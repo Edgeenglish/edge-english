@@ -175,49 +175,51 @@ export default function LongTermPrice() {
                     {plan === 1 ? (
                       <p className="flex items-center gap-1 text-xl max-md:text-sm">
                         월
-                        <span className="font-montserrat text-2xl font-extrabold max-md:text-lg">
+                        <span className="font-montserrat tabular-nums text-2xl font-extrabold max-md:text-lg">
                           {won(p.price)}
                         </span>
                         원
                       </p>
                     ) : (
                       <div className="flex flex-col items-end gap-0.5 text-right">
-                        <span className="font-montserrat text-xs text-[#aaa] line-through">
-                          정가 {won(p.regular)}원
+                        <span className="font-montserrat tabular-nums text-xs text-[#aaa] line-through">
+                          월 {won(row.monthly)}원
                         </span>
                         <p className="flex items-center gap-1 text-xl max-md:text-sm">
+                          월
                           <span
                             className={
                               plan === 6
-                                ? 'font-montserrat text-2xl font-extrabold text-[#E5383B] max-md:text-lg'
-                                : 'font-montserrat text-2xl font-extrabold text-edge-purple max-md:text-lg'
+                                ? 'font-montserrat tabular-nums text-2xl font-extrabold text-[#E5383B] max-md:text-lg'
+                                : 'font-montserrat tabular-nums text-2xl font-extrabold text-edge-purple max-md:text-lg'
                             }
                           >
-                            {won(p.price)}
+                            {won(p.perMonth)}
                           </span>
                           원
                         </p>
-                        <span className="text-sm font-semibold text-[#888] max-md:text-xs">
-                          월 <span className="font-montserrat text-[#888]">{won(p.perMonth)}</span>원
-                        </span>
                         <span
                           className={
                             plan === 6
-                              ? 'mt-1 whitespace-nowrap rounded-full bg-[#FFE8E8] px-2 py-0.5 text-xs font-bold text-[#E5383B]'
-                              : 'mt-1 whitespace-nowrap rounded-full bg-[#7D5FFF1A] px-2 py-0.5 text-xs font-bold text-edge-purple'
+                              ? 'my-1 whitespace-nowrap rounded-full bg-[#FFE8E8] px-3 py-1 text-[15px] font-extrabold text-[#E5383B] max-md:text-sm'
+                              : 'my-1 whitespace-nowrap rounded-full bg-[#7D5FFF1A] px-3 py-1 text-[15px] font-extrabold text-edge-purple max-md:text-sm'
                           }
                         >
+                          총{' '}
                           <span
                             className={
                               plan === 6
-                                ? 'font-montserrat text-[#E5383B]'
-                                : 'font-montserrat text-edge-purple'
+                                ? 'font-montserrat tabular-nums text-[#E5383B]'
+                                : 'font-montserrat tabular-nums text-edge-purple'
                             }
                           >
                             {won(p.save)}
                           </span>
                           원 절약
                         </span>
+                        <p className="text-sm font-medium text-[#888] max-md:text-xs">
+                          {plan}개월 결제 금액 <span className="font-montserrat tabular-nums text-[#888]">{won(p.price)}</span>원
+                        </p>
                       </div>
                     )}
                   </div>
