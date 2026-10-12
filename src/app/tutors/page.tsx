@@ -15,7 +15,8 @@ export default function TutorPage() {
         <>
           {/* 컴퓨터 */}
           <div className="break-keep px-4 text-center text-4xl font-bold leading-[150%] max-md:hidden">
-            <p>TESOL/TEFL/CELTA 또는 교육학 관련 학위를 보유한</p>
+            <p>TESOL/TEFL/CELTA 또는</p>
+            <p>교육학 학위를 보유한</p>
             <p>
               <span className="text-edge-purple">100% 미국·캐나다·호주</span> 원어민
               강사진
@@ -26,7 +27,7 @@ export default function TutorPage() {
             <p>
               교육 자격증 또는
               <br />
-              교육 관련 학위를 보유한
+              학위를 보유한
             </p>
             <p className="text-edge-purple">100% 미국·캐나다·호주</p>
             <p>원어민 강사진</p>
