@@ -66,7 +66,7 @@ export default function Home() {
             <span className="md:hidden">
               <br />
             </span>
-            영어 컨텐츠 제작자 탠저린이 직접 운영해요.
+            영어 콘텐츠 제작자 탠저린이 직접 운영해요.
           </h2>
         </>
       </div>
