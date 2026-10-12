@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import BubbleRightTail from './common/bubble/BubbleRightTail';
-import TrialLessonModal from './TrialLessonModal';
 import BubbleTopTail from './common/bubble/BubbleTopTail';
 
 export default function Header() {
@@ -12,17 +11,6 @@ export default function Header() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const closeDrawer = () => setIsDrawerOpen(false);
-
-  const openModal = () => {
-    const modal = document.getElementById('experience_modal') as HTMLDialogElement; // 모달(dialog) 요소를 가져옴
-
-    // 모달이 이미 열려 있다면, 먼저 닫음
-    if (modal && modal.open) {
-      modal.close();
-    }
-
-    modal.showModal();
-  };
 
   return (
     <header className="flex-center sticky top-0 z-20 min-h-[70px] bg-white px-4 py-4">
@@ -100,17 +88,8 @@ export default function Header() {
             >
               수강신청
             </Link>
-            <button
-              className="btn rounded-lg border-none bg-edge-gray text-sm font-semibold text-white"
-              onClick={() => openModal()}
-            >
-              왜 체험수업이 없나요?
-            </button>
           </div>
         </div>
-        {/* 체험수업 모달 */}
-        <TrialLessonModal />
-
         {/* 모바일 햄버거 메뉴 */}
         <div className="drawer drawer-end min-h-8 w-auto min-w-8 md:hidden">
           <input
@@ -222,15 +201,6 @@ export default function Header() {
                 >
                   수강신청
                 </Link>
-                <button
-                  className="btn flex-1 rounded-lg border-none bg-edge-gray text-sm font-semibold text-white"
-                  onClick={() => {
-                    openModal();
-                    closeDrawer();
-                  }}
-                >
-                  체험수업
-                </button>
                 <BubbleTopTail
                   text="30초만에 시작하기!"
                   bg="#1A1A1A"

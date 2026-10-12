@@ -51,7 +51,7 @@ export default function Footer() {
             <span className="font-montserrat text-edge-gray">support@edgeenglish.kr</span>
           </p>
           <p className="mt-1 text-edge-gray">
-            주소 : [21372] 인천광역시 부평구 길주남로 143, 103동{' '}
+            주소 : [21345] 인천광역시 부평구 길주남로 143, 103동{' '}
           </p>
           <p className="mt-1 text-edge-gray">
             사업자등록번호 :{' '}
