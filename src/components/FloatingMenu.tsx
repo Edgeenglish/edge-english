@@ -28,7 +28,7 @@ export default function FloatingMenu() {
       <div className="fixed bottom-[4.5rem] right-4.5 z-[19] flex flex-col gap-2 xs:bottom-10 xs:right-10">
         {/* 카카오 버튼 */}
         <Link
-          href="https://pf.kakao.com/_blxgib"
+          href="https://pf.kakao.com/_blxgib/friend"
           target="_blank"
           className="rounded-full border-2 border-white bg-[#FFEB3B] p-[11px]"
           style={{ boxShadow: '0px 0px 10px 0px rgba(0, 0, 0, 0.11)' }}
