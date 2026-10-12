@@ -13,8 +13,8 @@ export default function TutorPage() {
       <div className="mt-20 flex flex-col justify-center max-md:mt-15">
         {/* 섹션 1 */}
         <>
-          <div className="flex flex-wrap justify-center text-4xl font-bold leading-[150%] max-md:flex-col max-md:text-[32px]">
-            <p className="self-center md:pr-4">TESOL/TEFL을 보유한</p>
+          <div className="flex flex-wrap justify-center break-keep px-4 text-center text-4xl font-bold leading-[150%] max-md:flex-col max-md:text-[32px]">
+            <p className="self-center md:pr-4">TESOL/TEFL/CELTA를 보유한</p>
             <p className="self-center text-edge-purple md:pr-4">100% 미국·캐나다·호주</p>
             <p className="self-center">원어민 강사진</p>
           </div>
@@ -62,7 +62,7 @@ export default function TutorPage() {
                 2:1 심층 면접에서 인성과 소통 능력, 책임감을 꼼꼼히 살펴봅니다.
               </p>
               <p className="text-lg font-normal text-white">
-                면접을 통과한 강사는 실전 수업 평가와 2개월 집중 모니터링을 거쳐야 정식
+                면접을 통과한 강사는 시범 강의 평가와 2개월 집중 모니터링을 거쳐야 정식
                 튜터가 됩니다.
               </p>
               <br />
@@ -74,9 +74,11 @@ export default function TutorPage() {
         </div>
 
         {/* 섹션 2 모바일 */}
-        <div className="mt-15 flex min-h-[750px] justify-end bg-mobile-tutor bg-cover bg-bottom sm:bg-tablet-tutor md:hidden">
-          <div className="flex min-h-[700px] justify-end">
-            <div className="px-4 pt-12">
+        <div className="relative mt-15 flex min-h-[750px] justify-end bg-mobile-tutor bg-cover bg-bottom sm:bg-tablet-tutor md:hidden">
+          {/* 글자가 잘 보이도록 위쪽을 어둡게 */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/50 to-transparent" />
+          <div className="relative flex min-h-[700px] justify-end">
+            <div className="break-keep px-4 pt-12 [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">
               <p className="text-3xl font-bold leading-tight text-white">실력과 인성</p>
               <p className="text-3xl font-bold leading-relaxed text-white">
                 모두 확인된 튜터만
@@ -88,8 +90,8 @@ export default function TutorPage() {
               <br />
               <p className="text-lg text-white">
                 서면 인터뷰와 서류 심사를 통해 기본 자격을 확인하고, 2:1 심층 면접에서
-                인성, 소통 능력, 책임감을 꼼꼼히 살펴봅니다. 면접을 통과한 후보는 시범 강의
-                평가를 거쳐 정식 튜터가 됩니다.
+                인성, 소통 능력, 책임감을 꼼꼼히 살펴봅니다. 면접을 통과한 강사는 시범 강의
+                평가와 2개월 집중 모니터링을 거쳐야 정식 튜터가 됩니다.
               </p>
               <br />
               <p className="text-lg text-white">
@@ -148,7 +150,9 @@ export default function TutorPage() {
               <img src="/icons/tutor/check.svg" className="mr-[16px]" alt="check" />
               미국
               <span className="text-[#D2D2D2]">・</span>
-              캐나다 출신
+              캐나다
+              <span className="text-[#D2D2D2]">・</span>
+              호주 출신
             </div>
             <div className="flex flex-grow items-center rounded-lg border bg-white px-10 py-8 text-xl font-medium">
               <img src="/icons/tutor/check.svg" className="mr-[16px]" alt="check" />
@@ -182,7 +186,9 @@ export default function TutorPage() {
               <img src="/icons/tutor/check.svg" className="mr-2 h-6 w-6" alt="check" />
               미국
               <span className="text-[#D2D2D2]">・</span>
-              캐나다 출신
+              캐나다
+              <span className="text-[#D2D2D2]">・</span>
+              호주 출신
             </div>
             <div className="flex flex-grow items-center rounded-lg border bg-white px-4 py-6 text-lg font-medium">
               <img src="/icons/tutor/check.svg" className="mr-2 h-6 w-6" alt="check" />
