@@ -13,17 +13,17 @@ type Faq = (typeof rawFaqList)[number];
 const SYNONYM_GROUPS = [
   ['연기', '수강 정지', '정지', '일시정지', '휴강', '홀딩'],
   ['취소', '캔슬', '결석'],
-  ['보강', '재수업'],
+  ['보강', '재수업', '다시 들'],
   ['이월', '남은 수업', '연장'],
   ['결제', '카드', '카드결제', '계좌이체', '입금', '할부'],
   ['영수증', '현금영수증', '수강확인증', '수강증', '소득공제'],
   ['환불'],
-  ['줌', 'zoom', '구글미트', 'google meet', 'meet', '화상'],
+  ['줌', 'zoom', '구글미트', '구글 미트', 'google meet', 'meet', '어디에서'],
   ['녹화', '녹음', '녹화본'],
   ['교재', '책', '교과서'],
   ['숙제', '과제'],
   ['레벨', '수준', '초보', '왕초보'],
-  ['지각', '늦음', '늦게'],
+  ['지각', '늦음', '늦게', '늦을'],
   ['공휴일', '휴일', '명절', '연휴'],
   ['해외', '외국', '출국'],
   ['신청', '등록', '가입'],
@@ -90,6 +90,8 @@ export default function FaqPage() {
   const [searchText, setSearchText] = useState('');
   const keyword = searchText.trim();
   const terms = getSearchTerms(keyword);
+  // 검색 중에는 ALL 버튼만 선택된 것처럼 표시
+  const activeType = terms.length > 0 ? 'all' : currentType;
 
   // 검색 중에는 분류와 상관없이 전체 FAQ에서 찾고, 질문 제목 일치 결과를 먼저 보여 줌
   const filteredFaqList =
@@ -136,37 +138,37 @@ export default function FaqPage() {
       {/* 분류 */}
       <ScrollContainer className="mt-4 flex gap-2">
         <button
-          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${currentType === 'all' ? 'bg-edge-yellow' : 'border'}`}
+          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${activeType === 'all' ? 'bg-edge-yellow' : 'border'}`}
           onClick={() => setCurrentType('all')}
         >
           ALL
         </button>
         <button
-          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${currentType === '수강 신청' ? 'bg-edge-yellow' : 'border'}`}
+          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${activeType === '수강 신청' ? 'bg-edge-yellow' : 'border'}`}
           onClick={() => setCurrentType('수강 신청')}
         >
           수강 신청
         </button>
         <button
-          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${currentType === '수업 관련' ? 'bg-edge-yellow' : 'border'}`}
+          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${activeType === '수업 관련' ? 'bg-edge-yellow' : 'border'}`}
           onClick={() => setCurrentType('수업 관련')}
         >
           수업 관련
         </button>
         <button
-          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${currentType === '수강권' ? 'bg-edge-yellow' : 'border'}`}
+          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${activeType === '수강권' ? 'bg-edge-yellow' : 'border'}`}
           onClick={() => setCurrentType('수강권')}
         >
           수강권
         </button>
         <button
-          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${currentType === '결제' ? 'bg-edge-yellow' : 'border'}`}
+          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${activeType === '결제' ? 'bg-edge-yellow' : 'border'}`}
           onClick={() => setCurrentType('결제')}
         >
           결제
         </button>
         <button
-          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${currentType === '기타' ? 'bg-edge-yellow' : 'border'}`}
+          className={`h-fit text-nowrap rounded-full px-4 py-2 text-sm font-bold max-md:px-4 max-md:py-2 ${activeType === '기타' ? 'bg-edge-yellow' : 'border'}`}
           onClick={() => setCurrentType('기타')}
         >
           기타
