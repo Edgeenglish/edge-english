@@ -62,7 +62,7 @@ export default function Home() {
           </div>
 
           <h2 className="mt-8 text-center text-xl max-md:mt-6 max-md:text-base">
-            13년차 영어 튜터 시에나 & 누적 조회수 300만+
+            13년 차 영어 튜터 시에나 & 누적 조회수 300만+
             <span className="md:hidden">
               <br />
             </span>
@@ -116,7 +116,7 @@ export default function Home() {
                   target="_blank"
                   className="btn h-14 rounded-lg border-none bg-edge-yellow px-8 py-4 font-bold"
                 >
-                  더 많은 표현 보러가기
+                  더 많은 표현 보러 가기
                 </Link>
               </div>
             </div>
@@ -140,9 +140,9 @@ export default function Home() {
           }}
         >
           <p className="text-lg text-white">
-            영어영문학전공 영어강사,{' '}
+            영어영문학 전공 영어 강사,{' '}
             <span className="font-semibold text-[#FFEB3B]">「탠저린의 써먹는 영어」</span>{' '}
-            유튜브,인스타그램,블로그 운영 중
+            유튜브, 인스타그램, 블로그 운영 중
           </p>
         </div>
       </div>
@@ -174,9 +174,9 @@ export default function Home() {
           }}
         >
           <p className="text-lg text-white">
-            영어영문학전공 영어강사,{' '}
+            영어영문학 전공 영어 강사,{' '}
             <span className="font-semibold text-[#FFEB3B]">「탠저린의 써먹는 영어」</span>{' '}
-            유튜브,인스타그램,블로그 운영 중
+            유튜브, 인스타그램, 블로그 운영 중
           </p>
         </div>
 
@@ -190,7 +190,7 @@ export default function Home() {
             target="_blank"
             className="btn h-14 rounded-lg border-none bg-edge-yellow px-8 py-4 font-bold"
           >
-            더 많은 표현 보러가기
+            더 많은 표현 보러 가기
           </Link>
         </div>
       </div>
@@ -224,7 +224,7 @@ export default function Home() {
           </h3>
           <h4 className="mx-auto mt-6 w-fit text-xl text-[#4A4A4A] max-md:text-[15px] max-md:leading-normal">
             한국인이 영어에서 느끼는 어려움을 누구보다 잘 아니까. <br /> 초급부터 고급까지
-            모든 학습자를 만족 시키는 엣지 포인트!
+            모든 학습자를 만족시키는 엣지 포인트!
           </h4>
 
           <div className="mt-15 max-md:mt-10">
@@ -237,7 +237,7 @@ export default function Home() {
 
       {/* 섹션 3 수업 절차 */}
       <div className="mx-auto my-[120px] w-fit text-center max-md:my-15 max-md:px-4.5">
-        <h3 className="text-4xl font-bold text-[#140F33] max-md:text-[34px]">수업절차</h3>
+        <h3 className="text-4xl font-bold text-[#140F33] max-md:text-[34px]">수업 절차</h3>
         <div className="mt-10 flex items-center justify-center max-md:grid max-md:grid-cols-2 max-md:flex-wrap max-md:gap-6">
           {/* step 01 */}
           <div className="w-fit rounded-3xl border border-dashed border-edge-yellow p-1">
@@ -276,7 +276,7 @@ export default function Home() {
                   수강 안내
                 </p>
                 <p className="h-11 text-sm text-edge-gray max-md:text-xs">
-                  (최대 3일 소요)
+                  (최대 3영업일 소요)
                 </p>
               </div>
             </div>
@@ -502,7 +502,7 @@ export default function Home() {
           className="mt-8 text-center text-xl font-medium text-white max-xl:text-2xl max-lg:text-xl"
           style={{ textShadow: '0px 0px 10px rgba(0, 0, 0, 0.50)' }}
         >
-          운영진들의 오랜 강사 경력과 노하우를 바탕으로 완성된 학습시스템을 소개합니다.
+          운영진들의 오랜 강사 경력과 노하우를 바탕으로 완성된 학습 시스템을 소개합니다.
         </p>
       </div>
 
@@ -529,7 +529,7 @@ export default function Home() {
           <span className="md:hidden">
             <br />
           </span>
-          완성된 학습시스템을 소개합니다.
+          완성된 학습 시스템을 소개합니다.
         </p>
       </div>
 
@@ -585,7 +585,7 @@ export default function Home() {
                 인정받은 교재를 사용합니다.
               </p>
               <p className="mt-2 text-lg text-[#a4a4a4] max-lg:text-xl max-md:mt-2 max-md:text-base">
-                * 대부분 옥스포드 출판 교재 사용
+                * 대부분 옥스퍼드 출판 교재 사용
               </p>
             </div>
 
@@ -612,7 +612,7 @@ export default function Home() {
               </h4>
               <p className="mt-8 text-lg leading-[140%] text-edge-gray max-lg:text-xl max-md:mt-6 max-md:text-base">
                 영어에는 다양한 억양이 있지만, 한국 학습자에게 가장 익숙한 북미·호주 발음을
-                사용하는 튜터만으로 구성되어있어요.
+                사용하는 튜터만으로 구성되어 있어요.
               </p>
             </div>
 

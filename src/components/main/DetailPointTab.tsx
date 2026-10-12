@@ -20,7 +20,7 @@ const EDGE_DETAILS = [
         <p className="text-xl max-md:text-base">
           단순히 영어를 잘하는 원어민이 아닙니다. 영어를{' '}
           <span className="font-semibold">
-            ‘잘 가르칠 수 있는’ 국제 자격(TESOL/TEFL/CELTA)을 갖추거나 교육 관련 학위(학사,석사,박사)를 보유한 강사를 선발
+            ‘잘 가르칠 수 있는’ 국제 자격(TESOL/TEFL/CELTA)을 갖추거나 교육 관련 학위(학사, 석사, 박사)를 보유한 강사를 선발
           </span>
           해요.
         </p>
@@ -52,7 +52,7 @@ const EDGE_DETAILS = [
   {
     index: 3,
     subTitle: '비즈니스 영어',
-    title: '비지니스 영어·면접·발표 준비 완벽 지원',
+    title: '비즈니스 영어·면접·발표 준비 완벽 지원',
     contents: (
       <>
         <p className="text-xl max-md:text-base">

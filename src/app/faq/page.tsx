@@ -80,7 +80,7 @@ export default function FaqPage() {
                 <div className="flex-center h-8 min-w-8 rounded-full bg-edge-purple font-montserrat text-lg font-bold text-white">
                   A
                 </div>
-                <p className="text-[#4A4A4A]">{faq.answer}</p>
+                <p className="whitespace-pre-line text-[#4A4A4A]">{faq.answer}</p>
               </div>
             </div>
           );

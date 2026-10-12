@@ -18,12 +18,12 @@ const LEVEL_LIST = [
   {
     simbol: 'gold',
     level: '중급 Intermediate',
-    describe: '관계대명사나 구동사도조금씩 말할 수 있고, 문장도 길어져요',
+    describe: '관계대명사나 구동사도 조금씩 말할 수 있고, 문장도 길어져요',
   },
   {
     simbol: 'platinum',
     level: '고급 Advanced',
-    describe: '원어민과 토론도 가능하고. would, could 같은 표현도 자연스럽게 써요',
+    describe: '원어민과 토론도 가능하고, would, could 같은 표현도 자연스럽게 써요',
   },
 ];
 

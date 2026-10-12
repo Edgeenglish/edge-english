@@ -38,7 +38,7 @@ export default function TutorPage() {
                 width={24}
                 height={24}
               />
-              <p className="pl-2 font-bold">채팅상담 하기</p>
+              <p className="pl-2 font-bold">채팅 상담하기</p>
             </Link>
           </div>
           <TutorGallery tutorList={tutorList} />
@@ -88,7 +88,7 @@ export default function TutorPage() {
               <br />
               <p className="text-lg text-white">
                 서면 인터뷰와 서류 심사를 통해 기본 자격을 확인하고, 2:1 심층 면접에서
-                인성, 소통능력, 책임감을 꼼꼼히 살펴봅니다. 면접을 통과한 후보는 시범 강의
+                인성, 소통 능력, 책임감을 꼼꼼히 살펴봅니다. 면접을 통과한 후보는 시범 강의
                 평가를 거쳐 정식 튜터가 됩니다.
               </p>
               <br />

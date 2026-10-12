@@ -5,7 +5,7 @@ import Footer from '@/components/Footer';
 import FloatingMenu from '@/components/FloatingMenu';
 
 export const metadata: Metadata = {
-  title: '엣지영어',
+  title: { default: '엣지영어', template: '%s | 엣지영어' },
   description: '영어 교육 전문가들이 만든 원어민 화상영어 브랜드입니다.',
   keywords: [
     '엣지영어',
@@ -44,7 +44,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="light">
+    <html lang="ko" data-theme="light">
       <body>
         <Header />
 

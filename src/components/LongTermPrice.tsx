@@ -5,7 +5,7 @@ import Bubble from '@/components/common/bubble/Bubble';
 
 // ===== 엣지영어 수업료 (1개월 / 3개월 / 6개월) =====
 // 수강료가 바뀌면 아래 PRICES의 1개월 가격 숫자만 고치면 돼요.
-// 3개월·6개월 가격은 자동으로 계산돼요. (3개월: 5% 할인 / 6개월: 5% 할인 + 5만원 추가 할인)
+// 3개월·6개월 가격은 자동으로 계산돼요. (3개월: 5% 할인 / 6개월: 5% 할인 + 5만 원 추가 할인)
 
 type Plan = 1 | 3 | 6;
 
@@ -67,7 +67,7 @@ function calc(monthly: number, plan: Plan) {
 const TABS: { plan: Plan; title: string; sub: string; hot?: boolean }[] = [
   { plan: 1, title: '1개월', sub: '정가' },
   { plan: 3, title: '3개월', sub: '5% 할인' },
-  { plan: 6, title: '6개월 혜택가', sub: '5% 할인 + 5만원 추가 할인', hot: true },
+  { plan: 6, title: '6개월 혜택가', sub: '5% 할인 + 5만 원 추가 할인', hot: true },
 ];
 
 function PopularBadge() {
@@ -270,7 +270,7 @@ export default function LongTermPrice() {
                 <span className="text-sm text-[#888]">(PDF)</span>
               </li>
               <li>
-                <span className="font-bold text-edge-purple">✓</span> 스피킹에 무조건 도움 되는 영어꿀팁 30개{' '}
+                <span className="font-bold text-edge-purple">✓</span> 스피킹에 무조건 도움 되는 영어 꿀팁 30개{' '}
                 <span className="text-sm text-[#888]">(PDF)</span>
               </li>
               <li>

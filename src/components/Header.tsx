@@ -202,7 +202,7 @@ export default function Header() {
                   수강신청
                 </Link>
                 <BubbleTopTail
-                  text="30초만에 시작하기!"
+                  text="30초 만에 시작하기!"
                   bg="#1A1A1A"
                   left={3}
                   top={84}
