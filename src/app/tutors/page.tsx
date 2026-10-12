@@ -14,7 +14,9 @@ export default function TutorPage() {
         {/* 섹션 1 */}
         <>
           <div className="flex flex-wrap justify-center break-keep px-4 text-center text-4xl font-bold leading-[150%] max-md:flex-col max-md:text-[32px]">
-            <p className="self-center md:pr-4">TESOL/TEFL/CELTA를 보유한</p>
+            <p className="self-center md:pr-4">
+              TESOL/TEFL/CELTA 혹은 교육학 관련 학위를 보유한
+            </p>
             <p className="self-center text-edge-purple md:pr-4">100% 미국·캐나다·호주</p>
             <p className="self-center">원어민 강사진</p>
           </div>
