@@ -27,7 +27,7 @@ export default function TutorPage() {
             <p>
               교육 자격증 또는
               <br />
-              학위를 보유한
+              교육학 학위를 보유한
             </p>
             <p className="text-edge-purple">100% 미국·캐나다·호주</p>
             <p>원어민 강사진</p>
