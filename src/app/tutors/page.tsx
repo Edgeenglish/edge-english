@@ -41,7 +41,7 @@ export default function TutorPage() {
           </div>
           <div className="flex justify-center">
             <Link
-              href="https://pf.kakao.com/_blxgib"
+              href="https://pf.kakao.com/_blxgib/friend"
               target="_blank"
               className="mb-15 mt-10 flex flex-row justify-center rounded-lg bg-[#FFEB3B] px-[40px] py-[16px]"
             >
