@@ -90,8 +90,8 @@ export default function TutorPage() {
               <br />
               <p className="text-lg text-white">
                 서면 인터뷰와 서류 심사를 통해 기본 자격을 확인하고, 2:1 심층 면접에서
-                인성, 소통 능력, 책임감을 꼼꼼히 살펴봅니다. 면접을 통과한 강사는 시범 강의
-                평가와 2개월 집중 모니터링을 거쳐야 정식 튜터가 됩니다.
+                인성, 소통 능력, 책임감을 꼼꼼히 살펴봅니다. 면접을 통과한 강사는 시범
+                강의 평가와 2개월 집중 모니터링을 거쳐야 정식 튜터가 됩니다.
               </p>
               <br />
               <p className="text-lg text-white">
