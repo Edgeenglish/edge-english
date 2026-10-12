@@ -7,13 +7,75 @@ import rawFaqList from '@/data/faqs.json';
 
 const KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_blxgib/friend';
 
-// 검색어와 일치하는 부분을 형광펜 색으로 표시
-function highlight(text: string, keyword: string) {
-  if (!keyword) return text;
-  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+type Faq = (typeof rawFaqList)[number];
+
+// 비슷한 말 묶음 (질문 제목에서만 사용)
+const SYNONYM_GROUPS = [
+  ['연기', '수강 정지', '정지', '일시정지', '휴강', '홀딩'],
+  ['취소', '캔슬', '결석'],
+  ['보강', '재수업'],
+  ['이월', '남은 수업', '연장'],
+  ['결제', '카드', '카드결제', '계좌이체', '입금', '할부'],
+  ['영수증', '현금영수증', '수강확인증', '수강증', '소득공제'],
+  ['환불'],
+  ['줌', 'zoom', '구글미트', 'google meet', 'meet', '화상'],
+  ['녹화', '녹음', '녹화본'],
+  ['교재', '책', '교과서'],
+  ['숙제', '과제'],
+  ['레벨', '수준', '초보', '왕초보'],
+  ['지각', '늦음', '늦게'],
+  ['공휴일', '휴일', '명절', '연휴'],
+  ['해외', '외국', '출국'],
+  ['신청', '등록', '가입'],
+  ['강사', '선생님', '튜터', '원어민'],
+  ['체험', '무료수업', '트라이얼', '맛보기'],
+];
+
+// 띄어쓰기와 영어 대소문자 무시
+const normalize = (text: string) => text.replace(/\s+/g, '').toLowerCase();
+
+const NORMALIZED_GROUPS = SYNONYM_GROUPS.map((group) => group.map(normalize));
+
+const findSynonyms = (term: string) =>
+  NORMALIZED_GROUPS.find((group) => group.includes(term)) ?? [];
+
+// 검색어를 단어로 나눔. 입력 전체가 비슷한 말(예: "남은 수업")이면 한 단어로 취급
+function getSearchTerms(keyword: string) {
+  const whole = normalize(keyword);
+  if (!whole) return [];
+  if (findSynonyms(whole).length > 0) return [whole];
+  return keyword.split(/\s+/).filter(Boolean).map(normalize);
+}
+
+// 0: 질문 제목에서 모두 찾음, 1: 답변에서만 찾은 단어가 있음, null: 해당 없음
+function getMatchRank(faq: Faq, terms: string[]) {
+  const question = normalize(faq.question);
+  const answer = normalize(faq.answer);
+  let rank = 0;
+
+  for (const term of terms) {
+    const inQuestion =
+      question.includes(term) ||
+      findSynonyms(term).some((synonym) => question.includes(synonym));
+    if (inQuestion) continue;
+    if (answer.includes(term)) rank = 1;
+    else return null;
+  }
+  return rank;
+}
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// 입력한 글자를 형광펜 색으로 표시 (띄어쓰기·대소문자 무시)
+function highlight(text: string, terms: string[]) {
+  if (terms.length === 0) return text;
+  const pattern = [...terms]
+    .sort((a, b) => b.length - a.length)
+    .map((term) => Array.from(term).map(escapeRegExp).join('\\s*'))
+    .join('|');
+  const parts = text.split(new RegExp(`(${pattern})`, 'gi'));
   return parts.map((part, i) =>
-    part.toLowerCase() === keyword.toLowerCase() ? (
+    i % 2 === 1 ? (
       <mark key={i} className="rounded-sm bg-[#FFF176] px-0.5 text-inherit">
         {part}
       </mark>
@@ -27,17 +89,19 @@ export default function FaqPage() {
   const [currentType, setCurrentType] = useState('all');
   const [searchText, setSearchText] = useState('');
   const keyword = searchText.trim();
+  const terms = getSearchTerms(keyword);
 
-  const filteredFaqList = rawFaqList
-    .filter((faq) => currentType === 'all' || faq.type.includes(currentType))
-    .filter((faq) => {
-      if (!keyword) return true;
-      const lower = keyword.toLowerCase();
-      return (
-        faq.question.toLowerCase().includes(lower) ||
-        faq.answer.toLowerCase().includes(lower)
-      );
-    });
+  // 검색 중에는 분류와 상관없이 전체 FAQ에서 찾고, 질문 제목 일치 결과를 먼저 보여 줌
+  const filteredFaqList =
+    terms.length > 0
+      ? rawFaqList
+          .map((faq) => ({ faq, rank: getMatchRank(faq, terms) }))
+          .filter((item): item is { faq: Faq; rank: number } => item.rank !== null)
+          .sort((a, b) => a.rank - b.rank)
+          .map((item) => item.faq)
+      : rawFaqList.filter(
+          (faq) => currentType === 'all' || faq.type.includes(currentType)
+        );
 
   return (
     <div className="mx-auto max-w-[1200px] px-4">
@@ -125,14 +189,14 @@ export default function FaqPage() {
                 <div className="flex-center h-8 min-w-8 rounded-full bg-[#777777] font-montserrat text-lg font-bold text-edge-yellow">
                   Q
                 </div>
-                <p className="font-medium">{highlight(faq.question, keyword)}</p>
+                <p className="font-medium">{highlight(faq.question, terms)}</p>
               </div>
               <div className="collapse-content flex items-center gap-6 bg-[#FCFCFC] text-sm peer-checked:py-4 md:px-10">
                 <div className="flex-center h-8 min-w-8 rounded-full bg-edge-purple font-montserrat text-lg font-bold text-white">
                   A
                 </div>
                 <p className="whitespace-pre-line text-[#4A4A4A]">
-                  {highlight(faq.answer, keyword)}
+                  {highlight(faq.answer, terms)}
                 </p>
               </div>
             </div>
