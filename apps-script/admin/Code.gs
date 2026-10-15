@@ -43,7 +43,7 @@ function saveReview(input) {
     }
 
     const created = { ...review, id: Utilities.getUuid(), createdAt: now, updatedAt: now };
-    sheet.appendRow(rowValues_(created));
+    writeNewRow_(sheet, rowValues_(created));
     return toClient_(created);
   });
 }
@@ -78,14 +78,14 @@ function setup() {
   sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]).setFontWeight('bold');
   sheet.setFrozenRows(1);
   sheet.getRange('C:C').setNumberFormat('@'); // 날짜를 글자(YYYY-MM-DD) 그대로 저장
-  sheet.getRange('H2:H').setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
   sheet.setColumnWidth(COL.text + 1, 420);
   sheet.hideColumns(COL.id + 1);
+  clearEmptyRows_(sheet);
 
-  if (sheet.getLastRow() <= 1) {
+  if (lastReviewRow_(sheet) <= 1) {
     const now = timestamp_();
     LEGACY_REVIEWS.forEach((r, i) => {
-      sheet.appendRow(rowValues_({ ...r, id: Utilities.getUuid(), brand: '엣지영어', date: '', isPublic: true, createdAt: now + '-' + i, updatedAt: now }));
+      writeNewRow_(sheet, rowValues_({ ...r, id: Utilities.getUuid(), brand: '엣지영어', date: '', isPublic: true, createdAt: now + '-' + i, updatedAt: now }));
     });
   }
   return '준비 완료';
@@ -152,6 +152,29 @@ function readAll_() {
     list.push(r);
   }
   return list;
+}
+
+// 후기(내용 또는 이름)가 있는 마지막 줄 번호. 빈 체크박스 줄은 세지 않음
+function lastReviewRow_(sheet) {
+  const values = sheet.getDataRange().getValues();
+  for (let i = values.length - 1; i >= 1; i--) {
+    if (String(values[i][COL.text]).trim() || String(values[i][COL.name]).trim()) return i + 1;
+  }
+  return 1;
+}
+
+// 마지막 후기 바로 다음 줄에 쓰고, 그 줄의 '공개' 칸만 체크박스로
+function writeNewRow_(sheet, row) {
+  const rowNumber = lastReviewRow_(sheet) + 1;
+  sheet.getRange(rowNumber, 1, 1, HEADERS.length).setValues([row]);
+  sheet.getRange(rowNumber, COL.isPublic + 1).setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+}
+
+// 후기가 없는 줄에 남은 체크박스·값 지우기 (이전 버전이 열 전체에 깔아 둔 체크박스 정리)
+function clearEmptyRows_(sheet) {
+  const from = lastReviewRow_(sheet) + 1;
+  const to = sheet.getMaxRows();
+  if (to >= from) sheet.getRange(from, 1, to - from + 1, HEADERS.length).clearDataValidations().clearContent();
 }
 
 function findRow_(id) {
