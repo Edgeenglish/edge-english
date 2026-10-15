@@ -8,6 +8,11 @@
  * 설정 방법: docs/reviews-setup.md
  */
 
+// 홈페이지 주소 (등록 즉시 반영·반영 상태 확인용). 앞에 있는 주소부터 확인
+const SITE_URLS = ['https://edgeenglish.kr'];
+// Vercel 환경변수 REVIEWS_REFRESH_SECRET 과 같은 값
+const REFRESH_SECRET = '여기에_반영_비밀값_붙여넣기';
+
 const SHEET_NAME = '후기';
 const HEADERS = ['id', '브랜드', '날짜', '이름', '직업', '후기', '대표 문장', '공개', '등록 일시', '수정 일시'];
 const COL = { id: 0, brand: 1, date: 2, name: 3, job: 4, text: 5, highlight: 6, isPublic: 7, createdAt: 8, updatedAt: 9 };
@@ -30,7 +35,7 @@ function listReviews(brand) {
 
 function saveReview(input) {
   const review = validate_(input);
-  return withLock_(() => {
+  return afterWrite_(() => withLock_(() => {
     const sheet = getSheet_();
     const now = timestamp_();
 
@@ -45,27 +50,51 @@ function saveReview(input) {
     const created = { ...review, id: Utilities.getUuid(), createdAt: now, updatedAt: now };
     writeNewRow_(sheet, rowValues_(created));
     return toClient_(created);
-  });
+  }));
 }
 
 function setPublic(id, isPublic) {
-  return withLock_(() => {
+  return afterWrite_(() => withLock_(() => {
     const found = findRow_(id);
     if (!found) throw new Error('후기를 찾지 못했어요. 목록을 새로고침해 주세요.');
     const sheet = getSheet_();
     sheet.getRange(found.rowNumber, COL.isPublic + 1).setValue(Boolean(isPublic));
     sheet.getRange(found.rowNumber, COL.updatedAt + 1).setValue(timestamp_());
     return true;
-  });
+  }));
 }
 
 function deleteReview(id) {
-  return withLock_(() => {
+  return afterWrite_(() => withLock_(() => {
     const found = findRow_(id);
     if (!found) throw new Error('이미 삭제된 후기예요.');
     getSheet_().deleteRow(found.rowNumber);
     return true;
-  });
+  }));
+}
+
+// 홈페이지에 지금 떠 있는 공개 후기 id (관리 화면의 '반영 완료/반영 중' 표시용)
+function getSiteStatus() {
+  for (const base of SITE_URLS) {
+    try {
+      const res = UrlFetchApp.fetch(base + '/api/reviews/status', { muteHttpExceptions: true, followRedirects: true });
+      if (res.getResponseCode() !== 200) continue;
+      const data = JSON.parse(res.getContentText());
+      if (Array.isArray(data.ids)) return { ok: true, source: data.source, ids: data.ids };
+    } catch (e) {
+      // 다음 주소 확인
+    }
+  }
+  return { ok: false };
+}
+
+// Apps Script 편집기에서 한 번 실행: 외부 연결 권한 허용 + 홈페이지 연결 확인
+function checkSite() {
+  const refreshed = notifySite_();
+  const status = getSiteStatus();
+  const msg = '즉시 반영 알림: ' + (refreshed ? '성공' : '실패(비밀값·주소 확인)') + ' / 반영 상태 확인: ' + (status.ok ? '성공 (' + status.source + ', 공개 ' + status.ids.length + '개)' : '실패');
+  Logger.log(msg);
+  return msg;
 }
 
 /* ---------- 처음 한 번 실행: 시트 준비 + 기존 홈페이지 후기 6개 옮기기 ---------- */
@@ -212,7 +241,32 @@ function rowValues_(r) {
 }
 
 function toClient_(r) {
-  return { id: r.id, brand: r.brand, date: r.date, name: r.name, job: r.job, text: r.text, highlight: r.highlight, isPublic: r.isPublic };
+  return { id: r.id, brand: r.brand, date: r.date, name: r.name, job: r.job, text: r.text, highlight: r.highlight, isPublic: r.isPublic, createdAt: r.createdAt.slice(0, 16) };
+}
+
+// 시트를 바꾼 뒤 홈페이지에 바로 알림 (실패해도 홈페이지는 5분 안에 스스로 갱신)
+function afterWrite_(fn) {
+  const result = fn();
+  notifySite_();
+  return result;
+}
+
+function notifySite_() {
+  let ok = false;
+  SITE_URLS.forEach((base) => {
+    try {
+      const res = UrlFetchApp.fetch(base + '/api/reviews/refresh', {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({ secret: REFRESH_SECRET }),
+        muteHttpExceptions: true,
+      });
+      if (res.getResponseCode() === 200) ok = true;
+    } catch (e) {
+      // 무시: 5분 자동 갱신으로 반영됨
+    }
+  });
+  return ok;
 }
 
 function toDateText_(v) {

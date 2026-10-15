@@ -71,6 +71,16 @@
   .toast { position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:#222; color:#fff; padding:11px 16px; border-radius:12px; font-size:14px; max-width:calc(100% - 32px); z-index:20; }
   .error { background:#fde8e7; color:var(--red); border-radius:12px; padding:12px 14px; margin-top:14px; font-weight:600; font-size:14px; }
   .empty { text-align:center; color:var(--gray); padding:40px 0; }
+  .site { margin-top:12px; border-radius:12px; padding:11px 14px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  .site.ok { background:#e6f4ea; color:#137333; }
+  .site.pending { background:#fff4d6; color:#8a5a00; }
+  .site.bad { background:#fde8e7; color:var(--red); }
+  .site.info { background:#eceef2; color:var(--gray); }
+  .site button { margin-left:auto; border:0; background:none; font-weight:700; text-decoration:underline; padding:0; color:inherit; }
+  .badge { font-size:12px; font-weight:700; border-radius:6px; padding:2px 7px; white-space:nowrap; }
+  .badge.live { background:#e6f4ea; color:#137333; }
+  .badge.wait { background:#fff4d6; color:#8a5a00; }
+  .dates { font-size:12.5px; color:var(--light); }
   [hidden] { display:none !important; }
 </style>
 </head>
@@ -82,6 +92,7 @@
   <div class="wrap">
     <div class="seg" id="brandSeg"></div>
     <input class="search" id="search" type="search" placeholder="이름·내용으로 찾기">
+    <div class="site info" id="site">홈페이지 반영 상태 확인 중…</div>
     <p class="count" id="count"></p>
     <div id="list"></div>
   </div>
@@ -150,7 +161,8 @@ const BRANDS = ['엣지영어', '영붙캠'];
 const JOBS = ['직장인', '대학생', '주부', '직접 입력'];
 const $ = (id) => document.getElementById(id);
 
-const state = { brand: loadBrand(), reviews: [], editing: null, job: '', isPublic: true, saving: false };
+const state = { brand: loadBrand(), reviews: [], editing: null, job: '', isPublic: true, saving: false, site: null };
+const SITE_BRAND = '엣지영어'; // 홈페이지에 연결된 브랜드
 
 function loadBrand() {
   try { const b = localStorage.getItem('reviewBrand'); if (BRANDS.includes(b)) return b; } catch (e) {}
@@ -193,14 +205,68 @@ async function loadList() {
   try {
     state.reviews = await call('listReviews', state.brand);
     renderList();
+    checkSite();
   } catch (e) {
     $('count').textContent = '';
     $('list').innerHTML = `<div class="error">목록을 불러오지 못했어요. ↻ 를 눌러 다시 시도해 주세요. (${esc(e.message)})</div>`;
   }
 }
 
+/* ---------- 홈페이지 반영 상태 ---------- */
+// 홈페이지에 떠 있는 후기와 시트를 비교: 공개인데 안 보이는 것 / 숨겼는데 보이는 것
+function siteDiff() {
+  const live = new Set(state.site.ids);
+  return {
+    waitShow: state.reviews.filter((r) => r.isPublic && !live.has(r.id)).map((r) => r.id),
+    waitHide: state.reviews.filter((r) => !r.isPublic && live.has(r.id)).map((r) => r.id),
+  };
+}
+
+async function checkSite(tries = 0) {
+  clearTimeout(checkSite.timer);
+  if (state.brand !== SITE_BRAND) { state.site = null; renderSite(); return; }
+  try {
+    state.site = await call('getSiteStatus');
+  } catch (e) {
+    state.site = { ok: false };
+  }
+  state.site.tries = tries;
+  renderSite(); renderList();
+  // 반영 중이면 4초마다 다시 확인 (최대 1분)
+  if (state.site.ok && state.site.source === 'sheet') {
+    const d = siteDiff();
+    if ((d.waitShow.length || d.waitHide.length) && tries < 15) checkSite.timer = setTimeout(() => checkSite(tries + 1), 4000);
+  }
+}
+
+function renderSite() {
+  const el = $('site');
+  const set = (cls, html) => { el.className = 'site ' + cls; el.innerHTML = html; };
+  const again = ' <button type="button" id="siteAgain">다시 확인</button>';
+  if (state.brand !== SITE_BRAND) return set('info', '영붙캠 홈페이지는 아직 연결 전이에요. 후기는 저장돼요.');
+  if (!state.site) return set('info', '홈페이지 반영 상태 확인 중…');
+  if (!state.site.ok) set('info', '홈페이지 상태를 확인하지 못했어요. 등록한 후기는 5분 안에 자동 반영돼요.' + again);
+  else if (state.site.source !== 'sheet') set('bad', '⚠ 홈페이지가 이 시트와 연결되어 있지 않아요. 운영 안내를 확인해 주세요.' + again);
+  else {
+    const d = siteDiff();
+    const n = d.waitShow.length + d.waitHide.length;
+    if (!n) set('ok', '✅ 홈페이지 반영 완료 · 공개 후기 ' + state.reviews.filter((r) => r.isPublic).length + '개가 모두 보여요' + again);
+    else if (state.site.tries < 15) set('pending', '⏳ 반영 중 ' + n + '개 · 잠시 후 자동으로 다시 확인해요');
+    else set('pending', '⏳ 반영 대기 ' + n + '개 · 5분 안에 자동 반영돼요' + again);
+  }
+  const btn = $('siteAgain'); if (btn) btn.onclick = () => { state.site = null; renderSite(); checkSite(); };
+}
+
+function siteBadge(r) {
+  if (!state.site || !state.site.ok || state.site.source !== 'sheet') return '';
+  const d = siteDiff();
+  if (d.waitShow.includes(r.id)) return '<span class="badge wait">⏳ 반영 중</span>';
+  if (d.waitHide.includes(r.id)) return '<span class="badge wait">⏳ 숨김 반영 중</span>';
+  return r.isPublic ? '<span class="badge live">✓ 홈페이지에 보임</span>' : '';
+}
+
 function renderList() {
-  renderSeg($('brandSeg'), state.brand, (b) => { state.brand = b; saveBrand(b); loadList(); });
+  renderSeg($('brandSeg'), state.brand, (b) => { state.brand = b; saveBrand(b); state.site = null; renderSite(); loadList(); });
   const q = $('search').value.replace(/\s+/g, '');
   const list = state.reviews.filter((r) => !q || (r.name + r.job + r.text + r.highlight).replace(/\s+/g, '').includes(q));
   const pub = state.reviews.filter((r) => r.isPublic).length;
@@ -210,9 +276,10 @@ function renderList() {
   $('list').innerHTML = list.map((r) => `
     <div class="item${r.isPublic ? '' : ' off'}">
       <div class="row">
-        <span>${r.date ? dot(r.date) : '<span class="warn-date">날짜 없음</span>'} · ${esc(who(r))}</span>
+        <span>${esc(who(r))} ${siteBadge(r)}</span>
         <button class="switch${r.isPublic ? ' on' : ''}" type="button" data-pub="${r.id}" aria-pressed="${r.isPublic}">${r.isPublic ? '공개' : '숨김'}<i></i></button>
       </div>
+      <div class="dates">후기 날짜 ${r.date ? dot(r.date) : '<span class="warn-date">없음</span>'}${r.createdAt && /^\d{4}-/.test(r.createdAt) ? ' · 등록 ' + dot(r.createdAt.slice(5, 10)) + ' ' + r.createdAt.slice(11, 16) : ''}</div>
       <button class="open" type="button" data-open="${r.id}">
         ${r.highlight ? `<span class="hl">“${esc(r.highlight)}”</span>` : ''}
         <span class="tx">${esc(r.text)}</span>
@@ -229,7 +296,8 @@ async function togglePublic(id) {
   r.isPublic = next; renderList(); // 바로 반영해 보여주고, 실패하면 되돌림
   try {
     await call('setPublic', id, next);
-    toast(next ? '공개했어요. 홈페이지에 5분 안에 반영돼요.' : '숨겼어요. 홈페이지에서 5분 안에 사라져요.');
+    toast(next ? '공개했어요. 홈페이지에 반영하는 중이에요.' : '숨겼어요. 홈페이지에서 내리는 중이에요.');
+    checkSite();
   } catch (e) {
     r.isPublic = !next; renderList();
     toast('변경하지 못했어요: ' + e.message);
@@ -260,6 +328,7 @@ function openForm(review) {
 
 function closeForm() {
   $('formView').hidden = true; $('listView').hidden = false;
+  window.scrollTo(0, 0); // 맨 위 반영 상태가 보이도록
 }
 
 function currentJob() {
@@ -335,7 +404,7 @@ async function submitForm(e) {
     await call('saveReview', input);
     state.brand = input.brand;
     closeForm();
-    toast(state.editing ? '저장했어요. 홈페이지에 5분 안에 반영돼요.' : input.isPublic ? '등록했어요. 홈페이지에 5분 안에 올라가요.' : '비공개로 등록했어요.');
+    toast(state.editing ? '저장했어요. 홈페이지에 반영하는 중이에요.' : input.isPublic ? '등록했어요. 홈페이지에 올리는 중이에요.' : '비공개로 등록했어요.');
     $('search').value = '';
     loadList();
   } catch (err) {
