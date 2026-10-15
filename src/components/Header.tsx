@@ -35,6 +35,13 @@ export default function Header() {
             </Link>
 
             <Link
+              href="/reviews"
+              className={`text-nowrap ${pathName.startsWith('/reviews') ? 'font-bold' : 'font-medium text-edge-light'}`}
+            >
+              수강후기
+            </Link>
+
+            <Link
               href="/notice"
               className={`text-nowrap ${pathName.startsWith('/notice') ? 'font-bold' : 'font-medium text-edge-light'}`}
             >
@@ -140,6 +147,16 @@ export default function Header() {
                   onClick={() => closeDrawer()}
                 >
                   이벤트
+                </Link>
+              </li>
+
+              <li>
+                <Link
+                  href="/reviews"
+                  className={`text-nowrap py-4 text-[22px] font-bold ${pathName.startsWith('/reviews') ? 'text-edge-yellow' : ''}`}
+                  onClick={() => closeDrawer()}
+                >
+                  수강후기
                 </Link>
               </li>
 

@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root { --yellow:#FFD401; --purple:#7D5FFF; --navy:#140F33; --gray:#606060; --light:#999; --line:#e3e4ea; --bg:#F3F6F8; --red:#c5221f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:#333; font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif; font-size:15px; line-height:1.5; word-break:keep-all; }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  input, textarea { font:inherit; font-size:16px; color:#333; } /* 16px: 아이폰 확대 방지 */
+  .wrap { max-width:720px; margin:0 auto; padding:0 16px 120px; }
+  .top { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid var(--line); }
+  .top .in { max-width:720px; margin:0 auto; display:flex; align-items:center; gap:10px; padding:14px 16px; }
+  .top h1 { font-size:18px; margin:0; flex:1; }
+  .icon-btn { border:0; background:none; font-size:20px; padding:4px 8px; }
+  .seg { display:flex; background:#e6e8ee; border-radius:12px; padding:3px; gap:3px; margin-top:14px; }
+  .seg button { flex:1; border:0; background:none; border-radius:9px; padding:9px; font-weight:700; color:#888; }
+  .seg button.on { background:#fff; color:#333; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .search { width:100%; margin-top:10px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#fff; }
+  .count { font-size:13px; color:var(--gray); margin:12px 2px 8px; }
+  .item { background:#fff; border-radius:14px; padding:14px; display:grid; gap:6px; margin-bottom:10px; border:1px solid transparent; }
+  .item.off { opacity:.55; }
+  .item .row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; color:var(--light); }
+  .item .open { border:0; background:none; text-align:left; padding:0; display:grid; gap:4px; }
+  .item .hl { font-weight:700; color:var(--navy); }
+  .item .tx { color:#666; font-size:14px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .warn-date { color:var(--red); font-weight:700; }
+  .switch { display:inline-flex; align-items:center; gap:6px; border:0; background:none; padding:4px 0; font-size:13px; color:#333; font-weight:600; }
+  .switch i { width:42px; height:24px; border-radius:12px; background:#ccc; position:relative; display:inline-block; transition:background .15s; }
+  .switch i::after { content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:left .15s; }
+  .switch.on i { background:var(--purple); }
+  .switch.on i::after { left:21px; }
+  .fab { position:fixed; right:max(16px, env(safe-area-inset-right)); bottom:max(20px, env(safe-area-inset-bottom)); border:0; background:var(--yellow); border-radius:999px; padding:15px 22px; font-weight:800; box-shadow:0 6px 16px rgba(0,0,0,.18); }
+  .field { margin-top:16px; }
+  .label { display:block; font-size:13px; font-weight:700; color:var(--gray); margin-bottom:6px; }
+  .req { color:var(--red); }
+  .box { width:100%; background:#fff; border:1px solid #d6d8e0; border-radius:12px; padding:11px 12px; }
+  .box:focus { outline:2px solid var(--purple); border-color:transparent; }
+  textarea.box { min-height:170px; resize:vertical; line-height:1.6; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .hint { font-size:12.5px; color:var(--gray); margin-top:6px; }
+  .hint.bad { color:var(--red); font-weight:600; }
+  .masked { color:var(--purple); font-weight:700; }
+  .small-btn { border:0; background:var(--navy); color:#fff; border-radius:10px; padding:8px 12px; font-size:13px; font-weight:700; margin-top:8px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { border:1px solid #d6d8e0; background:#fff; border-radius:999px; padding:7px 14px; font-weight:600; font-size:14px; }
+  .chip.on { background:var(--navy); border-color:var(--navy); color:#fff; }
+  .hl-row { display:flex; gap:6px; }
+  .hl-row .box { flex:1; }
+  .clear { border:1px solid #d6d8e0; background:#fff; border-radius:12px; padding:0 12px; }
+  .preview-title { font-size:13px; font-weight:700; color:var(--gray); margin:22px 0 8px; }
+  .card { background:#fff; border:1px solid #e8e8e8; border-radius:20px; padding:20px; display:grid; gap:12px; }
+  .card .h { font-size:17px; font-weight:700; color:var(--navy); line-height:1.45; }
+  .card .t { color:var(--gray); white-space:pre-line; line-height:1.7; }
+  .card .t b { color:#333; font-weight:600; }
+  .card .m { display:flex; justify-content:space-between; font-weight:600; padding-top:4px; }
+  .card .m span { color:#BBB; font-weight:400; font-size:14px; }
+  .pub { display:flex; justify-content:space-between; align-items:center; background:#fff; border-radius:12px; padding:12px 14px; margin-top:18px; }
+  .primary { display:block; width:100%; border:0; background:var(--yellow); border-radius:14px; padding:16px; font-weight:800; font-size:16px; margin-top:14px; }
+  .primary:disabled { opacity:.6; }
+  .secondary { display:block; width:100%; border:1px solid #ccc; background:#fff; border-radius:14px; padding:14px; font-weight:700; margin-top:10px; }
+  .danger-zone { margin-top:26px; border-top:1px solid var(--line); padding-top:16px; }
+  .danger { border:0; background:none; color:var(--red); font-weight:700; padding:6px 0; }
+  .confirm { background:#fff; border:1px solid #f3c1bd; border-radius:12px; padding:14px; margin-top:8px; }
+  .confirm p { margin:0 0 10px; color:var(--red); font-weight:700; font-size:14px; }
+  .confirm .btns { display:flex; gap:8px; }
+  .confirm .btns button { flex:1; border:0; border-radius:10px; padding:11px; font-weight:700; }
+  .confirm .yes { background:var(--red); color:#fff; }
+  .confirm .no { background:#eee; }
+  .toast { position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:#222; color:#fff; padding:11px 16px; border-radius:12px; font-size:14px; max-width:calc(100% - 32px); z-index:20; }
+  .error { background:#fde8e7; color:var(--red); border-radius:12px; padding:12px 14px; margin-top:14px; font-weight:600; font-size:14px; }
+  .empty { text-align:center; color:var(--gray); padding:40px 0; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+
+<!-- 목록 화면 -->
+<section id="listView">
+  <div class="top"><div class="in"><h1>엣지영어 후기 관리</h1><button class="icon-btn" id="refreshBtn" type="button" aria-label="새로고침">↻</button></div></div>
+  <div class="wrap">
+    <div class="seg" id="brandSeg"></div>
+    <input class="search" id="search" type="search" placeholder="이름·내용으로 찾기">
+    <p class="count" id="count"></p>
+    <div id="list"></div>
+  </div>
+  <button class="fab" id="addBtn" type="button">+ 후기 등록</button>
+</section>
+
+<!-- 등록·수정 화면 -->
+<section id="formView" hidden>
+  <div class="top"><div class="in"><button class="icon-btn" id="backBtn" type="button" aria-label="목록으로">←</button><h1 id="formTitle">새 후기</h1></div></div>
+  <form class="wrap" id="form" novalidate>
+    <div class="seg" id="formBrandSeg"></div>
+
+    <div class="field">
+      <label class="label" for="text">후기 내용 <span class="req">*</span></label>
+      <textarea class="box" id="text" placeholder="카카오톡에서 복사한 후기를 붙여넣으세요"></textarea>
+      <button class="small-btn" id="pickHl" type="button">선택한 문장을 대표 문장으로</button>
+      <p class="hint" id="textHint">문장을 길게 눌러 선택한 뒤 위 버튼을 누르세요.</p>
+    </div>
+
+    <div class="field">
+      <label class="label" for="highlight">대표 문장 (선택)</label>
+      <div class="hl-row"><input class="box" id="highlight" type="text" placeholder="카드 제목으로 크게 보여요"><button class="clear" id="clearHl" type="button" aria-label="대표 문장 지우기">✕</button></div>
+      <p class="hint" id="hlHint"></p>
+    </div>
+
+    <div class="two field">
+      <div>
+        <label class="label" for="name">수강생 이름 <span class="req">*</span></label>
+        <input class="box" id="name" type="text" autocomplete="off" placeholder="김민수">
+        <p class="hint" id="nameHint">저장할 때 가운데 글자가 가려져요.</p>
+      </div>
+      <div>
+        <label class="label" for="date">후기 날짜 <span class="req">*</span></label>
+        <input class="box" id="date" type="date">
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="label">직업 (선택)</span>
+      <div class="chips" id="jobChips"></div>
+      <input class="box" id="jobCustom" type="text" placeholder="직업 직접 입력" style="margin-top:8px" hidden>
+    </div>
+
+    <p class="preview-title">홈페이지에 이렇게 보여요</p>
+    <div class="card" id="preview"></div>
+
+    <div class="pub"><span>홈페이지에 공개</span><button class="switch on" id="pubSwitch" type="button" aria-pressed="true"><i></i></button></div>
+
+    <div class="error" id="formError" hidden></div>
+    <button class="primary" id="submitBtn" type="submit">등록하기</button>
+
+    <div class="danger-zone" id="dangerZone" hidden>
+      <button class="danger" id="deleteBtn" type="button">이 후기 삭제</button>
+      <div class="confirm" id="confirmBox" hidden>
+        <p>이 후기를 완전히 삭제할까요? 되돌릴 수 없어요.<br><span style="font-weight:400;color:#666">잠시 내리려면 '홈페이지에 공개'를 끄세요.</span></p>
+        <div class="btns"><button class="yes" id="confirmYes" type="button">삭제</button><button class="no" id="confirmNo" type="button">취소</button></div>
+      </div>
+    </div>
+  </form>
+</section>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const BRANDS = ['엣지영어', '영붙캠'];
+const JOBS = ['직장인', '대학생', '주부', '직접 입력'];
+const $ = (id) => document.getElementById(id);
+
+const state = { brand: loadBrand(), reviews: [], editing: null, job: '', isPublic: true, saving: false };
+
+function loadBrand() {
+  try { const b = localStorage.getItem('reviewBrand'); if (BRANDS.includes(b)) return b; } catch (e) {}
+  return BRANDS[0];
+}
+function saveBrand(b) { try { localStorage.setItem('reviewBrand', b); } catch (e) {} }
+
+// 서버(Code.gs) 호출
+function call(fn, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run.withSuccessHandler(resolve).withFailureHandler((e) => reject(e && e.message ? e : new Error(String(e))))[fn](...args);
+  });
+}
+
+function maskName(raw) {
+  const chars = Array.from(String(raw || '').replace(/\s+/g, ''));
+  if (chars.length <= 1) return chars.join('');
+  if (chars.length === 2) return chars[0] + 'O';
+  return chars[0] + 'O'.repeat(chars.length - 2) + chars[chars.length - 1];
+}
+const hasContact = (t) => /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/.test(t) || /[\w.+-]+@[\w-]+(\.[\w-]+)+/.test(t);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const dot = (d) => d.replace(/-/g, '.');
+const who = (r) => (r.job ? r.job + ' ' : '') + r.name + ' 님';
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+
+function renderSeg(el, current, onPick) {
+  el.innerHTML = BRANDS.map((b) => `<button type="button" class="${b === current ? 'on' : ''}" data-b="${b}">${b}</button>`).join('');
+  el.querySelectorAll('button').forEach((btn) => { btn.onclick = () => onPick(btn.dataset.b); });
+}
+
+/* ---------- 목록 ---------- */
+async function loadList() {
+  $('count').textContent = '불러오는 중…';
+  try {
+    state.reviews = await call('listReviews', state.brand);
+    renderList();
+  } catch (e) {
+    $('count').textContent = '';
+    $('list').innerHTML = `<div class="error">목록을 불러오지 못했어요. ↻ 를 눌러 다시 시도해 주세요. (${esc(e.message)})</div>`;
+  }
+}
+
+function renderList() {
+  renderSeg($('brandSeg'), state.brand, (b) => { state.brand = b; saveBrand(b); loadList(); });
+  const q = $('search').value.replace(/\s+/g, '');
+  const list = state.reviews.filter((r) => !q || (r.name + r.job + r.text + r.highlight).replace(/\s+/g, '').includes(q));
+  const pub = state.reviews.filter((r) => r.isPublic).length;
+  $('count').textContent = `전체 ${state.reviews.length}개 · 공개 ${pub}개${q ? ` · 검색 결과 ${list.length}개` : ''}`;
+  if (!list.length) { $('list').innerHTML = `<p class="empty">${q ? '찾는 후기가 없어요.' : '아직 등록된 후기가 없어요.<br>아래 + 후기 등록을 눌러 시작하세요.'}</p>`; return; }
+
+  $('list').innerHTML = list.map((r) => `
+    <div class="item${r.isPublic ? '' : ' off'}">
+      <div class="row">
+        <span>${r.date ? dot(r.date) : '<span class="warn-date">날짜 없음</span>'} · ${esc(who(r))}</span>
+        <button class="switch${r.isPublic ? ' on' : ''}" type="button" data-pub="${r.id}" aria-pressed="${r.isPublic}">${r.isPublic ? '공개' : '숨김'}<i></i></button>
+      </div>
+      <button class="open" type="button" data-open="${r.id}">
+        ${r.highlight ? `<span class="hl">“${esc(r.highlight)}”</span>` : ''}
+        <span class="tx">${esc(r.text)}</span>
+      </button>
+    </div>`).join('');
+
+  $('list').querySelectorAll('[data-open]').forEach((b) => { b.onclick = () => openForm(state.reviews.find((r) => r.id === b.dataset.open)); });
+  $('list').querySelectorAll('[data-pub]').forEach((b) => { b.onclick = () => togglePublic(b.dataset.pub); });
+}
+
+async function togglePublic(id) {
+  const r = state.reviews.find((x) => x.id === id);
+  const next = !r.isPublic;
+  r.isPublic = next; renderList(); // 바로 반영해 보여주고, 실패하면 되돌림
+  try {
+    await call('setPublic', id, next);
+    toast(next ? '공개했어요. 홈페이지에 5분 안에 반영돼요.' : '숨겼어요. 홈페이지에서 5분 안에 사라져요.');
+  } catch (e) {
+    r.isPublic = !next; renderList();
+    toast('변경하지 못했어요: ' + e.message);
+  }
+}
+
+/* ---------- 등록·수정 ---------- */
+function openForm(review) {
+  state.editing = review || null;
+  const r = review || { brand: state.brand, text: '', highlight: '', name: '', date: today(), job: '', isPublic: true };
+  state.formBrand = r.brand;
+  state.isPublic = r.isPublic;
+  state.job = r.job;
+  $('formTitle').textContent = review ? '후기 수정' : '새 후기';
+  $('submitBtn').textContent = review ? '저장하기' : '등록하기';
+  $('text').value = r.text;
+  $('highlight').value = r.highlight;
+  $('name').value = r.name;
+  $('date').value = r.date;
+  $('jobCustom').value = JOBS.includes(r.job) || !r.job ? '' : r.job;
+  $('formError').hidden = true;
+  $('dangerZone').hidden = !review;
+  $('confirmBox').hidden = true;
+  renderForm();
+  $('listView').hidden = true; $('formView').hidden = false;
+  window.scrollTo(0, 0);
+}
+
+function closeForm() {
+  $('formView').hidden = true; $('listView').hidden = false;
+}
+
+function currentJob() {
+  if (state.job === '직접 입력' || (state.job && !JOBS.includes(state.job))) return $('jobCustom').value.trim();
+  return state.job;
+}
+
+function renderForm() {
+  renderSeg($('formBrandSeg'), state.formBrand, (b) => { state.formBrand = b; saveBrand(b); renderForm(); });
+
+  const isCustom = state.job === '직접 입력' || (state.job && !JOBS.includes(state.job));
+  $('jobChips').innerHTML = JOBS.map((j) => `<button type="button" class="chip${(j === '직접 입력' ? isCustom : state.job === j) ? ' on' : ''}" data-j="${j}">${j}</button>`).join('');
+  $('jobChips').querySelectorAll('button').forEach((b) => {
+    b.onclick = () => {
+      const j = b.dataset.j;
+      const on = j === '직접 입력' ? isCustom : state.job === j;
+      state.job = on ? '' : j; // 다시 누르면 선택 해제
+      renderForm();
+      if (state.job === '직접 입력') $('jobCustom').focus();
+    };
+  });
+  $('jobCustom').hidden = !isCustom;
+
+  $('pubSwitch').classList.toggle('on', state.isPublic);
+  $('pubSwitch').setAttribute('aria-pressed', state.isPublic);
+
+  const text = $('text').value.trim();
+  const hl = $('highlight').value.trim();
+  const masked = maskName($('name').value);
+
+  $('nameHint').innerHTML = masked ? `홈페이지 표시: <span class="masked">${esc(masked)}</span>` : '저장할 때 가운데 글자가 가려져요.';
+  $('textHint').className = hasContact(text) ? 'hint bad' : 'hint';
+  $('textHint').textContent = hasContact(text)
+    ? '전화번호나 이메일이 들어 있어요. 홈페이지에서는 자동으로 가려지지만, 지우는 것이 가장 안전해요.'
+    : '문장을 길게 눌러 선택한 뒤 위 버튼을 누르세요.';
+  $('hlHint').textContent = hl && text && !text.includes(hl) ? '후기 본문에 없는 문장이에요. 그래도 제목으로는 보여요.' : '';
+
+  // 미리보기 (홈페이지 카드와 같은 모양)
+  const idx = hl ? text.indexOf(hl) : -1;
+  const body = idx < 0 ? esc(text) : esc(text.slice(0, idx)) + '<b>' + esc(hl) + '</b>' + esc(text.slice(idx + hl.length));
+  const date = $('date').value;
+  $('preview').innerHTML = text || hl
+    ? `${hl ? `<p class="h" style="margin:0">“${esc(hl)}”</p>` : ''}<p class="t" style="margin:0">${body}</p><div class="m">${esc(masked ? who({ job: currentJob(), name: masked }) : '이름 입력 전')}<span>${date ? dot(date) : ''}</span></div>`
+    : '<p class="t" style="margin:0;color:#bbb">후기를 붙여넣으면 미리보기가 나타나요.</p>';
+}
+
+function pickHighlight() {
+  const ta = $('text');
+  const picked = ta.value.slice(ta.selectionStart, ta.selectionEnd).trim();
+  if (!picked) { toast('후기 내용에서 문장을 먼저 길게 눌러 선택해 주세요.'); return; }
+  $('highlight').value = picked;
+  renderForm();
+}
+
+async function submitForm(e) {
+  e.preventDefault();
+  if (state.saving) return;
+  const input = {
+    id: state.editing ? state.editing.id : '',
+    brand: state.formBrand,
+    text: $('text').value,
+    highlight: $('highlight').value,
+    name: $('name').value,
+    date: $('date').value,
+    job: currentJob(),
+    isPublic: state.isPublic,
+  };
+  const problem = !input.text.trim() ? '후기 내용을 붙여넣어 주세요.' : !maskName(input.name) ? '수강생 이름을 입력해 주세요.' : !input.date ? '날짜를 선택해 주세요.' : '';
+  if (problem) { showError(problem); return; }
+
+  state.saving = true; $('submitBtn').disabled = true; $('submitBtn').textContent = '저장 중…';
+  try {
+    await call('saveReview', input);
+    state.brand = input.brand;
+    closeForm();
+    toast(state.editing ? '저장했어요. 홈페이지에 5분 안에 반영돼요.' : input.isPublic ? '등록했어요. 홈페이지에 5분 안에 올라가요.' : '비공개로 등록했어요.');
+    $('search').value = '';
+    loadList();
+  } catch (err) {
+    showError('저장하지 못했어요: ' + err.message);
+  } finally {
+    state.saving = false; $('submitBtn').disabled = false; $('submitBtn').textContent = state.editing ? '저장하기' : '등록하기';
+  }
+}
+
+function showError(msg) { $('formError').textContent = msg; $('formError').hidden = false; $('formError').scrollIntoView({ block: 'center' }); }
+
+async function confirmDelete() {
+  try {
+    await call('deleteReview', state.editing.id);
+    closeForm(); toast('삭제했어요.'); loadList();
+  } catch (e) { showError('삭제하지 못했어요: ' + e.message); }
+}
+
+/* ---------- 연결 ---------- */
+$('addBtn').onclick = () => openForm(null);
+$('backBtn').onclick = closeForm;
+$('refreshBtn').onclick = loadList;
+$('search').oninput = renderList;
+$('form').onsubmit = submitForm;
+$('pickHl').onclick = pickHighlight;
+$('clearHl').onclick = () => { $('highlight').value = ''; renderForm(); };
+$('pubSwitch').onclick = () => { state.isPublic = !state.isPublic; renderForm(); };
+$('deleteBtn').onclick = () => { $('confirmBox').hidden = false; };
+$('confirmNo').onclick = () => { $('confirmBox').hidden = true; };
+$('confirmYes').onclick = confirmDelete;
+['text', 'highlight', 'name', 'date', 'jobCustom'].forEach((id) => $(id).addEventListener('input', renderForm));
+
+renderSeg($('brandSeg'), state.brand, () => {});
+loadList();
+</script>
+</body>
+</html>
