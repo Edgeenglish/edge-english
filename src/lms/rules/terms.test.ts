@@ -148,6 +148,11 @@ describe('학생 문서 유형 3가지 (계약서 / 안내서만 / 계약 후 �
     expect(r.flags.join()).toContain('2회차: 계약서·안내서 전달 기록 없음');
   });
 
+  it('옛 안내서(GV4)만 받은 학생도 계약 판본 없음', () => {
+    const r = assessStudentDocs([{ seq: 1, guides: [{ code: 'GV4', timing: 'unknown', exposure: ['student_sheet'] }] }], today);
+    expect(r).toMatchObject({ category: 'guide_only', contractCode: null, guideCodes: ['GV4'] });
+  });
+
   it('기록이 전혀 없으면 미확인', () => {
     expect(assessStudentDocs([{ seq: 1 }], today)).toMatchObject({ category: 'unknown', contractCode: null });
   });

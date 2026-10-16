@@ -10,6 +10,7 @@
 | [policy/critical-policies.md](policy/critical-policies.md) | **핵심 정책 27개 검토표** (횟수·변경권·보강·이월·급여, 판본별 적용 대상·실제 승인 여부) |
 | [policy/contract-version-check.md](policy/contract-version-check.md) | 구계약 적용 학생·강사 확인 방법 (서명·발송·동의 구분, 계약서/안내서만/계약 후 안내서만 유형, 이름 없는 집계) |
 | [policy/conflicts.md](policy/conflicts.md) | **정책 충돌 목록** 27건 (횟수·돈·계약 우선) |
+| [policy/guide-versions-in-sheets.md](policy/guide-versions-in-sheets.md) | 학생 시트 속 안내서 판 확인 결과 (5가지 판, 이름 없이 건수만) |
 | [policy/guide-2026-07-09-review.md](policy/guide-2026-07-09-review.md) | 수업 전 필독안내서(2장 세트) 원문과 계약서·FAQ·기획서 항목별 대조, 학생 유형별 영향 |
 | [policy/sources.md](policy/sources.md) | 근거 문서·버전 목록 (계약서 판본, 안내문, 시트) |
 | [policy/process.md](policy/process.md) | 정책 변경 절차, 영향 체크리스트, 점검 시점 |
@@ -35,7 +36,7 @@
 
 | 위치 | 내용 | 검증 |
 |---|---|---|
-| `src/lms/rules/` | 수강기간·회차·변경권·변경 판정·휴무 미리보기 규칙 + 정책 기준표 일관성 검사 | `npm test` (83개) |
+| `src/lms/rules/` | 수강기간·회차·변경권·변경 판정·휴무 미리보기 규칙 + 정책 기준표 일관성 검사 | `npm test` (84개) |
 | `supabase/migrations/` | DB 스키마 초안 v0.2, 단계별 5개 파일 (400 = 수업 안내 확인·동의) (**아직 어떤 Supabase에도 적용 안 함**) | `npm run test:db` (63개, 로컬 임시 PostgreSQL) |
 | `supabase/tests/` | DB 제약·권한 테스트 | |
 

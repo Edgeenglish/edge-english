@@ -145,10 +145,14 @@ export function assessTerms(records: ContractRecord[], today: KstDate): TermsAss
 // 필독안내서 (계약서가 아님) — POL-OP-09
 // ---------------------------------------------------------------------
 
-export type GuideCode = 'G20260709';
+export type GuideCode = 'GV1' | 'GV2' | 'GV3' | 'GV4' | 'G20260709';
 
-export const GUIDES: Record<GuideCode, { label: string; pages: number; firstSeen: KstDate }> = {
-  // 이전 판은 파일로 찾지 못함. 이미지에 날짜·판 표시가 없어 Drive 파일 날짜로만 구분
+export const GUIDES: Record<GuideCode, { label: string; pages: number; firstSeen: KstDate | null }> = {
+  // 이미지에 날짜·판 표시가 없음. GV1~GV4는 학생 수강현황 시트에서 발견 (guide-versions-in-sheets.md), 날짜 미상
+  GV1: { label: '필독안내서 옛 판 1 (30일, 4·6·10회, 이월 없음)', pages: 1, firstSeen: null },
+  GV2: { label: '필독안내서 옛 판 2 (28일, 4·6·10회, 이월 없음)', pages: 1, firstSeen: null },
+  GV3: { label: '필독안내서 옛 판 3 (28일, 월 1·2·3회, 이월 없음)', pages: 1, firstSeen: null },
+  GV4: { label: '필독안내서 옛 판 4 (28일, 월 1·2·3회, 종료 후 이틀 안 이월)', pages: 1, firstSeen: null },
   G20260709: { label: '수업 전 필독안내서 2026-07-09 판 (이미지 2장 세트)', pages: 2, firstSeen: '2026-07-09' },
 };
 
