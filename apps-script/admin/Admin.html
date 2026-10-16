@@ -78,9 +78,8 @@
   .site.info { background:#eceef2; color:var(--gray); }
   .site button { margin-left:auto; border:0; background:none; font-weight:700; text-decoration:underline; padding:0; color:inherit; }
   .badge { font-size:12px; font-weight:700; border-radius:6px; padding:2px 7px; white-space:nowrap; }
-  .badge.live { background:#e6f4ea; color:#137333; }
   .badge.wait { background:#fff4d6; color:#8a5a00; }
-  .dates { font-size:12.5px; color:var(--light); }
+  .created { font-size:12.5px; color:var(--light); margin-top:6px; }
   [hidden] { display:none !important; }
 </style>
 </head>
@@ -127,6 +126,7 @@
       <div>
         <label class="label" for="date">후기 날짜 <span class="req">*</span></label>
         <input class="box" id="date" type="date">
+        <p class="created" id="createdHint" hidden></p>
       </div>
     </div>
 
@@ -245,14 +245,14 @@ function renderSite() {
   const again = ' <button type="button" id="siteAgain">다시 확인</button>';
   if (state.brand !== SITE_BRAND) return set('info', '영붙캠 홈페이지는 아직 연결 전이에요. 후기는 저장돼요.');
   if (!state.site) return set('info', '홈페이지 반영 상태 확인 중…');
-  if (!state.site.ok) set('info', '홈페이지 상태를 확인하지 못했어요. 등록한 후기는 5분 안에 자동 반영돼요.' + again);
+  if (!state.site.ok) set('info', '반영 상태 확인 불가 · 5분 안에 자동 반영돼요' + again);
   else if (state.site.source !== 'sheet') set('bad', '⚠ 홈페이지가 이 시트와 연결되어 있지 않아요. 운영 안내를 확인해 주세요.' + again);
   else {
     const d = siteDiff();
     const n = d.waitShow.length + d.waitHide.length;
-    if (!n) set('ok', '✅ 홈페이지 반영 완료 · 공개 후기 ' + state.reviews.filter((r) => r.isPublic).length + '개가 모두 보여요' + again);
-    else if (state.site.tries < 15) set('pending', '⏳ 반영 중 ' + n + '개 · 잠시 후 자동으로 다시 확인해요');
-    else set('pending', '⏳ 반영 대기 ' + n + '개 · 5분 안에 자동 반영돼요' + again);
+    if (!n) set('ok', '✅ 모두 반영됨' + again);
+    else if (state.site.tries < 15) set('pending', '⏳ 반영 중 ' + n + '개');
+    else set('pending', '⏳ 반영 대기 ' + n + '개 · 5분 안에 자동 반영' + again);
   }
   const btn = $('siteAgain'); if (btn) btn.onclick = () => { state.site = null; renderSite(); checkSite(); };
 }
@@ -262,7 +262,7 @@ function siteBadge(r) {
   const d = siteDiff();
   if (d.waitShow.includes(r.id)) return '<span class="badge wait">⏳ 반영 중</span>';
   if (d.waitHide.includes(r.id)) return '<span class="badge wait">⏳ 숨김 반영 중</span>';
-  return r.isPublic ? '<span class="badge live">✓ 홈페이지에 보임</span>' : '';
+  return '';
 }
 
 function renderList() {
@@ -276,10 +276,9 @@ function renderList() {
   $('list').innerHTML = list.map((r) => `
     <div class="item${r.isPublic ? '' : ' off'}">
       <div class="row">
-        <span>${esc(who(r))} ${siteBadge(r)}</span>
+        <span>${esc(who(r))} · ${r.date ? dot(r.date) : '<span class="warn-date">날짜 없음</span>'} ${siteBadge(r)}</span>
         <button class="switch${r.isPublic ? ' on' : ''}" type="button" data-pub="${r.id}" aria-pressed="${r.isPublic}">${r.isPublic ? '공개' : '숨김'}<i></i></button>
       </div>
-      <div class="dates">후기 날짜 ${r.date ? dot(r.date) : '<span class="warn-date">없음</span>'}${r.createdAt && /^\d{4}-/.test(r.createdAt) ? ' · 등록 ' + dot(r.createdAt.slice(5, 10)) + ' ' + r.createdAt.slice(11, 16) : ''}</div>
       <button class="open" type="button" data-open="${r.id}">
         ${r.highlight ? `<span class="hl">“${esc(r.highlight)}”</span>` : ''}
         <span class="tx">${esc(r.text)}</span>
@@ -317,6 +316,9 @@ function openForm(review) {
   $('highlight').value = r.highlight;
   $('name').value = r.name;
   $('date').value = r.date;
+  const created = review && /^\d{4}-/.test(review.createdAt || '') ? review.createdAt : '';
+  $('createdHint').textContent = created ? '등록 ' + dot(created.slice(0, 10)) + ' ' + created.slice(11, 16) : '';
+  $('createdHint').hidden = !created;
   $('jobCustom').value = JOBS.includes(r.job) || !r.job ? '' : r.job;
   $('formError').hidden = true;
   $('dangerZone').hidden = !review;
