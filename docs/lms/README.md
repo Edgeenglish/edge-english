@@ -7,6 +7,8 @@
 | 정책 관리 | 내용 |
 |---|---|
 | [policy/register.md](policy/register.md) | **운영정책 기준표** 68개 (확정·검토 중·변경 제안·폐지, 근거, 기존/신규 차이, 고칠 곳) |
+| [policy/critical-policies.md](policy/critical-policies.md) | **핵심 정책 27개 검토표** (횟수·변경권·보강·이월·급여, 판본별 적용 대상·실제 승인 여부) |
+| [policy/contract-version-check.md](policy/contract-version-check.md) | 구계약 적용 학생·강사 확인 방법 (서명·발송·동의 구분, 이름 없는 집계) |
 | [policy/conflicts.md](policy/conflicts.md) | **정책 충돌 목록** 22건 (횟수·돈·계약 우선) |
 | [policy/sources.md](policy/sources.md) | 근거 문서·버전 목록 (계약서 판본, 안내문, 시트) |
 | [policy/process.md](policy/process.md) | 정책 변경 절차, 영향 체크리스트, 점검 시점 |
@@ -30,7 +32,7 @@
 
 | 위치 | 내용 | 검증 |
 |---|---|---|
-| `src/lms/rules/` | 수강기간·회차·변경권·변경 판정·휴무 미리보기 규칙 + 정책 기준표 일관성 검사 | `npm test` (48개) |
+| `src/lms/rules/` | 수강기간·회차·변경권·변경 판정·휴무 미리보기 규칙 + 정책 기준표 일관성 검사 | `npm test` (74개) |
 | `supabase/migrations/` | DB 스키마 초안 v0.2, 단계별 4개 파일 (**아직 어떤 Supabase에도 적용 안 함**) | `npm run test:db` (45개, 로컬 임시 PostgreSQL) |
 | `supabase/tests/` | DB 제약·권한 테스트 | |
 

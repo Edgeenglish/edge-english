@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CONFIRMED_REFS, PENDING_REFS } from './policy';
 import { CLASS_STATUSES, STATUS_RULES } from './status';
+import { TERMS } from './terms';
 
 const ROOT = join(__dirname, '..', '..', '..');
 const register = readFileSync(join(ROOT, 'docs/lms/policy/register.md'), 'utf8');
@@ -41,6 +42,35 @@ describe('정책 기준표 형식', () => {
     expect(m, '요약표 합계 줄이 없음').not.toBeNull();
     const count = (s: string) => [...policies.values()].filter((v) => v === s).length;
     expect(m!.slice(1).map(Number)).toEqual([policies.size, count('확정'), count('검토 중'), count('변경 제안'), count('폐지')]);
+  });
+});
+
+describe('핵심 정책 표시 (횟수·변경권·보강·이월·연기·급여·환불)', () => {
+  const blocks = register.split(/^### /m).slice(1).filter((b) => /^POL-/.test(b));
+
+  it('핵심 정책에는 적용 대상과 판본 차이가 반드시 있음', () => {
+    const missing = blocks
+      .filter((b) => b.includes('- **핵심 영향**:'))
+      .filter((b) => !b.includes('- **적용 대상**:') || !b.includes('- **판본 차이**:'))
+      .map((b) => b.slice(0, 11));
+    expect(missing).toEqual([]);
+  });
+
+  it('승인 표시는 정해진 4가지 중 하나 (◐는 정식 승인이 아님을 명시)', () => {
+    const bad = blocks
+      .map((b) => [b.slice(0, 11), /^- \*\*대표 승인\*\*: (.+)$/m.exec(b)?.[1] ?? ''] as const)
+      .filter(([, a]) => !(/^✅ 승인/.test(a) || /^⬜/.test(a) || (/^◐ (대화 지시|기획서 결정 목록)/.test(a) && a.includes('정식 승인 아님'))));
+    expect(bad).toEqual([]);
+  });
+});
+
+describe('계약 판본 코드: 코드 ↔ DB', () => {
+  it('판별 규칙(terms.ts)의 판본이 DB terms_versions 에 모두 있음', () => {
+    const sql = readFileSync(join(ROOT, 'supabase/migrations/20261016000000_lms_core.sql'), 'utf8');
+    const dbCodes = [...sql.matchAll(/^\s+\('([A-Z0-9_]+)', '(student|tutor)'/gm)].map((m) => [m[1], m[2]]);
+    for (const [code, meta] of Object.entries(TERMS)) {
+      expect(dbCodes, code).toContainEqual([code, meta.audience]);
+    }
   });
 });
 

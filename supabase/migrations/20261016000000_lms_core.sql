@@ -120,11 +120,16 @@ create table terms_versions (
   note text
 );
 insert into terms_versions (code, audience, title, first_seen, is_draft, source_ref, note) values
+  ('SC0A', 'student', '학생 계약 2024-09 이전 판 (12시간 기준)', null, false, 'SRC-SC0A', '취소 12시간 전, 4주 2/3/5회, 보강 2주 안'),
+  ('SC0B', 'student', '학생 계약 2024-11 판 (30일, 효력 조항 없음)', '2024-11-16', false, 'SRC-SC0B', '재등록 시 효력 조항 없음'),
+  ('SC0C', 'student', '학생 계약 2025-05 판 (30일)', '2025-05-27', false, 'SRC-SC0C', null),
   ('SC1', 'student', '수강계약서 1판 (30일 기준)', '2025-10-22', false, 'SRC-SC1', '변경권 4·6·10회/30일, 연기 30일'),
   ('SC2', 'student', '수강계약서 2판 (28일 기준)', '2026-01-14', false, 'SRC-SC2', '변경권 1·2·3회/28일, 연기 28일'),
   ('SC3', 'student', '수강계약서 3판 초안', '2026-10-02', true, 'SRC-SC3', '내부 메모 정리 전'),
   ('SC_UNKNOWN', 'student', '판본 미확인 (이관 시 확인 필요)', null, false, '-', '이관 후 운영자가 확인해 바꿈'),
-  ('TC1', 'tutor', '강사계약서 1판 (기본 $14)', '2025-11-27', false, 'SRC-TC1', null),
+  ('TC0', 'tutor', '국내 강사 계약 2024-08 (원화 시급)', '2024-08-10', false, 'SRC-TC0', '기간 고정, 만료 후 상호 협의 연장'),
+  ('TC0B', 'tutor', '강사 계약 2025-11-04 판 ($14 + 최대 $2, 자동 갱신)', '2025-11-04', false, 'SRC-TC0B', null),
+  ('TC1', 'tutor', '강사계약서 1판 (기본 $14 + 최대 $3)', '2025-11-27', false, 'SRC-TC1', '1년, 갱신은 서면 동의'),
   ('TC2', 'tutor', '강사계약서 2판 (기본 $11)', '2026-01-09', false, 'SRC-TC2', null),
   ('TC3', 'tutor', '강사계약서 3판 (기본 $11, 보강+보상)', '2026-08-24', false, 'SRC-TC3', null),
   ('TC_UNKNOWN', 'tutor', '판본 미확인', null, false, '-', null);
