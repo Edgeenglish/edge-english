@@ -5,7 +5,7 @@
 // - 옛 상품(1판 계약 30일, 2개월 등)은 다시 계산하지 않고 시트의 실제 날짜를 그대로 이관 (CF-04)
 
 import { addDays, diffDays, endOfKstDay, type KstDate } from './dates';
-import { CONFIRMED, RENEWAL, type CourseWeeks, type PendingPolicy } from './policy';
+import { CONFIRMED, RENEWAL, type CourseWeeks } from './policy';
 
 export type Period = { index: number; start: KstDate; end: KstDate };
 
@@ -49,15 +49,17 @@ export function periodOf(date: KstDate, startDate: KstDate, weeks: CourseWeeks, 
 /**
  * 재등록 시 새 수강 시작일
  * - 종료 후 결제 → 결제 후 첫 정규 수업일부터, 지난 기간 잔여 수업 이월 없음 (POL-RN-04, 정책 원본 A21 — 확정)
- * - 종료일(KST)까지 결제 → 미확정 (POL-RN-07) → 운영자가 정한 값을 넘겨야 계산됨
+ * - 종료일(KST)까지 결제 → 이전 종료일 뒤 처음 오는 정규 수업일부터 (POL-RN-07, 정책 원본 A25 — 확정)
  * paidOn = 실제 결제 완료일(KST)
  */
-export function renewalStartDate(
-  input: { previousFinalEnd: KstDate; paidOn: KstDate; firstLessonAfterPayment: KstDate; firstLessonAfterPreviousEnd: KstDate },
-  policy: Pick<PendingPolicy, 'onTimeRenewalStart'>,
-): KstDate {
+export function renewalStartDate(input: {
+  previousFinalEnd: KstDate;
+  paidOn: KstDate;
+  firstLessonAfterPayment: KstDate;
+  firstLessonAfterPreviousEnd: KstDate;
+}): KstDate {
   if (diffDays(input.paidOn, input.previousFinalEnd) >= 0) {
-    if (policy.onTimeRenewalStart === 'day_after_previous_end') return addDays(input.previousFinalEnd, 1);
+    if (RENEWAL.onTimeStart !== 'first_lesson_after_previous_end') throw new Error('재등록 규칙이 올바르지 않습니다.');
     if (diffDays(input.previousFinalEnd, input.firstLessonAfterPreviousEnd) <= 0) throw new Error('이전 종료일 뒤 첫 수업일이 올바르지 않습니다.');
     return input.firstLessonAfterPreviousEnd;
   }

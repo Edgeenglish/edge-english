@@ -50,6 +50,7 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Publishable key** (`sb_publishable_…`) 또는 옛 이름 anon key | 아님 (화면에 공개되는 키, RLS로 보호) |
 | `SUPABASE_SERVICE_ROLE_KEY` | **(나중에)** 시험용 전용으로 새로 만든 **Secret key** (`sb_secret_…`) | **비밀** — 이 칸에만. 채팅·GitHub·Vercel Production 금지. 쓰기 기능 시험 단계에서 Claude가 요청할 때 |
 
+- **주의 (2026-10-17 실제로 생긴 일)**: 값 칸에 `sb_publishable_로 시작하는 그 값` 같은 **설명 문구를 그대로 넣으면 안 된다.** Supabase → Project Settings → **API Keys** → Publishable key 줄의 **복사 버튼**으로 전체 키를 복사해 붙여 넣는다. 진짜 키는 `sb_publishable_` 뒤에 영문·숫자가 30자쯤 이어지고 한글·공백이 없다.
 - 저장 후 **새 세션**에서 반영된다. Claude는 값을 출력하지 않고 존재 여부만 확인한다.
 - DB 비밀번호(Database password)와 Supabase 계정 Access Token은 **필요 없다.** 표를 고칠 때는 1단계처럼 대표가 SQL Editor에서 실행한다. (Access Token은 계정 전체 권한이라 나중에 만들 운영 프로젝트까지 건드릴 수 있어 쓰지 않는다.)
 - 키가 노출됐다고 생각되면 Supabase → API Keys에서 **새 Secret key 생성 후 이전 키 삭제**.
@@ -67,7 +68,9 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 |---|---|
 | 시험용 프로젝트 | ✅ 생성 (대표) |
 | 마이그레이션·가상 데이터 | ✅ 2026-10-17 대표가 SQL Editor에서 실행, check.sql 6줄 모두 '통과' (프로젝트 주소 `kyeimjozkcqbgkepwrnv.supabase.co`) |
-| Claude 접속 (주소 허용·키) | ⬜ 2단계 대기 |
+| Claude 접속 — 주소 허용 | ✅ 2026-10-17 확인: 작업 환경에서 `kyeimjozkcqbgkepwrnv.supabase.co` 에 실제로 닿음 (관문 403 사라짐, Supabase 서버가 직접 응답) |
+| Claude 접속 — 환경 변수 | ◐ `NEXT_PUBLIC_SUPABASE_URL` 정상(시험용 주소와 일치). `NEXT_PUBLIC_SUPABASE_ANON_KEY` 는 **실제 키가 아니라 안내 문구가 들어 있음**(sb_publishable_ 뒤에 한글 문장, 25자) → Supabase가 "Invalid API key"로 거절. 값을 고친 뒤 새 세션 필요 |
+| 로그인 안 한 사용자 보안 실물 확인 | ⬜ 키 수정 후 `bash supabase/test-setup/anon-probe.sh` (로컬 재현에서는 통과) |
 | 로그인 | ⬜ 3단계 (화면 개발 후) |
 | Vercel 연결 | 하지 않음 (실제 운영 환경 — 별도 승인) |
 
@@ -78,4 +81,5 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 | `supabase/test-setup/schema_all.sql` | 마이그레이션 7개(000~600)를 순서대로 묶은 파일 (자동 생성: `node scripts/lms-test-bundle.mjs`, 테스트가 최신인지 확인) |
 | `supabase/test-setup/seed_fake.sql` | 가상 데이터 (이름 모두 '가상…', 이메일 example.com) |
 | `supabase/test-setup/check.sql` | 적용 확인 (읽기만) |
+| `supabase/test-setup/anon-probe.sh` | 실물 보안 점검 — 로그인 안 한 사용자로 표 40개·함수 9개 읽기/실행, 쓰기 4가지 시도. 시험용 주소가 아니거나 키 형식이 틀리면 바로 멈춤. 키 값은 출력 안 함 |
 | `supabase/migrations/20261016000600_lms_supabase_hardening.sql` | Supabase 기본 권한 정리: 로그인 안 한 사용자는 LMS 함수·학생 번호를 못 씀 |
