@@ -163,7 +163,7 @@
 
 <script>
 const BRANDS = ['엣지영어', '영붙캠'];
-const JOBS = ['직장인', '대학생', '주부', '직접 입력'];
+let JOBS = ['직장인', '대학생', '학생', '주부', '사업가', '직접 입력']; // 시트 '직업' 탭에서 다시 불러옴
 const $ = (id) => document.getElementById(id);
 
 const state = { brand: loadBrand(), reviews: [], editing: null, job: '', tutor: '', tutors: [], isPublic: true, saving: false, site: null };
@@ -456,7 +456,11 @@ $('confirmYes').onclick = confirmDelete;
 
 renderSeg($('brandSeg'), state.brand, () => {});
 loadList();
-call('getTutors').then((t) => { state.tutors = t; if (!$('formView').hidden) renderForm(); }).catch(() => {});
+call('getOptions').then((o) => {
+  state.tutors = o.tutors;
+  if (o.jobs.length) JOBS = o.jobs.filter((j) => j !== '직접 입력').concat('직접 입력');
+  if (!$('formView').hidden) renderForm();
+}).catch(() => {});
 </script>
 </body>
 </html>

@@ -16,9 +16,11 @@ const REFRESH_SECRET = '여기에_반영_비밀값_붙여넣기';
 const SHEET_NAME = '후기';
 const HEADERS = ['id', '브랜드', '날짜', '이름', '직업', '후기', '대표 문장', '공개', '등록 일시', '수정 일시', '강사'];
 const COL = { id: 0, brand: 1, date: 2, name: 3, job: 4, text: 5, highlight: 6, isPublic: 7, createdAt: 8, updatedAt: 9, tutor: 10 };
-// 관리용 강사 목록 (홈페이지에는 표시 안 함). 시트의 '강사' 탭 A열을 고치면 관리 화면 버튼이 바뀜
+// 관리 화면 버튼 목록. 시트의 '강사'·'직업' 탭 A열을 고치면 버튼이 바뀜 (강사는 홈페이지에 표시 안 함)
 const TUTOR_SHEET_NAME = '강사';
 const DEFAULT_TUTORS = ['Grace', 'Kai', 'Maria', 'Benny', 'Leslie', 'Olivia'];
+const JOB_SHEET_NAME = '직업';
+const DEFAULT_JOBS = ['직장인', '대학생', '학생', '주부', '사업가'];
 const BRANDS = ['엣지영어', '영붙캠'];
 
 function doGet() {
@@ -100,13 +102,26 @@ function checkSite() {
   return msg;
 }
 
-// 관리 화면 강사 버튼 목록 ('강사' 탭이 없으면 기본 목록으로 만듦)
+// 관리 화면 버튼 목록 한 번에 (강사·직업)
+function getOptions() {
+  return { tutors: getTutors(), jobs: getJobs() };
+}
+
 function getTutors() {
+  return readListTab_(TUTOR_SHEET_NAME, '강사 이름', DEFAULT_TUTORS);
+}
+
+function getJobs() {
+  return readListTab_(JOB_SHEET_NAME, '직업', DEFAULT_JOBS);
+}
+
+// 탭의 A열 2번째 줄부터 읽기. 탭이 없으면 기본 목록으로 만듦
+function readListTab_(name, header, defaults) {
   const ss = SpreadsheetApp.getActive();
-  let sheet = ss.getSheetByName(TUTOR_SHEET_NAME);
+  let sheet = ss.getSheetByName(name);
   if (!sheet) {
-    sheet = ss.insertSheet(TUTOR_SHEET_NAME);
-    sheet.getRange(1, 1, DEFAULT_TUTORS.length + 1, 1).setValues([['강사 이름']].concat(DEFAULT_TUTORS.map((t) => [t])));
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, defaults.length + 1, 1).setValues([[header]].concat(defaults.map((v) => [v])));
     sheet.getRange(1, 1).setFontWeight('bold');
   }
   return sheet.getDataRange().getValues().slice(1).map((row) => String(row[0]).trim()).filter(Boolean);
