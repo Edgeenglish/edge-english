@@ -2,6 +2,8 @@
 
 웹앱 + Supabase(PostgreSQL) 기반 LMS. 원본 기획서(2026-10-11)를 실제 운영정책과 대조해 고친 v2와 실행 계획.
 
+**새 채팅에서는 [`../lms-plan.md`](../lms-plan.md)(인수인계 문서)를 먼저 읽는다.** 기획서 원문 글자본: [`../lms-기획서-원문.md`](../lms-기획서-원문.md)
+
 **최우선 원칙: 운영정책은 [`policy/register.md`](policy/register.md)(정책 기준표)가 기준이다.** 계약서·FAQ·안내문·시트·코드가 서로 다르면 기준표에서 먼저 정리하고, 바꿀 때는 [`policy/process.md`](policy/process.md) 절차를 따른다.
 
 | 정책 관리 | 내용 |
