@@ -8,7 +8,7 @@ create table tutor_contracts (
   id uuid primary key default gen_random_uuid(),
   tutor_id uuid not null references tutors(id),
   terms_version text not null references terms_versions(code)
-    check (terms_audience(terms_version) = 'tutor'),
+    check (terms_kind_is(terms_version, 'contract', 'tutor')),  -- 서명한 계약서가 있는 강사만 행을 만듦
   signed_on date not null,
   base_rate_usd numeric(6, 2) not null check (base_rate_usd > 0),
   max_rate_usd numeric(6, 2) not null,

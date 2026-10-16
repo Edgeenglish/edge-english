@@ -18,7 +18,7 @@
 --  4. 겹치는 수업·두 번 차감은 DB 제약으로 막는다 (화면·서버 검사가 뚫려도 마지막 방어선)
 --  5. 학생·강사의 쓰기는 서버(검증된 로그인 + 규칙 검사)만. 앱 사용자에게는 본인 것 읽기만
 --  6. 운영정책 값은 DB에 두지 않는다 (docs/lms/policy/register.md → src/lms/rules/). 미확정 값은 비워 둔다
---  7. 학생·강사가 동의한 계약 판본(terms_versions)을 기록해 판본별 규칙을 적용할 수 있게 한다
+--  7. 학생·강사가 받은 계약서·안내서 판본과 전달·동의 근거를 기록한다. 받지 않은 문서의 판본을 붙이지 않는다
 -- =====================================================================
 
 create extension if not exists btree_gist;
@@ -106,12 +106,18 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
--- 계약 판본 (기존 학생·강사와 신규의 적용 조건이 다를 수 있음)
--- 판본별 규칙 값은 코드(src/lms/rules)와 정책 기준표에 있고, 여기는 "누가 어느 판본인지"만
+-- 계약서·안내서 판본 (기존 학생·강사와 신규의 적용 조건이 다를 수 있음)
+-- - contract: 수강계약서·강사계약서 (서명 또는 결제로 동의하는 문서)
+-- - guide: 수업 전 필독안내서 등 안내 문서 (계약서와 법적 성격이 다를 수 있음 — 미확인)
+-- 2026년 초 어느 시점부터 학생 계약서 발송을 중단하고 필독안내서만 보냄 (POL-OP-09)
+-- → 계약서를 받지 않은 학생에게 계약서 판본을 붙이지 않는다. 받은 문서가 없으면 비워 둔다(미확인)
+-- 판본별 규칙 값은 코드(src/lms/rules)와 정책 기준표에 있고, 여기는 "누가 어떤 문서를 받았는지"만
 -- ---------------------------------------------------------------------
 
 create table terms_versions (
   code text primary key check (code ~ '^[A-Z0-9_]+$'),
+  -- class_terms: LMS에서 클릭으로 확인·동의하는 수업 안내·수강규정 / privacy_notice·marketing 은 수강규정과 따로 받음 (POL-OP-12)
+  kind text not null check (kind in ('contract', 'guide', 'class_terms', 'privacy_notice', 'marketing')),
   audience text not null check (audience in ('student', 'tutor')),
   title text not null,
   first_seen date,                         -- 확인된 가장 이른 서명·작성일
@@ -119,23 +125,24 @@ create table terms_versions (
   source_ref text not null,                -- docs/lms/policy/sources.md 의 SRC-ID
   note text
 );
-insert into terms_versions (code, audience, title, first_seen, is_draft, source_ref, note) values
-  ('SC0A', 'student', '학생 계약 2024-09 이전 판 (12시간 기준)', null, false, 'SRC-SC0A', '취소 12시간 전, 4주 2/3/5회, 보강 2주 안'),
-  ('SC0B', 'student', '학생 계약 2024-11 판 (30일, 효력 조항 없음)', '2024-11-16', false, 'SRC-SC0B', '재등록 시 효력 조항 없음'),
-  ('SC0C', 'student', '학생 계약 2025-05 판 (30일)', '2025-05-27', false, 'SRC-SC0C', null),
-  ('SC1', 'student', '수강계약서 1판 (30일 기준)', '2025-10-22', false, 'SRC-SC1', '변경권 4·6·10회/30일, 연기 30일'),
-  ('SC2', 'student', '수강계약서 2판 (28일 기준)', '2026-01-14', false, 'SRC-SC2', '변경권 1·2·3회/28일, 연기 28일'),
-  ('SC3', 'student', '수강계약서 3판 초안', '2026-10-02', true, 'SRC-SC3', '내부 메모 정리 전'),
-  ('SC_UNKNOWN', 'student', '판본 미확인 (이관 시 확인 필요)', null, false, '-', '이관 후 운영자가 확인해 바꿈'),
-  ('TC0', 'tutor', '국내 강사 계약 2024-08 (원화 시급)', '2024-08-10', false, 'SRC-TC0', '기간 고정, 만료 후 상호 협의 연장'),
-  ('TC0B', 'tutor', '강사 계약 2025-11-04 판 ($14 + 최대 $2, 자동 갱신)', '2025-11-04', false, 'SRC-TC0B', null),
-  ('TC1', 'tutor', '강사계약서 1판 (기본 $14 + 최대 $3)', '2025-11-27', false, 'SRC-TC1', '1년, 갱신은 서면 동의'),
-  ('TC2', 'tutor', '강사계약서 2판 (기본 $11)', '2026-01-09', false, 'SRC-TC2', null),
-  ('TC3', 'tutor', '강사계약서 3판 (기본 $11, 보강+보상)', '2026-08-24', false, 'SRC-TC3', null),
-  ('TC_UNKNOWN', 'tutor', '판본 미확인', null, false, '-', null);
+insert into terms_versions (code, kind, audience, title, first_seen, is_draft, source_ref, note) values
+  ('SC0A', 'contract', 'student', '학생 계약 2024-09 이전 판 (12시간 기준)', null, false, 'SRC-SC0A', '취소 12시간 전, 4주 2/3/5회, 보강 2주 안'),
+  ('SC0B', 'contract', 'student', '학생 계약 2024-11 판 (30일, 효력 조항 없음)', '2024-11-16', false, 'SRC-SC0B', '재등록 시 효력 조항 없음'),
+  ('SC0C', 'contract', 'student', '학생 계약 2025-05 판 (30일)', '2025-05-27', false, 'SRC-SC0C', null),
+  ('SC1', 'contract', 'student', '수강계약서 1판 (30일 기준)', '2025-10-22', false, 'SRC-SC1', '변경권 4·6·10회/30일, 연기 30일'),
+  ('SC2', 'contract', 'student', '수강계약서 2판 (28일 기준)', '2026-01-14', false, 'SRC-SC2', '변경권 1·2·3회/28일, 연기 28일'),
+  ('SC3', 'contract', 'student', '수강계약서 3판 초안', '2026-10-02', true, 'SRC-SC3', '내부 메모 정리 전'),
+  ('G20260709', 'guide', 'student', '수업 전 필독안내서 2026-07-09 판 (이미지 2장)', '2026-07-09', false, 'SRC-GUIDE', '이전 판은 파일로 찾지 못함'),
+  ('TC0', 'contract', 'tutor', '국내 강사 계약 2024-08 (원화 시급)', '2024-08-10', false, 'SRC-TC0', '기간 고정, 만료 후 상호 협의 연장'),
+  ('TC0B', 'contract', 'tutor', '강사 계약 2025-11-04 판 ($14 + 최대 $2, 자동 갱신)', '2025-11-04', false, 'SRC-TC0B', null),
+  ('TC1', 'contract', 'tutor', '강사계약서 1판 (기본 $14 + 최대 $3)', '2025-11-27', false, 'SRC-TC1', '1년, 갱신은 서면 동의'),
+  ('TC2', 'contract', 'tutor', '강사계약서 2판 (기본 $11)', '2026-01-09', false, 'SRC-TC2', null),
+  ('TC3', 'contract', 'tutor', '강사계약서 3판 (기본 $11, 보강+보상)', '2026-08-24', false, 'SRC-TC3', null);
 
-create or replace function terms_audience(p_code text) returns text
-language sql stable as $$ select audience from terms_versions where code = p_code $$;
+create or replace function terms_kind_is(p_code text, p_kind text, p_audience text) returns boolean
+language sql stable as $$
+  select p_code is null or exists (select 1 from terms_versions where code = p_code and kind = p_kind and audience = p_audience)
+$$;
 
 -- ---------------------------------------------------------------------
 -- 사람: 학생 · 강사 · 로그인 연결
@@ -219,8 +226,11 @@ create table enrollments (
   student_id uuid not null references students(id),
   seq integer not null check (seq >= 1),                         -- 몇 번째 등록
   previous_enrollment_id uuid unique references enrollments(id), -- 재등록이면 직전 등록
-  terms_version text not null references terms_versions(code)
-    check (terms_audience(terms_version) = 'student'),           -- 이 등록에 적용되는 계약 판본
+  -- 이 등록 때 학생이 받은 문서 (운영자가 근거 기록(terms_deliveries)을 보고 정함, 모르면 비워 둠 = 미확인)
+  contract_version text references terms_versions(code)
+    check (terms_kind_is(contract_version, 'contract', 'student')),
+  guide_version text references terms_versions(code)
+    check (terms_kind_is(guide_version, 'guide', 'student')),
   weeks smallint check (weeks in (4, 12, 24)),                   -- 현행 상품 (POL-PER-01)
   legacy_label text,                                             -- 옛 상품 (예: '1개월(30일)', '2개월')
   weekly_count smallint not null check (weekly_count in (1, 2, 3, 5)),
@@ -506,6 +516,29 @@ create index change_requests_batch on change_requests (batch_id) where batch_id 
 alter table enrollment_extensions add constraint enrollment_extensions_request_fk
   foreign key (change_request_id) references change_requests(id);
 
+-- 계약서·안내서 전달·동의 근거 기록 (과거 기록 이관 + 앞으로 LMS 온라인 동의)
+-- 날짜·시점을 모르면 비워 두고 timing 'unknown' — 같은 시점에 받았다고 가정하지 않음
+create table terms_deliveries (
+  id uuid primary key default gen_random_uuid(),
+  terms_code text not null references terms_versions(code),
+  student_id uuid references students(id),
+  tutor_id uuid references tutors(id),
+  enrollment_id uuid references enrollments(id),   -- 어느 등록(신규·재등록) 때 받았는지
+  delivered_on date,
+  timing text not null check (timing in ('before_payment', 'after_payment', 'at_matching', 'at_signing', 'unknown')),
+  channel text not null check (channel in ('kakao', 'student_sheet', 'email', 'esign', 'online_page', 'in_person', 'unknown')),  -- student_sheet: 학생 수강현황 시트에 이미지로 게시 (POL-OP-09)
+  consent_kind text check (consent_kind in ('payment_after_delivery', 'signature', 'esign_completed', 'online_accept')),
+  consent_on timestamptz,
+  evidence_note text,                      -- 근거 위치 (예: '카톡 채널 대화 2026-02-03') — 이름·연락처는 적지 않음
+  recorded_by uuid,
+  created_at timestamptz not null default now(),
+  check ((student_id is null) <> (tutor_id is null)),
+  check ((consent_kind is null) = (consent_on is null)),
+  check (enrollment_id is null or student_id is not null)
+);
+create trigger terms_deliveries_no_update before update on terms_deliveries for each row execute function forbid_update();
+create trigger terms_deliveries_no_delete before delete on terms_deliveries for each row execute function forbid_delete();
+
 -- 변경권 장부: 지급은 enrollment_periods.credits_granted, 사용·복구는 여기에 한 줄씩
 create table credit_ledger (
   id uuid primary key default gen_random_uuid(),
@@ -617,7 +650,8 @@ insert into feature_flags (key, enabled, note) values
 select lms_protect(t::regclass) from unnest(array[
   'terms_versions', 'students', 'tutors', 'app_users', 'enrollments', 'enrollment_periods', 'enrollment_extensions',
   'payments', 'refunds', 'regular_schedules', 'class_status_rules', 'lessons', 'class_records',
-  'change_requests', 'credit_ledger', 'compensations', 'no_show_reports', 'tutor_time_off', 'holidays', 'feature_flags'
+  'change_requests', 'credit_ledger', 'compensations', 'no_show_reports', 'tutor_time_off', 'holidays', 'feature_flags',
+  'terms_deliveries'
 ]) as t;
 alter table audit_log enable row level security;
 revoke all on audit_log from anon, authenticated;
@@ -635,6 +669,8 @@ create policy student_own on compensations for select to authenticated using (st
 create policy student_own on credit_ledger for select to authenticated
   using (exists (select 1 from enrollment_periods p join enrollments e on e.id = p.enrollment_id
                  where p.id = period_id and e.student_id = my_student_id()));
+create policy student_own on terms_deliveries for select to authenticated using (student_id = my_student_id());
+create policy everyone_read on terms_versions for select to authenticated using (true);
 create policy everyone_read on class_status_rules for select to authenticated using (true);
 create policy everyone_read on holidays for select to authenticated using (true);
 
@@ -644,6 +680,7 @@ create policy tutor_own on lessons for select to authenticated using (tutor_id =
 create policy tutor_own on class_records for select to authenticated
   using (exists (select 1 from lessons l where l.id = lesson_id and l.tutor_id = my_tutor_id()));
 create policy tutor_own on tutor_time_off for select to authenticated using (tutor_id = my_tutor_id());
+create policy tutor_self on terms_deliveries for select to authenticated using (tutor_id = my_tutor_id());
 
 -- 강사가 볼 수 있는 학생 정보: 최근·예정 수업이 있는 담당 학생, 수업에 필요한 칸만 (휴대폰·한글 실명·운영 메모 제외, POL-OP-06)
 create or replace function tutor_my_students()

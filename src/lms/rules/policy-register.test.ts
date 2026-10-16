@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CONFIRMED_REFS, PENDING_REFS } from './policy';
 import { CLASS_STATUSES, STATUS_RULES } from './status';
-import { TERMS } from './terms';
+import { GUIDES, TERMS } from './terms';
 
 const ROOT = join(__dirname, '..', '..', '..');
 const register = readFileSync(join(ROOT, 'docs/lms/policy/register.md'), 'utf8');
@@ -65,11 +65,14 @@ describe('핵심 정책 표시 (횟수·변경권·보강·이월·연기·급�
 });
 
 describe('계약 판본 코드: 코드 ↔ DB', () => {
-  it('판별 규칙(terms.ts)의 판본이 DB terms_versions 에 모두 있음', () => {
+  it('판별 규칙(terms.ts)의 계약서·안내서 판본이 DB terms_versions 에 모두 있음', () => {
     const sql = readFileSync(join(ROOT, 'supabase/migrations/20261016000000_lms_core.sql'), 'utf8');
-    const dbCodes = [...sql.matchAll(/^\s+\('([A-Z0-9_]+)', '(student|tutor)'/gm)].map((m) => [m[1], m[2]]);
+    const dbCodes = [...sql.matchAll(/^\s+\('([A-Z0-9_]+)', '(contract|guide)', '(student|tutor)'/gm)].map((m) => [m[1], m[2], m[3]]);
     for (const [code, meta] of Object.entries(TERMS)) {
-      expect(dbCodes, code).toContainEqual([code, meta.audience]);
+      expect(dbCodes, code).toContainEqual([code, 'contract', meta.audience]);
+    }
+    for (const code of Object.keys(GUIDES)) {
+      expect(dbCodes, code).toContainEqual([code, 'guide', 'student']);
     }
   });
 });

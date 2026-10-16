@@ -1,6 +1,6 @@
 // 계약 판본 판별·적용 검사 테스트 — 실제 계약서가 아닌 짧은 가짜 문구만 사용
 import { describe, expect, it } from 'vitest';
-import { assessTerms, classifyContract } from './terms';
+import { assessStudentDocs, assessTerms, classifyContract, type EnrollmentDocs } from './terms';
 
 describe('계약서 조항 문구로 판본 판별', () => {
   const cases: [string, string | null][] = [
@@ -91,5 +91,68 @@ describe('지금 적용되는 판본 판정 (서명·발송·동의 구분)', ()
 
   it('학생 계약과 강사 계약을 섞으면 오류', () => {
     expect(() => assessTerms([{ code: 'SC2', documentDate: '2026-01-01' }, { code: 'TC2', documentDate: '2026-01-01' }], today)).toThrow();
+  });
+});
+
+describe('학생 문서 유형 3가지 (계약서 / 안내서만 / 계약 후 안내서만)', () => {
+  const today = '2026-10-16';
+  const sc1 = { code: 'SC1', documentDate: '2025-11-28', delivered: { on: '2025-11-28', proof: 'kakao' }, consent: { on: '2025-11-29', kind: 'payment_after_delivery' } } as const;
+  const guide = (timing: 'before_payment' | 'after_payment' | 'at_matching' | 'unknown', exposure: ('kakao' | 'student_sheet')[] = ['kakao', 'student_sheet']) =>
+    ({ code: 'G20260709', timing, exposure }) as const;
+
+  it('1. 계약서를 받은 학생', () => {
+    const r = assessStudentDocs([{ seq: 1, contract: sc1 }], today);
+    expect(r).toMatchObject({ category: 'contract', contractCode: 'SC1', contractLevel: 'confirmed' });
+  });
+
+  it('2. 안내서만 받은 학생에게는 계약 판본을 만들어 넣지 않음', () => {
+    const r = assessStudentDocs([{ seq: 1, guides: [guide('before_payment')] }], today);
+    expect(r).toMatchObject({ category: 'guide_only', contractCode: null, contractLevel: null, guideCodes: ['G20260709'] });
+    expect(r.flags.join()).toContain('계약 판본을 정하지 않음');
+    expect(r.flags.join()).toContain('미확인(법률)');
+  });
+
+  it('2. 안내서를 결제 후(매칭 중)에 받았으면 따로 표시', () => {
+    const r = assessStudentDocs([{ seq: 1, guides: [guide('at_matching')] }], today);
+    expect(r.flags.join()).toContain('1회차 G20260709: 결제 후 전달');
+  });
+
+  it('2. 시트에 게시만 되고 개별 발송 기록이 없으면 표시', () => {
+    const r = assessStudentDocs([{ seq: 1, guides: [guide('unknown', ['student_sheet'])] }], today);
+    expect(r.flags.join()).toContain('개별 발송 기록 없음');
+    expect(r.flags.join()).toContain('전달 시점 미상');
+  });
+
+  it('3. 예전 계약 + 재등록 때 안내서만: 계약 판본은 사실로 남기고 효력은 미확인', () => {
+    const docs: EnrollmentDocs[] = [
+      { seq: 1, contract: sc1 },
+      { seq: 2, guides: [guide('after_payment')] },
+    ];
+    const r = assessStudentDocs(docs, today);
+    expect(r).toMatchObject({ category: 'contract_then_guide', contractCode: 'SC1' });
+    expect(r.flags[0]).toContain('2회차는 안내서만 받음');
+    expect(r.flags[0]).toContain('미확인(법률)');
+    expect(r.flags[0]).toContain('9조) 있음');
+    expect(r.flags.join()).toContain('변경권 개수');
+  });
+
+  it('3. 효력 조항이 없는 옛 계약(SC0B)이면 사실로만 표시', () => {
+    const r = assessStudentDocs([{ seq: 1, contract: { code: 'SC0B', documentDate: '2024-11-16' } }, { seq: 2, guides: [guide('before_payment')] }], today);
+    expect(r.category).toBe('contract_then_guide');
+    expect(r.flags[0]).toContain('재등록 효력 조항 없음');
+  });
+
+  it('계약 후 재등록에 아무 기록도 없으면 계약 유형으로 두고 빈 회차를 표시', () => {
+    const r = assessStudentDocs([{ seq: 1, contract: sc1 }, { seq: 2 }], today);
+    expect(r.category).toBe('contract');
+    expect(r.flags.join()).toContain('2회차: 계약서·안내서 전달 기록 없음');
+  });
+
+  it('기록이 전혀 없으면 미확인', () => {
+    expect(assessStudentDocs([{ seq: 1 }], today)).toMatchObject({ category: 'unknown', contractCode: null });
+  });
+
+  it('학생 등록에 강사 계약을 넣으면 오류', () => {
+    expect(() => assessStudentDocs([{ seq: 1, contract: { code: 'TC2', documentDate: '2026-01-01' } }], today)).toThrow();
   });
 });

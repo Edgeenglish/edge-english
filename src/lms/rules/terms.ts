@@ -1,7 +1,9 @@
 // 계약 판본 판별·적용 검사 (docs/lms/policy/contract-version-check.md)
 // - classifyContract: 계약서 본문에 있는 '조항 문구'만 보고 판본을 판별 (이름·연락처는 읽지도 돌려주지도 않음)
 // - assessTerms: 한 사람의 계약 기록(발송·동의·서명)을 보고 지금 적용되는 판본과 확실한 정도를 판정
+// - assessStudentDocs: 학생의 등록별 문서(계약서·필독안내서)를 보고 3가지 유형으로 구분 (POL-OP-09~11)
 // 판정은 운영자 확인용 참고 자료이며 법률 판단이 아니다.
+// 계약서를 받지 않은 학생에게는 계약 판본을 절대 만들어 넣지 않는다 (contractCode = null).
 
 import { addDays, diffDays, type KstDate } from './dates';
 
@@ -137,4 +139,116 @@ export function assessTerms(records: ContractRecord[], today: KstDate): TermsAss
   if (level === 'presumed') flags.push('계약서 파일만 있고 발송·동의 기록 없음');
 
   return { code: chosen.code, level, flags };
+}
+
+// ---------------------------------------------------------------------
+// 필독안내서 (계약서가 아님) — POL-OP-09
+// ---------------------------------------------------------------------
+
+export type GuideCode = 'G20260709';
+
+export const GUIDES: Record<GuideCode, { label: string; pages: number; firstSeen: KstDate }> = {
+  // 이전 판은 파일로 찾지 못함. 이미지에 날짜·판 표시가 없어 Drive 파일 날짜로만 구분
+  G20260709: { label: '수업 전 필독안내서 2026-07-09 판 (이미지 2장 세트)', pages: 2, firstSeen: '2026-07-09' },
+};
+
+export type GuideRecord = {
+  code: GuideCode;
+  /** 결제와의 선후. 매칭 중 전달은 결제 후에 해당 */
+  timing: 'before_payment' | 'after_payment' | 'at_matching' | 'unknown';
+  /** 카카오톡 채널 개별 발송 · 학생 수강현황 시트에 이미지로 게시 */
+  exposure: ('kakao' | 'student_sheet')[];
+  on?: KstDate;
+};
+
+export type EnrollmentDocs = {
+  /** 몇 번째 등록인지 (1 = 신규) */
+  seq: number;
+  contract?: ContractRecord;
+  guides?: GuideRecord[];
+};
+
+export type DocCategory =
+  | 'contract' // 1. 계약서를 전달한 학생 (가장 최근 등록까지 계약서 있음)
+  | 'guide_only' // 2. 계약서 없이 안내서만 받은 학생
+  | 'contract_then_guide' // 3. 예전 등록에는 계약서, 이후 재등록에는 안내서만
+  | 'unknown'; // 문서 기록 없음
+
+export type StudentDocsAssessment = {
+  category: DocCategory;
+  /** 실제로 전달된 계약서가 있을 때만 값이 있음 */
+  contractCode: TermsCode | null;
+  contractLevel: TermsAssessment['level'] | null;
+  guideCodes: GuideCode[];
+  /** 운영자·전문가 확인 항목. '미확인(법률)'은 Claude가 판단하지 않는 항목 */
+  flags: string[];
+};
+
+// 안내서(G20260709)와 조건이 다르다고 확인된 계약 판본 항목 (guide-2026-07-09-review.md)
+const GUIDE_DIFFS: Partial<Record<TermsCode, string[]>> = {
+  SC0A: ['정상 변경 기준 12시간↔6시간', '변경권 개수'],
+  SC0B: ['변경권 개수 (CF-03)', '기간 길이 30일↔4주 (CF-04)'],
+  SC0C: ['변경권 개수 (CF-03)', '기간 길이 30일↔4주 (CF-04)'],
+  SC1: ['변경권 개수 (CF-03)', '기간 길이 30일↔4주 (CF-04)', '이월 기한 1주일↔당일 (CF-01)', '장기 연기 (안내서에 없음)'],
+  SC2: ['이월 기한 1주일↔당일 (CF-01)', '고정 시간 변경 4주·4일 전↔월 1회', '장기 연기 (안내서에 없음)'],
+};
+
+function guideFlags(e: EnrollmentDocs): string[] {
+  const flags: string[] = [];
+  for (const g of e.guides ?? []) {
+    const where = `${e.seq}회차 ${g.code}`;
+    if (g.timing === 'after_payment' || g.timing === 'at_matching') {
+      flags.push(`${where}: 결제 후 전달 — 이 등록의 수강조건으로 볼 수 있는지 미확인(법률)`);
+    } else if (g.timing === 'unknown') {
+      flags.push(`${where}: 결제 전후 전달 시점 미상`);
+    }
+    if (!g.exposure.includes('kakao')) {
+      flags.push(`${where}: 개별 발송 기록 없음 (시트 게시만 확인)`);
+    }
+  }
+  return flags;
+}
+
+/**
+ * 학생 한 명의 등록별 문서를 보고 유형을 구분한다.
+ * - 안내서만 받은 등록에 계약 판본을 채우지 않는다.
+ * - 예전 계약이 이후 등록에 이어지는지, 안내서가 수강조건이 되는지는 판단하지 않고 '미확인(법률)'로 표시한다.
+ */
+export function assessStudentDocs(enrollments: EnrollmentDocs[], today: KstDate): StudentDocsAssessment {
+  for (const e of enrollments) {
+    if (e.contract && TERMS[e.contract.code].audience !== 'student') throw new Error('학생 등록에 강사 계약을 넣을 수 없습니다.');
+  }
+  const sorted = [...enrollments].sort((a, b) => a.seq - b.seq);
+  const withContract = sorted.filter((e) => e.contract);
+  const guideCodes = [...new Set(sorted.flatMap((e) => (e.guides ?? []).map((g) => g.code)))];
+  const flags = sorted.flatMap(guideFlags);
+
+  if (withContract.length === 0) {
+    if (guideCodes.length === 0) {
+      return { category: 'unknown', contractCode: null, contractLevel: null, guideCodes, flags: ['계약서·안내서 전달 기록 없음'] };
+    }
+    flags.unshift('계약서 없음 — 계약 판본을 정하지 않음', '안내서 규정이 수강조건으로 적용되는지·범위 미확인(법률)');
+    return { category: 'guide_only', contractCode: null, contractLevel: null, guideCodes, flags };
+  }
+
+  const terms = assessTerms(withContract.map((e) => e.contract!), today);
+  const lastContractSeq = withContract.at(-1)!.seq;
+  const later = sorted.filter((e) => e.seq > lastContractSeq);
+  const laterGuideOnly = later.filter((e) => (e.guides ?? []).length > 0);
+  const laterNothing = later.filter((e) => (e.guides ?? []).length === 0);
+
+  for (const e of laterNothing) flags.push(`${e.seq}회차: 계약서·안내서 전달 기록 없음`);
+
+  if (laterGuideOnly.length === 0) {
+    return { category: 'contract', contractCode: terms.code, contractLevel: terms.level, guideCodes, flags: [...terms.flags, ...flags] };
+  }
+
+  const code = terms.code!;
+  const clause = TERMS[code].continuation === 'clause9' ? '재등록 효력 조항(9조) 있음' : '재등록 효력 조항 없음';
+  flags.unshift(
+    `${laterGuideOnly.map((e) => e.seq).join('·')}회차는 안내서만 받음 — ${code} 계약이 이 등록에도 이어지는지 미확인(법률). 사실: ${clause}`,
+  );
+  const diffs = GUIDE_DIFFS[code];
+  if (diffs) flags.push(`${code}와 안내서 조건이 다른 항목: ${diffs.join(', ')}`);
+  return { category: 'contract_then_guide', contractCode: code, contractLevel: terms.level, guideCodes, flags: [...flags, ...terms.flags] };
 }

@@ -38,17 +38,17 @@ select pg_temp.ok((select code from students where name_en = 'Test One') = 'STU-
 select pg_temp.expect_error($$insert into students (name_ko, name_en, timezone) values ('가', 'A', 'Mars/Base')$$, 'check');
 
 -- 4주 · 주 2회 · 50분, 2026-11-03(화) 시작
-insert into enrollments (id, student_id, seq, terms_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+insert into enrollments (id, student_id, seq, contract_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
 values ('55555555-5555-5555-5555-555555555555', '33333333-3333-3333-3333-333333333333', 1, 'SC2', 4, 2, 50,
         '2026-11-03', '2026-11-30', 8, 'active');
 insert into enrollment_periods (id, enrollment_id, idx, start_date, end_date, credits_granted)
 values ('66666666-6666-6666-6666-666666666666', '55555555-5555-5555-5555-555555555555', 1, '2026-11-03', '2026-11-30', 2);
 
-select pg_temp.expect_error($$insert into enrollments (student_id, seq, terms_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased)
+select pg_temp.expect_error($$insert into enrollments (student_id, seq, contract_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased)
   values ('33333333-3333-3333-3333-333333333333', 2, 'SC2', 4, 2, 50, '2026-11-03', '2026-11-29', 8)$$, 'check');
 select pg_temp.ok(true, '종료일 = 시작일 + 27 이 아니면 거부');
 
-select pg_temp.expect_error($$insert into enrollments (student_id, seq, terms_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased)
+select pg_temp.expect_error($$insert into enrollments (student_id, seq, contract_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased)
   values ('33333333-3333-3333-3333-333333333333', 2, 'SC2', 4, 2, 50, '2026-11-20', '2026-12-17', 8)$$, 'exclusion|23P01');
 select pg_temp.ok(true, '같은 학생 수강기간 겹침 거부');
 
@@ -60,7 +60,7 @@ values ('77777777-7777-7777-7777-777777777771', '55555555-5555-5555-5555-5555555
 select pg_temp.ok((select kst_date from lessons where seq = 1) = '2026-11-03', 'kst_date = 한국 날짜');
 
 -- 같은 강사, 겹치는 시간 → 거부 (다른 학생이라도)
-insert into enrollments (id, student_id, seq, terms_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+insert into enrollments (id, student_id, seq, contract_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
 values ('55555555-5555-5555-5555-555555555556', '44444444-4444-4444-4444-444444444444', 1, 'SC2', 4, 1, 50,
         '2026-11-03', '2026-11-30', 4, 'active');
 select pg_temp.expect_error($$insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
@@ -151,16 +151,29 @@ select pg_temp.ok(true, '운영자 최종 금액·승인 없이 정산 확정 �
 
 -- ---------- 계약 판본 · 옛 상품 이관 (v0.2) ----------
 insert into students (id, name_ko, name_en) values ('88888888-8888-8888-8888-888888888888', '테스트삼', 'Test Three');
-insert into enrollments (id, student_id, seq, terms_version, legacy_label, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+insert into enrollments (id, student_id, seq, contract_version, legacy_label, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
 values ('55555555-5555-5555-5555-555555555557', '88888888-8888-8888-8888-888888888888', 1, 'SC1', '1개월(30일)', 2, 40,
         '2025-12-01', '2025-12-30', 8, 'completed');
 select pg_temp.ok(true, '1판 계약(30일) 옛 등록은 실제 날짜 그대로 이관 가능');
-select pg_temp.expect_error($$insert into enrollments (student_id, seq, terms_version, weekly_count, duration_min, start_date, base_end_date, lessons_purchased)
+select pg_temp.expect_error($$insert into enrollments (student_id, seq, contract_version, weekly_count, duration_min, start_date, base_end_date, lessons_purchased)
   values ('88888888-8888-8888-8888-888888888888', 2, 'SC2', 2, 40, '2026-01-01', '2026-01-28', 8)$$, 'check');
 select pg_temp.ok(true, '현행 상품(주)도 옛 상품 이름도 없는 등록은 거부');
-select pg_temp.expect_error($$insert into enrollments (student_id, seq, terms_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased)
+select pg_temp.expect_error($$insert into enrollments (student_id, seq, contract_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased)
   values ('88888888-8888-8888-8888-888888888888', 2, 'TC1', 4, 2, 40, '2026-01-01', '2026-01-28', 8)$$, 'check');
 select pg_temp.ok(true, '학생 등록에 강사 계약 판본을 넣으면 거부');
+-- 계약서 없이 안내서만 받은 등록: 계약서 판본을 비워 둠 (임의 판본 금지)
+insert into enrollments (student_id, seq, contract_version, guide_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('88888888-8888-8888-8888-888888888888', 2, null, 'G20260709', 4, 2, 40, '2026-08-03', '2026-08-30', 8, 'completed');
+select pg_temp.ok((select contract_version is null and guide_version = 'G20260709' from enrollments where student_id = '88888888-8888-8888-8888-888888888888' and seq = 2),
+                  '계약서 없이 안내서만 받은 등록은 계약 판본 없이 저장');
+select pg_temp.expect_error($$insert into enrollments (student_id, seq, contract_version, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased)
+  values ('88888888-8888-8888-8888-888888888888', 3, 'G20260709', 4, 2, 40, '2026-09-07', '2026-10-04', 8)$$, 'check');
+select pg_temp.ok(true, '안내서를 계약서 칸에 넣으면 거부');
+-- 전달·동의 근거 기록
+insert into terms_deliveries (terms_code, student_id, timing, channel) values ('G20260709', '88888888-8888-8888-8888-888888888888', 'unknown', 'kakao');
+select pg_temp.expect_error($$update terms_deliveries set timing = 'before_payment'$$, '수정할 수 없습니다');
+select pg_temp.expect_error($$insert into terms_deliveries (terms_code, student_id, timing, channel, consent_kind) values ('SC2', '88888888-8888-8888-8888-888888888888', 'unknown', 'kakao', 'online_accept')$$, 'check');
+select pg_temp.ok(true, '전달 기록은 고칠 수 없고, 동의 종류에는 동의 시각이 필요');
 
 -- ---------- 기간 연장 장부 ----------
 insert into enrollment_extensions (enrollment_id, days, reason, approved_by)
@@ -243,3 +256,68 @@ set role anon;
 select pg_temp.expect_error($$select * from students$$, 'permission|42501');
 select pg_temp.ok(true, '비로그인(anon) 역할은 표 접근 자체가 막힘');
 reset role;
+
+-- ---------- 수업 안내 확인·동의 (v0.1 초안, POL-OP-12) ----------
+insert into terms_versions (code, kind, audience, title, source_ref) values ('TESTCT1', 'class_terms', 'student', '테스트 수업 안내 1판', 'TEST');
+insert into terms_documents (id, terms_code, format, body_md, required_items, optional_items, content_sha256, status, published_at)
+values ('cccccccc-0000-0000-0000-000000000001', 'TESTCT1', 'text', '6시간 전까지 변경 (가짜 문구)',
+        '[{"key":"cancel6h","text":"6시간 규정 확인"},{"key":"period","text":"수강 기간 확인"}]',
+        '[{"key":"marketing","text":"소식 받기(선택)"}]', 'fake', 'published', now());
+select pg_temp.ok((select content_sha256 <> 'fake' and length(content_sha256) = 64 from terms_documents where terms_code = 'TESTCT1'),
+                  '문서 해시는 앱이 넣은 값이 아니라 DB가 계산');
+select pg_temp.expect_error($$update terms_documents set body_md = '바꾼 문구' where terms_code = 'TESTCT1'$$, '고칠 수 없습니다');
+select pg_temp.expect_error($$delete from terms_documents where terms_code = 'TESTCT1'$$, '삭제할 수 없습니다');
+select pg_temp.ok(true, '게시된 안내 문서는 고치거나 지울 수 없음 (새 판으로만)');
+select pg_temp.expect_error($$insert into consent_requests (student_id, enrollment_id, document_id, reason)
+  values ('44444444-4444-4444-4444-444444444444', '55555555-5555-5555-5555-555555555555', 'cccccccc-0000-0000-0000-000000000001', 'new')$$, '학생과 수강등록의 학생이 다릅니다');
+select pg_temp.ok(true, '다른 학생의 등록으로 확인 요청을 만들 수 없음');
+insert into consent_requests (id, student_id, enrollment_id, document_id, reason)
+values ('cccccccc-0000-0000-0000-0000000000a1', '33333333-3333-3333-3333-333333333333', '55555555-5555-5555-5555-555555555555',
+        'cccccccc-0000-0000-0000-000000000001', 'new');
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';   -- 학생 B
+select pg_temp.ok((select count(*) from consent_requests) = 0, '학생 B는 학생 A의 확인 요청을 못 봄 (링크를 알아도)');
+select pg_temp.expect_error($$select consent_record('cccccccc-0000-0000-0000-0000000000a1', 'accepted', array['cancel6h','period'])$$, '본인의 확인 요청이 아닙니다');
+select pg_temp.ok(true, '학생 B는 학생 A 대신 동의할 수 없음');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000003';   -- 강사
+select pg_temp.expect_error($$select consent_record('cccccccc-0000-0000-0000-0000000000a1', 'accepted', array['cancel6h','period'])$$, '본인의 확인 요청이 아닙니다');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 운영자
+select pg_temp.expect_error($$select consent_record('cccccccc-0000-0000-0000-0000000000a1', 'accepted', array['cancel6h','period'])$$, '본인의 확인 요청이 아닙니다');
+select pg_temp.ok(true, '강사·운영자도 학생 대신 동의할 수 없음');
+select pg_temp.expect_error($$insert into consent_events (request_id, action, document_sha256, actor_auth_id, actor_role)
+  values ('cccccccc-0000-0000-0000-0000000000a1', 'accepted', 'x', 'bbbbbbbb-0000-0000-0000-000000000009', 'student')$$, 'permission|42501');
+select pg_temp.ok(true, '동의 기록 표에 직접 쓰기 불가 (함수로만)');
+
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';   -- 학생 A
+select consent_record('cccccccc-0000-0000-0000-0000000000a1', 'viewed');
+select pg_temp.expect_error($$select consent_record('cccccccc-0000-0000-0000-0000000000a1', 'accepted', array['cancel6h'])$$, '필수 항목');
+select pg_temp.ok(true, '필수 항목을 다 체크하지 않으면 동의 안 됨');
+select pg_temp.expect_error($$select consent_record('cccccccc-0000-0000-0000-0000000000a1', 'accepted', array['cancel6h','period','refund'])$$, '문서에 없는 항목');
+select pg_temp.ok(consent_record('cccccccc-0000-0000-0000-0000000000a1', 'accepted', array['cancel6h','period'])
+                  = consent_record('cccccccc-0000-0000-0000-0000000000a1', 'accepted', array['cancel6h','period']),
+                  '본인 동의 성공, 두 번 눌러도 동의 기록은 1건');
+select pg_temp.ok((select last_action = 'accepted' and accepted_at is not null and first_viewed_at is not null from consent_status),
+                  '학생 A는 본인 동의 상태(열람·동의 시각)를 봄');
+select pg_temp.ok((select not ('marketing' = any(checked_items)) from consent_events where action = 'accepted'),
+                  '선택 항목(마케팅)은 체크하지 않아도 수강 안내 동의와 따로 기록');
+select consent_record('cccccccc-0000-0000-0000-0000000000a1', 'withdrawn', '{}', '학생 요청');
+select consent_record('cccccccc-0000-0000-0000-0000000000a1', 'accepted', array['cancel6h','period']);
+select pg_temp.ok((select count(*) from consent_events where action <> 'viewed') = 3 and (select last_action from consent_status) = 'accepted',
+                  '철회·재동의는 새 줄로 쌓이고 마지막 상태가 보임');
+
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select count(*) from consent_status) = 1 and (select count(*) from consent_events) = 4, '운영자는 학생별 동의 현황·이력을 봄');
+select pg_temp.expect_error($$select consent_record('cccccccc-0000-0000-0000-0000000000a1', 'withdrawn')$$, 'check');
+select pg_temp.ok(true, '운영자가 철회를 대신 기록할 때는 사유가 필요');
+reset request.jwt.claim.sub;
+reset role;
+
+select pg_temp.expect_error($$update consent_events set action = 'viewed'$$, '수정할 수 없습니다');
+select pg_temp.expect_error($$delete from consent_events$$, '삭제할 수 없습니다');
+select pg_temp.ok(true, '동의 기록은 고치거나 지울 수 없음');
+select pg_temp.ok(not exists (
+  select 1 from pg_constraint c
+  where c.contype = 'f' and c.conrelid in ('lessons'::regclass, 'enrollments'::regclass, 'change_requests'::regclass)
+    and c.confrelid in ('consent_requests'::regclass, 'consent_events'::regclass, 'terms_documents'::regclass)
+), '동의 여부가 수업·등록·변경 신청을 막는 연결이 없음');
