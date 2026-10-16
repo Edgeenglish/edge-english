@@ -14,8 +14,11 @@ const SITE_URLS = ['https://edgeenglish.kr'];
 const REFRESH_SECRET = '여기에_반영_비밀값_붙여넣기';
 
 const SHEET_NAME = '후기';
-const HEADERS = ['id', '브랜드', '날짜', '이름', '직업', '후기', '대표 문장', '공개', '등록 일시', '수정 일시'];
-const COL = { id: 0, brand: 1, date: 2, name: 3, job: 4, text: 5, highlight: 6, isPublic: 7, createdAt: 8, updatedAt: 9 };
+const HEADERS = ['id', '브랜드', '날짜', '이름', '직업', '후기', '대표 문장', '공개', '등록 일시', '수정 일시', '강사'];
+const COL = { id: 0, brand: 1, date: 2, name: 3, job: 4, text: 5, highlight: 6, isPublic: 7, createdAt: 8, updatedAt: 9, tutor: 10 };
+// 관리용 강사 목록 (홈페이지에는 표시 안 함). 시트의 '강사' 탭 A열을 고치면 관리 화면 버튼이 바뀜
+const TUTOR_SHEET_NAME = '강사';
+const DEFAULT_TUTORS = ['Grace', 'Kai', 'Maria', 'Benny', 'Leslie', 'Olivia'];
 const BRANDS = ['엣지영어', '영붙캠'];
 
 function doGet() {
@@ -97,6 +100,18 @@ function checkSite() {
   return msg;
 }
 
+// 관리 화면 강사 버튼 목록 ('강사' 탭이 없으면 기본 목록으로 만듦)
+function getTutors() {
+  const ss = SpreadsheetApp.getActive();
+  let sheet = ss.getSheetByName(TUTOR_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(TUTOR_SHEET_NAME);
+    sheet.getRange(1, 1, DEFAULT_TUTORS.length + 1, 1).setValues([['강사 이름']].concat(DEFAULT_TUTORS.map((t) => [t])));
+    sheet.getRange(1, 1).setFontWeight('bold');
+  }
+  return sheet.getDataRange().getValues().slice(1).map((row) => String(row[0]).trim()).filter(Boolean);
+}
+
 /* ---------- 처음 한 번 실행: 시트 준비 + 기존 홈페이지 후기 6개 옮기기 ---------- */
 
 function setup() {
@@ -150,6 +165,7 @@ function validate_(input) {
     text: String(input.text || '').trim(),
     highlight: String(input.highlight || '').trim(),
     isPublic: input.isPublic !== false,
+    tutor: String(input.tutor || '').trim(),
   };
   if (BRANDS.indexOf(r.brand) < 0) throw new Error('브랜드를 선택해 주세요.');
   if (!r.text) throw new Error('후기 내용을 붙여넣어 주세요.');
@@ -160,7 +176,12 @@ function validate_(input) {
 
 function getSheet_() {
   const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
-  if (sheet) return sheet;
+  if (sheet) {
+    // 예전 버전으로 만든 시트에 '강사' 칸 제목 추가
+    const header = sheet.getRange(1, COL.tutor + 1);
+    if (!String(header.getValue()).trim()) header.setValue(HEADERS[COL.tutor]).setFontWeight('bold');
+    return sheet;
+  }
   setup();
   return SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
 }
@@ -222,6 +243,7 @@ function fromRow_(row) {
     isPublic: isTrue_(row[COL.isPublic]),
     createdAt: toStampText_(row[COL.createdAt]),
     updatedAt: toStampText_(row[COL.updatedAt]),
+    tutor: String(row[COL.tutor] || '').trim(),
   };
 }
 
@@ -237,11 +259,12 @@ function rowValues_(r) {
   row[COL.isPublic] = Boolean(r.isPublic);
   row[COL.createdAt] = r.createdAt;
   row[COL.updatedAt] = r.updatedAt;
+  row[COL.tutor] = r.tutor || '';
   return row;
 }
 
 function toClient_(r) {
-  return { id: r.id, brand: r.brand, date: r.date, name: r.name, job: r.job, text: r.text, highlight: r.highlight, isPublic: r.isPublic, createdAt: r.createdAt.slice(0, 16) };
+  return { id: r.id, brand: r.brand, date: r.date, name: r.name, job: r.job, text: r.text, highlight: r.highlight, isPublic: r.isPublic, createdAt: r.createdAt.slice(0, 16), tutor: r.tutor };
 }
 
 // 시트를 바꾼 뒤 홈페이지에 바로 알림 (실패해도 홈페이지는 5분 안에 스스로 갱신)

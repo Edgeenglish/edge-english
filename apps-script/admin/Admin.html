@@ -136,6 +136,11 @@
       <input class="box" id="jobCustom" type="text" placeholder="직업 직접 입력" style="margin-top:8px" hidden>
     </div>
 
+    <div class="field" id="tutorField">
+      <span class="label">담당 강사 (선택 · 홈페이지에는 안 보여요)</span>
+      <div class="chips" id="tutorChips"></div>
+    </div>
+
     <p class="preview-title">홈페이지에 이렇게 보여요</p>
     <div class="card" id="preview"></div>
 
@@ -161,7 +166,7 @@ const BRANDS = ['엣지영어', '영붙캠'];
 const JOBS = ['직장인', '대학생', '주부', '직접 입력'];
 const $ = (id) => document.getElementById(id);
 
-const state = { brand: loadBrand(), reviews: [], editing: null, job: '', isPublic: true, saving: false, site: null };
+const state = { brand: loadBrand(), reviews: [], editing: null, job: '', tutor: '', tutors: [], isPublic: true, saving: false, site: null };
 const SITE_BRAND = '엣지영어'; // 홈페이지에 연결된 브랜드
 
 function loadBrand() {
@@ -268,7 +273,7 @@ function siteBadge(r) {
 function renderList() {
   renderSeg($('brandSeg'), state.brand, (b) => { state.brand = b; saveBrand(b); state.site = null; renderSite(); loadList(); });
   const q = $('search').value.replace(/\s+/g, '');
-  const list = state.reviews.filter((r) => !q || (r.name + r.job + r.text + r.highlight).replace(/\s+/g, '').includes(q));
+  const list = state.reviews.filter((r) => !q || (r.name + r.job + (r.tutor || '') + r.text + r.highlight).replace(/\s+/g, '').includes(q));
   const pub = state.reviews.filter((r) => r.isPublic).length;
   $('count').textContent = `전체 ${state.reviews.length}개 · 공개 ${pub}개${q ? ` · 검색 결과 ${list.length}개` : ''}`;
   if (!list.length) { $('list').innerHTML = `<p class="empty">${q ? '찾는 후기가 없어요.' : '아직 등록된 후기가 없어요.<br>아래 + 후기 등록을 눌러 시작하세요.'}</p>`; return; }
@@ -310,6 +315,7 @@ function openForm(review) {
   state.formBrand = r.brand;
   state.isPublic = r.isPublic;
   state.job = r.job;
+  state.tutor = r.tutor || '';
   $('formTitle').textContent = review ? '후기 수정' : '새 후기';
   $('submitBtn').textContent = review ? '저장하기' : '등록하기';
   $('text').value = r.text;
@@ -340,6 +346,14 @@ function currentJob() {
 
 function renderForm() {
   renderSeg($('formBrandSeg'), state.formBrand, (b) => { state.formBrand = b; saveBrand(b); renderForm(); });
+
+  // 담당 강사: 한 번 누르면 선택, 다시 누르면 해제 (엣지영어만)
+  const tutors = state.tutor && !state.tutors.includes(state.tutor) ? state.tutors.concat(state.tutor) : state.tutors;
+  $('tutorField').hidden = state.formBrand !== SITE_BRAND || !tutors.length;
+  $('tutorChips').innerHTML = tutors.map((t) => `<button type="button" class="chip${state.tutor === t ? ' on' : ''}" data-t="${esc(t)}">${esc(t)}</button>`).join('');
+  $('tutorChips').querySelectorAll('button').forEach((b) => {
+    b.onclick = () => { state.tutor = state.tutor === b.dataset.t ? '' : b.dataset.t; renderForm(); };
+  });
 
   const isCustom = state.job === '직접 입력' || (state.job && !JOBS.includes(state.job));
   $('jobChips').innerHTML = JOBS.map((j) => `<button type="button" class="chip${(j === '직접 입력' ? isCustom : state.job === j) ? ' on' : ''}" data-j="${j}">${j}</button>`).join('');
@@ -396,6 +410,7 @@ async function submitForm(e) {
     name: $('name').value,
     date: $('date').value,
     job: currentJob(),
+    tutor: state.formBrand === SITE_BRAND ? state.tutor : '',
     isPublic: state.isPublic,
   };
   const problem = !input.text.trim() ? '후기 내용을 붙여넣어 주세요.' : !maskName(input.name) ? '수강생 이름을 입력해 주세요.' : !input.date ? '날짜를 선택해 주세요.' : '';
@@ -441,6 +456,7 @@ $('confirmYes').onclick = confirmDelete;
 
 renderSeg($('brandSeg'), state.brand, () => {});
 loadList();
+call('getTutors').then((t) => { state.tutors = t; if (!$('formView').hidden) renderForm(); }).catch(() => {});
 </script>
 </body>
 </html>
