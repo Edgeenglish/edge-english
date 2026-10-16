@@ -5,7 +5,7 @@
 // - 옛 상품(1판 계약 30일, 2개월 등)은 다시 계산하지 않고 시트의 실제 날짜를 그대로 이관 (CF-04)
 
 import { addDays, diffDays, endOfKstDay, type KstDate } from './dates';
-import { CONFIRMED, RENEWAL, type CourseWeeks } from './policy';
+import { CONFIRMED, RENEWAL, type CourseWeeks, type PendingPolicy } from './policy';
 
 export type Period = { index: number; start: KstDate; end: KstDate };
 
@@ -47,14 +47,21 @@ export function periodOf(date: KstDate, startDate: KstDate, weeks: CourseWeeks, 
 }
 
 /**
- * 재등록 시 새 수강 시작일 (POL-RN-04, 2026-10-16 대표 확정)
- * - 종료일(KST)까지 재등록 결제 → 이전 종료일 다음 날부터 끊김 없이
- * - 종료 후 결제 → 결제 후 첫 정규 수업일부터 (지난 기간 잔여 수업은 이월 없음 — canCarryOver)
+ * 재등록 시 새 수강 시작일
+ * - 종료 후 결제 → 결제 후 첫 정규 수업일부터, 지난 기간 잔여 수업 이월 없음 (POL-RN-04, 정책 원본 A21 — 확정)
+ * - 종료일(KST)까지 결제 → 미확정 (POL-RN-07) → 운영자가 정한 값을 넘겨야 계산됨
  * paidOn = 실제 결제 완료일(KST)
  */
-export function renewalStartDate(input: { previousFinalEnd: KstDate; paidOn: KstDate; firstLessonAfterPayment: KstDate }): KstDate {
-  const continuous = RENEWAL.start === 'continuous_if_before_end' && diffDays(input.paidOn, input.previousFinalEnd) >= 0;
-  if (continuous) return addDays(input.previousFinalEnd, 1);
+export function renewalStartDate(
+  input: { previousFinalEnd: KstDate; paidOn: KstDate; firstLessonAfterPayment: KstDate; firstLessonAfterPreviousEnd: KstDate },
+  policy: Pick<PendingPolicy, 'onTimeRenewalStart'>,
+): KstDate {
+  if (diffDays(input.paidOn, input.previousFinalEnd) >= 0) {
+    if (policy.onTimeRenewalStart === 'day_after_previous_end') return addDays(input.previousFinalEnd, 1);
+    if (diffDays(input.previousFinalEnd, input.firstLessonAfterPreviousEnd) <= 0) throw new Error('이전 종료일 뒤 첫 수업일이 올바르지 않습니다.');
+    return input.firstLessonAfterPreviousEnd;
+  }
+  if (RENEWAL.lateStart !== 'first_lesson_after_payment') throw new Error('재등록 규칙이 올바르지 않습니다.');
   if (diffDays(input.previousFinalEnd, input.firstLessonAfterPayment) <= 0 || diffDays(input.paidOn, input.firstLessonAfterPayment) < 0) {
     throw new Error('재등록 후 첫 수업일은 이전 종료일과 결제일 이후여야 합니다.');
   }

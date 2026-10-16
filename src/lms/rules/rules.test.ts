@@ -12,8 +12,8 @@ import { CreditLedger } from './credits';
 import { previewTutorLeave } from './leave';
 
 const H = 60 * 60 * 1000;
-const POLICY_A: PendingPolicy = { compensationRecancel: 'no_rebook' };
-const POLICY_B: PendingPolicy = { compensationRecancel: 'same_as_regular' };
+const POLICY_A: PendingPolicy = { onTimeRenewalStart: 'day_after_previous_end', compensationRecancel: 'no_rebook' };
+const POLICY_B: PendingPolicy = { onTimeRenewalStart: 'first_lesson_after_previous_end', compensationRecancel: 'same_as_regular' };
 
 describe('수강기간 계산', () => {
   it('4주 = 시작일 포함 28일 (종료일 = 시작일 + 27)', () => {
@@ -65,17 +65,18 @@ describe('수강기간 계산', () => {
     expect(periodOf('2026-10-25', '2026-07-30', 12, 7)?.index).toBe(3);
   });
 
-  describe('재등록 시작일 (POL-RN-04, 2026-10-16 대표 확정)', () => {
-    const input = { previousFinalEnd: '2026-10-21', paidOn: '2026-10-24', firstLessonAfterPayment: '2026-10-27' };
-    it('종료일까지 결제하면 이전 종료일 다음 날부터 이어짐', () => {
-      expect(renewalStartDate({ ...input, paidOn: '2026-10-21' })).toBe('2026-10-22');
-      expect(renewalStartDate({ ...input, paidOn: '2026-10-15' })).toBe('2026-10-22');
+  describe('재등록 시작일', () => {
+    const input = { previousFinalEnd: '2026-10-21', paidOn: '2026-10-24', firstLessonAfterPayment: '2026-10-27', firstLessonAfterPreviousEnd: '2026-10-23' };
+    it('종료 후 결제 → 결제 후 첫 정규 수업일부터 (A21 확정 — 운영자 값과 관계없음)', () => {
+      expect(renewalStartDate(input, POLICY_A)).toBe('2026-10-27');
+      expect(renewalStartDate(input, POLICY_B)).toBe('2026-10-27');
     });
-    it('종료 후 결제하면 결제 후 첫 정규 수업일부터', () => {
-      expect(renewalStartDate(input)).toBe('2026-10-27');
+    it('종료일까지 결제 → 미확정(POL-RN-07): 두 선택지 모두 검증', () => {
+      expect(renewalStartDate({ ...input, paidOn: '2026-10-21' }, POLICY_A)).toBe('2026-10-22');
+      expect(renewalStartDate({ ...input, paidOn: '2026-10-15' }, POLICY_B)).toBe('2026-10-23');
     });
     it('첫 수업일이 결제일보다 앞이면 오류', () => {
-      expect(() => renewalStartDate({ ...input, firstLessonAfterPayment: '2026-10-23' })).toThrow();
+      expect(() => renewalStartDate({ ...input, firstLessonAfterPayment: '2026-10-23' }, POLICY_A)).toThrow();
     });
   });
 });

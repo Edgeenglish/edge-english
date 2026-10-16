@@ -4,7 +4,8 @@
 -- 날짜는 넣는 시점(now) 기준으로 만들어, 대시보드에서 '기한 초과·임박·여유'가 모두 보이게 함
 -- 여러 번 실행해도 같은 데이터가 두 번 들어가지 않음 (고정 ID + on conflict do nothing)
 -- =====================================================================
-set app.actor_via = 'seed_fake';
+begin;   -- 중간에 오류가 나면 전부 취소 (반쯤 들어간 상태가 남지 않음)
+set local app.actor_via = 'seed_fake';
 
 insert into tutors (id, name, country, timezone) values
   ('00000000-7e57-0000-0000-00000000a001', '가상강사 Alex', 'Australia', 'Australia/Sydney'),
@@ -57,3 +58,5 @@ end $$;
 -- 재등록 통보: 강사에게 보냈지만 아직 확인 안 함
 update admin_tasks set tutor_notified_at = coalesce(tutor_notified_at, now())
 where kind = 'renewal_tutor_notice' and enrollment_id = '00000000-7e57-0000-0000-00000000c005';
+
+commit;

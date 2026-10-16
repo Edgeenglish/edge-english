@@ -53,11 +53,11 @@ export const FAVORABLE_FOR_ALL = {
 /** 재등록 규칙 (계약서에 정한 조항이 없어 전원 같음) */
 export const RENEWAL = {
   /**
-   * 새 수강 시작일 (POL-RN-04, 정책 원본 C01 → 2026-10-16 대표 확정)
-   * 종료일까지 재등록 결제 → 종료일 다음 날부터 이어짐 / 종료 후 결제 → 결제 후 첫 정규 수업일 (잔여 수업 이월 없음)
+   * 종료 후(늦은) 재등록의 새 수강 시작일 = 결제 후 첫 정규 수업일, 잔여 수업 이월 없음 (POL-RN-04, 정책 원본 A21)
+   * 종료일까지 결제한 경우의 시작일은 미확정 → PendingPolicy.onTimeRenewalStart (POL-RN-07)
    */
-  start: 'continuous_if_before_end',
-  /** 기존 고정 요일·시간은 종료일 23:59 KST까지 결제하면 유지 (POL-RN-02, C02 → 2026-10-16 대표 확정, 이월 마감과는 별도 규칙) */
+  lateStart: 'first_lesson_after_payment',
+  /** 기존 고정 요일·시간은 종료일 23:59 KST까지 결제하면 우선 확보 (POL-RN-02, 정책 원본 A22, 이월 마감과는 별도 규칙) */
   holdFixedSlotUntilEndOfDay: true,
 } as const;
 
@@ -78,7 +78,7 @@ export const POLICY_V1_REFS: Record<keyof typeof POLICY_V1 | keyof typeof FAVORA
   carryOverPaidByEndOfDay: 'POL-RN-01',
   longLeave: 'POL-LV-01',
   compensationCompleteWithinDays: 'POL-TU-03',
-  'renewal.start': 'POL-RN-04',
+  'renewal.lateStart': 'POL-RN-04',
   'renewal.holdFixedSlotUntilEndOfDay': 'POL-RN-02',
 };
 
@@ -103,11 +103,18 @@ export function isOfferedPlan(durationMin: number, weeklyCount: number): boolean
  * 각 항목의 선택지와 추천안은 docs/lms/07-decisions.md 참고.
  */
 export type PendingPolicy = {
+  /**
+   * 종료일까지 재등록 결제한 경우의 새 수강 시작일 (POL-RN-07 — 기획서 7장의 '이어진다'는 작업 가정일 뿐 대표 확정 아님)
+   * - 'day_after_previous_end': 이전 종료일 다음 날부터 끊김 없이
+   * - 'first_lesson_after_previous_end': 이전 종료일 뒤 첫 정규 수업일부터
+   */
+  onTimeRenewalStart: 'day_after_previous_end' | 'first_lesson_after_previous_end';
   /** 강사 노쇼 보상 수업을 학생이 다시 취소할 때 (POL-TU-10, 정책 원본 C03 — 원본 A03은 '보강'만 언급) */
   compensationRecancel: 'no_rebook' | 'same_as_regular';
 };
 
 /** PendingPolicy 각 항목의 정책 ID (기준표에서 아직 '검토 중'이어야 함 — 결정되면 테스트가 알려 줌) */
 export const PENDING_REFS: Record<keyof PendingPolicy, string> = {
+  onTimeRenewalStart: 'POL-RN-07',
   compensationRecancel: 'POL-TU-10',
 };
