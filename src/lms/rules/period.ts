@@ -4,7 +4,7 @@
 // - 12주 = 28일 × 3기간, 24주 = 28일 × 6기간 (기간은 끊김 없이 이어짐)
 // - 옛 상품(1판 계약 30일, 2개월 등)은 다시 계산하지 않고 시트의 실제 날짜를 그대로 이관 (CF-04)
 
-import { addDays, diffDays, type KstDate } from './dates';
+import { addDays, diffDays, endOfKstDay, type KstDate } from './dates';
 import { CONFIRMED, type CourseWeeks, type PendingPolicy } from './policy';
 
 export type Period = { index: number; start: KstDate; end: KstDate };
@@ -59,4 +59,13 @@ export function renewalStartDate(
     throw new Error('재등록 후 첫 수업일은 이전 종료일 이후여야 합니다.');
   }
   return input.firstLessonAfterRenewal;
+}
+
+/**
+ * 남은 수업 이월 가능 여부 (POL-RN-01, 정책 원본 A01·A02 — 'policy_v1' 등록 기준)
+ * 재등록 결제가 '실제로 완료된 시각'(운영자가 확인한 시각이 아님)이 종료일 23:59 KST 이내여야 함.
+ * 예전 계약(SC1·SC2·SC3 '종료 후 1주일')을 받은 등록은 이 함수로 판정하지 않고 계약대로 운영자가 처리 (POL-OP-16)
+ */
+export function canCarryOver(renewalPaidAt: Date, previousFinalEnd: KstDate): boolean {
+  return renewalPaidAt.getTime() <= endOfKstDay(previousFinalEnd).getTime();
 }

@@ -21,6 +21,7 @@
 - 최신 문서나 계약서 문구를 자동으로 고르지 않는다. 기존 학생·강사는 서명한 계약 판본이 다를 수 있다.
 
 ## LMS (docs/lms/README.md 를 먼저 읽을 것)
+- **운영정책 결정의 원본은 대표의 Google Docs 정책 원본**(docs/lms/policy/official-source.md). 저장소의 `policy/register.md`는 개발용 사본. 확정 정책은 신규·갱신 등록부터 적용하고 기존 계약 학생·강사에게 소급하지 않는다.
 - 웹앱 + Supabase(PostgreSQL)가 유일한 데이터 원본. Google 시트는 이관·검증·보고용.
 - 운영자 결정 대기 항목은 `docs/lms/07-decisions.md`. 미결정 규칙은 코드에 기본값으로 넣지 않는다.
 - 규칙 코드 `src/lms/rules/` (`npm test`), DB 초안 `supabase/` (`npm run test:db`).

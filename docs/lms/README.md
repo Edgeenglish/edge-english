@@ -4,11 +4,14 @@
 
 **새 채팅에서는 [`../lms-plan.md`](../lms-plan.md)(인수인계 문서)를 먼저 읽는다.** 기획서 원문 글자본: [`../lms-기획서-원문.md`](../lms-기획서-원문.md)
 
-**최우선 원칙: 운영정책은 [`policy/register.md`](policy/register.md)(정책 기준표)가 기준이다.** 계약서·FAQ·안내문·시트·코드가 서로 다르면 기준표에서 먼저 정리하고, 바꿀 때는 [`policy/process.md`](policy/process.md) 절차를 따른다.
+**정책 결정의 원본은 대표의 Google Docs 정책 원본(v1.0, `policy/sources.md` SRC-POLICY-V1)이다.** 조항별 대조는 [`policy/official-source.md`](policy/official-source.md). 실제 운영 데이터의 원본은 Supabase다.
+
+**개발 기준: 운영정책은 [`policy/register.md`](policy/register.md)(정책 기준표 — 정책 원본의 개발용 사본)를 따른다.** 계약서·FAQ·안내문·시트·코드가 서로 다르면 기준표에서 먼저 정리하고, 바꿀 때는 [`policy/process.md`](policy/process.md) 절차를 따른다.
 
 | 정책 관리 | 내용 |
 |---|---|
-| [policy/register.md](policy/register.md) | **운영정책 기준표** 72개 (확정·검토 중·변경 제안·폐지, 근거, 기존/신규 차이, 고칠 곳) |
+| [policy/official-source.md](policy/official-source.md) | **정책 원본 v1.0 대조표** (대표확정·개발요구·추가확인·보류 구분, 기존 계약과의 관계) |
+| [policy/register.md](policy/register.md) | **운영정책 기준표** 80개 (확정·검토 중·변경 제안·폐지, 근거, 기존/신규 차이, 고칠 곳) |
 | [policy/critical-policies.md](policy/critical-policies.md) | **핵심 정책 27개 검토표** (횟수·변경권·보강·이월·급여, 판본별 적용 대상·실제 승인 여부) |
 | [policy/contract-version-check.md](policy/contract-version-check.md) | 구계약 적용 학생·강사 확인 방법 (서명·발송·동의 구분, 계약서/안내서만/계약 후 안내서만 유형, 이름 없는 집계) |
 | [policy/conflicts.md](policy/conflicts.md) | **정책 충돌 목록** 27건 (횟수·돈·계약 우선) |
@@ -29,6 +32,7 @@
 | [08-legacy-automation-analysis.md](08-legacy-automation-analysis.md) | Master·이지은·Cindy 샘플 자동화 분석 (구현/중단/수동/제거 대상) |
 | [10-terms-consent-design.md](10-terms-consent-design.md) | **수업 안내 확인·동의 기능 설계** (흐름, 기록 항목, 판 관리, 카톡 발송 검토, 법률 미확인 목록) |
 | [09-design-review.md](09-design-review.md) | 기존 시트 구조 vs 새 구조 연결표, 입력 주체, SQL v0.2 재검토, 대안 비교 |
+| [drafts/](drafts/) | FAQ 수정 초안·필독안내 새 텍스트 판 초안 (게시 전 승인 필요) |
 | [history/](history/) | 이전 판 보관 (1차 결정 질문지) |
 | [original/](original/) | 원본 기획서 PDF |
 | [previews/consent-drafts/](previews/consent-drafts/) | 수업 안내 동의 화면 시안 (학생 3개·관리자 3개). 미리보기: https://claude.ai/artifact/PFkJbUuMy8CLJtamJxYQBK |
@@ -38,8 +42,8 @@
 
 | 위치 | 내용 | 검증 |
 |---|---|---|
-| `src/lms/rules/` | 수강기간·회차·변경권·변경 판정·휴무 미리보기 규칙 + 정책 기준표 일관성 검사 | `npm test` (84개) |
-| `supabase/migrations/` | DB 스키마 초안 v0.2, 단계별 5개 파일 (400 = 수업 안내 확인·동의) (**아직 어떤 Supabase에도 적용 안 함**) | `npm run test:db` (63개, 로컬 임시 PostgreSQL) |
+| `src/lms/rules/` | 수강기간·회차·변경권·변경 판정·휴무·장기 연기·적립금 규칙 + 정책 기준표 일관성 검사 | `npm test` (113개) |
+| `supabase/migrations/` | DB 스키마 초안 v0.2, 단계별 6개 파일 (400 = 수업 안내 확인·동의, 500 = 정책 원본 v1.0: 적립금·운영 업무·장기 연기) (**아직 어떤 Supabase에도 적용 안 함**) | `npm run test:db` (104개, 로컬 임시 PostgreSQL) |
 | `supabase/tests/` | DB 제약·권한 테스트 | |
 
 ## 지켜야 할 것

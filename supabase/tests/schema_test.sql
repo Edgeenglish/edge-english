@@ -321,3 +321,161 @@ select pg_temp.ok(not exists (
   where c.contype = 'f' and c.conrelid in ('lessons'::regclass, 'enrollments'::regclass, 'change_requests'::regclass)
     and c.confrelid in ('consent_requests'::regclass, 'consent_events'::regclass, 'terms_documents'::regclass)
 ), '동의 여부가 수업·등록·변경 신청을 막는 연결이 없음');
+
+-- =====================================================================
+-- 정책 원본 v1.0 (migration 500): 적용 기준·결제 시각·적립금·운영 업무·장기 연기
+-- =====================================================================
+insert into students (id, name_ko, name_en, timezone) values
+  ('99999999-0000-0000-0000-000000000001', '테스트사', 'Test Four', 'Asia/Seoul'),
+  ('99999999-0000-0000-0000-000000000002', '테스트오', 'Test Five', 'Asia/Seoul'),
+  ('99999999-0000-0000-0000-000000000003', '테스트육', 'Test Six', 'Asia/Seoul');
+select pg_temp.ok((select policy_basis from enrollments where id = '55555555-5555-5555-5555-555555555555') = 'legacy',
+                  '기존 등록은 기본 legacy — 새 정책을 자동 적용하지 않음');
+
+-- 신규 24주 등록 (정책 원본 적용) · 4주 legacy 등록
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status, policy_basis)
+values ('99999999-1000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001', 1, 24, 2, 50, '2026-11-02', '2027-04-18', 48, 'confirmed', 'policy_v1'),
+       ('99999999-1000-0000-0000-000000000002', '99999999-0000-0000-0000-000000000002', 1, 4, 2, 50, '2026-11-02', '2026-11-29', 8, 'confirmed', 'legacy');
+
+-- ---------- 결제 시각 ----------
+select pg_temp.expect_error($$insert into payments (enrollment_id, method, amount_received, received_on, confirmed_by)
+  values ('99999999-1000-0000-0000-000000000001', 'bank_transfer', 100000, '2026-10-20', 'aaaaaaaa-0000-0000-0000-000000000001')$$, 'not-null|23502');
+select pg_temp.ok(true, '실제 결제 완료 시각(paid_at) 없이 결제 기록 불가');
+select pg_temp.expect_error($$insert into payments (enrollment_id, method, amount_received, received_on, paid_at, confirmed_by)
+  values ('99999999-1000-0000-0000-000000000001', 'bank_transfer', 100000, '2026-10-21', '2026-10-20 14:59:00+00', 'aaaaaaaa-0000-0000-0000-000000000001')$$, 'check');
+select pg_temp.ok(true, '입금일(received_on)은 실제 결제 시각의 한국 날짜와 같아야 함 (UTC 14:59 = KST 23:59 → 10/20)');
+
+-- ---------- 신규 매칭 업무: 결제 확인 즉시 생성, 3영업일 ----------
+insert into holidays (day, name, kind) values ('2026-10-22', '테스트 임시공휴일', 'temporary');
+select pg_temp.expect_error($$insert into holidays (day, name, kind) values ('2026-10-23', '회사 행사', 'company')$$, 'check');
+select pg_temp.ok(true, '공휴일은 법정·대체·임시만 (운영자 임의 휴일 종류 없음)');
+select pg_temp.ok(add_business_days('2026-10-16', 3) = '2026-10-21', '영업일: 금 → 다음 주 수 (주말 제외)');
+select pg_temp.ok(add_business_days('2026-10-20', 3) = '2026-10-26', '영업일: 공휴일(10/22) 제외');
+
+insert into payments (id, enrollment_id, method, amount_received, received_on, paid_at, confirmed_by, confirmed_at, external_ref)
+values ('99999999-2000-0000-0000-000000000001', '99999999-1000-0000-0000-000000000001', 'card_link', 1000000, '2026-10-16',
+        '2026-10-16 03:00+00', 'aaaaaaaa-0000-0000-0000-000000000001', '2026-10-16 05:00+00', 'IMWEB-TEST-1');
+select pg_temp.ok((select count(*) from admin_tasks where enrollment_id = '99999999-1000-0000-0000-000000000001' and kind = 'new_student_matching') = 1,
+                  '신규 학생 결제 확인 → 매칭 대기 업무 자동 생성');
+select pg_temp.ok((select due_at from admin_tasks where kind = 'new_student_matching' and enrollment_id = '99999999-1000-0000-0000-000000000001')
+                  = '2026-10-21 23:59:59.999999+09', '매칭 기한 = 3영업일째 23:59 KST (10/16 금 확인 → 10/21 수)');
+select pg_temp.expect_error($$insert into payments (enrollment_id, method, amount_received, received_on, paid_at, confirmed_by, external_ref)
+  values ('99999999-1000-0000-0000-000000000001', 'card_link', 1000000, '2026-10-16', '2026-10-16 03:00+00', 'aaaaaaaa-0000-0000-0000-000000000001', 'IMWEB-TEST-1')$$, 'unique|23505');
+select pg_temp.ok(true, '같은 주문번호 결제를 두 번 기록할 수 없음');
+insert into payments (enrollment_id, method, amount_received, received_on, paid_at, confirmed_by)
+values ('99999999-1000-0000-0000-000000000001', 'bank_transfer', 10000, '2026-10-17', '2026-10-17 01:00+00', 'aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.ok((select count(*) from admin_tasks where enrollment_id = '99999999-1000-0000-0000-000000000001') = 1, '나눠 낸 두 번째 결제로 업무가 중복 생성되지 않음');
+
+select pg_temp.expect_error($$update admin_tasks set status = 'done', done_at = now() where kind = 'new_student_matching' and enrollment_id = '99999999-1000-0000-0000-000000000001'$$, 'check');
+update admin_tasks set tutor_id = '11111111-1111-1111-1111-111111111111', tutor_assigned_at = now()
+  where kind = 'new_student_matching' and enrollment_id = '99999999-1000-0000-0000-000000000001';
+select pg_temp.expect_error($$update admin_tasks set status = 'done', done_at = now() where kind = 'new_student_matching' and enrollment_id = '99999999-1000-0000-0000-000000000001'$$, 'check');
+select pg_temp.ok((select missing_steps = array['notify_student'] from admin_task_board where enrollment_id = '99999999-1000-0000-0000-000000000001'),
+                  '강사만 배정하고 학생 안내 전이면 업무가 남아 있고 남은 단계가 보임');
+update admin_tasks set student_notified_at = now(), status = 'done', done_at = now()
+  where kind = 'new_student_matching' and enrollment_id = '99999999-1000-0000-0000-000000000001';
+select pg_temp.ok(not exists (select 1 from admin_task_board where enrollment_id = '99999999-1000-0000-0000-000000000001'),
+                  '강사 배정 + 학생 안내를 모두 마쳐야 매칭 업무 완료');
+select pg_temp.expect_error($$delete from admin_tasks$$, '삭제할 수 없습니다');
+select pg_temp.ok(true, '운영 업무는 지울 수 없음 (취소는 사유와 함께)');
+
+-- 기한 표시
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000000003', '99999999-0000-0000-0000-000000000003', 1, 4, 2, 50, '2026-01-05', '2026-02-01', 8, 'completed');
+insert into payments (enrollment_id, method, amount_received, received_on, paid_at, confirmed_by, confirmed_at)
+values ('99999999-1000-0000-0000-000000000003', 'bank_transfer', 100000, '2026-01-02', '2026-01-02 01:00+00', 'aaaaaaaa-0000-0000-0000-000000000001', '2026-01-02 01:00+00');
+select pg_temp.ok((select urgency from admin_task_board where enrollment_id = '99999999-1000-0000-0000-000000000003') = 'overdue', '기한이 지난 매칭 업무는 기한 초과로 표시');
+
+-- ---------- 재등록 강사 통보: 강사 확인 + 일정 조치까지 ----------
+insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+values ('99999999-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 1, '20:00', 50, '2026-11-02');
+insert into enrollments (id, student_id, seq, previous_enrollment_id, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status, policy_basis)
+values ('99999999-1000-0000-0000-000000000004', '99999999-0000-0000-0000-000000000001', 2, '99999999-1000-0000-0000-000000000001',
+        4, 2, 50, '2027-04-19', '2027-05-16', 8, 'confirmed', 'policy_v1');
+insert into payments (id, enrollment_id, method, amount_received, received_on, paid_at, confirmed_by)
+values ('99999999-2000-0000-0000-000000000004', '99999999-1000-0000-0000-000000000004', 'bank_transfer', 100000, '2027-04-10', '2027-04-10 01:00+00', 'aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.ok((select tutor_id = '11111111-1111-1111-1111-111111111111' from admin_tasks where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004'),
+                  '재등록 결제 확인 → 담당 강사 통보 업무 자동 생성 (현재 고정 스케줄의 강사)');
+update admin_tasks set tutor_notified_at = now() where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004';
+select pg_temp.expect_error($$update admin_tasks set status = 'done', done_at = now() where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004'$$, 'check');
+select pg_temp.ok(true, '통보 발송만으로는 완료 불가 — 강사 확인·일정 조치 필요');
+
+-- ---------- 보상 적립금 ----------
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, canceled_at, class_status)
+values ('99999999-3000-0000-0000-000000000001', '99999999-1000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001',
+        '22222222-2222-2222-2222-222222222222', 'regular', 1, '2026-11-02 11:00+00', '2026-11-02 11:50+00', 'canceled', '2026-11-02 08:00+00', 'Tutor canceled late'),
+       ('99999999-3000-0000-0000-000000000002', '99999999-1000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001',
+        '22222222-2222-2222-2222-222222222222', 'regular', 2, '2026-11-04 11:00+00', '2026-11-04 11:50+00', 'canceled', '2026-11-03 08:00+00', 'Tutor canceled in advance'),
+       ('99999999-3000-0000-0000-000000000003', '99999999-1000-0000-0000-000000000002', '99999999-0000-0000-0000-000000000002',
+        '22222222-2222-2222-2222-222222222222', 'regular', 1, '2026-11-02 13:00+00', '2026-11-02 13:50+00', 'canceled', '2026-11-02 10:00+00', 'Tutor canceled late');
+insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000001');
+select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000001')$$, 'unique|23505');
+select pg_temp.ok(true, '같은 강사 늦은 취소 수업에 적립금 중복 지급 불가');
+select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000002')$$, '6시간 미만');
+select pg_temp.ok(true, '6시간 이상 전 강사 취소에는 적립금 없음 (보강만)');
+select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000002', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000003')$$, '정책 원본 적용 등록이 아니');
+select pg_temp.ok(true, '기존(legacy) 등록에는 자동 적립하지 않음 — 운영자 지급만 (POL-OP-17 결정 전)');
+select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount) values ('99999999-0000-0000-0000-000000000002', 'grant_admin', 2000)$$, 'check');
+select pg_temp.ok(true, '운영자 수동 지급은 사유 필수');
+select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000000001') = 2000, '적립금 잔액 2,000원');
+
+-- 사용: 예약 → 확정 / 복구
+select pg_temp.expect_error($$insert into reward_redemptions (student_id, enrollment_id, amount, method) values ('99999999-0000-0000-0000-000000000001', '99999999-1000-0000-0000-000000000004', 3000, 'bank_transfer')$$, '잔액이 부족');
+select pg_temp.ok(true, '잔액보다 많이 쓸 수 없음');
+insert into reward_redemptions (id, student_id, enrollment_id, amount, method)
+values ('99999999-4000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001', '99999999-1000-0000-0000-000000000004', 2000, 'bank_transfer');
+select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000000001') = 0, '사용 예약하면 잔액에서 바로 빠짐 (이중 사용 방지)');
+select pg_temp.expect_error($$insert into reward_redemptions (student_id, enrollment_id, amount, method) values ('99999999-0000-0000-0000-000000000001', '99999999-1000-0000-0000-000000000004', 1, 'bank_transfer')$$, 'unique|23505|잔액');
+select pg_temp.ok(true, '한 등록에 진행 중인 적립금 사용은 하나만');
+select pg_temp.expect_error($$update reward_redemptions set status = 'confirmed', payment_id = '99999999-2000-0000-0000-000000000001' where id = '99999999-4000-0000-0000-000000000001'$$, '이 등록의 결제');
+select pg_temp.ok(true, '다른 등록의 결제로는 확정 불가');
+update reward_redemptions set status = 'confirmed', payment_id = '99999999-2000-0000-0000-000000000004' where id = '99999999-4000-0000-0000-000000000001';
+select pg_temp.expect_error($$update reward_redemptions set status = 'released', note = '실수' where id = '99999999-4000-0000-0000-000000000001'$$, '바꿀 수 없습니다');
+select pg_temp.ok(true, '확정된 사용은 예약 취소로 되돌릴 수 없음 (환불 복구만)');
+update reward_redemptions set status = 'restored', note = '결제 환불' where id = '99999999-4000-0000-0000-000000000001';
+select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000000001') = 2000, '확정 후 결제 환불 → 적립금 복구');
+select pg_temp.expect_error($$update reward_redemptions set status = 'restored', note = '두 번' where id = '99999999-4000-0000-0000-000000000001'$$, '바꿀 수 없습니다');
+select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000000001') = 2000, '복구는 한 번만');
+select pg_temp.expect_error($$delete from reward_ledger$$, '삭제할 수 없습니다');
+select pg_temp.ok(true, '적립금 원장은 지울 수 없음');
+
+-- ---------- 보상 수업 7일 기한 ----------
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, class_status)
+values ('99999999-3000-0000-0000-000000000004', '99999999-1000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001',
+        '22222222-2222-2222-2222-222222222222', 'regular', 3, '2026-11-09 11:00+00', '2026-11-09 11:50+00', 'done', 'Tutor no-show');
+insert into compensations (student_id, enrollment_id, source_lesson_id, reason, confirmed_by, created_at)
+values ('99999999-0000-0000-0000-000000000001', '99999999-1000-0000-0000-000000000001', '99999999-3000-0000-0000-000000000004',
+        'tutor_no_show', 'aaaaaaaa-0000-0000-0000-000000000001', '2026-11-09 15:30+00');
+select pg_temp.ok((select expires_on from compensations where source_lesson_id = '99999999-3000-0000-0000-000000000004') = '2026-11-17',
+                  '보상 수업 기한 = 지급일(KST 11/10) + 7일 (정책 원본 적용 등록)');
+
+-- ---------- 장기 연기 (24주만, 총 14일·2회) ----------
+select pg_temp.expect_error($$insert into long_leave_requests (enrollment_id, leave_start, days, reason_kind) values ('99999999-1000-0000-0000-000000000001', '2027-03-01', 10, 'health')$$, 'check');
+select pg_temp.ok(true, '연기 기간은 7일 또는 14일만');
+insert into long_leave_requests (enrollment_id, leave_start, days, reason_kind) values ('99999999-1000-0000-0000-000000000001', '2026-12-01', 7, 'health');
+insert into long_leave_requests (enrollment_id, leave_start, days, reason_kind) values ('99999999-1000-0000-0000-000000000001', '2027-01-04', 7, 'business_trip');
+select pg_temp.expect_error($$insert into long_leave_requests (enrollment_id, leave_start, days, reason_kind) values ('99999999-1000-0000-0000-000000000001', '2027-02-01', 7, 'health')$$, '최대 14일');
+select pg_temp.ok(true, '장기 연기 3번째·14일 초과 신청은 거부');
+select pg_temp.expect_error($$insert into long_leave_requests (enrollment_id, leave_start, days, reason_kind) values ('99999999-1000-0000-0000-000000000002', '2026-11-10', 7, 'health')$$, '정책 원본 적용 등록이 아니');
+select pg_temp.ok(true, '기존(legacy) 등록은 자동 접수하지 않음 — 계약 조건 확인 후 운영자 처리');
+select pg_temp.expect_error($$insert into long_leave_requests (enrollment_id, leave_start, days, reason_kind) values ('99999999-1000-0000-0000-000000000004', '2027-04-25', 7, 'health')$$, '24주');
+select pg_temp.ok(true, '24주가 아닌 등록은 장기 연기 불가');
+select pg_temp.expect_error($$update long_leave_requests set status = 'approved' where leave_start = '2026-12-01'$$, 'check');
+select pg_temp.ok(true, '승인은 증빙 확인 메모와 연장 기록이 있어야 함');
+
+-- ---------- 권한 ----------
+insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000000011', 'student', '99999999-0000-0000-0000-000000000001');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000011';
+select pg_temp.ok((select count(*) from reward_ledger) > 0 and not exists (select 1 from reward_ledger where student_id <> '99999999-0000-0000-0000-000000000001'),
+                  '학생은 본인 적립금 기록만 봄');
+select pg_temp.ok((select count(*) from admin_tasks) = 0, '학생은 운영 업무를 볼 수 없음');
+select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, note) values ('99999999-0000-0000-0000-000000000001', 'grant_admin', 100000, 'x')$$, 'permission|42501');
+select pg_temp.ok(true, '학생이 적립금을 직접 넣을 수 없음');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000004';   -- 강사 TestTutorA
+select pg_temp.ok((select count(*) from admin_tasks) = 1 and (select kind from admin_tasks limit 1) = 'renewal_tutor_notice',
+                  '강사는 본인에게 온 재등록 통보만 봄 (매칭 업무는 안 보임)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select count(*) from admin_task_board) >= 2, '운영자는 열린 업무 전체를 봄');
+reset request.jwt.claim.sub;
+reset role;

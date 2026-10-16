@@ -95,3 +95,16 @@ export function formatInZone(instant: Date, timeZone: string): { date: string; t
 export function hoursBetween(from: Date, to: Date): number {
   return (to.getTime() - from.getTime()) / (60 * 60 * 1000);
 }
+
+/** 영업일(토·일·공휴일 제외)을 더함 — 시작 날짜 다음 날부터 셈. 공휴일 목록은 운영자가 등록한 holidays (POL-CHG-07) */
+export function addBusinessDays(date: KstDate, n: number, holidays: ReadonlySet<KstDate>): KstDate {
+  if (!Number.isInteger(n) || n < 1) throw new Error(`영업일 수가 올바르지 않습니다: ${n}`);
+  let d = date;
+  let left = n;
+  while (left > 0) {
+    d = addDays(d, 1);
+    const w = weekdayOf(d);
+    if (w !== 0 && w !== 6 && !holidays.has(d)) left--;
+  }
+  return d;
+}

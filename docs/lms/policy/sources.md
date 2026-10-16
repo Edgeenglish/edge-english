@@ -14,6 +14,12 @@
 
 마지막 확인일: **2026-10-16** (모두 읽기 전용으로 확인. 판본 판별 규칙은 `src/lms/rules/terms.ts`)
 
+## 대표 정책 원본 (최우선)
+
+| ID | 문서 | 버전·날짜 | 등급 | 상태 | 위치 |
+|---|---|---|---|---|---|
+| SRC-POLICY-V1 | 엣지영어 운영정책 통합 기준표 (대표 의사결정 원본) | v1.0, 2026-10-16 | 대표 결정 (계약·안내문이 아니라 **앞으로의 운영방침**. 과거 등록에 소급하지 않음) | 현행. 조항별 대조: [`official-source.md`](official-source.md) | Google Docs (support@ 계정, 비공개) `1jm6wtKRScTtvHQehlvI_in2CfBHxJpfeOmaDdUTjDbA` |
+
 ## 학생 대상
 
 | ID | 문서 | 버전·날짜 | 등급 | 상태 | 위치 |

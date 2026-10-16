@@ -8,7 +8,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CONFIRMED_REFS, PENDING_REFS } from './policy';
+import { CONFIRMED_REFS, PENDING_REFS, POLICY_V1_REFS } from './policy';
 import { CLASS_STATUSES, STATUS_RULES } from './status';
 import { GUIDES, TERMS } from './terms';
 
@@ -81,6 +81,19 @@ describe('코드 ↔ 기준표', () => {
   it('코드가 확정 값으로 쓰는 규칙은 기준표에서 확정', () => {
     for (const [key, id] of Object.entries(CONFIRMED_REFS)) {
       expect(policies.get(id), `${key} → ${id}`).toBe('확정');
+    }
+  });
+
+  it('정책 원본 v1.0 값(POLICY_V1)은 기준표에서 확정이고 대표 승인(✅)이 있음', () => {
+    const approved = new Set(
+      register
+        .split(/^### /m)
+        .filter((b) => /^- \*\*대표 승인\*\*: ✅/m.test(b))
+        .map((b) => /^POL-[A-Z]+-\d{2}/.exec(b)?.[0]),
+    );
+    for (const [key, id] of Object.entries(POLICY_V1_REFS)) {
+      expect(policies.get(id), `${key} → ${id}`).toBe('확정');
+      expect(approved.has(id), `${key} → ${id} 대표 승인 없음`).toBe(true);
     }
   });
 
