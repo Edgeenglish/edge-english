@@ -31,6 +31,8 @@
 | [07-decisions.md](07-decisions.md) | **대표 결정 필요 사항** (2차, 추천안 포함) — 결정되면 여기 기록 |
 | [08-legacy-automation-analysis.md](08-legacy-automation-analysis.md) | Master·이지은·Cindy 샘플 자동화 분석 (구현/중단/수동/제거 대상) |
 | [10-terms-consent-design.md](10-terms-consent-design.md) | **수업 안내 확인·동의 기능 설계** (흐름, 기록 항목, 판 관리, 카톡 발송 검토, 법률 미확인 목록) |
+| [11-accounts-auth-payments.md](11-accounts-auth-payments.md) | 계정·인증(운영자 초대 → 장래 공개 가입, 운영자 TOTP)·결제 확인 분담·보강 리마인더 설계. 공식 홈페이지 통합 기반 원칙 |
+| [12-dashboard-reference-review.md](12-dashboard-reference-review.md) | 대표 참고 이미지 2장(학생·운영자)에서 쓸 요소만 고른 검토 |
 | [09-design-review.md](09-design-review.md) | 기존 시트 구조 vs 새 구조 연결표, 입력 주체, SQL v0.2 재검토, 대안 비교 |
 | [supabase-test-setup.md](supabase-test-setup.md) | **시험용 Supabase 연결 안내** (SQL Editor 적용 → 접속 허용·키 저장 → 로그인) |
 | [drafts/](drafts/) | FAQ 수정 초안·필독안내 새 텍스트 판 초안 (게시 전 승인 필요) |
