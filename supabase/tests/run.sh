@@ -20,6 +20,6 @@ trap cleanup EXIT
 
 PSQL=("${RUN_AS[@]}" psql -h "$WORK" -U postgres -d postgres -v ON_ERROR_STOP=1 -q)
 "${PSQL[@]}" -f "$HERE/stub_supabase.sql"
-for f in "$ROOT"/supabase/migrations/*.sql; do "${PSQL[@]}" -f "$f"; done
+for f in "$ROOT"/supabase/migrations/*.sql; do "${PSQL[@]}" -o /dev/null -f "$f"; done
 "${PSQL[@]}" -o /dev/null -f "$HERE/schema_test.sql" 2>&1 | sed -n -e "s/.*NOTICE:  //p" -e "/ERROR/p"
 echo "✅ LMS 스키마 검증 통과"

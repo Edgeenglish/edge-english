@@ -12,8 +12,8 @@ import { CreditLedger } from './credits';
 import { previewTutorLeave } from './leave';
 
 const H = 60 * 60 * 1000;
-const POLICY_A: PendingPolicy = { makeupRecancel: 'no_rebook', compensationRecancel: 'no_rebook' };
-const POLICY_B: PendingPolicy = { makeupRecancel: 'same_as_regular', compensationRecancel: 'same_as_regular' };
+const POLICY_A: PendingPolicy = { makeupRecancel: 'no_rebook', compensationRecancel: 'no_rebook', renewalStart: 'day_after_previous_end' };
+const POLICY_B: PendingPolicy = { makeupRecancel: 'same_as_regular', compensationRecancel: 'same_as_regular', renewalStart: 'first_lesson_after_renewal' };
 
 describe('수강기간 계산', () => {
   it('4주 = 시작일 포함 28일 (종료일 = 시작일 + 27)', () => {
@@ -65,8 +65,19 @@ describe('수강기간 계산', () => {
     expect(periodOf('2026-10-25', '2026-07-30', 12, 7)?.index).toBe(3);
   });
 
-  it('재등록 시작일 = 이전 최종 종료일 다음 날', () => {
-    expect(renewalStartDate('2026-10-21')).toBe('2026-10-22');
+  describe('재등록 시작일 (미확정 규칙 — 두 선택지 모두 검증)', () => {
+    const input = { previousFinalEnd: '2026-10-21', renewedOn: '2026-10-24', firstLessonAfterRenewal: '2026-10-27' };
+    it('선택지 A: 이전 최종 종료일 다음 날', () => {
+      expect(renewalStartDate(input, { renewalStart: 'day_after_previous_end' })).toBe('2026-10-22');
+    });
+    it('선택지 B: 재등록 후 첫 정규 수업일', () => {
+      expect(renewalStartDate(input, { renewalStart: 'first_lesson_after_renewal' })).toBe('2026-10-27');
+    });
+    it('선택지 C: 종료일까지 재등록하면 이어서, 종료 후 재등록이면 첫 정규 수업일부터', () => {
+      const c = { renewalStart: 'continuous_if_before_end' } as const;
+      expect(renewalStartDate({ ...input, renewedOn: '2026-10-21' }, c)).toBe('2026-10-22');
+      expect(renewalStartDate(input, c)).toBe('2026-10-27');
+    });
   });
 });
 

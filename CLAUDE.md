@@ -15,10 +15,16 @@
 - 디자인·기능 결정이 필요하면 개발 전에 시안을 먼저 보여주고 운영자의 선택을 받는다.
 - 실제 홈페이지 배포는 테스트 결과를 공유하고 승인을 받은 뒤에 한다.
 
+## 운영정책 (최우선)
+- 운영정책의 기준은 `docs/lms/policy/register.md`(정책 기준표). 계약서·FAQ·안내문·시트·코드가 다르면 기준표에서 먼저 정리한다.
+- 새 문서를 받거나 정책 문구(FAQ·공지·계약서 초안·코드)를 고칠 때는 기준표와 대조하고, 다르면 고치기 전에 운영자에게 보고한다 (`docs/lms/policy/process.md`).
+- 최신 문서나 계약서 문구를 자동으로 고르지 않는다. 기존 학생·강사는 서명한 계약 판본이 다를 수 있다.
+
 ## LMS (docs/lms/README.md 를 먼저 읽을 것)
 - 웹앱 + Supabase(PostgreSQL)가 유일한 데이터 원본. Google 시트는 이관·검증·보고용.
 - 운영자 결정 대기 항목은 `docs/lms/07-decisions.md`. 미결정 규칙은 코드에 기본값으로 넣지 않는다.
 - 규칙 코드 `src/lms/rules/` (`npm test`), DB 초안 `supabase/` (`npm run test:db`).
+- 홈페이지 개선 과제(릴스 '실제 수업 모습' 섹션 등)는 LMS와 별도: `docs/homepage/backlog.md`.
 
 ## 수강후기 시스템 (docs/reviews-setup.md)
 - 관리 화면·저장: `apps-script/admin` (Google 시트 '후기' 탭), 공개 피드: `apps-script/feed`

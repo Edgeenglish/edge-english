@@ -1,8 +1,9 @@
-// 운영 규칙 값
-// - CONFIRMED: 기획서·홈페이지 FAQ·수강계약서·Master Sheet가 모두 같은 내용이라 확정된 값
-// - PendingPolicy: 문서끼리 서로 다르거나 아직 정하지 않은 규칙 (docs/lms/07-decisions.md)
+// 운영 규칙 값 — 기준은 정책 기준표 docs/lms/policy/register.md
+// - CONFIRMED: 기준표에서 '확정'인 값. CONFIRMED_REFS 에 정책 ID를 적고, 자동 테스트가 기준표 상태를 확인함
+// - PendingPolicy: 기준표에서 '검토 중'인 규칙 (docs/lms/07-decisions.md)
 //   → 기본값을 두지 않는다. 운영자가 정한 값을 넘겨주지 않으면 계산 자체가 되지 않게 해서
 //     정해지지 않은 규칙이 몰래 적용되는 일을 막는다.
+// - 아래 값은 수강계약서 2판(SC2) 이후 기준. 1판(SC1) 학생 규칙은 D-16 결정 후 판본별로 추가
 
 export const CONFIRMED = {
   /** 1기간 = 28일 (시작일 포함) */
@@ -15,6 +16,16 @@ export const CONFIRMED = {
   weeklyCounts: [1, 2, 3, 5] as const,
   /** 수업 길이(분) */
   durations: [20, 40, 50] as const,
+} as const;
+
+/** CONFIRMED 각 값의 근거 정책 ID (기준표에서 '확정'이어야 함 — policy-register.test.ts) */
+export const CONFIRMED_REFS = {
+  periodDays: 'POL-PER-02',
+  courseWeeks: 'POL-PER-01',
+  changeNoticeHours: 'POL-CHG-01',
+  weeklyCounts: 'POL-PAY-08',
+  durations: 'POL-PAY-08',
+  creditsPerPeriod: 'POL-CHG-03',
 } as const;
 
 export type CourseWeeks = (typeof CONFIRMED.courseWeeks)[number];
@@ -46,4 +57,18 @@ export type PendingPolicy = {
   makeupRecancel: 'no_rebook' | 'same_as_regular';
   /** 강사 노쇼 보상 수업을 학생이 다시 취소할 때 (D-2와 같은 선택지) */
   compensationRecancel: 'no_rebook' | 'same_as_regular';
+  /**
+   * 재등록 시 새 수강 시작일 (D-18)
+   * - 'day_after_previous_end': 이전 최종 종료일 다음 날 (기간이 끊김 없이 이어짐)
+   * - 'first_lesson_after_renewal': 재등록 후 첫 정규 수업일
+   * - 'continuous_if_before_end': 종료일까지 재등록하면 다음 날부터, 종료 후 재등록하면 재등록 후 첫 정규 수업일
+   */
+  renewalStart: 'day_after_previous_end' | 'first_lesson_after_renewal' | 'continuous_if_before_end';
+};
+
+/** PendingPolicy 각 항목의 정책 ID (기준표에서 아직 '검토 중'이어야 함 — 결정되면 테스트가 알려 줌) */
+export const PENDING_REFS: Record<keyof PendingPolicy, string> = {
+  makeupRecancel: 'POL-CHG-08',
+  compensationRecancel: 'POL-CHG-08',
+  renewalStart: 'POL-RN-04',
 };

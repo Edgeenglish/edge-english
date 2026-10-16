@@ -1,4 +1,5 @@
-// Class Status 14개 — Master Sheet '상태매핑표' 탭(2026-10-16 확인)과 같은 값
+// Class Status 14개 (POL-ST-01) — Master Sheet '상태매핑표' 탭(2026-10-16 확인)과 같은 값
+// DB 기준값(supabase/migrations/…_lms_core.sql 의 class_status_rules)과 같아야 함 — policy-register.test.ts
 // 수업 결과만 담는다. 보강 대기·확정 같은 진행 단계는 보강 신청 상태로 따로 관리.
 //
 // consumesLesson: 학생 수업 1회 소진(수강권 차감)

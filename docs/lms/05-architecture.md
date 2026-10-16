@@ -28,6 +28,8 @@
 
 ## 데이터 구조 (요청하신 15개 항목 → 실제 표)
 
+> **v0.2 (2026-10-16 오후) 변경**: 가격표·설정 표 삭제(정책 값은 기준표 + 코드 한 곳), 계약 판본(`terms_versions`)·강사 계약(`tutor_contracts`) 추가, 단계별 4개 파일로 분리, 연장 장부 자동 합계. 자세한 이유와 기존 시트 연결표는 [09-design-review.md](09-design-review.md).
+
 시트 컬럼을 그대로 옮기지 않고 "한 가지 사실은 한 곳에만" 원칙으로 정리했다. 전체 정의: `supabase/migrations/20261016000000_lms_core.sql`
 
 ```
@@ -64,8 +66,8 @@ tutors ── tutor_availability (주간 가능 시간, 강사 현지 시각) ·
 | Make-up Requests | `makeup_requests` | 희망 시간 2~3개, 강사 확정/다른 시간 제안 |
 | Change Credits | `enrollment_periods.credits_granted` + `credit_ledger` | 남은 개수를 칸에 덮어쓰지 않고 '사용 1줄'씩 기록 → 남은 개수 = 지급 − 사용 |
 | Compensation / Coupons | `compensations` | 운영자 확정 필수, 사용 기한은 결정 후 입력 |
-| Payments | `payments`, `refunds` | 환불 금액 자동 계산 없음 |
-| Tutor Payroll | `pay_policies`, `payroll_runs`, `payroll_items` | 승인된 급여 기준이 없으면 계산 안 함. 같은 수업 두 번 정산 불가. 최종 금액은 운영자 승인 |
+| Payments | `payments`(실제 입금 기록), `refunds` | 결제할 금액은 등록에 한 곳. 환불 금액 자동 계산 없음 |
+| Tutor Payroll | `tutor_contracts`, `pay_policies`, `payroll_runs`, `payroll_items` (6단계 파일) | 강사별 계약 판본·시급. 승인된 급여 기준이 없으면 계산 안 함. 같은 수업 두 번 정산 불가. 최종 금액은 운영자 승인 |
 | Availability | `tutor_availability`, `tutor_time_off` | |
 | Notifications | `notifications` | 같은 알림 두 번 금지(dedupe_key), 성공·실패 기록 |
 | Audit Logs | `audit_log` | 모든 표의 변경 전·후 자동 기록, 수정·삭제 불가 |
@@ -75,7 +77,7 @@ tutors ── tutor_availability (주간 가능 시간, 강사 현지 시각) ·
 | 요구 | 방법 | 검증 |
 |---|---|---|
 | 데이터 원본 일원화 | 학생·강사·운영자 화면이 같은 `lessons` 표를 읽음. 시트·캘린더는 DB에서 만든 복사본 | 설계 |
-| 학생별·강사별 접근 권한 | DB 권한(RLS): 학생은 본인 것만, 강사는 담당 수업만, 학생 정보는 필요한 칸만 함수로 제공. 앱 사용자는 **읽기만**, 쓰기는 서버만 | `supabase/tests` 13개 항목 (A학생이 B학생 보기, 강사가 다른 강사 학생 보기 등) |
+| 학생별·강사별 접근 권한 | DB 권한(RLS): 학생은 본인 것만, 강사는 담당 수업만, 학생 정보는 필요한 칸만 함수로 제공. 앱 사용자는 **읽기만**, 쓰기는 서버만 | `supabase/tests` 권한 14개 항목 (A학생이 B학생 보기, 강사가 다른 강사 학생 보기 등) |
 | 동시 예약·중복 수업 방지 | `lessons` 에 강사별·학생별 시간 겹침 금지 제약 (취소된 수업 제외). 두 학생이 같은 시간을 동시에 확정해도 DB가 하나만 받음 | 테스트 통과 |
 | 변경권 중복 차감 방지 | `credit_ledger` unique(수업, 사유) + 기간 행 잠금 + 0개 미만 금지 | 테스트 통과 |
 | 기록 삭제 없이 이력 보존 | 수업·기록·장부 삭제 금지 트리거, 모든 변경 `audit_log` (수정·삭제 불가) | 테스트 통과 |
