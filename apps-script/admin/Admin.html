@@ -79,6 +79,8 @@
   .site button { margin-left:auto; border:0; background:none; font-weight:700; text-decoration:underline; padding:0; color:inherit; }
   .badge { font-size:12px; font-weight:700; border-radius:6px; padding:2px 7px; white-space:nowrap; }
   .badge.wait { background:#fff4d6; color:#8a5a00; }
+  .item .row b.d { color:#333; font-weight:700; margin-right:2px; font-variant-numeric:tabular-nums; }
+  .ttag { display:inline-block; font-size:12px; font-weight:700; color:#5542A5; background:rgba(125,95,255,.12); border-radius:6px; padding:1px 7px; margin-left:2px; vertical-align:1px; }
   .created { font-size:12.5px; color:var(--light); margin-top:6px; }
   [hidden] { display:none !important; }
 </style>
@@ -281,7 +283,7 @@ function renderList() {
   $('list').innerHTML = list.map((r) => `
     <div class="item${r.isPublic ? '' : ' off'}">
       <div class="row">
-        <span>${esc(who(r))} · ${r.date ? dot(r.date) : '<span class="warn-date">날짜 없음</span>'} ${siteBadge(r)}</span>
+        <span>${r.date ? '<b class="d">' + dot(r.date.slice(2)) + '</b>' : '<b class="warn-date">날짜 없음</b>'} ${esc((r.job ? r.job + ' ' : '') + r.name)} ${r.tutor ? '<span class="ttag">' + esc(r.tutor) + '</span> ' : ''}${siteBadge(r)}</span>
         <button class="switch${r.isPublic ? ' on' : ''}" type="button" data-pub="${r.id}" aria-pressed="${r.isPublic}">${r.isPublic ? '공개' : '숨김'}<i></i></button>
       </div>
       <button class="open" type="button" data-open="${r.id}">
