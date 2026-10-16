@@ -43,3 +43,14 @@ describe('처리할 일 목록', () => {
     expect(boardCounts(items)).toMatchObject({ total: 6, overdue: 2, matching: 3, renewal: 1 });
   });
 });
+
+describe('재등록 통보의 새 기간 (가상 데이터, 기한 안 재등록 — 정책 원본 A25)', () => {
+  const period = (at: string) => {
+    const t = fakeTasks(new Date(at)).find((x) => x.kind === 'renewal_tutor_notice');
+    return t && t.kind === 'renewal_tutor_notice' ? t.newPeriod : '';
+  };
+  it('종료 다음 날이 아니라 종료 뒤 처음 오는 정규 수업일(화·목)부터 28일', () => {
+    expect(period('2026-10-16T05:00:00Z')).toBe('10/20(화)–11/16(월)'); // 금요일 종료 → 다음 화요일
+    expect(period('2026-10-20T05:00:00Z')).toBe('10/22(목)–11/18(수)'); // 원본 예시: 10/20 종료 → 10/22 시작
+  });
+});

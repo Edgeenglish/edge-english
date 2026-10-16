@@ -23,6 +23,10 @@ on conflict do nothing;
 do $$
 declare
   today date := ((now() at time zone 'UTC') + interval '9 hours')::date;
+  -- 가상학생사: 이전 기간이 오늘 끝나고 오늘 재등록 결제(기한 안) → 새 28일은 종료 뒤 처음 오는 정규 수업일(화·목)부터
+  -- (POL-RN-07, 정책 원본 A25 — 종료 다음 날 무조건 아님)
+  renew_start date := (select min(d)::date from generate_series(today + 1, today + 7, interval '1 day') d
+                       where extract(dow from d) in (2, 4));
 begin
   insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status, policy_basis)
   values
@@ -32,11 +36,12 @@ begin
     ('00000000-7e57-0000-0000-00000000c004', '00000000-7e57-0000-0000-00000000b004', 1, 4, 2, 50, today - 27, today, 8, 'active', 'legacy')
   on conflict do nothing;
   insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
-  select '00000000-7e57-0000-0000-00000000b004', '00000000-7e57-0000-0000-00000000a002', 2, '20:00', 50, today - 27
-  where not exists (select 1 from regular_schedules where student_id = '00000000-7e57-0000-0000-00000000b004');
+  select '00000000-7e57-0000-0000-00000000b004', '00000000-7e57-0000-0000-00000000a002', w, '20:00', 50, today - 27
+  from unnest(array[2, 4]) w   -- 화·목 (주 2회)
+  where not exists (select 1 from regular_schedules where student_id = '00000000-7e57-0000-0000-00000000b004' and weekday = w);
   insert into enrollments (id, student_id, seq, previous_enrollment_id, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status, policy_basis)
   values ('00000000-7e57-0000-0000-00000000c005', '00000000-7e57-0000-0000-00000000b004', 2, '00000000-7e57-0000-0000-00000000c004',
-          4, 2, 50, today + 1, today + 28, 8, 'confirmed', 'policy_v1')
+          4, 2, 50, renew_start, renew_start + 27, 8, 'confirmed', 'policy_v1')
   on conflict do nothing;
 
   -- 결제 확인 → 업무 자동 생성 (트리거). 확인 시각을 달리 해 기한 상태가 다르게 보이게

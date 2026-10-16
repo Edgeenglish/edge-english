@@ -22,7 +22,7 @@ export type RenewalTask = {
   studentName: string;
   studentCode: string;
   product: string;
-  newPeriod: string; // 예: '10/17(토)–11/13(금)'
+  newPeriod: string; // 예: '10/20(화)–11/16(월)' (기한 안 재등록은 이전 종료 뒤 첫 정규 수업일부터, A25)
   tutorName: string | null;
   tutorChangePlanned: boolean;
   tutorNotifiedAt: Date | null;
