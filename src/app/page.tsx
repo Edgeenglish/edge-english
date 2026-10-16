@@ -1,12 +1,16 @@
-'use client';
-
-import RealReviews from '@/components/main/RealReviews';
+import MainReviews from '@/components/main/MainReviews';
 import PointsTab from '@/components/main/DetailPointTab';
 import MobileShortsSwiper from '@/components/main/MobileShortsSwiper';
 import Link from 'next/link';
 import Bubble from '@/components/common/bubble/Bubble';
+import { getReviews } from '@/lib/reviews';
 
-export default function Home() {
+// 후기 시트 변경을 5분마다 반영 (재배포 불필요)
+export const revalidate = 300;
+
+export default async function Home() {
+  const reviews = (await getReviews()).slice(0, 6);
+
   return (
     <div>
       {/* 섹션 1 */}
@@ -70,6 +74,9 @@ export default function Home() {
           </h2>
         </>
       </div>
+
+      {/* 수강생 후기 (최신 6개) */}
+      <MainReviews reviews={reviews} />
 
       {/* 섹션 2 탠저린샘의 10초 영어 pc */}
       <div className="max-md:hidden">
@@ -628,22 +635,9 @@ export default function Home() {
         </div>
       </>
 
-      {/* 섹션7 솔직 찐후기 */}
+      {/* 섹션7 수강 신청 */}
       <div className="py-[120px] text-center max-md:py-15">
-        <p className="px-[140px] text-xl font-semibold text-edge-purple max-md:px-4.5">
-          솔직 찐후기
-        </p>
-        <h3 className="mt-4 text-4xl font-bold text-[#140F33] max-md:px-4.5 max-md:text-[32px]">
-          왜 모두 엣지영어에{' '}
-          <span className="md:hidden">
-            <br />
-          </span>
-          만족할까요?
-        </h3>
-
-        <RealReviews />
-
-        <div className="relative mx-auto mt-15 w-fit max-md:mt-10">
+        <div className="relative mx-auto w-fit">
           <div className="w-[228px] self-center text-center">
             <Bubble
               text="30초면 충분해요"

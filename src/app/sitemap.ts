@@ -12,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/faq`, lastModified: now, priority: 0.6 },
     { url: `${base}/notice`, lastModified: now, priority: 0.8 },
     { url: `${base}/price`, lastModified: now, priority: 0.7 },
+    { url: `${base}/reviews`, lastModified: now, priority: 0.8 },
     { url: `${base}/tutors`, lastModified: now, priority: 0.7 },
   ];
 }
