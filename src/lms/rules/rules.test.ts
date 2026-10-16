@@ -12,8 +12,8 @@ import { CreditLedger } from './credits';
 import { previewTutorLeave } from './leave';
 
 const H = 60 * 60 * 1000;
-const POLICY_A: PendingPolicy = { legacyMakeupRecancel: 'no_rebook', compensationRecancel: 'no_rebook', renewalStart: 'day_after_previous_end' };
-const POLICY_B: PendingPolicy = { legacyMakeupRecancel: 'same_as_regular', compensationRecancel: 'same_as_regular', renewalStart: 'first_lesson_after_renewal' };
+const POLICY_A: PendingPolicy = { compensationRecancel: 'no_rebook' };
+const POLICY_B: PendingPolicy = { compensationRecancel: 'same_as_regular' };
 
 describe('수강기간 계산', () => {
   it('4주 = 시작일 포함 28일 (종료일 = 시작일 + 27)', () => {
@@ -65,18 +65,17 @@ describe('수강기간 계산', () => {
     expect(periodOf('2026-10-25', '2026-07-30', 12, 7)?.index).toBe(3);
   });
 
-  describe('재등록 시작일 (미확정 규칙 — 두 선택지 모두 검증)', () => {
-    const input = { previousFinalEnd: '2026-10-21', renewedOn: '2026-10-24', firstLessonAfterRenewal: '2026-10-27' };
-    it('선택지 A: 이전 최종 종료일 다음 날', () => {
-      expect(renewalStartDate(input, { renewalStart: 'day_after_previous_end' })).toBe('2026-10-22');
+  describe('재등록 시작일 (POL-RN-04, 2026-10-16 대표 확정)', () => {
+    const input = { previousFinalEnd: '2026-10-21', paidOn: '2026-10-24', firstLessonAfterPayment: '2026-10-27' };
+    it('종료일까지 결제하면 이전 종료일 다음 날부터 이어짐', () => {
+      expect(renewalStartDate({ ...input, paidOn: '2026-10-21' })).toBe('2026-10-22');
+      expect(renewalStartDate({ ...input, paidOn: '2026-10-15' })).toBe('2026-10-22');
     });
-    it('선택지 B: 재등록 후 첫 정규 수업일', () => {
-      expect(renewalStartDate(input, { renewalStart: 'first_lesson_after_renewal' })).toBe('2026-10-27');
+    it('종료 후 결제하면 결제 후 첫 정규 수업일부터', () => {
+      expect(renewalStartDate(input)).toBe('2026-10-27');
     });
-    it('선택지 C: 종료일까지 재등록하면 이어서, 종료 후 재등록이면 첫 정규 수업일부터', () => {
-      const c = { renewalStart: 'continuous_if_before_end' } as const;
-      expect(renewalStartDate({ ...input, renewedOn: '2026-10-21' }, c)).toBe('2026-10-22');
-      expect(renewalStartDate(input, c)).toBe('2026-10-27');
+    it('첫 수업일이 결제일보다 앞이면 오류', () => {
+      expect(() => renewalStartDate({ ...input, firstLessonAfterPayment: '2026-10-23' })).toThrow();
     });
   });
 });
@@ -196,7 +195,6 @@ describe('변경권 개수', () => {
 describe('학생 수업 변경 판정', () => {
   const startsAt = kstToInstant('2026-11-10', '22:00'); // 화요일 밤 10시
   const base = {
-    basis: 'policy_v1' as const,
     lesson: { kind: 'regular' as const, kstDate: '2026-11-10', startsAt },
     finalEndDate: '2026-11-26',
     creditsLeft: 2,
@@ -249,31 +247,21 @@ describe('학생 수업 변경 판정', () => {
     expect(isMakeupSlotAllowed(new Date(now.getTime() - H), '2026-11-26', now)).toBe(false);
   });
 
-  describe('예약한 보강을 다시 변경 (정책 원본 A03 · POL-CHG-08)', () => {
+  describe('예약한 보강을 다시 변경 (정책 원본 A03 · POL-CHG-08, 기존 학생 포함 전원 — POL-OP-17)', () => {
     const makeup = { ...base, lesson: { ...base.lesson, kind: 'makeup' as const }, now: new Date(startsAt.getTime() - 24 * H) };
 
-    it('정책 원본 적용 등록: 운영자 값과 관계없이 정규와 같음 — 변경권 1개 사용 후 다시 보강 가능', () => {
+    it('정규와 같음 — 변경권 1개 사용 후 다시 보강 가능 (운영자 값과 관계없음)', () => {
       for (const p of [POLICY_A, POLICY_B]) {
         expect(evaluateStudentChange(makeup, p)).toMatchObject({ status: 'Student canceled in advance', usesCredit: true, makeupAllowed: true });
       }
     });
 
-    it('정책 원본 적용 등록: 반복 횟수 상한은 없고, 변경권 0개면 일반 규칙(보강 없음)', () => {
+    it('반복 횟수 상한은 없고, 변경권 0개면 일반 규칙(보강 없음)', () => {
       expect(evaluateStudentChange({ ...makeup, creditsLeft: 0 }, POLICY_A)).toMatchObject({ status: 'No change credits left', makeupAllowed: false });
     });
 
-    it('정책 원본 적용 등록: 6시간 미만이면 일반 늦은 변경', () => {
+    it('6시간 미만이면 일반 늦은 변경', () => {
       expect(evaluateStudentChange({ ...makeup, now: new Date(startsAt.getTime() - 2 * H) }, POLICY_A)).toMatchObject({ status: 'Student canceled late' });
-    });
-
-    describe('기존 등록(legacy)은 운영자 결정(POL-OP-17) 전까지 두 선택지 모두 검증', () => {
-      const legacy = { ...makeup, basis: 'legacy' as const };
-      it('재보강 불가: 수업 1회 소진, 변경권 차감 없음, 상태값은 결정 필요(null)', () => {
-        expect(evaluateStudentChange(legacy, POLICY_A)).toMatchObject({ status: null, consumesLesson: true, usesCredit: false, makeupAllowed: false });
-      });
-      it('정책 원본과 같이: 변경권 1개 사용 후 다시 보강 가능', () => {
-        expect(evaluateStudentChange(legacy, POLICY_B)).toMatchObject({ status: 'Student canceled in advance', usesCredit: true, makeupAllowed: true });
-      });
     });
 
     it('보상 수업 재변경은 미확정(POL-TU-10) → 운영자 값을 따름', () => {

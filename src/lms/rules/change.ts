@@ -9,13 +9,12 @@
 // 이 함수는 판정만 한다. 실제 저장(상태 기록·변경권 차감·이력)은 서버에서 한 번에(트랜잭션) 처리.
 
 import { addDays, endOfKstDay, hoursBetween, instantToKstDate, type KstDate } from './dates';
-import { CONFIRMED, POLICY_V1, type PendingPolicy, type RuleBasis } from './policy';
+import { CONFIRMED, FAVORABLE_FOR_ALL, POLICY_V1, type PendingPolicy } from './policy';
 import type { ClassStatus } from './status';
 
 export type LessonKind = 'regular' | 'makeup' | 'compensation';
 
 export type StudentChangeInput = {
-  basis: RuleBasis; // 이 등록에 자동 적용할 규칙 (POL-OP-16)
   lesson: { kind: LessonKind; kstDate: KstDate; startsAt: Date };
   now: Date;
   finalEndDate: KstDate; // 수강 최종 종료일 (연장 포함)
@@ -41,7 +40,7 @@ const LATE_MESSAGE =
   '수업 시작까지 6시간이 남지 않았어요. 지금 취소하면 보강 없이 수업 1회가 소진돼요. (변경권은 차감되지 않아요) 그래도 미리 알려주시면 강사님이 기다리지 않아도 돼요.';
 
 export function evaluateStudentChange(input: StudentChangeInput, policy: PendingPolicy): ChangeDecision {
-  const { basis, lesson, now, finalEndDate, creditsLeft, isKoreanPublicHoliday } = input;
+  const { lesson, now, finalEndDate, creditsLeft, isKoreanPublicHoliday } = input;
 
   if (lesson.startsAt.getTime() > endOfKstDay(finalEndDate).getTime()) return { ok: false, reason: 'outside_enrollment' };
   if (now.getTime() >= lesson.startsAt.getTime()) return { ok: false, reason: 'already_started' };
@@ -63,15 +62,10 @@ export function evaluateStudentChange(input: StudentChangeInput, policy: Pending
   }
 
   // 이미 보강·보상으로 잡힌 수업을 다시 바꾸는 경우
-  // - 보강: policy_v1 등록은 정규와 같은 규칙(A03, 변경권이 남아 있는 한 반복 가능). 그 밖의 등록은 운영자가 정한 값(POL-OP-17)
+  // - 보강: 정규와 같은 규칙 (A03, 변경권이 남아 있는 한 반복 가능) — 학생에게 유리해 기존 학생 포함 전원 (POL-OP-17)
   // - 보상 수업: 미확정(POL-TU-10) → 운영자가 정한 값
   if (lesson.kind !== 'regular') {
-    const rule =
-      lesson.kind === 'compensation'
-        ? policy.compensationRecancel
-        : basis === 'policy_v1'
-          ? POLICY_V1.makeupRecancel
-          : policy.legacyMakeupRecancel;
+    const rule = lesson.kind === 'compensation' ? policy.compensationRecancel : FAVORABLE_FOR_ALL.makeupRecancel;
     if (rule === 'no_rebook') {
       return {
         ok: true,
@@ -133,24 +127,24 @@ export type TutorCancelOutcome = {
   status: ClassStatus;
   makeupRequired: true; // 원래 수업은 항상 보강 (A15·A16)
   usesCredit: false;
-  /** 학생 적립금 지급액(원). legacy 등록은 null = 운영자 결정 대기(POL-OP-17) */
-  rewardWon: number | null;
+  /** 학생 적립금 지급액(원). 기존 학생 포함 전원 (POL-OP-17) */
+  rewardWon: number;
 };
 
 /** 강사 사유 취소의 학생 쪽 결과 — 6시간 이상 전: 보강만(A15) / 6시간 미만: 보강 + 2,000원 적립금(A16) */
-export function tutorCancelOutcome(now: Date, startsAt: Date, basis: RuleBasis): TutorCancelOutcome {
+export function tutorCancelOutcome(now: Date, startsAt: Date): TutorCancelOutcome {
   const status = evaluateTutorCancel(now, startsAt);
   const late = status === 'Tutor canceled late';
   return {
     status,
     makeupRequired: true,
     usesCredit: false,
-    rewardWon: !late ? 0 : basis === 'policy_v1' ? POLICY_V1.tutorLateCancelRewardWon : null,
+    rewardWon: late ? FAVORABLE_FOR_ALL.tutorLateCancelRewardWon : 0,
   };
 }
 
 /**
- * 강사 노쇼 무료 보상 수업의 완료 기한 (A14): 지급한 날(KST)부터 7일째 날 23:59 KST까지 수업이 '끝나야' 함.
+ * 강사 노쇼 무료 보상 수업의 완료 기한 (A14) — 'policy_v1' 등록에만 (기존 등록에는 기한을 새로 만들지 않음): 지급한 날(KST)부터 7일째 날 23:59 KST까지 수업이 '끝나야' 함.
  * 예: 11/3 지급 → 11/10 23:59까지. 기한 안에 못 받는 경우의 예외는 미확정(POL-TU-10) → 자동 소멸시키지 않고 운영자에게 표시.
  */
 export function compensationDeadline(grantedAt: Date): Date {

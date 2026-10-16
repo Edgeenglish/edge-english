@@ -108,12 +108,10 @@ declare
 begin
   perform 1 from students where id = new.student_id for update;
   if new.kind = 'grant_tutor_late_cancel' then
-    select ls.student_id, ls.class_status, e.policy_basis into l
-      from lessons ls join enrollments e on e.id = ls.enrollment_id where ls.id = new.lesson_id;
+    select ls.student_id, ls.class_status into l from lessons ls where ls.id = new.lesson_id;
     if l.student_id is distinct from new.student_id then raise exception '다른 학생의 수업으로 적립할 수 없습니다.'; end if;
     if l.class_status is distinct from 'Tutor canceled late' then raise exception '강사 6시간 미만 취소 수업에만 자동 적립합니다.'; end if;
-    -- 기존 등록(legacy)에 새 보상을 줄지는 대표 결정 대기 (POL-OP-17) → 운영자 지급(grant_admin, 사유 필수)으로만
-    if l.policy_basis <> 'policy_v1' then raise exception '정책 원본 적용 등록이 아니라 자동 적립하지 않습니다. 운영자 지급으로 처리하세요.'; end if;
+    -- 학생에게 유리한 규칙이라 기존 학생(legacy 등록)에도 적용 (POL-OP-17, 2026-10-16 대표 결정)
   end if;
   if new.redemption_id is not null then
     select * into r from reward_redemptions where id = new.redemption_id;

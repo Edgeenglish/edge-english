@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { addBusinessDays, kstToInstant } from './dates';
-import { canCarryOver } from './period';
+import { canCarryOver, isFixedSlotHeld } from './period';
 import { compensationDeadline, isCompensationSlotAllowed, tutorCancelOutcome } from './change';
 import { evaluateLongLeaveRequest, suggestDatesAfterEnd, tutorLeaveExtensionDays, type LongLeaveInput } from './leave';
 import { RewardLedger } from './rewards';
@@ -21,20 +21,29 @@ describe('이월: 종료일 23:59 KST까지 실제 결제 완료 (A01·A02)', ()
   });
 });
 
+describe('고정 요일·시간 유지 (POL-RN-02: 종료일 23:59 KST까지 결제)', () => {
+  it('종료일 23:59 결제는 유지, 다음 날 00:00 결제·미결제는 유지 안 함', () => {
+    expect(isFixedSlotHeld(kstToInstant('2026-11-26', '23:59'), '2026-11-26')).toBe(true);
+    expect(isFixedSlotHeld(kstToInstant('2026-11-26', '11:59'), '2026-11-26')).toBe(true);
+    expect(isFixedSlotHeld(kstToInstant('2026-11-27', '00:00'), '2026-11-26')).toBe(false);
+    expect(isFixedSlotHeld(null, '2026-11-26')).toBe(false);
+  });
+});
+
 describe('강사 사유 취소 (A15·A16)', () => {
   const startsAt = kstToInstant('2026-11-03', '20:00');
   it('6시간 이상 전: 보강만, 적립금 없음, 변경권 차감 없음', () => {
-    expect(tutorCancelOutcome(new Date(startsAt.getTime() - 6 * H), startsAt, 'policy_v1')).toEqual({
+    expect(tutorCancelOutcome(new Date(startsAt.getTime() - 6 * H), startsAt)).toEqual({
       status: 'Tutor canceled in advance', makeupRequired: true, usesCredit: false, rewardWon: 0,
     });
   });
   it('6시간 미만: 보강 + 적립금 2,000원', () => {
-    expect(tutorCancelOutcome(new Date(startsAt.getTime() - 6 * H + 60_000), startsAt, 'policy_v1')).toMatchObject({
+    expect(tutorCancelOutcome(new Date(startsAt.getTime() - 6 * H + 60_000), startsAt)).toMatchObject({
       status: 'Tutor canceled late', rewardWon: 2000, usesCredit: false,
     });
   });
-  it('기존 등록(legacy)의 적립금은 대표 결정(POL-OP-17) 전까지 자동 지급하지 않음', () => {
-    expect(tutorCancelOutcome(new Date(startsAt.getTime() - H), startsAt, 'legacy').rewardWon).toBeNull();
+  it('학생에게 유리한 규칙이라 기존 학생에게도 같은 금액 (POL-OP-17)', () => {
+    expect(tutorCancelOutcome(new Date(startsAt.getTime() - H), startsAt).rewardWon).toBe(2000);
   });
 });
 

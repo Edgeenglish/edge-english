@@ -32,6 +32,7 @@
 | [08-legacy-automation-analysis.md](08-legacy-automation-analysis.md) | Master·이지은·Cindy 샘플 자동화 분석 (구현/중단/수동/제거 대상) |
 | [10-terms-consent-design.md](10-terms-consent-design.md) | **수업 안내 확인·동의 기능 설계** (흐름, 기록 항목, 판 관리, 카톡 발송 검토, 법률 미확인 목록) |
 | [09-design-review.md](09-design-review.md) | 기존 시트 구조 vs 새 구조 연결표, 입력 주체, SQL v0.2 재검토, 대안 비교 |
+| [supabase-test-setup.md](supabase-test-setup.md) | **시험용 Supabase 연결 안내** (SQL Editor 적용 → 접속 허용·키 저장 → 로그인) |
 | [drafts/](drafts/) | FAQ 수정 초안·필독안내 새 텍스트 판 초안 (게시 전 승인 필요) |
 | [history/](history/) | 이전 판 보관 (1차 결정 질문지) |
 | [original/](original/) | 원본 기획서 PDF |
@@ -43,7 +44,7 @@
 | 위치 | 내용 | 검증 |
 |---|---|---|
 | `src/lms/rules/` | 수강기간·회차·변경권·변경 판정·휴무·장기 연기·적립금 규칙 + 정책 기준표 일관성 검사 | `npm test` (113개) |
-| `supabase/migrations/` | DB 스키마 초안 v0.2, 단계별 6개 파일 (400 = 수업 안내 확인·동의, 500 = 정책 원본 v1.0: 적립금·운영 업무·장기 연기) (**아직 어떤 Supabase에도 적용 안 함**) | `npm run test:db` (104개, 로컬 임시 PostgreSQL) |
+| `supabase/migrations/` | DB 스키마 초안 v0.2, 단계별 7개 파일 (400 = 수업 안내 확인·동의, 500 = 정책 원본 v1.0: 적립금·운영 업무·장기 연기, 600 = Supabase 권한 정리) (**아직 어떤 Supabase에도 적용 안 함**) | `npm run test:db` (106개, 로컬 임시 PostgreSQL) |
 | `supabase/tests/` | DB 제약·권한 테스트 | |
 
 ## 지켜야 할 것

@@ -413,8 +413,8 @@ select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amoun
 select pg_temp.ok(true, '같은 강사 늦은 취소 수업에 적립금 중복 지급 불가');
 select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000002')$$, '6시간 미만');
 select pg_temp.ok(true, '6시간 이상 전 강사 취소에는 적립금 없음 (보강만)');
-select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000002', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000003')$$, '정책 원본 적용 등록이 아니');
-select pg_temp.ok(true, '기존(legacy) 등록에는 자동 적립하지 않음 — 운영자 지급만 (POL-OP-17 결정 전)');
+insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000002', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000003');
+select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000000002') = 2000, '기존(legacy) 등록 학생도 강사 늦은 취소 적립금 받음 (유리한 규칙, POL-OP-17)');
 select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount) values ('99999999-0000-0000-0000-000000000002', 'grant_admin', 2000)$$, 'check');
 select pg_temp.ok(true, '운영자 수동 지급은 사유 필수');
 select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000000001') = 2000, '적립금 잔액 2,000원');
@@ -479,3 +479,14 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select pg_temp.ok((select count(*) from admin_task_board) >= 2, '운영자는 열린 업무 전체를 봄');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------- Supabase 권한 정리 (migration 600) ----------
+set role anon;
+select pg_temp.expect_error($$select add_business_days('2026-10-16', 3)$$, 'permission|42501');
+select pg_temp.expect_error($$select nextval('student_code_seq')$$, 'permission|42501');
+reset role;
+select pg_temp.ok(true, '로그인 안 한 사용자는 LMS 함수·학생 번호 시퀀스를 쓸 수 없음');
+set role authenticated;
+select pg_temp.expect_error($$select nextval('student_code_seq')$$, 'permission|42501');
+reset role;
+select pg_temp.ok(true, '로그인 사용자도 학생 번호를 직접 만들 수 없음 (서버만)');
