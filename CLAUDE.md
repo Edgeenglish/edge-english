@@ -15,6 +15,11 @@
 - 디자인·기능 결정이 필요하면 개발 전에 시안을 먼저 보여주고 운영자의 선택을 받는다.
 - 실제 홈페이지 배포는 테스트 결과를 공유하고 승인을 받은 뒤에 한다.
 
+## LMS (docs/lms/README.md 를 먼저 읽을 것)
+- 웹앱 + Supabase(PostgreSQL)가 유일한 데이터 원본. Google 시트는 이관·검증·보고용.
+- 운영자 결정 대기 항목은 `docs/lms/07-decisions.md`. 미결정 규칙은 코드에 기본값으로 넣지 않는다.
+- 규칙 코드 `src/lms/rules/` (`npm test`), DB 초안 `supabase/` (`npm run test:db`).
+
 ## 수강후기 시스템 (docs/reviews-setup.md)
 - 관리 화면·저장: `apps-script/admin` (Google 시트 '후기' 탭), 공개 피드: `apps-script/feed`
 - 홈페이지: `src/lib/reviews.ts` 가 Vercel 환경변수 `REVIEWS_FEED_URL` 에서 5분마다 가져옴
