@@ -220,8 +220,8 @@ function fromRow_(row) {
     text: String(row[COL.text] || ''),
     highlight: String(row[COL.highlight] || ''),
     isPublic: isTrue_(row[COL.isPublic]),
-    createdAt: String(row[COL.createdAt] || ''),
-    updatedAt: String(row[COL.updatedAt] || ''),
+    createdAt: toStampText_(row[COL.createdAt]),
+    updatedAt: toStampText_(row[COL.updatedAt]),
   };
 }
 
@@ -272,6 +272,12 @@ function notifySite_() {
 function toDateText_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   return String(v || '').trim().replace(/\./g, '-');
+}
+
+// 시트가 '2026-10-16 14:50:00' 같은 글자를 날짜로 바꿔 저장해도 다시 같은 글자로 읽기
+function toStampText_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
+  return String(v || '');
 }
 
 function isTrue_(v) {

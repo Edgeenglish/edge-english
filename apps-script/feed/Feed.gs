@@ -38,7 +38,7 @@ function getPublicReviews(brand) {
       job: String(row[COL.job] || '').trim(),
       text: String(row[COL.text]).trim(),
       highlight: String(row[COL.highlight] || '').trim(),
-      createdAt: String(row[COL.createdAt] || ''),
+      createdAt: toStampText_(row[COL.createdAt]),
     }))
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
     .map(({ createdAt: _createdAt, ...review }) => review);
@@ -55,6 +55,12 @@ function maskName(raw) {
 function toDateText_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   return String(v || '').trim().replace(/\./g, '-');
+}
+
+// 시트가 '2026-10-16 14:50:00' 같은 글자를 날짜로 바꿔 저장해도 다시 같은 글자로 읽기
+function toStampText_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
+  return String(v || '');
 }
 
 function isTrue_(v) {
