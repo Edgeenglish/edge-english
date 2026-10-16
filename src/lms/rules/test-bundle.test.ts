@@ -2,7 +2,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error 스크립트는 .mjs (타입 없음)
 import { buildBundle } from '../../../scripts/lms-test-bundle.mjs';
 
 describe('시험용 Supabase 묶음 SQL', () => {

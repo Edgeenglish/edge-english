@@ -394,6 +394,15 @@ Claude 검토: **큰 방향은 맞음** (모든 기능이 수강등록·회차�
 
 모두 브랜치 `claude/trusting-feynman-kujjnm`(이전 `claude/epic-heisenberg-teauxc`)에 있음. main에는 아직 없음.
 
+### 대표 추가 결정·시험용 Supabase·대시보드 (2026-10-16 밤)
+| 파일 | 내용 |
+|---|---|
+| `docs/lms/supabase-test-setup.md` | 시험용 Supabase 연결 안내 (SQL Editor 적용 → 접속 주소 허용·키 저장 → 로그인) |
+| `supabase/test-setup/` | 묶음 SQL(`schema_all.sql`, 자동 생성)·가상 데이터·확인 쿼리 |
+| `supabase/migrations/20261016000600_lms_supabase_hardening.sql` | Supabase 기본 권한 정리 |
+| `src/app/lms/admin/` · `src/lms/admin/` | 운영자 대시보드 A안 (가상 데이터, `LMS_PREVIEW=1`에서만) |
+| `src/components/SiteChrome.tsx` | `/lms` 화면에서 홈페이지 머리말·바닥글 숨김 (다른 페이지는 그대로) |
+
 ### 정책 원본 반영으로 추가 (2026-10-16 저녁)
 | 파일 | 내용 |
 |---|---|
