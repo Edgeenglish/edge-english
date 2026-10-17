@@ -514,6 +514,7 @@ set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표
 set request.jwt.claims = '{"aal":"aal1"}';
 select pg_temp.ok(not is_admin() and not is_owner(), 'TOTP 전(aal1) 대표 세션은 운영자가 아님');
+select pg_temp.ok(my_role() = 'admin', 'TOTP 전에도 본인 역할(admin)은 알 수 있음 → 로그인 화면이 인증 앱 코드를 물음 (migration 820)');
 select pg_temp.ok((select count(*) from students) = 0 and (select count(*) from payments) = 0 and (select count(*) from audit_log) = 0,
                   'TOTP 전 운영자 세션은 학생·결제·변경 이력을 한 줄도 못 봄');
 set request.jwt.claims = '{}';
@@ -528,3 +529,15 @@ select pg_temp.expect_error($$update app_users set admin_level = 'owner' where a
 reset request.jwt.claim.sub;
 reset role;
 select pg_temp.ok(true, '앱 사용자는 운영자 등급을 바꿀 수 없음 (서버만)');
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.ok(my_role() = 'student', '학생 본인 역할 = student');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-0000000000ff';
+select pg_temp.ok(my_role() is null, '연결 안 된 계정의 역할은 없음');
+reset request.jwt.claim.sub;
+reset role;
+set role anon;
+select pg_temp.expect_error($$select my_role()$$, 'permission|42501');
+reset role;
+select pg_temp.ok(true, '로그인 안 한 요청은 my_role 을 부를 수 없음');

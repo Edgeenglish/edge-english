@@ -58,7 +58,7 @@ declare
   -- RLS 판단에 쓰이거나 화면에서 부르는 SECURITY DEFINER 함수 (이 밖의 것이 생기면 검토 필요)
   -- 내부 함수가 데이터를 읽지 않는 것을 검토한 확장 (이 밖의 확장 함수가 앱 사용자에게 열려 있으면 실패)
   reviewed_ext text[] := array['btree_gist'];
-  definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'is_owner', 'tutor_my_students', 'student_my_tutors', 'consent_record'];
+  definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'is_owner', 'my_role', 'tutor_my_students', 'student_my_tutors', 'consent_record'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
   persona_uid uuid[];
@@ -317,6 +317,9 @@ begin
     begin
       if personas[i] not in ('운영자', '운영직원') and is_admin() then fails := fails || format('[함수] %s: is_admin() 이 참', personas[i]); end if;
       if personas[i] in ('운영자', '운영직원') and not is_admin() then fails := fails || format('[함수] %s: is_admin() 이 거짓', personas[i]); end if;
+      if my_role() is distinct from (case when personas[i] = '미등록' then null when personas[i] like '학생%' then 'student'
+                                          when personas[i] like '강사%' then 'tutor' else 'admin' end) then
+        fails := fails || format('[함수] %s: my_role() = %s', personas[i], my_role()); end if;
       if (personas[i] = '운영자') <> is_owner() then fails := fails || format('[함수] %s: is_owner() = %s', personas[i], is_owner()); end if;
       if personas[i] in ('미등록', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원') and my_student_id() is not null then fails := fails || format('[함수] %s: 학생 번호가 잡힘', personas[i]); end if;
       if personas[i] in ('미등록', '학생A', '학생B', '운영자', '운영자(TOTP 전)', '운영직원') and my_tutor_id() is not null then fails := fails || format('[함수] %s: 강사 번호가 잡힘', personas[i]); end if;
