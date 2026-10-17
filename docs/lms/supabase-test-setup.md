@@ -73,6 +73,8 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 | ⑤ | Claude (화면 개발) | 로그인 화면: `signInWithOtp({ email, options: { shouldCreateUser: false } })` → `verifyOtp({ email, token, type: 'email' })`. 등록 안 된 이메일도 화면 문구는 같게("등록된 이메일이면 코드를 보냈습니다") — 등록 여부를 알려 주지 않기 위해 | — |
 | ⑥ | Claude (서버 개발) | 운영자가 학생·강사를 등록할 때 서버가 Secret key로 `auth.admin.createUser({ email, email_confirm: true })` 로 로그인 계정을 만들고, **같은 처리 안에서** `app_users`(누가 어느 학생·강사인지) 행을 넣음 | — |
 
+- **실물 확인 (2026-10-17)**: 대시보드의 **Send invitation(초대)** 으로 만든 계정은 '이메일 미확인' 상태라, 공개 가입을 끈 뒤에는 코드 로그인이 `422 signup_disabled` 로 막힌다(메일도 안 나감). → **초대 기능은 쓰지 않는다.** 계정은 서버가 `email_confirm: true` 로 만든다(⑥). 이미 초대로 만든 시험 계정은 SQL Editor 에서 `update auth.users set email_confirmed_at = now() where email = '…' and email_confirmed_at is null;` 로 확인 처리. 초대 메일은 Supabase 기본 영어 문구(쓰지 않으므로 번역 안 함).
+
 - **실물 확인 완료 (2026-10-17)**: 등록 안 된 이메일로 `shouldCreateUser: false` 코드 요청 → Supabase가 `422 Signups not allowed for otp` 로 거절. **계정도 안 생기고 메일도 안 나감.** (회원가입을 끄기 전에도 이 옵션만으로 코드 로그인 경로는 막히지만, `/signup` 경로는 ②를 해야 막힌다)
 - **쓰지 않는 방식**: 처음 로그인할 때 이메일이 `students.email` 과 같으면 자동 연결 — 이메일 오타·가족이 같이 쓰는 이메일이면 다른 학생과 연결될 수 있어 위험. 연결은 운영자 등록 때 한 번만.
 - **겹방어**: 로그인 계정은 있는데 `app_users` 연결이 없으면 DB가 학생·결제·업무를 0건으로 보여 줌 (아래 4-② '미등록' 항목).
