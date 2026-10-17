@@ -166,7 +166,7 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 | 5-1 | 위 4-② 실행 안내 (DB 안에서 로그인 상태를 흉내 낸 점검) | 대표, SQL Editor | ✅ 2026-10-17 14개 묶음 통과 |
 | 5-2 | 공개 회원가입 끄기 (3단계 ①②) | 대표, 대시보드 스위치 | ⬜ (A30 확정) |
 | 5-3 | 운영자 TOTP 강제(migration 800) + 결제 확인 상태(810) 로컬 구현·테스트 → 실행 안내 | Claude 구현, 대표 SQL 실행 승인 | ⬜ |
-| 5-4 | **끝단 점검** (`e2e-token-probe.py`): 실제 Supabase 로그인 계정(가상, `@example.com`, 메일 발송 없음)을 만들어 실제 토큰으로 REST API를 거쳐 학생 A↔B·강사·미등록·운영자를 확인하고, 끝나면 계정·연결 삭제. 운영자 TOTP는 migration 800 이후 | Claude. Secret key `claude_test` 생성됨 — 대표가 네트워크 시크릿(또는 환경 변수) 입력 후 새 세션 | ⬜ 시크릿 입력 대기 |
+| 5-4 | **끝단 점검** (`e2e-token-probe.py`): 실제 Supabase 로그인 계정(가상, `@example.com`, 메일 발송 없음)을 만들어 실제 토큰으로 REST API를 거쳐 학생 A↔B·강사·미등록·운영자를 확인하고, 끝나면 계정·연결 삭제. 운영자 TOTP는 migration 800 이후 | Claude. 전용 환경 `edgeenglish-lms-security-test` 에 환경 변수로 키 입력 (네트워크 시크릿은 모든 요청에 키가 붙어 검증이 왜곡되므로 쓰지 않음) | ◐ 연결 검사 ✅, 1차 전체 실행 ❌ (서버 키 표 권한 없음 → 710) |
 | 5-5 | 이메일 6자리 코드 실제 로그인 시험 (대표 이메일 가상 계정) | 메일 발송 서비스 선택·승인(D-28) 후 | ⬜ |
 
 ### 5-4 Secret key 준비 (D-27 승인, 2026-10-17) — 대표 진행
@@ -193,6 +193,18 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 **공통**: 채팅·GitHub·Vercel에는 넣지 않는다. 운영 프로젝트 키는 넣지 않는다. 검증 후 Claude가 테스트 계정·연결을 지우고 보고 → 대표가 Supabase에서 `claude_test` 키 **삭제** → 작업 환경의 시크릿/환경 변수도 삭제.
 
 **`sb_secret_` 호환성 (스크립트 반영)**: 새 Secret key는 JWT가 아니라 `apikey` 헤더에만 넣는다(레거시 `service_role` JWT일 때만 `Authorization: Bearer`도 함께). 관리 API(`/auth/v1/admin/users`)·REST 모두 이 방식. 브라우저에서는 쓰지 않음(서버·스크립트 전용).
+
+### 5-4 실행 기록 (2026-10-17)
+
+| 순서 | 결과 |
+|---|---|
+| 키 입력 방식 | 전용 환경 `edgeenglish-lms-security-test` 의 **환경 변수** (`NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`). 네트워크 시크릿은 공식 문서상 그 주소의 **모든 요청**에 키를 붙이므로 학생 토큰 검증이 왜곡됨 → 사용 안 함 |
+| 1차 `--check` | 중단: 공개키 형식 아님 (환경 변수 둘째 줄 입력 오류) → 대표가 다시 입력 |
+| 2차 `--check` | ✅ 관리 API 200 · **안전장치 통과** (공개키 요청에 서버 권한이 섞이지 않음) |
+| 1차 전체 실행 | ❌ 가상 계정 2개 생성 후 `app_users` 연결이 403 → 즉시 중단, **계정 2개 삭제 완료**, 연결 0줄 |
+| 원인 확인 (읽기 전용) | 서버 키로 `app_users`·`audit_log`·`students` GET → 모두 403 `42501 permission denied`. 시험용 프로젝트는 새 표를 service_role 에게 자동으로 열지 않음 (지금까지 Supabase 기본 권한에 기대고 있었음) |
+| 수정 | `migrations/20261016000710_lms_service_role_grants.sql` — 서버 키에 LMS 표 읽기·쓰기 명시 부여, 변경 이력은 추가·읽기만. 앱 사용자 권한은 그대로. 로컬에서 같은 실패를 재현한 뒤 수정으로 통과 확인 (`npm run test:db`, authz-probe 14개 통과 유지) |
+| 다음 | 대표 승인 후 SQL Editor 에서 710 적용 → 5-4 전체 실행 다시 |
 
 ### 5-4 끝단 점검 계획
 

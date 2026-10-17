@@ -490,3 +490,15 @@ set role authenticated;
 select pg_temp.expect_error($$select nextval('student_code_seq')$$, 'permission|42501');
 reset role;
 select pg_temp.ok(true, '로그인 사용자도 학생 번호를 직접 만들 수 없음 (서버만)');
+
+-- ---------- 서버 키(service_role) 표 권한 (migration 710, 2026-10-17 5-4 실물 실패 재현) ----------
+set role service_role;
+insert into app_users (auth_user_id, role, student_id) values ('cccccccc-0000-0000-0000-000000000710', 'admin', null);
+select pg_temp.ok((select count(*) from app_users where auth_user_id = 'cccccccc-0000-0000-0000-000000000710') = 1, '서버 키는 app_users 를 추가·읽기 가능');
+delete from app_users where auth_user_id = 'cccccccc-0000-0000-0000-000000000710';
+select pg_temp.ok((select count(*) from audit_log where table_name = 'app_users' and row_id = 'cccccccc-0000-0000-0000-000000000710') = 2, '서버 키 쓰기도 변경 이력에 남음 (추가·삭제 2줄)');
+select pg_temp.ok((select count(*) from students) >= 2, '서버 키는 학생 표를 읽을 수 있음');
+select pg_temp.expect_error($$update audit_log set action = 'INSERT'$$, 'permission|42501');
+select pg_temp.expect_error($$delete from audit_log$$, 'permission|42501');
+reset role;
+select pg_temp.ok(true, '서버 키도 변경 이력을 고치거나 지울 수 없음');
