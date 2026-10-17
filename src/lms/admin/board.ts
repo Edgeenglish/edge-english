@@ -1,6 +1,8 @@
 // 운영자 대시보드 A안 '처리할 일' 목록 만들기 (POL-OP-13·14, POL-LV-01, POL-TU-02)
 // DB의 admin_tasks·long_leave_requests·no_show_reports 행을 화면 항목으로 바꾸고 급한 순서로 정렬한다.
 // 화면 문구는 여기 한 곳에서 만든다.
+// 표시 원칙 POL-OP-20: 대표 승인·판단 / 자동 처리 실패 / 일정 조율 실패 / 기한 임박 미해결만 올린다.
+// 자동 처리로 완료가 확인된 업무는 목록에서 빠진다 (사람이 닫지 않아도 됨). 단순 정보는 여기 넣지 않는다.
 
 import { formatInZone, hoursBetween } from '../rules/dates';
 
