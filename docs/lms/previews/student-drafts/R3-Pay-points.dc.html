@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>결제 적립금 내역</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#4b2fd6}a:hover{color:#3a22b0}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1200px; box-sizing: border-box; background: #f6f5fa; font-family: 'IBM Plex Sans KR', sans-serif; color: #1d1b2b; display: flex; flex-direction: column; gap: 14px; padding: 14px 16px 24px">
+  <div style="font-size: 13px; font-weight: 700; color: #55526a; padding: 0 4px">① 결제 내역 (메인 › 결제 내역)</div>
+  <section style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+    <div style="display: flex; justify-content: space-between; align-items: center"><h2 style="margin: 0; font-size: 16px; font-weight: 700">지금 수강권</h2><span style="font-size: 12px; font-weight: 600; background: #e3f5ea; color: #13623a; border-radius: 999px; padding: 4px 10px">결제 확인 완료</span></div>
+    <div style="display: flex; justify-content: space-between"><span style="color: #55526a">수강권</span><span style="font-weight: 600">50분 · 주 2회 · 4주 (8회)</span></div>
+    <div style="display: flex; justify-content: space-between"><span style="color: #55526a">수강 기간</span><span>9/25 ~ 10/22</span></div>
+    <div style="display: flex; justify-content: space-between"><span style="color: #55526a">결제 방법</span><span>카드 (아임웹)</span></div>
+    <div style="display: flex; justify-content: space-between"><span style="color: #55526a">확인한 날</span><span>9/23 · 운영자 확인</span></div>
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 46px; border-radius: 12px; border: 1px solid #d9d5e8; color: #1d1b2b; font-size: 14px; font-weight: 600; text-decoration: none; margin-top: 4px">카드 영수증 · 주문 보기 (아임웹) ↗</a>
+  </section>
+  <section style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 18px; padding: 6px 18px">
+    <div style="font-size: 13px; color: #55526a; padding: 10px 0 4px">지난 수강권</div>
+    <div style="display: flex; justify-content: space-between; align-items: center; min-height: 52px; border-top: 1px solid #eeecf4; font-size: 14px"><span>50분 · 주 2회 · 4주<br><span style="font-size: 12px; color: #6b6880">8/28 ~ 9/24 · 계좌이체</span></span><span style="font-size: 12px; color: #13623a; font-weight: 600">확인 완료</span></div>
+  </section>
+  <div style="font-size: 12px; color: #55526a; line-height: 1.6; padding: 0 4px">결제 금액·카드 정보는 LMS에 따로 저장하지 않아요 (아임웹 주문조회에서 확인). 결제는 아직 운영자가 직접 확인해요.</div>
+
+  <div style="font-size: 13px; font-weight: 700; color: #55526a; padding: 8px 4px 0">② 적립금 내역 (메인 › 적립금 내역)</div>
+  <section style="background: #1b1442; color: #ffffff; border-radius: 18px; padding: 18px; display: flex; justify-content: space-between; align-items: center">
+    <div><div style="font-size: 13px; color: #c9c0ff">사용할 수 있는 적립금</div><div style="font-size: 26px; font-weight: 700; margin-top: 2px">2,000원</div></div>
+    <div style="font-size: 12px; color: #d8d3f5; text-align: right; line-height: 1.5">유효기간 없음<br>재등록 결제 때 사용</div>
+  </section>
+  <section style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 18px; padding: 6px 18px">
+    <div style="display: flex; justify-content: space-between; align-items: center; min-height: 60px; font-size: 14px"><span>강사 사정 취소 보상<br><span style="font-size: 12px; color: #6b6880">10/8 · 10/8 (목) 20:00 수업, 시작 3시간 전 취소</span></span><b style="color: #13623a">+2,000원</b></div>
+    <div style="display: flex; justify-content: space-between; align-items: center; min-height: 60px; border-top: 1px solid #eeecf4; font-size: 14px"><span>재등록 결제에 사용<br><span style="font-size: 12px; color: #6b6880">9/23 · 결제 확인 후 확정</span></span><b>-2,000원</b></div>
+    <div style="display: flex; justify-content: space-between; align-items: center; min-height: 60px; border-top: 1px solid #eeecf4; font-size: 14px"><span>강사 사정 취소 보상<br><span style="font-size: 12px; color: #6b6880">9/10 · 9/10 (목) 20:00 수업</span></span><b style="color: #13623a">+2,000원</b></div>
+  </section>
+  <div style="font-size: 12px; color: #55526a; line-height: 1.6; padding: 0 4px">사용 신청은 재등록할 때 해요. 결제가 취소·환불되면 사용한 적립금은 다시 돌아와요.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1200}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
