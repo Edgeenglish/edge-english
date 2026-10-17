@@ -55,7 +55,7 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 - DB 비밀번호(Database password)와 Supabase 계정 Access Token은 **필요 없다.** 표를 고칠 때는 1단계처럼 대표가 SQL Editor에서 실행한다. (Access Token은 계정 전체 권한이라 나중에 만들 운영 프로젝트까지 건드릴 수 있어 쓰지 않는다.)
 - 키가 노출됐다고 생각되면 Supabase → API Keys에서 **새 Secret key 생성 후 이전 키 삭제**.
 
-## 3단계 — 로그인 설정 (2026-10-17 검토 완료 · 공개 가입 끄기는 A30으로 확정, 대표가 스위치 조작 전)
+## 3단계 — 로그인 설정 (2026-10-17 검토 완료 · ✅ ①② 완료: 모르는 계정 없음, 공개 가입 꺼짐 — Claude가 `/auth/v1/settings` 로 `disable_signup=true` 확인)
 
 목표: **초기에는 공개 회원가입 없음**(정책 원본 A30). 운영자가 등록·초대한 학생·강사·운영자 개인 계정만 이메일 6자리 코드로 로그인 (POL-OP-15·POL-AC-03). 운영자는 TOTP 추가 인증(POL-AC-05). 설계 전체: [`11-accounts-auth-payments.md`](11-accounts-auth-payments.md)
 
@@ -77,6 +77,15 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 - **쓰지 않는 방식**: 처음 로그인할 때 이메일이 `students.email` 과 같으면 자동 연결 — 이메일 오타·가족이 같이 쓰는 이메일이면 다른 학생과 연결될 수 있어 위험. 연결은 운영자 등록 때 한 번만.
 - **겹방어**: 로그인 계정은 있는데 `app_users` 연결이 없으면 DB가 학생·결제·업무를 0건으로 보여 줌 (아래 4-② '미등록' 항목).
 - 메일 발송: Supabase 기본 메일 서버는 시간당 발송 수가 적고, 안내상 **팀 멤버 주소로만** 보내도록 제한될 수 있다(설정 화면에서 확인 필요) → 가상 계정 로그인 시험은 대표 이메일로, 실제 학생 시험 전 메일 발송 서비스 연결(비용 승인 D-6).
+
+### 메일 발송 연결 (D-37 Resend)
+
+| 순서 | 상태 |
+|---|---|
+| Resend 가입·도메인 `edgeenglish.kr` 등록 (발송 서버 지역 Tokyo — 한국에서 가장 가까움, 받는 사람과 무관) | ✅ 2026-10-17 |
+| 호스팅케이알 DNS **추가만**: TXT `resend._domainkey`(DKIM), CNAME `rsend`·`send`(발송), TXT `_dmarc` = `v=DMARC1; p=none;` — 기존 구글 메일·Vercel 레코드 변경 없음 | ✅ 2026-10-17, Resend **Verified** |
+| 공개 회원가입 끄기 (메일 연결 전에 먼저) | ✅ 2026-10-17 |
+| 시험용 Supabase SMTP 연결 (smtp.resend.com:465, 사용자 `resend`, 비밀번호 = Resend API key — 키는 Supabase 화면에만 입력) | ⬜ |
 
 ## 4. 보안 점검 결과
 
