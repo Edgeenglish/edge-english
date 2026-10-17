@@ -6,7 +6,7 @@ import type { TaskSource } from './board';
 
 const H = 60 * 60 * 1000;
 
-export type FakeLesson = { time: string; student: string; tutor: string; state: '완료' | '예정' | '보강' | '노쇼 신고' | '학생 변경' };
+export type FakeLesson = { time: string; student: string; tutor: string; state: '완료' | '예정' | '보강' | '노쇼 신고' | '학생 변경' | '취소' };
 
 const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 const shortDate = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}(${WEEKDAY_KO[weekdayOf(d)]})`;

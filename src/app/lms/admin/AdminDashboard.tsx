@@ -25,6 +25,7 @@ const LESSON_STYLE: Record<FakeLesson['state'], string> = {
   보강: 'bg-[#efebff] text-[#5b3fe0]',
   '노쇼 신고': 'bg-[#fde6e6] text-[#c62b2b]',
   '학생 변경': 'bg-[#fff1d6] text-[#a35b00]',
+  취소: 'bg-[#eeedf3] text-[#6b6880]',
 };
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
@@ -62,9 +63,22 @@ const DONE_MESSAGE: Record<string, string> = {
   confirm_no_show: '노쇼로 확정했어요. 보강 1회 + 보상 수업 1회가 생겨요.',
 };
 
-export default function AdminDashboard({ nowIso, today, preview }: { nowIso: string; today: FakeLesson[]; preview: boolean }) {
+export default function AdminDashboard({
+  nowIso,
+  today,
+  preview,
+  tasks: liveTasks,
+  onLogout,
+}: {
+  nowIso: string;
+  today: FakeLesson[];
+  preview: boolean;
+  /** 실제 데이터 (없으면 가상 데이터 미리보기) */
+  tasks?: TaskSource[];
+  onLogout?: () => void;
+}) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
-  const [tasks, setTasks] = useState<TaskSource[]>(() => fakeTasks(now));
+  const [tasks, setTasks] = useState<TaskSource[]>(() => liveTasks ?? fakeTasks(now));
   const [toast, setToast] = useState<string | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const items = useMemo(() => buildBoard(tasks, now), [tasks, now]);
@@ -72,6 +86,11 @@ export default function AdminDashboard({ nowIso, today, preview }: { nowIso: str
   const dateLabel = `${now.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' })} (${WD[new Date(now.getTime() + 9 * 3600e3).getUTCDay()]})`;
 
   function act(item: BoardItem, key: string) {
+    if (!preview) {
+      // 실제 데이터: 처리(쓰기)는 서버 기능으로만 (POL-AC-07). 서버 기능을 만들기 전에는 보기만
+      setToast('처리 버튼은 서버 저장 기능을 만든 뒤 연결돼요. 지금은 실제 데이터 보기만 가능해요.');
+      return;
+    }
     setTasks((prev) => {
       const out: TaskSource[] = [];
       for (const t of prev) {
@@ -96,6 +115,11 @@ export default function AdminDashboard({ nowIso, today, preview }: { nowIso: str
         </span>
         <span className="flex-1" />
         <span className="text-[13px] text-[#6b6880]">{dateLabel}</span>
+        {onLogout && (
+          <button type="button" onClick={onLogout} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#1d1b2b]">
+            로그아웃
+          </button>
+        )}
         <button
           type="button"
           disabled
@@ -106,9 +130,14 @@ export default function AdminDashboard({ nowIso, today, preview }: { nowIso: str
         </button>
       </header>
 
+      {!preview && (
+        <p className="mx-4 mt-3 rounded-[10px] bg-[#e3f5ea] px-3 py-2 text-[13px] text-[#13623a] lg:mx-7">
+          시험용 DB의 실제 데이터예요 (가상 학생). 지금은 보기만 되고, 처리 버튼은 서버 저장 기능을 만든 뒤 연결돼요.
+        </p>
+      )}
       {preview && (
         <p className="mx-4 mt-3 rounded-[10px] bg-[#fff8d6] px-3 py-2 text-[13px] text-[#5c4a00] lg:mx-7">
-          가상 데이터 미리보기예요. 버튼을 눌러도 실제로 저장되거나 학생·강사에게 발송되지 않아요.
+          가상 데이터 미리보기예요. 버튼을 눌러도 실제로 저장되거나 학생·강사에게 발송되지 않아요. (실제 데이터: 로그인 후 /lms/admin)
         </p>
       )}
 
@@ -182,6 +211,7 @@ export default function AdminDashboard({ nowIso, today, preview }: { nowIso: str
 
         <aside aria-label="오늘 수업" className="hidden rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-3.5 lg:block">
           <h2 className="text-[12px] font-extrabold tracking-wider text-[#6b6880]">오늘 수업</h2>
+          {today.length === 0 && <p className="py-3 text-[13px] text-[#6b6880]">오늘 수업이 없어요.</p>}
           <ul>
             {today.map((l, i) => (
               <li key={i} className="grid grid-cols-[52px_1fr_auto] items-center gap-2 border-b border-[#e6e3ef] py-2 last:border-0">
