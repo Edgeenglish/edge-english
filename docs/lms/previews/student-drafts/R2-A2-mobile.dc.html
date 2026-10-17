@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>A-2 요약 헤더형</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#4b2fd6}a:hover{color:#3a22b0}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1500px; box-sizing: border-box; background: #ffffff; font-family: 'IBM Plex Sans KR', sans-serif; color: #1d1b2b; display: flex; flex-direction: column">
+  <header style="background: #1b1442; color: #ffffff; padding: 18px 20px 72px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <div style="font-size: 17px; font-weight: 700">Edge<span style="color: #b7a8ff">English</span></div>
+      <div style="font-size: 13px; color: #d8d3f5">가상학생일 님</div>
+    </div>
+    <div aria-label="수강 현황" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid #3a2f73; border-radius: 14px">
+      <div style="padding: 10px 12px; border-right: 1px solid #3a2f73"><div style="font-size: 11px; color: #c9c0ff">남은 수업</div><div style="font-size: 18px; font-weight: 700">2 / 8회</div></div>
+      <div style="padding: 10px 12px; border-right: 1px solid #3a2f73"><div style="font-size: 11px; color: #c9c0ff">변경권</div><div style="font-size: 18px; font-weight: 700">1 / 2개</div></div>
+      <div style="padding: 10px 12px"><div style="font-size: 11px; color: #c9c0ff">종료 10/22</div><div style="font-size: 18px; font-weight: 700">D-5</div></div>
+    </div>
+  </header>
+
+  <main style="display: flex; flex-direction: column; gap: 16px; padding: 0 16px 24px; margin-top: -56px">
+    <section aria-label="다음 수업" style="background: #ffffff; border-radius: 20px; padding: 18px; box-shadow: 0 6px 24px rgba(27, 20, 66, 0.14); display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 13px; font-weight: 700; color: #5b3df0">다음 수업 · 3일 후</span><span style="font-size: 12px; color: #6b6880">한국 시간</span></div>
+      <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.5px">10월 20일 (화) 20:00</div>
+      <div style="font-size: 14px; color: #55526a">50분 · 가상강사 Alex · 정규 수업</div>
+      <a href="#" style="display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; border-radius: 14px; background: #5b3df0; color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none">수업 입장</a>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+        <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 12px; background: #f1eefc; color: #3a22b0; font-size: 13px; font-weight: 700; text-decoration: none">교재 보기</a>
+        <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 12px; background: #f1eefc; color: #3a22b0; font-size: 13px; font-weight: 700; text-decoration: none">변경·취소</a>
+        <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 12px; background: #f1eefc; color: #3a22b0; font-size: 13px; font-weight: 700; text-decoration: none">보강 신청</a>
+      </div>
+      <div style="font-size: 12px; color: #55526a">교재: Speak now 2 · 지난번 Unit 7</div>
+    </section>
+
+    <section aria-label="재등록 안내" style="border: 2px solid #e0a100; border-radius: 18px; padding: 16px; display: flex; align-items: center; gap: 12px">
+      <div style="flex: 1"><div style="font-size: 15px; font-weight: 700">정규 수업 2회 남음</div><div style="font-size: 12px; color: #55526a; margin-top: 2px; line-height: 1.5">10/22 23:59까지 결제하면 남은 수업 이월·고정 시간 유지</div></div>
+      <a href="#" style="display: flex; align-items: center; min-height: 46px; padding: 0 16px; border-radius: 12px; background: #1b1442; color: #ffffff; font-size: 14px; font-weight: 700; text-decoration: none; white-space: nowrap">재등록</a>
+    </section>
+
+    <section aria-label="신청 진행 상태" style="display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px"><h2 style="margin: 0; font-size: 16px; font-weight: 700">신청 진행 상태</h2><a href="#" style="font-size: 13px">전체 ›</a></div>
+      <div style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; gap: 12px; align-items: center">
+        <span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; background: #e0a100; flex-shrink: 0"></span>
+        <div style="flex: 1"><div style="font-size: 14px; font-weight: 600">보강 · 10/13 수업분</div><div style="font-size: 12px; color: #6b6880">후보 10/23 (금) 19:00 · 10/24 (토) 10:00</div></div>
+        <span style="font-size: 12px; font-weight: 600; color: #8a5300">강사 확인 중</span>
+      </div>
+      <div style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; gap: 12px; align-items: center">
+        <span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; background: #1f9d5c; flex-shrink: 0"></span>
+        <div style="flex: 1"><div style="font-size: 14px; font-weight: 600">수업 변경 · 10/13 (화)</div><div style="font-size: 12px; color: #6b6880">변경권 1개 사용</div></div>
+        <span style="font-size: 12px; font-weight: 600; color: #13623a">처리 완료</span>
+      </div>
+    </section>
+
+    <section aria-label="수강과 결제" style="background: #f6f5fa; border-radius: 16px; padding: 4px 16px">
+      <a href="#" style="display: flex; justify-content: space-between; align-items: center; min-height: 52px; border-bottom: 1px solid #e6e3ef; text-decoration: none; color: #1d1b2b; font-size: 14px"><span>수강권 · 50분 주 2회 4주</span><span style="color: #55526a">수강 중 ›</span></a>
+      <a href="#" style="display: flex; justify-content: space-between; align-items: center; min-height: 52px; border-bottom: 1px solid #e6e3ef; text-decoration: none; color: #1d1b2b; font-size: 14px"><span>결제</span><span style="color: #13623a; font-weight: 600">확인 완료 (9/23) ›</span></a>
+      <a href="#" style="display: flex; justify-content: space-between; align-items: center; min-height: 52px; text-decoration: none; color: #1d1b2b; font-size: 14px"><span>적립금</span><span style="font-weight: 700">2,000원 ›</span></a>
+    </section>
+    <div style="font-size: 12px; color: #55526a; padding: 0 4px; line-height: 1.6">적립금은 재등록 때 사용 신청 · 카드 영수증은 아임웹 주문조회</div>
+  </main>
+
+  <nav aria-label="메뉴" style="position: sticky; bottom: 0; margin-top: auto; background: #ffffff; border-top: 1px solid #e6e3ef; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 6px 0 14px">
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; font-weight: 700; color: #5b3df0; text-decoration: none">홈</a>
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; color: #55526a; text-decoration: none">일정</a>
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; color: #55526a; text-decoration: none">신청 내역</a>
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; color: #55526a; text-decoration: none">학습자료</a>
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; color: #55526a; text-decoration: none">내 정보</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

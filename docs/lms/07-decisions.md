@@ -115,7 +115,8 @@
 ## 6. 시안 선택
 
 - 운영자 대시보드·신규 학생 등록 시안 각 3개: https://claude.ai/artifact/Jy4xt9WBjQjmqQuLHmLMNS — **대시보드 ✅ A안(처리할 일 중심) 확정 (2026-10-16 대표)**, 신규 등록은 미선택(추천 C). 학생 동의 관리 화면은 별개
-- **학생 메인 화면 시안 3개 (2026-10-17)**: https://claude.ai/artifact/7MCsdtwvs1XgYX7pzKMRLK (원본 `previews/student-drafts/`) — A 다음 수업 중심 / B 일정 목록 중심 / C 수강권 카드 중심, 각 휴대폰·PC. **대표 선택 대기 (D-34)**
+- **학생 메인 화면 시안 3개 (2026-10-17)**: https://claude.ai/artifact/7MCsdtwvs1XgYX7pzKMRLK (원본 `previews/student-drafts/`) — A 다음 수업 중심 / B 일정 목록 중심 / C 수강권 카드 중심, 각 휴대폰·PC. → **A안 기반으로 2차 진행 (2026-10-17 대표)**
+  - **D-34 학생 메인 2차 시안 (A안 기반 3가지)** — 같은 링크 '2차' 페이지 (원본 `previews/student-drafts/R2-*`). A-1 카드 쌓기형 / A-2 요약 헤더형 / A-3 할 일 순서형 + 공통 하위 화면(변경·취소 확인: 6시간 전·이내, 학습자료, 기능 위치) + PC 반응형. 메인에는 최근 수업 기록 없음, 재등록 안내는 남은 정규 수업 2회 이하일 때만(결제 확인되면 사라짐), 하단 탭 홈/일정/신청 내역/학습자료/내 정보. **대표 선택 대기 (추천 A-2)**
 - 강사 화면 시안은 3단계 전에 준비.
 - **수업 안내 확인·동의** 학생 화면·관리자 화면 시안 각 3개: https://claude.ai/artifact/PFkJbUuMy8CLJtamJxYQBK (원본 `previews/consent-drafts/`)
 
