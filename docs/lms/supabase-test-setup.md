@@ -85,7 +85,11 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 | Resend 가입·도메인 `edgeenglish.kr` 등록 (발송 서버 지역 Tokyo — 한국에서 가장 가까움, 받는 사람과 무관) | ✅ 2026-10-17 |
 | 호스팅케이알 DNS **추가만**: TXT `resend._domainkey`(DKIM), CNAME `rsend`·`send`(발송), TXT `_dmarc` = `v=DMARC1; p=none;` — 기존 구글 메일·Vercel 레코드 변경 없음 | ✅ 2026-10-17, Resend **Verified** |
 | 공개 회원가입 끄기 (메일 연결 전에 먼저) | ✅ 2026-10-17 |
-| 시험용 Supabase SMTP 연결 (smtp.resend.com:465, 사용자 `resend`, 비밀번호 = Resend API key — 키는 Supabase 화면에만 입력) | ⬜ |
+| 시험용 Supabase SMTP 연결 (smtp.resend.com:465, 사용자 `resend`, 비밀번호 = Resend API key `supabase-test` — 키는 Supabase 화면에만 입력, 보낸 사람 `엣지영어 <support@edgeenglish.kr>`) | ✅ 2026-10-17 |
+| 로그인 코드 설정: OTP 6자리, 유효 10분(600초), Magic Link 템플릿을 6자리 코드(`{{ .Token }}`) 한국어 문구로 | ✅ 2026-10-17 |
+| 실제 발송 시험: 등록된 계정(support@, app_users 연결 없음)으로 코드 요청 → **지메일 받은편지함 도착** | ✅ 2026-10-17 |
+| 등록 안 된 이메일: 코드 요청 422 `otp_disabled`(계정·메일 안 생김), `/signup` 422 `signup_disabled` | ✅ 2026-10-17 |
+| 코드 입력 → 로그인 완료(verifyOtp)는 로그인 화면을 만들 때 함께 확인 | ⬜ |
 
 ## 4. 보안 점검 결과
 
