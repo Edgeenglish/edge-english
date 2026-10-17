@@ -799,7 +799,7 @@
 - **근거**: SRC-POLICY-V1 A27, 대표 메시지(2026-10-17)
 - **상태**: 확정
 - **대표 승인**: ✅ 승인 (2026-10-17, 정책 원본 A27 대표확정 · D-29 세부)
-- **고칠 곳**: DB `is_admin()`(aal2 확인 추가 예정), 운영자 로그인·TOTP 등록 화면, `authz-probe.sql`
+- **고칠 곳**: DB `is_admin()`·`auth_is_aal2()` (migration 800 — aal2 확인 반영), 운영자 로그인·TOTP 등록 화면, `authz-probe.sql`·`e2e-token-probe.py` ('운영자(TOTP 전)' 0건 확인)
 - **마지막 확인**: 2026-10-17
 
 ### POL-AC-07 · 운영자 계정·권한 분리 (다중 운영자 대비)
@@ -807,7 +807,7 @@
 - **근거**: SRC-POLICY-V1 A34
 - **상태**: 확정
 - **대표 승인**: ✅ 승인 (2026-10-17, 정책 원본 A34)
-- **고칠 곳**: DB `app_users.role`(운영자 역할 세분화: 대표 / 운영직원 — 예정), `is_admin()`·대표 전용 확인 함수, 서버 쓰기 기능 권한 검사, `authz-probe.sql`
+- **고칠 곳**: DB `app_users.admin_level`(owner 대표 / staff 직원, migration 800)·`is_owner()`(대표 전용 확인), 서버 쓰기 기능 권한 검사(화면 개발 때), `authz-probe.sql`·`e2e-token-probe.py`. 직원 읽기 범위는 D-36
 - **마지막 확인**: 2026-10-17
 
 ### POL-AC-06 · 인증·알림 메일 발송 서비스

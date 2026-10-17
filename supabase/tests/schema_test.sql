@@ -223,8 +223,10 @@ insert into app_users (auth_user_id, role, student_id) values
 insert into app_users (auth_user_id, role, tutor_id) values
   ('bbbbbbbb-0000-0000-0000-000000000003', 'tutor', '22222222-2222-2222-2222-222222222222'),
   ('bbbbbbbb-0000-0000-0000-000000000004', 'tutor', '11111111-1111-1111-1111-111111111111');
-insert into app_users (auth_user_id, role) values ('bbbbbbbb-0000-0000-0000-000000000009', 'admin');
+insert into app_users (auth_user_id, role, admin_level) values ('bbbbbbbb-0000-0000-0000-000000000009', 'admin', 'owner');
 
+-- 아래 권한 시험은 TOTP까지 마친 세션(aal2)으로 진행. TOTP 전 세션은 맨 아래 'migration 800' 에서 따로 확인
+set request.jwt.claims = '{"aal":"aal2"}';
 set role authenticated;
 
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
@@ -493,7 +495,7 @@ select pg_temp.ok(true, '로그인 사용자도 학생 번호를 직접 만들 �
 
 -- ---------- 서버 키(service_role) 표 권한 (migration 710, 2026-10-17 5-4 실물 실패 재현) ----------
 set role service_role;
-insert into app_users (auth_user_id, role, student_id) values ('cccccccc-0000-0000-0000-000000000710', 'admin', null);
+insert into app_users (auth_user_id, role, admin_level) values ('cccccccc-0000-0000-0000-000000000710', 'admin', 'staff');
 select pg_temp.ok((select count(*) from app_users where auth_user_id = 'cccccccc-0000-0000-0000-000000000710') = 1, '서버 키는 app_users 를 추가·읽기 가능');
 delete from app_users where auth_user_id = 'cccccccc-0000-0000-0000-000000000710';
 select pg_temp.ok((select count(*) from audit_log where table_name = 'app_users' and row_id = 'cccccccc-0000-0000-0000-000000000710') = 2, '서버 키 쓰기도 변경 이력에 남음 (추가·삭제 2줄)');
@@ -502,3 +504,27 @@ select pg_temp.expect_error($$update audit_log set action = 'INSERT'$$, 'permiss
 select pg_temp.expect_error($$delete from audit_log$$, 'permission|42501');
 reset role;
 select pg_temp.ok(true, '서버 키도 변경 이력을 고치거나 지울 수 없음');
+
+-- ---------- 운영자 TOTP 강제·역할 분리 (migration 800, POL-AC-05·07) ----------
+insert into app_users (auth_user_id, role, admin_level) values ('bbbbbbbb-0000-0000-0000-000000000008', 'admin', 'staff');
+select pg_temp.expect_error($$insert into app_users (auth_user_id, role) values ('bbbbbbbb-0000-0000-0000-0000000000a8', 'admin')$$, 'check');
+select pg_temp.expect_error($$insert into app_users (auth_user_id, role, student_id, admin_level) values ('bbbbbbbb-0000-0000-0000-0000000000a9', 'student', '33333333-3333-3333-3333-333333333333', 'owner')$$, 'check|unique|duplicate');
+select pg_temp.ok(true, '운영자는 대표/직원 구분이 반드시 있고, 학생·강사에게는 운영자 등급을 줄 수 없음');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표
+set request.jwt.claims = '{"aal":"aal1"}';
+select pg_temp.ok(not is_admin() and not is_owner(), 'TOTP 전(aal1) 대표 세션은 운영자가 아님');
+select pg_temp.ok((select count(*) from students) = 0 and (select count(*) from payments) = 0 and (select count(*) from audit_log) = 0,
+                  'TOTP 전 운영자 세션은 학생·결제·변경 이력을 한 줄도 못 봄');
+set request.jwt.claims = '{}';
+select pg_temp.ok(not is_admin() and (select count(*) from students) = 0, 'aal 정보가 없는 세션도 운영자가 아님');
+set request.jwt.claims = '{"aal":"aal2"}';
+select pg_temp.ok(is_admin() and is_owner() and (select count(*) from students) >= 2, 'TOTP 완료(aal2) 대표 세션은 운영자·대표 권한');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000008';   -- 운영직원
+select pg_temp.ok(is_admin() and not is_owner(), 'TOTP 완료 직원은 운영자지만 대표 전용 권한은 없음');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';   -- 학생 (aal2여도)
+select pg_temp.ok(not is_admin() and not is_owner(), '학생은 aal2 여도 운영자가 아님');
+select pg_temp.expect_error($$update app_users set admin_level = 'owner' where auth_user_id = 'bbbbbbbb-0000-0000-0000-000000000008'$$, 'permission|42501');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok(true, '앱 사용자는 운영자 등급을 바꿀 수 없음 (서버만)');

@@ -6,8 +6,10 @@
       python3 -I supabase/test-setup/e2e-token-probe.py --check    (키 연결만 확인, 아무것도 만들지 않음)
 
 하는 일
-  1. 서버 키로 가상 로그인 계정 6개 생성 (authz-e2e-…@example.com, 무작위 비밀번호, email_confirm=true → 메일 발송 없음)
-  2. app_users 연결: 학생 A·B = 기존 가상학생일·이, 강사 X·Y = 기존 가상강사 Alex·Blair, 운영자 1, 미등록 1
+  1. 서버 키로 가상 로그인 계정 7개 생성 (authz-e2e-…@example.com, 무작위 비밀번호, email_confirm=true → 메일 발송 없음)
+  2. app_users 연결: 학생 A·B = 기존 가상학생일·이, 강사 X·Y = 기존 가상강사 Alex·Blair, 운영자(대표 owner) 1, 운영직원(staff) 1, 미등록 1
+     운영자·직원은 실제 Supabase MFA API로 TOTP를 등록·인증해 aal2 토큰을 받는다 (migration 800 확인).
+     같은 대표 계정의 TOTP 전(aal1) 토큰은 '운영자(TOTP 전)' 으로 따로 점검 → 아무것도 못 봐야 함
      (학생·수업·결제 데이터는 새로 만들지 않음)
   3. 각 계정으로 실제 로그인(비밀번호) → 받은 토큰으로 REST API를 거쳐 읽기·쓰기·함수 확인
   4. 성공·실패와 관계없이 마지막에 연결 6줄과 계정 6개 삭제 (변경 이력 audit_log 몇 줄은 남음 — 지울 수 없게 설계됨)
@@ -18,8 +20,13 @@
     이 경우 컨테이너 안에는 키가 없으므로 스크립트는 헤더 없이 관리 API를 불러 보고 200이면 '주입됨'으로 판단한다.
     주입된 키가 학생 토큰 요청까지 덮어써 결과가 왜곡되는지 '안전장치'로 먼저 확인하고, 왜곡되면 아무것도 만들지 않고 멈춘다.
 """
+import base64
+import hashlib
+import hmac
 import json
 import os
+import struct
+import time
 import secrets
 import ssl
 import sys
@@ -131,18 +138,19 @@ def preflight():
 
 # ---------- 1. 계정 만들기·연결 ----------
 PERSONAS = [
-    ("미등록", None, None, None),
-    ("학생A", "student", STUDENT_A, None),
-    ("학생B", "student", STUDENT_B, None),
-    ("강사X", "tutor", None, TUTOR_X),
-    ("강사Y", "tutor", None, TUTOR_Y),
-    ("운영자", "admin", None, None),
+    ("미등록", None, None, None, None),
+    ("학생A", "student", STUDENT_A, None, None),
+    ("학생B", "student", STUDENT_B, None, None),
+    ("강사X", "tutor", None, TUTOR_X, None),
+    ("강사Y", "tutor", None, TUTOR_Y, None),
+    ("운영자", "admin", None, None, "owner"),
+    ("운영직원", "admin", None, None, "staff"),
 ]
 
 
 def setup(created):
     tag = secrets.token_hex(3)
-    for name, role, sid, tid in PERSONAS:
+    for name, role, sid, tid, level in PERSONAS:
         email = f"authz-e2e-{tag}-{len(created)}@example.com"
         password = secrets.token_urlsafe(24)
         code, data = admin("POST", "/auth/v1/admin/users", {"email": email, "password": password, "email_confirm": True})
@@ -151,6 +159,8 @@ def setup(created):
         created.append({"name": name, "id": data["id"], "email": email, "password": password, "linked": False})
         if role:
             row = {"auth_user_id": data["id"], "role": role, "student_id": sid, "tutor_id": tid}
+            if level:
+                row["admin_level"] = level
             code, _ = admin("POST", "/rest/v1/app_users", row, {"Prefer": "return=minimal"})
             if code not in (200, 201, 204):
                 raise RuntimeError(f"{name} app_users 연결 실패 ({code})")
@@ -163,6 +173,34 @@ def login(p):
     if code != 200 or "access_token" not in (data or {}):
         raise RuntimeError(f"{p['name']} 로그인 실패 ({code})")
     return data["access_token"]
+
+
+def totp_code(secret_b32, at=None):
+    """RFC 6238 (SHA1, 30초, 6자리) — 인증 앱이 만드는 숫자와 같음"""
+    key = base64.b32decode(secret_b32.upper() + "=" * (-len(secret_b32) % 8))
+    counter = int((at or time.time()) // 30)
+    digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    off = digest[-1] & 0x0F
+    return f"{(struct.unpack('>I', digest[off:off + 4])[0] & 0x7FFFFFFF) % 1_000_000:06d}"
+
+
+def jwt_aal(token):
+    body = token.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4))).get("aal")
+
+
+def totp_login(p, aal1_token):
+    """실제 Supabase MFA API: TOTP 등록 → 확인 요청 → 코드 인증 → aal2 토큰 (비밀값·코드는 출력하지 않음)"""
+    code, f = as_user(aal1_token, "POST", "/auth/v1/factors", {"factor_type": "totp", "friendly_name": "authz-e2e"})
+    if code != 200 or "id" not in (f or {}):
+        raise RuntimeError(f"{p['name']} TOTP 등록 실패 ({code}) — Supabase Authentication → MFA 의 TOTP 가 켜져 있는지 확인")
+    code, ch = as_user(aal1_token, "POST", f"/auth/v1/factors/{f['id']}/challenge", {})
+    if code != 200 or "id" not in (ch or {}):
+        raise RuntimeError(f"{p['name']} TOTP 확인 요청 실패 ({code})")
+    code, s = as_user(aal1_token, "POST", f"/auth/v1/factors/{f['id']}/verify", {"challenge_id": ch["id"], "code": totp_code(f["totp"]["secret"])})
+    if code != 200 or "access_token" not in (s or {}):
+        raise RuntimeError(f"{p['name']} TOTP 인증 실패 ({code})")
+    return s["access_token"]
 
 
 def cleanup(created):
@@ -187,13 +225,15 @@ def probe(tokens):
 
     print("2. 읽기")
     tk = {p["name"]: t for p, t in tokens}
-    for name in ("미등록", "학생A", "학생B", "강사X", "강사Y"):
+    for name in ("미등록", "학생A", "학생B", "강사X", "강사Y", "운영자(TOTP 전)"):
         for table in ("payments", "refunds", "audit_log", "app_users", "notifications"):
             r = rows(tk[name], table, "select=*&limit=50")
             # app_users: 본인 행 정책이 없으므로 0건이어야 함
             check(not r, f"{name}: {table} 0건")
     check(not rows(tk["미등록"], "students"), "미등록: students 0건")
     check(not rows(tk["미등록"], "enrollments"), "미등록: enrollments 0건")
+    check(not rows(tk["운영자(TOTP 전)"], "students"), "운영자(TOTP 전): students 0건 (POL-AC-05)")
+    check(not rows(tk["운영자(TOTP 전)"], "enrollments"), "운영자(TOTP 전): enrollments 0건")
     for name, me, other in (("학생A", STUDENT_A, STUDENT_B), ("학생B", STUDENT_B, STUDENT_A)):
         s = rows(tk[name], "students", "select=id")
         check(s is not None and [x["id"] for x in s] == [me], f"{name}: students 본인 1명만")
@@ -211,6 +251,8 @@ def probe(tokens):
     code, all_students = admin("GET", "/rest/v1/students?select=id")
     adm = rows(tk["운영자"], "students", "select=id") or []
     check(code == 200 and len(adm) == len(all_students or []), f"운영자: 학생 전체 읽기 ({len(adm)}명)")
+    stf = rows(tk["운영직원"], "students", "select=id") or []
+    check(code == 200 and len(stf) == len(all_students or []), f"운영직원: 학생 읽기 ({len(stf)}명, 직원 읽기 범위는 미결정 → 지금은 운영자와 같음)")
 
     print("3. 쓰기 (모두 거절돼야 통과)")
     for p, t in tokens:
@@ -223,11 +265,14 @@ def probe(tokens):
         check(denied(c, d), f"{n}: 적립금 직접 지급 거절 ({c})")
 
     print("4. 함수")
-    for name in ("미등록", "학생A", "학생B", "강사X", "강사Y"):
+    for name in ("미등록", "학생A", "학생B", "강사X", "강사Y", "운영자(TOTP 전)"):
         c, d = as_user(tk[name], "POST", "/rest/v1/rpc/is_admin", {})
         check(c == 200 and d is False, f"{name}: is_admin() = false")
-    c, d = as_user(tk["운영자"], "POST", "/rest/v1/rpc/is_admin", {})
-    check(c == 200 and d is True, "운영자: is_admin() = true (TOTP 강제는 migration 800 이후 별도 점검)")
+    for name, want_admin, want_owner in (("운영자", True, True), ("운영직원", True, False), ("운영자(TOTP 전)", False, False)):
+        c, d = as_user(tk[name], "POST", "/rest/v1/rpc/is_admin", {})
+        check(c == 200 and d is want_admin, f"{name}: is_admin() = {str(want_admin).lower()}")
+        c, d = as_user(tk[name], "POST", "/rest/v1/rpc/is_owner", {})
+        check(c == 200 and d is want_owner, f"{name}: is_owner() = {str(want_owner).lower()} (대표 전용 권한, POL-AC-07)")
     c, d = as_user(tk["학생A"], "POST", "/rest/v1/rpc/reward_balance", {"p_student": STUDENT_B})
     check(c == 200 and (d or 0) == 0, "학생A: 학생B 적립금 잔액 조회 → 0")
 
@@ -240,7 +285,16 @@ def main():
     created = []
     try:
         setup(created)
-        tokens = [(p, login(p)) for p in created]
+        tokens = []
+        for p in created:
+            t = login(p)
+            if p["name"] in ("운영자", "운영직원"):
+                check(jwt_aal(t) == "aal1", f"{p['name']}: 이메일·비밀번호만 통과한 토큰은 aal1")
+                if p["name"] == "운영자":
+                    tokens.append(({"name": "운영자(TOTP 전)", "id": p["id"]}, t))
+                t = totp_login(p, t)
+                check(jwt_aal(t) == "aal2", f"{p['name']}: TOTP 인증 후 토큰은 aal2")
+            tokens.append((p, t))
         probe(tokens)
     except Exception as e:  # 오류가 나도 정리는 반드시
         check(False, f"점검 중 오류: {e}")

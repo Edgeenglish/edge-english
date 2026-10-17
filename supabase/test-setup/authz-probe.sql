@@ -9,7 +9,9 @@
 --
 -- 가상 계정 (Supabase 로그인 계정은 만들지 않고, 로그인했다고 가정한 상태를 DB 안에서 흉내 냄)
 --   미등록: 로그인은 했지만 app_users 에 없는 사람 (회원가입이 열려 있을 때 생길 수 있는 계정)
---   학생 A·B, 강사 X(학생 A 담당)·Y(학생 B 담당), 운영자
+--   학생 A·B, 강사 X(학생 A 담당)·Y(학생 B 담당), 운영자(대표, TOTP 완료 aal2),
+--   운영자(TOTP 전): 같은 대표 계정이 이메일 코드만 통과한 상태(aal1) → 아무것도 못 봐야 함 (POL-AC-05)
+--   운영직원(TOTP 완료): 운영자지만 대표 전용 권한(is_owner) 없음 (POL-AC-07)
 --
 -- 확인하는 것
 --   1. 권한 표: 앱 사용자(anon·authenticated)가 어떤 표에도 쓰기(추가·수정·삭제·비우기) 권한이 없는지,
@@ -42,6 +44,7 @@ declare
   u_x     uuid := 'a17e5700-0000-4000-8000-0000000000f3';
   u_y     uuid := 'a17e5700-0000-4000-8000-0000000000f4';
   u_admin uuid := 'a17e5700-0000-4000-8000-0000000000f9';
+  u_staff uuid := 'a17e5700-0000-4000-8000-0000000000f8';
 
   -- 공용 기준표: 로그인한 누구에게나 보여도 되는 것 (판본 목록·상태값·공휴일·게시된 안내 문서)
   reference_rels text[] := array['terms_versions', 'class_status_rules', 'holidays', 'terms_documents'];
@@ -55,11 +58,12 @@ declare
   -- RLS 판단에 쓰이거나 화면에서 부르는 SECURITY DEFINER 함수 (이 밖의 것이 생기면 검토 필요)
   -- 내부 함수가 데이터를 읽지 않는 것을 검토한 확장 (이 밖의 확장 함수가 앱 사용자에게 열려 있으면 실패)
   reviewed_ext text[] := array['btree_gist'];
-  definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'tutor_my_students', 'student_my_tutors', 'consent_record'];
+  definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'is_owner', 'tutor_my_students', 'student_my_tutors', 'consent_record'];
 
-  personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자'];
+  personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
   persona_uid uuid[];
-  persona_owner text[] := array[null, 'A', 'B', 'X', 'Y', null];
+  persona_owner text[] := array[null, 'A', 'B', 'X', 'Y', null, null, null];
+  persona_aal text[] := array['aal1', 'aal1', 'aal1', 'aal1', 'aal1', 'aal2', 'aal1', 'aal2'];
 
   rels text[];
   r text;
@@ -76,7 +80,7 @@ declare
   ok boolean;
 begin
   set local app.actor_via = 'authz_probe';
-  persona_uid := array[u_none, u_a, u_b, u_x, u_y, u_admin];
+  persona_uid := array[u_none, u_a, u_b, u_x, u_y, u_admin, u_admin, u_staff];
 
   -- -------------------------------------------------------------------
   -- 0. 가상 데이터 (끝에서 전부 되돌림)
@@ -88,7 +92,7 @@ begin
     (s_b, 'STU-9802', '점검가상학생B', 'Probe B', 'probe-b@example.com', '010-0000-0002', '운영 메모 B');
   insert into app_users (auth_user_id, role, student_id) values (u_a, 'student', s_a), (u_b, 'student', s_b);
   insert into app_users (auth_user_id, role, tutor_id) values (u_x, 'tutor', t_x), (u_y, 'tutor', t_y);
-  insert into app_users (auth_user_id, role) values (u_admin, 'admin');
+  insert into app_users (auth_user_id, role, admin_level) values (u_admin, 'admin', 'owner'), (u_staff, 'admin', 'staff');
 
   -- 학생 A: 24주 주1회 (장기 연기 가능), 학생 B: 4주 주2회 + 기한 안 재등록
   insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status, policy_basis) values
@@ -229,7 +233,7 @@ begin
   -- -------------------------------------------------------------------
   for i in 1 .. cardinality(personas) loop
     perform set_config('request.jwt.claim.sub', persona_uid[i]::text, true);
-    perform set_config('request.jwt.claims', json_build_object('sub', persona_uid[i], 'role', 'authenticated')::text, true);
+    perform set_config('request.jwt.claims', json_build_object('sub', persona_uid[i], 'role', 'authenticated', 'aal', persona_aal[i])::text, true);
     perform set_config('request.jwt.claim.role', 'authenticated', true);
     ok := true;
     foreach r in array rels loop
@@ -250,11 +254,11 @@ begin
       execute format('select count(*) from public.%I', r) into total;
       insert into _seen values (personas[i], r, n);
 
-      if personas[i] = '운영자' then
-        if n <> total then infos := infos || format('운영자에게 %s 표가 %s/%s행만 보임', r, n, total); end if;
-      elsif personas[i] = '미등록' then
+      if personas[i] in ('운영자', '운영직원') then
+        if n <> total then infos := infos || format('%s에게 %s 표가 %s/%s행만 보임', personas[i], r, n, total); end if;
+      elsif personas[i] in ('미등록', '운영자(TOTP 전)') then
         if n > 0 and r <> all (reference_rels) then
-          ok := false; fails := fails || format('[읽기] 미등록 계정이 %s 표에서 %s행을 봄', r, n);
+          ok := false; fails := fails || format('[읽기] %s 계정이 %s 표에서 %s행을 봄', personas[i], r, n);
         end if;
       elsif persona_owner[i] in ('A', 'B') then
         if n > 0 and r <> all (reference_rels || student_rels) then
@@ -311,9 +315,11 @@ begin
     -- 5. 함수 (본인 확인을 DB가 직접 하는지)
     execute 'set local role authenticated';
     begin
-      if personas[i] <> '운영자' and is_admin() then fails := fails || format('[함수] %s: is_admin() 이 참', personas[i]); end if;
-      if personas[i] in ('미등록', '강사X', '강사Y', '운영자') and my_student_id() is not null then fails := fails || format('[함수] %s: 학생 번호가 잡힘', personas[i]); end if;
-      if personas[i] in ('미등록', '학생A', '학생B', '운영자') and my_tutor_id() is not null then fails := fails || format('[함수] %s: 강사 번호가 잡힘', personas[i]); end if;
+      if personas[i] not in ('운영자', '운영직원') and is_admin() then fails := fails || format('[함수] %s: is_admin() 이 참', personas[i]); end if;
+      if personas[i] in ('운영자', '운영직원') and not is_admin() then fails := fails || format('[함수] %s: is_admin() 이 거짓', personas[i]); end if;
+      if (personas[i] = '운영자') <> is_owner() then fails := fails || format('[함수] %s: is_owner() = %s', personas[i], is_owner()); end if;
+      if personas[i] in ('미등록', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원') and my_student_id() is not null then fails := fails || format('[함수] %s: 학생 번호가 잡힘', personas[i]); end if;
+      if personas[i] in ('미등록', '학생A', '학생B', '운영자', '운영자(TOTP 전)', '운영직원') and my_tutor_id() is not null then fails := fails || format('[함수] %s: 강사 번호가 잡힘', personas[i]); end if;
       select count(*) into n from student_my_tutors();
       if (personas[i] in ('학생A', '학생B') and n <> 1) or (personas[i] not in ('학생A', '학생B') and n <> 0) then
         fails := fails || format('[함수] %s: student_my_tutors() %s명', personas[i], n); end if;
@@ -322,7 +328,7 @@ begin
         where t.student_id <> case personas[i] when '강사X' then s_a when '강사Y' then s_b end;
       if (personas[i] in ('강사X', '강사Y') and (n <> 1 or bad <> 0)) or (personas[i] not in ('강사X', '강사Y') and n <> 0) then
         fails := fails || format('[함수] %s: tutor_my_students() %s명 (담당 아닌 학생 %s명)', personas[i], n, bad); end if;
-      if personas[i] <> '학생B' and personas[i] <> '운영자' then
+      if personas[i] not in ('학생B', '운영자', '운영직원') then
         if coalesce(reward_balance(s_b), 0) <> 0 then fails := fails || format('[함수] %s: 학생 B 적립금 잔액이 보임', personas[i]); end if;
         if coalesce(credit_balance(p_b), 0) <> 0 then fails := fails || format('[함수] %s: 학생 B 변경권 잔액이 보임', personas[i]); end if;
       end if;
