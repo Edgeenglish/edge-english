@@ -53,6 +53,8 @@ declare
   tutor_rels text[] := array['tutors', 'lessons', 'class_records', 'tutor_time_off', 'terms_deliveries', 'tutor_availability',
     'makeup_requests', 'makeup_candidates', 'payroll_runs', 'tutor_contracts', 'admin_tasks', 'admin_task_board'];
   -- RLS 판단에 쓰이거나 화면에서 부르는 SECURITY DEFINER 함수 (이 밖의 것이 생기면 검토 필요)
+  -- 내부 함수가 데이터를 읽지 않는 것을 검토한 확장 (이 밖의 확장 함수가 앱 사용자에게 열려 있으면 실패)
+  reviewed_ext text[] := array['btree_gist'];
   definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'tutor_my_students', 'student_my_tutors', 'consent_record'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자'];
@@ -163,17 +165,34 @@ begin
      and (has_sequence_privilege('authenticated', c.oid, 'USAGE') or has_sequence_privilege('authenticated', c.oid, 'UPDATE')
           or has_sequence_privilege('anon', c.oid, 'USAGE') or has_sequence_privilege('anon', c.oid, 'UPDATE'));
   if v is not null then fails := fails || format('[권한] 앱 사용자가 쓸 수 있는 번호 시퀀스: %s', v); end if;
+  -- 함수 판정 (2026-10-17 실물 Supabase 결과 반영)
+  --  - 검토된 확장(btree_gist)의 내부 함수: 실물 Supabase는 확장을 플랫폼 관리자(supabase_admin) 소유로 만들고
+  --    anon 실행 권한을 기본으로 준다. 우리 SQL(postgres 권한)로는 그 권한을 회수할 수 없고(로컬은 슈퍼유저라 회수됨),
+  --    함수가 숫자 거리 계산·인덱스 내부용(internal 인자)이라 데이터를 읽지 않으며 REST API로도 부를 수 없다
+  --    (인자가 이름 없는 2개 이상) → 실패가 아니라 '참고'로 표시. 다른 확장의 함수는 여전히 실패로 잡는다.
+  --  - 트리거·이벤트 트리거 함수(예: Supabase 자동 RLS 켜기 rls_auto_enable): 직접 호출할 수 없고
+  --    DB 이벤트가 있을 때만 실행됨 → SECURITY DEFINER 여도 '참고'로 표시.
   select string_agg(p.proname, ', ') into v from pg_proc p join pg_namespace s on s.oid = p.pronamespace
-   where s.nspname = 'public' and has_function_privilege('anon', p.oid, 'EXECUTE');
+   where s.nspname = 'public' and has_function_privilege('anon', p.oid, 'EXECUTE')
+     and coalesce((select e.extname from pg_depend d join pg_extension e on e.oid = d.refobjid where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e' limit 1), '') <> all (reviewed_ext);
   if v is not null then fails := fails || format('[권한] 로그인 안 한 사용자가 실행할 수 있는 함수: %s', v); end if;
+  select string_agg(distinct (select e.extname from pg_depend d join pg_extension e on e.oid = d.refobjid where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e' limit 1) || ' (' || pg_get_userbyid(p.proowner) || ' 소유)', ', '), count(*) into v, n
+    from pg_proc p join pg_namespace s on s.oid = p.pronamespace
+   where s.nspname = 'public' and has_function_privilege('anon', p.oid, 'EXECUTE') and (select e.extname from pg_depend d join pg_extension e on e.oid = d.refobjid where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e' limit 1) = any (reviewed_ext);
+  if n > 0 then infos := infos || format('확장 내부 함수 %s개에 비로그인 실행 권한이 남아 있음: %s — 데이터 접근 없음·API로 호출 불가, 운영 프로젝트는 확장을 extensions 스키마에 설치 권장', n, v); end if;
   select string_agg(p.proname, ', ') into v from pg_proc p join pg_namespace s on s.oid = p.pronamespace
    where s.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-     and p.proname <> all (definer_ok);
+     and p.proname <> all (definer_ok)
+     and p.prorettype not in ('trigger'::regtype, 'event_trigger'::regtype);
   if v is not null then fails := fails || format('[권한] 검토 안 된 SECURITY DEFINER 함수: %s', v); end if;
+  select string_agg(p.proname || ' (' || pg_get_userbyid(p.proowner) || ' 소유)', ', ') into v
+    from pg_proc p join pg_namespace s on s.oid = p.pronamespace
+   where s.nspname = 'public' and p.prosecdef and p.prorettype in ('trigger'::regtype, 'event_trigger'::regtype);
+  if v is not null then infos := infos || format('SECURITY DEFINER 트리거·이벤트 트리거 함수(직접 호출 불가): %s', v); end if;
   select string_agg(p.proname, ', ' order by p.proname) into v from pg_proc p join pg_namespace s on s.oid = p.pronamespace
-   where s.nspname = 'public' and not p.prosecdef and p.prorettype <> 'trigger'::regtype
+   where s.nspname = 'public' and not p.prosecdef and p.prorettype not in ('trigger'::regtype, 'event_trigger'::regtype)
      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-     and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e');   -- btree_gist 확장 내부 함수 제외
+     and (select e.extname from pg_depend d join pg_extension e on e.oid = d.refobjid where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e' limit 1) is null;   -- 확장 내부 함수 제외
   infos := infos || format('로그인 사용자가 실행할 수 있는 일반 함수(RLS 그대로 적용): %s', coalesce(v, '없음'));
   if cardinality(fails) = 0 then passes := passes + 1; end if;
 
