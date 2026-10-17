@@ -166,16 +166,33 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 | 5-1 | 위 4-② 실행 안내 (DB 안에서 로그인 상태를 흉내 낸 점검) | 대표, SQL Editor | ✅ 2026-10-17 14개 묶음 통과 |
 | 5-2 | 공개 회원가입 끄기 (3단계 ①②) | 대표, 대시보드 스위치 | ⬜ (A30 확정) |
 | 5-3 | 운영자 TOTP 강제(migration 800) + 결제 확인 상태(810) 로컬 구현·테스트 → 실행 안내 | Claude 구현, 대표 SQL 실행 승인 | ⬜ |
-| 5-4 | **끝단 점검**: 실제 Supabase 로그인 계정(가상, `@example.com`, 메일 발송 없음)을 만들어 실제 토큰으로 REST API를 거쳐 학생 A↔B·강사·미등록·운영자(TOTP 전/후)를 확인하고, 끝나면 계정 삭제 | Claude. 시험용 전용 Secret key — **D-27 승인(2026-10-17)**, 대표가 키 입력 후 새 세션에서 진행 | ⬜ 키 입력 대기 |
+| 5-4 | **끝단 점검** (`e2e-token-probe.py`): 실제 Supabase 로그인 계정(가상, `@example.com`, 메일 발송 없음)을 만들어 실제 토큰으로 REST API를 거쳐 학생 A↔B·강사·미등록·운영자를 확인하고, 끝나면 계정·연결 삭제. 운영자 TOTP는 migration 800 이후 | Claude. Secret key `claude_test` 생성됨 — 대표가 네트워크 시크릿(또는 환경 변수) 입력 후 새 세션 | ⬜ 시크릿 입력 대기 |
 | 5-5 | 이메일 6자리 코드 실제 로그인 시험 (대표 이메일 가상 계정) | 메일 발송 서비스 선택·승인(D-28) 후 | ⬜ |
 
 ### 5-4 Secret key 준비 (D-27 승인, 2026-10-17) — 대표 진행
 
-1. Supabase 왼쪽 위 프로젝트가 **edgeenglish-lms-test** 인지 확인 (운영 프로젝트 아님)
-2. Project Settings → **API Keys** → Secret keys 쪽의 **새 Secret key 만들기**(이름 `claude-test`) → 생성된 값 복사 (`sb_secret_`로 시작, 한 번만 보일 수 있음)
-3. 이 채팅의 클라우드 환경 메뉴(세션 제목 줄) → **Edit** → 비밀 값/환경 변수에 `SUPABASE_SERVICE_ROLE_KEY` = 복사한 값 저장 → **새 세션**에서 Claude에게 "5-4 진행" 요청
-   - 채팅·GitHub·Vercel에는 넣지 않는다. Claude는 값을 출력하지 않고, 시험용 주소(`kyeimjozkcqbgkepwrnv.supabase.co`)가 아니면 실행하지 않는다
-4. 검증이 끝나면 Claude가 테스트 계정·연결을 지우고 결과를 보고 → 대표가 같은 화면에서 `claude-test` 키 **삭제** → 작업 환경의 비밀 값도 삭제
+- ✅ 시험용 프로젝트에 Secret key `claude_test` 생성 (2026-10-17 대표)
+- 점검 스크립트: `supabase/test-setup/e2e-token-probe.py` — 키를 **두 방식 모두** 받는다. 키 값은 출력하지 않고, 시험용 주소가 아니면 멈춘다.
+
+**방식 1 (권장): 네트워크 시크릿** — 키가 작업 컨테이너 안에 들어오지 않고, 관문(프록시)이 시험용 주소로 가는 요청에만 붙여 준다.
+환경 설정(세션 제목 줄 → Edit) → **네트워크 시크릿 → 시크릿 추가**에서 화면에 있는 칸에 맞춰 입력:
+
+| 칸 (화면에 있는 경우) | 입력 |
+|---|---|
+| 이름 | `SUPABASE_SERVICE_ROLE_KEY` (이름만 쓰는 칸이면 자유, 위 이름 권장) |
+| 대상 주소(호스트·도메인) | `kyeimjozkcqbgkepwrnv.supabase.co` — **이 주소 하나만** (`*.supabase.co` 같은 넓은 범위 금지) |
+| 헤더 이름 | `apikey` |
+| 값 | Supabase에서 복사한 `sb_secret_…` 키 **그대로** (`Bearer ` 를 앞에 붙이지 않음) |
+
+- 저장 후 **새 세션**에서 "5-4 진행". Claude는 먼저 `--check`로 키 연결만 확인한다(계정 안 만듦).
+- **안전장치**: 관문이 이 키를 공개키 요청(학생 토큰 요청)에까지 덮어씌우면 점검 결과가 왜곡된다. 스크립트가 시작 전에 이것을 확인하고, 그렇게 동작하면 아무것도 만들지 않고 멈춘다 → 그때는 방식 2로 바꾼다.
+- 화면에 '헤더 이름'·'대상 주소'를 고르는 칸이 없거나 `Authorization: Bearer` 방식만 있으면 방식 2를 쓴다 (`sb_secret_` 키는 JWT가 아니라 `apikey` 헤더로만 인정됨).
+
+**방식 2: 환경 변수** — 같은 Edit 화면의 환경 변수 칸에 `SUPABASE_SERVICE_ROLE_KEY=sb_secret_…`. 키가 컨테이너 안에 들어오지만 Claude는 출력하지 않는다. 시험이 끝나면 키 삭제로 무효가 된다.
+
+**공통**: 채팅·GitHub·Vercel에는 넣지 않는다. 운영 프로젝트 키는 넣지 않는다. 검증 후 Claude가 테스트 계정·연결을 지우고 보고 → 대표가 Supabase에서 `claude_test` 키 **삭제** → 작업 환경의 시크릿/환경 변수도 삭제.
+
+**`sb_secret_` 호환성 (스크립트 반영)**: 새 Secret key는 JWT가 아니라 `apikey` 헤더에만 넣는다(레거시 `service_role` JWT일 때만 `Authorization: Bearer`도 함께). 관리 API(`/auth/v1/admin/users`)·REST 모두 이 방식. 브라우저에서는 쓰지 않음(서버·스크립트 전용).
 
 ### 5-4 끝단 점검 계획
 
