@@ -92,7 +92,7 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 | 실제 발송 시험: 등록된 계정(support@, app_users 연결 없음)으로 코드 요청 → **지메일 받은편지함 도착** | ✅ 2026-10-17 |
 | 등록 안 된 이메일: 코드 요청 422 `otp_disabled`(계정·메일 안 생김), `/signup` 422 `signup_disabled` | ✅ 2026-10-17 |
 | 로그인 화면 `/lms/login` 실제 연결: 미등록 이메일 → 같은 코드 화면(요청 422, 메일 없음), 틀린 코드 → 403 안내 | ✅ 2026-10-17 (Claude 브라우저 점검) |
-| 맞는 코드 입력 → 로그인 완료 → 역할별 이동 | ⬜ 로그인 화면을 대표가 열 수 있는 곳(시험 배포)에서 확인. 그 전에 migration 820 `my_role` 적용 |
+| 맞는 코드 입력 → 로그인 완료 → 역할별 이동 | ✅ **2026-10-18 대표 실물 확인**: Vercel 미리보기(Preview 전용 환경 변수 `LMS_PREVIEW`·Supabase 주소·공개키, 운영 사이트 변경 없음) `/lms/login` → 지메일 코드 → **운영자 첫 인증 앱 등록(QR, Google Authenticator)** → aal2 → 운영자 대시보드 이동. migration 820 적용 완료. 시험용 대표 계정 support@ = app_users admin/owner |
 
 ## 4. 보안 점검 결과
 
