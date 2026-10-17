@@ -108,6 +108,7 @@ describe('코드 ↔ 기준표', () => {
   it('LMS 코드·DB가 언급하는 정책 ID는 모두 기준표에 있음', () => {
     const files = [
       ...readdirSync(join(ROOT, 'src/lms/rules')).map((f) => join(ROOT, 'src/lms/rules', f)),
+      ...readdirSync(join(ROOT, 'src/lms/student')).map((f) => join(ROOT, 'src/lms/student', f)),
       ...readdirSync(join(ROOT, 'supabase/migrations')).map((f) => join(ROOT, 'supabase/migrations', f)),
     ];
     const missing: string[] = [];

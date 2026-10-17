@@ -11,7 +11,7 @@
 | 정책 관리 | 내용 |
 |---|---|
 | [policy/official-source.md](policy/official-source.md) | **정책 원본 v1.0 대조표** (대표확정·개발요구·추가확인·보류 구분, 기존 계약과의 관계) |
-| [policy/register.md](policy/register.md) | **운영정책 기준표** 80개 (확정·검토 중·변경 제안·폐지, 근거, 기존/신규 차이, 고칠 곳) |
+| [policy/register.md](policy/register.md) | **운영정책 기준표** 92개 (확정·검토 중·변경 제안·폐지, 근거, 기존/신규 차이, 고칠 곳) |
 | [policy/critical-policies.md](policy/critical-policies.md) | **핵심 정책 27개 검토표** (횟수·변경권·보강·이월·급여, 판본별 적용 대상·실제 승인 여부) |
 | [policy/contract-version-check.md](policy/contract-version-check.md) | 구계약 적용 학생·강사 확인 방법 (서명·발송·동의 구분, 계약서/안내서만/계약 후 안내서만 유형, 이름 없는 집계) |
 | [policy/conflicts.md](policy/conflicts.md) | **정책 충돌 목록** 27건 (횟수·돈·계약 우선) |
@@ -47,11 +47,13 @@
 | 화면 | 상태 |
 |---|---|
 | `/lms/admin` 운영자 대시보드 (A안 처리할 일 중심, 2026-10-16 확정) | 가상 데이터 미리보기. `LMS_PREVIEW=1` 환경에서만 열림 (운영 사이트는 404). 로그인·실제 데이터 연결 전 |
+| `/lms/student` 학생 마이페이지 (3차 시안 A-1 최종, 2026-10-17 확정) — 판정 `src/lms/student/home.ts` | 가상 데이터 미리보기 (위 상단 칩으로 할 일·재등록 상태 바꿔 보기). `LMS_PREVIEW=1` 에서만 열림. 보강 신청·수업 안내 동의·알림 설정 화면과 학생 로그인·실제 데이터·Meet 주소·아임웹 주문조회 링크는 다음 단계 |
 
 
 | 위치 | 내용 | 검증 |
 |---|---|---|
-| `src/lms/rules/` | 수강기간·회차·변경권·변경 판정·휴무·장기 연기·적립금 규칙 + 정책 기준표 일관성 검사 | `npm test` (113개) |
+| `src/lms/rules/` | 수강기간·회차·변경권·변경 판정·휴무·장기 연기·적립금 규칙 + 정책 기준표 일관성 검사 | `npm test` (전체 138개) |
+| `src/lms/student/` | 학생 홈 판정 (재등록 안내 POL-RN-08, 할 일, 결제·적립금 이력 POL-PAY-11, 취소 확인) | `npm test` |
 | `supabase/migrations/` | DB 스키마 초안 v0.2, 단계별 7개 파일 (400 = 수업 안내 확인·동의, 500 = 정책 원본 v1.0: 적립금·운영 업무·장기 연기, 600 = Supabase 권한 정리) (**아직 어떤 Supabase에도 적용 안 함**) | `npm run test:db` (106개, 로컬 임시 PostgreSQL) |
 | `supabase/tests/` | DB 제약·권한 테스트 | |
 
