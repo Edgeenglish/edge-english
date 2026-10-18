@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Bubble from '@/components/common/bubble/Bubble';
 
-// ===== 엣지영어 수업료 (1개월 / 3개월 / 6개월, 화면에는 '1개월 = 4주(28일) 기준' 병기 — POL-PER-01) =====
+// ===== 엣지영어 수업료 (1개월 / 3개월 / 6개월, 탭 아래에 '* 1개월 = 4주(28일) 기준' 한 줄 — POL-PER-01) =====
 // 수강료가 바뀌면 아래 PRICES의 1개월 가격 숫자만 고치면 돼요.
 // 3개월·6개월 가격은 자동으로 계산돼요. (3개월: 5% 할인 / 6개월: 5% 할인 + 5만 원 추가 할인)
 
@@ -117,7 +117,6 @@ export default function LongTermPrice() {
                 }
               >
                 {tab.title}
-                <span className="ml-1 text-sm font-bold max-md:text-xs">({tab.plan * 4}주)</span>
               </span>
               <span
                 className={
@@ -134,7 +133,7 @@ export default function LongTermPrice() {
         <p className="mt-4 text-base text-[#888] max-md:text-sm">
           영어는 꾸준함이 답! 길게 할수록 더 저렴해요
         </p>
-        <p className="mt-1 text-sm text-[#888] max-md:text-xs">1개월 = 4주(28일) 기준이에요.</p>
+        <p className="mt-1 text-sm text-[#888] max-md:text-xs">* 1개월 = 4주(28일) 기준</p>
       </div>
 
       {/* 수강료 카드 */}
@@ -220,7 +219,7 @@ export default function LongTermPrice() {
                           원 절약
                         </span>
                         <p className="text-sm font-medium text-[#888] max-md:text-xs">
-                          {plan}개월({plan * 4}주) 결제 금액 <span className="font-montserrat tabular-nums text-[#888]">{won(p.price)}</span>원
+                          {plan}개월 결제 금액 <span className="font-montserrat tabular-nums text-[#888]">{won(p.price)}</span>원
                         </p>
                       </div>
                     )}
@@ -257,7 +256,7 @@ export default function LongTermPrice() {
 
           <div className="rounded-2xl border-2 border-edge-purple bg-white p-7 max-md:p-5">
             <span className="inline-block rounded-full bg-edge-purple px-3 py-1 text-xs font-bold text-white">
-              6개월(24주) 등록 시 추가 혜택
+              6개월 등록 시 추가 혜택
             </span>
             <p className="mt-3 text-xl font-extrabold max-md:text-lg">
               엣지영어 대표가 직접 만든 <span className="text-edge-purple">Ebook 패키지 무료!</span>
