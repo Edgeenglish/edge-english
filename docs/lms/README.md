@@ -34,6 +34,7 @@
 | [11-accounts-auth-payments.md](11-accounts-auth-payments.md) | 계정·인증(운영자 초대 → 장래 공개 가입, 운영자 TOTP)·결제 확인 분담·보강 리마인더 설계. 공식 홈페이지 통합 기반 원칙 |
 | [12-dashboard-reference-review.md](12-dashboard-reference-review.md) | 대표 참고 이미지 2장(학생·운영자)에서 쓸 요소만 고른 검토 |
 | [13-refund-proposal.md](13-refund-proposal.md) | **환불 기준 최종안(제안)** — 적용 법령, 산식, 사은품·위약금 공제 기준, 기존 규정 충돌, FAQ·계약서 문구 초안, 법률 확인 목록 |
+| [15-self-service-goal-check.md](15-self-service-goal-check.md) | **LMS 목표(학생 셀프 해결·자동 확정·예외만 대표) 대조 점검** — 이미 있음 / 빠짐, 대표 결정 D-43~45 |
 | [09-design-review.md](09-design-review.md) | 기존 시트 구조 vs 새 구조 연결표, 입력 주체, SQL v0.2 재검토, 대안 비교 |
 | [supabase-test-setup.md](supabase-test-setup.md) | **시험용 Supabase 연결 안내** (SQL Editor 적용 → 접속 허용·키 저장 → 로그인) |
 | [drafts/](drafts/) | FAQ 수정 초안·필독안내 새 텍스트 판 초안 (게시 전 승인 필요) |
