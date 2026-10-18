@@ -138,14 +138,12 @@ export default function AdminDashboard({
                 로그아웃
               </button>
             )}
-            <button
-              type="button"
-              disabled
-              title="신규 학생 등록 화면은 시안 선택 후 개발"
-              className="hidden min-h-[40px] cursor-not-allowed rounded-[10px] bg-[#7d5fff]/50 px-3 text-[13px] font-semibold text-white lg:block"
+            <Link
+              href={preview ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'}
+              className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5fff] px-3 text-[13px] font-semibold text-white"
             >
-              + 학생 등록 (준비 중)
-            </button>
+              + 학생 등록
+            </Link>
           </>
         }
       />

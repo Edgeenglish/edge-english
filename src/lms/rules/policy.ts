@@ -19,6 +19,8 @@ export const CONFIRMED = {
   weeklyCounts: [1, 2, 3, 5] as const,
   /** 수업 길이(분) */
   durations: [20, 40, 50] as const,
+  /** 같은 강사·학생의 수업 사이 최소 휴식(분) */
+  minBreakMin: 10,
 } as const;
 
 /** CONFIRMED 각 값의 근거 정책 ID (기준표에서 '확정'이어야 함 — policy-register.test.ts) */
@@ -28,6 +30,7 @@ export const CONFIRMED_REFS = {
   changeNoticeHours: 'POL-CHG-01',
   weeklyCounts: 'POL-PAY-08',
   durations: 'POL-PAY-08',
+  minBreakMin: 'POL-OP-21',
   creditsPerPeriod: 'POL-CHG-03',
 } as const;
 

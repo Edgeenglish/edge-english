@@ -541,3 +541,111 @@ set role anon;
 select pg_temp.expect_error($$select my_role()$$, 'permission|42501');
 reset role;
 select pg_temp.ok(true, '로그인 안 한 요청은 my_role 을 부를 수 없음');
+
+-- ---------- 신규 학생 등록 저장 함수 (migration 900, POL-OP-13·21, POL-AC-04·07) ----------
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000000900', 'TestTutorReg', 'Korea', 'Asia/Seoul');
+create or replace function pg_temp.reg(rid text, body jsonb) returns jsonb
+language sql as $$ select admin_register_student(rid::uuid, body) $$;
+-- 충돌 오류의 상세(JSON) 꺼내기
+create or replace function pg_temp.reg_conflicts(rid text, body jsonb) returns jsonb
+language plpgsql as $$
+declare det text; h text;
+begin
+  perform admin_register_student(rid::uuid, body);
+  raise exception '실패: 충돌이 나야 하는데 저장됨';
+exception when sqlstate 'P0001' then
+  get stacked diagnostics det = pg_exception_detail, h = pg_exception_hint;
+  if h is distinct from 'schedule_conflict' then raise; end if;
+  return det::jsonb;
+end $$;
+create or replace function pg_temp.body(name text, email text, weeks int, weekly int, dur int, start date, tutor uuid, slots jsonb, paid boolean) returns jsonb
+language sql as $$
+  select jsonb_build_object(
+    'student', jsonb_build_object('name_ko', name, 'name_en', 'Reg ' || name, 'email', email, 'timezone', 'Asia/Seoul'),
+    'course', jsonb_build_object('weeks', weeks, 'weekly_count', weekly, 'duration_min', dur, 'start_date', start, 'amount_due', 100000),
+    'tutor_id', tutor, 'slots', slots,
+    'payment', case when paid then jsonb_build_object('method', 'bank_transfer', 'amount', 100000, 'paid_at', ((start - 7) + time '14:22') at time zone 'Asia/Seoul', 'payer_name', name) end)
+$$;
+
+set role anon;
+select pg_temp.expect_error($$select admin_register_student(gen_random_uuid(), '{}'::jsonb)$$, 'permission|42501');
+reset role;
+set role authenticated;
+set request.jwt.claims = '{"aal":"aal2"}';
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';   -- 학생
+select pg_temp.expect_error($$select admin_register_student(gen_random_uuid(), '{}'::jsonb)$$, '42501');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표
+set request.jwt.claims = '{"aal":"aal1"}';
+select pg_temp.expect_error($$select admin_register_student(gen_random_uuid(), '{}'::jsonb)$$, '42501');
+set request.jwt.claims = '{"aal":"aal2"}';
+select pg_temp.ok(true, '등록 함수: 로그인 안 함·학생·TOTP 전 운영자는 부를 수 없음');
+select pg_temp.expect_error($$insert into students (name_ko, name_en) values ('직접', 'Direct')$$, 'permission|42501');
+select pg_temp.ok(true, '운영자도 학생 표에 직접 쓰지 못함 — 등록 함수로만');
+
+select pg_temp.expect_error($$select pg_temp.reg('90000000-0000-0000-0000-000000000001',
+  pg_temp.body('미결제강사', 'a@x.kr', 4, 1, 50, '2027-03-02', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"20:00"}]', false))$$, 'POL-OP-13');
+select pg_temp.ok(true, '결제 확인 전에는 강사·정규 일정 확정 불가');
+
+select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000000002',
+  pg_temp.body('결제대기', 'wait@x.kr', 4, 2, 50, '2027-03-01', null, '[]', false)) ->> 'status') = 'pending_payment',
+  '결제 확인 전 등록 = 학생·수강권(결제 대기)만');
+
+select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000000003',
+  pg_temp.body('정규일', 'one@x.kr', 4, 2, 50, '2027-03-02', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"20:00"},{"weekday":4,"time":"20:00"}]', true)) ->> 'lessons')::int = 8,
+  '결제 확인 + 강사 + 화·목 20:00 → 정규 8회 생성');
+select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000000003',
+  pg_temp.body('정규일', 'one@x.kr', 4, 2, 50, '2027-03-02', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"20:00"},{"weekday":4,"time":"20:00"}]', true)) ->> 'repeated')::boolean,
+  '같은 요청 번호로 다시 저장 → 처음 결과를 돌려줌 (새로 만들지 않음)');
+reset role;
+select pg_temp.ok((select count(*) from students where email = 'one@x.kr') = 1
+              and (select count(*) from lessons l join students s on s.id = l.student_id where s.email = 'one@x.kr') = 8
+              and (select count(*) from regular_schedules r join students s on s.id = r.student_id where s.email = 'one@x.kr') = 2,
+  '저장 버튼을 두 번 눌러도 학생·정규 일정·수업은 한 벌');
+select pg_temp.ok((select t.tutor_assigned_at is not null and t.student_notified_at is null and t.status = 'open'
+                   from admin_tasks t join enrollments e on e.id = t.enrollment_id join students s on s.id = e.student_id where s.email = 'one@x.kr'),
+  '결제 확인 → 신규 매칭 업무 생성, 강사 배정만 채워지고 학생 안내 전이라 업무는 열려 있음');
+select pg_temp.ok((select count(*) from students where email = 'wait@x.kr') = 1
+              and not exists (select 1 from admin_tasks t join enrollments e on e.id = t.enrollment_id join students s on s.id = e.student_id where s.email = 'wait@x.kr'),
+  '결제 대기 학생은 매칭 업무가 아직 없음');
+select pg_temp.ok((select count(*) from audit_log where table_name = 'students' and actor = 'bbbbbbbb-0000-0000-0000-000000000009' and actor_via = 'admin_register_student') >= 2,
+  '등록 함수로 만든 행은 변경 이력에 운영자 이름으로 남음');
+
+-- 11/3 예시와 같은 상황: 4/6(화) 20:00 에만 보강이 있음
+insert into lessons (enrollment_id, student_id, tutor_id, kind, makeup_of, starts_at, ends_at)
+select l.enrollment_id, l.student_id, l.tutor_id, 'makeup', l.id, '2027-04-06 20:00+09', '2027-04-06 20:50+09'
+from lessons l join students s on s.id = l.student_id where s.email = 'one@x.kr' and l.seq = 1;
+insert into tutor_time_off (tutor_id, starts_at, ends_at, kind) values ('55555555-0000-0000-0000-000000000900', '2027-05-04 17:00+09', '2027-05-04 19:00+09', 'block');
+set role authenticated;
+select pg_temp.ok((select jsonb_agg(c ->> 'date' || ' ' || (c ->> 'reason')) from jsonb_array_elements(
+  pg_temp.reg_conflicts('90000000-0000-0000-0000-000000000004',
+    pg_temp.body('보강충돌', 'mk@x.kr', 4, 1, 50, '2027-04-06', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"20:00"}]', true))) c)
+  = '["2027-04-06 tutor_makeup"]'::jsonb,
+  '첫 수업일이 보강 날(4/6)이면 그날 하나만 충돌로 알려 줌');
+reset role;
+select pg_temp.ok(not exists (select 1 from students where email = 'mk@x.kr') and not exists (select 1 from registration_requests where id = '90000000-0000-0000-0000-000000000004'),
+  '충돌이 있으면 학생·수강권·결제·수업 아무것도 저장 안 됨');
+set role authenticated;
+select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000000005',
+  pg_temp.body('보강다음주', 'mk2@x.kr', 4, 1, 50, '2027-04-13', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"20:00"}]', true)) ->> 'lessons')::int = 4,
+  '같은 화 20:00 이라도 보강 다음 주(4/13)부터는 등록 가능 — 보강이 정규 시간을 영구히 막지 않음');
+select pg_temp.ok((select jsonb_agg(c ->> 'reason') from jsonb_array_elements(
+  pg_temp.reg_conflicts('90000000-0000-0000-0000-000000000006',
+    pg_temp.body('휴식부족', 'br@x.kr', 4, 1, 20, '2027-03-04', '55555555-0000-0000-0000-000000000900', '[{"weekday":4,"time":"20:55"}]', true))) c)
+  = '["break","break","break","break"]'::jsonb,
+  '50분 수업(20:00) 뒤 20:55 시작은 휴식 10분 부족 — 기간 4회 모두 표시');
+select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000000007',
+  pg_temp.body('휴식딱', 'br2@x.kr', 4, 1, 40, '2027-03-04', '55555555-0000-0000-0000-000000000900', '[{"weekday":4,"time":"21:00"}]', true)) ->> 'lessons')::int = 4,
+  '20:50 에 끝나는 수업 뒤 21:00 시작은 가능 (휴식 정확히 10분)');
+select pg_temp.ok((select jsonb_agg(c ->> 'date' || ' ' || (c ->> 'reason')) from jsonb_array_elements(
+  pg_temp.reg_conflicts('90000000-0000-0000-0000-000000000008',
+    pg_temp.body('휴무충돌', 'off@x.kr', 4, 1, 50, '2027-04-27', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"18:00"}]', true))) c)
+  = '["2027-05-04 tutor_time_off"]'::jsonb,
+  '기간 중 강사 휴무 날짜(5/4)를 찾아 알려 줌');
+select pg_temp.expect_error($$select pg_temp.reg('90000000-0000-0000-0000-000000000009',
+  pg_temp.body('시작요일', 's@x.kr', 4, 1, 50, '2027-03-03', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"18:00"}]', true))$$, '첫 정규 수업일');
+select pg_temp.ok(true, '수강 시작일 요일이 정규 요일에 없으면 거절');
+select pg_temp.ok((select count(*) from admin_students_with_email('ONE@x.kr')) = 1, '같은 이메일 학생이 있으면 알려 줌 (연결·병합은 하지 않음)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.ok((select count(*) from admin_students_with_email('one@x.kr')) = 0, '운영자가 아니면 이메일 확인 결과 0건');
+reset request.jwt.claim.sub;
+reset role;

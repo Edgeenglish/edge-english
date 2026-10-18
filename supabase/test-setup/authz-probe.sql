@@ -58,10 +58,12 @@ declare
   -- RLS 판단에 쓰이거나 화면에서 부르는 SECURITY DEFINER 함수 (이 밖의 것이 생기면 검토 필요)
   -- 내부 함수가 데이터를 읽지 않는 것을 검토한 확장 (이 밖의 확장 함수가 앱 사용자에게 열려 있으면 실패)
   reviewed_ext text[] := array['btree_gist'];
-  definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'is_owner', 'my_role', 'tutor_my_students', 'student_my_tutors', 'consent_record'];
+  definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'is_owner', 'my_role', 'tutor_my_students', 'student_my_tutors', 'consent_record',
+                          'admin_register_student', 'admin_students_with_email'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
   persona_uid uuid[];
+  email_a text;
   persona_owner text[] := array[null, 'A', 'B', 'X', 'Y', null, null, null];
   persona_aal text[] := array['aal1', 'aal1', 'aal1', 'aal1', 'aal1', 'aal2', 'aal1', 'aal2'];
 
@@ -313,6 +315,7 @@ begin
     if ok then passes := passes + 1; end if;
 
     -- 5. 함수 (본인 확인을 DB가 직접 하는지)
+    select email into email_a from students where id = s_a;
     execute 'set local role authenticated';
     begin
       if personas[i] not in ('운영자', '운영직원') and is_admin() then fails := fails || format('[함수] %s: is_admin() 이 참', personas[i]); end if;
@@ -335,6 +338,19 @@ begin
         if coalesce(reward_balance(s_b), 0) <> 0 then fails := fails || format('[함수] %s: 학생 B 적립금 잔액이 보임', personas[i]); end if;
         if coalesce(credit_balance(p_b), 0) <> 0 then fails := fails || format('[함수] %s: 학생 B 변경권 잔액이 보임', personas[i]); end if;
       end if;
+      -- 신규 학생 등록 함수 (migration 900): 운영자(aal2)만. 다른 사람은 권한 오류
+      begin
+        perform admin_register_student(gen_random_uuid(), '{}'::jsonb);
+        fails := fails || format('[함수] %s: 빈 등록 요청이 통과함', personas[i]);
+      exception when others then
+        if personas[i] not in ('운영자', '운영직원') and sqlstate <> '42501' then
+          fails := fails || format('[함수] %s: 학생 등록이 권한 오류가 아닌 이유로 막힘 [%s] %s', personas[i], sqlstate, sqlerrm); end if;
+        if personas[i] in ('운영자', '운영직원') and sqlstate = '42501' then
+          fails := fails || format('[함수] %s: 운영자인데 학생 등록 권한 없음', personas[i]); end if;
+      end;
+      select count(*) into n from admin_students_with_email(email_a);
+      if (personas[i] in ('운영자', '운영직원') and email_a is not null and n = 0) or (personas[i] not in ('운영자', '운영직원') and n <> 0) then
+        fails := fails || format('[함수] %s: 같은 이메일 확인 결과 %s건', personas[i], n); end if;
       begin
         perform consent_record(cr_b, 'accepted', array['ok']);
         if personas[i] <> '학생B' then fails := fails || format('[함수] %s: 학생 B 대신 동의가 됨', personas[i]); end if;
