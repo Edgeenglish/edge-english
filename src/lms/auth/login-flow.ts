@@ -5,11 +5,12 @@
 export type Lang = 'ko' | 'en';
 export type Role = 'student' | 'tutor' | 'admin';
 
-/** 코드 입력 화면에 보여 줄 가린 이메일: student@gmail.com → stu***@gmail.com */
+/** 코드 입력 화면에 보여 줄 가린 이메일. * 개수 = 실제로 가린 글자 수: student@gmail.com → stu****@gmail.com */
 export function maskEmail(email: string): string {
   const [name, domain] = email.trim().split('@');
   if (!domain) return email;
-  return `${name.slice(0, Math.min(3, Math.max(1, name.length - 1)))}***@${domain}`;
+  const shown = Math.min(3, name.length - 1); // 앞 최대 3글자, 적어도 1글자는 가림
+  return `${name.slice(0, shown)}${'*'.repeat(name.length - shown)}@${domain}`;
 }
 
 export function looksLikeEmail(v: string): boolean {

@@ -238,7 +238,7 @@ export default function LoginFlow() {
           <div>
             <h1 className="text-[22px] font-bold text-[#1d1b2b]">{t.codeTitle}</h1>
             <p className="mb-[18px] mt-1.5 text-[13px] leading-relaxed text-[#55526a]">
-              <b className="text-[#1d1b2b]">{t.codeSent(maskEmail(email))}</b>
+              <b className="break-all text-[#1d1b2b]">{t.codeSent(maskEmail(email))}</b>
               <br />
               {t.codeLead}
             </p>

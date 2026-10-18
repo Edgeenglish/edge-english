@@ -19,8 +19,11 @@ describe('로그인 다음 단계 (POL-AC-04·05)', () => {
 
 describe('이메일 표시·검사', () => {
   it('가린 이메일', () => {
-    expect(maskEmail('student@gmail.com')).toBe('stu***@gmail.com');
-    expect(maskEmail('ab@x.kr')).toBe('a***@x.kr');
+    expect(maskEmail('student@gmail.com')).toBe('stu****@gmail.com');
+    expect(maskEmail('chlwlsdud@naver.com')).toBe('chl******@naver.com');
+    expect(maskEmail('abcd@x.kr')).toBe('abc*@x.kr');
+    expect(maskEmail('ab@x.kr')).toBe('a*@x.kr');
+    expect(maskEmail('a@x.kr')).toBe('*@x.kr');
   });
   it('형식 검사', () => {
     expect(looksLikeEmail(' a@b.co ')).toBe(true);

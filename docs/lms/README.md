@@ -40,6 +40,7 @@
 | [history/](history/) | 이전 판 보관 (1차 결정 질문지) |
 | [original/](original/) | 원본 기획서 PDF |
 | [previews/consent-drafts/](previews/consent-drafts/) | 수업 안내 동의 화면 시안 (학생 3개·관리자 3개). 미리보기: https://claude.ai/artifact/PFkJbUuMy8CLJtamJxYQBK |
+| [previews/place-drafts.html](previews/place-drafts.html) | 신규 등록 사는 곳(국가·도시·시간대) 검색 입력 A·B안, 수강 기간 문구, 이메일 가림 (2026-10-18). 미리보기: https://claude.ai/artifact/Wa3n2pKjHPvJRkThmB2muK |
 | [previews/lms-screen-drafts.html](previews/lms-screen-drafts.html) | 화면 시안 (운영자 대시보드·신규 학생 등록 각 3개). 미리보기: https://claude.ai/artifact/Jy4xt9WBjQjmqQuLHmLMNS |
 
 ## 코드 위치
