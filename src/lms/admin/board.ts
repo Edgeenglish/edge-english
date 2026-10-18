@@ -54,7 +54,71 @@ export type NoShowTask = {
   reportedAt: Date;
 };
 
-export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask;
+/** 종료 임박: 남은 정규 수업 2회 이하인데 재등록 결제 확인 전 (학생 화면 재등록 안내와 같은 기준, POL-RN-08) */
+export type EndingSoonTask = {
+  kind: 'ending_soon';
+  id: string;
+  studentName: string;
+  studentCode: string;
+  product: string;
+  regularLeft: number;
+  endsAt: Date; // 최종 종료일 23:59 KST (이월·고정 시간 마감, POL-RN-01·02)
+  tutorName: string | null;
+};
+
+/** 보강 미신청: 보강을 받을 수 있는 취소 수업이 있는데 학생이 아직 보강을 신청하지 않음. 기한 = 최종 종료일 (POL-PER-06) */
+export type MakeupUnrequestedTask = {
+  kind: 'makeup_unrequested';
+  id: string;
+  studentName: string;
+  studentCode: string;
+  canceledLesson: string; // 예: '10/13(화) 20:00'
+  deadline: Date;
+  tutorName: string | null;
+};
+
+/** 자동 처리 실패 (POL-OP-20 ②): 캘린더 반영 실패, 메일 반송, 결제 ↔ 수강등록 불일치 */
+export type AutoFailureTask = {
+  kind: 'auto_failure';
+  id: string;
+  what: 'calendar_sync' | 'email_bounce' | 'payment_mismatch';
+  studentName: string;
+  detail: string;
+  occurredAt: Date;
+};
+
+export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask;
+
+/** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
+export type Category = 'matching' | 'tutor_ack' | 'ending' | 'makeup' | 'issue';
+
+export const CATEGORY_LABEL: Record<Category, string> = {
+  matching: '신규 학생 매칭',
+  tutor_ack: '강사 확인 대기',
+  ending: '종료 임박',
+  makeup: '보강 미신청',
+  issue: '오류·조치 필요',
+};
+
+export function categoryOf(kind: TaskSource['kind']): Category {
+  switch (kind) {
+    case 'new_student_matching':
+      return 'matching';
+    case 'renewal_tutor_notice':
+      return 'tutor_ack';
+    case 'ending_soon':
+      return 'ending';
+    case 'makeup_unrequested':
+      return 'makeup';
+    default:
+      return 'issue'; // 노쇼 신고·자동 처리 실패·장기 연기 승인
+  }
+}
+
+/** '오류만' 필터: 실제로 문제가 생긴 건 (노쇼 신고, 자동 처리 실패). 승인 대기는 오류가 아님 */
+export function isError(kind: TaskSource['kind']): boolean {
+  return kind === 'no_show_report' || kind === 'auto_failure';
+}
 
 export type Severity = 'urgent' | 'overdue' | 'due_soon' | 'open';
 export type StepKey = 'assign_tutor' | 'notify_student' | 'notify_tutor' | 'tutor_ack' | 'check_schedule';
@@ -62,6 +126,8 @@ export type StepKey = 'assign_tutor' | 'notify_student' | 'notify_tutor' | 'tuto
 export type BoardItem = {
   id: string;
   kind: TaskSource['kind'];
+  category: Category;
+  error: boolean;
   severity: Severity;
   tag: string;
   title: string;
@@ -99,7 +165,7 @@ export function dueText(dueAt: Date, now: Date): string {
   return `${kstLabel(dueAt)}까지`;
 }
 
-function toItem(t: TaskSource, now: Date): BoardItem {
+function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error'> {
   switch (t.kind) {
     case 'new_student_matching': {
       const steps = [
@@ -178,29 +244,97 @@ function toItem(t: TaskSource, now: Date): BoardItem {
           { key: 'confirm_no_show', label: '노쇼 확정', danger: true },
         ],
       };
+    case 'ending_soon':
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: dueSeverity(t.endsAt, now),
+        tag: '종료 임박',
+        title: `${t.studentName} · 정규 ${t.regularLeft}회 남음`,
+        detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''} · 재등록 결제 확인 전 (학생 화면에 재등록 안내 표시 중)`,
+        due: `종료 ${dueText(t.endsAt, now)}`,
+        steps: [],
+        actions: [{ key: 'renewal_contacted', label: '재등록 안내함', primary: true }],
+      };
+    case 'makeup_unrequested':
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: dueSeverity(t.deadline, now),
+        tag: '보강 미신청',
+        title: `${t.studentName} · ${t.canceledLesson} 수업분`,
+        detail: `${t.studentCode}${t.tutorName ? ` · ${t.tutorName}` : ''} · 보강을 받을 수 있는데 아직 신청하지 않음`,
+        due: `보강 기한 ${dueText(t.deadline, now)}`,
+        steps: [],
+        actions: [{ key: 'makeup_nudged', label: '학생에게 보강 신청 안내함', primary: true }],
+      };
+    case 'auto_failure': {
+      const what = { calendar_sync: '캘린더 반영 실패', email_bounce: '메일 반송', payment_mismatch: '결제 금액 불일치' }[t.what];
+      const action = {
+        calendar_sync: { key: 'retry_calendar', label: '다시 반영' },
+        email_bounce: { key: 'fix_email', label: '이메일 확인' },
+        payment_mismatch: { key: 'check_payment', label: '결제 확인' },
+      }[t.what];
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: 'overdue',
+        tag: `오류 · ${what}`,
+        title: t.studentName,
+        detail: t.detail,
+        due: `발생 ${kstLabel(t.occurredAt)}`,
+        steps: [],
+        actions: [{ ...action, primary: true }],
+      };
+    }
   }
 }
 
 function sortKey(t: TaskSource): number {
-  if (t.kind === 'new_student_matching') return t.dueAt.getTime();
-  if (t.kind === 'no_show_report') return t.reportedAt.getTime();
-  return t.createdAt.getTime();
+  switch (t.kind) {
+    case 'new_student_matching':
+      return t.dueAt.getTime();
+    case 'no_show_report':
+      return t.reportedAt.getTime();
+    case 'ending_soon':
+      return t.endsAt.getTime();
+    case 'makeup_unrequested':
+      return t.deadline.getTime();
+    case 'auto_failure':
+      return t.occurredAt.getTime();
+    default:
+      return t.createdAt.getTime();
+  }
 }
 
 /** 급한 순서: 노쇼 신고 → 기한 초과 → 24시간 안 → 나머지(기한 빠른 순, 오래된 순) */
 export function buildBoard(tasks: TaskSource[], now: Date): BoardItem[] {
   return tasks
-    .map((t) => ({ t, item: toItem(t, now) }))
+    .map((t) => ({ t, item: { ...toItem(t, now), category: categoryOf(t.kind), error: isError(t.kind) } }))
     .sort((a, b) => SEVERITY_RANK[a.item.severity] - SEVERITY_RANK[b.item.severity] || sortKey(a.t) - sortKey(b.t))
     .map((x) => x.item);
 }
 
-/** 화면 위쪽 숫자 */
-export function boardCounts(items: BoardItem[]) {
-  return {
-    total: items.length,
-    overdue: items.filter((i) => i.severity === 'overdue' || i.severity === 'urgent').length,
-    matching: items.filter((i) => i.kind === 'new_student_matching').length,
-    renewal: items.filter((i) => i.kind === 'renewal_tutor_notice').length,
-  };
+/** 필터: 전체 / 긴급(노쇼·기한 초과·24시간 안) / 오류만 / 요약 카드 한 칸 */
+export type BoardFilter = 'all' | 'urgent' | 'error' | Category;
+
+export function isUrgent(i: BoardItem): boolean {
+  return i.severity !== 'open';
+}
+
+export function filterBoard(items: BoardItem[], f: BoardFilter): BoardItem[] {
+  if (f === 'all') return items;
+  if (f === 'urgent') return items.filter(isUrgent);
+  if (f === 'error') return items.filter((i) => i.error);
+  return items.filter((i) => i.category === f);
+}
+
+/** 요약 카드 5개의 숫자 (칸별 개수 + 그중 긴급 개수). 합계 = 전체 개수 */
+export function categoryCounts(items: BoardItem[]): Record<Category, { n: number; urgent: number }> {
+  const out = Object.fromEntries((Object.keys(CATEGORY_LABEL) as Category[]).map((c) => [c, { n: 0, urgent: 0 }])) as Record<Category, { n: number; urgent: number }>;
+  for (const i of items) {
+    out[i.category].n++;
+    if (isUrgent(i)) out[i.category].urgent++;
+  }
+  return out;
 }

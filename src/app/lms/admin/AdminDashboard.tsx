@@ -1,11 +1,12 @@
 'use client';
 
-// 운영자 대시보드 A안 — 처리할 일 중심. 휴대폰: 숫자 → 급한 순서 목록 → 아래 탭 / PC: 왼쪽 목록 + 오른쪽 오늘 수업
+// 운영자 대시보드 A안 — 처리할 일 중심. 휴대폰: 운영 현황 → 요약 카드 → 급한 순서 목록 → 아래 탭 / PC: 왼쪽 목록 + 오른쪽 오늘 수업
+// 2026-10-18 대표 반영: 운영 현황 3 + 처리할 일 요약 5(누르면 필터) + 필터(전체·긴급·오류만). 한 업무는 요약 한 칸·목록 한 줄에만 (중복 없음)
 // 미리보기(preview)에서는 버튼을 눌러도 화면 안에서만 바뀌고 저장·발송하지 않는다.
 
 import { useMemo, useState } from 'react';
-import { boardCounts, buildBoard, type BoardItem, type Severity, type TaskSource } from '@/lms/admin/board';
-import { fakeTasks, type FakeLesson } from '@/lms/admin/fake-data';
+import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, type BoardFilter, type BoardItem, type Category, type Severity, type TaskSource } from '@/lms/admin/board';
+import { fakeTasks, type FakeLesson, type OpsStats } from '@/lms/admin/fake-data';
 
 const TAG_STYLE: Record<Severity, string> = {
   urgent: 'bg-[#fde6e6] text-[#c62b2b]',
@@ -58,6 +59,11 @@ const DONE_MESSAGE: Record<string, string> = {
   tutor_ack: '강사 확인을 기록했어요. 일정 조치가 남았어요.',
   check_schedule: '재등록 강사 확인 업무를 마쳤어요.',
   approve_leave: '장기 연기를 승인했어요. 종료일이 늘어나요.',
+  renewal_contacted: '재등록 안내를 기록했어요.',
+  makeup_nudged: '보강 신청 안내를 기록했어요.',
+  retry_calendar: '캘린더에 다시 반영했어요.',
+  fix_email: '이메일을 확인했어요.',
+  check_payment: '결제를 확인했어요.',
   reject_leave: '장기 연기를 거절했어요. 학생에게 사유를 안내해 주세요.',
   tutor_arrived: '강사 지각으로 처리했어요.',
   confirm_no_show: '노쇼로 확정했어요. 보강 1회 + 보상 수업 1회가 생겨요.',
@@ -68,6 +74,7 @@ export default function AdminDashboard({
   today,
   preview,
   tasks: liveTasks,
+  stats,
   onLogout,
 }: {
   nowIso: string;
@@ -75,6 +82,8 @@ export default function AdminDashboard({
   preview: boolean;
   /** 실제 데이터 (없으면 가상 데이터 미리보기) */
   tasks?: TaskSource[];
+  /** 운영 현황 3개 (없으면 '—') */
+  stats?: OpsStats | null;
   onLogout?: () => void;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -82,7 +91,11 @@ export default function AdminDashboard({
   const [toast, setToast] = useState<string | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const items = useMemo(() => buildBoard(tasks, now), [tasks, now]);
-  const counts = boardCounts(items);
+  const [filter, setFilter] = useState<BoardFilter>('all');
+  const byCat = categoryCounts(items);
+  const shown = filterBoard(items, filter);
+  const urgentCount = items.filter(isUrgent).length;
+  const errorCount = items.filter((i) => i.error).length;
   const dateLabel = `${now.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' })} (${WD[new Date(now.getTime() + 9 * 3600e3).getUTCDay()]})`;
 
   function act(item: BoardItem, key: string) {
@@ -142,33 +155,79 @@ export default function AdminDashboard({
       )}
 
       <div className="grid gap-4 px-4 pt-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-5 lg:px-7 lg:pt-5">
-        <section aria-label="요약" className="grid grid-cols-2 gap-2 lg:col-span-2 lg:grid-cols-4">
+        <section aria-label="운영 현황" className="grid grid-cols-3 gap-2 lg:col-span-2">
           {[
-            ['처리할 일', counts.total, counts.total ? 'text-[#c62b2b]' : 'text-[#13804b]'],
-            ['기한 초과·긴급', counts.overdue, counts.overdue ? 'text-[#c62b2b]' : 'text-[#13804b]'],
-            ['신규 매칭 대기', counts.matching, 'text-[#1d1b2b]'],
-            ['재등록 강사 확인', counts.renewal, 'text-[#1d1b2b]'],
-          ].map(([label, n, color]) => (
-            <div key={label as string} className="rounded-[14px] border border-[#e6e3ef] bg-white px-3 py-2.5">
-              <span className="block text-[12.5px] text-[#6b6880]">{label}</span>
-              <b className={`block text-[22px] tabular-nums ${color}`}>{n}</b>
+            ['수강 중 학생', stats ? `${stats.activeStudents}명` : '—', ''],
+            ['이번 주 수업', stats ? `${stats.weekLessons.done} / ${stats.weekLessons.total}` : '—', '진행 / 전체'],
+            ['이번 달 등록', stats ? `${stats.monthEnrollments.fresh + stats.monthEnrollments.renewal}건` : '—', stats ? `신규 ${stats.monthEnrollments.fresh} · 재등록 ${stats.monthEnrollments.renewal}` : ''],
+          ].map(([label, v, sub]) => (
+            <div key={label} className="rounded-[14px] bg-[#f1eefc] px-3 py-2.5">
+              <span className="block text-[12px] text-[#6b6880]">{label}</span>
+              <b className="block text-[18px] tabular-nums text-[#1d1b2b] lg:text-[20px]">{v}</b>
+              {sub && <span className="block text-[11.5px] text-[#6b6880]">{sub}</span>}
             </div>
           ))}
         </section>
 
+        <section aria-label="처리할 일 요약" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:col-span-2 lg:grid-cols-5">
+          {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => {
+            const { n, urgent } = byCat[c];
+            const on = filter === c;
+            return (
+              <button
+                key={c}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setFilter(on ? 'all' : c)}
+                className={`rounded-[14px] border bg-white px-3 py-2.5 text-left ${on ? 'border-[#7d5fff] shadow-[0_0_0_2px_#e4ddff]' : 'border-[#e6e3ef]'}`}
+              >
+                <span className="block text-[12.5px] text-[#6b6880]">{CATEGORY_LABEL[c]}</span>
+                <b className={`block text-[22px] tabular-nums ${n === 0 ? 'text-[#b9b6c8]' : urgent ? 'text-[#c62b2b]' : 'text-[#1d1b2b]'}`}>{n}</b>
+                <span className={`block text-[11.5px] ${urgent ? 'font-semibold text-[#c62b2b]' : 'text-[#b9b6c8]'}`}>{urgent ? `긴급 ${urgent}` : n ? '여유' : '없음'}</span>
+              </button>
+            );
+          })}
+        </section>
+
         <section aria-label="처리할 일" className="grid min-w-0 gap-2.5">
-          <h2 className="text-[12px] font-extrabold tracking-wider text-[#6b6880]">지금 처리할 일 · 급한 순서</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[12px] font-extrabold tracking-wider text-[#6b6880]">
+              {filter === 'all' || filter === 'urgent' || filter === 'error' ? '지금 처리할 일 · 급한 순서' : `${CATEGORY_LABEL[filter]} · 급한 순서`}
+            </h2>
+            <div role="group" aria-label="필터" className="flex gap-1.5">
+              {([
+                ['all', `전체 ${items.length}`],
+                ['urgent', `긴급 ${urgentCount}`],
+                ['error', `오류만 ${errorCount}`],
+              ] as const).map(([f, label]) => (
+                <button
+                  key={f}
+                  type="button"
+                  aria-pressed={filter === f}
+                  onClick={() => setFilter(f)}
+                  className={`min-h-[34px] rounded-full border px-3 text-[12.5px] font-semibold ${
+                    filter === f ? 'border-[#1d1b2b] bg-[#1d1b2b] text-white' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {items.length > 0 && shown.length === 0 && (
+            <p className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-6 text-center text-[13px] text-[#6b6880]">이 조건에 맞는 일이 없어요.</p>
+          )}
           {items.length === 0 && (
             <div className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-8 text-center">
               <p className="text-[15px] font-bold text-[#13804b]">처리할 일이 없어요</p>
               <p className="mt-1 text-[13px] text-[#6b6880]">오늘 {doneCount}건을 마쳤어요.</p>
             </div>
           )}
-          {items.map((item) => (
+          {shown.map((item) => (
             <article key={item.id} className="grid gap-2 rounded-[14px] border border-[#e6e3ef] bg-white px-3.5 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${TAG_STYLE[item.severity]}`}>
-                  {item.severity === 'overdue' ? `${item.tag} · 기한 초과` : item.tag}
+                  {item.severity === 'overdue' && !item.error ? `${item.tag} · 기한 초과` : item.tag}
                 </span>
                 <h3 className="text-[15px] font-bold text-[#1d1b2b]">{item.title}</h3>
               </div>

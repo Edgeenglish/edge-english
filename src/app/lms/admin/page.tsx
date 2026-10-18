@@ -1,4 +1,4 @@
-import { FAKE_TODAY } from '@/lms/admin/fake-data';
+import { FAKE_STATS, FAKE_TODAY } from '@/lms/admin/fake-data';
 import AdminDashboard from './AdminDashboard';
 import AdminLive from './AdminLive';
 
@@ -9,6 +9,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ demo?: string }> }) {
   const { demo } = await searchParams;
-  if (demo === '1') return <AdminDashboard today={FAKE_TODAY} nowIso={new Date().toISOString()} preview />;
+  if (demo === '1') return <AdminDashboard today={FAKE_TODAY} stats={FAKE_STATS} nowIso={new Date().toISOString()} preview />;
   return <AdminLive />;
 }

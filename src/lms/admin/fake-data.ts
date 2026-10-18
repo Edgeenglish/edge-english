@@ -42,6 +42,22 @@ export function fakeTasks(now: Date): TaskSource[] {
       tutorNotifiedAt: t(-26), tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: t(-26),
     },
     {
+      kind: 'ending_soon', id: 'e-1', studentName: '가상학생팔', studentCode: 'STU-9008', product: '50분 주2회 4주',
+      regularLeft: 1, endsAt: endOfKstDay(instantToKstDate(now)), tutorName: '가상강사 Alex',
+    },
+    {
+      kind: 'ending_soon', id: 'e-2', studentName: '가상학생구', studentCode: 'STU-9009', product: '40분 주3회 12주',
+      regularLeft: 2, endsAt: endOfKstDay(addDays(instantToKstDate(now), 5)), tutorName: '가상강사 Blair',
+    },
+    {
+      kind: 'makeup_unrequested', id: 'mk-1', studentName: '가상학생십', studentCode: 'STU-9010',
+      canceledLesson: shortDate(addDays(instantToKstDate(now), -6)) + ' 20:00', deadline: endOfKstDay(addDays(instantToKstDate(now), 3)), tutorName: '가상강사 Alex',
+    },
+    {
+      kind: 'auto_failure', id: 'f-1', what: 'calendar_sync', studentName: '가상학생이',
+      detail: '보강 10/22(목) 21:00 이 가상강사 Blair 캘린더에 반영되지 않음 (3번 다시 시도 실패)', occurredAt: t(-2),
+    },
+    {
       kind: 'long_leave_request', id: 'l-1', studentName: '가상학생이', studentCode: 'STU-9002', from: '11/20(금)', to: '11/26(목)',
       days: 7, reason: 'health', createdAt: t(-5),
     },
@@ -56,3 +72,8 @@ export const FAKE_TODAY: FakeLesson[] = [
   { time: '20:00', student: '가상학생칠', tutor: 'Alex', state: '학생 변경' },
   { time: '21:00', student: '가상학생이', tutor: 'Blair', state: '보강' },
 ];
+
+/** 상단 운영 현황 3개 (처리할 일과 겹치지 않는 '현재 상태' 숫자) */
+export type OpsStats = { activeStudents: number; weekLessons: { done: number; total: number }; monthEnrollments: { fresh: number; renewal: number } };
+
+export const FAKE_STATS: OpsStats = { activeStudents: 42, weekLessons: { done: 38, total: 96 }, monthEnrollments: { fresh: 6, renewal: 11 } };

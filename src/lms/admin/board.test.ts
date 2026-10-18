@@ -1,6 +1,6 @@
 // 운영자 대시보드 '처리할 일' 목록 (가상 데이터)
 import { describe, expect, it } from 'vitest';
-import { boardCounts, buildBoard, dueSeverity, dueText } from './board';
+import { buildBoard, categoryCounts, dueSeverity, dueText, filterBoard } from './board';
 import { fakeTasks } from './fake-data';
 
 const now = new Date('2026-10-16T05:00:00Z'); // KST 10/16(금) 14:00
@@ -39,8 +39,21 @@ describe('처리할 일 목록', () => {
     expect(r.actions.map((a) => a.key)).toEqual(['remind_tutor', 'tutor_ack']);
     expect(r.due).toBe('통보 후 26시간째 미확인');
   });
-  it('숫자 요약', () => {
-    expect(boardCounts(items)).toMatchObject({ total: 6, overdue: 2, matching: 3, renewal: 1 });
+  it('요약 카드 5칸: 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
+    const c = categoryCounts(items);
+    expect(Object.values(c).reduce((s, x) => s + x.n, 0)).toBe(items.length);
+    expect(c).toMatchObject({ matching: { n: 3 }, tutor_ack: { n: 1 }, ending: { n: 2 }, makeup: { n: 1 }, issue: { n: 3 } });
+  });
+  it('필터: 긴급 = 노쇼·기한 초과·24시간 안, 오류만 = 노쇼 신고·자동 처리 실패 (승인 대기는 제외)', () => {
+    expect(filterBoard(items, 'urgent').every((i) => i.severity !== 'open')).toBe(true);
+    expect(filterBoard(items, 'error').map((i) => i.kind).sort()).toEqual(['auto_failure', 'no_show_report']);
+    expect(filterBoard(items, 'ending').map((i) => i.id)).toEqual(['e-1', 'e-2']);
+    expect(filterBoard(items, 'all')).toHaveLength(items.length);
+  });
+  it('종료 임박은 종료일이 24시간 안이면 긴급, 오류는 늘 긴급', () => {
+    expect(items.find((i) => i.id === 'e-1')!.severity).toBe('due_soon');
+    expect(items.find((i) => i.id === 'e-2')!.severity).toBe('open');
+    expect(items.find((i) => i.id === 'f-1')!.severity).toBe('overdue');
   });
 });
 

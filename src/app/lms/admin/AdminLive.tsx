@@ -5,12 +5,12 @@
 
 import { useEffect, useState } from 'react';
 import type { TaskSource } from '@/lms/admin/board';
-import type { FakeLesson } from '@/lms/admin/fake-data';
-import { loadAdminBoard } from '@/lms/admin/live';
+import type { FakeLesson, OpsStats } from '@/lms/admin/fake-data';
+import { loadAdminBoard, loadOpsStats } from '@/lms/admin/live';
 import { supabaseBrowser } from '@/lms/auth/client';
 import AdminDashboard from './AdminDashboard';
 
-type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tasks: TaskSource[]; today: FakeLesson[] };
+type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tasks: TaskSource[]; today: FakeLesson[]; stats: OpsStats | null };
 
 export default function AdminLive() {
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -29,8 +29,8 @@ export default function AdminLive() {
       if (aal?.currentLevel !== 'aal2' || admin !== true) return window.location.replace('/lms/login');
       const now = new Date();
       try {
-        const board = await loadAdminBoard(sb, now);
-        setState({ kind: 'ready', nowIso: now.toISOString(), ...board });
+        const [board, stats] = await Promise.all([loadAdminBoard(sb, now), loadOpsStats(sb, now)]);
+        setState({ kind: 'ready', nowIso: now.toISOString(), ...board, stats });
       } catch (e) {
         setState({ kind: 'error', message: e instanceof Error ? e.message : '데이터를 읽지 못했어요.' });
       }
@@ -52,5 +52,5 @@ export default function AdminLive() {
         </button>
       </div>
     );
-  return <AdminDashboard nowIso={state.nowIso} today={state.today} tasks={state.tasks} preview={false} onLogout={logout} />;
+  return <AdminDashboard nowIso={state.nowIso} today={state.today} tasks={state.tasks} stats={state.stats} preview={false} onLogout={logout} />;
 }

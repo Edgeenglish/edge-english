@@ -5,7 +5,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import type { TaskSource } from './board';
-import type { FakeLesson } from './fake-data';
+import type { FakeLesson, OpsStats } from './fake-data';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const short = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}(${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
@@ -168,5 +168,25 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   return {
     tasks: toTaskSources((tasks.data ?? []) as unknown as TaskRow[], (leaves.data ?? []) as unknown as LeaveRow[], ns),
     today: toTodayLessons((lessons.data ?? []) as unknown as LessonRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
+  };
+}
+
+/** 상단 운영 현황 3개: 수강 중 학생 · 이번 주(월~일, KST) 수업 진행/전체 · 이번 달 결제 확인된 등록(신규/재등록) */
+export async function loadOpsStats(sb: SupabaseClient, now: Date): Promise<OpsStats | null> {
+  const today = instantToKstDate(now);
+  const dow = new Date(`${today}T00:00:00Z`).getUTCDay();
+  const monday = addDays(today, -((dow + 6) % 7));
+  const monthStart = `${today.slice(0, 8)}01`;
+  const [active, week, pays] = await Promise.all([
+    sb.from('enrollments').select('student_id').eq('status', 'active'),
+    sb.from('lessons').select('state').gte('kst_date', monday).lte('kst_date', addDays(monday, 6)).neq('state', 'canceled'),
+    sb.from('payments').select('enrollment:enrollments(previous_enrollment_id)').gte('confirmed_at', `${monthStart}T00:00:00+09:00`),
+  ]);
+  if (active.error || week.error || pays.error) return null;
+  const p = (pays.data ?? []) as unknown as { enrollment: { previous_enrollment_id: string | null } | null }[];
+  return {
+    activeStudents: new Set((active.data ?? []).map((r) => r.student_id)).size,
+    weekLessons: { done: (week.data ?? []).filter((r) => r.state === 'done').length, total: (week.data ?? []).length },
+    monthEnrollments: { fresh: p.filter((r) => !r.enrollment?.previous_enrollment_id).length, renewal: p.filter((r) => !!r.enrollment?.previous_enrollment_id).length },
   };
 }
