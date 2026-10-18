@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Bubble from '@/components/common/bubble/Bubble';
 
-// ===== 엣지영어 수업료 (1개월 / 3개월 / 6개월) =====
+// ===== 엣지영어 수업료 (1개월 / 3개월 / 6개월, 탭 아래에 '* 1개월 = 4주(28일) 기준' 한 줄 — POL-PER-01) =====
 // 수강료가 바뀌면 아래 PRICES의 1개월 가격 숫자만 고치면 돼요.
 // 3개월·6개월 가격은 자동으로 계산돼요. (3개월: 5% 할인 / 6개월: 5% 할인 + 5만 원 추가 할인)
 
@@ -133,6 +133,7 @@ export default function LongTermPrice() {
         <p className="mt-4 text-base text-[#888] max-md:text-sm">
           영어는 꾸준함이 답! 길게 할수록 더 저렴해요
         </p>
+        <p className="mt-1 text-sm text-[#888] max-md:text-xs">* 1개월 = 4주(28일) 기준</p>
       </div>
 
       {/* 수강료 카드 */}
