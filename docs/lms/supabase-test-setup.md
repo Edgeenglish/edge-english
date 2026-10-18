@@ -232,6 +232,55 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 - **실물 결과 (2026-10-17, 대표 실행)**: 800 적용 → `AUTHZ-PROBE 결과: 모두 통과 (점검 묶음 18개)`, 실행 전후 학생 4·가상학생 4 그대로. TOTP 전 운영자 세션 0건·직원은 대표 전용 권한 없음을 DB 단계에서 확인.
 - 실제 TOTP 등록·인증 토큰 점검(`e2e-token-probe.py` 에 추가됨, Supabase MFA API 사용)은 Secret key가 필요하므로 **다음에 키를 만들 때(이메일 로그인 실물 시험 5-5 등) 함께** 실행.
 
+### 900 신규 학생 등록 저장 함수 (D-40, 2026-10-18) — ⬜ 대표 적용 대기
+
+- 파일: `migrations/20261018000900_lms_register_student.sql`. 하는 일: 등록 함수 `admin_register_student`(학생·수강등록·결제 확인·정규 일정·수업을 한 번에, 운영자 TOTP 세션만), 같은 이메일 확인 `admin_students_with_email`, 저장 버튼 중복 방지용 `registration_requests` 표. **기존 표·데이터를 지우거나 바꾸지 않음**(DROP·DELETE·TRUNCATE 없음). 두 번 실행해도 같은 결과.
+- 이 방식이면 Vercel에 Secret key를 넣지 않아도 저장된다 (DB 안에서 운영자·TOTP 확인).
+- **로컬 재현 (2026-10-18, Claude)**: 시험용 DB와 같은 순서(820까지 + 가상 데이터 → 900 두 번 → 가능 시간 → 확인)로 실행 → 확인 9줄 모두 '통과', 운영자 TOTP 세션으로 등록 2건(결제 확인+정규 8회 / 결제 대기) 저장 성공, 그 뒤 `authz-probe` **모두 통과 (점검 묶음 18개)**. 900 적용 전에 확인 파일을 돌리면 오류 없이 '실패' 7줄이 나오는 것도 확인.
+
+**적용 순서 (대표, PC 권장, 약 10분, 비밀키 필요 없음)** — 각 파일은 GitHub 브랜치 `claude/hopeful-planck-fd7mw7` 에서 열고 **Raw** → 전체 선택 → 복사 → Supabase → edgeenglish-lms-test → **SQL Editor** → **New query** → 붙여 넣기 → **Run**
+
+| 순서 | 실행할 것 | 정상 결과 |
+|---|---|---|
+| ① | 아래 한 줄 (시험용 프로젝트 확인)<br>`select count(*) as 학생수, count(*) filter (where name_ko like '가상%') as 가상학생수 from students;` | **4, 4** (다르면 멈추고 Claude에게 알림) |
+| ② | `supabase/migrations/20261018000900_lms_register_student.sql` | "Success. No rows returned" |
+| ③ | `supabase/test-setup/d40-availability.sql` (가상 강사 2명의 수업 가능 시간 — 이것이 없으면 화면에서 정규 시간을 고를 칸이 안 열림) | 표 2줄: 가상강사 Alex 5요일 18:00~23:00 Australia/Sydney, 가상강사 Blair 6요일 06:00~11:00 America/Toronto |
+| ④ | `supabase/test-setup/d40-check.sql` (읽기만) | 9줄 모두 **'통과'** |
+| ⑤ | `supabase/test-setup/authz-probe.sql` | 빨간 오류 칸 첫 줄 `AUTHZ-PROBE 결과: 모두 통과 (점검 묶음 18개)` (일부러 오류를 내서 점검 데이터를 되돌리는 것 — 정상) |
+| ⑥ | ①을 다시 | 여전히 **4, 4** |
+
+- 오류가 나면 **오류 첫 줄만** Claude에게 전달. ②에서 오류가 나면 아무것도 바뀌지 않는다(한 묶음 실행).
+- ④에서 '실패'가 있으면 그 줄 번호를 전달.
+
+**실제 화면 등록 시험 (대표, ①~⑥ 통과 후, 휴대폰도 가능)**
+
+Vercel → 프로젝트 → **Deployments** 에서 브랜치 `claude/hopeful-planck-fd7mw7` 의 최신 **Preview** 주소 열기 → `/lms/login` 로그인(이메일 코드 + 인증 앱) → 주소 끝을 `/lms/admin/students/new` 로 (주소에 `?demo=1` **없이**). 이름은 반드시 **'가상'으로 시작**, 이메일은 `@example.com` (실제 사람 정보 금지).
+
+| 시험 | 입력 | 통과 기준 |
+|---|---|---|
+| A. 결제 확인 + 강사 + 정규 시간 | 이름 `가상등록일`, 이메일 `reg1@example.com`, 4주(1개월) · 주 2회 · 50분, 결제 확인(가상 금액), 강사 **가상강사 Alex**, **화·목 19:00**(한국 시각), 첫 수업일 = 가장 가까운 화요일 → 저장 | 완료 칸에 학생 번호(STU-…)·**정규 8회** 표시 |
+| B. 방금 만든 수업이 다시 읽히는지 | 새 등록 화면에서 강사 가상강사 Alex 선택 | 같은 주 **화·목 19:00 칸이 '정규'로 막혀 있음**(A의 수업). 50분 수업이면 바로 앞뒤 18:30·19:30 칸도 수업+휴식 10분이 안 돼 고를 수 없음 |
+| C. 같은 이메일 알림 | 이메일 칸에 `reg1@example.com` 입력 | "같은 이메일의 기존 학생이 있어요: STU-… 가상등록일 … 자동으로 연결하지 않아요" 안내만 나옴 (확인 후 이 등록은 저장하지 않고 닫기) |
+| D. 결제 대기 등록 | 이름 `가상등록이`, 이메일 `reg2@example.com`, 12주(3개월) · 주 1회 · 20분, **결제 확인 안 함**, 강사 고르지 않음 → 저장 | 완료 칸에 '결제 대기' · 정규 0회 |
+| E. 대시보드 | `/lms/admin` | A 학생의 **신규 매칭** 업무가 보임(강사 배정 완료, 학생 안내 전). D 학생은 업무 없음(결제 전) |
+
+시험 뒤 확인 SQL (SQL Editor, 읽기만) — 결과 표를 캡처해 Claude에게:
+
+```sql
+select s.code, s.name_ko, e.status, e.weeks, e.weekly_count, e.duration_min, e.start_date, e.base_end_date,
+       (select count(*) from lessons l where l.enrollment_id = e.id) as 수업수,
+       (select count(*) from payments p where p.enrollment_id = e.id) as 결제기록,
+       (select t.status || ' / 강사배정 ' || (t.tutor_assigned_at is not null) from admin_tasks t
+         where t.enrollment_id = e.id and t.kind = 'new_student_matching') as 매칭업무
+from students s join enrollments e on e.student_id = s.id
+where s.email like 'reg%@example.com' order by s.code;
+```
+
+통과 기준: A 줄 `confirmed`·수업수 8·결제기록 1·매칭업무 `open / 강사배정 true`, D 줄 `pending_payment`·수업수 0·결제기록 0·매칭업무 비어 있음.
+
+- **시험 뒤부터 ① 확인 숫자가 4, 4 → 6, 6 으로 바뀐다.** 이후 기준은 **학생수 = 가상학생수**(모두 '가상'으로 시작). 시험 학생은 지우지 않는다(변경 이력 보호 설계상 삭제하지 않음, 가상 데이터라 문제없음).
+- 참고: 등록 함수는 강사 **겹침·휴식 10분·휴무**는 DB에서 다시 확인하지만, **강사 가능 시간 밖인지는 화면에서만 막는다**(운영자만 쓰는 화면이라 지금은 충분). 나중에 학생 셀프 신청을 만들 때는 DB 확인도 추가한다.
+
 ### 5-4 끝단 점검 계획
 
 | 항목 | 내용 |
@@ -267,6 +316,8 @@ Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·�
 | `supabase/test-setup/check.sql` | 적용 확인 (읽기만) |
 | `supabase/test-setup/anon-probe.sh` | 실물 보안 점검 — 로그인 안 한 사용자로 표 40개·함수 9개 읽기/실행, 쓰기 4가지 시도. 시험용 주소가 아니거나 키 형식이 틀리면 바로 멈춤. 키 값은 출력 안 함 |
 | `supabase/test-setup/authz-probe.sql` | 로그인 사용자 권한 점검 — 가상 계정 6개(미등록·학생 A·B·강사 X·Y·운영자)로 모든 표·보기 읽기, 쓰기 17가지, 함수 확인. SQL Editor에서 실행하면 끝에 일부러 오류를 내 **가상 데이터를 전부 되돌림**. 로컬은 `bash supabase/tests/run.sh` 가 같은 파일을 실행 |
+| `supabase/test-setup/d40-availability.sql` | D-40 화면 시험용 가상 강사 2명의 수업 가능 시간 (여러 번 실행해도 중복 없음, 가상 강사가 없으면 아무것도 안 넣음) |
+| `supabase/test-setup/d40-check.sql` | migration 900 적용 확인 9줄 (읽기만) |
 | `supabase/migrations/20261016000600_lms_supabase_hardening.sql` | Supabase 기본 권한 정리: 로그인 안 한 사용자는 LMS 함수·학생 번호를 못 씀 |
 | `supabase/migrations/20261016000700_lms_authz_hardening.sql` | 권한 정리 2차: 동의 현황 보기·이력 번호 시퀀스·내부 함수에 남은 앱 사용자 권한 회수, 앞으로 만드는 표·시퀀스 자동 공개 막기 |
 | `supabase/tests/stub_supabase.sql` | 로컬 검증용 Supabase 흉내 — 2026-10-17부터 **Supabase 기본 권한(자동 공개)까지 재현**해서 실물과 같은 조건으로 시험 |
