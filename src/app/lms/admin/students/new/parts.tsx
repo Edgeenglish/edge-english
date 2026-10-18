@@ -2,7 +2,7 @@
 
 // 신규 학생 등록 화면 조각: 입력 칸, 카드, 강사 고르기, 주간 캘린더 (2026-10-18 대표 최종 시안)
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { cellState, clashes, withinAvailability, type AvailabilityWindow, type CellState } from '@/lms/rules/booking';
 import { addDays, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '@/lms/rules/dates';
 import type { RegularSlot } from '@/lms/rules/schedule';
@@ -62,6 +62,88 @@ export const inputCls = (locked: boolean, bad = false) =>
   } ${locked ? 'bg-[#faf9fd]' : 'bg-white'}`;
 
 /** 학생 희망 칸 → 판정용 창 (학생 시간대 기준이라 서머타임 자동) */
+// 칸 안에서 바로 검색해서 고르기 (사는 곳 A안). 목록에 없으면 onFree 로 친 그대로 저장 (없으면 목록에서만)
+export type PickItem = { key: string; main: string; sub?: string; pick: () => void };
+export function SearchPick({ value, placeholder, locked = false, bad = false, search, onFree }: { value: string; placeholder: string; locked?: boolean; bad?: boolean; search: (q: string) => { label?: string; items: PickItem[] }[]; onFree?: (text: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const typed = useRef(''); // 칸을 떠날 때 친 글자 (고른 뒤에는 비움 → 친 글자로 덮어쓰지 않음)
+  const input = useRef<HTMLInputElement>(null);
+  const groups = open ? search(q) : [];
+  const first = groups.flatMap((g) => g.items)[0];
+  const text = q.trim();
+  const type = (v: string) => {
+    typed.current = v;
+    setQ(v);
+  };
+  const close = (free: boolean) => {
+    if (free && typed.current.trim() && onFree) onFree(typed.current.trim());
+    typed.current = '';
+    setOpen(false);
+    setQ('');
+  };
+  const choose = (it: PickItem) => {
+    it.pick();
+    typed.current = '';
+    input.current?.blur();
+    close(false);
+  };
+  return (
+    <div className="relative">
+      <input
+        ref={input}
+        readOnly={locked}
+        value={open ? q : value}
+        placeholder={placeholder}
+        autoComplete="off"
+        onFocus={(e) => {
+          if (locked) return;
+          setOpen(true);
+          type('');
+          // 휴대폰: 키보드가 올라와도 목록이 보이게 칸을 위로
+          const el = e.currentTarget;
+          setTimeout(() => el.scrollIntoView({ block: 'start', behavior: 'smooth' }), 250);
+        }}
+        onChange={(e) => type(e.target.value)}
+        onBlur={() => setTimeout(() => close(true), 150)} // 휴대폰에서 목록을 누르는 사이 칸이 먼저 닫히지 않게
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            if (first) choose(first);
+            else input.current?.blur();
+          }
+          if (e.key === 'Escape') {
+            typed.current = '';
+            input.current?.blur();
+          }
+        }}
+        className={`${inputCls(locked, bad)} scroll-mt-24`}
+      />
+      {open && (
+        <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-[260px] overflow-y-auto rounded-[12px] border border-[#e6e3ef] bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,.12)]">
+          {groups.map((g, i) => (
+            <div key={i}>
+              {g.label && g.items.length > 0 && <p className="px-2.5 pb-0.5 pt-1.5 text-[12px] text-[#6b6880]">{g.label}</p>}
+              {g.items.map((it) => (
+                <button key={it.key} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => choose(it)} className="block min-h-[44px] w-full rounded-[8px] px-2.5 py-2 text-left text-[14.5px] text-[#1d1b2b] hover:bg-[#efebff]">
+                  {it.main}
+                  {it.sub && <span className="block text-[12.5px] text-[#6b6880]">{it.sub}</span>}
+                </button>
+              ))}
+            </div>
+          ))}
+          {text && onFree && (
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => input.current?.blur()} className="block min-h-[44px] w-full rounded-[8px] px-2.5 py-2 text-left text-[14.5px] font-semibold text-[#5b3fe0] hover:bg-[#efebff]">
+              ‘{text}’ 그대로 쓰기
+            </button>
+          )}
+          {!first && !(text && onFree) && <p className="px-2.5 py-2 text-[13px] text-[#6b6880]">찾는 곳이 없어요. 가까운 큰 도시 이름이나 영어로 쳐 보세요.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function wishWindows(w: readonly WishWindow[], timezone: string): AvailabilityWindow[] {
   return w.map((x) => ({ weekday: x.weekday, startLocal: x.from, endLocal: x.to, timezone: timezone || 'Asia/Seoul', effectiveFrom: '2000-01-01', effectiveTo: null }));
 }

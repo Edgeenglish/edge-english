@@ -30,8 +30,9 @@ import {
   type RegTutor,
 } from '@/lms/admin/registration';
 import { dayLabel, diffFromKst, weekOf, WEEKDAY_KO } from '@/lms/admin/schedule';
+import { eunNeun, findCity, findCountry, manyZones, searchCities, searchCountries, searchZones, suggestTimezone, zoneName } from '@/lms/admin/places';
 import { AdminHeader } from '../../ui';
-import { Badge, Card, EMPTY_FILTER, Field, inputCls, Legend, nowLocal, ProfileSheet, slotLocal, slotText, TutorPicker, WeekCalendar, wishWindows, type TutorFilter } from './parts';
+import { Badge, Card, EMPTY_FILTER, Field, inputCls, Legend, nowLocal, ProfileSheet, SearchPick, slotLocal, slotText, TutorPicker, WeekCalendar, wishWindows, type TutorFilter } from './parts';
 
 export type SaveResult =
   | { kind: 'saved'; studentCode: string; lessons: number; status: string; repeated: boolean }
@@ -48,7 +49,6 @@ type Props = {
   sameEmail: (email: string) => Promise<{ code: string; name_ko: string }[]>;
 };
 
-const TZ = ['Asia/Seoul', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Singapore', 'Asia/Ho_Chi_Minh', 'Australia/Sydney', 'Australia/Melbourne', 'Australia/Brisbane', 'Australia/Perth', 'Pacific/Auckland', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Toronto', 'America/Vancouver'];
 const STEPS = ['학생 정보\n(신청서 불러오기)', '강사 & 스케줄 선택', '수업 정보 & 결제 확인', '최종 확인'];
 const HINT: Record<PlanIssue['reason'], string> = {
   tutor_makeup: '그날 보강을 옮기거나 첫 수업일을 다음 주로',
@@ -82,6 +82,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   const [profile, setProfile] = useState<RegTutor | null>(null);
   const [dupes, setDupes] = useState<{ code: string; name_ko: string }[]>([]);
   const [tried, setTried] = useState(false);
+  const [tzWhy, setTzWhy] = useState(''); // 시간대를 국가·도시로 자동 추천했으면 그 이유, 직접 골랐으면 ''
 
   const app = applications.find((a) => a.ref === appRef) ?? null;
   const tutor = tutors.find((t) => t.id === tutorId) ?? null;
@@ -92,6 +93,16 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   const prob = (f: keyof Draft) => (tried ? problems.find((p) => p.field === f)?.text : undefined);
   const locked = !editing;
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  // 국가·도시가 바뀌면 시간대 다시 추천. 추천이 없으면 자동으로 넣었던 시간대만 비우고, 직접 고른 시간대는 그대로
+  function setPlace(country: string, city: string) {
+    const s = suggestTimezone(country, city);
+    setDraft((d) => ({ ...d, country, city, timezone: s.timezone || (tzWhy ? '' : d.timezone) }));
+    setTzWhy(s.timezone ? s.why : '');
+  }
+  function setCountry(country: string) {
+    const c = findCity(draft.city);
+    setPlace(country, c && c.country !== country ? '' : draft.city); // 다른 나라 도시였으면 비움
+  }
 
   useEffect(() => {
     if (!toast) return;
@@ -111,7 +122,9 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     const a = applications.find((x) => x.ref === ref);
     if (!a) return;
     setAppRef(ref);
-    setDraft(draftFromForm(a));
+    const d = draftFromForm(a);
+    setDraft(d);
+    setTzWhy(suggestTimezone(d.country, d.city).why);
     setEditing(false);
     setPay((p) => ({ ...p, payerName: a.payerName }));
     setSlots([]);
@@ -121,6 +134,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   function manual() {
     setAppRef(null);
     setDraft(EMPTY_DRAFT);
+    setTzWhy('');
     setEditing(true);
     setSlots([]);
     setFirstPick('');
@@ -247,29 +261,56 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         <Field full label="휴대폰 (해외: 카카오톡 ID)">
           <input readOnly={locked} value={draft.phone} onChange={(e) => set('phone', e.target.value)} className={inputCls(locked)} />
         </Field>
-        <Field full label="거주 국가 / 도시">
-          <input
-            readOnly={locked}
-            value={[draft.country, draft.city].filter(Boolean).join(' / ')}
-            onChange={(e) => {
-              const [c, ...r] = e.target.value.split('/');
-              setDraft((d) => ({ ...d, country: c.trim(), city: r.join('/').trim() }));
-            }}
-            className={inputCls(locked)}
+        <Field label="거주 국가">
+          <SearchPick
+            locked={locked}
+            value={draft.country}
+            placeholder="예: 호주, Australia"
+            search={(q) => [{ label: q.trim() ? undefined : '자주 쓰는 나라', items: searchCountries(q).map((c) => ({ key: c.ko, main: c.ko, sub: c.en, pick: () => setCountry(c.ko) })) }]}
+            onFree={setCountry}
           />
+          {draft.country && !findCountry(draft.country) && <span className="mt-1 block text-[12px] text-[#9a5b00]">목록에 없는 나라 (친 그대로 저장) — 시간대는 직접 골라 주세요</span>}
         </Field>
-        <Field full label="사는 곳 시간대 · 현재 시각" problem={prob('timezone')}>
-          <select value={draft.timezone} onChange={(e) => set('timezone', e.target.value)} className={inputCls(false, !!prob('timezone'))}>
-            <option value="">골라 주세요</option>
-            {[...new Set([draft.timezone, ...TZ].filter(Boolean))].map((z) => (
-              <option key={z} value={z}>
-                {z} · {nowLocal(z, now)}
-              </option>
-            ))}
-          </select>
+        <Field label="도시">
+          <SearchPick
+            locked={locked}
+            value={draft.city}
+            placeholder="예: 멜버른, Melbourne"
+            search={(q) => [{ label: findCountry(draft.country) ? `${draft.country}의 도시` : undefined, items: searchCities(q, draft.country).map((c) => ({ key: `${c.country}-${c.ko}`, main: c.ko, sub: `${c.country} · ${c.en}`, pick: () => setPlace(c.country, c.ko) })) }]}
+            onFree={(t) => setPlace(draft.country, t)}
+          />
+          {draft.city && !findCity(draft.city) && <span className="mt-1 block text-[12px] text-[#9a5b00]">목록에 없는 도시 (친 그대로 저장)</span>}
+        </Field>
+        <Field wide label="사는 곳 시간대 · 현재 시각" problem={prob('timezone')}>
+          <SearchPick
+            value={draft.timezone ? zoneName(draft.timezone) : ''}
+            bad={!!prob('timezone')}
+            placeholder="예: 멜버른, 시드니, Sydney"
+            search={(q) => {
+              const pick = (z: string) => () => {
+                set('timezone', z);
+                setTzWhy('');
+              };
+              const r = searchZones(q);
+              const sub = (z: string) => `${z} · 지금 ${nowLocal(z, now)} · ${diffFromKst(now, z)}`;
+              return [
+                { items: r.rows.map((x) => ({ key: x.timezone, main: zoneName(x.timezone), sub: sub(x.timezone), pick: pick(x.timezone) })) },
+                { label: '그 밖의 시간대 (영어 이름)', items: r.more.map((z) => ({ key: z, main: z, sub: sub(z), pick: pick(z) })) },
+              ];
+            }}
+          />
+          {draft.timezone ? (
+            <span className={`mt-1 block text-[12.5px] ${tzWhy ? 'text-[#1e7a46]' : 'text-[#6b6880]'}`}>
+              {draft.timezone} · 지금 {nowLocal(draft.timezone, now)} · {diffFromKst(now, draft.timezone)}
+              {tzWhy && ` · ${tzWhy}`}
+            </span>
+          ) : manyZones(draft.country) ? (
+            <span className="mt-1 block text-[12.5px] text-[#9a5b00]">{eunNeun(draft.country)} 시간대가 여럿이라 도시를 고르면 자동으로 들어가요</span>
+          ) : (
+            <span className="mt-1 block text-[12.5px] text-[#6b6880]">한국어(멜버른·시드니)나 영어(Melbourne)로 검색</span>
+          )}
         </Field>
       </div>
-      {app && !draft.timezone && <p className="mt-2 text-[12.5px] text-[#9a5b00]">신청서에 시간대 칸이 없어 거주 국가로 추천하는데, 시간대가 여럿인 나라라 직접 골라 주세요.</p>}
       {dupes.length > 0 && (
         <p className="mt-3 rounded-[10px] bg-[#fff6e6] px-3 py-2 text-[13px] text-[#7a4a00]">
           같은 이메일의 기존 학생이 있어요: {dupes.map((x) => `${x.code} ${x.name_ko}`).join(', ')}. 자동으로 연결하지 않아요 — 재등록이면 그 학생 화면에서 처리하세요.

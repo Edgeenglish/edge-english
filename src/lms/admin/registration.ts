@@ -1,12 +1,13 @@
 // 신규 학생 등록 (2026-10-18 대표 최종 시안: C안 신청서 불러오기 + A안 직접 입력·스케줄)
 // - 신청서(구글폼 응답) → 등록 초안 자동 채움. 운영자가 고칠 수 있고, 신청서가 없으면 직접 입력
 // - 신청서 희망 시간은 자유 서술이라 그대로 보여 주고, 요일·시각은 운영자가 캘린더에서 고른다
-// - 시간대는 신청서에 칸이 없어 거주 국가로 '추천'만 하고 운영자가 확인 (모르면 비워 둠)
+// - 시간대는 신청서에 칸이 없어 거주 국가·도시로 '추천'만 하고 운영자가 확인 (모르면 비워 둠, places.ts)
 // - 이메일이 같아도 기존 학생·계정에 자동 연결하지 않는다 (POL-AC-04). 같은 이메일이 있으면 알려 주기만
 
 import type { AvailabilityWindow, Busy } from '../rules/booking';
 import { diffDays, type KstDate } from '../rules/dates';
 import { computePeriods } from '../rules/period';
+import { parseCountryCity, suggestTimezone } from './places';
 import { CONFIRMED, type CourseWeeks } from '../rules/policy';
 import type { RegularSlot } from '../rules/schedule';
 
@@ -80,26 +81,9 @@ function parseDate(s: string): KstDate | '' {
   return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : '';
 }
 
-// 거주 국가 → 시간대 추천. 한 나라에 시간대가 여럿이면(미국·캐나다·호주 등) 도시로만 추천하고, 모르면 비워 둠
-const COUNTRY_TZ: [RegExp, string][] = [
-  [/한국|대한민국|korea|서울|seoul/i, 'Asia/Seoul'],
-  [/일본|japan|도쿄|tokyo/i, 'Asia/Tokyo'],
-  [/영국|uk|united kingdom|런던|london/i, 'Europe/London'],
-  [/싱가포르|singapore/i, 'Asia/Singapore'],
-  [/베트남|vietnam|호치민|하노이/i, 'Asia/Ho_Chi_Minh'],
-  [/시드니|sydney|멜버른|melbourne/i, 'Australia/Sydney'],
-  [/브리즈번|brisbane/i, 'Australia/Brisbane'],
-  [/토론토|toronto|뉴욕|new york/i, 'America/Toronto'],
-  [/밴쿠버|vancouver|la|로스앤젤레스|los angeles|샌프란시스코|시애틀/i, 'America/Los_Angeles'],
-];
-
-export function suggestTimezone(countryCity: string): string {
-  return COUNTRY_TZ.find(([re]) => re.test(countryCity))?.[1] ?? '';
-}
-
 /** 신청서 → 등록 초안. 읽지 못한 칸은 비워 두고 checkDraft 가 '확인 필요'로 알려 줌 */
 export function draftFromForm(f: FormResponse): Draft {
-  const [country, ...cityParts] = f.countryCity.split(/[\/,·]/).map((x) => x.trim());
+  const { country, city } = parseCountryCity(f.countryCity);
   return {
     source: 'form',
     formRef: f.ref,
@@ -107,9 +91,9 @@ export function draftFromForm(f: FormResponse): Draft {
     nameEn: f.nameEn.trim(),
     email: f.email.trim().toLowerCase(),
     phone: f.phone.trim(),
-    country: country ?? '',
-    city: cityParts.join(' '),
-    timezone: suggestTimezone(f.countryCity),
+    country,
+    city,
+    timezone: suggestTimezone(country, city).timezone,
     goal: f.concern.trim(),
     desiredTime: f.desiredTime.trim(),
     wishes: f.wishGrid ?? [],

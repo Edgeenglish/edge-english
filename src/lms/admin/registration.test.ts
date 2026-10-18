@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { wishText, checkDraft, checkPayment, draftFromForm, EMPTY_DRAFT, EMPTY_PAYMENT, firstDateWarnings, planSummary, slotProblem, suggestTimezone, type FormResponse } from './registration';
+import { wishText, checkDraft, checkPayment, draftFromForm, EMPTY_DRAFT, EMPTY_PAYMENT, firstDateWarnings, planSummary, slotProblem, type FormResponse } from './registration';
 
 const form: FormResponse = {
   ref: 'r1', submittedAt: '2026-10-15 14:22', nameKo: ' 가상학생 ', nameEn: 'Fake Student', email: 'Fake@Example.com ', phone: '010-0000-0000',
@@ -18,9 +18,9 @@ describe('신청서 → 등록 초안', () => {
     expect([d.durationMin, d.weeklyCount, d.weeks, d.timezone]).toEqual([null, null, null, '']);
     expect(checkDraft(d).map((p) => p.field)).toEqual(['timezone', 'durationMin', 'weeklyCount', 'weeks']);
   });
-  it('시간대가 여럿인 나라는 추천하지 않음', () => {
-    expect(suggestTimezone('미국')).toBe('');
-    expect(suggestTimezone('호주 브리즈번')).toBe('Australia/Brisbane');
+  it('국가·도시를 나눠 읽고 도시로 시간대 추천', () => {
+    expect(draftFromForm({ ...form, countryCity: '호주 / 멜버른' })).toMatchObject({ country: '호주', city: '멜버른', timezone: 'Australia/Melbourne' });
+    expect(draftFromForm({ ...form, countryCity: 'Canada, Calgary' })).toMatchObject({ country: '캐나다', city: '캘거리', timezone: 'America/Edmonton' });
   });
   it('직접 입력 빈 초안은 필수 칸을 모두 요구', () => {
     expect(checkDraft(EMPTY_DRAFT)).toHaveLength(7);

@@ -3,14 +3,15 @@
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
 ## 지금 상태 (2026-10-18)
-- 브랜치: `claude/trusting-feynman-kujjnm` (같은 내용을 `claude/dreamy-tesla-a99w8r` 에도 올림). 실제 홈페이지 배포 없음, Vercel Preview만.
+- 브랜치: `claude/intelligent-feynman-twg0dn` (`claude/trusting-feynman-kujjnm` 에서 이어서 작업). 실제 홈페이지 배포 없음, Vercel Preview만.
 - 시험용 Supabase: `edgeenglish-lms-test` 만 사용 (운영 프로젝트 접근 금지). 로그인(이메일 코드 + TOTP)·운영자 대시보드 실제 데이터 확인 완료.
 - 운영자 화면 (`/lms/admin`, 가상 미리보기 `?demo=1`):
   - 홈 대시보드: 실제 데이터 연결됨 (종료 임박·보강 미신청·오류는 아직 0 — 데이터 출처 미연결)
   - 일정(주간 시간표·강사 현지 시각·서머타임), 학생 목록·상세: **가상 데이터만**
   - 신규 학생 등록 `/lms/admin/students/new`: 화면·충돌 판정 완료. 저장 함수(migration 900)는 **로컬 테스트만, 시험용 DB 미적용**
 - 학생 화면 `/lms/student`: 가상 데이터만. 강사 화면: 시안 전.
-- 테스트: `npm test`(179), `npm run test:db`(스키마 + 권한 점검) 모두 통과.
+- 2026-10-18 LMS 화면 수정 묶음 (시안 https://claude.ai/artifact/Wa3n2pKjHPvJRkThmB2muK): ① 국가·도시 칸 분리 + 한국어·영어 검색 ② 시간대 한국어·영어 검색 + 국가·도시로 자동 추천 — **A안 확정·반영** (`src/lms/admin/places.ts`, 도시 목록은 D-41 구글폼 '거주 도시' 선택지로도 재사용 가능) ④ 로그인 이메일 가림 * 개수 = 가린 글자 수 — 반영. ③ 수강 기간 표기는 **대표 결정 대기** ('1개월(4주)' 병기 여부)
+- 테스트: `npm test`(190), `npm run test:db`(스키마 + 권한 점검) 모두 통과.
 
 ## 승인됨 — 실행 대기 (2026-10-18 대표)
 - D-40 등록 저장 함수 시험용 DB 적용: migration `20261018000900_lms_register_student.sql`. 이 세션에는 DB 접속 키가 없으므로 적용 방법(대표가 SQL Editor에 붙여넣기 등)을 단계별로 안내하고, 적용 후 확인 SQL·실제 화면 등록 시험까지
@@ -18,6 +19,7 @@
 - D-42 신청서 → LMS 가져오기: D-41 끝난 뒤 ① Apps Script → DB ② 응답 시트 읽기 전용 비교안 보고 후 선택
 
 ## 대표 결정 대기
+- 수강 기간 표기: 운영자 등록 화면 '4주 (28일)' vs '1개월 (4주 · 28일)', 홈페이지 수업료 페이지에 '(4주)' 병기 여부 (POL-PER-01 '1개월 = 4주 기준')
 - D-36 운영직원 읽기 범위 (직원 계정 만들기 전까지)
 - 정책 원본(Google Docs)에 POL-OP-21(수업 사이 휴식 10분) 추가 — 대표가 직접
 
