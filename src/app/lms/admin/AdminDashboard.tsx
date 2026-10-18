@@ -5,8 +5,12 @@
 // 미리보기(preview)에서는 버튼을 눌러도 화면 안에서만 바뀌고 저장·발송하지 않는다.
 
 import { useMemo, useState } from 'react';
-import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, type BoardFilter, type BoardItem, type Category, type Severity, type TaskSource } from '@/lms/admin/board';
+import Link from 'next/link';
+import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, searchBoard, type BoardFilter, type BoardItem, type Category, type Severity, type TaskSource } from '@/lms/admin/board';
 import { fakeTasks, type FakeLesson, type OpsStats } from '@/lms/admin/fake-data';
+import { AdminHeader, BottomNav, Icon, type IconName } from './ui';
+
+const CATEGORY_ICON: Record<Category, IconName> = { matching: 'userPlus', tutor_ack: 'clock', ending: 'hourglass', makeup: 'repeat', issue: 'alert' };
 
 const TAG_STYLE: Record<Severity, string> = {
   urgent: 'bg-[#fde6e6] text-[#c62b2b]',
@@ -93,7 +97,8 @@ export default function AdminDashboard({
   const items = useMemo(() => buildBoard(tasks, now), [tasks, now]);
   const [filter, setFilter] = useState<BoardFilter>('all');
   const byCat = categoryCounts(items);
-  const shown = filterBoard(items, filter);
+  const [query, setQuery] = useState('');
+  const shown = searchBoard(filterBoard(items, filter), query);
   const urgentCount = items.filter(isUrgent).length;
   const errorCount = items.filter((i) => i.error).length;
   const dateLabel = `${now.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' })} (${WD[new Date(now.getTime() + 9 * 3600e3).getUTCDay()]})`;
@@ -122,26 +127,28 @@ export default function AdminDashboard({
 
   return (
     <div className="mx-auto min-h-dvh max-w-[1280px] pb-20 lg:pb-8">
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[#e6e3ef] bg-white px-4 py-3 lg:px-7">
-        <span className="text-[15px] font-extrabold tracking-tight text-[#09246b]">
-          Edge<span className="text-[#7d5fff]">English</span> <span className="text-[#09246b]">운영</span>
-        </span>
-        <span className="flex-1" />
-        <span className="text-[13px] text-[#6b6880]">{dateLabel}</span>
-        {onLogout && (
-          <button type="button" onClick={onLogout} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#1d1b2b]">
-            로그아웃
-          </button>
-        )}
-        <button
-          type="button"
-          disabled
-          title="신규 학생 등록 화면은 시안 선택 후 개발"
-          className="hidden min-h-[40px] cursor-not-allowed rounded-[10px] bg-[#7d5fff]/50 px-3 text-[13px] font-semibold text-white lg:block"
-        >
-          + 학생 등록 (준비 중)
-        </button>
-      </header>
+      <AdminHeader
+        active="home"
+        demo={preview}
+        right={
+          <>
+            <span className="text-[13px] text-[#6b6880]">{dateLabel}</span>
+            {onLogout && (
+              <button type="button" onClick={onLogout} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#1d1b2b]">
+                로그아웃
+              </button>
+            )}
+            <button
+              type="button"
+              disabled
+              title="신규 학생 등록 화면은 시안 선택 후 개발"
+              className="hidden min-h-[40px] cursor-not-allowed rounded-[10px] bg-[#7d5fff]/50 px-3 text-[13px] font-semibold text-white lg:block"
+            >
+              + 학생 등록 (준비 중)
+            </button>
+          </>
+        }
+      />
 
       {!preview && (
         <p className="mx-4 mt-3 rounded-[10px] bg-[#e3f5ea] px-3 py-2 text-[13px] text-[#13623a] lg:mx-7">
@@ -156,13 +163,16 @@ export default function AdminDashboard({
 
       <div className="grid gap-4 px-4 pt-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-5 lg:px-7 lg:pt-5">
         <section aria-label="운영 현황" className="grid grid-cols-3 gap-2 lg:col-span-2">
-          {[
-            ['수강 중 학생', stats ? `${stats.activeStudents}명` : '—', ''],
-            ['이번 주 수업', stats ? `${stats.weekLessons.done} / ${stats.weekLessons.total}` : '—', '진행 / 전체'],
-            ['이번 달 등록', stats ? `${stats.monthEnrollments.fresh + stats.monthEnrollments.renewal}건` : '—', stats ? `신규 ${stats.monthEnrollments.fresh} · 재등록 ${stats.monthEnrollments.renewal}` : ''],
-          ].map(([label, v, sub]) => (
+          {([
+            ['수강 중 학생', stats ? `${stats.activeStudents}명` : '—', '', 'users'],
+            ['이번 주 수업', stats ? `${stats.weekLessons.done} / ${stats.weekLessons.total}` : '—', '진행 / 전체', 'calendar'],
+            ['이번 달 등록', stats ? `${stats.monthEnrollments.fresh + stats.monthEnrollments.renewal}건` : '—', stats ? `신규 ${stats.monthEnrollments.fresh} · 재등록 ${stats.monthEnrollments.renewal}` : '', 'chart'],
+          ] as const).map(([label, v, sub, icon]) => (
             <div key={label} className="rounded-[14px] bg-[#f1eefc] px-3 py-2.5">
-              <span className="block text-[12px] text-[#6b6880]">{label}</span>
+              <span className="flex items-center gap-1.5 text-[12px] text-[#6b6880]">
+                <Icon name={icon} className="hidden h-4 w-4 text-[#7d5fff] sm:block" />
+                {label}
+              </span>
               <b className="block text-[18px] tabular-nums text-[#1d1b2b] lg:text-[20px]">{v}</b>
               {sub && <span className="block text-[11.5px] text-[#6b6880]">{sub}</span>}
             </div>
@@ -181,7 +191,10 @@ export default function AdminDashboard({
                 onClick={() => setFilter(on ? 'all' : c)}
                 className={`rounded-[14px] border bg-white px-3 py-2.5 text-left ${on ? 'border-[#7d5fff] shadow-[0_0_0_2px_#e4ddff]' : 'border-[#e6e3ef]'}`}
               >
-                <span className="block text-[12.5px] text-[#6b6880]">{CATEGORY_LABEL[c]}</span>
+                <span className="flex items-center gap-1.5 text-[12.5px] text-[#6b6880]">
+                  <Icon name={CATEGORY_ICON[c]} className={`h-4 w-4 ${urgent ? 'text-[#c62b2b]' : 'text-[#7d5fff]'}`} />
+                  {CATEGORY_LABEL[c]}
+                </span>
                 <b className={`block text-[22px] tabular-nums ${n === 0 ? 'text-[#b9b6c8]' : urgent ? 'text-[#c62b2b]' : 'text-[#1d1b2b]'}`}>{n}</b>
                 <span className={`block text-[11.5px] ${urgent ? 'font-semibold text-[#c62b2b]' : 'text-[#b9b6c8]'}`}>{urgent ? `긴급 ${urgent}` : n ? '여유' : '없음'}</span>
               </button>
@@ -214,6 +227,22 @@ export default function AdminDashboard({
               ))}
             </div>
           </div>
+          <label className="flex min-h-[44px] items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3">
+            <Icon name="search" className="h-[18px] w-[18px] text-[#6b6880]" />
+            <span className="sr-only">검색</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="학생 이름·번호, 강사 이름으로 찾기"
+              className="min-w-0 flex-1 bg-transparent text-[14px] text-[#1d1b2b] outline-none"
+            />
+          </label>
+          {query.trim() && (
+            <Link href={`/lms/admin/students?${preview ? 'demo=1&' : ''}q=${encodeURIComponent(query.trim())}`} className="-mt-1 w-fit text-[12.5px] font-semibold text-[#5b3fe0]">
+              처리할 일이 아니라 학생 정보를 찾으려면 → 학생 목록에서 &lsquo;{query.trim()}&rsquo; 찾기
+            </Link>
+          )}
           {items.length > 0 && shown.length === 0 && (
             <p className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-6 text-center text-[13px] text-[#6b6880]">이 조건에 맞는 일이 없어요.</p>
           )}
@@ -230,6 +259,14 @@ export default function AdminDashboard({
                   {item.severity === 'overdue' && !item.error ? `${item.tag} · 기한 초과` : item.tag}
                 </span>
                 <h3 className="text-[15px] font-bold text-[#1d1b2b]">{item.title}</h3>
+                {item.studentCode && (
+                  <Link
+                    href={`/lms/admin/students/${item.studentCode}${preview ? '?demo=1' : ''}`}
+                    className="ml-auto flex min-h-[32px] items-center gap-0.5 text-[12.5px] font-semibold text-[#5b3fe0]"
+                  >
+                    학생 보기 <Icon name="chevron" className="h-4 w-4" />
+                  </Link>
+                )}
               </div>
               <p className="text-[12.5px] text-[#6b6880]">{item.detail}</p>
               {item.due && <p className={`text-[13px] ${DUE_STYLE[item.severity]}`}>{item.due}</p>}
@@ -269,7 +306,12 @@ export default function AdminDashboard({
         </section>
 
         <aside aria-label="오늘 수업" className="hidden rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-3.5 lg:block">
-          <h2 className="text-[12px] font-extrabold tracking-wider text-[#6b6880]">오늘 수업</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-[12px] font-extrabold tracking-wider text-[#6b6880]">오늘 수업</h2>
+            <Link href={`/lms/admin/schedule${preview ? '?demo=1' : ''}`} className="flex min-h-[32px] items-center text-[12.5px] font-semibold text-[#5b3fe0]">
+              이번 주 전체 <Icon name="chevron" className="h-4 w-4" />
+            </Link>
+          </div>
           {today.length === 0 && <p className="py-3 text-[13px] text-[#6b6880]">오늘 수업이 없어요.</p>}
           <ul>
             {today.map((l, i) => (
@@ -294,14 +336,7 @@ export default function AdminDashboard({
         </div>
       )}
 
-      <nav aria-label="메뉴" className="fixed inset-x-0 bottom-0 grid grid-cols-4 border-t border-[#e6e3ef] bg-white lg:hidden">
-        {['홈', '학생', '일정', '더보기'].map((t, i) => (
-          <span key={t} className={`py-2.5 text-center text-[12px] font-semibold ${i === 0 ? 'text-[#7d5fff]' : 'text-[#b9b6c8]'}`}>
-            {t}
-            {i > 0 && <span className="block text-[10px] text-[#b9b6c8]">준비 중</span>}
-          </span>
-        ))}
-      </nav>
+      <BottomNav active="home" demo={preview} />
     </div>
   );
 }

@@ -128,6 +128,10 @@ export type BoardItem = {
   kind: TaskSource['kind'];
   category: Category;
   error: boolean;
+  /** 학생 상세로 가는 연결 (학생과 관계된 업무만) */
+  studentCode: string | null;
+  /** 검색용 글자 (학생·강사 이름, 번호, 내용) */
+  searchText: string;
   severity: Severity;
   tag: string;
   title: string;
@@ -165,7 +169,7 @@ export function dueText(dueAt: Date, now: Date): string {
   return `${kstLabel(dueAt)}까지`;
 }
 
-function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error'> {
+function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' | 'studentCode' | 'searchText'> {
   switch (t.kind) {
     case 'new_student_matching': {
       const steps = [
@@ -310,7 +314,12 @@ function sortKey(t: TaskSource): number {
 /** 급한 순서: 노쇼 신고 → 기한 초과 → 24시간 안 → 나머지(기한 빠른 순, 오래된 순) */
 export function buildBoard(tasks: TaskSource[], now: Date): BoardItem[] {
   return tasks
-    .map((t) => ({ t, item: { ...toItem(t, now), category: categoryOf(t.kind), error: isError(t.kind) } }))
+    .map((t) => {
+      const base = toItem(t, now);
+      const studentCode = 'studentCode' in t && t.studentCode ? t.studentCode : null;
+      const searchText = [base.tag, base.title, base.detail, studentCode, 'tutorName' in t ? t.tutorName : null].filter(Boolean).join(' ').toLowerCase();
+      return { t, item: { ...base, category: categoryOf(t.kind), error: isError(t.kind), studentCode, searchText } };
+    })
     .sort((a, b) => SEVERITY_RANK[a.item.severity] - SEVERITY_RANK[b.item.severity] || sortKey(a.t) - sortKey(b.t))
     .map((x) => x.item);
 }
@@ -320,6 +329,13 @@ export type BoardFilter = 'all' | 'urgent' | 'error' | Category;
 
 export function isUrgent(i: BoardItem): boolean {
   return i.severity !== 'open';
+}
+
+/** 검색: 학생·강사 이름, 학생 번호, 내용 (띄어쓰기 무시) */
+export function searchBoard(items: BoardItem[], q: string): BoardItem[] {
+  const k = q.trim().toLowerCase().replace(/\s+/g, '');
+  if (!k) return items;
+  return items.filter((i) => i.searchText.replace(/\s+/g, '').includes(k));
 }
 
 export function filterBoard(items: BoardItem[], f: BoardFilter): BoardItem[] {

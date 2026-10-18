@@ -64,15 +64,6 @@ export function fakeTasks(now: Date): TaskSource[] {
   ];
 }
 
-export const FAKE_TODAY: FakeLesson[] = [
-  { time: '17:00', student: '가상학생일', tutor: 'Alex', state: '완료' },
-  { time: '18:00', student: '가상학생육', tutor: 'Blair', state: '완료' },
-  { time: '19:00', student: '가상학생오', tutor: 'Alex', state: '노쇼 신고' },
-  { time: '20:00', student: '가상학생사', tutor: 'Blair', state: '예정' },
-  { time: '20:00', student: '가상학생칠', tutor: 'Alex', state: '학생 변경' },
-  { time: '21:00', student: '가상학생이', tutor: 'Blair', state: '보강' },
-];
-
 /** 상단 운영 현황 3개 (처리할 일과 겹치지 않는 '현재 상태' 숫자) */
 export type OpsStats = { activeStudents: number; weekLessons: { done: number; total: number }; monthEnrollments: { fresh: number; renewal: number } };
 
