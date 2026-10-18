@@ -7,6 +7,11 @@
 import { addDays, diffDays, endOfKstDay, type KstDate } from './dates';
 import { CONFIRMED, RENEWAL, type CourseWeeks } from './policy';
 
+/** 화면 표기 (POL-PER-01 '1개월 = 4주 기준'): 12 → '3개월(12주)'. 4주 단위가 아니면 '10주' */
+export function courseName(weeks: number): string {
+  return weeks % 4 === 0 ? `${weeks / 4}개월(${weeks}주)` : `${weeks}주`;
+}
+
 export type Period = { index: number; start: KstDate; end: KstDate };
 
 export function periodCount(weeks: CourseWeeks): number {

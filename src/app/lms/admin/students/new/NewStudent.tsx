@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { checkRegularPlan, firstLessonDateOnOrAfter, issueText, type CellState, type PlanIssue } from '@/lms/rules/booking';
 import { addDays, instantToKstDate, weekdayOf, type KstDate } from '@/lms/rules/dates';
+import { courseName } from '@/lms/rules/period';
 import type { RegularSlot } from '@/lms/rules/schedule';
 import { CONFIRMED } from '@/lms/rules/policy';
 import {
@@ -59,7 +60,9 @@ const HINT: Record<PlanIssue['reason'], string> = {
   outside_availability: '강사 가능 시간 밖 — 강사와 확인 (서머타임 변경일 확인)',
 };
 const won = (n: number | null) => (n === null ? '-' : `${n.toLocaleString('ko-KR')}원`);
-const product = (d: Draft) => (d.durationMin && d.weeklyCount && d.weeks ? `${d.durationMin}분 · 주${d.weeklyCount}회 · ${d.weeks}주` : '상품 미정');
+const product = (d: Draft) => (d.durationMin && d.weeklyCount && d.weeks ? `${d.durationMin}분 · 주${d.weeklyCount}회 · ${courseName(d.weeks)}` : '상품 미정');
+// 수강 기간: 3개월(12주) · 84일 (POL-PER-01 '1개월 = 4주 기준', 계산은 28일 단위 그대로)
+const termText = (weeks: number) => `${courseName(weeks)} · ${weeks * 7}일`;
 
 export default function NewStudent({ nowIso, demo, applications, applicationsNote, tutors, save, sameEmail }: Props) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -362,7 +365,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       )}
       {row('수업 길이', pick('durationMin', CONFIRMED.durations, (n) => `${n}분`))}
       {row('주 횟수', pick('weeklyCount', CONFIRMED.weeklyCounts, (n) => `주 ${n}회`))}
-      {row('수강 기간', pick('weeks', CONFIRMED.courseWeeks, (n) => `${n}주 (${n / 4}기간 × 28일)`))}
+      {row('수강 기간', pick('weeks', CONFIRMED.courseWeeks, (n) => `${n / 4}개월 (${n}주 · ${n * 7}일)`))}
       {row('시작 희망일', <input type="date" readOnly={locked} value={draft.startWish} onChange={(e) => set('startWish', e.target.value)} className={`${inputCls(locked)} min-h-[38px] text-[14px]`} />)}
       {row('학습 목표', <input readOnly={locked} value={draft.goal} onChange={(e) => set('goal', e.target.value)} className={`${inputCls(locked)} min-h-[38px] text-[14px]`} />)}
     </Card>
@@ -458,8 +461,8 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         )}
         {firstPick && slots.length > 0 && !slots.some((s) => s.weekday === weekdayOf(firstPick)) && <p className="text-[13px] text-[#b3261e]">첫 수업일은 정규 요일({slots.map((s) => WEEKDAY_KO[s.weekday]).join('·')}) 중 하나여야 해요. 추천 날짜로 바꿨어요.</p>}
         {firstDate && firstDateWarnings(firstDate, today, draft.startWish).map((w) => <p key={w} className="text-[13px] text-[#9a5b00]">{w}</p>)}
-        {summary && row('수강 기간', `${dayLabel(summary.startDate)} – ${dayLabel(summary.endDate)} (${summary.periods}기간 × 28일, 정규 ${summary.lessons}회)`)}
-        <p className="mt-2 text-[12.5px] text-[#6b6880]">기간은 첫 정규 수업일부터 28일 단위로 계산해요 (POL-PER-02·03). 재등록은 이 화면이 아니라 학생 화면의 재등록 절차(POL-RN-07)를 따라요.</p>
+        {summary && row('수강 기간', `${dayLabel(summary.startDate)} – ${dayLabel(summary.endDate)} · ${draft.weeks ? termText(draft.weeks) : ''}, 정규 ${summary.lessons}회`)}
+        <p className="mt-2 text-[12.5px] text-[#6b6880]">수강 기간은 첫 정규 수업일부터 계산해요 (4주 = 28일, POL-PER-01~03). 재등록은 이 화면이 아니라 학생 화면의 재등록 절차(POL-RN-07)를 따라요.</p>
         {plan && <PlanResult issues={plan.issues} count={plan.lessons.length} />}
       </Card>
       <Card title="결제·입금 확인">
@@ -520,7 +523,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           : '-',
       )}
       {row('첫 수업일', summary ? dayLabel(summary.startDate) + (paid && tutor ? '' : ' (예정)') : '-')}
-      {row('수강 기간', summary ? `${dayLabel(summary.startDate)} – ${dayLabel(summary.endDate)} · ${summary.periods}기간` : '-')}
+      {row('수강 기간', summary ? `${dayLabel(summary.startDate)} – ${dayLabel(summary.endDate)}${draft.weeks ? ` · ${termText(draft.weeks)}` : ''}` : '-')}
       {row('만들어질 수업', paid && tutor && summary ? `정규 ${summary.lessons}회` : '없음 (강사 배정 때 생성)')}
       {row('안내 발송', '자동 발송 안 함 — 학생·강사 안내는 기존 승인·발송 절차대로. 학생 안내 전까지 매칭 업무가 처리할 일에 남아요')}
       {dupes.length > 0 && <p className="mt-2 text-[13px] text-[#9a5b00]">같은 이메일 기존 학생: {dupes.map((x) => x.code).join(', ')} — 새 학생으로 따로 만들어요 (연결 안 함).</p>}

@@ -26,7 +26,7 @@ describe('실제 데이터 → 처리할 일', () => {
       [],
     );
     expect(src.map((s) => s.kind)).toEqual(['new_student_matching', 'renewal_tutor_notice']);
-    expect(src[0]).toMatchObject({ studentName: '가상학생일', product: '50분 주2회 4주' });
+    expect(src[0]).toMatchObject({ studentName: '가상학생일', product: '50분 주2회 1개월(4주)' });
     expect(src[1]).toMatchObject({ newPeriod: '10/20(화)–11/16(월)', tutorName: '가상강사 Blair' });
     const board = buildBoard(src, new Date('2026-10-18T00:00:00Z'));
     expect(board).toHaveLength(2);

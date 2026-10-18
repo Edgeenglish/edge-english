@@ -4,6 +4,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
+import { courseName } from '../rules/period';
 import type { TaskSource } from './board';
 import type { FakeLesson, OpsStats } from './fake-data';
 
@@ -56,7 +57,7 @@ const d = (v: string | null) => (v ? new Date(v) : null);
 
 function product(e: Enrollment | null): string {
   if (!e) return '수강 정보 없음';
-  const term = e.weeks ? `${e.weeks}주` : (e.legacy_label ?? '');
+  const term = e.weeks ? courseName(e.weeks) : (e.legacy_label ?? '');
   return `${e.duration_min}분 주${e.weekly_count}회 ${term}`.trim();
 }
 

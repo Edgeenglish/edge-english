@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { addDays, formatInZone, kstToInstant, weekdayOf } from './dates';
-import { computePeriods, finalEndDate, periodOf, renewalStartDate } from './period';
+import { computePeriods, courseName, finalEndDate, periodOf, renewalStartDate } from './period';
 import { generateRegularLessons, totalLessons } from './schedule';
 import { creditsPerPeriod, isOfferedPlan, type PendingPolicy } from './policy';
 import { evaluateStudentChange, evaluateTutorCancel, isMakeupSlotAllowed } from './change';
@@ -340,5 +340,12 @@ describe('강사 휴무 일괄 처리 미리보기 (예: 11/2~11/10)', () => {
       { studentId: 'S1', lessonIds: ['a2', 'a3'], dates: ['2026-11-02', '2026-11-05'] },
       { studentId: 'S2', lessonIds: ['b1'], dates: ['2026-11-10'] },
     ]);
+  });
+});
+
+describe('수강 기간 화면 표기 (POL-PER-01)', () => {
+  it('개월(주) 병기', () => {
+    expect([4, 12, 24].map(courseName)).toEqual(['1개월(4주)', '3개월(12주)', '6개월(24주)']);
+    expect(courseName(10)).toBe('10주');
   });
 });
