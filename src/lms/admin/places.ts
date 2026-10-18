@@ -8,7 +8,7 @@ const COUNTRIES: [string, string, string, string, string[]][] = [
   ['한국', 'South Korea', '대한민국 korea', 'Asia/Seoul', ['서울|Seoul', '부산|Busan', '인천|Incheon', '대구|Daegu', '대전|Daejeon', '광주|Gwangju', '제주|Jeju']],
   ['미국', 'United States', 'usa us america 미합중국', '', ['뉴욕|New York|America/New_York', '보스턴|Boston|America/New_York', '워싱턴 D.C.|Washington DC|America/New_York', '애틀랜타|Atlanta|America/New_York', '마이애미|Miami|America/New_York', '필라델피아|Philadelphia|America/New_York', '뉴저지|New Jersey|America/New_York', '시카고|Chicago|America/Chicago', '댈러스|Dallas|America/Chicago', '휴스턴|Houston|America/Chicago', '오스틴|Austin|America/Chicago', '덴버|Denver|America/Denver', '피닉스|Phoenix|America/Phoenix', '로스앤젤레스|Los Angeles LA 엘에이|America/Los_Angeles', '어바인|Irvine|America/Los_Angeles', '샌디에이고|San Diego|America/Los_Angeles', '샌프란시스코|San Francisco|America/Los_Angeles', '산호세|San Jose|America/Los_Angeles', '시애틀|Seattle|America/Los_Angeles', '포틀랜드|Portland|America/Los_Angeles', '라스베이거스|Las Vegas|America/Los_Angeles', '호놀룰루|Honolulu Hawaii 하와이|Pacific/Honolulu', '앵커리지|Anchorage Alaska 알래스카|America/Anchorage']],
   ['캐나다', 'Canada', '', '', ['토론토|Toronto|America/Toronto', '오타와|Ottawa|America/Toronto', '몬트리올|Montreal|America/Toronto', '밴쿠버|Vancouver 벤쿠버|America/Vancouver', '빅토리아|Victoria|America/Vancouver', '캘거리|Calgary|America/Edmonton', '에드먼턴|Edmonton|America/Edmonton', '위니펙|Winnipeg|America/Winnipeg', '리자이나|Regina|America/Regina', '핼리팩스|Halifax|America/Halifax']],
-  ['호주', 'Australia', '오스트레일리아', '', ['시드니|Sydney|Australia/Sydney', '캔버라|Canberra|Australia/Sydney', '멜버른|Melbourne 멜번|Australia/Melbourne', '브리즈번|Brisbane|Australia/Brisbane', '골드코스트|Gold Coast|Australia/Brisbane', '퍼스|Perth|Australia/Perth', '애들레이드|Adelaide|Australia/Adelaide', '호바트|Hobart|Australia/Hobart', '다윈|Darwin|Australia/Darwin']],
+  ['호주', 'Australia', '오스트레일리아', '', ['시드니|Sydney|Australia/Sydney', '캔버라|Canberra|Australia/Sydney', '멜버른|Melbourne 멜번|Australia/Melbourne', '브리즈번|Brisbane|Australia/Brisbane', '골드코스트|Gold Coast|Australia/Brisbane', '퍼스|Perth|Australia/Perth', '애들레이드|Adelaide|Australia/Adelaide', '호바트|Hobart|Australia/Hobart', '다윈|Darwin|Australia/Darwin', '케언즈|Cairns|Australia/Brisbane', '투움바|Toowoomba|Australia/Brisbane', '타운즈빌|Townsville|Australia/Brisbane']],
   ['뉴질랜드', 'New Zealand', 'nz', 'Pacific/Auckland', ['오클랜드|Auckland', '웰링턴|Wellington', '크라이스트처치|Christchurch']],
   ['영국', 'United Kingdom', 'uk england 잉글랜드', 'Europe/London', ['런던|London', '맨체스터|Manchester', '버밍엄|Birmingham', '에든버러|Edinburgh']],
   ['일본', 'Japan', '', 'Asia/Tokyo', ['도쿄|Tokyo', '오사카|Osaka', '교토|Kyoto', '나고야|Nagoya', '후쿠오카|Fukuoka', '삿포로|Sapporo']],
@@ -27,6 +27,7 @@ const COUNTRIES: [string, string, string, string, string[]][] = [
   ['네덜란드', 'Netherlands', '', 'Europe/Amsterdam', ['암스테르담|Amsterdam']],
   ['스페인', 'Spain', '', 'Europe/Madrid', ['마드리드|Madrid', '바르셀로나|Barcelona']],
   ['아일랜드', 'Ireland', '', 'Europe/Dublin', ['더블린|Dublin']],
+  ['폴란드', 'Poland', '', 'Europe/Warsaw', ['바르샤바|Warsaw', '크라쿠프|Krakow']],
 ];
 const POPULAR = ['한국', '미국', '캐나다', '호주', '뉴질랜드', '영국', '일본', '싱가포르'];
 
