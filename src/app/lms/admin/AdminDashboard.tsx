@@ -179,7 +179,8 @@ export default function AdminDashboard({
           ))}
         </section>
 
-        <section aria-label="처리할 일 요약" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:col-span-2 lg:grid-cols-5">
+        {/* 휴대폰: 가로로 밀어서 보기 (다음 카드가 살짝 보이게), PC: 5칸 한 줄 */}
+        <section aria-label="처리할 일 요약" className="-mx-4 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 pb-1 lg:col-span-2 lg:mx-0 lg:grid lg:grid-cols-5 lg:overflow-visible lg:px-0 lg:pb-0">
           {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => {
             const { n, urgent } = byCat[c];
             const on = filter === c;
@@ -189,7 +190,7 @@ export default function AdminDashboard({
                 type="button"
                 aria-pressed={on}
                 onClick={() => setFilter(on ? 'all' : c)}
-                className={`rounded-[14px] border bg-white px-3 py-2.5 text-left ${on ? 'border-[#7d5fff] shadow-[0_0_0_2px_#e4ddff]' : 'border-[#e6e3ef]'}`}
+                className={`w-[38%] min-w-[128px] shrink-0 snap-start rounded-[14px] border bg-white px-3 py-2.5 text-left lg:w-auto lg:min-w-0 ${on ? 'border-[#7d5fff] shadow-[0_0_0_2px_#e4ddff]' : 'border-[#e6e3ef]'}`}
               >
                 <span className="flex items-center gap-1.5 text-[12.5px] text-[#6b6880]">
                   <Icon name={CATEGORY_ICON[c]} className={`h-4 w-4 ${urgent ? 'text-[#c62b2b]' : 'text-[#7d5fff]'}`} />
