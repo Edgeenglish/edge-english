@@ -110,6 +110,7 @@
 | H13·H16 | 대표 확인 | 도메인 등록·갱신 = 호스팅케이알, DNS 관리 업체 미확인, 임의 DNS 변경 금지 | — | D-28 |
 | H14·H15·H17 | 검토 기록 | 학원법 별표 4·원격교습 해석, 학원 미등록·성인 취미 사실, eBook 26,900원 디지털 영구 소장(공제 가능 단정 금지) | POL-PAY-04 | 제안서 1·3·7절 |
 | H07~H09 | 진행 기록 | 시험 환경 준비·anon-probe 결과·참고 이미지 전달 시점 | — | `supabase-test-setup.md`, `12-dashboard-reference-review.md` |
+| H22 | 개발요구 (2026-10-21) | 신규 등록 한 번의 확정으로 양측 일정 반영·최종 안내. 강사 '가능' ≠ 확정, 한쪽만 안내되면 완료 아님, 실패한 쪽만 재시도, 일정 버전별 중복 방지 | — | `schedule_plans`·`schedule_notices`·`admin_confirm_schedule` 등 (migration 1000, 시험용 DB 미적용), 설계 `16-schedule-confirm.md`. 채널·회신 의무·시간값은 D-51 |
 
 **원본 안에서 서로 맞지 않는 문장 (대표가 원본에서 정리 필요 — Claude는 원본을 고치지 않음)**
 
