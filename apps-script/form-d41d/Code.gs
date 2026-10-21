@@ -17,7 +17,7 @@ const PAY = '결제 방법';
 const CARD_URL = 'https://tangerineenglish.imweb.me/?idx=11';
 const PAY_HELP = '계좌이체: 안내된 계좌로 입금해 주세요. 입금자명이 학생 이름과 다르면 \'입금자명\'에 꼭 적어 주세요.\n' +
   '카드결제: 신청서를 제출하면 다음 화면에 결제 링크가 나와요. 지금은 이 화면을 벗어나지 말고 끝까지 작성해 주세요.';
-const CONFIRM_ADD = '💳 카드결제를 고르셨다면 아래 링크에서 결제해 주세요.\n(수업 길이·횟수·수강 기간을 신청서와 똑같이 골라 주세요)\n' + CARD_URL;
+const CONFIRM_ADD = '💳 카드결제를 고르셨다면 아래 링크에서 결제해 주세요.\n(수업 길이·횟수·수강 기간을 신청서와 똑같이 골라 주세요)\n' + CARD_URL + '\n결제가 어려우시면 카카오톡 채널로 말씀해 주세요.';
 
 function 미리보기() {
   const plan = check_();
