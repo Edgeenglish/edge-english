@@ -31,7 +31,7 @@ function 미리보기() {
 function 적용() {
   const plan = check_();
   const form = plan.form;
-  plan.pay.asMultipleChoiceItem().setHelpText(PAY_HELP);
+  // '결제 방법' 안내는 2026-10-21 대표가 폼에서 직접 고침 (계좌번호 포함) → 스크립트는 건드리지 않음
   const now = form.getConfirmationMessage() || '';
   form.setConfirmationMessage(now ? now + '\n\n' + CONFIRM_ADD : CONFIRM_ADD);
   Logger.log('완료. 휴대폰으로 시험 응답 1건을 제출해서 제출 후 화면에 링크가 나오는지 확인해 주세요.');
