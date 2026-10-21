@@ -53,6 +53,10 @@ function 미리보기() {
 function 적용() {
   const plan = check_();
   const form = plan.form;
+  if (plan.leftover) {
+    form.deleteItem(plan.leftover); // 2026-10-21 첫 실행이 중간에 멈추며 맨 끝에 남긴 빈 시간표 질문
+    Logger.log('지난번 실행이 남긴 시간표 질문(맨 끝)을 지웠습니다.');
+  }
 
   // 뒤쪽 질문부터 넣어야 앞쪽 질문 위치가 안 밀림
   const [first, second] = plan.time.getIndex() > plan.place.getIndex() ? ['time', 'place'] : ['place', 'time'];
@@ -69,7 +73,7 @@ function replaceTime_(form, old) {
     .setHelpText('수업을 시작할 수 있는 시각을 요일마다 모두 골라 주세요. 많이 고를수록 강사 매칭이 빨라요.\n예) 화·목 저녁 7시 30분 시작 → \'오후 7:30\' 줄의 화·목 칸\n해외에 계시면 한국 시각이 아니라 지금 계신 곳의 시각으로 골라 주세요.')
     .setRows(STARTS)
     .setColumns(DAYS);
-  form.moveItem(grid, at); // 옛 질문 자리 (옛 질문은 뒤에서 보관 섹션으로 옮김)
+  form.moveItem(grid.getIndex(), at); // 옛 질문 자리 (옛 질문은 뒤에서 보관 섹션으로 옮김)
 }
 
 function replacePlace_(form, old) {
@@ -81,8 +85,8 @@ function replacePlace_(form, old) {
   const city = form.addTextItem()
     .setTitle(NEW_CITY)
     .setHelpText('예) 시드니, 멜버른, 토론토, 밴쿠버. 한국에 사시면 비워 두셔도 돼요.');
-  form.moveItem(country, at); // 옛 질문 자리
-  form.moveItem(city, at + 1);
+  form.moveItem(country.getIndex(), at); // 옛 질문 자리
+  form.moveItem(city.getIndex(), at + 1);
 }
 
 /** 옛 질문을 맨 끝 '보관' 섹션으로. 이 섹션 머리의 이동을 '제출'로 → 앞 섹션을 다 쓰면 바로 제출되어 학생은 볼 수 없음 */
@@ -93,7 +97,7 @@ function archive_(form, olds) {
   page.setGoToPage(FormApp.PageNavigationType.SUBMIT);
   olds.forEach((old) => {
     unrequire_(old);
-    form.moveItem(old, form.getItems().length - 1); // 맨 끝 = 보관 섹션 안
+    form.moveItem(old.getIndex(), form.getItems().length - 1); // 맨 끝 = 보관 섹션 안
   });
 }
 
@@ -102,7 +106,11 @@ function check_() {
   const form = FormApp.openById(FORM_ID);
   const items = form.getItems();
   const find = (prefix) => items.filter((it) => it.getTitle().trim().indexOf(prefix) === 0);
-  if (find(NEW_GRID).length || find(NEW_COUNTRY).length || find(ARCHIVE).length) {
+  // 2026-10-21 첫 실행은 시간표 질문을 맨 끝에 추가한 뒤 오류로 멈춤 → 그 질문 하나만 남은 경우는 '적용'에서 지우고 다시 진행
+  const grids = find(NEW_GRID);
+  const leftover = grids.length === 1 && !find(NEW_COUNTRY).length && !find(ARCHIVE).length && grids[0].getIndex() === items.length - 1 ? grids[0] : null;
+  if (leftover) Logger.log('지난번 실행이 남긴 시간표 질문이 맨 끝에 있음 → \'적용\' 때 지우고 다시 진행');
+  if ((grids.length && !leftover) || find(NEW_COUNTRY).length || find(ARCHIVE).length) {
     throw new Error('이미 바뀐 폼입니다 (새 질문이 있음). 아무것도 하지 않았습니다.');
   }
   const time = find(OLD_TIME);
@@ -111,12 +119,13 @@ function check_() {
     throw new Error('바꿀 질문을 정확히 찾지 못했습니다 (희망 수업시간 ' + time.length + '개, 국가와 도시 ' + place.length + '개). 아무것도 하지 않았습니다.');
   }
   // 마지막 섹션에 '답에 따라 다음 섹션으로' 질문이 있으면 그 답을 고른 학생에게 보관 섹션이 보일 수 있음 → 멈춤
-  const lastBreak = items.map((it) => it.getType()).lastIndexOf(FormApp.ItemType.PAGE_BREAK);
-  const jumpy = items.slice(lastBreak + 1).filter((it) => jumpCount_(it) > 0);
+  const rest = leftover ? items.slice(0, -1) : items;
+  const lastBreak = rest.map((it) => it.getType()).lastIndexOf(FormApp.ItemType.PAGE_BREAK);
+  const jumpy = rest.slice(lastBreak + 1).filter((it) => jumpCount_(it) > 0);
   if (jumpy.length) {
     throw new Error('마지막 섹션에 답에 따라 이동하는 질문이 있어 숨기기가 안전하지 않습니다: ' + jumpy.map((it) => firstLine_(it.getTitle())).join(', ') + '. 아무것도 하지 않았습니다.');
   }
-  return { form, time: time[0], place: place[0] };
+  return { form, time: time[0], place: place[0], leftover };
 }
 
 /** 옛 질문은 지우지 않고 '필수'만 풀기 (보관 섹션에 있어도 혹시 보이게 되돌렸을 때 막히지 않게) */
