@@ -59,7 +59,8 @@ declare
   -- 내부 함수가 데이터를 읽지 않는 것을 검토한 확장 (이 밖의 확장 함수가 앱 사용자에게 열려 있으면 실패)
   reviewed_ext text[] := array['btree_gist'];
   definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'is_owner', 'my_role', 'tutor_my_students', 'student_my_tutors', 'consent_record',
-                          'admin_register_student', 'admin_students_with_email'];
+                          'admin_register_student', 'admin_students_with_email',
+                          'admin_propose_schedule', 'admin_confirm_schedule', 'admin_close_plan', 'admin_mark_proposal_sent', 'admin_mark_notice_sent'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
   persona_uid uuid[];

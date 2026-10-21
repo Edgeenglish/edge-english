@@ -372,12 +372,14 @@ select pg_temp.expect_error($$update admin_tasks set status = 'done', done_at = 
 update admin_tasks set tutor_id = '11111111-1111-1111-1111-111111111111', tutor_assigned_at = now()
   where kind = 'new_student_matching' and enrollment_id = '99999999-1000-0000-0000-000000000001';
 select pg_temp.expect_error($$update admin_tasks set status = 'done', done_at = now() where kind = 'new_student_matching' and enrollment_id = '99999999-1000-0000-0000-000000000001'$$, 'check');
-select pg_temp.ok((select missing_steps = array['notify_student'] from admin_task_board where enrollment_id = '99999999-1000-0000-0000-000000000001'),
-                  '강사만 배정하고 학생 안내 전이면 업무가 남아 있고 남은 단계가 보임');
-update admin_tasks set student_notified_at = now(), status = 'done', done_at = now()
+select pg_temp.ok((select missing_steps = array['notify_tutor', 'notify_student'] from admin_task_board where enrollment_id = '99999999-1000-0000-0000-000000000001'),
+                  '강사만 배정하고 양쪽 최종 안내 전이면 업무가 남아 있고 남은 단계가 보임');
+select pg_temp.expect_error($$update admin_tasks set student_notified_at = now(), status = 'done', done_at = now()
+  where kind = 'new_student_matching' and enrollment_id = '99999999-1000-0000-0000-000000000001'$$, 'check');
+update admin_tasks set student_notified_at = now(), tutor_notified_at = now(), status = 'done', done_at = now()
   where kind = 'new_student_matching' and enrollment_id = '99999999-1000-0000-0000-000000000001';
 select pg_temp.ok(not exists (select 1 from admin_task_board where enrollment_id = '99999999-1000-0000-0000-000000000001'),
-                  '강사 배정 + 학생 안내를 모두 마쳐야 매칭 업무 완료');
+                  '강사 배정 + 학생·강사 양쪽 최종 안내를 모두 마쳐야 매칭 업무 완료 (H22)');
 select pg_temp.expect_error($$delete from admin_tasks$$, '삭제할 수 없습니다');
 select pg_temp.ok(true, '운영 업무는 지울 수 없음 (취소는 사유와 함께)');
 
@@ -563,7 +565,7 @@ language sql as $$
   select jsonb_build_object(
     'student', jsonb_build_object('name_ko', name, 'name_en', 'Reg ' || name, 'email', email, 'timezone', 'Asia/Seoul'),
     'course', jsonb_build_object('weeks', weeks, 'weekly_count', weekly, 'duration_min', dur, 'start_date', start, 'amount_due', 100000),
-    'tutor_id', tutor, 'slots', slots,
+    'tutor_id', tutor, 'slots', slots, 'tutor_answer', 'accepted',   -- 강사가 이미 가능하다고 답함 → 저장과 확정을 한 번에 (migration 1000)
     'payment', case when paid then jsonb_build_object('method', 'bank_transfer', 'amount', 100000, 'paid_at', ((start - 7) + time '14:22') at time zone 'Asia/Seoul', 'payer_name', name) end)
 $$;
 
@@ -649,3 +651,143 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
 select pg_temp.ok((select count(*) from admin_students_with_email('one@x.kr')) = 0, '운영자가 아니면 이메일 확인 결과 0건');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------- 신규 배정 확정 관리 (migration 1000, 정책 원본 H22 6번 필수 검증) ----------
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000001000', 'TestTutorConf', 'Korea', 'Asia/Seoul');
+create or replace function pg_temp.eid(mail text) returns uuid
+language sql as $$ select e.id from enrollments e join students s on s.id = e.student_id where s.email = mail $$;
+create or replace function pg_temp.task(mail text) returns admin_tasks
+language sql as $$ select t.* from admin_tasks t where t.kind = 'new_student_matching' and t.enrollment_id = pg_temp.eid(mail) $$;
+create or replace function pg_temp.notice(mail text, who text) returns schedule_notices
+language sql as $$ select n.* from schedule_notices n join schedule_plans p on p.id = n.plan_id
+                   where p.enrollment_id = pg_temp.eid(mail) and p.state = 'confirmed' and n.recipient_kind = who $$;
+-- 강사 답을 아직 못 받은 등록 = tutor_answer 없음
+create or replace function pg_temp.body_wait(name text, email text, start date, slots jsonb) returns jsonb
+language sql as $$ select pg_temp.body(name, email, 4, jsonb_array_length(slots), 50, start, '55555555-0000-0000-0000-000000001000', slots, true) - 'tutor_answer' $$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2)
+
+-- 1) 강사 '가능' 답 전: 제안만 저장, 수업·안내 없음
+select pg_temp.ok((select r ->> 'plan_state' = 'proposed' and (r ->> 'lessons')::int = 0
+                   from pg_temp.reg('90000000-0000-0000-0000-000000001001',
+                     pg_temp.body_wait('확정일', 'c1@x.kr', '2027-06-01', '[{"weekday":2,"time":"19:00"},{"weekday":4,"time":"19:00"}]')) r),
+  '강사 답 전 등록 = 일정안(제안)만, 수업 0회');
+select pg_temp.ok(not exists (select 1 from lessons where enrollment_id = pg_temp.eid('c1@x.kr'))
+              and not exists (select 1 from regular_schedules r join students s on s.id = r.student_id where s.email = 'c1@x.kr')
+              and not exists (select 1 from schedule_notices n join schedule_plans p on p.id = n.plan_id where p.enrollment_id = pg_temp.eid('c1@x.kr'))
+              and (pg_temp.task('c1@x.kr')).tutor_assigned_at is null,
+  '강사 가능 답변만으로는 확정되지 않음 — 정규 일정·수업·안내·강사 배정 모두 없음');
+select pg_temp.ok((select state = 'proposed' and proposal_sent_at is null from schedule_plan_board where student_code = (select code from students where email = 'c1@x.kr')),
+  '답 대기 일정안은 운영자 화면 목록에 보임');
+
+-- 제안 문구 복사 = 제안 보냄 (처음 시각만)
+select admin_mark_proposal_sent((select id from schedule_plans where enrollment_id = pg_temp.eid('c1@x.kr')));
+select pg_temp.ok(admin_mark_proposal_sent((select id from schedule_plans where enrollment_id = pg_temp.eid('c1@x.kr')))
+                  = (select proposal_sent_at from schedule_plans where enrollment_id = pg_temp.eid('c1@x.kr')),
+  '제안 문구를 다시 복사해도 처음 보낸 시각 유지');
+
+-- 2) 한 번 확정 → 양쪽 일정과 안내 2건이 함께 생김
+select pg_temp.ok((admin_confirm_schedule((select id from schedule_plans where enrollment_id = pg_temp.eid('c1@x.kr'))) ->> 'lessons')::int = 8,
+  '운영자가 한 번 확정 → 정규 수업 8회 생성');
+select pg_temp.ok((select count(*) from schedule_notices n join schedule_plans p on p.id = n.plan_id where p.enrollment_id = pg_temp.eid('c1@x.kr')) = 2
+              and (pg_temp.notice('c1@x.kr', 'student')).status = 'pending' and (pg_temp.notice('c1@x.kr', 'tutor')).status = 'pending'
+              and (pg_temp.notice('c1@x.kr', 'tutor')).channel = 'whatsapp_manual' and (pg_temp.notice('c1@x.kr', 'student')).channel = 'kakao_manual'
+              and (pg_temp.task('c1@x.kr')).tutor_assigned_at is not null,
+  '확정과 동시에 학생·강사 최종 안내 2건(대기) + 강사 배정 기록');
+create temp table t_conf as select admin_confirm_schedule((select id from schedule_plans where enrollment_id = pg_temp.eid('c1@x.kr'))) as r;
+select pg_temp.ok((select (r ->> 'repeated')::boolean from t_conf)
+              and (select count(*) from lessons where enrollment_id = pg_temp.eid('c1@x.kr')) = 8
+              and (select count(*) from schedule_notices n join schedule_plans p on p.id = n.plan_id where p.enrollment_id = pg_temp.eid('c1@x.kr')) = 2,
+  '확정을 두 번 눌러도 수업·안내는 한 벌');
+
+-- 3) 학생 쪽만 보낸 경우: 완료 아님
+select admin_mark_notice_sent((pg_temp.notice('c1@x.kr', 'student')).id);
+select pg_temp.ok((pg_temp.task('c1@x.kr')).status = 'open'
+              and (select missing_steps = array['notify_tutor'] from admin_task_board where enrollment_id = pg_temp.eid('c1@x.kr'))
+              and (select tutor_notice_status = 'pending' and student_notice_status = 'sent' from schedule_plan_board where enrollment_id = pg_temp.eid('c1@x.kr')),
+  '학생에게만 안내하면 매칭 업무는 열린 채 "강사에게 최종 안내"만 남음 (사고 상황)');
+select pg_temp.ok((admin_mark_notice_sent((pg_temp.notice('c1@x.kr', 'student')).id) ->> 'repeated')::boolean
+              and (select count(*) from audit_log where table_name = 'schedule_notices' and row_id = (pg_temp.notice('c1@x.kr', 'student')).id::text and action = 'UPDATE') = 1,
+  '이미 보낸 안내를 다시 복사해도 기록이 바뀌지 않음 (보낸 시각 그대로)');
+reset role;
+select pg_temp.expect_error($$update admin_tasks set student_notified_at = now(), status = 'done', done_at = now()
+  where kind = 'new_student_matching' and enrollment_id = pg_temp.eid('c1@x.kr')$$, 'admin_tasks_matching_tutor_notified');
+select pg_temp.ok(true, '강사 안내 기록 없이는 DB가 매칭 업무 완료를 거부');
+set role authenticated;
+
+-- 강사 쪽도 보냄 → 업무 자동 완료, 화면 목록에서 빠짐
+create temp table t_sent as select admin_mark_notice_sent((pg_temp.notice('c1@x.kr', 'tutor')).id) as r;
+select pg_temp.ok((select (r ->> 'all_sent')::boolean from t_sent)
+              and (pg_temp.task('c1@x.kr')).status = 'done'
+              and (pg_temp.task('c1@x.kr')).tutor_notified_at is not null and (pg_temp.task('c1@x.kr')).student_notified_at is not null
+              and not exists (select 1 from schedule_plan_board where enrollment_id = pg_temp.eid('c1@x.kr')),
+  '양쪽 안내가 끝나면 매칭 업무가 사람이 닫지 않아도 완료되고 목록에서 빠짐');
+
+-- 4) 강사가 안 된다고 함 → 다른 안 (버전 2). 닫힌 안은 확정 불가, 같은 요청 번호는 한 번만
+select pg_temp.reg('90000000-0000-0000-0000-000000001002',
+  pg_temp.body_wait('거절', 'c2@x.kr', '2027-06-07', '[{"weekday":1,"time":"19:00"}]'));
+select admin_close_plan((select id from schedule_plans where enrollment_id = pg_temp.eid('c2@x.kr') and version = 1), 'declined', '그 시간 다른 학교 수업');
+select pg_temp.expect_error($$select admin_confirm_schedule((select id from schedule_plans where enrollment_id = pg_temp.eid('c2@x.kr') and version = 1))$$, '닫힌 일정안');
+select pg_temp.ok(true, '강사가 거절한 안은 확정할 수 없음');
+create temp table t_prop as select admin_propose_schedule('90000000-0000-0000-0000-000000001003', pg_temp.eid('c2@x.kr'),
+  '{"tutor_id":"55555555-0000-0000-0000-000000001000","slots":[{"weekday":1,"time":"18:00"}],"start_date":"2027-06-07"}') as r;
+insert into t_prop select admin_propose_schedule('90000000-0000-0000-0000-000000001003', pg_temp.eid('c2@x.kr'),
+  '{"tutor_id":"55555555-0000-0000-0000-000000001000","slots":[{"weekday":1,"time":"18:00"}],"start_date":"2027-06-07"}');
+select pg_temp.ok((select array_agg((r ->> 'version') || coalesce(r ->> 'repeated', '')) from t_prop) = array['2', '2true']
+              and (select count(*) from schedule_plans where enrollment_id = pg_temp.eid('c2@x.kr')) = 2,
+  '다른 시간으로 다시 제안 = 버전 2, 같은 요청을 두 번 보내도 1건');
+select admin_propose_schedule('90000000-0000-0000-0000-000000001004', pg_temp.eid('c2@x.kr'),
+  '{"tutor_id":"55555555-0000-0000-0000-000000001000","slots":[{"weekday":1,"time":"17:00"}],"start_date":"2027-06-07"}');
+select pg_temp.ok((select state from schedule_plans where id = '90000000-0000-0000-0000-000000001003') = 'withdrawn'
+              and (select count(*) from schedule_plans where enrollment_id = pg_temp.eid('c2@x.kr') and state = 'proposed') = 1,
+  '답 대기 중 새 안을 제안하면 이전 안은 "다른 안으로 바꿈"으로 닫힘 (답 대기는 항상 1건)');
+
+-- 제안 뒤 강사 일정이 생기면 확정 때 다시 검사 → 아무것도 바뀌지 않음
+reset role;
+insert into tutor_time_off (tutor_id, starts_at, ends_at, kind)
+values ('55555555-0000-0000-0000-000000001000', '2027-06-14 16:30+09', '2027-06-14 18:30+09', 'block');
+set role authenticated;
+select pg_temp.expect_error($$select admin_confirm_schedule('90000000-0000-0000-0000-000000001004')$$, '일정 충돌');
+select pg_temp.ok((select state from schedule_plans where id = '90000000-0000-0000-0000-000000001004') = 'proposed'
+              and not exists (select 1 from lessons where enrollment_id = pg_temp.eid('c2@x.kr')),
+  '제안 뒤 생긴 강사 휴무와 겹치면 확정 거절 — 수업·안내 아무것도 안 생김');
+
+-- 결제 대기 등록에는 제안 불가
+select pg_temp.expect_error($$select admin_propose_schedule(gen_random_uuid(), pg_temp.eid('wait@x.kr'),
+  '{"tutor_id":"55555555-0000-0000-0000-000000001000","slots":[{"weekday":1,"time":"19:00"},{"weekday":3,"time":"19:00"}],"start_date":"2027-03-01"}')$$, 'POL-OP-13');
+select pg_temp.ok(true, '결제 확인 전 등록에는 강사 제안도 불가');
+
+-- 5) 자동 발송기(나중): 실패한 쪽만 다시, 성공은 덮지 않음, 결과 불명확은 자동 재시도 안 함
+select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000001005',
+  pg_temp.body('자동', 'c3@x.kr', 4, 1, 50, '2027-06-08', '55555555-0000-0000-0000-000000001000', '[{"weekday":2,"time":"07:00"}]', true)) ->> 'plan_state') = 'confirmed',
+  '강사가 이미 가능하다고 답했으면 등록 저장 한 번으로 확정까지');
+select pg_temp.expect_error($$select lms_notice_result((pg_temp.notice('c3@x.kr', 'tutor')).id, 'sent', null)$$, 'permission|42501');
+select pg_temp.ok(true, '앱 사용자는 발송 결과를 직접 기록할 수 없음 (서버만)');
+reset role;
+select lms_notice_result((pg_temp.notice('c3@x.kr', 'tutor')).id, 'failed', 'test: 발송 실패');
+select lms_notice_result((pg_temp.notice('c3@x.kr', 'student')).id, 'sent', null);
+select pg_temp.ok((select array_agg(recipient_kind) from schedule_notice_outbox o join schedule_plans p on p.id = o.plan_id where p.enrollment_id = pg_temp.eid('c3@x.kr')) = array['tutor']
+              and (pg_temp.task('c3@x.kr')).status = 'open',
+  '강사 쪽 실패 → 다시 보낼 대상은 강사 1건뿐, 학생 안내는 다시 안 보냄, 업무는 열림');
+select lms_notice_result((pg_temp.notice('c3@x.kr', 'student')).id, 'failed', 'test: 늦게 온 실패');
+select pg_temp.ok((pg_temp.notice('c3@x.kr', 'student')).status = 'sent', '이미 보낸 안내는 나중 결과로 덮이지 않음');
+select lms_notice_result((pg_temp.notice('c3@x.kr', 'tutor')).id, 'unknown', 'test: 응답 없음');
+select pg_temp.ok(not exists (select 1 from schedule_notice_outbox o join schedule_plans p on p.id = o.plan_id where p.enrollment_id = pg_temp.eid('c3@x.kr'))
+              and (select tutor_notice_status = 'unknown' from schedule_plan_board where enrollment_id = pg_temp.eid('c3@x.kr')),
+  '결과가 불명확하면 자동 재시도 대상에서 빠지고 운영자 화면에 "확인 필요"로 남음');
+select lms_notice_result((pg_temp.notice('c3@x.kr', 'tutor')).id, 'sent', null);
+select pg_temp.ok((pg_temp.task('c3@x.kr')).status = 'done', '강사 쪽까지 보내지면 업무 완료');
+
+-- 권한
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';   -- 학생
+select pg_temp.expect_error($$select admin_confirm_schedule('90000000-0000-0000-0000-000000001004')$$, '42501');
+select pg_temp.expect_error($$select admin_mark_notice_sent((select id from schedule_notices limit 1))$$, '42501');
+select pg_temp.ok((select count(*) from schedule_plans) = 0 and (select count(*) from schedule_notices) = 0, '학생은 일정안·안내 기록을 볼 수도, 확정·기록할 수도 없음');
+reset request.jwt.claim.sub;
+reset role;
+set role anon;
+select pg_temp.expect_error($$select admin_confirm_schedule('90000000-0000-0000-0000-000000001004')$$, 'permission|42501');
+reset role;
+select pg_temp.ok(true, '로그인 안 한 요청은 확정 함수를 부를 수 없음');
