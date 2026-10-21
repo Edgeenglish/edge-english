@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>학생 동의 C · 요약 먼저</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&amp;family=Montserrat:wght@700;800&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#4a2fc4}a:hover{color:#2f1d8a}
+.top{height:56px;display:flex;align-items:center;gap:10px;padding:0 18px;background:#ffffff;border-bottom:1px solid #e6e3ef;flex:none}
+.logo{font-family:Montserrat,sans-serif;font-weight:800;font-size:17px;color:#09246b}
+.logo b{color:#5b3fd9}
+.ver{font-size:12px;color:#4a4760;background:#efebff;border-radius:99px;padding:3px 10px;font-weight:500}
+.sum{background:#09246b;color:#ffffff;border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.sum b{color:#ffd401}
+.sum li{font-size:14px;line-height:1.55}
+.seg{display:flex;background:#e4e0f0;border-radius:12px;padding:4px;gap:4px}
+.seg button{flex:1;min-height:40px;border:0;border-radius:9px;font:inherit;font-size:14px;font-weight:700;background:transparent;color:#4a4760;cursor:pointer}
+.seg button.on{background:#ffffff;color:#1d1b2b}
+.acc{background:#ffffff;border:1px solid #e1ddeb;border-radius:12px}
+.acc .hd{display:flex;align-items:center;gap:8px;min-height:48px;padding:0 14px;font-size:15px;font-weight:700;width:100%;background:transparent;border:0;font-family:inherit;color:#1d1b2b;text-align:left;cursor:pointer}
+.acc .bd{padding:0 14px 14px;font-size:14px;line-height:1.6;color:#2e2b40}
+.hl{background:#fff1a8;border-radius:3px;padding:0 3px;font-weight:700}
+.pend{display:inline-block;color:#7a4300;background:#fff1d6;border-radius:6px;padding:0 6px;font-size:12px;font-weight:700}
+.chk{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.5;padding:11px 12px;border-radius:12px;border:1px solid #e1ddeb;background:#ffffff}
+.chk input{width:22px;height:22px;accent-color:#5b3fd9;flex:none;margin:0}
+.req{color:#b42318;font-weight:700;font-size:12px}
+.opt{color:#4a4760;font-weight:700;font-size:12px}
+.btn{min-height:50px;border-radius:12px;border:0;font:inherit;font-weight:700;font-size:16px;padding:0 18px;cursor:pointer;width:100%}
+.pri{background:#5b3fd9;color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1750px; height: 1000px; box-sizing: border-box; padding: 40px 48px; background: #ecebf2; font-family: 'Noto Sans KR', system-ui, sans-serif; color: #1d1b2b; display: flex; gap: 64px; align-items: flex-start">
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <p style="margin: 0; font-size: 13px; font-weight: 700; color: #4a4760">휴대폰 390px</p>
+    <div style="width: 390px; height: 844px; background: #f6f5fa; border-radius: 28px; overflow: hidden; border: 1px solid #d6d3e2; display: flex; flex-direction: column">
+      <div class="top"><span class="logo">Edge<b>English</b></span><span style="flex: 1"></span><span class="ver">CT2026A 초안</span></div>
+      <div style="flex: 1; overflow: hidden; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+        <div class="sum">
+          <span style="font-size: 13px; opacity: 0.85">2회차 수강등록 · 꼭 기억할 4가지</span>
+          <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px">
+            <li>변경은 수업 <b>6시간 전</b>까지</li>
+            <li>변경 횟수 4주마다 <b>주 2회 → 2회</b></li>
+            <li>보강은 <b>수강 기간 안</b>에만</li>
+            <li>시간은 모두 <b>한국 시간</b></li>
+          </ul>
+        </div>
+        <div class="seg" role="group" aria-label="보기 방식"><button class="on" type="button">글로 보기</button><button type="button">원본 이미지</button></div>
+        <div class="acc"><button class="hd" type="button" aria-expanded="true"><span style="flex: 1">1. 취소·변경과 횟수</span><span aria-hidden="true">−</span></button><div class="bd">수업 시작 <span class="hl">6시간 전</span>까지 가능. 6시간 이내 신청은 1회 차감. 4주마다 주 1회 1 · 주 2회 2 · 주 3회 이상 3회.</div></div>
+        <div class="acc"><button class="hd" type="button" aria-expanded="false"><span style="flex: 1">2. 보강</span><span aria-hidden="true">+</span></button></div>
+        <div class="acc"><button class="hd" type="button" aria-expanded="false"><span style="flex: 1">3. 수강 기간·이월·연기</span><span aria-hidden="true">+</span></button></div>
+        <div class="acc"><button class="hd" type="button" aria-expanded="false"><span style="flex: 1">4. 공휴일·지각·기타</span><span aria-hidden="true">+</span></button></div>
+      </div>
+      <div style="flex: none; background: #ffffff; border-top: 1px solid #e1ddeb; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 8px">
+        <label class="chk"><input type="checkbox" checked><span><span class="req">필수</span> 수업 안내를 확인했고 동의해요</span></label>
+        <label class="chk"><input type="checkbox" checked><span><span class="req">필수</span> 개인정보 처리 안내 <a href="#">보기</a></span></label>
+        <button class="btn pri" type="button">확인하고 동의합니다</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <p style="margin: 0; font-size: 13px; font-weight: 700; color: #4a4760">PC 1200px · 왼쪽 글 / 오른쪽 원본 이미지 비교</p>
+    <div style="width: 1200px; height: 844px; background: #f6f5fa; border-radius: 12px; overflow: hidden; border: 1px solid #d6d3e2; display: flex; flex-direction: column">
+      <div class="top" style="padding: 0 32px"><span class="logo">Edge<b>English</b></span><span style="font-size: 14px; color: #4a4760; margin-left: 8px">수업 안내 확인</span><span style="flex: 1"></span><span class="ver">CT2026A 초안</span></div>
+      <div style="flex: 1; display: flex; gap: 28px; padding: 24px 36px; overflow: hidden">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+          <div class="sum">
+            <span style="font-size: 13px; opacity: 0.85">STU-0012 · 2회차 수강등록 (2026-11-03 ~ 11-30) · 꼭 기억할 4가지</span>
+            <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; font-size: 14px">
+              <span>변경은 수업<br><b>6시간 전</b>까지</span><span>변경 횟수 4주마다<br><b>주 2회 → 2회</b></span><span>보강은<br><b>수강 기간 안</b>에만</span><span>모든 시간은<br><b>한국 시간</b></span>
+            </div>
+          </div>
+          <div class="seg" role="group" aria-label="보기 방식" style="max-width: 360px"><button class="on" type="button">글로 보기</button><button type="button">원본 이미지</button></div>
+          <div class="acc"><button class="hd" type="button" aria-expanded="true"><span style="flex: 1">1. 취소·변경과 횟수</span><span aria-hidden="true">−</span></button><div class="bd">수업 시작 <span class="hl">6시간 전</span>까지 가능. 6시간 이내 신청은 수업 1회 차감. 인터넷·기기 문제 불참도 1회 차감. 변경 가능 횟수는 4주마다 새로: 주 1회 1 · 주 2회 2 · 주 3회 이상 3회.</div></div>
+          <div class="acc"><button class="hd" type="button" aria-expanded="true"><span style="flex: 1">2. 보강</span><span aria-hidden="true">−</span></button><div class="bd">정상 변경일 때만, 수강 기간 안에. 다른 강사가 할 수 있어요. <span class="pend">재보강: 결정 후</span></div></div>
+          <div class="acc"><button class="hd" type="button" aria-expanded="false"><span style="flex: 1">3. 수강 기간·이월·장기 연기 (4주 · 12주 · 24주)</span><span aria-hidden="true">+</span></button></div>
+          <div class="acc"><button class="hd" type="button" aria-expanded="false"><span style="flex: 1">4. 공휴일 · 지각 · 강사 미입장 · 고정 시간 변경</span><span aria-hidden="true">+</span></button></div>
+          <div class="acc"><button class="hd" type="button" aria-expanded="false"><span style="flex: 1">5. 환불 <span class="pend">결정 후</span></span><span aria-hidden="true">+</span></button></div>
+          <div style="display: flex; gap: 10px; align-items: stretch; margin-top: 4px">
+            <label class="chk" style="flex: 1"><input type="checkbox" checked><span><span class="req">필수</span> 수업 안내를 확인했고 동의해요</span></label>
+            <label class="chk" style="flex: 1"><input type="checkbox" checked><span><span class="req">필수</span> 개인정보 처리 안내 <a href="#">보기</a></span></label>
+            <label class="chk" style="flex: 1"><input type="checkbox"><span><span class="opt">선택</span> 소식 받기</span></label>
+          </div>
+          <button class="btn pri" type="button" style="max-width: 360px">확인하고 동의합니다</button>
+        </div>
+        <div style="width: 330px; flex: none; background: #ffffff; border: 1px solid #e6e3ef; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; overflow: hidden">
+          <b style="font-size: 14px">지금 쓰는 이미지 안내 (G20260709)</b>
+          <span style="font-size: 12px; color: #4a4760; line-height: 1.5">비교용. 확대해야 읽히고, 화면 낭독기가 읽지 못해요. 24주·환불·장기 연기가 없어요.</span>
+          <div style="display: flex; gap: 8px">
+            <img src="/_blob/c97fc549c8b582bccbe233e94985fffa" alt="필독안내서 1장" style="width: 145px; height: auto; border: 1px solid #e1ddeb; border-radius: 6px">
+            <img src="/_blob/d720c4f3e283b5932fed2bb6447de1c2" alt="필독안내서 2장" style="width: 145px; height: auto; border: 1px solid #e1ddeb; border-radius: 6px">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1750,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

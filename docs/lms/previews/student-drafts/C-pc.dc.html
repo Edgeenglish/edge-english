@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>C안 수강권 카드 중심 PC</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#4b2fd6}a:hover{color:#3a22b0}
+</style>
+</helmet>
+<div style="min-height: 860px; box-sizing: border-box; background: #f3f1ec; font-family: 'IBM Plex Sans KR', sans-serif; color: #1d1b2b">
+  <header>
+    <div style="max-width: 1160px; margin: 0 auto; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+      <div style="font-size: 19px; font-weight: 700; color: #09246b">Edge<span style="color: #5b3df0">English</span></div>
+      <nav aria-label="메뉴" style="display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px">
+        <a href="#" style="color: #1d1b2b; font-weight: 700; text-decoration: none">내 수강권</a>
+        <a href="#" style="color: #55526a; text-decoration: none">전체 일정</a>
+        <a href="#" style="color: #55526a; text-decoration: none">신청 내역</a>
+        <a href="#" style="color: #55526a; text-decoration: none">내 정보</a>
+      </nav>
+    </div>
+  </header>
+
+  <main style="max-width: 1160px; margin: 0 auto; padding: 8px 24px 32px; display: flex; flex-wrap: wrap; gap: 20px">
+    <div style="flex: 1 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+      <div style="font-size: 24px; font-weight: 700">가상학생일 님의 수강권</div>
+      <section aria-label="수강권" style="background: #09246b; color: #ffffff; border-radius: 24px; padding: 26px; display: flex; flex-direction: column; gap: 20px">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start">
+          <div><div style="font-size: 13px; color: #b8c3ea">STU-9001</div><div style="font-size: 22px; font-weight: 700; margin-top: 2px">50분 · 주 2회 · 12주</div></div>
+          <span style="font-size: 13px; font-weight: 700; background: #3fd28b; color: #06331d; border-radius: 999px; padding: 5px 12px">수강 중</span>
+        </div>
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; color: #b8c3ea; margin-bottom: 8px"><span>수업 사용 11회</span><span>남은 13회</span></div>
+          <div aria-label="24회 중 11회 사용" role="img" style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px">
+            <sc-for list="{{dots}}" as="d" hint-placeholder-count="24"><span style="{{d.style}}"></span></sc-for>
+          </div>
+        </div>
+        <div>
+          <div style="font-size: 13px; color: #b8c3ea; margin-bottom: 8px">수강기간 (28일 × 3)</div>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+            <div style="background: #26407f; border-radius: 12px; padding: 10px; font-size: 13px; color: #b8c3ea">1기간<br>9/10–10/7</div>
+            <div style="background: #ffffff; color: #09246b; border-radius: 12px; padding: 10px; font-size: 13px; font-weight: 700">지금 2기간<br>10/8–11/4</div>
+            <div style="background: #26407f; border-radius: 12px; padding: 10px; font-size: 13px; color: #b8c3ea">3기간<br>11/5–12/2</div>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-top: 1px solid #26407f; padding-top: 14px; font-size: 14px; flex-wrap: wrap; gap: 8px">
+          <div>이번 기간 변경권 <b style="font-size: 18px">1</b> / 2</div>
+          <div>종료 12/2 · <b>D-46</b></div>
+        </div>
+      </section>
+      <section aria-label="결제와 적립금" style="background: #ffffff; border-radius: 18px; padding: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div><div style="font-size: 13px; color: #6b6880">결제</div><div style="font-size: 17px; font-weight: 700; color: #13623a; margin-top: 2px">확인 완료</div><div style="font-size: 13px; color: #6b6880">9/8 · 영수증은 아임웹</div></div>
+        <div><div style="font-size: 13px; color: #6b6880">적립금</div><div style="font-size: 17px; font-weight: 700; margin-top: 2px">2,000원</div><div style="font-size: 13px; color: #6b6880">재등록 때 사용 신청</div></div>
+      </section>
+    </div>
+
+    <div style="flex: 1 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 14px; padding-top: 44px">
+      <section aria-label="다음 수업" style="background: #ffffff; border-radius: 18px; padding: 22px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+        <div style="flex: 1; min-width: 200px"><div style="font-size: 13px; color: #6b6880; font-weight: 600">다음 수업 · 3일 후</div><div style="font-size: 22px; font-weight: 700; margin-top: 2px">10/20 (화) 20:00</div><div style="font-size: 14px; color: #55526a">가상강사 Alex · 50분</div></div>
+        <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 26px; border-radius: 14px; background: #5b3df0; color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none">수업 입장</a>
+      </section>
+      <section aria-label="신청" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+        <a href="#" style="background: #ffffff; border-radius: 16px; min-height: 84px; display: flex; align-items: center; justify-content: center; text-decoration: none; color: #1d1b2b; font-size: 15px; font-weight: 700">수업 변경</a>
+        <a href="#" style="background: #ffffff; border-radius: 16px; min-height: 84px; display: flex; align-items: center; justify-content: center; text-decoration: none; color: #1d1b2b; font-size: 15px; font-weight: 700">보강 신청</a>
+        <a href="#" style="background: #ffffff; border-radius: 16px; min-height: 84px; display: flex; align-items: center; justify-content: center; text-decoration: none; color: #1d1b2b; font-size: 15px; font-weight: 700">전체 일정</a>
+      </section>
+      <section aria-label="진행 중인 신청" style="background: #ffffff; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 16px; font-weight: 700">진행 중인 신청</h2>
+        <div style="display: flex; align-items: center; gap: 10px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; background: #e0a100"></span><div style="font-size: 15px">10/16 수업 보강 — 강사 확인 중</div></div>
+        <div style="font-size: 13px; color: #6b6880; padding-left: 20px">후보: 10/23 (금) 19:00 · 10/24 (토) 10:00</div>
+      </section>
+      <section aria-label="알려드려요" style="font-size: 13px; color: #55526a; line-height: 1.8; padding: 0 4px">
+        · 수업 변경은 시작 6시간 전까지 (변경권 1개 사용, 보강 가능)<br>
+        · 종료일 12/2 23:59까지 재등록 결제 시 남은 수업 이월
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dots = [];
+    for (let i = 0; i < 24; i++) {
+      dots.push({ style: 'display:block;height:12px;border-radius:4px;background:' + (i < 11 ? '#8fa2e0' : '#ffd66b') });
+    }
+    return { dots };
+  }
+}
+</script>
+</body>
+</html>

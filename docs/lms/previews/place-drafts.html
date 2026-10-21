@@ -1,0 +1,381 @@
+<title>사는 곳 입력 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 레이아웃: 위에서 아래로 ①② 입력 시안(A·B 나란히, 휴대폰은 세로) → ③ 수강 기간 문구 → ④ 이메일 가림. LMS 운영자 화면 색을 그대로 씀 */
+:root {
+  --bg: #f4f3f8; --card: #ffffff; --line: #e6e3ef; --soft: #faf9fd;
+  --ink: #1d1b2b; --mute: #6b6880; --accent: #5b3fe0; --accent-bg: #efebff; --accent-line: #cfc4ff;
+  --ok: #1e7a46; --ok-bg: #e3f6ea; --warn: #9a5b00; --warn-bg: #fff6e6; --bad: #b3261e;
+  --shade: rgba(29, 27, 43, .38);
+  --font: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15141c; --card: #1f1d29; --line: #34313f; --soft: #252330;
+  --ink: #ecebf3; --mute: #a3a0b6; --accent: #a996ff; --accent-bg: #2c2550; --accent-line: #4b3f8f;
+  --ok: #7ad6a0; --ok-bg: #173526; --warn: #f0b765; --warn-bg: #3a2b12; --bad: #ff8a80; --shade: rgba(0,0,0,.55); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15141c; --card: #1f1d29; --line: #34313f; --soft: #252330;
+  --ink: #ecebf3; --mute: #a3a0b6; --accent: #a996ff; --accent-bg: #2c2550; --accent-line: #4b3f8f;
+  --ok: #7ad6a0; --ok-bg: #173526; --warn: #f0b765; --warn-bg: #3a2b12; --bad: #ff8a80; --shade: rgba(0,0,0,.55); color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 28px }
+h1 { font-size: 22px; margin: 0; text-wrap: balance }
+h2 { font-size: 18px; margin: 0 0 4px; text-wrap: balance }
+p { margin: 0 }
+.lead { color: var(--mute); font-size: 14px; max-width: 68ch }
+.sec { display: grid; gap: 14px }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start }
+.frame { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; position: relative; overflow: hidden; min-width: 0; min-height: 560px }
+.frame h3 { font-size: 16px; margin: 0 0 2px }
+.frame .sub { color: var(--mute); font-size: 13px; margin-bottom: 14px }
+.tag { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 9px; background: var(--accent-bg); color: var(--accent) }
+.samples { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px }
+.samples button, .chip { min-height: 34px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); border-radius: 999px; padding: 0 11px; font: inherit; font-size: 13px; cursor: pointer }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+.fields .full { grid-column: 1 / -1 }
+.lab { display: block; font-size: 13px; color: var(--mute); margin-bottom: 4px }
+.box { position: relative }
+.inp { box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; font-size: 15px; padding: 0 12px; outline: none; text-align: left; display: flex; align-items: center; gap: 6px; cursor: text }
+.inp:focus, .inp:focus-visible, .inp.open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg) }
+button.inp { cursor: pointer }
+.inp .ph { color: var(--mute) }
+.inp .val { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.list { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 260px; overflow-y: auto; padding: 4px }
+.opt { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); font: inherit; font-size: 14.5px; padding: 9px 10px; border-radius: 8px; cursor: pointer; min-height: 44px }
+.opt:hover, .opt.hi { background: var(--accent-bg) }
+.opt small { display: block; color: var(--mute); font-size: 12.5px }
+.opt.free { color: var(--accent); font-weight: 600 }
+.grp { font-size: 12px; color: var(--mute); padding: 6px 10px 2px }
+.hint { font-size: 12.5px; margin-top: 4px; color: var(--mute) }
+.hint.ok { color: var(--ok) } .hint.warn { color: var(--warn) }
+.note { background: var(--soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; color: var(--mute); margin-top: 14px }
+.note b { color: var(--ink) }
+/* B안 아래에서 올라오는 창 */
+.sheet-bg { position: absolute; inset: 0; background: var(--shade); z-index: 8 }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 9; background: var(--card); border-radius: 18px 18px 0 0; padding: 14px 14px 18px; max-height: 82%; display: flex; flex-direction: column; gap: 10px }
+.sheet .top { display: flex; align-items: center; justify-content: space-between }
+.sheet .top b { font-size: 16px }
+.sheet .x { min-height: 40px; min-width: 40px; border: 0; background: none; font-size: 20px; color: var(--mute); cursor: pointer }
+.sheet .chips { display: flex; flex-wrap: wrap; gap: 6px }
+.sheet .res { overflow-y: auto; min-height: 120px }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px }
+.tbl { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top }
+th { font-size: 12.5px; color: var(--mute); font-weight: 600; background: var(--soft) }
+tr:last-child td { border-bottom: 0 }
+td.old { color: var(--mute); text-decoration: line-through; text-decoration-color: var(--bad) }
+td.new { font-weight: 600 }
+.opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px }
+.optcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 6px }
+.optcard.rec { border-color: var(--accent-line) }
+.mono { font-variant-numeric: tabular-nums }
+@media (max-width: 520px) { .fields { grid-template-columns: 1fr } .frame { padding: 14px; min-height: 600px } }
+@media (prefers-reduced-motion: no-preference) { .sheet { animation: up .18s ease-out } @keyframes up { from { transform: translateY(30px); opacity: .6 } } }
+</style>
+
+<div class="wrap">
+  <header class="sec">
+    <h1>신규 학생 등록 · 사는 곳 입력 시안</h1>
+    <p class="lead">아래 입력 칸은 실제로 눌러서 써 볼 수 있어요. 휴대폰에서도 열어서 한국어로 "멜버른", "뉴욕", "호주"처럼 쳐 보세요. 위의 회색 버튼은 신청서에서 불러온 예시예요.</p>
+  </header>
+
+  <section class="sec" aria-labelledby="s1">
+    <div>
+      <h2 id="s1">①② 거주 국가 · 도시 · 시간대</h2>
+      <p class="lead">공통: 국가와 도시 칸을 따로 두고, 둘 다 한국어·영어로 검색해서 골라요. 목록에 없으면 친 글자 그대로 저장할 수 있어요. 도시를 고르면 시간대가 자동으로 들어가고(바꿀 수 있음), 시간대가 하나뿐인 나라는 국가만 골라도 들어가요. 도시만 먼저 쳐도 국가가 같이 채워져요.</p>
+    </div>
+    <div class="pair">
+      <div class="frame" id="fa">
+        <span class="tag">A안</span>
+        <h3>칸 안에서 바로 검색</h3>
+        <p class="sub">칸에 치면 바로 아래에 목록이 떠요. 지금 화면 구조 그대로, 칸만 바뀌어요.</p>
+        <div class="samples" data-for="a"></div>
+        <div class="fields" data-ui="a"></div>
+      </div>
+      <div class="frame" id="fb">
+        <span class="tag">B안</span>
+        <h3>눌러서 검색 창 열기</h3>
+        <p class="sub">칸을 누르면 아래에서 검색 창이 올라와요. 자주 쓰는 곳은 버튼으로 바로 골라요. 휴대폰에서 목록이 키보드에 가리지 않아요.</p>
+        <div class="samples" data-for="b"></div>
+        <div class="fields" data-ui="b"></div>
+      </div>
+    </div>
+    <p class="note"><b>객관적으로 비교하면</b> — A안은 PC에서 빠르고(칸 하나에서 치고 고르기) 화면 변화가 적어요. 대신 휴대폰에서는 키보드가 올라오면 목록이 2~3줄밖에 안 보일 수 있어요. B안은 휴대폰에서 목록이 넓게 보이고 자주 쓰는 나라·도시를 한 번에 누를 수 있지만, PC에서는 한 번 더 눌러야 해요. 운영자 화면이 PC 80 : 휴대폰 20이라 A안이 기본으로는 맞고, 휴대폰 사용감이 더 중요하면 B안이에요. <b>추천: A안</b> (휴대폰에서 목록이 가려지는 문제는 칸을 누를 때 화면을 위로 올려서 줄임).</p>
+  </section>
+
+  <section class="sec" aria-labelledby="s3">
+    <div>
+      <h2 id="s3">③ 수강 기간 표시</h2>
+      <p class="lead">정책 기준표 대조: POL-PER-01은 화면에 "1개월 = 4주 기준"으로 쓰라고 하고, "기간"은 POL-PER-02의 내부 계산 단위(1기간 = 시작일 포함 28일)예요. 화면 글자에서 "기간"을 빼도 정책과 어긋나지 않아요. 계산(28일 단위, 종료일 = 시작일 + 27일)은 그대로 둬요.</p>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>위치</th><th>지금</th><th>바꾼 뒤 (추천안)</th></tr></thead>
+        <tbody class="mono">
+          <tr><td>1단계 수강 기간 고르기</td><td class="old">4주 (1기간 × 28일)<br>12주 (3기간 × 28일)<br>24주 (6기간 × 28일)</td><td class="new">4주 (28일)<br>12주 (84일)<br>24주 (168일)</td></tr>
+          <tr><td>3단계 수업 정보</td><td class="old">10/20(화) – 1/11(월) (3기간 × 28일, 정규 24회)</td><td class="new">10/20(화) – 1/11(월) (12주 · 84일, 정규 24회)</td></tr>
+          <tr><td>3단계 아래 설명</td><td class="old">기간은 첫 정규 수업일부터 28일 단위로 계산해요</td><td class="new">수강 기간은 첫 정규 수업일부터 계산해요 (4주 = 28일)</td></tr>
+          <tr><td>4단계 최종 확인</td><td class="old">10/20(화) – 1/11(월) · 3기간</td><td class="new">10/20(화) – 1/11(월) · 12주 (84일)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="lead">12주·24주는 예시가 없어서 두 가지 중에 골라 주세요.</p>
+    <div class="opts">
+      <div class="optcard rec"><span class="tag">추천 ㉠</span><b class="mono">12주 (84일) · 24주 (168일)</b><p class="hint">전체 일수를 바로 보여 줘요. 종료일 확인할 때 계산이 필요 없어요.</p></div>
+      <div class="optcard"><span class="tag">㉡</span><b class="mono">12주 (28일 × 3) · 24주 (28일 × 6)</b><p class="hint">4주(28일) 단위가 드러나요. 변경권이 4주마다 새로 생기는 걸 떠올리기 쉬워요.</p></div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="s4">
+    <div>
+      <h2 id="s4">④ 로그인 화면 이메일 가림 (이미 고침)</h2>
+      <p class="lead">디자인 변화가 없어서 먼저 고쳤어요. 앞 3글자만 보이고, 가린 글자 수만큼 * 를 붙여요. 아이디가 짧으면 적어도 1글자는 가려요. 긴 이메일은 줄을 바꿔 휴대폰 화면 밖으로 안 나가게 했어요.</p>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>실제 이메일</th><th>지금</th><th>바꾼 뒤</th></tr></thead>
+        <tbody class="mono">
+          <tr><td>chlwlsdud@naver.com</td><td class="old">chl***@naver.com</td><td class="new">chl******@naver.com</td></tr>
+          <tr><td>student@gmail.com</td><td class="old">stu***@gmail.com</td><td class="new">stu****@gmail.com</td></tr>
+          <tr><td>ab@x.kr</td><td class="old">a***@x.kr</td><td class="new">a*@x.kr</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">참고: * 개수가 맞으면 아이디 글자 수가 드러나요. 앞 3글자와 메일 회사는 원래 보이던 것이라 위험이 크게 늘지는 않아요.</p>
+  </section>
+</div>
+
+<script>
+// 국가: [한국어, 영어, 다른 이름들, 기본 시간대(나라 전체가 하나면), 도시들 'ko|en|시간대(없으면 기본)']
+const COUNTRIES = [
+  ['한국', 'South Korea', '대한민국 korea', 'Asia/Seoul', ['서울|Seoul', '부산|Busan', '인천|Incheon', '대구|Daegu', '대전|Daejeon', '광주|Gwangju', '제주|Jeju']],
+  ['미국', 'United States', 'usa us america 미합중국', '', ['뉴욕|New York|America/New_York', '보스턴|Boston|America/New_York', '워싱턴 D.C.|Washington DC|America/New_York', '애틀랜타|Atlanta|America/New_York', '마이애미|Miami|America/New_York', '필라델피아|Philadelphia|America/New_York', '뉴저지|New Jersey|America/New_York', '시카고|Chicago|America/Chicago', '댈러스|Dallas|America/Chicago', '휴스턴|Houston|America/Chicago', '오스틴|Austin|America/Chicago', '덴버|Denver|America/Denver', '피닉스|Phoenix|America/Phoenix', '로스앤젤레스|Los Angeles LA|America/Los_Angeles', '어바인|Irvine|America/Los_Angeles', '샌디에이고|San Diego|America/Los_Angeles', '샌프란시스코|San Francisco|America/Los_Angeles', '산호세|San Jose|America/Los_Angeles', '시애틀|Seattle|America/Los_Angeles', '포틀랜드|Portland|America/Los_Angeles', '라스베이거스|Las Vegas|America/Los_Angeles', '호놀룰루|Honolulu Hawaii 하와이|Pacific/Honolulu', '앵커리지|Anchorage Alaska 알래스카|America/Anchorage']],
+  ['캐나다', 'Canada', '', '', ['토론토|Toronto|America/Toronto', '오타와|Ottawa|America/Toronto', '몬트리올|Montreal|America/Toronto', '밴쿠버|Vancouver|America/Vancouver', '빅토리아|Victoria|America/Vancouver', '캘거리|Calgary|America/Edmonton', '에드먼턴|Edmonton|America/Edmonton', '위니펙|Winnipeg|America/Winnipeg', '리자이나|Regina|America/Regina', '핼리팩스|Halifax|America/Halifax']],
+  ['호주', 'Australia', '오스트레일리아', '', ['시드니|Sydney|Australia/Sydney', '캔버라|Canberra|Australia/Sydney', '멜버른|Melbourne 멜번|Australia/Melbourne', '브리즈번|Brisbane|Australia/Brisbane', '골드코스트|Gold Coast|Australia/Brisbane', '퍼스|Perth|Australia/Perth', '애들레이드|Adelaide|Australia/Adelaide', '호바트|Hobart|Australia/Hobart', '다윈|Darwin|Australia/Darwin']],
+  ['뉴질랜드', 'New Zealand', 'nz', 'Pacific/Auckland', ['오클랜드|Auckland', '웰링턴|Wellington', '크라이스트처치|Christchurch']],
+  ['영국', 'United Kingdom', 'uk england 잉글랜드', 'Europe/London', ['런던|London', '맨체스터|Manchester', '버밍엄|Birmingham', '에든버러|Edinburgh']],
+  ['일본', 'Japan', '', 'Asia/Tokyo', ['도쿄|Tokyo', '오사카|Osaka', '교토|Kyoto', '나고야|Nagoya', '후쿠오카|Fukuoka', '삿포로|Sapporo']],
+  ['중국', 'China', '', 'Asia/Shanghai', ['베이징|Beijing', '상하이|Shanghai', '광저우|Guangzhou', '선전|Shenzhen', '칭다오|Qingdao']],
+  ['홍콩', 'Hong Kong', '', 'Asia/Hong_Kong', ['홍콩|Hong Kong']],
+  ['대만', 'Taiwan', '', 'Asia/Taipei', ['타이베이|Taipei']],
+  ['싱가포르', 'Singapore', '', 'Asia/Singapore', ['싱가포르|Singapore']],
+  ['베트남', 'Vietnam', '', 'Asia/Ho_Chi_Minh', ['호찌민|Ho Chi Minh 호치민', '하노이|Hanoi', '다낭|Da Nang']],
+  ['태국', 'Thailand', '', 'Asia/Bangkok', ['방콕|Bangkok']],
+  ['필리핀', 'Philippines', '', 'Asia/Manila', ['마닐라|Manila', '세부|Cebu']],
+  ['말레이시아', 'Malaysia', '', 'Asia/Kuala_Lumpur', ['쿠알라룸푸르|Kuala Lumpur']],
+  ['인도네시아', 'Indonesia', '', '', ['자카르타|Jakarta|Asia/Jakarta', '발리|Bali|Asia/Makassar']],
+  ['아랍에미리트', 'United Arab Emirates', 'uae', 'Asia/Dubai', ['두바이|Dubai', '아부다비|Abu Dhabi']],
+  ['독일', 'Germany', '', 'Europe/Berlin', ['베를린|Berlin', '프랑크푸르트|Frankfurt', '뮌헨|Munich']],
+  ['프랑스', 'France', '', 'Europe/Paris', ['파리|Paris']],
+  ['네덜란드', 'Netherlands', '', 'Europe/Amsterdam', ['암스테르담|Amsterdam']],
+  ['스페인', 'Spain', '', 'Europe/Madrid', ['마드리드|Madrid', '바르셀로나|Barcelona']],
+  ['아일랜드', 'Ireland', '', 'Europe/Dublin', ['더블린|Dublin']],
+];
+const POPULAR_C = ['한국', '미국', '캐나다', '호주', '뉴질랜드', '영국', '일본', '싱가포르'];
+const KST = 'Asia/Seoul';
+
+// 도시 목록 (모든 나라) — 시간대 목록도 여기서 만듦
+const CITIES = COUNTRIES.flatMap(([ko, en, al, tz, cs]) => cs.map((s) => {
+  const [cko, cen, ctz] = s.split('|');
+  return { ko: cko, en: cen, country: ko, countryEn: en, tz: ctz || tz };
+}));
+const norm = (s) => s.toLowerCase().replace(/[\s._\-\/·,()]/g, '');
+const eunNeun = (w) => { const c = w.charCodeAt(w.length - 1) - 0xac00; return w + (c >= 0 && c < 11172 && c % 28 ? '은' : '는'); };
+const has = (q, ...xs) => { const n = norm(q); return !n || xs.some((x) => norm(x).includes(n)); };
+
+function offsetMin(tz, d = new Date()) {
+  const s = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' }).formatToParts(d).find((p) => p.type === 'timeZoneName')?.value || 'GMT';
+  const m = s.match(/GMT([+-])(\d{2}):(\d{2})/);
+  return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
+}
+function nowAt(tz) { return new Intl.DateTimeFormat('ko-KR', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(new Date()); }
+function diffText(tz) {
+  const d = offsetMin(tz) - offsetMin(KST);
+  if (!d) return '한국과 같음';
+  const h = Math.abs(d) / 60;
+  return `한국보다 ${d > 0 ? '+' : '−'}${Number.isInteger(h) ? h : h.toFixed(1)}시간`;
+}
+// 시간대 하나당 대표 이름 (같은 시간대 도시를 묶음)
+const TZ_ROWS = (() => {
+  const by = new Map();
+  for (const c of CITIES) {
+    if (!by.has(c.tz)) by.set(c.tz, { tz: c.tz, names: [], ens: [], countries: new Set() });
+    const r = by.get(c.tz); r.names.push(c.ko); r.ens.push(c.en); r.countries.add(c.country);
+  }
+  return [...by.values()].map((r) => ({ ...r, countries: [...r.countries] }));
+})();
+const ALL_TZ = (Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : TZ_ROWS.map((r) => r.tz));
+function tzLabel(tz) {
+  const r = TZ_ROWS.find((x) => x.tz === tz);
+  const name = r ? `${r.names.slice(0, 3).join('·')} (${r.countries.join('·')})` : tz;
+  return { main: name, sub: `${tz} · 지금 ${nowAt(tz)} · ${diffText(tz)}` };
+}
+
+// 입력 상태와 판단 (A·B 공통)
+function makeState() {
+  return { country: '', city: '', tz: '', tzWhy: '' };
+}
+function countryRow(name) { return COUNTRIES.find((c) => c[0] === name); }
+function suggest(st) {
+  const city = CITIES.find((c) => c.ko === st.city && (!st.country || c.country === st.country));
+  if (city) return [city.tz, `${city.ko} 기준 자동 추천`];
+  const c = countryRow(st.country);
+  if (c && c[3]) return [c[3], `${eunNeun(c[0])} 시간대가 하나라 자동으로 넣었어요`];
+  return ['', ''];
+}
+function applyAuto(st) {
+  const [tz, why] = suggest(st);
+  if (tz) { st.tz = tz; st.tzWhy = why; }
+  else if (st.tzWhy) { st.tz = ''; st.tzWhy = ''; }
+}
+// 검색 결과: [{grp, items:[{main, sub, pick()}]}]
+function optionsFor(kind, st, q) {
+  if (kind === 'country') {
+    const list = COUNTRIES.filter((c) => has(q, c[0], c[1], c[2]));
+    const items = (q ? list : list.filter((c) => POPULAR_C.includes(c[0]))).map((c) => ({ main: c[0], sub: c[1], pick: () => { st.country = c[0]; if (st.city && !CITIES.some((x) => x.ko === st.city && x.country === c[0])) st.city = ''; applyAuto(st); } }));
+    return [{ grp: q ? '' : '자주 쓰는 나라', items }];
+  }
+  if (kind === 'city') {
+    const pool = CITIES.filter((c) => (!st.country || !countryRow(st.country) || c.country === st.country) && has(q, c.ko, c.en));
+    const items = pool.slice(0, 40).map((c) => ({ main: c.ko, sub: `${c.country} · ${c.en}`, pick: () => { st.city = c.ko; st.country = c.country; applyAuto(st); } }));
+    return [{ grp: st.country && countryRow(st.country) ? `${st.country}의 도시` : '', items }];
+  }
+  // 시간대: 한국어 도시·나라 이름, 영어, IANA 이름 모두
+  const rows = TZ_ROWS.filter((r) => has(q, ...r.names, ...r.ens, ...r.countries, r.tz) || r.countries.some((k) => has(q, ...(countryRow(k) || []).slice(1, 3))));
+  const items = rows.map((r) => { const l = tzLabel(r.tz); return { main: l.main, sub: l.sub, pick: () => { st.tz = r.tz; st.tzWhy = '직접 고름'; } }; });
+  const more = q && norm(q).length >= 3 ? ALL_TZ.filter((z) => !rows.some((r) => r.tz === z) && has(q, z)).slice(0, 15).map((z) => ({ main: z, sub: `지금 ${nowAt(z)} · ${diffText(z)}`, pick: () => { st.tz = z; st.tzWhy = '직접 고름'; } })) : [];
+  return [{ grp: '', items }, ...(more.length ? [{ grp: '그 밖의 시간대 (영어 이름)', items: more }] : [])];
+}
+function shown(kind, st) {
+  if (kind === 'country') return st.country;
+  if (kind === 'city') return st.city;
+  return st.tz ? tzLabel(st.tz).main : '';
+}
+function hintFor(kind, st) {
+  if (kind === 'country' && st.country && !countryRow(st.country)) return ['warn', '목록에 없는 나라 — 친 그대로 저장돼요. 시간대는 직접 골라 주세요.'];
+  if (kind === 'city' && st.city && !CITIES.some((c) => c.ko === st.city)) return ['warn', '목록에 없는 도시 — 친 그대로 저장돼요.'];
+  if (kind === 'tz') {
+    if (st.tz) return [st.tzWhy === '직접 고름' ? '' : 'ok', `${st.tz} · 지금 ${nowAt(st.tz)} · ${diffText(st.tz)}${st.tzWhy && st.tzWhy !== '직접 고름' ? ` · ${st.tzWhy}` : ''}`];
+    const c = countryRow(st.country);
+    if (c && !c[3]) return ['warn', `${eunNeun(c[0])} 시간대가 여럿이라 도시를 고르면 자동으로 들어가요.`];
+    return ['', '한국어(멜버른·시드니)나 영어(Melbourne)로 검색'];
+  }
+  return null;
+}
+const LABEL = { country: '거주 국가', city: '도시', tz: '사는 곳 시간대 · 현재 시각' };
+const PH = { country: '예: 호주, Australia', city: '예: 멜버른, Melbourne', tz: '예: 멜버른, 시드니, Sydney' };
+function setFree(kind, st, text) {
+  if (kind === 'country') { st.country = text; if (st.city && !CITIES.some((x) => x.ko === st.city && x.country === text)) st.city = ''; applyAuto(st); }
+  if (kind === 'city') { st.city = text; applyAuto(st); }
+}
+
+// 신청서 예시 (원래 한 칸에 '국가 / 도시'로 들어옴)
+const SAMPLES = ['호주 / 멜버른', '미국', 'Canada, Calgary', '한국 / 서울'];
+function fromForm(st, text) {
+  const [a, ...b] = text.split(/[\/,·]/).map((x) => x.trim());
+  const c = COUNTRIES.find((x) => has(a, x[0], x[1], x[2]) && norm(a));
+  st.country = c ? c[0] : a;
+  const cityText = b.join(' ');
+  const city = cityText && CITIES.find((x) => (norm(x.ko) === norm(cityText) || has(cityText, x.en)) && (!c || x.country === c[0]));
+  st.city = city ? city.ko : cityText;
+  st.tz = ''; st.tzWhy = '';
+  applyAuto(st);
+}
+
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) { if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v); }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+function renderOptions(container, groups, done, q, kind) {
+  container.replaceChildren();
+  let n = 0;
+  for (const g of groups) {
+    if (g.grp && g.items.length) container.append(el('div', { class: 'grp' }, g.grp));
+    for (const it of g.items) { n++; container.append(el('button', { type: 'button', class: 'opt', onmousedown: (e) => e.preventDefault(), onclick: () => { it.pick(); done(); } }, it.main, el('small', {}, it.sub))); }
+  }
+  if (q && kind !== 'tz') container.append(el('button', { type: 'button', class: 'opt free', onmousedown: (e) => e.preventDefault(), onclick: () => done(q) }, `‘${q}’ 그대로 쓰기`));
+  if (!n && kind === 'tz') container.append(el('div', { class: 'grp' }, '찾는 곳이 없어요. 가까운 큰 도시 이름이나 영어로 쳐 보세요.'));
+}
+
+// A안: 칸 안에서 바로 검색
+function buildA(root, st) {
+  let openKind = null, query = '';
+  function draw() {
+    root.replaceChildren();
+    for (const kind of ['country', 'city', 'tz']) {
+      const box = el('div', { class: 'box' });
+      const wrap = el('div', { class: kind === 'tz' ? 'full' : '' }, el('label', { class: 'lab', for: `a-${kind}` }, LABEL[kind]), box);
+      const input = el('input', { id: `a-${kind}`, class: `inp${openKind === kind ? ' open' : ''}`, placeholder: PH[kind], autocomplete: 'off' });
+      input.value = openKind === kind ? query : shown(kind, st);
+      const finish = (free) => { if (free !== undefined) setFree(kind, st, free); openKind = null; query = ''; draw(); };
+      input.addEventListener('focus', () => { if (openKind !== kind) { openKind = kind; query = ''; draw(); const i = root.querySelector(`#a-${kind}`); i.focus(); i.scrollIntoView({ block: 'center', behavior: 'smooth' }); } });
+      input.addEventListener('input', () => { query = input.value; renderOptions(list, optionsFor(kind, st, query), finish, query.trim(), kind); });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); const first = list.querySelector('.opt'); first ? first.click() : finish(); } if (e.key === 'Escape') finish(); });
+      input.addEventListener('blur', () => setTimeout(() => { if (openKind === kind) { if (query.trim() && kind !== 'tz') setFree(kind, st, query.trim()); openKind = null; query = ''; draw(); } }, 120));
+      box.append(input);
+      const list = el('div', { class: 'list' });
+      if (openKind === kind) { renderOptions(list, optionsFor(kind, st, query), finish, query.trim(), kind); box.append(list); }
+      const h = hintFor(kind, st);
+      if (h) wrap.append(el('p', { class: `hint ${h[0]}` }, h[1]));
+      root.append(wrap);
+    }
+  }
+  draw();
+  return draw;
+}
+
+// B안: 눌러서 검색 창 열기
+function buildB(root, frame, st) {
+  let sheet = null;
+  function draw() {
+    root.replaceChildren();
+    for (const kind of ['country', 'city', 'tz']) {
+      const v = shown(kind, st);
+      const btn = el('button', { type: 'button', id: `b-${kind}`, class: 'inp', onclick: () => open(kind) }, v ? el('span', { class: 'val' }, v) : el('span', { class: 'ph val' }, PH[kind]), el('span', { class: 'ph', 'aria-hidden': 'true' }, '⌕'));
+      const wrap = el('div', { class: kind === 'tz' ? 'full' : '' }, el('label', { class: 'lab', for: `b-${kind}` }, LABEL[kind]), btn);
+      const h = hintFor(kind, st);
+      if (h) wrap.append(el('p', { class: `hint ${h[0]}` }, h[1]));
+      root.append(wrap);
+    }
+  }
+  function close() { sheet?.forEach((n) => n.remove()); sheet = null; draw(); }
+  function open(kind) {
+    const res = el('div', { class: 'res' });
+    const input = el('input', { class: 'inp', placeholder: PH[kind], autocomplete: 'off', 'aria-label': `${LABEL[kind]} 검색` });
+    const finish = (free) => { if (free !== undefined) setFree(kind, st, free); close(); };
+    const refresh = () => renderOptions(res, optionsFor(kind, st, input.value), finish, input.value.trim(), kind);
+    input.addEventListener('input', refresh);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); res.querySelector('.opt')?.click(); } });
+    const chips = el('div', { class: 'chips' });
+    const quick = kind === 'country' ? POPULAR_C.map((c) => [c, () => { optionsFor('country', st, c)[0].items.find((i) => i.main === c).pick(); }])
+      : kind === 'city' ? CITIES.filter((c) => (st.country && countryRow(st.country) ? c.country === st.country : ['시드니', '멜버른', '뉴욕', '로스앤젤레스', '토론토', '밴쿠버', '런던', '오클랜드'].includes(c.ko))).slice(0, 8).map((c) => [c.ko, () => { st.city = c.ko; st.country = c.country; applyAuto(st); }])
+      : st.country && countryRow(st.country) ? [...new Set(CITIES.filter((c) => c.country === st.country).map((c) => c.tz))].map((z) => [tzLabel(z).main.split(' (')[0], () => { st.tz = z; st.tzWhy = '직접 고름'; }]) : [];
+    for (const [t, f] of quick) chips.append(el('button', { type: 'button', class: 'chip', onclick: () => { f(); close(); } }, t));
+    const bg = el('div', { class: 'sheet-bg', onclick: close });
+    const s = el('div', { class: 'sheet', role: 'dialog', 'aria-label': LABEL[kind] },
+      el('div', { class: 'top' }, el('b', {}, LABEL[kind]), el('button', { type: 'button', class: 'x', 'aria-label': '닫기', onclick: close }, '×')),
+      input, quick.length ? chips : null, res);
+    frame.append(bg, s);
+    sheet = [bg, s];
+    refresh();
+    input.focus();
+  }
+  draw();
+  return draw;
+}
+
+const stA = makeState(), stB = makeState();
+fromForm(stA, SAMPLES[0]); fromForm(stB, SAMPLES[0]);
+const drawA = buildA(document.querySelector('[data-ui="a"]'), stA);
+const drawB = buildB(document.querySelector('[data-ui="b"]'), document.getElementById('fb'), stB);
+for (const [key, st, draw] of [['a', stA, drawA], ['b', stB, drawB]]) {
+  const box = document.querySelector(`[data-for="${key}"]`);
+  box.append(el('span', { class: 'hint' }, '신청서 예시:'));
+  for (const s of SAMPLES) box.append(el('button', { type: 'button', onclick: () => { fromForm(st, s); draw(); } }, s));
+  box.append(el('button', { type: 'button', onclick: () => { Object.assign(st, makeState()); draw(); } }, '비우기'));
+}
+</script>

@@ -1,0 +1,32 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>공통 화면</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0;background:#e9e7f0;font-family:'IBM Plex Sans KR',sans-serif;color:#1d1b2b}
+.row{display:flex;gap:28px;padding:28px;align-items:flex-start}
+.cap{font-size:14px;font-weight:700;color:#55526a;margin:0 0 8px 4px}
+.ph{width:390px;height:780px;box-sizing:border-box;border-radius:28px;overflow:hidden;position:relative;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.logo{font-weight:700;color:#09246b} .logo b{color:#5b3df0}
+input,.inp{box-sizing:border-box;width:100%;min-height:52px;border:1.5px solid #d9d5e8;border-radius:14px;padding:0 16px;font:inherit;font-size:16px;display:flex;align-items:center;color:#1d1b2b;background:#fff}
+.btn{display:flex;align-items:center;justify-content:center;min-height:52px;border-radius:14px;font-size:16px;font-weight:700}
+.pri{background:#5b3df0;color:#fff} .dark{background:#1b1442;color:#fff} .ghost{color:#55526a;font-size:14px;min-height:44px}
+.boxes{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.box{height:58px;border:1.5px solid #d9d5e8;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700}
+.box.on{border-color:#5b3df0;box-shadow:0 0 0 3px #e4ddff}
+.note{font-size:13px;color:#55526a;line-height:1.6}
+.info{background:#f1eefc;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.6;color:#3a2f7a}
+</style></head><body><div style="padding:24px 28px 0;font-size:22px;font-weight:700">공통 · 운영자 첫 등록과 PC 화면</div><div class="row">
+<div><p class="cap">운영자 처음 한 번: 인증 앱 등록</p><div class="ph" style="padding:26px 22px">
+<div class="logo" style="font-size:17px">Edge<b>English</b></div>
+<h1 style="font-size:22px;margin:22px 0 6px">인증 앱 등록 (처음 한 번)</h1>
+<p class="note" style="margin:0 0 14px">① 휴대폰에 Google Authenticator 설치 → ② 앱에서 + → QR 코드 스캔 → ③ 앱에 보이는 6자리 입력</p>
+<div style="width:180px;height:180px;margin:0 auto;border:1.5px dashed #b9b4d0;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#8b88a0;font-size:13px">QR 코드</div>
+<p class="note" style="text-align:center;margin:8px 0 14px">QR이 안 되면 <b>코드 직접 입력</b></p>
+<div class="boxes"><div class="box on"></div><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div></div>
+<div class="btn dark" style="margin-top:14px">등록 완료</div>
+<div class="info" style="margin-top:12px">복구 코드가 없어요. <b>휴대폰·태블릿 2대에 함께 등록</b>해 두는 것을 권해요.</div></div></div>
+<div><p class="cap">PC (1280px) — 같은 화면이 가운데 카드로</p><div style="width:900px;height:560px;border-radius:18px;background:#f6f5fa;box-shadow:0 2px 10px rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;flex-direction:column">
+<div class="logo" style="font-size:26px">Edge<b>English</b></div><div class="note" style="margin-bottom:18px">수업 관리 · Class portal</div>
+<div style="width:400px;background:#fff;border:1px solid #e6e3ef;border-radius:22px;padding:26px 24px"><h1 style="font-size:22px;margin:0 0 6px">로그인</h1><p class="note" style="margin:0 0 16px">등록하신 이메일로 6자리 코드를 보내 드려요.</p>
+<div class="inp" style="color:#8b88a0">이메일 주소</div><div class="btn pri" style="margin-top:12px">코드 받기</div></div>
+<p class="note" style="margin-top:14px">세 안 모두 PC에서는 가운데 400px 너비로 같은 흐름</p></div></div>
+</div></body></html>

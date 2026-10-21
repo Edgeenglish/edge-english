@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>B안 일정 목록 중심 PC</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#4b2fd6}a:hover{color:#3a22b0}
+</style>
+</helmet>
+<div style="min-height: 860px; box-sizing: border-box; background: #ffffff; font-family: 'IBM Plex Sans KR', sans-serif; color: #1d1b2b">
+  <header style="border-bottom: 1px solid #eeecf4">
+    <div style="max-width: 1160px; margin: 0 auto; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+      <div style="font-size: 19px; font-weight: 700; color: #09246b">Edge<span style="color: #5b3df0">English</span></div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+        <span style="font-size: 13px; font-weight: 600; background: #f1eefc; color: #3a22b0; border-radius: 999px; padding: 7px 12px">남은 수업 13 / 24</span>
+        <span style="font-size: 13px; font-weight: 600; background: #f1eefc; color: #3a22b0; border-radius: 999px; padding: 7px 12px">변경권 1 / 2 (11/4까지)</span>
+        <span style="font-size: 13px; font-weight: 600; background: #f1eefc; color: #3a22b0; border-radius: 999px; padding: 7px 12px">종료 12/2 · D-46</span>
+      </div>
+      <a href="#" style="font-size: 14px; color: #55526a; text-decoration: none">가상학생일 님 · 내 정보</a>
+    </div>
+  </header>
+
+  <main style="max-width: 1160px; margin: 0 auto; padding: 24px; display: flex; flex-wrap: wrap; gap: 24px">
+    <section aria-label="수업 일정" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 700">내 수업 일정</h1>
+        <div style="display: flex; gap: 8px">
+          <a href="#" style="display: flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; background: #5b3df0; color: #ffffff; font-size: 14px; font-weight: 700; text-decoration: none">보강 신청</a>
+          <a href="#" style="display: flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid #d9d5e8; color: #1d1b2b; font-size: 14px; font-weight: 600; text-decoration: none">고정 시간 변경</a>
+        </div>
+      </div>
+      <div style="font-size: 13px; color: #6b6880">한국 시간 기준 · 시작 6시간 전까지 변경하면 변경권 1개로 보강 가능</div>
+
+      <div style="margin-top: 12px; font-size: 13px; font-weight: 700; color: #6b6880">이번 주</div>
+      <div style="display: flex; align-items: center; gap: 16px; border: 2px solid #5b3df0; border-radius: 16px; padding: 14px 18px; flex-wrap: wrap">
+        <div style="width: 90px; font-size: 15px; font-weight: 700; color: #5b3df0">10/20 (화)</div>
+        <div style="flex: 1; min-width: 200px"><div style="font-size: 16px; font-weight: 700">20:00 – 20:50 · 가상강사 Alex</div><div style="font-size: 13px; color: #55526a">정규 수업 · 다음 수업 (3일 후)</div></div>
+        <a href="#" style="display: flex; align-items: center; min-height: 46px; padding: 0 20px; border-radius: 12px; background: #5b3df0; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none">수업 입장</a>
+        <a href="#" style="display: flex; align-items: center; min-height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid #d9d5e8; color: #1d1b2b; font-size: 14px; font-weight: 600; text-decoration: none">변경·취소</a>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; border: 1px solid #e6e3ef; border-radius: 16px; padding: 14px 18px; flex-wrap: wrap">
+        <div style="width: 90px; font-size: 15px; font-weight: 700">10/22 (목)</div>
+        <div style="flex: 1; min-width: 200px"><div style="font-size: 16px; font-weight: 700">20:00 – 20:50 · 가상강사 Alex</div><div style="font-size: 13px; color: #55526a">정규 수업</div></div>
+        <a href="#" style="display: flex; align-items: center; min-height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid #d9d5e8; color: #1d1b2b; font-size: 14px; font-weight: 600; text-decoration: none">변경·취소</a>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; border: 1px dashed #c9b26b; background: #fffaeb; border-radius: 16px; padding: 14px 18px; flex-wrap: wrap">
+        <div style="width: 90px; font-size: 15px; font-weight: 700; color: #8a5300">보강</div>
+        <div style="flex: 1; min-width: 200px"><div style="font-size: 16px; font-weight: 700">10/16 수업 보강 — 강사 확인 중</div><div style="font-size: 13px; color: #55526a">후보 10/23 (금) 19:00 · 10/24 (토) 10:00 · 확정되면 알려 드려요</div></div>
+      </div>
+
+      <div style="margin-top: 12px; font-size: 13px; font-weight: 700; color: #6b6880">다음 주</div>
+      <div style="display: flex; align-items: center; gap: 16px; border: 1px solid #e6e3ef; border-radius: 16px; padding: 14px 18px; flex-wrap: wrap">
+        <div style="width: 90px; font-size: 15px; font-weight: 700">10/27 (화)</div>
+        <div style="flex: 1; min-width: 200px"><div style="font-size: 16px; font-weight: 700">20:00 – 20:50 · 가상강사 Alex</div></div>
+        <a href="#" style="display: flex; align-items: center; min-height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid #d9d5e8; color: #1d1b2b; font-size: 14px; font-weight: 600; text-decoration: none">변경·취소</a>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; border: 1px solid #e6e3ef; border-radius: 16px; padding: 14px 18px; flex-wrap: wrap">
+        <div style="width: 90px; font-size: 15px; font-weight: 700">10/29 (목)</div>
+        <div style="flex: 1; min-width: 200px"><div style="font-size: 16px; font-weight: 700">20:00 – 20:50 · 가상강사 Alex</div></div>
+        <a href="#" style="display: flex; align-items: center; min-height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid #d9d5e8; color: #1d1b2b; font-size: 14px; font-weight: 600; text-decoration: none">변경·취소</a>
+      </div>
+    </section>
+
+    <aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+      <section aria-label="지난 수업" style="background: #f6f5fa; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 8px">
+        <h2 style="margin: 0 0 4px; font-size: 15px; font-weight: 700">지난 수업</h2>
+        <div style="display: flex; justify-content: space-between; font-size: 14px"><span>10/15 (목) 20:00</span><span style="color: #13623a; font-weight: 600">수업 완료</span></div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px"><span>10/13 (화) 20:00</span><span style="color: #55526a; font-weight: 600">변경 (변경권 1)</span></div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px"><span>10/8 (수) 20:00</span><span style="color: #13623a; font-weight: 600">수업 완료</span></div>
+      </section>
+      <section aria-label="수강과 결제" style="background: #f6f5fa; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0 0 4px; font-size: 15px; font-weight: 700">수강·결제·적립금</h2>
+        <div style="display: flex; justify-content: space-between; font-size: 14px"><span style="color: #55526a">수강권</span><span style="font-weight: 600">50분 · 주2회 · 12주</span></div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px"><span style="color: #55526a">결제</span><span style="font-weight: 600; color: #13623a">확인 완료 (9/8)</span></div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px"><span style="color: #55526a">적립금</span><span style="font-weight: 700">2,000원</span></div>
+        <div style="font-size: 12px; color: #6b6880; line-height: 1.6">적립금은 재등록할 때 사용 신청 · 카드 영수증은 아임웹 주문조회</div>
+      </section>
+    </aside>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

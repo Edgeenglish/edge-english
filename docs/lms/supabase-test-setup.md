@@ -1,0 +1,323 @@
+# 시험용 Supabase 연결 안내 (edgeenglish-lms-test)
+
+- 프로젝트: Organization **EdgeEnglish (Free)** · Project **edgeenglish-lms-test** · Region Seoul · GitHub 자동 연결 없음 (2026-10-16 대표 생성)
+- **가상 데이터만** 넣는다. 실제 학생·강사 정보, 실제 시트 데이터는 넣지 않는다.
+- 비밀번호·비밀키는 **채팅에 붙여 넣지 않는다.** Claude 작업 환경 설정의 '비밀 값' 칸에만 넣는다.
+- 실제 운영 프로젝트는 나중에 별도로 만든다. 이 시험용 프로젝트와 키를 섞지 않는다.
+
+## 0. 실행 전 안전성 검토 결과 (2026-10-16, Claude)
+
+Supabase 새 프로젝트의 기본 권한(anon·authenticated에 표·함수·시퀀스를 자동으로 여는 설정)을 로컬 PostgreSQL에 똑같이 만들어 놓고 세 파일을 실제 순서대로 실행해 확인했다. 실물 Supabase에는 아직 접속하지 못했으므로 **로컬 재현 결과**다.
+
+| 점검 | 결과 |
+|---|---|
+| 실제 학생 데이터 접근 | 없음. 세 파일 모두 외부 연결(다른 DB·인터넷·파일 읽기) 명령이 없고, 새 빈 프로젝트 안에서만 동작. 기준 데이터는 상태값 14개·계약/안내서 판 이름·기능 스위치뿐(사람 이름·연락처 없음). 가상 데이터는 이름이 모두 '가상…', 이메일은 example.com |
+| 기존 표 삭제 위험 | 없음. DROP·TRUNCATE·DELETE·권한 계정 변경 명령 0개. Supabase 자체 영역(auth·storage 등)에 아무것도 만들거나 고치지 않음 (public 영역에만 표를 만듦) |
+| RLS·접근 권한 | 모든 표 RLS 켜짐. 로그인 안 한 사용자(anon)는 표·뷰를 하나도 못 읽음, LMS 함수·학생 번호도 못 씀. 등록되지 않은 로그인 사용자는 학생·결제·업무를 0건으로 봄(판본·상태값·공휴일 목록만 보임). 쓰기는 서버만 |
+| 실행 순서 | ① schema_all → ② seed_fake → ③ check. 순서를 틀려 seed를 먼저 실행하면 "표가 없음" 오류로 **아무것도 들어가지 않음** |
+| 재실행 | schema_all을 두 번 실행하면 "already exists" 오류가 나고 **전체 취소**(기존 표·데이터 그대로). seed_fake는 여러 번 실행해도 데이터가 늘지 않음(변경 이력 1줄만 추가). check는 읽기만 함 |
+| 중간 오류 | schema_all·seed_fake 모두 한 묶음(begin~commit)이라 중간에 오류가 나면 반쯤 만들어진 상태가 남지 않음 |
+| 알려진 경고 | Supabase 'Security Advisor'가 "btree_gist 확장이 public에 있음"을 경고할 수 있음 — 시험용에서는 문제 없음, 운영 프로젝트 만들 때 정리 |
+
+## 1단계 — DB 표 만들기 (대표, PC 권장, 약 5분, 비밀키 필요 없음)
+
+1. GitHub에서 작업 브랜치 `claude/trusting-feynman-kujjnm` 의 `supabase/test-setup/schema_all.sql` 을 열고 **Raw** 버튼 → 전체 선택 → 복사
+2. Supabase → edgeenglish-lms-test → 왼쪽 **SQL Editor** → **New query** → 붙여 넣기 → **Run**
+   - "Success. No rows returned"가 나오면 성공. 빈 프로젝트에 **한 번만** 실행 (두 번째는 "already exists" 오류 — 문제 아님, 이미 만들어진 것)
+   - 중간에 오류가 나면 전체가 취소됨(한 묶음으로 실행). 오류 문구 **첫 줄만** Claude에게 알려 주면 됨
+3. 같은 방법으로 `supabase/test-setup/seed_fake.sql` 실행 → 가상 학생 4명·가상 강사 2명·업무 4건 (여러 번 실행해도 중복 안 됨)
+4. `supabase/test-setup/check.sql` 실행 → 결과 6줄이 모두 **'통과'** 면 완료. 화면을 캡처하거나 결과를 알려 주세요.
+
+이 파일들은 로컬 임시 DB에서 같은 순서로 실행해 6줄 모두 '통과'를 확인했다 (Supabase 실물은 Claude가 아직 접속하지 못함).
+
+## 2단계 — Claude가 시험용 프로젝트에 접속하도록 허용 (대표, 한 번만)
+
+지금 Claude 작업 환경은 `supabase.co` 주소에서 403이 난다. 작업 환경의 외부 접속 관문(프록시)이 허용 목록에 없는 주소를 막을 때 나는 오류이고, 관문 안내서도 "대부분 허용되지 않은 주소"라고 설명한다. 그래서 **허용 목록에 주소를 넣으면 풀릴 가능성이 높지만, 넣은 뒤 Claude가 실제로 접속해 봐야 확정**된다. 접속은 HTTPS(웹 주소)로만 하고, DB 직접 접속(5432 포트)은 쓰지 않는다.
+
+**최소 권한 원칙에 따른 순서**
+- **지금 필요한 것**: 접속 주소 허용 + `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`(publishable key). 둘 다 원래 화면에 공개되는 값이라 비밀이 아니다. 이것만으로 Claude는 ① 실물 Supabase에 접속되는지 ② 로그인 안 한 상태에서 데이터가 정말 하나도 안 보이는지(RLS)를 실물로 확인할 수 있다.
+- **아직 필요 없는 것**: Secret key(service_role). 서버가 결제 확인·업무 처리 같은 '쓰기'를 할 때 필요한데, 그 기능을 만들고 로그인 화면이 준비된 뒤에 요청한다. 그때도 **시험용 프로젝트 전용 Secret key를 새로 하나 만들어**(이름 예: claude-test) 넣고, 다 쓰면 그 키만 삭제한다. 레거시 service_role 키는 지우거나 바꾸기 어려워 쓰지 않는다.
+- 쓰지 않는 것: DB 비밀번호, Supabase 계정 Access Token(계정 전체 권한).
+
+**(1) 접속 주소 허용** — 이 채팅의 클라우드 환경 메뉴(세션 제목 줄) → **Edit** → **Network access** → Allowed domains에 추가:
+- `<프로젝트 주소>.supabase.co` (Supabase → Project Settings → **Data API** 의 Project URL에서 `https://` 뒤 부분. 예: `abcdxyz.supabase.co`) — 프로젝트 주소는 비밀이 아님
+
+**(2) 키 저장** — 같은 Edit 화면의 **환경 변수 / 비밀 값(Network secrets 또는 API credentials)** 칸에 아래 이름으로 저장. 값은 Supabase → Project Settings → **API Keys** 에서 복사:
+
+| 변수 이름 (그대로) | 넣을 값 | 비밀인가 |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Project URL (`https://….supabase.co`) | 아님 |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Publishable key** (`sb_publishable_…`) 또는 옛 이름 anon key | 아님 (화면에 공개되는 키, RLS로 보호) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **(나중에)** 시험용 전용으로 새로 만든 **Secret key** (`sb_secret_…`) | **비밀** — 이 칸에만. 채팅·GitHub·Vercel Production 금지. 쓰기 기능 시험 단계에서 Claude가 요청할 때 |
+
+- **주의 (2026-10-17 실제로 생긴 일)**: 값 칸에 `sb_publishable_로 시작하는 그 값` 같은 **설명 문구를 그대로 넣으면 안 된다.** Supabase → Project Settings → **API Keys** → Publishable key 줄의 **복사 버튼**으로 전체 키를 복사해 붙여 넣는다. 진짜 키는 `sb_publishable_` 뒤에 영문·숫자가 30자쯤 이어지고 한글·공백이 없다.
+- 저장 후 **새 세션**에서 반영된다. Claude는 값을 출력하지 않고 존재 여부만 확인한다.
+- DB 비밀번호(Database password)와 Supabase 계정 Access Token은 **필요 없다.** 표를 고칠 때는 1단계처럼 대표가 SQL Editor에서 실행한다. (Access Token은 계정 전체 권한이라 나중에 만들 운영 프로젝트까지 건드릴 수 있어 쓰지 않는다.)
+- 키가 노출됐다고 생각되면 Supabase → API Keys에서 **새 Secret key 생성 후 이전 키 삭제**.
+
+## 3단계 — 로그인 설정 (2026-10-17 검토 완료 · ✅ ①② 완료: 모르는 계정 없음, 공개 가입 꺼짐 — Claude가 `/auth/v1/settings` 로 `disable_signup=true` 확인)
+
+목표: **초기에는 공개 회원가입 없음**(정책 원본 A30). 운영자가 등록·초대한 학생·강사·운영자 개인 계정만 이메일 6자리 코드로 로그인 (POL-OP-15·POL-AC-03). 운영자는 TOTP 추가 인증(POL-AC-05). 설계 전체: [`11-accounts-auth-payments.md`](11-accounts-auth-payments.md)
+
+**현재 시험용 프로젝트 상태 (2026-10-17 Claude가 읽기만 해서 확인)**: 이메일 로그인 켜짐, **회원가입 열림**(`disable_signup=false`), 이메일 확인 필요(`mailer_autoconfirm=false`), 익명 로그인 꺼짐, 다른 로그인 방식(구글·카카오 등) 모두 꺼짐.
+- 회원가입이 열려 있으면 누구나 `/auth/v1/signup` 으로 계정을 만들 수 있다. DB는 그런 계정에게도 학생 데이터를 보여 주지 않지만(아래 4-②, 로컬 재현), 쓸데없는 계정·메일 발송이 생기고 방어가 한 겹뿐이 된다.
+
+**안전한 순서 (권장)**
+
+| 순서 | 누가 | 내용 | 되돌리기 |
+|---|---|---|---|
+| ① | 대표 | Authentication → **Users** 에 모르는 계정이 있는지 확인 (지금까지 회원가입이 열려 있었음). 있으면 Claude에게 알리고 삭제 | — |
+| ② | 대표 | Authentication → Sign In / Providers → **Allow new users to sign up: 끄기**. 로그인 화면이 아직 없어 끈다고 깨지는 기능 없음 | 스위치 다시 켜기 |
+| ③ | 대표 | Email 설정: Confirm email 켜 둠, **Email OTP Length 6**, OTP 유효 시간은 10분 권장(기본 1시간) | 값 되돌리기 |
+| ④ | Claude 문구 준비 → 대표 붙여 넣기 | Email Templates → **Magic Link** 템플릿에 링크 대신 `{{ .Token }}`(6자리 코드)만 보이게 | 기본 템플릿 복원 |
+| ⑤ | Claude (화면 개발) | 로그인 화면: `signInWithOtp({ email, options: { shouldCreateUser: false } })` → `verifyOtp({ email, token, type: 'email' })`. 등록 안 된 이메일도 화면 문구는 같게("등록된 이메일이면 코드를 보냈습니다") — 등록 여부를 알려 주지 않기 위해 | — |
+| ⑥ | Claude (서버 개발) | 운영자가 학생·강사를 등록할 때 서버가 Secret key로 `auth.admin.createUser({ email, email_confirm: true })` 로 로그인 계정을 만들고, **같은 처리 안에서** `app_users`(누가 어느 학생·강사인지) 행을 넣음 | — |
+
+- **실물 확인 (2026-10-17)**: 대시보드의 **Send invitation(초대)** 으로 만든 계정은 '이메일 미확인' 상태라, 공개 가입을 끈 뒤에는 코드 로그인이 `422 signup_disabled` 로 막힌다(메일도 안 나감). → **초대 기능은 쓰지 않는다.** 계정은 서버가 `email_confirm: true` 로 만든다(⑥). 이미 초대로 만든 시험 계정은 SQL Editor 에서 `update auth.users set email_confirmed_at = now() where email = '…' and email_confirmed_at is null;` 로 확인 처리. 초대 메일은 Supabase 기본 영어 문구(쓰지 않으므로 번역 안 함).
+
+- **실물 확인 완료 (2026-10-17)**: 등록 안 된 이메일로 `shouldCreateUser: false` 코드 요청 → Supabase가 `422 Signups not allowed for otp` 로 거절. **계정도 안 생기고 메일도 안 나감.** (회원가입을 끄기 전에도 이 옵션만으로 코드 로그인 경로는 막히지만, `/signup` 경로는 ②를 해야 막힌다)
+- **쓰지 않는 방식**: 처음 로그인할 때 이메일이 `students.email` 과 같으면 자동 연결 — 이메일 오타·가족이 같이 쓰는 이메일이면 다른 학생과 연결될 수 있어 위험. 연결은 운영자 등록 때 한 번만.
+- **겹방어**: 로그인 계정은 있는데 `app_users` 연결이 없으면 DB가 학생·결제·업무를 0건으로 보여 줌 (아래 4-② '미등록' 항목).
+- 메일 발송: Supabase 기본 메일 서버는 시간당 발송 수가 적고, 안내상 **팀 멤버 주소로만** 보내도록 제한될 수 있다(설정 화면에서 확인 필요) → 가상 계정 로그인 시험은 대표 이메일로, 실제 학생 시험 전 메일 발송 서비스 연결(비용 승인 D-6).
+
+### 메일 발송 연결 (D-37 Resend)
+
+| 순서 | 상태 |
+|---|---|
+| Resend 가입·도메인 `edgeenglish.kr` 등록 (발송 서버 지역 Tokyo — 한국에서 가장 가까움, 받는 사람과 무관) | ✅ 2026-10-17 |
+| 호스팅케이알 DNS **추가만**: TXT `resend._domainkey`(DKIM), CNAME `rsend`·`send`(발송), TXT `_dmarc` = `v=DMARC1; p=none;` — 기존 구글 메일·Vercel 레코드 변경 없음 | ✅ 2026-10-17, Resend **Verified** |
+| 공개 회원가입 끄기 (메일 연결 전에 먼저) | ✅ 2026-10-17 |
+| 시험용 Supabase SMTP 연결 (smtp.resend.com:465, 사용자 `resend`, 비밀번호 = Resend API key `supabase-test` — 키는 Supabase 화면에만 입력, 보낸 사람 `엣지영어 <support@edgeenglish.kr>`) | ✅ 2026-10-17 |
+| 로그인 코드 설정: OTP 6자리, 유효 10분(600초), Magic Link 템플릿을 6자리 코드(`{{ .Token }}`) 한국어 문구로 | ✅ 2026-10-17 |
+| 실제 발송 시험: 등록된 계정(support@, app_users 연결 없음)으로 코드 요청 → **지메일 받은편지함 도착** | ✅ 2026-10-17 |
+| 등록 안 된 이메일: 코드 요청 422 `otp_disabled`(계정·메일 안 생김), `/signup` 422 `signup_disabled` | ✅ 2026-10-17 |
+| 로그인 화면 `/lms/login` 실제 연결: 미등록 이메일 → 같은 코드 화면(요청 422, 메일 없음), 틀린 코드 → 403 안내 | ✅ 2026-10-17 (Claude 브라우저 점검) |
+| 맞는 코드 입력 → 로그인 완료 → 역할별 이동 | ✅ **2026-10-18 대표 실물 확인**: Vercel 미리보기(Preview 전용 환경 변수 `LMS_PREVIEW`·Supabase 주소·공개키, 운영 사이트 변경 없음) `/lms/login` → 지메일 코드 → **운영자 첫 인증 앱 등록(QR, Google Authenticator)** → aal2 → 운영자 대시보드 이동. migration 820 적용 완료. 시험용 대표 계정 support@ = app_users admin/owner |
+
+## 4. 보안 점검 결과
+
+> **범위 주의 (2026-10-17 갱신)**: 실물(시험용 Supabase)에서 통과한 것은 ① **로그인 안 한 사용자 차단**(REST API) ② **로그인 사용자 권한의 DB 단계 점검**(SQL Editor에서 로그인 상태를 흉내 낸 `authz-probe`, 14개 묶음 통과) 두 가지다.
+> **실제 Supabase 로그인 토큰으로 API를 거치는 끝단 점검(5-4), 운영자 TOTP 강제(800), 이메일 코드 실제 로그인(5-5)은 아직이다.** 따라서 **전체 보안이 검증된 상태가 아니다.**
+
+### ① 로그인 안 한 사용자 차단 — ✅ 실물 통과 (2026-10-17, `anon-probe.sh`)
+
+| 항목 | 결과 |
+|---|---|
+| 접속 | publishable key 정상 인정 (DB까지 요청이 닿음) |
+| 표·보기 읽기 40개 | 모두 거절 (401, DB 응답 `42501 permission denied`) — 키 오류가 아니라 권한으로 막힘을 응답 본문으로 확인 |
+| 함수 실행 9개 | 모두 거절 (401) |
+| 쓰기 4가지 (학생 추가·수정·삭제, 기능 스위치 수정) | 모두 거절 (401) |
+| 참고 | GraphQL 꺼짐(외부 통로 하나 적음). **회원가입 열림** → 3단계 ② |
+
+### ② 로그인 사용자 권한 — ✅ 로컬 통과 · ✅ **실물 DB 단계 통과 (2026-10-17)** · ⬜ 실제 토큰 끝단 점검 미완료 (`authz-probe.sql`)
+
+로컬 임시 PostgreSQL에 **Supabase 기본 권한(새 표·함수·시퀀스를 anon·authenticated에 자동으로 여는 설정)을 그대로 흉내 내고** 마이그레이션 000~700 + 가상 데이터를 넣은 뒤, 가상 계정 6개로 **모든 표·보기(40개)를 하나하나 직접 읽고**, 쓰기 17가지와 함수를 시도했다.
+
+| 가상 계정 | 확인 결과 (로컬) |
+|---|---|
+| 미등록 (로그인은 했지만 운영자가 등록하지 않은 계정) | 학생·결제·수업·업무 **0건**. 보이는 것은 공용 기준표(판본 목록·상태값·공휴일·게시된 안내 문서)뿐. 쓰기 전부 거절. 스스로 운영자로 올리기(`app_users` 추가·수정) 거절 |
+| 학생 A ↔ 학생 B | 서로의 **수업·결제·적립금·변경권·환불·동의·연기 신청 0건**. 다른 학생 번호로 적립금·변경권 잔액 조회 → 0, 다른 학생 대신 동의 → 거절. 본인 것은 보임(수업 2·적립금 1 등 — 점검이 헛돌지 않음을 함께 확인) |
+| 강사 X ↔ 강사 Y | 본인 담당 수업·기록·정산·재등록 통보만. 다른 강사 수업 0건. **결제·환불·적립금·변경권·학생 원본(휴대폰·실명·운영 메모)·동의 기록 0건.** 담당 학생 정보는 함수로 필요한 칸만, 담당 아닌 학생 0명 |
+| 운영자 | 모든 표 전체 읽기. **쓰기는 운영자 계정도 거절** (쓰기는 서버 전용 키로만 — 화면 개발 때 서버 기능으로) |
+
+- **점검 자체 검증**: 일부러 구멍을 12가지 만들어(결제 표 전체 공개, 학생이 다른 학생 수업·적립금 보기, 강사가 다른 강사 수업·결제 보기, 미등록이 학생 보기, 학생 수정 열기, 스스로 운영자 되기, RLS 끄기, RLS 건너뛰는 보기, 검토 안 된 관리자 권한 함수, 잔액 함수가 RLS 무시) 각각 넣어 보니 **12가지 모두 실패로 잡아냄**.
+- **점검에서 찾아 고친 것 2가지** → `migrations/20261016000700_lms_authz_hardening.sql` (데이터가 새는 문제는 아니었음, 미리 닫음)
+  1. `consent_status`(동의 현황 보기)에 앱 사용자의 추가·수정·삭제 권한이 남아 있었음 (Supabase 기본 권한). 원본 표가 막혀 실제 쓰기는 안 됐지만 회수
+  2. `audit_log_id_seq`(이력 번호)를 앱 사용자가 건드릴 수 있었음 (REST API로는 못 부르지만 회수). 표 보호용 내부 함수 `lms_protect` 도 로그인 사용자 실행 목록에서 뺌. 앞으로 만드는 표·시퀀스도 자동으로 열리지 않게 함
+- 참고(실패 아님): 학생은 **본인 결제·환불 표도 직접 못 본다**(정책 없음). 학생 화면에 결제 내역이 필요하면 그때 필요한 칸만 여는 정책을 추가.
+
+**실물 결과 (2026-10-17, 대표 실행)**: 700 적용 → authz-probe 1차 '실패 2건'(확장·이벤트 트리거 함수 오판정, 아래) → 스크립트 수정 → **2차 `AUTHZ-PROBE 결과: 모두 통과 (점검 묶음 14개)`**. 실행 전후 학생수 4·가상학생수 4로 **가상 데이터 그대로·되돌림 확인**.
+- 이 결과의 범위: DB 안에서 로그인 상태(JWT 값)를 흉내 내 RLS·권한·함수를 확인한 것. 실제 Supabase Auth가 발급한 토큰으로 REST API를 거친 확인은 5-4.
+
+**실물 확인 — 대표 실행 안내 (정책 원본 A32 승인: 시험용 `edgeenglish-lms-test` 에서만)** — ✅ 완료 (기록용으로 남김)
+
+**실행 전 Claude 재검토 결과 (2026-10-17, 작업 브랜치 `claude/trusting-feynman-kujjnm` 커밋 80ed2b8 의 파일 그대로)**
+
+| 확인 항목 | `20261016000700_lms_authz_hardening.sql` | `authz-probe.sql` |
+|---|---|---|
+| 하는 일 | 권한 **회수만**: ① `consent_status` 보기에 남은 추가·수정·삭제 등 권한 회수(읽기만 다시 부여) ② `audit_log_id_seq`·`student_code_seq` 를 앱 사용자(anon·authenticated)가 못 쓰게 ③ 내부 함수 `lms_protect` 실행 권한 회수 ④ 앞으로 만드는 표·시퀀스가 앱 사용자에게 자동 공개되지 않게 | 가상 계정 6개로 읽기·쓰기·함수 점검 후 **끝에서 일부러 오류를 내 전부 되돌림** |
+| 데이터 변경 | **없음** (INSERT·UPDATE·DELETE·DROP 0개) | 실행 중에 가상 학생 2·강사 2 등을 잠깐 넣지만 **마지막에 전부 취소** |
+| 기존 가상 데이터 | 그대로 (권한만 바뀜) | 그대로. 로컬 재현에서 실행 전후 학생 4·등록 5·이력 22·계정 0으로 **같음**을 확인, check.sql 6줄 통과 유지 |
+| 서버·대표 권한 | 영향 없음. 회수 대상은 앱 사용자(anon·authenticated)뿐 — SQL Editor(postgres)·서버 키(service_role)는 그대로 | — |
+| 다른 마이그레이션과 충돌 | 없음. 000~600 이 이미 적용된 상태를 로컬에 똑같이 만들고 적용 → 정상. **두 번 실행해도 같은 결과** | — |
+| 시험용 프로젝트에만? | SQL 자체에는 프로젝트 구분이 없다 → 실행 전에 **아래 0번으로 프로젝트를 눈으로 확인**. 이 파일은 나중에 운영 프로젝트를 만들 때도 같은 순서로 쓰는 정상 마이그레이션이다 | 같음. 운영 프로젝트에서는 실행하지 않는다 |
+| 되돌리기 | 권한 회수라 되돌릴 일이 없다(되돌리면 구멍이 다시 열림). 문제가 생기면 Claude가 원래 권한을 다시 주는 SQL을 따로 드림 | 자동으로 전부 되돌려짐. 남는 흔적: 이력 번호(`audit_log` id)가 몇 개 건너뜀 — 번호 순서일 뿐 데이터는 없음 |
+
+**실행 순서 (PC 권장, 약 5분, 비밀키 필요 없음)**
+
+0. Supabase 왼쪽 위 프로젝트 이름이 **edgeenglish-lms-test** 인지 확인 → SQL Editor → New query → 아래 한 줄 실행
+   `select count(*) as 학생수, count(*) filter (where name_ko like '가상%') as 가상학생수 from students;`
+   → **학생수 4, 가상학생수 4** 이면 시험용 프로젝트가 맞다. 숫자가 다르면 멈추고 Claude에게 알림
+1. 새 query에 GitHub 브랜치 `claude/trusting-feynman-kujjnm` 의 `supabase/migrations/20261016000700_lms_authz_hardening.sql` 전체(Raw → 전체 복사) 붙여 넣기 → Run → **"Success. No rows returned"**
+2. 새 query에 `supabase/test-setup/authz-probe.sql` 전체 붙여 넣기 → Run
+   - **결과가 빨간 오류 칸으로 나오는 것이 정상이다.** 이 파일은 가상 데이터를 넣고 점검한 뒤, 그 데이터를 DB에 남기지 않으려고 **마지막에 일부러 오류를 내서 전체를 취소**한다.
+   - 통과: 오류 칸 첫 줄이 `AUTHZ-PROBE 결과: 모두 통과 (점검 묶음 14개)`
+   - 실패: `AUTHZ-PROBE 결과: 실패 n건` + 목록 → 그대로 복사해 Claude에게 전달 (그래도 데이터는 모두 취소됨)
+   - `AUTHZ-PROBE` 가 아닌 다른 오류(예: `permission denied to set role`)가 나오면 점검이 끝까지 못 간 것 → 오류 첫 줄을 Claude에게 전달 (역시 데이터는 취소됨)
+3. 0번 쿼리를 다시 실행 → 여전히 **4, 4** 면 되돌림 확인 완료
+4. 결과(2번 오류 칸 전체, 3번 숫자)를 Claude에게 전달
+
+- 1을 건너뛰고 2를 실행하면 `실패 7건`(consent_status 6줄 + audit_log_id_seq 1줄)이 나온다 — 로컬에서 같은 결과를 확인했다.
+- **이 점검이 통과해도 '로그인 사용자 권한의 DB 단계'가 실물에서 확인된 것**이다. 실제 Supabase 로그인 토큰으로 API를 거쳐 확인하는 끝단 점검과 이메일 코드 로그인 시험은 남는다(아래 5절).
+
+### 실물 1차 실행 결과 (2026-10-17, 대표 실행) — 실패 2건, 둘 다 **검사 스크립트의 오판정** (보안 취약점 아님)
+
+- 700 관련 항목(consent_status·audit_log_id_seq)은 실패 목록에 없음 → **700 적용 확인**. 표·쓰기·학생 A↔B·강사·미등록·운영자 점검은 모두 통과(실패 2건은 함수 목록 판정뿐).
+
+| 실패 항목 | 원인 | 판정 |
+|---|---|---|
+| 비로그인 사용자가 실행할 수 있는 함수 `oid_dist`·`gbt_*` 등 188개 | `btree_gist` 확장(시간 겹침 방지 제약에 필요)의 내부 함수. 실물 Supabase는 확장을 플랫폼 관리자 소유로 만들며 anon 실행 권한을 함께 준다. 우리 SQL(600)의 권한 회수는 postgres 권한이라 **플랫폼 관리자가 준 권한에 닿지 않음**. 로컬은 슈퍼유저로 실행해 회수가 됐기 때문에 통과했다 | **취약점 아님**: 숫자 거리 계산·인덱스 내부용 함수로 표 데이터를 읽지 않음. 시험용 REST API로 직접 호출해 보니 `PGRST202 함수를 찾을 수 없음`(인자 2개 이상·internal 형식이라 API로 부를 수 없음) |
+| 검토 안 된 SECURITY DEFINER 함수 `rls_auto_enable` | Supabase가 만든 '새 표에 RLS 자동 켜기' **이벤트 트리거 함수**. 로컬에는 없는 함수라 통과했다 | **취약점 아님**: 이벤트 트리거 함수는 직접 호출할 수 없고 표를 만들 때만 DB가 실행함. 비로그인 REST 호출은 `permission denied`로 거절됨(확인) |
+
+**스크립트 수정 (2026-10-17)**: ① 검토한 확장(btree_gist)의 내부 함수는 실패가 아니라 '참고'로 표시(개수·소유자 출력) — **다른 확장 함수가 열려 있으면 여전히 실패** ② 트리거·이벤트 트리거 함수는 SECURITY DEFINER 검토 대상에서 빼고 '참고'로 표시 — 일반 SECURITY DEFINER 함수는 여전히 실패. 로컬 검증에 실물 Supabase 조건(확장 함수 anon 권한, `rls_auto_enable`)을 흉내 내는 `supabase/tests/stub_supabase_platform.sql` 추가 → 통과, 의도적 구멍 14가지(확장·definer 함수 2가지 추가) 모두 검출.
+
+- DB 추가 수정 필요 없음. 확장 삭제·권한 일괄 회수 하지 않음. 운영 프로젝트를 새로 만들 때는 btree_gist를 `extensions` 스키마에 설치하는 것을 권장(그때 별도 보고·승인).
+
+**다시 실행 (대표)**: SQL Editor에서 최신 `supabase/test-setup/authz-probe.sql`(작업 브랜치) 전체를 붙여 넣고 Run → 첫 줄이 `AUTHZ-PROBE 결과: 모두 통과 (점검 묶음 14개)` 인지 확인 → 오류 칸 전체를 Claude에게 전달. 700은 다시 실행하지 않아도 됨. 0번(학생수 4·가상학생수 4) 확인은 실행 전후 한 번씩.
+
+## 5. 실물 로그인 사용자 검증을 끝내기 위한 다음 단계
+
+| 단계 | 내용 | 누가 · 필요한 것 | 상태 |
+|---|---|---|---|
+| 5-1 | 위 4-② 실행 안내 (DB 안에서 로그인 상태를 흉내 낸 점검) | 대표, SQL Editor | ✅ 2026-10-17 14개 묶음 통과 |
+| 5-2 | 공개 회원가입 끄기 (3단계 ①②) | 대표, 대시보드 스위치 | ⬜ (A30 확정) |
+| 5-3 | 운영자 TOTP 강제(migration 800) + 결제 확인 상태(810) 로컬 구현·테스트 → 실행 안내 | Claude 구현, 대표 SQL 실행 승인 | ⬜ |
+| 5-4 | **끝단 점검** (`e2e-token-probe.py`): 실제 Supabase 로그인 계정(가상, `@example.com`, 메일 발송 없음)을 만들어 실제 토큰으로 REST API를 거쳐 학생 A↔B·강사·미등록·운영자를 확인하고, 끝나면 계정·연결 삭제. 운영자 TOTP는 migration 800 이후 | Claude. 전용 환경 `edgeenglish-lms-security-test` 에 환경 변수로 키 입력 (네트워크 시크릿은 모든 요청에 키가 붙어 검증이 왜곡되므로 쓰지 않음) | ✅ **통과 (2026-10-17, 75개)** — 710 적용 후 재실행. 운영자 TOTP 강제는 800 이후 별도 |
+| 5-5 | 이메일 6자리 코드 실제 로그인 시험 (대표 이메일 가상 계정) | 메일 발송 서비스 선택·승인(D-28) 후 | ⬜ |
+
+### 5-4 Secret key 준비 (D-27 승인, 2026-10-17) — 대표 진행
+
+- ✅ 시험용 프로젝트에 Secret key `claude_test` 생성 (2026-10-17 대표)
+- 점검 스크립트: `supabase/test-setup/e2e-token-probe.py` — 키를 **두 방식 모두** 받는다. 키 값은 출력하지 않고, 시험용 주소가 아니면 멈춘다.
+
+**방식 1 (권장): 네트워크 시크릿** — 키가 작업 컨테이너 안에 들어오지 않고, 관문(프록시)이 시험용 주소로 가는 요청에만 붙여 준다.
+환경 설정(세션 제목 줄 → Edit) → **네트워크 시크릿 → 시크릿 추가**에서 화면에 있는 칸에 맞춰 입력:
+
+| 칸 (화면에 있는 경우) | 입력 |
+|---|---|
+| 이름 | `SUPABASE_SERVICE_ROLE_KEY` (이름만 쓰는 칸이면 자유, 위 이름 권장) |
+| 대상 주소(호스트·도메인) | `kyeimjozkcqbgkepwrnv.supabase.co` — **이 주소 하나만** (`*.supabase.co` 같은 넓은 범위 금지) |
+| 헤더 이름 | `apikey` |
+| 값 | Supabase에서 복사한 `sb_secret_…` 키 **그대로** (`Bearer ` 를 앞에 붙이지 않음) |
+
+- 저장 후 **새 세션**에서 "5-4 진행". Claude는 먼저 `--check`로 키 연결만 확인한다(계정 안 만듦).
+- **안전장치**: 관문이 이 키를 공개키 요청(학생 토큰 요청)에까지 덮어씌우면 점검 결과가 왜곡된다. 스크립트가 시작 전에 이것을 확인하고, 그렇게 동작하면 아무것도 만들지 않고 멈춘다 → 그때는 방식 2로 바꾼다.
+- 화면에 '헤더 이름'·'대상 주소'를 고르는 칸이 없거나 `Authorization: Bearer` 방식만 있으면 방식 2를 쓴다 (`sb_secret_` 키는 JWT가 아니라 `apikey` 헤더로만 인정됨).
+
+**방식 2: 환경 변수** — 같은 Edit 화면의 환경 변수 칸에 `SUPABASE_SERVICE_ROLE_KEY=sb_secret_…`. 키가 컨테이너 안에 들어오지만 Claude는 출력하지 않는다. 시험이 끝나면 키 삭제로 무효가 된다.
+
+**공통**: 채팅·GitHub·Vercel에는 넣지 않는다. 운영 프로젝트 키는 넣지 않는다. 검증 후 Claude가 테스트 계정·연결을 지우고 보고 → 대표가 Supabase에서 `claude_test` 키 **삭제** → 작업 환경의 시크릿/환경 변수도 삭제.
+
+**`sb_secret_` 호환성 (스크립트 반영)**: 새 Secret key는 JWT가 아니라 `apikey` 헤더에만 넣는다(레거시 `service_role` JWT일 때만 `Authorization: Bearer`도 함께). 관리 API(`/auth/v1/admin/users`)·REST 모두 이 방식. 브라우저에서는 쓰지 않음(서버·스크립트 전용).
+
+### 5-4 실행 기록 (2026-10-17)
+
+| 순서 | 결과 |
+|---|---|
+| 키 입력 방식 | 전용 환경 `edgeenglish-lms-security-test` 의 **환경 변수** (`NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`). 네트워크 시크릿은 공식 문서상 그 주소의 **모든 요청**에 키를 붙이므로 학생 토큰 검증이 왜곡됨 → 사용 안 함 |
+| 1차 `--check` | 중단: 공개키 형식 아님 (환경 변수 둘째 줄 입력 오류) → 대표가 다시 입력 |
+| 2차 `--check` | ✅ 관리 API 200 · **안전장치 통과** (공개키 요청에 서버 권한이 섞이지 않음) |
+| 1차 전체 실행 | ❌ 가상 계정 2개 생성 후 `app_users` 연결이 403 → 즉시 중단, **계정 2개 삭제 완료**, 연결 0줄 |
+| 원인 확인 (읽기 전용) | 서버 키로 `app_users`·`audit_log`·`students` GET → 모두 403 `42501 permission denied`. 시험용 프로젝트는 새 표를 service_role 에게 자동으로 열지 않음 (지금까지 Supabase 기본 권한에 기대고 있었음) |
+| 수정 | `migrations/20261016000710_lms_service_role_grants.sql` — 서버 키에 LMS 표 읽기·쓰기 명시 부여, 변경 이력은 추가·읽기만. 앱 사용자 권한은 그대로. 로컬에서 같은 실패를 재현한 뒤 수정으로 통과 확인 (`npm run test:db`, authz-probe 14개 통과 유지) |
+| 710 적용 | 대표가 SQL Editor 에서 적용 (2026-10-17) |
+| **2차 전체 실행** | ✅ **모두 통과 (75개)**. 실제 로그인 토큰 6개(미등록·학생 A·B·강사 X·Y·운영자)로 REST API 경유: ① 토큰 = 본인 6/6 ② 읽기 — 미등록 전부 0건, 학생은 본인 학생·수강등록 1건만(다른 학생 번호로 요청해도 0건), 결제·환불·이력·운영 업무·강사 원본 0건, 강사는 학생 원본·수강등록 0건·본인 재등록 통보만, 운영자 학생 4명 전체 ③ 쓰기 — 6개 계정 모두 스스로 운영자 등록·학생 수정·적립금 지급 403 ④ 함수 — is_admin 은 운영자만 true, 학생A→학생B 적립금 잔액 0. **정리: 연결 5줄·계정 6개 삭제 완료** (audit_log 몇 줄은 설계상 남음) |
+| 정리 | ✅ 대표가 Supabase `claude_test` Secret key 삭제, 전용 환경의 환경 변수 3줄 삭제 (2026-10-17). 다시 점검할 때는 새 Secret key를 만들어 같은 방식으로 |
+
+### 800 운영자 TOTP 강제·역할 분리 (2026-10-17) — ✅ 시험용 적용·실물 점검 통과
+
+- 파일: `migrations/20261016000800_lms_admin_mfa.sql`. 하는 일: `app_users.admin_level`(owner/staff) 추가, `is_admin()` 은 aal2 세션에서만 참, `is_owner()`(대표 전용) 추가. 데이터 변경 없음(운영자 계정이 이미 있으면 staff 로 두고 대표는 따로 owner 지정 — 시험용에는 운영자 계정 없음).
+- 로컬 검증: `npm run test:db` 통과, authz-probe **18개 묶음** 통과 (운영자(TOTP 전)·운영직원 추가). aal2 확인을 일부러 빼면 테스트가 실패하는 것도 확인.
+- 실물 확인 순서 (비밀키 필요 없음): SQL Editor 에서 ① 학생수 4·가상학생수 4 확인 → ② 800 파일 Run → ③ `authz-probe.sql` Run → 오류 칸 첫 줄 `AUTHZ-PROBE 결과: 모두 통과 (점검 묶음 18개)` → ④ ① 다시 4·4.
+- **실물 결과 (2026-10-17, 대표 실행)**: 800 적용 → `AUTHZ-PROBE 결과: 모두 통과 (점검 묶음 18개)`, 실행 전후 학생 4·가상학생 4 그대로. TOTP 전 운영자 세션 0건·직원은 대표 전용 권한 없음을 DB 단계에서 확인.
+- 실제 TOTP 등록·인증 토큰 점검(`e2e-token-probe.py` 에 추가됨, Supabase MFA API 사용)은 Secret key가 필요하므로 **다음에 키를 만들 때(이메일 로그인 실물 시험 5-5 등) 함께** 실행.
+
+### 900 신규 학생 등록 저장 함수 (D-40, 2026-10-18) — ⬜ 대표 적용 대기
+
+- 파일: `migrations/20261018000900_lms_register_student.sql`. 하는 일: 등록 함수 `admin_register_student`(학생·수강등록·결제 확인·정규 일정·수업을 한 번에, 운영자 TOTP 세션만), 같은 이메일 확인 `admin_students_with_email`, 저장 버튼 중복 방지용 `registration_requests` 표. **기존 표·데이터를 지우거나 바꾸지 않음**(DROP·DELETE·TRUNCATE 없음). 두 번 실행해도 같은 결과.
+- 이 방식이면 Vercel에 Secret key를 넣지 않아도 저장된다 (DB 안에서 운영자·TOTP 확인).
+- **로컬 재현 (2026-10-18, Claude)**: 시험용 DB와 같은 순서(820까지 + 가상 데이터 → 900 두 번 → 가능 시간 → 확인)로 실행 → 확인 9줄 모두 '통과', 운영자 TOTP 세션으로 등록 2건(결제 확인+정규 8회 / 결제 대기) 저장 성공, 그 뒤 `authz-probe` **모두 통과 (점검 묶음 18개)**. 900 적용 전에 확인 파일을 돌리면 오류 없이 '실패' 7줄이 나오는 것도 확인.
+
+**적용 순서 (대표, PC 권장, 약 10분, 비밀키 필요 없음)** — 각 파일은 GitHub 브랜치 `claude/hopeful-planck-fd7mw7` 에서 열고 **Raw** → 전체 선택 → 복사 → Supabase → edgeenglish-lms-test → **SQL Editor** → **New query** → 붙여 넣기 → **Run**
+
+| 순서 | 실행할 것 | 정상 결과 |
+|---|---|---|
+| ① | 아래 한 줄 (시험용 프로젝트 확인)<br>`select count(*) as 학생수, count(*) filter (where name_ko like '가상%') as 가상학생수 from students;` | **4, 4** (다르면 멈추고 Claude에게 알림) |
+| ② | `supabase/migrations/20261018000900_lms_register_student.sql` | "Success. No rows returned" |
+| ③ | `supabase/test-setup/d40-availability.sql` (가상 강사 2명의 수업 가능 시간 — 이것이 없으면 화면에서 정규 시간을 고를 칸이 안 열림) | 표 2줄: 가상강사 Alex 5요일 18:00~23:00 Australia/Sydney, 가상강사 Blair 6요일 06:00~11:00 America/Toronto |
+| ④ | `supabase/test-setup/d40-check.sql` (읽기만) | 9줄 모두 **'통과'** |
+| ⑤ | `supabase/test-setup/authz-probe.sql` | 빨간 오류 칸 첫 줄 `AUTHZ-PROBE 결과: 모두 통과 (점검 묶음 18개)` (일부러 오류를 내서 점검 데이터를 되돌리는 것 — 정상) |
+| ⑥ | ①을 다시 | 여전히 **4, 4** |
+
+- 오류가 나면 **오류 첫 줄만** Claude에게 전달. ②에서 오류가 나면 아무것도 바뀌지 않는다(한 묶음 실행).
+- ④에서 '실패'가 있으면 그 줄 번호를 전달.
+
+**실제 화면 등록 시험 (대표, ①~⑥ 통과 후, 휴대폰도 가능)**
+
+Vercel → 프로젝트 → **Deployments** 에서 브랜치 `claude/hopeful-planck-fd7mw7` 의 최신 **Preview** 주소 열기 → `/lms/login` 로그인(이메일 코드 + 인증 앱) → 주소 끝을 `/lms/admin/students/new` 로 (주소에 `?demo=1` **없이**). 이름은 반드시 **'가상'으로 시작**, 이메일은 `@example.com` (실제 사람 정보 금지).
+
+| 시험 | 입력 | 통과 기준 |
+|---|---|---|
+| A. 결제 확인 + 강사 + 정규 시간 | 이름 `가상등록일`, 이메일 `reg1@example.com`, 4주(1개월) · 주 2회 · 50분, 결제 확인(가상 금액), 강사 **가상강사 Alex**, **화·목 19:00**(한국 시각), 첫 수업일 = 가장 가까운 화요일 → 저장 | 완료 칸에 학생 번호(STU-…)·**정규 8회** 표시 |
+| B. 방금 만든 수업이 다시 읽히는지 | 새 등록 화면에서 강사 가상강사 Alex 선택 | 같은 주 **화·목 19:00 칸이 '정규'로 막혀 있음**(A의 수업). 50분 수업이면 바로 앞뒤 18:30·19:30 칸도 수업+휴식 10분이 안 돼 고를 수 없음 |
+| C. 같은 이메일 알림 | 이메일 칸에 `reg1@example.com` 입력 | "같은 이메일의 기존 학생이 있어요: STU-… 가상등록일 … 자동으로 연결하지 않아요" 안내만 나옴 (확인 후 이 등록은 저장하지 않고 닫기) |
+| D. 결제 대기 등록 | 이름 `가상등록이`, 이메일 `reg2@example.com`, 12주(3개월) · 주 1회 · 20분, **결제 확인 안 함**, 강사 고르지 않음 → 저장 | 완료 칸에 '결제 대기' · 정규 0회 |
+| E. 대시보드 | `/lms/admin` | A 학생의 **신규 매칭** 업무가 보임(강사 배정 완료, 학생 안내 전). D 학생은 업무 없음(결제 전) |
+
+시험 뒤 확인 SQL (SQL Editor, 읽기만) — 결과 표를 캡처해 Claude에게:
+
+```sql
+select s.code, s.name_ko, e.status, e.weeks, e.weekly_count, e.duration_min, e.start_date, e.base_end_date,
+       (select count(*) from lessons l where l.enrollment_id = e.id) as 수업수,
+       (select count(*) from payments p where p.enrollment_id = e.id) as 결제기록,
+       (select t.status || ' / 강사배정 ' || (t.tutor_assigned_at is not null) from admin_tasks t
+         where t.enrollment_id = e.id and t.kind = 'new_student_matching') as 매칭업무
+from students s join enrollments e on e.student_id = s.id
+where s.email like 'reg%@example.com' order by s.code;
+```
+
+통과 기준: A 줄 `confirmed`·수업수 8·결제기록 1·매칭업무 `open / 강사배정 true`, D 줄 `pending_payment`·수업수 0·결제기록 0·매칭업무 비어 있음.
+
+- **시험 뒤부터 ① 확인 숫자가 4, 4 → 6, 6 으로 바뀐다.** 이후 기준은 **학생수 = 가상학생수**(모두 '가상'으로 시작). 시험 학생은 지우지 않는다(변경 이력 보호 설계상 삭제하지 않음, 가상 데이터라 문제없음).
+- 참고: 등록 함수는 강사 **겹침·휴식 10분·휴무**는 DB에서 다시 확인하지만, **강사 가능 시간 밖인지는 화면에서만 막는다**(운영자만 쓰는 화면이라 지금은 충분). 나중에 학생 셀프 신청을 만들 때는 DB 확인도 추가한다.
+
+### 5-4 끝단 점검 계획
+
+| 항목 | 내용 |
+|---|---|
+| 필요한 것 | 시험용 프로젝트 전용 **Secret key 1개**(이름 `claude-test`) — 대표가 Supabase → Project Settings → API Keys에서 만들고, 작업 환경 비밀 값 `SUPABASE_SERVICE_ROLE_KEY` 칸에만 저장. 채팅·GitHub 금지. Claude는 값을 출력하지 않음 |
+| Claude가 만드는 것 | Supabase 로그인 계정 6개(`authz-*@example.com`, 무작위 비밀번호, **메일 발송 없음**) + `app_users` 연결 6줄 — 미등록 1·학생 2(기존 가상학생에 연결)·강사 2(기존 가상강사)·운영자 1. **학생·수업 데이터는 새로 만들지 않음** |
+| 확인하는 것 | 실제 토큰으로 REST API를 거쳐: 미등록 0건, 학생 A↔B 서로 0건(수업·결제·적립금·변경권), 강사 X↔Y 분리·결제/학생 원본 0건, 운영자 전체 읽기·쓰기 거절, 함수(잔액·대신 동의) 거절 |
+| 끝나면 | 만든 계정 6개와 연결 6줄 삭제 → 대표가 `claude-test` 키 삭제. 남는 것: 변경 이력(audit_log) 몇 줄(지울 수 없게 설계됨) |
+| 운영자 TOTP | migration 800(운영자 권한은 TOTP 완료 세션에서만) 승인·적용 후 같은 방식으로 추가 점검. TOTP 코드는 시험 계정 등록 때 받은 비밀값으로 Claude가 계산(휴대폰 불필요) |
+| 위험 | Secret key는 RLS를 무시하는 키 → 시험용 프로젝트에서만, 점검 기간에만, 끝나면 삭제. 운영 프로젝트 키는 받지 않음 |
+
+## 지금 상태
+
+| 항목 | 상태 |
+|---|---|
+| 시험용 프로젝트 | ✅ 생성 (대표) |
+| 마이그레이션·가상 데이터 | ✅ 2026-10-17 대표가 SQL Editor에서 실행, check.sql 6줄 모두 '통과' (프로젝트 주소 `kyeimjozkcqbgkepwrnv.supabase.co`) |
+| Claude 접속 — 주소 허용 | ✅ 2026-10-17 확인: 작업 환경에서 `kyeimjozkcqbgkepwrnv.supabase.co` 에 실제로 닿음 (관문 403 사라짐, Supabase 서버가 직접 응답) |
+| Claude 접속 — 환경 변수 | ✅ 2026-10-17 대표가 publishable key 수정 → 정상 인정 (처음엔 안내 문구가 들어가 "Invalid API key"였음) |
+| **로그인 안 한 사용자 차단 (실물)** | ✅ 2026-10-17 `anon-probe.sh` **통과** — 표 40·함수 9·쓰기 4 모두 거절. **이 항목만 실물로 확인됨** (4-①) |
+| **로그인 사용자 권한 분리** (미등록·학생 간·강사 간·운영자) | ✅ **실물 DB 단계 통과(14개 묶음) + 실제 로그인 토큰 끝단 점검 5-4 통과(75개), 2026-10-17.** 남은 것: 운영자 TOTP 강제(800), 이메일 코드 실제 로그인(5-5) |
+| 권한 정리 2차 (`…000700_lms_authz_hardening.sql`) | ✅ 2026-10-17 대표 적용 (authz-probe 1차 결과에서 해당 실패 없음으로 확인) |
+| 회원가입 | ⚠ **열려 있음** — 초기 공개 가입 없음으로 확정(A30) → 대표가 3단계 ①② 스위치 조작 필요 |
+| 로그인 (6자리 코드) | ⬜ 3단계 ③~⑥ (화면 개발과 함께). 미등록 이메일 차단 옵션은 실물 확인 완료 |
+| Vercel 연결 | 하지 않음 (실제 운영 환경 — 별도 승인) |
+
+## 파일
+
+| 파일 | 내용 |
+|---|---|
+| `supabase/test-setup/schema_all.sql` | 마이그레이션 8개(000~700)를 순서대로 묶은 파일 (자동 생성: `node scripts/lms-test-bundle.mjs`, 테스트가 최신인지 확인) |
+| `supabase/test-setup/seed_fake.sql` | 가상 데이터 (이름 모두 '가상…', 이메일 example.com) |
+| `supabase/test-setup/check.sql` | 적용 확인 (읽기만) |
+| `supabase/test-setup/anon-probe.sh` | 실물 보안 점검 — 로그인 안 한 사용자로 표 40개·함수 9개 읽기/실행, 쓰기 4가지 시도. 시험용 주소가 아니거나 키 형식이 틀리면 바로 멈춤. 키 값은 출력 안 함 |
+| `supabase/test-setup/authz-probe.sql` | 로그인 사용자 권한 점검 — 가상 계정 6개(미등록·학생 A·B·강사 X·Y·운영자)로 모든 표·보기 읽기, 쓰기 17가지, 함수 확인. SQL Editor에서 실행하면 끝에 일부러 오류를 내 **가상 데이터를 전부 되돌림**. 로컬은 `bash supabase/tests/run.sh` 가 같은 파일을 실행 |
+| `supabase/test-setup/d40-availability.sql` | D-40 화면 시험용 가상 강사 2명의 수업 가능 시간 (여러 번 실행해도 중복 없음, 가상 강사가 없으면 아무것도 안 넣음) |
+| `supabase/test-setup/d40-check.sql` | migration 900 적용 확인 9줄 (읽기만) |
+| `supabase/migrations/20261016000600_lms_supabase_hardening.sql` | Supabase 기본 권한 정리: 로그인 안 한 사용자는 LMS 함수·학생 번호를 못 씀 |
+| `supabase/migrations/20261016000700_lms_authz_hardening.sql` | 권한 정리 2차: 동의 현황 보기·이력 번호 시퀀스·내부 함수에 남은 앱 사용자 권한 회수, 앞으로 만드는 표·시퀀스 자동 공개 막기 |
+| `supabase/tests/stub_supabase.sql` | 로컬 검증용 Supabase 흉내 — 2026-10-17부터 **Supabase 기본 권한(자동 공개)까지 재현**해서 실물과 같은 조건으로 시험 |

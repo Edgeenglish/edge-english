@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>표시 조건</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#4b2fd6}a:hover{color:#3a22b0}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1040px; box-sizing: border-box; background: #ffffff; font-family: 'IBM Plex Sans KR', sans-serif; color: #1d1b2b; padding: 20px 18px; display: flex; flex-direction: column; gap: 14px">
+  <h1 style="margin: 0; font-size: 20px; font-weight: 700">언제 보이나 — 표시 조건</h1>
+
+  <section style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px">
+    <div style="font-size: 15px; font-weight: 700; color: #8a5300">'할 일' 알림 (메인 맨 위 한 줄)</div>
+    <div style="font-size: 13px; line-height: 1.6">학생이 <b>직접 처리해야 할 때만</b> 보이고, 처리하면 사라져요. 2개 이상이면 "할 일 2" → 누르면 목록.</div>
+    <div style="font-size: 13px; line-height: 1.6; background: #fff8ec; border-radius: 10px; padding: 10px">
+      <b>보이는 경우</b><br>· 새 수업 안내 확인·동의가 필요할 때<br>· 그 밖에 학생 응답이 필요한 일 (규칙이 정해지면 추가)
+    </div>
+    <div style="font-size: 13px; line-height: 1.6; background: #f6f5fa; border-radius: 10px; padding: 10px">
+      <b>보이지 않는 경우</b><br>· 강사 확인 중 · 운영자 확인 중 (학생이 기다리기만 하면 됨)<br>· 재등록 (아래 전용 카드가 따로 있어 중복하지 않음)<br>· 강사 미입장 신고 (수업 칸에 따로 나타남)
+    </div>
+  </section>
+
+  <section style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px">
+    <div style="font-size: 15px; font-weight: 700; color: #5c3b00">재등록 카드</div>
+    <div style="font-size: 13px; line-height: 1.6">기준: <b>아직 하지 않은 정규 수업 수</b> (날짜·D-day가 아니라 횟수)</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; font-size: 12px; text-align: center">
+      <div style="background: #f6f5fa; border-radius: 10px; padding: 10px 4px"><b style="font-size: 14px">3회 남음</b><br>안 보임</div>
+      <div style="background: #fff4d6; border-radius: 10px; padding: 10px 4px"><b style="font-size: 14px">2회 이하</b><br>보임</div>
+      <div style="background: #f6f5fa; border-radius: 10px; padding: 10px 4px"><b style="font-size: 14px">재등록 결제<br>확인됨</b><br>사라짐</div>
+    </div>
+    <div style="font-size: 12px; color: #55526a; line-height: 1.6">보강 수업은 정규 수업 수에 넣지 않아요 (확인 필요 · 아래 보고 참고).</div>
+  </section>
+
+  <section style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 15px; font-weight: 700">누르면 열리는 곳</div>
+    <div style="font-size: 13px; line-height: 1.6">· 신청 진행 상태 한 줄 → 신청 상세 (내가 고른 후보 날짜·진행 단계)<br>· 결제 내역 → 지금·지난 수강권과 결제 확인 + 아임웹 영수증 링크<br>· 적립금 내역 → 잔액과 지급·사용·복구 이력</div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
