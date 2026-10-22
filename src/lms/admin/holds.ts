@@ -30,7 +30,7 @@ export function holdBusy(rows: readonly HoldSchedule[], now: Date, until: KstDat
       const d = addDays(r.lastEnd, i);
       if (weekdayOf(d) !== r.weekday) continue;
       const startsAt = kstToInstant(d, r.time);
-      list.push({ id: `hold-${r.id}-${d}`, startsAt, endsAt: new Date(startsAt.getTime() + r.durationMin * 60_000), kind: 'hold', label: `재등록 대기 · ${r.studentName} (${md(r.lastEnd)} 23:59까지)` });
+      list.push({ id: `hold-${r.id}-${d}`, startsAt, endsAt: new Date(startsAt.getTime() + r.durationMin * 60_000), kind: 'hold', label: `${r.studentName} · ${md(r.lastEnd)} 23:59까지` });
     }
     out.set(r.tutorId, list);
   }
