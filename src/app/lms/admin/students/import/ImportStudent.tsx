@@ -8,8 +8,8 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { addDays, instantToKstDate } from '@/lms/rules/dates';
-import { DURATIONS, emptyImport, IMPORT_REASON_TEXT, importIssues, importLessons, importPayload, importProblems, type ImportDraft, type ImportMakeup } from '@/lms/admin/import';
+import { addDays, instantToKstDate, weekdayOf } from '@/lms/rules/dates';
+import { DURATIONS, emptyImport, IMPORT_REASON_TEXT, importIssues, importLessons, importPayload, importProblems, type ImportDraft, type ImportIssue, type ImportMakeup } from '@/lms/admin/import';
 import type { ImportConflict, ImportResult } from '@/lms/admin/import-live';
 import { newRequestId, type RegTutor } from '@/lms/admin/registration';
 import { dayLabel, diffFromKst, WEEKDAY_KO } from '@/lms/admin/schedule';
@@ -116,6 +116,25 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload }: Pr
     </ul>
   );
 
+  // 충돌은 그 입력 줄 바로 아래에 (휴대폰에서 맨 아래까지 내려가지 않게). 같은 이유·상대는 날짜를 한 줄로 묶음
+  const inline = (list: ImportIssue[]) => {
+    if (list.length === 0) return null;
+    const groups = new Map<string, string[]>();
+    for (const x of list) {
+      const k = `${CONFLICT_TEXT[x.reason] ?? x.reason}${x.other && x.other !== '이번 입력' ? ` (${x.other})` : ''}`;
+      groups.set(k, [...(groups.get(k) ?? []), dayLabel(x.lesson.date)]);
+    }
+    return (
+      <ul className="mt-1.5 grid gap-1 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
+        {[...groups].map(([k, days]) => (
+          <li key={k}>
+            ⚠ {k} · {days.join(', ')}
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   return (
     <div className="min-h-dvh bg-[#f6f5fb] pb-16">
       <div className="hidden lg:block">
@@ -200,7 +219,8 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload }: Pr
               <span className="mb-1 block text-[13px] text-[#6b6880]">요일 · 한국 시각 (주 {d.slots.length}회)</span>
               <div className="grid gap-2">
                 {d.slots.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={i}>
+                    <div className="flex items-center gap-2">
                     <select
                       id={`imp-slot-day-${i}`}
                       aria-label={`${i + 1}번째 요일`}
@@ -230,6 +250,8 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload }: Pr
                         −
                       </button>
                     )}
+                    </div>
+                    {inline(issues.filter((x) => x.lesson.kind === 'regular' && weekdayOf(x.lesson.date) === s.weekday && x.lesson.time === s.time))}
                   </div>
                 ))}
                 {d.slots.length < 5 && !saved && (
@@ -278,6 +300,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload }: Pr
                 </div>
                 <Chips value={m.durationMin} options={DURATIONS} label={(v) => `${v}분`} onPick={(v) => !saved && setMakeup(i, { durationMin: v })} />
                 <Field label="보강 강사">{tutorSelect(m.tutorId, (v) => setMakeup(i, { tutorId: v }), `imp-mk-tutor-${i}`)}</Field>
+                {inline(issues.filter((x) => x.lesson.kind === 'makeup' && x.lesson.date === m.date && x.lesson.time === m.time))}
               </div>
             ))}
             {!saved && (
@@ -318,10 +341,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload }: Pr
             </ul>
           )}
           {issues.length > 0 && (
-            <div className="mt-3 rounded-[10px] bg-[#fdecec] px-3 py-2.5 text-[13.5px] text-[#b3261e]">
-              <b>일정 충돌 {issues.length}건 · 저장 안 됨</b>
-              {issueList(issues.map((x) => ({ date: x.lesson.date, time: x.lesson.time, kind: x.lesson.kind, reason: x.reason, other: x.other })))}
-            </div>
+            <p className="mt-3 rounded-[10px] bg-[#fdecec] px-3 py-2.5 text-[13.5px] font-bold text-[#b3261e]">일정 충돌 {issues.length}건 · 위 빨간 표시를 고쳐 주세요</p>
           )}
 
           {result?.kind === 'error' && (
