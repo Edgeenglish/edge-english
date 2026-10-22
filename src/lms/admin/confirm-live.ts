@@ -84,3 +84,52 @@ export const planActions = (sb: SupabaseClient) => ({
   noticeSent: (noticeId: string) => call<{ all_sent: boolean }>(sb, 'admin_mark_notice_sent', { p_notice_id: noticeId }),
 });
 export type PlanActions = ReturnType<typeof planActions>;
+
+/** 강사·시간 고르기 화면: 등록 하나의 학생·상품 정보 */
+export async function loadAssignInfo(sb: SupabaseClient, enrollmentId: string) {
+  const { data, error } = await sb
+    .from('enrollments')
+    .select('id, weeks, weekly_count, duration_min, start_date, status, student:students(code, name_ko, name_en, country, city, timezone)')
+    .eq('id', enrollmentId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('수강등록을 찾지 못했어요.');
+  const r = data as unknown as {
+    id: string;
+    weeks: 4 | 12 | 24 | null;
+    weekly_count: number;
+    duration_min: number;
+    start_date: string;
+    status: string;
+    student: { code: string; name_ko: string; name_en: string; country: string | null; city: string | null; timezone: string } | null;
+  };
+  if (!r.weeks) throw new Error('옛 상품 등록은 이 화면에서 고를 수 없어요.');
+  if (r.status === 'pending_payment') throw new Error('결제 확인 전이라 강사·시간을 정할 수 없어요 (POL-OP-13).');
+  return {
+    enrollmentId: r.id,
+    studentCode: r.student?.code ?? '',
+    studentName: r.student?.name_ko ?? '(학생)',
+    nameEn: r.student?.name_en ?? '',
+    place: [r.student?.country, r.student?.city].filter(Boolean).join(' '),
+    timezone: r.student?.timezone ?? 'Asia/Seoul',
+    weeks: r.weeks,
+    weeklyCount: r.weekly_count,
+    durationMin: r.duration_min,
+    startWish: r.start_date,
+  };
+}
+
+/** 저장된 등록에 일정안 제안 (tutor_answer = 'accepted' 면 확정까지) */
+export async function proposeSchedule(
+  sb: SupabaseClient,
+  enrollmentId: string,
+  planId: string,
+  p: { tutor_id: string; slots: RegularSlot[]; start_date: string; tutor_answer: 'accepted' | null },
+) {
+  const r = await call<{ plan_id: string; state: 'proposed' | 'confirmed'; tutor_notice_id?: string | null; student_notice_id?: string | null }>(sb, 'admin_propose_schedule', {
+    p_plan_id: planId,
+    p_enrollment: enrollmentId,
+    p: { ...p, slots: p.slots.map((s) => ({ weekday: s.weekday, time: s.time })) },
+  });
+  return { planId: r.plan_id, state: r.state, tutorNoticeId: r.tutor_notice_id ?? null, studentNoticeId: r.student_notice_id ?? null };
+}

@@ -347,22 +347,28 @@ export default function AdminDashboard({
               )}
               {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
               <div className="flex flex-wrap gap-1.5">
-                {item.actions.map((a) => (
-                  <button
-                    key={a.key}
-                    type="button"
-                    onClick={() => act(item, a.key)}
-                    className={`min-h-[40px] rounded-[10px] border px-3 text-[13.5px] font-semibold ${
-                      a.danger
-                        ? 'border-[#c62b2b] bg-[#c62b2b] text-white'
-                        : a.primary
-                          ? 'border-[#7d5fff] bg-[#7d5fff] text-white'
-                          : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'
-                    }`}
-                  >
-                    {a.label}
-                  </button>
-                ))}
+                {item.actions.map((a) =>
+                  a.href ? (
+                    <Link key={a.key} href={preview ? a.href.replace('?', '?demo=1&') : a.href} className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5fff] bg-[#7d5fff] px-3 text-[13.5px] font-semibold text-white">
+                      {a.label}
+                    </Link>
+                  ) : (
+                    <button
+                      key={a.key}
+                      type="button"
+                      onClick={() => act(item, a.key)}
+                      className={`min-h-[40px] rounded-[10px] border px-3 text-[13.5px] font-semibold ${
+                        a.danger
+                          ? 'border-[#c62b2b] bg-[#c62b2b] text-white'
+                          : a.primary
+                            ? 'border-[#7d5fff] bg-[#7d5fff] text-white'
+                            : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'
+                      }`}
+                    >
+                      {a.label}
+                    </button>
+                  ),
+                )}
               </div>
             </article>
           ))}

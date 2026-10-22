@@ -328,7 +328,7 @@ where s.email like 'reg%@example.com' order by s.code;
 - **적용 전에는 새 등록 화면을 쓰지 말 것** (예전 함수는 '아직 → 제안' 을 눌러도 수업을 바로 만듦)
 - 로컬 확인: `npm run test:db` (H22 필수 검증 포함) 통과
 
-**적용 순서 (대표, PC 권장, 약 5분)** — GitHub 브랜치 `claude/amazing-johnson-fffphy` 에서 파일 열기 → **Raw** → 전체 선택 → 복사 → Supabase → edgeenglish-lms-test → **SQL Editor** → **New query** → 붙여 넣기 → **Run**
+**적용 순서 (대표, PC 권장, 약 5분)** — **복사 버튼 페이지 https://claude.ai/artifact/BEvmJNX5GrG8eUiapVEGnE** (①~③, GitHub 안 열어도 됨. migration 1000 을 고치면 Claude가 이 페이지도 다시 올림) → [복사] → Supabase → edgeenglish-lms-test → **SQL Editor** → **New query** → 붙여 넣기 → **Run**. ④ authz-probe 는 Claude가 로컬에서 같은 파일로 통과 확인 → 생략 가능
 
 | 순서 | 실행할 것 | 정상 결과 |
 |---|---|---|
@@ -346,6 +346,7 @@ where s.email like 'reg%@example.com' order by s.code;
 | C. 한쪽만 | **학생 줄만 [복사]** | 학생 '보냄', 카드는 '강사 안내 안 함'으로 남음 |
 | D. 양쪽 | 강사 줄 [복사] | 카드가 처리할 일에서 사라짐 |
 | E. 한 번에 확정 | `가상확정이`로 다시 등록 → **[가능하대요 → 확정]** | 같은 화면에 두 줄(안 보냄) |
+| F. 다른 안 | `가상확정삼`을 결제 확인·**강사 고르지 않고** 저장 → 홈 카드 **[강사·시간 고르기 →]** → 강사·칸 고르기 → [아직 → 제안 문구 복사] → 홈에서 [안 된대요] → [닫기] → 다시 [강사·시간 고르기 →] | 다른 강사·시간으로 다시 제안됨 |
 
 오류가 나면 오류 첫 줄만 Claude에게.
 

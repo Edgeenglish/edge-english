@@ -753,6 +753,16 @@ select pg_temp.ok((select state from schedule_plans where id = '90000000-0000-00
               and not exists (select 1 from lessons where enrollment_id = pg_temp.eid('c2@x.kr')),
   '제안 뒤 생긴 강사 휴무와 겹치면 확정 거절 — 수업·안내 아무것도 안 생김');
 
+-- 수업이 없는 등록은 다른 첫 수업일로 제안하면 수강 기간이 따라 옮겨짐 (강사가 거절한 뒤 다른 요일)
+select admin_propose_schedule('90000000-0000-0000-0000-000000001006', pg_temp.eid('c2@x.kr'),
+  '{"tutor_id":"55555555-0000-0000-0000-000000001000","slots":[{"weekday":3,"time":"17:00"}],"start_date":"2027-06-09"}');
+select pg_temp.ok((select start_date = '2027-06-09' and base_end_date = '2027-07-06' from enrollments where id = pg_temp.eid('c2@x.kr'))
+              and (select state from schedule_plans where id = '90000000-0000-0000-0000-000000001004') = 'withdrawn',
+  '수업 없는 등록: 첫 수업일을 6/9(수)로 바꾸면 수강 기간도 6/9~7/6 으로');
+select pg_temp.expect_error($$select admin_propose_schedule(gen_random_uuid(), pg_temp.eid('c1@x.kr'),
+  '{"tutor_id":"55555555-0000-0000-0000-000000001000","slots":[{"weekday":2,"time":"10:00"},{"weekday":4,"time":"10:00"}],"start_date":"2027-06-08"}')$$, '이미 확정된 일정');
+select pg_temp.ok((select start_date from enrollments where id = pg_temp.eid('c1@x.kr')) = '2027-06-01', '확정된 등록은 다른 안을 받지 않고 기간도 그대로');
+
 -- 결제 대기 등록에는 제안 불가
 select pg_temp.expect_error($$select admin_propose_schedule(gen_random_uuid(), pg_temp.eid('wait@x.kr'),
   '{"tutor_id":"55555555-0000-0000-0000-000000001000","slots":[{"weekday":1,"time":"19:00"},{"weekday":3,"time":"19:00"}],"start_date":"2027-03-01"}')$$, 'POL-OP-13');

@@ -82,6 +82,7 @@ export function toTaskSources(tasks: TaskRow[], leaves: LeaveRow[], noShows: NoS
         tutorAssignedAt: d(t.tutor_assigned_at),
         studentNotifiedAt: d(t.student_notified_at),
         plan: (t.enrollment_id && plans.get(t.enrollment_id)) || null,
+        enrollmentId: t.enrollment_id,
       });
     } else {
       const e = t.enrollment;

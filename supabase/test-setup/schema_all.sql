@@ -1892,10 +1892,15 @@ declare
   v integer;
   conflicts jsonb;
 begin
-  perform lms_check_plan_shape(p_enrollment, p_tutor, p_slots, p_start);
   if exists (select 1 from schedule_plans where enrollment_id = p_enrollment and state = 'confirmed') then
     raise exception '이미 확정된 일정이 있습니다. 확정 후 변경은 일정 변경 기능으로 (아직 없음).';
   end if;
+  -- 아직 수업이 하나도 없으면 (결제만 저장한 학생·강사가 거절한 뒤 다른 안) 첫 수업일에 맞춰 수강 기간을 옮김.
+  -- 수강 기간은 첫 정규 수업일부터 (POL-PER-01~03)
+  update enrollments set start_date = p_start, base_end_date = p_start + (weeks / 4 * 28 - 1)
+  where id = p_enrollment and p_start is not null and start_date is distinct from p_start and weeks is not null
+    and not exists (select 1 from lessons where enrollment_id = p_enrollment);
+  perform lms_check_plan_shape(p_enrollment, p_tutor, p_slots, p_start);
   select * into e from enrollments where id = p_enrollment;
   conflicts := lms_plan_conflicts(p_tutor, p_slots, e.start_date, e.base_end_date, e.duration_min);
   if jsonb_array_length(conflicts) > 0 then

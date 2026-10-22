@@ -19,6 +19,8 @@ export type MatchingTask = {
   studentNotifiedAt: Date | null;
   /** 강사 답 대기·확정 일정안 (H22). 없으면 아직 강사·시간을 안 고름 */
   plan?: PlanView | null;
+  /** 강사·시간 고르기 화면으로 갈 때 쓰는 수강등록 번호 */
+  enrollmentId?: string;
 };
 
 export type RenewalTask = {
@@ -141,7 +143,7 @@ export type BoardItem = {
   detail: string;
   due: string | null;
   steps: { key: StepKey; label: string; done: boolean }[];
-  actions: { key: string; label: string; primary?: boolean; danger?: boolean }[];
+  actions: { key: string; label: string; primary?: boolean; danger?: boolean; href?: string }[];
   /** 신규 매칭의 일정안 — 화면이 PlanCard(확정·안내 복사)로 그림 */
   plan?: PlanView;
   /** 첫 수업 24시간 안인데 안내 미완료 → 목록 맨 위 (D-51-3) */
@@ -194,7 +196,9 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         due: dueText(t.dueAt, now),
         steps,
         actions: !t.tutorAssignedAt
-          ? [{ key: 'assign_tutor', label: '강사 배정', primary: true }]
+          ? t.enrollmentId
+            ? [{ key: 'pick_schedule', label: '강사·시간 고르기 →', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }]
+            : [{ key: 'assign_tutor', label: '강사 배정', primary: true }]
           : [{ key: 'notify_student', label: '학생 안내 완료', primary: true }],
       };
     }

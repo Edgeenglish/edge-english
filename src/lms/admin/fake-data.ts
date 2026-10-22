@@ -63,7 +63,7 @@ export function fakeTasks(now: Date): TaskSource[] {
     },
     {
       kind: 'new_student_matching', id: 'm-3', studentName: '가상학생삼', studentCode: 'STU-9003', product: '50분 주1회 12주',
-      dueAt: matchDue(0), tutorName: null, tutorAssignedAt: null, studentNotifiedAt: null,
+      dueAt: matchDue(0), tutorName: null, tutorAssignedAt: null, studentNotifiedAt: null, enrollmentId: 'demo',
     },
     {
       kind: 'renewal_tutor_notice', id: 'r-1', studentName: '가상학생사', studentCode: 'STU-9004', product: '50분 주2회 4주',
