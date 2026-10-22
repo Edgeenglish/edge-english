@@ -41,7 +41,7 @@ ${PAGE_STYLE}
   ${testStep('시험용인지 확인', '<p class="expect">정상: <b>edgeenglish-lms-test</b> 한 줄. 다르면 멈추고 Claude에게</p>', projectCheck('edgeenglish-lms-test'))}
   ${testStep('변경 적용 (1200·1300)', "<p class=\"expect\">정상: 빨간 글씨 없이 끝남 (Success 또는 빈 결과). 'Potential issue detected' 창이 뜨면 초록 <b>Run and enable RLS</b>. 문제 없으면 바로 다음으로</p>", apply)}
   ${testStep('확인 (읽기만)', '<p class="expect">정상: 6줄 모두 <b>통과</b></p>', sql('supabase/test-setup/d52-check.sql'))}
-  ${testStep('화면 시험 J용 가상 휴무 넣기', '<p class="expect">정상: 다음 주 수요일 날짜가 한 줄 나옴 — 그 날짜를 기억해 두세요 (시험용에서만 들어가요)</p>', sql('supabase/test-setup/d52-time-off.sql'))}
+  ${testStep('화면 시험 J용 가상 휴무 넣기', '<p class="expect">정상: 약 2주 뒤 수요일 날짜가 한 줄 나옴 — 그 날짜를 기억해 두세요 (시험용에서만 들어가요)</p>', sql('supabase/test-setup/d52-time-off.sql'))}
 
   <h3>B. 화면 시험 (시험용 데이터, 휴대폰도 가능)</h3>
   <p class="lead">${preview} → <code>/lms/login</code> 로그인 → 주소 끝을 바꿔 가며. 이름은 <b>'가상'으로 시작</b>. 기존 A·B·E·F 시험은 그대로예요.</p>

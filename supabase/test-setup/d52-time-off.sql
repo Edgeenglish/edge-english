@@ -1,4 +1,4 @@
--- 화면 시험 J용: 가상강사 Alex 에 다음 주 수요일 하루 '가상 휴무 시험' (시험용 DB 전용, 여러 번 실행해도 1건)
+-- 화면 시험 J용: 가상강사 Alex 에 약 2주 뒤 수요일 하루 '가상 휴무 시험' (시험용 DB 전용, 여러 번 실행해도 1건)
 -- 결과 줄의 날짜를 기억해 두세요 (그 날짜의 수요일 수업만 '강사 휴무'로 막혀야 정상)
 insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason)
 select t.id, (d::timestamp at time zone 'Asia/Seoul'), ((d + 1)::timestamp at time zone 'Asia/Seoul'), 'leave', '가상 휴무 시험'
