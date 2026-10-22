@@ -160,7 +160,7 @@
 
 ## 8. 신규 배정 확정 관리 (2026-10-21, 노쇼 대응 1번 — [`16-schedule-confirm.md`](16-schedule-confirm.md), 정책 원본 H22)
 
-시안: https://claude.ai/artifact/NGm6bfAKbYrT4U8FoRg2Zc
+시안: https://claude.ai/artifact/26abYN5Sd9gz6QhM5gDdTr
 
 | # | 질문 | Claude 추천 | 상태 |
 |---|---|---|---|

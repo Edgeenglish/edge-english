@@ -3,7 +3,7 @@
 근거: 정책 원본 **H22** (2026-10-21 대표 보고 운영사고·개발요구), B01, D-50 4번 절차, A33(채널 승인 범위), POL-OP-19·20.
 사고: 강사는 '그 일정 가능'까지만 답했고, 운영자가 학생에게만 최종 확정을 보내고 강사에게는 안 보냄 → 학생만 기다림. 원인은 강사가 아니라 **양쪽 최종 안내 중 한쪽 누락** (강사 귀책·급여 제재로 자동 처리하지 않음).
 
-시안: https://claude.ai/artifact/NGm6bfAKbYrT4U8FoRg2Zc (휴대폰 4장, 파일 사본 `previews/confirm-drafts/`)
+시안: https://claude.ai/artifact/26abYN5Sd9gz6QhM5gDdTr (휴대폰 4장, 파일 사본 `previews/confirm-drafts/`)
 
 ## 1. 흐름 (운영자 누르기 횟수)
 

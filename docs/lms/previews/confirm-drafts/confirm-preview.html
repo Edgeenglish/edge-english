@@ -1,0 +1,164 @@
+<title>신규 배정 확정 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 휴대폰 화면 4장을 위에서 아래로. LMS 운영자 화면 색(보라 강조) 그대로 */
+:root {
+  --bg: #eeecf5; --screen: #f6f5fa; --card: #ffffff; --line: #e6e3ef;
+  --fg: #1d1b2b; --sub: #6b6880; --body: #3d3a52;
+  --accent: #7d5fff; --accent-ink: #4b33c4; --accent-soft: #efeaff;
+  --warn-bg: #fff1c2; --warn-ink: #6a4a00;
+  --bad: #c4321f; --bad-line: #e04f3c; --bad-soft: #fff5f3; --bad-soft-line: #f2c4bd; --bad-ink: #8a2a1b;
+  --ok-soft: #f2fbf6; --ok-line: #cfe9db; --ok-ink: #1f6b44;
+  --font: 'Pretendard', -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15141c; --screen: #1c1b25; --card: #262434; --line: #3a374c;
+  --fg: #f1effa; --sub: #aaa6c0; --body: #d6d3e6;
+  --accent: #8f76ff; --accent-ink: #c6b8ff; --accent-soft: #2f2852;
+  --warn-bg: #4a3a0c; --warn-ink: #ffe08a;
+  --bad: #d9473a; --bad-line: #e0614f; --bad-soft: #3a1e1b; --bad-soft-line: #6b2e26; --bad-ink: #ffb4a8;
+  --ok-soft: #17301f; --ok-line: #2d5a3c; --ok-ink: #9be0b5; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15141c; --screen: #1c1b25; --card: #262434; --line: #3a374c;
+  --fg: #f1effa; --sub: #aaa6c0; --body: #d6d3e6;
+  --accent: #8f76ff; --accent-ink: #c6b8ff; --accent-soft: #2f2852;
+  --warn-bg: #4a3a0c; --warn-ink: #ffe08a;
+  --bad: #d9473a; --bad-line: #e0614f; --bad-soft: #3a1e1b; --bad-soft-line: #6b2e26; --bad-ink: #ffb4a8;
+  --ok-soft: #17301f; --ok-line: #2d5a3c; --ok-ink: #9be0b5; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 420px; margin: 0 auto; padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1 { font-size: 20px; margin: 0 0 4px; }
+.lead { color: var(--sub); font-size: 14px; margin: 0 0 20px; }
+.step { margin: 28px 0 8px; font-size: 13px; font-weight: 700; color: var(--accent-ink); letter-spacing: .02em; }
+.screen { background: var(--screen); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; }
+.bar { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--card); border-bottom: 1px solid var(--line); }
+.bar b { font-size: 16px; } .bar span { font-size: 13px; color: var(--sub); }
+.in { padding: 16px; }
+.in > * + * { margin-top: 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.card > * + * { margin-top: 10px; }
+.card.bad { border: 1.5px solid var(--bad-line); }
+.row { display: flex; justify-content: space-between; font-size: 14.5px; }
+.row > * + * { margin-left: 12px; text-align: right; }
+.k { color: var(--sub); }
+.head { display: flex; justify-content: space-between; align-items: center; }
+.head b { font-size: 15.5px; }
+.pill { font-size: 12.5px; font-weight: 700; border-radius: 999px; padding: 3px 10px; white-space: nowrap; margin-left: 8px; }
+.pill.wait { background: var(--warn-bg); color: var(--warn-ink); }
+.pill.pick { background: var(--accent-soft); color: var(--accent-ink); }
+.pill.bad { background: var(--bad); color: #fff; }
+.txt { font-size: 14px; color: var(--body); }
+.note { font-size: 13px; color: var(--sub); margin: 0; }
+.due-bad { font-size: 13px; color: var(--bad); font-weight: 600; }
+button { font-family: inherit; cursor: pointer; }
+.btn { display: block; width: 100%; min-height: 50px; border-radius: 12px; font-size: 15.5px; font-weight: 700; text-align: left; padding: 10px 16px; }
+.btn small { display: block; font-size: 12.5px; font-weight: 400; margin-top: 2px; }
+.btn.pri { border: 0; background: var(--accent); color: #fff; }
+.btn.sec { border: 1.5px solid var(--accent); background: var(--card); color: var(--accent-ink); }
+.btn.sec small { color: var(--sub); }
+.btn.center { text-align: center; }
+.two { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 8px; }
+.two .full { grid-column: 1 / 3; }
+.ghost { min-height: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font-size: 14px; }
+.notice { display: flex; align-items: center; border-radius: 12px; padding: 10px 12px; }
+.notice > div { flex: 1; min-width: 0; }
+.notice b { display: block; font-size: 14.5px; }
+.notice span { font-size: 12.5px; }
+.notice button { min-height: 44px; border-radius: 10px; padding: 0 14px; margin-left: 10px; font-size: 14px; }
+.notice.no { background: var(--bad-soft); border: 1px solid var(--bad-soft-line); } .notice.no span { color: var(--bad-ink); }
+.notice.no button { border: 0; background: var(--accent); color: #fff; font-weight: 700; }
+.notice.yes { background: var(--ok-soft); border: 1px solid var(--ok-line); } .notice.yes span { color: var(--ok-ink); }
+.notice.yes button { border: 1px solid var(--line); background: var(--card); color: var(--body); }
+.msg-label { font-size: 13px; font-weight: 700; color: var(--sub); margin: 0 0 6px; }
+.msg { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 13.5px; white-space: pre-line; margin: 0; overflow-wrap: anywhere; }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <h1>신규 배정 확정 시안</h1>
+  <p class="lead">휴대폰 운영자 화면 4장 (가상 데이터). 버튼은 눌러도 동작하지 않아요.</p>
+
+  <p class="step">① 등록 마지막 단계</p>
+  <div class="screen">
+    <div class="bar"><b>신규 학생 등록</b><span>4/4</span></div>
+    <div class="in">
+      <h1>최종 확인</h1>
+      <div class="card">
+        <div class="row"><span class="k">학생</span><b>가상학생일 (STU-9001)</b></div>
+        <div class="row"><span class="k">수업</span><span>50분 · 주2회 · 1개월(4주)</span></div>
+        <div class="row"><span class="k">결제</span><span>확인함 · 계좌이체</span></div>
+        <div class="row"><span class="k">강사</span><b>가상강사 Alex (Sydney)</b></div>
+        <div class="row"><span class="k">정규 시간</span><span>화·목 19:00 한국<br><span class="k" style="font-size:13px">강사 현지 21:00</span></span></div>
+        <div class="row"><span class="k">첫 수업</span><span>11/3(화) 19:00</span></div>
+        <div class="row"><span class="k">충돌</span><b style="color:var(--ok-ink)">없음 (8회 모두 확인)</b></div>
+      </div>
+      <p style="margin:0;font-weight:700">강사에게 이 일정을 물어봤나요?</p>
+      <button type="button" class="btn pri">아직 → 저장하고 강사 제안 문구 복사<small>WhatsApp에 붙여 보내면 '강사 답 대기'로 남아요</small></button>
+      <button type="button" class="btn sec">강사가 가능하다고 했어요 → 저장 + 확정<small>정규 수업 8회 생성, 바로 양쪽 안내 화면으로</small></button>
+      <p class="note">강사 '가능' 답을 받기 전에는 수업이 만들어지지 않아요. 확정은 이 버튼이나 '처리할 일'의 [강사 가능 → 확정] 한 번뿐이에요.</p>
+    </div>
+  </div>
+
+  <p class="step">② 처리할 일 · 강사 답 대기</p>
+  <div class="screen">
+    <div class="bar"><b>처리할 일</b><span>신규 학생 매칭 · 2</span></div>
+    <div class="in">
+      <div class="card">
+        <div class="head"><b>가상학생일 · 50분 주2회 4주</b><span class="pill wait">강사 답 대기</span></div>
+        <div class="txt">가상강사 Alex · 화·목 19:00 (강사 21:00)<br>첫 수업 11/3(화) · 제안 보냄 10/21 15:42</div>
+        <div class="note">매칭 기한 10/26(월) 23:59</div>
+        <div class="two">
+          <button type="button" class="btn pri center full">강사 가능 → 확정</button>
+          <button type="button" class="ghost">안 된대요 → 다른 안</button>
+          <button type="button" class="ghost">제안 문구 다시 복사</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="head"><b>가상학생삼 · 50분 주1회 12주</b><span class="pill pick">강사 고르기</span></div>
+        <div class="txt">결제 확인 10/21 · 아직 제안 없음</div>
+        <div class="due-bad">매칭 기한 오늘 23:59</div>
+        <button type="button" class="ghost" style="width:100%;color:var(--accent-ink);font-weight:700;border-color:var(--accent)">강사·시간 고르기 →</button>
+      </div>
+      <p class="note">[강사 가능 → 확정]을 누르면 정규 수업이 만들어지고, 같은 카드가 '양쪽 안내'로 바뀌어요 (③).</p>
+    </div>
+  </div>
+
+  <p class="step">③ 확정 직후 · 양쪽 안내</p>
+  <div class="screen">
+    <div class="bar"><b>처리할 일</b><span>신규 학생 매칭 · 1</span></div>
+    <div class="in">
+      <div class="card bad">
+        <div class="head"><b>가상학생일 · 확정됨</b><span class="pill bad">강사 안내 안 함</span></div>
+        <div class="txt">가상강사 Alex · 화·목 19:00 · 정규 8회 생성<br>첫 수업 <b>11/3(화) 19:00</b></div>
+        <div class="notice no"><div><b>강사 확정 안내 · WhatsApp</b><span>아직 안 보냄</span></div><button type="button">문구 복사</button></div>
+        <div class="notice yes"><div><b>학생 확정 안내 · 카카오톡</b><span>보냄 10/21 16:05 (복사한 시각)</span></div><button type="button">다시 복사</button></div>
+        <p class="note">두 줄이 모두 '보냄'이 되면 이 카드는 자동으로 '처리 내역'으로 넘어가요. 따로 완료를 누르지 않아요.</p>
+      </div>
+      <div class="card">
+        <div class="note" style="font-weight:700">처리 내역 (오늘)</div>
+        <div class="txt">가상학생이 · Blair · 양쪽 안내 완료 14:10</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="step">④ 복사되는 문구 초안</p>
+  <div class="screen"><div class="in">
+    <div><p class="msg-label">1. 강사 제안 (WhatsApp, 영어)</p><p class="msg">Hi Alex, a new student request (NOT confirmed yet):
+Student: [STUDENT EN NAME], 50 min
+Every Tue &amp; Thu 21:00 your time (Sydney)
+First class: Tue 3 Nov 21:00 · 8 classes, last Thu 26 Nov
+Can you take this schedule? I will send the final confirmation after your reply.</p></div>
+    <div><p class="msg-label">2. 강사 최종 확정 (WhatsApp, 영어)</p><p class="msg">CONFIRMED - new student
+[STUDENT EN NAME], 50 min
+Every Tue &amp; Thu 21:00 your time (Sydney) = 19:00 KST
+First class: Tue 3 Nov 21:00 · 8 classes, last Thu 26 Nov
+Please add it to your schedule. Thank you!</p></div>
+    <div><p class="msg-label">3. 학생 최종 확정 (카카오톡, 한국어)</p><p class="msg">[엣지영어] 수업 일정이 확정됐어요
+담당 강사: Alex
+매주 화·목 저녁 7:00 (한국 시각) · 50분
+첫 수업: 11월 3일(화) 저녁 7:00
+수강 기간: 11/3(화) ~ 11/30(월) · 8회
+[수업 링크·준비 안내 — 지금 보내는 문구 그대로]</p></div>
+    <p class="note">해외 학생이면 학생 현지 시각도 함께 적어요. 날짜·시각은 LMS가 확정 일정에서 채워요.</p>
+  </div></div>
+</div>
