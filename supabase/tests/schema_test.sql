@@ -707,6 +707,8 @@ select pg_temp.ok((pg_temp.task('c1@x.kr')).status = 'open'
               and (select missing_steps = array['notify_tutor'] from admin_task_board where enrollment_id = pg_temp.eid('c1@x.kr'))
               and (select tutor_notice_status = 'pending' and student_notice_status = 'sent' from schedule_plan_board where enrollment_id = pg_temp.eid('c1@x.kr')),
   '학생에게만 안내하면 매칭 업무는 열린 채 "강사에게 최종 안내"만 남음 (사고 상황)');
+select pg_temp.ok((pg_temp.notice('c1@x.kr', 'student')).sent_via = 'manual',
+  '[보냈어요]로 기록한 안내는 sent_via = manual (복사만으로는 기록되지 않음, migration 1200)');
 select pg_temp.ok((admin_mark_notice_sent((pg_temp.notice('c1@x.kr', 'student')).id) ->> 'repeated')::boolean
               and (select count(*) from audit_log where table_name = 'schedule_notices' and row_id = (pg_temp.notice('c1@x.kr', 'student')).id::text and action = 'UPDATE') = 1,
   '이미 보낸 안내를 다시 복사해도 기록이 바뀌지 않음 (보낸 시각 그대로)');
@@ -804,3 +806,87 @@ set role anon;
 select pg_temp.expect_error($$select admin_confirm_schedule('90000000-0000-0000-0000-000000001004')$$, 'permission|42501');
 reset role;
 select pg_temp.ok(true, '로그인 안 한 요청은 확정 함수를 부를 수 없음');
+
+-- ---------- 기존 학생 간단 입력 (migration 1300, D-52 · H23(3)) ----------
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000001300', 'TestTutorImport', 'Korea', 'Asia/Seoul'),
+                                                       ('55555555-0000-0000-0000-000000001301', 'TestTutorImport2', 'Korea', 'Asia/Seoul');
+create or replace function pg_temp.imp(rid text, body jsonb) returns jsonb
+language sql as $$ select admin_import_existing_student(rid::uuid, body) $$;
+create or replace function pg_temp.imp_conflicts(body jsonb) returns jsonb
+language plpgsql as $$
+declare det text; h text;
+begin
+  perform admin_import_existing_student(gen_random_uuid(), body);
+  raise exception '실패: 충돌이 나야 하는데 저장됨';
+exception when sqlstate 'P0001' then
+  get stacked diagnostics det = pg_exception_detail, h = pg_exception_hint;
+  if h is distinct from 'schedule_conflict' then raise; end if;
+  return det::jsonb;
+end $$;
+-- 2027-08-02(월) ~ 2027-08-29(일), 강사 Import, 50분
+create or replace function pg_temp.ibody(name text, slots jsonb, makeups jsonb) returns jsonb
+language sql as $$
+  select jsonb_build_object('student', jsonb_build_object('name_ko', name, 'name_en', 'Imp ' || name, 'timezone', 'Asia/Seoul'),
+    'tutor_id', '55555555-0000-0000-0000-000000001300', 'slots', slots, 'duration_min', 50,
+    'from_date', '2027-08-02', 'end_date', '2027-08-29', 'makeups', makeups)
+$$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2)
+-- 먼저 들어간 기존 학생 A: 화 19:00 (+ 8/12(목) 21:00 이관 보강, 같은 강사)
+select pg_temp.ok((select (r ->> 'lessons')::int = 4 and (r ->> 'makeups')::int = 1
+                   from pg_temp.imp('90000000-0000-0000-0000-000000001301',
+                     pg_temp.ibody('이관A', '[{"weekday":2,"time":"19:00"}]', '[{"date":"2027-08-12","time":"21:00","duration_min":50,"tutor_id":"55555555-0000-0000-0000-000000001300"}]')) r),
+  '기존 학생 입력: 시작일~종료일 정규 4회 + 확정된 미래 보강 1회');
+select pg_temp.ok((select count(*) from lessons l join students s on s.id = l.student_id where s.name_ko = '이관A' and l.kind = 'migrated_makeup' and l.makeup_of is null) = 1
+              and (select count(*) from regular_schedules r join students s on s.id = r.student_id where s.name_ko = '이관A') = 1
+              and (select status = 'active' and legacy_label is not null and weeks is null from enrollments e join students s on s.id = e.student_id where s.name_ko = '이관A')
+              and not exists (select 1 from admin_tasks t join enrollments e on e.id = t.enrollment_id join students s on s.id = e.student_id where s.name_ko = '이관A')
+              and not exists (select 1 from payments p join enrollments e on e.id = p.enrollment_id join students s on s.id = e.student_id where s.name_ko = '이관A'),
+  '보강은 그날 수업 하나만(정규 시간표에 안 들어감), 수강 중(active)·결제·매칭 업무 없음');
+select pg_temp.ok((pg_temp.imp('90000000-0000-0000-0000-000000001301', pg_temp.ibody('이관A', '[{"weekday":2,"time":"19:00"}]', '[]')) ->> 'repeated')::boolean
+              and (select count(*) from students where name_ko = '이관A') = 1,
+  '같은 요청 번호로 다시 저장해도 1명');
+
+-- 기존 학생 시간표와 충돌: 같은 강사 화 19:00 → 4주 모두, 화 19:55 → 휴식 10분 부족, 화 20:00 → 가능
+select pg_temp.ok((select count(*) = 4 and bool_and(x ->> 'reason' = 'tutor_regular' and x ->> 'other' = '이관A')
+                   from jsonb_array_elements(pg_temp.imp_conflicts(pg_temp.ibody('충돌', '[{"weekday":2,"time":"19:00"}]', '[]'))) x)
+              and not exists (select 1 from students where name_ko = '충돌'),
+  '기존 학생 정규 수업과 겹치면 날짜마다 알려 주고 아무것도 저장 안 함 (상대 학생 이름 포함)');
+select pg_temp.ok((select bool_and(x ->> 'reason' = 'break') from jsonb_array_elements(pg_temp.imp_conflicts(pg_temp.ibody('휴식', '[{"weekday":2,"time":"19:55"}]', '[]'))) x),
+  '앞 수업이 끝나고 10분 안에 시작하면 휴식 부족으로 거절 (A38)');
+
+-- 보강은 그날만 막음: 목 21:00 정규는 8/12 하루만 충돌, 다른 목요일은 가능
+select pg_temp.ok((select count(*) = 1 and bool_and(x ->> 'reason' = 'tutor_makeup' and x ->> 'date' = '2027-08-12')
+                   from jsonb_array_elements(pg_temp.imp_conflicts(pg_temp.ibody('목요일', '[{"weekday":4,"time":"21:00"}]', '[]'))) x),
+  '일회성 보강은 그 날짜만 충돌 — 같은 요일·시각의 다른 주는 막지 않음');
+
+-- 강사 휴무와 충돌 (정규·보강 모두)
+reset role;
+insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason)
+values ('55555555-0000-0000-0000-000000001300', '2027-08-18 00:00+09', '2027-08-19 00:00+09', 'leave', '휴가');
+set role authenticated;
+select pg_temp.ok((select count(*) = 2 and bool_and(x ->> 'reason' = 'tutor_time_off' and x ->> 'date' = '2027-08-18')
+                   from jsonb_array_elements(pg_temp.imp_conflicts(pg_temp.ibody('휴무', '[{"weekday":3,"time":"10:00"}]',
+                     '[{"date":"2027-08-18","time":"15:00","duration_min":20,"tutor_id":"55555555-0000-0000-0000-000000001300"}]'))) x),
+  '강사 휴무 날의 정규·보강 모두 휴무 충돌로 거절');
+
+-- 이번 입력끼리: 보강을 자기 정규 수업 시간에 넣으면 거절 (다른 강사여도 학생 시간이 겹치면)
+select pg_temp.ok((select bool_or(x ->> 'reason' = 'self') from jsonb_array_elements(pg_temp.imp_conflicts(pg_temp.ibody('자기', '[{"weekday":1,"time":"10:00"}]',
+                     '[{"date":"2027-08-09","time":"10:20","duration_min":20,"tutor_id":"55555555-0000-0000-0000-000000001301"}]'))) x),
+  '보강이 이 학생 정규 수업과 겹치면 거절');
+
+-- 입력 확인
+select pg_temp.expect_error($$select pg_temp.imp(gen_random_uuid()::text, pg_temp.ibody('지난보강', '[{"weekday":1,"time":"08:00"}]',
+  '[{"date":"2027-07-30","time":"15:00","duration_min":20,"tutor_id":"55555555-0000-0000-0000-000000001300"}]'))$$, '지난 보강');
+select pg_temp.expect_error($$select pg_temp.imp(gen_random_uuid()::text, pg_temp.ibody('네번', '[{"weekday":1,"time":"08:00"},{"weekday":2,"time":"08:00"},{"weekday":3,"time":"08:00"},{"weekday":4,"time":"08:00"}]', '[]'))$$, '1·2·3·5회');
+select pg_temp.ok(true, '시작일 전 보강·주 4회 같은 잘못된 입력 거절');
+
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';   -- 학생
+select pg_temp.expect_error($$select pg_temp.imp(gen_random_uuid()::text, pg_temp.ibody('학생이', '[{"weekday":1,"time":"08:00"}]', '[]'))$$, '42501');
+reset request.jwt.claim.sub;
+reset role;
+set role anon;
+select pg_temp.expect_error($$select admin_import_existing_student(gen_random_uuid(), '{}'::jsonb)$$, 'permission|42501');
+reset role;
+select pg_temp.ok(true, '학생·로그인 안 한 요청은 기존 학생 입력 불가');

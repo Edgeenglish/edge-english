@@ -230,7 +230,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
       if (live) await planActions!.proposalSent(view.planId);
       setView({ ...view, proposalSentAt: view.proposalSentAt ?? new Date() });
     },
-    noticeCopied: async (who) => {
+    noticeSent: async (who) => {
       if (!view) return;
       const n = who === 'tutor' ? view.tutorNotice : view.studentNotice;
       if (!n) return;

@@ -3,14 +3,47 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export function buildPage(root) {
-  const sql = (p) => readFileSync(join(root, p), 'utf8').trimEnd();
-  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
+// 복사 버튼 페이지 공용 (운영 DB 만들기·시험용 적용 안내가 같이 씀)
+export const PAGE_STYLE = `<style>
+:root { --bg:#f6f5fa; --card:#ffffff; --line:#e6e3ef; --fg:#1d1b2b; --sub:#6b6880; --accent:#7d5fff; --ok:#1f6b44; --okbg:#e3f6ea; --warnbg:#fff8d6; --warn:#5c4a00; color-scheme:light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#15141c; --card:#232130; --line:#3a374c; --fg:#f1effa; --sub:#aaa6c0; --accent:#8f76ff; --ok:#9be0b5; --okbg:#17301f; --warnbg:#3d3210; --warn:#ffe08a; color-scheme:dark } }
+:root[data-theme="dark"] { --bg:#15141c; --card:#232130; --line:#3a374c; --fg:#f1effa; --sub:#aaa6c0; --accent:#8f76ff; --ok:#9be0b5; --okbg:#17301f; --warnbg:#3d3210; --warn:#ffe08a; color-scheme:dark }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif; font-size:15px; line-height:1.55; }
+.wrap { max-width:640px; margin:0 auto; padding-block:20px 48px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+h1 { font-size:21px; margin:0 0 6px; }
+h3 { font-size:17px; margin:28px 0 4px; }
+.lead { color:var(--sub); margin:0 0 16px; }
+.where { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-top:12px; }
+.step { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:12px; }
+.step h2 { font-size:16px; margin:0; display:flex; align-items:center; }
+.step ol { margin:8px 0 0; padding-left:20px; }
+.step li { margin-bottom:4px; }
+.n { display:inline-flex; width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; font-size:14px; align-items:center; justify-content:center; margin-right:8px; flex-shrink:0; }
+.expect { color:var(--sub); font-size:14px; margin:6px 0 10px; }
+code { font-family:ui-monospace,Menlo,monospace; font-size:13px; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:0 4px; overflow-wrap:anywhere; }
+.copy { width:100%; min-height:50px; border:0; border-radius:12px; background:var(--accent); color:#fff; font-size:16px; font-weight:700; font-family:inherit; cursor:pointer; }
+.copy.done { background:var(--okbg); color:var(--ok); }
+.copy:focus-visible { outline:3px solid var(--fg); outline-offset:2px; }
+textarea { width:100%; box-sizing:border-box; margin-top:8px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--sub); font-family:ui-monospace,Menlo,monospace; font-size:11.5px; padding:8px; resize:vertical; }
+.note { background:var(--warnbg); color:var(--warn); border-radius:12px; padding:10px 12px; margin-top:12px; font-size:14px; }
+</style>`;
+export const COPY_SCRIPT = `<script>
+document.querySelectorAll('.copy').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var ta = document.getElementById(btn.dataset.target);
+    function ok() { btn.textContent = '복사됨 ✓ — Supabase에 붙여 넣기'; btn.classList.add('done'); }
+    function fallback() { ta.focus(); ta.select(); try { if (document.execCommand('copy')) return ok(); } catch (e) {} btn.textContent = '자동 복사가 안 돼요 — 아래 글을 길게 눌러 전체 선택·복사'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(ok, fallback); else fallback();
+  });
+});
+</script>`;
+export const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** 번호 단계 카드. copy 가 있으면 [복사] 버튼 + 글 칸 */
+export function stepMaker(prefix = 's') {
   let n = 0;
-  const step = (title, body, copy) => {
+  return (title, body, copy) => {
     n += 1;
-    const id = `s${n}`;
+    const id = `${prefix}${n}`;
     return `<section class="step">
     <h2><span class="n">${n}</span>${title}</h2>
     ${body}
@@ -18,6 +51,11 @@ export function buildPage(root) {
     <textarea id="${id}" readonly rows="3" aria-label="${title} SQL">${esc(copy)}</textarea>` : ''}
   </section>`;
   };
+}
+
+export function buildPage(root) {
+  const sql = (p) => readFileSync(join(root, p), 'utf8').trimEnd();
+  const step = stepMaker();
 
   const guardTest = `${sql('supabase/migrations/20261022001100_lms_backup_guard.sql')}
 
@@ -59,29 +97,7 @@ select name as 프로젝트_이름, (select count(*) from students) as 학생수
   // Artifact 발행용: 문서 뼈대(doctype·head·body)는 발행할 때 붙으므로 넣지 않음
   const html = `<title>운영 DB 만들기</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<style>
-:root { --bg:#f6f5fa; --card:#ffffff; --line:#e6e3ef; --fg:#1d1b2b; --sub:#6b6880; --accent:#7d5fff; --ok:#1f6b44; --okbg:#e3f6ea; --warnbg:#fff8d6; --warn:#5c4a00; color-scheme:light; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#15141c; --card:#232130; --line:#3a374c; --fg:#f1effa; --sub:#aaa6c0; --accent:#8f76ff; --ok:#9be0b5; --okbg:#17301f; --warnbg:#3d3210; --warn:#ffe08a; color-scheme:dark } }
-:root[data-theme="dark"] { --bg:#15141c; --card:#232130; --line:#3a374c; --fg:#f1effa; --sub:#aaa6c0; --accent:#8f76ff; --ok:#9be0b5; --okbg:#17301f; --warnbg:#3d3210; --warn:#ffe08a; color-scheme:dark }
-body { margin:0; background:var(--bg); color:var(--fg); font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif; font-size:15px; line-height:1.55; }
-.wrap { max-width:640px; margin:0 auto; padding-block:20px 48px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
-h1 { font-size:21px; margin:0 0 6px; }
-h3 { font-size:17px; margin:28px 0 4px; }
-.lead { color:var(--sub); margin:0 0 16px; }
-.where { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-top:12px; }
-.step { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:12px; }
-.step h2 { font-size:16px; margin:0; display:flex; align-items:center; }
-.step ol { margin:8px 0 0; padding-left:20px; }
-.step li { margin-bottom:4px; }
-.n { display:inline-flex; width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; font-size:14px; align-items:center; justify-content:center; margin-right:8px; flex-shrink:0; }
-.expect { color:var(--sub); font-size:14px; margin:6px 0 10px; }
-code { font-family:ui-monospace,Menlo,monospace; font-size:13px; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:0 4px; overflow-wrap:anywhere; }
-.copy { width:100%; min-height:50px; border:0; border-radius:12px; background:var(--accent); color:#fff; font-size:16px; font-weight:700; font-family:inherit; cursor:pointer; }
-.copy.done { background:var(--okbg); color:var(--ok); }
-.copy:focus-visible { outline:3px solid var(--fg); outline-offset:2px; }
-textarea { width:100%; box-sizing:border-box; margin-top:8px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--sub); font-family:ui-monospace,Menlo,monospace; font-size:11.5px; padding:8px; resize:vertical; }
-.note { background:var(--warnbg); color:var(--warn); border-radius:12px; padding:10px 12px; margin-top:12px; font-size:14px; }
-</style>
+${PAGE_STYLE}
 <div class="wrap">
   <h1>운영 DB 만들기 · edgeenglish-lms</h1>
   <p class="lead">번호 순서대로. 약 20분, PC 권장. 1번만 시험용(edgeenglish-lms-test)에서, 나머지는 새 운영 프로젝트에서 해요.</p>
@@ -105,16 +121,7 @@ textarea { width:100%; box-sizing:border-box; margin-top:8px; border:1px solid v
   </section>
   <p class="note">연습: 같은 SQL을 <b>시험용</b>(edgeenglish-lms-test)에서 한 번 실행해 CSV를 Claude에게 올려 주시면 복구 연습을 해 둘게요 (시험용은 가상 데이터라 올려도 괜찮아요).</p>
 </div>
-<script>
-document.querySelectorAll('.copy').forEach(function (btn) {
-  btn.addEventListener('click', function () {
-    var ta = document.getElementById(btn.dataset.target);
-    function ok() { btn.textContent = '복사됨 ✓ — Supabase에 붙여 넣기'; btn.classList.add('done'); }
-    function fallback() { ta.focus(); ta.select(); try { if (document.execCommand('copy')) return ok(); } catch (e) {} btn.textContent = '자동 복사가 안 돼요 — 아래 글을 길게 눌러 전체 선택·복사'; }
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(ok, fallback); else fallback();
-  });
-});
-</script>
+${COPY_SCRIPT}
   `;
   return html;
 }

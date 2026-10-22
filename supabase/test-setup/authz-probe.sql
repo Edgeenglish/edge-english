@@ -59,7 +59,7 @@ declare
   -- 내부 함수가 데이터를 읽지 않는 것을 검토한 확장 (이 밖의 확장 함수가 앱 사용자에게 열려 있으면 실패)
   reviewed_ext text[] := array['btree_gist'];
   definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'is_owner', 'my_role', 'tutor_my_students', 'student_my_tutors', 'consent_record',
-                          'admin_register_student', 'admin_students_with_email',
+                          'admin_register_student', 'admin_students_with_email', 'admin_import_existing_student',
                           'admin_propose_schedule', 'admin_confirm_schedule', 'admin_close_plan', 'admin_mark_proposal_sent', 'admin_mark_notice_sent'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
@@ -348,6 +348,16 @@ begin
           fails := fails || format('[함수] %s: 학생 등록이 권한 오류가 아닌 이유로 막힘 [%s] %s', personas[i], sqlstate, sqlerrm); end if;
         if personas[i] in ('운영자', '운영직원') and sqlstate = '42501' then
           fails := fails || format('[함수] %s: 운영자인데 학생 등록 권한 없음', personas[i]); end if;
+      end;
+      -- 기존 학생 간단 입력 (migration 1300): 운영자(aal2)만
+      begin
+        perform admin_import_existing_student(gen_random_uuid(), '{}'::jsonb);
+        fails := fails || format('[함수] %s: 빈 기존 학생 입력이 통과함', personas[i]);
+      exception when others then
+        if personas[i] not in ('운영자', '운영직원') and sqlstate <> '42501' then
+          fails := fails || format('[함수] %s: 기존 학생 입력이 권한 오류가 아닌 이유로 막힘 [%s] %s', personas[i], sqlstate, sqlerrm); end if;
+        if personas[i] in ('운영자', '운영직원') and sqlstate = '42501' then
+          fails := fails || format('[함수] %s: 운영자인데 기존 학생 입력 권한 없음', personas[i]); end if;
       end;
       select count(*) into n from admin_students_with_email(email_a);
       if (personas[i] in ('운영자', '운영직원') and email_a is not null and n = 0) or (personas[i] not in ('운영자', '운영직원') and n <> 0) then

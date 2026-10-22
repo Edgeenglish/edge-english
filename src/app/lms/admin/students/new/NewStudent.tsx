@@ -311,7 +311,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       if (planActions && !demo) await planActions.proposalSent(planView.planId);
       setPlanView({ ...planView, proposalSentAt: planView.proposalSentAt ?? new Date() });
     },
-    noticeCopied: async (who) => {
+    noticeSent: async (who) => {
       if (!planView) return;
       const n = who === 'tutor' ? planView.tutorNotice : planView.studentNotice;
       if (!n) return;
@@ -698,6 +698,13 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         </Link>
       </header>
       {demo && <p className="mx-4 mt-3 rounded-[12px] bg-[#fff8d6] px-4 py-2.5 text-[13.5px] text-[#5c4a00] lg:mx-7">가상 데이터 미리보기예요. 신청서·강사·일정은 모두 가상이고, 저장을 눌러도 실제로 저장되지 않아요.</p>}
+
+      <p className="mx-4 mt-3 text-[13.5px] text-[#6b6880] lg:mx-7">
+        이미 수업 중인 학생인가요?{' '}
+        <Link href={demo ? '/lms/admin/students/import?demo=1' : '/lms/admin/students/import'} className="font-semibold text-[#5b3fe0] underline underline-offset-2">
+          기존 학생 간단 입력 →
+        </Link>
+      </p>
 
       <Stepper step={step} onStep={go} />
 

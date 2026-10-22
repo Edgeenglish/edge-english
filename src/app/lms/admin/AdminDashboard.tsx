@@ -134,12 +134,12 @@ export default function AdminDashboard({
     const now = () => new Date();
     if (!preview && planActions)
       return {
-        confirm: () => live((a) => a.confirm(p.planId), '확정했어요. 강사·학생에게 안내 문구를 보내 주세요.'),
+        confirm: () => live((a) => a.confirm(p.planId), '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냈어요]를 눌러 주세요.'),
         decline: () => live((a) => a.decline(p.planId), '이 안을 닫았어요. 다른 강사·시간으로 다시 제안해 주세요.'),
         proposalCopied: () => live((a) => a.proposalSent(p.planId), '제안 문구를 복사했어요. WhatsApp에 붙여 보내 주세요.'),
-        noticeCopied: (who) => {
+        noticeSent: (who) => {
           const n = who === 'tutor' ? p.tutorNotice : p.studentNotice;
-          return n ? live((a) => a.noticeSent(n.id), `${who === 'tutor' ? '강사' : '학생'} 안내 문구를 복사했어요. 붙여 보내 주세요.`) : Promise.resolve();
+          return n ? live((a) => a.noticeSent(n.id), `${who === 'tutor' ? '강사' : '학생'} 안내를 보냄으로 기록했어요.`) : Promise.resolve();
         },
       };
     const preview_ = async (f: (p: PlanView) => PlanView | null, msg: string) => {
@@ -150,18 +150,18 @@ export default function AdminDashboard({
       confirm: () =>
         preview_(
           (x) => ({ ...x, state: 'confirmed', confirmedAt: now(), tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null }, studentNotice: { id: 'pv-s', status: 'pending', sentAt: null } }),
-          '확정했어요. 강사·학생에게 안내 문구를 보내 주세요.',
+          '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냈어요]를 눌러 주세요.',
         ),
       decline: () => preview_(() => null, '이 안을 닫았어요.'),
       proposalCopied: () => preview_((x) => ({ ...x, proposalSentAt: x.proposalSentAt ?? now() }), '제안 문구를 복사했어요.'),
-      noticeCopied: async (who) => {
+      noticeSent: async (who) => {
         const sent = (n: PlanView['tutorNotice']) => (n && n.status !== 'sent' ? { ...n, status: 'sent' as const, sentAt: now() } : n);
         const next = who === 'tutor' ? { ...p, tutorNotice: sent(p.tutorNotice) } : { ...p, studentNotice: sent(p.studentNotice) };
         if (next.tutorNotice?.status === 'sent' && next.studentNotice?.status === 'sent') {
           setTasks((prev) => prev.filter((t) => t.id !== item.id));
           setDoneCount((c) => c + 1);
           setToast('양쪽 안내를 마쳐서 매칭 업무가 끝났어요. (미리보기: 실제 저장·발송 없음)');
-        } else await preview_(() => next, `${who === 'tutor' ? '강사' : '학생'} 안내 문구를 복사했어요.`);
+        } else await preview_(() => next, `${who === 'tutor' ? '강사' : '학생'} 안내를 보냄으로 기록했어요.`);
       },
     };
   }
@@ -213,7 +213,7 @@ export default function AdminDashboard({
 
       {!preview && (
         <p className="mx-4 mt-3 rounded-[10px] bg-[#e3f5ea] px-3 py-2 text-[13px] text-[#13623a] lg:mx-7">
-          시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·안내 복사)은 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.
+          시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·[보냈어요])은 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.
         </p>
       )}
       {preview && (

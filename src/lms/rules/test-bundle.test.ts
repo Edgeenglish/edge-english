@@ -25,3 +25,10 @@ describe('운영 DB 만들기 복사 버튼 페이지', () => {
     expect(readFileSync(join(root, 'docs/lms/previews/prod-setup.html'), 'utf8')).toBe(buildPage(root));
   });
 });
+
+describe('[보냈어요]·기존 학생 입력 적용 안내 페이지', () => {
+  it('docs/lms/previews/d52-apply.html 이 최신 (다르면 node scripts/lms-d52-page.mjs 후 다시 발행)', async () => {
+    const { buildD52Page } = await import('../../../scripts/lms-d52-page.mjs');
+    expect(readFileSync(join(root, 'docs/lms/previews/d52-apply.html'), 'utf8')).toBe(buildD52Page(root));
+  });
+});
