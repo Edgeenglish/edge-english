@@ -18,6 +18,7 @@ export function buildBundle(root) {
     '-- 시험용 Supabase 프로젝트에만 사용. 빈 프로젝트에 한 번 실행 (두 번 실행하면 "이미 있음" 오류)',
     'begin;',
     ...migrationParts(root),
+    "insert into lms_backup.project (name) values ('edgeenglish-lms-test');   -- 이 DB의 프로젝트 이름 (복구 안전장치)",
     'commit;',
     '',
   ].join('\n');
@@ -37,6 +38,8 @@ export function buildProdBundle(root) {
     '  end if;',
     'end $$;',
     ...migrationParts(root),
+    '-- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)',
+    "insert into lms_backup.project (name) values ('edgeenglish-lms');",
     'commit;',
     '',
   ].join('\n');

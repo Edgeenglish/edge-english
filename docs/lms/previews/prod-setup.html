@@ -25,10 +25,61 @@ textarea { width:100%; box-sizing:border-box; margin-top:8px; border:1px solid v
 </style>
 <div class="wrap">
   <h1>운영 DB 만들기 · edgeenglish-lms</h1>
-  <p class="lead">번호 순서대로. 약 20분, PC 권장. 시험용(edgeenglish-lms-test)은 건드리지 않아요.</p>
+  <p class="lead">번호 순서대로. 약 20분, PC 권장. 1번만 시험용(edgeenglish-lms-test)에서, 나머지는 새 운영 프로젝트에서 해요.</p>
   <p class="note">시작 전: 요금제(Free / Pro)를 채팅에서 먼저 정해 주세요. 운영 DB에는 가상 데이터를 넣지 않고, 실제 학생 입력·홈페이지 연결은 다음 단계예요.</p>
   <section class="step">
-    <h2><span class="n">1</span>프로젝트 만들기</h2>
+    <h2><span class="n">1</span>먼저 시험용 DB에 복구 안전장치</h2>
+    <p class="expect">붙여 넣는 곳: 프로젝트 <b>edgeenglish-lms-test</b> → SQL Editor → New query → Run.<br>정상: <b>edgeenglish-lms-test · 6</b> 한 줄. 기존 데이터는 그대로예요. 문제 없으면 바로 2번으로</p>
+    <button type="button" class="copy" data-target="s1">복사</button>
+    <textarea id="s1" readonly rows="3" aria-label="먼저 시험용 DB에 복구 안전장치 SQL">-- =====================================================================
+-- 복구 안전장치 (2026-10-22, 정책 원본 H23(5) 예외: 비상 복구는 대표 승인 + 복구 직전 백업 후)
+--  1. lms_backup.project: 이 DB가 어느 프로젝트인지 이름 한 줄 (시험용 edgeenglish-lms-test / 운영 edgeenglish-lms)
+--     - 이름은 프로젝트마다 다르므로 이 파일이 아니라 각 프로젝트 적용 안내에서 한 번 넣는다
+--     - 백업에 이름이 같이 기록되고, 복구는 ① 입력한 이름 ② 이 표의 이름 ③ 백업의 이름이 모두 같아야 실행됨
+--       → 시험용·운영 DB를 헷갈리거나 다른 프로젝트 백업을 넣으려 하면 아무것도 바뀌지 않음
+--  2. lms_backup.snapshots: 복구가 지금 내용을 지우기 직전에 같은 묶음 안에서 지금 상태를 통째로 저장
+--     → 잘못 복구해도 그 직전으로 되돌릴 수 있음 (supabase/backup/from-snapshot.sql)
+-- 앱(로그인 사용자·비로그인)은 이 영역을 전혀 못 씀: public 이 아닌 별도 영역이라 Data API 에도 안 나옴
+-- 기존 표·데이터는 바꾸지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create schema if not exists lms_backup;
+revoke all on schema lms_backup from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on schema lms_backup from anon, authenticated';
+  end if;
+end $$;
+
+create table if not exists lms_backup.project (
+  name text primary key check (name in ('edgeenglish-lms-test', 'edgeenglish-lms')),
+  set_at timestamptz not null default now()
+);
+create unique index if not exists project_one_row on lms_backup.project ((true));
+
+create table if not exists lms_backup.snapshots (
+  id bigint generated always as identity primary key,
+  taken_at timestamptz not null default now(),
+  taken_by text not null default current_user,
+  reason text not null,
+  backup jsonb not null          -- backup.sql 결과와 같은 모양: {"_meta": …, "students": [...], …, "_sequences": {...}}
+);
+
+revoke all on all tables in schema lms_backup from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on all tables in schema lms_backup from anon, authenticated';
+  end if;
+end $$;
+
+-- 이 DB의 프로젝트 이름 (시험용)
+insert into lms_backup.project (name) values ('edgeenglish-lms-test') on conflict do nothing;
+select name as 프로젝트_이름, (select count(*) from students) as 학생수 from lms_backup.project;</textarea>
+  </section>
+  <section class="step">
+    <h2><span class="n">2</span>프로젝트 만들기</h2>
     <ol>
       <li>(Pro로 정했으면) 왼쪽 위 조직 메뉴 → <b>New organization</b> → 이름 <code>EdgeEnglish LMS</code> → 요금제 <b>Pro</b>. 시험용 조직은 그대로 둠</li>
       <li><b>New project</b> → 이름 <code>edgeenglish-lms</code> · 지역 <b>Northeast Asia (Seoul)</b></li>
@@ -38,18 +89,18 @@ textarea { width:100%; box-sizing:border-box; margin-top:8px; border:1px solid v
   </section>
   <div class="where">여기부터 SQL은: 새 프로젝트 <b>edgeenglish-lms</b> → 왼쪽 <b>SQL Editor</b> → <b>New query</b> → 붙여 넣기 → <b>Run</b>. 단계마다 새 query 하나씩. <b>화면 위쪽 프로젝트 이름이 edgeenglish-lms 인지 꼭 확인</b></div>
   <section class="step">
-    <h2><span class="n">2</span>빈 프로젝트인지 확인</h2>
+    <h2><span class="n">3</span>빈 프로젝트인지 확인</h2>
     <p class="expect">정상: 표_개수 <b>0</b> — 41이면 시험용에 들어온 것, 멈추고 Claude에게</p>
-    <button type="button" class="copy" data-target="s2">복사</button>
-    <textarea id="s2" readonly rows="3" aria-label="빈 프로젝트인지 확인 SQL">-- 운영 프로젝트가 비어 있는지 확인 (읽기만). 정상 결과: 표_개수 0
+    <button type="button" class="copy" data-target="s3">복사</button>
+    <textarea id="s3" readonly rows="3" aria-label="빈 프로젝트인지 확인 SQL">-- 운영 프로젝트가 비어 있는지 확인 (읽기만). 정상 결과: 표_개수 0
 -- 0이 아니면 멈추고 Claude에게 (시험용 프로젝트에 잘못 들어왔을 수 있음 — 시험용은 41)
 select count(*) as 표_개수 from pg_tables where schemaname = 'public';</textarea>
   </section>
   <section class="step">
-    <h2><span class="n">3</span>표 만들기 (길어요)</h2>
+    <h2><span class="n">4</span>표 만들기 (길어요)</h2>
     <p class="expect">정상: Success. No rows returned — 오류면 아무것도 안 만들어짐, 오류 첫 줄만 Claude에게</p>
-    <button type="button" class="copy" data-target="s3">복사</button>
-    <textarea id="s3" readonly rows="3" aria-label="표 만들기 (길어요) SQL">-- 자동 생성 파일 (직접 고치지 말 것): node scripts/lms-test-bundle.mjs
+    <button type="button" class="copy" data-target="s4">복사</button>
+    <textarea id="s4" readonly rows="3" aria-label="표 만들기 (길어요) SQL">-- 자동 생성 파일 (직접 고치지 말 것): node scripts/lms-test-bundle.mjs
 -- 운영 Supabase 프로젝트(edgeenglish-lms) 표 만들기. 빈 프로젝트에 한 번만 실행. 가상 데이터 없음
 -- 한 묶음 실행: 중간에 오류가 나면 전체 취소 (반쯤 만들어진 상태가 남지 않음)
 begin;
@@ -2346,13 +2397,59 @@ end $$;
 revoke all on function admin_register_student(uuid, jsonb) from public, anon;
 grant execute on function admin_register_student(uuid, jsonb) to authenticated;
 
+-- &gt;&gt;&gt; 20261022001100_lms_backup_guard.sql
+-- =====================================================================
+-- 복구 안전장치 (2026-10-22, 정책 원본 H23(5) 예외: 비상 복구는 대표 승인 + 복구 직전 백업 후)
+--  1. lms_backup.project: 이 DB가 어느 프로젝트인지 이름 한 줄 (시험용 edgeenglish-lms-test / 운영 edgeenglish-lms)
+--     - 이름은 프로젝트마다 다르므로 이 파일이 아니라 각 프로젝트 적용 안내에서 한 번 넣는다
+--     - 백업에 이름이 같이 기록되고, 복구는 ① 입력한 이름 ② 이 표의 이름 ③ 백업의 이름이 모두 같아야 실행됨
+--       → 시험용·운영 DB를 헷갈리거나 다른 프로젝트 백업을 넣으려 하면 아무것도 바뀌지 않음
+--  2. lms_backup.snapshots: 복구가 지금 내용을 지우기 직전에 같은 묶음 안에서 지금 상태를 통째로 저장
+--     → 잘못 복구해도 그 직전으로 되돌릴 수 있음 (supabase/backup/from-snapshot.sql)
+-- 앱(로그인 사용자·비로그인)은 이 영역을 전혀 못 씀: public 이 아닌 별도 영역이라 Data API 에도 안 나옴
+-- 기존 표·데이터는 바꾸지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create schema if not exists lms_backup;
+revoke all on schema lms_backup from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on schema lms_backup from anon, authenticated';
+  end if;
+end $$;
+
+create table if not exists lms_backup.project (
+  name text primary key check (name in ('edgeenglish-lms-test', 'edgeenglish-lms')),
+  set_at timestamptz not null default now()
+);
+create unique index if not exists project_one_row on lms_backup.project ((true));
+
+create table if not exists lms_backup.snapshots (
+  id bigint generated always as identity primary key,
+  taken_at timestamptz not null default now(),
+  taken_by text not null default current_user,
+  reason text not null,
+  backup jsonb not null          -- backup.sql 결과와 같은 모양: {"_meta": …, "students": [...], …, "_sequences": {...}}
+);
+
+revoke all on all tables in schema lms_backup from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on all tables in schema lms_backup from anon, authenticated';
+  end if;
+end $$;
+
+-- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)
+insert into lms_backup.project (name) values ('edgeenglish-lms');
 commit;</textarea>
   </section>
   <section class="step">
-    <h2><span class="n">4</span>확인 (읽기만)</h2>
-    <p class="expect">정상: 7줄 모두 <b>통과</b></p>
-    <button type="button" class="copy" data-target="s4">복사</button>
-    <textarea id="s4" readonly rows="3" aria-label="확인 (읽기만) SQL">-- 운영 DB 표 만들기 확인 (읽기만). 결과가 모두 '통과'면 정상
+    <h2><span class="n">5</span>확인 (읽기만)</h2>
+    <p class="expect">정상: 8줄 모두 <b>통과</b></p>
+    <button type="button" class="copy" data-target="s5">복사</button>
+    <textarea id="s5" readonly rows="3" aria-label="확인 (읽기만) SQL">-- 운영 DB 표 만들기 확인 (읽기만). 결과 8줄이 모두 '통과'면 정상
 select 항목, case when ok then '통과' else '실패' end as 결과 from (
   select 1 as n, 'LMS 표 41개' as 항목, (select count(*) from pg_tables where schemaname = 'public') = 41 as ok
   union all select 2, 'RLS 꺼진 표 없음', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity)
@@ -2367,10 +2464,12 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
     not exists (select 1 from pg_roles where rolname = 'service_role') or has_table_privilege('service_role', 'public.students', 'insert')
   union all select 7, '빈 운영 DB (학생·강사·수업 0, 가상 데이터 없음)',
     (select count(*) from students) = 0 and (select count(*) from tutors) = 0 and (select count(*) from lessons) = 0
+  union all select 8, '프로젝트 이름 = edgeenglish-lms (복구 안전장치)',
+    to_regclass('lms_backup.project') is not null and (select name from lms_backup.project) = 'edgeenglish-lms'
 ) t order by n;</textarea>
   </section>
   <section class="step">
-    <h2><span class="n">5</span>로그인 설정 (화면)</h2>
+    <h2><span class="n">6</span>로그인 설정 (화면)</h2>
     <p class="expect">시험용 프로젝트와 똑같이</p><ol>
       <li>Authentication → Sign In / Providers → <b>Allow new users to sign up: 끄기</b></li>
       <li>Email: Confirm email 켬 · Email OTP Length <b>6</b> · OTP Expiration <b>600</b></li>
@@ -2380,7 +2479,7 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
     
   </section>
   <section class="step">
-    <h2><span class="n">6</span>대표 계정 만들기 (화면)</h2>
+    <h2><span class="n">7</span>대표 계정 만들기 (화면)</h2>
     <ol>
       <li>Authentication → Users → <b>Add user</b> → <b>Create new user</b></li>
       <li>이메일 <code>support@edgeenglish.kr</code> · 비밀번호는 아무 긴 값 (쓰지 않음) · <b>Auto Confirm User 체크</b></li>
@@ -2388,10 +2487,10 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
     
   </section>
   <section class="step">
-    <h2><span class="n">7</span>대표 계정을 운영자(대표)로 연결</h2>
-    <p class="expect">정상: support@edgeenglish.kr · admin · owner 한 줄 (0줄이면 6번을 먼저)</p>
-    <button type="button" class="copy" data-target="s7">복사</button>
-    <textarea id="s7" readonly rows="3" aria-label="대표 계정을 운영자(대표)로 연결 SQL">-- 대표 로그인 계정을 운영자(대표)로 연결. 먼저 Authentication → Users → Add user → Create new user 로
+    <h2><span class="n">8</span>대표 계정을 운영자(대표)로 연결</h2>
+    <p class="expect">정상: support@edgeenglish.kr · admin · owner 한 줄 (0줄이면 7번을 먼저)</p>
+    <button type="button" class="copy" data-target="s8">복사</button>
+    <textarea id="s8" readonly rows="3" aria-label="대표 계정을 운영자(대표)로 연결 SQL">-- 대표 로그인 계정을 운영자(대표)로 연결. 먼저 Authentication → Users → Add user → Create new user 로
 -- support@edgeenglish.kr 계정을 만든 뒤 실행 (Auto Confirm User 체크). 여러 번 실행해도 한 번만 들어감
 -- 정상 결과: support@edgeenglish.kr · admin · owner 한 줄 (0줄이면 계정을 아직 안 만든 것)
 insert into app_users (auth_user_id, role, admin_level)
@@ -2401,14 +2500,14 @@ select u.email as 이메일, a.role as 역할, a.admin_level as 단계
 from app_users a join auth.users u on u.id = a.auth_user_id order by u.email;</textarea>
   </section>
   <section class="step">
-    <h2><span class="n">8</span>Claude에게 알려 주기</h2>
+    <h2><span class="n">9</span>Claude에게 알려 주기</h2>
     <ol>
       <li>왼쪽 <b>Database → Backups</b> 화면 캡처 (요금제별 자동 백업이 실제로 어떻게 보이는지 확인용)</li>
       <li>Project Settings → Data API → Project URL 의 <code>xxxx.supabase.co</code> 부분 (비밀 아님)</li>
       <li>Secret key·DB 비밀번호는 보내지 않음</li></ol>
     
   </section>
-  <p class="note">오류가 나면 오류 첫 줄만 Claude에게 보내 주세요. 3번은 한 묶음이라 오류가 나면 아무것도 바뀌지 않아요.</p>
+  <p class="note">오류가 나면 오류 첫 줄만 Claude에게 보내 주세요. 1·4번은 한 묶음이라 오류가 나면 아무것도 바뀌지 않아요.</p>
 
   <h3>운영 DB를 바꾸기 직전 — 매번 백업</h3>
   <p class="lead">읽기만 하는 SQL이에요. 데이터를 바꾸지 않아요.</p>
@@ -2426,7 +2525,7 @@ from app_users a join auth.users u on u.id = a.auth_user_id order by u.email;</t
 -- 쓰는 때: 운영 DB를 바꾸기(마이그레이션 적용) 직전, 실제 데이터를 많이 넣기 전후
 -- 사용: Supabase → SQL Editor → New query → 이 파일 전체 붙여 넣기 → Run
 --       → 결과 표 오른쪽 위 [Export] → [Download CSV] → 파일 이름 앞에 날짜를 붙여 구글 드라이브 'LMS 백업' 폴더에 보관
--- 결과: 표마다 한 줄 (표 이름 · 행 수 · 내용 JSON). 맨 위 _meta 줄에 백업 시각, _sequences 줄에 번호 순서,
+-- 결과: 표마다 한 줄 (표 이름 · 행 수 · 내용 JSON). 맨 위 _meta 줄에 백업 시각·프로젝트 이름, _sequences 줄에 번호 순서,
 --       _auth_users 줄에 로그인 계정 번호·이메일 (새 프로젝트로 복구할 때 계정 연결용)
 -- 복구: Claude가 이 CSV로 복구 SQL을 만든다 (scripts/lms-restore-sql.mjs). 복구는 대표 승인 후에만
 -- pg_temp = 이번 실행에서만 쓰는 임시 함수 (DB에 아무것도 남지 않음)
@@ -2442,7 +2541,9 @@ begin
   순서 := 0; 표 := '_meta';
   select count(*) into 행수 from pg_class c join pg_namespace s on s.oid = c.relnamespace where s.nspname = 'public' and c.relkind = 'r';
   내용 := jsonb_build_object('format', 'edge-lms-backup-1', 'at', now(), 'tables', 행수,
-                            'students', (select count(*) from public.students))::text;
+                            'students', (select count(*) from public.students),
+                            'project', case when to_regclass('lms_backup.project') is not null
+                                            then (select name from lms_backup.project) end)::text;
   return next;
   for r in select c.relname from pg_class c join pg_namespace s on s.oid = c.relnamespace
            where s.nspname = 'public' and c.relkind = 'r' order by c.relname loop

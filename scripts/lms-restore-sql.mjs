@@ -1,11 +1,14 @@
 // LMS 백업 CSV(supabase/backup/backup.sql 결과를 SQL Editor 에서 Download CSV) → 복구 SQL
 // 사용: node scripts/lms-restore-sql.mjs <백업.csv> > restore.sql
 // 복구 SQL이 하는 일 (한 묶음 — 오류가 나면 전체 취소):
+//   ⓪ 맨 위 한 줄에 대표가 프로젝트 이름을 직접 입력 → 입력한 이름 = 이 DB 이름(lms_backup.project) = 백업의 이름일 때만 진행
+//      (시험용·운영을 헷갈리거나 다른 프로젝트의 백업이면 아무것도 바꾸지 않고 멈춤)
 //   ① 백업에 있는 표가 지금 DB에 모두 있는지 확인 (없으면 멈춤 — 표 만들기(01-schema)를 먼저)
+//   ①-2 지우기 전에 지금 상태를 lms_backup.snapshots 에 통째로 저장 (잘못 복구했을 때 되돌리기용, from-snapshot.sql)
 //   ② 그 표들의 사용자 트리거(변경 이력·수정 금지)를 잠시 끔
 //   ③ 참조 제약을 잠시 내리고, 지금 내용을 지운 뒤 백업 내용을 넣음. 자동 계산 열은 DB가 다시 계산
 //   ④ 트리거·참조 제약을 다시 켬 (이때 전체 참조를 다시 검사) → 번호 순서(학생 번호 등) 되돌림
-// 같은 프로젝트에 쓰면 지금 데이터가 백업 시점으로 돌아간다. 대표 승인 후, 실행 직전 백업을 한 번 더 받고 쓸 것
+// 같은 프로젝트에 쓰면 지금 데이터가 백업 시점으로 돌아간다. 정책 원본 H23(5)의 예외 — 대표 승인 후에만 실행
 // 새 프로젝트로 옮길 때: 로그인 계정 번호가 달라지므로 app_users 는 _auth_users(이메일)로 다시 연결해야 함 (그때 Claude가 따로)
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
@@ -54,10 +57,14 @@ export function buildRestoreSql(backup) {
   };
   const tables = [...backup.keys()].filter((t) => !t.startsWith('_'));
   const meta = backup.get('_meta').body;
+  if (!meta.project) throw new Error('백업에 프로젝트 이름이 없습니다 (복구 안전장치 적용 전 백업) — 복구 SQL을 만들지 않음');
   const values = tables.map((t) => `  (${lit(t)}, ${lit(JSON.stringify(backup.get(t).body))}::jsonb)`);
   return `-- 자동 생성: node scripts/lms-restore-sql.mjs — LMS 복구 (백업 시각 ${meta.at}, 학생 ${meta.students}명, 표 ${tables.length}개)
 -- 한 묶음 실행: 오류가 나면 아무것도 바뀌지 않음
+-- ▼ 실행 전에 아래 줄의 '여기에 프로젝트 이름' 을 지우고, 복구할 프로젝트 이름을 직접 입력 (이 백업: ${meta.project})
 begin;
+select set_config('lms.restore_confirm', '여기에 프로젝트 이름', true);
+create temp table lms_restore_meta on commit drop as select ${lit(JSON.stringify(meta))}::jsonb as meta;
 create temp table lms_restore_input (tbl text primary key, rows jsonb not null) on commit drop;
 insert into lms_restore_input values
 ${values.join(',\n')};
@@ -70,7 +77,22 @@ declare
   t record;
   cols text;
   i int;
+  typed text := current_setting('lms.restore_confirm', true);
+  here text;
+  from_backup text := (select meta ->> 'project' from lms_restore_meta);
+  snap jsonb := '{}'::jsonb;
+  j jsonb;
 begin
+  -- ⓪ 프로젝트 이름 세 개가 모두 같아야 진행
+  if to_regclass('lms_backup.project') is null then raise exception '멈춤: 이 DB에 프로젝트 이름 표가 없습니다 (migration 1100 먼저)'; end if;
+  select name into here from lms_backup.project;
+  if typed is distinct from here then
+    raise exception '멈춤: 입력한 이름(%)이 이 DB(%)와 다릅니다. 아무것도 바꾸지 않았습니다.', typed, coalesce(here, '이름 없음');
+  end if;
+  if from_backup is distinct from here then
+    raise exception '멈춤: 다른 프로젝트(%)의 백업입니다. 이 DB는 %. 아무것도 바꾸지 않았습니다.', from_backup, here;
+  end if;
+
   select string_agg(tbl, ', ') into missing from lms_restore_input where to_regclass('public.' || quote_ident(tbl)) is null;
   if missing is not null then raise exception '멈춤: 지금 DB에 없는 표 — % (표 만들기를 먼저)', missing; end if;
 
@@ -87,6 +109,19 @@ begin
     where o.tbl = d.tbl and o.depth < d.depth and d.depth <= 50;
     exit when not found;
   end loop;
+
+  -- ①-2 지우기 전에 지금 상태 통째로 저장 (backup.sql 결과와 같은 모양)
+  for t in select c.relname from pg_class c join pg_namespace s on s.oid = c.relnamespace
+           where s.nspname = 'public' and c.relkind = 'r' order by c.relname loop
+    execute format('select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb) from public.%I x', t.relname) into j;
+    snap := snap || jsonb_build_object(t.relname, j);
+  end loop;
+  select coalesce(jsonb_object_agg(sequencename, last_value), '{}'::jsonb) into j from pg_sequences where schemaname = 'public';
+  snap := snap || jsonb_build_object('_sequences', j, '_meta', jsonb_build_object(
+    'format', 'edge-lms-backup-1', 'at', now(), 'project', here, 'students', (select count(*) from public.students),
+    'snapshot_of', '복구 직전 (복구한 백업 시각 ' || (select meta ->> 'at' from lms_restore_meta) || ')'));
+  insert into lms_backup.snapshots (reason, backup)
+  values ('복구 직전 — 복구한 백업 ' || (select meta ->> 'at' from lms_restore_meta), snap);
 
   -- 참조 제약(수업↔보상권처럼 서로 가리키는 것 포함)을 잠시 내렸다가 끝에 다시 걸어 전체를 한 번에 검사
   create temp table lms_restore_fk on commit drop as

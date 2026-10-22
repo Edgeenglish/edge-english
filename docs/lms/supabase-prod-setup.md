@@ -25,10 +25,11 @@
 
 | 순서 | 어디서 | 하는 것 | 정상 결과 |
 |---|---|---|---|
+| 0 | 시험용 SQL Editor | migration 1100(복구 안전장치) + 프로젝트 이름 `edgeenglish-lms-test` (페이지 1번, 기존 데이터 그대로) | `edgeenglish-lms-test · 6` 한 줄 |
 | 1 | supabase.com | (Pro면) 새 조직 `EdgeEnglish LMS` 만들고 Pro 선택 → New project: 이름 `edgeenglish-lms`, 지역 **Northeast Asia (Seoul)**, DB 비밀번호는 **Generate** 로 만들어 대표 비밀번호 관리 앱에만 저장 (Claude에게 주지 않음). Data API 켜 둠 | 프로젝트 생성 (2~3분) |
 | 2 | SQL Editor | `prod-setup/00-empty-check.sql` | 표_개수 **0** (41이면 시험용에 들어온 것 — 멈춤) |
-| 3 | SQL Editor | `prod-setup/01-schema.sql` (마이그레이션 000~1000 묶음, 가상 데이터 없음) | Success. No rows returned |
-| 4 | SQL Editor | `prod-setup/02-check.sql` (읽기만) | 7줄 모두 **통과** |
+| 3 | SQL Editor | `prod-setup/01-schema.sql` (마이그레이션 000~1100 묶음 + 프로젝트 이름 `edgeenglish-lms`, 가상 데이터 없음) | Success. No rows returned |
+| 4 | SQL Editor | `prod-setup/02-check.sql` (읽기만) | 8줄 모두 **통과** |
 | 5 | Authentication | 공개 가입 끄기, 이메일 확인 켬, OTP 6자리·600초, MFA(TOTP) 켬 | 시험용과 같은 설정 |
 | 6 | Resend → Supabase | Resend에서 **운영용 API key `supabase-prod`** 새로 만들기(Sending access, 도메인 edgeenglish.kr) → Supabase SMTP: `smtp.resend.com` 465, 사용자 `resend`, 비밀번호 = 그 키, 보낸 사람 `엣지영어 <support@edgeenglish.kr>` | 저장됨 (키는 Supabase 화면에만) |
 | 7 | Email Templates | 시험용 프로젝트의 **Magic Link** 제목·본문을 그대로 복사해 붙여 넣기 (6자리 코드 한국어 문구) | 저장됨 |
@@ -41,7 +42,7 @@
 - 3번을 두 번 실행하면 "멈춤: public 에 이미 표가 있습니다" — 정상(이미 만들어진 것).
 - 운영 사이트(Vercel) 연결, 실제 로그인 시험, 학생 데이터 입력은 **이 단계에 포함하지 않음** → 각각 다음 단계에서 승인 후.
 
-로컬 검증 (2026-10-22, Claude): `npm run test:db` 에서 빈 DB에 2~4·9번 파일을 같은 순서로 실행 → 확인 7줄 통과, 3번 두 번째 실행은 안전장치로 멈춤, 9번 두 번 실행해도 1줄.
+로컬 검증 (2026-10-22, Claude): `npm run test:db` 에서 빈 DB에 2~4·9번 파일을 같은 순서로 실행 → 확인 8줄 통과, 3번 두 번째 실행은 안전장치로 멈춤, 9번 두 번 실행해도 1줄.
 
 ## 2. 운영 DB 변경 절차 (앞으로 매번)
 
@@ -55,9 +56,14 @@
 ### 직접 백업·복구 (`supabase/backup/backup.sql`, `scripts/lms-restore-sql.mjs`)
 
 - 백업: 읽기만 하는 SQL. 표마다 한 줄(행 수·내용 JSON) + 백업 시각 + 번호 순서(학생 번호 등) + 로그인 계정 번호·이메일. 임시 함수(`pg_temp`)를 써서 DB에 아무것도 남기지 않음
-- 복구: Claude가 CSV로 복구 SQL을 만든다 → 대표 승인 → SQL Editor 실행. 한 묶음(오류면 전체 취소). 표 41개 확인 → 트리거·참조 제약 잠시 끔 → 내용 교체 → 다시 켜며 참조 전체 검사 → 번호 순서 복원 → 표별 행 수 '같음/다름' 표
-- 로컬 검증: `npm run test:db` 에서 가상 데이터 DB 백업 → 운영형 빈 DB에 복구 → 다시 백업해 **표 41개 내용이 같음**, 복구 뒤 변경 이력 삭제 금지 등 보호 장치가 다시 켜짐 확인
-- 남은 것: **시험용 DB에서 실물 연습 1회** (Supabase SQL Editor의 CSV 내보내기 형식 확인 — 시험용은 가상 데이터라 파일을 Claude에게 올려도 됨). 새 프로젝트로 옮기는 복구는 로그인 계정 번호가 달라져 `app_users` 재연결이 필요 (그때 이메일로 다시 연결)
+- 복구: **같은 프로젝트에 그 자리에서 복구** (2026-10-22 대표 결정 — 비상시 단계가 가장 적음). Claude가 CSV로 복구 SQL을 만든다 → **대표 승인** → 대표가 맨 위 한 줄에 **프로젝트 이름을 직접 입력** → SQL Editor 실행. 한 묶음(오류면 전체 취소)
+  - 안전장치 ①: 입력한 이름 = 이 DB 이름(`lms_backup.project`, migration 1100) = 백업의 이름일 때만 실행. 이름을 안 고쳤거나, 시험용·운영을 헷갈렸거나, 다른 프로젝트 백업이면 **아무것도 바꾸지 않고 멈춤**
+  - 안전장치 ②: 지우기 직전 상태를 같은 묶음 안에서 `lms_backup.snapshots` 에 통째로 저장 → 잘못 복구해도 `supabase/backup/from-snapshot.sql` 로 꺼내 다시 복구 가능
+  - 순서: 표 41개 확인 → 직전 상태 저장 → 트리거·참조 제약 잠시 끔 → 내용 교체 → 다시 켜며 참조 전체 검사 → 번호 순서 복원 → 표별 행 수 '같음/다름' 표
+  - 정책 원본 H23(5)의 예외로 기록됨 (2026-10-22): "구조 변경에는 데이터를 지우는 명령을 쓰지 않는다. 비상 복구만 예외로, 대표 승인 + 복구 직전 백업 후 실행"
+  - `lms_backup` 영역은 public 이 아니라 앱(로그인·비로그인)이 접근할 수 없고 Data API에도 안 나옴
+- 로컬 검증 (`npm run test:db`): 시험용 이름 백업을 운영 DB에 복구 시도 → 멈춤(운영 DB 학생 0 그대로), 이름 안 고침·틀린 이름 → 멈춤, 같은 이름 DB에 복구 → 다시 백업해 **표 41개 내용이 같음**, 한 번 더 복구한 뒤 직전 저장본을 꺼내면 그 전 상태와 같음, 로그인 사용자는 백업 영역 접근 거절, 복구 뒤 보호 장치 다시 켜짐
+- 남은 것: **시험용 DB에서 실물 연습 1회** (Supabase SQL Editor의 CSV 내보내기 형식 확인 — 시험용은 가상 데이터라 파일을 Claude에게 올려도 됨). 프로젝트 자체를 잃었을 때 새 프로젝트로 옮기는 경우는 로그인 계정 번호가 달라져 `app_users` 재연결 필요 (그때 따로)
 
 ## 3. 알려진 점
 

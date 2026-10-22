@@ -49,15 +49,42 @@ echo "$AGAIN" | grep -q '멈춤: public 에 이미 표가 있습니다' || { ech
 [ "$("${PROD[@]}" -tA -c "select count(*) from app_users where role = 'admin' and admin_level = 'owner'")" = "1" ] || { echo "❌ 대표 계정 연결 실패"; exit 1; }
 echo "✅ 운영 DB 표 만들기 파일 점검 통과 (확인 $(echo "$CHECK" | wc -l)줄 통과)"
 
-# 백업 → 복구 왕복: 가상 데이터가 든 DB를 백업 → 운영형 DB(대표 계정만 있음)에 복구 → 다시 백업해 표별 내용이 같은지
-"${PSQL[@]}" -c "create table if not exists auth.users (id uuid primary key, email text)"
+# 백업 → 복구 왕복 + 안전장치: 시험용 이름이 붙은 가상 데이터 DB(postgres)를 백업 →
+#  ① 운영 DB에 복구 시도 → '다른 프로젝트' 로 멈춤  ② 이름 안 고침·틀린 이름 → 멈춤
+#  ③ 같은 이름의 빈 시험용 DB(test2)에 복구 → 다시 백업해 표 41개 내용 같음
+#  ④ 한 번 더 복구 → 직전 저장본(snapshots)을 꺼내 보면 ③ 상태와 같음 (잘못 복구해도 되돌릴 수 있음)
+"${PSQL[@]}" -c "create table if not exists auth.users (id uuid primary key, email text)" \
+  -c "insert into lms_backup.project (name) values ('edgeenglish-lms-test')"
+cp "$ROOT"/supabase/backup/from-snapshot.sql "$WORK"/; chmod a+r "$WORK"/from-snapshot.sql
 "${RUN_AS[@]}" psql -h "$WORK" -U postgres -d postgres -v ON_ERROR_STOP=1 -q --csv -f "$WORK/backup.sql" > "$WORK/bk1.csv"
-node "$ROOT/scripts/lms-restore-sql.mjs" "$WORK/bk1.csv" > "$WORK/restore.sql"; chmod a+r "$WORK/restore.sql"
-RESTORE="$("${PROD[@]}" -tA -f "$WORK/restore.sql")"
+node "$ROOT/scripts/lms-restore-sql.mjs" "$WORK/bk1.csv" > "$WORK/restore.sql"
+with_name() { sed "s/'여기에 프로젝트 이름'/'$1'/" "$WORK/restore.sql" > "$WORK/restore-$1.sql"; chmod a+r "$WORK/restore-$1.sql"; echo "$WORK/restore-$1.sql"; }
+expect_stop() { # DB파일 SQL파일 기대문구
+  local out; out="$("${RUN_AS[@]}" psql -h "$WORK" -U postgres -d "$1" -v ON_ERROR_STOP=1 -q -f "$2" 2>&1 || true)"
+  echo "$out" | grep -q "$3" || { echo "$out" | tail -3; echo "❌ 복구 안전장치 실패: $3"; exit 1; }
+}
+chmod a+r "$WORK/restore.sql"
+expect_stop prod "$(with_name edgeenglish-lms)" '다른 프로젝트(edgeenglish-lms-test)의 백업'
+expect_stop prod "$WORK/restore.sql" '입력한 이름(여기에 프로젝트 이름)이 이 DB(edgeenglish-lms)와 다릅니다'
+[ "$("${PROD[@]}" -tA -c "select count(*) from students")" = "0" ] || { echo "❌ 멈춘 복구가 운영 DB를 바꿈"; exit 1; }
+"${PSQL[@]}" -c "create database test2"
+T2=("${RUN_AS[@]}" psql -h "$WORK" -U postgres -d test2 -v ON_ERROR_STOP=1 -q)
+"${T2[@]}" -f "$HERE/stub_supabase.sql"
+for f in "$ROOT"/supabase/migrations/*.sql; do "${T2[@]}" -o /dev/null -f "$f"; done
+"${T2[@]}" -c "create table auth.users (id uuid primary key, email text)" -c "insert into lms_backup.project (name) values ('edgeenglish-lms-test')"
+expect_stop test2 "$(with_name edgeenglish-lms)" '입력한 이름(edgeenglish-lms)이 이 DB(edgeenglish-lms-test)와 다릅니다'
+RESTORE="$("${T2[@]}" -tA -f "$(with_name edgeenglish-lms-test)")"
 echo "$RESTORE" | grep -q '|다름$' && { echo "$RESTORE"; echo "❌ 복구 행 수 다름"; exit 1; }
-"${PROD[@]}" --csv -f "$WORK/backup.sql" > "$WORK/bk2.csv"
+"${T2[@]}" --csv -f "$WORK/backup.sql" > "$WORK/bk2.csv"
 node "$HERE/backup-compare.mjs" "$WORK/bk1.csv" "$WORK/bk2.csv"
+"${T2[@]}" -o /dev/null -f "$WORK/restore-edgeenglish-lms-test.sql"
+"${T2[@]}" --csv -f "$WORK/from-snapshot.sql" > "$WORK/bk3.csv"
+node "$HERE/backup-compare.mjs" "$WORK/bk2.csv" "$WORK/bk3.csv"
+[ "$("${T2[@]}" -tA -c "select count(*) from lms_backup.snapshots")" = "2" ] || { echo "❌ 복구 직전 저장본 수 다름"; exit 1; }
+# 앱 사용자는 백업 영역을 못 봄
+DENY="$("${T2[@]}" -c "set role authenticated; select count(*) from lms_backup.snapshots" 2>&1 || true)"
+echo "$DENY" | grep -q 'permission denied' || { echo "❌ 로그인 사용자가 백업 영역에 접근함"; exit 1; }
 # 복구 뒤에도 보호 장치가 다시 켜졌는지 (변경 이력은 지울 수 없음)
-DEL="$("${PROD[@]}" -c "delete from audit_log where id = (select min(id) from audit_log)" 2>&1 || true)"
+DEL="$("${T2[@]}" -c "delete from audit_log where id = (select min(id) from audit_log)" 2>&1 || true)"
 echo "$DEL" | grep -q '삭제할 수 없습니다' || { echo "❌ 복구 뒤 보호 트리거가 꺼져 있음"; exit 1; }
-echo "✅ 백업 → 복구 왕복 통과"
+echo "✅ 백업 → 복구 왕복·안전장치 통과 (다른 프로젝트·틀린 이름 멈춤, 복구 직전 저장본으로 되돌리기 확인)"

@@ -19,7 +19,14 @@ export function buildPage(root) {
   </section>`;
   };
 
+  const guardTest = `${sql('supabase/migrations/20261022001100_lms_backup_guard.sql')}
+
+-- 이 DB의 프로젝트 이름 (시험용)
+insert into lms_backup.project (name) values ('edgeenglish-lms-test') on conflict do nothing;
+select name as 프로젝트_이름, (select count(*) from students) as 학생수 from lms_backup.project;`;
+
   const steps = [
+    step('먼저 시험용 DB에 복구 안전장치', `<p class="expect">붙여 넣는 곳: 프로젝트 <b>edgeenglish-lms-test</b> → SQL Editor → New query → Run.<br>정상: <b>edgeenglish-lms-test · 6</b> 한 줄. 기존 데이터는 그대로예요. 문제 없으면 바로 2번으로</p>`, guardTest),
     step('프로젝트 만들기', `<ol>
       <li>(Pro로 정했으면) 왼쪽 위 조직 메뉴 → <b>New organization</b> → 이름 <code>EdgeEnglish LMS</code> → 요금제 <b>Pro</b>. 시험용 조직은 그대로 둠</li>
       <li><b>New project</b> → 이름 <code>edgeenglish-lms</code> · 지역 <b>Northeast Asia (Seoul)</b></li>
@@ -28,7 +35,7 @@ export function buildPage(root) {
     `<div class="where">여기부터 SQL은: 새 프로젝트 <b>edgeenglish-lms</b> → 왼쪽 <b>SQL Editor</b> → <b>New query</b> → 붙여 넣기 → <b>Run</b>. 단계마다 새 query 하나씩. <b>화면 위쪽 프로젝트 이름이 edgeenglish-lms 인지 꼭 확인</b></div>`,
     step('빈 프로젝트인지 확인', '<p class="expect">정상: 표_개수 <b>0</b> — 41이면 시험용에 들어온 것, 멈추고 Claude에게</p>', sql('supabase/prod-setup/00-empty-check.sql')),
     step('표 만들기 (길어요)', '<p class="expect">정상: Success. No rows returned — 오류면 아무것도 안 만들어짐, 오류 첫 줄만 Claude에게</p>', sql('supabase/prod-setup/01-schema.sql')),
-    step('확인 (읽기만)', '<p class="expect">정상: 7줄 모두 <b>통과</b></p>', sql('supabase/prod-setup/02-check.sql')),
+    step('확인 (읽기만)', '<p class="expect">정상: 8줄 모두 <b>통과</b></p>', sql('supabase/prod-setup/02-check.sql')),
     step('로그인 설정 (화면)', `<p class="expect">시험용 프로젝트와 똑같이</p><ol>
       <li>Authentication → Sign In / Providers → <b>Allow new users to sign up: 끄기</b></li>
       <li>Email: Confirm email 켬 · Email OTP Length <b>6</b> · OTP Expiration <b>600</b></li>
@@ -39,7 +46,7 @@ export function buildPage(root) {
       <li>Authentication → Users → <b>Add user</b> → <b>Create new user</b></li>
       <li>이메일 <code>support@edgeenglish.kr</code> · 비밀번호는 아무 긴 값 (쓰지 않음) · <b>Auto Confirm User 체크</b></li>
       <li>Send invitation은 쓰지 않음 (가입을 끄면 초대 계정은 로그인이 안 됨)</li></ol>`),
-    step('대표 계정을 운영자(대표)로 연결', '<p class="expect">정상: support@edgeenglish.kr · admin · owner 한 줄 (0줄이면 6번을 먼저)</p>', sql('supabase/prod-setup/03-owner.sql')),
+    step('대표 계정을 운영자(대표)로 연결', '<p class="expect">정상: support@edgeenglish.kr · admin · owner 한 줄 (0줄이면 7번을 먼저)</p>', sql('supabase/prod-setup/03-owner.sql')),
     step('Claude에게 알려 주기', `<ol>
       <li>왼쪽 <b>Database → Backups</b> 화면 캡처 (요금제별 자동 백업이 실제로 어떻게 보이는지 확인용)</li>
       <li>Project Settings → Data API → Project URL 의 <code>xxxx.supabase.co</code> 부분 (비밀 아님)</li>
@@ -76,10 +83,10 @@ textarea { width:100%; box-sizing:border-box; margin-top:8px; border:1px solid v
 </style>
 <div class="wrap">
   <h1>운영 DB 만들기 · edgeenglish-lms</h1>
-  <p class="lead">번호 순서대로. 약 20분, PC 권장. 시험용(edgeenglish-lms-test)은 건드리지 않아요.</p>
+  <p class="lead">번호 순서대로. 약 20분, PC 권장. 1번만 시험용(edgeenglish-lms-test)에서, 나머지는 새 운영 프로젝트에서 해요.</p>
   <p class="note">시작 전: 요금제(Free / Pro)를 채팅에서 먼저 정해 주세요. 운영 DB에는 가상 데이터를 넣지 않고, 실제 학생 입력·홈페이지 연결은 다음 단계예요.</p>
   ${steps.join('\n  ')}
-  <p class="note">오류가 나면 오류 첫 줄만 Claude에게 보내 주세요. 3번은 한 묶음이라 오류가 나면 아무것도 바뀌지 않아요.</p>
+  <p class="note">오류가 나면 오류 첫 줄만 Claude에게 보내 주세요. 1·4번은 한 묶음이라 오류가 나면 아무것도 바뀌지 않아요.</p>
 
   <h3>운영 DB를 바꾸기 직전 — 매번 백업</h3>
   <p class="lead">읽기만 하는 SQL이에요. 데이터를 바꾸지 않아요.</p>
