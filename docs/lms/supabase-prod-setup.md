@@ -7,6 +7,8 @@
 
 ## 0. 요금제 — ✅ 결정 (2026-10-22 대표, 정책 원본 A40)
 
+- **실물 확인 (2026-10-22)**: 운영 프로젝트 `edgeenglish-lms`(주소 `mfamixejxydodclhglbc.supabase.co`) Database → Backups 화면에 'Free Plan does not include project backups' — **무료 요금제는 자동 백업이 없음**. 직접 백업이 유일한 백업
+
 - **운영 프로젝트는 Free로 시작, 새 무료 조직 `EdgeEnglish LMS` 에 만든다.** 시험용은 지금 무료 조직 그대로
 - 무료 기간: 대표가 **매주 1회 + 운영 DB 변경 직전** 직접 백업 (아래 2절)
 - **Pro 전환 시점 = 시트 대신 LMS에만 기록하기 시작하는 날.** 운영 조직만 Pro로 바꿈(프로젝트 다시 만들 필요 없음). Claude가 그 시점이 오면 먼저 알림

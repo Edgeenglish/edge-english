@@ -24,11 +24,11 @@
 - ~~migration 1000 시험용 DB 적용~~ **완료 (2026-10-22 대표, ①학생수 6 ②Success ③확인 6줄 통과)**. 실제 화면 시험(A~F, `supabase-test-setup.md`)은 대표 여유 될 때 — 운영 DB 작업과 별개로 진행 가능
 - D-42 신청서 → LMS 가져오기: D-41 끝난 뒤 ① Apps Script → DB ② 응답 시트 읽기 전용 비교안 보고 후 선택
 
-## 운영 DB 만들기 — 준비 완료, 대표 실행 대기 (2026-10-22) → [`supabase-prod-setup.md`](supabase-prod-setup.md)
+## 운영 DB 만들기 — ✅ 완료 (2026-10-22) → [`supabase-prod-setup.md`](supabase-prod-setup.md)
 - **복사 버튼 페이지 https://claude.ai/artifact/Y9aAahy2YVz8ukXdFtWStd** (9단계 — 1번은 시험용 DB에 migration 1100 먼저 + 변경 전 백업). SQL은 `supabase/prod-setup/` 00~03, 백업 `supabase/backup/backup.sql`, 복구 직전 저장본 꺼내기 `from-snapshot.sql`
 - 요금제 결정 (2026-10-22, A40): **Free, 새 무료 조직 `EdgeEnglish LMS`**. LMS 단독 기록 시작일에 Pro 전환 (위 '대표 결정 대기' ⏰)
 - 로컬 검증 통과 (`npm run test:db`): 빈 DB에 00~03 실행 → 확인 8줄 통과, 두 번째 실행은 안전장치로 멈춤 / 백업 → 운영형 DB 복구 → 다시 백업 비교, 표 41개 내용 같음
-- **진행 (2026-10-22 대표 실행)**: ✅ 시험용 DB migration 1100 적용(`edgeenglish-lms-test · 6`) ✅ 새 무료 조직 `EdgeEnglish LMS` + 프로젝트 `edgeenglish-lms`(서울, Data API·자동 공개·자동 RLS 켬 = 시험용과 같게) ✅ 빈 프로젝트 0 ✅ 표 만들기(결과 칸 lms_protect 4 rows = 정상) ✅ 확인 8줄 모두 통과. ✅ 로그인 설정(가입 끔·이메일 확인·OTP 600·6·TOTP 켜짐) ⬜ SMTP·템플릿 ⬜ 대표 계정 연결 ⬜ Backups 화면·프로젝트 주소
+- **진행 (2026-10-22 대표 실행)**: ✅ 시험용 DB migration 1100 적용(`edgeenglish-lms-test · 6`) ✅ 새 무료 조직 `EdgeEnglish LMS` + 프로젝트 `edgeenglish-lms`(서울, Data API·자동 공개·자동 RLS 켬 = 시험용과 같게) ✅ 빈 프로젝트 0 ✅ 표 만들기(결과 칸 lms_protect 4 rows = 정상) ✅ 확인 8줄 모두 통과. ✅ 로그인 설정(가입 끔·이메일 확인·OTP 600·6·TOTP 켜짐) ✅ SMTP(Resend `supabase-prod` 키)·Magic link 문구 ✅ 대표 계정 support@ = admin/owner ✅ **운영 프로젝트 주소 `mfamixejxydodclhglbc.supabase.co`** (비밀 아님) ✅ Backups 화면: **'Free Plan does not include project backups'** — 무료 요금제는 자동 백업이 전혀 없음 확인 → 직접 백업(매주 + 변경 직전)이 유일한 백업 (A40)
 - 대표 실행 뒤 받을 것: 02 결과(7줄 통과), 03 결과(owner 1줄), Database → Backups 화면 캡처, 프로젝트 주소(`xxxx.supabase.co`, 비밀 아님). Secret key·DB 비밀번호는 받지 않음
 - 그 다음: ① 시험용 DB에서 백업 실물 연습 1회 (CSV를 Claude에게 — 가상 데이터라 가능) ② 운영 DB를 어느 화면에서 쓸지(Vercel 환경 변수·LMS_PREVIEW) 대표 결정 — 지금 Preview는 시험용 DB에 연결 ③ D-52 기존 학생 고정 시간표 간단 입력
 - 남은 할 일: 공휴일 표 비어 있음(D-4 기능 전 입력), btree_gist 경고는 그대로(시험용과 같게)
