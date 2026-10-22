@@ -35,7 +35,7 @@
 | 0 | 시험용 SQL Editor | migration 1100(복구 안전장치) + 프로젝트 이름 `edgeenglish-lms-test` (페이지 1번, 기존 데이터 그대로) | `edgeenglish-lms-test · 6` 한 줄 |
 | 1 | supabase.com | 새 조직 `EdgeEnglish LMS` 만들고 **Free** 선택 → 그 조직에서 New project: 이름 `edgeenglish-lms`, 지역 **Northeast Asia (Seoul)**, DB 비밀번호는 **Generate** 로 만들어 대표 비밀번호 관리 앱에만 저장 (Claude에게 주지 않음). Data API 켜 둠 | 프로젝트 생성 (2~3분) |
 | 2 | SQL Editor | `prod-setup/00-empty-check.sql` | 표_개수 **0** (41이면 시험용에 들어온 것 — 멈춤) |
-| 3 | SQL Editor | `prod-setup/01-schema.sql` (마이그레이션 000~1100 묶음 + 프로젝트 이름 `edgeenglish-lms`, 가상 데이터 없음) | Success. No rows returned |
+| 3 | SQL Editor | `prod-setup/01-schema.sql` (마이그레이션 000~1100 묶음 + 프로젝트 이름 `edgeenglish-lms`, 가상 데이터 없음) | 결과 칸에 `lms_protect` 빈 칸 4줄(4 rows) — 묶음 안 마지막 결과가 보이는 것, 성공 (2026-10-22 실물 확인) |
 | 4 | SQL Editor | `prod-setup/02-check.sql` (읽기만) | 8줄 모두 **통과** |
 | 5 | Authentication | 공개 가입 끄기, 이메일 확인 켬, OTP 6자리·600초, MFA(TOTP) 켬 | 시험용과 같은 설정 |
 | 6 | Resend → Supabase | Resend에서 **운영용 API key `supabase-prod`** 새로 만들기(Sending access, 도메인 edgeenglish.kr) → Supabase SMTP: `smtp.resend.com` 465, 사용자 `resend`, 비밀번호 = 그 키, 보낸 사람 `엣지영어 <support@edgeenglish.kr>` | 저장됨 (키는 Supabase 화면에만) |

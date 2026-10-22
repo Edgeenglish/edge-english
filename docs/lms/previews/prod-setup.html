@@ -104,7 +104,7 @@ select count(*) as 표_개수 from pg_tables where schemaname = 'public';</texta
   </section>
   <section class="step">
     <h2><span class="n">4</span>표 만들기 (길어요)</h2>
-    <p class="expect">정상: Success. No rows returned — 오류면 아무것도 안 만들어짐, 오류 첫 줄만 Claude에게</p>
+    <p class="expect">정상: 아래 결과 칸에 <b>lms_protect · 4 rows</b> (빈 칸 4줄) 또는 Success — 둘 다 성공이에요. 빨간 글씨면 아무것도 안 만들어짐, 첫 줄만 Claude에게</p>
     <button type="button" class="copy" data-target="s4">복사</button>
     <textarea id="s4" readonly rows="3" aria-label="표 만들기 (길어요) SQL">-- 자동 생성 파일 (직접 고치지 말 것): node scripts/lms-test-bundle.mjs
 -- 운영 Supabase 프로젝트(edgeenglish-lms) 표 만들기. 빈 프로젝트에 한 번만 실행. 가상 데이터 없음

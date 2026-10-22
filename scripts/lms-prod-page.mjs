@@ -35,7 +35,7 @@ select name as 프로젝트_이름, (select count(*) from students) as 학생수
       <li>Data API는 켜 둔 채로 <b>Create</b> → 2~3분 기다림</li></ol>`),
     `<div class="where">여기부터 SQL은: 새 프로젝트 <b>edgeenglish-lms</b> → 왼쪽 <b>SQL Editor</b> → <b>New query</b> → 붙여 넣기 → <b>Run</b>. 단계마다 새 query 하나씩. <b>화면 위쪽 프로젝트 이름이 edgeenglish-lms 인지 꼭 확인</b></div>`,
     step('빈 프로젝트인지 확인', '<p class="expect">정상: 표_개수 <b>0</b> — 41이면 시험용에 들어온 것, 멈추고 Claude에게</p>', sql('supabase/prod-setup/00-empty-check.sql')),
-    step('표 만들기 (길어요)', '<p class="expect">정상: Success. No rows returned — 오류면 아무것도 안 만들어짐, 오류 첫 줄만 Claude에게</p>', sql('supabase/prod-setup/01-schema.sql')),
+    step('표 만들기 (길어요)', '<p class="expect">정상: 아래 결과 칸에 <b>lms_protect · 4 rows</b> (빈 칸 4줄) 또는 Success — 둘 다 성공이에요. 빨간 글씨면 아무것도 안 만들어짐, 첫 줄만 Claude에게</p>', sql('supabase/prod-setup/01-schema.sql')),
     step('확인 (읽기만)', '<p class="expect">정상: 8줄 모두 <b>통과</b></p>', sql('supabase/prod-setup/02-check.sql')),
     step('로그인 설정 (화면)', `<p class="expect">시험용 프로젝트와 똑같이</p><ol>
       <li>Authentication → Sign In / Providers → <b>Allow new users to sign up: 끄기</b></li>
