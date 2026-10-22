@@ -33,5 +33,9 @@ export default function ImportLive() {
 
   if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;
   if (state.kind === 'error') return <p className="px-6 py-16 text-center text-[15px] text-[#b3261e]">{state.message}</p>;
-  return <ImportStudent nowIso={state.nowIso} demo={false} tutors={state.tutors} save={(id, payload) => saveImport(sb!, id, payload)} />;
+  const reload = async () => {
+    const tutors = await loadRegTutors(sb!, new Date(state.nowIso));
+    setState({ ...state, tutors });
+  };
+  return <ImportStudent nowIso={state.nowIso} demo={false} tutors={state.tutors} save={(id, payload) => saveImport(sb!, id, payload)} reload={reload} />;
 }

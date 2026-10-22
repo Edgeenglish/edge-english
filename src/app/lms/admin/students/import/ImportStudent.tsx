@@ -22,6 +22,8 @@ type Props = {
   demo: boolean;
   tutors: RegTutor[];
   save: (requestId: string, payload: ReturnType<typeof importPayload>) => Promise<ImportResult>;
+  /** 저장 뒤 강사 일정 다시 읽기 (방금 넣은 학생 수업이 다음 입력의 충돌 검사에 들어가게) */
+  reload?: () => Promise<void>;
 };
 
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -45,7 +47,7 @@ function Chips<T extends string | number>({ value, options, label, onPick }: { v
   );
 }
 
-export default function ImportStudent({ nowIso, demo, tutors, save }: Props) {
+export default function ImportStudent({ nowIso, demo, tutors, save, reload }: Props) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const today = instantToKstDate(now);
   const [d, setD] = useState<ImportDraft>(() => emptyImport(today));
@@ -75,7 +77,9 @@ export default function ImportStudent({ nowIso, demo, tutors, save }: Props) {
     if (blockers.length > 0 || issues.length > 0 || saving) return;
     setSaving(true);
     try {
-      setResult(await save(requestId, importPayload(d)));
+      const r = await save(requestId, importPayload(d));
+      setResult(r);
+      if (r.kind === 'saved') await reload?.();
     } catch (e) {
       setResult({ kind: 'error', message: e instanceof Error ? e.message : '저장하지 못했어요.' });
     } finally {
@@ -138,13 +142,11 @@ export default function ImportStudent({ nowIso, demo, tutors, save }: Props) {
           <h1 className="text-[22px] font-bold text-[#1d1b2b]">기존 학생 간단 입력</h1>
         </div>
         {demo && <p className="rounded-[12px] bg-[#fff8d6] px-4 py-2.5 text-[13.5px] text-[#5c4a00]">가상 데이터 미리보기예요. 저장을 눌러도 실제로 저장되지 않아요.</p>}
-        <p className="rounded-[12px] bg-white px-4 py-3 text-[13.5px] leading-relaxed text-[#6b6880]">
-          지금 수업 중인 학생의 <b className="text-[#1d1b2b]">고정 시간표</b>만 넣어요. 시작일부터 지금 수강 종료일까지 수업이 만들어지고, 학생·강사에게는 아무것도 보내지 않아요.
-          지난 수업·변경권·결제는 시트에 그대로 두고, 재등록 때 정식 등록해요. 처음 시작하는 학생은{' '}
+        <p className="text-[13.5px] text-[#6b6880]">
+          수업 중인 학생의 고정 시간표만 넣어요. 학생·강사에게는 보내지 않아요. 새 학생은{' '}
           <Link href={demo ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'} className="font-semibold text-[#5b3fe0] underline underline-offset-2">
             신규 등록
           </Link>
-          으로.
         </p>
 
         <Card title="1. 학생">
@@ -253,7 +255,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save }: Props) {
         </Card>
 
         <Card title="3. 확정된 보강 (선택)">
-          <p className="mb-2 text-[13px] text-[#6b6880]">앞으로 잡혀 있는 보강만 넣어요. 그날 하나만 들어가고, 같은 요일·시각을 매주 막지 않아요.</p>
+          <p className="mb-2 text-[13px] text-[#6b6880]">앞으로 잡힌 보강만. 그날 하나만 막아요.</p>
           <div className="grid gap-3">
             {d.makeups.map((m, i) => (
               <div key={i} className="grid gap-2 rounded-[12px] border border-[#e6e3ef] p-3">
@@ -307,9 +309,6 @@ export default function ImportStudent({ nowIso, demo, tutors, save }: Props) {
               {makeups.length > 0 && ` + 보강 ${makeups.length}회`}
             </dd>
           </dl>
-          {regular.length > 0 && regular[0].date !== d.fromDate && (
-            <p className="mt-2 text-[12.5px] text-[#6b6880]">시작일은 수업 요일이 아니라 첫 수업이 {dayLabel(regular[0].date)}이에요.</p>
-          )}
 
           {tried && blockers.length > 0 && (
             <ul className="mt-3 grid gap-1 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
@@ -320,15 +319,14 @@ export default function ImportStudent({ nowIso, demo, tutors, save }: Props) {
           )}
           {issues.length > 0 && (
             <div className="mt-3 rounded-[10px] bg-[#fdecec] px-3 py-2.5 text-[13.5px] text-[#b3261e]">
-              <b>일정 충돌 {issues.length}건 — 이대로는 저장할 수 없어요.</b>
+              <b>일정 충돌 {issues.length}건 · 저장 안 됨</b>
               {issueList(issues.map((x) => ({ date: x.lesson.date, time: x.lesson.time, kind: x.lesson.kind, reason: x.reason, other: x.other })))}
-              <p className="mt-1.5 text-[12.5px] text-[#6b6880]">시트의 실제 시간표와 다르면 시트를 먼저 확인해 주세요. 상대 학생 시간표가 틀렸다면 그 학생부터 고쳐요.</p>
             </div>
           )}
 
           {result?.kind === 'error' && (
             <div className="mt-3 rounded-[10px] bg-[#fdecec] px-3 py-2.5 text-[13.5px] text-[#b3261e]">
-              저장하지 못했어요 — 아무것도 저장되지 않았어요. {result.message}
+              <b>저장 안 됨</b> · {result.message}
               {result.conflicts && issueList(result.conflicts.map((c: ImportConflict) => ({ ...c, kind: c.kind === 'regular' ? 'regular' : 'makeup' })))}
             </div>
           )}
