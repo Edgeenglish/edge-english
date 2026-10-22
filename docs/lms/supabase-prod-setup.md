@@ -5,7 +5,14 @@
 - Claude는 운영 프로젝트의 **Secret key·DB 비밀번호를 받지 않는다.** 표 만들기·변경은 대표가 SQL Editor에서 실행 (A32와 같은 방식).
 - 대표 안내는 **복사 버튼 페이지**로 (2026-10-22 합의). 페이지: 아래 '복사 버튼 페이지' 참고.
 
-## 0. 먼저 정할 것 (대표) — D-6 요금제
+## 0. 요금제 — ✅ 결정 (2026-10-22 대표, 정책 원본 A40)
+
+- **운영 프로젝트는 Free로 시작, 새 무료 조직 `EdgeEnglish LMS` 에 만든다.** 시험용은 지금 무료 조직 그대로
+- 무료 기간: 대표가 **매주 1회 + 운영 DB 변경 직전** 직접 백업 (아래 2절)
+- **Pro 전환 시점 = 시트 대신 LMS에만 기록하기 시작하는 날.** 운영 조직만 Pro로 바꿈(프로젝트 다시 만들 필요 없음). Claude가 그 시점이 오면 먼저 알림
+
+아래는 결정 때 비교한 내용:
+
 
 2026-10-22 확인한 내용 (Supabase 공식 문서·요금 페이지 검색 결과. Claude 작업 환경에서 supabase.com 직접 열기는 막혀 있어 검색 요약으로 확인 → 결제 전 대표가 요금 페이지에서 한 번 더 확인):
 
@@ -26,7 +33,7 @@
 | 순서 | 어디서 | 하는 것 | 정상 결과 |
 |---|---|---|---|
 | 0 | 시험용 SQL Editor | migration 1100(복구 안전장치) + 프로젝트 이름 `edgeenglish-lms-test` (페이지 1번, 기존 데이터 그대로) | `edgeenglish-lms-test · 6` 한 줄 |
-| 1 | supabase.com | (Pro면) 새 조직 `EdgeEnglish LMS` 만들고 Pro 선택 → New project: 이름 `edgeenglish-lms`, 지역 **Northeast Asia (Seoul)**, DB 비밀번호는 **Generate** 로 만들어 대표 비밀번호 관리 앱에만 저장 (Claude에게 주지 않음). Data API 켜 둠 | 프로젝트 생성 (2~3분) |
+| 1 | supabase.com | 새 조직 `EdgeEnglish LMS` 만들고 **Free** 선택 → 그 조직에서 New project: 이름 `edgeenglish-lms`, 지역 **Northeast Asia (Seoul)**, DB 비밀번호는 **Generate** 로 만들어 대표 비밀번호 관리 앱에만 저장 (Claude에게 주지 않음). Data API 켜 둠 | 프로젝트 생성 (2~3분) |
 | 2 | SQL Editor | `prod-setup/00-empty-check.sql` | 표_개수 **0** (41이면 시험용에 들어온 것 — 멈춤) |
 | 3 | SQL Editor | `prod-setup/01-schema.sql` (마이그레이션 000~1100 묶음 + 프로젝트 이름 `edgeenglish-lms`, 가상 데이터 없음) | Success. No rows returned |
 | 4 | SQL Editor | `prod-setup/02-check.sql` (읽기만) | 8줄 모두 **통과** |

@@ -28,7 +28,8 @@ select name as 프로젝트_이름, (select count(*) from students) as 학생수
   const steps = [
     step('먼저 시험용 DB에 복구 안전장치', `<p class="expect">붙여 넣는 곳: 프로젝트 <b>edgeenglish-lms-test</b> → SQL Editor → New query → Run.<br>정상: <b>edgeenglish-lms-test · 6</b> 한 줄. 기존 데이터는 그대로예요. 문제 없으면 바로 2번으로</p>`, guardTest),
     step('프로젝트 만들기', `<ol>
-      <li>(Pro로 정했으면) 왼쪽 위 조직 메뉴 → <b>New organization</b> → 이름 <code>EdgeEnglish LMS</code> → 요금제 <b>Pro</b>. 시험용 조직은 그대로 둠</li>
+      <li>왼쪽 위 조직 메뉴 → <b>New organization</b> → 이름 <code>EdgeEnglish LMS</code> → 요금제 <b>Free</b> (대표 결정 A40). 시험용 조직은 그대로 둠</li>
+      <li>방금 만든 <b>EdgeEnglish LMS</b> 조직 안에서 다음 단계 진행</li>
       <li><b>New project</b> → 이름 <code>edgeenglish-lms</code> · 지역 <b>Northeast Asia (Seoul)</b></li>
       <li>Database password → <b>Generate</b> → 비밀번호 관리 앱에만 저장 (Claude에게 보내지 않음)</li>
       <li>Data API는 켜 둔 채로 <b>Create</b> → 2~3분 기다림</li></ol>`),
@@ -84,12 +85,12 @@ textarea { width:100%; box-sizing:border-box; margin-top:8px; border:1px solid v
 <div class="wrap">
   <h1>운영 DB 만들기 · edgeenglish-lms</h1>
   <p class="lead">번호 순서대로. 약 20분, PC 권장. 1번만 시험용(edgeenglish-lms-test)에서, 나머지는 새 운영 프로젝트에서 해요.</p>
-  <p class="note">시작 전: 요금제(Free / Pro)를 채팅에서 먼저 정해 주세요. 운영 DB에는 가상 데이터를 넣지 않고, 실제 학생 입력·홈페이지 연결은 다음 단계예요.</p>
+  <p class="note">요금제는 Free로 시작해요. 시트 대신 LMS에만 기록하는 날 Pro로 바꿔요 (Claude가 먼저 알려 드려요). 운영 DB에는 가상 데이터를 넣지 않고, 실제 학생 입력·홈페이지 연결은 다음 단계예요.</p>
   ${steps.join('\n  ')}
   <p class="note">오류가 나면 오류 첫 줄만 Claude에게 보내 주세요. 1·4번은 한 묶음이라 오류가 나면 아무것도 바뀌지 않아요.</p>
 
   <h3>운영 DB를 바꾸기 직전 — 매번 백업</h3>
-  <p class="lead">읽기만 하는 SQL이에요. 데이터를 바꾸지 않아요.</p>
+  <p class="lead">무료 요금제 동안 <b>매주 1회</b> + DB를 바꾸기 직전에 받아요. 읽기만 하는 SQL이라 데이터를 바꾸지 않아요.</p>
   <section class="step">
   <h2><span class="n">B</span>직접 백업 받기</h2>
   <ol>
