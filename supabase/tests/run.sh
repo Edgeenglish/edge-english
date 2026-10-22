@@ -31,3 +31,33 @@ OUT="$("${RUN_AS[@]}" psql -h "$WORK" -U postgres -d postgres -q -f "$ROOT/supab
 echo "$OUT" | sed -n 's/^.*ERROR:  //p; /^[-(참실]/p; /^$/d'
 echo "$OUT" | grep -q 'AUTHZ-PROBE 결과: 모두 통과' || { echo "❌ 로그인 사용자 권한 점검 실패"; exit 1; }
 echo "✅ 로그인 사용자 권한 점검 통과"
+
+# 운영 DB 표 만들기 파일(supabase/prod-setup) 점검: 빈 DB에 한 묶음으로 실행 → 확인 모두 통과, 두 번째 실행은 안전장치로 멈춤
+"${PSQL[@]}" -c "create database prod"
+PROD=("${RUN_AS[@]}" psql -h "$WORK" -U postgres -d prod -v ON_ERROR_STOP=1 -q)
+cp "$ROOT"/supabase/prod-setup/*.sql "$ROOT"/supabase/backup/backup.sql "$WORK"/; chmod a+r "$WORK"/*.sql
+"${PROD[@]}" -f "$HERE/stub_supabase.sql"
+[ "$("${PROD[@]}" -tA -f "$WORK/00-empty-check.sql")" = "0" ] || { echo "❌ 빈 DB 확인 실패"; exit 1; }
+"${PROD[@]}" -o /dev/null -f "$WORK/01-schema.sql"
+CHECK="$("${PROD[@]}" -tA -f "$WORK/02-check.sql")"
+echo "$CHECK" | grep -v '|통과$' && { echo "❌ 운영 DB 확인 실패"; exit 1; }
+AGAIN="$("${PROD[@]}" -o /dev/null -f "$WORK/01-schema.sql" 2>&1 || true)"
+echo "$AGAIN" | grep -q '멈춤: public 에 이미 표가 있습니다' || { echo "❌ 두 번째 실행 안전장치 없음"; exit 1; }
+"${PROD[@]}" -c "create table auth.users (id uuid primary key, email text)" \
+  -c "insert into auth.users values ('00000000-0000-4000-8000-0000000000aa', 'Support@EdgeEnglish.kr')"
+"${PROD[@]}" -o /dev/null -f "$WORK/03-owner.sql"; "${PROD[@]}" -o /dev/null -f "$WORK/03-owner.sql"
+[ "$("${PROD[@]}" -tA -c "select count(*) from app_users where role = 'admin' and admin_level = 'owner'")" = "1" ] || { echo "❌ 대표 계정 연결 실패"; exit 1; }
+echo "✅ 운영 DB 표 만들기 파일 점검 통과 (확인 $(echo "$CHECK" | wc -l)줄 통과)"
+
+# 백업 → 복구 왕복: 가상 데이터가 든 DB를 백업 → 운영형 DB(대표 계정만 있음)에 복구 → 다시 백업해 표별 내용이 같은지
+"${PSQL[@]}" -c "create table if not exists auth.users (id uuid primary key, email text)"
+"${RUN_AS[@]}" psql -h "$WORK" -U postgres -d postgres -v ON_ERROR_STOP=1 -q --csv -f "$WORK/backup.sql" > "$WORK/bk1.csv"
+node "$ROOT/scripts/lms-restore-sql.mjs" "$WORK/bk1.csv" > "$WORK/restore.sql"; chmod a+r "$WORK/restore.sql"
+RESTORE="$("${PROD[@]}" -tA -f "$WORK/restore.sql")"
+echo "$RESTORE" | grep -q '|다름$' && { echo "$RESTORE"; echo "❌ 복구 행 수 다름"; exit 1; }
+"${PROD[@]}" --csv -f "$WORK/backup.sql" > "$WORK/bk2.csv"
+node "$HERE/backup-compare.mjs" "$WORK/bk1.csv" "$WORK/bk2.csv"
+# 복구 뒤에도 보호 장치가 다시 켜졌는지 (변경 이력은 지울 수 없음)
+DEL="$("${PROD[@]}" -c "delete from audit_log where id = (select min(id) from audit_log)" 2>&1 || true)"
+echo "$DEL" | grep -q '삭제할 수 없습니다' || { echo "❌ 복구 뒤 보호 트리거가 꺼져 있음"; exit 1; }
+echo "✅ 백업 → 복구 왕복 통과"
