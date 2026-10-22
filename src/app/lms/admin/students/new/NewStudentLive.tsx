@@ -2,7 +2,8 @@
 
 // 실제 데이터(시험용 Supabase)로 신규 학생 등록. 화면에서 막는 것은 편의이고, 권한은 DB가 확인 (is_admin = aal2)
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { planActions } from '@/lms/admin/confirm-live';
 import { loadRegTutors, saveRegistration, studentsWithEmail } from '@/lms/admin/registration-live';
 import type { RegTutor } from '@/lms/admin/registration';
 import { supabaseBrowser } from '@/lms/auth/client';
@@ -30,6 +31,7 @@ export default function NewStudentLive() {
     })();
   }, [sb]);
 
+  const actions = useMemo(() => (sb ? planActions(sb) : undefined), [sb]);
   const sameEmail = useCallback((email: string) => (sb ? studentsWithEmail(sb, email) : Promise.resolve([])), [sb]);
 
   if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;
@@ -43,6 +45,7 @@ export default function NewStudentLive() {
       tutors={state.tutors}
       save={(id, payload) => saveRegistration(sb!, id, payload)}
       sameEmail={sameEmail}
+      planActions={actions}
     />
   );
 }

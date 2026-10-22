@@ -5,6 +5,7 @@
 // 자동 처리로 완료가 확인된 업무는 목록에서 빠진다 (사람이 닫지 않아도 됨). 단순 정보는 여기 넣지 않는다.
 
 import { formatInZone, hoursBetween } from '../rules/dates';
+import { firstLessonAt, planAlert, type PlanView } from './confirm';
 
 export type MatchingTask = {
   kind: 'new_student_matching';
@@ -16,6 +17,8 @@ export type MatchingTask = {
   tutorName: string | null;
   tutorAssignedAt: Date | null;
   studentNotifiedAt: Date | null;
+  /** 강사 답 대기·확정 일정안 (H22). 없으면 아직 강사·시간을 안 고름 */
+  plan?: PlanView | null;
 };
 
 export type RenewalTask = {
@@ -139,6 +142,10 @@ export type BoardItem = {
   due: string | null;
   steps: { key: StepKey; label: string; done: boolean }[];
   actions: { key: string; label: string; primary?: boolean; danger?: boolean }[];
+  /** 신규 매칭의 일정안 — 화면이 PlanCard(확정·안내 복사)로 그림 */
+  plan?: PlanView;
+  /** 첫 수업 24시간 안인데 안내 미완료 → 목록 맨 위 (D-51-3) */
+  top?: boolean;
 };
 
 const KST = 'Asia/Seoul';
@@ -172,6 +179,7 @@ export function dueText(dueAt: Date, now: Date): string {
 function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' | 'studentCode' | 'searchText'> {
   switch (t.kind) {
     case 'new_student_matching': {
+      if (t.plan) return planItem(t, t.plan, now);
       const steps = [
         { key: 'assign_tutor' as const, label: t.tutorName ? `강사 배정 · ${t.tutorName}` : '강사 배정', done: !!t.tutorAssignedAt },
         { key: 'notify_student' as const, label: '학생에게 강사·첫 수업 안내', done: !!t.studentNotifiedAt },
@@ -294,6 +302,31 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
   }
 }
 
+/** 일정안이 있는 신규 매칭 (D-51-3 경고 시각). 버튼은 PlanCard 가 그림 */
+function planItem(t: MatchingTask, p: PlanView, now: Date): Omit<BoardItem, 'category' | 'error' | 'studentCode' | 'searchText'> {
+  const alert = planAlert(p, now);
+  const tutorUnsent = p.tutorNotice?.status !== 'sent';
+  const studentUnsent = p.studentNotice?.status !== 'sent';
+  const tag =
+    p.state === 'proposed'
+      ? alert === 'no_reply' ? '강사 답 확인 필요' : '강사 답 대기'
+      : tutorUnsent && studentUnsent ? '양쪽 안내 안 함' : tutorUnsent ? '강사 안내 안 함' : '학생 안내 안 함';
+  const first = firstLessonAt(p);
+  return {
+    id: t.id,
+    kind: t.kind,
+    severity: alert === 'top' || alert === 'urgent' || alert === 'check' ? 'urgent' : alert === 'no_reply' ? 'due_soon' : p.state === 'proposed' ? dueSeverity(t.dueAt, now) : 'open',
+    tag,
+    title: `${t.studentName}${p.studentPlace ? ` · ${p.studentPlace.split(' ')[0]}` : ''}`,
+    detail: `${p.tutorName}${first ? ` · 첫 수업 ${kstLabel(first)}` : ''}`,
+    due: p.state === 'proposed' ? dueText(t.dueAt, now) : alert === 'top' ? '첫 수업 24시간 안 — 지금 보내 주세요' : null,
+    steps: [],
+    actions: [],
+    plan: p,
+    top: alert === 'top',
+  };
+}
+
 function sortKey(t: TaskSource): number {
   switch (t.kind) {
     case 'new_student_matching':
@@ -320,7 +353,7 @@ export function buildBoard(tasks: TaskSource[], now: Date): BoardItem[] {
       const searchText = [base.tag, base.title, base.detail, studentCode, 'tutorName' in t ? t.tutorName : null].filter(Boolean).join(' ').toLowerCase();
       return { t, item: { ...base, category: categoryOf(t.kind), error: isError(t.kind), studentCode, searchText } };
     })
-    .sort((a, b) => SEVERITY_RANK[a.item.severity] - SEVERITY_RANK[b.item.severity] || sortKey(a.t) - sortKey(b.t))
+    .sort((a, b) => Number(!!b.item.top) - Number(!!a.item.top) || SEVERITY_RANK[a.item.severity] - SEVERITY_RANK[b.item.severity] || sortKey(a.t) - sortKey(b.t))
     .map((x) => x.item);
 }
 

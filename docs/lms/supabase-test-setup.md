@@ -321,3 +321,31 @@ where s.email like 'reg%@example.com' order by s.code;
 | `supabase/migrations/20261016000600_lms_supabase_hardening.sql` | Supabase 기본 권한 정리: 로그인 안 한 사용자는 LMS 함수·학생 번호를 못 씀 |
 | `supabase/migrations/20261016000700_lms_authz_hardening.sql` | 권한 정리 2차: 동의 현황 보기·이력 번호 시퀀스·내부 함수에 남은 앱 사용자 권한 회수, 앞으로 만드는 표·시퀀스 자동 공개 막기 |
 | `supabase/tests/stub_supabase.sql` | 로컬 검증용 Supabase 흉내 — 2026-10-17부터 **Supabase 기본 권한(자동 공개)까지 재현**해서 실물과 같은 조건으로 시험 |
+
+## migration 1000 — 신규 배정 확정 (2026-10-22, H22·A39·D-51)
+
+- 파일: `migrations/20261021001000_lms_schedule_confirm.sql`. 하는 일: 일정안 `schedule_plans`·최종 안내 `schedule_notices` 표, 확정·기록 함수 5개, `admin_register_student` 교체(강사·시간을 고르면 일정안으로 저장, 강사 '가능'이면 확정까지), 신규 매칭 업무는 강사 안내 기록 없이 완료 불가. **기존 표·데이터를 지우지 않음**(DROP·DELETE 없음). 두 번 실행해도 같은 결과.
+- **적용 전에는 새 등록 화면을 쓰지 말 것** (예전 함수는 '아직 → 제안' 을 눌러도 수업을 바로 만듦)
+- 로컬 확인: `npm run test:db` (H22 필수 검증 포함) 통과
+
+**적용 순서 (대표, PC 권장, 약 5분)** — GitHub 브랜치 `claude/amazing-johnson-fffphy` 에서 파일 열기 → **Raw** → 전체 선택 → 복사 → Supabase → edgeenglish-lms-test → **SQL Editor** → **New query** → 붙여 넣기 → **Run**
+
+| 순서 | 실행할 것 | 정상 결과 |
+|---|---|---|
+| ① | `select count(*) as 학생수 from students;` | **6** (다르면 멈추고 Claude에게) |
+| ② | `supabase/migrations/20261021001000_lms_schedule_confirm.sql` | "Success. No rows returned" |
+| ③ | `supabase/test-setup/d51-check.sql` (읽기만) | 6줄 모두 **'통과'** |
+| ④ | `supabase/test-setup/authz-probe.sql` | 첫 줄 `AUTHZ-PROBE 결과: 모두 통과` (일부러 오류로 되돌림 — 정상) |
+
+문제 없으면 바로 실제 화면 시험: Vercel Preview(브랜치 `claude/amazing-johnson-fffphy`) → `/lms/login` → `/lms/admin/students/new` (`?demo=1` 없이). 이름은 **'가상'으로 시작**, 이메일 `@example.com`.
+
+| 시험 | 하는 것 | 통과 기준 |
+|---|---|---|
+| A. 제안 | `가상확정일`, 4주·주2회·50분, 결제 확인, 가상강사 Alex, 빈 칸 2개 → 최종 확인에서 **[아직 → 제안 문구 복사]** | '강사 답 대기' 카드, 메모장에 붙여 보면 영어 제안 문구 |
+| B. 확정 | 홈 `/lms/admin` → 가상확정일 카드 **[가능하대요 → 확정]** | 카드가 강사·학생 두 줄(안 보냄)로 바뀜 |
+| C. 한쪽만 | **학생 줄만 [복사]** | 학생 '보냄', 카드는 '강사 안내 안 함'으로 남음 |
+| D. 양쪽 | 강사 줄 [복사] | 카드가 처리할 일에서 사라짐 |
+| E. 한 번에 확정 | `가상확정이`로 다시 등록 → **[가능하대요 → 확정]** | 같은 화면에 두 줄(안 보냄) |
+
+오류가 나면 오류 첫 줄만 Claude에게.
+

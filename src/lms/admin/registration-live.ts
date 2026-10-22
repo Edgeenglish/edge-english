@@ -63,8 +63,27 @@ export async function saveRegistration(sb: SupabaseClient, requestId: string, pa
     if (error.code === '42501') return { kind: 'error' as const, message: '운영자 추가 인증(TOTP)이 필요해요. 다시 로그인해 주세요.' };
     return { kind: 'error' as const, message: error.message };
   }
-  const r = data as { student_code: string; lessons: number; status: string; repeated?: boolean };
-  return { kind: 'saved' as const, studentCode: r.student_code, lessons: r.lessons, status: r.status, repeated: !!r.repeated };
+  const r = data as {
+    student_code: string;
+    lessons: number;
+    status: string;
+    repeated?: boolean;
+    plan_id?: string | null;
+    plan_state?: 'proposed' | 'confirmed' | null;
+    tutor_notice_id?: string | null;
+    student_notice_id?: string | null;
+  };
+  return {
+    kind: 'saved' as const,
+    studentCode: r.student_code,
+    lessons: r.lessons,
+    status: r.status,
+    repeated: !!r.repeated,
+    planId: r.plan_id ?? null,
+    planState: r.plan_state ?? null,
+    tutorNoticeId: r.tutor_notice_id ?? null,
+    studentNoticeId: r.student_notice_id ?? null,
+  };
 }
 
 export async function studentsWithEmail(sb: SupabaseClient, email: string) {

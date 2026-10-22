@@ -759,9 +759,12 @@ select pg_temp.expect_error($$select admin_propose_schedule(gen_random_uuid(), p
 select pg_temp.ok(true, '결제 확인 전 등록에는 강사 제안도 불가');
 
 -- 5) 자동 발송기(나중): 실패한 쪽만 다시, 성공은 덮지 않음, 결과 불명확은 자동 재시도 안 함
-select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000001005',
-  pg_temp.body('자동', 'c3@x.kr', 4, 1, 50, '2027-06-08', '55555555-0000-0000-0000-000000001000', '[{"weekday":2,"time":"07:00"}]', true)) ->> 'plan_state') = 'confirmed',
-  '강사가 이미 가능하다고 답했으면 등록 저장 한 번으로 확정까지');
+create temp table t_c3 as select pg_temp.reg('90000000-0000-0000-0000-000000001005',
+  pg_temp.body('자동', 'c3@x.kr', 4, 1, 50, '2027-06-08', '55555555-0000-0000-0000-000000001000', '[{"weekday":2,"time":"07:00"}]', true)) as r;
+select pg_temp.ok((select r ->> 'plan_state' = 'confirmed'
+                          and (r ->> 'tutor_notice_id')::uuid = (pg_temp.notice('c3@x.kr', 'tutor')).id
+                          and (r ->> 'student_notice_id')::uuid = (pg_temp.notice('c3@x.kr', 'student')).id from t_c3),
+  '강사가 이미 가능하다고 답했으면 등록 저장 한 번으로 확정까지, 결과에 안내 2건 번호');
 select pg_temp.expect_error($$select lms_notice_result((pg_temp.notice('c3@x.kr', 'tutor')).id, 'sent', null)$$, 'permission|42501');
 select pg_temp.ok(true, '앱 사용자는 발송 결과를 직접 기록할 수 없음 (서버만)');
 reset role;

@@ -3,9 +3,10 @@
 // 운영자 확인 후 실제 데이터로 대시보드 표시
 // 화면에서 막는 것은 편의일 뿐, 실제로는 DB가 막는다 (is_admin 은 aal2 에서만 참 — migration 800)
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { TaskSource } from '@/lms/admin/board';
 import type { FakeLesson, OpsStats } from '@/lms/admin/fake-data';
+import { planActions } from '@/lms/admin/confirm-live';
 import { loadAdminBoard, loadOpsStats } from '@/lms/admin/live';
 import { supabaseBrowser } from '@/lms/auth/client';
 import AdminDashboard from './AdminDashboard';
@@ -15,6 +16,15 @@ type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 
 export default function AdminLive() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const sb = supabaseBrowser();
+  const actions = useMemo(() => (sb ? planActions(sb) : undefined), [sb]);
+
+  // 처리 뒤 다시 읽기 (화면 깜빡임 없이 목록만 바꿈)
+  async function reload() {
+    if (!sb) return;
+    const now = new Date();
+    const board = await loadAdminBoard(sb, now);
+    setState((s) => (s.kind === 'ready' ? { ...s, nowIso: now.toISOString(), ...board } : s));
+  }
 
   useEffect(() => {
     if (!sb) {
@@ -52,5 +62,16 @@ export default function AdminLive() {
         </button>
       </div>
     );
-  return <AdminDashboard nowIso={state.nowIso} today={state.today} tasks={state.tasks} stats={state.stats} preview={false} onLogout={logout} />;
+  return (
+    <AdminDashboard
+      nowIso={state.nowIso}
+      today={state.today}
+      tasks={state.tasks}
+      stats={state.stats}
+      preview={false}
+      onLogout={logout}
+      planActions={actions}
+      onReload={reload}
+    />
+  );
 }

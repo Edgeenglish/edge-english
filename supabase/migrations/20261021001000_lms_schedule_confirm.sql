@@ -172,6 +172,16 @@ begin
 end $$;
 revoke all on function lms_new_plan(uuid, uuid, uuid, jsonb, date, uuid) from public, anon, authenticated;
 
+-- 확정 결과에 안내 2건의 번호를 붙여 화면이 바로 [복사]를 기록할 수 있게
+create or replace function lms_plan_notice_ids(p_plan_id uuid)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'tutor_notice_id', (select id from schedule_notices where plan_id = p_plan_id and recipient_kind = 'tutor'),
+    'student_notice_id', (select id from schedule_notices where plan_id = p_plan_id and recipient_kind = 'student'))
+$$;
+revoke all on function lms_plan_notice_ids(uuid) from public, anon, authenticated;
+
 -- 확정 (내부): 정규 일정·수업 + 양쪽 최종 안내 2건을 한 트랜잭션으로. 이미 확정이면 그대로 돌려줌
 create or replace function lms_confirm_plan(p_plan_id uuid, p_me uuid)
 returns jsonb
@@ -189,7 +199,8 @@ begin
   if not found then raise exception '일정안이 없습니다.'; end if;
   if pl.state = 'confirmed' then
     return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', 'confirmed', 'repeated', true,
-                              'lessons', (select count(*) from lessons where enrollment_id = pl.enrollment_id and kind = 'regular'));
+                              'lessons', (select count(*) from lessons where enrollment_id = pl.enrollment_id and kind = 'regular'))
+           || lms_plan_notice_ids(pl.id);
   end if;
   if pl.state <> 'proposed' then raise exception '닫힌 일정안(%)은 확정할 수 없습니다.', pl.state; end if;
   perform lms_check_plan_shape(pl.enrollment_id, pl.tutor_id, pl.slots, pl.start_date);
@@ -229,7 +240,7 @@ begin
   update admin_tasks set tutor_id = pl.tutor_id, tutor_assigned_at = now()
   where kind = 'new_student_matching' and enrollment_id = e.id and status = 'open';
 
-  return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', 'confirmed', 'lessons', n);
+  return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', 'confirmed', 'lessons', n) || lms_plan_notice_ids(pl.id);
 end $$;
 revoke all on function lms_confirm_plan(uuid, uuid) from public, anon, authenticated;
 
@@ -523,7 +534,8 @@ begin
                             'status', case when v_paid then 'confirmed' else 'pending_payment' end,
                             'plan_id', plan_id,
                             'plan_state', case when plan_id is null then null when conf is null then 'proposed' else 'confirmed' end,
-                            'lessons', coalesce((conf ->> 'lessons')::int, 0), 'start_date', v_start, 'end_date', v_end);
+                            'lessons', coalesce((conf ->> 'lessons')::int, 0), 'start_date', v_start, 'end_date', v_end,
+                            'tutor_notice_id', conf ->> 'tutor_notice_id', 'student_notice_id', conf ->> 'student_notice_id');
   insert into registration_requests (id, created_by, student_id, enrollment_id, result)
   values (p_request_id, me, sid, eid, res);
   return res;

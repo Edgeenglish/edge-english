@@ -4,10 +4,13 @@
 // 2026-10-18 대표 반영: 운영 현황 3 + 처리할 일 요약 5(누르면 필터) + 필터(전체·긴급·오류만). 한 업무는 요약 한 칸·목록 한 줄에만 (중복 없음)
 // 미리보기(preview)에서는 버튼을 눌러도 화면 안에서만 바뀌고 저장·발송하지 않는다.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, searchBoard, type BoardFilter, type BoardItem, type Category, type Severity, type TaskSource } from '@/lms/admin/board';
 import { fakeTasks, type FakeLesson, type OpsStats } from '@/lms/admin/fake-data';
+import type { PlanView } from '@/lms/admin/confirm';
+import type { PlanActions } from '@/lms/admin/confirm-live';
+import PlanCard, { type PlanHandlers } from './PlanCard';
 import { AdminHeader, BottomNav, Icon, type IconName } from './ui';
 
 const CATEGORY_ICON: Record<Category, IconName> = { matching: 'userPlus', tutor_ack: 'clock', ending: 'hourglass', makeup: 'repeat', issue: 'alert' };
@@ -80,6 +83,8 @@ export default function AdminDashboard({
   tasks: liveTasks,
   stats,
   onLogout,
+  planActions,
+  onReload,
 }: {
   nowIso: string;
   today: FakeLesson[];
@@ -89,9 +94,16 @@ export default function AdminDashboard({
   /** 운영 현황 3개 (없으면 '—') */
   stats?: OpsStats | null;
   onLogout?: () => void;
+  /** 실제 데이터: 일정안 확정·안내 기록 (DB 함수). 처리 뒤 onReload 로 다시 읽음 */
+  planActions?: PlanActions;
+  onReload?: () => Promise<void>;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [tasks, setTasks] = useState<TaskSource[]>(() => liveTasks ?? fakeTasks(now));
+  // 실제 데이터: 처리 뒤 다시 읽은 목록으로 바꿈
+  useEffect(() => {
+    if (liveTasks) setTasks(liveTasks);
+  }, [liveTasks]);
   const [toast, setToast] = useState<string | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const items = useMemo(() => buildBoard(tasks, now), [tasks, now]);
@@ -102,6 +114,57 @@ export default function AdminDashboard({
   const urgentCount = items.filter(isUrgent).length;
   const errorCount = items.filter((i) => i.error).length;
   const dateLabel = `${now.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' })} (${WD[new Date(now.getTime() + 9 * 3600e3).getUTCDay()]})`;
+
+  // 일정안 카드 처리: 미리보기는 화면 안에서만, 실제는 DB 함수 → 다시 읽기
+  function planHandlers(item: BoardItem, p: PlanView): PlanHandlers {
+    const patch = (f: (p: PlanView) => PlanView | null) =>
+      setTasks((prev) =>
+        prev.flatMap((t) => {
+          if (t.id !== item.id || t.kind !== 'new_student_matching' || !t.plan) return [t];
+          const next = f(t.plan);
+          return next ? [{ ...t, plan: next }] : [];
+        }),
+      );
+    const live = async (f: (a: PlanActions) => Promise<unknown>, msg: string) => {
+      if (!planActions) return;
+      await f(planActions);
+      await onReload?.();
+      setToast(msg);
+    };
+    const now = () => new Date();
+    if (!preview && planActions)
+      return {
+        confirm: () => live((a) => a.confirm(p.planId), '확정했어요. 강사·학생에게 안내 문구를 보내 주세요.'),
+        decline: () => live((a) => a.decline(p.planId), '이 안을 닫았어요. 다른 강사·시간으로 다시 제안해 주세요.'),
+        proposalCopied: () => live((a) => a.proposalSent(p.planId), '제안 문구를 복사했어요. WhatsApp에 붙여 보내 주세요.'),
+        noticeCopied: (who) => {
+          const n = who === 'tutor' ? p.tutorNotice : p.studentNotice;
+          return n ? live((a) => a.noticeSent(n.id), `${who === 'tutor' ? '강사' : '학생'} 안내 문구를 복사했어요. 붙여 보내 주세요.`) : Promise.resolve();
+        },
+      };
+    const preview_ = async (f: (p: PlanView) => PlanView | null, msg: string) => {
+      patch(f);
+      setToast(`${msg} (미리보기: 실제 저장·발송 없음)`);
+    };
+    return {
+      confirm: () =>
+        preview_(
+          (x) => ({ ...x, state: 'confirmed', confirmedAt: now(), tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null }, studentNotice: { id: 'pv-s', status: 'pending', sentAt: null } }),
+          '확정했어요. 강사·학생에게 안내 문구를 보내 주세요.',
+        ),
+      decline: () => preview_(() => null, '이 안을 닫았어요.'),
+      proposalCopied: () => preview_((x) => ({ ...x, proposalSentAt: x.proposalSentAt ?? now() }), '제안 문구를 복사했어요.'),
+      noticeCopied: async (who) => {
+        const sent = (n: PlanView['tutorNotice']) => (n && n.status !== 'sent' ? { ...n, status: 'sent' as const, sentAt: now() } : n);
+        const next = who === 'tutor' ? { ...p, tutorNotice: sent(p.tutorNotice) } : { ...p, studentNotice: sent(p.studentNotice) };
+        if (next.tutorNotice?.status === 'sent' && next.studentNotice?.status === 'sent') {
+          setTasks((prev) => prev.filter((t) => t.id !== item.id));
+          setDoneCount((c) => c + 1);
+          setToast('양쪽 안내를 마쳐서 매칭 업무가 끝났어요. (미리보기: 실제 저장·발송 없음)');
+        } else await preview_(() => next, `${who === 'tutor' ? '강사' : '학생'} 안내 문구를 복사했어요.`);
+      },
+    };
+  }
 
   function act(item: BoardItem, key: string) {
     if (!preview) {
@@ -150,7 +213,7 @@ export default function AdminDashboard({
 
       {!preview && (
         <p className="mx-4 mt-3 rounded-[10px] bg-[#e3f5ea] px-3 py-2 text-[13px] text-[#13623a] lg:mx-7">
-          시험용 DB의 실제 데이터예요 (가상 학생). 지금은 보기만 되고, 처리 버튼은 서버 저장 기능을 만든 뒤 연결돼요.
+          시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·안내 복사)은 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.
         </p>
       )}
       {preview && (
@@ -282,6 +345,7 @@ export default function AdminDashboard({
                   ))}
                 </ul>
               )}
+              {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
               <div className="flex flex-wrap gap-1.5">
                 {item.actions.map((a) => (
                   <button

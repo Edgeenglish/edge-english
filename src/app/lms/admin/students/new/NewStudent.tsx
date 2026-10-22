@@ -33,10 +33,23 @@ import {
 import { dayLabel, diffFromKst, weekOf, WEEKDAY_KO } from '@/lms/admin/schedule';
 import { eunNeun, findCity, findCountry, manyZones, searchCities, searchCountries, searchZones, suggestTimezone, zoneName } from '@/lms/admin/places';
 import { AdminHeader } from '../../ui';
+import { proposalMessage, type PlanView } from '@/lms/admin/confirm';
+import type { PlanActions } from '@/lms/admin/confirm-live';
+import PlanCard, { TimeRows, type PlanHandlers } from '../../PlanCard';
 import { Badge, Card, EMPTY_FILTER, Field, inputCls, Legend, nowLocal, ProfileSheet, SearchPick, slotLocal, slotText, TutorPicker, WeekCalendar, wishWindows, type TutorFilter } from './parts';
 
 export type SaveResult =
-  | { kind: 'saved'; studentCode: string; lessons: number; status: string; repeated: boolean }
+  | {
+      kind: 'saved';
+      studentCode: string;
+      lessons: number;
+      status: string;
+      repeated: boolean;
+      planId: string | null;
+      planState: 'proposed' | 'confirmed' | null;
+      tutorNoticeId: string | null;
+      studentNoticeId: string | null;
+    }
   | { kind: 'preview' }
   | { kind: 'error'; message: string; conflicts?: { date: string; time: string; reason: string }[] };
 
@@ -48,6 +61,8 @@ type Props = {
   tutors: RegTutor[];
   save: (requestId: string, payload: ReturnType<typeof savePayload>) => Promise<SaveResult>;
   sameEmail: (email: string) => Promise<{ code: string; name_ko: string }[]>;
+  /** 실제 데이터: 일정안 제안 보냄·확정·안내 보냄 기록 (DB 함수). 미리보기는 없음 → 화면 안에서만 */
+  planActions?: PlanActions;
 };
 
 const STEPS = ['학생 정보\n(신청서 불러오기)', '강사 & 스케줄 선택', '수업 정보 & 결제 확인', '최종 확인'];
@@ -64,7 +79,7 @@ const product = (d: Draft) => (d.durationMin && d.weeklyCount && d.weeks ? `${d.
 // 수강 기간: 3개월(12주) · 84일 (POL-PER-01 '1개월 = 4주 기준', 계산은 28일 단위 그대로)
 const termText = (weeks: number) => `${courseName(weeks)} · ${weeks * 7}일`;
 
-export default function NewStudent({ nowIso, demo, applications, applicationsNote, tutors, save, sameEmail }: Props) {
+export default function NewStudent({ nowIso, demo, applications, applicationsNote, tutors, save, sameEmail, planActions }: Props) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const today = instantToKstDate(now);
   const [step, setStep] = useState(1);
@@ -81,6 +96,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   const [requestId, setRequestId] = useState(newRequestId);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<SaveResult | null>(null);
+  const [planView, setPlanView] = useState<PlanView | null>(null);
   const [toast, setToast] = useState('');
   const [profile, setProfile] = useState<RegTutor | null>(null);
   const [dupes, setDupes] = useState<{ code: string; name_ko: string }[]>([]);
@@ -204,19 +220,110 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     window.scrollTo({ top: 0 });
   }
 
-  async function submit() {
+  // 저장하면서 강사·시간을 정했으면 일정안이 생김 (H22). 화면에 보일 일정안 모양
+  const draftPlan: PlanView | null =
+    paid && tutor && summary && slots.length && draft.durationMin
+      ? {
+          planId: '',
+          state: 'proposed',
+          studentNameEn: draft.nameEn.trim(),
+          studentPlace: [draft.country, draft.city].filter(Boolean).join(' '),
+          studentTz: draft.timezone || 'Asia/Seoul',
+          tutorName: tutor.name,
+          tutorPlace: tutor.country,
+          tutorTz: tutor.timezone,
+          slots,
+          startDate: summary.startDate,
+          endDate: summary.endDate,
+          lessons: summary.lessons,
+          durationMin: draft.durationMin,
+          proposalSentAt: null,
+          confirmedAt: null,
+          tutorNotice: null,
+          studentNotice: null,
+        }
+      : null;
+
+  async function submit(tutorAccepted = false, copyProposal = false) {
     if (saving || blockers.length || !summary) return;
+    // 강사 제안 문구는 누른 순간 복사 (휴대폰은 저장을 기다린 뒤에는 복사가 막힘). 저장이 실패하면 보내지 말라고 안내
+    let copied = false;
+    if (copyProposal && draftPlan) {
+      try {
+        await navigator.clipboard.writeText(proposalMessage(draftPlan));
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
     setSaving(true);
     try {
-      const r = await save(requestId, savePayload(draft, slots, tutor?.id ?? null, summary.startDate, pay));
+      const r = await save(requestId, savePayload(draft, slots, tutor?.id ?? null, summary.startDate, pay, tutorAccepted));
       setResult(r);
+      if (!draftPlan) return;
+      const now = new Date();
+      if (r.kind === 'preview') {
+        setPlanView(
+          tutorAccepted
+            ? { ...draftPlan, planId: 'preview', state: 'confirmed', confirmedAt: now, tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null }, studentNotice: { id: 'pv-s', status: 'pending', sentAt: null } }
+            : { ...draftPlan, planId: 'preview', proposalSentAt: copied ? now : null },
+        );
+      } else if (r.kind === 'saved' && r.planId) {
+        if (r.planState === 'confirmed') {
+          setPlanView({
+            ...draftPlan,
+            planId: r.planId,
+            state: 'confirmed',
+            confirmedAt: now,
+            tutorNotice: r.tutorNoticeId ? { id: r.tutorNoticeId, status: 'pending', sentAt: null } : null,
+            studentNotice: r.studentNoticeId ? { id: r.studentNoticeId, status: 'pending', sentAt: null } : null,
+          });
+        } else {
+          let sentAt: Date | null = null;
+          if (copied && planActions) sentAt = new Date(await planActions.proposalSent(r.planId).catch(() => ''));
+          setPlanView({ ...draftPlan, planId: r.planId, proposalSentAt: sentAt && !isNaN(sentAt.getTime()) ? sentAt : null });
+        }
+      } else if (r.kind === 'error' && copied) {
+        setToast('제안 문구는 복사됐지만 저장되지 않았어요 — 강사에게 보내지 마세요.');
+      }
     } finally {
       setSaving(false);
     }
   }
 
+  // 저장 뒤 일정안 카드 처리 (실제: DB 함수 / 미리보기: 화면 안에서만)
+  const planHandlers: PlanHandlers = {
+    confirm: async () => {
+      if (!planView) return;
+      if (planActions && !demo) {
+        const r = await planActions.confirm(planView.planId);
+        setPlanView({ ...planView, state: 'confirmed', confirmedAt: new Date(), tutorNotice: { id: r.tutor_notice_id, status: 'pending', sentAt: null }, studentNotice: { id: r.student_notice_id, status: 'pending', sentAt: null } });
+      } else setPlanView({ ...planView, state: 'confirmed', confirmedAt: new Date(), tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null }, studentNotice: { id: 'pv-s', status: 'pending', sentAt: null } });
+    },
+    decline: async () => {
+      if (!planView) return;
+      if (planActions && !demo) await planActions.decline(planView.planId);
+      setPlanView(null);
+      setToast('이 안을 닫았어요. 처리할 일에 신규 매칭으로 남아요.');
+    },
+    proposalCopied: async () => {
+      if (!planView) return;
+      if (planActions && !demo) await planActions.proposalSent(planView.planId);
+      setPlanView({ ...planView, proposalSentAt: planView.proposalSentAt ?? new Date() });
+    },
+    noticeCopied: async (who) => {
+      if (!planView) return;
+      const n = who === 'tutor' ? planView.tutorNotice : planView.studentNotice;
+      if (!n) return;
+      if (planActions && !demo) await planActions.noticeSent(n.id);
+      const sent = { ...n, status: 'sent' as const, sentAt: n.sentAt ?? new Date() };
+      setPlanView(who === 'tutor' ? { ...planView, tutorNotice: sent } : { ...planView, studentNotice: sent });
+    },
+  };
+
   function startNew() {
     setResult(null);
+    setPlanView(null);
     setRequestId(newRequestId());
     manual();
     setTutorId(null);
@@ -516,16 +623,10 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       {row('수강 상품', product(draft))}
       {row('결제', paid ? `확인함 · ${pay.method === 'card_link' ? '아임웹 카드' : '계좌이체'} ${won(pay.amount)}` : '확인 전 → 결제 대기로 저장')}
       {row('강사', paid && tutor ? `${tutor.name} (${tutor.country})` : paid ? '미배정 → 신규 매칭 업무로 남음' : '저장 안 함 (결제 확인 후)')}
-      {row(
-        '정규 시간',
-        paid && tutor && slots.length && firstDate
-          ? slots.map((s) => `${slotText(s)} (강사 ${slotLocal(s, firstDate, tutor.timezone)}${draft.timezone && draft.timezone !== 'Asia/Seoul' ? ` · 학생 ${slotLocal(s, firstDate, draft.timezone)}` : ''})`).join(' / ')
-          : '-',
-      )}
+      {row('정규 시간', draftPlan ? <TimeRows view={draftPlan} /> : '-')}
       {row('첫 수업일', summary ? dayLabel(summary.startDate) + (paid && tutor ? '' : ' (예정)') : '-')}
       {row('수강 기간', summary ? `${dayLabel(summary.startDate)} – ${dayLabel(summary.endDate)}${draft.weeks ? ` · ${termText(draft.weeks)}` : ''}` : '-')}
       {row('만들어질 수업', paid && tutor && summary ? `정규 ${summary.lessons}회` : '없음 (강사 배정 때 생성)')}
-      {row('안내 발송', '자동 발송 안 함 — 학생·강사 안내는 기존 승인·발송 절차대로. 학생 안내 전까지 매칭 업무가 처리할 일에 남아요')}
       {dupes.length > 0 && <p className="mt-2 text-[13px] text-[#9a5b00]">같은 이메일 기존 학생: {dupes.map((x) => x.code).join(', ')} — 새 학생으로 따로 만들어요 (연결 안 함).</p>}
       {blockers.length > 0 && (
         <ul className="mt-3 space-y-1 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
@@ -535,11 +636,29 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         </ul>
       )}
       {result && <ResultBox result={result} onNew={startNew} demo={demo} />}
-      {!(result?.kind === 'saved') && (
-        <button type="button" disabled={saving || blockers.length > 0} onClick={submit} className="mt-4 min-h-[52px] w-full rounded-[12px] bg-[#7d5fff] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
-          {saving ? '저장 중…' : demo ? '저장 (미리보기 — 실제로 저장 안 됨)' : paid && tutor ? '등록 저장 · 정규 수업 생성' : '등록 저장 (결제 대기)'}
-        </button>
+      {planView && (
+        <div className="mt-3 rounded-[12px] border border-[#e6e3ef] bg-white p-3">
+          <b className="mb-2 block text-[14.5px] text-[#1d1b2b]">{planView.state === 'proposed' ? '강사 답 대기' : '확정 · 양쪽에 안내를 보내 주세요'}</b>
+          <PlanCard view={planView} handlers={planHandlers} showTimes={false} />
+        </div>
       )}
+      {!(result?.kind === 'saved') && !(result?.kind === 'preview' && planView) &&
+        (draftPlan ? (
+          <div className="mt-4 grid gap-2">
+            <p className="text-[15px] font-bold text-[#1d1b2b]">강사에게 물어봤나요?</p>
+            <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit(false, true)} className="min-h-[52px] rounded-[12px] bg-[#7d5fff] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
+              {saving ? '저장 중…' : '아직 → 제안 문구 복사'}
+            </button>
+            <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit(true)} className="min-h-[52px] rounded-[12px] border-[1.5px] border-[#7d5fff] bg-white text-[16px] font-bold text-[#4b33c4] disabled:opacity-50">
+              가능하대요 → 확정
+            </button>
+            {demo && <p className="text-[12.5px] text-[#6b6880]">미리보기 — 실제로 저장되지 않아요</p>}
+          </div>
+        ) : (
+          <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit()} className="mt-4 min-h-[52px] w-full rounded-[12px] bg-[#7d5fff] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
+            {saving ? '저장 중…' : demo ? '저장 (미리보기 — 실제로 저장 안 됨)' : '등록 저장 (결제 대기)'}
+          </button>
+        ))}
     </Card>
   );
 
@@ -726,7 +845,13 @@ function ResultBox({ result, onNew, demo }: { result: SaveResult; onNew: () => v
     <div className="mt-3 rounded-[12px] bg-[#e3f6ea] px-4 py-3 text-[14px] text-[#1e7a46]">
       <b className="text-[16px] text-[#1e7a46]">✓ 등록 완료 · {result.studentCode}</b>
       <p className="mt-1 text-[#1e7a46]">
-        {result.status === 'confirmed' ? `결제 확인 · 정규 수업 ${result.lessons}회 생성` : '결제 대기로 저장 (강사·수업은 결제 확인 후)'}
+        {result.status !== 'confirmed'
+          ? '결제 대기로 저장 (강사·수업은 결제 확인 후)'
+          : result.planState === 'confirmed'
+            ? `결제 확인 · 정규 수업 ${result.lessons}회 생성`
+            : result.planState === 'proposed'
+              ? '결제 확인 · 강사 답을 받으면 확정해요'
+              : '결제 확인 · 강사 미배정 (신규 매칭으로 남음)'}
         {result.repeated && ' · 이미 저장된 요청이라 새로 만들지 않았어요'}
       </p>
       <div className="mt-2 flex gap-2">

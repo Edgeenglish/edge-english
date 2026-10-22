@@ -6,6 +6,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { courseName } from '../rules/period';
 import type { TaskSource } from './board';
+import type { PlanView } from './confirm';
+import { loadPlans } from './confirm-live';
 import type { FakeLesson, OpsStats } from './fake-data';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
@@ -15,6 +17,7 @@ type Enrollment = { weeks: number | null; legacy_label: string | null; weekly_co
 
 export type TaskRow = {
   id: string;
+  enrollment_id?: string;
   kind: 'new_student_matching' | 'renewal_tutor_notice';
   due_at: string | null;
   created_at: string;
@@ -61,7 +64,7 @@ function product(e: Enrollment | null): string {
   return `${e.duration_min}분 주${e.weekly_count}회 ${term}`.trim();
 }
 
-export function toTaskSources(tasks: TaskRow[], leaves: LeaveRow[], noShows: NoShowRow[]): TaskSource[] {
+export function toTaskSources(tasks: TaskRow[], leaves: LeaveRow[], noShows: NoShowRow[], plans: ReadonlyMap<string, PlanView> = new Map()): TaskSource[] {
   const out: TaskSource[] = [];
   for (const t of tasks) {
     const studentName = t.enrollment?.student?.name_ko ?? '(학생 정보 없음)';
@@ -78,6 +81,7 @@ export function toTaskSources(tasks: TaskRow[], leaves: LeaveRow[], noShows: NoS
         tutorName: t.tutor?.name ?? null,
         tutorAssignedAt: d(t.tutor_assigned_at),
         studentNotifiedAt: d(t.student_notified_at),
+        plan: (t.enrollment_id && plans.get(t.enrollment_id)) || null,
       });
     } else {
       const e = t.enrollment;
@@ -150,7 +154,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     sb
       .from('admin_tasks')
       .select(
-        'id, kind, due_at, created_at, tutor_assigned_at, student_notified_at, tutor_notified_at, tutor_acknowledged_at, schedule_checked_at, tutor_change_planned, tutor:tutors(name), enrollment:enrollments(weeks, legacy_label, weekly_count, duration_min, start_date, base_end_date, student:students(name_ko, code))',
+        'id, kind, enrollment_id, due_at, created_at, tutor_assigned_at, student_notified_at, tutor_notified_at, tutor_acknowledged_at, schedule_checked_at, tutor_change_planned, tutor:tutors(name), enrollment:enrollments(weeks, legacy_label, weekly_count, duration_min, start_date, base_end_date, student:students(name_ko, code))',
       )
       .eq('status', 'open'),
     sb.from('long_leave_requests').select('id, leave_start, days, reason_kind, created_at, enrollment:enrollments(student:students(name_ko, code))').eq('status', 'pending'),
@@ -166,8 +170,10 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error;
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
   const ns = (noShows.data ?? []) as unknown as (NoShowRow & { lesson: { id: string } | null })[];
+  const taskRows = (tasks.data ?? []) as unknown as TaskRow[];
+  const plans = await loadPlans(sb, taskRows.filter((t) => t.kind === 'new_student_matching' && t.enrollment_id).map((t) => t.enrollment_id!));
   return {
-    tasks: toTaskSources((tasks.data ?? []) as unknown as TaskRow[], (leaves.data ?? []) as unknown as LeaveRow[], ns),
+    tasks: toTaskSources(taskRows, (leaves.data ?? []) as unknown as LeaveRow[], ns, plans),
     today: toTodayLessons((lessons.data ?? []) as unknown as LessonRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
   };
 }

@@ -194,7 +194,8 @@ export type RegTutor = {
 };
 
 /** 저장 요청 (DB 함수 admin_register_student 의 p 와 같은 모양) */
-export function savePayload(d: Draft, slots: readonly RegularSlot[], tutorId: string | null, firstDate: KstDate, pay: Payment) {
+/** tutorAccepted: 강사가 이미 '가능'이라고 답함 → 저장과 확정을 한 번에. 아니면 일정안(강사 답 대기)만 저장 (H22, D-51) */
+export function savePayload(d: Draft, slots: readonly RegularSlot[], tutorId: string | null, firstDate: KstDate, pay: Payment, tutorAccepted = false) {
   const paid = pay.status === 'confirmed';
   const memo = [d.goal && `학습 목표: ${d.goal}`, d.formRef && `신청서: ${d.formRef}`, d.memo].filter(Boolean).join('\n');
   return {
@@ -203,6 +204,7 @@ export function savePayload(d: Draft, slots: readonly RegularSlot[], tutorId: st
     // 결제 확인 전에는 강사·정규 일정을 보내지 않음 (DB도 거절 — POL-OP-13)
     tutor_id: paid ? tutorId : null,
     slots: paid && tutorId ? slots.map((s) => ({ weekday: s.weekday, time: s.time })) : [],
+    tutor_answer: paid && tutorId && tutorAccepted ? ('accepted' as const) : null,
     payment: paid ? { method: pay.method, amount: pay.amount, paid_at: pay.paidAt, external_ref: pay.externalRef, payer_name: pay.payerName } : null,
   };
 }
