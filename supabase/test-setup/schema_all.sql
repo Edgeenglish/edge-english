@@ -2324,6 +2324,11 @@ create table if not exists lms_backup.snapshots (
   backup jsonb not null          -- backup.sql 결과와 같은 모양: {"_meta": …, "students": [...], …, "_sequences": {...}}
 );
 
+-- 행 단위 잠금(RLS)도 켬: 정책이 없으므로 앱 사용자는 0행. 복구·백업은 표 소유자(SQL Editor)라 영향 없음
+-- (Supabase SQL Editor 가 'RLS 없이 표를 만든다'고 묻는 창도 이 두 줄로 안 뜸 — 2026-10-22 대표 화면)
+alter table lms_backup.project enable row level security;
+alter table lms_backup.snapshots enable row level security;
+
 revoke all on all tables in schema lms_backup from public;
 do $$
 begin
