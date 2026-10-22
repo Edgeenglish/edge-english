@@ -17,8 +17,9 @@ export type Busy = {
   id: string;
   startsAt: Date;
   endsAt: Date;
-  /** regular = 매주 고정 수업의 회차, makeup = 보강·보상·이월 등 그날만 있는 수업, time_off = 강사 휴무·막은 시간 */
-  kind: 'regular' | 'makeup' | 'time_off';
+  /** regular = 매주 고정 수업의 회차, makeup = 보강·보상·이월 등 그날만 있는 수업, time_off = 강사 휴무·막은 시간,
+   *  hold = 수업 중인 학생의 고정 시간을 종료일 23:59까지 종료 뒤 날짜에도 맡아 둔 것 (재등록 대기, A22) */
+  kind: 'regular' | 'makeup' | 'time_off' | 'hold';
   label?: string;
 };
 
@@ -70,7 +71,7 @@ export type PlanIssue = {
   kstDate: KstDate;
   kstTime: KstTime;
   /** tutor_regular·tutor_makeup·tutor_time_off·break = 강사 쪽, student = 학생 본인 다른 수업, outside_availability = 강사 가능 시간 밖 */
-  reason: 'tutor_regular' | 'tutor_makeup' | 'tutor_time_off' | 'break' | 'student' | 'outside_availability';
+  reason: 'tutor_regular' | 'tutor_makeup' | 'tutor_time_off' | 'tutor_hold' | 'break' | 'student' | 'outside_availability';
   detail: string;
 };
 
@@ -78,6 +79,7 @@ const REASON_TEXT: Record<PlanIssue['reason'], string> = {
   tutor_regular: '강사의 다른 정규 수업과 겹침',
   tutor_makeup: '그날만 있는 보강과 겹침',
   tutor_time_off: '강사 휴무',
+  tutor_hold: '재등록 대기 중인 학생의 고정 시간',
   break: '앞뒤 수업과 휴식 10분이 안 됨',
   student: '학생의 다른 수업과 겹침',
   outside_availability: '강사 수업 가능 시간 밖',
@@ -110,7 +112,7 @@ export function checkRegularPlan(input: {
     }
     for (const c of clashes(l.startsAt, l.endsAt, input.tutorBusy, input.breakMin)) {
       const reason: PlanIssue['reason'] =
-        c.reason === 'break' ? 'break' : c.busy.kind === 'time_off' ? 'tutor_time_off' : c.busy.kind === 'makeup' ? 'tutor_makeup' : 'tutor_regular';
+        c.busy.kind === 'hold' ? 'tutor_hold' : c.reason === 'break' ? 'break' : c.busy.kind === 'time_off' ? 'tutor_time_off' : c.busy.kind === 'makeup' ? 'tutor_makeup' : 'tutor_regular';
       issues.push({ ...base, reason, detail: `${REASON_TEXT[reason]} · ${hhmm(c.busy.startsAt)}–${hhmm(c.busy.endsAt)}${c.busy.label ? ` ${c.busy.label}` : ''}` });
     }
     for (const c of clashes(l.startsAt, l.endsAt, input.studentBusy ?? [], input.breakMin)) {
@@ -131,7 +133,7 @@ export function cellState(date: KstDate, time: KstTime, stepMin: number, busy: r
   const s = kstToInstant(date, time);
   const e = new Date(s.getTime() + stepMin * MIN);
   const hit = (k: Busy['kind']) => busy.find((b) => b.kind === k && b.startsAt < e && s < b.endsAt);
-  const reg = hit('regular');
+  const reg = hit('regular') ?? hit('hold');   // 재등록 대기도 정규처럼 막힌 칸 (이름에 '재등록 대기')
   if (reg) return { state: 'regular', busy: reg };
   const mk = hit('makeup');
   if (mk) return { state: 'makeup', busy: mk };

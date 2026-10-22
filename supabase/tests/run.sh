@@ -91,11 +91,11 @@ echo "✅ 백업 → 복구 왕복·안전장치 통과 (다른 프로젝트·�
 
 # 시험용 DB 적용 안내 파일 (migration 1200·1300): 확인 6줄 통과, 가상 휴무는 시험용 이름일 때만·한 번만
 cp "$ROOT"/supabase/test-setup/d52-check.sql "$ROOT"/supabase/test-setup/d52-time-off.sql "$WORK"/; chmod a+r "$WORK"/d52-*.sql
-for f in "$ROOT"/supabase/migrations/2026102200{1100,1200,1300}_*.sql; do "${PSQL[@]}" -o /dev/null -f "$f"; done   # 두 번째 적용해도 오류 없음
+for f in "$ROOT"/supabase/migrations/2026102200{1100,1200,1300,1400}_*.sql; do "${PSQL[@]}" -o /dev/null -f "$f"; done   # 두 번째 적용해도 오류 없음
 D52="$("${PSQL[@]}" -tA -f "$WORK/d52-check.sql")"
 echo "$D52" | grep -v '|통과$' && { echo "❌ d52-check 실패"; exit 1; }
 "${PSQL[@]}" -o /dev/null -f "$WORK/d52-time-off.sql"; "${PSQL[@]}" -o /dev/null -f "$WORK/d52-time-off.sql"
 [ "$("${PSQL[@]}" -tA -c "select count(*) from tutor_time_off where reason = '가상 휴무 시험' and extract(dow from starts_at at time zone 'Asia/Seoul') = 3")" = "1" ] || { echo "❌ 가상 휴무 시험 데이터"; exit 1; }
 "${PROD[@]}" -o /dev/null -f "$WORK/d52-time-off.sql"
 [ "$("${PROD[@]}" -tA -c "select count(*) from tutor_time_off")" = "0" ] || { echo "❌ 운영 DB에 가상 휴무가 들어감"; exit 1; }
-echo "✅ migration 1200·1300 적용 확인 파일 통과 (확인 $(echo "$D52" | wc -l)줄, 가상 휴무는 시험용에만)"
+echo "✅ migration 1200·1300·1400 적용 확인 파일 통과 (확인 $(echo "$D52" | wc -l)줄, 가상 휴무는 시험용에만)"

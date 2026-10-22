@@ -1,4 +1,4 @@
--- migration 1200([보냈어요])·1300(기존 학생 간단 입력) 적용 확인 — 읽기만. 모든 줄이 '통과'면 정상
+-- migration 1200([보냈어요])·1300(기존 학생 간단 입력)·1400(재등록 대기 자리) 적용 확인 — 읽기만. 모든 줄이 '통과'면 정상
 select 항목, case when ok then '통과' else '실패' end as 결과 from (
   select 1 as n, '[보냈어요] 기록 방식(manual) 허용' as 항목,
     exists (select 1 from pg_constraint where conname = 'schedule_notices_sent_via_check' and pg_get_constraintdef(oid) like '%manual%') as ok
@@ -8,5 +8,9 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
     has_function_privilege('authenticated', 'admin_import_existing_student(uuid, jsonb)', 'execute')
     and not has_function_privilege('anon', 'admin_import_existing_student(uuid, jsonb)', 'execute')
   union all select 5, '충돌 계산 내부 함수는 앱에서 직접 못 부름', not has_function_privilege('authenticated', 'lms_import_conflicts(jsonb)', 'execute')
-  union all select 6, '기존 학생·수업 데이터 그대로 (표 41개)', (select count(*) from pg_tables where schemaname = 'public') = 41
+  union all select 6, '재등록 대기 자리 맡아 두기 (신규 등록·기존 학생 입력 모두)',
+    to_regprocedure('lms_slot_hold_hits(uuid, timestamptz, timestamptz)') is not null
+    and (select prosrc from pg_proc where proname = 'lms_plan_conflicts') like '%tutor_hold%'
+    and (select prosrc from pg_proc where proname = 'lms_import_conflicts') like '%tutor_hold%'
+  union all select 7, '기존 학생·수업 데이터 그대로 (표 41개)', (select count(*) from pg_tables where schemaname = 'public') = 41
 ) t order by n;

@@ -83,7 +83,7 @@ export function importLessons(d: ImportDraft): ImportLesson[] {
 
 export type ImportIssue = {
   lesson: ImportLesson;
-  reason: 'tutor_regular' | 'tutor_makeup' | 'tutor_time_off' | 'break' | 'self';
+  reason: 'tutor_regular' | 'tutor_makeup' | 'tutor_time_off' | 'tutor_hold' | 'break' | 'self';
   other?: string; // 상대 학생 이름·휴무 사유
 };
 
@@ -91,6 +91,7 @@ export const IMPORT_REASON_TEXT: Record<ImportIssue['reason'], string> = {
   tutor_regular: '강사의 다른 학생 정규 수업과 겹침',
   tutor_makeup: '강사의 그날 보강과 겹침',
   tutor_time_off: '강사 휴무',
+  tutor_hold: '재등록 대기 중인 학생의 고정 시간',
   break: '앞뒤 수업과 휴식 10분이 안 됨',
   self: '이 학생의 다른 수업과 겹침',
 };
@@ -104,7 +105,7 @@ export function importIssues(lessons: readonly ImportLesson[], tutors: readonly 
       const b: Busy = c.busy;
       out.push({
         lesson: l,
-        reason: b.kind === 'time_off' ? 'tutor_time_off' : c.reason === 'break' ? 'break' : b.kind === 'regular' ? 'tutor_regular' : 'tutor_makeup',
+        reason: b.kind === 'hold' ? 'tutor_hold' : b.kind === 'time_off' ? 'tutor_time_off' : c.reason === 'break' ? 'break' : b.kind === 'regular' ? 'tutor_regular' : 'tutor_makeup',
         other: b.label,
       });
     }

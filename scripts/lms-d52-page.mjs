@@ -6,7 +6,7 @@ import { COPY_SCRIPT, PAGE_STYLE, esc, stepMaker } from './lms-prod-page.mjs';
 
 export function buildD52Page(root) {
   const sql = (p) => readFileSync(join(root, p), 'utf8').trimEnd();
-  const migrations = ['supabase/migrations/20261022001200_lms_notice_sent_button.sql', 'supabase/migrations/20261022001300_lms_import_existing_student.sql'];
+  const migrations = ['supabase/migrations/20261022001200_lms_notice_sent_button.sql', 'supabase/migrations/20261022001300_lms_import_existing_student.sql', 'supabase/migrations/20261022001400_lms_fixed_slot_hold.sql'];
   const apply = ['begin;', ...migrations.map(sql), 'commit;'].join('\n\n');
   const projectCheck = (name) => `-- 이 DB가 ${name} 인지 확인 (읽기만)\nselect name as 프로젝트_이름 from lms_backup.project;`;
   const testStep = stepMaker('t');
@@ -20,6 +20,7 @@ export function buildD52Page(root) {
     ['H. 기존 학생 시간표와 충돌', '새로 <b>가상이관이</b> · Alex · <b>월 06:30</b> · 같은 종료일', "저장 전에 '일정 충돌' 목록: 월요일마다 '강사의 다른 학생 정규 수업과 겹침 (가상이관일)'. 저장 버튼이 막힘"],
     ['I. 보강은 그날만', '같은 화면에서 요일만 <b>목 06:30</b> 으로 바꿈', 'G의 보강 날짜 <b>하루만</b> 충돌 (다른 목요일은 괜찮음)'],
     ['J. 강사 휴무와 충돌', '아래 ③ SQL로 가상 휴무를 넣은 뒤, 요일을 <b>수 06:30</b> 으로 바꿈', "③ 결과의 수요일 <b>하루만</b> '강사 휴무'로 충돌"],
+    ['L. 재등록 대기 자리', '새로 <b>가상이관삼</b> · Alex · 50분 · <b>월 오후 06:30</b> · 시작일 <b>2026-11-20</b> · 종료일 <b>2026-12-17</b>', "저장 전에 11/23·11/30·12/7·12/14 모두 '재등록 대기 중인 학생의 고정 시간 (가상이관일 · 11/19 23:59까지)'. 오후 07:30 으로 바꾸면 충돌 없음"],
     ['K. 휴대폰', 'G~J 중 하나를 휴대폰으로', '글자가 잘리거나 옆으로 밀리지 않고 저장·충돌 목록이 보임'],
   ];
 
@@ -39,8 +40,8 @@ ${PAGE_STYLE}
   <h3>A. 시험용 DB (edgeenglish-lms-test)</h3>
   <div class="where">붙여 넣는 곳: Supabase → <b>edgeenglish-lms-test</b> → SQL Editor → 탭 줄 오른쪽 <b>+</b> → 붙여 넣기(Ctrl+V) → 초록 <b>Run</b>. 단계마다 새 탭 하나씩.</div>
   ${testStep('시험용인지 확인', '<p class="expect">정상: <b>edgeenglish-lms-test</b> 한 줄. 다르면 멈추고 Claude에게</p>', projectCheck('edgeenglish-lms-test'))}
-  ${testStep('변경 적용 (1200·1300)', "<p class=\"expect\">정상: 빨간 글씨 없이 끝남 (Success 또는 빈 결과). 'Potential issue detected' 창이 뜨면 초록 <b>Run and enable RLS</b>. 문제 없으면 바로 다음으로</p>", apply)}
-  ${testStep('확인 (읽기만)', '<p class="expect">정상: 6줄 모두 <b>통과</b></p>', sql('supabase/test-setup/d52-check.sql'))}
+  ${testStep('변경 적용 (1200·1300·1400)', "<p class=\"expect\">정상: 빨간 글씨 없이 끝남 (Success 또는 빈 결과). 'Potential issue detected' 창이 뜨면 초록 <b>Run and enable RLS</b>. 문제 없으면 바로 다음으로</p>", apply)}
+  ${testStep('확인 (읽기만)', '<p class="expect">정상: 7줄 모두 <b>통과</b></p>', sql('supabase/test-setup/d52-check.sql'))}
   ${testStep('화면 시험 J용 가상 휴무 넣기', '<p class="expect">정상: 약 2주 뒤 수요일 날짜가 한 줄 나옴 — 그 날짜를 기억해 두세요 (시험용에서만 들어가요)</p>', sql('supabase/test-setup/d52-time-off.sql'))}
 
   <h3>B. 화면 시험 (시험용 데이터, 휴대폰도 가능)</h3>
@@ -55,8 +56,8 @@ ${PAGE_STYLE}
   <div class="where">붙여 넣는 곳: 조직 <b>EdgeEnglish LMS</b> → <b>edgeenglish-lms</b> → SQL Editor. 화면 맨 위 이름을 꼭 확인</div>
   ${prodStep('운영인지 확인', '<p class="expect">정상: <b>edgeenglish-lms</b> 한 줄</p>', projectCheck('edgeenglish-lms'))}
   ${prodStep('적용 직전 백업', '<p class="expect">결과 표 오른쪽 위 <b>Export → Download CSV</b> → 파일 이름 앞에 날짜 (예: <code>2026-10-23_1200-1300적용전_lms-backup.csv</code>) → 구글 드라이브 <b>LMS 백업</b> 폴더</p>', sql('supabase/backup/backup.sql'))}
-  ${prodStep('변경 적용 (1200·1300)', '<p class="expect">정상: 빨간 글씨 없이 끝남. 창이 뜨면 초록 <b>Run and enable RLS</b></p>', apply)}
-  ${prodStep('확인 (읽기만)', '<p class="expect">정상: 6줄 모두 <b>통과</b>. 운영 DB에는 가상 휴무를 넣지 않아요</p>', sql('supabase/test-setup/d52-check.sql'))}
+  ${prodStep('변경 적용 (1200·1300·1400)', '<p class="expect">정상: 빨간 글씨 없이 끝남. 창이 뜨면 초록 <b>Run and enable RLS</b></p>', apply)}
+  ${prodStep('확인 (읽기만)', '<p class="expect">정상: 7줄 모두 <b>통과</b>. 운영 DB에는 가상 휴무를 넣지 않아요</p>', sql('supabase/test-setup/d52-check.sql'))}
   <p class="note">오류가 나면 오류 첫 줄만 Claude에게. 변경 적용은 한 묶음이라 오류가 나면 아무것도 바뀌지 않아요.</p>
 </div>
 ${COPY_SCRIPT}

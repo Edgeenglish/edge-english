@@ -70,6 +70,7 @@ const HINT: Record<PlanIssue['reason'], string> = {
   tutor_makeup: '그날 보강을 옮기거나 첫 수업일을 다음 주로',
   tutor_regular: '다른 시간을 고르세요 (매주 겹치면 이 시간은 불가)',
   tutor_time_off: '휴무 날짜 — 첫 수업일 조정 또는 강사와 확인',
+  tutor_hold: '다른 학생이 종료일 23:59까지 재등록할 수 있는 시간 — 다른 시간을 고르거나 마감 뒤에',
   break: '앞뒤 수업과 10분 휴식 필요 — 30분 당기거나 늦추기',
   student: '학생의 다른 수업과 겹침',
   outside_availability: '강사 가능 시간 밖 — 강사와 확인 (서머타임 변경일 확인)',

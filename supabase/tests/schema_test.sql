@@ -612,15 +612,15 @@ select pg_temp.ok((select count(*) from students where email = 'wait@x.kr') = 1
 select pg_temp.ok((select count(*) from audit_log where table_name = 'students' and actor = 'bbbbbbbb-0000-0000-0000-000000000009' and actor_via = 'admin_register_student') >= 2,
   '등록 함수로 만든 행은 변경 이력에 운영자 이름으로 남음');
 
--- 11/3 예시와 같은 상황: 4/6(화) 20:00 에만 보강이 있음
+-- 11/3 예시와 같은 상황: 4/6(화) 21:00 에만 보강이 있음 (20:00 은 one@x.kr 의 정규 → 3/29 종료 뒤엔 재등록 대기로 막히므로 21:00 으로)
 insert into lessons (enrollment_id, student_id, tutor_id, kind, makeup_of, starts_at, ends_at)
-select l.enrollment_id, l.student_id, l.tutor_id, 'makeup', l.id, '2027-04-06 20:00+09', '2027-04-06 20:50+09'
+select l.enrollment_id, l.student_id, l.tutor_id, 'makeup', l.id, '2027-04-06 21:00+09', '2027-04-06 21:50+09'
 from lessons l join students s on s.id = l.student_id where s.email = 'one@x.kr' and l.seq = 1;
 insert into tutor_time_off (tutor_id, starts_at, ends_at, kind) values ('55555555-0000-0000-0000-000000000900', '2027-05-04 17:00+09', '2027-05-04 19:00+09', 'block');
 set role authenticated;
 select pg_temp.ok((select jsonb_agg(c ->> 'date' || ' ' || (c ->> 'reason')) from jsonb_array_elements(
   pg_temp.reg_conflicts('90000000-0000-0000-0000-000000000004',
-    pg_temp.body('보강충돌', 'mk@x.kr', 4, 1, 50, '2027-04-06', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"20:00"}]', true))) c)
+    pg_temp.body('보강충돌', 'mk@x.kr', 4, 1, 50, '2027-04-06', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"21:00"}]', true))) c)
   = '["2027-04-06 tutor_makeup"]'::jsonb,
   '첫 수업일이 보강 날(4/6)이면 그날 하나만 충돌로 알려 줌');
 reset role;
@@ -628,8 +628,8 @@ select pg_temp.ok(not exists (select 1 from students where email = 'mk@x.kr') an
   '충돌이 있으면 학생·수강권·결제·수업 아무것도 저장 안 됨');
 set role authenticated;
 select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000000005',
-  pg_temp.body('보강다음주', 'mk2@x.kr', 4, 1, 50, '2027-04-13', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"20:00"}]', true)) ->> 'lessons')::int = 4,
-  '같은 화 20:00 이라도 보강 다음 주(4/13)부터는 등록 가능 — 보강이 정규 시간을 영구히 막지 않음');
+  pg_temp.body('보강다음주', 'mk2@x.kr', 4, 1, 50, '2027-04-13', '55555555-0000-0000-0000-000000000900', '[{"weekday":2,"time":"21:00"}]', true)) ->> 'lessons')::int = 4,
+  '같은 화 21:00 이라도 보강 다음 주(4/13)부터는 등록 가능 — 보강이 정규 시간을 영구히 막지 않음');
 select pg_temp.ok((select jsonb_agg(c ->> 'reason') from jsonb_array_elements(
   pg_temp.reg_conflicts('90000000-0000-0000-0000-000000000006',
     pg_temp.body('휴식부족', 'br@x.kr', 4, 1, 20, '2027-03-04', '55555555-0000-0000-0000-000000000900', '[{"weekday":4,"time":"20:55"}]', true))) c)
@@ -890,3 +890,34 @@ set role anon;
 select pg_temp.expect_error($$select admin_import_existing_student(gen_random_uuid(), '{}'::jsonb)$$, 'permission|42501');
 reset role;
 select pg_temp.ok(true, '학생·로그인 안 한 요청은 기존 학생 입력 불가');
+
+-- ---------- 재등록 대기 자리 맡아 두기 (migration 1400, A22 · POL-RN-02) ----------
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2)
+-- 이관A: 화 19:00, 2027-08-29 종료 (마감 아직 안 지남) → 종료 뒤 화요일 19:00 은 다른 학생에게 못 줌
+create or replace function pg_temp.ibody2(name text, slots jsonb, tutor text, f date, e date) returns jsonb
+language sql as $$ select pg_temp.ibody(name, slots, '[]') || jsonb_build_object('tutor_id', tutor, 'from_date', f, 'end_date', e) $$;
+select pg_temp.ok((select count(*) = 4 and bool_and(x ->> 'reason' = 'tutor_hold' and x ->> 'other' like '이관A%23:59까지')
+                   from jsonb_array_elements(pg_temp.imp_conflicts(pg_temp.ibody2('대기충돌', '[{"weekday":2,"time":"19:30"}]',
+                     '55555555-0000-0000-0000-000000001300', '2027-08-30', '2027-09-26'))) x),
+  '수업 중인 학생의 고정 시간은 종료일 23:59까지 종료 뒤 날짜도 막힘 (재등록 대기, 상대 이름·마감 표시)');
+select pg_temp.ok(jsonb_array_length(pg_temp.imp_conflicts(pg_temp.ibody2('대기휴식', '[{"weekday":2,"time":"19:55"}]',
+                     '55555555-0000-0000-0000-000000001300', '2027-08-30', '2027-09-26'))) = 4,
+  '재등록 대기 시간 앞뒤 휴식 10분도 지킴');
+select pg_temp.ok((pg_temp.imp('90000000-0000-0000-0000-000000001401', pg_temp.ibody2('대기옆', '[{"weekday":2,"time":"20:00"}]',
+                     '55555555-0000-0000-0000-000000001300', '2027-08-30', '2027-09-26')) ->> 'lessons')::int = 4,
+  '10분 뒤 시간은 그대로 가능');
+-- 신규 등록(일정안)도 같은 검사
+select pg_temp.ok((select bool_and(x ->> 'reason' = 'tutor_hold') and count(*) = 4
+                   from jsonb_array_elements(pg_temp.reg_conflicts('90000000-0000-0000-0000-000000001402',
+                     pg_temp.body('대기신규', 'hold@x.kr', 4, 1, 50, '2027-08-31', '55555555-0000-0000-0000-000000001300', '[{"weekday":2,"time":"19:00"}]', true))) x),
+  '신규 등록·확정도 재등록 대기 시간을 막음');
+-- 마감(종료일 23:59)이 지난 학생의 시간은 풀림
+select pg_temp.imp('90000000-0000-0000-0000-000000001403', pg_temp.ibody2('지난학생', '[{"weekday":1,"time":"10:00"}]',
+  '55555555-0000-0000-0000-000000001301', '2026-01-05', '2026-01-31'));
+select pg_temp.ok(jsonb_array_length(pg_temp.imp_conflicts(pg_temp.ibody2('자리받음', '[{"weekday":1,"time":"10:00"},{"weekday":2,"time":"10:00"}]',
+                     '55555555-0000-0000-0000-000000001301', '2027-08-02', '2027-08-29')
+                   || jsonb_build_object('makeups', '[{"date":"2027-08-03","time":"10:00","duration_min":50,"tutor_id":"55555555-0000-0000-0000-000000001301"}]'::jsonb))) = 2,
+  '종료일 23:59가 지난 학생의 고정 시간은 다른 학생이 쓸 수 있음 (충돌 2건은 이번 입력끼리의 보강·정규뿐)');
+reset request.jwt.claim.sub;
+reset role;

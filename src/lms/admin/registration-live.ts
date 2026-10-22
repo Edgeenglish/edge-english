@@ -6,6 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, instantToKstDate } from '../rules/dates';
 import type { Busy } from '../rules/booking';
+import { holdBusy } from './holds';
 import type { RegTutor, savePayload } from './registration';
 
 type Row = Record<string, unknown>;
@@ -24,12 +25,38 @@ export async function loadRegTutors(sb: SupabaseClient, now: Date): Promise<RegT
   const today = instantToKstDate(now);
   const from = addDays(today, -14);
   const until = addDays(today, 200); // 24주 등록 + 여유
-  const [tutors, avail, lessons, off] = await Promise.all([
+  const [tutors, avail, lessons, off, schedules, ends] = await Promise.all([
     all(() => sb.from('tutors').select('id, name, country, timezone').eq('active', true).order('name')),
     all(() => sb.from('tutor_availability').select('tutor_id, weekday, start_local, end_local, timezone, effective_from, effective_to')),
     all(() => sb.from('lessons').select('id, tutor_id, kind, starts_at, ends_at, student:students(name_ko)').neq('state', 'canceled').gte('kst_date', from).lte('kst_date', until)),
     all(() => sb.from('tutor_time_off').select('id, tutor_id, starts_at, ends_at, reason').gte('ends_at', `${from}T00:00:00+09:00`)),
+    // 재등록 대기 (A22): 고정 시간 + 학생별 결제 확인·수강 중 등록의 마지막 종료일
+    all(() => sb.from('regular_schedules').select('id, tutor_id, student_id, weekday, start_time_kst, duration_min, effective_from, effective_to, student:students(name_ko)')),
+    all(() => sb.from('enrollments').select('student_id, final_end_date').in('status', ['confirmed', 'active'])),
   ]);
+  const lastEnd = new Map<string, string>();
+  for (const e of ends) {
+    const k = String(e.student_id);
+    const d = String(e.final_end_date);
+    if (!lastEnd.has(k) || lastEnd.get(k)! < d) lastEnd.set(k, d);
+  }
+  const holds = holdBusy(
+    schedules
+      .filter((r) => lastEnd.has(String(r.student_id)))
+      .map((r) => ({
+        id: String(r.id),
+        tutorId: String(r.tutor_id),
+        studentName: (r.student as { name_ko?: string } | null)?.name_ko ?? '학생',
+        weekday: Number(r.weekday),
+        time: String(r.start_time_kst).slice(0, 5),
+        durationMin: Number(r.duration_min),
+        effectiveFrom: String(r.effective_from),
+        effectiveTo: (r.effective_to as string | null) ?? null,
+        lastEnd: lastEnd.get(String(r.student_id))!,
+      })),
+    now,
+    until,
+  );
   return tutors.map((t) => ({
     id: String(t.id),
     name: String(t.name),
@@ -43,6 +70,7 @@ export async function loadRegTutors(sb: SupabaseClient, now: Date): Promise<RegT
         .filter((l) => l.tutor_id === t.id)
         .map((l): Busy => ({ id: String(l.id), startsAt: new Date(String(l.starts_at)), endsAt: new Date(String(l.ends_at)), kind: l.kind === 'regular' ? 'regular' : 'makeup', label: (l.student as { name_ko?: string } | null)?.name_ko })),
       ...off.filter((o) => o.tutor_id === t.id).map((o): Busy => ({ id: String(o.id), startsAt: new Date(String(o.starts_at)), endsAt: new Date(String(o.ends_at)), kind: 'time_off', label: (o.reason as string | null) ?? '휴무' })),
+      ...(holds.get(String(t.id)) ?? []),
     ].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()),
   }));
 }
