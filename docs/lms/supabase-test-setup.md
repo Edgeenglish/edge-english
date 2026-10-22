@@ -324,6 +324,8 @@ where s.email like 'reg%@example.com' order by s.code;
 
 ## migration 1000 — 신규 배정 확정 (2026-10-22, H22·A39·D-51)
 
+**✅ 2026-10-22 대표 적용: ① 학생수 6 ② Success ③ 확인 6줄 모두 통과** (복사 버튼 페이지 사용)
+
 - 파일: `migrations/20261021001000_lms_schedule_confirm.sql`. 하는 일: 일정안 `schedule_plans`·최종 안내 `schedule_notices` 표, 확정·기록 함수 5개, `admin_register_student` 교체(강사·시간을 고르면 일정안으로 저장, 강사 '가능'이면 확정까지), 신규 매칭 업무는 강사 안내 기록 없이 완료 불가. **기존 표·데이터를 지우지 않음**(DROP·DELETE 없음). 두 번 실행해도 같은 결과.
 - **적용 전에는 새 등록 화면을 쓰지 말 것** (예전 함수는 '아직 → 제안' 을 눌러도 수업을 바로 만듦)
 - 로컬 확인: `npm run test:db` (H22 필수 검증 포함) 통과
