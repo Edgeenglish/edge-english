@@ -10,7 +10,7 @@ export function buildD52xPage(root) {
   const projectCheck = (name) => `-- 이 DB가 ${name} 인지 확인 (읽기만)\nselect name as 프로젝트_이름 from lms_backup.project;`;
   const testStep = stepMaker('t');
   const prodStep = stepMaker('p');
-  const preview = 'Vercel → Deployments → 브랜치 <code>claude/funny-feynman-6n5cup</code> 의 최신 Preview 주소';
+  const preview = '시험 주소 <code>https://edge-english-git-lms-test-support-2126.vercel.app</code>';
   const imp = '<code>/lms/admin/students/import</code>';
 
   const tests = [
