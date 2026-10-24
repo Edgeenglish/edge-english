@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { dbEnv } from '@/lms/auth/db-env';
 import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, searchBoard, type BoardFilter, type BoardItem, type Category, type Severity, type TaskSource } from '@/lms/admin/board';
 import { fakeTasks, type FakeLesson, type OpsStats } from '@/lms/admin/fake-data';
 import type { PlanView } from '@/lms/admin/confirm';
@@ -213,7 +214,9 @@ export default function AdminDashboard({
 
       {!preview && (
         <p className="mx-4 mt-3 rounded-[10px] bg-[#e3f5ea] px-3 py-2 text-[13px] text-[#13623a] lg:mx-7">
-          시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·[보냈어요])은 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.
+          {dbEnv(process.env.NEXT_PUBLIC_SUPABASE_URL) === 'prod'
+            ? '운영 DB의 실제 데이터예요. 학생 등록·신규 매칭 일정안(확정·[보냈어요])은 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'
+            : '시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·[보냈어요])은 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'}
         </p>
       )}
       {preview && (

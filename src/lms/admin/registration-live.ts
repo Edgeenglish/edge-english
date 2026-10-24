@@ -87,7 +87,7 @@ export async function saveRegistration(sb: SupabaseClient, requestId: string, pa
       }
       return { kind: 'error' as const, message: error.message, conflicts };
     }
-    if (error.code === 'PGRST202') return { kind: 'error' as const, message: '등록 저장 함수가 아직 시험용 DB에 적용되지 않았어요 (적용은 대표 승인 후).' };
+    if (error.code === 'PGRST202') return { kind: 'error' as const, message: '등록 저장 함수가 아직 이 DB에 적용되지 않았어요 (적용은 대표 승인 후).' };
     if (error.code === '42501') return { kind: 'error' as const, message: '운영자 추가 인증(TOTP)이 필요해요. 다시 로그인해 주세요.' };
     return { kind: 'error' as const, message: error.message };
   }
