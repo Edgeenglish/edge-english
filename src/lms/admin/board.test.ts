@@ -1,6 +1,6 @@
 // 운영자 대시보드 '처리할 일' 목록 (가상 데이터)
 import { describe, expect, it } from 'vitest';
-import { buildBoard, categoryCounts, dueSeverity, dueText, filterBoard } from './board';
+import { buildBoard, categoryCounts, dueSeverity, dueText, filterBoard, type TaskSource } from './board';
 import { fakeTasks } from './fake-data';
 
 const now = new Date('2026-10-16T05:00:00Z'); // KST 10/16(금) 14:00
@@ -56,7 +56,7 @@ describe('처리할 일 목록', () => {
   it('요약 카드 5칸: 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
     const c = categoryCounts(items);
     expect(Object.values(c).reduce((s, x) => s + x.n, 0)).toBe(items.length);
-    expect(c).toMatchObject({ matching: { n: 3 }, tutor_ack: { n: 1 }, ending: { n: 2 }, makeup: { n: 1 }, issue: { n: 3 } });
+    expect(c).toMatchObject({ matching: { n: 3 }, tutor_ack: { n: 1 }, ending: { n: 2 }, makeup: { n: 1 }, issue: { n: 4 } });
   });
   it('필터: 긴급 = 노쇼·기한 초과·24시간 안, 오류만 = 노쇼 신고·자동 처리 실패 (승인 대기는 제외)', () => {
     expect(filterBoard(items, 'urgent').every((i) => i.severity !== 'open')).toBe(true);
@@ -79,5 +79,21 @@ describe('재등록 통보의 새 기간 (가상 데이터, 기한 안 재등록
   it('종료 다음 날이 아니라 종료 뒤 처음 오는 정규 수업일(화·목)부터 28일', () => {
     expect(period('2026-10-16T05:00:00Z')).toBe('10/20(화)–11/16(월)'); // 금요일 종료 → 다음 화요일
     expect(period('2026-10-20T05:00:00Z')).toBe('10/22(목)–11/18(수)'); // 원본 예시: 10/20 종료 → 10/22 시작
+  });
+});
+
+describe('기존 학생 입력 뒤 시트 대조 (D-52 확대판)', () => {
+  const at = new Date('2026-10-24T03:00:00Z');
+  const task = (over: Partial<Extract<TaskSource, { kind: 'import_check' }>> = {}): TaskSource => ({
+    kind: 'import_check', id: 'e1', studentName: '가상기존', studentCode: 'STU-0101', counts: { lmsLeft: 13, sheetLeft: 12 }, unknownOrigins: [], createdAt: at, ...over,
+  });
+  it('차이가 있으면 차이를 보이고, 대조 완료 버튼 하나', () => {
+    const [i] = buildBoard([task()], at);
+    expect(i).toMatchObject({ category: 'issue', error: false, tag: '시트 대조 · 1회 차이', actions: [{ key: 'import_checked' }] });
+    expect(i.detail).toMatch('LMS 13회 · 시트 12회 (+1)');
+  });
+  it('대조는 끝났고 원래 날짜만 남으면 버튼 없이 날짜 칸만', () => {
+    const [i] = buildBoard([task({ counts: null, unknownOrigins: [{ id: 'x', label: '미예약 보강' }] })], at);
+    expect(i).toMatchObject({ tag: '보강 날짜 확인', actions: [], unknownOrigins: [{ id: 'x' }] });
   });
 });

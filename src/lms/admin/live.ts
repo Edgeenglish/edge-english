@@ -148,10 +148,32 @@ export function toTodayLessons(lessons: LessonRow[], openNoShowLessonIds: Readon
     }));
 }
 
+export type ImportCheckRow = { enrollment_id: string; sheet_total: number; sheet_used: number; lms_left: number; created_at: string; enrollment: { student: { name_ko: string; code: string } | null } | null };
+export type UnknownOriginRow = { id: string; kind: 'makeup_booked' | 'makeup_open'; enrollment_id: string; created_at: string; lesson: { starts_at: string } | null; enrollment: { student: { name_ko: string; code: string } | null } | null };
+
+/** 기존 학생 입력 뒤 시트 대조 전 · 보강 원래 날짜 확인 필요 → 학생(수강등록)마다 한 줄 */
+export function toImportChecks(checks: ImportCheckRow[], origins: UnknownOriginRow[]): TaskSource[] {
+  const out = new Map<string, Extract<TaskSource, { kind: 'import_check' }>>();
+  const row = (eid: string, e: ImportCheckRow['enrollment'], created: string) => {
+    if (!out.has(eid))
+      out.set(eid, { kind: 'import_check', id: eid, studentName: e?.student?.name_ko ?? '(학생 정보 없음)', studentCode: e?.student?.code ?? '', counts: null, unknownOrigins: [], createdAt: new Date(created) });
+    return out.get(eid)!;
+  };
+  for (const c of checks) row(c.enrollment_id, c.enrollment, c.created_at).counts = { lmsLeft: c.lms_left, sheetLeft: c.sheet_total - c.sheet_used };
+  for (const o of origins) {
+    const label = o.kind === 'makeup_open' ? '미예약 보강' : `예약된 보강 ${o.lesson ? short(instantToKstDate(new Date(o.lesson.starts_at))) : ''}`.trim();
+    row(o.enrollment_id, o.enrollment, o.created_at).unknownOrigins.push({ id: o.id, label });
+  }
+  return [...out.values()];
+}
+
+// migration 1500 전 DB에는 표가 없음 → 대시보드는 그대로 보이게 빈 목록
+const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01' || e.code === 'PGRST205');
+
 /** 시험용 DB에서 운영자 대시보드 데이터 읽기 (운영자 aal2 세션 필요 — 아니면 RLS 때문에 0건) */
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const today = instantToKstDate(now);
-  const [tasks, leaves, noShows, lessons] = await Promise.all([
+  const [tasks, leaves, noShows, lessons, checks, origins] = await Promise.all([
     sb
       .from('admin_tasks')
       .select(
@@ -167,14 +189,23 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .from('lessons')
       .select('id, starts_at, kind, state, class_status, student:students(name_ko), tutor:tutors!lessons_tutor_id_fkey(name)')
       .eq('kst_date', today),
+    sb.from('import_checks').select('enrollment_id, sheet_total, sheet_used, lms_left, created_at, enrollment:enrollments(student:students(name_ko, code))').is('checked_at', null),
+    sb
+      .from('migrated_items')
+      .select('id, kind, enrollment_id, created_at, lesson:lessons(starts_at), enrollment:enrollments(student:students(name_ko, code))')
+      .eq('origin_unknown', true)
+      .is('origin_checked_at', null),
   ]);
-  const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error;
+  const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error);
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
   const ns = (noShows.data ?? []) as unknown as (NoShowRow & { lesson: { id: string } | null })[];
   const taskRows = (tasks.data ?? []) as unknown as TaskRow[];
   const plans = await loadPlans(sb, taskRows.filter((t) => t.kind === 'new_student_matching' && t.enrollment_id).map((t) => t.enrollment_id!));
   return {
-    tasks: toTaskSources(taskRows, (leaves.data ?? []) as unknown as LeaveRow[], ns, plans),
+    tasks: [
+      ...toTaskSources(taskRows, (leaves.data ?? []) as unknown as LeaveRow[], ns, plans),
+      ...toImportChecks((checks.data ?? []) as unknown as ImportCheckRow[], (origins.data ?? []) as unknown as UnknownOriginRow[]),
+    ],
     today: toTodayLessons((lessons.data ?? []) as unknown as LessonRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
   };
 }

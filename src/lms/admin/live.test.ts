@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildBoard } from './board';
-import { toTaskSources, toTodayLessons, type TaskRow } from './live';
+import { toImportChecks, toTaskSources, toTodayLessons, type TaskRow } from './live';
 
 const base: Omit<TaskRow, 'id' | 'kind'> = {
   due_at: null,
@@ -61,6 +61,23 @@ describe('오늘 수업', () => {
       ['19:00', '학생 변경'],
       ['20:00', '보강'],
       ['21:00', '노쇼 신고'],
+    ]);
+  });
+});
+
+describe('기존 학생 입력 뒤 처리할 일 (import_checks · migrated_items)', () => {
+  it('대조 전과 원래 날짜 확인 필요를 학생마다 한 줄로 합침', () => {
+    const e = { student: { name_ko: '가상기존', code: 'STU-0101' } };
+    const out = toImportChecks(
+      [{ enrollment_id: 'e1', sheet_total: 24, sheet_used: 12, lms_left: 13, created_at: '2026-10-24T00:00:00Z', enrollment: e }],
+      [
+        { id: 'i1', kind: 'makeup_open', enrollment_id: 'e1', created_at: '2026-10-24T00:00:00Z', lesson: null, enrollment: e },
+        { id: 'i2', kind: 'makeup_booked', enrollment_id: 'e2', created_at: '2026-10-24T00:00:00Z', lesson: { starts_at: '2026-10-30T10:00:00Z' }, enrollment: e },
+      ],
+    );
+    expect(out).toMatchObject([
+      { id: 'e1', counts: { lmsLeft: 13, sheetLeft: 12 }, unknownOrigins: [{ id: 'i1', label: '미예약 보강' }] },
+      { id: 'e2', counts: null, unknownOrigins: [{ id: 'i2', label: '예약된 보강 10/30(금)' }] },
     ]);
   });
 });

@@ -87,6 +87,10 @@ export function fakeTasks(now: Date): TaskSource[] {
       detail: '보강 10/22(목) 21:00 이 가상강사 Blair 캘린더에 반영되지 않음 (3번 다시 시도 실패)', occurredAt: t(-2),
     },
     {
+      kind: 'import_check', id: 'ic-1', studentName: '가상기존일', studentCode: 'STU-9011', counts: { lmsLeft: 13, sheetLeft: 12 },
+      unknownOrigins: [{ id: 'mi-1', label: '미예약 보강' }], createdAt: t(-3),
+    },
+    {
       kind: 'long_leave_request', id: 'l-1', studentName: '가상학생이', studentCode: 'STU-9002', from: '11/20(금)', to: '11/26(목)',
       days: 7, reason: 'health', createdAt: t(-5),
     },

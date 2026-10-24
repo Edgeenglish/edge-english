@@ -92,7 +92,20 @@ export type AutoFailureTask = {
   occurredAt: Date;
 };
 
-export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask;
+/** 기존 학생 입력 뒤 시트 대조 전 · 보강 원래 날짜 확인 필요 (D-52 확대판, 2026-10-24 대표 결정 ②④⑤). 확인하면 사라짐 */
+export type ImportCheckTask = {
+  kind: 'import_check';
+  id: string; // 수강등록 번호
+  studentName: string;
+  studentCode: string;
+  /** 시트 대조 전이면 LMS·시트 남은 수업 (대조 완료면 null) */
+  counts: { lmsLeft: number; sheetLeft: number } | null;
+  /** 원래 수업 날짜를 아직 확인하지 못한 보강 */
+  unknownOrigins: { id: string; label: string }[];
+  createdAt: Date;
+};
+
+export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask;
 
 /** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
 export type Category = 'matching' | 'tutor_ack' | 'ending' | 'makeup' | 'issue';
@@ -148,6 +161,8 @@ export type BoardItem = {
   plan?: PlanView;
   /** 첫 수업 24시간 안인데 안내 미완료 → 목록 맨 위 (D-51-3) */
   top?: boolean;
+  /** 기존 학생 입력: 원래 날짜 확인 필요 보강 — 화면이 날짜 입력칸으로 그림 */
+  unknownOrigins?: { id: string; label: string }[];
 };
 
 const KST = 'Asia/Seoul';
@@ -284,6 +299,25 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         steps: [],
         actions: [{ key: 'makeup_nudged', label: '학생에게 보강 신청 안내함', primary: true }],
       };
+    case 'import_check': {
+      const diff = t.counts ? t.counts.lmsLeft - t.counts.sheetLeft : 0;
+      const parts = [
+        t.counts && (diff === 0 ? `남은 수업 ${t.counts.lmsLeft}회 (시트와 같음) · 입력 내용을 시트와 한 번 대조해 주세요` : `남은 수업 LMS ${t.counts.lmsLeft}회 · 시트 ${t.counts.sheetLeft}회 (${diff > 0 ? '+' : ''}${diff}) · 차이 원인을 확인해 주세요`),
+        t.unknownOrigins.length > 0 && `보강 원래 수업 날짜 확인 필요 ${t.unknownOrigins.length}건`,
+      ].filter(Boolean);
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: 'open',
+        tag: t.counts ? (diff === 0 ? '시트 대조' : `시트 대조 · ${Math.abs(diff)}회 차이`) : '보강 날짜 확인',
+        title: t.studentName,
+        detail: `${t.studentCode} · ${parts.join(' · ')}`,
+        due: null,
+        steps: [],
+        actions: t.counts ? [{ key: 'import_checked', label: '시트와 같음 · 대조 완료', primary: true }] : [],
+        unknownOrigins: t.unknownOrigins,
+      };
+    }
     case 'auto_failure': {
       const what = { calendar_sync: '캘린더 반영 실패', email_bounce: '메일 반송', payment_mismatch: '결제 금액 불일치' }[t.what];
       const action = {

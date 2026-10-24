@@ -12,6 +12,10 @@ import { fakeTasks, type FakeLesson, type OpsStats } from '@/lms/admin/fake-data
 import type { PlanView } from '@/lms/admin/confirm';
 import type { PlanActions } from '@/lms/admin/confirm-live';
 import PlanCard, { type PlanHandlers } from './PlanCard';
+import OriginFix from './OriginFix';
+
+/** 기존 학생 입력 뒤 처리 (DB 함수, migration 1500) */
+export type ImportActions = { markChecked: (enrollmentId: string) => Promise<void>; setOrigin: (itemId: string, date: string | null) => Promise<void> };
 import { AdminHeader, BottomNav, Icon, type IconName } from './ui';
 
 const CATEGORY_ICON: Record<Category, IconName> = { matching: 'userPlus', tutor_ack: 'clock', ending: 'hourglass', makeup: 'repeat', issue: 'alert' };
@@ -54,6 +58,10 @@ function applyAction(t: TaskSource, key: string, now: Date): TaskSource | null {
       if (key === 'check_schedule') next.scheduleCheckedAt = now;
       return next.tutorNotifiedAt && next.tutorAcknowledgedAt && next.scheduleCheckedAt ? null : next;
     }
+    case 'import_check': {
+      const next = { ...t, counts: key === 'import_checked' ? null : t.counts };
+      return next.counts || next.unknownOrigins.length > 0 ? next : null;
+    }
     default:
       return null; // 장기 연기 승인·거절, 노쇼 확정·지각 처리 → 목록에서 빠짐
   }
@@ -75,6 +83,7 @@ const DONE_MESSAGE: Record<string, string> = {
   reject_leave: '장기 연기를 거절했어요. 학생에게 사유를 안내해 주세요.',
   tutor_arrived: '강사 지각으로 처리했어요.',
   confirm_no_show: '노쇼로 확정했어요. 보강 1회 + 보상 수업 1회가 생겨요.',
+  import_checked: '시트 대조 완료로 기록했어요 (확인 시각·담당자). 이 학생은 다시 묻지 않아요.',
 };
 
 export default function AdminDashboard({
@@ -85,6 +94,7 @@ export default function AdminDashboard({
   stats,
   onLogout,
   planActions,
+  importActions,
   onReload,
 }: {
   nowIso: string;
@@ -97,6 +107,7 @@ export default function AdminDashboard({
   onLogout?: () => void;
   /** 실제 데이터: 일정안 확정·안내 기록 (DB 함수). 처리 뒤 onReload 로 다시 읽음 */
   planActions?: PlanActions;
+  importActions?: ImportActions;
   onReload?: () => Promise<void>;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -167,7 +178,17 @@ export default function AdminDashboard({
     };
   }
 
-  function act(item: BoardItem, key: string) {
+  async function act(item: BoardItem, key: string) {
+    if (!preview && key === 'import_checked' && importActions) {
+      try {
+        await importActions.markChecked(item.id);
+        await onReload?.();
+        setToast(DONE_MESSAGE[key]);
+      } catch (e) {
+        setToast(e instanceof Error ? e.message : '기록하지 못했어요.');
+      }
+      return;
+    }
     if (!preview) {
       // 실제 데이터: 처리(쓰기)는 서버 기능으로만 (POL-AC-07). 서버 기능을 만들기 전에는 보기만
       setToast('처리 버튼은 서버 저장 기능을 만든 뒤 연결돼요. 지금은 실제 데이터 보기만 가능해요.');
@@ -187,6 +208,23 @@ export default function AdminDashboard({
       return out;
     });
     setToast(`${DONE_MESSAGE[key] ?? '처리했어요.'}${preview ? ' (미리보기: 실제 저장·발송 없음)' : ''}`);
+  }
+
+  // 보강 원래 날짜 정리: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기
+  async function fixOrigin(item: BoardItem, itemId: string, date: string | null) {
+    if (!preview && importActions) {
+      await importActions.setOrigin(itemId, date);
+      await onReload?.();
+    } else {
+      setTasks((prev) =>
+        prev.flatMap((t) => {
+          if (t.id !== item.id || t.kind !== 'import_check') return [t];
+          const next = { ...t, unknownOrigins: t.unknownOrigins.filter((o) => o.id !== itemId) };
+          return next.counts || next.unknownOrigins.length > 0 ? [next] : [];
+        }),
+      );
+    }
+    setToast(`${date ? '원래 수업 날짜를 넣었어요.' : "'확인 불가'로 정리했어요. 날짜는 비워 둬요."}${preview ? ' (미리보기: 실제 저장 없음)' : ''}`);
   }
 
   return (
@@ -215,8 +253,8 @@ export default function AdminDashboard({
       {!preview && (
         <p className="mx-4 mt-3 rounded-[10px] bg-[#e3f5ea] px-3 py-2 text-[13px] text-[#13623a] lg:mx-7">
           {dbEnv(process.env.NEXT_PUBLIC_SUPABASE_URL) === 'prod'
-            ? '운영 DB의 실제 데이터예요. 학생 등록·신규 매칭 일정안(확정·[보냈어요])은 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'
-            : '시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·[보냈어요])은 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'}
+            ? '운영 DB의 실제 데이터예요. 학생 등록·신규 매칭 일정안(확정·[보냈어요])·시트 대조는 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'
+            : '시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·[보냈어요])·시트 대조는 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'}
         </p>
       )}
       {preview && (
@@ -349,6 +387,7 @@ export default function AdminDashboard({
                 </ul>
               )}
               {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
+              {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}
               <div className="flex flex-wrap gap-1.5">
                 {item.actions.map((a) =>
                   a.href ? (

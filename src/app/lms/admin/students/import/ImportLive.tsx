@@ -1,9 +1,9 @@
 'use client';
 
-// 실제 데이터로 기존 학생 입력. 화면 검사는 편의이고, 권한·충돌은 DB가 다시 확인 (is_admin = aal2)
+// 실제 데이터로 기존 학생 입력. 화면 검사는 편의이고, 권한·충돌은 DB가 다시 확인 (is_admin = aal2). 저장 뒤 시트 대조 완료 기록
 
 import { useEffect, useState } from 'react';
-import { saveImport } from '@/lms/admin/import-live';
+import { markImportChecked, saveImport } from '@/lms/admin/import-live';
 import { loadRegTutors } from '@/lms/admin/registration-live';
 import type { RegTutor } from '@/lms/admin/registration';
 import { supabaseBrowser } from '@/lms/auth/client';
@@ -37,5 +37,5 @@ export default function ImportLive() {
     const tutors = await loadRegTutors(sb!, new Date(state.nowIso));
     setState({ ...state, tutors });
   };
-  return <ImportStudent nowIso={state.nowIso} demo={false} tutors={state.tutors} save={(id, payload) => saveImport(sb!, id, payload)} reload={reload} />;
+  return <ImportStudent nowIso={state.nowIso} demo={false} tutors={state.tutors} save={(id, payload) => saveImport(sb!, id, payload)} reload={reload} markChecked={(id) => markImportChecked(sb!, id)} />;
 }

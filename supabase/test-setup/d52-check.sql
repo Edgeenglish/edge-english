@@ -12,5 +12,5 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
     to_regprocedure('lms_slot_hold_hits(uuid, timestamptz, timestamptz)') is not null
     and (select prosrc from pg_proc where proname = 'lms_plan_conflicts') like '%tutor_hold%'
     and (select prosrc from pg_proc where proname = 'lms_import_conflicts') like '%tutor_hold%'
-  union all select 7, '기존 학생·수업 데이터 그대로 (표 41개)', (select count(*) from pg_tables where schemaname = 'public') = 41
+  union all select 7, '기존 학생·수업 데이터 그대로 (표 41개 이상)', (select count(*) from pg_tables where schemaname = 'public') >= 41
 ) t order by n;
