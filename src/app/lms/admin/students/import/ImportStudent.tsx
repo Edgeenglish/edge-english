@@ -13,7 +13,7 @@ import { useMemo, useState } from 'react';
 import { addDays, instantToKstDate, weekdayOf } from '@/lms/rules/dates';
 import {
   DURATIONS, emptyImport, IMPORT_REASON_TEXT, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings,
-  newMakeup, regularRows, type ImportDraft, type ImportExtra, type ImportIssue, type ImportMakeup, type ImportWeeks,
+  newMakeup, regularRows, withAutoEnd, type ImportDraft, type ImportExtra, type ImportIssue, type ImportMakeup, type ImportWeeks,
 } from '@/lms/admin/import';
 import type { ImportConflict, ImportResult } from '@/lms/admin/import-live';
 import { creditsPerPeriod } from '@/lms/rules/policy';
@@ -89,7 +89,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
   const [checkError, setCheckError] = useState<string | null>(null);
 
   const set = <K extends keyof ImportDraft>(k: K, v: ImportDraft[K]) => {
-    setD((x) => ({ ...x, [k]: v }));
+    setD((x) => withAutoEnd(x, { ...x, [k]: v }));
     setResult(null);
   };
   const setSlot = (i: number, patch: Partial<ImportDraft['slots'][number]>) => set('slots', d.slots.map((s, j) => (j === i ? { ...s, ...patch } : s)));
@@ -318,29 +318,14 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="시작일 (이날부터 수업 생성)">
+              <Field label="입력 시작일 (이날부터 LMS에 수업 만듦)">
                 <input id="imp-from" type="date" value={d.fromDate} min={addDays(today, -7)} disabled={saved} onChange={(e) => set('fromDate', e.target.value || today)} className={inputCls(saved)} />
               </Field>
               <Field label="지금 수강 종료일" problem={tried && !d.endDate ? '필요해요' : undefined}>
                 <input id="imp-end" type="date" value={d.endDate} min={d.fromDate} disabled={saved} onChange={(e) => set('endDate', e.target.value)} className={inputCls(saved, tried && !d.endDate)} />
               </Field>
             </div>
-            {!saved && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[12.5px] text-[#6b6880]">종료일 빠르게:</span>
-                {WEEKS.map((w) => (
-                  <button
-                    key={w}
-                    type="button"
-                    onClick={() => set('endDate', addDays(d.fromDate, w * 7 - 1))}
-                    aria-pressed={d.endDate === addDays(d.fromDate, w * 7 - 1)}
-                    className={`min-h-[36px] rounded-[10px] border px-3 text-[13px] ${d.endDate === addDays(d.fromDate, w * 7 - 1) ? 'border-[#7d5fff] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
-                  >
-                    {w}주 뒤
-                  </button>
-                ))}
-              </div>
-            )}
+            <p className="-mt-1 text-[12.5px] text-[#6b6880]">종료일은 4번(상품·지금 기간·기간 시작일)을 넣으면 자동으로 채워져요. 연장이 있었으면 직접 고치세요.</p>
             {warn.endDate && <Note tone="warn">{warn.endDate}</Note>}
           </div>
         </Card>
@@ -350,6 +335,8 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
           <div className="grid gap-3">
             {d.makeups.map((m, i) => {
               const originIsRegular = !!m.originalDate && rows.some((r) => r.date === m.originalDate);
+              const originNote =
+                m.status === 'open' ? '보강 날짜 잡아야 함' : m.date ? `보강 ${dayLabel(m.date)}으로 잡힘` : '아래에 보강 날짜를 넣어 주세요';
               return (
                 <div key={i} className="grid gap-2 rounded-[12px] border border-[#e6e3ef] p-3">
                   <div className="flex items-center">
@@ -388,7 +375,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       </button>
                     </div>
                     {m.originUnknown && <Note tone="info">시트에서 원래 날짜를 알 수 없을 때만. 저장 뒤 대시보드에서 나중에 넣을 수 있어요.</Note>}
-                    {originIsRegular && <Note tone="info">{dayLabel(m.originalDate as string)} 정규 수업은 만들지 않아요 (이미 취소된 원래 수업)</Note>}
+                    {originIsRegular && <Note tone="info">{dayLabel(m.originalDate as string)} 수업 취소됨 · {originNote}</Note>}
                     {warn.origins[i] && <Note tone="warn">{warn.origins[i]}</Note>}
                   </div>
                   {m.status === 'booked' ? (
@@ -428,7 +415,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
           <div className="grid gap-3">
             <div>
               <span className="mb-1 block text-[13px] text-[#6b6880]">상품</span>
-              <Chips<ImportWeeks> value={d.weeks} options={WEEKS} label={(w) => WEEKS_TEXT[w]} onPick={(w) => !saved && setD((x) => ({ ...x, weeks: w, periodIdx: x.periodIdx && x.periodIdx > w / 4 ? null : x.periodIdx }))} />
+              <Chips<ImportWeeks> value={d.weeks} options={WEEKS} label={(w) => WEEKS_TEXT[w]} onPick={(w) => !saved && setD((x) => withAutoEnd(x, { ...x, weeks: w, periodIdx: x.periodIdx && x.periodIdx > w / 4 ? null : x.periodIdx }))} />
               {tried && !d.weeks && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
             </div>
             {d.weeks && (
@@ -449,6 +436,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 </p>
               </div>
             </div>
+            {warn.periodDay && <Note tone="warn">{warn.periodDay}</Note>}
             {warn.period && <Note tone="warn">{warn.period}</Note>}
             <div>
               <span className="mb-1 block text-[13px] text-[#6b6880]">이 기간 남은 변경권 (주 {d.slots.length}회 → 기간마다 {granted}개)</span>
@@ -489,7 +477,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
             <p className="-mt-1 text-[12.5px] text-[#6b6880]">회차 번호가 아니라 수업 상태(Class Status)가 진행·차감인 줄 수예요.</p>
             <p className="overflow-x-auto whitespace-nowrap rounded-[8px] bg-[#f6f5fb] px-3 py-2 text-[12.5px] tabular-nums text-[#1d1b2b]">
               정규 {count.regular}
-              {count.origin + count.skipped > 0 && ` (자동 ${count.candidates}${count.origin ? ` − 취소된 원래 수업 ${count.origin}` : ''}${count.skipped ? ` − 뺀 수업 ${count.skipped}` : ''})`} + 보강 예약 {count.booked} + 미예약 {count.open}
+              {count.origin + count.skipped > 0 && ` (자동 ${count.candidates}${count.origin ? ` − 취소됨(보강으로) ${count.origin}` : ''}${count.skipped ? ` − 뺀 수업 ${count.skipped}` : ''})`} + 보강 예약 {count.booked} + 미예약 {count.open}
               {count.extra > 0 && ` + 추가 ${count.extra}`} = <b>{count.lmsLeft}</b>
             </p>
             {count.sheetLeft !== null &&
@@ -555,7 +543,9 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       </span>
                       <span className="flex-1" />
                       {r.state === 'origin' ? (
-                        <span className="text-[12px] no-underline">취소된 원래 수업</span>
+                        <span className="text-[12px] no-underline">
+                          {d.makeups.find((m) => m.originalDate === r.date)?.status === 'booked' ? '취소됨 · 보강 잡힘' : '취소됨 · 보강 대기'}
+                        </span>
                       ) : (
                         (diff > 0 || r.state === 'skip') &&
                         !saved && (

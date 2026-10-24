@@ -11,6 +11,7 @@ import { clashes, type Busy } from '../rules/booking';
 import { addDays, diffDays, kstToInstant, weekdayOf, type KstDate, type KstTime } from '../rules/dates';
 import { creditsPerPeriod } from '../rules/policy';
 import type { RegTutor } from './registration';
+import { dayLabel, WEEKDAY_KO } from './schedule';
 
 export type ImportSlot = { weekday: number; time: KstTime };
 export type ImportMakeup = {
@@ -154,8 +155,21 @@ export function importPeriods(d: ImportDraft): ImportPeriod[] {
   });
 }
 
+/** 4번(상품·지금 기간·기간 시작일)으로 계산한 수강 종료일 = 마지막 28일 기간의 끝. 다 안 넣었으면 '' */
+export function autoEndDate(d: ImportDraft): KstDate | '' {
+  const ps = importPeriods(d);
+  return ps.length > 0 ? ps[ps.length - 1].end : '';
+}
+
+/** 종료일 자동 채우기: 비어 있거나 직전 자동값 그대로일 때만 새 자동값으로 (직접 고친 날짜는 건드리지 않음 — 연장·옛 상품) */
+export function withAutoEnd(prev: ImportDraft, next: ImportDraft): ImportDraft {
+  const auto = autoEndDate(next);
+  if (!auto || next.endDate !== prev.endDate) return next;
+  return prev.endDate === '' || prev.endDate === autoEndDate(prev) ? { ...next, endDate: auto } : next;
+}
+
 /** 저장은 막지 않는 확인 사항 (입력칸 바로 아래에 보여 줌) */
-export function importWarnings(d: ImportDraft): { period?: string; endDate?: string; origins: Record<number, string> } {
+export function importWarnings(d: ImportDraft): { period?: string; periodDay?: string; endDate?: string; origins: Record<number, string> } {
   const ps = importPeriods(d);
   const now = ps.find((p) => p.state === 'now');
   const last = ps[ps.length - 1];
@@ -164,7 +178,13 @@ export function importWarnings(d: ImportDraft): { period?: string; endDate?: str
   d.makeups.forEach((m, i) => {
     if (m.originalDate && m.originalDate >= d.fromDate && !keep.has(m.originalDate)) origins[i] = '이날은 정규 수업 날이 아니에요. 날짜를 확인해 주세요.';
   });
+  const days = d.slots.filter((x) => isTime(x.time)).map((x) => x.weekday);
+  const periodDay =
+    d.periodStart && days.length > 0 && !days.includes(weekdayOf(d.periodStart))
+      ? `${dayLabel(d.periodStart)}은 수업 요일(${days.map((w) => WEEKDAY_KO[w]).join('·')})이 아니에요. 기간 시작일은 첫 수업일부터 28일씩이라 항상 수업 요일이에요.`
+      : undefined;
   return {
+    periodDay,
     period: now && (d.fromDate < now.start || d.fromDate > now.end) ? `시작일(${d.fromDate})이 지금 기간(${now.start}~${now.end}) 밖이에요. 기간 시작일을 확인해 주세요.` : undefined,
     endDate: last && d.endDate && d.endDate !== last.end ? `종료일이 28일 규칙의 끝(${last.end})과 ${Math.abs(diffDays(last.end, d.endDate))}일 달라요. 연장·옛 상품이면 그대로 저장돼요.` : undefined,
     origins,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { kstToInstant } from '../rules/dates';
-import { emptyImport, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings, type ImportDraft, type ImportMakeup } from './import';
+import { autoEndDate, emptyImport, withAutoEnd, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings, type ImportDraft, type ImportMakeup } from './import';
 import type { RegTutor } from './registration';
 
 // 2027-08-02(월) ~ 2027-08-29(일)
@@ -95,5 +95,19 @@ describe('기존 학생 입력 확대판 (D-52 · H26, 2026-10-24 대표 결정)
     expect(importWarnings(d).endDate).toBeUndefined();
     expect(importWarnings({ ...d, endDate: '2027-09-10' }).endDate).toMatch('4일 달라요');
     expect(importWarnings({ ...d, periodStart: '2027-08-10' }).period).toMatch('밖이에요');
+  });
+});
+
+describe('종료일 자동 · 기간 시작일 요일 (2026-10-25 대표)', () => {
+  const d = base({ weeks: 12, periodIdx: 1, periodStart: '2026-10-27', fromDate: '2026-10-25', endDate: '', slots: [{ weekday: 2, time: '19:00' }] });
+  it('4번을 다 넣으면 마지막 28일 기간 끝이 종료일로, 직접 고친 종료일은 그대로', () => {
+    expect(autoEndDate(d)).toBe('2027-01-18');
+    expect(withAutoEnd({ ...d, periodStart: '' }, d).endDate).toBe('2027-01-18');
+    const edited = { ...d, endDate: '2027-01-25' };
+    expect(withAutoEnd(edited, { ...edited, periodIdx: 2 }).endDate).toBe('2027-01-25');
+  });
+  it('기간 시작일이 수업 요일이 아니면 알려 줌', () => {
+    expect(importWarnings(d).periodDay).toBeUndefined();
+    expect(importWarnings({ ...d, periodStart: '2026-10-25' }).periodDay).toMatch('수업 요일(화)이 아니에요');
   });
 });
