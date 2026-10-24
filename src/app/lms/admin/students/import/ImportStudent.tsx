@@ -39,6 +39,15 @@ const CONFLICT_TEXT: Record<string, string> = IMPORT_REASON_TEXT;
 const KIND_TEXT: Record<string, string> = { regular: '정규', makeup: '보강', migrated_makeup: '보강', extra: '추가', migrated_extra: '추가' };
 const WEEKS: ImportWeeks[] = [4, 12, 24];
 const WEEKS_TEXT: Record<ImportWeeks, string> = { 4: '1개월(4주)', 12: '3개월(12주)', 24: '6개월(24주)' };
+function openPicker(e: React.MouseEvent) {
+  const el = e.target as HTMLInputElement;
+  if (el.tagName !== 'INPUT' || (el.type !== 'date' && el.type !== 'time') || el.disabled) return;
+  try {
+    el.showPicker?.();
+  } catch {
+    /* 지원하지 않는 브라우저는 기본 동작 그대로 */
+  }
+}
 const numOrNull = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : null);
 const Note = ({ tone, children }: { tone: 'warn' | 'info' | 'bad' | 'ok'; children: React.ReactNode }) => (
   <p
@@ -198,7 +207,8 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
         </Link>
       </header>
 
-      <main className="mx-auto grid max-w-[760px] gap-4 px-4 pt-4 lg:px-7">
+      {/* 날짜·시각 칸은 PC에서도 휴대폰처럼 칸 아무 곳이나 누르면 고르는 창이 열림 */}
+      <main className="mx-auto grid max-w-[760px] gap-4 px-4 pt-4 lg:px-7" onClick={openPicker}>
         <div className="hidden lg:block">
           <h1 className="text-[22px] font-bold text-[#1d1b2b]">기존 학생 입력</h1>
         </div>
@@ -315,6 +325,22 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 <input id="imp-end" type="date" value={d.endDate} min={d.fromDate} disabled={saved} onChange={(e) => set('endDate', e.target.value)} className={inputCls(saved, tried && !d.endDate)} />
               </Field>
             </div>
+            {!saved && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[12.5px] text-[#6b6880]">종료일 빠르게:</span>
+                {WEEKS.map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => set('endDate', addDays(d.fromDate, w * 7 - 1))}
+                    aria-pressed={d.endDate === addDays(d.fromDate, w * 7 - 1)}
+                    className={`min-h-[36px] rounded-[10px] border px-3 text-[13px] ${d.endDate === addDays(d.fromDate, w * 7 - 1) ? 'border-[#7d5fff] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
+                  >
+                    {w}주 뒤
+                  </button>
+                ))}
+              </div>
+            )}
             {warn.endDate && <Note tone="warn">{warn.endDate}</Note>}
           </div>
         </Card>
