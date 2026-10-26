@@ -119,3 +119,11 @@ C17="$("${PSQL[@]}" -tA -f "$WORK/c17-check.sql")"
 echo "$C17" | grep -v '|통과$' && { echo "❌ c17-check 실패"; exit 1; }
 "${PROD[@]}" -tA -f "$WORK/c17-check.sql" | grep -v '|통과$' && { echo "❌ 운영 묶음 c17-check 실패"; exit 1; }
 echo "✅ migration 1700 적용 확인 파일 통과 (확인 $(echo "$C17" | wc -l)줄, 다시 적용해도 오류 없음)"
+
+# 수업 변경 화면 시험용 가상 학생: 시험용 DB에만, 두 번 실행해도 한 번
+cp "$ROOT"/supabase/test-setup/c17-seed.sql "$WORK"/; chmod a+r "$WORK"/c17-seed.sql
+"${PSQL[@]}" -o /dev/null -f "$WORK/c17-seed.sql"; "${PSQL[@]}" -o /dev/null -f "$WORK/c17-seed.sql"
+[ "$("${PSQL[@]}" -tA -c "select count(*) from lessons l join students s on s.id = l.student_id where s.name_ko = '가상변경'")" = "4" ] || { echo "❌ c17-seed"; exit 1; }
+"${PROD[@]}" -o /dev/null -f "$WORK/c17-seed.sql"
+[ "$("${PROD[@]}" -tA -c "select count(*) from students")" = "0" ] || { echo "❌ 운영 DB에 가상 학생이 들어감"; exit 1; }
+echo "✅ 수업 변경 시험용 가상 학생 (시험용에만, 한 번만)"
