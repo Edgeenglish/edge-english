@@ -49,15 +49,15 @@ describe('수업 변경 화면 계산 (1순위)', () => {
   it('안내 문구: 원래 수업 날짜와 보강 날짜를 모두 실제 날짜로 (학생 한국어, 강사 현지 시각 영어)', () => {
     const lesson = L('x1', '2026-10-29', '17:00');
     const c: NoticeContext = { student, durationMin: 50, lesson, decision: adv, tutorName: 'Alex', tutorTz: 'Asia/Manila', makeupAt: kstToInstant('2026-10-30', '18:00') };
-    expect(studentNotice('change', c)).toContain('취소한 수업: 10월 29일(목) 17:00');
-    expect(studentNotice('change', c)).toContain('수강기간(1/5 (화)까지) 내에 보강을 잡을 수 있어요');
+    expect(studentNotice('change', c)).toContain('취소된 수업: 10월 29일(목) 오후 5시\n변경권 1개 사용 (잔여 1개)');
+    expect(studentNotice('change', c)).toContain('보강은 수강기간 종료일인 1월 5일(화)까지 진행하실 수 있어요.');
     const conf = studentNotice('makeup_confirmed', c);
-    expect(conf).toContain('원래 수업: 10월 29일(목) 17:00');
-    expect(conf).toContain('보강 수업: 10월 30일(금) 18:00');
+    expect(conf).toContain('원래 수업: 10월 29일(목) 오후 5시');
+    expect(conf).toContain('보강 수업: 10월 30일(금) 오후 6시');
     expect(tutorNotice('makeup_confirmed', c)).toContain('Make-up: Fri 30 Oct 17:00 your time');
     expect(tutorNotice('makeup_ask', { ...c, candidates: [kstToInstant('2026-10-30', '18:00')] })).toContain('not confirmed yet');
     const abroad = studentNotice('change', { ...c, student: { ...student, timezone: 'America/Toronto' } });
-    expect(abroad).toContain('10월 29일(목) 04:00 (한국 10월 29일(목) 17:00)');
+    expect(abroad).toContain('10월 29일(목) 오전 4시 (한국 10월 29일(목) 오후 5시)');
   });
 
   it('대시보드: 안 보낸 안내·강사 답 대기 보강을 학생마다 한 줄로, 수업이 24시간 안이면 급함', () => {
@@ -82,7 +82,16 @@ describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)'
     expect(t).toContain('불편을 드려 정말 죄송합니다. 사과의 마음으로 다음 수강 등록 시 사용하실 수 있는 적립금 2,000원을 드렸어요 (유효기간 없음).');
     expect(t).not.toContain('직전');
     expect(t).not.toContain('변경권');
-    expect(t).toContain('수업 시간에 강사님과 정하셔도 되고');
+    expect(t).toContain('강사님과 수업 중에 일정을 정하시거나, 저희에게 말씀해 주세요.');
+  });
+  it('학생 본인 취소 안내 = 대표 문구 그대로 (2026-10-26)', () => {
+    const lesson = L('k', '2026-11-05', '10:00');
+    const d: ChangeDecision = { ...adv, credits_after: 1, makeup_until: '2026-11-16' };
+    expect(studentNotice('change', { student: { ...student, nameKo: '가상변경' }, durationMin: 50, lesson, decision: d, tutorName: 'A', tutorTz: 'Asia/Seoul' })).toBe(
+      '[엣지영어] 가상변경님, 요청하신 수업이 취소됐어요.\n\n취소된 수업: 11월 5일(목) 오전 10시\n변경권 1개 사용 (잔여 1개)\n\n' +
+        '보강은 수강기간 종료일인 11월 16일(월)까지 진행하실 수 있어요. 강사님과 수업 중에 일정을 정하시거나, 저희에게 말씀해 주세요.\n\n' +
+        '취소된 수업 날짜가 요청하신 날짜와 다르다면 바로 알려주세요.',
+    );
   });
   it('강사: 학생과 이야기해도 되지만 직접 확정 금지, 종료일까지', () => {
     const t = tutorNotice('change', c);
