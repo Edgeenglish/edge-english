@@ -474,7 +474,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <Field label="보강 날짜">
-                          <input id={`imp-mk-date-${i}`} type="date" value={m.date} min={d.fromDate} max={d.endDate || undefined} disabled={saved} onChange={(e) => setMakeup(i, { date: e.target.value })} className={inputCls(saved, tried && !m.date)} />
+                          <input id={`imp-mk-date-${i}`} type="date" value={m.date} min={d.fromDate} disabled={saved} onChange={(e) => setMakeup(i, { date: e.target.value })} className={inputCls(saved, tried && !m.date)} />
                         </Field>
                         <Field label="한국 시각">
                           <input id={`imp-mk-time-${i}`} type="time" step={300} value={m.time} disabled={saved} onChange={(e) => setMakeup(i, { time: e.target.value })} className={inputCls(saved, tried && !m.time)} />
