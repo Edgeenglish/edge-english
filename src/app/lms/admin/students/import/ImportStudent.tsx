@@ -100,7 +100,9 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
 
   const problems = importProblems(d);
   const lessons = useMemo(() => importLessons(d), [d]);
-  const issues = useMemo(() => importIssues(lessons, tutors), [lessons, tutors]);
+  // 저장 뒤에는 강사 일정을 다시 읽어 방금 넣은 이 학생 수업이 들어오므로, 자기 자신과 충돌로 보이지 않게 검사하지 않음
+  const savedNow = result?.kind === 'saved';
+  const issues = useMemo(() => (savedNow ? [] : importIssues(lessons, tutors)), [savedNow, lessons, tutors]);
   const regular = lessons.filter((l) => l.kind === 'regular');
   const rows = useMemo(() => regularRows(d), [d]);
   const count = importCount(d);
