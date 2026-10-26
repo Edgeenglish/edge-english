@@ -86,6 +86,15 @@ export const WEEKLY_ALLOWED = [1, 2, 3, 5] as const;
 export const DURATIONS = [20, 40, 50] as const;
 const isTime = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 
+/**
+ * 정규 시각 바꾸기: 1번째 줄 시각을 바꾸면, 1번째와 같은 시각이었거나 비어 있던 다른 요일도 함께 바뀜 (보통 모든 요일 같은 시각).
+ * 2번째 줄부터는 그 줄만 바뀜 → 주 3회 이상에서 1개 요일만 다른 시각도 넣을 수 있음. 시각이 달라도 오류로 막지 않음 (2026-10-27 대표)
+ */
+export function setSlotTime(slots: readonly ImportSlot[], i: number, time: KstTime | ''): ImportSlot[] {
+  const old = slots[i]?.time ?? '';
+  return slots.map((s, j) => (j === i || (i === 0 && (s.time === old || s.time === '')) ? { ...s, time: time as KstTime } : s));
+}
+
 /** '없음'을 고르면 적어 둔 보강은 저장·계산에서 빠짐 */
 export const activeMakeups = (d: ImportDraft): ImportMakeup[] => (d.hasMakeups ? d.makeups : []);
 

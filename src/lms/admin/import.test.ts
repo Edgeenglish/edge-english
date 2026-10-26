@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { kstToInstant } from '../rules/dates';
-import { autoEndDate, autoFromDate, currentPeriod, emptyImport, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings, regularEnd, withAutoEnd, type ImportDraft, type ImportMakeup } from './import';
+import { autoEndDate, autoFromDate, currentPeriod, emptyImport, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings, regularEnd, setSlotTime, withAutoEnd, type ImportDraft, type ImportMakeup } from './import';
 import type { RegTutor } from './registration';
 
 // 2027-08-02(월) ~ 2027-08-29(일)
@@ -129,5 +129,19 @@ describe('종료일 자동 · 연장된 날 정규 없음 · 보강 없으면 �
   it('첫 정규 수업일은 오늘 이후 첫 수업 요일, 수강 시작일이 수업 요일과 다르면 안내만', () => {
     expect(autoFromDate({ ...d, today: '2026-10-28' })).toBe('2026-11-03');
     expect(importWarnings({ ...d, courseStart: '2026-10-26' }).courseDay).toMatch('고정 요일을 바꾼 학생이면 정상');
+  });
+});
+
+describe('정규 시각 맞추기 (2026-10-27 대표)', () => {
+  const three = [{ weekday: 1, time: '' }, { weekday: 3, time: '' }, { weekday: 5, time: '' }] as const;
+  it('1번째 시각을 넣으면 나머지도 같은 시각, 다른 줄만 바꾸면 그 줄만', () => {
+    const a = setSlotTime([...three], 0, '11:00');
+    expect(a.map((s) => s.time)).toEqual(['11:00', '11:00', '11:00']);
+    const b = setSlotTime(a, 2, '15:00');
+    expect(b.map((s) => s.time)).toEqual(['11:00', '11:00', '15:00']);
+    expect(setSlotTime(b, 0, '12:00').map((s) => s.time)).toEqual(['12:00', '12:00', '15:00']);
+  });
+  it('시각이 달라도 저장 전 문제로 막지 않음', () => {
+    expect(importProblems(base({ slots: [{ weekday: 2, time: '19:00' }, { weekday: 4, time: '20:00' }] }))).toEqual([]);
   });
 });

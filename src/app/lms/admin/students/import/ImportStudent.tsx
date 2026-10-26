@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react';
 import { addDays, instantToKstDate, weekdayOf } from '@/lms/rules/dates';
 import {
   DURATIONS, emptyImport, IMPORT_REASON_TEXT, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings,
-  activeMakeups, autoFromDate, currentPeriod, END_REASON_TEXT, newMakeup, regularEnd, regularRows, todayPeriod, withAutoEnd, type EndReason, type ImportDraft, type ImportExtra, type ImportIssue, type ImportMakeup, type ImportWeeks,
+  activeMakeups, autoFromDate, setSlotTime, currentPeriod, END_REASON_TEXT, newMakeup, regularEnd, regularRows, todayPeriod, withAutoEnd, type EndReason, type ImportDraft, type ImportExtra, type ImportIssue, type ImportMakeup, type ImportWeeks,
 } from '@/lms/admin/import';
 import type { ImportConflict, ImportResult } from '@/lms/admin/import-live';
 import { creditsPerPeriod } from '@/lms/rules/policy';
@@ -93,7 +93,8 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
     setD((x) => withAutoEnd(x, { ...x, [k]: v }));
     setResult(null);
   };
-  const setSlot = (i: number, patch: Partial<ImportDraft['slots'][number]>) => set('slots', d.slots.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+  const setSlot = (i: number, patch: Partial<ImportDraft['slots'][number]>) =>
+    set('slots', patch.time !== undefined ? setSlotTime(d.slots, i, patch.time) : d.slots.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const setMakeup = (i: number, patch: Partial<ImportMakeup>) => set('makeups', d.makeups.map((m, j) => (j === i ? { ...m, ...patch } : m)));
   const setExtra = (i: number, patch: Partial<ImportExtra>) => set('extras', d.extras.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const tutorName = (id: string) => tutors.find((t) => t.id === id)?.name ?? '';
@@ -358,6 +359,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
             </div>
             <div>
               <span className="mb-1 block text-[13px] text-[#6b6880]">요일 · 한국 시각 (주 {d.slots.length}회)</span>
+              {d.slots.length > 1 && <span className="-mt-0.5 mb-1.5 block text-[12px] text-[#6b6880]">1번째 시각을 넣으면 다른 요일도 같은 시각으로 맞춰져요. 다른 시각이 필요한 요일만 그 줄에서 바꾸세요.</span>}
               <div className="grid gap-2">
                 {d.slots.map((s, i) => (
                   <div key={i}>
