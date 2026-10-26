@@ -29,7 +29,7 @@ ${PAGE_STYLE}
   <div class="where">Supabase → 조직 <b>EdgeEnglish LMS</b> → <b>edgeenglish-lms</b> → 왼쪽 SQL Editor. 화면 맨 위 이름 확인</div>
   ${prodStep('운영인지 확인', '<p class="expect">확인: <b>edgeenglish-lms</b> 한 줄</p>', projectCheck('edgeenglish-lms'))}
   ${prodStep('적용 직전 백업', '<p class="expect">결과 표 오른쪽 위 <b>Export → Download CSV</b> → 파일 이름 앞에 <code>날짜_운영_1700적용전_</code> → 구글 드라이브 <b>LMS 백업</b> 폴더</p>', sql('supabase/backup/backup.sql'))}
-  ${prodStep('변경 적용 (1700)', '<p class="expect">확인: 빨간 글씨 없이 끝남. 창이 뜨면 초록 <b>Run and enable RLS</b></p>', apply)}
+  ${prodStep('변경 적용 (1700)', '<p class="expect">확인: 빨간 글씨 없이 끝남. \'Potential issue detected\' 창이 뜨면 주황 <b>Run query</b> (규칙을 새 규칙으로 바꾸는 줄 때문, 데이터 지우지 않음). \'Run and enable RLS\' 창이면 초록 버튼</p>', apply)}
   ${prodStep('확인 (읽기만)', '<p class="expect">확인: 5줄 모두 <b>통과</b></p>', sql('supabase/test-setup/c17-check.sql'))}
   <p class="note">오류가 나면 오류 첫 줄만 Claude에게. 변경 적용은 한 묶음이라 오류가 나면 아무것도 바뀌지 않아요.</p>
 </div>
