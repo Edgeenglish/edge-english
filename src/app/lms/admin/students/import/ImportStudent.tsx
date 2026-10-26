@@ -331,7 +331,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 )}
                 {!saved && (
                   <button type="button" onClick={() => setD((x) => ({ ...x, endDate: warn.end!.calc, endReason: '', endNote: '' }))} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-left text-[13px] text-[#1d1b2b]">
-                    계산값({dayLabel(warn.end.calc)})으로 되돌리기
+                    되돌리기
                   </button>
                 )}
               </div>
@@ -475,7 +475,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                               onClick={() => setD((x) => ({ ...x, endDate: m.date as string, endReason: 'tutor_long_term_leave' }))}
                               className="min-h-[40px] w-fit rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px] font-semibold text-[#1d1b2b]"
                             >
-                              종료일을 {dayLabel(m.date)}로 늘리기 (강사 장기 휴무 연장)
+                              종료일 {dayLabel(m.date)}로 연장
                             </button>
                           )}
                         </div>
@@ -693,7 +693,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                   <li>• 보강 예약 {count.booked} · 미예약 {count.open}</li>
                 </ul>
                 {checked === 'yes' ? (
-                  <Note tone="ok">✓ 대조 완료로 기록했어요 (오늘 · 내 계정). 이 학생은 다시 묻지 않아요.</Note>
+                  <Note tone="ok">✓ 대조 완료</Note>
                 ) : demo ? (
                   <Note tone="warn">미리보기에서는 대조 완료를 기록하지 않아요.</Note>
                 ) : (
@@ -704,7 +704,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       onClick={() => confirmChecked(result.enrollmentId)}
                       className="mt-2 min-h-[48px] w-full rounded-[10px] bg-[#7d5fff] text-[15px] font-bold text-white disabled:bg-[#cfc4ff]"
                     >
-                      {checked === 'saving' ? '기록 중…' : '시트와 같음 · 대조 완료'}
+                      {checked === 'saving' ? '기록 중…' : '대조 완료'}
                     </button>
                   </>
                 )}
@@ -722,7 +722,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 onClick={submit}
                 className={`mt-3 min-h-[52px] w-full rounded-[12px] text-[16px] font-bold text-white disabled:bg-[#cfc4ff] ${count.sheetLeft !== null && diff !== 0 ? 'bg-[#b7791f]' : 'bg-[#7d5fff]'}`}
               >
-                {saving ? '저장 중…' : count.sheetLeft !== null && diff !== 0 ? `차이 ${Math.abs(diff)}회 그대로 저장` : '저장'}
+                {saving ? '저장 중…' : '저장'}
               </button>
             </>
           )}

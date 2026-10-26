@@ -319,7 +319,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         detail: `${t.studentCode} · ${parts.join(' · ')}`,
         due: null,
         steps: [],
-        actions: t.counts ? [{ key: 'import_checked', label: '시트와 같음 · 대조 완료', primary: true }] : [],
+        actions: t.counts ? [{ key: 'import_checked', label: '대조 완료', primary: true }] : [],
         unknownOrigins: t.unknownOrigins,
         endReason: t.endReason ?? null,
       };

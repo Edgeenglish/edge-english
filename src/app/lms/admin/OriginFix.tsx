@@ -42,7 +42,7 @@ export default function OriginFix({ items, onSave }: { items: { id: string; labe
               onClick={() => run(o.id, dates[o.id])}
               className="min-h-[40px] rounded-[10px] border border-[#7d5fff] bg-[#7d5fff] px-3 text-[13.5px] font-semibold text-white disabled:border-[#cfc4ff] disabled:bg-[#cfc4ff]"
             >
-              날짜 저장
+              저장
             </button>
             <button
               type="button"

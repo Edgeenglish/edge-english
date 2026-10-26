@@ -89,7 +89,7 @@ const DONE_MESSAGE: Record<string, string> = {
   reject_leave: '장기 연기를 거절했어요. 학생에게 사유를 안내해 주세요.',
   tutor_arrived: '강사 지각으로 처리했어요.',
   confirm_no_show: '노쇼로 확정했어요. 보강 1회 + 보상 수업 1회가 생겨요.',
-  import_checked: '시트 대조 완료로 기록했어요 (확인 시각·담당자). 이 학생은 다시 묻지 않아요.',
+  import_checked: '대조 완료',
 };
 
 export default function AdminDashboard({
@@ -230,7 +230,7 @@ export default function AdminDashboard({
         }),
       );
     }
-    setToast(`${date ? '원래 수업 날짜를 넣었어요.' : "'확인 불가'로 정리했어요. 날짜는 비워 둬요."}${preview ? ' (미리보기: 실제 저장 없음)' : ''}`);
+    setToast(`저장했어요${preview ? ' (미리보기)' : ''}`);
   }
 
   // 종료일 이유 확인: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기
@@ -247,7 +247,7 @@ export default function AdminDashboard({
         }),
       );
     }
-    setToast(`종료일 이유를 기록했어요.${preview ? ' (미리보기: 실제 저장 없음)' : ''}`);
+    setToast(`저장했어요${preview ? ' (미리보기)' : ''}`);
   }
 
   return (

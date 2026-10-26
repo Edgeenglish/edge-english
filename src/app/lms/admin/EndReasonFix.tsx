@@ -58,7 +58,7 @@ export default function EndReasonFix({ weeks, onSave }: { weeks: number | null; 
         onClick={save}
         className="min-h-[40px] w-fit rounded-[10px] border border-[#7d5fff] bg-[#7d5fff] px-3 text-[13.5px] font-semibold text-white disabled:border-[#cfc4ff] disabled:bg-[#cfc4ff]"
       >
-        이유 저장
+        저장
       </button>
       {error && <span className="text-[12.5px] text-[#b3261e]">{error}</span>}
     </div>
