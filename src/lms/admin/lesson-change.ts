@@ -172,7 +172,7 @@ function originEn(c: NoticeContext): string {
 }
 
 /** 보강은 학생이 수업 시간에 강사와 정해도 되고 운영진에게 말해도 됨 (확정은 운영진, D-43) */
-const makeupLineKo = (until: KstDate) => `보강: ${dateLabel(until)}까지 잡을 수 있어요. 수업 시간에 강사님과 정하셔도 되고, 저희에게 말씀하셔도 돼요.`;
+const makeupLineKo = (until: KstDate) => `수강기간(${dateLabel(until)}까지) 내에 보강을 잡을 수 있어요. 수업 시간에 강사님과 정하셔도 되고, 저희에게 말씀하셔도 돼요.`;
 const EN_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const EN_WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const enDate = (d: KstDate) => `${EN_WD[new Date(`${d}T00:00:00Z`).getUTCDay()]} ${Number(d.slice(8))} ${EN_MON[Number(d.slice(5, 7)) - 1]}`;
@@ -191,8 +191,9 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
       return [
         `[엣지영어] ${name}님, 강사 사정으로 수업이 취소됐어요`,
         `취소된 수업: ${at}`,
-        d.reward_won > 0 ? '수업 직전에 취소돼 불편을 드려 정말 죄송합니다.' : '불편을 드려 죄송합니다.',
-        d.reward_won > 0 ? `사과의 마음으로 적립금 ${d.reward_won.toLocaleString('ko-KR')}원을 드렸어요. 다음 수강 등록 결제 때 사용하실 수 있어요 (유효기간 없음).` : '',
+        d.reward_won > 0
+          ? `불편을 드려 정말 죄송합니다. 사과의 마음으로 다음 수강 등록 시 사용하실 수 있는 적립금 ${d.reward_won.toLocaleString('ko-KR')}원을 드렸어요 (유효기간 없음).`
+          : '불편을 드려 정말 죄송합니다.',
         d.makeup_until ? makeupLineKo(d.makeup_until) : '',
       ].filter(Boolean).join('\n');
     }

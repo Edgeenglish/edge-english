@@ -50,7 +50,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     const lesson = L('x1', '2026-10-29', '17:00');
     const c: NoticeContext = { student, durationMin: 50, lesson, decision: adv, tutorName: 'Alex', tutorTz: 'Asia/Manila', makeupAt: kstToInstant('2026-10-30', '18:00') };
     expect(studentNotice('change', c)).toContain('변경한 수업: 10월 29일(목) 17:00');
-    expect(studentNotice('change', c)).toContain('보강: 1/5 (화)까지');
+    expect(studentNotice('change', c)).toContain('수강기간(1/5 (화)까지) 내에 보강을 잡을 수 있어요');
     const conf = studentNotice('makeup_confirmed', c);
     expect(conf).toContain('원래 수업: 10월 29일(목) 17:00');
     expect(conf).toContain('보강 수업: 10월 30일(금) 18:00');
@@ -79,8 +79,8 @@ describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)'
   const c: NoticeContext = { student, durationMin: 50, lesson, decision: tutorLate, tutorName: 'Alex', tutorTz: 'Asia/Manila' };
   it('학생: 사과 + 적립금 사용처, 당연한 말(변경권 차감 없음) 없음, 보강은 강사와 정해도 됨', () => {
     const t = studentNotice('change', c);
-    expect(t).toContain('정말 죄송합니다');
-    expect(t).toContain('다음 수강 등록 결제 때 사용하실 수 있어요');
+    expect(t).toContain('불편을 드려 정말 죄송합니다. 사과의 마음으로 다음 수강 등록 시 사용하실 수 있는 적립금 2,000원을 드렸어요 (유효기간 없음).');
+    expect(t).not.toContain('직전');
     expect(t).not.toContain('변경권');
     expect(t).toContain('수업 시간에 강사님과 정하셔도 되고');
   });
