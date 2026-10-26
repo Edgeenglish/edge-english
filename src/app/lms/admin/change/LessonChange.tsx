@@ -10,7 +10,7 @@ import { formatInZone, instantToKstDate, kstToInstant } from '@/lms/rules/dates'
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
 import {
-  changeableLessons, dateLabel, decisionLines, EVENT_TEXT, kstLabel, lessonTag, makeupRights, STATUS_SHORT, studentNotice, tutorNotice,
+  changeableLessons, dateLabel, tutorLocalLabel, decisionLines, EVENT_TEXT, kstLabel, lessonTag, makeupRights, STATUS_SHORT, studentNotice, tutorNotice,
   type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupRight, type NoticeContext,
 } from '@/lms/admin/lesson-change';
 import type { StudentLessonData } from '@/lms/admin/lesson-change-live';
@@ -183,7 +183,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
               <Card title="보강">
                 <ul className="grid gap-2.5">
                   {rights.map((r) => (
-                    <MakeupRow key={r.key} right={r} finalEnd={data.enrollment?.finalEndDate ?? null} actions={actions} done={reload} />
+                    <MakeupRow key={r.key} right={r} finalEnd={data.enrollment?.finalEndDate ?? null} tutorTz={(r.kind === 'lesson' ? r.source : lastTutor)?.tutorTz ?? 'Asia/Seoul'} actions={actions} done={reload} />
                   ))}
                 </ul>
               </Card>
@@ -323,7 +323,7 @@ function NoticeRow({ n, text, markSent }: { n: ChNotice; text: string; markSent:
   );
 }
 
-function MakeupRow({ right, finalEnd, actions, done }: { right: MakeupRight; finalEnd: string | null; actions: ChangeActions; done: () => Promise<void> }) {
+function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupRight; finalEnd: string | null; tutorTz: string; actions: ChangeActions; done: () => Promise<void> }) {
   const src = right.kind === 'lesson' ? right.source : null;
   const defTime = src ? kstParts(src.startsAt).time : '';
   const [slots, setSlots] = useState<{ date: string; time: string }[]>([{ date: '', time: defTime }]);
@@ -336,6 +336,11 @@ function MakeupRow({ right, finalEnd, actions, done }: { right: MakeupRight; fin
     : `시트 보강 · 원래 ${right.kind === 'migrated' && right.item.originalDate ? dateLabel(right.item.originalDate) : '날짜 확인 필요'}`;
   const until = right.kind === 'migrated' && right.item.tutorLeave ? '강사 휴가 · 종료일 제한 없음' : finalEnd ? `${dateLabel(finalEnd)}까지` : '';
   const toAt = (s: { date: string; time: string }) => (s.date && /^\d\d:\d\d$/.test(s.time) ? kstToInstant(s.date, s.time) : null);
+  // 한국 시각으로 넣고, 강사 현지 날짜·시각은 바로 아래 자동 표시 (2026-10-26 대표)
+  const Local = ({ at }: { at: Date | null }) => {
+    const t = at && tutorLocalLabel(at, tutorTz);
+    return t ? <span className="text-[12.5px] text-[#6b6880]">강사 현지 {t}</span> : null;
+  };
 
   async function run(f: () => Promise<void>) {
     setBusy(true);
@@ -358,7 +363,10 @@ function MakeupRow({ right, finalEnd, actions, done }: { right: MakeupRight; fin
         <div className="mt-2 grid gap-1.5">
           {open.candidates.map((t) => (
             <div key={+t} className="flex items-center gap-2">
-              <span className="flex-1 text-[15px] text-[#1d1b2b]">{kstLabel(t)}</span>
+              <span className="flex-1 text-[15px] text-[#1d1b2b]">
+                {kstLabel(t)}
+                <span className="block"><Local at={t} /></span>
+              </span>
               <button type="button" disabled={busy} className={btnMain} onClick={() => run(() => actions.confirmMakeup(open.id, t))}>확정</button>
             </div>
           ))}
@@ -367,16 +375,20 @@ function MakeupRow({ right, finalEnd, actions, done }: { right: MakeupRight; fin
             <TimeInput aria-label="다른 보강 시각" value={other.time} onChange={(v) => setOther({ ...other, time: v })} className={inputCls(false)} />
             <button type="button" disabled={busy || !toAt(other)} className={btnMain} onClick={() => run(() => actions.confirmMakeup(open.id, toAt(other)!))}>확정</button>
           </div>
+          <Local at={toAt(other)} />
           <button type="button" disabled={busy} className={btnSub} onClick={() => run(() => actions.withdrawMakeup(open.id))}>신청 닫기</button>
         </div>
       ) : (
         <div className="mt-2 grid gap-1.5">
           {slots.map((s, i) => (
-            <div key={i} className="grid grid-cols-[1.4fr_1fr] gap-1.5">
+            <div key={i} className="grid gap-1">
+            <div className="grid grid-cols-[1.4fr_1fr] gap-1.5">
               <input type="date" aria-label={`보강 희망 날짜 ${i + 1}`} value={s.date} max={right.kind === 'migrated' && right.item.tutorLeave ? undefined : finalEnd ?? undefined}
                 onChange={(e) => setSlots(slots.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)))} className={inputCls(false)} />
               <TimeInput aria-label={`보강 희망 시각 ${i + 1}`} value={s.time}
                 onChange={(v) => setSlots(slots.map((x, j) => (j === i ? { ...x, time: v } : x)))} className={inputCls(false)} />
+            </div>
+            <Local at={toAt(s)} />
             </div>
           ))}
           <div className="grid grid-cols-2 gap-1.5">

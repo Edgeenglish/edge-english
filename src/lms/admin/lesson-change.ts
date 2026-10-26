@@ -81,6 +81,12 @@ export function kstLabel(at: Date): string {
   const d = instantToKstDate(at);
   return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]}) ${f.time}`;
 }
+/** 강사 현지 '11/6 (금) 09:00' — 한국과 날짜가 달라도 그 나라 날짜로. 강사가 한국 시간대면 null (같은 시각이라 표시 안 함) */
+export function tutorLocalLabel(at: Date, tz: string): string | null {
+  if (!tz || tz === 'Asia/Seoul') return null;
+  const f = formatInZone(at, tz);
+  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))} (${WD[new Date(`${f.date}T00:00:00Z`).getUTCDay()]}) ${f.time}`;
+}
 export function dateLabel(d: KstDate): string {
   return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 }

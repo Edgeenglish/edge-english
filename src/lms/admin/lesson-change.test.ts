@@ -100,3 +100,17 @@ describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)'
     expect(tutorNotice('change', { ...c, decision: { ...adv, status: 'Student canceled late', makeup_allowed: false, makeup_until: null } })).not.toContain('Make-up');
   });
 });
+
+describe('보강 시간 입력: 강사 현지 날짜·시각 (2026-10-26 대표)', () => {
+  it('한국 시각을 강사 현지로 바꿔 보여 주고 날짜가 바뀌어도 정확히', async () => {
+    const { tutorLocalLabel } = await import('./lesson-change');
+    expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'Asia/Manila')).toBe('11/6 (금) 09:00');
+    expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'America/Toronto')).toBe('11/5 (목) 20:00');
+    expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'Asia/Seoul')).toBeNull();
+  });
+  it('강사 확인 전 보강 신청은 학생에게 확정처럼 안내하지 않음 (학생 안내 없음)', () => {
+    const c: NoticeContext = { student, durationMin: 50, lesson: L('x', '2026-10-29', '17:00'), candidates: [kstToInstant('2026-11-06', '10:00')], tutorName: 'A', tutorTz: 'Asia/Manila' };
+    expect(studentNotice('makeup_ask', c)).toBe('');
+    expect(tutorNotice('makeup_ask', c)).toContain('not confirmed yet');
+  });
+});
