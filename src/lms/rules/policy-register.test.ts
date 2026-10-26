@@ -8,7 +8,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CONFIRMED_REFS, PENDING_REFS, POLICY_V1_REFS } from './policy';
+import { CONFIRMED, CONFIRMED_REFS, FAVORABLE_FOR_ALL, PENDING_REFS, POLICY_V1_REFS } from './policy';
 import { CLASS_STATUSES, STATUS_RULES } from './status';
 import { GUIDES, TERMS } from './terms';
 
@@ -141,5 +141,14 @@ describe('상태매핑표 14개: TypeScript ↔ DB 기준값', () => {
         incentive: r.incentive,
       });
     }
+  });
+});
+
+describe('수업 변경 DB 함수의 숫자 = 코드 기준값 (migration 1700)', () => {
+  const sql = readFileSync(join(ROOT, 'supabase/migrations/20261026001700_lms_lesson_change.sql'), 'utf8');
+  it('6시간 · 강사 늦은 취소 적립금 · 휴식 시간', () => {
+    expect(sql).toContain(`v_notice constant interval := interval '${CONFIRMED.changeNoticeHours} hours'`);
+    expect(sql).toContain(`v_reward constant integer := ${FAVORABLE_FOR_ALL.tutorLateCancelRewardWon};`);
+    expect(sql).toContain(`v_break constant interval := interval '${CONFIRMED.minBreakMin} minutes'`);
   });
 });

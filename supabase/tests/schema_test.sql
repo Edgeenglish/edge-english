@@ -100,11 +100,16 @@ select pg_temp.expect_error($$delete from lessons where id = '77777777-7777-7777
 select pg_temp.ok(true, '수업 삭제 금지');
 
 -- ---------- 변경권 ----------
-insert into credit_ledger (period_id, lesson_id, reason, delta)
-values ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777771', 'student_change', -1);
+-- 차감은 변경 요청 1건당 1번 (migration 1700: 수업당 → 요청당, 되돌린 뒤 다시 변경 가능)
+insert into change_requests (id, lesson_id, type, status, via) values
+  ('cccccccc-0000-0000-0000-000000000771', '77777777-7777-7777-7777-777777777771', 'student_cancel', 'applied', 'admin_app');
+insert into credit_ledger (period_id, lesson_id, change_request_id, reason, delta)
+values ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777771', 'cccccccc-0000-0000-0000-000000000771', 'student_change', -1);
+select pg_temp.expect_error($$insert into credit_ledger (period_id, lesson_id, change_request_id, reason, delta)
+  values ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777771', 'cccccccc-0000-0000-0000-000000000771', 'student_change', -1)$$, 'unique|23505');
 select pg_temp.expect_error($$insert into credit_ledger (period_id, lesson_id, reason, delta)
-  values ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777771', 'student_change', -1)$$, 'unique|23505');
-select pg_temp.ok(credit_balance('66666666-6666-6666-6666-666666666666') = 1, '같은 수업 변경권 두 번 차감 거부, 남은 1개');
+  values ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777771', 'student_change', -1)$$, 'credit_ledger_request_required');
+select pg_temp.ok(credit_balance('66666666-6666-6666-6666-666666666666') = 1, '같은 요청 변경권 두 번 차감 거부, 요청 없는 차감 거부, 남은 1개');
 
 insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, canceled_at, class_status)
 values ('77777777-7777-7777-7777-777777777773', '55555555-5555-5555-5555-555555555555', '33333333-3333-3333-3333-333333333333',
@@ -114,10 +119,13 @@ insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_
 values ('77777777-7777-7777-7777-777777777774', '55555555-5555-5555-5555-555555555555', '33333333-3333-3333-3333-333333333333',
         '11111111-1111-1111-1111-111111111111', 'regular', 3, '2026-11-10 08:00+00', '2026-11-10 08:50+00',
         'canceled', now(), 'Student canceled in advance');
-insert into credit_ledger (period_id, lesson_id, reason, delta)
-values ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777773', 'student_change', -1);
-select pg_temp.expect_error($$insert into credit_ledger (period_id, lesson_id, reason, delta)
-  values ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777774', 'student_change', -1)$$, '남아 있지 않습니다');
+insert into change_requests (id, lesson_id, type, status, via) values
+  ('cccccccc-0000-0000-0000-000000000773', '77777777-7777-7777-7777-777777777773', 'student_cancel', 'applied', 'admin_app'),
+  ('cccccccc-0000-0000-0000-000000000774', '77777777-7777-7777-7777-777777777774', 'student_cancel', 'applied', 'admin_app');
+insert into credit_ledger (period_id, lesson_id, change_request_id, reason, delta)
+values ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777773', 'cccccccc-0000-0000-0000-000000000773', 'student_change', -1);
+select pg_temp.expect_error($$insert into credit_ledger (period_id, lesson_id, change_request_id, reason, delta)
+  values ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777774', 'cccccccc-0000-0000-0000-000000000774', 'student_change', -1)$$, '남아 있지 않습니다');
 select pg_temp.ok(credit_balance('66666666-6666-6666-6666-666666666666') = 0, '변경권 0개 밑으로 내려가지 않음');
 select pg_temp.expect_error($$update credit_ledger set delta = 1$$, '수정할 수 없습니다');
 select pg_temp.ok(true, '변경권 장부 수정 금지 (반대 기록으로만 정정)');
@@ -412,12 +420,17 @@ values ('99999999-3000-0000-0000-000000000001', '99999999-1000-0000-0000-0000000
         '22222222-2222-2222-2222-222222222222', 'regular', 2, '2026-11-04 11:00+00', '2026-11-04 11:50+00', 'canceled', '2026-11-03 08:00+00', 'Tutor canceled in advance'),
        ('99999999-3000-0000-0000-000000000003', '99999999-1000-0000-0000-000000000002', '99999999-0000-0000-0000-000000000002',
         '22222222-2222-2222-2222-222222222222', 'regular', 1, '2026-11-02 13:00+00', '2026-11-02 13:50+00', 'canceled', '2026-11-02 10:00+00', 'Tutor canceled late');
-insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000001');
-select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000001')$$, 'unique|23505');
-select pg_temp.ok(true, '같은 강사 늦은 취소 수업에 적립금 중복 지급 불가');
-select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000002')$$, '6시간 미만');
+insert into change_requests (id, lesson_id, type, status, via) values
+  ('cccccccc-3000-0000-0000-000000000001', '99999999-3000-0000-0000-000000000001', 'tutor_cancel', 'applied', 'admin_app'),
+  ('cccccccc-3000-0000-0000-000000000002', '99999999-3000-0000-0000-000000000002', 'tutor_cancel', 'applied', 'admin_app'),
+  ('cccccccc-3000-0000-0000-000000000003', '99999999-3000-0000-0000-000000000003', 'tutor_cancel', 'applied', 'admin_app');
+insert into reward_ledger (student_id, kind, amount, lesson_id, change_request_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000001', 'cccccccc-3000-0000-0000-000000000001');
+select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id, change_request_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000001', 'cccccccc-3000-0000-0000-000000000001')$$, 'unique|23505');
+select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000001')$$, 'reward_ledger_request_required');
+select pg_temp.ok(true, '같은 강사 늦은 취소(요청 1건)에 적립금 중복 지급 불가');
+select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount, lesson_id, change_request_id) values ('99999999-0000-0000-0000-000000000001', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000002', 'cccccccc-3000-0000-0000-000000000002')$$, '6시간 미만');
 select pg_temp.ok(true, '6시간 이상 전 강사 취소에는 적립금 없음 (보강만)');
-insert into reward_ledger (student_id, kind, amount, lesson_id) values ('99999999-0000-0000-0000-000000000002', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000003');
+insert into reward_ledger (student_id, kind, amount, lesson_id, change_request_id) values ('99999999-0000-0000-0000-000000000002', 'grant_tutor_late_cancel', 2000, '99999999-3000-0000-0000-000000000003', 'cccccccc-3000-0000-0000-000000000003');
 select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000000002') = 2000, '기존(legacy) 등록 학생도 강사 늦은 취소 적립금 받음 (유리한 규칙, POL-OP-17)');
 select pg_temp.expect_error($$insert into reward_ledger (student_id, kind, amount) values ('99999999-0000-0000-0000-000000000002', 'grant_admin', 2000)$$, 'check');
 select pg_temp.ok(true, '운영자 수동 지급은 사유 필수');
@@ -1045,5 +1058,182 @@ select pg_temp.ok(jsonb_array_length(pg_temp.imp_conflicts(pg_temp.ibody2('자�
                      '55555555-0000-0000-0000-000000001301', '2027-08-02', '2027-08-29')
                    || jsonb_build_object('makeups', '[{"status":"booked","origin_unknown":true,"date":"2027-08-03","time":"10:00","duration_min":50,"tutor_id":"55555555-0000-0000-0000-000000001301"}]'::jsonb))) = 2,
   '종료일 23:59가 지난 학생의 고정 시간은 다른 학생이 쓸 수 있음 (충돌 2건은 이번 입력끼리의 보강·정규뿐)');
+reset request.jwt.claim.sub;
+reset role;
+
+-- ---------- 1순위 취소·변경·보강 공통 처리 (migration 1700, 17번 문서 3절 ①·5절) ----------
+-- 지금 시각 기준으로 잡은 가상 학생 '변경A' (4주·주2회, 기간 1개 변경권 2개). 강사 TestTutorChange
+reset role;
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000001700', 'TestTutorChange', 'Korea', 'Asia/Seoul');
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000001700', '변경A', 'Change A');
+insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000001700', 'student', '99999999-0000-0000-0000-000000001700');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000001700', '99999999-0000-0000-0000-000000001700', 1, 4, 2, 50,
+        current_date - 3, current_date - 3 + 27, 8, 'active');
+insert into enrollment_periods (id, enrollment_id, idx, start_date, end_date, credits_granted)
+values ('99999999-2000-0000-0000-000000001700', '99999999-1000-0000-0000-000000001700', 1, current_date - 3, current_date - 3 + 27, 2);
+create temp table cx (k text primary key, t timestamptz);
+insert into cx values ('base', date_trunc('hour', now()));
+grant select on cx to authenticated;
+-- 수업: L2 = 3시간 뒤, L1·L3·L4·L5 = 3·4·5·6일 뒤 같은 시각
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select ('77777777-1700-0000-0000-00000000000' || n)::uuid, '99999999-1000-0000-0000-000000001700', '99999999-0000-0000-0000-000000001700',
+       '55555555-0000-0000-0000-000000001700', 'regular', n, t + o, t + o + interval '50 minutes'
+from cx, (values (1, interval '3 days'), (2, interval '3 hours'), (3, interval '4 days'), (4, interval '5 days'), (5, interval '6 days')) v(n, o)
+where k = 'base';
+create or replace function pg_temp.chg(rid text, lesson int, who text, req timestamptz, dry boolean) returns jsonb
+language sql as $$ select admin_change_lesson(rid::uuid, ('77777777-1700-0000-0000-00000000000' || lesson)::uuid, who, req, dry) $$;
+create or replace function pg_temp.bal() returns int language sql as $$ select credit_balance('99999999-2000-0000-0000-000000001700') $$;
+create or replace function pg_temp.st(lesson int) returns text language sql as $$
+  select state || ':' || coalesce(class_status::text, '-') from lessons where id = ('77777777-1700-0000-0000-00000000000' || lesson)::uuid $$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2)
+-- 1) 미리 보기는 아무것도 바꾸지 않음
+select pg_temp.ok((select r ->> 'status' = 'Student canceled in advance' and (r ->> 'uses_credit')::boolean and (r ->> 'credits_after')::int = 1
+                          and (r ->> 'makeup_allowed')::boolean and (r ->> 'dry_run')::boolean
+                   from pg_temp.chg('c0000000-0000-0000-0000-000000000001', 1, 'student', now(), true) r)
+              and pg_temp.st(1) = 'scheduled:-' and pg_temp.bal() = 2 and (select count(*) from change_requests where lesson_id = '77777777-1700-0000-0000-000000000001') = 0,
+  '미리 보기: 정상 변경·변경권 2→1·보강 가능으로 보이지만 저장은 안 함');
+-- 2) 확정: 수업 취소·변경권 1개·안내 2건(학생·강사)·요청 시각 기록
+select pg_temp.chg('c0000000-0000-0000-0000-000000000001', 1, 'student', now() - interval '1 hour', false);
+select pg_temp.ok(pg_temp.st(1) = 'canceled:Student canceled in advance' and pg_temp.bal() = 1
+              and (select count(*) from lesson_notices n join change_requests c on c.id = n.change_request_id
+                   where c.lesson_id = '77777777-1700-0000-0000-000000000001' and n.status = 'pending') = 2
+              and (select requested_at < created_at and via = 'admin_on_behalf' and decided_by = 'bbbbbbbb-0000-0000-0000-000000000009'
+                   from change_requests where lesson_id = '77777777-1700-0000-0000-000000000001'),
+  '확정: 수업 취소 + 변경권 1개 차감 + 학생·강사 안내 각각 + 카톡 받은 시각·처리자 기록');
+-- 3) 두 번 누름 → 한 번만 / 다른 요청으로 같은 수업 → 거절
+select pg_temp.ok((pg_temp.chg('c0000000-0000-0000-0000-000000000001', 1, 'student', now(), false) ->> 'repeated')::boolean and pg_temp.bal() = 1,
+  '같은 요청 두 번 → 한 번만 처리 (변경권 한 번만 차감)');
+select pg_temp.expect_error($$select pg_temp.chg(gen_random_uuid()::text, 1, 'student', now(), false)$$, '이미 처리된 수업');
+select pg_temp.ok(true, '이미 변경된 수업에 다른 요청 → 거절 (학생·운영진 동시 처리도 하나만)');
+-- 4) 6시간 판정은 실제 요청 시각으로: L2(3시간 뒤) — 지금 받은 요청은 늦은 변경, 5시간 전 카톡은 정상 변경
+select pg_temp.ok((pg_temp.chg(gen_random_uuid()::text, 2, 'student', now(), true) ->> 'status') = 'Student canceled late'
+              and (pg_temp.chg(gen_random_uuid()::text, 2, 'student', now() - interval '5 hours', true) ->> 'status') = 'Student canceled in advance',
+  '같은 수업도 카톡 받은 시각(8시간 전)이면 정상 변경, 지금(3시간 전)이면 늦은 변경');
+select pg_temp.expect_error($$select pg_temp.chg(gen_random_uuid()::text, 2, 'student', now() + interval '1 hour', true)$$, '지금보다 늦');
+select pg_temp.expect_error($$select pg_temp.chg(gen_random_uuid()::text, 2, 'student', null, true)$$, '요청 받은 시각');
+select pg_temp.ok(true, '요청 시각이 없거나 미래면 거절');
+-- 5) 늦은 변경: 변경권 그대로, 보강 없음
+select pg_temp.chg('c0000000-0000-0000-0000-000000000002', 2, 'student', now(), false);
+select pg_temp.ok(pg_temp.st(2) = 'canceled:Student canceled late' and pg_temp.bal() = 1, '늦은 변경: 수업 1회 소진, 변경권 차감 없음');
+-- 6) 공휴일: 변경권 차감 없이 보강 가능
+reset role;
+insert into holidays (day, name) select kst_date, '시험 공휴일' from lessons where id = '77777777-1700-0000-0000-000000000005';
+set role authenticated;
+select pg_temp.chg('c0000000-0000-0000-0000-000000000005', 5, 'student', now(), false);
+select pg_temp.ok(pg_temp.st(5) = 'canceled:Student canceled in advance (public holiday)' and pg_temp.bal() = 1, '공휴일 정상 변경: 변경권 그대로, 보강 가능');
+reset role;
+delete from holidays where name = '시험 공휴일';
+set role authenticated;
+-- 7) 되돌리기 → 다시 변경 → 되돌리기 → 다시 변경: 매번 정확히 (17번 5절)
+select admin_revert_change((select id from change_requests where idempotency_key = 'c0000000-0000-0000-0000-000000000001'), '다른 날짜였음');
+select pg_temp.ok(pg_temp.st(1) = 'scheduled:-' and pg_temp.bal() = 2
+              and (select status = 'reverted' and reverted_by is not null and revert_note = '다른 날짜였음' from change_requests where idempotency_key = 'c0000000-0000-0000-0000-000000000001'),
+  '되돌리기: 수업 다시 예정, 변경권 복구(+1 줄 추가), 기록은 reverted로 남음');
+select pg_temp.ok((select count(*) filter (where n.status = 'not_needed') = 2 and count(*) filter (where n.event = 'revert') = 0
+                   from lesson_notices n join change_requests c on c.id = n.change_request_id where c.idempotency_key = 'c0000000-0000-0000-0000-000000000001'),
+  '안내를 보내기 전에 되돌리면 안내 2건은 보낼 필요 없음, 되돌림 안내도 안 만듦');
+select pg_temp.chg('c0000000-0000-0000-0000-000000000011', 1, 'student', now(), false);
+select pg_temp.ok(pg_temp.st(1) = 'canceled:Student canceled in advance' and pg_temp.bal() = 1, '되돌린 수업도 다시 정상 변경 가능 (새 요청 = 새 차감)');
+-- 보낸 안내가 있으면 그쪽에만 되돌림 안내
+select admin_mark_lesson_notice_sent(n.id) from lesson_notices n join change_requests c on c.id = n.change_request_id
+where c.idempotency_key = 'c0000000-0000-0000-0000-000000000011' and n.recipient_kind = 'student';
+select admin_revert_change((select id from change_requests where idempotency_key = 'c0000000-0000-0000-0000-000000000011'), null);
+select pg_temp.ok((select array_agg(n.event || ':' || n.recipient_kind || ':' || n.status order by n.event, n.recipient_kind)
+                   from lesson_notices n join change_requests c on c.id = n.change_request_id where c.idempotency_key = 'c0000000-0000-0000-0000-000000000011')
+                  = '{change:student:sent,change:tutor:not_needed,revert:student:pending}',
+  '학생에게만 보낸 뒤 되돌리면 학생에게만 되돌림 안내 (강사 안내는 보낼 필요 없음)');
+select pg_temp.chg('c0000000-0000-0000-0000-000000000021', 1, 'student', now(), false);
+select pg_temp.ok(pg_temp.bal() = 1 and (select count(*) from credit_ledger where lesson_id = '77777777-1700-0000-0000-000000000001') = 5,
+  '차감 → 복구 → 차감 → 복구 → 차감 모두 기록 (덮어쓰기 없음)');
+-- 8) 변경권 0개: 정상 변경이어도 보강 없음
+select pg_temp.chg('c0000000-0000-0000-0000-000000000003', 3, 'student', now(), false);
+select pg_temp.ok(pg_temp.bal() = 0, '변경권 마지막 1개 사용');
+select pg_temp.chg('c0000000-0000-0000-0000-000000000004', 4, 'student', now(), false);
+select pg_temp.ok(pg_temp.st(4) = 'canceled:No change credits left' and pg_temp.bal() = 0, '변경권 0개: 변경 처리되지만 보강 없음, 수업 1회 소진');
+select admin_revert_change((select id from change_requests where idempotency_key = 'c0000000-0000-0000-0000-000000000004'), null);
+-- 9) 강사 사유: 늦은 취소 = 적립금, 되돌리면 회수 줄, 다시 늦은 취소면 다시 지급
+reset role;
+update lessons set starts_at = starts_at - interval '5 days' + interval '2 hours', ends_at = ends_at - interval '5 days' + interval '2 hours'
+where id = '77777777-1700-0000-0000-000000000004';   -- L4를 2시간 뒤로
+set role authenticated;
+select pg_temp.chg('c0000000-0000-0000-0000-000000000041', 4, 'tutor', now(), false);
+select pg_temp.ok(pg_temp.st(4) = 'canceled:Tutor canceled late' and pg_temp.bal() = 0 and reward_balance('99999999-0000-0000-0000-000000001700') = 2000,
+  '강사 늦은 취소: 학생 변경권 차감 없음, 적립금 2,000원, 보강 권리');
+select admin_revert_change((select id from change_requests where idempotency_key = 'c0000000-0000-0000-0000-000000000041'), null);
+select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000001700') = 0
+              and (select count(*) from reward_ledger where student_id = '99999999-0000-0000-0000-000000001700') = 2,
+  '강사 늦은 취소를 되돌리면 적립금 회수 줄 추가 (지우지 않음)');
+select pg_temp.chg('c0000000-0000-0000-0000-000000000042', 4, 'tutor', now(), false);
+select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000001700') = 2000, '다시 강사 늦은 취소면 새 취소 1건으로 다시 지급');
+
+-- 10) 보강: 신청 → 강사 확인 → 확정 (학생 선택만으로는 확정 안 됨, D-43)
+select pg_temp.expect_error($$select admin_makeup_request('77777777-1700-0000-0000-000000000002', null, jsonb_build_array(jsonb_build_object('starts_at', now() + interval '7 days')), now())$$, '보강을 받을 수 있는 수업이 아닙니다');
+select pg_temp.expect_error($$select admin_makeup_request('77777777-1700-0000-0000-000000000004', null, jsonb_build_array(jsonb_build_object('starts_at', now() + interval '40 days')), now())$$, '종료일');
+select pg_temp.ok(true, '늦은 변경 수업은 보강 신청 불가 · 수강 종료일 뒤 시간 거절');
+create temp table mk as select (admin_makeup_request('77777777-1700-0000-0000-000000000004', null,
+  jsonb_build_array(jsonb_build_object('starts_at', (select t from cx) + interval '4 days'),
+                    jsonb_build_object('starts_at', (select t from cx) + interval '7 days 2 hours')), now()) ->> 'makeup_request_id')::uuid as id;
+select pg_temp.ok((select r.status = 'requested' and r.confirmed_lesson_id is null from makeup_requests r join mk on mk.id = r.id)
+              and not exists (select 1 from lessons where makeup_of = '77777777-1700-0000-0000-000000000004')
+              and (select count(*) from lesson_notices n join mk on mk.id = n.makeup_request_id where n.event = 'makeup_ask' and n.recipient_kind = 'tutor') = 1,
+  '보강 신청: 수업은 아직 안 생김, 강사 확인 요청 안내만');
+select pg_temp.ok((admin_makeup_request('77777777-1700-0000-0000-000000000004', null, jsonb_build_array(jsonb_build_object('starts_at', now() + interval '8 days')), now()) ->> 'repeated')::boolean,
+  '같은 수업에 진행 중 보강 신청은 1건');
+reset role;
+insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason)
+select '55555555-0000-0000-0000-000000001700', t + interval '4 days', t + interval '4 days 3 hours', 'block', '변경 시험' from cx;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from mk), (select t from cx) + interval '4 days')$$, '강사 휴무');
+select pg_temp.ok(true, '강사 휴무와 겹치는 보강 시간은 확정 거절');
+select admin_makeup_confirm((select id from mk), (select t from cx) + interval '7 days 2 hours');
+select pg_temp.ok((select l.kind = 'makeup' and l.state = 'scheduled' and l.starts_at = (select t from cx) + interval '7 days 2 hours'
+                   from lessons l where l.makeup_of = '77777777-1700-0000-0000-000000000004')
+              and (select array_agg(n.event || ':' || n.status order by n.event, n.recipient_kind) from lesson_notices n join mk on mk.id = n.makeup_request_id)
+                  = '{makeup_ask:not_needed,makeup_confirmed:pending,makeup_confirmed:pending}',
+  '강사 가능 → 확정: 보강 수업 생김(원래 수업과 연결), 학생·강사 확정 안내');
+-- 11) 확정 보강도 정규와 같이 변경 가능 (A03) → 새 보강 권리
+select admin_change_lesson('c0000000-0000-0000-0000-000000000051', (select id from lessons where makeup_of = '77777777-1700-0000-0000-000000000004'), 'tutor', now(), false);
+select pg_temp.ok((select class_status = 'Tutor canceled in advance' from lessons where makeup_of = '77777777-1700-0000-0000-000000000004'),
+  '확정 보강도 변경 가능, 그 보강이 다시 보강 권리가 됨');
+select pg_temp.expect_error($$select admin_revert_change((select id from change_requests where idempotency_key = 'c0000000-0000-0000-0000-000000000042'), null)$$, '다시 변경됐습니다');
+select pg_temp.ok(true, '보강이 다시 변경된 수업은 그 변경부터 되돌려야 함');
+select admin_revert_change((select id from change_requests where idempotency_key = 'c0000000-0000-0000-0000-000000000051'), null);
+select admin_revert_change((select id from change_requests where idempotency_key = 'c0000000-0000-0000-0000-000000000042'), null);
+select pg_temp.ok(pg_temp.st(4) = 'scheduled:-' and reward_balance('99999999-0000-0000-0000-000000001700') = 0
+              and (select state = 'canceled' and voided_at is not null and class_status is null from lessons where makeup_of = '77777777-1700-0000-0000-000000000004')
+              and (select status = 'voided' from makeup_requests r join mk on mk.id = r.id),
+  '원래 수업 되돌리기: 그 취소로 잡은 보강은 없앰(voided, 결과 상태 없음), 적립금 회수');
+-- 12) [보냈어요]: 보낼 필요 없어진 안내는 기록 불가, 두 번 눌러도 처음 시각
+select pg_temp.expect_error($$select admin_mark_lesson_notice_sent((select n.id from lesson_notices n join mk on mk.id = n.makeup_request_id where n.event = 'makeup_ask'))$$, '보낼 필요');
+select pg_temp.ok(true, '보낼 필요 없어진 안내에는 [보냈어요] 불가');
+
+-- 13) 이관한 미예약 보강도 같은 흐름 (예약되면 예약됨, 잘못 넣은 보강을 없애면 다시 미예약)
+reset role;
+insert into migrated_items (id, enrollment_id, kind, original_date) values ('99999999-4000-0000-0000-000000001700', '99999999-1000-0000-0000-000000001700', 'makeup_open', current_date - 2);
+set role authenticated;
+create temp table mk2 as select (admin_makeup_request(null, '99999999-4000-0000-0000-000000001700',
+  jsonb_build_array(jsonb_build_object('starts_at', (select t from cx) + interval '8 days')), now()) ->> 'makeup_request_id')::uuid as id;
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from mk2), (select t from cx) + interval '2 hours 55 minutes')$$, '휴식 10분');
+select pg_temp.ok(true, '강사 다른 수업 뒤 휴식 10분이 안 되는 보강 시간은 확정 거절');
+select admin_makeup_confirm((select id from mk2), (select t from cx) + interval '8 days');
+select pg_temp.ok((select i.kind = 'makeup_booked' and l.kind = 'migrated_makeup' from migrated_items i join lessons l on l.id = i.lesson_id where i.id = '99999999-4000-0000-0000-000000001700'),
+  '이관 미예약 보강 → 확정되면 예약됨 + 수업');
+select admin_void_makeup((select lesson_id from migrated_items where id = '99999999-4000-0000-0000-000000001700'), '날짜 잘못 넣음');
+select pg_temp.ok((select kind = 'makeup_open' and lesson_id is null from migrated_items where id = '99999999-4000-0000-0000-000000001700'),
+  '잘못 넣은 보강을 없애면 다시 미예약 보강 (권리 유지)');
+
+-- 14) 권한: 학생은 본인 수업만, 운영 함수는 운영자만
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';   -- 다른 학생
+select pg_temp.expect_error($$select student_change_lesson(gen_random_uuid(), '77777777-1700-0000-0000-000000000003', true)$$, '42501');
+select pg_temp.expect_error($$select pg_temp.chg(gen_random_uuid()::text, 3, 'student', now(), true)$$, '42501');
+select pg_temp.expect_error($$select admin_revert_change(gen_random_uuid(), null)$$, '42501');
+select pg_temp.ok((select count(*) from lesson_notices) = 0, '다른 학생 수업 변경 불가, 운영 함수 불가, 안내 기록도 못 봄');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000001700';   -- 변경A 본인
+select pg_temp.ok((select (student_change_lesson(gen_random_uuid(), '77777777-1700-0000-0000-000000000004', true) ->> 'status') = 'Student canceled late'),
+  '학생 본인도 같은 함수로 판정 (지금 시각 기준)');
 reset request.jwt.claim.sub;
 reset role;

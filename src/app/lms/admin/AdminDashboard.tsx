@@ -263,6 +263,11 @@ export default function AdminDashboard({
                 로그아웃
               </button>
             )}
+            {!preview && (
+              <Link href="/lms/admin/change" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5fff] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+                수업 변경
+              </Link>
+            )}
             <Link
               href={preview ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'}
               className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5fff] px-3 text-[13px] font-semibold text-white"

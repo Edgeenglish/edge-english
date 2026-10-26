@@ -180,23 +180,36 @@ describe('변경권 개수', () => {
     expect(isOfferedPlan(30, 2)).toBe(false);
   });
 
-  it('같은 수업은 두 번 눌러도 한 번만 차감', () => {
+  it('같은 요청은 두 번 눌러도 한 번만 차감', () => {
     const ledger = new CreditLedger(2);
-    expect(ledger.record({ periodIndex: 1, lessonId: 'L1', reason: 'student_change', delta: -1 })).toBe(true);
-    expect(ledger.record({ periodIndex: 1, lessonId: 'L1', reason: 'student_change', delta: -1 })).toBe(false);
+    expect(ledger.record({ periodIndex: 1, lessonId: 'L1', requestId: 'R1', reason: 'student_change', delta: -1 })).toBe(true);
+    expect(ledger.record({ periodIndex: 1, lessonId: 'L1', requestId: 'R1', reason: 'student_change', delta: -1 })).toBe(false);
     expect(ledger.balance(1)).toBe(1);
+  });
+
+  it('차감 → 복구 → 다시 차감 → 복구 → 다시 차감 모두 기록 (되돌린 수업도 새 요청이면 다시 변경, 17번 5절)', () => {
+    const ledger = new CreditLedger(2);
+    for (const [req, reason, delta] of [
+      ['R1', 'student_change', -1], ['R1', 'restore_by_admin', 1],
+      ['R2', 'student_change', -1], ['R2', 'restore_by_admin', 1],
+      ['R3', 'student_change', -1],
+    ] as const) {
+      expect(ledger.record({ periodIndex: 1, lessonId: 'L1', requestId: req, reason, delta })).toBe(true);
+    }
+    expect(ledger.balance(1)).toBe(1);
+    expect(ledger.history()).toHaveLength(5);
   });
 
   it('0개 밑으로 내려가지 않고, 기간끼리 섞이지 않음', () => {
     const ledger = new CreditLedger(1);
-    ledger.record({ periodIndex: 1, lessonId: 'L1', reason: 'student_change', delta: -1 });
-    expect(() => ledger.record({ periodIndex: 1, lessonId: 'L2', reason: 'student_change', delta: -1 })).toThrow();
+    ledger.record({ periodIndex: 1, lessonId: 'L1', requestId: 'R1', reason: 'student_change', delta: -1 });
+    expect(() => ledger.record({ periodIndex: 1, lessonId: 'L2', requestId: 'R2', reason: 'student_change', delta: -1 })).toThrow();
     expect(ledger.balance(2)).toBe(1);
   });
 
   it('운영자 복구는 지급 개수를 넘지 않음', () => {
     const ledger = new CreditLedger(1);
-    expect(() => ledger.record({ periodIndex: 1, lessonId: 'L1', reason: 'restore_by_admin', delta: 1 })).toThrow();
+    expect(() => ledger.record({ periodIndex: 1, lessonId: 'L1', requestId: 'R1', reason: 'restore_by_admin', delta: 1 })).toThrow();
   });
 });
 

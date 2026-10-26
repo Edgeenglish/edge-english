@@ -10,5 +10,5 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
     has_function_privilege('authenticated', 'admin_import_set_end_reason(uuid, text, text)', 'execute')
     and not has_function_privilege('anon', 'admin_import_set_end_reason(uuid, text, text)', 'execute')
     and exists (select 1 from information_schema.columns where table_name = 'migrated_items' and column_name = 'tutor_leave')
-  union all select 4, '기존 학생·수업 데이터 그대로 (표 43개)', (select count(*) from pg_tables where schemaname = 'public') = 43
+  union all select 4, '기존 학생·수업 데이터 그대로 (표 43개 이상)', (select count(*) from pg_tables where schemaname = 'public') >= 43
 ) t order by n;

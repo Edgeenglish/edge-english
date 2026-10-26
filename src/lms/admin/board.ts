@@ -107,7 +107,20 @@ export type ImportCheckTask = {
   createdAt: Date;
 };
 
-export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask;
+/** 수업 변경·보강: 안 보낸 안내 · 강사 답을 기다리는 보강 신청 (migration 1700). 학생마다 한 줄, [보냈어요]·확정하면 사라짐 */
+export type LessonChangeTask = {
+  kind: 'lesson_change';
+  id: string; // 학생 번호(id)
+  studentName: string;
+  studentCode: string;
+  pendingNotices: number;
+  openMakeups: number;
+  /** 안 보낸 변경 안내가 있는 가장 가까운 수업 (지나기 전에 보내야 함) */
+  lessonAt: Date | null;
+  createdAt: Date;
+};
+
+export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask;
 
 /** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
 export type Category = 'matching' | 'tutor_ack' | 'ending' | 'makeup' | 'issue';
@@ -324,6 +337,18 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         endReason: t.endReason ?? null,
       };
     }
+    case 'lesson_change':
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: t.lessonAt ? dueSeverity(t.lessonAt, now) : 'open',
+        tag: t.pendingNotices > 0 ? `안내 안 보냄 ${t.pendingNotices}건` : '보강 강사 답 대기',
+        title: t.studentName,
+        detail: [t.studentCode, t.lessonAt && `${kstLabel(t.lessonAt)} 수업`, t.pendingNotices > 0 && t.openMakeups > 0 && `보강 강사 답 대기 ${t.openMakeups}건`].filter(Boolean).join(' · '),
+        due: null,
+        steps: [],
+        actions: [{ key: 'open_change', label: '열기', primary: true, href: `/lms/admin/change?student=${encodeURIComponent(t.studentCode)}` }],
+      };
     case 'auto_failure': {
       const what = { calendar_sync: '캘린더 반영 실패', email_bounce: '메일 반송', payment_mismatch: '결제 금액 불일치' }[t.what];
       const action = {

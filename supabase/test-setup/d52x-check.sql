@@ -14,5 +14,5 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
     and (select prosrc from pg_proc where proname = 'admin_import_existing_student') like '%import_checks%'
   union all select 5, '보강 원래 날짜와 같은 날 정규 수업은 만들지 않음',
     (select prosrc from pg_proc where proname = 'lms_import_candidates') like '%skip_dates%'
-  union all select 6, '기존 학생·수업 데이터 그대로 (표 43개)', (select count(*) from pg_tables where schemaname = 'public') = 43
+  union all select 6, '기존 학생·수업 데이터 그대로 (표 43개 이상)', (select count(*) from pg_tables where schemaname = 'public') >= 43
 ) t order by n;

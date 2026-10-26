@@ -60,7 +60,9 @@ declare
   reviewed_ext text[] := array['btree_gist'];
   definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'is_owner', 'my_role', 'tutor_my_students', 'student_my_tutors', 'consent_record',
                           'admin_register_student', 'admin_students_with_email', 'admin_import_existing_student', 'admin_import_mark_checked', 'admin_import_set_origin', 'admin_import_set_end_reason',
-                          'admin_propose_schedule', 'admin_confirm_schedule', 'admin_close_plan', 'admin_mark_proposal_sent', 'admin_mark_notice_sent'];
+                          'admin_propose_schedule', 'admin_confirm_schedule', 'admin_close_plan', 'admin_mark_proposal_sent', 'admin_mark_notice_sent',
+                          'admin_change_lesson', 'student_change_lesson', 'admin_revert_change', 'admin_makeup_request', 'admin_makeup_confirm',
+                          'admin_makeup_withdraw', 'admin_void_makeup', 'admin_mark_lesson_notice_sent'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
   persona_uid uuid[];
@@ -113,14 +115,16 @@ begin
     (l_b1, e_b, s_b, t_y, 'regular', 1, '2031-03-04 12:00+00', '2031-03-04 12:50+00', 'done', 'Normal', null),
     (l_b2, e_b, s_b, t_y, 'regular', 2, '2031-03-06 12:00+00', '2031-03-06 12:50+00', 'canceled', 'Student canceled in advance', now());
   insert into class_records (lesson_id, covered_topics) values (l_a1, 'A 수업 기록'), (l_b1, 'B 수업 기록');
-  insert into change_requests (lesson_id, student_id, tutor_id, type, status, via) values (l_b2, s_b, t_y, 'student_cancel', 'applied', 'student_app');
-  insert into credit_ledger (period_id, lesson_id, reason, delta) values (p_b, l_b2, 'student_change', -1);
+  insert into change_requests (id, lesson_id, student_id, tutor_id, type, status, via) values
+    ('a17e5700-0000-4000-8000-0000000000c2', l_b2, s_b, t_y, 'student_cancel', 'applied', 'student_app'),
+    ('a17e5700-0000-4000-8000-0000000000c1', l_a2, s_a, t_x, 'tutor_cancel', 'applied', 'admin_on_behalf');
+  insert into credit_ledger (period_id, lesson_id, change_request_id, reason, delta) values (p_b, l_b2, 'a17e5700-0000-4000-8000-0000000000c2', 'student_change', -1);
   insert into payments (enrollment_id, method, payer_name, amount_received, received_on, paid_at, confirmed_by) values
     (e_a, 'bank_transfer', '점검가상학생A', 1000000, '2031-03-01', '2031-03-01 01:00+00', u_admin),
     (e_b, 'card_link', '점검가상학생B', 200000, '2031-03-01', '2031-03-01 01:00+00', u_admin),
     (e_b2, 'card_link', '점검가상학생B', 200000, '2031-03-31', '2031-03-31 01:00+00', u_admin);   -- 기한 안 재등록 → 강사 Y 통보 업무
   insert into refunds (enrollment_id, amount, reason) values (e_b, 10000, '점검용 가상 환불');
-  insert into reward_ledger (student_id, kind, amount, lesson_id) values (s_a, 'grant_tutor_late_cancel', 5000, l_a2);
+  insert into reward_ledger (student_id, kind, amount, lesson_id, change_request_id) values (s_a, 'grant_tutor_late_cancel', 5000, l_a2, 'a17e5700-0000-4000-8000-0000000000c1');
   insert into reward_ledger (student_id, kind, amount, note) values (s_b, 'grant_admin', 3000, '점검용 가상 적립');
   insert into long_leave_requests (enrollment_id, leave_start, days, reason_kind) values (e_a, '2031-04-01', 7, 'health');
   insert into makeup_requests (source_lesson_id, student_id, tutor_id) values (l_b2, s_b, t_y);

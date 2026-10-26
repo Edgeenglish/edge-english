@@ -3339,5 +3339,623 @@ end $$;
 revoke all on function admin_import_set_end_reason(uuid, text, text) from public, anon;
 grant execute on function admin_import_set_end_reason(uuid, text, text) to authenticated;
 
+-- >>> 20261026001700_lms_lesson_change.sql
+-- =====================================================================
+-- 1순위: 수업 변경(취소)·보강·되돌리기·안내 기록 — 공통 처리 (2026-10-26 대표 우선순위, 17번 문서 3절 ①·5절)
+--  - 학생·강사·운영진(카톡 대신 입력) 모두 같은 함수 lms_change_core 로 처리 → 같은 검사·같은 기록
+--  - 판정 기준 시각 = 실제 요청 시각 (운영진 입력은 카톡·WhatsApp 받은 시각, 학생 직접은 지금)
+--  - 미리 보기(p_dry_run)도 같은 함수 → 화면과 저장 결과가 다를 수 없음
+--  - 중복 방지: 같은 요청 키 1번, 같은 수업에 적용 중인 변경 1건, 변경권·적립금은 '요청 1건당 1번'
+--    (되돌린 수업은 다시 정상 변경 가능 — 17번 5절)
+--  - 보강은 학생(또는 운영진 대신) 신청 → 강사 확인 → 운영진 확정만 (D-43). 학생 선택만으로 확정되는 경로 없음
+--  - 안내: 학생·강사 각각 [복사] → 실제로 보낸 뒤 [보냈어요] (A39와 같음). 복사는 기록하지 않음
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- 숫자: 6시간(POL-CHG-01)·2,000원(POL-TU-04)·휴식 10분(POL-OP-21)은 코드 src/lms/rules/policy.ts 와 같아야 함 (자동 테스트)
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 되돌리기로 없어진 보강 수업 = 'voided' (state 'canceled' + voided_at, 결과 상태 없음)
+--    상태매핑표 14개에 없는 '잘못 만든 수업'을 억지로 다른 상태로 적지 않기 위해
+-- ---------------------------------------------------------------------
+alter table lessons add column if not exists voided_at timestamptz;
+alter table lessons add column if not exists voided_by uuid;
+alter table lessons add column if not exists void_note text;
+do $$
+declare
+  c text;
+begin
+  select conname into c from pg_constraint
+  where conrelid = 'lessons'::regclass and contype = 'c'
+    and pg_get_constraintdef(oid) = 'CHECK (((state = ''scheduled''::text) = (class_status IS NULL)))';
+  if c is not null then execute format('alter table lessons drop constraint %I', c); end if;
+  if not exists (select 1 from pg_constraint where conname = 'lessons_status_present') then
+    alter table lessons add constraint lessons_status_present
+      check ((class_status is null) = (state = 'scheduled' or voided_at is not null));
+    alter table lessons add constraint lessons_void_canceled
+      check (voided_at is null or (state = 'canceled' and voided_by is not null));
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 2. 변경 요청: 실제 요청 시각, 되돌린 시각·사람
+-- ---------------------------------------------------------------------
+alter table change_requests add column if not exists requested_at timestamptz;   -- 학생이 실제로 요청한 시각 (카톡 시각)
+alter table change_requests add column if not exists reverted_at timestamptz;
+alter table change_requests add column if not exists reverted_by uuid;
+alter table change_requests add column if not exists revert_note text;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'change_requests_reverted_who') then
+    alter table change_requests add constraint change_requests_reverted_who
+      check ((status = 'reverted') = (reverted_at is not null) and (reverted_at is null or reverted_by is not null));
+  end if;
+end $$;
+-- 같은 수업에 적용 중인 변경은 1건 (학생·운영진 동시 처리 → 하나만 성공)
+create unique index if not exists change_requests_one_applied on change_requests (lesson_id)
+  where status = 'applied' and type in ('student_cancel', 'tutor_cancel', 'admin_cancel');
+
+-- ---------------------------------------------------------------------
+-- 3. 변경권 장부: '수업당 1번' → '요청 1건당 1번' (되돌린 뒤 다시 변경 가능, 17번 5절)
+-- ---------------------------------------------------------------------
+alter table credit_ledger add column if not exists change_request_id uuid references change_requests(id);
+alter table credit_ledger drop constraint if exists credit_ledger_lesson_id_reason_key;
+create unique index if not exists credit_ledger_once_per_request on credit_ledger (change_request_id, reason)
+  where change_request_id is not null;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'credit_ledger_request_required') then
+    -- 앞으로의 차감·복구는 근거 요청이 있어야 함 (기존 행은 그대로: not valid)
+    alter table credit_ledger add constraint credit_ledger_request_required
+      check (reason = 'admin_adjust' or change_request_id is not null) not valid;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 4. 적립금 장부: 강사 늦은 취소 지급도 '취소 1건당 1번', 되돌리면 회수 줄 추가 (2026-10-22 대표)
+-- ---------------------------------------------------------------------
+alter table reward_ledger add column if not exists change_request_id uuid references change_requests(id);
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'reward_ledger_kind_check'
+             and pg_get_constraintdef(oid) not like '%revoke_tutor_late_cancel%') then
+    alter table reward_ledger drop constraint reward_ledger_kind_check;
+    alter table reward_ledger add constraint reward_ledger_kind_check check (kind in (
+      'grant_tutor_late_cancel', 'revoke_tutor_late_cancel', 'grant_admin', 'hold', 'release', 'refund_restore', 'admin_adjust'));
+    alter table reward_ledger add constraint reward_ledger_revoke_shape
+      check (kind <> 'revoke_tutor_late_cancel' or (lesson_id is not null and change_request_id is not null and amount < 0));
+  end if;
+end $$;
+drop index if exists reward_ledger_one_grant_per_lesson;
+create unique index if not exists reward_ledger_once_per_request on reward_ledger (change_request_id, kind)
+  where change_request_id is not null;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'reward_ledger_request_required') then
+    alter table reward_ledger add constraint reward_ledger_request_required
+      check (kind <> 'grant_tutor_late_cancel' or change_request_id is not null) not valid;
+  end if;
+end $$;
+
+-- 지급 근거 확인은 그대로, 회수는 같은 요청의 지급이 있어야 함
+create or replace function reward_ledger_guard() returns trigger
+language plpgsql as $$
+declare
+  l record;
+  r record;
+begin
+  perform 1 from students where id = new.student_id for update;
+  if new.kind = 'grant_tutor_late_cancel' then
+    select ls.student_id, ls.class_status into l from lessons ls where ls.id = new.lesson_id;
+    if l.student_id is distinct from new.student_id then raise exception '다른 학생의 수업으로 적립할 수 없습니다.'; end if;
+    if l.class_status is distinct from 'Tutor canceled late' then raise exception '강사 6시간 미만 취소 수업에만 자동 적립합니다.'; end if;
+    -- 학생에게 유리한 규칙이라 기존 학생(legacy 등록)에도 적용 (POL-OP-17, 2026-10-16 대표 결정)
+  end if;
+  if new.kind = 'revoke_tutor_late_cancel' then
+    if not exists (select 1 from reward_ledger g where g.change_request_id = new.change_request_id
+                   and g.kind = 'grant_tutor_late_cancel' and g.amount = -new.amount and g.student_id = new.student_id) then
+      raise exception '회수할 적립 기록이 없습니다.';
+    end if;
+  end if;
+  if new.redemption_id is not null then
+    select * into r from reward_redemptions where id = new.redemption_id;
+    if r.student_id <> new.student_id then raise exception '다른 학생의 사용 요청입니다.'; end if;
+    if new.kind in ('hold', 'release', 'refund_restore') and abs(new.amount) <> r.amount then
+      raise exception '사용 요청 금액과 다릅니다.';
+    end if;
+  end if;
+  if reward_balance(new.student_id) + new.amount < 0 then raise exception '적립금 잔액이 부족합니다.'; end if;
+  return new;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 5. 보강 신청: 이관한 미예약 보강(migrated_items)도 같은 흐름, 되돌린 보강 = voided
+-- ---------------------------------------------------------------------
+alter table makeup_requests alter column source_lesson_id drop not null;
+alter table makeup_requests add column if not exists migrated_item_id uuid references migrated_items(id);
+alter table makeup_requests add column if not exists via text;
+alter table makeup_requests add column if not exists requested_at timestamptz;
+alter table makeup_requests add column if not exists requested_by uuid;
+alter table makeup_requests add column if not exists decided_by uuid;
+do $$
+declare
+  c text;
+begin
+  if not exists (select 1 from pg_constraint where conname = 'makeup_requests_one_source') then
+    alter table makeup_requests add constraint makeup_requests_one_source
+      check ((source_lesson_id is null) <> (migrated_item_id is null));
+    alter table makeup_requests add constraint makeup_requests_via_check
+      check (via is null or via in ('student_app', 'admin_on_behalf'));
+    alter table makeup_requests drop constraint if exists makeup_requests_status_check;
+    alter table makeup_requests add constraint makeup_requests_status_check
+      check (status in ('requested', 'countered', 'confirmed', 'declined', 'expired', 'withdrawn', 'voided'));
+    perform 1;
+    for c in select conname from pg_constraint where conrelid = 'makeup_requests'::regclass and contype = 'c'
+             and pg_get_constraintdef(oid) like '%confirmed''::text) = (confirmed_lesson_id IS NOT NULL)%' loop
+      execute format('alter table makeup_requests drop constraint %I', c);
+    end loop;
+    alter table makeup_requests add constraint makeup_requests_lesson_link
+      check ((status in ('confirmed', 'voided')) = (confirmed_lesson_id is not null));
+  end if;
+end $$;
+create unique index if not exists makeup_requests_one_open_migrated on makeup_requests (migrated_item_id)
+  where status in ('requested', 'countered');
+
+-- ---------------------------------------------------------------------
+-- 6. 수업 변경·보강 안내 기록 (학생·강사 각각, [보냈어요]로만 '보냄')
+--    event: change(변경 처리) / makeup_ask(강사에게 보강 가능 확인) / makeup_confirmed / makeup_voided / revert(되돌림)
+--    문구는 화면이 DB의 원래 수업·바뀐 수업 날짜로 만듦 (날짜를 사람이 타이핑하지 않음)
+-- ---------------------------------------------------------------------
+create table if not exists lesson_notices (
+  id uuid primary key default gen_random_uuid(),
+  change_request_id uuid references change_requests(id),
+  makeup_request_id uuid references makeup_requests(id),
+  event text not null check (event in ('change', 'makeup_ask', 'makeup_confirmed', 'makeup_voided', 'revert')),
+  recipient_kind text not null check (recipient_kind in ('student', 'tutor')),
+  recipient_id uuid not null,
+  status text not null default 'pending' check (status in ('pending', 'sent', 'not_needed')),
+  sent_at timestamptz,
+  sent_by uuid,
+  created_at timestamptz not null default now(),
+  check ((change_request_id is null) <> (makeup_request_id is null)),
+  check ((status = 'sent') = (sent_at is not null)),
+  check ((event in ('change', 'revert')) = (change_request_id is not null))
+);
+create unique index if not exists lesson_notices_once_change on lesson_notices (change_request_id, event, recipient_kind) where change_request_id is not null;
+create unique index if not exists lesson_notices_once_makeup on lesson_notices (makeup_request_id, event, recipient_kind) where makeup_request_id is not null;
+create index if not exists lesson_notices_pending on lesson_notices (created_at) where status = 'pending';
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'lesson_notices_audit') then
+    perform lms_protect('lesson_notices'::regclass);
+    create trigger lesson_notices_no_delete before delete on lesson_notices for each row execute function forbid_delete();
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 7. 공통 판정 + 처리
+-- ---------------------------------------------------------------------
+
+-- 보강 받을 권리가 있는 결과인지 (rules/status.ts grantsMakeup 과 같음)
+create or replace function lms_grants_makeup(s class_status) returns boolean
+language sql immutable as $$
+  select s is not null
+     and s not in ('Normal', 'Make-up completed', 'Student canceled late', 'Student no-show', 'No change credits left',
+                   'Tutor Late - Student Present', 'Covered by another tutor', 'Tutor long-term leave', 'Student long-term leave')
+$$;
+revoke all on function lms_grants_makeup(class_status) from public, anon, authenticated;
+
+-- 수업 날짜가 속한 변경권 기간 (연장일 등 기간 밖이면 마지막 기간)
+create or replace function lms_lesson_period(p_enrollment uuid, p_day date) returns uuid
+language sql stable as $$
+  select coalesce(
+    (select id from enrollment_periods where enrollment_id = p_enrollment and p_day between start_date and end_date),
+    (select id from enrollment_periods where enrollment_id = p_enrollment and start_date <= p_day order by idx desc limit 1))
+$$;
+revoke all on function lms_lesson_period(uuid, date) from public, anon, authenticated;
+
+-- p_who: 'student' | 'tutor' / p_via: 'student_app' | 'admin_on_behalf'
+create or replace function lms_change_core(p_key text, p_lesson uuid, p_who text, p_via text,
+                                           p_requested_at timestamptz, p_dry_run boolean, p_actor uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_notice constant interval := interval '6 hours';   -- POL-CHG-01 (policy.ts CONFIRMED.changeNoticeHours)
+  v_reward constant integer := 2000;                  -- POL-TU-04 (policy.ts FAVORABLE_FOR_ALL.tutorLateCancelRewardWon)
+  l lessons;
+  e enrollments;
+  prev change_requests;
+  v_period uuid;
+  v_left integer;
+  v_advance boolean;
+  v_holiday boolean;
+  v_status class_status;
+  v_uses boolean := false;
+  v_reward_won integer := 0;
+  v_refs text[];
+  v_cr uuid;
+  out jsonb;
+begin
+  if p_who not in ('student', 'tutor') then raise exception '요청한 사람이 올바르지 않습니다.'; end if;
+  if p_requested_at is null then raise exception '요청 받은 시각을 넣어 주세요.'; end if;
+  if p_requested_at > now() then raise exception '요청 받은 시각이 지금보다 늦습니다.'; end if;
+
+  if not p_dry_run then
+    select * into prev from change_requests where idempotency_key = p_key;
+    if found then
+      return (prev.decision || jsonb_build_object('change_request_id', prev.id, 'repeated', true, 'dry_run', false));
+    end if;
+  end if;
+
+  select * into l from lessons where id = p_lesson for update;
+  if not found then raise exception '수업이 없습니다.'; end if;
+  if l.state <> 'scheduled' then
+    raise exception '이미 처리된 수업입니다 (%).', coalesce(l.class_status::text, '되돌린 보강') using hint = 'not_scheduled';
+  end if;
+  if p_requested_at >= l.starts_at then raise exception '수업 시작 뒤에 받은 요청이라 변경할 수 없습니다.' using hint = 'already_started'; end if;
+  if l.kind = 'compensation' then raise exception '보상 수업 변경 규칙은 아직 정해지지 않았습니다 (POL-TU-10).'; end if;
+  select * into e from enrollments where id = l.enrollment_id;
+  if l.starts_at >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') and p_who = 'student' then
+    raise exception '수강기간 밖의 수업입니다.' using hint = 'outside_enrollment';
+  end if;
+
+  v_advance := l.starts_at - p_requested_at >= v_notice;
+  v_period := lms_lesson_period(e.id, l.kst_date);
+  v_left := case when v_period is null then 0 else credit_balance(v_period) end;
+  v_holiday := exists (select 1 from holidays where day = l.kst_date);
+
+  if p_who = 'tutor' then
+    -- 강사 사유: 학생 변경권은 절대 차감하지 않음. 6시간 미만이면 학생 적립금 (A15·A16)
+    v_status := case when v_advance then 'Tutor canceled in advance' else 'Tutor canceled late' end;
+    v_reward_won := case when v_advance then 0 else v_reward end;
+    v_refs := array['POL-TU-04', 'POL-TU-05'];
+  elsif not v_advance then
+    v_status := 'Student canceled late';
+    v_refs := array['POL-CHG-01', 'POL-CHG-02'];
+  elsif v_holiday then
+    v_status := 'Student canceled in advance (public holiday)';
+    v_refs := array['POL-CHG-01', 'POL-CHG-06'];
+  elsif v_left <= 0 then
+    v_status := 'No change credits left';
+    v_refs := array['POL-CHG-01', 'POL-CHG-04'];
+  else
+    v_status := 'Student canceled in advance';
+    v_uses := true;
+    v_refs := array['POL-CHG-01', 'POL-CHG-03'];
+  end if;
+  if l.kind <> 'regular' then v_refs := v_refs || array['POL-CHG-08']; end if;   -- 보강·추가 수업도 정규와 같은 규칙 (A03)
+
+  out := jsonb_build_object(
+    'lesson_id', l.id, 'who', p_who, 'status', v_status, 'timing', case when v_advance then 'advance' else 'late' end,
+    'requested_at', p_requested_at, 'starts_at', l.starts_at,
+    'hours_before', round(extract(epoch from (l.starts_at - p_requested_at)) / 3600.0, 1),
+    'uses_credit', v_uses, 'credits_left', v_left, 'credits_after', v_left - case when v_uses then 1 else 0 end,
+    'makeup_allowed', lms_grants_makeup(v_status), 'makeup_until', case when lms_grants_makeup(v_status) then e.final_end_date end,
+    'reward_won', v_reward_won, 'holiday', v_holiday);
+  if p_dry_run then return out || jsonb_build_object('dry_run', true, 'repeated', false); end if;
+
+  if exists (select 1 from change_requests where lesson_id = l.id and status = 'applied'
+             and type in ('student_cancel', 'tutor_cancel', 'admin_cancel')) then
+    raise exception '이 수업에 이미 적용된 변경이 있습니다.' using hint = 'not_scheduled';
+  end if;
+
+  perform set_config('app.actor_id', coalesce(p_actor::text, ''), true);
+  perform set_config('app.actor_via', 'lms_change_core', true);
+  insert into change_requests (lesson_id, student_id, tutor_id, type, status, via, policy_refs, decision,
+                               idempotency_key, requested_by, decided_by, decided_at, requested_at)
+  values (l.id, l.student_id, l.tutor_id, case when p_who = 'tutor' then 'tutor_cancel' else 'student_cancel' end,
+          'applied', p_via, v_refs, out, p_key, p_actor, p_actor, now(), p_requested_at)
+  returning id into v_cr;
+  update lessons set state = 'canceled', class_status = v_status, canceled_at = now(),
+                     cancel_reason = case when p_who = 'tutor' then 'tutor' else 'student' end
+  where id = l.id;
+  if v_uses then
+    insert into credit_ledger (period_id, lesson_id, change_request_id, reason, delta, created_by)
+    values (v_period, l.id, v_cr, 'student_change', -1, p_actor);
+  end if;
+  if v_reward_won > 0 then
+    insert into reward_ledger (student_id, kind, amount, lesson_id, change_request_id, created_by)
+    values (l.student_id, 'grant_tutor_late_cancel', v_reward_won, l.id, v_cr, p_actor);
+  end if;
+  insert into lesson_notices (change_request_id, event, recipient_kind, recipient_id)
+  values (v_cr, 'change', 'student', l.student_id), (v_cr, 'change', 'tutor', l.tutor_id);
+  return out || jsonb_build_object('change_request_id', v_cr, 'dry_run', false, 'repeated', false);
+end $$;
+revoke all on function lms_change_core(text, uuid, text, text, timestamptz, boolean, uuid) from public, anon, authenticated;
+
+-- 운영진이 카톡·WhatsApp 요청을 대신 처리 (요청 받은 시각으로 판정)
+create or replace function admin_change_lesson(p_request_id uuid, p_lesson uuid, p_who text, p_requested_at timestamptz, p_dry_run boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  return lms_change_core(p_request_id::text, p_lesson, p_who, 'admin_on_behalf', p_requested_at, p_dry_run, auth.uid());
+end $$;
+revoke all on function admin_change_lesson(uuid, uuid, text, timestamptz, boolean) from public, anon;
+grant execute on function admin_change_lesson(uuid, uuid, text, timestamptz, boolean) to authenticated;
+
+-- 학생 본인 (학생 화면 연결 단계에서 사용, 판정 시각 = 지금)
+create or replace function student_change_lesson(p_request_id uuid, p_lesson uuid, p_dry_run boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if my_student_id() is null or not exists (select 1 from lessons where id = p_lesson and student_id = my_student_id()) then
+    raise exception '본인 수업만 변경할 수 있습니다.' using errcode = '42501';
+  end if;
+  return lms_change_core(p_request_id::text, p_lesson, 'student', 'student_app', now(), p_dry_run, auth.uid());
+end $$;
+revoke all on function student_change_lesson(uuid, uuid, boolean) from public, anon;
+grant execute on function student_change_lesson(uuid, uuid, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 8. 되돌리기 = 정확한 원상복구 (17번 5절): 수업 다시 '예정', 변경권 +1, 적립금 회수, 그 취소로 생긴 보강·신청 정리
+--    이력은 지우지 않음. 아직 안 보낸 안내는 '보낼 필요 없음', 이미 보낸 쪽에만 되돌림 안내
+-- ---------------------------------------------------------------------
+create or replace function admin_revert_change(p_change uuid, p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  cr change_requests;
+  l lessons;
+  m lessons;
+  g reward_ledger;
+  c credit_ledger;
+  v_voided uuid;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into cr from change_requests where id = p_change for update;
+  if not found then raise exception '변경 기록이 없습니다.'; end if;
+  if cr.status = 'reverted' then return jsonb_build_object('change_request_id', cr.id, 'repeated', true); end if;
+  if cr.status <> 'applied' or cr.type not in ('student_cancel', 'tutor_cancel') then raise exception '되돌릴 수 있는 변경이 아닙니다.'; end if;
+  select * into l from lessons where id = cr.lesson_id for update;
+
+  -- 그 수업으로 잡은 보강: 이미 끝났거나 다시 변경된 보강이 있으면 그쪽부터
+  for m in select * from lessons where makeup_of = l.id and voided_at is null for update loop
+    if m.state = 'done' then raise exception '이 수업의 보강(%)이 이미 진행됐습니다.', m.kst_date; end if;
+    if m.state = 'canceled' then raise exception '이 수업의 보강(%)이 다시 변경됐습니다. 그 변경부터 되돌려 주세요.', m.kst_date; end if;
+  end loop;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_revert_change', true);
+  update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = me, void_note = '원래 수업 변경 되돌림'
+  where makeup_of = l.id and state = 'scheduled' and voided_at is null
+  returning id into v_voided;
+  update makeup_requests set status = 'voided', decided_at = now(), decided_by = me
+  where source_lesson_id = l.id and status = 'confirmed';
+  update makeup_requests set status = 'withdrawn', decided_at = now(), decided_by = me
+  where source_lesson_id = l.id and status in ('requested', 'countered');
+  update lesson_notices set status = 'not_needed'
+  where status = 'pending' and makeup_request_id in (select id from makeup_requests where source_lesson_id = l.id);
+
+  begin
+    update lessons set state = 'scheduled', class_status = null, canceled_at = null, cancel_reason = null where id = l.id;
+  exception when exclusion_violation then
+    raise exception '그 시간에 이미 다른 수업이 있어 되돌릴 수 없습니다.';
+  end;
+  for c in select * from credit_ledger where change_request_id = cr.id and reason = 'student_change' loop
+    insert into credit_ledger (period_id, lesson_id, change_request_id, reason, delta, note, created_by)
+    values (c.period_id, l.id, cr.id, 'admin_restore', 1, '변경 되돌림', me);
+  end loop;
+  for g in select * from reward_ledger where change_request_id = cr.id and kind = 'grant_tutor_late_cancel' loop
+    begin
+      insert into reward_ledger (student_id, kind, amount, lesson_id, change_request_id, note, created_by)
+      values (g.student_id, 'revoke_tutor_late_cancel', -g.amount, l.id, cr.id, '변경 되돌림', me);
+    exception when raise_exception then
+      raise exception '학생이 이 적립금을 이미 사용해서 회수할 수 없습니다. 대표 확인이 필요합니다.' using hint = 'reward_used';
+    end;
+  end loop;
+  update change_requests set status = 'reverted', reverted_at = now(), reverted_by = me, revert_note = nullif(trim(p_note), '')
+  where id = cr.id;
+  update lesson_notices set status = 'not_needed' where change_request_id = cr.id and event = 'change' and status = 'pending';
+  insert into lesson_notices (change_request_id, event, recipient_kind, recipient_id)
+  select cr.id, 'revert', n.recipient_kind, n.recipient_id from lesson_notices n
+  where n.change_request_id = cr.id and n.event = 'change' and n.status = 'sent'
+  on conflict do nothing;
+  return jsonb_build_object('change_request_id', cr.id, 'lesson_id', l.id, 'voided_makeup', v_voided, 'repeated', false);
+end $$;
+revoke all on function admin_revert_change(uuid, text) from public, anon;
+grant execute on function admin_revert_change(uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 9. 보강: 신청(후보 시간) → 강사에게 확인 [보냈어요] → 강사 가능 → 운영진 확정
+-- ---------------------------------------------------------------------
+
+-- 보강 권리 확인: 보강 받는 결과로 끝난 수업이고 살아 있는 보강이 없음 / 이관한 미예약 보강
+create or replace function lms_makeup_source(p_lesson uuid, p_item uuid, out enrollment_id uuid, out student_id uuid,
+                                             out tutor_id uuid, out tutor_leave boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  l lessons;
+  it migrated_items;
+begin
+  if (p_lesson is null) = (p_item is null) then raise exception '보강할 수업을 하나 골라 주세요.'; end if;
+  if p_lesson is not null then
+    select * into l from lessons where id = p_lesson;
+    if not found or not lms_grants_makeup(l.class_status) then raise exception '보강을 받을 수 있는 수업이 아닙니다.'; end if;
+    if exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled') then raise exception '이미 보강이 잡혀 있습니다.'; end if;
+    enrollment_id := l.enrollment_id; student_id := l.student_id; tutor_id := l.tutor_id; tutor_leave := false;
+  else
+    select * into it from migrated_items where id = p_item;
+    if not found or it.kind <> 'makeup_open' then raise exception '예약 전 보강이 아닙니다.'; end if;
+    select e.student_id into student_id from enrollments e where e.id = it.enrollment_id;
+    select x.tutor_id into tutor_id from lessons x where x.enrollment_id = it.enrollment_id order by x.starts_at desc limit 1;
+    enrollment_id := it.enrollment_id; tutor_leave := coalesce(it.tutor_leave, false);
+  end if;
+end $$;
+revoke all on function lms_makeup_source(uuid, uuid) from public, anon, authenticated;
+
+-- p_slots: [{"starts_at": "2026-11-05T08:00:00Z"}, ...] 학생이 원하는 시간 (1개 이상)
+create or replace function admin_makeup_request(p_lesson uuid, p_item uuid, p_slots jsonb, p_requested_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  s record;
+  e enrollments;
+  v_id uuid;
+  x jsonb;
+  t timestamptz;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into s from lms_makeup_source(p_lesson, p_item);
+  select * into e from enrollments where id = s.enrollment_id;
+  if jsonb_typeof(p_slots) <> 'array' or jsonb_array_length(p_slots) = 0 then raise exception '보강 시간을 하나 이상 넣어 주세요.'; end if;
+  select id into v_id from makeup_requests
+  where status in ('requested', 'countered') and (source_lesson_id = p_lesson or migrated_item_id = p_item);
+  if found then return jsonb_build_object('makeup_request_id', v_id, 'repeated', true); end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_makeup_request', true);
+  insert into makeup_requests (source_lesson_id, migrated_item_id, student_id, tutor_id, via, requested_at, requested_by)
+  values (p_lesson, p_item, s.student_id, s.tutor_id, 'admin_on_behalf', coalesce(p_requested_at, now()), me)
+  returning id into v_id;
+  for x in select * from jsonb_array_elements(p_slots) loop
+    t := (x ->> 'starts_at')::timestamptz;
+    if t <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+    if not s.tutor_leave and t >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+    end if;
+    insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by)
+    values (v_id, t, t + make_interval(mins => e.duration_min), 'student');
+  end loop;
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id) values (v_id, 'makeup_ask', 'tutor', s.tutor_id);
+  return jsonb_build_object('makeup_request_id', v_id, 'repeated', false);
+end $$;
+revoke all on function admin_makeup_request(uuid, uuid, jsonb, timestamptz) from public, anon;
+grant execute on function admin_makeup_request(uuid, uuid, jsonb, timestamptz) to authenticated;
+
+-- 강사가 가능하다고 한 시간으로 확정 (후보 중 하나 또는 강사가 다른 시간을 말한 경우 그 시간)
+create or replace function admin_makeup_confirm(p_makeup_request uuid, p_starts_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+  me uuid := auth.uid();
+  r makeup_requests;
+  s record;
+  e enrollments;
+  v_end timestamptz;
+  v_lesson uuid;
+  v_conf text;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into r from makeup_requests where id = p_makeup_request for update;
+  if not found then raise exception '보강 신청이 없습니다.'; end if;
+  if r.status = 'confirmed' then return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', r.confirmed_lesson_id, 'repeated', true); end if;
+  if r.status not in ('requested', 'countered') then raise exception '이미 닫힌 보강 신청입니다.'; end if;
+  select * into s from lms_makeup_source(r.source_lesson_id, r.migrated_item_id);
+  select * into e from enrollments where id = s.enrollment_id;
+  if p_starts_at <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+  if not s.tutor_leave and p_starts_at >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+    raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+  end if;
+  v_end := p_starts_at + make_interval(mins => e.duration_min);
+  select case when o.id is not null then '강사 휴무' else '강사 다른 수업(휴식 10분 포함)' end into v_conf
+  from (select 1) d
+  left join lateral (select x.id from lessons x where x.tutor_id = r.tutor_id and x.state <> 'canceled'
+                     and x.starts_at < v_end + v_break and p_starts_at - v_break < x.ends_at limit 1) k on true
+  left join lateral (select o.id from tutor_time_off o where o.tutor_id = r.tutor_id
+                     and o.starts_at < v_end and p_starts_at < o.ends_at limit 1) o on true
+  where k.id is not null or o.id is not null;
+  if v_conf is not null then raise exception '그 시간은 %와 겹칩니다.', v_conf using hint = 'schedule_conflict'; end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+  if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+    insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+  end if;
+  begin
+    insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of, created_by)
+    values (s.enrollment_id, s.student_id, r.tutor_id,
+            case when r.source_lesson_id is null then 'migrated_makeup' else 'makeup' end,
+            p_starts_at, v_end, r.source_lesson_id, me)
+    returning id into v_lesson;
+  exception when exclusion_violation then
+    raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+  end;
+  if r.migrated_item_id is not null then
+    update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = r.migrated_item_id;
+  end if;
+  update makeup_requests set status = 'confirmed', confirmed_lesson_id = v_lesson, decided_at = now(), decided_by = me where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  values (r.id, 'makeup_confirmed', 'student', s.student_id), (r.id, 'makeup_confirmed', 'tutor', r.tutor_id);
+  return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', v_lesson, 'repeated', false);
+end $$;
+revoke all on function admin_makeup_confirm(uuid, timestamptz) from public, anon;
+grant execute on function admin_makeup_confirm(uuid, timestamptz) to authenticated;
+
+-- 확정 전 신청 닫기 (강사가 모두 안 된다고 함·학생이 철회)
+create or replace function admin_makeup_withdraw(p_makeup_request uuid)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_makeup_withdraw', true);
+  update makeup_requests set status = 'withdrawn', decided_at = now(), decided_by = me
+  where id = p_makeup_request and status in ('requested', 'countered');
+  update lesson_notices set status = 'not_needed' where makeup_request_id = p_makeup_request and status = 'pending';
+end $$;
+revoke all on function admin_makeup_withdraw(uuid) from public, anon;
+grant execute on function admin_makeup_withdraw(uuid) to authenticated;
+
+-- 확정한 보강을 잘못 넣었을 때 없애기 (변경권 없이, 보강 권리는 다시 열림). 학생이 바꾸는 건 일반 변경(변경권 사용, A03)
+create or replace function admin_void_makeup(p_lesson uuid, p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  l lessons;
+  r makeup_requests;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into l from lessons where id = p_lesson for update;
+  if not found or l.kind not in ('makeup', 'migrated_makeup') then raise exception '보강 수업이 아닙니다.'; end if;
+  if l.voided_at is not null then return jsonb_build_object('lesson_id', l.id, 'repeated', true); end if;
+  if l.state <> 'scheduled' then raise exception '이미 진행·변경된 보강입니다.'; end if;
+  select * into r from makeup_requests where confirmed_lesson_id = l.id;
+  if not found then raise exception '보강 신청 기록이 없는 보강입니다 (이관한 보강은 시트에서 확인).'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_void_makeup', true);
+  update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = me, void_note = nullif(trim(p_note), '')
+  where id = l.id;
+  update makeup_requests set status = 'voided', decided_at = now(), decided_by = me where id = r.id;
+  if r.migrated_item_id is not null then
+    update migrated_items set kind = 'makeup_open', lesson_id = null where id = r.migrated_item_id;
+  end if;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_confirmed' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  select r.id, 'makeup_voided', n.recipient_kind, n.recipient_id from lesson_notices n
+  where n.makeup_request_id = r.id and n.event = 'makeup_confirmed' and n.status = 'sent'
+  on conflict do nothing;
+  return jsonb_build_object('lesson_id', l.id, 'repeated', false);
+end $$;
+revoke all on function admin_void_makeup(uuid, text) from public, anon;
+grant execute on function admin_void_makeup(uuid, text) to authenticated;
+
+-- [보냈어요]
+create or replace function admin_mark_lesson_notice_sent(p_notice uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  n lesson_notices;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into n from lesson_notices where id = p_notice for update;
+  if not found then raise exception '안내가 없습니다.'; end if;
+  if n.status = 'not_needed' then raise exception '보낼 필요가 없어진 안내입니다.'; end if;
+  if n.status = 'pending' then
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_mark_lesson_notice_sent', true);
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me where id = p_notice;
+  end if;
+  return jsonb_build_object('notice_id', p_notice, 'repeated', n.status = 'sent');
+end $$;
+revoke all on function admin_mark_lesson_notice_sent(uuid) from public, anon;
+grant execute on function admin_mark_lesson_notice_sent(uuid) to authenticated;
+
 insert into lms_backup.project (name) values ('edgeenglish-lms-test');   -- 이 DB의 프로젝트 이름 (복구 안전장치)
 commit;

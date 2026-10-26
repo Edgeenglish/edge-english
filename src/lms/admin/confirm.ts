@@ -83,11 +83,11 @@ const EN_WD_FULL: Record<string, string> = { 일: 'Sun', 월: 'Mon', 화: 'Tue',
 const enDays = (text: string) => text.replace(/[일월화수목금토]/g, (c) => EN_WD_FULL[c]).replace(/·/g, ' & ');
 
 /** 한 시점을 그 시간대 기준 'Wed 4 Nov 11:00' / '11월 4일(수) 09:00' */
-function enWhen(at: Date, tz: string) {
+export function enWhen(at: Date, tz: string) {
   const f = formatInZone(at, tz);
   return `${f.weekday} ${Number(f.date.slice(8))} ${EN_MON[Number(f.date.slice(5, 7)) - 1]} ${f.time}`;
 }
-function koWhen(at: Date, tz: string) {
+export function koWhen(at: Date, tz: string) {
   const f = formatInZone(at, tz);
   return `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8))}일(${EN_WD[f.weekday]}) ${f.time}`;
 }

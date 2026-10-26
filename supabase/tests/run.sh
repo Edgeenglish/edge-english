@@ -111,3 +111,11 @@ cp "$ROOT"/supabase/test-setup/d52y-check.sql "$WORK"/; chmod a+r "$WORK"/d52y-c
 D52Y="$("${PSQL[@]}" -tA -f "$WORK/d52y-check.sql")"
 echo "$D52Y" | grep -v '|통과$' && { echo "❌ d52y-check 실패"; exit 1; }
 echo "✅ migration 1600 적용 확인 파일 통과 (확인 $(echo "$D52Y" | wc -l)줄)"
+
+# migration 1700 (수업 변경·보강·되돌리기·안내 기록) 적용 확인 파일: 5줄 통과, 두 번 적용해도 오류 없음
+"${PSQL[@]}" -o /dev/null -f "$ROOT/supabase/migrations/20261026001700_lms_lesson_change.sql"
+cp "$ROOT"/supabase/test-setup/c17-check.sql "$WORK"/; chmod a+r "$WORK"/c17-check.sql
+C17="$("${PSQL[@]}" -tA -f "$WORK/c17-check.sql")"
+echo "$C17" | grep -v '|통과$' && { echo "❌ c17-check 실패"; exit 1; }
+"${PROD[@]}" -tA -f "$WORK/c17-check.sql" | grep -v '|통과$' && { echo "❌ 운영 묶음 c17-check 실패"; exit 1; }
+echo "✅ migration 1700 적용 확인 파일 통과 (확인 $(echo "$C17" | wc -l)줄, 다시 적용해도 오류 없음)"
