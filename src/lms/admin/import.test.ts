@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { kstToInstant } from '../rules/dates';
-import { autoEndDate, emptyImport, withAutoEnd, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings, type ImportDraft, type ImportMakeup } from './import';
+import { autoEndDate, autoFromDate, currentPeriod, emptyImport, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings, regularEnd, withAutoEnd, type ImportDraft, type ImportMakeup } from './import';
 import type { RegTutor } from './registration';
 
 // 2027-08-02(월) ~ 2027-08-29(일)
 const base = (over: Partial<ImportDraft> = {}): ImportDraft => ({
   ...emptyImport('2027-08-02'),
   nameKo: '이관', nameEn: 'Import', tutorId: 'T', durationMin: 50,
-  slots: [{ weekday: 2, time: '19:00' }], endDate: '2027-08-29',
-  weeks: 4, periodIdx: 1, periodStart: '2027-08-02', creditsLeft: 1, sheetTotal: 4, sheetUsed: 0, ...over,
+  slots: [{ weekday: 2, time: '19:00' }], endDate: '2027-08-29', hasMakeups: true,
+  weeks: 4, courseStart: '2027-08-02', creditsLeft: 1, sheetTotal: 4, sheetUsed: 0, ...over,
 });
 const mk = (date: string, time: string, durationMin: number, tutorId: string, more: Partial<ImportMakeup> = {}): ImportMakeup => ({
   status: 'booked', originalDate: '', originUnknown: true, date, time, durationMin, tutorId, ...more,
@@ -26,7 +26,7 @@ describe('기존 학생 간단 입력 (D-52)', () => {
   it('잘못된 입력은 저장 전에 알려 줌', () => {
     expect(importProblems(base())).toEqual([]);
     expect(importProblems(base({ slots: [1, 2, 3, 4].map((w) => ({ weekday: w, time: '08:00' })) }))).toContain('주 수업 횟수는 1·2·3·5회만 가능해요 (지금 4회).');
-    expect(importProblems(base({ endDate: '2027-07-01' }))).toContain('수강 종료일이 시작일보다 빨라요.');
+    expect(importProblems(base({ endDate: '2027-07-01' }))).toContain('수강 종료일이 첫 정규 수업일보다 빨라요.');
     expect(importProblems(base({ makeups: [mk('2027-07-30', '10:00', 20, 'T')] })).join()).toMatch('지난 보강은 시트에');
   });
 
@@ -85,29 +85,49 @@ describe('기존 학생 입력 확대판 (D-52 · H26, 2026-10-24 대표 결정)
     expect(importProblems(base({ makeups: [open({ originalDate: '2027-07-20' }), open({ originalDate: '2027-07-20' })] })).join()).toMatch('두 개');
   });
 
-  it('지금 기간은 남은 변경권, 다음 기간부터 주 횟수대로 새로 지급 (28일씩)', () => {
-    const d = base({ slots: [{ weekday: 2, time: '19:00' }, { weekday: 4, time: '19:00' }], weeks: 12, periodIdx: 2, periodStart: '2027-07-13', creditsLeft: 0, endDate: '2027-09-06' });
+  it('수강 시작일부터 28일 기간 전체, 지금 기간은 오늘 날짜로 (다르면 고침), 다음 기간부터 새로 지급', () => {
+    const d = base({ today: '2027-08-02', slots: [{ weekday: 2, time: '19:00' }, { weekday: 4, time: '19:00' }], weeks: 12, courseStart: '2027-06-15', creditsLeft: 0, endDate: '2027-09-06' });
     expect(importPeriods(d).map((p) => [p.index, p.start, p.end, p.state, p.credits])).toEqual([
       [1, '2027-06-15', '2027-07-12', 'past', 2],
       [2, '2027-07-13', '2027-08-09', 'now', 0],
       [3, '2027-08-10', '2027-09-06', 'next', 2],
     ]);
-    expect(importWarnings(d).endDate).toBeUndefined();
-    expect(importWarnings({ ...d, endDate: '2027-09-10' }).endDate).toMatch('4일 달라요');
-    expect(importWarnings({ ...d, periodStart: '2027-08-10' }).period).toMatch('밖이에요');
+    expect(currentPeriod({ ...d, periodOverride: 3 })).toBe(3);
+    expect(importPayload(d).course).toEqual({ weeks: 12, period_idx: 2, period_start: '2027-07-13', credits_left: 0 });
+    expect(importWarnings(d).end).toBeUndefined();
+    expect(importWarnings({ ...d, endDate: '2027-09-10' }).end).toEqual({ days: 4, calc: '2027-09-06' });
   });
 });
 
-describe('종료일 자동 · 기간 시작일 요일 (2026-10-25 대표)', () => {
-  const d = base({ weeks: 12, periodIdx: 1, periodStart: '2026-10-27', fromDate: '2026-10-25', endDate: '', slots: [{ weekday: 2, time: '19:00' }] });
-  it('4번을 다 넣으면 마지막 28일 기간 끝이 종료일로, 직접 고친 종료일은 그대로', () => {
+describe('종료일 자동 · 연장된 날 정규 없음 · 보강 없으면 건너뜀 (시안 2, 2026-10-26 대표)', () => {
+  const d = base({ today: '2026-10-26', weeks: 12, courseStart: '2026-10-27', fromDate: '2026-10-27', endDate: '', slots: [{ weekday: 2, time: '19:00' }] });
+  it('상품·수강 시작일을 넣으면 마지막 28일 기간 끝이 종료일로, 직접 고친 종료일은 그대로', () => {
     expect(autoEndDate(d)).toBe('2027-01-18');
-    expect(withAutoEnd({ ...d, periodStart: '' }, d).endDate).toBe('2027-01-18');
+    expect(withAutoEnd({ ...d, courseStart: '' }, d).endDate).toBe('2027-01-18');
     const edited = { ...d, endDate: '2027-01-25' };
-    expect(withAutoEnd(edited, { ...edited, periodIdx: 2 }).endDate).toBe('2027-01-25');
+    expect(withAutoEnd(edited, { ...edited, creditsLeft: 0 }).endDate).toBe('2027-01-25');
   });
-  it('기간 시작일이 수업 요일이 아니면 알려 줌', () => {
-    expect(importWarnings(d).periodDay).toBeUndefined();
-    expect(importWarnings({ ...d, periodStart: '2026-10-25' }).periodDay).toMatch('수업 요일(화)이 아니에요');
+  it('종료일을 연장해도 늘어난 날에는 정규 수업을 만들지 않음 (A41 ④)', () => {
+    const base12 = { ...d, endDate: '2027-01-18' as const };
+    const ext = { ...base12, endDate: '2027-02-01', endReason: 'tutor_long_term_leave' as const };
+    expect(regularEnd(ext)).toBe('2027-01-18');
+    expect(importCount(ext).regular).toBe(importCount(base12).regular);
+    expect(importLessons(ext).filter((l) => l.kind === 'regular').every((l) => l.date <= '2027-01-18')).toBe(true);
+    expect(importPayload(ext).extension).toEqual({ reason: 'tutor_long_term_leave', note: '' });
+  });
+  it('보강 날짜가 종료일 뒤면 막고, 학생 장기 연기는 24주만', () => {
+    const e = { ...d, endDate: '2027-01-18' };
+    expect(importProblems({ ...e, makeups: [mk('2027-01-26', '19:00', 50, 'T')] }).join()).toMatch('종료일 뒤');
+    expect(importProblems({ ...e, endDate: '2027-01-25', endReason: 'student_long_term_leave' }).join()).toMatch('24주');
+  });
+  it("미완료 보강 '없음'이면 적어 둔 보강은 계산·저장에서 빠짐", () => {
+    const e = { ...d, endDate: '2027-01-18', makeups: [{ ...mk('', '', 50, 'T', { originalDate: '2026-11-03', originUnknown: false }), status: 'open' as const }] };
+    expect(importCount({ ...e, hasMakeups: true }).open).toBe(1);
+    expect(importCount({ ...e, hasMakeups: false })).toMatchObject({ open: 0, origin: 0 });
+    expect(importPayload({ ...e, hasMakeups: false }).makeups).toEqual([]);
+  });
+  it('첫 정규 수업일은 오늘 이후 첫 수업 요일, 수강 시작일이 수업 요일과 다르면 안내만', () => {
+    expect(autoFromDate({ ...d, today: '2026-10-28' })).toBe('2026-11-03');
+    expect(importWarnings({ ...d, courseStart: '2026-10-26' }).courseDay).toMatch('고정 요일을 바꾼 학생이면 정상');
   });
 });

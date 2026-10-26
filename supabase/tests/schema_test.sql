@@ -923,9 +923,10 @@ select pg_temp.ok((select count(*) filter (where i.kind = 'makeup_booked' and i.
                       and count(*) filter (where i.kind = 'extra' and i.reason = '시트 이월 1회') = 1
                    from migrated_items i join enrollments e on e.id = i.enrollment_id join students s on s.id = e.student_id where s.name_ko = '확대A'),
   '보강 예약됨·미예약·날짜 확인 필요, 추가 수업 근거가 따로 기록됨');
-select pg_temp.ok((select array_agg(credit_balance(p.id) order by p.idx) = '{1,2}' and array_agg(p.start_date order by p.idx) = '{2027-10-12,2027-11-09}'
+select pg_temp.ok((select array_agg(credit_balance(p.id) order by p.idx) = '{2,1,2}' and array_agg(p.start_date order by p.idx) = '{2027-09-14,2027-10-12,2027-11-09}'
+                          and min(e.start_date) = '2027-09-14'
                    from enrollment_periods p join enrollments e on e.id = p.enrollment_id join students s on s.id = e.student_id where s.name_ko = '확대A'),
-  '지금 2기간은 남은 변경권 1, 다음 3기간은 2개 새로 지급 (주2회, 28일씩)');
+  '수강 시작일(1기간)부터 모든 28일 기간 기록, 지금 2기간만 남은 변경권 1, 다음 3기간은 2개 새로 (1600)');
 select pg_temp.ok((select c.checked_at is null and c.lms_left = 10 and st.lms_since is null
                    from import_checks c join enrollments e on e.id = c.enrollment_id join students st on st.id = e.student_id where st.name_ko = '확대A'),
   '입력해도 시트 대조 전·LMS 전환 전 (시트로 관리)');
@@ -962,12 +963,45 @@ select pg_temp.ok((select count(*) from migrated_items) = 0 and (select count(*)
 reset request.jwt.claim.sub;
 reset role;
 
+-- ---------- 시안 2: 연장된 날에는 정규 수업을 만들지 않음 (migration 1600, A41 ④) ----------
+-- 4주 · 1기간 2027-12-06(월) 시작 → 계산 끝 2028-01-02(일). 시트 종료일 2028-01-09(일, 강사 휴무 연장 7일)
+create or replace function pg_temp.ebody(name text, reason text, ext_end date, makeups jsonb) returns jsonb
+language sql as $$
+  select jsonb_build_object('student', jsonb_build_object('name_ko', name, 'name_en', 'E ' || name, 'timezone', 'Asia/Seoul'),
+    'tutor_id', '55555555-0000-0000-0000-000000001500', 'slots', '[{"weekday":1,"time":"07:00"},{"weekday":3,"time":"07:00"}]'::jsonb,
+    'duration_min', 50, 'from_date', '2027-12-06', 'end_date', ext_end, 'makeups', makeups,
+    'course', jsonb_build_object('weeks', 4, 'period_idx', 1, 'period_start', '2027-12-06', 'credits_left', 2),
+    'extension', jsonb_build_object('reason', reason), 'sheet', jsonb_build_object('total', 8, 'used', 0))
+$$;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2)
+select pg_temp.ok((select (r ->> 'lessons')::int = 6 and (r ->> 'lms_left')::int = 8 and r ->> 'regular_end' = '2028-01-02' and r ->> 'end_date' = '2028-01-09'
+                   from pg_temp.imp('90000000-0000-0000-0000-000000001601', pg_temp.ebody('연장A', 'tutor_long_term_leave', '2028-01-09',
+                     '[{"status":"open","original_date":"2027-12-27"},{"status":"booked","original_date":"2027-12-29","date":"2028-01-05","time":"07:00","duration_min":50,"tutor_id":"55555555-0000-0000-0000-000000001500"}]')) r)
+              and not exists (select 1 from lessons l join students s on s.id = l.student_id where s.name_ko = '연장A' and l.kind = 'regular' and l.kst_date > '2028-01-02'),
+  '종료일을 7일 연장해도 정규 수업은 계산 끝(1/2)까지만 — 늘어난 날의 월·수는 만들지 않음 (보강 1/5만 늘어난 날에)');
+select pg_temp.ok((select e.base_end_date = '2028-01-02' and e.final_end_date = '2028-01-09' and x.reason = 'tutor_long_term_leave' and x.days = 7
+                   from enrollments e join students s on s.id = e.student_id join enrollment_extensions x on x.enrollment_id = e.id where s.name_ko = '연장A')
+              and (select lms_left = 8 + 0 and end_reason = 'tutor_long_term_leave' from import_checks c join enrollments e on e.id = c.enrollment_id join students s on s.id = e.student_id where s.name_ko = '연장A'),
+  '늘어난 날은 연장 기록(강사 장기 휴무 7일)으로, 남은 수업은 늘지 않음 (정규 6 + 예약 보강 1 + 미예약 1 = 8)');
+select pg_temp.expect_error($$select pg_temp.imp(gen_random_uuid()::text, pg_temp.ebody('보강늦음', 'tutor_long_term_leave', '2028-01-02',
+  '[{"status":"booked","original_date":"2027-12-29","date":"2028-01-05","time":"07:00","duration_min":50,"tutor_id":"55555555-0000-0000-0000-000000001500"}]'))$$, '종료일');
+select pg_temp.expect_error($$select pg_temp.imp(gen_random_uuid()::text, pg_temp.ebody('장기연기4주', 'student_long_term_leave', '2028-01-09', '[]'))$$, '24주');
+select pg_temp.ok(true, '보강이 종료일 뒤면 저장 안 함(연장 먼저) · 학생 장기 연기는 24주만');
+select pg_temp.imp('90000000-0000-0000-0000-000000001602', pg_temp.ebody('이유없음', '', '2028-01-04', '[]') || jsonb_build_object('slots', '[{"weekday":1,"time":"09:00"},{"weekday":3,"time":"09:00"}]'::jsonb));
+select pg_temp.ok((select x.reason = 'admin_exception' and x.note like '이유 미선택%'
+                   from enrollments e join students s on s.id = e.student_id join enrollment_extensions x on x.enrollment_id = e.id where s.name_ko = '이유없음'),
+  '이유를 안 골라도 저장은 됨 — 기타·이유 미선택으로 남아 대조 때 보임');
+reset request.jwt.claim.sub;
+reset role;
+
 -- ---------- 재등록 대기 자리 맡아 두기 (migration 1400, A22 · POL-RN-02) ----------
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2)
 -- 이관A: 화 19:00, 2027-08-29 종료 (마감 아직 안 지남) → 종료 뒤 화요일 19:00 은 다른 학생에게 못 줌
 create or replace function pg_temp.ibody2(name text, slots jsonb, tutor text, f date, e date) returns jsonb
-language sql as $$ select pg_temp.ibody(name, slots, '[]') || jsonb_build_object('tutor_id', tutor, 'from_date', f, 'end_date', e) $$;
+language sql as $$ select pg_temp.ibody(name, slots, '[]') || jsonb_build_object('tutor_id', tutor, 'from_date', f, 'end_date', e,
+  'course', jsonb_build_object('weeks', 4, 'period_idx', 1, 'period_start', f, 'credits_left', 1)) $$;
 select pg_temp.ok((select count(*) = 4 and bool_and(x ->> 'reason' = 'tutor_hold' and x ->> 'other' like '이관A%23:59까지')
                    from jsonb_array_elements(pg_temp.imp_conflicts(pg_temp.ibody2('대기충돌', '[{"weekday":2,"time":"19:30"}]',
                      '55555555-0000-0000-0000-000000001300', '2027-08-30', '2027-09-26'))) x),

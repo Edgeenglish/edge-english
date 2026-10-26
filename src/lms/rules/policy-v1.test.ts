@@ -2,7 +2,7 @@
 // 실행: npm test
 
 import { describe, expect, it } from 'vitest';
-import { addBusinessDays, kstToInstant } from './dates';
+import { addBusinessDays, addDays, kstToInstant } from './dates';
 import { canCarryOver, isFixedSlotHeld } from './period';
 import { compensationDeadline, isCompensationSlotAllowed, tutorCancelOutcome } from './change';
 import { evaluateLongLeaveRequest, suggestDatesAfterEnd, tutorLeaveExtensionDays, type LongLeaveInput } from './leave';
@@ -161,5 +161,32 @@ describe('보상 적립금 장부 (POL-PAY-09)', () => {
     l.restoreAfterRefund('use-1');
     expect(l.balance()).toBe(2000);
     expect(() => l.restoreAfterRefund('use-1')).toThrow();
+  });
+});
+
+// 강사 휴가 수업 처리 (정책 원본 A41, 2026-10-26 대표 확정) — 지금 있는 규칙으로 확인할 수 있는 것만
+// 대체강사 배정·학생 선택·보강 확정 화면은 H26 순서의 '취소·변경 공통 처리(강사 취소·장기 휴가)' 단계에서 만든다
+describe('강사 휴가: 연장은 실제 마지막 보강일까지만 (A20·A41)', () => {
+  const baseEnd = '2026-11-26'; // 휴가 연장 전 종료일 (월·수 학생이 휴가 5일 동안 월 11/9·수 11/11 2회를 놓침)
+  it('1순위 대체강사가 원래 시간에 수업 → 보강 없음 → 연장 0', () => {
+    expect(tutorLeaveExtensionDays(baseEnd, [])).toBe(0);
+  });
+  it('기존 강사와 기간 안에 보강을 끝냄 → 연장 0', () => {
+    expect(tutorLeaveExtensionDays(baseEnd, ['2026-11-20', '2026-11-25'])).toBe(0);
+  });
+  it('종료일 뒤로 보강이 확정됨 → 마지막 보강일까지만 (휴가 일수·7일·14일 단위 아님)', () => {
+    expect(tutorLeaveExtensionDays(baseEnd, ['2026-11-25', '2026-11-30'])).toBe(4);
+  });
+  it('보강 날짜가 아직 없음 → 지금은 연장하지 않음 (놓친 2회는 미예약 보강으로 남아 있음)', () => {
+    expect(tutorLeaveExtensionDays(baseEnd, [])).toBe(0);
+  });
+  it('보강 날짜를 바꾸면 늘 휴가 연장 전 종료일 기준으로 다시 계산 (연장이 쌓이지 않음)', () => {
+    const before = tutorLeaveExtensionDays(baseEnd, ['2026-11-25', '2026-12-02']); // 6일
+    const after = tutorLeaveExtensionDays(baseEnd, ['2026-11-25', '2026-11-30']); // 4일
+    expect([before, after, after - before]).toEqual([6, 4, -2]); // 차이 -2일은 정정 기록(correction)으로
+    expect(tutorLeaveExtensionDays(addDays(baseEnd, before), ['2026-11-30'])).toBe(0); // 연장된 종료일을 넣으면 줄어든 걸 못 잡음 → 쓰면 안 됨
+  });
+  it('원래 월·수를 보강 후보로 추천만 (확정은 학생·강사 확인 뒤)', () => {
+    expect(suggestDatesAfterEnd(baseEnd, [1, 3], 2)).toEqual(['2026-11-30', '2026-12-02']);
   });
 });

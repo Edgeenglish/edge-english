@@ -1,9 +1,10 @@
 'use client';
 
-// 기존 학생 입력 (D-52, 정책 원본 H23(3) → 확대판 H26, 2026-10-24 대표 결정 6가지)
-// - 지금 수업 중인 학생: 이름·강사·요일·시각·수업 길이·지금 수강 종료일 → 시작일(기본 오늘)~종료일 정규 수업
-// - 미완료 보강: 예약됨/미예약 + 원래 수업 날짜(모르면 '날짜 확인 필요'). 원래 날짜가 시작일 이후면 그날 정규는 안 만듦
-// - 지금 28일 기간·그 기간 남은 변경권, 시트 숫자(총 수업 수·진행·차감된 수)와 남은 수업 대조 — 달라도 저장
+// 기존 학생 입력 (D-52, 정책 원본 H23(3) → 확대판 H26(9) → 시안 2, 2026-10-26 대표 승인)
+// 카드: 1 학생 · 2 현재 수강권(상품·수강 시작일 → 기간 자동, 지금 기간 자동, 변경권, 종료일·차이 이유) · 3 강사·정규(첫 정규 수업일)
+//       · 4 미완료 보강(없으면 건너뜀) · 5 남은 수업 대조 · 6 확인·저장. 연장으로 늘어난 날에는 정규 수업을 만들지 않음 (A41 ④)
+// - 미완료 보강: 예약됨/미예약 + 원래 수업 날짜(모르면 '날짜 확인 필요'). 원래 날짜가 첫 정규 수업일 이후면 그날 정규는 안 만듦
+// - 시트 숫자(총 수업 수·진행·차감된 수)와 남은 수업 대조 — 달라도 저장
 // - 저장 뒤 [시트와 같음 · 대조 완료] → 확인 시각·담당자 기록. 안 누르면 대시보드 처리할 일에 남음
 // - LMS 전환일은 비워 둠 (시트로 계속 관리, 학생 상세에서 나중에). 결제·지난 수업 기록은 옮기지 않음. 학생에게 아무것도 보내지 않음
 // - 휴대폰·PC 한 화면: 위에서 아래로 채우고 맨 아래 [저장]. 경고·충돌은 그 입력칸 바로 아래, DB가 다시 확인
@@ -13,7 +14,7 @@ import { useMemo, useState } from 'react';
 import { addDays, instantToKstDate, weekdayOf } from '@/lms/rules/dates';
 import {
   DURATIONS, emptyImport, IMPORT_REASON_TEXT, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings,
-  newMakeup, regularRows, withAutoEnd, type ImportDraft, type ImportExtra, type ImportIssue, type ImportMakeup, type ImportWeeks,
+  activeMakeups, autoFromDate, currentPeriod, END_REASON_TEXT, newMakeup, regularEnd, regularRows, todayPeriod, withAutoEnd, type EndReason, type ImportDraft, type ImportExtra, type ImportIssue, type ImportMakeup, type ImportWeeks,
 } from '@/lms/admin/import';
 import type { ImportConflict, ImportResult } from '@/lms/admin/import-live';
 import { creditsPerPeriod } from '@/lms/rules/policy';
@@ -260,7 +261,92 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
           </div>
         </Card>
 
-        <Card title="2. 정규 수업">
+        <Card title="2. 현재 수강권">
+          <div className="grid gap-3">
+            <div>
+              <span className="mb-1 block text-[13px] text-[#6b6880]">상품</span>
+              <Chips<ImportWeeks> value={d.weeks} options={WEEKS} label={(w) => WEEKS_TEXT[w]} onPick={(w) => !saved && setD((x) => withAutoEnd(x, { ...x, weeks: w, periodOverride: null }))} />
+              {tried && !d.weeks && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
+            </div>
+            <Field label="수강 시작일 (시트 '첫번째 수강 기간' 시작일)" problem={tried && !d.courseStart ? '필요해요' : undefined}>
+              <input id="imp-course-start" type="date" value={d.courseStart} disabled={saved} onChange={(e) => setD((x) => withAutoEnd(x, { ...x, courseStart: e.target.value, periodOverride: null }))} className={inputCls(saved, tried && !d.courseStart)} />
+            </Field>
+            {warn.courseDay && <Note tone="info">{warn.courseDay}</Note>}
+            {periods.length > 0 && (
+              <div>
+                <span className="mb-1 block text-[13px] text-[#6b6880]">28일 기간 — 시트와 한 줄씩 비교해 보세요</span>
+                <ul className="grid gap-1.5">
+                  {periods.map((p) => (
+                    <li
+                      key={p.index}
+                      className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-[10px] border px-3 py-2 text-[13.5px] ${
+                        p.state === 'now' ? 'border-[#7d5fff] bg-[#efebff]' : p.state === 'past' ? 'border-[#e6e3ef] bg-[#f6f5fb] text-[#6b6880]' : 'border-[#e6e3ef]'
+                      }`}
+                    >
+                      <b>{p.index}기간</b>
+                      <span className="tabular-nums">
+                        {dayLabel(p.start)} – {dayLabel(p.end)}
+                      </span>
+                      <span className="text-right tabular-nums">{p.state === 'past' ? '지난 기간' : p.state === 'now' ? `지금 · 변경권 ${p.credits}/${granted}` : `변경권 ${granted}개 새로`}</span>
+                    </li>
+                  ))}
+                </ul>
+                {currentPeriod(d) !== null ? (
+                  <p className="mt-1.5 text-[12.5px] text-[#6b6880]">
+                    {d.periodOverride === null ? `오늘 ${dayLabel(today)}은 ${currentPeriod(d)}기간이에요 (자동).` : `지금 기간을 ${d.periodOverride}기간으로 고쳤어요 (오늘 날짜 계산: ${todayPeriod(d) ?? '기간 밖'}).`}
+                  </p>
+                ) : (
+                  <Note tone="warn">오늘 {dayLabel(today)}이 어느 기간에도 없어요. 수강 시작일·상품을 확인하거나 아래에서 지금 기간을 골라 주세요.</Note>
+                )}
+                {!saved && d.weeks && (
+                  <details className="mt-1" open={d.periodOverride !== null || currentPeriod(d) === null}>
+                    <summary className="flex min-h-[36px] cursor-pointer items-center text-[12.5px] font-semibold text-[#5b3fe0]">시트의 지금 기간이 다르면 고르기</summary>
+                    <Chips
+                      value={d.periodOverride ?? currentPeriod(d)}
+                      options={Array.from({ length: d.weeks / 4 }, (_, i) => i + 1)}
+                      label={(i) => `${i}기간`}
+                      onPick={(i) => set('periodOverride', i === todayPeriod(d) ? null : i)}
+                    />
+                  </details>
+                )}
+              </div>
+            )}
+            <div>
+              <span className="mb-1 block text-[13px] text-[#6b6880]">지금 기간에 남은 변경권 (시트 &lsquo;변경권 ○회 / 총 {granted}회&rsquo;)</span>
+              <Chips value={d.creditsLeft} options={Array.from({ length: granted + 1 }, (_, i) => i)} label={(i) => `${i}개`} onPick={(i) => !saved && set('creditsLeft', i)} />
+              {tried && d.creditsLeft === null && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
+            </div>
+            <Field label="현재 수강 종료일 (시트 '수강 종료일')" problem={tried && !d.endDate ? '필요해요' : undefined}>
+              <input id="imp-end" type="date" value={d.endDate} disabled={saved} onChange={(e) => set('endDate', e.target.value)} className={inputCls(saved, tried && !d.endDate)} />
+            </Field>
+            {warn.end ? (
+              <div className="grid gap-2 rounded-[10px] bg-[#fff8d6] px-3 py-2.5 text-[13px] text-[#5c4a00]">
+                <span>
+                  기간 계산 끝 {dayLabel(warn.end.calc)}보다 <b>{Math.abs(warn.end.days)}일 {warn.end.days > 0 ? '늦어요' : '빨라요'}</b>. 이유를 골라 주세요 (저장은 막지 않아요).
+                </span>
+                {warn.end.days > 0 && <span>늘어난 {dayLabel(addDays(warn.end.calc, 1))} ~ {dayLabel(d.endDate as string)}에는 정규 수업을 만들지 않아요. 보강만 잡을 수 있어요.</span>}
+                <Chips<EndReason>
+                  value={d.endReason || null}
+                  options={(d.weeks === 24 ? ['tutor_long_term_leave', 'student_long_term_leave', 'admin_exception'] : ['tutor_long_term_leave', 'admin_exception']) as EndReason[]}
+                  label={(r) => END_REASON_TEXT[r]}
+                  onPick={(r) => !saved && set('endReason', r)}
+                />
+                {d.endReason === 'admin_exception' && (
+                  <input id="imp-end-note" value={d.endNote} disabled={saved} placeholder="메모 (예: 대표 승인 연장)" onChange={(e) => set('endNote', e.target.value)} className={inputCls(saved)} />
+                )}
+                {!saved && (
+                  <button type="button" onClick={() => setD((x) => ({ ...x, endDate: warn.end!.calc, endReason: '', endNote: '' }))} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-left text-[13px] text-[#1d1b2b]">
+                    계산값({dayLabel(warn.end.calc)})으로 되돌리기
+                  </button>
+                )}
+              </div>
+            ) : (
+              d.endDate && <p className="-mt-1 text-[12.5px] text-[#6b6880]">기간 계산과 같아요. 연장이 있었으면 시트 종료일로 고치세요.</p>
+            )}
+          </div>
+        </Card>
+
+        <Card title="3. 강사 · 정규 수업">
           <div className="grid gap-3">
             <Field label="담당 강사">{tutorSelect(d.tutorId, (v) => set('tutorId', v), 'imp-tutor')}</Field>
             <div>
@@ -317,22 +403,20 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="입력 시작일 (이날부터 LMS에 수업 만듦)">
-                <input id="imp-from" type="date" value={d.fromDate} min={addDays(today, -7)} disabled={saved} onChange={(e) => set('fromDate', e.target.value || today)} className={inputCls(saved)} />
-              </Field>
-              <Field label="지금 수강 종료일" problem={tried && !d.endDate ? '필요해요' : undefined}>
-                <input id="imp-end" type="date" value={d.endDate} min={d.fromDate} disabled={saved} onChange={(e) => set('endDate', e.target.value)} className={inputCls(saved, tried && !d.endDate)} />
-              </Field>
-            </div>
-            <p className="-mt-1 text-[12.5px] text-[#6b6880]">종료일은 4번(상품·지금 기간·기간 시작일)을 넣으면 자동으로 채워져요. 연장이 있었으면 직접 고치세요.</p>
-            {warn.endDate && <Note tone="warn">{warn.endDate}</Note>}
+            <Field label="앞으로 남은 첫 정규 수업일">
+              <input id="imp-from" type="date" value={d.fromDate} min={addDays(today, -7)} disabled={saved} onChange={(e) => set('fromDate', e.target.value || autoFromDate(d))} className={inputCls(saved)} />
+            </Field>
+            <p className="-mt-1 text-[12.5px] text-[#6b6880]">오늘 이후 첫 수업 요일로 자동이에요. 이날부터 {regularEnd(d) ? dayLabel(regularEnd(d) as string) : '종료일'}까지 정규 수업을 만들어요.</p>
           </div>
         </Card>
 
-        <Card title="3. 미완료 보강">
-          <p className="mb-2 text-[13px] text-[#6b6880]">아직 안 끝난 보강 전부 (예약됨 · 미예약). 지난 보강은 넣지 않아요.</p>
-          <div className="grid gap-3">
+        <Card title="4. 미완료 보강">
+          <Chips<'n' | 'y'> value={d.hasMakeups ? 'y' : 'n'} options={['n', 'y']} label={(v) => (v === 'n' ? '없음' : '있음')} onPick={(v) => !saved && set('hasMakeups', v === 'y')} />
+          {!d.hasMakeups ? (
+            <p className="mt-2 text-[12.5px] text-[#6b6880]">미완료 보강이 없는 학생은 이대로 다음으로 넘어가요.</p>
+          ) : (
+          <div className="mt-3 grid gap-3">
+            <p className="text-[13px] text-[#6b6880]">아직 안 끝난 보강 전부 (예약됨 · 미예약). 지난 보강은 넣지 않아요.</p>
             {d.makeups.map((m, i) => {
               const originIsRegular = !!m.originalDate && rows.some((r) => r.date === m.originalDate);
               const originNote =
@@ -346,7 +430,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     </b>
                     <span className="flex-1" />
                     {!saved && (
-                      <button type="button" onClick={() => set('makeups', d.makeups.filter((_, j) => j !== i))} className="min-h-[36px] rounded-[8px] px-2 text-[13px] text-[#b3261e]">
+                      <button type="button" onClick={() => setD((x) => ({ ...x, makeups: x.makeups.filter((_, j) => j !== i), hasMakeups: x.makeups.length > 1 }))} className="min-h-[36px] rounded-[8px] px-2 text-[13px] text-[#b3261e]">
                         빼기
                       </button>
                     )}
@@ -382,7 +466,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <Field label="보강 날짜">
-                          <input id={`imp-mk-date-${i}`} type="date" value={m.date} min={d.fromDate} disabled={saved} onChange={(e) => setMakeup(i, { date: e.target.value })} className={inputCls(saved, tried && !m.date)} />
+                          <input id={`imp-mk-date-${i}`} type="date" value={m.date} min={d.fromDate} max={d.endDate || undefined} disabled={saved} onChange={(e) => setMakeup(i, { date: e.target.value })} className={inputCls(saved, tried && !m.date)} />
                         </Field>
                         <Field label="한국 시각">
                           <input id={`imp-mk-time-${i}`} type="time" step={300} value={m.time} disabled={saved} onChange={(e) => setMakeup(i, { time: e.target.value })} className={inputCls(saved, tried && !m.time)} />
@@ -409,59 +493,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
               </div>
             )}
           </div>
-        </Card>
-
-        <Card title="4. 지금 수강기간 · 변경권">
-          <div className="grid gap-3">
-            <div>
-              <span className="mb-1 block text-[13px] text-[#6b6880]">상품</span>
-              <Chips<ImportWeeks> value={d.weeks} options={WEEKS} label={(w) => WEEKS_TEXT[w]} onPick={(w) => !saved && setD((x) => withAutoEnd(x, { ...x, weeks: w, periodIdx: x.periodIdx && x.periodIdx > w / 4 ? null : x.periodIdx }))} />
-              {tried && !d.weeks && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
-            </div>
-            {d.weeks && (
-              <div>
-                <span className="mb-1 block text-[13px] text-[#6b6880]">지금 몇 번째 기간</span>
-                <Chips value={d.periodIdx} options={Array.from({ length: d.weeks / 4 }, (_, i) => i + 1)} label={(i) => `${i}기간`} onPick={(i) => !saved && set('periodIdx', i)} />
-                {tried && !d.periodIdx && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="이 기간 시작일" problem={tried && !d.periodStart ? '필요해요' : undefined}>
-                <input id="imp-period-start" type="date" value={d.periodStart} disabled={saved} onChange={(e) => set('periodStart', e.target.value)} className={inputCls(saved, tried && !d.periodStart)} />
-              </Field>
-              <div>
-                <span className="mb-1 block text-[13px] text-[#6b6880]">이 기간 끝 (28일)</span>
-                <p className="flex min-h-[44px] items-center rounded-[10px] border border-[#e6e3ef] bg-[#f6f5fb] px-3 text-[15px] text-[#1d1b2b]">
-                  {periods.find((p) => p.state === 'now') ? dayLabel(periods.find((p) => p.state === 'now')!.end) : '-'}
-                </p>
-              </div>
-            </div>
-            {warn.periodDay && <Note tone="warn">{warn.periodDay}</Note>}
-            {warn.period && <Note tone="warn">{warn.period}</Note>}
-            <div>
-              <span className="mb-1 block text-[13px] text-[#6b6880]">이 기간 남은 변경권 (주 {d.slots.length}회 → 기간마다 {granted}개)</span>
-              <Chips value={d.creditsLeft} options={Array.from({ length: granted + 1 }, (_, i) => i)} label={(i) => `${i}개`} onPick={(i) => !saved && set('creditsLeft', i)} />
-              {tried && d.creditsLeft === null && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
-            </div>
-            {periods.length > 0 && (
-              <ul className="grid gap-1.5">
-                {periods.map((p) => (
-                  <li
-                    key={p.index}
-                    className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-[10px] border px-3 py-2 text-[13.5px] ${
-                      p.state === 'now' ? 'border-[#7d5fff] bg-[#efebff]' : p.state === 'past' ? 'border-[#e6e3ef] bg-[#f6f5fb] text-[#6b6880]' : 'border-[#e6e3ef]'
-                    }`}
-                  >
-                    <b>{p.index}기간</b>
-                    <span className="tabular-nums">
-                      {dayLabel(p.start)} – {dayLabel(p.end)}
-                    </span>
-                    <span className="text-right tabular-nums">{p.state === 'past' ? '지난 기간 · 시트' : p.state === 'now' ? `남은 ${p.credits}/${granted}` : `${granted}개 새로 지급`}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          )}
         </Card>
 
         <Card title="5. 남은 수업 대조">
@@ -491,7 +523,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 </Note>
               ) : (
                 <Note tone="warn">
-                  만들 수업이 시트보다 {-diff}회 적어요. 종료일·요일을 먼저 확인하고, 맞으면 아래 [+ 수업 날짜 추가]나 3번의 [+ 미예약 보강]으로 채우세요. 그대로 저장해도 돼요.
+                  만들 수업이 시트보다 {-diff}회 적어요. 종료일·요일을 먼저 확인하고, 맞으면 아래 [+ 수업 날짜 추가]나 4번의 [+ 미예약 보강]으로 채우세요. 그대로 저장해도 돼요.
                 </Note>
               ))}
             {d.extras.map((x, i) => (
@@ -507,7 +539,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="날짜">
-                    <input id={`imp-ex-date-${i}`} type="date" value={x.date} min={d.fromDate} disabled={saved} onChange={(e) => setExtra(i, { date: e.target.value })} className={inputCls(saved, tried && !x.date)} />
+                    <input id={`imp-ex-date-${i}`} type="date" value={x.date} min={d.fromDate} max={d.endDate || undefined} disabled={saved} onChange={(e) => setExtra(i, { date: e.target.value })} className={inputCls(saved, tried && !x.date)} />
                   </Field>
                   <Field label="한국 시각">
                     <input id={`imp-ex-time-${i}`} type="time" step={300} value={x.time} disabled={saved} onChange={(e) => setExtra(i, { time: e.target.value })} className={inputCls(saved, tried && !x.time)} />
@@ -544,7 +576,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       <span className="flex-1" />
                       {r.state === 'origin' ? (
                         <span className="text-[12px] no-underline">
-                          {d.makeups.find((m) => m.originalDate === r.date)?.status === 'booked' ? '취소됨 · 보강 잡힘' : '취소됨 · 보강 대기'}
+                          {activeMakeups(d).find((m) => m.originalDate === r.date)?.status === 'booked' ? '취소됨 · 보강 잡힘' : '취소됨 · 보강 대기'}
                         </span>
                       ) : (
                         (diff > 0 || r.state === 'skip') &&
@@ -571,27 +603,47 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
         <Card title="6. 확인 · 저장">
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[14px]">
             <dt className="text-[#6b6880]">학생</dt>
-            <dd className="text-[#1d1b2b]">{d.nameKo || '-'} {d.nameEn && `(${d.nameEn})`}</dd>
-            <dt className="text-[#6b6880]">강사</dt>
-            <dd className="text-[#1d1b2b]">{tutorName(d.tutorId) || '-'}</dd>
-            <dt className="text-[#6b6880]">정규</dt>
-            <dd className="text-[#1d1b2b]">
-              {d.slots.filter((s) => s.time).map((s) => `${WEEKDAY_KO[s.weekday]} ${s.time}`).join(' · ') || '-'}
+            <dd className="min-w-0 text-[#1d1b2b]">{d.nameKo || '-'} {d.nameEn && `(${d.nameEn})`}</dd>
+            <dt className="text-[#6b6880]">수강권</dt>
+            <dd className="min-w-0 text-[#1d1b2b]">
+              {d.weeks ? WEEKS_TEXT[d.weeks] : '-'}
+              {d.courseStart ? ` · ${dayLabel(d.courseStart)} 시작` : ''}
+              {currentPeriod(d) !== null && d.weeks ? ` · 지금 ${currentPeriod(d)}/${d.weeks / 4}기간` : ''}
+            </dd>
+            <dt className="text-[#6b6880]">종료일</dt>
+            <dd className="min-w-0 text-[#1d1b2b]">
+              {d.endDate ? dayLabel(d.endDate) : '-'}
+              {warn.end && (
+                <b className="text-[#5c4a00]">
+                  {' '}
+                  (계산보다 {warn.end.days > 0 ? '+' : ''}
+                  {warn.end.days}일 · {d.endReason ? END_REASON_TEXT[d.endReason] : '이유 미선택'})
+                </b>
+              )}
+            </dd>
+            <dt className="text-[#6b6880]">변경권</dt>
+            <dd className="text-[#1d1b2b]">지금 기간 {d.creditsLeft ?? '-'}/{granted} · 다음 기간부터 {granted}개씩</dd>
+            <dt className="text-[#6b6880]">강사·정규</dt>
+            <dd className="min-w-0 text-[#1d1b2b]">
+              {tutorName(d.tutorId) || '-'} · {d.slots.filter((s) => s.time).map((s) => `${WEEKDAY_KO[s.weekday]} ${s.time}`).join(' · ') || '-'}
               {d.durationMin ? ` · ${d.durationMin}분` : ''}
+            </dd>
+            <dt className="text-[#6b6880]">만들 수업</dt>
+            <dd className="min-w-0 tabular-nums text-[#1d1b2b]">
+              정규 {count.regular}회{regular.length > 0 ? ` (${dayLabel(regular[0].date)} ~ ${dayLabel(regular[regular.length - 1].date)})` : ''}
+              {count.booked > 0 && ` · 보강 ${count.booked}회 (${lessons.filter((l) => l.kind === 'makeup').map((l) => dayLabel(l.date)).join(', ')})`}
+              {count.extra > 0 && ` · 추가 ${count.extra}회`}
+            </dd>
+            <dt className="text-[#6b6880]">미예약 보강</dt>
+            <dd className="min-w-0 text-[#1d1b2b]">
+              {count.open > 0
+                ? `${count.open}건 (${activeMakeups(d).filter((m) => m.status === 'open').map((m) => (m.originalDate ? `${dayLabel(m.originalDate)} 수업분` : '날짜 확인 필요')).join(', ')})`
+                : '없음'}
             </dd>
             <dt className="text-[#6b6880]">남은 수업</dt>
             <dd className="tabular-nums text-[#1d1b2b]">
-              {count.lmsLeft}회
-              {count.sheetLeft !== null && (diff === 0 ? ` (시트 ${count.sheetLeft}회 ✓)` : <b className="text-[#b3261e]"> (시트 {count.sheetLeft}회 · {diff > 0 ? '+' : ''}{diff})</b>)}
-            </dd>
-            <dt className="text-[#6b6880]">종료일</dt>
-            <dd className="text-[#1d1b2b]">{d.endDate ? dayLabel(d.endDate) : '-'}</dd>
-            <dt className="text-[#6b6880]">지금 기간</dt>
-            <dd className="text-[#1d1b2b]">{d.weeks && d.periodIdx ? `${d.periodIdx}/${d.weeks / 4}기간 · 변경권 ${d.creditsLeft ?? '-'}/${granted} 남음` : '-'}</dd>
-            <dt className="text-[#6b6880]">보강</dt>
-            <dd className="text-[#1d1b2b]">
-              예약 {count.booked} · 미예약 {count.open}
-              {d.makeups.some((m) => m.originUnknown) && ` · 날짜 확인 필요 ${d.makeups.filter((m) => m.originUnknown).length}`}
+              <b>{count.lmsLeft}회</b>
+              {count.sheetLeft !== null && (diff === 0 ? ` = 시트 ${count.sheetLeft}회 ✓` : <b className="text-[#b3261e]"> ≠ 시트 {count.sheetLeft}회 ({diff > 0 ? '+' : ''}{diff})</b>)}
             </dd>
             <dt className="text-[#6b6880]">LMS 전환</dt>
             <dd className="text-[#1d1b2b]">아직 시트로 관리 (전환일은 학생 상세에서 나중에)</dd>
@@ -631,8 +683,8 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 <b className="text-[15px] text-[#1d1b2b]">시트와 1회 대조</b>
                 <ul className="mt-2 grid gap-1 text-[13.5px] text-[#1d1b2b]">
                   <li>• 남은 수업 {result.lmsLeft}회 {result.lmsLeft === result.sheetLeft ? `= 시트 ${result.sheetLeft}회` : <b className="text-[#b3261e]">≠ 시트 {result.sheetLeft}회</b>}</li>
-                  <li>• 다음 수업 {regular[0] ? `${dayLabel(regular[0].date)} ${regular[0].time}` : '-'} · 종료일 {d.endDate ? dayLabel(d.endDate) : '-'}</li>
-                  <li>• {d.periodIdx}기간 변경권 {d.creditsLeft}/{granted}</li>
+                  <li>• 다음 정규 수업 {regular[0] ? `${dayLabel(regular[0].date)} ${regular[0].time}` : '-'}</li>
+                  <li>• {currentPeriod(d)}기간 변경권 {d.creditsLeft}/{granted} · 종료일 {d.endDate ? dayLabel(d.endDate) : '-'}</li>
                   <li>• 보강 예약 {count.booked} · 미예약 {count.open}</li>
                 </ul>
                 {checked === 'yes' ? (

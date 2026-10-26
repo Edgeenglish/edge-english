@@ -1,5 +1,8 @@
 // 휴무·장기 연기
-// - 강사 휴무 일괄 처리: 영향받는 수업 미리보기 → 학생과 보강 협의 → 기간 안에 어려우면 필요한 만큼만 연장 (POL-LV-02, 정책 원본 A19·A20)
+// - 강사 휴무 일괄 처리 (POL-LV-02, 정책 원본 A19·A20 → A41, 2026-10-26 대표 확정):
+//   1순위 대체강사가 원래 날짜·시간에 (강사 수락 + 학생 안내·확인 뒤 확정) / 2순위 학생이 원하면 기존 강사를 기다렸다가 보강
+//   연장은 학생이 따로 신청하지 않음 — 기존 강사를 기다린 보강이 종료일 뒤로 잡힐 때만 실제 마지막 보강일까지 LMS가 처리
+//   연장된 날에는 정규 수업을 만들지 않음 (연장 = 미완료 수업을 끝낼 기간 확대, 새 수업 권리 아님)
 // - 학생 장기 연기 신청 검사 (POL-LV-01, 정책 원본 A09~A12 — 'policy_v1' 등록만 자동 판정)
 
 import { addDays, diffDays, instantToKstDate, weekdayOf, type KstDate } from './dates';
@@ -48,6 +51,7 @@ export function suggestDatesAfterEnd(finalEnd: KstDate, weekdays: number[], n: n
 /**
  * 강사 장기 휴무 연장 일수 (A20): 휴무 일수나 1주 단위가 아니라, 기간 밖으로 잡은 보강 중 '마지막 실제 보강 수업일'까지만.
  * 기간 안에 모두 잡았으면 0.
+ * finalEnd 는 '이번 휴가 연장 전' 종료일을 넣는다. 이미 연장된 종료일을 넣으면 보강 날짜가 앞당겨졌을 때 줄어든 연장을 못 잡음 (A41)
  */
 export function tutorLeaveExtensionDays(finalEnd: KstDate, makeupDates: KstDate[]): number {
   return makeupDates.reduce((max, d) => Math.max(max, diffDays(finalEnd, d)), 0);

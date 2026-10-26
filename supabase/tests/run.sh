@@ -91,7 +91,7 @@ echo "✅ 백업 → 복구 왕복·안전장치 통과 (다른 프로젝트·�
 
 # 시험용 DB 적용 안내 파일 (migration 1200·1300): 확인 6줄 통과, 가상 휴무는 시험용 이름일 때만·한 번만
 cp "$ROOT"/supabase/test-setup/d52-check.sql "$ROOT"/supabase/test-setup/d52-time-off.sql "$WORK"/; chmod a+r "$WORK"/d52-*.sql
-for f in "$ROOT"/supabase/migrations/2026102{2001100,2001200,2001300,2001400,4001500}_*.sql; do "${PSQL[@]}" -o /dev/null -f "$f"; done   # 두 번째 적용해도 오류 없음
+for f in "$ROOT"/supabase/migrations/2026102{2001100,2001200,2001300,2001400,4001500,6001600}_*.sql; do "${PSQL[@]}" -o /dev/null -f "$f"; done   # 두 번째 적용해도 오류 없음
 D52="$("${PSQL[@]}" -tA -f "$WORK/d52-check.sql")"
 echo "$D52" | grep -v '|통과$' && { echo "❌ d52-check 실패"; exit 1; }
 "${PSQL[@]}" -o /dev/null -f "$WORK/d52-time-off.sql"; "${PSQL[@]}" -o /dev/null -f "$WORK/d52-time-off.sql"
@@ -105,3 +105,9 @@ cp "$ROOT"/supabase/test-setup/d52x-check.sql "$WORK"/; chmod a+r "$WORK"/d52x-c
 D52X="$("${PSQL[@]}" -tA -f "$WORK/d52x-check.sql")"
 echo "$D52X" | grep -v '|통과$' && { echo "❌ d52x-check 실패"; exit 1; }
 echo "✅ migration 1500 적용 확인 파일 통과 (확인 $(echo "$D52X" | wc -l)줄)"
+
+# migration 1600 (기존 학생 입력 시안 2) 적용 확인 파일: 3줄 통과
+cp "$ROOT"/supabase/test-setup/d52y-check.sql "$WORK"/; chmod a+r "$WORK"/d52y-check.sql
+D52Y="$("${PSQL[@]}" -tA -f "$WORK/d52y-check.sql")"
+echo "$D52Y" | grep -v '|통과$' && { echo "❌ d52y-check 실패"; exit 1; }
+echo "✅ migration 1600 적용 확인 파일 통과 (확인 $(echo "$D52Y" | wc -l)줄)"
