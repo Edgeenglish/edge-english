@@ -359,7 +359,6 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
             </div>
             <div>
               <span className="mb-1 block text-[13px] text-[#6b6880]">요일 · 한국 시각 (주 {d.slots.length}회)</span>
-              {d.slots.length > 1 && <span className="-mt-0.5 mb-1.5 block text-[12px] text-[#6b6880]">1번째 시각을 넣으면 다른 요일도 같은 시각으로 맞춰져요. 다른 시각이 필요한 요일만 그 줄에서 바꾸세요.</span>}
               <div className="grid gap-2">
                 {d.slots.map((s, i) => (
                   <div key={i}>
