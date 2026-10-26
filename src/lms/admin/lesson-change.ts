@@ -197,7 +197,7 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
         d.makeup_until ? makeupLineKo(d.makeup_until) : '',
       ].filter(Boolean).join('\n');
     }
-    const lines = [`[엣지영어] ${name}님, 수업 변경 처리됐어요`, `변경한 수업: ${at}`];
+    const lines = [`[엣지영어] ${name}님, 수업 취소 처리됐어요`, `취소한 수업: ${at}`];
     if (d.status === 'Student canceled in advance') lines.push(`변경권 1개 사용 (남은 변경권 ${d.credits_after}개)`);
     if (d.status === 'Student canceled in advance (public holiday)') lines.push('공휴일 수업이라 변경권은 차감되지 않아요');
     if (d.status === 'Student canceled late') lines.push(`수업 ${CONFIRMED.changeNoticeHours}시간 전이 지나 보강 없이 수업 1회가 차감돼요 (변경권은 그대로)`);
@@ -214,7 +214,7 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
   }
   if (event === 'revert' && c.lesson) {
     return [
-      `[엣지영어] ${name}님, 수업 변경 정정 안내`,
+      `[엣지영어] ${name}님, 수업 취소 정정 안내`,
       `${koAt(c.lesson.startsAt, c.student.timezone)} 수업은 그대로 진행해요`,
       c.decision?.uses_credit ? '사용한 변경권은 돌려드렸어요' : '',
       c.makeupAt ? `잡혀 있던 보강 ${koAt(c.makeupAt, c.student.timezone)}은 진행하지 않아요` : '',

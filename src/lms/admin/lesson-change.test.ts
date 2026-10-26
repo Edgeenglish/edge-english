@@ -49,7 +49,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
   it('안내 문구: 원래 수업 날짜와 보강 날짜를 모두 실제 날짜로 (학생 한국어, 강사 현지 시각 영어)', () => {
     const lesson = L('x1', '2026-10-29', '17:00');
     const c: NoticeContext = { student, durationMin: 50, lesson, decision: adv, tutorName: 'Alex', tutorTz: 'Asia/Manila', makeupAt: kstToInstant('2026-10-30', '18:00') };
-    expect(studentNotice('change', c)).toContain('변경한 수업: 10월 29일(목) 17:00');
+    expect(studentNotice('change', c)).toContain('취소한 수업: 10월 29일(목) 17:00');
     expect(studentNotice('change', c)).toContain('수강기간(1/5 (화)까지) 내에 보강을 잡을 수 있어요');
     const conf = studentNotice('makeup_confirmed', c);
     expect(conf).toContain('원래 수업: 10월 29일(목) 17:00');
