@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react';
 import { addDays, instantToKstDate, weekdayOf } from '@/lms/rules/dates';
 import {
   DURATIONS, emptyImport, IMPORT_REASON_TEXT, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings,
-  activeMakeups, autoFromDate, setSlotTime, currentPeriod, END_REASON_TEXT, newMakeup, regularEnd, regularRows, todayPeriod, withAutoEnd, type EndReason, type ImportDraft, type ImportExtra, type ImportIssue, type ImportMakeup, type ImportWeeks,
+  activeMakeups, autoFromDate, setSlotTime, currentPeriod, END_REASON_TEXT, newMakeup, regularRows, todayPeriod, withAutoEnd, type EndReason, type ImportDraft, type ImportExtra, type ImportIssue, type ImportMakeup, type ImportWeeks,
 } from '@/lms/admin/import';
 import type { ImportConflict, ImportResult } from '@/lms/admin/import-live';
 import { creditsPerPeriod } from '@/lms/rules/policy';
@@ -217,10 +217,9 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
           <h1 className="text-[22px] font-bold text-[#1d1b2b]">기존 학생 입력</h1>
         </div>
         {demo && <p className="rounded-[12px] bg-[#fff8d6] px-4 py-2.5 text-[13.5px] text-[#5c4a00]">가상 데이터 미리보기예요. 저장을 눌러도 실제로 저장되지 않아요.</p>}
-        <p className="text-[13.5px] text-[#6b6880]">
-          수업 중인 학생의 시간표·남은 수업·변경권·미완료 보강을 넣어요. 넣은 뒤에도 전환 전까지는 시트로 관리하고, 학생·강사에게는 보내지 않아요. 새 학생은{' '}
+        <p className="text-[13.5px]">
           <Link href={demo ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'} className="font-semibold text-[#5b3fe0] underline underline-offset-2">
-            신규 등록
+            신규 학생 등록 →
           </Link>
         </p>
 
@@ -258,7 +257,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 </span>
               )}
             </Field>
-            <Field wide label="운영 메모 (선택, 강사에게 안 보임)">
+            <Field wide label="운영 메모 (선택)">
               <input id="imp-memo" value={d.memo} disabled={saved} onChange={(e) => set('memo', e.target.value)} className={inputCls(saved)} />
             </Field>
           </div>
@@ -271,13 +270,13 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
               <Chips<ImportWeeks> value={d.weeks} options={WEEKS} label={(w) => WEEKS_TEXT[w]} onPick={(w) => !saved && setD((x) => withAutoEnd(x, { ...x, weeks: w, periodOverride: null }))} />
               {tried && !d.weeks && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
             </div>
-            <Field label="수강 시작일 (시트 '첫번째 수강 기간' 시작일)" problem={tried && !d.courseStart ? '필요해요' : undefined}>
+            <Field label="수강 시작일" problem={tried && !d.courseStart ? '필요해요' : undefined}>
               <input id="imp-course-start" type="date" value={d.courseStart} disabled={saved} onChange={(e) => setD((x) => withAutoEnd(x, { ...x, courseStart: e.target.value, periodOverride: null }))} className={inputCls(saved, tried && !d.courseStart)} />
             </Field>
             {warn.courseDay && <Note tone="info">{warn.courseDay}</Note>}
             {periods.length > 0 && (
               <div>
-                <span className="mb-1 block text-[13px] text-[#6b6880]">28일 기간 — 시트와 한 줄씩 비교해 보세요</span>
+                <span className="mb-1 block text-[13px] text-[#6b6880]">28일 기간</span>
                 <ul className="grid gap-1.5">
                   {periods.map((p) => (
                     <li
@@ -294,16 +293,10 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     </li>
                   ))}
                 </ul>
-                {currentPeriod(d) !== null ? (
-                  <p className="mt-1.5 text-[12.5px] text-[#6b6880]">
-                    {d.periodOverride === null ? `오늘 ${dayLabel(today)}은 ${currentPeriod(d)}기간이에요 (자동).` : `지금 기간을 ${d.periodOverride}기간으로 고쳤어요 (오늘 날짜 계산: ${todayPeriod(d) ?? '기간 밖'}).`}
-                  </p>
-                ) : (
-                  <Note tone="warn">오늘 {dayLabel(today)}이 어느 기간에도 없어요. 수강 시작일·상품을 확인하거나 아래에서 지금 기간을 골라 주세요.</Note>
-                )}
+                {currentPeriod(d) === null && <Note tone="warn">오늘({dayLabel(today)})이 수강기간 밖이에요.</Note>}
                 {!saved && d.weeks && (
                   <details className="mt-1" open={d.periodOverride !== null || currentPeriod(d) === null}>
-                    <summary className="flex min-h-[36px] cursor-pointer items-center text-[12.5px] font-semibold text-[#5b3fe0]">시트의 지금 기간이 다르면 고르기</summary>
+                    <summary className="flex min-h-[36px] cursor-pointer items-center text-[12.5px] font-semibold text-[#5b3fe0]">지금 기간 바꾸기</summary>
                     <Chips
                       value={d.periodOverride ?? currentPeriod(d)}
                       options={Array.from({ length: d.weeks / 4 }, (_, i) => i + 1)}
@@ -315,26 +308,24 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
               </div>
             )}
             <div>
-              <span className="mb-1 block text-[13px] text-[#6b6880]">지금 기간에 남은 변경권 (시트 &lsquo;변경권 ○회 / 총 {granted}회&rsquo;)</span>
+              <span className="mb-1 block text-[13px] text-[#6b6880]">지금 기간 남은 변경권 (총 {granted}개)</span>
               <Chips value={d.creditsLeft} options={Array.from({ length: granted + 1 }, (_, i) => i)} label={(i) => `${i}개`} onPick={(i) => !saved && set('creditsLeft', i)} />
               {tried && d.creditsLeft === null && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
             </div>
-            <Field label="현재 수강 종료일 (시트 '수강 종료일')" problem={tried && !d.endDate ? '필요해요' : undefined}>
+            <Field label="현재 수강 종료일" problem={tried && !d.endDate ? '필요해요' : undefined}>
               <input id="imp-end" type="date" value={d.endDate} disabled={saved} onChange={(e) => set('endDate', e.target.value)} className={inputCls(saved, tried && !d.endDate)} />
             </Field>
             {warn.end ? (
               <div className="grid gap-2 rounded-[10px] bg-[#fff8d6] px-3 py-2.5 text-[13px] text-[#5c4a00]">
                 <span>
-                  기간 계산 끝 {dayLabel(warn.end.calc)}보다 <b>{Math.abs(warn.end.days)}일 {warn.end.days > 0 ? '늦어요' : '빨라요'}</b>. 이유를 골라 주세요 (저장은 막지 않아요).
+                  기간 계산({dayLabel(warn.end.calc)})보다 <b>{Math.abs(warn.end.days)}일 {warn.end.days > 0 ? '늦음' : '빠름'}</b> · 이유
                 </span>
-                {warn.end.days > 0 && <span>늘어난 {dayLabel(addDays(warn.end.calc, 1))} ~ {dayLabel(d.endDate as string)}에는 정규 수업을 만들지 않아요. 보강만 잡을 수 있어요.</span>}
                 <Chips<EndReason>
                   value={d.endReason || null}
                   options={(d.weeks === 24 ? ['tutor_long_term_leave', 'student_long_term_leave', 'admin_exception'] : ['tutor_long_term_leave', 'admin_exception']) as EndReason[]}
                   label={(r) => END_REASON_TEXT[r]}
                   onPick={(r) => !saved && set('endReason', r)}
                 />
-                {!d.endReason && <span className="font-semibold">이유를 안 고르면 저장은 되지만, 대시보드 처리할 일에 &lsquo;종료일 이유 확인&rsquo;으로 남아요.</span>}
                 {d.endReason === 'admin_exception' && (
                   <input id="imp-end-note" value={d.endNote} disabled={saved} placeholder="메모 (예: 대표 승인 연장)" onChange={(e) => set('endNote', e.target.value)} className={inputCls(saved)} />
                 )}
@@ -344,9 +335,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                   </button>
                 )}
               </div>
-            ) : (
-              d.endDate && <p className="-mt-1 text-[12.5px] text-[#6b6880]">기간 계산과 같아요. 연장이 있었으면 시트 종료일로 고치세요.</p>
-            )}
+            ) : null}
           </div>
         </Card>
 
@@ -410,21 +399,17 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
             <Field label="앞으로 남은 첫 정규 수업일">
               <input id="imp-from" type="date" value={d.fromDate} min={addDays(today, -7)} disabled={saved} onChange={(e) => set('fromDate', e.target.value || autoFromDate(d))} className={inputCls(saved)} />
             </Field>
-            <p className="-mt-1 text-[12.5px] text-[#6b6880]">오늘 이후 첫 수업 요일로 자동이에요. 이날부터 {regularEnd(d) ? dayLabel(regularEnd(d) as string) : '종료일'}까지 정규 수업을 만들어요.</p>
           </div>
         </Card>
 
         <Card title="4. 미완료 보강">
           <Chips<'n' | 'y'> value={d.hasMakeups ? 'y' : 'n'} options={['n', 'y']} label={(v) => (v === 'n' ? '없음' : '있음')} onPick={(v) => !saved && set('hasMakeups', v === 'y')} />
-          {!d.hasMakeups ? (
-            <p className="mt-2 text-[12.5px] text-[#6b6880]">미완료 보강이 없는 학생은 이대로 다음으로 넘어가요.</p>
-          ) : (
+          {d.hasMakeups && (
           <div className="mt-3 grid gap-3">
-            <p className="text-[13px] text-[#6b6880]">아직 안 끝난 보강 전부 (예약됨 · 미예약). 지난 보강은 넣지 않아요.</p>
             {d.makeups.map((m, i) => {
               const originIsRegular = !!m.originalDate && rows.some((r) => r.date === m.originalDate);
               const originNote =
-                m.status === 'open' ? '보강 날짜 잡아야 함' : m.date ? `보강 ${dayLabel(m.date)}으로 잡힘` : '아래에 보강 날짜를 넣어 주세요';
+                m.status === 'open' ? '보강 날짜 잡아야 함' : m.date ? `보강 ${dayLabel(m.date)}으로 잡힘` : '보강 날짜 없음';
               return (
                 <div key={i} className="grid gap-2 rounded-[12px] border border-[#e6e3ef] p-3">
                   <div className="flex items-center">
@@ -444,9 +429,8 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     <input type="checkbox" className="h-5 w-5" checked={m.tutorLeave} disabled={saved} onChange={(e) => setMakeup(i, { tutorLeave: e.target.checked })} />
                     강사 휴가로 생긴 보강
                   </label>
-                  {m.tutorLeave && m.status === 'open' && <p className="-mt-1 text-[12.5px] text-[#6b6880]">날짜를 못 정한 채 종료일이 지나도 보강 권리는 남아요. 종료일 뒤로 잡히면 그날까지 연장돼요.</p>}
                   <div>
-                    <span className="mb-1 block text-[13px] text-[#6b6880]">원래 수업 날짜 (어느 수업이 취소돼서 생긴 보강인지)</span>
+                    <span className="mb-1 block text-[13px] text-[#6b6880]">원래 수업 날짜</span>
                     <div className="flex items-center gap-2">
                       <input
                         id={`imp-mk-orig-${i}`}
@@ -467,7 +451,6 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                         날짜 확인 필요
                       </button>
                     </div>
-                    {m.originUnknown && <Note tone="info">시트에서 원래 날짜를 알 수 없을 때만. 저장 뒤 대시보드에서 나중에 넣을 수 있어요.</Note>}
                     {originIsRegular && <Note tone="info">{dayLabel(m.originalDate as string)} 수업 취소됨 · {originNote}</Note>}
                     {warn.origins[i] && <Note tone="warn">{warn.origins[i]}</Note>}
                   </div>
@@ -485,7 +468,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       <Field label="보강 강사">{tutorSelect(m.tutorId, (v) => setMakeup(i, { tutorId: v }), `imp-mk-tutor-${i}`)}</Field>
                       {m.date && d.endDate && m.date > d.endDate && (
                         <div className="grid gap-1.5 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
-                          <span>보강 날짜가 수강 종료일({dayLabel(d.endDate)}) 뒤예요. 종료일을 먼저 늘려 주세요.</span>
+                          <span>수강 종료일({dayLabel(d.endDate)}) 뒤예요.</span>
                           {m.tutorLeave && !saved && (
                             <button
                               type="button"
@@ -499,9 +482,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       )}
                       {inline(issues.filter((x) => x.lesson.kind === 'makeup' && x.lesson.date === m.date && x.lesson.time === m.time))}
                     </>
-                  ) : (
-                    <p className="text-[12.5px] text-[#6b6880]">날짜는 나중에 보강 잡을 때. 강사 시간은 막지 않아요.</p>
-                  )}
+                  ) : null}
                 </div>
               );
             })}
@@ -529,7 +510,6 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 <input id="imp-sheet-used" type="number" inputMode="numeric" min={0} value={d.sheetUsed ?? ''} disabled={saved} onChange={(e) => set('sheetUsed', numOrNull(e.target.value))} className={inputCls(saved, tried && d.sheetUsed === null)} />
               </Field>
             </div>
-            <p className="-mt-1 text-[12.5px] text-[#6b6880]">회차 번호가 아니라 수업 상태(Class Status)가 진행·차감인 줄 수예요.</p>
             <p className="overflow-x-auto whitespace-nowrap rounded-[8px] bg-[#f6f5fb] px-3 py-2 text-[12.5px] tabular-nums text-[#1d1b2b]">
               정규 {count.regular}
               {count.origin + count.skipped > 0 && ` (자동 ${count.candidates}${count.origin ? ` − 취소됨(보강으로) ${count.origin}` : ''}${count.skipped ? ` − 뺀 수업 ${count.skipped}` : ''})`} + 보강 예약 {count.booked} + 미예약 {count.open}
@@ -538,15 +518,15 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
             {count.sheetLeft !== null &&
               (diff === 0 ? (
                 <Note tone="ok">
-                  ✓ 시트 남은 {count.sheetLeft}회 = 만들 수업 {count.lmsLeft}회
+                  ✓ 시트와 같음 ({count.lmsLeft}회)
                 </Note>
               ) : diff > 0 ? (
                 <Note tone="bad">
-                  만들 수업이 시트보다 {diff}회 많아요. 아래 목록에서 뺄 정규 수업을 고르세요 (보통 이미 취소했거나 옮긴 수업). 그대로 저장해도 돼요.
+                  시트보다 {diff}회 많음
                 </Note>
               ) : (
                 <Note tone="warn">
-                  만들 수업이 시트보다 {-diff}회 적어요. 종료일·요일을 먼저 확인하고, 맞으면 아래 [+ 수업 날짜 추가]나 4번의 [+ 미예약 보강]으로 채우세요. 그대로 저장해도 돼요.
+                  시트보다 {-diff}회 적음
                 </Note>
               ))}
             {d.extras.map((x, i) => (
@@ -568,10 +548,9 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     <input id={`imp-ex-time-${i}`} type="time" step={300} value={x.time} disabled={saved} onChange={(e) => setExtra(i, { time: e.target.value })} className={inputCls(saved, tried && !x.time)} />
                   </Field>
                 </div>
-                <Field label="근거 (예: 시트 18회차 · 이월 1회)" problem={tried && !x.reason.trim() ? '필요해요' : undefined}>
-                  <input id={`imp-ex-reason-${i}`} value={x.reason} disabled={saved} onChange={(e) => setExtra(i, { reason: e.target.value })} className={inputCls(saved, tried && !x.reason.trim())} />
+                <Field label="근거" problem={tried && !x.reason.trim() ? '필요해요' : undefined}>
+                  <input id={`imp-ex-reason-${i}`} placeholder="예: 시트 18회차 · 이월 1회" value={x.reason} disabled={saved} onChange={(e) => setExtra(i, { reason: e.target.value })} className={inputCls(saved, tried && !x.reason.trim())} />
                 </Field>
-                <p className="text-[12.5px] text-[#6b6880]">실제로 받아야 하는 수업만. 그날 하나만 만들어요 ({tutorName(d.tutorId) || '담당 강사'} · {d.durationMin ?? '-'}분).</p>
                 {inline(issues.filter((y) => y.lesson.kind === 'extra' && y.lesson.date === x.date && y.lesson.time === x.time))}
               </div>
             ))}
@@ -669,7 +648,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
               {count.sheetLeft !== null && (diff === 0 ? ` = 시트 ${count.sheetLeft}회 ✓` : <b className="text-[#b3261e]"> ≠ 시트 {count.sheetLeft}회 ({diff > 0 ? '+' : ''}{diff})</b>)}
             </dd>
             <dt className="text-[#6b6880]">LMS 전환</dt>
-            <dd className="text-[#1d1b2b]">아직 시트로 관리 (전환일은 학생 상세에서 나중에)</dd>
+            <dd className="text-[#1d1b2b]">시트로 관리 중</dd>
           </dl>
 
           {tried && blockers.length > 0 && (
@@ -698,12 +677,12 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 <b className="text-[16px]">✓ 입력 완료 · {result.studentCode}</b>
                 <p className="mt-1">
                   남은 수업 {result.lmsLeft}회 (정규 {result.lessons} · 보강 예약 {result.makeups} · 미예약 {result.openMakeups}
-                  {result.extras > 0 ? ` · 추가 ${result.extras}` : ''}). 학생·강사에게는 아무것도 보내지 않았어요. 시트로 계속 관리해요.
+                  {result.extras > 0 ? ` · 추가 ${result.extras}` : ''})
                   {result.repeated && ' (이미 저장된 요청이라 새로 만들지 않았어요)'}
                 </p>
               </div>
               {result.endReasonMissing && (
-                <Note tone="warn">종료일 변경 이유를 고르지 않아서, 대시보드 처리할 일에 &lsquo;종료일 이유 확인&rsquo;으로 남았어요. 시트 대조를 끝내도 이유를 고를 때까지 남아요.</Note>
+                <Note tone="warn">종료일 이유 미선택 · 처리할 일에 남음</Note>
               )}
               <div className="rounded-[12px] border border-[#e6e3ef] px-4 py-3">
                 <b className="text-[15px] text-[#1d1b2b]">시트와 1회 대조</b>
@@ -727,7 +706,6 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     >
                       {checked === 'saving' ? '기록 중…' : '시트와 같음 · 대조 완료'}
                     </button>
-                    <p className="mt-1.5 text-[12.5px] text-[#6b6880]">지금 확인하지 못하면 그냥 다음으로 넘어가세요. 대시보드 처리할 일에 &lsquo;시트 대조&rsquo;로 남아요.</p>
                   </>
                 )}
                 {checkError && <Note tone="bad">{checkError}</Note>}
@@ -738,9 +716,6 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
             </div>
           ) : (
             <>
-              {count.sheetLeft !== null && diff !== 0 && (
-                <p className="mt-3 text-[13px] text-[#b3261e]">차이 {Math.abs(diff)}회는 저장 뒤 대시보드 처리할 일(시트 대조)에 남아요.</p>
-              )}
               <button
                 type="button"
                 disabled={saving || (tried && (blockers.length > 0 || issues.length > 0))}

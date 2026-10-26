@@ -243,7 +243,7 @@ export function importWarnings(d: ImportDraft): { courseDay?: string; end?: { da
   return {
     courseDay:
       d.courseStart && days.length > 0 && !days.includes(weekdayOf(d.courseStart))
-        ? `${dayLabel(d.courseStart)}이 지금 수업 요일(${days.map((w) => WEEKDAY_KO[w]).join('·')})과 달라요. 수강 중 고정 요일을 바꾼 학생이면 정상이에요. 시트 날짜 그대로 두세요.`
+        ? `${dayLabel(d.courseStart)}이 지금 수업 요일(${days.map((w) => WEEKDAY_KO[w]).join('·')})과 달라요 (고정 요일을 바꾼 학생이면 정상)`
         : undefined,
     end: calc && d.endDate && d.endDate !== calc ? { days: diffDays(calc, d.endDate), calc } : undefined,
     origins,
