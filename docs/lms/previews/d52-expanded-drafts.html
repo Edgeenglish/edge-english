@@ -2,12 +2,12 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-/* 레이아웃: 왼쪽 휴대폰 화면 시안(실제 LMS 색 그대로), 오른쪽 대표가 정할 것. 좁으면 위아래로 */
+/* 레이아웃: 왼쪽 휴대폰 화면 시안(실제 LMS 색 그대로), 오른쪽 확인 결과·정할 것. 좁으면 위아래로 */
 :root {
   --bg: #f6f5fb; --panel: #ffffff; --fg: #1d1b2b; --muted: #6b6880; --line: #e6e3ef;
   --accent: #7d5fff; --accent-ink: #5b3fe0; --accent-soft: #efebff;
   --bad: #b3261e; --bad-soft: #fdecec; --warn: #5c4a00; --warn-soft: #fff8d6; --ok: #1e7a46; --ok-soft: #e3f6ea;
-  --new: #0b6e78; --new-soft: #e2f5f6; --phone-edge: #d9d5e6;
+  --info: #1b5a8a; --info-soft: #e9f4ff; --new: #0b6e78; --new-soft: #e2f5f6; --phone-edge: #d9d5e6; --amber: #b7791f;
   --sans: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
 }
@@ -15,193 +15,154 @@
   --bg: #15141c; --panel: #1f1d29; --fg: #ece9f6; --muted: #a29fb5; --line: #34313f;
   --accent: #9c85ff; --accent-ink: #c3b5ff; --accent-soft: #2c2645;
   --bad: #ff8a80; --bad-soft: #3a1f1f; --warn: #f1dc8c; --warn-soft: #3a3318; --ok: #7ad6a0; --ok-soft: #1b3326;
-  --new: #7fd6de; --new-soft: #17333a; --phone-edge: #3b3848; color-scheme: dark } }
+  --info: #9fd0ff; --info-soft: #18304a; --new: #7fd6de; --new-soft: #17333a; --phone-edge: #3b3848; --amber: #d69a3c; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #15141c; --panel: #1f1d29; --fg: #ece9f6; --muted: #a29fb5; --line: #34313f;
   --accent: #9c85ff; --accent-ink: #c3b5ff; --accent-soft: #2c2645;
   --bad: #ff8a80; --bad-soft: #3a1f1f; --warn: #f1dc8c; --warn-soft: #3a3318; --ok: #7ad6a0; --ok-soft: #1b3326;
-  --new: #7fd6de; --new-soft: #17333a; --phone-edge: #3b3848; color-scheme: dark }
+  --info: #9fd0ff; --info-soft: #18304a; --new: #7fd6de; --new-soft: #17333a; --phone-edge: #3b3848; --amber: #d69a3c; color-scheme: dark }
 * { box-sizing: border-box }
 body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.55;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 60px }
 h1, h2, h3 { text-wrap: balance; margin: 0 }
 .wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px }
 .intro h1 { font-size: 22px }
-.intro p { margin: 6px 0 0; color: var(--muted); max-width: 70ch }
+.intro p { margin: 6px 0 0; color: var(--muted); max-width: 72ch }
 .cols { display: grid; gap: 24px; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); align-items: start }
 @media (max-width: 860px) { .cols { grid-template-columns: minmax(0, 1fr) } }
 .phone { border: 1px solid var(--phone-edge); border-radius: 22px; background: var(--bg); overflow: hidden; min-width: 0 }
 .bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line) }
 .bar b { font-size: 17px }
-.bar span { margin-left: auto; font-size: 22px; color: var(--fg) }
-.dbtag { background: var(--bad); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 12px }
+.bar span { margin-left: auto; font-size: 22px }
+.dbtag { background: var(--muted); color: var(--panel); font-size: 12px; font-weight: 700; padding: 4px 12px }
 .screen { display: grid; gap: 14px; padding: 14px }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 10px; min-width: 0 }
-.card.isnew { border-color: var(--new); box-shadow: inset 0 0 0 1px var(--new) }
+.card.moved { border-color: var(--new); box-shadow: inset 0 0 0 1px var(--new) }
 .card h3 { font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
-.tag { font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 1px 7px; letter-spacing: .02em }
+.tag { font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 1px 7px }
 .tag.n { background: var(--new-soft); color: var(--new) }
 .tag.same { background: var(--line); color: var(--muted) }
 .hint { font-size: 12.5px; color: var(--muted); margin: 0 }
 .lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
 .ro { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; background: var(--bg); font-size: 14px; min-height: 42px }
-input[type=date], input[type=time], input[type=number] { font: inherit; width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel); color: var(--fg) }
+input[type=date], input[type=number], input[type=text] { font: inherit; width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel); color: var(--fg); min-width: 0 }
 .chips { display: flex; flex-wrap: wrap; gap: 6px }
 .chip { font: inherit; font-size: 14px; min-height: 40px; min-width: 48px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); padding: 0 12px; cursor: pointer }
 .chip[aria-pressed=true] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 700 }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
 .periods { display: grid; gap: 6px }
 .per { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13.5px }
 .per.past { color: var(--muted); background: var(--bg) }
 .per.now { border-color: var(--accent); background: var(--accent-soft) }
 .per .k { font-weight: 700 }
-.per .c { font-variant-numeric: tabular-nums; text-align: right }
+.per .c { text-align: right; font-variant-numeric: tabular-nums }
+.per input { min-height: 36px; padding: 4px 6px; font-size: 13px }
 .num { font-variant-numeric: tabular-nums }
-.stepper { display: flex; align-items: center; gap: 8px }
-.stepper button { font: inherit; font-size: 20px; width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer }
-.stepper output { font-size: 22px; font-weight: 700; min-width: 3ch; text-align: center; font-variant-numeric: tabular-nums }
-.box { border-radius: 10px; padding: 10px 12px; font-size: 13.5px; display: grid; gap: 6px }
+.box { border-radius: 10px; padding: 9px 12px; font-size: 13px; display: grid; gap: 6px; margin: 0 }
 .box.ok { background: var(--ok-soft); color: var(--ok) }
 .box.warn { background: var(--warn-soft); color: var(--warn) }
 .box.bad { background: var(--bad-soft); color: var(--bad) }
-.box.info { background: var(--new-soft); color: var(--new) }
-.eq { font-family: var(--mono); font-size: 12.5px; color: var(--fg); background: var(--bg); border-radius: 8px; padding: 8px 10px; overflow-x: auto; white-space: nowrap }
-.lessons { display: grid; gap: 4px; max-height: 300px; overflow-y: auto; padding-right: 2px }
+.box.info { background: var(--info-soft); color: var(--info) }
+.eq { font-family: var(--mono); font-size: 12.5px; background: var(--bg); border-radius: 8px; padding: 8px 10px; overflow-x: auto; white-space: nowrap }
+.lessons { display: grid; gap: 4px; max-height: 320px; overflow-y: auto }
 .les { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; font-size: 13.5px; min-height: 40px }
-.les.off { color: var(--muted); text-decoration: line-through; background: var(--bg) }
-.les .kind { font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 1px 6px; background: var(--line); color: var(--muted) }
-.les .kind.mk { background: var(--accent-soft); color: var(--accent-ink) }
-.les .kind.ex { background: var(--new-soft); color: var(--new) }
-.les .why { font-size: 12px; color: var(--muted); margin-left: auto; text-decoration: none }
+.les.off { color: var(--muted); background: var(--bg) }
+.les.off .d { text-decoration: line-through }
+.kind { font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 1px 6px; background: var(--line); color: var(--muted) }
+.kind.mk { background: var(--accent-soft); color: var(--accent-ink) }
+.les .why { font-size: 12px; color: var(--muted); margin-left: auto }
 .les label { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--bad); cursor: pointer }
 .les input[type=checkbox] { width: 20px; height: 20px }
 .mk { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 8px }
 .mk-head { display: flex; align-items: center; gap: 8px }
-.mk-head b { font-size: 14px }
 .link { font: inherit; font-size: 13px; background: none; border: 0; color: var(--bad); cursor: pointer; margin-left: auto; min-height: 36px }
 .add { font: inherit; font-size: 14px; min-height: 44px; border: 1px dashed var(--accent); border-radius: 10px; background: var(--panel); color: var(--accent-ink); cursor: pointer; width: 100% }
-.radio { display: grid; gap: 6px }
-.radio label { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 10px; cursor: pointer }
-.radio input { width: 20px; height: 20px; margin-top: 1px; flex: none }
-.radio small { display: block; color: var(--muted); font-size: 12.5px }
+.toggle { font: inherit; font-size: 13px; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); padding: 0 12px; cursor: pointer; text-align: left }
 dl.sum { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 14px }
 dl.sum dt { color: var(--muted) }
-dl.sum dd { margin: 0 }
+dl.sum dd { margin: 0; min-width: 0 }
 .save { font: inherit; font-size: 16px; font-weight: 700; min-height: 52px; width: 100%; border: 0; border-radius: 12px; background: var(--accent); color: #fff; cursor: pointer }
-.save.amber { background: #b7791f }
-.chk { display: grid; gap: 6px }
-.chk-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13.5px }
-.chk-row small { display: block; color: var(--muted) }
-.chk-row .chips .chip { min-height: 36px; min-width: 52px; font-size: 13px }
+.save.amber { background: var(--amber) }
 .demo { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted) }
 .demo .chip { min-height: 32px; font-size: 12.5px }
 .side { display: grid; gap: 16px; min-width: 0 }
-.side section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 10px }
+.side section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 10px; min-width: 0 }
 .side h2 { font-size: 16px }
+.side ul, .side ol { margin: 0; padding-left: 20px; display: grid; gap: 5px }
 .q { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px }
 .q:first-of-type { border-top: 0; padding-top: 0 }
-.q b { font-size: 14.5px }
-.q ol { margin: 0; padding-left: 20px; display: grid; gap: 3px }
-.q .rec { font-size: 13px; color: var(--accent-ink); font-weight: 700 }
-.side ul { margin: 0; padding-left: 18px; display: grid; gap: 4px }
-.crit { display: grid; gap: 6px; font-size: 13.5px }
-.crit div { display: grid; grid-template-columns: 7.5em 1fr; gap: 8px }
-.crit span:first-child { color: var(--muted) }
+.rec { font-size: 13px; color: var(--accent-ink); font-weight: 700 }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px }
+.tbl th, .tbl td { border-top: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: top }
+.tbl th { color: var(--muted); font-weight: 600 }
+.scroll { overflow-x: auto }
 </style>
 
 <div class="wrap">
   <div class="intro">
-    <h1>D-52 기존 학생 입력 · 확대판 시안</h1>
-    <p>지금 있는 '기존 학생 간단 입력' 화면(1~3번)은 그대로 두고, 청록색 테두리 칸만 새로 붙여요. 가상 학생 예시이고, 화면 안 버튼·숫자는 눌러서 바꿔 볼 수 있어요. 오늘 날짜 10월 24일 기준.</p>
+    <h1>D-52 기존 학생 입력 · 확대판 시안 2</h1>
+    <p>지금 화면의 디자인·기능은 그대로 두고 카드 순서와 수강기간 입력 방식만 바꿨어요. 숫자·날짜는 실제 학생 시트 한 장의 구조를 본떠 가상 학생으로 채웠어요(오늘 10/26(월) 기준). 화면 안 버튼은 눌러서 바꿔 볼 수 있어요. 청록 테두리 = 이번에 바뀐 카드.</p>
   </div>
 
   <div class="cols">
     <div class="phone" aria-label="휴대폰 화면 시안">
-      <div class="dbtag">운영 DB · 실제 데이터</div>
+      <div class="dbtag">시험용 DB · 가상 데이터</div>
       <div class="bar"><b>기존 학생 입력</b><span aria-hidden="true">×</span></div>
       <div class="screen" id="screen"></div>
     </div>
 
     <div class="side">
       <section>
-        <h2>대표님이 정할 것 (6가지)</h2>
-        <div class="q">
-          <b>① 시트의 '남은 수업 횟수'에 미완료 보강이 들어가 있나요?</b>
-          <ol>
-            <li>들어가 있음 → 시안처럼 정규 + 보강(예약·미예약)을 합쳐서 시트 숫자와 비교</li>
-            <li>따로 셈 → 정규만 시트 숫자와 비교, 보강은 따로 비교</li>
-          </ol>
-          <span class="rec">시안은 1번 기준이에요. 시트 실제 모양을 보고 답해 주세요.</span>
-        </div>
-        <div class="q">
-          <b>② 숫자가 안 맞는 채로 저장하면</b>
-          <ol>
-            <li>대시보드 '처리할 일'에 "가상기존1 · 남은 수업 1회 차이" 카드를 남김 (정리하면 지움)</li>
-            <li>운영 메모에만 적고 끝</li>
-          </ol>
-          <span class="rec">Claude 의견: 1번. 메모는 다시 안 보게 돼서 차이가 묻혀요.</span>
-        </div>
-        <div class="q">
-          <b>③ 모자랄 때 채우는 방법</b>
-          <ol>
-            <li>두 버튼 다: [+ 추가 수업 날짜](그날 하나만 만드는 수업) · [+ 미예약 보강]</li>
-            <li>[+ 미예약 보강]만 (날짜는 나중에 보강 잡을 때)</li>
-          </ol>
-          <span class="rec">Claude 의견: 1번. 이미 날짜가 정해진 추가 수업이 있으면 그날 강사 시간을 막아야 해요.</span>
-        </div>
-        <div class="q">
-          <b>④ 보강의 '원래 수업 날짜'</b>
-          <ol>
-            <li>꼭 넣기 → 원래 날짜가 앞으로의 날이면 그날 정규 수업을 자동으로 안 만듦 (정규·보강 중복 방지)</li>
-            <li>선택 (모르면 비워 둠)</li>
-          </ol>
-          <span class="rec">Claude 의견: 1번. 미리 취소한 수업이 정규로 또 생기는 걸 막는 유일한 단서예요.</span>
-        </div>
-        <div class="q">
-          <b>⑤ 저장 뒤 '시트와 대조' 체크</b>
-          <ol>
-            <li>항목마다 [맞음]을 눌러야 '대조 완료' 기록이 남음 (학생 목록에 대조 완료/전 표시)</li>
-            <li>확인 화면만 보여 주고 기록은 안 남김</li>
-          </ol>
-          <span class="rec">Claude 의견: 1번. 학생 전원을 넣을 때 누구를 대조했는지 남아요.</span>
-        </div>
-        <div class="q">
-          <b>⑥ LMS 전환일을 어디서 정할지</b>
-          <ol>
-            <li>입력 화면은 '아직 시트로 관리'로 고정, 전환일은 나중에 학생 상세에서</li>
-            <li>입력 화면에서 바로 날짜를 넣을 수도 있게</li>
-          </ol>
-          <span class="rec">Claude 의견: 1번. 취소·보강·Class Record 검증 전에는 전환할 일이 없어서요.</span>
-        </div>
+        <h2>정책·실제 시트 대조 결과</h2>
+        <p class="hint">기준표 POL-PER-01~08, period.ts, 실제 학생 수강현황 시트 1장(PC 탭)의 구조를 읽었어요. 시트·운영 DB는 바꾸지 않았어요.</p>
+        <div class="scroll"><table class="tbl">
+          <tr><th>항목</th><th>확인한 사실</th><th>시안 반영</th></tr>
+          <tr><td>시트에 있는 것</td><td>학생 시트 맨 위에 '첫번째·두번째·세번째 수강 기간' 시작·종료일, '수강 종료일', '변경권 1회 / 총 2회'가 그대로 적혀 있음</td><td>대표님은 시트의 <b>수강 시작일</b>만 옮겨 적으면 나머지 기간이 자동으로 나오고, 시트와 한 줄씩 대조</td></tr>
+          <tr><td>기간 시작일</td><td>최초 시작일 = 첫 정규 수업일(POL-PER-03), 재등록은 이전 종료 뒤 첫 정규 수업일(A25). 그 뒤 28일씩 이어짐. 확인한 시트도 수요일 수업 학생이 수요일 시작</td><td>계산은 그대로. 단 <b>수강 중 고정 요일을 바꾼 학생</b>은 기간 시작 요일이 지금 수업 요일과 다를 수 있음 → '경고'가 아니라 '확인' 안내로 바꾸고 막지 않음</td></tr>
+          <tr><td>연장</td><td>강사 장기 휴무·학생 장기 연기는 기간 칸은 그대로 두고 <b>마지막 종료일만</b> 늘어남(period.ts). 확인한 시트에도 '강사 장기 휴식 → 수강기간 연장, 보강 TBD' 줄이 있고 종료일은 아직 그대로</td><td>종료일은 자동 계산값을 넣되 고칠 수 있음. 다르면 <b>며칠 차이 + 이유</b>를 고르게 하고 저장은 막지 않음. 늘어난 날에는 정규 수업을 만들지 않고 보강만 (정규를 더 만들면 남은 수업이 실제보다 많아짐)</td></tr>
+          <tr><td>옛 상품</td><td>1판 계약 30일·8주 상품은 다시 계산하지 않고 시트 날짜 그대로(POL-PER-01, CF-04)</td><td>'시트 기간 날짜가 계산과 달라요'를 누르면 기간 날짜를 한 줄씩 직접 입력</td></tr>
+          <tr><td>지금 기간</td><td>오늘 날짜가 어느 기간 안에 있는지로 정해짐</td><td>'몇 번째 기간' 고르기를 없애고 <b>오늘 날짜로 자동</b> 표시 (입력 1번 줄어듦)</td></tr>
+        </table></div>
       </section>
 
       <section>
-        <h2>달라지는 것</h2>
-        <ul>
-          <li><b>4. 지금 수강기간</b>: 상품 · 지금 몇 번째 기간 · 그 기간 날짜 · 그 기간 남은 변경권. 다음 기간 변경권은 기존 규칙(주1회 1 · 주2회 2 · 주3회 이상 3)으로 자동</li>
-          <li><b>3. 보강</b>: 예약됨 / 미예약 구분 + 원래 수업 날짜</li>
-          <li><b>5. 남은 수업 대조</b>: 시트 숫자를 넣으면 만들 수업과 비교. 달라도 저장은 됨. 많으면 뺄 수업을 고르고, 적으면 추가</li>
-          <li><b>6. LMS 전환</b>: 입력해도 '시트로 계속 관리' 상태</li>
-          <li><b>저장 뒤</b>: 시트와 1회 대조 체크</li>
-        </ul>
-        <p class="hint">충돌 검사(다른 학생 수업 · 휴식 10분 · 강사 휴무 · 재등록 대기)는 지금 화면 그대로 써요. 학생·강사에게는 아무것도 보내지 않아요.</p>
+        <h2>바뀐 점</h2>
+        <ol>
+          <li>카드 순서: 학생 → <b>수강권</b> → 강사·정규 수업 → 미완료 보강 → 남은 수업 대조 → 확인·저장</li>
+          <li>수강권 카드: 상품 · 수강 시작일 → 기간 전체 목록 자동(지금 기간 강조) · 남은 변경권 · 수강 종료일(자동, 다르면 차이·이유)</li>
+          <li>강사·정규 수업 카드: '입력 시작일' 대신 <b>앞으로 남은 첫 정규 수업일</b>(오늘 이후 첫 수업 요일로 자동, 고칠 수 있음)</li>
+          <li>미완료 보강: 기본값 <b>'없음'</b> — 없는 학생은 아무것도 누르지 않고 넘어감</li>
+          <li>남은 수업 대조: 위 카드를 고치는 즉시 다시 계산</li>
+          <li>확인·저장: 만들 수업 날짜·횟수 · 변경권 · 미완료 보강 · 기간 · 종료일을 한 카드에서</li>
+        </ol>
+        <p class="hint">'시트와 같음 · 대조 완료', 처리할 일 카드, 충돌 검사, 시트 숫자와 달라도 저장 — 이미 맞게 만든 부분은 그대로예요.</p>
+      </section>
+
+      <section>
+        <h2>정할 것 (3가지)</h2>
+        <div class="q">
+          <b>① 종료일이 계산과 다를 때 고르는 이유</b>
+          <ol><li>강사 장기 휴무 연장</li><li>학생 장기 연기 (24주)</li><li>옛 상품 (30일 기준 등)</li><li>기타 (메모)</li></ol>
+          <span class="rec">이 4개로 충분한지, 더 넣을 이유가 있는지 알려 주세요.</span>
+        </div>
+        <div class="q">
+          <b>② 30일 기준 등 옛 상품 학생이 지금 있나요?</b>
+          <ol><li>있음 → 기간 날짜 직접 입력 버튼을 지금 만들기</li><li>없음 → 버튼은 빼고 나중에 필요할 때</li></ol>
+          <span class="rec">만들고 빼는 데 드는 일이 작아서 어느 쪽이든 괜찮아요. 실제 학생 기준으로 골라 주세요.</span>
+        </div>
+        <div class="q">
+          <b>③ 이 시안대로 개발해도 될까요?</b>
+          <span class="rec">승인하시면 로컬 → 시험용 DB(필요하면 migration 추가) → 화면 시험 순서로 진행해요. D-52 순서는 그대로예요.</span>
+        </div>
       </section>
 
       <section>
         <h2>검토 기준 대조</h2>
-        <div class="crit">
-          <div><span>① 취소·변경·보강</span><span>변경권·미완료 보강이 LMS에 들어가야 다음 단계(취소·변경 처리)를 기존 학생에게 바로 쓸 수 있음</span></div>
-          <div><span>② 반복 확인</span><span>입력 때 1회 대조로 끝. 전환 뒤에는 시트 대조가 사라짐 (전환 전까지는 그대로)</span></div>
-          <div><span>③ 불필요 개발</span><span>없음. 새 화면이 아니라 기존 입력 화면에 칸 추가</span></div>
-        </div>
-      </section>
-
-      <section>
-        <h2>고르시면 만들 때 필요한 것</h2>
         <ul>
-          <li>DB: 기간·변경권 저장(기존 표 사용), 미예약 보강 저장 자리(원래 수업이 시트에만 있어 새로 필요), 학생별 전환일·대조 기록 칸</li>
-          <li>순서: 로컬 → 시험용 DB → 화면 시험 → 대표 승인 → 운영 DB (적용 직전 백업)</li>
+          <li>① 취소·변경·보강: 기간·변경권·원래 수업 날짜가 시트와 같게 들어가야 다음 단계 취소·변경 처리가 맞게 동작</li>
+          <li>② 반복 확인: '몇 번째 기간' 고르기 제거, 기간 목록 자동, 미완료 보강 없으면 건너뜀 → 학생당 입력·확인 동작 감소</li>
+          <li>③ 불필요 개발: 없음. 새 화면 없이 같은 화면 순서·계산만 바꿈</li>
         </ul>
       </section>
     </div>
@@ -211,162 +172,165 @@ dl.sum dd { margin: 0 }
 <script>
 (function () {
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
+  const TODAY = '2026-10-26';
   const parse = (s) => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); };
   const fmt = (t) => new Date(t).toISOString().slice(0, 10);
   const add = (s, n) => fmt(parse(s) + n * 86400000);
   const wd = (s) => new Date(parse(s)).getUTCDay();
-  const md = (s) => { const [, m, d] = s.split('-').map(Number); return `${m}/${d}(${WD[wd(s)]})`; };
-  const granted = (w) => Math.min(w, 3);
+  const md = (s) => { if (!s) return '-'; const [y, m, d] = s.split('-').map(Number); return `${y !== 2026 ? y + '. ' : ''}${m}/${d}(${WD[wd(s)]})`; };
+  const diffDays = (a, b) => Math.round((parse(b) - parse(a)) / 86400000);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   const fresh = () => ({
-    tutor: '가상강사 Blair', dur: 50, slots: [{ wd: 2, t: '19:00' }, { wd: 4, t: '19:00' }],
-    from: '2026-10-24', end: '2026-12-07',
-    weeks: 12, pIdx: 2, pStart: '2026-10-13', credLeft: 1,
-    sheetLeft: 13,
+    weeks: 12, courseStart: '2026-10-14', manualPeriods: false, periodEdits: {},
+    creditsLeft: 1, endDate: null, endReason: '', endMemo: '',
+    slots: [1, 3], time: '11:00', dur: 40, firstLesson: null,
+    hasMakeups: false,
     makeups: [
-      { status: 'booked', orig: '2026-10-22', date: '2026-10-30', time: '19:00' },
-      { status: 'open', orig: '2026-11-05' },
+      { status: 'booked', orig: '2026-10-26', date: '2026-11-06', time: '11:00' },
+      { status: 'open', orig: '2026-11-02', unknown: false },
     ],
-    excluded: [], extras: [], saved: false, checks: {},
+    sheetTotal: 24, sheetUsed: 3, skips: [], saved: false,
   });
   let S = fresh();
 
-  function regularAll() {
-    const out = [];
-    for (let d = S.from; d <= S.end; d = add(d, 1)) for (const s of S.slots) if (s.wd === wd(d)) out.push({ date: d, time: s.t });
-    return out;
-  }
-  function calc() {
-    const all = regularAll();
-    const origs = new Set(S.makeups.map((m) => m.orig).filter(Boolean));
-    const rows = all.map((l) => ({ ...l, auto: origs.has(l.date), manual: S.excluded.includes(l.date) }));
-    const regular = rows.filter((r) => !r.auto && !r.manual).length;
-    const booked = S.makeups.filter((m) => m.status === 'booked').length;
-    const open = S.makeups.filter((m) => m.status === 'open').length;
-    const extras = S.extras.filter((x) => x.date).length;
-    const total = regular + booked + open + extras;
-    return { all, rows, regular, booked, open, extras, total, auto: rows.filter((r) => r.auto).length, manual: rows.filter((r) => r.manual).length, diff: total - S.sheetLeft };
-  }
   function periods() {
     const n = S.weeks / 4, out = [];
-    for (let i = 1; i <= n; i++) { const start = add(S.pStart, (i - S.pIdx) * 28); out.push({ i, start, end: add(start, 27) }); }
-    return out;
+    for (let i = 0; i < n; i++) {
+      const start = add(S.courseStart, i * 28);
+      const e = S.periodEdits[i + 1] || {};
+      out.push({ i: i + 1, start: S.manualPeriods && e.start ? e.start : start, end: S.manualPeriods && e.end ? e.end : add(start, 27), calcStart: start, calcEnd: add(start, 27) });
+    }
+    const now = out.find((p) => p.start <= TODAY && TODAY <= p.end);
+    return { list: out, now, autoEnd: out[out.length - 1].end };
   }
+  const endDate = (P) => S.endDate || P.autoEnd;
+  const firstLesson = () => {
+    if (S.firstLesson) return S.firstLesson;
+    for (let d = TODAY; ; d = add(d, 1)) if (S.slots.includes(wd(d))) return d;
+  };
+  const granted = () => Math.min(S.slots.length, 3);
+
+  function calc() {
+    const P = periods(), end = endDate(P), from = firstLesson();
+    const regEnd = end < P.autoEnd ? end : P.autoEnd;   // 연장으로 늘어난 날에는 정규 수업을 만들지 않음 (보강만)
+    const mks = S.hasMakeups ? S.makeups : [];
+    const origs = new Set(mks.map((m) => m.orig).filter(Boolean));
+    const rows = [];
+    for (let d = from; d <= regEnd; d = add(d, 1)) if (S.slots.includes(wd(d))) rows.push({ date: d, state: origs.has(d) ? 'origin' : S.skips.includes(d) ? 'skip' : 'keep' });
+    const regular = rows.filter((r) => r.state === 'keep').length;
+    const booked = mks.filter((m) => m.status === 'booked').length, open = mks.filter((m) => m.status === 'open').length;
+    const lms = regular + booked + open, sheet = S.sheetTotal - S.sheetUsed;
+    return { P, end, regEnd, from, rows, regular, booked, open, lms, sheet, diff: lms - sheet, mks };
+  }
+
   const chips = (name, val, opts, label) => `<div class="chips">${opts.map((o) => `<button type="button" class="chip" data-act="${name}" data-v="${o}" aria-pressed="${String(o) === String(val)}">${label ? label(o) : o}</button>`).join('')}</div>`;
 
   function render() {
-    const c = calc(), ps = periods(), g = granted(S.slots.length), last = ps[ps.length - 1];
-    const endGap = (parse(S.end) - parse(last.end)) / 86400000;
-    const lessonRows = [
+    const c = calc(), P = c.P, g = granted();
+    const endGap = diffDays(P.autoEnd, c.end);
+    const startWdOk = S.slots.includes(wd(S.courseStart));
+    const lessons = [
       ...c.rows.map((r) => ({ ...r, kind: 'reg' })),
-      ...S.makeups.filter((m) => m.status === 'booked' && m.date).map((m) => ({ date: m.date, time: m.time, kind: 'mk' })),
-      ...S.extras.filter((x) => x.date).map((x) => ({ date: x.date, time: x.time, kind: 'ex' })),
-    ].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-    const pickMode = c.diff > 0;
+      ...c.mks.filter((m) => m.status === 'booked' && m.date).map((m) => ({ date: m.date, kind: 'mk', orig: m.orig })),
+    ].sort((a, b) => a.date.localeCompare(b.date));
+    const keepList = lessons.filter((l) => l.kind === 'mk' || l.state === 'keep');
 
     let diffBox;
-    if (c.diff === 0) diffBox = `<div class="box ok"><b>✓ 시트 ${S.sheetLeft}회 = 만들 수업 ${c.total}회</b></div>`;
-    else if (c.diff > 0) diffBox = `<div class="box bad"><b>만들 수업이 시트보다 ${c.diff}회 많아요</b><span>아래 목록에서 뺄 정규 수업을 고르세요. 보통 이미 취소했거나 다른 날로 옮긴 수업이에요. 그대로 저장해도 돼요.</span></div>`;
-    else diffBox = `<div class="box warn"><b>만들 수업이 시트보다 ${-c.diff}회 적어요</b><span>종료일·요일을 먼저 확인하고, 맞으면 아래에서 채우세요. 그대로 저장해도 돼요.</span>
-      <div class="row2"><button type="button" class="add" data-act="addExtra">+ 추가 수업 날짜</button><button type="button" class="add" data-act="addOpen">+ 미예약 보강</button></div></div>`;
+    if (c.diff === 0) diffBox = `<p class="box ok"><b>✓ 시트 남은 ${c.sheet}회 = 만들 수업 ${c.lms}회</b></p>`;
+    else if (c.diff > 0) diffBox = `<p class="box bad"><b>만들 수업이 시트보다 ${c.diff}회 많아요.</b> 아래 목록에서 뺄 정규 수업을 고르세요. 그대로 저장해도 돼요.</p>`;
+    else diffBox = `<p class="box warn"><b>만들 수업이 시트보다 ${-c.diff}회 적어요.</b> 종료일·첫 수업일을 먼저 확인하고, 맞으면 [+ 수업 날짜 추가]나 미완료 보강으로 채우세요. 그대로 저장해도 돼요.</p>`;
 
-    const eq = `정규 ${c.regular}${c.auto + c.manual ? ` (자동 ${c.all.length}${c.auto ? ` − 취소된 원래 수업 ${c.auto}` : ''}${c.manual ? ` − 뺀 수업 ${c.manual}` : ''})` : ''} + 보강 예약 ${c.booked} + 미예약 ${c.open}${c.extras ? ` + 추가 ${c.extras}` : ''} = ${c.total}`;
+    const reasons = ['강사 장기 휴무 연장', '학생 장기 연기 (24주)', '옛 상품 (30일 기준 등)', '기타'];
 
-    const html = `
-    <div class="card"><h3>1. 학생 <span class="tag same">지금 그대로</span></h3>
-      <div class="row2"><div class="ro">가상기존1</div><div class="ro">Gasang One</div></div>
+    document.getElementById('screen').innerHTML = `
+    <div class="card"><h3>1. 학생 <span class="tag same">그대로</span></h3>
+      <div class="row2"><div class="ro">가상기존일</div><div class="ro">Virtual One</div></div>
       <p class="hint">이메일 · 휴대폰 · 시간대 · 운영 메모</p></div>
 
-    <div class="card"><h3>2. 정규 수업 <span class="tag same">지금 그대로</span></h3>
-      <div class="row2"><div><span class="lbl">담당 강사</span><div class="ro">${S.tutor}</div></div><div><span class="lbl">수업 길이</span><div class="ro">${S.dur}분</div></div></div>
-      <div><span class="lbl">요일 · 한국 시각 (주 ${S.slots.length}회)</span><div class="ro">${S.slots.map((s) => `${WD[s.wd]} ${s.t}`).join(' · ')}</div></div>
-      <div class="row2">
-        <div><span class="lbl">시작일 (이날부터 생성)</span><input type="date" id="f-from" data-f="from" value="${S.from}"></div>
-        <div><span class="lbl">지금 수강 종료일</span><input type="date" id="f-end" data-f="end" value="${S.end}"></div>
-      </div></div>
-
-    <div class="card isnew"><h3>3. 미완료 보강 <span class="tag n">예약됨/미예약 추가</span></h3>
-      <p class="hint">아직 안 끝난 보강 전부. 지난 보강은 넣지 않아요.</p>
-      ${S.makeups.map((m, i) => `
-        <div class="mk"><div class="mk-head"><b>보강 ${i + 1}</b><button type="button" class="link" data-act="rmMk" data-i="${i}">빼기</button></div>
-          ${chips('mkStatus:' + i, m.status, ['booked', 'open'], (o) => (o === 'booked' ? '예약됨' : '미예약'))}
-          <div><span class="lbl">원래 수업 날짜</span><input type="date" id="mk-orig-${i}" data-mk="${i}" data-k="orig" value="${m.orig || ''}"></div>
-          ${m.orig && m.orig >= S.from ? `<div class="box info">${md(m.orig)} 정규 수업은 만들지 않아요 (이미 취소된 원래 수업)</div>` : ''}
-          ${m.status === 'booked' ? `<div class="row2"><div><span class="lbl">보강 날짜</span><input type="date" id="mk-date-${i}" data-mk="${i}" data-k="date" value="${m.date || ''}"></div><div><span class="lbl">한국 시각</span><input type="time" id="mk-time-${i}" data-mk="${i}" data-k="time" value="${m.time || ''}"></div></div><p class="hint">길이 ${S.dur}분 · 강사 ${S.tutor} · 그날 강사 시간을 막아요</p>` : `<p class="hint">날짜는 나중에 보강 잡을 때. 강사 시간은 막지 않아요.</p>`}
-        </div>`).join('')}
-      <div class="row2"><button type="button" class="add" data-act="addBooked">+ 예약된 보강</button><button type="button" class="add" data-act="addOpen">+ 미예약 보강</button></div>
-    </div>
-
-    <div class="card isnew"><h3>4. 지금 수강기간 · 변경권 <span class="tag n">새 칸</span></h3>
+    <div class="card moved"><h3>2. 현재 수강권 <span class="tag n">순서 앞으로 · 입력 방식 변경</span></h3>
       <div><span class="lbl">상품</span>${chips('weeks', S.weeks, [4, 12, 24], (w) => (w === 4 ? '1개월(4주)' : w === 12 ? '3개월(12주)' : '6개월(24주)'))}</div>
-      <div><span class="lbl">지금 몇 번째 기간</span>${chips('pIdx', S.pIdx, Array.from({ length: S.weeks / 4 }, (_, i) => i + 1), (i) => `${i}기간`)}</div>
-      <div class="row2">
-        <div><span class="lbl">이 기간 시작일</span><input type="date" id="f-pstart" data-f="pStart" value="${S.pStart}"></div>
-        <div><span class="lbl">이 기간 끝 (28일)</span><div class="ro num">${md(add(S.pStart, 27))}</div></div>
-      </div>
-      <div><span class="lbl">이 기간 남은 변경권 (주 ${S.slots.length}회 → 기간마다 ${g}개)</span>${chips('cred', S.credLeft, Array.from({ length: g + 1 }, (_, i) => i), (i) => `${i}개`)}</div>
-      <div class="periods">
-        ${ps.map((p) => `<div class="per ${p.i < S.pIdx ? 'past' : p.i === S.pIdx ? 'now' : ''}"><span class="k">${p.i}기간</span><span class="num">${md(p.start)} – ${md(p.end)}</span><span class="c">${p.i < S.pIdx ? '지난 기간 · 시트' : p.i === S.pIdx ? `남은 ${S.credLeft}/${g}` : `${g}개 새로 지급`}</span></div>`).join('')}
-      </div>
-      ${endGap !== 0 ? `<div class="box warn">종료일 ${md(S.end)}이 28일 규칙 끝 ${md(last.end)}과 ${Math.abs(endGap)}일 달라요. 연장이 있었거나 옛 상품이면 입력한 종료일 그대로 저장돼요.</div>` : ''}
-    </div>
-
-    <div class="card isnew"><h3>5. 남은 수업 대조 <span class="tag n">새 칸</span></h3>
-      <div><span class="lbl">시트의 남은 수업 횟수</span>
-        <div class="stepper"><button type="button" data-act="sheet" data-v="-1" aria-label="하나 빼기">−</button><output class="num">${S.sheetLeft}</output><button type="button" data-act="sheet" data-v="1" aria-label="하나 더하기">+</button><span class="hint">회</span></div></div>
-      <div class="eq">${eq}</div>
-      ${diffBox}
-      ${S.extras.map((x, i) => `<div class="mk"><div class="mk-head"><b>추가 수업 ${i + 1}</b><button type="button" class="link" data-act="rmEx" data-i="${i}">빼기</button></div><div class="row2"><div><span class="lbl">날짜</span><input type="date" id="ex-date-${i}" data-ex="${i}" data-k="date" value="${x.date}"></div><div><span class="lbl">한국 시각</span><input type="time" id="ex-time-${i}" data-ex="${i}" data-k="time" value="${x.time}"></div></div><p class="hint">그날 하나만 만들어요 (정규 시간표에 안 넣음)</p></div>`).join('')}
-      <details ${pickMode || S.excluded.length ? 'open' : ''}><summary class="hint" style="cursor:pointer;min-height:32px">만들어질 수업 ${c.total - c.open}개 보기 (미예약 보강 제외)</summary>
-        <div class="lessons" style="margin-top:6px">
-          ${lessonRows.map((r) => {
-            const off = r.kind === 'reg' && (r.auto || r.manual);
-            const k = r.kind === 'reg' ? '<span class="kind">정규</span>' : r.kind === 'mk' ? '<span class="kind mk">보강</span>' : '<span class="kind ex">추가</span>';
-            let tail = '';
-            if (r.kind === 'reg' && r.auto) tail = '<span class="why">취소된 원래 수업</span>';
-            else if (r.kind === 'reg' && (pickMode || r.manual)) tail = `<label><input type="checkbox" id="ex-${r.date}" data-act="excl" data-d="${r.date}" ${r.manual ? 'checked' : ''}>빼기</label>`;
-            return `<div class="les ${off ? 'off' : ''}"><span class="num">${md(r.date)} ${r.time}</span>${k}${tail}</div>`;
+      <div><span class="lbl">수강 시작일 (시트 '첫번째 수강 기간' 시작일)</span><input type="date" id="f-start" data-f="courseStart" value="${S.courseStart}"></div>
+      ${startWdOk ? '' : `<p class="box info">${md(S.courseStart)}이 지금 수업 요일(${S.slots.map((w) => WD[w]).join('·')})과 달라요. 수강 중 고정 요일을 바꾼 학생이면 정상이에요. 시트 날짜 그대로 두세요.</p>`}
+      <div>
+        <span class="lbl">28일 기간 — 시트와 한 줄씩 비교해 보세요</span>
+        <div class="periods">
+          ${P.list.map((p) => {
+            const cls = p === P.now ? 'now' : p.end < TODAY ? 'past' : '';
+            const right = p === P.now ? `지금 · 변경권 ${S.creditsLeft}/${g}` : p.end < TODAY ? '지난 기간' : `변경권 ${g}개 새로`;
+            const dates = S.manualPeriods
+              ? `<span class="row2"><input type="date" id="pe-s-${p.i}" data-pe="${p.i}" data-k="start" value="${p.start}" aria-label="${p.i}기간 시작"><input type="date" id="pe-e-${p.i}" data-pe="${p.i}" data-k="end" value="${p.end}" aria-label="${p.i}기간 끝"></span>`
+              : `<span class="num">${md(p.start)} – ${md(p.end)}</span>`;
+            return `<div class="per ${cls}"><span class="k">${p.i}기간</span>${dates}<span class="c">${right}</span></div>`;
           }).join('')}
-        </div></details>
-    </div>
-
-    <div class="card isnew"><h3>6. LMS 전환 <span class="tag n">새 칸</span></h3>
-      <div class="radio">
-        <label><input type="radio" name="conv" id="conv-later" checked><span><b>아직 시트로 관리</b><small>입력해도 수업기록·변경권·보강은 시트가 기준. 취소·보강·Class Record가 검증되면 학생 상세에서 전환일을 정해요.</small></span></label>
+        </div>
+        ${P.now ? `<p class="hint" style="margin-top:6px">오늘 ${md(TODAY)}은 ${P.now.i}기간이에요 (자동).</p>` : `<p class="box warn" style="margin-top:6px">오늘 ${md(TODAY)}이 어느 기간에도 없어요. 수강 시작일·상품을 확인해 주세요.</p>`}
+        <button type="button" class="toggle" data-act="manual" style="margin-top:6px">${S.manualPeriods ? '✓ 기간 날짜 직접 입력 중 · 계산값으로 되돌리기' : '시트 기간 날짜가 이 계산과 달라요 (옛 상품 등) → 직접 입력'}</button>
       </div>
+      <div><span class="lbl">지금 기간에 남은 변경권 (주 ${S.slots.length}회 → 기간마다 ${g}개)</span>${chips('cred', S.creditsLeft, Array.from({ length: g + 1 }, (_, i) => i), (i) => `${i}개`)}</div>
+      <div><span class="lbl">현재 수강 종료일 (시트 '수강 종료일')</span><input type="date" id="f-end" data-f="endDate" value="${c.end}"></div>
+      ${endGap === 0 ? `<p class="hint">기간 계산과 같아요 (${md(P.autoEnd)}).</p>` : `
+        <div class="box warn"><span>기간 계산 끝 ${md(P.autoEnd)}보다 <b>${Math.abs(endGap)}일 ${endGap > 0 ? '늦어요' : '빨라요'}</b>. 이유를 골라 주세요 (저장은 막지 않아요).</span>
+          ${endGap > 0 ? `<span>늘어난 ${md(add(P.autoEnd, 1))} ~ ${md(c.end)}에는 정규 수업을 만들지 않아요. 보강만 잡을 수 있어요.</span>` : ''}
+          ${chips('reason', S.endReason, reasons)}
+          ${S.endReason === '기타' ? `<input type="text" id="f-memo" data-f="endMemo" placeholder="예: 대표 승인 연장 3일" value="${esc(S.endMemo)}">` : ''}
+          <button type="button" class="toggle" data-act="endReset">계산값(${md(P.autoEnd)})으로 되돌리기</button>
+        </div>`}
     </div>
 
-    <div class="card"><h3>7. 확인 · 저장</h3>
+    <div class="card moved"><h3>3. 강사 · 정규 수업 <span class="tag n">첫 정규 수업일 추가</span></h3>
+      <div class="row2"><div><span class="lbl">담당 강사</span><div class="ro">가상강사 Alex</div></div><div><span class="lbl">수업 길이</span><div class="ro">${S.dur}분</div></div></div>
+      <div><span class="lbl">고정 요일 · 한국 시각</span>${chips('slot', '', [1, 2, 3, 4, 5, 6, 0].map(String), (w) => WD[w]).replace(/aria-pressed="false"/g, '').replace(/data-v="(\d)"/g, (m, w) => `data-v="${w}" aria-pressed="${S.slots.includes(Number(w))}"`)}<p class="hint" style="margin-top:4px">${S.slots.map((w) => WD[w]).join('·')} ${S.time} · 주 ${S.slots.length}회</p></div>
+      <div><span class="lbl">앞으로 남은 첫 정규 수업일</span><input type="date" id="f-first" data-f="firstLesson" value="${c.from}"></div>
+      <p class="hint">오늘 이후 첫 수업 요일로 자동이에요. 이날부터 ${md(c.regEnd)}까지 정규 수업을 만들어요.</p>
+    </div>
+
+    <div class="card moved"><h3>4. 미완료 보강 <span class="tag n">없으면 건너뜀</span></h3>
+      ${chips('hasMk', S.hasMakeups ? 'y' : 'n', ['n', 'y'], (v) => (v === 'n' ? '없음' : '있음'))}
+      ${!S.hasMakeups ? '<p class="hint">미완료 보강이 없는 학생은 이대로 다음으로 넘어가요.</p>' : `
+        ${S.makeups.map((m, i) => `
+          <div class="mk"><div class="mk-head"><b>보강 ${i + 1}</b><button type="button" class="link" data-act="rmMk" data-i="${i}">빼기</button></div>
+            ${chips('mkStatus:' + i, m.status, ['booked', 'open'], (o) => (o === 'booked' ? '예약됨' : '미예약'))}
+            <div><span class="lbl">원래 수업 날짜</span><input type="date" id="mk-o-${i}" data-mk="${i}" data-k="orig" value="${m.orig || ''}"></div>
+            ${m.orig && c.rows.some((r) => r.date === m.orig) ? `<p class="box info">${md(m.orig)} 수업 취소됨 · ${m.status === 'open' ? '보강 날짜 잡아야 함' : m.date ? `보강 ${md(m.date)}으로 잡힘` : '아래에 보강 날짜를 넣어 주세요'}</p>` : ''}
+            ${m.status === 'booked' ? `<div><span class="lbl">보강 날짜 (11:00 · ${S.dur}분 · 가상강사 Alex)</span><input type="date" id="mk-d-${i}" data-mk="${i}" data-k="date" value="${m.date || ''}"></div>` : ''}
+          </div>`).join('')}
+        <div class="row2"><button type="button" class="add" data-act="addBooked">+ 예약된 보강</button><button type="button" class="add" data-act="addOpen">+ 미예약 보강</button></div>`}
+    </div>
+
+    <div class="card"><h3>5. 남은 수업 대조 <span class="tag same">그대로 · 즉시 갱신</span></h3>
+      <div class="row2">
+        <div><span class="lbl">시트 총 수업 수</span><input type="number" id="f-total" data-n="sheetTotal" value="${S.sheetTotal}" inputmode="numeric"></div>
+        <div><span class="lbl">이미 진행·차감된 수</span><input type="number" id="f-used" data-n="sheetUsed" value="${S.sheetUsed}" inputmode="numeric"></div>
+      </div>
+      <p class="eq">정규 ${c.regular}${c.rows.length !== c.regular ? ` (자동 ${c.rows.length}${c.rows.some((r) => r.state === 'origin') ? ` − 취소됨(보강으로) ${c.rows.filter((r) => r.state === 'origin').length}` : ''}${S.skips.length ? ` − 뺀 수업 ${c.rows.filter((r) => r.state === 'skip').length}` : ''})` : ''} + 보강 예약 ${c.booked} + 미예약 ${c.open} = <b>${c.lms}</b></p>
+      ${diffBox}
+      <details ${c.diff > 0 ? 'open' : ''}><summary class="hint" style="cursor:pointer;min-height:36px;display:flex;align-items:center">만들어질 수업 ${keepList.length}개 보기</summary>
+        <div class="lessons">${lessons.map((l) => {
+          const off = l.kind === 'reg' && l.state !== 'keep';
+          const k = l.kind === 'reg' ? '<span class="kind">정규</span>' : '<span class="kind mk">보강</span>';
+          let tail = '';
+          if (l.kind === 'reg' && l.state === 'origin') tail = `<span class="why">취소됨 · ${(c.mks.find((m) => m.orig === l.date) || {}).status === 'booked' ? '보강 잡힘' : '보강 대기'}</span>`;
+          else if (l.kind === 'reg' && (c.diff > 0 || l.state === 'skip')) tail = `<label><input type="checkbox" data-act="skip" data-d="${l.date}" ${l.state === 'skip' ? 'checked' : ''}>빼기</label>`;
+          else if (l.kind === 'mk') tail = `<span class="why">${md(l.orig)} 수업분</span>`;
+          return `<div class="les ${off ? 'off' : ''}"><span class="d num">${md(l.date)} ${S.time}</span>${k}${tail}</div>`;
+        }).join('')}</div></details>
+    </div>
+
+    <div class="card moved"><h3>6. 확인 · 저장 <span class="tag n">한 번에 보기</span></h3>
       <dl class="sum">
-        <dt>남은 수업</dt><dd class="num">${c.total}회 (시트 ${S.sheetLeft}회${c.diff ? ` · <b style="color:var(--bad)">${c.diff > 0 ? '+' : ''}${c.diff}</b>` : ' ✓'})</dd>
-        <dt>종료일</dt><dd>${md(S.end)}</dd>
-        <dt>지금 기간</dt><dd>${S.pIdx}/${S.weeks / 4}기간 · 변경권 ${S.credLeft}/${g} 남음</dd>
-        <dt>보강</dt><dd>예약 ${c.booked} · 미예약 ${c.open}</dd>
-        <dt>전환</dt><dd>시트로 관리 중</dd>
+        <dt>수강권</dt><dd>${S.weeks}주 · ${md(S.courseStart)} 시작 · ${P.now ? `지금 ${P.now.i}/${P.list.length}기간` : '기간 확인 필요'}</dd>
+        <dt>종료일</dt><dd>${md(c.end)}${endGap ? ` <b style="color:var(--warn)">(계산보다 ${endGap > 0 ? '+' : ''}${endGap}일 · ${esc(S.endReason || '이유 미선택')})</b>` : ''}</dd>
+        <dt>변경권</dt><dd>지금 기간 ${S.creditsLeft}/${g} · 다음 기간부터 ${g}개씩</dd>
+        <dt>만들 수업</dt><dd class="num">정규 ${c.regular}회 (${md(keepList.find((l) => l.kind === 'reg')?.date)} ~ ${md([...keepList].reverse().find((l) => l.kind === 'reg')?.date)}) · 보강 ${c.booked}회${c.booked ? ` (${c.mks.filter((m) => m.status === 'booked').map((m) => md(m.date)).join(', ')})` : ''}</dd>
+        <dt>미예약 보강</dt><dd>${c.open ? `${c.open}건 (${c.mks.filter((m) => m.status === 'open').map((m) => `${md(m.orig)} 수업분`).join(', ')})` : '없음'}</dd>
+        <dt>남은 수업</dt><dd class="num"><b>${c.lms}회</b> ${c.diff === 0 ? `= 시트 ${c.sheet}회 ✓` : `<b style="color:var(--bad)">≠ 시트 ${c.sheet}회 (${c.diff > 0 ? '+' : ''}${c.diff})</b>`}</dd>
+        <dt>LMS 전환</dt><dd>아직 시트로 관리</dd>
       </dl>
-      ${S.saved ? savedBlock(c, g) : `
-        ${c.diff ? `<p class="hint" style="color:var(--bad)">차이 ${Math.abs(c.diff)}회는 '처리할 일'에 남아요 (②번 1안일 때)</p>` : ''}
-        <button type="button" class="save ${c.diff ? 'amber' : ''}" data-act="save">${c.diff ? `차이 ${Math.abs(c.diff)}회 그대로 저장` : '저장'}</button>`}
+      ${S.saved ? '<p class="box ok"><b>✓ 입력 완료 (시안)</b> 저장 뒤 [시트와 같음 · 대조 완료]는 지금처럼 나와요.</p>' : `<button type="button" class="save ${c.diff ? 'amber' : ''}" data-act="save">${c.diff ? `차이 ${Math.abs(c.diff)}회 그대로 저장` : '저장'}</button>`}
     </div>
 
-    <div class="demo">시안 조작: <button type="button" class="chip" data-act="reset">처음 상태로</button><button type="button" class="chip" data-act="preset" data-v="12">시트 12회 (많음)</button><button type="button" class="chip" data-act="preset" data-v="14">시트 14회 (적음)</button></div>`;
-    document.getElementById('screen').innerHTML = html;
-  }
-
-  function savedBlock(c, g) {
-    const items = [
-      ['left', `남은 수업 ${c.total}회`, '시트 남은 횟수와 같나요'],
-      ['next', `다음 수업 ${(() => { const r = calc().rows.find((x) => !x.auto && !x.manual); return r ? md(r.date) + ' ' + r.time : '-'; })()}`, '시트 다음 수업 줄과 같나요'],
-      ['end', `종료일 ${md(S.end)}`, '시트 종료일과 같나요'],
-      ['cred', `${S.pIdx}기간 변경권 ${S.credLeft}/${g}`, '시트 변경권 칸과 같나요'],
-      ['mk', `보강 예약 ${c.booked} · 미예약 ${c.open}`, '시트 보강 줄과 같나요'],
-    ];
-    const done = items.every(([k]) => S.checks[k] === 'ok');
-    return `<div class="box ok"><b>✓ 입력 완료 · STU-0001</b><span>학생·강사에게는 아무것도 보내지 않았어요. 시트로 계속 관리해요.</span></div>
-      <b style="font-size:14px">시트와 1회 대조</b>
-      <div class="chk">${items.map(([k, a, b]) => `<div class="chk-row"><span>${a}<small>${b}</small></span>${chips('chk:' + k, S.checks[k] || '', ['ok', 'no'], (o) => (o === 'ok' ? '맞음' : '다름'))}</div>`).join('')}</div>
-      ${Object.values(S.checks).includes('no') ? '<div class="box bad">다른 항목은 학생 상세에서 고쳐요. 고친 뒤 다시 대조해요.</div>' : ''}
-      ${done ? '<div class="box ok"><b>✓ 대조 완료 기록</b><span>학생 목록에 \'대조 완료\'로 보여요.</span></div>' : ''}`;
+    <div class="demo">시안 조작: <button type="button" class="chip" data-act="reset">처음 상태</button><button type="button" class="chip" data-act="preset" data-v="mk">보강 2건 있는 학생</button><button type="button" class="chip" data-act="preset" data-v="ext">강사 휴무로 종료일 연장</button><button type="button" class="chip" data-act="preset" data-v="chg">고정 요일 바꾼 학생</button></div>`;
   }
 
   const root = document.getElementById('screen');
@@ -374,33 +338,43 @@ dl.sum dd { margin: 0 }
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const act = b.dataset.act, v = b.dataset.v;
-    if (act === 'excl') { const d = b.dataset.d; S.excluded = b.checked ? [...S.excluded, d] : S.excluded.filter((x) => x !== d); }
-    else if (act === 'weeks') { S.weeks = Number(v); S.pIdx = Math.min(S.pIdx, S.weeks / 4); }
-    else if (act === 'pIdx') S.pIdx = Number(v);
-    else if (act === 'cred') S.credLeft = Number(v);
-    else if (act === 'sheet') S.sheetLeft = Math.max(0, S.sheetLeft + Number(v));
-    else if (act.startsWith('mkStatus:')) { const m = S.makeups[Number(act.split(':')[1])]; m.status = v; if (v === 'booked' && !m.time) m.time = S.slots[0].t; }
-    else if (act.startsWith('chk:')) S.checks[act.split(':')[1]] = v;
-    else if (act === 'rmMk') S.makeups.splice(Number(b.dataset.i), 1);
-    else if (act === 'rmEx') S.extras.splice(Number(b.dataset.i), 1);
-    else if (act === 'addBooked') S.makeups.push({ status: 'booked', orig: '', date: '', time: S.slots[0].t });
+    if (act === 'skip') { const d = b.dataset.d; S.skips = b.checked ? [...S.skips, d] : S.skips.filter((x) => x !== d); }
+    else if (act === 'weeks') { S.weeks = Number(v); S.endDate = null; }
+    else if (act === 'cred') S.creditsLeft = Number(v);
+    else if (act === 'reason') S.endReason = v;
+    else if (act === 'endReset') { S.endDate = null; S.endReason = ''; }
+    else if (act === 'manual') { S.manualPeriods = !S.manualPeriods; S.periodEdits = {}; }
+    else if (act === 'slot') { const w = Number(v); S.slots = S.slots.includes(w) ? S.slots.filter((x) => x !== w) : [...S.slots, w].sort(); if (!S.slots.length) S.slots = [w]; S.firstLesson = null; S.creditsLeft = Math.min(S.creditsLeft, granted()); }
+    else if (act === 'hasMk') S.hasMakeups = v === 'y';
+    else if (act.startsWith('mkStatus:')) S.makeups[Number(act.split(':')[1])].status = v;
+    else if (act === 'rmMk') { S.makeups.splice(Number(b.dataset.i), 1); if (!S.makeups.length) S.hasMakeups = false; }
+    else if (act === 'addBooked') S.makeups.push({ status: 'booked', orig: '', date: '' });
     else if (act === 'addOpen') S.makeups.push({ status: 'open', orig: '' });
-    else if (act === 'addExtra') S.extras.push({ date: '', time: S.slots[0].t });
     else if (act === 'save') S.saved = true;
     else if (act === 'reset') S = fresh();
-    else if (act === 'preset') { S = fresh(); S.sheetLeft = Number(v); }
+    else if (act === 'preset') {
+      S = fresh();
+      if (v === 'mk') S.hasMakeups = true;
+      if (v === 'ext') { S.hasMakeups = true; S.endDate = '2027-01-11'; S.endReason = '강사 장기 휴무 연장'; S.sheetTotal = 24; }
+      if (v === 'chg') { S.courseStart = '2026-10-13'; S.slots = [1, 3]; }
+    }
     else return;
-    if (act !== 'save' && !act.startsWith('chk:')) { S.saved = false; S.checks = {}; }
+    if (act !== 'save') S.saved = false;
     render();
   });
   root.addEventListener('change', (e) => {
     const t = e.target;
-    if (t.dataset.f) { if (!t.value) return; S[t.dataset.f] = t.value; }
+    if (t.dataset.f) { S[t.dataset.f] = t.value || (t.dataset.f === 'endMemo' ? '' : null); if (t.dataset.f === 'courseStart' && !t.value) S.courseStart = '2026-10-14'; if (t.dataset.f === 'courseStart') S.endDate = null; }
+    else if (t.dataset.n) S[t.dataset.n] = Math.max(0, Number(t.value) || 0);
     else if (t.dataset.mk) S.makeups[Number(t.dataset.mk)][t.dataset.k] = t.value;
-    else if (t.dataset.ex) S.extras[Number(t.dataset.ex)][t.dataset.k] = t.value;
+    else if (t.dataset.pe) { const k = t.dataset.pe; S.periodEdits[k] = { ...(S.periodEdits[k] || {}), [t.dataset.k]: t.value }; S.endDate = null; }
     else return;
-    S.saved = false; S.checks = {};
+    S.saved = false;
     render();
+  });
+  root.addEventListener('click', (e) => {
+    const el = e.target;
+    if (el.tagName === 'INPUT' && el.type === 'date') try { el.showPicker && el.showPicker(); } catch (_) {}
   });
   render();
 })();
