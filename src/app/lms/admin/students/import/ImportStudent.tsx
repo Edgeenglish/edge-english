@@ -331,6 +331,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                   label={(r) => END_REASON_TEXT[r]}
                   onPick={(r) => !saved && set('endReason', r)}
                 />
+                {!d.endReason && <span className="font-semibold">이유를 안 고르면 저장은 되지만, 대시보드 처리할 일에 &lsquo;종료일 이유 확인&rsquo;으로 남아요.</span>}
                 {d.endReason === 'admin_exception' && (
                   <input id="imp-end-note" value={d.endNote} disabled={saved} placeholder="메모 (예: 대표 승인 연장)" onChange={(e) => set('endNote', e.target.value)} className={inputCls(saved)} />
                 )}
@@ -436,6 +437,11 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     )}
                   </div>
                   <Chips<'booked' | 'open'> value={m.status} options={['booked', 'open']} label={(v) => (v === 'booked' ? '예약됨' : '미예약')} onPick={(v) => !saved && setMakeup(i, { status: v })} />
+                  <label className="flex min-h-[40px] items-center gap-2 text-[13.5px] text-[#1d1b2b]">
+                    <input type="checkbox" className="h-5 w-5" checked={m.tutorLeave} disabled={saved} onChange={(e) => setMakeup(i, { tutorLeave: e.target.checked })} />
+                    강사 휴가로 생긴 보강
+                  </label>
+                  {m.tutorLeave && m.status === 'open' && <p className="-mt-1 text-[12.5px] text-[#6b6880]">날짜를 못 정한 채 종료일이 지나도 보강 권리는 남아요. 종료일 뒤로 잡히면 그날까지 연장돼요.</p>}
                   <div>
                     <span className="mb-1 block text-[13px] text-[#6b6880]">원래 수업 날짜 (어느 수업이 취소돼서 생긴 보강인지)</span>
                     <div className="flex items-center gap-2">
@@ -474,6 +480,20 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       </div>
                       <Chips value={m.durationMin} options={DURATIONS} label={(v) => `${v}분`} onPick={(v) => !saved && setMakeup(i, { durationMin: v })} />
                       <Field label="보강 강사">{tutorSelect(m.tutorId, (v) => setMakeup(i, { tutorId: v }), `imp-mk-tutor-${i}`)}</Field>
+                      {m.date && d.endDate && m.date > d.endDate && (
+                        <div className="grid gap-1.5 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
+                          <span>보강 날짜가 수강 종료일({dayLabel(d.endDate)}) 뒤예요. 종료일을 먼저 늘려 주세요.</span>
+                          {m.tutorLeave && !saved && (
+                            <button
+                              type="button"
+                              onClick={() => setD((x) => ({ ...x, endDate: m.date as string, endReason: 'tutor_long_term_leave' }))}
+                              className="min-h-[40px] w-fit rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px] font-semibold text-[#1d1b2b]"
+                            >
+                              종료일을 {dayLabel(m.date)}로 늘리기 (강사 장기 휴무 연장)
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {inline(issues.filter((x) => x.lesson.kind === 'makeup' && x.lesson.date === m.date && x.lesson.time === m.time))}
                     </>
                   ) : (
@@ -679,6 +699,9 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                   {result.repeated && ' (이미 저장된 요청이라 새로 만들지 않았어요)'}
                 </p>
               </div>
+              {result.endReasonMissing && (
+                <Note tone="warn">종료일 변경 이유를 고르지 않아서, 대시보드 처리할 일에 &lsquo;종료일 이유 확인&rsquo;으로 남았어요. 시트 대조를 끝내도 이유를 고를 때까지 남아요.</Note>
+              )}
               <div className="rounded-[12px] border border-[#e6e3ef] px-4 py-3">
                 <b className="text-[15px] text-[#1d1b2b]">시트와 1회 대조</b>
                 <ul className="mt-2 grid gap-1 text-[13.5px] text-[#1d1b2b]">

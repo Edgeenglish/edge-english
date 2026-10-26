@@ -106,7 +106,7 @@ D52X="$("${PSQL[@]}" -tA -f "$WORK/d52x-check.sql")"
 echo "$D52X" | grep -v '|통과$' && { echo "❌ d52x-check 실패"; exit 1; }
 echo "✅ migration 1500 적용 확인 파일 통과 (확인 $(echo "$D52X" | wc -l)줄)"
 
-# migration 1600 (기존 학생 입력 시안 2) 적용 확인 파일: 3줄 통과
+# migration 1600 (기존 학생 입력 시안 2) 적용 확인 파일: 4줄 통과
 cp "$ROOT"/supabase/test-setup/d52y-check.sql "$WORK"/; chmod a+r "$WORK"/d52y-check.sql
 D52Y="$("${PSQL[@]}" -tA -f "$WORK/d52y-check.sql")"
 echo "$D52Y" | grep -v '|통과$' && { echo "❌ d52y-check 실패"; exit 1; }

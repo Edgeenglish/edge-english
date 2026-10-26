@@ -81,3 +81,11 @@ describe('기존 학생 입력 뒤 처리할 일 (import_checks · migrated_item
     ]);
   });
 });
+
+describe('종료일 이유 미확인은 대조 완료와 따로 (migration 1600)', () => {
+  it('대조 완료한 학생도 종료일 이유가 없으면 그 항목만 남음', () => {
+    const e = { student: { name_ko: '가상', code: 'STU-0102' } };
+    const [t] = toImportChecks([{ enrollment_id: 'e3', sheet_total: 24, sheet_used: 3, lms_left: 21, created_at: '2026-10-26T00:00:00Z', checked_at: '2026-10-26T01:00:00Z', end_days: 6, end_reason: null, weeks: 12, enrollment: e }], []);
+    expect(t).toMatchObject({ counts: null, endReason: { days: 6, weeks: 12 } });
+  });
+});

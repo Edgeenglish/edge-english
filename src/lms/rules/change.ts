@@ -156,7 +156,12 @@ export function isCompensationSlotAllowed(slot: { startsAt: Date; endsAt: Date }
   return slot.startsAt.getTime() > now.getTime() && slot.endsAt.getTime() <= compensationDeadline(grantedAt).getTime();
 }
 
-/** 보강 시간이 기한 안인지: 최종 종료일(KST) 23:59까지 '시작'하는 수업 */
-export function isMakeupSlotAllowed(slotStartsAt: Date, finalEndDate: KstDate, now: Date): boolean {
-  return slotStartsAt.getTime() > now.getTime() && slotStartsAt.getTime() <= endOfKstDay(finalEndDate).getTime();
+/**
+ * 보강 시간이 기한 안인지: 최종 종료일(KST) 23:59까지 '시작'하는 수업.
+ * 강사 휴가로 생긴 보강(tutorLeave)은 종료일 제한 없음 — 종료일 뒤로 잡히면 그 날까지 연장으로 처리 (A20·A41).
+ * 날짜를 못 정한 채 종료일이 지나도 보강 권리가 사라지거나 신청이 막히지 않게
+ */
+export function isMakeupSlotAllowed(slotStartsAt: Date, finalEndDate: KstDate, now: Date, opts: { tutorLeave?: boolean } = {}): boolean {
+  if (slotStartsAt.getTime() <= now.getTime()) return false;
+  return opts.tutorLeave === true || slotStartsAt.getTime() <= endOfKstDay(finalEndDate).getTime();
 }

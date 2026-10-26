@@ -97,3 +97,12 @@ describe('기존 학생 입력 뒤 시트 대조 (D-52 확대판)', () => {
     expect(i).toMatchObject({ tag: '보강 날짜 확인', actions: [], unknownOrigins: [{ id: 'x' }] });
   });
 });
+
+describe('종료일 이유 확인 (D-52 시안 2, 2026-10-26 대표)', () => {
+  const at = new Date('2026-10-26T03:00:00Z');
+  it('대조를 끝내도 종료일 이유가 없으면 카드가 남고 이유 고르기가 보임', () => {
+    const [i] = buildBoard([{ kind: 'import_check', id: 'e1', studentName: '가상', studentCode: 'STU-0101', counts: null, unknownOrigins: [], endReason: { days: 6, weeks: 12 }, createdAt: at }], at);
+    expect(i).toMatchObject({ tag: '종료일 이유 확인', actions: [], endReason: { days: 6 } });
+    expect(i.detail).toMatch('6일 늦은 이유 확인 필요');
+  });
+});

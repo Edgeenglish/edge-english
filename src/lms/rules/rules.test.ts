@@ -252,6 +252,9 @@ describe('학생 수업 변경 판정', () => {
     const now = new Date(startsAt.getTime() - 24 * H);
     expect(isMakeupSlotAllowed(kstToInstant('2026-11-26', '23:30'), '2026-11-26', now)).toBe(true);
     expect(isMakeupSlotAllowed(kstToInstant('2026-11-27', '00:00'), '2026-11-26', now)).toBe(false);
+    // 강사 휴가로 생긴 보강은 종료일 뒤도 신청 가능 (그 날까지 연장으로 처리, A41) — 지난 시각은 여전히 안 됨
+    expect(isMakeupSlotAllowed(kstToInstant('2026-12-10', '10:00'), '2026-11-26', now, { tutorLeave: true })).toBe(true);
+    expect(isMakeupSlotAllowed(new Date(now.getTime() - 60_000), '2026-11-26', now, { tutorLeave: true })).toBe(false);
     expect(isMakeupSlotAllowed(new Date(now.getTime() - H), '2026-11-26', now)).toBe(false);
   });
 

@@ -989,9 +989,30 @@ select pg_temp.expect_error($$select pg_temp.imp(gen_random_uuid()::text, pg_tem
 select pg_temp.expect_error($$select pg_temp.imp(gen_random_uuid()::text, pg_temp.ebody('장기연기4주', 'student_long_term_leave', '2028-01-09', '[]'))$$, '24주');
 select pg_temp.ok(true, '보강이 종료일 뒤면 저장 안 함(연장 먼저) · 학생 장기 연기는 24주만');
 select pg_temp.imp('90000000-0000-0000-0000-000000001602', pg_temp.ebody('이유없음', '', '2028-01-04', '[]') || jsonb_build_object('slots', '[{"weekday":1,"time":"09:00"},{"weekday":3,"time":"09:00"}]'::jsonb));
-select pg_temp.ok((select x.reason = 'admin_exception' and x.note like '이유 미선택%'
-                   from enrollments e join students s on s.id = e.student_id join enrollment_extensions x on x.enrollment_id = e.id where s.name_ko = '이유없음'),
-  '이유를 안 골라도 저장은 됨 — 기타·이유 미선택으로 남아 대조 때 보임');
+select pg_temp.ok((select x.reason = 'admin_exception' and x.note like '이유 확인 필요%' and c.end_reason is null and c.end_days = 2 and c.end_checked_at is null
+                   from enrollments e join students s on s.id = e.student_id join enrollment_extensions x on x.enrollment_id = e.id
+                   join import_checks c on c.enrollment_id = e.id where s.name_ko = '이유없음'),
+  '이유를 안 골라도 저장은 됨 — 대신 종료일 이유가 비어 있는 미해결 항목으로 남음 (대표 2026-10-26)');
+select admin_import_mark_checked(e.id) from enrollments e join students s on s.id = e.student_id where s.name_ko = '이유없음';
+select pg_temp.ok((select c.checked_at is not null and c.end_reason is null from import_checks c join enrollments e on e.id = c.enrollment_id join students s on s.id = e.student_id where s.name_ko = '이유없음'),
+  '시트 대조 완료를 눌러도 종료일 이유 미해결은 따로 남음');
+select pg_temp.expect_error($$select admin_import_set_end_reason((select e.id from enrollments e join students s on s.id = e.student_id where s.name_ko = '이유없음'), 'student_long_term_leave', null)$$, '24주');
+select pg_temp.expect_error($$select admin_import_set_end_reason((select e.id from enrollments e join students s on s.id = e.student_id where s.name_ko = '이유없음'), 'admin_exception', ' ')$$, '메모');
+select admin_import_set_end_reason(e.id, 'tutor_long_term_leave', null) from enrollments e join students s on s.id = e.student_id where s.name_ko = '이유없음';
+select pg_temp.ok((select c.end_reason = 'tutor_long_term_leave' and c.end_checked_by = 'bbbbbbbb-0000-0000-0000-000000000009' and e.extension_days = 2
+                          and (select count(*) from enrollment_extensions x where x.enrollment_id = e.id) = 3
+                          and (select sum(days) filter (where reason = 'tutor_long_term_leave') from enrollment_extensions x where x.enrollment_id = e.id) = 2
+                   from import_checks c join enrollments e on e.id = c.enrollment_id join students s on s.id = e.student_id where s.name_ko = '이유없음'),
+  '이유를 정하면 해결(시각·담당자 기록), 연장 일수는 그대로이고 이력은 정정 줄로 남음');
+
+-- 강사 휴가 보강 권리: 날짜 미정인 채로 수강 종료일이 지나도 그대로 남음 (A41)
+select pg_temp.imp('90000000-0000-0000-0000-000000001603',
+  pg_temp.ebody('휴가지남', 'tutor_long_term_leave', '2026-10-04', '[{"status":"open","original_date":"2026-09-30","tutor_leave":true}]')
+  || jsonb_build_object('from_date', '2026-09-07', 'course', jsonb_build_object('weeks', 4, 'period_idx', 1, 'period_start', '2026-09-07', 'credits_left', 2),
+                        'slots', '[{"weekday":1,"time":"10:00"},{"weekday":3,"time":"10:00"}]'::jsonb));
+select pg_temp.ok((select i.kind = 'makeup_open' and i.tutor_leave and i.lesson_id is null and e.final_end_date < current_date
+                   from migrated_items i join enrollments e on e.id = i.enrollment_id join students s on s.id = e.student_id where s.name_ko = '휴가지남'),
+  '강사 휴가로 생긴 미예약 보강은 종료일이 지나도 지워지거나 소멸 처리되지 않음 (강사 휴가 표시 보존)');
 reset request.jwt.claim.sub;
 reset role;
 

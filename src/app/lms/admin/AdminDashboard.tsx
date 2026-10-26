@@ -13,9 +13,15 @@ import type { PlanView } from '@/lms/admin/confirm';
 import type { PlanActions } from '@/lms/admin/confirm-live';
 import PlanCard, { type PlanHandlers } from './PlanCard';
 import OriginFix from './OriginFix';
+import EndReasonFix from './EndReasonFix';
+import type { EndReason } from '@/lms/admin/import';
 
 /** 기존 학생 입력 뒤 처리 (DB 함수, migration 1500) */
-export type ImportActions = { markChecked: (enrollmentId: string) => Promise<void>; setOrigin: (itemId: string, date: string | null) => Promise<void> };
+export type ImportActions = {
+  markChecked: (enrollmentId: string) => Promise<void>;
+  setOrigin: (itemId: string, date: string | null) => Promise<void>;
+  setEndReason: (enrollmentId: string, reason: EndReason, note: string) => Promise<void>;
+};
 import { AdminHeader, BottomNav, Icon, type IconName } from './ui';
 
 const CATEGORY_ICON: Record<Category, IconName> = { matching: 'userPlus', tutor_ack: 'clock', ending: 'hourglass', makeup: 'repeat', issue: 'alert' };
@@ -60,7 +66,7 @@ function applyAction(t: TaskSource, key: string, now: Date): TaskSource | null {
     }
     case 'import_check': {
       const next = { ...t, counts: key === 'import_checked' ? null : t.counts };
-      return next.counts || next.unknownOrigins.length > 0 ? next : null;
+      return next.counts || next.unknownOrigins.length > 0 || next.endReason ? next : null;
     }
     default:
       return null; // 장기 연기 승인·거절, 노쇼 확정·지각 처리 → 목록에서 빠짐
@@ -220,11 +226,28 @@ export default function AdminDashboard({
         prev.flatMap((t) => {
           if (t.id !== item.id || t.kind !== 'import_check') return [t];
           const next = { ...t, unknownOrigins: t.unknownOrigins.filter((o) => o.id !== itemId) };
-          return next.counts || next.unknownOrigins.length > 0 ? [next] : [];
+          return next.counts || next.unknownOrigins.length > 0 || next.endReason ? [next] : [];
         }),
       );
     }
     setToast(`${date ? '원래 수업 날짜를 넣었어요.' : "'확인 불가'로 정리했어요. 날짜는 비워 둬요."}${preview ? ' (미리보기: 실제 저장 없음)' : ''}`);
+  }
+
+  // 종료일 이유 확인: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기
+  async function fixEndReason(item: BoardItem, reason: EndReason, note: string) {
+    if (!preview && importActions) {
+      await importActions.setEndReason(item.id, reason, note);
+      await onReload?.();
+    } else {
+      setTasks((prev) =>
+        prev.flatMap((t) => {
+          if (t.id !== item.id || t.kind !== 'import_check') return [t];
+          const next = { ...t, endReason: null };
+          return next.counts || next.unknownOrigins.length > 0 ? [next] : [];
+        }),
+      );
+    }
+    setToast(`종료일 이유를 기록했어요.${preview ? ' (미리보기: 실제 저장 없음)' : ''}`);
   }
 
   return (
@@ -388,6 +411,7 @@ export default function AdminDashboard({
               )}
               {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
               {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}
+              {item.endReason && <EndReasonFix weeks={item.endReason.weeks} onSave={(r, n) => fixEndReason(item, r, n)} />}
               <div className="flex flex-wrap gap-1.5">
                 {item.actions.map((a) =>
                   a.href ? (

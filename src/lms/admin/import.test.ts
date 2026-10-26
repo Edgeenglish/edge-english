@@ -11,7 +11,7 @@ const base = (over: Partial<ImportDraft> = {}): ImportDraft => ({
   weeks: 4, courseStart: '2027-08-02', creditsLeft: 1, sheetTotal: 4, sheetUsed: 0, ...over,
 });
 const mk = (date: string, time: string, durationMin: number, tutorId: string, more: Partial<ImportMakeup> = {}): ImportMakeup => ({
-  status: 'booked', originalDate: '', originUnknown: true, date, time, durationMin, tutorId, ...more,
+  status: 'booked', originalDate: '', originUnknown: true, tutorLeave: false, date, time, durationMin, tutorId, ...more,
 });
 const tutor = (busy: RegTutor['busy']): RegTutor => ({ id: 'T', name: 'Tutor', country: 'Korea', timezone: 'Asia/Seoul', availability: [], busy });
 const at = (d: string, t: string, min: number) => ({ startsAt: kstToInstant(d, t), endsAt: new Date(kstToInstant(d, t).getTime() + min * 60_000) });

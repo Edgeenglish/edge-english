@@ -102,6 +102,8 @@ export type ImportCheckTask = {
   counts: { lmsLeft: number; sheetLeft: number } | null;
   /** 원래 수업 날짜를 아직 확인하지 못한 보강 */
   unknownOrigins: { id: string; label: string }[];
+  /** 종료일이 기간 계산과 다른데 이유를 안 고름 (대조 완료와 따로, 이유를 정해야 사라짐) */
+  endReason?: { days: number; weeks: number | null } | null;
   createdAt: Date;
 };
 
@@ -163,6 +165,8 @@ export type BoardItem = {
   top?: boolean;
   /** 기존 학생 입력: 원래 날짜 확인 필요 보강 — 화면이 날짜 입력칸으로 그림 */
   unknownOrigins?: { id: string; label: string }[];
+  /** 기존 학생 입력: 종료일 이유 확인 — 화면이 이유 고르기로 그림 */
+  endReason?: { days: number; weeks: number | null } | null;
 };
 
 const KST = 'Asia/Seoul';
@@ -304,18 +308,20 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
       const parts = [
         t.counts && (diff === 0 ? `남은 수업 ${t.counts.lmsLeft}회 (시트와 같음) · 입력 내용을 시트와 한 번 대조해 주세요` : `남은 수업 LMS ${t.counts.lmsLeft}회 · 시트 ${t.counts.sheetLeft}회 (${diff > 0 ? '+' : ''}${diff}) · 차이 원인을 확인해 주세요`),
         t.unknownOrigins.length > 0 && `보강 원래 수업 날짜 확인 필요 ${t.unknownOrigins.length}건`,
+        t.endReason && `종료일이 기간 계산보다 ${Math.abs(t.endReason.days)}일 ${t.endReason.days > 0 ? '늦은' : '빠른'} 이유 확인 필요`,
       ].filter(Boolean);
       return {
         id: t.id,
         kind: t.kind,
         severity: 'open',
-        tag: t.counts ? (diff === 0 ? '시트 대조' : `시트 대조 · ${Math.abs(diff)}회 차이`) : '보강 날짜 확인',
+        tag: t.counts ? (diff === 0 ? '시트 대조' : `시트 대조 · ${Math.abs(diff)}회 차이`) : t.endReason ? '종료일 이유 확인' : '보강 날짜 확인',
         title: t.studentName,
         detail: `${t.studentCode} · ${parts.join(' · ')}`,
         due: null,
         steps: [],
         actions: t.counts ? [{ key: 'import_checked', label: '시트와 같음 · 대조 완료', primary: true }] : [],
         unknownOrigins: t.unknownOrigins,
+        endReason: t.endReason ?? null,
       };
     }
     case 'auto_failure': {

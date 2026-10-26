@@ -148,7 +148,12 @@ export function toTodayLessons(lessons: LessonRow[], openNoShowLessonIds: Readon
     }));
 }
 
-export type ImportCheckRow = { enrollment_id: string; sheet_total: number; sheet_used: number; lms_left: number; created_at: string; enrollment: { student: { name_ko: string; code: string } | null } | null };
+export type ImportCheckRow = {
+  enrollment_id: string; sheet_total: number; sheet_used: number; lms_left: number; created_at: string;
+  /** migration 1600 부터 */
+  checked_at?: string | null; end_days?: number; end_reason?: string | null; weeks?: number | null;
+  enrollment: { student: { name_ko: string; code: string } | null } | null;
+};
 export type UnknownOriginRow = { id: string; kind: 'makeup_booked' | 'makeup_open'; enrollment_id: string; created_at: string; lesson: { starts_at: string } | null; enrollment: { student: { name_ko: string; code: string } | null } | null };
 
 /** 기존 학생 입력 뒤 시트 대조 전 · 보강 원래 날짜 확인 필요 → 학생(수강등록)마다 한 줄 */
@@ -159,12 +164,27 @@ export function toImportChecks(checks: ImportCheckRow[], origins: UnknownOriginR
       out.set(eid, { kind: 'import_check', id: eid, studentName: e?.student?.name_ko ?? '(학생 정보 없음)', studentCode: e?.student?.code ?? '', counts: null, unknownOrigins: [], createdAt: new Date(created) });
     return out.get(eid)!;
   };
-  for (const c of checks) row(c.enrollment_id, c.enrollment, c.created_at).counts = { lmsLeft: c.lms_left, sheetLeft: c.sheet_total - c.sheet_used };
+  for (const c of checks) {
+    const r = row(c.enrollment_id, c.enrollment, c.created_at);
+    if (!c.checked_at) r.counts = { lmsLeft: c.lms_left, sheetLeft: c.sheet_total - c.sheet_used };
+    if (c.end_days && !c.end_reason) r.endReason = { days: c.end_days, weeks: c.weeks ?? null };
+  }
   for (const o of origins) {
     const label = o.kind === 'makeup_open' ? '미예약 보강' : `예약된 보강 ${o.lesson ? short(instantToKstDate(new Date(o.lesson.starts_at))) : ''}`.trim();
     row(o.enrollment_id, o.enrollment, o.created_at).unknownOrigins.push({ id: o.id, label });
   }
   return [...out.values()];
+}
+
+// 시트 대조 전 + 종료일 이유 미확인 (1600). 1600 전 DB는 칸이 없어 대조 전만 읽음
+async function loadImportChecks(sb: SupabaseClient) {
+  const who = 'enrollment:enrollments(student:students(name_ko, code))';
+  const full = await sb
+    .from('import_checks')
+    .select(`enrollment_id, sheet_total, sheet_used, lms_left, created_at, checked_at, end_days, end_reason, weeks, ${who}`)
+    .or('checked_at.is.null,and(end_days.neq.0,end_reason.is.null)');
+  if (full.error?.code !== '42703' && full.error?.code !== 'PGRST204') return full;
+  return sb.from('import_checks').select(`enrollment_id, sheet_total, sheet_used, lms_left, created_at, ${who}`).is('checked_at', null);
 }
 
 // migration 1500 전 DB에는 표가 없음 → 대시보드는 그대로 보이게 빈 목록
@@ -189,7 +209,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .from('lessons')
       .select('id, starts_at, kind, state, class_status, student:students(name_ko), tutor:tutors!lessons_tutor_id_fkey(name)')
       .eq('kst_date', today),
-    sb.from('import_checks').select('enrollment_id, sheet_total, sheet_used, lms_left, created_at, enrollment:enrollments(student:students(name_ko, code))').is('checked_at', null),
+    loadImportChecks(sb),
     sb
       .from('migrated_items')
       .select('id, kind, enrollment_id, created_at, lesson:lessons(starts_at), enrollment:enrollments(student:students(name_ko, code))')

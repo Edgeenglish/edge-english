@@ -20,6 +20,8 @@ export type ImportMakeup = {
   /** 원래 수업 날짜. 시트에서 알 수 없으면 비우고 originUnknown (가짜 날짜 금지) */
   originalDate: KstDate | '';
   originUnknown: boolean;
+  /** 강사 휴가로 생긴 보강 (A41): 종료일이 지나도 권리가 남고, 종료일 뒤로 잡으면 연장 */
+  tutorLeave: boolean;
   /** 예약됨일 때만 */
   date: KstDate | '';
   time: KstTime | '';
@@ -77,7 +79,7 @@ export const emptyImport = (today: KstDate): ImportDraft => ({
 });
 
 export const newMakeup = (d: ImportDraft, status: ImportMakeup['status']): ImportMakeup => ({
-  status, originalDate: '', originUnknown: false, date: '', time: '', durationMin: d.durationMin ?? 50, tutorId: d.tutorId,
+  status, originalDate: '', originUnknown: false, tutorLeave: false, date: '', time: '', durationMin: d.durationMin ?? 50, tutorId: d.tutorId,
 });
 
 export const WEEKLY_ALLOWED = [1, 2, 3, 5] as const;
@@ -308,6 +310,7 @@ export function importPayload(d: ImportDraft) {
     end_date: d.endDate,
     makeups: activeMakeups(d).map((m) => ({
       status: m.status,
+      ...(m.tutorLeave ? { tutor_leave: true } : {}),
       ...(m.originalDate ? { original_date: m.originalDate } : { origin_unknown: true }),
       ...(m.status === 'booked' ? { date: m.date, time: m.time, duration_min: m.durationMin, tutor_id: m.tutorId } : {}),
     })),

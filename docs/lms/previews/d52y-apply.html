@@ -103,7 +103,8 @@ select * from pg_temp.lms_backup() order by 순서;</textarea>
 --  1. 정규 수업은 28일 기간 계산 끝까지만 만든다. 종료일이 그보다 늦어도(연장) 늘어난 날에는 정규 수업을 만들지 않는다
 --     (연장 = 새 정규 수업 추가가 아니라 미완료 수업을 끝낼 수 있는 기간 확대. 늘어난 날에는 보강·추가 수업만)
 --  2. 늘어난 날은 연장 기록(enrollment_extensions)으로 남김: base_end = 계산 끝, final_end = 시트 종료일
---     이유: 강사 장기 휴무 연장 / 학생 장기 연기(24주만) / 기타(메모). 안 고르면 '기타 · 이유 미선택' (저장은 막지 않음)
+--     이유: 강사 장기 휴무 연장 / 학생 장기 연기(24주만) / 기타(메모). 안 고르면 저장은 하되 '종료일 이유 확인'으로 처리할 일에 남김
+--     (2026-10-26 대표: 기록만 남기고 끝내지 않음) → 운영진이 이유를 고르면(admin_import_set_end_reason) 사라짐
 --  3. 수강 시작일(1기간 시작)부터 모든 28일 기간을 기록 (지난 기간 포함). 지금 기간의 남은 변경권만 시트 값으로
 --  4. 보강·추가 수업 날짜는 수강 종료일(연장 포함)까지만
 --  5. 원래 날짜 정리(admin_import_set_origin)의 기준 '입력 시작일' = LMS가 만든 첫 수업 날 (start_date 가 수강 시작일로 바뀌어서)
@@ -112,6 +113,12 @@ select * from pg_temp.lms_backup() order by 순서;</textarea>
 
 alter table import_checks add column if not exists end_reason text;   -- 종료일이 계산과 다를 때 이유 (enrollment_extensions.reason 과 같은 값)
 alter table import_checks add column if not exists end_note text;
+alter table import_checks add column if not exists end_days integer not null default 0;     -- 종료일 − 기간 계산 끝 (0 = 같음)
+alter table import_checks add column if not exists weeks integer;                            -- 상품 (학생 장기 연기는 24주만 확인용)
+alter table import_checks add column if not exists end_checked_at timestamptz;               -- 종료일 이유를 정한 시각·담당자
+alter table import_checks add column if not exists end_checked_by uuid;
+-- 강사 휴가로 생긴 보강 (A41): 수강 종료일이 지나도 보강 권리가 사라지지 않고, 보강을 종료일 뒤로 잡으면 연장으로 처리
+alter table migrated_items add column if not exists tutor_leave boolean not null default false;
 
 -- 정규 수업 마지막 날 = 종료일과 28일 기간 계산 끝 중 빠른 날 (course 가 없으면 종료일)
 create or replace function lms_import_regular_end(p jsonb)
@@ -227,14 +234,13 @@ begin
   if v_cleft is null or v_cleft &lt; 0 or v_cleft &gt; v_grant then raise exception '이 기간 남은 변경권은 0~%개입니다.', v_grant; end if;
   v_cstart := v_pstart - (v_pidx - 1) * 28;
   v_calc_end := v_pstart + (v_weeks / 4 - v_pidx + 1) * 28 - 1;
-  -- 종료일이 계산과 다르면 이유를 기록 (막지 않음). 이유를 안 골랐으면 '기타 · 이유 미선택'으로 남겨 대조 때 보이게
+  -- 종료일이 계산과 다르면 이유를 기록 (막지 않음). 이유를 안 골랐으면 v_reason 은 비운 채 저장 → 처리할 일 '종료일 이유 확인'
   if v_end &lt;&gt; v_calc_end then
     if v_reason is not null and v_reason not in ('tutor_long_term_leave', 'student_long_term_leave', 'admin_exception') then
       raise exception '종료일 변경 사유가 올바르지 않습니다.';
     end if;
     if v_reason = 'student_long_term_leave' and v_weeks &lt;&gt; 24 then raise exception '학생 장기 연기는 24주 상품만 가능합니다 (A09).'; end if;
-    v_reason := coalesce(v_reason, 'admin_exception');
-    if v_reason = 'admin_exception' then v_note := coalesce(v_note, '이유 미선택 (기존 학생 이관)'); end if;
+    if v_reason = 'admin_exception' then v_note := coalesce(v_note, '기타'); end if;
   else
     v_reason := null; v_note := null;
   end if;
@@ -291,7 +297,8 @@ begin
   returning id into eid;
   if v_end &gt; v_calc_end then
     insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by)
-    values (eid, v_end - v_calc_end, v_reason, coalesce(v_note, '기존 학생 이관 (시트 종료일)'), me);
+    values (eid, v_end - v_calc_end, coalesce(v_reason, 'admin_exception'),
+            case when v_reason is null then '이유 확인 필요 (기존 학생 이관)' else coalesce(v_note, '기존 학생 이관 (시트 종료일)') end, me);
   end if;
 
   -- 1기간 ~ 마지막 기간 (28일씩, 지난 기간은 기록용). 지금 기간은 남은 변경권만큼 남기고, 다음 기간부터 새로 지급
@@ -321,8 +328,9 @@ begin
     if r.kind = 'migrated_makeup' then
       select x into m from jsonb_array_elements(v_makeups) x
       where x -&gt;&gt; 'status' = 'booked' and (x -&gt;&gt; 'date')::date = r.kst_date and to_char((x -&gt;&gt; 'time')::time, 'HH24:MI') = r.kst_time limit 1;
-      insert into migrated_items (enrollment_id, kind, lesson_id, original_date, origin_unknown, created_by)
-      values (eid, 'makeup_booked', lid, nullif(m -&gt;&gt; 'original_date', '')::date, coalesce((m -&gt;&gt; 'origin_unknown')::boolean, false), me);
+      insert into migrated_items (enrollment_id, kind, lesson_id, original_date, origin_unknown, tutor_leave, created_by)
+      values (eid, 'makeup_booked', lid, nullif(m -&gt;&gt; 'original_date', '')::date, coalesce((m -&gt;&gt; 'origin_unknown')::boolean, false),
+              coalesce((m -&gt;&gt; 'tutor_leave')::boolean, false), me);
     elsif r.kind = 'migrated_extra' then
       select x into m from jsonb_array_elements(v_extras) x
       where (x -&gt;&gt; 'date')::date = r.kst_date and to_char((x -&gt;&gt; 'time')::time, 'HH24:MI') = r.kst_time limit 1;
@@ -330,17 +338,21 @@ begin
     end if;
   end loop;
   for m in select * from jsonb_array_elements(v_makeups) x where x -&gt;&gt; 'status' = 'open' loop
-    insert into migrated_items (enrollment_id, kind, original_date, origin_unknown, created_by)
-    values (eid, 'makeup_open', nullif(m -&gt;&gt; 'original_date', '')::date, coalesce((m -&gt;&gt; 'origin_unknown')::boolean, false), me);
+    insert into migrated_items (enrollment_id, kind, original_date, origin_unknown, tutor_leave, created_by)
+    values (eid, 'makeup_open', nullif(m -&gt;&gt; 'original_date', '')::date, coalesce((m -&gt;&gt; 'origin_unknown')::boolean, false),
+            coalesce((m -&gt;&gt; 'tutor_leave')::boolean, false), me);
   end loop;
 
-  insert into import_checks (enrollment_id, sheet_total, sheet_used, lms_left, end_reason, end_note, created_by)
-  values (eid, v_total, v_used, n_reg + n_mk + n_open + n_ex, v_reason, v_note, me);
+  insert into import_checks (enrollment_id, sheet_total, sheet_used, lms_left, end_reason, end_note, end_days, weeks,
+                             end_checked_at, end_checked_by, created_by)
+  values (eid, v_total, v_used, n_reg + n_mk + n_open + n_ex, v_reason, v_note, v_end - v_calc_end, v_weeks,
+          case when v_reason is not null then now() end, case when v_reason is not null then me end, me);
 
   res := jsonb_build_object('student_id', sid, 'student_code', scode, 'enrollment_id', eid, 'lessons', n_reg, 'makeups', n_mk,
                             'open_makeups', n_open, 'extras', n_ex, 'lms_left', n_reg + n_mk + n_open + n_ex,
                             'sheet_left', v_total - v_used, 'start_date', v_from, 'end_date', v_end,
-                            'course_start', v_cstart, 'regular_end', least(v_end, v_calc_end));
+                            'course_start', v_cstart, 'regular_end', least(v_end, v_calc_end),
+                            'end_reason_missing', v_end &lt;&gt; v_calc_end and v_reason is null);
   insert into registration_requests (id, created_by, student_id, enrollment_id, result)
   values (p_request_id, me, sid, eid, res);
   return res;
@@ -377,13 +389,43 @@ end $$;
 revoke all on function admin_import_set_origin(uuid, date) from public, anon;
 grant execute on function admin_import_set_origin(uuid, date) to authenticated;
 
+-- 종료일 이유 확인 (처리할 일 '종료일 이유 확인'에서): 이유를 정하면 그 항목이 사라짐. 이미 정했으면 다시 바꿀 수 있음
+-- 연장 기록은 고치지 않고 정정 2줄(빼기 → 새 이유로 더하기)을 남겨 이력 보존. 일수는 그대로
+create or replace function admin_import_set_end_reason(p_enrollment uuid, p_reason text, p_note text)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  c import_checks;
+  v_note text := nullif(trim(p_note), '');
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into c from import_checks where enrollment_id = p_enrollment for update;
+  if not found then raise exception '이관 기록이 없는 수강등록입니다.'; end if;
+  if c.end_days = 0 then raise exception '종료일이 기간 계산과 같아서 이유가 필요 없습니다.'; end if;
+  if p_reason not in ('tutor_long_term_leave', 'student_long_term_leave', 'admin_exception') then raise exception '종료일 변경 사유가 올바르지 않습니다.'; end if;
+  if p_reason = 'student_long_term_leave' and c.weeks &lt;&gt; 24 then raise exception '학생 장기 연기는 24주 상품만 가능합니다 (A09).'; end if;
+  if p_reason = 'admin_exception' and v_note is null then raise exception '기타는 메모를 적어 주세요.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_import_set_end_reason', true);
+  if c.end_days &gt; 0 then
+    insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by)
+    values (p_enrollment, -c.end_days, 'correction', '종료일 이유 확인: 이전 기록 정정', me),
+           (p_enrollment, c.end_days, p_reason, coalesce(v_note, '기존 학생 이관 (시트 종료일)'), me);
+  end if;
+  update import_checks set end_reason = p_reason, end_note = v_note, end_checked_at = now(), end_checked_by = me
+  where enrollment_id = p_enrollment;
+end $$;
+revoke all on function admin_import_set_end_reason(uuid, text, text) from public, anon;
+grant execute on function admin_import_set_end_reason(uuid, text, text) to authenticated;
+
 commit;</textarea>
   </section>
   <section class="step">
     <h2><span class="n">4</span>확인 (읽기만)</h2>
-    <p class="expect">정상: 3줄 모두 <b>통과</b></p>
+    <p class="expect">정상: 4줄 모두 <b>통과</b></p>
     <button type="button" class="copy" data-target="t4">복사</button>
-    <textarea id="t4" readonly rows="3" aria-label="확인 (읽기만) SQL">-- migration 1600(기존 학생 입력 시안 2) 적용 확인 — 읽기만. 모든 줄이 '통과'면 정상
+    <textarea id="t4" readonly rows="3" aria-label="확인 (읽기만) SQL">-- migration 1600(기존 학생 입력 시안 2) 적용 확인 — 읽기만. 4줄 모두 '통과'면 정상
 select 항목, case when ok then '통과' else '실패' end as 결과 from (
   select 1 as n, '정규 수업은 28일 기간 계산 끝까지만 (연장된 날 정규 없음)' as 항목,
     to_regprocedure('lms_import_regular_end(jsonb)') is not null
@@ -391,7 +433,11 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
   union all select 2, '늘어난 종료일은 연장 기록으로 (이유 포함)',
     (select prosrc from pg_proc where proname = 'admin_import_existing_student') like '%enrollment_extensions%'
     and exists (select 1 from information_schema.columns where table_name = 'import_checks' and column_name = 'end_reason')
-  union all select 3, '기존 학생·수업 데이터 그대로 (표 43개)', (select count(*) from pg_tables where schemaname = 'public') = 43
+  union all select 3, '종료일 이유 미선택은 처리할 일로 남고 운영자만 해결 · 강사 휴가 보강 표시',
+    has_function_privilege('authenticated', 'admin_import_set_end_reason(uuid, text, text)', 'execute')
+    and not has_function_privilege('anon', 'admin_import_set_end_reason(uuid, text, text)', 'execute')
+    and exists (select 1 from information_schema.columns where table_name = 'migrated_items' and column_name = 'tutor_leave')
+  union all select 4, '기존 학생·수업 데이터 그대로 (표 43개)', (select count(*) from pg_tables where schemaname = 'public') = 43
 ) t order by n;</textarea>
   </section>
 
@@ -404,6 +450,8 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
     <tr><td><b>R3. 보강이 종료일 뒤</b></td><td>새로 <b>가상시안삼</b> · 강사 <b>가상강사 Blair</b> · 40분 · 요일 <b>월·수</b> · 상품 <b>3개월(12주)</b> · 수강 시작일 <b>2026-10-14</b> · 남은 변경권 <b>1개</b> · 시각 <b>오후 03:00</b> · 4번 <b>[있음]</b> → [+ 예약된 보강] → 원래 수업 날짜 = 첫 정규 수업일, 보강 날짜 <b>2027-01-08</b> 오후 03:00 Blair → [저장]</td><td>저장 안 됨 '보강 1: 수강 종료일 뒤예요. 종료일(연장)을 먼저 맞춰 주세요.' → 2번 종료일 <b>2027-01-11</b> + [강사 장기 휴무 연장] → 저장됨. 5번 목록에서 원래 수업 날 줄은 '취소됨 · 보강 잡힘'</td></tr>
     <tr><td><b>R4. 지금 기간 고치기</b></td><td>R1 같은 화면을 새로 열어(저장 안 함) 2번 <b>[시트의 지금 기간이 다르면 고르기]</b> → <b>2기간</b></td><td>기간 목록에서 2기간이 보라색 '지금', 1기간은 '지난 기간', 아래 글씨 '지금 기간을 2기간으로 고쳤어요'. 다시 1기간을 누르면 자동으로 돌아옴. 확인 후 화면 닫기(저장 안 함)</td></tr>
     <tr><td><b>R5. 고정 요일 바꾼 학생</b></td><td>새로 <b>가상시안사</b> · 강사 <b>가상강사 Blair</b> · 40분 · 요일 <b>월·수</b> · 상품 <b>3개월(12주)</b> · 수강 시작일 <b>2026-10-13</b> · 남은 변경권 <b>1개</b> · 시각 <b>오후 05:00</b> · 시트 숫자 계산식과 같게 → [저장]</td><td>수강 시작일 아래 파란 안내 '10/13(화)이 지금 수업 요일(월·수)과 달라요. 수강 중 고정 요일을 바꾼 학생이면 정상이에요' — 빨간 경고 아님, 저장됨</td></tr>
+    <tr><td><b>R6. 종료일 이유 안 고름</b></td><td>새로 <b>가상시안육</b> · 강사 <b>가상강사 Blair</b> · 40분 · 요일 <b>월·수</b> · 상품 <b>3개월(12주)</b> · 수강 시작일 <b>2026-10-14</b> · 남은 변경권 <b>1개</b> · 시각 <b>오후 08:00</b> · 2번 종료일을 <b>2027-01-11</b>로 고치고 <b>이유는 고르지 않음</b> · 시트 숫자 계산식과 같게 → [저장] → [시트와 같음 · 대조 완료] → <code>/lms/admin</code></td><td>저장됨 + 노란 글씨 '종료일 이유 확인으로 남았어요'. 대조 완료를 눌러도 처리할 일에 <b>'종료일 이유 확인 · 가상시안육'</b>이 남음 → [강사 장기 휴무 연장] → [이유 저장] → 카드 사라짐</td></tr>
+    <tr><td><b>R7. 강사 휴가 보강</b></td><td>새로 <b>가상시안칠</b> · 강사 <b>가상강사 Blair</b> · 40분 · 요일 <b>월·수</b> · 상품 <b>3개월(12주)</b> · 수강 시작일 <b>2026-10-14</b> · 남은 변경권 <b>1개</b> · 시각 <b>오후 09:00</b> · 4번 [있음] → [+ 예약된 보강] → <b>[강사 휴가로 생긴 보강]</b> 체크 → 원래 수업 날짜 = 첫 정규 수업일, 보강 날짜 <b>2027-01-08</b> 오후 09:00 Blair</td><td>보강 칸 아래 빨간 상자에 <b>[종료일을 1/8(금)로 늘리기 (강사 장기 휴무 연장)]</b> 버튼 → 누르면 종료일 2027-01-08 + 이유 자동, 빨간 상자 사라짐 → 시트 숫자 맞추고 [저장] 됨</td></tr>
     <tr><td><b>N. 숫자 다름 → 처리할 일</b></td><td>새로 <b>가상시안오</b> · 강사 <b>가상강사 Blair</b> · 40분 · 요일 <b>월·수</b> · 상품 <b>3개월(12주)</b> · 수강 시작일 <b>2026-10-14</b> · 남은 변경권 <b>1개</b> · 시각 <b>오후 07:00</b> · 5번 시트 총 수업 수 = <b>계산식 숫자 + 1</b> → 갈색 [차이 1회 그대로 저장] → 대조 완료는 누르지 않음 → <code>/lms/admin</code></td><td>처리할 일에 '시트 대조 · 1회 차이 · 가상시안오' → [시트와 같음 · 대조 완료] → 카드 사라짐</td></tr>
     <tr><td><b>K. 휴대폰</b></td><td>R1~R5 중 하나를 휴대폰으로</td><td>글자가 잘리거나 옆으로 밀리지 않고, 날짜 칸을 누르면 달력이 열리고, 경고가 그 칸 바로 아래 보임</td></tr>
   </table></div>
@@ -816,7 +864,8 @@ grant execute on function admin_import_set_origin(uuid, date) to authenticated;
 --  1. 정규 수업은 28일 기간 계산 끝까지만 만든다. 종료일이 그보다 늦어도(연장) 늘어난 날에는 정규 수업을 만들지 않는다
 --     (연장 = 새 정규 수업 추가가 아니라 미완료 수업을 끝낼 수 있는 기간 확대. 늘어난 날에는 보강·추가 수업만)
 --  2. 늘어난 날은 연장 기록(enrollment_extensions)으로 남김: base_end = 계산 끝, final_end = 시트 종료일
---     이유: 강사 장기 휴무 연장 / 학생 장기 연기(24주만) / 기타(메모). 안 고르면 '기타 · 이유 미선택' (저장은 막지 않음)
+--     이유: 강사 장기 휴무 연장 / 학생 장기 연기(24주만) / 기타(메모). 안 고르면 저장은 하되 '종료일 이유 확인'으로 처리할 일에 남김
+--     (2026-10-26 대표: 기록만 남기고 끝내지 않음) → 운영진이 이유를 고르면(admin_import_set_end_reason) 사라짐
 --  3. 수강 시작일(1기간 시작)부터 모든 28일 기간을 기록 (지난 기간 포함). 지금 기간의 남은 변경권만 시트 값으로
 --  4. 보강·추가 수업 날짜는 수강 종료일(연장 포함)까지만
 --  5. 원래 날짜 정리(admin_import_set_origin)의 기준 '입력 시작일' = LMS가 만든 첫 수업 날 (start_date 가 수강 시작일로 바뀌어서)
@@ -825,6 +874,12 @@ grant execute on function admin_import_set_origin(uuid, date) to authenticated;
 
 alter table import_checks add column if not exists end_reason text;   -- 종료일이 계산과 다를 때 이유 (enrollment_extensions.reason 과 같은 값)
 alter table import_checks add column if not exists end_note text;
+alter table import_checks add column if not exists end_days integer not null default 0;     -- 종료일 − 기간 계산 끝 (0 = 같음)
+alter table import_checks add column if not exists weeks integer;                            -- 상품 (학생 장기 연기는 24주만 확인용)
+alter table import_checks add column if not exists end_checked_at timestamptz;               -- 종료일 이유를 정한 시각·담당자
+alter table import_checks add column if not exists end_checked_by uuid;
+-- 강사 휴가로 생긴 보강 (A41): 수강 종료일이 지나도 보강 권리가 사라지지 않고, 보강을 종료일 뒤로 잡으면 연장으로 처리
+alter table migrated_items add column if not exists tutor_leave boolean not null default false;
 
 -- 정규 수업 마지막 날 = 종료일과 28일 기간 계산 끝 중 빠른 날 (course 가 없으면 종료일)
 create or replace function lms_import_regular_end(p jsonb)
@@ -940,14 +995,13 @@ begin
   if v_cleft is null or v_cleft &lt; 0 or v_cleft &gt; v_grant then raise exception '이 기간 남은 변경권은 0~%개입니다.', v_grant; end if;
   v_cstart := v_pstart - (v_pidx - 1) * 28;
   v_calc_end := v_pstart + (v_weeks / 4 - v_pidx + 1) * 28 - 1;
-  -- 종료일이 계산과 다르면 이유를 기록 (막지 않음). 이유를 안 골랐으면 '기타 · 이유 미선택'으로 남겨 대조 때 보이게
+  -- 종료일이 계산과 다르면 이유를 기록 (막지 않음). 이유를 안 골랐으면 v_reason 은 비운 채 저장 → 처리할 일 '종료일 이유 확인'
   if v_end &lt;&gt; v_calc_end then
     if v_reason is not null and v_reason not in ('tutor_long_term_leave', 'student_long_term_leave', 'admin_exception') then
       raise exception '종료일 변경 사유가 올바르지 않습니다.';
     end if;
     if v_reason = 'student_long_term_leave' and v_weeks &lt;&gt; 24 then raise exception '학생 장기 연기는 24주 상품만 가능합니다 (A09).'; end if;
-    v_reason := coalesce(v_reason, 'admin_exception');
-    if v_reason = 'admin_exception' then v_note := coalesce(v_note, '이유 미선택 (기존 학생 이관)'); end if;
+    if v_reason = 'admin_exception' then v_note := coalesce(v_note, '기타'); end if;
   else
     v_reason := null; v_note := null;
   end if;
@@ -1004,7 +1058,8 @@ begin
   returning id into eid;
   if v_end &gt; v_calc_end then
     insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by)
-    values (eid, v_end - v_calc_end, v_reason, coalesce(v_note, '기존 학생 이관 (시트 종료일)'), me);
+    values (eid, v_end - v_calc_end, coalesce(v_reason, 'admin_exception'),
+            case when v_reason is null then '이유 확인 필요 (기존 학생 이관)' else coalesce(v_note, '기존 학생 이관 (시트 종료일)') end, me);
   end if;
 
   -- 1기간 ~ 마지막 기간 (28일씩, 지난 기간은 기록용). 지금 기간은 남은 변경권만큼 남기고, 다음 기간부터 새로 지급
@@ -1034,8 +1089,9 @@ begin
     if r.kind = 'migrated_makeup' then
       select x into m from jsonb_array_elements(v_makeups) x
       where x -&gt;&gt; 'status' = 'booked' and (x -&gt;&gt; 'date')::date = r.kst_date and to_char((x -&gt;&gt; 'time')::time, 'HH24:MI') = r.kst_time limit 1;
-      insert into migrated_items (enrollment_id, kind, lesson_id, original_date, origin_unknown, created_by)
-      values (eid, 'makeup_booked', lid, nullif(m -&gt;&gt; 'original_date', '')::date, coalesce((m -&gt;&gt; 'origin_unknown')::boolean, false), me);
+      insert into migrated_items (enrollment_id, kind, lesson_id, original_date, origin_unknown, tutor_leave, created_by)
+      values (eid, 'makeup_booked', lid, nullif(m -&gt;&gt; 'original_date', '')::date, coalesce((m -&gt;&gt; 'origin_unknown')::boolean, false),
+              coalesce((m -&gt;&gt; 'tutor_leave')::boolean, false), me);
     elsif r.kind = 'migrated_extra' then
       select x into m from jsonb_array_elements(v_extras) x
       where (x -&gt;&gt; 'date')::date = r.kst_date and to_char((x -&gt;&gt; 'time')::time, 'HH24:MI') = r.kst_time limit 1;
@@ -1043,17 +1099,21 @@ begin
     end if;
   end loop;
   for m in select * from jsonb_array_elements(v_makeups) x where x -&gt;&gt; 'status' = 'open' loop
-    insert into migrated_items (enrollment_id, kind, original_date, origin_unknown, created_by)
-    values (eid, 'makeup_open', nullif(m -&gt;&gt; 'original_date', '')::date, coalesce((m -&gt;&gt; 'origin_unknown')::boolean, false), me);
+    insert into migrated_items (enrollment_id, kind, original_date, origin_unknown, tutor_leave, created_by)
+    values (eid, 'makeup_open', nullif(m -&gt;&gt; 'original_date', '')::date, coalesce((m -&gt;&gt; 'origin_unknown')::boolean, false),
+            coalesce((m -&gt;&gt; 'tutor_leave')::boolean, false), me);
   end loop;
 
-  insert into import_checks (enrollment_id, sheet_total, sheet_used, lms_left, end_reason, end_note, created_by)
-  values (eid, v_total, v_used, n_reg + n_mk + n_open + n_ex, v_reason, v_note, me);
+  insert into import_checks (enrollment_id, sheet_total, sheet_used, lms_left, end_reason, end_note, end_days, weeks,
+                             end_checked_at, end_checked_by, created_by)
+  values (eid, v_total, v_used, n_reg + n_mk + n_open + n_ex, v_reason, v_note, v_end - v_calc_end, v_weeks,
+          case when v_reason is not null then now() end, case when v_reason is not null then me end, me);
 
   res := jsonb_build_object('student_id', sid, 'student_code', scode, 'enrollment_id', eid, 'lessons', n_reg, 'makeups', n_mk,
                             'open_makeups', n_open, 'extras', n_ex, 'lms_left', n_reg + n_mk + n_open + n_ex,
                             'sheet_left', v_total - v_used, 'start_date', v_from, 'end_date', v_end,
-                            'course_start', v_cstart, 'regular_end', least(v_end, v_calc_end));
+                            'course_start', v_cstart, 'regular_end', least(v_end, v_calc_end),
+                            'end_reason_missing', v_end &lt;&gt; v_calc_end and v_reason is null);
   insert into registration_requests (id, created_by, student_id, enrollment_id, result)
   values (p_request_id, me, sid, eid, res);
   return res;
@@ -1090,6 +1150,36 @@ end $$;
 revoke all on function admin_import_set_origin(uuid, date) from public, anon;
 grant execute on function admin_import_set_origin(uuid, date) to authenticated;
 
+-- 종료일 이유 확인 (처리할 일 '종료일 이유 확인'에서): 이유를 정하면 그 항목이 사라짐. 이미 정했으면 다시 바꿀 수 있음
+-- 연장 기록은 고치지 않고 정정 2줄(빼기 → 새 이유로 더하기)을 남겨 이력 보존. 일수는 그대로
+create or replace function admin_import_set_end_reason(p_enrollment uuid, p_reason text, p_note text)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  c import_checks;
+  v_note text := nullif(trim(p_note), '');
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into c from import_checks where enrollment_id = p_enrollment for update;
+  if not found then raise exception '이관 기록이 없는 수강등록입니다.'; end if;
+  if c.end_days = 0 then raise exception '종료일이 기간 계산과 같아서 이유가 필요 없습니다.'; end if;
+  if p_reason not in ('tutor_long_term_leave', 'student_long_term_leave', 'admin_exception') then raise exception '종료일 변경 사유가 올바르지 않습니다.'; end if;
+  if p_reason = 'student_long_term_leave' and c.weeks &lt;&gt; 24 then raise exception '학생 장기 연기는 24주 상품만 가능합니다 (A09).'; end if;
+  if p_reason = 'admin_exception' and v_note is null then raise exception '기타는 메모를 적어 주세요.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_import_set_end_reason', true);
+  if c.end_days &gt; 0 then
+    insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by)
+    values (p_enrollment, -c.end_days, 'correction', '종료일 이유 확인: 이전 기록 정정', me),
+           (p_enrollment, c.end_days, p_reason, coalesce(v_note, '기존 학생 이관 (시트 종료일)'), me);
+  end if;
+  update import_checks set end_reason = p_reason, end_note = v_note, end_checked_at = now(), end_checked_by = me
+  where enrollment_id = p_enrollment;
+end $$;
+revoke all on function admin_import_set_end_reason(uuid, text, text) from public, anon;
+grant execute on function admin_import_set_end_reason(uuid, text, text) to authenticated;
+
 commit;</textarea>
   </section>
   <section class="step">
@@ -1117,9 +1207,9 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
   </section>
   <section class="step">
     <h2><span class="n">5</span>확인 2 (읽기만)</h2>
-    <p class="expect">정상: 3줄 모두 <b>통과</b></p>
+    <p class="expect">정상: 4줄 모두 <b>통과</b></p>
     <button type="button" class="copy" data-target="p5">복사</button>
-    <textarea id="p5" readonly rows="3" aria-label="확인 2 (읽기만) SQL">-- migration 1600(기존 학생 입력 시안 2) 적용 확인 — 읽기만. 모든 줄이 '통과'면 정상
+    <textarea id="p5" readonly rows="3" aria-label="확인 2 (읽기만) SQL">-- migration 1600(기존 학생 입력 시안 2) 적용 확인 — 읽기만. 4줄 모두 '통과'면 정상
 select 항목, case when ok then '통과' else '실패' end as 결과 from (
   select 1 as n, '정규 수업은 28일 기간 계산 끝까지만 (연장된 날 정규 없음)' as 항목,
     to_regprocedure('lms_import_regular_end(jsonb)') is not null
@@ -1127,7 +1217,11 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
   union all select 2, '늘어난 종료일은 연장 기록으로 (이유 포함)',
     (select prosrc from pg_proc where proname = 'admin_import_existing_student') like '%enrollment_extensions%'
     and exists (select 1 from information_schema.columns where table_name = 'import_checks' and column_name = 'end_reason')
-  union all select 3, '기존 학생·수업 데이터 그대로 (표 43개)', (select count(*) from pg_tables where schemaname = 'public') = 43
+  union all select 3, '종료일 이유 미선택은 처리할 일로 남고 운영자만 해결 · 강사 휴가 보강 표시',
+    has_function_privilege('authenticated', 'admin_import_set_end_reason(uuid, text, text)', 'execute')
+    and not has_function_privilege('anon', 'admin_import_set_end_reason(uuid, text, text)', 'execute')
+    and exists (select 1 from information_schema.columns where table_name = 'migrated_items' and column_name = 'tutor_leave')
+  union all select 4, '기존 학생·수업 데이터 그대로 (표 43개)', (select count(*) from pg_tables where schemaname = 'public') = 43
 ) t order by n;</textarea>
   </section>
   <p class="note">오류가 나면 오류 첫 줄만 Claude에게. 변경 적용은 한 묶음이라 오류가 나면 아무것도 바뀌지 않아요.</p>

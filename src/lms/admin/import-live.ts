@@ -14,6 +14,8 @@ export type ImportSaved = {
   extras: number;
   lmsLeft: number;
   sheetLeft: number;
+  /** 종료일이 기간 계산과 다른데 이유를 안 고름 → 처리할 일 '종료일 이유 확인' */
+  endReasonMissing: boolean;
   repeated: boolean;
 };
 export type ImportResult = ImportSaved | { kind: 'preview' } | { kind: 'error'; message: string; conflicts?: ImportConflict[] };
@@ -42,13 +44,14 @@ export async function saveImport(sb: SupabaseClient, requestId: string, payload:
   }
   const r = data as {
     student_code: string; enrollment_id: string; lessons: number; makeups: number;
-    open_makeups?: number; extras?: number; lms_left?: number; sheet_left?: number; repeated?: boolean;
+    open_makeups?: number; extras?: number; lms_left?: number; sheet_left?: number; end_reason_missing?: boolean; repeated?: boolean;
   };
   // 1300만 적용된 DB는 새 칸을 모르고 저장함 → 확대판 기록이 빠지므로 알려 줌
   if (r.lms_left === undefined) return { kind: 'error', message: `${NOT_APPLIED} 저장된 ${r.student_code}는 시트 대조 기록이 없어요. Claude에게 알려 주세요.` };
   return {
     kind: 'saved', studentCode: r.student_code, enrollmentId: r.enrollment_id, lessons: r.lessons, makeups: r.makeups,
-    openMakeups: r.open_makeups ?? 0, extras: r.extras ?? 0, lmsLeft: r.lms_left, sheetLeft: r.sheet_left ?? 0, repeated: !!r.repeated,
+    openMakeups: r.open_makeups ?? 0, extras: r.extras ?? 0, lmsLeft: r.lms_left, sheetLeft: r.sheet_left ?? 0,
+    endReasonMissing: !!r.end_reason_missing, repeated: !!r.repeated,
   };
 }
 
@@ -62,4 +65,10 @@ export async function markImportChecked(sb: SupabaseClient, enrollmentId: string
 export async function setImportOrigin(sb: SupabaseClient, itemId: string, date: string | null): Promise<void> {
   const { error } = await sb.rpc('admin_import_set_origin', { p_item: itemId, p_date: date });
   if (error) throw new Error(friendly(error));
+}
+
+/** 종료일 이유 확인 (처리할 일에서): 강사 장기 휴무 연장 / 학생 장기 연기(24주) / 기타(메모) */
+export async function setImportEndReason(sb: SupabaseClient, enrollmentId: string, reason: string, note: string): Promise<void> {
+  const { error } = await sb.rpc('admin_import_set_end_reason', { p_enrollment: enrollmentId, p_reason: reason, p_note: note });
+  if (error) throw new Error(error.code === 'PGRST202' ? '종료일 이유 확인 기능이 아직 이 DB에 적용되지 않았어요 (migration 1600).' : friendly(error));
 }
