@@ -38,7 +38,7 @@
 - **2026-10-23 0시 마감 상태**: 18번 비교안 → **대표 ② 선택 (운영 DB 전용 Preview `lms-prod` + DB 표시)**. DB 표시 문구 확정: 운영 '운영 DB · 실제 데이터 — 실제 학생 등록·수업 일정이 저장되는 환경'(빨강), 시험 '시험용 DB · 가상 데이터 — 기능 테스트 전용 환경'(회색) — 색보다 한글 문구가 핵심
 - **Vercel 요금제**: 확인 결과 **Hobby** → 홈페이지 자체가 상업적 사용이라 **Pro 전환 결정** (월 $20, 같은 팀 그대로 업그레이드 화면 확인). 호스팅 이전(Cloudflare·Netlify)·Next.js 교체는 검토 후 하지 않기로. **트래블월렛(선불카드)은 결제 거절** → 대표가 일반 신용카드·해외결제 가능 체크카드(사업자 카드 권장)로 다시 시도 예정. 전환 후 Spend Management 월 한도 약 $40(사이트 정지 옵션은 끔) 권장
 - **2026-10-24 운영 DB 화면 연결 완료**: Vercel Pro 전환·추가 사용료 예산(대표가 정한 금액, 사이트 멈춤 끔) ✅, 환경 변수 2개(Preview · 브랜치 `lms-prod`, 다른 Preview는 시험용 그대로) ✅, `lms-prod` 배포 → 빨간 띠 '운영 DB · 실제 데이터' + 대표 로그인·TOTP 등록 + 대시보드 학생 0명 확인 ✅. **운영 화면 고정 주소: https://edge-english-git-lms-prod-support-2126.vercel.app/lms/admin** (배포마다 바뀌는 주소 말고 이것)
-- **lms-prod 반영 절차**: 작업 브랜치에서 시험용 Preview 확인 → 대표 승인 → `git push origin HEAD:lms-prod`. 대기 중: 대시보드 안내 문구 운영/시험용 구분 수정(작업 브랜치에만 있음 — 대표 승인 후 반영)
+- **lms-prod 반영 절차**: 작업 브랜치에서 시험용 Preview 확인 → 대표 승인 → `git push origin HEAD:lms-prod`. 대시보드 안내 문구 운영/시험용 구분 수정 → 2026-10-24 대표 승인, lms-prod 반영
 - (이전 계획) **다음 세션**: ① Vercel Pro 전환 확인 → ② `lms-prod` 브랜치 + DB 표시 추가 → ③ 대표 Vercel 환경 변수 2개(Preview·브랜치 lms-prod) + 함수 지역 서울(icn1) 안내 → ④ 운영 DB 연결 확인(학생 0명, 인증 앱 새 등록) → ⑤ 백업 후 D-52 기존 학생 간단 입력
 - 브랜치: **`claude/admiring-gauss-c8crhe`** (2026-10-22 운영 DB 준비. `claude/amazing-johnson-fffphy` 위에 이어서 만듦 — 그 브랜치 기록을 모두 포함). 실제 홈페이지 배포 없음, Vercel Preview만.
 - 시험용 Supabase: `edgeenglish-lms-test` 만 사용 (운영 프로젝트 접근 금지). 로그인(이메일 코드 + TOTP)·운영자 대시보드 실제 데이터 확인 완료. 로그인 계정으로 등록된 이메일은 support@edgeenglish.kr 하나뿐 (미등록 이메일은 화면 문구는 같지만 코드 메일이 나가지 않음 — 설계)
