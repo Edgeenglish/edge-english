@@ -35,7 +35,7 @@ insert into tutors (name, country, timezone) values ('Olivia', 'Japan', 'Asia/To
 on conflict (name) do nothing;
 select id, name, country, timezone from tutors;
 ```
-- 휴무: Olivia 10/30(금) 강사 취소(서O정·황O영 시트) — 새 기간 전이라 넣지 않음. 11월 이후 휴무는 대표만 앎
+- 휴무: Olivia 10/30(금) 강사 취소(서O정·황O영 시트) — 새 기간 전이라 넣지 않음. 11월 이후 휴무 없음으로 판단(2026-10-27, 대표가 맡김): 시트에 11/2~11/10 Olivia 정규 수업이 그대로 있고(이O민·이O옥·황O영), 그 기간 '연장·TBD'는 모두 Benny 학생 → 11/2~11/10은 Benny 휴가
 
 **정O연** — 재등록 확정 뒤 기존 학생 입력 화면: 한글·영문 이름, 시간대 Asia/Seoul, 새 상품, 새 수강 시작일, 고정 요일·시각, 40분, 변경권 2, 미완료 보강 없음, 시트 총 수/진행 0
 
