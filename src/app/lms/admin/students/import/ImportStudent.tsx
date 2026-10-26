@@ -467,15 +467,22 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       <Chips value={m.durationMin} options={DURATIONS} label={(v) => `${v}분`} onPick={(v) => !saved && setMakeup(i, { durationMin: v })} />
                       <Field label="보강 강사">{tutorSelect(m.tutorId, (v) => setMakeup(i, { tutorId: v }), `imp-mk-tutor-${i}`)}</Field>
                       {m.date && d.endDate && m.date > d.endDate && (
-                        <div className="grid gap-1.5 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
+                        <div className="flex flex-wrap items-center gap-2 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
                           <span>수강 종료일({dayLabel(d.endDate)}) 뒤예요.</span>
-                          {m.tutorLeave && !saved && (
+                          {!saved && (
                             <button
                               type="button"
-                              onClick={() => setD((x) => ({ ...x, endDate: m.date as string, endReason: 'tutor_long_term_leave' }))}
-                              className="min-h-[40px] w-fit rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px] font-semibold text-[#1d1b2b]"
+                              onClick={() =>
+                                setD((x) => ({
+                                  ...x,
+                                  endDate: m.date as string,
+                                  endReason: 'tutor_long_term_leave',
+                                  makeups: x.makeups.map((y, j) => (j === i ? { ...y, tutorLeave: true } : y)),
+                                }))
+                              }
+                              className="ml-auto min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px] font-semibold text-[#1d1b2b]"
                             >
-                              종료일 {dayLabel(m.date)}로 연장
+                              {m.tutorLeave ? `종료일 ${dayLabel(m.date)}로 연장` : `강사 휴가 보강 · 종료일 ${dayLabel(m.date)}로 연장`}
                             </button>
                           )}
                         </div>
