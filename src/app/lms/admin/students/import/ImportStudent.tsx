@@ -727,7 +727,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 type="button"
                 disabled={saving || (tried && (blockers.length > 0 || issues.length > 0))}
                 onClick={submit}
-                className={`mt-3 min-h-[52px] w-full rounded-[12px] text-[16px] font-bold text-white disabled:bg-[#cfc4ff] ${count.sheetLeft !== null && diff !== 0 ? 'bg-[#b7791f]' : 'bg-[#7d5fff]'}`}
+                className={`mt-3 min-h-[52px] w-full rounded-[12px] text-[16px] font-bold bg-[#7d5fff] text-white disabled:bg-[#cfc4ff]`}
               >
                 {saving ? '저장 중…' : '저장'}
               </button>
