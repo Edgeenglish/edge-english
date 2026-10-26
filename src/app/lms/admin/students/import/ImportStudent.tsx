@@ -22,6 +22,7 @@ import { newRequestId, type RegTutor } from '@/lms/admin/registration';
 import { dayLabel, diffFromKst, WEEKDAY_KO } from '@/lms/admin/schedule';
 import { searchZones, zoneName } from '@/lms/admin/places';
 import { AdminHeader } from '../../ui';
+import TimeInput from '../../TimeInput';
 import { Card, Field, inputCls, nowLocal, SearchPick } from '../new/parts';
 
 type Props = {
@@ -366,14 +367,12 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                         </option>
                       ))}
                     </select>
-                    <input
+                    <TimeInput
                       id={`imp-slot-time-${i}`}
                       aria-label={`${i + 1}번째 시각`}
-                      type="time"
-                      step={300}
                       value={s.time}
                       disabled={saved}
-                      onChange={(e) => setSlot(i, { time: e.target.value })}
+                      onChange={(v) => setSlot(i, { time: v })}
                       className={`${inputCls(saved, tried && !s.time)} min-w-0 flex-1`}
                     />
                     {d.slots.length > 1 && !saved && (
@@ -461,7 +460,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                           <input id={`imp-mk-date-${i}`} type="date" value={m.date} min={d.fromDate} disabled={saved} onChange={(e) => setMakeup(i, { date: e.target.value })} className={inputCls(saved, tried && !m.date)} />
                         </Field>
                         <Field label="한국 시각">
-                          <input id={`imp-mk-time-${i}`} type="time" step={300} value={m.time} disabled={saved} onChange={(e) => setMakeup(i, { time: e.target.value })} className={inputCls(saved, tried && !m.time)} />
+                          <TimeInput id={`imp-mk-time-${i}`} value={m.time} disabled={saved} onChange={(v) => setMakeup(i, { time: v })} className={inputCls(saved, tried && !m.time)} />
                         </Field>
                       </div>
                       <Chips value={m.durationMin} options={DURATIONS} label={(v) => `${v}분`} onPick={(v) => !saved && setMakeup(i, { durationMin: v })} />
@@ -552,7 +551,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     <input id={`imp-ex-date-${i}`} type="date" value={x.date} min={d.fromDate} max={d.endDate || undefined} disabled={saved} onChange={(e) => setExtra(i, { date: e.target.value })} className={inputCls(saved, tried && !x.date)} />
                   </Field>
                   <Field label="한국 시각">
-                    <input id={`imp-ex-time-${i}`} type="time" step={300} value={x.time} disabled={saved} onChange={(e) => setExtra(i, { time: e.target.value })} className={inputCls(saved, tried && !x.time)} />
+                    <TimeInput id={`imp-ex-time-${i}`} value={x.time} disabled={saved} onChange={(v) => setExtra(i, { time: v })} className={inputCls(saved, tried && !x.time)} />
                   </Field>
                 </div>
                 <Field label="근거" problem={tried && !x.reason.trim() ? '필요해요' : undefined}>

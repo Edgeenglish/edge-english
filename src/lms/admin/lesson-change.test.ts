@@ -72,3 +72,22 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     expect(item.actions[0].href).toBe('/lms/admin/change?student=STU-0001');
   });
 });
+
+describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)', () => {
+  const lesson = L('x1', '2026-10-26', '23:30');
+  const tutorLate: ChangeDecision = { ...adv, status: 'Tutor canceled late', who: 'tutor', uses_credit: false, reward_won: 2000, makeup_until: '2026-11-16' };
+  const c: NoticeContext = { student, durationMin: 50, lesson, decision: tutorLate, tutorName: 'Alex', tutorTz: 'Asia/Manila' };
+  it('학생: 사과 + 적립금 사용처, 당연한 말(변경권 차감 없음) 없음, 보강은 강사와 정해도 됨', () => {
+    const t = studentNotice('change', c);
+    expect(t).toContain('정말 죄송합니다');
+    expect(t).toContain('다음 수강 등록 결제 때 사용하실 수 있어요');
+    expect(t).not.toContain('변경권');
+    expect(t).toContain('수업 시간에 강사님과 정하셔도 되고');
+  });
+  it('강사: 학생과 이야기해도 되지만 직접 확정 금지, 종료일까지', () => {
+    const t = tutorNotice('change', c);
+    expect(t).toContain('until Mon 16 Nov');
+    expect(t).toContain('do NOT confirm it yourself');
+    expect(tutorNotice('change', { ...c, decision: { ...adv, status: 'Student canceled late', makeup_allowed: false, makeup_until: null } })).not.toContain('Make-up');
+  });
+});

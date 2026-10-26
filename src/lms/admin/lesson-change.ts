@@ -171,6 +171,17 @@ function originEn(c: NoticeContext): string {
   return c.originalDate ? c.originalDate : 'earlier class';
 }
 
+/** 보강은 학생이 수업 시간에 강사와 정해도 되고 운영진에게 말해도 됨 (확정은 운영진, D-43) */
+const makeupLineKo = (until: KstDate) => `보강: ${dateLabel(until)}까지 잡을 수 있어요. 수업 시간에 강사님과 정하셔도 되고, 저희에게 말씀하셔도 돼요.`;
+const EN_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const EN_WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const enDate = (d: KstDate) => `${EN_WD[new Date(`${d}T00:00:00Z`).getUTCDay()]} ${Number(d.slice(8))} ${EN_MON[Number(d.slice(5, 7)) - 1]}`;
+/** 강사가 학생과 보강 시간을 이야기해도 되지만 직접 확정하지 않고 운영진에게 먼저 (2026-10-26 대표) */
+const makeupLinesEn = (until: KstDate) => [
+  `Make-up: you can agree on a make-up time with the student during class (any day until ${enDate(until)}).`,
+  'Please do NOT confirm it yourself. Send us the agreed date and time first, and we will confirm it.',
+];
+
 export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
   const name = c.student.nameKo;
   if (event === 'change' && c.lesson && c.decision) {
@@ -180,9 +191,9 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
       return [
         `[엣지영어] ${name}님, 강사 사정으로 수업이 취소됐어요`,
         `취소된 수업: ${at}`,
-        d.makeup_until ? `보강: ${dateLabel(d.makeup_until)}까지 잡을 수 있어요` : '',
-        d.reward_won > 0 ? `적립금 ${d.reward_won.toLocaleString('ko-KR')}원을 드려요` : '',
-        '변경권은 차감되지 않아요',
+        d.reward_won > 0 ? '수업 직전에 취소돼 불편을 드려 정말 죄송합니다.' : '불편을 드려 죄송합니다.',
+        d.reward_won > 0 ? `사과의 마음으로 적립금 ${d.reward_won.toLocaleString('ko-KR')}원을 드렸어요. 다음 수강 등록 결제 때 사용하실 수 있어요 (유효기간 없음).` : '',
+        d.makeup_until ? makeupLineKo(d.makeup_until) : '',
       ].filter(Boolean).join('\n');
     }
     const lines = [`[엣지영어] ${name}님, 수업 변경 처리됐어요`, `변경한 수업: ${at}`];
@@ -190,7 +201,7 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
     if (d.status === 'Student canceled in advance (public holiday)') lines.push('공휴일 수업이라 변경권은 차감되지 않아요');
     if (d.status === 'Student canceled late') lines.push(`수업 ${CONFIRMED.changeNoticeHours}시간 전이 지나 보강 없이 수업 1회가 차감돼요 (변경권은 그대로)`);
     if (d.status === 'No change credits left') lines.push('이번 기간 변경권이 없어 보강 없이 수업 1회가 차감돼요');
-    if (d.makeup_allowed && d.makeup_until) lines.push(`보강: ${dateLabel(d.makeup_until)}까지 잡을 수 있어요`);
+    if (d.makeup_allowed && d.makeup_until) lines.push(makeupLineKo(d.makeup_until));
     lines.push('요청하신 날짜와 다르면 바로 말씀해 주세요');
     return lines.join('\n');
   }
@@ -214,9 +225,13 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
 export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
   const who = c.student.nameEn;
   if (event === 'change' && c.lesson && c.decision) {
-    return c.decision.who === 'tutor'
-      ? [`CANCELED (tutor) - ${who}`, `Class: ${enAt(c.lesson.startsAt, c.tutorTz)}`, 'We will arrange a make-up class.'].join('\n')
-      : [`CANCELED - ${who}`, `Class: ${enAt(c.lesson.startsAt, c.tutorTz)}`, 'No class at this time.'].join('\n');
+    const d = c.decision;
+    return [
+      d.who === 'tutor' ? `CANCELED (tutor) - ${who}` : `CANCELED - ${who}`,
+      `Class: ${enAt(c.lesson.startsAt, c.tutorTz)}`,
+      'No class at this time.',
+      ...(d.makeup_allowed && d.makeup_until ? makeupLinesEn(d.makeup_until) : []),
+    ].join('\n');
   }
   if (event === 'makeup_ask' && c.candidates) {
     return [

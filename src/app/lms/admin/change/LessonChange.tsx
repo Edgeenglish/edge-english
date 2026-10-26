@@ -15,6 +15,7 @@ import {
 } from '@/lms/admin/lesson-change';
 import type { StudentLessonData } from '@/lms/admin/lesson-change-live';
 import { AdminHeader } from '../ui';
+import TimeInput from '../TimeInput';
 import { Card, inputCls } from '../students/new/parts';
 
 export type ChangeActions = {
@@ -260,7 +261,7 @@ function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson
           요청 받은 시각 (한국)
           <div className="grid grid-cols-[1.4fr_1fr] gap-1.5">
             <input type="date" aria-label="요청 받은 날짜" value={date} max={init.date} onChange={(e) => setDate(e.target.value)} className={inputCls(false)} />
-            <input type="time" aria-label="요청 받은 시각" value={time} onChange={(e) => setTime(e.target.value)} className={inputCls(false)} />
+            <TimeInput aria-label="요청 받은 시각" value={time} onChange={setTime} className={inputCls(false)} />
           </div>
         </label>
         {preview && (
@@ -363,7 +364,7 @@ function MakeupRow({ right, finalEnd, actions, done }: { right: MakeupRight; fin
           ))}
           <div className="grid grid-cols-[1.4fr_1fr_auto] gap-1.5">
             <input type="date" aria-label="다른 보강 날짜" value={other.date} onChange={(e) => setOther({ ...other, date: e.target.value })} className={inputCls(false)} />
-            <input type="time" aria-label="다른 보강 시각" value={other.time} onChange={(e) => setOther({ ...other, time: e.target.value })} className={inputCls(false)} />
+            <TimeInput aria-label="다른 보강 시각" value={other.time} onChange={(v) => setOther({ ...other, time: v })} className={inputCls(false)} />
             <button type="button" disabled={busy || !toAt(other)} className={btnMain} onClick={() => run(() => actions.confirmMakeup(open.id, toAt(other)!))}>확정</button>
           </div>
           <button type="button" disabled={busy} className={btnSub} onClick={() => run(() => actions.withdrawMakeup(open.id))}>신청 닫기</button>
@@ -374,8 +375,8 @@ function MakeupRow({ right, finalEnd, actions, done }: { right: MakeupRight; fin
             <div key={i} className="grid grid-cols-[1.4fr_1fr] gap-1.5">
               <input type="date" aria-label={`보강 희망 날짜 ${i + 1}`} value={s.date} max={right.kind === 'migrated' && right.item.tutorLeave ? undefined : finalEnd ?? undefined}
                 onChange={(e) => setSlots(slots.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)))} className={inputCls(false)} />
-              <input type="time" aria-label={`보강 희망 시각 ${i + 1}`} value={s.time}
-                onChange={(e) => setSlots(slots.map((x, j) => (j === i ? { ...x, time: e.target.value } : x)))} className={inputCls(false)} />
+              <TimeInput aria-label={`보강 희망 시각 ${i + 1}`} value={s.time}
+                onChange={(v) => setSlots(slots.map((x, j) => (j === i ? { ...x, time: v } : x)))} className={inputCls(false)} />
             </div>
           ))}
           <div className="grid grid-cols-2 gap-1.5">
