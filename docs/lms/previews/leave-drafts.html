@@ -1,0 +1,277 @@
+<title>강사 휴무 처리 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* 레이아웃: 왼쪽 휴대폰 화면 시안(실제 LMS 색 그대로), 오른쪽 확인 결과·정할 것. 좁으면 위아래로 */
+:root {
+  --bg: #f6f5fb; --panel: #ffffff; --fg: #1d1b2b; --muted: #6b6880; --line: #e6e3ef;
+  --accent: #7d5fff; --accent-ink: #5b3fe0; --accent-soft: #efebff;
+  --bad: #b3261e; --bad-soft: #fdecec; --warn: #5c4a00; --warn-soft: #fff8d6; --ok: #1e7a46; --ok-soft: #e3f6ea;
+  --info: #1b5a8a; --info-soft: #e9f4ff; --new: #0b6e78; --new-soft: #e2f5f6; --phone-edge: #d9d5e6; --amber: #b7791f;
+  --sans: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15141c; --panel: #1f1d29; --fg: #ece9f6; --muted: #a29fb5; --line: #34313f;
+  --accent: #9c85ff; --accent-ink: #c3b5ff; --accent-soft: #2c2645;
+  --bad: #ff8a80; --bad-soft: #3a1f1f; --warn: #f1dc8c; --warn-soft: #3a3318; --ok: #7ad6a0; --ok-soft: #1b3326;
+  --info: #9fd0ff; --info-soft: #18304a; --new: #7fd6de; --new-soft: #17333a; --phone-edge: #3b3848; --amber: #d69a3c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15141c; --panel: #1f1d29; --fg: #ece9f6; --muted: #a29fb5; --line: #34313f;
+  --accent: #9c85ff; --accent-ink: #c3b5ff; --accent-soft: #2c2645;
+  --bad: #ff8a80; --bad-soft: #3a1f1f; --warn: #f1dc8c; --warn-soft: #3a3318; --ok: #7ad6a0; --ok-soft: #1b3326;
+  --info: #9fd0ff; --info-soft: #18304a; --new: #7fd6de; --new-soft: #17333a; --phone-edge: #3b3848; --amber: #d69a3c; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 60px }
+h1, h2, h3 { text-wrap: balance; margin: 0 }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px }
+.intro h1 { font-size: 22px }
+.intro p { margin: 6px 0 0; color: var(--muted); max-width: 72ch }
+.cols { display: grid; gap: 24px; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); align-items: start }
+@media (max-width: 860px) { .cols { grid-template-columns: minmax(0, 1fr) } }
+.phone { border: 1px solid var(--phone-edge); border-radius: 22px; background: var(--bg); overflow: hidden; min-width: 0 }
+.bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line) }
+.bar b { font-size: 17px }
+.bar span { margin-left: auto; font-size: 22px }
+.dbtag { background: var(--muted); color: var(--panel); font-size: 12px; font-weight: 700; padding: 4px 12px }
+.screen { display: grid; gap: 14px; padding: 14px }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 10px; min-width: 0 }
+.card.moved { border-color: var(--new); box-shadow: inset 0 0 0 1px var(--new) }
+.card h3 { font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.tag { font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 1px 7px }
+.tag.n { background: var(--new-soft); color: var(--new) }
+.tag.same { background: var(--line); color: var(--muted) }
+.hint { font-size: 12.5px; color: var(--muted); margin: 0 }
+.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.ro { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; background: var(--bg); font-size: 14px; min-height: 42px }
+input[type=date], input[type=number], input[type=text] { font: inherit; width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel); color: var(--fg); min-width: 0 }
+.chips { display: flex; flex-wrap: wrap; gap: 6px }
+.chip { font: inherit; font-size: 14px; min-height: 40px; min-width: 48px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); padding: 0 12px; cursor: pointer }
+.chip[aria-pressed=true] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 700 }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.periods { display: grid; gap: 6px }
+.per { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13.5px }
+.per.past { color: var(--muted); background: var(--bg) }
+.per.now { border-color: var(--accent); background: var(--accent-soft) }
+.per .k { font-weight: 700 }
+.per .c { text-align: right; font-variant-numeric: tabular-nums }
+.per input { min-height: 36px; padding: 4px 6px; font-size: 13px }
+.num { font-variant-numeric: tabular-nums }
+.box { border-radius: 10px; padding: 9px 12px; font-size: 13px; display: grid; gap: 6px; margin: 0 }
+.box.ok { background: var(--ok-soft); color: var(--ok) }
+.box.warn { background: var(--warn-soft); color: var(--warn) }
+.box.bad { background: var(--bad-soft); color: var(--bad) }
+.box.info { background: var(--info-soft); color: var(--info) }
+.eq { font-family: var(--mono); font-size: 12.5px; background: var(--bg); border-radius: 8px; padding: 8px 10px; overflow-x: auto; white-space: nowrap }
+.lessons { display: grid; gap: 4px; max-height: 320px; overflow-y: auto }
+.les { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; font-size: 13.5px; min-height: 40px }
+.les.off { color: var(--muted); background: var(--bg) }
+.les.off .d { text-decoration: line-through }
+.kind { font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 1px 6px; background: var(--line); color: var(--muted) }
+.kind.mk { background: var(--accent-soft); color: var(--accent-ink) }
+.les .why { font-size: 12px; color: var(--muted); margin-left: auto }
+.les label { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--bad); cursor: pointer }
+.les input[type=checkbox] { width: 20px; height: 20px }
+.mk { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 8px }
+.mk-head { display: flex; align-items: center; gap: 8px }
+.link { font: inherit; font-size: 13px; background: none; border: 0; color: var(--bad); cursor: pointer; margin-left: auto; min-height: 36px }
+.add { font: inherit; font-size: 14px; min-height: 44px; border: 1px dashed var(--accent); border-radius: 10px; background: var(--panel); color: var(--accent-ink); cursor: pointer; width: 100% }
+.toggle { font: inherit; font-size: 13px; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); padding: 0 12px; cursor: pointer; text-align: left }
+dl.sum { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 14px }
+dl.sum dt { color: var(--muted) }
+dl.sum dd { margin: 0; min-width: 0 }
+.save { font: inherit; font-size: 16px; font-weight: 700; min-height: 52px; width: 100%; border: 0; border-radius: 12px; background: var(--accent); color: #fff; cursor: pointer }
+.save.amber { background: var(--amber) }
+.demo { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted) }
+.demo .chip { min-height: 32px; font-size: 12.5px }
+.side { display: grid; gap: 16px; min-width: 0 }
+.side section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 10px; min-width: 0 }
+.side h2 { font-size: 16px }
+.side ul, .side ol { margin: 0; padding-left: 20px; display: grid; gap: 5px }
+.q { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px }
+.q:first-of-type { border-top: 0; padding-top: 0 }
+.rec { font-size: 13px; color: var(--accent-ink); font-weight: 700 }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px }
+.tbl th, .tbl td { border-top: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: top }
+.tbl th { color: var(--muted); font-weight: 600 }
+.scroll { overflow-x: auto }
+</style>
+<style>
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 6px }
+.choice .chip { min-height: 48px; text-align: left; padding: 6px 10px; line-height: 1.3 }
+.choice .chip small { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px }
+.stu { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 8px }
+.stu-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap }
+.stu-head b { font-size: 15px }
+.stu-head span { font-size: 12.5px; color: var(--muted) }
+.dates { display: flex; flex-wrap: wrap; gap: 4px }
+.dt { font-size: 12.5px; border-radius: 7px; padding: 2px 7px; background: var(--bg); border: 1px solid var(--line); font-variant-numeric: tabular-nums }
+.dt.x { background: var(--bad-soft); color: var(--bad); border-color: transparent }
+select { font: inherit; width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel); color: var(--fg) }
+.steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none }
+.steps li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13.5px; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; min-height: 44px }
+.steps li .st { margin-left: auto; font-size: 12px; font-weight: 700; border-radius: 6px; padding: 2px 8px }
+.st.done { background: var(--ok-soft); color: var(--ok) }
+.st.now { background: var(--warn-soft); color: var(--warn) }
+.st.wait { background: var(--line); color: var(--muted) }
+.btn2 { font: inherit; font-size: 13px; min-height: 36px; border: 1px solid var(--accent); border-radius: 9px; background: var(--panel); color: var(--accent-ink); padding: 0 10px; cursor: pointer }
+.dash { display: grid; gap: 6px }
+.dc { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13.5px; min-height: 44px }
+.dc b { margin-left: auto; font-variant-numeric: tabular-nums }
+.dc.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent }
+.screen-title { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; padding: 0 2px }
+</style>
+
+<div class="wrap">
+  <div class="intro">
+    <h1>강사 휴무 처리 시안</h1>
+    <p>운영진용 휴대폰 화면. 예시는 실제 Olivia 11/2~11/10 휴무와 같은 모양으로 만든 가상 학생 4명·수업 12회예요. 오른쪽 <b>정할 것 2가지</b>만 골라 주세요.</p>
+  </div>
+
+  <div class="cols">
+    <div class="phone">
+      <div class="bar"><b>강사 휴무</b><span aria-hidden="true">≡</span></div>
+      <div class="screen">
+
+        <div class="screen-title">① 휴무 넣기</div>
+        <div class="card">
+          <div class="row2">
+            <div><span class="lbl">강사</span><div class="ro">강사 A</div></div>
+            <div><span class="lbl">사유</span><div class="ro">개인 휴가</div></div>
+          </div>
+          <div class="row2">
+            <div><label class="lbl" for="f1">시작일</label><input id="f1" type="date" value="2026-11-02"></div>
+            <div><label class="lbl" for="f2">끝일</label><input id="f2" type="date" value="2026-11-10"></div>
+          </div>
+          <p class="box warn">걸리는 수업 <b>12회 · 학생 4명</b>. 저장하면 이 기간에는 강사 A로 보강을 확정할 수 없어요.</p>
+        </div>
+
+        <div class="screen-title">② 학생별 처리</div>
+        <div class="card">
+          <div class="demo">보기: <button class="chip" type="button" data-q1="A" aria-pressed="true">Q1-A 학생별</button><button class="chip" type="button" data-q1="B" aria-pressed="false">Q1-B 수업마다</button></div>
+
+          <div class="stu">
+            <div class="stu-head"><b>학생1</b><span>월·화·목 20:00 · 40분 · 종료 12/28</span></div>
+            <div class="dates q1a"><span class="dt x">11/2 월</span><span class="dt x">11/3 화</span><span class="dt x">11/5 목</span><span class="dt x">11/9 월</span><span class="dt x">11/10 화</span></div>
+            <div class="choice q1a">
+              <button class="chip" type="button" aria-pressed="true">대체강사<small>원래 날짜·시간</small></button>
+              <button class="chip" type="button" aria-pressed="false">강사 A 기다림<small>나중에 보강</small></button>
+            </div>
+            <div class="q1a">
+              <label class="lbl" for="sub1">대체강사 (그 시간 비어 있는 강사만)</label>
+              <select id="sub1"><option>강사 B — 5회 모두 가능</option><option>강사 C — 3회 가능 (11/3·11/10 겹침)</option></select>
+            </div>
+            <button class="toggle q1a" type="button">일부 날짜만 다르게 처리 ›</button>
+            <div class="lessons q1b" hidden>
+              <div class="les"><span class="d num">11/2 월 20:00</span><span class="why">대체 · 강사 B</span></div>
+              <div class="les"><span class="d num">11/3 화 20:00</span><span class="why">대체 · 강사 B</span></div>
+              <div class="les"><span class="d num">11/5 목 20:00</span><span class="why">기다림</span></div>
+              <div class="les"><span class="d num">11/9 월 20:00</span><span class="why">대체 · 강사 B</span></div>
+              <div class="les"><span class="d num">11/10 화 20:00</span><span class="why">미정</span></div>
+              <p class="hint">줄을 누르면 대체 / 기다림 / 미정을 골라요.</p>
+            </div>
+          </div>
+
+          <div class="stu">
+            <div class="stu-head"><b>학생2</b><span>월·수 12:00 · 40분 · 종료 11/17</span></div>
+            <div class="dates"><span class="dt x">11/2 월</span><span class="dt x">11/4 수</span><span class="dt x">11/9 월</span></div>
+            <div class="choice">
+              <button class="chip" type="button" aria-pressed="false">대체강사<small>원래 날짜·시간</small></button>
+              <button class="chip" type="button" aria-pressed="true">강사 A 기다림<small>나중에 보강</small></button>
+            </div>
+            <p class="box info">보강 3회는 기존 보강 흐름(신청 → 강사 확인 → 확정). 보강이 종료일 11/17 뒤로 잡히면 마지막 보강일까지 수강기간이 자동으로 늘어나요. 변경권은 안 써요.</p>
+          </div>
+
+          <div class="stu">
+            <div class="stu-head"><b>학생3</b><span>수·금 21:00 · 20분</span></div>
+            <div class="dates"><span class="dt x">11/4 수</span><span class="dt x">11/6 금</span></div>
+            <div class="choice">
+              <button class="chip" type="button" aria-pressed="false">대체강사<small>원래 날짜·시간</small></button>
+              <button class="chip" type="button" aria-pressed="false">강사 A 기다림<small>나중에 보강</small></button>
+            </div>
+            <p class="box warn">학생 답 대기 · 2일째. 고르기 전까지 대시보드에 남아요.</p>
+          </div>
+          <p class="hint">학생4도 같은 모양이라 생략.</p>
+        </div>
+
+        <div class="screen-title">③ 대체강사 진행 (학생1)</div>
+        <div class="card">
+          <div class="demo">보기: <button class="chip" type="button" data-q2="A" aria-pressed="true">Q2-A 학생 OK 뒤</button><button class="chip" type="button" data-q2="B" aria-pressed="false">Q2-B 안내 보내면</button></div>
+          <ol class="steps">
+            <li>강사 B에게 가능 여부 안내 <button class="btn2" type="button">복사</button><span class="st done">보냄</span></li>
+            <li>강사 B 가능 <span class="st done">기록함</span></li>
+            <li>학생1에게 대체강사 안내 <button class="btn2" type="button">복사</button><span class="st now">보내기 전</span></li>
+            <li class="q2a">학생1 확인 <button class="btn2" type="button">학생 OK</button><span class="st wait">대기</span></li>
+            <li><b>확정</b><span class="st wait q2a">학생 OK 뒤</span><span class="st wait q2b" hidden>안내 보내면 바로</span></li>
+          </ol>
+          <p class="box ok">확정되면 그 수업 강사가 강사 B로 바뀌고 결과는 '대타 강사 진행', 급여는 강사 B. 학생 남은 횟수·종료일은 그대로.</p>
+          <p class="hint q2b" hidden>학생이 싫다고 하면 [기다림으로 바꾸기] 1번.</p>
+        </div>
+
+        <div class="screen-title">④ 대시보드에 생기는 카드</div>
+        <div class="card dash">
+          <div class="dc warn">휴무 처리 · 학생 답 대기<b>2명</b></div>
+          <div class="dc">대체강사 답 대기<b>1명</b></div>
+          <div class="dc">안내 안 보냄 (학생·강사)<b>3건</b></div>
+          <div class="dc">휴가 보강 날짜 미정<b>5회</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <section>
+        <h2>정할 것 2가지</h2>
+        <div class="q">
+          <b>Q1. 처리 단위</b>
+          <span>A. 학생별로 한 번에 고르고, 필요하면 일부 날짜만 다르게</span>
+          <span>B. 처음부터 수업마다 하나씩 고르기</span>
+          <span class="rec">추천 A — 대부분 휴무 기간 전체를 같은 방식으로 처리해서 누를 게 적어요.</span>
+        </div>
+        <div class="q">
+          <b>Q2. 대체강사 수업 확정 시점</b>
+          <span>A. 대체강사 가능 → 학생 안내 → <b>학생 OK 받은 뒤</b> 확정 (정책 원본 A41 그대로)</span>
+          <span>B. 대체강사 가능 → <b>학생에게 안내 보내면</b> 바로 확정, 싫다고 하면 되돌림 (A41 문구 변경 필요)</span>
+          <span class="rec">추천 A — 학생이 안내를 못 본 채 모르는 강사 수업이 열리는 일을 막아요. B는 1번 덜 누르는 대신 그 위험이 있어요.</span>
+        </div>
+      </section>
+      <section>
+        <h2>이미 정하신 대로 들어가는 것</h2>
+        <ul>
+          <li>1순위 대체강사(원래 시간) · 2순위 강사 기다림 보강, 학생 선택지는 이 둘뿐 (A41)</li>
+          <li>연장은 보강이 종료일 뒤로 확정될 때 마지막 보강일까지만 자동, 연장된 날엔 정규 수업 안 만듦 (A20)</li>
+          <li>휴가 보강은 날짜 미정인 채 종료일이 지나도 권리 유지</li>
+          <li>보강·안내·[보냈어요]는 이미 만든 취소·보강 처리를 그대로 씀</li>
+          <li>이미 입력한 학생의 휴가 보강(Olivia 11/2~11/10)은 ②에 '기다림'으로 보이고 대체강사로 바꿀 수 있음</li>
+        </ul>
+      </section>
+      <section>
+        <h2>이번에 안 만드는 것</h2>
+        <ul>
+          <li>학생·강사가 직접 고르는 화면 (강사 LMS·학생 LMS 단계)</li>
+          <li>자동 메시지 발송 (지금처럼 복사 → 보냄)</li>
+          <li>대체강사 자동 추천 순위 (비어 있는 강사만 보여 줌)</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+function setGroup(attr, val) {
+  document.querySelectorAll('[data-' + attr + ']').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset[attr] === val)); });
+}
+function show(cls, on) { document.querySelectorAll(cls).forEach(function (e) { e.hidden = !on; }); }
+document.querySelectorAll('[data-q1]').forEach(function (b) {
+  b.addEventListener('click', function () { setGroup('q1', b.dataset.q1); show('.q1a', b.dataset.q1 === 'A'); show('.q1b', b.dataset.q1 === 'B'); });
+});
+document.querySelectorAll('[data-q2]').forEach(function (b) {
+  b.addEventListener('click', function () { setGroup('q2', b.dataset.q2); show('.q2a', b.dataset.q2 === 'A'); show('.q2b', b.dataset.q2 === 'B'); });
+});
+document.querySelectorAll('.choice').forEach(function (g) {
+  g.querySelectorAll('.chip').forEach(function (c) {
+    c.addEventListener('click', function () { g.querySelectorAll('.chip').forEach(function (x) { x.setAttribute('aria-pressed', String(x === c)); }); });
+  });
+});
+</script>
