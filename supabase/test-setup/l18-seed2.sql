@@ -1,5 +1,6 @@
 -- 강사 휴무 새 화면(안 1) 시험용 두 번째 장면 (시험용 DB에서만, 두 번 실행해도 한 번만 만듦)
 -- 휴무 강사 Lucas(서울): 정유진 11/09·11/11·11/13 19:00 (월·수·금) · 한도훈 11/10·11/12 21:00 (화·목) (40분)
+-- 재등록 대기: 오지훈 10/31 종료(아직 재등록 안 함), Lucas와 평소 수 18:00 → 재등록하면 11/11 수업이 휴무에 걸림 (10/31 23:59까지만 보임)
 -- 대체 가능 James(마닐라) / Sophie: 11/11 19:00 에 박서연 수업 → 정유진 3회 중 2회 가능·1회 겹침 (실제 강사·학생 이름 아님)
 do $$
 declare
@@ -41,6 +42,17 @@ begin
   select l.enrollment_id, l.student_id, t_sophie, 'regular', 4, timestamp '2026-11-11 19:00' at time zone 'Asia/Seoul', timestamp '2026-11-11 19:40' at time zone 'Asia/Seoul'
   from lessons l join students s on s.id = l.student_id where s.name_ko = '박서연' limit 1;
   raise notice 'Lucas·정유진·한도훈을 만들었어요.';
+end $$;
+do $$
+declare
+  s_r uuid;
+begin
+  if (select name from lms_backup.project) is distinct from 'edgeenglish-lms-test' or exists (select 1 from students where name_ko = '오지훈') then return; end if;
+  insert into students (name_ko, name_en) values ('오지훈', 'Jihoon Oh') returning id into s_r;
+  insert into enrollments (student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+  values (s_r, 1, 4, 1, 40, date '2026-10-04', date '2026-10-31', 4, 'active');
+  insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+  values (s_r, (select id from tutors where name = 'Lucas'), 3, '18:00', 40, date '2026-10-04');
 end $$;
 select s.name_ko as 학생, t.name as 강사, to_char(l.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI') as 수업_한국
 from lessons l join students s on s.id = l.student_id join tutors t on t.id = l.tutor_id

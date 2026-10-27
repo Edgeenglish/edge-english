@@ -646,3 +646,40 @@ begin
 end $$;
 revoke all on function admin_leave_notice_unsend(uuid[]) from public, anon;
 grant execute on function admin_leave_notice_unsend(uuid[]) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 10. 재등록 대기 학생 (2026-10-27 대표): 구글 캘린더·수업 목록에는 결제된 수업만 있어서, 재등록 전 학생의 평소 시간은
+--     휴무 기간에 비어 보임 → 대체강사 섭외 때 누락. 고정 시간을 맡아 두는 동안(종료일 23:59 KST까지, POL-RN-02 · lms_slot_hold_hits와 같은 기준)
+--     그 강사의 평소 요일·시간 중 종료일 뒤 ~ 휴무 끝 사이에 걸리는 날짜를 보여 줌. 수업이 아니라서 처리 목록에는 안 넣음
+--     (재등록 결제로 수업이 생기면 휴무를 다시 저장 → 처리 목록에 들어옴)
+-- ---------------------------------------------------------------------
+create or replace function admin_leave_renewal_pending(p_time_off uuid)
+returns table (student_id uuid, student_name text, student_code text, end_date date, starts_at timestamptz, duration_min integer)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  o tutor_time_off;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  select * into o from tutor_time_off where id = p_time_off;
+  if not found then return; end if;
+  return query
+  with last_end as (
+    select e.student_id, max(e.final_end_date) as end_date
+    from enrollments e
+    where e.status in ('confirmed', 'active')
+    group by e.student_id
+  )
+  select rs.student_id, st.name_ko, st.code, le.end_date, ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul'), rs.duration_min::integer
+  from regular_schedules rs
+  join last_end le on le.student_id = rs.student_id
+  join students st on st.id = rs.student_id
+  cross join lateral generate_series(greatest((o.starts_at at time zone 'Asia/Seoul')::date, le.end_date + 1),
+                                     (o.ends_at at time zone 'Asia/Seoul')::date - 1, interval '1 day') d
+  where rs.tutor_id = o.tutor_id
+    and extract(dow from d)::int = rs.weekday
+    and rs.effective_from <= le.end_date and (rs.effective_to is null or rs.effective_to >= le.end_date)
+    and now() < ((le.end_date + 1)::timestamp at time zone 'Asia/Seoul')
+  order by 2, 5;
+end $$;
+revoke all on function admin_leave_renewal_pending(uuid) from public, anon;
+grant execute on function admin_leave_renewal_pending(uuid) to authenticated;

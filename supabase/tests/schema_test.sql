@@ -1385,6 +1385,19 @@ select pg_temp.ok((select status = 'pending' and sent_at is null from lesson_not
 select pg_temp.expect_error($$select admin_leave_notice_unsend(array(select id from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'leave_options'))$$, '다음 단계');
 select pg_temp.expect_error($$select admin_leave_back(array[pg_temp.li(1)], 'undecided')$$, '보강부터 정리');
 select pg_temp.ok(true, '지난 단계 안내는 못 되돌림 · 보강 신청이 있는 기다림 수업은 학생 답 전으로 못 돌림');
+-- 9-3) 재등록 대기 학생: 고정 시간을 맡아 두는 동안(종료일 23:59까지)만, 종료일 뒤 ~ 휴무 끝 사이 평소 요일·시간
+reset role;
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000001802', '휴무재등록', 'Leave R');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000001802', '99999999-0000-0000-0000-000000001802', 1, 4, 1, 40, d0 - 25, d0 + 2, 4, 'active' from lv;
+insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+select '99999999-0000-0000-0000-000000001802', '55555555-0000-0000-0000-00000000180a', extract(dow from d0 + 4), '18:00', 40, d0 - 25 from lv;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select array_agg((starts_at at time zone 'Asia/Seoul')::date) from admin_leave_renewal_pending(
+                     (select id from tutor_time_off where tutor_id = '55555555-0000-0000-0000-00000000180a' and kind = 'leave' order by starts_at limit 1))
+                   where student_name = '휴무재등록') = array[(select d0 + 4 from lv)],
+  '재등록 대기: 종료일(휴무 3일째) 뒤 휴무 기간의 평소 요일 하루만');
 -- 10) 휴무인 강사로는 보강 확정 안 됨 (기존 확인 그대로)
 select pg_temp.expect_error($$select admin_makeup_confirm((select id from makeup_requests where source_lesson_id = '77777777-1800-0000-0000-000000000001' and status = 'requested'), pg_temp.kst(4, '21:00'))$$, '강사 휴무');
 select pg_temp.ok(true, '휴무 기간에는 원래 강사로 보강 확정 거절');

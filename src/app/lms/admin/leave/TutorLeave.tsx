@@ -11,8 +11,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { dateLabel, kstLabel, MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
 import {
-  groupByStudent, itemStatus, leaveMessages, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, studentWork,
-  type LvItem, type LvMakeupOption, type LvMessage, type LvNotice, type LvStep, type LvStudentGroup, type LvStudentWork, type LvSubOption, type LvTimeOff,
+  groupByStudent, groupRenewals, itemStatus, leaveMessages, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork,
+  type LvItem, type LvRenewal, type LvRenewalGroup, type LvMakeupOption, type LvMessage, type LvNotice, type LvStep, type LvStudentGroup, type LvStudentWork, type LvSubOption, type LvTimeOff,
 } from '@/lms/admin/tutor-leave';
 import type { LeaveCreateResult, LvTutor } from '@/lms/admin/tutor-leave-live';
 import { AdminHeader } from '../ui';
@@ -30,6 +30,7 @@ export type LeaveActions = {
   makeupOptions: (itemIds: string[]) => Promise<LvMakeupOption[]>;
   requestMakeup: (source: { lessonId?: string; itemId?: string }, slots: Date[]) => Promise<void>;
   back: (itemIds: string[], to: 'undecided' | 'asked' | 'tutor_ok') => Promise<void>;
+  renewals: (timeOffId: string) => Promise<LvRenewal[]>;
 };
 
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5fff] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
@@ -75,7 +76,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [leaves, setLeaves] = useState<LvTimeOff[]>([]);
   const [offId, setOffId] = useState<string | null>(initialOff ?? null);
-  const [data, setData] = useState<{ items: LvItem[]; notices: LvNotice[] } | null>(null);
+  const [data, setData] = useState<{ items: LvItem[]; notices: LvNotice[]; renewals: LvRenewal[] } | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [err, setErr] = useState('');
 
@@ -90,7 +91,8 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
     if (!offId) return setData(null);
     try {
       setErr('');
-      setData(await actions.items(offId));
+      const [d, renewals] = await Promise.all([actions.items(offId), actions.renewals(offId)]);
+      setData({ ...d, renewals });
     } catch (e) {
       setErr(e instanceof Error ? e.message : '불러오지 못했어요.');
     }
@@ -107,7 +109,10 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
   const groups = data ? groupByStudent(data.items) : [];
   const messages = data ? leaveMessages(data.items, data.notices) : [];
   const works = new Map(groups.map((g) => [g.studentId, studentWork(g, messages, now)]));
+  const renewals = data ? groupRenewals(data.renewals) : [];
+  const off = leaves.find((l) => l.id === offId) ?? null;
   const selected = groups.find((g) => g.studentId === sel) ?? groups.find((g) => works.get(g.studentId)!.steps.length > 0) ?? groups[0];
+  const selKey = sel && (groups.some((g) => g.studentId === sel) || sel.startsWith('r:')) ? sel : selected?.studentId ?? (renewals[0] ? `r:${renewals[0].studentId}` : null);
   const todo = STEP_ORDER.map((s) => [s, groups.filter((g) => works.get(g.studentId)!.steps[0] === s).length] as const).filter(([, n]) => n > 0);
 
   return (
@@ -133,14 +138,15 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
               {data.items.length === 0
                 ? '이 휴무에 걸리는 수업이 없어요.'
                 : `학생 ${groups.length}명 · 수업 ${data.items.length}회 · ${todo.length ? `할 일: ${todo.map(([s, n]) => `${LV_STEP_TEXT[s].replace(/^\d /, '')} ${n}명`).join(' · ')}` : '모두 처리됨'}`}
+              {renewals.length > 0 && ` · 재등록 대기 ${renewals.length}명(재등록하면 ${renewals.reduce((n, r) => n + r.dates.length, 0)}회)`}
             </p>
 
-            {groups.length > 0 && (
+            {(groups.length > 0 || renewals.length > 0) && (
               <div className="grid gap-3 lg:grid-cols-[260px_1fr] lg:items-start">
                 <ul className="hidden gap-1.5 lg:grid">
                   {groups.map((g) => {
                     const w = works.get(g.studentId)!;
-                    const on = g.studentId === selected?.studentId;
+                    const on = g.studentId === selKey;
                     return (
                       <li key={g.studentId}>
                         <button type="button" aria-pressed={on} onClick={() => setSel(g.studentId)}
@@ -152,12 +158,31 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
                       </li>
                     );
                   })}
+                  {renewals.length > 0 && <li className="mt-2 text-[13px] font-bold text-[#6b6880]">재등록 대기</li>}
+                  {renewals.map((r) => {
+                    const on = `r:${r.studentId}` === selKey;
+                    return (
+                      <li key={r.studentId}>
+                        <button type="button" aria-pressed={on} onClick={() => setSel(`r:${r.studentId}`)}
+                          className={`grid w-full gap-0.5 rounded-[12px] border px-3 py-2.5 text-left ${on ? 'border-[#7d5fff] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
+                          <b className="text-[15px] text-[#1d1b2b]">{r.studentName}</b>
+                          <span className="text-[12.5px] text-[#6b6880]">{dateLabel(r.endDate)} 종료 · 재등록하면 {r.dates.length}회</span>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
                 <div className="grid min-w-0 gap-3">
                   {groups.map((g) => (
-                    <div key={g.studentId} className={g.studentId === selected?.studentId ? '' : 'lg:hidden'}>
+                    <div key={g.studentId} className={g.studentId === selKey ? '' : 'lg:hidden'}>
                       <StudentPanel g={g} w={works.get(g.studentId)!} sent={messages.filter((m) => m.status === 'sent' && m.studentId === g.studentId)}
                         now={now} actions={actions} done={reload} />
+                    </div>
+                  ))}
+                  {renewals.length > 0 && <h2 className="text-[15px] font-bold text-[#6b6880] lg:hidden">재등록 대기</h2>}
+                  {renewals.map((r) => (
+                    <div key={r.studentId} className={`r:${r.studentId}` === selKey ? '' : 'lg:hidden'}>
+                      {off && <RenewalPanel r={r} from={off.from} to={off.to} />}
                     </div>
                   ))}
                 </div>
@@ -396,6 +421,45 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
         </details>
       </div>
     </Card>
+  );
+}
+
+// 재등록 대기 학생: 재등록하면 휴무에 걸리는 날짜 + 재등록 안내에 덧붙일 글 + 대체강사에게 같이 물어볼 글 (복사만)
+function RenewalPanel({ r, from, to }: { r: LvRenewalGroup; from: KstDate; to: KstDate }) {
+  return (
+    <Card title={<>{r.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{r.studentCode} · {dateLabel(r.endDate)} 종료 · 재등록 대기</span></>}>
+      <div className="grid gap-3">
+        <div className="grid gap-1.5">
+          <b className="text-[14px] text-[#1d1b2b]">재등록하면 휴무에 걸리는 날짜</b>
+          <ul className="grid gap-1.5">
+            {r.dates.map((d) => (
+              <li key={+d.startsAt} className="flex min-h-[44px] items-center rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
+                {kstLabel(d.startsAt)} · {d.durationMin}분
+              </li>
+            ))}
+          </ul>
+        </div>
+        <CopyBox title="재등록 안내에 덧붙일 글" text={renewalLeaveText(from, to)} />
+        <CopyBox title="대체강사에게 물어볼 때 덧붙일 글" text={renewalTutorText(r)} />
+      </div>
+    </Card>
+  );
+}
+
+function CopyBox({ title, text }: { title: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const [manual, setManual] = useState(false);
+  return (
+    <div className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <b className="min-w-0 flex-1 text-[14px] text-[#1d1b2b]">{title}</b>
+        <button type="button" className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>
+          {copied ? '복사함 ✓' : '복사'}
+        </button>
+      </div>
+      <pre className="mt-2 whitespace-pre-wrap rounded-[10px] bg-[#f6f5fb] px-3 py-2 font-sans text-[13.5px] text-[#1d1b2b]">{text}</pre>
+      {manual && <textarea readOnly value={text} rows={5} onFocus={(e) => e.currentTarget.select()} aria-label="복사할 글" className="mt-2 w-full rounded-[10px] border border-[#e6e3ef] p-2 text-[13.5px]" />}
+    </div>
   );
 }
 

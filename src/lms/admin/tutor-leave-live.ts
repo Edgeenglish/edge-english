@@ -2,7 +2,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, instantToKstDate, type KstDate } from '../rules/dates';
-import type { LvChoice, LvItem, LvMakeupOption, LvNotice, LvStage, LvSubOption, LvTimeOff } from './tutor-leave';
+import type { LvChoice, LvItem, LvMakeupOption, LvNotice, LvRenewal, LvStage, LvSubOption, LvTimeOff } from './tutor-leave';
 
 const NOT_APPLIED = '강사 휴무 기능이 아직 이 DB에 적용되지 않았어요 (migration 1800).';
 
@@ -97,4 +97,11 @@ export async function subOptions(sb: SupabaseClient, itemIds: string[]): Promise
 export async function makeupOptions(sb: SupabaseClient, itemIds: string[]): Promise<LvMakeupOption[]> {
   const rows = check(await sb.rpc('admin_leave_makeup_options', { p_items: itemIds })) as { section: LvMakeupOption['section']; starts_at: string }[];
   return rows.map((r) => ({ section: r.section, startsAt: new Date(r.starts_at) }));
+}
+
+/** 재등록 대기 학생: 재등록하면 이 휴무에 걸리는 날짜 (고정 시간을 맡아 두는 동안만) */
+export async function loadRenewals(sb: SupabaseClient, timeOffId: string): Promise<LvRenewal[]> {
+  const rows = check(await sb.rpc('admin_leave_renewal_pending', { p_time_off: timeOffId })) as
+    { student_id: string; student_name: string; student_code: string; end_date: string; starts_at: string; duration_min: number }[];
+  return rows.map((r) => ({ studentId: r.student_id, studentName: r.student_name, studentCode: r.student_code, endDate: r.end_date as KstDate, startsAt: new Date(r.starts_at), durationMin: r.duration_min }));
 }

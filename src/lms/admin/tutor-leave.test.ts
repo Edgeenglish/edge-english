@@ -3,7 +3,7 @@ import { kstToInstant } from '../rules/dates';
 import { buildBoard } from './board';
 import { makeupRights, type ChLesson } from './lesson-change';
 import { toTutorLeaves } from './live';
-import { groupByStudent, groupChoice, itemStatus, leaveMessages, leaveSummary, makeupDatesText, studentWork, type LvItem, type LvNotice } from './tutor-leave';
+import { groupByStudent, groupChoice, itemStatus, leaveMessages, leaveSummary, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork, type LvItem, type LvNotice } from './tutor-leave';
 
 const I = (id: string, student: string, date: string, extra: Partial<LvItem> = {}): LvItem => ({
   id, timeOffId: 'off', studentId: student, studentName: student === 's1' ? '김민수' : '이지은', studentNameEn: student === 's1' ? 'Minsu Kim' : 'Jieun Lee',
@@ -103,6 +103,14 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(m[0].text).toContain('CONFIRMED substitute classes');
     expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 대체강사 Benny 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.\n\n- 11월 2일(월) 오후 8시');
     expect(studentWork(groupByStudent(items)[0], m, now).confirm.confirmedMsgs).toHaveLength(2);
+  });
+
+  it('재등록 대기: 재등록 안내에 덧붙일 글 · 대체강사에게 같이 물어볼 날짜(재등록하면)', () => {
+    expect(renewalLeaveText('2026-11-02', '2026-11-10')).toBe(
+      '참고로 담당 강사님이 11/2~11/10 휴가예요. 이 기간 수업은 ① ⭐추천⭐ 대체강사와 원래 시간에 하시거나 ② 강사님 복귀 뒤 보강으로 하실 수 있고, 수업 횟수는 그대로예요. 어느 쪽이 편하신지 같이 알려 주세요.',
+    );
+    const t = renewalTutorText({ studentId: 's', studentName: '정유진', studentCode: 'STU-1', endDate: '2026-10-29', dates: [{ startsAt: kstToInstant('2026-11-05', '21:30'), durationMin: 40 }] });
+    expect(t).toMatch(/^- .*KST \(40 min\) \(if the student renews\)$/);
   });
 
   it('기다림 수업(강사 장기 휴식)도 보강 권리 — 수업 변경·보강 화면에서 보강을 잡음', () => {

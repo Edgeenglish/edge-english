@@ -279,3 +279,32 @@ export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date)
   if (confirm.studentMsg || confirm.tutorOk.length || confirm.confirmedMsgs.length || confirm.makeupRequested.length) steps.push('confirm');
   return { notify, answer, tutor, makeup, confirm, steps };
 }
+
+// ---------------------------------------------------------------------
+// 재등록 대기 학생 (2026-10-27 대표): 재등록하면 휴무에 걸리는 날짜. 수업이 아니라 처리 목록에는 안 넣고 보여 주기·글 복사만
+// ---------------------------------------------------------------------
+
+export type LvRenewal = { studentId: string; studentName: string; studentCode: string; endDate: KstDate; startsAt: Date; durationMin: number };
+export type LvRenewalGroup = { studentId: string; studentName: string; studentCode: string; endDate: KstDate; dates: { startsAt: Date; durationMin: number }[] };
+
+export function groupRenewals(rows: LvRenewal[]): LvRenewalGroup[] {
+  const out = new Map<string, LvRenewalGroup>();
+  for (const r of [...rows].sort((a, b) => +a.startsAt - +b.startsAt)) {
+    const g = out.get(r.studentId) ?? { studentId: r.studentId, studentName: r.studentName, studentCode: r.studentCode, endDate: r.endDate, dates: [] };
+    g.dates.push({ startsAt: r.startsAt, durationMin: r.durationMin });
+    out.set(r.studentId, g);
+  }
+  return [...out.values()];
+}
+
+const md = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
+
+/** 재등록 안내에 덧붙일 글 (대표 확인 2026-10-27: 새 기간이 휴무와 겹치는 학생에게 미리 알림) */
+export function renewalLeaveText(from: KstDate, to: KstDate): string {
+  return `참고로 담당 강사님이 ${md(from)}~${md(to)} 휴가예요. 이 기간 수업은 ① ⭐추천⭐ 대체강사와 원래 시간에 하시거나 ② 강사님 복귀 뒤 보강으로 하실 수 있고, 수업 횟수는 그대로예요. 어느 쪽이 편하신지 같이 알려 주세요.`;
+}
+
+/** 대체강사에게 같이 물어볼 날짜 (재등록하면) — 강사가 정해지기 전이라 한국 시간 */
+export function renewalTutorText(g: LvRenewalGroup): string {
+  return g.dates.map((d) => `- ${enAt(d.startsAt, 'Asia/Seoul')} (${d.durationMin} min) (if the student renews)`).join('\n');
+}
