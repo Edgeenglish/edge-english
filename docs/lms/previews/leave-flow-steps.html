@@ -1,4 +1,4 @@
-<title>강사 휴무 처리 순서</title>
+<title>강사 휴가 처리 순서</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
 <style>
@@ -87,6 +87,11 @@ td.st { text-align: right; }
 .opt small { grid-column: 1; color: var(--muted); font-size: 12.5px; }
 .opt .b { grid-row: 1 / span 2; grid-column: 2; }
 .txt { margin: 0; white-space: pre-wrap; font: 13.5px/1.6 var(--sans); background: var(--shade); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.words summary { font-weight: 700; color: var(--fg); }
+.wt { width: auto; max-width: 100%; margin-top: 6px; }
+.wt th { text-align: left; font-size: 12.5px; color: var(--muted); padding: 4px 12px 4px 0; }
+.wt td { padding: 5px 12px 5px 0; font-size: 14px; }
+.wt td:first-child { color: var(--muted); text-decoration: line-through; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 details { border-top: 1px solid var(--line); padding-top: 6px; }
 summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--accent-ink); min-height: 34px; display: flex; align-items: center; }
@@ -101,10 +106,24 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outli
 </style>
 
 <div class="wrap">
-  <h1>강사 휴무 · 처음부터 끝까지 (새 학생 카드 시안)</h1>
-  <p class="lead">2026-10-28 대표 확정 순서: <b>대체강사를 먼저 정하고 → 학생에게 휴무 양해와 그 강사를 한 번에 제안 → 학생은 한 번만 답</b>([좋아요] 또는 [기존 강사와 보강]). 학생을 누르면 오른쪽에 수업 현황표 → 지금 할 일 → 보낸 글(접힘)만 보여요.</p>
+  <h1>강사 휴가 처리 · 처음부터 끝까지 (시안)</h1>
+  <p class="lead">하는 일은 4가지예요. <b>① 쉬는 강사의 수업 확인 → ② 대신 수업할 강사에게 되는지 물어보기 → ③ 학생에게 대체강사 소개하고 괜찮은지 물어보기 → ④ 괜찮다고 한 수업 확정하고 알리기.</b> 학생을 누르면 오른쪽에 '수업마다 지금 상태' → '지금 할 일' → '보낸 메시지 보기'만 나와요.</p>
+  <details class="words" open><summary>화면 말 바꾼 것</summary>
+    <table class="wt"><tr><th>전</th><th>후</th></tr>
+      <tr><td>휴무 넣기</td><td>쉬는 강사 넣기</td></tr>
+      <tr><td>대체강사 찾는 중</td><td>대체강사에게 물어봐야 함</td></tr>
+      <tr><td>고르기</td><td>이 강사에게 물어보기</td></tr>
+      <tr><td>James 답 입력</td><td>James 강사님이 된다고 한 날짜</td></tr>
+      <tr><td>저장 (2회)</td><td>이 날짜로 저장 (2회)</td></tr>
+      <tr><td>강사 답 대기</td><td>James 강사님 답 기다리는 중</td></tr>
+      <tr><td>학생에게 제안 전</td><td>학생에게 물어봐야 함</td></tr>
+      <tr><td>학생 답 입력 · 좋아요 → 확정</td><td>학생이 괜찮다고 한 수업 · 체크한 수업 확정</td></tr>
+      <tr><td>확정 안내</td><td>확정 알림</td></tr>
+      <tr><td>수업 현황 / 보낸 글 / 글 보기</td><td>수업마다 지금 상태 / 보낸 메시지 보기 / 메시지 보기</td></tr>
+    </table>
+  </details>
   <ul class="who-list">
-    <li><b>Lucas</b> 휴무 강사 · 11/9~11/13</li>
+    <li><b>Lucas</b> 쉬는 강사 · 11/9~11/13</li>
     <li><b>정유진</b> 월·수·금 19:00 · 대체강사 쪽</li>
     <li><b>한도훈</b> 화·목 21:00 · 기존 강사 보강 쪽</li>
     <li><b>James</b> 대체 가능 강사</li>
@@ -117,9 +136,9 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outli
   <section class="ask" aria-label="대표 확인">
     <h2>대표 확인</h2>
     <ol>
-      <li>이 순서·모양(현황표 → 지금 할 일 → 보낸 글 접기, 단계 칩 없음)으로 만들까요?</li>
-      <li>5단계 학생 글 문구 그대로 쓸까요? (고칠 곳 있으면 그 부분만 알려 주세요)</li>
-      <li>대체강사가 아무도 안 될 때(한도훈) 휴무 안내 + 보강 가능한 날짜를 한 글로 보낼까요?</li>
+      <li>이 순서와 화면 말로 만들까요? 더 어려운 말이 있으면 그 말만 알려 주세요.</li>
+      <li>5번 학생 메시지 그대로 쓸까요?</li>
+      <li>대신할 강사가 없을 때(한도훈) 휴가 안내 + 보강 날짜를 메시지 하나로 보낼까요?</li>
     </ol>
   </section>
 </div>
@@ -127,81 +146,81 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outli
 <script>
 const P = (cls, t) => `<span class="pill ${cls}">${t}</span>`;
 const st = {
-  find: P('todo', '대체강사 찾는 중'), ask: P('todo', '학생 안내 전'), ans: P('wait', '학생 답 대기'),
-  jw: P('wait', 'James 답 대기'), jok: P('wait', '대체강사 정함 · 학생 제안 전'), jsw: P('wait', '학생 OK 대기'),
-  jdone: P('ok', '확정'), resub: P('todo', '대체강사 다시 고르기'), sw: P('wait', 'Sophie 답 대기'),
-  mk: P('todo', '보강 날짜 미정'), mkw: P('wait', '학생 날짜 고르는 중'), mkr: P('wait', '보강 신청 · Lucas 확인 대기'), mkd: P('ok', '보강 확정'),
+  find: P('todo', '대체강사에게 물어봐야 함'),
+  jw: P('wait', 'James 강사님 답 기다리는 중'), sw: P('wait', 'Sophie 강사님 답 기다리는 중'),
+  jok: P('todo', '학생에게 물어봐야 함'), ans: P('wait', '학생 답 기다리는 중'), jdone: P('ok', '확정'),
+  mk: P('todo', '보강 날짜 보내야 함'), mkw: P('wait', '학생이 보강 날짜 고르는 중'), mkd: P('ok', '보강 확정'),
 };
-const YJ = (a, b, c, wa = 'Lucas', wb = 'Lucas', wc = 'Lucas') => [['11/9 (월) 19:00', wa, a], ['11/11 (수) 19:00', wb, b], ['11/13 (금) 19:00', wc, c]];
+const YJ = (a, b, c, wa = '—', wb = '—', wc = '—') => [['11/9 (월) 19:00', wa, a], ['11/11 (수) 19:00', wb, b], ['11/13 (금) 19:00', wc, c]];
 const HD = (a, b, wa = 'Lucas', wb = 'Lucas') => [['11/10 (화) 21:00', wa, a], ['11/12 (목) 21:00', wb, b]];
-const msg = (to, copied, sent) => `<div class="msgrow"><span class="to">${to}</span><a class="lnk" href="#" onclick="return false">글 보기</a>
+const msg = (to, copied, sent) => `<div class="msgrow"><span class="to">${to}</span><a class="lnk" href="#" onclick="return false">메시지 보기</a>
   <button class="b ${copied ? 'done' : ''}">${copied ? '복사함 ✓' : '복사'}</button>${sent ? '<button class="b done" disabled>보냄 ✓</button>' : '<button class="b main">보냄</button>'}</div>`;
+const opt = (name, note, state) => `<div class="opt ${state === 'done' ? 'on' : ''}"><span>${name}</span><small>${note}</small>${state === 'done' ? '<button class="b done" disabled>물어봄 ✓</button>' : state === 'no' ? '<button class="b" disabled>안 됨</button>' : '<button class="b">이 강사에게 물어보기</button>'}</div>`;
+const L = (y, h) => [['정유진', '3회 · 11/9~11/13', y], ['한도훈', '2회 · 11/10~11/12', h]];
 
 const steps = [
-  { track: '정유진 · 대체강사로 진행' },
-  { id: 's0', t: '휴무 넣기', do: '맨 위 <b>[+ 휴무 넣기]</b> → 강사 <b>Lucas</b>, 날짜 <b>11/9 ~ 11/13</b> → <b>[저장]</b>',
+  { track: '정유진 · 대체강사와 수업하는 경우' },
+  { id: 's0', t: '쉬는 강사와 날짜 넣기', do: '맨 위 <b>[+ 쉬는 강사 넣기]</b> → 강사 <b>Lucas</b>, 날짜 <b>11/9 ~ 11/13</b> → <b>[저장]</b>',
     list: [], sel: -1, form: true },
-  { id: 's1', t: '대체강사 고르기 → 가능 확인 글 보내기', do: '왼쪽 <b>정유진</b> 누르기 → <b>James</b> 옆 <b>[고르기]</b> → 나온 글 <b>[복사]</b> → WhatsApp으로 보낸 뒤 <b>[보냄]</b>',
-    list: [['정유진', '3회 · 11/9~11/13', '대체강사 찾는 중'], ['한도훈', '2회 · 11/10~11/12', '대체강사 찾는 중']], sel: 0,
-    name: '정유진', sum: '3회 · 대체강사 찾는 중 3', rows: YJ(st.find, st.find, st.find, '—', '—', '—'),
-    now: ['대체강사 고르기', `<div class="opt on"><span>James</span><small>3회 모두 빈 시간</small><button class="b done" disabled>고름 ✓</button></div>
-      <div class="opt"><span>Sophie</span><small>2회 빈 시간 · 11/11 다른 수업</small><button class="b">고르기</button></div>
-      ${msg('James · WhatsApp · 가능 확인', true, false)}`], sent: 0 },
-  { id: 's2', t: 'James 답 입력', do: 'James가 "1, 2만 돼요" → 가능한 날짜만 체크 → <b>[저장 (2회)]</b>',
-    list: [['정유진', '3회 · 11/9~11/13', 'James 답 대기'], ['한도훈', '2회 · 11/10~11/12', '대체강사 찾는 중']], sel: 0,
-    name: '정유진', sum: '3회 · James 답 대기 3', rows: YJ(st.jw, st.jw, st.jw, 'James', 'James', 'James'),
-    now: ['James 답 입력 <small>가능하다고 한 날짜만</small>', `<label class="chk on"><i>✓</i>11/9 (월) 19:00</label><label class="chk on"><i>✓</i>11/11 (수) 19:00</label><label class="chk x"><i></i>11/13 (금) 19:00</label>
-      <button class="b main wide">저장 (2회)</button>`], sent: 1 },
-  { id: 's3', t: '11/13은 다른 대체강사 → Sophie 답 입력', do: '<b>Sophie</b> 옆 <b>[고르기]</b> → 글 <b>[복사]</b>·<b>[보냄]</b> → Sophie가 "돼요" → 11/13 체크 → <b>[저장 (1회)]</b>',
-    list: [['정유진', '3회 · 11/9~11/13', 'Sophie 답 대기'], ['한도훈', '2회 · 11/10~11/12', '대체강사 찾는 중']], sel: 0,
-    name: '정유진', sum: '3회 · 대체강사 정함 2 · Sophie 답 대기 1', rows: YJ(st.jok, st.jok, st.sw, 'James', 'James', 'Sophie'),
-    now: ['Sophie 답 입력', `<label class="chk on"><i>✓</i>11/13 (금) 19:00</label><button class="b main wide">저장 (1회)</button>`], sent: 2 },
-  { id: 's4', t: '학생에게 휴무 안내 + 대체강사 제안 (한 번에)', do: '글 <b>[복사]</b> → 카톡으로 프로필과 함께 보낸 뒤 <b>[보냄]</b>',
-    list: [['정유진', '3회 · 11/9~11/13', '학생에게 제안 전'], ['한도훈', '2회 · 11/10~11/12', '대체강사 찾는 중']], sel: 0,
-    name: '정유진', sum: '3회 · 대체강사 정함 3 · 학생에게 제안 전', rows: YJ(st.jok, st.jok, st.jok, 'James', 'James', 'Sophie'),
-    now: ['학생에게 휴무 안내 + 대체강사 제안', msg('학생 · 카톡 · 휴무 안내 + James·Sophie 제안', true, false) + `<pre class="txt">[엣지영어] 정유진님, 담당 강사님 휴가로 아래 수업은 대체강사님과 평소 시간에 진행하려고 해요. 불편을 드려 죄송합니다.
+  { id: 's1', t: '대신 수업할 강사에게 물어보기', do: '왼쪽 <b>정유진</b> 누르기 → James 옆 <b>[이 강사에게 물어보기]</b> → 메시지 <b>[복사]</b> → WhatsApp으로 보내고 <b>[보냄]</b>',
+    list: L('대체강사에게 물어봐야 함', '대체강사에게 물어봐야 함'), sel: 0,
+    name: '정유진', sum: '3회 모두 대체강사에게 물어봐야 함', rows: YJ(st.find, st.find, st.find),
+    now: ['대신 수업할 강사 고르기', opt('James', '3회 모두 시간 비어 있음', 'done') + opt('Sophie', '2회 시간 비어 있음 · 11/11은 다른 수업', '') + msg('James 강사님에게 보낼 메시지 (WhatsApp)', true, false)], sent: 0 },
+  { id: 's2', t: 'James 강사님이 된다고 한 날짜 체크하기', do: 'James 강사님이 "1번, 2번만 돼요" → 11/9·11/11만 체크 → <b>[이 날짜로 저장 (2회)]</b>',
+    list: L('James 강사님 답 기다리는 중', '대체강사에게 물어봐야 함'), sel: 0,
+    name: '정유진', sum: '3회 모두 James 강사님 답 기다리는 중', rows: YJ(st.jw, st.jw, st.jw, 'James', 'James', 'James'),
+    now: ['James 강사님이 된다고 한 날짜', `<label class="chk on"><i>✓</i>11/9 (월) 19:00</label><label class="chk on"><i>✓</i>11/11 (수) 19:00</label><label class="chk x"><i></i>11/13 (금) 19:00</label>
+      <button class="b main wide">이 날짜로 저장 (2회)</button>`], sent: 1 },
+  { id: 's3', t: '안 되는 11/13은 Sophie 강사님에게 물어보기', do: 'Sophie 옆 <b>[이 강사에게 물어보기]</b> → 메시지 <b>[복사]</b>·<b>[보냄]</b> → Sophie 강사님이 "돼요" → 11/13 체크 → <b>[이 날짜로 저장 (1회)]</b>',
+    list: L('Sophie 강사님 답 기다리는 중', '대체강사에게 물어봐야 함'), sel: 0,
+    name: '정유진', sum: '2회 학생에게 물어봐야 함 · 1회 Sophie 강사님 답 기다리는 중', rows: YJ(st.jok, st.jok, st.sw, 'James', 'James', 'Sophie'),
+    now: ['Sophie 강사님이 된다고 한 날짜', `<label class="chk on"><i>✓</i>11/13 (금) 19:00</label><button class="b main wide">이 날짜로 저장 (1회)</button>`], sent: 2 },
+  { id: 's4', t: '학생에게 대체강사 소개하고 괜찮은지 물어보기', do: '메시지 <b>[복사]</b> → 카톡으로 강사 프로필과 함께 보내고 <b>[보냄]</b>',
+    list: L('학생에게 물어봐야 함', '대체강사에게 물어봐야 함'), sel: 0,
+    name: '정유진', sum: '3회 모두 학생에게 물어봐야 함', rows: YJ(st.jok, st.jok, st.jok, 'James', 'James', 'Sophie'),
+    now: ['학생에게 보낼 메시지', msg('정유진 학생에게 보낼 메시지 (카톡)', true, false) + `<pre class="txt">[엣지영어] 정유진님, 담당 강사님 휴가로 아래 수업은 대체강사님과 평소 시간에 진행하려고 해요. 불편을 드려 죄송합니다.
 
 - 11월 9일(월) 오후 7시 · James 강사님
 - 11월 11일(수) 오후 7시 · James 강사님
 - 11월 13일(금) 오후 7시 · Sophie 강사님
 
 강사님 프로필도 함께 보내 드려요. 괜찮으시면 '좋아요'라고 답해 주세요. 기존 강사님과 보강을 원하시면 말씀해 주세요.</pre>`], sent: 3 },
-  { id: 's5', t: '학생 답 입력 (한 번)', do: '학생이 "좋아요" → <b>[좋아요 → 확정 (3회)]</b> (일부만 보강을 원하면 그 수업 체크 해제 후 누르고, 남은 수업은 [기존 강사와 보강])',
-    list: [['정유진', '3회 · 11/9~11/13', '학생 답 대기'], ['한도훈', '2회 · 11/10~11/12', '대체강사 찾는 중']], sel: 0,
-    name: '정유진', sum: '3회 · 학생 답 대기 3', rows: YJ(st.ans, st.ans, st.ans, 'James', 'James', 'Sophie'),
-    now: ['학생 답 입력', `<label class="chk on"><i>✓</i>11/9 (월) 19:00 · James</label><label class="chk on"><i>✓</i>11/11 (수) 19:00 · James</label><label class="chk on"><i>✓</i>11/13 (금) 19:00 · Sophie</label>
-      <div class="grid2"><button class="b main">좋아요 → 확정 (3회)</button><button class="b">기존 강사와 보강</button></div>`], sent: 3 },
-  { id: 's6', t: '확정 안내 보내기 → 정유진 끝', do: '확정 안내 3개(학생·James·Sophie) 각각 <b>[복사]</b> → 보낸 뒤 <b>[보냄]</b>',
-    list: [['정유진', '3회 · 11/9~11/13', '확정 안내 3'], ['한도훈', '2회 · 11/10~11/12', '대체강사 찾는 중']], sel: 0,
-    name: '정유진', sum: '3회 모두 확정 · 확정 안내 안 보냄 3', rows: YJ(st.jdone, st.jdone, st.jdone, 'James', 'James', 'Sophie'),
-    now: ['확정 안내 보내기', msg('학생 · 카톡 · 확정 안내', true, true) + msg('James · WhatsApp · 확정 안내', true, true) + msg('Sophie · WhatsApp · 확정 안내', false, false)], sent: 5 },
-  { track: '한도훈 · 대체강사가 없어 기존 강사 보강' },
-  { id: 'h1', t: '대체강사 없음 → 학생에게 휴무 안내 + 보강 가능한 날짜 (한 번에)', do: '왼쪽 <b>한도훈</b> → 대체강사 목록에 빈 시간 없음 → <b>[대체강사 없이 보강으로]</b> → 나온 글 <b>[복사]</b>·<b>[보냄]</b>',
-    list: [['정유진', '3회 · 11/9~11/13', '완료 ✓'], ['한도훈', '2회 · 11/10~11/12', '대체강사 찾는 중']], sel: 1, fin: 0,
-    name: '한도훈', sum: '2회 · 대체강사 없음', rows: HD(st.mk, st.mk),
-    now: ['학생에게 휴무 안내 + 보강 가능한 날짜', `<div class="opt"><span>James · Sophie</span><small>11/10·11/12 21:00 빈 시간 없음</small><button class="b" disabled>—</button></div>
-      <button class="b done wide" disabled>대체강사 없이 보강으로 ✓</button>${msg('학생 · 카톡 · 휴무 안내 + 보강 가능한 날짜', true, false)}`], sent: 0 },
-  { id: 'h2', t: '학생이 고른 날짜로 보강 신청', do: '학생이 "17일, 19일이요" → 그 날짜 체크(2개까지) → <b>[보강 신청 (2)]</b>',
-    list: [['정유진', '3회 · 11/9~11/13', '완료 ✓'], ['한도훈', '2회 · 11/10~11/12', '학생 날짜 고르는 중']], sel: 1, fin: 0,
-    name: '한도훈', sum: '2회 · 학생 날짜 고르는 중 2', rows: HD(st.mkw, st.mkw),
-    now: ['학생이 고른 날짜 체크 <small>2개까지</small>', `<label class="chk on"><i>✓</i>11/17 (화) 21:00</label><label class="chk on"><i>✓</i>11/19 (목) 21:00</label><label class="chk x"><i></i>11/24 (화) 21:00</label>
-      <button class="b main wide">보강 신청 (2)</button>`], sent: 1 },
-  { id: 'h3', t: 'Lucas 확인 → 보강 확정 → 한도훈 끝', do: '<b>[보강 확정]</b> → 수업 변경 화면에서 Lucas 답대로 확정 → 확정 안내 보냄',
-    list: [['정유진', '3회 · 11/9~11/13', '완료 ✓'], ['한도훈', '2회 · 11/10~11/12', '완료 ✓']], sel: 1, fin: 1, both: true,
+  { id: 's5', t: '학생이 괜찮다고 한 수업 확정하기', do: '학생이 "좋아요" → 괜찮다고 한 수업만 체크(처음엔 모두 체크) → <b>[체크한 수업 확정 (3회)]</b>. 보강을 원한 수업은 체크하고 <b>[체크한 수업은 기존 강사와 보강]</b>',
+    list: L('학생 답 기다리는 중', '대체강사에게 물어봐야 함'), sel: 0,
+    name: '정유진', sum: '3회 모두 학생 답 기다리는 중', rows: YJ(st.ans, st.ans, st.ans, 'James', 'James', 'Sophie'),
+    now: ['학생이 괜찮다고 한 수업', `<label class="chk on"><i>✓</i>11/9 (월) 19:00 · James</label><label class="chk on"><i>✓</i>11/11 (수) 19:00 · James</label><label class="chk on"><i>✓</i>11/13 (금) 19:00 · Sophie</label>
+      <button class="b main wide">체크한 수업 확정 (3회)</button><button class="b wide">체크한 수업은 기존 강사와 보강</button>`], sent: 3 },
+  { id: 's6', t: '학생과 강사에게 확정됐다고 알리기 → 끝', do: '메시지 3개(학생·James·Sophie) 각각 <b>[복사]</b> → 보내고 <b>[보냄]</b>',
+    list: L('확정 알림 보내야 함', '대체강사에게 물어봐야 함'), sel: 0,
+    name: '정유진', sum: '3회 모두 확정 · 확정 알림 1개 남음', rows: YJ(st.jdone, st.jdone, st.jdone, 'James', 'James', 'Sophie'),
+    now: ['확정 알림 보내기', msg('정유진 학생에게 (카톡)', true, true) + msg('James 강사님에게 (WhatsApp)', true, true) + msg('Sophie 강사님에게 (WhatsApp)', false, false)], sent: 5 },
+  { track: '한도훈 · 대신 수업할 강사가 없는 경우' },
+  { id: 'h1', t: '대신할 강사가 없음 → 학생에게 보강 날짜 보내기', do: '왼쪽 <b>한도훈</b> → 두 강사 모두 <b>안 됨</b> → <b>[대체강사 없이 보강으로]</b> → 메시지 <b>[복사]</b>·<b>[보냄]</b>',
+    list: L('완료 ✓', '대체강사에게 물어봐야 함'), sel: 1, fin: 0,
+    name: '한도훈', sum: '2회 모두 보강 날짜 보내야 함', rows: HD(st.mk, st.mk),
+    now: ['대신 수업할 강사 고르기', opt('James', '11/10·11/12 21:00 다른 수업', 'no') + opt('Sophie', '11/10·11/12 21:00 다른 수업', 'no')
+      + `<button class="b done wide" disabled>대체강사 없이 보강으로 ✓</button>` + msg('한도훈 학생에게 보낼 메시지 (카톡) · 휴가 안내 + 보강 날짜', true, false)], sent: 0 },
+  { id: 'h2', t: '학생이 고른 보강 날짜 신청하기', do: '학생이 "17일, 19일이요" → 그 날짜 체크(2개까지) → <b>[이 날짜로 보강 신청 (2)]</b>',
+    list: L('완료 ✓', '학생이 보강 날짜 고르는 중'), sel: 1, fin: 0,
+    name: '한도훈', sum: '2회 모두 학생이 보강 날짜 고르는 중', rows: HD(st.mkw, st.mkw),
+    now: ['학생이 고른 보강 날짜 <small>2개까지</small>', `<label class="chk on"><i>✓</i>11/17 (화) 21:00</label><label class="chk on"><i>✓</i>11/19 (목) 21:00</label><label class="chk x"><i></i>11/24 (화) 21:00</label>
+      <button class="b main wide">이 날짜로 보강 신청 (2)</button>`], sent: 1 },
+  { id: 'h3', t: 'Lucas 강사님 확인 받고 보강 확정하기 → 끝', do: '<b>[보강 확정하러 가기]</b> → 수업 변경 화면에서 Lucas 강사님 답대로 확정 → 확정 알림 보냄',
+    list: L('완료 ✓', '완료 ✓'), sel: 1, fin: 1, both: true,
     name: '한도훈', sum: '2회 모두 보강 확정', rows: HD(st.mkd, st.mkd, '보강 11/17 21:00', '보강 11/19 21:00'),
     now: null, sent: 3 },
 ];
 
 function table(rows) {
-  return `<div><p class="label">수업 현황</p><table>${rows.map(([w, who, s]) => `<tr><td class="when">${w}</td><td class="who">${who}</td><td class="st">${s}</td></tr>`).join('')}</table></div>`;
+  return `<div><p class="label">수업마다 지금 상태</p><table>${rows.map(([w, who, s]) => `<tr><td class="when">${w}</td><td class="who">${who}</td><td class="st">${s}</td></tr>`).join('')}</table></div>`;
 }
 function card(s) {
-  if (s.form) return `<div class="card"><div class="head"><b>휴무 넣기</b></div><div class="form">
+  if (s.form) return `<div class="card"><div class="head"><b>쉬는 강사 넣기</b></div><div class="form">
     <div class="field">강사<div>Lucas</div></div><div class="grid2"><div class="field">시작<div>11/9 (월)</div></div><div class="field">끝<div>11/13 (금)</div></div></div>
     <button class="b main wide">저장</button></div></div>`;
-  const now = s.now ? `<div class="now"><h4>${s.now[0]}</h4>${s.now[1]}</div>` : `<div class="toast">${s.name} 처리를 모두 마쳤어요.</div>`;
-  return `<div class="card"><div class="head"><b>${s.name}</b><span>Lucas 휴무</span><p class="sum">${s.sum}</p></div>
-    ${table(s.rows)}${now}<details><summary>보낸 글 ${s.sent}개</summary></details></div>`;
+  const now = s.now ? `<div class="now"><h4>${s.now[0]}</h4>${s.now[1]}</div>` : `<div class="toast">${s.name} 끝</div>`;
+  return `<div class="card"><div class="head"><b>${s.name}</b><span>Lucas 강사님 휴가</span><p class="sum">${s.sum}</p></div>
+    ${table(s.rows)}${now}<details><summary>보낸 메시지 보기 (${s.sent})</summary></details></div>`;
 }
 function list(s) {
   return `<div class="list">${s.list.map(([n, d, st2], i) => `<div class="li ${i === s.sel ? 'on' : ''}"><b>${n}</b><span>${d}</span><span class="s ${(s.fin === i || (s.both)) && st2.includes('완료') ? 'fin' : ''}">${st2}</span></div>`).join('')}
@@ -218,8 +237,8 @@ for (const s of steps) {
   out.push(`<section class="step" id="${s.id}"><h3><span class="n">${n}</span>${s.t}</h3><p class="do">${s.do}</p>
     <div class="pair">
       <div class="frame"><span class="tag">PC</span><div class="scroll"><div class="pc">
-        <div class="pc-top"><b>강사 휴무</b><span class="chip ${s.form ? '' : 'on'}">Lucas 11/9~11/13</span><button class="b ${s.form ? 'pick' : ''}" style="margin-left:auto">+ 휴무 넣기</button></div>
-        <div class="pc-body">${s.form ? '<div class="list"><p class="grp">휴무를 넣으면 걸리는 학생이 여기 생겨요</p></div>' : list(s)}${right}</div>
+        <div class="pc-top"><b>강사 휴가</b><span class="chip ${s.form ? '' : 'on'}">Lucas 11/9~11/13</span><button class="b ${s.form ? 'pick' : ''}" style="margin-left:auto">+ 쉬는 강사 넣기</button></div>
+        <div class="pc-body">${s.form ? '<div class="list"><p class="grp"></p></div>' : list(s)}${right}</div>
       </div></div></div>
       <div class="frame"><span class="tag">휴대폰</span>${s.form ? card(s) : card(s)}</div>
     </div></section>`);
