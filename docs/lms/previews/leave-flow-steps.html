@@ -1,0 +1,236 @@
+<title>강사 휴무 처리 순서</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<style>
+/* 레이아웃: 단계마다 — 제목 → PC 화면(위 휴무 칩 · 왼쪽 학생 목록 · 오른쪽 고른 학생) → 휴대폰 화면(학생 카드). 넓으면 PC·휴대폰 나란히 */
+:root {
+  --bg: #f4f3f8; --card: #ffffff; --fg: #1d1b2b; --muted: #6b6880; --line: #e6e3ef;
+  --accent: #7d5fff; --accent-ink: #5b3fe0; --accent-soft: #efebff;
+  --ok: #1e7a46; --ok-soft: #e3f6ea; --wait: #8a5a00; --wait-soft: #fff1d6; --todo: #b3261e; --todo-soft: #fde6e6;
+  --grey: #d9d6e3; --grey-ink: #4a4760; --faint: #b9b6c8; --shade: #f8f7fc;
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15131f; --card: #1f1c2c; --fg: #ece9f6; --muted: #a29fb6; --line: #34304a;
+  --accent: #9a82ff; --accent-ink: #b9a8ff; --accent-soft: #2c2547;
+  --ok: #7fd9a3; --ok-soft: #1c3527; --wait: #f2c46b; --wait-soft: #3a2f17; --todo: #ff9c93; --todo-soft: #3d1f1f;
+  --grey: #3a3650; --grey-ink: #c9c5dc; --faint: #5d5875; --shade: #191725; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15131f; --card: #1f1c2c; --fg: #ece9f6; --muted: #a29fb6; --line: #34304a;
+  --accent: #9a82ff; --accent-ink: #b9a8ff; --accent-soft: #2c2547;
+  --ok: #7fd9a3; --ok-soft: #1c3527; --wait: #f2c46b; --wait-soft: #3a2f17; --todo: #ff9c93; --todo-soft: #3d1f1f;
+  --grey: #3a3650; --grey-ink: #c9c5dc; --faint: #5d5875; --shade: #191725; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 56px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 28px; }
+h1 { font-size: 22px; margin: 0; text-wrap: balance; }
+.lead { margin: 0; color: var(--muted); max-width: 76ch; }
+.who-list { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; color: var(--muted); }
+.who-list b { color: var(--fg); }
+.toc { display: flex; flex-wrap: wrap; gap: 6px; }
+.toc a { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--accent-ink); font-size: 13px; text-decoration: none; font-weight: 600; }
+.track { margin: 8px 0 0; font-size: 18px; padding-top: 12px; border-top: 2px solid var(--line); }
+.step { display: grid; gap: 10px; scroll-margin-top: 12px; }
+.step > h3 { margin: 0; font-size: 17px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; text-wrap: balance; }
+.step > h3 .n { display: inline-grid; place-items: center; min-width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 15px; }
+.do { margin: 0; font-size: 14px; color: var(--muted); }
+.do b { color: var(--fg); }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+@media (max-width: 1080px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.frame { min-width: 0; display: grid; gap: 6px; }
+.tag { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .05em; }
+.scroll { overflow-x: auto; }
+.pc { min-width: 820px; background: var(--shade); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 10px; }
+.pc-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 14px; }
+.chip { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 600; background: var(--card); }
+.chip.on { background: var(--accent); color: #fff; }
+.pc-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 12px; align-items: start; }
+.list { display: grid; gap: 6px; }
+.li { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 1px; font-size: 12.5px; color: var(--muted); }
+.li b { color: var(--fg); font-size: 14.5px; }
+.li.on { border: 2px solid var(--accent); background: var(--accent-soft); }
+.li .s { font-weight: 700; color: var(--accent-ink); }
+.li .s.fin { color: var(--ok); }
+.grp { font-size: 12px; font-weight: 700; color: var(--muted); margin: 4px 0 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
+.head b { font-size: 17px; }
+.head span { color: var(--muted); font-size: 12.5px; }
+.sum { width: 100%; margin: 0; font-size: 13.5px; color: var(--muted); }
+.label { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .05em; margin: 0 0 4px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+td { padding: 8px 4px; border-top: 1px solid var(--line); font-size: 14px; vertical-align: middle; }
+tr:first-child td { border-top: 0; }
+td.when { white-space: nowrap; font-weight: 600; }
+td.who { color: var(--muted); font-size: 13px; }
+td.st { text-align: right; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.ok { background: var(--ok-soft); color: var(--ok); } .wait { background: var(--wait-soft); color: var(--wait); } .todo { background: var(--todo-soft); color: var(--todo); }
+.now { border: 2px solid var(--accent); border-radius: 12px; padding: 10px 12px; display: grid; gap: 8px; }
+.now h4 { margin: 0; font-size: 15px; color: var(--accent-ink); }
+.now h4 small { color: var(--muted); font-weight: 400; }
+.msgrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.msgrow .to { flex: 1; min-width: 120px; font-size: 14px; font-weight: 600; }
+.lnk { font-size: 13px; color: var(--accent-ink); font-weight: 600; }
+.b { min-height: 40px; padding: 0 12px; border-radius: 10px; font: 600 13.5px var(--sans); border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+.b.main { background: var(--accent); border-color: var(--accent); color: #fff; }
+.b.done { background: var(--grey); border-color: var(--grey); color: var(--grey-ink); font-weight: 700; }
+.b.pick { border: 2px solid var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+.b.wide { width: 100%; }
+.chk { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+.chk.x { color: var(--faint); }
+.chk i { font-style: normal; width: 18px; height: 18px; border-radius: 4px; border: 2px solid var(--accent); display: grid; place-items: center; font-size: 12px; color: #fff; }
+.chk.on i { background: var(--accent); }
+.chk.x i { border-color: var(--faint); }
+.opt { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; align-items: center; }
+.opt.on { border: 2px solid var(--accent); background: var(--accent-soft); }
+.opt small { grid-column: 1; color: var(--muted); font-size: 12.5px; }
+.opt .b { grid-row: 1 / span 2; grid-column: 2; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+details { border-top: 1px solid var(--line); padding-top: 6px; }
+summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--accent-ink); min-height: 34px; display: flex; align-items: center; }
+.form { display: grid; gap: 8px; }
+.field { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
+.field div { border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14.5px; color: var(--fg); background: var(--card); }
+.toast { background: #1b1442; color: #fff; border-radius: 10px; padding: 8px 12px; font-size: 13.5px; }
+.ask { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; }
+.ask h2 { margin: 0; font-size: 16px; }
+.ask ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <h1>강사 휴무 · 처음부터 끝까지 (새 학생 카드 시안)</h1>
+  <p class="lead">[강사 휴무]에서 휴무를 넣으면 걸리는 학생이 왼쪽에 생기고, 학생을 누르면 오른쪽에 <b>수업 현황표 → 지금 할 일 → 보낸 글(접힘)</b>만 보여요. 단계 칩은 없고, 할 일을 끝내면 그 자리에 다음 할 일이 나와요.</p>
+  <ul class="who-list">
+    <li><b>Lucas</b> 휴무 강사 · 11/9~11/13</li>
+    <li><b>정유진</b> 월·수·금 19:00 · 대체강사 쪽</li>
+    <li><b>한도훈</b> 화·목 21:00 · 기존 강사 보강 쪽</li>
+    <li><b>James</b> 대체 가능 강사</li>
+    <li><b>Sophie</b> 대체 가능 강사 · 11/11 겹침</li>
+    <li><b>오지훈</b> 10/31 종료 · 재등록 대기</li>
+  </ul>
+  <nav class="toc" id="toc" aria-label="단계 바로 가기"></nav>
+  <div id="steps"></div>
+
+  <section class="ask" aria-label="대표 확인">
+    <h2>대표 확인</h2>
+    <ol>
+      <li>이 순서·모양(현황표 → 지금 할 일 → 보낸 글 접기, 단계 칩 없음)으로 바꿀까요?</li>
+      <li>4단계처럼 할 일이 동시에 2개(학생 제안 보내기 · 11/13 다른 대체강사 고르기)일 때 '지금 할 일' 칸에 둘 다 순서대로 보여 줄까요?</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+const P = (cls, t) => `<span class="pill ${cls}">${t}</span>`;
+const st = {
+  ask: P('todo', '학생 안내 전'), ans: P('wait', '학생 답 대기'),
+  jw: P('wait', 'James 답 대기'), jok: P('wait', 'James 가능 · 학생 제안 전'), jsw: P('wait', '학생 OK 대기'),
+  jdone: P('ok', '확정'), resub: P('todo', '대체강사 다시 고르기'), sw: P('wait', 'Sophie 답 대기'),
+  mk: P('todo', '보강 날짜 미정'), mkw: P('wait', '학생 날짜 고르는 중'), mkr: P('wait', '보강 신청 · Lucas 확인 대기'), mkd: P('ok', '보강 확정'),
+};
+const YJ = (a, b, c, wa = 'Lucas', wb = 'Lucas', wc = 'Lucas') => [['11/9 (월) 19:00', wa, a], ['11/11 (수) 19:00', wb, b], ['11/13 (금) 19:00', wc, c]];
+const HD = (a, b, wa = 'Lucas', wb = 'Lucas') => [['11/10 (화) 21:00', wa, a], ['11/12 (목) 21:00', wb, b]];
+const msg = (to, copied, sent) => `<div class="msgrow"><span class="to">${to}</span><a class="lnk" href="#" onclick="return false">글 보기</a>
+  <button class="b ${copied ? 'done' : ''}">${copied ? '복사함 ✓' : '복사'}</button>${sent ? '<button class="b done" disabled>보냄 ✓</button>' : '<button class="b main">보냄</button>'}</div>`;
+
+const steps = [
+  { track: '정유진 · 대체강사로 진행' },
+  { id: 's0', t: '휴무 넣기', do: '맨 위 <b>[+ 휴무 넣기]</b> → 강사 <b>Lucas</b>, 날짜 <b>11/9 ~ 11/13</b> → <b>[저장]</b>',
+    list: [['정유진', '3회 · 11/9~11/13', '학생 안내 전'], ['한도훈', '2회 · 11/10~11/12', '학생 안내 전']], sel: -1, chipOn: false,
+    form: true },
+  { id: 's1', t: '학생 고르기 → 진행 방법 안내 보내기', do: '왼쪽 <b>정유진</b> 누르기 → 지금 할 일에서 <b>[복사]</b> → 카톡으로 보낸 뒤 <b>[보냄]</b>',
+    list: [['정유진', '3회 · 11/9~11/13', '학생 안내 전'], ['한도훈', '2회 · 11/10~11/12', '학생 안내 전']], sel: 0,
+    name: '정유진', sum: '3회 · 학생 안내 전 3', rows: YJ(st.ask, st.ask, st.ask),
+    now: ['학생에게 진행 방법 안내', msg('학생 · 카톡 · 대체강사 / 기존 강사 보강 중 고르기', true, false)], sent: 0 },
+  { id: 's2', t: '학생 답 입력', do: '학생이 "대체강사로 할게요" → 수업에 체크(기본 전부) → <b>[대체강사]</b> 누르기',
+    list: [['정유진', '3회 · 11/9~11/13', '학생 답 대기'], ['한도훈', '2회 · 11/10~11/12', '학생 안내 전']], sel: 0,
+    name: '정유진', sum: '3회 · 학생 답 대기 3', rows: YJ(st.ans, st.ans, st.ans),
+    now: ['학생 답 입력', `<label class="chk on"><i>✓</i>11/9 (월) 19:00</label><label class="chk on"><i>✓</i>11/11 (수) 19:00</label><label class="chk on"><i>✓</i>11/13 (금) 19:00</label>
+      <div class="grid2"><button class="b main">대체강사</button><button class="b">기존 강사 보강</button></div>`], sent: 1 },
+  { id: 's3', t: '대체강사 고르기 → 가능 확인 글 보내기', do: '<b>James</b> 옆 <b>[고르기]</b> → 나온 글 <b>[복사]</b> → WhatsApp으로 보낸 뒤 <b>[보냄]</b>',
+    list: [['정유진', '3회 · 11/9~11/13', 'James 답 대기'], ['한도훈', '2회 · 11/10~11/12', '학생 안내 전']], sel: 0,
+    name: '정유진', sum: '3회 · James 답 대기 3', rows: YJ(st.jw, st.jw, st.jw, 'James', 'James', 'James'),
+    now: ['대체강사 고르기', `<div class="opt on"><span>James</span><small>3회 모두 가능</small><button class="b done" disabled>고름 ✓</button></div>
+      <div class="opt"><span>Sophie</span><small>2회 가능 · 11/11 다른 수업</small><button class="b">고르기</button></div>
+      ${msg('James · WhatsApp · 가능 확인', true, false)}`], sent: 1 },
+  { id: 's4', t: 'James 답 입력', do: 'James가 "1, 2만 돼요" → 가능한 날짜만 체크 → <b>[저장 (2회)]</b>',
+    list: [['정유진', '3회 · 11/9~11/13', 'James 답 대기'], ['한도훈', '2회 · 11/10~11/12', '학생 안내 전']], sel: 0,
+    name: '정유진', sum: '3회 · James 답 대기 3', rows: YJ(st.jw, st.jw, st.jw, 'James', 'James', 'James'),
+    now: ['James 답 입력 <small>가능하다고 한 날짜만</small>', `<label class="chk on"><i>✓</i>11/9 (월) 19:00</label><label class="chk on"><i>✓</i>11/11 (수) 19:00</label><label class="chk x"><i></i>11/13 (금) 19:00</label>
+      <button class="b main wide">저장 (2회)</button>`], sent: 2 },
+  { id: 's5', t: '학생에게 James 제안 + 11/13은 다른 대체강사', do: '① 학생 제안 글 <b>[복사]</b> → 프로필과 함께 카톡 → <b>[보냄]</b> ② 11/13: <b>Sophie</b>는 11/13 가능 → <b>[고르기]</b> → 글 <b>[복사]</b> → <b>[보냄]</b>',
+    list: [['정유진', '3회 · 11/9~11/13', '할 일 2'], ['한도훈', '2회 · 11/10~11/12', '학생 안내 전']], sel: 0,
+    name: '정유진', sum: '3회 · 학생 제안 전 2 · 대체강사 다시 고르기 1', rows: YJ(st.jok, st.jok, st.resub, 'James', 'James', '—'),
+    now: ['① 학생에게 James 제안 (11/9·11/11)', msg('학생 · 카톡 · James 제안 (프로필 함께)', true, true)
+      + `<h4 style="margin-top:6px">② 11/13 대체강사 다시 고르기</h4><div class="opt on"><span>Sophie</span><small>11/13 가능</small><button class="b done" disabled>고름 ✓</button></div>${msg('Sophie · WhatsApp · 가능 확인', false, false)}`], sent: 2 },
+  { id: 's6', t: '학생 OK → 확정 → 확정 안내', do: '학생이 "좋아요" → <b>[학생 OK → 확정 (2회)]</b> → 확정 안내 2개 각각 <b>[복사]</b> → 보낸 뒤 <b>[보냄]</b>',
+    list: [['정유진', '3회 · 11/9~11/13', 'Sophie 답 대기 · 확정 안내 2'], ['한도훈', '2회 · 11/10~11/12', '학생 안내 전']], sel: 0,
+    name: '정유진', sum: '3회 · 확정 2 · Sophie 답 대기 1', rows: YJ(st.jdone, st.jdone, st.sw, 'James', 'James', 'Sophie'),
+    now: ['확정 안내 보내기 (11/9·11/11)', msg('학생 · 카톡 · 확정 안내', true, true) + msg('James · WhatsApp · 확정 안내', true, false)], sent: 4 },
+  { id: 's7', t: 'Sophie도 같은 순서 → 정유진 끝', do: 'Sophie 답 입력 → 학생 제안 → 학생 OK → 확정 안내 (4~6단계와 같음)',
+    list: [['정유진', '3회 · 11/9~11/13', '완료 ✓'], ['한도훈', '2회 · 11/10~11/12', '학생 안내 전']], sel: 0, fin: 0,
+    name: '정유진', sum: '3회 모두 확정', rows: YJ(st.jdone, st.jdone, st.jdone, 'James', 'James', 'Sophie'),
+    now: null, sent: 9 },
+  { track: '한도훈 · 기존 강사 보강으로 진행' },
+  { id: 'h1', t: '진행 방법 안내 → 학생 답 "기존 강사 보강"', do: '왼쪽 <b>한도훈</b> → 안내 <b>[복사]</b>·<b>[보냄]</b> → 학생 답이 오면 수업 체크 → <b>[기존 강사 보강]</b>',
+    list: [['정유진', '3회 · 11/9~11/13', '완료 ✓'], ['한도훈', '2회 · 11/10~11/12', '학생 답 대기']], sel: 1, fin: 0,
+    name: '한도훈', sum: '2회 · 학생 답 대기 2', rows: HD(st.ans, st.ans),
+    now: ['학생 답 입력', `<label class="chk on"><i>✓</i>11/10 (화) 21:00</label><label class="chk on"><i>✓</i>11/12 (목) 21:00</label>
+      <div class="grid2"><button class="b">대체강사</button><button class="b main">기존 강사 보강</button></div>`], sent: 1 },
+  { id: 'h2', t: '보강 가능한 날짜 보내기', do: '나온 글 <b>[복사]</b> → 카톡으로 보낸 뒤 <b>[보냄]</b>',
+    list: [['정유진', '3회 · 11/9~11/13', '완료 ✓'], ['한도훈', '2회 · 11/10~11/12', '보강 날짜 미정 2']], sel: 1, fin: 0,
+    name: '한도훈', sum: '2회 · 보강 날짜 미정 2', rows: HD(st.mk, st.mk),
+    now: ['학생에게 보강 가능한 날짜 보내기', msg('학생 · 카톡 · 보강 가능한 날짜', true, false)], sent: 1 },
+  { id: 'h3', t: '학생이 고른 날짜로 보강 신청', do: '학생이 "17일, 19일이요" → 그 날짜 체크(2개까지) → <b>[보강 신청 (2)]</b>',
+    list: [['정유진', '3회 · 11/9~11/13', '완료 ✓'], ['한도훈', '2회 · 11/10~11/12', '학생 날짜 고르는 중']], sel: 1, fin: 0,
+    name: '한도훈', sum: '2회 · 학생 날짜 고르는 중 2', rows: HD(st.mkw, st.mkw),
+    now: ['학생이 고른 날짜 체크 <small>2개까지</small>', `<label class="chk on"><i>✓</i>11/17 (화) 21:00</label><label class="chk on"><i>✓</i>11/19 (목) 21:00</label><label class="chk x"><i></i>11/24 (화) 21:00</label>
+      <button class="b main wide">보강 신청 (2)</button>`], sent: 2 },
+  { id: 'h4', t: 'Lucas 확인 → 보강 확정 → 한도훈 끝', do: '<b>[보강 확정]</b> → 수업 변경 화면에서 Lucas 답대로 확정 → 확정 안내 보냄',
+    list: [['정유진', '3회 · 11/9~11/13', '완료 ✓'], ['한도훈', '2회 · 11/10~11/12', '완료 ✓']], sel: 1, fin: 1, both: true,
+    name: '한도훈', sum: '2회 모두 보강 확정', rows: HD(st.mkd, st.mkd, '보강 11/17 21:00', '보강 11/19 21:00'),
+    now: null, sent: 4 },
+];
+
+function table(rows) {
+  return `<div><p class="label">수업 현황</p><table>${rows.map(([w, who, s]) => `<tr><td class="when">${w}</td><td class="who">${who}</td><td class="st">${s}</td></tr>`).join('')}</table></div>`;
+}
+function card(s) {
+  if (s.form) return `<div class="card"><div class="head"><b>휴무 넣기</b></div><div class="form">
+    <div class="field">강사<div>Lucas</div></div><div class="grid2"><div class="field">시작<div>11/9 (월)</div></div><div class="field">끝<div>11/13 (금)</div></div></div>
+    <button class="b main wide">저장</button></div></div>`;
+  const now = s.now ? `<div class="now"><h4>${s.now[0]}</h4>${s.now[1]}</div>` : `<div class="toast">${s.name} 처리를 모두 마쳤어요.</div>`;
+  return `<div class="card"><div class="head"><b>${s.name}</b><span>Lucas 휴무</span><p class="sum">${s.sum}</p></div>
+    ${table(s.rows)}${now}<details><summary>보낸 글 ${s.sent}개</summary></details></div>`;
+}
+function list(s) {
+  return `<div class="list">${s.list.map(([n, d, st2], i) => `<div class="li ${i === s.sel ? 'on' : ''}"><b>${n}</b><span>${d}</span><span class="s ${(s.fin === i || (s.both)) && st2.includes('완료') ? 'fin' : ''}">${st2}</span></div>`).join('')}
+    <p class="grp">재등록 대기</p><div class="li"><b>오지훈</b><span>10/31 종료 · 재등록하면 1회</span></div></div>`;
+}
+const out = [];
+const toc = [];
+let n = 0;
+for (const s of steps) {
+  if (s.track) { out.push(`<h2 class="track">${s.track}</h2>`); continue; }
+  n++;
+  toc.push(`<a href="#${s.id}">${n}. ${s.t.split(' → ')[0]}</a>`);
+  const right = s.sel === -1 && !s.form ? '' : card(s);
+  out.push(`<section class="step" id="${s.id}"><h3><span class="n">${n}</span>${s.t}</h3><p class="do">${s.do}</p>
+    <div class="pair">
+      <div class="frame"><span class="tag">PC</span><div class="scroll"><div class="pc">
+        <div class="pc-top"><b>강사 휴무</b><span class="chip ${s.form ? '' : 'on'}">Lucas 11/9~11/13</span><button class="b ${s.form ? 'pick' : ''}" style="margin-left:auto">+ 휴무 넣기</button></div>
+        <div class="pc-body">${s.form ? '<div class="list"><p class="grp">아직 학생 없음</p></div>' : list(s)}${right}</div>
+      </div></div></div>
+      <div class="frame"><span class="tag">휴대폰</span>${s.form ? card(s) : card(s)}</div>
+    </div></section>`);
+  if (s.form) {
+    // 저장 뒤: 왼쪽에 걸리는 학생이 생김
+    out.push(`<p class="do" style="margin-top:-4px">저장하면 → 왼쪽 목록에 <b>정유진 3회 · 한도훈 2회</b>와 <b>재등록 대기 오지훈</b>이 생겨요. 휴대폰은 학생 카드가 위아래로 쌓여요.</p>`);
+  }
+}
+document.getElementById('steps').innerHTML = out.join('');
+document.getElementById('steps').style.cssText = 'display:grid;gap:26px';
+document.getElementById('toc').innerHTML = toc.join('');
+</script>
