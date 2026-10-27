@@ -1421,3 +1421,17 @@ select pg_temp.expect_error($$select admin_leave_choose(array[]::uuid[], 'wait',
 select pg_temp.ok((select count(*) from leave_items) = 0, '학생은 휴무 처리 함수를 못 쓰고 목록도 못 봄');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------- 종료 임박 재등록 안내 [보냄] 기록 (migration 1900) ----------
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+create temp table rn_chk as select admin_renewal_notice_sent(e.id) as r1, e.id as eid from enrollments e join students s on s.id = e.student_id where s.name_ko = '확대A';
+select pg_temp.ok((select admin_renewal_notice_sent(eid) ->> 'sent_at' = r1 ->> 'sent_at' from rn_chk)
+                  and (select count(*) = 1 from renewal_notices r join rn_chk c on c.eid = r.enrollment_id and r.sent_by = 'bbbbbbbb-0000-0000-0000-000000000009'),
+  '재등록 안내 보냄은 수강권마다 한 번 기록되고, 다시 눌러도 처음 시각 그대로');
+select pg_temp.expect_error($$delete from renewal_notices$$, '');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.expect_error($$select admin_renewal_notice_sent((select eid from rn_chk))$$, '42501');
+select pg_temp.ok((select count(*) from renewal_notices) = 0, '학생은 재등록 안내 기록을 볼 수도 기록할 수도 없음');
+reset request.jwt.claim.sub;
+reset role;

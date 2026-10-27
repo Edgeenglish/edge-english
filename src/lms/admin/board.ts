@@ -69,6 +69,8 @@ export type EndingSoonTask = {
   lessonsLeft: number;
   endsAt: Date; // 최종 종료일 23:59 KST (이월·고정 시간 마감, POL-RN-01·02)
   tutorName: string | null;
+  /** 재등록 안내 문자 [보냄] 기록 (migration 1900). 없으면 안 보냄 */
+  noticeSentAt: Date | null;
 };
 
 /** 보강 미신청: 보강을 받을 수 있는 취소 수업이 있는데 학생이 아직 보강을 신청하지 않음. 기한 = 최종 종료일 (POL-PER-06) */
@@ -196,6 +198,8 @@ export type BoardItem = {
   unknownOrigins?: { id: string; label: string }[];
   /** 기존 학생 입력: 종료일 이유 확인 — 화면이 이유 고르기로 그림 */
   endReason?: { days: number; weeks: number | null } | null;
+  /** 종료 임박: 재등록 안내 문자 (복사) + [보냄] 기록 — 화면이 RenewalNotice로 그림 */
+  renewal?: { text: string; sentAt: Date | null };
 };
 
 const KST = 'Asia/Seoul';
@@ -214,6 +218,20 @@ export function dueSeverity(dueAt: Date | null, now: Date): Severity {
   if (now.getTime() > dueAt.getTime()) return 'overdue';
   if (hoursBetween(now, dueAt) <= 24) return 'due_soon';
   return 'open';
+}
+
+/**
+ * 재등록 안내 문자 (2026-10-28 대표: 당분간 문자로 안내 → 복사해서 보냄). 마감 = 종료일 23:59 KST (POL-RN-01 이월 · POL-RN-02 고정 시간)
+ * 남은 수업이 없으면 이월 문장은 뺌
+ */
+export function renewalMessage(name: string, lessonsLeft: number, endsAt: Date): string {
+  const f = formatInZone(endsAt, KST);
+  const day = `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8, 10))}일(${WD[f.weekday] ?? f.weekday})`;
+  return [
+    `[엣지영어] ${name}님, ${lessonsLeft > 0 ? `수업이 ${lessonsLeft}회 남았어요.` : '이번 수강기간 수업이 모두 끝나 가요.'} (종료일 ${day})`,
+    `종료일 ${day} 밤 11시 59분까지 재등록 결제를 마치시면 ${lessonsLeft > 0 ? '남은 수업은 다음 수강기간으로 이어지고, ' : ''}지금 수업 요일·시간도 그대로 유지돼요.`,
+    '재등록을 원하시면 편하게 답장 주세요. 😊',
+  ].join('\n\n');
 }
 
 export function dueText(dueAt: Date, now: Date): string {
@@ -318,7 +336,8 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''} · 재등록 결제 확인 전`,
         due: `종료 ${dueText(t.endsAt, now)}`,
         steps: [],
-        actions: [{ key: 'renewal_contacted', label: '재등록 안내함', primary: true }],
+        actions: [],
+        renewal: { text: renewalMessage(t.studentName, t.lessonsLeft, t.endsAt), sentAt: t.noticeSentAt },
       };
     case 'makeup_unrequested':
       return {

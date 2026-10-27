@@ -12,6 +12,7 @@ import { fakeTasks, type FakeLesson, type OpsStats } from '@/lms/admin/fake-data
 import type { PlanView } from '@/lms/admin/confirm';
 import type { PlanActions } from '@/lms/admin/confirm-live';
 import PlanCard, { type PlanHandlers } from './PlanCard';
+import RenewalNotice from './RenewalNotice';
 import OriginFix from './OriginFix';
 import EndReasonFix from './EndReasonFix';
 import type { EndReason } from '@/lms/admin/import';
@@ -81,7 +82,6 @@ const DONE_MESSAGE: Record<string, string> = {
   tutor_ack: '강사 확인을 기록했어요. 일정 조치가 남았어요.',
   check_schedule: '재등록 강사 확인 업무를 마쳤어요.',
   approve_leave: '장기 연기를 승인했어요. 종료일이 늘어나요.',
-  renewal_contacted: '재등록 안내를 기록했어요.',
   makeup_nudged: '보강 신청 안내를 기록했어요.',
   retry_calendar: '캘린더에 다시 반영했어요.',
   fix_email: '이메일을 확인했어요.',
@@ -101,6 +101,7 @@ export default function AdminDashboard({
   onLogout,
   planActions,
   importActions,
+  renewalSent,
   onReload,
 }: {
   nowIso: string;
@@ -114,6 +115,8 @@ export default function AdminDashboard({
   /** 실제 데이터: 일정안 확정·안내 기록 (DB 함수). 처리 뒤 onReload 로 다시 읽음 */
   planActions?: PlanActions;
   importActions?: ImportActions;
+  /** 실제 데이터: 재등록 안내 [보냄] 기록 (DB 함수, migration 1900) */
+  renewalSent?: (enrollmentId: string) => Promise<void>;
   onReload?: () => Promise<void>;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -214,6 +217,17 @@ export default function AdminDashboard({
       return out;
     });
     setToast(`${DONE_MESSAGE[key] ?? '처리했어요.'}${preview ? ' (미리보기: 실제 저장·발송 없음)' : ''}`);
+  }
+
+  // 재등록 안내 [보냄]: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기 (카드는 재등록 결제 확인 전까지 남음)
+  async function markRenewalSent(item: BoardItem) {
+    if (!preview && renewalSent) {
+      await renewalSent(item.id);
+      await onReload?.();
+    } else {
+      setTasks((prev) => prev.map((t) => (t.id === item.id && t.kind === 'ending_soon' ? { ...t, noticeSentAt: new Date() } : t)));
+    }
+    setToast(`재등록 안내를 보냄으로 기록했어요${preview ? ' (미리보기)' : ''}`);
   }
 
   // 보강 원래 날짜 정리: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기
@@ -421,6 +435,7 @@ export default function AdminDashboard({
               )}
               {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
               {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}
+              {item.renewal && <RenewalNotice text={item.renewal.text} sentAt={item.renewal.sentAt} onSent={() => markRenewalSent(item)} />}
               {item.endReason && <EndReasonFix weeks={item.endReason.weeks} onSave={(r, n) => fixEndReason(item, r, n)} />}
               <div className="flex flex-wrap gap-1.5">
                 {item.actions.map((a) =>

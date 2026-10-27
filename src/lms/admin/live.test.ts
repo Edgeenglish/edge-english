@@ -108,6 +108,19 @@ describe('종료 임박 (POL-RN-08)', () => {
     expect(buildBoard(src, now)[0]).toMatchObject({ category: 'ending', title: '가상학생일 · 수업 2회 남음' });
   });
 
+  it('재등록 안내 문자: 남은 횟수·종료일 23:59 마감, [보냄] 기록이 있으면 보냄 시각', () => {
+    const lessons = [reg('2026-10-28T10:00:00Z'), reg('2026-10-30T10:00:00Z')];
+    const item = buildBoard(toEndingSoon([row({ lessons })], now, new Map([['e1', '2026-10-27T05:00:00Z']])), now)[0];
+    expect(item.actions).toEqual([]);
+    expect(item.renewal?.sentAt?.toISOString()).toBe('2026-10-27T05:00:00.000Z');
+    expect(item.renewal?.text).toBe(
+      '[엣지영어] 가상학생일님, 수업이 2회 남았어요. (종료일 10월 30일(금))\n\n' +
+        '종료일 10월 30일(금) 밤 11시 59분까지 재등록 결제를 마치시면 남은 수업은 다음 수강기간으로 이어지고, 지금 수업 요일·시간도 그대로 유지돼요.\n\n' +
+        '재등록을 원하시면 편하게 답장 주세요. 😊',
+    );
+    expect(buildBoard(toEndingSoon([row({ lessons })], now), now)[0].renewal?.sentAt).toBeNull();
+  });
+
   it('3회 이상 남으면 안 나옴', () => {
     expect(toEndingSoon([row({ lessons: [reg('2026-10-28T10:00:00Z'), reg('2026-10-29T10:00:00Z'), reg('2026-10-30T10:00:00Z')] })], now)).toEqual([]);
   });
