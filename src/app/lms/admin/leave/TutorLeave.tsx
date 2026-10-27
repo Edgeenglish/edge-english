@@ -255,6 +255,7 @@ function StudentCard({ g, now, actions, done }: { g: LvStudentGroup; now: Date; 
     try {
       await f();
       setOptions(null);
+      setPicked(new Set());
       await done();
     } catch (e) {
       setErr(e instanceof Error ? e.message : '처리하지 못했어요.');
