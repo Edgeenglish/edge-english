@@ -299,7 +299,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         severity: dueSeverity(t.endsAt, now),
         tag: '종료 임박',
         title: `${t.studentName} · 정규 ${t.regularLeft}회 남음`,
-        detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''} · 재등록 결제 확인 전 (학생 화면에 재등록 안내 표시 중)`,
+        detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''} · 재등록 결제 확인 전`,
         due: `종료 ${dueText(t.endsAt, now)}`,
         steps: [],
         actions: [{ key: 'renewal_contacted', label: '재등록 안내함', primary: true }],
