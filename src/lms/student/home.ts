@@ -24,7 +24,7 @@ export type StudentLesson = {
 export const RENEWAL_PROMPT = { maxLessonsLeft: 2 } as const;
 export const RENEWAL_PROMPT_REF = 'POL-RN-08';
 
-/** 아직 하지 않은 정규 수업 수. 보강·보상 수업은 넣지 않음 (POL-RN-08) */
+/** 아직 하지 않은 정규 수업 수 (화면 표시용 — 재등록 안내 기준은 보강·보상도 세는 lessonsLeft, POL-RN-08) */
 export function regularLessonsLeft(lessons: readonly StudentLesson[]): number {
   return lessons.filter((l) => l.kind === 'regular' && l.state === 'scheduled').length;
 }
