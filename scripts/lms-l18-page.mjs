@@ -22,7 +22,7 @@ ${PAGE_STYLE}
   ${testStep('변경 전 백업', '<p class="expect">결과 표 오른쪽 위 <b>Export → Download CSV</b> → 파일 이름 앞에 <code>날짜_시험용_1800적용전_</code> → 구글 드라이브 <b>LMS 백업</b> 폴더 → 바로 다음 단계</p>', sql('supabase/backup/backup.sql'))}
   ${testStep('변경 적용 (1800)', "<p class=\"expect\">확인: 빨간 글씨 없이 끝남. 'Potential issue detected' 창이 뜨면 초록 <b>Run and enable RLS</b> → 바로 다음 단계</p>", apply)}
   ${testStep('확인 (읽기만)', '<p class="expect">확인: 5줄 모두 <b>통과</b></p>', sql('supabase/test-setup/l18-check.sql'))}
-  ${testStep('화면 시험용 가상 강사·학생', '<p class="expect">확인: 가상휴무A 5줄 · 가상휴무B 3줄</p>', sql('supabase/test-setup/l18-seed.sql'))}
+  ${testStep('화면 시험용 가상 강사·학생', '<p class="expect">확인: 김하준 5줄 · 박서연 3줄</p>', sql('supabase/test-setup/l18-seed.sql'))}
   <p class="note">A가 끝나면 Claude에게 "A 했어". 화면 시험 순서는 대화창으로 드려요.</p>
 
   <h3>C. 운영 DB (edgeenglish-lms)</h3>

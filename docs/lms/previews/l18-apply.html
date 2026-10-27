@@ -644,11 +644,11 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
   </section>
   <section class="step">
     <h2><span class="n">5</span>화면 시험용 가상 강사·학생</h2>
-    <p class="expect">확인: 가상휴무A 5줄 · 가상휴무B 3줄</p>
+    <p class="expect">확인: 김하준 5줄 · 박서연 3줄</p>
     <button type="button" class="copy" data-target="t5">복사</button>
-    <textarea id="t5" readonly rows="3" aria-label="화면 시험용 가상 강사·학생 SQL">-- 강사 휴무 화면 시험(B)용 가상 강사·학생 (시험용 DB에서만, 두 번 실행해도 한 번만 만듦). 날짜는 실행한 날(한국) 기준 d
--- 가상휴무강사(서울) 수업: 가상휴무A d+3 ~ d+7 매일 20:00 (5회) · 가상휴무B d+5 12:00 + 시트 휴가 보강 d+8 12:00 (40분)
--- 가상대체강사(마닐라): 5회 모두 비어 있음 · 가상바쁜강사: d+4·d+6 20:00 에 가상휴무B 수업 → 3회 가능·2회 겹침
+    <textarea id="t5" readonly rows="3" aria-label="화면 시험용 가상 강사·학생 SQL">-- 강사 휴무 화면 시험(B)용 시험 강사·학생 (시험용 DB에서만, 두 번 실행해도 한 번만 만듦). 날짜는 실행한 날(한국) 기준 d
+-- 휴무 강사 Emma(서울) 수업: 김하준 d+3 ~ d+7 매일 20:00 (5회) · 박서연 d+5 12:00 + 시트 휴가 보강 d+8 12:00 (40분)
+-- 대체 가능 James(마닐라): 5회 모두 비어 있음 · Sophie: d+4·d+6 20:00 에 박서연 수업 → 3회 가능·2회 겹침 (실제 강사·학생 이름 아님)
 do $$
 declare
   t_leave uuid;
@@ -664,15 +664,15 @@ begin
     raise notice '시험용 DB가 아니라서 아무것도 하지 않았어요.';
     return;
   end if;
-  if exists (select 1 from students where name_ko = '가상휴무A') then
+  if exists (select 1 from students where name_ko = '김하준') then
     raise notice '이미 있어요 (그대로 둠).';
     return;
   end if;
-  insert into tutors (name, country, timezone) values ('가상휴무강사', 'Korea', 'Asia/Seoul') returning id into t_leave;
-  insert into tutors (name, country, timezone) values ('가상대체강사', 'Philippines', 'Asia/Manila') returning id into t_sub;
-  insert into tutors (name, country, timezone) values ('가상바쁜강사', 'Korea', 'Asia/Seoul') returning id into t_busy;
-  insert into students (name_ko, name_en) values ('가상휴무A', 'Virtual Leave A') returning id into s_a;
-  insert into students (name_ko, name_en) values ('가상휴무B', 'Virtual Leave B') returning id into s_b;
+  insert into tutors (name, country, timezone) values ('Emma', 'Korea', 'Asia/Seoul') returning id into t_leave;
+  insert into tutors (name, country, timezone) values ('James', 'Philippines', 'Asia/Manila') returning id into t_sub;
+  insert into tutors (name, country, timezone) values ('Sophie', 'Korea', 'Asia/Seoul') returning id into t_busy;
+  insert into students (name_ko, name_en) values ('김하준', 'Hajun Kim') returning id into s_a;
+  insert into students (name_ko, name_en) values ('박서연', 'Seoyeon Park') returning id into s_b;
   insert into enrollments (student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
   values (s_a, 1, 4, 5, 40, d0 - 7, d0 - 7 + 27, 20, 'active') returning id into e_a;
   insert into enrollments (student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
@@ -698,7 +698,7 @@ begin
 end $$;
 select s.name_ko as 학생, t.name as 강사, to_char(l.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI') as 수업_한국
 from lessons l join students s on s.id = l.student_id join tutors t on t.id = l.tutor_id
-where s.name_ko in ('가상휴무A', '가상휴무B') order by l.starts_at;</textarea>
+where s.name_ko in ('김하준', '박서연') order by l.starts_at;</textarea>
   </section>
   <p class="note">A가 끝나면 Claude에게 "A 했어". 화면 시험 순서는 대화창으로 드려요.</p>
 
