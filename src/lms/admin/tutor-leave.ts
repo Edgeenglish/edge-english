@@ -50,7 +50,7 @@ export type LvMakeupOption = { section: 'in_period' | 'after_end'; startsAt: Dat
 /** 학생 선택 안내의 두 가지 (대표 문구 2026-10-27). 나중에 학생 LMS 선택 화면도 이 글을 그대로 씀 */
 export const LEAVE_OPTIONS = {
   substitute: {
-    title: '원래 시간에 대체강사와 수업하기 · 추천',
+    title: '⭐추천⭐ 원래 시간에 대체강사와 수업하기',
     lines: ['일정을 바꾸지 않고, 평소 수업 시간 그대로 수업하실 수 있어요.', '다른 강사의 영어와 수업 방식도 경험해 보실 수 있습니다.'],
   },
   wait: {
@@ -189,7 +189,7 @@ export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
 /** 기존 강사 보강: 학생에게 보강 가능한 날짜를 보내고 2개까지 고르게 함 (1개도 됨, 2026-10-27 대표) */
 export function makeupDatesText(studentName: string, studentTz: string, dates: Date[]): string {
   return [
-    `[엣지영어] ${studentName}님, 보강 가능한 날짜예요. 편한 날을 ${MAKEUP_SLOTS_MAX}개까지 골라 주세요. 1개만 되셔도 괜찮아요.`,
+    `[엣지영어] ${studentName}님, 보강 가능한 날짜예요. 편한 날을 ${MAKEUP_SLOTS_MAX}개까지 골라 주세요.(없다면 1개만 고르셔도 괜찮아요)`,
     ...dates.map((d) => `- ${koAt(d, studentTz)}`),
   ].join('\n');
 }

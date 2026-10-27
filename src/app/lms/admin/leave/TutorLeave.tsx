@@ -40,6 +40,8 @@ const btnDone = 'min-h-[44px] rounded-[10px] border border-[#c9c6d6] bg-[#d9d6e3
 const Err = ({ children }: { children: React.ReactNode }) => (children ? <p className="mt-1.5 text-[13px] text-[#b3261e]">{children}</p> : null);
 const TONE = { todo: 'bg-[#fff8d6] text-[#5c4a00]', wait: 'bg-[#e9f4ff] text-[#1b5a8a]', done: 'bg-[#e3f6ea] text-[#1e7a46]' } as const;
 const STEP_ORDER: LvStep[] = ['notify', 'answer', 'tutor', 'makeup', 'confirm'];
+/** 단계 화면 제목 (4 = 3단계가 기존 강사 보강뿐일 때) */
+const STEP_TITLE = ['학생에게 안내', '학생 답 입력', '강사 확인', '확정', '보강 날짜'];
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -266,127 +268,121 @@ const Block = ({ title, children }: { title: string; children: React.ReactNode }
 
 const overlaps = (m: LvMessage, ids: Set<string>) => m.noticeIds.some((id) => ids.has(id));
 
-// 학생 한 명: 단계 흐름(1 안내 › 2 학생 답 › 3 강사 확인 › 4 확정), 아래는 지금 할 일만 단계 순서로.
-// 끝난 단계를 누르면 그 단계로 되돌리기. 방금 보낸 안내는 회색 [보냄 ✓]으로 그 자리에 남음 (다시 누르면 안 보냄으로)
+// 학생 한 명: 단계 흐름(1 안내 › 2 학생 답 › 3 강사 확인 › 4 확정). 고른 단계(처음엔 지금 단계)의 화면만 보임:
+// 그 단계에서 할 일 + 그 단계에서 보낸 글(회색 '보냄 ✓', 다시 누르면 안 보냄) + 앞 단계로 되돌리기.
+// 할 일도 되돌릴 것도 없는 단계는 못 누름. 보냄을 누르면 그 단계에 머물러 회색 버튼을 보여 주고, 아래 [다음 단계 ›]로 넘어감
 function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w: LvStudentWork; sent: LvMessage[]; now: Date; actions: LeaveActions; done: () => Promise<void> }) {
-  const r = useRun(done);
-  const [kept, setKept] = useState<Set<string>>(new Set());
   const [view, setView] = useState<number | null>(null);
+  // 처리(고르기·저장·확정)를 하면 지금 단계로 넘어가 다음 할 일이 바로 보이게
+  const next = async () => { setView(null); await done(); };
+  const r = useRun(next);
+  const [copied, setCopied] = useState<Set<string>>(new Set());
   const stage = (s: LvStep) => (s === 'notify' ? 0 : s === 'answer' ? 1 : s === 'confirm' ? 3 : 2);
   const cur = w.steps.length ? stage(w.steps[0]) : 4;
   const third = w.tutor.length && w.makeup.length ? '3 강사 확인·보강 날짜' : w.makeup.length ? LV_STEP_TEXT.makeup : LV_STEP_TEXT.tutor;
   const chips = [LV_STEP_TEXT.notify, LV_STEP_TEXT.answer, third, LV_STEP_TEXT.confirm];
   const changeable = g.items.filter((i) => i.startsAt > now && !(i.choice === 'wait' && (i.makeupAt || i.makeupRequested)));
-  const send = (m: LvMessage) => async () => {
-    await actions.markSent(m.noticeIds);
-    setKept(new Set([...kept, ...m.noticeIds]));
-    await done();
-  };
-  const unsend = (m: LvMessage) => async () => {
-    await actions.unsend(m.noticeIds);
-    await done();
-  };
-  const msg = (m: LvMessage) => <MessageRow key={m.key} m={m} onSend={send(m)} onUnsend={unsend(m)} />;
-  const keptOf = (events: LvMessage['event'][], recipientId?: string) =>
-    sent.filter((m) => events.includes(m.event) && overlaps(m, kept) && (!recipientId || m.recipientId === recipientId));
+
+  const msg = (m: LvMessage, n: number) => (
+    <MessageRow key={m.key} m={m} copied={overlaps(m, copied)}
+      onCopied={() => setCopied(new Set([...copied, ...m.noticeIds]))}
+      onSend={async () => { await actions.markSent(m.noticeIds); setView(n); await done(); }}
+      onUnsend={async () => { await actions.unsend(m.noticeIds); await done(); }} />
+  );
+  const sentOf = (n: number) => sent.filter((m) => (n === 0 ? m.event === 'leave_options' : n === 2 ? m.event === 'sub_ask' : n === 3 && (m.event === 'sub_student' || m.event === 'sub_confirmed')));
 
   // 되돌리기 대상 (지난 수업 제외)
   const future = g.items.filter((i) => i.startsAt > now);
-  const backAnswer = future.filter((i) => i.choice === 'substitute' || (i.choice === 'wait' && !i.makeupAt && !i.makeupRequested));
-  const backTutor = future.filter((i) => i.choice === 'substitute' && (i.subStage === 'tutor_ok' || i.subStage === 'confirmed'));
-  const backConfirm = future.filter((i) => i.choice === 'substitute' && i.subStage === 'confirmed');
-  const sentAt = (n: number) => sent.filter((m) => (n === 0 ? m.event === 'leave_options' : n === 2 ? m.event === 'sub_ask' : n === 3 && (m.event === 'sub_student' || m.event === 'sub_confirmed')));
-  // 누를 수 있는 단계: 지금 단계 · 할 일이 있는 단계 · 되돌릴 것이 있는 단계. 나머지는 아예 못 누름
-  const canOpen = (n: number) => n === cur || w.steps.some((x) => stage(x) === n)
-    || sentAt(n).length > 0 || [[], backAnswer, backTutor, backConfirm][n].length > 0;
-  const shown = view !== null && view !== cur && canOpen(view) ? view : null;
-  const backPanel = (n: number) => {
-    const sentHere = sentAt(n);
-    const [items, to, label] = n === 1 ? [backAnswer, 'undecided', '학생 답 전으로'] as const
-      : n === 2 ? [backTutor, 'asked', '강사 답 전으로'] as const
-      : n === 3 ? [backConfirm, 'tutor_ok', '확정 전으로'] as const : [[], null, ''] as const;
-    return (
-      <Block title={`${chips[n]} · 되돌리기`}>
-        {sentHere.map(msg)}
-        {items.length > 0 && to && (
-          <>
-            <ItemList items={items} />
-            <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => actions.back(items.map((i) => i.id), to), () => setView(null))}>
-              {label} ({items.length}회)
-            </button>
-          </>
-        )}
-        {sentHere.length === 0 && items.length === 0 && <p className="text-[13.5px] text-[#6b6880]">되돌릴 것 없음</p>}
-        <Err>{r.err}</Err>
-      </Block>
-    );
+  const backOf = (n: number) => {
+    if (n === 1) return { items: future.filter((i) => i.choice === 'substitute' || (i.choice === 'wait' && !i.makeupAt && !i.makeupRequested)), to: 'undecided' as const, label: '학생 답 전으로' };
+    if (n === 2) return { items: future.filter((i) => i.choice === 'substitute' && (i.subStage === 'tutor_ok' || i.subStage === 'confirmed')), to: 'asked' as const, label: '강사 답 전으로' };
+    if (n === 3) return { items: future.filter((i) => i.choice === 'substitute' && i.subStage === 'confirmed'), to: 'tutor_ok' as const, label: '확정 전으로' };
+    return null;
   };
 
-  const blocks: React.ReactNode[] = [];
-  const notifyMsgs = [...w.notify, ...keptOf(['leave_options'])];
-  if (notifyMsgs.length) blocks.push(<Block key="notify" title="학생에게 안내">{notifyMsgs.map(msg)}</Block>);
-  if (w.answer.length) blocks.push(
-    <Block key="answer" title="학생 답">
-      <ItemList items={w.answer} />
-      <ChooseBox items={w.answer} actions={actions} done={done} />
-    </Block>,
-  );
-  for (const t of w.tutor) blocks.push(
-    <Block key={`t-${t.subTutorId}`} title={`대체강사 ${t.subTutorName} 확인`}>
-      {t.ask ? msg(t.ask) : keptOf(['sub_ask'], t.subTutorId).map(msg)}
-      <TutorCheck key={t.items.map((i) => i.id).join()} t={t} actions={actions} done={done} />
-    </Block>,
-  );
-  if (w.makeup.length) blocks.push(
-    <Block key="makeup" title="보강 날짜">
-      <MakeupPick g={g} items={w.makeup} actions={actions} done={done} />
-    </Block>,
-  );
+  // 단계마다 할 일
   const c = w.confirm;
-  const confirmMsgs = [...(c.studentMsg ? [c.studentMsg] : []), ...keptOf(['sub_student'])];
-  const doneMsgs = [...c.confirmedMsgs, ...keptOf(['sub_confirmed'])];
-  if (confirmMsgs.length || c.tutorOk.length || doneMsgs.length || c.makeupRequested.length) blocks.push(
-    <Block key="confirm" title="확정">
-      {confirmMsgs.map(msg)}
-      {c.tutorOk.length > 0 && (
-        <button type="button" disabled={r.busy} className={btnMain} onClick={() => r.run(() => actions.studentOk(c.tutorOk.map((i) => i.id)))}>
-          학생 OK → 확정 ({c.tutorOk.length}회)
-        </button>
-      )}
-      {doneMsgs.map(msg)}
-      {c.makeupRequested.length > 0 && (
-        <>
-          <ItemList items={c.makeupRequested} />
-          <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5fff] text-[14px] font-semibold text-[#5b3fe0]">
-            보강 확정
-          </Link>
-        </>
-      )}
-      <Err>{view === null ? r.err : ''}</Err>
-    </Block>,
-  );
+  const todo = (n: number): React.ReactNode[] => {
+    if (n === 0) return w.notify.map((m) => msg(m, 0));
+    if (n === 1) return w.answer.length ? [
+      <div key="answer" className="grid gap-2">
+        <ItemList items={w.answer} />
+        <ChooseBox items={w.answer} actions={actions} done={next} />
+      </div>,
+    ] : [];
+    if (n === 2) return [
+      ...w.tutor.map((t) => (
+        <Block key={`t-${t.subTutorId}`} title={`대체강사 ${t.subTutorName} 확인`}>
+          {t.ask && msg(t.ask, 2)}
+          <TutorCheck key={t.items.map((i) => i.id).join()} t={t} actions={actions} done={next} />
+        </Block>
+      )),
+      ...(w.makeup.length ? [<Block key="makeup" title="보강 날짜"><MakeupPick g={g} items={w.makeup} actions={actions} done={next} /></Block>] : []),
+    ];
+    const out: React.ReactNode[] = [];
+    if (c.studentMsg) out.push(msg(c.studentMsg, 3));
+    if (c.tutorOk.length) out.push(
+      <button key="ok" type="button" disabled={r.busy} className={btnMain} onClick={() => r.run(() => actions.studentOk(c.tutorOk.map((i) => i.id)))}>
+        학생 OK → 확정 ({c.tutorOk.length}회)
+      </button>,
+    );
+    out.push(...c.confirmedMsgs.map((m) => msg(m, 3)));
+    if (c.makeupRequested.length) out.push(
+      <div key="mk" className="grid gap-2">
+        <ItemList items={c.makeupRequested} />
+        <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5fff] text-[14px] font-semibold text-[#5b3fe0]">
+          보강 확정
+        </Link>
+      </div>,
+    );
+    return out;
+  };
+  const canOpen = (n: number) => todo(n).length > 0 || sentOf(n).length > 0 || (backOf(n)?.items.length ?? 0) > 0;
+  const sel = view !== null && canOpen(view) ? view : cur;
+  const nextStep = todo(sel).length === 0 ? [0, 1, 2, 3].find((n) => n > sel && todo(n).length > 0) : undefined;
+  const back = sel < 4 ? backOf(sel) : null;
 
   return (
     <Card title={<>{g.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{g.studentCode}</span></>}>
       <div className="mb-3 flex flex-wrap items-center gap-1">
         {chips.map((label, n) => {
-          const on = (shown ?? cur) === n;
+          const on = sel === n;
           const open = canOpen(n);
           return (
             <span key={label} className="flex items-center gap-1">
               {n > 0 && <span aria-hidden className="text-[15px] font-bold text-[#b9b6c8]">›</span>}
-              <button type="button" aria-pressed={on} disabled={!open} onClick={() => setView(n === cur ? null : n)}
+              <button type="button" aria-pressed={on} disabled={!open} onClick={() => setView(n)}
                 className={`min-h-[34px] rounded-full px-3 text-[13px] ${on ? 'bg-[#7d5fff] font-bold text-white' : open ? 'border border-[#7d5fff] bg-white text-[#5b3fe0]' : 'bg-[#f3f2f7] text-[#b9b6c8]'}`}>
                 {n < cur ? '✓ ' : ''}{label}
               </button>
             </span>
           );
         })}
-        {cur === 4 && <span className="ml-1 rounded-full bg-[#7d5fff] px-3 py-1 text-[13px] font-bold text-white">완료</span>}
+        {cur === 4 && <span className="ml-1 rounded-full bg-[#e3f6ea] px-3 py-1 text-[13px] font-bold text-[#1e7a46]">완료</span>}
       </div>
 
       <div className="grid gap-3">
-        {shown !== null ? backPanel(shown) : blocks}
+        {sel < 4 && (
+          <section aria-label={`${sel + 1}단계`} className="grid gap-2 rounded-[14px] border-2 border-[#7d5fff] p-3">
+            <h3 className="-mx-3 -mt-3 mb-1 rounded-t-[12px] bg-[#7d5fff] px-3 py-2 text-[15.5px] font-extrabold text-white">
+              {sel + 1}단계 · {STEP_TITLE[sel === 2 && w.makeup.length && !w.tutor.length ? 4 : sel]}
+            </h3>
+            {todo(sel)}
+            {sentOf(sel).map((m) => msg(m, sel))}
+            {back && back.items.length > 0 && (
+              <div className="grid gap-2 border-t border-[#e6e3ef] pt-3">
+                <ItemList items={back.items} />
+                <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => actions.back(back.items.map((i) => i.id), back.to), () => setView(null))}>
+                  {back.label} ({back.items.length}회)
+                </button>
+              </div>
+            )}
+            {nextStep !== undefined && (
+              <button type="button" className={btnMain} onClick={() => setView(nextStep)}>{chips[nextStep]} ›</button>
+            )}
+            <Err>{r.err}</Err>
+          </section>
+        )}
 
         <details className="border-t border-[#e6e3ef] pt-3">
           <summary className="min-h-[36px] cursor-pointer text-[13.5px] font-semibold text-[#5b3fe0]">전체 수업 {g.items.length}회</summary>
@@ -395,17 +391,11 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
             {changeable.length > 0 && (
               <details>
                 <summary className="min-h-[36px] cursor-pointer text-[13.5px] font-semibold text-[#5b3fe0]">처리 방법 바꾸기</summary>
-                <div className="mt-2"><ChooseBox items={changeable} actions={actions} done={done} /></div>
+                <div className="mt-2"><ChooseBox items={changeable} actions={actions} done={next} /></div>
               </details>
             )}
           </div>
         </details>
-        {sent.length > 0 && (
-          <details>
-            <summary className="min-h-[36px] cursor-pointer text-[13.5px] font-semibold text-[#5b3fe0]">보낸 글 {sent.length}건</summary>
-            <div className="mt-2 grid gap-2">{sent.map(msg)}</div>
-          </details>
-        )}
       </div>
     </Card>
   );
@@ -631,11 +621,10 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
   );
 }
 
-// 안내 한 건: [복사] 누르면 회색 '복사함 ✓', [보냄] 누르면 회색 '보냄 ✓'로 남음 (다시 누르면 안 보냄으로 되돌림)
-function MessageRow({ m, onSend, onUnsend }: { m: LvMessage; onSend: () => Promise<void>; onUnsend: () => Promise<void> }) {
+// 안내 한 건: [복사] 누르면 회색 '복사함 ✓'(보냄을 눌러도 그대로), [보냄] 누르면 회색 '보냄 ✓'로 남음 (다시 누르면 안 보냄으로 되돌림)
+function MessageRow({ m, copied, onCopied, onSend, onUnsend }: { m: LvMessage; copied: boolean; onCopied: () => void; onSend: () => Promise<void>; onUnsend: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [copied, setCopied] = useState(false);
   const [manual, setManual] = useState(false);
   const sent = m.status === 'sent';
   const act = async (f: () => Promise<void>) => {
@@ -647,7 +636,7 @@ function MessageRow({ m, onSend, onUnsend }: { m: LvMessage; onSend: () => Promi
     <div className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
       <div className="flex items-center gap-2">
         <b className="min-w-0 flex-1 text-[14.5px] text-[#1d1b2b]">{m.recipient === 'student' ? '학생' : '강사'} {m.to} · {LV_EVENT_TEXT[m.event]}</b>
-        <button type="button" className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(m.text)) setCopied(true); else setManual(true); }}>
+        <button type="button" className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(m.text)) onCopied(); else setManual(true); }}>
           {copied ? '복사함 ✓' : '복사'}
         </button>
         <button type="button" disabled={busy} className={sent ? btnDone : btnMain} onClick={() => act(sent ? onUnsend : onSend)}>
