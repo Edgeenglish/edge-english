@@ -27,19 +27,21 @@ const lesson = (id: string, kind: StudentLesson['kind'], date: string, state: St
 describe('재등록 안내 (POL-RN-08)', () => {
   const three = [lesson('a', 'regular', '2026-10-15'), lesson('b', 'regular', '2026-10-20'), lesson('c', 'regular', '2026-10-22')];
 
-  it('정규 3회 남으면 숨김', () => expect(renewalPrompt(three, 'not_requested')).toBeNull());
+  it('수업 3회 남으면 숨김', () => expect(renewalPrompt(three, 'not_requested')).toBeNull());
 
-  it('정규 2회 이하면 재등록 신청 버튼', () => {
-    expect(renewalPrompt(three.slice(1), 'not_requested')).toEqual({ mode: 'request', regularLeft: 2 });
-    expect(renewalPrompt([], 'not_requested')).toEqual({ mode: 'request', regularLeft: 0 });
+  it('수업 2회 이하면 재등록 신청 버튼', () => {
+    expect(renewalPrompt(three.slice(1), 'not_requested')).toEqual({ mode: 'request', left: 2 });
+    expect(renewalPrompt([], 'not_requested')).toEqual({ mode: 'request', left: 0 });
   });
 
-  it('보강·보상 수업은 세지 않음 — 정규 2 + 보강 2 이어도 보임', () => {
+  it('보강·보상도 수업으로 셈 (2026-10-27 대표) — 정규 2 + 보강 2면 안 보임, 날짜 미정 보강도 셈', () => {
     const list = [...three.slice(1), lesson('m1', 'makeup', '2026-10-21'), lesson('m2', 'compensation', '2026-10-21')];
     expect(regularLessonsLeft(list)).toBe(2);
     expect(lessonsLeft(list)).toEqual({ total: 4, regular: 2, other: 2 });
     expect(lessonsLeft(list, 1)).toEqual({ total: 5, regular: 2, other: 3 });
-    expect(renewalPrompt(list, 'not_requested')).toMatchObject({ mode: 'request' });
+    expect(renewalPrompt(list, 'not_requested')).toBeNull();
+    expect(renewalPrompt(three.slice(2), 'not_requested', 1)).toEqual({ mode: 'request', left: 2 });
+    expect(renewalPrompt(three.slice(2), 'not_requested', 2)).toBeNull();
   });
 
   it('진행·취소된 정규 수업은 남은 수업이 아님', () => {
@@ -48,7 +50,7 @@ describe('재등록 안내 (POL-RN-08)', () => {
   });
 
   it('신청했지만 결제 확인 전이면 "결제 확인 중", 결제 확인되면 사라짐', () => {
-    expect(renewalPrompt(three.slice(1), 'requested')).toEqual({ mode: 'awaiting_payment', regularLeft: 2 });
+    expect(renewalPrompt(three.slice(1), 'requested')).toEqual({ mode: 'awaiting_payment', left: 2 });
     expect(renewalPrompt(three.slice(1), 'payment_confirmed')).toBeNull();
   });
 

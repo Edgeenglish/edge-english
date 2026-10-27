@@ -66,7 +66,7 @@ export type EndingSoonTask = {
   studentName: string;
   studentCode: string;
   product: string;
-  regularLeft: number;
+  lessonsLeft: number;
   endsAt: Date; // 최종 종료일 23:59 KST (이월·고정 시간 마감, POL-RN-01·02)
   tutorName: string | null;
 };
@@ -314,7 +314,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         kind: t.kind,
         severity: dueSeverity(t.endsAt, now),
         tag: '종료 임박',
-        title: `${t.studentName} · 정규 ${t.regularLeft}회 남음`,
+        title: `${t.studentName} · 수업 ${t.lessonsLeft}회 남음`,
         detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''} · 재등록 결제 확인 전`,
         due: `종료 ${dueText(t.endsAt, now)}`,
         steps: [],

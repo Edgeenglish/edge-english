@@ -5,6 +5,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, endOfKstDay, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { courseName } from '../rules/period';
+import { grantsMakeup, type ClassStatus } from '../rules/status';
 import { RENEWAL_PROMPT } from '../student/home';
 import type { TaskSource } from './board';
 import type { PlanView } from './confirm';
@@ -259,8 +260,10 @@ export type EndingRow = {
   duration_min: number;
   final_end_date: string;
   student: { name_ko: string; code: string } | null;
-  /** 이 수강권의 정규 수업만 (보강·보상·이월·이관 수업 제외, POL-RN-08) */
-  lessons: { state: 'scheduled' | 'canceled' | 'done'; starts_at: string; tutor: { name: string } | null }[];
+  /** 이 수강권의 모든 수업 (POL-RN-08: 정규·보강·보상·이월 다 셈, 2026-10-27 대표) */
+  lessons: { id: string; kind: string; state: 'scheduled' | 'canceled' | 'done'; starts_at: string; class_status: string | null; makeup_of: string | null; voided_at: string | null; tutor: { name: string } | null }[];
+  /** 시트에서 넘어온 날짜 미정 보강 (makeup_open) */
+  migrated?: { kind: string }[];
 };
 
 /**
@@ -276,9 +279,15 @@ export function toEndingSoon(rows: EndingRow[], now: Date): TaskSource[] {
   }
   const out: TaskSource[] = [];
   for (const r of latest.values()) {
-    if (r.lessons.length === 0) continue;
+    // 정규 수업이 아직 없는 수강권(신규 매칭 전)은 제외
+    if (!r.lessons.some((l) => l.kind === 'regular')) continue;
     const left = r.lessons.filter((l) => l.state === 'scheduled' && new Date(l.starts_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    if (left.length > RENEWAL_PROMPT.maxRegularLessonsLeft) continue;
+    // 날짜 미정 보강: 보강 권리가 있는 취소 수업 중 살아 있는 보강이 없는 것 + 시트에서 넘어온 미예약 보강
+    const booked = new Set(r.lessons.filter((l) => l.makeup_of && l.state !== 'canceled').map((l) => l.makeup_of));
+    const owed = r.lessons.filter((l) => l.state === 'canceled' && !l.voided_at && l.class_status
+      && (grantsMakeup(l.class_status as ClassStatus) || l.class_status === 'Tutor long-term leave') && !booked.has(l.id)).length
+      + (r.migrated ?? []).filter((m) => m.kind === 'makeup_open').length;
+    if (left.length + owed > RENEWAL_PROMPT.maxLessonsLeft) continue;
     const last = [...r.lessons].sort((a, b) => b.starts_at.localeCompare(a.starts_at))[0];
     out.push({
       kind: 'ending_soon',
@@ -286,7 +295,7 @@ export function toEndingSoon(rows: EndingRow[], now: Date): TaskSource[] {
       studentName: r.student?.name_ko ?? '(학생 정보 없음)',
       studentCode: r.student?.code ?? '',
       product: product(r),
-      regularLeft: left.length,
+      lessonsLeft: left.length + owed,
       endsAt: endOfKstDay(r.final_end_date),
       tutorName: (left[0] ?? last).tutor?.name ?? null,
     });
@@ -330,9 +339,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     sb.from('makeup_requests').select('created_at, student:students(id, name_ko, code)').in('status', ['requested', 'countered']),
     sb
       .from('enrollments')
-      .select('id, student_id, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(state, starts_at, tutor:tutors!lessons_tutor_id_fkey(name))')
-      .in('status', ['confirmed', 'active'])
-      .eq('lessons.kind', 'regular'),
+      .select('id, student_id, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind)')
+      .in('status', ['confirmed', 'active']),
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
     sb.from('lesson_notices').select(`leave:leave_items(${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
   ]);

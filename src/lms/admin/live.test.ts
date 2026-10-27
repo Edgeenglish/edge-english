@@ -93,7 +93,9 @@ describe('종료일 이유 미확인은 대조 완료와 따로 (migration 1600)
 describe('종료 임박 (POL-RN-08)', () => {
   const now = new Date('2026-10-27T03:00:00Z'); // 10/27 12:00 KST
   const T = { name: 'Olivia' };
-  const reg = (starts_at: string, state: 'scheduled' | 'canceled' | 'done' = 'scheduled') => ({ state, starts_at, tutor: T });
+  let n = 0;
+  const reg = (starts_at: string, state: 'scheduled' | 'canceled' | 'done' = 'scheduled', kind = 'regular', extra: { class_status?: string; makeup_of?: string } = {}) =>
+    ({ id: `l${++n}`, kind, state, starts_at, class_status: extra.class_status ?? null, makeup_of: extra.makeup_of ?? null, voided_at: null, tutor: T });
   const row = (over: Partial<EndingRow>): EndingRow => ({
     id: 'e1', student_id: 's1', weeks: 4, legacy_label: null, weekly_count: 2, duration_min: 50, final_end_date: '2026-10-30',
     student: { name_ko: '가상학생일', code: 'STU-9001' }, lessons: [], ...over,
@@ -101,9 +103,9 @@ describe('종료 임박 (POL-RN-08)', () => {
 
   it('지금 이후 예정 정규 2회 이하 → 한 줄. 지난 예정 수업(Class Record 없음)은 한 것으로 셈, 취소는 안 셈', () => {
     const src = toEndingSoon([row({ lessons: [reg('2026-10-20T10:00:00Z'), reg('2026-10-27T02:00:00Z'), reg('2026-10-28T10:00:00Z'), reg('2026-10-29T10:00:00Z', 'canceled'), reg('2026-10-30T10:00:00Z')] })], now);
-    expect(src).toEqual([expect.objectContaining({ kind: 'ending_soon', id: 'e1', regularLeft: 2, tutorName: 'Olivia', product: '50분 주2회 1개월(4주)' })]);
+    expect(src).toEqual([expect.objectContaining({ kind: 'ending_soon', id: 'e1', lessonsLeft: 2, tutorName: 'Olivia', product: '50분 주2회 1개월(4주)' })]);
     expect((src[0] as { endsAt: Date }).endsAt.toISOString()).toBe('2026-10-30T14:59:59.999Z');
-    expect(buildBoard(src, now)[0]).toMatchObject({ category: 'ending', title: '가상학생일 · 정규 2회 남음' });
+    expect(buildBoard(src, now)[0]).toMatchObject({ category: 'ending', title: '가상학생일 · 수업 2회 남음' });
   });
 
   it('3회 이상 남으면 안 나옴', () => {
@@ -113,7 +115,7 @@ describe('종료 임박 (POL-RN-08)', () => {
   it('종료일이 지나도 재등록 결제 확인 전이면 계속 나옴 (0회, 기한 지남)', () => {
     const src = toEndingSoon([row({ final_end_date: '2026-10-24', lessons: [reg('2026-10-23T10:00:00Z')] })], now);
     expect(src).toHaveLength(1);
-    expect(buildBoard(src, now)[0]).toMatchObject({ severity: 'overdue', title: '가상학생일 · 정규 0회 남음' });
+    expect(buildBoard(src, now)[0]).toMatchObject({ severity: 'overdue', title: '가상학생일 · 수업 0회 남음' });
   });
 
   it('결제 확인된 재등록 수강권이 있으면 빠짐 (학생마다 마지막 수강권만 봄)', () => {
@@ -124,5 +126,15 @@ describe('종료 임박 (POL-RN-08)', () => {
 
   it('정규 수업이 아직 없는 수강권(신규 매칭 전)은 안 나옴', () => {
     expect(toEndingSoon([row({ lessons: [] })], now)).toEqual([]);
+  });
+
+  it('보강·보상·이월도 수업으로 셈, 날짜 미정 보강(취소 수업의 보강 권리·시트 미예약 보강)도 셈 (2026-10-27 대표)', () => {
+    const base = [reg('2026-10-28T10:00:00Z'), reg('2026-10-29T10:00:00Z', 'scheduled', 'makeup')];
+    expect(toEndingSoon([row({ lessons: base })], now)).toHaveLength(1);
+    expect(toEndingSoon([row({ lessons: [...base, reg('2026-10-30T10:00:00Z', 'scheduled', 'compensation')] })], now)).toEqual([]);
+    const canceled = reg('2026-10-22T10:00:00Z', 'canceled', 'regular', { class_status: 'Student canceled in advance' });
+    expect(toEndingSoon([row({ lessons: [...base, canceled] })], now)).toEqual([]);
+    expect(toEndingSoon([row({ lessons: [...base, canceled, reg('2026-10-30T10:00:00Z', 'done', 'makeup', { makeup_of: canceled.id })] })], now)).toHaveLength(1);
+    expect(toEndingSoon([row({ lessons: base, migrated: [{ kind: 'makeup_open' }] })], now)).toEqual([]);
   });
 });

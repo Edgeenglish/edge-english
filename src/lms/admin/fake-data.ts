@@ -72,11 +72,11 @@ export function fakeTasks(now: Date): TaskSource[] {
     },
     {
       kind: 'ending_soon', id: 'e-1', studentName: '가상학생팔', studentCode: 'STU-9008', product: '50분 주2회 4주',
-      regularLeft: 1, endsAt: endOfKstDay(instantToKstDate(now)), tutorName: '가상강사 Alex',
+      lessonsLeft: 1, endsAt: endOfKstDay(instantToKstDate(now)), tutorName: '가상강사 Alex',
     },
     {
       kind: 'ending_soon', id: 'e-2', studentName: '가상학생구', studentCode: 'STU-9009', product: '40분 주3회 12주',
-      regularLeft: 2, endsAt: endOfKstDay(addDays(instantToKstDate(now), 5)), tutorName: '가상강사 Blair',
+      lessonsLeft: 2, endsAt: endOfKstDay(addDays(instantToKstDate(now), 5)), tutorName: '가상강사 Blair',
     },
     {
       kind: 'makeup_unrequested', id: 'mk-1', studentName: '가상학생십', studentCode: 'STU-9010',

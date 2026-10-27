@@ -75,7 +75,7 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
   const left = lessonsLeft(lessons, makeupsOwed);
-  const prompt = renewalPrompt(lessons, renewal);
+  const prompt = renewalPrompt(lessons, renewal, makeupsOwed);
   const dLeft = diffDays(formatInZone(now, 'Asia/Seoul').date, s.finalEndDate);
   const points = pointsHistory(s.points);
   const book = books.find((b) => b.title.replace(/\s/g, '') === s.textbook.title.replace(/\s/g, ''));
@@ -99,7 +99,7 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
       <div className="lg:flex-1">
-        <h2 className="text-[15px] font-bold text-[#5c3b00]">정규 수업이 {prompt.regularLeft}회 남았어요</h2>
+        <h2 className="text-[15px] font-bold text-[#5c3b00]">수업이 {prompt.left}회 남았어요</h2>
         {prompt.mode === 'request' ? (
           <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
             종료일 {fmtDate(s.finalEndDate)} 23:59까지 재등록 결제하면 남은 수업을 다음 등록으로 옮길 수 있고, 지금 고정 시간도 유지돼요.

@@ -21,7 +21,8 @@ export type StudentLesson = {
 };
 
 /** 재등록 안내를 보여 주는 기준: 남은 정규 수업 수 (POL-RN-08, 2026-10-17 대표 결정) */
-export const RENEWAL_PROMPT = { maxRegularLessonsLeft: 2 } as const;
+/** 남은 수업(정규·보강·보상·이월 + 날짜 미정 보강) 2회 이하일 때 재등록 안내 (POL-RN-08, 2026-10-27 대표: 보강·보상도 다 수업) */
+export const RENEWAL_PROMPT = { maxLessonsLeft: 2 } as const;
 export const RENEWAL_PROMPT_REF = 'POL-RN-08';
 
 /** 아직 하지 않은 정규 수업 수. 보강·보상 수업은 넣지 않음 (POL-RN-08) */
@@ -55,13 +56,13 @@ export function nextLesson(lessons: readonly StudentLesson[], now: Date): Studen
  */
 export type RenewalState = 'not_requested' | 'requested' | 'payment_confirmed';
 
-export type RenewalPrompt = null | { mode: 'request'; regularLeft: number } | { mode: 'awaiting_payment'; regularLeft: number };
+export type RenewalPrompt = null | { mode: 'request'; left: number } | { mode: 'awaiting_payment'; left: number };
 
-export function renewalPrompt(lessons: readonly StudentLesson[], renewal: RenewalState): RenewalPrompt {
-  const regularLeft = regularLessonsLeft(lessons);
+export function renewalPrompt(lessons: readonly StudentLesson[], renewal: RenewalState, makeupsOwed = 0): RenewalPrompt {
+  const left = lessonsLeft(lessons, makeupsOwed).total;
   if (renewal === 'payment_confirmed') return null;
-  if (regularLeft > RENEWAL_PROMPT.maxRegularLessonsLeft) return null;
-  return renewal === 'requested' ? { mode: 'awaiting_payment', regularLeft } : { mode: 'request', regularLeft };
+  if (left > RENEWAL_PROMPT.maxLessonsLeft) return null;
+  return renewal === 'requested' ? { mode: 'awaiting_payment', left } : { mode: 'request', left };
 }
 
 /** 신청 진행 상태. 학생이 기다리기만 하면 되는 단계는 할 일이 아님 */
