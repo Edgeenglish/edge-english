@@ -295,13 +295,18 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
   const backAnswer = future.filter((i) => i.choice === 'substitute' || (i.choice === 'wait' && !i.makeupAt && !i.makeupRequested));
   const backTutor = future.filter((i) => i.choice === 'substitute' && (i.subStage === 'tutor_ok' || i.subStage === 'confirmed'));
   const backConfirm = future.filter((i) => i.choice === 'substitute' && i.subStage === 'confirmed');
+  const sentAt = (n: number) => sent.filter((m) => (n === 0 ? m.event === 'leave_options' : n === 2 ? m.event === 'sub_ask' : n === 3 && (m.event === 'sub_student' || m.event === 'sub_confirmed')));
+  // 누를 수 있는 단계: 지금 단계 · 할 일이 있는 단계 · 되돌릴 것이 있는 단계. 나머지는 아예 못 누름
+  const canOpen = (n: number) => n === cur || w.steps.some((x) => stage(x) === n)
+    || sentAt(n).length > 0 || [[], backAnswer, backTutor, backConfirm][n].length > 0;
+  const shown = view !== null && view !== cur && canOpen(view) ? view : null;
   const backPanel = (n: number) => {
-    const sentHere = sent.filter((m) => (n === 0 ? m.event === 'leave_options' : n === 2 ? m.event === 'sub_ask' : n === 3 && (m.event === 'sub_student' || m.event === 'sub_confirmed')));
+    const sentHere = sentAt(n);
     const [items, to, label] = n === 1 ? [backAnswer, 'undecided', '학생 답 전으로'] as const
       : n === 2 ? [backTutor, 'asked', '강사 답 전으로'] as const
       : n === 3 ? [backConfirm, 'tutor_ok', '확정 전으로'] as const : [[], null, ''] as const;
     return (
-      <Block title={`되돌리기 · ${chips[n]}`}>
+      <Block title={`${chips[n]} · 되돌리기`}>
         {sentHere.map(msg)}
         {items.length > 0 && to && (
           <>
@@ -364,21 +369,24 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
   return (
     <Card title={<>{g.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{g.studentCode}</span></>}>
       <div className="mb-3 flex flex-wrap items-center gap-1">
-        {chips.map((label, n) => (
-          <span key={label} className="flex items-center gap-1">
-            {n > 0 && <span aria-hidden className="text-[15px] font-bold text-[#b9b6c8]">›</span>}
-            <button type="button" aria-pressed={view === n} onClick={() => setView(view === n || n === cur ? null : n)}
-              className={`min-h-[32px] rounded-full px-3 text-[13px] ${n < cur ? 'bg-[#e3f6ea] text-[#1e7a46]' : n === cur ? 'bg-[#7d5fff] font-bold text-white' : 'border border-[#e6e3ef] text-[#6b6880]'} ${view === n ? 'ring-2 ring-[#7d5fff] ring-offset-1' : ''}`}>
-              {label}{n < cur ? ' ✓' : ''}
-            </button>
-          </span>
-        ))}
+        {chips.map((label, n) => {
+          const on = (shown ?? cur) === n;
+          const open = canOpen(n);
+          return (
+            <span key={label} className="flex items-center gap-1">
+              {n > 0 && <span aria-hidden className="text-[15px] font-bold text-[#b9b6c8]">›</span>}
+              <button type="button" aria-pressed={on} disabled={!open} onClick={() => setView(n === cur ? null : n)}
+                className={`min-h-[34px] rounded-full px-3 text-[13px] ${on ? 'bg-[#7d5fff] font-bold text-white' : open ? 'border border-[#7d5fff] bg-white text-[#5b3fe0]' : 'bg-[#f3f2f7] text-[#b9b6c8]'}`}>
+                {n < cur ? '✓ ' : ''}{label}
+              </button>
+            </span>
+          );
+        })}
         {cur === 4 && <span className="ml-1 rounded-full bg-[#7d5fff] px-3 py-1 text-[13px] font-bold text-white">완료</span>}
       </div>
 
       <div className="grid gap-3">
-        {view !== null && backPanel(view)}
-        {blocks}
+        {shown !== null ? backPanel(shown) : blocks}
 
         <details className="border-t border-[#e6e3ef] pt-3">
           <summary className="min-h-[36px] cursor-pointer text-[13.5px] font-semibold text-[#5b3fe0]">전체 수업 {g.items.length}회</summary>
