@@ -107,7 +107,7 @@ export type ImportCheckTask = {
   createdAt: Date;
 };
 
-/** 수업 변경·보강: 안 보낸 안내 · 강사 답을 기다리는 보강 신청 (migration 1700). 학생마다 한 줄, [보냈어요]·확정하면 사라짐 */
+/** 수업 변경·보강: 안 보낸 안내 · 강사 답을 기다리는 보강 신청 (migration 1700). 학생마다 한 줄, [보냄]·확정하면 사라짐 */
 export type LessonChangeTask = {
   kind: 'lesson_change';
   id: string; // 학생 번호(id)

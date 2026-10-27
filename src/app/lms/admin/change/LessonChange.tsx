@@ -2,7 +2,7 @@
 
 // 수업 변경·보강 (1순위, migration 1700) — 카톡·WhatsApp 요청을 운영진이 대신 처리
 // 카드: 1 학생 · 2 수업(실제 예정 수업 목록에서 고름) · 3 변경(요청한 사람·요청 받은 시각 → DB 미리 보기 → [변경])
-//       · 4 안내(학생·강사 각각 [복사] → 보낸 뒤 [보냈어요]) · 5 보강(신청 → 강사 확인 → [확정]) · 6 변경 기록([되돌리기])
+//       · 4 안내(학생·강사 각각 [복사] → 보낸 뒤 [보냄], 누른 버튼은 회색으로 남음) · 5 보강(신청 → 강사 확인 → [확정]) · 6 변경 기록([되돌리기])
 // 판정(6시간·변경권·공휴일·보강 기한)과 중복 방지는 DB 함수 하나 — 화면 미리 보기와 저장 결과가 같음
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -31,6 +31,8 @@ export type ChangeActions = {
 
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5fff] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-3.5 text-[14px] text-[#1d1b2b] disabled:text-[#b9b6c8]';
+/** 누른 버튼: 회색으로 꽉 차게 (눌린 티, 2026-10-27 대표) */
+const btnDone = 'min-h-[44px] rounded-[10px] border border-[#c9c6d6] bg-[#d9d6e3] px-3.5 text-[14px] font-bold text-[#4a4760]';
 const Err = ({ children }: { children: React.ReactNode }) => (children ? <p className="mt-1.5 text-[13px] text-[#b3261e]">{children}</p> : null);
 
 async function copyText(text: string): Promise<boolean> {
@@ -301,18 +303,20 @@ function NoticeRow({ n, text, markSent }: { n: ChNotice; text: string; markSent:
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <b className="block text-[14.5px] text-[#1d1b2b]">{n.recipient === 'student' ? '학생' : '강사'} · {EVENT_TEXT[n.event]}</b>
-          <span className="text-[12.5px] text-[#6b6880]">{sent && n.sentAt ? `보냄 ${sentLabel(n.sentAt)}` : copied ? '복사함' : '안 보냄'}</span>
+          {sent && n.sentAt && <span className="text-[12.5px] text-[#6b6880]">보냄 {sentLabel(n.sentAt)}</span>}
         </div>
-        <button type="button" disabled={!text} className={btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>
-          복사
+        <button type="button" disabled={!text} className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>
+          {copied ? '복사함 ✓' : '복사'}
         </button>
-        {!sent && (
+        {sent ? (
+          <button type="button" disabled className={btnDone}>보냄 ✓</button>
+        ) : (
           <button type="button" disabled={busy} className={btnMain} onClick={async () => {
             setBusy(true);
             setErr('');
             try { await markSent(); } catch (e) { setErr(e instanceof Error ? e.message : '기록하지 못했어요.'); } finally { setBusy(false); }
           }}>
-            보냈어요
+            보냄
           </button>
         )}
       </div>

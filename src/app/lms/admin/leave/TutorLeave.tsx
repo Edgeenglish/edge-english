@@ -30,7 +30,6 @@ export type LeaveActions = {
   makeupOptions: (itemIds: string[]) => Promise<LvMakeupOption[]>;
   requestMakeup: (source: { lessonId?: string; itemId?: string }, slots: Date[]) => Promise<void>;
   back: (itemIds: string[], to: 'undecided' | 'asked' | 'tutor_ok') => Promise<void>;
-  unsend: (noticeIds: string[]) => Promise<void>;
 };
 
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5fff] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
@@ -269,7 +268,7 @@ const Block = ({ title, children }: { title: string; children: React.ReactNode }
 const overlaps = (m: LvMessage, ids: Set<string>) => m.noticeIds.some((id) => ids.has(id));
 
 // 학생 한 명: 단계 흐름(1 안내 › 2 학생 답 › 3 강사 확인 › 4 확정). 고른 단계(처음엔 지금 단계)의 화면만 보임:
-// 그 단계에서 할 일 + 그 단계에서 보낸 글(회색 '보냄 ✓', 다시 누르면 안 보냄) + 앞 단계로 되돌리기.
+// 그 단계에서 할 일 + 그 단계에서 보낸 글(회색 '보냄 ✓') + 앞 단계로 되돌리기.
 // 할 일도 되돌릴 것도 없는 단계는 못 누름. 보냄을 누르면 그 단계에 머물러 회색 버튼을 보여 주고, 아래 [다음 단계 ›]로 넘어감
 function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w: LvStudentWork; sent: LvMessage[]; now: Date; actions: LeaveActions; done: () => Promise<void> }) {
   const [view, setView] = useState<number | null>(null);
@@ -286,8 +285,7 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
   const msg = (m: LvMessage, n: number) => (
     <MessageRow key={m.key} m={m} copied={overlaps(m, copied)}
       onCopied={() => setCopied(new Set([...copied, ...m.noticeIds]))}
-      onSend={async () => { await actions.markSent(m.noticeIds); setView(n); await done(); }}
-      onUnsend={async () => { await actions.unsend(m.noticeIds); await done(); }} />
+      onSend={async () => { await actions.markSent(m.noticeIds); setView(n); await done(); }} />
   );
   const sentOf = (n: number) => sent.filter((m) => (n === 0 ? m.event === 'leave_options' : n === 2 ? m.event === 'sub_ask' : n === 3 && (m.event === 'sub_student' || m.event === 'sub_confirmed')));
 
@@ -621,8 +619,8 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
   );
 }
 
-// 안내 한 건: [복사] 누르면 회색 '복사함 ✓'(보냄을 눌러도 그대로), [보냄] 누르면 회색 '보냄 ✓'로 남음 (다시 누르면 안 보냄으로 되돌림)
-function MessageRow({ m, copied, onCopied, onSend, onUnsend }: { m: LvMessage; copied: boolean; onCopied: () => void; onSend: () => Promise<void>; onUnsend: () => Promise<void> }) {
+// 안내 한 건: [복사] 누르면 회색 '복사함 ✓'(보냄을 눌러도 그대로), [보냄] 누르면 회색 '보냄 ✓'로 남고 더 못 누름 (다른 화면과 같게)
+function MessageRow({ m, copied, onCopied, onSend }: { m: LvMessage; copied: boolean; onCopied: () => void; onSend: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [manual, setManual] = useState(false);
@@ -639,9 +637,11 @@ function MessageRow({ m, copied, onCopied, onSend, onUnsend }: { m: LvMessage; c
         <button type="button" className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(m.text)) onCopied(); else setManual(true); }}>
           {copied ? '복사함 ✓' : '복사'}
         </button>
-        <button type="button" disabled={busy} className={sent ? btnDone : btnMain} onClick={() => act(sent ? onUnsend : onSend)}>
-          {sent ? '보냄 ✓' : '보냄'}
-        </button>
+        {sent ? (
+          <button type="button" disabled className={btnDone}>보냄 ✓</button>
+        ) : (
+          <button type="button" disabled={busy} className={btnMain} onClick={() => act(onSend)}>보냄</button>
+        )}
       </div>
       <pre className="mt-2 whitespace-pre-wrap rounded-[10px] bg-[#f6f5fb] px-3 py-2 font-sans text-[13.5px] text-[#1d1b2b]">{m.text}</pre>
       {manual && <textarea readOnly value={m.text} rows={5} onFocus={(e) => e.currentTarget.select()} aria-label="복사할 글" className="mt-2 w-full rounded-[10px] border border-[#e6e3ef] p-2 text-[13.5px]" />}

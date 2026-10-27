@@ -152,7 +152,7 @@ export default function AdminDashboard({
     const now = () => new Date();
     if (!preview && planActions)
       return {
-        confirm: () => live((a) => a.confirm(p.planId), '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냈어요]를 눌러 주세요.'),
+        confirm: () => live((a) => a.confirm(p.planId), '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.'),
         decline: () => live((a) => a.decline(p.planId), '이 안을 닫았어요. 다른 강사·시간으로 다시 제안해 주세요.'),
         proposalCopied: () => live((a) => a.proposalSent(p.planId), '제안 문구를 복사했어요. WhatsApp에 붙여 보내 주세요.'),
         noticeSent: (who) => {
@@ -168,7 +168,7 @@ export default function AdminDashboard({
       confirm: () =>
         preview_(
           (x) => ({ ...x, state: 'confirmed', confirmedAt: now(), tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null }, studentNotice: { id: 'pv-s', status: 'pending', sentAt: null } }),
-          '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냈어요]를 눌러 주세요.',
+          '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.',
         ),
       decline: () => preview_(() => null, '이 안을 닫았어요.'),
       proposalCopied: () => preview_((x) => ({ ...x, proposalSentAt: x.proposalSentAt ?? now() }), '제안 문구를 복사했어요.'),
@@ -286,8 +286,8 @@ export default function AdminDashboard({
       {!preview && (
         <p className="mx-4 mt-3 rounded-[10px] bg-[#e3f5ea] px-3 py-2 text-[13px] text-[#13623a] lg:mx-7">
           {dbEnv(process.env.NEXT_PUBLIC_SUPABASE_URL) === 'prod'
-            ? '운영 DB의 실제 데이터예요. 학생 등록·신규 매칭 일정안(확정·[보냈어요])·시트 대조는 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'
-            : '시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·[보냈어요])·시트 대조는 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'}
+            ? '운영 DB의 실제 데이터예요. 학생 등록·신규 매칭 일정안(확정·[보냄])·시트 대조는 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'
+            : '시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·[보냄])·시트 대조는 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'}
         </p>
       )}
       {preview && (
