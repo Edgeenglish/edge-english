@@ -24,6 +24,7 @@
 ## 🆕 2026-10-28 (claude/confident-ritchie-4fgo3a)
 - **종료 임박 카드 재등록 안내 문자 — 구현·시험용 반영 완료**: 카드에 문자 글 + [복사](회색 '복사함 ✓') + [보냄](회색 '보냄 ✓', 다시 못 누름). migration **1900** `lms_renewal_notice`(표 `renewal_notices` 수강권당 1줄·지우기 금지, 함수 `admin_renewal_notice_sent` 다시 눌러도 처음 시각). 시험용 DB 적용 완료(Claude, Management API). 문구는 Claude 초안(`renewalMessage`, board.ts) → **대표 문구 확인 대기**. `npm test` 277 · `npm run test:db` 통과. 운영: 대표 화면 확인·승인 → 운영 1900 + `lms-prod`
 - **대표 결정 대기 (10/28)**: ⑤ 미완료 업무 '지연' 표시 며칠째부터(숫자) ⑥ 종료 임박 카드를 종료일 23:59 지나면 없앨지(POL-RN-02와 같은 기준, 위험: 놓친 안내도 같이 사라짐) ⑦ 재등록 입력 기능(기존 학생에 새 수강권만) 지금 만들지 + 정O연·김O민 결제 여부 ⑧ Olivia 휴무 Benny·Maria 섭외 결과
+- **대시보드 반복 문구 정리 + 신규 매칭 카드 [강사 배정]·[수업 컨펌 완료] 두 버튼(끝난 단계 회색 ✓) — lms-test 반영**. 일정안이 생긴 뒤(PlanCard)에도 두 버튼을 보일지 → **신규 매칭 흐름 시안** https://claude.ai/artifact/JGZWvamyRd5mSPeZvPinno (원본 `docs/lms/previews/matching-flow-drafts.html`, 1~6단계 PC·휴대폰) **대표 답 대기 3가지**
 - **강사 휴무 학생 카드 다시 짜기 시안** https://claude.ai/artifact/VfAdvLXgiQzYXrbY8mNemo (원본 `docs/lms/previews/leave-status-drafts.html`): 대표 피드백(정유진 카드에서 확정/누구 답 대기가 한눈에 안 보임, 같은 목록·글이 여기저기 반복, 단계 오가며 찾음) → ① 수업 현황표 하나(날짜·강사·상태 색) ② 지금 할 일 하나 ③ 보낸 글 접기 ④ 단계 칩 없앰(되돌리기는 수업 줄 ⋯). **대표 답 대기** → 승인되면 `TutorLeave.tsx`만 고침(DB 그대로). B4~B6 시험은 새 화면으로 다시
 
 ## 🔔 (✅ 2026-10-23 답 받음 — 19번 문서 1절) 새 세션 첫 답변에서 대표에게 반드시 먼저 물을 것

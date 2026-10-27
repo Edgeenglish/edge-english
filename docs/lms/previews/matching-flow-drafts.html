@@ -1,0 +1,239 @@
+<title>신규 매칭 흐름 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<style>
+/* 레이아웃: 단계마다 한 줄 — 왼쪽 PC 대시보드 카드(넓게) · 오른쪽 휴대폰 카드(390px). 좁은 화면에서는 위아래로 */
+:root {
+  --bg: #f4f3f8; --card: #ffffff; --fg: #1d1b2b; --muted: #6b6880; --line: #e6e3ef;
+  --accent: #7d5fff; --accent-ink: #5b3fe0; --accent-soft: #efebff;
+  --ok: #1e7a46; --ok-soft: #e3f6ea; --wait: #8a5a00; --wait-soft: #fff1d6; --red: #b3261e; --red-soft: #fde6e6;
+  --grey: #d9d6e3; --grey-ink: #4a4760; --faint: #b9b6c8; --shade: #f6f5fb;
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15131f; --card: #1f1c2c; --fg: #ece9f6; --muted: #a29fb6; --line: #34304a;
+  --accent: #9a82ff; --accent-ink: #b9a8ff; --accent-soft: #2c2547;
+  --ok: #7fd9a3; --ok-soft: #1c3527; --wait: #f2c46b; --wait-soft: #3a2f17; --red: #ff9c93; --red-soft: #3d1f1f;
+  --grey: #3a3650; --grey-ink: #c9c5dc; --faint: #5d5875; --shade: #191725; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15131f; --card: #1f1c2c; --fg: #ece9f6; --muted: #a29fb6; --line: #34304a;
+  --accent: #9a82ff; --accent-ink: #b9a8ff; --accent-soft: #2c2547;
+  --ok: #7fd9a3; --ok-soft: #1c3527; --wait: #f2c46b; --wait-soft: #3a2f17; --red: #ff9c93; --red-soft: #3d1f1f;
+  --grey: #3a3650; --grey-ink: #c9c5dc; --faint: #5d5875; --shade: #191725; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 22px; }
+h1 { font-size: 22px; margin: 0; text-wrap: balance; }
+.lead { margin: 0; color: var(--muted); max-width: 72ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13.5px; color: var(--muted); }
+.step { display: grid; gap: 10px; }
+.step h2 { margin: 0; font-size: 16.5px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.step h2 .n { color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.step h2 small { font-size: 13.5px; font-weight: 400; color: var(--muted); }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.frame { min-width: 0; display: grid; gap: 6px; }
+.tag { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.p-new { background: var(--red-soft); color: var(--red); }
+.p-wait { background: var(--wait-soft); color: var(--wait); }
+.p-ok { background: var(--ok-soft); color: var(--ok); }
+.title { font-weight: 700; font-size: 15px; }
+.link { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); }
+.sub { margin: 0; font-size: 12.5px; color: var(--muted); }
+.due { margin: 0; font-size: 13px; color: var(--red); }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.b { min-height: 40px; padding: 0 12px; border-radius: 10px; font: 600 13.5px var(--sans); border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+.b.main { background: var(--accent); border-color: var(--accent); color: #fff; }
+.b.cur { border: 2px solid var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+.b.done { background: var(--grey); border-color: var(--grey); color: var(--grey-ink); font-weight: 700; }
+.b.off { color: var(--faint); }
+.b.wide { flex: 1; min-height: 46px; }
+.times { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; margin: 0; font-variant-numeric: tabular-nums; }
+.times dt { color: var(--muted); }
+.times dd { margin: 0; }
+.note { margin: 0; font-size: 13px; color: var(--muted); }
+.box { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); }
+.row.sent { background: var(--ok-soft); border-color: transparent; }
+.row.unsent { background: var(--red-soft); border-color: transparent; }
+.row .who { flex: 1; min-width: 0; font-size: 14px; }
+.row .who span { display: block; font-size: 12px; color: var(--muted); }
+.page { background: var(--shade); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 8px; }
+.page header { display: flex; justify-content: space-between; font-weight: 700; }
+.sec { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 13.5px; display: grid; gap: 6px; }
+.sec b { font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 12.5px; }
+.chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 700; }
+.toast { background: #1b1442; color: #fff; border-radius: 12px; padding: 10px 14px; font-size: 13.5px; }
+.gone { border: 1px dashed var(--line); border-radius: 14px; padding: 18px; text-align: center; color: var(--muted); font-size: 13.5px; }
+.ask { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; }
+.ask h2 { margin: 0; font-size: 16px; }
+.ask ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+</style>
+
+<div class="wrap">
+  <h1>신규 매칭 · 처음부터 끝까지 (시안)</h1>
+  <p class="lead">가상 학생 김민지(서울) · 50분 주2회 4주 · 결제 확인 10/28. 카드 맨 위에 <b>[강사 배정] [수업 컨펌 완료]</b> 두 버튼이 처음부터 끝까지 같은 자리에 있고, 지금 하는 단계만 보라색, 끝난 단계는 회색 ✓예요.</p>
+  <div class="legend"><button class="b main" tabindex="-1">지금 할 일</button><button class="b cur" tabindex="-1">진행 중</button><button class="b done" tabindex="-1">끝 ✓</button><button class="b off" tabindex="-1">아직</button></div>
+
+  <!-- 1 -->
+  <section class="step">
+    <h2><span class="n">1</span> 결제 확인 → 대시보드에 카드가 생김 <small>할 일: 강사 배정</small></h2>
+    <div class="pair">
+      <div class="frame"><span class="tag">PC</span>
+        <div class="card">
+          <div class="top"><span class="pill p-new">신규 매칭</span><span class="title">김민지 · 50분 주2회 1개월(4주)</span><span class="link">학생 보기 ›</span></div>
+          <p class="sub">STU-0021</p>
+          <p class="due">10/31(금) 23:59까지</p>
+          <div class="btns"><button class="b main">강사 배정</button><button class="b off" disabled>수업 컨펌 완료</button></div>
+        </div>
+      </div>
+      <div class="frame"><span class="tag">휴대폰</span>
+        <div class="card">
+          <div class="top"><span class="pill p-new">신규 매칭</span><span class="title">김민지 · 50분 주2회 4주</span></div>
+          <p class="sub">STU-0021</p>
+          <p class="due">10/31(금) 23:59까지</p>
+          <div class="btns"><button class="b main wide">강사 배정</button><button class="b off wide" disabled>수업 컨펌 완료</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="step">
+    <h2><span class="n">2</span> [강사 배정] → 강사·시간 고르기 화면 <small>강사 → 시간 → 첫 수업일 → 강사에게 물어봤는지</small></h2>
+    <div class="pair">
+      <div class="frame"><span class="tag">PC</span>
+        <div class="page">
+          <header><span>강사·시간 고르기</span><span>×</span></header>
+          <div class="sec"><b>김민지 · 서울</b>STU-0021 · 50분 주2회 4주 · 희망 시작 11/3(월)</div>
+          <div class="sec"><b>1. 강사</b><div class="chips"><span class="chip on">Alex · 빈 시간 많음</span><span class="chip">Blair</span><span class="chip">Noah</span></div></div>
+          <div class="sec"><b>2. 시간 2/2</b>주간 달력에서 화 20:00 · 목 20:00 고름</div>
+          <div class="sec"><b>3. 첫 수업일</b><div class="chips"><span class="chip on">11/4(화) ✓</span><span class="chip">11/6(목) ✓</span></div></div>
+          <div class="sec"><b>확인 · 강사에게 물어봤나요?</b><div class="btns"><button class="b main wide">아직 → 제안 문구 복사</button><button class="b cur wide">가능하대요 → 확정</button></div></div>
+        </div>
+      </div>
+      <div class="frame"><span class="tag">휴대폰</span>
+        <div class="page">
+          <header><span>강사·시간 고르기</span><span>×</span></header>
+          <div class="sec"><b>1. 강사</b><div class="chips"><span class="chip on">Alex</span><span class="chip">Blair</span><span class="chip">Noah</span></div></div>
+          <div class="sec"><b>2. 시간 2/2</b>화 20:00 · 목 20:00</div>
+          <div class="sec"><b>3. 첫 수업일</b><div class="chips"><span class="chip on">11/4(화) ✓</span></div></div>
+          <div class="sec"><b>강사에게 물어봤나요?</b><button class="b main wide">아직 → 제안 문구 복사</button><button class="b cur wide">가능하대요 → 확정</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">이 화면은 지금과 같아요. 강사에게 이미 물어봐서 된다고 했으면 [가능하대요 → 확정]으로 바로 4번으로 가요.</p>
+  </section>
+
+  <!-- 3 -->
+  <section class="step">
+    <h2><span class="n">3</span> 강사에게 제안 보냄 → 강사 답 기다림 <small>할 일: 강사 답 받으면 [가능하대요 → 확정]</small></h2>
+    <div class="pair">
+      <div class="frame"><span class="tag">PC</span>
+        <div class="card">
+          <div class="top"><span class="pill p-wait">강사 답 대기</span><span class="title">김민지 · 서울</span><span class="link">학생 보기 ›</span></div>
+          <div class="btns"><button class="b cur">강사 배정 · 진행 중</button><button class="b off" disabled>수업 컨펌 완료</button></div>
+          <dl class="times"><dt>한국</dt><dd>화·목 20:00</dd><dt>강사 Alex</dt><dd>화·목 22:00 (시드니)</dd><dt>첫 수업</dt><dd>11/4(화) 20:00</dd></dl>
+          <p class="note">제안 보냄 10/28 14:02</p>
+          <div class="btns"><button class="b main wide">가능하대요 → 확정</button><button class="b">안 된대요</button><button class="b">문구 다시 복사</button></div>
+        </div>
+      </div>
+      <div class="frame"><span class="tag">휴대폰</span>
+        <div class="card">
+          <div class="top"><span class="pill p-wait">강사 답 대기</span><span class="title">김민지 · 서울</span></div>
+          <div class="btns"><button class="b cur wide">강사 배정 · 진행 중</button><button class="b off wide" disabled>수업 컨펌 완료</button></div>
+          <dl class="times"><dt>한국</dt><dd>화·목 20:00</dd><dt>Alex</dt><dd>화·목 22:00 (시드니)</dd><dt>첫 수업</dt><dd>11/4(화) 20:00</dd></dl>
+          <p class="note">제안 보냄 10/28 14:02</p>
+          <button class="b main wide">가능하대요 → 확정</button>
+          <div class="btns"><button class="b wide">안 된대요</button><button class="b wide">문구 다시 복사</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="step">
+    <h2><span class="n">4</span> 확정 → 강사·학생에게 확정 안내 <small>할 일: 두 줄 각각 [복사] → 보낸 뒤 [보냄]</small></h2>
+    <div class="pair">
+      <div class="frame"><span class="tag">PC</span>
+        <div class="card">
+          <div class="top"><span class="pill p-new">양쪽 안내 안 함</span><span class="title">김민지 · 서울</span><span class="link">학생 보기 ›</span></div>
+          <div class="btns"><button class="b done" disabled>강사 배정 ✓</button><button class="b cur">수업 컨펌 완료 · 진행 중</button></div>
+          <p class="sub">Alex · 첫 수업 11/4(화) 20:00</p>
+          <div class="box">
+            <div class="row unsent"><div class="who">강사 · WhatsApp<span>안 보냄</span></div><button class="b done">복사함 ✓</button><button class="b main">보냄</button></div>
+            <div class="row unsent"><div class="who">학생 · 카톡<span>안 보냄</span></div><button class="b">복사</button><button class="b main">보냄</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="frame"><span class="tag">휴대폰</span>
+        <div class="card">
+          <div class="top"><span class="pill p-new">양쪽 안내 안 함</span><span class="title">김민지 · 서울</span></div>
+          <div class="btns"><button class="b done wide" disabled>강사 배정 ✓</button><button class="b cur wide">수업 컨펌 완료 · 진행 중</button></div>
+          <div class="box">
+            <div class="row unsent"><div class="who">강사 · WhatsApp<span>안 보냄</span></div><button class="b done">복사함 ✓</button><button class="b main">보냄</button></div>
+            <div class="row unsent"><div class="who">학생 · 카톡<span>안 보냄</span></div><button class="b">복사</button><button class="b main">보냄</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="step">
+    <h2><span class="n">5</span> 강사에게만 보냄 → 학생 안내가 남음 <small>한쪽만 보내면 카드가 안 사라짐</small></h2>
+    <div class="pair">
+      <div class="frame"><span class="tag">PC</span>
+        <div class="card">
+          <div class="top"><span class="pill p-new">학생 안내 안 함</span><span class="title">김민지 · 서울</span><span class="link">학생 보기 ›</span></div>
+          <div class="btns"><button class="b done" disabled>강사 배정 ✓</button><button class="b cur">수업 컨펌 완료 · 진행 중</button></div>
+          <div class="box">
+            <div class="row sent"><div class="who">강사 · WhatsApp<span>보냄 10/28 15:10</span></div><button class="b done">복사함 ✓</button><button class="b done" disabled>보냄 ✓</button></div>
+            <div class="row unsent"><div class="who">학생 · 카톡<span>안 보냄</span></div><button class="b">복사</button><button class="b main">보냄</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="frame"><span class="tag">휴대폰</span>
+        <div class="card">
+          <div class="top"><span class="pill p-new">학생 안내 안 함</span><span class="title">김민지 · 서울</span></div>
+          <div class="btns"><button class="b done wide" disabled>강사 배정 ✓</button><button class="b cur wide">수업 컨펌 완료 · 진행 중</button></div>
+          <div class="box">
+            <div class="row sent"><div class="who">강사 · WhatsApp<span>보냄 10/28 15:10</span></div><button class="b done" disabled>보냄 ✓</button></div>
+            <div class="row unsent"><div class="who">학생 · 카톡<span>안 보냄</span></div><button class="b">복사</button><button class="b main">보냄</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="step">
+    <h2><span class="n">6</span> 학생에게도 보냄 → 끝 <small>두 버튼 모두 회색 ✓ → 잠깐 보인 뒤 카드가 처리할 일에서 빠짐</small></h2>
+    <div class="pair">
+      <div class="frame"><span class="tag">PC</span>
+        <div class="card">
+          <div class="top"><span class="pill p-ok">완료</span><span class="title">김민지 · 서울</span></div>
+          <div class="btns"><button class="b done" disabled>강사 배정 ✓</button><button class="b done" disabled>수업 컨펌 완료 ✓</button></div>
+        </div>
+        <div class="toast">양쪽 안내를 마쳐서 매칭 업무가 끝났어요.</div>
+      </div>
+      <div class="frame"><span class="tag">휴대폰</span>
+        <div class="gone">카드가 빠지고 '오늘 1건 마침'으로 셈</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ask" aria-label="대표 확인">
+    <h2>대표 확인</h2>
+    <ol>
+      <li>이 흐름대로 할까요? [강사 배정] [수업 컨펌 완료] 두 버튼이 1~6단계 내내 같은 자리에 있어요.</li>
+      <li>3·4·5단계에서 두 버튼은 '어디까지 했는지' 표시예요. 실제로 누르는 버튼은 아래쪽([가능하대요 → 확정], [복사]·[보냄])이에요. 이렇게 나뉘어도 괜찮을까요?</li>
+      <li>[수업 컨펌 완료] = 강사·학생 둘 다 [보냄]을 누른 상태로 볼까요? (한쪽만 보내면 안 끝남 — H22 '한쪽만 안내되면 완료 아님')</li>
+    </ol>
+  </section>
+</div>
