@@ -41,7 +41,7 @@ export type LvItem = {
 };
 
 export type LvNoticeEvent = 'leave_options' | 'sub_ask' | 'sub_student' | 'sub_confirmed';
-export type LvNotice = { id: string; itemId: string; event: LvNoticeEvent; recipientId: string; status: 'pending' | 'sent' | 'not_needed'; sentAt: Date | null };
+export type LvNotice = { id: string; itemId: string; event: LvNoticeEvent; recipientKind: 'student' | 'tutor'; recipientId: string; status: 'pending' | 'sent' | 'not_needed'; sentAt: Date | null };
 
 export type LvSubOption = { tutorId: string; name: string; timezone: string; free: number; busyDates: string[] };
 /** 기존 강사 보강 후보: in_period 지금 수강기간 안 / after_end 종료일 뒤 평소 요일·시간 (확정하면 그날까지 자동 연장) */
@@ -133,7 +133,7 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[]
   return [...groups.entries()].map(([key, g]) => {
     const list = [...g.items].sort((a, b) => +a.startsAt - +b.startsAt);
     const first = list[0];
-    const recipient = g.event === 'sub_student' || g.event === 'leave_options' ? 'student' : 'tutor';
+    const recipient = g.notices[0].recipientKind;
     return {
       key,
       event: g.event,
@@ -143,12 +143,12 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[]
       recipientId: g.notices[0].recipientId,
       noticeIds: g.notices.map((n) => n.id),
       status: g.status,
-      text: leaveText(g.event, list),
+      text: leaveText(g.event, list, recipient),
     };
   });
 }
 
-export function leaveText(event: LvNoticeEvent, items: LvItem[]): string {
+export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'student' | 'tutor' = event === 'sub_ask' || event === 'sub_confirmed' ? 'tutor' : 'student'): string {
   const i = items[0];
   const tz = i.subTutorTz ?? 'Asia/Seoul';
   const dates = items.map((x) => `- ${koAt(x.startsAt, x.studentTz)}`).join('\n');
@@ -173,6 +173,9 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[]): string {
       "If you can't do all of them, please reply with the numbers you can do. Thank you!",
     ].join('\n');
   }
+  if (recipient === 'student') {
+    return [`[엣지영어] ${i.studentName}님, 아래 수업은 대체강사 ${i.subTutorName} 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.`, dates].join('\n\n');
+  }
   return [
     `CONFIRMED substitute classes - ${i.studentNameEn} (${i.durationMin} min)`,
     ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, tz)}`),
@@ -184,7 +187,7 @@ export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
   leave_options: '진행 방법 선택 안내',
   sub_ask: '대체강사 가능 확인',
   sub_student: '대체강사 제안 (프로필 함께)',
-  sub_confirmed: '대체강사 확정 안내',
+  sub_confirmed: '최종 확정 안내',
 };
 
 /** 기존 강사 보강: 학생에게 보강 가능한 날짜를 보내고 2개까지 고르게 함 (1개도 됨, 2026-10-27 대표 문구)

@@ -35,12 +35,12 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
   it('안내: 같은 학생·같은 대체강사 날짜를 한 메시지로, 강사는 현지 시각, 학생은 한국어', () => {
     const items = [I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' }), I('b', 's1', '2026-11-05', { ...sub, subStage: 'tutor_ok' })];
     const notices: LvNotice[] = [
-      { id: 'n1', itemId: 'a', event: 'sub_ask', recipientId: 'b', status: 'pending', sentAt: null },
-      { id: 'n2', itemId: 'b', event: 'sub_ask', recipientId: 'b', status: 'pending', sentAt: null },
-      { id: 'n3', itemId: 'b', event: 'sub_student', recipientId: 's1', status: 'pending', sentAt: null },
-      { id: 'n4', itemId: 'a', event: 'sub_confirmed', recipientId: 'b', status: 'not_needed', sentAt: null },
-      { id: 'n5', itemId: 'a', event: 'leave_options', recipientId: 's1', status: 'pending', sentAt: null },
-      { id: 'n6', itemId: 'b', event: 'leave_options', recipientId: 's1', status: 'pending', sentAt: null },
+      { id: 'n1', itemId: 'a', event: 'sub_ask', recipientKind: 'tutor', recipientId: 'b', status: 'pending', sentAt: null },
+      { id: 'n2', itemId: 'b', event: 'sub_ask', recipientKind: 'tutor', recipientId: 'b', status: 'pending', sentAt: null },
+      { id: 'n3', itemId: 'b', event: 'sub_student', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
+      { id: 'n4', itemId: 'a', event: 'sub_confirmed', recipientKind: 'tutor', recipientId: 'b', status: 'not_needed', sentAt: null },
+      { id: 'n5', itemId: 'a', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
+      { id: 'n6', itemId: 'b', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
     ];
     const m = leaveMessages(items, notices);
     expect(m.map((x) => [x.event, x.noticeIds])).toEqual([['sub_ask', ['n1', 'n2']], ['sub_student', ['n3']], ['leave_options', ['n5', 'n6']]]);
@@ -90,6 +90,19 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     );
     const mixed = [kstToInstant('2026-11-14', '22:00'), kstToInstant('2026-11-14', '21:00'), kstToInstant('2026-11-17', '22:00')];
     expect(makeupDatesText('박서연', 'Asia/Seoul', mixed)).toBe(`${head}\n\n- 11/14(토) 오후 9시 · 오후 10시\n- 11/17(화) 오후 10시`);
+  });
+
+  it('학생 OK 뒤 최종 확정 안내는 학생(한국어)·대체강사(영어) 모두에게', () => {
+    const items = [I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' })];
+    const notices: LvNotice[] = [
+      { id: 'c1', itemId: 'a', event: 'sub_confirmed', recipientKind: 'tutor', recipientId: 'b', status: 'pending', sentAt: null },
+      { id: 'c2', itemId: 'a', event: 'sub_confirmed', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
+    ];
+    const m = leaveMessages(items, notices);
+    expect(m.map((x) => [x.recipient, x.to])).toEqual([['tutor', 'Benny'], ['student', '김민수']]);
+    expect(m[0].text).toContain('CONFIRMED substitute classes');
+    expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 대체강사 Benny 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.\n\n- 11월 2일(월) 오후 8시');
+    expect(studentWork(groupByStudent(items)[0], m, now).confirm.confirmedMsgs).toHaveLength(2);
   });
 
   it('기다림 수업(강사 장기 휴식)도 보강 권리 — 수업 변경·보강 화면에서 보강을 잡음', () => {

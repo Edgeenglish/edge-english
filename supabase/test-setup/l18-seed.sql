@@ -46,7 +46,7 @@ begin
     (e_b, s_b, t_busy, 'regular', 3, ((d0 + 6) + time '20:00') at time zone 'Asia/Seoul', ((d0 + 6) + time '20:40') at time zone 'Asia/Seoul');
   -- 기존 학생 입력 때 '강사 휴가'로 넣은 시트 휴가 보강과 같은 모양
   insert into migrated_items (enrollment_id, kind, original_date, tutor_leave) values (e_b, 'makeup_open', d0 + 8, true);
-  raise notice '가상 강사 3명·학생 2명·수업 8개·시트 휴가 보강 1개를 만들었어요.';
+  raise notice '강사 3명·학생 2명·수업 8개·시트 휴가 보강 1개를 만들었어요.';
 end $$;
 select s.name_ko as 학생, t.name as 강사, to_char(l.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI') as 수업_한국
 from lessons l join students s on s.id = l.student_id join tutors t on t.id = l.tutor_id

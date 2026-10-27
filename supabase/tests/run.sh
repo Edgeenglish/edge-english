@@ -135,7 +135,7 @@ L18="$("${PSQL[@]}" -tA -f "$WORK/l18-check.sql")"
 echo "$L18" | grep -v '|통과$' && { echo "❌ l18-check 실패"; exit 1; }
 "${PROD[@]}" -tA -f "$WORK/l18-check.sql" | grep -v '|통과$' && { echo "❌ 운영 묶음 l18-check 실패"; exit 1; }
 "${PSQL[@]}" -o /dev/null -f "$WORK/l18-seed.sql"; "${PSQL[@]}" -o /dev/null -f "$WORK/l18-seed.sql"
-[ "$("${PSQL[@]}" -tA -c "select count(*) from lessons l join students s on s.id = l.student_id where s.name_ko in ('가상휴무A', '가상휴무B')")" = "8" ] || { echo "❌ l18-seed"; exit 1; }
+[ "$("${PSQL[@]}" -tA -c "select count(*) from lessons l join students s on s.id = l.student_id where s.name_ko in ('김하준', '박서연')")" = "8" ] || { echo "❌ l18-seed"; exit 1; }
 "${PROD[@]}" -o /dev/null -f "$WORK/l18-seed.sql"
 [ "$("${PROD[@]}" -tA -c "select count(*) from students")" = "0" ] || { echo "❌ 운영 DB에 가상 학생이 들어감"; exit 1; }
 echo "✅ migration 1800 적용 확인 파일 통과 (확인 $(echo "$L18" | wc -l)줄, 다시 적용해도 오류 없음, 가상 데이터는 시험용에만)"
