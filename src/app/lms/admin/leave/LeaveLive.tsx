@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { markLessonNoticeSent, requestMakeup } from '@/lms/admin/lesson-change-live';
-import { chooseLeave, createLeave, loadLeaveItems, loadLeaves, loadTutors, makeupOptions, studentOk, subOptions, subTutorOk, type LvTutor } from '@/lms/admin/tutor-leave-live';
+import { chooseLeave, createLeave, leaveBack, unsendNotices, loadLeaveItems, loadLeaves, loadTutors, makeupOptions, studentOk, subOptions, subTutorOk, type LvTutor } from '@/lms/admin/tutor-leave-live';
 import { supabaseBrowser } from '@/lms/auth/client';
 import TutorLeave, { type LeaveActions } from './TutorLeave';
 
@@ -38,6 +38,8 @@ export default function LeaveLive({ offId }: { offId?: string }) {
         choose: (ids, c, sub) => chooseLeave(sb, ids, c, sub),
         subOk: (ids) => subTutorOk(sb, ids),
         studentOk: (ids) => studentOk(sb, ids),
+        back: (ids, to) => leaveBack(sb, ids, to),
+        unsend: (ids) => unsendNotices(sb, ids),
         subOptions: (ids) => subOptions(sb, ids),
         makeupOptions: (ids) => makeupOptions(sb, ids),
         requestMakeup: (src, slots) => requestMakeup(sb, src, slots),

@@ -82,6 +82,14 @@ export async function chooseLeave(sb: SupabaseClient, itemIds: string[], choice:
 export async function subTutorOk(sb: SupabaseClient, itemIds: string[]): Promise<void> {
   check(await sb.rpc('admin_leave_sub_ok', { p_items: itemIds }));
 }
+/** 이전 단계로: tutor_ok 확정 전 / asked 강사 답 전 / undecided 학생 답 전 */
+export async function leaveBack(sb: SupabaseClient, itemIds: string[], to: 'undecided' | 'asked' | 'tutor_ok'): Promise<void> {
+  check(await sb.rpc('admin_leave_back', { p_items: itemIds, p_to: to }));
+}
+/** 안내 '보냄' 되돌리기 */
+export async function unsendNotices(sb: SupabaseClient, noticeIds: string[]): Promise<void> {
+  check(await sb.rpc('admin_leave_notice_unsend', { p_notices: noticeIds }));
+}
 export async function studentOk(sb: SupabaseClient, itemIds: string[]): Promise<void> {
   check(await sb.rpc('admin_leave_student_ok', { p_items: itemIds }));
 }

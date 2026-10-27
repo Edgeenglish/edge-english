@@ -1357,6 +1357,34 @@ select pg_temp.ok(pg_temp.lst(3) = 'substitute:asked:scheduled:-:휴무A', '기�
 select admin_makeup_request('77777777-1800-0000-0000-000000000001', null, jsonb_build_array(jsonb_build_object('starts_at', pg_temp.kst(12, '20:00'))), now());
 select pg_temp.expect_error($$select admin_leave_choose(array[pg_temp.li(1)], 'substitute', '55555555-0000-0000-0000-00000000180b')$$, '보강부터 정리');
 select pg_temp.ok(true, '보강 신청이 있는 기다림 수업은 대체강사로 못 바꿈');
+-- 9-2) 이전 단계로 되돌리기 (2026-10-27 대표): 확정 전 → 강사 답 전 → 학생 답 전, 다시 해도 같은 안내 중복 없음
+select admin_leave_sub_ok(array[pg_temp.li(3)]);
+select admin_leave_student_ok(array[pg_temp.li(3)]);
+select admin_leave_back(array[pg_temp.li(3)], 'tutor_ok');
+select pg_temp.ok(pg_temp.lst(3) = 'substitute:tutor_ok:scheduled:-:휴무A'
+              and (select original_tutor_id is null from lessons where id = '77777777-1800-0000-0000-000000000003'),
+  '확정 전으로: 수업 강사가 원래 강사로, 학생 OK 대기');
+select admin_leave_student_ok(array[pg_temp.li(3)]);
+select admin_leave_back(array[pg_temp.li(3)], 'asked');
+select admin_leave_sub_ok(array[pg_temp.li(3)]);
+select pg_temp.ok(pg_temp.lst(3) = 'substitute:tutor_ok:scheduled:-:휴무A'
+              and (select count(*) from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_student' and status <> 'not_needed') = 1,
+  '확정 → 강사 답 전 → 다시 가능: 학생 안내는 하나만');
+select admin_leave_back(array[pg_temp.li(3)], 'undecided');
+select pg_temp.ok((select choice = 'undecided' and sub_tutor_id is null from leave_items where id = pg_temp.li(3))
+              and (select state = 'scheduled' and tutor_id = '55555555-0000-0000-0000-00000000180a' from lessons where id = '77777777-1800-0000-0000-000000000003')
+              and not exists (select 1 from lesson_notices where leave_item_id = pg_temp.li(3) and status = 'pending'),
+  '학생 답 전으로: 미확인, 수업은 원래 강사 그대로, 안 보낸 안내 없음');
+select admin_leave_choose(array[pg_temp.li(3)], 'substitute', '55555555-0000-0000-0000-00000000180b');
+select pg_temp.ok((select count(*) from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_ask' and status <> 'not_needed') = 1,
+  '같은 대체강사를 다시 골라도 가능 확인 안내는 하나');
+select admin_mark_lesson_notice_sent((select id from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_ask' and status = 'pending'));
+select admin_leave_notice_unsend(array(select id from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_ask' and status = 'sent'));
+select pg_temp.ok((select status = 'pending' and sent_at is null from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_ask' and status <> 'not_needed'),
+  '보냄 되돌리기: 안 보냄으로');
+select pg_temp.expect_error($$select admin_leave_notice_unsend(array(select id from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'leave_options'))$$, '다음 단계');
+select pg_temp.expect_error($$select admin_leave_back(array[pg_temp.li(1)], 'undecided')$$, '보강부터 정리');
+select pg_temp.ok(true, '지난 단계 안내는 못 되돌림 · 보강 신청이 있는 기다림 수업은 학생 답 전으로 못 돌림');
 -- 10) 휴무인 강사로는 보강 확정 안 됨 (기존 확인 그대로)
 select pg_temp.expect_error($$select admin_makeup_confirm((select id from makeup_requests where source_lesson_id = '77777777-1800-0000-0000-000000000001' and status = 'requested'), pg_temp.kst(4, '21:00'))$$, '강사 휴무');
 select pg_temp.ok(true, '휴무 기간에는 원래 강사로 보강 확정 거절');

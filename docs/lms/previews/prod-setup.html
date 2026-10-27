@@ -4414,6 +4414,8 @@ begin
       update leave_items set choice = 'substitute', sub_tutor_id = p_sub_tutor, sub_stage = 'asked', sub_lesson_id = null,
                              decided_at = now(), decided_by = me
       where id = it.id;
+      update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+      where leave_item_id = it.id and event = 'sub_ask' and recipient_id = p_sub_tutor and status = 'sent';
       insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values (it.id, 'sub_ask', 'tutor', p_sub_tutor);
     end if;
     v_changed := v_changed + 1;
@@ -4441,6 +4443,8 @@ begin
     update lesson_notices set status = 'sent', sent_at = now(), sent_by = me
     where leave_item_id = it.id and event = 'sub_ask' and status = 'pending';
     update leave_items set sub_stage = 'tutor_ok' where id = it.id;
+    update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+    where leave_item_id = it.id and event = 'sub_student' and status = 'sent';
     insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values (it.id, 'sub_student', 'student', it.student_id);
     v_changed := v_changed + 1;
   end loop;
@@ -4490,6 +4494,8 @@ begin
     update lesson_notices set status = 'sent', sent_at = now(), sent_by = me
     where leave_item_id = it.id and event = 'sub_student' and status = 'pending';
     update leave_items set sub_stage = 'confirmed', sub_lesson_id = v_lesson where id = it.id;
+    update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+    where leave_item_id = it.id and event = 'sub_confirmed' and recipient_id = it.sub_tutor_id and status = 'sent';
     insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values (it.id, 'sub_confirmed', 'tutor', it.sub_tutor_id);
     v_changed := v_changed + 1;
   end loop;
@@ -4597,6 +4603,122 @@ revoke all on function makeup_requests_leave_choice() from public, anon, authent
 drop trigger if exists makeup_requests_leave_choice on makeup_requests;
 create trigger makeup_requests_leave_choice after insert on makeup_requests
   for each row execute function makeup_requests_leave_choice();
+
+-- ---------------------------------------------------------------------
+-- 9. 이전 단계로 되돌리기 (2026-10-27 대표): 확정 전(학생 OK 대기) / 강사 답 전(가능 확인 중) / 학생 답 전(미확인)
+--    대체 확정 수업은 원래 강사로, 기다림(강사 장기 휴식) 수업은 다시 예정으로. 안 보낸 안내는 보낼 필요 없음. 지난 수업은 안 됨
+--    안내 '보냄'도 되돌릴 수 있음 (그 안내 단계에 있을 때만)
+-- ---------------------------------------------------------------------
+create or replace function lms_leave_unconfirm(it leave_items, p_me uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  l lessons;
+begin
+  if it.lesson_id is not null then
+    select * into l from lessons where id = it.lesson_id for update;
+    if l.state &lt;&gt; 'scheduled' then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+    begin
+      update lessons set tutor_id = it.tutor_id, original_tutor_id = null where id = l.id;
+    exception when exclusion_violation then
+      raise exception '원래 강사의 그 시간에 다른 수업이 있어 되돌릴 수 없습니다.';
+    end;
+  else
+    update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = p_me, void_note = '대체강사 수업 취소(휴무 처리 되돌림)'
+    where id = it.sub_lesson_id and state = 'scheduled';
+    if not found then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+    update migrated_items set kind = 'makeup_open', lesson_id = null where id = it.migrated_item_id;
+  end if;
+end $$;
+revoke all on function lms_leave_unconfirm(leave_items, uuid) from public, anon, authenticated;
+
+create or replace function admin_leave_back(p_items uuid[], p_to text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  l lessons;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_to not in ('undecided', 'asked', 'tutor_ok') then raise exception '되돌릴 단계를 골라 주세요.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_back', true);
+
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if p_to = 'tutor_ok' and (it.choice &lt;&gt; 'substitute' or it.sub_stage &lt;&gt; 'confirmed') then continue; end if;
+    if p_to = 'asked' and (it.choice &lt;&gt; 'substitute' or it.sub_stage = 'asked') then continue; end if;
+    if p_to = 'undecided' and it.choice = 'undecided' then continue; end if;
+    if it.starts_at &lt;= now() then raise exception '% 수업 시간이 지나 되돌릴 수 없습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+
+    if it.choice = 'substitute' then
+      if it.sub_stage = 'confirmed' then perform lms_leave_unconfirm(it, me); end if;
+      update lesson_notices set status = 'not_needed'
+      where leave_item_id = it.id and status = 'pending'
+        and event = any(case p_to when 'tutor_ok' then array['sub_confirmed'] when 'asked' then array['sub_student', 'sub_confirmed']
+                                  else array['sub_ask', 'sub_student', 'sub_confirmed'] end);
+    else
+      -- 기다림 → 학생 답 전: 보강 신청·확정이 없을 때만, 수업은 다시 예정으로
+      if it.lesson_id is not null then
+        select * into l from lessons where id = it.lesson_id for update;
+        if exists (select 1 from lessons x where x.makeup_of = l.id and x.state &lt;&gt; 'canceled')
+           or exists (select 1 from makeup_requests r where r.source_lesson_id = l.id and r.status in ('requested', 'countered', 'confirmed')) then
+          raise exception '% 수업은 보강 신청·확정이 있어 되돌릴 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+        end if;
+        if l.state = 'canceled' and l.class_status = 'Tutor long-term leave' then
+          begin
+            update lessons set state = 'scheduled', class_status = null, canceled_at = null, cancel_reason = null where id = l.id;
+          exception when exclusion_violation then
+            raise exception '% 그 시간에 다른 수업이 있어 되돌릴 수 없습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI');
+          end;
+        end if;
+      elsif exists (select 1 from migrated_items m where m.id = it.migrated_item_id and m.kind &lt;&gt; 'makeup_open')
+            or exists (select 1 from makeup_requests r where r.migrated_item_id = it.migrated_item_id and r.status in ('requested', 'countered')) then
+        raise exception '% 휴가 보강은 보강 신청·확정이 있어 되돌릴 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+      end if;
+    end if;
+
+    if p_to = 'undecided' then
+      update leave_items set choice = 'undecided', sub_tutor_id = null, sub_stage = null, sub_lesson_id = null, decided_at = null, decided_by = null
+      where id = it.id;
+    else
+      update leave_items set sub_stage = p_to, sub_lesson_id = null where id = it.id;
+    end if;
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_back(uuid[], text) from public, anon;
+grant execute on function admin_leave_back(uuid[], text) to authenticated;
+
+create or replace function admin_leave_notice_unsend(p_notices uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  n lesson_notices;
+  it leave_items;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_notice_unsend', true);
+  for n in select * from lesson_notices where id = any(p_notices) and leave_item_id is not null for update loop
+    if n.status &lt;&gt; 'sent' then continue; end if;
+    select * into it from leave_items where id = n.leave_item_id;
+    if (n.event = 'leave_options' and it.choice &lt;&gt; 'undecided')
+       or (n.event = 'sub_ask' and it.sub_stage is distinct from 'asked')
+       or (n.event = 'sub_student' and it.sub_stage is distinct from 'tutor_ok')
+       or (n.event = 'sub_confirmed' and it.sub_stage is distinct from 'confirmed') then
+      raise exception '이미 다음 단계로 넘어간 안내입니다. 단계를 먼저 되돌려 주세요.';
+    end if;
+    update lesson_notices set status = 'pending', sent_at = null, sent_by = null where id = n.id;
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_notice_unsend(uuid[]) from public, anon;
+grant execute on function admin_leave_notice_unsend(uuid[]) to authenticated;
 
 -- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)
 insert into lms_backup.project (name) values ('edgeenglish-lms');
