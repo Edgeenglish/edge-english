@@ -6,7 +6,7 @@
 // - 학생·대체강사에게 가는 글에 휴무 강사 이름을 쓰지 않음 (2026-10-27 대표)
 // - 화면은 학생 한 명씩 단계대로 (안 1, 2026-10-27 대표 확정): 1 안내 → 2 학생 답 → 3 강사 확인 / 보강 날짜 → 4 확정
 
-import type { KstDate } from '../rules/dates';
+import { formatInZone, type KstDate } from '../rules/dates';
 import { enAt, koAt, MAKEUP_SLOTS_MAX } from './lesson-change';
 
 export type LvChoice = 'undecided' | 'substitute' | 'wait';
@@ -186,12 +186,44 @@ export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
   sub_confirmed: '대체강사 확정 안내',
 };
 
-/** 기존 강사 보강: 학생에게 보강 가능한 날짜를 보내고 2개까지 고르게 함 (1개도 됨, 2026-10-27 대표) */
+/** 기존 강사 보강: 학생에게 보강 가능한 날짜를 보내고 2개까지 고르게 함 (1개도 됨, 2026-10-27 대표 문구)
+ *  날짜가 먼저 보이게 (2026-10-27 대표): 시간이 모두 같으면 시간은 위에 한 번, 날짜는 한 주(월~일)씩 한 줄
+ *  시간이 섞이면 한 줄에 날짜 하나 + 그날 가능한 시간. 해외 학생은 현지 시각 */
 export function makeupDatesText(studentName: string, studentTz: string, dates: Date[]): string {
-  return [
-    `[엣지영어] ${studentName}님, 보강 가능한 날짜예요. 편한 날을 ${MAKEUP_SLOTS_MAX}개까지 골라 주세요.(없다면 1개만 고르셔도 괜찮아요)`,
-    ...dates.map((d) => `- ${koAt(d, studentTz)}`),
-  ].join('\n');
+  const tz = studentTz || 'Asia/Seoul';
+  const head = `[엣지영어] ${studentName}님, 보강 가능한 날짜예요. 편한 날을 ${MAKEUP_SLOTS_MAX}개까지 골라 주세요.(없다면 1개만 고르셔도 괜찮아요)`;
+  const local = tz === 'Asia/Seoul' ? '' : ' (현지 시간)';
+  const days = new Map<string, { label: string; times: string[] }>();
+  for (const d of [...dates].sort((a, b) => +a - +b)) {
+    const f = formatInZone(d, tz);
+    const day = days.get(f.date) ?? { label: `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))}(${KO_WEEKDAY[f.weekday]})`, times: [] };
+    const t = koTime(f.time);
+    if (!day.times.includes(t)) day.times.push(t);
+    days.set(f.date, day);
+  }
+  const list = [...days.entries()];
+  const times = new Set(list.flatMap(([, v]) => v.times));
+  if (times.size !== 1) return [head, list.map(([, v]) => `- ${v.label} ${v.times.join(' · ')}`).join('\n') + local].join('\n\n');
+  // 한 주(월~일)씩 한 줄
+  const weeks: string[][] = [];
+  let key = '';
+  for (const [date, v] of list) {
+    const k = mondayOf(date);
+    if (k !== key) { weeks.push([]); key = k; }
+    weeks[weeks.length - 1].push(v.label);
+  }
+  return [head, [`⏰ 모두 평소 시간 ${[...times][0]}${local}`, ...weeks.map((w) => `- ${w.join(' · ')}`)].join('\n')].join('\n\n');
+}
+
+const KO_WEEKDAY: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토' };
+function koTime(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}시${m ? ` ${m}분` : ''}`;
+}
+function mondayOf(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
 }
 
 // ---------------------------------------------------------------------
