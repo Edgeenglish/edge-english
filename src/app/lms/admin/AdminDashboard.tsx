@@ -431,7 +431,11 @@ export default function AdminDashboard({
               {item.endReason && <EndReasonFix weeks={item.endReason.weeks} onSave={(r, n) => fixEndReason(item, r, n)} />}
               <div className="flex flex-wrap gap-1.5">
                 {item.actions.map((a) =>
-                  a.href ? (
+                  a.done ? (
+                    <button key={a.key} type="button" disabled className="min-h-[40px] rounded-[10px] border border-[#c9c6d6] bg-[#d9d6e3] px-3 text-[13.5px] font-bold text-[#4a4760]">
+                      {a.label} ✓
+                    </button>
+                  ) : a.href ? (
                     <Link key={a.key} href={preview ? a.href.replace('?', '?demo=1&') : a.href} className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5fff] bg-[#7d5fff] px-3 text-[13.5px] font-semibold text-white">
                       {a.label}
                     </Link>
@@ -439,8 +443,9 @@ export default function AdminDashboard({
                     <button
                       key={a.key}
                       type="button"
+                      disabled={a.disabled}
                       onClick={() => act(item, a.key)}
-                      className={`min-h-[40px] rounded-[10px] border px-3 text-[13.5px] font-semibold ${
+                      className={`min-h-[40px] rounded-[10px] border px-3 text-[13.5px] font-semibold disabled:border-[#e6e3ef] disabled:bg-white disabled:text-[#b9b6c8] ${
                         a.danger
                           ? 'border-[#c62b2b] bg-[#c62b2b] text-white'
                           : a.primary

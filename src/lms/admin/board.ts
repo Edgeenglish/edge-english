@@ -189,7 +189,8 @@ export type BoardItem = {
   detail: string;
   due: string | null;
   steps: { key: StepKey; label: string; done: boolean }[];
-  actions: { key: string; label: string; primary?: boolean; danger?: boolean; href?: string }[];
+  /** done: 끝난 단계(회색 ✓, 못 누름) · disabled: 앞 단계가 안 끝나 아직 못 누름 */
+  actions: { key: string; label: string; primary?: boolean; danger?: boolean; href?: string; done?: boolean; disabled?: boolean }[];
   /** 신규 매칭의 일정안 — 화면이 PlanCard(확정·안내 복사)로 그림 */
   plan?: PlanView;
   /** 첫 수업 24시간 안인데 안내 미완료 → 목록 맨 위 (D-51-3) */
@@ -258,11 +259,17 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         detail: t.tutorName ? `${t.studentCode} · ${t.tutorName}` : t.studentCode,
         due: dueText(t.dueAt, now),
         steps: [],
-        actions: !t.tutorAssignedAt
-          ? t.enrollmentId
-            ? [{ key: 'pick_schedule', label: '강사·시간 고르기 →', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }]
-            : [{ key: 'assign_tutor', label: '강사 배정', primary: true }]
-          : [{ key: 'notify_student', label: '학생 안내 완료', primary: true }],
+        // 두 단계 버튼을 늘 같이 보임. 끝난 단계는 회색 ✓, 앞 단계가 안 끝난 버튼은 못 누름 (2026-10-28 대표)
+        actions: [
+          t.tutorAssignedAt
+            ? { key: 'assign_tutor', label: '강사 배정', done: true }
+            : t.enrollmentId
+              ? { key: 'pick_schedule', label: '강사 배정', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }
+              : { key: 'assign_tutor', label: '강사 배정', primary: true },
+          t.studentNotifiedAt
+            ? { key: 'notify_student', label: '수업 컨펌 완료', done: true }
+            : { key: 'notify_student', label: '수업 컨펌 완료', primary: !!t.tutorAssignedAt, disabled: !t.tutorAssignedAt },
+        ],
       };
     }
     case 'renewal_tutor_notice': {
