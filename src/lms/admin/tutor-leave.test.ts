@@ -51,7 +51,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(m[0].text).toContain("If you can't do all of them, please reply with the numbers you can do.");
     expect(m[0].text.split('\n').filter((l) => /^\d\)/.test(l))).toHaveLength(2);
     expect(m[0].text).toContain('your time');
-    expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 Benny 강사님과 평소 시간에 진행해요. 괜찮으시면 답장 주세요.\n\n- 11월 5일(목) 오후 8시');
+    expect(m[1].text).toBe('[엣지영어] 김민수님, 담당 강사님 휴가 기간 수업을 대체강사 Benny 강사님과 평소 시간에 진행하려고 해요. 아래 날짜 괜찮으신지 알려 주세요. 강사님 프로필도 함께 보내 드려요.\n\n- 11월 5일(목) 오후 8시');
     // 두 가지를 처음부터 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강), 대표 문구 그대로
     expect(m[2].recipient).toBe('student');
     expect(m[2].text).toBe([

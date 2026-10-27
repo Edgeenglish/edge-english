@@ -162,7 +162,8 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[]): string {
     ].join('\n\n');
   }
   if (event === 'sub_student') {
-    return [`[엣지영어] ${i.studentName}님, 아래 수업은 ${i.subTutorName} 강사님과 평소 시간에 진행해요. 괜찮으시면 답장 주세요.`, dates].join('\n\n');
+    // 대체강사 가능 확인 뒤 학생에게 강사·날짜 제안 (프로필은 이어서 따로 보냄) → 학생 OK → 확정 (2026-10-27 대표 최종)
+    return [`[엣지영어] ${i.studentName}님, 담당 강사님 휴가 기간 수업을 대체강사 ${i.subTutorName} 강사님과 평소 시간에 진행하려고 해요. 아래 날짜 괜찮으신지 알려 주세요. 강사님 프로필도 함께 보내 드려요.`, dates].join('\n\n');
   }
   if (event === 'sub_ask') {
     return [
@@ -182,7 +183,7 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[]): string {
 export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
   leave_options: '진행 방법 선택 안내',
   sub_ask: '대체강사 가능 확인',
-  sub_student: '학생 대체강사 안내',
+  sub_student: '대체강사 제안 (프로필 함께)',
   sub_confirmed: '대체강사 확정 안내',
 };
 
