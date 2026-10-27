@@ -248,19 +248,16 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
   switch (t.kind) {
     case 'new_student_matching': {
       if (t.plan) return planItem(t, t.plan, now);
-      const steps = [
-        { key: 'assign_tutor' as const, label: t.tutorName ? `강사 배정 · ${t.tutorName}` : '강사 배정', done: !!t.tutorAssignedAt },
-        { key: 'notify_student' as const, label: '학생에게 강사·첫 수업 안내', done: !!t.studentNotifiedAt },
-      ];
+      // 할 일 목록(○ 강사 배정 · ○ 학생 안내)은 버튼과 같은 말이라 안 보임 — 지금 할 일은 버튼 하나로 (2026-10-28 대표)
       return {
         id: t.id,
         kind: t.kind,
         severity: dueSeverity(t.dueAt, now),
         tag: '신규 매칭',
         title: `${t.studentName} · ${t.product}`,
-        detail: `${t.studentCode} · 결제 확인 후 3영업일 안에 강사 배정과 학생 안내까지`,
+        detail: t.tutorName ? `${t.studentCode} · ${t.tutorName}` : t.studentCode,
         due: dueText(t.dueAt, now),
-        steps,
+        steps: [],
         actions: !t.tutorAssignedAt
           ? t.enrollmentId
             ? [{ key: 'pick_schedule', label: '강사·시간 고르기 →', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }]
@@ -303,7 +300,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         severity: 'open',
         tag: '장기 연기 승인',
         title: `${t.studentName} · ${t.days}일`,
-        detail: `${t.studentCode} · ${t.from} ~ ${t.to} · 사유: ${REASON_KO[t.reason]} · 증빙 확인 후 승인`,
+        detail: `${t.studentCode} · ${t.from} ~ ${t.to} · 사유: ${REASON_KO[t.reason]}`,
         due: null,
         steps: [],
         actions: [
@@ -333,7 +330,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         severity: dueSeverity(t.endsAt, now),
         tag: '종료 임박',
         title: `${t.studentName} · 수업 ${t.lessonsLeft}회 남음`,
-        detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''} · 재등록 결제 확인 전`,
+        detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''}`,
         due: `종료 ${dueText(t.endsAt, now)}`,
         steps: [],
         actions: [],
@@ -346,7 +343,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         severity: dueSeverity(t.deadline, now),
         tag: '보강 미신청',
         title: `${t.studentName} · ${t.canceledLesson} 수업분`,
-        detail: `${t.studentCode}${t.tutorName ? ` · ${t.tutorName}` : ''} · 보강을 받을 수 있는데 아직 신청하지 않음`,
+        detail: `${t.studentCode}${t.tutorName ? ` · ${t.tutorName}` : ''}`,
         due: `보강 기한 ${dueText(t.deadline, now)}`,
         steps: [],
         actions: [{ key: 'makeup_nudged', label: '학생에게 보강 신청 안내함', primary: true }],
