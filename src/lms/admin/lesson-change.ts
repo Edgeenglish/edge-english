@@ -91,6 +91,9 @@ export function dateLabel(d: KstDate): string {
   return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 }
 
+/** 보강 시간은 한 수업당 강사에게 최대 2개 (2026-10-27 대표: 학생에게 2개 권장, 1개도 허용) */
+export const MAKEUP_SLOTS_MAX = 2;
+
 export const KIND_TEXT: Record<ChLesson['kind'], string> = {
   regular: '정규', makeup: '보강', migrated_makeup: '보강', compensation: '보상', carryover: '이월', migrated_extra: '추가',
 };

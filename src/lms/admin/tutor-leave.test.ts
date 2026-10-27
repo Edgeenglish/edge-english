@@ -3,7 +3,7 @@ import { kstToInstant } from '../rules/dates';
 import { buildBoard } from './board';
 import { makeupRights, type ChLesson } from './lesson-change';
 import { toTutorLeaves } from './live';
-import { groupByStudent, groupChoice, itemStatus, leaveMessages, leaveSummary, type LvItem, type LvNotice } from './tutor-leave';
+import { groupByStudent, groupChoice, itemStatus, leaveMessages, leaveSummary, makeupDatesText, studentWork, type LvItem, type LvNotice } from './tutor-leave';
 
 const I = (id: string, student: string, date: string, extra: Partial<LvItem> = {}): LvItem => ({
   id, timeOffId: 'off', studentId: student, studentName: student === 's1' ? '김민수' : '이지은', studentNameEn: student === 's1' ? 'Minsu Kim' : 'Jieun Lee',
@@ -42,22 +42,50 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
       { id: 'n5', itemId: 'a', event: 'leave_options', recipientId: 's1', status: 'pending', sentAt: null },
       { id: 'n6', itemId: 'b', event: 'leave_options', recipientId: 's1', status: 'pending', sentAt: null },
     ];
-    const m = leaveMessages(items, notices, 'Olivia');
+    const m = leaveMessages(items, notices);
     expect(m.map((x) => [x.event, x.noticeIds])).toEqual([['sub_ask', ['n1', 'n2']], ['sub_student', ['n3']], ['leave_options', ['n5', 'n6']]]);
     expect(m[0].text).toContain('Substitute request - Minsu Kim (40 min)');
-    expect(m[0].text).toContain('Olivia is on leave');
+    // 휴무 강사 이름은 대체강사·학생 글에 쓰지 않음, 일부만 가능하면 번호로 답하게 (2026-10-27 대표)
+    expect(m.every((x) => !x.text.includes('Olivia'))).toBe(true);
+    expect(m[0].text).toContain('One of our Edge English tutors is on leave');
+    expect(m[0].text).toContain("If you can't do all of them, please reply with the numbers you can do.");
     expect(m[0].text.split('\n').filter((l) => /^\d\)/.test(l))).toHaveLength(2);
     expect(m[0].text).toContain('your time');
     expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 Benny 강사님과 평소 시간에 진행해요. 괜찮으시면 답장 주세요.\n\n- 11월 5일(목) 오후 8시');
     // 두 가지를 처음부터 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강), 대표 문구 그대로
     expect(m[2].recipient).toBe('student');
     expect(m[2].text).toBe([
-      '[엣지영어] 김민수님, Olivia 강사님 휴무로 아래 수업의 진행 방법을 골라 주세요.',
+      '[엣지영어] 김민수님, 담당 강사님 휴무로 아래 수업의 진행 방법을 골라 주세요.',
       '- 11월 2일(월) 오후 8시\n- 11월 5일(목) 오후 8시',
       '① 원래 시간에 대체강사와 수업하기 · 추천\n일정을 바꾸지 않고, 평소 수업 시간 그대로 수업하실 수 있어요.\n다른 강사의 영어와 수업 방식도 경험해 보실 수 있습니다.',
       '② 기존 강사와 보강하기\n기존 강사님이 돌아오신 뒤 수업하실 수 있어요. 가능한 보강 시간을 확인해 주세요.',
     ].join('\n\n'));
     expect(leaveSummary(items, notices).pendingNotices).toBe(5);
+    // 학생 한 명의 할 일: 안내 → (대체강사 확인) → 확정(학생 안내) 순서
+    const w = studentWork(groupByStudent(items)[0], m, now);
+    expect(w.steps).toEqual(['notify', 'tutor', 'confirm']);
+    expect(w.tutor.map((t) => [t.subTutorName, t.items.map((i) => i.id), t.ask?.noticeIds])).toEqual([['Benny', ['a'], ['n1', 'n2']]]);
+    expect(w.confirm.studentMsg?.noticeIds).toEqual(['n3']);
+    expect(w.confirm.tutorOk.map((i) => i.id)).toEqual(['b']);
+  });
+
+  it('학생 할 일: 미정 → 학생 답, 기존 강사 보강 날짜 미정 → 보강 날짜, 신청함 → 확정(수업 변경 화면), 지난 미정 수업은 제외', () => {
+    const items = [
+      I('p', 's1', '2026-10-20'), I('a', 's1', '2026-11-02'), I('b', 's1', '2026-11-03', { choice: 'wait' }),
+      I('c', 's1', '2026-11-04', { choice: 'wait', makeupRequested: true }), I('d', 's1', '2026-11-05', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') }),
+    ];
+    const w = studentWork(groupByStudent(items)[0], [], now);
+    expect(w.steps).toEqual(['answer', 'makeup', 'confirm']);
+    expect(w.answer.map((i) => i.id)).toEqual(['a']);
+    expect(w.makeup.map((i) => i.id)).toEqual(['b']);
+    expect(w.confirm.makeupRequested.map((i) => i.id)).toEqual(['c']);
+    expect(studentWork(groupByStudent([items[4]])[0], [], now).steps).toEqual([]);
+  });
+
+  it('보강 가능한 날짜 글: 2개까지, 1개도 괜찮다고', () => {
+    expect(makeupDatesText('박서연', 'Asia/Seoul', [kstToInstant('2026-11-05', '12:00'), kstToInstant('2026-11-06', '12:00')])).toBe(
+      '[엣지영어] 박서연님, 보강 가능한 날짜예요. 편한 날을 2개까지 골라 주세요. 1개만 되셔도 괜찮아요.\n- 11월 5일(목) 오후 12시\n- 11월 6일(금) 오후 12시',
+    );
   });
 
   it('기다림 수업(강사 장기 휴식)도 보강 권리 — 수업 변경·보강 화면에서 보강을 잡음', () => {

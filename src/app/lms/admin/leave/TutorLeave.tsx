@@ -1,18 +1,18 @@
 'use client';
 
-// 강사 휴무·대체강사 (2순위 ①, migration 1800, 2026-10-27 대표 시안 승인 Q1 A · Q2 A)
-// 카드: 1 휴무 넣기(강사·기간 → 걸리는 수업 미리 보기 → [저장]) · 2 휴무 고르기 · 3 학생별 처리(대체강사 / 기다림, 일부 날짜만 다르게)
-//       · 4 안내(학생·강사마다 한 메시지 [복사] → 보낸 뒤 [보냈어요]). 휴무를 넣으면 학생에게 두 가지 선택 안내(① 대체강사 · 추천 / ② 기존 강사 보강)
-// 대체강사: 강사 가능 → 학생 안내 → 학생 OK 뒤 확정 (A41)
-// 기존 강사 보강: 후보(지금 수강기간 안 → 종료일 뒤 평소 요일·시간)에서 골라 신청 → 확정은 수업 변경·보강 화면 (종료일 뒤면 자동 연장, A20)
+// 강사 휴무·대체강사 (2순위 ①, migration 1800, 2026-10-27 대표 시안 승인 Q1 A · Q2 A, 화면 흐름 안 1 확정)
+// 위: 휴무 목록 · [+ 휴무 넣기] · 할 일 요약. PC: 왼쪽 학생 목록(지금 단계) · 오른쪽 고른 학생. 휴대폰: 학생 카드가 위아래로
+// 학생 카드 = 지금 할 일부터 단계 순서로 (1 안내 → 2 학생 답 → 3 강사 확인 / 보강 날짜 → 4 확정), 끝난 수업·보낸 글은 접어 둠
+// 대체강사: 강사 가능(가능한 날짜만 골라 저장) → 학생 안내 → 학생 OK 뒤 확정 (A41). 안 되는 날짜는 다른 강사·기존 강사 보강으로
+// 기존 강사 보강: 보강 가능한 날짜(지금 수강기간 안 → 종료일 뒤 평소 요일·시간)를 학생에게 보내고 2개까지 골라 신청 → 확정은 수업 변경·보강 화면 (A20)
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { instantToKstDate, type KstDate } from '@/lms/rules/dates';
-import { dateLabel, kstLabel } from '@/lms/admin/lesson-change';
+import { dateLabel, kstLabel, MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
 import {
-  groupByStudent, groupChoice, itemStatus, leaveMessages, leaveSummary, LV_EVENT_TEXT,
-  type LvItem, type LvMakeupOption, type LvMessage, type LvNotice, type LvStudentGroup, type LvSubOption, type LvTimeOff,
+  groupByStudent, itemStatus, leaveMessages, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, studentWork,
+  type LvItem, type LvMakeupOption, type LvMessage, type LvNotice, type LvStep, type LvStudentGroup, type LvStudentWork, type LvSubOption, type LvTimeOff,
 } from '@/lms/admin/tutor-leave';
 import type { LeaveCreateResult, LvTutor } from '@/lms/admin/tutor-leave-live';
 import { AdminHeader } from '../ui';
@@ -35,6 +35,7 @@ const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5fff] px-4 text-[14.5px] fon
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-3.5 text-[14px] text-[#1d1b2b] disabled:text-[#b9b6c8]';
 const Err = ({ children }: { children: React.ReactNode }) => (children ? <p className="mt-1.5 text-[13px] text-[#b3261e]">{children}</p> : null);
 const TONE = { todo: 'bg-[#fff8d6] text-[#5c4a00]', wait: 'bg-[#e9f4ff] text-[#1b5a8a]', done: 'bg-[#e3f6ea] text-[#1e7a46]' } as const;
+const STEP_ORDER: LvStep[] = ['notify', 'answer', 'tutor', 'makeup', 'confirm'];
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -45,11 +46,32 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** 처리 버튼 공통: 실행 → 다시 읽기, 오류는 그 자리에 */
+function useRun(done: () => Promise<void>) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const run = async (f: () => Promise<unknown>, after?: () => void) => {
+    setBusy(true);
+    setErr('');
+    try {
+      await f();
+      after?.();
+      await done();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '처리하지 못했어요.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { busy, err, setErr, run };
+}
+
 export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tutors: LvTutor[]; actions: LeaveActions; nowIso: string; initialOff?: string }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [leaves, setLeaves] = useState<LvTimeOff[]>([]);
   const [offId, setOffId] = useState<string | null>(initialOff ?? null);
   const [data, setData] = useState<{ items: LvItem[]; notices: LvNotice[] } | null>(null);
+  const [sel, setSel] = useState<string | null>(null);
   const [err, setErr] = useState('');
 
   const reloadLeaves = useCallback(async () => {
@@ -73,71 +95,68 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
   }, [reloadLeaves]);
   useEffect(() => {
     setData(null);
+    setSel(null);
     reload();
   }, [reload]);
 
-  const off = leaves.find((l) => l.id === offId) ?? null;
   const groups = data ? groupByStudent(data.items) : [];
-  const sum = data ? leaveSummary(data.items, data.notices) : null;
-  const messages = data && off ? leaveMessages(data.items, data.notices, off.tutorName) : [];
-  const pendingMsgs = messages.filter((m) => m.status === 'pending');
+  const messages = data ? leaveMessages(data.items, data.notices) : [];
+  const works = new Map(groups.map((g) => [g.studentId, studentWork(g, messages, now)]));
+  const selected = groups.find((g) => g.studentId === sel) ?? groups.find((g) => works.get(g.studentId)!.steps.length > 0) ?? groups[0];
+  const todo = STEP_ORDER.map((s) => [s, groups.filter((g) => works.get(g.studentId)!.steps[0] === s).length] as const).filter(([, n]) => n > 0);
 
   return (
     <div className="pb-24">
       <AdminHeader active="schedule" demo={false} />
-      <main className="mx-auto grid max-w-[720px] gap-3 px-4 py-4">
+      <main className="mx-auto grid max-w-[720px] gap-3 px-4 py-4 lg:max-w-[1120px]">
         <h1 className="text-[20px] font-extrabold text-[#1d1b2b]">강사 휴무</h1>
 
+        <div className="flex flex-wrap items-center gap-1.5">
+          {leaves.map((l) => (
+            <button key={l.id} type="button" aria-pressed={l.id === offId} onClick={() => setOffId(l.id === offId ? null : l.id)}
+              className={`min-h-[40px] rounded-full border px-3.5 text-[14px] ${l.id === offId ? 'border-[#7d5fff] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
+              {l.tutorName} · {dateLabel(l.from)} ~ {dateLabel(l.to)}
+            </button>
+          ))}
+        </div>
         <NewLeave tutors={tutors} actions={actions} today={instantToKstDate(now)} saved={async (id) => { await reloadLeaves(); setOffId(id); }} />
-
-        {leaves.length > 0 && (
-          <Card title="휴무 목록">
-            <ul className="grid gap-1.5">
-              {leaves.map((l) => (
-                <li key={l.id}>
-                  <button type="button" aria-pressed={l.id === offId} onClick={() => setOffId(l.id === offId ? null : l.id)}
-                    className={`flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border px-3 py-2 text-left ${l.id === offId ? 'border-[#7d5fff] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
-                    <b className="text-[15.5px] text-[#1d1b2b]">{l.tutorName}</b>
-                    <span className="flex-1 text-right text-[13.5px] text-[#6b6880]">{dateLabel(l.from)} ~ {dateLabel(l.to)}{l.reason ? ` · ${l.reason}` : ''}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
         <Err>{err}</Err>
 
-        {off && data && sum && (
+        {offId && data && (
           <>
             <p className="rounded-[12px] bg-[#f6f5fb] px-3 py-2.5 text-[14px] text-[#1d1b2b]">
               {data.items.length === 0
                 ? '이 휴무에 걸리는 수업이 없어요.'
-                : [
-                    `수업 ${data.items.length}회 · 학생 ${groups.length}명`,
-                    sum.undecidedStudents > 0 && `학생 선택 미확인 ${sum.undecidedStudents}명`,
-                    sum.tutorReply > 0 && `대체강사 답 대기 ${sum.tutorReply}회`,
-                    sum.studentReply > 0 && `학생 OK 대기 ${sum.studentReply}회`,
-                    sum.makeupOpen > 0 && `보강 날짜 미정 ${sum.makeupOpen}회`,
-                    sum.pendingNotices > 0 && `안내 안 보냄 ${pendingMsgs.length}건`,
-                  ].filter(Boolean).join(' · ')}
+                : `학생 ${groups.length}명 · 수업 ${data.items.length}회 · ${todo.length ? `할 일: ${todo.map(([s, n]) => `${LV_STEP_TEXT[s].replace(/^\d /, '')} ${n}명`).join(' · ')}` : '모두 처리됨'}`}
             </p>
 
-            {pendingMsgs.length > 0 && (
-              <Card title="안내">
-                <ul className="grid gap-2">
-                  {pendingMsgs.map((m) => <MessageRow key={m.key} m={m} markSent={async () => { await actions.markSent(m.noticeIds); await reload(); }} />)}
+            {groups.length > 0 && (
+              <div className="grid gap-3 lg:grid-cols-[260px_1fr] lg:items-start">
+                <ul className="hidden gap-1.5 lg:grid">
+                  {groups.map((g) => {
+                    const w = works.get(g.studentId)!;
+                    const on = g.studentId === selected?.studentId;
+                    return (
+                      <li key={g.studentId}>
+                        <button type="button" aria-pressed={on} onClick={() => setSel(g.studentId)}
+                          className={`grid w-full gap-0.5 rounded-[12px] border px-3 py-2.5 text-left ${on ? 'border-[#7d5fff] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
+                          <b className="text-[15px] text-[#1d1b2b]">{g.studentName}</b>
+                          <span className="text-[12.5px] text-[#6b6880]">{dateLabel(instantToKstDate(g.items[0].startsAt))}{g.items.length > 1 ? ` ~ ${dateLabel(instantToKstDate(g.items[g.items.length - 1].startsAt))}` : ''} · {g.items.length}회</span>
+                          <span className="text-[13px] font-semibold text-[#5b3fe0]">{LV_STEP_TEXT[w.steps[0] ?? 'done']}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
-              </Card>
-            )}
-
-            {groups.map((g) => <StudentCard key={g.studentId} g={g} now={now} actions={actions} done={reload} />)}
-
-            {messages.some((m) => m.status === 'sent') && (
-              <Card title="보낸 안내">
-                <ul className="grid gap-2">
-                  {messages.filter((m) => m.status === 'sent').map((m) => <MessageRow key={m.key} m={m} markSent={async () => {}} />)}
-                </ul>
-              </Card>
+                <div className="grid min-w-0 gap-3">
+                  {groups.map((g) => (
+                    <div key={g.studentId} className={g.studentId === selected?.studentId ? '' : 'lg:hidden'}>
+                      <StudentPanel g={g} w={works.get(g.studentId)!} sent={messages.filter((m) => m.status === 'sent' && m.studentId === g.studentId)}
+                        now={now} actions={actions} done={reload} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </>
         )}
@@ -234,185 +253,320 @@ function NewLeave({ tutors, actions, today, saved }: { tutors: LvTutor[]; action
   );
 }
 
-function StudentCard({ g, now, actions, done }: { g: LvStudentGroup; now: Date; actions: LeaveActions; done: () => Promise<void> }) {
-  // 지난 수업·확정된 대체 수업은 고를 대상에서 빼고, 나머지를 기본으로 한 번에 (Q1 A)
-  const changeable = g.items.filter((i) => i.startsAt > now && !(i.choice === 'wait' && (i.makeupAt || i.makeupRequested)));
-  const [some, setSome] = useState(false);
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(changeable.map((i) => i.id)));
-  const [options, setOptions] = useState<LvSubOption[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const target = some ? changeable.filter((i) => picked.has(i.id)) : changeable;
-  const ids = target.map((i) => i.id);
-  const asked = g.items.filter((i) => i.choice === 'substitute' && i.subStage === 'asked');
-  const tutorOk = g.items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok');
-  const choice = groupChoice(g.items);
-  const needMakeup = g.items.filter((i) => i.choice === 'wait' && !i.makeupAt && !i.makeupRequested);
+const Block = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div className="grid gap-2 border-t border-[#e6e3ef] pt-3 first:border-t-0 first:pt-0">
+    <b className="text-[14.5px] text-[#1d1b2b]">{title}</b>
+    {children}
+  </div>
+);
 
-  async function run(f: () => Promise<void>) {
-    setBusy(true);
-    setErr('');
-    try {
-      await f();
-      setOptions(null);
-      setPicked(new Set());
-      await done();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : '처리하지 못했어요.');
-    } finally {
-      setBusy(false);
-    }
-  }
+// 학생 한 명: 위에 단계 표시, 아래는 지금 할 일만 단계 순서로, 끝난 것은 접어 둠
+function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w: LvStudentWork; sent: LvMessage[]; now: Date; actions: LeaveActions; done: () => Promise<void> }) {
+  const r = useRun(done);
+  const stage = (s: LvStep) => (s === 'notify' ? 0 : s === 'answer' ? 1 : s === 'confirm' ? 3 : 2);
+  const cur = w.steps.length ? stage(w.steps[0]) : 4;
+  const third = w.tutor.length && w.makeup.length ? '3 강사 확인·보강 날짜' : w.makeup.length ? LV_STEP_TEXT.makeup : LV_STEP_TEXT.tutor;
+  const chips = [LV_STEP_TEXT.notify, LV_STEP_TEXT.answer, third, LV_STEP_TEXT.confirm];
+  const changeable = g.items.filter((i) => i.startsAt > now && !(i.choice === 'wait' && (i.makeupAt || i.makeupRequested)));
+  const mark = (m: LvMessage) => async () => { await actions.markSent(m.noticeIds); await done(); };
 
   return (
-    <Card title={<>{g.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{g.studentCode}</span></>}
-      badge={choice === 'mixed' ? <span className="rounded-[6px] bg-[#efebff] px-2 py-0.5 text-[12px] font-bold text-[#5b3fe0]">날짜마다 다름</span> : null}>
-      <ul className="grid gap-1.5">
-        {g.items.map((i) => {
-          const s = itemStatus(i);
-          const can = changeable.some((c) => c.id === i.id);
+    <Card title={<>{g.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{g.studentCode}</span></>}>
+      <div className="mb-3 flex flex-wrap gap-1">
+        {chips.map((c, n) => (
+          <span key={c} className={`rounded-full px-2.5 py-0.5 text-[12.5px] ${n < cur ? 'bg-[#e3f6ea] text-[#1e7a46]' : n === cur ? 'bg-[#7d5fff] font-bold text-white' : 'border border-[#e6e3ef] text-[#6b6880]'}`}>
+            {c}{n < cur ? ' ✓' : ''}
+          </span>
+        ))}
+        {cur === 4 && <span className="rounded-full bg-[#7d5fff] px-2.5 py-0.5 text-[12.5px] font-bold text-white">완료</span>}
+      </div>
+
+      <div className="grid gap-3">
+        {w.steps.map((s) => {
+          if (s === 'notify') return (
+            <Block key={s} title="학생에게 안내">
+              {w.notify.map((m) => <MessageRow key={m.key} m={m} markSent={mark(m)} />)}
+            </Block>
+          );
+          if (s === 'answer') return (
+            <Block key={s} title="학생 답">
+              <ItemList items={w.answer} />
+              <ChooseBox items={w.answer} actions={actions} done={done} />
+            </Block>
+          );
+          if (s === 'tutor') return w.tutor.map((t) => (
+            <Block key={`t-${t.subTutorId}`} title={`대체강사 ${t.subTutorName} 확인`}>
+              {t.ask && <MessageRow m={t.ask} markSent={mark(t.ask)} />}
+              <TutorCheck key={t.items.map((i) => i.id).join()} t={t} actions={actions} done={done} />
+            </Block>
+          ));
+          if (s === 'makeup') return (
+            <Block key={s} title="보강 날짜">
+              <MakeupPick g={g} items={w.makeup} actions={actions} done={done} />
+            </Block>
+          );
+          const c = w.confirm;
           return (
-            <li key={i.id} className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
-              {some && can && (
-                <input type="checkbox" aria-label={`${kstLabel(i.startsAt)} 고르기`} checked={picked.has(i.id)} className="h-5 w-5"
-                  onChange={(e) => { const n = new Set(picked); if (e.target.checked) n.add(i.id); else n.delete(i.id); setPicked(n); }} />
+            <Block key={s} title="확정">
+              {c.studentMsg && <MessageRow m={c.studentMsg} markSent={mark(c.studentMsg)} />}
+              {c.tutorOk.length > 0 && (
+                <button type="button" disabled={r.busy} className={btnMain} onClick={() => r.run(() => actions.studentOk(c.tutorOk.map((i) => i.id)))}>
+                  학생 OK → 확정 ({c.tutorOk.length}회)
+                </button>
               )}
-              <span className="text-[14.5px] text-[#1d1b2b]">{kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'}</span>
-              <span className={`ml-auto rounded-[6px] px-2 py-0.5 text-[12px] font-bold ${TONE[s.tone]}`}>{s.text}</span>
-            </li>
+              {c.confirmedMsgs.map((m) => <MessageRow key={m.key} m={m} markSent={mark(m)} />)}
+              {c.makeupRequested.length > 0 && (
+                <>
+                  <ItemList items={c.makeupRequested} />
+                  <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5fff] text-[14px] font-semibold text-[#5b3fe0]">
+                    보강 확정
+                  </Link>
+                </>
+              )}
+              <Err>{r.err}</Err>
+            </Block>
           );
         })}
-      </ul>
 
-      {changeable.length > 0 && (
-        <div className="mt-3 grid gap-2">
-          {changeable.length > 1 && (
-            <button type="button" className="min-h-[40px] text-left text-[13.5px] font-semibold text-[#5b3fe0]" onClick={() => setSome(!some)}>
-              {some ? '모든 날짜 한 번에 ›' : '일부 날짜만 다르게 처리 ›'}
-            </button>
-          )}
-          <div className="grid grid-cols-2 gap-1.5">
-            <button type="button" disabled={busy || ids.length === 0} className={btnSub} onClick={async () => {
-              setErr('');
-              try { setOptions(await actions.subOptions(ids)); } catch (e) { setErr(e instanceof Error ? e.message : '강사 목록을 읽지 못했어요.'); }
-            }}>
-              대체강사
-            </button>
-            <button type="button" disabled={busy || ids.length === 0} className={btnSub} onClick={() => run(() => actions.choose(ids, 'wait', null))}>
-              기존 강사 보강
-            </button>
+        <details className="border-t border-[#e6e3ef] pt-3">
+          <summary className="min-h-[36px] cursor-pointer text-[13.5px] font-semibold text-[#5b3fe0]">전체 수업 {g.items.length}회</summary>
+          <div className="mt-2 grid gap-2">
+            <ItemList items={g.items} />
+            {changeable.length > 0 && (
+              <details>
+                <summary className="min-h-[36px] cursor-pointer text-[13.5px] font-semibold text-[#5b3fe0]">처리 방법 바꾸기</summary>
+                <div className="mt-2"><ChooseBox items={changeable} actions={actions} done={done} /></div>
+              </details>
+            )}
           </div>
-          {options && (
-            <ul className="grid gap-1.5">
-              {options.length === 0 && <li className="text-[13.5px] text-[#6b6880]">고를 수 있는 강사가 없어요.</li>}
-              {options.map((o) => (
-                <li key={o.tutorId}>
-                  <button type="button" disabled={busy || o.free < ids.length} onClick={() => run(() => actions.choose(ids, 'substitute', o.tutorId))}
-                    className="flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2 text-left disabled:bg-[#faf9fd] disabled:text-[#b9b6c8]">
-                    <b className="text-[15px]">{o.name}</b>
-                    <span className="flex-1 text-right text-[13px] text-[#6b6880]">
-                      {o.free === ids.length ? `${ids.length}회 모두 가능` : `${o.free}회 가능 · ${o.busyDates.join('·')} 겹침`}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {(asked.length > 0 || tutorOk.length > 0) && (
-        <div className="mt-3 grid gap-1.5">
-          {asked.length > 0 && (
-            <button type="button" disabled={busy} className={btnMain} onClick={() => run(() => actions.subOk(asked.map((i) => i.id)))}>
-              {asked[0].subTutorName} 가능 ({asked.length}회)
-            </button>
-          )}
-          {tutorOk.length > 0 && (
-            <button type="button" disabled={busy} className={btnMain} onClick={() => run(() => actions.studentOk(tutorOk.map((i) => i.id)))}>
-              학생 OK → 확정 ({tutorOk.length}회)
-            </button>
-          )}
-        </div>
-      )}
-      {needMakeup.length > 0 && <MakeupPick items={needMakeup} actions={actions} done={done} />}
-      {g.items.some((i) => i.makeupRequested) && (
-        <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="mt-3 flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5fff] text-[14px] font-semibold text-[#5b3fe0]">
-          보강 확정
-        </Link>
-      )}
-      <Err>{err}</Err>
+        </details>
+        {sent.length > 0 && (
+          <details>
+            <summary className="min-h-[36px] cursor-pointer text-[13.5px] font-semibold text-[#5b3fe0]">보낸 글 {sent.length}건</summary>
+            <div className="mt-2 grid gap-2">
+              {sent.map((m) => <MessageRow key={m.key} m={m} markSent={async () => {}} />)}
+            </div>
+          </details>
+        )}
+      </div>
     </Card>
   );
 }
 
-// 기존 강사 보강 후보: 지금 수강기간 안 먼저, 종료일 뒤 평소 요일·시간 (확정하면 그날까지 자동 연장)
-function MakeupPick({ items, actions, done }: { items: LvItem[]; actions: LeaveActions; done: () => Promise<void> }) {
+function ItemList({ items }: { items: LvItem[] }) {
+  return (
+    <ul className="grid gap-1.5">
+      {items.map((i) => {
+        const s = itemStatus(i);
+        return (
+          <li key={i.id} className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
+            <span className="text-[14.5px] text-[#1d1b2b]">{kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'}</span>
+            <span className={`ml-auto rounded-[6px] px-2 py-0.5 text-[12px] font-bold ${TONE[s.tone]}`}>{s.text}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// 대체강사 / 기존 강사 보강 고르기 (모든 날짜 한 번에, 필요하면 일부 날짜만)
+function ChooseBox({ items, actions, done }: { items: LvItem[]; actions: LeaveActions; done: () => Promise<void> }) {
+  const [some, setSome] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(items.map((i) => i.id)));
+  const [options, setOptions] = useState<LvSubOption[] | null>(null);
+  const r = useRun(done);
+  const ids = (some ? items.filter((i) => picked.has(i.id)) : items).map((i) => i.id);
+  const reset = () => { setOptions(null); setSome(false); };
+
+  return (
+    <div className="grid gap-2">
+      {some && (
+        <ul className="grid gap-1.5">
+          {items.map((i) => (
+            <li key={i.id}>
+              <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
+                <input type="checkbox" className="h-5 w-5" checked={picked.has(i.id)}
+                  onChange={(e) => { const n = new Set(picked); if (e.target.checked) n.add(i.id); else n.delete(i.id); setPicked(n); setOptions(null); }} />
+                {kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'}
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="grid grid-cols-2 gap-1.5">
+        <button type="button" disabled={r.busy || ids.length === 0} className={btnSub} onClick={async () => {
+          r.setErr('');
+          try { setOptions(await actions.subOptions(ids)); } catch (e) { r.setErr(e instanceof Error ? e.message : '강사 목록을 읽지 못했어요.'); }
+        }}>
+          대체강사
+        </button>
+        <button type="button" disabled={r.busy || ids.length === 0} className={btnSub} onClick={() => r.run(() => actions.choose(ids, 'wait', null), reset)}>
+          기존 강사 보강
+        </button>
+      </div>
+      {items.length > 1 && (
+        <button type="button" className="min-h-[36px] text-left text-[13.5px] font-semibold text-[#5b3fe0]" onClick={() => { setSome(!some); setOptions(null); }}>
+          {some ? '모든 날짜 한 번에 ›' : '일부 날짜만 다르게 ›'}
+        </button>
+      )}
+      {options && <SubOptions options={options} n={ids.length} busy={r.busy} pick={(id) => r.run(() => actions.choose(ids, 'substitute', id), reset)} />}
+      <Err>{r.err}</Err>
+    </div>
+  );
+}
+
+function SubOptions({ options, n, busy, pick }: { options: LvSubOption[]; n: number; busy: boolean; pick: (tutorId: string) => void }) {
+  return (
+    <ul className="grid gap-1.5">
+      {options.length === 0 && <li className="text-[13.5px] text-[#6b6880]">고를 수 있는 강사가 없어요.</li>}
+      {options.map((o) => (
+        <li key={o.tutorId}>
+          <button type="button" disabled={busy || o.free < n} onClick={() => pick(o.tutorId)}
+            className="flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2 text-left disabled:bg-[#faf9fd] disabled:text-[#b9b6c8]">
+            <b className="text-[15px]">{o.name}</b>
+            <span className="flex-1 text-right text-[13px] text-[#6b6880]">
+              {o.free === n ? `${n}회 모두 가능` : `${o.free}회 가능 · ${o.busyDates.join('·')} 겹침`}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// 대체강사 답: 가능하다고 한 날짜만 체크해 저장. 체크 안 한 날짜는 다른 강사 또는 기존 강사 보강으로
+function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; actions: LeaveActions; done: () => Promise<void> }) {
+  const [ok, setOk] = useState<Set<string>>(() => new Set(t.items.map((i) => i.id)));
+  const [options, setOptions] = useState<LvSubOption[] | null>(null);
+  const r = useRun(done);
+  const yes = t.items.filter((i) => ok.has(i.id)).map((i) => i.id);
+  const no = t.items.filter((i) => !ok.has(i.id)).map((i) => i.id);
+
+  return (
+    <div className="grid gap-2">
+      <span className="text-[13px] text-[#6b6880]">{t.subTutorName}가 가능하다고 한 날짜</span>
+      <ul className="grid gap-1.5">
+        {t.items.map((i) => (
+          <li key={i.id}>
+            <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
+              <input type="checkbox" className="h-5 w-5" checked={ok.has(i.id)}
+                onChange={(e) => { const n = new Set(ok); if (e.target.checked) n.add(i.id); else n.delete(i.id); setOk(n); setOptions(null); }} />
+              {kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'}
+            </label>
+          </li>
+        ))}
+      </ul>
+      <button type="button" disabled={r.busy || yes.length === 0} className={btnMain} onClick={() => r.run(() => actions.subOk(yes))}>
+        저장 ({yes.length}회)
+      </button>
+      {no.length > 0 && (
+        <>
+          <span className="text-[13px] text-[#6b6880]">안 되는 날짜 {no.length}회</span>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button type="button" disabled={r.busy} className={btnSub} onClick={async () => {
+              r.setErr('');
+              try { setOptions((await actions.subOptions(no)).filter((o) => o.tutorId !== t.subTutorId)); } catch (e) { r.setErr(e instanceof Error ? e.message : '강사 목록을 읽지 못했어요.'); }
+            }}>
+              다른 대체강사
+            </button>
+            <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => actions.choose(no, 'wait', null))}>
+              기존 강사 보강
+            </button>
+          </div>
+          {options && <SubOptions options={options} n={no.length} busy={r.busy} pick={(id) => r.run(() => actions.choose(no, 'substitute', id))} />}
+        </>
+      )}
+      <Err>{r.err}</Err>
+    </div>
+  );
+}
+
+// 기존 강사 보강: 보강 가능한 날짜(지금 수강기간 안 먼저, 종료일 뒤 평소 요일·시간) → 학생에게 보내기 → 학생이 고른 날짜 2개까지 신청
+function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvItem[]; actions: LeaveActions; done: () => Promise<void> }) {
   const [itemId, setItemId] = useState(items[0].id);
   const [opts, setOpts] = useState<LvMakeupOption[] | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [manual, setManual] = useState(false);
+  const r = useRun(done);
   const item = items.find((i) => i.id === itemId) ?? items[0];
+  const { setErr } = r;
+
+  useEffect(() => {
+    let live = true;
+    setOpts(null);
+    setPicked(new Set());
+    setCopied(false);
+    setManual(false);
+    actions.makeupOptions([item.id]).then(
+      (o) => live && setOpts(o),
+      (e) => live && setErr(e instanceof Error ? e.message : '보강 가능한 날짜를 읽지 못했어요.'),
+    );
+    return () => { live = false; };
+  }, [actions, item.id, setErr]);
+
+  const text = opts ? makeupDatesText(g.studentName, item.studentTz, opts.map((o) => o.startsAt)) : '';
   const section = (s: LvMakeupOption['section'], title: string) => {
     const list = (opts ?? []).filter((o) => o.section === s);
     if (list.length === 0) return null;
     return (
       <div className="grid gap-1">
-        <b className="text-[13px] text-[#6b6880]">{title}</b>
+        <span className="text-[13px] text-[#6b6880]">{title}</span>
         <ul className="grid max-h-[260px] gap-1 overflow-y-auto">
-          {list.map((o) => (
-            <li key={+o.startsAt}>
-              <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
-                <input type="checkbox" className="h-5 w-5" checked={picked.has(+o.startsAt)}
-                  onChange={(e) => { const n = new Set(picked); if (e.target.checked) n.add(+o.startsAt); else n.delete(+o.startsAt); setPicked(n); }} />
-                {kstLabel(o.startsAt)}
-              </label>
-            </li>
-          ))}
+          {list.map((o) => {
+            const on = picked.has(+o.startsAt);
+            return (
+              <li key={+o.startsAt}>
+                <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
+                  <input type="checkbox" className="h-5 w-5" checked={on} disabled={!on && picked.size >= MAKEUP_SLOTS_MAX}
+                    onChange={(e) => { const n = new Set(picked); if (e.target.checked) n.add(+o.startsAt); else n.delete(+o.startsAt); setPicked(n); }} />
+                  {kstLabel(o.startsAt)}
+                </label>
+              </li>
+            );
+          })}
         </ul>
       </div>
     );
   };
+
   return (
-    <div className="mt-3 grid gap-2 rounded-[12px] border border-[#e6e3ef] p-3">
-      <b className="text-[14.5px] text-[#1d1b2b]">보강 후보</b>
-      {items.length > 1 && (
-        <select aria-label="보강할 수업" value={itemId} onChange={(e) => { setItemId(e.target.value); setPicked(new Set()); }} className={inputCls(false)}>
-          {items.map((i) => <option key={i.id} value={i.id}>{kstLabel(i.startsAt)} 수업분</option>)}
+    <div className="grid gap-2">
+      {items.length > 1 ? (
+        <select aria-label="보강할 수업" value={itemId} onChange={(e) => setItemId(e.target.value)} className={inputCls(false)}>
+          {items.map((i) => <option key={i.id} value={i.id}>{kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'} 수업분</option>)}
         </select>
+      ) : (
+        <ItemList items={items} />
       )}
       {opts === null ? (
-        <button type="button" className={btnSub} disabled={busy} onClick={async () => {
-          setErr('');
-          try { setOpts(await actions.makeupOptions(items.map((i) => i.id))); } catch (e) { setErr(e instanceof Error ? e.message : '후보를 읽지 못했어요.'); }
-        }}>
-          후보 보기
-        </button>
+        <p className="text-[13.5px] text-[#6b6880]">불러오는 중…</p>
+      ) : opts.length === 0 ? (
+        <p className="text-[13.5px] text-[#6b6880]">보강 가능한 날짜 없음</p>
       ) : (
         <>
-          {section('in_period', '수강기간 안')}
-          {section('after_end', '종료일 뒤 평소 요일·시간')}
-          {opts.length === 0 && <p className="text-[13.5px] text-[#6b6880]">후보 없음</p>}
-          <button type="button" className={btnMain} disabled={busy || picked.size === 0} onClick={async () => {
-            setBusy(true);
-            setErr('');
-            try {
-              await actions.requestMakeup(item.lessonId ? { lessonId: item.lessonId } : { itemId: item.migratedItemId! }, [...picked].sort((a, b) => a - b).map((t) => new Date(t)));
-              setPicked(new Set());
-              setOpts(null);
-              await done();
-            } catch (e) {
-              setErr(e instanceof Error ? e.message : '신청하지 못했어요.');
-            } finally {
-              setBusy(false);
-            }
-          }}>
+          <div className="grid gap-1.5 rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <b className="flex-1 text-[14px] text-[#1d1b2b]">학생에게 보낼 글</b>
+              <button type="button" className={btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>
+                {copied ? '복사함' : '복사'}
+              </button>
+            </div>
+            <pre className="whitespace-pre-wrap rounded-[10px] bg-[#f6f5fb] px-3 py-2 font-sans text-[13.5px] text-[#1d1b2b]">{text}</pre>
+            {manual && <textarea readOnly value={text} rows={5} onFocus={(e) => e.currentTarget.select()} aria-label="복사할 글" className="w-full rounded-[10px] border border-[#e6e3ef] p-2 text-[13.5px]" />}
+          </div>
+          <b className="text-[14px] text-[#1d1b2b]">학생이 고른 날짜 ({picked.size}/{MAKEUP_SLOTS_MAX})</b>
+          {section('in_period', '보강 가능한 날짜 · 수강기간 안')}
+          {section('after_end', '보강 가능한 날짜 · 종료일 뒤')}
+          <button type="button" className={btnMain} disabled={r.busy || picked.size === 0} onClick={() => r.run(
+            () => actions.requestMakeup(item.lessonId ? { lessonId: item.lessonId } : { itemId: item.migratedItemId! }, [...picked].sort((a, b) => a - b).map((t) => new Date(t))),
+            () => setPicked(new Set()),
+          )}>
             보강 신청 ({picked.size})
           </button>
         </>
       )}
-      <Err>{err}</Err>
+      <Err>{r.err}</Err>
     </div>
   );
 }
@@ -424,7 +578,7 @@ function MessageRow({ m, markSent }: { m: LvMessage; markSent: () => Promise<voi
   const [manual, setManual] = useState(false);
   const sent = m.status === 'sent';
   return (
-    <li className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
+    <div className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <b className="block text-[14.5px] text-[#1d1b2b]">{m.recipient === 'student' ? '학생' : '강사'} {m.to} · {LV_EVENT_TEXT[m.event]}</b>
@@ -446,6 +600,6 @@ function MessageRow({ m, markSent }: { m: LvMessage; markSent: () => Promise<voi
       <pre className="mt-2 whitespace-pre-wrap rounded-[10px] bg-[#f6f5fb] px-3 py-2 font-sans text-[13.5px] text-[#1d1b2b]">{m.text}</pre>
       {manual && <textarea readOnly value={m.text} rows={5} onFocus={(e) => e.currentTarget.select()} aria-label="복사할 글" className="mt-2 w-full rounded-[10px] border border-[#e6e3ef] p-2 text-[13.5px]" />}
       <Err>{err}</Err>
-    </li>
+    </div>
   );
 }

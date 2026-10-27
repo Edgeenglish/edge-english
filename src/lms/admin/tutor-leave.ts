@@ -3,9 +3,11 @@
 // - 대체강사는 강사 가능 → 학생 안내 → 학생 OK 뒤 확정 (Q2 A, 정책 원본 A41)
 // - 학생에게는 처음부터 두 가지를 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강). 거절해야 ②를 알려주는 방식 아님 (2026-10-27 대표)
 // - 안내는 학생·강사마다 한 번에 복사 (같은 학생의 여러 날짜를 한 메시지로), 보낸 뒤 [보냈어요]
+// - 학생·대체강사에게 가는 글에 휴무 강사 이름을 쓰지 않음 (2026-10-27 대표)
+// - 화면은 학생 한 명씩 단계대로 (안 1, 2026-10-27 대표 확정): 1 안내 → 2 학생 답 → 3 강사 확인 / 보강 날짜 → 4 확정
 
 import type { KstDate } from '../rules/dates';
-import { enAt, koAt } from './lesson-change';
+import { enAt, koAt, MAKEUP_SLOTS_MAX } from './lesson-change';
 
 export type LvChoice = 'undecided' | 'substitute' | 'wait';
 export type LvStage = 'asked' | 'tutor_ok' | 'confirmed';
@@ -112,10 +114,10 @@ export function leaveSummary(items: LvItem[], notices: LvNotice[]) {
 // 안내 문구: 학생·강사마다 한 메시지로 (같은 학생·같은 대체강사의 날짜를 모음)
 // ---------------------------------------------------------------------
 
-export type LvMessage = { key: string; event: LvNoticeEvent; recipient: 'student' | 'tutor'; to: string; noticeIds: string[]; status: 'pending' | 'sent'; text: string };
+export type LvMessage = { key: string; event: LvNoticeEvent; recipient: 'student' | 'tutor'; to: string; studentId: string; recipientId: string; noticeIds: string[]; status: 'pending' | 'sent'; text: string };
 
 /** 아직 안 보낸 안내는 메시지로 묶고, 보낸 것은 최근 것만 따로 보여 줌 */
-export function leaveMessages(items: LvItem[], notices: LvNotice[], originalTutorName: string): LvMessage[] {
+export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[] {
   const byId = new Map(items.map((i) => [i.id, i]));
   const groups = new Map<string, { event: LvNoticeEvent; status: 'pending' | 'sent'; notices: LvNotice[]; items: LvItem[] }>();
   for (const n of notices) {
@@ -137,21 +139,23 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[], originalTuto
       event: g.event,
       recipient,
       to: recipient === 'student' ? first.studentName : first.subTutorName ?? '대체강사',
+      studentId: first.studentId,
+      recipientId: g.notices[0].recipientId,
       noticeIds: g.notices.map((n) => n.id),
       status: g.status,
-      text: leaveText(g.event, list, originalTutorName),
+      text: leaveText(g.event, list),
     };
   });
 }
 
-export function leaveText(event: LvNoticeEvent, items: LvItem[], originalTutorName: string): string {
+export function leaveText(event: LvNoticeEvent, items: LvItem[]): string {
   const i = items[0];
   const tz = i.subTutorTz ?? 'Asia/Seoul';
   const dates = items.map((x) => `- ${koAt(x.startsAt, x.studentTz)}`).join('\n');
   if (event === 'leave_options') {
     const o = LEAVE_OPTIONS;
     return [
-      `[엣지영어] ${i.studentName}님, ${originalTutorName} 강사님 휴무로 아래 수업의 진행 방법을 골라 주세요.`,
+      `[엣지영어] ${i.studentName}님, 담당 강사님 휴무로 아래 수업의 진행 방법을 골라 주세요.`,
       dates,
       [`① ${o.substitute.title}`, ...o.substitute.lines].join('\n'),
       [`② ${o.wait.title}`, ...o.wait.lines].join('\n'),
@@ -163,8 +167,9 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], originalTutorNa
   if (event === 'sub_ask') {
     return [
       `Substitute request - ${i.studentNameEn} (${i.durationMin} min), not confirmed yet`,
-      `${originalTutorName} is on leave. Are you available to teach these classes?`,
+      'One of our Edge English tutors is on leave. Are you available to teach these classes?',
       ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, tz)}`),
+      "If you can't do all of them, please reply with the numbers you can do. Thank you!",
     ].join('\n');
   }
   return [
@@ -180,3 +185,61 @@ export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
   sub_student: '학생 대체강사 안내',
   sub_confirmed: '대체강사 확정 안내',
 };
+
+/** 기존 강사 보강: 학생에게 보강 가능한 날짜를 보내고 2개까지 고르게 함 (1개도 됨, 2026-10-27 대표) */
+export function makeupDatesText(studentName: string, studentTz: string, dates: Date[]): string {
+  return [
+    `[엣지영어] ${studentName}님, 보강 가능한 날짜예요. 편한 날을 ${MAKEUP_SLOTS_MAX}개까지 골라 주세요. 1개만 되셔도 괜찮아요.`,
+    ...dates.map((d) => `- ${koAt(d, studentTz)}`),
+  ].join('\n');
+}
+
+// ---------------------------------------------------------------------
+// 학생 한 명의 단계 (안 1): 지금 할 일이 있는 단계를 앞에서부터
+// ---------------------------------------------------------------------
+
+export type LvStep = 'notify' | 'answer' | 'tutor' | 'makeup' | 'confirm';
+export const LV_STEP_TEXT: Record<LvStep | 'done', string> = {
+  notify: '1 안내', answer: '2 학생 답', tutor: '3 강사 확인', makeup: '3 보강 날짜', confirm: '4 확정', done: '완료',
+};
+
+/** 학생 한 명의 할 일 묶음. 단계마다 해당 수업·안 보낸 안내 */
+export type LvStudentWork = {
+  notify: LvMessage[];
+  /** 학생 답을 아직 못 받은 지금 이후 수업 */
+  answer: LvItem[];
+  /** 대체강사 확인 중 (강사별) */
+  tutor: { subTutorId: string; subTutorName: string; items: LvItem[]; ask: LvMessage | null }[];
+  /** 기존 강사 보강 날짜를 아직 안 정함 */
+  makeup: LvItem[];
+  /** 대체강사 가능 → 학생 안내·학생 OK / 확정 안내 / 기존 강사 보강 신청(강사 확인 중) */
+  confirm: { studentMsg: LvMessage | null; tutorOk: LvItem[]; confirmedMsgs: LvMessage[]; makeupRequested: LvItem[] };
+  steps: LvStep[];
+};
+
+export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date): LvStudentWork {
+  const mine = messages.filter((m) => m.status === 'pending' && m.studentId === g.studentId);
+  const notify = mine.filter((m) => m.event === 'leave_options');
+  const answer = g.items.filter((i) => i.choice === 'undecided' && i.startsAt > now);
+  const tutorMap = new Map<string, LvStudentWork['tutor'][number]>();
+  for (const i of g.items.filter((x) => x.choice === 'substitute' && x.subStage === 'asked')) {
+    const t = tutorMap.get(i.subTutorId!) ?? { subTutorId: i.subTutorId!, subTutorName: i.subTutorName ?? '', items: [], ask: null };
+    t.items.push(i);
+    tutorMap.set(i.subTutorId!, t);
+  }
+  const tutor = [...tutorMap.values()].map((t) => ({ ...t, ask: mine.find((m) => m.event === 'sub_ask' && m.recipientId === t.subTutorId) ?? null }));
+  const makeup = g.items.filter((i) => i.choice === 'wait' && !i.makeupAt && !i.makeupRequested);
+  const confirm = {
+    studentMsg: mine.find((m) => m.event === 'sub_student') ?? null,
+    tutorOk: g.items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok'),
+    confirmedMsgs: mine.filter((m) => m.event === 'sub_confirmed'),
+    makeupRequested: g.items.filter((i) => i.choice === 'wait' && !i.makeupAt && i.makeupRequested),
+  };
+  const steps: LvStep[] = [];
+  if (notify.length) steps.push('notify');
+  if (answer.length) steps.push('answer');
+  if (tutor.length) steps.push('tutor');
+  if (makeup.length) steps.push('makeup');
+  if (confirm.studentMsg || confirm.tutorOk.length || confirm.confirmedMsgs.length || confirm.makeupRequested.length) steps.push('confirm');
+  return { notify, answer, tutor, makeup, confirm, steps };
+}

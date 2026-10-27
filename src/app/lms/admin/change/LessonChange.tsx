@@ -10,7 +10,7 @@ import { formatInZone, instantToKstDate, kstToInstant } from '@/lms/rules/dates'
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
 import {
-  changeableLessons, dateLabel, tutorLocalLabel, decisionLines, EVENT_TEXT, kstLabel, lessonTag, makeupRights, STATUS_SHORT, studentNotice, tutorNotice,
+  changeableLessons, dateLabel, tutorLocalLabel, decisionLines, EVENT_TEXT, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, STATUS_SHORT, studentNotice, tutorNotice,
   type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupRight, type NoticeContext,
 } from '@/lms/admin/lesson-change';
 import type { StudentLessonData } from '@/lms/admin/lesson-change-live';
@@ -394,7 +394,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
             </div>
           ))}
           <div className="grid grid-cols-2 gap-1.5">
-            <button type="button" className={btnSub} onClick={() => setSlots([...slots, { date: '', time: defTime }])}>+ 시간</button>
+            <button type="button" disabled={slots.length >= MAKEUP_SLOTS_MAX} className={btnSub} onClick={() => setSlots([...slots, { date: '', time: defTime }])}>+ 시간</button>
             <button type="button" disabled={busy || slots.every((s) => !toAt(s))} className={btnMain}
               onClick={() => run(() => actions.requestMakeup(right.kind === 'lesson' ? { lessonId: right.source.id } : { itemId: right.item.id }, slots.map(toAt).filter((t): t is Date => !!t)))}>
               신청
