@@ -120,7 +120,7 @@ export type LessonChangeTask = {
   createdAt: Date;
 };
 
-/** 강사 휴무 처리 (migration 1800): 학생 답 대기 · 대체강사 답 대기 · 학생 OK 대기 · 안 보낸 안내. 휴무 1건당 한 줄, 다 처리하면 사라짐 */
+/** 강사 휴무 처리 (migration 1800): 학생 선택 미확인 · 대체강사 답 대기 · 학생 OK 대기 · 안 보낸 안내. 휴무 1건당 한 줄, 다 처리하면 사라짐 */
 export type TutorLeaveTask = {
   kind: 'tutor_leave';
   id: string; // 휴무 번호
@@ -367,7 +367,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
       };
     case 'tutor_leave': {
       const parts = [
-        t.undecidedStudents > 0 && `학생 답 대기 ${t.undecidedStudents}명`,
+        t.undecidedStudents > 0 && `학생 선택 미확인 ${t.undecidedStudents}명`,
         t.tutorReply > 0 && `대체강사 답 대기 ${t.tutorReply}회`,
         t.studentReply > 0 && `학생 OK 대기 ${t.studentReply}회`,
         t.pendingNotices > 0 && `안내 안 보냄 ${t.pendingNotices}건`,

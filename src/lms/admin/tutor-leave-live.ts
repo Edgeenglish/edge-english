@@ -2,7 +2,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, instantToKstDate, type KstDate } from '../rules/dates';
-import type { LvChoice, LvItem, LvNotice, LvStage, LvSubOption, LvTimeOff } from './tutor-leave';
+import type { LvChoice, LvItem, LvMakeupOption, LvNotice, LvStage, LvSubOption, LvTimeOff } from './tutor-leave';
 
 const NOT_APPLIED = '강사 휴무 기능이 아직 이 DB에 적용되지 않았어요 (migration 1800).';
 
@@ -48,11 +48,13 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
   const lessonIds = rows.flatMap((r) => (r.lesson_id ? [r.lesson_id] : []));
   const migIds = rows.flatMap((r) => (r.migrated_item_id ? [r.migrated_item_id] : []));
   const ids = rows.map((r) => r.id);
-  const [mk, mig, nt] = await Promise.all([
+  const [mk, mig, nt, rq] = await Promise.all([
     lessonIds.length ? sb.from('lessons').select('makeup_of, starts_at').in('makeup_of', lessonIds).neq('state', 'canceled') : Promise.resolve({ data: [], error: null }),
     migIds.length ? sb.from('migrated_items').select('id, lesson:lessons(starts_at)').in('id', migIds) : Promise.resolve({ data: [], error: null }),
     ids.length ? sb.from('lesson_notices').select('id, leave_item_id, event, recipient_id, status, sent_at').in('leave_item_id', ids) : Promise.resolve({ data: [], error: null }),
+    ids.length ? sb.from('makeup_requests').select('source_lesson_id, migrated_item_id').in('status', ['requested', 'countered']) : Promise.resolve({ data: [], error: null }),
   ]);
+  const requested = new Set((check(rq) as { source_lesson_id: string | null; migrated_item_id: string | null }[]).map((r) => r.source_lesson_id ?? r.migrated_item_id));
   const makeupOf = new Map((check(mk) as { makeup_of: string; starts_at: string }[]).map((m) => [m.makeup_of, new Date(m.starts_at)]));
   const migLesson = new Map((check(mig) as unknown as { id: string; lesson: { starts_at: string } | null }[]).map((m) => [m.id, m.lesson ? new Date(m.lesson.starts_at) : null]));
   const items: LvItem[] = rows.map((r) => ({
@@ -61,6 +63,8 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
     durationMin: r.enrollment?.duration_min ?? 0, isLesson: !!r.lesson_id, startsAt: new Date(r.starts_at),
     choice: r.choice, subTutorId: r.sub_tutor_id, subTutorName: r.sub?.name ?? null, subTutorTz: r.sub?.timezone ?? null, subStage: r.sub_stage,
     makeupAt: r.choice !== 'wait' ? null : r.lesson_id ? makeupOf.get(r.lesson_id) ?? null : migLesson.get(r.migrated_item_id ?? '') ?? null,
+    makeupRequested: requested.has(r.lesson_id ?? r.migrated_item_id),
+    lessonId: r.lesson_id, migratedItemId: r.migrated_item_id,
   }));
   const notices = (check(nt) as { id: string; leave_item_id: string; event: LvNotice['event']; recipient_id: string; status: LvNotice['status']; sent_at: string | null }[])
     .map((n) => ({ id: n.id, itemId: n.leave_item_id, event: n.event, recipientId: n.recipient_id, status: n.status, sentAt: n.sent_at ? new Date(n.sent_at) : null }));
@@ -84,4 +88,9 @@ export async function studentOk(sb: SupabaseClient, itemIds: string[]): Promise<
 export async function subOptions(sb: SupabaseClient, itemIds: string[]): Promise<LvSubOption[]> {
   const rows = check(await sb.rpc('admin_leave_sub_options', { p_items: itemIds })) as { tutor_id: string; name: string; timezone: string; free: number; busy_dates: string[] }[];
   return rows.map((r) => ({ tutorId: r.tutor_id, name: r.name, timezone: r.timezone, free: r.free, busyDates: r.busy_dates }));
+}
+
+export async function makeupOptions(sb: SupabaseClient, itemIds: string[]): Promise<LvMakeupOption[]> {
+  const rows = check(await sb.rpc('admin_leave_makeup_options', { p_items: itemIds })) as { section: LvMakeupOption['section']; starts_at: string }[];
+  return rows.map((r) => ({ section: r.section, startsAt: new Date(r.starts_at) }));
 }

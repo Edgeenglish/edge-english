@@ -1,6 +1,7 @@
 // 강사 휴무·대체강사 화면 계산 (2순위 ①, migration 1800) — 처리·검사는 DB 함수가 하고, 여기는 묶기·상태 글·안내 문구만
 // - 학생별로 한 번에 고르고, 필요하면 일부 날짜만 다르게 (2026-10-27 대표 Q1 A)
 // - 대체강사는 강사 가능 → 학생 안내 → 학생 OK 뒤 확정 (Q2 A, 정책 원본 A41)
+// - 학생에게는 처음부터 두 가지를 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강). 거절해야 ②를 알려주는 방식 아님 (2026-10-27 대표)
 // - 안내는 학생·강사마다 한 번에 복사 (같은 학생의 여러 날짜를 한 메시지로), 보낸 뒤 [보냈어요]
 
 import type { KstDate } from '../rules/dates';
@@ -28,14 +29,33 @@ export type LvItem = {
   subTutorName: string | null;
   subTutorTz: string | null;
   subStage: LvStage | null;
-  /** 기다림: 보강이 잡혔으면 그 시각 */
+  /** 기존 강사 보강: 보강이 잡혔으면 그 시각 */
   makeupAt: Date | null;
+  /** 기존 강사 보강: 보강 신청(강사 확인 중)이 있음 */
+  makeupRequested: boolean;
+  /** 보강 신청 대상 (수업 또는 시트 휴가 보강) */
+  lessonId: string | null;
+  migratedItemId: string | null;
 };
 
-export type LvNoticeEvent = 'sub_ask' | 'sub_student' | 'sub_confirmed';
+export type LvNoticeEvent = 'leave_options' | 'sub_ask' | 'sub_student' | 'sub_confirmed';
 export type LvNotice = { id: string; itemId: string; event: LvNoticeEvent; recipientId: string; status: 'pending' | 'sent' | 'not_needed'; sentAt: Date | null };
 
 export type LvSubOption = { tutorId: string; name: string; timezone: string; free: number; busyDates: string[] };
+/** 기존 강사 보강 후보: in_period 지금 수강기간 안 / after_end 종료일 뒤 평소 요일·시간 (확정하면 그날까지 자동 연장) */
+export type LvMakeupOption = { section: 'in_period' | 'after_end'; startsAt: Date };
+
+/** 학생 선택 안내의 두 가지 (대표 문구 2026-10-27). 나중에 학생 LMS 선택 화면도 이 글을 그대로 씀 */
+export const LEAVE_OPTIONS = {
+  substitute: {
+    title: '원래 시간에 대체강사와 수업하기 · 추천',
+    lines: ['일정을 바꾸지 않고, 평소 수업 시간 그대로 수업하실 수 있어요.', '다른 강사의 영어와 수업 방식도 경험해 보실 수 있습니다.'],
+  },
+  wait: {
+    title: '기존 강사와 보강하기',
+    lines: ['기존 강사님이 돌아오신 뒤 수업하실 수 있어요. 가능한 보강 시간을 확인해 주세요.'],
+  },
+} as const;
 
 export type LvStudentGroup = { studentId: string; studentName: string; studentCode: string; items: LvItem[] };
 
@@ -59,9 +79,10 @@ export function groupChoice(items: LvItem[]): LvChoice | 'mixed' {
 
 /** 한 줄 상태 글 */
 export function itemStatus(i: LvItem): { text: string; tone: 'todo' | 'wait' | 'done' } {
-  if (i.choice === 'undecided') return { text: '미정 · 학생 답 대기', tone: 'todo' };
+  if (i.choice === 'undecided') return { text: '학생 선택 미확인', tone: 'todo' };
   if (i.choice === 'wait') {
-    return i.makeupAt ? { text: `기다림 · 보강 ${koShort(i.makeupAt)}`, tone: 'done' } : { text: '기다림 · 보강 날짜 미정', tone: 'wait' };
+    if (i.makeupAt) return { text: `기존 강사 보강 · ${koShort(i.makeupAt)}`, tone: 'done' };
+    return i.makeupRequested ? { text: '기존 강사 보강 · 강사 확인 중', tone: 'wait' } : { text: '기존 강사 보강 · 날짜 미정', tone: 'wait' };
   }
   const who = i.subTutorName ?? '대체강사';
   if (i.subStage === 'asked') return { text: `대체 ${who} · 강사 답 대기`, tone: 'todo' };
@@ -82,7 +103,7 @@ export function leaveSummary(items: LvItem[], notices: LvNotice[]) {
     undecidedStudents: new Set(items.filter((i) => i.choice === 'undecided').map((i) => i.studentId)).size,
     tutorReply: items.filter((i) => i.choice === 'substitute' && i.subStage === 'asked').length,
     studentReply: items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok').length,
-    makeupOpen: items.filter((i) => i.choice === 'wait' && !i.makeupAt).length,
+    makeupOpen: items.filter((i) => i.choice === 'wait' && !i.makeupAt && !i.makeupRequested).length,
     pendingNotices: pending,
   };
 }
@@ -110,7 +131,7 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[], originalTuto
   return [...groups.entries()].map(([key, g]) => {
     const list = [...g.items].sort((a, b) => +a.startsAt - +b.startsAt);
     const first = list[0];
-    const recipient = g.event === 'sub_student' ? 'student' : 'tutor';
+    const recipient = g.event === 'sub_student' || g.event === 'leave_options' ? 'student' : 'tutor';
     return {
       key,
       event: g.event,
@@ -126,12 +147,18 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[], originalTuto
 export function leaveText(event: LvNoticeEvent, items: LvItem[], originalTutorName: string): string {
   const i = items[0];
   const tz = i.subTutorTz ?? 'Asia/Seoul';
-  if (event === 'sub_student') {
+  const dates = items.map((x) => `- ${koAt(x.startsAt, x.studentTz)}`).join('\n');
+  if (event === 'leave_options') {
+    const o = LEAVE_OPTIONS;
     return [
-      `[엣지영어] ${i.studentName}님, ${originalTutorName} 강사님 휴무로 아래 수업을 ${i.subTutorName} 강사님이 같은 시간에 진행할 수 있어요.`,
-      items.map((x) => `- ${koAt(x.startsAt, x.studentTz)}`).join('\n'),
-      `${i.subTutorName} 강사님 수업으로 진행해도 괜찮으신지 알려주세요. 원하시면 ${originalTutorName} 강사님이 돌아온 뒤 보강으로 진행할 수도 있어요.`,
+      `[엣지영어] ${i.studentName}님, ${originalTutorName} 강사님 휴무로 아래 수업의 진행 방법을 골라 주세요.`,
+      dates,
+      [`① ${o.substitute.title}`, ...o.substitute.lines].join('\n'),
+      [`② ${o.wait.title}`, ...o.wait.lines].join('\n'),
     ].join('\n\n');
+  }
+  if (event === 'sub_student') {
+    return [`[엣지영어] ${i.studentName}님, 아래 수업은 ${i.subTutorName} 강사님과 평소 시간에 진행해요. 괜찮으시면 답장 주세요.`, dates].join('\n\n');
   }
   if (event === 'sub_ask') {
     return [
@@ -148,6 +175,7 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], originalTutorNa
 }
 
 export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
+  leave_options: '진행 방법 선택 안내',
   sub_ask: '대체강사 가능 확인',
   sub_student: '학생 대체강사 안내',
   sub_confirmed: '대체강사 확정 안내',

@@ -1,7 +1,8 @@
 -- =====================================================================
 -- 2순위 ①: 강사 휴무·대체강사 (운영진) — 정책 원본 A41·A20, 2026-10-27 대표 시안 승인 (Q1 학생별+일부 날짜 예외, Q2 학생 OK 뒤 확정)
 --  - 휴무 넣기 → 그 기간 강사 수업(+ 시트에서 넘어온 휴가 보강)을 휴무 처리 목록(leave_items)으로 모음
---  - 학생 선택지는 둘뿐: 1순위 대체강사가 원래 날짜·시간 / 2순위 기존 강사를 기다렸다가 보강
+--  - 학생 선택지는 둘뿐: 1순위 대체강사가 원래 날짜·시간(추천) / 2순위 기존 강사와 보강 — 두 가지를 처음부터 함께 안내 (leave_options)
+--    학생 답을 받기 전에는 '학생 선택 미확인'(undecided). 시트에서 넘어온 휴가 보강도 미확인으로 시작 (2026-10-27 대표)
 --  - 대체강사: 강사에게 안내 [보냈어요] → 강사 가능 → 학생 안내 → 학생 OK → 확정 (학생 OK 전에는 수업 강사가 안 바뀜)
 --  - 기다림: 수업 결과 'Tutor long-term leave' → 기존 보강 흐름(1700)으로 보강. 변경권 차감 없음
 --    보강이 종료일 뒤로 확정되면 마지막 보강일까지만 자동 연장, 날짜가 바뀌면 다시 계산 (A20). 연장된 날 정규 수업 없음
@@ -48,7 +49,7 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
--- 2. 안내 기록: 대체강사 안내 3가지 (sub_ask 대체강사에게 가능 확인 / sub_student 학생에게 대체강사 안내 / sub_confirmed 대체강사에게 확정)
+-- 2. 안내 기록: leave_options 학생에게 두 가지 선택 안내 / sub_ask 대체강사에게 가능 확인 / sub_student 학생에게 대체강사 확인 / sub_confirmed 대체강사에게 확정
 -- ---------------------------------------------------------------------
 alter table lesson_notices add column if not exists leave_item_id uuid references leave_items(id);
 do $$
@@ -61,13 +62,13 @@ begin
       execute format('alter table lesson_notices drop constraint %I', c);
     end loop;
     alter table lesson_notices add constraint lesson_notices_event_check check (event in (
-      'change', 'makeup_ask', 'makeup_confirmed', 'makeup_voided', 'revert', 'sub_ask', 'sub_student', 'sub_confirmed'));
+      'change', 'makeup_ask', 'makeup_confirmed', 'makeup_voided', 'revert', 'leave_options', 'sub_ask', 'sub_student', 'sub_confirmed'));
     alter table lesson_notices add constraint lesson_notices_one_source
       check (num_nonnulls(change_request_id, makeup_request_id, leave_item_id) = 1);
     alter table lesson_notices add constraint lesson_notices_change_events
       check ((event in ('change', 'revert')) = (change_request_id is not null));
     alter table lesson_notices add constraint lesson_notices_leave_events
-      check ((event in ('sub_ask', 'sub_student', 'sub_confirmed')) = (leave_item_id is not null));
+      check ((event in ('leave_options', 'sub_ask', 'sub_student', 'sub_confirmed')) = (leave_item_id is not null));
   end if;
 end $$;
 -- 같은 안내는 한 번 (대체강사를 바꿨다가 다시 고르면 예전 안내는 '보낼 필요 없음'이라 새로 생김)
@@ -182,8 +183,9 @@ revoke all on function lms_sub_conflict(uuid, timestamptz, timestamptz, uuid) fr
 -- ---------------------------------------------------------------------
 
 -- 휴무 기간(KST 날짜, 양 끝 포함)에 걸리는, 아직 목록에 없는 것
---  · 그 강사의 예정 수업 → '미정'
---  · 시트에서 넘어온 휴가 보강(기존 학생 입력 때 '강사 휴가'로 넣은 것) → 이미 '기다림'. 원래 시각 = 그 요일 고정 시각
+--  · 그 강사의 예정 수업 → 학생 선택 미확인
+--  · 시트에서 넘어온 휴가 보강(기존 학생 입력 때 '강사 휴가'로 넣은 것) → 불러오기만으로 '기존 강사 보강'을 골랐다고 보지 않음: 학생 선택 미확인.
+--    원래 시각 = 그 요일 고정 시각 (대체강사 제안에 씀)
 create or replace function lms_leave_candidates(p_tutor uuid, p_from date, p_to date)
 returns table (lesson_id uuid, migrated_item_id uuid, student_id uuid, enrollment_id uuid, starts_at timestamptz, ends_at timestamptz, choice text)
 language sql stable security definer set search_path = public as $$
@@ -195,7 +197,7 @@ language sql stable security definer set search_path = public as $$
   union all
   select null::uuid, m.id, e.student_id, e.id,
          ((m.original_date + rs.start_time_kst) at time zone 'Asia/Seoul'),
-         ((m.original_date + rs.start_time_kst) at time zone 'Asia/Seoul') + make_interval(mins => rs.duration_min), 'wait'
+         ((m.original_date + rs.start_time_kst) at time zone 'Asia/Seoul') + make_interval(mins => rs.duration_min), 'undecided'
   from migrated_items m
   join enrollments e on e.id = m.enrollment_id
   join regular_schedules rs on rs.student_id = e.student_id and rs.tutor_id = p_tutor
@@ -237,10 +239,16 @@ begin
     insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by)
     values (p_tutor, t0, t1, 'leave', nullif(trim(p_reason), ''), me) returning id into v_off;
   end if;
-  insert into leave_items (time_off_id, tutor_id, student_id, enrollment_id, lesson_id, migrated_item_id, starts_at, ends_at, choice, created_by)
-  select v_off, p_tutor, n.student_id, n.enrollment_id, n.lesson_id, n.migrated_item_id, n.starts_at, n.ends_at, n.choice, me
-  from lms_leave_candidates(p_tutor, p_from, p_to) n
-  on conflict do nothing;
+  -- 새로 들어온 줄마다 학생에게 두 가지 선택 안내 (화면은 학생마다 한 메시지로 묶어 복사)
+  with ins as (
+    insert into leave_items (time_off_id, tutor_id, student_id, enrollment_id, lesson_id, migrated_item_id, starts_at, ends_at, choice, created_by)
+    select v_off, p_tutor, n.student_id, n.enrollment_id, n.lesson_id, n.migrated_item_id, n.starts_at, n.ends_at, n.choice, me
+    from lms_leave_candidates(p_tutor, p_from, p_to) n
+    on conflict do nothing
+    returning id, student_id
+  )
+  insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id)
+  select id, 'leave_options', 'student', student_id from ins;
   return jsonb_build_object('dry_run', false, 'time_off_id', v_off, 'lessons', v_lessons, 'items', v_items, 'students', v_students);
 end $$;
 revoke all on function admin_leave_create(uuid, date, date, text, boolean) from public, anon;
@@ -269,6 +277,9 @@ begin
     if it.choice = p_choice and (p_choice = 'wait' or it.sub_tutor_id = p_sub_tutor) then continue; end if;
     if p_choice = 'substitute' and p_sub_tutor = it.tutor_id then raise exception '휴무인 강사는 대체강사가 될 수 없습니다.'; end if;
     if it.lesson_id is not null then select * into l from lessons where id = it.lesson_id for update; end if;
+    -- 학생이 골랐으면 두 가지 선택 안내는 보낸 것
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me
+    where leave_item_id = it.id and event = 'leave_options' and status = 'pending';
 
     -- 지금 상태 풀기
     if it.choice = 'substitute' then
@@ -430,3 +441,84 @@ begin
 end $$;
 revoke all on function admin_leave_sub_options(uuid[]) from public, anon;
 grant execute on function admin_leave_sub_options(uuid[]) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 8. 기존 강사 보강을 고른 학생: 보강 시간 후보
+--    in_period = 강사 복귀 뒤 ~ 지금 종료일 사이, 평소 수업 시각으로 정규 수업이 없는 요일 (먼저 보여 줌)
+--    after_end = 종료일 뒤 평소 요일·시간 (평소 시간을 유지하고 싶을 때). 필요한 보강 수만큼 — 확정하면 그날까지 자동 연장 (A20)
+--    강사 다른 수업(휴식 10분)·휴무, 학생 다른 수업과 겹치는 시간은 뺌. 확정은 기존 보강 흐름(강사 확인 → 운영진 확정)
+-- ---------------------------------------------------------------------
+create or replace function admin_leave_makeup_options(p_items uuid[])
+returns table (section text, starts_at timestamptz, ends_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  it leave_items;
+  e enrollments;
+  v_back date;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_need integer;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  select * into it from leave_items where id = any(p_items) order by starts_at limit 1;
+  if not found then return; end if;
+  if exists (select 1 from leave_items where id = any(p_items) and student_id <> it.student_id) then
+    raise exception '한 학생의 수업만 골라 주세요.';
+  end if;
+  select count(*) into v_need from leave_items where id = any(p_items);
+  select * into e from enrollments where id = it.enrollment_id;
+  select (o.ends_at at time zone 'Asia/Seoul')::date into v_back from tutor_time_off o where o.id = it.time_off_id;
+
+  return query
+  with rs as (
+    select r.weekday, r.start_time_kst from regular_schedules r
+    where r.student_id = it.student_id and r.tutor_id = it.tutor_id and (r.effective_to is null or r.effective_to >= v_today)
+  ),
+  slots as (
+    select 'in_period'::text as sec, ((d::date + t.start_time_kst) at time zone 'Asia/Seoul') as s
+    from generate_series(greatest(v_today + 1, v_back), e.final_end_date, interval '1 day') d
+    cross join (select distinct start_time_kst from rs) t
+    where extract(dow from d) not in (select weekday from rs)
+    union all
+    select 'after_end', ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul')
+    from generate_series(greatest(e.final_end_date + 1, v_back, v_today + 1), greatest(e.final_end_date + 1, v_back, v_today + 1) + 180, interval '1 day') d
+    join rs on rs.weekday = extract(dow from d)
+  ),
+  free as (
+    select x.sec, x.s, x.s + make_interval(mins => e.duration_min) as f from slots x
+    where x.s > now()
+      and lms_sub_conflict(it.tutor_id, x.s, x.s + make_interval(mins => e.duration_min), null) is null
+      and not exists (select 1 from lessons l where l.student_id = it.student_id and l.state <> 'canceled'
+                      and l.starts_at < x.s + make_interval(mins => e.duration_min) and x.s < l.ends_at)
+  )
+  select z.sec, z.s, z.f from (
+    select f1.sec, f1.s, f1.f, row_number() over (partition by f1.sec order by f1.s) as n from free f1
+  ) z
+  where z.sec = 'in_period' or z.n <= v_need
+  order by z.s;
+end $$;
+revoke all on function admin_leave_makeup_options(uuid[]) from public, anon;
+grant execute on function admin_leave_makeup_options(uuid[]) to authenticated;
+
+-- 시트 휴가 보강에 보강 신청이 들어오면 = 학생이 기존 강사 보강을 고른 것 (미확인 → 기존 강사 보강)
+create or replace function makeup_requests_leave_choice() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  it leave_items;
+begin
+  if new.migrated_item_id is null then return null; end if;
+  select * into it from leave_items where migrated_item_id = new.migrated_item_id for update;
+  if not found then return null; end if;
+  if it.choice = 'substitute' then
+    raise exception '대체강사로 진행 중인 휴무 수업입니다. 강사 휴무 화면에서 먼저 기존 강사 보강으로 바꿔 주세요.';
+  end if;
+  if it.choice = 'undecided' then
+    update leave_items set choice = 'wait', decided_at = now(), decided_by = new.requested_by where id = it.id;
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = new.requested_by
+    where leave_item_id = it.id and event = 'leave_options' and status = 'pending';
+  end if;
+  return null;
+end $$;
+revoke all on function makeup_requests_leave_choice() from public, anon, authenticated;
+drop trigger if exists makeup_requests_leave_choice on makeup_requests;
+create trigger makeup_requests_leave_choice after insert on makeup_requests
+  for each row execute function makeup_requests_leave_choice();
