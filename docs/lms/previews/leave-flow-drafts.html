@@ -50,6 +50,23 @@ h2{font-size:18px;margin:0 0 10px;text-wrap:balance}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
 .old{color:var(--muted);text-decoration:line-through}
 ul.q{margin:0;padding-left:20px;display:grid;gap:6px}
+.pcwrap{overflow-x:auto;margin-top:12px;border-radius:16px}
+.pc{min-width:900px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:12px}
+.pctop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pctop b{font-size:18px;margin-right:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13.5px}
+.chip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-weight:700}
+.b.sm{min-height:34px;padding:0 14px;margin-left:auto}
+.pcsum{background:var(--code);border-radius:10px;padding:8px 12px;font-size:13.5px}
+.pcbody{display:grid;grid-template-columns:240px 1fr;gap:14px;align-items:start}
+.pclist{display:grid;gap:6px}
+.li{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;gap:3px;font-size:13px}
+.li span{color:var(--muted)}
+.li em{font-style:normal;justify-self:start}
+.li.on{border-color:var(--accent);background:var(--accent-soft)}
+.pcmain{min-width:0}
+.pccols{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;align-items:start}
+.pcc{display:grid;gap:8px;min-width:0}
 </style>
 <div class="wrap">
   <header>
@@ -122,6 +139,56 @@ ul.q{margin:0;padding-left:20px;display:grid;gap:6px}
         </div>
       </div>
     </div>
+  </section>
+
+  <section>
+    <h2>안 1 · PC 화면</h2>
+    <p class="lead">PC에서는 왼쪽에 학생 목록(지금 단계 표시), 오른쪽에 고른 학생 카드. 답이 온 학생을 왼쪽에서 누르고 오른쪽에서 처리. 휴대폰은 위 화면처럼 카드가 위아래로 쌓임 (같은 화면, 폭에 따라 배치만 바뀜).</p>
+    <div class="pcwrap"><div class="pc">
+      <div class="pctop">
+        <b>강사 휴무</b>
+        <span class="chip on">Emma · 10/30(금) ~ 11/04(수)</span>
+        <span class="chip">Alex · 11/09(월) ~ 11/10(화)</span>
+        <span class="b m sm">+ 휴무 넣기</span>
+      </div>
+      <div class="pcsum">학생 2명 · 수업 7회 &nbsp;|&nbsp; 할 일: 강사 답 입력 1명 · 보강 날짜 1명</div>
+      <div class="pcbody">
+        <div class="pclist">
+          <div class="li on"><b>김하준</b><span>10/30~11/03 · 5회</span><em class="st now">3 강사 확인</em></div>
+          <div class="li"><b>박서연</b><span>11/01 · 11/04 · 2회</span><em class="st now">3 보강 날짜</em></div>
+        </div>
+        <div class="pcmain">
+          <div class="card">
+            <h4>김하준 <small>STU-0012 · 대체강사 James</small></h4>
+            <div class="steps"><span class="st ok">1 안내 ✓</span><span class="st ok">2 학생 답 ✓ 대체강사</span><span class="st now">3 강사 확인</span><span class="st">4 확정</span></div>
+            <div class="pccols">
+              <div class="pcc">
+                <div class="lbl">James에게 보낼 글</div>
+                <div class="msg">Substitute request - Hajun Kim (40 min), not confirmed yet
+One of our Edge English tutors is on leave. Are you available to teach these classes?
+1) Fri, Oct 30, 7:00 PM
+2) Sat, Oct 31, 7:00 PM
+3) Sun, Nov 1, 7:00 PM
+4) Mon, Nov 2, 7:00 PM
+5) Tue, Nov 3, 7:00 PM
+If you can't do all of them, please reply with the numbers you can do. Thank you!</div>
+                <div class="btns"><span class="b">복사</span><span class="b">보냈어요 ✓</span></div>
+              </div>
+              <div class="pcc">
+                <div class="lbl">James가 가능하다고 한 날짜</div>
+                <div class="row"><input type="checkbox" checked aria-label="pc 10/30"> 10/30(금) 20:00</div>
+                <div class="row"><input type="checkbox" checked aria-label="pc 10/31"> 10/31(토) 20:00</div>
+                <div class="row"><input type="checkbox" aria-label="pc 11/01"> 11/01(일) 20:00</div>
+                <div class="row"><input type="checkbox" checked aria-label="pc 11/02"> 11/02(월) 20:00</div>
+                <div class="row"><input type="checkbox" checked aria-label="pc 11/03"> 11/03(화) 20:00</div>
+                <span class="b m">저장 (4회)</span>
+              </div>
+            </div>
+            <div class="more">보낸 글 1건 보기 ›</div>
+          </div>
+        </div>
+      </div>
+    </div></div>
   </section>
 
   <section>
