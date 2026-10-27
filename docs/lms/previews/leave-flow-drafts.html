@@ -1,0 +1,173 @@
+<title>강사 휴무 화면 흐름 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위에서 아래로 결정 → 휴대폰 화면 모형 → 바뀌는 글. LMS 화면과 같은 보라·회색 */
+:root{
+  --bg:#f4f3f8; --panel:#ffffff; --fg:#1d1b2b; --muted:#6b6880; --line:#e6e3ef;
+  --accent:#7d5fff; --accent-ink:#5b3fe0; --accent-soft:#efebff;
+  --todo:#fff1d6; --todo-ink:#7a4b00; --done:#e3f6ea; --done-ink:#1f6b3a; --code:#f6f5fb;
+  --font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#15141c; --panel:#1f1d29; --fg:#ecebf3; --muted:#a3a0b6; --line:#34314a;
+  --accent:#9b84ff; --accent-ink:#b9a9ff; --accent-soft:#2c2645;
+  --todo:#3a2e14; --todo-ink:#f3c97a; --done:#173322; --done-ink:#8fdcaa; --code:#28263a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15141c; --panel:#1f1d29; --fg:#ecebf3; --muted:#a3a0b6; --line:#34314a;
+  --accent:#9b84ff; --accent-ink:#b9a9ff; --accent-soft:#2c2645;
+  --todo:#3a2e14; --todo-ink:#f3c97a; --done:#173322; --done-ink:#8fdcaa; --code:#28263a; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:28px}
+h1{font-size:22px;margin:0;text-wrap:balance}
+h2{font-size:18px;margin:0 0 10px;text-wrap:balance}
+.lead{color:var(--muted);margin:4px 0 0;font-size:14.5px}
+.pick{display:inline-block;background:var(--accent);color:#fff;border-radius:6px;padding:1px 8px;font-size:12.5px;font-weight:700;margin-left:6px;vertical-align:2px}
+.phones{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start}
+.phone{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:14px;display:grid;gap:10px;min-width:0}
+.cap{font-size:12.5px;font-weight:700;color:var(--accent-ink);letter-spacing:.02em}
+.card{border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:9px}
+.card h4{margin:0;font-size:16px}
+.card h4 small{font-weight:400;color:var(--muted);font-size:12.5px;margin-left:4px}
+.steps{display:flex;gap:4px;flex-wrap:wrap}
+.st{font-size:12px;border-radius:999px;padding:2px 8px;border:1px solid var(--line);color:var(--muted)}
+.st.ok{background:var(--done);color:var(--done-ink);border-color:transparent}
+.st.now{background:var(--accent);color:#fff;border-color:transparent;font-weight:700}
+.row{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px;min-height:40px}
+.row .tag{margin-left:auto;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 7px;background:var(--todo);color:var(--todo-ink)}
+.row .tag.d{background:var(--done);color:var(--done-ink)}
+.row input{width:18px;height:18px;accent-color:var(--accent)}
+.msg{background:var(--code);border-radius:10px;padding:9px 10px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.b{border-radius:10px;min-height:40px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;border:1px solid var(--accent);color:var(--accent-ink);background:var(--panel)}
+.b.m{background:var(--accent);color:#fff}
+.b.full{grid-column:1/-1}
+.lbl{font-size:13px;font-weight:700;color:var(--muted)}
+.more{font-size:13px;color:var(--accent-ink);font-weight:600}
+.sum{background:var(--code);border-radius:12px;padding:9px 11px;font-size:13.5px}
+.sum b{display:block;margin-bottom:2px}
+.cnt{font-size:12.5px;color:var(--muted);text-align:right}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:10px;min-width:0}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.old{color:var(--muted);text-decoration:line-through}
+ul.q{margin:0;padding-left:20px;display:grid;gap:6px}
+</style>
+<div class="wrap">
+  <header>
+    <h1>강사 휴무 화면 · 흐름 시안</h1>
+    <p class="lead">예시: Emma 휴무 10/30~11/04 · 학생 김하준(대체강사), 박서연(기존 강사 보강) · 대체 가능 강사 James</p>
+  </header>
+
+  <section>
+    <h2>안 1. 학생 카드 하나에서 단계대로<span class="pick">추천</span></h2>
+    <p class="lead">학생마다 카드 한 장. 카드 맨 위에 단계 표시, 아래에는 <b>지금 단계에서 할 일만</b> 보임. 안내문은 그 단계 안에 들어가고, 보낸 글은 접혀 있음. 따로 떨어진 '안내'·'보낸 안내' 칸은 없어짐.</p>
+    <div class="phones">
+      <div class="phone">
+        <div class="cap">맨 위 (휴무 고른 뒤)</div>
+        <div class="sum"><b>Emma · 10/30(금) ~ 11/04(수)</b>할 일: 안내 보내기 2명</div>
+        <div class="card">
+          <h4>김하준 <small>STU-0012</small></h4>
+          <div class="steps"><span class="st now">1 안내</span><span class="st">2 학생 답</span><span class="st">3 강사 확인</span><span class="st">4 확정</span></div>
+          <div class="row">10/30(금) 20:00 <span class="tag">답 대기</span></div>
+          <div class="row">10/31(토) 20:00 <span class="tag">답 대기</span></div>
+          <div class="more">+ 3회 더 보기</div>
+          <div class="msg">[엣지영어] 김하준님, 담당 강사님 휴무로 아래 수업의 진행 방법을 골라 주세요. …</div>
+          <div class="btns"><span class="b">복사</span><span class="b m">보냈어요</span></div>
+        </div>
+      </div>
+
+      <div class="phone">
+        <div class="cap">2 학생 답 입력</div>
+        <div class="card">
+          <h4>김하준 <small>STU-0012</small></h4>
+          <div class="steps"><span class="st ok">1 안내 ✓</span><span class="st now">2 학생 답</span><span class="st">3 강사 확인</span><span class="st">4 확정</span></div>
+          <div class="row">10/30(금) ~ 11/03(화) 20:00 · 5회</div>
+          <div class="btns"><span class="b m">대체강사</span><span class="b">기존 강사 보강</span></div>
+          <div class="more">일부 날짜만 다르게 ›</div>
+          <div class="lbl">대체강사 고르기</div>
+          <div class="row"><b>James</b><span class="tag d">5회 모두 가능</span></div>
+          <div class="row" style="opacity:.55"><b>Sophie</b><span class="tag">3회 가능 · 10/31·11/02 겹침</span></div>
+        </div>
+      </div>
+
+      <div class="phone">
+        <div class="cap">3 강사 확인 (일부만 가능해도 됨)</div>
+        <div class="card">
+          <h4>김하준 <small>STU-0012</small></h4>
+          <div class="steps"><span class="st ok">1 ✓</span><span class="st ok">2 ✓</span><span class="st now">3 강사 확인</span><span class="st">4 확정</span></div>
+          <div class="msg">(James에게 보낼 글 — 아래 '바뀌는 글' 참고)</div>
+          <div class="btns"><span class="b">복사</span><span class="b">보냈어요 ✓</span></div>
+          <div class="lbl">James가 가능하다고 한 날짜</div>
+          <div class="row"><input type="checkbox" checked aria-label="10/30"> 10/30(금) 20:00</div>
+          <div class="row"><input type="checkbox" checked aria-label="10/31"> 10/31(토) 20:00</div>
+          <div class="row"><input type="checkbox" aria-label="11/01"> 11/01(일) 20:00</div>
+          <div class="row"><input type="checkbox" checked aria-label="11/02"> 11/02(월) 20:00</div>
+          <div class="row"><input type="checkbox" checked aria-label="11/03"> 11/03(화) 20:00</div>
+          <span class="b m full">저장 (4회)</span>
+          <div class="cnt">체크 안 한 11/01은 2단계로 돌아가 다른 강사·보강을 고름</div>
+        </div>
+      </div>
+
+      <div class="phone">
+        <div class="cap">기존 강사 보강 (박서연 11/04분)</div>
+        <div class="card">
+          <h4>박서연 <small>STU-0013</small></h4>
+          <div class="steps"><span class="st ok">1 ✓</span><span class="st ok">2 ✓</span><span class="st now">3 보강 날짜</span><span class="st">4 확정</span></div>
+          <div class="row">11/04(수) 12:00 · 시트 보강 <span class="tag">보강 날짜 미정</span></div>
+          <div class="lbl">보강 가능한 날짜</div>
+          <div class="row"><input type="checkbox" checked aria-label="11/05"> 11/05(목) 12:00</div>
+          <div class="row"><input type="checkbox" checked aria-label="11/06"> 11/06(금) 12:00</div>
+          <div class="row"><input type="checkbox" aria-label="11/09"> 11/09(월) 12:00</div>
+          <div class="cnt">2개까지 · 2개 고름</div>
+          <span class="b m full">보강 신청 (2)</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>안 2. 단계별 칸</h2>
+    <p class="lead">'1 안내 보내기 · 2 학생 답 입력 · 3 강사 확인 · 4 확정' 칸이 위에서 아래로 있고, 각 칸 안에 해당 학생들이 줄지어 있음. 같은 일을 여러 학생에게 몰아서 할 때 빠름. 대신 한 학생의 진행 상황이 여러 칸에 흩어짐 (예: 김하준 4회는 3칸, 1회는 2칸).</p>
+    <p class="lead">추천 이유(안 1): 답은 학생·강사마다 따로따로 오기 때문에, 답이 왔을 때 그 학생 카드 하나만 열면 끝나는 쪽이 휴대폰에서 덜 헤맴.</p>
+  </section>
+
+  <section class="two">
+    <div class="box">
+      <h2>바뀌는 글 ① 대체강사에게</h2>
+      <div class="msg">Substitute request - Hajun Kim (40 min), not confirmed yet
+One of our Edge English tutors is on leave. Are you available to teach these classes?
+1) Fri, Oct 30, 7:00 PM
+2) Sat, Oct 31, 7:00 PM
+3) Sun, Nov 1, 7:00 PM
+4) Mon, Nov 2, 7:00 PM
+5) Tue, Nov 3, 7:00 PM
+If you can't do all of them, please reply with the numbers you can do. Thank you!</div>
+      <p class="lead"><span class="old">Emma is on leave.</span> → 휴무 강사 이름 빼고 'One of our Edge English tutors'. 마지막 줄 추가.</p>
+    </div>
+    <div class="box">
+      <h2>바뀌는 글 ② 학생에게 (기존 강사 보강을 고른 뒤, 새로 추가)</h2>
+      <div class="msg">[엣지영어] 박서연님, 보강 가능한 날짜예요. 편한 날을 2개까지 골라 주세요. 1개만 되셔도 괜찮아요.
+- 11/05(목) 오후 12시
+- 11/06(금) 오후 12시
+- 11/09(월) 오후 12시</div>
+      <p class="lead">'보강 가능한 날짜'에서 [복사]하면 이 글이 됨. 학생 답이 오면 고른 날짜(최대 2개)를 체크하고 [보강 신청] → 강사에게 2개가 감.</p>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>함께 바뀌는 것</h2>
+    <ul class="q">
+      <li>학생 선택 안내 ①·②의 휴무 강사 이름 → '담당 강사님' (학생은 자기 강사를 알기 때문에 이름을 써도 되면 그대로 둠 — 확인 1)</li>
+      <li>'보강 후보' → '보강 가능한 날짜'</li>
+      <li>보강 시간 최대 2개: 강사 휴무 화면 + 수업 변경 화면(지금은 '+ 시간'으로 제한 없음)</li>
+    </ul>
+  </section>
+
+  <section class="box">
+    <h2>대표 확인 3가지</h2>
+    <ul class="q">
+      <li><b>1.</b> 학생에게 가는 글에는 휴무 강사 이름(Emma)을 그대로 둘까요, '담당 강사님'으로 바꿀까요?</li>
+      <li><b>2.</b> 화면 흐름: 안 1(학생 카드, 추천) / 안 2(단계별 칸)</li>
+      <li><b>3.</b> 바뀌는 글 ①·② 문구 이대로 괜찮은지</li>
+    </ul>
+  </section>
+</div>
