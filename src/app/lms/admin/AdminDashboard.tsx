@@ -268,6 +268,11 @@ export default function AdminDashboard({
                 수업 변경
               </Link>
             )}
+            {!preview && (
+              <Link href="/lms/admin/leave" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5fff] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+                강사 휴무
+              </Link>
+            )}
             <Link
               href={preview ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'}
               className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5fff] px-3 text-[13px] font-semibold text-white"

@@ -120,7 +120,23 @@ export type LessonChangeTask = {
   createdAt: Date;
 };
 
-export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask;
+/** 강사 휴무 처리 (migration 1800): 학생 답 대기 · 대체강사 답 대기 · 학생 OK 대기 · 안 보낸 안내. 휴무 1건당 한 줄, 다 처리하면 사라짐 */
+export type TutorLeaveTask = {
+  kind: 'tutor_leave';
+  id: string; // 휴무 번호
+  tutorName: string;
+  from: string; // KST 날짜
+  to: string;
+  undecidedStudents: number;
+  tutorReply: number;
+  studentReply: number;
+  pendingNotices: number;
+  /** 아직 처리 안 된 가장 가까운 수업 (지나기 전에 정해야 함) */
+  firstOpenAt: Date | null;
+  createdAt: Date;
+};
+
+export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask;
 
 /** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
 export type Category = 'matching' | 'tutor_ack' | 'ending' | 'makeup' | 'issue';
@@ -349,6 +365,26 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         steps: [],
         actions: [{ key: 'open_change', label: '열기', primary: true, href: `/lms/admin/change?student=${encodeURIComponent(t.studentCode)}` }],
       };
+    case 'tutor_leave': {
+      const parts = [
+        t.undecidedStudents > 0 && `학생 답 대기 ${t.undecidedStudents}명`,
+        t.tutorReply > 0 && `대체강사 답 대기 ${t.tutorReply}회`,
+        t.studentReply > 0 && `학생 OK 대기 ${t.studentReply}회`,
+        t.pendingNotices > 0 && `안내 안 보냄 ${t.pendingNotices}건`,
+      ].filter(Boolean) as string[];
+      const day = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: t.firstOpenAt ? dueSeverity(t.firstOpenAt, now) : 'open',
+        tag: `강사 휴무 · ${parts[0] ?? '처리 중'}`,
+        title: `${t.tutorName} 휴무 ${day(t.from)}~${day(t.to)}`,
+        detail: parts.join(' · '),
+        due: t.firstOpenAt ? `첫 수업 ${kstLabel(t.firstOpenAt)}` : null,
+        steps: [],
+        actions: [{ key: 'open_leave', label: '열기', primary: true, href: `/lms/admin/leave?off=${encodeURIComponent(t.id)}` }],
+      };
+    }
     case 'auto_failure': {
       const what = { calendar_sync: '캘린더 반영 실패', email_bounce: '메일 반송', payment_mismatch: '결제 금액 불일치' }[t.what];
       const action = {

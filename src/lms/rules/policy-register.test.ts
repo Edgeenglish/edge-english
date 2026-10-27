@@ -151,4 +151,8 @@ describe('수업 변경 DB 함수의 숫자 = 코드 기준값 (migration 1700)'
     expect(sql).toContain(`v_reward constant integer := ${FAVORABLE_FOR_ALL.tutorLateCancelRewardWon};`);
     expect(sql).toContain(`v_break constant interval := interval '${CONFIRMED.minBreakMin} minutes'`);
   });
+  it('강사 휴무 대체강사 가능 여부의 휴식 시간 (migration 1800)', () => {
+    const leave = readFileSync(join(ROOT, 'supabase/migrations/20261027001800_lms_tutor_leave.sql'), 'utf8');
+    expect(leave).toContain(`v_break constant interval := interval '${CONFIRMED.minBreakMin} minutes'`);
+  });
 });

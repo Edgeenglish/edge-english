@@ -213,13 +213,50 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
   return [...out.values()];
 }
 
+export type LeaveOpenRow = {
+  student_id: string; starts_at: string; choice: 'undecided' | 'substitute' | 'wait'; sub_stage: 'asked' | 'tutor_ok' | 'confirmed' | null;
+  off: { id: string; starts_at: string; ends_at: string; created_at: string; tutor: { name: string } | null } | null;
+};
+export type LeaveNoticeRow = { leave: { off: LeaveOpenRow['off'] } | null };
+
+/** 강사 휴무 처리 (1800): 아직 정하지 않았거나 답을 기다리는 수업 · 안 보낸 안내 → 휴무마다 한 줄 */
+export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], now: Date): TaskSource[] {
+  const out = new Map<string, Extract<TaskSource, { kind: 'tutor_leave' }>>();
+  const undecided = new Map<string, Set<string>>();
+  const row = (o: NonNullable<LeaveOpenRow['off']>) => {
+    if (!out.has(o.id))
+      out.set(o.id, {
+        kind: 'tutor_leave', id: o.id, tutorName: o.tutor?.name ?? '', from: instantToKstDate(new Date(o.starts_at)),
+        to: addDays(instantToKstDate(new Date(o.ends_at)), -1), undecidedStudents: 0, tutorReply: 0, studentReply: 0, pendingNotices: 0,
+        firstOpenAt: null, createdAt: new Date(o.created_at),
+      });
+    return out.get(o.id)!;
+  };
+  for (const r of rows) {
+    if (!r.off) continue;
+    const t = row(r.off);
+    if (r.choice === 'undecided') {
+      const s = undecided.get(r.off.id) ?? new Set<string>();
+      s.add(r.student_id);
+      undecided.set(r.off.id, s);
+      t.undecidedStudents = s.size;
+    } else if (r.sub_stage === 'asked') t.tutorReply += 1;
+    else if (r.sub_stage === 'tutor_ok') t.studentReply += 1;
+    const at = new Date(r.starts_at);
+    if (at > now && (!t.firstOpenAt || at < t.firstOpenAt)) t.firstOpenAt = at;
+  }
+  for (const n of notices) if (n.leave?.off) row(n.leave.off).pendingNotices += 1;
+  return [...out.values()];
+}
+
 // migration 1500 전 DB에는 표가 없음 → 대시보드는 그대로 보이게 빈 목록
 const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01' || e.code === 'PGRST205');
 
 /** 시험용 DB에서 운영자 대시보드 데이터 읽기 (운영자 aal2 세션 필요 — 아니면 RLS 때문에 0건) */
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const today = instantToKstDate(now);
-  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups] = await Promise.all([
+  const off = 'off:tutor_time_off(id, starts_at, ends_at, created_at, tutor:tutors(name))';
+  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, leaveOpen, leaveNotices] = await Promise.all([
     sb
       .from('admin_tasks')
       .select(
@@ -246,6 +283,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .select('created_at, change:change_requests(student:students(id, name_ko, code), lesson:lessons(starts_at)), makeup:makeup_requests(student:students(id, name_ko, code))')
       .eq('status', 'pending'),
     sb.from('makeup_requests').select('created_at, student:students(id, name_ko, code)').in('status', ['requested', 'countered']),
+    sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
+    sb.from('lesson_notices').select(`leave:leave_items(${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
   ]);
   const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error);
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
@@ -258,6 +297,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       ...toImportChecks((checks.data ?? []) as unknown as ImportCheckRow[], (origins.data ?? []) as unknown as UnknownOriginRow[]),
       // 1700 전 DB(표·칸 없음)는 건너뜀
       ...(changeNotices.error ? [] : toLessonChanges((changeNotices.data ?? []) as unknown as ChangeNoticeRow[], (openMakeups.data ?? []) as unknown as OpenMakeupRow[], now)),
+      // 1800 전 DB는 건너뜀
+      ...(leaveOpen.error || leaveNotices.error ? [] : toTutorLeaves((leaveOpen.data ?? []) as unknown as LeaveOpenRow[], (leaveNotices.data ?? []) as unknown as LeaveNoticeRow[], now)),
     ],
     today: toTodayLessons((lessons.data ?? []) as unknown as LessonRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
   };

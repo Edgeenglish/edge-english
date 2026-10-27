@@ -1,6 +1,6 @@
 -- 운영 DB 표 만들기 확인 (읽기만). 결과 8줄이 모두 '통과'면 정상
 select 항목, case when ok then '통과' else '실패' end as 결과 from (
-  select 1 as n, 'LMS 표 44개' as 항목, (select count(*) from pg_tables where schemaname = 'public') = 44 as ok
+  select 1 as n, 'LMS 표 45개' as 항목, (select count(*) from pg_tables where schemaname = 'public') = 45 as ok
   union all select 2, 'RLS 꺼진 표 없음', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity)
   union all select 3, '로그인 안 한 사용자(anon)가 읽을 수 있는 표 없음',
     not exists (select 1 from pg_class c join pg_namespace s on s.oid = c.relnamespace

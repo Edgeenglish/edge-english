@@ -1237,3 +1237,124 @@ select pg_temp.ok((select (student_change_lesson(gen_random_uuid(), '77777777-17
   '학생 본인도 같은 함수로 판정 (지금 시각 기준)');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------- 2순위 강사 휴무·대체강사 (migration 1800, A41·A20, 2026-10-27 시안 Q1·Q2 = A) ----------
+-- 가상 강사 휴무A(휴무)·휴무B(대체 가능)·휴무C(한 날짜 다른 수업), 학생 '휴무학생' 4주·주2회·40분
+-- 휴무 기간 d0~d0+6: 정규 수업 d0+1·d0+3·d0+5 20:00 + 시트 휴가 보강 d0+2(고정 요일 20:00)
+reset role;
+create temp table lv (d0 date);
+insert into lv values (current_date + 10);
+grant select on lv to authenticated;
+create or replace function pg_temp.kst(days int, hhmm text) returns timestamptz language sql as $$
+  select ((select d0 from lv) + days + hhmm::time) at time zone 'Asia/Seoul' $$;
+insert into tutors (id, name, country, timezone) values
+  ('55555555-0000-0000-0000-00000000180a', '휴무A', 'Korea', 'Asia/Seoul'),
+  ('55555555-0000-0000-0000-00000000180b', '휴무B', 'Korea', 'Asia/Seoul'),
+  ('55555555-0000-0000-0000-00000000180c', '휴무C', 'Korea', 'Asia/Seoul');
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000001800', '휴무학생', 'Leave S'),
+                                                   ('99999999-0000-0000-0000-000000001801', '휴무다른', 'Leave O');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000001800'::uuid, '99999999-0000-0000-0000-000000001800'::uuid, 1, 4, 2, 40, d0 - 7, d0 - 7 + 27, 8, 'active' from lv
+union all
+select '99999999-1000-0000-0000-000000001801', '99999999-0000-0000-0000-000000001801', 1, 4, 2, 40, d0 - 7, d0 - 7 + 27, 8, 'active' from lv;
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select ('77777777-1800-0000-0000-00000000000' || n)::uuid, '99999999-1000-0000-0000-000000001800', '99999999-0000-0000-0000-000000001800',
+       '55555555-0000-0000-0000-00000000180a', 'regular', n, pg_temp.kst(n, '20:00'), pg_temp.kst(n, '20:40')
+from (values (1), (3), (5)) v(n);
+-- 휴무C는 d0+3 20:00에 다른 학생 수업
+insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+values ('99999999-1000-0000-0000-000000001801', '99999999-0000-0000-0000-000000001801', '55555555-0000-0000-0000-00000000180c', 'regular', 1,
+        pg_temp.kst(3, '20:00'), pg_temp.kst(3, '20:40'));
+insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+select '99999999-0000-0000-0000-000000001800', '55555555-0000-0000-0000-00000000180a', extract(dow from d0 + 2), '20:00', 40, d0 - 7 from lv;
+insert into migrated_items (id, enrollment_id, kind, original_date, tutor_leave)
+select '99999999-4000-0000-0000-000000001800', '99999999-1000-0000-0000-000000001800', 'makeup_open', d0 + 2, true from lv;
+create or replace function pg_temp.li(days int) returns uuid language sql as $$
+  select i.id from leave_items i where i.student_id = '99999999-0000-0000-0000-000000001800' and i.starts_at = pg_temp.kst(days, '20:00') $$;
+create or replace function pg_temp.lst(days int) returns text language sql as $$
+  select i.choice || ':' || coalesce(i.sub_stage, '-') || ':' || l.state || ':' || coalesce(l.class_status::text, '-') || ':' || t.name
+  from leave_items i join lessons l on l.id = coalesce(i.lesson_id, i.sub_lesson_id) join tutors t on t.id = l.tutor_id
+  where i.id = pg_temp.li(days) $$;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2)
+
+-- 1) 미리 보기: 수업 3 + 시트 휴가 보강 1, 학생 1명. 아무것도 안 바뀜
+select pg_temp.ok((select (r ->> 'lessons')::int = 3 and (r ->> 'items')::int = 4 and (r ->> 'students')::int = 1
+                   from admin_leave_create('55555555-0000-0000-0000-00000000180a', (select d0 from lv), (select d0 + 6 from lv), '개인 휴가', true) r)
+              and (select count(*) from leave_items) = 0
+              and (select count(*) from tutor_time_off where tutor_id = '55555555-0000-0000-0000-00000000180a') = 0,
+  '휴무 미리 보기: 걸리는 수업 3 + 시트 휴가 보강 1 · 학생 1명, 저장은 안 함');
+-- 2) 넣기: 휴무 기록 + 목록 (수업은 '미정', 시트 휴가 보강은 이미 '기다림'), 다시 실행해도 그대로
+select admin_leave_create('55555555-0000-0000-0000-00000000180a', (select d0 from lv), (select d0 + 6 from lv), '개인 휴가', false);
+select admin_leave_create('55555555-0000-0000-0000-00000000180a', (select d0 from lv), (select d0 + 6 from lv), '개인 휴가', false);
+select pg_temp.ok((select count(*) from tutor_time_off where tutor_id = '55555555-0000-0000-0000-00000000180a' and kind = 'leave') = 1
+              and (select array_agg(choice order by starts_at) from leave_items) = '{undecided,wait,undecided,undecided}'
+              and (select starts_at = pg_temp.kst(2, '20:00') and ends_at = pg_temp.kst(2, '20:40') from leave_items where migrated_item_id is not null),
+  '휴무 넣기: 휴무 1건 + 목록 4줄(시트 휴가 보강은 고정 시각으로 기다림), 두 번 눌러도 한 번');
+-- 3) 대체강사 목록: 휴무B 4회 모두 가능, 휴무C 3회(d0+3 겹침), 휴무인 강사는 목록에 없음
+select pg_temp.ok((select free = 4 and busy_dates = '{}' from admin_leave_sub_options(array(select id from leave_items)) where name = '휴무B')
+              and (select free = 3 and cardinality(busy_dates) = 1 from admin_leave_sub_options(array(select id from leave_items)) where name = '휴무C')
+              and not exists (select 1 from admin_leave_sub_options(array(select id from leave_items)) where name = '휴무A'),
+  '대체강사 목록: 비어 있는 횟수와 겹치는 날짜, 휴무 강사는 빠짐');
+-- 4) 겹치는 강사로 한 번에 고르면 전체 거절 (일부만 바뀌지 않음)
+select pg_temp.expect_error($$select admin_leave_choose(array(select id from leave_items), 'substitute', '55555555-0000-0000-0000-00000000180c')$$, '겹칩니다');
+select pg_temp.ok((select count(*) from leave_items where choice = 'substitute') = 0, '대체강사 시간이 하나라도 겹치면 아무것도 안 바뀜');
+-- 5) 일부 날짜만 대체강사(Q1 A): 가능 확인 안내만, 수업 강사는 아직 그대로
+select admin_leave_choose(array[pg_temp.li(1), pg_temp.li(2)], 'substitute', '55555555-0000-0000-0000-00000000180b');
+select pg_temp.ok(pg_temp.lst(1) = 'substitute:asked:scheduled:-:휴무A'
+              and (select count(*) from lesson_notices where leave_item_id is not null and event = 'sub_ask' and status = 'pending'
+                   and recipient_id = '55555555-0000-0000-0000-00000000180b') = 2,
+  '대체강사 고름: 대체강사에게 가능 확인 안내 2건, 수업 강사는 아직 원래 강사');
+-- 6) 학생 OK 전에는 확정 안 됨 (Q2 A): 강사 가능 → 학생 안내 → 학생 OK → 확정
+select pg_temp.expect_error($$select admin_leave_student_ok(array[pg_temp.li(1)])$$, '가능하다고 한 뒤');
+select admin_leave_sub_ok(array[pg_temp.li(1), pg_temp.li(2)]);
+select pg_temp.ok(pg_temp.lst(1) = 'substitute:tutor_ok:scheduled:-:휴무A'
+              and (select array_agg(event || ':' || status order by event) from lesson_notices where leave_item_id = pg_temp.li(1)) = '{sub_ask:sent,sub_student:pending}',
+  '대체강사 가능: 가능 확인 안내는 보냄, 학생 안내 생김, 아직 확정 아님');
+select admin_leave_student_ok(array[pg_temp.li(1), pg_temp.li(2)]);
+select admin_leave_student_ok(array[pg_temp.li(1), pg_temp.li(2)]);
+select pg_temp.ok(pg_temp.lst(1) = 'substitute:confirmed:scheduled:-:휴무B'
+              and (select original_tutor_id = '55555555-0000-0000-0000-00000000180a' from lessons where id = '77777777-1800-0000-0000-000000000001')
+              and pg_temp.lst(2) = 'substitute:confirmed:scheduled:-:휴무B'
+              and (select kind = 'makeup_booked' from migrated_items where id = '99999999-4000-0000-0000-000000001800')
+              and (select count(*) from lessons where student_id = '99999999-0000-0000-0000-000000001800' and state = 'scheduled') = 4
+              and (select array_agg(event || ':' || status order by event) from lesson_notices where leave_item_id = pg_temp.li(1))
+                  = '{sub_ask:sent,sub_confirmed:pending,sub_student:sent}',
+  '학생 OK → 확정: 그 수업 강사가 대체강사(원래 강사 기록), 시트 휴가 보강은 원래 시각 대체 수업으로 예약됨, 두 번 눌러도 한 번');
+-- 7) 기다림: 수업 결과 '강사 장기 휴식', 변경권 차감 없음, 보강은 종료일 뒤도 가능 → 마지막 보강일까지만 연장
+select admin_leave_choose(array[pg_temp.li(3), pg_temp.li(5)], 'wait', null);
+select pg_temp.ok(pg_temp.lst(5) = 'wait:-:canceled:Tutor long-term leave:휴무A'
+              and not exists (select 1 from credit_ledger where lesson_id = '77777777-1800-0000-0000-000000000005'),
+  '기다림: 수업은 강사 장기 휴식으로 취소, 변경권 그대로');
+create temp table lmk as select (admin_makeup_request('77777777-1800-0000-0000-000000000005', null,
+  jsonb_build_array(jsonb_build_object('starts_at', pg_temp.kst(23, '20:00'))), now()) ->> 'makeup_request_id')::uuid as id;
+select admin_makeup_confirm((select id from lmk), pg_temp.kst(23, '20:00'));
+select pg_temp.ok((select final_end_date = (select d0 + 23 from lv) from enrollments where id = '99999999-1000-0000-0000-000000001800'),
+  '기다린 보강이 종료일 3일 뒤로 확정 → 종료일이 그 보강일까지만 늘어남 (A20)');
+select admin_void_makeup((select r.confirmed_lesson_id from makeup_requests r join lmk on lmk.id = r.id), '날짜 다시');
+select pg_temp.ok((select final_end_date = (select d0 + 20 from lv) from enrollments where id = '99999999-1000-0000-0000-000000001800')
+              and (select array_agg(days order by created_at, days) from enrollment_extensions where enrollment_id = '99999999-1000-0000-0000-000000001800') = '{3,-3}',
+  '그 보강을 없애면 연장도 원래대로 (지우지 않고 -3 줄 추가)');
+-- 8) 대체강사 확정 → 기다림으로 바꾸기: 원래 강사로 되돌린 뒤 취소, 안 보낸 안내는 보낼 필요 없음
+select admin_leave_choose(array[pg_temp.li(1)], 'wait', null);
+select pg_temp.ok(pg_temp.lst(1) = 'wait:-:canceled:Tutor long-term leave:휴무A'
+              and (select original_tutor_id is null from lessons where id = '77777777-1800-0000-0000-000000000001')
+              and (select array_agg(event || ':' || status order by event) from lesson_notices where leave_item_id = pg_temp.li(1))
+                  = '{sub_ask:sent,sub_confirmed:not_needed,sub_student:sent}',
+  '대체 확정 뒤 기다림으로: 원래 강사 수업으로 되돌려 휴식 처리, 안 보낸 확정 안내는 보낼 필요 없음');
+-- 9) 기다림 → 대체강사: 수업 다시 예정으로 + 가능 확인. 보강 신청이 있으면 거절
+select admin_leave_choose(array[pg_temp.li(3)], 'substitute', '55555555-0000-0000-0000-00000000180b');
+select pg_temp.ok(pg_temp.lst(3) = 'substitute:asked:scheduled:-:휴무A', '기다림에서 대체강사로: 수업 다시 예정, 가능 확인부터');
+select admin_makeup_request('77777777-1800-0000-0000-000000000001', null, jsonb_build_array(jsonb_build_object('starts_at', pg_temp.kst(12, '20:00'))), now());
+select pg_temp.expect_error($$select admin_leave_choose(array[pg_temp.li(1)], 'substitute', '55555555-0000-0000-0000-00000000180b')$$, '보강부터 정리');
+select pg_temp.ok(true, '보강 신청이 있는 기다림 수업은 대체강사로 못 바꿈');
+-- 10) 휴무인 강사로는 보강 확정 안 됨 (기존 확인 그대로)
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from makeup_requests where source_lesson_id = '77777777-1800-0000-0000-000000000001' and status = 'requested'), pg_temp.kst(4, '21:00'))$$, '강사 휴무');
+select pg_temp.ok(true, '휴무 기간에는 원래 강사로 보강 확정 거절');
+-- 11) 권한: 운영자만
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.expect_error($$select admin_leave_create('55555555-0000-0000-0000-00000000180a', current_date, current_date, null, true)$$, '42501');
+select pg_temp.expect_error($$select admin_leave_choose(array[]::uuid[], 'wait', null)$$, '42501');
+select pg_temp.ok((select count(*) from leave_items) = 0, '학생은 휴무 처리 함수를 못 쓰고 목록도 못 봄');
+reset request.jwt.claim.sub;
+reset role;

@@ -334,7 +334,9 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const title = src
     ? `${kstLabel(src.startsAt)} · ${src.classStatus ? STATUS_SHORT[src.classStatus] ?? src.classStatus : ''}`
     : `시트 보강 · 원래 ${right.kind === 'migrated' && right.item.originalDate ? dateLabel(right.item.originalDate) : '날짜 확인 필요'}`;
-  const until = right.kind === 'migrated' && right.item.tutorLeave ? '강사 휴가 · 종료일 제한 없음' : finalEnd ? `${dateLabel(finalEnd)}까지` : '';
+  // 강사 휴무 보강은 종료일 제한 없음 — 종료일 뒤로 확정되면 그 날까지 자동 연장 (A20, migration 1800)
+  const leave = (right.kind === 'migrated' && right.item.tutorLeave) || src?.classStatus === 'Tutor long-term leave';
+  const until = leave ? '강사 휴가 · 종료일 제한 없음 (뒤로 잡으면 그날까지 연장)' : finalEnd ? `${dateLabel(finalEnd)}까지` : '';
   const toAt = (s: { date: string; time: string }) => (s.date && /^\d\d:\d\d$/.test(s.time) ? kstToInstant(s.date, s.time) : null);
   // 한국 시각으로 넣고, 강사 현지 날짜·시각은 바로 아래 자동 표시 (2026-10-26 대표)
   const Local = ({ at }: { at: Date | null }) => {
@@ -383,7 +385,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
           {slots.map((s, i) => (
             <div key={i} className="grid gap-1">
             <div className="grid grid-cols-[1.4fr_1fr] gap-1.5">
-              <input type="date" aria-label={`보강 희망 날짜 ${i + 1}`} value={s.date} max={right.kind === 'migrated' && right.item.tutorLeave ? undefined : finalEnd ?? undefined}
+              <input type="date" aria-label={`보강 희망 날짜 ${i + 1}`} value={s.date} max={leave ? undefined : finalEnd ?? undefined}
                 onChange={(e) => setSlots(slots.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)))} className={inputCls(false)} />
               <TimeInput aria-label={`보강 희망 시각 ${i + 1}`} value={s.time}
                 onChange={(v) => setSlots(slots.map((x, j) => (j === i ? { ...x, time: v } : x)))} className={inputCls(false)} />

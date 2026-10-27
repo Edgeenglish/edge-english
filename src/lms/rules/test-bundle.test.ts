@@ -43,4 +43,8 @@ describe('[보냈어요]·기존 학생 입력 적용 안내 페이지', () => {
     const { buildC17Page } = await import('../../../scripts/lms-c17-page.mjs');
     expect(readFileSync(join(root, 'docs/lms/previews/c17-apply.html'), 'utf8')).toBe(buildC17Page(root));
   });
+  it('docs/lms/previews/l18-apply.html 이 최신 (다르면 node scripts/lms-l18-page.mjs 후 다시 발행)', async () => {
+    const { buildL18Page } = await import('../../../scripts/lms-l18-page.mjs');
+    expect(readFileSync(join(root, 'docs/lms/previews/l18-apply.html'), 'utf8')).toBe(buildL18Page(root));
+  });
 });

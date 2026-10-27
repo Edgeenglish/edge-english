@@ -108,12 +108,12 @@ export type MakeupRight =
   | { kind: 'lesson'; key: string; source: ChLesson; open: ChMakeupRequest | null }
   | { kind: 'migrated'; key: string; item: ChMigratedOpen; open: ChMakeupRequest | null };
 
-/** 보강 받을 권리: 보강 받는 결과로 끝났는데 살아 있는 보강이 없는 수업 + 이관한 미예약 보강 */
+/** 보강 받을 권리: 보강 받는 결과로 끝났는데 살아 있는 보강이 없는 수업 + 강사 휴무 '기다림' 수업(1800) + 이관한 미예약 보강 */
 export function makeupRights(lessons: ChLesson[], migrated: ChMigratedOpen[], requests: ChMakeupRequest[]): MakeupRight[] {
   const live = new Set(lessons.filter((l) => l.makeupOf && l.state !== 'canceled').map((l) => l.makeupOf));
   const openFor = (f: (r: ChMakeupRequest) => boolean) => requests.find((r) => (r.status === 'requested' || r.status === 'countered') && f(r)) ?? null;
   const fromLessons: MakeupRight[] = lessons
-    .filter((l) => !l.voided && l.classStatus && grantsMakeup(l.classStatus) && !live.has(l.id))
+    .filter((l) => !l.voided && l.classStatus && (grantsMakeup(l.classStatus) || l.classStatus === 'Tutor long-term leave') && !live.has(l.id))
     .sort((a, b) => +a.startsAt - +b.startsAt)
     .map((l) => ({ kind: 'lesson', key: l.id, source: l, open: openFor((r) => r.sourceLessonId === l.id) }));
   const fromSheet: MakeupRight[] = migrated.map((m) => ({ kind: 'migrated', key: m.id, item: m, open: openFor((r) => r.migratedItemId === m.id) }));
@@ -127,6 +127,7 @@ export const STATUS_SHORT: Partial<Record<ClassStatus, string>> = {
   'No change credits left': '변경권 없음',
   'Tutor canceled in advance': '강사 정상 취소',
   'Tutor canceled late': '강사 늦은 취소',
+  'Tutor long-term leave': '강사 휴무',
 };
 
 /** 미리 보기 결과 줄 (화면 표시용, 짧게) */
@@ -154,13 +155,13 @@ function koNice(at: Date, tz: string): string {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8))}일(${KO_WD[f.weekday]}) ${h < 12 ? '오전' : '오후'} ${h12}시${m ? ` ${m}분` : ''}`;
 }
-function koAt(at: Date, tz: string): string {
+export function koAt(at: Date, tz: string): string {
   const kst = koNice(at, 'Asia/Seoul');
   if (!tz || tz === 'Asia/Seoul') return kst;
   return `${koNice(at, tz)} (한국 ${kst})`;
 }
 const koDate = (d: KstDate) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일(${['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
-const enAt = (at: Date, tz: string) => `${enWhen(at, tz || 'Asia/Seoul')}${!tz || tz === 'Asia/Seoul' ? ' KST' : ' your time'}`;
+export const enAt = (at: Date, tz: string) => `${enWhen(at, tz || 'Asia/Seoul')}${!tz || tz === 'Asia/Seoul' ? ' KST' : ' your time'}`;
 
 export type NoticeContext = {
   student: ChStudent;
