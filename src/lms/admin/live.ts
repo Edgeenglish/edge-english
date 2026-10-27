@@ -3,8 +3,9 @@
 // 표시 원칙 POL-OP-20: 열린 업무만 가져온다 (완료·취소된 업무는 목록에 오지 않음)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { addDays, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
+import { addDays, endOfKstDay, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { courseName } from '../rules/period';
+import { RENEWAL_PROMPT } from '../student/home';
 import type { TaskSource } from './board';
 import type { PlanView } from './confirm';
 import { loadPlans } from './confirm-live';
@@ -58,7 +59,7 @@ export type LessonRow = {
 
 const d = (v: string | null) => (v ? new Date(v) : null);
 
-function product(e: Enrollment | null): string {
+function product(e: Pick<Enrollment, 'weeks' | 'legacy_label' | 'weekly_count' | 'duration_min'> | null): string {
   if (!e) return '수강 정보 없음';
   const term = e.weeks ? courseName(e.weeks) : (e.legacy_label ?? '');
   return `${e.duration_min}분 주${e.weekly_count}회 ${term}`.trim();
@@ -249,6 +250,50 @@ export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], n
   return [...out.values()];
 }
 
+export type EndingRow = {
+  id: string;
+  student_id: string;
+  weeks: number | null;
+  legacy_label: string | null;
+  weekly_count: number;
+  duration_min: number;
+  final_end_date: string;
+  student: { name_ko: string; code: string } | null;
+  /** 이 수강권의 정규 수업만 (보강·보상·이월·이관 수업 제외, POL-RN-08) */
+  lessons: { state: 'scheduled' | 'canceled' | 'done'; starts_at: string; tutor: { name: string } | null }[];
+};
+
+/**
+ * 종료 임박 (POL-RN-08): 학생마다 마지막 수강권(결제 확인·수강 중)만 보고, 지금 이후 예정 정규 수업이 2회 이하면 한 줄.
+ * Class Record 완료 기록이 없어도 날짜로 셈(지난 예정 수업은 한 것으로 봄). 결제 확인된 재등록 수강권이 있으면 그쪽이 마지막이라 빠짐.
+ * 정규 수업이 아직 하나도 없는 수강권(신규 매칭 전)은 신규 매칭 칸에서 다룸
+ */
+export function toEndingSoon(rows: EndingRow[], now: Date): TaskSource[] {
+  const latest = new Map<string, EndingRow>();
+  for (const r of rows) {
+    const cur = latest.get(r.student_id);
+    if (!cur || r.final_end_date > cur.final_end_date) latest.set(r.student_id, r);
+  }
+  const out: TaskSource[] = [];
+  for (const r of latest.values()) {
+    if (r.lessons.length === 0) continue;
+    const left = r.lessons.filter((l) => l.state === 'scheduled' && new Date(l.starts_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    if (left.length > RENEWAL_PROMPT.maxRegularLessonsLeft) continue;
+    const last = [...r.lessons].sort((a, b) => b.starts_at.localeCompare(a.starts_at))[0];
+    out.push({
+      kind: 'ending_soon',
+      id: r.id,
+      studentName: r.student?.name_ko ?? '(학생 정보 없음)',
+      studentCode: r.student?.code ?? '',
+      product: product(r),
+      regularLeft: left.length,
+      endsAt: endOfKstDay(r.final_end_date),
+      tutorName: (left[0] ?? last).tutor?.name ?? null,
+    });
+  }
+  return out;
+}
+
 // migration 1500 전 DB에는 표가 없음 → 대시보드는 그대로 보이게 빈 목록
 const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01' || e.code === 'PGRST205');
 
@@ -256,7 +301,7 @@ const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01'
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const today = instantToKstDate(now);
   const off = 'off:tutor_time_off(id, starts_at, ends_at, created_at, tutor:tutors(name))';
-  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, leaveOpen, leaveNotices] = await Promise.all([
+  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, ending, leaveOpen, leaveNotices] = await Promise.all([
     sb
       .from('admin_tasks')
       .select(
@@ -283,10 +328,15 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .select('created_at, change:change_requests(student:students(id, name_ko, code), lesson:lessons(starts_at)), makeup:makeup_requests(student:students(id, name_ko, code))')
       .eq('status', 'pending'),
     sb.from('makeup_requests').select('created_at, student:students(id, name_ko, code)').in('status', ['requested', 'countered']),
+    sb
+      .from('enrollments')
+      .select('id, student_id, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(state, starts_at, tutor:tutors!lessons_tutor_id_fkey(name))')
+      .in('status', ['confirmed', 'active'])
+      .eq('lessons.kind', 'regular'),
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
     sb.from('lesson_notices').select(`leave:leave_items(${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
   ]);
-  const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error);
+  const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error) ?? ending.error;
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
   const ns = (noShows.data ?? []) as unknown as (NoShowRow & { lesson: { id: string } | null })[];
   const taskRows = (tasks.data ?? []) as unknown as TaskRow[];
@@ -295,6 +345,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     tasks: [
       ...toTaskSources(taskRows, (leaves.data ?? []) as unknown as LeaveRow[], ns, plans),
       ...toImportChecks((checks.data ?? []) as unknown as ImportCheckRow[], (origins.data ?? []) as unknown as UnknownOriginRow[]),
+      ...toEndingSoon((ending.data ?? []) as unknown as EndingRow[], now),
       // 1700 전 DB(표·칸 없음)는 건너뜀
       ...(changeNotices.error ? [] : toLessonChanges((changeNotices.data ?? []) as unknown as ChangeNoticeRow[], (openMakeups.data ?? []) as unknown as OpenMakeupRow[], now)),
       // 1800 전 DB는 건너뜀
