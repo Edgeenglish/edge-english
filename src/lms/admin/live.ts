@@ -277,6 +277,7 @@ export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], n
 export type EndingRow = {
   id: string;
   student_id: string;
+  status?: string;
   weeks: number | null;
   legacy_label: string | null;
   weekly_count: number;
@@ -303,8 +304,8 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
   }
   const out: TaskSource[] = [];
   for (const r of latest.values()) {
-    // 정규 수업이 아직 없는 수강권(신규 매칭 전)은 제외
-    if (!r.lessons.some((l) => l.kind === 'regular')) continue;
+    // 정규 수업이 아직 없는 수강권(신규 매칭 전)은 제외. 기존 학생 입력으로 넣은 '다 끝난 수강권'(수강 중, 남은 0회)은 재등록 대기로 보여 줌 (migration 2200)
+    if (r.status !== 'active' && !r.lessons.some((l) => l.kind === 'regular')) continue;
     const left = r.lessons.filter((l) => l.state === 'scheduled' && new Date(l.starts_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     // 날짜 미정 보강: 보강 권리가 있는 취소 수업 중 살아 있는 보강이 없는 것 + 시트에서 넘어온 미예약 보강
     const booked = new Set(r.lessons.filter((l) => l.makeup_of && l.state !== 'canceled').map((l) => l.makeup_of));
@@ -321,7 +322,7 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
       product: product(r),
       lessonsLeft: left.length + owed,
       endsAt: endOfKstDay(r.final_end_date),
-      tutorName: (left[0] ?? last).tutor?.name ?? null,
+      tutorName: (left[0] ?? last)?.tutor?.name ?? null,
       noticeSentAt: sent.has(r.id) ? new Date(sent.get(r.id)!) : null,
     });
   }
@@ -364,7 +365,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     loadOpenMakeups(sb),
     sb
       .from('enrollments')
-      .select('id, student_id, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind)')
+      .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind)')
       .in('status', ['confirmed', 'active']),
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
     sb.from('lesson_notices').select(`leave:leave_items(${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),

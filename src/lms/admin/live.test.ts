@@ -139,6 +139,12 @@ describe('종료 임박 (POL-RN-08)', () => {
 
   it('정규 수업이 아직 없는 수강권(신규 매칭 전)은 안 나옴', () => {
     expect(toEndingSoon([row({ lessons: [] })], now)).toEqual([]);
+    expect(toEndingSoon([row({ status: 'confirmed', lessons: [] })], now)).toEqual([]);
+  });
+
+  it('기존 학생 입력으로 넣은 다 끝난 수강권(수강 중, 수업 0회)은 재등록 대기로 나옴 (migration 2200)', () => {
+    const [t] = toEndingSoon([row({ status: 'active', lessons: [] })], now);
+    expect(t).toMatchObject({ kind: 'ending_soon', lessonsLeft: 0, tutorName: null });
   });
 
   it('보강·보상·이월도 수업으로 셈, 날짜 미정 보강(취소 수업의 보강 권리·시트 미예약 보강)도 셈 (2026-10-27 대표)', () => {

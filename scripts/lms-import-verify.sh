@@ -60,7 +60,7 @@ Q="select coalesce(json_agg(x order by x.name_ko), '[]') from (
 node -e '
 const [a, b] = [require(process.argv[1]), require(process.argv[2])];
 const K = ["name_ko", "end_date", "regular", "extras", "open", "lms_left", "sheet_left", "checked", "credits_left", "dates"];
-const norm = (xs) => JSON.stringify(xs.map((x) => K.map((k) => (k === "dates" ? [...x.dates].sort() : x[k]))).sort((p, q) => p[0].localeCompare(q[0])));
+const norm = (xs) => JSON.stringify(xs.map((x) => K.map((k) => (k === "dates" ? [...(x.dates ?? [])].sort() : x[k]))).sort((p, q) => p[0].localeCompare(q[0])));
 if (norm(a) !== norm(b)) { console.log("❌ ① 기대값과 다름\n기대", JSON.stringify(b, null, 1), "\n실제", JSON.stringify(a, null, 1)); process.exit(1); }
 console.log(`✅ ① 학생 ${a.length}명 기대값과 같음 (정규·추가·미예약 보강·남은 수·변경권·종료일·수업 날짜)`);
 ' "$WORK/actual.json" "$OUT/expected.json"
