@@ -4,7 +4,9 @@
 // - 학생에게는 처음부터 두 가지를 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강). 거절해야 ②를 알려주는 방식 아님 (2026-10-27 대표)
 // - 안내는 학생·강사마다 한 번에 복사 (같은 학생의 여러 날짜를 한 메시지로), 보낸 뒤 [보냄]
 // - 학생·대체강사에게 가는 글에 휴무 강사 이름을 쓰지 않음 (2026-10-27 대표)
-// - 화면은 학생 한 명씩 단계대로 (안 1, 2026-10-27 대표 확정): 1 안내 → 2 학생 답 → 3 강사 확인 / 보강 날짜 → 4 확정
+// - 화면은 학생 한 명씩 단계대로. 2026-10-28 대표 새 순서 (정책 원본 H26(27), migration 2500):
+//   1 대체 강사에게 묻기 → 2 학생에게 휴무 안내 · 대체 강사 제안 (글 하나) → 3 학생 답 입력 → 4 확정 안내 보내기
+//   운영진이 대체강사 가능 여부를 먼저 확인하고, 학생은 한 번만 답함 ([좋아요] / [기존 강사와 보강])
 
 import { formatInZone, type KstDate } from '../rules/dates';
 import { enAt, koAt, MAKEUP_SLOTS_MAX } from './lesson-change';
@@ -81,14 +83,14 @@ export function groupChoice(items: LvItem[]): LvChoice | 'mixed' {
 
 /** 한 줄 상태 글 */
 export function itemStatus(i: LvItem): { text: string; tone: 'todo' | 'wait' | 'done' } {
-  if (i.choice === 'undecided') return { text: '학생 답변 기다리는 중', tone: 'todo' };
+  if (i.choice === 'undecided') return { text: '대체 강사 고르기 필요', tone: 'todo' };
   if (i.choice === 'wait') {
     if (i.makeupAt) return { text: `기존 강사 보강 · ${koShort(i.makeupAt)}`, tone: 'done' };
-    return i.makeupRequested ? { text: '기존 강사 보강 · 강사님 확인 기다리는 중', tone: 'wait' } : { text: '학생에게 보강 가능한 날짜 안내 필요', tone: 'wait' };
+    return i.makeupRequested ? { text: '기존 강사 보강 · 강사님 확인 기다리는 중', tone: 'wait' } : { text: '보강 · 날짜 잡기 전', tone: 'wait' };
   }
   const who = i.subTutorName ?? '대체강사';
   if (i.subStage === 'asked') return { text: `${who} 강사님 답변 기다리는 중`, tone: 'todo' };
-  if (i.subStage === 'tutor_ok') return { text: `${who} 강사님 수락 · 학생 동의 확인 필요`, tone: 'todo' };
+  if (i.subStage === 'tutor_ok') return { text: `${who} 강사님 가능 · 학생 답 필요`, tone: 'todo' };
   return { text: `대체강사 ${who} 확정`, tone: 'done' };
 }
 
@@ -236,50 +238,80 @@ function mondayOf(date: string): string {
 // 학생 한 명의 단계 (안 1): 지금 할 일이 있는 단계를 앞에서부터
 // ---------------------------------------------------------------------
 
-export type LvStep = 'notify' | 'answer' | 'tutor' | 'makeup' | 'confirm';
+export type LvStep = 'tutor' | 'propose' | 'answer' | 'confirm';
 export const LV_STEP_TEXT: Record<LvStep | 'done', string> = {
-  notify: '1 기존 강사 휴무 안내', answer: '2 학생 선호 방법 입력', tutor: '3 대체 강사에게 묻기', makeup: '3 보강 날짜 잡기', confirm: '4 학생에게 확정 받기', done: '완료',
+  tutor: '1 대체 강사에게 묻기', propose: '2 학생에게 휴무 안내 · 대체 강사 제안', answer: '3 학생 답 입력', confirm: '4 확정 안내 보내기', done: '완료',
 };
 
-/** 학생 한 명의 할 일 묶음. 단계마다 해당 수업·안 보낸 안내 */
+/** 2단계 글: 휴무 안내 + 대체강사 제안을 한 번에 (2026-10-28 대표 시안 승인). 대체강사 날짜는 강사 이름과 함께, 나머지는 보강 */
+export type LvProposal = { status: 'pending' | 'sent'; noticeIds: string[]; itemIds: string[]; text: string };
+
+export function proposalText(studentName: string, items: LvItem[]): string {
+  const subs = items.filter((i) => i.choice === 'substitute');
+  const waits = items.filter((i) => i.choice === 'wait');
+  const head = subs.length
+    ? `[엣지영어] ${studentName}님, 담당 강사님 휴무로 아래 수업은 대체강사와 평소 시간에 진행하려고 해요. 강사님 프로필도 함께 보내 드려요.`
+    : `[엣지영어] ${studentName}님, 담당 강사님 휴무로 아래 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.`;
+  const out = [head];
+  if (subs.length) out.push(subs.map((i) => `${koAt(i.startsAt, i.studentTz)} · ${i.subTutorName} 강사님`).join('\n'));
+  if (subs.length && waits.length) out.push(`${waits.map((i) => koAt(i.startsAt, i.studentTz)).join(', ')} 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.`);
+  if (!subs.length) out.push(waits.map((i) => `- ${koAt(i.startsAt, i.studentTz)}`).join('\n'));
+  if (subs.length) out.push('기존 강사님과 보강을 원하시면 말씀해 주세요.');
+  return out.join('\n\n');
+}
+
+/** 학생 한 명의 할 일 묶음. 단계마다 해당 수업·안내 */
 export type LvStudentWork = {
-  notify: LvMessage[];
-  /** 학생 답을 아직 못 받은 지금 이후 수업 */
-  answer: LvItem[];
-  /** 대체강사 확인 중 (강사별) */
+  /** 1단계: 대체강사(또는 '대체 강사 없음 → 보강')를 아직 안 고른 지금 이후 수업 */
+  pick: LvItem[];
+  /** 1단계: 대체강사 답 기다리는 중 (강사별) */
   tutor: { subTutorId: string; subTutorName: string; items: LvItem[]; ask: LvMessage | null }[];
-  /** 기존 강사 보강 날짜를 아직 안 정함 */
-  makeup: LvItem[];
-  /** 대체강사 가능 → 학생 안내·학생 OK / 확정 안내 / 기존 강사 보강 신청(강사 확인 중) */
-  confirm: { studentMsg: LvMessage | null; tutorOk: LvItem[]; confirmedMsgs: LvMessage[]; makeupRequested: LvItem[] };
+  /** 2단계 글 (안 보냈으면 pending, 보냈으면 sent — 보낸 글도 그 자리에 남김) */
+  proposal: LvProposal | null;
+  /** 3단계: 대체강사 가능 → 학생 답 기다리는 수업 (2단계 글을 보낸 뒤) */
+  answer: LvItem[];
+  /** 4단계: 확정 안내 · 기존 강사 보강 날짜 미정 · 보강 신청(강사 확인 중) */
+  confirm: { confirmedMsgs: LvMessage[]; makeup: LvItem[]; makeupRequested: LvItem[] };
   steps: LvStep[];
 };
 
 export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date): LvStudentWork {
-  const mine = messages.filter((m) => m.status === 'pending' && m.studentId === g.studentId);
-  const notify = mine.filter((m) => m.event === 'leave_options');
-  const answer = g.items.filter((i) => i.choice === 'undecided' && i.startsAt > now);
+  const mine = messages.filter((m) => m.studentId === g.studentId);
+  const pending = mine.filter((m) => m.status === 'pending');
+  const future = g.items.filter((i) => i.startsAt > now);
+  const pick = future.filter((i) => i.choice === 'undecided');
   const tutorMap = new Map<string, LvStudentWork['tutor'][number]>();
   for (const i of g.items.filter((x) => x.choice === 'substitute' && x.subStage === 'asked')) {
     const t = tutorMap.get(i.subTutorId!) ?? { subTutorId: i.subTutorId!, subTutorName: i.subTutorName ?? '', items: [], ask: null };
     t.items.push(i);
     tutorMap.set(i.subTutorId!, t);
   }
-  const tutor = [...tutorMap.values()].map((t) => ({ ...t, ask: mine.find((m) => m.event === 'sub_ask' && m.recipientId === t.subTutorId) ?? null }));
-  const makeup = g.items.filter((i) => i.choice === 'wait' && !i.makeupAt && !i.makeupRequested);
+  const tutor = [...tutorMap.values()].map((t) => ({ ...t, ask: pending.find((m) => m.event === 'sub_ask' && m.recipientId === t.subTutorId) ?? null }));
+
+  // 2단계 글: 휴무 안내(leave_options) + 학생에게 대체강사 제안(sub_student) 안내를 하나로. 1단계가 끝난 뒤에만
+  const step1Done = pick.length === 0 && tutor.length === 0;
+  const propPending = pending.filter((m) => m.event === 'leave_options' || m.event === 'sub_student');
+  const propSent = mine.filter((m) => m.status === 'sent' && (m.event === 'leave_options' || m.event === 'sub_student'));
+  const shown = step1Done ? future.filter((i) => i.choice === 'wait' || (i.choice === 'substitute' && i.subStage !== 'asked')) : [];
+  const proposal: LvProposal | null = !step1Done || shown.length === 0
+    ? null
+    : propPending.length
+      ? { status: 'pending', noticeIds: propPending.flatMap((m) => m.noticeIds), itemIds: shown.map((i) => i.id), text: proposalText(g.studentName, shown) }
+      : propSent.length
+        ? { status: 'sent', noticeIds: propSent.flatMap((m) => m.noticeIds), itemIds: shown.map((i) => i.id), text: proposalText(g.studentName, shown) }
+        : null;
+  const answer = proposal?.status === 'sent' ? g.items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok') : [];
   const confirm = {
-    studentMsg: mine.find((m) => m.event === 'sub_student') ?? null,
-    tutorOk: g.items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok'),
-    confirmedMsgs: mine.filter((m) => m.event === 'sub_confirmed'),
+    confirmedMsgs: pending.filter((m) => m.event === 'sub_confirmed'),
+    makeup: proposal?.status === 'sent' || !proposal ? g.items.filter((i) => i.choice === 'wait' && !i.makeupAt && !i.makeupRequested) : [],
     makeupRequested: g.items.filter((i) => i.choice === 'wait' && !i.makeupAt && i.makeupRequested),
   };
   const steps: LvStep[] = [];
-  if (notify.length) steps.push('notify');
+  if (pick.length || tutor.length) steps.push('tutor');
+  if (proposal?.status === 'pending') steps.push('propose');
   if (answer.length) steps.push('answer');
-  if (tutor.length) steps.push('tutor');
-  if (makeup.length) steps.push('makeup');
-  if (confirm.studentMsg || confirm.tutorOk.length || confirm.confirmedMsgs.length || confirm.makeupRequested.length) steps.push('confirm');
-  return { notify, answer, tutor, makeup, confirm, steps };
+  if (confirm.confirmedMsgs.length || (step1Done && confirm.makeup.length) || confirm.makeupRequested.length) steps.push('confirm');
+  return { pick, tutor, proposal, answer, confirm, steps };
 }
 
 // ---------------------------------------------------------------------

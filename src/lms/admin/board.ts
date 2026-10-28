@@ -147,7 +147,7 @@ export type LessonChangeTask = {
   createdAt: Date;
 };
 
-/** 강사 휴무 처리 (migration 1800): 휴무 화면 단계(1 기존 강사 휴무 안내 · 2 학생 선호 방법 입력 · 3 대체 강사에게 묻기 · 4 학생에게 확정 받기). 휴무 1건당 한 줄, 다 처리하면 사라짐 */
+/** 강사 휴무 처리 (migration 1800·2500): 휴무 화면 단계(1 대체 강사에게 묻기 · 2 학생에게 휴무 안내 · 대체 강사 제안 · 3 학생 답 입력 · 4 확정 안내 보내기). 휴무 1건당 한 줄, 다 처리하면 사라짐 */
 export type TutorLeaveTask = {
   kind: 'tutor_leave';
   id: string; // 휴무 번호
@@ -155,11 +155,13 @@ export type TutorLeaveTask = {
   from: string; // KST 날짜
   to: string;
   undecidedStudents: number;
+  /** 대체 강사를 아직 안 고른 수업 수 */
+  undecidedLessons?: number;
   tutorReply: number;
   studentReply: number;
   pendingNotices: number;
-  /** 안 보낸 안내를 휴무 화면 단계별로: 1 휴무 안내(leave_options) · 3 대체강사(sub_ask) · 4 학생 확정(sub_student·sub_confirmed) */
-  noticeSteps?: { notify: number; tutor: number; confirm: number };
+  /** 안 보낸 안내를 휴무 화면 단계별로: 1 대체강사 묻기(sub_ask) · 2 학생 글(leave_options·sub_student, 학생 수) · 4 확정 안내(sub_confirmed) */
+  noticeSteps?: { notify: number; tutor: number; confirm: number; proposeStudents?: string[]; proposeLessons?: number };
   /** 아직 처리 안 된 가장 가까운 수업 (지나기 전에 정해야 함) */
   firstOpenAt: Date | null;
   createdAt: Date;
@@ -440,11 +442,15 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
       // 휴무 화면 단계 이름 그대로 (같은 것은 어디서나 같은 이름 — 2026-10-28 대표)
       const ns = t.noticeSteps ?? { notify: 0, tutor: 0, confirm: 0 };
       const other = t.pendingNotices - ns.notify - ns.tutor - ns.confirm;
+      // 1 = 대체강사 안 고른 수업 + 강사 답 대기 · 2 = 학생 글 안 보낸 학생(대체강사를 다 고른 학생만) · 3 = 글 보낸 뒤 학생 답 대기 · 4 = 확정 안내
+      const step1 = (t.undecidedLessons ?? 0) + t.tutorReply;
+      const proposeStudents = ns.proposeStudents?.length ?? 0;
+      const answer = Math.max(0, t.studentReply - (ns.proposeLessons ?? 0));
       const parts = [
-        ns.notify > 0 && `1 기존 강사 휴무 안내 ${ns.notify}건`,
-        t.undecidedStudents > 0 && `2 학생 선호 방법 입력 ${t.undecidedStudents}명`,
-        (t.tutorReply > 0 || ns.tutor > 0) && `3 대체 강사에게 묻기 ${t.tutorReply || ns.tutor}회`,
-        (t.studentReply > 0 || ns.confirm > 0) && `4 학생에게 확정 받기 ${t.studentReply > 0 ? `${t.studentReply}회` : `안내 ${ns.confirm}건`}`,
+        step1 > 0 && `1 대체 강사에게 묻기 ${step1}회`,
+        proposeStudents > 0 && `2 학생에게 휴무 안내 · 대체 강사 제안 ${proposeStudents}명`,
+        answer > 0 && `3 학생 답 입력 ${answer}회`,
+        ns.confirm > 0 && `4 확정 안내 보내기 ${ns.confirm}건`,
         other > 0 && `안내 보내기 ${other}건`,
       ].filter(Boolean) as string[];
       const day = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;

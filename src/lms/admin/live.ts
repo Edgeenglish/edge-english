@@ -252,12 +252,14 @@ export type LeaveOpenRow = {
   student_id: string; starts_at: string; choice: 'undecided' | 'substitute' | 'wait'; sub_stage: 'asked' | 'tutor_ok' | 'confirmed' | null;
   off: { id: string; starts_at: string; ends_at: string; created_at: string; tutor: { name: string } | null } | null;
 };
-export type LeaveNoticeRow = { event?: string; leave: { off: LeaveOpenRow['off'] } | null };
+export type LeaveNoticeRow = { event?: string; leave: { student_id?: string; off: LeaveOpenRow['off'] } | null };
 
-/** 강사 휴무 처리 (1800): 아직 정하지 않았거나 답을 기다리는 수업 · 안 보낸 안내 → 휴무마다 한 줄 */
+/** 강사 휴무 처리 (1800·2500 새 순서): 아직 정하지 않았거나 답을 기다리는 수업 · 안 보낸 안내 → 휴무마다 한 줄 */
 export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], now: Date): TaskSource[] {
   const out = new Map<string, Extract<TaskSource, { kind: 'tutor_leave' }>>();
   const undecided = new Map<string, Set<string>>();
+  // 1단계(대체강사 고르기·강사 답)가 남은 학생은 2단계 글을 아직 보낼 수 없음
+  const blocked = new Set<string>();
   const row = (o: NonNullable<LeaveOpenRow['off']>) => {
     if (!out.has(o.id))
       out.set(o.id, {
@@ -274,9 +276,13 @@ export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], n
       const s = undecided.get(r.off.id) ?? new Set<string>();
       s.add(r.student_id);
       undecided.set(r.off.id, s);
+      blocked.add(`${r.off.id}|${r.student_id}`);
       t.undecidedStudents = s.size;
-    } else if (r.sub_stage === 'asked') t.tutorReply += 1;
-    else if (r.sub_stage === 'tutor_ok') t.studentReply += 1;
+      t.undecidedLessons = (t.undecidedLessons ?? 0) + 1;
+    } else if (r.sub_stage === 'asked') {
+      t.tutorReply += 1;
+      blocked.add(`${r.off.id}|${r.student_id}`);
+    } else if (r.sub_stage === 'tutor_ok') t.studentReply += 1;
     const at = new Date(r.starts_at);
     if (at > now && (!t.firstOpenAt || at < t.firstOpenAt)) t.firstOpenAt = at;
   }
@@ -285,9 +291,14 @@ export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], n
     const t = row(n.leave.off);
     t.pendingNotices += 1;
     const ns = (t.noticeSteps ??= { notify: 0, tutor: 0, confirm: 0 });
-    if (n.event === 'leave_options') ns.notify += 1;
-    else if (n.event === 'sub_ask') ns.tutor += 1;
-    else if (n.event === 'sub_student' || n.event === 'sub_confirmed') ns.confirm += 1;
+    if (n.event === 'leave_options' || n.event === 'sub_student') {
+      // 2단계 글(휴무 안내 + 대체강사 제안)은 학생마다 하나
+      ns.notify += 1;
+      if (n.event === 'sub_student') ns.proposeLessons = (ns.proposeLessons ?? 0) + 1;
+      const sid = n.leave?.student_id;
+      if (sid && !blocked.has(`${n.leave!.off!.id}|${sid}`) && !(ns.proposeStudents ??= []).includes(sid)) ns.proposeStudents.push(sid);
+    } else if (n.event === 'sub_ask') ns.tutor += 1;
+    else if (n.event === 'sub_confirmed') ns.confirm += 1;
   }
   return [...out.values()];
 }
@@ -386,7 +397,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind)')
       .in('status', ['confirmed', 'active']),
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
-    sb.from('lesson_notices').select(`event, leave:leave_items(${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
+    sb.from('lesson_notices').select(`event, leave:leave_items(student_id, ${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
     sb.from('renewal_notices').select('enrollment_id, sent_at'),
     loadMissingRecords(sb),
   ]);
