@@ -1355,10 +1355,9 @@ select admin_makeup_confirm((select id from lmk), pg_temp.kst(23, '20:00'));
 select pg_temp.ok((select final_end_date = (select d0 + 23 from lv) from enrollments where id = '99999999-1000-0000-0000-000000001800'),
   '기다린 보강이 종료일 3일 뒤로 확정 → 종료일이 그 보강일까지만 늘어남 (A20)');
 reset role;
-select pg_temp.ok((select lms_original_end('99999999-1000-0000-0000-000000001800') = d0 + 20 from lv)
-              and lms_is_leave_postponed((select r.confirmed_lesson_id from makeup_requests r join lmk on lmk.id = r.id))
+select pg_temp.ok(lms_is_leave_postponed((select r.confirmed_lesson_id from makeup_requests r join lmk on lmk.id = r.id))
               and (select lms_next_regular_from('99999999-1000-0000-0000-000000001800') is null),
-  '휴무로 미뤄진 수업 (2750): 원래 종료일은 그대로(재등록·일반 보강 기준), 그 수업은 휴무로 미뤄진 수업, 날짜 안 잡은 것이 남으면 다음 정규 시작일 미정');
+  '휴무로 미뤄진 수업 (2750): 휴무 보강으로 잡은 수업은 휴무로 미뤄진 수업, 날짜 안 잡은 것이 남으면 다음 정규 시작일 미정');
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select admin_void_makeup((select r.confirmed_lesson_id from makeup_requests r join lmk on lmk.id = r.id), '날짜 다시');

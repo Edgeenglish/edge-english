@@ -103,20 +103,18 @@ export default function StudentHome(props: {
   const [busy, setBusy] = useState(false);
 
   const lessons = s.lessons;
-  // 일반 보강(원래 종료일까지)과 휴무로 미뤄진 수업(강사 장기휴무, 종료일 뒤도 가능)은 따로 셈·표시 (2026-10-28 대표)
+  // 일반 보강과 휴무로 미뤄진 수업(강사 장기휴무)은 이름·할 일만 따로 (2026-10-28 대표). 수강기간 연장·재등록 기준은 기존 그대로
   const openRights = s.makeupRights.filter((m) => !m.requested);
   const regularRights = openRights.filter((m) => !m.tutorLeave);
   const postponedRights = openRights.filter((m) => m.tutorLeave);
-  const makeupsOwed = s.makeupRights.filter((m) => !m.tutorLeave).length;
+  const makeupsOwed = s.makeupRights.length;
   const postponedLeft = s.makeupRights.filter((m) => m.tutorLeave).length + lessons.filter((l) => l.leavePostponed && l.state === 'scheduled').length;
-  const normalLessons = lessons.filter((l) => !l.leavePostponed);
   const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
-  // 재등록 안내·마감은 원래 종료일 기준, 휴무로 미뤄진 수업은 남은 수업 수에서 뺌 (기존 수강권에서 따로 진행)
-  const left = lessonsLeft(normalLessons, makeupsOwed);
-  const prompt = renewalPrompt(normalLessons, renewal, makeupsOwed);
-  const endDate = s.originalEndDate;
+  const left = lessonsLeft(lessons, makeupsOwed);
+  const prompt = renewalPrompt(lessons, renewal, makeupsOwed);
+  const endDate = s.finalEndDate;
   const dLeft = endDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, endDate) : 0;
   const points = pointsHistory(s.points);
   const textbook = extras?.textbook ?? null;
@@ -184,11 +182,6 @@ export default function StudentHome(props: {
             <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {fmtDate(endDate)} 23:59예요.
           </p>
         )}
-        {postponedLeft > 0 && (
-          <p className="mt-1 text-[13px] text-[#5c3b00]">
-            다음 정규 수업: {s.nextRegularFrom ? `${fmtDate(s.nextRegularFrom)}부터` : '휴무로 미뤄진 수업을 마친 뒤'}
-          </p>
-        )}
       </div>
       {/* 재등록 신청 저장은 아직 DB에 없음 → 미리보기에서만 버튼 */}
       {preview && prompt.mode === 'request' && (
@@ -209,7 +202,7 @@ export default function StudentHome(props: {
 
   const statusTiles = (
     <section aria-label="수강 현황" className="grid grid-cols-3 gap-2">
-      <Tile label="남은 수업" value={`${left.total}`} unit="회" sub={postponedLeft > 0 ? `+ 휴무로 미뤄진 수업 ${postponedLeft}회` : left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
+      <Tile label="남은 수업" value={`${left.total}`} unit="회" sub={postponedLeft > 0 ? `휴무로 미뤄진 수업 ${postponedLeft}회 포함` : left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
       <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중`} />
       <Tile
         label="수강 종료"
@@ -495,7 +488,7 @@ export default function StudentHome(props: {
               now={now}
               creditsLeft={s.creditsLeft}
               finalEndDate={s.finalEndDate}
-              makeupUntil={endDate}
+              makeupUntil={s.finalEndDate}
               holidays={holidays}
               regularLeft={regularLessonsLeft(lessons)}
               totalLeft={left.total}
@@ -1071,7 +1064,7 @@ function CancelSheet(props: {
   now: Date;
   creditsLeft: number;
   finalEndDate: KstDate;
-  /** 일반 보강 기한 = 원래 종료일 */
+  /** 보강 기한 = 수강 종료일 */
   makeupUntil: KstDate;
   holidays: ReadonlySet<KstDate>;
   regularLeft: number;

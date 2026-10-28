@@ -34,10 +34,8 @@ export type StudentView = {
   studentId: string;
   name: string;
   product: string;
-  /** 휴무로 미뤄진 수업까지 포함한 마지막 날 (그 수업만 이 날까지) */
+  /** 수강 종료일 (강사 휴무면 마지막 휴무 보강일까지 연장된 날, A20) — 재등록 결제 마감도 이 날 23:59 */
   finalEndDate: KstDate;
-  /** 원래 수강기간 종료일 — 재등록·결제 마감, 일반 보강 기한 (2026-10-28 대표) */
-  originalEndDate: KstDate;
   /** 재등록하면 다음 정규 수업을 시작할 수 있는 첫날. null = 휴무로 미뤄진 수업 날짜가 아직 안 잡힘 */
   nextRegularFrom: KstDate | null;
   totalLessons: number;
@@ -59,7 +57,7 @@ type Raw = {
   enrollment: null | {
     weeks: number | null; legacy_label: string | null; weekly_count: number; duration_min: number; final_end_date: KstDate;
     lessons_total: number; credits_left: number; credits_granted: number; confirmed_on: KstDate | null; renewal_paid: boolean;
-    original_end_date: KstDate; next_regular_from: KstDate | null;
+    next_regular_from: KstDate | null;
   };
   lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean }[];
   makeup_rights: { lesson_id: string | null; item_id: string | null; original_at: string; tutor_leave: boolean }[];
@@ -91,7 +89,6 @@ export function parseStudentView(r: Raw): StudentView {
     name: r.student.name_ko,
     product: e ? `${e.duration_min}분 · 주 ${e.weekly_count}회 · ${e.weeks ? `${e.weeks}주` : e.legacy_label}` : '-',
     finalEndDate: e?.final_end_date ?? ('' as KstDate),
-    originalEndDate: e?.original_end_date ?? ('' as KstDate),
     nextRegularFrom: e?.next_regular_from ?? null,
     totalLessons: e?.lessons_total ?? 0,
     creditsLeft: e?.credits_left ?? 0,

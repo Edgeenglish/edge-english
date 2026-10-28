@@ -128,7 +128,6 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     name: s.name,
     product: s.product,
     finalEndDate: addDays(today, 20),
-    originalEndDate: addDays(today, 12),
     nextRegularFrom: null,
     totalLessons: s.totalLessons,
     creditsLeft: s.creditsLeft,
