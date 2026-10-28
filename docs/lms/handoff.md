@@ -23,6 +23,15 @@
 - Google Sheets 읽기 한도(분당)가 낮아 연속으로 읽으면 'Quota exceeded' → 다시 시도하면 됨
 - 이 세션(claude/epic-dijkstra-nu1hht)에 남은 것: 10/28 오전 10시 정O연 10/28 오후 8시 보강 학생 답 확인 예약 알림(이 세션으로 옴) · POL-RN-08 변경 반영 완료(보강·보상도 셈) · 강사 휴무 화면 시험 B4~B6
 
+## 📋 다음 세션 할 일 (2026-10-28 대표 지시): ② 강사 LMS 개발 — 바로 개발
+- 대표 지시: 강사 휴무 화면은 **더 다듬거나 재설계하지 않음** (confident-ritchie 세션의 '학생 카드 다시 짜기' 시안 VfAdv… 도 보류). 바로 강사 LMS로
+- **확정 범위 (H26(18))**: ① 수업 일정 확인 ② Class Record 직접 입력 ③ 보강 가능 여부 응답. 휴대폰 우선(강사 화면은 영어)
+- **가장 중요**: Class Record가 학생 수강현황·남은 수업·보강·급여 기록에 정확히 연결 (수업 1건 `lessons.class_status` 하나 → `class_status_rules`로 회차·변경권·지급 자동, 정산 표 `payroll_items`(0300)). 원래 수업 길이와 급여 인정 시간 분리(3순위 메모)
+- **재사용**: 1700 취소·변경·보강 엔진(강사 확인·확정 함수), `tutor_my_students()`·`my_tutor_id()` RLS, 보강 '가능' ≠ 확정(D-43, 운영진 최종 확정 유지)
+- **이미 있는 것 / 없는 것을 먼저 구분**: 지금 `/lms/tutor`는 'coming soon' 자리만. 강사 계정 초대·로그인(app_users role tutor) 경로 확인 필요
+- 대표에게 요청할 것은 화면 시험·운영 적용 승인만. 같이 검증: **시트 기록을 실제로 멈출 수 있는 조건**
+- 남은 운영 확인(이 세션): 대표가 운영 화면 https://edge-english-git-lms-prod-support-2126.vercel.app/lms/admin 에서 '강사 휴무' 메뉴가 열리는지 확인. 강사 가능 시간 숫자 3개 답 대기(반영 목록 8번)
+
 ## ✅ 2026-10-28 운영 반영 (claude/epic-dijkstra-nu1hht)
 - 운영 DB(`mfamixejxydodclhglbc`) 백업(적용 직전, 학생 4명) → migration **1800·1900 적용** → 확인 6줄 통과 → 강사 Benny(Australia/Melbourne)·Maria(Asia/Ho_Chi_Minh)·Leslie(Asia/Hong_Kong) 등록 → `lms-prod` push(3e8a91f)
 - 대표 확인 대기: 강사 가능 시간 숫자 (아래 반영 목록 8번)
