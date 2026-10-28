@@ -23,11 +23,11 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
   });
 
   it('상태 글: 미정 → 강사 답 대기 → 학생 OK 대기 → 확정 / 기다림 보강 미정·보강 날짜', () => {
-    expect(itemStatus(I('a', 's1', '2026-11-02')).text).toBe('학생 답변 기다리는 중');
+    expect(itemStatus(I('a', 's1', '2026-11-02')).text).toBe('대체 강사 고르기 필요');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' })).text).toBe('Benny 강사님 답변 기다리는 중');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' })).text).toBe('Benny 강사님 수락 · 학생 동의 확인 필요');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' })).text).toBe('Benny 강사님 가능 · 학생 답 필요');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' })).tone).toBe('done');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' })).text).toBe('학생에게 보강 가능한 날짜 안내 필요');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' })).text).toBe('보강 · 날짜 잡기 전');
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupRequested: true })).text).toBe('기존 강사 보강 · 강사님 확인 기다리는 중');
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') })).text).toBe('기존 강사 보강 · 11/20 20:00');
   });
@@ -61,23 +61,56 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
       '② 기존 강사와 보강하기\n기존 강사님이 돌아오신 뒤 수업하실 수 있어요. 가능한 보강 시간을 확인해 주세요.',
     ].join('\n\n'));
     expect(leaveSummary(items, notices).pendingNotices).toBe(5);
-    // 학생 한 명의 할 일: 안내 → (대체강사 확인) → 확정(학생 안내) 순서
+    // 새 순서(2026-10-28): 대체강사 답이 남아 있으면 1단계만 — 학생 글(2단계)은 1단계가 끝난 뒤
     const w = studentWork(groupByStudent(items)[0], m, now);
-    expect(w.steps).toEqual(['notify', 'tutor', 'confirm']);
+    expect(w.steps).toEqual(['tutor']);
     expect(w.tutor.map((t) => [t.subTutorName, t.items.map((i) => i.id), t.ask?.noticeIds])).toEqual([['Benny', ['a'], ['n1', 'n2']]]);
-    expect(w.confirm.studentMsg?.noticeIds).toEqual(['n3']);
-    expect(w.confirm.tutorOk.map((i) => i.id)).toEqual(['b']);
+    expect(w.proposal).toBeNull();
   });
 
-  it('학생 할 일: 미정 → 학생 답, 기존 강사 보강 날짜 미정 → 보강 날짜, 신청함 → 확정(수업 변경 화면), 지난 미정 수업은 제외', () => {
+  it('새 순서: 1 대체 강사에게 묻기 → 2 학생에게 휴무 안내 · 대체 강사 제안(글 하나) → 3 학생 답 입력 → 4 확정 안내 보내기', () => {
+    const N = (id: string, itemId: string, event: LvNotice['event'], status: LvNotice['status'] = 'pending'): LvNotice =>
+      ({ id, itemId, event, recipientKind: 'student', recipientId: 's1', status, sentAt: null });
+    const items = [I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), I('b', 's1', '2026-11-04', { ...sub, subStage: 'tutor_ok' }), I('c', 's1', '2026-11-09', { choice: 'wait' })];
+    // 1단계 끝 → 2단계: 휴무 안내 3건 + 대체강사 제안 2건을 글 하나로
+    const before = [N('o1', 'a', 'leave_options'), N('o2', 'b', 'leave_options'), N('o3', 'c', 'leave_options'), N('s1', 'a', 'sub_student'), N('s2', 'b', 'sub_student')];
+    const w2 = studentWork(groupByStudent(items)[0], leaveMessages(items, before), now);
+    expect(w2.steps).toEqual(['propose']);
+    expect(w2.proposal?.status).toBe('pending');
+    expect([...w2.proposal!.noticeIds].sort()).toEqual(['o1', 'o2', 'o3', 's1', 's2']);
+    expect(w2.proposal?.text).toBe([
+      '[엣지영어] 김민수님, 담당 강사님 휴무로 아래 수업은 대체강사와 평소 시간에 진행하려고 해요. 강사님 프로필도 함께 보내 드려요.',
+      '11월 2일(월) 오후 8시 · Benny 강사님\n11월 4일(수) 오후 8시 · Benny 강사님',
+      '11월 9일(월) 오후 8시 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.',
+      '기존 강사님과 보강을 원하시면 말씀해 주세요.',
+    ].join('\n\n'));
+    // 보낸 뒤 → 3단계(학생 답) + 4단계(보강 날짜). 보낸 글은 그대로 남음
+    const sent = before.map((n) => ({ ...n, status: 'sent' as const }));
+    const w3 = studentWork(groupByStudent(items)[0], leaveMessages(items, sent), now);
+    expect(w3.steps).toEqual(['answer', 'confirm']);
+    expect(w3.proposal?.status).toBe('sent');
+    expect(w3.answer.map((i) => i.id)).toEqual(['a', 'b']);
+    expect(w3.confirm.makeup.map((i) => i.id)).toEqual(['c']);
+  });
+
+  it('대체 강사가 아무도 안 되면 2단계 글은 보강 안내만', () => {
+    const items = [I('a', 's1', '2026-11-02', { choice: 'wait' })];
+    const m = leaveMessages(items, [{ id: 'o', itemId: 'a', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null }]);
+    const w = studentWork(groupByStudent(items)[0], m, now);
+    expect(w.steps).toEqual(['propose']);
+    expect(w.proposal?.text).toBe('[엣지영어] 김민수님, 담당 강사님 휴무로 아래 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.\n\n- 11월 2일(월) 오후 8시');
+    expect(w.confirm.makeup).toEqual([]);
+  });
+
+  it('학생 할 일: 미정 → 1단계, 보강 날짜 미정·신청함 → 4단계(수업 변경 화면), 지난 미정 수업은 제외', () => {
     const items = [
       I('p', 's1', '2026-10-20'), I('a', 's1', '2026-11-02'), I('b', 's1', '2026-11-03', { choice: 'wait' }),
       I('c', 's1', '2026-11-04', { choice: 'wait', makeupRequested: true }), I('d', 's1', '2026-11-05', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') }),
     ];
     const w = studentWork(groupByStudent(items)[0], [], now);
-    expect(w.steps).toEqual(['answer', 'makeup', 'confirm']);
-    expect(w.answer.map((i) => i.id)).toEqual(['a']);
-    expect(w.makeup.map((i) => i.id)).toEqual(['b']);
+    expect(w.steps).toEqual(['tutor', 'confirm']);
+    expect(w.pick.map((i) => i.id)).toEqual(['a']);
+    expect(w.confirm.makeup.map((i) => i.id)).toEqual(['b']);
     expect(w.confirm.makeupRequested.map((i) => i.id)).toEqual(['c']);
     expect(studentWork(groupByStudent([items[4]])[0], [], now).steps).toEqual([]);
   });
@@ -132,18 +165,24 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(r.map((x) => x.key)).toEqual(['w']);
   });
 
-  it('대시보드: 휴무마다 한 줄 (학생 답 대기 명 수 · 강사 답 대기 · 학생 OK 대기 · 안 보낸 안내), 열기 → 휴무 화면', () => {
+  it('대시보드: 휴무마다 한 줄 (휴무 화면 새 단계 이름 그대로), 열기 → 휴무 화면', () => {
     const off = { id: 'off1', starts_at: '2026-11-01T15:00:00Z', ends_at: '2026-11-10T15:00:00Z', created_at: '2026-10-27T00:00:00Z', tutor: { name: 'Olivia' } };
     const tasks = toTutorLeaves([
       { student_id: 's1', starts_at: '2026-11-02T11:00:00Z', choice: 'undecided', sub_stage: null, off },
       { student_id: 's1', starts_at: '2026-11-03T11:00:00Z', choice: 'undecided', sub_stage: null, off },
       { student_id: 's2', starts_at: '2026-11-04T03:00:00Z', choice: 'substitute', sub_stage: 'asked', off },
-    ], [{ event: 'leave_options', leave: { off } }], now);
+      { student_id: 's3', starts_at: '2026-11-05T03:00:00Z', choice: 'substitute', sub_stage: 'tutor_ok', off },
+      { student_id: 's4', starts_at: '2026-11-06T03:00:00Z', choice: 'substitute', sub_stage: 'tutor_ok', off },
+    ], [
+      { event: 'leave_options', leave: { student_id: 's1', off } },
+      { event: 'leave_options', leave: { student_id: 's3', off } }, { event: 'sub_student', leave: { student_id: 's3', off } },
+      { event: 'sub_confirmed', leave: { student_id: 's5', off } },
+    ], now);
     const [item] = buildBoard(tasks, now);
     expect(item.title).toBe('Olivia 휴무 11/2~11/10');
     // 휴무 화면 단계 이름 그대로 (2026-10-28 대표)
-    expect(item.tag).toBe('강사 휴무 · 1 기존 강사 휴무 안내 1건');
-    expect(item.detail).toBe('1 기존 강사 휴무 안내 1건 · 2 학생 선호 방법 입력 1명 · 3 대체 강사에게 묻기 1회');
+    expect(item.tag).toBe('강사 휴무 · 1 대체 강사에게 묻기 3회');
+    expect(item.detail).toBe('1 대체 강사에게 묻기 3회 · 2 학생에게 휴무 안내 · 대체 강사 제안 1명 · 3 학생 답 입력 1회 · 4 확정 안내 보내기 1건');
     expect(item.actions[0].href).toBe('/lms/admin/leave?off=off1');
   });
 });
