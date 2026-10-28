@@ -238,7 +238,7 @@ function mondayOf(date: string): string {
 
 export type LvStep = 'notify' | 'answer' | 'tutor' | 'makeup' | 'confirm';
 export const LV_STEP_TEXT: Record<LvStep | 'done', string> = {
-  notify: '1 휴무 안내', answer: '2 학생 선택', tutor: '3 강사에게 묻기', makeup: '3 보강 날짜', confirm: '4 학생 동의·확정', done: '완료',
+  notify: '1 기존 강사 휴무 안내', answer: '2 학생 선호 방법 입력', tutor: '3 대체 강사에게 묻기', makeup: '3 보강 날짜 잡기', confirm: '4 학생에게 확정 받기', done: '완료',
 };
 
 /** 학생 한 명의 할 일 묶음. 단계마다 해당 수업·안 보낸 안내 */

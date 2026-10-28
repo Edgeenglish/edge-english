@@ -40,8 +40,6 @@ const btnDone = 'min-h-[44px] rounded-[10px] border border-[#c9c6d6] bg-[#d9d6e3
 const Err = ({ children }: { children: React.ReactNode }) => (children ? <p className="mt-1.5 text-[13px] text-[#b3261e]">{children}</p> : null);
 const TONE = { todo: 'bg-[#fff8d6] text-[#5c4a00]', wait: 'bg-[#e9f4ff] text-[#1b5a8a]', done: 'bg-[#e3f6ea] text-[#1e7a46]' } as const;
 const STEP_ORDER: LvStep[] = ['notify', 'answer', 'tutor', 'makeup', 'confirm'];
-/** 단계 화면 제목 (4 = 3단계가 기존 강사 보강뿐일 때) */
-const STEP_TITLE = ['학생에게 휴무 안내', '학생이 고른 방법 입력', '대체강사에게 물어보기', '학생에게 확인받기 · 확정', '보강 날짜 잡기'];
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -303,7 +301,7 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
   const [copied, setCopied] = useState<Set<string>>(new Set());
   const stage = (s: LvStep) => (s === 'notify' ? 0 : s === 'answer' ? 1 : s === 'confirm' ? 3 : 2);
   const cur = w.steps.length ? stage(w.steps[0]) : 4;
-  const third = w.tutor.length && w.makeup.length ? '3 강사에게 묻기·보강 날짜' : w.makeup.length ? LV_STEP_TEXT.makeup : LV_STEP_TEXT.tutor;
+  const third = w.tutor.length && w.makeup.length ? `${LV_STEP_TEXT.tutor} · 보강 날짜` : w.makeup.length ? LV_STEP_TEXT.makeup : LV_STEP_TEXT.tutor;
   const chips = [LV_STEP_TEXT.notify, LV_STEP_TEXT.answer, third, LV_STEP_TEXT.confirm];
 
   const msg = (m: LvMessage, n: number) => (
@@ -397,13 +395,12 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
           {chips.map((label, n) => {
             const on = sel === n;
             const open = canOpen(n);
-            const title = on ? `${n + 1} ${STEP_TITLE[n === 2 && w.makeup.length && !w.tutor.length ? 4 : n]}` : label;
             return (
               <span key={label} className="flex items-center gap-1">
                 {n > 0 && <span aria-hidden className="text-[15px] font-bold text-[#9a90c8]">›</span>}
                 <button type="button" aria-pressed={on} disabled={!open} onClick={() => setView(n)}
                   className={`min-h-[34px] rounded-full px-3 text-[13px] ${on ? 'bg-[#7d5fff] text-[14px] font-extrabold text-white' : open ? 'border border-[#7d5fff] bg-white text-[#5b3fe0]' : 'bg-white/60 text-[#b9b6c8]'}`}>
-                  {n < cur && !on ? '✓ ' : ''}{title}
+                  {n < cur && !on ? '✓ ' : ''}{label}
                 </button>
               </span>
             );
