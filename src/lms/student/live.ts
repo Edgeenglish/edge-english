@@ -34,13 +34,19 @@ export type StudentView = {
   studentId: string;
   name: string;
   product: string;
+  /** 휴무로 미뤄진 수업까지 포함한 마지막 날 (그 수업만 이 날까지) */
   finalEndDate: KstDate;
+  /** 원래 수강기간 종료일 — 재등록·결제 마감, 일반 보강 기한 (2026-10-28 대표) */
+  originalEndDate: KstDate;
+  /** 재등록하면 다음 정규 수업을 시작할 수 있는 첫날. null = 휴무로 미뤄진 수업 날짜가 아직 안 잡힘 */
+  nextRegularFrom: KstDate | null;
   totalLessons: number;
   creditsLeft: number;
   creditsPerPeriod: number;
   renewalPaid: boolean;
   confirmedOn: KstDate | null;
-  lessons: (StudentLesson & { meetUrl: string | null })[];
+  /** leavePostponed = 휴무로 미뤄진 수업 (강사 장기휴무로 못 들은 수업, 학생 화면에서 '보강'이라 부르지 않음) */
+  lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
   leave: LeaveRow[];
@@ -53,10 +59,11 @@ type Raw = {
   enrollment: null | {
     weeks: number | null; legacy_label: string | null; weekly_count: number; duration_min: number; final_end_date: KstDate;
     lessons_total: number; credits_left: number; credits_granted: number; confirmed_on: KstDate | null; renewal_paid: boolean;
+    original_end_date: KstDate; next_regular_from: KstDate | null;
   };
-  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null }[];
+  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean }[];
   makeup_rights: { lesson_id: string | null; item_id: string | null; original_at: string; tutor_leave: boolean }[];
-  makeup_requests: { id: string; status: string; lesson_id: string | null; item_id: string | null; requested_at: string; candidates: string[] }[];
+  makeup_requests: { id: string; status: string; lesson_id: string | null; item_id: string | null; requested_at: string; candidates: string[]; tutor_leave: boolean }[];
   leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string }[];
   holidays: KstDate[];
   points: { id: string; on: KstDate; kind: string; amount: number; note: string | null }[];
@@ -84,6 +91,8 @@ export function parseStudentView(r: Raw): StudentView {
     name: r.student.name_ko,
     product: e ? `${e.duration_min}분 · 주 ${e.weekly_count}회 · ${e.weeks ? `${e.weeks}주` : e.legacy_label}` : '-',
     finalEndDate: e?.final_end_date ?? ('' as KstDate),
+    originalEndDate: e?.original_end_date ?? ('' as KstDate),
+    nextRegularFrom: e?.next_regular_from ?? null,
     totalLessons: e?.lessons_total ?? 0,
     creditsLeft: e?.credits_left ?? 0,
     creditsPerPeriod: e?.credits_granted ?? 0,
@@ -97,6 +106,7 @@ export function parseStudentView(r: Raw): StudentView {
       tutorName: l.tutor,
       state: lessonState(l.state),
       meetUrl: l.meet_url,
+      leavePostponed: l.leave_postponed,
     })),
     makeupRights: r.makeup_rights.map((m) => ({
       lessonId: m.lesson_id,
@@ -110,7 +120,7 @@ export function parseStudentView(r: Raw): StudentView {
       return {
         id: q.id,
         kind: 'makeup',
-        title: `보강 신청${src ? ` · ${md(new Date(src.original_at))} 수업분` : ''}`,
+        title: `${q.tutor_leave ? '휴무로 미뤄진 수업' : '보강 신청'}${src ? ` · ${md(new Date(src.original_at))} 수업분` : ''}`,
         status: q.status === 'confirmed' ? 'confirmed' : 'tutor_reviewing',
         candidates: q.candidates.map((c) => new Date(c)),
         createdAt: new Date(q.requested_at),

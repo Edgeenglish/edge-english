@@ -9,6 +9,7 @@
 --  - 학생 화면 보기 전 운영진이 준비 중인 휴무 수업(대체강사 묻는 중)은 학생에게 보이지 않음
 --  - 학생 로그인 계정 만들기 admin_student_login (강사 admin_tutor_login 과 같은 방식)
 -- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+--  - 2750: 강사 장기휴무로 못 들은 수업은 '휴무로 미뤄진 수업'(원래 종료일 뒤도 가능), 일반 보강·재등록 기준은 원래 종료일(lms_original_end)
 -- =====================================================================
 
 -- 누구의 학생 화면인지: 학생 본인, 또는 운영자(TOTP 완료)가 고른 학생
@@ -63,12 +64,12 @@ begin
   ),
   slots as (
     select 'in_period'::text as sec, ((d::date + t.start_time_kst) at time zone 'Asia/Seoul') as x
-    from generate_series(greatest(v_today + 1, v_back), e.final_end_date, interval '1 day') d
+    from generate_series(greatest(v_today + 1, v_back), lms_original_end(e.id), interval '1 day') d
     cross join (select distinct start_time_kst from rs) t
     where extract(dow from d) not in (select weekday from rs)
     union all
     select 'after_end', ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul')
-    from generate_series(greatest(e.final_end_date + 1, v_back, v_today + 1), greatest(e.final_end_date + 1, v_back, v_today + 1) + 180, interval '1 day') d
+    from generate_series(greatest(lms_original_end(e.id) + 1, v_back, v_today + 1), greatest(lms_original_end(e.id) + 1, v_back, v_today + 1) + 180, interval '1 day') d
     join rs on rs.weekday = extract(dow from d)
     where v_leave
   ),
@@ -127,8 +128,8 @@ begin
   for x in select * from jsonb_array_elements(p_slots) loop
     t := (x ->> 'starts_at')::timestamptz;
     if t <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
-    if not s.tutor_leave and t >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
-      raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+    if not s.tutor_leave and t >= ((lms_original_end(e.id) + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '수강 종료일(%) 뒤의 시간입니다.', lms_original_end(e.id) using hint = 'after_end';
     end if;
     insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by)
     values (v_id, t, t + make_interval(mins => e.duration_min), 'student');
@@ -363,6 +364,7 @@ begin
     'enrollment', case when e.id is null then null else jsonb_build_object(
       'id', e.id, 'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
       'start_date', e.start_date, 'final_end_date', e.final_end_date, 'status', e.status,
+      'original_end_date', lms_original_end(e.id), 'next_regular_from', lms_next_regular_from(e.id),
       'lessons_total', coalesce((select c.sheet_total from import_checks c where c.enrollment_id = e.id), e.lessons_purchased + e.lessons_carried_in),
       'credits_left', case when v_period.id is null then 0 else credit_balance(v_period.id) end,
       'credits_granted', coalesce(v_period.credits_granted, 0),
@@ -371,7 +373,7 @@ begin
     'lessons', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
-        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of) order by l.starts_at)
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id)) order by l.starts_at)
       from lessons l join tutors t on t.id = l.tutor_id
       where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
     -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강)
@@ -390,6 +392,7 @@ begin
       select jsonb_agg(jsonb_build_object(
         'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id,
         'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id,
+        'tutor_leave', (select x.tutor_leave from lms_makeup_source(r.source_lesson_id, r.migrated_item_id) x),
         'candidates', (select coalesce(jsonb_agg(c.starts_at order by c.starts_at), '[]'::jsonb) from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
         order by r.requested_at desc)
       from makeup_requests r where r.student_id = v_student and r.status in ('requested', 'countered', 'confirmed')

@@ -128,14 +128,16 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     name: s.name,
     product: s.product,
     finalEndDate: addDays(today, 20),
+    originalEndDate: addDays(today, 12),
+    nextRegularFrom: null,
     totalLessons: s.totalLessons,
     creditsLeft: s.creditsLeft,
     creditsPerPeriod: s.creditsPerPeriod,
     renewalPaid: false,
     confirmedOn: s.payments[0].confirmedOn,
     lessons: [
-      ...s.lessons.map((l) => ({ ...l, meetUrl: null })),
-      ...[7, 9, 11].map((d, i) => ({ id: `lv${i}`, kind: 'regular' as const, startsAt: at(d, '20:00'), minutes: 50, tutorName: '가상강사 Alex', state: 'scheduled' as const, meetUrl: null })),
+      ...s.lessons.map((l) => ({ ...l, meetUrl: null, leavePostponed: false })),
+      ...[7, 9, 11].map((d, i) => ({ id: `lv${i}`, kind: 'regular' as const, startsAt: at(d, '20:00'), minutes: 50, tutorName: '가상강사 Alex', state: 'scheduled' as const, meetUrl: null, leavePostponed: false })),
     ],
     makeupRights: [{ lessonId: 'l5', itemId: null, originalAt: s.lessons[4].startsAt, tutorLeave: false, requested: false }],
     requests: [],
@@ -174,7 +176,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       set({
         ...view,
         makeupRights: view.makeupRights.map((m) => (m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
-        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: '보강 신청', status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
+        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: view.makeupRights.find((m) => m.lessonId === right.lessonId && m.itemId === right.itemId)?.tutorLeave ? '휴무로 미뤄진 수업' : '보강 신청', status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
       });
     },
     answerLeave: async (items, answer) => {

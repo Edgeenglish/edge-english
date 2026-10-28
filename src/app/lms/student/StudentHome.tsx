@@ -103,14 +103,21 @@ export default function StudentHome(props: {
   const [busy, setBusy] = useState(false);
 
   const lessons = s.lessons;
+  // 일반 보강(원래 종료일까지)과 휴무로 미뤄진 수업(강사 장기휴무, 종료일 뒤도 가능)은 따로 셈·표시 (2026-10-28 대표)
   const openRights = s.makeupRights.filter((m) => !m.requested);
-  const makeupsOwed = s.makeupRights.length;
+  const regularRights = openRights.filter((m) => !m.tutorLeave);
+  const postponedRights = openRights.filter((m) => m.tutorLeave);
+  const makeupsOwed = s.makeupRights.filter((m) => !m.tutorLeave).length;
+  const postponedLeft = s.makeupRights.filter((m) => m.tutorLeave).length + lessons.filter((l) => l.leavePostponed && l.state === 'scheduled').length;
+  const normalLessons = lessons.filter((l) => !l.leavePostponed);
   const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
-  const left = lessonsLeft(lessons, makeupsOwed);
-  const prompt = renewalPrompt(lessons, renewal, makeupsOwed);
-  const dLeft = s.finalEndDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, s.finalEndDate) : 0;
+  // 재등록 안내·마감은 원래 종료일 기준, 휴무로 미뤄진 수업은 남은 수업 수에서 뺌 (기존 수강권에서 따로 진행)
+  const left = lessonsLeft(normalLessons, makeupsOwed);
+  const prompt = renewalPrompt(normalLessons, renewal, makeupsOwed);
+  const endDate = s.originalEndDate;
+  const dLeft = endDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, endDate) : 0;
   const points = pointsHistory(s.points);
   const textbook = extras?.textbook ?? null;
   const book = textbook && books.find((b) => b.title.replace(/\s/g, '') === textbook.title.replace(/\s/g, ''));
@@ -155,13 +162,14 @@ export default function StudentHome(props: {
 
   async function answerLeave(answer: 'ok' | 'makeup') {
     const ids = leaveAsk.map((x) => x.id);
-    const v = await run(() => actions.answerLeave(ids, answer), answer === 'ok' ? '대체강사님과 평소 시간으로 확정했어요.' : '기존 강사님과 보강으로 정했어요.');
+    const v = await run(() => actions.answerLeave(ids, answer), answer === 'ok' ? '대체강사님과 평소 시간으로 확정했어요.' : '기존 강사님과 수업하기로 정했어요.');
     if (!v || answer === 'ok') return;
     const right = v.makeupRights.find((m) => !m.requested && leaveAsk.some((x) => (x.lessonId && x.lessonId === m.lessonId) || (x.itemId && x.itemId === m.itemId)));
     if (right) setOverlay({ kind: 'makeup', right });
   }
 
-  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={s.lessons.find((l) => l.id === next.id)?.meetUrl ?? null} />;
+  const nextFull = next && s.lessons.find((l) => l.id === next.id);
+  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.meetUrl ?? null} postponed={nextFull?.leavePostponed ?? false} />;
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -169,11 +177,16 @@ export default function StudentHome(props: {
         <h2 className="text-[15px] font-bold text-[#5c3b00]">수업이 {prompt.left}회 남았어요</h2>
         {prompt.mode === 'request' ? (
           <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            종료일 {fmtDate(s.finalEndDate)} 23:59까지 재등록 결제하면 남은 수업을 다음 등록으로 옮길 수 있고, 지금 고정 시간도 유지돼요.
+            종료일 {fmtDate(endDate)} 23:59까지 재등록 결제하면 남은 수업을 다음 등록으로 옮길 수 있고, 지금 고정 시간도 유지돼요.
           </p>
         ) : (
           <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {fmtDate(s.finalEndDate)} 23:59예요.
+            <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {fmtDate(endDate)} 23:59예요.
+          </p>
+        )}
+        {postponedLeft > 0 && (
+          <p className="mt-1 text-[13px] text-[#5c3b00]">
+            다음 정규 수업: {s.nextRegularFrom ? `${fmtDate(s.nextRegularFrom)}부터` : '휴무로 미뤄진 수업을 마친 뒤'}
           </p>
         )}
       </div>
@@ -196,12 +209,12 @@ export default function StudentHome(props: {
 
   const statusTiles = (
     <section aria-label="수강 현황" className="grid grid-cols-3 gap-2">
-      <Tile label="남은 수업" value={`${left.total}`} unit="회" sub={left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
+      <Tile label="남은 수업" value={`${left.total}`} unit="회" sub={postponedLeft > 0 ? `+ 휴무로 미뤄진 수업 ${postponedLeft}회` : left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
       <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중`} />
       <Tile
         label="수강 종료"
-        value={!s.finalEndDate ? '-' : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'}
-        sub={s.finalEndDate ? `${fmtDate(s.finalEndDate)} (${kst(new Date(`${s.finalEndDate}T12:00:00+09:00`)).wd})` : ''}
+        value={!endDate ? '-' : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'}
+        sub={endDate ? `${fmtDate(endDate)} (${kst(new Date(`${endDate}T12:00:00+09:00`)).wd})` : ''}
       />
     </section>
   );
@@ -219,13 +232,13 @@ export default function StudentHome(props: {
       </button>
       <button
         type="button"
-        disabled={openRights.length === 0}
-        onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })}
+        disabled={regularRights.length === 0}
+        onClick={() => setOverlay({ kind: 'makeup', right: regularRights.length === 1 ? regularRights[0] : null })}
         className={`${card} grid content-start gap-1.5 p-4 text-left disabled:opacity-50`}
       >
         <Icon d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" className="h-[22px] w-[22px] text-[#5b3df0]" />
         <span className="text-[15px] font-bold">보강 신청</span>
-        <span className="text-[12px] leading-[1.55] text-[#55526a]">보강할 수업 {openRights.length}회</span>
+        <span className="text-[12px] leading-[1.55] text-[#55526a]">보강할 수업 {regularRights.length}회</span>
       </button>
     </section>
   );
@@ -257,7 +270,8 @@ export default function StudentHome(props: {
   const todoBars = (
     <>
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
-      {openRights.length > 0 && <TodoBar n={openRights.length} text="보강 날짜 고르기" onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
+      {regularRights.length > 0 && <TodoBar n={regularRights.length} text="보강 날짜 고르기" onClick={() => setOverlay({ kind: 'makeup', right: regularRights.length === 1 ? regularRights[0] : null })} />}
+      {postponedRights.length > 0 && <TodoBar n={postponedRights.length} text="휴무로 미뤄진 수업 날짜 고르기" onClick={() => setOverlay({ kind: 'leave' })} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
     </>
   );
@@ -327,7 +341,7 @@ export default function StudentHome(props: {
               {leaveVisible && leaveAsk.length === 0 && (
                 <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
                   <span className="font-semibold">담당 강사님 휴무 안내</span>
-                  <span className="text-[#8b88a0]">›</span>
+                  <span className="text-[13px] text-[#55526a]">{postponedLeft > 0 ? `휴무로 미뤄진 수업 ${postponedLeft}회 ` : ''}›</span>
                 </button>
               )}
               {requestList}
@@ -348,7 +362,7 @@ export default function StudentHome(props: {
                 <div>
                   <p className="text-[15px] font-semibold">{whenText(l.startsAt)}</p>
                   <p className="text-[12.5px] text-[#6b6880]">
-                    {l.minutes}분 · {l.tutorName} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
+                    {l.minutes}분 · {l.tutorName} · {l.leavePostponed ? '휴무로 미뤄진 수업' : l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
                   </p>
                 </div>
                 <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: l.id })} className="min-h-[44px] rounded-[12px] border border-[#d9d5e8] px-3 text-[14px] font-semibold">
@@ -381,8 +395,8 @@ export default function StudentHome(props: {
             <section className={`${card} px-4`}>
               <button
                 type="button"
-                disabled={openRights.length === 0}
-                onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })}
+                disabled={regularRights.length === 0}
+                onClick={() => setOverlay({ kind: 'makeup', right: regularRights.length === 1 ? regularRights[0] : null })}
                 className="flex min-h-[52px] w-full items-center justify-between text-left text-[15px] disabled:opacity-50"
               >
                 보강 신청 <span className="text-[#8b88a0]">›</span>
@@ -481,6 +495,7 @@ export default function StudentHome(props: {
               now={now}
               creditsLeft={s.creditsLeft}
               finalEndDate={s.finalEndDate}
+              makeupUntil={endDate}
               holidays={holidays}
               regularLeft={regularLessonsLeft(lessons)}
               totalLeft={left.total}
@@ -505,20 +520,20 @@ export default function StudentHome(props: {
               <MakeupPicker
                 key={`${overlay.right.lessonId}${overlay.right.itemId}`}
                 right={s.makeupRights.find((m) => sameRight(m, overlay.right!)) ?? null}
-                endDate={s.finalEndDate}
+                endDate={endDate}
                 load={actions.makeupOptions}
                 busy={busy}
                 onSubmit={async (right, slots) => {
-                  const v = await run(() => actions.requestMakeup(right, slots), '보강을 신청했어요.');
+                  const v = await run(() => actions.requestMakeup(right, slots), '신청했어요.');
                   if (v) setOverlay(null);
                 }}
               />
             ) : (
               <div className="grid gap-3">
                 <h2 className="text-[18px] font-bold">보강할 수업</h2>
-                {openRights.map((m) => (
+                {regularRights.map((m) => (
                   <button key={`${m.lessonId}${m.itemId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })} className={`${card} flex min-h-[56px] items-center justify-between px-4 text-left`}>
-                    <span className="text-[15px] font-semibold">{whenText(m.originalAt)} 수업{m.tutorLeave ? ' · 강사님 휴무' : ''}</span>
+                    <span className="text-[15px] font-semibold">{whenText(m.originalAt)} 수업</span>
                     <span className="text-[#8b88a0]">›</span>
                   </button>
                 ))}
@@ -597,19 +612,19 @@ function LeaveSheet(props: {
       )}
       {waits.length > 0 && (
         <section className={`${card} grid gap-1 p-4`}>
-          <h3 className="text-[15px] font-bold">기존 강사님과 보강</h3>
+          <h3 className="text-[15px] font-bold">기존 강사님과 수업 · 휴무로 미뤄진 수업</h3>
           {waits.map((x) => {
             const r = props.rights.find((m) => (x.lessonId && m.lessonId === x.lessonId) || (x.itemId && m.itemId === x.itemId));
             return (
               <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
                 <span className="text-[15px] font-semibold">{whenText(x.startsAt)}</span>
                 {!r ? (
-                  <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">보강 확정 ✓</span>
+                  <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">날짜 확정 ✓</span>
                 ) : r.requested ? (
                   <span className="rounded-full bg-[#fff1d6] px-2.5 py-1 text-[12px] font-semibold text-[#8a5300]">신청함 · 강사 확인 중</span>
                 ) : (
                   <button type="button" onClick={() => props.onMakeup(r)} className="min-h-[40px] rounded-[10px] bg-[#5b3df0] px-3 text-[13px] font-bold text-white">
-                    보강 날짜 고르기
+                    날짜 고르기
                   </button>
                 )}
               </div>
@@ -694,7 +709,7 @@ function MakeupPicker(props: {
       .catch((e) => setErr(e instanceof Error ? e.message : '불러오지 못했어요.'));
   }, [right, load]);
 
-  if (!right) return <p className="text-[14px]">이미 신청했거나 보강할 수 없는 수업이에요.</p>;
+  if (!right) return <p className="text-[14px]">이미 신청했거나 신청할 수 없는 수업이에요.</p>;
   const byDay = new Map<string, Date[]>();
   for (const o of opts ?? []) {
     const d = kst(o.startsAt).date;
@@ -742,16 +757,16 @@ function MakeupPicker(props: {
           ),
         )}
       </div>
-      {props.endDate && <p className="text-[12px] text-[#6b6880]">수강 종료일 {fmtDate(props.endDate)}</p>}
+      {props.endDate && !right.tutorLeave && <p className="text-[12px] text-[#6b6880]">수강 종료일 {fmtDate(props.endDate)}</p>}
     </section>
   );
 
   return (
     <div className="grid gap-3.5">
-      <h2 className="text-[18px] font-bold">보강 신청 · {whenText(right.originalAt)} 수업</h2>
+      <h2 className="text-[18px] font-bold">{right.tutorLeave ? '휴무로 미뤄진 수업' : '보강 신청'} · {whenText(right.originalAt)} 수업</h2>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
-      {opts && opts.length === 0 && <p className="text-[14px]">보강 가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
+      {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
       {opts && opts.length > 0 && (
         <div className="grid gap-3.5 lg:grid-cols-2 lg:items-start">
           {calendar}
@@ -794,7 +809,7 @@ function MakeupPicker(props: {
                 onClick={() => props.onSubmit(right, picked)}
                 className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-40"
               >
-                보강 신청하기
+                {right.tutorLeave ? '신청하기' : '보강 신청하기'}
               </button>
             </section>
           </div>
@@ -811,7 +826,7 @@ function monthCells(month: string): (string | null)[] {
   return [...Array<null>(first.getUTCDay()).fill(null), ...Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
 }
 
-function NextLesson({ lesson, now, textbook, meetUrl }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null }) {
+function NextLesson({ lesson, now, textbook, meetUrl, postponed }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null; postponed: boolean }) {
   const k = kst(lesson.startsAt);
   const days = diffDays(formatInZone(now, 'Asia/Seoul').date, k.date);
   const started = now.getTime() >= lesson.startsAt.getTime();
@@ -828,7 +843,7 @@ function NextLesson({ lesson, now, textbook, meetUrl }: { lesson: StudentLesson;
           {Number(k.md.split('/')[0])}월 {Number(k.md.split('/')[1])}일 ({k.wd}) {k.time}
         </p>
         <p className="mt-1 text-[14px] text-[#d8d3f5]">
-          {lesson.minutes}분 · {lesson.tutorName} · 한국 시간{lesson.kind === 'makeup' ? ' · 보강' : ''}
+          {lesson.minutes}분 · {lesson.tutorName} · 한국 시간{postponed ? ' · 휴무로 미뤄진 수업' : lesson.kind === 'makeup' ? ' · 보강' : ''}
         </p>
       </div>
       <div className="grid gap-2.5 lg:grid-cols-2">
@@ -873,7 +888,7 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
     <button type="button" onClick={onOpen} className="flex min-h-[56px] w-full items-center justify-between gap-2 border-b border-[#eeecf4] py-2 text-left last:border-0">
       <span>
         <span className="block text-[14px] font-semibold">{r.title}</span>
-        <span className="block text-[12px] text-[#6b6880]">{r.kind === 'makeup' ? `내가 고른 후보 ${r.candidates.length}개 · 누르면 날짜 보기` : r.note}</span>
+        <span className="block text-[12px] text-[#6b6880]">{r.kind === 'makeup' ? `고른 날짜 ${r.candidates.length}개` : r.note}</span>
       </span>
       <span className="flex items-center gap-1.5">
         <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold ${STATUS_STYLE[r.status]}`}>{REQUEST_STATUS_LABEL[r.status]}</span>
@@ -936,11 +951,6 @@ function RequestDetail({ r }: { r: StudentRequest }) {
           <span className="text-[13px] text-[#55526a]">지금 상태</span>
           <span className={`rounded-full px-3 py-1 text-[13px] font-semibold ${STATUS_STYLE[r.status]}`}>{REQUEST_STATUS_LABEL[r.status]}</span>
         </div>
-        {at === 1 && (
-          <p className="text-[14px] leading-relaxed">
-            {r.status === 'tutor_reviewing' ? '강사가 아래 후보 중 하나를 고르면' : '운영자가 확인하면'} <b>이메일로 알려 드려요.</b> 지금 학생이 할 일은 없어요.
-          </p>
-        )}
         <ol className="flex gap-1.5">
           {steps.map((t, i) => (
             <li key={t} className="flex-1 text-center">
@@ -952,12 +962,12 @@ function RequestDetail({ r }: { r: StudentRequest }) {
       </section>
       {r.candidates.length > 0 && (
         <section className={`${card} grid gap-2.5 p-4`}>
-          <h3 className="text-[15px] font-bold">내가 고른 보강 후보</h3>
+          <h3 className="text-[15px] font-bold">내가 고른 날짜</h3>
           {r.candidates.map((d, i) => {
             const k = kst(d);
             return (
               <div key={i} className="flex items-center gap-3 rounded-[12px] border border-[#e6e3ef] px-3.5 py-3">
-                <span className="text-[12px] font-bold text-[#5b3df0]">후보 {i + 1}</span>
+                <span className="text-[12px] font-bold text-[#5b3df0]">{i + 1}</span>
                 <span className="text-[16px] font-bold">
                   {k.md} ({k.wd}) {k.time}
                 </span>
@@ -1061,6 +1071,8 @@ function CancelSheet(props: {
   now: Date;
   creditsLeft: number;
   finalEndDate: KstDate;
+  /** 일반 보강 기한 = 원래 종료일 */
+  makeupUntil: KstDate;
   holidays: ReadonlySet<KstDate>;
   regularLeft: number;
   totalLeft: number;
@@ -1110,7 +1122,7 @@ function CancelSheet(props: {
   const needsCheck = d.consumesLesson; // 수업이 차감되면 한 번 더 확인
   const rows: [string, string][] = [
     ['수업 횟수', d.consumesLesson ? `1회 차감 (남은 ${props.totalLeft}회 → ${props.totalLeft - 1}회)` : '차감 안 됨'],
-    ['보강', d.makeupAllowed ? `수강기간(~${fmtDate(props.finalEndDate)}) 안에 보강 가능` : '불가'],
+    ['보강', d.makeupAllowed ? `수강기간(~${fmtDate(props.makeupUntil)}) 안에 보강 가능` : '불가'],
     ['변경권', d.usesCredit ? `1개 사용 → 남은 ${props.creditsLeft - 1}개` : `차감 안 됨 (${props.creditsLeft}개 그대로)`],
   ];
 
