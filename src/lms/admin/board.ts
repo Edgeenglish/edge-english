@@ -147,7 +147,7 @@ export type LessonChangeTask = {
   createdAt: Date;
 };
 
-/** 강사 휴무 처리 (migration 1800): 학생 선택 미확인 · 대체강사 답 대기 · 학생 OK 대기 · 안 보낸 안내. 휴무 1건당 한 줄, 다 처리하면 사라짐 */
+/** 강사 휴무 처리 (migration 1800): 휴무 화면 단계(1 기존 강사 휴무 안내 · 2 학생 선호 방법 입력 · 3 대체 강사에게 묻기 · 4 학생에게 확정 받기). 휴무 1건당 한 줄, 다 처리하면 사라짐 */
 export type TutorLeaveTask = {
   kind: 'tutor_leave';
   id: string; // 휴무 번호
@@ -182,7 +182,7 @@ export type Category = 'matching' | 'tutor_ack' | 'ending' | 'makeup' | 'issue';
 export const CATEGORY_LABEL: Record<Category, string> = {
   matching: '신규 학생 매칭',
   tutor_ack: '강사 확인 대기',
-  ending: '종료 임박',
+  ending: '수강기간 종료 임박',
   makeup: '보강 미신청',
   issue: '오류·조치 필요',
 };
@@ -371,7 +371,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         id: t.id,
         kind: t.kind,
         severity: dueSeverity(t.endsAt, now),
-        tag: '종료 임박',
+        tag: '수강기간 종료 임박',
         title: `${t.studentName} · 수업 ${t.lessonsLeft}회 남음`,
         detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''}`,
         due: `종료 ${dueText(t.endsAt, now)}`,

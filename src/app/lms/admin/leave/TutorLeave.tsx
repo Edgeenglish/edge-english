@@ -30,7 +30,7 @@ export type LeaveActions = {
   makeupOptions: (itemIds: string[]) => Promise<LvMakeupOption[]>;
   requestMakeup: (source: { lessonId?: string; itemId?: string }, slots: Date[]) => Promise<void>;
   back: (itemIds: string[], to: 'undecided' | 'asked' | 'tutor_ok') => Promise<void>;
-  /** 휴무 안내 '보냄'을 안 보냄으로 (모든 날짜가 학생 선택 미확인일 때만) */
+  /** 휴무 안내 '보냄'을 안 보냄으로 (모든 날짜가 학생 답 전일 때만) */
   unsend: (noticeIds: string[]) => Promise<void>;
   renewals: (timeOffId: string) => Promise<LvRenewal[]>;
 };

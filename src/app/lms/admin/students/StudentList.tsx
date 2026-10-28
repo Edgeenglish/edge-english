@@ -8,7 +8,7 @@ import { AdminHeader, BottomNav, Icon } from '../ui';
 
 const STATUS: Record<DirStudent['status'], [string, string]> = {
   active: ['수강 중', 'bg-[#e3f5ea] text-[#13623a]'],
-  ending: ['종료 임박', 'bg-[#fff1d6] text-[#8a5300]'],
+  ending: ['수강기간 종료 임박', 'bg-[#fff1d6] text-[#8a5300]'],
   waiting_match: ['매칭 대기', 'bg-[#efebff] text-[#5b3fe0]'],
 };
 
