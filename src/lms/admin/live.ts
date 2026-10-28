@@ -194,7 +194,7 @@ type ChangeNoticeRow = {
   created_at: string;
   event?: string;
   recipient_kind?: 'student' | 'tutor';
-  change: { student: { id: string; name_ko: string; code: string } | null; lesson: { starts_at: string } | null } | null;
+  change: { type?: string; student: { id: string; name_ko: string; code: string } | null; lesson: { starts_at: string; kind?: string } | null } | null;
   makeup: { student: { id: string; name_ko: string; code: string } | null } | null;
 };
 type OpenMakeupRow = { created_at: string; tutor_answered_at?: string | null; student: { id: string; name_ko: string; code: string } | null };
@@ -216,7 +216,11 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
     const at = n.change?.lesson ? new Date(n.change.lesson.starts_at) : null;
     if (at && at > now && (!r.lessonAt || at < r.lessonAt)) r.lessonAt = at;
     // 지난 수업이어도 안내 카드에는 그 수업 날짜를 보여 줌 (무슨 일인지 바로 알게)
-    if (at && (!r.noticeLessonAt || at < r.noticeLessonAt)) r.noticeLessonAt = at;
+    if (at && (!r.noticeLessonAt || at < r.noticeLessonAt)) {
+      r.noticeLessonAt = at;
+      r.noticeLessonKind = n.change?.lesson?.kind ?? null;
+      r.noticeChangeType = n.change?.type ?? null;
+    }
   }
   for (const m of makeups) {
     if (!m.student) continue;
@@ -374,7 +378,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .is('origin_checked_at', null),
     sb
       .from('lesson_notices')
-      .select('created_at, event, recipient_kind, change:change_requests(student:students(id, name_ko, code), lesson:lessons(starts_at)), makeup:makeup_requests(student:students(id, name_ko, code))')
+      .select('created_at, event, recipient_kind, change:change_requests(type, student:students(id, name_ko, code), lesson:lessons(starts_at, kind)), makeup:makeup_requests(student:students(id, name_ko, code))')
       .eq('status', 'pending'),
     loadOpenMakeups(sb),
     sb

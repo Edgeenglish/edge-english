@@ -11,6 +11,15 @@ import { firstLessonAt, planAlert, type PlanView } from './confirm';
 const CHANGE_EVENT_TEXT: Record<string, string> = {
   change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림',
 };
+const LESSON_KIND_TEXT: Record<string, string> = { regular: '정규 ', makeup: '보강 ', migrated_makeup: '보강 ', migrated_extra: '추가 ', compensation: '보상 ' };
+const CANCEL_BY_TEXT: Record<string, string> = { student_cancel: '학생측 취소', tutor_cancel: '강사측 취소', admin_cancel: '운영진 취소' };
+/** '10/28(수) 오전 9시' · '11/2(월) 오후 8시 30분' 한국 시각 */
+function koShort(at: Date): string {
+  const f = formatInZone(at, 'Asia/Seoul');
+  const [h, m] = f.time.split(':').map(Number);
+  const wd = ['일', '월', '화', '수', '목', '금', '토'][new Date(`${f.date}T00:00:00Z`).getUTCDay()];
+  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))}(${wd}) ${h < 12 ? '오전' : '오후'} ${h % 12 || 12}시${m ? ` ${m}분` : ''}`;
+}
 const noticeWho = (to: ('student' | 'tutor')[] = []) =>
   to.includes('student') && to.includes('tutor') ? '학생·강사' : to.includes('tutor') ? '강사' : to.includes('student') ? '학생' : '안내';
 
@@ -127,6 +136,9 @@ export type LessonChangeTask = {
   noticeEvents?: string[];
   noticeTo?: ('student' | 'tutor')[];
   noticeLessonAt?: Date | null;
+  /** 그 수업의 종류(regular·makeup…)와 누가 취소했는지(change_requests.type) */
+  noticeLessonKind?: string | null;
+  noticeChangeType?: string | null;
   openMakeups: number;
   /** 그중 강사가 강사 LMS에서 가능 여부를 답한 보강 신청 (운영진 확정 차례, migration 2000) */
   answeredMakeups?: number;
@@ -405,10 +417,15 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         id: t.id,
         kind: t.kind,
         severity: t.lessonAt ? dueSeverity(t.lessonAt, now) : 'open',
-        tag: t.pendingNotices > 0 ? `${CHANGE_EVENT_TEXT[t.noticeEvents?.[0] ?? ''] ?? '수업 변경'} · 안내 보내기` : (t.answeredMakeups ?? 0) > 0 ? '보강 강사 답 옴 · 확정' : '보강 강사 답 대기',
+        tag: t.pendingNotices > 0 ? `${CHANGE_EVENT_TEXT[t.noticeEvents?.[0] ?? ''] ?? '수업 변경'} 안내 보내기` : (t.answeredMakeups ?? 0) > 0 ? '보강 강사 답 옴 · 확정' : '보강 강사 답 대기',
         title: t.studentName,
         detail: [
-          t.pendingNotices > 0 && (t.noticeLessonAt ?? t.lessonAt) && `${kstLabel((t.noticeLessonAt ?? t.lessonAt)!)} 수업`,
+          // 예: '10/28(수) 오전 9시 정규 수업 학생측 취소' (2026-10-28 대표 안)
+          t.pendingNotices > 0 && (t.noticeLessonAt ?? t.lessonAt) && [
+            koShort((t.noticeLessonAt ?? t.lessonAt)!),
+            `${LESSON_KIND_TEXT[t.noticeLessonKind ?? ''] ?? ''}수업`,
+            CANCEL_BY_TEXT[t.noticeChangeType ?? ''],
+          ].filter(Boolean).join(' '),
           t.pendingNotices > 0 && `${noticeWho(t.noticeTo)} ${t.pendingNotices}건`,
           t.pendingNotices === 0 && t.lessonAt && `${kstLabel(t.lessonAt)} 수업`,
           t.pendingNotices > 0 && (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 옴 ${t.answeredMakeups}건`,
