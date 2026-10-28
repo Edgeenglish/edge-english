@@ -1666,9 +1666,10 @@ select '55555555-0000-0000-0000-000000002400'::uuid, d, time '09:00', time '18:0
 union all select '55555555-0000-0000-0000-000000002400', 6, '10:00', '11:00', 'Australia/Melbourne', current_date - 1;
 create temp table av as select ((d::date + time '20:00') at time zone 'Asia/Seoul') as t20, ((d::date + time '18:00') at time zone 'Asia/Seoul') as t18
 from generate_series(current_date + 7, current_date + 13, interval '1 day') d where extract(dow from d) = 1;
-select pg_temp.ok(lms_sub_conflict('55555555-0000-0000-0000-000000002400', (select t20 from av), (select t20 from av) + interval '40 minutes', null) = '강사 수업 가능 시간 밖'
-              and lms_sub_conflict('55555555-0000-0000-0000-000000002400', (select t18 from av), (select t18 from av) + interval '40 minutes', null) is null
-              and lms_sub_conflict('55555555-0000-0000-0000-000000002400', (select t18 from av) - interval '10 hours', (select t18 from av) - interval '9 hours', null) = '강사 수업 가능 시간 밖',
-  '대체강사 판정: 평일 한국 9~18시 시작 강사는 20시 불가 · 18시 정각 시작 가능 · 8시 불가');
-select pg_temp.ok(lms_sub_conflict('55555555-0000-0000-0000-000000001700', now() + interval '30 days', now() + interval '30 days 1 hour', null) is null,
-  '가능 시간을 안 넣은 강사는 가능 시간 검사 안 함');
+select pg_temp.ok(not lms_tutor_available('55555555-0000-0000-0000-000000002400', (select t20 from av))
+              and lms_tutor_available('55555555-0000-0000-0000-000000002400', (select t18 from av))
+              and not lms_tutor_available('55555555-0000-0000-0000-000000002400', (select t18 from av) - interval '10 hours')
+              and lms_sub_conflict('55555555-0000-0000-0000-000000002400', (select t20 from av), (select t20 from av) + interval '40 minutes', null) is null,
+  '보통 수업 시간: 평일 한국 9~18시 시작 강사는 20시·8시 밖 · 18시 정각 안 — 밖이어도 대체강사로 고를 수는 있음 (2700)');
+select pg_temp.ok(lms_tutor_available('55555555-0000-0000-0000-000000001700', now() + interval '30 days'),
+  '보통 수업 시간을 안 넣은 강사는 언제나 안');

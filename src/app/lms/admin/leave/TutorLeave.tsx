@@ -644,11 +644,13 @@ function SubOptions({ options, items, busy, pick }: { options: LvSubOption[]; it
       {options.length === 0 && <li className="text-[13.5px] text-[#6b6880]">고를 수 있는 강사가 없어요.</li>}
       {options.map((o) => (
         <li key={o.tutorId}>
-          <button type="button" disabled={busy || o.free === 0} onClick={() => pick(o.tutorId, items.filter((i) => !o.busyDates.includes(md(i))).map((i) => i.id))}
+          <button type="button" disabled={busy || (o.free === 0 && !(items.length === 1 && o.offHours.length === 1))}
+            onClick={() => pick(o.tutorId, items.filter((i) => !o.busyDates.includes(md(i)) && (items.length === 1 || !o.offHours.includes(md(i)))).map((i) => i.id))}
             className="flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2 text-left disabled:bg-[#faf9fd] disabled:text-[#b9b6c8]">
             <b className="text-[15px]">{o.name}</b>
             <span className="flex-1 text-right text-[13px] text-[#6b6880]">
-              {o.free === items.length ? `${o.free}회 모두 가능` : `${o.free}회 가능 · ${o.busyDates.join('·')} 불가`}
+              {[o.free === items.length ? `${o.free}회 모두 가능` : `${o.free}회 가능`, o.busyDates.length > 0 && `${o.busyDates.join('·')} 불가`,
+                o.offHours.length > 0 && `${o.offHours.join('·')} 보통 시간 밖`].filter(Boolean).join(' · ')}
             </span>
           </button>
         </li>

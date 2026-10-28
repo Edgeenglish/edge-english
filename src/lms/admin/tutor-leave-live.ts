@@ -94,8 +94,11 @@ export async function studentOk(sb: SupabaseClient, itemIds: string[]): Promise<
   check(await sb.rpc('admin_leave_student_ok', { p_items: itemIds }));
 }
 export async function subOptions(sb: SupabaseClient, itemIds: string[]): Promise<LvSubOption[]> {
-  const rows = check(await sb.rpc('admin_leave_sub_options', { p_items: itemIds })) as { tutor_id: string; name: string; timezone: string; free: number; busy_dates: string[] }[];
-  return rows.map((r) => ({ tutorId: r.tutor_id, name: r.name, timezone: r.timezone, free: r.free, busyDates: r.busy_dates }));
+  const [opt, off] = await Promise.all([sb.rpc('admin_leave_sub_options', { p_items: itemIds }), sb.rpc('admin_leave_sub_off_hours', { p_items: itemIds })]);
+  const rows = check(opt) as { tutor_id: string; name: string; timezone: string; free: number; busy_dates: string[] }[];
+  // 보통 시간 밖 날짜 (2700). 적용 전 DB면 빈 목록
+  const hours = new Map(((off.error ? [] : off.data) as { tutor_id: string; off_hours: string[] }[]).map((r) => [r.tutor_id, r.off_hours]));
+  return rows.map((r) => ({ tutorId: r.tutor_id, name: r.name, timezone: r.timezone, free: r.free, busyDates: r.busy_dates, offHours: hours.get(r.tutor_id) ?? [] }));
 }
 
 export async function makeupOptions(sb: SupabaseClient, itemIds: string[]): Promise<LvMakeupOption[]> {

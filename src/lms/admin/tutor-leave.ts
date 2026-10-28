@@ -45,7 +45,8 @@ export type LvItem = {
 export type LvNoticeEvent = 'leave_options' | 'sub_ask' | 'sub_student' | 'sub_confirmed';
 export type LvNotice = { id: string; itemId: string; event: LvNoticeEvent; recipientKind: 'student' | 'tutor'; recipientId: string; status: 'pending' | 'sent' | 'not_needed'; sentAt: Date | null };
 
-export type LvSubOption = { tutorId: string; name: string; timezone: string; free: number; busyDates: string[] };
+/** free = 보통 수업 시간 안에서 맡을 수 있는 횟수, busyDates = 못 하는 날짜(휴무·다른 수업·불가 답), offHours = 보통 시간 밖(골라도 됨, 2700) */
+export type LvSubOption = { tutorId: string; name: string; timezone: string; free: number; busyDates: string[]; offHours: string[] };
 /** 기존 강사 보강 후보: in_period 지금 수강기간 안 / after_end 종료일 뒤 평소 요일·시간 (확정하면 그날까지 자동 연장) */
 export type LvMakeupOption = { section: 'in_period' | 'after_end'; startsAt: Date };
 
