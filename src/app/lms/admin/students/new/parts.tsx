@@ -3,7 +3,7 @@
 // 신규 학생 등록 화면 조각: 입력 칸, 카드, 강사 고르기, 주간 캘린더 (2026-10-18 대표 최종 시안)
 
 import { useMemo, useRef, useState } from 'react';
-import { cellState, clashes, withinAvailability, type AvailabilityWindow, type CellState } from '@/lms/rules/booking';
+import { cellState, clashes, startsWithinAvailability, withinAvailability, type AvailabilityWindow, type CellState } from '@/lms/rules/booking';
 import { addDays, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '@/lms/rules/dates';
 import type { RegularSlot } from '@/lms/rules/schedule';
 import { homepageProfile, type HomepageProfile } from '@/lms/admin/homepage-tutor';
@@ -155,7 +155,7 @@ const times = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).
 export function canStartAt(t: RegTutor, date: KstDate, time: string, durationMin: number): boolean {
   const s = kstToInstant(date, time);
   const e = new Date(s.getTime() + durationMin * 60000);
-  return withinAvailability(s, e, t.availability) && clashes(s, e, t.busy).length === 0;
+  return startsWithinAvailability(s, t.availability) && clashes(s, e, t.busy).length === 0;
 }
 
 /** 이번 주에 학생 희망 시간과 맞는 시작 칸 수 (희망 시간이 없으면 가능한 시작 칸 수) */

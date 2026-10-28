@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { kstToInstant } from './dates';
-import { cellState, checkRegularPlan, clashes, firstLessonDateOnOrAfter, withinAvailability, type AvailabilityWindow, type Busy } from './booking';
+import { cellState, checkRegularPlan, clashes, firstLessonDateOnOrAfter, startsWithinAvailability, withinAvailability, type AvailabilityWindow, type Busy } from './booking';
 
 const at = (d: string, t: string) => kstToInstant(d, t);
 const plus = (x: Date, m: number) => new Date(x.getTime() + m * 60000);
@@ -56,7 +56,7 @@ describe('등록기간 전체 검사', () => {
     expect(r.issues.map((i) => [i.kstDate, i.reason])).toEqual([['2026-11-19', 'tutor_time_off'], ['2026-11-24', 'tutor_regular']]);
   });
   it('강사 가능 시간 밖이면 표시', () => {
-    const r = checkRegularPlan({ startDate: '2026-11-03', weeks: 4, slots: [{ weekday: 2, time: '21:30' }], durationMin: 50, tutorBusy: [], availability: seoul });
+    const r = checkRegularPlan({ startDate: '2026-11-03', weeks: 4, slots: [{ weekday: 2, time: '22:30' }], durationMin: 50, tutorBusy: [], availability: seoul });
     expect(r.issues).toHaveLength(4);
     expect(r.issues.every((i) => i.reason === 'outside_availability')).toBe(true);
   });
@@ -77,6 +77,15 @@ describe('서머타임 자동 반영', () => {
   it('기간 검사에서 서머타임 이후 날짜만 가능 시간 밖으로 잡힌다', () => {
     const r = checkRegularPlan({ startDate: '2026-10-19', weeks: 4, slots: [{ weekday: 1, time: '18:00' }], durationMin: 50, tutorBusy: [], availability: london });
     expect(r.issues.map((i) => i.kstDate)).toEqual(['2026-10-26', '2026-11-02', '2026-11-09']);
+  });
+});
+
+describe('강사 가능 시간 = 시작 기준', () => {
+  it('끝 시각에 시작하는 수업까지 가능, 그 뒤는 불가', () => {
+    expect(startsWithinAvailability(at('2026-11-03', '22:00'), seoul)).toBe(true);
+    expect(startsWithinAvailability(at('2026-11-03', '22:30'), seoul)).toBe(false);
+    expect(startsWithinAvailability(at('2026-11-03', '17:30'), seoul)).toBe(false);
+    expect(cellState('2026-11-03', '22:00', 30, [], seoul).state).toBe('available');
   });
 });
 
