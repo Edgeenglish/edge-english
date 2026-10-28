@@ -105,6 +105,16 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(studentWork(groupByStudent(items)[0], m, now).confirm.confirmedMsgs).toHaveLength(2);
   });
 
+  it('학생에게 가는 대체강사 글은 대체강사마다 따로 묶음', () => {
+    const items = [I('a', 's1', '2026-11-09', { ...sub, subStage: 'tutor_ok' }), I('b', 's1', '2026-11-11', { choice: 'substitute', subTutorId: 'j', subTutorName: 'James', subTutorTz: 'Asia/Manila', subStage: 'tutor_ok' })];
+    const notices: LvNotice[] = [
+      { id: 'x1', itemId: 'a', event: 'sub_student', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
+      { id: 'x2', itemId: 'b', event: 'sub_student', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
+    ];
+    const m = leaveMessages(items, notices);
+    expect(m.map((x) => [x.itemIds, x.text.includes('Benny') ? 'Benny' : 'James'])).toEqual([[['a'], 'Benny'], [['b'], 'James']]);
+  });
+
   it('재등록 대기: 재등록 안내에 덧붙일 글 · 대체강사에게 같이 물어볼 날짜(재등록하면)', () => {
     expect(renewalLeaveText('2026-11-02', '2026-11-10')).toBe(
       '참고로 담당 강사님이 11/2~11/10 휴가예요. 이 기간 수업은 ① ⭐추천⭐ 대체강사와 원래 시간에 하시거나 ② 강사님 복귀 뒤 보강으로 하실 수 있고, 수업 횟수는 그대로예요. 어느 쪽이 편하신지 같이 알려 주세요.',

@@ -114,7 +114,7 @@ export function leaveSummary(items: LvItem[], notices: LvNotice[]) {
 // 안내 문구: 학생·강사마다 한 메시지로 (같은 학생·같은 대체강사의 날짜를 모음)
 // ---------------------------------------------------------------------
 
-export type LvMessage = { key: string; event: LvNoticeEvent; recipient: 'student' | 'tutor'; to: string; studentId: string; recipientId: string; noticeIds: string[]; status: 'pending' | 'sent'; text: string };
+export type LvMessage = { key: string; event: LvNoticeEvent; recipient: 'student' | 'tutor'; to: string; studentId: string; recipientId: string; itemIds: string[]; noticeIds: string[]; status: 'pending' | 'sent'; text: string };
 
 /** 아직 안 보낸 안내는 메시지로 묶고, 보낸 것은 최근 것만 따로 보여 줌 */
 export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[] {
@@ -124,7 +124,8 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[]
     if (n.status === 'not_needed') continue;
     const it = byId.get(n.itemId);
     if (!it) continue;
-    const key = `${n.status}|${n.event}|${it.studentId}|${n.recipientId}`;
+    // 학생에게 가는 대체강사 글은 대체강사마다 따로 (날짜마다 대체강사가 다를 수 있음)
+    const key = `${n.status}|${n.event}|${it.studentId}|${n.recipientId}|${n.event === 'sub_student' || n.event === 'sub_confirmed' ? it.subTutorId ?? '' : ''}`;
     const g = groups.get(key) ?? { event: n.event, status: n.status, notices: [], items: [] };
     g.notices.push(n);
     g.items.push(it);
@@ -141,6 +142,7 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[]
       to: recipient === 'student' ? first.studentName : first.subTutorName ?? '대체강사',
       studentId: first.studentId,
       recipientId: g.notices[0].recipientId,
+      itemIds: [...new Set(g.items.map((i) => i.id))],
       noticeIds: g.notices.map((n) => n.id),
       status: g.status,
       text: leaveText(g.event, list, recipient),

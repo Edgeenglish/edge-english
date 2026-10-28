@@ -312,7 +312,18 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
       onCopied={() => setCopied(new Set([...copied, ...m.noticeIds]))}
       onSend={async () => { await actions.markSent(m.noticeIds); setView(n); await done(); }} />
   );
-  const sentOf = (n: number) => sent.filter((m) => (n === 0 ? m.event === 'leave_options' : n === 2 ? m.event === 'sub_ask' : n === 3 && (m.event === 'sub_student' || m.event === 'sub_confirmed')));
+  // 보낸 글은 그 수업이 아직 그 단계 뒤에 있을 때만 (되돌린 뒤 예전 글은 안 보임)
+  const byId = new Map(g.items.map((i) => [i.id, i]));
+  const still = (m: LvMessage) => m.itemIds.every((id) => {
+    const i = byId.get(id);
+    if (!i) return false;
+    if (m.event === 'leave_options') return true;
+    if (i.choice !== 'substitute') return false;
+    if (m.event === 'sub_ask') return m.recipientId === i.subTutorId;
+    if (m.event === 'sub_student') return i.subStage === 'tutor_ok' || i.subStage === 'confirmed';
+    return i.subStage === 'confirmed';
+  });
+  const sentOf = (n: number) => sent.filter((m) => still(m) && (n === 0 ? m.event === 'leave_options' : n === 2 ? m.event === 'sub_ask' : n === 3 && (m.event === 'sub_student' || m.event === 'sub_confirmed')));
 
   // 되돌리기 대상 (지난 수업 제외)
   const future = g.items.filter((i) => i.startsAt > now);
