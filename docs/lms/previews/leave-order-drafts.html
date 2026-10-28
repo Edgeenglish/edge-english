@@ -1,0 +1,238 @@
+<title>강사 휴무 새 순서 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<style>
+/* 레이아웃: 바뀌는 순서 한 줄 → PC 화면(왼쪽 학생 목록 · 오른쪽 학생 카드 1단계) → 휴대폰 화면 3장(2·3·4단계) → 경우별 → 대표 확인 질문 */
+:root {
+  --bg: #f4f3f8; --card: #ffffff; --fg: #1d1b2b; --muted: #6b6880; --line: #e6e3ef;
+  --accent: #7d5fff; --accent-ink: #5b3fe0; --accent-soft: #efebff;
+  --ok: #1e7a46; --ok-soft: #e3f6ea; --wait: #8a5a00; --wait-soft: #fff1d6;
+  --grey: #d9d6e3; --grey-ink: #4a4760; --frame: #2b2838; --msg: #f7f6fb;
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15131f; --card: #1f1c2c; --fg: #ece9f6; --muted: #a29fb6; --line: #34304a;
+  --accent: #9a82ff; --accent-ink: #b9a8ff; --accent-soft: #2c2547;
+  --ok: #7fd9a3; --ok-soft: #1c3527; --wait: #f2c46b; --wait-soft: #3a2f17;
+  --grey: #3a3650; --grey-ink: #c9c5dc; --frame: #4a4660; --msg: #262236; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15131f; --card: #1f1c2c; --fg: #ece9f6; --muted: #a29fb6; --line: #34304a;
+  --accent: #9a82ff; --accent-ink: #b9a8ff; --accent-soft: #2c2547;
+  --ok: #7fd9a3; --ok-soft: #1c3527; --wait: #f2c46b; --wait-soft: #3a2f17;
+  --grey: #3a3650; --grey-ink: #c9c5dc; --frame: #4a4660; --msg: #262236; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 22px; }
+h1 { font-size: 22px; margin: 0; text-wrap: balance; }
+h2 { font-size: 18px; margin: 0; text-wrap: balance; }
+.label { font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: .04em; margin: 0; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.order { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: baseline; margin: 0; }
+.order dt { font-weight: 700; color: var(--muted); font-size: 13.5px; white-space: nowrap; }
+.order dd { margin: 0; }
+.order dd.new { font-weight: 700; color: var(--accent-ink); }
+.flow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; background: var(--accent-soft); border-radius: 12px 12px 0 0; padding: 8px; margin: -12px -12px 4px; }
+.chip { min-height: 32px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 999px; font-size: 13px; border: 1px solid var(--accent); color: var(--accent-ink); background: var(--card); }
+.chip.on { background: var(--accent); color: #fff; font-weight: 700; }
+.chip.off { border-color: transparent; color: var(--muted); opacity: .7; }
+.sep { color: var(--muted); font-weight: 700; }
+.stage { border: 2px solid var(--accent); border-radius: 14px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
+.stage h3 { margin: 0; font-size: 15.5px; color: var(--accent-ink); }
+.block { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 8px; }
+.block h4 { margin: 0; font-size: 14.5px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+td { padding: 8px 6px; border-top: 1px solid var(--line); font-size: 14px; vertical-align: middle; }
+tr:first-child td { border-top: 0; }
+td.when { white-space: nowrap; font-weight: 600; }
+td.act { text-align: right; white-space: nowrap; }
+select { font: 14px var(--sans); min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); padding: 0 6px; max-width: 100%; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.ok { background: var(--ok-soft); color: var(--ok); }
+.wait { background: var(--wait-soft); color: var(--wait); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { min-height: 40px; padding: 0 12px; border-radius: 10px; font: 600 13.5px var(--sans); border: 1px solid var(--accent); background: var(--card); color: var(--accent-ink); cursor: pointer; }
+.btn.main { background: var(--accent); color: #fff; }
+.btn.done { background: var(--grey); border-color: var(--grey); color: var(--grey-ink); cursor: default; }
+.btn.wide { flex: 1; }
+.btn:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.msg { white-space: pre-wrap; background: var(--msg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin: 0; }
+.muted { color: var(--muted); font-size: 13.5px; margin: 0; }
+/* PC 화면 */
+.pc { border: 6px solid var(--frame); border-radius: 14px; background: var(--bg); padding: 14px; display: grid; gap: 12px; overflow-x: auto; }
+.pc-in { min-width: 860px; display: grid; gap: 12px; }
+.pc-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pc-grid { display: grid; grid-template-columns: 270px 1fr; gap: 14px; align-items: start; }
+.list { display: grid; gap: 6px; }
+.li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; }
+.li.sel { border: 2px solid var(--accent); }
+.li b { font-size: 15px; }
+.li span { font-size: 13px; color: var(--accent-ink); font-weight: 600; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+/* 휴대폰 화면 */
+.phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.phone { border: 6px solid var(--frame); border-radius: 28px; background: var(--bg); padding: 14px 10px; display: grid; gap: 10px; max-width: 380px; width: 100%; justify-self: center; min-width: 0; }
+.phone .cap { text-align: center; }
+.q { display: grid; gap: 12px; }
+.q ol { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.q li b { color: var(--accent-ink); }
+.cases { display: grid; gap: 8px; margin: 0; padding-left: 20px; }
+@media (max-width: 640px) { .order { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <p class="label">LMS 반영 목록 16 · 정책 원본 H26(27)</p>
+    <h1>강사 휴무 화면: 대체강사 먼저 확인하고, 학생에게는 한 번만 묻기</h1>
+  </header>
+
+  <section class="box" aria-label="바뀌는 순서">
+    <dl class="order">
+      <dt>지금 화면</dt><dd>1 기존 강사 휴무 안내 › 2 학생 선호 방법 입력 › 3 대체 강사에게 묻기 › 4 학생에게 확정 받기 <span class="muted">(학생이 두 번 답함)</span></dd>
+      <dt>바꿀 화면</dt><dd class="new">1 대체 강사에게 묻기 › 2 학생에게 휴무 안내 · 대체 강사 제안 › 3 학생 답 입력 › 4 확정 안내 보내기</dd>
+    </dl>
+    <p class="muted">DB 처리 함수(대체강사 묻기·강사 가능·학생 OK·기존 강사와 보강)는 지금 것을 그대로 씀. 바뀌는 것은 화면 순서와 학생에게 가는 글(휴무 안내 + 대체강사 제안이 글 하나로).</p>
+  </section>
+
+  <section style="display:grid;gap:10px" aria-label="PC 화면">
+    <h2>PC · 1단계 대체 강사에게 묻기</h2>
+    <div class="pc">
+      <div class="pc-in">
+        <div class="pc-top">
+          <span class="chip on">Olivia 11/2(월)~11/10(화)</span>
+          <span class="chip">+ 강사 휴무 등록</span>
+          <span class="muted">학생 3명 · 수업 7회 · 할 일: 대체 강사에게 묻기 2명 · 학생 답 입력 1명</span>
+        </div>
+        <div class="pc-grid">
+          <div class="list" aria-label="학생 목록">
+            <div class="li sel"><b>정유진</b><span>1 대체 강사에게 묻기</span></div>
+            <div class="li"><b>한도훈</b><span>1 대체 강사에게 묻기</span></div>
+            <div class="li"><b>오세린</b><span>3 학생 답 입력</span></div>
+          </div>
+          <div class="card">
+            <h2>정유진 <span class="muted" style="display:inline">STU-0102</span></h2>
+            <div class="stage">
+              <div class="flow">
+                <span class="chip on">1 대체 강사에게 묻기</span><span class="sep">›</span>
+                <span class="chip off">2 학생에게 휴무 안내 · 대체 강사 제안</span><span class="sep">›</span>
+                <span class="chip off">3 학생 답 입력</span><span class="sep">›</span>
+                <span class="chip off">4 확정 안내 보내기</span>
+              </div>
+              <div class="block">
+                <h4>날짜마다 대체 강사 고르기</h4>
+                <table>
+                  <tr><td class="when">11/2(월) 오전 11:00</td><td><select aria-label="11/2 대체 강사"><option>Maria</option><option>Benny</option><option>대체 강사 없음 → 보강</option></select></td><td class="act"><span class="pill wait">Maria 답 대기</span></td></tr>
+                  <tr><td class="when">11/4(수) 오전 11:00</td><td><select aria-label="11/4 대체 강사"><option>Maria</option><option>대체 강사 없음 → 보강</option></select></td><td class="act"><span class="pill wait">Maria 답 대기</span></td></tr>
+                  <tr><td class="when">11/9(월) 오전 11:00</td><td><select aria-label="11/9 대체 강사"><option>대체 강사 없음 → 보강</option><option>Maria</option></select></td><td class="act"><span class="pill ok">보강으로 제안</span></td></tr>
+                </table>
+              </div>
+              <div class="block">
+                <h4>Maria 강사님에게 수업 가능 여부 묻기</h4>
+                <pre class="msg">Hi Maria, one of our Edge English tutors is on leave. Could you cover these classes at the same times?
+
+Mon, Nov 2 · 9:00 AM (your time)
+Wed, Nov 4 · 9:00 AM (your time)
+
+If you can't do all of them, just let us know which ones work.</pre>
+                <div class="row"><button class="btn done" type="button">복사함 ✓</button><button class="btn done" type="button">보냄 ✓</button></div>
+                <table>
+                  <tr><td class="when">11/2(월) 오전 11:00</td><td class="act"><button class="btn main" type="button">가능</button> <button class="btn" type="button">불가</button></td></tr>
+                  <tr><td class="when">11/4(수) 오전 11:00</td><td class="act"><button class="btn main" type="button">가능</button> <button class="btn" type="button">불가</button></td></tr>
+                </table>
+              </div>
+              <button class="btn main wide" type="button" disabled style="opacity:.55">2 학생에게 휴무 안내 · 대체 강사 제안 ›</button>
+              <p class="muted">강사 답이 모두 들어와야 다음 단계 버튼이 눌림. 불가 날짜는 다른 대체 강사를 고르거나 '보강'으로.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:10px" aria-label="휴대폰 화면">
+    <h2>휴대폰 · 2·3·4단계 (같은 학생 카드, 단계 줄은 가로로 넘김)</h2>
+    <div class="phones">
+      <div class="phone">
+        <p class="label cap">2단계</p>
+        <div class="card">
+          <h2>정유진</h2>
+          <div class="stage">
+            <div class="flow"><span class="chip">✓ 1 대체 강사에게 묻기</span><span class="chip on">2 학생에게 휴무 안내 · 대체 강사 제안</span></div>
+            <pre class="msg">[엣지영어] 정유진님, 담당 강사님 휴무로 아래 수업은 대체강사와 평소 시간에 진행하려고 해요. 강사님 프로필도 함께 보내 드려요.
+
+11/2(월) 오전 11시 · Maria 강사님
+11/4(수) 오전 11시 · Maria 강사님
+
+11/9(월) 오전 11시 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.
+
+기존 강사님과 보강을 원하시면 말씀해 주세요.</pre>
+            <div class="row"><button class="btn" type="button">복사</button><button class="btn main" type="button">보냄</button></div>
+            <div class="block"><h4>Maria 프로필</h4><div class="row"><button class="btn" type="button">프로필 링크 복사</button></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone">
+        <p class="label cap">3단계</p>
+        <div class="card">
+          <h2>정유진</h2>
+          <div class="stage">
+            <div class="flow"><span class="chip on">3 학생 답 입력</span></div>
+            <table>
+              <tr><td class="when">11/2(월) 오전 11:00<br><span class="muted">Maria</span></td><td class="act"><button class="btn main" type="button">좋아요</button></td></tr>
+              <tr><td class="when">11/4(수) 오전 11:00<br><span class="muted">Maria</span></td><td class="act"><button class="btn main" type="button">좋아요</button></td></tr>
+              <tr><td class="when">11/9(월) 오전 11:00<br><span class="muted">보강</span></td><td class="act"><span class="pill ok">보강 · 답 필요 없음</span></td></tr>
+            </table>
+            <div class="row"><button class="btn main wide" type="button">모두 좋아요</button><button class="btn wide" type="button">모두 기존 강사와 보강</button></div>
+            <p class="muted">날짜마다 다르면 각 줄에서: [좋아요] 옆 ⋯ → '기존 강사와 보강'</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone">
+        <p class="label cap">4단계</p>
+        <div class="card">
+          <h2>정유진</h2>
+          <div class="stage">
+            <div class="flow"><span class="chip on">4 확정 안내 보내기</span></div>
+            <div class="block">
+              <h4>학생에게</h4>
+              <pre class="msg">[엣지영어] 정유진님, 아래 수업 Maria 강사님과 확정됐어요.
+
+11/2(월) 오전 11시
+11/4(수) 오전 11시</pre>
+              <div class="row"><button class="btn done" type="button">복사함 ✓</button><button class="btn main" type="button">보냄</button></div>
+            </div>
+            <div class="block">
+              <h4>Maria 강사님에게</h4>
+              <div class="row"><button class="btn" type="button">복사</button><button class="btn main" type="button">보냄</button></div>
+            </div>
+            <div class="block">
+              <h4>11/9 보강</h4>
+              <button class="btn wide" type="button">수업 변경 화면에서 보강 날짜 잡기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="box" aria-label="경우별">
+    <h2>경우별로 2단계 글이 달라지는 것</h2>
+    <ul class="cases">
+      <li><b>모든 날짜 대체 가능</b>: 대체강사 날짜만 넣은 글 (위 글에서 '보강으로 잡아 드려요' 줄 없음)</li>
+      <li><b>일부 날짜만 가능</b>: 가능한 날짜는 강사 이름과 함께, 나머지는 다른 대체강사 또는 '보강으로 잡아 드려요' (위 예시)</li>
+      <li><b>아무도 안 됨</b>: 대체강사 줄 없이 휴무 안내 + 보강 안내만. 3단계 없이 바로 보강 날짜 잡기</li>
+      <li><b>학생이 '기존 강사와 보강'을 고름</b>: 그 날짜는 대체 묻기를 닫고(대체강사에게는 '취소' 글) 보강으로</li>
+    </ul>
+  </section>
+
+  <section class="box q" aria-label="대표 확인">
+    <h2>대표님 확인 3가지</h2>
+    <ol>
+      <li><b>단계 이름</b>: 1 대체 강사에게 묻기 · 2 학생에게 휴무 안내 · 대체 강사 제안 · 3 학생 답 입력 · 4 확정 안내 보내기 — 이대로? (다른 이름이면 알려 주세요)</li>
+      <li><b>2단계 학생 글</b>: 위 휴대폰 2단계 글 그대로 써도 되는지. 지금 화면의 ①/② 두 가지 선택 글(⭐추천⭐ 대체강사 / 기존 강사와 보강)은 없어짐</li>
+      <li><b>대체 강사가 '불가'인 날짜</b>: 1단계에서 다른 대체 강사를 바로 고르게 할지(위 시안), 아니면 그 날짜는 자동으로 '보강'으로 넘길지</li>
+    </ol>
+  </section>
+</div>
