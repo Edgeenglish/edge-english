@@ -40,7 +40,7 @@ export default function OriginFix({ items, onSave }: { items: { id: string; labe
               type="button"
               disabled={!dates[o.id] || busy === o.id}
               onClick={() => run(o.id, dates[o.id])}
-              className="min-h-[40px] rounded-[10px] border border-[#7d5fff] bg-[#7d5fff] px-3 text-[13.5px] font-semibold text-white disabled:border-[#cfc4ff] disabled:bg-[#cfc4ff]"
+              className="min-h-[40px] rounded-[10px] border border-[#7d5ffb] bg-[#7d5ffb] px-3 text-[13.5px] font-semibold text-white disabled:border-[#cfc4ff] disabled:bg-[#cfc4ff]"
             >
               저장
             </button>

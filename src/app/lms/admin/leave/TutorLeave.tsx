@@ -36,7 +36,7 @@ export type LeaveActions = {
   renewals: (timeOffId: string) => Promise<LvRenewal[]>;
 };
 
-const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5fff] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
+const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5ffb] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-3.5 text-[14px] text-[#1d1b2b] disabled:text-[#b9b6c8]';
 /** 누른 버튼: 회색으로 꽉 차게 (눌린 티) */
 const btnDone = 'min-h-[44px] rounded-[10px] border border-[#c9c6d6] bg-[#d9d6e3] px-3.5 text-[14px] font-bold text-[#4a4760]';
@@ -125,7 +125,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
         <div className="flex flex-wrap items-center gap-1.5">
           {leaves.map((l) => (
             <button key={l.id} type="button" aria-pressed={l.id === offId} onClick={() => setOffId(l.id === offId ? null : l.id)}
-              className={`min-h-[40px] rounded-full border px-3.5 text-[14px] ${l.id === offId ? 'border-[#7d5fff] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
+              className={`min-h-[40px] rounded-full border px-3.5 text-[14px] ${l.id === offId ? 'border-[#7d5ffb] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
               {l.tutorName} · {dateLabel(l.from)} ~ {dateLabel(l.to)}
             </button>
           ))}
@@ -151,7 +151,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
                     return (
                       <li key={g.studentId}>
                         <button type="button" aria-pressed={on} onClick={() => setSel(g.studentId)}
-                          className={`grid w-full gap-0.5 rounded-[12px] border px-3 py-2.5 text-left ${on ? 'border-[#7d5fff] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
+                          className={`grid w-full gap-0.5 rounded-[12px] border px-3 py-2.5 text-left ${on ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
                           <b className="text-[15px] text-[#1d1b2b]">{g.studentName}</b>
                           <span className="text-[12.5px] text-[#6b6880]">{dateLabel(instantToKstDate(g.items[0].startsAt))}{g.items.length > 1 ? ` ~ ${dateLabel(instantToKstDate(g.items[g.items.length - 1].startsAt))}` : ''} · {g.items.length}회</span>
                           <span className="text-[13px] font-semibold text-[#5b3fe0]">{LV_STEP_TEXT[w.steps[0] ?? 'done']}</span>
@@ -165,7 +165,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
                     return (
                       <li key={r.studentId}>
                         <button type="button" aria-pressed={on} onClick={() => setSel(`r:${r.studentId}`)}
-                          className={`grid w-full gap-0.5 rounded-[12px] border px-3 py-2.5 text-left ${on ? 'border-[#7d5fff] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
+                          className={`grid w-full gap-0.5 rounded-[12px] border px-3 py-2.5 text-left ${on ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
                           <b className="text-[15px] text-[#1d1b2b]">{r.studentName}</b>
                           <span className="text-[12.5px] text-[#6b6880]">{dateLabel(r.endDate)} 종료 · 재등록하면 {r.dates.length}회</span>
                         </button>
@@ -406,7 +406,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
       if (w.confirm.makeupRequested.length) out.push(
         <Block key="mk" title={`${leaveTutor} 강사님 확인 후 보강 확정`}>
           <ItemList items={w.confirm.makeupRequested} />
-          <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5fff] text-[14px] font-semibold text-[#5b3fe0]">
+          <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5ffb] text-[14px] font-semibold text-[#5b3fe0]">
             보강 확정
           </Link>
         </Block>,
@@ -430,7 +430,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
   return (
     <Card title={<>{g.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{g.studentCode}</span></>}>
       {/* 단계 줄과 단계 화면을 한 상자로: 단계 이름은 누르든 안 누르든 같음(2026-10-28 대표), 오른쪽 [← 뒤로] */}
-      <section aria-label={sel < 4 ? `${sel + 1}단계` : '완료'} className="grid gap-2 rounded-[14px] border-2 border-[#7d5fff] p-3">
+      <section aria-label={sel < 4 ? `${sel + 1}단계` : '완료'} className="grid gap-2 rounded-[14px] border-2 border-[#7d5ffb] p-3">
         <div className="-mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-1 rounded-t-[12px] bg-[#efebff] px-2 py-2">
           {chips.map((label, n) => {
             const on = sel === n;
@@ -439,7 +439,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
               <span key={label} className="flex items-center gap-1">
                 {n > 0 && <span aria-hidden className="text-[15px] font-bold text-[#9a90c8]">›</span>}
                 <button type="button" aria-pressed={on} disabled={!open} onClick={() => setView(n)}
-                  className={`min-h-[34px] rounded-full px-3 text-[13px] ${on ? 'bg-[#7d5fff] text-[14px] font-extrabold text-white' : open ? 'border border-[#7d5fff] bg-white text-[#5b3fe0]' : 'bg-white/60 text-[#b9b6c8]'}`}>
+                  className={`min-h-[34px] rounded-full px-3 text-[13px] ${on ? 'bg-[#7d5ffb] text-[14px] font-extrabold text-white' : open ? 'border border-[#7d5ffb] bg-white text-[#5b3fe0]' : 'bg-white/60 text-[#b9b6c8]'}`}>
                   {n < cur && !on ? '✓ ' : ''}{label}
                 </button>
               </span>
@@ -448,7 +448,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
           {cur === 4 && <span className="ml-1 rounded-full bg-[#e3f6ea] px-3 py-1 text-[13px] font-bold text-[#1e7a46]">완료</span>}
           {back.length > 0 && (
             <button type="button" disabled={r.busy} onClick={() => r.run(async () => { for (const b of back) await (b.to === 'unsend' ? actions.unsend(b.ids) : actions.back(b.ids, b.to)); }, () => setView(sel - 1))}
-              className="ml-auto min-h-[34px] rounded-[8px] border border-[#7d5fff] bg-white px-3 text-[13.5px] font-bold text-[#5b3fe0] disabled:opacity-60">
+              className="ml-auto min-h-[34px] rounded-[8px] border border-[#7d5ffb] bg-white px-3 text-[13.5px] font-bold text-[#5b3fe0] disabled:opacity-60">
               ← 뒤로
             </button>
           )}

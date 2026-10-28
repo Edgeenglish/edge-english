@@ -84,7 +84,7 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
         <>
           <p className="text-[13px] text-[#6b6880]">{view.proposalSentAt ? `제안 보냄 ${sentLabel(view.proposalSentAt)}` : '강사에게 아직 제안 안 함'}</p>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled={busy} onClick={() => run(handlers.confirm)} className="col-span-2 min-h-[50px] rounded-[12px] bg-[#7d5fff] text-[15.5px] font-bold text-white disabled:bg-[#cfc4ff]">
+            <button type="button" disabled={busy} onClick={() => run(handlers.confirm)} className="col-span-2 min-h-[50px] rounded-[12px] bg-[#7d5ffb] text-[15.5px] font-bold text-white disabled:bg-[#cfc4ff]">
               가능하대요 → 확정
             </button>
             {asking ? (
@@ -142,7 +142,7 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
                         type="button"
                         disabled={busy || !n}
                         onClick={() => run(() => handlers.noticeSent(who))}
-                        className="min-h-[44px] rounded-[10px] bg-[#7d5fff] px-3 text-[14px] font-bold text-white disabled:bg-[#cfc4ff]"
+                        className="min-h-[44px] rounded-[10px] bg-[#7d5ffb] px-3 text-[14px] font-bold text-white disabled:bg-[#cfc4ff]"
                       >
                         보냄
                       </button>
@@ -167,7 +167,7 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
               setManual(null);
               if (d) run(d);
             }}
-            className="mt-2 min-h-[44px] w-full rounded-[10px] bg-[#7d5fff] text-[14px] font-bold text-white"
+            className="mt-2 min-h-[44px] w-full rounded-[10px] bg-[#7d5ffb] text-[14px] font-bold text-white"
           >
             {manual.done ? '복사했어요' : '닫기'}
           </button>
