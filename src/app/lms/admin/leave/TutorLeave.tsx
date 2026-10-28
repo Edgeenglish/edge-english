@@ -383,45 +383,42 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
 
   return (
     <Card title={<>{g.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{g.studentCode}</span></>}>
-      <div className="mb-3 flex flex-wrap items-center gap-1">
-        {chips.map((label, n) => {
-          const on = sel === n;
-          const open = canOpen(n);
-          return (
-            <span key={label} className="flex items-center gap-1">
-              {n > 0 && <span aria-hidden className="text-[15px] font-bold text-[#b9b6c8]">›</span>}
-              <button type="button" aria-pressed={on} disabled={!open} onClick={() => setView(n)}
-                className={`min-h-[34px] rounded-full px-3 text-[13px] ${on ? 'bg-[#7d5fff] font-bold text-white' : open ? 'border border-[#7d5fff] bg-white text-[#5b3fe0]' : 'bg-[#f3f2f7] text-[#b9b6c8]'}`}>
-                {n < cur ? '✓ ' : ''}{label}
-              </button>
-            </span>
-          );
-        })}
-        {cur === 4 && <span className="ml-1 rounded-full bg-[#e3f6ea] px-3 py-1 text-[13px] font-bold text-[#1e7a46]">완료</span>}
-      </div>
-
-      <div className="grid gap-3">
-        {sel < 4 && (
-          <section aria-label={`${sel + 1}단계`} className="grid gap-2 rounded-[14px] border-2 border-[#7d5fff] p-3">
-            <h3 className="-mx-3 -mt-3 mb-1 flex items-center gap-2 rounded-t-[12px] bg-[#7d5fff] px-3 py-2 text-[15.5px] font-extrabold text-white">
-              <span className="flex-1">{sel + 1}단계 · {STEP_TITLE[sel === 2 && w.makeup.length && !w.tutor.length ? 4 : sel]}</span>
-              {back.length > 0 && (
-                <button type="button" disabled={r.busy} onClick={() => r.run(async () => { for (const b of back) await actions.back(b.ids, b.to); }, () => setView(sel - 1))}
-                  className="min-h-[34px] rounded-[8px] bg-white px-3 text-[13.5px] font-bold text-[#5b3fe0] disabled:opacity-60">
-                  ← 뒤로
+      {/* 단계 줄과 단계 화면을 한 상자로: 고른 단계는 이름 전체(예: '2 학생이 고른 방법 입력'), 오른쪽 [← 뒤로] */}
+      <section aria-label={sel < 4 ? `${sel + 1}단계` : '완료'} className="grid gap-2 rounded-[14px] border-2 border-[#7d5fff] p-3">
+        <div className="-mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-1 rounded-t-[12px] bg-[#efebff] px-2 py-2">
+          {chips.map((label, n) => {
+            const on = sel === n;
+            const open = canOpen(n);
+            const title = on ? `${n + 1} ${STEP_TITLE[n === 2 && w.makeup.length && !w.tutor.length ? 4 : n]}` : label;
+            return (
+              <span key={label} className="flex items-center gap-1">
+                {n > 0 && <span aria-hidden className="text-[15px] font-bold text-[#9a90c8]">›</span>}
+                <button type="button" aria-pressed={on} disabled={!open} onClick={() => setView(n)}
+                  className={`min-h-[34px] rounded-full px-3 text-[13px] ${on ? 'bg-[#7d5fff] text-[14px] font-extrabold text-white' : open ? 'border border-[#7d5fff] bg-white text-[#5b3fe0]' : 'bg-white/60 text-[#b9b6c8]'}`}>
+                  {n < cur && !on ? '✓ ' : ''}{title}
                 </button>
-              )}
-            </h3>
+              </span>
+            );
+          })}
+          {cur === 4 && sel === 4 && <span className="ml-1 rounded-full bg-[#e3f6ea] px-3 py-1 text-[13px] font-bold text-[#1e7a46]">완료</span>}
+          {back.length > 0 && (
+            <button type="button" disabled={r.busy} onClick={() => r.run(async () => { for (const b of back) await actions.back(b.ids, b.to); }, () => setView(sel - 1))}
+              className="ml-auto min-h-[34px] rounded-[8px] border border-[#7d5fff] bg-white px-3 text-[13.5px] font-bold text-[#5b3fe0] disabled:opacity-60">
+              ← 뒤로
+            </button>
+          )}
+        </div>
+        {sel < 4 && (
+          <>
             {todo(sel)}
             {sentOf(sel).map((m) => msg(m, sel))}
             {nextStep !== undefined && (
               <button type="button" className={btnMain} onClick={() => setView(nextStep)}>{chips[nextStep]} ›</button>
             )}
-            <Err>{r.err}</Err>
-          </section>
+          </>
         )}
-
-      </div>
+        <Err>{r.err}</Err>
+      </section>
     </Card>
   );
 }
