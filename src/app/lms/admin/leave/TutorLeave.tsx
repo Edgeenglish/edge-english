@@ -339,17 +339,25 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
     return [];
   };
 
+  // 2단계 화면: 이미 고른 날짜도 상태와 함께 그대로, 날짜마다 [다시 선택](학생 답 전으로). 고를 것은 '학생 선택 미확인'만
+  const reselectable = future.filter((i) => i.choice === 'substitute' || (i.choice === 'wait' && !i.makeupAt && !i.makeupRequested));
+  const answerPage = (
+    <div key="answer" className="grid gap-2">
+      <ItemList items={g.items} action={(i) => reselectable.includes(i) && (
+        <button type="button" disabled={r.busy} onClick={() => r.run(() => actions.back([i.id], 'undecided'), () => setView(1))}
+          className="min-h-[34px] rounded-[8px] border border-[#7d5fff] bg-white px-2.5 text-[13px] font-semibold text-[#5b3fe0]">
+          다시 선택
+        </button>
+      )} />
+      {w.answer.length > 0 && <ChooseBox items={w.answer} actions={actions} done={next} />}
+    </div>
+  );
+
   // 단계마다 할 일
   const c = w.confirm;
   const todo = (n: number): React.ReactNode[] => {
     if (n === 0) return w.notify.map((m) => msg(m, 0));
-    if (n === 1) return w.answer.length ? [
-      <div key="answer" className="grid gap-2">
-        {/* 이미 고른 날짜도 그대로 보여 줌 (상태 표시), 고를 것은 '학생 선택 미확인'만 */}
-        <ItemList items={g.items} />
-        <ChooseBox items={w.answer} actions={actions} done={next} />
-      </div>,
-    ] : [];
+    if (n === 1) return w.answer.length ? [answerPage] : [];
     if (n === 2) return [
       ...w.tutor.map((t) => (
         <Block key={`t-${t.subTutorId}`} title={`${t.subTutorName} 강사님에게 물어보기`}>
@@ -376,7 +384,7 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
   // 누를 수 있는 단계: 지금 단계 · 할 일이 있는 단계 (보냄 뒤 머무는 단계 포함)
   // 모두 끝난 학생은 4단계(확정) 화면을 보여 줌 — 보낸 확정 안내와 [← 뒤로]
   const home = cur === 4 && (sentOf(3).length > 0 || backOf(3).length > 0) ? 3 : cur;
-  const canOpen = (n: number) => n === home || todo(n).length > 0 || (n === view && sentOf(n).length > 0);
+  const canOpen = (n: number) => n === home || todo(n).length > 0 || (n === view && sentOf(n).length > 0) || (n === 1 && reselectable.length > 0);
   const sel = view !== null && canOpen(view) ? view : home;
   const nextStep = todo(sel).length === 0 ? [0, 1, 2, 3].find((n) => n > sel && todo(n).length > 0) : undefined;
   const back = backOf(sel);
@@ -410,7 +418,7 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
         </div>
         {sel < 4 && (
           <>
-            {todo(sel)}
+            {sel === 1 ? answerPage : todo(sel)}
             {sentOf(sel).map((m) => msg(m, sel))}
             {nextStep !== undefined && (
               <button type="button" className={btnMain} onClick={() => setView(nextStep)}>{chips[nextStep]} ›</button>
@@ -462,15 +470,16 @@ function CopyBox({ title, text }: { title: string; text: string }) {
   );
 }
 
-function ItemList({ items }: { items: LvItem[] }) {
+function ItemList({ items, action }: { items: LvItem[]; action?: (i: LvItem) => React.ReactNode }) {
   return (
     <ul className="grid gap-1.5">
       {items.map((i) => {
         const s = itemStatus(i);
         return (
-          <li key={i.id} className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
+          <li key={i.id} className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
             <span className="text-[14.5px] text-[#1d1b2b]">{kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'}</span>
             <span className={`ml-auto rounded-[6px] px-2 py-0.5 text-[12px] font-bold ${TONE[s.tone]}`}>{s.text}</span>
+            {action?.(i)}
           </li>
         );
       })}
