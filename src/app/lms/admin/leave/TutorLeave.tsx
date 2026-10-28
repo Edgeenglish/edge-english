@@ -345,7 +345,8 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
     if (n === 0) return w.notify.map((m) => msg(m, 0));
     if (n === 1) return w.answer.length ? [
       <div key="answer" className="grid gap-2">
-        <ItemList items={w.answer} />
+        {/* 이미 고른 날짜도 그대로 보여 줌 (상태 표시), 고를 것은 '학생 선택 미확인'만 */}
+        <ItemList items={g.items} />
         <ChooseBox items={w.answer} actions={actions} done={next} />
       </div>,
     ] : [];
