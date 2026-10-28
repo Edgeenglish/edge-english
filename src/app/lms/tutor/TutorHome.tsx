@@ -74,7 +74,10 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       {adminBar}
       <header className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="text-[13px] font-semibold text-[#5b3fe0]">Edge English · Tutor</p>
+          <p className="mb-1.5 flex items-center gap-1.5">
+            <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
+            <span className="rounded-[6px] bg-[#27230e] px-[7px] py-[3px] text-[12px] font-extrabold text-[#ffd401]">Tutor</span>
+          </p>
           <h1 className="text-[22px] font-bold text-[#1d1b2b]">{screen.tutor.name}</h1>
           <p className="text-[13px] text-[#6b6880]">Your time · {tz}</p>
         </div>
