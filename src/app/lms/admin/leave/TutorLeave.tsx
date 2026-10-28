@@ -30,6 +30,8 @@ export type LeaveActions = {
   makeupOptions: (itemIds: string[]) => Promise<LvMakeupOption[]>;
   requestMakeup: (source: { lessonId?: string; itemId?: string }, slots: Date[]) => Promise<void>;
   back: (itemIds: string[], to: 'undecided' | 'asked' | 'tutor_ok') => Promise<void>;
+  /** 휴무 안내 '보냄'을 안 보냄으로 (모든 날짜가 학생 선택 미확인일 때만) */
+  unsend: (noticeIds: string[]) => Promise<void>;
   renewals: (timeOffId: string) => Promise<LvRenewal[]>;
 };
 
@@ -324,7 +326,12 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
 
   // [← 뒤로]: 지금 보는 단계의 수업을 바로 앞 단계로 (3단계 → 학생 답 전, 4단계 → 확정 전·강사 답 전). 지난 수업·보강 신청이 있는 수업은 빼고
   const future = g.items.filter((i) => i.startsAt > now);
-  const backOf = (n: number): { ids: string[]; to: 'undecided' | 'asked' | 'tutor_ok' }[] => {
+  const backOf = (n: number): { ids: string[]; to: 'undecided' | 'asked' | 'tutor_ok' | 'unsent' }[] => {
+    // 2단계 → 1단계: 아직 아무것도 안 골랐을 때만, 보낸 휴무 안내를 안 보냄으로
+    if (n === 1) {
+      const ids = g.items.every((i) => i.choice === 'undecided') ? sent.filter((m) => m.event === 'leave_options').flatMap((m) => m.noticeIds) : [];
+      return ids.length ? [{ ids, to: 'unsent' }] : [];
+    }
     if (n === 2) {
       const ids = future.filter((i) => (i.choice === 'substitute' && i.subStage === 'asked') || (i.choice === 'wait' && !i.makeupAt && !i.makeupRequested)).map((i) => i.id);
       return ids.length ? [{ ids, to: 'undecided' }] : [];
@@ -382,14 +389,15 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
   // 누를 수 있는 단계: 지금 단계 · 할 일이 있는 단계 (보냄 뒤 머무는 단계 포함)
   // 모두 끝난 학생은 4단계(확정) 화면을 보여 줌 — 보낸 확정 안내와 [← 뒤로]
   const home = cur === 4 && (sentOf(3).length > 0 || backOf(3).length > 0) ? 3 : cur;
-  const canOpen = (n: number) => n === home || todo(n).length > 0 || (n === view && sentOf(n).length > 0) || (n === 1 && reselectable.length > 0);
+  // 1단계는 보낸 휴무 안내를 다시 볼 수 있게 늘 열림
+  const canOpen = (n: number) => n === home || todo(n).length > 0 || (n === view && sentOf(n).length > 0) || (n === 1 && reselectable.length > 0) || (n === 0 && sentOf(0).length > 0);
   const sel = view !== null && canOpen(view) ? view : home;
   const nextStep = todo(sel).length === 0 ? [0, 1, 2, 3].find((n) => n > sel && todo(n).length > 0) : undefined;
   const back = backOf(sel);
 
   return (
     <Card title={<>{g.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{g.studentCode}</span></>}>
-      {/* 단계 줄과 단계 화면을 한 상자로: 고른 단계는 이름 전체(예: '2 학생이 고른 방법 입력'), 오른쪽 [← 뒤로] */}
+      {/* 단계 줄과 단계 화면을 한 상자로: 단계 이름은 누르든 안 누르든 같음(2026-10-28 대표), 오른쪽 [← 뒤로] */}
       <section aria-label={sel < 4 ? `${sel + 1}단계` : '완료'} className="grid gap-2 rounded-[14px] border-2 border-[#7d5fff] p-3">
         <div className="-mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-1 rounded-t-[12px] bg-[#efebff] px-2 py-2">
           {chips.map((label, n) => {
@@ -407,7 +415,7 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
           })}
           {cur === 4 && sel === 4 && <span className="ml-1 rounded-full bg-[#e3f6ea] px-3 py-1 text-[13px] font-bold text-[#1e7a46]">완료</span>}
           {back.length > 0 && (
-            <button type="button" disabled={r.busy} onClick={() => r.run(async () => { for (const b of back) await actions.back(b.ids, b.to); }, () => setView(sel - 1))}
+            <button type="button" disabled={r.busy} onClick={() => r.run(async () => { for (const b of back) await (b.to === 'unsent' ? actions.unsend(b.ids) : actions.back(b.ids, b.to)); }, () => setView(sel - 1))}
               className="ml-auto min-h-[34px] rounded-[8px] border border-[#7d5fff] bg-white px-3 text-[13.5px] font-bold text-[#5b3fe0] disabled:opacity-60">
               ← 뒤로
             </button>

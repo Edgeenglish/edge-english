@@ -86,6 +86,10 @@ export async function subTutorOk(sb: SupabaseClient, itemIds: string[]): Promise
 export async function leaveBack(sb: SupabaseClient, itemIds: string[], to: 'undecided' | 'asked' | 'tutor_ok'): Promise<void> {
   check(await sb.rpc('admin_leave_back', { p_items: itemIds, p_to: to }));
 }
+/** 휴무 안내 '보냄' 되돌리기 (모든 날짜가 학생 선택 미확인일 때만 — DB가 확인) */
+export async function unsendNotices(sb: SupabaseClient, noticeIds: string[]): Promise<void> {
+  check(await sb.rpc('admin_leave_notice_unsend', { p_notices: noticeIds }));
+}
 export async function studentOk(sb: SupabaseClient, itemIds: string[]): Promise<void> {
   check(await sb.rpc('admin_leave_student_ok', { p_items: itemIds }));
 }
