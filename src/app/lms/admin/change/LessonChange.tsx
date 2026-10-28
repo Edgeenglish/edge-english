@@ -371,11 +371,17 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
             <div key={+t} className="flex items-center gap-2">
               <span className="flex-1 text-[15px] text-[#1d1b2b]">
                 {kstLabel(t)}
+                {open.tutorAnswers?.[+t] && (
+                  <b className={`ml-1.5 text-[13px] ${open.tutorAnswers[+t] === 'yes' ? 'text-[#1f7a4d]' : 'text-[#b3261e]'}`}>
+                    {open.tutorAnswers[+t] === 'yes' ? '강사 가능' : '강사 불가'}
+                  </b>
+                )}
                 <span className="block"><Local at={t} /></span>
               </span>
               <button type="button" disabled={busy} className={btnMain} onClick={() => run(() => actions.confirmMakeup(open.id, t))}>확정</button>
             </div>
           ))}
+          {open.tutorNote && <p className="rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] text-[#1d1b2b]">강사 메모: {open.tutorNote}</p>}
           <div className="grid grid-cols-[1.4fr_1fr_auto] gap-1.5">
             <input type="date" aria-label="다른 보강 날짜" value={other.date} onChange={(e) => setOther({ ...other, date: e.target.value })} className={inputCls(false)} />
             <TimeInput aria-label="다른 보강 시각" value={other.time} onChange={(v) => setOther({ ...other, time: v })} className={inputCls(false)} />

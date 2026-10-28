@@ -1435,3 +1435,148 @@ select pg_temp.expect_error($$select admin_renewal_notice_sent((select eid from 
 select pg_temp.ok((select count(*) from renewal_notices) = 0, '학생은 재등록 안내 기록을 볼 수도 기록할 수도 없음');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------- ② 강사 LMS: 수업 일정 · Class Record 입력 · 보강 가능 여부 답 (migration 2000) ----------
+-- 강사 기록A(본인)·기록B(다른 강사), 학생 '기록학생' 4주·주2회·40분
+-- 수업: 1 지난 정규 · 2 내일 정규 · 3 지난 보강(원래 0 강사 정상 취소) · 4 지난 정규(대체 진행) · 5 학생 정상 취소(보강 신청용) · 6 지난 정규(정산 들어감)
+reset role;
+insert into tutors (id, name, country, timezone) values
+  ('55555555-0000-0000-0000-00000000200a', '기록A', 'Australia', 'Australia/Sydney'),
+  ('55555555-0000-0000-0000-00000000200b', '기록B', 'Korea', 'Asia/Seoul');
+insert into app_users (auth_user_id, role, tutor_id) values
+  ('bbbbbbbb-0000-0000-0000-00000000200a', 'tutor', '55555555-0000-0000-0000-00000000200a'),
+  ('bbbbbbbb-0000-0000-0000-00000000200b', 'tutor', '55555555-0000-0000-0000-00000000200b');
+insert into students (id, name_ko, name_en, class_note_url) values ('99999999-0000-0000-0000-000000002000', '기록학생', 'Record S', 'https://docs.google.com/x');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', 1, 4, 2, 40, current_date - 10, current_date - 10 + 27, 8, 'active');
+create temp table rc (t timestamptz);
+insert into rc values (date_trunc('hour', now()));
+grant select on rc to authenticated;
+insert into lessons (id, enrollment_id, student_id, tutor_id, original_tutor_id, kind, seq, starts_at, ends_at, state, class_status, canceled_at, makeup_of)
+select v.id::uuid, '99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', '55555555-0000-0000-0000-00000000200a',
+       v.orig::uuid, v.kind, v.seq, t + v.off, t + v.off + interval '40 minutes', v.state, v.st::class_status,
+       case when v.state = 'canceled' then now() end, v.mo::uuid
+from rc, (values
+  ('77777777-2000-0000-0000-000000000000', null, 'regular', 1, interval '-5 days', 'canceled', 'Tutor canceled in advance', null),
+  ('77777777-2000-0000-0000-000000000001', null, 'regular', 2, interval '-3 hours', 'scheduled', null, null),
+  ('77777777-2000-0000-0000-000000000002', null, 'regular', 3, interval '1 day', 'scheduled', null, null),
+  ('77777777-2000-0000-0000-000000000004', '55555555-0000-0000-0000-00000000200b', 'regular', 4, interval '-2 days', 'scheduled', null, null),
+  ('77777777-2000-0000-0000-000000000005', null, 'regular', 5, interval '-4 days', 'canceled', 'Student canceled in advance', null),
+  ('77777777-2000-0000-0000-000000000006', null, 'regular', 6, interval '-6 days', 'scheduled', null, null)
+) v(id, orig, kind, seq, off, state, st, mo);
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of)
+select '77777777-2000-0000-0000-000000000003', '99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000',
+       '55555555-0000-0000-0000-00000000200a', 'makeup', t - interval '1 day', t - interval '1 day' + interval '40 minutes', '77777777-2000-0000-0000-000000000000' from rc;
+insert into payroll_runs (id, tutor_id, month) values ('99999999-5000-0000-0000-000000002000', '55555555-0000-0000-0000-00000000200a', date_trunc('month', current_date)::date);
+insert into payroll_items (run_id, lesson_id, minutes, payable) values ('99999999-5000-0000-0000-000000002000', '77777777-2000-0000-0000-000000000006', 40, true);
+
+set role authenticated;
+-- 1) 일정: 본인 수업만, 학생 연락처 없이 이름·노트 링크, 회차 n/총
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+create temp table scr as select tutor_screen(null, current_date - 7, current_date + 7) as j;
+select pg_temp.ok((select jsonb_array_length(j -> 'lessons') = 7 and j #>> '{tutor,timezone}' = 'Australia/Sydney' from scr)
+              and (select bool_and(not (x ? 'phone') and not (x ? 'email') and x ->> 'student' = 'Record S') from scr, jsonb_array_elements(j -> 'lessons') x)
+              and (select (x #>> '{count,n}', x #>> '{count,total}') = ('4', '8') from scr, jsonb_array_elements(j -> 'lessons') x where x ->> 'id' = '77777777-2000-0000-0000-000000000001')
+              and (select x -> 'count' = 'null'::jsonb from scr, jsonb_array_elements(j -> 'lessons') x where x ->> 'id' = '77777777-2000-0000-0000-000000000005'),
+  '강사 일정: 본인 수업 7개, 학생은 이름만(연락처 없음), 회차는 소진되는 수업만 n/총');
+select pg_temp.expect_error($$select tutor_screen('55555555-0000-0000-0000-00000000200b', current_date, current_date)$$, '42501');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200b';
+select pg_temp.ok((select jsonb_array_length(tutor_screen(null, current_date - 7, current_date + 7) -> 'lessons') = 0),
+  '다른 강사 화면은 못 열고, 다른 강사에게는 이 수업이 안 보임');
+select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'x', null)$$, '42501');
+select pg_temp.ok(true, '다른 강사는 이 수업을 기록 못 함');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';   -- 학생
+select pg_temp.expect_error($$select tutor_screen(null, current_date, current_date)$$, '42501');
+select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'x', null)$$, '42501');
+select pg_temp.ok(true, '학생은 강사 화면·기록 함수를 못 씀');
+
+-- 2) Class Record 입력 → 결과 하나(lessons.class_status), 정확한 상태 이름은 DB가 정함
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000002', 'held', 'x', null)$$, 'after it starts');
+select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', '  ', null)$$, 'covered topics');
+select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000005', 'held', 'x', null)$$, 'canceled');
+select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000004', 'late', 'x', null)$$, 'reason for being late');
+select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000006', 'held', 'x', null)$$, 'payroll');
+select pg_temp.ok(true, '시작 전·다룬 내용 없음·취소된 수업·지각 사유 없음·정산 들어간 수업은 기록 거절');
+select tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'Free talk, hobbies', null);
+select tutor_record_class('77777777-2000-0000-0000-000000000003', 'held', 'Unit 5', null);
+select tutor_record_class('77777777-2000-0000-0000-000000000004', 'held', 'Airports', null);
+select pg_temp.ok((select array_agg(class_status::text order by id) from lessons where id in
+                   ('77777777-2000-0000-0000-000000000001', '77777777-2000-0000-0000-000000000003', '77777777-2000-0000-0000-000000000004'))
+                  = '{Normal,"Make-up completed","Covered by another tutor"}'
+              and (select bool_and(state = 'done') from lessons where id in ('77777777-2000-0000-0000-000000000001', '77777777-2000-0000-0000-000000000003'))
+              and (select covered_topics = 'Free talk, hobbies' and submitted_by = 'bbbbbbbb-0000-0000-0000-00000000200a' from class_records where lesson_id = '77777777-2000-0000-0000-000000000001'),
+  '진행 → 정규 Normal · 보강 Make-up completed · 대체 진행 Covered by another tutor, 수업 진행 완료 + 다룬 내용 저장');
+select pg_temp.ok((select (tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'Free talk, hobbies', null) ->> 'repeated')::boolean),
+  '같은 기록을 다시 저장하면 바뀌는 것 없음');
+reset role;
+create temp table rc_first as select first_submitted_at as f from class_records where lesson_id = '77777777-2000-0000-0000-000000000001';
+grant select on rc_first to authenticated;
+set role authenticated;
+select tutor_record_class('77777777-2000-0000-0000-000000000001', 'student_no_show', null, 'Waited until the end');
+select pg_temp.ok((select l.class_status = 'Student no-show' and r.covered_topics is null and r.remarks = 'Waited until the end' and r.first_submitted_at = (select f from rc_first)
+                   from lessons l join class_records r on r.lesson_id = l.id where l.id = '77777777-2000-0000-0000-000000000001'),
+  '다시 저장하면 고침(학생 노쇼), 첫 기록 시각은 그대로 (10분 기준)');
+select tutor_record_class('77777777-2000-0000-0000-000000000004', 'late', 'Airports', 'Internet down, 5 min late, extended');
+select pg_temp.ok((select class_status = 'Tutor Late - Student Present' from lessons where id = '77777777-2000-0000-0000-000000000004'),
+  '강사 지각(사유 있음) → Tutor Late - Student Present');
+select pg_temp.ok((select (x #>> '{count,n}')::int = 4 and x ->> 'topics' is null and x ->> 'remarks' = 'Waited until the end'
+                   from jsonb_array_elements(tutor_screen(null, current_date - 7, current_date + 7) -> 'lessons') x where x ->> 'id' = '77777777-2000-0000-0000-000000000001')
+              and (select (x ->> 'locked')::boolean from jsonb_array_elements(tutor_screen(null, current_date - 7, current_date + 7) -> 'lessons') x where x ->> 'id' = '77777777-2000-0000-0000-000000000006'),
+  '일정에 기록 내용·회차가 그대로 보이고, 정산 들어간 수업은 잠김 표시');
+
+-- 3) 보강 가능 여부: 시간마다 가능/불가, 확정은 운영진
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+create temp table mk20 as select (admin_makeup_request('77777777-2000-0000-0000-000000000005', null,
+  jsonb_build_array(jsonb_build_object('starts_at', (select t from rc) + interval '2 days'), jsonb_build_object('starts_at', (select t from rc) + interval '3 days')), now())
+  ->> 'makeup_request_id')::uuid as id;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+select pg_temp.ok((select jsonb_array_length(m -> 'slots') = 2 and m ->> 'answered_at' is null
+                   from jsonb_array_elements(tutor_screen(null, current_date, current_date) -> 'makeups') m),
+  '강사 화면에 답할 보강 신청 1건, 학생이 원한 시간 2개');
+select pg_temp.expect_error($$select tutor_makeup_answer((select id from mk20), '{}', ' ')$$, 'other times');
+select pg_temp.expect_error($$select tutor_makeup_answer((select id from mk20), array[gen_random_uuid()], null)$$, 'Unknown time');
+select pg_temp.ok(true, '모두 불가면 다른 가능 시간 메모 필수, 다른 신청의 시간은 거절');
+select tutor_makeup_answer((select id from mk20), array[(select c.id from makeup_candidates c join mk20 on mk20.id = c.request_id order by c.starts_at limit 1)], 'Also free on Friday');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 안내 기록은 운영자만 봄
+select pg_temp.ok((select array_agg(c.tutor_answer order by c.starts_at) = '{yes,no}' from makeup_candidates c join mk20 on mk20.id = c.request_id)
+              and (select r.status = 'requested' and r.tutor_note = 'Also free on Friday' and r.tutor_answered_at is not null and r.confirmed_lesson_id is null
+                   from makeup_requests r join mk20 on mk20.id = r.id)
+              and (select n.status = 'not_needed' from lesson_notices n join mk20 on mk20.id = n.makeup_request_id where n.event = 'makeup_ask'),
+  '강사 답: 시간마다 가능/불가 기록, 확정은 아님(수업 안 생김), WhatsApp으로 물어볼 안내는 보낼 필요 없음');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200b';
+select pg_temp.expect_error($$select tutor_makeup_answer((select id from mk20), '{}', 'x')$$, '42501');
+select pg_temp.ok(true, '다른 강사는 답할 수 없음');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_makeup_confirm((select id from mk20), (select t from rc) + interval '2 days');
+select pg_temp.ok((select jsonb_array_length(tutor_screen('55555555-0000-0000-0000-00000000200a', current_date, current_date + 7) -> 'makeups') = 0)
+              and (select count(*) = 1 from jsonb_array_elements(tutor_screen('55555555-0000-0000-0000-00000000200a', current_date, current_date + 7) -> 'lessons') x
+                   where x ->> 'kind' = 'makeup' and x ->> 'makeup_of' is not null and x ->> 'state' = 'scheduled')
+              and (select count(*) = 2 from admin_tutor_accounts() a where a.has_login and a.name like '기록%'),
+  '운영진 확정 뒤: 답할 보강에서 빠지고 일정에 보강 수업(원래 날짜 표시)으로 보임, 운영자는 강사 화면을 그대로 열 수 있음');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+select pg_temp.expect_error($$select tutor_makeup_answer((select id from mk20), '{}', 'x')$$, 'closed');
+select pg_temp.expect_error($$select admin_tutor_accounts()$$, '42501');
+select pg_temp.ok(true, '닫힌 보강 신청에는 답 못 함, 강사는 운영 목록 못 봄');
+reset request.jwt.claim.sub;
+reset role;
+-- 4) 기록할 수업 = 강사 LMS 계정이 생긴 뒤 시작했는데 결과 없는 수업 (그 전 수업은 시트), 운영자 대시보드 미기록도 같은 기준
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+select pg_temp.ok((select tutor_screen(null, current_date, current_date) -> 'to_record' = '[]'::jsonb),
+  '계정 연결 전에 시작한 수업은 기록할 수업에 안 나옴');
+reset role;
+update app_users set created_at = now() - interval '7 days' where auth_user_id = 'bbbbbbbb-0000-0000-0000-00000000200a';
+set role authenticated;
+select pg_temp.ok((select j -> 'to_record' = '["77777777-2000-0000-0000-000000000006"]'::jsonb
+                          and exists (select 1 from jsonb_array_elements(j -> 'lessons') x where x ->> 'id' = '77777777-2000-0000-0000-000000000006')
+                   from (select tutor_screen(null, current_date + 1, current_date + 1) as j) q),
+  '계정 연결 뒤 시작한 미기록 수업은 보던 주와 상관없이 기록할 수업에 나옴');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select array_agg(lesson_id::text) from admin_class_record_missing() where tutor_name = '기록A') = '{77777777-2000-0000-0000-000000000006}',
+  '운영자 대시보드 미기록: 같은 수업 1건');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+select pg_temp.expect_error($$select admin_class_record_missing()$$, '42501');
+select pg_temp.ok(true, '강사는 운영자 미기록 목록 못 봄');
+reset request.jwt.claim.sub;
+reset role;

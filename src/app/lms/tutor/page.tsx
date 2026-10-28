@@ -1,9 +1,12 @@
-// 강사 화면 자리 (3단계에서 시안 → 개발). 로그인 후 강사가 404를 보지 않도록 안내만 둔다
-export default function TutorPage() {
-  return (
-    <main className="mx-auto max-w-[400px] px-5 py-16 text-center">
-      <p className="text-[20px] font-bold text-[#1d1b2b]">Tutor page is coming soon</p>
-      <p className="mt-2 text-[14px] text-[#55526a]">Your schedule stays in Google Calendar. Please contact Edge English on WhatsApp for now.</p>
-    </main>
-  );
+import TutorDemo from './TutorDemo';
+import TutorLive from './TutorLive';
+
+// 강사 화면 (② 강사 LMS, migration 2000): 수업 일정 · Class Record 입력 · 보강 가능 여부 답 (영어, 휴대폰 우선)
+// 강사 본인 로그인, 또는 운영자(TOTP 완료)가 ?tutor=강사id 로 그대로 보기·대신 입력. ?demo=1 은 가짜 데이터 미리보기
+export const dynamic = 'force-dynamic';
+
+export default async function TutorPage({ searchParams }: { searchParams: Promise<{ demo?: string; tutor?: string }> }) {
+  const { demo, tutor } = await searchParams;
+  if (demo === '1') return <TutorDemo nowIso={new Date().toISOString()} />;
+  return <TutorLive tutorParam={tutor} />;
 }

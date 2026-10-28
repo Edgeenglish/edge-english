@@ -36,6 +36,19 @@ type LessonRow = {
   makeup_of: string | null; voided_at: string | null; tutor_id: string; tutor: { name: string; timezone: string } | null;
 };
 
+type MakeupRow = {
+  id: string; source_lesson_id: string | null; migrated_item_id: string | null; status: ChMakeupRequest['status']; confirmed_lesson_id: string | null;
+  tutor_note?: string | null; tutor_answered_at?: string | null; candidates: { starts_at: string; tutor_answer?: 'yes' | 'no' | null }[];
+};
+/** 강사 답 칸(migration 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
+async function loadMakeupRequests(sb: SupabaseClient, studentId: string) {
+  const q = (cols: string) => sb.from('makeup_requests').select(cols).eq('student_id', studentId).order('created_at');
+  const r = await q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
+  return r.error?.code === '42703' || r.error?.code === 'PGRST200'
+    ? q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, candidates:makeup_candidates(starts_at)')
+    : r;
+}
+
 export async function loadStudentLessons(sb: SupabaseClient, studentId: string): Promise<StudentLessonData> {
   const enrolls = check(await sb.from('enrollments').select('id, final_end_date, duration_min, start_date').eq('student_id', studentId)
     .neq('status', 'canceled').order('start_date', { ascending: false }).limit(1)) as { id: string; final_end_date: string; duration_min: number }[];
@@ -50,12 +63,11 @@ export async function loadStudentLessons(sb: SupabaseClient, studentId: string):
   const [changes, reqs, migrated] = await Promise.all([
     sb.from('change_requests').select('id, lesson_id, type, status, requested_at, decided_at, decision')
       .eq('student_id', studentId).in('type', ['student_cancel', 'tutor_cancel']).in('status', ['applied', 'reverted']).order('decided_at', { ascending: false }),
-    sb.from('makeup_requests').select('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, candidates:makeup_candidates(starts_at)')
-      .eq('student_id', studentId).order('created_at'),
+    loadMakeupRequests(sb, studentId),
     e ? sb.from('migrated_items').select('id, original_date, tutor_leave').eq('enrollment_id', e.id).eq('kind', 'makeup_open') : Promise.resolve({ data: [], error: null }),
   ]);
   const chRows = check(changes) as { id: string; lesson_id: string; type: ChChange['type']; status: ChChange['status']; requested_at: string | null; decided_at: string; decision: ChangeDecision }[];
-  const mkRows = check(reqs) as { id: string; source_lesson_id: string | null; migrated_item_id: string | null; status: ChMakeupRequest['status']; confirmed_lesson_id: string | null; candidates: { starts_at: string }[] }[];
+  const mkRows = check(reqs) as unknown as MakeupRow[];
   const changeIds = chRows.map((c) => c.id);
   const mkIds = mkRows.map((m) => m.id);
   const notices: ChNotice[] = [];
@@ -75,6 +87,9 @@ export async function loadStudentLessons(sb: SupabaseClient, studentId: string):
     makeupRequests: mkRows.map((m) => ({
       id: m.id, sourceLessonId: m.source_lesson_id, migratedItemId: m.migrated_item_id, status: m.status, confirmedLessonId: m.confirmed_lesson_id,
       candidates: m.candidates.map((c) => new Date(c.starts_at)).sort((a, b) => +a - +b),
+      tutorAnswers: Object.fromEntries(m.candidates.filter((c) => c.tutor_answer).map((c) => [+new Date(c.starts_at), c.tutor_answer!])),
+      tutorNote: m.tutor_note ?? null,
+      tutorAnsweredAt: m.tutor_answered_at ? new Date(m.tutor_answered_at) : null,
     })),
     migrated: (check(migrated) as { id: string; original_date: string | null; tutor_leave: boolean | null }[]).map((m) => ({ id: m.id, originalDate: m.original_date, tutorLeave: !!m.tutor_leave })),
     notices: notices.sort((a, b) => +a.createdAt - +b.createdAt),

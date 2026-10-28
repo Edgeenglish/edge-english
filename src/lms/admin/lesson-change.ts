@@ -55,6 +55,10 @@ export type ChMakeupRequest = {
   status: 'requested' | 'countered' | 'confirmed' | 'declined' | 'expired' | 'withdrawn' | 'voided';
   candidates: Date[];
   confirmedLessonId: string | null;
+  /** 강사 LMS 답 (migration 2000): 시각(ms)별 가능/불가, 메모. 답 전이면 비어 있음 */
+  tutorAnswers?: Record<number, 'yes' | 'no'>;
+  tutorNote?: string | null;
+  tutorAnsweredAt?: Date | null;
 };
 
 export type ChMigratedOpen = { id: string; originalDate: KstDate | null; tutorLeave: boolean };

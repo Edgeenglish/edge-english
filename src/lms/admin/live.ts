@@ -11,6 +11,7 @@ import type { TaskSource } from './board';
 import type { PlanView } from './confirm';
 import { loadPlans } from './confirm-live';
 import type { FakeLesson, OpsStats } from './fake-data';
+import { loadMissingRecords, type MissingRecord } from '../tutor/live';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const short = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}(${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
@@ -194,7 +195,7 @@ type ChangeNoticeRow = {
   change: { student: { id: string; name_ko: string; code: string } | null; lesson: { starts_at: string } | null } | null;
   makeup: { student: { id: string; name_ko: string; code: string } | null } | null;
 };
-type OpenMakeupRow = { created_at: string; student: { id: string; name_ko: string; code: string } | null };
+type OpenMakeupRow = { created_at: string; tutor_answered_at?: string | null; student: { id: string; name_ko: string; code: string } | null };
 
 /** 수업 변경·보강 (1700): 안 보낸 안내 · 강사 답 대기 보강 → 학생마다 한 줄 */
 export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupRow[], now: Date): TaskSource[] {
@@ -211,7 +212,29 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
     const at = n.change?.lesson ? new Date(n.change.lesson.starts_at) : null;
     if (at && at > now && (!r.lessonAt || at < r.lessonAt)) r.lessonAt = at;
   }
-  for (const m of makeups) if (m.student) row(m.student, m.created_at).openMakeups += 1;
+  for (const m of makeups) {
+    if (!m.student) continue;
+    const r = row(m.student, m.created_at);
+    r.openMakeups += 1;
+    if (m.tutor_answered_at) r.answeredMakeups = (r.answeredMakeups ?? 0) + 1;
+  }
+  return [...out.values()];
+}
+
+/** 강사 답 칸(tutor_answered_at, migration 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
+async function loadOpenMakeups(sb: SupabaseClient) {
+  const q = (cols: string) => sb.from('makeup_requests').select(cols).in('status', ['requested', 'countered']);
+  const r = await q('created_at, tutor_answered_at, student:students(id, name_ko, code)');
+  return r.error?.code === '42703' ? q('created_at, student:students(id, name_ko, code)') : r;
+}
+
+/** Class Record 미기록 (2000): 강사마다 한 줄 */
+export function toMissingRecords(rows: MissingRecord[]): TaskSource[] {
+  const out = new Map<string, Extract<TaskSource, { kind: 'class_record_missing' }>>();
+  for (const r of rows) {
+    if (!out.has(r.tutorId)) out.set(r.tutorId, { kind: 'class_record_missing', id: r.tutorId, tutorName: r.tutorName, lessons: [], createdAt: r.startsAt });
+    out.get(r.tutorId)!.lessons.push({ studentName: r.studentName, startsAt: r.startsAt });
+  }
   return [...out.values()];
 }
 
@@ -312,7 +335,7 @@ const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01'
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const today = instantToKstDate(now);
   const off = 'off:tutor_time_off(id, starts_at, ends_at, created_at, tutor:tutors(name))';
-  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, ending, leaveOpen, leaveNotices, renewalSent] = await Promise.all([
+  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, ending, leaveOpen, leaveNotices, renewalSent, missing] = await Promise.all([
     sb
       .from('admin_tasks')
       .select(
@@ -338,7 +361,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .from('lesson_notices')
       .select('created_at, change:change_requests(student:students(id, name_ko, code), lesson:lessons(starts_at)), makeup:makeup_requests(student:students(id, name_ko, code))')
       .eq('status', 'pending'),
-    sb.from('makeup_requests').select('created_at, student:students(id, name_ko, code)').in('status', ['requested', 'countered']),
+    loadOpenMakeups(sb),
     sb
       .from('enrollments')
       .select('id, student_id, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind)')
@@ -346,6 +369,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
     sb.from('lesson_notices').select(`leave:leave_items(${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
     sb.from('renewal_notices').select('enrollment_id, sent_at'),
+    loadMissingRecords(sb),
   ]);
   const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error) ?? ending.error;
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
@@ -363,6 +387,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       ...(changeNotices.error ? [] : toLessonChanges((changeNotices.data ?? []) as unknown as ChangeNoticeRow[], (openMakeups.data ?? []) as unknown as OpenMakeupRow[], now)),
       // 1800 전 DB는 건너뜀
       ...(leaveOpen.error || leaveNotices.error ? [] : toTutorLeaves((leaveOpen.data ?? []) as unknown as LeaveOpenRow[], (leaveNotices.data ?? []) as unknown as LeaveNoticeRow[], now)),
+      // 2000 전 DB는 null
+      ...toMissingRecords(missing ?? []),
     ],
     today: toTodayLessons((lessons.data ?? []) as unknown as LessonRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
   };

@@ -139,3 +139,17 @@ echo "$L18" | grep -v '|통과$' && { echo "❌ l18-check 실패"; exit 1; }
 "${PROD[@]}" -o /dev/null -f "$WORK/l18-seed.sql"
 [ "$("${PROD[@]}" -tA -c "select count(*) from students")" = "0" ] || { echo "❌ 운영 DB에 가상 학생이 들어감"; exit 1; }
 echo "✅ migration 1800 적용 확인 파일 통과 (확인 $(echo "$L18" | wc -l)줄, 다시 적용해도 오류 없음, 가상 데이터는 시험용에만)"
+
+# migration 2000 (강사 LMS) 적용 확인 파일: 4줄 통과, 두 번 적용해도 오류 없음
+"${PSQL[@]}" -o /dev/null -f "$ROOT/supabase/migrations/20261028002000_lms_tutor_screen.sql"
+cp "$ROOT"/supabase/test-setup/t20-check.sql "$WORK"/; chmod a+r "$WORK"/t20-check.sql
+T20="$("${PSQL[@]}" -tA -f "$WORK/t20-check.sql")"
+echo "$T20" | grep -v '|통과$' && { echo "❌ t20-check 실패"; exit 1; }
+"${PROD[@]}" -tA -f "$WORK/t20-check.sql" | grep -v '|통과$' && { echo "❌ 운영 묶음 t20-check 실패"; exit 1; }
+echo "✅ migration 2000 적용 확인 파일 통과 (확인 $(echo "$T20" | wc -l)줄, 다시 적용해도 오류 없음)"
+cp "$ROOT"/supabase/test-setup/t20-seed.sql "$WORK"/; chmod a+r "$WORK"/t20-seed.sql
+"${PSQL[@]}" -o /dev/null -f "$WORK/t20-seed.sql"; "${PSQL[@]}" -o /dev/null -f "$WORK/t20-seed.sql"
+[ "$("${PSQL[@]}" -tA -c "select count(*) from lessons l join tutors t on t.id = l.tutor_id where t.name = 'Mia'")" = "18" ] || { echo "❌ t20-seed"; exit 1; }
+"${PROD[@]}" -o /dev/null -f "$WORK/t20-seed.sql"
+[ "$("${PROD[@]}" -tA -c "select count(*) from tutors where name = 'Mia'")" = "0" ] || { echo "❌ 운영 DB에 가상 강사가 들어감"; exit 1; }
+echo "✅ 강사 화면 시험 장면 (시험용에만, 한 번만)"

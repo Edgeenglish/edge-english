@@ -117,6 +117,8 @@ export type LessonChangeTask = {
   studentCode: string;
   pendingNotices: number;
   openMakeups: number;
+  /** 그중 강사가 강사 LMS에서 가능 여부를 답한 보강 신청 (운영진 확정 차례, migration 2000) */
+  answeredMakeups?: number;
   /** 안 보낸 변경 안내가 있는 가장 가까운 수업 (지나기 전에 보내야 함) */
   lessonAt: Date | null;
   createdAt: Date;
@@ -138,7 +140,16 @@ export type TutorLeaveTask = {
   createdAt: Date;
 };
 
-export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask;
+/** Class Record 미기록 (migration 2000): 강사 LMS 계정이 있는 강사의 수업이 끝나고 10분 지나도 기록 없음 (POL-TU-06). 강사마다 한 줄, 기록하면 사라짐 */
+export type ClassRecordMissingTask = {
+  kind: 'class_record_missing';
+  id: string; // 강사 번호
+  tutorName: string;
+  lessons: { studentName: string; startsAt: Date }[];
+  createdAt: Date;
+};
+
+export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask | ClassRecordMissingTask;
 
 /** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
 export type Category = 'matching' | 'tutor_ack' | 'ending' | 'makeup' | 'issue';
@@ -381,9 +392,15 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         id: t.id,
         kind: t.kind,
         severity: t.lessonAt ? dueSeverity(t.lessonAt, now) : 'open',
-        tag: t.pendingNotices > 0 ? `안내 안 보냄 ${t.pendingNotices}건` : '보강 강사 답 대기',
+        tag: t.pendingNotices > 0 ? `안내 안 보냄 ${t.pendingNotices}건` : (t.answeredMakeups ?? 0) > 0 ? '보강 강사 답 옴 · 확정' : '보강 강사 답 대기',
         title: t.studentName,
-        detail: [t.studentCode, t.lessonAt && `${kstLabel(t.lessonAt)} 수업`, t.pendingNotices > 0 && t.openMakeups > 0 && `보강 강사 답 대기 ${t.openMakeups}건`].filter(Boolean).join(' · '),
+        detail: [
+          t.studentCode,
+          t.lessonAt && `${kstLabel(t.lessonAt)} 수업`,
+          t.pendingNotices > 0 && (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 옴 ${t.answeredMakeups}건`,
+          t.pendingNotices > 0 && t.openMakeups - (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
+          t.pendingNotices === 0 && (t.answeredMakeups ?? 0) > 0 && t.openMakeups > (t.answeredMakeups ?? 0) && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
+        ].filter(Boolean).join(' · '),
         due: null,
         steps: [],
         actions: [{ key: 'open_change', label: '열기', primary: true, href: `/lms/admin/change?student=${encodeURIComponent(t.studentCode)}` }],
@@ -408,6 +425,18 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         actions: [{ key: 'open_leave', label: '열기', primary: true, href: `/lms/admin/leave?off=${encodeURIComponent(t.id)}` }],
       };
     }
+    case 'class_record_missing':
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: 'overdue',
+        tag: `Class Record 미기록 ${t.lessons.length}회`,
+        title: t.tutorName,
+        detail: t.lessons.map((l) => `${kstLabel(l.startsAt)} ${l.studentName}`).join(' · '),
+        due: null,
+        steps: [],
+        actions: [{ key: 'open_tutor', label: '열기', primary: true, href: `/lms/tutor?tutor=${encodeURIComponent(t.id)}` }],
+      };
     case 'auto_failure': {
       const what = { calendar_sync: '캘린더 반영 실패', email_bounce: '메일 반송', payment_mismatch: '결제 금액 불일치' }[t.what];
       const action = {

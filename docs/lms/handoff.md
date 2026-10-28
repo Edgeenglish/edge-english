@@ -23,6 +23,16 @@
 - Google Sheets 읽기 한도(분당)가 낮아 연속으로 읽으면 'Quota exceeded' → 다시 시도하면 됨
 - 이 세션(claude/epic-dijkstra-nu1hht)에 남은 것: 10/28 오전 10시 정O연 10/28 오후 8시 보강 학생 답 확인 예약 알림(이 세션으로 옴) · POL-RN-08 변경 반영 완료(보강·보상도 셈) · 강사 휴무 화면 시험 B4~B6
 
+## 🆕 2026-10-28 ② 강사 LMS — 구현·시험용 반영 완료 (claude/adoring-newton-lzqeck)
+- migration **2000** `lms_tutor_screen`: `tutor_screen`(일정·기록할 수업·답할 보강 한 번에, 학생은 이름·레벨·노트 링크만) · `tutor_record_class`(진행/강사 지각/학생 노쇼 → DB가 Normal·Make-up completed·Covered by another tutor·Tutor Late·Student no-show로 정함, 다룬 내용 필수·지각은 사유 필수, 시작 뒤에만, 취소 수업 거절, 정산(payroll_items) 들어간 수업 잠김, 고쳐도 첫 기록 시각 유지) · `tutor_makeup_answer`(학생 원한 시간마다 가능/불가 + 메모, 확정 아님 D-43, 답 오면 WhatsApp 'makeup_ask' 안내는 보낼 필요 없음) · `admin_tutor_accounts` · `admin_class_record_missing`(강사 LMS 계정 있는 강사만, 끝나고 10분 POL-TU-06). '기록할 수업' = 강사 계정이 생긴 뒤 시작한 수업만(그 전은 시트)
+- 화면 `/lms/tutor`(영어, 휴대폰 우선): Class Record(기록할 수업) → Make-up requests → Schedule(주 단위, 강사 현지 시각 + KST, 회차 n/총, Classroom·Class notes). 운영자(TOTP)는 `/lms/tutor?tutor=…`로 강사 화면 그대로 보기·대신 입력(맨 위 '운영자 보기'). `?demo=1` 가짜 데이터
+- 운영진 연결: 대시보드 'Class Record 미기록 n회'(강사마다, [열기] → 그 강사 화면) · 수업 변경 카드 '보강 강사 답 옴 · 확정' · 수업 변경 화면 보강 시간 옆 '강사 가능/불가'·강사 메모
+- 원래 수업 길이(lessons 시작~끝)는 기록으로 안 바뀜, 급여 인정 시간은 정산 때 `payroll_items.minutes`로 따로(정산 단계, 숫자 D-14·D-17 대표 결정 대기)
+- 시험: `npm test` 296 · `npm run test:db`(2000 시험 14개·권한 점검·t20-check 4줄·두 번 적용) 통과. 시험용 DB 2000 적용(확인 4줄 통과) + 시험 장면 `t20-seed.sql`(강사 Mia 시드니, 정하은·윤지호·강민재)
+- **다음: 대표 화면 시험(lms-test, 운영자 보기로 Mia)** → 승인 → 운영 2000 + `lms-prod` → 실제 강사 1명(Olivia) 계정 초대(Supabase 로그인 사용자 추가 + `app_users` 연결, 방법 대표 확인) → 시범
+- **시트 기록을 멈출 수 있는 조건 (검증할 것)**: ① 그 강사의 모든 학생이 LMS에 입력돼 있음(Olivia는 정O연·서O정·김O민 재등록 전 미입력) ② 취소·보강이 LMS로만 처리됨(1700, 학생별 lms_since) ③ 강사가 1~2주 LMS에만 기록하고 '미기록' 카드가 0으로 유지 ④ LMS 회차 n/총 = 시트 Class Count 1회 대조 ⑤ 정산 화면(아직 없음) 전까지 급여는 LMS 기록으로 수동 집계 가능한지 확인
+- 아직 없음: 강사 계정 초대 화면(지금은 SQL), 보강 확정 뒤 강사 [확인](POL-OP-19), 대체강사 가능 여부(휴무 sub_ask) 강사 화면 답, 정산 화면, 강사가 잘못 '진행' 기록한 수업을 취소로 바꾸기(지금 1700은 예정 수업만 변경 → 운영진이 대신 고칠 방법 필요)
+
 ## 📋 다음 세션 할 일 (2026-10-28 대표 지시): ② 강사 LMS 개발 — 바로 개발
 - 대표 지시: 강사 휴무 화면은 **더 다듬거나 재설계하지 않음** (confident-ritchie 세션의 '학생 카드 다시 짜기' 시안 VfAdv… 도 보류). 바로 강사 LMS로
 - **확정 범위 (H26(18))**: ① 수업 일정 확인 ② Class Record 직접 입력 ③ 보강 가능 여부 응답. 휴대폰 우선(강사 화면은 영어)
