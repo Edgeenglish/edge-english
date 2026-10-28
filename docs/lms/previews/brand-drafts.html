@@ -1,0 +1,171 @@
+<title>LMS 브랜드 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 시안 페이지 자체는 밝은 화면 하나로 고정 (실제 LMS 화면이 밝은 화면뿐이라 그대로 보여 줌) */
+:root {
+  --page: #f1eff7; --ink: #1d1b2b; --sub: #6b6880; --line: #e6e3ef;
+  --brand-yellow: #ffd401; --brand-purple: #7d5ffb; --brand-lilac: #aa96ff; --brand-brown: #27230e;
+  --app-purple: #7d5fff; --app-purple-dark: #5b3fe0; --app-tint: #efebff;
+  --red: #b3261e; --red-tint: #fdecec;
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+}
+body { background: var(--page); color: var(--ink); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; }
+.wrap { max-width: 1160px; margin: 0 auto; display: grid; gap: 20px; }
+h1 { font-size: 22px; margin: 0; text-wrap: balance; }
+.lead { margin: 0; color: var(--sub); line-height: 1.6; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tabs button { font: inherit; font-weight: 700; font-size: 15px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.tabs button:focus-visible { outline: 3px solid var(--brand-lilac); outline-offset: 2px; }
+.rec { font-size: 11px; font-weight: 800; background: var(--brand-yellow); color: var(--brand-brown); border-radius: 6px; padding: 2px 6px; margin-left: 6px; }
+.panel { display: grid; gap: 16px; }
+.what { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 8px; }
+.what h2 { margin: 0; font-size: 17px; }
+.what ul { margin: 0; padding-left: 20px; line-height: 1.7; }
+.what .cons { color: var(--red); }
+.views { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .views { grid-template-columns: minmax(0, 1fr); } }
+.label { font-size: 13px; font-weight: 700; color: var(--sub); margin: 0 0 6px; }
+.pcscroll { overflow-x: auto; border-radius: 12px; border: 1px solid var(--line); }
+.pc { width: 100%; min-width: 760px; background: #f6f5fa; }
+.phone { width: 100%; max-width: 390px; border: 1px solid var(--line); border-radius: 24px; overflow: hidden; background: #f6f5fa; position: relative; }
+
+/* ── 앱 화면 흉내 (실제 LMS 코드의 색·크기 그대로) ── */
+.dbbar { background: #6b7280; color: #fff; text-align: center; padding: 6px; font-size: 12px; font-weight: 700; }
+.hdr { display: flex; align-items: center; gap: 12px; background: #fff; border-bottom: 1px solid var(--line); padding: 12px 20px; position: relative; }
+.phone .hdr { padding: 12px 14px; }
+.logo { display: flex; align-items: center; gap: 6px; text-decoration: none; }
+.logo img { height: 22px; width: auto; display: block; }
+.logo .tag { font-size: 12px; font-weight: 800; padding: 3px 7px; border-radius: 6px; }
+.oldlogo { font-size: 15px; font-weight: 800; color: #09246b; letter-spacing: -0.02em; }
+.oldlogo b { color: var(--app-purple); }
+.nav { display: flex; gap: 4px; }
+.nav span { font-size: 13.5px; font-weight: 600; color: var(--sub); padding: 8px 12px; border-radius: 10px; position: relative; }
+.grow { flex: 1; }
+.date { font-size: 13px; color: var(--sub); }
+.btn { font-size: 13px; font-weight: 700; color: #fff; background: var(--app-purple); border-radius: 10px; padding: 9px 12px; white-space: nowrap; }
+.body { padding: 14px 20px 20px; display: grid; gap: 12px; }
+.phone .body { padding: 12px 12px 76px; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.stat { border-radius: 12px; padding: 12px; background: var(--app-tint); }
+.stat small { display: block; font-size: 12px; color: var(--sub); }
+.stat strong { display: block; font-size: 20px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.phone .stat strong { font-size: 17px; }
+.cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.phone .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.card small { display: block; font-size: 11.5px; color: var(--sub); }
+.card strong { display: block; font-size: 20px; margin-top: 4px; }
+.card em { font-style: normal; font-size: 11px; color: var(--sub); }
+.card.urgent strong, .card.urgent em { color: var(--red); }
+.task { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; }
+.task .t { font-weight: 700; font-size: 14.5px; }
+.pill { font-size: 11.5px; font-weight: 700; color: var(--red); background: var(--red-tint); border-radius: 6px; padding: 2px 7px; margin-right: 6px; }
+.task .acts { display: flex; gap: 8px; }
+.task .ghost { font-size: 13px; font-weight: 600; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.task .danger { font-size: 13px; font-weight: 700; color: #fff; background: #c62b2b; border-radius: 10px; padding: 8px 10px; }
+.tabbar { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr); }
+.tabbar span { text-align: center; font-size: 12px; font-weight: 600; color: var(--sub); padding: 10px 0 12px; position: relative; }
+
+/* A안: 로고만 */
+.vA .logo .tag { background: var(--app-tint); color: var(--app-purple-dark); }
+.vA .nav span.on { background: var(--app-tint); color: var(--app-purple-dark); }
+.vA .tabbar span.on { color: var(--app-purple); }
+
+/* B안: 로고 + 노랑 포인트 */
+.vB .hdr { border-bottom: 3px solid var(--brand-yellow); }
+.vB .logo .tag { background: var(--brand-brown); color: var(--brand-yellow); }
+.vB .nav span.on { background: var(--app-tint); color: var(--app-purple-dark); }
+.vB .nav span.on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -15px; height: 3px; background: var(--brand-brown); border-radius: 2px; }
+.vB .btn { background: var(--brand-purple); }
+.vB .tabbar span.on { color: var(--brand-purple); }
+.vB .tabbar span.on::before { content: ""; position: absolute; left: 30%; right: 30%; top: 0; height: 3px; background: var(--brand-yellow); border-radius: 0 0 3px 3px; }
+
+/* C안: 브랜드 색 넓게 */
+.vC .logo .tag { background: var(--brand-yellow); color: var(--brand-brown); }
+.vC .nav span.on { background: var(--brand-yellow); color: var(--brand-brown); }
+.vC .btn { background: var(--brand-yellow); color: var(--brand-brown); }
+.vC .stat { background: var(--brand-purple); }
+.vC .stat small { color: #e7e1ff; }
+.vC .stat strong { color: #fff; }
+.vC .tabbar span.on { color: var(--brand-brown); background: #fff7c2; }
+
+.note { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 8px; line-height: 1.7; }
+.note h2 { margin: 0; font-size: 17px; }
+.note p, .note ul { margin: 0; }
+.note ul { padding-left: 20px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <h1>LMS 운영 화면 · 엣지영어 로고·색 시안</h1>
+  <p class="lead">운영 화면 대시보드 맨 위를 기준으로 그렸습니다. 아래 버튼으로 A·B·C안을 바꿔 보세요. 화면마다 PC와 휴대폰 모습을 같이 보여 줍니다. 맨 오른쪽 '지금 화면' 버튼으로 지금 모습과 비교할 수 있습니다.</p>
+
+  <div class="tabs" role="group" aria-label="시안 고르기">
+    <button type="button" data-v="A" aria-pressed="false">A안 · 로고만 바꾸기</button>
+    <button type="button" data-v="B" aria-pressed="true">B안 · 로고 + 노랑 포인트<span class="rec">추천</span></button>
+    <button type="button" data-v="C" aria-pressed="false">C안 · 브랜드 색 넓게</button>
+    <button type="button" data-v="now" aria-pressed="false">지금 화면</button>
+  </div>
+
+  <div class="panel" id="panel"></div>
+
+  <div class="note">
+    <h2>세 안 모두 같은 점</h2>
+    <ul>
+      <li>왼쪽 위 로고는 누르면 대시보드를 새로고침합니다. 이 기능은 이미 시험용 화면에 들어가 있습니다.</li>
+      <li>로그인 화면 맨 위에도 같은 로고를 넣습니다.</li>
+      <li>상태 색은 바꾸지 않습니다. 긴급은 빨강, 완료는 초록, 대기는 주황 그대로입니다.</li>
+      <li>노랑 #ffd401은 흰 바탕 위 글자색으로 쓰지 않습니다. 너무 옅어서 읽기 어렵기 때문에 선·바탕으로만 씁니다.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const LOGO = 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcKICAgeG1sbnM6ZGM9Imh0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvIgogICB4bWxuczpjYz0iaHR0cDovL2NyZWF0aXZlY29tbW9ucy5vcmcvbnMjIgogICB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiCiAgIHhtbG5zOnN2Zz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciCiAgIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIKICAgdmlld0JveD0iMCAwIDEwOS4zMzMzMyAzMiIKICAgaGVpZ2h0PSIzMiIKICAgd2lkdGg9IjEwOS4zMzMzMyIKICAgeG1sOnNwYWNlPSJwcmVzZXJ2ZSIKICAgaWQ9InN2ZzIiCiAgIHZlcnNpb249IjEuMSI+PG1ldGFkYXRhCiAgICAgaWQ9Im1ldGFkYXRhOCI+PHJkZjpSREY+PGNjOldvcmsKICAgICAgICAgcmRmOmFib3V0PSIiPjxkYzpmb3JtYXQ+aW1hZ2Uvc3ZnK3htbDwvZGM6Zm9ybWF0PjxkYzp0eXBlCiAgICAgICAgICAgcmRmOnJlc291cmNlPSJodHRwOi8vcHVybC5vcmcvZGMvZGNtaXR5cGUvU3RpbGxJbWFnZSIgLz48L2NjOldvcms+PC9yZGY6UkRGPjwvbWV0YWRhdGE+PGRlZnMKICAgICBpZD0iZGVmczYiPjxjbGlwUGF0aAogICAgICAgaWQ9ImNsaXBQYXRoMTgiCiAgICAgICBjbGlwUGF0aFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGgKICAgICAgICAgaWQ9InBhdGgxNiIKICAgICAgICAgZD0iTSAwLDAgSCA4MiBWIDI0IEggMCBaIiAvPjwvY2xpcFBhdGg+PC9kZWZzPjxnCiAgICAgdHJhbnNmb3JtPSJtYXRyaXgoMS4zMzMzMzMzLDAsMCwtMS4zMzMzMzMzLDAsMzIpIgogICAgIGlkPSJnMTAiPjxnCiAgICAgICBpZD0iZzEyIj48ZwogICAgICAgICBjbGlwLXBhdGg9InVybCgjY2xpcFBhdGgxOCkiCiAgICAgICAgIGlkPSJnMTQiPjxnCiAgICAgICAgICAgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTkuNzI3MSwxMS40MTgxKSIKICAgICAgICAgICBpZD0iZzIwIj48cGF0aAogICAgICAgICAgICAgaWQ9InBhdGgyMiIKICAgICAgICAgICAgIHN0eWxlPSJmaWxsOiNmZmQ0MDE7ZmlsbC1vcGFjaXR5OjE7ZmlsbC1ydWxlOm5vbnplcm87c3Ryb2tlOm5vbmUiCiAgICAgICAgICAgICBkPSJtIDAsMCBjIC0wLjA0NiwtMC45OTUgLTAuOTA2LC0xLjczMSAtMS45OTgsLTEuNjgzIC0xLjAyMSwwLjA0NyAtMS42OTUsMS4wNDMgLTEuNjcyLDEuOTkxIDAuMjU2LDIuODY4IDAuMjA5LDYuNjEzIDAsOS41NzYgLTAuMDIzLDAuOTI1IDAuNjUxLDEuODczIDEuNjAzLDEuOTY4IEMgLTEuMDkyLDExLjk0NyAtMC4xMzksMTEuMjM1IDAsMTAuMjE2IDAuMjc5LDcuNDkgMC4yMzIsMi42MzEgMCwwIG0gLTEzLjgyLDguMzY3IGMgLTAuODM2LDAgLTEuMTE1LC0wLjcxMSAtMS4xMTUsLTIuMjUxIDAsLTEuNTE3IDAuMzAyLC0yLjI1MiAxLjExNSwtMi4yNTIgMC45NTIsMCAxLjE2MSwwLjgyOSAxLjE2MSwyLjI1MiAwLDEuNDQ1IC0wLjExNiwyLjI1MSAtMS4xNjEsMi4yNTEgbSAtMi45OTYsLTE2LjQ1MSBjIC0wLjI1NiwxLjAyMSAwLjMwMSwyLjA4NyAxLjI3NywyLjM3MSAzLjUzMSwxLjAxOSA1LjcxNCwyLjQ2NSA1LjcxNCw0LjE3MiB2IDAuMDk1IGMgMCwwLjc1OCAwLjc5LDEuNDY5IDEuODU4LDEuNDY5IDEuMDY5LDAgMi4wNDQsLTAuNTkyIDIuMDQ0LC0xLjQ2OSB2IC0wLjMwOSBjIDAsLTMuNDEzIC00LjQxMywtNi43MzEgLTguNTcxLC03LjYzMSAtMC43MiwtMC4xNDMgLTEuOTc0LC0wLjA0OSAtMi4zMjIsMS4zMDIgbSAzLjAxOSw4LjE3OSBjIC0zLjQxNSwwIC00Ljc4NSwyLjc0OSAtNC43ODUsNi4wMjEgMCwzLjM4OSAxLjUxLDYuMDIgNC43ODUsNi4wMiAyLjgzNCwwIDQuMjc0LC0xLjg5NiA0LjY2OCwtNC40OCBoIDEuMjU1IGMgLTAuMDI0LDAuNjQgLTAuMDcsMS4zMjcgLTAuMTE2LDIuMTEgLTAuMDIzLDAuOTI0IDAuNTgsMS44NzIgMS42MDMsMS45NjcgMS4wMjIsMC4wOTUgMS45MjcsLTAuNjE2IDIuMDY3LC0xLjYzNSAwLjI3OCwtMi43MjYgMC4yMzIsLTUuNDUyIDAsLTguMDgzIC0wLjA0NywtMC45OTYgLTAuOTk5LC0xLjczMSAtMS45OTgsLTEuNjg0IC0xLjA0NSwwLjA0OCAtMS42OTUsMS4wNDMgLTEuNjcyLDEuOTkyIDAuMDQ2LDAuNjYzIDAuMDkyLDEuMjU2IDAuMTE2LDEuODI1IEggLTkuMTk4IEMgLTkuNjM5LDEuODcyIC0xMS4wMSwwLjA5NSAtMTMuNzk3LDAuMDk1IiAvPjwvZz48ZwogICAgICAgICAgIHRyYW5zZm9ybT0idHJhbnNsYXRlKDIwLjE2NjIsMy4wNDc3KSIKICAgICAgICAgICBpZD0iZzI0Ij48cGF0aAogICAgICAgICAgICAgaWQ9InBhdGgyNiIKICAgICAgICAgICAgIHN0eWxlPSJmaWxsOiNlOWI5MmI7ZmlsbC1vcGFjaXR5OjE7ZmlsbC1ydWxlOm5vbnplcm87c3Ryb2tlOm5vbmUiCiAgICAgICAgICAgICBkPSJNIDAsMCBDIC0wLjY4OSwtMS4wODggLTEuOTA3LC0xLjA2NyAtMi43MTUsLTAuNjM2IEwgLTYuMDMzLDEuMTIgYyAtMC44MTksMC40MjEgLTEuMjA2LDEuNjA2IC0wLjcyMiwyLjYyOSAwLjUyOCwxLjA4OCAxLjk1LDEuMDg4IDIuNjUxLDAuNzExIEwgLTAuNzIyLDIuNjYxIEMgMC4xODMsMi4xODcgMC41ODIsMC45MDUgMCwwIiAvPjwvZz48ZwogICAgICAgICAgIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQwLjI2NDgsMi4wODg3KSIKICAgICAgICAgICBpZD0iZzI4Ij48cGF0aAogICAgICAgICAgICAgaWQ9InBhdGgzMCIKICAgICAgICAgICAgIHN0eWxlPSJmaWxsOiNmZmQ0MDE7ZmlsbC1vcGFjaXR5OjE7ZmlsbC1ydWxlOm5vbnplcm87c3Ryb2tlOm5vbmUiCiAgICAgICAgICAgICBkPSJtIDAsMCBjIC0wLjEzOSwtMC45NDggLTEuMTE0LC0xLjczIC0yLjExNCwtMS42MzUgLTEuMTM4LDAuMTE4IC0xLjgxMSwxLjA0MyAtMS43NjUsMS45OTEgMC4zMDIsMy42MDMgMC4zNDksMTIuNjU4IDAsMTYuMzA4IC0wLjEzOSwwLjk5NiAwLjc2NywxLjk0NCAxLjY5NiwyLjAzOSBDIC0xLjExNCwxOC44MjEgLTAuMTM5LDE4LjA4NiAwLDE3LjA5MSAwLjQ0MiwxMy44NDMgMC4yNTYsMi42MzEgMCwwIG0gLTkuODI1LDEzLjUxMSB2IC0xLjkyIGMgMCwtNS41NDYgLTEuODM1LC05LjAzIC01LjQzNSwtMTEuMDQ2IC0wLjYyNywtMC4zNTYgLTEuOTI3LC0wLjMwNyAtMi40ODUsMC43MTEgLTAuNTExLDAuOTQ5IC0wLjExNywyLjE1NyAwLjY3MywyLjY3OSAyLjM5MywxLjYxMSAzLjMyMiwzLjM2NiAzLjM0NSw3LjkxNyB2IDEuNjU5IGggLTIuNTc4IGMgLTAuODgyLDAgLTEuMzQ3LDEuMDY3IC0xLjM0NywxLjg3MyAwLDAuNzgyIDAuNTM0LDEuODczIDEuMzQ3LDEuODczIGggOS42MzkgYyAwLjY5NywwIDEuMzI0LC0wLjkyNSAxLjMyNCwtMS44NDkgMCwtMC44MDYgLTAuNDQxLC0xLjg5NyAtMS4zMjQsLTEuODk3IHoiIC8+PC9nPjxnCiAgICAgICAgICAgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzQuNjAyLDMuMDE1NCkiCiAgICAgICAgICAgaWQ9ImczMiI+PHBhdGgKICAgICAgICAgICAgIGlkPSJwYXRoMzQiCiAgICAgICAgICAgICBzdHlsZT0iZmlsbDojZTliOTJiO2ZpbGwtb3BhY2l0eToxO2ZpbGwtcnVsZTpub256ZXJvO3N0cm9rZTpub25lIgogICAgICAgICAgICAgZD0iTSAwLDAgQyAtMC44NjIsLTAuNjg5IC0yLjA5LC0wLjQ1MyAtMi43MDQsMC4zMDIgTCAtNC4zMiwyLjExMSBjIC0wLjQ0MiwwLjU2MSAtMC41ODIsMS44IDAuNDA5LDIuNjA4IDAuODE5LDAuNjM1IDIuMDQ3LDAuNTM4IDIuNjk0LC0wLjMxMyBMIDAuMzg4LDIuNjA3IEMgMC45OTEsMS44NDIgMC43NjUsMC41OTIgMCwwIiAvPjwvZz48ZwogICAgICAgICAgIHRyYW5zZm9ybT0idHJhbnNsYXRlKDU0LjkwMTQsMTYuMzI3MSkiCiAgICAgICAgICAgaWQ9ImczNiI+PHBhdGgKICAgICAgICAgICAgIGlkPSJwYXRoMzgiCiAgICAgICAgICAgICBzdHlsZT0iZmlsbDojM2IyZjAwO2ZpbGwtb3BhY2l0eToxO2ZpbGwtcnVsZTpub256ZXJvO3N0cm9rZTpub25lIgogICAgICAgICAgICAgZD0ibSAwLDAgaCAyLjExNCBjIDAsMC40OTggMCwxLjAxOSAtMC4wMjQsMS41NDEgSCAwLjAyMyBDIDAuMDQ2LDEuMzI3IDAuMDY5LDEuMTM4IDAuMDY5LDAuOTQ4IDAuMDY5LDAuNjE3IDAuMDQ2LDAuMzA4IDAsMCBtIC0yLjQ2MiwtOC45NiBjIC0zLjUzLDAgLTQuNTc2LC0wLjQ3NCAtNC41NzYsLTEuMzk4IDAsLTAuOTQ4IDEuMDQ2LC0xLjM5OSA0LjU3NiwtMS4zOTkgMy41NTQsMCA0LjYyMiwwLjQ3NCA0LjYyMiwxLjM5OSAwLDAuOTI0IC0xLjA5MSwxLjM5OCAtNC42MjIsMS4zOTggTSAtNi4yNDgsMy4xNTIgYyAtMS4zNywwIC0yLjM5MiwtMC45OTUgLTIuMzkyLC0yLjIwNCAwLC0xLjMwNCAwLjk5OCwtMi4yMDQgMi4zOTIsLTIuMjA0IDEuNTc5LDAgMi40MzksMC45NDggMi40MzksMi4yMjggMCwxLjEzNyAtMC44NiwyLjE4IC0yLjQzOSwyLjE4IG0gMy44MDksLTE4LjMyMyBjIC00LjY0NSwwIC04LjUwMSwxLjM3NSAtOC41MDEsNC44MTMgMCwzLjQzNyAzLjc4Niw0LjgxMSA4LjUwMSw0LjgxMSA0LjY5MiwwIDguNTAyLC0xLjM3NCA4LjUwMiwtNC44MTEgMCwtMy40MzggLTMuNzYzLC00LjgxMyAtOC41MDIsLTQuODEzIG0gLTMuNzg2LDEwLjQzIGMgLTMuNjQ2LDAgLTYuMjk0LDIuMDg2IC02LjI5NCw1LjY4OSAwLDMuNTA4IDIuODExLDUuNjg5IDYuMjk0LDUuNjg5IDEuOTUyLDAgMy42MjMsLTAuNjQgNC43MzgsLTEuNzc4IDAuMDkzLDAuMDI0IDAuMjEsMC4wNDggMC4zMjYsMC4wNDggSCAxLjk3NSBDIDIuMTM3LDUuNjE4IDIuNzE3LDYuMjM0IDMuNjQ2LDYuMzUzIDQuNzg1LDYuNDk1IDUuNjkxLDUuNzM2IDUuODMsNC43MTcgNi4xMzIsMS45OTEgNi4wODYsLTAuOTAxIDUuODMsLTMuNjAzIDUuNzM3LC00LjU5OCA0Ljg1NCwtNS40MjggMy43MTcsLTUuMjg2IDIuNTc5LC01LjE2OCAxLjkyOCwtNC4yOSAxLjkyOCwtMy4zNjYgaCAtMy4yMDUgYyAtMC4xNjMsMCAtMC4zMjUsMC4wMjQgLTAuNDY1LDAuMDcxIC0xLjExNCwtMC45NDggLTIuNjcxLC0xLjQ0NiAtNC40ODMsLTEuNDQ2IiAvPjwvZz48ZwogICAgICAgICAgIHRyYW5zZm9ybT0idHJhbnNsYXRlKDY5LjIzMTksMTYuNDk4KSIKICAgICAgICAgICBpZD0iZzQwIj48cGF0aAogICAgICAgICAgICAgaWQ9InBhdGg0MiIKICAgICAgICAgICAgIHN0eWxlPSJmaWxsOiMzYjJmMDA7ZmlsbC1vcGFjaXR5OjE7ZmlsbC1ydWxlOm5vbnplcm87c3Ryb2tlOm5vbmUiCiAgICAgICAgICAgICBkPSJtIDAsMCBjIC0xLjQ4NywwIC0yLjI1MywtMS4zNTEgLTIuMjUzLC01LjEyIDAsLTMuNTMyIDAuNjI3LC01LjAyNSAyLjI1MywtNS4wMjUgMS42NDksMCAyLjI5OSwxLjQ5MyAyLjI5OSw1LjAyNSBDIDIuMjk5LC0xLjQ0NiAxLjYyNSwwIDAsMCBtIDAuMDIzLC0xMy45MzggYyAtNC41MjksLTAuMDI0IC02LjE3OSwzLjg4OCAtNi4xNzksOC44NjYgMCw0Ljk1NCAxLjY1LDguODQxIDYuMTc5LDguODY1IDMuODEsLTAuMDI0IDUuNTI4LC0yLjg5MiA2LjAxNiwtNi40OTUgSCA3Ljg1IEMgNy44MDQsLTAuNTY5IDcuNzM1LDEuMzc1IDcuNjE4LDIuNjU1IDcuNDc5LDMuNjUxIDguMzg1LDQuNTk5IDkuMzE0LDQuNjk0IGMgMS4wNjksMC4xMTggMi4wNDQsLTAuNjE3IDIuMTgzLC0xLjYxMyAwLjQ0MiwtMy4yNDcgMC4yNTUsLTE0LjQ1OSAwLC0xNy4wOSAtMC4xMzksLTAuOTQ4IC0xLjExNCwtMS43MyAtMi4xMTQsLTEuNjM1IC0xLjEzOCwwLjExOCAtMS44MTEsMS4wNDMgLTEuNzY1LDEuOTkxIDAuMTQsMS42MTEgMC4yMDksNC4zNjEgMC4yMzIsNy4yMDYgSCA2LjE1NCBjIC0wLjMwMSwtNC4zODUgLTIuMTgzLC03LjUxNSAtNi4xMzEsLTcuNDkxIiAvPjwvZz48L2c+PC9nPjwvZz48L3N2Zz4=';
+const INFO = {
+  A: { name: 'A안 · 로고만 바꾸기',
+    good: ['글자 \'EdgeEnglish 운영\' 대신 엣지영어 로고와 작은 \'운영\' 표시를 넣습니다.', '나머지 색·배치는 지금과 같습니다. 바뀌는 것이 가장 적습니다.'],
+    bad: ['브랜드 색은 로고에만 보입니다.'] },
+  B: { name: 'B안 · 로고 + 노랑 포인트',
+    good: ['로고를 넣고, 맨 위 막대 아래에 노란 선을 긋습니다.', '\'운영\' 표시는 진한 갈색 바탕에 노란 글자입니다.', '선택한 메뉴 아래에 갈색 밑줄, 휴대폰은 선택한 탭 위에 노란 막대를 둡니다.', '보라 버튼은 브랜드 보라 #7d5ffb로 맞춥니다. 지금 색과 거의 같습니다.', '카드·숫자 색은 그대로라 긴급(빨강)이 지금처럼 눈에 띕니다.'],
+    bad: ['노랑이 선·표시에만 들어가서, 한눈에 \'엣지영어\' 느낌은 C안보다 약합니다.'] },
+  C: { name: 'C안 · 브랜드 색 넓게',
+    good: ['맨 위 요약 3칸을 브랜드 보라 바탕에 흰 글자로 바꿉니다.', '선택한 메뉴와 \'+ 학생 등록\' 버튼을 노랑 바탕에 갈색 글자로 바꿉니다.', '엣지영어 느낌이 가장 강합니다.'],
+    bad: ['노랑 버튼이 주의·대기 표시(주황·노랑 계열)와 비슷해 보일 수 있습니다.', '보라 요약 칸이 가장 눈에 띄어서, 처리할 일(빨강 카드)로 눈이 덜 갑니다.', '바꿀 화면이 가장 많습니다. 학생 등록, 수업 변경, 강사 휴무 화면의 버튼까지 함께 바꿔야 합니다.'] },
+  now: { name: '지금 화면', good: ['비교용입니다. 지금 시험용 화면과 같습니다.'], bad: [] },
+};
+
+function logoHtml(v, phone) {
+  if (v === 'now') return '<a class="oldlogo">Edge<b>English</b> 운영</a>';
+  return `<a class="logo" title="대시보드 새로고침"><img src="${LOGO}" alt="엣지영어"><span class="tag">운영</span></a>`;
+}
+function screen(v, phone) {
+  const nav = phone ? '' : '<nav class="nav"><span class="on">홈</span><span>일정</span><span>학생</span></nav>';
+  const date = phone ? '' : '<span class="date">10월 28일 (수)</span>';
+  const cards = [['신규 학생 매칭', '3', '긴급 2', 1], ['강사 확인 대기', '1', '여유', 0], ['수강기간 종료 임박', '2', '긴급 1', 1], ['보강 미신청', '1', '여유', 0], ['오류·조치 필요', '4', '긴급 2', 1]]
+    .slice(0, phone ? 3 : 5).map(([a, b, c, u]) => `<div class="card${u ? ' urgent' : ''}"><small>${a}</small><strong>${b}</strong><em>${c}</em></div>`).join('');
+  return `<div class="v${v}">
+    <div class="dbbar">시험용 DB · 가상 데이터</div>
+    <header class="hdr">${logoHtml(v, phone)}${nav}<span class="grow"></span>${date}<span class="btn">+ 학생 등록</span></header>
+    <div class="body">
+      <div class="stats"><div class="stat"><small>수강 중 학생</small><strong>42명</strong></div><div class="stat"><small>이번 주 수업</small><strong>38 / 96</strong></div><div class="stat"><small>이번 달 등록</small><strong>17건</strong></div></div>
+      <div class="cards">${cards}</div>
+      <div class="task"><div class="t"><span class="pill">노쇼 신고</span>김하준 · 21:25 · 강사 Emma</div><div class="acts"><span class="ghost">강사 들어옴(지각)</span><span class="danger">노쇼 확정</span></div></div>
+    </div>
+    ${phone ? '<div class="tabbar"><span class="on">홈</span><span>일정</span><span>학생</span></div>' : ''}
+  </div>`;
+}
+function show(v) {
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  const i = INFO[v];
+  document.getElementById('panel').innerHTML = `
+    <div class="what"><h2>${i.name}</h2><ul>${i.good.map(t => `<li>${t}</li>`).join('')}${i.bad.map(t => `<li class="cons">단점: ${t}</li>`).join('')}</ul></div>
+    <div class="views">
+      <div><p class="label">PC</p><div class="pcscroll"><div class="pc">${screen(v, false)}</div></div></div>
+      <div><p class="label">휴대폰</p><div class="phone">${screen(v, true)}</div></div>
+    </div>`;
+}
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => show(b.dataset.v)));
+show('B');
+</script>
