@@ -1436,6 +1436,48 @@ select admin_makeup_request(null, '99999999-4000-0000-0000-000000001801', jsonb_
 select pg_temp.ok((select i.choice = 'wait' and n.status = 'sent' from leave_items i join lesson_notices n on n.leave_item_id = i.id and n.event = 'leave_options'
                    where i.migrated_item_id = '99999999-4000-0000-0000-000000001801'),
   '미확인 시트 휴가 보강에 보강 신청 → 기존 강사 보강을 고른 것으로 기록, 선택 안내는 보낸 것');
+-- 10-3) ③ 학생 LMS (2800): 학생이 휴무 안내에 직접 답하기 · 보강 날짜 고르기 · 본인 화면만
+reset role;
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+values ('77777777-1800-0000-0000-000000000004', '99999999-1000-0000-0000-000000001800', '99999999-0000-0000-0000-000000001800',
+        '55555555-0000-0000-0000-00000000180a', 'regular', 4, pg_temp.kst(4, '20:00'), pg_temp.kst(4, '20:40'));
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_leave_create('55555555-0000-0000-0000-00000000180a', (select d0 from lv), (select d0 + 6 from lv), '개인 휴가', false);
+select admin_leave_choose(array[pg_temp.li(4)], 'substitute', '55555555-0000-0000-0000-00000000180b');
+create temp table sli as select pg_temp.li(4) as id;
+reset role;
+insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000001800', 'student', '99999999-0000-0000-0000-000000001800');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000001800';
+select pg_temp.ok(not exists (select 1 from jsonb_array_elements(student_screen(null) -> 'leave') x where (x ->> 'id')::uuid = (select id from sli)),
+  '학생 화면: 대체강사에게 묻는 중인 수업은 아직 안 보임');
+select pg_temp.expect_error($$select student_leave_answer(array[(select id from sli)], 'ok')$$, '이미 정해졌거나');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_leave_sub_ok(array[(select id from sli)]);
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000001800';
+select pg_temp.ok((select x ->> 'stage' = 'tutor_ok' and x ->> 'sub_tutor' = '휴무B' from jsonb_array_elements(student_screen(null) -> 'leave') x where (x ->> 'id')::uuid = (select id from sli)),
+  '학생 화면: 대체강사가 가능하다고 한 수업은 대체강사 이름과 함께 보임');
+select pg_temp.expect_error($$select student_screen('99999999-0000-0000-0000-000000001802')$$, '42501');
+select pg_temp.expect_error($$select admin_leave_choose(array[(select id from sli)], 'wait', null)$$, '42501');
+select student_leave_answer(array[(select id from sli)], 'makeup');
+select pg_temp.ok(exists (select 1 from jsonb_array_elements(student_screen(null) -> 'makeup_rights') x where x ->> 'lesson_id' = '77777777-1800-0000-0000-000000000004'),
+  '학생이 기존 강사님과 보강: 운영진 화면과 같은 처리(강사 장기 휴식), 보강할 수업에 들어감');
+select pg_temp.expect_error($$select student_leave_answer(array[(select id from sli)], 'ok')$$, '이미 정해졌거나');
+select pg_temp.ok((select count(*) from student_makeup_options(null, '77777777-1800-0000-0000-000000000004', null)) > 0, '학생 보강 가능한 날짜가 나옴');
+select pg_temp.expect_error($$select student_makeup_request('77777777-1800-0000-0000-000000000004', null, jsonb_build_array(jsonb_build_object('starts_at', pg_temp.kst(4, '03:00'))))$$, '보강 가능한 날짜가 아닙니다');
+select pg_temp.expect_error($$select student_makeup_request('77777777-1800-0000-0000-000000000004', null, (select jsonb_agg(jsonb_build_object('starts_at', o.starts_at)) from (select starts_at from student_makeup_options(null, '77777777-1800-0000-0000-000000000004', null) limit 3) o))$$, '1~2개');
+select student_makeup_request('77777777-1800-0000-0000-000000000004', null, (select jsonb_agg(jsonb_build_object('starts_at', o.starts_at)) from (select starts_at from student_makeup_options(null, '77777777-1800-0000-0000-000000000004', null) order by starts_at limit 2) o));
+select pg_temp.ok((select x ->> 'status' = 'requested' and jsonb_array_length(x -> 'candidates') = 2 from jsonb_array_elements(student_screen(null) -> 'makeup_requests') x where x ->> 'lesson_id' = '77777777-1800-0000-0000-000000000004'),
+  '학생 보강 신청: 고른 날짜 2개로 신청됨(강사 확인 → 운영진 확정, 학생 신청만으로 확정 안 됨)');
+reset role;
+select pg_temp.ok(pg_temp.lst(4) = 'wait:-:canceled:Tutor long-term leave:휴무A', '학생 답 처리 결과는 운영진 기다림과 같음');
+select pg_temp.ok((select via = 'student_app' from makeup_requests where source_lesson_id = '77777777-1800-0000-0000-000000000004' and status = 'requested')
+              and exists (select 1 from lesson_notices n join makeup_requests r on r.id = n.makeup_request_id where r.source_lesson_id = '77777777-1800-0000-0000-000000000004' and n.event = 'makeup_ask'),
+  '학생 신청은 학생 앱 신청으로 기록, 강사 보강 요청 생김');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((student_screen('99999999-0000-0000-0000-000000001800') -> 'student' ->> 'id') = '99999999-0000-0000-0000-000000001800', '운영자는 학생 화면을 그대로 봄');
 -- 11) 권한: 운영자만
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
 select pg_temp.expect_error($$select admin_leave_create('55555555-0000-0000-0000-00000000180a', current_date, current_date, null, true)$$, '42501');
