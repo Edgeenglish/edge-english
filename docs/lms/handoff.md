@@ -7,7 +7,7 @@
 ## 🆕 2026-10-28 대표 새 요청 (wizardly-hypatia 세션에서 받음 → 새 세션 작업)
 - ✅ **LMS 관리 화면 왼쪽 위 'EdgeEnglish 운영' 로고를 누르면 새로고침(대시보드 다시 불러오기)** — 대표: '자꾸 착각해' → 2026-10-28 awesome-hopper 반영(`ui.tsx` AdminHeader, 어느 화면에서 눌러도 대시보드를 새로 엶), lms-test push. 대표 시험 → lms-prod 대기
 - **엣지영어 색·로고를 LMS에 적절히 섞어 넣기** → `docs/brand/README.md`(색: 노랑 **#ffd401** — 팔레트 이미지의 #fbd600 아님 · 보라 #7d5ffb·#7c5dff · 연보라 #aa96ff · 진한 갈색 #27230e) + 로고 `docs/brand/edge-english-logo.svg`(.ai 원본). 디자인 결정이라 **시안(PC·휴대폰) 먼저**
-  - **시안 (2026-10-28 awesome-hopper)** https://claude.ai/artifact/XpovHjyGmkJLFsKZQytQkM (원본 `docs/lms/previews/brand-drafts.html`): A 로고만 · **B 로고+노랑 포인트(Claude 추천)** · C 브랜드 색 넓게 → **대표 선택 대기**. 함께 물음: 영어인 강사 화면에도 한글 로고(엣지영어)를 넣을지
+  - **시안 (2026-10-28 awesome-hopper)** https://claude.ai/artifact/XpovHjyGmkJLFsKZQytQkM (원본 `docs/lms/previews/brand-drafts.html`): A 로고만 · **B 로고+노랑 포인트(Claude 추천)** · C 브랜드 색 넓게 → ✅ **대표 B안 선택 (2026-10-28) → 반영**: 운영 화면 위쪽 막대(로고+갈색 '운영' 표시, 노란 선, 선택 메뉴 갈색 밑줄, 휴대폰 탭 노란 막대) · 로그인 화면 로고 · LMS 보라 #7d5fff→#7d5ffb. 로고 파일 `public/images/brand/edge-english-logo.svg`. lms-test push, 대표 확인 → lms-prod 대기. **남은 질문: 영어인 강사 화면에도 한글 로고(엣지영어)를 넣을지**
 
 ## 🧾 시트·운영에서 찾은 문제 → LMS 반영 목록 (대표: 꼭 기억해서 LMS에 넣기, 새로 찾으면 바로 추가)
 | # | 찾은 문제 (날짜·사례) | LMS에서 막는 방법 | 상태 |
@@ -212,7 +212,7 @@
 - 대표 안내는 GitHub 대신 **복사 버튼 페이지** 방식으로 (2026-10-22 'GitHub 브랜치에서 열고'가 어렵다는 피드백)
 
 ## 대표 결정 대기 (새 세션을 시작할 때마다 대표에게 먼저 알릴 것)
-- **LMS 로고·색 시안 A/B/C (2026-10-28)** https://claude.ai/artifact/XpovHjyGmkJLFsKZQytQkM — 대표 선택 대기 + 강사 화면(영어)에도 한글 로고 넣을지
+- **LMS 로고·색**: B안 반영됨(lms-test) → 대표 확인 후 lms-prod. 남은 질문: 강사 화면(영어)에도 한글 로고 넣을지
 - **재등록 입력 + 종료 임박 [끝냄] 시안 (2026-10-28, claude/intelligent-wright-aqbe25)** https://claude.ai/artifact/397sv4kaLLvmT4SMPTGG9o (원본 `docs/lms/previews/renewal-input-drafts.html`) — 대표 답 대기 5개: ① 결제 금액 칸 ② 시작일 [바꾸기] 허용 ③ 이월 수업 처리 ④ 종료일 전 [끝냄] 때 강사 시간 ⑤ 강사 안내 방식. 실제 첫 대상: 송O나(11/13 종료)·이O옥(11/17 종료). 정O연은 LMS에 없어 재등록 때 기존 학생 입력 화면으로
 - ~~적립금 쓴 뒤 되돌리기~~ **닫음 (2026-10-27 대표: 너무 예외적, 생기면 대표에게 보고)** — 지금 구현(되돌리기 막고 '대표 확인 필요') 그대로
 - ~~이관 추가 수업·이월 수업 변경 규칙~~ **닫음 (2026-10-27 대표: 이미 답함)** — 정규와 같은 규칙(지금 구현) 유지

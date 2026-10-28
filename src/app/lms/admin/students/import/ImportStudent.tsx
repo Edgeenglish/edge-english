@@ -70,7 +70,7 @@ function Chips<T extends string | number>({ value, options, label, onPick }: { v
           type="button"
           onClick={() => onPick(o)}
           aria-pressed={value === o}
-          className={`min-h-[40px] min-w-[52px] rounded-[10px] border px-3 text-[14px] ${value === o ? 'border-[#7d5fff] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
+          className={`min-h-[40px] min-w-[52px] rounded-[10px] border px-3 text-[14px] ${value === o ? 'border-[#7d5ffb] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
         >
           {label(o)}
         </button>
@@ -283,7 +283,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     <li
                       key={p.index}
                       className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-[10px] border px-3 py-2 text-[13.5px] ${
-                        p.state === 'now' ? 'border-[#7d5fff] bg-[#efebff]' : p.state === 'past' ? 'border-[#e6e3ef] bg-[#f6f5fb] text-[#6b6880]' : 'border-[#e6e3ef]'
+                        p.state === 'now' ? 'border-[#7d5ffb] bg-[#efebff]' : p.state === 'past' ? 'border-[#e6e3ef] bg-[#f6f5fb] text-[#6b6880]' : 'border-[#e6e3ef]'
                       }`}
                     >
                       <b>{p.index}기간</b>
@@ -445,7 +445,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                         aria-pressed={m.originUnknown}
                         disabled={saved}
                         onClick={() => setMakeup(i, { originUnknown: !m.originUnknown, originalDate: '' })}
-                        className={`min-h-[44px] shrink-0 rounded-[10px] border px-3 text-[13px] ${m.originUnknown ? 'border-[#7d5fff] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
+                        className={`min-h-[44px] shrink-0 rounded-[10px] border px-3 text-[13px] ${m.originUnknown ? 'border-[#7d5ffb] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
                       >
                         날짜 확인 필요
                       </button>
@@ -708,7 +708,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       type="button"
                       disabled={checked === 'saving'}
                       onClick={() => confirmChecked(result.enrollmentId)}
-                      className="mt-2 min-h-[48px] w-full rounded-[10px] bg-[#7d5fff] text-[15px] font-bold text-white disabled:bg-[#cfc4ff]"
+                      className="mt-2 min-h-[48px] w-full rounded-[10px] bg-[#7d5ffb] text-[15px] font-bold text-white disabled:bg-[#cfc4ff]"
                     >
                       {checked === 'saving' ? '기록 중…' : '대조 완료'}
                     </button>
@@ -726,7 +726,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 type="button"
                 disabled={saving || (tried && (blockers.length > 0 || issues.length > 0))}
                 onClick={submit}
-                className={`mt-3 min-h-[52px] w-full rounded-[12px] text-[16px] font-bold bg-[#7d5fff] text-white disabled:bg-[#cfc4ff]`}
+                className={`mt-3 min-h-[52px] w-full rounded-[12px] text-[16px] font-bold bg-[#7d5ffb] text-white disabled:bg-[#cfc4ff]`}
               >
                 {saving ? '저장 중…' : '저장'}
               </button>

@@ -29,7 +29,7 @@ export type ChangeActions = {
   markSent: (noticeId: string) => Promise<void>;
 };
 
-const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5fff] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
+const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5ffb] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-3.5 text-[14px] text-[#1d1b2b] disabled:text-[#b9b6c8]';
 /** 누른 버튼: 회색으로 꽉 차게 (눌린 티, 2026-10-27 대표) */
 const btnDone = 'min-h-[44px] rounded-[10px] border border-[#c9c6d6] bg-[#d9d6e3] px-3.5 text-[14px] font-bold text-[#4a4760]';
@@ -153,7 +153,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                         type="button"
                         aria-pressed={l.id === lessonId}
                         onClick={() => setLessonId(l.id === lessonId ? null : l.id)}
-                        className={`flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border px-3 py-2 text-left ${l.id === lessonId ? 'border-[#7d5fff] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}
+                        className={`flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border px-3 py-2 text-left ${l.id === lessonId ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}
                       >
                         <b className="text-[16px] text-[#1d1b2b]">{kstLabel(l.startsAt)}</b>
                         <span className="flex-1 text-right text-[13px] text-[#6b6880]">{lessonTag(l)} · {l.tutorName}</span>
@@ -254,7 +254,7 @@ function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="요청한 사람">
           {(['student', 'tutor'] as const).map((w) => (
             <button key={w} type="button" aria-pressed={who === w} onClick={() => setWho(w)}
-              className={`min-h-[44px] rounded-[10px] border text-[14.5px] font-semibold ${who === w ? 'border-[#7d5fff] bg-[#efebff] text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
+              className={`min-h-[44px] rounded-[10px] border text-[14.5px] font-semibold ${who === w ? 'border-[#7d5ffb] bg-[#efebff] text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
               {w === 'student' ? '학생 요청' : '강사 요청'}
             </button>
           ))}

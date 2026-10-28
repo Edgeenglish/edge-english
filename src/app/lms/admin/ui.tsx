@@ -48,8 +48,10 @@ export function TopNav({ active, demo }: { active: AdminTab; demo: boolean }) {
           key={t.key}
           href={withDemo(t.href, demo)}
           aria-current={active === t.key ? 'page' : undefined}
-          className={`flex min-h-[38px] items-center gap-1.5 rounded-[10px] px-3 text-[13.5px] font-semibold ${
-            active === t.key ? 'bg-[#efebff] text-[#5b3fe0]' : 'text-[#6b6880]'
+          className={`relative flex min-h-[38px] items-center gap-1.5 rounded-[10px] px-3 text-[13.5px] font-semibold ${
+            active === t.key
+              ? "bg-[#efebff] text-[#5b3fe0] after:absolute after:inset-x-2.5 after:-bottom-[15px] after:h-[3px] after:rounded-full after:bg-[#27230e] after:content-['']"
+              : 'text-[#6b6880]'
           }`}
         >
           <Icon name={t.icon} className="h-[18px] w-[18px]" />
@@ -69,7 +71,11 @@ export function BottomNav({ active, demo }: { active: AdminTab; demo: boolean })
           key={t.key}
           href={withDemo(t.href, demo)}
           aria-current={active === t.key ? 'page' : undefined}
-          className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 text-[12px] font-semibold ${active === t.key ? 'text-[#7d5fff]' : 'text-[#6b6880]'}`}
+          className={`relative flex min-h-[54px] flex-col items-center justify-center gap-0.5 text-[12px] font-semibold ${
+            active === t.key
+              ? "text-[#7d5ffb] before:absolute before:inset-x-[30%] before:top-0 before:h-[3px] before:rounded-b-[3px] before:bg-[#ffd401] before:content-['']"
+              : 'text-[#6b6880]'
+          }`}
         >
           <Icon name={t.icon} />
           {t.label}
@@ -82,10 +88,11 @@ export function BottomNav({ active, demo }: { active: AdminTab; demo: boolean })
 /** 운영자 화면 위쪽 막대 */
 export function AdminHeader({ active, demo, right }: { active: AdminTab; demo: boolean; right?: React.ReactNode }) {
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[#e6e3ef] bg-white px-4 py-3 lg:px-7">
+    <header className="sticky top-0 z-10 flex items-center gap-3 border-b-[3px] border-[#ffd401] bg-white px-4 py-3 lg:px-7">
       {/* 로고 = 대시보드 새로고침. Link 는 같은 주소면 다시 불러오지 않아서 일반 a 로 페이지 전체를 다시 연다 */}
-      <a href={withDemo('/lms/admin', demo)} title="대시보드 새로고침" className="text-[15px] font-extrabold tracking-tight text-[#09246b]">
-        Edge<span className="text-[#7d5fff]">English</span> <span className="text-[#09246b]">운영</span>
+      <a href={withDemo('/lms/admin', demo)} title="대시보드 새로고침" className="flex shrink-0 items-center gap-1.5">
+        <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
+        <span className="rounded-[6px] bg-[#27230e] px-[7px] py-[3px] text-[12px] font-extrabold text-[#ffd401]">운영</span>
       </a>
       <TopNav active={active} demo={demo} />
       <span className="flex-1" />

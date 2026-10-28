@@ -48,7 +48,7 @@ export default function RenewalNotice({ text, sentAt, onSent }: { text: string; 
             보냄 ✓
           </button>
         ) : (
-          <button type="button" disabled={busy} onClick={sent} className="min-h-[44px] rounded-[10px] bg-[#7d5fff] px-3 text-[14px] font-bold text-white disabled:bg-[#cfc4ff]">
+          <button type="button" disabled={busy} onClick={sent} className="min-h-[44px] rounded-[10px] bg-[#7d5ffb] px-3 text-[14px] font-bold text-white disabled:bg-[#cfc4ff]">
             보냄
           </button>
         )}

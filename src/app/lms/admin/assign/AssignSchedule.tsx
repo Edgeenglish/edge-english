@@ -304,7 +304,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                       key={c.date}
                       type="button"
                       onClick={() => setFirstPick(c.date)}
-                      className={`min-h-[40px] rounded-full border px-3 text-[13.5px] ${c.date === firstDate ? 'border-[#7d5fff] bg-[#efebff] font-semibold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
+                      className={`min-h-[40px] rounded-full border px-3 text-[13.5px] ${c.date === firstDate ? 'border-[#7d5ffb] bg-[#efebff] font-semibold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
                     >
                       {dayLabel(c.date)} {c.issues === 0 ? '✓' : `충돌 ${c.issues}`}
                     </button>
@@ -334,7 +334,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                     type="button"
                     disabled={!ready || saving}
                     onClick={() => save(false)}
-                    className="min-h-[52px] rounded-[12px] bg-[#7d5fff] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]"
+                    className="min-h-[52px] rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]"
                   >
                     {saving ? '저장 중…' : '아직 → 제안 문구 복사'}
                   </button>
@@ -342,7 +342,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                     type="button"
                     disabled={!ready || saving}
                     onClick={() => save(true)}
-                    className="min-h-[52px] rounded-[12px] border-[1.5px] border-[#7d5fff] bg-white text-[16px] font-bold text-[#4b33c4] disabled:opacity-50"
+                    className="min-h-[52px] rounded-[12px] border-[1.5px] border-[#7d5ffb] bg-white text-[16px] font-bold text-[#4b33c4] disabled:opacity-50"
                   >
                     가능하대요 → 확정
                   </button>

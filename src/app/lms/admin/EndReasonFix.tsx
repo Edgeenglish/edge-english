@@ -37,7 +37,7 @@ export default function EndReasonFix({ weeks, onSave }: { weeks: number | null; 
             type="button"
             aria-pressed={reason === r}
             onClick={() => setReason(r)}
-            className={`min-h-[40px] rounded-[10px] border px-3 text-[13.5px] ${reason === r ? 'border-[#7d5fff] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
+            className={`min-h-[40px] rounded-[10px] border px-3 text-[13.5px] ${reason === r ? 'border-[#7d5ffb] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
           >
             {END_REASON_TEXT[r]}
           </button>
@@ -56,7 +56,7 @@ export default function EndReasonFix({ weeks, onSave }: { weeks: number | null; 
         type="button"
         disabled={!ready || busy}
         onClick={save}
-        className="min-h-[40px] w-fit rounded-[10px] border border-[#7d5fff] bg-[#7d5fff] px-3 text-[13.5px] font-semibold text-white disabled:border-[#cfc4ff] disabled:bg-[#cfc4ff]"
+        className="min-h-[40px] w-fit rounded-[10px] border border-[#7d5ffb] bg-[#7d5ffb] px-3 text-[13.5px] font-semibold text-white disabled:border-[#cfc4ff] disabled:bg-[#cfc4ff]"
       >
         저장
       </button>

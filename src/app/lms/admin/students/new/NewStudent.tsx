@@ -428,7 +428,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         </p>
       )}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => setEditing((v) => !v)} className={`min-h-[44px] rounded-[10px] border text-[14px] font-semibold ${editing ? 'border-[#7d5fff] bg-[#efebff] text-[#5b3fe0]' : 'border-[#cfc4ff] text-[#5b3fe0]'}`}>
+        <button type="button" onClick={() => setEditing((v) => !v)} className={`min-h-[44px] rounded-[10px] border text-[14px] font-semibold ${editing ? 'border-[#7d5ffb] bg-[#efebff] text-[#5b3fe0]' : 'border-[#cfc4ff] text-[#5b3fe0]'}`}>
           {editing ? '수정 끝내기' : '✎ 신청서 내용 수정'}
         </button>
         <Field label="" wide={false}>
@@ -560,7 +560,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
                 key={c.date}
                 type="button"
                 onClick={() => setFirstPick(c.date)}
-                className={`min-h-[36px] rounded-full border px-3 text-[13px] ${c.date === firstDate ? 'border-[#7d5fff] bg-[#efebff] font-semibold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
+                className={`min-h-[36px] rounded-full border px-3 text-[13px] ${c.date === firstDate ? 'border-[#7d5ffb] bg-[#efebff] font-semibold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
               >
                 {dayLabel(c.date)} {c.issues === null ? '' : c.issues === 0 ? '✓' : `충돌 ${c.issues}`}
               </button>
@@ -576,7 +576,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       <Card title="결제·입금 확인">
         <div className="grid grid-cols-2 gap-2">
           {(['confirmed', 'unconfirmed'] as const).map((s) => (
-            <button key={s} type="button" aria-pressed={pay.status === s} onClick={() => setPay({ ...pay, status: s })} className={`min-h-[46px] rounded-[10px] border text-[14px] font-semibold ${pay.status === s ? 'border-[#7d5fff] bg-[#efebff] text-[#5b3fe0]' : 'border-[#e6e3ef] text-[#1d1b2b]'}`}>
+            <button key={s} type="button" aria-pressed={pay.status === s} onClick={() => setPay({ ...pay, status: s })} className={`min-h-[46px] rounded-[10px] border text-[14px] font-semibold ${pay.status === s ? 'border-[#7d5ffb] bg-[#efebff] text-[#5b3fe0]' : 'border-[#e6e3ef] text-[#1d1b2b]'}`}>
               {s === 'confirmed' ? '입금·결제 확인함' : '아직 확인 전'}
             </button>
           ))}
@@ -647,16 +647,16 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         (draftPlan ? (
           <div className="mt-4 grid gap-2">
             <p className="text-[15px] font-bold text-[#1d1b2b]">강사에게 물어봤나요?</p>
-            <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit(false, true)} className="min-h-[52px] rounded-[12px] bg-[#7d5fff] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
+            <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit(false, true)} className="min-h-[52px] rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
               {saving ? '저장 중…' : '아직 → 제안 문구 복사'}
             </button>
-            <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit(true)} className="min-h-[52px] rounded-[12px] border-[1.5px] border-[#7d5fff] bg-white text-[16px] font-bold text-[#4b33c4] disabled:opacity-50">
+            <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit(true)} className="min-h-[52px] rounded-[12px] border-[1.5px] border-[#7d5ffb] bg-white text-[16px] font-bold text-[#4b33c4] disabled:opacity-50">
               가능하대요 → 확정
             </button>
             {demo && <p className="text-[12.5px] text-[#6b6880]">미리보기 — 실제로 저장되지 않아요</p>}
           </div>
         ) : (
-          <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit()} className="mt-4 min-h-[52px] w-full rounded-[12px] bg-[#7d5fff] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
+          <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit()} className="mt-4 min-h-[52px] w-full rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
             {saving ? '저장 중…' : demo ? '저장 (미리보기 — 실제로 저장 안 됨)' : '등록 저장 (결제 대기)'}
           </button>
         ))}
@@ -726,7 +726,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
                   이전
                 </button>
               )}
-              <button type="button" onClick={() => go(step <= 2 ? 3 : 4)} className="min-h-[48px] rounded-[12px] bg-[#7d5fff] px-6 text-[15px] font-bold text-white">
+              <button type="button" onClick={() => go(step <= 2 ? 3 : 4)} className="min-h-[48px] rounded-[12px] bg-[#7d5ffb] px-6 text-[15px] font-bold text-white">
                 {step <= 2 ? '다음: 수업 정보 및 결제 확인 →' : '다음: 최종 확인 →'}
               </button>
             </div>
@@ -747,7 +747,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           </button>
         )}
         {step < 4 && (
-          <button type="button" onClick={() => go(step + 1)} className="min-h-[50px] flex-1 rounded-[12px] bg-[#7d5fff] text-[15px] font-bold text-white">
+          <button type="button" onClick={() => go(step + 1)} className="min-h-[50px] flex-1 rounded-[12px] bg-[#7d5ffb] text-[15px] font-bold text-white">
             {nextLabel}
           </button>
         )}
@@ -794,8 +794,8 @@ function Stepper({ step, onStep }: { step: number; onStep: (n: number) => void }
         const done = n < step;
         return (
           <li key={label} className="relative flex flex-col items-center text-center">
-            {i > 0 && <span className={`absolute right-1/2 top-[15px] h-[2px] w-full ${n <= step ? 'bg-[#7d5fff]' : 'bg-[#e1dcf5]'}`} />}
-            <button type="button" onClick={() => onStep(n)} className={`relative z-[1] flex h-8 w-8 items-center justify-center rounded-full text-[14px] font-bold ${on || done ? 'bg-[#7d5fff] text-white' : 'bg-[#e4ddff] text-white'}`}>
+            {i > 0 && <span className={`absolute right-1/2 top-[15px] h-[2px] w-full ${n <= step ? 'bg-[#7d5ffb]' : 'bg-[#e1dcf5]'}`} />}
+            <button type="button" onClick={() => onStep(n)} className={`relative z-[1] flex h-8 w-8 items-center justify-center rounded-full text-[14px] font-bold ${on || done ? 'bg-[#7d5ffb] text-white' : 'bg-[#e4ddff] text-white'}`}>
               {n}
             </button>
             <span className={`mt-1.5 whitespace-pre-line text-[13px] ${on ? 'font-bold text-[#1d1b2b]' : 'text-[#6b6880]'}`}>{label}</span>
