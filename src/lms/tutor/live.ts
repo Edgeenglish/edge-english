@@ -24,6 +24,11 @@ export async function answerMakeup(sb: SupabaseClient, requestId: string, yes: s
   check(await sb.rpc('tutor_makeup_answer', { p_request: requestId, p_yes: yes, p_note: note }));
 }
 
+/** 대체 수업 요청 답 (2600): items = 이번에 답하는 수업 전체, yes = 그중 가능한 수업 */
+export async function answerCover(sb: SupabaseClient, items: string[], yes: string[]): Promise<void> {
+  check(await sb.rpc('tutor_sub_answer', { p_items: items, p_yes: yes }));
+}
+
 export type TutorAccount = { id: string; name: string; timezone: string; active: boolean; hasLogin: boolean };
 /** 운영자: 강사 화면을 열 강사 목록 */
 export async function loadTutorAccounts(sb: SupabaseClient): Promise<TutorAccount[]> {

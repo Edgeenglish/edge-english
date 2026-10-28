@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { answerMakeup, createTutorLogin, loadTutorAccounts, loadTutorScreen, recordClass, type TutorAccount } from '@/lms/tutor/live';
+import { answerCover, answerMakeup, createTutorLogin, loadTutorAccounts, loadTutorScreen, recordClass, type TutorAccount } from '@/lms/tutor/live';
 import { weekOf, type TutorScreen } from '@/lms/tutor/screen';
 import TutorHome, { type TutorActions } from './TutorHome';
 
@@ -51,6 +51,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
         load: (from, to) => loadTutorScreen(sb, adminTutor, from, to),
         record: (id, r, t, rm) => recordClass(sb, id, r, t, rm),
         answer: (id, yes, note) => answerMakeup(sb, id, yes, note),
+        answerCover: (items, yes) => answerCover(sb, items, yes),
       },
     [sb, adminTutor],
   );

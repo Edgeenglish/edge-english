@@ -1333,6 +1333,22 @@ select admin_leave_choose(array[pg_temp.li(3)], 'substitute', '55555555-0000-000
 select admin_leave_choose(array[pg_temp.li(3)], 'wait', null);
 select pg_temp.ok((select array_agg(event || ':' || status order by event) from lesson_notices where leave_item_id = pg_temp.li(3)) = '{leave_options:pending,sub_ask:not_needed}',
   '1단계에서 대체강사 → 보강으로 바꿔도 휴무 안내(2단계 글)는 남음, 대체강사 묻기만 보낼 필요 없음 (2500)');
+-- 강사 화면 대체 요청 답 (2600): 불가 → 다시 고르기 필요 + 그 강사는 목록에서 불가 / 가능 → 학생에게 제안할 수 있게
+select admin_leave_choose(array[pg_temp.li(3)], 'substitute', '55555555-0000-0000-0000-00000000180b');
+select pg_temp.ok((select jsonb_array_length(tutor_screen('55555555-0000-0000-0000-00000000180b', current_date, current_date) -> 'covers') = 1),
+  '대체강사 화면에 대체 수업 요청 1건 (2600)');
+select tutor_sub_answer(array[pg_temp.li(3)], '{}');
+select pg_temp.ok((select choice = 'undecided' and sub_tutor_id is null and '55555555-0000-0000-0000-00000000180b' = any(sub_declined) from leave_items where id = pg_temp.li(3))
+              and (select free = 0 from admin_leave_sub_options(array[pg_temp.li(3)]) where name = '휴무B')
+              and (select status = 'not_needed' from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_ask' order by created_at desc limit 1),
+  '강사가 불가: 다시 대체 강사 고르기 필요, 그 강사는 목록에서 불가, WhatsApp으로 물어볼 글은 보낼 필요 없음 (2600)');
+select admin_leave_choose(array[pg_temp.li(3)], 'substitute', '55555555-0000-0000-0000-00000000180b');
+select tutor_sub_answer(array[pg_temp.li(3)], array[pg_temp.li(3)]);
+select pg_temp.ok((select sub_stage = 'tutor_ok' from leave_items where id = pg_temp.li(3))
+              and exists (select 1 from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_student' and status = 'pending'),
+  '강사가 가능: 강사 가능 상태 + 학생에게 제안할 글 생김 (2600)');
+select pg_temp.expect_error($$select tutor_sub_answer(array[pg_temp.li(3)], '{}')$$, 'closed');
+select admin_leave_choose(array[pg_temp.li(3)], 'wait', null);
 create temp table lmk as select (admin_makeup_request('77777777-1800-0000-0000-000000000005', null,
   jsonb_build_array(jsonb_build_object('starts_at', pg_temp.kst(23, '20:00'))), now()) ->> 'makeup_request_id')::uuid as id;
 select admin_makeup_confirm((select id from lmk), pg_temp.kst(23, '20:00'));

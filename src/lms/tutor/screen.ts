@@ -37,11 +37,15 @@ export type TutorMakeup = {
   slots: MakeupSlot[];
 };
 
+/** 대체 수업 요청 (2600): 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 */
+export type TutorCover = { id: string; student: string; startsAt: Date; endsAt: Date; busy: boolean };
+
 export type TutorScreen = {
   tutor: { id: string; name: string; timezone: string; meetUrl: string | null };
   lessons: TutorLesson[];
   toRecord: string[];
   makeups: TutorMakeup[];
+  covers: TutorCover[];
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB 함수가 돌려주는 JSON 을 화면 모양으로 바꾸는 곳 */
@@ -60,6 +64,7 @@ export function parseScreen(j: any): TutorScreen {
       id: m.id, student: m.student, originalAt: at(m.original_at), originalDate: m.original_date ?? null, note: m.note ?? null, answeredAt: at(m.answered_at),
       slots: (m.slots ?? []).map((s: any) => ({ id: s.id, startsAt: new Date(s.starts_at), endsAt: new Date(s.ends_at), answer: s.answer ?? null, busy: !!s.busy, past: !!s.past })),
     })),
+    covers: (j.covers ?? []).map((c: any) => ({ id: c.id, student: c.student, startsAt: new Date(c.starts_at), endsAt: new Date(c.ends_at), busy: !!c.busy })),
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

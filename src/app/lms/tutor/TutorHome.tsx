@@ -6,13 +6,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   answerReady, canRecord, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus,
-  statusText, timeRange, weekOf, whenText, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
+  statusText, timeRange, weekOf, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
 } from '@/lms/tutor/screen';
 
 export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
   record: (lessonId: string, result: TutorResult, topics: string, remarks: string) => Promise<void>;
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
+  /** 대체 수업 요청 답: items = 답하는 수업 전체, yes = 가능한 수업 */
+  answerCover: (items: string[], yes: string[]) => Promise<void>;
 };
 
 const card = 'rounded-[14px] border border-[#e6e3ef] bg-white p-4';
@@ -104,6 +106,17 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
                     await reload();
                   }} />
               </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {screen.covers.length > 0 && (
+        <section className="mb-6">
+          <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">Cover requests</h2>
+          <div className="grid gap-3">
+            {groupCovers(screen.covers).map((g) => (
+              <CoverCard key={g.map((c) => c.id).join()} covers={g} tz={tz} actions={actions} onSent={() => reload()} />
             ))}
           </div>
         </section>
@@ -282,6 +295,64 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved }: {
         <button type="button" disabled={!ready || busy} onClick={save} className={`${btnMain} flex-1`}>{busy ? 'Saving…' : 'Save'}</button>
         {l.state === 'done' && <button type="button" disabled={busy} onClick={() => setEditing(false)} className={btnSub}>Cancel</button>}
       </div>
+    </div>
+  );
+}
+
+/** 같은 학생 대체 수업은 한 카드로 */
+function groupCovers(covers: TutorCover[]): TutorCover[][] {
+  const m = new Map<string, TutorCover[]>();
+  for (const c of covers) m.set(c.student, [...(m.get(c.student) ?? []), c]);
+  return [...m.values()];
+}
+
+// 대체 수업 요청: 가능한 수업만 체크해 보내기 (체크 안 한 수업 = 불가). 확정은 운영진이 학생 답을 받은 뒤
+function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: string; actions: TutorActions; onSent: () => Promise<void> }) {
+  const [yes, setYes] = useState<Set<string>>(() => new Set());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function send() {
+    setBusy(true);
+    setErr('');
+    try {
+      await actions.answerCover(covers.map((c) => c.id), [...yes]);
+      await onSent();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not send. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className={card}>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <b className="text-[16px] text-[#1d1b2b]">{covers[0].student}</b>
+        <span className="text-[13px] text-[#6b6880]">{minutesOf(covers[0])} min · not confirmed yet</span>
+      </div>
+      <p className="mb-1.5 mt-3 text-[13px] font-semibold text-[#55526a]">Available?</p>
+      <div className="grid gap-1.5">
+        {covers.map((c) => {
+          const on = yes.has(c.id);
+          const kst = kstText(c.startsAt, tz);
+          return (
+            <button key={c.id} type="button" role="checkbox" aria-checked={on} disabled={busy}
+              onClick={() => { const n = new Set(yes); if (on) n.delete(c.id); else n.add(c.id); setYes(n); }}
+              className={`flex min-h-[52px] items-center gap-3 rounded-[10px] border px-3 py-2 text-left ${on ? 'border-[#5b3fe0] bg-[#efebff]' : 'border-[#d9d5e6] bg-white'}`}>
+              <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border text-[14px] font-bold ${
+                on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>✓</span>
+              <span className="flex-1">
+                <b className="block text-[15px] text-[#1d1b2b]">{whenText(c.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(c, tz)}</b>
+                {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
+                {c.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">You have another class or time off then</span>}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {err && <p className="mt-2 text-[14px] text-[#b3261e]">{err}</p>}
+      <button type="button" disabled={busy} onClick={send} className={`${btnMain} mt-3 w-full`}>
+        {busy ? 'Sending…' : yes.size === 0 ? 'None of these work' : `Send answer · ${yes.size} available`}
+      </button>
     </div>
   );
 }

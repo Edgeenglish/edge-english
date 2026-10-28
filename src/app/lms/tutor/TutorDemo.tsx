@@ -19,6 +19,9 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
       data.s.makeups = data.s.makeups.map((m) => (m.id === id
         ? { ...m, note: note || null, answeredAt: new Date(), slots: m.slots.map((x) => ({ ...x, answer: yes.includes(x.id) ? 'yes' as const : 'no' as const })) } : m));
     },
+    answerCover: async (items) => {
+      data.s.covers = data.s.covers.filter((c) => !items.includes(c.id));
+    },
   }), [data]);
   return <TutorHome initial={data.s} nowIso={nowIso} actions={actions} />;
 }

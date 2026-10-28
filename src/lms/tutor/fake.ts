@@ -26,5 +26,9 @@ export function fakeTutorScreen(now: Date): TutorScreen {
         { id: 's2', startsAt: h(94), endsAt: new Date(+h(94) + 20 * 60000), answer: null, busy: true, past: false },
       ],
     }],
+    covers: [
+      { id: 'c1', student: 'Minsu Kim', startsAt: h(52), endsAt: new Date(+h(52) + 40 * 60000), busy: false },
+      { id: 'c2', student: 'Minsu Kim', startsAt: h(100), endsAt: new Date(+h(100) + 40 * 60000), busy: false },
+    ],
   };
 }
