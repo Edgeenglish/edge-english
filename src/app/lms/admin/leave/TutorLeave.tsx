@@ -306,7 +306,6 @@ const Fold = ({ title, children }: { title: string; children: React.ReactNode })
 // 할 일도 보여 줄 것도 없는 단계는 못 누름. 처리해도 보던 단계에 머물고, 아래 [다음 단계 ›]로 넘어감
 function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStudentGroup; w: LvStudentWork; msgs: LvMessage[]; leaveTutor: string; now: Date; actions: LeaveActions; done: () => Promise<void> }) {
   const [view, setView] = useState<number | null>(null);
-  const [perRow, setPerRow] = useState(false);
   // 처리(고르기·저장·확정)를 해도 보던 단계 화면에 그대로 머묾 — 처리한 것은 사라지지 않고 상태가 바뀌거나 접힘 (2026-10-28 대표)
   const next = async () => { setView(sel); await done(); };
   const r = useRun(next);
@@ -348,11 +347,10 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
   const pageNodes = (n: number): React.ReactNode[] => {
     const out: React.ReactNode[] = [];
     if (n === 0) {
-      const rowMode = perRow || g.items.some((i) => i.choice !== 'undecided');
       if (w.pick.length) out.push(
         <Block key="pick" title="날짜마다 대체 강사 고르기">
-          <ItemList items={w.pick} action={(i) => (rowMode ? <RowChoose item={i} actions={actions} done={next} /> : null)} />
-          {!rowMode && <ChooseBox items={w.pick} actions={actions} done={next} onPerRow={() => setPerRow(true)} />}
+          <PickTutors key={w.pick.map((i) => i.id).join()} items={w.pick} actions={actions} done={next} />
+          <ItemList items={w.pick} action={(i) => <RowChoose item={i} actions={actions} done={next} />} />
         </Block>,
       );
       for (const t of w.tutor) {
@@ -592,28 +590,24 @@ function ItemList({ items, action }: { items: LvItem[]; action?: (i: LvItem) => 
   );
 }
 
-// 대체강사 / 기존 강사 보강 고르기 (모든 날짜 한 번에, 필요하면 일부 날짜만)
-function ChooseBox({ items, actions, done, onPerRow }: { items: LvItem[]; actions: LeaveActions; done: () => Promise<void>; onPerRow: () => void }) {
+// 남은 수업 전체 기준 강사별 맡을 수 있는 횟수 (많은 순). 누르면 그 강사가 되는 날짜를 모두 그 강사로 → 남은 날짜는 아래 줄마다 (2026-10-28 대표)
+function PickTutors({ items, actions, done }: { items: LvItem[]; actions: LeaveActions; done: () => Promise<void> }) {
   const [options, setOptions] = useState<LvSubOption[] | null>(null);
   const r = useRun(done);
-  const ids = items.map((i) => i.id);
+  const { setErr } = r;
+  const ids = items.map((i) => i.id).join(',');
+  useEffect(() => {
+    let live = true;
+    actions.subOptions(ids.split(',')).then(
+      (o) => live && setOptions(o),
+      (e) => live && setErr(e instanceof Error ? e.message : '강사 목록을 읽지 못했어요.'),
+    );
+    return () => { live = false; };
+  }, [actions, ids, setErr]);
   return (
-    <div className="grid gap-2">
-      <div className="grid grid-cols-2 gap-1.5">
-        <button type="button" disabled={r.busy} className={btnSub} onClick={async () => {
-          r.setErr('');
-          try { setOptions(await actions.subOptions(ids)); } catch (e) { r.setErr(e instanceof Error ? e.message : '강사 목록을 읽지 못했어요.'); }
-        }}>
-          대체 강사 고르기
-        </button>
-        <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => actions.choose(ids, 'wait', null), () => setOptions(null))}>
-          대체 강사 없음 → 보강
-        </button>
-      </div>
-      {items.length > 1 && (
-        <button type="button" className="min-h-[36px] text-left text-[13.5px] font-semibold text-[#5b3fe0]" onClick={onPerRow}>날짜마다 따로 선택 ›</button>
-      )}
-      {options && <SubOptions options={options} items={items} busy={r.busy} pick={(id, sel) => r.run(() => actions.choose(sel, 'substitute', id), () => setOptions(null))} />}
+    <div className="grid gap-1.5">
+      {options === null ? <p className="text-[13.5px] text-[#6b6880]">불러오는 중…</p>
+        : <SubOptions options={options} items={items} busy={r.busy} pick={(id, sel) => r.run(() => actions.choose(sel, 'substitute', id))} />}
       <Err>{r.err}</Err>
     </div>
   );
@@ -654,7 +648,7 @@ function SubOptions({ options, items, busy, pick }: { options: LvSubOption[]; it
             className="flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2 text-left disabled:bg-[#faf9fd] disabled:text-[#b9b6c8]">
             <b className="text-[15px]">{o.name}</b>
             <span className="flex-1 text-right text-[13px] text-[#6b6880]">
-              {o.free === items.length ? `수업 ${items.length}회 모두 일정상 가능` : `${o.free}회 일정상 가능 · ${o.busyDates.join('·')}은 기존 수업과 겹침`}
+              {o.free === items.length ? `${o.free}회 모두 가능` : `${o.free}회 가능 · ${o.busyDates.join('·')} 불가`}
             </span>
           </button>
         </li>
