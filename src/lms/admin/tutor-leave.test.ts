@@ -78,11 +78,13 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(w2.steps).toEqual(['propose']);
     expect(w2.proposal?.status).toBe('pending');
     expect([...w2.proposal!.noticeIds].sort()).toEqual(['o1', 'o2', 'o3', 's1', 's2']);
+    // 2026-10-28 대표 문구: 날짜만, 맨 끝에 학생 LMS 링크 (강사 프로필·답은 LMS에서)
     expect(w2.proposal?.text).toBe([
-      '[엣지영어] 김민수님, 담당 강사님 휴무로 아래 수업은 대체강사와 평소 시간에 진행하려고 해요. 강사님 프로필도 함께 보내 드려요.',
-      '11월 2일(월) 오후 8시 · Benny 강사님\n11월 4일(수) 오후 8시 · Benny 강사님',
-      '11월 9일(월) 오후 8시 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.',
-      '기존 강사님과 보강을 원하시면 말씀해 주세요.',
+      '[엣지영어] 안녕하세요, 김민수님! \n다름이 아니라 담당 강사님 휴무로 부득이하게 아래 날짜에는 수업을 진행하기 어렵게 되었어요.🥲',
+      '- 11월 2일(월) 오후 8시\n- 11월 4일(수) 오후 8시\n- 11월 9일(월) 오후 8시',
+      '추천드리는 방법은, 원래 시간에 대체강사와 수업하는 거예요!\n일정을 바꾸지 않고, 평소 수업 시간 그대로 수업하실 수 있어요.\n다른 강사의 영어와 수업 방식도 경험해 보실 수 있습니다:)',
+      '아래 링크에서 강사님 프로필을 확인하시고, 원하시는 수업 방법을 편하게 선택해 주세요. \n감사합니다🙇‍♀️',
+      '/lms/student',
     ].join('\n\n'));
     // 보낸 뒤 → 3단계(학생 답) + 4단계(보강 날짜). 보낸 글은 그대로 남음
     const sent = before.map((n) => ({ ...n, status: 'sent' as const }));
@@ -98,7 +100,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     const m = leaveMessages(items, [{ id: 'o', itemId: 'a', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null }]);
     const w = studentWork(groupByStudent(items)[0], m, now, { from: '2026-11-02', to: '2026-11-10' });
     expect(w.steps).toEqual(['propose']);
-    expect(w.proposal?.text).toBe('[엣지영어] 김민수님, 담당 강사님 휴무(11/2~11/10)로 아래 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.\n\n- 11월 2일(월) 오후 8시');
+    expect(w.proposal?.text).toBe('[엣지영어] 안녕하세요, 김민수님! \n다름이 아니라 담당 강사님 휴무로 부득이하게 아래 날짜에는 수업을 진행하기 어렵게 되었어요.🥲\n\n- 11월 2일(월) 오후 8시\n\n아래 링크에서 보강 날짜를 편하게 골라 주세요. \n감사합니다🙇‍♀️\n\n/lms/student');
     expect(w.confirm.makeup).toEqual([]);
   });
 

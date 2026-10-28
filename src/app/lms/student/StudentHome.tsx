@@ -1,12 +1,17 @@
 'use client';
 
 // 학생 마이페이지 A-1 (카드 쌓기형) — 휴대폰: 카드 순서대로 + 아래 탭 / PC: 왼쪽 메뉴 + 가운데 카드 + 오른쪽 현황·결제
-// 판정은 모두 src/lms/student/home.ts (6시간 규칙은 rules/change.ts). 미리보기에서는 눌러도 저장·발송하지 않는다.
+// 판정은 src/lms/student/home.ts (6시간 규칙은 rules/change.ts), 저장은 DB 함수(migration 2800, StudentActions).
+// ③ 학생 LMS (2026-10-28 대표): 휴무 안내에 한 번에 답(A안) · 보강 날짜는 달력에서 고르기 · 직접 취소
+// 미리보기(?demo=1)는 같은 화면에 브라우저 안에서만 흉내 내는 동작(fakeStore)을 넣음 — 저장·발송 없음
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import books from '@/data/books.json';
+import { homepageProfile } from '@/lms/admin/homepage-tutor';
+import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
 import { diffDays, formatInZone, hoursBetween, type KstDate } from '@/lms/rules/dates';
-import { fakeStudent } from '@/lms/student/fake-data';
+import type { PreviewExtras } from '@/lms/student/fake-data';
+import type { LeaveRow, MakeupOption, MakeupRight, StudentActions, StudentView } from '@/lms/student/live';
 import {
   cancelPreview,
   lessonsLeft,
@@ -17,6 +22,7 @@ import {
   renewalPrompt,
   REQUEST_STATUS_LABEL,
   studentTodos,
+  type PaymentSummary,
   type RenewalState,
   type RequestStatus,
   type StudentLesson,
@@ -24,7 +30,17 @@ import {
 } from '@/lms/student/home';
 
 type Tab = 'home' | 'schedule' | 'requests' | 'materials' | 'me';
-type Overlay = null | { kind: 'request'; id: string } | { kind: 'payments' } | { kind: 'points' } | { kind: 'consent' } | { kind: 'cancel'; lessonId: string | null };
+type Right = Pick<MakeupRight, 'lessonId' | 'itemId'>;
+type Overlay =
+  | null
+  | { kind: 'request'; id: string }
+  | { kind: 'payments' }
+  | { kind: 'points' }
+  | { kind: 'consent' }
+  | { kind: 'cancel'; lessonId: string | null }
+  | { kind: 'leave' }
+  | { kind: 'profile'; name: string }
+  | { kind: 'makeup'; right: Right | null };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -59,42 +75,93 @@ function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
   );
 }
 
-export default function StudentHome({ nowIso, preview }: { nowIso: string; preview: boolean }) {
-  const now = useMemo(() => new Date(nowIso), [nowIso]);
-  const initial = useMemo(() => fakeStudent(now), [now]);
-  const [lessons, setLessons] = useState<StudentLesson[]>(initial.lessons);
-  const [creditsLeft, setCreditsLeft] = useState(initial.creditsLeft);
-  const [makeupsOwed, setMakeupsOwed] = useState(initial.makeupsOwed);
-  const [renewal, setRenewal] = useState<RenewalState>('not_requested');
-  const [consents, setConsents] = useState(initial.pendingConsents);
+
+const sameRight = (a: Right, b: Right) => (a.lessonId !== null && a.lessonId === b.lessonId) || (a.itemId !== null && a.itemId === b.itemId);
+const whenText = (d: Date) => {
+  const k = kst(d);
+  return `${k.md} (${k.wd}) ${k.time}`;
+};
+
+export default function StudentHome(props: {
+  nowIso: string;
+  initial: StudentView;
+  actions: StudentActions;
+  /** 미리보기에만: 교재·결제 내역·동의 할 일 (실제 데이터 연결 전 항목) */
+  extras?: PreviewExtras;
+  preview: boolean;
+  adminBar?: React.ReactNode;
+  onLogout?: () => void;
+}) {
+  const { actions, extras, preview } = props;
+  const now = useMemo(() => new Date(props.nowIso), [props.nowIso]);
+  const [s, setView] = useState<StudentView>(props.initial);
+  const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
+  const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const s = initial;
+  const lessons = s.lessons;
+  const openRights = s.makeupRights.filter((m) => !m.requested);
+  const makeupsOwed = s.makeupRights.length;
+  const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
   const left = lessonsLeft(lessons, makeupsOwed);
   const prompt = renewalPrompt(lessons, renewal, makeupsOwed);
-  const dLeft = diffDays(formatInZone(now, 'Asia/Seoul').date, s.finalEndDate);
+  const dLeft = s.finalEndDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, s.finalEndDate) : 0;
   const points = pointsHistory(s.points);
-  const book = books.find((b) => b.title.replace(/\s/g, '') === s.textbook.title.replace(/\s/g, ''));
+  const textbook = extras?.textbook ?? null;
+  const book = textbook && books.find((b) => b.title.replace(/\s/g, '') === textbook.title.replace(/\s/g, ''));
+  const holidays = useMemo(() => new Set(s.holidays), [s.holidays]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   function say(msg: string) {
     setToast(`${msg}${preview ? ' (미리보기: 실제로 저장되지 않아요)' : ''}`);
   }
 
-  function confirmCancel(lesson: StudentLesson) {
-    const d = cancelPreview({ lesson, now: new Date(), finalEndDate: s.finalEndDate, creditsLeft, holidays: new Set() }, null);
-    if (!d.ok) return;
-    setLessons((prev) => prev.map((l) => (l.id === lesson.id ? { ...l, state: 'canceled' } : l)));
-    if (d.usesCredit) setCreditsLeft((c) => c - 1);
-    if (d.makeupAllowed) setMakeupsOwed((n) => n + 1);
-    setOverlay(null);
-    say(d.consumesLesson ? '수업을 취소했어요. 수업 1회가 차감됐어요.' : '수업을 취소했어요. 보강 신청에서 시간을 골라 주세요.');
+  /** 저장 → 화면 다시 읽기. 실패하면 DB 오류 문구 그대로 */
+  async function run(work: () => Promise<unknown>, done: string): Promise<StudentView | null> {
+    setBusy(true);
+    try {
+      await work();
+      const v = await actions.reload();
+      setView(v);
+      say(done);
+      return v;
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '저장하지 못했어요.');
+      return null;
+    } finally {
+      setBusy(false);
+    }
   }
 
-  const nextCard = next && <NextLesson lesson={next} now={now} textbook={s.textbook} />;
+  async function confirmCancel(lesson: StudentLesson) {
+    let allowed = false;
+    const v = await run(async () => {
+      allowed = (await actions.cancel(lesson.id)).makeup_allowed;
+    }, '수업을 취소했어요.');
+    if (!v) return;
+    const right = v.makeupRights.find((m) => m.lessonId === lesson.id && !m.requested);
+    setOverlay(allowed && right ? { kind: 'makeup', right } : null);
+  }
+
+  async function answerLeave(answer: 'ok' | 'makeup') {
+    const ids = leaveAsk.map((x) => x.id);
+    const v = await run(() => actions.answerLeave(ids, answer), answer === 'ok' ? '대체강사님과 평소 시간으로 확정했어요.' : '기존 강사님과 보강으로 정했어요.');
+    if (!v || answer === 'ok') return;
+    const right = v.makeupRights.find((m) => !m.requested && leaveAsk.some((x) => (x.lessonId && x.lessonId === m.lessonId) || (x.itemId && x.itemId === m.itemId)));
+    if (right) setOverlay({ kind: 'makeup', right });
+  }
+
+  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={s.lessons.find((l) => l.id === next.id)?.meetUrl ?? null} />;
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -110,32 +177,36 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
           </p>
         )}
       </div>
-      {prompt.mode === 'request' ? (
+      {/* 재등록 신청 저장은 아직 DB에 없음 → 미리보기에서만 버튼 */}
+      {preview && prompt.mode === 'request' && (
         <button
           type="button"
           onClick={() => {
             setRenewal('requested');
-            say('재등록을 신청했어요. 결제가 확인되면 안내가 사라져요.');
+            say('재등록을 신청했어요.');
           }}
           className="min-h-[46px] rounded-[12px] bg-[#1b1442] px-5 text-[15px] font-bold text-white"
         >
           재등록 신청
         </button>
-      ) : (
-        <span className="justify-self-start rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#8a5300]">결제 확인 대기</span>
       )}
+      {prompt.mode === 'awaiting_payment' && <span className="justify-self-start rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#8a5300]">결제 확인 대기</span>}
     </section>
   );
 
   const statusTiles = (
     <section aria-label="수강 현황" className="grid grid-cols-3 gap-2">
       <Tile label="남은 수업" value={`${left.total}`} unit="회" sub={left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
-      <Tile label="변경권" value={`${creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중`} />
-      <Tile label="수강 종료" value={dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'} sub={`${fmtDate(s.finalEndDate)} (${kst(new Date(`${s.finalEndDate}T12:00:00+09:00`)).wd})`} />
+      <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중`} />
+      <Tile
+        label="수강 종료"
+        value={!s.finalEndDate ? '-' : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'}
+        sub={s.finalEndDate ? `${fmtDate(s.finalEndDate)} (${kst(new Date(`${s.finalEndDate}T12:00:00+09:00`)).wd})` : ''}
+      />
     </section>
   );
 
-  const actions = (
+  const quick = (
     <section aria-label="빠른 신청" className="grid grid-cols-2 gap-2">
       <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: null })} className={`${card} grid content-start gap-1.5 p-4 text-left`}>
         <Icon d={TABS[1].icon} className="h-[22px] w-[22px] text-[#5b3df0]" />
@@ -146,19 +217,20 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
           6시간 이내: 수업 1회 차감 · 보강 불가 · 변경권 유지
         </span>
       </button>
-      <button type="button" onClick={() => say('보강 신청 화면은 다음 단계에서 연결해요.')} className={`${card} grid content-start gap-1.5 p-4 text-left`}>
+      <button
+        type="button"
+        disabled={openRights.length === 0}
+        onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })}
+        className={`${card} grid content-start gap-1.5 p-4 text-left disabled:opacity-50`}
+      >
         <Icon d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" className="h-[22px] w-[22px] text-[#5b3df0]" />
         <span className="text-[15px] font-bold">보강 신청</span>
-        <span className="text-[12px] leading-[1.55] text-[#55526a]">
-          보강할 수업 {makeupsOwed}회
-          <br />
-          강사 가능 시간 중 2~3개 골라 신청
-        </span>
+        <span className="text-[12px] leading-[1.55] text-[#55526a]">보강할 수업 {openRights.length}회</span>
       </button>
     </section>
   );
 
-  const requestList = (
+  const requestList = s.requests.length > 0 && (
     <section aria-label="신청 진행 상태" className={`${card} grid gap-1 p-4`}>
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-bold">신청 진행 상태</h2>
@@ -166,7 +238,7 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
           전체 ›
         </button>
       </div>
-      {s.requests.map((r) => (
+      {s.requests.slice(0, 3).map((r) => (
         <RequestRow key={r.id} r={r} onOpen={() => setOverlay({ kind: 'request', id: r.id })} />
       ))}
     </section>
@@ -175,34 +247,23 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
   const payBox = (
     <section aria-label="수강과 결제" className={`${card} px-4 pb-1.5 pt-4`}>
       <h2 className="mb-2 text-[15px] font-bold">수강·결제·적립금</h2>
-      <LinkRow label="수강권" value={s.product} onClick={() => setOverlay({ kind: 'payments' })} />
-      <LinkRow
-        label="결제 내역"
-        value={s.payments[0].confirmedOn ? `확인 완료 (${fmtDate(s.payments[0].confirmedOn)})` : '확인 중'}
-        valueClass="text-[#13623a]"
-        onClick={() => setOverlay({ kind: 'payments' })}
-      />
+      <LinkRow label="수강권" value={s.product} onClick={() => extras && setOverlay({ kind: 'payments' })} />
+      <LinkRow label="결제" value={s.confirmedOn ? `확인 완료 (${fmtDate(s.confirmedOn)})` : '확인 중'} valueClass="text-[#13623a]" onClick={() => extras && setOverlay({ kind: 'payments' })} />
       <LinkRow label="적립금 내역" value={won(points.balance)} valueClass="font-bold" onClick={() => setOverlay({ kind: 'points' })} />
     </section>
   );
 
-  const todoBar = todos.length > 0 && (
-    <button
-      type="button"
-      onClick={() => setOverlay({ kind: 'consent' })}
-      className="flex min-h-[48px] items-center gap-2.5 rounded-[14px] border-[1.5px] border-[#f0a33a] bg-white px-3.5 py-2.5 text-left"
-    >
-      <span aria-hidden className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#f0a33a] text-[13px] font-bold text-white">
-        {todos.length}
-      </span>
-      <span className="flex-1 text-[14px] leading-snug">
-        <b>할 일</b> · {todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`}
-      </span>
-      <span className="whitespace-nowrap text-[13px] text-[#8a5300]">확인 ›</span>
-    </button>
+  // 할 일: 학생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
+  const todoBars = (
+    <>
+      {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
+      {openRights.length > 0 && <TodoBar n={openRights.length} text="보강 날짜 고르기" onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
+      {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
+    </>
   );
 
   const upcoming = lessons.filter((l) => l.state === 'scheduled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const leaveVisible = s.leave.length > 0;
 
   return (
     <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
@@ -223,9 +284,15 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
           </button>
         ))}
         <span className="px-3 pt-5 text-[13px] text-[#55526a]">{s.name} 님</span>
+        {props.onLogout && (
+          <button type="button" onClick={props.onLogout} className="mx-3 mt-1 min-h-[36px] text-left text-[13px] text-[#55526a] underline">
+            로그아웃
+          </button>
+        )}
       </nav>
 
       <div className="min-w-0 flex-1 pb-24 lg:pb-0">
+        {props.adminBar && <div className="px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}</div>}
         <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
           <span className="text-[17px] font-bold text-[#09246b]">
             Edge<span className="text-[#5b3df0]">English</span>
@@ -235,9 +302,9 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
 
         {preview && (
           <div className="mx-4 mb-3 grid gap-2 rounded-[12px] bg-[#fff8d6] px-3 py-2.5 text-[12.5px] text-[#5c4a00] lg:mx-0">
-            <p>가상 데이터 미리보기예요. 눌러도 실제로 저장·발송되지 않아요. 아래에서 상태를 바꿔 볼 수 있어요.</p>
+            <p>가상 데이터 미리보기예요. 눌러도 실제로 저장·발송되지 않아요.</p>
             <div className="flex flex-wrap gap-1.5">
-              <PreviewChip on={consents.length > 0} onClick={() => setConsents(consents.length ? [] : initial.pendingConsents)}>
+              <PreviewChip on={consents.length > 0} onClick={() => setConsents(consents.length ? [] : (extras?.pendingConsents ?? []))}>
                 할 일 {consents.length ? '있음' : '없음'}
               </PreviewChip>
               {(['not_requested', 'requested', 'payment_confirmed'] as const).map((r) => (
@@ -245,13 +312,6 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
                   재등록 {r === 'not_requested' ? '미신청' : r === 'requested' ? '신청함' : '결제 확인'}
                 </PreviewChip>
               ))}
-              <PreviewChip on={false} onClick={() => {
-                  setLessons(initial.lessons);
-                  setCreditsLeft(initial.creditsLeft);
-                  setMakeupsOwed(initial.makeupsOwed);
-                }}>
-                수업 되돌리기
-              </PreviewChip>
             </div>
           </div>
         )}
@@ -259,11 +319,17 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
         {tab === 'home' && (
           <div className="grid gap-3.5 px-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5 lg:px-0">
             <div className="grid min-w-0 gap-3.5">
-              {todoBar}
+              {todoBars}
               {nextCard}
               {renewalCard}
               <div className="lg:hidden">{statusTiles}</div>
-              {actions}
+              {quick}
+              {leaveVisible && leaveAsk.length === 0 && (
+                <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
+                  <span className="font-semibold">담당 강사님 휴무 안내</span>
+                  <span className="text-[#8b88a0]">›</span>
+                </button>
+              )}
               {requestList}
               <div className="lg:hidden">{payBox}</div>
             </div>
@@ -280,9 +346,7 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
             {upcoming.map((l) => (
               <div key={l.id} className={`${card} flex items-center justify-between gap-3 p-4`}>
                 <div>
-                  <p className="text-[15px] font-semibold">
-                    {kst(l.startsAt).md} ({kst(l.startsAt).wd}) {kst(l.startsAt).time}
-                  </p>
+                  <p className="text-[15px] font-semibold">{whenText(l.startsAt)}</p>
                   <p className="text-[12.5px] text-[#6b6880]">
                     {l.minutes}분 · {l.tutorName} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
                   </p>
@@ -298,9 +362,7 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
               .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
               .map((l) => (
                 <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">
-                  <span>
-                    {kst(l.startsAt).md} ({kst(l.startsAt).wd}) {kst(l.startsAt).time}
-                  </span>
+                  <span>{whenText(l.startsAt)}</span>
                   <span className="text-[#6b6880]">{l.state === 'done' ? '진행' : l.state === 'canceled' ? '취소' : '진행 중'}</span>
                 </div>
               ))}
@@ -309,59 +371,66 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
 
         {tab === 'requests' && (
           <TabPage title="신청 내역">
-            <section className={`${card} grid gap-1 p-4`}>
-              {s.requests.map((r) => (
-                <RequestRow key={r.id} r={r} onOpen={() => setOverlay({ kind: 'request', id: r.id })} />
-              ))}
-            </section>
-            <h2 className="pt-2 text-[14px] font-bold text-[#55526a]">새로 신청하기</h2>
+            {s.requests.length > 0 && (
+              <section className={`${card} grid gap-1 p-4`}>
+                {s.requests.map((r) => (
+                  <RequestRow key={r.id} r={r} onOpen={() => setOverlay({ kind: 'request', id: r.id })} />
+                ))}
+              </section>
+            )}
             <section className={`${card} px-4`}>
-              {['보강 신청', '고정 요일·시간 변경', '강사·교재 변경 요청', ...(s.product.includes('24주') ? ['장기 연기 신청'] : [])].map((t) => (
-                <button key={t} type="button" onClick={() => say(`'${t}' 화면은 다음 단계에서 연결해요.`)} className="flex min-h-[52px] w-full items-center justify-between border-b border-[#eeecf4] text-left text-[15px] last:border-0">
-                  {t} <span className="text-[#8b88a0]">›</span>
-                </button>
-              ))}
+              <button
+                type="button"
+                disabled={openRights.length === 0}
+                onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })}
+                className="flex min-h-[52px] w-full items-center justify-between text-left text-[15px] disabled:opacity-50"
+              >
+                보강 신청 <span className="text-[#8b88a0]">›</span>
+              </button>
             </section>
           </TabPage>
         )}
 
         {tab === 'materials' && (
           <TabPage title="학습자료">
-            <section className={`${card} grid gap-3 p-4`}>
-              <p className="text-[13px] font-bold text-[#5b3df0]">지금 수업 교재</p>
-              <p className="text-[17px] font-bold">{s.textbook.title}</p>
-              <p className="text-[13px] text-[#55526a]">
-                {book ? `${book.category} · ${book.level.join('·')}` : ''} · 지난 수업 Unit {s.textbook.lastUnit}
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {book?.pdf && (
-                  <a href={book.pdf} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center rounded-[12px] bg-[#5b3df0] text-[14px] font-bold text-white">
-                    미리보기 열기
-                  </a>
-                )}
-                {book?.buyLink && (
-                  <a href={book.buyLink} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center rounded-[12px] border border-[#d9d5e8] text-[14px] font-semibold">
-                    교재 구매
-                  </a>
-                )}
-              </div>
-              <p className="text-[12px] leading-relaxed text-[#55526a]">출판사 교재는 저작권 때문에 미리보기·구매 링크로 열려요.</p>
-            </section>
+            {textbook && (
+              <section className={`${card} grid gap-3 p-4`}>
+                <p className="text-[13px] font-bold text-[#5b3df0]">지금 수업 교재</p>
+                <p className="text-[17px] font-bold">{textbook.title}</p>
+                <p className="text-[13px] text-[#55526a]">
+                  {book ? `${book.category} · ${book.level.join('·')}` : ''} · 지난 수업 Unit {textbook.lastUnit}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {book?.pdf && (
+                    <a href={book.pdf} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center rounded-[12px] bg-[#5b3df0] text-[14px] font-bold text-white">
+                      미리보기 열기
+                    </a>
+                  )}
+                  {book?.buyLink && (
+                    <a href={book.buyLink} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center rounded-[12px] border border-[#d9d5e8] text-[14px] font-semibold">
+                      교재 구매
+                    </a>
+                  )}
+                </div>
+              </section>
+            )}
             <a href="/books" className={`${card} flex min-h-[52px] items-center justify-between px-4 text-[15px] font-semibold`}>
               전체 교재 둘러보기 (홈페이지 교재 소개) <span className="text-[#8b88a0]">›</span>
             </a>
-            <p className="px-1 text-[12.5px] text-[#55526a]">수업 노트·수업 기록·받은 자료는 다음 단계에서 연결해요.</p>
           </TabPage>
         )}
 
         {tab === 'me' && (
           <TabPage title="내 정보">
             <section className={`${card} px-4 pb-1.5 pt-2`}>
-              <LinkRow label="결제 내역" value="" onClick={() => setOverlay({ kind: 'payments' })} />
+              {extras && <LinkRow label="결제 내역" value="" onClick={() => setOverlay({ kind: 'payments' })} />}
               <LinkRow label="적립금 내역" value={won(points.balance)} onClick={() => setOverlay({ kind: 'points' })} />
-              <LinkRow label="알림 설정 (보강 리마인더)" value="" onClick={() => say('알림 설정은 다음 단계에서 연결해요.')} />
-              <LinkRow label="동의한 수업 안내" value="" onClick={() => say('동의 기록 화면은 다음 단계에서 연결해요.')} />
             </section>
+            {props.onLogout && (
+              <button type="button" onClick={props.onLogout} className="min-h-[44px] text-left text-[14px] text-[#55526a] underline">
+                로그아웃
+              </button>
+            )}
           </TabPage>
         )}
       </div>
@@ -382,9 +451,9 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
       </nav>
 
       {overlay && (
-        <Sheet onClose={() => setOverlay(null)}>
-          {overlay.kind === 'request' && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} />}
-          {overlay.kind === 'payments' && <Payments payments={s.payments} />}
+        <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
+          {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} />}
+          {overlay.kind === 'payments' && extras && <Payments payments={extras.payments} />}
           {overlay.kind === 'points' && <Points history={points} />}
           {overlay.kind === 'consent' && (
             <div className="grid gap-3">
@@ -395,7 +464,7 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
                 onClick={() => {
                   setConsents([]);
                   setOverlay(null);
-                  say('동의했어요. 할 일 알림이 사라져요.');
+                  say('동의했어요.');
                 }}
                 className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white"
               >
@@ -410,19 +479,56 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
               lessonId={overlay.lessonId}
               onPick={(id) => setOverlay({ kind: 'cancel', lessonId: id })}
               now={now}
-              creditsLeft={creditsLeft}
+              creditsLeft={s.creditsLeft}
               finalEndDate={s.finalEndDate}
+              holidays={holidays}
               regularLeft={regularLessonsLeft(lessons)}
               totalLeft={left.total}
+              busy={busy}
               onConfirm={confirmCancel}
               onClose={() => setOverlay(null)}
             />
           )}
+          {overlay.kind === 'leave' && (
+            <LeaveSheet
+              rows={s.leave}
+              rights={s.makeupRights}
+              busy={busy}
+              onProfile={(name) => setOverlay({ kind: 'profile', name })}
+              onAnswer={answerLeave}
+              onMakeup={(right) => setOverlay({ kind: 'makeup', right })}
+            />
+          )}
+          {overlay.kind === 'profile' && <Profile name={overlay.name} onBack={() => setOverlay({ kind: 'leave' })} />}
+          {overlay.kind === 'makeup' &&
+            (overlay.right ? (
+              <MakeupPicker
+                key={`${overlay.right.lessonId}${overlay.right.itemId}`}
+                right={s.makeupRights.find((m) => sameRight(m, overlay.right!)) ?? null}
+                endDate={s.finalEndDate}
+                load={actions.makeupOptions}
+                busy={busy}
+                onSubmit={async (right, slots) => {
+                  const v = await run(() => actions.requestMakeup(right, slots), '보강을 신청했어요.');
+                  if (v) setOverlay(null);
+                }}
+              />
+            ) : (
+              <div className="grid gap-3">
+                <h2 className="text-[18px] font-bold">보강할 수업</h2>
+                {openRights.map((m) => (
+                  <button key={`${m.lessonId}${m.itemId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })} className={`${card} flex min-h-[56px] items-center justify-between px-4 text-left`}>
+                    <span className="text-[15px] font-semibold">{whenText(m.originalAt)} 수업{m.tutorLeave ? ' · 강사님 휴무' : ''}</span>
+                    <span className="text-[#8b88a0]">›</span>
+                  </button>
+                ))}
+              </div>
+            ))}
         </Sheet>
       )}
 
       {toast && (
-        <div role="status" className="fixed inset-x-4 bottom-24 z-30 mx-auto max-w-md rounded-[12px] bg-[#1d1b2b] px-4 py-3 shadow-lg lg:bottom-6">
+        <div role="status" className="fixed inset-x-4 top-4 z-30 mx-auto max-w-md lg:bottom-6 lg:top-auto rounded-[12px] bg-[#1d1b2b] px-4 py-3 shadow-lg">
           <p className="text-[13.5px] text-white">{toast}</p>
           <button type="button" onClick={() => setToast(null)} className="mt-1 text-[12.5px] font-semibold text-[#c9bcff] underline">
             닫기
@@ -433,14 +539,284 @@ export default function StudentHome({ nowIso, preview }: { nowIso: string; previ
   );
 }
 
-function NextLesson({ lesson, now, textbook }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } }) {
+function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex min-h-[48px] items-center gap-2.5 rounded-[14px] border-[1.5px] border-[#f0a33a] bg-white px-3.5 py-2.5 text-left">
+      <span aria-hidden className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#f0a33a] text-[13px] font-bold text-white">
+        {n}
+      </span>
+      <span className="flex-1 text-[14px] leading-snug">
+        <b>할 일</b> · {text}
+      </span>
+      <span className="whitespace-nowrap text-[13px] text-[#8a5300]">확인 ›</span>
+    </button>
+  );
+}
+
+// 강사 휴무 안내 (A안 한 번에 답, 2026-10-28 대표). 학생은 강사를 고르지 않음 — 운영진이 정한 대체강사만 보여 줌
+function LeaveSheet(props: {
+  rows: LeaveRow[];
+  rights: MakeupRight[];
+  busy: boolean;
+  onProfile: (name: string) => void;
+  onAnswer: (a: 'ok' | 'makeup') => void;
+  onMakeup: (r: Right) => void;
+}) {
+  const subs = props.rows.filter((x) => x.choice === 'substitute');
+  const waits = props.rows.filter((x) => x.choice === 'wait');
+  const ask = subs.filter((x) => x.stage === 'tutor_ok');
+  const off = props.rows[0];
+  const offText = off && `${fmtDate(formatInZone(off.offFrom, 'Asia/Seoul').date)} ~ ${fmtDate(formatInZone(new Date(off.offTo.getTime() - 1), 'Asia/Seoul').date)}`;
+  return (
+    <div className="grid gap-3.5">
+      <div>
+        <h2 className="text-[18px] font-bold">담당 강사님 휴무 안내</h2>
+        {offText && <p className="mt-0.5 text-[13px] text-[#55526a]">휴무 {offText}</p>}
+      </div>
+      {subs.length > 0 && (
+        <section className={`${card} grid gap-1 p-4`}>
+          <h3 className="text-[15px] font-bold">
+            원래 시간에 대체강사와 수업하기 <span className="ml-1 rounded-full bg-[#efeaff] px-2 py-0.5 text-[12px] text-[#4b2fd6]">추천</span>
+          </h3>
+          {subs.map((x) => (
+            <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
+              <span>
+                <span className="block text-[15px] font-semibold">{whenText(x.startsAt)}</span>
+                <span className="block text-[13px] text-[#55526a]">{x.subTutor} 강사님</span>
+              </span>
+              {x.stage === 'confirmed' ? (
+                <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">확정 ✓</span>
+              ) : (
+                <button type="button" onClick={() => props.onProfile(x.subTutor ?? '')} className="min-h-[40px] rounded-[10px] border border-[#d9d5e8] px-3 text-[13px] font-semibold">
+                  프로필 보기
+                </button>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
+      {waits.length > 0 && (
+        <section className={`${card} grid gap-1 p-4`}>
+          <h3 className="text-[15px] font-bold">기존 강사님과 보강</h3>
+          {waits.map((x) => {
+            const r = props.rights.find((m) => (x.lessonId && m.lessonId === x.lessonId) || (x.itemId && m.itemId === x.itemId));
+            return (
+              <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
+                <span className="text-[15px] font-semibold">{whenText(x.startsAt)}</span>
+                {!r ? (
+                  <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">보강 확정 ✓</span>
+                ) : r.requested ? (
+                  <span className="rounded-full bg-[#fff1d6] px-2.5 py-1 text-[12px] font-semibold text-[#8a5300]">신청함 · 강사 확인 중</span>
+                ) : (
+                  <button type="button" onClick={() => props.onMakeup(r)} className="min-h-[40px] rounded-[10px] bg-[#5b3df0] px-3 text-[13px] font-bold text-white">
+                    보강 날짜 고르기
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </section>
+      )}
+      {ask.length > 0 && (
+        <div className="grid gap-2">
+          <button type="button" disabled={props.busy} onClick={() => props.onAnswer('ok')} className="min-h-[52px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-50">
+            좋아요, 이대로 할게요
+          </button>
+          <button type="button" disabled={props.busy} onClick={() => props.onAnswer('makeup')} className="min-h-[50px] rounded-[14px] border border-[#5b3df0] text-[15px] font-bold text-[#4b2fd6] disabled:opacity-50">
+            기존 강사님과 수업할게요
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 대체강사 프로필: 홈페이지 강사 소개(src/data/tutors.json)에 이미 공개된 내용만 (2026-10-28 대표: 홈페이지 보고 가져오기)
+function Profile({ name, onBack }: { name: string; onBack: () => void }) {
+  const p = homepageProfile(name);
+  const video = p?.videoUrl.replace('/embed/', '/watch?v=');
+  return (
+    <div className="grid gap-3.5">
+      <button type="button" onClick={onBack} className="justify-self-start text-[14px] text-[#55526a]">
+        ‹ 휴무 안내
+      </button>
+      <h2 className="text-[18px] font-bold">{p?.name ?? name} 강사님</h2>
+      {p ? (
+        <section className={`${card} grid gap-3 p-4 text-[14px] leading-relaxed`}>
+          {p.career && (
+            <div>
+              <p className="text-[12.5px] font-bold text-[#5b3df0]">이력</p>
+              <p className="whitespace-pre-line">{p.career}</p>
+            </div>
+          )}
+          {p.intro && (
+            <div>
+              <p className="text-[12.5px] font-bold text-[#5b3df0]">소개</p>
+              <p className="whitespace-pre-line">{p.intro}</p>
+            </div>
+          )}
+          {video && (
+            <a href={video} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center gap-2 rounded-[12px] bg-[#efeaff] text-[14px] font-bold text-[#4b2fd6]">
+              ▶ 자기소개 영상 보기
+            </a>
+          )}
+        </section>
+      ) : (
+        <p className="text-[14px] text-[#55526a]">프로필을 찾지 못했어요.</p>
+      )}
+    </div>
+  );
+}
+
+// 보강 날짜 고르기 (2026-10-28 대표: 목록 대신 달력 — PC·휴대폰 같은 모양, 스크롤 줄이기)
+// 달력에서 날짜 → 그날 가능한 시각 → 고른 날짜 최대 2개 → 신청. 날짜는 DB '보강 가능한 날짜'(강사 일정·휴무·종료일)만
+function MakeupPicker(props: {
+  right: MakeupRight | null;
+  endDate: KstDate;
+  load: (r: Right) => Promise<MakeupOption[]>;
+  busy: boolean;
+  onSubmit: (r: Right, slots: Date[]) => void;
+}) {
+  const [opts, setOpts] = useState<MakeupOption[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [day, setDay] = useState<string | null>(null);
+  const [month, setMonth] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Date[]>([]);
+  const { right, load } = props;
+
+  useEffect(() => {
+    if (!right) return;
+    load(right)
+      .then((o) => {
+        setOpts(o);
+        if (o[0]) setMonth(kst(o[0].startsAt).date.slice(0, 7));
+      })
+      .catch((e) => setErr(e instanceof Error ? e.message : '불러오지 못했어요.'));
+  }, [right, load]);
+
+  if (!right) return <p className="text-[14px]">이미 신청했거나 보강할 수 없는 수업이에요.</p>;
+  const byDay = new Map<string, Date[]>();
+  for (const o of opts ?? []) {
+    const d = kst(o.startsAt).date;
+    byDay.set(d, [...(byDay.get(d) ?? []), o.startsAt]);
+  }
+  const months = [...new Set([...byDay.keys()].map((d) => d.slice(0, 7)))].sort();
+  const mi = month ? months.indexOf(month) : -1;
+  const isPicked = (t: Date) => picked.some((p) => p.getTime() === t.getTime());
+  const toggle = (t: Date) => setPicked(isPicked(t) ? picked.filter((p) => p.getTime() !== t.getTime()) : picked.length < MAKEUP_SLOTS_MAX ? [...picked, t].sort((a, b) => a.getTime() - b.getTime()) : picked);
+
+  const calendar = month && (
+    <section className={`${card} grid gap-2 p-3`}>
+      <div className="flex items-center justify-between">
+        <button type="button" aria-label="이전 달" disabled={mi <= 0} onClick={() => setMonth(months[mi - 1])} className="h-10 w-10 rounded-[10px] text-[18px] disabled:opacity-30">
+          ‹
+        </button>
+        <span className="text-[15px] font-bold">
+          {month.slice(0, 4)}년 {Number(month.slice(5))}월
+        </span>
+        <button type="button" aria-label="다음 달" disabled={mi < 0 || mi >= months.length - 1} onClick={() => setMonth(months[mi + 1])} className="h-10 w-10 rounded-[10px] text-[18px] disabled:opacity-30">
+          ›
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[12px] text-[#6b6880]">
+        {'일월화수목금토'.split('').map((w) => (
+          <span key={w}>{w}</span>
+        ))}
+        {monthCells(month).map((d, i) =>
+          !d ? (
+            <span key={i} />
+          ) : (
+            <button
+              key={d}
+              type="button"
+              disabled={!byDay.has(d)}
+              onClick={() => setDay(d)}
+              aria-pressed={day === d}
+              className={`relative flex h-10 items-center justify-center rounded-full text-[14px] ${
+                day === d ? 'bg-[#5b3df0] font-bold text-white' : byDay.has(d) ? 'bg-[#efeaff] font-semibold text-[#3a22b0]' : 'text-[#c4c1d2]'
+              }`}
+            >
+              {Number(d.slice(8))}
+              {(byDay.get(d) ?? []).some(isPicked) && day !== d && <span aria-hidden className="absolute bottom-1 h-1 w-1 rounded-full bg-[#5b3df0]" />}
+            </button>
+          ),
+        )}
+      </div>
+      {props.endDate && <p className="text-[12px] text-[#6b6880]">수강 종료일 {fmtDate(props.endDate)}</p>}
+    </section>
+  );
+
+  return (
+    <div className="grid gap-3.5">
+      <h2 className="text-[18px] font-bold">보강 신청 · {whenText(right.originalAt)} 수업</h2>
+      {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
+      {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
+      {opts && opts.length === 0 && <p className="text-[14px]">보강 가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
+      {opts && opts.length > 0 && (
+        <div className="grid gap-3.5 lg:grid-cols-2 lg:items-start">
+          {calendar}
+          <div className="grid gap-3">
+            <section className={`${card} grid gap-2 p-3`}>
+              <p className="text-[14px] font-bold">{day ? `${fmtDate(day as KstDate)} (${kst(new Date(`${day}T12:00:00+09:00`)).wd})` : '날짜를 골라 주세요'}</p>
+              {day && (
+                <div className="grid grid-cols-3 gap-2">
+                  {(byDay.get(day) ?? []).map((t) => (
+                    <button
+                      key={t.getTime()}
+                      type="button"
+                      aria-pressed={isPicked(t)}
+                      disabled={!isPicked(t) && picked.length >= MAKEUP_SLOTS_MAX}
+                      onClick={() => toggle(t)}
+                      className={`min-h-[44px] rounded-[10px] border text-[14px] font-semibold disabled:opacity-40 ${isPicked(t) ? 'border-[#5b3df0] bg-[#5b3df0] text-white' : 'border-[#d9d5e8]'}`}
+                    >
+                      {kst(t).time}
+                      {isPicked(t) ? ' ✓' : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+            <section className={`${card} grid gap-2 p-3`}>
+              <p className="text-[14px] font-bold">
+                고른 날짜 {picked.length}/{MAKEUP_SLOTS_MAX}
+              </p>
+              {picked.map((t) => (
+                <div key={t.getTime()} className="flex items-center justify-between rounded-[10px] border border-[#e6e3ef] px-3 py-2 text-[14px]">
+                  <span className="font-semibold">{whenText(t)}</span>
+                  <button type="button" aria-label="빼기" onClick={() => toggle(t)} className="h-8 w-8 text-[16px] text-[#55526a]">
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                disabled={picked.length === 0 || props.busy}
+                onClick={() => props.onSubmit(right, picked)}
+                className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-40"
+              >
+                보강 신청하기
+              </button>
+            </section>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 'YYYY-MM' 달력 칸 (일요일 시작, 앞쪽 빈칸 null) */
+function monthCells(month: string): (string | null)[] {
+  const first = new Date(`${month}-01T00:00:00Z`);
+  const days = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  return [...Array<null>(first.getUTCDay()).fill(null), ...Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
+}
+
+function NextLesson({ lesson, now, textbook, meetUrl }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null }) {
   const k = kst(lesson.startsAt);
   const days = diffDays(formatInZone(now, 'Asia/Seoul').date, k.date);
   const started = now.getTime() >= lesson.startsAt.getTime();
   const hours = hoursBetween(now, lesson.startsAt);
   const badge = started ? '진행 중' : hours < 24 ? `${Math.max(1, Math.round(hours))}시간 후` : days === 1 ? '내일' : `${days}일 후`;
-  // 강사 미입장 신고: 시작 5분 뒤부터 (기능 위치 시안)
-  const canReportNoShow = now.getTime() >= lesson.startsAt.getTime() + 5 * 60_000;
   return (
     <section aria-label="다음 수업" className="grid gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
       <div className="flex items-center justify-between">
@@ -456,6 +832,7 @@ function NextLesson({ lesson, now, textbook }: { lesson: StudentLesson; now: Dat
         </p>
       </div>
       <div className="grid gap-2.5 lg:grid-cols-2">
+        {textbook && (
         <a href="/books" className="flex min-h-[44px] items-center justify-between gap-2.5 rounded-[12px] bg-[#2c2263] px-3.5 py-3 text-[14px] lg:order-2">
           <span className="flex items-center gap-2.5">
             <Icon d={TABS[3].icon} className="h-[18px] w-[18px] text-[#c9c0ff]" />
@@ -465,20 +842,15 @@ function NextLesson({ lesson, now, textbook }: { lesson: StudentLesson; now: Dat
           </span>
           <span className="whitespace-nowrap text-[13px] text-[#c9c0ff]">보기 ›</span>
         </a>
-        <span
-          aria-disabled
-          title="Google Meet 주소는 실제 데이터 연결 후 표시"
-          className="flex min-h-[50px] items-center justify-center gap-2 rounded-[14px] bg-white text-[16px] font-bold text-[#1b1442] lg:order-1"
-        >
-          <Icon d="M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM16 10l6-3v10l-6-3z" />
-          수업 입장 (Google Meet)
-        </span>
+        )}
+        {meetUrl ? (
+          <a href={meetUrl} target="_blank" rel="noreferrer" className="flex min-h-[50px] items-center justify-center gap-2 rounded-[14px] bg-white text-[16px] font-bold text-[#1b1442] lg:order-1">
+            <Icon d="M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM16 10l6-3v10l-6-3z" />
+            수업 입장 (Google Meet)
+          </a>
+        ) : null}
       </div>
-      {canReportNoShow && (
-        <button type="button" className="min-h-[44px] rounded-[12px] border border-[#6e62b8] text-[14px] font-semibold text-white">
-          강사가 아직 안 들어왔어요
-        </button>
-      )}
+
     </section>
   );
 }
@@ -539,10 +911,10 @@ function TabPage({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Sheet({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+function Sheet({ onClose, children, wide }: { onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
-      <div role="dialog" aria-modal className="max-h-[90dvh] w-full max-w-[520px] overflow-y-auto rounded-t-[22px] bg-[#f6f5fa] p-5 lg:rounded-[22px]" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal className={`max-h-[90dvh] w-full ${wide ? 'max-w-[520px] lg:max-w-[860px]' : 'max-w-[520px]'} overflow-y-auto rounded-t-[22px] bg-[#f6f5fa] p-5 lg:rounded-[22px]`} onClick={(e) => e.stopPropagation()}>
         <button type="button" onClick={onClose} className="mb-2 min-h-[36px] text-[14px] text-[#55526a]">
           ‹ 닫기
         </button>
@@ -611,7 +983,7 @@ function RequestDetail({ r }: { r: StudentRequest }) {
   );
 }
 
-function Payments({ payments }: { payments: ReturnType<typeof fakeStudent>['payments'] }) {
+function Payments({ payments }: { payments: PaymentSummary[] }) {
   // 금액·카드 정보는 보여 주지 않음 (POL-PAY-11). 카드 영수증은 아임웹 주문조회로
   return (
     <div className="grid gap-3.5">
@@ -689,8 +1061,10 @@ function CancelSheet(props: {
   now: Date;
   creditsLeft: number;
   finalEndDate: KstDate;
+  holidays: ReadonlySet<KstDate>;
   regularLeft: number;
   totalLeft: number;
+  busy: boolean;
   onConfirm: (l: StudentLesson) => void;
   onClose: () => void;
 }) {
@@ -717,7 +1091,7 @@ function CancelSheet(props: {
     );
   }
 
-  const d = cancelPreview({ lesson, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, holidays: new Set() }, null);
+  const d = cancelPreview({ lesson, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, holidays: props.holidays }, null);
   const k = kst(lesson.startsAt);
   const title = `${k.md} (${k.wd}) ${k.time} 수업을 취소할까요?`;
 
@@ -761,7 +1135,7 @@ function CancelSheet(props: {
       )}
       <button
         type="button"
-        disabled={needsCheck && !checked}
+        disabled={(needsCheck && !checked) || props.busy}
         onClick={() => props.onConfirm(lesson)}
         className={`min-h-[52px] rounded-[14px] text-[16px] font-bold text-white disabled:opacity-40 ${needsCheck ? 'bg-[#b3261e]' : 'bg-[#5b3df0]'}`}
       >

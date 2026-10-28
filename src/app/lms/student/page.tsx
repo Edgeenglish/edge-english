@@ -1,9 +1,12 @@
-import StudentHome from './StudentHome';
+import StudentDemo from './StudentDemo';
+import StudentLive from './StudentLive';
 
-// 학생 마이페이지 (3차 시안 A-1 최종, 2026-10-17 대표 확정 — docs/lms/07-decisions.md D-34·D-35)
-// 지금은 가상 데이터 미리보기. 학생 로그인·실제 데이터 연결은 시험용 Supabase 검증(5-4) 후
+// 학생 화면 (③ 학생 LMS, migration 2800): 수업 확인 · 직접 취소 · 보강 신청 · 강사 휴무 안내 답하기 (휴대폰 우선)
+// 학생 본인 로그인, 또는 운영자(TOTP 완료)가 ?student=학생id 로 그대로 보기·대신 입력. ?demo=1 은 가상 데이터 미리보기
 export const dynamic = 'force-dynamic';
 
-export default function StudentPage() {
-  return <StudentHome nowIso={new Date().toISOString()} preview />;
+export default async function StudentPage({ searchParams }: { searchParams: Promise<{ demo?: string; student?: string }> }) {
+  const { demo, student } = await searchParams;
+  if (demo === '1') return <StudentDemo nowIso={new Date().toISOString()} />;
+  return <StudentLive studentParam={student} />;
 }

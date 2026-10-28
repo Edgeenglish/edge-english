@@ -3,6 +3,7 @@
 
 import { addDays, instantToKstDate, kstToInstant, type KstDate, type KstTime } from '../rules/dates';
 import type { PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
+import type { StudentActions, StudentView } from './live';
 
 const H = 60 * 60 * 1000;
 
@@ -109,4 +110,82 @@ export function fakeStudent(now: Date): FakeStudent {
 
 function md(d: KstDate) {
   return `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+}
+
+// ---------------------------------------------------------------------
+// 미리보기(?demo=1): 실제 화면과 같은 동작(StudentActions)을 이 브라우저 안에서만 흉내 냄 — 저장·발송 없음
+// ---------------------------------------------------------------------
+export type PreviewExtras = { textbook: FakeStudent['textbook']; payments: PaymentSummary[]; pendingConsents: FakeStudent['pendingConsents'] };
+
+export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras; actions: StudentActions } {
+  const s = fakeStudent(now);
+  const today = instantToKstDate(now);
+  const at = (days: number, time: KstTime) => kstToInstant(addDays(today, days), time);
+  const offFrom = at(6, '00:00');
+  const offTo = at(14, '00:00');
+  let view: StudentView = {
+    studentId: 'preview',
+    name: s.name,
+    product: s.product,
+    finalEndDate: addDays(today, 20),
+    totalLessons: s.totalLessons,
+    creditsLeft: s.creditsLeft,
+    creditsPerPeriod: s.creditsPerPeriod,
+    renewalPaid: false,
+    confirmedOn: s.payments[0].confirmedOn,
+    lessons: [
+      ...s.lessons.map((l) => ({ ...l, meetUrl: null })),
+      ...[7, 9, 11].map((d, i) => ({ id: `lv${i}`, kind: 'regular' as const, startsAt: at(d, '20:00'), minutes: 50, tutorName: '가상강사 Alex', state: 'scheduled' as const, meetUrl: null })),
+    ],
+    makeupRights: [{ lessonId: 'l5', itemId: null, originalAt: s.lessons[4].startsAt, tutorLeave: false, requested: false }],
+    requests: [],
+    leave: [
+      { id: 'x1', startsAt: at(7, '20:00'), choice: 'substitute', stage: 'tutor_ok', subTutor: 'Maria', lessonId: 'lv0', itemId: null, offFrom, offTo },
+      { id: 'x2', startsAt: at(9, '20:00'), choice: 'substitute', stage: 'tutor_ok', subTutor: 'Benny', lessonId: 'lv1', itemId: null, offFrom, offTo },
+      { id: 'x3', startsAt: at(11, '20:00'), choice: 'wait', stage: null, subTutor: null, lessonId: 'lv2', itemId: null, offFrom, offTo },
+    ],
+    holidays: [],
+    points: s.points,
+  };
+  view.lessons = view.lessons.map((l) => (l.id === 'lv2' ? { ...l, state: 'canceled' } : l));
+  view.makeupRights.push({ lessonId: 'lv2', itemId: null, originalAt: at(11, '20:00'), tutorLeave: true, requested: false });
+  const set = (v: StudentView) => (view = v);
+  const actions: StudentActions = {
+    reload: async () => view,
+    makeupOptions: async (right) => {
+      const back = view.makeupRights.find((m) => m.lessonId === right.lessonId)?.tutorLeave ? 14 : 1;
+      return Array.from({ length: 18 }, (_, i) => back + i)
+        .filter((d) => d % 2 === 0)
+        .flatMap((d) => [{ startsAt: at(d, '10:00'), afterEnd: false }, ...(d % 4 === 0 ? [{ startsAt: at(d, '20:00'), afterEnd: false }] : [])]);
+    },
+    cancel: async (lessonId) => {
+      const l = view.lessons.find((x) => x.id === lessonId)!;
+      const late = l.startsAt.getTime() - Date.now() < 6 * H;
+      const uses = !late && view.creditsLeft > 0;
+      set({
+        ...view,
+        lessons: view.lessons.map((x) => (x.id === lessonId ? { ...x, state: 'canceled' } : x)),
+        creditsLeft: view.creditsLeft - (uses ? 1 : 0),
+        makeupRights: uses ? [...view.makeupRights, { lessonId, itemId: null, originalAt: l.startsAt, tutorLeave: false, requested: false }] : view.makeupRights,
+      });
+      return { status: '', uses_credit: uses, makeup_allowed: uses };
+    },
+    requestMakeup: async (right, slots) => {
+      set({
+        ...view,
+        makeupRights: view.makeupRights.map((m) => (m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
+        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: '보강 신청', status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
+      });
+    },
+    answerLeave: async (items, answer) => {
+      const rows = view.leave.filter((x) => items.includes(x.id));
+      set({
+        ...view,
+        leave: view.leave.map((x) => (!items.includes(x.id) ? x : answer === 'ok' ? { ...x, stage: 'confirmed' } : { ...x, choice: 'wait', stage: null, subTutor: null })),
+        lessons: view.lessons.map((l) => (answer === 'makeup' && rows.some((r) => r.lessonId === l.id) ? { ...l, state: 'canceled' } : l)),
+        makeupRights: answer === 'makeup' ? [...view.makeupRights, ...rows.map((r) => ({ lessonId: r.lessonId, itemId: null, originalAt: r.startsAt, tutorLeave: true, requested: false }))] : view.makeupRights,
+      });
+    },
+  };
+  return { view, extras: { textbook: s.textbook, payments: s.payments, pendingConsents: s.pendingConsents }, actions };
 }

@@ -248,18 +248,19 @@ export const LV_STEP_TEXT: Record<LvStep | 'done', string> = {
 export type LvProposal = { status: 'pending' | 'sent'; noticeIds: string[]; itemIds: string[]; text: string };
 
 /** period: 휴무 기간 — 학생이 그 기간을 피해 보강을 잡을 수 있게 같이 알림 (2026-10-28 대표) */
-export function proposalText(studentName: string, items: LvItem[], period?: { from: KstDate; to: KstDate }): string {
-  const off = period ? `담당 강사님 휴무(${md(period.from)}~${md(period.to)})로` : '담당 강사님 휴무로';
-  const subs = items.filter((i) => i.choice === 'substitute');
-  const waits = items.filter((i) => i.choice === 'wait');
-  const head = subs.length
-    ? `[엣지영어] ${studentName}님, ${off} 아래 수업은 대체강사와 평소 시간에 진행하려고 해요. 강사님 프로필도 함께 보내 드려요.`
-    : `[엣지영어] ${studentName}님, ${off} 아래 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.`;
-  const out = [head];
-  if (subs.length) out.push(subs.map((i) => `${koAt(i.startsAt, i.studentTz)} · ${i.subTutorName} 강사님`).join('\n'));
-  if (subs.length && waits.length) out.push(`${waits.map((i) => koAt(i.startsAt, i.studentTz)).join(', ')} 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.`);
-  if (!subs.length) out.push(waits.map((i) => `- ${koAt(i.startsAt, i.studentTz)}`).join('\n'));
-  if (subs.length) out.push('기존 강사님과 보강을 원하시면 말씀해 주세요.');
+/** 학생 LMS 주소 (2단계 글 맨 끝). 운영진 화면과 같은 사이트 */
+export const studentLmsLink = () => `${typeof window === 'undefined' ? '' : window.location.origin}/lms/student`;
+
+// 2단계 글 (2026-10-28 대표 문구): 날짜만 알리고, 강사 프로필 확인·답은 학생 LMS에서 (A안 한 번에 답)
+export function proposalText(studentName: string, items: LvItem[], _period?: { from: KstDate; to: KstDate }, link = studentLmsLink()): string {
+  const subs = items.some((i) => i.choice === 'substitute');
+  const out = [
+    `[엣지영어] 안녕하세요, ${studentName}님! \n다름이 아니라 담당 강사님 휴무로 부득이하게 아래 날짜에는 수업을 진행하기 어렵게 되었어요.🥲`,
+    items.map((i) => `- ${koAt(i.startsAt, i.studentTz)}`).join('\n'),
+  ];
+  if (subs) out.push('추천드리는 방법은, 원래 시간에 대체강사와 수업하는 거예요!\n일정을 바꾸지 않고, 평소 수업 시간 그대로 수업하실 수 있어요.\n다른 강사의 영어와 수업 방식도 경험해 보실 수 있습니다:)');
+  out.push(subs ? '아래 링크에서 강사님 프로필을 확인하시고, 원하시는 수업 방법을 편하게 선택해 주세요. \n감사합니다🙇‍♀️' : '아래 링크에서 보강 날짜를 편하게 골라 주세요. \n감사합니다🙇‍♀️');
+  out.push(link);
   return out.join('\n\n');
 }
 

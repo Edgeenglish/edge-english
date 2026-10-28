@@ -405,6 +405,8 @@ begin
       left join tutors sub on sub.id = li.sub_tutor_id
       where li.student_id = v_student and li.starts_at > now()
         and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
+      where h.day between (now() at time zone 'Asia/Seoul')::date and (now() at time zone 'Asia/Seoul')::date + 200), '[]'::jsonb),
     'points', coalesce((
       select jsonb_agg(jsonb_build_object('id', g.id, 'on', (g.created_at at time zone 'Asia/Seoul')::date, 'kind', g.kind, 'amount', g.amount, 'note', g.note)
         order by g.created_at)
