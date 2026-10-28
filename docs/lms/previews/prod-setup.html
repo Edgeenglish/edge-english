@@ -6095,7 +6095,7 @@ revoke all on function lms_student_enrollment(uuid) from public, anon, authentic
 
 -- ---------------------------------------------------------------------
 -- 1. 보강 가능한 날짜 (운영진 휴무 화면 admin_leave_makeup_options 와 같은 계산을 모든 보강에)
---    강사 일정·휴무·보통 수업 시간 · 학생 다른 수업 · 종료일 / 정규 요일이 아닌 날의 정규 시각
+--    강사 일정·휴무·보통 수업 시간 · 학생 다른 수업 · 종료일 / 30분 단위 시작 시각 (운영진 휴무 화면은 정규 시각 그대로)
 --    강사 휴무 보강은 휴무가 끝난 날부터, 종료일 뒤 정규 요일도 (휴무 보강은 종료일 제한 없음, A41)
 -- ---------------------------------------------------------------------
 create or replace function lms_makeup_options(p_lesson uuid, p_item uuid)
@@ -6122,10 +6122,10 @@ begin
     where r.student_id = s.student_id and r.tutor_id = s.tutor_id and (r.effective_to is null or r.effective_to &gt;= v_today)
   ),
   slots as (
-    select 'in_period'::text as sec, ((d::date + t.start_time_kst) at time zone 'Asia/Seoul') as x
+    -- 수업 시작은 항상 30분 단위 (2026-10-28 대표) → 강사 보통 수업 시간 안의 :00·:30 모두
+    select 'in_period'::text as sec, ((d::date::timestamp + make_interval(mins =&gt; n * 30)) at time zone 'Asia/Seoul') as x
     from generate_series(greatest(v_today + 1, v_back), e.final_end_date, interval '1 day') d
-    cross join (select distinct start_time_kst from rs) t
-    where extract(dow from d) not in (select weekday from rs)
+    cross join generate_series(0, 47) n
     union all
     select 'after_end', ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul')
     from generate_series(greatest(e.final_end_date + 1, v_back, v_today + 1), greatest(e.final_end_date + 1, v_back, v_today + 1) + 180, interval '1 day') d
