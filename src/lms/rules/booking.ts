@@ -23,7 +23,7 @@ export type Busy = {
   label?: string;
 };
 
-/** 강사 주간 수업 가능 시간 (tutor_availability 한 행) */
+/** 주간 시간 칸 한 행 — 강사(tutor_availability)는 수업 시작 가능 시간(startsWithinAvailability), 학생 희망 시간은 수업 전체가 들어가는 칸(withinAvailability) */
 export type AvailabilityWindow = {
   weekday: number; // 강사 현지 요일 0=일
   startLocal: string; // 'HH:MM' 강사 현지
@@ -46,6 +46,18 @@ export function withinAvailability(start: Date, end: Date, windows: readonly Ava
     const sm = toMin(s.time);
     const em = sm + Math.round((end.getTime() - start.getTime()) / MIN);
     return sm >= toMin(w.startLocal) && em <= toMin(w.endLocal);
+  });
+}
+
+/** 강사 가능 시간(tutor_availability)은 수업 '시작' 가능 시간 — 시작 시각이 [start, end] 안이면 가능 (끝 시각 포함, 2026-10-28 대표: 강사 시간은 시작 기준) */
+export function startsWithinAvailability(start: Date, windows: readonly AvailabilityWindow[]): boolean {
+  const kstDay = instantToKstDate(start);
+  return windows.some((w) => {
+    if (kstDay < w.effectiveFrom || (w.effectiveTo !== null && kstDay > w.effectiveTo)) return false;
+    const s = formatInZone(start, w.timezone);
+    if (weekdayOf(s.date) !== w.weekday) return false;
+    const sm = toMin(s.time);
+    return sm >= toMin(w.startLocal) && sm <= toMin(w.endLocal);
   });
 }
 
@@ -107,7 +119,7 @@ export function checkRegularPlan(input: {
   const issues: PlanIssue[] = [];
   for (const l of lessons) {
     const base = { seq: l.seq, kstDate: l.kstDate, kstTime: l.kstTime };
-    if (!withinAvailability(l.startsAt, l.endsAt, input.availability)) {
+    if (!startsWithinAvailability(l.startsAt, input.availability)) {
       issues.push({ ...base, reason: 'outside_availability', detail: REASON_TEXT.outside_availability });
     }
     for (const c of clashes(l.startsAt, l.endsAt, input.tutorBusy, input.breakMin)) {
@@ -127,7 +139,7 @@ export type CellState = 'available' | 'regular' | 'makeup' | 'off' | 'unavailabl
 /**
  * 주간 캘린더의 30분 칸 상태 (화면 표시용 — 예약 판정은 checkRegularPlan/clashes 가 따로 함)
  * 칸 [t, t+30) 에 수업이 조금이라도 걸치면 그 수업 종류, 휴무가 걸치면 off,
- * 칸 전체가 가능 시간 안이면 available, 아니면 unavailable
+ * 칸 시작 시각이 강사 시작 가능 시간 안이면 available, 아니면 unavailable
  */
 export function cellState(date: KstDate, time: KstTime, stepMin: number, busy: readonly Busy[], availability: readonly AvailabilityWindow[]): { state: CellState; busy?: Busy } {
   const s = kstToInstant(date, time);
@@ -139,7 +151,7 @@ export function cellState(date: KstDate, time: KstTime, stepMin: number, busy: r
   if (mk) return { state: 'makeup', busy: mk };
   const off = hit('time_off');
   if (off) return { state: 'off', busy: off };
-  return { state: withinAvailability(s, e, availability) ? 'available' : 'unavailable' };
+  return { state: startsWithinAvailability(s, availability) ? 'available' : 'unavailable' };
 }
 
 /** 고른 요일들 중 from 이후(포함) 가장 이른 날 = 첫 정규 수업일 후보 */
