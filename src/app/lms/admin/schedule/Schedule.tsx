@@ -117,7 +117,7 @@ export default function Schedule({ nowIso }: { nowIso: string }) {
               role="tab"
               aria-selected={selDay === d}
               onClick={() => setDay(d)}
-              className={`rounded-[10px] py-1.5 text-center text-[12px] ${selDay === d ? 'bg-[#7d5fff] font-bold text-white' : d === today ? 'bg-[#efebff] text-[#5b3fe0]' : 'bg-white text-[#1d1b2b]'}`}
+              className={`rounded-[10px] py-1.5 text-center text-[12px] ${selDay === d ? 'bg-[#7d5ffb] font-bold text-white' : d === today ? 'bg-[#efebff] text-[#5b3fe0]' : 'bg-white text-[#1d1b2b]'}`}
             >
               {dayLabel(d).split('(')[1].replace(')', '')}
               <span className="block text-[11px] opacity-80">{Number(d.slice(8))}</span>

@@ -277,18 +277,18 @@ export default function AdminDashboard({
               </button>
             )}
             {!preview && (
-              <Link href="/lms/admin/change" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5fff] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+              <Link href="/lms/admin/change" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
                 수업 변경
               </Link>
             )}
             {!preview && (
-              <Link href="/lms/admin/leave" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5fff] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+              <Link href="/lms/admin/leave" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
                 강사 휴무
               </Link>
             )}
             <Link
               href={preview ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'}
-              className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5fff] px-3 text-[13px] font-semibold text-white"
+              className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5ffb] px-3 text-[13px] font-semibold text-white"
             >
               + 학생 등록
             </Link>
@@ -311,7 +311,7 @@ export default function AdminDashboard({
           ] as const).map(([label, v, sub, icon]) => (
             <div key={label} className="rounded-[14px] bg-[#f1eefc] px-3 py-2.5">
               <span className="flex items-center gap-1.5 text-[12px] text-[#6b6880]">
-                <Icon name={icon} className="hidden h-4 w-4 text-[#7d5fff] sm:block" />
+                <Icon name={icon} className="hidden h-4 w-4 text-[#7d5ffb] sm:block" />
                 {label}
               </span>
               <b className="block text-[18px] tabular-nums text-[#1d1b2b] lg:text-[20px]">{v}</b>
@@ -331,10 +331,10 @@ export default function AdminDashboard({
                 type="button"
                 aria-pressed={on}
                 onClick={() => setFilter(on ? 'all' : c)}
-                className={`w-[38%] min-w-[128px] shrink-0 snap-start rounded-[14px] border bg-white px-3 py-2.5 text-left lg:w-auto lg:min-w-0 ${on ? 'border-[#7d5fff] shadow-[0_0_0_2px_#e4ddff]' : 'border-[#e6e3ef]'}`}
+                className={`w-[38%] min-w-[128px] shrink-0 snap-start rounded-[14px] border bg-white px-3 py-2.5 text-left lg:w-auto lg:min-w-0 ${on ? 'border-[#7d5ffb] shadow-[0_0_0_2px_#e4ddff]' : 'border-[#e6e3ef]'}`}
               >
                 <span className="flex items-center gap-1.5 text-[12.5px] text-[#6b6880]">
-                  <Icon name={CATEGORY_ICON[c]} className={`h-4 w-4 ${urgent ? 'text-[#c62b2b]' : 'text-[#7d5fff]'}`} />
+                  <Icon name={CATEGORY_ICON[c]} className={`h-4 w-4 ${urgent ? 'text-[#c62b2b]' : 'text-[#7d5ffb]'}`} />
                   {CATEGORY_LABEL[c]}
                 </span>
                 <b className={`block text-[22px] tabular-nums ${n === 0 ? 'text-[#b9b6c8]' : urgent ? 'text-[#c62b2b]' : 'text-[#1d1b2b]'}`}>{n}</b>
@@ -436,7 +436,7 @@ export default function AdminDashboard({
                       {a.label} ✓
                     </button>
                   ) : a.href ? (
-                    <Link key={a.key} href={preview ? a.href.replace('?', '?demo=1&') : a.href} className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5fff] bg-[#7d5fff] px-3 text-[13.5px] font-semibold text-white">
+                    <Link key={a.key} href={preview ? a.href.replace('?', '?demo=1&') : a.href} className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] bg-[#7d5ffb] px-3 text-[13.5px] font-semibold text-white">
                       {a.label}
                     </Link>
                   ) : (
@@ -449,7 +449,7 @@ export default function AdminDashboard({
                         a.danger
                           ? 'border-[#c62b2b] bg-[#c62b2b] text-white'
                           : a.primary
-                            ? 'border-[#7d5fff] bg-[#7d5fff] text-white'
+                            ? 'border-[#7d5ffb] bg-[#7d5ffb] text-white'
                             : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'
                       }`}
                     >

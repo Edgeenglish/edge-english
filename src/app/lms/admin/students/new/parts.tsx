@@ -15,7 +15,7 @@ export const C = {
   ink: 'text-[#1d1b2b]',
   sub: 'text-[#6b6880]',
   line: 'border-[#e6e3ef]',
-  primary: 'bg-[#7d5fff] text-white',
+  primary: 'bg-[#7d5ffb] text-white',
 };
 
 export function Card({ title, badge, action, children, className = '' }: { title?: React.ReactNode; badge?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
@@ -57,7 +57,7 @@ export function Field({ label, children, wide = false, full = false, problem }: 
 }
 
 export const inputCls = (locked: boolean, bad = false) =>
-  `min-h-[44px] w-full rounded-[10px] border px-3 text-[15px] text-[#1d1b2b] outline-none focus:border-[#7d5fff] ${
+  `min-h-[44px] w-full rounded-[10px] border px-3 text-[15px] text-[#1d1b2b] outline-none focus:border-[#7d5ffb] ${
     bad ? 'border-[#e8a39e]' : 'border-[#e6e3ef]'
   } ${locked ? 'bg-[#faf9fd]' : 'bg-white'}`;
 
@@ -270,9 +270,9 @@ export function TutorPicker({
         {rows.map(({ t, n }) => {
           const on = t.id === selectedId;
           return (
-            <div key={t.id} className={`relative w-[72%] min-w-[220px] shrink-0 snap-start rounded-[14px] border bg-white p-3 lg:w-auto lg:min-w-0 ${on ? 'border-[#7d5fff] shadow-[0_0_0_2px_#e4ddff]' : 'border-[#e6e3ef]'}`}>
+            <div key={t.id} className={`relative w-[72%] min-w-[220px] shrink-0 snap-start rounded-[14px] border bg-white p-3 lg:w-auto lg:min-w-0 ${on ? 'border-[#7d5ffb] shadow-[0_0_0_2px_#e4ddff]' : 'border-[#e6e3ef]'}`}>
               <button type="button" aria-pressed={on} onClick={() => onSelect(t.id)} className="flex w-full items-center gap-3 text-left">
-                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${on ? 'border-[#7d5fff] bg-[#7d5fff]' : 'border-[#cfcbe0]'}`}>
+                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${on ? 'border-[#7d5ffb] bg-[#7d5ffb]' : 'border-[#cfcbe0]'}`}>
                   {on && <span className="h-2 w-2 rounded-full bg-white" />}
                 </span>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#efebff] text-[17px] font-bold text-[#5b3fe0]">{t.name.slice(0, 1)}</span>
@@ -301,7 +301,7 @@ export function TutorPicker({
 const CELL: Record<CellState, { cls: string; text: string }> = {
   available: { cls: 'bg-[#efebff] text-[#5b3fe0]', text: '가능' },
   makeup: { cls: 'bg-[#fff1dc] text-[#9a5b00]', text: '보강' },
-  regular: { cls: 'bg-[#7d5fff] text-white', text: '정규 수업' },
+  regular: { cls: 'bg-[#7d5ffb] text-white', text: '정규 수업' },
   off: { cls: 'bg-[#e9e8ee] text-[#6b6880]', text: '휴무' },
   unavailable: { cls: 'bg-[#f6f5f9] text-[#b5b2c4]', text: '-' },
 };
@@ -318,7 +318,7 @@ export function Legend() {
       {item('bg-[#efebff]', '가능')}
       {item('bg-[#f7f5ff] border border-[#e4ddff]', '시작 불가 (길이·휴식 부족)')}
       {item('bg-[#fff1dc]', '보강 있음 (그날만)')}
-      {item('bg-[#7d5fff]', '정규 수업 있음')}
+      {item('bg-[#7d5ffb]', '정규 수업 있음')}
       {item('bg-[#e9e8ee]', '휴무')}
       {item('bg-[#f6f5f9] border border-[#e6e3ef]', '불가')}
       {item('border-2 border-dashed border-[#f0a23a] bg-white', '학생 희망')}
@@ -376,7 +376,7 @@ export function WeekCalendar({
         </button>
         <span className="flex-1" />
         <label className="flex min-h-[40px] items-center gap-2 text-[13px] text-[#1d1b2b]">
-          <input type="checkbox" checked={showLocal} onChange={(e) => setShowLocal(e.target.checked)} className="h-4 w-4 accent-[#7d5fff]" />
+          <input type="checkbox" checked={showLocal} onChange={(e) => setShowLocal(e.target.checked)} className="h-4 w-4 accent-[#7d5ffb]" />
           {tutor.name} 현지 시각 함께
         </label>
       </div>

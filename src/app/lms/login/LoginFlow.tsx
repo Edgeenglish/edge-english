@@ -193,9 +193,7 @@ export default function LoginFlow() {
       </div>
 
       <div className="mt-6 text-center">
-        <p className="text-[26px] font-bold text-[#09246b]">
-          Edge<span className="text-[#5b3df0]">English</span>
-        </p>
+        <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="mx-auto h-[36px] w-auto" />
         <p className="mt-1 text-[14px] text-[#55526a]">{t.portal}</p>
       </div>
 
