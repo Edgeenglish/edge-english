@@ -7,6 +7,13 @@
 import { formatInZone, hoursBetween } from '../rules/dates';
 import { firstLessonAt, planAlert, type PlanView } from './confirm';
 
+/** 수업 변경 안내 종류 → 카드 맨 위 '무슨 일' (lesson_notices.event, migration 1700) */
+const CHANGE_EVENT_TEXT: Record<string, string> = {
+  change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림',
+};
+const noticeWho = (to: ('student' | 'tutor')[] = []) =>
+  to.includes('student') && to.includes('tutor') ? '학생·강사' : to.includes('tutor') ? '강사' : to.includes('student') ? '학생' : '안내';
+
 export type MatchingTask = {
   kind: 'new_student_matching';
   id: string;
@@ -116,6 +123,10 @@ export type LessonChangeTask = {
   studentName: string;
   studentCode: string;
   pendingNotices: number;
+  /** 안 보낸 안내의 종류(change·makeup_ask·…)와 받는 사람·수업 시각 — 카드에 '무슨 일 · 안내 보내기'로 (2026-10-28 대표) */
+  noticeEvents?: string[];
+  noticeTo?: ('student' | 'tutor')[];
+  noticeLessonAt?: Date | null;
   openMakeups: number;
   /** 그중 강사가 강사 LMS에서 가능 여부를 답한 보강 신청 (운영진 확정 차례, migration 2000) */
   answeredMakeups?: number;
@@ -135,6 +146,8 @@ export type TutorLeaveTask = {
   tutorReply: number;
   studentReply: number;
   pendingNotices: number;
+  /** 안 보낸 안내를 휴무 화면 단계별로: 1 휴무 안내(leave_options) · 3 대체강사(sub_ask) · 4 학생 확정(sub_student·sub_confirmed) */
+  noticeSteps?: { notify: number; tutor: number; confirm: number };
   /** 아직 처리 안 된 가장 가까운 수업 (지나기 전에 정해야 함) */
   firstOpenAt: Date | null;
   createdAt: Date;
@@ -392,11 +405,12 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         id: t.id,
         kind: t.kind,
         severity: t.lessonAt ? dueSeverity(t.lessonAt, now) : 'open',
-        tag: t.pendingNotices > 0 ? `안내 안 보냄 ${t.pendingNotices}건` : (t.answeredMakeups ?? 0) > 0 ? '보강 강사 답 옴 · 확정' : '보강 강사 답 대기',
+        tag: t.pendingNotices > 0 ? `${CHANGE_EVENT_TEXT[t.noticeEvents?.[0] ?? ''] ?? '수업 변경'} · 안내 보내기` : (t.answeredMakeups ?? 0) > 0 ? '보강 강사 답 옴 · 확정' : '보강 강사 답 대기',
         title: t.studentName,
         detail: [
-          t.studentCode,
-          t.lessonAt && `${kstLabel(t.lessonAt)} 수업`,
+          t.pendingNotices > 0 && (t.noticeLessonAt ?? t.lessonAt) && `${kstLabel((t.noticeLessonAt ?? t.lessonAt)!)} 수업`,
+          t.pendingNotices > 0 && `${noticeWho(t.noticeTo)} ${t.pendingNotices}건`,
+          t.pendingNotices === 0 && t.lessonAt && `${kstLabel(t.lessonAt)} 수업`,
           t.pendingNotices > 0 && (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 옴 ${t.answeredMakeups}건`,
           t.pendingNotices > 0 && t.openMakeups - (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
           t.pendingNotices === 0 && (t.answeredMakeups ?? 0) > 0 && t.openMakeups > (t.answeredMakeups ?? 0) && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
@@ -406,11 +420,15 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         actions: [{ key: 'open_change', label: '열기', primary: true, href: `/lms/admin/change?student=${encodeURIComponent(t.studentCode)}` }],
       };
     case 'tutor_leave': {
+      // 휴무 화면 단계 이름 그대로 (같은 것은 어디서나 같은 이름 — 2026-10-28 대표)
+      const ns = t.noticeSteps ?? { notify: 0, tutor: 0, confirm: 0 };
+      const other = t.pendingNotices - ns.notify - ns.tutor - ns.confirm;
       const parts = [
-        t.undecidedStudents > 0 && `학생 선택 미확인 ${t.undecidedStudents}명`,
-        t.tutorReply > 0 && `대체강사 답 대기 ${t.tutorReply}회`,
-        t.studentReply > 0 && `학생 OK 대기 ${t.studentReply}회`,
-        t.pendingNotices > 0 && `안내 안 보냄 ${t.pendingNotices}건`,
+        ns.notify > 0 && `1 기존 강사 휴무 안내 ${ns.notify}건`,
+        t.undecidedStudents > 0 && `2 학생 선호 방법 입력 ${t.undecidedStudents}명`,
+        (t.tutorReply > 0 || ns.tutor > 0) && `3 대체 강사에게 묻기 ${t.tutorReply || ns.tutor}회`,
+        (t.studentReply > 0 || ns.confirm > 0) && `4 학생에게 확정 받기 ${t.studentReply > 0 ? `${t.studentReply}회` : `안내 ${ns.confirm}건`}`,
+        other > 0 && `안내 보내기 ${other}건`,
       ].filter(Boolean) as string[];
       const day = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
       return {

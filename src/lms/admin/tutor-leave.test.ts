@@ -138,10 +138,12 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
       { student_id: 's1', starts_at: '2026-11-02T11:00:00Z', choice: 'undecided', sub_stage: null, off },
       { student_id: 's1', starts_at: '2026-11-03T11:00:00Z', choice: 'undecided', sub_stage: null, off },
       { student_id: 's2', starts_at: '2026-11-04T03:00:00Z', choice: 'substitute', sub_stage: 'asked', off },
-    ], [{ leave: { off } }], now);
+    ], [{ event: 'leave_options', leave: { off } }], now);
     const [item] = buildBoard(tasks, now);
     expect(item.title).toBe('Olivia 휴무 11/2~11/10');
-    expect(item.detail).toBe('학생 선택 미확인 1명 · 대체강사 답 대기 1회 · 안내 안 보냄 1건');
+    // 휴무 화면 단계 이름 그대로 (2026-10-28 대표)
+    expect(item.tag).toBe('강사 휴무 · 1 기존 강사 휴무 안내 1건');
+    expect(item.detail).toBe('1 기존 강사 휴무 안내 1건 · 2 학생 선호 방법 입력 1명 · 3 대체 강사에게 묻기 1회');
     expect(item.actions[0].href).toBe('/lms/admin/leave?off=off1');
   });
 });

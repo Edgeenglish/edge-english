@@ -63,13 +63,24 @@ describe('수업 변경 화면 계산 (1순위)', () => {
   it('대시보드: 안 보낸 안내·강사 답 대기 보강을 학생마다 한 줄로, 수업이 24시간 안이면 급함', () => {
     const s = { id: 's', name_ko: '김민수', code: 'STU-0001' };
     const tasks = toLessonChanges([
-      { created_at: '2026-10-26T10:00:00Z', change: { student: s, lesson: { starts_at: kstToInstant('2026-10-27', '08:00').toISOString() } }, makeup: null },
-      { created_at: '2026-10-26T10:00:00Z', change: { student: s, lesson: { starts_at: kstToInstant('2026-10-27', '08:00').toISOString() } }, makeup: null },
+      { created_at: '2026-10-26T10:00:00Z', event: 'change', recipient_kind: 'student', change: { student: s, lesson: { starts_at: kstToInstant('2026-10-27', '08:00').toISOString() } }, makeup: null },
+      { created_at: '2026-10-26T10:00:00Z', event: 'change', recipient_kind: 'tutor', change: { student: s, lesson: { starts_at: kstToInstant('2026-10-27', '08:00').toISOString() } }, makeup: null },
     ], [{ created_at: '2026-10-26T10:00:00Z', student: s }], now);
     const [item] = buildBoard(tasks, now);
-    expect(item.tag).toBe('안내 안 보냄 2건');
+    // 무슨 일 · 할 일이 맨 위, 수업 날짜·받는 사람이 아래 (2026-10-28 대표: 스치듯 봐도 알게)
+    expect(item.tag).toBe('수업 취소 · 안내 보내기');
+    expect(item.detail).toBe('10/27(화) 08:00 수업 · 학생·강사 2건 · 보강 강사 답 대기 1건');
     expect(item.severity).toBe('due_soon');
     expect(item.actions[0].href).toBe('/lms/admin/change?student=STU-0001');
+  });
+
+  it('대시보드: 수업이 이미 지났어도 안내 카드에 그 수업 날짜가 보임', () => {
+    const s = { id: 's', name_ko: '송예나', code: 'STU-0004' };
+    const [item] = buildBoard(toLessonChanges([
+      { created_at: '2026-10-28T10:00:00Z', event: 'change', recipient_kind: 'student', change: { student: s, lesson: { starts_at: kstToInstant('2026-10-20', '09:00').toISOString() } }, makeup: null },
+    ], [], now), now);
+    expect(item.tag).toBe('수업 취소 · 안내 보내기');
+    expect(item.detail).toBe('10/20(화) 09:00 수업 · 학생 1건');
   });
 });
 

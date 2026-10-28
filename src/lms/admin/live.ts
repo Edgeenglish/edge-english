@@ -192,6 +192,8 @@ async function loadImportChecks(sb: SupabaseClient) {
 
 type ChangeNoticeRow = {
   created_at: string;
+  event?: string;
+  recipient_kind?: 'student' | 'tutor';
   change: { student: { id: string; name_ko: string; code: string } | null; lesson: { starts_at: string } | null } | null;
   makeup: { student: { id: string; name_ko: string; code: string } | null } | null;
 };
@@ -209,8 +211,12 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
     if (!s) continue;
     const r = row(s, n.created_at);
     r.pendingNotices += 1;
+    if (n.event && !(r.noticeEvents ??= []).includes(n.event)) r.noticeEvents.push(n.event);
+    if (n.recipient_kind && !(r.noticeTo ??= []).includes(n.recipient_kind)) r.noticeTo.push(n.recipient_kind);
     const at = n.change?.lesson ? new Date(n.change.lesson.starts_at) : null;
     if (at && at > now && (!r.lessonAt || at < r.lessonAt)) r.lessonAt = at;
+    // 지난 수업이어도 안내 카드에는 그 수업 날짜를 보여 줌 (무슨 일인지 바로 알게)
+    if (at && (!r.noticeLessonAt || at < r.noticeLessonAt)) r.noticeLessonAt = at;
   }
   for (const m of makeups) {
     if (!m.student) continue;
@@ -242,7 +248,7 @@ export type LeaveOpenRow = {
   student_id: string; starts_at: string; choice: 'undecided' | 'substitute' | 'wait'; sub_stage: 'asked' | 'tutor_ok' | 'confirmed' | null;
   off: { id: string; starts_at: string; ends_at: string; created_at: string; tutor: { name: string } | null } | null;
 };
-export type LeaveNoticeRow = { leave: { off: LeaveOpenRow['off'] } | null };
+export type LeaveNoticeRow = { event?: string; leave: { off: LeaveOpenRow['off'] } | null };
 
 /** 강사 휴무 처리 (1800): 아직 정하지 않았거나 답을 기다리는 수업 · 안 보낸 안내 → 휴무마다 한 줄 */
 export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], now: Date): TaskSource[] {
@@ -270,7 +276,15 @@ export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], n
     const at = new Date(r.starts_at);
     if (at > now && (!t.firstOpenAt || at < t.firstOpenAt)) t.firstOpenAt = at;
   }
-  for (const n of notices) if (n.leave?.off) row(n.leave.off).pendingNotices += 1;
+  for (const n of notices) {
+    if (!n.leave?.off) continue;
+    const t = row(n.leave.off);
+    t.pendingNotices += 1;
+    const ns = (t.noticeSteps ??= { notify: 0, tutor: 0, confirm: 0 });
+    if (n.event === 'leave_options') ns.notify += 1;
+    else if (n.event === 'sub_ask') ns.tutor += 1;
+    else if (n.event === 'sub_student' || n.event === 'sub_confirmed') ns.confirm += 1;
+  }
   return [...out.values()];
 }
 
@@ -360,7 +374,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .is('origin_checked_at', null),
     sb
       .from('lesson_notices')
-      .select('created_at, change:change_requests(student:students(id, name_ko, code), lesson:lessons(starts_at)), makeup:makeup_requests(student:students(id, name_ko, code))')
+      .select('created_at, event, recipient_kind, change:change_requests(student:students(id, name_ko, code), lesson:lessons(starts_at)), makeup:makeup_requests(student:students(id, name_ko, code))')
       .eq('status', 'pending'),
     loadOpenMakeups(sb),
     sb
@@ -368,7 +382,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind)')
       .in('status', ['confirmed', 'active']),
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
-    sb.from('lesson_notices').select(`leave:leave_items(${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
+    sb.from('lesson_notices').select(`event, leave:leave_items(${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
     sb.from('renewal_notices').select('enrollment_id, sent_at'),
     loadMissingRecords(sb),
   ]);
