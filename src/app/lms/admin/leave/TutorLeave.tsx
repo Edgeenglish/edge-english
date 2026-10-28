@@ -109,9 +109,9 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
 
   const groups = data ? groupByStudent(data.items) : [];
   const messages = data ? leaveMessages(data.items, data.notices) : [];
-  const works = new Map(groups.map((g) => [g.studentId, studentWork(g, messages, now)]));
-  const renewals = data ? groupRenewals(data.renewals) : [];
   const off = leaves.find((l) => l.id === offId) ?? null;
+  const works = new Map(groups.map((g) => [g.studentId, studentWork(g, messages, now, off ?? undefined)]));
+  const renewals = data ? groupRenewals(data.renewals) : [];
   const selected = groups.find((g) => g.studentId === sel) ?? groups.find((g) => works.get(g.studentId)!.steps.length > 0) ?? groups[0];
   const selKey = sel && (groups.some((g) => g.studentId === sel) || sel.startsWith('r:')) ? sel : selected?.studentId ?? (renewals[0] ? `r:${renewals[0].studentId}` : null);
   const todo = STEP_ORDER.map((s) => [s, groups.filter((g) => works.get(g.studentId)!.steps[0] === s).length] as const).filter(([, n]) => n > 0);

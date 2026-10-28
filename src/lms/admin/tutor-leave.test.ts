@@ -96,9 +96,9 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
   it('대체 강사가 아무도 안 되면 2단계 글은 보강 안내만', () => {
     const items = [I('a', 's1', '2026-11-02', { choice: 'wait' })];
     const m = leaveMessages(items, [{ id: 'o', itemId: 'a', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null }]);
-    const w = studentWork(groupByStudent(items)[0], m, now);
+    const w = studentWork(groupByStudent(items)[0], m, now, { from: '2026-11-02', to: '2026-11-10' });
     expect(w.steps).toEqual(['propose']);
-    expect(w.proposal?.text).toBe('[엣지영어] 김민수님, 담당 강사님 휴무로 아래 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.\n\n- 11월 2일(월) 오후 8시');
+    expect(w.proposal?.text).toBe('[엣지영어] 김민수님, 담당 강사님 휴무(11/2~11/10)로 아래 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.\n\n- 11월 2일(월) 오후 8시');
     expect(w.confirm.makeup).toEqual([]);
   });
 

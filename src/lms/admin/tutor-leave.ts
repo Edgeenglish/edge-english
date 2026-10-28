@@ -246,12 +246,14 @@ export const LV_STEP_TEXT: Record<LvStep | 'done', string> = {
 /** 2단계 글: 휴무 안내 + 대체강사 제안을 한 번에 (2026-10-28 대표 시안 승인). 대체강사 날짜는 강사 이름과 함께, 나머지는 보강 */
 export type LvProposal = { status: 'pending' | 'sent'; noticeIds: string[]; itemIds: string[]; text: string };
 
-export function proposalText(studentName: string, items: LvItem[]): string {
+/** period: 휴무 기간 — 학생이 그 기간을 피해 보강을 잡을 수 있게 같이 알림 (2026-10-28 대표) */
+export function proposalText(studentName: string, items: LvItem[], period?: { from: KstDate; to: KstDate }): string {
+  const off = period ? `담당 강사님 휴무(${md(period.from)}~${md(period.to)})로` : '담당 강사님 휴무로';
   const subs = items.filter((i) => i.choice === 'substitute');
   const waits = items.filter((i) => i.choice === 'wait');
   const head = subs.length
-    ? `[엣지영어] ${studentName}님, 담당 강사님 휴무로 아래 수업은 대체강사와 평소 시간에 진행하려고 해요. 강사님 프로필도 함께 보내 드려요.`
-    : `[엣지영어] ${studentName}님, 담당 강사님 휴무로 아래 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.`;
+    ? `[엣지영어] ${studentName}님, ${off} 아래 수업은 대체강사와 평소 시간에 진행하려고 해요. 강사님 프로필도 함께 보내 드려요.`
+    : `[엣지영어] ${studentName}님, ${off} 아래 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.`;
   const out = [head];
   if (subs.length) out.push(subs.map((i) => `${koAt(i.startsAt, i.studentTz)} · ${i.subTutorName} 강사님`).join('\n'));
   if (subs.length && waits.length) out.push(`${waits.map((i) => koAt(i.startsAt, i.studentTz)).join(', ')} 수업은 담당 강사님이 돌아오신 뒤 보강으로 잡아 드려요.`);
@@ -275,7 +277,7 @@ export type LvStudentWork = {
   steps: LvStep[];
 };
 
-export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date): LvStudentWork {
+export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date, period?: { from: KstDate; to: KstDate }): LvStudentWork {
   const mine = messages.filter((m) => m.studentId === g.studentId);
   const pending = mine.filter((m) => m.status === 'pending');
   const future = g.items.filter((i) => i.startsAt > now);
@@ -296,9 +298,9 @@ export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date)
   const proposal: LvProposal | null = !step1Done || shown.length === 0
     ? null
     : propPending.length
-      ? { status: 'pending', noticeIds: propPending.flatMap((m) => m.noticeIds), itemIds: shown.map((i) => i.id), text: proposalText(g.studentName, shown) }
+      ? { status: 'pending', noticeIds: propPending.flatMap((m) => m.noticeIds), itemIds: shown.map((i) => i.id), text: proposalText(g.studentName, shown, period) }
       : propSent.length
-        ? { status: 'sent', noticeIds: propSent.flatMap((m) => m.noticeIds), itemIds: shown.map((i) => i.id), text: proposalText(g.studentName, shown) }
+        ? { status: 'sent', noticeIds: propSent.flatMap((m) => m.noticeIds), itemIds: shown.map((i) => i.id), text: proposalText(g.studentName, shown, period) }
         : null;
   const answer = proposal?.status === 'sent' ? g.items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok') : [];
   const confirm = {
