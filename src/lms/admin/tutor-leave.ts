@@ -81,15 +81,15 @@ export function groupChoice(items: LvItem[]): LvChoice | 'mixed' {
 
 /** 한 줄 상태 글 */
 export function itemStatus(i: LvItem): { text: string; tone: 'todo' | 'wait' | 'done' } {
-  if (i.choice === 'undecided') return { text: '학생 선택 미확인', tone: 'todo' };
+  if (i.choice === 'undecided') return { text: '학생 답변 기다리는 중', tone: 'todo' };
   if (i.choice === 'wait') {
     if (i.makeupAt) return { text: `기존 강사 보강 · ${koShort(i.makeupAt)}`, tone: 'done' };
-    return i.makeupRequested ? { text: '기존 강사 보강 · 강사 확인 중', tone: 'wait' } : { text: '기존 강사 보강 · 날짜 미정', tone: 'wait' };
+    return i.makeupRequested ? { text: '기존 강사 보강 · 강사님 확인 기다리는 중', tone: 'wait' } : { text: '학생에게 보강 가능한 날짜 안내 필요', tone: 'wait' };
   }
   const who = i.subTutorName ?? '대체강사';
-  if (i.subStage === 'asked') return { text: `대체 ${who} · 강사 답 대기`, tone: 'todo' };
-  if (i.subStage === 'tutor_ok') return { text: `대체 ${who} · 학생 OK 대기`, tone: 'todo' };
-  return { text: `대체 ${who} · 확정`, tone: 'done' };
+  if (i.subStage === 'asked') return { text: `${who} 강사님 답변 기다리는 중`, tone: 'todo' };
+  if (i.subStage === 'tutor_ok') return { text: `${who} 강사님 수락 · 학생 동의 확인 필요`, tone: 'todo' };
+  return { text: `대체강사 ${who} 확정`, tone: 'done' };
 }
 
 function koShort(at: Date): string {
@@ -187,9 +187,9 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
 
 export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
   leave_options: '진행 방법 선택 안내',
-  sub_ask: '대체강사에게 물어보기',
-  sub_student: '학생에게 확인받기 (프로필 함께)',
-  sub_confirmed: '최종 확정 안내',
+  sub_ask: '대체강사에게 수업 가능 여부 묻기',
+  sub_student: '학생에게 대체강사 안내하고 동의받기 (프로필 함께)',
+  sub_confirmed: '확정 안내',
 };
 
 /** 기존 강사 보강: 학생에게 보강 가능한 날짜를 보내고 2개까지 고르게 함 (1개도 됨, 2026-10-27 대표 문구)

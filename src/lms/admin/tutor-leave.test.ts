@@ -23,12 +23,12 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
   });
 
   it('상태 글: 미정 → 강사 답 대기 → 학생 OK 대기 → 확정 / 기다림 보강 미정·보강 날짜', () => {
-    expect(itemStatus(I('a', 's1', '2026-11-02')).text).toBe('학생 선택 미확인');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' })).text).toBe('대체 Benny · 강사 답 대기');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' })).text).toBe('대체 Benny · 학생 OK 대기');
+    expect(itemStatus(I('a', 's1', '2026-11-02')).text).toBe('학생 답변 기다리는 중');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' })).text).toBe('Benny 강사님 답변 기다리는 중');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' })).text).toBe('Benny 강사님 수락 · 학생 동의 확인 필요');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' })).tone).toBe('done');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' })).text).toBe('기존 강사 보강 · 날짜 미정');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupRequested: true })).text).toBe('기존 강사 보강 · 강사 확인 중');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' })).text).toBe('학생에게 보강 가능한 날짜 안내 필요');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupRequested: true })).text).toBe('기존 강사 보강 · 강사님 확인 기다리는 중');
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') })).text).toBe('기존 강사 보강 · 11/20 20:00');
   });
 

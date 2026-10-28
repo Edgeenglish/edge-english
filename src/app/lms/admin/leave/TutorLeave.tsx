@@ -1,7 +1,7 @@
 'use client';
 
 // 강사 휴무·대체강사 (2순위 ①, migration 1800, 2026-10-27 대표 시안 승인 Q1 A · Q2 A, 화면 흐름 안 1 확정)
-// 위: 휴무 목록 · [+ 휴무 넣기] · 할 일 요약. PC: 왼쪽 학생 목록(지금 단계) · 오른쪽 고른 학생. 휴대폰: 학생 카드가 위아래로
+// 위: 휴무 목록 · [+ 강사 휴무 등록] · 할 일 요약. PC: 왼쪽 학생 목록(지금 단계) · 오른쪽 고른 학생. 휴대폰: 학생 카드가 위아래로
 // 학생 카드 = 단계 흐름(1 안내 › 2 학생 답 › 3 강사 확인 / 보강 날짜 › 4 확정) + 고른 단계 화면 하나. 앞 단계로는 단계 화면의 [← 뒤로]
 // 대체강사: 강사 가능(가능한 날짜만 골라 저장) → 학생 안내 → 학생 OK 뒤 확정 (A41). 안 되는 날짜는 다른 강사·기존 강사 보강으로
 // 기존 강사 보강: 보강 가능한 날짜(지금 수강기간 안 → 종료일 뒤 평소 요일·시간)를 학생에게 보내고 2개까지 골라 신청 → 확정은 수업 변경·보강 화면 (A20)
@@ -175,7 +175,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
                 <div className="grid min-w-0 gap-3">
                   {groups.map((g) => (
                     <div key={g.studentId} className={g.studentId === selKey ? '' : 'lg:hidden'}>
-                      <StudentPanel g={g} w={works.get(g.studentId)!} sent={messages.filter((m) => m.status === 'sent' && m.studentId === g.studentId)}
+                      <StudentPanel g={g} w={works.get(g.studentId)!} msgs={messages.filter((m) => m.studentId === g.studentId)} leaveTutor={off?.tutorName ?? '기존'}
                         now={now} actions={actions} done={reload} />
                     </div>
                   ))}
@@ -224,12 +224,12 @@ function NewLeave({ tutors, actions, today, saved }: { tutors: LvTutor[]; action
   if (!open) {
     return (
       <button type="button" className={btnMain} onClick={() => setOpen(true)}>
-        + 휴무 넣기
+        + 강사 휴무 등록
       </button>
     );
   }
   return (
-    <Card title="휴무 넣기">
+    <Card title="강사 휴무 등록">
       <div className="grid gap-2.5">
         <label className="grid gap-1 text-[13px] text-[#6b6880]">
           강사
@@ -240,11 +240,11 @@ function NewLeave({ tutors, actions, today, saved }: { tutors: LvTutor[]; action
         </label>
         <div className="grid grid-cols-2 gap-1.5">
           <label className="grid gap-1 text-[13px] text-[#6b6880]">
-            시작일
+            휴무 시작일
             <input type="date" value={from} min={today} onChange={(e) => { setFrom(e.target.value); if (!to || to < e.target.value) setTo(e.target.value); }} className={inputCls(false)} />
           </label>
           <label className="grid gap-1 text-[13px] text-[#6b6880]">
-            끝일
+            휴무 종료일
             <input type="date" value={to} min={from || today} onChange={(e) => setTo(e.target.value)} className={inputCls(false)} />
           </label>
         </div>
@@ -292,18 +292,28 @@ const Block = ({ title, children }: { title: string; children: React.ReactNode }
 
 const overlaps = (m: LvMessage, ids: Set<string>) => m.noticeIds.some((id) => ids.has(id));
 
+// 더 할 일이 없는 묶음: 사라지지 않고 접힘 (눌러서 펼치면 보낸 글·날짜가 그대로)
+const Fold = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <details className="rounded-[12px] border border-[#e6e3ef] px-3 py-2">
+    <summary className="min-h-[36px] cursor-pointer py-1.5 text-[14px] font-bold text-[#1e7a46]">{title}</summary>
+    <div className="mt-2 grid gap-2">{children}</div>
+  </details>
+);
+
 // 학생 한 명: 단계 흐름(1 안내 › 2 학생 답 › 3 강사 확인 › 4 확정). 고른 단계(처음엔 지금 단계)의 화면만 보임:
 // 그 단계에서 할 일 + 그 단계에서 보낸 글(회색 '보냄 ✓') + 오른쪽 위 [← 뒤로].
 // 할 일도 되돌릴 것도 없는 단계는 못 누름. 보냄을 누르면 그 단계에 머물러 회색 버튼을 보여 주고, 아래 [다음 단계 ›]로 넘어감
-function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w: LvStudentWork; sent: LvMessage[]; now: Date; actions: LeaveActions; done: () => Promise<void> }) {
+function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStudentGroup; w: LvStudentWork; msgs: LvMessage[]; leaveTutor: string; now: Date; actions: LeaveActions; done: () => Promise<void> }) {
   const [view, setView] = useState<number | null>(null);
-  // 처리(고르기·저장·확정)를 하면 지금 단계로 넘어가 다음 할 일이 바로 보이게
-  const next = async () => { setView(null); await done(); };
+  const [perRow, setPerRow] = useState(false);
+  // 처리(고르기·저장·확정)를 해도 보던 단계 화면에 그대로 머묾 — 처리한 것은 사라지지 않고 상태가 바뀌거나 접힘 (2026-10-28 대표)
+  const next = async () => { setView(sel); await done(); };
   const r = useRun(next);
   const [copied, setCopied] = useState<Set<string>>(new Set());
   const stage = (s: LvStep) => (s === 'notify' ? 0 : s === 'answer' ? 1 : s === 'confirm' ? 3 : 2);
   const cur = w.steps.length ? stage(w.steps[0]) : 4;
-  const third = w.tutor.length && w.makeup.length ? `${LV_STEP_TEXT.tutor} · 보강 날짜` : w.makeup.length ? LV_STEP_TEXT.makeup : LV_STEP_TEXT.tutor;
+  const anySub = g.items.some((i) => i.choice === 'substitute');
+  const third = anySub && w.makeup.length ? `${LV_STEP_TEXT.tutor} · 보강 날짜` : w.makeup.length ? LV_STEP_TEXT.makeup : LV_STEP_TEXT.tutor;
   const chips = [LV_STEP_TEXT.notify, LV_STEP_TEXT.answer, third, LV_STEP_TEXT.confirm];
 
   const msg = (m: LvMessage, n: number) => (
@@ -311,9 +321,9 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
       onCopied={() => setCopied(new Set([...copied, ...m.noticeIds]))}
       onSend={async () => { await actions.markSent(m.noticeIds); setView(n); await done(); }} />
   );
-  // 보낸 글은 그 수업이 아직 그 단계 뒤에 있을 때만 (되돌린 뒤 예전 글은 안 보임)
   const byId = new Map(g.items.map((i) => [i.id, i]));
-  const still = (m: LvMessage) => m.itemIds.every((id) => {
+  // 보낸 글은 그 글의 수업 중 하나라도 아직 그 단계 뒤에 있으면 보임 (일부 날짜만 다른 강사로 바뀌어도 글은 남음)
+  const still = (m: LvMessage) => m.itemIds.some((id) => {
     const i = byId.get(id);
     if (!i) return false;
     if (m.event === 'leave_options') return true;
@@ -322,7 +332,8 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
     if (m.event === 'sub_student') return i.subStage === 'tutor_ok' || i.subStage === 'confirmed';
     return i.subStage === 'confirmed';
   });
-  const sentOf = (n: number) => sent.filter((m) => still(m) && (n === 0 ? m.event === 'leave_options' : n === 2 ? m.event === 'sub_ask' : n === 3 && (m.event === 'sub_student' || m.event === 'sub_confirmed')));
+  const live = msgs.filter(still);
+  const sent = msgs.filter((m) => m.status === 'sent');
 
   // [← 뒤로]: 지금 보는 단계의 수업을 바로 앞 단계로 (3단계 → 학생 답 전, 4단계 → 확정 전·강사 답 전). 지난 수업·보강 신청이 있는 수업은 빼고
   const future = g.items.filter((i) => i.startsAt > now);
@@ -344,55 +355,98 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
     return [];
   };
 
-  // 2단계 화면: 이미 고른 날짜도 상태와 함께 그대로, 날짜마다 [다시 선택](학생 답 전으로). 고를 것은 '학생 선택 미확인'만
+  // 2단계 화면: 이미 고른 날짜도 상태와 함께 그대로, 날짜마다 [다시 선택]. 처음엔 아래 공통 버튼으로 한 번에,
+  // 일부만 가능한 대체강사를 고르는 등 날짜마다 다르게 되면 남은 날짜 옆에 각각 버튼 (2026-10-28 대표)
   const reselectable = future.filter((i) => i.choice === 'substitute' || (i.choice === 'wait' && !i.makeupAt && !i.makeupRequested));
+  const rowMode = perRow || (w.answer.length > 0 && g.items.some((i) => i.choice !== 'undecided'));
   const answerPage = (
     <div key="answer" className="grid gap-2">
-      <ItemList items={g.items} action={(i) => reselectable.includes(i) && (
-        <button type="button" disabled={r.busy} onClick={() => r.run(() => actions.back([i.id], 'undecided'), () => setView(1))}
-          className="min-h-[34px] rounded-[8px] border border-[#7d5fff] bg-white px-2.5 text-[13px] font-semibold text-[#5b3fe0]">
-          다시 선택
-        </button>
+      <ItemList items={g.items} action={(i) => (
+        i.choice === 'undecided' && rowMode && i.startsAt > now ? <RowChoose item={i} actions={actions} done={next} />
+          : reselectable.includes(i) && (
+            <button type="button" disabled={r.busy} onClick={() => r.run(() => actions.back([i.id], 'undecided'))}
+              className="min-h-[34px] rounded-[8px] border border-[#7d5fff] bg-white px-2.5 text-[13px] font-semibold text-[#5b3fe0]">
+              다시 선택
+            </button>
+          )
       )} />
-      {w.answer.length > 0 && <ChooseBox items={w.answer} actions={actions} done={next} />}
+      {w.answer.length > 0 && !rowMode && <ChooseBox items={w.answer} actions={actions} done={next} onPerRow={() => setPerRow(true)} />}
     </div>
   );
 
-  // 단계마다 할 일
+  // 단계 화면 내용. 처리한 것은 사라지지 않고, 더 할 일이 없는 묶음은 '✓ …'로 접힘
   const c = w.confirm;
-  const todo = (n: number): React.ReactNode[] => {
-    if (n === 0) return w.notify.map((m) => msg(m, 0));
-    if (n === 1) return w.answer.length ? [answerPage] : [];
-    if (n === 2) return [
-      ...w.tutor.map((t) => (
-        <Block key={`t-${t.subTutorId}`} title={`${t.subTutorName} 강사님에게 물어보기`}>
-          {t.ask && msg(t.ask, 2)}
-          <TutorCheck key={t.items.map((i) => i.id).join()} t={t} actions={actions} done={next} />
-        </Block>
-      )),
-      ...(w.makeup.length ? [<Block key="makeup" title="보강 날짜"><MakeupPick g={g} items={w.makeup} actions={actions} done={next} /></Block>] : []),
-    ];
-    const out: React.ReactNode[] = [];
-    if (c.studentMsg) out.push(msg(c.studentMsg, 3));
-    if (c.tutorOk.length) out.push(<StudentAgree key={c.tutorOk.map((i) => i.id).join()} items={c.tutorOk} actions={actions} done={next} />);
-    out.push(...c.confirmedMsgs.map((m) => msg(m, 3)));
-    if (c.makeupRequested.length) out.push(
-      <div key="mk" className="grid gap-2">
-        <ItemList items={c.makeupRequested} />
-        <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5fff] text-[14px] font-semibold text-[#5b3fe0]">
-          보강 확정
-        </Link>
-      </div>,
-    );
-    return out;
+  const subTutors = [...new Map(g.items.filter((i) => i.choice === 'substitute' && i.subTutorId).map((i) => [i.subTutorId!, i.subTutorName ?? ''])).entries()];
+  const pageNodes = (n: number): React.ReactNode[] => {
+    if (n === 0) return live.filter((m) => m.event === 'leave_options').map((m) => msg(m, 0));
+    if (n === 1) return [answerPage];
+    if (n === 2) {
+      const out: React.ReactNode[] = [];
+      for (const [tid, name] of subTutors) {
+        const its = g.items.filter((i) => i.choice === 'substitute' && i.subTutorId === tid);
+        const asks = live.filter((m) => m.event === 'sub_ask' && m.recipientId === tid);
+        const t = w.tutor.find((x) => x.subTutorId === tid);
+        const doneIts = its.filter((i) => i.subStage !== 'asked');
+        const body = (
+          <>
+            {asks.map((m) => msg(m, 2))}
+            {t && <TutorCheck key={t.items.map((i) => i.id).join()} t={t} actions={actions} done={next} />}
+            {doneIts.length > 0 && <ItemList items={doneIts} />}
+          </>
+        );
+        const pending = !!t || asks.some((m) => m.status === 'pending');
+        out.push(pending
+          ? <Block key={`t-${tid}`} title={`${name} 강사님에게 수업 가능 여부 묻기`}>{body}</Block>
+          : <Fold key={`t-${tid}`} title={`✓ ${name} 강사님 가능 여부 문의 완료 · 수락 ${doneIts.length}회`}>{body}</Fold>);
+      }
+      if (w.makeup.length) out.push(<Block key="makeup" title="대체강사가 없을 때 보강 일정 안내"><MakeupPick g={g} items={w.makeup} actions={actions} done={next} /></Block>);
+      return out;
+    }
+    if (n === 3) {
+      const out: React.ReactNode[] = [];
+      for (const [tid, name] of subTutors) {
+        const its = g.items.filter((i) => i.choice === 'substitute' && i.subTutorId === tid && (i.subStage === 'tutor_ok' || i.subStage === 'confirmed'));
+        if (its.length === 0) continue;
+        const ids = new Set(its.map((i) => i.id));
+        const mine = live.filter((m) => (m.event === 'sub_student' || m.event === 'sub_confirmed') && m.itemIds.some((id) => ids.has(id)));
+        const ok = its.filter((i) => i.subStage === 'tutor_ok');
+        const confirmed = its.filter((i) => i.subStage === 'confirmed');
+        const body = (
+          <>
+            {mine.filter((m) => m.event === 'sub_student').map((m) => msg(m, 3))}
+            {ok.length > 0 && <StudentAgree key={ok.map((i) => i.id).join()} items={ok} actions={actions} done={next} />}
+            {mine.filter((m) => m.event === 'sub_confirmed').map((m) => msg(m, 3))}
+            {confirmed.length > 0 && <ItemList items={confirmed} />}
+          </>
+        );
+        const pending = ok.length > 0 || mine.some((m) => m.status === 'pending');
+        out.push(pending
+          ? <Block key={`c-${tid}`} title={`${name} 강사님 수업 · 학생에게 대체강사 안내하고 동의받기`}>{body}</Block>
+          : <Fold key={`c-${tid}`} title={`✓ ${name} 강사님 수업 ${confirmed.length}회 확정`}>{body}</Fold>);
+      }
+      if (c.makeupRequested.length) out.push(
+        <Block key="mk" title={`${leaveTutor} 강사님 확인 후 보강 확정`}>
+          <ItemList items={c.makeupRequested} />
+          <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5fff] text-[14px] font-semibold text-[#5b3fe0]">
+            보강 확정
+          </Link>
+        </Block>,
+      );
+      const booked = g.items.filter((i) => i.choice === 'wait' && i.makeupAt);
+      if (booked.length) out.push(<Fold key="mk-done" title={`✓ ${leaveTutor} 강사님 보강 ${booked.length}회 확정`}><ItemList items={booked} /></Fold>);
+      return out;
+    }
+    return [];
   };
+  const hasWork = (n: number) => w.steps.some((x) => stage(x) === n);
+
   // 누를 수 있는 단계: 지금 단계 · 할 일이 있는 단계 (보냄 뒤 머무는 단계 포함)
   // 모두 끝난 학생은 4단계(확정) 화면을 보여 줌 — 보낸 확정 안내와 [← 뒤로]
-  const home = cur === 4 && (sentOf(3).length > 0 || backOf(3).length > 0) ? 3 : cur;
-  // 1단계는 보낸 휴무 안내를 다시 볼 수 있게 늘 열림
-  const canOpen = (n: number) => n === home || todo(n).length > 0 || (n === view && sentOf(n).length > 0) || (n === 1 && reselectable.length > 0) || (n === 0 && sentOf(0).length > 0);
+  const home = cur === 4 && pageNodes(3).length > 0 ? 3 : cur;
+  // 보여 줄 것이 있는 단계는 언제든 열림 (1단계 = 보낸 휴무 안내, 2단계 = 날짜마다 지금 상태)
+  const canOpen = (n: number) => n === home || pageNodes(n).length > 0;
   const sel = view !== null && canOpen(view) ? view : home;
-  const nextStep = todo(sel).length === 0 ? [0, 1, 2, 3].find((n) => n > sel && todo(n).length > 0) : undefined;
+  const nextStep = !hasWork(sel) ? [0, 1, 2, 3].find((n) => n > sel && hasWork(n)) : undefined;
   const back = backOf(sel);
 
   return (
@@ -423,8 +477,7 @@ function StudentPanel({ g, w, sent, now, actions, done }: { g: LvStudentGroup; w
         </div>
         {sel < 4 && (
           <>
-            {sel === 1 ? answerPage : todo(sel)}
-            {sentOf(sel).map((m) => msg(m, sel))}
+            {pageNodes(sel)}
             {nextStep !== undefined && (
               <button type="button" className={btnMain} onClick={() => setView(nextStep)}>{chips[nextStep]} ›</button>
             )}
@@ -493,46 +546,50 @@ function ItemList({ items, action }: { items: LvItem[]; action?: (i: LvItem) => 
 }
 
 // 대체강사 / 기존 강사 보강 고르기 (모든 날짜 한 번에, 필요하면 일부 날짜만)
-function ChooseBox({ items, actions, done }: { items: LvItem[]; actions: LeaveActions; done: () => Promise<void> }) {
-  const [some, setSome] = useState(false);
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(items.map((i) => i.id)));
+function ChooseBox({ items, actions, done, onPerRow }: { items: LvItem[]; actions: LeaveActions; done: () => Promise<void>; onPerRow: () => void }) {
   const [options, setOptions] = useState<LvSubOption[] | null>(null);
   const r = useRun(done);
-  const ids = (some ? items.filter((i) => picked.has(i.id)) : items).map((i) => i.id);
-  const reset = () => { setOptions(null); setSome(false); };
-
+  const ids = items.map((i) => i.id);
   return (
     <div className="grid gap-2">
-      {some && (
-        <ul className="grid gap-1.5">
-          {items.map((i) => (
-            <li key={i.id}>
-              <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
-                <input type="checkbox" className="h-5 w-5" checked={picked.has(i.id)}
-                  onChange={(e) => { const n = new Set(picked); if (e.target.checked) n.add(i.id); else n.delete(i.id); setPicked(n); setOptions(null); }} />
-                {kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'}
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
       <div className="grid grid-cols-2 gap-1.5">
-        <button type="button" disabled={r.busy || ids.length === 0} className={btnSub} onClick={async () => {
+        <button type="button" disabled={r.busy} className={btnSub} onClick={async () => {
           r.setErr('');
           try { setOptions(await actions.subOptions(ids)); } catch (e) { r.setErr(e instanceof Error ? e.message : '강사 목록을 읽지 못했어요.'); }
         }}>
           대체강사
         </button>
-        <button type="button" disabled={r.busy || ids.length === 0} className={btnSub} onClick={() => r.run(() => actions.choose(ids, 'wait', null), reset)}>
+        <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => actions.choose(ids, 'wait', null), () => setOptions(null))}>
           기존 강사 보강
         </button>
       </div>
       {items.length > 1 && (
-        <button type="button" className="min-h-[36px] text-left text-[13.5px] font-semibold text-[#5b3fe0]" onClick={() => { setSome(!some); setOptions(null); }}>
-          {some ? '모든 날짜 한 번에 ›' : '일부 날짜만 다르게 ›'}
-        </button>
+        <button type="button" className="min-h-[36px] text-left text-[13.5px] font-semibold text-[#5b3fe0]" onClick={onPerRow}>날짜마다 따로 선택 ›</button>
       )}
-      {options && <SubOptions options={options} items={items.filter((i) => ids.includes(i.id))} busy={r.busy} pick={(id, sel) => r.run(() => actions.choose(sel, 'substitute', id), reset)} />}
+      {options && <SubOptions options={options} items={items} busy={r.busy} pick={(id, sel) => r.run(() => actions.choose(sel, 'substitute', id), () => setOptions(null))} />}
+      <Err>{r.err}</Err>
+    </div>
+  );
+}
+
+// 날짜 한 줄의 처리 방법 (날짜마다 따로 고를 때)
+function RowChoose({ item, actions, done }: { item: LvItem; actions: LeaveActions; done: () => Promise<void> }) {
+  const [options, setOptions] = useState<LvSubOption[] | null>(null);
+  const r = useRun(done);
+  return (
+    <div className="grid basis-full gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
+        <button type="button" disabled={r.busy} className={btnSub} onClick={async () => {
+          r.setErr('');
+          try { setOptions(await actions.subOptions([item.id])); } catch (e) { r.setErr(e instanceof Error ? e.message : '강사 목록을 읽지 못했어요.'); }
+        }}>
+          대체강사
+        </button>
+        <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => actions.choose([item.id], 'wait', null))}>
+          기존 강사 보강
+        </button>
+      </div>
+      {options && <SubOptions options={options} items={[item]} busy={r.busy} pick={(id, sel) => r.run(() => actions.choose(sel, 'substitute', id))} />}
       <Err>{r.err}</Err>
     </div>
   );
@@ -550,7 +607,7 @@ function SubOptions({ options, items, busy, pick }: { options: LvSubOption[]; it
             className="flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2 text-left disabled:bg-[#faf9fd] disabled:text-[#b9b6c8]">
             <b className="text-[15px]">{o.name}</b>
             <span className="flex-1 text-right text-[13px] text-[#6b6880]">
-              {o.free === items.length ? `${items.length}회 모두 가능` : `${o.free}회 가능 · ${o.busyDates.join('·')} 겹침`}
+              {o.free === items.length ? `수업 ${items.length}회 모두 일정상 가능` : `${o.free}회 일정상 가능 · ${o.busyDates.join('·')}은 기존 수업과 겹침`}
             </span>
           </button>
         </li>
@@ -579,7 +636,7 @@ function StudentAgree({ items, actions, done }: { items: LvItem[]; actions: Leav
         ))}
       </ul>
       <button type="button" disabled={r.busy || yes.length === 0} className={btnMain} onClick={() => r.run(() => actions.studentOk(yes))}>
-        학생 동의 확인 · {yes.length}회 확정
+        학생이 동의한 {yes.length}회 확정
       </button>
       <Err>{r.err}</Err>
     </div>
@@ -596,7 +653,7 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
 
   return (
     <div className="grid gap-2">
-      <span className="text-[13px] text-[#6b6880]">{t.subTutorName} 강사님이 가능한 날짜 선택</span>
+      <span className="text-[13px] text-[#6b6880]">{t.subTutorName} 강사님이 가능하다고 답한 날짜 선택</span>
       <ul className="grid gap-1.5">
         {t.items.map((i) => (
           <li key={i.id}>
@@ -609,17 +666,17 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
         ))}
       </ul>
       <button type="button" disabled={r.busy || yes.length === 0} className={btnMain} onClick={() => r.run(() => actions.subOk(yes))}>
-        저장 ({yes.length}회)
+        가능한 수업 {yes.length}회 저장
       </button>
       {no.length > 0 && (
         <>
-          <span className="text-[13px] text-[#6b6880]">안 되는 날짜 {no.length}회</span>
+          <span className="text-[13px] text-[#6b6880]">가능하지 않다고 답한 날짜 {no.length}회</span>
           <div className="grid grid-cols-2 gap-1.5">
             <button type="button" disabled={r.busy} className={btnSub} onClick={async () => {
               r.setErr('');
               try { setOptions((await actions.subOptions(no)).filter((o) => o.tutorId !== t.subTutorId)); } catch (e) { r.setErr(e instanceof Error ? e.message : '강사 목록을 읽지 못했어요.'); }
             }}>
-              다른 대체강사
+              다른 대체강사 선택
             </button>
             <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => actions.choose(no, 'wait', null))}>
               기존 강사 보강
@@ -714,7 +771,7 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
             () => actions.requestMakeup(item.lessonId ? { lessonId: item.lessonId } : { itemId: item.migratedItemId! }, [...picked].sort((a, b) => a - b).map((t) => new Date(t))),
             () => setPicked(new Set()),
           )}>
-            보강 신청 ({picked.size})
+            학생이 선택한 날짜로 보강 신청 ({picked.size})
           </button>
         </>
       )}
