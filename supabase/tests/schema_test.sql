@@ -1580,3 +1580,58 @@ select pg_temp.expect_error($$select admin_class_record_missing()$$, '42501');
 select pg_temp.ok(true, '강사는 운영자 미기록 목록 못 봄');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------- 보강 back to back (migration 2300, 정책 원본 H26(30)+보완, POL-OP-21 예외) ----------
+-- 강사 붙임T. 학생 붙임A(20분)·붙임B(20분, 다른 학생)·붙임C(40분). 기준 시각 bb = 10일 뒤 정시
+reset role;
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000002300', '붙임T', 'Korea', 'Asia/Seoul');
+insert into students (id, name_ko, name_en) values
+  ('99999999-0000-0000-0000-00000000230a', '붙임A', 'BtB A'), ('99999999-0000-0000-0000-00000000230b', '붙임B', 'BtB B'),
+  ('99999999-0000-0000-0000-00000000230c', '붙임C', 'BtB C');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select ('99999999-1000-0000-0000-00000000230' || k)::uuid, ('99999999-0000-0000-0000-00000000230' || k)::uuid, 1, 4, 2, d,
+       current_date - 3, current_date - 3 + 27, 8, 'active'
+from (values ('a', 20), ('b', 20), ('c', 40)) v(k, d);
+create temp table bb as select date_trunc('hour', now()) + interval '10 days' as t;
+grant select on bb to authenticated;
+-- A: 10일 뒤 2시 20분 수업 하나 / 11일 뒤 2시·2시 20분 쉬지 않고 2개 / B: 13일 뒤 2시 / C: 14일 뒤 2시 40분 / A: 15일 뒤 2시
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select ('77777777-2300-0000-0000-00000000000' || n)::uuid, ('99999999-1000-0000-0000-00000000230' || k)::uuid, ('99999999-0000-0000-0000-00000000230' || k)::uuid,
+       '55555555-0000-0000-0000-000000002300', 'regular', n, bb.t + o, bb.t + o + make_interval(mins => d)
+from bb, (values (1, 'a', interval '2 hours', 20), (2, 'a', interval '1 day 2 hours', 20), (3, 'a', interval '1 day 2 hours 20 minutes', 20),
+                 (4, 'b', interval '3 days 2 hours', 20), (5, 'c', interval '4 days 2 hours', 40), (6, 'a', interval '5 days 2 hours', 20)) v(n, k, o, d);
+-- 날짜 미정 보강(이관) — 학생마다 보강 신청 1건씩 쓰려고 여러 개
+insert into migrated_items (id, enrollment_id, kind, original_date)
+select ('99999999-4000-0000-0000-00000000230' || n)::uuid, ('99999999-1000-0000-0000-00000000230' || k)::uuid, 'makeup_open', current_date - 1 - n
+from (values (1, 'a'), (2, 'a'), (3, 'a'), (4, 'a'), (5, 'c'), (6, 'c')) v(n, k);
+create or replace function pg_temp.mreq(item int, slot interval) returns uuid language sql as $$
+  select (admin_makeup_request(null, ('99999999-4000-0000-0000-00000000230' || item)::uuid,
+          jsonb_build_array(jsonb_build_object('starts_at', (select t from bb) + slot)), now()) ->> 'makeup_request_id')::uuid $$;
+create or replace function pg_temp.busy(req uuid) returns boolean language sql as $$
+  select (s ->> 'busy')::boolean from jsonb_array_elements(tutor_screen('55555555-0000-0000-0000-000000002300', current_date, current_date) -> 'makeups') m,
+         jsonb_array_elements(m -> 'slots') s where (m ->> 'id')::uuid = req $$;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+create temp table bq as select 1 as n, pg_temp.mreq(1, interval '2 hours 20 minutes') as id   -- A 수업 바로 뒤 (휴식 0분)
+union all select 2, pg_temp.mreq(2, interval '1 day 2 hours 40 minutes')                        -- 이미 쉬지 않고 2개인 A 수업 바로 뒤
+union all select 3, pg_temp.mreq(3, interval '3 days 2 hours 20 minutes')                        -- 다른 학생 B 수업 바로 뒤
+union all select 4, pg_temp.mreq(4, interval '6 days')                                            -- 강사가 다른 시간을 말하는 경우
+union all select 5, pg_temp.mreq(5, interval '4 days 2 hours 40 minutes')                        -- 40분 C 수업 바로 뒤
+union all select 6, pg_temp.mreq(6, interval '4 days 2 hours 50 minutes');                       -- 40분 C 수업 뒤 10분 쉬고
+select pg_temp.ok((select array_agg(pg_temp.busy(id) order by n) from bq) = '{f,t,t,f,t,f}',
+  'back to back 강사 화면: 같은 학생 20분 바로 뒤는 가능 표시, 쉬지 않고 3개·다른 학생 바로 뒤·40분 바로 뒤는 이미 수업 있음');
+select admin_makeup_confirm((select id from bq where n = 1), (select t from bb) + interval '2 hours 20 minutes');
+select pg_temp.ok((select ends_at - starts_at = interval '20 minutes' from lessons where id = (select confirmed_lesson_id from makeup_requests where id = (select id from bq where n = 1))),
+  '같은 학생 20분 수업 바로 뒤(휴식 없이) 보강 확정 — 학생이 원한 시간');
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from bq where n = 2), (select t from bb) + interval '1 day 2 hours 40 minutes')$$, '쉬지 않고 이어 붙이는 수업\(20분 2개까지\)');
+select pg_temp.ok(true, '쉬지 않고 붙이는 건 2개까지: 이미 이어진 2개 바로 뒤는 거절');
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from bq where n = 3), (select t from bb) + interval '3 days 2 hours 20 minutes')$$, '휴식 10분');
+select pg_temp.ok(true, '다른 학생 수업 바로 뒤는 휴식 10분 그대로');
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from bq where n = 4), (select t from bb) + interval '5 days 2 hours 20 minutes')$$, '휴식 10분');
+select pg_temp.ok(true, '학생이 원한 시간이 아니면(강사가 말한 시간) 같은 학생 20분이어도 휴식 10분');
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from bq where n = 5), (select t from bb) + interval '4 days 2 hours 40 minutes')$$, '휴식 10분');
+select admin_makeup_confirm((select id from bq where n = 6), (select t from bb) + interval '4 days 2 hours 50 minutes');
+select pg_temp.ok((select status = 'confirmed' from makeup_requests where id = (select id from bq where n = 6)),
+  '40분 수업은 같은 학생이어도 휴식 10분: 바로 뒤 거절, 10분 쉬고 이어서(back to back) 확정');
+reset request.jwt.claim.sub;
+reset role;

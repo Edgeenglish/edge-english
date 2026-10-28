@@ -21,6 +21,10 @@ export const CONFIRMED = {
   durations: [20, 40, 50] as const,
   /** 같은 강사·학생의 수업 사이 최소 휴식(분) */
   minBreakMin: 10,
+  /** 휴식 예외(back to back): 같은 학생이 원한 보강이면 이 길이 수업끼리는 휴식 없이 붙일 수 있음 — 40·50분은 10분 그대로 */
+  backToBackNoBreakDurationMin: 20,
+  /** 휴식 없이 이어 붙이는 수업은 이 개수까지 (20분 × 2 = 연속 40분) */
+  backToBackNoBreakMaxLessons: 2,
 } as const;
 
 /** CONFIRMED 각 값의 근거 정책 ID (기준표에서 '확정'이어야 함 — policy-register.test.ts) */
@@ -31,6 +35,8 @@ export const CONFIRMED_REFS = {
   weeklyCounts: 'POL-PAY-08',
   durations: 'POL-PAY-08',
   minBreakMin: 'POL-OP-21',
+  backToBackNoBreakDurationMin: 'POL-OP-21',
+  backToBackNoBreakMaxLessons: 'POL-OP-21',
   creditsPerPeriod: 'POL-CHG-03',
 } as const;
 

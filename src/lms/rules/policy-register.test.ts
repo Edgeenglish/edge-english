@@ -155,4 +155,10 @@ describe('수업 변경 DB 함수의 숫자 = 코드 기준값 (migration 1700)'
     const leave = readFileSync(join(ROOT, 'supabase/migrations/20261027001800_lms_tutor_leave.sql'), 'utf8');
     expect(leave).toContain(`v_break constant interval := interval '${CONFIRMED.minBreakMin} minutes'`);
   });
+  it('보강 back to back 예외: 휴식 · 휴식 없이 붙일 수 있는 길이 · 개수 (migration 2300)', () => {
+    const b2b = readFileSync(join(ROOT, 'supabase/migrations/20261029002300_lms_back_to_back.sql'), 'utf8');
+    expect(b2b).toContain(`v_break constant interval := interval '${CONFIRMED.minBreakMin} minutes'`);
+    expect(b2b).toContain(`v_b2b_min constant integer := ${CONFIRMED.backToBackNoBreakDurationMin};`);
+    expect(b2b).toContain(`v_b2b_max constant integer := ${CONFIRMED.backToBackNoBreakMaxLessons};`);
+  });
 });
