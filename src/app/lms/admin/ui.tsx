@@ -83,9 +83,10 @@ export function BottomNav({ active, demo }: { active: AdminTab; demo: boolean })
 export function AdminHeader({ active, demo, right }: { active: AdminTab; demo: boolean; right?: React.ReactNode }) {
   return (
     <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[#e6e3ef] bg-white px-4 py-3 lg:px-7">
-      <span className="text-[15px] font-extrabold tracking-tight text-[#09246b]">
+      {/* 로고 = 대시보드 새로고침. Link 는 같은 주소면 다시 불러오지 않아서 일반 a 로 페이지 전체를 다시 연다 */}
+      <a href={withDemo('/lms/admin', demo)} title="대시보드 새로고침" className="text-[15px] font-extrabold tracking-tight text-[#09246b]">
         Edge<span className="text-[#7d5fff]">English</span> <span className="text-[#09246b]">운영</span>
-      </span>
+      </a>
       <TopNav active={active} demo={demo} />
       <span className="flex-1" />
       {right}
