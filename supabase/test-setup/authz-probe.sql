@@ -63,7 +63,8 @@ declare
                           'admin_propose_schedule', 'admin_confirm_schedule', 'admin_close_plan', 'admin_mark_proposal_sent', 'admin_mark_notice_sent',
                           'admin_change_lesson', 'student_change_lesson', 'admin_revert_change', 'admin_makeup_request', 'admin_makeup_confirm',
                           'admin_makeup_withdraw', 'admin_void_makeup', 'admin_mark_lesson_notice_sent',
-                          'admin_leave_create', 'admin_leave_choose', 'admin_leave_sub_ok', 'admin_leave_student_ok', 'admin_leave_sub_options', 'admin_leave_makeup_options', 'admin_leave_back', 'admin_leave_notice_unsend', 'admin_leave_renewal_pending'];
+                          'admin_leave_create', 'admin_leave_choose', 'admin_leave_sub_ok', 'admin_leave_student_ok', 'admin_leave_sub_options', 'admin_leave_makeup_options', 'admin_leave_back', 'admin_leave_notice_unsend', 'admin_leave_renewal_pending',
+                          'admin_renewal_notice_sent'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
   persona_uid uuid[];

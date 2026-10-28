@@ -271,7 +271,8 @@ export type EndingRow = {
  * Class Record 완료 기록이 없어도 날짜로 셈(지난 예정 수업은 한 것으로 봄). 결제 확인된 재등록 수강권이 있으면 그쪽이 마지막이라 빠짐.
  * 정규 수업이 아직 하나도 없는 수강권(신규 매칭 전)은 신규 매칭 칸에서 다룸
  */
-export function toEndingSoon(rows: EndingRow[], now: Date): TaskSource[] {
+/** sent: 수강권 id → 재등록 안내 [보냄] 시각 (migration 1900, 없으면 빈 목록) */
+export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, string> = new Map()): TaskSource[] {
   const latest = new Map<string, EndingRow>();
   for (const r of rows) {
     const cur = latest.get(r.student_id);
@@ -298,6 +299,7 @@ export function toEndingSoon(rows: EndingRow[], now: Date): TaskSource[] {
       lessonsLeft: left.length + owed,
       endsAt: endOfKstDay(r.final_end_date),
       tutorName: (left[0] ?? last).tutor?.name ?? null,
+      noticeSentAt: sent.has(r.id) ? new Date(sent.get(r.id)!) : null,
     });
   }
   return out;
@@ -310,7 +312,7 @@ const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01'
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const today = instantToKstDate(now);
   const off = 'off:tutor_time_off(id, starts_at, ends_at, created_at, tutor:tutors(name))';
-  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, ending, leaveOpen, leaveNotices] = await Promise.all([
+  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, ending, leaveOpen, leaveNotices, renewalSent] = await Promise.all([
     sb
       .from('admin_tasks')
       .select(
@@ -343,6 +345,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .in('status', ['confirmed', 'active']),
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
     sb.from('lesson_notices').select(`leave:leave_items(${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
+    sb.from('renewal_notices').select('enrollment_id, sent_at'),
   ]);
   const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error) ?? ending.error;
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
@@ -353,7 +356,9 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     tasks: [
       ...toTaskSources(taskRows, (leaves.data ?? []) as unknown as LeaveRow[], ns, plans),
       ...toImportChecks((checks.data ?? []) as unknown as ImportCheckRow[], (origins.data ?? []) as unknown as UnknownOriginRow[]),
-      ...toEndingSoon((ending.data ?? []) as unknown as EndingRow[], now),
+      ...toEndingSoon((ending.data ?? []) as unknown as EndingRow[], now,
+        // 1900 전 DB는 표가 없음 → 보냄 기록 없이
+        new Map(renewalSent.error ? [] : (renewalSent.data ?? []).map((r) => [r.enrollment_id as string, r.sent_at as string]))),
       // 1700 전 DB(표·칸 없음)는 건너뜀
       ...(changeNotices.error ? [] : toLessonChanges((changeNotices.data ?? []) as unknown as ChangeNoticeRow[], (openMakeups.data ?? []) as unknown as OpenMakeupRow[], now)),
       // 1800 전 DB는 건너뜀

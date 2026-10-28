@@ -44,8 +44,9 @@ describe('처리할 일 목록', () => {
   });
   it('매칭: 일정안 없으면 [강사·시간 고르기] 화면으로', () => {
     const m3 = items.find((i) => i.id === 'm-3')!;
-    expect(m3.steps.map((s) => s.done)).toEqual([false, false]);
+    expect(m3.steps).toEqual([]); // 할 일 목록은 버튼과 같은 말이라 안 보임
     expect(m3.actions[0]).toMatchObject({ key: 'pick_schedule', href: '/lms/admin/assign?e=demo' });
+    expect(m3.actions[1]).toMatchObject({ label: '수업 컨펌 완료', disabled: true });
   });
   it('재등록: 통보만 했으면 강사 확인이 다음 단계, 미확인 시간 표시', () => {
     const r = items.find((i) => i.id === 'r-1')!;

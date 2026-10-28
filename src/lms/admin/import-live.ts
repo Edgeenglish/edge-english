@@ -72,3 +72,9 @@ export async function setImportEndReason(sb: SupabaseClient, enrollmentId: strin
   const { error } = await sb.rpc('admin_import_set_end_reason', { p_enrollment: enrollmentId, p_reason: reason, p_note: note });
   if (error) throw new Error(error.code === 'PGRST202' ? '종료일 이유 확인 기능이 아직 이 DB에 적용되지 않았어요 (migration 1600).' : friendly(error));
 }
+
+/** 종료 임박 카드: 재등록 안내 문자 [보냄] 기록 (migration 1900, 다시 눌러도 처음 시각 그대로) */
+export async function markRenewalSent(sb: SupabaseClient, enrollmentId: string): Promise<void> {
+  const { error } = await sb.rpc('admin_renewal_notice_sent', { p_enrollment: enrollmentId });
+  if (error) throw new Error(error.code === 'PGRST202' ? '재등록 안내 기록 기능이 아직 이 DB에 적용되지 않았어요 (migration 1900).' : friendly(error));
+}

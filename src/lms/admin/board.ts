@@ -69,6 +69,8 @@ export type EndingSoonTask = {
   lessonsLeft: number;
   endsAt: Date; // 최종 종료일 23:59 KST (이월·고정 시간 마감, POL-RN-01·02)
   tutorName: string | null;
+  /** 재등록 안내 문자 [보냄] 기록 (migration 1900). 없으면 안 보냄 */
+  noticeSentAt: Date | null;
 };
 
 /** 보강 미신청: 보강을 받을 수 있는 취소 수업이 있는데 학생이 아직 보강을 신청하지 않음. 기한 = 최종 종료일 (POL-PER-06) */
@@ -187,7 +189,8 @@ export type BoardItem = {
   detail: string;
   due: string | null;
   steps: { key: StepKey; label: string; done: boolean }[];
-  actions: { key: string; label: string; primary?: boolean; danger?: boolean; href?: string }[];
+  /** done: 끝난 단계(회색 ✓, 못 누름) · disabled: 앞 단계가 안 끝나 아직 못 누름 */
+  actions: { key: string; label: string; primary?: boolean; danger?: boolean; href?: string; done?: boolean; disabled?: boolean }[];
   /** 신규 매칭의 일정안 — 화면이 PlanCard(확정·안내 복사)로 그림 */
   plan?: PlanView;
   /** 첫 수업 24시간 안인데 안내 미완료 → 목록 맨 위 (D-51-3) */
@@ -196,6 +199,8 @@ export type BoardItem = {
   unknownOrigins?: { id: string; label: string }[];
   /** 기존 학생 입력: 종료일 이유 확인 — 화면이 이유 고르기로 그림 */
   endReason?: { days: number; weeks: number | null } | null;
+  /** 종료 임박: 재등록 안내 문자 (복사) + [보냄] 기록 — 화면이 RenewalNotice로 그림 */
+  renewal?: { text: string; sentAt: Date | null };
 };
 
 const KST = 'Asia/Seoul';
@@ -216,6 +221,20 @@ export function dueSeverity(dueAt: Date | null, now: Date): Severity {
   return 'open';
 }
 
+/**
+ * 재등록 안내 문자 (2026-10-28 대표: 당분간 문자로 안내 → 복사해서 보냄). 마감 = 종료일 23:59 KST (POL-RN-01 이월 · POL-RN-02 고정 시간)
+ * 남은 수업이 없으면 이월 문장은 뺌
+ */
+export function renewalMessage(name: string, lessonsLeft: number, endsAt: Date): string {
+  const f = formatInZone(endsAt, KST);
+  const day = `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8, 10))}일(${WD[f.weekday] ?? f.weekday})`;
+  return [
+    `[엣지영어] ${name}님, ${lessonsLeft > 0 ? `수업이 ${lessonsLeft}회 남았어요.` : '이번 수강기간 수업이 모두 끝나 가요.'} (종료일 ${day})`,
+    `종료일 ${day} 밤 11시 59분까지 재등록 결제를 마치시면 ${lessonsLeft > 0 ? '남은 수업은 다음 수강기간으로 이어지고, ' : ''}지금 수업 요일·시간도 그대로 유지돼요.`,
+    '재등록을 원하시면 편하게 답장 주세요. 😊',
+  ].join('\n\n');
+}
+
 export function dueText(dueAt: Date, now: Date): string {
   const h = hoursBetween(now, dueAt);
   if (h < 0) {
@@ -230,24 +249,27 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
   switch (t.kind) {
     case 'new_student_matching': {
       if (t.plan) return planItem(t, t.plan, now);
-      const steps = [
-        { key: 'assign_tutor' as const, label: t.tutorName ? `강사 배정 · ${t.tutorName}` : '강사 배정', done: !!t.tutorAssignedAt },
-        { key: 'notify_student' as const, label: '학생에게 강사·첫 수업 안내', done: !!t.studentNotifiedAt },
-      ];
+      // 할 일 목록(○ 강사 배정 · ○ 학생 안내)은 버튼과 같은 말이라 안 보임 — 지금 할 일은 버튼 하나로 (2026-10-28 대표)
       return {
         id: t.id,
         kind: t.kind,
         severity: dueSeverity(t.dueAt, now),
         tag: '신규 매칭',
         title: `${t.studentName} · ${t.product}`,
-        detail: `${t.studentCode} · 결제 확인 후 3영업일 안에 강사 배정과 학생 안내까지`,
+        detail: t.tutorName ? `${t.studentCode} · ${t.tutorName}` : t.studentCode,
         due: dueText(t.dueAt, now),
-        steps,
-        actions: !t.tutorAssignedAt
-          ? t.enrollmentId
-            ? [{ key: 'pick_schedule', label: '강사·시간 고르기 →', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }]
-            : [{ key: 'assign_tutor', label: '강사 배정', primary: true }]
-          : [{ key: 'notify_student', label: '학생 안내 완료', primary: true }],
+        steps: [],
+        // 두 단계 버튼을 늘 같이 보임. 끝난 단계는 회색 ✓, 앞 단계가 안 끝난 버튼은 못 누름 (2026-10-28 대표)
+        actions: [
+          t.tutorAssignedAt
+            ? { key: 'assign_tutor', label: '강사 배정', done: true }
+            : t.enrollmentId
+              ? { key: 'pick_schedule', label: '강사 배정', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }
+              : { key: 'assign_tutor', label: '강사 배정', primary: true },
+          t.studentNotifiedAt
+            ? { key: 'notify_student', label: '수업 컨펌 완료', done: true }
+            : { key: 'notify_student', label: '수업 컨펌 완료', primary: !!t.tutorAssignedAt, disabled: !t.tutorAssignedAt },
+        ],
       };
     }
     case 'renewal_tutor_notice': {
@@ -285,7 +307,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         severity: 'open',
         tag: '장기 연기 승인',
         title: `${t.studentName} · ${t.days}일`,
-        detail: `${t.studentCode} · ${t.from} ~ ${t.to} · 사유: ${REASON_KO[t.reason]} · 증빙 확인 후 승인`,
+        detail: `${t.studentCode} · ${t.from} ~ ${t.to} · 사유: ${REASON_KO[t.reason]}`,
         due: null,
         steps: [],
         actions: [
@@ -315,10 +337,11 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         severity: dueSeverity(t.endsAt, now),
         tag: '종료 임박',
         title: `${t.studentName} · 수업 ${t.lessonsLeft}회 남음`,
-        detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''} · 재등록 결제 확인 전`,
+        detail: `${t.studentCode} · ${t.product}${t.tutorName ? ` · ${t.tutorName}` : ''}`,
         due: `종료 ${dueText(t.endsAt, now)}`,
         steps: [],
-        actions: [{ key: 'renewal_contacted', label: '재등록 안내함', primary: true }],
+        actions: [],
+        renewal: { text: renewalMessage(t.studentName, t.lessonsLeft, t.endsAt), sentAt: t.noticeSentAt },
       };
     case 'makeup_unrequested':
       return {
@@ -327,7 +350,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         severity: dueSeverity(t.deadline, now),
         tag: '보강 미신청',
         title: `${t.studentName} · ${t.canceledLesson} 수업분`,
-        detail: `${t.studentCode}${t.tutorName ? ` · ${t.tutorName}` : ''} · 보강을 받을 수 있는데 아직 신청하지 않음`,
+        detail: `${t.studentCode}${t.tutorName ? ` · ${t.tutorName}` : ''}`,
         due: `보강 기한 ${dueText(t.deadline, now)}`,
         steps: [],
         actions: [{ key: 'makeup_nudged', label: '학생에게 보강 신청 안내함', primary: true }],

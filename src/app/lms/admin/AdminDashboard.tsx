@@ -6,12 +6,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { dbEnv } from '@/lms/auth/db-env';
 import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, searchBoard, type BoardFilter, type BoardItem, type Category, type Severity, type TaskSource } from '@/lms/admin/board';
 import { fakeTasks, type FakeLesson, type OpsStats } from '@/lms/admin/fake-data';
 import type { PlanView } from '@/lms/admin/confirm';
 import type { PlanActions } from '@/lms/admin/confirm-live';
 import PlanCard, { type PlanHandlers } from './PlanCard';
+import RenewalNotice from './RenewalNotice';
 import OriginFix from './OriginFix';
 import EndReasonFix from './EndReasonFix';
 import type { EndReason } from '@/lms/admin/import';
@@ -81,7 +81,6 @@ const DONE_MESSAGE: Record<string, string> = {
   tutor_ack: '강사 확인을 기록했어요. 일정 조치가 남았어요.',
   check_schedule: '재등록 강사 확인 업무를 마쳤어요.',
   approve_leave: '장기 연기를 승인했어요. 종료일이 늘어나요.',
-  renewal_contacted: '재등록 안내를 기록했어요.',
   makeup_nudged: '보강 신청 안내를 기록했어요.',
   retry_calendar: '캘린더에 다시 반영했어요.',
   fix_email: '이메일을 확인했어요.',
@@ -101,6 +100,7 @@ export default function AdminDashboard({
   onLogout,
   planActions,
   importActions,
+  renewalSent,
   onReload,
 }: {
   nowIso: string;
@@ -114,6 +114,8 @@ export default function AdminDashboard({
   /** 실제 데이터: 일정안 확정·안내 기록 (DB 함수). 처리 뒤 onReload 로 다시 읽음 */
   planActions?: PlanActions;
   importActions?: ImportActions;
+  /** 실제 데이터: 재등록 안내 [보냄] 기록 (DB 함수, migration 1900) */
+  renewalSent?: (enrollmentId: string) => Promise<void>;
   onReload?: () => Promise<void>;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -216,6 +218,17 @@ export default function AdminDashboard({
     setToast(`${DONE_MESSAGE[key] ?? '처리했어요.'}${preview ? ' (미리보기: 실제 저장·발송 없음)' : ''}`);
   }
 
+  // 재등록 안내 [보냄]: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기 (카드는 재등록 결제 확인 전까지 남음)
+  async function markRenewalSent(item: BoardItem) {
+    if (!preview && renewalSent) {
+      await renewalSent(item.id);
+      await onReload?.();
+    } else {
+      setTasks((prev) => prev.map((t) => (t.id === item.id && t.kind === 'ending_soon' ? { ...t, noticeSentAt: new Date() } : t)));
+    }
+    setToast(`재등록 안내를 보냄으로 기록했어요${preview ? ' (미리보기)' : ''}`);
+  }
+
   // 보강 원래 날짜 정리: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기
   async function fixOrigin(item: BoardItem, itemId: string, date: string | null) {
     if (!preview && importActions) {
@@ -283,13 +296,6 @@ export default function AdminDashboard({
         }
       />
 
-      {!preview && (
-        <p className="mx-4 mt-3 rounded-[10px] bg-[#e3f5ea] px-3 py-2 text-[13px] text-[#13623a] lg:mx-7">
-          {dbEnv(process.env.NEXT_PUBLIC_SUPABASE_URL) === 'prod'
-            ? '운영 DB의 실제 데이터예요. 학생 등록·신규 매칭 일정안(확정·[보냄])·시트 대조는 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'
-            : '시험용 DB의 실제 데이터예요 (가상 학생). 신규 매칭 일정안(확정·[보냄])·시트 대조는 실제로 저장되고, 다른 처리 버튼은 아직 보기만 돼요.'}
-        </p>
-      )}
       {preview && (
         <p className="mx-4 mt-3 rounded-[10px] bg-[#fff8d6] px-3 py-2 text-[13px] text-[#5c4a00] lg:mx-7">
           가상 데이터 미리보기예요. 버튼을 눌러도 실제로 저장되거나 학생·강사에게 발송되지 않아요. (실제 데이터: 로그인 후 /lms/admin)
@@ -421,10 +427,15 @@ export default function AdminDashboard({
               )}
               {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
               {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}
+              {item.renewal && <RenewalNotice text={item.renewal.text} sentAt={item.renewal.sentAt} onSent={() => markRenewalSent(item)} />}
               {item.endReason && <EndReasonFix weeks={item.endReason.weeks} onSave={(r, n) => fixEndReason(item, r, n)} />}
               <div className="flex flex-wrap gap-1.5">
                 {item.actions.map((a) =>
-                  a.href ? (
+                  a.done ? (
+                    <button key={a.key} type="button" disabled className="min-h-[40px] rounded-[10px] border border-[#c9c6d6] bg-[#d9d6e3] px-3 text-[13.5px] font-bold text-[#4a4760]">
+                      {a.label} ✓
+                    </button>
+                  ) : a.href ? (
                     <Link key={a.key} href={preview ? a.href.replace('?', '?demo=1&') : a.href} className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5fff] bg-[#7d5fff] px-3 text-[13.5px] font-semibold text-white">
                       {a.label}
                     </Link>
@@ -432,8 +443,9 @@ export default function AdminDashboard({
                     <button
                       key={a.key}
                       type="button"
+                      disabled={a.disabled}
                       onClick={() => act(item, a.key)}
-                      className={`min-h-[40px] rounded-[10px] border px-3 text-[13.5px] font-semibold ${
+                      className={`min-h-[40px] rounded-[10px] border px-3 text-[13.5px] font-semibold disabled:border-[#e6e3ef] disabled:bg-white disabled:text-[#b9b6c8] ${
                         a.danger
                           ? 'border-[#c62b2b] bg-[#c62b2b] text-white'
                           : a.primary
