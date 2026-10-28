@@ -65,7 +65,8 @@ declare
                           'admin_makeup_withdraw', 'admin_void_makeup', 'admin_mark_lesson_notice_sent',
                           'admin_leave_create', 'admin_leave_choose', 'admin_leave_sub_ok', 'admin_leave_student_ok', 'admin_leave_sub_options', 'admin_leave_makeup_options', 'admin_leave_back', 'admin_leave_notice_unsend', 'admin_leave_renewal_pending',
                           'admin_renewal_notice_sent',
-                          'tutor_screen', 'tutor_record_class', 'tutor_makeup_answer', 'admin_tutor_accounts', 'admin_class_record_missing'];
+                          'tutor_screen', 'tutor_record_class', 'tutor_makeup_answer', 'admin_tutor_accounts', 'admin_class_record_missing',
+                          'admin_tutor_login'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
   persona_uid uuid[];
@@ -365,6 +366,16 @@ begin
           fails := fails || format('[함수] %s: 기존 학생 입력이 권한 오류가 아닌 이유로 막힘 [%s] %s', personas[i], sqlstate, sqlerrm); end if;
         if personas[i] in ('운영자', '운영직원') and sqlstate = '42501' then
           fails := fails || format('[함수] %s: 운영자인데 기존 학생 입력 권한 없음', personas[i]); end if;
+      end;
+      -- 강사 로그인 계정 만들기 (migration 2100): 대표(owner, aal2)만. 직원·강사·학생은 권한 오류
+      begin
+        perform admin_tutor_login(gen_random_uuid(), 'probe@example.com');
+        fails := fails || format('[함수] %s: 없는 강사 로그인 만들기가 통과함', personas[i]);
+      exception when others then
+        if personas[i] <> '운영자' and sqlstate <> '42501' then
+          fails := fails || format('[함수] %s: 강사 로그인 만들기가 권한 오류가 아닌 이유로 막힘 [%s] %s', personas[i], sqlstate, sqlerrm); end if;
+        if personas[i] = '운영자' and sqlstate <> 'P0002' then
+          fails := fails || format('[함수] 운영자: 강사 로그인 만들기 [%s] %s', sqlstate, sqlerrm); end if;
       end;
       select count(*) into n from admin_students_with_email(email_a);
       if (personas[i] in ('운영자', '운영직원') and email_a is not null and n = 0) or (personas[i] not in ('운영자', '운영직원') and n <> 0) then

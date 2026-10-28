@@ -40,3 +40,9 @@ export async function loadMissingRecords(sb: SupabaseClient): Promise<MissingRec
     lessonId: x.lesson_id, tutorId: x.tutor_id, tutorName: x.tutor_name, studentName: x.student_name, studentCode: x.student_code, startsAt: new Date(x.starts_at),
   }));
 }
+
+/** 대표: 강사 로그인 계정 만들기 + 강사 연결 (migration 2100). 이미 같은 이메일로 연결돼 있으면 그대로 */
+export async function createTutorLogin(sb: SupabaseClient, tutorId: string, email: string): Promise<{ created: boolean }> {
+  const rows = check(await sb.rpc('admin_tutor_login', { p_tutor: tutorId, p_email: email })) as { created: boolean }[];
+  return { created: rows[0]?.created ?? false };
+}

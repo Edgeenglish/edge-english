@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { answerMakeup, loadTutorAccounts, loadTutorScreen, recordClass, type TutorAccount } from '@/lms/tutor/live';
+import { answerMakeup, createTutorLogin, loadTutorAccounts, loadTutorScreen, recordClass, type TutorAccount } from '@/lms/tutor/live';
 import { weekOf, type TutorScreen } from '@/lms/tutor/screen';
 import TutorHome, { type TutorActions } from './TutorHome';
 
@@ -78,7 +78,41 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
         ))}
       </select>
       <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">대시보드</a>
+      {sb && !state.admin.tutors.find((t) => t.id === state.admin?.tutorId)?.hasLogin && (
+        <TutorLoginForm onCreate={(email) => createTutorLogin(sb, state.admin!.tutorId, email)} />
+      )}
     </div>
   );
   return <TutorHome key={state.screen.tutor.id} initial={state.screen} nowIso={state.nowIso} actions={actions} adminBar={adminBar} onLogout={state.admin ? undefined : logout} />;
+}
+
+// 대표: 이 강사의 로그인 계정 만들기 (이메일만 넣으면 계정 + 강사 연결, 비밀번호 없음 — 강사는 이메일 코드로 로그인)
+function TutorLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{ created: boolean }> }) {
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  async function submit() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await onCreate(email);
+      setMsg({ ok: true, text: '강사 로그인 계정을 만들었어요. 지금부터 시작하는 수업이 기록할 수업에 나와요.' });
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : '만들지 못했어요.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex w-full flex-wrap items-center gap-2">
+      <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="강사 로그인 이메일"
+        aria-label="강사 로그인 이메일" className="min-h-[38px] min-w-0 flex-1 rounded-[8px] bg-white px-2 text-[15px] text-[#1d1b2b]" />
+      <button type="button" disabled={busy || !email.trim()} onClick={submit}
+        className="min-h-[38px] rounded-[8px] bg-[#6d4aff] px-3 text-[13px] font-semibold text-white disabled:opacity-50">
+        {busy ? '만드는 중…' : '로그인 만들기'}
+      </button>
+      {msg && <p role={msg.ok ? 'status' : 'alert'} className={`w-full text-[13px] ${msg.ok ? 'text-[#b9f5cf]' : 'text-[#ffb4ab]'}`}>{msg.text}</p>}
+    </div>
+  );
 }
