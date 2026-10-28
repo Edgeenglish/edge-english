@@ -187,8 +187,8 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
 
 export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
   leave_options: '진행 방법 선택 안내',
-  sub_ask: '대체강사 가능 확인',
-  sub_student: '대체강사 제안 (프로필 함께)',
+  sub_ask: '대체강사에게 물어보기',
+  sub_student: '학생에게 확인받기 (프로필 함께)',
   sub_confirmed: '최종 확정 안내',
 };
 
@@ -238,7 +238,7 @@ function mondayOf(date: string): string {
 
 export type LvStep = 'notify' | 'answer' | 'tutor' | 'makeup' | 'confirm';
 export const LV_STEP_TEXT: Record<LvStep | 'done', string> = {
-  notify: '1 안내', answer: '2 학생 답', tutor: '3 강사 확인', makeup: '3 보강 날짜', confirm: '4 확정', done: '완료',
+  notify: '1 휴무 안내', answer: '2 학생 선택', tutor: '3 강사에게 묻기', makeup: '3 보강 날짜', confirm: '4 학생 동의·확정', done: '완료',
 };
 
 /** 학생 한 명의 할 일 묶음. 단계마다 해당 수업·안 보낸 안내 */
