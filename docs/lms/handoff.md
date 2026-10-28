@@ -9,7 +9,7 @@
 - 대표 추가 지시: 보강 날짜는 목록 대신 **달력**(PC·휴대폰 같은 모양, 대표가 준 이미지는 참고만) / **2단계 카톡 글 = 대표 문구**(날짜만 + 추천 문단 + 맨 끝 학생 LMS 링크, `proposalText`)
 - migration **2800** `lms_student_screen`: `student_screen`(본인 또는 운영자 ?student=) · `lms_makeup_options`/`student_makeup_options`(운영진 휴무 화면 보강 가능한 날짜와 같은 계산을 모든 보강에) · `lms_makeup_request_core`(admin_makeup_request 와 같은 처리, 학생은 보강 가능한 날짜 중 1~2개만) · `student_leave_answer`(좋아요 = admin_leave_student_ok, 기존 강사 = admin_leave_choose wait 와 같은 처리, 대체강사 tutor_ok 수업만) · `admin_student_accounts`·`admin_student_login`(강사와 같은 방식). DB 시험 추가, `npm run test:db`·`npm test` 293 통과
 - 화면: `StudentLive`(학생 본인/운영자 보기 막대·학생 로그인 만들기) · `StudentHome`(할 일: 휴무 안내·보강 날짜 고르기, 휴무 안내 시트, 대체강사 프로필, 보강 달력, 취소는 DB 판정, 공휴일 반영) · `?demo=1` 미리보기 · 대시보드 [학생 화면] 버튼
-- **2026-10-28 대표 최종: 종료일 연장 유지 + 재등록 안내만 개선** (ChatGPT '종료일 유지'안은 하루 만에 철회): 수강기간은 기존처럼 마지막 휴무 보강일까지 연장(A20), 재등록 결제 마감 = 연장된 종료일 23:59, 학생 화면 '수강기간 연장' 표현 유지. 휴무로 못 들은 수업은 학생 화면에서 '휴무로 미뤄진 수업'(일정·다음 수업·할 일·신청 내역·휴무 안내), 일반 보강은 '보강'. migration **2750** `lms_leave_postponed`: `lms_is_leave_postponed` · `lms_next_regular_from` · 다음 수강권 정규 수업이 휴무로 미뤄진 수업보다 먼저 생기면 막는 트리거 (기존 함수는 안 바꿈)
+- **2026-10-28 대표 최종: 종료일 연장 유지 + 재등록 안내만 개선** (ChatGPT '종료일 유지'안은 하루 만에 철회): 수강기간은 기존처럼 마지막 휴무 보강일까지 연장(A20), 재등록 결제 마감 = 연장된 종료일 23:59, 학생 화면 '수강기간 연장' 표현 유지. 휴무로 못 들은 수업도 학생 화면에서는 '보강'으로 통일(대표 재확정, 이름을 따로 두면 학생에게 새 용어·휴무를 매번 떠올리게 함), DB에서만 구분. migration **2750** `lms_leave_postponed`: `lms_is_leave_postponed` · `lms_next_regular_from` · 다음 수강권 정규 수업이 휴무로 미뤄진 수업보다 먼저 생기면 막는 트리거 (기존 함수는 안 바꿈)
   - 강사 인센티브: 휴무 없음보다 사전 통보 준수·실제 수업 이행률 기준 (LMS 완성 뒤 검토)
 - **실행 대기**: 시험용 DB에 2750·2800 적용 (Claude 자동 실행이 권한 확인에서 막힘 → 대표 허락 필요) → 대표 화면 시험 → 운영 2800 + lms-prod (대표 승인)
 - **대표 결정 대기**:

@@ -43,7 +43,7 @@ export type StudentView = {
   creditsPerPeriod: number;
   renewalPaid: boolean;
   confirmedOn: KstDate | null;
-  /** leavePostponed = 휴무로 미뤄진 수업 (강사 장기휴무로 못 들은 수업, 학생 화면에서 '보강'이라 부르지 않음) */
+  /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 학생 화면 표시는 '보강'으로 같음) */
   lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
@@ -117,7 +117,7 @@ export function parseStudentView(r: Raw): StudentView {
       return {
         id: q.id,
         kind: 'makeup',
-        title: `${q.tutor_leave ? '휴무로 미뤄진 수업' : '보강 신청'}${src ? ` · ${md(new Date(src.original_at))} 수업분` : ''}`,
+        title: `보강 신청${src ? ` · ${md(new Date(src.original_at))} 수업분` : ''}`,
         status: q.status === 'confirmed' ? 'confirmed' : 'tutor_reviewing',
         candidates: q.candidates.map((c) => new Date(c)),
         createdAt: new Date(q.requested_at),

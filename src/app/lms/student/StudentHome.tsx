@@ -103,12 +103,9 @@ export default function StudentHome(props: {
   const [busy, setBusy] = useState(false);
 
   const lessons = s.lessons;
-  // 일반 보강과 휴무로 미뤄진 수업(강사 장기휴무)은 이름·할 일만 따로 (2026-10-28 대표). 수강기간 연장·재등록 기준은 기존 그대로
+  // 강사 휴무로 못 들은 수업도 학생 화면에서는 '보강' (2026-10-28 대표). DB 구분(lms_is_leave_postponed)은 그대로
   const openRights = s.makeupRights.filter((m) => !m.requested);
-  const regularRights = openRights.filter((m) => !m.tutorLeave);
-  const postponedRights = openRights.filter((m) => m.tutorLeave);
   const makeupsOwed = s.makeupRights.length;
-  const postponedLeft = s.makeupRights.filter((m) => m.tutorLeave).length + lessons.filter((l) => l.leavePostponed && l.state === 'scheduled').length;
   const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
@@ -167,7 +164,7 @@ export default function StudentHome(props: {
   }
 
   const nextFull = next && s.lessons.find((l) => l.id === next.id);
-  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.meetUrl ?? null} postponed={nextFull?.leavePostponed ?? false} />;
+  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.meetUrl ?? null} />;
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -202,7 +199,7 @@ export default function StudentHome(props: {
 
   const statusTiles = (
     <section aria-label="수강 현황" className="grid grid-cols-3 gap-2">
-      <Tile label="남은 수업" value={`${left.total}`} unit="회" sub={postponedLeft > 0 ? `휴무로 미뤄진 수업 ${postponedLeft}회 포함` : left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
+      <Tile label="남은 수업" value={`${left.total}`} unit="회" sub={left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
       <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중`} />
       <Tile
         label="수강 종료"
@@ -225,13 +222,13 @@ export default function StudentHome(props: {
       </button>
       <button
         type="button"
-        disabled={regularRights.length === 0}
-        onClick={() => setOverlay({ kind: 'makeup', right: regularRights.length === 1 ? regularRights[0] : null })}
+        disabled={openRights.length === 0}
+        onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })}
         className={`${card} grid content-start gap-1.5 p-4 text-left disabled:opacity-50`}
       >
         <Icon d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" className="h-[22px] w-[22px] text-[#5b3df0]" />
         <span className="text-[15px] font-bold">보강 신청</span>
-        <span className="text-[12px] leading-[1.55] text-[#55526a]">보강할 수업 {regularRights.length}회</span>
+        <span className="text-[12px] leading-[1.55] text-[#55526a]">보강할 수업 {openRights.length}회</span>
       </button>
     </section>
   );
@@ -263,8 +260,7 @@ export default function StudentHome(props: {
   const todoBars = (
     <>
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
-      {regularRights.length > 0 && <TodoBar n={regularRights.length} text="보강 날짜 고르기" onClick={() => setOverlay({ kind: 'makeup', right: regularRights.length === 1 ? regularRights[0] : null })} />}
-      {postponedRights.length > 0 && <TodoBar n={postponedRights.length} text="휴무로 미뤄진 수업 날짜 고르기" onClick={() => setOverlay({ kind: 'leave' })} />}
+      {openRights.length > 0 && <TodoBar n={openRights.length} text="보강 날짜 고르기" onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
     </>
   );
@@ -334,7 +330,7 @@ export default function StudentHome(props: {
               {leaveVisible && leaveAsk.length === 0 && (
                 <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
                   <span className="font-semibold">담당 강사님 휴무 안내</span>
-                  <span className="text-[13px] text-[#55526a]">{postponedLeft > 0 ? `휴무로 미뤄진 수업 ${postponedLeft}회 ` : ''}›</span>
+                  <span className="text-[#8b88a0]">›</span>
                 </button>
               )}
               {requestList}
@@ -355,7 +351,7 @@ export default function StudentHome(props: {
                 <div>
                   <p className="text-[15px] font-semibold">{whenText(l.startsAt)}</p>
                   <p className="text-[12.5px] text-[#6b6880]">
-                    {l.minutes}분 · {l.tutorName} · {l.leavePostponed ? '휴무로 미뤄진 수업' : l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
+                    {l.minutes}분 · {l.tutorName} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
                   </p>
                 </div>
                 <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: l.id })} className="min-h-[44px] rounded-[12px] border border-[#d9d5e8] px-3 text-[14px] font-semibold">
@@ -388,8 +384,8 @@ export default function StudentHome(props: {
             <section className={`${card} px-4`}>
               <button
                 type="button"
-                disabled={regularRights.length === 0}
-                onClick={() => setOverlay({ kind: 'makeup', right: regularRights.length === 1 ? regularRights[0] : null })}
+                disabled={openRights.length === 0}
+                onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })}
                 className="flex min-h-[52px] w-full items-center justify-between text-left text-[15px] disabled:opacity-50"
               >
                 보강 신청 <span className="text-[#8b88a0]">›</span>
@@ -524,7 +520,7 @@ export default function StudentHome(props: {
             ) : (
               <div className="grid gap-3">
                 <h2 className="text-[18px] font-bold">보강할 수업</h2>
-                {regularRights.map((m) => (
+                {openRights.map((m) => (
                   <button key={`${m.lessonId}${m.itemId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })} className={`${card} flex min-h-[56px] items-center justify-between px-4 text-left`}>
                     <span className="text-[15px] font-semibold">{whenText(m.originalAt)} 수업</span>
                     <span className="text-[#8b88a0]">›</span>
@@ -605,19 +601,19 @@ function LeaveSheet(props: {
       )}
       {waits.length > 0 && (
         <section className={`${card} grid gap-1 p-4`}>
-          <h3 className="text-[15px] font-bold">기존 강사님과 수업 · 휴무로 미뤄진 수업</h3>
+          <h3 className="text-[15px] font-bold">기존 강사님과 보강</h3>
           {waits.map((x) => {
             const r = props.rights.find((m) => (x.lessonId && m.lessonId === x.lessonId) || (x.itemId && m.itemId === x.itemId));
             return (
               <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
                 <span className="text-[15px] font-semibold">{whenText(x.startsAt)}</span>
                 {!r ? (
-                  <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">날짜 확정 ✓</span>
+                  <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">보강 확정 ✓</span>
                 ) : r.requested ? (
                   <span className="rounded-full bg-[#fff1d6] px-2.5 py-1 text-[12px] font-semibold text-[#8a5300]">신청함 · 강사 확인 중</span>
                 ) : (
                   <button type="button" onClick={() => props.onMakeup(r)} className="min-h-[40px] rounded-[10px] bg-[#5b3df0] px-3 text-[13px] font-bold text-white">
-                    날짜 고르기
+                    보강 날짜 고르기
                   </button>
                 )}
               </div>
@@ -756,7 +752,7 @@ function MakeupPicker(props: {
 
   return (
     <div className="grid gap-3.5">
-      <h2 className="text-[18px] font-bold">{right.tutorLeave ? '휴무로 미뤄진 수업' : '보강 신청'} · {whenText(right.originalAt)} 수업</h2>
+      <h2 className="text-[18px] font-bold">보강 신청 · {whenText(right.originalAt)} 수업</h2>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
       {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
@@ -802,7 +798,7 @@ function MakeupPicker(props: {
                 onClick={() => props.onSubmit(right, picked)}
                 className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-40"
               >
-                {right.tutorLeave ? '신청하기' : '보강 신청하기'}
+                보강 신청하기
               </button>
             </section>
           </div>
@@ -819,7 +815,7 @@ function monthCells(month: string): (string | null)[] {
   return [...Array<null>(first.getUTCDay()).fill(null), ...Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
 }
 
-function NextLesson({ lesson, now, textbook, meetUrl, postponed }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null; postponed: boolean }) {
+function NextLesson({ lesson, now, textbook, meetUrl }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null }) {
   const k = kst(lesson.startsAt);
   const days = diffDays(formatInZone(now, 'Asia/Seoul').date, k.date);
   const started = now.getTime() >= lesson.startsAt.getTime();
@@ -836,7 +832,7 @@ function NextLesson({ lesson, now, textbook, meetUrl, postponed }: { lesson: Stu
           {Number(k.md.split('/')[0])}월 {Number(k.md.split('/')[1])}일 ({k.wd}) {k.time}
         </p>
         <p className="mt-1 text-[14px] text-[#d8d3f5]">
-          {lesson.minutes}분 · {lesson.tutorName} · 한국 시간{postponed ? ' · 휴무로 미뤄진 수업' : lesson.kind === 'makeup' ? ' · 보강' : ''}
+          {lesson.minutes}분 · {lesson.tutorName} · 한국 시간{lesson.kind === 'makeup' ? ' · 보강' : ''}
         </p>
       </div>
       <div className="grid gap-2.5 lg:grid-cols-2">

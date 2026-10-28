@@ -175,7 +175,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       set({
         ...view,
         makeupRights: view.makeupRights.map((m) => (m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
-        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: view.makeupRights.find((m) => m.lessonId === right.lessonId && m.itemId === right.itemId)?.tutorLeave ? '휴무로 미뤄진 수업' : '보강 신청', status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
+        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: '보강 신청', status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
       });
     },
     answerLeave: async (items, answer) => {
