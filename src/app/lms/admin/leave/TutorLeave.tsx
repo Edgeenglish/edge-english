@@ -41,7 +41,8 @@ const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-
 /** 누른 버튼: 회색으로 꽉 차게 (눌린 티) */
 const btnDone = 'min-h-[44px] rounded-[10px] border border-[#c9c6d6] bg-[#d9d6e3] px-3.5 text-[14px] font-bold text-[#4a4760]';
 const Err = ({ children }: { children: React.ReactNode }) => (children ? <p className="mt-1.5 text-[13px] text-[#b3261e]">{children}</p> : null);
-const TONE = { todo: 'bg-[#fff8d6] text-[#5c4a00]', wait: 'bg-[#e9f4ff] text-[#1b5a8a]', done: 'bg-[#e3f6ea] text-[#1e7a46]' } as const;
+/** 진행 상태 글자 (대표 10/29: '진행 중'·'완료'가 눈에 확 띄게) */
+const STATUS_BADGE = { doing: 'border-2 border-[#f0a33a] bg-[#fff4d6] text-[#5c3b00]', fresh: 'border-2 border-[#b9b4cc] bg-white text-[#55526a]', done: 'border-2 border-[#1e7a46] bg-[#e3f6ea] text-[#1e7a46]' } as const;
 const STEP_ORDER: LvStep[] = ['tutor', 'propose', 'answer', 'confirm'];
 
 async function copyText(text: string): Promise<boolean> {
@@ -73,10 +74,12 @@ function useRun(done: () => Promise<void>) {
   return { busy, err, setErr, run };
 }
 
-export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tutors: LvTutor[]; actions: LeaveActions; nowIso: string; initialOff?: string }) {
+export default function TutorLeave({ tutors, actions, nowIso, initialOff, startNew }: { tutors: LvTutor[]; actions: LeaveActions; nowIso: string; initialOff?: string; startNew?: boolean }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [leaves, setLeaves] = useState<LvTimeOff[]>([]);
   const [offId, setOffId] = useState<string | null>(initialOff ?? null);
+  // 대시보드 '+ 강사 휴무 입력' → 입력 칸부터 (등록된 휴무는 입력을 닫거나 저장한 뒤에, 대표 10/29)
+  const [creating, setCreating] = useState(!!startNew && !initialOff);
   const [data, setData] = useState<{ items: LvItem[]; notices: LvNotice[]; renewals: LvRenewal[] } | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [err, setErr] = useState('');
@@ -122,15 +125,17 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
       <main className="mx-auto grid max-w-[720px] gap-3 px-4 py-4 lg:max-w-[1120px]">
         <h1 className="text-[20px] font-extrabold text-[#1d1b2b]">강사 휴무</h1>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        {!creating && leaves.length > 0 && <h2 className="text-[14px] font-bold text-[#55526a]">등록된 휴무</h2>}
+        {!creating && <div className="flex flex-wrap items-center gap-1.5">
           {leaves.map((l) => (
             <button key={l.id} type="button" aria-pressed={l.id === offId} onClick={() => setOffId(l.id === offId ? null : l.id)}
               className={`min-h-[40px] rounded-full border px-3.5 text-[14px] ${l.id === offId ? 'border-[#7d5ffb] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
               {l.tutorName} · {dateLabel(l.from)} ~ {dateLabel(l.to)}
             </button>
           ))}
-        </div>
-        <NewLeave tutors={tutors} actions={actions} today={instantToKstDate(now)} saved={async (id) => { await reloadLeaves(); setOffId(id); }} />
+        </div>}
+        <NewLeave tutors={tutors} actions={actions} today={instantToKstDate(now)} open={creating} setOpen={setCreating}
+          saved={async (id) => { await reloadLeaves(); setOffId(id); }} />
         <Err>{err}</Err>
 
         {offId && data && (
@@ -144,18 +149,31 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
 
             {(groups.length > 0 || renewals.length > 0) && (
               <div className="grid gap-3 lg:grid-cols-[260px_1fr] lg:items-start">
-                <ul className="hidden gap-1.5 lg:grid">
-                  {groups.map((g) => {
-                    const w = works.get(g.studentId)!;
-                    const on = g.studentId === selKey;
+                <ul className="grid gap-1.5">
+                  {[false, true].map((finished) => {
+                    const list = groups.filter((g) => (works.get(g.studentId)!.steps.length === 0) === finished);
+                    if (!list.length) return null;
                     return (
-                      <li key={g.studentId}>
-                        <button type="button" aria-pressed={on} onClick={() => setSel(g.studentId)}
-                          className={`grid w-full gap-0.5 rounded-[12px] border px-3 py-2.5 text-left ${on ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
-                          <b className="text-[15px] text-[#1d1b2b]">{g.studentName}</b>
-                          <span className="text-[12.5px] text-[#6b6880]">{dateLabel(instantToKstDate(g.items[0].startsAt))}{g.items.length > 1 ? ` ~ ${dateLabel(instantToKstDate(g.items[g.items.length - 1].startsAt))}` : ''} · {g.items.length}회</span>
-                          <span className="text-[13px] font-semibold text-[#5b3fe0]">{LV_STEP_TEXT[w.steps[0] ?? 'done']}</span>
-                        </button>
+                      <li key={String(finished)} className="grid gap-1.5">
+                        <h3 className="mt-1 text-[13px] font-bold text-[#55526a]">{finished ? `끝난 학생 ${list.length}명` : `안 끝난 학생 ${list.length}명`}</h3>
+                        {list.map((g) => {
+                          const w = works.get(g.studentId)!;
+                          const on = g.studentId === selKey;
+                          const fresh = g.items.every((i) => i.choice === 'undecided') && !messages.some((m) => m.studentId === g.studentId && m.status === 'sent');
+                          return (
+                            <button key={g.studentId} type="button" aria-pressed={on} onClick={() => setSel(g.studentId)}
+                              className={`grid w-full gap-0.5 rounded-[12px] border px-3 py-2.5 text-left ${on ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
+                              <span className="flex items-center gap-2">
+                                <b className={`text-[15px] ${finished ? 'text-[#6b6880]' : 'text-[#1d1b2b]'}`}>{g.studentName}</b>
+                                <span className={`ml-auto rounded-[6px] px-2 py-0.5 text-[12.5px] font-extrabold ${finished ? STATUS_BADGE.done : fresh ? STATUS_BADGE.fresh : STATUS_BADGE.doing}`}>
+                                  {finished ? '✓ 완료' : fresh ? '시작 전' : '진행 중'}
+                                </span>
+                              </span>
+                              <span className="text-[12.5px] text-[#6b6880]">{dateLabel(instantToKstDate(g.items[0].startsAt))}{g.items.length > 1 ? ` ~ ${dateLabel(instantToKstDate(g.items[g.items.length - 1].startsAt))}` : ''} · {g.items.length}회</span>
+                              {!finished && <span className="text-[13px] font-semibold text-[#5b3fe0]">{LV_STEP_TEXT[w.steps[0]]}</span>}
+                            </button>
+                          );
+                        })}
                       </li>
                     );
                   })}
@@ -175,14 +193,13 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
                 </ul>
                 <div className="grid min-w-0 gap-3">
                   {groups.map((g) => (
-                    <div key={g.studentId} className={g.studentId === selKey ? '' : 'lg:hidden'}>
+                    <div key={g.studentId} className={g.studentId === selKey ? '' : 'hidden'}>
                       <StudentPanel g={g} w={works.get(g.studentId)!} msgs={messages.filter((m) => m.studentId === g.studentId)} leaveTutor={off?.tutorName ?? '기존'}
                         now={now} actions={actions} done={reload} />
                     </div>
                   ))}
-                  {renewals.length > 0 && <h2 className="text-[15px] font-bold text-[#6b6880] lg:hidden">재등록 대기</h2>}
-                  {renewals.map((r) => (
-                    <div key={r.studentId} className={`r:${r.studentId}` === selKey ? '' : 'lg:hidden'}>
+                                    {renewals.map((r) => (
+                    <div key={r.studentId} className={`r:${r.studentId}` === selKey ? '' : 'hidden'}>
                       {off && <RenewalPanel r={r} from={off.from} to={off.to} />}
                     </div>
                   ))}
@@ -196,8 +213,9 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
   );
 }
 
-function NewLeave({ tutors, actions, today, saved }: { tutors: LvTutor[]; actions: LeaveActions; today: KstDate; saved: (id: string) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
+function NewLeave({ tutors, actions, today, saved, open, setOpen }: {
+  tutors: LvTutor[]; actions: LeaveActions; today: KstDate; saved: (id: string) => Promise<void>; open: boolean; setOpen: (open: boolean) => void;
+}) {
   const [tutorId, setTutorId] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -225,12 +243,12 @@ function NewLeave({ tutors, actions, today, saved }: { tutors: LvTutor[]; action
   if (!open) {
     return (
       <button type="button" className={btnMain} onClick={() => setOpen(true)}>
-        + 강사 휴무 등록
+        + 강사 휴무 입력
       </button>
     );
   }
   return (
-    <Card title="강사 휴무 등록">
+    <Card title="강사 휴무 입력">
       <div className="grid gap-2.5">
         <label className="grid gap-1 text-[13px] text-[#6b6880]">
           강사
@@ -601,7 +619,10 @@ function ItemList({ items, action }: { items: LvItem[]; action?: (i: LvItem) => 
         return (
           <li key={i.id} className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
             <span className="text-[14.5px] text-[#1d1b2b]">{name(i)}</span>
-            <span className={`ml-auto rounded-[6px] px-2 py-0.5 text-[12px] font-bold ${TONE[s.tone]}`}>{s.text}</span>
+            <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+              <span className="text-[12.5px] text-[#55526a]">{s.text}</span>
+              <span className={`rounded-[6px] px-2 py-0.5 text-[12.5px] font-extrabold ${s.tone === 'done' ? STATUS_BADGE.done : STATUS_BADGE.doing}`}>{s.tone === 'done' ? '✓ 완료' : '진행 중'}</span>
+            </span>
             {action?.(i)}
           </li>
         );

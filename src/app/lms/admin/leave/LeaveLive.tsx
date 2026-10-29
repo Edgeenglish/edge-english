@@ -10,7 +10,7 @@ import TutorLeave, { type LeaveActions } from './TutorLeave';
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tutors: LvTutor[] };
 
-export default function LeaveLive({ offId }: { offId?: string }) {
+export default function LeaveLive({ offId, startNew }: { offId?: string; startNew?: boolean }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const sb = supabaseBrowser();
 
@@ -53,5 +53,5 @@ export default function LeaveLive({ offId }: { offId?: string }) {
 
   if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;
   if (state.kind === 'error' || !actions) return <p className="px-6 py-16 text-center text-[15px] text-[#b3261e]">{state.kind === 'error' ? state.message : ''}</p>;
-  return <TutorLeave tutors={state.tutors} actions={actions} nowIso={state.nowIso} initialOff={offId} />;
+  return <TutorLeave tutors={state.tutors} actions={actions} nowIso={state.nowIso} initialOff={offId} startNew={startNew} />;
 }
