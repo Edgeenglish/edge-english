@@ -703,7 +703,7 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
         ))}
       </ul>
       <button type="button" disabled={r.busy || yes.length === 0} className={btnMain} onClick={() => r.run(() => actions.subOk(yes))}>
-        가능한 수업 {yes.length}회 저장
+        강사 가능 여부 확인 완료
       </button>
       {no.length > 0 && (
         <>
