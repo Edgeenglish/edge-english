@@ -223,6 +223,9 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
         {days.length > 0 && (
           <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
+            <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] gap-2 border-b-2 border-[#5b3fe0] bg-[#efebff] px-3 py-2 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:hidden">
+              <span>Local Time</span><span>Student</span><span>Class Status</span>
+            </div>
             <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 whitespace-nowrap text-[13px] font-bold text-[#2b1c7a] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
               <span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
             </div>
@@ -342,7 +345,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
     <div className={`border-b border-[#e6e3ef] last:border-b-0 ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
       <button type="button" disabled={!canOpen} aria-expanded={open} onClick={() => setOpen(!open)}
         className={`w-full cursor-pointer px-3 py-2 text-left lg:px-1 disabled:cursor-default ${open ? 'bg-[#f3f1f8]' : 'enabled:hover:bg-[#f7f6fb]'}`}>
-        <div className="grid grid-cols-[60px_minmax(0,1fr)_auto] items-start gap-2 lg:hidden">
+        <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
             {time}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]">{k}</span>}
           </span>
