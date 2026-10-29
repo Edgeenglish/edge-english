@@ -74,7 +74,7 @@ const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** 'Mon 3 Nov' (그 날짜 문자열 그대로) */
 export function dayLabel(date: string): string {
-  return `${WD[new Date(`${date}T00:00:00Z`).getUTCDay()]} ${Number(date.slice(8))} ${MON[Number(date.slice(5, 7)) - 1]}`;
+  return `${WD[new Date(`${date}T00:00:00Z`).getUTCDay()]}, ${Number(date.slice(8))} ${MON[Number(date.slice(5, 7)) - 1]}`;
 }
 export function localDate(t: Date, tz: string): string {
   return formatInZone(t, tz).date;
