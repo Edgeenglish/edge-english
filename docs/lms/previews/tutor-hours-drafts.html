@@ -81,19 +81,17 @@ main>*{min-width:0}code{overflow-wrap:anywhere}
 </style>
 <main>
 <h1>강사 가능 시간 고치기 · 시안</h1>
-<p class="q"><b>✅ 대표 확정 (10/29, 정책 원본 H26(37))</b> Q1 ① 못 닫음 · Q2 ① 바로 반영 + 기록 · 그 주만 닫기 = 시작 6시간 전까지 · 앞으로 4주까지 · 매주 변경 = 다음 주 월요일부터(확정된 수업·보강은 그대로) · 30분 칸 · 'Closed this week' → 'Unavailable this week'</p>
-
 <section class="q">
-<p>강사 화면 맨 위 <b>[My hours]</b> 버튼 → 아래 창이 열려요. 탭 두 개: <b>Every week</b>(매주 고정, 지금 <code>tutor_availability</code>) · <b>One week only</b>(그 주만 닫기, 지금 <code>tutor_time_off</code> 'block'). 둘 다 이미 보강 가능한 날짜·대체강사 판정에 쓰이고 있어서 저장 즉시 학생 보강 달력에서 빠져요. 칸을 눌러 보세요(견본은 실제로 바뀝니다).</p>
-<p><b>Q1. 고정 수업이 있는 시간을 '매주 닫기'</b> — ① 못 닫음(칸 잠금, 누르면 '운영진에게 말씀해 주세요') <b>권장</b> ② 닫을 수 있게 + 경고. <span class="mini">이유: 매주 닫아도 이미 있는 고정 수업은 그대로라서 강사는 '닫았다'고 생각하고 학생은 그대로 기다리는 일이 생길 수 있어요. 고정 수업을 그만하려면 운영진이 학생과 시간을 옮겨야 하니 운영진 일이 맞아요.</span></p>
-<p><b>Q2. 저장하면</b> — ① 바로 반영 + 운영진 화면에 '바뀐 기록'만 남김 <b>권장</b> ② 운영진 확인 뒤 반영. <span class="mini">닫기는 빈 시간만 되므로(수업 있는 칸은 잠김) 바로 반영해도 학생 수업이 깨지지 않아요. ②는 대표 할 일이 늘어요. 다만 강사가 시간을 크게 줄이면 신규 학생 받을 자리가 줄어드는 건 ①에서 기록으로만 알게 돼요.</span></p>
-<p><b>Q3. 숫자 (대표가 정해 주세요)</b></p>
+<p><b>✅ 대표 확정 (2026-10-29, 정책 원본 H26(37)) — 남은 질문 없음</b></p>
 <ol>
-<li>'그 주만 닫기'는 수업 시작 <b>몇 시간 전</b>까지 할 수 있게 할까요? (그 안이면 칸이 잠김. 학생이 막 보강을 고르는 중일 수 있어서)</li>
-<li>'One week only' 탭에서 <b>몇 주 앞까지</b> 넘겨 볼 수 있게 할까요? (견본은 4주)</li>
-<li>'매주' 변경은 <b>언제부터</b> 적용할까요? 바로(오늘부터) / 다음 주 월요일부터 / 그 밖</li>
+<li>고정 수업이 있는 시간: 강사가 매주 닫기 불가 → 운영진에게 요청</li>
+<li>저장: 바로 반영 + 운영진 화면에 바뀐 기록</li>
+<li>그 주만 닫기: 빈 시간만, 수업 시작 6시간 전까지, 앞으로 4주까지</li>
+<li>잠기는 칸: 확정 수업 · 보강 · <b>학생이 보강 신청해 강사 답을 기다리는 시간</b></li>
+<li>매주 변경: 다음 주 월요일부터 (이미 확정된 수업·보강은 그대로)</li>
+<li>30분 칸 (수업 길이·휴식 10분은 기존 충돌 검사)</li>
+<li>문구: My hours · Every week · One week only 그대로, 'Unavailable this week'</li>
 </ol>
-<p><b>Q4.</b> 칸 누르기 모양(30분 한 칸 = 그 시각에 <b>수업 시작</b> 가능)·영어 문구 괜찮을까요?</p>
 </section>
 
 <section>
@@ -217,7 +215,7 @@ function make(root,isPc){
    const ch=changes();
    s.innerHTML=`<strong>Save these changes?</strong><ul style="margin:0;padding-left:18px;font-size:14px">${ch.map(x=>`<li>${x}</li>`).join('')}</ul><p class="mini">Students can no longer pick closed times for make-ups. Your classes don’t change.</p><div class="btns"><button class="btn" data-ok>Save</button><button class="btn s" data-x>Back</button></div>`;
    s.querySelector('[data-ok]').onclick=()=>{open.forEach((o,i)=>base[i]=new Set(o));Object.keys(once).forEach(w=>onceBase[w]=new Set(once[w]));sheet={kind:'saved'};draw()};
-  }else if(kind==='saved')s.innerHTML=`<strong>Saved</strong><p class="mini">(시안: 저장 기록이 운영진 화면에 남음 — Q2 ①일 때)</p><div class="btns">${close}</div>`;
+  }else if(kind==='saved')s.innerHTML=`<strong>Saved</strong><p class="mini">(시안: 저장 기록이 운영진 화면에 남음)</p><div class="btns">${close}</div>`;
   s.querySelectorAll('[data-x]').forEach(x=>x.onclick=()=>{sheet=null;draw()});
   dim.append(s);return dim;
  }
@@ -244,7 +242,7 @@ function make(root,isPc){
    root.append(main);
    const side=document.createElement('div');side.className='side';
    side.innerHTML=`<div class="box"><strong>Changes</strong>${n?`<ul>${changes().map(x=>`<li>${x}</li>`).join('')}</ul>`:'<p class="mini">Nothing changed yet. Tap a time on the left.</p>'}<button class="btn" type="button" ${n?'':'disabled'}>Save${n?` (${n})`:''}</button></div>
-   <div class="box"><strong>Can’t teach a class?</strong><p class="mini">Times with a class are locked. Tap the class to send a cancellation request.</p></div>`;
+   <div class="box"><strong>Can’t teach a class?</strong><p class="mini">Times with a class or a make-up request are locked. Tap a class to send a cancellation request.</p></div>`;
    side.querySelector('.btn').onclick=save;root.append(side);
   }else{
    root.append(main);
