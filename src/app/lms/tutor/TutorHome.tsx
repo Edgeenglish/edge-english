@@ -113,6 +113,9 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
           </p>
           <h1 className="text-[22px] font-bold text-[#1d1b2b]">{screen.tutor.name}</h1>
           <p className="text-[13px] text-[#6b6880]">Your time · {tz}</p>
+          {screen.tutor.meetUrl && (
+            <a href={screen.tutor.meetUrl} target="_blank" rel="noreferrer" className={`${btnMain} mt-2 inline-flex items-center`}>Classroom (Google Meet)</a>
+          )}
         </div>
         {onLogout && (
           <button type="button" onClick={onLogout} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13.5px] text-[#1d1b2b]">
@@ -328,7 +331,6 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
   const links = (
     <>
-      {phase === 'upcoming' && meetUrl && <a href={meetUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Classroom</a>}
       {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Class notes</a>}
       {phase === 'upcoming' && kindTag(l) === 'Make-up' && (() => {
         const ev = { title: `Edge English make-up · ${l.student}`, start: l.startsAt, end: l.endsAt, details: meetUrl };
