@@ -5,6 +5,7 @@
 // ③ 학생 LMS (2026-10-28 대표): 휴무 안내에 한 번에 답(A안) · 보강 날짜는 달력에서 고르기 · 직접 취소
 // 미리보기(?demo=1)는 같은 화면에 브라우저 안에서만 흉내 내는 동작(fakeStore)을 넣음 — 저장·발송 없음
 
+import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
 import { useEffect, useMemo, useState } from 'react';
 import books from '@/data/books.json';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
@@ -403,6 +404,7 @@ export default function StudentHome(props: {
                       수업 링크 (Google Meet)
                     </a>
                   )}
+                  {l.kind === 'makeup' && <AddToCalendar ev={{ title: '엣지영어 보강 수업', start: l.startsAt, end: new Date(l.startsAt.getTime() + l.minutes * 60000), details: meetOf(l.id) }} google="구글 캘린더에 추가" file="애플·삼성 캘린더에 추가" />}
                 </div>
                 <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: l.id })} className="min-h-[44px] rounded-[12px] border border-[#d9d5e8] px-3 text-[14px] font-semibold">
                   변경·취소
@@ -901,6 +903,17 @@ function monthCells(month: string): (string | null)[] {
   const first = new Date(`${month}-01T00:00:00Z`);
   const days = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
   return [...Array<null>(first.getUTCDay()).fill(null), ...Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
+}
+
+/** 보강을 캘린더에 더하기 (2026-10-29 대표, 학생·강사 화면 같은 버튼) */
+export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google: string; file: string }) {
+  const cls = 'inline-flex min-h-[36px] items-center rounded-[10px] border border-[#d9d5e8] bg-white px-2.5 text-[13px] font-semibold text-[#1b1442]';
+  return (
+    <span className="mt-1.5 flex flex-wrap gap-1.5">
+      <a href={googleCalendarUrl(ev)} target="_blank" rel="noreferrer" className={cls}>{google}</a>
+      <a href={icsUrl(ev)} className={cls}>{file}</a>
+    </span>
+  );
 }
 
 function NextLesson({ lesson, now, textbook, meetUrl, substitute }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null; substitute: boolean }) {
