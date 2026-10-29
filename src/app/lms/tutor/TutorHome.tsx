@@ -224,7 +224,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         {days.length > 0 && (
           <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
             <div className={`hidden ${cols(kst)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 whitespace-nowrap text-[13px] font-bold text-[#2b1c7a] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-              <span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span><span>Paid</span><span>Covered Topics</span><span />
+              <span /><span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span><span>Paid</span><span>Covered Topics</span>
             </div>
             {days.map((d) => (
               <div key={d.date}>
@@ -275,8 +275,8 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
 
 /** PC 표 칸 (KST 칸은 강사가 끌 수 있음) */
 const cols = (kst: boolean) => kst
-  ? 'lg:grid-cols-[80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)_72px]'
-  : 'lg:grid-cols-[80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)_72px]';
+  ? 'lg:grid-cols-[76px_80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
+  : 'lg:grid-cols-[76px_80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]';
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
 function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
@@ -328,6 +328,7 @@ function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
           <span className={`text-right text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip && <span className="block">{remarksChip}</span>}</span>
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
+          <span>{phase === 'to_record' && <span className="rounded-[8px] bg-[#5b3fe0] px-2.5 py-1 text-[13px] font-semibold text-white">Record</span>}</span>
           <span className="font-semibold">{time}</span>
           {kst && <span className="text-[#6b6880]">{k?.replace(/^KST /, '')}</span>}
           <span className="font-semibold"><span className="truncate">{name}</span></span>
@@ -337,11 +338,10 @@ function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
           <span className={`font-semibold ${stColor}`}>{stText}</span>
           <span>{paid}</span>
           <span className="flex-wrap text-[13px]">{l.topics}{remarksChip}</span>
-          <span>{phase === 'to_record' && <span className="rounded-[8px] bg-[#5b3fe0] px-2.5 py-1 text-[13px] font-semibold text-white">Record</span>}</span>
         </div>
       </button>
       {open && (
-        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[108px]">
+        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[180px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
           {canRecord(l, now) ? (
             <div className="lg:max-w-[560px]">
