@@ -148,7 +148,7 @@ const formHtml = (r) => r[5]==='rec' || r[5]==='ok' ? `
   <div class="radios"><span class="${r[6].includes('Late')?'':'on'}">Normal</span><span class="${r[6].includes('Late')?'on':''}">Late</span><span>No-show</span></div>
   <div class="f">Covered topics</div><div class="box">${r[8]||'&nbsp;'}</div>
   ${r[9]||r[6].includes('Late')?`<div class="f">${r[6].includes('Late')?'Remarks (reason for being late)':'Remarks'}</div><div class="box">${r[9]||'&nbsp;'}</div>`:`<div class="save"><span class="btn">+ Remarks</span></div>`}
-  <div class="save"><span class="btn main">Save</span> <span class="btn">Classroom</span> <span class="btn">Class notes</span></div>`
+  <div class="save"><span class="btn main">Save</span> <span class="btn">Class notes</span></div>`
   : r[5]==='up' ? `<span class="btn">Classroom</span> <span class="btn">Class notes</span>` : `<span style="color:var(--muted);font-size:13px">Canceled</span>`;
 
 function head(){
