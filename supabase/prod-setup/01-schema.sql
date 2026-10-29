@@ -6274,6 +6274,7 @@ returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   v_student uuid := my_student_id();
+  v jsonb;
 begin
   if p_answer not in ('ok', 'makeup') then raise exception '답을 골라 주세요.'; end if;
   if coalesce(array_length(p_items, 1), 0) = 0 then raise exception '수업이 없습니다.'; end if;
@@ -6285,8 +6286,18 @@ begin
              and (choice <> 'substitute' or sub_stage <> 'tutor_ok' or starts_at <= now())) then
     raise exception '이미 정해졌거나 지난 수업이 있어요. 화면을 새로 열어 주세요.' using hint = 'not_open';
   end if;
-  if p_answer = 'ok' then return lms_leave_student_ok_core(p_items); end if;
-  return lms_leave_choose_core(p_items, 'wait', null);
+  -- 학생이 LMS에서 직접 답함 = 2단계 글(휴무 안내)은 받은 것, 학생 확정 카톡은 필요 없음 (대표 10/29: 휴무 안내 카톡 + LMS로 끝)
+  --  대체강사에게 가는 확정 안내는 그대로 남김
+  if p_answer = 'ok' then
+    v := lms_leave_student_ok_core(p_items);
+  else
+    v := lms_leave_choose_core(p_items, 'wait', null);
+  end if;
+  update lesson_notices set status = 'sent', sent_at = now(), sent_by = auth.uid()
+  where leave_item_id = any(p_items) and event in ('leave_options', 'sub_student') and status = 'pending';
+  update lesson_notices set status = 'not_needed'
+  where leave_item_id = any(p_items) and event = 'sub_confirmed' and recipient_kind = 'student' and status = 'pending';
+  return v;
 end $$;
 revoke all on function student_leave_answer(uuid[], text) from public, anon;
 grant execute on function student_leave_answer(uuid[], text) to authenticated;

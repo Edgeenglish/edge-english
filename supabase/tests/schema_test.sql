@@ -1470,6 +1470,11 @@ select student_leave_answer(array[(select id from sli)], 'makeup');
 select pg_temp.ok(exists (select 1 from jsonb_array_elements(student_screen(null) -> 'makeup_rights') x where x ->> 'lesson_id' = '77777777-1800-0000-0000-000000000004'),
   '학생이 기존 강사님과 보강: 운영진 화면과 같은 처리(강사 장기 휴식), 보강할 수업에 들어감');
 select pg_temp.expect_error($$select student_leave_answer(array[(select id from sli)], 'ok')$$, '이미 정해졌거나');
+reset role;
+select pg_temp.ok(not exists (select 1 from lesson_notices where leave_item_id = (select id from sli) and status = 'pending' and recipient_kind = 'student'),
+  '학생이 LMS에서 답하면 학생에게 보낼 카톡(휴무 안내·확정 안내)은 남지 않음');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000001800';
 select pg_temp.ok((select count(*) from student_makeup_options(null, '77777777-1800-0000-0000-000000000004', null)) > 0, '학생 보강 가능한 날짜가 나옴');
 select pg_temp.expect_error($$select student_makeup_request('77777777-1800-0000-0000-000000000004', null, jsonb_build_array(jsonb_build_object('starts_at', pg_temp.kst(4, '03:00'))))$$, '보강 가능한 날짜가 아닙니다');
 select pg_temp.expect_error($$select student_makeup_request('77777777-1800-0000-0000-000000000004', null, (select jsonb_agg(jsonb_build_object('starts_at', o.starts_at)) from (select starts_at from student_makeup_options(null, '77777777-1800-0000-0000-000000000004', null) limit 3) o))$$, '1~2개');
