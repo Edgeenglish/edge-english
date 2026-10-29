@@ -13,7 +13,7 @@ import {
 
 export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
-  record: (lessonId: string, result: TutorResult, topics: string, remarks: string) => Promise<void>;
+  record: (lessonId: string, result: TutorResult, topics: string, remarks: string, studentLate: boolean) => Promise<void>;
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
   /** 대체 수업 요청 답: items = 답하는 수업 전체, yes = 가능한 수업 */
   answerCover: (items: string[], yes: string[]) => Promise<void>;
@@ -324,7 +324,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   const count = l.count ? `${l.count.n}/${l.count.total}` : '—';
   const canOpen = phase !== 'canceled';
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
-  const stText = phase === 'recorded' ? `✓ ${status}` : status;
+  const stText = phase === 'recorded' ? `✓ ${status}${l.studentLate ? ' · Student late' : ''}` : status;
   // 페이 대상 Y/N (상태 규칙 tutorPaid, 대표 10/29 가안). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
   const paid = l.classStatus ? (STATUS_RULES[l.classStatus].tutorPaid ? (l.locked ? 'Y ✓' : 'Y') : 'N') : '';
   const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
@@ -402,6 +402,7 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
   const [result, setResult] = useState<TutorResult | null>(resultOf(l.classStatus));
   const [topics, setTopics] = useState(l.topics ?? '');
   const [remarks, setRemarks] = useState(l.remarks ?? '');
+  const [studentLate, setStudentLate] = useState(l.studentLate);
   // Remarks 칸은 이슈 있을 때만 꺼내 씀 (대표 10/29). Late는 이유가 필요해서 바로 보임
   const [remarksOpen, setRemarksOpen] = useState(!!l.remarks);
   const [busy, setBusy] = useState(false);
@@ -411,7 +412,7 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
   if (!editing) {
     return (
       <div className="mt-2 flex items-center justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2">
-        <span className="text-[14px] font-semibold text-[#1f7a4d]">✓ {statusText(l, now)}{l.topics ? ` · ${l.topics}` : ''}</span>
+        <span className="text-[14px] font-semibold text-[#1f7a4d]">✓ {statusText(l, now)}{l.studentLate ? ' · Student late' : ''}{l.topics ? ` · ${l.topics}` : ''}</span>
         {canRecord(l, now) && <button type="button" onClick={() => setEditing(true)} className={`${btnSub} min-h-[36px] text-[13.5px]`}>Edit</button>}
       </div>
     );
@@ -423,9 +424,10 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
     setErr('');
     try {
       const t = result === 'student_no_show' ? '' : topics.trim();
-      await actions.record(l.id, result, t, remarks);
+      const late = result === 'held' && studentLate;
+      await actions.record(l.id, result, t, remarks, late);
       setEditing(false);
-      await onSaved({ ...l, state: 'done', classStatus: savedStatus(l, result), topics: t || null, remarks: remarks.trim() || null });
+      await onSaved({ ...l, state: 'done', classStatus: savedStatus(l, result), topics: t || null, remarks: remarks.trim() || null, studentLate: late });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
     } finally {
@@ -444,6 +446,12 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
           </button>
         ))}
       </div>
+      {result === 'held' && (
+        <label className="flex min-h-[44px] items-center gap-2 text-[15px] font-semibold text-[#1d1b2b]">
+          <input type="checkbox" checked={studentLate} onChange={(e) => setStudentLate(e.target.checked)} className="h-[20px] w-[20px] accent-[#5b3fe0]" />
+          Student was late
+        </label>
+      )}
       {result !== 'student_no_show' && (
         <div>
           <label className={label} htmlFor={`topics-${l.id}`}>Covered topics</label>

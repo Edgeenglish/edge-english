@@ -49,7 +49,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
     () =>
       sb && {
         load: (from, to) => loadTutorScreen(sb, adminTutor, from, to),
-        record: (id, r, t, rm) => recordClass(sb, id, r, t, rm),
+        record: (id, r, t, rm, late) => recordClass(sb, id, r, t, rm, late),
         answer: (id, yes, note) => answerMakeup(sb, id, yes, note),
         answerCover: (items, yes) => answerCover(sb, items, yes),
       },

@@ -2,7 +2,7 @@
 select 항목, case when ok then '통과' else '실패' end as 결과 from (
   select 1 as n, '강사 화면 함수는 로그인 사용자만 (본인 강사·운영자 확인은 함수 안에서)' as 항목,
     has_function_privilege('authenticated', 'tutor_screen(uuid, date, date)', 'execute')
-    and has_function_privilege('authenticated', 'tutor_record_class(uuid, text, text, text)', 'execute')
+    and exists (select 1 from pg_proc where proname = 'tutor_record_class' and has_function_privilege('authenticated', oid, 'execute'))   -- 3000에서 인자 하나 늘어남
     and has_function_privilege('authenticated', 'tutor_makeup_answer(uuid, uuid[], text)', 'execute')
     and has_function_privilege('authenticated', 'admin_tutor_accounts()', 'execute')
     and has_function_privilege('authenticated', 'admin_class_record_missing()', 'execute')

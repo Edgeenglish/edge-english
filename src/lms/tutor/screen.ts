@@ -22,6 +22,8 @@ export type TutorLesson = {
   count: { n: number; total: number } | null;
   topics: string | null;
   remarks: string | null;
+  /** 학생 지각 표시 (정상 수업, migration 3000) */
+  studentLate: boolean;
   recordedAt: Date | null;
   locked: boolean;
 };
@@ -57,7 +59,7 @@ export function parseScreen(j: any): TutorScreen {
       id: l.id, startsAt: new Date(l.starts_at), endsAt: new Date(l.ends_at), kind: l.kind, state: l.state, classStatus: l.class_status ?? null,
       student: l.student, level: l.level ?? null, noteUrl: l.note_url ?? null, covering: !!l.covering, makeupOf: at(l.makeup_of),
       count: l.count ? { n: Number(l.count.n), total: Number(l.count.total) } : null,
-      topics: l.topics ?? null, remarks: l.remarks ?? null, recordedAt: at(l.recorded_at), locked: !!l.locked,
+      topics: l.topics ?? null, remarks: l.remarks ?? null, studentLate: !!l.student_late, recordedAt: at(l.recorded_at), locked: !!l.locked,
     })),
     toRecord: j.to_record ?? [],
     makeups: (j.makeups ?? []).map((m: any) => ({
