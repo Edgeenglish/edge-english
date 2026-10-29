@@ -462,7 +462,12 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
       {/* 휴무에 걸린 수업 전체: 이름을 누르면 바로 보임 (대표 10/29) */}
       <section aria-label="휴무에 걸린 수업" className="grid gap-1.5">
         <h3 className="text-[14px] font-bold text-[#1d1b2b]">휴무에 걸린 수업 {g.items.length}회</h3>
-        <ItemList items={g.items} badge />
+        <ItemList items={g.items} badge action={(i) => i.choice !== 'undecided' && i.startsAt > now && (
+          <button type="button" disabled={r.busy} className={`${btnSub} min-h-[36px] text-[13px]`}
+            onClick={() => window.confirm(`${kstLabel(i.startsAt)} 수업을 처음부터 다시 고를까요?`) && r.run(() => actions.back([i.id], 'undecided'))}>
+            다시 고르기
+          </button>
+        )} />
       </section>
       {/* 단계 줄과 단계 화면을 한 상자로: 단계 이름은 누르든 안 누르든 같음(2026-10-28 대표), 오른쪽 [← 뒤로] */}
       <section aria-label={sel < 4 ? chips[sel] : '완료'} className="grid gap-2 rounded-[14px] border-2 border-[#7d5ffb] p-3">
