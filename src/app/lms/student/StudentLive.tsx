@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { createStudentLogin, loadStudentAccounts, loadStudentView, studentActions, type StudentAccount, type StudentView } from '@/lms/student/live';
+import { createStudentLogin, loadStudentAccounts, loadStudentView, searchStudents, studentActions, type StudentAccount, type StudentView } from '@/lms/student/live';
 import StudentHome from './StudentHome';
 
 type State =
@@ -60,12 +60,7 @@ export default function StudentLive({ studentParam }: { studentParam?: string })
   const adminBar = state.admin && (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[12px] bg-[#1d1b2b] px-3 py-2">
       <span className="text-[13px] font-semibold text-white">운영자 보기</span>
-      <select aria-label="학생" value={state.admin.studentId} onChange={(e) => window.location.assign(`/lms/student?student=${e.target.value}`)}
-        className="min-h-[38px] flex-1 rounded-[8px] bg-white px-2 text-[15px] text-[#1d1b2b]">
-        {state.admin.students.map((x) => (
-          <option key={x.id} value={x.id}>{x.code} {x.name}{x.hasLogin ? '' : ' · 학생 계정 없음'}</option>
-        ))}
-      </select>
+      <StudentPicker students={state.admin.students} current={state.admin.studentId} />
       <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">대시보드</a>
       {sb && current && !current.hasLogin && <StudentLoginForm onCreate={(email) => createStudentLogin(sb, current.id, email)} />}
     </div>
@@ -110,6 +105,41 @@ function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{
         {busy ? '만드는 중…' : '로그인 만들기'}
       </button>
       {msg && <p role={msg.ok ? 'status' : 'alert'} className={`w-full text-[13px] ${msg.ok ? 'text-[#b9f5cf]' : 'text-[#ffb4ab]'}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
+// 운영자 보기: 학생 검색 (이름·영문 이름·학생 번호·강사). 이름이 같아도 번호·영문 이름·강사로 구별
+function StudentPicker({ students, current }: { students: StudentAccount[]; current: string }) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const cur = students.find((x) => x.id === current);
+  const found = searchStudents(students, q).slice(0, 20);
+  const label = (x: StudentAccount) => `${x.code} ${x.name}${x.nameEn ? ` (${x.nameEn})` : ''}${x.tutors ? ` · ${x.tutors}` : ''}`;
+  return (
+    <div className="relative min-w-0 flex-1">
+      <input
+        aria-label="학생 검색"
+        value={open ? q : cur ? label(cur) : ''}
+        onFocus={() => { setOpen(true); setQ(''); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="이름·번호·강사로 검색"
+        className="min-h-[38px] w-full rounded-[8px] bg-white px-2 text-[15px] text-[#1d1b2b]"
+      />
+      {open && (
+        <ul className="absolute left-0 right-0 top-[42px] z-30 max-h-[60vh] overflow-y-auto rounded-[10px] border border-[#e6e3ef] bg-white shadow-lg">
+          {found.length === 0 && <li className="px-3 py-3 text-[14px] text-[#6b6880]">없어요</li>}
+          {found.map((x) => (
+            <li key={x.id}>
+              <button type="button" onMouseDown={() => window.location.assign(`/lms/student?student=${x.id}`)}
+                className={`flex min-h-[44px] w-full items-center px-3 text-left text-[14px] ${x.id === current ? 'bg-[#efeaff] font-bold' : ''}`}>
+                {label(x)}{x.hasLogin ? '' : ' · 학생 계정 없음'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

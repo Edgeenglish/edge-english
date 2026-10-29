@@ -6478,12 +6478,17 @@ revoke all on function student_screen(uuid) from public, anon;
 grant execute on function student_screen(uuid) to authenticated;
 
 -- 운영자 보기 막대: 학생 목록 + 로그인 계정 여부
-create or replace function admin_student_accounts()
-returns table (id uuid, code text, name_ko text, has_login boolean)
+-- 이름이 같은 학생을 구별하도록 영문 이름·지금 강사도 같이 (대표 10/29: 검색, 동명이인)
+drop function if exists admin_student_accounts();
+create function admin_student_accounts()
+returns table (id uuid, code text, name_ko text, name_en text, tutors text, has_login boolean)
 language plpgsql stable security definer set search_path = public as $$
 begin
   if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
-  return query select s.id, s.code, s.name_ko, exists (select 1 from app_users u where u.student_id = s.id)
+  return query select s.id, s.code, s.name_ko, s.name_en,
+    (select string_agg(distinct t.name, ', ') from lessons l join tutors t on t.id = l.tutor_id
+     where l.student_id = s.id and l.state = 'scheduled' and l.voided_at is null),
+    exists (select 1 from app_users u where u.student_id = s.id)
   from students s order by s.code;
 end $$;
 revoke all on function admin_student_accounts() from public, anon;

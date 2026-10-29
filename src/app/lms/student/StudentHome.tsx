@@ -257,16 +257,28 @@ export default function StudentHome(props: {
   );
 
   // 할 일: 학생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
-  const todoBars = (
+  const todoItems = (
     <>
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
       {openRights.length > 0 && <TodoBar n={openRights.length} text="보강 날짜 고르기" onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
     </>
   );
+  const todoCount = (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
+  const todoBars = todoCount > 0 && (
+    <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
+      <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
+        할 일 <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
+      </h2>
+      <div className="divide-y divide-[#f3e6c4]">{todoItems}</div>
+    </section>
+  );
 
   const upcoming = lessons.filter((l) => l.state === 'scheduled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   const leaveVisible = s.leave.length > 0;
+  const meetOf = (id: string) => s.lessons.find((l) => l.id === id)?.meetUrl ?? null;
+  // 강사마다 수업 링크가 다름 → 앞으로 수업하는 강사별로 (대체강사 포함)
+  const meetLinks = [...new Map(upcoming.map((l) => [l.tutorName, meetOf(l.id)] as const).filter(([, u]) => u)).entries()];
 
   return (
     <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
@@ -348,11 +360,16 @@ export default function StudentHome(props: {
             <p className="text-[13px] text-[#55526a]">한국 시간 기준이에요.</p>
             {upcoming.map((l) => (
               <div key={l.id} className={`${card} flex items-center justify-between gap-3 p-4`}>
-                <div>
+                <div className="min-w-0">
                   <p className="text-[15px] font-semibold">{whenText(l.startsAt)}</p>
                   <p className="text-[12.5px] text-[#6b6880]">
                     {l.minutes}분 · {l.tutorName} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
                   </p>
+                  {meetOf(l.id) && (
+                    <a href={meetOf(l.id)!} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold text-[#4b2fd6] underline">
+                      수업 링크 (Google Meet)
+                    </a>
+                  )}
                 </div>
                 <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: l.id })} className="min-h-[44px] rounded-[12px] border border-[#d9d5e8] px-3 text-[14px] font-semibold">
                   변경·취소
@@ -425,6 +442,17 @@ export default function StudentHome(props: {
 
         {tab === 'me' && (
           <TabPage title="내 정보">
+            {meetLinks.length > 0 && (
+              <section className={`${card} grid gap-1 px-4 py-3`}>
+                <h2 className="text-[15px] font-bold">수업 링크</h2>
+                {meetLinks.map(([name, url]) => (
+                  <a key={name} href={url!} target="_blank" rel="noreferrer" className="flex min-h-[48px] items-center justify-between border-t border-[#eeecf4] text-[14px] first-of-type:border-0">
+                    <span>{name} 강사님</span>
+                    <span className="font-semibold text-[#4b2fd6]">Google Meet ›</span>
+                  </a>
+                ))}
+              </section>
+            )}
             <section className={`${card} px-4 pb-1.5 pt-2`}>
               {extras && <LinkRow label="결제 내역" value="" onClick={() => setOverlay({ kind: 'payments' })} />}
               <LinkRow label="적립금 내역" value={won(points.balance)} onClick={() => setOverlay({ kind: 'points' })} />
@@ -513,7 +541,7 @@ export default function StudentHome(props: {
                 load={actions.makeupOptions}
                 busy={busy}
                 onSubmit={async (right, slots) => {
-                  const v = await run(() => actions.requestMakeup(right, slots), '신청했어요.');
+                  const v = await run(() => actions.requestMakeup(right, slots), '요청했어요. 강사님이 확인하면 확정돼요.');
                   if (v) setOverlay(null);
                 }}
               />
@@ -545,14 +573,10 @@ export default function StudentHome(props: {
 
 function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="flex min-h-[48px] items-center gap-2.5 rounded-[14px] border-[1.5px] border-[#f0a33a] bg-white px-3.5 py-2.5 text-left">
-      <span aria-hidden className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#f0a33a] text-[13px] font-bold text-white">
-        {n}
-      </span>
-      <span className="flex-1 text-[14px] leading-snug">
-        <b>할 일</b> · {text}
-      </span>
-      <span className="whitespace-nowrap text-[13px] text-[#8a5300]">확인 ›</span>
+    <button type="button" onClick={onClick} className="flex min-h-[54px] w-full items-center gap-3 px-4 py-3 text-left">
+      <span className="flex-1 text-[15px] font-semibold leading-snug">{text}</span>
+      {n > 1 && <span className="text-[13px] text-[#8a5300]">{n}건</span>}
+      <span className="whitespace-nowrap rounded-[10px] bg-[#5b3df0] px-3 py-1.5 text-[13px] font-bold text-white">확인 ›</span>
     </button>
   );
 }
@@ -577,11 +601,17 @@ function LeaveSheet(props: {
         <h2 className="text-[18px] font-bold">담당 강사님 휴무 안내</h2>
         {offText && <p className="mt-0.5 text-[13px] text-[#55526a]">휴무 {offText}</p>}
       </div>
+      <p className="rounded-[14px] bg-[#efeaff] px-4 py-3 text-[15px] font-semibold leading-relaxed text-[#2b1c7a]">
+        <span className="mr-1.5 rounded-full bg-[#5b3df0] px-2 py-0.5 text-[12px] text-white">추천</span>
+        {subs.length && waits.length
+          ? `휴무 기간 수업 ${props.rows.length}회 중 ${subs.length}회는 대체강사님과, ${waits.length}회는 기존 강사님과 진행해요.`
+          : subs.length
+            ? `휴무 기간 수업 ${subs.length}회는 대체강사님과 진행해요.`
+            : `휴무 기간 수업 ${waits.length}회는 기존 강사님과 보강해요.`}
+      </p>
       {subs.length > 0 && (
         <section className={`${card} grid gap-1 p-4`}>
-          <h3 className="text-[15px] font-bold">
-            대체강사와 수업하기 <span className="ml-1 rounded-full bg-[#efeaff] px-2 py-0.5 text-[12px] text-[#4b2fd6]">추천</span>
-          </h3>
+          <h3 className="text-[15px] font-bold">대체강사와 수업하기</h3>
           {subs.map((x) => (
             <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
               <span>
@@ -627,7 +657,7 @@ function LeaveSheet(props: {
             좋아요, 이대로 할게요
           </button>
           <button type="button" disabled={props.busy} onClick={() => props.onAnswer('makeup')} className="min-h-[50px] rounded-[14px] border border-[#5b3df0] text-[15px] font-bold text-[#4b2fd6] disabled:opacity-50">
-            기존 강사님과 수업할게요
+            전부 기존 강사님과 수업할게요
           </button>
         </div>
       )}
@@ -641,8 +671,8 @@ function Profile({ name, onBack }: { name: string; onBack: () => void }) {
   const video = p?.videoUrl.replace('/embed/', '/watch?v=');
   return (
     <div className="grid gap-3.5">
-      <button type="button" onClick={onBack} className="justify-self-start text-[14px] text-[#55526a]">
-        ‹ 휴무 안내
+      <button type="button" onClick={onBack} className="flex min-h-[44px] items-center gap-1 justify-self-start rounded-[12px] border border-[#5b3df0] px-4 text-[15px] font-bold text-[#4b2fd6]">
+        ← 휴무 안내로 돌아가기
       </button>
       <h2 className="text-[18px] font-bold">{p?.name ?? name} 강사님</h2>
       {p ? (
@@ -752,7 +782,7 @@ function MakeupPicker(props: {
 
   return (
     <div className="grid gap-3.5">
-      <h2 className="text-[18px] font-bold">보강 신청 · {whenText(right.originalAt)} 수업</h2>
+      <h2 className="text-[18px] font-bold">보강 날짜 고르기 · {whenText(right.originalAt)} 수업</h2>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
       {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
@@ -784,6 +814,7 @@ function MakeupPicker(props: {
               <p className="text-[14px] font-bold">
                 고른 날짜 {picked.length}/{MAKEUP_SLOTS_MAX}
               </p>
+              <p className="text-[13px] leading-relaxed text-[#55526a]">2개까지 고를 수 있어요. 2개를 고르시면 더 빨리 잡혀요. 강사님이 확인해야 확정돼요.</p>
               {picked.map((t) => (
                 <div key={t.getTime()} className="flex items-center justify-between rounded-[10px] border border-[#e6e3ef] px-3 py-2 text-[14px]">
                   <span className="font-semibold">{whenText(t)}</span>
@@ -798,7 +829,7 @@ function MakeupPicker(props: {
                 onClick={() => props.onSubmit(right, picked)}
                 className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-40"
               >
-                보강 신청하기
+                강사님께 요청하기
               </button>
             </section>
           </div>
@@ -919,9 +950,11 @@ function Sheet({ onClose, children, wide }: { onClose: () => void; children: Rea
   return (
     <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
       <div role="dialog" aria-modal className={`max-h-[90dvh] w-full ${wide ? 'max-w-[520px] lg:max-w-[860px]' : 'max-w-[520px]'} overflow-y-auto rounded-t-[22px] bg-[#f6f5fa] p-5 lg:rounded-[22px]`} onClick={(e) => e.stopPropagation()}>
-        <button type="button" onClick={onClose} className="mb-2 min-h-[36px] text-[14px] text-[#55526a]">
-          ‹ 닫기
-        </button>
+        <div className="flex justify-end">
+          <button type="button" aria-label="닫기" onClick={onClose} className="-mr-2 -mt-2 flex h-11 w-11 items-center justify-center rounded-full text-[22px] leading-none text-[#55526a] hover:bg-[#ebe8f5]">
+            ✕
+          </button>
+        </div>
         {children}
       </div>
     </div>
@@ -1053,6 +1086,9 @@ function Row({ k, v }: { k: string; v: string }) {
   );
 }
 
+// 6시간 이내 취소 확인 문구 (대표 원문, docs/lms-기획서-원문.md 3-3)
+const LATE_CANCEL_TEXT = '수업 시작까지 6시간이 남지 않았어요. 지금 취소하면 보강 없이 수업 1회가 소진돼요. (변경권은 차감되지 않아요) 그래도 미리 알려주시면 강사님이 기다리지 않아도 돼요. 취소할까요?';
+
 function CancelSheet(props: {
   lessons: StudentLesson[];
   lessonId: string | null;
@@ -1109,6 +1145,7 @@ function CancelSheet(props: {
 
   const hours = hoursBetween(props.now, lesson.startsAt);
   const needsCheck = d.consumesLesson; // 수업이 차감되면 한 번 더 확인
+  const late = d.timing === 'late';
   const rows: [string, string][] = [
     ['수업 횟수', d.consumesLesson ? `1회 차감 (남은 ${props.totalLeft}회 → ${props.totalLeft - 1}회)` : '차감 안 됨'],
     ['보강', d.makeupAllowed ? `수강기간(~${fmtDate(props.makeupUntil)}) 안에 보강 가능` : '불가'],
@@ -1127,8 +1164,12 @@ function CancelSheet(props: {
           </div>
         ))}
       </section>
-      <p className="text-[12.5px] leading-relaxed text-[#55526a]">{d.studentMessage}</p>
-      {needsCheck && (
+      {late ? (
+        <p className="text-[15px] leading-relaxed">{LATE_CANCEL_TEXT}</p>
+      ) : (
+        <p className="text-[12.5px] leading-relaxed text-[#55526a]">{d.studentMessage}</p>
+      )}
+      {needsCheck && !late && (
         <label className="flex min-h-[44px] items-start gap-2.5 text-[14px] leading-normal">
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-5 w-5 accent-[#b3261e]" />
           수업 1회가 차감되고 보강이 없다는 것을 확인했어요
@@ -1136,14 +1177,14 @@ function CancelSheet(props: {
       )}
       <button
         type="button"
-        disabled={(needsCheck && !checked) || props.busy}
+        disabled={(needsCheck && !late && !checked) || props.busy}
         onClick={() => props.onConfirm(lesson)}
         className={`min-h-[52px] rounded-[14px] text-[16px] font-bold text-white disabled:opacity-40 ${needsCheck ? 'bg-[#b3261e]' : 'bg-[#5b3df0]'}`}
       >
-        {needsCheck ? '1회 차감하고 취소' : '취소하고 보강 시간 고르기'}
+        {late ? '취소할게요' : needsCheck ? '1회 차감하고 취소' : '취소하고 보강 시간 고르기'}
       </button>
       <button type="button" onClick={props.onClose} className="min-h-[44px] text-[14px] text-[#55526a]">
-        {d.timing === 'late' ? '수업 그대로 하기' : '취소 안 함'}
+        {late ? '돌아가기' : '취소 안 함'}
       </button>
     </div>
   );

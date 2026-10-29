@@ -174,10 +174,17 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
 }
 export type StudentActions = ReturnType<typeof studentActions>;
 
-export type StudentAccount = { id: string; code: string; name: string; hasLogin: boolean };
+export type StudentAccount = { id: string; code: string; name: string; nameEn: string; tutors: string; hasLogin: boolean };
 export async function loadStudentAccounts(sb: SupabaseClient): Promise<StudentAccount[]> {
-  const rows = check(await sb.rpc('admin_student_accounts')) as { id: string; code: string; name_ko: string; has_login: boolean }[];
-  return rows.map((r) => ({ id: r.id, code: r.code, name: r.name_ko, hasLogin: r.has_login }));
+  const rows = check(await sb.rpc('admin_student_accounts')) as { id: string; code: string; name_ko: string; name_en: string; tutors: string | null; has_login: boolean }[];
+  return rows.map((r) => ({ id: r.id, code: r.code, name: r.name_ko, nameEn: r.name_en, tutors: r.tutors ?? '', hasLogin: r.has_login }));
+}
+
+/** 운영자 보기 학생 검색: 한글·영문 이름, 학생 번호, 강사 이름 (공백 무시) */
+export function searchStudents(list: StudentAccount[], q: string): StudentAccount[] {
+  const k = q.replace(/\s/g, '').toLowerCase();
+  if (!k) return list;
+  return list.filter((x) => [x.name, x.nameEn, x.code, x.tutors].some((v) => v.replace(/\s/g, '').toLowerCase().includes(k)));
 }
 export async function createStudentLogin(sb: SupabaseClient, studentId: string, email: string): Promise<{ created: boolean }> {
   const rows = check(await sb.rpc('admin_student_login', { p_student: studentId, p_email: email })) as { created: boolean }[];
