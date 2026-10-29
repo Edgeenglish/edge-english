@@ -146,6 +146,8 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       { id: 'x3', startsAt: at(11, '20:00'), choice: 'wait', stage: null, subTutor: null, subMeetUrl: null, lessonId: 'lv2', itemId: null, offFrom, offTo },
     ],
     holidays: [],
+    creditPeriod: { start: s.periodStart, end: addDays(s.periodStart, 27) },
+    creditUses: [{ at: s.lessons[4].startsAt, reason: 'student_change', delta: -1, lessonAt: s.lessons[4].startsAt }],
     points: s.points,
   };
   view.lessons = view.lessons.map((l) => (l.id === 'lv2' ? { ...l, state: 'canceled' } : l));

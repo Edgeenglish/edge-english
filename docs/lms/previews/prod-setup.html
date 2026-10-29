@@ -6479,6 +6479,11 @@ begin
       left join tutors sub on sub.id = li.sub_tutor_id
       where li.student_id = v_student and li.starts_at &gt; now()
         and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    -- 변경권: 지금 기간과 쓴 기록 (대표 10/29: 변경권 칸 누르면 언제 썼는지)
+    'credit_period', case when v_period.id is null then null else jsonb_build_object('start', v_period.start_date, 'end', v_period.end_date) end,
+    'credit_uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'lesson_at', l.starts_at) order by c.created_at)
+      from credit_ledger c left join lessons l on l.id = c.lesson_id where c.period_id = v_period.id), '[]'::jsonb),
     'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
       where h.day between (now() at time zone 'Asia/Seoul')::date and (now() at time zone 'Asia/Seoul')::date + 200), '[]'::jsonb),
     'points', coalesce((

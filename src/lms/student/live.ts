@@ -52,6 +52,9 @@ export type StudentView = {
   leave: LeaveRow[];
   holidays: KstDate[];
   points: PointsEvent[];
+  /** 지금 변경권 기간과 쓴·돌려받은 기록 */
+  creditPeriod: { start: KstDate; end: KstDate } | null;
+  creditUses: { at: Date; reason: 'student_change' | 'admin_restore' | 'admin_adjust'; delta: number; lessonAt: Date | null }[];
 };
 
 type Raw = {
@@ -66,6 +69,8 @@ type Raw = {
   makeup_requests: { id: string; status: string; lesson_id: string | null; item_id: string | null; requested_at: string; candidates: string[]; tutor_leave: boolean }[];
   leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; sub_meet_url: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string }[];
   holidays: KstDate[];
+  credit_period: { start: KstDate; end: KstDate } | null;
+  credit_uses: { at: string; reason: 'student_change' | 'admin_restore' | 'admin_adjust'; delta: number; lesson_at: string | null }[];
   points: { id: string; on: KstDate; kind: string; amount: number; note: string | null }[];
 };
 
@@ -132,6 +137,8 @@ export function parseStudentView(r: Raw): StudentView {
       lessonId: x.lesson_id, itemId: x.item_id, offFrom: new Date(x.off_from), offTo: new Date(x.off_to),
     })),
     holidays: r.holidays,
+    creditPeriod: r.credit_period,
+    creditUses: (r.credit_uses ?? []).map((c) => ({ at: new Date(c.at), reason: c.reason, delta: c.delta, lessonAt: c.lesson_at ? new Date(c.lesson_at) : null })),
     points: r.points.map((p) => ({ id: p.id, on: p.on, kind: p.amount > 0 ? 'grant' : 'use', amount: Math.abs(p.amount), reason: p.note || POINT_REASON[p.kind] || '적립금' })),
   };
 }

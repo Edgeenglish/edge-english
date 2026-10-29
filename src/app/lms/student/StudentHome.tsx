@@ -40,7 +40,8 @@ type Overlay =
   | { kind: 'cancel'; lessonId: string | null }
   | { kind: 'leave' }
   | { kind: 'profile'; name: string }
-  | { kind: 'makeup'; right: Right | null };
+  | { kind: 'makeup'; right: Right | null; canceled?: boolean }
+  | { kind: 'credits' };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -152,7 +153,7 @@ export default function StudentHome(props: {
     }, '수업을 취소했어요.');
     if (!v) return;
     const right = v.makeupRights.find((m) => m.lessonId === lesson.id && !m.requested);
-    setOverlay(allowed && right ? { kind: 'makeup', right } : null);
+    setOverlay(allowed && right ? { kind: 'makeup', right, canceled: true } : null);
   }
 
   async function answerLeave(answer: 'ok' | 'makeup') {
@@ -200,7 +201,7 @@ export default function StudentHome(props: {
   const statusTiles = (
     <section aria-label="수강 현황" className="grid grid-cols-3 gap-2">
       <Tile label="남은 수업" value={`${left.total}`} unit="회" sub={left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
-      <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중`} />
+      <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중 ›`} onClick={() => setOverlay({ kind: 'credits' })} />
       <Tile
         label="수강 종료"
         value={!endDate ? '-' : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'}
@@ -283,9 +284,15 @@ export default function StudentHome(props: {
   return (
     <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
       <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
-        <div className="px-3 pb-4 pt-1 text-[20px] font-bold text-[#09246b]">
-          Edge<span className="text-[#5b3df0]">English</span>
-        </div>
+        {props.adminBar ? (
+          <a href="/lms/admin" className="px-3 pb-4 pt-1 text-[20px] font-bold text-[#09246b]">
+            Edge<span className="text-[#5b3df0]">English</span>
+          </a>
+        ) : (
+          <div className="px-3 pb-4 pt-1 text-[20px] font-bold text-[#09246b]">
+            Edge<span className="text-[#5b3df0]">English</span>
+          </div>
+        )}
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -309,9 +316,15 @@ export default function StudentHome(props: {
       <div className="min-w-0 flex-1 pb-24 lg:pb-0">
         {props.adminBar && <div className="px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}</div>}
         <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
-          <span className="text-[17px] font-bold text-[#09246b]">
-            Edge<span className="text-[#5b3df0]">English</span>
-          </span>
+          {props.adminBar ? (
+            <a href="/lms/admin" className="text-[17px] font-bold text-[#09246b]">
+              Edge<span className="text-[#5b3df0]">English</span>
+            </a>
+          ) : (
+            <span className="text-[17px] font-bold text-[#09246b]">
+              Edge<span className="text-[#5b3df0]">English</span>
+            </span>
+          )}
           <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
         </header>
 
@@ -489,6 +502,7 @@ export default function StudentHome(props: {
           {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} />}
           {overlay.kind === 'payments' && extras && <Payments payments={extras.payments} />}
           {overlay.kind === 'points' && <Points history={points} />}
+          {overlay.kind === 'credits' && <Credits s={s} />}
           {overlay.kind === 'consent' && (
             <div className="grid gap-3">
               <h2 className="text-[18px] font-bold">새 수업 안내 확인</h2>
@@ -540,6 +554,7 @@ export default function StudentHome(props: {
               <MakeupPicker
                 key={`${overlay.right.lessonId}${overlay.right.itemId}`}
                 right={s.makeupRights.find((m) => sameRight(m, overlay.right!)) ?? null}
+                canceled={overlay.canceled ?? false}
                 endDate={endDate}
                 load={actions.makeupOptions}
                 busy={busy}
@@ -719,6 +734,8 @@ function Profile({ name, onBack }: { name: string; onBack: () => void }) {
 // 달력에서 날짜 → 그날 가능한 시각 → 고른 날짜 최대 2개 → 신청. 날짜는 DB '보강 가능한 날짜'(강사 일정·휴무·종료일)만
 function MakeupPicker(props: {
   right: MakeupRight | null;
+  /** 방금 수업을 취소하고 넘어왔으면 맨 위에 결과 표시 */
+  canceled: boolean;
   endDate: KstDate;
   load: (r: Right) => Promise<MakeupOption[]>;
   busy: boolean;
@@ -795,7 +812,9 @@ function MakeupPicker(props: {
 
   return (
     <div className="grid gap-3.5">
+      {props.canceled && <p className="rounded-[12px] bg-[#e3f5ea] px-3.5 py-2.5 text-[15px] font-bold text-[#13623a]">✓ {whenText(right.originalAt)} 수업을 취소했어요</p>}
       <h2 className="text-[18px] font-bold">보강 날짜 고르기 · {whenText(right.originalAt)} 수업</h2>
+      <p className="text-[14px] leading-relaxed text-[#55526a]">원하시는 일정을 최대 2개 고르실 수 있어요(선택). 2개를 고르시면 강사님이 확인 후 가능한 일정으로 확정해드립니다.</p>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
       {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
@@ -823,11 +842,10 @@ function MakeupPicker(props: {
                 </div>
               )}
             </section>
-            <section className={`${card} grid gap-2 p-3`}>
+            <section className={`${card} sticky bottom-0 z-10 grid gap-2 p-3 shadow-[0_-6px_16px_rgba(27,20,66,0.12)]`}>
               <p className="text-[14px] font-bold">
                 고른 날짜 {picked.length}/{MAKEUP_SLOTS_MAX}
               </p>
-              <p className="text-[13px] leading-relaxed text-[#55526a]">2개까지 고를 수 있어요. 2개를 고르시면 더 빨리 잡혀요. 강사님이 확인해야 확정돼요.</p>
               {picked.map((t) => (
                 <div key={t.getTime()} className="flex items-center justify-between rounded-[10px] border border-[#e6e3ef] px-3 py-2 text-[14px]">
                   <span className="font-semibold">{whenText(t)}</span>
@@ -842,7 +860,7 @@ function MakeupPicker(props: {
                 onClick={() => props.onSubmit(right, picked)}
                 className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-40"
               >
-                강사님께 요청하기
+                강사님께 확정 요청하기
               </button>
             </section>
           </div>
@@ -874,7 +892,7 @@ function NextLesson({ lesson, now, textbook, meetUrl, substitute }: { lesson: St
       {/* 대체강사 수업은 수업 링크가 다름 — 늘 쓰던 링크로 들어가는 일이 잦음 (대표 10/29) */}
       {substitute && (
         <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">
-          ⚠️ 대체강사 {lesson.tutorName} 강사님 수업이에요. 수업 링크가 달라요!
+          ⚠️ 대체강사 {lesson.tutorName} 강사님 수업이에요. 수업 링크가 달라요! 아래 &lsquo;수업 입장&rsquo; 링크에서 진행됩니다.
         </p>
       )}
       <div>
@@ -909,15 +927,61 @@ function NextLesson({ lesson, now, textbook, meetUrl, substitute }: { lesson: St
   );
 }
 
-function Tile({ label, value, unit, sub }: { label: string; value: string; unit?: string; sub: string }) {
-  return (
-    <div className={`${card} p-3 lg:p-4`}>
+function Tile({ label, value, unit, sub, onClick }: { label: string; value: string; unit?: string; sub: string; onClick?: () => void }) {
+  const body = (
+    <>
       <p className="text-[12px] text-[#55526a]">{label}</p>
       <p className="mt-1 text-[22px] font-bold">
         {value}
         {unit && <span className="text-[13px] font-medium">{unit}</span>}
       </p>
       <p className="text-[11px] text-[#6b6880]">{sub}</p>
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`${card} p-3 text-left lg:p-4`}>
+      {body}
+    </button>
+  ) : (
+    <div className={`${card} p-3 lg:p-4`}>{body}</div>
+  );
+}
+
+// 변경권: 지금 기간과 언제 썼는지 (대표 10/29)
+function Credits({ s }: { s: StudentView }) {
+  const text = (c: StudentView['creditUses'][number]) =>
+    c.reason === 'student_change'
+      ? `${c.lessonAt ? `${whenText(c.lessonAt)} 수업 취소` : '수업 취소'}`
+      : c.reason === 'admin_restore'
+        ? `${c.lessonAt ? `${whenText(c.lessonAt)} 수업 ` : ''}취소 되돌림`
+        : 'LMS 시작 전 사용';
+  return (
+    <div className="grid gap-3.5">
+      <h2 className="text-[18px] font-bold">변경권</h2>
+      <section className="flex items-center justify-between rounded-[18px] bg-[#1b1442] p-4 text-white">
+        <div>
+          <p className="text-[13px] text-[#c9c0ff]">남은 변경권</p>
+          <p className="mt-0.5 text-[26px] font-bold text-white">
+            {s.creditsLeft}개 <span className="text-[14px] font-medium text-[#d8d3f5]">/ {s.creditsPerPeriod}개</span>
+          </p>
+        </div>
+        {s.creditPeriod && (
+          <p className="text-right text-[12.5px] text-[#d8d3f5]">
+            이번 기간
+            <br />
+            {fmtDate(s.creditPeriod.start)} ~ {fmtDate(s.creditPeriod.end)}
+          </p>
+        )}
+      </section>
+      <section className={`${card} px-4`}>
+        {s.creditUses.length === 0 && <p className="py-4 text-[14px] text-[#6b6880]">이번 기간에 쓴 변경권이 없어요.</p>}
+        {s.creditUses.map((c, i) => (
+          <div key={i} className="flex items-center justify-between gap-3 border-b border-[#eeecf4] py-3 text-[14px] last:border-0">
+            <span>{text(c)}</span>
+            <b className={c.delta > 0 ? 'text-[#13623a]' : ''}>{c.delta > 0 ? '+1' : '−1'}</b>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
@@ -1168,7 +1232,7 @@ function CancelSheet(props: {
   const rows: [string, string][] = [
     ['수업 횟수', d.consumesLesson ? `1회 차감 (남은 ${props.totalLeft}회 → ${props.totalLeft - 1}회)` : '차감 안 됨'],
     ['보강', d.makeupAllowed ? `수강기간(~${fmtDate(props.makeupUntil)}) 안에 보강 가능` : '불가'],
-    ['변경권', d.usesCredit ? `1개 사용 → 남은 ${props.creditsLeft - 1}개` : `차감 안 됨 (${props.creditsLeft}개 그대로)`],
+    ['변경권', d.usesCredit ? `1개 사용 (${props.creditsLeft}개 → ${props.creditsLeft - 1}개)` : `사용 안 함 (${props.creditsLeft}개 그대로)`],
   ];
 
   return (
