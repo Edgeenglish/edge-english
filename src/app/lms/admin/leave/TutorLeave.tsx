@@ -138,7 +138,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff }: { tu
             <p className="rounded-[12px] bg-[#f6f5fb] px-3 py-2.5 text-[14px] text-[#1d1b2b]">
               {data.items.length === 0
                 ? '이 휴무에 걸리는 수업이 없어요.'
-                : `학생 ${groups.length}명 · 수업 ${data.items.length}회 · ${todo.length ? `할 일: ${todo.map(([s, n]) => `${LV_STEP_TEXT[s].replace(/^\d /, '')} ${n}명`).join(' · ')}` : '모두 처리됨'}`}
+                : `학생 ${groups.length}명 · 수업 ${data.items.length}회 · ${todo.length ? `할 일: ${todo.map(([s, n]) => `${LV_STEP_TEXT[s]} ${n}명`).join(' · ')}` : '모두 처리됨'}`}
               {renewals.length > 0 && ` · 재등록 대기 ${renewals.length}명(재등록하면 ${renewals.reduce((n, r) => n + r.dates.length, 0)}회)`}
             </p>
 
@@ -368,7 +368,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
     if (n === 1) {
       if (!p) return out;
       out.push(
-        <Block key="prop" title="학생에게 휴무 안내 · 대체 강사 제안 (프로필 함께)">
+        <Block key="prop" title={LV_STEP_TEXT.propose}>
           <ProposalRow key={p.noticeIds.join()} p={p} to={g.studentName} onSend={async () => { await actions.markSent(p.noticeIds); setView(1); await done(); }} />
           <ItemList items={g.items.filter((i) => p.itemIds.includes(i.id))} />
         </Block>,
@@ -377,7 +377,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
     }
     if (n === 2) {
       if (w.answer.length) out.push(
-        <Block key="ans" title="학생 답 입력">
+        <Block key="ans" title={LV_STEP_TEXT.answer}>
           <StudentAnswer key={w.answer.map((i) => i.id).join()} items={w.answer} actions={actions} done={next} onWait={(its) => setDropped([...dropped, ...its])} />
         </Block>,
       );
@@ -428,7 +428,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
   return (
     <Card title={<>{g.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{g.studentCode}</span></>}>
       {/* 단계 줄과 단계 화면을 한 상자로: 단계 이름은 누르든 안 누르든 같음(2026-10-28 대표), 오른쪽 [← 뒤로] */}
-      <section aria-label={sel < 4 ? `${sel + 1}단계` : '완료'} className="grid gap-2 rounded-[14px] border-2 border-[#7d5ffb] p-3">
+      <section aria-label={sel < 4 ? chips[sel] : '완료'} className="grid gap-2 rounded-[14px] border-2 border-[#7d5ffb] p-3">
         <div className="-mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-1 rounded-t-[12px] bg-[#efebff] px-2 py-2">
           {chips.map((label, n) => {
             const on = sel === n;
