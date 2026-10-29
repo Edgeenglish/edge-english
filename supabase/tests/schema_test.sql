@@ -1586,6 +1586,16 @@ select pg_temp.ok((select array_agg(class_status::text order by id) from lessons
   '진행 → 정규 Normal · 보강 Make-up completed · 대체 진행 Covered by another tutor, 수업 진행 완료 + 다룬 내용 저장');
 select pg_temp.ok((select (tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'Free talk, hobbies', null) ->> 'repeated')::boolean),
   '같은 기록을 다시 저장하면 바뀌는 것 없음');
+-- 3000 학생 지각: 정상 수업 그대로 + 표시만. Held 아니면 저장 안 함
+select tutor_record_class('77777777-2000-0000-0000-000000000003', 'held', 'Unit 5', null, true);
+select pg_temp.ok((select student_late from class_records where lesson_id = '77777777-2000-0000-0000-000000000003')
+              and (select class_status = 'Make-up completed' from lessons where id = '77777777-2000-0000-0000-000000000003')
+              and (select bool_or((x ->> 'student_late')::boolean) from jsonb_array_elements(tutor_screen(null, '2000-01-01', '2100-12-31') -> 'lessons') x
+                   where x ->> 'id' = '77777777-2000-0000-0000-000000000003'),
+  '학생 지각 체크 → 상태는 그대로(Make-up completed), 강사 화면에 student_late');
+select tutor_record_class('77777777-2000-0000-0000-000000000003', 'student_no_show', null, null, true);
+select pg_temp.ok((select not student_late from class_records where lesson_id = '77777777-2000-0000-0000-000000000003'), 'Held가 아니면 학생 지각 표시 안 함');
+select tutor_record_class('77777777-2000-0000-0000-000000000003', 'held', 'Unit 5', null);
 reset role;
 create temp table rc_first as select first_submitted_at as f from class_records where lesson_id = '77777777-2000-0000-0000-000000000001';
 grant select on rc_first to authenticated;

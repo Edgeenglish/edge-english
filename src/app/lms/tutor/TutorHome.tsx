@@ -13,7 +13,7 @@ import {
 
 export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
-  record: (lessonId: string, result: TutorResult, topics: string, remarks: string) => Promise<void>;
+  record: (lessonId: string, result: TutorResult, topics: string, remarks: string, studentLate: boolean) => Promise<void>;
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
   /** 대체 수업 요청 답: items = 답하는 수업 전체, yes = 가능한 수업 */
   answerCover: (items: string[], yes: string[]) => Promise<void>;
@@ -94,6 +94,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (학생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
+  const [panel, setPanel] = useState<'record' | 'cover' | 'makeup' | null>(null);
   const todoCount = [screen.toRecord.length, screen.covers.length, screen.makeups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
@@ -112,6 +113,9 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
           </p>
           <h1 className="text-[22px] font-bold text-[#1d1b2b]">{screen.tutor.name}</h1>
           <p className="text-[13px] text-[#6b6880]">Your time · {tz}</p>
+          {screen.tutor.meetUrl && (
+            <a href={screen.tutor.meetUrl} target="_blank" rel="noreferrer" className={`${btnMain} mt-2 inline-flex items-center`}>Classroom (Google Meet)</a>
+          )}
         </div>
         {onLogout && (
           <button type="button" onClick={onLogout} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13.5px] text-[#1d1b2b]">
@@ -127,17 +131,17 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             To do <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
           </h2>
           <div className="divide-y divide-[#f3e6c4]">
-            {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text="Class Record" target="sec-record" />}
-            {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text="Cover requests" target="sec-cover" />}
-            {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text="Make-up requests" target="sec-makeup" />}
+            {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text="Classes to record" onClick={() => setPanel('record')} />}
+            {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text="Cover requests" onClick={() => setPanel('cover')} />}
+            {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text="Make-up requests" onClick={() => setPanel('makeup')} />}
           </div>
         </section>
       )}
 
-      {toRecord.length > 0 && (
-        <section id="sec-record" className="mb-6 scroll-mt-3">
-          <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">
-            Class Record <span className="text-[#5b3fe0]">{screen.toRecord.length > 0 ? screen.toRecord.length : ''}</span>
+      {panel === 'record' && (
+        <Sheet onClose={() => setPanel(null)}>
+          <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">
+            Classes to record <span className="text-[#5b3fe0]">{screen.toRecord.length > 0 ? screen.toRecord.length : ''}</span>
           </h2>
           <div className="grid gap-3">
             {toRecord.map((l) => (
@@ -151,23 +155,24 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
               </div>
             ))}
           </div>
-        </section>
+        </Sheet>
       )}
 
-      {screen.covers.length > 0 && (
-        <section id="sec-cover" className="mb-6 scroll-mt-3">
-          <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">Cover requests</h2>
+      {panel === 'cover' && (
+        <Sheet onClose={() => setPanel(null)}>
+          <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Cover requests</h2>
           <div className="grid gap-3">
             {groupCovers(screen.covers).map((g) => (
               <CoverCard key={g.map((c) => c.id).join()} covers={g} tz={tz} actions={actions} onSent={() => reload()} />
             ))}
+            {screen.covers.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ Sent</p>}
           </div>
-        </section>
+        </Sheet>
       )}
 
-      {makeups.length > 0 && (
-        <section id="sec-makeup" className="mb-6 scroll-mt-3">
-          <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">Make-up requests</h2>
+      {panel === 'makeup' && (
+        <Sheet onClose={() => setPanel(null)}>
+          <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Make-up requests</h2>
           <div className="grid gap-3">
             {makeups.map((m) => (
               <MakeupCard key={m.id} m={m} tz={tz} actions={actions} closed={!screen.makeups.some((x) => x.id === m.id)}
@@ -177,14 +182,14 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
                 }} />
             ))}
           </div>
-        </section>
+        </Sheet>
       )}
 
       </div>
 
       <section>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[17px] font-bold text-[#1d1b2b]">Schedule</h2>
+          <h2 className="text-[17px] font-bold text-[#1d1b2b]">Class Record</h2>
           {kstOn !== null && (
             <label className="ml-auto flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]">
               <input type="checkbox" checked={kstOn} onChange={(e) => setKst(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
@@ -221,8 +226,11 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
         {days.length > 0 && (
           <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
+            <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] gap-2 border-b-2 border-[#5b3fe0] bg-[#efebff] px-3 py-2 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:hidden">
+              <span>Local Time</span><span>Student</span><span>Class Status</span>
+            </div>
             <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 whitespace-nowrap text-[13px] font-bold text-[#2b1c7a] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-              <span /><span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
+              <span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
             </div>
             {days.map((d) => (
               <div key={d.date}>
@@ -240,9 +248,23 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
   );
 }
 
-function TodoBar({ n, text, target }: { n: number; text: string; target: string }) {
+// 할 일은 화면에 펼쳐 두지 않고 누르면 창으로 (대표 10/29: 할 일이 많아도 Class Record 표가 아래로 밀리지 않게)
+function Sheet({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   return (
-    <button type="button" onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth' })}
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
+      <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}
+        className="relative max-h-[90vh] w-full max-w-[640px] overflow-y-auto rounded-t-[20px] bg-[#f6f5fa] p-4 pb-8 lg:rounded-[20px]">
+        <button type="button" aria-label="Close" onClick={onClose}
+          className="absolute right-3 top-3 flex h-[40px] w-[40px] items-center justify-center rounded-full bg-white text-[18px] text-[#1d1b2b]">✕</button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
       className="flex min-h-[54px] w-full items-center gap-3 px-4 py-3 text-left">
       <span className="flex-1 text-[15px] font-semibold leading-snug text-[#1d1b2b]">{text}</span>
       <span className="text-[13px] text-[#8a5300]">{n}</span>
@@ -273,10 +295,10 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
 
 /** PC 표 칸 (KST 칸은 강사가 끌 수 있음) */
 const cols = (kst: boolean, paid: boolean) => kst
-  ? (paid ? 'lg:grid-cols-[76px_80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
-    : 'lg:grid-cols-[76px_80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]')
-  : (paid ? 'lg:grid-cols-[76px_80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
-    : 'lg:grid-cols-[76px_80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]');
+  ? (paid ? 'lg:grid-cols-[80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
+    : 'lg:grid-cols-[80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]')
+  : (paid ? 'lg:grid-cols-[80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
+    : 'lg:grid-cols-[80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]');
 
 /** 켬/끔을 이 기기에 기억 (기본 켬) */
 function useSavedToggle(key: string): [boolean, (on: boolean) => void] {
@@ -302,14 +324,13 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   const count = l.count ? `${l.count.n}/${l.count.total}` : '—';
   const canOpen = phase !== 'canceled';
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
-  const stText = phase === 'recorded' ? `✓ ${status}` : status;
+  const stText = phase === 'recorded' ? `✓ ${status}${l.studentLate ? ' · Student late' : ''}` : status;
   // 페이 대상 Y/N (상태 규칙 tutorPaid, 대표 10/29 가안). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
   const paid = l.classStatus ? (STATUS_RULES[l.classStatus].tutorPaid ? (l.locked ? 'Y ✓' : 'Y') : 'N') : '';
   const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
   const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
   const links = (
     <>
-      {phase === 'upcoming' && meetUrl && <a href={meetUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Classroom</a>}
       {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Class notes</a>}
       {phase === 'upcoming' && kindTag(l) === 'Make-up' && (() => {
         const ev = { title: `Edge English make-up · ${l.student}`, start: l.startsAt, end: l.endsAt, details: meetUrl };
@@ -325,8 +346,8 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   return (
     <div className={`border-b border-[#e6e3ef] last:border-b-0 ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
       <button type="button" disabled={!canOpen} aria-expanded={open} onClick={() => setOpen(!open)}
-        className={`w-full px-3 py-2 text-left lg:px-1 disabled:cursor-default ${open ? 'bg-[#f3f1f8]' : 'enabled:hover:bg-[#f7f6fb]'}`}>
-        <div className="grid grid-cols-[60px_minmax(0,1fr)_auto] items-start gap-2 lg:hidden">
+        className={`w-full cursor-pointer px-3 py-2 text-left lg:px-1 disabled:cursor-default ${open ? 'bg-[#f3f1f8]' : 'enabled:hover:bg-[#f7f6fb]'}`}>
+        <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
             {time}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]">{k}</span>}
           </span>
@@ -340,7 +361,6 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
           <span className={`text-right text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip && <span className="block">{remarksChip}</span>}</span>
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-          <span>{phase === 'to_record' && <span className="rounded-[8px] bg-[#5b3fe0] px-2.5 py-1 text-[13px] font-semibold text-white">Record</span>}</span>
           <span className="font-semibold">{time}</span>
           {kst && <span className="text-[#6b6880]">{k?.replace(/^KST /, '')}</span>}
           <span className="font-semibold"><span className="truncate">{name}</span></span>
@@ -353,7 +373,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
         </div>
       </button>
       {open && (
-        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[180px]">
+        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
           {canRecord(l, now) ? (
             <div className="lg:max-w-[560px]">
@@ -382,6 +402,7 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
   const [result, setResult] = useState<TutorResult | null>(resultOf(l.classStatus));
   const [topics, setTopics] = useState(l.topics ?? '');
   const [remarks, setRemarks] = useState(l.remarks ?? '');
+  const [studentLate, setStudentLate] = useState(l.studentLate);
   // Remarks 칸은 이슈 있을 때만 꺼내 씀 (대표 10/29). Late는 이유가 필요해서 바로 보임
   const [remarksOpen, setRemarksOpen] = useState(!!l.remarks);
   const [busy, setBusy] = useState(false);
@@ -391,7 +412,7 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
   if (!editing) {
     return (
       <div className="mt-2 flex items-center justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2">
-        <span className="text-[14px] font-semibold text-[#1f7a4d]">✓ {statusText(l, now)}{l.topics ? ` · ${l.topics}` : ''}</span>
+        <span className="text-[14px] font-semibold text-[#1f7a4d]">✓ {statusText(l, now)}{l.studentLate ? ' · Student late' : ''}{l.topics ? ` · ${l.topics}` : ''}</span>
         {canRecord(l, now) && <button type="button" onClick={() => setEditing(true)} className={`${btnSub} min-h-[36px] text-[13.5px]`}>Edit</button>}
       </div>
     );
@@ -403,9 +424,10 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
     setErr('');
     try {
       const t = result === 'student_no_show' ? '' : topics.trim();
-      await actions.record(l.id, result, t, remarks);
+      const late = result === 'held' && studentLate;
+      await actions.record(l.id, result, t, remarks, late);
       setEditing(false);
-      await onSaved({ ...l, state: 'done', classStatus: savedStatus(l, result), topics: t || null, remarks: remarks.trim() || null });
+      await onSaved({ ...l, state: 'done', classStatus: savedStatus(l, result), topics: t || null, remarks: remarks.trim() || null, studentLate: late });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
     } finally {
@@ -424,6 +446,12 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
           </button>
         ))}
       </div>
+      {result === 'held' && (
+        <label className="flex min-h-[44px] items-center gap-2 text-[15px] font-semibold text-[#1d1b2b]">
+          <input type="checkbox" checked={studentLate} onChange={(e) => setStudentLate(e.target.checked)} className="h-[20px] w-[20px] accent-[#5b3fe0]" />
+          Student was late
+        </label>
+      )}
       {result !== 'student_no_show' && (
         <div>
           <label className={label} htmlFor={`topics-${l.id}`}>Covered topics</label>

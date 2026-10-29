@@ -4,7 +4,7 @@ import { answerReady, canRecord, daysOf, kstText, parseScreen, phaseOf, recordRe
 
 const base: TutorLesson = {
   id: 'a', startsAt: new Date('2026-11-02T08:00:00Z'), endsAt: new Date('2026-11-02T08:40:00Z'), kind: 'regular', state: 'scheduled', classStatus: null,
-  student: 'S', level: null, noteUrl: null, covering: false, makeupOf: null, count: null, topics: null, remarks: null, recordedAt: null, locked: false,
+  student: 'S', level: null, noteUrl: null, covering: false, makeupOf: null, count: null, topics: null, remarks: null, studentLate: false, recordedAt: null, locked: false,
 };
 
 describe('강사 화면 (migration 2000)', () => {

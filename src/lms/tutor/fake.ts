@@ -6,7 +6,7 @@ export function fakeTutorScreen(now: Date): TutorScreen {
   const lesson = (id: string, start: number, min: number, extra: Partial<TutorScreen['lessons'][number]> = {}) => ({
     id, startsAt: h(start), endsAt: new Date(+h(start) + min * 60000), kind: 'regular' as const, state: 'scheduled' as const, classStatus: null,
     student: 'Hajun Kim', level: null, noteUrl: 'https://docs.google.com/', covering: false, makeupOf: null, count: null,
-    topics: null, remarks: null, recordedAt: null, locked: false, ...extra,
+    topics: null, remarks: null, studentLate: false, recordedAt: null, locked: false, ...extra,
   });
   return {
     tutor: { id: 'demo', name: 'Emma', timezone: 'Australia/Sydney', meetUrl: 'https://meet.google.com/' },

@@ -10,9 +10,9 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
   const [data] = useState<{ s: TutorScreen }>(() => ({ s: fakeTutorScreen(new Date(nowIso)) }));
   const actions = useMemo<TutorActions>(() => ({
     load: async () => ({ ...data.s }),
-    record: async (id, r, topics, remarks) => {
+    record: async (id, r, topics, remarks, late) => {
       const s = data.s;
-      s.lessons = s.lessons.map((l) => (l.id === id ? { ...l, state: 'done', classStatus: savedStatus(l, r), topics: topics || null, remarks: remarks || null } : l));
+      s.lessons = s.lessons.map((l) => (l.id === id ? { ...l, state: 'done', classStatus: savedStatus(l, r), topics: topics || null, remarks: remarks || null, studentLate: r === 'held' && late } : l));
       s.toRecord = s.toRecord.filter((x) => x !== id);
     },
     answer: async (id, yes, note) => {

@@ -17,8 +17,8 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null, kstFrom: string, kstTo: string): Promise<TutorScreen> {
   return parseScreen(check(await sb.rpc('tutor_screen', { p_tutor: tutorId, p_from: kstFrom, p_to: kstTo })));
 }
-export async function recordClass(sb: SupabaseClient, lessonId: string, result: TutorResult, topics: string, remarks: string): Promise<void> {
-  check(await sb.rpc('tutor_record_class', { p_lesson: lessonId, p_result: result, p_topics: topics, p_remarks: remarks }));
+export async function recordClass(sb: SupabaseClient, lessonId: string, result: TutorResult, topics: string, remarks: string, studentLate: boolean): Promise<void> {
+  check(await sb.rpc('tutor_record_class', { p_lesson: lessonId, p_result: result, p_topics: topics, p_remarks: remarks, p_student_late: studentLate }));
 }
 export async function answerMakeup(sb: SupabaseClient, requestId: string, yes: string[], note: string): Promise<void> {
   check(await sb.rpc('tutor_makeup_answer', { p_request: requestId, p_yes: yes, p_note: note }));
