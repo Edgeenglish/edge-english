@@ -78,8 +78,8 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [leaves, setLeaves] = useState<LvTimeOff[]>([]);
   const [offId, setOffId] = useState<string | null>(initialOff ?? null);
-  // 대시보드 '+ 강사 휴무 입력' → 입력 칸부터 (등록된 휴무는 입력을 닫거나 저장한 뒤에, 대표 10/29)
-  const [creating, setCreating] = useState(!!startNew && !initialOff);
+  // 맨 위 버튼 둘: 등록된 휴무 / 새 휴무 입력 (대표 10/29). ?new=1 이면 입력부터
+  const [tab, setTab] = useState<'list' | 'new'>(startNew && !initialOff ? 'new' : 'list');
   const [data, setData] = useState<{ items: LvItem[]; notices: LvNotice[]; renewals: LvRenewal[] } | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [err, setErr] = useState('');
@@ -125,8 +125,20 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
       <main className="mx-auto grid max-w-[720px] gap-3 px-4 py-4 lg:max-w-[1120px]">
         <h1 className="text-[20px] font-extrabold text-[#1d1b2b]">강사 휴무</h1>
 
-        {!creating && leaves.length > 0 && <h2 className="text-[14px] font-bold text-[#55526a]">등록된 휴무</h2>}
-        {!creating && <div className="flex flex-wrap items-center gap-1.5">
+        <div role="tablist" className="grid grid-cols-2 gap-1.5">
+          {(['list', 'new'] as const).map((t) => (
+            <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
+              className={`min-h-[44px] rounded-[10px] border text-[15px] font-bold ${tab === t ? 'border-[#7d5ffb] bg-[#7d5ffb] text-white' : 'border-[#7d5ffb] bg-white text-[#5b3fe0]'}`}>
+              {t === 'list' ? `등록된 휴무${leaves.length ? ` ${leaves.length}` : ''}` : '+ 새 휴무 입력'}
+            </button>
+          ))}
+        </div>
+        {tab === 'new' && (
+          <NewLeave tutors={tutors} actions={actions} today={instantToKstDate(now)} onClose={() => setTab('list')}
+            saved={async (id) => { await reloadLeaves(); setOffId(id); setTab('list'); }} />
+        )}
+        {tab === 'list' && leaves.length === 0 && <p className="text-[14px] text-[#6b6880]">등록된 휴무가 없어요.</p>}
+        {tab === 'list' && <div className="flex flex-wrap items-center gap-1.5">
           {leaves.map((l) => (
             <button key={l.id} type="button" aria-pressed={l.id === offId} onClick={() => setOffId(l.id === offId ? null : l.id)}
               className={`min-h-[40px] rounded-full border px-3.5 text-[14px] ${l.id === offId ? 'border-[#7d5ffb] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
@@ -134,11 +146,9 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
             </button>
           ))}
         </div>}
-        <NewLeave tutors={tutors} actions={actions} today={instantToKstDate(now)} open={creating} setOpen={setCreating}
-          saved={async (id) => { await reloadLeaves(); setOffId(id); }} />
         <Err>{err}</Err>
 
-        {offId && data && (
+        {tab === 'list' && offId && data && (
           <>
             <p className="rounded-[12px] bg-[#f6f5fb] px-3 py-2.5 text-[14px] text-[#1d1b2b]">
               {data.items.length === 0
@@ -213,8 +223,8 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
   );
 }
 
-function NewLeave({ tutors, actions, today, saved, open, setOpen }: {
-  tutors: LvTutor[]; actions: LeaveActions; today: KstDate; saved: (id: string) => Promise<void>; open: boolean; setOpen: (open: boolean) => void;
+function NewLeave({ tutors, actions, today, saved, onClose }: {
+  tutors: LvTutor[]; actions: LeaveActions; today: KstDate; saved: (id: string) => Promise<void>; onClose: () => void;
 }) {
   const [tutorId, setTutorId] = useState('');
   const [from, setFrom] = useState('');
@@ -240,15 +250,8 @@ function NewLeave({ tutors, actions, today, saved, open, setOpen }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tutorId, from, to]);
 
-  if (!open) {
-    return (
-      <button type="button" className={btnMain} onClick={() => setOpen(true)}>
-        + 강사 휴무 입력
-      </button>
-    );
-  }
   return (
-    <Card title="강사 휴무 입력">
+    <Card title="새 휴무 입력">
       <div className="grid gap-2.5">
         <label className="grid gap-1 text-[13px] text-[#6b6880]">
           강사
@@ -280,13 +283,12 @@ function NewLeave({ tutors, actions, today, saved, open, setOpen }: {
         )}
         <Err>{err}</Err>
         <div className="grid grid-cols-2 gap-1.5">
-          <button type="button" className={btnSub} onClick={() => setOpen(false)}>닫기</button>
+          <button type="button" className={btnSub} onClick={onClose}>닫기</button>
           <button type="button" className={btnMain} disabled={!preview || busy} onClick={async () => {
             setBusy(true);
             setErr('');
             try {
               const r = await actions.create(tutorId, from, to, reason, false);
-              setOpen(false);
               await saved(r.time_off_id!);
             } catch (e) {
               setErr(e instanceof Error ? e.message : '저장하지 못했어요.');
