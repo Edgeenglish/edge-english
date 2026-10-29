@@ -390,8 +390,6 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
           </Block>,
         );
       }
-      const decided = g.items.filter((i) => (i.choice === 'substitute' && i.subStage !== 'asked') || i.choice === 'wait');
-      if (decided.length) out.push(<Fold key="decided" title={`✓ 정한 수업 ${decided.length}회`}><ItemList items={decided} /></Fold>);
       return out;
     }
     if (n === 1) {
@@ -399,7 +397,6 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
       out.push(
         <Block key="prop" title={LV_STEP_TEXT.propose}>
           <ProposalRow key={p.noticeIds.join()} p={p} to={g.studentName} onSend={async () => { await actions.markSent(p.noticeIds); setView(1); await done(); }} />
-          <ItemList items={g.items.filter((i) => p.itemIds.includes(i.id))} />
         </Block>,
       );
       return out;
@@ -414,8 +411,6 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
         const its = dropped.filter((i) => i.subTutorId === tid);
         if (its.length) out.push(<CopyBox key={`cancel-${tid}`} title={`${name} 강사님에게 취소 알리기`} text={subCancelText(its)} />);
       }
-      const answered = g.items.filter((i) => p?.itemIds.includes(i.id) && !w.answer.includes(i));
-      if (answered.length && out.length) out.push(<Fold key="answered" title={`✓ 학생 답 받은 수업 ${answered.length}회`}><ItemList items={answered} /></Fold>);
       return out;
     }
     if (n === 3) {
@@ -424,7 +419,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
         if (ids.size === 0) continue;
         const mine = msgs.filter((m) => m.event === 'sub_confirmed' && m.itemIds.some((id) => ids.has(id)));
         const pending = mine.some((m) => m.status === 'pending');
-        const body = <>{mine.map((m) => msg(m, 3))}<ItemList items={confirmedSubs.filter((i) => ids.has(i.id))} /></>;
+        const body = <>{mine.map((m) => msg(m, 3))}</>;
         out.push(pending
           ? <Block key={`c-${tid}`} title={`${name} 강사님 수업 ${ids.size}회 확정 안내 보내기`}>{body}</Block>
           : <Fold key={`c-${tid}`} title={`✓ ${name} 강사님 수업 ${ids.size}회 확정`}>{body}</Fold>);
@@ -432,14 +427,11 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
       if (w.confirm.makeup.length) out.push(<Block key="makeup" title={`${leaveTutor} 강사님 복귀 뒤 보강 날짜 잡기`}><MakeupPick g={g} items={w.confirm.makeup} actions={actions} done={next} /></Block>);
       if (w.confirm.makeupRequested.length) out.push(
         <Block key="mk" title={`${leaveTutor} 강사님 확인 후 보강 확정`}>
-          <ItemList items={w.confirm.makeupRequested} />
           <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5ffb] text-[14px] font-semibold text-[#5b3fe0]">
             보강 확정
           </Link>
         </Block>,
       );
-      const booked = g.items.filter((i) => i.choice === 'wait' && i.makeupAt);
-      if (booked.length) out.push(<Fold key="mk-done" title={`✓ ${leaveTutor} 강사님 보강 ${booked.length}회 확정`}><ItemList items={booked} /></Fold>);
       return out;
     }
     return out;
@@ -448,7 +440,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
 
   // 모두 끝난 학생은 4단계(확정) 화면을 보여 줌
   const home = cur === 4 && pageNodes(3).length > 0 ? 3 : cur;
-  // 보여 줄 것이 있는 단계는 언제든 열림 (1단계 = 정한 수업, 2단계 = 보낸 학생 글)
+  // 보여 줄 것이 있는 단계는 언제든 열림. 수업 목록·상태는 카드 맨 위 한 곳에만 (대표 10/29: 같은 말이 단계마다 반복)
   const canOpen = (n: number) => n === home || pageNodes(n).length > 0;
   const sel = view !== null && canOpen(view) ? view : home;
   const nextStep = !hasWork(sel) ? [0, 1, 2, 3].find((n) => n > sel && hasWork(n)) : undefined;
