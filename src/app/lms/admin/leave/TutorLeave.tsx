@@ -8,7 +8,7 @@
 // 기존 강사 보강: 보강 가능한 날짜(지금 수강기간 안 → 종료일 뒤 평소 요일·시간)를 학생에게 보내고 2개까지 골라 신청 → 확정은 수업 변경·보강 화면 (A20)
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { dateLabel, enAt, kstLabel, MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
 import {
@@ -301,6 +301,15 @@ const Fold = ({ title, children }: { title: string; children: React.ReactNode })
   </details>
 );
 
+// 휴무에 걸린 수업 순서: '첫 번째 수업 · 11/2(월) 12:00' (대표 10/29). 학생 카드 안에서 같은 번호
+const ORDER = createContext<Map<string, number>>(new Map());
+const ORD = ['첫', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
+const ordText = (n: number) => (n < ORD.length ? `${ORD[n]} 번째 수업` : `${n + 1}번째 수업`);
+function useLessonName(): (i: LvItem) => string {
+  const order = useContext(ORDER);
+  return (i) => { const n = order.get(i.id); return n === undefined ? kstLabel(i.startsAt) : `${ordText(n)} · ${kstLabel(i.startsAt)}`; };
+}
+
 // 학생 한 명: 단계 흐름(1 대체 강사에게 묻기 › 2 학생에게 휴무 안내 · 대체 강사 제안 › 3 학생 답 입력 › 4 확정 안내 보내기, 2026-10-28 대표 새 순서).
 // 고른 단계(처음엔 지금 단계)의 화면만 보임: 그 단계에서 할 일 + 그 단계에서 보낸 글(회색 '보냄 ✓') + 오른쪽 위 [← 뒤로].
 // 할 일도 보여 줄 것도 없는 단계는 못 누름. 처리해도 보던 단계에 머물고, 아래 [다음 단계 ›]로 넘어감
@@ -425,8 +434,16 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
   const nextStep = !hasWork(sel) ? [0, 1, 2, 3].find((n) => n > sel && hasWork(n)) : undefined;
   const back = backOf(sel);
 
+  const order = new Map(g.items.map((i, n) => [i.id, n]));
+
   return (
+    <ORDER.Provider value={order}>
     <Card title={<>{g.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{g.studentCode}</span></>}>
+      {/* 휴무에 걸린 수업 전체: 이름을 누르면 바로 보임 (대표 10/29) */}
+      <section aria-label="휴무에 걸린 수업" className="grid gap-1.5">
+        <h3 className="text-[14px] font-bold text-[#1d1b2b]">휴무에 걸린 수업 {g.items.length}회</h3>
+        <ItemList items={g.items} />
+      </section>
       {/* 단계 줄과 단계 화면을 한 상자로: 단계 이름은 누르든 안 누르든 같음(2026-10-28 대표), 오른쪽 [← 뒤로] */}
       <section aria-label={sel < 4 ? chips[sel] : '완료'} className="grid gap-2 rounded-[14px] border-2 border-[#7d5ffb] p-3">
         <div className="-mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-1 rounded-t-[12px] bg-[#efebff] px-2 py-2">
@@ -462,6 +479,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
         <Err>{r.err}</Err>
       </section>
     </Card>
+    </ORDER.Provider>
   );
 }
 
@@ -478,6 +496,7 @@ function subCancelText(items: LvItem[]): string {
 
 // 3단계: 날짜마다 학생 답 — [좋아요](대체강사 확정) / [기존 강사와 보강]. 날짜가 여러 개면 한 번에 누르는 버튼도
 function StudentAnswer({ items, actions, done, onWait }: { items: LvItem[]; actions: LeaveActions; done: () => Promise<void>; onWait: (items: LvItem[]) => void }) {
+  const name = useLessonName();
   const r = useRun(done);
   const ok = (its: LvItem[]) => r.run(() => actions.studentOk(its.map((i) => i.id)));
   const wait = (its: LvItem[]) => r.run(() => actions.choose(its.map((i) => i.id), 'wait', null), () => onWait(its));
@@ -486,7 +505,7 @@ function StudentAnswer({ items, actions, done, onWait }: { items: LvItem[]; acti
       <ul className="grid gap-1.5">
         {items.map((i) => (
           <li key={i.id} className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
-            <span className="text-[14.5px] text-[#1d1b2b]">{kstLabel(i.startsAt)} · {i.subTutorName}</span>
+            <span className="text-[14.5px] text-[#1d1b2b]">{name(i)} · {i.subTutorName}</span>
             <span className="ml-auto flex gap-1.5">
               <button type="button" disabled={r.busy} className={btnMain} onClick={() => ok([i])}>좋아요</button>
               <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait([i])}>기존 강사와 보강</button>
@@ -574,13 +593,14 @@ function CopyBox({ title, text }: { title: string; text: string }) {
 }
 
 function ItemList({ items, action }: { items: LvItem[]; action?: (i: LvItem) => React.ReactNode }) {
+  const name = useLessonName();
   return (
     <ul className="grid gap-1.5">
       {items.map((i) => {
         const s = itemStatus(i);
         return (
           <li key={i.id} className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
-            <span className="text-[14.5px] text-[#1d1b2b]">{kstLabel(i.startsAt)}</span>
+            <span className="text-[14.5px] text-[#1d1b2b]">{name(i)}</span>
             <span className={`ml-auto rounded-[6px] px-2 py-0.5 text-[12px] font-bold ${TONE[s.tone]}`}>{s.text}</span>
             {action?.(i)}
           </li>
@@ -666,6 +686,7 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
   const r = useRun(done);
   const yes = t.items.filter((i) => ok.has(i.id)).map((i) => i.id);
   const no = t.items.filter((i) => !ok.has(i.id)).map((i) => i.id);
+  const name = useLessonName();
 
   return (
     <div className="grid gap-2">
@@ -676,7 +697,7 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
             <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
               <input type="checkbox" className="h-5 w-5" checked={ok.has(i.id)}
                 onChange={(e) => { const n = new Set(ok); if (e.target.checked) n.add(i.id); else n.delete(i.id); setOk(n); setOptions(null); }} />
-              {kstLabel(i.startsAt)}
+              {name(i)}
             </label>
           </li>
         ))}
@@ -719,6 +740,7 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
   const [manual, setManual] = useState(false);
   const r = useRun(done);
   const item = items.find((i) => i.id === itemId) ?? items[0];
+  const lessonName = useLessonName();
   const { setErr } = r;
 
   useEffect(() => {
@@ -763,7 +785,7 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
     <div className="grid gap-2">
       {items.length > 1 ? (
         <select aria-label="보강할 수업" value={itemId} onChange={(e) => setItemId(e.target.value)} className={inputCls(false)}>
-          {items.map((i) => <option key={i.id} value={i.id}>{kstLabel(i.startsAt)} 수업분</option>)}
+          {items.map((i) => <option key={i.id} value={i.id}>{lessonName(i)}</option>)}
         </select>
       ) : (
         <ItemList items={items} />
