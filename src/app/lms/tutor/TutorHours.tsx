@@ -20,6 +20,13 @@ const WEEKS = 4;
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-4 text-[15px] font-semibold text-[#1d1b2b] disabled:opacity-40';
 const cellBase = 'h-[26px] w-full overflow-hidden whitespace-nowrap rounded-[5px] p-0 text-[10.5px] font-semibold lg:h-[24px] lg:text-[11.5px]';
+const span = (start: string, min: number) => `${timeText(toMin(start))}–${timeText(toMin(start) + min)}`;
+/** 수업 시작 칸 글 (대표 10/29): 휴대폰 = 학생 이름(칸이 좁아 이름 앞부분), PC = 이름 + 길이. 정확한 시각은 누르면 창에 */
+const lessonLabel = (student: string, min: number) => (
+  <><span className="[color:inherit] lg:hidden">{student.split(' ')[0]}</span><span className="hidden [color:inherit] lg:inline">{student} · {min}m</span></>
+);
+/** 같은 수업의 다음 칸은 위 칸과 붙여 한 덩어리로 */
+const cont = '-mt-[2px] h-[28px] rounded-t-none lg:h-[26px]';
 const hatch = { background: 'repeating-linear-gradient(-45deg,#fdecea,#fdecea 4px,#fff 4px,#fff 7px)', boxShadow: 'inset 0 0 0 1px #b3261e' };
 
 type Dialog =
@@ -107,11 +114,11 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
     const cl = weeklyClassAt(d.weeklyClasses, dow, t);
     if (cl) {
       return (
-        <button type="button" className={`${cellBase} bg-[#5b3fe0] text-white`} aria-label={`Every ${FULL[dow]} ${timeText(toMin(t))} class with ${cl.c.student}`}
+        <button type="button" className={`${cellBase} truncate px-0.5 bg-[#5b3fe0] text-white ${cl.first ? '' : cont}`} aria-label={`Every ${FULL[dow]} ${timeText(toMin(t))} class with ${cl.c.student}`}
           onClick={() => setDialog({ kind: 'info', title: `Weekly class · ${cl.c.student}`, body: [
-            `Every ${FULL[dow]} ${timeText(toMin(cl.c.time))} (${cl.c.min} min). You can’t close this time while the class is here.`,
+            `Every ${FULL[dow]} ${span(cl.c.time, cl.c.min)} (${cl.c.min} min). You can’t close this time while the class is here.`,
             'To stop teaching this slot, please tell the Edge English team. We’ll move the class with the student first.'] })}>
-          {cl.first ? 'Class' : ''}
+          {cl.first ? lessonLabel(cl.c.student, cl.c.min) : ''}
         </button>
       );
     }
@@ -134,11 +141,11 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
       const name = ls?.l.student ?? '';
       return (
         <button type="button" aria-label={`${when} ${ls?.l.makeup ? 'make-up' : 'class'} with ${name}`}
-          className={`${cellBase} ${ls?.l.makeup ? 'bg-[#d9d1ff] text-[#3a2a99]' : 'bg-[#5b3fe0] text-white'}`}
-          onClick={() => setDialog({ kind: 'info', title: `${name} · ${ls ? `${dateText(date)} ${timeText(toMin(ls.l.start.slice(11, 16)))}` : when}`, body: [
+          className={`${cellBase} truncate px-0.5 ${ls?.l.makeup ? 'bg-[#d9d1ff] text-[#3a2a99]' : 'bg-[#5b3fe0] text-white'} ${ls && !ls.first ? cont : ''}`}
+          onClick={() => setDialog({ kind: 'info', title: `${name} · ${ls ? `${dateText(date)} ${span(ls.l.start.slice(11, 16), ls.l.min)}` : when}`, body: [
             `${ls?.l.makeup ? 'Make-up' : 'Class'}${ls ? ` (${ls.l.min} min)` : ''}. This time has a class, so it can’t be closed here.`,
             'Can’t teach this class? Please tell the Edge English team.'] })}>
-          {ls?.first ? (ls.l.makeup ? 'Make-up' : 'Class') : ''}
+          {ls?.first ? lessonLabel(ls.l.student, ls.l.min) : ''}
         </button>
       );
     }
