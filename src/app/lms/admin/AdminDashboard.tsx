@@ -276,32 +276,35 @@ export default function AdminDashboard({
                 로그아웃
               </button>
             )}
-            {!preview && (
-              <Link href="/lms/admin/change" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                수업 변경
+            {/* 입력 3개는 나란히, 화면 보기 2개는 따로 (대표 10/29) */}
+            <div className="flex flex-wrap items-center gap-2">
+              {!preview && (
+                <Link href="/lms/admin/change" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+                  + 수업 변경 입력
+                </Link>
+              )}
+              {!preview && (
+                <Link href="/lms/admin/leave" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+                  + 강사 휴무 입력
+                </Link>
+              )}
+              <Link
+                href={preview ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'}
+                className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5ffb] px-3 text-[13px] font-semibold text-white"
+              >
+                + 신규 학생 등록
               </Link>
-            )}
+            </div>
             {!preview && (
-              <Link href="/lms/admin/leave" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                강사 휴무
-              </Link>
+              <div className="flex flex-wrap items-center gap-2 lg:border-l lg:border-[#e6e3ef] lg:pl-3">
+                <Link href="/lms/student" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+                  학생 화면
+                </Link>
+                <Link href="/lms/tutor" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+                  강사 화면
+                </Link>
+              </div>
             )}
-            {!preview && (
-              <Link href="/lms/student" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                학생 화면
-              </Link>
-            )}
-            {!preview && (
-              <Link href="/lms/tutor" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                강사 화면
-              </Link>
-            )}
-            <Link
-              href={preview ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'}
-              className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5ffb] px-3 text-[13px] font-semibold text-white"
-            >
-              + 학생 등록
-            </Link>
           </>
         }
       />
