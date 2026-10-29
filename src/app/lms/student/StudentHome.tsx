@@ -612,6 +612,9 @@ function LeaveSheet(props: {
             ? `휴무 기간 수업 ${subs.length}회는 대체강사님과 진행해요.`
             : `휴무 기간 수업 ${waits.length}회는 기존 강사님과 보강해요.`}
       </p>
+      {subs.some((x) => x.stage === 'confirmed') && (
+        <p className="rounded-[14px] bg-[#ffd66b] px-4 py-3 text-[15px] font-bold leading-snug text-[#1b1442]">⚠️ 대체강사 수업은 수업 링크가 달라요. 아래 링크로 들어와 주세요.</p>
+      )}
       {subs.length > 0 && (
         <section className={`${card} grid gap-1 p-4`}>
           <h3 className="text-[15px] font-bold">대체강사와 수업하기</h3>
