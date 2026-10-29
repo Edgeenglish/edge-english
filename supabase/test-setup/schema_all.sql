@@ -6317,7 +6317,8 @@ begin
     'lessons', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
-        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id)) order by l.starts_at)
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id),
+        'substitute', l.original_tutor_id is not null) order by l.starts_at)
       from lessons l join tutors t on t.id = l.tutor_id
       where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
     -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강)
@@ -6344,7 +6345,7 @@ begin
     -- 휴무 안내: 대체강사가 가능하다고 한 수업(답 기다림)·확정된 대체 수업·보강으로 정한 수업만. 지난 수업은 빼고
     'leave', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name,
+        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name, 'sub_meet_url', sub.meet_url,
         'lesson_id', li.lesson_id, 'item_id', li.migrated_item_id,
         'off_from', o.starts_at, 'off_to', o.ends_at) order by li.starts_at)
       from leave_items li

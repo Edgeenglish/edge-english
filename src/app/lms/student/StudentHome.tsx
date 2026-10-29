@@ -164,7 +164,7 @@ export default function StudentHome(props: {
   }
 
   const nextFull = next && s.lessons.find((l) => l.id === next.id);
-  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.meetUrl ?? null} />;
+  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.meetUrl ?? null} substitute={nextFull?.substitute ?? false} />;
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -365,6 +365,9 @@ export default function StudentHome(props: {
                   <p className="text-[12.5px] text-[#6b6880]">
                     {l.minutes}분 · {l.tutorName} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
                   </p>
+                  {s.lessons.find((x) => x.id === l.id)?.substitute && (
+                    <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 대체강사 수업 · 수업 링크가 달라요</p>
+                  )}
                   {meetOf(l.id) && (
                     <a href={meetOf(l.id)!} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold text-[#4b2fd6] underline">
                       수업 링크 (Google Meet)
@@ -619,7 +622,14 @@ function LeaveSheet(props: {
                 <span className="block text-[13px] text-[#55526a]">{x.subTutor} 강사님</span>
               </span>
               {x.stage === 'confirmed' ? (
-                <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">확정 ✓</span>
+                <span className="grid justify-items-end gap-1">
+                  <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">확정 ✓</span>
+                  {x.subMeetUrl && (
+                    <a href={x.subMeetUrl} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-[#4b2fd6] underline">
+                      {x.subTutor} 강사님 수업 링크
+                    </a>
+                  )}
+                </span>
               ) : (
                 <button type="button" onClick={() => props.onProfile(x.subTutor ?? '')} className="min-h-[40px] rounded-[10px] border border-[#d9d5e8] px-3 text-[13px] font-semibold">
                   프로필 보기
@@ -846,7 +856,7 @@ function monthCells(month: string): (string | null)[] {
   return [...Array<null>(first.getUTCDay()).fill(null), ...Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
 }
 
-function NextLesson({ lesson, now, textbook, meetUrl }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null }) {
+function NextLesson({ lesson, now, textbook, meetUrl, substitute }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null; substitute: boolean }) {
   const k = kst(lesson.startsAt);
   const days = diffDays(formatInZone(now, 'Asia/Seoul').date, k.date);
   const started = now.getTime() >= lesson.startsAt.getTime();
@@ -858,6 +868,12 @@ function NextLesson({ lesson, now, textbook, meetUrl }: { lesson: StudentLesson;
         <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
         <span className="rounded-full bg-[#ffd66b] px-2.5 py-1 text-[12px] font-semibold text-[#1b1442]">{badge}</span>
       </div>
+      {/* 대체강사 수업은 수업 링크가 다름 — 늘 쓰던 링크로 들어가는 일이 잦음 (대표 10/29) */}
+      {substitute && (
+        <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">
+          ⚠️ 대체강사 {lesson.tutorName} 강사님 수업이에요. 수업 링크가 달라요!
+        </p>
+      )}
       <div>
         <p className="text-[26px] font-bold tracking-tight text-white lg:text-[30px]">
           {Number(k.md.split('/')[0])}월 {Number(k.md.split('/')[1])}일 ({k.wd}) {k.time}
