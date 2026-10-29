@@ -88,7 +88,7 @@ export function BottomNav({ active, demo }: { active: AdminTab; demo: boolean })
 /** 운영자 화면 위쪽 막대 */
 export function AdminHeader({ active, demo, right }: { active: AdminTab; demo: boolean; right?: React.ReactNode }) {
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-3 border-b-[3px] border-[#ffd401] bg-white px-4 py-3 lg:px-7">
+    <header className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b-[3px] border-[#ffd401] bg-white px-4 py-3 lg:flex-nowrap lg:px-7">
       {/* 로고 = 대시보드 새로고침. Link 는 같은 주소면 다시 불러오지 않아서 일반 a 로 페이지 전체를 다시 연다 */}
       <a href={withDemo('/lms/admin', demo)} title="대시보드 새로고침" className="flex shrink-0 items-center gap-1.5">
         <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
@@ -96,7 +96,8 @@ export function AdminHeader({ active, demo, right }: { active: AdminTab; demo: b
       </a>
       <TopNav active={active} demo={demo} />
       <span className="flex-1" />
-      {right}
+      {/* 휴대폰: 버튼이 많으면 다음 줄로 (글자가 세로로 깨지지 않게) */}
+      {right && <div className="flex w-full flex-wrap items-center justify-end gap-2 whitespace-nowrap lg:w-auto lg:flex-nowrap">{right}</div>}
     </header>
   );
 }

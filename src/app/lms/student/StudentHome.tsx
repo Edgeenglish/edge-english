@@ -379,7 +379,7 @@ export default function StudentHome(props: {
                     {l.minutes}분 · {l.tutorName} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
                   </p>
                   {s.lessons.find((x) => x.id === l.id)?.substitute && (
-                    <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 대체강사 수업 · 수업 링크가 달라요</p>
+                    <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 대체강사 수업</p>
                   )}
                   {meetOf(l.id) && (
                     <a href={meetOf(l.id)!} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold text-[#4b2fd6] underline">
@@ -628,7 +628,7 @@ function LeaveSheet(props: {
             : `휴무 기간 수업 ${waits.length}회는 기존 강사님과 보강해요.`}
       </p>
       {subs.some((x) => x.stage === 'confirmed') && (
-        <p className="rounded-[14px] bg-[#ffd66b] px-4 py-3 text-[15px] font-bold leading-snug text-[#1b1442]">⚠️ 대체강사 수업은 수업 링크가 달라요. 아래 링크로 들어와 주세요.</p>
+        <p className="rounded-[14px] bg-[#ffd66b] px-4 py-3 text-[15px] font-bold leading-snug text-[#1b1442]">⚠️ 대체강사 수업은 아래 링크에서 진행됩니다.</p>
       )}
       {subs.length > 0 && (
         <section className={`${card} grid gap-1 p-4`}>
@@ -892,7 +892,7 @@ function NextLesson({ lesson, now, textbook, meetUrl, substitute }: { lesson: St
       {/* 대체강사 수업은 수업 링크가 다름 — 늘 쓰던 링크로 들어가는 일이 잦음 (대표 10/29) */}
       {substitute && (
         <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">
-          ⚠️ 대체강사 {lesson.tutorName} 강사님 수업이에요. 수업 링크가 달라요! 아래 &lsquo;수업 입장&rsquo; 링크에서 진행됩니다.
+          ⚠️ 대체강사 {lesson.tutorName} 강사님 수업이에요. 아래 &lsquo;수업 입장&rsquo; 링크에서 진행됩니다.
         </p>
       )}
       <div>
