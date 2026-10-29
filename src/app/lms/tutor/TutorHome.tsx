@@ -222,8 +222,8 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
         {days.length > 0 && (
           <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
-            <div className={`hidden ${cols(kst)} border-b border-[#e6e3ef] px-1 whitespace-nowrap text-[12.5px] font-semibold text-[#6b6880] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-              <span>Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span><span>Covered Topics</span><span />
+            <div className={`hidden ${cols(kst)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 whitespace-nowrap text-[13px] font-bold text-[#2b1c7a] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
+              <span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span><span>Covered Topics</span><span />
             </div>
             {days.map((d) => (
               <div key={d.date}>
