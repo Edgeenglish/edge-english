@@ -6,7 +6,8 @@
 
 ## 🆕 2026-10-29 강사 본인 가능 시간 고치기 — 시안 (브랜치 claude/upbeat-allen-sfqlap)
 - 시안 https://claude.ai/artifact/2u7QFFrTmNYev4MuEcb4bv (원본 `docs/lms/previews/tutor-hours-drafts.html`): 강사 화면 [My hours] → 탭 2개 **Every week**(`tutor_availability`, 30분 칸 = 그 시각 수업 시작 가능) · **One week only**(`tutor_time_off` kind 'block', 요일 머리 누르면 하루 통째). 수업·보강 칸은 잠김 → 그 주만 탭에서 '취소 신청'(다음 작업)으로 연결. 저장 전 바뀐 내용 확인 창
-- **대표 답 대기**: Q1 고정 수업 있는 칸 매주 닫기 금지(권장) / 경고 후 허용 · Q2 저장 즉시 반영 + 운영진 화면 기록(권장) / 운영진 확인 뒤 · Q3 숫자(대표 결정): 그 주만 닫기 마감(시작 몇 시간 전) · 몇 주 앞까지 · 매주 변경 적용 시작(바로/다음 주 월요일) · Q4 화면·영어 문구
+- **✅ 대표 확정 (10/29, 정책 원본 H26(37) 적음)**: ① 고정 수업 있는 칸 매주 닫기 불가(운영진에게 요청) ② 저장 즉시 반영 + 운영진 화면에 바뀐 기록 ③ 그 주만 닫기 = 빈 시간만, 수업 시작 **6시간 전**까지, 앞으로 **4주**까지(신청 중인 보강 날짜·확정 수업·보강 칸 잠김) ④ 매주 변경 = **다음 주 월요일부터**, 확정된 수업·보강은 그대로 ⑤ 30분 칸, 수업 길이·휴식 10분은 기존 충돌 검사 ⑥ 문구: My hours·Every week·One week only 그대로, 'Closed this week' → 'Unavailable this week' (시안 반영함)
+- **다음 세션 = 개발**: DB 함수(강사 본인·운영자 ?tutor= 같은 함수, 잠금 재검사) + 강사 화면 [My hours] + 운영진 화면 '바뀐 기록' + `register.md`에 정책 추가 → 시험용 → 대표 시험 → 운영
 - 만들 때: 매주 변경은 기존 줄 `effective_to` 끝내고 새 줄 · block 칸은 이어진 칸 한 줄로 · DB 함수에서 수업·보강·보강 yes 답 칸 닫기 재검사
 
 ## 🆕 2026-10-29 학생 수업 알림 메일 (POL-OP-18 변경) — 개발 완료, 시험용 적용 대기 (브랜치 claude/compassionate-hypatia-wqlnnh)

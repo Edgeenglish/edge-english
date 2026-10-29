@@ -81,6 +81,7 @@ main>*{min-width:0}code{overflow-wrap:anywhere}
 </style>
 <main>
 <h1>강사 가능 시간 고치기 · 시안</h1>
+<p class="q"><b>✅ 대표 확정 (10/29, 정책 원본 H26(37))</b> Q1 ① 못 닫음 · Q2 ① 바로 반영 + 기록 · 그 주만 닫기 = 시작 6시간 전까지 · 앞으로 4주까지 · 매주 변경 = 다음 주 월요일부터(확정된 수업·보강은 그대로) · 30분 칸 · 'Closed this week' → 'Unavailable this week'</p>
 
 <section class="q">
 <p>강사 화면 맨 위 <b>[My hours]</b> 버튼 → 아래 창이 열려요. 탭 두 개: <b>Every week</b>(매주 고정, 지금 <code>tutor_availability</code>) · <b>One week only</b>(그 주만 닫기, 지금 <code>tutor_time_off</code> 'block'). 둘 다 이미 보강 가능한 날짜·대체강사 판정에 쓰이고 있어서 저장 즉시 학생 보강 달력에서 빠져요. 칸을 눌러 보세요(견본은 실제로 바뀝니다).</p>
@@ -104,7 +105,7 @@ main>*{min-width:0}code{overflow-wrap:anywhere}
   <ul>
    <li><b>초록</b> Open = 이 시각에 수업 시작 가능 (보강 달력·대체강사 후보에 나옴)</li>
    <li><b>회색</b> Closed = 매주 닫음</li>
-   <li><b>빨간 줄무늬</b> Closed this week = 그 주만 닫음 (다시 누르면 열림)</li>
+   <li><b>빨간 줄무늬</b> Unavailable this week = 그 주만 닫음 (다시 누르면 열림)</li>
    <li><b>보라</b> Class = 고정 수업 · <b>연보라</b> Make-up = 그날 보강. 둘 다 잠김 → 누르면 안내</li>
   </ul>
   <p><b>그 주만 닫기에서 수업 칸을 누르면</b> '이 수업을 못 하면 취소 신청' 버튼 → 다음 작업인 '강사 취소·휴무 신청'(경고 팝업 + 운영진 확인)으로 이어져요. 지금은 버튼 자리만.</p>
@@ -165,7 +166,7 @@ function make(root,isPc){
   });
   Object.keys(once).forEach(w=>{const b=onceBase[w]||new Set();DAYS.forEach((dn,d)=>{
    const diff=T.filter(m=>once[w].has(d+':'+m)!==b.has(d+':'+m));
-   runs(diff).forEach(([a,z])=>out.push(`${dn} ${DATES[w][d]} Nov ${tt(a)}–${tt(z+30)} → ${once[w].has(d+':'+a)?'closed this week':'open again'}`));
+   runs(diff).forEach(([a,z])=>out.push(`${dn} ${DATES[w][d]} Nov ${tt(a)}–${tt(z+30)} → ${once[w].has(d+':'+a)?'unavailable this week':'open again'}`));
   })});
   return out;
  }
@@ -186,7 +187,7 @@ function make(root,isPc){
    if(!isOpen){b.classList.add('shut');b.setAttribute('aria-label',`${tt(m)} closed every week`);b.onclick=()=>openSheet('shut',d,m);return b}
    const k=d+':'+m;const on=O().has(k);b.classList.add(on?'once':'open');
    if(on!==(onceBase[wk]||new Set()).has(k))b.classList.add('chg');
-   b.setAttribute('aria-label',`${DAYS[d]} ${DATES[wk][d]} Nov ${tt(m)} ${on?'closed this week':'open'}`);
+   b.setAttribute('aria-label',`${DAYS[d]} ${DATES[wk][d]} Nov ${tt(m)} ${on?'unavailable this week':'open'}`);
    b.onclick=()=>{on?O().delete(k):O().add(k);draw()};
   }
   return b;
@@ -228,7 +229,7 @@ function make(root,isPc){
   <div class="tabs" role="tablist"><button role="tab" aria-selected="${tab==='week'}" data-t="week">Every week</button><button role="tab" aria-selected="${tab==='once'}" data-t="once">One week only</button></div>
   <p class="help">${tab==='week'?'Tap a time to open or close it every week. Green = students can book a class starting then.':'Close free times for this week only. Tap a day to close the whole day.'}</p>
   ${tab==='once'?`<div class="wk"><button type="button" data-w="-1" ${wk===0?'disabled':''} aria-label="Previous week">‹</button><b>${WEEKS[wk]}</b><button type="button" data-w="1" ${wk===WEEKS.length-1?'disabled':''} aria-label="Next week">›</button></div>`:''}
-  <div class="legend"><span><i style="background:var(--open)"></i>Open</span><span><i style="background:var(--shut)"></i>Closed</span>${tab==='once'?'<span><i class="c once" style="height:12px"></i>Closed this week</span>':''}<span><i style="background:var(--cls)"></i>Class</span>${tab==='once'?'<span><i style="background:var(--mk)"></i>Make-up</span>':''}</div>`;
+  <div class="legend"><span><i style="background:var(--open)"></i>Open</span><span><i style="background:var(--shut)"></i>Closed</span>${tab==='once'?'<span><i class="c once" style="height:12px"></i>Unavailable this week</span>':''}<span><i style="background:var(--cls)"></i>Class</span>${tab==='once'?'<span><i style="background:var(--mk)"></i>Make-up</span>':''}</div>`;
   main.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;draw()});
   main.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{wk+=Number(b.dataset.w);draw()});
   const gw=document.createElement('div');gw.className='gridwrap';
