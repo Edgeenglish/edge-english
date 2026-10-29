@@ -462,7 +462,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
       {/* 휴무에 걸린 수업 전체: 이름을 누르면 바로 보임 (대표 10/29) */}
       <section aria-label="휴무에 걸린 수업" className="grid gap-1.5">
         <h3 className="text-[14px] font-bold text-[#1d1b2b]">휴무에 걸린 수업 {g.items.length}회</h3>
-        <ItemList items={g.items} />
+        <ItemList items={g.items} badge />
       </section>
       {/* 단계 줄과 단계 화면을 한 상자로: 단계 이름은 누르든 안 누르든 같음(2026-10-28 대표), 오른쪽 [← 뒤로] */}
       <section aria-label={sel < 4 ? chips[sel] : '완료'} className="grid gap-2 rounded-[14px] border-2 border-[#7d5ffb] p-3">
@@ -612,7 +612,8 @@ function CopyBox({ title, text }: { title: string; text: string }) {
   );
 }
 
-function ItemList({ items, action }: { items: LvItem[]; action?: (i: LvItem) => React.ReactNode }) {
+/** badge = 카드 맨 위 '휴무에 걸린 수업' 목록에서만 '진행 중'·'✓ 완료' (단계 화면 목록은 상태 글만, 대표 10/29: 진행 중이 너무 많음) */
+function ItemList({ items, action, badge }: { items: LvItem[]; action?: (i: LvItem) => React.ReactNode; badge?: boolean }) {
   const name = useLessonName();
   return (
     <ul className="grid gap-1.5">
@@ -623,7 +624,7 @@ function ItemList({ items, action }: { items: LvItem[]; action?: (i: LvItem) => 
             <span className="text-[14.5px] text-[#1d1b2b]">{name(i)}</span>
             <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
               <span className="text-[12.5px] text-[#55526a]">{s.text}</span>
-              <span className={`rounded-[6px] px-2 py-0.5 text-[12.5px] font-extrabold ${s.tone === 'done' ? STATUS_BADGE.done : STATUS_BADGE.doing}`}>{s.tone === 'done' ? '✓ 완료' : '진행 중'}</span>
+              {badge && <span className={`rounded-[6px] px-2 py-0.5 text-[12.5px] font-extrabold ${s.tone === 'done' ? STATUS_BADGE.done : STATUS_BADGE.doing}`}>{s.tone === 'done' ? '✓ 완료' : '진행 중'}</span>}
             </span>
             {action?.(i)}
           </li>
