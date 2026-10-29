@@ -190,7 +190,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
               <h3 className="mb-1.5 text-[14px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}</h3>
               <div className="grid gap-2">
                 {d.lessons.map((l) => (
-                  <ScheduleRow key={l.id} lesson={l} tz={tz} now={now} meetUrl={screen.tutor.meetUrl} actions={actions} onSaved={() => { void reload(); if (student) void refreshAll(); }}
+                  <ScheduleRow key={l.id} lesson={l} tz={tz} now={now} meetUrl={screen.tutor.meetUrl} actions={actions} onSaved={async () => { await reload(); if (student) await refreshAll(); }}
                     inRecordList={toRecord.some((x) => x.id === l.id)} />
                 ))}
               </div>
