@@ -11,7 +11,7 @@ import { homepageProfile } from '@/lms/admin/homepage-tutor';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
 import { diffDays, formatInZone, hoursBetween, type KstDate } from '@/lms/rules/dates';
 import type { PreviewExtras } from '@/lms/student/fake-data';
-import type { LeaveRow, MakeupOption, MakeupRight, StudentActions, StudentView } from '@/lms/student/live';
+import type { LeaveRow, MakeupOption, MakeupRight, Reminders, StudentActions, StudentView } from '@/lms/student/live';
 import {
   cancelPreview,
   lessonsLeft,
@@ -102,6 +102,7 @@ export default function StudentHome(props: {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reminders, setReminders] = useState<Reminders | null>(null);
 
   const lessons = s.lessons;
   // 강사 휴무로 못 들은 수업도 학생 화면에서는 '보강' (2026-10-28 대표). DB 구분(lms_is_leave_postponed)은 그대로
@@ -124,6 +125,22 @@ export default function StudentHome(props: {
     const t = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    actions.reminders().then(setReminders, () => setReminders(null));
+  }, [actions]);
+
+  async function saveReminder(change: { regular?: boolean; makeup?: boolean }) {
+    setBusy(true);
+    try {
+      setReminders(await actions.reminders(change));
+      say('저장했어요.');
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '저장하지 못했어요.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function say(msg: string) {
     setToast(`${msg}${preview ? ' (미리보기: 실제로 저장되지 않아요)' : ''}`);
@@ -467,6 +484,15 @@ export default function StudentHome(props: {
                     <span className="font-semibold text-[#4b2fd6]">Google Meet ›</span>
                   </a>
                 ))}
+              </section>
+            )}
+            {reminders && (
+              <section className={`${card} grid px-4 pb-1.5 pt-3`}>
+                <h2 className="text-[15px] font-bold">수업 알림 메일</h2>
+                <p className="text-[13px] text-[#55526a]">수업 24시간 전 · 2시간 전</p>
+                {!reminders.hasEmail && <p className="mt-1 text-[13px] font-semibold text-[#c0392b]">등록된 이메일이 없어 메일을 받을 수 없어요.</p>}
+                <Switch label="정규 수업" on={reminders.regular} disabled={busy} onChange={(v) => saveReminder({ regular: v })} />
+                <Switch label="보강 수업" on={reminders.makeup} disabled={busy} onChange={(v) => saveReminder({ makeup: v })} />
               </section>
             )}
             <section className={`${card} px-4 pb-1.5 pt-2`}>
@@ -1007,6 +1033,24 @@ function LinkRow({ label, value, valueClass = 'font-semibold', onClick }: { labe
       <span className="text-[#55526a]">{label}</span>
       <span className={valueClass}>
         {value} <span className="font-normal text-[#8b88a0]">›</span>
+      </span>
+    </button>
+  );
+}
+
+function Switch({ label, on, disabled, onChange }: { label: string; on: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className="flex min-h-[48px] items-center justify-between border-t border-[#eeecf4] text-left text-[15px] first-of-type:border-0"
+    >
+      <span>{label}</span>
+      <span className={`relative h-7 w-[46px] flex-none rounded-full transition-colors ${on ? 'bg-[#5b3df0]' : 'bg-[#dcd8e8]'}`}>
+        <span className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white transition-all ${on ? 'right-[3px]' : 'left-[3px]'}`} />
       </span>
     </button>
   );
