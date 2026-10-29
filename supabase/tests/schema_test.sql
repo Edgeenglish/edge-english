@@ -1728,3 +1728,112 @@ select pg_temp.ok(not lms_tutor_available('55555555-0000-0000-0000-000000002400'
   '보통 수업 시간: 평일 한국 9~18시 시작 강사는 20시·8시 밖 · 18시 정각 안 — 밖이어도 대체강사로 고를 수는 있음 (2700)');
 select pg_temp.ok(lms_tutor_available('55555555-0000-0000-0000-000000001700', now() + interval '30 days'),
   '보통 수업 시간을 안 넣은 강사는 언제나 안');
+
+-- ---------- 학생 수업 알림 메일 (migration 2900) ----------
+reset role;
+reset request.jwt.claim.sub;
+insert into tutors (id, name, country, timezone, meet_url) values
+  ('55555555-0000-0000-0000-000000002900', '알림T', 'Australia', 'Australia/Sydney', 'https://meet.google.com/aaa-bbbb-ccc'),
+  ('55555555-0000-0000-0000-000000002901', '대체T', 'Australia', 'Australia/Sydney', 'https://meet.google.com/sub-link-xyz');
+insert into students (id, name_ko, name_en, email) values ('99999999-0000-0000-0000-000000002900', '알림학생', 'Remind S', 'remind-s@example.com');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000002900', '99999999-0000-0000-0000-000000002900', 1, 4, 2, 50, '2031-02-20', '2031-03-19', 8, 'active');
+-- T0 = 2031-03-03(월) 20:00 KST 정규, T0+3시간 보강
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, makeup_of, starts_at, ends_at) values
+  ('77777777-2900-0000-0000-000000000001', '99999999-1000-0000-0000-000000002900', '99999999-0000-0000-0000-000000002900',
+   '55555555-0000-0000-0000-000000002900', 'regular', 1, null, '2031-03-03 11:00Z', '2031-03-03 11:50Z'),
+  ('77777777-2900-0000-0000-000000000002', '99999999-1000-0000-0000-000000002900', '99999999-0000-0000-0000-000000002900',
+   '55555555-0000-0000-0000-000000002900', 'makeup', null, '77777777-2900-0000-0000-000000000001', '2031-03-03 14:00Z', '2031-03-03 14:50Z');
+create temp table rm_due as select * from lms_lesson_reminders_due('2031-03-02 12:00Z') where student_id = '99999999-0000-0000-0000-000000002900';
+select pg_temp.ok(lms_ko_when('2031-03-03 11:00Z', 'Asia/Seoul') = '3/3(월) 오후 8:00' and lms_ko_when('2031-03-03 00:05Z', 'Asia/Seoul') = '3/3(월) 오전 9:05'
+              and lms_ko_when('2031-03-03 03:00Z', 'Asia/Seoul') = '3/3(월) 오후 12:00',
+  '알림 시간 표기: 3/3(월) 오후 8:00 · 오전 9:05 · 오후 12:00');
+select pg_temp.ok((select count(*) = 1 and bool_and(which = '24h' and to_email = 'support@edgeenglish.kr' and intended_email = 'remind-s@example.com'
+                          and subject = '[시험 · ' || (select code from students where id = '99999999-0000-0000-0000-000000002900') || '] [엣지영어] 3/3(월) 오후 8:00 수업'
+                          and html like '%알림학생님, 수업 안내드려요.%' and html like '%(50분)%' and html like '%meet.google.com/aaa-bbbb-ccc%'
+                          and html not like '%대체강사%') from rm_due),
+  '알림: 23시간 전 = 정규 24시간 전 알림 1개 (보강은 아직 24시간 밖), 메일 꺼져 있으면 support@로만 + 제목에 [시험 · 학생 번호]');
+select pg_temp.ok((select array_agg(which || ':' || (lesson_id = '77777777-2900-0000-0000-000000000002') order by lesson_id)
+                   from lms_lesson_reminders_due('2031-03-03 09:30Z') where student_id = '99999999-0000-0000-0000-000000002900') = '{2h:false,24h:true}'
+              and (select subject like '%3/3(월) 오후 11:00 보강 수업' from lms_lesson_reminders_due('2031-03-03 09:30Z') where lesson_id = '77777777-2900-0000-0000-000000000002'),
+  '알림: 1시간 30분 전 = 정규는 2시간 전 알림, 보강은 24시간 전 알림 (제목 ''보강 수업'')');
+insert into notifications (recipient_kind, recipient_id, email, locale, template, dedupe_key)
+select 'student', student_id, to_email, 'ko', 'lesson_reminder_24h', dedupe_key from rm_due;
+select pg_temp.ok(not exists (select 1 from lms_lesson_reminders_due('2031-03-02 13:00Z') where student_id = '99999999-0000-0000-0000-000000002900'),
+  '알림: 이미 보낸 알림은 다시 안 보냄');
+update lessons set starts_at = '2031-03-03 11:30Z', ends_at = '2031-03-03 12:20Z', time_set_at = '2031-01-01Z' where id = '77777777-2900-0000-0000-000000000001';
+select pg_temp.ok((select count(*) = 1 from lms_lesson_reminders_due('2031-03-02 13:00Z') where student_id = '99999999-0000-0000-0000-000000002900'),
+  '알림: 시간이 바뀌면 새 시간으로 다시 보냄');
+update lessons set starts_at = '2031-03-03 11:00Z', ends_at = '2031-03-03 11:50Z' where id = '77777777-2900-0000-0000-000000000001';
+select pg_temp.ok((select time_set_at > now() - interval '1 minute' from lessons where id = '77777777-2900-0000-0000-000000000001'), '시작 시각을 바꾸면 정한 때 기록');
+update lessons set time_set_at = '2031-03-03 01:00Z' where id = '77777777-2900-0000-0000-000000000001';
+select pg_temp.ok(not exists (select 1 from lms_lesson_reminders_due('2031-03-03 02:00Z') where lesson_id = '77777777-2900-0000-0000-000000000001')
+              and exists (select 1 from lms_lesson_reminders_due('2031-03-03 09:30Z') where lesson_id = '77777777-2900-0000-0000-000000000001' and which = '2h'),
+  '알림: 24시간 안에 시간을 정한 수업은 24시간 전 알림 건너뛰고 2시간 전 알림만');
+update lessons set original_tutor_id = tutor_id, tutor_id = '55555555-0000-0000-0000-000000002901' where id = '77777777-2900-0000-0000-000000000001';
+select pg_temp.ok((select subject like '% 수업 · 대체강사' and html like '%대체강사 수업이에요. 수업 링크가 달라요.%' and html like '%meet.google.com/sub-link-xyz%'
+                          and html like '%대체T 강사님 수업 들어가기%' and html not like '%aaa-bbbb-ccc%'
+                   from lms_lesson_reminders_due('2031-03-03 09:30Z') where lesson_id = '77777777-2900-0000-0000-000000000001'),
+  '알림: 대체강사 수업 = 제목 ''· 대체강사'' + ''수업 링크가 달라요'' + 대체강사 링크만');
+update students set timezone = 'America/Los_Angeles', city = 'Los Angeles' where id = '99999999-0000-0000-0000-000000002900';
+select pg_temp.ok((select html like '%3/3(월) 오후 11:00 (50분) 한국 시간<br>3/3(월) 오전 6:00 Los Angeles%'
+                   from lms_lesson_reminders_due('2031-03-03 09:30Z') where lesson_id = '77777777-2900-0000-0000-000000000002'),
+  '알림: 해외 학생은 한국 시간 + 현지 시각');
+update students set remind_regular = false where id = '99999999-0000-0000-0000-000000002900';
+select pg_temp.ok((select array_agg(lesson_id) from lms_lesson_reminders_due('2031-03-03 09:30Z') where student_id = '99999999-0000-0000-0000-000000002900')
+                  = '{77777777-2900-0000-0000-000000000002}',
+  '알림: 정규 끔 → 보강만');
+update feature_flags set enabled = true where key = 'send_emails';
+select pg_temp.ok((select to_email = 'remind-s@example.com' and subject not like '[시험%' from lms_lesson_reminders_due('2031-03-03 09:30Z') where lesson_id = '77777777-2900-0000-0000-000000000002'),
+  '알림: 메일 켜면 학생 이메일로');
+update feature_flags set enabled = false where key = 'send_emails';
+update lessons set state = 'canceled', canceled_at = now(), class_status = 'Student canceled in advance' where id = '77777777-2900-0000-0000-000000000002';
+select pg_temp.ok(not exists (select 1 from lms_lesson_reminders_due('2031-03-03 09:30Z') where student_id = '99999999-0000-0000-0000-000000002900'),
+  '알림: 취소된 수업은 안 보냄');
+
+-- 보내기: pg_net·Vault 흉내 (실제 Supabase 에는 있음)
+create schema if not exists net;
+create table net._http_response (id bigint primary key, status_code int, content text, error_msg text, created timestamptz default now());
+create sequence net.req_seq;
+create table net.sent (id bigint, url text, body jsonb, headers jsonb);
+create function net.http_post(url text, body jsonb, params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds int default 5000)
+returns bigint language plpgsql as $$
+declare i bigint := nextval('net.req_seq');
+begin insert into net.sent values (i, url, body, headers); return i; end $$;
+create schema if not exists vault;
+create table vault.decrypted_secrets (name text, decrypted_secret text);
+update students set remind_regular = true, timezone = 'Asia/Seoul' where id = '99999999-0000-0000-0000-000000002900';
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+values ('77777777-2900-0000-0000-000000000003', '99999999-1000-0000-0000-000000002900', '99999999-0000-0000-0000-000000002900',
+        '55555555-0000-0000-0000-000000002900', 'regular', 3, date_trunc('minute', now()) + interval '90 minutes 7 seconds', date_trunc('minute', now()) + interval '140 minutes 7 seconds');
+update lessons set time_set_at = now() - interval '3 days' where id = '77777777-2900-0000-0000-000000000003';
+select pg_temp.ok(lms_send_lesson_reminders() = 0 and not exists (select 1 from net.sent), '보내기: Resend 키가 없으면 아무것도 안 보냄');
+insert into vault.decrypted_secrets values ('resend_api_key', 're_test_key');
+create temp table rm_sent as select lms_send_lesson_reminders() as n;
+select pg_temp.ok((select n >= 1 from rm_sent)
+              and (select s.url = 'https://api.resend.com/emails' and s.body -> 'to' = '["support@edgeenglish.kr"]' and s.headers ->> 'Authorization' = 'Bearer re_test_key'
+                          and s.headers ->> 'Idempotency-Key' = n.dedupe_key and n.status = 'queued' and n.template = 'lesson_reminder_2h'
+                   from notifications n join net.sent s on s.id = n.net_request_id where n.payload ->> 'lesson_id' = '77777777-2900-0000-0000-000000000003'),
+  '보내기: 2시간 전 알림을 Resend 로 (support@, 같은 알림 키로 중복 방지)');
+insert into net._http_response (id, status_code, content) select net_request_id, 200, '{"id":"x"}' from notifications where payload ->> 'lesson_id' = '77777777-2900-0000-0000-000000000003';
+create temp table rm_sent2 as select lms_send_lesson_reminders() as n;
+select pg_temp.ok((select n = 0 from rm_sent2)
+              and (select status = 'sent' and sent_at is not null from notifications where payload ->> 'lesson_id' = '77777777-2900-0000-0000-000000000003')
+              and (select count(*) = 1 from net.sent s join notifications n on n.net_request_id = s.id where n.payload ->> 'lesson_id' = '77777777-2900-0000-0000-000000000003'),
+  '보내기: 다음 실행 때 결과 기록(보냄), 같은 알림은 다시 안 보냄');
+
+-- 학생 알림 설정: 본인 · 운영자 · 다른 학생 거절
+insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000002900', 'student', '99999999-0000-0000-0000-000000002900');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000002900';
+select pg_temp.ok(student_reminders(null) = '{"regular": true, "makeup": true, "has_email": true}', '알림 설정: 기본 정규·보강 모두 켬');
+select pg_temp.ok(student_reminders(null, false, null) = '{"regular": false, "makeup": true, "has_email": true}', '알림 설정: 학생이 정규만 끔');
+select pg_temp.expect_error($$select student_reminders('99999999-0000-0000-0000-000000001800', false, false)$$, '42501');
+select pg_temp.ok(true, '알림 설정: 다른 학생 것은 못 바꿈');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok(student_reminders('99999999-0000-0000-0000-000000002900', true, false) = '{"regular": true, "makeup": false, "has_email": true}',
+  '알림 설정: 운영자가 대신 바꿈');
+select pg_temp.expect_error($$select lms_send_lesson_reminders()$$, 'permission denied');
+select pg_temp.ok(true, '보내기 함수는 로그인 사용자가 못 부름');
+reset request.jwt.claim.sub;
+reset role;

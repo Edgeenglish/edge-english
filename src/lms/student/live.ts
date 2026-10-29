@@ -154,11 +154,23 @@ export async function loadMakeupOptions(sb: SupabaseClient, studentId: string | 
   return rows.map((x) => ({ startsAt: new Date(x.starts_at), afterEnd: x.section === 'after_end' }));
 }
 
+/** 수업 알림 메일 켬/끔 (정규 = 정규 수업, 보강 = 그 밖의 수업). hasEmail = 받을 이메일이 있는지 */
+export type Reminders = { regular: boolean; makeup: boolean; hasEmail: boolean };
+
 /** 학생 화면 동작. admin = 운영자 보기(대신 입력)면 운영진 함수 */
 export function studentActions(sb: SupabaseClient, adminStudentId: string | null) {
   const admin = adminStudentId !== null;
   return {
     reload: () => loadStudentView(sb, adminStudentId),
+    /** 알림 설정 읽기(인자 없음)·바꾸기 — 학생·운영자 같은 함수 */
+    reminders: async (change?: { regular?: boolean; makeup?: boolean }): Promise<Reminders> => {
+      const r = check(await sb.rpc('student_reminders', { p_student: adminStudentId, p_regular: change?.regular ?? null, p_makeup: change?.makeup ?? null })) as {
+        regular: boolean;
+        makeup: boolean;
+        has_email: boolean;
+      };
+      return { regular: r.regular, makeup: r.makeup, hasEmail: r.has_email };
+    },
     makeupOptions: (right: { lessonId: string | null; itemId: string | null }) => loadMakeupOptions(sb, adminStudentId, right),
     /** 수업 취소 (판정 시각 = 지금). 결과는 DB 판정 */
     cancel: async (lessonId: string): Promise<{ status: string; uses_credit: boolean; makeup_allowed: boolean }> => {

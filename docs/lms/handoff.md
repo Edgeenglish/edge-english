@@ -4,6 +4,13 @@
 
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
+## 🆕 2026-10-29 학생 수업 알림 메일 (POL-OP-18 변경) — 개발 완료, 시험용 적용 대기 (브랜치 claude/compassionate-hypatia-wqlnnh)
+- 시안 https://claude.ai/artifact/F5MoyuxfjWso8p2S5E7wDZ (원본 `docs/lms/previews/lesson-reminder-drafts.html`) — **대표 답 대기**: Q1 예약 실행 간격(5·10·15분, 숫자라 대표 결정) · Q2 보상·이월 수업은 '보강 수업' 스위치를 따를지(권장 예) · Q3 메일 글·화면
+- migration **2900** `lms_lesson_reminders`: `students.remind_regular/remind_makeup`(기본 켬) · `lessons.time_set_at`(시작 시각 정한 때, 트리거) · `lms_lesson_reminders_due(시각)`(보낼 알림 계산: 24시간 전/2시간 전, 그 뒤에 정한 수업은 건너뜀, 취소 안 보냄, 시간 바뀌면 새로, `dedupe_key`로 한 번만) · `lms_send_lesson_reminders()`(pg_net → Resend API, `Idempotency-Key`, 다음 실행 때 결과 기록 sent/failed) · `student_reminders`(학생·운영자 같은 함수). `send_emails` 꺼져 있으면 support@로만 + 제목 '[시험 · 학생 번호]'. 실패 자동 재시도 없음(failed로 남음)
+- 화면: 학생 화면 '내 정보'에 '수업 알림 메일' 카드(정규·보강 스위치, 이메일 없으면 빨간 글)
+- `npm run test:db`·`npm test` 293 통과
+- **남은 순서**: ① 시험용 DB에 2900 적용(Claude, 커넥터가 확인을 물어 대표 승인 필요) ② 대표: Resend에서 시험용 API 키 만들기 → 시험용 Supabase Vault에 `resend_api_key`로 넣기 ③ Claude: 시험용에 pg_net·pg_cron 켜고 예약 실행 등록(Q1 간격) ④ support@로 실제 메일 확인 ⑤ 대표 승인 → 운영(직전 백업, 운영용 키, `send_emails`는 별도 승인 전까지 끔)
+
 ## 🔍 2026-10-29 LMS 등록 학생 6명 시트 ↔ 운영 DB 대조 (읽기만, 시트·DB 안 고침)
 - 같음: 6명 모두 수강권(등록 수·시작·종료일)·요일·시각·길이·남은 변경권·남은 수업 수
 - 다름: ① 적립금 — 시트 이신옥 3,000원·정다연 5,000원, LMS 0(`reward_ledger` 비어 있음) ② Olivia 휴무(11/2~11/10) 수업 — 이세민 5회·황지영 2회·이신옥 3회는 시트에 그냥 '정규'(휴무 표시 없음), LMS는 휴무 처리 중(이세민·황지영 = 학생 선택 미확인, 이신옥 = 3회 모두 Maria 가능 확인·학생 답 대기). 송예나 11/4·11/6은 시트 '강사 장기 휴식 → 연장(보강 tbd)', LMS '학생 선택 미확인' ③ 시트 A1 학생 번호 — 이세민·이신옥 시트 모두 'STU-0004'(LMS 이세민 0001·이신옥 0003, STU-0004는 송예나) ④ 지난 수업 기록 — 이세민 10/27·이신옥 10/28은 시트 '정상 진행', LMS는 아직 '예정'(Class Record 미입력). 황지영 10/28은 시트·LMS 둘 다 기록 없음

@@ -153,8 +153,10 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
   view.lessons = view.lessons.map((l) => (l.id === 'lv2' ? { ...l, state: 'canceled' } : l));
   view.makeupRights.push({ lessonId: 'lv2', itemId: null, originalAt: at(11, '20:00'), tutorLeave: true, requested: false });
   const set = (v: StudentView) => (view = v);
+  let reminders = { regular: true, makeup: true, hasEmail: true };
   const actions: StudentActions = {
     reload: async () => view,
+    reminders: async (change) => (reminders = { ...reminders, ...change }),
     makeupOptions: async (right) => {
       const back = view.makeupRights.find((m) => m.lessonId === right.lessonId)?.tutorLeave ? 14 : 1;
       return Array.from({ length: 18 }, (_, i) => back + i)
