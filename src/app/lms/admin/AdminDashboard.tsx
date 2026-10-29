@@ -291,6 +291,11 @@ export default function AdminDashboard({
                 학생 화면
               </Link>
             )}
+            {!preview && (
+              <Link href="/lms/tutor" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+                강사 화면
+              </Link>
+            )}
             <Link
               href={preview ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'}
               className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5ffb] px-3 text-[13px] font-semibold text-white"
