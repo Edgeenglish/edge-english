@@ -241,7 +241,7 @@ function mondayOf(date: string): string {
 
 export type LvStep = 'tutor' | 'propose' | 'answer' | 'confirm';
 export const LV_STEP_TEXT: Record<LvStep | 'done', string> = {
-  tutor: '1 대체 강사에게 묻기', propose: '2 학생에게 휴무 안내 · 대체 강사 제안', answer: '3 학생 답 입력', confirm: '4 확정 안내 보내기', done: '완료',
+  tutor: '수업별 대체 강사 찾기', propose: '학생한테 기존 강사 휴무 안내하기', answer: '학생이 원하는 수업 방향 입력', confirm: '확정 안내 보내기', done: '완료',
 };
 
 /** 2단계 글: 휴무 안내 + 대체강사 제안을 한 번에 (2026-10-28 대표 시안 승인). 대체강사 날짜는 강사 이름과 함께, 나머지는 보강 */

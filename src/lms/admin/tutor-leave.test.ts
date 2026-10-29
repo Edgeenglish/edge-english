@@ -183,8 +183,8 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     const [item] = buildBoard(tasks, now);
     expect(item.title).toBe('Olivia 휴무 11/2~11/10');
     // 휴무 화면 단계 이름 그대로 (2026-10-28 대표)
-    expect(item.tag).toBe('강사 휴무 · 1 대체 강사에게 묻기 3회');
-    expect(item.detail).toBe('1 대체 강사에게 묻기 3회 · 2 학생에게 휴무 안내 · 대체 강사 제안 1명 · 3 학생 답 입력 1회 · 4 확정 안내 보내기 1건');
+    expect(item.tag).toBe('강사 휴무 · 수업별 대체 강사 찾기 3회');
+    expect(item.detail).toBe('수업별 대체 강사 찾기 3회 · 학생한테 기존 강사 휴무 안내하기 1명 · 학생이 원하는 수업 방향 입력 1회 · 확정 안내 보내기 1건');
     expect(item.actions[0].href).toBe('/lms/admin/leave?off=off1');
   });
 });
