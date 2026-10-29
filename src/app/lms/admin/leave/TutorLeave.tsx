@@ -321,7 +321,7 @@ const Fold = ({ title, children }: { title: string; children: React.ReactNode })
   </details>
 );
 
-// 휴무에 걸린 수업 순서: '첫 번째 수업 · 11/2(월) 12:00' (대표 10/29). 학생 카드 안에서 같은 번호
+// 휴무에 걸린 수업 순서: '첫 번째 수업 · 11/2(월) 12:00' — 카드 맨 위 목록에서만 (대표 10/29: 단계 화면마다 나오면 너무 많음)
 const ORDER = createContext<Map<string, number>>(new Map());
 const ORD = ['첫', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
 const ordText = (n: number) => (n < ORD.length ? `${ORD[n]} 번째 수업` : `${n + 1}번째 수업`);
@@ -521,7 +521,6 @@ function subCancelText(items: LvItem[]): string {
 
 // 3단계: 날짜마다 학생 답 — [좋아요](대체강사 확정) / [기존 강사와 보강]. 날짜가 여러 개면 한 번에 누르는 버튼도
 function StudentAnswer({ items, actions, done, onWait }: { items: LvItem[]; actions: LeaveActions; done: () => Promise<void>; onWait: (items: LvItem[]) => void }) {
-  const name = useLessonName();
   const r = useRun(done);
   const ok = (its: LvItem[]) => r.run(() => actions.studentOk(its.map((i) => i.id)));
   const wait = (its: LvItem[]) => r.run(() => actions.choose(its.map((i) => i.id), 'wait', null), () => onWait(its));
@@ -530,7 +529,7 @@ function StudentAnswer({ items, actions, done, onWait }: { items: LvItem[]; acti
       <ul className="grid gap-1.5">
         {items.map((i) => (
           <li key={i.id} className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
-            <span className="text-[14.5px] text-[#1d1b2b]">{name(i)} · {i.subTutorName}</span>
+            <span className="text-[14.5px] text-[#1d1b2b]">{kstLabel(i.startsAt)} · {i.subTutorName}</span>
             <span className="ml-auto flex gap-1.5">
               <button type="button" disabled={r.busy} className={btnMain} onClick={() => ok([i])}>좋아요</button>
               <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait([i])}>기존 강사와 보강</button>
@@ -617,7 +616,7 @@ function CopyBox({ title, text }: { title: string; text: string }) {
   );
 }
 
-/** badge = 카드 맨 위 '휴무에 걸린 수업' 목록에서만 '진행 중'·'✓ 완료' (단계 화면 목록은 상태 글만, 대표 10/29: 진행 중이 너무 많음) */
+/** badge = 카드 맨 위 '휴무에 걸린 수업' 목록: 번호(첫 번째 수업…) + '진행 중'·'✓ 완료'. 단계 화면 목록은 날짜·상태 글만 (대표 10/29: 너무 많음) */
 function ItemList({ items, action, badge }: { items: LvItem[]; action?: (i: LvItem) => React.ReactNode; badge?: boolean }) {
   const name = useLessonName();
   return (
@@ -626,7 +625,7 @@ function ItemList({ items, action, badge }: { items: LvItem[]; action?: (i: LvIt
         const s = itemStatus(i);
         return (
           <li key={i.id} className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
-            <span className="text-[14.5px] text-[#1d1b2b]">{name(i)}</span>
+            <span className="text-[14.5px] text-[#1d1b2b]">{badge ? name(i) : kstLabel(i.startsAt)}</span>
             <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
               <span className="text-[12.5px] text-[#55526a]">{s.text}</span>
               {badge && <span className={`rounded-[6px] px-2 py-0.5 text-[12.5px] font-extrabold ${s.tone === 'done' ? STATUS_BADGE.done : STATUS_BADGE.doing}`}>{s.tone === 'done' ? '✓ 완료' : '진행 중'}</span>}
@@ -715,7 +714,6 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
   const r = useRun(done);
   const yes = t.items.filter((i) => ok.has(i.id)).map((i) => i.id);
   const no = t.items.filter((i) => !ok.has(i.id)).map((i) => i.id);
-  const name = useLessonName();
 
   return (
     <div className="grid gap-2">
@@ -726,7 +724,7 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
             <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
               <input type="checkbox" className="h-5 w-5" checked={ok.has(i.id)}
                 onChange={(e) => { const n = new Set(ok); if (e.target.checked) n.add(i.id); else n.delete(i.id); setOk(n); setOptions(null); }} />
-              {name(i)}
+              {kstLabel(i.startsAt)}
             </label>
           </li>
         ))}
@@ -769,7 +767,6 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
   const [manual, setManual] = useState(false);
   const r = useRun(done);
   const item = items.find((i) => i.id === itemId) ?? items[0];
-  const lessonName = useLessonName();
   const { setErr } = r;
 
   useEffect(() => {
@@ -814,7 +811,7 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
     <div className="grid gap-2">
       {items.length > 1 ? (
         <select aria-label="보강할 수업" value={itemId} onChange={(e) => setItemId(e.target.value)} className={inputCls(false)}>
-          {items.map((i) => <option key={i.id} value={i.id}>{lessonName(i)}</option>)}
+          {items.map((i) => <option key={i.id} value={i.id}>{kstLabel(i.startsAt)}</option>)}
         </select>
       ) : (
         <ItemList items={items} />
