@@ -1,0 +1,262 @@
+<title>강사 가능 시간 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위 질문 → 휴대폰(누르면 바뀌는 견본) → PC → 메모. 강사 화면(영어)과 같은 보라·노랑 */
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--accent:#5b3fe0;--q:#efeafe;
+--open:#e6f6ec;--open-fg:#1f7a4d;--shut:#ecebf1;--shut-fg:#8a879c;--once:#fdecea;--once-fg:#b3261e;--cls:#5b3fe0;--cls-fg:#fff;--mk:#d9d1ff;--mk-fg:#3a2a99;
+--todo:#fff4d6;--todo-fg:#5c3b00;--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;
+--open:#173325;--open-fg:#7fd6a5;--shut:#2a2935;--shut-fg:#7d7a90;--once:#3d1d1b;--once-fg:#ff9b92;--cls:#7d66ff;--cls-fg:#fff;--mk:#3a3266;--mk-fg:#d3caff;--todo:#3a2f12;--todo-fg:#ffd77a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;
+--open:#173325;--open-fg:#7fd6a5;--shut:#2a2935;--shut-fg:#7d7a90;--once:#3d1d1b;--once-fg:#ff9b92;--cls:#7d66ff;--cls-fg:#fff;--mk:#3a3266;--mk-fg:#d3caff;--todo:#3a2f12;--todo-fg:#ffd77a;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+main{max-width:1120px;margin:0 auto;display:grid;gap:28px}
+h1{font-size:22px;margin:0;text-wrap:balance}h2{font-size:18px;margin:0 0 10px}
+p{margin:0}
+*,*::before,*::after{box-sizing:border-box}
+main>*{min-width:0}code{overflow-wrap:anywhere}
+.q{background:var(--q);border-radius:14px;padding:14px 16px;display:grid;gap:12px}
+.q b{color:var(--accent)}
+.q ol{margin:4px 0 0;padding-left:20px}
+.cap{font-size:13px;color:var(--muted);margin:0 0 6px}
+.row{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.note{font-size:14px;display:grid;gap:6px;max-width:70ch}
+.note li{margin-bottom:4px}
+
+/* 강사 화면 */
+.phone{width:360px;max-width:100%;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:14px 12px 0;position:relative;overflow:hidden;display:flex;flex-direction:column;height:720px}
+.pc{flex:1 1 640px;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:20px;position:relative;overflow:hidden}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.top strong{font-size:18px}
+.x{min-width:40px;min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:18px;cursor:pointer}
+.sub{font-size:12.5px;color:var(--muted)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--shut);border-radius:11px;padding:3px;margin:10px 0 8px}
+.tabs button{min-height:38px;border:0;border-radius:9px;background:transparent;color:var(--muted);font:600 14px var(--font);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.help{font-size:12.5px;color:var(--muted);margin-bottom:6px}
+.wk{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.wk b{font-size:14px}
+.wk button{min-width:36px;min-height:34px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--fg);cursor:pointer}
+.wk button:disabled{opacity:.35;cursor:default}
+.gridwrap{overflow-y:auto;flex:1;min-height:0;border-top:1px solid var(--line)}
+.pc .gridwrap{max-height:560px}
+.g{display:grid;grid-template-columns:42px repeat(7,minmax(0,1fr));gap:2px;font-variant-numeric:tabular-nums;padding:4px 0 8px}
+.g .h{position:sticky;top:0;background:var(--card);z-index:1;text-align:center;font-size:12px;font-weight:700;padding:4px 0;line-height:1.2;border:0;color:var(--fg);font-family:var(--font)}
+.g button.h{cursor:pointer}
+.g button.h small{display:block;font-weight:500;color:var(--muted)}
+.g .t{font-size:11px;color:var(--muted);text-align:right;padding-right:4px;line-height:26px}
+.c{height:26px;border:0;border-radius:5px;font:600 10.5px var(--font);cursor:pointer;padding:0;overflow:hidden;white-space:nowrap}
+.pc .c{height:24px;font-size:11.5px}
+.c:focus-visible,.tabs button:focus-visible,.x:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.c.open{background:var(--open);color:var(--open-fg)}
+.c.shut{background:var(--shut);color:var(--shut-fg)}
+.c.once{background:repeating-linear-gradient(-45deg,var(--once),var(--once) 4px,transparent 4px,transparent 7px),var(--card);color:var(--once-fg);box-shadow:inset 0 0 0 1px var(--once-fg)}
+.c.cls{background:var(--cls);color:var(--cls-fg)}
+.c.mk{background:var(--mk);color:var(--mk-fg)}
+.c.chg{box-shadow:inset 0 0 0 2px var(--accent)}
+.c.cont{border-top-left-radius:0;border-top-right-radius:0;margin-top:-2px;height:28px}
+.pc .c.cont{height:26px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted);margin:2px 0 6px}
+.legend i{display:inline-block;width:14px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+.bar{border-top:1px solid var(--line);padding:10px 2px 12px;display:flex;gap:8px;align-items:center;background:var(--card)}
+.bar span{flex:1;font-size:13px;color:var(--muted)}
+.btn{min-height:44px;border-radius:10px;border:0;background:var(--accent);color:#fff;padding:0 16px;font:600 15px var(--font);cursor:pointer}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.s{background:var(--card);color:var(--fg);border:1px solid var(--line)}
+.side{display:grid;gap:12px;align-content:start}
+.side .box{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:8px}
+.side ul{margin:0;padding-left:18px;font-size:13.5px}
+.dim{position:absolute;inset:0;background:rgba(20,18,30,.45);display:flex;align-items:flex-end;justify-content:center;z-index:5}
+.pc .dim{align-items:center}
+.sheet{background:var(--card);border-radius:18px 18px 0 0;padding:16px 16px 18px;width:100%;display:grid;gap:10px}
+.pc .sheet{border-radius:16px;max-width:420px}
+.sheet strong{font-size:16px}
+.sheet .btns{display:grid;gap:8px}
+.warn{background:var(--todo);color:var(--todo-fg);border-radius:8px;padding:9px 11px;font-size:13.5px}
+.mini{font-size:13px;color:var(--muted)}
+.entry{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
+.entry b{color:var(--accent)}
+@media (max-width:760px){.pc{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(16px);opacity:.6}}}
+</style>
+<main>
+<h1>강사 가능 시간 고치기 · 시안</h1>
+
+<section class="q">
+<p>강사 화면 맨 위 <b>[My hours]</b> 버튼 → 아래 창이 열려요. 탭 두 개: <b>Every week</b>(매주 고정, 지금 <code>tutor_availability</code>) · <b>One week only</b>(그 주만 닫기, 지금 <code>tutor_time_off</code> 'block'). 둘 다 이미 보강 가능한 날짜·대체강사 판정에 쓰이고 있어서 저장 즉시 학생 보강 달력에서 빠져요. 칸을 눌러 보세요(견본은 실제로 바뀝니다).</p>
+<p><b>Q1. 고정 수업이 있는 시간을 '매주 닫기'</b> — ① 못 닫음(칸 잠금, 누르면 '운영진에게 말씀해 주세요') <b>권장</b> ② 닫을 수 있게 + 경고. <span class="mini">이유: 매주 닫아도 이미 있는 고정 수업은 그대로라서 강사는 '닫았다'고 생각하고 학생은 그대로 기다리는 일이 생길 수 있어요. 고정 수업을 그만하려면 운영진이 학생과 시간을 옮겨야 하니 운영진 일이 맞아요.</span></p>
+<p><b>Q2. 저장하면</b> — ① 바로 반영 + 운영진 화면에 '바뀐 기록'만 남김 <b>권장</b> ② 운영진 확인 뒤 반영. <span class="mini">닫기는 빈 시간만 되므로(수업 있는 칸은 잠김) 바로 반영해도 학생 수업이 깨지지 않아요. ②는 대표 할 일이 늘어요. 다만 강사가 시간을 크게 줄이면 신규 학생 받을 자리가 줄어드는 건 ①에서 기록으로만 알게 돼요.</span></p>
+<p><b>Q3. 숫자 (대표가 정해 주세요)</b></p>
+<ol>
+<li>'그 주만 닫기'는 수업 시작 <b>몇 시간 전</b>까지 할 수 있게 할까요? (그 안이면 칸이 잠김. 학생이 막 보강을 고르는 중일 수 있어서)</li>
+<li>'One week only' 탭에서 <b>몇 주 앞까지</b> 넘겨 볼 수 있게 할까요? (견본은 4주)</li>
+<li>'매주' 변경은 <b>언제부터</b> 적용할까요? 바로(오늘부터) / 다음 주 월요일부터 / 그 밖</li>
+</ol>
+<p><b>Q4.</b> 칸 누르기 모양(30분 한 칸 = 그 시각에 <b>수업 시작</b> 가능)·영어 문구 괜찮을까요?</p>
+</section>
+
+<section>
+<h2>휴대폰</h2>
+<div class="row">
+ <div><p class="cap">눌러 보세요 · 처음은 Every week</p><div class="phone" id="ph"></div></div>
+ <div class="note">
+  <p><b>칸 색</b></p>
+  <ul>
+   <li><b>초록</b> Open = 이 시각에 수업 시작 가능 (보강 달력·대체강사 후보에 나옴)</li>
+   <li><b>회색</b> Closed = 매주 닫음</li>
+   <li><b>빨간 줄무늬</b> Closed this week = 그 주만 닫음 (다시 누르면 열림)</li>
+   <li><b>보라</b> Class = 고정 수업 · <b>연보라</b> Make-up = 그날 보강. 둘 다 잠김 → 누르면 안내</li>
+  </ul>
+  <p><b>그 주만 닫기에서 수업 칸을 누르면</b> '이 수업을 못 하면 취소 신청' 버튼 → 다음 작업인 '강사 취소·휴무 신청'(경고 팝업 + 운영진 확인)으로 이어져요. 지금은 버튼 자리만.</p>
+  <p><b>요일 머리(Mon 2 등)를 누르면</b> 그날 빈 칸 모두 닫기 / 모두 다시 열기 (하루 통째로 쉬는 경우).</p>
+  <p><b>저장 전 확인 창</b>에 바뀐 내용을 사람 말로 보여 줌: "Every Monday 9:00–10:00 → closed".</p>
+  <p><b>이번 시안에 넣지 않은 것</b>: 그 주만 '추가로 여는' 기능(보통 시간 밖도 이미 예외로 잡을 수 있어서) · 강사가 직접 하루 이상 쉬는 것(= 휴무 신청, 14일 전 규칙, 다음 작업).</p>
+ </div>
+</div>
+</section>
+
+<section>
+<h2>PC</h2>
+<div class="pc" id="pcv"></div>
+<p class="cap" style="margin-top:8px">PC = 같은 칸 + 오른쪽에 바뀐 내용 목록과 저장 버튼. 견본 강사 Emma (Australia/Melbourne, 한국 시간 = 2시간 빠름). 시간은 모두 강사 현지 시각.</p>
+</section>
+
+<section class="note">
+<h2>만들 때 (참고, 결정 필요 없음)</h2>
+<ul>
+<li>매주 변경 = <code>tutor_availability</code> 기존 줄을 <code>effective_to</code>로 끝내고 새 줄(<code>effective_from</code>)로 — 지난 기록은 그대로 남음. 강사 시간대(timezone) 기준 저장.</li>
+<li>그 주만 닫기 = <code>tutor_time_off</code> kind 'block', 붙어 있는 칸은 한 줄로 합침, 다시 열면 그 줄 지움. 휴무('leave')와 섞이지 않음.</li>
+<li>DB 함수 하나(강사 본인만, 운영자는 ?tutor= 로 같은 화면)에서 '수업·보강·보강 답 대기(yes로 답한 칸)가 있는 칸은 못 닫음'을 다시 검사 — 화면 잠금만 믿지 않음.</li>
+<li>판정이 이미 이렇게 되어 있어서 그대로 맞물림: 매주 가능 시간 = <b>시작</b> 시각 기준, 그 주만 닫은 칸 = 그 30분에 <b>걸치는</b> 수업도 막음.</li>
+</ul>
+</section>
+</main>
+
+<script>
+(()=>{
+const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const T=[];for(let m=8*60;m<=22*60;m+=30)T.push(m);
+const tt=m=>`${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`;
+// 견본: 매주 여는 시간 (요일 index → [시작,끝] 시작 시각 포함)
+const OPEN0=[[[540,960],[1170,1320]],[[540,870],[1140,1320]],[[540,870],[1110,1320]],[[540,1320]],[[540,1320]],[[540,720]],[[1020,1320]]];
+// 고정 수업 (요일, 시작, 분, 학생)
+const CLS=[[0,720,50,'Minjun K.'],[0,1200,50,'Seoyeon L.'],[2,1200,50,'Seoyeon L.'],[3,600,25,'Jiho Y.'],[4,1260,25,'Hana P.'],[1,540,50,'Yuna C.']];
+// 주별: 보강·이미 그 주만 닫은 칸
+const WEEKS=['2 – 8 Nov','9 – 15 Nov','16 – 22 Nov','23 – 29 Nov'];
+const DATES=[[2,3,4,5,6,7,8],[9,10,11,12,13,14,15],[16,17,18,19,20,21,22],[23,24,25,26,27,28,29]];
+const MK0={0:[[3,1110,50,'Minjun K.']]};
+const ONCE0={0:['1:600','1:630','4:1080','4:1110']};
+
+function make(root,isPc){
+ let tab='week',wk=0;
+ const open=OPEN0.map(r=>{const s=new Set();T.forEach(m=>{if(r.some(([a,b])=>m>=a&&m<=b))s.add(m)});return s});
+ const base=open.map(s=>new Set(s));
+ const once={0:new Set(ONCE0[0])};const onceBase={0:new Set(ONCE0[0])};
+ let sheet=null;
+
+ const clsAt=(d,m)=>{for(const c of CLS){if(c[0]===d&&m>=c[1]&&m<c[1]+c[2])return {c,first:m===c[1]}}return null};
+ const mkAt=(d,m)=>{for(const c of (MK0[wk]||[])){if(c[0]===d&&m>=c[1]&&m<c[1]+c[2])return {c,first:m===c[1]}}return null};
+ const O=()=>once[wk]||(once[wk]=new Set());
+ function changes(){
+  const out=[];
+  DAYS.forEach((dn,d)=>{
+   const diff=T.filter(m=>open[d].has(m)!==base[d].has(m));
+   runs(diff).forEach(([a,b])=>out.push(`Every ${full(d)} ${tt(a)}–${tt(b+30)} → ${open[d].has(a)?'open':'closed'}`));
+  });
+  Object.keys(once).forEach(w=>{const b=onceBase[w]||new Set();DAYS.forEach((dn,d)=>{
+   const diff=T.filter(m=>once[w].has(d+':'+m)!==b.has(d+':'+m));
+   runs(diff).forEach(([a,z])=>out.push(`${dn} ${DATES[w][d]} Nov ${tt(a)}–${tt(z+30)} → ${once[w].has(d+':'+a)?'closed this week':'open again'}`));
+  })});
+  return out;
+ }
+ const full=d=>['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][d];
+ function runs(ms){const r=[];ms.forEach(m=>{const l=r[r.length-1];if(l&&l[1]+30===m)l[1]=m;else r.push([m,m])});return r}
+
+ function cell(d,m){
+  const b=document.createElement('button');b.type='button';b.className='c';
+  const cl=clsAt(d,m);const mk=tab==='once'?mkAt(d,m):null;
+  if(cl){b.classList.add('cls');if(!cl.first)b.classList.add('cont');b.textContent=cl.first?'Class':'';b.setAttribute('aria-label',`${DAYS[d]} ${tt(m)} class with ${cl.c[3]}`);b.onclick=()=>openSheet('cls',d,m,cl.c);return b}
+  if(mk){b.classList.add('mk');if(!mk.first)b.classList.add('cont');b.textContent=mk.first?'Make-up':'';b.setAttribute('aria-label',`${DAYS[d]} ${tt(m)} make-up`);b.onclick=()=>openSheet('mk',d,m,mk.c);return b}
+  const isOpen=open[d].has(m);
+  if(tab==='week'){
+   b.classList.add(isOpen?'open':'shut');if(isOpen!==base[d].has(m))b.classList.add('chg');
+   b.setAttribute('aria-label',`Every ${full(d)} ${tt(m)} ${isOpen?'open':'closed'}`);
+   b.onclick=()=>{isOpen?open[d].delete(m):open[d].add(m);draw()};
+  }else{
+   if(!isOpen){b.classList.add('shut');b.setAttribute('aria-label',`${tt(m)} closed every week`);b.onclick=()=>openSheet('shut',d,m);return b}
+   const k=d+':'+m;const on=O().has(k);b.classList.add(on?'once':'open');
+   if(on!==(onceBase[wk]||new Set()).has(k))b.classList.add('chg');
+   b.setAttribute('aria-label',`${DAYS[d]} ${DATES[wk][d]} Nov ${tt(m)} ${on?'closed this week':'open'}`);
+   b.onclick=()=>{on?O().delete(k):O().add(k);draw()};
+  }
+  return b;
+ }
+ function dayHead(d){
+  if(tab==='week'){const s=document.createElement('div');s.className='h';s.textContent=DAYS[d];return s}
+  const b=document.createElement('button');b.type='button';b.className='h';b.innerHTML=`${DAYS[d]}<small>${DATES[wk][d]}</small>`;
+  b.setAttribute('aria-label',`${full(d)} ${DATES[wk][d]} Nov: close or open the whole day`);
+  b.onclick=()=>openSheet('day',d);return b;
+ }
+ function openSheet(kind,d,m,c){sheet={kind,d,m,c};draw()}
+ function sheetEl(){
+  const dim=document.createElement('div');dim.className='dim';dim.onclick=e=>{if(e.target===dim){sheet=null;draw()}};
+  const s=document.createElement('div');s.className='sheet';s.setAttribute('role','dialog');
+  const close='<button class="btn s" data-x>Close</button>';
+  const {kind,d,m,c}=sheet;
+  if(kind==='cls'&&tab==='week')s.innerHTML=`<strong>Weekly class · ${c[3]}</strong><p>Every ${full(d)} ${tt(c[1])} (${c[2]} min). You can’t close this time while the class is here.</p><p class="mini">To stop teaching this slot, please tell the Edge English team. We’ll move the class with the student first.</p><div class="btns">${close}</div>`;
+  else if(kind==='cls')s.innerHTML=`<strong>${c[3]} · ${DAYS[d]} ${DATES[wk][d]} Nov ${tt(c[1])}</strong><p>This time has a class, so it can’t be closed here.</p><p class="warn">Can’t teach this class? Send a cancellation request. The team will check it first.</p><div class="btns"><button class="btn" data-x>Request cancellation →</button>${close}</div><p class="mini">(다음 작업: 경고 팝업 + 운영진 확인으로 이어짐)</p>`;
+  else if(kind==='mk')s.innerHTML=`<strong>Make-up · ${c[3]}</strong><p>${DAYS[d]} ${DATES[wk][d]} Nov ${tt(c[1])} (${c[2]} min). Booked, so it can’t be closed here.</p><div class="btns"><button class="btn" data-x>Request cancellation →</button>${close}</div>`;
+  else if(kind==='shut')s.innerHTML=`<strong>Closed every week</strong><p>${full(d)} ${tt(m)} is closed in <b>Every week</b>. Change it there.</p><div class="btns">${close}</div>`;
+  else if(kind==='day'){
+   const free=T.filter(x=>open[d].has(x)&&!clsAt(d,x)&&!mkAt(d,x));
+   const allShut=free.length&&free.every(x=>O().has(d+':'+x));
+   s.innerHTML=`<strong>${full(d)} ${DATES[wk][d]} Nov</strong><p>${allShut?'Open all free times on this day again?':'Close all free times on this day, just this week?'}</p><p class="mini">Classes stay as they are.</p><div class="btns"><button class="btn" data-day>${allShut?'Open the day':'Close the day'}</button>${close}</div>`;
+   s.querySelector('[data-day]').onclick=()=>{free.forEach(x=>allShut?O().delete(d+':'+x):O().add(d+':'+x));sheet=null;draw()};
+  }else if(kind==='save'){
+   const ch=changes();
+   s.innerHTML=`<strong>Save these changes?</strong><ul style="margin:0;padding-left:18px;font-size:14px">${ch.map(x=>`<li>${x}</li>`).join('')}</ul><p class="mini">Students can no longer pick closed times for make-ups. Your classes don’t change.</p><div class="btns"><button class="btn" data-ok>Save</button><button class="btn s" data-x>Back</button></div>`;
+   s.querySelector('[data-ok]').onclick=()=>{open.forEach((o,i)=>base[i]=new Set(o));Object.keys(once).forEach(w=>onceBase[w]=new Set(once[w]));sheet={kind:'saved'};draw()};
+  }else if(kind==='saved')s.innerHTML=`<strong>Saved</strong><p class="mini">(시안: 저장 기록이 운영진 화면에 남음 — Q2 ①일 때)</p><div class="btns">${close}</div>`;
+  s.querySelectorAll('[data-x]').forEach(x=>x.onclick=()=>{sheet=null;draw()});
+  dim.append(s);return dim;
+ }
+ function draw(){
+  const scroll=root.querySelector('.gridwrap')?.scrollTop;
+  root.innerHTML='';
+  const main=document.createElement('div');main.style.cssText=isPc?'min-width:0':'display:flex;flex-direction:column;flex:1;min-height:0';
+  main.innerHTML=`<div class="top"><div><strong>My hours</strong><div class="sub">Your time · Australia/Melbourne</div></div><button class="x" aria-label="Close" type="button">✕</button></div>
+  <div class="tabs" role="tablist"><button role="tab" aria-selected="${tab==='week'}" data-t="week">Every week</button><button role="tab" aria-selected="${tab==='once'}" data-t="once">One week only</button></div>
+  <p class="help">${tab==='week'?'Tap a time to open or close it every week. Green = students can book a class starting then.':'Close free times for this week only. Tap a day to close the whole day.'}</p>
+  ${tab==='once'?`<div class="wk"><button type="button" data-w="-1" ${wk===0?'disabled':''} aria-label="Previous week">‹</button><b>${WEEKS[wk]}</b><button type="button" data-w="1" ${wk===WEEKS.length-1?'disabled':''} aria-label="Next week">›</button></div>`:''}
+  <div class="legend"><span><i style="background:var(--open)"></i>Open</span><span><i style="background:var(--shut)"></i>Closed</span>${tab==='once'?'<span><i class="c once" style="height:12px"></i>Closed this week</span>':''}<span><i style="background:var(--cls)"></i>Class</span>${tab==='once'?'<span><i style="background:var(--mk)"></i>Make-up</span>':''}</div>`;
+  main.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;draw()});
+  main.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{wk+=Number(b.dataset.w);draw()});
+  const gw=document.createElement('div');gw.className='gridwrap';
+  const g=document.createElement('div');g.className='g';
+  g.append(Object.assign(document.createElement('div'),{className:'h'}));
+  DAYS.forEach((_,d)=>g.append(dayHead(d)));
+  T.forEach(m=>{g.append(Object.assign(document.createElement('div'),{className:'t',textContent:m%60?'':tt(m)}));DAYS.forEach((_,d)=>g.append(cell(d,m)))});
+  gw.append(g);main.append(gw);
+  const n=changes().length;
+  const save=()=>{sheet={kind:'save'};draw()};
+  if(isPc){
+   root.append(main);
+   const side=document.createElement('div');side.className='side';
+   side.innerHTML=`<div class="box"><strong>Changes</strong>${n?`<ul>${changes().map(x=>`<li>${x}</li>`).join('')}</ul>`:'<p class="mini">Nothing changed yet. Tap a time on the left.</p>'}<button class="btn" type="button" ${n?'':'disabled'}>Save${n?` (${n})`:''}</button></div>
+   <div class="box"><strong>Can’t teach a class?</strong><p class="mini">Times with a class are locked. Tap the class to send a cancellation request.</p></div>`;
+   side.querySelector('.btn').onclick=save;root.append(side);
+  }else{
+   root.append(main);
+   const bar=document.createElement('div');bar.className='bar';
+   bar.innerHTML=`<span>${n?`${n} change${n>1?'s':''} not saved`:'No changes'}</span><button class="btn" type="button" ${n?'':'disabled'}>Save</button>`;
+   bar.querySelector('.btn').onclick=save;root.append(bar);
+  }
+  if(sheet)root.append(sheetEl());
+  const nw=root.querySelector('.gridwrap');if(nw)nw.scrollTop=scroll??(isPc?0:60);
+ }
+ draw();
+}
+make(document.getElementById('ph'),false);
+make(document.getElementById('pcv'),true);
+})();
+</script>

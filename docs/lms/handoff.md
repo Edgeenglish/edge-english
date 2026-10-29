@@ -4,6 +4,11 @@
 
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
+## 🆕 2026-10-29 강사 본인 가능 시간 고치기 — 시안 (브랜치 claude/upbeat-allen-sfqlap)
+- 시안 https://claude.ai/artifact/2u7QFFrTmNYev4MuEcb4bv (원본 `docs/lms/previews/tutor-hours-drafts.html`): 강사 화면 [My hours] → 탭 2개 **Every week**(`tutor_availability`, 30분 칸 = 그 시각 수업 시작 가능) · **One week only**(`tutor_time_off` kind 'block', 요일 머리 누르면 하루 통째). 수업·보강 칸은 잠김 → 그 주만 탭에서 '취소 신청'(다음 작업)으로 연결. 저장 전 바뀐 내용 확인 창
+- **대표 답 대기**: Q1 고정 수업 있는 칸 매주 닫기 금지(권장) / 경고 후 허용 · Q2 저장 즉시 반영 + 운영진 화면 기록(권장) / 운영진 확인 뒤 · Q3 숫자(대표 결정): 그 주만 닫기 마감(시작 몇 시간 전) · 몇 주 앞까지 · 매주 변경 적용 시작(바로/다음 주 월요일) · Q4 화면·영어 문구
+- 만들 때: 매주 변경은 기존 줄 `effective_to` 끝내고 새 줄 · block 칸은 이어진 칸 한 줄로 · DB 함수에서 수업·보강·보강 yes 답 칸 닫기 재검사
+
 ## 🆕 2026-10-29 학생 수업 알림 메일 (POL-OP-18 변경) — 개발 완료, 시험용 적용 대기 (브랜치 claude/compassionate-hypatia-wqlnnh)
 - 시안 https://claude.ai/artifact/F5MoyuxfjWso8p2S5E7wDZ (원본 `docs/lms/previews/lesson-reminder-drafts.html`) — **대표 답 대기**: Q1 예약 실행 간격(5·10·15분, 숫자라 대표 결정) · Q2 보상·이월 수업은 '보강 수업' 스위치를 따를지(권장 예) · Q3 메일 글·화면
 - migration **2900** `lms_lesson_reminders`: `students.remind_regular/remind_makeup`(기본 켬) · `lessons.time_set_at`(시작 시각 정한 때, 트리거) · `lms_lesson_reminders_due(시각)`(보낼 알림 계산: 24시간 전/2시간 전, 그 뒤에 정한 수업은 건너뜀, 취소 안 보냄, 시간 바뀌면 새로, `dedupe_key`로 한 번만) · `lms_send_lesson_reminders()`(pg_net → Resend API, `Idempotency-Key`, 다음 실행 때 결과 기록 sent/failed) · `student_reminders`(학생·운영자 같은 함수). `send_emails` 꺼져 있으면 support@로만 + 제목 '[시험 · 학생 번호]'. 실패 자동 재시도 없음(failed로 남음)
