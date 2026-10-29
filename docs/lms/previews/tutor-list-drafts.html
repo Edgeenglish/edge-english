@@ -1,0 +1,175 @@
+<title>강사 수업 목록 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위 설명 한 줄 + PC 화면(표) + 휴대폰 화면(한 줄 목록). 같은 데이터로 둘 다 그림. 색은 강사 화면과 같게(주 버튼 보라) */
+:root{
+  --bg:#f4f3f8;--card:#ffffff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--soft:#f7f6fb;
+  --purple:#5b3fe0;--purple-soft:#efebff;--red:#b3261e;--ok:#1f7a4d;--frame:#1d1b2b;
+  --sans:"Pretendard","Noto Sans KR",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141320;--card:#1d1b2b;--fg:#ecebf5;--muted:#a9a6bd;--line:#34314a;--soft:#232136;
+  --purple:#a996ff;--purple-soft:#2a2442;--red:#ff8a80;--ok:#5fcf91;--frame:#4a4766;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141320;--card:#1d1b2b;--fg:#ecebf5;--muted:#a9a6bd;--line:#34314a;--soft:#232136;
+  --purple:#a996ff;--purple-soft:#2a2442;--red:#ff8a80;--ok:#5fcf91;--frame:#4a4766;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font-size:1.5rem;margin:0}
+h2{font-size:1.1rem;margin:0 0 8px}
+.lead{color:var(--muted);margin:4px 0 0}
+.ctl{display:flex;gap:8px;flex-wrap:wrap}
+.ctl button{min-height:40px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-weight:600;cursor:pointer}
+.ctl button[aria-pressed="true"]{background:var(--purple);border-color:var(--purple);color:#fff}
+.row{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.pc{flex:1 1 640px;min-width:0;border:6px solid var(--frame);border-radius:14px;background:var(--card);overflow:hidden}
+.phone{flex:0 1 360px;min-width:0;max-width:360px;border:6px solid var(--frame);border-radius:28px;background:var(--card);overflow:hidden}
+.cap{font-size:.85rem;color:var(--muted);margin:0 0 6px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px 6px;flex-wrap:wrap}
+.top b{font-size:17px}
+.nav{display:flex;gap:6px}
+.nav span{border:1px solid var(--line);border-radius:10px;padding:4px 10px;font-size:14px;font-weight:600}
+.sel{margin:4px 14px 8px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:15px;display:flex;justify-content:space-between}
+.range{margin:0 14px 6px;font-size:14px;font-weight:600;color:var(--muted)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:12.5px;color:var(--muted);font-weight:600;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+tr.day td{background:var(--soft);font-weight:700;font-size:13px;padding:5px 10px}
+tr.l{cursor:pointer}
+tr.l:hover td,.li:hover{background:var(--soft)}
+tr.cx td{color:var(--muted)}
+tr.cx .nm,.li.cx .nm{text-decoration:line-through}
+.tag{display:inline-block;margin-left:6px;border-radius:6px;background:var(--purple-soft);color:var(--purple);font-size:12px;font-weight:600;padding:0 6px}
+.st{font-weight:600}
+.st.rec{color:var(--red)}.st.ok{color:var(--ok)}.st.up{color:var(--muted)}
+.btn{display:inline-block;border-radius:8px;padding:3px 10px;font-size:13px;font-weight:600;border:1px solid var(--line);color:var(--fg);background:var(--card)}
+.btn.main{background:var(--purple);border-color:var(--purple);color:#fff}
+.form{padding:10px 12px 12px;background:var(--soft);border-bottom:1px solid var(--line);white-space:normal}
+.radios{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:420px}
+.radios span{border:1px solid var(--line);border-radius:8px;text-align:center;padding:6px 0;font-size:13.5px;font-weight:600;background:var(--card)}
+.radios span.on{background:var(--purple);border-color:var(--purple);color:#fff}
+.f{margin-top:8px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.box{margin-top:3px;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:7px 10px;font-size:14px;color:var(--muted);max-width:520px}
+.save{margin-top:8px}
+.dayh{background:var(--soft);font-weight:700;font-size:13px;padding:5px 12px;border-bottom:1px solid var(--line)}
+.li{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-variant-numeric:tabular-nums}
+.li .t{font-weight:700;font-size:14px}
+.li .nm{font-weight:600;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .sub{font-size:12.5px;color:var(--muted)}
+.li .st{font-size:13px;text-align:right}
+.li.cx{color:var(--muted)}
+.notes{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;max-width:760px}
+.notes ul{margin:0;padding-left:18px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>강사 화면 · 수업 목록 시안</h1>
+    <p class="lead">수업 하나 = 한 줄. 줄을 누르면 그 자리에서 기록칸이 펼쳐집니다. 아래 줄을 직접 눌러 보세요.</p>
+  </div>
+
+  <div class="ctl" role="group" aria-label="보기">
+    <button type="button" id="v-week" aria-pressed="true">주별 보기</button>
+    <button type="button" id="v-stu" aria-pressed="false">학생 한 명 전체 보기</button>
+  </div>
+
+  <div class="row">
+    <div style="flex:1 1 640px;min-width:0">
+      <p class="cap">PC</p>
+      <div class="pc"><div id="pc"></div></div>
+    </div>
+    <div style="flex:0 1 360px;min-width:0">
+      <p class="cap">휴대폰</p>
+      <div class="phone"><div id="ph"></div></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>지금 화면과 다른 점</h2>
+    <ul>
+      <li>칸(카드) → 한 줄. 한 화면에 보이는 수업이 약 3배.</li>
+      <li>Classroom·Class notes 버튼은 줄을 펼쳤을 때만 보임.</li>
+      <li>맨 위 'To record'(기록할 수업) 묶음은 지금처럼 그대로 둠.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const D = {
+  '2026-10-26':'Mon 10/26','2026-10-27':'Tue 10/27','2026-10-28':'Wed 10/28',
+  '2026-10-29':'Thu 10/29','2026-10-30':'Fri 10/30','2026-10-31':'Sat 10/31',
+  '2026-10-19':'Mon 10/19','2026-10-21':'Wed 10/21','2026-11-02':'Mon 11/2','2026-11-04':'Wed 11/4'
+};
+const week = [
+  ['2026-10-26','19:00','19:50','Jiwoo Park','4/24','ok','✓ Normal',''],
+  ['2026-10-26','20:00','20:50','Minjun Lee','11/24','ok','✓ Normal',''],
+  ['2026-10-26','21:00','21:50','Seoyeon Kim','2/8','ok','✓ Late',''],
+  ['2026-10-27','19:30','20:20','Hajun Choi','7/12','ok','✓ Normal','Make-up'],
+  ['2026-10-27','20:30','21:20','Yuna Jung','15/24','ok','✓ Normal',''],
+  ['2026-10-28','19:00','19:50','Jiwoo Park','5/24','rec','To record',''],
+  ['2026-10-28','20:00','20:50','Minjun Lee','12/24','ok','✓ Normal',''],
+  ['2026-10-28','21:00','21:50','Seoyeon Kim','—','cx','Canceled (student)',''],
+  ['2026-10-29','19:30','20:20','Hajun Choi','8/12','up','Upcoming',''],
+  ['2026-10-29','20:30','21:20','Yuna Jung','16/24','up','Upcoming',''],
+  ['2026-10-30','19:00','19:50','Jiwoo Park','6/24','up','Upcoming',''],
+  ['2026-10-30','20:00','20:50','Minjun Lee','13/24','up','Upcoming',''],
+  ['2026-10-31','10:00','10:50','Seoyeon Kim','3/8','up','Upcoming','Make-up'],
+];
+const stu = [
+  ['2026-10-19','19:00','19:50','Jiwoo Park','1/24','ok','✓ Normal',''],
+  ['2026-10-21','19:00','19:50','Jiwoo Park','2/24','ok','✓ Normal',''],
+  ['2026-10-23','19:00','19:50','Jiwoo Park','3/24','ok','✓ Late',''],
+  ['2026-10-26','19:00','19:50','Jiwoo Park','4/24','ok','✓ Normal',''],
+  ['2026-10-28','19:00','19:50','Jiwoo Park','5/24','rec','To record',''],
+  ['2026-10-30','19:00','19:50','Jiwoo Park','6/24','up','Upcoming',''],
+  ['2026-11-02','19:00','19:50','Jiwoo Park','7/24','up','Upcoming',''],
+  ['2026-11-04','19:00','19:50','Jiwoo Park','8/24','up','Upcoming',''],
+];
+D['2026-10-23'] = 'Fri 10/23';
+let mode = 'week';
+let open = '2026-10-28 19:00';
+
+const formHtml = (r) => r[5]==='rec' || r[5]==='ok' ? `
+  <div class="radios"><span class="${r[5]==='rec'?'on':''}">Normal</span><span>Late</span><span>No-show</span></div>
+  <div class="f">Covered topics</div><div class="box">${r[5]==='rec'?'e.g. Ch.3 past tense, small talk':'Ch.2 travel phrases'}</div>
+  <div class="f">Remarks</div><div class="box">&nbsp;</div>
+  <div class="save"><span class="btn main">Save</span> <span class="btn">Classroom</span> <span class="btn">Class notes</span></div>`
+  : r[5]==='up' ? `<span class="btn">Classroom</span> <span class="btn">Class notes</span>` : `<span style="color:var(--muted);font-size:13px">Canceled</span>`;
+
+function head(){
+  return `<div class="top"><b>Schedule</b>${mode==='week'?'<div class="nav"><span>‹</span><span>This week</span><span>›</span></div>':''}</div>
+  <div class="sel"><span>${mode==='week'?'All students · by week':'Jiwoo Park · all classes'}</span><span>▾</span></div>
+  ${mode==='week'?'<div class="range">Mon 10/26 – Sun 11/1</div>':''}`;
+}
+function render(){
+  const rows = mode==='week'?week:stu;
+  let pc = head()+'<div class="scroll"><table><thead><tr><th>Time</th><th>Student</th><th>Class</th><th>Length</th><th>Status</th><th></th></tr></thead><tbody>';
+  let ph = head();
+  let last = '';
+  for (const r of rows){
+    const k = r[0]+' '+r[1];
+    if (r[0]!==last){ last=r[0];
+      pc += `<tr class="day"><td colspan="6">${D[r[0]]}</td></tr>`;
+      ph += `<div class="dayh">${D[r[0]]}</div>`; }
+    const cls = r[5]==='cx'?'cx':'';
+    const tag = r[7]?`<span class="tag">${r[7]}</span>`:'';
+    const act = r[5]==='rec'?'<span class="btn main">Record</span>':'';
+    const stc = r[5]==='cx'?'up':r[5];
+    pc += `<tr class="l ${cls}" data-k="${k}"><td>${r[1]}–${r[2]}</td><td><span class="nm">${r[3]}</span>${tag}</td><td>${r[4]}</td><td>50 min</td><td class="st ${stc}">${r[6]}</td><td>${act}</td></tr>`;
+    if (open===k) pc += `<tr><td colspan="6" class="form">${formHtml(r)}</td></tr>`;
+    ph += `<div class="li ${cls}" data-k="${k}"><span class="t">${r[1]}</span><div style="min-width:0"><div class="nm">${r[3]}${tag}</div><div class="sub">Class ${r[4]} · 50 min</div></div><span class="st ${stc}">${r[6]}</span></div>`;
+    if (open===k) ph += `<div class="form">${formHtml(r)}</div>`;
+  }
+  pc += '</tbody></table></div>';
+  document.getElementById('pc').innerHTML = pc;
+  document.getElementById('ph').innerHTML = ph;
+  document.querySelectorAll('[data-k]').forEach(el => el.onclick = () => { open = open===el.dataset.k ? '' : el.dataset.k; render(); });
+}
+function setMode(m){ mode=m; document.getElementById('v-week').setAttribute('aria-pressed', m==='week'); document.getElementById('v-stu').setAttribute('aria-pressed', m==='stu'); render(); }
+document.getElementById('v-week').onclick = () => setMode('week');
+document.getElementById('v-stu').onclick = () => setMode('stu');
+render();
+</script>
