@@ -5,6 +5,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
+import { STATUS_RULES } from '@/lms/rules/status';
 import {
   answerReady, canRecord, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus,
   statusText, timeRange, weekOf, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
@@ -223,7 +224,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         {days.length > 0 && (
           <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
             <div className={`hidden ${cols(kst)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 whitespace-nowrap text-[13px] font-bold text-[#2b1c7a] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-              <span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span><span>Covered Topics</span><span />
+              <span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span><span>Paid</span><span>Covered Topics</span><span />
             </div>
             {days.map((d) => (
               <div key={d.date}>
@@ -274,8 +275,8 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
 
 /** PC 표 칸 (KST 칸은 강사가 끌 수 있음) */
 const cols = (kst: boolean) => kst
-  ? 'lg:grid-cols-[80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)_72px]'
-  : 'lg:grid-cols-[80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)_72px]';
+  ? 'lg:grid-cols-[80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)_72px]'
+  : 'lg:grid-cols-[80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)_72px]';
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
 function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
@@ -290,6 +291,8 @@ function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
   const canOpen = phase !== 'canceled';
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
   const stText = phase === 'recorded' ? `✓ ${status}` : status;
+  // 페이 대상 Y/N (상태 규칙 tutorPaid, 대표 10/29 가안). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
+  const paid = l.classStatus ? (STATUS_RULES[l.classStatus].tutorPaid ? (l.locked ? 'Y ✓' : 'Y') : 'N') : '';
   const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
   const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
   const links = (
@@ -318,7 +321,7 @@ function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
           <span className="min-w-0">
             <span className="block truncate text-[14.5px] font-semibold">{name}</span>
             <span className="block text-[12.5px] text-[#6b6880]">
-              {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min{kindTag(l) ? ` · ${kindTag(l)}` : ''}
+              {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min{kindTag(l) ? ` · ${kindTag(l)}` : ''}{paid ? ` · Paid ${paid}` : ''}
             </span>
             {l.topics && <span className="block truncate text-[12.5px]">{l.topics}</span>}
           </span>
@@ -332,6 +335,7 @@ function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
           <span>{minutesOf(l)}</span>
           <span>{kindTag(l) ?? 'Regular'}</span>
           <span className={`font-semibold ${stColor}`}>{stText}</span>
+          <span>{paid}</span>
           <span className="flex-wrap text-[13px]">{l.topics}{remarksChip}</span>
           <span>{phase === 'to_record' && <span className="rounded-[8px] bg-[#5b3fe0] px-2.5 py-1 text-[13px] font-semibold text-white">Record</span>}</span>
         </div>
