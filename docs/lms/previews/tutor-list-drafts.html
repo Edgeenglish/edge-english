@@ -23,7 +23,7 @@ h2{font-size:1.1rem;margin:0 0 8px}
 .ctl button{min-height:40px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-weight:600;cursor:pointer}
 .ctl button[aria-pressed="true"]{background:var(--purple);border-color:var(--purple);color:#fff}
 .row{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
-.pc{flex:1 1 640px;min-width:0;border:6px solid var(--frame);border-radius:14px;background:var(--card);overflow:hidden}
+.pc{flex:1 1 760px;min-width:0;border:6px solid var(--frame);border-radius:14px;background:var(--card);overflow:hidden}
 .phone{flex:0 1 360px;min-width:0;max-width:360px;border:6px solid var(--frame);border-radius:28px;background:var(--card);overflow:hidden}
 .cap{font-size:.85rem;color:var(--muted);margin:0 0 6px}
 .top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px 6px;flex-wrap:wrap}
@@ -60,6 +60,10 @@ tr.cx .nm,.li.cx .nm{text-decoration:line-through}
 .li .sub{font-size:12.5px;color:var(--muted)}
 .li .st{font-size:13px;text-align:right}
 .li.cx{color:var(--muted)}
+.mu{color:var(--muted)}
+td.wrap{white-space:normal;min-width:140px;max-width:220px;font-size:13px}
+.li .tp{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li{align-items:start}
 .notes{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;max-width:760px}
 .notes ul{margin:0;padding-left:18px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -90,7 +94,8 @@ tr.cx .nm,.li.cx .nm{text-decoration:line-through}
   <div class="notes">
     <h2>지금 화면과 다른 점</h2>
     <ul>
-      <li>칸(카드) → 한 줄. 한 화면에 보이는 수업이 약 3배.</li>
+      <li>칸(카드) → 한 줄. 칸 이름은 Class Record 시트와 같게 (Covered Topics·Remarks·KST 포함).</li>
+      <li>휴대폰은 칸이 좁아 Covered Topics·Remarks를 학생 이름 아래 작은 글씨로.</li>
       <li>Classroom·Class notes 버튼은 줄을 펼쳤을 때만 보임.</li>
       <li>맨 위 'To record'(기록할 수업) 묶음은 지금처럼 그대로 둠.</li>
     </ul>
@@ -104,38 +109,39 @@ const D = {
   '2026-10-19':'Mon 10/19','2026-10-21':'Wed 10/21','2026-11-02':'Mon 11/2','2026-11-04':'Wed 11/4'
 };
 const week = [
-  ['2026-10-26','19:00','19:50','Jiwoo Park','4/24','ok','✓ Normal',''],
-  ['2026-10-26','20:00','20:50','Minjun Lee','11/24','ok','✓ Normal',''],
-  ['2026-10-26','21:00','21:50','Seoyeon Kim','2/8','ok','✓ Late',''],
-  ['2026-10-27','19:30','20:20','Hajun Choi','7/12','ok','✓ Normal','Make-up'],
-  ['2026-10-27','20:30','21:20','Yuna Jung','15/24','ok','✓ Normal',''],
-  ['2026-10-28','19:00','19:50','Jiwoo Park','5/24','rec','To record',''],
-  ['2026-10-28','20:00','20:50','Minjun Lee','12/24','ok','✓ Normal',''],
-  ['2026-10-28','21:00','21:50','Seoyeon Kim','—','cx','Canceled (student)',''],
-  ['2026-10-29','19:30','20:20','Hajun Choi','8/12','up','Upcoming',''],
-  ['2026-10-29','20:30','21:20','Yuna Jung','16/24','up','Upcoming',''],
-  ['2026-10-30','19:00','19:50','Jiwoo Park','6/24','up','Upcoming',''],
-  ['2026-10-30','20:00','20:50','Minjun Lee','13/24','up','Upcoming',''],
-  ['2026-10-31','10:00','10:50','Seoyeon Kim','3/8','up','Upcoming','Make-up'],
+  ['2026-10-26','19:00','19:50','Jiwoo Park','4/24','ok','✓ Normal','','Daily routines, past tense',''],
+  ['2026-10-26','20:00','20:50','Minjun Lee','11/24','ok','✓ Normal','','Job interview practice','Needs more speaking time'],
+  ['2026-10-26','21:00','21:50','Seoyeon Kim','2/8','ok','✓ Late','','Hobbies, free-time phrases','Student joined 10 min late'],
+  ['2026-10-27','19:30','20:20','Hajun Choi','7/12','ok','✓ Normal','Make-up','Travel: airport & hotel',''],
+  ['2026-10-27','20:30','21:20','Yuna Jung','15/24','ok','✓ Normal','','News article discussion',''],
+  ['2026-10-28','19:00','19:50','Jiwoo Park','5/24','rec','To record','','',''],
+  ['2026-10-28','20:00','20:50','Minjun Lee','12/24','ok','✓ Normal','','Self-introduction for interviews',''],
+  ['2026-10-28','21:00','21:50','Seoyeon Kim','—','cx','Canceled (student)','','',''],
+  ['2026-10-29','19:30','20:20','Hajun Choi','8/12','up','Upcoming','','',''],
+  ['2026-10-29','20:30','21:20','Yuna Jung','16/24','up','Upcoming','','',''],
+  ['2026-10-30','19:00','19:50','Jiwoo Park','6/24','up','Upcoming','','',''],
+  ['2026-10-30','20:00','20:50','Minjun Lee','13/24','up','Upcoming','','',''],
+  ['2026-10-31','10:00','10:50','Seoyeon Kim','3/8','up','Upcoming','Make-up','',''],
 ];
 const stu = [
-  ['2026-10-19','19:00','19:50','Jiwoo Park','1/24','ok','✓ Normal',''],
-  ['2026-10-21','19:00','19:50','Jiwoo Park','2/24','ok','✓ Normal',''],
-  ['2026-10-23','19:00','19:50','Jiwoo Park','3/24','ok','✓ Late',''],
-  ['2026-10-26','19:00','19:50','Jiwoo Park','4/24','ok','✓ Normal',''],
-  ['2026-10-28','19:00','19:50','Jiwoo Park','5/24','rec','To record',''],
-  ['2026-10-30','19:00','19:50','Jiwoo Park','6/24','up','Upcoming',''],
-  ['2026-11-02','19:00','19:50','Jiwoo Park','7/24','up','Upcoming',''],
-  ['2026-11-04','19:00','19:50','Jiwoo Park','8/24','up','Upcoming',''],
+  ['2026-10-19','19:00','19:50','Jiwoo Park','1/24','ok','✓ Normal','','Get-to-know-you questions','Level check: A2'],
+  ['2026-10-21','19:00','19:50','Jiwoo Park','2/24','ok','✓ Normal','','Family, describing people',''],
+  ['2026-10-23','19:00','19:50','Jiwoo Park','3/24','ok','✓ Late','','Weekend plans, future tense','Tutor internet issue, 5 min late'],
+  ['2026-10-26','19:00','19:50','Jiwoo Park','4/24','ok','✓ Normal','','Daily routines, past tense',''],
+  ['2026-10-28','19:00','19:50','Jiwoo Park','5/24','rec','To record','','',''],
+  ['2026-10-30','19:00','19:50','Jiwoo Park','6/24','up','Upcoming','','',''],
+  ['2026-11-02','19:00','19:50','Jiwoo Park','7/24','up','Upcoming','','',''],
+  ['2026-11-04','19:00','19:50','Jiwoo Park','8/24','up','Upcoming','','',''],
 ];
 D['2026-10-23'] = 'Fri 10/23';
 let mode = 'week';
+const kst = (t) => String(+t.slice(0,2)+1).padStart(2,'0')+t.slice(2);
 let open = '2026-10-28 19:00';
 
 const formHtml = (r) => r[5]==='rec' || r[5]==='ok' ? `
-  <div class="radios"><span class="${r[5]==='rec'?'on':''}">Normal</span><span>Late</span><span>No-show</span></div>
-  <div class="f">Covered topics</div><div class="box">${r[5]==='rec'?'e.g. Ch.3 past tense, small talk':'Ch.2 travel phrases'}</div>
-  <div class="f">Remarks</div><div class="box">&nbsp;</div>
+  <div class="radios"><span class="${r[6].includes('Late')?'':'on'}">Normal</span><span>Late</span><span>No-show</span></div>
+  <div class="f">Covered topics</div><div class="box">${r[8]||'&nbsp;'}</div>
+  <div class="f">Remarks</div><div class="box">${r[9]||'&nbsp;'}</div>
   <div class="save"><span class="btn main">Save</span> <span class="btn">Classroom</span> <span class="btn">Class notes</span></div>`
   : r[5]==='up' ? `<span class="btn">Classroom</span> <span class="btn">Class notes</span>` : `<span style="color:var(--muted);font-size:13px">Canceled</span>`;
 
@@ -146,21 +152,21 @@ function head(){
 }
 function render(){
   const rows = mode==='week'?week:stu;
-  let pc = head()+'<div class="scroll"><table><thead><tr><th>Time</th><th>Student</th><th>Class</th><th>Length</th><th>Status</th><th></th></tr></thead><tbody>';
+  let pc = head()+'<div class="scroll"><table><thead><tr><th>Time (Local)</th><th>KST</th><th>Student</th><th>Class Count</th><th>Min</th><th>Class Type</th><th>Class Status</th><th>Covered Topics</th><th>Remarks</th><th></th></tr></thead><tbody>';
   let ph = head();
   let last = '';
   for (const r of rows){
     const k = r[0]+' '+r[1];
     if (r[0]!==last){ last=r[0];
-      pc += `<tr class="day"><td colspan="6">${D[r[0]]}</td></tr>`;
+      pc += `<tr class="day"><td colspan="10">${D[r[0]]}</td></tr>`;
       ph += `<div class="dayh">${D[r[0]]}</div>`; }
     const cls = r[5]==='cx'?'cx':'';
     const tag = r[7]?`<span class="tag">${r[7]}</span>`:'';
     const act = r[5]==='rec'?'<span class="btn main">Record</span>':'';
     const stc = r[5]==='cx'?'up':r[5];
-    pc += `<tr class="l ${cls}" data-k="${k}"><td>${r[1]}–${r[2]}</td><td><span class="nm">${r[3]}</span>${tag}</td><td>${r[4]}</td><td>50 min</td><td class="st ${stc}">${r[6]}</td><td>${act}</td></tr>`;
-    if (open===k) pc += `<tr><td colspan="6" class="form">${formHtml(r)}</td></tr>`;
-    ph += `<div class="li ${cls}" data-k="${k}"><span class="t">${r[1]}</span><div style="min-width:0"><div class="nm">${r[3]}${tag}</div><div class="sub">Class ${r[4]} · 50 min</div></div><span class="st ${stc}">${r[6]}</span></div>`;
+    pc += `<tr class="l ${cls}" data-k="${k}"><td>${r[1]}</td><td class="mu">${kst(r[1])}</td><td><span class="nm">${r[3]}</span></td><td>${r[4]}</td><td>50</td><td>${r[7]||'Regular'}</td><td class="st ${stc}">${r[6]}</td><td class="wrap">${r[8]}</td><td class="wrap mu">${r[9]}</td><td>${act}</td></tr>`;
+    if (open===k) pc += `<tr><td colspan="10" class="form">${formHtml(r)}</td></tr>`;
+    ph += `<div class="li ${cls}" data-k="${k}"><span class="t">${r[1]}</span><div style="min-width:0"><div class="nm">${r[3]}${tag}</div><div class="sub">Class ${r[4]} · 50 min</div>${r[8]?`<div class="tp">${r[8]}</div>`:''}${r[9]?`<div class="tp mu">Remarks: ${r[9]}</div>`:''}</div><span class="st ${stc}">${r[6]}</span></div>`;
     if (open===k) ph += `<div class="form">${formHtml(r)}</div>`;
   }
   pc += '</tbody></table></div>';
