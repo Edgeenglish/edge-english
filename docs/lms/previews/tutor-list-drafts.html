@@ -64,6 +64,9 @@ tr.cx .nm,.li.cx .nm{text-decoration:line-through}
 td.wrap{white-space:normal;min-width:140px;max-width:220px;font-size:13px}
 .li .tp{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .li{align-items:start}
+.rm{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:0 5px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.k{display:block;font-size:11.5px;font-weight:500;color:var(--muted)}
+.kt{font-size:13px;font-weight:600;color:var(--muted);display:flex;gap:4px;align-items:center;margin-left:auto;margin-right:8px}
 .notes{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;max-width:760px}
 .notes ul{margin:0;padding-left:18px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -81,7 +84,7 @@ td.wrap{white-space:normal;min-width:140px;max-width:220px;font-size:13px}
   </div>
 
   <div class="row">
-    <div style="flex:1 1 640px;min-width:0">
+    <div style="flex:1 1 100%;min-width:0">
       <p class="cap">PC</p>
       <div class="pc"><div id="pc"></div></div>
     </div>
@@ -94,8 +97,10 @@ td.wrap{white-space:normal;min-width:140px;max-width:220px;font-size:13px}
   <div class="notes">
     <h2>지금 화면과 다른 점</h2>
     <ul>
-      <li>칸(카드) → 한 줄. 칸 이름은 Class Record 시트와 같게 (Covered Topics·Remarks·KST 포함).</li>
-      <li>휴대폰은 칸이 좁아 Covered Topics·Remarks를 학생 이름 아래 작은 글씨로.</li>
+      <li>칸(카드) → 한 줄. 칸 이름은 Class Record 시트와 같게 (Covered Topics·KST 포함).</li>
+      <li>KST: 강사가 체크를 끄면 KST가 사라짐 (강사마다 기억).</li>
+      <li>Remarks: 목록에는 적힌 줄에만 작은 'Remarks' 표시. 내용은 줄을 눌러 펼치면 보임. 새로 쓸 때는 펼친 칸에서 '+ Remarks'. Late를 고르면 이유 칸이 바로 나옴.</li>
+      <li>휴대폰은 Covered Topics만 이름 아래 작은 글씨로.</li>
       <li>Classroom·Class notes 버튼은 줄을 펼쳤을 때만 보임.</li>
       <li>맨 위 'To record'(기록할 수업) 묶음은 지금처럼 그대로 둠.</li>
     </ul>
@@ -135,43 +140,45 @@ const stu = [
 ];
 D['2026-10-23'] = 'Fri 10/23';
 let mode = 'week';
+let showKst = true;
 const kst = (t) => String(+t.slice(0,2)+1).padStart(2,'0')+t.slice(2);
 let open = '2026-10-28 19:00';
 
 const formHtml = (r) => r[5]==='rec' || r[5]==='ok' ? `
-  <div class="radios"><span class="${r[6].includes('Late')?'':'on'}">Normal</span><span>Late</span><span>No-show</span></div>
+  <div class="radios"><span class="${r[6].includes('Late')?'':'on'}">Normal</span><span class="${r[6].includes('Late')?'on':''}">Late</span><span>No-show</span></div>
   <div class="f">Covered topics</div><div class="box">${r[8]||'&nbsp;'}</div>
-  <div class="f">Remarks</div><div class="box">${r[9]||'&nbsp;'}</div>
+  ${r[9]||r[6].includes('Late')?`<div class="f">${r[6].includes('Late')?'Remarks (reason for being late)':'Remarks'}</div><div class="box">${r[9]||'&nbsp;'}</div>`:`<div class="save"><span class="btn">+ Remarks</span></div>`}
   <div class="save"><span class="btn main">Save</span> <span class="btn">Classroom</span> <span class="btn">Class notes</span></div>`
   : r[5]==='up' ? `<span class="btn">Classroom</span> <span class="btn">Class notes</span>` : `<span style="color:var(--muted);font-size:13px">Canceled</span>`;
 
 function head(){
-  return `<div class="top"><b>Schedule</b>${mode==='week'?'<div class="nav"><span>‹</span><span>This week</span><span>›</span></div>':''}</div>
+  return `<div class="top"><b>Schedule</b><label class="kt"><input type="checkbox" id="kst" ${showKst?'checked':''}> KST</label>${mode==='week'?'<div class="nav"><span>‹</span><span>This week</span><span>›</span></div>':''}</div>
   <div class="sel"><span>${mode==='week'?'All students · by week':'Jiwoo Park · all classes'}</span><span>▾</span></div>
   ${mode==='week'?'<div class="range">Mon 10/26 – Sun 11/1</div>':''}`;
 }
 function render(){
   const rows = mode==='week'?week:stu;
-  let pc = head()+'<div class="scroll"><table><thead><tr><th>Time (Local)</th><th>KST</th><th>Student</th><th>Class Count</th><th>Min</th><th>Class Type</th><th>Class Status</th><th>Covered Topics</th><th>Remarks</th><th></th></tr></thead><tbody>';
+  let pc = head()+'<div class="scroll"><table><thead><tr><th>Time (Local)</th>'+(showKst?'<th>KST</th>':'')+'<th>Student</th><th>Class Count</th><th>Min</th><th>Class Type</th><th>Class Status</th><th>Covered Topics</th><th></th></tr></thead><tbody>';
   let ph = head();
   let last = '';
   for (const r of rows){
     const k = r[0]+' '+r[1];
     if (r[0]!==last){ last=r[0];
-      pc += `<tr class="day"><td colspan="10">${D[r[0]]}</td></tr>`;
+      pc += `<tr class="day"><td colspan="${showKst?9:8}">${D[r[0]]}</td></tr>`;
       ph += `<div class="dayh">${D[r[0]]}</div>`; }
     const cls = r[5]==='cx'?'cx':'';
     const tag = r[7]?`<span class="tag">${r[7]}</span>`:'';
     const act = r[5]==='rec'?'<span class="btn main">Record</span>':'';
     const stc = r[5]==='cx'?'up':r[5];
-    pc += `<tr class="l ${cls}" data-k="${k}"><td>${r[1]}</td><td class="mu">${kst(r[1])}</td><td><span class="nm">${r[3]}</span></td><td>${r[4]}</td><td>50</td><td>${r[7]||'Regular'}</td><td class="st ${stc}">${r[6]}</td><td class="wrap">${r[8]}</td><td class="wrap mu">${r[9]}</td><td>${act}</td></tr>`;
-    if (open===k) pc += `<tr><td colspan="10" class="form">${formHtml(r)}</td></tr>`;
-    ph += `<div class="li ${cls}" data-k="${k}"><span class="t">${r[1]}</span><div style="min-width:0"><div class="nm">${r[3]}${tag}</div><div class="sub">Class ${r[4]} · 50 min</div>${r[8]?`<div class="tp">${r[8]}</div>`:''}${r[9]?`<div class="tp mu">Remarks: ${r[9]}</div>`:''}</div><span class="st ${stc}">${r[6]}</span></div>`;
+    pc += `<tr class="l ${cls}" data-k="${k}"><td>${r[1]}</td>${showKst?`<td class="mu">${kst(r[1])}</td>`:''}<td><span class="nm">${r[3]}</span></td><td>${r[4]}</td><td>50</td><td>${r[7]||'Regular'}</td><td class="st ${stc}">${r[6]}</td><td class="wrap">${r[8]}${r[9]?' <span class="rm">Remarks</span>':''}</td><td>${act}</td></tr>`;
+    if (open===k) pc += `<tr><td colspan="${showKst?9:8}" class="form">${formHtml(r)}</td></tr>`;
+    ph += `<div class="li ${cls}" data-k="${k}"><span class="t">${r[1]}${showKst?`<span class="k">KST ${kst(r[1])}</span>`:''}</span><div style="min-width:0"><div class="nm">${r[3]}${tag}</div><div class="sub">Class ${r[4]} · 50 min</div>${r[8]?`<div class="tp">${r[8]}</div>`:''}</div><span class="st ${stc}">${r[6]}${r[9]?'<br><span class="rm">Remarks</span>':''}</span></div>`;
     if (open===k) ph += `<div class="form">${formHtml(r)}</div>`;
   }
   pc += '</tbody></table></div>';
   document.getElementById('pc').innerHTML = pc;
   document.getElementById('ph').innerHTML = ph;
+  document.querySelectorAll('#kst').forEach(el => el.onchange = () => { showKst = el.checked; render(); });
   document.querySelectorAll('[data-k]').forEach(el => el.onclick = () => { open = open===el.dataset.k ? '' : el.dataset.k; render(); });
 }
 function setMode(m){ mode=m; document.getElementById('v-week').setAttribute('aria-pressed', m==='week'); document.getElementById('v-stu').setAttribute('aria-pressed', m==='stu'); render(); }
