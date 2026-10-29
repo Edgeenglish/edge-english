@@ -42,15 +42,9 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
   const [recordedHere, setRecordedHere] = useState<TutorLesson[]>([]);
   const [answeredHere, setAnsweredHere] = useState<TutorMakeup[]>([]);
   const tz = screen.tutor.timezone;
-  // KST 칸: 강사가 끌 수 있음, 이 기기에 기억 (대표 10/29). 한국 시간대 강사는 칸 없음
-  const [kstPref, setKstPref] = useState(true);
-  useEffect(() => {
-    try { if (localStorage.getItem('lms_tutor_kst') === '0') setKstPref(false); } catch { /* 저장 안 되는 브라우저 */ }
-  }, []);
-  function setKst(on: boolean) {
-    setKstPref(on);
-    try { localStorage.setItem('lms_tutor_kst', on ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
-  }
+  // KST·Paid 칸: 강사가 끌 수 있음, 이 기기에 기억 (대표 10/29). 한국 시간대 강사는 KST 칸 없음
+  const [kstPref, setKst] = useSavedToggle('lms_tutor_kst');
+  const [paidCol, setPaidCol] = useSavedToggle('lms_tutor_paid');
   const kstOn = tz === 'Asia/Seoul' ? null : kstPref;
   const kst = kstOn === true;
   const week = weekOf(now, tz, offset);
@@ -197,6 +191,10 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
               KST
             </label>
           )}
+          <label className={`${kstOn === null ? 'ml-auto ' : ''}flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]`}>
+            <input type="checkbox" checked={paidCol} onChange={(e) => setPaidCol(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
+            Paid
+          </label>
           {!student && <div className="flex items-center gap-1.5">
             <button type="button" aria-label="Previous week" disabled={loading} onClick={() => goWeek(offset - 1)} className={`${btnSub} px-3`}>‹</button>
             <button type="button" disabled={loading || offset === 0} onClick={() => goWeek(0)} className={`${btnSub} px-3 text-[14px]`}>This week</button>
@@ -223,14 +221,14 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
         {days.length > 0 && (
           <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
-            <div className={`hidden ${cols(kst)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 whitespace-nowrap text-[13px] font-bold text-[#2b1c7a] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-              <span /><span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span><span>Paid</span><span>Covered Topics</span>
+            <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 whitespace-nowrap text-[13px] font-bold text-[#2b1c7a] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
+              <span /><span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
             </div>
             {days.map((d) => (
               <div key={d.date}>
                 <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}</h3>
                 {d.lessons.map((l) => (
-                  <ListRow key={l.id} lesson={l} tz={tz} now={now} kst={kst} meetUrl={screen.tutor.meetUrl} actions={actions}
+                  <ListRow key={l.id} lesson={l} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions}
                     onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
                 ))}
               </div>
@@ -274,13 +272,27 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
 }
 
 /** PC 표 칸 (KST 칸은 강사가 끌 수 있음) */
-const cols = (kst: boolean) => kst
-  ? 'lg:grid-cols-[76px_80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
-  : 'lg:grid-cols-[76px_80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]';
+const cols = (kst: boolean, paid: boolean) => kst
+  ? (paid ? 'lg:grid-cols-[76px_80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
+    : 'lg:grid-cols-[76px_80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]')
+  : (paid ? 'lg:grid-cols-[76px_80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
+    : 'lg:grid-cols-[76px_80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]');
+
+/** 켬/끔을 이 기기에 기억 (기본 켬) */
+function useSavedToggle(key: string): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    try { if (localStorage.getItem(key) === '0') setOn(false); } catch { /* 저장 안 되는 브라우저 */ }
+  }, [key]);
+  return [on, (v: boolean) => {
+    setOn(v);
+    try { localStorage.setItem(key, v ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
+  }];
+}
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
-function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
-  lesson: TutorLesson; tz: string; now: Date; kst: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>;
+function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }: {
+  lesson: TutorLesson; tz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const phase = phaseOf(l, now);
@@ -321,13 +333,13 @@ function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
           <span className="min-w-0">
             <span className="block truncate text-[14.5px] font-semibold">{name}</span>
             <span className="block text-[12.5px] text-[#6b6880]">
-              {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min{kindTag(l) ? ` · ${kindTag(l)}` : ''}{paid ? ` · Paid ${paid}` : ''}
+              {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min{kindTag(l) ? ` · ${kindTag(l)}` : ''}{paidCol && paid ? ` · Paid ${paid}` : ''}
             </span>
             {l.topics && <span className="block truncate text-[12.5px]">{l.topics}</span>}
           </span>
           <span className={`text-right text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip && <span className="block">{remarksChip}</span>}</span>
         </div>
-        <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
+        <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
           <span>{phase === 'to_record' && <span className="rounded-[8px] bg-[#5b3fe0] px-2.5 py-1 text-[13px] font-semibold text-white">Record</span>}</span>
           <span className="font-semibold">{time}</span>
           {kst && <span className="text-[#6b6880]">{k?.replace(/^KST /, '')}</span>}
@@ -336,7 +348,7 @@ function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
           <span>{minutesOf(l)}</span>
           <span>{kindTag(l) ?? 'Regular'}</span>
           <span className={`font-semibold ${stColor}`}>{stText}</span>
-          <span>{paid}</span>
+          {paidCol && <span>{paid}</span>}
           <span className="flex-wrap text-[13px]">{l.topics}{remarksChip}</span>
         </div>
       </button>
