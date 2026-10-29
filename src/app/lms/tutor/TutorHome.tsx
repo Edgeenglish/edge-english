@@ -1,6 +1,6 @@
 'use client';
 
-// 강사 화면 (영어, 휴대폰 우선): ① 기록할 수업(Class Record) ② 보강 가능 여부 답 ③ 주간 일정
+// 강사 화면 (영어, 휴대폰 우선): ① 기록할 수업(Class Record) ② 보강 가능 여부 답 ③ 일정 목록(시트처럼 한 줄, 누르면 펼침)
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
 import { useEffect, useState, type ReactNode } from 'react';
@@ -40,6 +40,17 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
   const [recordedHere, setRecordedHere] = useState<TutorLesson[]>([]);
   const [answeredHere, setAnsweredHere] = useState<TutorMakeup[]>([]);
   const tz = screen.tutor.timezone;
+  // KST 칸: 강사가 끌 수 있음, 이 기기에 기억 (대표 10/29). 한국 시간대 강사는 칸 없음
+  const [kstPref, setKstPref] = useState(true);
+  useEffect(() => {
+    try { if (localStorage.getItem('lms_tutor_kst') === '0') setKstPref(false); } catch { /* 저장 안 되는 브라우저 */ }
+  }, []);
+  function setKst(on: boolean) {
+    setKstPref(on);
+    try { localStorage.setItem('lms_tutor_kst', on ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
+  }
+  const kstOn = tz === 'Asia/Seoul' ? null : kstPref;
+  const kst = kstOn === true;
   const week = weekOf(now, tz, offset);
   // 학생별로 보기 (대표 10/29): 학생을 고르면 그 학생의 모든 수업을 날짜순으로 (주 단위 대신)
   const [student, setStudent] = useState('');
@@ -92,7 +103,8 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
     : daysOf(screen.lessons, tz, week);
 
   return (
-    <main className="mx-auto max-w-[680px] px-4 pb-16 pt-4">
+    <main className="mx-auto max-w-[680px] px-4 pb-16 pt-4 lg:max-w-[1080px]">
+      <div className="lg:max-w-[680px]">
       {adminBar}
       <header className="mb-4 flex items-start justify-between gap-3">
         <div>
@@ -157,9 +169,17 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         </section>
       )}
 
+      </div>
+
       <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[17px] font-bold text-[#1d1b2b]">Schedule</h2>
+          {kstOn !== null && (
+            <label className="ml-auto flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]">
+              <input type="checkbox" checked={kstOn} onChange={(e) => setKst(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
+              KST
+            </label>
+          )}
           {!student && <div className="flex items-center gap-1.5">
             <button type="button" aria-label="Previous week" disabled={loading} onClick={() => goWeek(offset - 1)} className={`${btnSub} px-3`}>‹</button>
             <button type="button" disabled={loading || offset === 0} onClick={() => goWeek(0)} className={`${btnSub} px-3 text-[14px]`}>This week</button>
@@ -175,7 +195,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             if (v) await loadAll();
             setStudent(v);
           }}
-          className="mb-2 min-h-[44px] w-full rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[15px] text-[#1d1b2b]"
+          className="mb-2 min-h-[44px] w-full rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[15px] text-[#1d1b2b] lg:max-w-[680px]"
         >
           <option value="">All students · by week</option>
           {studentNames.map((n) => (
@@ -184,19 +204,22 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         </select>
         {!student && <p className="mb-2 text-[14px] font-semibold text-[#55526a]">{dayLabel(week.from)} – {dayLabel(week.to)}</p>}
         {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
-        <div className="grid gap-4">
-          {days.map((d) => (
-            <div key={d.date}>
-              <h3 className="mb-1.5 text-[14px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}</h3>
-              <div className="grid gap-2">
+        {days.length > 0 && (
+          <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
+            <div className={`hidden ${cols(kst)} gap-3 border-b border-[#e6e3ef] px-3 py-2 text-[12.5px] font-semibold text-[#6b6880] lg:grid`}>
+              <span>Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span><span>Covered Topics</span><span />
+            </div>
+            {days.map((d) => (
+              <div key={d.date}>
+                <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}</h3>
                 {d.lessons.map((l) => (
-                  <ScheduleRow key={l.id} lesson={l} tz={tz} now={now} meetUrl={screen.tutor.meetUrl} actions={actions} onSaved={async () => { await reload(); if (student) await refreshAll(); }}
-                    inRecordList={toRecord.some((x) => x.id === l.id)} />
+                  <ListRow key={l.id} lesson={l} tz={tz} now={now} kst={kst} meetUrl={screen.tutor.meetUrl} actions={actions}
+                    onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
                 ))}
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );
@@ -222,60 +245,93 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
   );
 }
 
-function ScheduleRow({ lesson: l, tz, now, meetUrl, actions, onSaved, inRecordList }: {
-  lesson: TutorLesson; tz: string; now: Date; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; inRecordList: boolean;
+/** PC 표 칸 (KST 칸은 강사가 끌 수 있음) */
+const cols = (kst: boolean) => kst
+  ? 'lg:grid-cols-[96px_84px_minmax(120px,1.1fr)_84px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)_72px]'
+  : 'lg:grid-cols-[96px_minmax(120px,1.1fr)_84px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)_72px]';
+
+/** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
+function ListRow({ lesson: l, tz, now, kst, meetUrl, actions, onSaved }: {
+  lesson: TutorLesson; tz: string; now: Date; kst: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const phase = phaseOf(l, now);
-  const tag = kindTag(l);
-  const kst = kstText(l.startsAt, tz);
   const status = statusText(l, now);
+  const k = kst ? kstText(l.startsAt, tz) : null;
+  const time = timeRange(l, tz).split('–')[0];
+  const count = l.count ? `${l.count.n}/${l.count.total}` : '—';
+  const canOpen = phase !== 'canceled';
+  const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
+  const stText = phase === 'recorded' ? `✓ ${status}` : status;
+  const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
+  const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
+  const links = (
+    <>
+      {phase === 'upcoming' && meetUrl && <a href={meetUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Classroom</a>}
+      {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Class notes</a>}
+    </>
+  );
   return (
-    <div className={`rounded-[12px] border border-[#e6e3ef] bg-white p-3 ${phase === 'canceled' ? 'opacity-60' : ''}`}>
-      <div className="flex items-start gap-3">
-        <div className="w-[96px] shrink-0">
-          <b className="block text-[15px] text-[#1d1b2b]">{timeRange(l, tz)}</b>
-          {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
+    <div className={`border-b border-[#e6e3ef] last:border-b-0 ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
+      <button type="button" disabled={!canOpen} aria-expanded={open} onClick={() => setOpen(!open)}
+        className={`w-full px-3 py-2 text-left disabled:cursor-default ${open ? 'bg-[#f3f1f8]' : 'enabled:hover:bg-[#f7f6fb]'}`}>
+        <div className="grid grid-cols-[60px_minmax(0,1fr)_auto] items-start gap-2 lg:hidden">
+          <span className="text-[14px] font-bold tabular-nums">
+            {time}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]">{k}</span>}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[14.5px] font-semibold">{name}</span>
+            <span className="block text-[12.5px] text-[#6b6880]">
+              {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min{kindTag(l) ? ` · ${kindTag(l)}` : ''}
+            </span>
+            {l.topics && <span className="block truncate text-[12.5px]">{l.topics}</span>}
+          </span>
+          <span className={`text-right text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip && <span className="block">{remarksChip}</span>}</span>
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <b className={`text-[15px] text-[#1d1b2b] ${phase === 'canceled' ? 'line-through' : ''}`}>{l.student}</b>
-            {tag && <span className="rounded-[6px] bg-[#efebff] px-1.5 text-[12px] font-semibold text-[#5b3fe0]">{tag}</span>}
-          </div>
-          <p className="text-[13px] text-[#6b6880]">
-            {minutesOf(l)} min{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}{l.level ? ` · ${l.level}` : ''}
-          </p>
-          <p className={`text-[13px] font-semibold ${phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#55526a]'}`}>
-            {phase === 'recorded' ? `✓ ${status}` : status}
-          </p>
-          {phase === 'recorded' && l.topics && <p className="text-[13px] text-[#55526a]">{l.topics}</p>}
-          {l.makeupOf && <p className="text-[12.5px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
+        <div className={`hidden items-center gap-3 text-[14px] tabular-nums lg:grid ${cols(kst)}`}>
+          <span className="font-semibold">{time}</span>
+          {kst && <span className="text-[#6b6880]">{k}</span>}
+          <span className="truncate font-semibold">{name}</span>
+          <span>{count}</span>
+          <span>{minutesOf(l)}</span>
+          <span>{kindTag(l) ?? 'Regular'}</span>
+          <span className={`font-semibold ${stColor}`}>{stText}</span>
+          <span className="text-[13px]">{l.topics}{remarksChip}</span>
+          <span>{phase === 'to_record' && <span className="rounded-[8px] bg-[#5b3fe0] px-2.5 py-1 text-[13px] font-semibold text-white">Record</span>}</span>
         </div>
-      </div>
-      {(phase !== 'canceled') && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {phase === 'upcoming' && meetUrl && <a href={meetUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Classroom</a>}
-          {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Class notes</a>}
-          {canRecord(l, now) && !inRecordList && (
-            <button type="button" onClick={() => setOpen(!open)} className={`${open ? btnDone : phase === 'to_record' ? btnMain : btnSub} text-[14px]`}>
-              {phase === 'to_record' ? 'Record' : 'Edit record'}
-            </button>
+      </button>
+      {open && (
+        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[108px]">
+          {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
+          {canRecord(l, now) ? (
+            <div className="lg:max-w-[560px]">
+              <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing extra={links}
+                onSaved={async () => { setOpen(false); await onSaved(); }} />
+            </div>
+          ) : (
+            <div className="grid gap-2 pt-2">
+              {l.remarks && <p className="text-[14px]"><b className="text-[13px] text-[#55526a]">Remarks</b> {l.remarks}</p>}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {links}
+                {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}
+              </div>
+            </div>
           )}
-          {l.locked && <span className="self-center text-[13px] text-[#6b6880]">In payroll</span>}
         </div>
       )}
-      {open && <RecordForm lesson={l} now={now} actions={actions} startEditing onSaved={async () => { setOpen(false); await onSaved(); }} />}
     </div>
   );
 }
 
-function RecordForm({ lesson: l, now, actions, startEditing, onSaved }: {
-  lesson: TutorLesson; now: Date; actions: TutorActions; startEditing: boolean; onSaved: (saved: TutorLesson) => Promise<void>;
+function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
+  lesson: TutorLesson; now: Date; actions: TutorActions; startEditing: boolean; onSaved: (saved: TutorLesson) => Promise<void>; extra?: ReactNode;
 }) {
   const [editing, setEditing] = useState(startEditing);
   const [result, setResult] = useState<TutorResult | null>(resultOf(l.classStatus));
   const [topics, setTopics] = useState(l.topics ?? '');
   const [remarks, setRemarks] = useState(l.remarks ?? '');
+  // Remarks 칸은 이슈 있을 때만 꺼내 씀 (대표 10/29). Late는 이유가 필요해서 바로 보임
+  const [remarksOpen, setRemarksOpen] = useState(!!l.remarks);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const ready = recordReady(result, topics, remarks) && canRecord(l, now);
@@ -322,14 +378,17 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved }: {
           <textarea id={`topics-${l.id}`} rows={2} value={topics} onChange={(e) => setTopics(e.target.value)} className={input} />
         </div>
       )}
-      <div>
+      {(remarksOpen || result === 'late') ? <div>
         <label className={label} htmlFor={`remarks-${l.id}`}>{result === 'late' ? 'Remarks (reason for being late)' : 'Remarks'}</label>
         <textarea id={`remarks-${l.id}`} rows={result === 'late' ? 2 : 1} value={remarks} onChange={(e) => setRemarks(e.target.value)} className={input} />
-      </div>
+      </div> : (
+        <button type="button" onClick={() => setRemarksOpen(true)} className={`${btnSub} justify-self-start text-[14px]`}>+ Remarks</button>
+      )}
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button type="button" disabled={!ready || busy} onClick={save} className={`${btnMain} flex-1`}>{busy ? 'Saving…' : 'Save'}</button>
-        {l.state === 'done' && <button type="button" disabled={busy} onClick={() => setEditing(false)} className={btnSub}>Cancel</button>}
+        {l.state === 'done' && !extra && <button type="button" disabled={busy} onClick={() => setEditing(false)} className={btnSub}>Cancel</button>}
+        {extra}
       </div>
     </div>
   );
