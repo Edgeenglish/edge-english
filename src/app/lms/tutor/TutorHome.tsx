@@ -94,6 +94,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (학생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
+  const [panel, setPanel] = useState<'record' | 'cover' | 'makeup' | null>(null);
   const todoCount = [screen.toRecord.length, screen.covers.length, screen.makeups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
@@ -127,17 +128,17 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             To do <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
           </h2>
           <div className="divide-y divide-[#f3e6c4]">
-            {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text="Class Record" target="sec-record" />}
-            {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text="Cover requests" target="sec-cover" />}
-            {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text="Make-up requests" target="sec-makeup" />}
+            {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text="Classes to record" onClick={() => setPanel('record')} />}
+            {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text="Cover requests" onClick={() => setPanel('cover')} />}
+            {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text="Make-up requests" onClick={() => setPanel('makeup')} />}
           </div>
         </section>
       )}
 
-      {toRecord.length > 0 && (
-        <section id="sec-record" className="mb-6 scroll-mt-3">
-          <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">
-            Class Record <span className="text-[#5b3fe0]">{screen.toRecord.length > 0 ? screen.toRecord.length : ''}</span>
+      {panel === 'record' && (
+        <Sheet onClose={() => setPanel(null)}>
+          <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">
+            Classes to record <span className="text-[#5b3fe0]">{screen.toRecord.length > 0 ? screen.toRecord.length : ''}</span>
           </h2>
           <div className="grid gap-3">
             {toRecord.map((l) => (
@@ -151,23 +152,24 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
               </div>
             ))}
           </div>
-        </section>
+        </Sheet>
       )}
 
-      {screen.covers.length > 0 && (
-        <section id="sec-cover" className="mb-6 scroll-mt-3">
-          <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">Cover requests</h2>
+      {panel === 'cover' && (
+        <Sheet onClose={() => setPanel(null)}>
+          <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Cover requests</h2>
           <div className="grid gap-3">
             {groupCovers(screen.covers).map((g) => (
               <CoverCard key={g.map((c) => c.id).join()} covers={g} tz={tz} actions={actions} onSent={() => reload()} />
             ))}
+            {screen.covers.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ Sent</p>}
           </div>
-        </section>
+        </Sheet>
       )}
 
-      {makeups.length > 0 && (
-        <section id="sec-makeup" className="mb-6 scroll-mt-3">
-          <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">Make-up requests</h2>
+      {panel === 'makeup' && (
+        <Sheet onClose={() => setPanel(null)}>
+          <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Make-up requests</h2>
           <div className="grid gap-3">
             {makeups.map((m) => (
               <MakeupCard key={m.id} m={m} tz={tz} actions={actions} closed={!screen.makeups.some((x) => x.id === m.id)}
@@ -177,14 +179,14 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
                 }} />
             ))}
           </div>
-        </section>
+        </Sheet>
       )}
 
       </div>
 
       <section>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[17px] font-bold text-[#1d1b2b]">Schedule</h2>
+          <h2 className="text-[17px] font-bold text-[#1d1b2b]">Class Record</h2>
           {kstOn !== null && (
             <label className="ml-auto flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]">
               <input type="checkbox" checked={kstOn} onChange={(e) => setKst(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
@@ -240,9 +242,23 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
   );
 }
 
-function TodoBar({ n, text, target }: { n: number; text: string; target: string }) {
+// 할 일은 화면에 펼쳐 두지 않고 누르면 창으로 (대표 10/29: 할 일이 많아도 Class Record 표가 아래로 밀리지 않게)
+function Sheet({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   return (
-    <button type="button" onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth' })}
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
+      <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}
+        className="relative max-h-[90vh] w-full max-w-[640px] overflow-y-auto rounded-t-[20px] bg-[#f6f5fa] p-4 pb-8 lg:rounded-[20px]">
+        <button type="button" aria-label="Close" onClick={onClose}
+          className="absolute right-3 top-3 flex h-[40px] w-[40px] items-center justify-center rounded-full bg-white text-[18px] text-[#1d1b2b]">✕</button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
       className="flex min-h-[54px] w-full items-center gap-3 px-4 py-3 text-left">
       <span className="flex-1 text-[15px] font-semibold leading-snug text-[#1d1b2b]">{text}</span>
       <span className="text-[13px] text-[#8a5300]">{n}</span>
