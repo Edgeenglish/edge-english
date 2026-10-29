@@ -157,7 +157,7 @@ export default function StudentHome(props: {
 
   async function answerLeave(answer: 'ok' | 'makeup') {
     const ids = leaveAsk.map((x) => x.id);
-    const v = await run(() => actions.answerLeave(ids, answer), answer === 'ok' ? '대체강사님과 평소 시간으로 확정했어요.' : '기존 강사님과 수업하기로 정했어요.');
+    const v = await run(() => actions.answerLeave(ids, answer), answer === 'ok' ? '확정했어요.' : '기존 강사님과 수업하기로 정했어요.');
     if (!v || answer === 'ok') return;
     const right = v.makeupRights.find((m) => !m.requested && leaveAsk.some((x) => (x.lessonId && x.lessonId === m.lessonId) || (x.itemId && x.itemId === m.itemId)));
     if (right) setOverlay({ kind: 'makeup', right });
@@ -580,7 +580,7 @@ function LeaveSheet(props: {
       {subs.length > 0 && (
         <section className={`${card} grid gap-1 p-4`}>
           <h3 className="text-[15px] font-bold">
-            원래 시간에 대체강사와 수업하기 <span className="ml-1 rounded-full bg-[#efeaff] px-2 py-0.5 text-[12px] text-[#4b2fd6]">추천</span>
+            대체강사와 수업하기 <span className="ml-1 rounded-full bg-[#efeaff] px-2 py-0.5 text-[12px] text-[#4b2fd6]">추천</span>
           </h3>
           {subs.map((x) => (
             <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">

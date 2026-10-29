@@ -165,7 +165,7 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
           : await sb.rpc('student_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots }),
       );
     },
-    /** 휴무 안내 답 (A안 한 번에): ok = 대체강사와 평소 시간, makeup = 기존 강사님과 보강 */
+    /** 휴무 안내 답 (A안 한 번에): ok = 대체강사와 수업, makeup = 기존 강사님과 보강 */
     answerLeave: async (items: string[], answer: 'ok' | 'makeup'): Promise<void> => {
       if (!admin) return void check(await sb.rpc('student_leave_answer', { p_items: items, p_answer: answer }));
       check(answer === 'ok' ? await sb.rpc('admin_leave_student_ok', { p_items: items }) : await sb.rpc('admin_leave_choose', { p_items: items, p_choice: 'wait', p_sub_tutor: null }));
