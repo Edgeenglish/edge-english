@@ -29,6 +29,8 @@ type Input = {
     extras: { date: KstDate; time: KstTime; reason: string }[];
     /** 시트에서 아직 진행 안 된 줄의 날짜 (첫 정규 수업일부터). LMS 수업·휴가 보강과 1:1 대조 */
     sheetFuture: KstDate[];
+    /** 정규 수업에서 뺄 날짜 (예: 고정 시간이 바뀌어 계산보다 1회 많을 때) */
+    skipDates?: KstDate[];
   }[];
 };
 
@@ -53,7 +55,7 @@ for (const s of input.students) {
     ...emptyImport(input.today),
     nameKo: s.nameKo, nameEn: s.nameEn, timezone: s.timezone, tutorId: TUTOR, durationMin: s.durationMin,
     slots: s.slots, fromDate: s.fromDate, endDate: s.endDate, endReason: s.endReason ?? '', endNote: s.endNote ?? '',
-    weeks: s.weeks, courseStart: s.courseStart, sheetTotal: s.sheetTotal, sheetUsed: s.sheetUsed, extras: s.extras,
+    weeks: s.weeks, courseStart: s.courseStart, sheetTotal: s.sheetTotal, sheetUsed: s.sheetUsed, extras: s.extras, skipDates: s.skipDates ?? [],
   };
   // 강사 휴가에 걸리는 정규 수업 → '강사 휴가 보강(미예약)', 원래 날짜 유지 (21번 7절, A41)
   const leave = regularRows({ ...base, hasMakeups: false }).filter((r) => inLeave(r.date)).map((r): ImportMakeup => ({
