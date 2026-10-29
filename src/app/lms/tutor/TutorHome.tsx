@@ -97,6 +97,8 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
     ...screen.toRecord.map((id) => byId.get(id)).filter((l): l is TutorLesson => !!l),
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
+  // 할 일 게시판 (학생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
+  const todoCount = [screen.toRecord.length, screen.covers.length, screen.makeups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
     ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), tz, { from: '1900-01-01', to: '2999-12-31' })
@@ -123,8 +125,21 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       </header>
       {err && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
 
+      {todoCount > 0 && (
+        <section aria-label="To do" className="mb-6 overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
+          <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
+            To do <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
+          </h2>
+          <div className="divide-y divide-[#f3e6c4]">
+            {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text="Class Record" target="sec-record" />}
+            {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text="Cover requests" target="sec-cover" />}
+            {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text="Make-up requests" target="sec-makeup" />}
+          </div>
+        </section>
+      )}
+
       {toRecord.length > 0 && (
-        <section className="mb-6">
+        <section id="sec-record" className="mb-6 scroll-mt-3">
           <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">
             Class Record <span className="text-[#5b3fe0]">{screen.toRecord.length > 0 ? screen.toRecord.length : ''}</span>
           </h2>
@@ -144,7 +159,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       )}
 
       {screen.covers.length > 0 && (
-        <section className="mb-6">
+        <section id="sec-cover" className="mb-6 scroll-mt-3">
           <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">Cover requests</h2>
           <div className="grid gap-3">
             {groupCovers(screen.covers).map((g) => (
@@ -155,7 +170,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       )}
 
       {makeups.length > 0 && (
-        <section className="mb-6">
+        <section id="sec-makeup" className="mb-6 scroll-mt-3">
           <h2 className="mb-2 text-[17px] font-bold text-[#1d1b2b]">Make-up requests</h2>
           <div className="grid gap-3">
             {makeups.map((m) => (
@@ -222,6 +237,17 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         )}
       </section>
     </main>
+  );
+}
+
+function TodoBar({ n, text, target }: { n: number; text: string; target: string }) {
+  return (
+    <button type="button" onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth' })}
+      className="flex min-h-[54px] w-full items-center gap-3 px-4 py-3 text-left">
+      <span className="flex-1 text-[15px] font-semibold leading-snug text-[#1d1b2b]">{text}</span>
+      <span className="text-[13px] text-[#8a5300]">{n}</span>
+      <span className="whitespace-nowrap rounded-[10px] bg-[#5b3fe0] px-3 py-1.5 text-[13px] font-bold text-white">Open ›</span>
+    </button>
   );
 }
 
