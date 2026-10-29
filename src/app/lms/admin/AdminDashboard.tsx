@@ -284,7 +284,7 @@ export default function AdminDashboard({
                 </Link>
               )}
               {!preview && (
-                <Link href="/lms/admin/leave" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+                <Link href="/lms/admin/leave?new=1" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
                   + 강사 휴무 입력
                 </Link>
               )}
