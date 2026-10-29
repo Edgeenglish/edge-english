@@ -1483,6 +1483,8 @@ select pg_temp.ok((select x ->> 'status' = 'requested' and jsonb_array_length(x 
   '학생 보강 신청: 고른 날짜 2개로 신청됨(강사 확인 → 운영진 확정, 학생 신청만으로 확정 안 됨)');
 reset role;
 select pg_temp.ok(pg_temp.lst(4) = 'wait:-:canceled:Tutor long-term leave:휴무A', '학생 답 처리 결과는 운영진 기다림과 같음');
+select pg_temp.expect_error($$select * from lms_makeup_source((select id from lessons where state = 'scheduled' and class_status is null limit 1), null)$$, '보강을 받을 수 있는 수업이 아닙니다');
+select pg_temp.ok(true, '아직 안 한 수업(결과 없음)으로는 보강 신청 안 됨 (2800 고침)');
 select pg_temp.ok((select via = 'student_app' from makeup_requests where source_lesson_id = '77777777-1800-0000-0000-000000000004' and status = 'requested')
               and exists (select 1 from lesson_notices n join makeup_requests r on r.id = n.makeup_request_id where r.source_lesson_id = '77777777-1800-0000-0000-000000000004' and n.event = 'makeup_ask'),
   '학생 신청은 학생 앱 신청으로 기록, 강사 보강 요청 생김');

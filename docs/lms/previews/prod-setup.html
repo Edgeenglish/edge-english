@@ -6093,6 +6093,34 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function lms_student_enrollment(uuid) from public, anon, authenticated;
 
+-- 보강 받을 수 있는 수업인지 (1800 그대로 + 고침: 아직 안 한 수업(결과 없음)이 통과되던 것 — 결과가 비어 있으면 거절)
+create or replace function lms_makeup_source(p_lesson uuid, p_item uuid, out enrollment_id uuid, out student_id uuid,
+                                             out tutor_id uuid, out tutor_leave boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  l lessons;
+  it migrated_items;
+begin
+  if (p_lesson is null) = (p_item is null) then raise exception '보강할 수업을 하나 골라 주세요.'; end if;
+  if p_lesson is not null then
+    select * into l from lessons where id = p_lesson;
+    if not found or not coalesce(lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave', false) then
+      raise exception '보강을 받을 수 있는 수업이 아닙니다.';
+    end if;
+    if exists (select 1 from lessons x where x.makeup_of = l.id and x.state &lt;&gt; 'canceled') then raise exception '이미 보강이 잡혀 있습니다.'; end if;
+    enrollment_id := l.enrollment_id; student_id := l.student_id; tutor_id := l.tutor_id;
+    tutor_leave := coalesce(l.class_status = 'Tutor long-term leave', false);
+  else
+    select * into it from migrated_items where id = p_item;
+    if not found or it.kind &lt;&gt; 'makeup_open' then raise exception '예약 전 보강이 아닙니다.'; end if;
+    select e.student_id into student_id from enrollments e where e.id = it.enrollment_id;
+    select coalesce(x.original_tutor_id, x.tutor_id) into tutor_id from lessons x
+    where x.enrollment_id = it.enrollment_id and x.voided_at is null order by x.starts_at desc limit 1;
+    enrollment_id := it.enrollment_id; tutor_leave := coalesce(it.tutor_leave, false);
+  end if;
+end $$;
+revoke all on function lms_makeup_source(uuid, uuid) from public, anon, authenticated;
+
 -- ---------------------------------------------------------------------
 -- 1. 보강 가능한 날짜 (운영진 휴무 화면 admin_leave_makeup_options 와 같은 계산을 모든 보강에)
 --    강사 일정·휴무·보통 수업 시간 · 학생 다른 수업 · 종료일 / 30분 단위 시작 시각 (운영진 휴무 화면은 정규 시각 그대로)
