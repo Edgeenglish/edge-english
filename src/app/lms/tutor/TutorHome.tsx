@@ -41,6 +41,24 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
   const [answeredHere, setAnsweredHere] = useState<TutorMakeup[]>([]);
   const tz = screen.tutor.timezone;
   const week = weekOf(now, tz, offset);
+  // 학생별로 보기 (대표 10/29): 학생을 고르면 그 학생의 모든 수업을 날짜순으로 (주 단위 대신)
+  const [student, setStudent] = useState('');
+  const [allLessons, setAllLessons] = useState<TutorLesson[] | null>(null);
+  const studentNames = [...new Set([...(allLessons ?? []), ...screen.lessons].map((l) => l.student))].sort();
+  async function loadAll(): Promise<void> {
+    if (!allLessons) await refreshAll();
+  }
+  async function refreshAll(): Promise<void> {
+    setLoading(true);
+    setErr('');
+    try {
+      setAllLessons((await actions.load('2000-01-01', '2100-12-31')).lessons);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not load. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => setScreen(initial), [initial]);
 
@@ -69,7 +87,9 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
-  const days = daysOf(screen.lessons, tz, week);
+  const days = student
+    ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), tz, { from: '1900-01-01', to: '2999-12-31' })
+    : daysOf(screen.lessons, tz, week);
 
   return (
     <main className="mx-auto max-w-[680px] px-4 pb-16 pt-4">
@@ -140,13 +160,29 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       <section>
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-[17px] font-bold text-[#1d1b2b]">Schedule</h2>
-          <div className="flex items-center gap-1.5">
+          {!student && <div className="flex items-center gap-1.5">
             <button type="button" aria-label="Previous week" disabled={loading} onClick={() => goWeek(offset - 1)} className={`${btnSub} px-3`}>‹</button>
             <button type="button" disabled={loading || offset === 0} onClick={() => goWeek(0)} className={`${btnSub} px-3 text-[14px]`}>This week</button>
             <button type="button" aria-label="Next week" disabled={loading} onClick={() => goWeek(offset + 1)} className={`${btnSub} px-3`}>›</button>
-          </div>
+          </div>}
         </div>
-        <p className="mb-2 text-[14px] font-semibold text-[#55526a]">{dayLabel(week.from)} – {dayLabel(week.to)}</p>
+        <select
+          aria-label="Student"
+          value={student}
+          onFocus={() => void loadAll()}
+          onChange={async (e) => {
+            const v = e.target.value;
+            if (v) await loadAll();
+            setStudent(v);
+          }}
+          className="mb-2 min-h-[44px] w-full rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[15px] text-[#1d1b2b]"
+        >
+          <option value="">All students · by week</option>
+          {studentNames.map((n) => (
+            <option key={n} value={n}>{n} · all classes</option>
+          ))}
+        </select>
+        {!student && <p className="mb-2 text-[14px] font-semibold text-[#55526a]">{dayLabel(week.from)} – {dayLabel(week.to)}</p>}
         {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
         <div className="grid gap-4">
           {days.map((d) => (
@@ -154,7 +190,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
               <h3 className="mb-1.5 text-[14px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}</h3>
               <div className="grid gap-2">
                 {d.lessons.map((l) => (
-                  <ScheduleRow key={l.id} lesson={l} tz={tz} now={now} meetUrl={screen.tutor.meetUrl} actions={actions} onSaved={() => reload()}
+                  <ScheduleRow key={l.id} lesson={l} tz={tz} now={now} meetUrl={screen.tutor.meetUrl} actions={actions} onSaved={() => { void reload(); if (student) void refreshAll(); }}
                     inRecordList={toRecord.some((x) => x.id === l.id)} />
                 ))}
               </div>
