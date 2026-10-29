@@ -6,6 +6,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { STATUS_RULES } from '@/lms/rules/status';
+import TutorHours, { type HoursActions } from './TutorHours';
 import {
   answerReady, canRecord, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus,
   statusText, timeRange, weekOf, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
@@ -17,6 +18,8 @@ export type TutorActions = {
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
   /** 대체 수업 요청 답: items = 답하는 수업 전체, yes = 가능한 수업 */
   answerCover: (items: string[], yes: string[]) => Promise<void>;
+  /** 가능 시간 고치기 [My hours] (migration 3100) */
+  hours: HoursActions;
 };
 
 const card = 'rounded-[14px] border border-[#e6e3ef] bg-white p-4';
@@ -94,7 +97,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (학생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
-  const [panel, setPanel] = useState<'record' | 'cover' | 'makeup' | null>(null);
+  const [panel, setPanel] = useState<'record' | 'cover' | 'makeup' | 'hours' | null>(null);
   const todoCount = [screen.toRecord.length, screen.covers.length, screen.makeups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
@@ -113,9 +116,12 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
           </p>
           <h1 className="text-[22px] font-bold text-[#1d1b2b]">{screen.tutor.name}</h1>
           <p className="text-[13px] text-[#6b6880]">Your time · {tz}</p>
-          {screen.tutor.meetUrl && (
-            <a href={screen.tutor.meetUrl} target="_blank" rel="noreferrer" className={`${btnMain} mt-2 inline-flex items-center`}>Classroom (Google Meet)</a>
-          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {screen.tutor.meetUrl && (
+              <a href={screen.tutor.meetUrl} target="_blank" rel="noreferrer" className={`${btnMain} inline-flex items-center`}>Classroom (Google Meet)</a>
+            )}
+            <button type="button" onClick={() => setPanel('hours')} className={btnSub}>My hours</button>
+          </div>
         </div>
         {onLogout && (
           <button type="button" onClick={onLogout} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13.5px] text-[#1d1b2b]">
@@ -137,6 +143,8 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
           </div>
         </section>
       )}
+
+      {panel === 'hours' && <TutorHours actions={actions.hours} onClose={() => setPanel(null)} />}
 
       {panel === 'record' && (
         <Sheet onClose={() => setPanel(null)}>

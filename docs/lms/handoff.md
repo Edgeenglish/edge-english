@@ -7,8 +7,12 @@
 ## 🆕 2026-10-29 강사 본인 가능 시간 고치기 — 시안 (브랜치 claude/upbeat-allen-sfqlap)
 - 시안 https://claude.ai/artifact/2u7QFFrTmNYev4MuEcb4bv (원본 `docs/lms/previews/tutor-hours-drafts.html`): 강사 화면 [My hours] → 탭 2개 **Every week**(`tutor_availability`, 30분 칸 = 그 시각 수업 시작 가능) · **One week only**(`tutor_time_off` kind 'block', 요일 머리 누르면 하루 통째). 수업·보강 칸은 잠김 → 그 주만 탭에서 '취소 신청'(다음 작업)으로 연결. 저장 전 바뀐 내용 확인 창
 - **✅ 대표 확정 (10/29, 정책 원본 H26(37) 적음)**: ① 고정 수업 있는 칸 매주 닫기 불가(운영진에게 요청) ② 저장 즉시 반영 + 운영진 화면에 바뀐 기록 ③ 그 주만 닫기 = 빈 시간만, 수업 시작 **6시간 전**까지, 앞으로 **4주**까지(신청 중인 보강 날짜·확정 수업·보강 칸 잠김) ④ 매주 변경 = **다음 주 월요일부터**, 확정된 수업·보강은 그대로 ⑤ 30분 칸, 수업 길이·휴식 10분은 기존 충돌 검사 ⑥ 문구: My hours·Every week·One week only 그대로, 'Closed this week' → 'Unavailable this week' (시안 반영함)
-- **다음 세션 = 개발**: DB 함수(강사 본인·운영자 ?tutor= 같은 함수, 잠금 재검사) + 강사 화면 [My hours] + 운영진 화면 '바뀐 기록' + `register.md`에 정책 추가 → 시험용 → 대표 시험 → 운영
-- 만들 때: 매주 변경은 기존 줄 `effective_to` 끝내고 새 줄 · block 칸은 이어진 칸 한 줄로 · DB 함수에서 수업·보강·보강 yes 답 칸 닫기 재검사
+- **✅ 2026-10-29 개발 완료 (claude/intelligent-dijkstra-vr2sng, lms-test push, 시험용 DB 3100 적용)** → **대표 화면 시험(H1·H2) 대기** → 운영 3100 + lms-prod (대표 승인)
+  - migration **3100** `lms_tutor_hours`: `tutor_hours`(읽기)·`tutor_hours_save`(저장) — 강사 본인 또는 운영자 `?tutor=`. 매주 변경 = 다음 주 월요일(한국 날짜)부터, 기존 줄은 그 전날로 끝냄(그날부터 시작하는 줄은 지움), 이어진 칸 한 줄. 고정 수업(앞으로 남은 정규 수업)이 걸친 칸은 매주 닫기 거절. 그 주만 = `tutor_time_off` 'block'(붙은 칸 합침, 다시 열면 그 칸만 잘라 냄), 4주(이번 주 포함, 강사 현지 월~일), 6시간 안·수업·보강·보강 신청(강사 불가 답 제외)·대체 요청 중·휴무 칸 잠김 — 저장 함수가 같은 판정(`lms_hours_cell`)으로 다시 검사. 바뀐 기록 표 `tutor_hours_changes`(지우기 금지) → 운영자 보기 My hours 아래 '바뀐 기록'. `tutor_availability` 한 칸 줄 허용(시작=끝)
+  - 칸 시각 = 강사 현지 22:00 시작까지 + 한국 06:00~22:30 (POL-OP-02). 한국 시간대로 넣은 줄(운영 Maria)도 강사 현지 칸으로 바꿔 보여 줌
+  - 화면: 강사 화면 맨 위 [My hours] → `TutorHours.tsx`(시안 그대로, 휴대폰 아래 Save 막대 · PC 오른쪽 Changes). 수업 칸 누르면 'Can't teach this class? Please tell the Edge English team.'(취소 신청 버튼은 다음 작업 '강사 취소·휴무 신청'에서 연결)
+  - 정책 기준표 **POL-TU-11** 추가. 시험: `npm test` 300 · `npm run test:db`(My hours 14개·권한 점검) 통과
+  - 운영 적용 때: 운영 표 수 46 → 47 (`02-check.sql` 갱신함). 운영 DB 적용 직전 백업(데이터 바뀌었으면)
 
 ## 🆕 2026-10-29 학생 수업 알림 메일 (POL-OP-18 변경) — 개발 완료, 시험용 적용 대기 (브랜치 claude/compassionate-hypatia-wqlnnh)
 - 시안 https://claude.ai/artifact/F5MoyuxfjWso8p2S5E7wDZ (원본 `docs/lms/previews/lesson-reminder-drafts.html`) — **대표 답 대기**: Q1 예약 실행 간격(5·10·15분, 숫자라 대표 결정) · Q2 보상·이월 수업은 '보강 수업' 스위치를 따를지(권장 예) · Q3 메일 글·화면

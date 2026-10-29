@@ -2,12 +2,13 @@
 
 // 강사 화면 미리보기 (?demo=1): 가짜 데이터, 저장은 이 화면 안에서만
 import { useMemo, useState } from 'react';
-import { fakeTutorScreen } from '@/lms/tutor/fake';
+import { fakeHours, fakeTutorScreen } from '@/lms/tutor/fake';
+import type { HoursData } from '@/lms/tutor/hours';
 import { savedStatus, type TutorScreen } from '@/lms/tutor/screen';
 import TutorHome, { type TutorActions } from './TutorHome';
 
 export default function TutorDemo({ nowIso }: { nowIso: string }) {
-  const [data] = useState<{ s: TutorScreen }>(() => ({ s: fakeTutorScreen(new Date(nowIso)) }));
+  const [data] = useState<{ s: TutorScreen; h: HoursData }>(() => ({ s: fakeTutorScreen(new Date(nowIso)), h: fakeHours(new Date(nowIso)) }));
   const actions = useMemo<TutorActions>(() => ({
     load: async () => ({ ...data.s }),
     record: async (id, r, topics, remarks, late) => {
@@ -21,6 +22,15 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
     },
     answerCover: async (items) => {
       data.s.covers = data.s.covers.filter((c) => !items.includes(c.id));
+    },
+    hours: {
+      load: async () => ({ ...data.h, cells: { ...data.h.cells } }),
+      save: async (weekly, close, open) => {
+        const h = data.h;
+        if (weekly) h.weeklyOpen = weekly;
+        close.forEach((k) => { h.cells[k] = 'b'; });
+        open.forEach((k) => { delete h.cells[k]; });
+      },
     },
   }), [data]);
   return <TutorHome initial={data.s} nowIso={nowIso} actions={actions} />;

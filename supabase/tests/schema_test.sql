@@ -1847,3 +1847,87 @@ select pg_temp.expect_error($$select lms_send_lesson_reminders()$$, 'permission 
 select pg_temp.ok(true, '보내기 함수는 로그인 사용자가 못 부름');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------- 강사 본인 가능 시간 고치기 My hours (migration 3100) ----------
+-- 강사 '시간H'(호찌민, 한국보다 2시간 늦음). 가능 시간은 Maria처럼 한국 시간대 줄(월~금 10:00~17:00 KST = 현지 08:00~15:00)
+reset role;
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000003100', '시간H', 'Vietnam', 'Asia/Ho_Chi_Minh');
+insert into app_users (auth_user_id, role, tutor_id) values ('bbbbbbbb-0000-0000-0000-000000003100', 'tutor', '55555555-0000-0000-0000-000000003100');
+insert into tutor_availability (tutor_id, weekday, start_local, end_local, timezone, effective_from)
+select '55555555-0000-0000-0000-000000003100', d, '10:00', '17:00', 'Asia/Seoul', current_date - 14 from generate_series(1, 5) d;
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000003100', '시간학생', 'Hours S');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000003100', '99999999-0000-0000-0000-000000003100', 1, 4, 1, 40, current_date, current_date + 27, 4, 'active');
+-- 고정 수업: 다음 주 다음 월요일 현지 09:00 (40분) · 3주째 화요일 현지 10:00 보강
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select '77777777-3100-0000-0000-000000000001', '99999999-1000-0000-0000-000000003100', '99999999-0000-0000-0000-000000003100', '55555555-0000-0000-0000-000000003100',
+       'regular', 1, ((lms_next_monday() + 7) + time '09:00') at time zone 'Asia/Ho_Chi_Minh', ((lms_next_monday() + 7) + time '09:40') at time zone 'Asia/Ho_Chi_Minh';
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of)
+select '77777777-3100-0000-0000-000000000002', '99999999-1000-0000-0000-000000003100', '99999999-0000-0000-0000-000000003100', '55555555-0000-0000-0000-000000003100',
+       'makeup', ((lms_local_monday('Asia/Ho_Chi_Minh') + 15) + time '10:00') at time zone 'Asia/Ho_Chi_Minh',
+       ((lms_local_monday('Asia/Ho_Chi_Minh') + 15) + time '10:40') at time zone 'Asia/Ho_Chi_Minh', '77777777-3100-0000-0000-000000000001';
+create temp table hm (mon date, nxt date);
+insert into hm select lms_local_monday('Asia/Ho_Chi_Minh'), lms_next_monday();
+grant select on hm to authenticated;
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000003100';
+create temp table hr as select tutor_hours(null) as j;
+select pg_temp.ok((select j -> 'times' ->> 0 = '04:00' and j -> 'times' ->> -1 = '20:30' and j ->> 'from' = (select nxt::text from hm) from hr),
+  'My hours: 칸은 강사 현지 시각, 한국 06:00~22:30 시작 = 호찌민 04:00~20:30, 매주 변경은 다음 주 월요일부터');
+select pg_temp.ok((select j -> 'weekly_open' ? '1:08:00' and j -> 'weekly_open' ? '5:15:00' and not j -> 'weekly_open' ? '1:15:30' and not j -> 'weekly_open' ? '0:08:00' from hr),
+  'My hours: 한국 시간대로 넣은 가능 시간을 강사 현지 칸으로 (월 08:00~15:00)');
+select pg_temp.ok((select j -> 'weekly_classes' @> '[{"d": 1, "time": "09:00", "min": 40}]' and j -> 'history' = 'null'::jsonb from hr),
+  'My hours: 고정 수업 칸 표시, 강사 본인에게는 바뀐 기록 없음');
+select pg_temp.ok((select j -> 'cells' ->> ((mon + 15)::text || 'T10:00') = 'c' and j -> 'cells' ->> ((mon + 15)::text || 'T10:30') = 'c'
+                          and j -> 'cells' ->> ((mon + 15)::text || 'T16:00') = 's' and not j -> 'cells' ? ((mon + 15)::text || 'T08:00') from hr, hm),
+  'My hours: 그 주만 칸 — 보강 걸친 칸 잠김, 매주 닫힌 칸, 빈 칸은 열림');
+select pg_temp.expect_error($$select tutor_hours_save(null, array(select x from jsonb_array_elements_text((select j -> 'weekly_open' from hr)) x where x <> '1:09:30'), null, null)$$, 'weekly class');
+select pg_temp.ok(true, 'My hours: 고정 수업이 걸친 칸은 매주 닫기 불가');
+select tutor_hours_save(null, array(select x from jsonb_array_elements_text((select j -> 'weekly_open' from hr)) x where x <> '1:08:00') || '{6:10:00}', null, null);
+select tutor_hours_save(null, array(select x from jsonb_array_elements_text((select j -> 'weekly_open' from hr)) x where x not in ('1:08:00', '1:08:30')) || '{6:10:00}', null, null);
+reset role;
+select pg_temp.ok((select count(*) = 5 and bool_and(effective_to = nxt - 1) from tutor_availability, hm where tutor_id = '55555555-0000-0000-0000-000000003100' and timezone = 'Asia/Seoul')
+              and (select count(*) = 6 and bool_and(effective_from = nxt and effective_to is null and timezone = 'Asia/Ho_Chi_Minh')
+                   from tutor_availability, hm where tutor_id = '55555555-0000-0000-0000-000000003100' and timezone <> 'Asia/Seoul')
+              and exists (select 1 from tutor_availability where tutor_id = '55555555-0000-0000-0000-000000003100' and weekday = 1 and start_local = '09:00' and end_local = '15:00')
+              and exists (select 1 from tutor_availability where tutor_id = '55555555-0000-0000-0000-000000003100' and weekday = 6 and start_local = '10:00' and end_local = '10:00')
+              and (select count(*) = 2 from tutor_hours_changes where tutor_id = '55555555-0000-0000-0000-000000003100' and not by_admin),
+  'My hours 매주: 기존 줄은 전날로 끝냄, 새 줄은 다음 주 월요일부터 이어진 칸 한 줄(한 칸 줄도 됨), 두 번 저장해도 겹치지 않음, 바뀐 기록 2건');
+select pg_temp.ok(lms_tutor_available('55555555-0000-0000-0000-000000003100', ((select nxt + 5 from hm) + time '10:00') at time zone 'Asia/Ho_Chi_Minh')
+              and not lms_tutor_available('55555555-0000-0000-0000-000000003100', ((select nxt from hm) + time '08:00') at time zone 'Asia/Ho_Chi_Minh')
+              and lms_tutor_available('55555555-0000-0000-0000-000000003100', ((select nxt - 7 from hm) + time '08:00') at time zone 'Asia/Ho_Chi_Minh'),
+  'My hours 매주: 보강 날짜·대체강사 판정에 다음 주부터 반영, 이번 주는 그대로');
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000003100';
+select tutor_hours_save(null, null, array[(select (mon + 15)::text from hm) || 'T08:00', (select (mon + 15)::text from hm) || 'T08:30', (select (mon + 15)::text from hm) || 'T09:00'], null);
+select tutor_hours_save(null, null, null, array[(select (mon + 15)::text from hm) || 'T08:00']);
+reset role;
+select pg_temp.ok((select count(*) = 1 and min(starts_at) = (select ((mon + 15) + time '08:30') at time zone 'Asia/Ho_Chi_Minh' from hm)
+                          and max(ends_at) = (select ((mon + 15) + time '09:30') at time zone 'Asia/Ho_Chi_Minh' from hm)
+                   from tutor_time_off where tutor_id = '55555555-0000-0000-0000-000000003100' and kind = 'block'),
+  'My hours 그 주만: 붙은 칸은 한 줄로 합침, 다시 연 칸만 잘라 냄');
+select pg_temp.ok(lms_tutor_busy('55555555-0000-0000-0000-000000003100', ((select mon + 15 from hm) + time '09:00') at time zone 'Asia/Ho_Chi_Minh', ((select mon + 15 from hm) + time '09:40') at time zone 'Asia/Ho_Chi_Minh')
+              and not lms_tutor_busy('55555555-0000-0000-0000-000000003100', ((select mon + 15 from hm) + time '08:00') at time zone 'Asia/Ho_Chi_Minh', ((select mon + 15 from hm) + time '08:20') at time zone 'Asia/Ho_Chi_Minh'),
+  'My hours 그 주만: 닫은 칸은 보강·대체 판정에서 막힘, 다시 연 칸은 열림');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000003100';
+select pg_temp.expect_error($$select tutor_hours_save(null, null, array[(select (mon + 15)::text from hm) || 'T10:30'], null)$$, 'can''t be closed');
+select pg_temp.expect_error($$select tutor_hours_save(null, null, array[(select (mon + 15)::text from hm) || 'T16:00'], null)$$, 'can''t be closed');
+select pg_temp.expect_error($$select tutor_hours_save(null, null, array[(select (mon + 28)::text from hm) || 'T08:00'], null)$$, 'Invalid time');
+select pg_temp.expect_error($$select tutor_hours_save(null, null, null, array[(select (mon + 16)::text from hm) || 'T08:00'])$$, 'can''t be opened');
+select pg_temp.ok(true, 'My hours 그 주만: 수업 칸·매주 닫힌 칸·4주 밖은 닫기 불가, 닫지 않은 칸은 다시 열기 불가');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+select pg_temp.expect_error($$select tutor_hours('55555555-0000-0000-0000-000000003100')$$, '42501');
+select pg_temp.expect_error($$select tutor_hours_save('55555555-0000-0000-0000-000000003100', null, null, null)$$, '42501');
+select pg_temp.ok(true, 'My hours: 다른 강사는 못 보고 못 고침');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select tutor_hours_save('55555555-0000-0000-0000-000000003100', null, array[(select (mon + 16)::text from hm) || 'T08:00'], null);
+select pg_temp.ok((select jsonb_array_length(tutor_hours('55555555-0000-0000-0000-000000003100') -> 'history') = 5),
+  'My hours: 운영자가 대신 고치고, 운영자 보기에 바뀐 기록');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select count(*) = 1 from tutor_hours_changes where tutor_id = '55555555-0000-0000-0000-000000003100' and by_admin), 'My hours: 운영자 대신 고친 것은 운영자 표시');
+select pg_temp.expect_error($$delete from tutor_hours_changes$$, '삭제할 수 없습니다');
+select pg_temp.ok(true, 'My hours: 바뀐 기록은 지울 수 없음');

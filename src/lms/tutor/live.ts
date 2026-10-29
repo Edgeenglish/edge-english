@@ -1,6 +1,7 @@
 // 강사 화면 실제 데이터 (migration 2000). 읽기·쓰기 모두 DB 함수 — 본인 강사 확인·검사·이력은 DB
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { parseHours, type HoursData } from './hours';
 import { parseScreen, type TutorResult, type TutorScreen } from './screen';
 
 const NOT_APPLIED = 'The tutor page is not ready on this database yet (migration 2000).';
@@ -50,4 +51,16 @@ export async function loadMissingRecords(sb: SupabaseClient): Promise<MissingRec
 export async function createTutorLogin(sb: SupabaseClient, tutorId: string, email: string): Promise<{ created: boolean }> {
   const rows = check(await sb.rpc('admin_tutor_login', { p_tutor: tutorId, p_email: email })) as { created: boolean }[];
   return { created: rows[0]?.created ?? false };
+}
+
+const HOURS_NOT_APPLIED = 'My hours is not ready on this database yet (migration 3100).';
+/** 가능 시간 고치기 (3100). tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
+export async function loadHours(sb: SupabaseClient, tutorId: string | null): Promise<HoursData> {
+  const r = await sb.rpc('tutor_hours', { p_tutor: tutorId });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') throw new Error(HOURS_NOT_APPLIED);
+  return parseHours(check(r));
+}
+/** weekly = 바꾼 뒤 매주 열린 칸 전체 (안 바꾸면 null), close·open = 그 주만 닫을·다시 열 칸 */
+export async function saveHours(sb: SupabaseClient, tutorId: string | null, weekly: string[] | null, close: string[], open: string[]): Promise<void> {
+  check(await sb.rpc('tutor_hours_save', { p_tutor: tutorId, p_weekly: weekly, p_close: close, p_open: open }));
 }
