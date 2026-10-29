@@ -222,7 +222,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         {days.length > 0 && (
           <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
             <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 whitespace-nowrap text-[13px] font-bold text-[#2b1c7a] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-              <span /><span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
+              <span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
             </div>
             {days.map((d) => (
               <div key={d.date}>
@@ -273,10 +273,10 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
 
 /** PC 표 칸 (KST 칸은 강사가 끌 수 있음) */
 const cols = (kst: boolean, paid: boolean) => kst
-  ? (paid ? 'lg:grid-cols-[76px_80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
-    : 'lg:grid-cols-[76px_80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]')
-  : (paid ? 'lg:grid-cols-[76px_80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
-    : 'lg:grid-cols-[76px_80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]');
+  ? (paid ? 'lg:grid-cols-[80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
+    : 'lg:grid-cols-[80px_84px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]')
+  : (paid ? 'lg:grid-cols-[80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_56px_minmax(160px,1.6fr)]'
+    : 'lg:grid-cols-[80px_minmax(120px,1.1fr)_100px_44px_104px_minmax(120px,1fr)_minmax(160px,1.6fr)]');
 
 /** 켬/끔을 이 기기에 기억 (기본 켬) */
 function useSavedToggle(key: string): [boolean, (on: boolean) => void] {
@@ -325,7 +325,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   return (
     <div className={`border-b border-[#e6e3ef] last:border-b-0 ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
       <button type="button" disabled={!canOpen} aria-expanded={open} onClick={() => setOpen(!open)}
-        className={`w-full px-3 py-2 text-left lg:px-1 disabled:cursor-default ${open ? 'bg-[#f3f1f8]' : 'enabled:hover:bg-[#f7f6fb]'}`}>
+        className={`w-full cursor-pointer px-3 py-2 text-left lg:px-1 disabled:cursor-default ${open ? 'bg-[#f3f1f8]' : 'enabled:hover:bg-[#f7f6fb]'}`}>
         <div className="grid grid-cols-[60px_minmax(0,1fr)_auto] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
             {time}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]">{k}</span>}
@@ -340,7 +340,6 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
           <span className={`text-right text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip && <span className="block">{remarksChip}</span>}</span>
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-          <span>{phase === 'to_record' && <span className="rounded-[8px] bg-[#5b3fe0] px-2.5 py-1 text-[13px] font-semibold text-white">Record</span>}</span>
           <span className="font-semibold">{time}</span>
           {kst && <span className="text-[#6b6880]">{k?.replace(/^KST /, '')}</span>}
           <span className="font-semibold"><span className="truncate">{name}</span></span>
@@ -353,7 +352,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
         </div>
       </button>
       {open && (
-        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[180px]">
+        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
           {canRecord(l, now) ? (
             <div className="lg:max-w-[560px]">
