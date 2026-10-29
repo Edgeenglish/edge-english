@@ -337,7 +337,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const open = right.open;
   const title = src
     ? `${kstLabel(src.startsAt)} · ${src.classStatus ? STATUS_SHORT[src.classStatus] ?? src.classStatus : ''}`
-    : `시트 보강 · 원래 ${right.kind === 'migrated' && right.item.originalDate ? dateLabel(right.item.originalDate) : '날짜 확인 필요'}`;
+    : `보강 · 원래 ${right.kind === 'migrated' && right.item.originalDate ? dateLabel(right.item.originalDate) : '날짜 확인 필요'}`;
   // 강사 휴무 보강은 종료일 제한 없음 — 종료일 뒤로 확정되면 그 날까지 자동 연장 (A20, migration 1800)
   const leave = (right.kind === 'migrated' && right.item.tutorLeave) || src?.classStatus === 'Tutor long-term leave';
   const until = leave ? '강사 휴가 · 종료일 제한 없음 (뒤로 잡으면 그날까지 연장)' : finalEnd ? `${dateLabel(finalEnd)}까지` : '';

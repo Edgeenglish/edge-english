@@ -580,7 +580,7 @@ function ItemList({ items, action }: { items: LvItem[]; action?: (i: LvItem) => 
         const s = itemStatus(i);
         return (
           <li key={i.id} className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
-            <span className="text-[14.5px] text-[#1d1b2b]">{kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'}</span>
+            <span className="text-[14.5px] text-[#1d1b2b]">{kstLabel(i.startsAt)}</span>
             <span className={`ml-auto rounded-[6px] px-2 py-0.5 text-[12px] font-bold ${TONE[s.tone]}`}>{s.text}</span>
             {action?.(i)}
           </li>
@@ -676,7 +676,7 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
             <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
               <input type="checkbox" className="h-5 w-5" checked={ok.has(i.id)}
                 onChange={(e) => { const n = new Set(ok); if (e.target.checked) n.add(i.id); else n.delete(i.id); setOk(n); setOptions(null); }} />
-              {kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'}
+              {kstLabel(i.startsAt)}
             </label>
           </li>
         ))}
@@ -701,6 +701,10 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
           {options && <SubOptions options={options} items={t.items.filter((i) => no.includes(i.id))} busy={r.busy} pick={(id, sel) => r.run(() => actions.choose(sel, 'substitute', id))} />}
         </>
       )}
+      {/* 이 강사 대신 처음부터 다시 고르기 (대표 10/29) */}
+      <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => actions.back(t.items.map((i) => i.id), 'undecided'))}>
+        강사 다시 고르기
+      </button>
       <Err>{r.err}</Err>
     </div>
   );
@@ -759,7 +763,7 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
     <div className="grid gap-2">
       {items.length > 1 ? (
         <select aria-label="보강할 수업" value={itemId} onChange={(e) => setItemId(e.target.value)} className={inputCls(false)}>
-          {items.map((i) => <option key={i.id} value={i.id}>{kstLabel(i.startsAt)}{i.isLesson ? '' : ' · 시트 보강'} 수업분</option>)}
+          {items.map((i) => <option key={i.id} value={i.id}>{kstLabel(i.startsAt)} 수업분</option>)}
         </select>
       ) : (
         <ItemList items={items} />
