@@ -1413,6 +1413,17 @@ select pg_temp.ok((select status = 'pending' and sent_at is null from lesson_not
 select pg_temp.expect_error($$select admin_leave_notice_unsend(array(select id from lesson_notices where leave_item_id = pg_temp.li(1) and event = 'leave_options'))$$, '다음 단계');
 select pg_temp.expect_error($$select admin_leave_back(array[pg_temp.li(1)], 'undecided')$$, '보강부터 정리');
 select pg_temp.ok(true, '보강 신청이 있는 수업의 2단계 글(휴무 안내)은 못 되돌림 · 보강 신청이 있는 기다림 수업은 학생 답 전으로 못 돌림');
+-- 9-2b) 휴무 처리 밖에서 수업이 취소되면 휴무 줄에 표시, 되살리면 지움 (3200, R5). 휴무 처리 자체의 취소('Tutor long-term leave')는 아님
+reset role;
+update lessons set state = 'canceled', class_status = 'Student canceled in advance', canceled_at = now() where id = '77777777-1800-0000-0000-000000000003';
+select pg_temp.ok((select lesson_gone_at is not null from leave_items where id = pg_temp.li(3)), '학생 취소: 휴무 줄에 취소 표시');
+update lessons set state = 'scheduled', class_status = null, canceled_at = null where id = '77777777-1800-0000-0000-000000000003';
+select pg_temp.ok((select lesson_gone_at is null from leave_items where id = pg_temp.li(3)), '취소 되돌리기: 표시 지움');
+update lessons set state = 'canceled', class_status = 'Tutor long-term leave', canceled_at = now() where id = '77777777-1800-0000-0000-000000000003';
+select pg_temp.ok((select lesson_gone_at is null from leave_items where id = pg_temp.li(3)), '휴무 처리 취소(기존 강사와 보강)는 밖에서 취소 아님');
+update lessons set state = 'scheduled', class_status = null, canceled_at = null where id = '77777777-1800-0000-0000-000000000003';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 -- 9-3) 재등록 대기 학생: 고정 시간을 맡아 두는 동안(종료일 23:59까지)만, 종료일 뒤 ~ 휴무 끝 사이 평소 요일·시간
 reset role;
 insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000001802', '휴무재등록', 'Leave R');

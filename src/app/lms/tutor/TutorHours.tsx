@@ -209,8 +209,10 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
   );
 
   const history = d.history && (
-    <section className="mt-4 rounded-[12px] border border-[#e6e3ef] bg-white p-3">
-      <h3 className="mb-1 text-[14px] font-bold text-[#1d1b2b]">바뀐 기록</h3>
+    // 운영자 보기에서만 나옴 → 운영자 보기 막대와 같은 모양으로 강사 화면과 구분 (R9)
+    <section className="mt-4 overflow-hidden rounded-[12px] border border-[#1d1b2b] bg-white">
+      <h3 className="mb-1 bg-[#1d1b2b] px-3 py-1.5 text-[13px] font-semibold text-white">운영자 보기 · 바뀐 기록</h3>
+      <div className="px-3 pb-3">
       {d.history.length === 0 && <p className="text-[13px] text-[#6b6880]">없음</p>}
       <ul className="grid gap-2">
         {d.history.map((h) => (
@@ -222,6 +224,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
           </li>
         ))}
       </ul>
+      </div>
     </section>
   );
 

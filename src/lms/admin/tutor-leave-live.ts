@@ -35,7 +35,7 @@ export async function loadLeaves(sb: SupabaseClient, now: Date): Promise<LvTimeO
 
 type ItemRow = {
   id: string; time_off_id: string; student_id: string; lesson_id: string | null; migrated_item_id: string | null; starts_at: string;
-  choice: LvChoice; sub_tutor_id: string | null; sub_stage: LvStage | null;
+  choice: LvChoice; sub_tutor_id: string | null; sub_stage: LvStage | null; lesson_gone_at: string | null;
   student: { name_ko: string; name_en: string; code: string; timezone: string } | null;
   enrollment: { duration_min: number } | null;
   sub: { name: string; timezone: string } | null;
@@ -43,7 +43,7 @@ type ItemRow = {
 
 export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Promise<{ items: LvItem[]; notices: LvNotice[] }> {
   const rows = check(await sb.from('leave_items')
-    .select('id, time_off_id, student_id, lesson_id, migrated_item_id, starts_at, choice, sub_tutor_id, sub_stage, student:students(name_ko, name_en, code, timezone), enrollment:enrollments(duration_min), sub:tutors!leave_items_sub_tutor_id_fkey(name, timezone)')
+    .select('id, time_off_id, student_id, lesson_id, migrated_item_id, starts_at, choice, sub_tutor_id, sub_stage, lesson_gone_at, student:students(name_ko, name_en, code, timezone), enrollment:enrollments(duration_min), sub:tutors!leave_items_sub_tutor_id_fkey(name, timezone)')
     .eq('time_off_id', timeOffId).order('starts_at')) as unknown as ItemRow[];
   const lessonIds = rows.flatMap((r) => (r.lesson_id ? [r.lesson_id] : []));
   const migIds = rows.flatMap((r) => (r.migrated_item_id ? [r.migrated_item_id] : []));
@@ -64,7 +64,7 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
     choice: r.choice, subTutorId: r.sub_tutor_id, subTutorName: r.sub?.name ?? null, subTutorTz: r.sub?.timezone ?? null, subStage: r.sub_stage,
     makeupAt: r.choice !== 'wait' ? null : r.lesson_id ? makeupOf.get(r.lesson_id) ?? null : migLesson.get(r.migrated_item_id ?? '') ?? null,
     makeupRequested: requested.has(r.lesson_id ?? r.migrated_item_id),
-    lessonId: r.lesson_id, migratedItemId: r.migrated_item_id,
+    lessonId: r.lesson_id, migratedItemId: r.migrated_item_id, lessonGone: !!r.lesson_gone_at,
   }));
   const notices = (check(nt) as { id: string; leave_item_id: string; event: LvNotice['event']; recipient_kind: 'student' | 'tutor'; recipient_id: string; status: LvNotice['status']; sent_at: string | null }[])
     .map((n) => ({ id: n.id, itemId: n.leave_item_id, event: n.event, recipientKind: n.recipient_kind, recipientId: n.recipient_id, status: n.status, sentAt: n.sent_at ? new Date(n.sent_at) : null }));

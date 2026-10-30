@@ -99,7 +99,7 @@ export default function LoginFlow() {
       setCode('');
       setStep('totp');
     } else if (next.kind === 'totp_enroll') {
-      const { data, error: e } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: `EdgeEnglish ${new Date().toISOString().slice(0, 10)}` });
+      const { data, error: e } = await sb.auth.mfa.enroll({ factorType: 'totp', issuer: '엣지영어 LMS', friendlyName: `EdgeEnglish ${new Date().toISOString().slice(0, 10)}` });
       if (e || !data) return setError(failMessage(e));
       setEnroll({ factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
       setCode('');

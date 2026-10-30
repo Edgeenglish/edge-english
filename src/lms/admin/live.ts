@@ -250,9 +250,11 @@ export function toMissingRecords(rows: MissingRecord[]): TaskSource[] {
 
 export type LeaveOpenRow = {
   student_id: string; starts_at: string; choice: 'undecided' | 'substitute' | 'wait'; sub_stage: 'asked' | 'tutor_ok' | 'confirmed' | null;
+  /** 휴무 처리 밖에서 취소된 수업 (3200, R5) → 할 일에서 뺌 */
+  lesson_gone_at?: string | null;
   off: { id: string; starts_at: string; ends_at: string; created_at: string; tutor: { name: string } | null } | null;
 };
-export type LeaveNoticeRow = { event?: string; leave: { student_id?: string; off: LeaveOpenRow['off'] } | null };
+export type LeaveNoticeRow = { event?: string; leave: { student_id?: string; lesson_gone_at?: string | null; off: LeaveOpenRow['off'] } | null };
 
 /** 강사 휴무 처리 (1800·2500 새 순서): 아직 정하지 않았거나 답을 기다리는 수업 · 안 보낸 안내 → 휴무마다 한 줄 */
 export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], now: Date): TaskSource[] {
@@ -270,7 +272,7 @@ export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], n
     return out.get(o.id)!;
   };
   for (const r of rows) {
-    if (!r.off) continue;
+    if (!r.off || r.lesson_gone_at) continue;
     const t = row(r.off);
     if (r.choice === 'undecided') {
       const s = undecided.get(r.off.id) ?? new Set<string>();
@@ -287,7 +289,7 @@ export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], n
     if (at > now && (!t.firstOpenAt || at < t.firstOpenAt)) t.firstOpenAt = at;
   }
   for (const n of notices) {
-    if (!n.leave?.off) continue;
+    if (!n.leave?.off || n.leave.lesson_gone_at) continue;
     const t = row(n.leave.off);
     t.pendingNotices += 1;
     const ns = (t.noticeSteps ??= { notify: 0, tutor: 0, confirm: 0 });
@@ -396,8 +398,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .from('enrollments')
       .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind)')
       .in('status', ['confirmed', 'active']),
-    sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
-    sb.from('lesson_notices').select(`event, leave:leave_items(student_id, ${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
+    sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, lesson_gone_at, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
+    sb.from('lesson_notices').select(`event, leave:leave_items(student_id, lesson_gone_at, ${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
     sb.from('renewal_notices').select('enrollment_id, sent_at'),
     loadMissingRecords(sb),
   ]);

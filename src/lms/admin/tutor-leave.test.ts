@@ -32,6 +32,16 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') })).text).toBe('기존 강사 보강 · 11/20 20:00');
   });
 
+  it('상태 글: 문의 보내기 전 ≠ 답변 대기 (R2), 확정 안내 보내기 전 ≠ 완료 (R4), 밖에서 취소된 수업 (R5)', () => {
+    const pending = new Set(['a|sub_ask', 'b|sub_confirmed']);
+    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' }), pending).text).toBe('Benny 강사님에게 문의 보내기 전');
+    expect(itemStatus(I('b', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending)).toEqual({ text: '대체강사 Benny 확정 · 확정 안내 보내기 전', tone: 'todo' });
+    expect(itemStatus(I('c', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending).tone).toBe('done');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', lessonGone: true }), pending)).toEqual({ text: '수업 취소·변경됨', tone: 'done' });
+    const g = groupByStudent([I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked', lessonGone: true })])[0];
+    expect(studentWork(g, [], new Date('2026-10-30T00:00:00Z')).steps).toEqual([]);
+  });
+
   it('안내: 같은 학생·같은 대체강사 날짜를 한 메시지로, 강사는 현지 시각, 학생은 한국어', () => {
     const items = [I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' }), I('b', 's1', '2026-11-05', { ...sub, subStage: 'tutor_ok' })];
     const notices: LvNotice[] = [

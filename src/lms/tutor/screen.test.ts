@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CLASS_STATUSES } from '../rules/status';
-import { answerReady, canRecord, daysOf, kstText, parseScreen, phaseOf, recordReady, resultOf, savedStatus, statusText, timeRange, TUTOR_STATUS_TEXT, weekOf, type TutorLesson } from './screen';
+import { answerReady, canRecord, daysOf, kindTag, kstText, parseScreen, phaseOf, recordReady, resultOf, savedStatus, statusText, timeRange, TUTOR_STATUS_TEXT, weekOf, type TutorLesson } from './screen';
 
 const base: TutorLesson = {
   id: 'a', startsAt: new Date('2026-11-02T08:00:00Z'), endsAt: new Date('2026-11-02T08:40:00Z'), kind: 'regular', state: 'scheduled', classStatus: null,
@@ -36,6 +36,9 @@ describe('강사 화면 (migration 2000)', () => {
     expect(canRecord({ ...base, state: 'canceled', classStatus: 'Tutor long-term leave' }, now)).toBe(false);
     expect(canRecord({ ...base, locked: true, state: 'done', classStatus: 'Normal' }, now)).toBe(false);
     expect(canRecord({ ...base, startsAt: new Date('2026-11-02T09:00:00Z') }, now)).toBe(false);
+    // 강사 계정 만들기 전 수업은 'Not recorded'가 아님 (R7)
+    expect(statusText({ ...base, beforeLms: true }, now)).toBe('Before LMS');
+    expect(kindTag({ ...base, kind: 'migrated_makeup', covering: true })).toBe('Substitute');
   });
   it('14개 상태 모두 강사 문구가 있음', () => {
     for (const s of CLASS_STATUSES) expect(TUTOR_STATUS_TEXT[s]).toBeTruthy();

@@ -40,6 +40,8 @@ export type LvItem = {
   /** 보강 신청 대상 (수업 또는 시트 휴가 보강) */
   lessonId: string | null;
   migratedItemId: string | null;
+  /** 휴무 처리 밖에서(학생 취소·변경) 수업이 취소됨 (3200, R5) → 처리할 것 없음 */
+  lessonGone?: boolean;
 };
 
 export type LvNoticeEvent = 'leave_options' | 'sub_ask' | 'sub_student' | 'sub_confirmed';
@@ -82,16 +84,26 @@ export function groupChoice(items: LvItem[]): LvChoice | 'mixed' {
   return items[0].choice;
 }
 
-/** 한 줄 상태 글 */
-export function itemStatus(i: LvItem): { text: string; tone: 'todo' | 'wait' | 'done' } {
+/** 안 보낸 안내 '수업id|종류' (상태 글에서 '보내기 전'과 '답 기다리는 중'·'완료'를 가름, R2·R4) */
+export function pendingNoticeKeys(notices: LvNotice[]): Set<string> {
+  return new Set(notices.filter((n) => n.status === 'pending').map((n) => `${n.itemId}|${n.event}`));
+}
+
+/** 한 줄 상태 글. pending = pendingNoticeKeys (없으면 안내 보냄 여부는 안 봄) */
+export function itemStatus(i: LvItem, pending?: ReadonlySet<string>): { text: string; tone: 'todo' | 'wait' | 'done' } {
+  if (i.lessonGone) return { text: '수업 취소·변경됨', tone: 'done' };
   if (i.choice === 'undecided') return { text: '대체 강사 고르기 필요', tone: 'todo' };
   if (i.choice === 'wait') {
     if (i.makeupAt) return { text: `기존 강사 보강 · ${koShort(i.makeupAt)}`, tone: 'done' };
     return i.makeupRequested ? { text: '기존 강사 보강 · 강사님 확인 기다리는 중', tone: 'wait' } : { text: '보강 · 날짜 잡기 전', tone: 'wait' };
   }
   const who = i.subTutorName ?? '대체강사';
-  if (i.subStage === 'asked') return { text: `${who} 강사님 답변 기다리는 중`, tone: 'todo' };
+  if (i.subStage === 'asked') {
+    return pending?.has(`${i.id}|sub_ask`) ? { text: `${who} 강사님에게 문의 보내기 전`, tone: 'todo' } : { text: `${who} 강사님 답변 기다리는 중`, tone: 'todo' };
+  }
   if (i.subStage === 'tutor_ok') return { text: `${who} 강사님 가능 · 학생 답 필요`, tone: 'todo' };
+  // 배정 확정과 확정 안내 보냄은 다른 상태: 안내까지 보내야 완료 (R4)
+  if (pending?.has(`${i.id}|sub_confirmed`)) return { text: `대체강사 ${who} 확정 · 확정 안내 보내기 전`, tone: 'todo' };
   return { text: `대체강사 ${who} 확정`, tone: 'done' };
 }
 
@@ -102,8 +114,10 @@ function koShort(at: Date): string {
 }
 
 /** 휴무 한 건의 요약 (대시보드 카드와 같은 기준) */
-export function leaveSummary(items: LvItem[], notices: LvNotice[]) {
-  const pending = notices.filter((n) => n.status === 'pending').length;
+export function leaveSummary(all: LvItem[], notices: LvNotice[]) {
+  const items = all.filter((i) => !i.lessonGone);
+  const gone = new Set(all.filter((i) => i.lessonGone).map((i) => i.id));
+  const pending = notices.filter((n) => n.status === 'pending' && !gone.has(n.itemId)).length;
   return {
     undecidedStudents: new Set(items.filter((i) => i.choice === 'undecided').map((i) => i.studentId)).size,
     tutorReply: items.filter((i) => i.choice === 'substitute' && i.subStage === 'asked').length,
@@ -126,7 +140,7 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[]
   for (const n of notices) {
     if (n.status === 'not_needed') continue;
     const it = byId.get(n.itemId);
-    if (!it) continue;
+    if (!it || it.lessonGone) continue;
     // 학생에게 가는 대체강사 글은 대체강사마다 따로 (날짜마다 대체강사가 다를 수 있음)
     const key = `${n.status}|${n.event}|${it.studentId}|${n.recipientId}|${n.event === 'sub_student' || n.event === 'sub_confirmed' ? it.subTutorId ?? '' : ''}`;
     const g = groups.get(key) ?? { event: n.event, status: n.status, notices: [], items: [] };
@@ -282,10 +296,12 @@ export type LvStudentWork = {
 export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date, period?: { from: KstDate; to: KstDate }): LvStudentWork {
   const mine = messages.filter((m) => m.studentId === g.studentId);
   const pending = mine.filter((m) => m.status === 'pending');
-  const future = g.items.filter((i) => i.startsAt > now);
+  // 휴무 처리 밖에서 취소된 수업은 할 일에서 뺌 (R5)
+  const items = g.items.filter((i) => !i.lessonGone);
+  const future = items.filter((i) => i.startsAt > now);
   const pick = future.filter((i) => i.choice === 'undecided');
   const tutorMap = new Map<string, LvStudentWork['tutor'][number]>();
-  for (const i of g.items.filter((x) => x.choice === 'substitute' && x.subStage === 'asked')) {
+  for (const i of items.filter((x) => x.choice === 'substitute' && x.subStage === 'asked')) {
     const t = tutorMap.get(i.subTutorId!) ?? { subTutorId: i.subTutorId!, subTutorName: i.subTutorName ?? '', items: [], ask: null };
     t.items.push(i);
     tutorMap.set(i.subTutorId!, t);
@@ -304,11 +320,11 @@ export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date,
       : propSent.length
         ? { status: 'sent', noticeIds: propSent.flatMap((m) => m.noticeIds), itemIds: shown.map((i) => i.id), text: proposalText(g.studentName, shown, period) }
         : null;
-  const answer = proposal?.status === 'sent' ? g.items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok') : [];
+  const answer = proposal?.status === 'sent' ? items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok') : [];
   const confirm = {
     confirmedMsgs: pending.filter((m) => m.event === 'sub_confirmed'),
-    makeup: proposal?.status === 'sent' || !proposal ? g.items.filter((i) => i.choice === 'wait' && !i.makeupAt && !i.makeupRequested) : [],
-    makeupRequested: g.items.filter((i) => i.choice === 'wait' && !i.makeupAt && i.makeupRequested),
+    makeup: proposal?.status === 'sent' || !proposal ? items.filter((i) => i.choice === 'wait' && !i.makeupAt && !i.makeupRequested) : [],
+    makeupRequested: items.filter((i) => i.choice === 'wait' && !i.makeupAt && i.makeupRequested),
   };
   const steps: LvStep[] = [];
   if (pick.length || tutor.length) steps.push('tutor');

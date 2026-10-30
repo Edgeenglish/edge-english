@@ -269,8 +269,8 @@ export default function StudentHome(props: {
   const payBox = (
     <section aria-label="수강과 결제" className={`${card} px-4 pb-1.5 pt-4`}>
       <h2 className="mb-2 text-[15px] font-bold">수강·결제·적립금</h2>
-      <LinkRow label="수강권" value={s.product} onClick={() => extras && setOverlay({ kind: 'payments' })} />
-      <LinkRow label="결제" value={s.confirmedOn ? `확인 완료 (${fmtDate(s.confirmedOn)})` : '확인 중'} valueClass="text-[#13623a]" onClick={() => extras && setOverlay({ kind: 'payments' })} />
+      <LinkRow label="수강권" value={s.product} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
+      <LinkRow label="결제" value={s.confirmedOn ? `확인 완료 (${fmtDate(s.confirmedOn)})` : '확인 중'} valueClass="text-[#13623a]" onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
       <LinkRow label="적립금 내역" value={won(points.balance)} valueClass="font-bold" onClick={() => setOverlay({ kind: 'points' })} />
     </section>
   );
@@ -1040,7 +1040,14 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
   );
 }
 
-function LinkRow({ label, value, valueClass = 'font-semibold', onClick }: { label: string; value: string; valueClass?: string; onClick: () => void }) {
+// 누를 곳이 없으면 버튼 모양(›) 없이 글만 (R8)
+function LinkRow({ label, value, valueClass = 'font-semibold', onClick }: { label: string; value: string; valueClass?: string; onClick?: () => void }) {
+  if (!onClick) return (
+    <div className="flex min-h-[52px] w-full items-center justify-between border-t border-[#eeecf4] text-[14px] first:border-0">
+      <span className="text-[#55526a]">{label}</span>
+      <span className={valueClass}>{value}</span>
+    </div>
+  );
   return (
     <button type="button" onClick={onClick} className="flex min-h-[52px] w-full items-center justify-between border-t border-[#eeecf4] text-left text-[14px] first:border-0">
       <span className="text-[#55526a]">{label}</span>
