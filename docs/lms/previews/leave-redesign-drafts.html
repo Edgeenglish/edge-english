@@ -1,0 +1,305 @@
+<title>강사 휴무 새 흐름 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 질문 → 휴대폰 견본(학생 바꿔 보기) → PC 견본(왼쪽 학생 목록 · 오른쪽 학생 한 명) → 바뀌는 점. LMS 운영자 화면과 같은 보라 */
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--accent:#7d5ffb;--accent-fg:#5b3fe0;--q:#efeafe;
+--todo:#fff4d6;--todo-fg:#5c3b00;--todo-line:#f0a33a;--wait:#eef0ff;--wait-fg:#3b3f9e;--done:#e3f6ec;--done-fg:#1e7a46;--gone:#ecebf1;--gone-fg:#8a879c;--warn:#b3261e;
+--sent:#d9d6e3;--sent-fg:#4a4760;--msg:#f6f5fb;--frame:#1d1b2b;
+--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#8f78ff;--accent-fg:#b9aaff;--q:#2a2540;
+--todo:#3a2f12;--todo-fg:#ffd77a;--todo-line:#a6721f;--wait:#24264a;--wait-fg:#b9bdff;--done:#173325;--done-fg:#7fd6a5;--gone:#2a2935;--gone-fg:#8a879c;--warn:#ff9b92;
+--sent:#3a3848;--sent-fg:#cfcbe0;--msg:#2a2935;--frame:#000;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#8f78ff;--accent-fg:#b9aaff;--q:#2a2540;
+--todo:#3a2f12;--todo-fg:#ffd77a;--todo-line:#a6721f;--wait:#24264a;--wait-fg:#b9bdff;--done:#173325;--done-fg:#7fd6a5;--gone:#2a2935;--gone-fg:#8a879c;--warn:#ff9b92;
+--sent:#3a3848;--sent-fg:#cfcbe0;--msg:#2a2935;--frame:#000;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:22px}
+h1{font-size:22px;margin:0;text-wrap:balance}
+h2{font-size:18px;margin:0 0 8px;text-wrap:balance}
+h3{font-size:15px;margin:0}
+p{margin:0}
+.muted{color:var(--muted)}
+.qbox{background:var(--q);border-radius:14px;padding:14px 16px;display:grid;gap:10px}
+.qbox ol{margin:0;padding-left:22px;display:grid;gap:8px}
+.qbox b{color:var(--accent-fg)}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:1px 7px;vertical-align:1px}
+.tag.c{background:var(--todo);color:var(--todo-fg)}
+.switch{display:flex;flex-wrap:wrap;gap:6px}
+.switch button{min-height:40px;border-radius:10px;border:1px solid var(--accent);background:var(--card);color:var(--accent-fg);font:inherit;font-size:14px;font-weight:700;padding:0 14px;cursor:pointer}
+.switch button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.stage{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.phone{width:min(390px,100%);border:10px solid var(--frame);border-radius:30px;background:var(--bg);overflow:hidden}
+.phone .scr{max-height:760px;overflow-y:auto;padding:12px;display:grid;gap:10px}
+.note{flex:1 1 280px;min-width:0;display:grid;gap:10px;font-size:14px}
+.note li{margin-bottom:4px}
+.pcbox{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
+.pc{width:1060px;display:grid;grid-template-columns:300px 1fr;gap:14px;padding:14px}
+.pc .list{display:grid;gap:10px;align-content:start}
+/* 운영자 화면 조각 */
+.top{display:grid;gap:8px}
+.offbar{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;gap:4px}
+.offbar b{font-size:15.5px}
+.group{display:grid;gap:6px}
+.group h4{margin:0;font-size:13.5px;color:var(--muted);font-weight:700}
+.stu{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;min-height:48px;cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+.stu[aria-pressed="true"]{border:2px solid var(--accent)}
+.stu .n{font-weight:700}
+.stu .s{margin-left:auto;font-size:12.5px;color:var(--muted);text-align:right}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:10px}
+.card > header{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.card > header .code{font-size:13px;color:var(--muted)}
+.card > header .r{margin-left:auto}
+.row{border:1px solid var(--line);border-radius:12px;padding:9px 11px;display:grid;gap:6px}
+.row.todo{border:2px solid var(--todo-line)}
+.row .l1{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.row .when{font-weight:700;font-variant-numeric:tabular-nums}
+.st{font-size:12.5px;font-weight:800;border-radius:6px;padding:1px 7px}
+.st.todo{background:var(--todo);color:var(--todo-fg)}
+.st.wait{background:var(--wait);color:var(--wait-fg)}
+.st.done{background:var(--done);color:var(--done-fg)}
+.st.gone{background:var(--gone);color:var(--gone-fg)}
+.row .who{font-size:13px;color:var(--muted)}
+.btn{min-height:44px;border-radius:10px;border:0;background:var(--accent);color:#fff;font:inherit;font-size:14.5px;font-weight:700;padding:0 14px;cursor:pointer}
+.btn.sub{background:var(--card);color:var(--fg);border:1px solid var(--line);font-weight:500}
+.btn.sent{background:var(--sent);color:var(--sent-fg);border:1px solid var(--line)}
+.btn.sm{min-height:36px;font-size:13px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.btns .grow{flex:1 1 auto}
+details.fold{border:1px dashed var(--line);border-radius:12px;padding:8px 11px}
+details.fold summary{cursor:pointer;font-weight:700;color:var(--done-fg);min-height:28px}
+details.fold .row{margin-top:6px}
+.msg{background:var(--msg);border-radius:10px;padding:8px 10px;white-space:pre-wrap;font-size:13.5px}
+.sec{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.sec h3 small{font-weight:500;color:var(--muted);font-size:12.5px}
+.opt{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:44px}
+.opt b{font-size:14.5px}
+.opt .k{margin-left:auto;font-size:12.5px;text-align:right}
+.k.ok{color:var(--done-fg)} .k.ask{color:var(--todo-fg)} .k.no{color:var(--warn)}
+.chk{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:0 10px;min-height:44px}
+.chk input{width:20px;height:20px}
+.warn{color:var(--warn);font-size:13px}
+.changes{display:grid;gap:6px;font-size:14px}
+.changes table{border-collapse:collapse;width:100%;min-width:620px}
+.changes th,.changes td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+.changes th{font-size:13px;color:var(--muted)}
+.tbl{overflow-x:auto}
+button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:6px">
+    <h1>강사 휴무 새 흐름 시안</h1>
+    <p class="muted">R11~R25 반영 견본 · 예: Olivia 11/2~11/10 휴무, 신O옥(일부만 확정) · 지O(대체+보강 섞임). 상태는 견본용 예시예요.</p>
+  </header>
+
+  <section class="qbox" aria-label="대표 답 필요">
+    <h2>대표 답 필요</h2>
+    <ol>
+      <li><b>Q1 흐름</b> — 단계 화면(4단계 줄) 대신 <b>수업마다 한 줄: 지금 상태 · 누구 답 기다림 · 다음 버튼 하나</b>로 바꿀까요? 끝난 수업은 접힘, 묶음 문의·안내는 그 아래. (권장: 예)</li>
+      <li><b>Q2 이름</b> <span class="tag c">C1</span> — 10/29 정한 단계 이름(수업별 대체 강사 찾기 › 학생한테 기존 강사 휴무 안내하기 › 학생이 원하는 수업 방향 입력 › 확정 안내 보내기)은 단계 줄이 없어지면 <b>버튼 이름</b>으로 씀: [강사에게 문의] [학생에게 휴무 안내] [학생 답 기록] [확정 안내 보내기]. ChatGPT안 '학생 선택 기록'은 '학생 선택' 금지 규칙과 부딪혀 <b>'학생 답 기록'</b>으로 했어요. 괜찮을까요?</li>
+      <li><b>Q3 수강기간 연장</b> <span class="tag c">C2</span> — 학생 안내에 세 번째 선택지로 따로 둘까요? 지금 정책은 보강이 종료일 뒤로 잡히면 <b>자동 연장</b>이라 시안에는 안 넣었어요. (권장: 지금처럼 자동, 선택지 안 만듦)</li>
+      <li><b>Q4 수업 인계</b> <span class="tag c">C10</span> — 대체강사에게 넘길 교재·페이지·Docs가 어디 있나요? (강사 Class Record 시트 · 학생 Docs 노트 · 교재 목록 중) 정해지면 '수업 인계' 칸을 채워요. 지금은 칸 자리만.</li>
+      <li><b>Q5 대시보드</b> — 휴무 줄을 '처리할 일 / 답 기다리는 일'로 나눠 보이기(R25·R29)는 이 흐름 확정 뒤 대시보드 작업 때 같이 할까요? (권장: 예)</li>
+    </ol>
+  </section>
+
+  <section aria-label="휴대폰 견본" style="display:grid;gap:10px">
+    <h2>휴대폰</h2>
+    <div class="switch" role="group" aria-label="학생 바꾸기">
+      <button type="button" data-stu="list" aria-pressed="true">휴무 첫 화면</button>
+      <button type="button" data-stu="shin" aria-pressed="false">신O옥</button>
+      <button type="button" data-stu="se" aria-pressed="false">이O민</button>
+      <button type="button" data-stu="ji" aria-pressed="false">지O</button>
+      <button type="button" data-stu="maria" aria-pressed="false">Maria 묶음 문의</button>
+    </div>
+    <div class="stage">
+      <div class="phone"><div class="scr" id="phone"></div></div>
+      <div class="note">
+        <h3>무엇이 바뀌나</h3>
+        <ul>
+          <li>같은 날짜를 위·아래 두 번 읽지 않음: <b>수업 한 줄에 상태 + 버튼</b>(R11·R15)</li>
+          <li>대체강사 목록은 <b>한 곳</b>만, 날짜마다 '평소 가능시간과 일치 / 평소 시간표 밖 · 문의 필요 / 다른 수업과 겹침(불가)'(R12·R13)</li>
+          <li>후보 고름 → <b>[강사에게 문의] 보냄</b> → 답 기다림. 보내기 전엔 '문의 보내기 전'(R2, 오늘 고침)</li>
+          <li>같은 강사에게 여러 학생 수업을 <b>한 메시지로</b> 묻고, 답은 수업마다 체크(처음엔 체크 없음)(R17·R3)</li>
+          <li>어느 때든 <b>[휴무 먼저 안내]</b>(R19). 일부만 정해져도 확정·안내 가능(R20)</li>
+          <li>확정 안내는 학생 글(맡는 강사 Meet 링크 자동) + 강사 글 한 화면, <b>둘 다 보내야 완료</b>(R21·R4)</li>
+          <li>[← 뒤로]는 화면만 옮김. 처리 무르기는 [처리 되돌리기] + 확인창(R1, 오늘 고침)</li>
+          <li>끝에 <b>[다음 학생 ›]</b>, 답 기다리는 수업이 남아도 넘어감(R24)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="PC 견본" style="display:grid;gap:10px">
+    <h2>PC</h2>
+    <div class="pcbox"><div class="pc">
+      <div class="list" id="pcList"></div>
+      <div id="pcPanel"></div>
+    </div></div>
+  </section>
+
+  <section class="changes" aria-label="지금 화면과 다른 점">
+    <h2>지금 화면 → 새 화면</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>지금</th><th>새 화면</th><th>요청</th></tr></thead>
+      <tbody>
+        <tr><td>카드 위 '휴무에 걸린 수업' 목록 + 아래 단계 화면에 같은 날짜 다시</td><td>수업 한 줄에 상태·버튼, 끝난 수업은 접힘</td><td>R11·R15</td></tr>
+        <tr><td>전체 후보 강사 줄 + 날짜별 후보 줄</td><td>날짜를 고르면 그 날짜들 기준 강사 목록 하나</td><td>R12·R13</td></tr>
+        <tr><td>'좋아요' · '안 끝난 학생'</td><td>'대체강사로 수업' · '처리할 것'</td><td>R14</td></tr>
+        <tr><td>학생마다 강사 문의 글 따로</td><td>강사별로 묶어 한 번, 답은 수업마다</td><td>R17</td></tr>
+        <tr><td>휴무 안내는 대체강사 다 정한 뒤에만</td><td>[휴무 먼저 안내] 언제든 (대체강사 미정이면 '확인 중')</td><td>R18·R19</td></tr>
+        <tr><td>확정 '✓ 완료'인데 확정 안내 남음</td><td>학생·강사 안내 보내야 완료</td><td>R4·R21</td></tr>
+        <tr><td>수업 인계 없음</td><td>확정 안내 아래 '수업 인계' (Q4 답 뒤)</td><td>R23</td></tr>
+        <tr><td>다음 학생으로 가려면 목록에서 다시 고르기</td><td>[다음 학생 ›]</td><td>R24</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted">숫자(기다리는 기한 등)는 넣지 않았어요. 수업 시각만 보여 줘요.</p>
+  </section>
+</div>
+
+<template id="t-list">
+  <div class="top">
+    <div class="offbar"><b>Olivia 휴무 · 11/2(월) ~ 11/10(화)</b><span class="muted" style="font-size:13px">걸린 수업 9회 · 학생 3명</span></div>
+    <div class="group"><h4>처리할 것 2명</h4>
+      <button type="button" class="stu" data-go="shin"><span class="n">신O옥</span><span class="s">11/4 확정 안내 보내기</span></button>
+      <button type="button" class="stu" data-go="se"><span class="n">이O민</span><span class="s">11/10 강사 고르기</span></button>
+      <button type="button" class="stu" data-go="ji"><span class="n">지O</span><span class="s">11/5 보강 날짜 안내하기</span></button>
+    </div>
+    <div class="group"><h4>강사에게 묻기 1명</h4>
+      <button type="button" class="stu" data-go="maria"><span class="n">Maria</span><span class="s">학생 2명 2회 · 문의 보내기 전</span></button>
+    </div>
+    <div class="group"><h4>답 기다리는 것</h4>
+      <p class="muted" style="font-size:13px;padding-left:4px">이O민 11/2·11/4 학생 답 (첫 수업 11/2 09:00)</p>
+    </div>
+    <div class="group"><h4>끝남 0명</h4></div>
+  </div>
+</template>
+
+<template id="t-shin">
+  <article class="card">
+    <header><h3>신O옥</h3><span class="code">STU-0003</span>
+      <button type="button" class="btn sub sm r">휴무 먼저 안내</button></header>
+    <details class="fold"><summary>✓ 끝난 수업 1회</summary>
+      <div class="row"><div class="l1"><span class="when">11/2(월) 20:00</span><span class="st done">대체강사 Maria · 안내 보냄</span></div></div>
+    </details>
+    <div class="row todo">
+      <div class="l1"><span class="when">11/4(수) 20:00</span><span class="st todo">Maria 확정 · 확정 안내 보내기 전</span></div>
+      <div class="btns"><button type="button" class="btn grow">확정 안내 보내기</button></div>
+    </div>
+    <div class="row">
+      <div class="l1"><span class="when">11/9(월) 20:00</span><span class="st todo">Maria 문의 보내기 전</span></div>
+      <p class="who">다른 학생과 묶어 Maria에게 한 번에 물어요</p>
+      <div class="btns"><button type="button" class="btn sub grow" data-go="maria">Maria 묶음 문의 ›</button></div>
+    </div>
+    <section class="sec" aria-label="확정 안내 11/4">
+      <h3>11/4 확정 안내</h3>
+      <div class="btns" style="align-items:center"><b class="grow">학생 신O옥</b><button type="button" class="btn sub sm">복사</button><button type="button" class="btn sm">보냄</button></div>
+      <div class="msg">[엣지영어] 11/4(수) 20:00 수업은 Maria 강사님과 진행해요.
+입장: https://meet.google.com/○○○ (Maria 강사님 링크)</div>
+      <div class="btns" style="align-items:center"><b class="grow">강사 Maria</b><button type="button" class="btn sent sm" disabled>복사함 ✓</button><button type="button" class="btn sm">보냄</button></div>
+      <div class="msg">Confirmed - Wed 4 Nov 19:00 (your time), 40 min
+Student: Sin O-ok</div>
+      <div class="row"><div class="l1"><b>수업 인계</b><span class="st wait">Q4 답 뒤</span></div><p class="who">학생 정보 · 가르칠 교재·페이지 · 학생 Docs 권한</p></div>
+    </section>
+    <div class="btns"><button type="button" class="btn sub grow">다음 학생 ›</button></div>
+  </article>
+</template>
+
+<template id="t-ji">
+  <article class="card">
+    <header><h3>지O</h3><span class="code">STU-0006</span>
+      <button type="button" class="btn sub sm r">휴무 먼저 안내</button></header>
+    <details class="fold"><summary>✓ 끝난 수업 1회</summary>
+      <div class="row"><div class="l1"><span class="when">11/3(화) 09:00</span><span class="st done">대체강사 Benny · 안내 보냄</span></div></div>
+    </details>
+    <div class="row todo">
+      <div class="l1"><span class="when">11/5(목) 09:00</span><span class="st todo">기존 강사와 보강 · 보강 날짜 조율 필요</span></div>
+      <p class="who">빠진 수업 11/5 → 보강 날짜 미정</p>
+      <div class="btns"><button type="button" class="btn grow">보강 날짜 안내하기</button></div>
+    </div>
+    <section class="sec" aria-label="보강 날짜 안내">
+      <h3>보강 날짜 안내 <small>Olivia 복귀 뒤</small></h3>
+      <div class="btns" style="align-items:center"><b class="grow">학생 지O</b><button type="button" class="btn sub sm">복사</button><button type="button" class="btn sm">보냄</button></div>
+      <div class="msg">[엣지영어] 11/5(목) 수업 보강 날짜를 아래 링크에서 골라 주세요.
+https://…/lms/student</div>
+      <p class="who">학생이 고르면 'Olivia 강사님 확인 기다림'으로 바뀌어요.</p>
+    </section>
+    <div class="btns"><button type="button" class="btn sub grow">다음 학생 ›</button></div>
+  </article>
+</template>
+
+<template id="t-se">
+  <article class="card">
+    <header><h3>이O민</h3><span class="code">STU-0001</span>
+      <button type="button" class="btn sub sm r">휴무 먼저 안내</button></header>
+    <div class="row"><div class="l1"><span class="when">11/2(월) 09:00</span><span class="st wait">학생 답 기다림</span></div><p class="who">Maria 가능 · 휴무 안내 보냄</p>
+      <div class="btns"><button type="button" class="btn sub grow">학생 답 기록</button></div></div>
+    <div class="row"><div class="l1"><span class="when">11/4(수) 09:00</span><span class="st wait">학생 답 기다림</span></div><p class="who">Maria 가능 · 휴무 안내 보냄</p>
+      <div class="btns"><button type="button" class="btn sub grow">학생 답 기록</button></div></div>
+    <div class="row"><div class="l1"><span class="when">11/9(월) 09:00</span><span class="st todo">Maria 문의 보내기 전</span></div>
+      <div class="btns"><button type="button" class="btn sub grow" data-go="maria">Maria 묶음 문의 ›</button></div></div>
+    <div class="row todo">
+      <div class="l1"><span class="when">11/10(화) 09:00</span><span class="st todo">대체 강사 고르기</span></div>
+      <div class="btns"><button type="button" class="btn grow">강사 고르기</button><button type="button" class="btn sub">기존 강사와 보강</button></div>
+    </div>
+    <section class="sec" aria-label="강사 고르기 11/10">
+      <h3>11/10 강사 고르기 <small>평소 가능시간 기준</small></h3>
+      <div class="opt"><b>Benny</b><span class="k ok">평소 가능시간과 일치</span></div>
+      <div class="opt"><b>Maria</b><span class="k ask">평소 시간표 밖 · 문의 필요</span></div>
+      <div class="opt" style="opacity:.55"><b>Leslie</b><span class="k no">다른 확정 수업과 겹침(불가)</span></div>
+    </section>
+    <div class="btns"><button type="button" class="btn sub grow">다음 학생 ›</button></div>
+  </article>
+</template>
+
+<template id="t-maria">
+  <article class="card">
+    <header><h3>Maria 강사님에게 묻기</h3><span class="code">학생 2명 2회</span></header>
+    <div class="btns" style="align-items:center"><b class="grow">강사 Maria</b><button type="button" class="btn sub sm">복사</button><button type="button" class="btn sm">보냄</button></div>
+    <div class="msg">Hi Maria! One of our Edge English tutors is on leave. Could you cover these classes? If not all, please tell us the ones you can do.
+1) Mon 9 Nov 08:00 (your time) · Lee O-min · 40 min
+2) Mon 9 Nov 19:00 (your time) · Sin O-ok · 40 min</div>
+    <section class="sec" aria-label="Maria 답 기록">
+      <h3>Maria가 가능하다고 답한 수업 <small>[보냄] 뒤에 체크</small></h3>
+      <label class="chk"><input type="checkbox" disabled> 11/9(월) 09:00 · 이O민</label>
+      <label class="chk"><input type="checkbox" disabled> 11/9(월) 20:00 · 신O옥</label>
+      <button type="button" class="btn" disabled style="opacity:.5">답 저장</button>
+    </section>
+  </article>
+</template>
+
+<script>
+const VIEWS = { list: 't-list', shin: 't-shin', ji: 't-ji', se: 't-se', maria: 't-maria' };
+const phone = document.getElementById('phone');
+const pcList = document.getElementById('pcList');
+const pcPanel = document.getElementById('pcPanel');
+const clone = (k) => document.getElementById(VIEWS[k]).content.cloneNode(true);
+let pcSel = 'shin';
+function showPhone(k) {
+  phone.replaceChildren(clone(k));
+  if (k !== 'list') {
+    const back = document.createElement('button');
+    back.type = 'button'; back.className = 'btn sub sm'; back.textContent = '← 학생 목록';
+    back.addEventListener('click', () => setPhone('list'));
+    phone.prepend(back);
+  }
+  phone.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => setPhone(b.dataset.go)));
+  phone.scrollTop = 0;
+}
+function setPhone(k) {
+  document.querySelectorAll('.switch button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.stu === k)));
+  showPhone(k);
+}
+function showPc() {
+  pcList.replaceChildren(clone('list'));
+  pcList.querySelectorAll('[data-go]').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.go === pcSel));
+    b.addEventListener('click', () => { pcSel = b.dataset.go; showPc(); });
+  });
+  pcPanel.replaceChildren(clone(pcSel));
+  pcPanel.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { pcSel = b.dataset.go; showPc(); }));
+}
+document.querySelectorAll('.switch button').forEach((b) => b.addEventListener('click', () => setPhone(b.dataset.stu)));
+showPhone('list');
+showPc();
+</script>
