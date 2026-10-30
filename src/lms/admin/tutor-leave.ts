@@ -32,6 +32,8 @@ export type LvItem = {
   subTutorId: string | null;
   subTutorName: string | null;
   subTutorTz: string | null;
+  /** 대체강사 Meet 주소: 학생 확정 안내에 같이 (C11 '안내와 링크는 한 번에') */
+  subTutorMeetUrl?: string | null;
   subStage: LvStage | null;
   /** 기존 강사 보강: 보강이 잡혔으면 그 시각 */
   makeupAt: Date | null;
@@ -193,7 +195,8 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
     ].join('\n');
   }
   if (recipient === 'student') {
-    return [`[엣지영어] ${i.studentName}님, 아래 수업은 대체강사 ${i.subTutorName} 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.`, dates].join('\n\n');
+    return [`[엣지영어] ${i.studentName}님, 아래 수업은 대체강사 ${i.subTutorName} 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.`, dates,
+      ...(i.subTutorMeetUrl ? [`수업 입장: ${i.subTutorMeetUrl}`] : [])].join('\n\n');
   }
   return [
     `CONFIRMED substitute classes - ${i.studentNameEn} (${i.durationMin} min)`,
@@ -255,7 +258,7 @@ function mondayOf(date: string): string {
 
 export type LvStep = 'tutor' | 'propose' | 'answer' | 'confirm';
 export const LV_STEP_TEXT: Record<LvStep | 'done', string> = {
-  tutor: '수업별 대체 강사 찾기', propose: '학생한테 기존 강사 휴무 안내하기', answer: '학생이 원하는 수업 방향 입력', confirm: '확정 안내 보내기', done: '완료',
+  tutor: '수업별 대체 강사 찾기', propose: '학생한테 기존 강사 휴무 안내하기', answer: '학생 답변 기록', confirm: '확정 안내 보내기', done: '완료',
 };
 
 /** 2단계 글: 휴무 안내 + 대체강사 제안을 한 번에 (2026-10-28 대표 시안 승인). 대체강사 날짜는 강사 이름과 함께, 나머지는 보강 */

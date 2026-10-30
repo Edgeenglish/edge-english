@@ -92,15 +92,16 @@ button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outli
     <p class="muted">R11~R25 반영 견본 · 예: Olivia 11/2~11/10 휴무, 신O옥(일부만 확정) · 지O(대체+보강 섞임). 상태는 견본용 예시예요.</p>
   </header>
 
-  <section class="qbox" aria-label="대표 답 필요">
-    <h2>대표 답 필요</h2>
+  <section class="qbox" aria-label="대표 답 반영">
+    <h2>대표 답(10/30) 반영</h2>
     <ol>
-      <li><b>Q1 흐름</b> — 단계 화면(4단계 줄) 대신 <b>수업마다 한 줄: 지금 상태 · 누구 답 기다림 · 다음 버튼 하나</b>로 바꿀까요? 끝난 수업은 접힘, 묶음 문의·안내는 그 아래. (권장: 예)</li>
-      <li><b>Q2 이름</b> <span class="tag c">C1</span> — 10/29 정한 단계 이름(수업별 대체 강사 찾기 › 학생한테 기존 강사 휴무 안내하기 › 학생이 원하는 수업 방향 입력 › 확정 안내 보내기)은 단계 줄이 없어지면 <b>버튼 이름</b>으로 씀: [강사에게 문의] [학생에게 휴무 안내] [학생 답 기록] [확정 안내 보내기]. ChatGPT안 '학생 선택 기록'은 '학생 선택' 금지 규칙과 부딪혀 <b>'학생 답 기록'</b>으로 했어요. 괜찮을까요?</li>
-      <li><b>Q3 수강기간 연장</b> <span class="tag c">C2</span> — 학생 안내에 세 번째 선택지로 따로 둘까요? 지금 정책은 보강이 종료일 뒤로 잡히면 <b>자동 연장</b>이라 시안에는 안 넣었어요. (권장: 지금처럼 자동, 선택지 안 만듦)</li>
-      <li><b>Q4 수업 인계</b> <span class="tag c">C10</span> — 대체강사에게 넘길 교재·페이지·Docs가 어디 있나요? (강사 Class Record 시트 · 학생 Docs 노트 · 교재 목록 중) 정해지면 '수업 인계' 칸을 채워요. 지금은 칸 자리만.</li>
-      <li><b>Q5 대시보드</b> — 휴무 줄을 '처리할 일 / 답 기다리는 일'로 나눠 보이기(R25·R29)는 이 흐름 확정 뒤 대시보드 작업 때 같이 할까요? (권장: 예)</li>
+      <li><b>버튼·단계 안 늘림</b>: 지금 있는 버튼만 씀. 바뀌는 건 <b>배치(수업 한 줄)와 상태 글</b>뿐. 처음 시안의 [휴무 먼저 안내]·[다음 학생 ›]는 뺐어요</li>
+      <li><b>C1</b> 단계 이름 '학생 답변 기록', 버튼 '대체수업 수락' · '기존 강사 보강 요청'</li>
+      <li><b>C2</b> 연장은 지금처럼 자동, 종료일 뒤 보강이면 '수강기간도 연장 · 새 종료일'만 보여 줌</li>
+      <li><b>C10</b> 인계: 기존 강사가 남긴 최신 인계 우선, 자료끼리 다르면 '확인 필요'</li>
+      <li><b>C11</b> 확정 뒤 '배정됨 · 안내·링크 보냄 · 인계 준비'를 상태로 보여 줌(버튼 아님). 학생 확정 안내에 대체강사 입장 링크 자동</li>
     </ol>
+    <p><b>대표 답 필요 1개</b> — C1의 '나중에 결정'은 버튼을 만들지 않고 <b>아무것도 안 누르면 '학생 답 기다림'으로 남는 것</b>으로 둘까요? (10/29 '미정 수업은 안 누르고 두면 됨'과 같음, 권장: 예)</p>
   </section>
 
   <section aria-label="휴대폰 견본" style="display:grid;gap:10px">
@@ -117,14 +118,13 @@ button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outli
       <div class="note">
         <h3>무엇이 바뀌나</h3>
         <ul>
-          <li>같은 날짜를 위·아래 두 번 읽지 않음: <b>수업 한 줄에 상태 + 버튼</b>(R11·R15)</li>
+          <li>같은 날짜를 위·아래 두 번 읽지 않음: <b>수업 한 줄에 상태 + 지금 버튼</b>(R11·R15)</li>
           <li>대체강사 목록은 <b>한 곳</b>만, 날짜마다 '평소 가능시간과 일치 / 평소 시간표 밖 · 문의 필요 / 다른 수업과 겹침(불가)'(R12·R13)</li>
-          <li>후보 고름 → <b>[강사에게 문의] 보냄</b> → 답 기다림. 보내기 전엔 '문의 보내기 전'(R2, 오늘 고침)</li>
-          <li>같은 강사에게 여러 학생 수업을 <b>한 메시지로</b> 묻고, 답은 수업마다 체크(처음엔 체크 없음)(R17·R3)</li>
-          <li>어느 때든 <b>[휴무 먼저 안내]</b>(R19). 일부만 정해져도 확정·안내 가능(R20)</li>
-          <li>확정 안내는 학생 글(맡는 강사 Meet 링크 자동) + 강사 글 한 화면, <b>둘 다 보내야 완료</b>(R21·R4)</li>
-          <li>[← 뒤로]는 화면만 옮김. 처리 무르기는 [처리 되돌리기] + 확인창(R1, 오늘 고침)</li>
-          <li>끝에 <b>[다음 학생 ›]</b>, 답 기다리는 수업이 남아도 넘어감(R24)</li>
+          <li>'문의 보내기 전'과 '답변 기다리는 중'을 다른 글로(R2, 반영함). 답 입력은 지금처럼 언제든</li>
+          <li>같은 강사에게 여러 학생 수업을 <b>한 메시지로</b>, [보냄]도 한 번(R17). 답은 수업마다 체크, 처음엔 체크 없음(R3, 반영함)</li>
+          <li>확정 '✓ 완료'는 확정 안내까지 보낸 뒤(R4·C11, 반영함)</li>
+          <li>단계 이동은 단계 이름으로, 처리 무르기는 [처리 되돌리기] + 확인창(R1, 반영함)</li>
+          <li>끝난 수업은 '✓ 끝난 수업 n회'로 접힘(사라지지 않음)</li>
         </ul>
       </div>
     </div>
@@ -145,15 +145,14 @@ button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outli
       <tbody>
         <tr><td>카드 위 '휴무에 걸린 수업' 목록 + 아래 단계 화면에 같은 날짜 다시</td><td>수업 한 줄에 상태·버튼, 끝난 수업은 접힘</td><td>R11·R15</td></tr>
         <tr><td>전체 후보 강사 줄 + 날짜별 후보 줄</td><td>날짜를 고르면 그 날짜들 기준 강사 목록 하나</td><td>R12·R13</td></tr>
-        <tr><td>'좋아요' · '안 끝난 학생'</td><td>'대체강사로 수업' · '처리할 것'</td><td>R14</td></tr>
+        <tr><td>'안 끝난 학생'</td><td>'처리할 것'</td><td>R14</td></tr>
         <tr><td>학생마다 강사 문의 글 따로</td><td>강사별로 묶어 한 번, 답은 수업마다</td><td>R17</td></tr>
-        <tr><td>휴무 안내는 대체강사 다 정한 뒤에만</td><td>[휴무 먼저 안내] 언제든 (대체강사 미정이면 '확인 중')</td><td>R18·R19</td></tr>
         <tr><td>확정 '✓ 완료'인데 확정 안내 남음</td><td>학생·강사 안내 보내야 완료</td><td>R4·R21</td></tr>
-        <tr><td>수업 인계 없음</td><td>확정 안내 아래 '수업 인계' (Q4 답 뒤)</td><td>R23</td></tr>
-        <tr><td>다음 학생으로 가려면 목록에서 다시 고르기</td><td>[다음 학생 ›]</td><td>R24</td></tr>
+        <tr><td>'좋아요' · '학생이 원하는 수업 방향 입력'</td><td>'대체수업 수락' · '기존 강사 보강 요청' · '학생 답변 기록'</td><td>C1</td></tr>
+        <tr><td>수업 인계 없음</td><td>확정 안내 아래 '수업 인계' 상태(최신 인계 우선, 다르면 확인 필요)</td><td>R23·C10</td></tr>
       </tbody>
     </table></div>
-    <p class="muted">숫자(기다리는 기한 등)는 넣지 않았어요. 수업 시각만 보여 줘요.</p>
+    <p class="muted">새 숫자(기다리는 기한 등)는 넣지 않았어요. 수업 시각 같은 실제 정보만(C7).</p>
   </section>
 </div>
 
@@ -177,14 +176,13 @@ button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outli
 
 <template id="t-shin">
   <article class="card">
-    <header><h3>신O옥</h3><span class="code">STU-0003</span>
-      <button type="button" class="btn sub sm r">휴무 먼저 안내</button></header>
+    <header><h3>신O옥</h3><span class="code">STU-0003</span></header>
     <details class="fold"><summary>✓ 끝난 수업 1회</summary>
       <div class="row"><div class="l1"><span class="when">11/2(월) 20:00</span><span class="st done">대체강사 Maria · 안내 보냄</span></div></div>
     </details>
     <div class="row todo">
       <div class="l1"><span class="when">11/4(수) 20:00</span><span class="st todo">Maria 확정 · 확정 안내 보내기 전</span></div>
-      <div class="btns"><button type="button" class="btn grow">확정 안내 보내기</button></div>
+      <p class="who">배정됨 ✓ · 안내·링크 보냄 – · 인계 준비 –</p>
     </div>
     <div class="row">
       <div class="l1"><span class="when">11/9(월) 20:00</span><span class="st todo">Maria 문의 보내기 전</span></div>
@@ -195,20 +193,19 @@ button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outli
       <h3>11/4 확정 안내</h3>
       <div class="btns" style="align-items:center"><b class="grow">학생 신O옥</b><button type="button" class="btn sub sm">복사</button><button type="button" class="btn sm">보냄</button></div>
       <div class="msg">[엣지영어] 11/4(수) 20:00 수업은 Maria 강사님과 진행해요.
-입장: https://meet.google.com/○○○ (Maria 강사님 링크)</div>
+수업 입장: https://meet.google.com/○○○ (Maria 강사님 링크 자동)</div>
       <div class="btns" style="align-items:center"><b class="grow">강사 Maria</b><button type="button" class="btn sent sm" disabled>복사함 ✓</button><button type="button" class="btn sm">보냄</button></div>
       <div class="msg">Confirmed - Wed 4 Nov 19:00 (your time), 40 min
 Student: Sin O-ok</div>
-      <div class="row"><div class="l1"><b>수업 인계</b><span class="st wait">Q4 답 뒤</span></div><p class="who">학생 정보 · 가르칠 교재·페이지 · 학생 Docs 권한</p></div>
+      <div class="row"><div class="l1"><b>수업 인계</b><span class="st todo">확인 필요</span></div>
+        <p class="who">Class Record: Unit 5 완료 · 학생 Docs: '마지막 4슬라이드 복습 후 Unit 6 시작' → 기존 강사 최신 인계(Docs) 우선, 서로 달라 확인 필요</p></div>
     </section>
-    <div class="btns"><button type="button" class="btn sub grow">다음 학생 ›</button></div>
   </article>
 </template>
 
 <template id="t-ji">
   <article class="card">
-    <header><h3>지O</h3><span class="code">STU-0006</span>
-      <button type="button" class="btn sub sm r">휴무 먼저 안내</button></header>
+    <header><h3>지O</h3><span class="code">STU-0006</span></header>
     <details class="fold"><summary>✓ 끝난 수업 1회</summary>
       <div class="row"><div class="l1"><span class="when">11/3(화) 09:00</span><span class="st done">대체강사 Benny · 안내 보냄</span></div></div>
     </details>
@@ -222,20 +219,18 @@ Student: Sin O-ok</div>
       <div class="btns" style="align-items:center"><b class="grow">학생 지O</b><button type="button" class="btn sub sm">복사</button><button type="button" class="btn sm">보냄</button></div>
       <div class="msg">[엣지영어] 11/5(목) 수업 보강 날짜를 아래 링크에서 골라 주세요.
 https://…/lms/student</div>
-      <p class="who">학생이 고르면 'Olivia 강사님 확인 기다림'으로 바뀌어요.</p>
+      <p class="who">학생이 고르면 'Olivia 강사님 확인 기다림'으로 바뀌어요. 종료일 뒤 날짜를 고르면 학생 화면에 '이 수업에 맞춰 수강기간도 연장돼요 · 새 종료일 11/27'.</p>
     </section>
-    <div class="btns"><button type="button" class="btn sub grow">다음 학생 ›</button></div>
   </article>
 </template>
 
 <template id="t-se">
   <article class="card">
-    <header><h3>이O민</h3><span class="code">STU-0001</span>
-      <button type="button" class="btn sub sm r">휴무 먼저 안내</button></header>
+    <header><h3>이O민</h3><span class="code">STU-0001</span></header>
     <div class="row"><div class="l1"><span class="when">11/2(월) 09:00</span><span class="st wait">학생 답 기다림</span></div><p class="who">Maria 가능 · 휴무 안내 보냄</p>
-      <div class="btns"><button type="button" class="btn sub grow">학생 답 기록</button></div></div>
+      <div class="btns"><button type="button" class="btn sub grow">대체수업 수락</button><button type="button" class="btn sub grow">기존 강사 보강 요청</button></div></div>
     <div class="row"><div class="l1"><span class="when">11/4(수) 09:00</span><span class="st wait">학생 답 기다림</span></div><p class="who">Maria 가능 · 휴무 안내 보냄</p>
-      <div class="btns"><button type="button" class="btn sub grow">학생 답 기록</button></div></div>
+      <div class="btns"><button type="button" class="btn sub grow">대체수업 수락</button><button type="button" class="btn sub grow">기존 강사 보강 요청</button></div></div>
     <div class="row"><div class="l1"><span class="when">11/9(월) 09:00</span><span class="st todo">Maria 문의 보내기 전</span></div>
       <div class="btns"><button type="button" class="btn sub grow" data-go="maria">Maria 묶음 문의 ›</button></div></div>
     <div class="row todo">
@@ -248,7 +243,6 @@ https://…/lms/student</div>
       <div class="opt"><b>Maria</b><span class="k ask">평소 시간표 밖 · 문의 필요</span></div>
       <div class="opt" style="opacity:.55"><b>Leslie</b><span class="k no">다른 확정 수업과 겹침(불가)</span></div>
     </section>
-    <div class="btns"><button type="button" class="btn sub grow">다음 학생 ›</button></div>
   </article>
 </template>
 
@@ -260,10 +254,10 @@ https://…/lms/student</div>
 1) Mon 9 Nov 08:00 (your time) · Lee O-min · 40 min
 2) Mon 9 Nov 19:00 (your time) · Sin O-ok · 40 min</div>
     <section class="sec" aria-label="Maria 답 기록">
-      <h3>Maria가 가능하다고 답한 수업 <small>[보냄] 뒤에 체크</small></h3>
-      <label class="chk"><input type="checkbox" disabled> 11/9(월) 09:00 · 이O민</label>
-      <label class="chk"><input type="checkbox" disabled> 11/9(월) 20:00 · 신O옥</label>
-      <button type="button" class="btn" disabled style="opacity:.5">답 저장</button>
+      <h3>Maria가 가능하다고 답한 수업 <small>처음엔 체크 없음</small></h3>
+      <label class="chk"><input type="checkbox"> 11/9(월) 09:00 · 이O민</label>
+      <label class="chk"><input type="checkbox"> 11/9(월) 20:00 · 신O옥</label>
+      <button type="button" class="btn">강사 가능 여부 확인 완료</button>
     </section>
   </article>
 </template>

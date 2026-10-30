@@ -38,12 +38,12 @@ type ItemRow = {
   choice: LvChoice; sub_tutor_id: string | null; sub_stage: LvStage | null; lesson_gone_at: string | null;
   student: { name_ko: string; name_en: string; code: string; timezone: string } | null;
   enrollment: { duration_min: number } | null;
-  sub: { name: string; timezone: string } | null;
+  sub: { name: string; timezone: string; meet_url: string | null } | null;
 };
 
 export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Promise<{ items: LvItem[]; notices: LvNotice[] }> {
   const rows = check(await sb.from('leave_items')
-    .select('id, time_off_id, student_id, lesson_id, migrated_item_id, starts_at, choice, sub_tutor_id, sub_stage, lesson_gone_at, student:students(name_ko, name_en, code, timezone), enrollment:enrollments(duration_min), sub:tutors!leave_items_sub_tutor_id_fkey(name, timezone)')
+    .select('id, time_off_id, student_id, lesson_id, migrated_item_id, starts_at, choice, sub_tutor_id, sub_stage, lesson_gone_at, student:students(name_ko, name_en, code, timezone), enrollment:enrollments(duration_min), sub:tutors!leave_items_sub_tutor_id_fkey(name, timezone, meet_url)')
     .eq('time_off_id', timeOffId).order('starts_at')) as unknown as ItemRow[];
   const lessonIds = rows.flatMap((r) => (r.lesson_id ? [r.lesson_id] : []));
   const migIds = rows.flatMap((r) => (r.migrated_item_id ? [r.migrated_item_id] : []));
@@ -61,7 +61,7 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
     id: r.id, timeOffId: r.time_off_id, studentId: r.student_id,
     studentName: r.student?.name_ko ?? '', studentNameEn: r.student?.name_en ?? '', studentCode: r.student?.code ?? '', studentTz: r.student?.timezone ?? 'Asia/Seoul',
     durationMin: r.enrollment?.duration_min ?? 0, isLesson: !!r.lesson_id, startsAt: new Date(r.starts_at),
-    choice: r.choice, subTutorId: r.sub_tutor_id, subTutorName: r.sub?.name ?? null, subTutorTz: r.sub?.timezone ?? null, subStage: r.sub_stage,
+    choice: r.choice, subTutorId: r.sub_tutor_id, subTutorName: r.sub?.name ?? null, subTutorTz: r.sub?.timezone ?? null, subTutorMeetUrl: r.sub?.meet_url ?? null, subStage: r.sub_stage,
     makeupAt: r.choice !== 'wait' ? null : r.lesson_id ? makeupOf.get(r.lesson_id) ?? null : migLesson.get(r.migrated_item_id ?? '') ?? null,
     makeupRequested: requested.has(r.lesson_id ?? r.migrated_item_id),
     lessonId: r.lesson_id, migratedItemId: r.migrated_item_id, lessonGone: !!r.lesson_gone_at,

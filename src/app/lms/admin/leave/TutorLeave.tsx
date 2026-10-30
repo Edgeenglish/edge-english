@@ -395,8 +395,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
         out.push(
           <Block key={`t-${t.subTutorId}`} title={`${t.subTutorName} 강사님에게 수업 가능 여부 묻기`}>
             {t.ask && msg(t.ask, 0)}
-            {/* 문의 [보냄] 뒤에만 강사 답 입력 (R2: 후보 고름 → 문의 보냄 → 답 기다림) */}
-            <TutorCheck key={t.items.map((i) => i.id).join()} t={t} actions={actions} done={next} askSent={!t.ask} />
+            <TutorCheck key={t.items.map((i) => i.id).join()} t={t} actions={actions} done={next} />
           </Block>,
         );
       }
@@ -455,8 +454,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
   const sel = view !== null && canOpen(view) ? view : home;
   const nextStep = !hasWork(sel) ? [0, 1, 2, 3].find((n) => n > sel && hasWork(n)) : undefined;
   const back = backOf(sel);
-  // [← 뒤로] = 보던 단계만 옮김, 저장된 처리는 그대로 (R1). 처리를 되돌리는 것은 [처리 되돌리기] + 확인창
-  const prev = [0, 1, 2, 3].filter((n) => n < sel && canOpen(n)).pop();
+  // 단계 이동은 단계 줄 이름으로만, 처리 무르기는 [처리 되돌리기] + 확인창 (R1: 예전 [← 뒤로]가 이동처럼 보이는데 처리를 지움). 버튼 수는 그대로
   const undoLessons = g.items.filter((i) => back.some((b) => (b.to === 'unsend' ? p?.itemIds ?? [] : b.ids).includes(i.id)));
   const undo = async () => {
     const lines = undoLessons.map((i) => `- ${kstLabel(i.startsAt)}`).join('\n');
@@ -499,12 +497,6 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
             );
           })}
           {cur === 4 && <span className="ml-1 rounded-full bg-[#e3f6ea] px-3 py-1 text-[13px] font-bold text-[#1e7a46]">완료</span>}
-          {prev !== undefined && (
-            <button type="button" onClick={() => setView(prev)}
-              className="ml-auto min-h-[34px] rounded-[8px] border border-[#7d5ffb] bg-white px-3 text-[13.5px] font-bold text-[#5b3fe0]">
-              ← 뒤로
-            </button>
-          )}
         </div>
         {sel < 4 && (
           <>
@@ -547,16 +539,16 @@ function StudentAnswer({ items, actions, done, onWait }: { items: LvItem[]; acti
           <li key={i.id} className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5">
             <span className="text-[14.5px] text-[#1d1b2b]">{kstLabel(i.startsAt)} · {i.subTutorName}</span>
             <span className="ml-auto flex gap-1.5">
-              <button type="button" disabled={r.busy} className={btnMain} onClick={() => ok([i])}>좋아요</button>
-              <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait([i])}>기존 강사와 보강</button>
+              <button type="button" disabled={r.busy} className={btnMain} onClick={() => ok([i])}>대체수업 수락</button>
+              <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait([i])}>기존 강사 보강 요청</button>
             </span>
           </li>
         ))}
       </ul>
       {items.length > 1 && (
         <div className="grid grid-cols-2 gap-1.5">
-          <button type="button" disabled={r.busy} className={btnMain} onClick={() => ok(items)}>모두 좋아요</button>
-          <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait(items)}>모두 기존 강사와 보강</button>
+          <button type="button" disabled={r.busy} className={btnMain} onClick={() => ok(items)}>모두 대체수업 수락</button>
+          <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait(items)}>모두 기존 강사 보강 요청</button>
         </div>
       )}
       <Err>{r.err}</Err>
@@ -725,7 +717,7 @@ function SubOptions({ options, items, busy, pick }: { options: LvSubOption[]; it
 }
 
 // 대체강사 답: 가능하다고 한 날짜만 체크해 저장. 체크 안 한 날짜는 다른 강사 또는 기존 강사 보강으로
-function TutorCheck({ t, actions, done, askSent }: { t: LvStudentWork['tutor'][number]; actions: LeaveActions; done: () => Promise<void>; askSent: boolean }) {
+function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; actions: LeaveActions; done: () => Promise<void> }) {
   // 처음엔 아무것도 체크 안 함: 강사가 실제로 가능하다고 답한 날짜만 체크 (R3)
   const [ok, setOk] = useState<Set<string>>(() => new Set());
   const [options, setOptions] = useState<LvSubOption[] | null>(null);
@@ -737,14 +729,6 @@ function TutorCheck({ t, actions, done, askSent }: { t: LvStudentWork['tutor'][n
   const reset = () => {
     if (window.confirm(`${t.subTutorName} 강사님 대신 다시 고를까요?\n${t.items.map((i) => `- ${kstLabel(i.startsAt)}`).join('\n')}`)) r.run(() => actions.back(t.items.map((i) => i.id), 'undecided'));
   };
-  if (!askSent) return (
-    <>
-      <button type="button" disabled={r.busy} className={btnSub} onClick={reset}>
-        강사 다시 고르기
-      </button>
-      <Err>{r.err}</Err>
-    </>
-  );
   return (
     <div className="grid gap-2">
       <span className="text-[13px] text-[#6b6880]">{t.subTutorName} 강사님이 가능하다고 답한 날짜 선택</span>

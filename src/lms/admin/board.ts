@@ -449,7 +449,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
       const parts = [
         step1 > 0 && `수업별 대체 강사 찾기 ${step1}회`,
         proposeStudents > 0 && `학생한테 기존 강사 휴무 안내하기 ${proposeStudents}명`,
-        answer > 0 && `학생이 원하는 수업 방향 입력 ${answer}회`,
+        answer > 0 && `학생 답변 기록 ${answer}회`,
         ns.confirm > 0 && `확정 안내 보내기 ${ns.confirm}건`,
         other > 0 && `안내 보내기 ${other}건`,
       ].filter(Boolean) as string[];
