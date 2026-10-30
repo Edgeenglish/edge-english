@@ -365,3 +365,41 @@ export function renewalLeaveText(from: KstDate, to: KstDate): string {
 export function renewalTutorText(g: LvRenewalGroup): string {
   return g.dates.map((d) => `- ${enAt(d.startsAt, 'Asia/Seoul')} (${d.durationMin} min) (if the student renews)`).join('\n');
 }
+
+// ---------------------------------------------------------------------
+// 강사별 묶음 문의 (R17, 2026-10-30 시안 승인): 같은 대체강사에게 여러 학생 수업을 한 메시지로. 답은 수업마다 (admin_leave_sub_ok)
+// ---------------------------------------------------------------------
+
+export type LvTutorBundle = { subTutorId: string; subTutorName: string; items: LvItem[]; noticeIds: string[]; status: 'pending' | 'sent'; text: string };
+
+export function tutorBundles(items: LvItem[], notices: LvNotice[], now: Date): LvTutorBundle[] {
+  const out = new Map<string, LvItem[]>();
+  for (const i of items) {
+    if (i.lessonGone || i.choice !== 'substitute' || i.subStage !== 'asked' || !i.subTutorId || i.startsAt <= now) continue;
+    out.set(i.subTutorId, [...(out.get(i.subTutorId) ?? []), i]);
+  }
+  return [...out.entries()].map(([id, list]) => {
+    const its = [...list].sort((a, b) => +a.startsAt - +b.startsAt);
+    const ids = new Set(its.map((i) => i.id));
+    const pend = notices.filter((n) => n.event === 'sub_ask' && n.status === 'pending' && n.recipientId === id && ids.has(n.itemId));
+    return { subTutorId: id, subTutorName: its[0].subTutorName ?? '', items: its, noticeIds: pend.map((n) => n.id), status: pend.length ? 'pending' : 'sent', text: subAskBundleText(its) };
+  });
+}
+
+/** 묶음 문의 글: 휴무 강사 이름은 안 씀, 가능한 것만 답해 달라고 (2026-10-27 대표 규칙 그대로) */
+export function subAskBundleText(items: LvItem[]): string {
+  const tz = items[0].subTutorTz ?? 'Asia/Seoul';
+  return [
+    'Substitute request - not confirmed yet',
+    'One of our Edge English tutors is on leave. Are you available to teach these classes?',
+    ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, tz)} · ${x.studentNameEn} · ${x.durationMin} min`),
+    "If you can't do all of them, please reply with the numbers you can do. Thank you!",
+  ].join('\n');
+}
+
+/** 학생 목록 묶음: 운영진이 할 것 / 답 기다림 / 끝남 (R15·R29) */
+export function studentPhase(w: LvStudentWork): 'todo' | 'wait' | 'done' {
+  if (w.pick.length || w.tutor.some((t) => t.ask) || w.proposal?.status === 'pending' || w.confirm.confirmedMsgs.length || w.confirm.makeup.length) return 'todo';
+  if (w.tutor.length || w.answer.length || w.confirm.makeupRequested.length) return 'wait';
+  return 'done';
+}

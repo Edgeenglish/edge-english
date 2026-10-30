@@ -3,7 +3,7 @@ import { kstToInstant } from '../rules/dates';
 import { buildBoard } from './board';
 import { makeupRights, type ChLesson } from './lesson-change';
 import { toTutorLeaves } from './live';
-import { groupByStudent, groupChoice, itemStatus, leaveMessages, leaveSummary, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork, type LvItem, type LvNotice } from './tutor-leave';
+import { groupByStudent, groupChoice, itemStatus, leaveMessages, leaveSummary, makeupDatesText, renewalLeaveText, renewalTutorText, studentPhase, studentWork, tutorBundles, type LvItem, type LvNotice } from './tutor-leave';
 
 const I = (id: string, student: string, date: string, extra: Partial<LvItem> = {}): LvItem => ({
   id, timeOffId: 'off', studentId: student, studentName: student === 's1' ? '김민수' : '이지은', studentNameEn: student === 's1' ? 'Minsu Kim' : 'Jieun Lee',
@@ -196,5 +196,31 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(item.tag).toBe('강사 휴무 · 수업별 대체 강사 찾기 3회');
     expect(item.detail).toBe('수업별 대체 강사 찾기 3회 · 학생한테 기존 강사 휴무 안내하기 1명 · 학생 답변 기록 1회 · 확정 안내 보내기 1건');
     expect(item.actions[0].href).toBe('/lms/admin/leave?off=off1');
+  });
+});
+
+describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승인)', () => {
+  const sub = { choice: 'substitute' as const, subTutorId: 'm', subTutorName: 'Maria', subTutorTz: 'Asia/Manila', subStage: 'asked' as const };
+  const base = (id: string, sid: string, at: string, o: Partial<LvItem> = {}): LvItem => ({
+    id, timeOffId: 'o', studentId: sid, studentName: sid, studentNameEn: `En ${sid}`, studentCode: sid, studentTz: 'Asia/Seoul', durationMin: 40, isLesson: true,
+    startsAt: new Date(at), choice: 'undecided', subTutorId: null, subTutorName: null, subTutorTz: null, subStage: null, makeupAt: null, makeupRequested: false,
+    lessonId: id, migratedItemId: null, ...o,
+  });
+  const now = new Date('2026-11-01T00:00:00Z');
+  it('같은 대체강사의 여러 학생 수업을 한 묶음으로, 안 보낸 문의가 있으면 pending · 취소된 수업은 뺌', () => {
+    const items = [base('a', 's1', '2026-11-09T11:00:00Z', sub), base('b', 's2', '2026-11-09T00:00:00Z', sub), base('c', 's2', '2026-11-10T00:00:00Z', { ...sub, lessonGone: true })];
+    const notices: LvNotice[] = [{ id: 'n1', itemId: 'a', event: 'sub_ask', recipientKind: 'tutor', recipientId: 'm', status: 'pending', sentAt: null }];
+    const [b] = tutorBundles(items, notices, now);
+    expect(b.items.map((i) => i.id)).toEqual(['b', 'a']);
+    expect(b.status).toBe('pending');
+    expect(b.noticeIds).toEqual(['n1']);
+    expect(b.text).toContain('En s2 · 40 min');
+    expect(b.text).not.toContain('on leave -');
+  });
+  it('학생 묶음: 고르기 전 수업 → 처리할 것, 강사 답만 남음 → 답 기다리는 것', () => {
+    const w1 = studentWork(groupByStudent([base('a', 's1', '2026-11-09T11:00:00Z')])[0], [], now);
+    expect(studentPhase(w1)).toBe('todo');
+    const w2 = studentWork(groupByStudent([base('a', 's1', '2026-11-09T11:00:00Z', sub)])[0], [], now);
+    expect(studentPhase(w2)).toBe('wait');
   });
 });
