@@ -58,15 +58,18 @@ async function copyText(text: string): Promise<boolean> {
 function useRun(done: () => Promise<void>) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const run = async (f: () => Promise<unknown>, after?: () => void) => {
+  /** 성공하면 true — 화면을 옮길 때는 done(다시 읽기) 뒤에 옮겨야 done 이 보던 단계로 되돌리지 않음 */
+  const run = async (f: () => Promise<unknown>, after?: () => void): Promise<boolean> => {
     setBusy(true);
     setErr('');
     try {
       await f();
       after?.();
       await done();
+      return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : '처리하지 못했어요.');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -456,7 +459,10 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
         <h3 className="text-[14px] font-bold text-[#1d1b2b]">휴무에 걸린 수업 {g.items.length}회</h3>
         <ItemList items={g.items} badge action={(i) => i.choice !== 'undecided' && i.startsAt > now && (
           <button type="button" disabled={r.busy} className={`${btnSub} min-h-[36px] text-[13px]`}
-            onClick={() => window.confirm(`${kstLabel(i.startsAt)} 수업을 처음부터 다시 고를까요?`) && r.run(() => actions.back([i.id], 'undecided'))}>
+            onClick={async () => {
+              // 다시 고르면 '수업별 대체 강사 찾기' 단계로 바로 이동 (대표 10/30)
+              if (window.confirm(`${kstLabel(i.startsAt)} 수업을 처음부터 다시 고를까요?`) && await r.run(() => actions.back([i.id], 'undecided'))) setView(0);
+            }}>
             다시 고르기
           </button>
         )} />
@@ -479,7 +485,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done }: { g: LvStu
           })}
           {cur === 4 && <span className="ml-1 rounded-full bg-[#e3f6ea] px-3 py-1 text-[13px] font-bold text-[#1e7a46]">완료</span>}
           {back.length > 0 && (
-            <button type="button" disabled={r.busy} onClick={() => r.run(async () => { for (const b of back) await (b.to === 'unsend' ? actions.unsend(b.ids) : actions.back(b.ids, b.to)); }, () => setView(sel - 1))}
+            <button type="button" disabled={r.busy} onClick={async () => { if (await r.run(async () => { for (const b of back) await (b.to === 'unsend' ? actions.unsend(b.ids) : actions.back(b.ids, b.to)); })) setView(sel - 1); }}
               className="ml-auto min-h-[34px] rounded-[8px] border border-[#7d5ffb] bg-white px-3 text-[13.5px] font-bold text-[#5b3fe0] disabled:opacity-60">
               ← 뒤로
             </button>
