@@ -47,7 +47,13 @@ export type LvItem = {
 };
 
 export type LvNoticeEvent = 'leave_options' | 'sub_ask' | 'sub_student' | 'sub_confirmed';
-export type LvNotice = { id: string; itemId: string; event: LvNoticeEvent; recipientKind: 'student' | 'tutor'; recipientId: string; status: 'pending' | 'sent' | 'not_needed'; sentAt: Date | null };
+export type LvNotice = {
+  id: string; itemId: string; event: LvNoticeEvent; recipientKind: 'student' | 'tutor'; recipientId: string; status: 'pending' | 'sent' | 'not_needed'; sentAt: Date | null;
+  /** 보냈다가 다시 고르기 등으로 '보낼 필요 없음'이 된 안내의 보낸 시각 (3400): 보낸 원문·번호는 그대로 보여 줌 */
+  wasSentAt?: Date | null;
+};
+/** 보낸 적 있는 안내의 보낸 시각 (지금 보냄 상태 또는 보냈던 기록) */
+const sentTime = (n: LvNotice): Date | null => (n.status === 'sent' ? n.sentAt : n.status === 'not_needed' ? n.wasSentAt ?? null : null);
 
 /** free = 보통 수업 시간 안에서 맡을 수 있는 횟수, busyDates = 못 하는 날짜(휴무·다른 수업·불가 답), offHours = 보통 시간 밖(골라도 됨, 2700) */
 export type LvSubOption = { tutorId: string; name: string; timezone: string; free: number; busyDates: string[]; offHours: string[] };
@@ -145,8 +151,11 @@ export type LvMessage = {
 export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[] {
   const byId = new Map(items.map((i) => [i.id, i]));
   const groups = new Map<string, { event: LvNoticeEvent; status: 'pending' | 'sent'; notices: LvNotice[]; items: LvItem[] }>();
-  for (const n of notices) {
-    if (n.status === 'not_needed') continue;
+  for (const raw of notices) {
+    // 보냈던 안내는 '보낼 필요 없음'이 돼도 보낸 글 기록으로 남김 (3400)
+    const was = raw.status === 'not_needed' ? sentTime(raw) : null;
+    if (raw.status === 'not_needed' && !was) continue;
+    const n = (was ? { ...raw, status: 'sent', sentAt: was } : raw) as LvNotice & { status: 'pending' | 'sent' };
     const it = byId.get(n.itemId);
     // 안 보낸 글에서는 취소된 수업을 뺌. 보낸 글은 보낸 그대로
     if (!it || (it.lessonGone && n.status === 'pending')) continue;
@@ -419,11 +428,14 @@ export function tutorBundles(items: LvItem[], notices: LvNotice[], now: Date): L
     const pend = mineAsk.filter((n) => n.status === 'pending' && asked.has(n.itemId));
     const pendIts = sortIts(pend.map((n) => n.itemId));
     // 보낸 문의: 같은 보낸 시각 = 한 번에 보낸 글. 답 기다리는 수업이 든 글만
-    const sent = sentBatches(mineAsk.filter((x) => x.status === 'sent'), (n) => n.sentAt)
+    // 보낸 문의: 다시 고르기·다시 묻기로 '보낼 필요 없음'이 된 것도 보낸 그대로 (대표 10/30)
+    const sent = sentBatches(mineAsk.filter((x) => sentTime(x)), sentTime)
       .map((ns) => { const bi = sortIts(ns.map((n) => n.itemId)); return { noticeIds: ns.map((n) => n.id), itemIds: bi.map((i) => i.id), text: subAskBundleText(bi), sentAt: ns[0].sentAt }; })
       .filter((m) => m.itemIds.some((x) => asked.has(x)));
+    // 번호는 지금 답 기다리는 문의(보냄 상태)가 든 글에서만
+    const live = new Set(mineAsk.filter((x) => x.status === 'sent' && asked.has(x.itemId)).map((x) => x.id));
     const numbers: Record<string, string> = {};
-    for (const m of sent) m.itemIds.forEach((x, n) => { if (asked.has(x)) numbers[x] = `${n + 1}번`; });
+    for (const m of sent) m.itemIds.forEach((x, n) => { if (m.noticeIds.some((id) => live.has(id) && mineAsk.find((y) => y.id === id)?.itemId === x)) numbers[x] = `${n + 1}번`; });
     return {
       subTutorId: id, subTutorName: its[0].subTutorName ?? '', items: its, sent, numbers,
       pending: pendIts.length ? { noticeIds: pend.map((n) => n.id), itemIds: pendIts.map((i) => i.id), text: subAskBundleText(pendIts), sentAt: null } : null,

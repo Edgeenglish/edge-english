@@ -229,6 +229,21 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     expect(b.sent[0].text).toContain('2) Mon 9 Nov 19:00 your time · En s2');
     expect(b.numbers).toEqual({ b: '2번' });
   });
+  it('다시 고르기 뒤 같은 강사를 다시 골라도 예전에 보낸 문의 원문·번호는 그대로, 새 문의는 따로 (3400, 대표 10/30)', () => {
+    const at = new Date('2026-10-30T10:40:00Z');
+    const items = [base('a', 's1', '2026-11-09T00:00:00Z', sub), base('b', 's2', '2026-11-09T11:00:00Z', sub)];
+    const notices: LvNotice[] = [
+      { id: 'old-a', itemId: 'a', event: 'sub_ask', recipientKind: 'tutor', recipientId: 'm', status: 'not_needed', sentAt: null, wasSentAt: at },
+      { id: 'old-b', itemId: 'b', event: 'sub_ask', recipientKind: 'tutor', recipientId: 'm', status: 'sent', sentAt: at },
+      { id: 'new-a', itemId: 'a', event: 'sub_ask', recipientKind: 'tutor', recipientId: 'm', status: 'pending', sentAt: null },
+    ];
+    const [b] = tutorBundles(items, notices, now);
+    expect(b.sent).toHaveLength(1);
+    expect(b.sent[0].text).toContain('1) Mon 9 Nov 08:00 your time · En s1');
+    expect(b.sent[0].text).toContain('2) Mon 9 Nov 19:00 your time · En s2');
+    expect(b.numbers).toEqual({ b: '2번' });
+    expect(b.pending!.itemIds).toEqual(['a']);
+  });
   it('일부 날짜만 정해져도 그 날짜부터 휴무 안내·학생 답 진행 (대표 10/30)', () => {
     const items = [base('a', 's1', '2026-11-02T11:00:00Z', { ...sub, subStage: 'tutor_ok' }), base('b', 's1', '2026-11-03T11:00:00Z', sub)];
     const notices: LvNotice[] = [

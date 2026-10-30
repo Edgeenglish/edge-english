@@ -1432,6 +1432,12 @@ select pg_temp.ok((select count(distinct sent_at) = 1 and count(*) >= 1 from les
 select pg_temp.ok((select bool_or((l ->> 'leave_open')::boolean) from jsonb_array_elements(student_screen('99999999-0000-0000-0000-000000001800') -> 'lessons') l
                    where l ->> 'id' = '77777777-1800-0000-0000-000000000003'),
   '대체강사 확정 전 수업은 학생 화면에 일정 조율 중 (leave_open)');
+-- 9-2d) 보낸 안내가 '보낼 필요 없음'이 돼도 보낸 시각을 남김, 보냄 되돌리기는 남기지 않음 (3400)
+select pg_temp.ok((select count(*) = 1 from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_ask' and status = 'sent'), '(준비) 보낸 문의 1건');
+select admin_leave_back(array[pg_temp.li(3)], 'undecided');
+select pg_temp.ok((select count(*) >= 1 from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_ask' and status = 'not_needed' and was_sent_at is not null),
+  '다시 고르기 뒤에도 보낸 문의의 보낸 시각이 남음');
+select admin_leave_choose(array[pg_temp.li(3)], 'substitute', '55555555-0000-0000-0000-00000000180b');
 -- 9-3) 재등록 대기 학생: 고정 시간을 맡아 두는 동안(종료일 23:59까지)만, 종료일 뒤 ~ 휴무 끝 사이 평소 요일·시간
 reset role;
 insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000001802', '휴무재등록', 'Leave R');

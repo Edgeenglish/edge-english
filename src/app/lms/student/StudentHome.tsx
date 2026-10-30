@@ -295,7 +295,8 @@ export default function StudentHome(props: {
 
   const upcoming = lessons.filter((l) => l.state === 'scheduled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   const leaveVisible = s.leave.length > 0;
-  const meetOf = (id: string) => s.lessons.find((l) => l.id === id)?.meetUrl ?? null;
+  // 휴무 처리 확정 전 수업(일정 조율 중)은 입장 링크 없음 — 휴무 강사 링크로 들어가지 않게
+  const meetOf = (id: string) => { const x = s.lessons.find((l) => l.id === id); return x && !x.leaveOpen ? x.meetUrl : null; };
   // 강사마다 수업 링크가 다름 → 앞으로 수업하는 강사별로 (대체강사 포함)
   const meetLinks = [...new Map(upcoming.map((l) => [l.tutorName, meetOf(l.id)] as const).filter(([, u]) => u)).entries()];
 
@@ -394,7 +395,7 @@ export default function StudentHome(props: {
                 <div className="min-w-0">
                   <p className="text-[15px] font-semibold">{whenText(l.startsAt)}</p>
                   <p className="text-[12.5px] text-[#6b6880]">
-                    {l.minutes}분 · {l.tutorName} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
+                    {l.minutes}분{s.lessons.find((x) => x.id === l.id)?.leaveOpen ? '' : ` · ${l.tutorName}`} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
                   </p>
                   {s.lessons.find((x) => x.id === l.id)?.substitute && (
                     <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 대체강사 수업</p>
@@ -402,7 +403,7 @@ export default function StudentHome(props: {
                   {s.lessons.find((x) => x.id === l.id)?.leaveOpen && (
                     <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
                   )}
-                  {meetOf(l.id) && !s.lessons.find((x) => x.id === l.id)?.leaveOpen && (
+                  {meetOf(l.id) && (
                     <a href={meetOf(l.id)!} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold text-[#4b2fd6] underline">
                       수업 링크 (Google Meet)
                     </a>
