@@ -294,6 +294,7 @@ export default function StudentHome(props: {
   );
 
   const upcoming = lessons.filter((l) => l.state === 'scheduled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const canceledAhead = lessons.filter((l) => l.state === 'canceled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   const leaveVisible = s.leave.length > 0;
   // 휴무 처리 확정 전 수업(일정 조율 중)은 입장 링크 없음 — 휴무 강사 링크로 들어가지 않게
   const meetOf = (id: string) => { const x = s.lessons.find((l) => l.id === id); return x && !x.leaveOpen ? x.meetUrl : null; };
@@ -415,9 +416,17 @@ export default function StudentHome(props: {
                 </button>
               </div>
             ))}
+            {/* 앞으로의 취소 수업은 '지난 수업'과 따로 (대표 10/30) */}
+            {canceledAhead.length > 0 && <h2 className="pt-2 text-[14px] font-bold text-[#55526a]">취소된 수업</h2>}
+            {canceledAhead.map((l) => (
+              <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">
+                <span>{whenText(l.startsAt)}</span>
+                <span className="text-[#6b6880]">취소</span>
+              </div>
+            ))}
             <h2 className="pt-2 text-[14px] font-bold text-[#55526a]">지난 수업</h2>
             {lessons
-              .filter((l) => l.state !== 'scheduled' || l.startsAt.getTime() <= now.getTime())
+              .filter((l) => l.startsAt.getTime() <= now.getTime())
               .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
               .map((l) => (
                 <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">

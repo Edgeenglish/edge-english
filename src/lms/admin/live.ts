@@ -227,6 +227,7 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
     const r = row(m.student, m.created_at);
     r.openMakeups += 1;
     if (m.tutor_answered_at) r.answeredMakeups = (r.answeredMakeups ?? 0) + 1;
+    else if (!r.makeupWaitingSince || new Date(m.created_at) < r.makeupWaitingSince) r.makeupWaitingSince = new Date(m.created_at);
   }
   return [...out.values()];
 }

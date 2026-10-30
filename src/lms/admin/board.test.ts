@@ -1,13 +1,13 @@
 // 운영자 대시보드 '처리할 일' 목록 (가상 데이터)
 import { describe, expect, it } from 'vitest';
-import { buildBoard, categoryCounts, dueSeverity, dueText, filterBoard, type TaskSource } from './board';
+import { buildBoard, categoryCounts, dueSeverity, dueText, filterBoard, waitText, type TaskSource } from './board';
 import { fakeTasks } from './fake-data';
 
 const now = new Date('2026-10-16T05:00:00Z'); // KST 10/16(금) 14:00
 const H = 3600e3;
 
 describe('기한 상태 (매칭 3영업일)', () => {
-  it('지남 / 24시간 안 / 여유', () => {
+  it('지남 / 24시간 안 / 그 밖', () => {
     expect(dueSeverity(new Date(now.getTime() - 1), now)).toBe('overdue');
     expect(dueSeverity(new Date(now.getTime() + 24 * H), now)).toBe('due_soon');
     expect(dueSeverity(new Date(now.getTime() + 25 * H), now)).toBe('open');
@@ -52,7 +52,7 @@ describe('처리할 일 목록', () => {
     const r = items.find((i) => i.id === 'r-1')!;
     expect(r.steps.map((s) => s.done)).toEqual([true, false, false]);
     expect(r.actions.map((a) => a.key)).toEqual(['remind_tutor', 'tutor_ack']);
-    expect(r.due).toBe('통보 후 26시간째 미확인');
+    expect(r.due).toBe('통보 후 2일째 미확인');
   });
   it('요약 카드 5칸: 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
     const c = categoryCounts(items);
@@ -105,5 +105,23 @@ describe('종료일 이유 확인 (D-52 시안 2, 2026-10-26 대표)', () => {
     const [i] = buildBoard([{ kind: 'import_check', id: 'e1', studentName: '가상', studentCode: 'STU-0101', counts: null, unknownOrigins: [], endReason: { days: 6, weeks: 12 }, createdAt: at }], at);
     expect(i).toMatchObject({ tag: '종료일 이유 확인', actions: [], endReason: { days: 6 } });
     expect(i.detail).toMatch('6일 늦은 이유 확인 필요');
+  });
+});
+
+describe("요약 칸: '여유' 대신 실제 정보 (C7, 대표 10/30)", () => {
+  it('기다린 시간은 하루 넘으면 일 단위', () => {
+    expect(waitText(new Date(now.getTime() - 5.5 * H), now)).toBe('5시간째');
+    expect(waitText(new Date(now.getTime() - 327 * H), now)).toBe('14일째');
+  });
+  it('종료 임박 = 잔여 회수 · 종료일, 재등록 통보 = 통보 후 대기 시간', () => {
+    const tasks: TaskSource[] = [
+      { kind: 'ending_soon', id: 'e', studentName: '김하준', studentCode: 'STU-1', product: '50분 주2회', lessonsLeft: 0, endsAt: new Date('2026-10-17T14:59:00Z'), tutorName: null, noticeSentAt: null },
+      { kind: 'renewal_tutor_notice', id: 'r', studentName: '박서연', studentCode: 'STU-2', product: '50분 주2회', newPeriod: '10/20(화)–11/16(월)', tutorName: 'Emma', tutorChangePlanned: false, tutorNotifiedAt: new Date(now.getTime() - 327 * H), tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: new Date(now.getTime() - 400 * H) },
+    ];
+    const items = buildBoard(tasks, now);
+    expect(items.find((i) => i.id === 'e')!.brief).toBe('잔여 0회 · 10/17(토) 종료');
+    expect(items.find((i) => i.id === 'r')!.brief).toBe('통보 후 14일째');
+    expect(items.find((i) => i.id === 'r')!.due).toBe('통보 후 14일째 미확인');
+    expect(items.every((i) => !i.brief.includes('여유'))).toBe(true);
   });
 });

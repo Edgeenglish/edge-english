@@ -351,7 +351,9 @@ export default function AdminDashboard({
                   {CATEGORY_LABEL[c]}
                 </span>
                 <b className={`block text-[22px] tabular-nums ${n === 0 ? 'text-[#b9b6c8]' : urgent ? 'text-[#c62b2b]' : 'text-[#1d1b2b]'}`}>{n}</b>
-                <span className={`block text-[11.5px] ${urgent ? 'font-semibold text-[#c62b2b]' : 'text-[#b9b6c8]'}`}>{urgent ? `긴급 ${urgent}` : n ? '여유' : '없음'}</span>
+                {urgent > 0 && <span className="block text-[11.5px] font-semibold text-[#c62b2b]">긴급 {urgent}</span>}
+                {/* '여유' 대신 가장 급한 일의 실제 정보 (C7, 대표 10/30) */}
+                <span className={`block truncate text-[11.5px] ${n ? 'text-[#55526a]' : 'text-[#b9b6c8]'}`}>{n ? items.find((i) => i.category === c)?.brief : '없음'}</span>
               </button>
             );
           })}

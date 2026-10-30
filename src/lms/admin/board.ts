@@ -144,6 +144,8 @@ export type LessonChangeTask = {
   answeredMakeups?: number;
   /** 안 보낸 변경 안내가 있는 가장 가까운 수업 (지나기 전에 보내야 함) */
   lessonAt: Date | null;
+  /** 강사 답을 기다리는 보강 신청 중 가장 오래된 신청 시각 */
+  makeupWaitingSince?: Date | null;
   createdAt: Date;
 };
 
@@ -239,6 +241,8 @@ export type BoardItem = {
   endReason?: { days: number; weeks: number | null } | null;
   /** 종료 임박: 재등록 안내 문자 (복사) + [보냄] 기록 — 화면이 RenewalNotice로 그림 */
   renewal?: { text: string; sentAt: Date | null };
+  /** 요약 칸에 보이는 실제 정보 한 줄 (대기 시간·남은 수업·종료일). '여유' 같은 판단 글은 안 씀 (C7, 대표 10/30) */
+  brief: string;
 };
 
 const KST = 'Asia/Seoul';
@@ -251,7 +255,7 @@ function kstLabel(d: Date): string {
   return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}(${WD[f.weekday] ?? f.weekday}) ${f.time}`;
 }
 
-/** 기한 상태: 초과 / 24시간 안 / 여유 (DB 뷰 admin_task_board 와 같은 기준) */
+/** 기한 상태: 초과 / 24시간 안 / 그 밖 (DB 뷰 admin_task_board 와 같은 기준) */
 export function dueSeverity(dueAt: Date | null, now: Date): Severity {
   if (!dueAt) return 'open';
   if (now.getTime() > dueAt.getTime()) return 'overdue';
@@ -273,6 +277,17 @@ export function renewalMessage(name: string, lessonsLeft: number, endsAt: Date):
   ].join('\n\n');
 }
 
+/** 기다린 시간 '5시간째' · '2일째'(24~48시간) — 하루 넘으면 일 단위 */
+export function waitText(since: Date, now: Date): string {
+  const h = Math.max(0, hoursBetween(since, now));
+  return h < 24 ? `${Math.max(1, Math.floor(h))}시간째` : `${Math.floor(h / 24) + 1}일째`;
+}
+
+/** '11/3(화)' 한국 날짜 */
+function kstDay(d: Date): string {
+  return kstLabel(d).split(' ')[0];
+}
+
 export function dueText(dueAt: Date, now: Date): string {
   const h = hoursBetween(now, dueAt);
   if (h < 0) {
@@ -283,7 +298,42 @@ export function dueText(dueAt: Date, now: Date): string {
   return `${kstLabel(dueAt)}까지`;
 }
 
-function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' | 'studentCode' | 'searchText'> {
+type ItemBase = Omit<BoardItem, 'category' | 'error' | 'studentCode' | 'searchText' | 'brief'>;
+
+/** 요약 칸 한 줄: 그 칸에서 가장 급한 일의 실제 정보 */
+function briefOf(t: TaskSource, now: Date): string {
+  switch (t.kind) {
+    case 'new_student_matching':
+      if (t.plan?.state === 'proposed' && t.plan.proposalSentAt) return `강사 문의 후 ${waitText(t.plan.proposalSentAt, now)}`;
+      if (t.plan) { const first = firstLessonAt(t.plan); return first ? `첫 수업 ${kstDay(first)}` : '안내 전'; }
+      return `기한 ${kstDay(t.dueAt)}`;
+    case 'renewal_tutor_notice':
+      if (!t.tutorNotifiedAt) return '강사 통보 전';
+      if (!t.tutorAcknowledgedAt) return `통보 후 ${waitText(t.tutorNotifiedAt, now)}`;
+      return '일정 조치 전';
+    case 'long_leave_request':
+      return `신청 후 ${waitText(t.createdAt, now)}`;
+    case 'no_show_report':
+      return `신고 후 ${waitText(t.reportedAt, now)}`;
+    case 'ending_soon':
+      return `잔여 ${t.lessonsLeft}회 · ${kstDay(t.endsAt)} 종료`;
+    case 'makeup_unrequested':
+      return `기한 ${kstDay(t.deadline)}`;
+    case 'import_check':
+      return t.studentName;
+    case 'lesson_change':
+      if (t.pendingNotices > 0) return `안내 안 보냄 ${t.pendingNotices}건`;
+      return t.makeupWaitingSince ? `보강 신청 후 ${waitText(t.makeupWaitingSince, now)}` : `보강 강사 답 대기 ${t.openMakeups}건`;
+    case 'tutor_leave':
+      return t.firstOpenAt ? `첫 수업 ${kstDay(t.firstOpenAt)}` : `${t.tutorName} 휴무`;
+    case 'class_record_missing':
+      return `미기록 ${t.lessons.length}회`;
+    case 'auto_failure':
+      return `발생 후 ${waitText(t.occurredAt, now)}`;
+  }
+}
+
+function toItem(t: TaskSource, now: Date): ItemBase {
   switch (t.kind) {
     case 'new_student_matching': {
       if (t.plan) return planItem(t, t.plan, now);
@@ -333,7 +383,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
         tag: t.tutorChangePlanned ? '재등록 · 강사 변경' : '재등록 강사 확인',
         title: `${t.studentName} · ${t.tutorName ?? '담당 강사 미정'}`,
         detail: `${t.studentCode} · ${t.product} · 새 기간 ${t.newPeriod}${t.tutorChangePlanned ? ' · 강사 변경 예정이라 새 강사 배정 필요' : ''}`,
-        due: t.tutorNotifiedAt && !t.tutorAcknowledgedAt ? `통보 후 ${Math.max(1, Math.floor(hoursBetween(t.tutorNotifiedAt, now)))}시간째 미확인` : null,
+        due: t.tutorNotifiedAt && !t.tutorAcknowledgedAt ? `통보 후 ${waitText(t.tutorNotifiedAt, now)} 미확인` : null,
         steps,
         actions,
       };
@@ -434,7 +484,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
           t.pendingNotices > 0 && t.openMakeups - (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
           t.pendingNotices === 0 && (t.answeredMakeups ?? 0) > 0 && t.openMakeups > (t.answeredMakeups ?? 0) && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
         ].filter(Boolean).join(' · '),
-        due: null,
+        due: t.openMakeups > (t.answeredMakeups ?? 0) && t.makeupWaitingSince ? `보강 신청 후 ${waitText(t.makeupWaitingSince, now)}` : null,
         steps: [],
         actions: [{ key: 'open_change', label: '열기', primary: true, href: `/lms/admin/change?student=${encodeURIComponent(t.studentCode)}` }],
       };
@@ -501,7 +551,7 @@ function toItem(t: TaskSource, now: Date): Omit<BoardItem, 'category' | 'error' 
 }
 
 /** 일정안이 있는 신규 매칭 (D-51-3 경고 시각). 버튼은 PlanCard 가 그림 */
-function planItem(t: MatchingTask, p: PlanView, now: Date): Omit<BoardItem, 'category' | 'error' | 'studentCode' | 'searchText'> {
+function planItem(t: MatchingTask, p: PlanView, now: Date): ItemBase {
   const alert = planAlert(p, now);
   const tutorUnsent = p.tutorNotice?.status !== 'sent';
   const studentUnsent = p.studentNotice?.status !== 'sent';
@@ -516,7 +566,7 @@ function planItem(t: MatchingTask, p: PlanView, now: Date): Omit<BoardItem, 'cat
     severity: alert === 'top' || alert === 'urgent' || alert === 'check' ? 'urgent' : alert === 'no_reply' ? 'due_soon' : p.state === 'proposed' ? dueSeverity(t.dueAt, now) : 'open',
     tag,
     title: `${t.studentName}${p.studentPlace ? ` · ${p.studentPlace.split(' ')[0]}` : ''}`,
-    detail: `${p.tutorName}${first ? ` · 첫 수업 ${kstLabel(first)}` : ''}`,
+    detail: `${p.tutorName}${first ? ` · 첫 수업 ${kstLabel(first)}` : ''}${p.state === 'proposed' && p.proposalSentAt ? ` · 문의 후 ${waitText(p.proposalSentAt, now)}` : ''}`,
     due: p.state === 'proposed' ? dueText(t.dueAt, now) : alert === 'top' ? '첫 수업 24시간 안 — 지금 보내 주세요' : null,
     steps: [],
     actions: [],
@@ -549,7 +599,7 @@ export function buildBoard(tasks: TaskSource[], now: Date): BoardItem[] {
       const base = toItem(t, now);
       const studentCode = 'studentCode' in t && t.studentCode ? t.studentCode : null;
       const searchText = [base.tag, base.title, base.detail, studentCode, 'tutorName' in t ? t.tutorName : null].filter(Boolean).join(' ').toLowerCase();
-      return { t, item: { ...base, category: categoryOf(t.kind), error: isError(t.kind), studentCode, searchText } };
+      return { t, item: { ...base, category: categoryOf(t.kind), error: isError(t.kind), studentCode, searchText, brief: briefOf(t, now) } };
     })
     .sort((a, b) => Number(!!b.item.top) - Number(!!a.item.top) || SEVERITY_RANK[a.item.severity] - SEVERITY_RANK[b.item.severity] || sortKey(a.t) - sortKey(b.t))
     .map((x) => x.item);

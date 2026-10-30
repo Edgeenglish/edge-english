@@ -3,7 +3,7 @@
 // 강사 화면 (영어, 휴대폰 우선): ① 기록할 수업(Class Record) ② 보강 가능 여부 답 ③ 일정 목록(시트처럼 한 줄, 누르면 펼침)
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { STATUS_RULES } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
@@ -257,14 +257,46 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
 }
 
 // 할 일은 화면에 펼쳐 두지 않고 누르면 창으로 (대표 10/29: 할 일이 많아도 Class Record 표가 아래로 밀리지 않게)
+// 보내지 않은 답·저장 안 한 기록 보호 (대표 10/30): 창을 닫거나 페이지를 떠날 때 확인 (My hours와 같은 'Discard changes?')
+const DirtyCtx = createContext<((id: string, dirty: boolean) => void) | null>(null);
+
+function useDirty(id: string, dirty: boolean) {
+  const mark = useContext(DirtyCtx);
+  useEffect(() => {
+    mark?.(id, dirty);
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => {
+      mark?.(id, false);
+      window.removeEventListener('beforeunload', warn);
+    };
+  }, [mark, id, dirty]);
+}
+
+/** 창 안에서 고치는 중인 칸 목록 (닫기 전 확인용) */
+function useDirtyList() {
+  const dirty = useRef(new Set<string>());
+  const [mark] = useState(() => (id: string, on: boolean) => {
+    if (on) dirty.current.add(id);
+    else dirty.current.delete(id);
+  });
+  return [dirty, mark] as const;
+}
+
 function Sheet({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const [dirty, mark] = useDirtyList();
+  const close = () => {
+    if (dirty.current.size > 0 && !window.confirm('Discard changes?')) return;
+    onClose();
+  };
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={close}>
       <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}
         className="relative max-h-[90vh] w-full max-w-[640px] overflow-y-auto rounded-t-[20px] bg-[#f6f5fa] p-4 pb-8 lg:rounded-[20px]">
-        <button type="button" aria-label="Close" onClick={onClose}
+        <button type="button" aria-label="Close" onClick={close}
           className="absolute right-3 top-3 flex h-[40px] w-[40px] items-center justify-center rounded-full bg-white text-[18px] text-[#1d1b2b]">✕</button>
-        {children}
+        <DirtyCtx.Provider value={mark}>{children}</DirtyCtx.Provider>
       </div>
     </div>
   );
@@ -325,6 +357,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   lesson: TutorLesson; tz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [dirty, mark] = useDirtyList();
   const phase = phaseOf(l, now);
   const status = statusText(l, now);
   const k = kst ? kstText(l.startsAt, tz) : null;
@@ -353,7 +386,10 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   );
   return (
     <div className={`border-b border-[#e6e3ef] last:border-b-0 ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
-      <button type="button" disabled={!canOpen} aria-expanded={open} onClick={() => setOpen(!open)}
+      <button type="button" disabled={!canOpen} aria-expanded={open} onClick={() => {
+        if (open && dirty.current.size > 0 && !window.confirm('Discard changes?')) return;
+        setOpen(!open);
+      }}
         className={`w-full cursor-pointer px-3 py-2 text-left lg:px-1 disabled:cursor-default ${open ? 'bg-[#f3f1f8]' : 'enabled:hover:bg-[#f7f6fb]'}`}>
         <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
@@ -385,8 +421,10 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
           {canRecord(l, now) ? (
             <div className="lg:max-w-[560px]">
-              <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing extra={links}
-                onSaved={async () => { setOpen(false); await onSaved(); }} />
+              <DirtyCtx.Provider value={mark}>
+                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing extra={links}
+                  onSaved={async () => { setOpen(false); await onSaved(); }} />
+              </DirtyCtx.Provider>
             </div>
           ) : (
             <div className="grid gap-2 pt-2">
@@ -416,6 +454,7 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const ready = recordReady(result, topics, remarks) && canRecord(l, now);
+  useDirty(`record-${l.id}`, editing && (result !== resultOf(l.classStatus) || topics !== (l.topics ?? '') || remarks !== (l.remarks ?? '') || studentLate !== l.studentLate));
 
   if (!editing) {
     return (
@@ -494,11 +533,14 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
   const [yes, setYes] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [sent, setSent] = useState(false);
+  useDirty(`cover-${covers[0].id}`, !sent && yes.size > 0);
   async function send() {
     setBusy(true);
     setErr('');
     try {
       await actions.answerCover(covers.map((c) => c.id), [...yes]);
+      setSent(true);
       await onSent();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not send. Please try again.');
@@ -547,6 +589,8 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const minutes = m.slots[0] ? minutesOf(m.slots[0]) : null;
+  const [first] = useState(() => ({ yes: [...yes].sort().join(), note }));
+  useDirty(`makeup-${m.id}`, !closed && !sent && ([...yes].sort().join() !== first.yes || note !== first.note));
 
   function toggle(id: string) {
     const n = new Set(yes);
