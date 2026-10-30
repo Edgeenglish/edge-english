@@ -133,7 +133,13 @@ export function leaveSummary(all: LvItem[], notices: LvNotice[]) {
 // 안내 문구: 학생·강사마다 한 메시지로 (같은 학생·같은 대체강사의 날짜를 모음)
 // ---------------------------------------------------------------------
 
-export type LvMessage = { key: string; event: LvNoticeEvent; recipient: 'student' | 'tutor'; to: string; studentId: string; recipientId: string; itemIds: string[]; noticeIds: string[]; status: 'pending' | 'sent'; text: string };
+export type LvMessage = {
+  key: string; event: LvNoticeEvent; recipient: 'student' | 'tutor'; to: string; studentId: string; recipientId: string; itemIds: string[]; noticeIds: string[]; status: 'pending' | 'sent'; text: string;
+  /** noticeIds 와 같은 순서의 수업 id */
+  noticeItems?: string[];
+  /** 보낸 시각: 한 번에 보낸 글은 같은 시각 → 보낸 글은 그 묶음 그대로 (대표 10/30: 보낸 원문·번호 고정) */
+  sentAt?: Date | null;
+};
 
 /** 아직 안 보낸 안내는 메시지로 묶고, 보낸 것은 최근 것만 따로 보여 줌 */
 export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[] {
@@ -142,9 +148,10 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[]
   for (const n of notices) {
     if (n.status === 'not_needed') continue;
     const it = byId.get(n.itemId);
-    if (!it || it.lessonGone) continue;
-    // 학생에게 가는 대체강사 글은 대체강사마다 따로 (날짜마다 대체강사가 다를 수 있음)
-    const key = `${n.status}|${n.event}|${it.studentId}|${n.recipientId}|${n.event === 'sub_student' || n.event === 'sub_confirmed' ? it.subTutorId ?? '' : ''}`;
+    // 안 보낸 글에서는 취소된 수업을 뺌. 보낸 글은 보낸 그대로
+    if (!it || (it.lessonGone && n.status === 'pending')) continue;
+    // 학생에게 가는 대체강사 글은 대체강사마다 따로 (날짜마다 대체강사가 다를 수 있음). 보낸 글은 보낸 묶음(같은 보낸 시각)마다
+    const key = `${n.status}|${n.event}|${it.studentId}|${n.recipientId}|${n.event === 'sub_student' || n.event === 'sub_confirmed' ? it.subTutorId ?? '' : ''}|${n.status === 'sent' ? n.sentAt?.toISOString() ?? '' : ''}`;
     const g = groups.get(key) ?? { event: n.event, status: n.status, notices: [], items: [] };
     g.notices.push(n);
     g.items.push(it);
@@ -163,6 +170,8 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[]
       recipientId: g.notices[0].recipientId,
       itemIds: [...new Set(g.items.map((i) => i.id))],
       noticeIds: g.notices.map((n) => n.id),
+      noticeItems: g.notices.map((n) => n.itemId),
+      sentAt: g.notices[0].sentAt,
       status: g.status,
       text: leaveText(g.event, list, recipient),
     };
@@ -287,14 +296,31 @@ export type LvStudentWork = {
   pick: LvItem[];
   /** 1단계: 대체강사 답 기다리는 중 (강사별) */
   tutor: { subTutorId: string; subTutorName: string; items: LvItem[]; ask: LvMessage | null }[];
-  /** 2단계 글 (안 보냈으면 pending, 보냈으면 sent — 보낸 글도 그 자리에 남김) */
+  /** 휴무 안내 글: 아직 안 보낸 것 (정해진 날짜만) */
   proposal: LvProposal | null;
+  /** 보낸 휴무 안내 (보낸 묶음마다 원문 그대로) */
+  sentProposals: LvProposal[];
   /** 3단계: 대체강사 가능 → 학생 답 기다리는 수업 (2단계 글을 보낸 뒤) */
   answer: LvItem[];
   /** 4단계: 확정 안내 · 기존 강사 보강 날짜 미정 · 보강 신청(강사 확인 중) */
   confirm: { confirmedMsgs: LvMessage[]; makeup: LvItem[]; makeupRequested: LvItem[] };
   steps: LvStep[];
 };
+
+/** 보낸 기록을 '한 번에 보낸 묶음'으로: 보낸 시각이 앞 기록과 몇 초 안이면 같은 묶음 (3300 전에는 한 건씩 기록해 시각이 조금씩 다름) */
+const SAME_SEND_MS = 5000;
+export function sentBatches<T>(list: T[], at: (x: T) => Date | null): T[][] {
+  const sorted = [...list].sort((a, b) => +(at(a) ?? 0) - +(at(b) ?? 0));
+  const out: T[][] = [];
+  let last: number | null = null;
+  for (const x of sorted) {
+    const t = +(at(x) ?? 0);
+    if (last === null || t - last > SAME_SEND_MS) out.push([]);
+    out[out.length - 1].push(x);
+    last = t;
+  }
+  return out;
+}
 
 export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date, period?: { from: KstDate; to: KstDate }): LvStudentWork {
   const mine = messages.filter((m) => m.studentId === g.studentId);
@@ -311,30 +337,34 @@ export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date,
   }
   const tutor = [...tutorMap.values()].map((t) => ({ ...t, ask: pending.find((m) => m.event === 'sub_ask' && m.recipientId === t.subTutorId) ?? null }));
 
-  // 2단계 글: 휴무 안내(leave_options) + 학생에게 대체강사 제안(sub_student) 안내를 하나로. 1단계가 끝난 뒤에만
-  const step1Done = pick.length === 0 && tutor.length === 0;
-  const propPending = pending.filter((m) => m.event === 'leave_options' || m.event === 'sub_student');
-  const propSent = mine.filter((m) => m.status === 'sent' && (m.event === 'leave_options' || m.event === 'sub_student'));
-  const shown = step1Done ? future.filter((i) => i.choice === 'wait' || (i.choice === 'substitute' && i.subStage !== 'asked')) : [];
-  const proposal: LvProposal | null = !step1Done || shown.length === 0
-    ? null
-    : propPending.length
-      ? { status: 'pending', noticeIds: propPending.flatMap((m) => m.noticeIds), itemIds: shown.map((i) => i.id), text: proposalText(g.studentName, shown, period) }
-      : propSent.length
-        ? { status: 'sent', noticeIds: propSent.flatMap((m) => m.noticeIds), itemIds: shown.map((i) => i.id), text: proposalText(g.studentName, shown, period) }
-        : null;
-  const answer = proposal?.status === 'sent' ? items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok') : [];
+  // 휴무 안내 글(leave_options + sub_student): 정해진 날짜부터 먼저 (대표 10/30: 미정 날짜가 있어도 준비된 날짜는 진행). 미정·강사 답 대기 날짜는 정해지면 따로
+  const isProp = (m: LvMessage) => m.event === 'leave_options' || m.event === 'sub_student';
+  const ready = future.filter((i) => i.choice === 'wait' || (i.choice === 'substitute' && i.subStage !== 'asked'));
+  const readyIds = new Set(ready.map((i) => i.id));
+  const pendNotices = pending.filter(isProp).flatMap((m) => m.noticeIds.map((id, k) => [id, m.noticeItems?.[k] ?? ''] as const)).filter(([, it]) => readyIds.has(it));
+  const unsent = new Set(pendNotices.map(([, it]) => it));
+  const pendItems = ready.filter((i) => unsent.has(i.id));
+  const proposal: LvProposal | null = pendItems.length
+    ? { status: 'pending', noticeIds: pendNotices.map(([id]) => id), itemIds: pendItems.map((i) => i.id), text: proposalText(g.studentName, pendItems, period) }
+    : null;
+  // 보낸 휴무 안내: 보낸 묶음마다 그대로
+  const byId = new Map(g.items.map((i) => [i.id, i]));
+  const sentProposals: LvProposal[] = sentBatches(mine.filter((x) => x.status === 'sent' && isProp(x)), (m) => m.sentAt ?? null).map((ms) => {
+    const its = [...new Set(ms.flatMap((m) => m.itemIds))].map((id) => byId.get(id)!).filter(Boolean).sort((x, y) => +x.startsAt - +y.startsAt);
+    return { status: 'sent', noticeIds: ms.flatMap((m) => m.noticeIds), itemIds: its.map((i) => i.id), text: proposalText(g.studentName, its, period) };
+  });
+  const answer = items.filter((i) => i.choice === 'substitute' && i.subStage === 'tutor_ok' && !unsent.has(i.id));
   const confirm = {
     confirmedMsgs: pending.filter((m) => m.event === 'sub_confirmed'),
-    makeup: proposal?.status === 'sent' || !proposal ? items.filter((i) => i.choice === 'wait' && !i.makeupAt && !i.makeupRequested) : [],
+    makeup: items.filter((i) => i.choice === 'wait' && !i.makeupAt && !i.makeupRequested && !unsent.has(i.id)),
     makeupRequested: items.filter((i) => i.choice === 'wait' && !i.makeupAt && i.makeupRequested),
   };
   const steps: LvStep[] = [];
   if (pick.length || tutor.length) steps.push('tutor');
-  if (proposal?.status === 'pending') steps.push('propose');
+  if (proposal) steps.push('propose');
   if (answer.length) steps.push('answer');
-  if (confirm.confirmedMsgs.length || (step1Done && confirm.makeup.length) || confirm.makeupRequested.length) steps.push('confirm');
-  return { pick, tutor, proposal, answer, confirm, steps };
+  if (confirm.confirmedMsgs.length || confirm.makeup.length || confirm.makeupRequested.length) steps.push('confirm');
+  return { pick, tutor, proposal, sentProposals, answer, confirm, steps };
 }
 
 // ---------------------------------------------------------------------
@@ -370,19 +400,35 @@ export function renewalTutorText(g: LvRenewalGroup): string {
 // 강사별 묶음 문의 (R17, 2026-10-30 시안 승인): 같은 대체강사에게 여러 학생 수업을 한 메시지로. 답은 수업마다 (admin_leave_sub_ok)
 // ---------------------------------------------------------------------
 
-export type LvTutorBundle = { subTutorId: string; subTutorName: string; items: LvItem[]; noticeIds: string[]; status: 'pending' | 'sent'; text: string };
+/** pending = 아직 안 보낸 문의(안 보낸 수업만) · sent = 보낸 문의 원문(보낸 묶음마다, 번호 고정) · numbers = 답 기다리는 수업이 보낸 글의 몇 번인지 */
+export type LvAskMsg = { noticeIds: string[]; itemIds: string[]; text: string; sentAt: Date | null };
+export type LvTutorBundle = { subTutorId: string; subTutorName: string; items: LvItem[]; pending: LvAskMsg | null; sent: LvAskMsg[]; numbers: Record<string, string>; status: 'pending' | 'sent' };
 
 export function tutorBundles(items: LvItem[], notices: LvNotice[], now: Date): LvTutorBundle[] {
+  const byId = new Map(items.map((i) => [i.id, i]));
   const out = new Map<string, LvItem[]>();
   for (const i of items) {
     if (i.lessonGone || i.choice !== 'substitute' || i.subStage !== 'asked' || !i.subTutorId || i.startsAt <= now) continue;
     out.set(i.subTutorId, [...(out.get(i.subTutorId) ?? []), i]);
   }
+  const sortIts = (ids: string[]) => [...new Set(ids)].map((id) => byId.get(id)).filter((x): x is LvItem => !!x).sort((a, b) => +a.startsAt - +b.startsAt);
   return [...out.entries()].map(([id, list]) => {
-    const its = [...list].sort((a, b) => +a.startsAt - +b.startsAt);
-    const ids = new Set(its.map((i) => i.id));
-    const pend = notices.filter((n) => n.event === 'sub_ask' && n.status === 'pending' && n.recipientId === id && ids.has(n.itemId));
-    return { subTutorId: id, subTutorName: its[0].subTutorName ?? '', items: its, noticeIds: pend.map((n) => n.id), status: pend.length ? 'pending' : 'sent', text: subAskBundleText(its) };
+    const its = sortIts(list.map((i) => i.id));
+    const asked = new Set(its.map((i) => i.id));
+    const mineAsk = notices.filter((n) => n.event === 'sub_ask' && n.recipientId === id);
+    const pend = mineAsk.filter((n) => n.status === 'pending' && asked.has(n.itemId));
+    const pendIts = sortIts(pend.map((n) => n.itemId));
+    // 보낸 문의: 같은 보낸 시각 = 한 번에 보낸 글. 답 기다리는 수업이 든 글만
+    const sent = sentBatches(mineAsk.filter((x) => x.status === 'sent'), (n) => n.sentAt)
+      .map((ns) => { const bi = sortIts(ns.map((n) => n.itemId)); return { noticeIds: ns.map((n) => n.id), itemIds: bi.map((i) => i.id), text: subAskBundleText(bi), sentAt: ns[0].sentAt }; })
+      .filter((m) => m.itemIds.some((x) => asked.has(x)));
+    const numbers: Record<string, string> = {};
+    for (const m of sent) m.itemIds.forEach((x, n) => { if (asked.has(x)) numbers[x] = `${n + 1}번`; });
+    return {
+      subTutorId: id, subTutorName: its[0].subTutorName ?? '', items: its, sent, numbers,
+      pending: pendIts.length ? { noticeIds: pend.map((n) => n.id), itemIds: pendIts.map((i) => i.id), text: subAskBundleText(pendIts), sentAt: null } : null,
+      status: pendIts.length ? 'pending' : 'sent',
+    };
   });
 }
 

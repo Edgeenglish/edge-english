@@ -254,7 +254,7 @@ export type LeaveOpenRow = {
   lesson_gone_at?: string | null;
   off: { id: string; starts_at: string; ends_at: string; created_at: string; tutor: { name: string } | null } | null;
 };
-export type LeaveNoticeRow = { event?: string; leave: { student_id?: string; lesson_gone_at?: string | null; off: LeaveOpenRow['off'] } | null };
+export type LeaveNoticeRow = { event?: string; leave: { student_id?: string; lesson_gone_at?: string | null; choice?: string; sub_stage?: string | null; off: LeaveOpenRow['off'] } | null };
 
 /** 강사 휴무 처리 (1800·2500 새 순서): 아직 정하지 않았거나 답을 기다리는 수업 · 안 보낸 안내 → 휴무마다 한 줄 */
 export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], now: Date): TaskSource[] {
@@ -298,7 +298,9 @@ export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], n
       ns.notify += 1;
       if (n.event === 'sub_student') ns.proposeLessons = (ns.proposeLessons ?? 0) + 1;
       const sid = n.leave?.student_id;
-      if (sid && !blocked.has(`${n.leave!.off!.id}|${sid}`) && !(ns.proposeStudents ??= []).includes(sid)) ns.proposeStudents.push(sid);
+      // 정해진 날짜부터 먼저 안내 (대표 10/30): 그 수업 자체가 미정·강사 답 대기면 아직 못 보냄. choice 를 못 읽는 옛 응답은 학생 단위로
+      const itemReady = n.leave?.choice ? n.leave.choice !== 'undecided' && n.leave.sub_stage !== 'asked' : !blocked.has(`${n.leave!.off!.id}|${sid}`);
+      if (sid && itemReady && !(ns.proposeStudents ??= []).includes(sid)) ns.proposeStudents.push(sid);
     } else if (n.event === 'sub_ask') ns.tutor += 1;
     else if (n.event === 'sub_confirmed') ns.confirm += 1;
   }
@@ -399,7 +401,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind)')
       .in('status', ['confirmed', 'active']),
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, lesson_gone_at, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
-    sb.from('lesson_notices').select(`event, leave:leave_items(student_id, lesson_gone_at, ${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
+    sb.from('lesson_notices').select(`event, leave:leave_items(student_id, lesson_gone_at, choice, sub_stage, ${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
     sb.from('renewal_notices').select('enrollment_id, sent_at'),
     loadMissingRecords(sb),
   ]);

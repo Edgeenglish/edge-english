@@ -46,7 +46,7 @@ export type StudentView = {
   renewalPaid: boolean;
   confirmedOn: KstDate | null;
   /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 학생 화면 표시는 '보강'으로 같음) */
-  lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean })[];
+  lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
   leave: LeaveRow[];
@@ -64,7 +64,7 @@ type Raw = {
     lessons_total: number; credits_left: number; credits_granted: number; confirmed_on: KstDate | null; renewal_paid: boolean;
     next_regular_from: KstDate | null;
   };
-  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean }[];
+  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean }[];
   makeup_rights: { lesson_id: string | null; item_id: string | null; original_at: string; tutor_leave: boolean }[];
   makeup_requests: { id: string; status: string; lesson_id: string | null; item_id: string | null; requested_at: string; candidates: string[]; tutor_leave: boolean }[];
   leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; sub_meet_url: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string }[];
@@ -112,6 +112,7 @@ export function parseStudentView(r: Raw): StudentView {
       meetUrl: l.meet_url,
       leavePostponed: l.leave_postponed,
       substitute: l.substitute,
+      leaveOpen: !!l.leave_open,
     })),
     makeupRights: r.makeup_rights.map((m) => ({
       lessonId: m.lesson_id,

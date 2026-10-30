@@ -183,7 +183,7 @@ export default function StudentHome(props: {
   }
 
   const nextFull = next && s.lessons.find((l) => l.id === next.id);
-  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.meetUrl ?? null} substitute={nextFull?.substitute ?? false} />;
+  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.leaveOpen ? null : nextFull?.meetUrl ?? null} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -399,7 +399,10 @@ export default function StudentHome(props: {
                   {s.lessons.find((x) => x.id === l.id)?.substitute && (
                     <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 대체강사 수업</p>
                   )}
-                  {meetOf(l.id) && (
+                  {s.lessons.find((x) => x.id === l.id)?.leaveOpen && (
+                    <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
+                  )}
+                  {meetOf(l.id) && !s.lessons.find((x) => x.id === l.id)?.leaveOpen && (
                     <a href={meetOf(l.id)!} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold text-[#4b2fd6] underline">
                       수업 링크 (Google Meet)
                     </a>
@@ -916,7 +919,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, textbook, meetUrl, substitute }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null; substitute: boolean }) {
+function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
   const k = kst(lesson.startsAt);
   const days = diffDays(formatInZone(now, 'Asia/Seoul').date, k.date);
   const started = now.getTime() >= lesson.startsAt.getTime();
@@ -929,6 +932,10 @@ function NextLesson({ lesson, now, textbook, meetUrl, substitute }: { lesson: St
         <span className="rounded-full bg-[#ffd66b] px-2.5 py-1 text-[12px] font-semibold text-[#1b1442]">{badge}</span>
       </div>
       {/* 대체강사 수업은 수업 링크가 다름 — 늘 쓰던 링크로 들어가는 일이 잦음 (대표 10/29) */}
+      {/* 휴무 처리 확정 전: 휴무 강사와 정상 수업처럼 보이지 않게 (대표 10/30) */}
+      {leaveOpen && (
+        <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">⚠️ 강사님 휴무로 일정 조율 중</p>
+      )}
       {substitute && (
         <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">
           ⚠️ 대체강사 {lesson.tutorName} 강사님 수업이에요. 아래 &lsquo;수업 입장&rsquo; 링크에서 진행됩니다.
@@ -939,7 +946,7 @@ function NextLesson({ lesson, now, textbook, meetUrl, substitute }: { lesson: St
           {Number(k.md.split('/')[0])}월 {Number(k.md.split('/')[1])}일 ({k.wd}) {k.time}
         </p>
         <p className="mt-1 text-[14px] text-[#d8d3f5]">
-          {lesson.minutes}분 · {lesson.tutorName} · 한국 시간{lesson.kind === 'makeup' ? ' · 보강' : ''}
+          {lesson.minutes}분{leaveOpen ? '' : ` · ${lesson.tutorName}`} · 한국 시간{lesson.kind === 'makeup' ? ' · 보강' : ''}
         </p>
       </div>
       <div className="grid gap-2.5 lg:grid-cols-2">

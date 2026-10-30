@@ -13,7 +13,7 @@ import { instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { dateLabel, enAt, kstLabel, MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
 import {
   groupByStudent, groupRenewals, itemStatus, leaveMessages, pendingNoticeKeys, studentPhase, tutorBundles, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork,
-  type LvItem, type LvProposal, type LvTutorBundle, type LvRenewal, type LvRenewalGroup, type LvMakeupOption, type LvMessage, type LvNotice, type LvStep, type LvStudentGroup, type LvStudentWork, type LvSubOption, type LvTimeOff,
+  type LvAskMsg, type LvItem, type LvProposal, type LvTutorBundle, type LvRenewal, type LvRenewalGroup, type LvMakeupOption, type LvMessage, type LvNotice, type LvStep, type LvStudentGroup, type LvStudentWork, type LvSubOption, type LvTimeOff,
 } from '@/lms/admin/tutor-leave';
 import type { LeaveCreateResult, LvTutor } from '@/lms/admin/tutor-leave-live';
 import { AdminHeader } from '../ui';
@@ -444,7 +444,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
             {picked.length > 0 && <PickTutors key={picked.map((i) => i.id).join()} items={picked} actions={actions} done={done} />}
           </Block>
         )}
-        {p?.status === 'pending' && (
+        {p && (
           <Block title={LV_STEP_TEXT.propose}>
             <ProposalRow key={p.noticeIds.join()} p={p} to={g.studentName} onSend={async () => { await actions.markSent(p.noticeIds); await done(); }} />
           </Block>
@@ -480,7 +480,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
             </Link>
           </Block>
         )}
-        {p?.status === 'sent' && <Fold title="✓ 휴무 안내 보냄"><ProposalRow p={p} to={g.studentName} onSend={async () => {}} /></Fold>}
+        {w.sentProposals.map((sp) => <Fold key={sp.noticeIds.join()} title={`✓ 휴무 안내 보냄 · ${sp.itemIds.length}회`}><ProposalRow p={sp} to={g.studentName} onSend={async () => {}} /></Fold>)}
         <Err>{r.err}</Err>
       </div>
     </Card>
@@ -490,15 +490,25 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
 // 대체강사 한 명에게 묻기 (R17): 여러 학생 수업을 한 메시지로, [보냄]도 한 번. 답은 수업마다 체크 (처음엔 체크 없음, R3)
 function TutorBundlePanel({ b, actions, done }: { b: LvTutorBundle; actions: LeaveActions; done: () => Promise<void> }) {
   const [copied, setCopied] = useState(false);
-  const m: LvMessage = { key: `ask-${b.subTutorId}`, event: 'sub_ask', recipient: 'tutor', to: b.subTutorName, studentId: '', recipientId: b.subTutorId,
-    itemIds: b.items.map((i) => i.id), noticeIds: b.noticeIds, status: b.status, text: b.text };
+  const asMsg = (a: LvAskMsg, status: 'pending' | 'sent'): LvMessage => ({ key: `ask-${b.subTutorId}-${a.sentAt?.toISOString() ?? 'new'}`, event: 'sub_ask', recipient: 'tutor', to: b.subTutorName,
+    studentId: '', recipientId: b.subTutorId, itemIds: a.itemIds, noticeIds: a.noticeIds, status, text: a.text });
   const students = new Set(b.items.map((i) => i.studentId)).size;
+  const when = (d: Date | null) => (d ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d) : '');
   return (
     <Card title={<>{b.subTutorName} 강사님에게 묻기 <span className="text-[13px] font-normal text-[#6b6880]">학생 {students}명 {b.items.length}회</span></>}>
       <div className="grid gap-3">
-        <MessageRow m={m} copied={copied} onCopied={() => setCopied(true)}
-          onSend={async () => { if (b.noticeIds.length) await actions.markSent(b.noticeIds); await done(); }} />
-        <TutorCheck key={b.items.map((i) => i.id).join()} t={{ subTutorId: b.subTutorId, subTutorName: b.subTutorName, items: b.items, ask: null }} actions={actions} done={done} />
+        {b.pending && (
+          <MessageRow m={asMsg(b.pending, 'pending')} copied={copied} onCopied={() => setCopied(true)}
+            onSend={async () => { await actions.markSent(b.pending!.noticeIds); await done(); }} />
+        )}
+        {/* 보낸 문의는 보낸 원문·번호 그대로 (대표 10/30: 강사가 '2번 가능'이라고 답하면 대조) */}
+        {b.sent.map((a) => (
+          <div key={a.sentAt?.toISOString()} className="grid gap-1">
+            <span className="text-[12.5px] text-[#6b6880]">{when(a.sentAt)} 보냄</span>
+            <MessageRow m={asMsg(a, 'sent')} copied={false} onCopied={() => {}} onSend={async () => {}} />
+          </div>
+        ))}
+        <TutorCheck key={b.items.map((i) => i.id).join()} t={{ subTutorId: b.subTutorId, subTutorName: b.subTutorName, items: b.items, ask: null }} numbers={b.numbers} actions={actions} done={done} />
       </div>
     </Card>
   );
@@ -650,7 +660,7 @@ function SubOptions({ options, items, busy, pick }: { options: LvSubOption[]; it
 }
 
 // 대체강사 답: 가능하다고 한 날짜만 체크해 저장. 체크 안 한 날짜는 다른 강사 또는 기존 강사 보강으로
-function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; actions: LeaveActions; done: () => Promise<void> }) {
+function TutorCheck({ t, actions, done, numbers }: { t: LvStudentWork['tutor'][number]; actions: LeaveActions; done: () => Promise<void>; numbers?: Record<string, string> }) {
   // 처음엔 아무것도 체크 안 함: 강사가 실제로 가능하다고 답한 날짜만 체크 (R3)
   const [ok, setOk] = useState<Set<string>>(() => new Set());
   const [options, setOptions] = useState<LvSubOption[] | null>(null);
@@ -664,14 +674,14 @@ function TutorCheck({ t, actions, done }: { t: LvStudentWork['tutor'][number]; a
   };
   return (
     <div className="grid gap-2">
-      <span className="text-[13px] text-[#6b6880]">{t.subTutorName} 강사님이 가능하다고 답한 날짜 선택</span>
+      <span className="text-[13px] text-[#6b6880]">답 기다리는 수업 {t.items.length}회 · {t.subTutorName} 강사님이 가능하다고 답한 것 체크</span>
       <ul className="grid gap-1.5">
         {t.items.map((i) => (
           <li key={i.id}>
             <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
               <input type="checkbox" className="h-5 w-5" checked={ok.has(i.id)}
                 onChange={(e) => { const n = new Set(ok); if (e.target.checked) n.add(i.id); else n.delete(i.id); setOk(n); setOptions(null); }} />
-              {kstLabel(i.startsAt)} · {i.studentName}
+              {numbers?.[i.id] ? `${numbers[i.id]} · ` : ''}{kstLabel(i.startsAt)} · {i.studentName}
             </label>
           </li>
         ))}

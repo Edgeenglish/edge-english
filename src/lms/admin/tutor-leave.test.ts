@@ -71,11 +71,10 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
       '② 기존 강사와 보강하기\n기존 강사님이 돌아오신 뒤 수업하실 수 있어요. 가능한 보강 시간을 확인해 주세요.',
     ].join('\n\n'));
     expect(leaveSummary(items, notices).pendingNotices).toBe(5);
-    // 새 순서(2026-10-28): 대체강사 답이 남아 있으면 1단계만 — 학생 글(2단계)은 1단계가 끝난 뒤
+    // 2026-10-30 대표: 대체강사 답이 남은 날짜가 있어도 정해진 날짜는 휴무 안내부터 진행 (답 기다리는 날짜는 글에서 빠짐)
     const w = studentWork(groupByStudent(items)[0], m, now);
-    expect(w.steps).toEqual(['tutor']);
     expect(w.tutor.map((t) => [t.subTutorName, t.items.map((i) => i.id), t.ask?.noticeIds])).toEqual([['Benny', ['a'], ['n1', 'n2']]]);
-    expect(w.proposal).toBeNull();
+    expect(w.proposal?.itemIds ?? []).not.toContain('a');
   });
 
   it('새 순서: 1 대체 강사에게 묻기 → 2 학생에게 휴무 안내 · 대체 강사 제안(글 하나) → 3 학생 답 입력 → 4 확정 안내 보내기', () => {
@@ -100,7 +99,8 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     const sent = before.map((n) => ({ ...n, status: 'sent' as const }));
     const w3 = studentWork(groupByStudent(items)[0], leaveMessages(items, sent), now);
     expect(w3.steps).toEqual(['answer', 'confirm']);
-    expect(w3.proposal?.status).toBe('sent');
+    expect(w3.proposal).toBeNull();
+    expect(w3.sentProposals.map((x) => x.itemIds)).toEqual([['a', 'b', 'c']]);
     expect(w3.answer.map((i) => i.id)).toEqual(['a', 'b']);
     expect(w3.confirm.makeup.map((i) => i.id)).toEqual(['c']);
   });
@@ -213,9 +213,40 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     const [b] = tutorBundles(items, notices, now);
     expect(b.items.map((i) => i.id)).toEqual(['b', 'a']);
     expect(b.status).toBe('pending');
-    expect(b.noticeIds).toEqual(['n1']);
-    expect(b.text).toContain('En s2 · 40 min');
-    expect(b.text).not.toContain('on leave -');
+    expect(b.pending!.noticeIds).toEqual(['n1']);
+    expect(b.pending!.text).toContain('1) ');
+    expect(b.pending!.text).toContain('En s1 · 40 min');
+    expect(b.pending!.text).not.toContain('En s2');
+  });
+  it('보낸 문의는 원문·번호 고정: 1번만 가능 기록 뒤에도 보낸 글은 1·2번 그대로, 남은 수업은 2번 (대표 10/30)', () => {
+    const at = new Date('2026-10-30T06:00:00Z');
+    const items = [base('a', 's1', '2026-11-09T00:00:00Z', { ...sub, subStage: 'tutor_ok' }), base('b', 's2', '2026-11-09T11:00:00Z', sub)];
+    const notices: LvNotice[] = ['a', 'b'].map((x) => ({ id: `n${x}`, itemId: x, event: 'sub_ask', recipientKind: 'tutor', recipientId: 'm', status: 'sent', sentAt: at }));
+    const [b] = tutorBundles(items, notices, now);
+    expect(b.pending).toBeNull();
+    expect(b.sent).toHaveLength(1);
+    expect(b.sent[0].text).toContain('1) Mon 9 Nov 08:00 your time · En s1');
+    expect(b.sent[0].text).toContain('2) Mon 9 Nov 19:00 your time · En s2');
+    expect(b.numbers).toEqual({ b: '2번' });
+  });
+  it('일부 날짜만 정해져도 그 날짜부터 휴무 안내·학생 답 진행 (대표 10/30)', () => {
+    const items = [base('a', 's1', '2026-11-02T11:00:00Z', { ...sub, subStage: 'tutor_ok' }), base('b', 's1', '2026-11-03T11:00:00Z', sub)];
+    const notices: LvNotice[] = [
+      { id: 'lo-a', itemId: 'a', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
+      { id: 'lo-b', itemId: 'b', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
+      { id: 'ss-a', itemId: 'a', event: 'sub_student', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
+    ];
+    const g = groupByStudent(items)[0];
+    const w = studentWork(g, leaveMessages(items, notices), now);
+    expect(w.proposal!.itemIds).toEqual(['a']);
+    expect([...w.proposal!.noticeIds].sort()).toEqual(['lo-a', 'ss-a']);
+    expect(studentPhase(w)).toBe('todo');
+    const sentAt = new Date('2026-10-31T00:00:00Z');
+    const after = notices.map((n) => (n.itemId === 'a' ? { ...n, status: 'sent' as const, sentAt } : n));
+    const w2 = studentWork(g, leaveMessages(items, after), now);
+    expect(w2.proposal).toBeNull();
+    expect(w2.answer.map((i) => i.id)).toEqual(['a']);
+    expect(w2.sentProposals.map((p) => p.itemIds)).toEqual([['a']]);
   });
   it('학생 묶음: 고르기 전 수업 → 처리할 것, 강사 답만 남음 → 답 기다리는 것', () => {
     const w1 = studentWork(groupByStudent([base('a', 's1', '2026-11-09T11:00:00Z')])[0], [], now);

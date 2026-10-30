@@ -64,7 +64,7 @@ export default function LeaveDemo({ nowIso }: { nowIso: string }) {
       },
       subOk: async (ids) => {
         edit(ids, (i) => ({ ...i, subStage: 'tutor_ok' }));
-        db.notices = db.notices.map((n) => (ids.includes(n.itemId) && n.event === 'sub_ask' && n.status === 'pending' ? { ...n, status: 'sent', sentAt: new Date() } : n));
+        const at = new Date(); db.notices = db.notices.map((n) => (ids.includes(n.itemId) && n.event === 'sub_ask' && n.status === 'pending' ? { ...n, status: 'sent', sentAt: at } : n));
         for (const id of ids) note(id, 'sub_student', 'student', db.items.find((i) => i.id === id)!.studentId);
       },
       studentOk: async (ids) => {
@@ -82,7 +82,7 @@ export default function LeaveDemo({ nowIso }: { nowIso: string }) {
           : { ...i, subStage: to }));
       },
       unsend: async (ids) => { db.notices = db.notices.map((n) => (ids.includes(n.id) ? { ...n, status: 'pending', sentAt: null } : n)); },
-      markSent: async (ids) => { db.notices = db.notices.map((n) => (ids.includes(n.id) ? { ...n, status: 'sent', sentAt: new Date() } : n)); },
+      markSent: async (ids) => { const at = new Date(); db.notices = db.notices.map((n) => (ids.includes(n.id) ? { ...n, status: 'sent', sentAt: at } : n)); },
       subOptions: async (ids) => [
         { tutorId: 't-james', name: 'James', timezone: 'Asia/Manila', free: ids.length, busyDates: [], offHours: [] },
         { tutorId: 't-noah', name: 'Noah', timezone: 'Asia/Manila', free: Math.max(0, ids.length - 1), busyDates: ids.length > 1 ? ['날짜 1개'] : [], offHours: [] },

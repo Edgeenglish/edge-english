@@ -119,6 +119,10 @@ export async function voidMakeup(sb: SupabaseClient, lessonId: string, note: str
 export async function markLessonNoticeSent(sb: SupabaseClient, noticeId: string): Promise<void> {
   check(await sb.rpc('admin_mark_lesson_notice_sent', { p_notice: noticeId }));
 }
+/** 여러 안내를 한 묶음으로 '보냄' (3300): 보낸 시각이 같아 보낸 글 원문을 그대로 다시 보여 줄 수 있음 */
+export async function markLessonNoticesSent(sb: SupabaseClient, noticeIds: string[]): Promise<void> {
+  check(await sb.rpc('admin_mark_lesson_notices_sent', { p_notices: noticeIds }));
+}
 
 /** 대시보드: 안 보낸 수업 변경·보강 안내, 강사 답을 기다리는 보강 신청 */
 export async function loadChangeTasks(sb: SupabaseClient): Promise<{ pendingNotices: number; openMakeups: number } | null> {

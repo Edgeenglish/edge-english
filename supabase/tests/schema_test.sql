@@ -1424,6 +1424,14 @@ select pg_temp.ok((select lesson_gone_at is null from leave_items where id = pg_
 update lessons set state = 'scheduled', class_status = null, canceled_at = null where id = '77777777-1800-0000-0000-000000000003';
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+-- 9-2c) 여러 안내를 한 번에 보냄 → 보낸 시각이 같음 (3300, 대표 10/30: 보낸 문의 원문·번호 고정) · 학생 화면 '일정 조율 중' 표시
+select admin_mark_lesson_notices_sent(array(select id from lesson_notices where leave_item_id in (pg_temp.li(3), pg_temp.li(5)) and status = 'pending'));
+select pg_temp.ok((select count(distinct sent_at) = 1 and count(*) >= 1 from lesson_notices where leave_item_id in (pg_temp.li(3), pg_temp.li(5)) and status = 'sent' and sent_by is not null
+                   and sent_at = (select max(sent_at) from lesson_notices)),
+  '한 번에 보낸 안내는 보낸 시각이 같음');
+select pg_temp.ok((select bool_or((l ->> 'leave_open')::boolean) from jsonb_array_elements(student_screen('99999999-0000-0000-0000-000000001800') -> 'lessons') l
+                   where l ->> 'id' = '77777777-1800-0000-0000-000000000003'),
+  '대체강사 확정 전 수업은 학생 화면에 일정 조율 중 (leave_open)');
 -- 9-3) 재등록 대기 학생: 고정 시간을 맡아 두는 동안(종료일 23:59까지)만, 종료일 뒤 ~ 휴무 끝 사이 평소 요일·시간
 reset role;
 insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000001802', '휴무재등록', 'Leave R');

@@ -3,7 +3,7 @@
 // 실제 데이터로 강사 휴무 처리 (migration 1800). 화면은 편의이고 권한·검사·중복 방지는 DB 함수가 다시 확인 (is_admin = aal2)
 
 import { useEffect, useMemo, useState } from 'react';
-import { markLessonNoticeSent, requestMakeup } from '@/lms/admin/lesson-change-live';
+import { markLessonNoticesSent, requestMakeup } from '@/lms/admin/lesson-change-live';
 import { chooseLeave, createLeave, leaveBack, loadRenewals, unsendNotices, loadLeaveItems, loadLeaves, loadTutors, makeupOptions, studentOk, subOptions, subTutorOk, type LvTutor } from '@/lms/admin/tutor-leave-live';
 import { supabaseBrowser } from '@/lms/auth/client';
 import TutorLeave, { type LeaveActions } from './TutorLeave';
@@ -44,9 +44,7 @@ export default function LeaveLive({ offId, startNew }: { offId?: string; startNe
         subOptions: (ids) => subOptions(sb, ids),
         makeupOptions: (ids) => makeupOptions(sb, ids),
         requestMakeup: (src, slots) => requestMakeup(sb, src, slots),
-        markSent: async (ids) => {
-          for (const id of ids) await markLessonNoticeSent(sb, id);
-        },
+        markSent: (ids) => markLessonNoticesSent(sb, ids),
       },
     [sb],
   );
