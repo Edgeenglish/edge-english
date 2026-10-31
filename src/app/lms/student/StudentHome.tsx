@@ -112,8 +112,8 @@ export default function StudentHome(props: {
   const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
-  const left = lessonsLeft(lessons, makeupsOwed);
-  const prompt = renewalPrompt(lessons, renewal, makeupsOwed);
+  const left = lessonsLeft(lessons, now, makeupsOwed);
+  const prompt = renewalPrompt(lessons, renewal, now, makeupsOwed);
   const endDate = s.finalEndDate;
   const dLeft = endDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, endDate) : 0;
   const points = pointsHistory(s.points);
@@ -431,7 +431,7 @@ export default function StudentHome(props: {
               .map((l) => (
                 <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">
                   <span>{whenText(l.startsAt)}</span>
-                  <span className="text-[#6b6880]">{l.state === 'done' ? '진행' : l.state === 'canceled' ? '취소' : '진행 중'}</span>
+                  <span className="text-[#6b6880]">{l.state === 'done' ? '진행' : l.state === 'canceled' ? '취소' : l.startsAt.getTime() + l.minutes * 60_000 > now.getTime() ? '진행 중' : '기록 전'}</span>
                 </div>
               ))}
           </TabPage>
@@ -572,7 +572,7 @@ export default function StudentHome(props: {
               finalEndDate={s.finalEndDate}
               makeupUntil={s.finalEndDate}
               holidays={holidays}
-              regularLeft={regularLessonsLeft(lessons)}
+              regularLeft={regularLessonsLeft(lessons, now)}
               totalLeft={left.total}
               busy={busy}
               onConfirm={confirmCancel}

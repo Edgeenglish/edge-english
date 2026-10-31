@@ -363,7 +363,9 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   const k = kst ? kstText(l.startsAt, tz) : null;
   const time = timeRange(l, tz).split('–')[0];
   const count = l.count ? `${l.count.n}/${l.count.total}` : '—';
-  const canOpen = phase !== 'canceled';
+  // 펼쳐도 보일 것이 없는 줄은 못 누름 (대표 10/31: 대체수업을 펼쳐도 빈 칸)
+  const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
+  const canOpen = phase !== 'canceled' && !!(l.noteUrl || canRecord(l, now) || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup));
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
   const stText = phase === 'recorded' ? `✓ ${status}${l.studentLate ? ' · Student late' : ''}` : status;
   // 페이 대상 Y/N (상태 규칙 tutorPaid, 대표 10/29 가안). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'

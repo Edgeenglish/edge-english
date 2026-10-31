@@ -28,6 +28,8 @@ export type TutorLesson = {
   locked: boolean;
   /** 강사 LMS 계정을 만들기 전 수업: LMS 기록 대상이 아님 (DB to_record 와 같은 기준, R7) */
   beforeLms?: boolean;
+  /** 이 강사 휴무로 처리 중인 수업 (미정 · 대체강사 확정 전, 학생 화면 '일정 조율 중'과 같은 판정, migration 3500) */
+  leaveOpen?: boolean;
 };
 
 export type MakeupSlot = { id: string; startsAt: Date; endsAt: Date; answer: 'yes' | 'no' | null; busy: boolean; past: boolean };
@@ -64,6 +66,7 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
       count: l.count ? { n: Number(l.count.n), total: Number(l.count.total) } : null,
       topics: l.topics ?? null, remarks: l.remarks ?? null, studentLate: !!l.student_late, recordedAt: at(l.recorded_at), locked: !!l.locked,
       beforeLms: l.state === 'scheduled' && new Date(l.starts_at) <= loadedAt && !toRecord.has(l.id),
+      leaveOpen: !!l.leave_open,
     })),
     toRecord: j.to_record ?? [],
     makeups: (j.makeups ?? []).map((m: any) => ({
@@ -141,10 +144,11 @@ export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   'Student long-term leave': 'Student on leave',
 };
 
-export type LessonPhase = 'upcoming' | 'to_record' | 'before_lms' | 'recorded' | 'canceled';
+export type LessonPhase = 'upcoming' | 'to_record' | 'before_lms' | 'on_leave' | 'recorded' | 'canceled';
 export function phaseOf(l: TutorLesson, now: Date): LessonPhase {
   if (l.state === 'canceled') return 'canceled';
   if (l.state === 'done') return 'recorded';
+  if (l.leaveOpen) return 'on_leave';
   if (l.beforeLms) return 'before_lms';
   return l.startsAt <= now ? 'to_record' : 'upcoming';
 }
@@ -153,6 +157,7 @@ export function statusText(l: TutorLesson, now: Date): string {
   if (p === 'upcoming') return 'Upcoming';
   if (p === 'to_record') return 'Not recorded';
   if (p === 'before_lms') return 'Before LMS';
+  if (p === 'on_leave') return TUTOR_STATUS_TEXT['Tutor long-term leave'];
   return l.classStatus ? TUTOR_STATUS_TEXT[l.classStatus] : '';
 }
 
@@ -180,7 +185,7 @@ export function recordReady(r: TutorResult | null, topics: string, remarks: stri
   return r !== 'late' || !!remarks.trim();
 }
 export function canRecord(l: TutorLesson, now: Date): boolean {
-  return l.state !== 'canceled' && l.startsAt <= now && !l.locked;
+  return l.state !== 'canceled' && !l.leaveOpen && l.startsAt <= now && !l.locked;
 }
 
 // 대체 수업이 먼저: 시트 보강을 대체강사가 맡아도 그 강사에게는 대체 수업 (R6)

@@ -24,20 +24,26 @@ export type StudentLesson = {
 export const RENEWAL_PROMPT = { maxLessonsLeft: 2 } as const;
 export const RENEWAL_PROMPT_REF = 'POL-RN-08';
 
+/**
+ * 아직 하지 않은 수업 = 예정 수업 중 시작 시각이 지금 이후. 시작 시각이 지난 수업은 Class Record 기록 전이어도 한 것으로 셈
+ * (대시보드 '수강기간 종료 임박'과 같은 기준, 2026-10-27 대표 결정. 강사가 나중에 강사 사정 취소로 기록하면 보강으로 다시 생김)
+ */
+const notYet = (l: StudentLesson, now: Date) => l.state === 'scheduled' && l.startsAt.getTime() > now.getTime();
+
 /** 아직 하지 않은 정규 수업 수 (화면 표시용 — 재등록 안내 기준은 보강·보상도 세는 lessonsLeft, POL-RN-08) */
-export function regularLessonsLeft(lessons: readonly StudentLesson[]): number {
-  return lessons.filter((l) => l.kind === 'regular' && l.state === 'scheduled').length;
+export function regularLessonsLeft(lessons: readonly StudentLesson[], now: Date): number {
+  return lessons.filter((l) => l.kind === 'regular' && notYet(l, now)).length;
 }
 
 /**
  * '남은 수업' 칸 = 예정된 수업(정규 + 보강 + 보상) + 아직 시간을 안 잡은 보강.
  * makeupsOwed: 정상 취소로 생긴 보강 중 아직 예정 수업이 아닌 것 (신청 중 포함)
  */
-export function lessonsLeft(lessons: readonly StudentLesson[], makeupsOwed = 0) {
+export function lessonsLeft(lessons: readonly StudentLesson[], now: Date, makeupsOwed = 0) {
   if (!Number.isInteger(makeupsOwed) || makeupsOwed < 0) throw new Error(`보강 수가 올바르지 않습니다: ${makeupsOwed}`);
-  const scheduled = lessons.filter((l) => l.state === 'scheduled');
+  const scheduled = lessons.filter((l) => notYet(l, now));
   const other = scheduled.filter((l) => l.kind !== 'regular').length + makeupsOwed;
-  return { total: scheduled.length + makeupsOwed, regular: regularLessonsLeft(lessons), other };
+  return { total: scheduled.length + makeupsOwed, regular: regularLessonsLeft(lessons, now), other };
 }
 
 /** 지금 들어갈 수 있거나 다음에 올 수업 (끝나기 전까지는 '다음 수업'에 남김 — 수업 입장 버튼) */
@@ -57,8 +63,8 @@ export type RenewalState = 'not_requested' | 'requested' | 'payment_confirmed';
 
 export type RenewalPrompt = null | { mode: 'request'; left: number } | { mode: 'awaiting_payment'; left: number };
 
-export function renewalPrompt(lessons: readonly StudentLesson[], renewal: RenewalState, makeupsOwed = 0): RenewalPrompt {
-  const left = lessonsLeft(lessons, makeupsOwed).total;
+export function renewalPrompt(lessons: readonly StudentLesson[], renewal: RenewalState, now: Date, makeupsOwed = 0): RenewalPrompt {
+  const left = lessonsLeft(lessons, now, makeupsOwed).total;
   if (renewal === 'payment_confirmed') return null;
   if (left > RENEWAL_PROMPT.maxLessonsLeft) return null;
   return renewal === 'requested' ? { mode: 'awaiting_payment', left } : { mode: 'request', left };
