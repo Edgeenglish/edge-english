@@ -1190,6 +1190,8 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select pg_temp.expect_error($$select admin_makeup_confirm((select id from mk), (select t from cx) + interval '4 days')$$, '강사 휴무');
 select pg_temp.ok(true, '강사 휴무와 겹치는 보강 시간은 확정 거절');
 select admin_makeup_confirm((select id from mk), (select t from cx) + interval '7 days 2 hours');
+select pg_temp.ok((select bool_or(r ->> 'status' = 'confirmed') from jsonb_array_elements(student_screen((select student_id from makeup_requests where id = (select id from mk))) -> 'makeup_requests') r),
+  '보강 확정 뒤에도 학생 화면이 열리고 신청 내역에 확정으로 보임 (3600)');
 select pg_temp.ok((select l.kind = 'makeup' and l.state = 'scheduled' and l.starts_at = (select t from cx) + interval '7 days 2 hours'
                    from lessons l where l.makeup_of = '77777777-1700-0000-0000-000000000004')
               and (select array_agg(n.event || ':' || n.status order by n.event, n.recipient_kind) from lesson_notices n join mk on mk.id = n.makeup_request_id)
