@@ -103,6 +103,7 @@ export default function AdminDashboard({
   renewalSent,
   enrollmentClose,
   onReload,
+  onTaskClose,
 }: {
   nowIso: string;
   today: FakeLesson[];
@@ -120,6 +121,7 @@ export default function AdminDashboard({
   /** 재등록 안 함 · 수강 종료 (3800) */
   enrollmentClose?: (enrollmentId: string) => Promise<void>;
   onReload?: () => Promise<void>;
+  onTaskClose?: (task: TaskSource, closed: boolean) => Promise<void>;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [tasks, setTasks] = useState<TaskSource[]>(() => liveTasks ?? fakeTasks(now));
@@ -128,6 +130,8 @@ export default function AdminDashboard({
     if (liveTasks) setTasks(liveTasks);
   }, [liveTasks]);
   const [toast, setToast] = useState<string | null>(null);
+  const [closing, setClosing] = useState<string | null>(null);
+  const [lastClosed, setLastClosed] = useState<TaskSource | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const items = useMemo(() => buildBoard(tasks, now), [tasks, now]);
   const [filter, setFilter] = useState<BoardFilter>('all');
@@ -137,6 +141,40 @@ export default function AdminDashboard({
   const urgentCount = items.filter(isUrgent).length;
   const errorCount = items.filter((i) => i.error).length;
   const dateLabel = `${now.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' })} (${WD[new Date(now.getTime() + 9 * 3600e3).getUTCDay()]})`;
+
+  async function closeTask(item: BoardItem) {
+    const task = tasks.find((t) => t.id === item.id && t.kind === item.kind);
+    if (!task || closing) return;
+    setClosing(`${task.kind}:${task.id}`);
+    try {
+      if (!preview) {
+        if (!onTaskClose) throw new Error('저장 기능을 불러오지 못했어요.');
+        await onTaskClose(task, true);
+      }
+      setTasks((prev) => prev.filter((t) => t !== task));
+      setLastClosed(task);
+      setDoneCount((n) => n + 1);
+      setToast('처리할 일에서 종료했어요.');
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '종료하지 못했어요.');
+    } finally { setClosing(null); }
+  }
+
+  async function undoClose() {
+    if (!lastClosed || closing) return;
+    setClosing('undo');
+    try {
+      if (!preview) {
+        if (!onTaskClose) throw new Error('저장 기능을 불러오지 못했어요.');
+        await onTaskClose(lastClosed, false);
+        await onReload?.();
+      } else setTasks((prev) => [...prev, lastClosed]);
+      setLastClosed(null);
+      setDoneCount((n) => Math.max(0, n - 1));
+      setToast('종료를 되돌렸어요.');
+    } catch (e) { setToast(e instanceof Error ? e.message : '되돌리지 못했어요.'); }
+    finally { setClosing(null); }
+  }
 
   // 일정안 카드 처리: 미리보기는 화면 안에서만, 실제는 DB 함수 → 다시 읽기
   function planHandlers(item: BoardItem, p: PlanView): PlanHandlers {
@@ -232,16 +270,16 @@ export default function AdminDashboard({
     setToast(`재등록 안내를 보냄으로 기록했어요${preview ? ' (미리보기)' : ''}`);
   }
 
-  // 재등록 안 함 · 수강 종료 (대표 11/2: 답 없는 학생을 할 일에서 직접 빼기). 학생·수업 기록은 그대로
+  // 수강 종료 (대표 11/2: 재등록 안 하는 학생을 할 일에서 직접 빼기). 학생·수업 기록은 그대로
   async function closeEnrollmentItem(item: BoardItem) {
-    if (!window.confirm(`${item.title.split(' · ')[0]} 님 수강을 종료할까요?\n학생·수업 기록은 그대로 남고, 할 일과 수강 중 학생에서 빠져요. 다시 오시면 재등록하면 돼요.`)) return;
+    if (!window.confirm(`${item.title.split(' · ')[0]} 님 수강을 종료할까요?`)) return;
     if (!preview && enrollmentClose) {
       await enrollmentClose(item.id);
       await onReload?.();
     } else {
       setTasks((prev) => prev.filter((t) => t.id !== item.id));
     }
-    setToast(`수강 종료로 정리했어요${preview ? ' (미리보기)' : ''}`);
+    setToast(`수강 종료했어요${preview ? ' (미리보기)' : ''}`);
   }
 
   // 보강 원래 날짜 정리: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기
@@ -424,13 +462,15 @@ export default function AdminDashboard({
               <p className="mt-1 text-[13px] text-[#6b6880]">오늘 {doneCount}건을 마쳤어요.</p>
             </div>
           )}
+          {lastClosed && <button type="button" disabled={!!closing} onClick={undoClose} className="min-h-[40px] text-left text-[13px] font-semibold text-[#5b3fe0]">방금 종료한 일 되돌리기</button>}
           {shown.map((item) => (
-            <article key={item.id} className="grid gap-2 rounded-[14px] border border-[#e6e3ef] bg-white px-3.5 py-3">
+            <article key={`${item.kind}:${item.id}`} className="grid gap-2 rounded-[14px] border border-[#e6e3ef] bg-white px-3.5 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${TAG_STYLE[item.severity]}`}>
                   {item.severity === 'overdue' && !item.error ? `${item.tag} · 기한 초과` : item.tag}
                 </span>
                 <h3 className="text-[15px] font-bold text-[#1d1b2b]">{item.title}</h3>
+                <button type="button" disabled={!!closing} onClick={() => closeTask(item)} aria-label={`${item.title} 처리 종료`} className="ml-auto min-h-[40px] rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#6b6880] disabled:opacity-50">{closing === `${item.kind}:${item.id}` ? '저장 중…' : '처리 종료'}</button>
                 {/* 학생 상세·일정·학생 목록은 실제 데이터 연결 전까지 미리보기에서만 (대표 11/2) */}
                 {item.studentCode && preview && (
                   <Link
@@ -463,7 +503,7 @@ export default function AdminDashboard({
               {item.kind === 'ending_soon' && item.severity === 'overdue' && (
                 <button type="button" onClick={() => void closeEnrollmentItem(item).catch((e) => setToast(e instanceof Error ? e.message : '처리하지 못했어요.'))}
                   className="min-h-[44px] justify-self-start rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] font-semibold text-[#1d1b2b]">
-                  재등록 안 함 · 수강 종료
+                  수강 종료
                 </button>
               )}
               {item.endReason && <EndReasonFix weeks={item.endReason.weeks} onSave={(r, n) => fixEndReason(item, r, n)} />}

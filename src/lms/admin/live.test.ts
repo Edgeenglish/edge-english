@@ -121,12 +121,19 @@ describe('종료 임박 (POL-RN-08)', () => {
     expect(buildBoard(toEndingSoon([row({ lessons })], now), now)[0].renewal?.sentAt).toBeNull();
   });
 
+  it('한국 날짜 종료일+3일 00:00에 제외하고 연장된 종료일을 적용한다', () => {
+    const r = row({ status: 'active', final_end_date: '2026-10-24' });
+    expect(toEndingSoon([r], new Date('2026-10-26T14:59:59Z'))).toHaveLength(1);
+    expect(toEndingSoon([r], new Date('2026-10-26T15:00:00Z'))).toEqual([]);
+    expect(toEndingSoon([{ ...r, final_end_date: '2026-10-28' }], now)).toHaveLength(1);
+  });
+
   it('3회 이상 남으면 안 나옴', () => {
     expect(toEndingSoon([row({ lessons: [reg('2026-10-28T10:00:00Z'), reg('2026-10-29T10:00:00Z'), reg('2026-10-30T10:00:00Z')] })], now)).toEqual([]);
   });
 
-  it('종료일이 지나도 재등록 결제 확인 전이면 계속 나옴 (0회, 기한 지남)', () => {
-    const src = toEndingSoon([row({ final_end_date: '2026-10-24', lessons: [reg('2026-10-23T10:00:00Z')] })], now);
+  it('종료일 경과 후 3일 전까지는 재등록 결제 확인 전이면 나옴', () => {
+    const src = toEndingSoon([row({ final_end_date: '2026-10-25', lessons: [reg('2026-10-23T10:00:00Z')] })], now);
     expect(src).toHaveLength(1);
     expect(buildBoard(src, now)[0]).toMatchObject({ severity: 'overdue', title: '가상학생일 · 수업 0회 남음' });
   });
