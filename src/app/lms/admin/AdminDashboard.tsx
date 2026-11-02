@@ -101,6 +101,7 @@ export default function AdminDashboard({
   planActions,
   importActions,
   renewalSent,
+  enrollmentClose,
   onReload,
 }: {
   nowIso: string;
@@ -116,6 +117,8 @@ export default function AdminDashboard({
   importActions?: ImportActions;
   /** 실제 데이터: 재등록 안내 [보냄] 기록 (DB 함수, migration 1900) */
   renewalSent?: (enrollmentId: string) => Promise<void>;
+  /** 재등록 안 함 · 수강 종료 (3800) */
+  enrollmentClose?: (enrollmentId: string) => Promise<void>;
   onReload?: () => Promise<void>;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -227,6 +230,18 @@ export default function AdminDashboard({
       setTasks((prev) => prev.map((t) => (t.id === item.id && t.kind === 'ending_soon' ? { ...t, noticeSentAt: new Date() } : t)));
     }
     setToast(`재등록 안내를 보냄으로 기록했어요${preview ? ' (미리보기)' : ''}`);
+  }
+
+  // 재등록 안 함 · 수강 종료 (대표 11/2: 답 없는 학생을 할 일에서 직접 빼기). 학생·수업 기록은 그대로
+  async function closeEnrollmentItem(item: BoardItem) {
+    if (!window.confirm(`${item.title.split(' · ')[0]} 님 수강을 종료할까요?\n학생·수업 기록은 그대로 남고, 할 일과 수강 중 학생에서 빠져요. 다시 오시면 재등록하면 돼요.`)) return;
+    if (!preview && enrollmentClose) {
+      await enrollmentClose(item.id);
+      await onReload?.();
+    } else {
+      setTasks((prev) => prev.filter((t) => t.id !== item.id));
+    }
+    setToast(`수강 종료로 정리했어요${preview ? ' (미리보기)' : ''}`);
   }
 
   // 보강 원래 날짜 정리: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기
@@ -444,6 +459,13 @@ export default function AdminDashboard({
               {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
               {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}
               {item.renewal && <RenewalNotice text={item.renewal.text} sentAt={item.renewal.sentAt} onSent={() => markRenewalSent(item)} />}
+              {/* 수강기간이 끝난 뒤에만: 재등록 안 하는 학생 정리 */}
+              {item.kind === 'ending_soon' && item.severity === 'overdue' && (
+                <button type="button" onClick={() => void closeEnrollmentItem(item).catch((e) => setToast(e instanceof Error ? e.message : '처리하지 못했어요.'))}
+                  className="min-h-[44px] justify-self-start rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] font-semibold text-[#1d1b2b]">
+                  재등록 안 함 · 수강 종료
+                </button>
+              )}
               {item.endReason && <EndReasonFix weeks={item.endReason.weeks} onSave={(r, n) => fixEndReason(item, r, n)} />}
               <div className="flex flex-wrap gap-1.5">
                 {item.actions.map((a) =>

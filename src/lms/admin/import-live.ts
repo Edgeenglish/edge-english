@@ -78,3 +78,9 @@ export async function markRenewalSent(sb: SupabaseClient, enrollmentId: string):
   const { error } = await sb.rpc('admin_renewal_notice_sent', { p_enrollment: enrollmentId });
   if (error) throw new Error(error.code === 'PGRST202' ? '재등록 안내 기록 기능이 아직 이 DB에 적용되지 않았어요 (migration 1900).' : friendly(error));
 }
+
+/** 재등록 안 하는 학생 수강 종료 (3800): 학생·수업 기록은 그대로, 대시보드에서만 빠짐. undo = 되돌리기 */
+export async function closeEnrollment(sb: SupabaseClient, enrollmentId: string, undo = false): Promise<void> {
+  const { error } = await sb.rpc('admin_enrollment_close', { p_enrollment: enrollmentId, p_undo: undo });
+  if (error) throw new Error(error.message);
+}

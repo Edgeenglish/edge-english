@@ -8,7 +8,7 @@ import type { TaskSource } from '@/lms/admin/board';
 import type { FakeLesson, OpsStats } from '@/lms/admin/fake-data';
 import { planActions } from '@/lms/admin/confirm-live';
 import { loadAdminBoard, loadOpsStats } from '@/lms/admin/live';
-import { markImportChecked, markRenewalSent, setImportEndReason, setImportOrigin } from '@/lms/admin/import-live';
+import { closeEnrollment, markImportChecked, markRenewalSent, setImportEndReason, setImportOrigin } from '@/lms/admin/import-live';
 import { supabaseBrowser } from '@/lms/auth/client';
 import AdminDashboard from './AdminDashboard';
 
@@ -85,6 +85,7 @@ export default function AdminLive() {
       planActions={actions}
       importActions={imports}
       renewalSent={sb ? (id) => markRenewalSent(sb, id) : undefined}
+      enrollmentClose={sb ? (id) => closeEnrollment(sb, id) : undefined}
       onReload={reload}
     />
   );
