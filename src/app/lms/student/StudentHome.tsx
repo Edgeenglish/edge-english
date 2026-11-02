@@ -114,7 +114,8 @@ export default function StudentHome(props: {
   const lessons = s.lessons;
   // 강사 휴무로 못 들은 수업도 학생 화면에서는 '보강' (2026-10-28 대표). DB 구분(lms_is_leave_postponed)은 그대로
   const openRights = s.makeupRights.filter((m) => !m.requested);
-  const makeupsOwed = s.makeupRights.length;
+  // 휴무 처리 중인 시트 휴가 수업(수업 줄 없음)도 남은 수업 — 보강 신청 목록에서만 빠짐 (3700, 대시보드와 같은 수)
+  const makeupsOwed = s.makeupRights.length + (s.leavePending?.length ?? 0);
   const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
