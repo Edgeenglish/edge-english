@@ -331,7 +331,8 @@ export type EndingRow = {
  * 정규 수업이 아직 하나도 없는 수강권(신규 매칭 전)은 신규 매칭 칸에서 다룸
  */
 /** sent: 수강권 id → 재등록 안내 [보냄] 시각 (migration 1900, 없으면 빈 목록) */
-export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, string> = new Map()): TaskSource[] {
+/** reopened: 처리 내역에서 다시 연 수강권 id (자동 제외하지 않음, 3900) */
+export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, string> = new Map(), reopened: Set<string> = new Set()): TaskSource[] {
   const latest = new Map<string, EndingRow>();
   for (const r of rows) {
     const cur = latest.get(r.student_id);
@@ -340,7 +341,7 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
   const out: TaskSource[] = [];
   for (const r of latest.values()) {
     // 종료일로부터 3일 뒤 자동 제외 (한국 날짜, 연장된 최종 종료일 기준).
-    if (instantToKstDate(now) >= addDays(r.final_end_date, 3)) continue;
+    if (instantToKstDate(now) >= addDays(r.final_end_date, 3) && !reopened.has(r.id)) continue;
     // 정규 수업이 아직 없는 수강권(신규 매칭 전)은 제외. 기존 학생 입력으로 넣은 '다 끝난 수강권'(수강 중, 남은 0회)은 재등록 대기로 보여 줌 (migration 2200)
     if (r.status !== 'active' && !r.lessons.some((l) => l.kind === 'regular')) continue;
     const left = r.lessons.filter((l) => l.state === 'scheduled' && new Date(l.starts_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
@@ -408,7 +409,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     sb.from('lesson_notices').select(`event, leave:leave_items(student_id, lesson_gone_at, choice, sub_stage, ${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
     sb.from('renewal_notices').select('enrollment_id, sent_at'),
     loadMissingRecords(sb),
-    sb.from('admin_task_closures').select('task_kind, task_id, signature').eq('closed', true),
+    sb.from('admin_task_closures').select('task_kind, task_id, signature, closed'),
   ]);
   const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error) ?? ending.error;
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
@@ -422,14 +423,15 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       ...toImportChecks((checks.data ?? []) as unknown as ImportCheckRow[], (origins.data ?? []) as unknown as UnknownOriginRow[]),
       ...toEndingSoon((ending.data ?? []) as unknown as EndingRow[], now,
         // 1900 전 DB는 표가 없음 → 보냄 기록 없이
-        new Map(renewalSent.error ? [] : (renewalSent.data ?? []).map((r) => [r.enrollment_id as string, r.sent_at as string]))),
+        new Map(renewalSent.error ? [] : (renewalSent.data ?? []).map((r) => [r.enrollment_id as string, r.sent_at as string])),
+        new Set((closures.data ?? []).filter((c) => c.task_kind === 'ending_soon' && !c.closed).map((c) => c.task_id as string))),
       // 1700 전 DB(표·칸 없음)는 건너뜀
       ...(changeNotices.error ? [] : toLessonChanges((changeNotices.data ?? []) as unknown as ChangeNoticeRow[], (openMakeups.data ?? []) as unknown as OpenMakeupRow[], now)),
       // 1800 전 DB는 건너뜀
       ...(leaveOpen.error || leaveNotices.error ? [] : toTutorLeaves((leaveOpen.data ?? []) as unknown as LeaveOpenRow[], (leaveNotices.data ?? []) as unknown as LeaveNoticeRow[], now)),
       // 2000 전 DB는 null
       ...toMissingRecords(missing ?? []),
-    ]), closures.data ?? []),
+    ]), (closures.data ?? []).filter((c) => c.closed)),
     today: toTodayLessons((lessons.data ?? []) as unknown as LessonRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
   };
 }

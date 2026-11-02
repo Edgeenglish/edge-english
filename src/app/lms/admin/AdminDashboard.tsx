@@ -11,6 +11,8 @@ import { fakeTasks, type FakeLesson, type OpsStats } from '@/lms/admin/fake-data
 import type { PlanView } from '@/lms/admin/confirm';
 import type { PlanActions } from '@/lms/admin/confirm-live';
 import PlanCard, { type PlanHandlers } from './PlanCard';
+import HistoryPanel from './HistoryPanel';
+import type { HistoryRow } from '@/lms/admin/task-history';
 import RenewalNotice from './RenewalNotice';
 import OriginFix from './OriginFix';
 import EndReasonFix from './EndReasonFix';
@@ -104,6 +106,7 @@ export default function AdminDashboard({
   enrollmentClose,
   onReload,
   onTaskClose,
+  history,
 }: {
   nowIso: string;
   today: FakeLesson[];
@@ -122,6 +125,8 @@ export default function AdminDashboard({
   enrollmentClose?: (enrollmentId: string) => Promise<void>;
   onReload?: () => Promise<void>;
   onTaskClose?: (task: TaskSource, closed: boolean) => Promise<void>;
+  /** 처리 내역 보기·다시 열기 (3900) */
+  history?: { load: () => Promise<HistoryRow[]>; reopen: (r: HistoryRow) => Promise<void> };
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [tasks, setTasks] = useState<TaskSource[]>(() => liveTasks ?? fakeTasks(now));
@@ -131,6 +136,7 @@ export default function AdminDashboard({
   }, [liveTasks]);
   const [toast, setToast] = useState<string | null>(null);
   const [closing, setClosing] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [lastClosed, setLastClosed] = useState<TaskSource | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const items = useMemo(() => buildBoard(tasks, now), [tasks, now]);
@@ -435,8 +441,16 @@ export default function AdminDashboard({
                   {label}
                 </button>
               ))}
+              {history && (
+                <button type="button" onClick={() => setHistoryOpen(true)} className="min-h-[34px] rounded-full border border-[#e6e3ef] bg-white px-3 text-[12.5px] font-semibold text-[#1d1b2b]">
+                  처리 내역
+                </button>
+              )}
             </div>
           </div>
+          {historyOpen && history && (
+            <HistoryPanel load={history.load} reopen={history.reopen} onClose={() => setHistoryOpen(false)} onReopened={async () => { await onReload?.(); }} />
+          )}
           <label className="flex min-h-[44px] items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3">
             <Icon name="search" className="h-[18px] w-[18px] text-[#6b6880]" />
             <span className="sr-only">검색</span>

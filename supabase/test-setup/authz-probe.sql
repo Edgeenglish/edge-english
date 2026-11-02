@@ -64,7 +64,7 @@ declare
                           'admin_change_lesson', 'student_change_lesson', 'admin_revert_change', 'admin_makeup_request', 'admin_makeup_confirm',
                           'admin_makeup_withdraw', 'admin_void_makeup', 'admin_mark_lesson_notice_sent', 'admin_mark_lesson_notices_sent',
                           'admin_leave_create', 'admin_leave_choose', 'admin_leave_sub_ok', 'admin_leave_student_ok', 'admin_leave_sub_options', 'admin_leave_makeup_options', 'admin_leave_back', 'admin_leave_notice_unsend', 'admin_leave_renewal_pending',
-                          'admin_renewal_notice_sent', 'admin_enrollment_close', 'admin_set_task_closed',
+                          'admin_renewal_notice_sent', 'admin_enrollment_close', 'admin_set_task_closed', 'admin_task_history',
                           'tutor_screen', 'tutor_hours', 'tutor_hours_save', 'tutor_record_class', 'tutor_makeup_answer', 'tutor_sub_answer', 'student_screen', 'student_makeup_options', 'student_makeup_request', 'student_leave_answer', 'student_reminders', 'admin_student_accounts', 'admin_student_login', 'admin_leave_sub_off_hours', 'admin_tutor_accounts', 'admin_class_record_missing',
                           'admin_tutor_login'];
 

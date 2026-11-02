@@ -12,6 +12,7 @@ import { closeEnrollment, markImportChecked, markRenewalSent, setImportEndReason
 import { supabaseBrowser } from '@/lms/auth/client';
 import AdminDashboard from './AdminDashboard';
 import { saveTaskClosure } from '@/lms/admin/task-closure';
+import { loadTaskHistory, reopenTask } from '@/lms/admin/task-history';
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tasks: TaskSource[]; today: FakeLesson[]; stats: OpsStats | null };
 
@@ -88,6 +89,7 @@ export default function AdminLive() {
       renewalSent={sb ? (id) => markRenewalSent(sb, id) : undefined}
       enrollmentClose={sb ? (id) => closeEnrollment(sb, id) : undefined}
       onTaskClose={sb ? (task, closed) => saveTaskClosure(sb, task, closed) : undefined}
+      history={sb ? { load: () => loadTaskHistory(sb), reopen: (r) => reopenTask(sb, r) } : undefined}
       onReload={reload}
     />
   );

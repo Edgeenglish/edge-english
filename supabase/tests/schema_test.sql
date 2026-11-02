@@ -1537,6 +1537,7 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 create temp table rn_chk as select admin_renewal_notice_sent(e.id) as r1, e.id as eid from enrollments e join students s on s.id = e.student_id where s.name_ko = '확대A';
 select pg_temp.expect_error($$select admin_enrollment_close((select eid from rn_chk))$$, '아직 끝나지');
 select pg_temp.ok(true, '수강 종료: 수강기간이 안 끝났으면 거절 (3800)');
+select pg_temp.ok((select jsonb_typeof(admin_task_history()) = 'array'), '처리 내역: 운영자는 읽을 수 있음 (3900)');
 select pg_temp.ok((select admin_renewal_notice_sent(eid) ->> 'sent_at' = r1 ->> 'sent_at' from rn_chk)
                   and (select count(*) = 1 from renewal_notices r join rn_chk c on c.eid = r.enrollment_id and r.sent_by = 'bbbbbbbb-0000-0000-0000-000000000009'),
   '재등록 안내 보냄은 수강권마다 한 번 기록되고, 다시 눌러도 처음 시각 그대로');
