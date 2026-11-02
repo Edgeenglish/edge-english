@@ -8,6 +8,7 @@ import { courseName } from '../rules/period';
 import { grantsMakeup, type ClassStatus } from '../rules/status';
 import { RENEWAL_PROMPT } from '../student/home';
 import type { TaskSource } from './board';
+import { filterActionableTasks, filterClosedTasks } from './task-closure';
 import type { PlanView } from './confirm';
 import { loadPlans } from './confirm-live';
 import type { FakeLesson, OpsStats } from './fake-data';
@@ -338,6 +339,8 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
   }
   const out: TaskSource[] = [];
   for (const r of latest.values()) {
+    // 종료일로부터 3일 뒤 자동 제외 (한국 날짜, 연장된 최종 종료일 기준).
+    if (instantToKstDate(now) >= addDays(r.final_end_date, 3)) continue;
     // 정규 수업이 아직 없는 수강권(신규 매칭 전)은 제외. 기존 학생 입력으로 넣은 '다 끝난 수강권'(수강 중, 남은 0회)은 재등록 대기로 보여 줌 (migration 2200)
     if (r.status !== 'active' && !r.lessons.some((l) => l.kind === 'regular')) continue;
     const left = r.lessons.filter((l) => l.state === 'scheduled' && new Date(l.starts_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
@@ -370,7 +373,7 @@ const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01'
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const today = instantToKstDate(now);
   const off = 'off:tutor_time_off(id, starts_at, ends_at, created_at, tutor:tutors(name))';
-  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, ending, leaveOpen, leaveNotices, renewalSent, missing] = await Promise.all([
+  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, ending, leaveOpen, leaveNotices, renewalSent, missing, closures] = await Promise.all([
     sb
       .from('admin_tasks')
       .select(
@@ -405,14 +408,16 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     sb.from('lesson_notices').select(`event, leave:leave_items(student_id, lesson_gone_at, choice, sub_stage, ${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
     sb.from('renewal_notices').select('enrollment_id, sent_at'),
     loadMissingRecords(sb),
+    sb.from('admin_task_closures').select('task_kind, task_id, signature').eq('closed', true),
   ]);
   const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error) ?? ending.error;
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
+  if (closures.error) throw new Error('종료한 할 일 기록을 읽지 못했어요. 새로고침해 주세요.');
   const ns = (noShows.data ?? []) as unknown as (NoShowRow & { lesson: { id: string } | null })[];
   const taskRows = (tasks.data ?? []) as unknown as TaskRow[];
   const plans = await loadPlans(sb, taskRows.filter((t) => t.kind === 'new_student_matching' && t.enrollment_id).map((t) => t.enrollment_id!));
   return {
-    tasks: [
+    tasks: filterClosedTasks(filterActionableTasks([
       ...toTaskSources(taskRows, (leaves.data ?? []) as unknown as LeaveRow[], ns, plans),
       ...toImportChecks((checks.data ?? []) as unknown as ImportCheckRow[], (origins.data ?? []) as unknown as UnknownOriginRow[]),
       ...toEndingSoon((ending.data ?? []) as unknown as EndingRow[], now,
@@ -424,7 +429,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       ...(leaveOpen.error || leaveNotices.error ? [] : toTutorLeaves((leaveOpen.data ?? []) as unknown as LeaveOpenRow[], (leaveNotices.data ?? []) as unknown as LeaveNoticeRow[], now)),
       // 2000 전 DB는 null
       ...toMissingRecords(missing ?? []),
-    ],
+    ]), closures.data ?? []),
     today: toTodayLessons((lessons.data ?? []) as unknown as LessonRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
   };
 }
