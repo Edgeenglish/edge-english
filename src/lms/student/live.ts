@@ -47,7 +47,7 @@ export type StudentView = {
   renewalPaid: boolean;
   confirmedOn: KstDate | null;
   /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 학생 화면 표시는 '보강'으로 같음) */
-  lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean })[];
+  lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
   leave: LeaveRow[];
@@ -117,6 +117,7 @@ export function parseStudentView(r: Raw): StudentView {
       leavePostponed: l.leave_postponed,
       substitute: l.substitute,
       leaveOpen: !!l.leave_open,
+      tutorNoShow: l.class_status === 'Tutor no-show',
     })),
     makeupRights: r.makeup_rights.map((m) => ({
       lessonId: m.lesson_id,

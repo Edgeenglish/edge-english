@@ -449,7 +449,7 @@ export default function StudentHome(props: {
               .map((l) => (
                 <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">
                   <span>{whenText(l.startsAt)}</span>
-                  <span className="text-[#6b6880]">{l.state === 'done' ? '진행' : l.state === 'canceled' ? '취소' : l.startsAt.getTime() + l.minutes * 60_000 > now.getTime() ? '진행 중' : '기록 전'}</span>
+                  <span className="text-[#6b6880]">{l.state === 'done' ? (s.lessons.find((x) => x.id === l.id)?.tutorNoShow ? '강사 노쇼' : '진행') : l.state === 'canceled' ? '취소' : l.startsAt.getTime() + l.minutes * 60_000 > now.getTime() ? '진행 중' : '기록 전'}</span>
                 </div>
               ))}
           </TabPage>
