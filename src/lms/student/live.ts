@@ -17,7 +17,7 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 
 /** 보강할 수업 (취소한 수업 또는 시트에서 넘어온 날짜 미정 보강) */
 /** timeKnown=false: 시트에서 옮긴 보강이라 원래 수업 날짜만 앎 (화면은 날짜만, 3700) */
-export type MakeupRight = { lessonId: string | null; itemId: string | null; originalAt: Date; timeKnown?: boolean; tutorLeave: boolean; requested: boolean };
+export type MakeupRight = { lessonId: string | null; itemId: string | null; originalAt: Date; timeKnown?: boolean; tutorLeave: boolean; requested: boolean; tutor?: string | null; tutorNoShow?: boolean };
 /** 강사 휴무 안내 한 줄. stage tutor_ok = 학생 답 기다림, confirmed = 대체 수업 확정, choice wait = 기존 강사님과 보강 */
 export type LeaveRow = {
   id: string;
@@ -67,7 +67,7 @@ type Raw = {
     lessons_total: number; credits_left: number; credits_granted: number; confirmed_on: KstDate | null; renewal_paid: boolean;
     next_regular_from: KstDate | null;
   };
-  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean }[];
+  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null }[];
   makeup_rights: { lesson_id: string | null; item_id: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean }[];
   leave_pending?: { id: string; starts_at: string; ends_at: string }[];
   makeup_requests: { id: string; status: string; lesson_id: string | null; item_id: string | null; requested_at: string; candidates: string[]; tutor_leave: boolean }[];
@@ -124,6 +124,8 @@ export function parseStudentView(r: Raw): StudentView {
       originalAt: new Date(m.original_at),
       timeKnown: m.time_known !== false,
       tutorLeave: m.tutor_leave,
+      tutor: r.lessons.find((l) => l.id === m.lesson_id)?.tutor ?? null,
+      tutorNoShow: r.lessons.find((l) => l.id === m.lesson_id)?.class_status === 'Tutor no-show',
       requested: open.some((q) => (m.lesson_id && q.lesson_id === m.lesson_id) || (m.item_id && q.item_id === m.item_id)),
     })),
     requests: r.makeup_requests.map((q) => {

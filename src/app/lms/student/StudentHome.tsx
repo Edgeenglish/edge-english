@@ -89,6 +89,8 @@ const rightText = (m: { originalAt: Date; timeKnown?: boolean }) => {
   const k = kst(m.originalAt);
   return `${k.md} (${k.wd})`;
 };
+/** 보강할 수업 이름: 날짜·시간 + 강사 (대표 11/2: 어떤 수업인지 분명하게) */
+const rightLabel = (m: { originalAt: Date; timeKnown?: boolean; tutor?: string | null }) => `${rightText(m)}${m.tutor ? ` ${m.tutor} 강사님` : ''} 수업`;
 
 export default function StudentHome(props: {
   nowIso: string;
@@ -625,7 +627,7 @@ export default function StudentHome(props: {
                 <h2 className="text-[18px] font-bold">보강할 수업</h2>
                 {openRights.map((m) => (
                   <button key={`${m.lessonId}${m.itemId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })} className={`${card} flex min-h-[56px] items-center justify-between px-4 text-left`}>
-                    <span className="text-[15px] font-semibold">{rightText(m)} 수업</span>
+                    <span className="grid text-[15px] font-semibold">{rightLabel(m)}{m.tutorNoShow && <span className="text-[13px] font-semibold text-[#b3261e]">강사 노쇼 · 보상수업 1회 추가</span>}</span>
                     <span className="text-[#8b88a0]">›</span>
                   </button>
                 ))}
@@ -867,7 +869,8 @@ function MakeupPicker(props: {
   return (
     <div className="grid gap-3.5">
       {props.canceled && <p className="rounded-[12px] bg-[#e3f5ea] px-3.5 py-2.5 text-[15px] font-bold text-[#13623a]">✓ {rightText(right)} 수업을 취소했어요</p>}
-      <h2 className="text-[18px] font-bold">보강 날짜 고르기 · {rightText(right)} 수업</h2>
+      <h2 className="text-[18px] font-bold">보강 날짜 고르기 · {rightLabel(right)}</h2>
+      {right.tutorNoShow && <p className="text-[14px] font-semibold text-[#b3261e]">강사 노쇼 · 보상수업 1회 추가</p>}
       <p className="text-[14px] leading-relaxed text-[#55526a]">원하시는 일정을 최대 2개 고르실 수 있어요(선택). 2개를 고르시면 강사님이 확인 후 가능한 일정으로 확정해드립니다.</p>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
