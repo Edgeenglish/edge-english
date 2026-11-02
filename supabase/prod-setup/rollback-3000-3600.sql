@@ -216,7 +216,7 @@ begin
 end $function$;
 
 -- 3100 가능 시간 고치기(My hours) 함수는 지움 (옛 코드는 안 씀). 바뀐 기록 표는 남김
-drop function if exists tutor_hours_save(uuid, jsonb, jsonb, jsonb);
+drop function if exists tutor_hours_save(uuid, text[], text[], text[]);
 drop function if exists tutor_hours(uuid);
 -- 3300 한 번에 보냄 함수 (옛 코드는 안 씀)
 drop function if exists admin_mark_lesson_notices_sent(uuid[]);
