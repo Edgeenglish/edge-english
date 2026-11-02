@@ -4,7 +4,8 @@
 import { addDays, formatInZone } from '../rules/dates';
 import type { ClassStatus } from '../rules/status';
 
-export type TutorResult = 'held' | 'late' | 'student_no_show';
+/** tutor_no_show = 운영자만 (4000) */
+export type TutorResult = 'held' | 'late' | 'student_no_show' | 'tutor_no_show';
 export type LessonKind = 'regular' | 'makeup' | 'compensation' | 'carryover' | 'migrated_makeup' | 'migrated_extra';
 
 export type TutorLesson = {
@@ -30,6 +31,8 @@ export type TutorLesson = {
   beforeLms?: boolean;
   /** 이 강사 휴무로 처리 중인 수업 (미정 · 대체강사 확정 전, 학생 화면 '일정 조율 중'과 같은 판정, migration 3500) */
   leaveOpen?: boolean;
+  /** 강사 노쇼 보상 수업 상태 (4000): available·used·expired·voided */
+  compensation?: string | null;
 };
 
 export type MakeupSlot = { id: string; startsAt: Date; endsAt: Date; answer: 'yes' | 'no' | null; busy: boolean; past: boolean };
@@ -67,6 +70,7 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
       topics: l.topics ?? null, remarks: l.remarks ?? null, studentLate: !!l.student_late, recordedAt: at(l.recorded_at), locked: !!l.locked,
       beforeLms: l.state === 'scheduled' && new Date(l.starts_at) <= loadedAt && !toRecord.has(l.id),
       leaveOpen: !!l.leave_open,
+      compensation: l.compensation ?? null,
     })),
     toRecord: j.to_record ?? [],
     makeups: (j.makeups ?? []).map((m: any) => ({
@@ -158,6 +162,7 @@ export function statusText(l: TutorLesson, now: Date): string {
   if (p === 'to_record') return 'Not recorded';
   if (p === 'before_lms') return 'Before LMS';
   if (p === 'on_leave') return TUTOR_STATUS_TEXT['Tutor long-term leave'];
+  if (l.classStatus === 'Tutor no-show' && l.compensation && l.compensation !== 'voided') return 'Tutor no-show · +1 Compensation';
   return l.classStatus ? TUTOR_STATUS_TEXT[l.classStatus] : '';
 }
 
@@ -165,6 +170,7 @@ export function statusText(l: TutorLesson, now: Date): string {
 export function resultOf(s: ClassStatus | null): TutorResult | null {
   if (s === 'Tutor Late - Student Present') return 'late';
   if (s === 'Student no-show') return 'student_no_show';
+  if (s === 'Tutor no-show') return 'tutor_no_show';
   if (s === 'Normal' || s === 'Make-up completed' || s === 'Covered by another tutor') return 'held';
   return null;
 }
@@ -172,15 +178,16 @@ export function resultOf(s: ClassStatus | null): TutorResult | null {
 export function savedStatus(l: Pick<TutorLesson, 'kind' | 'covering'>, r: TutorResult): ClassStatus {
   if (r === 'late') return 'Tutor Late - Student Present';
   if (r === 'student_no_show') return 'Student no-show';
+  if (r === 'tutor_no_show') return 'Tutor no-show';
   if (l.kind === 'makeup' || l.kind === 'migrated_makeup' || l.kind === 'compensation') return 'Make-up completed';
   return l.covering ? 'Covered by another tutor' : 'Normal';
 }
-export const RESULT_TEXT: Record<TutorResult, string> = { held: 'Held', late: 'I was late', student_no_show: 'Student no-show' };
+export const RESULT_TEXT: Record<TutorResult, string> = { held: 'Held', late: 'I was late', student_no_show: 'Student no-show', tutor_no_show: 'Tutor no-show' };
 
 /** 화면에서 저장 버튼을 누를 수 있는지 (DB가 다시 확인) — 다룬 내용 필수, 지각은 사유(Remarks) 필수 (POL-TU-01) */
 export function recordReady(r: TutorResult | null, topics: string, remarks: string): boolean {
   if (!r) return false;
-  if (r === 'student_no_show') return true;
+  if (r === 'student_no_show' || r === 'tutor_no_show') return true;
   if (!topics.trim()) return false;
   return r !== 'late' || !!remarks.trim();
 }

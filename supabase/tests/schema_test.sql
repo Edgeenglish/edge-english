@@ -1628,6 +1628,9 @@ select pg_temp.ok((select student_late from class_records where lesson_id = '777
               and (select bool_or((x ->> 'student_late')::boolean) from jsonb_array_elements(tutor_screen(null, '2000-01-01', '2100-12-31') -> 'lessons') x
                    where x ->> 'id' = '77777777-2000-0000-0000-000000000003'),
   '학생 지각 체크 → 상태는 그대로(Make-up completed), 강사 화면에 student_late');
+-- 4000 강사 노쇼: 강사는 못 함, 운영자만 → 수업 취소(Tutor no-show) + 보상 수업 1회, 다른 결과로 고치면 보상 되돌림
+select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000004', 'tutor_no_show', null, null)$$, '42501');
+select pg_temp.ok(true, '강사는 강사 노쇼를 기록할 수 없음 (4000)');
 select tutor_record_class('77777777-2000-0000-0000-000000000003', 'student_no_show', null, null, true);
 select pg_temp.ok((select not student_late from class_records where lesson_id = '77777777-2000-0000-0000-000000000003'), 'Held가 아니면 학생 지각 표시 안 함');
 select tutor_record_class('77777777-2000-0000-0000-000000000003', 'held', 'Unit 5', null);
@@ -1734,6 +1737,14 @@ create or replace function pg_temp.busy(req uuid) returns boolean language sql a
          jsonb_array_elements(m -> 'slots') s where (m ->> 'id')::uuid = req $$;
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select tutor_record_class('77777777-2000-0000-0000-000000000004', 'tutor_no_show', null, 'Tutor did not join');
+select pg_temp.ok((select state = 'done' and class_status = 'Tutor no-show' from lessons where id = '77777777-2000-0000-0000-000000000004')
+              and (select status = 'available' and reason = 'tutor_no_show' from compensations where source_lesson_id = '77777777-2000-0000-0000-000000000004'),
+  '운영자 강사 노쇼 → Tutor no-show + 보상 수업 1회 (4000)');
+select tutor_record_class('77777777-2000-0000-0000-000000000004', 'held', 'Airports', null);
+select pg_temp.ok((select state = 'done' from lessons where id = '77777777-2000-0000-0000-000000000004')
+              and (select status = 'voided' from compensations where source_lesson_id = '77777777-2000-0000-0000-000000000004'),
+  '강사 노쇼를 진행으로 고치면 보상 수업은 되돌림(기록 남김) (4000)');
 create temp table bq as select 1 as n, pg_temp.mreq(1, interval '2 hours 20 minutes') as id   -- A 수업 바로 뒤 (휴식 0분)
 union all select 2, pg_temp.mreq(2, interval '1 day 2 hours 40 minutes')                        -- 이미 쉬지 않고 2개인 A 수업 바로 뒤
 union all select 3, pg_temp.mreq(3, interval '3 days 2 hours 20 minutes')                        -- 다른 학생 B 수업 바로 뒤

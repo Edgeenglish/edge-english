@@ -155,7 +155,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             {toRecord.map((l) => (
               <div key={l.id} className={card}>
                 <LessonHead lesson={l} tz={tz} now={now} />
-                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing={screen.toRecord.includes(l.id)}
+                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing={screen.toRecord.includes(l.id)} admin={!!adminBar}
                   onSaved={async (saved) => {
                     setRecordedHere((x) => [...x.filter((y) => y.id !== saved.id), saved]);
                     await reload();
@@ -244,7 +244,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
               <div key={d.date}>
                 <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}</h3>
                 {d.lessons.map((l) => (
-                  <ListRow key={l.id} lesson={l} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions}
+                  <ListRow key={l.id} lesson={l} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
                     onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
                 ))}
               </div>
@@ -353,8 +353,8 @@ function useSavedToggle(key: string): [boolean, (on: boolean) => void] {
 }
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
-function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }: {
-  lesson: TutorLesson; tz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>;
+function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, admin }: {
+  lesson: TutorLesson; tz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [dirty, mark] = useDirtyList();
@@ -365,7 +365,9 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   const count = l.count ? `${l.count.n}/${l.count.total}` : '—';
   // 펼쳐도 보일 것이 없는 줄은 못 누름 (대표 10/31: 대체수업을 펼쳐도 빈 칸)
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
-  const canOpen = phase !== 'canceled' && !!(l.noteUrl || canRecord(l, now) || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup));
+  // 강사 노쇼는 운영자만 기록·수정 (4000)
+  const recordable = canRecord(l, now) && (admin || l.classStatus !== 'Tutor no-show');
+  const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup));
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
   const stText = phase === 'recorded' ? `✓ ${status}${l.studentLate ? ' · Student late' : ''}` : status;
   // 페이 대상 Y/N (상태 규칙 tutorPaid, 대표 10/29 가안). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
@@ -421,10 +423,10 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
       {open && (
         <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
-          {canRecord(l, now) ? (
+          {recordable ? (
             <div className="lg:max-w-[560px]">
               <DirtyCtx.Provider value={mark}>
-                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing extra={links}
+                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing extra={links} admin={admin}
                   onSaved={async () => { setOpen(false); await onSaved(); }} />
               </DirtyCtx.Provider>
             </div>
@@ -443,8 +445,8 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved }
   );
 }
 
-function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
-  lesson: TutorLesson; now: Date; actions: TutorActions; startEditing: boolean; onSaved: (saved: TutorLesson) => Promise<void>; extra?: ReactNode;
+function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra, admin = false }: {
+  lesson: TutorLesson; now: Date; actions: TutorActions; startEditing: boolean; onSaved: (saved: TutorLesson) => Promise<void>; extra?: ReactNode; admin?: boolean;
 }) {
   const [editing, setEditing] = useState(startEditing);
   const [result, setResult] = useState<TutorResult | null>(resultOf(l.classStatus));
@@ -472,7 +474,8 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
     setBusy(true);
     setErr('');
     try {
-      const t = result === 'student_no_show' ? '' : topics.trim();
+      const noShow = result === 'student_no_show' || result === 'tutor_no_show';
+      const t = noShow ? '' : topics.trim();
       const late = result === 'held' && studentLate;
       await actions.record(l.id, result, t, remarks, late);
       setEditing(false);
@@ -486,8 +489,8 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
 
   return (
     <div className="mt-3 grid gap-3">
-      <div role="radiogroup" aria-label="How did the class go?" className="grid grid-cols-3 gap-1.5">
-        {(['held', 'late', 'student_no_show'] as const).map((r) => (
+      <div role="radiogroup" aria-label="How did the class go?" className={`grid gap-1.5 ${admin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+        {(admin ? ['held', 'late', 'student_no_show', 'tutor_no_show'] as const : ['held', 'late', 'student_no_show'] as const).map((r) => (
           <button key={r} type="button" role="radio" aria-checked={result === r} onClick={() => setResult(r)}
             className={`min-h-[48px] rounded-[10px] border px-2 text-[14px] font-semibold ${
               result === r ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#d9d5e6] bg-white text-[#1d1b2b]'}`}>
@@ -501,7 +504,7 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
           Student was late
         </label>
       )}
-      {result !== 'student_no_show' && (
+      {result !== 'student_no_show' && result !== 'tutor_no_show' && (
         <div>
           <label className={label} htmlFor={`topics-${l.id}`}>Covered topics</label>
           <textarea id={`topics-${l.id}`} rows={2} value={topics} onChange={(e) => setTopics(e.target.value)} className={input} />
