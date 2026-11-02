@@ -123,7 +123,7 @@ ${PAGE_STYLE}
 </div>
 ${COPY_SCRIPT}
   `;
-  return html;
+  return html + '\n';
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
