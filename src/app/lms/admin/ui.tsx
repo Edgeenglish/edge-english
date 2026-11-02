@@ -31,10 +31,10 @@ export function Icon({ name, className = 'h-5 w-5' }: { name: IconName; classNam
 
 export type AdminTab = 'home' | 'schedule' | 'students';
 
-const TABS: { key: AdminTab; label: string; href: string; icon: IconName }[] = [
+const TABS: { key: AdminTab; label: string; href: string; icon: IconName; demoOnly?: boolean }[] = [
   { key: 'home', label: '홈', href: '/lms/admin', icon: 'home' },
-  { key: 'schedule', label: '일정', href: '/lms/admin/schedule', icon: 'calendar' },
-  { key: 'students', label: '학생', href: '/lms/admin/students', icon: 'users' },
+  { key: 'schedule', label: '일정', href: '/lms/admin/schedule', icon: 'calendar', demoOnly: true },
+  { key: 'students', label: '학생', href: '/lms/admin/students', icon: 'users', demoOnly: true },
 ];
 
 const withDemo = (href: string, demo: boolean) => (demo ? `${href}?demo=1` : href);
@@ -43,7 +43,7 @@ const withDemo = (href: string, demo: boolean) => (demo ? `${href}?demo=1` : hre
 export function TopNav({ active, demo }: { active: AdminTab; demo: boolean }) {
   return (
     <nav aria-label="운영 메뉴" className="hidden gap-1 lg:flex">
-      {TABS.map((t) => (
+      {TABS.filter((t) => demo || !t.demoOnly).map((t) => (
         <Link
           key={t.key}
           href={withDemo(t.href, demo)}
@@ -66,7 +66,7 @@ export function TopNav({ active, demo }: { active: AdminTab; demo: boolean }) {
 export function BottomNav({ active, demo }: { active: AdminTab; demo: boolean }) {
   return (
     <nav aria-label="메뉴" className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-3 border-t border-[#e6e3ef] bg-white lg:hidden">
-      {TABS.map((t) => (
+      {TABS.filter((t) => demo || !t.demoOnly).map((t) => (
         <Link
           key={t.key}
           href={withDemo(t.href, demo)}

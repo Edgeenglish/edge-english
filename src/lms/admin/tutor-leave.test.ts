@@ -27,15 +27,19 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' })).text).toBe('Benny 강사님 답변 기다리는 중');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' })).text).toBe('Benny 강사님 가능 · 학생 답 필요');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' })).tone).toBe('done');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' })).text).toBe('보강 · 날짜 잡기 전');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupRequested: true })).text).toBe('기존 강사 보강 · 강사님 확인 기다리는 중');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' }))).toMatchObject({ text: '기존 강사 보강 · 날짜 미정', wait: '학생 보강 신청' });
+    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupRequested: true }))).toMatchObject({ text: '기존 강사 보강 · 날짜 미정', wait: '강사님 보강 확인' });
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') })).text).toBe('기존 강사 보강 · 11/20 20:00');
   });
 
   it('상태 글: 문의 보내기 전 ≠ 답변 대기 (R2), 확정 안내 보내기 전 ≠ 완료 (R4), 밖에서 취소된 수업 (R5)', () => {
     const pending = new Set(['a|sub_ask', 'b|sub_confirmed']);
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' }), pending).text).toBe('Benny 강사님에게 문의 보내기 전');
-    expect(itemStatus(I('b', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending)).toEqual({ text: '대체강사 Benny 확정 · 확정 안내 보내기 전', tone: 'todo' });
+    expect(itemStatus(I('b', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending)).toEqual({ text: '대체강사 Benny 확정 · 확정 안내 보내기 전', tone: 'todo', next: '확정 안내 보내기' });
+    expect(itemStatus(I('c', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending).text).toBe('대체강사 Benny 확정 · 안내 보냄');
+    // 학생 답 대기는 운영자 할 일이 아님 (대표 11/2): 안내를 보냈으면 '학생 답변 기다리는 중', 안 보냈으면 '학생 안내 전'
+    expect(itemStatus(I('d', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), pending)).toMatchObject({ text: 'Benny 강사님 가능 · 학생 답변 기다리는 중', tone: 'wait', wait: '학생 답' });
+    expect(itemStatus(I('d', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), new Set(['d|sub_student']))).toMatchObject({ tone: 'todo', next: '학생에게 휴무 안내 보내기' });
     expect(itemStatus(I('c', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending).tone).toBe('done');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', lessonGone: true }), pending)).toEqual({ text: '수업 취소·변경됨', tone: 'done' });
     const g = groupByStudent([I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked', lessonGone: true })])[0];

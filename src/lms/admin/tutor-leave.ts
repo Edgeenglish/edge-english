@@ -97,22 +97,37 @@ export function pendingNoticeKeys(notices: LvNotice[]): Set<string> {
   return new Set(notices.filter((n) => n.status === 'pending').map((n) => `${n.itemId}|${n.event}`));
 }
 
-/** 한 줄 상태 글. pending = pendingNoticeKeys (없으면 안내 보냄 여부는 안 봄) */
-export function itemStatus(i: LvItem, pending?: ReadonlySet<string>): { text: string; tone: 'todo' | 'wait' | 'done' } {
+/**
+ * 한 줄 상태: text = 일정 상태, wait = 누구 답을 기다리는지, next = 운영자가 다음에 할 일 (대표 11/2: 일정 확정과 안내 완료를 따로)
+ * pending = pendingNoticeKeys (없으면 안내 보냄 여부는 안 봄)
+ */
+export function itemStatus(i: LvItem, pending?: ReadonlySet<string>): { text: string; tone: 'todo' | 'wait' | 'done'; wait?: string; next?: string } {
+  const unsent = (e: LvNoticeEvent) => !!pending?.has(`${i.id}|${e}`);
+  const proposalUnsent = unsent('leave_options') || unsent('sub_student');
   if (i.lessonGone) return { text: '수업 취소·변경됨', tone: 'done' };
-  if (i.choice === 'undecided') return { text: '대체 강사 고르기 필요', tone: 'todo' };
+  if (i.choice === 'undecided') return { text: '대체 강사 고르기 필요', tone: 'todo', next: '대체 강사 고르기' };
   if (i.choice === 'wait') {
     if (i.makeupAt) return { text: `기존 강사 보강 · ${koShort(i.makeupAt)}`, tone: 'done' };
-    return i.makeupRequested ? { text: '기존 강사 보강 · 강사님 확인 기다리는 중', tone: 'wait' } : { text: '보강 · 날짜 잡기 전', tone: 'wait' };
+    if (proposalUnsent) return { text: '기존 강사 보강 · 날짜 미정', tone: 'todo', next: '학생에게 휴무 안내 보내기' };
+    return i.makeupRequested
+      ? { text: '기존 강사 보강 · 날짜 미정', tone: 'wait', wait: '강사님 보강 확인' }
+      : { text: '기존 강사 보강 · 날짜 미정', tone: 'wait', wait: '학생 보강 신청' };
   }
   const who = i.subTutorName ?? '대체강사';
   if (i.subStage === 'asked') {
-    return pending?.has(`${i.id}|sub_ask`) ? { text: `${who} 강사님에게 문의 보내기 전`, tone: 'todo' } : { text: `${who} 강사님 답변 기다리는 중`, tone: 'todo' };
+    return unsent('sub_ask')
+      ? { text: `${who} 강사님에게 문의 보내기 전`, tone: 'todo', next: `${who} 강사님에게 문의 보내기` }
+      : { text: `${who} 강사님 답변 기다리는 중`, tone: 'wait', wait: `${who} 강사님 답` };
   }
-  if (i.subStage === 'tutor_ok') return { text: `${who} 강사님 가능 · 학생 답 필요`, tone: 'todo' };
+  if (i.subStage === 'tutor_ok') {
+    if (!pending) return { text: `${who} 강사님 가능 · 학생 답 필요`, tone: 'todo' };
+    return proposalUnsent
+      ? { text: `${who} 강사님 가능 · 학생 안내 전`, tone: 'todo', next: '학생에게 휴무 안내 보내기' }
+      : { text: `${who} 강사님 가능 · 학생 답변 기다리는 중`, tone: 'wait', wait: '학생 답', next: '학생 답이 오면 아래에서 기록' };
+  }
   // 배정 확정과 확정 안내 보냄은 다른 상태: 안내까지 보내야 완료 (R4)
-  if (pending?.has(`${i.id}|sub_confirmed`)) return { text: `대체강사 ${who} 확정 · 확정 안내 보내기 전`, tone: 'todo' };
-  return { text: `대체강사 ${who} 확정`, tone: 'done' };
+  if (unsent('sub_confirmed')) return { text: `대체강사 ${who} 확정 · 확정 안내 보내기 전`, tone: 'todo', next: '확정 안내 보내기' };
+  return { text: `대체강사 ${who} 확정 · 안내 보냄`, tone: 'done' };
 }
 
 function koShort(at: Date): string {

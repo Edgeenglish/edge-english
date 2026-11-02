@@ -1437,6 +1437,8 @@ select pg_temp.ok((select bool_or((l ->> 'leave_open')::boolean) from jsonb_arra
 select pg_temp.ok((select bool_or((l ->> 'leave_open')::boolean) from jsonb_array_elements(tutor_screen((select tutor_id from lessons where id = '77777777-1800-0000-0000-000000000003'), current_date - 30, current_date + 60) -> 'lessons') l
                    where l ->> 'id' = '77777777-1800-0000-0000-000000000003'),
   '같은 수업이 휴무 강사 화면에도 휴무 처리 중 (leave_open, 3500)');
+select pg_temp.ok((select jsonb_typeof(student_screen('99999999-0000-0000-0000-000000001800') -> 'leave_pending') = 'array'),
+  '학생 화면에 수업 줄 없는 휴무 처리 수업 목록 (leave_pending, 3700)');
 -- 9-2d) 보낸 안내가 '보낼 필요 없음'이 돼도 보낸 시각을 남김, 보냄 되돌리기는 남기지 않음 (3400)
 select pg_temp.ok((select count(*) = 1 from lesson_notices where leave_item_id = pg_temp.li(3) and event = 'sub_ask' and status = 'sent'), '(준비) 보낸 문의 1건');
 select admin_leave_back(array[pg_temp.li(3)], 'undecided');

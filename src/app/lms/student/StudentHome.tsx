@@ -83,6 +83,12 @@ const whenText = (d: Date) => {
   const k = kst(d);
   return `${k.md} (${k.wd}) ${k.time}`;
 };
+/** 보강 권리의 원래 수업: 시트에서 옮긴 보강은 날짜만 (00:00 으로 보이지 않게, 3700) */
+const rightText = (m: { originalAt: Date; timeKnown?: boolean }) => {
+  if (m.timeKnown !== false) return whenText(m.originalAt);
+  const k = kst(m.originalAt);
+  return `${k.md} (${k.wd})`;
+};
 
 export default function StudentHome(props: {
   nowIso: string;
@@ -391,7 +397,16 @@ export default function StudentHome(props: {
         {tab === 'schedule' && (
           <TabPage title="일정">
             <p className="text-[13px] text-[#55526a]">한국 시간 기준이에요.</p>
-            {upcoming.map((l) => (
+            {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p }))]
+              .sort((a, b) => a.at.getTime() - b.at.getTime())
+              .map(({ l, p }) => p ? (
+              // 휴무 처리 중인데 수업 줄이 아직 없는 수업 (3700, 대표 11/2: 휴무 안내에는 보이는데 일정에 없음)
+              <div key={p.id} className={`${card} p-4`}>
+                <p className="text-[15px] font-semibold">{whenText(p.startsAt)}</p>
+                <p className="text-[12.5px] text-[#6b6880]">{Math.round((p.endsAt.getTime() - p.startsAt.getTime()) / 60000)}분</p>
+                <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
+              </div>
+            ) : l && (
               <div key={l.id} className={`${card} flex items-center justify-between gap-3 p-4`}>
                 <div className="min-w-0">
                   <p className="text-[15px] font-semibold">{whenText(l.startsAt)}</p>
@@ -609,7 +624,7 @@ export default function StudentHome(props: {
                 <h2 className="text-[18px] font-bold">보강할 수업</h2>
                 {openRights.map((m) => (
                   <button key={`${m.lessonId}${m.itemId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })} className={`${card} flex min-h-[56px] items-center justify-between px-4 text-left`}>
-                    <span className="text-[15px] font-semibold">{whenText(m.originalAt)} 수업</span>
+                    <span className="text-[15px] font-semibold">{rightText(m)} 수업</span>
                     <span className="text-[#8b88a0]">›</span>
                   </button>
                 ))}
@@ -652,6 +667,7 @@ function LeaveSheet(props: {
   const subs = props.rows.filter((x) => x.choice === 'substitute');
   const waits = props.rows.filter((x) => x.choice === 'wait');
   const ask = subs.filter((x) => x.stage === 'tutor_ok');
+  const fixed = subs.filter((x) => x.stage === 'confirmed');
   const off = props.rows[0];
   const offText = off && `${fmtDate(formatInZone(off.offFrom, 'Asia/Seoul').date)} ~ ${fmtDate(formatInZone(new Date(off.offTo.getTime() - 1), 'Asia/Seoul').date)}`;
   return (
@@ -660,21 +676,17 @@ function LeaveSheet(props: {
         <h2 className="text-[18px] font-bold">담당 강사님 휴무 안내</h2>
         {offText && <p className="mt-0.5 text-[13px] text-[#55526a]">휴무 {offText}</p>}
       </div>
+      {/* 확정·답변 필요·기존 강사 보강을 따로 (대표 11/2: 확정 2회·미정 1회인데 '3회 대체수업'으로 보임) */}
       <p className="rounded-[14px] bg-[#efeaff] px-4 py-3 text-[15px] font-semibold leading-relaxed text-[#2b1c7a]">
-        <span className="mr-1.5 rounded-full bg-[#5b3df0] px-2 py-0.5 text-[12px] text-white">추천</span>
-        {subs.length && waits.length
-          ? `휴무 기간 수업 ${props.rows.length}회 중 ${subs.length}회는 대체강사님과, ${waits.length}회는 기존 강사님과 진행해요.`
-          : subs.length
-            ? `휴무 기간 수업 ${subs.length}회는 대체강사님과 진행해요.`
-            : `휴무 기간 수업 ${waits.length}회는 기존 강사님과 보강해요.`}
+        {[fixed.length && `대체강사 확정 ${fixed.length}회`, ask.length && `답변 필요 ${ask.length}회`, waits.length && `기존 강사님과 보강 ${waits.length}회`].filter(Boolean).join(' · ')}
       </p>
-      {subs.some((x) => x.stage === 'confirmed') && (
+      {fixed.length > 0 && (
         <p className="rounded-[14px] bg-[#ffd66b] px-4 py-3 text-[15px] font-bold leading-snug text-[#1b1442]">⚠️ 대체강사 수업은 아래 링크에서 진행됩니다.</p>
       )}
-      {subs.length > 0 && (
-        <section className={`${card} grid gap-1 p-4`}>
-          <h3 className="text-[15px] font-bold">대체강사와 수업하기</h3>
-          {subs.map((x) => (
+      {[{ title: '대체강사 수업 · 확정', list: fixed }, { title: '대체강사 수업 · 답변 필요', list: ask }].filter((x) => x.list.length > 0).map(({ title, list }) => (
+        <section key={title} className={`${card} grid gap-1 p-4`}>
+          <h3 className="text-[15px] font-bold">{title}</h3>
+          {list.map((x) => (
             <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
               <span>
                 <span className="block text-[15px] font-semibold">{whenText(x.startsAt)}</span>
@@ -696,8 +708,18 @@ function LeaveSheet(props: {
               )}
             </div>
           ))}
+          {list === ask && (
+            <div className="mt-2 grid gap-2">
+              <button type="button" disabled={props.busy} onClick={() => props.onAnswer('ok')} className="min-h-[52px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-50">
+                {ask.length > 1 ? `좋아요, ${ask.length}회 모두 이대로 할게요` : '좋아요, 이대로 할게요'}
+              </button>
+              <button type="button" disabled={props.busy} onClick={() => props.onAnswer('makeup')} className="min-h-[50px] rounded-[14px] border border-[#5b3df0] text-[15px] font-bold text-[#4b2fd6] disabled:opacity-50">
+                {ask.length > 1 ? `${ask.length}회 모두 기존 강사님과 보강할게요` : '기존 강사님과 보강할게요'}
+              </button>
+            </div>
+          )}
         </section>
-      )}
+      ))}
       {waits.length > 0 && (
         <section className={`${card} grid gap-1 p-4`}>
           <h3 className="text-[15px] font-bold">기존 강사님과 보강</h3>
@@ -719,16 +741,6 @@ function LeaveSheet(props: {
             );
           })}
         </section>
-      )}
-      {ask.length > 0 && (
-        <div className="grid gap-2">
-          <button type="button" disabled={props.busy} onClick={() => props.onAnswer('ok')} className="min-h-[52px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-50">
-            좋아요, 이대로 할게요
-          </button>
-          <button type="button" disabled={props.busy} onClick={() => props.onAnswer('makeup')} className="min-h-[50px] rounded-[14px] border border-[#5b3df0] text-[15px] font-bold text-[#4b2fd6] disabled:opacity-50">
-            전부 기존 강사님과 수업할게요
-          </button>
-        </div>
       )}
     </div>
   );
@@ -853,8 +865,8 @@ function MakeupPicker(props: {
 
   return (
     <div className="grid gap-3.5">
-      {props.canceled && <p className="rounded-[12px] bg-[#e3f5ea] px-3.5 py-2.5 text-[15px] font-bold text-[#13623a]">✓ {whenText(right.originalAt)} 수업을 취소했어요</p>}
-      <h2 className="text-[18px] font-bold">보강 날짜 고르기 · {whenText(right.originalAt)} 수업</h2>
+      {props.canceled && <p className="rounded-[12px] bg-[#e3f5ea] px-3.5 py-2.5 text-[15px] font-bold text-[#13623a]">✓ {rightText(right)} 수업을 취소했어요</p>}
+      <h2 className="text-[18px] font-bold">보강 날짜 고르기 · {rightText(right)} 수업</h2>
       <p className="text-[14px] leading-relaxed text-[#55526a]">원하시는 일정을 최대 2개 고르실 수 있어요(선택). 2개를 고르시면 강사님이 확인 후 가능한 일정으로 확정해드립니다.</p>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}

@@ -16,7 +16,8 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 }
 
 /** 보강할 수업 (취소한 수업 또는 시트에서 넘어온 날짜 미정 보강) */
-export type MakeupRight = { lessonId: string | null; itemId: string | null; originalAt: Date; tutorLeave: boolean; requested: boolean };
+/** timeKnown=false: 시트에서 옮긴 보강이라 원래 수업 날짜만 앎 (화면은 날짜만, 3700) */
+export type MakeupRight = { lessonId: string | null; itemId: string | null; originalAt: Date; timeKnown?: boolean; tutorLeave: boolean; requested: boolean };
 /** 강사 휴무 안내 한 줄. stage tutor_ok = 학생 답 기다림, confirmed = 대체 수업 확정, choice wait = 기존 강사님과 보강 */
 export type LeaveRow = {
   id: string;
@@ -50,6 +51,8 @@ export type StudentView = {
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
   leave: LeaveRow[];
+  /** 휴무 처리 중인데 수업 줄이 아직 없는 수업 → 일정에 '일정 조율 중' (3700) */
+  leavePending?: { id: string; startsAt: Date; endsAt: Date }[];
   holidays: KstDate[];
   points: PointsEvent[];
   /** 지금 변경권 기간과 쓴·돌려받은 기록 */
@@ -65,7 +68,8 @@ type Raw = {
     next_regular_from: KstDate | null;
   };
   lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean }[];
-  makeup_rights: { lesson_id: string | null; item_id: string | null; original_at: string; tutor_leave: boolean }[];
+  makeup_rights: { lesson_id: string | null; item_id: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean }[];
+  leave_pending?: { id: string; starts_at: string; ends_at: string }[];
   makeup_requests: { id: string; status: string; lesson_id: string | null; item_id: string | null; requested_at: string; candidates: string[]; tutor_leave: boolean }[];
   leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; sub_meet_url: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string }[];
   holidays: KstDate[];
@@ -118,6 +122,7 @@ export function parseStudentView(r: Raw): StudentView {
       lessonId: m.lesson_id,
       itemId: m.item_id,
       originalAt: new Date(m.original_at),
+      timeKnown: m.time_known !== false,
       tutorLeave: m.tutor_leave,
       requested: open.some((q) => (m.lesson_id && q.lesson_id === m.lesson_id) || (m.item_id && q.item_id === m.item_id)),
     })),
@@ -137,6 +142,7 @@ export function parseStudentView(r: Raw): StudentView {
       id: x.id, startsAt: new Date(x.starts_at), choice: x.choice, stage: x.stage, subTutor: x.sub_tutor, subMeetUrl: x.sub_meet_url,
       lessonId: x.lesson_id, itemId: x.item_id, offFrom: new Date(x.off_from), offTo: new Date(x.off_to),
     })),
+    leavePending: (r.leave_pending ?? []).map((x) => ({ id: x.id, startsAt: new Date(x.starts_at), endsAt: new Date(x.ends_at) })),
     holidays: r.holidays,
     creditPeriod: r.credit_period,
     creditUses: (r.credit_uses ?? []).map((c) => ({ at: new Date(c.at), reason: c.reason, delta: c.delta, lessonAt: c.lesson_at ? new Date(c.lesson_at) : null })),

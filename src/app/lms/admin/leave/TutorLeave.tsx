@@ -84,6 +84,13 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
   const [tab, setTab] = useState<'list' | 'new'>(startNew && !initialOff ? 'new' : 'list');
   const [data, setData] = useState<{ items: LvItem[]; notices: LvNotice[]; renewals: LvRenewal[] } | null>(null);
   const [sel, setSel] = useState<string | null>(null);
+  // 휴대폰: 목록에서 고르면 아래 상세로 바로 내려감 (대표 11/2: 긴 목록 아래까지 찾아 내려가야 함)
+  const pick = (k: string) => {
+    setSel(k);
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+      requestAnimationFrame(() => document.getElementById('leave-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  };
   const [err, setErr] = useState('');
 
   const reloadLeaves = useCallback(async () => {
@@ -179,7 +186,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
                         <li className="grid gap-1.5">
                           <h3 className="mt-1 text-[13px] font-bold text-[#55526a]">강사에게 묻기 {bundles.length}명</h3>
                           {bundles.map((b) => (
-                            <ListButton key={b.subTutorId} on={selKey === `t:${b.subTutorId}`} onClick={() => setSel(`t:${b.subTutorId}`)}
+                            <ListButton key={b.subTutorId} on={selKey === `t:${b.subTutorId}`} onClick={() => pick(`t:${b.subTutorId}`)}
                               name={b.subTutorName} sub={`학생 ${new Set(b.items.map((i) => i.studentId)).size}명 ${b.items.length}회 · ${b.status === 'pending' ? '문의 보내기 전' : '답변 기다리는 중'}`} />
                           ))}
                         </li>
@@ -188,7 +195,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
                         <li className="grid gap-1.5">
                           <h3 className="mt-1 text-[13px] font-bold text-[#55526a]">{label} {phases[ph].length}명</h3>
                           {phases[ph].map((g) => (
-                            <ListButton key={g.studentId} on={g.studentId === selKey} onClick={() => setSel(g.studentId)} name={g.studentName} done={ph === 'done'}
+                            <ListButton key={g.studentId} on={g.studentId === selKey} onClick={() => pick(g.studentId)} name={g.studentName} done={ph === 'done'}
                               sub={nextText(g, works.get(g.studentId)!)} />
                           ))}
                         </li>
@@ -198,11 +205,11 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
                   {renewals.length > 0 && <li className="mt-2 text-[13px] font-bold text-[#6b6880]">재등록 대기</li>}
                   {renewals.map((r) => (
                     <li key={r.studentId}>
-                      <ListButton on={`r:${r.studentId}` === selKey} onClick={() => setSel(`r:${r.studentId}`)} name={r.studentName} sub={`${dateLabel(r.endDate)} 종료 · 재등록하면 ${r.dates.length}회`} />
+                      <ListButton on={`r:${r.studentId}` === selKey} onClick={() => pick(`r:${r.studentId}`)} name={r.studentName} sub={`${dateLabel(r.endDate)} 종료 · 재등록하면 ${r.dates.length}회`} />
                     </li>
                   ))}
                 </ul>
-                <div className="grid min-w-0 gap-3">
+                <div id="leave-detail" className="grid min-w-0 scroll-mt-3 gap-3">
                   {groups.map((g) => (
                     <div key={g.studentId} className={g.studentId === selKey ? '' : 'hidden'}>
                       <StudentPanel g={g} w={works.get(g.studentId)!} msgs={messages.filter((m) => m.studentId === g.studentId)} leaveTutor={off?.tutorName ?? '기존'}
@@ -418,6 +425,14 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
           </label>
           <span className={`rounded-[6px] px-2 py-0.5 text-[12.5px] font-extrabold ${s.tone === 'done' ? STATUS_BADGE.done : STATUS_BADGE.doing}`}>{s.text}</span>
         </div>
+        {/* 누구 답을 기다리는지 · 운영자가 다음에 할 일 (대표 11/2) */}
+        {i.startsAt > now && (s.wait || s.next) && (
+          <p className="text-[13px] text-[#55526a]">
+            {s.wait && <>기다리는 중: <b className="text-[#1d1b2b]">{s.wait}</b></>}
+            {s.wait && s.next && ' · '}
+            {s.next && <>할 일: <b className="text-[#1d1b2b]">{s.next}</b></>}
+          </p>
+        )}
         {rowAction(i) && <div className="flex flex-wrap gap-1.5">{rowAction(i)}</div>}
       </li>
     );
@@ -450,10 +465,10 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
           </Block>
         )}
         {w.answer.length > 1 && (
-          <Block title={LV_STEP_TEXT.answer}>
+          <Block title={`${LV_STEP_TEXT.answer} · ${w.answer.map((i) => kstLabel(i.startsAt)).join(', ')}`}>
             <div className="grid grid-cols-2 gap-1.5">
-              <button type="button" disabled={r.busy} className={btnMain} onClick={() => ok(w.answer)}>모두 대체수업 수락</button>
-              <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait(w.answer)}>모두 기존 강사 보강 요청</button>
+              <button type="button" disabled={r.busy} className={btnMain} onClick={() => ok(w.answer)}>{w.answer.length}회 모두 대체수업 수락</button>
+              <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait(w.answer)}>{w.answer.length}회 모두 기존 강사 보강 요청</button>
             </div>
           </Block>
         )}

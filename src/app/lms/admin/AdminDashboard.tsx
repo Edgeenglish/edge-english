@@ -395,7 +395,7 @@ export default function AdminDashboard({
               className="min-w-0 flex-1 bg-transparent text-[14px] text-[#1d1b2b] outline-none"
             />
           </label>
-          {query.trim() && (
+          {query.trim() && preview && (
             <Link href={`/lms/admin/students?${preview ? 'demo=1&' : ''}q=${encodeURIComponent(query.trim())}`} className="-mt-1 w-fit text-[12.5px] font-semibold text-[#5b3fe0]">
               처리할 일이 아니라 학생 정보를 찾으려면 → 학생 목록에서 &lsquo;{query.trim()}&rsquo; 찾기
             </Link>
@@ -416,7 +416,8 @@ export default function AdminDashboard({
                   {item.severity === 'overdue' && !item.error ? `${item.tag} · 기한 초과` : item.tag}
                 </span>
                 <h3 className="text-[15px] font-bold text-[#1d1b2b]">{item.title}</h3>
-                {item.studentCode && (
+                {/* 학생 상세·일정·학생 목록은 실제 데이터 연결 전까지 미리보기에서만 (대표 11/2) */}
+                {item.studentCode && preview && (
                   <Link
                     href={`/lms/admin/students/${item.studentCode}${preview ? '?demo=1' : ''}`}
                     className="ml-auto flex min-h-[32px] items-center gap-0.5 text-[12.5px] font-semibold text-[#5b3fe0]"
@@ -480,9 +481,11 @@ export default function AdminDashboard({
         <aside aria-label="오늘 수업" className="hidden rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-3.5 lg:block">
           <div className="flex items-center justify-between">
             <h2 className="text-[12px] font-extrabold tracking-wider text-[#6b6880]">오늘 수업</h2>
-            <Link href={`/lms/admin/schedule${preview ? '?demo=1' : ''}`} className="flex min-h-[32px] items-center text-[12.5px] font-semibold text-[#5b3fe0]">
-              이번 주 전체 <Icon name="chevron" className="h-4 w-4" />
-            </Link>
+            {preview && (
+              <Link href="/lms/admin/schedule?demo=1" className="flex min-h-[32px] items-center text-[12.5px] font-semibold text-[#5b3fe0]">
+                이번 주 전체 <Icon name="chevron" className="h-4 w-4" />
+              </Link>
+            )}
           </div>
           {today.length === 0 && <p className="py-3 text-[13px] text-[#6b6880]">오늘 수업이 없어요.</p>}
           <ul>
