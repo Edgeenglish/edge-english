@@ -11,6 +11,7 @@ import { loadAdminBoard, loadOpsStats } from '@/lms/admin/live';
 import { markImportChecked, markRenewalSent, setImportEndReason, setImportOrigin } from '@/lms/admin/import-live';
 import { supabaseBrowser } from '@/lms/auth/client';
 import AdminDashboard from './AdminDashboard';
+import { saveTaskClosure } from '@/lms/admin/task-closure';
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tasks: TaskSource[]; today: FakeLesson[]; stats: OpsStats | null };
 
@@ -85,6 +86,7 @@ export default function AdminLive() {
       planActions={actions}
       importActions={imports}
       renewalSent={sb ? (id) => markRenewalSent(sb, id) : undefined}
+      onTaskClose={sb ? (task, closed) => saveTaskClosure(sb, task, closed) : undefined}
       onReload={reload}
     />
   );
