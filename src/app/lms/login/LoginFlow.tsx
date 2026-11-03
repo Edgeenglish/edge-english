@@ -37,6 +37,16 @@ export default function LoginFlow() {
   const codeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setLang(readLang()), []);
+  // 같은 고정 주소의 유효한 세션은 이메일 코드를 다시 보내지 않고 이어 쓴다.
+  useEffect(() => {
+    if (!sb) return;
+    let active = true;
+    void sb.auth.getSession().then(({ data }) => {
+      if (active && data.session) return routeAfterLogin();
+    }).catch(() => { /* 세션이 유효하지 않으면 원래 로그인 화면을 사용 */ });
+    return () => { active = false; };
+  }, [sb]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (wait <= 0) return;
     const id = setTimeout(() => setWait((w) => w - 1), 1000);
