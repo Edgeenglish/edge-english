@@ -25,6 +25,8 @@ export type Busy = {
 
 /** 주간 시간 칸 한 행 — 강사(tutor_availability)는 수업 시작 가능 시간(startsWithinAvailability), 학생 희망 시간은 수업 전체가 들어가는 칸(withinAvailability) */
 export type AvailabilityWindow = {
+  /** Google Forms grid selections specify exact starts, independent of lesson length. */
+  startOnly?: boolean;
   weekday: number; // 강사 현지 요일 0=일
   startLocal: string; // 'HH:MM' 강사 현지
   endLocal: string;
@@ -39,6 +41,7 @@ const toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slic
 export function withinAvailability(start: Date, end: Date, windows: readonly AvailabilityWindow[]): boolean {
   const kstDay = instantToKstDate(start);
   return windows.some((w) => {
+    if (w.startOnly) return startsWithinAvailability(start, [w]);
     if (kstDay < w.effectiveFrom || (w.effectiveTo !== null && kstDay > w.effectiveTo)) return false;
     const s = formatInZone(start, w.timezone);
     const e = formatInZone(new Date(end.getTime() - 1), w.timezone); // 끝 시각 직전이 같은 현지 날짜인지
