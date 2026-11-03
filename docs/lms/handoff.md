@@ -7,10 +7,19 @@
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
 ## 📌 기록 방식 (2026-11-03 대표 결정, 정책 원본 H26(45))
-- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(45)**, 다음은 (46)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
+- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(46)**, 다음은 (47)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
 - 10/30~11/3 결정은 H26(38)~(42)에 보충함(11/3), 시간 표기 원칙 (43), 학생 관리 ①~⑦ 전문 (44), 11/3 진행 (45)
 
-## 📋 다음 세션 할 일: 학생 관리 ①~⑦ 개발 — **결정 = 정책 원본 H26(44)** (확정, 다시 묻지 말 것)
+## ✅ 2026-11-04 학생 관리 ①~⑦ 시험용 개발 완료 (브랜치 claude/busy-rubin-w3dii1 = lms-test, 정책 원본 H26(46))
+- **migration 4300** `20261104000000_lms_student_management.sql` — 시험용 DB 적용됨, **운영 DB 미적용**. 지우는 문장(drop·delete) 없이 씀(Supabase 커넥터가 지우는 SQL에 승인 창을 띄우는데 휴대폰·PC 모두 안 보여 막힘 → 제약·트리거·정책은 있으면 건너뜀, 수업 옮기기는 두 단계, 예정 일정 줄은 1900-01-01로 치움). 운영 적용도 같은 파일로(승인 창 없이 됨)
+  - students 7항목(job·hobbies·interests·improve·hopes·correction_style/note·class_style/note)·level 4단계(Rubric)·level_note/by/at, 표 `student_profile_edits`·`regular_changes`, 함수 admin_students·admin_student_detail·admin_student_update·admin_regular_change(미리 보기/저장)·admin_regular_change_sent·admin_extend_enrollment·tutor_student_profile·tutor_student_update·lms_tutor_student_access·lms_current_slots, tutor_my_students 교체(열 그대로), tutor_screen 에 student_id·'Kim Seoyeon (Sarah)'
+- 화면: `src/app/lms/admin/students/*`(StudentsLive·StudentList·[code]/StudentDetailLive·StudentDetail·RegularChange·SheetImport·parts), `src/lms/admin/students(-live).ts`, 강사 `src/app/lms/tutor/StudentProfile.tsx`·`src/lms/tutor/profile.ts`, TutorHome 학생 이름 → 프로필. ui.tsx 학생 탭 실데이터
+- 시험: `npm test` 337 · `npm run test:db` 400(4300 블록 40개: 검사 7종·저장·두 번 변경·안내·권한·연장·⑥ 24시간) · authz-probe 함수 목록·02-check 표 50개 · 묶음 SQL 재생성
+- **클릭 검증 (시험용 DB 전용 계정, Claude만)**: `e2e-admin-4300@example.com`(운영자 staff, TOTP = Claude 작업 공간에만) · `e2e-tutor-blair-4300@`(Blair) · `e2e-tutor-emma-4300@`(Emma, 대체강사). PC·휴대폰 모두 통과: 목록·검색·상세 / 정규 변경 12:30(겹침 ✕)·13:00(현지 23:00 범위 밖 ✕)·08:30(My hours 밖 ✕)·화·목 11:00 저장(월 11:00은 Toronto 일요일이라 My hours 밖 — 요일이 현지에서 어긋나는 경우 검사됨) / 안내 복사·발송 완료 / 연장 +7일 / 프로필·7항목 / 시트 붙여 넣기 반영 / 뒤로가기 창만 닫힘 / 학생 화면(운영자 보기) 반영 / 강사 Blair 프로필·이메일 Copy·Edit·'From 11/5' 다음 일정 / Emma 대체 열람만·수정 API 403·담당 아닌 학생 403
+  - 시험 데이터 바뀐 것: STU-0004 임O아 정규 월·수 11:00 → 11/5부터 화·목 12:30(여러 번 바꿈), 종료일 +7일, 프로필·7항목·시트 값 입력 / STU-0005 11/4 수업을 Emma 대체로 바꿈
+- **남은 것**: 대표 시험 주소 확인 → 운영 DB 4300 적용·lms-prod · 운영 학생 12명 시트 이전(⑤ 화면, 한 명씩 승인) · 대시보드에 '정규 변경 안내 안 보냄' 카드(지금은 학생 목록·상세에만) · 운영진 화면 다른 시각 '(한국 시간)' 점검(11/3 남은 것) · RegularChange 창의 '지금:' 줄은 오늘 기준 일정(다음 주부터 바뀐 일정이 있으면 상세의 '○○부터' 줄 참고)
+
+## ✅ 학생 관리 ①~⑦ 결정 = 정책 원본 H26(44) (위 2026-11-04 항목으로 개발 완료)
 - 시안 https://claude.ai/artifact/FvSAvM7mFXnGwDwPSnrdWc (`docs/lms/previews/student-info-drafts.html`, 승인 전 설계 — H26(44)와 다르면 H26(44)가 맞음) · 아래 '2026-11-03 저녁' 조사 결과 재사용
 - 시작: 이 브랜치(claude/eloquent-gauss-vp8uct, lms-test와 같음). 끝나면 결과를 정책 원본 H26(46)~에 적고, 여기에는 수정 파일·migration·시험 결과·남은 개발만
 
