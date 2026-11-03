@@ -19,13 +19,22 @@ function doPost(e) {
       return lmsApplicationsJson_({ error: 'Unauthorized' });
     }
     const form = FormApp.openById('163rAf9Jn-bCxNN8Px38G2BgUTfK-AeixxIlTLedjXNs');
+    // 질문 제목·유형·그리드 행은 응답마다 다시 읽지 않고 한 번만 읽는다.
+    const metadata = {};
+    form.getItems().forEach(function(item) {
+      const m = { id: String(item.getId()), title: item.getTitle(), type: String(item.getType()) };
+      if (item.getType() === FormApp.ItemType.CHECKBOX_GRID) m.rows = item.asCheckboxGridItem().getRows();
+      metadata[m.id] = m;
+    });
     const applications = form.getResponses().map(function(response) {
       return {
         id: response.getId(), submittedAt: response.getTimestamp().toISOString(), email: response.getRespondentEmail() || '',
         items: response.getItemResponses().map(function(itemResponse) {
           const item = itemResponse.getItem();
-          const result = { id: String(item.getId()), title: item.getTitle(), type: String(item.getType()), value: itemResponse.getResponse() };
-          if (item.getType() === FormApp.ItemType.CHECKBOX_GRID) result.rows = item.asCheckboxGridItem().getRows();
+          const id = String(item.getId());
+          const m = metadata[id] || { id: id, title: item.getTitle(), type: String(item.getType()) };
+          const result = { id: id, title: m.title, type: m.type, value: itemResponse.getResponse() };
+          if (m.rows) result.rows = m.rows;
           return result;
         }),
       };
@@ -34,3 +43,11 @@ function doPost(e) {
   } catch (_) { return lmsApplicationsJson_({ error: 'Unable to read applications' }); }
 }
 function lmsApplicationsJson_(value) { return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON); }
+
+/** 수동 진단: 개인정보·토큰은 출력하지 않고 읽기/통신 성공 여부만 확인. */
+function lmsApplicationsCheck() {
+  const form = FormApp.openById('163rAf9Jn-bCxNN8Px38G2BgUTfK-AeixxIlTLedjXNs');
+  const responses = form.getResponses();
+  const transport = UrlFetchApp.fetch('https://kyeimjozkcqbgkepwrnv.supabase.co/auth/v1/health', { muteHttpExceptions: true });
+  console.log(JSON.stringify({ responses: responses.length, transportStatus: transport.getResponseCode() }));
+}
