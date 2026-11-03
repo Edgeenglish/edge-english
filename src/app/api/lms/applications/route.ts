@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const upstream = await fetch(feed, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ supabaseUrl: url, anonKey: key, accessToken: token }),
-      cache: 'no-store', signal: AbortSignal.timeout(30_000),
+      cache: 'no-store', signal: AbortSignal.timeout(60_000),
     });
     const payload = await upstream.json();
     if (!upstream.ok || !Array.isArray(payload.applications)) throw new Error('Form read failed');
