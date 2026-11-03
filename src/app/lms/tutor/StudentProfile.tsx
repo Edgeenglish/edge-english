@@ -2,7 +2,7 @@
 
 // 강사용 Student profile (영어, H26(44) ③·④·⑥): Profile / About & preferences / Class / Enrollment 네 칸.
 // 정규 담당 강사 = 레벨·자기소개·선호 수정, 대체강사 = 열람만(이메일 없음). 권한은 DB 함수가 확인. 닫으면 보던 주로 그대로
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { enZone } from '@/lms/admin/students';
 import { formatInZone } from '@/lms/rules/dates';
 import { CLASS_STYLE_EN, CORRECTION_EN, dstNote, enAt, enDate, enDateYear, finalEndLines, nextLesson, RUBRIC, slotsIn, todayKst, type TutorStudentProfile } from '@/lms/tutor/profile';
@@ -52,17 +52,16 @@ export default function StudentProfile({ studentId, actions, onClose, now }: { s
     actions.load(studentId).then((x) => { if (alive) setP(x); }).catch((e) => { if (alive) setErr(e instanceof Error ? e.message : 'Could not load.'); });
     return () => { alive = false; };
   }, [studentId, actions]);
-  // 뒤로가기로도 닫히게 (휴대폰): 창을 열 때 history 한 칸, 뒤로 가면 닫기
+  // 뒤로가기로도 닫히게 (휴대폰): 창을 열 때 history 한 칸, 뒤로 가면 닫기. 닫기 버튼은 그 한 칸을 되돌림
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
-    const onPop = () => onClose();
-    window.history.pushState({ profile: studentId }, '');
+    const onPop = () => onCloseRef.current();
+    if (window.history.state?.profile !== studentId) window.history.pushState({ profile: studentId }, '');
     window.addEventListener('popstate', onPop);
-    return () => {
-      window.removeEventListener('popstate', onPop);
-      if (window.history.state?.profile === studentId) window.history.back();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 열릴 때 한 번
-  }, []);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [studentId]);
+  const close = () => { if (window.history.state?.profile === studentId) window.history.back(); else onClose(); };
 
   const body = (() => {
     if (err) return <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>;
@@ -181,11 +180,11 @@ export default function StudentProfile({ studentId, actions, onClose, now }: { s
   })();
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={close}>
       <div role="dialog" aria-modal="true" aria-label="Student profile" onClick={(e) => e.stopPropagation()}
         className="relative max-h-[92vh] w-full max-w-[860px] overflow-y-auto rounded-t-[20px] bg-[#f6f5fa] p-4 pb-8 lg:rounded-[20px]">
-        <button type="button" onClick={onClose} className="mb-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0]">‹ Back to schedule</button>
-        <button type="button" aria-label="Close" onClick={onClose}
+        <button type="button" onClick={close} className="mb-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0]">‹ Back to schedule</button>
+        <button type="button" aria-label="Close" onClick={close}
           className="absolute right-3 top-3 flex h-[40px] w-[40px] items-center justify-center rounded-full bg-white text-[18px] text-[#1d1b2b]">✕</button>
         {body}
       </div>

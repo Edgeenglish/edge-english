@@ -1,7 +1,7 @@
 'use client';
 
 // 학생 상세 공통 조각: 창(Sheet), 줄(Row), 칸(Box), 복사 버튼, 스타일
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 export const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
 export const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-4 text-[15px] font-semibold text-[#1d1b2b] disabled:opacity-40';
@@ -30,16 +30,25 @@ export function Box({ title, action, children }: { title: string; action?: React
   );
 }
 
-/** 아래에서 올라오는 창 (휴대폰) / 가운데 창 (PC). 닫기 ✕, 바깥 누르면 닫힘. 뒤로가기도 닫히게 history 에 한 칸 */
+/** 아래에서 올라오는 창 (휴대폰) / 가운데 창 (PC). 닫기 ✕, 바깥 누르면 닫힘. 휴대폰 뒤로가기도 창만 닫히게 history 에 한 칸 */
 export function Sheet({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const onPop = () => onCloseRef.current();
+    if (window.history.state?.sheet !== title) window.history.pushState({ sheet: title }, '');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [title]);
+  const close = () => { if (window.history.state?.sheet === title) window.history.back(); else onClose(); };
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={close}>
       <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}
         className={`relative max-h-[92vh] w-full ${wide ? 'max-w-[860px]' : 'max-w-[640px]'} overflow-y-auto rounded-t-[20px] bg-[#f6f5fa] p-4 pb-8 lg:rounded-[20px]`}>
         <div className="mb-3 flex items-center justify-between gap-2 pr-10">
           <h2 className="text-[17px] font-bold text-[#1d1b2b]">{title}</h2>
         </div>
-        <button type="button" aria-label="닫기" onClick={onClose}
+        <button type="button" aria-label="닫기" onClick={close}
           className="absolute right-3 top-3 flex h-[40px] w-[40px] items-center justify-center rounded-full bg-white text-[18px] text-[#1d1b2b]">✕</button>
         {children}
       </div>
