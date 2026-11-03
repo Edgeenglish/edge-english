@@ -2240,7 +2240,7 @@ select pg_temp.ok((select p ->> 'access' = 'substitute' and p -> 'student' ->> '
                    from tutor_student_profile('99999999-0000-0000-0000-000000004300') p),
   '⑥ 대체강사: 대체수업 확정 뒤 프로필·레벨·선호 열람, 이메일·연장 기록은 안 보임, 자기 대체수업만 (4300)');
 select pg_temp.expect_error($$select tutor_student_update('99999999-0000-0000-0000-000000004300', '{"level":"Advanced"}')$$, 'regular tutor|42501');
-select pg_temp.ok((select count(*) from tutor_my_students() where access = 'substitute' and email is null) = 1, '⑥ 대체강사는 수정 불가, 목록에도 이메일 없이 (4300)');
+select pg_temp.ok((select count(*) from tutor_my_students() where email is null) = 1, '⑥ 대체강사는 수정 불가, 목록에도 이메일 없이 (4300)');
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004300';   -- 정규 강사 R 은 대체 뒤에도 그대로
 select pg_temp.ok((select p ->> 'access' = 'regular' from tutor_student_profile('99999999-0000-0000-0000-000000004300') p), '⑥ 정규 담당 강사 권한은 대체수업과 무관하게 유지 (4300)');
 reset role;

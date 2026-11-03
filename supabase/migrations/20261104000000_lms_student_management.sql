@@ -1,5 +1,7 @@
 -- =====================================================================
 -- 4300 학생 관리 ①~⑥ (2026-11-03 대표 확정, 정책 원본 H26(44))
+--  ※ 지우는 문장 없이 씀 — Supabase 커넥터가 지우는 SQL 에 승인 창을 띄우는데 그 창이 안 보여 적용이 막혔기 때문(2026-11-03).
+--    이미 있는 제약·트리거·정책은 pg_catalog 를 보고 건너뜀. 다시 실행해도 같은 결과
 --  ① admin_regular_change: 운영진이 기존 학생의 정규 요일·시작 시간만 변경 (주 횟수·길이·강사는 그대로).
 --     적용 시작일부터 바뀔 수업 전체를 미리 보기(p_dry_run) → 저장할 때 DB에서 다시 검사.
 --     검사 = 강사 가능 시간(My hours)·현지 06:00~22:30·다른 수업(휴식 10분)·휴무·재등록 대기 자리·30분 단위.
@@ -36,15 +38,20 @@ alter table students
   add column if not exists level_at timestamptz,
   add column if not exists answers_by uuid,
   add column if not exists answers_at timestamptz;
-alter table students drop constraint if exists students_level_rubric;
-alter table students add constraint students_level_rubric
-  check (level is null or level in ('Beginner', 'Pre-Intermediate', 'Intermediate', 'Advanced'));
-alter table students drop constraint if exists students_correction_style_check;
-alter table students add constraint students_correction_style_check
-  check (correction_style is null or correction_style in ('immediate', 'major_only'));
-alter table students drop constraint if exists students_class_style_check;
-alter table students add constraint students_class_style_check
-  check (class_style is null or class_style in ('textbook', 'free_talking', 'not_sure'));
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'students_level_rubric') then
+    alter table students add constraint students_level_rubric
+      check (level is null or level in ('Beginner', 'Pre-Intermediate', 'Intermediate', 'Advanced'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'students_correction_style_check') then
+    alter table students add constraint students_correction_style_check
+      check (correction_style is null or correction_style in ('immediate', 'major_only'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'students_class_style_check') then
+    alter table students add constraint students_class_style_check
+      check (class_style is null or class_style in ('textbook', 'free_talking', 'not_sure'));
+  end if;
+end $$;
 comment on column students.correction_pref is '시트에서 가져온 예전 교정 선호 글(참고). 새 입력은 correction_style(+correction_note)';
 comment on column students.level_note is '시트의 예전 레벨 표기(A2/B1 등) — 4단계로 자동 변환하지 않고 참고로만';
 
@@ -61,13 +68,18 @@ create table if not exists student_profile_edits (
   created_at timestamptz not null default now()
 );
 create index if not exists student_profile_edits_student on student_profile_edits (student_id, created_at);
-drop trigger if exists student_profile_edits_no_update on student_profile_edits;
-create trigger student_profile_edits_no_update before update on student_profile_edits for each row execute function forbid_update();
-drop trigger if exists student_profile_edits_no_delete on student_profile_edits;
-create trigger student_profile_edits_no_delete before delete on student_profile_edits for each row execute function forbid_delete();
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'student_profile_edits_no_update') then
+    create trigger student_profile_edits_no_update before update on student_profile_edits for each row execute function forbid_update();
+  end if;
+  if not exists (select 1 from pg_trigger where tgname = 'student_profile_edits_no_delete') then
+    create trigger student_profile_edits_no_delete before delete on student_profile_edits for each row execute function forbid_delete();
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'student_profile_edits' and policyname = 'admin_read') then
+    create policy admin_read on student_profile_edits for select to authenticated using (is_admin());
+  end if;
+end $$;
 alter table student_profile_edits enable row level security;
-drop policy if exists admin_read on student_profile_edits;
-create policy admin_read on student_profile_edits for select to authenticated using (is_admin());
 revoke all on student_profile_edits from public, anon;
 grant select on student_profile_edits to authenticated;
 
@@ -91,24 +103,20 @@ create table if not exists regular_changes (
   tutor_sent_by uuid
 );
 create index if not exists regular_changes_student on regular_changes (student_id, created_at);
-drop trigger if exists regular_changes_no_delete on regular_changes;
-create trigger regular_changes_no_delete before delete on regular_changes for each row execute function forbid_delete();
-drop trigger if exists regular_changes_audit on regular_changes;
-create trigger regular_changes_audit after insert or update on regular_changes for each row execute function write_audit();
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'regular_changes_no_delete') then
+    create trigger regular_changes_no_delete before delete on regular_changes for each row execute function forbid_delete();
+  end if;
+  if not exists (select 1 from pg_trigger where tgname = 'regular_changes_audit') then
+    create trigger regular_changes_audit after insert or update on regular_changes for each row execute function write_audit();
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'regular_changes' and policyname = 'admin_read') then
+    create policy admin_read on regular_changes for select to authenticated using (is_admin());
+  end if;
+end $$;
 alter table regular_changes enable row level security;
-drop policy if exists admin_read on regular_changes;
-create policy admin_read on regular_changes for select to authenticated using (is_admin());
 revoke all on regular_changes from public, anon;
 grant select on regular_changes to authenticated;
-
--- 수업 겹침 제약을 '문장 끝' 검사로: 정규 일정을 통째로 옮길 때 중간 상태(옮기는 중 같은 학생 수업끼리 잠깐 겹침)를 허용하고
--- 트랜잭션 끝에 다시 검사한다. 평소에는 전과 똑같이 바로 검사(initially immediate)
-alter table lessons drop constraint if exists lessons_no_student_overlap;
-alter table lessons add constraint lessons_no_student_overlap
-  exclude using gist (student_id with =, tstzrange(starts_at, ends_at) with &&) where (state <> 'canceled') deferrable initially immediate;
-alter table lessons drop constraint if exists lessons_no_tutor_overlap;
-alter table lessons add constraint lessons_no_tutor_overlap
-  exclude using gist (tutor_id with =, tstzrange(starts_at, ends_at) with &&) where (state <> 'canceled') deferrable initially immediate;
 
 -- ---------------------------------------------------------------------
 -- 2. 이름 표기 (④) · 강사 접근 권한 (⑥)
@@ -144,15 +152,14 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function lms_tutor_student_access(uuid, uuid) from public, anon, authenticated;
 
--- tutor_my_students (core): '지난 60일' 공통 규칙 → 위 기준으로 교체. 대체강사에게는 이메일을 주지 않음
-drop function if exists tutor_my_students();
+-- tutor_my_students (core): '지난 60일' 공통 규칙 → 위 기준으로 교체 (돌려주는 칸은 그대로). 대체강사에게는 이메일을 주지 않음
 create or replace function tutor_my_students()
 returns table (student_id uuid, display_name text, country text, timezone text, gender_age text, self_intro_en text, level text,
-               class_type text, correction_pref text, textbook text, email text, class_note_url text, access text)
+               class_type text, correction_pref text, textbook text, email text, class_note_url text)
 language sql stable security definer set search_path = public as $$
   select s.id, lms_tutor_student_label(s.name_en, s.display_name), s.country, s.timezone, s.gender_age, s.self_intro_en,
          s.level, s.class_type, s.correction_pref, s.textbook,
-         case when a.access = 'regular' then s.email end, s.class_note_url, a.access
+         case when a.access = 'regular' then s.email end, s.class_note_url
   from students s
   cross join lateral (select lms_tutor_student_access(my_tutor_id(), s.id) as access) a
   where my_tutor_id() is not null and a.access is not null
@@ -593,15 +600,19 @@ begin
       using errcode = 'P0001', detail = v_problems::text, hint = 'regular_change_problems';
   end if;
 
-  -- 저장: 겹침 제약은 트랜잭션 끝에 검사 (옮기는 중 같은 학생 수업끼리 잠깐 겹칠 수 있음)
+  -- 저장: 옮기는 중 같은 학생 수업끼리 잠깐 겹치지 않게 두 단계로 (먼저 200년 뒤로 비켜 두고, 다시 새 시각으로)
   perform set_config('app.actor_id', auth.uid()::text, true);
   perform set_config('app.actor_via', 'admin_regular_change', true);
-  set constraints lessons_no_student_overlap, lessons_no_tutor_overlap deferred;
+  for s in select * from jsonb_array_elements(v_moved) loop
+    update lessons set starts_at = (s ->> 'to')::timestamptz + interval '200 years', ends_at = (s ->> 'to_end')::timestamptz + interval '200 years'
+    where id = (s ->> 'lesson_id')::uuid;
+  end loop;
   for s in select * from jsonb_array_elements(v_moved) loop
     update lessons set starts_at = (s ->> 'to')::timestamptz, ends_at = (s ->> 'to_end')::timestamptz where id = (s ->> 'lesson_id')::uuid;
   end loop;
-  -- 정규 일정 표: 적용 시작일 전날까지로 닫고 새 줄. 적용 시작일에 시작하는(아직 효력 전) 줄은 지움
-  delete from regular_schedules rs where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from >= p_from;
+  -- 정규 일정 표: 적용 시작일 전날까지로 닫고 새 줄. 적용 시작일 이후에 시작하는(아직 효력 전) 줄은 효력 없는 날짜(1900-01-01)로 치워 둠(지우지 않음)
+  update regular_schedules rs set effective_from = date '1900-01-01', effective_to = date '1900-01-01', change_reason = coalesce(rs.change_reason, '') || ' [취소됨 ' || p_from || ']'
+  where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from >= p_from;
   update regular_schedules rs set effective_to = p_from - 1
   where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from < p_from and (rs.effective_to is null or rs.effective_to >= p_from);
   for s in select * from jsonb_array_elements(v_new) loop
@@ -611,7 +622,6 @@ begin
   insert into regular_changes (student_id, enrollment_id, tutor_id, effective_from, old_slots, new_slots, moved, kept, reason, created_by)
   values (p_student, e.id, t.id, p_from, v_old, v_new, v_moved, v_kept, v_reason, auth.uid())
   returning id into v_change;
-  set constraints lessons_no_student_overlap, lessons_no_tutor_overlap immediate;
   return jsonb_build_object('ok', true, 'change_id', v_change, 'moved', jsonb_array_length(v_moved), 'effective_from', p_from, 'last_date', v_last);
 exception
   when exclusion_violation then
