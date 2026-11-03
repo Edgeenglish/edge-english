@@ -9423,7 +9423,10 @@ begin
     update lessons set starts_at = (s -&gt;&gt; 'to')::timestamptz, ends_at = (s -&gt;&gt; 'to_end')::timestamptz where id = (s -&gt;&gt; 'lesson_id')::uuid;
   end loop;
   -- 정규 일정 표: 적용 시작일 전날까지로 닫고 새 줄. 적용 시작일 이후에 시작하는(아직 효력 전) 줄은 효력 없는 날짜(1900-01-01)로 치워 둠(지우지 않음)
-  update regular_schedules rs set effective_from = date '1900-01-01', effective_to = date '1900-01-01', change_reason = coalesce(rs.change_reason, '') || ' [취소됨 ' || p_from || ']'
+  update regular_schedules rs
+     set effective_from = date '1900-01-01' + (select count(*) from regular_schedules r2 where r2.student_id = rs.student_id and r2.weekday = rs.weekday and r2.effective_to &lt; date '1950-01-01')::int,
+         effective_to = date '1900-01-01' + (select count(*) from regular_schedules r2 where r2.student_id = rs.student_id and r2.weekday = rs.weekday and r2.effective_to &lt; date '1950-01-01')::int,
+         change_reason = coalesce(rs.change_reason, '') || ' [취소됨 ' || p_from || ']'
   where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from &gt;= p_from;
   update regular_schedules rs set effective_to = p_from - 1
   where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from &lt; p_from and (rs.effective_to is null or rs.effective_to &gt;= p_from);
@@ -9437,7 +9440,7 @@ begin
   return jsonb_build_object('ok', true, 'change_id', v_change, 'moved', jsonb_array_length(v_moved), 'effective_from', p_from, 'last_date', v_last);
 exception
   when exclusion_violation then
-    raise exception '옮긴 수업이 다른 수업과 겹칩니다 (%). 미리 보기를 다시 확인해 주세요.', sqlerrm;
+    raise exception '저장 중 겹침이 생겨 저장하지 않았습니다 (%). 미리 보기를 다시 확인해 주세요.', sqlerrm;
 end $$;
 revoke all on function admin_regular_change(uuid, jsonb, date, text, boolean) from public, anon;
 grant execute on function admin_regular_change(uuid, jsonb, date, text, boolean) to authenticated;

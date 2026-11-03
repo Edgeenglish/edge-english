@@ -328,14 +328,14 @@ function ExtendSheet({ enrollment: e, studentTz, today, extend, onClose, onSaved
             <li>학생 화면 수강 종료일{studentTz !== 'Asia/Seoul' ? ` (${koZone(studentTz)}으로도 표시)` : ''} · 보강·무료 보상수업 사용 기한 · 재등록 안내 마감 · 대시보드 종료 임박 · 강사 화면 Enrollment</li>
             <li>수업 회차는 그대로 ({e.lessonsPurchased}회{e.lessonsCarriedIn ? ` + 이월 ${e.lessonsCarriedIn}회` : ''}) — 연장만으로 회차가 늘지 않아요</li>
             {auto.length > 0 && <li>강사 휴무 자동 연장(+{auto.reduce((a, x) => a + x.days, 0)}일)은 그대로 두고 합계로 계산해요 (중복 없음)</li>}
-            <li>기록: {md(e.finalEndDate)} → {md(newEnd)}, 사유, 운영진, 저장 시각. 지우거나 고칠 수 없고 잘못 넣으면 ‘정정’ 줄을 하나 더해요</li>
+            <li>기록: {md(e.finalEndDate)} → {days === 0 ? '새 종료일' : md(newEnd)}, 사유, 운영진, 저장 시각. 지우거나 고칠 수 없고 잘못 넣으면 ‘정정’ 줄을 하나 더해요</li>
           </ul>
         </div>
       </div>
       {err && <p className="mt-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
       <div className="mt-4 flex gap-2">
         <button type="button" className={btnSub} onClick={onClose} disabled={busy}>취소</button>
-        <button type="button" className={`${btnMain} flex-1`} disabled={days === 0 || !note.trim() || busy} onClick={onSave}>{busy ? '저장 중…' : `${md(newEnd)}로 ${days > 0 ? '연장' : '정정'}`}</button>
+        <button type="button" className={`${btnMain} flex-1`} disabled={days === 0 || !note.trim() || busy} onClick={onSave}>{busy ? '저장 중…' : days === 0 ? '새 종료일 고르기' : `${md(newEnd)}로 ${days > 0 ? '연장' : '정정'}`}</button>
       </div>
     </Sheet>
   );

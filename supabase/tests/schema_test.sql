@@ -2196,13 +2196,16 @@ select pg_temp.ok((select count(*) = 2 and bool_and(effective_to = (select from_
   '① 정규 일정 표: 예전 줄은 전날까지, 새 줄 2개 · 변경 기록(사유·옮긴 수업)과 안내 미발송 (4300)');
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select (r ->> 'ok')::boolean from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"22:00"},{"weekday":2,"time":"20:30"}]', (select from_day from p4300), '한 번 더', false) r)
+              and (select (r ->> 'ok')::boolean from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"22:00"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), '다시 원래대로', false) r),
+  '① 같은 적용일로 두 번 더 바꿔도 저장됨 (예정 일정 줄은 효력 없는 날짜로 치움, 지우지 않음) (4300)');
 select pg_temp.ok((select (x ->> 'notice_pending')::boolean and x ->> 'status' = 'active' and x ->> 'tutor' = 'RegTutor'
                    from jsonb_array_elements(admin_students()) x where x ->> 'code' = (select code from students where id = '99999999-0000-0000-0000-000000004300')),
   '운영진 학생 목록: 수강 상태·강사·안내 안 보냄 표시 (4300)');
-select admin_regular_change_sent((select id from regular_changes where student_id = '99999999-0000-0000-0000-000000004300'), 'student');
-select pg_temp.ok((select student_sent_at is not null and tutor_sent_at is null from regular_changes where student_id = '99999999-0000-0000-0000-000000004300'),
+select admin_regular_change_sent(id, 'student') from regular_changes where student_id = '99999999-0000-0000-0000-000000004300';
+select pg_temp.ok((select bool_and(student_sent_at is not null and tutor_sent_at is null) from regular_changes where student_id = '99999999-0000-0000-0000-000000004300'),
   '③ 학생 [발송 완료]만 기록, 강사 안내는 따로 (4300)');
-select admin_regular_change_sent((select id from regular_changes where student_id = '99999999-0000-0000-0000-000000004300'), 'tutor');
+select admin_regular_change_sent(id, 'tutor') from regular_changes where student_id = '99999999-0000-0000-0000-000000004300';
 select pg_temp.ok((select not (x ->> 'notice_pending')::boolean from jsonb_array_elements(admin_students()) x where x ->> 'name_ko' = '김서연'), '③ 둘 다 보내면 안내 완료 (4300)');
 -- 강사는 정규 일정 변경·종료일 연장 불가
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004300';
@@ -2279,7 +2282,7 @@ select admin_student_update('99999999-0000-0000-0000-000000004300', '{"display_n
 select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-0000-000000004300', '{"timezone":"Mars/Base"}')$$, 'time zone');
 select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-0000-000000004300', '{"email":"nope"}')$$, 'email');
 select pg_temp.ok((select d -> 'student' ->> 'name_ko' = '김서연' and d -> 'student' ->> 'timezone' = 'America/Toronto' and d -> 'student' ->> 'level_note' = 'A2/B1 (시트)'
-                          and jsonb_array_length(d -> 'changes') = 1 and jsonb_array_length(d -> 'enrollments') = 2 and (d -> 'edits' -> 0 ->> 'role') = 'admin'
+                          and jsonb_array_length(d -> 'changes') = 3 and jsonb_array_length(d -> 'enrollments') = 2 and (d -> 'edits' -> 0 ->> 'role') = 'admin'
                           and (d -> 'enrollment' ->> 'seq')::int = 2 and (d -> 'enrollments' -> 1 ->> 'seq')::int = 1
                    from admin_student_detail('99999999-0000-0000-0000-000000004300') d),
   '운영진 상세: 한국 이름·바뀐 시간대·예전 레벨 참고·정규 변경 기록·수강권·수정 기록·연장 기록 (4300)');

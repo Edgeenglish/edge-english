@@ -135,7 +135,10 @@ export default function StudentProfile({ studentId, actions, onClose, now }: { s
               <>
                 <Row k="Korea Time (KST)" v={kst.text} />
                 {tz !== 'Asia/Seoul' && <Row k={`Your time — ${enZone(tz)}`} v={<>{mine.text}{shift(mine.dayShift, enZone(tz).replace(' Time', ''))}</>} />}
-                {stTz !== tz && <Row k={`Student's time — ${enZone(stTz)}`} v={<>{theirs.text}{shift(theirs.dayShift, enZone(stTz).replace(' Time', ''))}</>} />}
+                {stTz !== 'Asia/Seoul' && stTz !== tz && <Row k={`Student's time — ${enZone(stTz)}`} v={<>{theirs.text}{shift(theirs.dayShift, enZone(stTz).replace(' Time', ''))}</>} />}
+                {p.nextSlots.length > 0 && (() => { const nk = slotsIn(p.nextSlots, 'Asia/Seoul', p.nextSlots[0].from); const nm = slotsIn(p.nextSlots, tz, p.nextSlots[0].from); return (
+                  <Row k={`From ${enDate(p.nextSlots[0].from)}`} v={<b className="text-[#5b3fe0]">{nk.text} KST{tz !== 'Asia/Seoul' ? ` · ${nm.text} ${enZone(tz)}` : ''}</b>} />
+                ); })()}
                 {next && <Row k="Next class" v={<>{enAt(next.startsAt, tz)} {enZone(tz)}{tz !== 'Asia/Seoul' && <span className="text-[#6b6880]"> · {enAt(next.startsAt, 'Asia/Seoul').split(' · ')[1]} KST</span>}{next.substitute ? ' · cover class' : ''}</>} />}
                 {notes.map((n) => <p key={n} className="pt-1 text-[12.5px] text-[#a35b00]">{n}</p>)}
               </>

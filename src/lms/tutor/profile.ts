@@ -7,14 +7,18 @@ import { formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate }
 
 export type TutorAccess = 'regular' | 'substitute';
 export type TutorStudentProfile = {
-  student: StudentProfile; enrollment: EnrollmentInfo | null; slots: SlotFull[]; upcoming: Upcoming[]; recentTopics: RecentTopic[];
+  student: StudentProfile; enrollment: EnrollmentInfo | null; slots: SlotFull[];
+  /** 앞으로 바뀔 정규 일정 (운영진이 바꾼 뒤 적용 전) */
+  nextSlots: { weekday: number; time: string; from: KstDate }[];
+  upcoming: Upcoming[]; recentTopics: RecentTopic[];
   access: TutorAccess; me: { id: string | null; timezone: string };
 };
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB JSON → 화면 모양 */
 export function parseTutorProfile(j: any): TutorStudentProfile {
   return {
     student: parseProfile(j.student), enrollment: parseEnrollment(j.enrollment && j.enrollment.id ? j.enrollment : j.enrollment ? { ...j.enrollment, id: '', seq: 0, status: '' } : null),
-    slots: parseSlots(j.slots), upcoming: parseUpcoming(j.upcoming), recentTopics: parseTopics(j.recent_topics),
+    slots: parseSlots(j.slots), nextSlots: ((j.next_slots ?? []) as any[]).map((s) => ({ weekday: s.weekday, time: s.time, from: s.from })),
+    upcoming: parseUpcoming(j.upcoming), recentTopics: parseTopics(j.recent_topics),
     access: j.access === 'substitute' ? 'substitute' : 'regular', me: { id: j.me?.id ?? null, timezone: j.me?.timezone ?? 'Asia/Seoul' },
   };
 }

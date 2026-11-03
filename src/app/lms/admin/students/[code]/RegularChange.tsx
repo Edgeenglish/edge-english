@@ -107,11 +107,11 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
             </div>
           </div>
           {slots.map((s) => (
-            <div key={s.weekday} className="grid grid-cols-[1fr_auto] items-center gap-2">
+            <div key={s.weekday} className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-2">
               <label htmlFor={`t-${s.weekday}`} className="text-[14px] text-[#1d1b2b]">
-                {WD_KO[s.weekday]}요일 시작 시간 <span className="text-[12px] text-[#6b6880]">(한국 시간 · 30분 단위)</span>
+                {WD_KO[s.weekday]}요일 시작 시간 <span className="block text-[12px] text-[#6b6880]">한국 시간 · 30분 단위</span>
               </label>
-              <TimeInput id={`t-${s.weekday}`} value={times[s.weekday] ?? ''} onChange={(v) => setTimes({ ...times, [s.weekday]: v })} className={`${input} w-[112px] text-center`} />
+              <TimeInput id={`t-${s.weekday}`} value={times[s.weekday] ?? ''} onChange={(v) => setTimes({ ...times, [s.weekday]: v })} className={`${input.replace('w-full', 'w-[120px]')} text-center`} />
             </div>
           ))}
           <div>
@@ -173,10 +173,17 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
               <section className="rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2">
                 <h3 className="text-[13px] font-extrabold text-[#6b6880]">검사</h3>
                 <ul className="mt-1 grid gap-1 text-[13.5px]">
-                  <Check ok={!pv.problems.some((p) => p.why === 'tutor_unavailable')} text={`${pv.tutor.name} 가능 시간(My hours) 안`} />
-                  <Check ok={!pv.problems.some((p) => p.why === 'tutor_hours_range')} text={`강사 시작 시각이 ${koZone(pv.tutor.timezone)} 06:00~22:30 안`} />
-                  <Check ok={!pv.problems.some((p) => p.why === 'tutor_busy' || p.why === 'tutor_time_off' || p.why === 'tutor_hold')} text="다른 수업·휴무·재등록 대기 자리와 겹치지 않음 (휴식 10분 포함)" />
-                  <Check ok={!pv.problems.some((p) => p.why === 'after_end')} text={`마지막 수업 ${pv.lastDate ? mdw(pv.lastDate) : '—'} ≤ 최종 종료일 ${mdw(pv.enrollment.finalEndDate)} (종료일은 연장하지 않음)`} />
+                  {([
+                    [['tutor_hours_range'], `강사 시작 시각이 ${koZone(pv.tutor.timezone)} 06:00~22:30 안`],
+                    [['tutor_unavailable'], `${pv.tutor.name} 가능 시간(My hours) 안`],
+                    [['tutor_busy', 'tutor_time_off', 'tutor_hold'], '다른 수업·휴무·재등록 대기 자리와 겹치지 않음 (휴식 10분 포함)'],
+                    [['after_end'], `마지막 수업 ${pv.lastDate ? mdw(pv.lastDate) : '—'} ≤ 최종 종료일 ${mdw(pv.enrollment.finalEndDate)} (종료일은 연장하지 않음)`],
+                  ] as [string[], string][]).map(([whys, label2]) => {
+                    const bad = pv.problems.some((p) => whys.includes(p.why));
+                    // 한 수업에 문제가 있으면 그 뒤 검사는 하지 않음 → ✓ 대신 '앞 문제 고친 뒤 검사'
+                    const state = bad ? 'bad' : pv.problems.length > 0 ? 'skip' : 'ok';
+                    return <Check key={label2} state={state} text={label2} />;
+                  })}
                 </ul>
                 {pv.problems.length > 0 && (
                   <ul className="mt-2 grid gap-1 text-[13px] text-[#b3261e]">
@@ -203,6 +210,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
   );
 }
 
-function Check({ ok, text }: { ok: boolean; text: string }) {
-  return <li className={ok ? 'text-[#13623a]' : 'text-[#b3261e]'}>{ok ? '✓' : '✕'} {text}</li>;
+function Check({ state, text }: { state: 'ok' | 'bad' | 'skip'; text: string }) {
+  if (state === 'skip') return <li className="text-[#6b6880]">· {text} <span className="text-[12px]">(위 문제를 고친 뒤 검사)</span></li>;
+  return <li className={state === 'ok' ? 'text-[#13623a]' : 'text-[#b3261e]'}>{state === 'ok' ? '✓' : '✕'} {text}</li>;
 }
