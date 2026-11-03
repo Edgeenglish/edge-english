@@ -7,6 +7,7 @@
 // - 실제로 저장에 성공했을 때만 '등록 완료'. 미리보기(가상 데이터)는 저장하지 않음
 
 import Link from 'next/link';
+import ApplicationPicker from './ApplicationPicker';
 import { useEffect, useMemo, useState } from 'react';
 import { checkRegularPlan, firstLessonDateOnOrAfter, issueText, type CellState, type PlanIssue } from '@/lms/rules/booking';
 import { addDays, instantToKstDate, weekdayOf, type KstDate } from '@/lms/rules/dates';
@@ -146,7 +147,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     setDraft(d);
     setTzWhy(suggestTimezone(d.country, d.city).why);
     setEditing(false);
-    setPay((p) => ({ ...p, payerName: a.payerName }));
+    setPay({ ...EMPTY_PAYMENT, payerName: a.payerName, method: a.paymentMethod ?? null });
     setSlots([]);
     setFirstPick('');
     if (a.startWish && /^\d{4}-\d{2}-\d{2}$/.test(a.startWish)) setWeekStart(a.startWish < today ? today : a.startWish);
@@ -338,20 +339,8 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       title="1. 학생 정보"
       badge={app ? <Badge tone="green">신청서 연동 완료</Badge> : <Badge tone="gray">직접 입력</Badge>}
     >
+      <ApplicationPicker applications={applications} selected={appRef} onSelect={loadApp} onManual={manual} />
       <div className="mb-3 flex gap-2">
-        <select
-          aria-label="신청서 불러오기"
-          value={appRef ?? ''}
-          onChange={(e) => (e.target.value ? loadApp(e.target.value) : manual())}
-          className="min-h-[44px] min-w-0 flex-1 rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]"
-        >
-          <option value="">신청서 없이 직접 입력</option>
-          {applications.map((a) => (
-            <option key={a.ref} value={a.ref}>
-              {a.nameKo} · {a.submittedAt.slice(5, 10).replace('-', '/')} 제출 · {a.ref}
-            </option>
-          ))}
-        </select>
         {app && (
           <button type="button" onClick={() => setShowRaw(true)} className="min-h-[44px] shrink-0 whitespace-nowrap rounded-[10px] border border-[#e6e3ef] px-3 text-[13.5px] font-semibold text-[#1d1b2b]">
             원본 보기
