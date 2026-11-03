@@ -13,6 +13,8 @@
 - 강사 화면: 수업 상세·대체 요청·보강 답 시각에 '[도시] Time', Make-up/Compensation for 줄에 도시+KST (`whenFull`)
 - 미리보기 확인용 `/lms/student?demo=1&tz=America/Toronto`. 휴대폰·PC 클릭 확인(취소 → 보강 고르기 → 나중에 고르기 → 닫힘, 한국 시간 끄기/켜기). `npm test` 329 · build 통과
 - CLAUDE.md에 '시간 표기' 원칙 추가. **남은 것: 운영진 화면 시각들도 '(한국 시간)' 표기 점검**
+- 시험용 DB 실제 응답(STU-0002 멜버른 학생, student_screen)으로 학생 화면 그려 확인: UTC 00:30 수업 → 'Melbourne 11:30 · 한국 09:30' 맞음. 실제 로그인 화면 클릭은 아직(운영자 TOTP 필요)
+- **⏳ 대표 결정 (11/3): 운영 배포 보류** — 대표가 시험 주소 실제 화면(운영자 보기 `?student=`·`?tutor=`)에서 확인한 뒤 운영 반영. 학생 관리 1~7번은 **별도 세션에서 승인 → 개발**. 시안은 승인 전 설계(시간 표기 일관성 고침: 한국 시간·학생 도시 시간·강사 도시 시간을 이름과 함께 — 새로 만드는 모든 화면에 적용)
 
 ## 🆕 2026-11-03 저녁 (브랜치 claude/eloquent-gauss-vp8uct): 위 1~7번 조사 + 시안 → **대표 선택 대기 (개발 전)**
 - 시안 https://claude.ai/artifact/FvSAvM7mFXnGwDwPSnrdWc (원본 `docs/lms/previews/student-info-drafts.html`): A 학생 목록(수강 중·수강 예정·종료) · B 학생 상세 · C 정규 일정 수정(요일·시간·적용 시작일 → 바뀌는 수업/그대로 두는 수업 미리 보기·검사) · D 종료일 연장 · E 강사 Student profile(Profile / About & preferences / Class / Enrollment). G에 정할 것 ①~⑦

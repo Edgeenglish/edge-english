@@ -111,7 +111,7 @@ h2{font-size:19px;margin:0;text-wrap:balance}
 
 <div class="wrap">
   <header class="sec-head">
-    <span class="tag">2026-11-03 시안 · 승인 전</span>
+    <span class="tag">2026-11-03 시안 · 승인 전 설계 (개발·배포 안 함)</span>
     <h1>학생 메뉴 · 정규 일정 수정 · 종료일 연장 · 강사용 학생 정보</h1>
     <p class="lead">대표 요청 1~5번 화면 시안입니다. 휴대폰과 PC를 같이 보여 드려요. 시안 속 학생·날짜는 가상이고, 실제 숫자 정책(기간·횟수 등)은 새로 정하지 않았어요. 맨 아래 '정할 것'을 골라 주시면 그대로 개발합니다.</p>
   </header>
@@ -198,9 +198,9 @@ h2{font-size:19px;margin:0;text-wrap:balance}
     <div class="search">🔍 이름, 영문 이름, STU 번호, 이메일, 강사</div>
     <div class="chips"><span class="chip on">수강 중 9</span><span class="chip">수강 예정 2</span><span class="chip">종료 6</span><span class="chip">전체 17</span></div>
     <div class="list two">
-      <div class="item"><span class="av">O</span><span class="t"><b>박O준</b> <span class="pill p-ok">수강 중</span><span class="sub">STU-0013 · Maria · 화/목 22:00 · 12주 · 종료 1/26</span></span>›</div>
-      <div class="item"><span class="av">O</span><span class="t"><b>이O나</b> <span class="pill p-warn">종료 임박</span><span class="sub">STU-0011 · Maria · 월/수 20:00 · 4주 · 종료 11/9</span></span>›</div>
-      <div class="item"><span class="av">O</span><span class="t"><b>김O연</b> <span class="pill p-ac">수강 예정</span><span class="sub">STU-0014 · Benny · 월/목 10:00 · 11/9 시작</span></span>›</div>
+      <div class="item"><span class="av">O</span><span class="t"><b>박O준</b> <span class="pill p-ok">수강 중</span><span class="sub">STU-0013 · Maria · 화/목 22:00 (한국 시간) · 12주 · 종료 1/26</span></span>›</div>
+      <div class="item"><span class="av">O</span><span class="t"><b>이O나</b> <span class="pill p-warn">종료 임박</span><span class="sub">STU-0011 · Maria · 월/수 20:00 (한국 시간) · 4주 · 종료 11/9</span></span>›</div>
+      <div class="item"><span class="av">O</span><span class="t"><b>김O연</b> <span class="pill p-ac">수강 예정</span><span class="sub">STU-0014 · Benny · 월/목 10:00 (한국 시간) · 11/9 시작</span></span>›</div>
       <div class="item"><span class="av">O</span><span class="t"><b>정O우</b> <span class="pill p-mu">종료</span><span class="sub">STU-0004 · Olivia · 10/26 종료 · 재등록 안 함</span></span>›</div>
     </div>
     <p class="fact" style="margin:0">'종료 임박'은 대시보드에서 이미 쓰는 기준을 그대로 써요(새 숫자 없음).</p>
@@ -214,8 +214,9 @@ h2{font-size:19px;margin:0;text-wrap:balance}
       <div class="stats"><span>남은 정규<b>21/24</b></span><span>이월<b>1회</b></span><span>최종 종료<b>1/26</b></span></div></div>
     <div class="split">
       <div class="card"><h3>정규 일정 <span style="float:right"><span class="btn sm pri">정규 일정 수정</span></span></h3>
-        <div class="row"><span class="k">요일·시간 (한국)</span><span class="v">화·목 22:00 · 40분</span></div>
-        <div class="row"><span class="k">강사</span><span class="v">Maria · 강사 현지 화·목 20:00 (Ho Chi Minh City)</span></div>
+        <div class="row"><span class="k">한국 시간</span><span class="v">화·목 22:00 · 40분</span></div>
+        <div class="row"><span class="k">학생 · Toronto 시간</span><span class="v">화·목 08:00</span></div>
+        <div class="row"><span class="k">강사 Maria · Ho Chi Minh City 시간</span><span class="v">화·목 20:00</span></div>
         <div class="row"><span class="k">적용</span><span class="v">11/3부터</span></div>
         <div class="row"><span class="k">바뀐 기록</span><span class="v">없음</span></div></div>
       <div class="card"><h3>수강 <span style="float:right"><span class="btn sm">종료일 연장</span></span></h3>
@@ -223,7 +224,7 @@ h2{font-size:19px;margin:0;text-wrap:balance}
         <div class="row"><span class="k">등록 수업</span><span class="v">24회 + 이월 1회</span></div>
         <div class="row"><span class="k">기간</span><span class="v">11/3 – 1/25 (84일)</span></div>
         <div class="row"><span class="k">연장</span><span class="v">+1일 (휴무 자동)</span></div>
-        <div class="row"><span class="k">최종 종료</span><span class="v"><b>1/26(화) 23:59 한국</b></span></div></div>
+        <div class="row"><span class="k">최종 종료</span><span class="v"><b>1/26(화) 23:59 (한국 시간)</b><span class="sub">= 1/26(화) 09:59 (Toronto 시간)</span></span></div></div>
       <div class="card"><h3>프로필 <span style="float:right"><span class="btn sm">수정</span></span></h3>
         <div class="row"><span class="k">Preferred Name</span><span class="v">Minjun</span></div>
         <div class="row"><span class="k">거주</span><span class="v">Canada · Toronto · America/Toronto</span></div>
@@ -233,7 +234,7 @@ h2{font-size:19px;margin:0;text-wrap:balance}
         <div class="row"><span class="k">결제</span><span class="v">11/2 계좌이체 · 확인</span></div>
         <div class="row"><span class="k">운영 메모</span><span class="v">강사 화면에 안 보임</span></div></div>
     </div>
-    <p class="note">강사 현지 시간은 수업 날짜 기준으로 계산해서 보여 줘요. 06:00~22:30 밖이면 빨간 글로 알려요.</p>
+    <p class="note">모든 시각은 '한국 시간 · 학생 도시 시간 · 강사 도시 시간'을 이름과 같이 보여 줘요. 실제 수업 날짜 기준으로 계산해서 서머타임·날짜·요일이 바뀌면 그대로 반영돼요.</p>
   </div>
 </template>
 
@@ -242,31 +243,31 @@ h2{font-size:19px;margin:0;text-wrap:balance}
   <div class="scr">
     <div class="sheet">
       <div class="top">정규 일정 수정<span class="x">✕</span></div>
-      <div class="field"><span class="lab">요일 (한국 날짜)</span><div class="days"><span>월</span><span class="on">화</span><span>수</span><span class="on">목</span><span>금</span><span>토</span><span>일</span></div></div>
+      <div class="field"><span class="lab">요일 (한국 시간 기준)</span><div class="days"><span>월</span><span class="on">화</span><span>수</span><span class="on">목</span><span>금</span><span>토</span><span>일</span></div></div>
       <div class="split">
-        <div class="field"><span class="lab">시작 시간 (한국)</span><div class="inp">22:00 → <b>22:30</b> ▾</div></div>
+        <div class="field"><span class="lab">시작 시간 (한국 시간)</span><div class="inp">22:00 → <b>22:30</b> ▾</div></div>
         <div class="field"><span class="lab">적용 시작일</span><div class="inp"><b>11/5(목)</b>부터 ▾</div></div>
       </div>
       <div class="field"><span class="lab">바뀌는 수업 8회</span>
         <div class="chg">
-          <div><span>11/5(목)</span><span>22:00 → <span class="new">22:30</span></span></div>
-          <div><span>11/10(화)</span><span>22:00 → <span class="new">22:30</span></span></div>
-          <div><span>11/12(목)</span><span>22:00 → <span class="new">22:30</span></span></div>
-          <div><span>… 1/21(목)까지</span><span>모두 22:30</span></div>
-          <div class="keep"><span>11/3(화) 지난 수업</span><span>그대로</span></div>
-          <div class="keep"><span>11/17(화) 보강 확정 20:00</span><span>그대로</span></div>
-          <div class="keep"><span>11/19(목) 대체 수업 · Benny</span><span>그대로</span></div>
+          <div style="display:grid;gap:2px"><b>11/5(목)</b><span>한국 시간 22:00 → <span class="new">22:30</span></span><span>Toronto 시간 11/5(목) 08:00 → <span class="new">08:30</span></span><span>Ho Chi Minh City 시간 11/5(목) 20:00 → <span class="new">20:30</span></span></div>
+          <div style="display:grid;gap:2px"><b>11/10(화)</b><span>한국 시간 22:00 → <span class="new">22:30</span></span><span>Toronto 시간 11/10(화) 08:00 → <span class="new">08:30</span></span><span>Ho Chi Minh City 시간 11/10(화) 20:00 → <span class="new">20:30</span></span></div>
+          <div><span>… 1/21(목)까지 6회 더</span><span>같은 시각</span></div>
+          <div class="keep"><span>11/3(화) 22:00 (한국 시간) 지난 수업</span><span>그대로</span></div>
+          <div class="keep"><span>11/17(화) 20:00 (한국 시간) 보강 확정</span><span>그대로</span></div>
+          <div class="keep"><span>11/19(목) 22:00 (한국 시간) 대체 수업 · Benny</span><span>그대로</span></div>
         </div></div>
       <div class="field"><span class="lab">검사</span>
-        <div class="check"><div>Maria 가능 시간 안 (화·목 22:30 시작)</div><div>강사 현지 시작 06:00~22:30 안</div><div>다른 학생 수업과 겹치지 않음 (휴식 10분 포함)</div><div>마지막 수업 1/21 ≤ 최종 종료일 1/26</div></div></div>
+        <div class="check" style="margin-bottom:4px"><div>Maria 가능 시간 안 (Ho Chi Minh City 시간 화·목 20:30 시작)</div><div>강사 시작 시각이 Ho Chi Minh City 시간 06:00~22:30 안</div><div>다른 학생 수업과 겹치지 않음 (휴식 10분 포함)</div><div>마지막 수업 1/21 ≤ 최종 종료일 1/26</div></div></div>
       <div class="time3">
-        <div><span class="who">학생 현지 시간 — Toronto</span><span class="when">화·목 08:30</span><span class="d">11/5 기준 (Toronto는 11/1에 서머타임 끝남)</span></div>
-        <div><span class="who">강사 현지 시간 — Ho Chi Minh City</span><span class="when">화·목 20:30</span></div>
+        <div><span class="who">한국 시간</span><span class="when">화·목 22:30</span></div>
+        <div><span class="who">학생 — Toronto 시간</span><span class="when">화·목 08:30</span><span class="d">11/5 수업부터 (Toronto 서머타임은 11/1에 끝남)</span></div>
+        <div><span class="who">강사 — Ho Chi Minh City 시간</span><span class="when">화·목 20:30</span></div>
       </div>
-      <div class="field"><span class="lab">사유 (필수)</span><div class="inp">학생 요청 (11/3 카톡)</div><span class="fact">학생·강사 시간은 위 시안 예시처럼 도시 이름과 같이 보여 줘요.</span></div>
+      <div class="field"><span class="lab">사유 (필수)</span><div class="inp">학생 요청 (11/3 카톡)</div></div>
       <div class="btns"><span class="btn">취소</span><span class="btn pri">8회 바꾸고 저장</span></div>
     </div>
-    <p class="note">검사 중 하나라도 ✕면 저장 버튼이 꺼지고 이유를 적어 줘요. 예: '강사 현지 00:30 시작 — 06:00~22:30 밖이에요'.</p>
+    <p class="note">검사 중 하나라도 ✕면 저장 버튼이 꺼지고 이유를 적어 줘요. 예: '강사 시작 00:30 (Melbourne 시간) — 06:00~22:30 밖이에요'.</p>
   </div>
 </template>
 
@@ -276,12 +277,12 @@ h2{font-size:19px;margin:0;text-wrap:balance}
     <div class="sheet">
       <div class="top">종료일 연장<span class="x">✕</span></div>
       <div class="card" style="padding:8px 12px">
-        <div class="row"><span class="k">원래 종료일</span><span class="v">1/25(월)</span></div>
+        <div class="row"><span class="k">원래 종료</span><span class="v">1/25(월) 23:59 (한국 시간)</span></div>
         <div class="row"><span class="k">이미 연장</span><span class="v">+1일 · 휴무 자동 (11/10 Maria 휴무)</span></div>
-        <div class="row"><span class="k">지금 최종 종료일</span><span class="v"><b>1/26(화)</b></span></div>
+        <div class="row"><span class="k">지금 최종 종료</span><span class="v"><b>1/26(화) 23:59 (한국 시간)</b><span class="sub">= 1/26(화) 09:59 (Toronto 시간)</span></span></div>
       </div>
       <div class="split">
-        <div class="field"><span class="lab">새 최종 종료일</span><div class="inp"><b>2/2(화)</b> ▾</div></div>
+        <div class="field"><span class="lab">새 최종 종료일 (23:59 한국 시간)</span><div class="inp"><b>2/2(화)</b> ▾</div><span class="fact">= 2/2(화) 09:59 (Toronto 시간)</span></div>
         <div class="field"><span class="lab">더해지는 날</span><div class="inp">+7일 (자동 계산)</div></div>
       </div>
       <div class="field"><span class="lab">사유 (필수)</span><div class="inp big">학생 입원으로 2주 수업 못 함 — 대표 승인 11/3</div></div>
@@ -322,7 +323,7 @@ h2{font-size:19px;margin:0;text-wrap:balance}
         <div class="row"><span class="k">Class duration</span><span class="v">40 min</span></div>
         <div class="time3">
           <div><span class="who">Korea Time (KST)</span><span class="when">Tue/Thu 10:00 AM</span></div>
-          <div><span class="who">Your time — Melbourne</span><span class="when">Tue/Thu 12:00 PM</span></div>
+          <div><span class="who">Your time — Melbourne Time</span><span class="when">Tue/Thu 12:00 PM</span></div>
           <div><span class="who">Student's time — Toronto</span><span class="when">Mon/Wed 8:00 PM</span><span class="warnline">Day before in Toronto</span><span class="d">Next class: Thu, Nov 5 · Toronto clocks went back on Nov 1</span></div>
         </div>
         <div class="row"><span class="k">Google Docs</span><span class="v"><span class="btn sm">Open class notes ↗</span></span></div>
@@ -335,7 +336,7 @@ h2{font-size:19px;margin:0;text-wrap:balance}
         <div class="row"><span class="k">Start date</span><span class="v">Nov 3, 2026</span></div>
         <div class="row"><span class="k">End date</span><span class="v">Jan 25, 2027</span></div>
         <div class="row"><span class="k">Extended end date</span><span class="v">Jan 26, 2027</span></div>
-        <div class="row"><span class="k">Final end</span><span class="v"><b>Jan 26, 11:59 PM KST</b><span class="sub">= Jan 26, 9:59 AM Toronto</span></span></div>
+        <div class="row"><span class="k">Final end</span><span class="v"><b>Jan 26, 11:59 PM Korea Time (KST)</b><span class="sub">= Jan 27, 1:59 AM Melbourne Time</span><span class="sub">= Jan 26, 9:59 AM Student's time — Toronto</span></span></div>
       </div>
     </div>
     <p class="note">'Your time — Melbourne'은 강사 본인 화면이라 이렇게 썼어요. 'Local'·'Your time' 한 단어만 쓰지 않고 도시를 늘 같이 적어요. Edit(자기소개·선호)와 레벨은 담당 정규 강사만, 결제·운영 메모는 강사 화면에 없음.</p>
