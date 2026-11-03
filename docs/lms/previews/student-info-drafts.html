@@ -1,0 +1,356 @@
+<title>학생 메뉴 · 학생 정보 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
+<style>
+/* 레이아웃: 화면마다 휴대폰 틀 + PC 틀(가로 스크롤), 같은 내용을 컨테이너 너비로 배치만 바꿈 */
+:root{
+  --bg:#f6f5fb; --panel:#ffffff; --fg:#1d1b2b; --muted:#6b6880; --line:#e6e3ef; --soft:#f0eef6;
+  --accent:#7d5ffb; --accent-ink:#5b3fe0; --accent-soft:#efebff; --hero:#1b1442; --hero-2:#2c2263; --hero-ink:#d8d3f5;
+  --ok:#13623a; --ok-soft:#e3f5ea; --warn:#8a5300; --warn-soft:#fff1d6; --bad:#b3261e; --bad-soft:#fde8e6; --note:#fff8d6; --note-ink:#5c4a00;
+  --font:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#13111c; --panel:#1d1a2a; --fg:#ecebf3; --muted:#a9a6bb; --line:#33304a; --soft:#28253a;
+  --accent:#9b84ff; --accent-ink:#b9a8ff; --accent-soft:#2c2650; --hero:#0d0a22; --hero-2:#251d55; --hero-ink:#c9c0ff;
+  --ok:#7fd8a3; --ok-soft:#163626; --warn:#f2c06b; --warn-soft:#3a2c10; --bad:#ff9a90; --bad-soft:#3d1a17; --note:#3a3313; --note-ink:#f0e2a0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#13111c; --panel:#1d1a2a; --fg:#ecebf3; --muted:#a9a6bb; --line:#33304a; --soft:#28253a;
+  --accent:#9b84ff; --accent-ink:#b9a8ff; --accent-soft:#2c2650; --hero:#0d0a22; --hero-2:#251d55; --hero-ink:#c9c0ff;
+  --ok:#7fd8a3; --ok-soft:#163626; --warn:#f2c06b; --warn-soft:#3a2c10; --bad:#ff9a90; --bad-soft:#3d1a17; --note:#3a3313; --note-ink:#f0e2a0; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:40px}
+h1{font-size:24px;margin:0;text-wrap:balance}
+h2{font-size:19px;margin:0;text-wrap:balance}
+.lead{color:var(--muted);max-width:68ch;margin:6px 0 0}
+.sec{display:grid;gap:14px}
+.sec-head{display:grid;gap:4px}
+.tag{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:.06em;color:var(--accent-ink);text-transform:uppercase}
+.frames{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.phone{width:375px;max-width:100%;border:8px solid var(--fg);border-radius:30px;background:var(--bg);overflow:hidden;container-type:inline-size}
+.pcbox{flex:1 1 560px;min-width:0;overflow-x:auto;border-radius:14px}
+.pc{width:860px;border:1px solid var(--line);border-radius:14px;background:var(--bg);overflow:hidden;container-type:inline-size}
+.cap{font-size:12px;color:var(--muted);margin:0 0 6px;font-weight:700}
+.scr{display:grid;gap:10px;padding:12px}
+.bar{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--line);font-weight:800}
+.bar .sp{flex:1}
+.nav{display:flex;gap:4px;font-size:12px;font-weight:700}
+.nav span{padding:4px 8px;border-radius:8px;color:var(--muted)}
+.nav .on{background:var(--accent-soft);color:var(--accent-ink)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.card h3{margin:0 0 6px;font-size:12px;font-weight:800;letter-spacing:.05em;color:var(--muted)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--soft);font-size:13.5px}
+.row:last-child{border-bottom:0}
+.row .k{color:var(--muted);flex-shrink:0}
+.row .v{text-align:right;min-width:0;overflow-wrap:anywhere}
+.search{display:flex;align-items:center;gap:8px;min-height:44px;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:0 12px;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:700;color:var(--muted)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:800}
+.p-ok{background:var(--ok-soft);color:var(--ok)}.p-warn{background:var(--warn-soft);color:var(--warn)}.p-ac{background:var(--accent-soft);color:var(--accent-ink)}.p-mu{background:var(--soft);color:var(--muted)}.p-bad{background:var(--bad-soft);color:var(--bad)}
+.list{display:grid;gap:8px}
+.item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.av{width:38px;height:38px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.item .t{min-width:0;flex:1}
+.item b{font-size:14.5px}
+.sub{display:block;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero{background:var(--hero);color:#fff;border-radius:16px;padding:14px;display:grid;gap:10px}
+.hero p{margin:0}
+.hero .s{color:var(--hero-ink);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.stats span{background:var(--hero-2);border-radius:10px;padding:6px 8px;text-align:center;font-size:11px;color:var(--hero-ink)}
+.stats b{display:block;font-size:15px;color:#fff}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 14px;border-radius:10px;font-weight:700;font-size:13.5px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.sm{min-height:30px;padding:0 10px;font-size:12.5px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.field{display:grid;gap:4px;font-size:13px}
+.field .lab{color:var(--muted);font-weight:700;font-size:12.5px}
+.inp{min-height:40px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.inp.big{min-height:64px;align-items:flex-start}
+.days{display:flex;gap:4px;flex-wrap:wrap}
+.days span{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;background:var(--panel)}
+.days .on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chg{display:grid;gap:4px}
+.chg div{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:6px 8px;border-radius:8px;background:var(--soft)}
+.chg .new{color:var(--accent-ink);font-weight:800}
+.chg .keep{background:transparent;border:1px dashed var(--line);color:var(--muted)}
+.check{display:grid;gap:4px;font-size:13px}
+.check div::before{content:"✓ ";color:var(--ok);font-weight:800}
+.check div.x::before{content:"✕ ";color:var(--bad)}
+.note{background:var(--note);color:var(--note-ink);border-radius:10px;padding:8px 10px;font-size:12.5px}
+.sheet{border:1px solid var(--line);background:var(--panel);border-radius:16px 16px 0 0;padding:14px;display:grid;gap:12px;box-shadow:0 -8px 24px rgba(0,0,0,.08)}
+.sheet .top{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:15px}
+.x{color:var(--muted);font-size:18px}
+.time3{display:grid;gap:6px}
+.time3 div{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:13px}
+.time3 .who{font-weight:800;font-size:12px;color:var(--muted)}
+.time3 .when{font-weight:800}
+.time3 .d{grid-column:1/-1;color:var(--muted);font-size:12px}
+.time3 .warnline{grid-column:1/-1;color:var(--warn);font-size:12px;font-weight:700}
+.copy{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.una{color:var(--muted);font-style:italic}
+.split{display:grid;gap:10px}
+.who-tag{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.04em}
+@container (min-width:700px){
+  .split{grid-template-columns:1fr 1fr;align-items:start}
+  .split3{grid-template-columns:1fr 1fr 1fr}
+  .list.two{grid-template-columns:1fr 1fr}
+  .sheet{border-radius:16px;max-width:560px;margin:0 auto}
+}
+.dec{display:grid;gap:10px}
+.dec article{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:6px}
+.dec h3{margin:0;font-size:15px}
+.dec p{margin:0}
+.dec ul{margin:0;padding-left:18px}
+.rec{color:var(--accent-ink);font-weight:700}
+.fact{font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="sec-head">
+    <span class="tag">2026-11-03 시안 · 승인 전</span>
+    <h1>학생 메뉴 · 정규 일정 수정 · 종료일 연장 · 강사용 학생 정보</h1>
+    <p class="lead">대표 요청 1~5번 화면 시안입니다. 휴대폰과 PC를 같이 보여 드려요. 시안 속 학생·날짜는 가상이고, 실제 숫자 정책(기간·횟수 등)은 새로 정하지 않았어요. 맨 아래 '정할 것'을 골라 주시면 그대로 개발합니다.</p>
+  </header>
+
+  <!-- A -->
+  <section class="sec">
+    <div class="sec-head"><span class="tag">A · 운영진</span><h2>학생 목록 · 이름 검색 (요청 2)</h2>
+      <p class="lead">지금 하단 메뉴의 '학생'은 가상 미리보기만 있어요(실제 데이터 연결 전). 같은 화면을 실제 데이터로 연결하고 수강 상태 칸을 붙입니다. 상태는 등록 기간으로 계산해요(따로 입력 안 함).</p></div>
+    <div class="frames" data-tpl="list"></div>
+  </section>
+
+  <!-- B -->
+  <section class="sec">
+    <div class="sec-head"><span class="tag">B · 운영진</span><h2>학생 상세 (요청 1·2·4)</h2>
+      <p class="lead">기존 학생 상세 모양을 그대로 쓰고, 칸마다 [수정] 버튼을 붙여요. 결제·운영 메모는 운영진 화면에만 있어요.</p></div>
+    <div class="frames" data-tpl="detail"></div>
+  </section>
+
+  <!-- C -->
+  <section class="sec">
+    <div class="sec-head"><span class="tag">C · 운영진</span><h2>정규 일정 수정 → 미리 보기 → 저장 (요청 1)</h2>
+      <p class="lead">요일·시작 시간·적용 시작일을 고르면 바뀔 수업을 바로 보여 줘요. 지난 수업, 따로 확정된 보강·대체 수업은 '그대로'로 따로 표시하고 건드리지 않아요. 강사 가능 시간·다른 수업과 겹침·강사 현지 06:00~22:30 시작은 저장할 때 DB에서 다시 검사해요.</p></div>
+    <div class="frames" data-tpl="regular"></div>
+  </section>
+
+  <!-- D -->
+  <section class="sec">
+    <div class="sec-head"><span class="tag">D · 운영진만</span><h2>종료일 연장 (요청 4)</h2>
+      <p class="lead">기존 연장 기록 표(enrollment_extensions)에 한 줄 더하는 방식이에요. 휴무 자동 연장은 그 기록 그대로 두고 합계로 계산하니까 두 번 더해지지 않아요. 연장해도 수업 회차는 늘지 않아요. 강사 화면엔 이 버튼이 없고, DB에서도 강사는 막혀요.</p></div>
+    <div class="frames" data-tpl="extend"></div>
+  </section>
+
+  <!-- E -->
+  <section class="sec">
+    <div class="sec-head"><span class="tag">E · 강사 (영어 화면)</span><h2>Student profile — 강사가 학생 이름을 누르면 열림 (요청 3·5)</h2>
+      <p class="lead">(B~D와 다른 가상 학생 예시예요: 학생 Toronto · 강사 Melbourne.) 강사 화면의 수업 줄·수업 상세에서 학생 이름을 누르면 열려요. 닫으면 보던 주로 돌아가요. 네 칸(Profile / About & preferences / Class / Enrollment)으로 나눴어요. 시간은 누구 시간인지 항상 함께 적고, 수업 날짜 기준으로 서머타임·날짜·요일 변화를 계산해요.</p></div>
+    <div class="frames" data-tpl="tutor"></div>
+  </section>
+
+  <!-- F -->
+  <section class="sec">
+    <div class="sec-head"><span class="tag">F</span><h2>자료에서 확인한 것</h2></div>
+    <div class="dec">
+      <article><h3>시트 'Local' 시간은 강사 기준이에요</h3>
+        <p>Benny Class Record의 Student Info를 보면 한국에 사는 학생도 Local이 KST보다 1시간 늦어요(예: KST 9am → Local 10:00). 강사(멜버른) 시간이라는 뜻이에요. 3월 16일 시작 학생은 멜버른 서머타임 기간(KST+2)인데도 +1로 적혀 있었어요. 글자로 고정된 칸이라 서머타임을 따라가지 않는다는 뜻이고, 그래서 LMS는 수업 날짜마다 다시 계산해서 보여 줘요.</p></article>
+      <article><h3>이미 있는 데이터 칸 (새로 안 만듦)</h3>
+        <p class="fact">students: name_en(Student Name) · display_name(Preferred Name) · country · city · timezone · gender_age · email · level · class_type · correction_pref · class_note_url(Google Docs) · self_intro_en(기존 자기소개). 일정·회차·이월·기간·종료일은 regular_schedules · lessons · enrollments(lessons_purchased · lessons_carried_in · weeks · start_date · base_end_date · final_end_date) · enrollment_extensions에서 그대로 읽어요.</p>
+        <p class="fact">새로 필요한 것: 자기소개·선호 7항목 칸, 레벨·답변을 누가 언제 고쳤는지 남기는 기록 표, 정규 일정 변경·종료일 연장 DB 함수. 7항목을 저장하는 기본 칸이 없어서 이것만 추가해요.</p></article>
+      <article><h3>운영 DB 지금 상태</h3>
+        <p class="fact">운영 학생 12명: 프로필 칸(자기소개·레벨·성별/연령·국가)이 모두 비어 있어요. 이메일은 1명만 학생 표에 있어요. 그래서 강사 화면에는 처음엔 'Not provided'가 많이 보여요. 시트에서 가져오는 건 운영 데이터 변경이라 아래 정할 것 ⑤로 따로 여쭤봐요.</p></article>
+      <article><h3>English Speaking Level Rubric (원본 그대로)</h3>
+        <p>Beginner · Pre-Intermediate · Intermediate · Advanced, 4단계예요. 시트의 기존 레벨은 A2/B1·B2/C1 같은 다른 표기라서 자동으로 바꾸지 않아요. 기존 값이 있으면 'Earlier note: A2/B1'로 보여 주고, 강사가 4단계 중에 고르게 해요.</p></article>
+      <article><h3>대체강사가 학생 정보를 보는 지금 규칙</h3>
+        <p class="fact">DB 함수 tutor_my_students는 지난 60일 안이나 앞으로 그 학생 수업이 있는 강사면 정규·대체 구분 없이 같은 정보를 보여 줘요. 이 60일은 정책 기준표 POL-OP-06(검토 중, 대표 승인 전)에 묶인 값이에요. 그래서 대체강사 규칙은 아래 ⑥에서 정해 주셔야 해요.</p></article>
+    </div>
+  </section>
+
+  <!-- G -->
+  <section class="sec">
+    <div class="sec-head"><span class="tag">G · 대표님이 정할 것</span><h2>골라 주시면 그대로 개발해요</h2></div>
+    <div class="dec">
+      <article><h3>① 정규 일정 수정 화면에서 바꿀 수 있는 것</h3>
+        <ul><li><b>A (추천)</b> 요일·시작 시간만. 주 횟수·수업 길이(금액이 달라짐)와 강사 변경(기존 강사 변경 흐름이 따로 있음)은 이 화면에서 빼요.</li><li><b>B</b> 수업 길이까지 포함</li></ul>
+        <p class="rec">추천 이유: 주 횟수·길이는 상품과 금액이 바뀌어서 재등록·정산 쪽 결정이 같이 필요해요.</p></article>
+      <article><h3>② 새 일정으로 옮기면 마지막 수업이 최종 종료일 뒤로 넘어갈 때</h3>
+        <ul><li><b>A (추천)</b> 저장을 막고 '종료일 연장 먼저 해 주세요'라고 안내해요. 회차는 그대로예요.</li><li><b>B</b> 종료일 안에 들어가는 회차만 옮기고 나머지는 보강 권리로 남겨요.</li></ul></article>
+      <article><h3>③ 학생·강사에게 알리는 방법</h3>
+        <ul><li><b>A (추천)</b> 저장하면 학생 LMS·강사 화면·대시보드에 바로 반영해요. 카톡 안내는 지금처럼 운영진이 보내고, 저장 뒤 '안내 문구 복사'만 붙여요.</li><li><b>B</b> 메일 자동 발송까지 (메일 알림 개발 뒤)</li></ul></article>
+      <article><h3>④ Preferred Name·영어 이름</h3>
+        <p>Student Name = 지금 영문 이름(name_en), Preferred Name = 지금 display_name 칸(강사에게 보이는 이름)을 그대로 써요. 영어 이름 칸은 Student Name과 같은 데이터라 따로 만들지 않아요. <span class="rec">이대로 진행해도 될까요?</span></p></article>
+      <article><h3>⑤ 시트 Student Info의 기존 정보를 운영 DB로 가져올지</h3>
+        <ul><li><b>A</b> 이번엔 안 가져와요. 화면만 만들고, 운영진·강사가 필요할 때 입력해요.</li><li><b>B (추천)</b> 시트는 읽기만 하고, Preferred Name·거주지·성별/연령·이메일·Docs·기존 자기소개(원문 그대로, 7개로 나누지 않음)만 학생별로 미리 보여 드린 뒤 승인받고 넣어요. 레벨은 표기가 달라서 안 가져와요.</li></ul></article>
+      <article><h3>⑥ 대체강사 권한</h3>
+        <ul><li>보는 범위: 프로필·자기소개·선호·수업 정보·Docs 링크·이메일 (결제·운영 메모는 절대 안 보임)</li><li>편집: <b>A (추천)</b> 보기만 / <b>B</b> 레벨·선호도 고칠 수 있음</li><li>볼 수 있는 기간: 지금 코드는 '지난 60일 안이나 앞으로 수업이 있으면'이에요. 이 기간을 그대로 둘지, 다른 기간으로 바꿀지 정해 주세요. (Claude가 숫자를 정하지 않아요)</li></ul></article>
+      <article><h3>⑦ 화면 클릭 검증 방법</h3>
+        <ul><li>운영진 화면은 인증 앱(TOTP) 코드가 필요해서 Claude가 직접 로그인할 수 없어요.</li><li><b>A (추천)</b> 강사 화면은 시험용 DB의 가상 강사 계정으로 Claude가 직접 클릭 검증하고, 운영진 화면은 대표님이 시험 주소에서 순서표대로 누르고 결과만 알려 주세요.</li><li><b>B</b> 시험용 DB에만 Claude 전용 운영자 계정과 인증 앱 비밀값을 만들어 Claude가 직접 클릭해요. 시험용 DB 보안이 조금 약해져요. 운영 DB에는 만들지 않아요.</li></ul></article>
+    </div>
+  </section>
+</div>
+
+<template id="t-list">
+  <div class="bar">학생<span class="sp"></span><span class="nav"><span>대시보드</span><span class="on">학생</span><span>일정</span></span></div>
+  <div class="scr">
+    <div class="search">🔍 이름, 영문 이름, STU 번호, 이메일, 강사</div>
+    <div class="chips"><span class="chip on">수강 중 9</span><span class="chip">수강 예정 2</span><span class="chip">종료 6</span><span class="chip">전체 17</span></div>
+    <div class="list two">
+      <div class="item"><span class="av">O</span><span class="t"><b>박O준</b> <span class="pill p-ok">수강 중</span><span class="sub">STU-0013 · Maria · 화/목 22:00 · 12주 · 종료 1/26</span></span>›</div>
+      <div class="item"><span class="av">O</span><span class="t"><b>이O나</b> <span class="pill p-warn">종료 임박</span><span class="sub">STU-0011 · Maria · 월/수 20:00 · 4주 · 종료 11/9</span></span>›</div>
+      <div class="item"><span class="av">O</span><span class="t"><b>김O연</b> <span class="pill p-ac">수강 예정</span><span class="sub">STU-0014 · Benny · 월/목 10:00 · 11/9 시작</span></span>›</div>
+      <div class="item"><span class="av">O</span><span class="t"><b>정O우</b> <span class="pill p-mu">종료</span><span class="sub">STU-0004 · Olivia · 10/26 종료 · 재등록 안 함</span></span>›</div>
+    </div>
+    <p class="fact" style="margin:0">'종료 임박'은 대시보드에서 이미 쓰는 기준을 그대로 써요(새 숫자 없음).</p>
+  </div>
+</template>
+
+<template id="t-detail">
+  <div class="bar">‹ 학생 목록<span class="sp"></span><span class="nav"><span class="on">학생</span></span></div>
+  <div class="scr">
+    <div class="hero"><div><p style="font-size:19px;font-weight:800">박O준 <span class="s">Minjun Park · STU-0013</span></p><p class="s">12주 · 주 2회 · 40분 · Maria (Ho Chi Minh City)</p></div>
+      <div class="stats"><span>남은 정규<b>21/24</b></span><span>이월<b>1회</b></span><span>최종 종료<b>1/26</b></span></div></div>
+    <div class="split">
+      <div class="card"><h3>정규 일정 <span style="float:right"><span class="btn sm pri">정규 일정 수정</span></span></h3>
+        <div class="row"><span class="k">요일·시간 (한국)</span><span class="v">화·목 22:00 · 40분</span></div>
+        <div class="row"><span class="k">강사</span><span class="v">Maria · 강사 현지 화·목 20:00 (Ho Chi Minh City)</span></div>
+        <div class="row"><span class="k">적용</span><span class="v">11/3부터</span></div>
+        <div class="row"><span class="k">바뀐 기록</span><span class="v">없음</span></div></div>
+      <div class="card"><h3>수강 <span style="float:right"><span class="btn sm">종료일 연장</span></span></h3>
+        <div class="row"><span class="k">등록 상품</span><span class="v">3개월 (12주)</span></div>
+        <div class="row"><span class="k">등록 수업</span><span class="v">24회 + 이월 1회</span></div>
+        <div class="row"><span class="k">기간</span><span class="v">11/3 – 1/25 (84일)</span></div>
+        <div class="row"><span class="k">연장</span><span class="v">+1일 (휴무 자동)</span></div>
+        <div class="row"><span class="k">최종 종료</span><span class="v"><b>1/26(화) 23:59 한국</b></span></div></div>
+      <div class="card"><h3>프로필 <span style="float:right"><span class="btn sm">수정</span></span></h3>
+        <div class="row"><span class="k">Preferred Name</span><span class="v">Minjun</span></div>
+        <div class="row"><span class="k">거주</span><span class="v">Canada · Toronto · America/Toronto</span></div>
+        <div class="row"><span class="k">이메일</span><span class="v">minjun@example.com</span></div>
+        <div class="row"><span class="k">레벨 (강사 평가)</span><span class="v">Intermediate · Maria 11/3</span></div></div>
+      <div class="card"><h3>운영진만</h3>
+        <div class="row"><span class="k">결제</span><span class="v">11/2 계좌이체 · 확인</span></div>
+        <div class="row"><span class="k">운영 메모</span><span class="v">강사 화면에 안 보임</span></div></div>
+    </div>
+    <p class="note">강사 현지 시간은 수업 날짜 기준으로 계산해서 보여 줘요. 06:00~22:30 밖이면 빨간 글로 알려요.</p>
+  </div>
+</template>
+
+<template id="t-regular">
+  <div class="bar">‹ 박O준<span class="sp"></span></div>
+  <div class="scr">
+    <div class="sheet">
+      <div class="top">정규 일정 수정<span class="x">✕</span></div>
+      <div class="field"><span class="lab">요일 (한국 날짜)</span><div class="days"><span>월</span><span class="on">화</span><span>수</span><span class="on">목</span><span>금</span><span>토</span><span>일</span></div></div>
+      <div class="split">
+        <div class="field"><span class="lab">시작 시간 (한국)</span><div class="inp">22:00 → <b>22:30</b> ▾</div></div>
+        <div class="field"><span class="lab">적용 시작일</span><div class="inp"><b>11/5(목)</b>부터 ▾</div></div>
+      </div>
+      <div class="field"><span class="lab">바뀌는 수업 8회</span>
+        <div class="chg">
+          <div><span>11/5(목)</span><span>22:00 → <span class="new">22:30</span></span></div>
+          <div><span>11/10(화)</span><span>22:00 → <span class="new">22:30</span></span></div>
+          <div><span>11/12(목)</span><span>22:00 → <span class="new">22:30</span></span></div>
+          <div><span>… 1/21(목)까지</span><span>모두 22:30</span></div>
+          <div class="keep"><span>11/3(화) 지난 수업</span><span>그대로</span></div>
+          <div class="keep"><span>11/17(화) 보강 확정 20:00</span><span>그대로</span></div>
+          <div class="keep"><span>11/19(목) 대체 수업 · Benny</span><span>그대로</span></div>
+        </div></div>
+      <div class="field"><span class="lab">검사</span>
+        <div class="check"><div>Maria 가능 시간 안 (화·목 22:30 시작)</div><div>강사 현지 시작 06:00~22:30 안</div><div>다른 학생 수업과 겹치지 않음 (휴식 10분 포함)</div><div>마지막 수업 1/21 ≤ 최종 종료일 1/26</div></div></div>
+      <div class="time3">
+        <div><span class="who">학생 현지 시간 — Toronto</span><span class="when">화·목 08:30</span><span class="d">11/5 기준 (Toronto는 11/1에 서머타임 끝남)</span></div>
+        <div><span class="who">강사 현지 시간 — Ho Chi Minh City</span><span class="when">화·목 20:30</span></div>
+      </div>
+      <div class="field"><span class="lab">사유 (필수)</span><div class="inp">학생 요청 (11/3 카톡)</div><span class="fact">학생·강사 시간은 위 시안 예시처럼 도시 이름과 같이 보여 줘요.</span></div>
+      <div class="btns"><span class="btn">취소</span><span class="btn pri">8회 바꾸고 저장</span></div>
+    </div>
+    <p class="note">검사 중 하나라도 ✕면 저장 버튼이 꺼지고 이유를 적어 줘요. 예: '강사 현지 00:30 시작 — 06:00~22:30 밖이에요'.</p>
+  </div>
+</template>
+
+<template id="t-extend">
+  <div class="bar">‹ 박O준<span class="sp"></span></div>
+  <div class="scr">
+    <div class="sheet">
+      <div class="top">종료일 연장<span class="x">✕</span></div>
+      <div class="card" style="padding:8px 12px">
+        <div class="row"><span class="k">원래 종료일</span><span class="v">1/25(월)</span></div>
+        <div class="row"><span class="k">이미 연장</span><span class="v">+1일 · 휴무 자동 (11/10 Maria 휴무)</span></div>
+        <div class="row"><span class="k">지금 최종 종료일</span><span class="v"><b>1/26(화)</b></span></div>
+      </div>
+      <div class="split">
+        <div class="field"><span class="lab">새 최종 종료일</span><div class="inp"><b>2/2(화)</b> ▾</div></div>
+        <div class="field"><span class="lab">더해지는 날</span><div class="inp">+7일 (자동 계산)</div></div>
+      </div>
+      <div class="field"><span class="lab">사유 (필수)</span><div class="inp big">학생 입원으로 2주 수업 못 함 — 대표 승인 11/3</div></div>
+      <div class="field"><span class="lab">같이 바뀌는 곳</span>
+        <div class="check"><div>학생 화면 수강 종료일 · 해외 학생은 '2/2 09:59 (Toronto 시간)'처럼 현지</div><div>보강·무료 보상수업 사용 기한</div><div>재등록 안내 마감 · 대시보드 종료 임박</div><div>강사 화면 Enrollment 칸</div><div>수업 회차는 그대로 (24회 + 이월 1회)</div></div></div>
+      <p class="fact" style="margin:0">기록: 1/26 → 2/2, +7일, 사유, 운영진 이름, 저장 시각. 지우거나 고칠 수 없고, 잘못 넣으면 '정정' 줄을 하나 더해요(기존 규칙).</p>
+      <div class="btns"><span class="btn">취소</span><span class="btn pri">2/2로 연장</span></div>
+    </div>
+  </div>
+</template>
+
+<template id="t-tutor">
+  <div class="bar">‹ Back to this week<span class="sp"></span><span class="x">✕</span></div>
+  <div class="scr">
+    <div class="hero"><div><p style="font-size:19px;font-weight:800">Seoyeon Kim <span class="s">“Sarah”</span></p><p class="s">Your regular student · Tue/Thu · 40 min</p></div></div>
+    <div class="split">
+      <div class="card"><h3>PROFILE</h3>
+        <div class="row"><span class="k">Student Name</span><span class="v">Seoyeon Kim</span></div>
+        <div class="row"><span class="k">Preferred Name</span><span class="v">Sarah</span></div>
+        <div class="row"><span class="k">Lives in</span><span class="v">Toronto, Canada · America/Toronto</span></div>
+        <div class="row"><span class="k">Gender / age</span><span class="v">F / 30s</span></div>
+        <div class="row"><span class="k">Email</span><span class="v copy">seoyeon@example.com <span class="btn sm">Copy</span></span></div>
+        <div class="row"><span class="k">English level</span><span class="v"><span class="inp" style="min-height:32px;display:inline-flex">Intermediate ▾</span><span class="sub">Your assessment · Nov 3</span></span></div>
+      </div>
+      <div class="card"><h3>ABOUT &amp; PREFERENCES <span class="who-tag">· STUDENT'S ANSWERS</span> <span style="float:right"><span class="btn sm">Edit</span></span></h3>
+        <div class="row"><span class="k">Job</span><span class="v">Software engineer</span></div>
+        <div class="row"><span class="k">Hobbies</span><span class="v">Hiking, cooking</span></div>
+        <div class="row"><span class="k">Interests</span><span class="v una">No answer yet</span></div>
+        <div class="row"><span class="k">Wants to improve</span><span class="v">Speaking in meetings</span></div>
+        <div class="row"><span class="k">Hopes for class</span><span class="v">Relaxed, lots of talking</span></div>
+        <div class="row"><span class="k">Corrections</span><span class="v">Big mistakes only, with explanation</span></div>
+        <div class="row"><span class="k">Class style</span><span class="v">Free talking</span></div>
+        <details><summary class="fact">Earlier self-introduction (from the old sheet, unchanged)</summary><p class="fact">✅ Job: … (원문 그대로 보여 줌, 7개로 나누지 않음)</p></details>
+      </div>
+      <div class="card"><h3>CLASS</h3>
+        <div class="row"><span class="k">Type of class</span><span class="v">Free conversation</span></div>
+        <div class="row"><span class="k">Corrections / feedback</span><span class="v">Big mistakes only</span></div>
+        <div class="row"><span class="k">Class duration</span><span class="v">40 min</span></div>
+        <div class="time3">
+          <div><span class="who">Korea Time (KST)</span><span class="when">Tue/Thu 10:00 AM</span></div>
+          <div><span class="who">Your time — Melbourne</span><span class="when">Tue/Thu 12:00 PM</span></div>
+          <div><span class="who">Student's time — Toronto</span><span class="when">Mon/Wed 8:00 PM</span><span class="warnline">Day before in Toronto</span><span class="d">Next class: Thu, Nov 5 · Toronto clocks went back on Nov 1</span></div>
+        </div>
+        <div class="row"><span class="k">Google Docs</span><span class="v"><span class="btn sm">Open class notes ↗</span></span></div>
+      </div>
+      <div class="card"><h3>ENROLLMENT</h3>
+        <div class="row"><span class="k">Plan</span><span class="v">3 months (12 weeks)</span></div>
+        <div class="row"><span class="k">Enrolled classes</span><span class="v">24</span></div>
+        <div class="row"><span class="k">Rollover classes</span><span class="v">1</span></div>
+        <div class="row"><span class="k">Course period</span><span class="v">84 days</span></div>
+        <div class="row"><span class="k">Start date</span><span class="v">Nov 3, 2026</span></div>
+        <div class="row"><span class="k">End date</span><span class="v">Jan 25, 2027</span></div>
+        <div class="row"><span class="k">Extended end date</span><span class="v">Jan 26, 2027</span></div>
+        <div class="row"><span class="k">Final end</span><span class="v"><b>Jan 26, 11:59 PM KST</b><span class="sub">= Jan 26, 9:59 AM Toronto</span></span></div>
+      </div>
+    </div>
+    <p class="note">'Your time — Melbourne'은 강사 본인 화면이라 이렇게 썼어요. 'Local'·'Your time' 한 단어만 쓰지 않고 도시를 늘 같이 적어요. Edit(자기소개·선호)와 레벨은 담당 정규 강사만, 결제·운영 메모는 강사 화면에 없음.</p>
+  </div>
+</template>
+
+<script>
+document.querySelectorAll('[data-tpl]').forEach(function(box){
+  var t=document.getElementById('t-'+box.dataset.tpl);
+  var ph=document.createElement('div');
+  ph.innerHTML='<p class="cap">휴대폰</p>';
+  var p=document.createElement('div');p.className='phone';p.appendChild(t.content.cloneNode(true));ph.appendChild(p);
+  var pcw=document.createElement('div');pcw.className='pcbox';
+  pcw.innerHTML='<p class="cap">PC</p>';
+  var pc=document.createElement('div');pc.className='pc';pc.appendChild(t.content.cloneNode(true));pcw.appendChild(pc);
+  box.appendChild(ph);box.appendChild(pcw);
+});
+</script>

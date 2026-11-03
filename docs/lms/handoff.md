@@ -6,6 +6,13 @@
 
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
+## 🆕 2026-11-03 저녁 (브랜치 claude/eloquent-gauss-vp8uct): 위 1~7번 조사 + 시안 → **대표 선택 대기 (개발 전)**
+- 시안 https://claude.ai/artifact/FvSAvM7mFXnGwDwPSnrdWc (원본 `docs/lms/previews/student-info-drafts.html`): A 학생 목록(수강 중·수강 예정·종료) · B 학생 상세 · C 정규 일정 수정(요일·시간·적용 시작일 → 바뀌는 수업/그대로 두는 수업 미리 보기·검사) · D 종료일 연장 · E 강사 Student profile(Profile / About & preferences / Class / Enrollment). G에 정할 것 ①~⑦
+- **조사 결과**: 기존 정규 일정 수정·운영진 단독 연장 DB 함수 **없음**(regular_schedules 는 등록·이관 때만 insert, enrollment_extensions 는 이관·휴무 자동만). 운영진 학생 목록·상세는 **가상 미리보기만**(DemoOnly). 강사 화면에 학생 프로필 없음, `tutor_my_students()`(core) = 최근 60일·앞으로 수업 있는 강사 모두(정규·대체 구분 없음, POL-OP-06 검토 중)
+- students 표에 이미 있는 칸: name_en·display_name·country·city·timezone·gender_age·email·level·class_type·correction_pref·class_note_url·self_intro_en → 새로 필요한 건 7항목 칸·수정 기록·함수뿐. 운영 DB 학생 12명 프로필 칸 거의 비어 있음(이메일 1명)
+- **시트 'Local' = 강사 현지 시간**(Benny 시트: 한국 거주 학생도 Local = KST+1), 고정 글자라 서머타임 반영 안 됨(3월 멜버른 +2인데 +1로 적힘). Rubric = Beginner · Pre-Intermediate · Intermediate · Advanced (시트 기존 레벨 A2/B1 등은 다른 표기 → 자동 변환 안 함)
+- 개발 순서(승인 뒤): migration(7항목·수정 기록·admin_regular_change(미리보기/저장)·admin_extend_enrollment·tutor_student_profile·권한) → 운영진 학생 목록·상세 실데이터 → 강사 프로필 창 → 시험용 DB → 클릭 검증. 큰 변경이라 CLAUDE.md 기준 Fable 5.1 또는 노력 '높음' 권유함
+
 ## 📋 다음 세션 할 일 (2026-11-03 대표 요청 원문 요약 — 빠짐없이, 시험용 구현·검증까지. 운영 DB·배포는 별도 승인)
 - **시작 전 필수**: 최신 코드·DB·이 handoff + 강사 Class Record 시트 'Student Info' 탭을 실제로 읽고, 이미 있는 화면·데이터 재사용(중복 화면 금지). 자료로 알 수 있는 건 대표에게 묻지 말 것. 디자인 결정이 필요하면 PC·휴대폰 시안 먼저(CLAUDE.md)
 1. **운영진이 학생 정규 수업 시간 직접 수정**: 기존 기능이 있으면 위치를 알려 주고, 전체 학생 목록 → 학생 상세 → 정규 일정 수정으로 쉽게. 없으면 구현. 시간대·요일·**적용 시작일**·**바뀔 향후 수업 미리 보기**, 강사 가능 시간·충돌 검사, 과거 수업·별도 확정된 대체·보강은 자동으로 덮어쓰지 않음. **최성O님(11/3 신규 등록) 22:00 → 22:30**은 대표가 직접 이 절차로 고칠 예정(운영 일정 정정도 이 확인 절차 따름)
