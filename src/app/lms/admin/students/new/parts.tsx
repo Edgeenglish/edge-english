@@ -145,7 +145,7 @@ export function SearchPick({ value, placeholder, locked = false, bad = false, se
 }
 
 export function wishWindows(w: readonly WishWindow[], timezone: string): AvailabilityWindow[] {
-  return w.map((x) => ({ weekday: x.weekday, startLocal: x.from, endLocal: x.to, timezone: timezone || 'Asia/Seoul', effectiveFrom: '2000-01-01', effectiveTo: null }));
+  return w.map((x) => ({ weekday: x.weekday, startLocal: x.from, endLocal: x.to, startOnly: x.startOnly, timezone: timezone || 'Asia/Seoul', effectiveFrom: '2000-01-01', effectiveTo: null }));
 }
 
 const STEP = 30;
