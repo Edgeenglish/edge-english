@@ -1064,7 +1064,11 @@ reset role;
 -- ---------- 1순위 취소·변경·보강 공통 처리 (migration 1700, 17번 문서 3절 ①·5절) ----------
 -- 지금 시각 기준으로 잡은 가상 학생 '변경A' (4주·주2회, 기간 1개 변경권 2개). 강사 TestTutorChange
 reset role;
-insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000001700', 'TestTutorChange', 'Korea', 'Asia/Seoul');
+-- 시험 시각이 '지금' 기준이라, 강사 현지 06:00~22:30 시작 검사(4200)에 시험 시각이 걸리지 않게 지금이 현지 정오쯤인 시간대로
+create or replace function pg_temp.noon_tz() returns text language sql as $$
+  select case when o > 0 then 'Etc/GMT-' || o when o < 0 then 'Etc/GMT+' || (-o) else 'UTC' end
+  from (select ((12 - extract(hour from now() at time zone 'UTC')::int + 36) % 24) - 12 as o) x $$;
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000001700', 'TestTutorChange', 'Korea', pg_temp.noon_tz());
 insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000001700', '변경A', 'Change A');
 insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000001700', 'student', '99999999-0000-0000-0000-000000001700');
 insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
@@ -1653,7 +1657,7 @@ select pg_temp.ok((select (x #>> '{count,n}')::int = 4 and x ->> 'topics' is nul
 -- 3) 보강 가능 여부: 시간마다 가능/불가, 확정은 운영진
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 create temp table mk20 as select (admin_makeup_request('77777777-2000-0000-0000-000000000005', null,
-  jsonb_build_array(jsonb_build_object('starts_at', (select t from rc) + interval '2 days'), jsonb_build_object('starts_at', (select t from rc) + interval '3 days')), now())
+  jsonb_build_array(jsonb_build_object('starts_at', ((current_date + 2) + time '12:00') at time zone 'Australia/Sydney'), jsonb_build_object('starts_at', ((current_date + 3) + time '12:00') at time zone 'Australia/Sydney')), now())
   ->> 'makeup_request_id')::uuid as id;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
 select pg_temp.ok((select jsonb_array_length(m -> 'slots') = 2 and m ->> 'answered_at' is null
@@ -1673,7 +1677,7 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200b';
 select pg_temp.expect_error($$select tutor_makeup_answer((select id from mk20), '{}', 'x')$$, '42501');
 select pg_temp.ok(true, '다른 강사는 답할 수 없음');
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
-select admin_makeup_confirm((select id from mk20), (select t from rc) + interval '2 days');
+select admin_makeup_confirm((select id from mk20), ((current_date + 2) + time '12:00') at time zone 'Australia/Sydney');
 select pg_temp.ok((select jsonb_array_length(tutor_screen('55555555-0000-0000-0000-00000000200a', current_date, current_date + 7) -> 'makeups') = 0)
               and (select count(*) = 1 from jsonb_array_elements(tutor_screen('55555555-0000-0000-0000-00000000200a', current_date, current_date + 7) -> 'lessons') x
                    where x ->> 'kind' = 'makeup' and x ->> 'makeup_of' is not null and x ->> 'state' = 'scheduled')
@@ -1709,7 +1713,7 @@ reset role;
 -- ---------- 보강 back to back (migration 2300, 정책 원본 H26(30)+보완, POL-OP-21 예외) ----------
 -- 강사 붙임T. 학생 붙임A(20분)·붙임B(20분, 다른 학생)·붙임C(40분). 기준 시각 bb = 10일 뒤 정시
 reset role;
-insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000002300', '붙임T', 'Korea', 'Asia/Seoul');
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000002300', '붙임T', 'Korea', pg_temp.noon_tz());
 insert into students (id, name_ko, name_en) values
   ('99999999-0000-0000-0000-00000000230a', '붙임A', 'BtB A'), ('99999999-0000-0000-0000-00000000230b', '붙임B', 'BtB B'),
   ('99999999-0000-0000-0000-00000000230c', '붙임C', 'BtB C');
@@ -2075,3 +2079,18 @@ reset role;
 select pg_temp.ok((select status = 'voided' from compensations where id = (select id from cp))
               and not exists (select 1 from makeup_requests where compensation_id = (select id from cp) and status in ('requested', 'countered')),
   '강사 노쇼를 고치면 보상권 voided + 열린 보상 신청 닫힘 (기록은 남김, 4100)');
+
+-- ---------- 4200 강사 현지 06:00~22:30 시작 (DB에서 막기) ----------
+reset request.jwt.claim.sub;
+reset role;
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000004200', 'EarlyTutor', 'Australia', 'Australia/Melbourne');
+select pg_temp.ok(not lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 05:30 Australia/Melbourne')
+              and lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 06:00 Australia/Melbourne')
+              and lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 22:30 Australia/Melbourne')
+              and not lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 23:00 Australia/Melbourne'),
+  '가능 시간이 없는 새 강사도 현지 06:00 전·22:30 뒤 시작은 불가, 06:00·22:30은 가능 (4200)');
+select pg_temp.ok(lms_makeup_conflict('55555555-0000-0000-0000-000000004200', '99999999-0000-0000-0000-000000004100',
+                    timestamptz '2026-11-10 05:00 Australia/Melbourne', timestamptz '2026-11-10 05:50 Australia/Melbourne', true) like '%06:00~22:30%'
+              and lms_makeup_conflict('55555555-0000-0000-0000-000000004200', '99999999-0000-0000-0000-000000004100',
+                    timestamptz '2026-11-10 04:00 Asia/Seoul', timestamptz '2026-11-10 04:50 Asia/Seoul', true) is null,
+  '보강 확정·강사 답 검사: 현지 05:00은 거절, 한국 04:00(멜버른 06:00)은 한국시간 제한 없이 가능 (4200)');

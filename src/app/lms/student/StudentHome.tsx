@@ -61,8 +61,14 @@ const STATUS_STYLE: Record<RequestStatus, string> = {
 
 const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
 
+// 학생 화면 시각은 학생이 사는 곳 시간대로 (11/3 대표: 해외 학생은 본인 나라 시간으로 캘린더). 국내 학생은 한국 시간 그대로.
+// 화면 하나에 학생 한 명이라 렌더할 때 정해 둠. 판정(6시간 규칙·수강 종료일 23:59 KST)은 그대로
+let VIEW_TZ = 'Asia/Seoul';
+/** 시각 기준 이름: '한국 시간' / 'Toronto 시간' */
+const zoneText = () => (VIEW_TZ === 'Asia/Seoul' ? '한국 시간' : `${(VIEW_TZ.split('/').pop() ?? VIEW_TZ).replace(/_/g, ' ')} 시간`);
+/** 이름은 예전 그대로(kst) — 보여 주는 시간대는 VIEW_TZ */
 function kst(d: Date) {
-  const f = formatInZone(d, 'Asia/Seoul');
+  const f = formatInZone(d, VIEW_TZ);
   return { md: `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}`, wd: '일월화수목금토'[new Date(`${f.date}T00:00:00Z`).getUTCDay()], time: f.time, date: f.date };
 }
 const fmtDate = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
@@ -109,7 +115,7 @@ const rightReason = (m: MakeupRight) =>
 function untilText(now: Date, at: Date): string {
   const hours = hoursBetween(now, at);
   if (hours < 24) return `${Math.max(1, Math.floor(hours))}시간 후`;
-  const days = diffDays(formatInZone(now, 'Asia/Seoul').date, kst(at).date);
+  const days = diffDays(formatInZone(now, VIEW_TZ).date, kst(at).date);
   return days === 1 ? '내일' : `${days}일 후`;
 }
 
@@ -126,6 +132,7 @@ export default function StudentHome(props: {
   const { actions, extras, preview } = props;
   const now = useMemo(() => new Date(props.nowIso), [props.nowIso]);
   const [s, setView] = useState<StudentView>(props.initial);
+  VIEW_TZ = s.timezone || 'Asia/Seoul';
   const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
@@ -428,7 +435,7 @@ export default function StudentHome(props: {
 
         {tab === 'schedule' && (
           <TabPage title="일정">
-            <p className="text-[13px] text-[#55526a]">한국 시간 기준이에요.</p>
+            <p className="text-[13px] text-[#55526a]">{zoneText()} 기준이에요.</p>
             {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p }))]
               .sort((a, b) => a.at.getTime() - b.at.getTime())
               .map(({ l, p }) => p ? (
@@ -708,7 +715,7 @@ function LeaveSheet(props: {
   const ask = subs.filter((x) => x.stage === 'tutor_ok');
   const fixed = subs.filter((x) => x.stage === 'confirmed');
   const off = props.rows[0];
-  const offText = off && `${fmtDate(formatInZone(off.offFrom, 'Asia/Seoul').date)} ~ ${fmtDate(formatInZone(new Date(off.offTo.getTime() - 1), 'Asia/Seoul').date)}`;
+  const offText = off && `${fmtDate(formatInZone(off.offFrom, VIEW_TZ).date)} ~ ${fmtDate(formatInZone(new Date(off.offTo.getTime() - 1), VIEW_TZ).date)}`;
   return (
     <div className="grid gap-3.5">
       <div>
@@ -1014,7 +1021,7 @@ function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: {
           {Number(k.md.split('/')[0])}월 {Number(k.md.split('/')[1])}일 ({k.wd}) {k.time}
         </p>
         <p className="mt-1 text-[14px] text-[#d8d3f5]">
-          {lesson.minutes}분{leaveOpen ? '' : ` · ${lesson.tutorName}`} · 한국 시간{lesson.kind === 'makeup' ? ' · 보강' : ''}
+          {lesson.minutes}분{leaveOpen ? '' : ` · ${lesson.tutorName}`} · {zoneText()}{lesson.kind === 'makeup' ? ' · 보강' : ''}
         </p>
       </div>
       <div className="grid gap-2.5 lg:grid-cols-2">
@@ -1221,7 +1228,7 @@ function RequestDetail({ r }: { r: StudentRequest }) {
               </div>
             );
           })}
-          <p className="text-[12px] text-[#55526a]">한국 시간</p>
+          <p className="text-[12px] text-[#55526a]">{zoneText()}</p>
         </section>
       )}
       <section className={`${card} grid gap-2 p-4 text-[14px]`}>

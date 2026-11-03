@@ -41,6 +41,8 @@ export type LeaveRow = {
 
 export type StudentView = {
   studentId: string;
+  /** 학생이 사는 곳 시간대 — 학생 화면 시각은 이 시간대로 (11/3 대표: 해외 학생은 본인 나라 시간으로) */
+  timezone?: string;
   name: string;
   product: string;
   /** 수강 종료일 (강사 휴무면 마지막 휴무 보강일까지 연장된 날, A20) — 재등록 결제 마감도 이 날 23:59 */
@@ -69,7 +71,7 @@ export type StudentView = {
 };
 
 type Raw = {
-  student: { id: string; code: string; name_ko: string };
+  student: { id: string; code: string; name_ko: string; timezone?: string | null };
   enrollment: null | {
     status?: string;
     weeks: number | null; legacy_label: string | null; weekly_count: number; duration_min: number; final_end_date: KstDate;
@@ -133,6 +135,7 @@ export function parseStudentView(r: Raw): StudentView {
   const at = (lessonId: string | null, itemId: string | null) => r.makeup_rights.find((m) => !m.comp_id && ((lessonId && m.lesson_id === lessonId) || (itemId && m.item_id === itemId)));
   return {
     studentId: r.student.id,
+    timezone: r.student.timezone || 'Asia/Seoul',
     name: r.student.name_ko,
     product: e ? productLabel(e) : '-',
     finalEndDate: e?.final_end_date ?? ('' as KstDate),
