@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const { data: admin, error } = await sb.rpc('is_admin');
   if (error || admin !== true) return Response.json({ error: '운영자 인증이 필요합니다.' }, { status: 403, headers });
   const feed = process.env.LMS_FORM_RESPONSES_URL;
-  if (!feed || !/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(feed)) {
+  if (!feed || !/^https:\/\/script\.google\.com\/(?:a\/macros\/edgeenglish\.kr\/s|macros\/s)\/[A-Za-z0-9_-]+\/exec$/.test(feed)) {
     return Response.json({ error: '구글폼 연결 설정이 아직 완료되지 않았습니다. 직접 입력은 가능합니다.' }, { status: 503, headers });
   }
   try {
