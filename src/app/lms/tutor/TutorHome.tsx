@@ -9,7 +9,7 @@ import { STATUS_RULES } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
 import {
   answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus,
-  statusText, timeRange, weekOf, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
+  statusText, timeRange, weekOf, whenFull, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
 } from '@/lms/tutor/screen';
 
 export type TutorActions = {
@@ -338,11 +338,11 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
         {l.count && <span className="text-[13px] text-[#6b6880]">Class {l.count.n}/{l.count.total}</span>}
       </div>
       <p className="text-[14.5px] text-[#1d1b2b]">
-        {whenText(l.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(l, tz)} · {minutesOf(l)} min
+        {whenText(l.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(l, tz)} {tzTimeLabel(tz)} · {minutesOf(l)} min
         {kst && <span className="text-[#6b6880]"> · {kst}</span>}
       </p>
-      {l.makeupOf && <p className="text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
-      {l.compensationOf && <p className="text-[13px] text-[#6b6880]">Compensation for {whenText(l.compensationOf, tz)} (tutor no-show)</p>}
+      {l.makeupOf && <p className="text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
+      {l.compensationOf && <p className="text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
       {phaseOf(l, now) === 'canceled' && <p className="text-[13px] font-semibold text-[#b3261e]">{statusText(l, now)}</p>}
     </div>
   );
@@ -438,8 +438,8 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
       </button>
       {open && (
         <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
-          {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
-          {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenText(l.compensationOf, tz)} (tutor no-show)</p>}
+          {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
+          {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
           {recordable ? (
             <div className="lg:max-w-[560px]">
               <DirtyCtx.Provider value={mark}>
@@ -588,7 +588,7 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
               <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border text-[14px] font-bold ${
                 on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>✓</span>
               <span className="flex-1">
-                <b className="block text-[15px] text-[#1d1b2b]">{whenText(c.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(c, tz)}</b>
+                <b className="block text-[15px] text-[#1d1b2b]">{whenText(c.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(c, tz)} {tzTimeLabel(tz)}</b>
                 {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
                 {c.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">You have another class or time off then</span>}
               </span>
@@ -659,7 +659,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
                   <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border text-[14px] font-bold ${
                     on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>✓</span>
                   <span className="flex-1">
-                    <b className="block text-[15px] text-[#1d1b2b]">{whenText(s.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(s, tz)}</b>
+                    <b className="block text-[15px] text-[#1d1b2b]">{whenText(s.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(s, tz)} {tzTimeLabel(tz)}</b>
                     {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
                     {s.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">You have another class or time off then</span>}
                   </span>

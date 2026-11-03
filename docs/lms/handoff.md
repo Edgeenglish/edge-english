@@ -6,6 +6,14 @@
 
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
+## ✅ 2026-11-03 밤: 학생 화면 시각 기준 표기 고침 (대표 '큰일날뻔', lms-test push, 운영 반영 승인 대기)
+- 문제: 학생 '어느 수업을 바꿀까요?' 등에서 시각만 '19:00'으로 표시(오O수 Sydney 학생) → 기준 이름 없음
+- 고침: 학생 화면 모든 시각 = `11/4 (수) 19:00 (Sydney 시간 · 한국 17:00)`(날짜가 다르면 한국 날짜도), 국내 학생 `(한국 시간)`. 해외 학생은 [한국 시간 같이 보기] 끄기 가능(기기 저장 `lms_student_kst`, 꺼도 'Sydney 시간'은 남음) — 일정 탭·수업 변경 창·보강 고르기·내 정보. 보강 시간 칸에 한국 시각 줄, 보강 달력 날짜 머리 요일을 날짜 글자로(해외 요일 어긋남 고침). 시각 모르는 시트 수업은 '한국 날짜'. 수강 종료 '(한국 시간)' 표기
+- **보강 고르기 [나중에 고르기]**(창 닫기, 할 일에 그대로) — 수업 취소 뒤 바로 넘어오는 창 아래 막대
+- 강사 화면: 수업 상세·대체 요청·보강 답 시각에 '[도시] Time', Make-up/Compensation for 줄에 도시+KST (`whenFull`)
+- 미리보기 확인용 `/lms/student?demo=1&tz=America/Toronto`. 휴대폰·PC 클릭 확인(취소 → 보강 고르기 → 나중에 고르기 → 닫힘, 한국 시간 끄기/켜기). `npm test` 329 · build 통과
+- CLAUDE.md에 '시간 표기' 원칙 추가. **남은 것: 운영진 화면 시각들도 '(한국 시간)' 표기 점검**
+
 ## 🆕 2026-11-03 저녁 (브랜치 claude/eloquent-gauss-vp8uct): 위 1~7번 조사 + 시안 → **대표 선택 대기 (개발 전)**
 - 시안 https://claude.ai/artifact/FvSAvM7mFXnGwDwPSnrdWc (원본 `docs/lms/previews/student-info-drafts.html`): A 학생 목록(수강 중·수강 예정·종료) · B 학생 상세 · C 정규 일정 수정(요일·시간·적용 시작일 → 바뀌는 수업/그대로 두는 수업 미리 보기·검사) · D 종료일 연장 · E 강사 Student profile(Profile / About & preferences / Class / Enrollment). G에 정할 것 ①~⑦
 - **조사 결과**: 기존 정규 일정 수정·운영진 단독 연장 DB 함수 **없음**(regular_schedules 는 등록·이관 때만 insert, enrollment_extensions 는 이관·휴무 자동만). 운영진 학생 목록·상세는 **가상 미리보기만**(DemoOnly). 강사 화면에 학생 프로필 없음, `tutor_my_students()`(core) = 최근 60일·앞으로 수업 있는 강사 모두(정규·대체 구분 없음, POL-OP-06 검토 중)

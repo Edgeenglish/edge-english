@@ -121,6 +121,14 @@ export function kstText(t: Date, tz: string): string | null {
   const k = formatInZone(t, 'Asia/Seoul');
   return localDate(t, tz) === k.date ? `KST ${k.time}` : `KST ${WD[new Date(`${k.date}T00:00:00Z`).getUTCDay()]} ${k.time}`;
 }
+/**
+ * 기준 이름까지 붙인 시각 (11/3 대표: 시각마다 어디 기준인지 꼭) —
+ * 'Mon, 3 Nov 09:00 Melbourne Time · KST 07:00' (한국 강사면 'Korea Time (KST)' 하나)
+ */
+export function whenFull(t: Date, tz: string): string {
+  const k = kstText(t, tz);
+  return `${whenText(t, tz)} ${tzTimeLabel(tz)}${k ? ` · ${k}` : ''}`;
+}
 export const minutesOf = (l: { startsAt: Date; endsAt: Date }) => Math.round((+l.endsAt - +l.startsAt) / 60000);
 
 /** 강사 현지 기준 월~일 한 주. offset: 0 이번 주, -1 지난주, 1 다음 주 */
@@ -220,7 +228,7 @@ export function kindTag(l: TutorLesson): string | null {
 
 /** 보강 신청의 원래 수업 ('Mon 3 Nov 09:00', 시트에서 옮겨 온 보강은 날짜만) */
 export function makeupOrigin(m: TutorMakeup, tz: string): string {
-  if (m.originalAt) return whenText(m.originalAt, tz);
+  if (m.originalAt) return whenFull(m.originalAt, tz);
   return m.originalDate ? dayLabel(m.originalDate) : '';
 }
 /** 보강 답을 보낼 수 있는지: 가능한 시간이 하나 이상이거나, 모두 안 되면 다른 가능 시간 메모 */

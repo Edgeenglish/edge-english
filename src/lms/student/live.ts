@@ -96,7 +96,8 @@ type Raw = {
   points: { id: string; on: KstDate; kind: string; amount: number; note: string | null }[];
 };
 
-const md = (d: Date) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' }).format(d).replace(/\.\s?/g, '/').replace(/\/$/, '');
+/** 날짜 'M/D' — 학생 시간대 날짜 (시각 모르는 시트 수업은 한국 날짜) */
+const md = (d: Date, tz = 'Asia/Seoul') => new Intl.DateTimeFormat('ko-KR', { timeZone: tz, month: 'numeric', day: 'numeric' }).format(d).replace(/\.\s?/g, '/').replace(/\/$/, '');
 
 /** 확정된 보강 수업 시각 (옛 DB: confirmed_at 이 없으면 수업 목록에서) */
 function lessonStart(r: Raw, q: { status: string } & { confirmed_lesson_id?: string | null }): Date | null {
@@ -181,7 +182,7 @@ export function parseStudentView(r: Raw): StudentView {
         id: q.id,
         kind: 'makeup',
         compensation: comp,
-        title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso))} 수업분` : ''}`,
+        title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso), (q.original_time_known ?? src?.time_known !== false) ? r.student.timezone || 'Asia/Seoul' : 'Asia/Seoul')} 수업분` : ''}`,
         status: q.status === 'confirmed' ? 'confirmed' : q.tutor_answered_at ? 'admin_reviewing' : 'tutor_reviewing',
         candidates: q.candidates.map((c) => new Date(c)),
         createdAt: new Date(q.requested_at),
