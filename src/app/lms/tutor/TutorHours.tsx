@@ -9,6 +9,8 @@ import {
   dateText, describeChanges, diff, fromText, lessonAt, plusDays, timeText, toMin, WEEK_DAYS, weekText, weeklyClassAt, type CellCode, type HoursData,
 } from '@/lms/tutor/hours';
 
+import { ALL_HOURS, cityTime, sourceCell } from '@/lms/tutor/hours-view';
+
 export type HoursActions = {
   load: () => Promise<HoursData>;
   save: (weekly: string[] | null, close: string[], open: string[]) => Promise<void>;
@@ -40,6 +42,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
   const [err, setErr] = useState('');
   const [tab, setTab] = useState<'week' | 'once'>('week');
   const [wk, setWk] = useState(0);
+  const [koreaTime, setKoreaTime] = useState(false);
   const [weekly, setWeekly] = useState<Set<string>>(new Set());
   const [once, setOnce] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -77,6 +80,9 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
   }
 
   const d = data;
+  const localLabel = cityTime(d.tutor.timezone);
+  const viewZone = koreaTime ? 'Asia/Seoul' : d.tutor.timezone;
+  const viewLabel = koreaTime ? 'Korea time (KST)' : localLabel;
   const baseOnce = Object.keys(d.cells).filter((k) => d.cells[k] === 'b');
   const w = diff(d.weeklyOpen, weekly);
   const o = diff(baseOnce, once);
@@ -84,7 +90,18 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
   const weeklyChanged = w.added.length + w.removed.length > 0;
   const monday = plusDays(d.monday, wk * 7);
   const dates = WEEK_DAYS.map((_, i) => plusDays(monday, i));
-  const code = (k: string): CellCode => d.cells[k] ?? 'o';
+  const code = (k: string): CellCode | undefined => d.cells[k];
+  const source = (date: string, t: string) => sourceCell(date, t, viewZone, d.tutor.timezone);
+  const unavailable = <span title="Outside editable booking hours" className={`${cellBase} block bg-[#f6f5fa]`} />;
+  function displayCell(i: number, t: string) {
+    const c = source(tab === 'week' ? plusDays(d.from, i) : dates[i], t);
+    const k = `${c.date}T${c.time}`;
+    if (tab === 'week') {
+      if (!d.times.includes(c.time) && !weekly.has(`${c.dow}:${c.time}`) && !weeklyClassAt(d.weeklyClasses, c.dow, c.time)) return unavailable;
+      return weekCell(c.dow, c.time, `Every ${FULL[WEEK_DAYS[i]]} ${timeText(toMin(t))} · ${viewLabel}`);
+    }
+    return code(k) ? onceCell(c.date, c.time, `${dateText(dates[i])} ${timeText(toMin(t))} · ${viewLabel}`) : unavailable;
+  }
   const toggle = (set: Set<string>, k: string, setter: (s: Set<string>) => void) => {
     const n = new Set(set);
     if (n.has(k)) n.delete(k);
@@ -110,13 +127,13 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
     }
   }
 
-  function weekCell(dow: number, t: string) {
+  function weekCell(dow: number, t: string, when: string) {
     const cl = weeklyClassAt(d.weeklyClasses, dow, t);
     if (cl) {
       return (
-        <button type="button" className={`${cellBase} truncate px-0.5 bg-[#5b3fe0] text-white ${cl.first ? '' : cont}`} aria-label={`Every ${FULL[dow]} ${timeText(toMin(t))} class with ${cl.c.student}`}
+        <button type="button" className={`${cellBase} truncate px-0.5 bg-[#5b3fe0] text-white ${cl.first ? '' : cont}`} aria-label={`${when} class with ${cl.c.student}`}
           onClick={() => setDialog({ kind: 'info', title: `Weekly class · ${cl.c.student}`, body: [
-            `Every ${FULL[dow]} ${span(cl.c.time, cl.c.min)} (${cl.c.min} min). You can’t close this time while the class is here.`,
+            `Every ${FULL[dow]} ${span(cl.c.time, cl.c.min)} ${localLabel} (${cl.c.min} min). You can’t close this time while the class is here.`,
             'To stop teaching this slot, please tell the Edge English team. We’ll move the class with the student first.'] })}>
           {cl.first ? lessonLabel(cl.c.student, cl.c.min) : ''}
         </button>
@@ -126,23 +143,22 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
     const isOpen = weekly.has(k);
     const changed = isOpen !== d.weeklyOpen.includes(k);
     return (
-      <button type="button" aria-label={`Every ${FULL[dow]} ${timeText(toMin(t))} ${isOpen ? 'open' : 'closed'}`} aria-pressed={isOpen}
+      <button type="button" aria-label={`${when} ${isOpen ? 'open' : 'closed'}`} aria-pressed={isOpen}
         onClick={() => toggle(weekly, k, setWeekly)}
         className={`${cellBase} ${isOpen ? 'bg-[#e6f6ec] text-[#1f7a4d]' : 'bg-[#ecebf1] text-[#8a879c]'} ${changed ? 'ring-2 ring-inset ring-[#5b3fe0]' : ''}`} />
     );
   }
 
-  function onceCell(date: string, t: string) {
+  function onceCell(date: string, t: string, when: string) {
     const k = `${date}T${t}`;
     const c = code(k);
-    const when = `${dateText(date)} ${timeText(toMin(t))}`;
     if (c === 'c') {
       const ls = lessonAt(d.lessons, date, t);
       const name = ls?.l.student ?? '';
       return (
         <button type="button" aria-label={`${when} ${ls?.l.makeup ? 'make-up' : 'class'} with ${name}`}
           className={`${cellBase} truncate px-0.5 ${ls?.l.makeup ? 'bg-[#d9d1ff] text-[#3a2a99]' : 'bg-[#5b3fe0] text-white'} ${ls && !ls.first ? cont : ''}`}
-          onClick={() => setDialog({ kind: 'info', title: `${name} · ${ls ? `${dateText(date)} ${span(ls.l.start.slice(11, 16), ls.l.min)}` : when}`, body: [
+          onClick={() => setDialog({ kind: 'info', title: `${name} · ${ls ? `${dateText(date)} ${span(ls.l.start.slice(11, 16), ls.l.min)} ${localLabel}` : when}`, body: [
             `${ls?.l.makeup ? 'Make-up' : 'Class'}${ls ? ` (${ls.l.min} min)` : ''}. This time has a class, so it can’t be closed here.`,
             'Can’t teach this class? Please tell the Edge English team.'] })}>
           {ls?.first ? lessonLabel(ls.l.student, ls.l.min) : ''}
@@ -169,7 +185,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
     if (c === 's') {
       return (
         <button type="button" aria-label={`${when} closed every week`} className={`${cellBase} bg-[#ecebf1]`}
-          onClick={() => setDialog({ kind: 'info', title: 'Closed every week', body: [`${FULL[new Date(`${date}T00:00:00Z`).getUTCDay()]} ${timeText(toMin(t))} is closed in Every week. Change it there.`] })} />
+          onClick={() => setDialog({ kind: 'info', title: 'Closed every week', body: [`${FULL[new Date(`${date}T00:00:00Z`).getUTCDay()]} ${timeText(toMin(t))} ${localLabel} is closed in Every week. Change it there.`] })} />
       );
     }
     const shut = once.has(k);
@@ -185,7 +201,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
     const dow = WEEK_DAYS[i];
     if (tab === 'week') return <div className="sticky top-0 z-[1] bg-white py-1 text-center text-[12px] font-bold text-[#1d1b2b]">{SHORT[dow]}</div>;
     const date = dates[i];
-    const free = d.times.map((t) => `${date}T${t}`).filter((k) => code(k) === 'o' || code(k) === 'b');
+    const free = ALL_HOURS.map((t) => { const c = source(date, t); return `${c.date}T${c.time}`; }).filter((k) => code(k) === 'o' || code(k) === 'b');
     const allShut = free.length > 0 && free.every((k) => once.has(k));
     return (
       <button type="button" disabled={free.length === 0} onClick={() => setDialog({ kind: 'day', date, free, allShut })}
@@ -198,7 +214,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
 
   const changesBox = (
     <div className="grid gap-2 rounded-[12px] border border-[#e6e3ef] bg-white p-3">
-      <strong className="text-[15px] text-[#1d1b2b]">Changes</strong>
+      <strong className="text-[15px] text-[#1d1b2b]">Changes · {localLabel}</strong>
       {lines.length > 0
         ? <ul className="list-disc pl-5 text-[13.5px] text-[#1d1b2b]">{lines.map((x) => <li key={x}>{x}</li>)}</ul>
         : <p className="text-[13px] text-[#6b6880]">No changes</p>}
@@ -229,9 +245,16 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
   );
 
   return (
-    <Panel onClose={close} sub={d.tutor.timezone}>
+    <Panel onClose={close} sub={viewLabel}>
       <div className="flex min-h-0 flex-1 gap-5 lg:p-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div role="group" aria-label="Timetable time zone" className="mb-2 flex flex-wrap gap-2">
+            {[false, true].map((korea) => <button key={String(korea)} type="button" aria-pressed={koreaTime === korea}
+              onClick={() => { setKoreaTime(korea); if (scroller.current) scroller.current.scrollTop = 0; }}
+              className={`${btnSub} ${koreaTime === korea ? 'border-[#5b3fe0] bg-[#eeeaff] text-[#5b3fe0]' : ''}`}>
+              {korea ? 'Korea time' : localLabel}
+            </button>)}
+          </div>
           <div role="tablist" className="mb-2 grid grid-cols-2 rounded-[11px] bg-[#ecebf1] p-[3px]">
             {(['week', 'once'] as const).map((t) => (
               <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
@@ -264,10 +287,10 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
             <div className="grid grid-cols-[42px_repeat(7,minmax(0,1fr))] gap-[2px] pb-2 pt-1 tabular-nums">
               <div className="sticky top-0 z-[1] bg-white" />
               {WEEK_DAYS.map((_, i) => <div key={i} className="contents">{dayHead(i)}</div>)}
-              {d.times.map((t) => (
+              {ALL_HOURS.map((t) => (
                 <div key={t} className="contents">
                   <div data-row={toMin(t)} className="pr-1 text-right text-[11px] leading-[26px] text-[#6b6880]">{t.endsWith('00') ? timeText(toMin(t)) : ''}</div>
-                  {WEEK_DAYS.map((dow, i) => <div key={dow}>{tab === 'week' ? weekCell(dow, t) : onceCell(dates[i], t)}</div>)}
+                  {WEEK_DAYS.map((dow, i) => <div key={dow}>{displayCell(i, t)}</div>)}
                 </div>
               ))}
             </div>
@@ -311,6 +334,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
             {dialog.kind === 'save' && (
               <>
                 <strong className="text-[16px] text-[#1d1b2b]">Save these changes?</strong>
+                <p className="text-[12px] text-[#6b6880]">{localLabel}</p>
                 <ul className="list-disc pl-5 text-[14px] text-[#1d1b2b]">{lines.map((x) => <li key={x}>{x}</li>)}</ul>
                 {weeklyChanged && <p className="text-[13px] text-[#6b6880]">{fromText(d.from, 'en')}</p>}
                 <p className="text-[13px] text-[#6b6880]">Students can no longer pick closed times for make-ups. Your classes don’t change.</p>
@@ -340,7 +364,7 @@ function Panel({ onClose, sub, children }: { onClose: () => void; sub?: string; 
         <div className="mb-2 flex items-start justify-between gap-2">
           <div>
             <h2 className="text-[18px] font-bold text-[#1d1b2b]">My hours</h2>
-            {sub && <p className="text-[12.5px] text-[#6b6880]">Your time · {sub}</p>}
+            {sub && <p className="text-[12.5px] text-[#6b6880]">{sub}</p>}
           </div>
           <button type="button" aria-label="Close" onClick={onClose}
             className="flex h-[40px] w-[40px] items-center justify-center rounded-[10px] border border-[#e6e3ef] text-[18px] text-[#1d1b2b]">✕</button>
