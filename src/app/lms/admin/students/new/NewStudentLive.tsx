@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { planActions } from '@/lms/admin/confirm-live';
 import { loadRegTutors, saveRegistration, studentsWithEmail } from '@/lms/admin/registration-live';
-import type { RegTutor } from '@/lms/admin/registration';
+import type { FormResponse, RegTutor } from '@/lms/admin/registration';
 import { supabaseBrowser } from '@/lms/auth/client';
 import NewStudent from './NewStudent';
 
@@ -14,6 +14,8 @@ type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 
 export default function NewStudentLive() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const sb = supabaseBrowser();
+  const [applications, setApplications] = useState<FormResponse[]>([]);
+  const [applicationsNote, setApplicationsNote] = useState('구글폼 신청서를 불러오는 중…');
 
   useEffect(() => {
     if (!sb) return setState({ kind: 'error', message: '시험용 Supabase 설정이 없어요 (환경 변수).' });
@@ -25,6 +27,14 @@ export default function NewStudentLive() {
       const now = new Date();
       try {
         setState({ kind: 'ready', nowIso: now.toISOString(), tutors: await loadRegTutors(sb, now) });
+        try {
+          const { data } = await sb.auth.getSession();
+          const response = await fetch('/api/lms/applications', { method: 'POST', headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` }, cache: 'no-store' });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error);
+          setApplications(payload.applications);
+          setApplicationsNote('제출일은 한국 시간 기준입니다. 신청서를 고르면 정보가 자동으로 채워집니다.');
+        } catch (e) { setApplicationsNote(e instanceof Error ? e.message : '신청서를 불러오지 못했습니다. 직접 입력은 가능합니다.'); }
       } catch (e) {
         setState({ kind: 'error', message: e instanceof Error ? e.message : '데이터를 읽지 못했어요.' });
       }
@@ -40,8 +50,8 @@ export default function NewStudentLive() {
     <NewStudent
       nowIso={state.nowIso}
       demo={false}
-      applications={[]}
-      applicationsNote="신청서(구글폼 응답) 연결 전이라 직접 입력만 돼요. 연결 방식은 승인 후 붙여요."
+      applications={applications}
+      applicationsNote={applicationsNote}
       tutors={state.tutors}
       save={(id, payload) => saveRegistration(sb!, id, payload)}
       sameEmail={sameEmail}
