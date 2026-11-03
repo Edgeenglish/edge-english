@@ -31,11 +31,12 @@ export type FormResponse = {
   wishGrid: WishWindow[] | null;
   startWish: string; // '2026-11-03' 또는 자유 서술
   payerName: string;
+  paymentMethod?: 'bank_transfer' | 'card_link' | null;
   raw: [string, string][];
 };
 
 /** 학생 희망 시간 한 칸 (학생 현지 요일·시각). 캘린더에서 날짜마다 한국 시각으로 바꿔 표시 → 서머타임 자동 */
-export type WishWindow = { weekday: number; from: string; to: string };
+export type WishWindow = { weekday: number; from: string; to: string; startOnly?: boolean };
 
 export type Draft = {
   source: 'form' | 'manual';
