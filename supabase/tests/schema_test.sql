@@ -1919,8 +1919,8 @@ grant select on hm to authenticated;
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000003100';
 create temp table hr as select tutor_hours(null) as j;
-select pg_temp.ok((select j -> 'times' ->> 0 = '04:00' and j -> 'times' ->> -1 = '20:30' and j ->> 'from' = (select nxt::text from hm) from hr),
-  'My hours: 칸은 강사 현지 시각, 한국 06:00~22:30 시작 = 호찌민 04:00~20:30, 매주 변경은 다음 주 월요일부터');
+select pg_temp.ok((select j -> 'times' ->> 0 = '06:00' and j -> 'times' ->> -1 = '22:30' and j ->> 'from' = (select nxt::text from hm) from hr),
+  'My hours: 강사 현지 06:00~22:30 시작, 한국 시간대와 무관, 매주 변경은 다음 주 월요일부터');
 select pg_temp.ok((select j -> 'weekly_open' ? '1:08:00' and j -> 'weekly_open' ? '5:15:00' and not j -> 'weekly_open' ? '1:15:30' and not j -> 'weekly_open' ? '0:08:00' from hr),
   'My hours: 한국 시간대로 넣은 가능 시간을 강사 현지 칸으로 (월 08:00~15:00)');
 select pg_temp.ok((select j -> 'weekly_classes' @> '[{"d": 1, "time": "09:00", "min": 40}]' and j -> 'history' = 'null'::jsonb from hr),
