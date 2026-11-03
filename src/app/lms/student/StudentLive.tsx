@@ -61,7 +61,7 @@ export default function StudentLive({ studentParam }: { studentParam?: string })
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[12px] bg-[#1d1b2b] px-3 py-2">
       <span className="text-[13px] font-semibold text-white">운영자 보기</span>
       <StudentPicker students={state.admin.students} current={state.admin.studentId} />
-      <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">대시보드</a>
+      <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">← 운영자 화면</a>
       {sb && current && !current.hasLogin && <StudentLoginForm onCreate={(email) => createStudentLogin(sb, current.id, email)} />}
     </div>
   );

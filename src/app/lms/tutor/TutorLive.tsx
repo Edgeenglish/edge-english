@@ -82,7 +82,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
           <option key={t.id} value={t.id}>{t.name}{t.hasLogin ? '' : ' · 강사 계정 없음'}{t.active ? '' : ' · 쉬는 중'}</option>
         ))}
       </select>
-      <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">대시보드</a>
+      <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">← 운영자 화면</a>
       {sb && !state.admin.tutors.find((t) => t.id === state.admin?.tutorId)?.hasLogin && (
         <TutorLoginForm onCreate={(email) => createTutorLogin(sb, state.admin!.tutorId, email)} />
       )}

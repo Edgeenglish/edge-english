@@ -111,7 +111,12 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       <header className="mb-4 flex items-start justify-between gap-3">
         <div>
           <p className="mb-1.5 flex items-center gap-1.5">
-            <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
+            {/* 운영자 보기: 로고를 누르면 운영자 화면으로 (11/3 대표, 학생 화면과 같게) */}
+            {adminBar ? (
+              <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex"><img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" /></a>
+            ) : (
+              <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
+            )}
             <span className="rounded-[6px] bg-[#27230e] px-[7px] py-[3px] text-[12px] font-extrabold text-[#ffd401]">Tutor</span>
           </p>
           <h1 className="text-[22px] font-bold text-[#1d1b2b]">{screen.tutor.name}</h1>
