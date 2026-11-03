@@ -6,6 +6,14 @@
 
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
+## ✅ 2026-11-03 무료 보상수업 + 11/2·11/3 점검 고침 (브랜치 claude/loving-faraday-2nm7yi, lms-test push) — 운영 반영 대표 승인 대기
+- **migration 4100** `lms_compensation_makeup` (시험용·운영 DB 둘 다 아직 미적용 — Claude 실행이 권한에서 막힘): 7일 트리거 폐지 · `makeup_requests.compensation_id`로 원래 수업 보강과 보상 신청 분리(각각 열린 신청 1개) · 사용 기한 = 수강 종료일, 종료일 23:59 KST까지 결제한 재등록(결제 기록 없는 시트 재등록 포함)이면 이월 · 확정 시 lessons kind 'compensation'(차감·회차 없음) + 보상권 used · 보상 수업 unique · 운영진 '보강 없애기'로 보상권 복구 · 노쇼를 고치면(voided) 열린 보상 신청 닫음 · student_screen(보상 권리·신청 상세 원래 수업·강사·확정 날짜·강사 답 시각) · tutor_screen(Compensation) · **tutor_makeup_answer: 겹치는 시간 '가능' 거절**
+- 화면: 학생 '날짜 선택 필요'(보강·무료 보상수업 각각) · 신청 상세 '신청 › 강사 확인 › 최종 확정', 강사 답 뒤 '최종 확정 대기' · 'n일 후' 표시 통일(계산 그대로) · 수강·결제 칸 내부 문구 제거·실제 결제 상태 · 강사 주 이동 [‹] 날짜 [›] + 'Back to this week'(지금 주 아닐 때만) · 시간대 '[도시] Time' / 'Korea Time (KST)'(Class Record·My hours) · 강사 보강 답 겹치는 시간 못 고름, 보낸 뒤 'Edge English will confirm' · 운영진 수업 변경 화면 '무료 보상수업' 줄 · 대시보드 남은 수업에 보상·강사 노쇼 보강 포함
+- 시험: `npm test` 329 · `npm run test:db`(4100 시험 16개) 통과. 02-check 표 수 47→48(admin_task_closures, 예전부터 실패하던 것)
+- **ChatGPT 11/3 점검 판단**: ① 겹치는 시간 → 고침 ② 확정 주체 문구 → 고침 ③ 모바일 뒤로가기 LMS 이탈 → 나중 ④ 휴무 날짜별 답 → 하지 않음(A안 유지)
+- **운영 반영 때 주의**: lms-test → lms-prod push는 ChatGPT Google Forms 작업(운영 승인 경계 표시됨)까지 같이 올라감 → 대표가 범위 결정. 운영 DB: 4100 미적용(직전 백업 후 적용), lms_hours_times 는 이미 있음. 운영에 쓸 수 있는 보상권 1개(오O수) 있음
+- **남은 결정**: POL-TU-10② 예약한 보상 수업 학생 재변경 · 정책 원본(Google Docs) H항목 기록은 아직
+
 ## 📋 다음 세션 할 일 (2026-11-02 대표 확정): 강사 노쇼 무료 보상수업 정책 변경 반영
 - **대표 결정 (11/2, 최종)**: 7일 사용 제한 폐지 · 일반 보강과 같이 수강기간 안에 사용 · 종료일까지 재등록·결제하면 미사용 보상수업 이월 · 재등록 안 하면 보강과 같이 소멸 · 강사 노쇼 기록과 보상 +1 기록은 따로 보존 · 학생 LMS·강사 Class Record·운영진 화면에 정확히 · **별도 기한·새 신청 절차 없이 기존 보강 기능 재사용**.
 - 고칠 곳(조사 완료): `src/lms/rules/change.ts` compensationDeadline·`policy.ts` A14(7일) · `compensations.expires_on`(운영 오O수 건은 비어 있음) · register POL-TU-03(7일 → 변경, POL-TU-10 정리) · 정책 원본 H항목 기록. 보강 요청은 `makeup_requests.source_lesson_id` 하나로 묶여 있음(열린 요청 1개 unique) → 보상수업은 같은 노쇼 수업에서 두 번째 보강 권리가 되므로 `makeup_requests`에 compensation_id 같은 구분이 필요. 확정 시 lessons.kind='compensation'·compensation_id, compensations.status='used'·used_lesson_id. 관련 함수: lms_makeup_source·lms_makeup_request_core·student_makeup_request·student_makeup_options·tutor_makeup_answer·admin_makeup_confirm·tutor_screen makeups·student_screen makeup_rights/makeup_requests. 이월: 재등록 결제 때 보강 이월 처리하는 곳에 보상도 포함.
