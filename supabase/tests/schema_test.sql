@@ -2107,3 +2107,181 @@ select pg_temp.ok(lms_makeup_conflict('55555555-0000-0000-0000-000000004200', '9
               and lms_makeup_conflict('55555555-0000-0000-0000-000000004200', '99999999-0000-0000-0000-000000004100',
                     timestamptz '2026-11-10 04:00 Asia/Seoul', timestamptz '2026-11-10 04:50 Asia/Seoul', true) is null,
   '보강 확정·강사 답 검사: 현지 05:00은 거절, 한국 04:00(멜버른 06:00)은 한국시간 제한 없이 가능 (4200)');
+
+-- ---------- 4300 학생 관리 ①~⑥ (H26(44)) ----------
+reset request.jwt.claim.sub;
+reset role;
+-- 가짜: 한국 거주 강사 R(월~금 06:00~22:30 가능)·대체강사 S, 학생 P 주 2회(월·화 20:00 KST) 40분 4주, 3주 전 화요일 시작 → 마지막 정규 = 다음 주 월요일 = 최종 종료일
+create temp table t4300 as select (date_trunc('week', current_date))::date as mon;
+grant select on t4300 to authenticated;
+insert into tutors (id, name, country, timezone) values
+  ('55555555-0000-0000-0000-000000004300', 'RegTutor', 'Korea', 'Asia/Seoul'),
+  ('55555555-0000-0000-0000-000000004301', 'SubTutor', 'Canada', 'America/Toronto');
+insert into tutor_availability (tutor_id, weekday, start_local, end_local, timezone, effective_from)
+select '55555555-0000-0000-0000-000000004300', w, '06:00', '22:30', 'Asia/Seoul', '2026-01-01' from generate_series(1, 5) w;
+insert into students (id, name_ko, name_en, display_name, timezone, email) values
+  ('99999999-0000-0000-0000-000000004300', '김서연', 'Kim Seoyeon', 'Sarah', 'Asia/Seoul', 'p4300@example.com'),
+  ('99999999-0000-0000-0000-000000004301', '박다른', 'Park Dareun', null, 'Asia/Seoul', null);
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000004300', '99999999-0000-0000-0000-000000004300', 1, 4, 2, 40, mon - 20, mon + 7, 8, 'active' from t4300;
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000004301', '99999999-0000-0000-0000-000000004301', 1, 4, 1, 40, mon - 20, mon + 7, 4, 'active' from t4300;
+insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+select '99999999-0000-0000-0000-000000004300', '55555555-0000-0000-0000-000000004300', w, '20:00', 40, mon - 20 from t4300, (values (1), (2)) v(w);
+insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select '99999999-1000-0000-0000-000000004300', '99999999-0000-0000-0000-000000004300', '55555555-0000-0000-0000-000000004300', 'regular',
+       row_number() over (order by d), (d::date + time '20:00') at time zone 'Asia/Seoul', (d::date + time '20:40') at time zone 'Asia/Seoul'
+from t4300, generate_series(mon - 20, mon + 7, interval '1 day') g(d)
+where extract(dow from d::date) in (1, 2);
+select pg_temp.ok((select count(*) from lessons where enrollment_id = '99999999-1000-0000-0000-000000004300') = 8
+              and (select max(kst_date) from lessons where enrollment_id = '99999999-1000-0000-0000-000000004300') = (select mon + 7 from t4300),
+  '4300 가짜 데이터: 정규 8회, 마지막 수업 = 최종 종료일');
+-- 다른 학생 수업: 다음 주 월 20:50~21:25 (강사 R) — P 의 20:00~20:40 뒤 10분 쉬고
+insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select '99999999-1000-0000-0000-000000004301', '99999999-0000-0000-0000-000000004301', '55555555-0000-0000-0000-000000004300', 'regular', 1,
+       (mon + 7 + time '20:50') at time zone 'Asia/Seoul', (mon + 7 + time '21:25') at time zone 'Asia/Seoul' from t4300;
+insert into app_users (auth_user_id, role, tutor_id) values
+  ('bbbbbbbb-0000-0000-0000-000000004300', 'tutor', '55555555-0000-0000-0000-000000004300'),
+  ('bbbbbbbb-0000-0000-0000-000000004301', 'tutor', '55555555-0000-0000-0000-000000004301');
+
+select pg_temp.ok(lms_tutor_student_label('Kim Seoyeon', 'Sarah') = 'Kim Seoyeon (Sarah)' and lms_tutor_student_label('Kim Seoyeon', null) = 'Kim Seoyeon'
+              and lms_tutor_student_label('Kim Seoyeon', ' kim seoyeon ') = 'Kim Seoyeon',
+  '④ 강사 화면 이름: 영문 이름 (Preferred Name), 없거나 같으면 괄호 없이 (4300)');
+
+set request.jwt.claims = '{"aal":"aal2"}';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 운영자
+-- ① 미리 보기: 다음 주 월요일부터 월 22:00 · 화 20:00 → 옮길 수업 1회(다음 주 월), 문제 없음
+create temp view p4300 as select mon + 7 as from_day from t4300;
+grant select on p4300 to authenticated;
+select pg_temp.ok((select (r ->> 'ok')::boolean and jsonb_array_length(r -> 'moved') = 1 and jsonb_array_length(r -> 'problems') = 0
+                          and (r -> 'moved' -> 0 ->> 'to')::timestamptz = ((select from_day from p4300) + time '22:00') at time zone 'Asia/Seoul'
+                          and (select count(*) from jsonb_array_elements(r -> 'kept') k where k ->> 'why' = 'before_from') >= 0
+                   from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"22:00"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), null, true) r),
+  '① 미리 보기: 적용 시작일 이후 정규 수업만 새 시각으로, 지난 수업·적용 전 수업은 그대로 (4300)');
+select pg_temp.ok((select not (r ->> 'ok')::boolean and r -> 'problems' -> 0 ->> 'why' = 'tutor_busy' and r -> 'problems' -> 0 ->> 'other' like '박다른%'
+                   from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"20:30"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), null, true) r),
+  '① 검사: 강사의 다른 학생 수업과 겹치면 문제 표시(누구 수업인지) (4300)');
+select pg_temp.ok((select not (r ->> 'ok')::boolean and r -> 'problems' -> 0 ->> 'why' = 'tutor_busy'
+                   from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"21:30"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), null, true) r),
+  '① 검사: 앞 수업 끝나고 10분 안 쉬면 문제 (21:25 끝 → 21:30 시작 불가) (4300)');
+select pg_temp.ok((select not (r ->> 'ok')::boolean and r -> 'problems' -> 0 ->> 'why' = 'tutor_hours_range'
+                   from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"23:00"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), null, true) r),
+  '① 검사: 강사 현지 06:00~22:30 밖 시작은 문제 (4300)');
+select pg_temp.ok((select not (r ->> 'ok')::boolean and r -> 'problems' -> 0 ->> 'why' = 'after_end'
+                   from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":3,"time":"20:00"},{"weekday":4,"time":"20:00"}]', (select from_day from p4300), null, true) r),
+  '② 마지막 수업이 최종 종료일을 넘으면 문제(after_end) — 종료일 연장 안 함 (4300)');
+select pg_temp.ok((select not (r ->> 'ok')::boolean and r -> 'problems' -> 0 ->> 'why' = 'tutor_unavailable'
+                   from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":6,"time":"20:00"},{"weekday":0,"time":"20:00"}]', (select from_day from p4300), null, true) r),
+  '① 검사: 강사가 열어 두지 않은 요일(토)은 문제 (4300)');
+select pg_temp.expect_error($$select admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"21:30"}]', (select from_day from p4300), null, true)$$, '주 2회');
+select pg_temp.expect_error($$select admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"21:15"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), null, true)$$, '30분 단위');
+select pg_temp.expect_error($$select admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"20:00"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), null, true)$$, '같습니다');
+select pg_temp.expect_error($$select admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"22:00"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), null, false)$$, '사유');
+select pg_temp.expect_error($$select admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":3,"time":"20:00"},{"weekday":4,"time":"20:00"}]', (select from_day from p4300), '사유', false)$$, '문제가 1건');
+select pg_temp.ok(true, '① 주 횟수 변경·30분 단위 아님·같은 일정·사유 없음·문제 있는 저장은 거절 (4300)');
+-- 저장
+select pg_temp.ok((select (r ->> 'ok')::boolean and (r ->> 'moved')::int = 1
+                   from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"22:00"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), '학생 요청 (카톡)', false) r),
+  '① 저장 성공 (4300)');
+reset role;
+select pg_temp.ok((select starts_at = ((select from_day from p4300) + time '22:00') at time zone 'Asia/Seoul' and ends_at - starts_at = interval '40 minutes'
+                   from lessons where enrollment_id = '99999999-1000-0000-0000-000000004300' and seq = 8)
+              and (select count(*) from lessons where enrollment_id = '99999999-1000-0000-0000-000000004300' and kind = 'regular') = 8
+              and (select starts_at = ((select from_day from p4300) - 7 + time '20:00') at time zone 'Asia/Seoul' from lessons where enrollment_id = '99999999-1000-0000-0000-000000004300' and seq = 6),
+  '① 저장 뒤: 다음 주 월 수업만 22:00 으로, 회차·지난 수업 그대로 (4300)');
+select pg_temp.ok((select count(*) = 2 and bool_and(effective_to = (select from_day from p4300) - 1) from regular_schedules where student_id = '99999999-0000-0000-0000-000000004300' and effective_from < (select from_day from p4300))
+              and (select count(*) = 2 and bool_and(effective_from = (select from_day from p4300)) from regular_schedules where student_id = '99999999-0000-0000-0000-000000004300' and effective_to is null)
+              and (select count(*) = 1 and bool_and(student_sent_at is null and tutor_sent_at is null and reason = '학생 요청 (카톡)' and jsonb_array_length(moved) = 1) from regular_changes where student_id = '99999999-0000-0000-0000-000000004300'),
+  '① 정규 일정 표: 예전 줄은 전날까지, 새 줄 2개 · 변경 기록(사유·옮긴 수업)과 안내 미발송 (4300)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select (x ->> 'notice_pending')::boolean and x ->> 'status' = 'active' and x ->> 'tutor' = 'RegTutor'
+                   from jsonb_array_elements(admin_students()) x where x ->> 'code' = (select code from students where id = '99999999-0000-0000-0000-000000004300')),
+  '운영진 학생 목록: 수강 상태·강사·안내 안 보냄 표시 (4300)');
+select admin_regular_change_sent((select id from regular_changes where student_id = '99999999-0000-0000-0000-000000004300'), 'student');
+select pg_temp.ok((select student_sent_at is not null and tutor_sent_at is null from regular_changes where student_id = '99999999-0000-0000-0000-000000004300'),
+  '③ 학생 [발송 완료]만 기록, 강사 안내는 따로 (4300)');
+select admin_regular_change_sent((select id from regular_changes where student_id = '99999999-0000-0000-0000-000000004300'), 'tutor');
+select pg_temp.ok((select not (x ->> 'notice_pending')::boolean from jsonb_array_elements(admin_students()) x where x ->> 'name_ko' = '김서연'), '③ 둘 다 보내면 안내 완료 (4300)');
+-- 강사는 정규 일정 변경·종료일 연장 불가
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004300';
+select pg_temp.expect_error($$select admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"21:00"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), 'x', true)$$, '운영자|42501');
+select pg_temp.expect_error($$select admin_extend_enrollment('99999999-1000-0000-0000-000000004300', (select from_day from p4300) + 7, 'admin_exception', 'x')$$, '운영자|42501');
+select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-0000-000000004300', '{"level":"Advanced"}')$$, '운영자|42501');
+select pg_temp.expect_error($$select admin_student_detail('99999999-0000-0000-0000-000000004300')$$, '운영자|42501');
+select pg_temp.ok(admin_students() is null, '강사는 운영진 학생 목록·상세·정보 수정 함수 사용 불가 (4300)');
+
+-- ⑥ 강사 접근: 정규 담당 R = 전체(이메일 포함)·수정 가능 / 미배정 S = 차단 / 대체수업 확정 뒤 S = 열람만, 이메일 없음, 끝나고 24시간 뒤 차단
+select pg_temp.ok((select p ->> 'access' = 'regular' and p -> 'student' ->> 'email' = 'p4300@example.com' and p -> 'student' ->> 'label' = 'Kim Seoyeon (Sarah)'
+                          and p -> 'student' ->> 'name_ko' is null and jsonb_array_length(p -> 'slots') = 2 and p -> 'enrollment' ->> 'final_end_date' is not null
+                   from tutor_student_profile('99999999-0000-0000-0000-000000004300') p),
+  '⑥ 정규 담당 강사: 프로필·이메일·정규 일정·수강 정보 보임, 한국 이름은 안 보임 (4300)');
+select tutor_student_update('99999999-0000-0000-0000-000000004300', '{"level":"Intermediate","job":"Software engineer","interests":"  ","correction_style":"major_only"}');
+select pg_temp.expect_error($$select tutor_student_update('99999999-0000-0000-0000-000000004300', '{"level":"B2"}')$$, 'rubric');
+select pg_temp.expect_error($$select tutor_student_update('99999999-0000-0000-0000-000000004300', '{"email":"x@y.z"}')$$, 'cannot be changed|42501');
+reset role;
+select pg_temp.ok((select level = 'Intermediate' and level_by = 'bbbbbbbb-0000-0000-0000-000000004300' and level_at is not null and job = 'Software engineer' and interests is null
+                          and correction_style = 'major_only' and answers_at is not null from students where id = '99999999-0000-0000-0000-000000004300')
+              and (select count(*) from student_profile_edits where student_id = '99999999-0000-0000-0000-000000004300' and edited_role = 'tutor') = 3,
+  '⑥ 정규 강사 수정: 4단계 레벨만, 빈 답은 미응답(null), 이메일 수정 불가, 칸마다 누가 언제 기록 (4300)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004301';   -- 대체강사 S (아직 배정 전)
+select pg_temp.expect_error($$select tutor_student_profile('99999999-0000-0000-0000-000000004300')$$, 'not assigned|42501');
+select pg_temp.ok(true, '⑥ 맡지 않은 학생은 URL·API 로도 차단 (4300)');
+reset role;
+update lessons set tutor_id = '55555555-0000-0000-0000-000000004301', original_tutor_id = '55555555-0000-0000-0000-000000004300'
+where enrollment_id = '99999999-1000-0000-0000-000000004300' and seq = 8;   -- 다음 주 월 수업을 대체강사 S 가 맡음
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004301';
+select pg_temp.ok((select p ->> 'access' = 'substitute' and p -> 'student' ->> 'email' is null and p -> 'student' ->> 'level' = 'Intermediate'
+                          and p -> 'student' ->> 'label' = 'Kim Seoyeon (Sarah)' and jsonb_array_length(p -> 'upcoming') = 1
+                          and p -> 'enrollment' ? 'duration_min' and not (p -> 'enrollment' ? 'extensions')
+                   from tutor_student_profile('99999999-0000-0000-0000-000000004300') p),
+  '⑥ 대체강사: 대체수업 확정 뒤 프로필·레벨·선호 열람, 이메일·연장 기록은 안 보임, 자기 대체수업만 (4300)');
+select pg_temp.expect_error($$select tutor_student_update('99999999-0000-0000-0000-000000004300', '{"level":"Advanced"}')$$, 'regular tutor|42501');
+select pg_temp.ok((select count(*) from tutor_my_students() where access = 'substitute' and email is null) = 1, '⑥ 대체강사는 수정 불가, 목록에도 이메일 없이 (4300)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004300';   -- 정규 강사 R 은 대체 뒤에도 그대로
+select pg_temp.ok((select p ->> 'access' = 'regular' from tutor_student_profile('99999999-0000-0000-0000-000000004300') p), '⑥ 정규 담당 강사 권한은 대체수업과 무관하게 유지 (4300)');
+reset role;
+-- 대체수업이 끝나고 24시간 지나면 차단 (시각을 과거로 옮겨 흉내)
+update lessons set starts_at = now() - interval '26 hours', ends_at = now() - interval '25 hours' where enrollment_id = '99999999-1000-0000-0000-000000004300' and seq = 8;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004301';
+select pg_temp.expect_error($$select tutor_student_profile('99999999-0000-0000-0000-000000004300')$$, 'not assigned|42501');
+select pg_temp.ok(true, '⑥ 대체수업 종료 24시간 뒤 자동 차단 (4300)');
+reset role;
+update lessons set tutor_id = '55555555-0000-0000-0000-000000004300', original_tutor_id = null,
+  starts_at = ((select from_day from p4300) + time '22:00') at time zone 'Asia/Seoul', ends_at = ((select from_day from p4300) + time '22:40') at time zone 'Asia/Seoul'
+where enrollment_id = '99999999-1000-0000-0000-000000004300' and seq = 8;
+
+-- 운영진 종료일 연장: 한 줄 추가, 회차 그대로, 예정 수업보다 앞으로 못 줄임, 다음 수강권과 겹치면 거절
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_extend_enrollment('99999999-1000-0000-0000-000000004300', (select from_day from p4300) + 7, 'admin_exception', '  ')$$, '사유');
+select pg_temp.expect_error($$select admin_extend_enrollment('99999999-1000-0000-0000-000000004300', (select from_day from p4300) - 1, 'correction', '정정')$$, '줄일 수 없습니다');
+select pg_temp.ok((select (r ->> 'days')::int = 7 and (r ->> 'final_end_date')::date = (select from_day from p4300) + 7
+                   from admin_extend_enrollment('99999999-1000-0000-0000-000000004300', (select from_day from p4300) + 7, 'student_long_term_leave', '학생 입원 2주 — 대표 승인') r),
+  '운영진 종료일 연장: 새 최종 종료일 → +7일 한 줄 (4300)');
+reset role;
+select pg_temp.ok((select final_end_date = (select from_day from p4300) + 7 and extension_days = 7 from enrollments where id = '99999999-1000-0000-0000-000000004300')
+              and (select count(*) from lessons where enrollment_id = '99999999-1000-0000-0000-000000004300') = 8
+              and (select count(*) = 1 and bool_and(auto_source is null and note like '학생 입원%') from enrollment_extensions where enrollment_id = '99999999-1000-0000-0000-000000004300'),
+  '연장 뒤: 최종 종료일만 바뀌고 수업 회차 그대로, 휴무 자동 연장 줄과 구분 (4300)');
+insert into enrollments (id, student_id, seq, previous_enrollment_id, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000004302', '99999999-0000-0000-0000-000000004300', 2, '99999999-1000-0000-0000-000000004300', 4, 2, 40, mon + 15, mon + 42, 8, 'confirmed' from t4300;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_extend_enrollment('99999999-1000-0000-0000-000000004300', (select from_day from p4300) + 10, 'admin_exception', '더')$$, '다음 수강권');
+select pg_temp.ok(true, '연장이 다음 수강권 기간과 겹치면 거절 (4300)');
+-- 운영진 정보 수정 + 상세
+select admin_student_update('99999999-0000-0000-0000-000000004300', '{"display_name":"Sarah","city":"Toronto","country":"Canada","timezone":"America/Toronto","level_note":"A2/B1 (시트)","class_note_url":"https://docs.google.com/document/d/x"}');
+select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-0000-000000004300', '{"timezone":"Mars/Base"}')$$, 'time zone');
+select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-0000-000000004300', '{"email":"nope"}')$$, 'email');
+select pg_temp.ok((select d -> 'student' ->> 'name_ko' = '김서연' and d -> 'student' ->> 'timezone' = 'America/Toronto' and d -> 'student' ->> 'level_note' = 'A2/B1 (시트)'
+                          and jsonb_array_length(d -> 'changes') = 1 and jsonb_array_length(d -> 'enrollments') = 2 and (d -> 'edits' -> 0 ->> 'role') = 'admin'
+                          and (d -> 'enrollment' ->> 'seq')::int = 2 and (d -> 'enrollments' -> 1 ->> 'seq')::int = 1
+                   from admin_student_detail('99999999-0000-0000-0000-000000004300') d),
+  '운영진 상세: 한국 이름·바뀐 시간대·예전 레벨 참고·정규 변경 기록·수강권·수정 기록·연장 기록 (4300)');
+reset request.jwt.claim.sub;
+reset role;

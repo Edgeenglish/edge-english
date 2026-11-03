@@ -17,6 +17,8 @@ export type TutorLesson = {
   state: 'scheduled' | 'canceled' | 'done';
   classStatus: ClassStatus | null;
   student: string;
+  /** 학생 프로필 창 열기용 (4300) */
+  studentId?: string;
   level: string | null;
   noteUrl: string | null;
   covering: boolean;
@@ -42,6 +44,7 @@ export type MakeupSlot = { id: string; startsAt: Date; endsAt: Date; answer: 'ye
 export type TutorMakeup = {
   id: string;
   student: string;
+  studentId?: string;
   originalAt: Date | null;
   originalDate: string | null;
   note: string | null;
@@ -52,7 +55,7 @@ export type TutorMakeup = {
 };
 
 /** 대체 수업 요청 (2600): 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 */
-export type TutorCover = { id: string; student: string; startsAt: Date; endsAt: Date; busy: boolean };
+export type TutorCover = { id: string; student: string; studentId?: string; startsAt: Date; endsAt: Date; busy: boolean };
 
 export type TutorScreen = {
   tutor: { id: string; name: string; timezone: string; meetUrl: string | null };
@@ -70,7 +73,7 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
     tutor: { id: j.tutor.id, name: j.tutor.name, timezone: j.tutor.timezone, meetUrl: j.tutor.meet_url ?? null },
     lessons: (j.lessons ?? []).map((l: any) => ({
       id: l.id, startsAt: new Date(l.starts_at), endsAt: new Date(l.ends_at), kind: l.kind, state: l.state, classStatus: l.class_status ?? null,
-      student: l.student, level: l.level ?? null, noteUrl: l.note_url ?? null, covering: !!l.covering, makeupOf: at(l.makeup_of),
+      student: l.student, studentId: l.student_id ?? undefined, level: l.level ?? null, noteUrl: l.note_url ?? null, covering: !!l.covering, makeupOf: at(l.makeup_of),
       count: l.count ? { n: Number(l.count.n), total: Number(l.count.total) } : null,
       topics: l.topics ?? null, remarks: l.remarks ?? null, studentLate: !!l.student_late, recordedAt: at(l.recorded_at), locked: !!l.locked,
       beforeLms: l.state === 'scheduled' && new Date(l.starts_at) <= loadedAt && !toRecord.has(l.id),
@@ -80,10 +83,10 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
     })),
     toRecord: j.to_record ?? [],
     makeups: (j.makeups ?? []).map((m: any) => ({
-      id: m.id, student: m.student, originalAt: at(m.original_at), originalDate: m.original_date ?? null, note: m.note ?? null, answeredAt: at(m.answered_at), compensation: !!m.compensation,
+      id: m.id, student: m.student, studentId: m.student_id ?? undefined, originalAt: at(m.original_at), originalDate: m.original_date ?? null, note: m.note ?? null, answeredAt: at(m.answered_at), compensation: !!m.compensation,
       slots: (m.slots ?? []).map((s: any) => ({ id: s.id, startsAt: new Date(s.starts_at), endsAt: new Date(s.ends_at), answer: s.answer ?? null, busy: !!s.busy, past: !!s.past })),
     })),
-    covers: (j.covers ?? []).map((c: any) => ({ id: c.id, student: c.student, startsAt: new Date(c.starts_at), endsAt: new Date(c.ends_at), busy: !!c.busy })),
+    covers: (j.covers ?? []).map((c: any) => ({ id: c.id, student: c.student, studentId: c.student_id ?? undefined, startsAt: new Date(c.starts_at), endsAt: new Date(c.ends_at), busy: !!c.busy })),
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

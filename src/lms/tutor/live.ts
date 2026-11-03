@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseHours, type HoursData } from './hours';
 import { parseScreen, type TutorResult, type TutorScreen } from './screen';
+import { parseTutorProfile, type TutorStudentProfile } from './profile';
 
 const NOT_APPLIED = 'The tutor page is not ready on this database yet (migration 2000).';
 
@@ -63,4 +64,18 @@ export async function loadHours(sb: SupabaseClient, tutorId: string | null): Pro
 /** weekly = 바꾼 뒤 매주 열린 칸 전체 (안 바꾸면 null), close·open = 그 주만 닫을·다시 열 칸 */
 export async function saveHours(sb: SupabaseClient, tutorId: string | null, weekly: string[] | null, close: string[], open: string[]): Promise<void> {
   check(await sb.rpc('tutor_hours_save', { p_tutor: tutorId, p_weekly: weekly, p_close: close, p_open: open }));
+}
+
+/** 학생 프로필 (4300): 담당 정규 강사·대체강사(열람만)·운영자. 자격은 DB 함수가 확인 (담당 아니면 42501) */
+export async function loadStudentProfile(sb: SupabaseClient, studentId: string): Promise<TutorStudentProfile> {
+  const r = await sb.rpc('tutor_student_profile', { p_student: studentId });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') throw new Error('Student profiles are not ready on this database yet (migration 4300).');
+  if (r.error?.code === '42501') throw new Error(r.error.message || 'This student is not assigned to you.');
+  return parseTutorProfile(check(r));
+}
+/** 정규 담당 강사만: 레벨·자기소개·선호 (대체강사는 DB 가 거절) */
+export async function updateStudentProfile(sb: SupabaseClient, studentId: string, fields: Record<string, string | null>): Promise<void> {
+  const r = await sb.rpc('tutor_student_update', { p_student: studentId, p: fields });
+  if (r.error?.code === '42501') throw new Error(r.error.message || "Only the student's regular tutor can edit this.");
+  check(r);
 }

@@ -7,6 +7,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { STATUS_RULES } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
+import StudentProfile, { type ProfileActions } from './StudentProfile';
 import {
   answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus,
   statusText, timeRange, weekOf, whenFull, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
@@ -20,7 +21,22 @@ export type TutorActions = {
   answerCover: (items: string[], yes: string[]) => Promise<void>;
   /** 가능 시간 고치기 [My hours] (migration 3100) */
   hours: HoursActions;
+  /** 학생 프로필 (4300): 학생 이름을 누르면 열림. 없으면 이름만 글자 */
+  profile?: ProfileActions;
 };
+
+/** 학생 이름 → 프로필 창 (이 화면 어디서든 같은 창) */
+const ProfileCtx = createContext<((studentId: string) => void) | null>(null);
+function StudentName({ id, name, className }: { id?: string; name: ReactNode; className?: string }) {
+  const open = useContext(ProfileCtx);
+  if (!id || !open) return <span className={className}>{name}</span>;
+  return (
+    <button type="button" onClick={(e) => { e.stopPropagation(); open(id); }} title="Student profile"
+      className={`${className ?? ''} cursor-pointer text-left underline decoration-[#c9c0ff] decoration-2 underline-offset-2 hover:text-[#5b3fe0]`}>
+      {name}
+    </button>
+  );
+}
 
 const card = 'rounded-[14px] border border-[#e6e3ef] bg-white p-4';
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
@@ -98,6 +114,10 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (학생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
   const [panel, setPanel] = useState<'record' | 'cover' | 'makeup' | 'hours' | null>(null);
+  // 학생 프로필 창 (4300): 열어도 보던 주·고른 학생은 그대로, 닫으면 돌아옴
+  const [profileOf, setProfileOf] = useState<string | null>(null);
+  const openProfile = actions.profile ? setProfileOf : null;
+  const studentIdByName = new Map([...(allLessons ?? []), ...screen.lessons].filter((l) => l.studentId).map((l) => [l.student, l.studentId!]));
   const todoCount = [screen.toRecord.length, screen.covers.length, screen.makeups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
@@ -105,9 +125,11 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
     : daysOf(screen.lessons, tz, week);
 
   return (
+    <ProfileCtx.Provider value={openProfile}>
     <main className="mx-auto max-w-[680px] px-4 pb-16 pt-4 lg:max-w-[1080px] xl:max-w-[1280px]">
       <div className="lg:max-w-[680px]">
       {adminBar}
+      {profileOf && actions.profile && <StudentProfile studentId={profileOf} actions={actions.profile} now={now} onClose={() => setProfileOf(null)} />}
       <header className="mb-4 flex items-start justify-between gap-3">
         <div>
           <p className="mb-1.5 flex items-center gap-1.5">
@@ -230,6 +252,9 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             <option key={n} value={n}>{n} · all classes</option>
           ))}
         </select>
+        {student && studentIdByName.get(student) && openProfile && (
+          <button type="button" onClick={() => openProfile(studentIdByName.get(student)!)} className={`${btnSub} mb-2 w-full text-[14px] lg:w-auto`}>Student profile — {student}</button>
+        )}
         {/* 주 이동: [‹] 날짜 범위 [›] 한 줄, 누르면 범위 바로 바뀜. 지금 주가 아닐 때만 'Back to this week' (대표 11/3) */}
         {!student && (
           <div className="mb-2 lg:max-w-[680px]">
@@ -267,6 +292,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         )}
       </section>
     </main>
+    </ProfileCtx.Provider>
   );
 }
 
@@ -333,7 +359,7 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <b className="text-[16px] text-[#1d1b2b]">{l.student}</b>
+        <StudentName id={l.studentId} name={l.student} className="text-[16px] font-bold text-[#1d1b2b]" />
         {tag && <span className="rounded-[6px] bg-[#efebff] px-1.5 text-[12.5px] font-semibold text-[#5b3fe0]">{tag}</span>}
         {l.count && <span className="text-[13px] text-[#6b6880]">Class {l.count.n}/{l.count.total}</span>}
       </div>
@@ -383,15 +409,17 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
   // 강사 노쇼는 운영자만 기록·수정 (4000)
   const recordable = canRecord(l, now) && (admin || l.classStatus !== 'Tutor no-show');
-  const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup));
+  const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
   const stText = phase === 'recorded' ? `✓ ${status}${l.studentLate ? ' · Student late' : ''}` : status;
   // 페이 대상 Y/N (상태 규칙 tutorPaid, 대표 10/29 가안). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
   const paid = l.classStatus ? (STATUS_RULES[l.classStatus].tutorPaid ? (l.locked ? 'Y ✓' : 'Y') : 'N') : '';
   const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
   const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
+  const openProfile = useContext(ProfileCtx);
   const links = (
     <>
+      {l.studentId && openProfile && <button type="button" onClick={() => openProfile(l.studentId!)} className={`${btnSub} inline-flex items-center text-[14px]`}>Student profile</button>}
       {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Class notes</a>}
       {phase === 'upcoming' && (l.kind === 'makeup' || l.kind === 'migrated_makeup') && (() => {
         const ev = { title: `Edge English make-up · ${l.student}`, start: l.startsAt, end: l.endsAt, details: meetUrl };
@@ -573,7 +601,7 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
   return (
     <div className={card}>
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <b className="text-[16px] text-[#1d1b2b]">{covers[0].student}</b>
+        <StudentName id={covers[0].studentId} name={covers[0].student} className="text-[16px] font-bold text-[#1d1b2b]" />
         <span className="text-[13px] text-[#6b6880]">{minutesOf(covers[0])} min · not confirmed yet</span>
       </div>
       <p className="mb-1.5 mt-3 text-[13px] font-semibold text-[#55526a]">Available?</p>
@@ -638,7 +666,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
   return (
     <div className={card}>
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <b className="text-[16px] text-[#1d1b2b]">{m.student}</b>
+        <StudentName id={m.studentId} name={m.student} className="text-[16px] font-bold text-[#1d1b2b]" />
         {m.compensation && <span className="rounded-[6px] bg-[#efebff] px-1.5 text-[12.5px] font-semibold text-[#5b3fe0]">Compensation</span>}
         {minutes && <span className="text-[13px] text-[#6b6880]">{minutes} min</span>}
       </div>
