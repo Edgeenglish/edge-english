@@ -1065,10 +1065,15 @@ reset role;
 -- 지금 시각 기준으로 잡은 가상 학생 '변경A' (4주·주2회, 기간 1개 변경권 2개). 강사 TestTutorChange
 reset role;
 -- 시험 시각이 '지금' 기준이라, 강사 현지 06:00~22:30 시작 검사(4200)에 시험 시각이 걸리지 않게 지금이 현지 정오쯤인 시간대로
+-- 4200: 강사가 연 시간만 가능 → 가능 시간 판정이 주제가 아닌 시험 강사는 매일 하루 종일 열어 둠 (현지 06:00~22:30 검사는 따로 걸림)
+create or replace function pg_temp.open_all(p uuid) returns void language sql as $$
+  insert into tutor_availability (tutor_id, weekday, start_local, end_local, timezone, effective_from)
+  select p, d, '00:00', '23:30', (select timezone from tutors where id = p), current_date - 60 from generate_series(0, 6) d $$;
 create or replace function pg_temp.noon_tz() returns text language sql as $$
   select case when o > 0 then 'Etc/GMT-' || o when o < 0 then 'Etc/GMT+' || (-o) else 'UTC' end
   from (select ((12 - extract(hour from now() at time zone 'UTC')::int + 36) % 24) - 12 as o) x $$;
 insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000001700', 'TestTutorChange', 'Korea', pg_temp.noon_tz());
+select pg_temp.open_all('55555555-0000-0000-0000-000000001700');
 insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000001700', '변경A', 'Change A');
 insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000001700', 'student', '99999999-0000-0000-0000-000000001700');
 insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
@@ -1257,6 +1262,9 @@ insert into tutors (id, name, country, timezone) values
   ('55555555-0000-0000-0000-00000000180a', '휴무A', 'Korea', 'Asia/Seoul'),
   ('55555555-0000-0000-0000-00000000180b', '휴무B', 'Korea', 'Asia/Seoul'),
   ('55555555-0000-0000-0000-00000000180c', '휴무C', 'Korea', 'Asia/Seoul');
+select pg_temp.open_all('55555555-0000-0000-0000-00000000180a');
+select pg_temp.open_all('55555555-0000-0000-0000-00000000180b');
+select pg_temp.open_all('55555555-0000-0000-0000-00000000180c');
 insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000001800', '휴무학생', 'Leave S'),
                                                    ('99999999-0000-0000-0000-000000001801', '휴무다른', 'Leave O');
 insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
@@ -1988,6 +1996,7 @@ select pg_temp.ok(true, 'My hours: 바뀐 기록은 지울 수 없음');
 reset request.jwt.claim.sub;
 reset role;
 insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000004100', 'CompTutor', 'Korea', 'Asia/Seoul');
+select pg_temp.open_all('55555555-0000-0000-0000-000000004100');
 insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000004100', '보상학생', 'Comp S');
 insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000004100', 'student', '99999999-0000-0000-0000-000000004100');
 insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
@@ -2084,11 +2093,15 @@ select pg_temp.ok((select status = 'voided' from compensations where id = (selec
 reset request.jwt.claim.sub;
 reset role;
 insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000004200', 'EarlyTutor', 'Australia', 'Australia/Melbourne');
+select pg_temp.ok(not lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 10:00 Australia/Melbourne'),
+  '가능 시간을 안 넣은 강사는 어느 시간도 예약 가능 아님 (4200)');
+insert into tutor_availability (tutor_id, weekday, start_local, end_local, timezone, effective_from)
+values ('55555555-0000-0000-0000-000000004200', 1, '00:00', '23:30', 'Australia/Melbourne', '2026-01-01');
 select pg_temp.ok(not lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 05:30 Australia/Melbourne')
               and lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 06:00 Australia/Melbourne')
               and lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 22:30 Australia/Melbourne')
               and not lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 23:00 Australia/Melbourne'),
-  '가능 시간이 없는 새 강사도 현지 06:00 전·22:30 뒤 시작은 불가, 06:00·22:30은 가능 (4200)');
+  '강사가 하루 종일 열어 둬도 현지 06:00 전·22:30 뒤 시작은 불가, 06:00·22:30은 가능 (4200)');
 select pg_temp.ok(lms_makeup_conflict('55555555-0000-0000-0000-000000004200', '99999999-0000-0000-0000-000000004100',
                     timestamptz '2026-11-10 05:00 Australia/Melbourne', timestamptz '2026-11-10 05:50 Australia/Melbourne', true) like '%06:00~22:30%'
               and lms_makeup_conflict('55555555-0000-0000-0000-000000004200', '99999999-0000-0000-0000-000000004100',

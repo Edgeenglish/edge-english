@@ -72,6 +72,15 @@ function kst(d: Date) {
   return { md: `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}`, wd: '일월화수목금토'[new Date(`${f.date}T00:00:00Z`).getUTCDay()], time: f.time, date: f.date };
 }
 const fmtDate = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+/**
+ * 수강 종료(재등록 마감) 시각: 기준은 한국 종료일 23:59 (POL-RN-01). 국내 학생 '11/30 23:59',
+ * 해외 학생은 본인 시간으로 바꿔 '11/30 09:59 (Toronto 시간)' (11/3 대표·ChatGPT: 종료 시각도 현지로 정확히)
+ */
+const endText = (d: KstDate) => {
+  if (VIEW_TZ === 'Asia/Seoul') return `${fmtDate(d)} 23:59`;
+  const k = kst(new Date(new Date(`${d}T23:59:00+09:00`).getTime()));
+  return `${k.md} ${k.time} (${zoneText()})`;
+};
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
 function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
@@ -104,7 +113,7 @@ const rightTitle = (m: MakeupRight) => (m.compId ? '무료 보상수업 1회' : 
 /** 제목 아래 사유 한 줄 */
 const rightReason = (m: MakeupRight) =>
   m.compId
-    ? `사유: ${rightLabel(m)} 강사 노쇼${m.useUntil ? ` · ${fmtDate(m.useUntil)}까지` : ''}`
+    ? `사유: ${rightLabel(m)} 강사 노쇼${m.useUntil ? ` · ${endText(m.useUntil)}까지` : ''}`
     : m.tutorNoShow
       ? '사유: 강사 노쇼 · 보상수업 1회 추가'
       : null;
@@ -228,11 +237,11 @@ export default function StudentHome(props: {
         <h2 className="text-[15px] font-bold text-[#5c3b00]">수업이 {prompt.left}회 남았어요</h2>
         {prompt.mode === 'request' ? (
           <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            종료일 {fmtDate(endDate)} 23:59까지 재등록 결제하면 남은 수업을 다음 등록으로 옮길 수 있고, 지금 고정 시간도 유지돼요.
+            종료일 {endText(endDate)}까지 재등록 결제하면 남은 수업을 다음 등록으로 옮길 수 있고, 지금 고정 시간도 유지돼요.
           </p>
         ) : (
           <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {fmtDate(endDate)} 23:59예요.
+            <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {endText(endDate)}예요.
           </p>
         )}
       </div>
@@ -260,7 +269,7 @@ export default function StudentHome(props: {
       <Tile
         label="수강 종료"
         value={!endDate ? '-' : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'}
-        sub={endDate ? `${fmtDate(endDate)} (${kst(new Date(`${endDate}T12:00:00+09:00`)).wd})` : ''}
+        sub={!endDate ? '' : VIEW_TZ === 'Asia/Seoul' ? `${fmtDate(endDate)} (${kst(new Date(`${endDate}T12:00:00+09:00`)).wd})` : `${endText(endDate)}까지`}
       />
     </section>
   );
@@ -906,9 +915,9 @@ function MakeupPicker(props: {
         )}
       </div>
       {right.compId && right.useUntil ? (
-        <p className="text-[12px] text-[#6b6880]">사용 기한 {fmtDate(right.useUntil)}</p>
+        <p className="text-[12px] text-[#6b6880]">사용 기한 {endText(right.useUntil)}</p>
       ) : (
-        props.endDate && !right.tutorLeave && <p className="text-[12px] text-[#6b6880]">수강 종료일 {fmtDate(props.endDate)}</p>
+        props.endDate && !right.tutorLeave && <p className="text-[12px] text-[#6b6880]">수강 종료 {endText(props.endDate)}</p>
       )}
     </section>
   );
@@ -1403,7 +1412,7 @@ function CancelSheet(props: {
   const late = d.timing === 'late';
   const rows: [string, string][] = [
     ['수업 횟수', d.consumesLesson ? `1회 차감 (남은 ${props.totalLeft}회 → ${props.totalLeft - 1}회)` : '차감 안 됨'],
-    ['보강', d.makeupAllowed ? `수강기간(~${fmtDate(props.makeupUntil)}) 안에 보강 가능` : '불가'],
+    ['보강', d.makeupAllowed ? `수강기간(~${endText(props.makeupUntil)}) 안에 보강 가능` : '불가'],
     ['변경권', d.usesCredit ? `1개 사용 (${props.creditsLeft}개 → ${props.creditsLeft - 1}개)` : `사용 안 함 (${props.creditsLeft}개 그대로)`],
   ];
 

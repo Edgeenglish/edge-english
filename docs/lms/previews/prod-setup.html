@@ -8743,8 +8743,9 @@ revoke all on function public.lms_hours_times(text, date) from public, anon, aut
 -- =====================================================================
 -- 4200 강사 현지 06:00~22:30 시작 — DB에서 막기 (2026-11-03 대표: 현지 06:00 전은 절대 안 됨, 강사 컨디션 컴플레인 / 22:30까지 허용 / 한국시간 제한 없음, POL-OP-02)
 --  - lms_tutor_start_ok: 강사 현지 시각으로 06:00~22:30 시작인지 (서머타임은 그날 실제 시차)
---  - lms_tutor_available: 가능 시간 줄이 없는 강사(새 강사)도 이 범위 밖은 '불가' (전에는 줄이 없으면 하루 종일 가능 → 보강 날짜에 새벽이 뜰 수 있었음)
---    → 학생 보강 가능한 날짜·대체강사 후보·My hours 판정에 그대로 반영
+--  - lms_tutor_available: 강사가 직접 연 시간(tutor_availability)만 가능. 가능 시간을 안 넣은 강사는 어느 시간도 '가능'이 아님
+--    (전에는 줄이 없으면 하루 종일 가능 → 보강 날짜에 새벽이 뜰 수 있었음, 11/3 대표·ChatGPT 확인). 칸 = 수업 시작 가능 시각 그대로(POL-TU-11)
+--    → 학생 보강 가능한 날짜·대체강사 '평소 시간' 표시·My hours 판정에 그대로 반영
 --  - lms_makeup_conflict: 범위 밖이면 충돌 → 운영진 보강·보상 확정, 강사 화면 busy, 강사 '가능' 답 모두 거절
 --  - 운영진이 직접 넣는 신규 등록·기존 학생 입력 시각은 이번에 건드리지 않음
 -- 기존 표·데이터를 바꾸지 않음. 다시 실행해도 같은 결과
@@ -8759,13 +8760,12 @@ revoke all on function lms_tutor_start_ok(uuid, timestamptz) from public, anon, 
 create or replace function lms_tutor_available(p_tutor uuid, p_start timestamptz) returns boolean
 language sql stable security definer set search_path = public as $$
   select lms_tutor_start_ok(p_tutor, p_start)
-     and (not exists (select 1 from tutor_availability a where a.tutor_id = p_tutor)
-      or exists (select 1 from tutor_availability a
+     and exists (select 1 from tutor_availability a
                  where a.tutor_id = p_tutor
                    and a.effective_from &lt;= (p_start at time zone 'Asia/Seoul')::date
                    and (a.effective_to is null or a.effective_to &gt;= (p_start at time zone 'Asia/Seoul')::date)
                    and extract(dow from (p_start at time zone a.timezone)) = a.weekday
-                   and (p_start at time zone a.timezone)::time between a.start_local and a.end_local))
+                   and (p_start at time zone a.timezone)::time between a.start_local and a.end_local)
 $$;
 revoke all on function lms_tutor_available(uuid, timestamptz) from public, anon, authenticated;
 
