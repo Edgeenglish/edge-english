@@ -82,6 +82,14 @@ export type StudentRequest = {
   candidates: Date[];
   createdAt: Date;
   note: string;
+  /** 강사 노쇼 무료 보상수업 신청 (4100) */
+  compensation?: boolean;
+  /** 원래 수업 시각·담당 강사, 확정된 날짜 (11/2 점검 ③) */
+  originalAt?: Date | null;
+  originalTimeKnown?: boolean;
+  originalTutor?: string | null;
+  tutor?: string | null;
+  confirmedAt?: Date | null;
 };
 
 export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {

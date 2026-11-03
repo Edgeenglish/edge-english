@@ -78,8 +78,6 @@ export const POLICY_V1 = {
   carryOverPaidByEndOfDay: true,
   /** 장기 연기: 24주 상품만, 총 14일, 7일 단위 최대 2회, 시작 4일 전까지 신청 (A09~A12) */
   longLeave: { weeks: 24 as CourseWeeks, maxTotalDays: 14, unitDays: 7, maxRequests: 2, applyDaysBefore: 4 },
-  /** 강사 노쇼 무료 보상 수업: 지급일로부터 7일 안에 수업 완료 (A14) */
-  compensationCompleteWithinDays: 7,
 } as const;
 
 /** POLICY_V1 각 값의 근거 정책 ID (기준표에서 '확정'이어야 함 — policy-register.test.ts) */
@@ -88,7 +86,6 @@ export const POLICY_V1_REFS: Record<keyof typeof POLICY_V1 | keyof typeof FAVORA
   tutorLateCancelRewardWon: 'POL-TU-04',
   carryOverPaidByEndOfDay: 'POL-RN-01',
   longLeave: 'POL-LV-01',
-  compensationCompleteWithinDays: 'POL-TU-03',
   'renewal.lateStart': 'POL-RN-04',
   'renewal.onTimeStart': 'POL-RN-07',
   'renewal.holdFixedSlotUntilEndOfDay': 'POL-RN-02',

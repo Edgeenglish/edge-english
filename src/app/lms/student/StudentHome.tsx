@@ -31,7 +31,7 @@ import {
 } from '@/lms/student/home';
 
 type Tab = 'home' | 'schedule' | 'requests' | 'materials' | 'me';
-type Right = Pick<MakeupRight, 'lessonId' | 'itemId'>;
+type Right = Pick<MakeupRight, 'lessonId' | 'itemId' | 'compId'>;
 type Overlay =
   | null
   | { kind: 'request'; id: string }
@@ -78,7 +78,9 @@ function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
 }
 
 
-const sameRight = (a: Right, b: Right) => (a.lessonId !== null && a.lessonId === b.lessonId) || (a.itemId !== null && a.itemId === b.itemId);
+// 같은 노쇼 수업이라도 원래 수업 보강과 무료 보상수업은 다른 권리 (4100)
+const sameRight = (a: Right, b: Right) =>
+  a.compId || b.compId ? !!a.compId && a.compId === b.compId : (a.lessonId !== null && a.lessonId === b.lessonId) || (a.itemId !== null && a.itemId === b.itemId);
 const whenText = (d: Date) => {
   const k = kst(d);
   return `${k.md} (${k.wd}) ${k.time}`;
@@ -91,6 +93,25 @@ const rightText = (m: { originalAt: Date; timeKnown?: boolean }) => {
 };
 /** 보강할 수업 이름: 날짜·시간 + 강사 (대표 11/2: 어떤 수업인지 분명하게) */
 const rightLabel = (m: { originalAt: Date; timeKnown?: boolean; tutor?: string | null }) => `${rightText(m)}${m.tutor ? ` ${m.tutor} 강사님` : ''} 수업`;
+/** 보강 권리 제목: 원래 수업 보강 / 무료 보상수업 (4100: 같은 노쇼 수업에서 각각 신청) */
+const rightTitle = (m: MakeupRight) => (m.compId ? '무료 보상수업 1회' : `${rightLabel(m)}에 대한 보강`);
+/** 제목 아래 사유 한 줄 */
+const rightReason = (m: MakeupRight) =>
+  m.compId
+    ? `사유: ${rightLabel(m)} 강사 노쇼${m.useUntil ? ` · ${fmtDate(m.useUntil)}까지` : ''}`
+    : m.tutorNoShow
+      ? '사유: 강사 노쇼 · 보상수업 1회 추가'
+      : null;
+/**
+ * 수업까지 남은 때 (홈 '다음 수업'·수업 변경 창 같은 글, 11/2 점검 ④): 24시간 안이면 'n시간 후', 아니면 한국 날짜 차이로 '내일'·'n일 후'.
+ * 판정(6시간 규칙 등) 계산은 그대로 — 화면 글만 하나로
+ */
+function untilText(now: Date, at: Date): string {
+  const hours = hoursBetween(now, at);
+  if (hours < 24) return `${Math.max(1, Math.floor(hours))}시간 후`;
+  const days = diffDays(formatInZone(now, 'Asia/Seoul').date, kst(at).date);
+  return days === 1 ? '내일' : `${days}일 후`;
+}
 
 export default function StudentHome(props: {
   nowIso: string;
@@ -256,7 +277,15 @@ export default function StudentHome(props: {
       >
         <Icon d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" className="h-[22px] w-[22px] text-[#5b3df0]" />
         <span className="text-[15px] font-bold">보강 신청</span>
-        <span className="text-[12px] leading-[1.55] text-[#55526a]">보강할 수업 {openRights.length}회</span>
+        <span className="text-[12px] leading-[1.55] text-[#55526a]">
+          보강할 수업 {openRights.filter((m) => !m.compId).length}회
+          {openRights.some((m) => m.compId) && (
+            <>
+              <br />
+              무료 보상수업 {openRights.filter((m) => m.compId).length}회
+            </>
+          )}
+        </span>
       </button>
     </section>
   );
@@ -279,7 +308,7 @@ export default function StudentHome(props: {
     <section aria-label="수강과 결제" className={`${card} px-4 pb-1.5 pt-4`}>
       <h2 className="mb-2 text-[15px] font-bold">수강·결제·적립금</h2>
       <LinkRow label="수강권" value={s.product} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
-      <LinkRow label="결제" value={s.confirmedOn ? `확인 완료 (${fmtDate(s.confirmedOn)})` : '확인 중'} valueClass="text-[#13623a]" onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
+      <LinkRow label="결제" value={s.paid ? `결제 완료${s.confirmedOn ? ` (${fmtDate(s.confirmedOn)})` : ''}` : '결제 확인 중'} valueClass={s.paid ? 'text-[#13623a]' : 'text-[#8a5300]'} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
       <LinkRow label="적립금 내역" value={won(points.balance)} valueClass="font-bold" onClick={() => setOverlay({ kind: 'points' })} />
     </section>
   );
@@ -464,16 +493,23 @@ export default function StudentHome(props: {
                 ))}
               </section>
             )}
-            <section className={`${card} px-4`}>
-              <button
-                type="button"
-                disabled={openRights.length === 0}
-                onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })}
-                className="flex min-h-[52px] w-full items-center justify-between text-left text-[15px] disabled:opacity-50"
-              >
-                보강 신청 <span className="text-[#8b88a0]">›</span>
-              </button>
-            </section>
+            {openRights.length > 0 && (
+              <section className={`${card} grid gap-1 p-4`}>
+                {openRights.map((m) => (
+                  <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })}
+                    className="flex min-h-[56px] w-full items-center justify-between gap-2 border-b border-[#eeecf4] py-2 text-left last:border-0">
+                    <span>
+                      <span className="block text-[14px] font-semibold">{rightTitle(m)}</span>
+                      {rightReason(m) && <span className="block text-[12px] text-[#6b6880]">{rightReason(m)}</span>}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="whitespace-nowrap rounded-full bg-[#fff1d6] px-2.5 py-1 text-[12px] font-semibold text-[#8a5300]">날짜 선택 필요</span>
+                      <span className="text-[#8b88a0]">›</span>
+                    </span>
+                  </button>
+                ))}
+              </section>
+            )}
           </TabPage>
         )}
 
@@ -611,7 +647,7 @@ export default function StudentHome(props: {
           {overlay.kind === 'makeup' &&
             (overlay.right ? (
               <MakeupPicker
-                key={`${overlay.right.lessonId}${overlay.right.itemId}`}
+                key={`${overlay.right.lessonId}${overlay.right.itemId}${overlay.right.compId}`}
                 right={s.makeupRights.find((m) => sameRight(m, overlay.right!)) ?? null}
                 canceled={overlay.canceled ?? false}
                 endDate={endDate}
@@ -626,8 +662,8 @@ export default function StudentHome(props: {
               <div className="grid gap-3">
                 <h2 className="text-[18px] font-bold">보강할 수업</h2>
                 {openRights.map((m) => (
-                  <button key={`${m.lessonId}${m.itemId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })} className={`${card} flex min-h-[56px] items-center justify-between px-4 text-left`}>
-                    <span className="grid text-[15px] font-semibold">{rightLabel(m)}에 대한 보강{m.tutorNoShow && <span className="text-[13px] font-semibold text-[#b3261e]">사유: 강사 노쇼 · 보상수업 1회 추가</span>}</span>
+                  <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })} className={`${card} flex min-h-[56px] items-center justify-between px-4 py-2 text-left`}>
+                    <span className="grid text-[15px] font-semibold">{rightTitle(m)}{rightReason(m) && <span className="text-[13px] font-semibold text-[#b3261e]">{rightReason(m)}</span>}</span>
                     <span className="text-[#8b88a0]">›</span>
                   </button>
                 ))}
@@ -862,17 +898,21 @@ function MakeupPicker(props: {
           ),
         )}
       </div>
-      {props.endDate && !right.tutorLeave && <p className="text-[12px] text-[#6b6880]">수강 종료일 {fmtDate(props.endDate)}</p>}
+      {right.compId && right.useUntil ? (
+        <p className="text-[12px] text-[#6b6880]">사용 기한 {fmtDate(right.useUntil)}</p>
+      ) : (
+        props.endDate && !right.tutorLeave && <p className="text-[12px] text-[#6b6880]">수강 종료일 {fmtDate(props.endDate)}</p>
+      )}
     </section>
   );
 
   return (
     <div className="grid gap-3.5">
       {props.canceled && <p className="rounded-[12px] bg-[#e3f5ea] px-3.5 py-2.5 text-[15px] font-bold text-[#13623a]">✓ {rightText(right)} 수업을 취소했어요</p>}
-      <h2 className="text-[18px] font-bold">보강 날짜 고르기</h2>
+      <h2 className="text-[18px] font-bold">{right.compId ? '보상수업 날짜 고르기' : '보강 날짜 고르기'}</h2>
       <div className={`${card} grid gap-1 px-4 py-3`}>
-        <p className="text-[15px] font-bold">{rightLabel(right)}에 대한 보강</p>
-        {right.tutorNoShow && <p className="text-[14px] font-semibold text-[#b3261e]">사유: 강사 노쇼 · 보상수업 1회 추가</p>}
+        <p className="text-[15px] font-bold">{rightTitle(right)}</p>
+        {rightReason(right) && <p className="text-[14px] font-semibold text-[#b3261e]">{rightReason(right)}</p>}
         {right.tutorLeave && <p className="text-[14px] font-semibold text-[#55526a]">사유: 강사 휴무</p>}
       </div>
       <p className="text-[14px] leading-relaxed text-[#55526a]">원하시는 일정을 최대 2개 고르실 수 있어요(선택). 2개를 고르시면 강사님이 확인 후 가능한 일정으로 확정해드립니다.</p>
@@ -951,10 +991,8 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
 
 function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
   const k = kst(lesson.startsAt);
-  const days = diffDays(formatInZone(now, 'Asia/Seoul').date, k.date);
   const started = now.getTime() >= lesson.startsAt.getTime();
-  const hours = hoursBetween(now, lesson.startsAt);
-  const badge = started ? '진행 중' : hours < 24 ? `${Math.max(1, Math.round(hours))}시간 후` : days === 1 ? '내일' : `${days}일 후`;
+  const badge = started ? '진행 중' : untilText(now, lesson.startsAt);
   return (
     <section aria-label="다음 수업" className="grid gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
       <div className="flex items-center justify-between">
@@ -1067,7 +1105,9 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
     <button type="button" onClick={onOpen} className="flex min-h-[56px] w-full items-center justify-between gap-2 border-b border-[#eeecf4] py-2 text-left last:border-0">
       <span>
         <span className="block text-[14px] font-semibold">{r.title}</span>
-        <span className="block text-[12px] text-[#6b6880]">{r.kind === 'makeup' ? `고른 날짜 ${r.candidates.length}개` : r.note}</span>
+        <span className="block text-[12px] text-[#6b6880]">
+          {r.kind !== 'makeup' ? r.note : r.status === 'confirmed' && r.confirmedAt ? `${whenText(r.confirmedAt)} 확정` : `고른 날짜 ${r.candidates.length}개`}
+        </span>
       </span>
       <span className="flex items-center gap-1.5">
         <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold ${STATUS_STYLE[r.status]}`}>{REQUEST_STATUS_LABEL[r.status]}</span>
@@ -1184,10 +1224,33 @@ function RequestDetail({ r }: { r: StudentRequest }) {
         </section>
       )}
       <section className={`${card} grid gap-2 p-4 text-[14px]`}>
-        <div className="flex justify-between">
-          <span className="text-[#55526a]">내용</span>
-          <span>{r.note}</span>
-        </div>
+        {r.originalAt && (
+          <div className="flex justify-between gap-3">
+            <span className="shrink-0 text-[#55526a]">원래 수업</span>
+            <span className="text-right">
+              {r.originalTimeKnown === false ? `${kst(r.originalAt).md} (${kst(r.originalAt).wd})` : whenText(r.originalAt)}
+              {r.compensation ? ' · 강사 노쇼' : ''}
+            </span>
+          </div>
+        )}
+        {(r.tutor || r.originalTutor) && (
+          <div className="flex justify-between gap-3">
+            <span className="shrink-0 text-[#55526a]">담당 강사</span>
+            <span className="text-right">{r.tutor ?? r.originalTutor}</span>
+          </div>
+        )}
+        {r.status === 'confirmed' && r.confirmedAt && (
+          <div className="flex justify-between gap-3">
+            <span className="shrink-0 text-[#55526a]">확정 날짜</span>
+            <b className="text-right">{whenText(r.confirmedAt)}</b>
+          </div>
+        )}
+        {r.note && (
+          <div className="flex justify-between gap-3">
+            <span className="shrink-0 text-[#55526a]">내용</span>
+            <span className="text-right">{r.note}</span>
+          </div>
+        )}
         <div className="flex justify-between">
           <span className="text-[#55526a]">신청한 날</span>
           <span>
@@ -1304,7 +1367,7 @@ function CancelSheet(props: {
               <span className="text-[15px] font-semibold">
                 {k.md} ({k.wd}) {k.time}
               </span>
-              <span className="text-[12.5px] text-[#6b6880]">{h < 6 ? '6시간 이내' : h < 24 ? `${Math.floor(h)}시간 후` : `${Math.floor(h / 24)}일 후`} ›</span>
+              <span className="text-[12.5px] text-[#6b6880]">{h < 6 ? '6시간 이내' : untilText(props.now, l.startsAt)} ›</span>
             </button>
           );
         })}

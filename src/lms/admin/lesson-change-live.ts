@@ -1,8 +1,10 @@
 // 수업 변경·보강 실제 데이터 (migration 1700). 읽기는 운영자 RLS, 쓰기는 DB 함수만 (판정·중복 방지·이력은 DB)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { compensationUseUntil } from '../rules/change';
+import type { KstDate } from '../rules/dates';
 import type { ClassStatus } from '../rules/status';
-import type { ChangeDecision, ChChange, ChEnrollment, ChLesson, ChMakeupRequest, ChMigratedOpen, ChNotice, ChStudent } from './lesson-change';
+import type { ChangeDecision, ChChange, ChCompensation, ChEnrollment, ChLesson, ChMakeupRequest, ChMigratedOpen, ChNotice, ChStudent } from './lesson-change';
 
 const NOT_APPLIED = '수업 변경 기능이 아직 이 DB에 적용되지 않았어요 (migration 1700).';
 
@@ -29,6 +31,8 @@ export type StudentLessonData = {
   makeupRequests: ChMakeupRequest[];
   migrated: ChMigratedOpen[];
   notices: ChNotice[];
+  /** 강사 노쇼 무료 보상수업 (4100 전 DB는 빈 목록) */
+  compensations?: ChCompensation[];
 };
 
 type LessonRow = {
@@ -39,14 +43,40 @@ type LessonRow = {
 type MakeupRow = {
   id: string; source_lesson_id: string | null; migrated_item_id: string | null; status: ChMakeupRequest['status']; confirmed_lesson_id: string | null;
   tutor_note?: string | null; tutor_answered_at?: string | null; candidates: { starts_at: string; tutor_answer?: 'yes' | 'no' | null }[];
+  compensation_id?: string | null;
 };
-/** 강사 답 칸(migration 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
+/** 새 칸(보상권 4100, 강사 답 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
 async function loadMakeupRequests(sb: SupabaseClient, studentId: string) {
   const q = (cols: string) => sb.from('makeup_requests').select(cols).eq('student_id', studentId).order('created_at');
-  const r = await q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
-  return r.error?.code === '42703' || r.error?.code === 'PGRST200'
-    ? q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, candidates:makeup_candidates(starts_at)')
-    : r;
+  const missing = (r: { error: { code?: string } | null }) => r.error?.code === '42703' || r.error?.code === 'PGRST200';
+  let r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
+  if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
+  if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, candidates:makeup_candidates(starts_at)');
+  return r;
+}
+
+/** 강사 노쇼 무료 보상수업과 사용 기한 (DB lms_comp_use_until 과 같은 판정: 종료일 23:59 KST까지 결제한 재등록이면 이월) */
+async function loadCompensations(sb: SupabaseClient, studentId: string): Promise<ChCompensation[]> {
+  const [c, en] = await Promise.all([
+    sb.from('compensations').select('id, status, source_lesson_id, enrollment_id').eq('student_id', studentId),
+    sb.from('enrollments').select('id, previous_enrollment_id, final_end_date, status, payments(paid_at)').eq('student_id', studentId),
+  ]);
+  if (c.error || en.error) return [];
+  const rows = en.data as unknown as { id: string; previous_enrollment_id: string | null; final_end_date: KstDate; status: string; payments: { paid_at: string }[] | null }[];
+  const until = (enrollmentId: string): KstDate => {
+    const start = rows.find((e) => e.id === enrollmentId);
+    if (!start) return '' as KstDate;
+    const chain: { finalEnd: KstDate; paidAt: Date[] }[] = [];
+    for (let cur = start, i = 0; i < 50; i++) {
+      const next = rows.find((e) => e.previous_enrollment_id === cur.id && ['confirmed', 'active', 'completed'].includes(e.status));
+      if (!next) break;
+      chain.push({ finalEnd: next.final_end_date, paidAt: (next.payments ?? []).map((p) => new Date(p.paid_at)) });
+      cur = next;
+    }
+    return compensationUseUntil(start.final_end_date, chain);
+  };
+  return (c.data as { id: string; status: ChCompensation['status']; source_lesson_id: string; enrollment_id: string }[])
+    .map((x) => ({ id: x.id, status: x.status, sourceLessonId: x.source_lesson_id, useUntil: until(x.enrollment_id) }));
 }
 
 export async function loadStudentLessons(sb: SupabaseClient, studentId: string): Promise<StudentLessonData> {
@@ -90,7 +120,9 @@ export async function loadStudentLessons(sb: SupabaseClient, studentId: string):
       tutorAnswers: Object.fromEntries(m.candidates.filter((c) => c.tutor_answer).map((c) => [+new Date(c.starts_at), c.tutor_answer!])),
       tutorNote: m.tutor_note ?? null,
       tutorAnsweredAt: m.tutor_answered_at ? new Date(m.tutor_answered_at) : null,
+      compensationId: m.compensation_id ?? null,
     })),
+    compensations: await loadCompensations(sb, studentId),
     migrated: (check(migrated) as { id: string; original_date: string | null; tutor_leave: boolean | null }[]).map((m) => ({ id: m.id, originalDate: m.original_date, tutorLeave: !!m.tutor_leave })),
     notices: notices.sort((a, b) => +a.createdAt - +b.createdAt),
   };
@@ -102,9 +134,11 @@ export async function changeLesson(sb: SupabaseClient, requestId: string, lesson
 export async function revertChange(sb: SupabaseClient, changeId: string, note: string): Promise<void> {
   check(await sb.rpc('admin_revert_change', { p_change: changeId, p_note: note }));
 }
-export async function requestMakeup(sb: SupabaseClient, source: { lessonId?: string; itemId?: string }, slots: Date[]): Promise<void> {
+/** compId = 강사 노쇼 무료 보상수업 (4100). 보상수업이 아니면 예전과 같은 인자 */
+export async function requestMakeup(sb: SupabaseClient, source: { lessonId?: string; itemId?: string; compId?: string }, slots: Date[]): Promise<void> {
   check(await sb.rpc('admin_makeup_request', {
     p_lesson: source.lessonId ?? null, p_item: source.itemId ?? null, p_slots: slots.map((t) => ({ starts_at: t.toISOString() })), p_requested_at: new Date().toISOString(),
+    ...(source.compId ? { p_comp: source.compId } : {}),
   }));
 }
 export async function confirmMakeup(sb: SupabaseClient, requestId: string, at: Date): Promise<void> {

@@ -6,7 +6,7 @@ describe('My hours display zones', () => {
     expect(ALL_HOURS).toHaveLength(48);
     expect(ALL_HOURS[0]).toBe('00:00');
     expect(ALL_HOURS.at(-1)).toBe('23:30');
-    expect(cityTime('America/New_York')).toBe('New York time');
+    expect(cityTime('America/New_York')).toBe('New York Time');
   });
   it('preserves tutor-local save keys', () => {
     expect(sourceCell('2026-11-02', '00:00', 'Asia/Manila', 'Asia/Manila'))

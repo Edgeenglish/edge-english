@@ -456,15 +456,15 @@ select pg_temp.ok(reward_balance('99999999-0000-0000-0000-000000000001') = 2000,
 select pg_temp.expect_error($$delete from reward_ledger$$, '삭제할 수 없습니다');
 select pg_temp.ok(true, '적립금 원장은 지울 수 없음');
 
--- ---------- 보상 수업 7일 기한 ----------
+-- ---------- 보상 수업 기한 (4100: 7일 폐지) ----------
 insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, class_status)
 values ('99999999-3000-0000-0000-000000000004', '99999999-1000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001',
         '22222222-2222-2222-2222-222222222222', 'regular', 3, '2026-11-09 11:00+00', '2026-11-09 11:50+00', 'done', 'Tutor no-show');
 insert into compensations (student_id, enrollment_id, source_lesson_id, reason, confirmed_by, created_at)
 values ('99999999-0000-0000-0000-000000000001', '99999999-1000-0000-0000-000000000001', '99999999-3000-0000-0000-000000000004',
         'tutor_no_show', 'aaaaaaaa-0000-0000-0000-000000000001', '2026-11-09 15:30+00');
-select pg_temp.ok((select expires_on from compensations where source_lesson_id = '99999999-3000-0000-0000-000000000004') = '2026-11-17',
-                  '보상 수업 기한 = 지급일(KST 11/10) + 7일 (정책 원본 적용 등록)');
+select pg_temp.ok((select expires_on is null from compensations where source_lesson_id = '99999999-3000-0000-0000-000000000004'),
+                  '보상 수업 7일 기한 없음 — 일반 보강과 같이 수강기간 안 (4100, 2026-11-02 대표)');
 
 -- ---------- 장기 연기 (24주만, 총 14일·2회) ----------
 select pg_temp.expect_error($$insert into long_leave_requests (enrollment_id, leave_start, days, reason_kind) values ('99999999-1000-0000-0000-000000000001', '2027-03-01', 10, 'health')$$, 'check');
@@ -1977,3 +1977,99 @@ reset role;
 select pg_temp.ok((select count(*) = 1 from tutor_hours_changes where tutor_id = '55555555-0000-0000-0000-000000003100' and by_admin), 'My hours: 운영자 대신 고친 것은 운영자 표시');
 select pg_temp.expect_error($$delete from tutor_hours_changes$$, '삭제할 수 없습니다');
 select pg_temp.ok(true, 'My hours: 바뀐 기록은 지울 수 없음');
+
+-- ---------- 4100 강사 노쇼 무료 보상수업 = 기존 보강 기능 재사용 ----------
+reset request.jwt.claim.sub;
+reset role;
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000004100', 'CompTutor', 'Korea', 'Asia/Seoul');
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000004100', '보상학생', 'Comp S');
+insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000004100', 'student', '99999999-0000-0000-0000-000000004100');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000004100', '99999999-0000-0000-0000-000000004100', 1, 4, 2, 50, current_date - 20, current_date - 20 + 27, 8, 'active');
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select ('77777777-4100-0000-0000-00000000000' || n)::uuid, '99999999-1000-0000-0000-000000004100', '99999999-0000-0000-0000-000000004100',
+       '55555555-0000-0000-0000-000000004100', 'regular', n, date_trunc('hour', now()) - make_interval(days => 3 - n), date_trunc('hour', now()) - make_interval(days => 3 - n) + interval '50 minutes'
+from generate_series(1, 2) n;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select tutor_record_class('77777777-4100-0000-0000-000000000001', 'tutor_no_show', null, null);
+select tutor_record_class('77777777-4100-0000-0000-000000000001', 'tutor_no_show', null, null);
+reset role;
+create temp table cp as select id from compensations where source_lesson_id = '77777777-4100-0000-0000-000000000001';
+grant select on cp to authenticated;
+select pg_temp.ok((select count(*) = 1 and bool_and(expires_on is null and status = 'available') from compensations where source_lesson_id = '77777777-4100-0000-0000-000000000001'),
+  '강사 노쇼 → 보상권 1개(다시 저장해도 1개), 7일 기한 없음 (4100)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004100';
+select pg_temp.ok((select count(*) filter (where x ->> 'lesson_id' = '77777777-4100-0000-0000-000000000001') = 1
+                      and count(*) filter (where x ->> 'comp_id' = (select id::text from cp)) = 1
+                      and bool_and(x ->> 'use_until' = (current_date - 20 + 27)::text) filter (where x ? 'comp_id')
+                   from jsonb_array_elements(student_screen(null) -> 'makeup_rights') x),
+  '학생 화면: 원래 수업 보강과 무료 보상수업이 따로 보임, 보상 사용 기한 = 수강 종료일 (4100)');
+select pg_temp.ok((select count(*) > 0 and bool_and(starts_at < ((current_date - 20 + 28)::timestamp at time zone 'Asia/Seoul')) and bool_and(section = 'in_period')
+                   from student_makeup_options(null, null, null, (select id from cp))),
+  '보상수업 보강 가능한 날짜: 일반 보강과 같은 계산, 사용 기한 안만 (4100)');
+select student_makeup_request('77777777-4100-0000-0000-000000000001', null, (select jsonb_agg(jsonb_build_object('starts_at', o.starts_at)) from (select starts_at from student_makeup_options(null, '77777777-4100-0000-0000-000000000001', null) order by starts_at limit 1) o));
+select student_makeup_request(null, null, (select jsonb_agg(jsonb_build_object('starts_at', o.starts_at)) from (select starts_at from student_makeup_options(null, null, null, (select id from cp)) order by starts_at offset 1 limit 2) o), (select id from cp));
+select pg_temp.ok((student_makeup_request(null, null, (select jsonb_agg(jsonb_build_object('starts_at', o.starts_at)) from (select starts_at from student_makeup_options(null, null, null, (select id from cp)) order by starts_at offset 1 limit 1) o), (select id from cp)) ->> 'repeated')::boolean
+              and (student_makeup_request('77777777-4100-0000-0000-000000000001', null, (select jsonb_agg(jsonb_build_object('starts_at', o.starts_at)) from (select starts_at from student_makeup_options(null, '77777777-4100-0000-0000-000000000001', null) order by starts_at limit 1) o)) ->> 'repeated')::boolean,
+  '같은 노쇼 수업: 보강 신청 1개 + 보상 신청 1개가 따로 열리고, 다시 눌러도 더 안 생김 (4100)');
+reset role;
+select pg_temp.ok((select count(*) = 2 and count(*) filter (where compensation_id is not null) = 1 from makeup_requests
+                   where source_lesson_id = '77777777-4100-0000-0000-000000000001' and status = 'requested'),
+  '열린 신청: 원래 수업 보강 1 · 보상 1 (4100)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004100';
+select pg_temp.expect_error($$select student_makeup_request(null, null, '[]'::jsonb, (select id from cp))$$, '1~2개');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select bool_or((m ->> 'compensation')::boolean) and bool_or(not (m ->> 'compensation')::boolean)
+                   from jsonb_array_elements(tutor_screen('55555555-0000-0000-0000-000000004100', current_date, current_date) -> 'makeups') m),
+  '강사 화면 Make-up requests: 보상 신청은 Compensation 으로 구분 (4100)');
+select admin_makeup_confirm((select id from makeup_requests where compensation_id = (select id from cp) and status = 'requested'),
+                            (select min(c.starts_at) from makeup_candidates c join makeup_requests r on r.id = c.request_id where r.compensation_id = (select id from cp)));
+reset role;
+create temp table cl as select confirmed_lesson_id as id from makeup_requests where compensation_id = (select id from cp) and status = 'confirmed';
+grant select on cl to authenticated;
+select pg_temp.ok((select l.kind = 'compensation' and l.compensation_id = (select id from cp) and l.makeup_of is null and l.state = 'scheduled'
+                          and lms_lesson_count(l.id) is null from lessons l where l.id = (select id from cl))
+              and (select status = 'used' and used_lesson_id = (select id from cl) from compensations where id = (select id from cp))
+              and (select count(*) = 1 from makeup_requests where source_lesson_id = '77777777-4100-0000-0000-000000000001' and status = 'requested' and compensation_id is null),
+  '운영 확정 → 보상 수업(kind compensation, 회차·차감 없음) + 보상권 used, 원래 수업 보강 신청은 그대로 (4100)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004100';
+select pg_temp.ok(not exists (select 1 from jsonb_array_elements(student_screen(null) -> 'makeup_rights') x where x ? 'comp_id' and x ->> 'comp_id' is not null)
+              and (select x ->> 'original_at' is not null and x ->> 'original_tutor' = 'CompTutor' and x ->> 'tutor' = 'CompTutor' and x ->> 'confirmed_at' is not null
+                   from jsonb_array_elements(student_screen(null) -> 'makeup_requests') x where x ->> 'comp_id' = (select id::text from cp)),
+  '확정 뒤 학생 화면: 보상 권리 빠짐, 신청 내역에 원래 수업·담당 강사·확정 날짜 (4100)');
+select pg_temp.expect_error($$select student_makeup_request(null, null, '[{"starts_at":"2100-01-01T00:00:00Z"}]'::jsonb, (select id from cp))$$, '이미 날짜를 잡은');
+select pg_temp.ok(true, '쓴 보상수업은 다시 신청 못 함 (중복 생성 막기, 4100)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_makeup_request(null, null, jsonb_build_array(jsonb_build_object('starts_at', ((current_date + 60)::timestamp + time '10:00') at time zone 'Asia/Seoul')), now(), (select id from cp))$$, '이미 날짜를 잡은');
+select admin_void_makeup((select id from cl), '날짜 다시');
+select pg_temp.ok((select status = 'available' and used_lesson_id is null from compensations where id = (select id from cp)), '운영진이 보상 수업을 없애면 보상권 다시 사용 가능 (4100)');
+select pg_temp.expect_error($$select admin_makeup_request(null, null, jsonb_build_array(jsonb_build_object('starts_at', ((current_date + 60)::timestamp + time '10:00') at time zone 'Asia/Seoul')), now(), (select id from cp))$$, '사용 기한');
+select pg_temp.ok(true, '사용 기한(수강 종료일) 뒤 시간은 보상 신청 거절 (4100)');
+reset role;
+-- 이월: 종료일 23:59 KST까지 결제한 재등록이면 그 수강권 종료일까지, 늦은 결제면 이월 안 함, 결제 기록 없는 재등록(시트)은 이월
+insert into enrollments (id, student_id, seq, previous_enrollment_id, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000004101', '99999999-0000-0000-0000-000000004100', 2, '99999999-1000-0000-0000-000000004100', 4, 2, 50,
+        current_date - 20 + 28, current_date - 20 + 28 + 27, 8, 'confirmed');
+select pg_temp.ok(lms_comp_use_until('99999999-1000-0000-0000-000000004100') = current_date - 20 + 28 + 27, '결제 기록 없는 재등록(시트 관리)은 이월 (4100)');
+insert into payments (enrollment_id, method, amount_received, paid_at, received_on, confirmed_by)
+values ('99999999-1000-0000-0000-000000004101', 'bank_transfer', 100000, ((current_date - 20 + 28)::timestamp + time '00:30') at time zone 'Asia/Seoul', current_date - 20 + 28, 'aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.ok(lms_comp_use_until('99999999-1000-0000-0000-000000004100') = current_date - 20 + 27, '종료일 다음 날 결제한 재등록은 이월 안 함 (POL-RN-01, 4100)');
+insert into payments (enrollment_id, method, amount_received, paid_at, received_on, confirmed_by)
+values ('99999999-1000-0000-0000-000000004101', 'bank_transfer', 1000, ((current_date - 20 + 27)::timestamp + time '23:59') at time zone 'Asia/Seoul', current_date - 20 + 27, 'aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.ok(lms_comp_use_until('99999999-1000-0000-0000-000000004100') = current_date - 20 + 28 + 27
+              and lms_comp_lesson_enrollment((select id from cp), current_date - 20 + 30) = '99999999-1000-0000-0000-000000004101'
+              and lms_comp_lesson_enrollment((select id from cp), current_date) = '99999999-1000-0000-0000-000000004100',
+  '종료일 23:59까지 결제한 재등록 → 다음 수강권 종료일까지 이월, 이월된 날짜의 보상 수업은 재등록 수강권에 붙음 (4100)');
+-- 강사 노쇼를 다른 결과로 고치면: 쓰지 않은 보상권 voided + 열린 보상 신청 닫힘
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_makeup_request(null, null, (select jsonb_agg(jsonb_build_object('starts_at', o.starts_at)) from (select starts_at from student_makeup_options('99999999-0000-0000-0000-000000004100', null, null, (select id from cp)) order by starts_at limit 1) o), now(), (select id from cp));
+select tutor_record_class('77777777-4100-0000-0000-000000000001', 'student_no_show', null, null);
+reset role;
+select pg_temp.ok((select status = 'voided' from compensations where id = (select id from cp))
+              and not exists (select 1 from makeup_requests where compensation_id = (select id from cp) and status in ('requested', 'countered')),
+  '강사 노쇼를 고치면 보상권 voided + 열린 보상 신청 닫힘 (기록은 남김, 4100)');

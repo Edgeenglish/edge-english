@@ -8,7 +8,7 @@ import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { STATUS_RULES } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
 import {
-  answerReady, canRecord, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus,
+  answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus,
   statusText, timeRange, weekOf, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
 } from '@/lms/tutor/screen';
 
@@ -115,7 +115,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             <span className="rounded-[6px] bg-[#27230e] px-[7px] py-[3px] text-[12px] font-extrabold text-[#ffd401]">Tutor</span>
           </p>
           <h1 className="text-[22px] font-bold text-[#1d1b2b]">{screen.tutor.name}</h1>
-          <p className="text-[13px] text-[#6b6880]">Your time · {tz}</p>
+          <p className="text-[13px] text-[#6b6880]">{tzHeader(tz)}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {screen.tutor.meetUrl && (
               <a href={screen.tutor.meetUrl} target="_blank" rel="noreferrer" className={`${btnMain} inline-flex items-center`}>Classroom (Google Meet)</a>
@@ -201,7 +201,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
           {kstOn !== null && (
             <label className="ml-auto flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]">
               <input type="checkbox" checked={kstOn} onChange={(e) => setKst(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
-              KST
+              {KOREA_TIME}
             </label>
           )}
           <label className={`${kstOn === null ? 'ml-auto ' : ''}flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]`}>
@@ -235,10 +235,10 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
         {days.length > 0 && (
           <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
             <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] gap-2 border-b-2 border-[#5b3fe0] bg-[#efebff] px-3 py-2 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:hidden">
-              <span>Local Time</span><span>Student</span><span>Class Status</span>
+              <span>{tzTimeLabel(tz)}</span><span>Student</span><span>Class Status</span>
             </div>
             <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 whitespace-nowrap text-[13px] font-bold text-[#2b1c7a] lg:grid [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-              <span>Local Time</span>{kst && <span>KST</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
+              <span>{tzTimeLabel(tz)}</span>{kst && <span>{KOREA_TIME}</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
             </div>
             {days.map((d) => (
               <div key={d.date}>
@@ -328,6 +328,7 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
         {kst && <span className="text-[#6b6880]"> · {kst}</span>}
       </p>
       {l.makeupOf && <p className="text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
+      {l.compensationOf && <p className="text-[13px] text-[#6b6880]">Compensation for {whenText(l.compensationOf, tz)} (tutor no-show)</p>}
       {phaseOf(l, now) === 'canceled' && <p className="text-[13px] font-semibold text-[#b3261e]">{statusText(l, now)}</p>}
     </div>
   );
@@ -423,6 +424,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
       {open && (
         <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenText(l.makeupOf, tz)}</p>}
+          {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenText(l.compensationOf, tz)} (tutor no-show)</p>}
           {recordable ? (
             <div className="lg:max-w-[560px]">
               <DirtyCtx.Provider value={mark}>
@@ -622,9 +624,10 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
     <div className={card}>
       <div className="flex flex-wrap items-baseline gap-x-2">
         <b className="text-[16px] text-[#1d1b2b]">{m.student}</b>
+        {m.compensation && <span className="rounded-[6px] bg-[#efebff] px-1.5 text-[12.5px] font-semibold text-[#5b3fe0]">Compensation</span>}
         {minutes && <span className="text-[13px] text-[#6b6880]">{minutes} min</span>}
       </div>
-      <p className="text-[13.5px] text-[#55526a]">Original class: {makeupOrigin(m, tz)}</p>
+      <p className="text-[13.5px] text-[#55526a]">{m.compensation ? 'Tutor no-show class' : 'Original class'}: {makeupOrigin(m, tz)}</p>
       {closed ? (
         <p className="mt-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] font-semibold text-[#1f7a4d]">✓ Closed by Edge English</p>
       ) : (

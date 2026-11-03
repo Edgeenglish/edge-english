@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { addBusinessDays, addDays, kstToInstant } from './dates';
 import { canCarryOver, isFixedSlotHeld } from './period';
-import { compensationDeadline, isCompensationSlotAllowed, tutorCancelOutcome } from './change';
+import { compensationUseUntil, isCompensationSlotAllowed, tutorCancelOutcome } from './change';
 import { evaluateLongLeaveRequest, suggestDatesAfterEnd, tutorLeaveExtensionDays, type LongLeaveInput } from './leave';
 import { RewardLedger } from './rewards';
 
@@ -47,15 +47,19 @@ describe('강사 사유 취소 (A15·A16)', () => {
   });
 });
 
-describe('강사 노쇼 무료 보상 수업 기한 (A14: 지급일부터 7일 안에 수업 완료)', () => {
-  const grantedAt = kstToInstant('2026-11-03', '15:00');
-  it('11/3 지급 → 11/10 23:59(KST)까지', () => {
-    expect(compensationDeadline(grantedAt).getTime()).toBe(kstToInstant('2026-11-11', '00:00').getTime() - 1);
+describe('강사 노쇼 무료 보상 수업 기한 (POL-TU-03, 11/2: 7일 폐지 · 보강처럼 수강기간 안 · 기한 안 재등록이면 이월)', () => {
+  const now = kstToInstant('2026-11-04', '10:00');
+  it('재등록 없으면 수강 종료일까지 — 7일이 지나도 종료일 전이면 가능', () => {
+    expect(compensationUseUntil('2026-11-30', [])).toBe('2026-11-30');
+    expect(isCompensationSlotAllowed({ startsAt: kstToInstant('2026-11-30', '23:00') }, '2026-11-30', now)).toBe(true);
+    expect(isCompensationSlotAllowed({ startsAt: kstToInstant('2026-12-01', '00:00') }, '2026-11-30', now)).toBe(false);
   });
-  it('기한 안에 끝나는 수업만 가능 (예약만 기한 안이고 끝나는 시각이 넘으면 불가)', () => {
-    const now = kstToInstant('2026-11-04', '10:00');
-    expect(isCompensationSlotAllowed({ startsAt: kstToInstant('2026-11-10', '23:00'), endsAt: kstToInstant('2026-11-10', '23:50') }, grantedAt, now)).toBe(true);
-    expect(isCompensationSlotAllowed({ startsAt: kstToInstant('2026-11-10', '23:30'), endsAt: kstToInstant('2026-11-11', '00:20') }, grantedAt, now)).toBe(false);
+  it('종료일 23:59까지 결제한 재등록이면 다음 수강권 종료일까지, 다음 날 결제면 이월 안 함', () => {
+    expect(compensationUseUntil('2026-11-30', [{ finalEnd: '2026-12-28', paidAt: [kstToInstant('2026-11-30', '23:59')] }])).toBe('2026-12-28');
+    expect(compensationUseUntil('2026-11-30', [{ finalEnd: '2026-12-28', paidAt: [kstToInstant('2026-12-01', '00:00')] }])).toBe('2026-11-30');
+  });
+  it('결제 기록 없는 재등록(시트 관리)은 이월, 이어서 반복', () => {
+    expect(compensationUseUntil('2026-11-30', [{ finalEnd: '2026-12-28', paidAt: [] }, { finalEnd: '2027-01-25', paidAt: [kstToInstant('2026-12-28', '12:00')] }])).toBe('2027-01-25');
   });
 });
 

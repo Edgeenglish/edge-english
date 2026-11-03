@@ -2,6 +2,7 @@
 // 수업 결과는 lessons.class_status 하나 (POL-ST-02). 강사는 '진행 / 강사 지각 / 학생 노쇼'만 고르고 정확한 상태 이름은 DB가 정함
 
 import { addDays, formatInZone } from '../rules/dates';
+import { cityTime } from './hours-view';
 import type { ClassStatus } from '../rules/status';
 
 /** tutor_no_show = 운영자만 (4000) */
@@ -33,6 +34,8 @@ export type TutorLesson = {
   leaveOpen?: boolean;
   /** 강사 노쇼 보상 수업 상태 (4000): available·used·expired·voided */
   compensation?: string | null;
+  /** 보상 수업이면 강사 노쇼였던 원래 수업 시각 (4100) */
+  compensationOf?: Date | null;
 };
 
 export type MakeupSlot = { id: string; startsAt: Date; endsAt: Date; answer: 'yes' | 'no' | null; busy: boolean; past: boolean };
@@ -44,6 +47,8 @@ export type TutorMakeup = {
   note: string | null;
   answeredAt: Date | null;
   slots: MakeupSlot[];
+  /** 강사 노쇼 무료 보상수업 신청 (4100) */
+  compensation?: boolean;
 };
 
 /** 대체 수업 요청 (2600): 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 */
@@ -71,10 +76,11 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
       beforeLms: l.state === 'scheduled' && new Date(l.starts_at) <= loadedAt && !toRecord.has(l.id),
       leaveOpen: !!l.leave_open,
       compensation: l.compensation ?? null,
+      compensationOf: at(l.compensation_of),
     })),
     toRecord: j.to_record ?? [],
     makeups: (j.makeups ?? []).map((m: any) => ({
-      id: m.id, student: m.student, originalAt: at(m.original_at), originalDate: m.original_date ?? null, note: m.note ?? null, answeredAt: at(m.answered_at),
+      id: m.id, student: m.student, originalAt: at(m.original_at), originalDate: m.original_date ?? null, note: m.note ?? null, answeredAt: at(m.answered_at), compensation: !!m.compensation,
       slots: (m.slots ?? []).map((s: any) => ({ id: s.id, startsAt: new Date(s.starts_at), endsAt: new Date(s.ends_at), answer: s.answer ?? null, busy: !!s.busy, past: !!s.past })),
     })),
     covers: (j.covers ?? []).map((c: any) => ({ id: c.id, student: c.student, startsAt: new Date(c.starts_at), endsAt: new Date(c.ends_at), busy: !!c.busy })),
@@ -99,6 +105,15 @@ export function timeRange(l: { startsAt: Date; endsAt: Date }, tz: string): stri
 /** 'Mon 3 Nov 09:00' 강사 현지 */
 export function whenText(t: Date, tz: string): string {
   return `${dayLabel(localDate(t, tz))} ${formatInZone(t, tz).time}`;
+}
+/**
+ * 시간대 이름 (11/2 점검 ⑤): '[도시] Time' — 'Asia/Manila' → 'Manila Time', 한국은 'Korea Time (KST)'.
+ * 강사 화면 머리글은 '[도시] Time / Korea Time (KST)' 로 통일
+ */
+export const KOREA_TIME = 'Korea Time (KST)';
+export const tzTimeLabel = cityTime;
+export function tzHeader(tz: string): string {
+  return tz === 'Asia/Seoul' ? KOREA_TIME : `${tzTimeLabel(tz)} / ${KOREA_TIME}`;
 }
 /** 한국 시각 'KST 08:00' (날짜가 다르면 'KST Tue 08:00'). 강사가 한국 시간대면 null */
 export function kstText(t: Date, tz: string): string | null {

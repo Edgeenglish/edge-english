@@ -323,6 +323,8 @@ export type EndingRow = {
   lessons: { id: string; kind: string; state: 'scheduled' | 'canceled' | 'done'; starts_at: string; class_status: string | null; makeup_of: string | null; voided_at: string | null; tutor: { name: string } | null }[];
   /** 시트에서 넘어온 날짜 미정 보강 (makeup_open) */
   migrated?: { kind: string }[];
+  /** 강사 노쇼 무료 보상수업 (available = 날짜 안 잡음, 4100) */
+  comps?: { status: string }[];
 };
 
 /**
@@ -347,9 +349,11 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
     const left = r.lessons.filter((l) => l.state === 'scheduled' && new Date(l.starts_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     // 날짜 미정 보강: 보강 권리가 있는 취소 수업 중 살아 있는 보강이 없는 것 + 시트에서 넘어온 미예약 보강
     const booked = new Set(r.lessons.filter((l) => l.makeup_of && l.state !== 'canceled').map((l) => l.makeup_of));
-    const owed = r.lessons.filter((l) => l.state === 'canceled' && !l.voided_at && l.class_status
+    // 강사 노쇼는 '진행됨(done)' 상태라도 보강 권리가 있음 (학생 홈과 같은 수, 4100) + 날짜 안 잡은 무료 보상수업
+    const owed = r.lessons.filter((l) => (l.state === 'canceled' || l.class_status === 'Tutor no-show') && !l.voided_at && l.class_status
       && (grantsMakeup(l.class_status as ClassStatus) || l.class_status === 'Tutor long-term leave') && !booked.has(l.id)).length
-      + (r.migrated ?? []).filter((m) => m.kind === 'makeup_open').length;
+      + (r.migrated ?? []).filter((m) => m.kind === 'makeup_open').length
+      + (r.comps ?? []).filter((c) => c.status === 'available').length;
     if (left.length + owed > RENEWAL_PROMPT.maxLessonsLeft) continue;
     const last = [...r.lessons].sort((a, b) => b.starts_at.localeCompare(a.starts_at))[0];
     out.push({
@@ -403,7 +407,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     loadOpenMakeups(sb),
     sb
       .from('enrollments')
-      .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind)')
+      .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind), comps:compensations(status)')
       .in('status', ['confirmed', 'active']),
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, lesson_gone_at, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
     sb.from('lesson_notices').select(`event, leave:leave_items(student_id, lesson_gone_at, choice, sub_stage, ${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),

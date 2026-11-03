@@ -17,7 +17,13 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 
 /** 보강할 수업 (취소한 수업 또는 시트에서 넘어온 날짜 미정 보강) */
 /** timeKnown=false: 시트에서 옮긴 보강이라 원래 수업 날짜만 앎 (화면은 날짜만, 3700) */
-export type MakeupRight = { lessonId: string | null; itemId: string | null; originalAt: Date; timeKnown?: boolean; tutorLeave: boolean; requested: boolean; tutor?: string | null; tutorNoShow?: boolean };
+/** compId: 강사 노쇼 무료 보상수업 (4100, 원래 수업 보강과 따로). useUntil = 사용 기한(수강 종료일, 기한 안 재등록이면 이월) */
+export type MakeupRight = {
+  lessonId: string | null; itemId: string | null; compId?: string | null; useUntil?: KstDate | null;
+  originalAt: Date; timeKnown?: boolean; tutorLeave: boolean; requested: boolean; tutor?: string | null; tutorNoShow?: boolean;
+};
+/** 보강 권리를 가리키는 값 (원래 수업 · 시트 보강 · 보상수업 중 하나) */
+export type RightRef = { lessonId: string | null; itemId: string | null; compId?: string | null };
 /** 강사 휴무 안내 한 줄. stage tutor_ok = 학생 답 기다림, confirmed = 대체 수업 확정, choice wait = 기존 강사님과 보강 */
 export type LeaveRow = {
   id: string;
@@ -46,6 +52,8 @@ export type StudentView = {
   creditsPerPeriod: number;
   renewalPaid: boolean;
   confirmedOn: KstDate | null;
+  /** 결제 완료 여부 (결제 확인 기록, 또는 시트에서 옮긴 수강 중 수강권) */
+  paid: boolean;
   /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 학생 화면 표시는 '보강'으로 같음) */
   lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean })[];
   makeupRights: MakeupRight[];
@@ -63,14 +71,20 @@ export type StudentView = {
 type Raw = {
   student: { id: string; code: string; name_ko: string };
   enrollment: null | {
+    status?: string;
     weeks: number | null; legacy_label: string | null; weekly_count: number; duration_min: number; final_end_date: KstDate;
     lessons_total: number; credits_left: number; credits_granted: number; confirmed_on: KstDate | null; renewal_paid: boolean;
     next_regular_from: KstDate | null;
   };
   lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null }[];
-  makeup_rights: { lesson_id: string | null; item_id: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean }[];
+  makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean }[];
   leave_pending?: { id: string; starts_at: string; ends_at: string }[];
-  makeup_requests: { id: string; status: string; lesson_id: string | null; item_id: string | null; requested_at: string; candidates: string[]; tutor_leave: boolean }[];
+  makeup_requests: {
+    confirmed_lesson_id?: string | null;
+    id: string; status: string; lesson_id: string | null; item_id: string | null; comp_id?: string | null; requested_at: string; candidates: string[]; tutor_leave: boolean;
+    /** 4100: 원래 수업 시각·강사, 보강 강사, 확정된 날짜 */
+    original_at?: string | null; original_time_known?: boolean; original_tutor?: string | null; tutor?: string | null; confirmed_at?: string | null;
+  }[];
   leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; sub_meet_url: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string }[];
   holidays: KstDate[];
   credit_period: { start: KstDate; end: KstDate } | null;
@@ -79,6 +93,26 @@ type Raw = {
 };
 
 const md = (d: Date) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' }).format(d).replace(/\.\s?/g, '/').replace(/\/$/, '');
+
+/** 확정된 보강 수업 시각 (옛 DB: confirmed_at 이 없으면 수업 목록에서) */
+function lessonStart(r: Raw, q: { status: string } & { confirmed_lesson_id?: string | null }): Date | null {
+  const l = q.confirmed_lesson_id ? r.lessons.find((x) => x.id === q.confirmed_lesson_id) : undefined;
+  return l ? new Date(l.starts_at) : null;
+}
+
+/**
+ * 수강권 이름: '50분 · 주 2회 · 4주'. 시트에서 옮긴 수강권은 운영 메모('기존 학생 이관 · 4주 (결제는 시트)')가 이름 칸에 있어
+ * 학생에게는 주 수만 보여 줌 (11/2 점검 ⑥: 내부 문구 노출)
+ */
+export function productLabel(e: { duration_min: number; weekly_count: number; weeks: number | null; legacy_label: string | null }): string {
+  const weeks = e.weeks ?? Number(/(\d+)\s*주/.exec(e.legacy_label ?? '')?.[1] ?? 0);
+  return [`${e.duration_min}분`, `주 ${e.weekly_count}회`, weeks ? `${weeks}주` : ''].filter(Boolean).join(' · ');
+}
+
+/** 결제 상태: 결제 확인된 수강권(확정·수강 중·끝남)은 결제 완료. 시트에서 옮긴 수강권은 LMS 결제 기록이 없어도 수강 중이면 결제 완료 */
+export function paidStatus(e: { status?: string; confirmed_on: KstDate | null }): boolean {
+  return !!e.confirmed_on || (e.status !== undefined && ['confirmed', 'active', 'completed'].includes(e.status));
+}
 
 const POINT_REASON: Record<string, string> = {
   grant_tutor_late_cancel: '강사 사정 취소 보상 (시작 6시간 이내)',
@@ -94,11 +128,11 @@ export function parseStudentView(r: Raw): StudentView {
   const lessonKind = (k: string): StudentLesson['kind'] => (k === 'regular' ? 'regular' : k === 'compensation' ? 'compensation' : 'makeup');
   const lessonState = (s: string): StudentLesson['state'] => (s === 'scheduled' ? 'scheduled' : s === 'done' ? 'done' : 'canceled');
   const open = r.makeup_requests.filter((q) => q.status === 'requested' || q.status === 'countered');
-  const at = (lessonId: string | null, itemId: string | null) => r.makeup_rights.find((m) => (lessonId && m.lesson_id === lessonId) || (itemId && m.item_id === itemId));
+  const at = (lessonId: string | null, itemId: string | null) => r.makeup_rights.find((m) => !m.comp_id && ((lessonId && m.lesson_id === lessonId) || (itemId && m.item_id === itemId)));
   return {
     studentId: r.student.id,
     name: r.student.name_ko,
-    product: e ? `${e.duration_min}분 · 주 ${e.weekly_count}회 · ${e.weeks ? `${e.weeks}주` : e.legacy_label}` : '-',
+    product: e ? productLabel(e) : '-',
     finalEndDate: e?.final_end_date ?? ('' as KstDate),
     nextRegularFrom: e?.next_regular_from ?? null,
     totalLessons: e?.lessons_total ?? 0,
@@ -106,6 +140,7 @@ export function parseStudentView(r: Raw): StudentView {
     creditsPerPeriod: e?.credits_granted ?? 0,
     renewalPaid: e?.renewal_paid ?? false,
     confirmedOn: e?.confirmed_on ?? null,
+    paid: e ? paidStatus(e) : false,
     lessons: r.lessons.map((l) => ({
       id: l.id,
       kind: lessonKind(l.kind),
@@ -122,23 +157,35 @@ export function parseStudentView(r: Raw): StudentView {
     makeupRights: r.makeup_rights.map((m) => ({
       lessonId: m.lesson_id,
       itemId: m.item_id,
+      compId: m.comp_id ?? null,
+      useUntil: m.use_until ?? null,
       originalAt: new Date(m.original_at),
       timeKnown: m.time_known !== false,
       tutorLeave: m.tutor_leave,
-      tutor: r.lessons.find((l) => l.id === m.lesson_id)?.tutor ?? null,
-      tutorNoShow: r.lessons.find((l) => l.id === m.lesson_id)?.class_status === 'Tutor no-show',
-      requested: open.some((q) => (m.lesson_id && q.lesson_id === m.lesson_id) || (m.item_id && q.item_id === m.item_id)),
+      tutor: m.tutor ?? r.lessons.find((l) => l.id === m.lesson_id)?.tutor ?? null,
+      tutorNoShow: !!m.comp_id || r.lessons.find((l) => l.id === m.lesson_id)?.class_status === 'Tutor no-show',
+      // 원래 수업 보강과 보상수업은 신청이 따로 (4100)
+      requested: open.some((q) => (m.comp_id ? q.comp_id === m.comp_id : !q.comp_id && ((m.lesson_id && q.lesson_id === m.lesson_id) || (m.item_id && q.item_id === m.item_id)))),
     })),
     requests: r.makeup_requests.map((q) => {
+      // 확정 뒤에는 보강 권리 목록에서 빠지므로 원래 수업 정보는 신청 줄에서 바로 읽음 (4100), 옛 DB는 권리 목록에서
       const src = at(q.lesson_id, q.item_id);
+      const originalIso = q.original_at ?? src?.original_at ?? null;
+      const comp = !!q.comp_id;
       return {
         id: q.id,
         kind: 'makeup',
-        title: `보강 신청${src ? ` · ${md(new Date(src.original_at))} 수업분` : ''}`,
+        compensation: comp,
+        title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso))} 수업분` : ''}`,
         status: q.status === 'confirmed' ? 'confirmed' : 'tutor_reviewing',
         candidates: q.candidates.map((c) => new Date(c)),
         createdAt: new Date(q.requested_at),
         note: '',
+        originalAt: originalIso ? new Date(originalIso) : null,
+        originalTimeKnown: q.original_time_known ?? src?.time_known !== false,
+        originalTutor: q.original_tutor ?? (q.lesson_id ? r.lessons.find((l) => l.id === q.lesson_id)?.tutor ?? null : null),
+        tutor: q.tutor ?? null,
+        confirmedAt: q.confirmed_at ? new Date(q.confirmed_at) : q.status === 'confirmed' ? lessonStart(r, q) : null,
       };
     }),
     leave: r.leave.map((x) => ({
@@ -159,8 +206,10 @@ export async function loadStudentView(sb: SupabaseClient, studentId: string | nu
 }
 
 export type MakeupOption = { startsAt: Date; afterEnd: boolean };
-export async function loadMakeupOptions(sb: SupabaseClient, studentId: string | null, right: { lessonId: string | null; itemId: string | null }): Promise<MakeupOption[]> {
-  const rows = check(await sb.rpc('student_makeup_options', { p_student: studentId, p_lesson: right.lessonId, p_item: right.itemId })) as { section: string; starts_at: string }[];
+/** 보상수업이면 p_comp 를 붙임 (4100). 원래 수업 보강은 예전과 같은 인자 → 4100 전 DB에서도 그대로 */
+const compArg = (right: RightRef) => (right.compId ? { p_comp: right.compId } : {});
+export async function loadMakeupOptions(sb: SupabaseClient, studentId: string | null, right: RightRef): Promise<MakeupOption[]> {
+  const rows = check(await sb.rpc('student_makeup_options', { p_student: studentId, p_lesson: right.lessonId, p_item: right.itemId, ...compArg(right) })) as { section: string; starts_at: string }[];
   return rows.map((x) => ({ startsAt: new Date(x.starts_at), afterEnd: x.section === 'after_end' }));
 }
 
@@ -181,7 +230,7 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
       };
       return { regular: r.regular, makeup: r.makeup, hasEmail: r.has_email };
     },
-    makeupOptions: (right: { lessonId: string | null; itemId: string | null }) => loadMakeupOptions(sb, adminStudentId, right),
+    makeupOptions: (right: RightRef) => loadMakeupOptions(sb, adminStudentId, right),
     /** 수업 취소 (판정 시각 = 지금). 결과는 DB 판정 */
     cancel: async (lessonId: string): Promise<{ status: string; uses_credit: boolean; makeup_allowed: boolean }> => {
       const id = crypto.randomUUID();
@@ -189,12 +238,12 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
         ? check(await sb.rpc('admin_change_lesson', { p_request_id: id, p_lesson: lessonId, p_who: 'student', p_requested_at: new Date().toISOString(), p_dry_run: false }))
         : check(await sb.rpc('student_change_lesson', { p_request_id: id, p_lesson: lessonId, p_dry_run: false }));
     },
-    requestMakeup: async (right: { lessonId: string | null; itemId: string | null }, slots: Date[]): Promise<void> => {
+    requestMakeup: async (right: RightRef, slots: Date[]): Promise<void> => {
       const p_slots = slots.map((s) => ({ starts_at: s.toISOString() }));
       check(
         admin
-          ? await sb.rpc('admin_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, p_requested_at: new Date().toISOString() })
-          : await sb.rpc('student_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots }),
+          ? await sb.rpc('admin_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, p_requested_at: new Date().toISOString(), ...compArg(right) })
+          : await sb.rpc('student_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, ...compArg(right) }),
       );
     },
     /** 휴무 안내 답 (A안 한 번에): ok = 대체강사와 수업, makeup = 기존 강사님과 보강 */

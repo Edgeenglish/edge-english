@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import {
   dateText, describeChanges, diff, fromText, lessonAt, plusDays, timeText, toMin, WEEK_DAYS, weekText, weeklyClassAt, type CellCode, type HoursData,
 } from '@/lms/tutor/hours';
+import { KOREA_TIME } from '@/lms/tutor/screen';
 
 import { ALL_HOURS, cityTime, sourceCell } from '@/lms/tutor/hours-view';
 
@@ -82,7 +83,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
   const d = data;
   const localLabel = cityTime(d.tutor.timezone);
   const viewZone = koreaTime ? 'Asia/Seoul' : d.tutor.timezone;
-  const viewLabel = koreaTime ? 'Korea time (KST)' : localLabel;
+  const viewLabel = koreaTime ? KOREA_TIME : localLabel;
   const baseOnce = Object.keys(d.cells).filter((k) => d.cells[k] === 'b');
   const w = diff(d.weeklyOpen, weekly);
   const o = diff(baseOnce, once);
@@ -252,7 +253,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
             {[false, true].map((korea) => <button key={String(korea)} type="button" aria-pressed={koreaTime === korea}
               onClick={() => { setKoreaTime(korea); if (scroller.current) scroller.current.scrollTop = 0; }}
               className={`${btnSub} ${koreaTime === korea ? 'border-[#5b3fe0] bg-[#eeeaff] text-[#5b3fe0]' : ''}`}>
-              {korea ? 'Korea time' : localLabel}
+              {korea ? KOREA_TIME : localLabel}
             </button>)}
           </div>
           <div role="tablist" className="mb-2 grid grid-cols-2 rounded-[11px] bg-[#ecebf1] p-[3px]">

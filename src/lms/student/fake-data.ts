@@ -134,6 +134,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     creditsPerPeriod: s.creditsPerPeriod,
     renewalPaid: false,
     confirmedOn: s.payments[0].confirmedOn,
+    paid: true,
     lessons: [
       ...s.lessons.map((l) => ({ ...l, meetUrl: null, leavePostponed: false, substitute: false })),
       ...[7, 9, 11].map((d, i) => ({ id: `lv${i}`, kind: 'regular' as const, startsAt: at(d, '20:00'), minutes: 50, tutorName: '가상강사 Alex', state: 'scheduled' as const, meetUrl: null, leavePostponed: false, substitute: false })),
@@ -152,6 +153,18 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
   };
   view.lessons = view.lessons.map((l) => (l.id === 'lv2' ? { ...l, state: 'canceled' } : l));
   view.makeupRights.push({ lessonId: 'lv2', itemId: null, originalAt: at(11, '20:00'), tutorLeave: true, requested: false });
+  // 강사 노쇼(l6): 원래 수업 보강 + 무료 보상수업 1회가 따로 (4100)
+  view.lessons = view.lessons.map((l) => (l.id === 'l6' ? { ...l, tutorNoShow: true } : l));
+  const noShowAt = s.lessons[5].startsAt;
+  view.makeupRights.push(
+    { lessonId: 'l6', itemId: null, originalAt: noShowAt, tutor: '가상강사 Alex', tutorNoShow: true, tutorLeave: false, requested: false },
+    { lessonId: null, itemId: null, compId: 'c1', useUntil: addDays(today, 20), originalAt: noShowAt, tutor: '가상강사 Alex', tutorNoShow: true, tutorLeave: false, requested: false },
+  );
+  // 확정된 보강 예: 상세에 원래 수업·담당 강사·확정 날짜 (11/2 점검 ③)
+  view.requests = [{
+    id: 'q0', kind: 'makeup', title: `보강 · ${md(addDays(today, -26))} 수업분`, status: 'confirmed', candidates: [at(2, '10:00'), at(4, '10:00')],
+    createdAt: at(-25, '09:00'), note: '', originalAt: at(-26, '20:00'), originalTutor: '가상강사 Alex', tutor: '가상강사 Alex', confirmedAt: at(2, '10:00'),
+  }];
   const set = (v: StudentView) => (view = v);
   let reminders = { regular: true, makeup: true, hasEmail: true };
   const actions: StudentActions = {
@@ -178,8 +191,8 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     requestMakeup: async (right, slots) => {
       set({
         ...view,
-        makeupRights: view.makeupRights.map((m) => (m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
-        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: '보강 신청', status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
+        makeupRights: view.makeupRights.map((m) => ((m.compId ?? null) === (right.compId ?? null) && m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
+        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '무료 보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
       });
     },
     answerLeave: async (items, answer) => {

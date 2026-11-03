@@ -59,7 +59,12 @@ export type ChMakeupRequest = {
   tutorAnswers?: Record<number, 'yes' | 'no'>;
   tutorNote?: string | null;
   tutorAnsweredAt?: Date | null;
+  /** 강사 노쇼 무료 보상수업 신청이면 보상권 id (4100). 같은 노쇼 수업의 원래 수업 보강과 따로 */
+  compensationId?: string | null;
 };
+
+/** 강사 노쇼 무료 보상수업 (4100). useUntil = 사용 기한(수강 종료일, 기한 안 재등록이면 이월) */
+export type ChCompensation = { id: string; sourceLessonId: string; status: 'available' | 'used' | 'expired' | 'voided'; useUntil: KstDate };
 
 export type ChMigratedOpen = { id: string; originalDate: KstDate | null; tutorLeave: boolean };
 
@@ -113,18 +118,23 @@ export function changeableLessons(lessons: ChLesson[], now: Date): ChLesson[] {
 
 export type MakeupRight =
   | { kind: 'lesson'; key: string; source: ChLesson; open: ChMakeupRequest | null }
-  | { kind: 'migrated'; key: string; item: ChMigratedOpen; open: ChMakeupRequest | null };
+  | { kind: 'migrated'; key: string; item: ChMigratedOpen; open: ChMakeupRequest | null }
+  | { kind: 'compensation'; key: string; comp: ChCompensation; source: ChLesson | null; open: ChMakeupRequest | null };
 
 /** 보강 받을 권리: 보강 받는 결과로 끝났는데 살아 있는 보강이 없는 수업 + 강사 휴무 '기다림' 수업(1800) + 이관한 미예약 보강 */
-export function makeupRights(lessons: ChLesson[], migrated: ChMigratedOpen[], requests: ChMakeupRequest[]): MakeupRight[] {
+/** + 강사 노쇼 무료 보상수업(4100): 날짜 안 잡은 보상권, 원래 수업 보강과 따로 신청 */
+export function makeupRights(lessons: ChLesson[], migrated: ChMigratedOpen[], requests: ChMakeupRequest[], comps: ChCompensation[] = []): MakeupRight[] {
   const live = new Set(lessons.filter((l) => l.makeupOf && l.state !== 'canceled').map((l) => l.makeupOf));
   const openFor = (f: (r: ChMakeupRequest) => boolean) => requests.find((r) => (r.status === 'requested' || r.status === 'countered') && f(r)) ?? null;
   const fromLessons: MakeupRight[] = lessons
     .filter((l) => !l.voided && l.classStatus && (grantsMakeup(l.classStatus) || l.classStatus === 'Tutor long-term leave') && !live.has(l.id))
     .sort((a, b) => +a.startsAt - +b.startsAt)
-    .map((l) => ({ kind: 'lesson', key: l.id, source: l, open: openFor((r) => r.sourceLessonId === l.id) }));
+    .map((l) => ({ kind: 'lesson', key: l.id, source: l, open: openFor((r) => !r.compensationId && r.sourceLessonId === l.id) }));
   const fromSheet: MakeupRight[] = migrated.map((m) => ({ kind: 'migrated', key: m.id, item: m, open: openFor((r) => r.migratedItemId === m.id) }));
-  return [...fromLessons, ...fromSheet];
+  const fromComps: MakeupRight[] = comps
+    .filter((c) => c.status === 'available')
+    .map((c) => ({ kind: 'compensation', key: `comp-${c.id}`, comp: c, source: lessons.find((l) => l.id === c.sourceLessonId) ?? null, open: openFor((r) => r.compensationId === c.id) }));
+  return [...fromLessons, ...fromSheet, ...fromComps];
 }
 
 export const STATUS_SHORT: Partial<Record<ClassStatus, string>> = {
@@ -183,6 +193,8 @@ export type NoticeContext = {
   originalDate?: KstDate | null;
   tutorName: string;
   tutorTz: string;
+  /** 강사 노쇼 무료 보상수업 안내 (4100) */
+  compensation?: boolean;
 };
 
 function originKo(c: NoticeContext): string {
@@ -235,10 +247,14 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
     ].filter(Boolean).join('\n\n');
   }
   if (event === 'makeup_confirmed' && c.makeupAt) {
+    if (c.compensation) {
+      return [`[엣지영어] ${name}님, 무료 보상수업이 확정됐어요`, `강사 노쇼 수업: ${originKo(c)}`, `보상수업: ${koAt(c.makeupAt, c.student.timezone)}`, `강사: ${c.tutorName}`].join('\n');
+    }
     return [`[엣지영어] ${name}님, 보강이 확정됐어요`, `원래 수업: ${originKo(c)}`, `보강 수업: ${koAt(c.makeupAt, c.student.timezone)}`, `강사: ${c.tutorName}`].join('\n');
   }
   if (event === 'makeup_voided' && c.makeupAt) {
-    return [`[엣지영어] ${name}님, 보강 일정 정정 안내`, `보강 수업 ${koAt(c.makeupAt, c.student.timezone)}은 진행하지 않아요`, `원래 수업: ${originKo(c)}`, '보강 날짜는 다시 잡아 드릴게요'].join('\n');
+    const w = c.compensation ? '보상수업' : '보강';
+    return [`[엣지영어] ${name}님, ${w} 일정 정정 안내`, `${w} ${koAt(c.makeupAt, c.student.timezone)}은 진행하지 않아요`, `원래 수업: ${originKo(c)}`, `${w} 날짜는 다시 잡아 드릴게요`].join('\n');
   }
   if (event === 'revert' && c.lesson) {
     return [
@@ -264,17 +280,19 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
   }
   if (event === 'makeup_ask' && c.candidates) {
     return [
-      `Make-up request - ${who} (${c.durationMin} min), not confirmed yet`,
+      `${c.compensation ? 'Compensation class request' : 'Make-up request'} - ${who} (${c.durationMin} min), not confirmed yet`,
       `Original class: ${originEn(c)}`,
       'Are you available at any of these times?',
       ...c.candidates.map((t, i) => `${i + 1}) ${enAt(t, c.tutorTz)}`),
     ].join('\n');
   }
   if (event === 'makeup_confirmed' && c.makeupAt) {
-    return [`CONFIRMED make-up - ${who} (${c.durationMin} min)`, `Original class: ${originEn(c)}`, `Make-up: ${enAt(c.makeupAt, c.tutorTz)}`, 'Please add it to your schedule. Thank you!'].join('\n');
+    const w = c.compensation ? 'Compensation class' : 'Make-up';
+    return [`CONFIRMED ${w.toLowerCase()} - ${who} (${c.durationMin} min)`, `Original class: ${originEn(c)}`, `${w}: ${enAt(c.makeupAt, c.tutorTz)}`, 'Please add it to your schedule. Thank you!'].join('\n');
   }
   if (event === 'makeup_voided' && c.makeupAt) {
-    return [`CANCELED make-up - ${who}`, `Make-up: ${enAt(c.makeupAt, c.tutorTz)}`, 'No class at this time.'].join('\n');
+    const w = c.compensation ? 'Compensation class' : 'Make-up';
+    return [`CANCELED ${w.toLowerCase()} - ${who}`, `${w}: ${enAt(c.makeupAt, c.tutorTz)}`, 'No class at this time.'].join('\n');
   }
   if (event === 'revert' && c.lesson) {
     return [

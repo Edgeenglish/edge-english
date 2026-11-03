@@ -1,6 +1,6 @@
 // 수업 변경(취소) 규칙 검사 — 기획서 3-3 검사 순서
 // 정책: POL-CHG-01(6시간) POL-CHG-02(늦은 변경) POL-CHG-04(변경권 0개) POL-CHG-06(공휴일) POL-CHG-08(보강 재변경)
-//       POL-PER-06(보강 기한) POL-TU-03(노쇼 보상 기한) POL-TU-04·05(강사 취소) POL-OP-16·17(적용 범위)
+//       POL-PER-06(보강 기한) POL-TU-03(노쇼 보상 = 보강 기한) POL-TU-04·05(강사 취소) POL-OP-16·17(적용 범위)
 // 1. 수강기간 안인지  2. 시작 전인지  3. 6시간 전까지면 정상 변경(변경권 사용)
 // 4. 6시간 미만이면 늦은 변경(보강 없음, 수업 1회 소진, 변경권 유지)
 // 5. 변경권 0개면 사전 변경이어도 보강 없음, 수업 1회 소진
@@ -8,8 +8,8 @@
 //
 // 이 함수는 판정만 한다. 실제 저장(상태 기록·변경권 차감·이력)은 서버에서 한 번에(트랜잭션) 처리.
 
-import { addDays, endOfKstDay, hoursBetween, instantToKstDate, type KstDate } from './dates';
-import { CONFIRMED, FAVORABLE_FOR_ALL, POLICY_V1, type PendingPolicy } from './policy';
+import { endOfKstDay, hoursBetween, type KstDate } from './dates';
+import { CONFIRMED, FAVORABLE_FOR_ALL, type PendingPolicy } from './policy';
 import type { ClassStatus } from './status';
 
 export type LessonKind = 'regular' | 'makeup' | 'compensation';
@@ -144,16 +144,22 @@ export function tutorCancelOutcome(now: Date, startsAt: Date): TutorCancelOutcom
 }
 
 /**
- * 강사 노쇼 무료 보상 수업의 완료 기한 (A14) — 'policy_v1' 등록에만 (기존 등록에는 기한을 새로 만들지 않음): 지급한 날(KST)부터 7일째 날 23:59 KST까지 수업이 '끝나야' 함.
- * 예: 11/3 지급 → 11/10 23:59까지. 기한 안에 못 받는 경우의 예외는 미확정(POL-TU-10) → 자동 소멸시키지 않고 운영자에게 표시.
+ * 강사 노쇼 무료 보상 수업의 사용 기한 (POL-TU-03, 2026-11-02 대표: 7일 제한 폐지 · 일반 보강과 같이 수강기간 안).
+ * 수강 종료일까지. 종료일 23:59 KST까지 결제한 재등록이 있으면 그 수강권 종료일까지 이월(이어서 반복, POL-RN-01).
+ * 재등록 결제 기록이 없는 수강권(시트에서 옮긴 재등록)은 운영진 등록을 믿고 이월. DB lms_comp_use_until 과 같은 판정
  */
-export function compensationDeadline(grantedAt: Date): Date {
-  return endOfKstDay(addDays(instantToKstDate(grantedAt), POLICY_V1.compensationCompleteWithinDays));
+export function compensationUseUntil(finalEnd: KstDate, renewals: readonly { finalEnd: KstDate; paidAt: readonly Date[] }[]): KstDate {
+  let until = finalEnd;
+  for (const r of renewals) {
+    if (r.paidAt.length > 0 && !r.paidAt.some((t) => t.getTime() <= endOfKstDay(until).getTime())) break;
+    until = r.finalEnd;
+  }
+  return until;
 }
 
-/** 보상 수업 시간이 기한 안인지: 시작 전이고, 끝나는 시각이 기한 이내 */
-export function isCompensationSlotAllowed(slot: { startsAt: Date; endsAt: Date }, grantedAt: Date, now: Date): boolean {
-  return slot.startsAt.getTime() > now.getTime() && slot.endsAt.getTime() <= compensationDeadline(grantedAt).getTime();
+/** 보상 수업 시간이 기한 안인지: 시작 전이고, 사용 기한(KST) 23:59까지 '시작'하는 수업 (보강 기한과 같은 기준) */
+export function isCompensationSlotAllowed(slot: { startsAt: Date }, useUntil: KstDate, now: Date): boolean {
+  return slot.startsAt.getTime() > now.getTime() && slot.startsAt.getTime() <= endOfKstDay(useUntil).getTime();
 }
 
 /**
