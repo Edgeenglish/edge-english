@@ -94,7 +94,7 @@ export type StudentRequest = {
 
 export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
   tutor_reviewing: '강사 확인 중',
-  admin_reviewing: '운영자 확인 중',
+  admin_reviewing: '최종 확정 대기',
   confirmed: '확정',
   completed: '처리 완료',
 };

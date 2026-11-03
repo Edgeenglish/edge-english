@@ -83,6 +83,8 @@ type Raw = {
     confirmed_lesson_id?: string | null;
     id: string; status: string; lesson_id: string | null; item_id: string | null; comp_id?: string | null; requested_at: string; candidates: string[]; tutor_leave: boolean;
     /** 4100: 원래 수업 시각·강사, 보강 강사, 확정된 날짜 */
+    /** 강사가 답한 시각 (있으면 운영진 최종 확정 대기) */
+    tutor_answered_at?: string | null;
     original_at?: string | null; original_time_known?: boolean; original_tutor?: string | null; tutor?: string | null; confirmed_at?: string | null;
   }[];
   leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; sub_meet_url: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string }[];
@@ -177,7 +179,7 @@ export function parseStudentView(r: Raw): StudentView {
         kind: 'makeup',
         compensation: comp,
         title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso))} 수업분` : ''}`,
-        status: q.status === 'confirmed' ? 'confirmed' : 'tutor_reviewing',
+        status: q.status === 'confirmed' ? 'confirmed' : q.tutor_answered_at ? 'admin_reviewing' : 'tutor_reviewing',
         candidates: q.candidates.map((c) => new Date(c)),
         createdAt: new Date(q.requested_at),
         note: '',

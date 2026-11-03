@@ -208,11 +208,6 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             <input type="checkbox" checked={paidCol} onChange={(e) => setPaidCol(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
             Paid
           </label>
-          {!student && <div className="flex items-center gap-1.5">
-            <button type="button" aria-label="Previous week" disabled={loading} onClick={() => goWeek(offset - 1)} className={`${btnSub} px-3`}>‹</button>
-            <button type="button" disabled={loading || offset === 0} onClick={() => goWeek(0)} className={`${btnSub} px-3 text-[14px]`}>This week</button>
-            <button type="button" aria-label="Next week" disabled={loading} onClick={() => goWeek(offset + 1)} className={`${btnSub} px-3`}>›</button>
-          </div>}
         </div>
         <select
           aria-label="Student"
@@ -230,7 +225,21 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             <option key={n} value={n}>{n} · all classes</option>
           ))}
         </select>
-        {!student && <p className="mb-2 text-[14px] font-semibold text-[#55526a]">{dayLabel(week.from)} – {dayLabel(week.to)}</p>}
+        {/* 주 이동: [‹] 날짜 범위 [›] 한 줄, 누르면 범위 바로 바뀜. 지금 주가 아닐 때만 'Back to this week' (대표 11/3) */}
+        {!student && (
+          <div className="mb-2 lg:max-w-[680px]">
+            <div className="flex items-center gap-2">
+              <button type="button" aria-label="Previous week" disabled={loading} onClick={() => goWeek(offset - 1)} className={`${btnSub} shrink-0 px-3`}>‹</button>
+              <p aria-live="polite" className="min-w-0 flex-1 text-center text-[14.5px] font-semibold text-[#1d1b2b]">{dayLabel(week.from)} – {dayLabel(week.to)}</p>
+              <button type="button" aria-label="Next week" disabled={loading} onClick={() => goWeek(offset + 1)} className={`${btnSub} shrink-0 px-3`}>›</button>
+            </div>
+            {offset !== 0 && (
+              <div className="text-center">
+                <button type="button" disabled={loading} onClick={() => goWeek(0)} className="min-h-[36px] px-2 text-[13.5px] font-semibold text-[#5b3fe0] underline">Back to this week</button>
+              </div>
+            )}
+          </div>
+        )}
         {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
         {days.length > 0 && (
           <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
@@ -590,7 +599,7 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
 }
 
 function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: string; actions: TutorActions; closed: boolean; onSent: () => Promise<void> }) {
-  const [yes, setYes] = useState<Set<string>>(() => new Set(m.slots.filter((s) => s.answer === 'yes').map((s) => s.id)));
+  const [yes, setYes] = useState<Set<string>>(() => new Set(m.slots.filter((s) => s.answer === 'yes' && !s.busy).map((s) => s.id)));
   const [note, setNote] = useState(m.note ?? '');
   const [sent, setSent] = useState(!!m.answeredAt);
   const [busy, setBusy] = useState(false);
@@ -638,7 +647,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
               const on = yes.has(s.id);
               const kst = kstText(s.startsAt, tz);
               return (
-                <button key={s.id} type="button" role="checkbox" aria-checked={on} disabled={s.past || busy} onClick={() => toggle(s.id)}
+                <button key={s.id} type="button" role="checkbox" aria-checked={on} disabled={s.past || s.busy || busy} onClick={() => toggle(s.id)}
                   className={`flex min-h-[52px] items-center gap-3 rounded-[10px] border px-3 py-2 text-left disabled:opacity-40 ${
                     on ? 'border-[#5b3fe0] bg-[#efebff]' : 'border-[#d9d5e6] bg-white'}`}>
                   <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border text-[14px] font-bold ${
@@ -657,7 +666,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
           {err && <p className="mt-2 text-[14px] text-[#b3261e]">{err}</p>}
           <button type="button" disabled={busy || sent || !answerReady(yes, note)} onClick={send}
             className={`${sent ? btnDone : btnMain} mt-3 w-full`}>
-            {sent ? 'Sent ✓ · Not confirmed yet' : busy ? 'Sending…' : 'Send answer'}
+            {sent ? 'Sent ✓ · Edge English will confirm' : busy ? 'Sending…' : 'Send answer'}
           </button>
         </>
       )}

@@ -8567,7 +8567,7 @@ begin
     'makeup_requests', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id, 'comp_id', r.compensation_id,
-        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id,
+        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id, 'tutor_answered_at', r.tutor_answered_at,
         'original_at', coalesce(src.starts_at, (select m.original_date::timestamp at time zone 'Asia/Seoul' from migrated_items m where m.id = r.migrated_item_id)),
         'original_time_known', src.id is not null,
         'original_tutor', srct.name,
@@ -8682,6 +8682,62 @@ begin
 end $$;
 revoke all on function tutor_screen(uuid, date, date) from public, anon;
 grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 9. 강사 보강 답: 다른 수업·휴무와 겹치는 시간은 '가능'으로 보낼 수 없음 (11/3 ChatGPT 점검 ①: 겹치는 시간도 체크·전송됨)
+--    강사 화면 'busy'·운영진 확정과 같은 판정(lms_makeup_conflict). 2000 그대로 + 이 검사
+-- ---------------------------------------------------------------------
+create or replace function tutor_makeup_answer(p_request uuid, p_yes uuid[], p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  v_note text := nullif(trim(coalesce(p_note, '')), '');
+  v_yes uuid[] := coalesce(p_yes, '{}');
+begin
+  select * into r from makeup_requests where id = p_request for update;
+  if not found then raise exception 'Make-up request not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and r.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your make-up request.' using errcode = '42501';
+  end if;
+  if r.status not in ('requested', 'countered') then
+    raise exception 'This make-up request is already closed.' using hint = 'closed';
+  end if;
+  if exists (select 1 from unnest(v_yes) y where not exists
+             (select 1 from makeup_candidates c where c.id = y and c.request_id = r.id and c.proposed_by = 'student')) then
+    raise exception 'Unknown time in your answer. Please reload the page.';
+  end if;
+  if exists (select 1 from makeup_candidates c where c.id = any(v_yes)
+             and (c.starts_at &lt;= now() or lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null)) then
+    raise exception 'One of the times you chose overlaps another class or time off. Please reload the page.' using hint = 'busy';
+  end if;
+  if cardinality(v_yes) = 0 and v_note is null then
+    raise exception 'None of the times work? Please write other times you are available in the note.' using hint = 'note';
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_makeup_answer' else 'tutor_makeup_answer' end, true);
+  update makeup_candidates c set tutor_answer = case when c.id = any(v_yes) then 'yes' else 'no' end, answered_at = now(), answered_by = me
+  where c.request_id = r.id and c.proposed_by = 'student'
+    and c.tutor_answer is distinct from case when c.id = any(v_yes) then 'yes' else 'no' end;
+  update makeup_requests set tutor_note = v_note, tutor_answered_at = now() where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  return jsonb_build_object('makeup_request_id', r.id, 'yes', cardinality(v_yes));
+end $$;
+revoke all on function tutor_makeup_answer(uuid, uuid[], text) from public, anon;
+grant execute on function tutor_makeup_answer(uuid, uuid[], text) to authenticated;
+
+-- &gt;&gt;&gt; 20261103095424_tutor_hours_local_0600_2230.sql
+-- 대표 요청 2026-11-03: My hours 선택 범위는 강사 현지 06:00~22:30 시작.
+-- 한국 시간 보기에서도 같은 현지 칸을 변환한다. 기존 가능 시간·수업 데이터는 변경하지 않는다.
+-- 읽기(tutor_hours)와 저장(tutor_hours_save)이 같은 함수를 사용한다.
+create or replace function public.lms_hours_times(p_tz text, p_monday date) returns setof time
+language sql stable as $$
+  select g::time
+  from generate_series(timestamp '2000-01-01 06:00', timestamp '2000-01-01 22:30', interval '30 minutes') g
+  order by 1
+$$;
+revoke all on function public.lms_hours_times(text, date) from public, anon, authenticated;
 
 -- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)
 insert into lms_backup.project (name) values ('edgeenglish-lms');

@@ -654,7 +654,7 @@ export default function StudentHome(props: {
                 load={actions.makeupOptions}
                 busy={busy}
                 onSubmit={async (right, slots) => {
-                  const v = await run(() => actions.requestMakeup(right, slots), '요청했어요. 강사님이 확인하면 확정돼요.');
+                  const v = await run(() => actions.requestMakeup(right, slots), '요청했어요. 강사님 확인 후 최종 확정돼요.');
                   if (v) setOverlay(null);
                 }}
               />
@@ -1186,8 +1186,9 @@ function Sheet({ onClose, children, wide }: { onClose: () => void; children: Rea
 }
 
 function RequestDetail({ r }: { r: StudentRequest }) {
-  const steps = ['신청', r.status === 'admin_reviewing' ? '운영자 확인' : '강사 확인', '확정'];
-  const at = r.status === 'tutor_reviewing' || r.status === 'admin_reviewing' ? 1 : 2;
+  // 신청 → 강사 확인 → 최종 확정(운영진). 지금 단계는 주황, 끝난 단계는 보라 (11/3 점검 ②: 누가 확인 중인지)
+  const steps = ['신청', '강사 확인', '최종 확정'];
+  const at = r.status === 'tutor_reviewing' ? 1 : r.status === 'admin_reviewing' ? 2 : 3;
   const c = kst(r.createdAt);
   return (
     <div className="grid gap-3.5">
@@ -1200,7 +1201,7 @@ function RequestDetail({ r }: { r: StudentRequest }) {
         <ol className="flex gap-1.5">
           {steps.map((t, i) => (
             <li key={t} className="flex-1 text-center">
-              <div className={`h-1.5 rounded ${i < at ? 'bg-[#5b3df0]' : i === at && at < 2 ? 'bg-[#f0a33a]' : i <= at ? 'bg-[#5b3df0]' : 'bg-[#e6e3ef]'}`} />
+              <div className={`h-1.5 rounded ${i < at ? 'bg-[#5b3df0]' : i === at ? 'bg-[#f0a33a]' : 'bg-[#e6e3ef]'}`} />
               <span className={`mt-1.5 block text-[12px] ${i <= at ? 'font-semibold' : 'text-[#8b88a0]'}`}>{t}</span>
             </li>
           ))}

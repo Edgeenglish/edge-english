@@ -1753,6 +1753,8 @@ union all select 5, pg_temp.mreq(5, interval '4 days 2 hours 40 minutes')       
 union all select 6, pg_temp.mreq(6, interval '4 days 2 hours 50 minutes');                       -- 40분 C 수업 뒤 10분 쉬고
 select pg_temp.ok((select array_agg(pg_temp.busy(id) order by n) from bq) = '{f,t,t,f,t,f}',
   'back to back 강사 화면: 같은 학생 20분 바로 뒤는 가능 표시, 쉬지 않고 3개·다른 학생 바로 뒤·40분 바로 뒤는 이미 수업 있음');
+select pg_temp.expect_error($$select tutor_makeup_answer((select id from bq where n = 3), array[(select c.id from makeup_candidates c where c.request_id = (select id from bq where n = 3))], null)$$, 'overlaps');
+select pg_temp.ok(true, '강사 보강 답: 다른 수업과 겹치는 시간은 가능으로 못 보냄 (4100, 11/3 점검 ①)');
 select admin_makeup_confirm((select id from bq where n = 1), (select t from bb) + interval '2 hours 20 minutes');
 select pg_temp.ok((select ends_at - starts_at = interval '20 minutes' from lessons where id = (select confirmed_lesson_id from makeup_requests where id = (select id from bq where n = 1))),
   '같은 학생 20분 수업 바로 뒤(휴식 없이) 보강 확정 — 학생이 원한 시간');
