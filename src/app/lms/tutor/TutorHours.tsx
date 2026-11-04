@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  dateText, describeChanges, diff, applyFromText, fromText, lessonAt, plusDays, timeText, toMin, WEEK_DAYS, weekText, weeklyClassAt, type CellCode, type HoursData,
+  dateText, describeChanges, describeChangesIn, diff, applyFromText, fromText, lessonAt, plusDays, timeText, toMin, WEEK_DAYS, weekText, weeklyClassAt, type CellCode, type HoursData,
 } from '@/lms/tutor/hours';
 import { KOREA_TIME } from '@/lms/tutor/screen';
 
@@ -88,7 +88,18 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
   const baseOnce = Object.keys(d.cells).filter((k) => d.cells[k] === 'b');
   const w = diff(d.weeklyOpen, weekly);
   const o = diff(baseOnce, once);
-  const lines = describeChanges({ weeklyOpen: w.added, weeklyClose: w.removed, onceClose: o.added, onceOpen: o.removed }, 'en');
+  // 바뀐 내용은 고른 시간대 기준 + 다른 시간대 보조 (2026-11-04 대표 8번). 저장 키는 강사 현지 그대로
+  const lines = describeChangesIn({ weeklyOpen: w.added, weeklyClose: w.removed, onceClose: o.added, onceOpen: o.removed }, d.from, d.tutor.timezone, viewZone);
+  const lineList = (cls: string) => (
+    <ul className={`grid gap-1.5 ${cls}`}>
+      {lines.map((x) => (
+        <li key={x.main} className="list-none">
+          <span className="block font-semibold">{x.main}</span>
+          {x.sub && <span className="block text-[12.5px] text-[#6b6880]">{x.sub}</span>}
+        </li>
+      ))}
+    </ul>
+  );
   const weeklyChanged = w.added.length + w.removed.length > 0;
   const monday = plusDays(d.monday, wk * 7);
   const dates = WEEK_DAYS.map((_, i) => plusDays(monday, i));
@@ -217,9 +228,9 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
 
   const changesBox = (
     <div className="grid gap-2 rounded-[12px] border border-[#e6e3ef] bg-white p-3">
-      <strong className="text-[15px] text-[#1d1b2b]">Changes · {localLabel}</strong>
+      <strong className="text-[15px] text-[#1d1b2b]">Changes · {viewLabel}</strong>
       {lines.length > 0
-        ? <ul className="list-disc pl-5 text-[13.5px] text-[#1d1b2b]">{lines.map((x) => <li key={x}>{x}</li>)}</ul>
+        ? lineList('text-[13.5px] text-[#1d1b2b]')
         : <p className="text-[13px] text-[#6b6880]">No changes</p>}
       <button type="button" disabled={lines.length === 0} onClick={() => { setSaveErr(''); setDialog({ kind: 'save' }); }} className={btnMain}>
         Save{lines.length > 0 ? ` (${lines.length})` : ''}
@@ -254,8 +265,8 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
           <div role="group" aria-label="Timetable time zone" className="mb-2 flex flex-wrap gap-2">
             {[false, true].map((korea) => <button key={String(korea)} type="button" aria-pressed={koreaTime === korea}
               onClick={() => { setKoreaTime(korea); if (scroller.current) scroller.current.scrollTop = 0; }}
-              className={`${btnSub} ${koreaTime === korea ? 'border-[#5b3fe0] bg-[#eeeaff] text-[#5b3fe0]' : ''}`}>
-              {korea ? KOREA_TIME : localLabel}
+              className={`min-h-[44px] rounded-[10px] border px-4 text-[15px] font-semibold ${koreaTime === korea ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
+              {koreaTime === korea ? '✓ ' : ''}{korea ? KOREA_TIME : localLabel}
             </button>)}
           </div>
           <div role="tablist" className="mb-2 grid grid-cols-2 rounded-[11px] bg-[#ecebf1] p-[3px]">
@@ -316,7 +327,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
       </div>
 
       {dialog && (
-        <div className="absolute inset-0 z-10 flex items-end justify-center bg-black/40 lg:items-center" onClick={(e) => { if (e.target === e.currentTarget && !busy) setDialog(null); }}>
+        <div className={`${inline ? 'fixed z-50' : 'absolute z-10'} inset-0 flex items-end justify-center bg-black/40 lg:items-center`} onClick={(e) => { if (e.target === e.currentTarget && !busy) setDialog(null); }}>
           <div role="dialog" aria-modal="true" className="grid w-full gap-2.5 rounded-t-[18px] bg-white p-4 pb-5 lg:max-w-[440px] lg:rounded-[16px]">
             {dialog.kind === 'info' && (
               <>
@@ -342,8 +353,8 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
             {dialog.kind === 'save' && (
               <>
                 <strong className="text-[16px] text-[#1d1b2b]">Save these changes?</strong>
-                <p className="text-[12px] text-[#6b6880]">{localLabel}</p>
-                <ul className="list-disc pl-5 text-[14px] text-[#1d1b2b]">{lines.map((x) => <li key={x}>{x}</li>)}</ul>
+                <p className="text-[12px] text-[#6b6880]">Times shown in {viewLabel}</p>
+                {lineList('text-[14px] text-[#1d1b2b]')}
                 {weeklyChanged && <p className="text-[13px] font-semibold text-[#3a22b0]">Every week: {applyFromText(d.from).replace('These hours apply', 'these hours apply')}</p>}
                 <p className="text-[13px] text-[#6b6880]">Students can no longer pick closed times for make-ups. Your classes don’t change.</p>
                 {saveErr && <p role="alert" className="text-[14px] text-[#b3261e]">{saveErr}</p>}

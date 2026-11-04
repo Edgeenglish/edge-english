@@ -14,3 +14,13 @@ export function sourceCell(date: string, time: string, viewZone: string, tutorZo
   const local = formatInZone(instant, tutorZone);
   return { date: local.date, time: local.time, dow: new Date(`${local.date}T00:00Z`).getUTCDay() };
 }
+
+/** 강사 현지 날짜·시각 → 그 시각을 보는 시간대의 날짜·시각 (표시 전용, 저장 키는 그대로). 서머타임은 그 날짜의 실제 시각으로 계산 */
+export function localToInstant(date: string, time: string, zone: string): Date {
+  let t = Date.parse(`${date}T${time}:00Z`);
+  for (let i = 0; i < 3; i++) {
+    const f = formatInZone(new Date(t), zone);
+    t += Date.parse(`${date}T${time}:00Z`) - Date.parse(`${f.date}T${f.time}:00Z`);
+  }
+  return new Date(t);
+}

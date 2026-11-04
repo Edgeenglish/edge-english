@@ -547,8 +547,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   const count = l.count ? `${l.count.n}/${l.count.total}` : '—';
   // 펼쳐도 보일 것이 없는 줄은 못 누름 (대표 10/31: 대체수업을 펼쳐도 빈 칸)
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
-  // 강사 노쇼는 운영자만 기록·수정 (4000)
-  const recordable = canRecord(l, now) && (admin || l.classStatus !== 'Tutor no-show');
+  const recordable = canRecord(l, now);
   const recordHere = recordable && mode === 'record';
   const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
@@ -632,7 +631,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   );
 }
 
-function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra, admin = false }: {
+function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
   lesson: TutorLesson; now: Date; actions: TutorActions; startEditing: boolean; onSaved: (saved: TutorLesson) => Promise<void>; extra?: ReactNode; admin?: boolean;
 }) {
   const [editing, setEditing] = useState(startEditing);
@@ -660,6 +659,8 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra, adm
 
   async function save() {
     if (!result) return;
+    if (result === 'tutor_no_show' && l.classStatus !== 'Tutor no-show'
+      && !window.confirm('Record a tutor no-show? The student gets a make-up class and a free compensation class, and this class is not paid.')) return;
     setBusy(true);
     setErr('');
     try {
@@ -676,12 +677,13 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra, adm
     }
   }
 
-  const results = admin ? (['held', 'student_no_show', 'tutor_no_show'] as const) : (['held', 'student_no_show'] as const);
+  // 강사 본인도 운영진도 Tutor no-show 선택 가능 (2026-11-04 대표, 4401)
+  const results = ['held', 'student_no_show', 'tutor_no_show'] as const;
   return (
     <div className="mt-3 grid gap-3">
       <div>
         <p className={label}>How did the class go?</p>
-        <div role="radiogroup" aria-label="How did the class go?" className={`grid gap-1.5 ${admin ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <div role="radiogroup" aria-label="How did the class go?" className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
           {results.map((r) => (
             <button key={r} type="button" role="radio" aria-checked={result === r} onClick={() => setResult(r)}
               className={`min-h-[48px] rounded-[10px] border px-2 text-[14px] font-semibold ${

@@ -18,6 +18,11 @@
 - **검증**: vitest 343 통과 · tsc · eslint. 시험용 DB SQL(강사 계정 흉내)로 저장→'Tutor Late - Student Present'+10/5분, 같은 값 재저장 repeated=true, 되돌리기→Normal·지각 없음, 오류 3종(강사 지각 사유 없음·0분·강사 노쇼 강사 금지), 보상 0건 확인. 화면은 `?demo=1` 가짜 데이터로 PC·휴대폰 5메뉴 캡처 확인(콘솔 오류 없음). **실제 로그인 클릭 검증(e2e-tutor 계정)은 아직** — 다음 세션에 lms-test 배포 후 대표 또는 Claude 클릭
 - **남은 것**: ① 운영자 보기(?tutor=)에서는 Students 목록이 본인 기준 함수라 안내문만 나옴(필요하면 admin용 목록 함수 추가) ② 대체강사 Students 목록은 DB `lms_tutor_student_access`(확정~수업 종료 24시간) 그대로, 화면에 Substitute 표시 없음 ③ 5번 문구 전체 점검은 바뀐 화면만 함 ④ 정책 원본 H26(48)에 기록 필요
 
+## ✅ 2026-11-04 오후 추가: Tutor no-show 강사도 선택 + My hours 시간대 표시 (8번) — 시험용 DB 적용, 운영 미적용
+- **migration 4401** `20261104130000_lms_tutor_self_no_show.sql`(시험용 DB 적용): **강사 본인도 운영진도 Tutor no-show 선택 가능**(대표 지시, 4000 '운영자만' 정책 변경). 결과·보상수업 1회·학생 보강 1회·강사 급여 없음은 그대로. 운영자가 기록한 강사 노쇼는 강사가 못 고침(`class_records.submitted_by` 가 본인일 때만 강사가 고칠 수 있음). 강사 화면 Class Record 에 Tutor no-show 버튼 + 저장 전 확인 창('Record a tutor no-show? … compensation class, not paid'). 시험용 DB: 저장→보상수업 생성, Held 로 되돌리면 보상수업 voided 확인. ※ 정책 원본 H26 에 이 변경 기록 필요
+- **My hours 8번**: 고른 시간대(현지/KST)를 달력·오른쪽 Changes·저장 확인 창에 같게 적용. Changes 는 고른 시간대 먼저(`Every Monday 17:30–18:00 Korea Time (KST) → open`), 아래 보조로 다른 시간대. 요일·날짜가 달라지거나 자정을 걸쳐도 정확히, 서머타임은 적용일 주의 실제 시각으로 계산(`describeChangesIn`, `localToInstant`). 저장 키·로직은 안 바꿈. 선택된 시간대 버튼은 보라 배경+✓. 휴대폰에서 저장 팝업이 아래 메뉴에 가려지던 것도 고침
+- 남은 것: 실제 강사 계정 로그인 클릭 검증(lms-test 배포 후), 운영자 보기 Students 목록
+
 ## 📋 다음 세션 할 일 (2026-11-04 대표 요청 원문 요약 — 빠짐없이): 강사 LMS 화면 전체 개선 + Class Record 출결·지각 구조 변경
 - **시작**: 브랜치 `claude/busy-rubin-w3dii1`(= lms-test) 위에서. 대표가 첨부한 학생 화면·강사 화면 캡처는 이 세션에 안 보였음 → 새 세션 첫 메시지에 다시 첨부 요청. 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. 시험용 DB·lms-test 에서만, 운영 DB·lms-prod 금지. 완료 보고는 바뀐 화면·실제 검증 결과·남은 문제만 짧게
 1. **왼쪽 사이드바** (학생 LMS처럼 고정 메뉴, PC·모바일): **Home**(오늘 수업·해야 할 일) · **Schedule**(수업 일정) · **Class Record**(기록 조회·작성) · **Students**(담당 학생) · **My hours**. 메뉴 이름은 이 영문 그대로. 기존 기능을 메뉴로 나누기만 하지 말고 화면마다 목적이 분명하고 원하는 기능을 바로 찾게

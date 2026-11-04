@@ -1,6 +1,9 @@
 // 강사 가능 시간 고치기 [My hours] (migration 3100) — 판정은 DB 함수 tutor_hours·tutor_hours_save, 여기는 칸 모양·바뀐 내용 글만
 //  - Every week 칸 키 '요일:HH:MM' (요일 0=일 … 6=토, 강사 현지) · One week only 칸 키 'YYYY-MM-DDTHH:MM' (강사 현지)
 
+import { addDays, formatInZone } from '../rules/dates';
+import { cityTime, localToInstant } from './hours-view';
+
 /** 그 주만 칸: c 수업·보강 · r 보강 신청/대체 요청 답 대기 · l 휴무 · p 6시간 안·지난 시간 · s 매주 닫힘 · b 그 주만 닫음 · o 열림 */
 export type CellCode = 'c' | 'r' | 'l' | 'p' | 's' | 'b' | 'o';
 export type WeeklyClass = { d: number; time: string; min: number; student: string };
@@ -127,6 +130,49 @@ export function describeChanges(ch: Omit<HoursChanges, 'from'> & { from?: string
           ? `${dateText(date)} ${span} → ${close ? 'unavailable this week' : 'open again'}`
           : `${koDate(date)} ${span} → ${close ? '그 주만 닫음' : '다시 엶'}`);
       }
+    }
+  };
+  weekly(ch.weeklyOpen, true);
+  weekly(ch.weeklyClose, false);
+  once(ch.onceClose, true);
+  once(ch.onceOpen, false);
+  return out;
+}
+/**
+ * 바뀐 내용 (표시 시간대 기준 + 다른 시간대 보조). 저장 키는 강사 현지 그대로이고 보여 주는 글만 바꿈 (2026-11-04 대표 8번).
+ * main = 고른 시간대 'Every Mon 17:30–18:00 KST → open', sub = 다른 시간대 'Every Mon 15:30–16:00 Ho Chi Minh Time' (강사가 한국이면 없음)
+ * 날짜·요일이 시간대 때문에 달라져도 각각 정확히: 걸치면 'Mon 23:30 – Tue 0:30'. 매주 변경은 적용일 주(from) 기준
+ */
+export function describeChangesIn(
+  ch: Omit<HoursChanges, 'from'>, from: string, tutorZone: string, viewZone: string,
+): { main: string; sub: string | null }[] {
+  const names = (z: string) => cityTime(z);
+  const at = (date: string, a: number, b: number, zone: string, weekly: boolean): string => {
+    const start = localToInstant(date, hhmm(a), tutorZone);
+    const end = new Date(+start + (b + 30 - a) * 60000);
+    const s = formatInZone(start, zone);
+    const e = formatInZone(end, zone);
+    const day = (d: string) => (weekly ? FULL[parts(d).dow] : dateText(d));
+    const head = weekly ? `Every ${day(s.date)}` : day(s.date);
+    const span = s.date === e.date || e.time === '00:00' && addDays(s.date, 1) === e.date
+      ? `${timeText(toMin(s.time))}–${e.time === '00:00' ? '24:00' : timeText(toMin(e.time))}`
+      : `${timeText(toMin(s.time))} – ${day(e.date)} ${timeText(toMin(e.time))}`;
+    return `${head} ${span} ${names(zone)}`;
+  };
+  const other = tutorZone === 'Asia/Seoul' && viewZone === 'Asia/Seoul' ? null : viewZone === tutorZone ? 'Asia/Seoul' : tutorZone;
+  const out: { main: string; sub: string | null }[] = [];
+  const add = (date: string, a: number, b: number, weekly: boolean, tail: string) => {
+    out.push({ main: `${at(date, a, b, viewZone, weekly)} → ${tail}`, sub: other ? at(date, a, b, other, weekly) : null });
+  };
+  const weekly = (keys: string[], open: boolean) => {
+    for (const d of WEEK_DAYS) {
+      const mins = keys.filter((k) => Number(k.split(':')[0]) === d).map((k) => toMin(k.slice(2)));
+      for (const [a, b] of runs(mins)) add(plusDays(from, (d + 6) % 7), a, b, true, open ? 'open' : 'closed');
+    }
+  };
+  const once = (keys: string[], close: boolean) => {
+    for (const date of [...new Set(keys.map((k) => k.slice(0, 10)))].sort()) {
+      for (const [a, b] of runs(keys.filter((k) => k.startsWith(date)).map((k) => toMin(k.slice(11))))) add(date, a, b, false, close ? 'unavailable this week' : 'open again');
     }
   };
   weekly(ch.weeklyOpen, true);

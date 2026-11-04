@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyFromText, describeChanges, diff, lessonAt, parseHours, runs, weekText, weeklyClassAt } from './hours';
+import { applyFromText, describeChanges, describeChangesIn, diff, lessonAt, parseHours, runs, weekText, weeklyClassAt } from './hours';
 
 describe('My hours', () => {
   it('붙은 30분 칸을 한 묶음으로', () => {
@@ -37,5 +37,24 @@ describe('My hours', () => {
   });
   it('Every week 적용일 안내: 강사 현지 월요일 날짜 그대로', () => {
     expect(applyFromText('2026-11-09')).toBe('These hours apply from Mon, Nov 9.');
+  });
+  it('바뀐 내용: 고른 시간대 먼저, 다른 시간대 보조 (날짜·요일 달라짐, 서머타임)', () => {
+    const none = { weeklyOpen: [], weeklyClose: [], onceClose: [], onceOpen: [] };
+    // 호치민(UTC+7) 월 15:30–16:00 = KST 월 17:30–18:00
+    const a = describeChangesIn({ ...none, weeklyOpen: ['1:15:30'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Seoul');
+    expect(a).toEqual([{ main: 'Every Monday 17:30–18:00 Korea Time (KST) → open', sub: 'Every Monday 15:30–16:00 Ho Chi Minh Time' }]);
+    const b = describeChangesIn({ ...none, weeklyOpen: ['1:15:30'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Ho_Chi_Minh');
+    expect(b[0].main).toBe('Every Monday 15:30–16:00 Ho Chi Minh Time → open');
+    expect(b[0].sub).toBe('Every Monday 17:30–18:00 Korea Time (KST)');
+    // 멜버른 월 01:00(서머타임 UTC+11) = KST 일 23:00 → 요일이 달라짐
+    const c = describeChangesIn({ ...none, weeklyClose: ['1:01:00'] }, '2026-11-09', 'Australia/Melbourne', 'Asia/Seoul');
+    expect(c[0].main).toBe('Every Sunday 23:00–23:30 Korea Time (KST) → closed');
+    expect(c[0].sub).toBe('Every Monday 1:00–1:30 Melbourne Time');
+    // 그 주만, 자정을 걸치는 칸 묶음
+    const d = describeChangesIn({ ...none, onceClose: ['2026-11-10T21:30', '2026-11-10T22:00'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Seoul');
+    expect(d[0].main).toBe('Tue 10 Nov 23:30 – Wed 11 Nov 0:30 Korea Time (KST) → unavailable this week');
+    expect(d[0].sub).toBe('Tue 10 Nov 21:30–22:30 Ho Chi Minh Time');
+    // 강사가 한국이면 보조 줄 없음
+    expect(describeChangesIn({ ...none, weeklyOpen: ['1:09:00'] }, '2026-11-09', 'Asia/Seoul', 'Asia/Seoul')[0].sub).toBeNull();
   });
 });
