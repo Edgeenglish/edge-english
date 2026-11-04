@@ -40,6 +40,7 @@
 - **Schedule 메뉴 제거**(대표: Class Record 와 같은 표) → 메뉴 4개 Home · Class Record · Students · My hours. Class Record 가 주별 일정 + 기록. Home 'All classes ›' → Class Record. ListRow 의 schedule 모드 코드 삭제
 - 대표 경고: My hours 가 다시 깨지거나 이상하게 보이면 안 됨 → 앞으로 My hours 를 건드리면 **실제 계정 데이터로 PC·휴대폰, 현지/KST, Every week/One week only 캡처를 모두 확인한 뒤** push
 - 검증 뒤 e2e Blair 임시 비밀번호 무효화(파일·스크립트 삭제)
+- 이어서(대표): '바꿀 수 없는' 칸은 닫힘 회색과 헷갈려 **빗금**으로, 이름은 **Can't open**. 표 위에 왜 못 여는지 한 줄: `Striped = can't open: outside 06:00–22:30 [도시] Time (classes can only start in these hours)`(One week only 는 '지난 시간·6시간 안' 추가, 범위는 DB times 목록에서 읽음). 휴대폰 저장 막대 아래로 표가 비치던 틈은 흰 그림자로 막음
 
 ## 📋 다음 세션 할 일 (2026-11-04 대표 요청 원문 요약 — 빠짐없이): 강사 LMS 화면 전체 개선 + Class Record 출결·지각 구조 변경
 - **시작**: 브랜치 `claude/busy-rubin-w3dii1`(= lms-test) 위에서. 대표가 첨부한 학생 화면·강사 화면 캡처는 이 세션에 안 보였음 → 새 세션 첫 메시지에 다시 첨부 요청. 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. 시험용 DB·lms-test 에서만, 운영 DB·lms-prod 금지. 완료 보고는 바뀐 화면·실제 검증 결과·남은 문제만 짧게

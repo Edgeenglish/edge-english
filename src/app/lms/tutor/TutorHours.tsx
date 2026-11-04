@@ -35,6 +35,8 @@ const cont = '-mt-[2px] h-[28px] rounded-t-none lg:h-[26px]';
 const fillStyle = (f: { from: number; to: number }, dark: string, pale: string): CSSProperties => (f.from <= 0 && f.to >= 1
   ? { background: dark }
   : { background: `linear-gradient(to bottom, ${pale} ${f.from * 100}%, ${dark} ${f.from * 100}%, ${dark} ${f.to * 100}%, ${pale} ${f.to * 100}%)` });
+/** 바꿀 수 없는 칸: 닫힘(회색)과 헷갈리지 않게 빗금 (대표 11/4) */
+const cantChange: CSSProperties = { background: 'repeating-linear-gradient(-45deg,#e3e1ea,#e3e1ea 2px,#fafafd 2px,#fafafd 7px)' };
 const hatch = { background: 'repeating-linear-gradient(-45deg,#fdecea,#fdecea 4px,#fff 4px,#fff 7px)', boxShadow: 'inset 0 0 0 1px #b3261e' };
 
 type Dialog =
@@ -112,7 +114,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
   const dates = WEEK_DAYS.map((_, i) => plusDays(monday, i));
   const code = (k: string): CellCode | undefined => d.cells[k];
   const source = (date: string, t: string) => sourceCell(date, t, viewZone, d.tutor.timezone);
-  const unavailable = <span title="Outside editable booking hours" className={`${cellBase} block border border-[#ebe9f1] bg-[#f6f5fa]`} />;
+  const unavailable = <span title="Outside editable booking hours" className={`${cellBase} block`} style={cantChange} />;
   function displayCell(i: number, t: string) {
     const c = source(tab === 'week' ? plusDays(d.from, i) : dates[i], t);
     const k = `${c.date}T${c.time}`;
@@ -204,7 +206,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
         </button>
       );
     }
-    if (c === 'p') return <span aria-hidden className={`${cellBase} block border border-[#ebe9f1] bg-[#f6f5fa]`} />;
+    if (c === 'p') return <span aria-hidden className={`${cellBase} block`} style={cantChange} />;
     if (c === 's') {
       return (
         <button type="button" aria-label={`${when} closed every week`} className={`${cellBase} bg-[#ecebf1]`}
@@ -293,6 +295,10 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
               ? 'Tap a time to open or close it every week. Green = students can book a class starting then.'
               : 'Close free times for this week only. Tap a day to close the whole day.'}
           </p>
+          {/* 왜 못 여는지 한 줄 (대표 11/4): 범위는 DB 가 준 시작 시각 목록(강사 현지 06:00~22:30, 2026-11-03 대표 결정)에서 읽음 */}
+          <p className="mb-1.5 text-[12.5px] text-[#6b6880]">
+            Striped = can’t open: {tab === 'once' ? 'already past or less than 6 hours away, or ' : ''}outside {timeText(toMin(d.times[0]))}–{timeText(toMin(d.times[d.times.length - 1]))} {localLabel} (classes can only start in these hours).
+          </p>
           {tab === 'week' && (
             <p className="mb-1.5 rounded-[8px] bg-[#eeeaff] px-2.5 py-1.5 text-[13px] font-semibold text-[#3a22b0]">
               {applyFromText(d.from)} <span className="font-normal">This week stays as it is — use One week only to change this week.</span>
@@ -308,7 +314,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
           <div className="mb-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-[#6b6880]">
             <Legend color="bg-[#e6f6ec]">Open</Legend>
             <Legend color="bg-[#ecebf1]">Closed</Legend>
-            <Legend color="border border-[#e6e3ef] bg-[#f6f5fa]">Can’t change</Legend>
+            <Legend style={cantChange}>Can’t open</Legend>
             {tab === 'once' && <Legend style={hatch}>Unavailable this week</Legend>}
             <Legend color="bg-[#5b3fe0]">Class</Legend>
             {tab === 'once' && <Legend color="bg-[#d9d1ff]">Make-up</Legend>}
@@ -333,7 +339,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
           {history}
         </aside>
       </div>
-      <div className={`flex items-center gap-2 border-t border-[#e6e3ef] bg-white px-1 pb-1 pt-2.5 lg:hidden ${inline ? 'sticky bottom-[76px] z-10 -mx-1 rounded-b-[10px]' : ''}`}>
+      <div className={`flex items-center gap-2 border-t border-[#e6e3ef] bg-white px-1 pb-1 pt-2.5 lg:hidden ${inline ? 'sticky bottom-[64px] z-10 -mx-1 shadow-[0_64px_0_0_#fff]' : ''}`}>
         <span className="flex-1 text-[13px] text-[#6b6880]">{lines.length > 0 ? `${lines.length} change${lines.length > 1 ? 's' : ''} not saved` : 'No changes'}</span>
         <button type="button" disabled={lines.length === 0} onClick={() => { setSaveErr(''); setDialog({ kind: 'save' }); }} className={btnMain}>Save</button>
       </div>
