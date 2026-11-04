@@ -180,7 +180,7 @@ h2{font-size:19px;margin:0 0 4px;text-wrap:balance}
 
 <div class="wrap">
 <header>
-  <span class="tag">강사 LMS · 시안 2 · 개발 전</span>
+  <span class="tag">강사 LMS · 시안 2 · 승인됨 (H26(50))</span>
   <h1>강사 Schedule (수업 보기 + 날짜별 막기·열기) · My hours (매주 시간만)</h1>
   <p class="lead">가짜 데이터(강사 Blair, 토론토 · 오늘 = Mon, Nov 16, 2026 15:00 Toronto Time). 수업 자체는 Schedule 에서 옮기거나 추가·삭제하지 못합니다.</p>
 </header>
@@ -189,7 +189,7 @@ h2{font-size:19px;margin:0 0 4px;text-wrap:balance}
   <h2>대표님 결정 반영</h2>
   <ul style="margin:0;padding-left:20px;display:grid;gap:4px">
     <li>One week only 탭 없앰 → 날짜별 <b>막기(Block time)·열기(Make available)</b>는 Schedule 에서. My hours 는 매주 시간만.</li>
-    <li>이번 주 포함 <b>12주</b> 안만 막기·열기 가능 (지금 4주를 계산 방식 그대로 12주로. 예: 오늘 기준 Sun, Feb 7, 2027 까지).</li>
+    <li><b>오늘부터 12주 후까지</b> 막기·열기 가능 (예: 오늘 Mon, Nov 16 → Mon, Feb 8, 2027 까지).</li>
     <li>메모 선택 입력, 최대 <b>100자</b>. 강사 본인·운영진만 봄. 학생은 그냥 고를 수 없는 시간.</li>
     <li>PC = 드래그 또는 클릭 / 휴대폰 = 빈 시간 누름 → 끝 시간 → 메모(선택) → Block.</li>
     <li>그대로 지킴: 수업 있는 시간은 못 막음 · 지난 시간·6시간 안은 못 바꿈 · 이미 막아 둔 기록(One week only로 막은 것)은 같은 표라 그대로 Schedule 에 보임(메모 없음으로).</li>
@@ -208,7 +208,7 @@ h2{font-size:19px;margin:0 0 4px;text-wrap:balance}
     <tr><th>자리</th><th>영어 (화면)</th><th>뜻</th></tr>
     <tr><td>1 My hours 제목</td><td><b>Weekly Availability</b><br>Set the hours you're available to teach each week.</td><td>매주 반복 시간. 'Every week' 탭 이름은 없어짐</td></tr>
     <tr><td>2 My hours 적용일</td><td>Changes apply from Mon, Nov 23.</td><td>지금 'These hours apply from…' 짧게</td></tr>
-    <tr><td>3 My hours 아래 한 줄</td><td>Need one day off or extra time on one day? Use <u>Schedule</u>.</td><td>하루만 바꾸는 곳 안내 (없애도 됨 — 정해 주세요)</td></tr>
+    <tr><td>3 My hours 아래 한 줄</td><td>Need to change your hours for just one day? Go to <u>Schedule</u>.</td><td>하루만 바꾸는 곳 안내 (없애도 됨 — 정해 주세요)</td></tr>
     <tr><td>4 Schedule 색 설명</td><td>Available · Not available · Class · Blocked · Can't change</td><td>초록·회색·보라·빗금(메모)·흰 빗금(지난 시간·6시간 안)</td></tr>
     <tr><td>5 초록 칸 누름</td><td><b>Block time</b> · Start · End · Note (optional) · [Block]</td><td>그날만 막기</td></tr>
     <tr><td>6 메모 칸 아래</td><td>Only you and Edge English see this note. Students just see this time as unavailable.</td><td>대표 요청 문구</td></tr>
@@ -302,7 +302,7 @@ const dayEv=d=>ev.filter(e=>e.d===d);
 const OPEN={1:[[16*60,22*60]],2:[[17*60,22*60]],3:[[16*60,22*60]],4:[[12*60,22*60]],5:[[16*60,21*60]],6:[[8*60,12*60]],0:[[9*60,12*60]]};
 const IC={home:'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',sch:'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',rec:'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z',stu:'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',hrs:'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z'};
 const svg=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-const MENU=[['home','Home'],['sch','Schedule'],['rec','Class Record'],['stu','Students'],['hrs','My hours']];
+const MENU=[['home','Home'],['sch','Schedule'],['rec','Class Record'],['stu','Students'],['hrs','Availability']];
 const nav=on=>`<nav class="nav"><div class="logo">Edge English <i>Tutor</i></div>${MENU.map(([k,l])=>`<a class="${k===on?'on':''}">${svg(IC[k])}${l}</a>`).join('')}<div class="me"><b>Blair</b>Toronto Time (EST)</div></nav>`;
 const bar=on=>`<div class="bar">${MENU.map(([k,l])=>`<div class="${k===on?'on':''}">${svg(IC[k])}${l}</div>`).join('')}</div>`;
 const phTop=`<div class="top"><span class="logo" style="padding:0">Edge English <i>Tutor</i></span><span style="font-size:13px;color:#55526a;text-decoration:underline">Sign out</span></div>`;
@@ -399,7 +399,7 @@ const wkT='Nov 16 – 22 · Toronto Time';
   const g=`<div class="wk" style="--rh:${rh}px;grid-template-columns:52px repeat(7,minmax(0,1fr))"><div class="h" style="background:#fff"></div>${[1,2,3,4,5,6,0].map(w=>`<div class="h">${DOW[w]}</div>`).join('')}<div>${Array.from({length:rows},(_,i)=>`<div class="tm">${i%2===0?fromMin(S+i*30):''}</div>`).join('')}</div>${[1,2,3,4,5,6,0].map(w=>`<div class="col">${Array.from({length:rows},(_,i)=>{const m=S+i*30;return `<div class="slot ${(OPEN[w]||[]).some(([a,b])=>m>=a&&m<b)?'o':'c'}"></div>`}).join('')}${REG.filter(r=>r[0]===w).map(r=>`<div class="blkx cls" style="top:${(toMin(r[1])-S)/30*rh}px;height:${r[2]/30*rh}px"><b>${r[3].split(' ')[0]}</b></div>`).join('')}</div>`).join('')}</div>`;
   const top=`<h3 style="margin:0;font-size:20px">Weekly Availability</h3><p style="margin:2px 0 8px;color:#55526a">Set the hours you're available to teach each week.</p>
     <p style="margin:0 0 8px;font-weight:600">Changes apply from Mon, Nov 23.</p>`;
-  const foot=`<p class="fine" style="margin-top:8px">Need one day off or extra time on one day? Use <u style="color:#5b3fe0">Schedule</u>.</p>`;
+  const foot=`<p class="fine" style="margin-top:8px">Need to change your hours for just one day? Go to <u style="color:#5b3fe0">Schedule</u>.</p>`;
   document.getElementById('pcHours').innerHTML=`${nav('hrs')}<div class="main"><div class="head"><div style="flex:1">${top}</div>${zoneSeg('l')}</div>${g}${foot}</div>`;
   document.getElementById('phHours').innerHTML=`${phTop}<div class="body">${top}<div style="margin-bottom:8px">${zoneSeg('l')}</div><div style="height:150px;overflow:hidden;border-radius:12px">${g.replace('--rh:16px','--rh:11px')}</div><p class="fine">(표 아래 생략 — 지금 My hours 표 그대로)</p>${foot}</div>${bar('hrs')}`;
 })();

@@ -7,7 +7,7 @@
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
 ## 📌 기록 방식 (2026-11-03 대표 결정, 정책 원본 H26(45))
-- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(47)**, 다음은 (48)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
+- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(50)**, 다음은 (51)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
 - 10/30~11/3 결정은 H26(38)~(42)에 보충함(11/3), 시간 표기 원칙 (43), 학생 관리 ①~⑦ 전문 (44), 11/3 진행 (45)
 
 ## ✅ 2026-11-04 강사 LMS 개편 + Class Record 출결·지각 (브랜치 claude/upbeat-davinci-e9clnn = lms-test 위, 시험용 DB 적용, 운영 미적용)
@@ -42,12 +42,13 @@
 - 검증 뒤 e2e Blair 임시 비밀번호 무효화(파일·스크립트 삭제)
 - 이어서(대표): '바꿀 수 없는' 칸은 닫힘 회색과 헷갈려 **빗금**으로, 이름은 **Can't open**. 표 위에 왜 못 여는지 한 줄: `Striped = can't open: outside 06:00–22:30 [도시] Time (classes can only start in these hours)`(One week only 는 '지난 시간·6시간 안' 추가, 범위는 DB times 목록에서 읽음). 휴대폰 저장 막대 아래로 표가 비치던 틈은 흰 그림자로 막음
 
-## 📋 다음 세션 할 일: 강사 Schedule 메뉴 = Google Calendar 식 월간↔주간 (대표 결정 H26(49), 2026-11-04)
-- **시작**: 브랜치 `claude/upbeat-davinci-e9clnn`(= lms-test) 위에서. 새 세션. 먼저 **PC·휴대폰 시안**(Month·Week·수업 클릭 창)을 보여 주고 대표가 고른 뒤 개발
-- 기준 전문은 H26(49). 요약: 조회 전용(기록 칸 없음, 드래그 변경·추가·삭제 금지) / Month = 평소와 다른 날(취소·보강·대체·휴무·수강 종료) 짧은 글자로 눈에 띄게 / Week = My hours 시간표 격자 재사용(편집 없음, `TutorHours` 의 격자·`classFill`·`sourceCell` 참고) / 수업 클릭 → 학생·현지 시간+KST·종류 + [Class Record] 이동(해당 수업이 펼쳐지게) / 마지막 보기(Month/Week)·시간대 기억(`useSaved.ts`) / 휴대폰 Month 는 날짜 칸에 수업 수·점, 누르면 그날 목록
-- 데이터: `tutor_screen(p_tutor, from, to)` 가 기간을 받으므로 한 달 치 읽기(KST 날짜 기준 ±1일 넓혀 읽고 현지 날짜로 거르기 — `weekOf` 와 같은 방식). DB 변경 없음
-- 메뉴 복원: `TutorHome.tsx` TABS 에 `schedule` 다시 추가(아이콘은 이전 커밋 7273b81 이전 참고), 휴대폰 아래 메뉴 grid-cols-5, Home 'All classes ›' → Schedule 로
-- 끝나면: 실제 Blair 계정(시험용 e2e, 임시 비밀번호는 검증 뒤 무효화)으로 PC·휴대폰·현지/KST·Month/Week 캡처 확인 → lms-test push → 결과를 H26(50)에
+## 📋 다음 세션 할 일: 강사 Schedule + 날짜별 막기·열기 개발 (대표 결정 H26(49)+(50), 시안 승인됨 2026-11-04)
+- **시작**: 브랜치 `claude/happy-knuth-dgvczj`(= upbeat-davinci-e9clnn 위 + 시안). 시안 `docs/lms/previews/tutor-schedule-drafts.html` (https://claude.ai/artifact/8JCxp93muCHe7BZfZnA9GX, 시안 2 = 승인본, Month 는 시안 2 의 '칸마다 수업 줄' 모양). 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. **시험용 DB·lms-test 에만**, 운영 금지
+- 기준 전문 H26(49)+(50). 요약: 메뉴 Home · Schedule · Class Record · Students · **Availability**(예전 My hours, 화면 제목 Weekly Availability + 'Set the hours you're available to teach each week.' + 아래 'Need to change your hours for just one day? Go to Schedule.') / One week only 탭 삭제 / Schedule = Month(칸마다 수업 시각·학생, 다른 날 짧은 글자)·Week(My hours 격자) + 수업 클릭 창(→ Class Record 해당 수업 펼침) + **초록 칸 Block time · 회색 칸 Make available(그날만) · 막은 칸 Save note/Remove block** / PC 드래그·클릭, 휴대폰 빈 칸 → 끝 시간 칩 → 메모(선택) → Block / 메모 선택 최대 100자 + 'Only you and Edge English see this note. Students just see this time as unavailable.' / **기간 = 오늘부터 12주 후까지**(지금 v_mon+27 → 변경) / 수업 칸 못 막음(드래그가 수업에서 멈춤)·지난 시간·6시간 안 못 바꿈 / 마지막 보기(Month/Week)·시간대 기억(`useSaved.ts`) / 문구는 시안 '화면 문구' 표 그대로
+- DB(migration 새로): `tutor_hours_save` 에 메모 인자(once_close 의 reason, 100자 검사, 비우면 null — 예전 고정 글 'Unavailable this week (My hours)'는 화면에서 메모 없음으로 보임) + 12주 범위 + `tutor_screen`(또는 새 읽기 함수)에 기간 안 막은 시간(id·시작·끝·메모)·열어 둔 시간 반환, 메모 고치기·막기 풀기. 학생 쪽 함수는 reason 을 안 돌려줌(확인함, `tutor_time_off` RLS 도 본인 강사만) — 그대로 유지. 운영자 보기(?tutor=)도 같은 함수
+- 화면: `TutorHome.tsx` TABS 에 schedule 복원(7273b81 이전 아이콘), 휴대폰 grid-cols-5, Home 'All classes ›' → Schedule. `TutorHours.tsx` One week only 탭 제거(코드·저장 키 `lms_tutor_hours_tab` 정리). 데이터는 `tutor_screen(p_tutor, from, to)` 로 한 달(KST ±1일)
+- 끝나면: 실제 Blair 계정(시험용 e2e, 임시 비밀번호는 검증 뒤 무효화)으로 PC·휴대폰·현지/KST·Month/Week·막기/열기/메모/수업 충돌/6시간 클릭 확인 + Availability(Weekly) 캡처 확인(My hours 깨짐 주의 규칙) → lms-test push → 결과를 H26(51)에. 정책 원본 마지막 번호 **(50)**
+- 별도(Claude 안 함, 대표가 ChatGPT Work 에 맡김): LMS 전체 문구 점검
 
 ## 📋 다음 세션 할 일 (2026-11-04 대표 요청 원문 요약 — 빠짐없이): 강사 LMS 화면 전체 개선 + Class Record 출결·지각 구조 변경
 - **시작**: 브랜치 `claude/busy-rubin-w3dii1`(= lms-test) 위에서. 대표가 첨부한 학생 화면·강사 화면 캡처는 이 세션에 안 보였음 → 새 세션 첫 메시지에 다시 첨부 요청. 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. 시험용 DB·lms-test 에서만, 운영 DB·lms-prod 금지. 완료 보고는 바뀐 화면·실제 검증 결과·남은 문제만 짧게
