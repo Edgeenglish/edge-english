@@ -159,83 +159,121 @@ h2{font-size:19px;margin:0 0 4px;text-wrap:balance}
 .opt>div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
 .opt h5{margin:0 0 8px;font-size:15px}
 </style>
+<style>
+.slot.sel{background:#c9bcff !important;outline:0}
+.slot.no{background:repeating-linear-gradient(135deg,#fff 0 5px,#ecebf1 5px 9px)}
+.form{display:grid;gap:9px}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sel-b{border:1px solid #d9d5e6;border-radius:10px;min-height:44px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;font-size:15px;font-variant-numeric:tabular-nums;background:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{min-height:40px;min-width:62px;border:1px solid #d9d5e6;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14.5px;font-variant-numeric:tabular-nums}
+.chips span.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.cnt{font-size:12px;color:var(--sub);text-align:right}
+.err{font-size:13px;color:var(--red);background:var(--redSoft);border-radius:8px;padding:6px 9px;margin:0}
+.toast{position:absolute;left:50%;transform:translateX(-50%);bottom:72px;background:#1d1b2b;color:#fff;border-radius:10px;padding:8px 14px;font-size:14px;font-weight:600}
+.words{width:100%;border-collapse:collapse;font-size:14px}
+.words td,.words th{border-top:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+.words th{font-size:12.5px;color:var(--sub)}
+.words td:first-child{font-weight:700;white-space:nowrap}
+.stack{display:grid;gap:12px;align-content:start}
+</style>
 
 <div class="wrap">
-
 <header>
-  <span class="tag">강사 LMS · 시안 · H26(49)</span>
-  <h1>강사 Schedule 메뉴 (월간 ↔ 주간) + 개인 일정 메모</h1>
-  <p class="lead">아래 데이터는 모두 가짜(강사 Blair, 토론토)입니다. 조회 전용 — 기록 칸·드래그·수업 추가/삭제 없음. 수업을 누르면 정보 창 → [Class Record] 로 이동.</p>
+  <span class="tag">강사 LMS · 시안 2 · 개발 전</span>
+  <h1>강사 Schedule (수업 보기 + 날짜별 막기·열기) · My hours (매주 시간만)</h1>
+  <p class="lead">가짜 데이터(강사 Blair, 토론토 · 오늘 = Mon, Nov 16, 2026 15:00 Toronto Time). 수업 자체는 Schedule 에서 옮기거나 추가·삭제하지 못합니다.</p>
 </header>
 
-<section class="box ask" aria-label="대표가 고를 것">
-  <h2>대표님이 골라 주실 것</h2>
+<section class="box ask">
+  <h2>대표님 결정 반영</h2>
+  <ul style="margin:0;padding-left:20px;display:grid;gap:4px">
+    <li>One week only 탭 없앰 → 날짜별 <b>막기(Block time)·열기(Make available)</b>는 Schedule 에서. My hours 는 매주 시간만.</li>
+    <li>이번 주 포함 <b>12주</b> 안만 막기·열기 가능 (지금 4주를 계산 방식 그대로 12주로. 예: 오늘 기준 Sun, Feb 7, 2027 까지).</li>
+    <li>메모 선택 입력, 최대 <b>100자</b>. 강사 본인·운영진만 봄. 학생은 그냥 고를 수 없는 시간.</li>
+    <li>PC = 드래그 또는 클릭 / 휴대폰 = 빈 시간 누름 → 끝 시간 → 메모(선택) → Block.</li>
+    <li>그대로 지킴: 수업 있는 시간은 못 막음 · 지난 시간·6시간 안은 못 바꿈 · 이미 막아 둔 기록(One week only로 막은 것)은 같은 표라 그대로 Schedule 에 보임(메모 없음으로).</li>
+  </ul>
+  <h2 style="margin-top:6px">골라 주실 것</h2>
   <ol>
-    <li><b>① PC Month 칸 모양</b> A = 구글 캘린더처럼 칸마다 수업 줄(시각·학생) <span class="rec">추천</span> / B = 칸에 수업 수만 + 평소와 다른 날 글자. (아래 ①-A, ①-B)</li>
-    <li><b>② 개인 일정(병원·부모님 생신 등) — My hours 에서 넣음 (Schedule 은 고치는 곳 아님)</b> 지금도 My hours → 'One week only'에서 빈 시간을 닫을 수 있습니다. <b>없는 것은 메모뿐</b>(지금은 운영진에게도 'Unavailable this week (My hours)'라는 고정 글만 남음). 닫을 때 메모 한 줄을 받게 추가합니다(아래 ②). Schedule 에는 막은 시간이 메모와 함께 <b>보이기만</b> 합니다.</li>
-    <li><b>③ 개인 일정을 미리 막을 수 있는 기간</b> 지금 'One week only'는 <b>이번 주 포함 4주</b> 안만 닫을 수 있습니다(시험용 DB 함수 기준). 부모님 생신처럼 더 먼 날은 지금은 못 막습니다. 늘릴지, 늘린다면 몇 주까지인지 정해 주세요. (숫자는 대표님이 정함)</li>
-    <li><b>④ 메모를 볼 수 있는 사람</b> 강사 본인 + 운영진만. 학생 보강 신청·신규 등록 화면에서는 그냥 '불가' 시간으로만 보입니다(지금도 학생은 이 표를 읽을 권한이 없음 — 확인함). 강사 화면 메모 칸 아래에 <i>"Only you and Edge English see this note. Students just see this time as unavailable."</i> 한 줄로 알립니다. 이대로 괜찮은지.</li>
+    <li><b>① PC Month 칸 모양:</b> 칸마다 수업 줄(아래 시안) <span class="rec">추천</span> / 칸에 수업 수만. (시안 1의 두 모양 중 하나)</li>
+    <li><b>② 메뉴 이름 'My hours'</b> — 처음 보는 강사는 '내가 일한 시간(급여)'으로 읽을 수 있습니다. 화면 제목을 <b>Weekly Availability</b> 로 바꾸는 것만으로 충분한지, 메뉴 이름까지 <b>Availability</b> 로 바꿀지. 제 의견: 메뉴도 바꾸는 게 낫다(메뉴만 보고 무엇을 하는지 알아야 하므로).</li>
+    <li><b>③ 아래 '화면 문구' 표</b> — 처음 보는 강사 기준으로 고쳤습니다. 바꿀 것 있으면 줄 번호로.</li>
   </ol>
-  <p class="note">개발 범위: 표(테이블) 구조는 그대로. 다만 메모 저장·Schedule 에 막은 시간 표시를 위해 DB 함수 2개(My hours 저장, 강사 화면 읽기)는 바꿔야 합니다 — H26(49)의 'DB 변경 없음'과 달라지는 부분이라 미리 알립니다.</p>
 </section>
 
-<!-- ① PC Month -->
-<section>
-  <h2>①-A PC · Month <span class="rec">추천</span></h2>
-  <p class="note">평소와 다른 날은 색 + 짧은 글자(Canceled · Make-up · Cover · Leave · Last class · Blocked). 칸에 다 안 들어가면 '+2 more'. 수업을 누르면 오른쪽 같은 창.</p>
-  <div class="scroll"><div class="pc" id="pcMonth"></div></div>
+<section class="box">
+  <h2>화면 문구 (처음 보는 강사가 보자마자 알게)</h2>
+  <div class="scroll"><table class="words">
+    <tr><th>자리</th><th>영어 (화면)</th><th>뜻</th></tr>
+    <tr><td>1 My hours 제목</td><td><b>Weekly Availability</b><br>Set the hours you're available to teach each week.</td><td>매주 반복 시간. 'Every week' 탭 이름은 없어짐</td></tr>
+    <tr><td>2 My hours 적용일</td><td>Changes apply from Mon, Nov 23.</td><td>지금 'These hours apply from…' 짧게</td></tr>
+    <tr><td>3 My hours 아래 한 줄</td><td>Need one day off or extra time on one day? Use <u>Schedule</u>.</td><td>하루만 바꾸는 곳 안내 (없애도 됨 — 정해 주세요)</td></tr>
+    <tr><td>4 Schedule 색 설명</td><td>Available · Not available · Class · Blocked · Can't change</td><td>초록·회색·보라·빗금(메모)·흰 빗금(지난 시간·6시간 안)</td></tr>
+    <tr><td>5 초록 칸 누름</td><td><b>Block time</b> · Start · End · Note (optional) · [Block]</td><td>그날만 막기</td></tr>
+    <tr><td>6 메모 칸 아래</td><td>Only you and Edge English see this note. Students just see this time as unavailable.</td><td>대표 요청 문구</td></tr>
+    <tr><td>7 회색 칸 누름</td><td><b>Make available</b> · Start · End · [Make available]<br>This day only.</td><td>그날만 열기 (매주 바꾸기는 My hours)</td></tr>
+    <tr><td>8 막은 시간 누름</td><td>Blocked · Dentist · [Save note] [Remove block]</td><td>메모 고치기·막기 풀기</td></tr>
+    <tr><td>9 수업에 걸림</td><td>You have a class at 18:00 Toronto Time. Classes can't be blocked.</td><td>드래그가 수업에서 멈춤</td></tr>
+    <tr><td>10 6시간 안</td><td>Can't change: less than 6 hours away.</td><td>흰 빗금 칸 누를 때</td></tr>
+    <tr><td>11 저장 후</td><td>Blocked ✓ / Made available ✓</td><td>휴대폰 아래 짧은 알림</td></tr>
+  </table></div>
 </section>
 
 <section>
-  <h2>①-B PC · Month (수 + 표시만)</h2>
-  <p class="note">칸이 깔끔하지만 날짜를 눌러야 누구 수업인지 보입니다. 날짜 누르면 오른쪽에 그날 목록.</p>
-  <div class="scroll"><div class="pc" id="pcMonthB"></div></div>
-</section>
-
-<section>
-  <h2>PC · Week</h2>
-  <p class="note">My hours 와 같은 30분 격자(06:00–22:30). 초록 = 열어 둔 시간(수업 없음), 회색 = 닫힘, 보라 = 수업(실제 분만큼), 파랑 = 보강, 청록 = 대체, 점선 = 취소, 빗금 = 개인 일정(메모 표시). 편집 안 됨 — 바꾸려면 My hours.</p>
+  <h2>PC · Week — 드래그(또는 클릭)로 막기</h2>
+  <p class="note">초록 칸을 끌면 보라로 선택 → 오른쪽 창에 시작·끝 자동 입력. 칸 하나만 누르면 30분이 선택되고 End 에서 늘림. 수업·회색 칸에서는 선택이 멈춤.</p>
   <div class="scroll"><div class="pc" id="pcWeek"></div></div>
 </section>
 
 <section>
-  <h2>휴대폰 · Month → 날짜 누름 → 수업 누름</h2>
-  <div class="row">
-    <div class="ph" id="phMonth"></div>
-    <div class="ph" id="phSheet"></div>
-    <div class="ph" id="phWeek"></div>
-  </div>
-  <p class="note">휴대폰 Month 칸 = 날짜 + 점(수업 하나당 하나) + 평소와 다른 날만 아주 짧은 글자. 날짜를 누르면 아래에 그날 목록, 수업을 누르면 아래에서 올라오는 창. Week 는 7일 좁은 격자(시각 + 학생 이름 앞부분).</p>
+  <h2>PC · 회색 칸 누름(그날만 열기) · 막은 시간 누름 · 오류</h2>
+  <div class="row" id="pcPops"></div>
 </section>
 
-<!-- ② 개인 일정 -->
 <section>
-  <h2>② 개인 일정 메모 — My hours 'One week only'</h2>
-  <p class="note">지금처럼 칸을 눌러 닫고, 오른쪽 Changes 아래에 메모 한 줄(선택). 메모 없이 저장해도 됨. 수업이 있는 칸은 지금처럼 못 닫음.</p>
+  <h2>PC · Month — 날짜 누름 → 그날 목록 + 막기</h2>
+  <p class="note">먼 날(부모님 생신 등)은 Month 에서 날짜를 눌러 바로 막음. 12주 넘는 날짜는 [+ Block time]이 회색(못 누름).</p>
+  <div class="scroll"><div class="pc" id="pcMonth"></div></div>
+</section>
+
+<section>
+  <h2>휴대폰 · 막기 (빈 시간 → 끝 시간 → 메모 → Block)</h2>
+  <div class="row">
+    <div class="ph" id="ph1"></div>
+    <div class="ph" id="ph2"></div>
+    <div class="ph" id="ph3"></div>
+  </div>
+</section>
+
+<section>
+  <h2>휴대폰 · 회색 칸(그날만 열기) · 막은 시간 · Month</h2>
+  <div class="row">
+    <div class="ph" id="ph4"></div>
+    <div class="ph" id="ph5"></div>
+    <div class="ph" id="ph6"></div>
+  </div>
+</section>
+
+<section>
+  <h2>My hours → Weekly Availability (탭 없음)</h2>
   <div class="scroll"><div class="pc" id="pcHours"></div></div>
-  <div class="row" style="margin-top:16px">
-    <div class="ph" id="phHours"></div>
-    <div style="flex:1;min-width:280px;display:grid;gap:14px">
-      <h2 style="font-size:16px">같은 막힌 시간이 화면마다 어떻게 보이나</h2>
+  <div class="row" style="margin-top:14px"><div class="ph" id="phHours"></div>
+    <div class="stack" style="flex:1;min-width:280px">
+      <h2 style="font-size:16px">같은 막은 시간이 누구에게 어떻게 보이나</h2>
       <div class="cmp">
-        <div><h5>강사 (Schedule)</h5><span class="k block">Blocked</span><span style="font-size:14px">Thu 13:00–15:00 Toronto Time<br><b>Dentist</b></span><p class="fine">누르면 메모 + [Change in My hours ›]</p></div>
-        <div><h5>운영진 (강사 보기·강사 시간)</h5><span class="k block">Blocked</span><span style="font-size:14px">목 13:00–15:00 토론토 · 금 03:00–05:00 KST<br><b>Dentist</b> (Blair 작성)</span><p class="fine">보강·대체 고를 때도 메모가 보여 사정을 앎</p></div>
-        <div><h5>학생 (보강 신청)</h5><span style="font-size:14px">그 시간이 그냥 고를 수 없는 시간</span><p class="fine">메모·'개인 일정'이라는 말 모두 안 보임</p></div>
-      </div>
-      <div class="opt" style="grid-template-columns:1fr">
-        <div><h5>메모 길이·글자</h5><p class="fine">한 줄 짧은 메모(예: Dentist, Mom's birthday). 몇 글자까지 받을지 정해 주시면 그대로 넣습니다. 안 정하시면 줄 하나를 넘지 않게 화면에서만 자릅니다.</p></div>
+        <div><h5>강사 (Schedule)</h5><span class="k block" style="justify-self:start">Blocked</span><span style="font-size:14px">Thu, Nov 19 13:00–15:00 Toronto Time<br><b>Dentist</b></span></div>
+        <div><h5>운영진 (강사 화면 보기)</h5><span class="k block" style="justify-self:start">Blocked</span><span style="font-size:14px">Thu, Nov 19 13:00–15:00 Toronto Time · Fri, Nov 20 03:00–05:00 KST<br><b>Dentist</b></span><p class="fine">대신 막기·열기도 가능(이력에 운영자 대신)</p></div>
+        <div><h5>학생 (보강 신청)</h5><span style="font-size:14px">그 시간이 고를 수 없는 시간</span><p class="fine">메모·이유 안 보임</p></div>
       </div>
     </div>
   </div>
 </section>
-
 </div>
 
 <script>
-// ---------- 가짜 데이터 (Blair, America/Toronto, 2026년 11월 · 11/2 부터 EST = KST-14h) ----------
-const TODAY='2026-11-16';
+const TODAY='2026-11-16', NOW=15*60;
 const pad=n=>String(n).padStart(2,'0');
-const iso=(y,m,d)=>`${y}-${pad(m)}-${pad(d)}`;
 const dt=s=>new Date(s+'T00:00:00Z');
 const dow=s=>dt(s).getUTCDay();
 const addD=(s,n)=>{const d=dt(s);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
@@ -245,35 +283,23 @@ const lab=s=>{const d=dt(s);return `${DOW[d.getUTCDay()]}, ${MON[d.getUTCMonth()
 const toMin=t=>{const[a,b]=t.split(':').map(Number);return a*60+b};
 const fromMin=m=>`${pad(Math.floor(m/60)%24)}:${pad(m%60)}`;
 const kst=(d,t,m)=>{let s=toMin(t)+14*60,dd=d;if(s>=1440){s-=1440;dd=addD(d,1)}return `${lab(dd)} ${fromMin(s)}–${fromMin(s+m)}`};
-
-const REG=[ // 요일, 시각, 분, 학생, 회차시작
-  [1,'18:00',40,'Hajun Kim'],[3,'18:00',40,'Hajun Kim'],
-  [2,'19:00',40,'Seoyeon Park'],[4,'19:00',40,'Seoyeon Park'],
-  [1,'20:30',20,'Minji Lee'],[4,'20:30',20,'Minji Lee'],
-  [6,'09:00',50,'Jiwoo Choi'],
-];
+const REG=[[1,'18:00',40,'Hajun Kim'],[3,'18:00',40,'Hajun Kim'],[2,'19:00',40,'Seoyeon Park'],[4,'19:00',40,'Seoyeon Park'],[1,'20:30',20,'Minji Lee'],[4,'20:30',20,'Minji Lee'],[6,'09:00',50,'Jiwoo Choi']];
 const ev=[];
-for(let d='2026-11-01';d<='2026-12-05';d=addD(d,1)){
-  for(const [w,t,m,who] of REG){ if(dow(d)!==w) continue;
-    if(who==='Seoyeon Park' && d>'2026-11-26') continue;
-    ev.push({d,t,m,who,kind:'regular'});
-  }
-}
+for(let d='2026-11-01';d<='2026-12-05';d=addD(d,1)) for(const [w,t,m,who] of REG){ if(dow(d)!==w) continue; if(who==='Seoyeon Park'&&d>'2026-11-26') continue; ev.push({d,t,m,who,kind:'regular'}); }
 const find=(d,who)=>ev.find(e=>e.d===d&&e.who===who);
 find('2026-11-11','Hajun Kim').kind='cancel';
-ev.push({d:'2026-11-13',t:'17:00',m:40,who:'Hajun Kim',kind:'makeup',of:'Wed, Nov 11'});
-ev.push({d:'2026-11-17',t:'21:00',m:40,who:'Yuna Jung',kind:'cover',of:'Emma'});
-for(const d of ['2026-11-24','2026-11-25']) ev.filter(e=>e.d===d).forEach(e=>{e.kind='leave';e.sub='Emma'});
+ev.push({d:'2026-11-13',t:'17:00',m:40,who:'Hajun Kim',kind:'makeup'});
+ev.push({d:'2026-11-17',t:'21:00',m:40,who:'Yuna Jung',kind:'cover'});
+for(const d of ['2026-11-24','2026-11-25']) ev.filter(e=>e.d===d).forEach(e=>e.kind='leave');
 find('2026-11-26','Seoyeon Park').kind='last';
 ev.push({d:'2026-11-19',t:'13:00',m:120,who:'Dentist',kind:'block'});
 ev.push({d:'2026-11-29',t:'10:00',m:240,who:"Mom's birthday",kind:'block'});
+ev.push({d:'2026-11-22',t:'09:00',m:60,who:'',kind:'block'}); // One week only 로 막아 둔 예전 기록 (메모 없음)
 ev.sort((a,b)=>(a.d+a.t).localeCompare(b.d+b.t));
 const KW={cancel:'Canceled',makeup:'Make-up',cover:'Cover',leave:'Leave',last:'Last class',block:'Blocked'};
 const KS={cancel:'Cancel',makeup:'Make-up',cover:'Cover',leave:'Leave',last:'Last',block:'Block'};
 const dayEv=d=>ev.filter(e=>e.d===d);
-const count={'Hajun Kim':[3,8],'Seoyeon Park':[8,8],'Minji Lee':[5,16],'Jiwoo Choi':[2,4],'Yuna Jung':[6,8]};
-
-// ---------- 공통 조각 ----------
+const OPEN={1:[[16*60,22*60]],2:[[17*60,22*60]],3:[[16*60,22*60]],4:[[12*60,22*60]],5:[[16*60,21*60]],6:[[8*60,12*60]],0:[[9*60,12*60]]};
 const IC={home:'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',sch:'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',rec:'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z',stu:'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',hrs:'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z'};
 const svg=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
 const MENU=[['home','Home'],['sch','Schedule'],['rec','Class Record'],['stu','Students'],['hrs','My hours']];
@@ -282,123 +308,99 @@ const bar=on=>`<div class="bar">${MENU.map(([k,l])=>`<div class="${k===on?'on':'
 const phTop=`<div class="top"><span class="logo" style="padding:0">Edge English <i>Tutor</i></span><span style="font-size:13px;color:#55526a;text-decoration:underline">Sign out</span></div>`;
 const zoneSeg=on=>`<div class="seg"><span class="${on==='l'?'on':''}">${on==='l'?'✓ ':''}Toronto Time</span><span class="${on==='k'?'on':''}">${on==='k'?'✓ ':''}Korea Time (KST)</span></div>`;
 const viewSeg=on=>`<div class="seg"><span class="${on==='m'?'on':''}">Month</span><span class="${on==='w'?'on':''}">Week</span></div>`;
-const legend=`<div class="legend"><span><span class="k cancel">Canceled</span> class canceled</span><span><span class="k makeup">Make-up</span></span><span><span class="k cover">Cover</span> you cover another tutor</span><span><span class="k leave">Leave</span> your leave · a cover tutor teaches</span><span><span class="k last">Last class</span> student's last class</span><span><span class="k block">Blocked</span> your own time off</span></div>`;
+const legend=`<div class="legend"><span>■ <b style="color:#2a8a4f">Available</b></span><span>■ Not available</span><span>■ <b style="color:#5b3fe0">Class</b></span><span>▨ Blocked (your note)</span><span>▨ Can't change (past or less than 6 hours away)</span><span>Times: Toronto Time (EST)</span></div>`;
+const PRIV='<p class="fine">Only you and Edge English see this note. Students just see this time as unavailable.</p>';
 
-function popup(e){
-  const blk=e.kind==='block';
-  if(blk) return `<div class="pop" style="position:relative"><h4>${e.who}</h4><span class="k block" style="justify-self:start">Blocked · your own time</span>
-    <div class="ln"><span>Toronto</span><span>${lab(e.d)} ${e.t}–${fromMin(toMin(e.t)+e.m)} Toronto Time</span></div>
-    <div class="ln"><span>Korea</span><span>${kst(e.d,e.t,e.m)} KST</span></div>
-    <p class="fine">Only you and Edge English see this note. Students just see this time as unavailable.</p>
-    <div class="acts"><span class="btn">Change in My hours ›</span></div></div>`;
-  const c=count[e.who];
-  const kindTxt={regular:'Regular class',cancel:'Canceled (student changed it)',makeup:`Make-up class (for ${e.of})`,cover:`Cover class (${e.of}'s student)`,leave:`Your leave — ${e.sub} teaches this class`,last:'Regular class · last class of this course'}[e.kind];
-  return `<div class="pop" style="position:relative"><span class="x">×</span><h4>${e.who}</h4>
-    ${e.kind!=='regular'?`<span class="k ${e.kind}" style="justify-self:start">${KW[e.kind]}</span>`:''}
-    <div class="ln"><span>Toronto</span><span><b>${lab(e.d)} ${e.t}–${fromMin(toMin(e.t)+e.m)}</b> Toronto Time</span></div>
-    <div class="ln"><span>Korea</span><span>${kst(e.d,e.t,e.m)} KST</span></div>
-    <div class="ln"><span>Class</span><span>${kindTxt} · ${e.m} min${c?` · ${c[0]}/${c[1]}`:''}</span></div>
-    <div class="acts">${['cancel','leave'].includes(e.kind)?'':'<span class="btn main">Class Record ›</span>'}<span class="btn">Student profile</span></div>
-    <p class="fine">Class Record ›: opens this class there, ready to record.</p></div>`;
-}
-
-// ---------- ①-A PC Month ----------
-function monthCells(){const first='2026-11-01';const start=addD(first,-dow(first));return Array.from({length:35},(_,i)=>addD(start,i))}
-function pcMonth(sel){
-  const cells=monthCells().map(d=>{
-    const es=dayEv(d),out=d.slice(5,7)!=='11',max=4;
-    const lines=es.slice(0,max).map(e=>{
-      const x=['cancel','leave'].includes(e.kind)?' x':'', b=e.kind==='block'?' blk':'';
-      return `<div class="ev${x}${b}${sel===e?' sel':''}"><span class="dot"></span><span class="t">${e.t}</span><span style="overflow:hidden;text-overflow:ellipsis">${e.who.split(' ')[0]}</span>${e.kind!=='regular'?`<span class="k ${e.kind}">${KW[e.kind]}</span>`:''}</div>`}).join('');
-    return `<div class="cell${out?' out':''}${d===TODAY?' today':''}"><div class="dn">${+d.slice(8)}</div>${lines}${es.length>max?`<div class="more">+${es.length-max} more</div>`:''}</div>`}).join('');
-  return `${nav('sch')}<div class="main"><div class="head"><h3>Schedule</h3><span class="btn">‹</span><b style="font-size:16px">November 2026</b><span class="btn">›</span><span class="btn">Today</span><span class="sp"></span>${viewSeg('m')}${zoneSeg('l')}</div>
-  ${legend}<div style="display:flex;gap:16px;align-items:flex-start"><div class="mon" style="flex:1;min-width:0"><div class="dow">${DOW.map(x=>`<div>${x}</div>`).join('')}</div><div class="grid">${cells}</div></div>${popup(sel)}</div>
-  <p class="fine" style="margin-top:6px">Times are Toronto Time (EST). Switch to Korea Time (KST) above — dates move with the time.</p></div>`;
-}
-const selA=ev.find(e=>e.kind==='makeup');
-document.getElementById('pcMonth').innerHTML=pcMonth(selA);
-
-// ---------- ①-B ----------
-(function(){
-  const pick='2026-11-17';
-  const cells=monthCells().map(d=>{const es=dayEv(d),out=d.slice(5,7)!=='11';
-    const n=es.filter(e=>!['block','cancel','leave'].includes(e.kind)).length;
-    const ks=[...new Set(es.map(e=>e.kind).filter(k=>k!=='regular'))];
-    return `<div class="cell${out?' out':''}${d===TODAY?' today':''}" style="min-height:84px;${d===pick?'background:#efeaff':''}"><div class="dn">${+d.slice(8)}</div>${n?`<div style="font-size:13px;font-weight:600">${n} class${n>1?'es':''}</div>`:''}<div style="display:flex;flex-wrap:wrap;gap:3px">${ks.map(k=>`<span class="k ${k}">${KW[k]}</span>`).join('')}</div></div>`}).join('');
-  const list=dayEv(pick).map(e=>`<div class="li"><div class="a"><span>${e.who}</span>${e.kind!=='regular'?`<span class="k ${e.kind}">${KW[e.kind]}</span>`:''}</div><div class="b">${e.t}–${fromMin(toMin(e.t)+e.m)} Toronto · ${kst(e.d,e.t,e.m).split(' ').slice(3).join(' ')} KST</div></div>`).join('');
-  document.getElementById('pcMonthB').innerHTML=`${nav('sch')}<div class="main"><div class="head"><h3>Schedule</h3><span class="btn">‹</span><b style="font-size:16px">November 2026</b><span class="btn">›</span><span class="sp"></span>${viewSeg('m')}${zoneSeg('l')}</div>
-  <div style="display:flex;gap:16px"><div class="mon" style="flex:1"><div class="dow">${DOW.map(x=>`<div>${x}</div>`).join('')}</div><div class="grid">${cells}</div></div>
-  <div style="width:300px;display:grid;gap:8px;align-content:start"><h4 style="margin:0">${lab(pick)}</h4>${list}</div></div></div>`;
-})();
-
-// ---------- Week 격자 ----------
-const OPEN={1:[[16*60,22*60]],2:[[17*60,22*60]],3:[[16*60,22*60]],4:[[12*60,22*60]],5:[[16*60,21*60]],6:[[8*60,12*60]],0:[]};
-function weekGrid(mon,rh,mobile,sel){
-  const days=Array.from({length:7},(_,i)=>addD(mon,i));
-  const S=6*60,E=22*60+30,rows=(E-S)/30;
-  let html=`<div class="wk" style="--rh:${rh}px;grid-template-columns:${mobile?'34px':'52px'} repeat(7,minmax(0,1fr))"><div class="h" style="background:#fff"></div>`;
-  html+=days.map(d=>`<div class="h${d===TODAY?' today':''}">${DOW[dow(d)]}<br>${mobile?+d.slice(8):MON[10]+' '+(+d.slice(8))}</div>`).join('');
-  html+=`<div>${Array.from({length:rows},(_,i)=>`<div class="tm">${(i%2===0)?fromMin(S+i*30):''}</div>`).join('')}</div>`;
-  html+=days.map(d=>{
-    const op=OPEN[dow(d)]||[];
-    const slots=Array.from({length:rows},(_,i)=>{const m=S+i*30;return `<div class="slot ${op.some(([a,b])=>m>=a&&m<b)?'o':'c'}"></div>`}).join('');
-    const bl=dayEv(d).map(e=>{const top=(toMin(e.t)-S)/30*rh, h=Math.max(e.m/30*rh,rh*0.66);
+// Week grid: sel = {d,a,b} 선택 범위
+function weekGrid(mon,rh,mobile,sel,extra){
+  const days=Array.from({length:7},(_,i)=>addD(mon,i)), S=6*60,E=22*60+30,rows=(E-S)/30;
+  let h=`<div class="wk" style="--rh:${rh}px;grid-template-columns:${mobile?'34px':'52px'} repeat(7,minmax(0,1fr))"><div class="h" style="background:#fff"></div>`;
+  h+=days.map(d=>`<div class="h${d===TODAY?' today':''}">${DOW[dow(d)]}<br>${mobile?+d.slice(8):'Nov '+(+d.slice(8))}</div>`).join('');
+  h+=`<div>${Array.from({length:rows},(_,i)=>`<div class="tm">${i%2===0?fromMin(S+i*30):''}</div>`).join('')}</div>`;
+  h+=days.map(d=>{const op=OPEN[dow(d)]||[];
+    const slots=Array.from({length:rows},(_,i)=>{const m=S+i*30;
+      const no=d<TODAY||(d===TODAY&&m<NOW+360);
+      const s=sel&&sel.d===d&&m>=sel.a&&m<sel.b;
+      return `<div class="slot ${s?'sel':no?'no':op.some(([a,b])=>m>=a&&m<b)?'o':'c'}"></div>`}).join('');
+    const bl=dayEv(d).concat((extra||[]).filter(e=>e.d===d)).map(e=>{const top=(toMin(e.t)-S)/30*rh,hh=Math.max(e.m/30*rh,rh*.66);
       const cls=e.kind==='block'?'per':`cls ${['cancel','leave'].includes(e.kind)?'x':e.kind}`;
-      const name=mobile?e.who.split(' ')[0]:e.who;
-      return `<div class="blkx ${cls}${sel===e?' sel':''}" style="top:${top}px;height:${h}px"><b>${e.kind==='block'?'⛔ ':''}${name}</b>${!mobile||h>rh*1.4?`<span>${e.t}${e.kind!=='regular'&&e.kind!=='block'?' · '+KW[e.kind]:''}</span>`:''}</div>`}).join('');
+      const nm=e.kind==='block'?(e.who||'Blocked'):(mobile?e.who.split(' ')[0]:e.who);
+      return `<div class="blkx ${cls}${e.hi?' sel':''}" style="top:${top}px;height:${hh}px"><b>${nm}</b>${!mobile||hh>rh*1.4?`<span>${e.t}${e.kind==='block'&&e.who?' · Blocked':''}</span>`:''}</div>`}).join('');
     return `<div class="col">${slots}${bl}</div>`}).join('');
-  return html+'</div>';
+  return h+'</div>';
 }
-(function(){
-  const sel=ev.find(e=>e.d==='2026-11-17'&&e.kind==='cover');
-  document.getElementById('pcWeek').innerHTML=`${nav('sch')}<div class="main"><div class="head"><h3>Schedule</h3><span class="btn">‹</span><b style="font-size:16px">Nov 16 – Nov 22, 2026</b><span class="btn">›</span><span class="btn">Today</span><span class="sp"></span>${viewSeg('w')}${zoneSeg('l')}</div>
-  <div class="legend"><span>■ <span style="color:#2a8a4f">green</span> open, no class</span><span>■ gray closed</span><span>■ <span style="color:#5b3fe0">purple</span> class</span><span>⛔ striped = your own time off</span><span>Times: Toronto Time (EST)</span><span>To change your hours, go to My hours.</span></div>
-  <div style="display:flex;gap:16px;align-items:flex-start"><div style="flex:1;min-width:0">${weekGrid('2026-11-16',20,false,sel)}</div>${popup(sel)}</div></div>`;
-})();
+const blockForm=(d,a,b,note,ends)=>`<div class="form">
+  <h4 style="margin:0;font-size:17px">Block time</h4>
+  <div style="font-size:14px"><b>${lab(d)}</b> · Toronto Time<br><span style="color:#6b6880;font-size:12.5px">${kst(d,fromMin(a),b-a)} Korea Time (KST)</span></div>
+  ${ends?`<span class="lbl">Start</span><div class="sel-b">${fromMin(a)} Toronto Time</div><span class="lbl">End</span><div class="chips">${ends.map(m=>`<span class="${m===b?'on':''}">${fromMin(m)}</span>`).join('')}</div>`
+  :`<div class="two"><div><span class="lbl">Start</span><div class="sel-b">${fromMin(a)} <span>▾</span></div></div><div><span class="lbl">End</span><div class="sel-b">${fromMin(b)} <span>▾</span></div></div></div>`}
+  <label class="lbl">Note (optional)</label><div class="inp ${note?'':'ph-t'}">${note||'e.g. Dentist'}</div><div class="cnt">${note.length}/100</div>
+  ${PRIV}<div style="display:flex;gap:8px"><span class="btn main" style="flex:1;justify-content:center;min-height:46px">Block</span><span class="btn" style="min-height:46px">Cancel</span></div></div>`;
+const openForm=(d,a,b,ends)=>`<div class="form"><h4 style="margin:0;font-size:17px">Make available</h4>
+  <div style="font-size:14px"><b>${lab(d)}</b> · This day only<br><span style="color:#6b6880;font-size:12.5px">${fromMin(a)}–${fromMin(b)} Toronto Time · ${kst(d,fromMin(a),b-a)} KST</span></div>
+  ${ends?`<span class="lbl">Start</span><div class="sel-b">${fromMin(a)} Toronto Time</div><span class="lbl">End</span><div class="chips">${ends.map(m=>`<span class="${m===b?'on':''}">${fromMin(m)}</span>`).join('')}</div>`
+  :`<div class="two"><div><span class="lbl">Start</span><div class="sel-b">${fromMin(a)} <span>▾</span></div></div><div><span class="lbl">End</span><div class="sel-b">${fromMin(b)} <span>▾</span></div></div></div>`}
+  <span class="btn main" style="justify-content:center;min-height:46px">Make available</span></div>`;
+const blockedPop=(e)=>`<div class="form"><span class="k block" style="justify-self:start">Blocked</span>
+  <div style="font-size:14px"><b>${lab(e.d)} ${e.t}–${fromMin(toMin(e.t)+e.m)}</b> Toronto Time<br><span style="color:#6b6880;font-size:12.5px">${kst(e.d,e.t,e.m)} KST</span></div>
+  <label class="lbl">Note (optional)</label><div class="inp">${e.who}</div><div class="cnt">${e.who.length}/100</div>${PRIV}
+  <div style="display:flex;gap:8px"><span class="btn main" style="flex:1;justify-content:center;min-height:46px">Save note</span><span class="btn" style="min-height:46px">Remove block</span></div></div>`;
 
-// ---------- 휴대폰 ----------
-function phMonthCal(pick){
-  return `<div class="pm">${['S','M','T','W','T','F','S'].map(x=>`<div class="w">${x}</div>`).join('')}${monthCells().map(d=>{const es=dayEv(d),out=d.slice(5,7)!=='11';
-    const k=es.find(e=>e.kind!=='regular');
-    return `<div class="d${out?' out':''}${d===TODAY?' today':''}${d===pick?' pick':''}"><span class="n">${+d.slice(8)}</span><span class="dots">${es.map(e=>`<i class="${e.kind==='block'?'b':['cancel','leave'].includes(e.kind)?'x':''}"></i>`).join('')}</span>${k?`<span class="k ${k.kind}">${KS[k.kind]}</span>`:''}</div>`}).join('')}</div>`;
-}
+// PC Week
 (function(){
-  const pick='2026-11-13';
-  const list=dayEv(pick).map(e=>`<div class="li${['cancel','leave'].includes(e.kind)?' x':''}"><div class="a"><span>${e.who}</span>${e.kind!=='regular'?`<span class="k ${e.kind}">${KW[e.kind]}</span>`:''}</div><div class="b">${e.t}–${fromMin(toMin(e.t)+e.m)} Toronto · ${kst(e.d,e.t,e.m).replace(/^.*?(\d\d:\d\d–\d\d:\d\d)$/,'$1')} KST</div></div>`).join('');
-  const head=`<div class="head" style="gap:6px"><h3 style="font-size:18px">Schedule</h3><span class="sp"></span>${viewSeg('m')}</div>
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span class="btn" style="min-height:36px">‹</span><b style="flex:1;text-align:center">November 2026</b><span class="btn" style="min-height:36px">›</span></div>`;
-  document.getElementById('phMonth').innerHTML=`${phTop}<div class="body">${head}${phMonthCal(pick)}<div class="dl"><h5>${lab(pick)} <span style="font-weight:400;color:#6b6880;font-size:12.5px">Toronto Time · KST</span></h5>${list}</div><p class="fine" style="margin-top:8px">Time zone: Toronto Time ▾</p></div>${bar('sch')}`;
-  const sel=ev.find(e=>e.kind==='makeup');
-  document.getElementById('phSheet').innerHTML=`${phTop}<div class="body">${head}${phMonthCal(pick)}</div>${bar('sch')}<div class="dim"></div>
-   <div class="sheet"><div class="grab"></div>${popup(sel).replace('class="pop" style="position:relative"','class="pop" style="position:relative;width:auto;border:0;box-shadow:none;padding:0"').replace('<span class="btn main">','<span class="btn main" style="flex:1;justify-content:center;min-height:46px">')}</div>`;
-  document.getElementById('phWeek').innerHTML=`${phTop}<div class="body"><div class="head" style="gap:6px"><h3 style="font-size:18px">Schedule</h3><span class="sp"></span>${viewSeg('w')}</div>
-   <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span class="btn" style="min-height:36px">‹</span><b style="flex:1;text-align:center;font-size:14px">Nov 16 – 22 · Toronto Time</b><span class="btn" style="min-height:36px">›</span></div>
-   ${weekGrid('2026-11-16',15,true,null)}</div>${bar('sch')}`;
+  const sel={d:'2026-11-20',a:16*60,b:17*60+30};
+  document.getElementById('pcWeek').innerHTML=`${nav('sch')}<div class="main"><div class="head"><h3>Schedule</h3><span class="btn">‹</span><b style="font-size:16px">Nov 16 – Nov 22, 2026</b><span class="btn">›</span><span class="btn">Today</span><span class="sp"></span>${viewSeg('w')}${zoneSeg('l')}</div>${legend}
+  <div style="display:flex;gap:16px;align-items:flex-start"><div style="flex:1;min-width:0">${weekGrid('2026-11-16',20,false,sel)}</div><div class="pop">${blockForm(sel.d,sel.a,sel.b,'Parent-teacher meeting')}</div></div></div>`;
 })();
-
-// ---------- My hours One week only + 메모 ----------
+// PC pops
 (function(){
-  const mon='2026-11-16';const days=Array.from({length:7},(_,i)=>addD(mon,i));
-  const S=6*60,E=22*60+30,rows=(E-S)/30,rh=18;
-  let g=`<div class="wk" style="--rh:${rh}px;grid-template-columns:52px repeat(7,minmax(0,1fr))"><div class="h" style="background:#fff"></div>${days.map(d=>`<div class="h">${DOW[dow(d)]}<br>Nov ${+d.slice(8)}</div>`).join('')}`;
-  g+=`<div>${Array.from({length:rows},(_,i)=>`<div class="tm">${i%2===0?fromMin(S+i*30):''}</div>`).join('')}</div>`;
-  g+=days.map(d=>{const op=OPEN[dow(d)]||[];
-    const slots=Array.from({length:rows},(_,i)=>{const m=S+i*30;const o=op.some(([a,b])=>m>=a&&m<b);
-      const sel=d==='2026-11-19'&&m>=13*60&&m<15*60;return `<div class="slot ${sel?'selc':o?'o':'c'}"></div>`}).join('');
-    const bl=dayEv(d).filter(e=>e.kind!=='block').map(e=>`<div class="blkx cls ${['cancel','leave'].includes(e.kind)?'x':e.kind}" style="top:${(toMin(e.t)-S)/30*rh}px;height:${e.m/30*rh}px"><b>${e.who.split(' ')[0]}</b></div>`).join('');
-    return `<div class="col">${slots}${bl}</div>`}).join('')+'</div>';
-  const memo=(mob)=>`<div class="chg"><b>Changes</b>
-    <div style="font-size:14px">Thu, Nov 19 · 13:00–15:00 Toronto Time → <b>closed</b><br><span style="color:#6b6880;font-size:12.5px">Fri, Nov 20 · 03:00–05:00 Korea Time (KST)</span></div>
-    <label class="lbl" for="m${mob}">Note for this time (optional)</label>
-    <div class="inp" id="m${mob}">Dentist</div>
-    <p class="fine">Only you and Edge English see this note. Students just see this time as unavailable.</p>
-    <span class="btn main" style="justify-content:center;min-height:46px">Save</span></div>`;
-  document.getElementById('pcHours').innerHTML=`${nav('hrs')}<div class="main"><div class="head"><h3>My hours</h3><div class="seg"><span>Every week</span><span class="on">One week only</span></div><span class="sp"></span>${zoneSeg('l')}</div>
-   <div class="head"><span class="btn">‹</span><b>Nov 16 – Nov 22, 2026</b><span class="btn">›</span></div>
-   <div class="hrs"><div>${g}</div>${memo('p')}</div></div>`;
-  document.getElementById('phHours').innerHTML=`${phTop}<div class="body"><div class="head" style="gap:6px"><h3 style="font-size:18px">My hours</h3><span class="sp"></span><div class="seg"><span style="min-height:34px;font-size:13px">Every week</span><span class="on" style="min-height:34px;font-size:13px">One week only</span></div></div>
-   <p class="fine" style="margin-bottom:8px">(표는 지금 My hours 그대로 — 생략) 닫을 칸을 누르면 아래 저장 막대가 올라옴</p>
-   <div style="height:120px;border-radius:12px;background:repeating-linear-gradient(0deg,#dff3e6 0 17px,#fff 17px 18px);opacity:.6"></div></div>
-   <div style="border-top:1px solid #e6e3ef;padding:12px 14px;box-shadow:0 -8px 18px rgba(255,255,255,1)">${memo('m').replace('<div class="chg">','<div style="display:grid;gap:8px">')}</div>${bar('hrs')}`;
+  const e=ev.find(x=>x.who==='Dentist');
+  document.getElementById('pcPops').innerHTML=
+   `<div class="stack"><b>회색 칸 누름 (Sun, Nov 22 13:00)</b><div class="pop">${openForm('2026-11-22',13*60,15*60)}</div></div>`+
+   `<div class="stack"><b>막은 시간 누름</b><div class="pop">${blockedPop(e)}</div></div>`+
+   `<div class="stack"><b>드래그가 수업에 걸림</b><div class="pop"><div class="form"><h4 style="margin:0;font-size:17px">Block time</h4><div style="font-size:14px"><b>Wed, Nov 18</b> · 16:00–18:00 Toronto Time</div><p class="err">You have a class at 18:00 Toronto Time. Classes can't be blocked.</p><p class="fine">선택은 18:00 에서 자동으로 멈춤 → End = 18:00</p></div></div>
+    <b>6시간 안 칸 누름</b><div class="pop"><p class="err">Can't change: less than 6 hours away.</p></div></div>`;
+})();
+// PC Month
+function monthCells(){const f='2026-11-01';const s=addD(f,-dow(f));return Array.from({length:35},(_,i)=>addD(s,i))}
+(function(){
+  const pick='2026-11-29';
+  const cells=monthCells().map(d=>{const es=dayEv(d),out=d.slice(5,7)!=='11';
+    const lines=es.slice(0,4).map(e=>`<div class="ev${['cancel','leave'].includes(e.kind)?' x':''}${e.kind==='block'?' blk':''}"><span class="dot"></span><span class="t">${e.t}</span><span style="overflow:hidden;text-overflow:ellipsis">${e.kind==='block'?(e.who||'Blocked'):e.who.split(' ')[0]}</span>${e.kind!=='regular'&&!(e.kind==='block'&&e.who)?`<span class="k ${e.kind}">${KW[e.kind]}</span>`:''}</div>`).join('');
+    return `<div class="cell${out?' out':''}${d===TODAY?' today':''}" style="${d===pick?'background:#efeaff':''}"><div class="dn">${+d.slice(8)}</div>${lines}</div>`}).join('');
+  const list=dayEv(pick).map(e=>`<div class="li blk"><div class="a"><span>${e.who}</span><span class="k block">Blocked</span></div><div class="b">${e.t}–${fromMin(toMin(e.t)+e.m)} Toronto Time · ${kst(e.d,e.t,e.m).split(' ').pop()} KST</div></div>`).join('');
+  document.getElementById('pcMonth').innerHTML=`${nav('sch')}<div class="main"><div class="head"><h3>Schedule</h3><span class="btn">‹</span><b style="font-size:16px">November 2026</b><span class="btn">›</span><span class="btn">Today</span><span class="sp"></span>${viewSeg('m')}${zoneSeg('l')}</div>
+  <div style="display:flex;gap:16px;align-items:flex-start"><div class="mon" style="flex:1;min-width:0"><div class="dow">${DOW.map(x=>`<div>${x}</div>`).join('')}</div><div class="grid">${cells}</div></div>
+  <div class="pop"><h4>${lab(pick)}</h4>${list}<div style="display:flex;gap:8px;flex-wrap:wrap"><span class="btn main">+ Block time</span><span class="btn">+ Make available</span></div><p class="fine">누르면 위 PC 창과 같은 칸(날짜 고정, Start·End 고르기)</p></div></div></div>`;
+})();
+// 휴대폰
+const phHead=(v,t)=>`<div class="head" style="gap:6px"><h3 style="font-size:18px">Schedule</h3><span class="sp"></span>${viewSeg(v)}</div><div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span class="btn" style="min-height:36px">‹</span><b style="flex:1;text-align:center;font-size:14px">${t}</b><span class="btn" style="min-height:36px">›</span></div>`;
+const wkT='Nov 16 – 22 · Toronto Time';
+(function(){
+  const d='2026-11-20';
+  document.getElementById('ph1').innerHTML=`${phTop}<div class="body">${phHead('w',wkT)}${weekGrid('2026-11-16',15,true,{d,a:16*60,b:16*60+30})}</div>${bar('sch')}
+    <div class="dim"></div><div class="sheet"><div class="grab"></div><b style="font-size:13px;color:#5b3fe0">1 빈 시간 누름 → 2 끝 시간</b>${blockForm(d,16*60,16*60+30,'',[16*60+30,17*60,17*60+30,18*60,18*60+30,19*60,19*60+30,20*60,20*60+30,21*60]).replace(/<label class="lbl">Note[\s\S]*?<\/div><div class="cnt">0\/100<\/div>[\s\S]*?<\/p>/,'')}</div>`;
+  document.getElementById('ph2').innerHTML=`${phTop}<div class="body">${phHead('w',wkT)}${weekGrid('2026-11-16',15,true,{d,a:16*60,b:17*60+30})}</div>${bar('sch')}
+    <div class="dim"></div><div class="sheet"><div class="grab"></div><b style="font-size:13px;color:#5b3fe0">3 메모(선택) → 4 Block</b>${blockForm(d,16*60,17*60+30,"Kid's school event",[16*60+30,17*60,17*60+30,18*60,18*60+30,19*60,19*60+30,20*60,20*60+30,21*60])}</div>`;
+  document.getElementById('ph3').innerHTML=`${phTop}<div class="body">${phHead('w',wkT)}${weekGrid('2026-11-16',15,true,null,[{d,t:'16:00',m:90,who:"Kid's school event",kind:'block',hi:1}])}</div>${bar('sch')}<div class="toast">Blocked ✓</div>`;
+  document.getElementById('ph4').innerHTML=`${phTop}<div class="body">${phHead('w',wkT)}${weekGrid('2026-11-16',15,true,{d:'2026-11-22',a:13*60,b:13*60+30})}</div>${bar('sch')}
+    <div class="dim"></div><div class="sheet"><div class="grab"></div>${openForm('2026-11-22',13*60,15*60,[13*60+30,14*60,14*60+30,15*60,15*60+30,16*60,16*60+30])}</div>`;
+  const e=ev.find(x=>x.who==='Dentist');
+  document.getElementById('ph5').innerHTML=`${phTop}<div class="body">${phHead('w',wkT)}${weekGrid('2026-11-16',15,true,null)}</div>${bar('sch')}<div class="dim"></div><div class="sheet"><div class="grab"></div>${blockedPop(e)}</div>`;
+  const pick='2026-11-29';
+  const cal=`<div class="pm">${['S','M','T','W','T','F','S'].map(x=>`<div class="w">${x}</div>`).join('')}${monthCells().map(d=>{const es=dayEv(d),out=d.slice(5,7)!=='11';const k=es.find(x=>x.kind!=='regular');
+    return `<div class="d${out?' out':''}${d===TODAY?' today':''}${d===pick?' pick':''}"><span class="n">${+d.slice(8)}</span><span class="dots">${es.map(x=>`<i class="${x.kind==='block'?'b':['cancel','leave'].includes(x.kind)?'x':''}"></i>`).join('')}</span>${k?`<span class="k ${k.kind}">${KS[k.kind]}</span>`:''}</div>`}).join('')}</div>`;
+  document.getElementById('ph6').innerHTML=`${phTop}<div class="body">${phHead('m','November 2026')}${cal}<div class="dl"><h5>${lab(pick)}</h5>${dayEv(pick).map(x=>`<div class="li blk"><div class="a"><span>${x.who}</span><span class="k block">Blocked</span></div><div class="b">${x.t}–${fromMin(toMin(x.t)+x.m)} Toronto Time · ${kst(x.d,x.t,x.m).split(' ').pop()} KST</div></div>`).join('')}
+    <div style="display:flex;gap:8px"><span class="btn main" style="flex:1;justify-content:center">+ Block time</span><span class="btn" style="flex:1;justify-content:center">+ Make available</span></div></div></div>${bar('sch')}`;
+})();
+// My hours (Weekly Availability)
+(function(){
+  const S=6*60,E=22*60+30,rows=(E-S)/30,rh=16;
+  const g=`<div class="wk" style="--rh:${rh}px;grid-template-columns:52px repeat(7,minmax(0,1fr))"><div class="h" style="background:#fff"></div>${[1,2,3,4,5,6,0].map(w=>`<div class="h">${DOW[w]}</div>`).join('')}<div>${Array.from({length:rows},(_,i)=>`<div class="tm">${i%2===0?fromMin(S+i*30):''}</div>`).join('')}</div>${[1,2,3,4,5,6,0].map(w=>`<div class="col">${Array.from({length:rows},(_,i)=>{const m=S+i*30;return `<div class="slot ${(OPEN[w]||[]).some(([a,b])=>m>=a&&m<b)?'o':'c'}"></div>`}).join('')}${REG.filter(r=>r[0]===w).map(r=>`<div class="blkx cls" style="top:${(toMin(r[1])-S)/30*rh}px;height:${r[2]/30*rh}px"><b>${r[3].split(' ')[0]}</b></div>`).join('')}</div>`).join('')}</div>`;
+  const top=`<h3 style="margin:0;font-size:20px">Weekly Availability</h3><p style="margin:2px 0 8px;color:#55526a">Set the hours you're available to teach each week.</p>
+    <p style="margin:0 0 8px;font-weight:600">Changes apply from Mon, Nov 23.</p>`;
+  const foot=`<p class="fine" style="margin-top:8px">Need one day off or extra time on one day? Use <u style="color:#5b3fe0">Schedule</u>.</p>`;
+  document.getElementById('pcHours').innerHTML=`${nav('hrs')}<div class="main"><div class="head"><div style="flex:1">${top}</div>${zoneSeg('l')}</div>${g}${foot}</div>`;
+  document.getElementById('phHours').innerHTML=`${phTop}<div class="body">${top}<div style="margin-bottom:8px">${zoneSeg('l')}</div><div style="height:150px;overflow:hidden;border-radius:12px">${g.replace('--rh:16px','--rh:11px')}</div><p class="fine">(표 아래 생략 — 지금 My hours 표 그대로)</p>${foot}</div>${bar('hrs')}`;
 })();
 </script>
