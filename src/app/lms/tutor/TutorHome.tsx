@@ -711,7 +711,7 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
         </div>
       )}
       {(remarksOpen || (result === 'held' && late.tutor)) ? <div>
-        <label className={label} htmlFor={`remarks-${l.id}`}>{result === 'held' && late.tutor ? 'Remarks (why you were late)' : 'Remarks'}</label>
+        <label className={label} htmlFor={`remarks-${l.id}`}>{result === 'held' && late.tutor ? 'Briefly explain why you were late (required)' : 'Remarks'}</label>
         <textarea id={`remarks-${l.id}`} rows={result === 'held' && late.tutor ? 2 : 1} value={remarks} onChange={(e) => setRemarks(e.target.value)} className={input} />
       </div> : (
         <button type="button" onClick={() => setRemarksOpen(true)} className={`${btnSub} justify-self-start text-[14px]`}>+ Remarks</button>
