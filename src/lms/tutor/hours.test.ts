@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyFromText, describeChanges, describeChangesIn, diff, lessonAt, parseHours, runs, weekText, weeklyClassAt } from './hours';
+import { applyFromText, classFill, describeChanges, describeChangesIn, diff, lessonAt, parseHours, runs, weekText, weeklyClassAt } from './hours';
 
 describe('My hours', () => {
   it('붙은 30분 칸을 한 묶음으로', () => {
@@ -56,5 +56,10 @@ describe('My hours', () => {
     expect(d[0].sub).toBe('Tue 10 Nov 21:30–22:30 Ho Chi Minh Time');
     // 강사가 한국이면 보조 줄 없음
     expect(describeChangesIn({ ...none, weeklyOpen: ['1:09:00'] }, '2026-11-09', 'Asia/Seoul', 'Asia/Seoul')[0].sub).toBeNull();
+  });
+  it('40분 수업: 두 번째 칸은 위 1/3만 수업', () => {
+    expect(classFill(60, 40, 60)).toEqual({ from: 0, to: 1 });
+    expect(classFill(60, 40, 90)).toEqual({ from: 0, to: 10 / 30 });
+    expect(classFill(615, 20, 600)).toEqual({ from: 0.5, to: 1 });
   });
 });

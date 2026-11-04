@@ -82,6 +82,13 @@ export function weeklyClassAt(classes: WeeklyClass[], d: number, time: string): 
   }
   return null;
 }
+/**
+ * 30분 칸 안에서 수업이 실제로 차지하는 부분 (0~1). 40분 수업이면 두 번째 칸은 위 1/3만 수업
+ * (2026-11-04 대표: 칸을 꽉 칠하면 1시간 수업처럼 보임). 나머지는 수업 직후라 예약 불가 → 연하게
+ */
+export function classFill(start: number, min: number, cell: number): { from: number; to: number } {
+  return { from: Math.max(0, start - cell) / 30, to: Math.min(30, start + min - cell) / 30 };
+}
 /** 그 칸에 걸친 수업·보강 (그 주만 탭) */
 export function lessonAt(lessons: HoursLesson[], date: string, time: string): { l: HoursLesson; first: boolean } | null {
   const m = toMin(time);
