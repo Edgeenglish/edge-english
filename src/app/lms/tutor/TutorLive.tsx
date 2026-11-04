@@ -60,8 +60,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
           load: (studentId) => loadStudentProfile(sb, studentId),
           save: (studentId, fields) => updateStudentProfile(sb, studentId, fields),
         },
-        // 운영자 보기: tutor_my_students 는 로그인한 강사 본인 기준이라 운영자에게는 빈 목록 → 메뉴에 안내만
-        students: adminTutor ? undefined : () => loadMyStudents(sb),
+        students: () => loadMyStudents(sb, adminTutor),
       },
     [sb, adminTutor],
   );

@@ -23,6 +23,11 @@
 - **My hours 8번**: 고른 시간대(현지/KST)를 달력·오른쪽 Changes·저장 확인 창에 같게 적용. Changes 는 고른 시간대 먼저(`Every Monday 17:30–18:00 Korea Time (KST) → open`), 아래 보조로 다른 시간대. 요일·날짜가 달라지거나 자정을 걸쳐도 정확히, 서머타임은 적용일 주의 실제 시각으로 계산(`describeChangesIn`, `localToInstant`). 저장 키·로직은 안 바꿈. 선택된 시간대 버튼은 보라 배경+✓. 휴대폰에서 저장 팝업이 아래 메뉴에 가려지던 것도 고침
 - 남은 것: 실제 강사 계정 로그인 클릭 검증(lms-test 배포 후), 운영자 보기 Students 목록
 
+## ✅ 2026-11-04 최종 검증 라운드 (정책 원본 H26(48) 기록함)
+- **migration 4402** `20261104140000_lms_tutor_students_admin_view.sql`(시험용 DB 적용): `tutor_students_list(p_tutor)` — 강사 본인(비움) 또는 운영자(강사 고름), 권한은 `lms_screen_tutor`+`lms_tutor_student_access`. 운영자 보기 Students 가 안내문 대신 해당 강사 목록을 보여 줌. DB 검증(트랜잭션 되돌림): Blair 본인 9명(기존 함수와 같음) · Emma 4명(정규+대체) · 강사가 다른 강사 고르기 차단 · 운영자(aal2)가 Blair 고르면 9명
+- Tutor no-show DB 검증(되돌림): 강사 기록→보상수업 available·payroll 0·규칙 consumes=false/tutor_paid=false, 강사가 본인 기록 되돌림→보상 voided, 운영진 기록→available·submitted_by 운영진, 강사가 운영진 기록 수정 시 'Edge English recorded this class…' 차단, 운영진이 되돌림→voided. (앞 단계 실제 실행으로 시험 수업 한 건에 voided 보상 행이 남아 있음 — 지울 수 없는 표, 무해)
+- **못 한 것: 실제 강사 계정 로그인 클릭 검증** — 로그인이 이메일 코드 방식이라 Claude 가 세션을 못 만듦. 서비스 키 조회로 세션을 만드는 방법은 보안 분류기가 막아 시도 안 함(우회 안 함). 대표 결정 필요: ① 대표가 시험 주소에서 직접 클릭 ② 시험용 강사 계정에 임시 비밀번호/로그인 방법을 Claude 가 쓰도록 허용(시험용 DB 한정)
+
 ## 📋 다음 세션 할 일 (2026-11-04 대표 요청 원문 요약 — 빠짐없이): 강사 LMS 화면 전체 개선 + Class Record 출결·지각 구조 변경
 - **시작**: 브랜치 `claude/busy-rubin-w3dii1`(= lms-test) 위에서. 대표가 첨부한 학생 화면·강사 화면 캡처는 이 세션에 안 보였음 → 새 세션 첫 메시지에 다시 첨부 요청. 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. 시험용 DB·lms-test 에서만, 운영 DB·lms-prod 금지. 완료 보고는 바뀐 화면·실제 검증 결과·남은 문제만 짧게
 1. **왼쪽 사이드바** (학생 LMS처럼 고정 메뉴, PC·모바일): **Home**(오늘 수업·해야 할 일) · **Schedule**(수업 일정) · **Class Record**(기록 조회·작성) · **Students**(담당 학생) · **My hours**. 메뉴 이름은 이 영문 그대로. 기존 기능을 메뉴로 나누기만 하지 말고 화면마다 목적이 분명하고 원하는 기능을 바로 찾게

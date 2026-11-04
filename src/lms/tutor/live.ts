@@ -85,8 +85,8 @@ export async function updateStudentProfile(sb: SupabaseClient, studentId: string
   check(r);
 }
 
-/** Students 메뉴 (4300 tutor_my_students): 정규 담당 학생 + 확정된 대체수업 학생(수업 끝 24시간까지). 누가 보이는지는 DB 가 정함 */
-export async function loadMyStudents(sb: SupabaseClient): Promise<TutorStudentRow[]> {
-  const rows = check(await sb.rpc('tutor_my_students')) as { student_id: string; display_name: string; level: string | null; class_type: string | null; timezone: string | null; class_note_url: string | null }[];
+/** Students 메뉴 (4402 tutor_students_list): 정규 담당 학생 + 확정된 대체수업 학생(수업 끝 24시간까지). 누가 보이는지는 DB 가 정함. tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
+export async function loadMyStudents(sb: SupabaseClient, tutorId: string | null): Promise<TutorStudentRow[]> {
+  const rows = check(await sb.rpc('tutor_students_list', { p_tutor: tutorId })) as { student_id: string; display_name: string; level: string | null; class_type: string | null; timezone: string | null; class_note_url: string | null }[];
   return rows.map((r) => ({ id: r.student_id, name: r.display_name, level: r.level, classType: r.class_type, timezone: r.timezone, noteUrl: r.class_note_url }));
 }
