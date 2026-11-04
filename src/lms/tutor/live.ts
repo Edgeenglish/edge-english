@@ -2,7 +2,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseHours, type HoursData } from './hours';
-import { parseScreen, type TutorResult, type TutorScreen } from './screen';
+import { parseScreen, type Late, type TutorResult, type TutorScreen } from './screen';
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
 
 const NOT_APPLIED = 'The tutor page is not ready on this database yet (migration 2000).';
@@ -19,8 +19,12 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null, kstFrom: string, kstTo: string): Promise<TutorScreen> {
   return parseScreen(check(await sb.rpc('tutor_screen', { p_tutor: tutorId, p_from: kstFrom, p_to: kstTo })));
 }
-export async function recordClass(sb: SupabaseClient, lessonId: string, result: TutorResult, topics: string, remarks: string, studentLate: boolean): Promise<void> {
-  check(await sb.rpc('tutor_record_class', { p_lesson: lessonId, p_result: result, p_topics: topics, p_remarks: remarks, p_student_late: studentLate }));
+/** 결과 + 지각 (4400). 인자 8개를 모두 보내야 DB 함수가 하나로 정해짐 */
+export async function recordClass(sb: SupabaseClient, lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late): Promise<void> {
+  check(await sb.rpc('tutor_record_class', {
+    p_lesson: lessonId, p_result: result, p_topics: topics, p_remarks: remarks,
+    p_student_late: late.student, p_student_late_min: late.student ? late.studentMin : null, p_tutor_late: late.tutor, p_tutor_late_min: late.tutor ? late.tutorMin : null,
+  }));
 }
 export async function answerMakeup(sb: SupabaseClient, requestId: string, yes: string[], note: string): Promise<void> {
   check(await sb.rpc('tutor_makeup_answer', { p_request: requestId, p_yes: yes, p_note: note }));

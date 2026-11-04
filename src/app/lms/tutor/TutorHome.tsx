@@ -9,13 +9,13 @@ import { STATUS_RULES } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
 import StudentProfile, { type ProfileActions } from './StudentProfile';
 import {
-  answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus,
+  answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   statusText, timeRange, weekOf, whenFull, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
 } from '@/lms/tutor/screen';
 
 export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
-  record: (lessonId: string, result: TutorResult, topics: string, remarks: string, studentLate: boolean) => Promise<void>;
+  record: (lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late) => Promise<void>;
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
   /** 대체 수업 요청 답: items = 답하는 수업 전체, yes = 가능한 수업 */
   answerCover: (items: string[], yes: string[]) => Promise<void>;
@@ -411,7 +411,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   const recordable = canRecord(l, now) && (admin || l.classStatus !== 'Tutor no-show');
   const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
-  const stText = phase === 'recorded' ? `✓ ${status}${l.studentLate ? ' · Student late' : ''}` : status;
+  const stText = phase === 'recorded' ? `✓ ${status}${lateText(l.late)}` : status;
   // 페이 대상 Y/N (상태 규칙 tutorPaid, 대표 10/29 가안). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
   const paid = l.classStatus ? (STATUS_RULES[l.classStatus].tutorPaid ? (l.locked ? 'Y ✓' : 'Y') : 'N') : '';
   const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
@@ -497,18 +497,20 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra, adm
   const [result, setResult] = useState<TutorResult | null>(resultOf(l.classStatus));
   const [topics, setTopics] = useState(l.topics ?? '');
   const [remarks, setRemarks] = useState(l.remarks ?? '');
-  const [studentLate, setStudentLate] = useState(l.studentLate);
-  // Remarks 칸은 이슈 있을 때만 꺼내 씀 (대표 10/29). Late는 이유가 필요해서 바로 보임
+  // 지각은 결과와 따로 (4400): 평소엔 Held 만 누르면 끝, 지각일 때만 분 칸이 열림
+  const [late, setLate] = useState<Late>(l.late);
+  // Remarks 칸은 이슈 있을 때만 꺼내 씀 (대표 10/29). 강사 지각은 이유가 필요해서 바로 보임
   const [remarksOpen, setRemarksOpen] = useState(!!l.remarks);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const ready = recordReady(result, topics, remarks) && canRecord(l, now);
-  useDirty(`record-${l.id}`, editing && (result !== resultOf(l.classStatus) || topics !== (l.topics ?? '') || remarks !== (l.remarks ?? '') || studentLate !== l.studentLate));
+  const ready = recordReady(result, topics, remarks, late) && canRecord(l, now);
+  const sameLate = (a: Late, b: Late) => a.student === b.student && a.studentMin === b.studentMin && a.tutor === b.tutor && a.tutorMin === b.tutorMin;
+  useDirty(`record-${l.id}`, editing && (result !== resultOf(l.classStatus) || topics !== (l.topics ?? '') || remarks !== (l.remarks ?? '') || !sameLate(late, l.late)));
 
   if (!editing) {
     return (
       <div className="mt-2 flex items-center justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2">
-        <span className="text-[14px] font-semibold text-[#1f7a4d]">✓ {statusText(l, now)}{l.studentLate ? ' · Student late' : ''}{l.topics ? ` · ${l.topics}` : ''}</span>
+        <span className="text-[14px] font-semibold text-[#1f7a4d]">✓ {statusText(l, now)}{lateText(l.late)}{l.topics ? ` · ${l.topics}` : ''}</span>
         {canRecord(l, now) && <button type="button" onClick={() => setEditing(true)} className={`${btnSub} min-h-[36px] text-[13.5px]`}>Edit</button>}
       </div>
     );
@@ -521,10 +523,10 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra, adm
     try {
       const noShow = result === 'student_no_show' || result === 'tutor_no_show';
       const t = noShow ? '' : topics.trim();
-      const late = result === 'held' && studentLate;
-      await actions.record(l.id, result, t, remarks, late);
+      const lt = lateToSave(result, late);
+      await actions.record(l.id, result, t, remarks, lt);
       setEditing(false);
-      await onSaved({ ...l, state: 'done', classStatus: savedStatus(l, result), topics: t || null, remarks: remarks.trim() || null, studentLate: late });
+      await onSaved({ ...l, state: 'done', classStatus: savedStatus(l, result, lt.tutor), topics: t || null, remarks: remarks.trim() || null, studentLate: lt.student, late: lt });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
     } finally {
@@ -532,22 +534,31 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra, adm
     }
   }
 
+  const results = admin ? (['held', 'student_no_show', 'tutor_no_show'] as const) : (['held', 'student_no_show'] as const);
   return (
     <div className="mt-3 grid gap-3">
-      <div role="radiogroup" aria-label="How did the class go?" className={`grid gap-1.5 ${admin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
-        {(admin ? ['held', 'late', 'student_no_show', 'tutor_no_show'] as const : ['held', 'late', 'student_no_show'] as const).map((r) => (
-          <button key={r} type="button" role="radio" aria-checked={result === r} onClick={() => setResult(r)}
-            className={`min-h-[48px] rounded-[10px] border px-2 text-[14px] font-semibold ${
-              result === r ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#d9d5e6] bg-white text-[#1d1b2b]'}`}>
-            {RESULT_TEXT[r]}
-          </button>
-        ))}
+      <div>
+        <p className={label}>How did the class go?</p>
+        <div role="radiogroup" aria-label="How did the class go?" className={`grid gap-1.5 ${admin ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          {results.map((r) => (
+            <button key={r} type="button" role="radio" aria-checked={result === r} onClick={() => setResult(r)}
+              className={`min-h-[48px] rounded-[10px] border px-2 text-[14px] font-semibold ${
+                result === r ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#d9d5e6] bg-white text-[#1d1b2b]'}`}>
+              {RESULT_TEXT[r]}
+            </button>
+          ))}
+        </div>
       </div>
       {result === 'held' && (
-        <label className="flex min-h-[44px] items-center gap-2 text-[15px] font-semibold text-[#1d1b2b]">
-          <input type="checkbox" checked={studentLate} onChange={(e) => setStudentLate(e.target.checked)} className="h-[20px] w-[20px] accent-[#5b3fe0]" />
-          Student was late
-        </label>
+        <div>
+          <p className={label}>Anyone late? <span className="font-normal">(skip if not)</span></p>
+          <div className="grid gap-2">
+            <LateRow id={`${l.id}-s`} who="Student late" on={late.student} min={late.studentMin}
+              onToggle={(on) => setLate({ ...late, student: on, studentMin: on ? late.studentMin : null })} onMin={(m) => setLate({ ...late, studentMin: m })} />
+            <LateRow id={`${l.id}-t`} who="Tutor late" hint="(I was late)" on={late.tutor} min={late.tutorMin}
+              onToggle={(on) => setLate({ ...late, tutor: on, tutorMin: on ? late.tutorMin : null })} onMin={(m) => setLate({ ...late, tutorMin: m })} />
+          </div>
+        </div>
       )}
       {result !== 'student_no_show' && result !== 'tutor_no_show' && (
         <div>
@@ -555,9 +566,9 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra, adm
           <textarea id={`topics-${l.id}`} rows={2} value={topics} onChange={(e) => setTopics(e.target.value)} className={input} />
         </div>
       )}
-      {(remarksOpen || result === 'late') ? <div>
-        <label className={label} htmlFor={`remarks-${l.id}`}>{result === 'late' ? 'Remarks (reason for being late)' : 'Remarks'}</label>
-        <textarea id={`remarks-${l.id}`} rows={result === 'late' ? 2 : 1} value={remarks} onChange={(e) => setRemarks(e.target.value)} className={input} />
+      {(remarksOpen || (result === 'held' && late.tutor)) ? <div>
+        <label className={label} htmlFor={`remarks-${l.id}`}>{result === 'held' && late.tutor ? 'Remarks (why you were late)' : 'Remarks'}</label>
+        <textarea id={`remarks-${l.id}`} rows={result === 'held' && late.tutor ? 2 : 1} value={remarks} onChange={(e) => setRemarks(e.target.value)} className={input} />
       </div> : (
         <button type="button" onClick={() => setRemarksOpen(true)} className={`${btnSub} justify-self-start text-[14px]`}>+ Remarks</button>
       )}
@@ -567,6 +578,40 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra, adm
         {l.state === 'done' && !extra && <button type="button" disabled={busy} onClick={() => setEditing(false)} className={btnSub}>Cancel</button>}
         {extra}
       </div>
+    </div>
+  );
+}
+
+/** 지각 한 줄 (4400): 켜면 5 / 10 / 15 min · Custom(분 직접 입력) */
+function LateRow({ id, who, hint, on, min, onToggle, onMin }: {
+  id: string; who: string; hint?: string; on: boolean; min: number | null; onToggle: (on: boolean) => void; onMin: (m: number | null) => void;
+}) {
+  const preset = (LATE_PRESETS as readonly number[]).includes(min ?? -1);
+  const [custom, setCustom] = useState(on && min != null && !preset);
+  const chip = (active: boolean) => `min-h-[40px] rounded-[10px] border px-3 text-[14px] font-semibold ${
+    active ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#d9d5e6] bg-white text-[#1d1b2b]'}`;
+  return (
+    <div className="rounded-[10px] border border-[#e6e3ef] bg-white px-3 py-2">
+      <label className="flex min-h-[40px] items-center gap-2 text-[15px] font-semibold text-[#1d1b2b]">
+        <input type="checkbox" checked={on} onChange={(e) => { onToggle(e.target.checked); if (!e.target.checked) setCustom(false); }} className="h-[20px] w-[20px] accent-[#5b3fe0]" />
+        {who}{hint && <span className="text-[13px] font-normal text-[#6b6880]">{hint}</span>}
+      </label>
+      {on && (
+        <div className="mt-1 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label={`${who} — how many minutes?`}>
+          {LATE_PRESETS.map((m) => (
+            <button key={m} type="button" role="radio" aria-checked={!custom && min === m} onClick={() => { setCustom(false); onMin(m); }} className={chip(!custom && min === m)}>{m} min</button>
+          ))}
+          <button type="button" role="radio" aria-checked={custom} onClick={() => { setCustom(true); if (preset) onMin(null); }} className={chip(custom)}>Custom</button>
+          {custom && (
+            <label className="flex items-center gap-1 text-[14px] text-[#1d1b2b]">
+              <input id={`late-${id}`} type="number" inputMode="numeric" min={1} max={300} aria-label={`${who} minutes`} value={min ?? ''}
+                onChange={(e) => onMin(e.target.value ? Math.max(0, Math.floor(Number(e.target.value))) : null)}
+                className="w-[72px] rounded-[10px] border border-[#d9d5e6] px-2 py-1.5 text-[16px]" />
+              min
+            </label>
+          )}
+        </div>
+      )}
     </div>
   );
 }

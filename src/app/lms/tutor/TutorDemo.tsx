@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { fakeHours, fakeStudentProfile, fakeTutorScreen } from '@/lms/tutor/fake';
 import type { HoursData } from '@/lms/tutor/hours';
-import { savedStatus, type TutorScreen } from '@/lms/tutor/screen';
+import { lateToSave, savedStatus, type TutorScreen } from '@/lms/tutor/screen';
 import TutorHome, { type TutorActions } from './TutorHome';
 
 export default function TutorDemo({ nowIso }: { nowIso: string }) {
@@ -13,7 +13,8 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
     load: async () => ({ ...data.s }),
     record: async (id, r, topics, remarks, late) => {
       const s = data.s;
-      s.lessons = s.lessons.map((l) => (l.id === id ? { ...l, state: 'done', classStatus: savedStatus(l, r), topics: topics || null, remarks: remarks || null, studentLate: r === 'held' && late } : l));
+      const lt = lateToSave(r, late);
+      s.lessons = s.lessons.map((l) => (l.id === id ? { ...l, state: 'done', classStatus: savedStatus(l, r, lt.tutor), topics: topics || null, remarks: remarks || null, studentLate: lt.student, late: lt } : l));
       s.toRecord = s.toRecord.filter((x) => x !== id);
     },
     answer: async (id, yes, note) => {

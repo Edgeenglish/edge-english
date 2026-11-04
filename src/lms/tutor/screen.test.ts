@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { CLASS_STATUSES } from '../rules/status';
-import { answerReady, canRecord, daysOf, kindTag, kstText, parseScreen, phaseOf, recordReady, resultOf, savedStatus, statusText, timeRange, TUTOR_STATUS_TEXT, weekOf, type TutorLesson } from './screen';
+import { lateText, NO_LATE, answerReady, canRecord, daysOf, kindTag, kstText, parseScreen, phaseOf, recordReady, resultOf, savedStatus, statusText, timeRange, TUTOR_STATUS_TEXT, weekOf, type TutorLesson } from './screen';
 
 const base: TutorLesson = {
   id: 'a', startsAt: new Date('2026-11-02T08:00:00Z'), endsAt: new Date('2026-11-02T08:40:00Z'), kind: 'regular', state: 'scheduled', classStatus: null,
-  student: 'S', level: null, noteUrl: null, covering: false, makeupOf: null, count: null, topics: null, remarks: null, studentLate: false, recordedAt: null, locked: false,
+  student: 'S', level: null, noteUrl: null, covering: false, makeupOf: null, count: null, topics: null, remarks: null, studentLate: false, late: NO_LATE, recordedAt: null, locked: false,
 };
 
 describe('강사 화면 (migration 2000)', () => {
@@ -47,7 +47,10 @@ describe('강사 화면 (migration 2000)', () => {
     expect(savedStatus(base, 'held')).toBe('Normal');
     expect(savedStatus({ ...base, kind: 'migrated_makeup' }, 'held')).toBe('Make-up completed');
     expect(savedStatus({ ...base, covering: true }, 'held')).toBe('Covered by another tutor');
-    expect(savedStatus({ ...base, kind: 'makeup' }, 'late')).toBe('Tutor Late - Student Present');
+    expect(savedStatus({ ...base, kind: 'makeup' }, 'held', true)).toBe('Tutor Late - Student Present');
+    expect(resultOf('Tutor Late - Student Present')).toBe('held');
+    expect(lateText({ student: true, studentMin: 10, tutor: true, tutorMin: null })).toBe(' · Student late 10 min · Tutor late');
+    expect(lateText(NO_LATE)).toBe('');
     expect(resultOf('Covered by another tutor')).toBe('held');
     expect(resultOf('Student no-show')).toBe('student_no_show');
     expect(resultOf('Student canceled in advance')).toBeNull();
@@ -56,8 +59,11 @@ describe('강사 화면 (migration 2000)', () => {
     expect(recordReady(null, 'x', '')).toBe(false);
     expect(recordReady('held', ' ', '')).toBe(false);
     expect(recordReady('held', 'Travel', '')).toBe(true);
-    expect(recordReady('late', 'Travel', '')).toBe(false);
-    expect(recordReady('late', 'Travel', 'Internet down')).toBe(true);
+    expect(recordReady('held', 'Travel', '', { ...NO_LATE, tutor: true, tutorMin: 5 })).toBe(false);
+    expect(recordReady('held', 'Travel', 'Internet down', { ...NO_LATE, tutor: true, tutorMin: 5 })).toBe(true);
+    expect(recordReady('held', 'Travel', 'Internet down', { ...NO_LATE, tutor: true, tutorMin: null })).toBe(false);
+    expect(recordReady('held', 'Travel', '', { ...NO_LATE, student: true, studentMin: null })).toBe(false);
+    expect(recordReady('held', 'Travel', '', { ...NO_LATE, student: true, studentMin: 15 })).toBe(true);
     expect(recordReady('student_no_show', '', '')).toBe(true);
   });
   it('보강 답: 가능 시간 하나 이상, 모두 안 되면 메모', () => {

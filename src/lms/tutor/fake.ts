@@ -2,14 +2,14 @@
 import { addDays, formatInZone, instantToKstDate } from '../rules/dates';
 import type { TutorStudentProfile } from './profile';
 import { hhmm, lessonAt, plusDays, toMin, type CellCode, type HoursData } from './hours';
-import type { TutorScreen } from './screen';
+import { NO_LATE, type TutorScreen } from './screen';
 
 export function fakeTutorScreen(now: Date): TutorScreen {
   const h = (hours: number) => new Date(Math.floor(+now / 3600000) * 3600000 + hours * 3600000);
   const lesson = (id: string, start: number, min: number, extra: Partial<TutorScreen['lessons'][number]> = {}) => ({
     id, startsAt: h(start), endsAt: new Date(+h(start) + min * 60000), kind: 'regular' as const, state: 'scheduled' as const, classStatus: null,
     student: 'Hajun Kim', studentId: 'demo-hajun', level: null, noteUrl: 'https://docs.google.com/', covering: false, makeupOf: null, count: null,
-    topics: null, remarks: null, studentLate: false, recordedAt: null, locked: false, ...extra,
+    topics: null, remarks: null, studentLate: false, late: NO_LATE, recordedAt: null, locked: false, ...extra,
   });
   return {
     tutor: { id: 'demo', name: 'Emma', timezone: 'Australia/Sydney', meetUrl: 'https://meet.google.com/' },

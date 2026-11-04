@@ -1,12 +1,17 @@
 // 강사 화면(영어) 판정·표시 — 데이터는 DB 함수 tutor_screen 하나 (migration 2000)
-// 수업 결과는 lessons.class_status 하나 (POL-ST-02). 강사는 '진행 / 강사 지각 / 학생 노쇼'만 고르고 정확한 상태 이름은 DB가 정함
+// 수업 결과는 lessons.class_status 하나 (POL-ST-02). 강사는 결과(Held / Student no-show)와 지각(학생·강사, 분)을 따로 고르고 정확한 상태 이름은 DB가 정함 (4400)
 
 import { addDays, formatInZone } from '../rules/dates';
 import { cityTime } from './hours-view';
 import type { ClassStatus } from '../rules/status';
 
-/** tutor_no_show = 운영자만 (4000) */
-export type TutorResult = 'held' | 'late' | 'student_no_show' | 'tutor_no_show';
+/** 수업 결과 하나. tutor_no_show = 운영자만 (4000). 지각은 결과와 따로 (4400) */
+export type TutorResult = 'held' | 'student_no_show' | 'tutor_no_show';
+/** 지각 (4400): 학생·강사 각각, 분은 모를 수 있음(예전 'I was late' 기록) */
+export type Late = { student: boolean; studentMin: number | null; tutor: boolean; tutorMin: number | null };
+export const NO_LATE: Late = { student: false, studentMin: null, tutor: false, tutorMin: null };
+/** 지각 시간 고르기 칸 — 대표가 정한 값 (2026-11-04). Custom 은 분 직접 입력 */
+export const LATE_PRESETS = [5, 10, 15] as const;
 export type LessonKind = 'regular' | 'makeup' | 'compensation' | 'carryover' | 'migrated_makeup' | 'migrated_extra';
 
 export type TutorLesson = {
@@ -26,8 +31,10 @@ export type TutorLesson = {
   count: { n: number; total: number } | null;
   topics: string | null;
   remarks: string | null;
-  /** 학생 지각 표시 (정상 수업, migration 3000) */
+  /** 학생 지각 표시 (정상 수업, migration 3000) — late.student 와 같음 */
   studentLate: boolean;
+  /** 출결·지각 (4400) */
+  late: Late;
   recordedAt: Date | null;
   locked: boolean;
   /** 강사 LMS 계정을 만들기 전 수업: LMS 기록 대상이 아님 (DB to_record 와 같은 기준, R7) */
@@ -75,7 +82,8 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
       id: l.id, startsAt: new Date(l.starts_at), endsAt: new Date(l.ends_at), kind: l.kind, state: l.state, classStatus: l.class_status ?? null,
       student: l.student, studentId: l.student_id ?? undefined, level: l.level ?? null, noteUrl: l.note_url ?? null, covering: !!l.covering, makeupOf: at(l.makeup_of),
       count: l.count ? { n: Number(l.count.n), total: Number(l.count.total) } : null,
-      topics: l.topics ?? null, remarks: l.remarks ?? null, studentLate: !!l.student_late, recordedAt: at(l.recorded_at), locked: !!l.locked,
+      topics: l.topics ?? null, remarks: l.remarks ?? null, studentLate: !!l.student_late,
+      late: { student: !!l.student_late, studentMin: l.student_late_min ?? null, tutor: !!l.tutor_late, tutorMin: l.tutor_late_min ?? null }, recordedAt: at(l.recorded_at), locked: !!l.locked,
       beforeLms: l.state === 'scheduled' && new Date(l.starts_at) <= loadedAt && !toRecord.has(l.id),
       leaveOpen: !!l.leave_open,
       compensation: l.compensation ?? null,
@@ -161,7 +169,7 @@ export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   Normal: 'Held',
   'Make-up completed': 'Held · make-up',
   'Covered by another tutor': 'Held · substitute',
-  'Tutor Late - Student Present': 'Held · tutor late',
+  'Tutor Late - Student Present': 'Held',   // 지각은 lateText 로 따로 붙임 (4400)
   'Student no-show': 'Student no-show',
   'Student canceled in advance': 'Canceled by student',
   'Student canceled in advance (public holiday)': 'Canceled · public holiday',
@@ -192,30 +200,41 @@ export function statusText(l: TutorLesson, now: Date): string {
   return l.classStatus ? TUTOR_STATUS_TEXT[l.classStatus] : '';
 }
 
-/** 저장된 결과 → 강사가 고른 버튼 (고칠 때 처음 선택) */
+/** 저장된 결과 → 강사가 고른 버튼 (고칠 때 처음 선택). 예전 'Tutor Late - Student Present' 는 Held + 강사 지각 (4400) */
 export function resultOf(s: ClassStatus | null): TutorResult | null {
-  if (s === 'Tutor Late - Student Present') return 'late';
   if (s === 'Student no-show') return 'student_no_show';
   if (s === 'Tutor no-show') return 'tutor_no_show';
-  if (s === 'Normal' || s === 'Make-up completed' || s === 'Covered by another tutor') return 'held';
+  if (s === 'Normal' || s === 'Make-up completed' || s === 'Covered by another tutor' || s === 'Tutor Late - Student Present') return 'held';
   return null;
 }
-/** 저장 뒤 결과 이름 — DB tutor_record_class 와 같은 규칙 (수업 종류·대체 진행으로 정함) */
-export function savedStatus(l: Pick<TutorLesson, 'kind' | 'covering'>, r: TutorResult): ClassStatus {
-  if (r === 'late') return 'Tutor Late - Student Present';
+/** 저장 뒤 결과 이름 — DB tutor_record_class 와 같은 규칙 (강사 지각 → 'Tutor Late - Student Present', 그 외 수업 종류·대체 진행으로 정함) */
+export function savedStatus(l: Pick<TutorLesson, 'kind' | 'covering'>, r: TutorResult, tutorLate = false): ClassStatus {
   if (r === 'student_no_show') return 'Student no-show';
   if (r === 'tutor_no_show') return 'Tutor no-show';
+  if (tutorLate) return 'Tutor Late - Student Present';
   if (l.kind === 'makeup' || l.kind === 'migrated_makeup' || l.kind === 'compensation') return 'Make-up completed';
   return l.covering ? 'Covered by another tutor' : 'Normal';
 }
-export const RESULT_TEXT: Record<TutorResult, string> = { held: 'Held', late: 'I was late', student_no_show: 'Student no-show', tutor_no_show: 'Tutor no-show' };
+export const RESULT_TEXT: Record<TutorResult, string> = { held: 'Held', student_no_show: 'Student no-show', tutor_no_show: 'Tutor no-show' };
 
-/** 화면에서 저장 버튼을 누를 수 있는지 (DB가 다시 확인) — 다룬 내용 필수, 지각은 사유(Remarks) 필수 (POL-TU-01) */
-export function recordReady(r: TutorResult | null, topics: string, remarks: string): boolean {
+/** 저장할 지각 — Held 가 아니면 지각 없음 */
+export function lateToSave(r: TutorResult, late: Late): Late {
+  if (r !== 'held') return NO_LATE;
+  return { student: late.student, studentMin: late.student ? late.studentMin : null, tutor: late.tutor, tutorMin: late.tutor ? late.tutorMin : null };
+}
+/** '· Student late 10 min · Tutor late' 같은 꼬리 (없으면 '') */
+export function lateText(late: Late): string {
+  const part = (who: string, min: number | null) => ` · ${who} late${min ? ` ${min} min` : ''}`;
+  return (late.student ? part('Student', late.studentMin) : '') + (late.tutor ? part('Tutor', late.tutorMin) : '');
+}
+/** 화면에서 저장 버튼을 누를 수 있는지 (DB가 다시 확인) — 다룬 내용 필수, 강사 지각은 분·사유(Remarks) 필수, 학생 지각은 분 필수 (POL-TU-01) */
+export function recordReady(r: TutorResult | null, topics: string, remarks: string, late: Late = NO_LATE): boolean {
   if (!r) return false;
   if (r === 'student_no_show' || r === 'tutor_no_show') return true;
   if (!topics.trim()) return false;
-  return r !== 'late' || !!remarks.trim();
+  if (late.student && !(late.studentMin && late.studentMin > 0)) return false;
+  if (late.tutor && !(late.tutorMin && late.tutorMin > 0)) return false;
+  return !late.tutor || !!remarks.trim();
 }
 export function canRecord(l: TutorLesson, now: Date): boolean {
   return l.state !== 'canceled' && !l.leaveOpen && l.startsAt <= now && !l.locked;
