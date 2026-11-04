@@ -10,6 +10,17 @@
 - **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(47)**, 다음은 (48)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
 - 10/30~11/3 결정은 H26(38)~(42)에 보충함(11/3), 시간 표기 원칙 (43), 학생 관리 ①~⑦ 전문 (44), 11/3 진행 (45)
 
+## 📋 다음 세션 할 일 (2026-11-04 대표 요청 원문 요약 — 빠짐없이): 강사 LMS 화면 전체 개선 + Class Record 출결·지각 구조 변경
+- **시작**: 브랜치 `claude/busy-rubin-w3dii1`(= lms-test) 위에서. 대표가 첨부한 학생 화면·강사 화면 캡처는 이 세션에 안 보였음 → 새 세션 첫 메시지에 다시 첨부 요청. 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. 시험용 DB·lms-test 에서만, 운영 DB·lms-prod 금지. 완료 보고는 바뀐 화면·실제 검증 결과·남은 문제만 짧게
+1. **왼쪽 사이드바** (학생 LMS처럼 고정 메뉴, PC·모바일): **Home**(오늘 수업·해야 할 일) · **Schedule**(수업 일정) · **Class Record**(기록 조회·작성) · **Students**(담당 학생) · **My hours**. 메뉴 이름은 이 영문 그대로. 기존 기능을 메뉴로 나누기만 하지 말고 화면마다 목적이 분명하고 원하는 기능을 바로 찾게
+2. **Students 메뉴**: 지금은 Class Record 줄을 펼쳐야 [Student profile]이 보여 찾기 어려움 → 담당 학생 목록 + 이름 클릭 → Student Profile. 공식 영문 이름 기본 + Preferred Name 같이. 정보·선호도·Class Notes 링크·최근 Covered Topics 3건(기존 정책). 정규 담당 = 본인 학생만 / 대체강사 = 확정된 대체수업 학생만, 확정~수업 종료 24시간, 읽기 전용, 개인정보·운영 메모·결제 금지 / 담당 해제·대체 취소·기간 종료 시 즉시 재검증 / 화면 숨김이 아니라 DB·API 차단 (4300 `lms_tutor_student_access`·`tutor_student_profile` 재사용). **Class Record에서는 기록 입력과 학생 정보 조회를 분리** — 기록 작성은 유지, 학생 정보 보려고 입력창을 먼저 펼치지 않게
+3. **전체 디자인**: 학생 LMS 와 통일감 있는 대시보드(이름·현지 시간대·주요 기능 간결 배치, Home 에 오늘 수업·할 일, Class Record 빠른 작성 동선 유지, 불필요한 여백·중복 설명 제거, 기존 기능·수업 정보 유지). 운영자 보기 선택창(?tutor=)은 시험 기능이라 디자인 기준 아님. 학생 화면 복사 금지 — 강사 업무에 맞게. PC·모바일 실제 클릭 검증
+4. **My hours → Every week 적용일 안내**: 저장하면 초록 칸이 바로 바뀌어 이번 주부터로 오해 → 실제 적용은 다음 주 월요일(대표가 11/9 적용 확인). **예약·적용 로직은 바꾸지 말 것.** Every week 달력 위에 `These hours apply from Mon, Nov 9.` 같은 안내(날짜 자동 계산, 강사 현지 기준, 저장 전후 모두, One week only 와 구분, 짧고 쉽게)
+5. **문구·팝업**: 이번에 고치는 모든 화면·팝업 실제 클릭 확인. 꼭 필요한 말만, 처음 쓰는 강사도 바로 이해하는 쉬운 영어. 저장 확인·오류·성공 메시지는 무엇이 언제 적용되는지·다음에 뭘 해야 하는지 분명히. 이미 자연스러운 문구는 억지로 바꾸지 않기
+6. **범위·검증**: 정규·보강·대체·Class Record·학생 정보·시간대·권한 정책 유지, 기능·경로 끊김 없게 회귀 시험, 운영진·학생 화면과 데이터 연결 확인
+7. **Class Record 출결·지각 개선**: 지금 Held / I was late / Student no-show / Tutor no-show → **① 수업 결과(하나): Held · Student no-show · Tutor no-show** + **② 지각(별도): Student late · Tutor late**, 지각 시간 `5 min / 10 min / 15 min / Custom(분 직접 입력)`, 학생·강사 둘 다 지각이면 각각, 지각이 있어도 결과는 Held 가능, 지각 시간은 Class Record 에 저장·다시 열어도 유지. 기존 기록·보상수업·변경권·노쇼 정책 훼손 금지, **지각만으로 노쇼·보상 자동 발생 금지**. 평소엔 Held 만 누르면 끝, 지각일 때만 추가 칸. 기존 기록과 호환되게 migration, 시험용 DB 에서 저장·수정·재조회 검증. 운영 미적용
+   - 참고(코드): 지금 `lessons.class_status`(14개 상태, `class_status_rules`) + `class_records.student_late boolean`(3000) + 'Tutor late' 상태. 'I was late' 는 class_status 로 저장됨 → 결과/지각 분리 때 기존 'Tutor late' 기록을 Held + tutor late 로 읽히게 호환 처리 필요. 강사 노쇼는 운영자만(4000)
+
 ## ✅ 2026-11-04 학생 관리 ①~⑦ 시험용 개발 완료 (브랜치 claude/busy-rubin-w3dii1 = lms-test, 정책 원본 H26(46))
 - **migration 4300** `20261104000000_lms_student_management.sql` — 시험용 DB 적용됨, **운영 DB 미적용**. 지우는 문장(drop·delete) 없이 씀(Supabase 커넥터가 지우는 SQL에 승인 창을 띄우는데 휴대폰·PC 모두 안 보여 막힘 → 제약·트리거·정책은 있으면 건너뜀, 수업 옮기기는 두 단계, 예정 일정 줄은 1900-01-01로 치움). 운영 적용도 같은 파일로(승인 창 없이 됨)
   - students 7항목(job·hobbies·interests·improve·hopes·correction_style/note·class_style/note)·level 4단계(Rubric)·level_note/by/at, 표 `student_profile_edits`·`regular_changes`, 함수 admin_students·admin_student_detail·admin_student_update·admin_regular_change(미리 보기/저장)·admin_regular_change_sent·admin_extend_enrollment·tutor_student_profile·tutor_student_update·lms_tutor_student_access·lms_current_slots, tutor_my_students 교체(열 그대로), tutor_screen 에 student_id·'Kim Seoyeon (Sarah)'
