@@ -1,0 +1,404 @@
+<title>강사 Schedule 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위 = 대표가 고를 것, 아래 = PC 화면 틀(가로 스크롤) · 휴대폰 화면 틀(390px). 색은 실제 강사 LMS 와 같게. 실제 화면을 그린 시안이라 밝은 화면 하나로 고정 */
+:root{
+  --bg:#f4f3f8; --card:#fff; --ink:#1d1b2b; --sub:#6b6880; --line:#e6e3ef;
+  --brand:#5b3fe0; --brandSoft:#efeaff; --brandInk:#2b1c7a;
+  --open:#dff3e6; --closed:#ecebf1; --cls:#5b3fe0;
+  --red:#b3261e; --redSoft:#fdecea; --amber:#8a5a00; --amberSoft:#fff4d6;
+  --teal:#0f6b6b; --tealSoft:#dcf3f1; --blue:#1f4fb8; --blueSoft:#e3ecff;
+  --gray:#4a4858; --graySoft:#e9e7f0;
+  --sans:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px}
+.wrap{max-width:1240px;margin:0 auto;display:grid;gap:28px}
+h1{font-size:24px;margin:0;text-wrap:balance}
+h2{font-size:19px;margin:0 0 4px;text-wrap:balance}
+.lead{color:var(--sub);margin:4px 0 0;max-width:70ch}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.ask{display:grid;gap:12px}
+.ask ol{margin:0;padding-left:22px;display:grid;gap:10px}
+.ask li b{display:inline}
+.rec{display:inline-block;background:var(--brandSoft);color:var(--brandInk);font-weight:700;font-size:12.5px;border-radius:6px;padding:1px 7px;margin-left:4px}
+.tag{font-size:12px;letter-spacing:.04em;font-weight:700;color:var(--brand);text-transform:uppercase}
+.scroll{overflow-x:auto;padding-bottom:6px}
+.note{font-size:13.5px;color:var(--sub);margin:6px 0 0}
+.row{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.row>*{min-width:0}
+
+/* PC 틀 */
+.pc{width:1180px;background:#fff;border:1px solid var(--line);border-radius:14px;display:flex;gap:24px;padding:22px 24px;box-shadow:0 2px 10px rgba(40,30,90,.06)}
+.nav{width:200px;flex-shrink:0;display:flex;flex-direction:column;gap:4px}
+.logo{display:flex;align-items:center;gap:6px;padding:2px 10px 14px;font-weight:800}
+.logo i{font-style:normal;background:#27230e;color:#ffd401;font-size:11.5px;border-radius:6px;padding:2px 7px}
+.nav a{display:flex;align-items:center;gap:10px;min-height:44px;border-radius:12px;padding:0 12px;color:var(--ink);text-decoration:none;font-size:15px}
+.nav a.on{background:var(--brandSoft);color:#3a22b0;font-weight:700}
+.nav svg{width:20px;height:20px;flex-shrink:0}
+.nav .me{padding:18px 12px 0;font-size:13px;color:#55526a}
+.nav .me b{display:block;color:var(--ink);font-size:14px}
+.main{flex:1;min-width:0}
+
+/* 공통 머리 */
+.head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.head h3{font-size:20px;margin:0 6px 0 0}
+.btn{min-height:40px;border-radius:10px;border:1px solid var(--line);background:#fff;padding:0 13px;font:600 14.5px var(--sans);color:var(--ink);display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.btn.main{background:var(--brand);color:#fff;border-color:var(--brand)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg span{min-height:38px;display:flex;align-items:center;padding:0 13px;font-weight:600;font-size:14px;color:#55526a;background:#fff}
+.seg span.on{background:var(--brand);color:#fff}
+.seg span+span{border-left:1px solid var(--line)}
+.sp{flex:1}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12.5px;color:var(--sub);margin:0 0 10px}
+
+/* 표시 글자 */
+.k{display:inline-block;font-size:11px;font-weight:800;border-radius:5px;padding:0 5px;line-height:17px;white-space:nowrap}
+.k.cancel{background:var(--redSoft);color:var(--red)}
+.k.makeup{background:var(--blueSoft);color:var(--blue)}
+.k.cover{background:var(--tealSoft);color:var(--teal)}
+.k.leave{background:var(--amberSoft);color:var(--amber)}
+.k.last{background:#f3e6ff;color:#6b2a9a}
+.k.block{background:var(--graySoft);color:var(--gray)}
+
+/* PC Month */
+.mon{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.mon .dow{display:grid;grid-template-columns:repeat(7,1fr);background:var(--brandSoft);color:var(--brandInk);font-weight:700;font-size:13px}
+.mon .dow div{padding:6px 8px}
+.mon .grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.cell{min-height:118px;border-top:1px solid var(--line);border-left:1px solid var(--line);padding:5px 6px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.cell:nth-child(7n+1){border-left:0}
+.cell.out{background:#faf9fc;color:#b3b0c2}
+.cell.today .dn{background:var(--brand);color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+.dn{font-size:13px;font-weight:700;margin-bottom:2px;height:24px;display:flex;align-items:center}
+.ev{font-size:12.5px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;padding:0 4px;display:flex;gap:4px;align-items:center;cursor:pointer}
+.ev:hover{background:#f3f1f8}
+.ev .t{font-variant-numeric:tabular-nums;color:var(--sub);flex-shrink:0}
+.ev .dot{width:7px;height:7px;border-radius:50%;background:var(--cls);flex-shrink:0}
+.ev.x{color:#9b98ad;text-decoration:line-through}
+.ev.x .dot{background:#c9c6d6}
+.ev.blk .dot{background:var(--gray);border-radius:2px}
+.ev.sel{outline:2px solid var(--brand);background:var(--brandSoft)}
+.more{font-size:12px;color:var(--brand);font-weight:600;padding-left:4px}
+
+/* Week 격자 (My hours 와 같은 30분 칸) */
+.wk{display:grid;border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:12px}
+.wk .h{background:var(--brandSoft);color:var(--brandInk);font-weight:700;padding:5px 4px;text-align:center;border-left:1px solid #fff;line-height:1.25}
+.wk .h.today{background:var(--brand);color:#fff}
+.wk .tm{font-variant-numeric:tabular-nums;color:var(--sub);text-align:right;padding-right:5px;font-size:11px;height:var(--rh);line-height:var(--rh);border-top:1px solid transparent}
+.wk .col{position:relative;border-left:1px solid var(--line)}
+.wk .slot{height:var(--rh);border-top:1px solid #f1eff6}
+.wk .slot.o{background:var(--open)}
+.wk .slot.c{background:var(--closed)}
+.blkx{position:absolute;left:2px;right:2px;border-radius:5px;padding:2px 5px;overflow:hidden;font-size:11.5px;line-height:1.25;cursor:pointer}
+.blkx.cls{background:var(--cls);color:#fff}
+.blkx.cls.makeup{background:#2f5fd0}
+.blkx.cls.cover{background:#0f7f7f}
+.blkx.cls.x{background:#fff;color:#9b98ad;border:1.5px dashed #c9c6d6;text-decoration:line-through}
+.blkx.per{background:repeating-linear-gradient(135deg,#d9d6e3 0 6px,#e9e7f0 6px 12px);color:var(--gray);font-weight:700;border:1px solid #c9c6d6}
+.blkx b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blkx span{opacity:.9}
+.blkx.sel{outline:3px solid #ffd401}
+
+/* 창 */
+.pop{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 34px rgba(30,20,80,.18);padding:16px;width:340px;display:grid;gap:8px}
+.pop h4{margin:0;font-size:17px}
+.pop .ln{display:grid;grid-template-columns:72px 1fr;gap:6px;font-size:14px}
+.pop .ln span:first-child{color:var(--sub);font-size:13px}
+.pop .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.pop .x{position:absolute;right:12px;top:10px;color:var(--sub);font-size:20px}
+.fine{font-size:12.5px;color:var(--sub);margin:0}
+
+/* 휴대폰 틀 */
+.ph{width:390px;max-width:100%;background:#fff;border:1px solid var(--line);border-radius:28px;overflow:hidden;box-shadow:0 2px 10px rgba(40,30,90,.08);display:flex;flex-direction:column;position:relative}
+.ph .top{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px}
+.ph .body{padding:4px 14px 12px;flex:1}
+.ph .bar{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);background:#fff}
+.ph .bar div{min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10.5px;color:#55526a;text-align:center;line-height:1.1}
+.ph .bar div.on{color:#5b3df0;font-weight:700}
+.ph .bar svg{width:20px;height:20px}
+.pm{display:grid;grid-template-columns:repeat(7,1fr);text-align:center}
+.pm .w{font-size:11.5px;font-weight:700;color:var(--brandInk);padding:4px 0}
+.pm .d{min-height:58px;border-top:1px solid var(--line);padding:4px 1px 3px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.pm .d.out{color:#c3c0d0}
+.pm .d .n{font-size:13.5px;font-weight:700;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.pm .d.today .n{background:var(--brand);color:#fff}
+.pm .d.pick .n{outline:2px solid var(--brand)}
+.pm .dots{display:flex;gap:2px;height:6px}
+.pm .dots i{width:5px;height:5px;border-radius:50%;background:var(--cls)}
+.pm .dots i.x{background:#c9c6d6}
+.pm .dots i.b{background:var(--gray);border-radius:1px}
+.pm .k{font-size:9.5px;padding:0 3px;line-height:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.dl{display:grid;gap:8px;margin-top:10px}
+.dl h5{margin:4px 0 0;font-size:14.5px}
+.li{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;gap:2px}
+.li .a{display:flex;justify-content:space-between;gap:8px;font-weight:700;font-size:15px}
+.li .b{font-size:13px;color:var(--sub);font-variant-numeric:tabular-nums}
+.li.x .a span:first-child{text-decoration:line-through;color:#9b98ad}
+.li.blk{background:#f7f6fb}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -10px 30px rgba(30,20,80,.2);padding:14px 16px 18px;display:grid;gap:8px}
+.sheet .grab{width:38px;height:4px;border-radius:2px;background:#d9d5e6;justify-self:center}
+.dim{position:absolute;inset:0;background:rgba(29,27,43,.35)}
+
+/* My hours 메모 */
+.hrs{display:grid;grid-template-columns:1fr 300px;gap:18px}
+.chg{border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:8px;align-content:start}
+.inp{border:1px solid #d9d5e6;border-radius:10px;min-height:44px;padding:0 12px;display:flex;align-items:center;font-size:15px;color:var(--ink);background:#fff}
+.inp.ph-t{color:#9b98ad}
+.lbl{font-size:13px;font-weight:700;color:#55526a}
+.slot.sel{background:#fff;outline:2px solid #b3261e;outline-offset:-2px}
+.slot.selc{background:repeating-linear-gradient(135deg,#d9d6e3 0 6px,#e9e7f0 6px 12px)}
+.cmp{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.cmp>div{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff;display:grid;gap:6px;align-content:start}
+.cmp h5{margin:0;font-size:14.5px}
+@media (max-width:760px){.cmp{grid-template-columns:1fr}}
+.opt{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:760px){.opt{grid-template-columns:1fr}}
+.opt>div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
+.opt h5{margin:0 0 8px;font-size:15px}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="tag">강사 LMS · 시안 · H26(49)</span>
+  <h1>강사 Schedule 메뉴 (월간 ↔ 주간) + 개인 일정 메모</h1>
+  <p class="lead">아래 데이터는 모두 가짜(강사 Blair, 토론토)입니다. 조회 전용 — 기록 칸·드래그·수업 추가/삭제 없음. 수업을 누르면 정보 창 → [Class Record] 로 이동.</p>
+</header>
+
+<section class="box ask" aria-label="대표가 고를 것">
+  <h2>대표님이 골라 주실 것</h2>
+  <ol>
+    <li><b>① PC Month 칸 모양</b> A = 구글 캘린더처럼 칸마다 수업 줄(시각·학생) <span class="rec">추천</span> / B = 칸에 수업 수만 + 평소와 다른 날 글자. (아래 ①-A, ①-B)</li>
+    <li><b>② 개인 일정(병원·부모님 생신 등) — My hours 에서 넣음 (Schedule 은 고치는 곳 아님)</b> 지금도 My hours → 'One week only'에서 빈 시간을 닫을 수 있습니다. <b>없는 것은 메모뿐</b>(지금은 운영진에게도 'Unavailable this week (My hours)'라는 고정 글만 남음). 닫을 때 메모 한 줄을 받게 추가합니다(아래 ②). Schedule 에는 막은 시간이 메모와 함께 <b>보이기만</b> 합니다.</li>
+    <li><b>③ 개인 일정을 미리 막을 수 있는 기간</b> 지금 'One week only'는 <b>이번 주 포함 4주</b> 안만 닫을 수 있습니다(시험용 DB 함수 기준). 부모님 생신처럼 더 먼 날은 지금은 못 막습니다. 늘릴지, 늘린다면 몇 주까지인지 정해 주세요. (숫자는 대표님이 정함)</li>
+    <li><b>④ 메모를 볼 수 있는 사람</b> 강사 본인 + 운영진만. 학생 보강 신청·신규 등록 화면에서는 그냥 '불가' 시간으로만 보입니다(지금도 학생은 이 표를 읽을 권한이 없음 — 확인함). 강사 화면 메모 칸 아래에 <i>"Only you and Edge English see this note. Students just see this time as unavailable."</i> 한 줄로 알립니다. 이대로 괜찮은지.</li>
+  </ol>
+  <p class="note">개발 범위: 표(테이블) 구조는 그대로. 다만 메모 저장·Schedule 에 막은 시간 표시를 위해 DB 함수 2개(My hours 저장, 강사 화면 읽기)는 바꿔야 합니다 — H26(49)의 'DB 변경 없음'과 달라지는 부분이라 미리 알립니다.</p>
+</section>
+
+<!-- ① PC Month -->
+<section>
+  <h2>①-A PC · Month <span class="rec">추천</span></h2>
+  <p class="note">평소와 다른 날은 색 + 짧은 글자(Canceled · Make-up · Cover · Leave · Last class · Blocked). 칸에 다 안 들어가면 '+2 more'. 수업을 누르면 오른쪽 같은 창.</p>
+  <div class="scroll"><div class="pc" id="pcMonth"></div></div>
+</section>
+
+<section>
+  <h2>①-B PC · Month (수 + 표시만)</h2>
+  <p class="note">칸이 깔끔하지만 날짜를 눌러야 누구 수업인지 보입니다. 날짜 누르면 오른쪽에 그날 목록.</p>
+  <div class="scroll"><div class="pc" id="pcMonthB"></div></div>
+</section>
+
+<section>
+  <h2>PC · Week</h2>
+  <p class="note">My hours 와 같은 30분 격자(06:00–22:30). 초록 = 열어 둔 시간(수업 없음), 회색 = 닫힘, 보라 = 수업(실제 분만큼), 파랑 = 보강, 청록 = 대체, 점선 = 취소, 빗금 = 개인 일정(메모 표시). 편집 안 됨 — 바꾸려면 My hours.</p>
+  <div class="scroll"><div class="pc" id="pcWeek"></div></div>
+</section>
+
+<section>
+  <h2>휴대폰 · Month → 날짜 누름 → 수업 누름</h2>
+  <div class="row">
+    <div class="ph" id="phMonth"></div>
+    <div class="ph" id="phSheet"></div>
+    <div class="ph" id="phWeek"></div>
+  </div>
+  <p class="note">휴대폰 Month 칸 = 날짜 + 점(수업 하나당 하나) + 평소와 다른 날만 아주 짧은 글자. 날짜를 누르면 아래에 그날 목록, 수업을 누르면 아래에서 올라오는 창. Week 는 7일 좁은 격자(시각 + 학생 이름 앞부분).</p>
+</section>
+
+<!-- ② 개인 일정 -->
+<section>
+  <h2>② 개인 일정 메모 — My hours 'One week only'</h2>
+  <p class="note">지금처럼 칸을 눌러 닫고, 오른쪽 Changes 아래에 메모 한 줄(선택). 메모 없이 저장해도 됨. 수업이 있는 칸은 지금처럼 못 닫음.</p>
+  <div class="scroll"><div class="pc" id="pcHours"></div></div>
+  <div class="row" style="margin-top:16px">
+    <div class="ph" id="phHours"></div>
+    <div style="flex:1;min-width:280px;display:grid;gap:14px">
+      <h2 style="font-size:16px">같은 막힌 시간이 화면마다 어떻게 보이나</h2>
+      <div class="cmp">
+        <div><h5>강사 (Schedule)</h5><span class="k block">Blocked</span><span style="font-size:14px">Thu 13:00–15:00 Toronto Time<br><b>Dentist</b></span><p class="fine">누르면 메모 + [Change in My hours ›]</p></div>
+        <div><h5>운영진 (강사 보기·강사 시간)</h5><span class="k block">Blocked</span><span style="font-size:14px">목 13:00–15:00 토론토 · 금 03:00–05:00 KST<br><b>Dentist</b> (Blair 작성)</span><p class="fine">보강·대체 고를 때도 메모가 보여 사정을 앎</p></div>
+        <div><h5>학생 (보강 신청)</h5><span style="font-size:14px">그 시간이 그냥 고를 수 없는 시간</span><p class="fine">메모·'개인 일정'이라는 말 모두 안 보임</p></div>
+      </div>
+      <div class="opt" style="grid-template-columns:1fr">
+        <div><h5>메모 길이·글자</h5><p class="fine">한 줄 짧은 메모(예: Dentist, Mom's birthday). 몇 글자까지 받을지 정해 주시면 그대로 넣습니다. 안 정하시면 줄 하나를 넘지 않게 화면에서만 자릅니다.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+// ---------- 가짜 데이터 (Blair, America/Toronto, 2026년 11월 · 11/2 부터 EST = KST-14h) ----------
+const TODAY='2026-11-16';
+const pad=n=>String(n).padStart(2,'0');
+const iso=(y,m,d)=>`${y}-${pad(m)}-${pad(d)}`;
+const dt=s=>new Date(s+'T00:00:00Z');
+const dow=s=>dt(s).getUTCDay();
+const addD=(s,n)=>{const d=dt(s);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const lab=s=>{const d=dt(s);return `${DOW[d.getUTCDay()]}, ${MON[d.getUTCMonth()]} ${d.getUTCDate()}`};
+const toMin=t=>{const[a,b]=t.split(':').map(Number);return a*60+b};
+const fromMin=m=>`${pad(Math.floor(m/60)%24)}:${pad(m%60)}`;
+const kst=(d,t,m)=>{let s=toMin(t)+14*60,dd=d;if(s>=1440){s-=1440;dd=addD(d,1)}return `${lab(dd)} ${fromMin(s)}–${fromMin(s+m)}`};
+
+const REG=[ // 요일, 시각, 분, 학생, 회차시작
+  [1,'18:00',40,'Hajun Kim'],[3,'18:00',40,'Hajun Kim'],
+  [2,'19:00',40,'Seoyeon Park'],[4,'19:00',40,'Seoyeon Park'],
+  [1,'20:30',20,'Minji Lee'],[4,'20:30',20,'Minji Lee'],
+  [6,'09:00',50,'Jiwoo Choi'],
+];
+const ev=[];
+for(let d='2026-11-01';d<='2026-12-05';d=addD(d,1)){
+  for(const [w,t,m,who] of REG){ if(dow(d)!==w) continue;
+    if(who==='Seoyeon Park' && d>'2026-11-26') continue;
+    ev.push({d,t,m,who,kind:'regular'});
+  }
+}
+const find=(d,who)=>ev.find(e=>e.d===d&&e.who===who);
+find('2026-11-11','Hajun Kim').kind='cancel';
+ev.push({d:'2026-11-13',t:'17:00',m:40,who:'Hajun Kim',kind:'makeup',of:'Wed, Nov 11'});
+ev.push({d:'2026-11-17',t:'21:00',m:40,who:'Yuna Jung',kind:'cover',of:'Emma'});
+for(const d of ['2026-11-24','2026-11-25']) ev.filter(e=>e.d===d).forEach(e=>{e.kind='leave';e.sub='Emma'});
+find('2026-11-26','Seoyeon Park').kind='last';
+ev.push({d:'2026-11-19',t:'13:00',m:120,who:'Dentist',kind:'block'});
+ev.push({d:'2026-11-29',t:'10:00',m:240,who:"Mom's birthday",kind:'block'});
+ev.sort((a,b)=>(a.d+a.t).localeCompare(b.d+b.t));
+const KW={cancel:'Canceled',makeup:'Make-up',cover:'Cover',leave:'Leave',last:'Last class',block:'Blocked'};
+const KS={cancel:'Cancel',makeup:'Make-up',cover:'Cover',leave:'Leave',last:'Last',block:'Block'};
+const dayEv=d=>ev.filter(e=>e.d===d);
+const count={'Hajun Kim':[3,8],'Seoyeon Park':[8,8],'Minji Lee':[5,16],'Jiwoo Choi':[2,4],'Yuna Jung':[6,8]};
+
+// ---------- 공통 조각 ----------
+const IC={home:'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',sch:'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',rec:'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z',stu:'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',hrs:'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z'};
+const svg=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+const MENU=[['home','Home'],['sch','Schedule'],['rec','Class Record'],['stu','Students'],['hrs','My hours']];
+const nav=on=>`<nav class="nav"><div class="logo">Edge English <i>Tutor</i></div>${MENU.map(([k,l])=>`<a class="${k===on?'on':''}">${svg(IC[k])}${l}</a>`).join('')}<div class="me"><b>Blair</b>Toronto Time (EST)</div></nav>`;
+const bar=on=>`<div class="bar">${MENU.map(([k,l])=>`<div class="${k===on?'on':''}">${svg(IC[k])}${l}</div>`).join('')}</div>`;
+const phTop=`<div class="top"><span class="logo" style="padding:0">Edge English <i>Tutor</i></span><span style="font-size:13px;color:#55526a;text-decoration:underline">Sign out</span></div>`;
+const zoneSeg=on=>`<div class="seg"><span class="${on==='l'?'on':''}">${on==='l'?'✓ ':''}Toronto Time</span><span class="${on==='k'?'on':''}">${on==='k'?'✓ ':''}Korea Time (KST)</span></div>`;
+const viewSeg=on=>`<div class="seg"><span class="${on==='m'?'on':''}">Month</span><span class="${on==='w'?'on':''}">Week</span></div>`;
+const legend=`<div class="legend"><span><span class="k cancel">Canceled</span> class canceled</span><span><span class="k makeup">Make-up</span></span><span><span class="k cover">Cover</span> you cover another tutor</span><span><span class="k leave">Leave</span> your leave · a cover tutor teaches</span><span><span class="k last">Last class</span> student's last class</span><span><span class="k block">Blocked</span> your own time off</span></div>`;
+
+function popup(e){
+  const blk=e.kind==='block';
+  if(blk) return `<div class="pop" style="position:relative"><h4>${e.who}</h4><span class="k block" style="justify-self:start">Blocked · your own time</span>
+    <div class="ln"><span>Toronto</span><span>${lab(e.d)} ${e.t}–${fromMin(toMin(e.t)+e.m)} Toronto Time</span></div>
+    <div class="ln"><span>Korea</span><span>${kst(e.d,e.t,e.m)} KST</span></div>
+    <p class="fine">Only you and Edge English see this note. Students just see this time as unavailable.</p>
+    <div class="acts"><span class="btn">Change in My hours ›</span></div></div>`;
+  const c=count[e.who];
+  const kindTxt={regular:'Regular class',cancel:'Canceled (student changed it)',makeup:`Make-up class (for ${e.of})`,cover:`Cover class (${e.of}'s student)`,leave:`Your leave — ${e.sub} teaches this class`,last:'Regular class · last class of this course'}[e.kind];
+  return `<div class="pop" style="position:relative"><span class="x">×</span><h4>${e.who}</h4>
+    ${e.kind!=='regular'?`<span class="k ${e.kind}" style="justify-self:start">${KW[e.kind]}</span>`:''}
+    <div class="ln"><span>Toronto</span><span><b>${lab(e.d)} ${e.t}–${fromMin(toMin(e.t)+e.m)}</b> Toronto Time</span></div>
+    <div class="ln"><span>Korea</span><span>${kst(e.d,e.t,e.m)} KST</span></div>
+    <div class="ln"><span>Class</span><span>${kindTxt} · ${e.m} min${c?` · ${c[0]}/${c[1]}`:''}</span></div>
+    <div class="acts">${['cancel','leave'].includes(e.kind)?'':'<span class="btn main">Class Record ›</span>'}<span class="btn">Student profile</span></div>
+    <p class="fine">Class Record ›: opens this class there, ready to record.</p></div>`;
+}
+
+// ---------- ①-A PC Month ----------
+function monthCells(){const first='2026-11-01';const start=addD(first,-dow(first));return Array.from({length:35},(_,i)=>addD(start,i))}
+function pcMonth(sel){
+  const cells=monthCells().map(d=>{
+    const es=dayEv(d),out=d.slice(5,7)!=='11',max=4;
+    const lines=es.slice(0,max).map(e=>{
+      const x=['cancel','leave'].includes(e.kind)?' x':'', b=e.kind==='block'?' blk':'';
+      return `<div class="ev${x}${b}${sel===e?' sel':''}"><span class="dot"></span><span class="t">${e.t}</span><span style="overflow:hidden;text-overflow:ellipsis">${e.who.split(' ')[0]}</span>${e.kind!=='regular'?`<span class="k ${e.kind}">${KW[e.kind]}</span>`:''}</div>`}).join('');
+    return `<div class="cell${out?' out':''}${d===TODAY?' today':''}"><div class="dn">${+d.slice(8)}</div>${lines}${es.length>max?`<div class="more">+${es.length-max} more</div>`:''}</div>`}).join('');
+  return `${nav('sch')}<div class="main"><div class="head"><h3>Schedule</h3><span class="btn">‹</span><b style="font-size:16px">November 2026</b><span class="btn">›</span><span class="btn">Today</span><span class="sp"></span>${viewSeg('m')}${zoneSeg('l')}</div>
+  ${legend}<div style="display:flex;gap:16px;align-items:flex-start"><div class="mon" style="flex:1;min-width:0"><div class="dow">${DOW.map(x=>`<div>${x}</div>`).join('')}</div><div class="grid">${cells}</div></div>${popup(sel)}</div>
+  <p class="fine" style="margin-top:6px">Times are Toronto Time (EST). Switch to Korea Time (KST) above — dates move with the time.</p></div>`;
+}
+const selA=ev.find(e=>e.kind==='makeup');
+document.getElementById('pcMonth').innerHTML=pcMonth(selA);
+
+// ---------- ①-B ----------
+(function(){
+  const pick='2026-11-17';
+  const cells=monthCells().map(d=>{const es=dayEv(d),out=d.slice(5,7)!=='11';
+    const n=es.filter(e=>!['block','cancel','leave'].includes(e.kind)).length;
+    const ks=[...new Set(es.map(e=>e.kind).filter(k=>k!=='regular'))];
+    return `<div class="cell${out?' out':''}${d===TODAY?' today':''}" style="min-height:84px;${d===pick?'background:#efeaff':''}"><div class="dn">${+d.slice(8)}</div>${n?`<div style="font-size:13px;font-weight:600">${n} class${n>1?'es':''}</div>`:''}<div style="display:flex;flex-wrap:wrap;gap:3px">${ks.map(k=>`<span class="k ${k}">${KW[k]}</span>`).join('')}</div></div>`}).join('');
+  const list=dayEv(pick).map(e=>`<div class="li"><div class="a"><span>${e.who}</span>${e.kind!=='regular'?`<span class="k ${e.kind}">${KW[e.kind]}</span>`:''}</div><div class="b">${e.t}–${fromMin(toMin(e.t)+e.m)} Toronto · ${kst(e.d,e.t,e.m).split(' ').slice(3).join(' ')} KST</div></div>`).join('');
+  document.getElementById('pcMonthB').innerHTML=`${nav('sch')}<div class="main"><div class="head"><h3>Schedule</h3><span class="btn">‹</span><b style="font-size:16px">November 2026</b><span class="btn">›</span><span class="sp"></span>${viewSeg('m')}${zoneSeg('l')}</div>
+  <div style="display:flex;gap:16px"><div class="mon" style="flex:1"><div class="dow">${DOW.map(x=>`<div>${x}</div>`).join('')}</div><div class="grid">${cells}</div></div>
+  <div style="width:300px;display:grid;gap:8px;align-content:start"><h4 style="margin:0">${lab(pick)}</h4>${list}</div></div></div>`;
+})();
+
+// ---------- Week 격자 ----------
+const OPEN={1:[[16*60,22*60]],2:[[17*60,22*60]],3:[[16*60,22*60]],4:[[12*60,22*60]],5:[[16*60,21*60]],6:[[8*60,12*60]],0:[]};
+function weekGrid(mon,rh,mobile,sel){
+  const days=Array.from({length:7},(_,i)=>addD(mon,i));
+  const S=6*60,E=22*60+30,rows=(E-S)/30;
+  let html=`<div class="wk" style="--rh:${rh}px;grid-template-columns:${mobile?'34px':'52px'} repeat(7,minmax(0,1fr))"><div class="h" style="background:#fff"></div>`;
+  html+=days.map(d=>`<div class="h${d===TODAY?' today':''}">${DOW[dow(d)]}<br>${mobile?+d.slice(8):MON[10]+' '+(+d.slice(8))}</div>`).join('');
+  html+=`<div>${Array.from({length:rows},(_,i)=>`<div class="tm">${(i%2===0)?fromMin(S+i*30):''}</div>`).join('')}</div>`;
+  html+=days.map(d=>{
+    const op=OPEN[dow(d)]||[];
+    const slots=Array.from({length:rows},(_,i)=>{const m=S+i*30;return `<div class="slot ${op.some(([a,b])=>m>=a&&m<b)?'o':'c'}"></div>`}).join('');
+    const bl=dayEv(d).map(e=>{const top=(toMin(e.t)-S)/30*rh, h=Math.max(e.m/30*rh,rh*0.66);
+      const cls=e.kind==='block'?'per':`cls ${['cancel','leave'].includes(e.kind)?'x':e.kind}`;
+      const name=mobile?e.who.split(' ')[0]:e.who;
+      return `<div class="blkx ${cls}${sel===e?' sel':''}" style="top:${top}px;height:${h}px"><b>${e.kind==='block'?'⛔ ':''}${name}</b>${!mobile||h>rh*1.4?`<span>${e.t}${e.kind!=='regular'&&e.kind!=='block'?' · '+KW[e.kind]:''}</span>`:''}</div>`}).join('');
+    return `<div class="col">${slots}${bl}</div>`}).join('');
+  return html+'</div>';
+}
+(function(){
+  const sel=ev.find(e=>e.d==='2026-11-17'&&e.kind==='cover');
+  document.getElementById('pcWeek').innerHTML=`${nav('sch')}<div class="main"><div class="head"><h3>Schedule</h3><span class="btn">‹</span><b style="font-size:16px">Nov 16 – Nov 22, 2026</b><span class="btn">›</span><span class="btn">Today</span><span class="sp"></span>${viewSeg('w')}${zoneSeg('l')}</div>
+  <div class="legend"><span>■ <span style="color:#2a8a4f">green</span> open, no class</span><span>■ gray closed</span><span>■ <span style="color:#5b3fe0">purple</span> class</span><span>⛔ striped = your own time off</span><span>Times: Toronto Time (EST)</span><span>To change your hours, go to My hours.</span></div>
+  <div style="display:flex;gap:16px;align-items:flex-start"><div style="flex:1;min-width:0">${weekGrid('2026-11-16',20,false,sel)}</div>${popup(sel)}</div></div>`;
+})();
+
+// ---------- 휴대폰 ----------
+function phMonthCal(pick){
+  return `<div class="pm">${['S','M','T','W','T','F','S'].map(x=>`<div class="w">${x}</div>`).join('')}${monthCells().map(d=>{const es=dayEv(d),out=d.slice(5,7)!=='11';
+    const k=es.find(e=>e.kind!=='regular');
+    return `<div class="d${out?' out':''}${d===TODAY?' today':''}${d===pick?' pick':''}"><span class="n">${+d.slice(8)}</span><span class="dots">${es.map(e=>`<i class="${e.kind==='block'?'b':['cancel','leave'].includes(e.kind)?'x':''}"></i>`).join('')}</span>${k?`<span class="k ${k.kind}">${KS[k.kind]}</span>`:''}</div>`}).join('')}</div>`;
+}
+(function(){
+  const pick='2026-11-13';
+  const list=dayEv(pick).map(e=>`<div class="li${['cancel','leave'].includes(e.kind)?' x':''}"><div class="a"><span>${e.who}</span>${e.kind!=='regular'?`<span class="k ${e.kind}">${KW[e.kind]}</span>`:''}</div><div class="b">${e.t}–${fromMin(toMin(e.t)+e.m)} Toronto · ${kst(e.d,e.t,e.m).replace(/^.*?(\d\d:\d\d–\d\d:\d\d)$/,'$1')} KST</div></div>`).join('');
+  const head=`<div class="head" style="gap:6px"><h3 style="font-size:18px">Schedule</h3><span class="sp"></span>${viewSeg('m')}</div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span class="btn" style="min-height:36px">‹</span><b style="flex:1;text-align:center">November 2026</b><span class="btn" style="min-height:36px">›</span></div>`;
+  document.getElementById('phMonth').innerHTML=`${phTop}<div class="body">${head}${phMonthCal(pick)}<div class="dl"><h5>${lab(pick)} <span style="font-weight:400;color:#6b6880;font-size:12.5px">Toronto Time · KST</span></h5>${list}</div><p class="fine" style="margin-top:8px">Time zone: Toronto Time ▾</p></div>${bar('sch')}`;
+  const sel=ev.find(e=>e.kind==='makeup');
+  document.getElementById('phSheet').innerHTML=`${phTop}<div class="body">${head}${phMonthCal(pick)}</div>${bar('sch')}<div class="dim"></div>
+   <div class="sheet"><div class="grab"></div>${popup(sel).replace('class="pop" style="position:relative"','class="pop" style="position:relative;width:auto;border:0;box-shadow:none;padding:0"').replace('<span class="btn main">','<span class="btn main" style="flex:1;justify-content:center;min-height:46px">')}</div>`;
+  document.getElementById('phWeek').innerHTML=`${phTop}<div class="body"><div class="head" style="gap:6px"><h3 style="font-size:18px">Schedule</h3><span class="sp"></span>${viewSeg('w')}</div>
+   <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span class="btn" style="min-height:36px">‹</span><b style="flex:1;text-align:center;font-size:14px">Nov 16 – 22 · Toronto Time</b><span class="btn" style="min-height:36px">›</span></div>
+   ${weekGrid('2026-11-16',15,true,null)}</div>${bar('sch')}`;
+})();
+
+// ---------- My hours One week only + 메모 ----------
+(function(){
+  const mon='2026-11-16';const days=Array.from({length:7},(_,i)=>addD(mon,i));
+  const S=6*60,E=22*60+30,rows=(E-S)/30,rh=18;
+  let g=`<div class="wk" style="--rh:${rh}px;grid-template-columns:52px repeat(7,minmax(0,1fr))"><div class="h" style="background:#fff"></div>${days.map(d=>`<div class="h">${DOW[dow(d)]}<br>Nov ${+d.slice(8)}</div>`).join('')}`;
+  g+=`<div>${Array.from({length:rows},(_,i)=>`<div class="tm">${i%2===0?fromMin(S+i*30):''}</div>`).join('')}</div>`;
+  g+=days.map(d=>{const op=OPEN[dow(d)]||[];
+    const slots=Array.from({length:rows},(_,i)=>{const m=S+i*30;const o=op.some(([a,b])=>m>=a&&m<b);
+      const sel=d==='2026-11-19'&&m>=13*60&&m<15*60;return `<div class="slot ${sel?'selc':o?'o':'c'}"></div>`}).join('');
+    const bl=dayEv(d).filter(e=>e.kind!=='block').map(e=>`<div class="blkx cls ${['cancel','leave'].includes(e.kind)?'x':e.kind}" style="top:${(toMin(e.t)-S)/30*rh}px;height:${e.m/30*rh}px"><b>${e.who.split(' ')[0]}</b></div>`).join('');
+    return `<div class="col">${slots}${bl}</div>`}).join('')+'</div>';
+  const memo=(mob)=>`<div class="chg"><b>Changes</b>
+    <div style="font-size:14px">Thu, Nov 19 · 13:00–15:00 Toronto Time → <b>closed</b><br><span style="color:#6b6880;font-size:12.5px">Fri, Nov 20 · 03:00–05:00 Korea Time (KST)</span></div>
+    <label class="lbl" for="m${mob}">Note for this time (optional)</label>
+    <div class="inp" id="m${mob}">Dentist</div>
+    <p class="fine">Only you and Edge English see this note. Students just see this time as unavailable.</p>
+    <span class="btn main" style="justify-content:center;min-height:46px">Save</span></div>`;
+  document.getElementById('pcHours').innerHTML=`${nav('hrs')}<div class="main"><div class="head"><h3>My hours</h3><div class="seg"><span>Every week</span><span class="on">One week only</span></div><span class="sp"></span>${zoneSeg('l')}</div>
+   <div class="head"><span class="btn">‹</span><b>Nov 16 – Nov 22, 2026</b><span class="btn">›</span></div>
+   <div class="hrs"><div>${g}</div>${memo('p')}</div></div>`;
+  document.getElementById('phHours').innerHTML=`${phTop}<div class="body"><div class="head" style="gap:6px"><h3 style="font-size:18px">My hours</h3><span class="sp"></span><div class="seg"><span style="min-height:34px;font-size:13px">Every week</span><span class="on" style="min-height:34px;font-size:13px">One week only</span></div></div>
+   <p class="fine" style="margin-bottom:8px">(표는 지금 My hours 그대로 — 생략) 닫을 칸을 누르면 아래 저장 막대가 올라옴</p>
+   <div style="height:120px;border-radius:12px;background:repeating-linear-gradient(0deg,#dff3e6 0 17px,#fff 17px 18px);opacity:.6"></div></div>
+   <div style="border-top:1px solid #e6e3ef;padding:12px 14px;box-shadow:0 -8px 18px rgba(255,255,255,1)">${memo('m').replace('<div class="chg">','<div style="display:grid;gap:8px">')}</div>${bar('hrs')}`;
+})();
+</script>
