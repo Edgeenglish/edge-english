@@ -344,7 +344,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
                 <span className="mt-0.5 flex justify-center gap-[3px] lg:hidden">
                   {ls.slice(0, 3).map((x) => <i key={+x.at} className={`block h-[5px] w-[5px] rounded-full ${x.kind === 'lesson' && x.lesson.state === 'canceled' ? 'bg-[#c4c1d1]' : 'bg-[#5b3fe0]'}`} />)}
                 </span>
-                {tag && <span className={`mt-0.5 block overflow-hidden whitespace-nowrap rounded-[4px] text-center text-[9px] font-bold tracking-[-0.02em] lg:hidden ${tagColor(tag)}`}>{tag}</span>}
+                {tag && <span className={`mt-0.5 block overflow-hidden rounded-[4px] py-px text-center text-[9px] font-bold leading-[10px] tracking-[-0.02em] lg:hidden ${tagColor(tag)}`}>{tag}</span>}
                 {/* PC: 칸마다 수업 시각·학생 (H26(50) ⑥ A안) */}
                 <span className="mt-1 hidden gap-0.5 lg:grid">
                   {its.map((x) => <MonthLine key={`${x.kind}-${+x.at}-${x.kind === 'lesson' ? x.lesson.id : ''}`} item={x} zone={viewZone} />)}
@@ -538,7 +538,7 @@ function NoteField({ value, onChange }: { value: string; onChange: (v: string) =
 }
 
 const tagColor = (tag: string) => (tag === 'Cancel' ? 'bg-[#fdecea] text-[#b3261e]' : tag === 'Leave' ? 'bg-[#fff4d6] text-[#8a5300]'
-  : tag === 'Block' ? 'bg-[#ecebf1] text-[#55526a]' : tag === 'Open' ? 'bg-[#e6f6ec] text-[#1f7a4d]' : tag === 'Last' ? 'bg-[#f3e8ff] text-[#7a2ab0]' : 'bg-[#e3f6f3] text-[#0f5f56]');
+  : tag === 'Block' ? 'bg-[#ecebf1] text-[#55526a]' : tag === 'Extra hours' ? 'bg-[#e6f6ec] text-[#1f7a4d]' : tag === 'Last' ? 'bg-[#f3e8ff] text-[#7a2ab0]' : 'bg-[#e3f6f3] text-[#0f5f56]');
 
 function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
   const time = inZone(item.at, zone).time;
@@ -567,7 +567,7 @@ function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
     <span className="flex min-w-0 items-center gap-1 text-[12px] leading-[16px] text-[#1f7a4d]">
       <i className="block h-[6px] w-[6px] shrink-0 rounded-full border border-[#1f7a4d]" />
       <span className="shrink-0 tabular-nums">{time}</span>
-      <span className="truncate">Open</span>
+      <span className="truncate">Extra availability</span>
     </span>
   );
 }
@@ -597,12 +597,12 @@ function DayRow({ item, zone, onOpen }: { item: DayItem; zone: string; onOpen: (
         className="flex min-h-[48px] w-full items-center gap-2 rounded-[10px] border border-[#e6e3ef] bg-[#faf9fd] px-3 py-1.5 text-left enabled:hover:bg-[#f3f1f8]">
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14.5px] font-semibold text-[#1d1b2b]">
-            {block ? (item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Blocked') : 'Available (this day only)'}
+            {block ? (item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Blocked') : 'Extra availability (this day only)'}
           </span>
           <span className="block text-[12.5px] text-[#6b6880]">{spanText(item.at, item.end, zone)}</span>
         </span>
         <span className={`shrink-0 rounded-[6px] px-1.5 text-[12px] font-bold ${block ? 'bg-[#ecebf1] text-[#55526a]' : 'bg-[#e6f6ec] text-[#1f7a4d]'}`}>
-          {block ? (item.block.kind === 'leave' ? 'Leave' : 'Blocked') : 'Open'}
+          {block ? (item.block.kind === 'leave' ? 'Leave' : 'Blocked') : 'Extra'}
         </span>
       </button>
     </li>

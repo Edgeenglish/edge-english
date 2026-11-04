@@ -22,6 +22,7 @@ export function fakeTutorScreen(now: Date): TutorScreen {
       lesson('d4', 20, 40, { count: { n: 7, total: 8 } }),
       lesson('d5', 22, 20, { student: 'Doyun Lee', state: 'canceled', classStatus: 'Student canceled in advance' }),
       lesson('d6', 46, 40, { student: 'Seoyeon Park (Sarah)', studentId: 'demo-seoyeon', covering: true, count: { n: 6, total: 8 } }),
+      lesson('d7', 70, 40, { student: 'Minsu Kim', kind: 'compensation' }),
     ],
     toRecord: ['d2', 'd3'],
     makeups: [{

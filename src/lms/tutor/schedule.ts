@@ -149,16 +149,16 @@ export function dayItems(date: string, zone: string, lessons: TutorLesson[], d: 
   return items.sort((x, y) => +x.at - +y.at);
 }
 
-/** Month 칸 짧은 글자 (색으로만 구분하지 않게, H26(49) ①). 평소와 다른 것 하나 — 앞이 먼저 */
+/** Month 휴대폰 칸 짧은 글자 (색으로만 구분하지 않게, H26(49) ①). 칸이 좁아 두 줄까지, 전체 이름은 그날 목록에서. 평소와 다른 것 하나 — 앞이 먼저 */
 export function dayTag(items: DayItem[]): string | null {
   const ls = items.flatMap((i) => (i.kind === 'lesson' ? [i.lesson] : []));
   if (ls.some((l) => l.state === 'canceled')) return 'Cancel';
   if (items.some((i) => i.kind === 'block' && i.block.kind === 'leave') || ls.some((l) => l.leaveOpen)) return 'Leave';
   if (ls.some((l) => l.covering)) return 'Cover';
   if (ls.some((l) => l.kind === 'makeup' || l.kind === 'migrated_makeup')) return 'Make-up';
-  if (ls.some((l) => l.kind === 'compensation')) return 'Comp';
+  if (ls.some((l) => l.kind === 'compensation')) return 'Extra class';   // 보상수업 (전체 이름 Compensation 은 날짜 누르면)
   if (items.some((i) => i.kind === 'block')) return 'Block';
-  if (items.some((i) => i.kind === 'open')) return 'Open';
+  if (items.some((i) => i.kind === 'open')) return 'Extra hours';   // 그날만 연 시간 (전체 이름 Extra availability 는 날짜 누르면)
   if (ls.some((l) => l.state !== 'canceled' && l.count && l.count.n === l.count.total)) return 'Last';
   return null;
 }
