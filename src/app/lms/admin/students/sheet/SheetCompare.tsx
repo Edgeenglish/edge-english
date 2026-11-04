@@ -63,7 +63,7 @@ export default function SheetCompare({ rows, students, actions, studentFilter }:
         {rows.length === 0 && <p className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-8 text-center text-[14px] text-[#6b6880]">읽어 둔 시트 줄이 없어요. (Claude가 시트를 읽어 넣으면 여기에 보여요)</p>}
         {rows.length > 0 && list.length === 0 && <p className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-8 text-center text-[14px] text-[#6b6880]">해당하는 줄이 없어요.</p>}
         {sheets.map((sh) => (
-          <section key={sh} className="grid gap-2">
+          <section key={sh} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
             <h2 className="text-[13px] font-extrabold tracking-wider text-[#6b6880]">{sh}</h2>
             {list.filter((r) => r.sheet === sh).map((r) => (
               <RowCard key={r.id} r={r} students={students} byId={byId} actions={actions} open={open === r.id} onToggle={() => setOpen(open === r.id ? null : r.id)} />
@@ -105,7 +105,7 @@ function RowCard({ r, students, byId, actions, open, onToggle }: { r: SheetRow; 
     </button>
   );
   return (
-    <div className="rounded-[14px] border border-[#e6e3ef] bg-white">
+    <div className="min-w-0 overflow-hidden rounded-[14px] border border-[#e6e3ef] bg-white">
       {head}
       {open && (
         <div className="border-t border-[#f0eef6] px-4 pb-4 pt-3">
