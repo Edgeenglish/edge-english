@@ -2,13 +2,14 @@
 
 // 강사 화면 미리보기 (?demo=1): 가짜 데이터, 저장은 이 화면 안에서만
 import { useMemo, useState } from 'react';
-import { fakeHours, fakeStudentProfile, fakeTutorScreen } from '@/lms/tutor/fake';
+import { fakeHours, fakeScheduleStore, fakeStudentProfile, fakeTutorScreen } from '@/lms/tutor/fake';
 import type { HoursData } from '@/lms/tutor/hours';
 import { lateToSave, savedStatus, type TutorScreen } from '@/lms/tutor/screen';
 import TutorHome, { type TutorActions } from './TutorHome';
 
 export default function TutorDemo({ nowIso }: { nowIso: string }) {
   const [data] = useState<{ s: TutorScreen; h: HoursData }>(() => ({ s: fakeTutorScreen(new Date(nowIso)), h: fakeHours(new Date(nowIso)) }));
+  const [sched] = useState(() => fakeScheduleStore(new Date(nowIso), data.h, data.s.lessons));
   const actions = useMemo<TutorActions>(() => ({
     load: async () => ({ ...data.s }),
     record: async (id, r, topics, remarks, late) => {
@@ -33,6 +34,7 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
         open.forEach((k) => { delete h.cells[k]; });
       },
     },
+    schedule: { load: sched.load, save: sched.save },
     profile: {
       load: async (id) => fakeStudentProfile(id, new Date(nowIso)),
       save: async () => {},
@@ -41,6 +43,6 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
       { id: 'demo-hajun', name: 'Hajun Kim', level: 'Intermediate', classType: 'Free talking', timezone: 'Asia/Seoul', noteUrl: 'https://docs.google.com/' },
       { id: 'demo-seoyeon', name: 'Seoyeon Park (Sarah)', level: 'Pre-Intermediate', classType: 'Textbook', timezone: 'Australia/Melbourne', noteUrl: null },
     ],
-  }), [data, nowIso]);
+  }), [data, nowIso, sched]);
   return <TutorHome initial={data.s} nowIso={nowIso} actions={actions} />;
 }

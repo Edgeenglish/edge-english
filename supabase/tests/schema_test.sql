@@ -1619,7 +1619,7 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
 select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000002', 'held', 'x', null)$$, 'after it starts');
 select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', '  ', null)$$, 'covered topics');
 select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000005', 'held', 'x', null)$$, 'canceled');
-select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000004', 'late', 'x', null)$$, 'reason for being late');
+select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000004', 'late', 'x', null)$$, 'why you were late');
 select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000006', 'held', 'x', null)$$, 'payroll');
 select pg_temp.ok(true, '시작 전·다룬 내용 없음·취소된 수업·지각 사유 없음·정산 들어간 수업은 기록 거절');
 select tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'Free talk, hobbies', null);
@@ -1641,8 +1641,7 @@ select pg_temp.ok((select student_late from class_records where lesson_id = '777
                    where x ->> 'id' = '77777777-2000-0000-0000-000000000003'),
   '학생 지각 체크 → 상태는 그대로(Make-up completed), 강사 화면에 student_late');
 -- 4000 강사 노쇼: 강사는 못 함, 운영자만 → 수업 취소(Tutor no-show) + 보상 수업 1회, 다른 결과로 고치면 보상 되돌림
-select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000004', 'tutor_no_show', null, null)$$, '42501');
-select pg_temp.ok(true, '강사는 강사 노쇼를 기록할 수 없음 (4000)');
+-- (4401 대표 지시로 강사 본인도 Tutor no-show 를 고를 수 있게 바뀜 — 예전 '강사는 못 함' 시험은 뺌)
 select tutor_record_class('77777777-2000-0000-0000-000000000003', 'student_no_show', null, null, true);
 select pg_temp.ok((select not student_late from class_records where lesson_id = '77777777-2000-0000-0000-000000000003'), 'Held가 아니면 학생 지각 표시 안 함');
 select tutor_record_class('77777777-2000-0000-0000-000000000003', 'held', 'Unit 5', null);
@@ -1991,6 +1990,72 @@ reset role;
 select pg_temp.ok((select count(*) = 1 from tutor_hours_changes where tutor_id = '55555555-0000-0000-0000-000000003100' and by_admin), 'My hours: 운영자 대신 고친 것은 운영자 표시');
 select pg_temp.expect_error($$delete from tutor_hours_changes$$, '삭제할 수 없습니다');
 select pg_temp.ok(true, 'My hours: 바뀐 기록은 지울 수 없음');
+
+-- ---------- 4403 강사 Schedule 날짜별 막기·열기 (H26(49)+(50)) ----------
+-- 강사 3100 (Ho Chi Minh): 다음 주부터 매주 월 09:00~15:00 시작 가능, 다다음 주 월요일 = nxt + 7 에 정규 수업 09:00 (40분)
+create temp table sd (d date, far date);
+insert into sd select nxt + 14, (now() at time zone 'Asia/Ho_Chi_Minh')::date + 85 from hm;
+grant select on sd to authenticated;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000003100';
+select tutor_schedule_save(null, 'block', array[(select d::text from sd) || 'T10:00', (select d::text from sd) || 'T10:30'], '  Dentist  ');
+select tutor_schedule_save(null, 'open', array[(select d::text from sd) || 'T16:00', (select d::text from sd) || 'T16:30'], null);
+create temp table sj as select tutor_schedule(null, (select d from sd), (select d from sd), true) as j;
+select pg_temp.ok((select j -> 'cells' ->> ((select d::text from sd) || 'T10:00') = 'b' and j -> 'cells' ->> ((select d::text from sd) || 'T16:00') = 'x'
+                          and j -> 'cells' ->> ((select d::text from sd) || 'T17:00') = 's' and not j -> 'cells' ? ((select d::text from sd) || 'T11:00')
+                          and j -> 'blocks' -> 0 ->> 'note' = 'Dentist' and j -> 'blocks' -> 0 ->> 'end' = (select d::text from sd) || 'T11:00'
+                          and j -> 'opens' -> 0 ->> 'start' = (select d::text from sd) || 'T16:00' and j -> 'opens' -> 0 ->> 'end' = (select d::text from sd) || 'T17:00'
+                          and (j ->> 'last')::date = (j ->> 'today')::date + 84 from sj),
+  'Schedule: 막기(메모 앞뒤 공백 정리)·그날만 열기 칸이 보이고, 기간은 오늘부터 12주(84일) 후까지');
+reset role;
+select pg_temp.ok(lms_tutor_available('55555555-0000-0000-0000-000000003100', ((select d from sd) + time '16:30') at time zone 'Asia/Ho_Chi_Minh')
+              and not lms_tutor_available('55555555-0000-0000-0000-000000003100', ((select d from sd) + time '17:00') at time zone 'Asia/Ho_Chi_Minh')
+              and lms_tutor_busy('55555555-0000-0000-0000-000000003100', ((select d from sd) + time '10:00') at time zone 'Asia/Ho_Chi_Minh', ((select d from sd) + time '10:40') at time zone 'Asia/Ho_Chi_Minh'),
+  'Schedule: 그날만 연 시간은 보강·대체 판정에 가능, 막은 시간은 막힘');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000003100';
+select tutor_schedule_save(null, 'block', array[(select d::text from sd) || 'T16:30'], 'ignored');
+select pg_temp.ok((select j -> 'cells' ->> ((select d::text from sd) || 'T16:30') = 's' and j -> 'cells' ->> ((select d::text from sd) || 'T16:00') = 'x'
+                   from (select tutor_schedule(null, (select d from sd), (select d from sd), true) j) z),
+  'Schedule: 그날만 연 칸을 막으면 그 칸만 다시 닫힘(매주 닫힌 시간)');
+select pg_temp.expect_error($$select tutor_schedule_save(null, 'block', array[(select (nxt + 7)::text from hm) || 'T09:00'], null)$$, 'You have a class at 09:00 Ho Chi Minh Time. Classes can''t be blocked.');
+select pg_temp.expect_error($$select tutor_schedule_save(null, 'block', array[(select d::text from sd) || 'T12:00'], repeat('a', 101))$$, '100 characters');
+select pg_temp.expect_error($$select tutor_schedule_save(null, 'block', array[(select far::text from sd) || 'T10:00'], null)$$, '12 weeks');
+select pg_temp.expect_error($$select tutor_schedule_save(null, 'block', array[(select d::text from sd) || 'T10:00'], null)$$, 'already blocked');
+select pg_temp.expect_error($$select tutor_schedule_save(null, 'open', array[(select d::text from sd) || 'T11:00'], null)$$, 'already available');
+select pg_temp.expect_error($$select tutor_schedule_save(null, 'block', array[(select d::text from sd) || 'T05:30'], null)$$, 'Invalid time');
+select pg_temp.ok(true, 'Schedule: 수업 칸·100자 넘는 메모·12주 밖·이미 막은 칸·이미 열린 칸·06:00 전은 거절');
+select tutor_schedule_save(null, 'note', null, 'Kid''s school event', (select (j -> 'blocks' -> 0 ->> 'id')::uuid from sj));
+reset role;
+select pg_temp.ok((select reason = 'Kid''s school event' from tutor_time_off where id = (select (j -> 'blocks' -> 0 ->> 'id')::uuid from sj)), 'Schedule: 메모 고치기');
+-- 6시간 안에 걸친 막기 풀기 → 6시간 안 부분은 남음 · 예전 고정 글은 메모 없음 · 휴무 사유는 강사에게 안 보임
+insert into tutor_time_off (id, tutor_id, starts_at, ends_at, kind, reason)
+values ('66666666-4403-0000-0000-000000000001', '55555555-0000-0000-0000-000000003100', now() + interval '1 hour', now() + interval '20 hours', 'block', 'Unavailable this week (My hours)'),
+       ('66666666-4403-0000-0000-000000000002', '55555555-0000-0000-0000-000000003100', now() + interval '30 days', now() + interval '31 days', 'leave', 'internal reason');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000003100';
+select pg_temp.ok((select bool_and(case b ->> 'kind' when 'leave' then b -> 'note' = 'null'::jsonb else true end)
+                          and exists (select 1 from jsonb_array_elements(j -> 'blocks') x where x ->> 'id' = '66666666-4403-0000-0000-000000000001' and x -> 'note' = 'null'::jsonb)
+                   from (select tutor_schedule(null, (now() at time zone 'Asia/Ho_Chi_Minh')::date, (now() at time zone 'Asia/Ho_Chi_Minh')::date + 31) j) z,
+                        jsonb_array_elements(j -> 'blocks') b group by j),
+  'Schedule: 예전 One week only 고정 글은 메모 없음, 휴무 사유는 강사 화면에 안 보냄');
+select tutor_schedule_save(null, 'unblock', null, null, '66666666-4403-0000-0000-000000000001');
+reset role;
+select pg_temp.ok((select count(*) = 1 and min(starts_at) between now() + interval '59 minutes' and now() + interval '61 minutes'
+                          and max(ends_at) between now() + interval '6 hours' and now() + interval '6 hours 30 minutes'
+                   from tutor_time_off where tutor_id = '55555555-0000-0000-0000-000000003100' and kind = 'block' and starts_at < now() + interval '2 hours'),
+  'Schedule: 막기 풀기 — 6시간 안 부분은 그대로, 그 뒤만 풂');
+select pg_temp.ok((select count(*) >= 5 from tutor_hours_changes where tutor_id = '55555555-0000-0000-0000-000000003100' and changes ? 'day_open'), 'Schedule: 바뀐 기록 남음');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+select pg_temp.expect_error($$select tutor_schedule('55555555-0000-0000-0000-000000003100', current_date, current_date)$$, '42501');
+select pg_temp.expect_error($$select tutor_schedule_save('55555555-0000-0000-0000-000000003100', 'note', null, 'x', '66666666-4403-0000-0000-000000000002')$$, '42501');
+select pg_temp.expect_error($$select tutor_schedule_save(null, 'unblock', null, null, (select (j -> 'blocks' -> 0 ->> 'id')::uuid from sj))$$, 'gone');
+select pg_temp.ok(true, 'Schedule: 다른 강사는 못 보고 못 고침(남의 막기 id 도 못 건드림)');
+select pg_temp.ok((select count(*) = 0 from tutor_open_once), 'Schedule: 다른 강사의 그날만 연 시간은 표에서도 안 보임');
+reset request.jwt.claim.sub;
+reset role;
+delete from tutor_time_off where id = '66666666-4403-0000-0000-000000000002' or (tutor_id = '55555555-0000-0000-0000-000000003100' and starts_at < now() + interval '2 hours');
 
 -- ---------- 4100 강사 노쇼 무료 보상수업 = 기존 보강 기능 재사용 ----------
 reset request.jwt.claim.sub;

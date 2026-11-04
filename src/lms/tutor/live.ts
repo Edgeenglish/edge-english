@@ -2,6 +2,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseHours, type HoursData } from './hours';
+import { parseSchedule, type ScheduleAction, type ScheduleData } from './schedule';
 import { parseScreen, type Late, type TutorResult, type TutorScreen } from './screen';
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
 import type { TutorStudentRow } from '@/app/lms/tutor/TutorHome';
@@ -89,4 +90,16 @@ export async function updateStudentProfile(sb: SupabaseClient, studentId: string
 export async function loadMyStudents(sb: SupabaseClient, tutorId: string | null): Promise<TutorStudentRow[]> {
   const rows = check(await sb.rpc('tutor_students_list', { p_tutor: tutorId })) as { student_id: string; display_name: string; level: string | null; class_type: string | null; timezone: string | null; class_note_url: string | null }[];
   return rows.map((r) => ({ id: r.student_id, name: r.display_name, level: r.level, classType: r.class_type, timezone: r.timezone, noteUrl: r.class_note_url }));
+}
+
+const SCHEDULE_NOT_APPLIED = 'Schedule is not ready on this database yet (migration 4403).';
+/** Schedule (4403): 강사 현지 날짜 from~to, cells = Week 칸 판정도. tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
+export async function loadSchedule(sb: SupabaseClient, tutorId: string | null, from: string, to: string, cells: boolean): Promise<ScheduleData> {
+  const r = await sb.rpc('tutor_schedule', { p_tutor: tutorId, p_from: from, p_to: to, p_cells: cells });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') throw new Error(SCHEDULE_NOT_APPLIED);
+  return parseSchedule(check(r));
+}
+/** 막기·그날만 열기(cells = 강사 현지 칸 키) · 메모 고치기·막기 풀기(blockId). 검사는 DB */
+export async function saveSchedule(sb: SupabaseClient, tutorId: string | null, action: ScheduleAction, cells: string[] | null, note: string | null, blockId: string | null): Promise<void> {
+  check(await sb.rpc('tutor_schedule_save', { p_tutor: tutorId, p_action: action, p_cells: cells, p_note: note, p_block: blockId }));
 }

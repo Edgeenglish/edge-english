@@ -22,10 +22,10 @@ describe('My hours', () => {
     expect(describeChanges(ch, 'en')).toEqual([
       'Every Saturday 10:00–10:30 → open',
       'Every Monday 9:00–10:00 → closed',
-      'Mon 2 Nov 10:00–11:00 → unavailable this week',
-      'Tue 3 Nov 8:00–8:30 → open again',
+      'Mon 2 Nov 10:00–11:00 → blocked',
+      'Tue 3 Nov 8:00–8:30 → block removed',
     ]);
-    expect(describeChanges(ch, 'ko')).toEqual(['매주 토 10:00–10:30 → 열림', '매주 월 9:00–10:00 → 닫음', '11/2(월) 10:00–11:00 → 그 주만 닫음', '11/3(화) 8:00–8:30 → 다시 엶']);
+    expect(describeChanges(ch, 'ko')).toEqual(['매주 토 10:00–10:30 → 열림', '매주 월 9:00–10:00 → 닫음', '11/2(월) 10:00–11:00 → 그날만 막음', '11/3(화) 8:00–8:30 → 막기 풂']);
   });
   it('주 표시와 DB 값 읽기', () => {
     expect(weekText('2026-11-02')).toBe('2 – 8 Nov');
@@ -36,7 +36,7 @@ describe('My hours', () => {
     expect(parseHours({ tutor: { id: 't', name: 'T', timezone: 'Asia/Tokyo' }, history: null }).history).toBeNull();
   });
   it('Every week 적용일 안내: 강사 현지 월요일 날짜 그대로', () => {
-    expect(applyFromText('2026-11-09')).toBe('These hours apply from Mon, Nov 9.');
+    expect(applyFromText('2026-11-09')).toBe('Changes apply from Mon, Nov 9.');
   });
   it('바뀐 내용: 고른 시간대 먼저, 다른 시간대 보조 (날짜·요일 달라짐, 서머타임)', () => {
     const none = { weeklyOpen: [], weeklyClose: [], onceClose: [], onceOpen: [] };
@@ -52,7 +52,7 @@ describe('My hours', () => {
     expect(c[0].sub).toBe('Every Monday 1:00–1:30 Melbourne Time');
     // 그 주만, 자정을 걸치는 칸 묶음
     const d = describeChangesIn({ ...none, onceClose: ['2026-11-10T21:30', '2026-11-10T22:00'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Seoul');
-    expect(d[0].main).toBe('Tue 10 Nov 23:30 – Wed 11 Nov 0:30 Korea Time (KST) → unavailable this week');
+    expect(d[0].main).toBe('Tue 10 Nov 23:30 – Wed 11 Nov 0:30 Korea Time (KST) → blocked');
     expect(d[0].sub).toBe('Tue 10 Nov 21:30–22:30 Ho Chi Minh Time');
     // 강사가 한국이면 보조 줄 없음
     expect(describeChangesIn({ ...none, weeklyOpen: ['1:09:00'] }, '2026-11-09', 'Asia/Seoul', 'Asia/Seoul')[0].sub).toBeNull();

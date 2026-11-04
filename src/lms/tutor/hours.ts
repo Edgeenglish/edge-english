@@ -8,7 +8,8 @@ import { cityTime, localToInstant } from './hours-view';
 export type CellCode = 'c' | 'r' | 'l' | 'p' | 's' | 'b' | 'o';
 export type WeeklyClass = { d: number; time: string; min: number; student: string };
 export type HoursLesson = { start: string; min: number; student: string; makeup: boolean };
-export type HoursChanges = { from: string; weeklyOpen: string[]; weeklyClose: string[]; onceClose: string[]; onceOpen: string[] };
+/** onceClose·onceOpen = 그날만 막기·풀기, dayOpen = 그날만 열기, note = 막을 때·고친 메모 (Schedule, 4403) */
+export type HoursChanges = { from: string; weeklyOpen: string[]; weeklyClose: string[]; onceClose: string[]; onceOpen: string[]; dayOpen?: string[]; note?: string | null; noteOf?: string | null };
 export type HoursHistory = { at: Date; byAdmin: boolean; changes: HoursChanges };
 
 export type HoursData = {
@@ -29,6 +30,7 @@ export type HoursData = {
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB 함수가 돌려주는 JSON 을 화면 모양으로 바꾸는 곳 */
 const changesOf = (c: any): HoursChanges => ({
   from: c.from, weeklyOpen: c.weekly_open ?? [], weeklyClose: c.weekly_close ?? [], onceClose: c.once_close ?? [], onceOpen: c.once_open ?? [],
+  dayOpen: c.day_open ?? [], note: c.note ?? null, noteOf: c.note_of ?? null,
 });
 export function parseHours(j: any): HoursData {
   return {
@@ -129,20 +131,26 @@ export function describeChanges(ch: Omit<HoursChanges, 'from'> & { from?: string
       }
     }
   };
-  const once = (keys: string[], close: boolean) => {
+  const once = (keys: string[], what: 'close' | 'reopen' | 'dayOpen') => {
     for (const date of [...new Set(keys.map((k) => k.slice(0, 10)))].sort()) {
       for (const [a, b] of runs(keys.filter((k) => k.startsWith(date)).map((k) => toMin(k.slice(11))))) {
         const span = `${timeText(a)}–${timeText(b + 30)}`;
-        out.push(lang === 'en'
-          ? `${dateText(date)} ${span} → ${close ? 'unavailable this week' : 'open again'}`
-          : `${koDate(date)} ${span} → ${close ? '그 주만 닫음' : '다시 엶'}`);
+        const en = { close: 'blocked', reopen: 'block removed', dayOpen: 'available (this day only)' }[what];
+        const ko = { close: '그날만 막음', reopen: '막기 풂', dayOpen: '그날만 엶' }[what];
+        out.push(lang === 'en' ? `${dateText(date)} ${span} → ${en}` : `${koDate(date)} ${span} → ${ko}`);
       }
     }
   };
   weekly(ch.weeklyOpen, true);
   weekly(ch.weeklyClose, false);
-  once(ch.onceClose, true);
-  once(ch.onceOpen, false);
+  once(ch.onceClose, 'close');
+  once(ch.onceOpen, 'reopen');
+  once(ch.dayOpen ?? [], 'dayOpen');
+  if (ch.note && ch.onceClose.length > 0) out.push(lang === 'en' ? `Note: ${ch.note}` : `메모: ${ch.note}`);
+  if (ch.noteOf) {
+    const [a] = ch.noteOf.split('/');
+    out.push(lang === 'en' ? `${dateText(a.slice(0, 10))} ${timeText(toMin(a.slice(11)))} block note → ${ch.note ?? '(none)'}` : `${koDate(a.slice(0, 10))} ${timeText(toMin(a.slice(11)))} 막은 시간 메모 → ${ch.note ?? '(없음)'}`);
+  }
   return out;
 }
 /**
@@ -179,7 +187,7 @@ export function describeChangesIn(
   };
   const once = (keys: string[], close: boolean) => {
     for (const date of [...new Set(keys.map((k) => k.slice(0, 10)))].sort()) {
-      for (const [a, b] of runs(keys.filter((k) => k.startsWith(date)).map((k) => toMin(k.slice(11))))) add(date, a, b, false, close ? 'unavailable this week' : 'open again');
+      for (const [a, b] of runs(keys.filter((k) => k.startsWith(date)).map((k) => toMin(k.slice(11))))) add(date, a, b, false, close ? 'blocked' : 'block removed');
     }
   };
   weekly(ch.weeklyOpen, true);
@@ -188,7 +196,7 @@ export function describeChangesIn(
   once(ch.onceOpen, false);
   return out;
 }
-/** Every week 적용일 안내 (2026-11-04 대표: 저장하면 바로 바뀌는 줄 오해) — 'These hours apply from Mon, Nov 9.' 강사 현지 날짜 */
-export const applyFromText = (from: string): string => { const p = parts(from); return `These hours apply from ${SHORT[p.dow]}, ${MONTHS[p.month]} ${p.day}.`; };
+/** 매주 변경 적용일 안내 (2026-11-04 대표: 저장하면 바로 바뀌는 줄 오해, 문구는 시안 2 표 2번) — 'Changes apply from Mon, Nov 23.' 강사 현지 날짜 */
+export const applyFromText = (from: string): string => { const p = parts(from); return `Changes apply from ${SHORT[p.dow]}, ${MONTHS[p.month]} ${p.day}.`; };
 /** 매주 변경 시작일 문구 */
 export const fromText = (from: string, lang: 'en' | 'ko'): string => (lang === 'en' ? `Every week changes start ${dateText(from)}.` : `${koDate(from)}부터`);

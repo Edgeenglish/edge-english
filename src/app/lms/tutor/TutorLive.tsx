@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { answerCover, answerMakeup, createTutorLogin, loadHours, loadMyStudents, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveHours, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
+import { answerCover, answerMakeup, createTutorLogin, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
 import { weekOf, type TutorScreen } from '@/lms/tutor/screen';
 import TutorHome, { type TutorActions } from './TutorHome';
 
@@ -55,6 +55,10 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
         hours: {
           load: () => loadHours(sb, adminTutor),
           save: (weekly, close, open) => saveHours(sb, adminTutor, weekly, close, open),
+        },
+        schedule: {
+          load: (from, to, cells) => loadSchedule(sb, adminTutor, from, to, cells),
+          save: (action, cells, note, blockId) => saveSchedule(sb, adminTutor, action, cells, note, blockId),
         },
         profile: {
           load: (studentId) => loadStudentProfile(sb, studentId),

@@ -1,14 +1,16 @@
 'use client';
 
-// 강사 화면 (영어, 휴대폰 우선, 2026-11-04 개편): 왼쪽(PC)·아래(휴대폰) 고정 메뉴 Home · Class Record · Students · My hours
-// Home = 오늘 수업·할 일, Class Record = 주별 일정 + 기록 작성·조회 (Schedule 메뉴는 같은 표라 뺌, 대표), Students = 담당 학생 → 프로필, My hours = 가능 시간
+// 강사 화면 (영어, 휴대폰 우선, 2026-11-04 개편): 왼쪽(PC)·아래(휴대폰) 고정 메뉴 Home · Schedule · Class Record · Students · Availability
+// Home = 오늘 수업·할 일, Schedule = 월간·주간 일정 + 날짜별 막기·열기 (H26(49)+(50)), Class Record = 주별 기록 작성·조회,
+// Students = 담당 학생 → 프로필, Availability = 매주 가능 시간 (예전 My hours)
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { formatInZone } from '@/lms/rules/dates';
 import { STATUS_RULES } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
+import TutorSchedule, { type ScheduleActions } from './TutorSchedule';
 import { useSavedToggle, useSavedValue } from './useSaved';
 import StudentProfile, { type ProfileActions } from './StudentProfile';
 import {
@@ -22,8 +24,10 @@ export type TutorActions = {
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
   /** 대체 수업 요청 답: items = 답하는 수업 전체, yes = 가능한 수업 */
   answerCover: (items: string[], yes: string[]) => Promise<void>;
-  /** 가능 시간 고치기 [My hours] (migration 3100) */
+  /** 매주 가능 시간 [Availability] (migration 3100) */
   hours: HoursActions;
+  /** Schedule 날짜별 막기·열기 (migration 4403) */
+  schedule: ScheduleActions;
   /** 학생 프로필 (4300): 학생 이름을 누르면 열림. 없으면 이름만 글자 */
   profile?: ProfileActions;
   /** Students 메뉴: 담당 학생 목록 (tutor_my_students — 정규 담당·확정 대체만, DB 가 정함) */
@@ -50,13 +54,14 @@ const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-
 const input = 'w-full rounded-[10px] border border-[#d9d5e6] bg-white px-3 py-2.5 text-[16px] text-[#1d1b2b]';
 const label = 'mb-1 block text-[13px] font-semibold text-[#55526a]';
 
-type Tab = 'home' | 'record' | 'students' | 'hours';
-// 메뉴 이름은 대표가 정한 영문 그대로 (2026-11-04)
+type Tab = 'home' | 'schedule' | 'record' | 'students' | 'hours';
+// 메뉴 이름은 대표가 정한 영문 그대로 (2026-11-04, H26(50): My hours → Availability. 저장 키 'hours' 는 그대로)
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
+  { key: 'schedule', label: 'Schedule', icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
   { key: 'record', label: 'Class Record', icon: 'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z' },
   { key: 'students', label: 'Students', icon: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' },
-  { key: 'hours', label: 'My hours', icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+  { key: 'hours', label: 'Availability', icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
 ];
 function Icon({ d }: { d: string }) {
   return (
@@ -132,6 +137,17 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
     setOffset(off);
     await reload(off);
   }
+  // Schedule 수업 창 [Class Record ›] → 그 수업이 있는 주로 가서 그 줄을 펼침 (H26(49) ③)
+  const [focus, setFocus] = useState<string | null>(null);
+  async function openInRecord(l: TutorLesson) {
+    const n = new Date();
+    const off = Math.round((Date.parse(weekOf(l.startsAt, tz, 0).from) - Date.parse(weekOf(n, tz, 0).from)) / (7 * 86400000));
+    setStudent('');
+    setFocus(l.id);
+    setTab('record');
+    await goWeek(off);
+  }
+  const loadLessons = useCallback(async (kstFrom: string, kstTo: string) => (await actions.load(kstFrom, kstTo)).lessons, [actions]);
 
   const byId = new Map(screen.lessons.map((l) => [l.id, l]));
   const toRecord = [
@@ -210,7 +226,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             <div key={d.date}>
               <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}{d.date === today ? ' · Today' : ''}</h3>
               {d.lessons.map((l) => (
-                <ListRow key={l.id} lesson={l} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
+                <ListRow key={l.id} focus={focus === l.id} lesson={l} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
                   onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
               ))}
             </div>
@@ -307,7 +323,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
                 {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={tz} now={now} onRecord={() => setTab('record')} />)}
               </div>
               {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">Next class: {whenFull(nextLesson.startsAt, tz)} · {nextLesson.student}</p>}
-              <button type="button" onClick={() => setTab('record')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">All classes ›</button>
+              <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">All classes ›</button>
             </section>
           </div>
         )}
@@ -368,7 +384,12 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
           </section>
         )}
 
-        {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} inline />}
+        {tab === 'schedule' && (
+          <TutorSchedule actions={actions.schedule} tz={tz} now={now} openProfile={openProfile} onRecord={openInRecord}
+            loadLessons={loadLessons} />
+        )}
+
+        {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => setTab('schedule')} inline />}
 
         {panel === 'cover' && (
           <Sheet onClose={() => setPanel(null)}>
@@ -399,7 +420,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       </div>
 
       {/* 휴대폰: 아래 고정 메뉴 */}
-      <nav aria-label="Menu" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
+      <nav aria-label="Menu" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
         {TABS.map((t) => tabBtn(t, true))}
       </nav>
     </div>
@@ -516,11 +537,13 @@ const cols = (kst: boolean, paid: boolean) => kst
 
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
-function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, admin }: {
+function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, admin, focus = false }: {
+  focus?: boolean;
   lesson: TutorLesson; tz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [dirty, mark] = useDirtyList();
+  const rowRef = useRef<HTMLDivElement>(null);
   const phase = phaseOf(l, now);
   const status = statusText(l, now);
   const k = kst ? kstText(l.startsAt, tz) : null;
@@ -530,6 +553,12 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
   const recordable = canRecord(l, now);
   const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
+  // Schedule 에서 [Class Record ›] 로 온 수업: 펼치고 그 줄로 스크롤
+  useEffect(() => {
+    if (!focus) return;
+    if (canOpen) setOpen(true);
+    rowRef.current?.scrollIntoView({ block: 'center' });
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
   const stText = phase === 'recorded' ? `✓ ${status}${lateText(l.late)}` : status;
   // 페이 대상 Y/N (상태 규칙 tutorPaid, 대표 10/29 가안). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
@@ -553,7 +582,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
     </>
   );
   return (
-    <div className={`border-b border-[#e6e3ef] last:border-b-0 ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
+    <div ref={rowRef} className={`border-b border-[#e6e3ef] last:border-b-0 ${focus ? 'ring-2 ring-inset ring-[#5b3fe0]' : ''} ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
       <button type="button" disabled={!canOpen} aria-expanded={open} onClick={() => {
         if (open && dirty.current.size > 0 && !window.confirm('Discard changes?')) return;
         setOpen(!open);

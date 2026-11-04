@@ -3,6 +3,8 @@ import { addDays, formatInZone, instantToKstDate } from '../rules/dates';
 import type { TutorStudentProfile } from './profile';
 import { hhmm, lessonAt, plusDays, toMin, type CellCode, type HoursData } from './hours';
 import { NO_LATE, type TutorScreen } from './screen';
+import { localToInstant } from './hours-view';
+import type { ScheduleAction, ScheduleCode, ScheduleData } from './schedule';
 
 export function fakeTutorScreen(now: Date): TutorScreen {
   const h = (hours: number) => new Date(Math.floor(+now / 3600000) * 3600000 + hours * 3600000);
@@ -95,5 +97,49 @@ export function fakeStudentProfile(studentId: string, now: Date): TutorStudentPr
       lessonsPurchased: 24, lessonsCarriedIn: 1, sheet: null, done: 4, leftRegular: 20, leftAll: 21, extensions: [] },
     slots: regular ? slots : [], nextSlots: [], upcoming: regular ? up : up.slice(0, 1), recentTopics: [{ startsAt: new Date(+now - 86400000 * 2), tutor: 'Emma', topics: 'Travel plans, airports', kind: 'regular', substitute: false }],
     access: regular ? 'regular' : 'substitute', me: { id: 'demo', timezone: 'Australia/Sydney' },
+  };
+}
+
+/** Schedule 미리보기 (?demo=1): My hours 가짜 매주 시간 + 이 화면 안에서만 막기·열기 */
+export function fakeScheduleStore(now: Date, hours: HoursData, lessons: TutorScreen['lessons']) {
+  const tz = hours.tutor.timezone;
+  const today = formatInZone(now, tz).date;
+  const last = plusDays(today, 84);
+  const times = Array.from({ length: 34 }, (_, i) => hhmm(6 * 60 + i * 30));
+  const blocks: ScheduleData['blocks'] = [{ id: 'b1', kind: 'block', start: `${plusDays(today, 2)}T13:00`, end: `${plusDays(today, 2)}T15:00`, note: 'Dentist' }];
+  const opens: ScheduleData['opens'] = [];
+  const inst = (k: string) => localToInstant(k.slice(0, 10), k.slice(11, 16), tz);
+  const covers = (rs: { start: string; end: string }[], k: string) => rs.find((r) => +inst(r.start) <= +inst(k) && +inst(k) < +inst(r.end));
+  const code = (k: string): ScheduleCode => {
+    const a = +inst(k);
+    if (lessons.some((l) => l.state !== 'canceled' && +l.startsAt < a + 1800000 && a < +l.endsAt)) return 'c';
+    if (a < +now + 6 * 3600000) return 'p';
+    const weekly = hours.weeklyOpen.includes(`${new Date(`${k.slice(0, 10)}T00:00:00Z`).getUTCDay()}:${k.slice(11)}`);
+    if (!weekly && !covers(opens, k)) return 's';
+    if (covers(blocks, k)) return 'b';
+    return weekly ? 'o' : 'x';
+  };
+  const end = (k: string) => { const t = toMin(k.slice(11)) + 30; return `${k.slice(0, 10)}T${hhmm(t)}`; };
+  return {
+    load: async (from: string, to: string, withCells: boolean): Promise<ScheduleData> => {
+      const cells: Record<string, ScheduleCode> = {};
+      if (withCells) {
+        for (let d = from < today ? today : from; d <= to && d <= last; d = plusDays(d, 1)) {
+          for (const t of times) { const c = code(`${d}T${t}`); if (c !== 'o') cells[`${d}T${t}`] = c; }
+        }
+      }
+      return { tutor: hours.tutor, today, last, times, cells: withCells ? cells : null, blocks: blocks.map((b) => ({ ...b })), opens: opens.map((o) => ({ ...o })) };
+    },
+    save: async (action: ScheduleAction, keys: string[] | null, note: string | null, id: string | null) => {
+      const ks = [...(keys ?? [])].sort();
+      if (action === 'block') {
+        if (ks.some((k) => code(k) === 'x')) { for (let i = opens.length - 1; i >= 0; i--) if (ks.some((k) => covers([opens[i]], k))) opens.splice(i, 1); }
+        else blocks.push({ id: `b${Date.now()}`, kind: 'block', start: ks[0], end: end(ks[ks.length - 1]), note: note?.trim() || null });
+      }
+      if (action === 'open') opens.push({ start: ks[0], end: end(ks[ks.length - 1]) });
+      const b = blocks.find((x) => x.id === id);
+      if (action === 'note' && b) b.note = note?.trim() || null;
+      if (action === 'unblock' && b) blocks.splice(blocks.indexOf(b), 1);
+    },
   };
 }
