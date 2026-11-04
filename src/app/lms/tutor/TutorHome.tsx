@@ -1,7 +1,7 @@
 'use client';
 
-// 강사 화면 (영어, 휴대폰 우선, 2026-11-04 개편): 왼쪽(PC)·아래(휴대폰) 고정 메뉴 Home · Schedule · Class Record · Students · My hours
-// Home = 오늘 수업·할 일, Schedule = 주별 일정, Class Record = 기록 작성·조회, Students = 담당 학생 → 프로필, My hours = 가능 시간
+// 강사 화면 (영어, 휴대폰 우선, 2026-11-04 개편): 왼쪽(PC)·아래(휴대폰) 고정 메뉴 Home · Class Record · Students · My hours
+// Home = 오늘 수업·할 일, Class Record = 주별 일정 + 기록 작성·조회 (Schedule 메뉴는 같은 표라 뺌, 대표), Students = 담당 학생 → 프로필, My hours = 가능 시간
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -50,11 +50,10 @@ const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-
 const input = 'w-full rounded-[10px] border border-[#d9d5e6] bg-white px-3 py-2.5 text-[16px] text-[#1d1b2b]';
 const label = 'mb-1 block text-[13px] font-semibold text-[#55526a]';
 
-type Tab = 'home' | 'schedule' | 'record' | 'students' | 'hours';
+type Tab = 'home' | 'record' | 'students' | 'hours';
 // 메뉴 이름은 대표가 정한 영문 그대로 (2026-11-04)
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
-  { key: 'schedule', label: 'Schedule', icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
   { key: 'record', label: 'Class Record', icon: 'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z' },
   { key: 'students', label: 'Students', icon: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' },
   { key: 'hours', label: 'My hours', icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
@@ -196,7 +195,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       )}
     </div>
   );
-  const table = (mode: 'schedule' | 'record') => (
+  const table = (
     <>
       {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
       {days.length > 0 && (
@@ -212,7 +211,6 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
               <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}{d.date === today ? ' · Today' : ''}</h3>
               {d.lessons.map((l) => (
                 <ListRow key={l.id} lesson={l} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
-                  mode={mode} onRecord={() => setTab('record')}
                   onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
               ))}
             </div>
@@ -309,24 +307,16 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
                 {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={tz} now={now} onRecord={() => setTab('record')} />)}
               </div>
               {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">Next class: {whenFull(nextLesson.startsAt, tz)} · {nextLesson.student}</p>}
-              <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">Full schedule ›</button>
+              <button type="button" onClick={() => setTab('record')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">All classes ›</button>
             </section>
           </div>
         )}
 
-        {tab === 'schedule' && (
-          <section aria-label="Schedule">
-            <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">Schedule</h1>
-            <p className="mb-3 text-[13.5px] text-[#6b6880]">Your classes by week · {tzHeader(tz)}. Tap a class for notes and links.</p>
-            {viewControls}
-            {table('schedule')}
-          </section>
-        )}
 
         {tab === 'record' && (
           <section aria-label="Class Record">
             <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">Class Record</h1>
-            <p className="mb-3 text-[13.5px] text-[#6b6880]">Record each class after it ends. Tap a past class to edit its record.</p>
+            <p className="mb-3 text-[13.5px] text-[#6b6880]">Your classes by week · {tzHeader(tz)}. Record each class after it ends; tap a past class to edit.</p>
             {toRecord.length > 0 && (
               <section aria-label="Classes to record" className="mb-5 grid gap-3 lg:max-w-[760px]">
                 <h2 className="text-[16px] font-bold text-[#b3261e]">
@@ -345,7 +335,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
               </section>
             )}
             {viewControls}
-            {table('record')}
+            {table}
           </section>
         )}
 
@@ -409,7 +399,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       </div>
 
       {/* 휴대폰: 아래 고정 메뉴 */}
-      <nav aria-label="Menu" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
+      <nav aria-label="Menu" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
         {TABS.map((t) => tabBtn(t, true))}
       </nav>
     </div>
@@ -526,10 +516,8 @@ const cols = (kst: boolean, paid: boolean) => kst
 
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
-function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, admin, mode = 'record', onRecord }: {
+function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, admin }: {
   lesson: TutorLesson; tz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
-  /** schedule = 일정만 (기록은 Class Record 메뉴에서), record = 펼치면 기록칸 */
-  mode?: 'schedule' | 'record'; onRecord?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [dirty, mark] = useDirtyList();
@@ -541,7 +529,6 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   // 펼쳐도 보일 것이 없는 줄은 못 누름 (대표 10/31: 대체수업을 펼쳐도 빈 칸)
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
   const recordable = canRecord(l, now);
-  const recordHere = recordable && mode === 'record';
   const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
   const stText = phase === 'recorded' ? `✓ ${status}${lateText(l.late)}` : status;
@@ -601,7 +588,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
         <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
           {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
-          {recordHere ? (
+          {recordable ? (
             <div className="lg:max-w-[560px]">
               <DirtyCtx.Provider value={mark}>
                 <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing extra={links} admin={admin}
@@ -612,7 +599,6 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
             <div className="grid gap-2 pt-2">
               {l.remarks && <p className="text-[14px]"><b className="text-[13px] text-[#55526a]">Remarks</b> {l.remarks}</p>}
               <div className="flex flex-wrap items-center gap-1.5">
-                {recordable && onRecord && <button type="button" onClick={onRecord} className={`${btnMain} inline-flex items-center text-[14px]`}>{phase === 'recorded' ? 'Edit record' : 'Record this class'}</button>}
                 {links}
                 {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}
               </div>

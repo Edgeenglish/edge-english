@@ -35,6 +35,12 @@
 - 검증 중 바뀐 시험 데이터(되돌리지 않음, 대표 허락): Blair 11/3·11/4 수업 3건 기록됨(지각·E2E 문구), 보상수업 voided 행 1건
 - 못 한 것: 운영자(TOTP) 실제 로그인 클릭 — 운영자 Tutor no-show·Students 운영자 보기는 DB 검증만
 
+## ✅ 2026-11-04 저녁: My hours 표 깨짐 원인 수정 + Schedule 메뉴 제거 (실제 Blair 계정 데이터로 PC·휴대폰·토론토/KST·두 탭 확인)
+- 원인 ① 수업 칸의 수업 아닌 나머지를 투명으로 두어 칸에 구멍이 난 것처럼 보임 → 닫힘 회색(#ecebf1)으로. ② '바꿀 수 없는' 칸이 흰 카드 위 흰색이라 표가 빈 것처럼 보임 → 연한 테두리. 수업 칸은 실제 분만큼만 보라(40분 → 둘째 칸 위 10분)
+- **Schedule 메뉴 제거**(대표: Class Record 와 같은 표) → 메뉴 4개 Home · Class Record · Students · My hours. Class Record 가 주별 일정 + 기록. Home 'All classes ›' → Class Record. ListRow 의 schedule 모드 코드 삭제
+- 대표 경고: My hours 가 다시 깨지거나 이상하게 보이면 안 됨 → 앞으로 My hours 를 건드리면 **실제 계정 데이터로 PC·휴대폰, 현지/KST, Every week/One week only 캡처를 모두 확인한 뒤** push
+- 검증 뒤 e2e Blair 임시 비밀번호 무효화(파일·스크립트 삭제)
+
 ## 📋 다음 세션 할 일 (2026-11-04 대표 요청 원문 요약 — 빠짐없이): 강사 LMS 화면 전체 개선 + Class Record 출결·지각 구조 변경
 - **시작**: 브랜치 `claude/busy-rubin-w3dii1`(= lms-test) 위에서. 대표가 첨부한 학생 화면·강사 화면 캡처는 이 세션에 안 보였음 → 새 세션 첫 메시지에 다시 첨부 요청. 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. 시험용 DB·lms-test 에서만, 운영 DB·lms-prod 금지. 완료 보고는 바뀐 화면·실제 검증 결과·남은 문제만 짧게
 1. **왼쪽 사이드바** (학생 LMS처럼 고정 메뉴, PC·모바일): **Home**(오늘 수업·해야 할 일) · **Schedule**(수업 일정) · **Class Record**(기록 조회·작성) · **Students**(담당 학생) · **My hours**. 메뉴 이름은 이 영문 그대로. 기존 기능을 메뉴로 나누기만 하지 말고 화면마다 목적이 분명하고 원하는 기능을 바로 찾게
