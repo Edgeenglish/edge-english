@@ -113,6 +113,14 @@ export function localDate(t: Date, tz: string): string {
 export function timeRange(l: { startsAt: Date; endsAt: Date }, tz: string): string {
   return `${formatInZone(l.startsAt, tz).time}–${formatInZone(l.endsAt, tz).time}`;
 }
+/** 한국 시각 범위 'KST 15:00–15:40' (강사가 한국 시간대면 null). 시차로 날짜가 다르면 요일을 붙임 */
+export function kstRange(l: { startsAt: Date; endsAt: Date }, tz: string): string | null {
+  if (tz === 'Asia/Seoul') return null;
+  const a = formatInZone(l.startsAt, 'Asia/Seoul');
+  const b = formatInZone(l.endsAt, 'Asia/Seoul');
+  const day = localDate(l.startsAt, tz) === a.date ? '' : `${WD[new Date(`${a.date}T00:00:00Z`).getUTCDay()]} `;
+  return `KST ${day}${a.time}–${b.time}`;
+}
 /** 'Mon 3 Nov 09:00' 강사 현지 */
 export function whenText(t: Date, tz: string): string {
   return `${dayLabel(localDate(t, tz))} ${formatInZone(t, tz).time}`;

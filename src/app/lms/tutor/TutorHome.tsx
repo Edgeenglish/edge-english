@@ -11,7 +11,7 @@ import { STATUS_RULES } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
 import StudentProfile, { type ProfileActions } from './StudentProfile';
 import {
-  answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
+  answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstRange, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   statusText, timeRange, weekOf, whenFull, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
 } from '@/lms/tutor/screen';
 
@@ -422,7 +422,12 @@ function TodayRow({ lesson: l, tz, now, onRecord }: { lesson: TutorLesson; tz: s
   const st = statusText(l, now);
   return (
     <div className={`flex items-center gap-3 py-2 ${phase === 'canceled' ? 'text-[#8a879c]' : ''}`}>
-      <span className="w-[84px] shrink-0 text-[14px] font-bold tabular-nums">{timeRange(l, tz)}</span>
+      {/* 시각에는 항상 어느 시간대인지 같이 (현지 + 한국) */}
+      <span className="w-[118px] shrink-0 tabular-nums">
+        <span className="block text-[14px] font-bold">{timeRange(l, tz)}</span>
+        <span className="block text-[11.5px] leading-tight text-[#6b6880]">{tzTimeLabel(tz)}</span>
+        {kstRange(l, tz) && <span className="block text-[11.5px] leading-tight text-[#6b6880]">{kstRange(l, tz)}</span>}
+      </span>
       <span className="min-w-0 flex-1">
         <StudentName id={l.studentId} name={l.student} className={`block truncate text-[15px] font-semibold ${phase === 'canceled' ? 'line-through' : ''}`} />
         <span className="block text-[12.5px] text-[#6b6880]">{minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}</span>
