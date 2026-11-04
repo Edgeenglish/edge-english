@@ -2526,3 +2526,85 @@ select pg_temp.expect_error($$select admin_credits('99999999-0000-0000-0000-0000
 select pg_temp.ok(true, '변경권 수동 조정은 운영진만 (4500)');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------- 4510 휴무 철회 (QA-17) ----------
+-- 강사 철회A(휴무)·철회B(대체), 학생 철회학생. 수업 w1 = 12일 뒤 20:00(대체 확정) · w2 = 14일 뒤 20:00(기존 강사 보강 기다림) · w3 = 16일 뒤 20:00(미정)
+reset request.jwt.claim.sub;
+reset role;
+create temp table wd (d0 date);
+insert into wd values (current_date + 12);
+grant select on wd to authenticated;
+insert into tutors (id, name, country, timezone) values
+  ('55555555-0000-0000-0000-00000000451a', '철회A', 'Korea', 'Asia/Seoul'), ('55555555-0000-0000-0000-00000000451b', '철회B', 'Korea', 'Asia/Seoul');
+select pg_temp.open_all('55555555-0000-0000-0000-00000000451a');
+select pg_temp.open_all('55555555-0000-0000-0000-00000000451b');
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000004510', '철회학생', 'Withdraw S');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000004510', '99999999-0000-0000-0000-000000004510', 1, 4, 2, 40, d0 - 7, d0 - 7 + 27, 8, 'active' from wd;
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select ('77777777-4510-0000-0000-00000000000' || n)::uuid, '99999999-1000-0000-0000-000000004510', '99999999-0000-0000-0000-000000004510',
+       '55555555-0000-0000-0000-00000000451a', 'regular', n, ((d0 + k) + time '20:00') at time zone 'Asia/Seoul', ((d0 + k) + time '20:40') at time zone 'Asia/Seoul'
+from wd, (values (1, 0), (2, 2), (3, 4)) v(n, k);
+create or replace function pg_temp.wi(n int) returns uuid language sql as $$
+  select id from leave_items where lesson_id = ('77777777-4510-0000-0000-00000000000' || n)::uuid and withdrawn_at is null $$;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+create temp table woff as select (admin_leave_create('55555555-0000-0000-0000-00000000451a', (select d0 from wd), (select d0 + 5 from wd), 'QA 잘못 넣은 휴무', false) ->> 'time_off_id')::uuid as id;
+grant select on woff to authenticated;
+select admin_leave_choose(array[pg_temp.wi(1)], 'substitute', '55555555-0000-0000-0000-00000000451b');
+select admin_leave_sub_ok(array[pg_temp.wi(1)]);
+select admin_leave_student_ok(array[pg_temp.wi(1)]);
+select admin_leave_choose(array[pg_temp.wi(2)], 'wait', null);
+select pg_temp.ok((select tutor_id = '55555555-0000-0000-0000-00000000451b' from lessons where id = '77777777-4510-0000-0000-000000000001')
+              and (select state = 'canceled' and class_status = 'Tutor long-term leave' from lessons where id = '77777777-4510-0000-0000-000000000002'),
+  '4510 준비: w1 대체 확정(철회B), w2 기존 강사 보강 기다림(취소), w3 미정');
+-- 미리 보기: 아무것도 안 바뀜
+create temp table wdry as select admin_leave_withdraw((select id from woff), null, true) as r;
+select pg_temp.ok((select (r ->> 'dry_run')::boolean and (r ->> 'items')::int = 3 and (r ->> 'sub_back')::int = 1 and (r ->> 'wait_back')::int = 1 and (r ->> 'untouched')::int = 1
+                          and jsonb_array_length(r -> 'blockers') = 0 from wdry)
+              and (select tutor_id = '55555555-0000-0000-0000-00000000451b' from lessons where id = '77777777-4510-0000-0000-000000000001'),
+  'QA-17 미리 보기: 대체 1 되돌림·보강 기다림 1 복구·미정 1, 막는 것 없음, 바뀐 것 없음 (4510)');
+-- 보강 신청이 있는 수업이 있으면 철회 거절 (보강부터 정리)
+create temp table wreq as select (admin_makeup_request('77777777-4510-0000-0000-000000000002', null,
+  jsonb_build_array(jsonb_build_object('starts_at', ((select d0 + 9 from wd) + time '20:00') at time zone 'Asia/Seoul')), now()) ->> 'makeup_request_id')::uuid as id;
+grant select on wreq to authenticated;
+select pg_temp.ok((select jsonb_array_length(r -> 'blockers') = 1 and r -> 'blockers' ->> 0 like '%보강 신청·확정%' from admin_leave_withdraw((select id from woff), null, true) r),
+  'QA-17: 보강 신청이 걸린 수업은 미리 보기에 막는 이유로 보임 (4510)');
+select pg_temp.expect_error($$select admin_leave_withdraw((select id from woff), 'x', false)$$, '철회할 수 없어요');
+select admin_makeup_withdraw((select id from wreq));
+select pg_temp.expect_error($$select admin_leave_withdraw((select id from woff), '  ', false)$$, '사유');
+-- 철회
+select admin_leave_withdraw((select id from woff), '날짜를 잘못 넣음 (QA)', false);
+reset role;
+select pg_temp.ok((select tutor_id = '55555555-0000-0000-0000-00000000451a' and original_tutor_id is null and state = 'scheduled' from lessons where id = '77777777-4510-0000-0000-000000000001')
+              and (select state = 'scheduled' and class_status is null from lessons where id = '77777777-4510-0000-0000-000000000002')
+              and (select count(*) = 3 and bool_and(withdrawn_at is not null and lesson_gone_at is not null and choice = 'undecided' and sub_tutor_id is null) from leave_items where time_off_id = (select id from woff))
+              and (select withdrawn_at is not null and withdraw_note = '날짜를 잘못 넣음 (QA)' and lower(withdrawn_range) = ((select d0 from wd)::timestamp at time zone 'Asia/Seoul') and starts_at < timestamptz '1901-01-01' from tutor_time_off where id = (select id from woff))
+              and (select count(*) = 0 from lesson_notices where leave_item_id in (select id from leave_items where time_off_id = (select id from woff)) and status in ('pending', 'sent')),
+  'QA-17 철회: 대체 수업 원래 강사로·취소 수업 다시 예정·줄은 닫힘+철회 표시·휴무는 효력 없는 날짜+원래 기간·사유, 안내는 보낼 필요 없음 (4510)');
+select pg_temp.ok(lms_sub_conflict('55555555-0000-0000-0000-00000000451a', ((select d0 + 1 from wd) + time '10:00') at time zone 'Asia/Seoul', ((select d0 + 1 from wd) + time '10:40') at time zone 'Asia/Seoul', null) is null
+              and (select (admin_leave_withdraw((select id from woff), 'again', false) ->> 'repeated')::boolean),
+  'QA-17 철회 뒤: 그 기간은 휴무가 아님(충돌 없음), 두 번 눌러도 한 번 (4510)');
+-- 같은 기간을 다시 휴무로 넣으면 철회된 줄이 되살아남 (수업당 한 줄 규칙 그대로)
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select (r ->> 'items')::int = 3 and (r ->> 'existing')::int = 0 from admin_leave_create('55555555-0000-0000-0000-00000000451a', (select d0 from wd), (select d0 + 5 from wd), '다시', true) r),
+  'QA-17: 철회 뒤 같은 기간 미리 보기 = 수업 3회 다시 걸림, 이미 목록 0 (4510)');
+create temp table woff2 as select (admin_leave_create('55555555-0000-0000-0000-00000000451a', (select d0 from wd), (select d0 + 5 from wd), '다시 넣음', false) ->> 'time_off_id')::uuid as id;
+grant select on woff2 to authenticated;
+reset role;
+select pg_temp.ok((select id from woff2) <> (select id from woff)
+              and (select count(*) = 3 and bool_and(withdrawn_at is null and lesson_gone_at is null and choice = 'undecided') from leave_items where time_off_id = (select id from woff2))
+              and (select count(*) = 3 from leave_items where lesson_id in ('77777777-4510-0000-0000-000000000001', '77777777-4510-0000-0000-000000000002', '77777777-4510-0000-0000-000000000003'))
+              and (select count(*) = 3 from lesson_notices n join leave_items i on i.id = n.leave_item_id where i.time_off_id = (select id from woff2) and n.event = 'leave_options' and n.status = 'pending'),
+  'QA-17: 새 휴무에 철회된 줄 3개가 되살아나고(새 줄 없음) 학생 안내도 다시 생김 (4510)');
+-- 지난 수업이 걸린 휴무는 철회 못 함
+update lessons set starts_at = now() - interval '2 hours', ends_at = now() - interval '80 minutes' where id = '77777777-4510-0000-0000-000000000003';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select r -> 'blockers' ->> 0 like '%이미 시작%' from admin_leave_withdraw((select id from woff2), null, true) r), 'QA-17: 이미 시작한 수업이 걸려 있으면 철회 못 함 (4510)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004500';   -- 강사
+select pg_temp.expect_error($$select admin_leave_withdraw((select id from woff2), 'x', true)$$, '운영자|42501');
+select pg_temp.ok(true, 'QA-17: 휴무 철회는 운영진만 (4510)');
+reset request.jwt.claim.sub;
+reset role;

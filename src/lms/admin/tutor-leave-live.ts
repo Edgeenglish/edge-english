@@ -76,6 +76,13 @@ export type LeaveCreateResult = { dry_run: boolean; time_off_id?: string; lesson
 export async function createLeave(sb: SupabaseClient, tutorId: string, from: KstDate, to: KstDate, reason: string, dryRun: boolean): Promise<LeaveCreateResult> {
   return check(await sb.rpc('admin_leave_create', { p_tutor: tutorId, p_from: from, p_to: to, p_reason: reason, p_dry_run: dryRun }));
 }
+/** 휴무 철회 (4510, QA-17): dryRun = 영향 미리 보기. 철회는 사유 필수. blockers 가 있으면 철회 못 함 */
+export type LeaveWithdrawPreview = { dry_run: boolean; repeated?: boolean; items: number; sub_back: number; ask_clear: number; wait_back: number; untouched: number; notices_pending: number; blockers?: string[]; from?: KstDate; to?: KstDate };
+export async function withdrawLeave(sb: SupabaseClient, timeOffId: string, note: string | null, dryRun: boolean): Promise<LeaveWithdrawPreview> {
+  const r = await sb.rpc('admin_leave_withdraw', { p_time_off: timeOffId, p_note: note, p_dry_run: dryRun });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') throw new Error('휴무 철회 기능이 아직 이 DB에 적용되지 않았어요 (migration 4510).');
+  return check(r);
+}
 export async function chooseLeave(sb: SupabaseClient, itemIds: string[], choice: 'substitute' | 'wait', subTutorId: string | null): Promise<void> {
   check(await sb.rpc('admin_leave_choose', { p_items: itemIds, p_choice: choice, p_sub_tutor: subTutorId }));
 }

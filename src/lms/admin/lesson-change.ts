@@ -199,6 +199,8 @@ export type NoticeContext = {
   tutorTz: string;
   /** 강사 노쇼 무료 보상수업 안내 (4100) */
   compensation?: boolean;
+  /** 취소 안내를 보내는 시점의 보강 진행 상태 (추가 요청 6: 취소만 / 신청 중 / 강사 확인 끝 / 전부 불가 / 확정) */
+  makeup?: { state: 'none' | 'requested' | 'tutor_answered' | 'declined' | 'confirmed'; candidates?: Date[]; at?: Date | null };
 };
 
 function originKo(c: NoticeContext): string {
@@ -212,6 +214,17 @@ function originEn(c: NoticeContext): string {
 
 /** 보강은 학생이 수업 시간에 강사와 정해도 되고 운영진에게 말해도 됨 (확정은 운영진, D-43) */
 const makeupLineKo = (until: KstDate) => `보강은 수강기간 종료일인 ${koDate(until)}까지 진행하실 수 있어요. 강사님과 수업 중에 일정을 정하시거나, 저희에게 말씀해 주세요.`;
+/** 취소 안내의 보강 줄 — 보내는 시점의 실제 상태에 맞게 (추가 요청 6). 상태를 모르면 예전 문구 */
+function makeupStateKo(c: NoticeContext, until: KstDate): string {
+  const m = c.makeup;
+  const tz = c.student.timezone;
+  if (!m || m.state === 'none') return makeupLineKo(until);   // 대표 문구 그대로 (2026-10-26)
+  if (m.state === 'confirmed' && m.at) return `보강 수업: ${koAt(m.at, tz)} (확정)`;
+  const picked = m.candidates && m.candidates.length > 0 ? `신청하신 날짜: ${m.candidates.map((t) => koAt(t, tz)).join(' / ')}` : '보강 날짜를 신청하셨어요.';
+  if (m.state === 'requested') return `${picked}\n강사님 확인 후 확정 안내 드릴게요.`;
+  if (m.state === 'tutor_answered') return `${picked}\n강사님 확인이 끝나 곧 확정 안내 드릴게요.`;
+  return `${picked}\n강사님이 그 날짜에는 어렵다고 해요. 다른 날짜를 알려 주시면 조율해 드릴게요 (종료일 ${koDate(until)}까지).`;
+}
 const EN_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const EN_WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const enDate = (d: KstDate) => `${EN_WD[new Date(`${d}T00:00:00Z`).getUTCDay()]} ${Number(d.slice(8))} ${EN_MON[Number(d.slice(5, 7)) - 1]}`;
@@ -246,7 +259,7 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
     return [
       `[엣지영어] ${name}님, 요청하신 수업이 취소됐어요.`,
       [`취소된 수업: ${at}`, result].filter(Boolean).join('\n'),
-      d.makeup_allowed && d.makeup_until ? makeupLineKo(d.makeup_until) : '',
+      d.makeup_allowed && d.makeup_until ? makeupStateKo(c, d.makeup_until) : '',
       '취소된 수업 날짜가 요청하신 날짜와 다르다면 바로 알려주세요.',
     ].filter(Boolean).join('\n\n');
   }
@@ -275,11 +288,18 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
   const who = c.student.nameEn;
   if (event === 'change' && c.lesson && c.decision) {
     const d = c.decision;
+    const m = c.makeup;
+    const makeupEn = !d.makeup_allowed || !d.makeup_until ? []
+      : m?.state === 'confirmed' && m.at ? [`Make-up already confirmed: ${enAt(m.at, c.tutorTz)}. Please add it to your schedule.`]
+      : m?.state === 'requested' && m.candidates?.length ? [`The student asked for a make-up at: ${m.candidates.map((t) => enAt(t, c.tutorTz)).join(' / ')}.`, 'Please answer on your Home page (Make-up requests). Edge English will confirm.']
+      : m?.state === 'tutor_answered' ? ['You already answered the make-up request. Edge English will confirm and let you know.']
+      : m?.state === 'declined' ? ['You said the requested make-up times do not work. Edge English will arrange another time with the student.']
+      : makeupLinesEn(d.makeup_until);
     return [
       d.who === 'tutor' ? `CANCELED (tutor) - ${who}` : `CANCELED - ${who}`,
       `Class: ${enAt(c.lesson.startsAt, c.tutorTz)}`,
       'No class at this time.',
-      ...(d.makeup_allowed && d.makeup_until ? makeupLinesEn(d.makeup_until) : []),
+      ...makeupEn,
     ].join('\n');
   }
   if (event === 'makeup_ask' && c.candidates) {

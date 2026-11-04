@@ -198,7 +198,7 @@ type ChangeNoticeRow = {
   change: { type?: string; student: { id: string; name_ko: string; code: string } | null; lesson: { starts_at: string; kind?: string } | null } | null;
   makeup: { student: { id: string; name_ko: string; code: string } | null } | null;
 };
-type OpenMakeupRow = { created_at: string; tutor_answered_at?: string | null; student: { id: string; name_ko: string; code: string } | null };
+type OpenMakeupRow = { created_at: string; tutor_answered_at?: string | null; student: { id: string; name_ko: string; code: string } | null; candidates?: { tutor_answer: string | null; proposed_by: string }[] | null };
 
 /** 수업 변경·보강 (1700): 안 보낸 안내 · 강사 답 대기 보강 → 학생마다 한 줄 */
 export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupRow[], now: Date): TaskSource[] {
@@ -227,7 +227,12 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
     if (!m.student) continue;
     const r = row(m.student, m.created_at);
     r.openMakeups += 1;
-    if (m.tutor_answered_at) r.answeredMakeups = (r.answeredMakeups ?? 0) + 1;
+    if (m.tutor_answered_at) {
+      r.answeredMakeups = (r.answeredMakeups ?? 0) + 1;
+      // 강사가 학생 후보 모두에 불가 → 운영진이 다른 일정 조율 (QA-08, 4500)
+      const studentCands = (m.candidates ?? []).filter((c) => c.proposed_by === 'student');
+      if (studentCands.length > 0 && studentCands.every((c) => c.tutor_answer === 'no')) r.declinedMakeups = (r.declinedMakeups ?? 0) + 1;
+    }
     else if (!r.makeupWaitingSince || new Date(m.created_at) < r.makeupWaitingSince) r.makeupWaitingSince = new Date(m.created_at);
   }
   return [...out.values()];
@@ -236,7 +241,7 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
 /** 강사 답 칸(tutor_answered_at, migration 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
 async function loadOpenMakeups(sb: SupabaseClient) {
   const q = (cols: string) => sb.from('makeup_requests').select(cols).in('status', ['requested', 'countered']);
-  const r = await q('created_at, tutor_answered_at, student:students(id, name_ko, code)');
+  const r = await q('created_at, tutor_answered_at, student:students(id, name_ko, code), candidates:makeup_candidates(tutor_answer, proposed_by)');
   return r.error?.code === '42703' ? q('created_at, student:students(id, name_ko, code)') : r;
 }
 

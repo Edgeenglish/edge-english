@@ -122,7 +122,14 @@ function RowCard({ r, students, byId, actions, open, onToggle }: { r: SheetRow; 
                   <option value="">LMS 학생 고르기…</option>
                   {students.map((s) => <option key={s.id} value={s.id}>{s.nameKo} ({s.nameEn} · {s.code})</option>)}
                 </select>
-                <button type="button" className={btnSub} disabled={!pickId || !!busy} onClick={() => run('match', () => actions.match(r.id, pickId))}>짝 정하기</button>
+                <button type="button" className={btnSub} disabled={!pickId || !!busy} onClick={() => {
+                  // 시트 이름과 다른 학생을 고르면 한 번 더 확인 (QA UX: 오연결 경고)
+                  const p = students.find((x) => x.id === pickId);
+                  const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.replace(/\s/g, '').toLowerCase() === b.replace(/\s/g, '').toLowerCase();
+                  if (p && !same(r.studentName, p.nameKo) && !same(r.studentName, p.nameEn) && !same(r.preferredName, p.nameEn)
+                      && !window.confirm(`시트: ${r.studentName}${r.preferredName ? ` (${r.preferredName})` : ''} / 연결할 LMS 학생: ${p.nameKo} (${p.nameEn} · ${p.code})\n이름이 다릅니다. 동일인인지 확인해 주세요. 연결할까요?`)) return;
+                  run('match', () => actions.match(r.id, pickId));
+                }}>짝 정하기</button>
                 {!r.doneAt && <button type="button" className={btnSub} disabled={!!busy} onClick={() => run('done', () => actions.done(r.id, 'LMS 학생 없음 · 반영 안 함'))}>LMS에 없는 학생 (반영 안 함)</button>}
               </div>
             </div>

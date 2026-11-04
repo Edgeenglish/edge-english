@@ -15,7 +15,7 @@ import {
   groupByStudent, groupRenewals, itemStatus, leaveMessages, pendingNoticeKeys, studentPhase, tutorBundles, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork,
   type LvAskMsg, type LvItem, type LvProposal, type LvTutorBundle, type LvRenewal, type LvRenewalGroup, type LvMakeupOption, type LvMessage, type LvNotice, type LvStep, type LvStudentGroup, type LvStudentWork, type LvSubOption, type LvTimeOff,
 } from '@/lms/admin/tutor-leave';
-import type { LeaveCreateResult, LvTutor } from '@/lms/admin/tutor-leave-live';
+import type { LeaveWithdrawPreview, LeaveCreateResult, LvTutor } from '@/lms/admin/tutor-leave-live';
 import { AdminHeader } from '../ui';
 import { Card, inputCls } from '../students/new/parts';
 
@@ -34,6 +34,8 @@ export type LeaveActions = {
   /** 휴무 안내 '보냄'을 안 보냄으로 (모든 날짜가 학생 답 전일 때만) */
   unsend: (noticeIds: string[]) => Promise<void>;
   renewals: (timeOffId: string) => Promise<LvRenewal[]>;
+  /** 휴무 철회 (4510): dryRun 미리 보기 → 사유 → 철회 */
+  withdraw?: (timeOffId: string, note: string | null, dryRun: boolean) => Promise<LeaveWithdrawPreview>;
 };
 
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5ffb] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
@@ -169,6 +171,10 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
 
         {tab === 'list' && offId && data && (
           <>
+            {off && actions.withdraw && (
+              <WithdrawLeave off={off} withdraw={(note, dry) => actions.withdraw!(off.id, note, dry)}
+                done={async () => { await reloadLeaves(); setOffId(null); setData(null); }} />
+            )}
             <p className="rounded-[12px] bg-[#f6f5fb] px-3 py-2.5 text-[14px] text-[#1d1b2b]">
               {data.items.length === 0
                 ? '이 휴무에 걸리는 수업이 없어요.'
@@ -234,6 +240,76 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
       </main>
     </div>
     </PENDING.Provider>
+  );
+}
+
+/** 휴무 철회 (QA-17): 날짜·강사를 잘못 넣었을 때. 영향(대체 되돌림·수업 복구·안내)을 먼저 보여 주고 사유를 받음. 지난 수업·보강이 걸려 있으면 DB 가 거절 */
+function WithdrawLeave({ off, withdraw, done }: { off: LvTimeOff; withdraw: (note: string | null, dry: boolean) => Promise<LeaveWithdrawPreview>; done: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [pv, setPv] = useState<LeaveWithdrawPreview | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function start() {
+    setOpen(true);
+    setErr('');
+    setPv(null);
+    try { setPv(await withdraw(null, true)); } catch (e) { setErr(e instanceof Error ? e.message : '미리 보기를 불러오지 못했어요.'); }
+  }
+  async function run() {
+    if (!window.confirm(`${off.tutorName} 강사 휴무(${dateLabel(off.from)} ~ ${dateLabel(off.to)})를 철회할까요? 처리한 대체·보강 선택은 모두 되돌아가요.`)) return;
+    setBusy(true);
+    setErr('');
+    try {
+      await withdraw(note.trim(), false);
+      await done();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '철회하지 못했어요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  const blocked = (pv?.blockers?.length ?? 0) > 0;
+  return (
+    <div className="rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <b className="flex-1 text-[14.5px] text-[#1d1b2b]">{off.tutorName} · {dateLabel(off.from)} ~ {dateLabel(off.to)} (한국 날짜){off.reason ? <span className="font-normal text-[#6b6880]"> · {off.reason}</span> : ''}</b>
+        {!open && <button type="button" className={btnSub} onClick={start}>휴무 철회…</button>}
+      </div>
+      {open && (
+        <div className="mt-2 grid gap-2 rounded-[10px] bg-[#f6f5fb] p-3 text-[14px] text-[#1d1b2b]">
+          {!pv && !err && <p className="text-[#6b6880]">영향을 확인하는 중…</p>}
+          {pv && (
+            <>
+              <p className="font-bold">철회하면</p>
+              <ul className="grid gap-0.5 text-[13.5px]">
+                <li>· 걸린 수업 {pv.items}회</li>
+                {pv.sub_back > 0 && <li>· 확정된 대체 수업 {pv.sub_back}회 → 원래 강사로 되돌림</li>}
+                {pv.ask_clear > 0 && <li>· 대체강사 문의·가능 답 {pv.ask_clear}회 → 비움 (강사에게 취소 알려 주세요)</li>}
+                {pv.wait_back > 0 && <li>· 기존 강사 보강으로 취소된 수업 {pv.wait_back}회 → 다시 예정</li>}
+                {pv.untouched > 0 && <li>· 그대로 두는 수업 {pv.untouched}회 (미정·이미 밖에서 취소)</li>}
+                <li>· 안 보낸 안내 {pv.notices_pending}건은 보낼 필요 없음으로. 이미 보낸 안내는 기록만 남아요 — 학생·강사에게 철회를 따로 알려 주세요</li>
+                <li>· 휴무 줄과 처리 기록은 지우지 않고 ‘철회’로 남아요</li>
+              </ul>
+              {blocked && (
+                <div className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[13.5px] text-[#b3261e]">
+                  <b>지금은 철회할 수 없어요</b>
+                  <ul className="mt-1 grid gap-0.5">{pv.blockers!.map((b) => <li key={b}>· {b}</li>)}</ul>
+                </div>
+              )}
+              {!blocked && (
+                <input aria-label="철회 사유" value={note} onChange={(e) => setNote(e.target.value)} placeholder="사유 (필수) — 예: 날짜를 잘못 넣음" className={inputCls(false)} />
+              )}
+            </>
+          )}
+          <Err>{err}</Err>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button type="button" className={btnSub} disabled={busy} onClick={() => setOpen(false)}>닫기</button>
+            <button type="button" className={`${btnMain} bg-[#b3261e] disabled:bg-[#e8b4b0]`} disabled={busy || !pv || blocked || !note.trim()} onClick={run}>{busy ? '철회 중…' : '휴무 철회'}</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

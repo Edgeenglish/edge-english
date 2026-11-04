@@ -102,7 +102,15 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
       const l = c ? byId.get(c.lessonId) : undefined;
       if (!c || !l) return null;
       const voided = n.event === 'revert' ? lessons.filter((x) => x.makeupOf === l.id && x.voided).pop() : undefined;
-      return { ...base, lesson: l, decision: c.decision, makeupAt: voided?.startsAt, tutorName: l.tutorName, tutorTz: l.tutorTz };
+      // 취소 안내는 보내는 시점의 보강 상태에 맞게 (추가 요청 6): 신청 전 / 신청 중 / 강사 답 / 전부 불가 / 확정
+      const req = [...data.makeupRequests].reverse().find((x) => !x.compensationId && x.sourceLessonId === l.id && ['requested', 'countered', 'confirmed'].includes(x.status));
+      const made = req?.confirmedLessonId ? byId.get(req.confirmedLessonId) : undefined;
+      const makeup: NoticeContext['makeup'] = !req ? { state: 'none' }
+        : req.status === 'confirmed' ? (made && made.state !== 'canceled' ? { state: 'confirmed', at: made.startsAt } : { state: 'none' })
+        : !req.tutorAnsweredAt ? { state: 'requested', candidates: req.candidates }
+        : req.candidates.every((t) => req.tutorAnswers?.[+t] === 'no') ? { state: 'declined', candidates: req.candidates }
+        : { state: 'tutor_answered', candidates: req.candidates };
+      return { ...base, lesson: l, decision: c.decision, makeupAt: voided?.startsAt, tutorName: l.tutorName, tutorTz: l.tutorTz, makeup };
     }
     const r = data.makeupRequests.find((x) => x.id === n.makeupRequestId);
     if (!r) return null;

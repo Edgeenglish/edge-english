@@ -271,6 +271,28 @@ export default function StudentHome(props: {
     const right = v.makeupRights.find((m) => m.lessonId === lesson.id && !m.requested);
     setOverlay(allowed && right ? { kind: 'makeup', right, canceled: true } : null);
   }
+  /** 여러 수업 한 번에 취소 (추가 요청 2): 시간순으로 하나씩 DB 판정 — 미리 보기(변경권 차례대로 차감)와 같은 순서. 하나가 실패하면 거기서 멈추고 그때까지 결과를 알림 */
+  async function confirmCancelMany(ls: StudentLesson[]) {
+    const sorted = [...ls].sort((a, b) => +a.startsAt - +b.startsAt);
+    let done = 0;
+    let credits = 0;
+    let makeups = 0;
+    const v = await run(async () => {
+      try {
+        for (const l of sorted) {
+          const r = await actions.cancel(l.id);
+          done += 1;
+          if (r.uses_credit) credits += 1;
+          if (r.makeup_allowed) makeups += 1;
+        }
+      } catch (e) {
+        if (done === 0) throw e;
+        throw new Error(`${done}회 취소한 뒤 멈췄어요: ${e instanceof Error ? e.message : '오류'}`);
+      }
+    }, `수업 ${sorted.length}회를 취소했어요 · 변경권 ${credits}개 사용${makeups ? ` · 보강 ${makeups}회는 ‘보강 신청’에서 날짜를 골라 주세요` : ''}`);
+    if (!v) return;
+    setOverlay(null);
+  }
 
   async function answerLeave(answer: 'ok' | 'makeup') {
     const ids = leaveAsk.map((x) => x.id);
@@ -709,6 +731,7 @@ export default function StudentHome(props: {
               totalLeft={left.total}
               busy={busy}
               onConfirm={confirmCancel}
+              onConfirmMany={confirmCancelMany}
               onClose={() => setOverlay(null)}
             />
           )}
@@ -1453,25 +1476,77 @@ function CancelSheet(props: {
   totalLeft: number;
   busy: boolean;
   onConfirm: (l: StudentLesson) => void;
+  /** 여러 수업 한 번에 (추가 요청 2) */
+  onConfirmMany?: (ls: StudentLesson[]) => void;
   onClose: () => void;
 }) {
   const [checked, setChecked] = useState(false);
+  const [many, setMany] = useState<Set<string>>(new Set());
+  const [manyChecked, setManyChecked] = useState(false);
   const lesson = props.lessons.find((l) => l.id === props.lessonId);
 
   if (!lesson) {
+    // 여러 수업 고르기: 시간순으로 변경권을 차례로 차감해 미리 계산 (DB 도 같은 순서로 처리)
+    const picked = props.lessons.filter((l) => many.has(l.id)).sort((a, b) => +a.startsAt - +b.startsAt);
+    let credits = props.creditsLeft;
+    const plan = picked.map((l) => {
+      const d = cancelPreview({ lesson: l, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: credits, holidays: props.holidays }, null);
+      if (d.ok && d.usesCredit) credits -= 1;
+      return { l, d };
+    });
+    const uses = plan.filter((x) => x.d.ok && x.d.usesCredit).length;
+    const consumes = plan.filter((x) => x.d.ok && x.d.consumesLesson).length;
+    const makeups = plan.filter((x) => x.d.ok && x.d.makeupAllowed).length;
+    const bad = plan.filter((x) => !x.d.ok);
+    const toggleMany = (id: string) => setMany((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
     return (
       <div className="grid gap-3">
         <h2 className="text-[18px] font-bold">어느 수업을 바꿀까요?</h2>
         <KstToggle />
+        <p className="text-[13px] text-[#55526a]">수업을 누르면 하나씩 취소해요. 여러 수업을 한 번에 취소하려면 왼쪽 네모를 체크해 주세요.</p>
         {props.lessons.map((l) => {
           const h = hoursBetween(props.now, l.startsAt);
+          const on = many.has(l.id);
           return (
-            <button key={l.id} type="button" onClick={() => props.onPick(l.id)} className={`${card} flex min-h-[56px] items-center justify-between px-4 text-left`}>
-              <span className="text-[15px] font-semibold">{whenText(l.startsAt)}</span>
-              <span className="shrink-0 pl-2 text-[12.5px] text-[#6b6880]">{h < 6 ? '6시간 이내' : untilText(props.now, l.startsAt)} ›</span>
-            </button>
+            <div key={l.id} className={`${card} flex min-h-[56px] items-center gap-2 pl-3 pr-4 ${on ? 'border-[#5b3df0] bg-[#f6f3ff]' : ''}`}>
+              {props.onConfirmMany && l.kind !== 'compensation' && (
+                <input type="checkbox" aria-label={`${whenText(l.startsAt)} 함께 취소`} checked={on} onChange={() => toggleMany(l.id)} className="h-5 w-5 shrink-0 accent-[#5b3df0]" />
+              )}
+              <button type="button" onClick={() => props.onPick(l.id)} className="flex min-h-[56px] min-w-0 flex-1 items-center justify-between text-left">
+                <span className="text-[15px] font-semibold">{whenText(l.startsAt)}</span>
+                <span className="shrink-0 pl-2 text-[12.5px] text-[#6b6880]">{h < 6 ? '6시간 이내' : untilText(props.now, l.startsAt)} ›</span>
+              </button>
+            </div>
           );
         })}
+        {picked.length > 0 && props.onConfirmMany && (
+          <section className={`${card} sticky bottom-0 z-10 grid gap-2 p-3.5 shadow-[0_-6px_16px_rgba(27,20,66,0.12)]`}>
+            <p className="text-[15px] font-bold">선택한 수업 {picked.length}회 · 변경권 {uses}개 사용 · 잔여 {Math.max(props.creditsLeft - uses, 0)}개</p>
+            <ul className="grid gap-1 text-[13px] text-[#1d1b2b]">
+              {plan.map(({ l, d }) => (
+                <li key={l.id} className="flex justify-between gap-2">
+                  <span>{whenText(l.startsAt)}</span>
+                  <b className={d.ok && d.consumesLesson ? 'text-[#b3261e]' : ''}>
+                    {!d.ok ? '취소 불가' : d.consumesLesson ? (d.timing === 'late' ? '6시간 이내 · 1회 차감 · 보강 없음' : '변경권 없음 · 1회 차감 · 보강 없음')
+                      : d.usesCredit ? '변경권 1개 · 보강 가능' : '변경권 그대로 · 보강 가능'}
+                  </b>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[12.5px] text-[#55526a]">취소 뒤 남은 수업 {props.totalLeft}회 → {props.totalLeft - consumes}회{makeups ? ` (보강 ${makeups}회 포함)` : ''}. 보강 날짜는 취소 뒤 ‘보강 신청’에서 골라 주세요.</p>
+            {consumes > 0 && (
+              <label className="flex min-h-[44px] items-start gap-2.5 text-[14px] leading-normal">
+                <input type="checkbox" checked={manyChecked} onChange={(e) => setManyChecked(e.target.checked)} className="mt-0.5 h-5 w-5 accent-[#b3261e]" />
+                {consumes}회는 보강 없이 수업이 차감된다는 것을 확인했어요
+              </label>
+            )}
+            <button type="button" disabled={props.busy || bad.length > 0 || (consumes > 0 && !manyChecked)} onClick={() => props.onConfirmMany!(picked)}
+              className={`min-h-[52px] rounded-[14px] text-[16px] font-bold text-white disabled:opacity-40 ${consumes > 0 ? 'bg-[#b3261e]' : 'bg-[#5b3df0]'}`}>
+              {picked.length}회 취소하기
+            </button>
+            {bad.length > 0 && <p className="text-[12.5px] text-[#b3261e]">취소할 수 없는 수업이 있어요. 체크를 풀어 주세요.</p>}
+          </section>
+        )}
       </div>
     );
   }

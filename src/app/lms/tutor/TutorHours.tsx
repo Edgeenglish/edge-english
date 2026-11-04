@@ -43,7 +43,7 @@ type Dialog =
   | { kind: 'saved'; weekly: boolean; from: string };
 
 /** inline = 메뉴 안에 그대로 (2026-11-04 사이드바), 아니면 창 */
-export default function TutorHours({ actions, onClose, onSchedule, inline = false }: { actions: HoursActions; onClose: () => void; onSchedule?: () => void; inline?: boolean }) {
+export default function TutorHours({ actions, onClose, onSchedule, inline = false, onDirty }: { actions: HoursActions; onClose: () => void; onSchedule?: () => void; inline?: boolean; /** 저장 안 한 변경이 있는지 알림 — 메뉴를 바꿀 때 확인 (QA UX) */ onDirty?: (dirty: boolean) => void }) {
   const [data, setData] = useState<HoursData | null>(null);
   const [err, setErr] = useState('');
   // 예전 탭 기억(Every week / One week only)은 탭이 없어져 지움
@@ -75,6 +75,16 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
     const row = scroller.current.querySelector<HTMLElement>(`[data-row="${firstOpen}"]`);
     if (row) scroller.current.scrollTop = Math.max(0, row.offsetTop - 40);
   }, [data, firstOpen]);
+
+  // 저장 안 한 변경 → 바깥(메뉴 바꾸기)에 알리고, 창을 닫거나 떠날 때 브라우저 확인 (QA UX: 미저장 이동 손실)
+  const dirtyCount = data ? (() => { const x = diff(data.weeklyOpen, weekly); return x.added.length + x.removed.length; })() : 0;
+  useEffect(() => {
+    onDirty?.(dirtyCount > 0);
+    if (dirtyCount === 0) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => { onDirty?.(false); window.removeEventListener('beforeunload', warn); };
+  }, [dirtyCount, onDirty]);
 
   if (!data) {
     return (

@@ -142,6 +142,8 @@ export type LessonChangeTask = {
   openMakeups: number;
   /** 그중 강사가 강사 LMS에서 가능 여부를 답한 보강 신청 (운영진 확정 차례, migration 2000) */
   answeredMakeups?: number;
+  /** 답한 것 중 모든 후보 불가 → 재조율 (학생에게 다른 날짜 받기 또는 강사 메모 시간으로 확정, QA-08) */
+  declinedMakeups?: number;
   /** 안 보낸 변경 안내가 있는 가장 가까운 수업 (지나기 전에 보내야 함) */
   lessonAt: Date | null;
   /** 강사 답을 기다리는 보강 신청 중 가장 오래된 신청 시각 */
@@ -472,7 +474,9 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         id: t.id,
         kind: t.kind,
         severity: t.lessonAt ? dueSeverity(t.lessonAt, now) : 'open',
-        tag: t.pendingNotices > 0 ? `${CHANGE_EVENT_TEXT[t.noticeEvents?.[0] ?? ''] ?? '수업 변경'} 안내 보내기` : (t.answeredMakeups ?? 0) > 0 ? '보강 강사 답 옴 · 확정' : '보강 강사 답 대기',
+        tag: t.pendingNotices > 0 ? `${CHANGE_EVENT_TEXT[t.noticeEvents?.[0] ?? ''] ?? '수업 변경'} 안내 보내기`
+          : (t.declinedMakeups ?? 0) > 0 ? '보강 강사 불가 · 재조율'
+          : (t.answeredMakeups ?? 0) > 0 ? '보강 강사 답 옴 · 확정' : '보강 강사 답 대기',
         title: t.studentName,
         detail: [
           // 예: '10/28(수) 오전 9시 정규 수업 학생측 취소' (2026-10-28 대표 안)
@@ -483,7 +487,8 @@ function toItem(t: TaskSource, now: Date): ItemBase {
           ].filter(Boolean).join(' '),
           t.pendingNotices > 0 && `${noticeWho(t.noticeTo)} ${t.pendingNotices}건`,
           t.pendingNotices === 0 && t.lessonAt && `${kstLabel(t.lessonAt)} 수업`,
-          t.pendingNotices > 0 && (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 옴 ${t.answeredMakeups}건`,
+          (t.declinedMakeups ?? 0) > 0 && `강사가 모든 날짜 불가 ${t.declinedMakeups}건 — 학생에게 다른 날짜 받기`,
+          t.pendingNotices > 0 && (t.answeredMakeups ?? 0) - (t.declinedMakeups ?? 0) > 0 && `보강 강사 답 옴 ${(t.answeredMakeups ?? 0) - (t.declinedMakeups ?? 0)}건`,
           t.pendingNotices > 0 && t.openMakeups - (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
           t.pendingNotices === 0 && (t.answeredMakeups ?? 0) > 0 && t.openMakeups > (t.answeredMakeups ?? 0) && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
         ].filter(Boolean).join(' · '),

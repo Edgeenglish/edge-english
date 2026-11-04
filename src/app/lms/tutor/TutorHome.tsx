@@ -186,8 +186,14 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
   );
   // 운영자 보기: 로고를 누르면 운영자 화면으로 (11/3 대표, 학생 화면과 같게)
   const brand = adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : logo;
+  // Availability 에 저장 안 한 변경이 있으면 메뉴를 바꾸기 전에 확인 (QA UX: '1 change not saved' 상태에서 Home 누르면 사라짐)
+  const hoursDirty = useRef(false);
+  const goTab = (key: Tab) => {
+    if (tab === 'hours' && key !== 'hours' && hoursDirty.current && !window.confirm('You have unsaved changes in Availability. Leave without saving?')) return;
+    setTab(key);
+  };
   const tabBtn = (t: (typeof TABS)[number], mobile: boolean) => (
-    <button key={t.key} type="button" onClick={() => setTab(t.key)} aria-current={tab === t.key ? 'page' : undefined}
+    <button key={t.key} type="button" onClick={() => goTab(t.key)} aria-current={tab === t.key ? 'page' : undefined}
       className={mobile
         ? `flex min-h-[48px] flex-col items-center justify-center gap-0.5 text-[11px] ${tab === t.key ? 'font-bold text-[#5b3df0]' : 'text-[#55526a]'}`
         : `flex min-h-[46px] items-center gap-2.5 rounded-[12px] px-3 text-left text-[15px] ${tab === t.key ? 'bg-[#efeaff] font-bold text-[#3a22b0]' : 'text-[#1d1b2b] hover:bg-[#f3f1f8]'}`}>
@@ -390,7 +396,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
             loadLessons={loadLessons} />
         )}
 
-        {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => setTab('schedule')} inline />}
+        {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} inline onDirty={(d) => { hoursDirty.current = d; }} />}
 
         {panel === 'cover' && (
           <Sheet onClose={() => setPanel(null)}>
