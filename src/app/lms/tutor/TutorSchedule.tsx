@@ -72,6 +72,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const [saveErr, setSaveErr] = useState('');
   const [toast, setToast] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
+  // 휴대폰: 날짜를 누르면 아래 그날 목록이 보이게
+  const dayRef = useRef<HTMLElement>(null);
 
   const month = anchor.slice(0, 7);
   const monday = mondayOf(anchor);
@@ -303,7 +305,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const items = dayItems(selected, viewZone, lessons, data);
   const inRange = data ? selected >= todayView && selected <= plusDays(lastLocal, korea ? 1 : 0) : false;
   const dayPanel = (
-    <section aria-label={`${dayText(selected)} schedule`} className="rounded-[14px] border border-[#e6e3ef] bg-white p-3">
+    <section ref={dayRef} aria-label={`${dayText(selected)} schedule`} className="scroll-mb-[90px] rounded-[14px] border border-[#e6e3ef] bg-white p-3">
       <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{dayText(selected)}{selected === todayView ? ' · Today' : ''}</h2>
       {items.length === 0 && <p className="mb-2 text-[14px] text-[#6b6880]">No classes</p>}
       <ul className="mb-3 grid gap-1.5">
@@ -334,7 +336,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
             const out = date.slice(0, 7) !== month;
             const ls = its.filter((x) => x.kind === 'lesson');
             return (
-              <button key={date} type="button" onClick={() => setSelected(date)} aria-pressed={selected === date}
+              <button key={date} type="button" onClick={() => { setSelected(date); if (window.innerWidth < 1024) setTimeout(() => dayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50); }} aria-pressed={selected === date}
                 aria-label={`${dayText(date)}: ${ls.length} class${ls.length === 1 ? '' : 'es'}${tag ? `, ${tag}` : ''}`}
                 className={`min-h-[64px] min-w-0 border-b border-r border-[#f0eef5] px-1 pb-1 pt-1 text-left align-top lg:min-h-[104px] lg:px-1.5 ${selected === date ? 'bg-[#f3efff]' : 'hover:bg-[#faf9fd]'} ${out ? 'text-[#b4b1c2]' : 'text-[#1d1b2b]'}`}>
                 <span className={`mx-auto flex h-[24px] w-[24px] items-center justify-center rounded-full text-[13px] font-bold lg:mx-0 ${date === todayView ? 'bg-[#5b3fe0] text-white' : ''}`}>{Number(date.slice(8))}</span>
