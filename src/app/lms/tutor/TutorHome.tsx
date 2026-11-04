@@ -217,7 +217,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
       {days.length > 0 && (
         <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
           <div className="grid grid-cols-[76px_minmax(0,1fr)_auto] gap-2 border-b-2 border-[#5b3fe0] bg-[#efebff] px-3 py-2 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:hidden">
-            <span>{tzTimeLabel(tz)}</span><span>Student</span><span>Class Status</span>
+            <span>{tzTimeLabel(tz)}</span><span>Student · Class Status</span><span className="sr-only">Details</span>
           </div>
           <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:grid [&>*]:break-words [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
             <span>{tzTimeLabel(tz)}</span>{kst && <span>{KOREA_TIME}</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
@@ -289,7 +289,8 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
           {brand}
           {onLogout && <button type="button" onClick={onLogout} className="min-h-[36px] text-[13px] text-[#55526a] underline">Sign out</button>}
         </header>
-        {profileOf && actions.profile && <StudentProfile studentId={profileOf} actions={actions.profile} now={now} onClose={() => setProfileOf(null)} />}
+        {profileOf && actions.profile && <StudentProfile studentId={profileOf} actions={actions.profile} now={now} onClose={() => setProfileOf(null)}
+          backLabel={tab === 'students' ? 'Back to students' : tab === 'record' ? 'Back to Class Record' : tab === 'schedule' ? 'Back to schedule' : 'Back'} />}
         {err && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
 
         {tab === 'home' && (
@@ -553,6 +554,10 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
   const recordable = canRecord(l, now);
   const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
+  const toggle = () => {
+    if (open && dirty.current.size > 0 && !window.confirm('Discard changes?')) return;
+    setOpen(!open);
+  };
   // Schedule 에서 [Class Record ›] 로 온 수업: 펼치고 그 줄로 스크롤
   useEffect(() => {
     if (!focus) return;
@@ -583,36 +588,41 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   );
   return (
     <div ref={rowRef} className={`border-b border-[#e6e3ef] last:border-b-0 ${focus ? 'ring-2 ring-inset ring-[#5b3fe0]' : ''} ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
-      <button type="button" disabled={!canOpen} aria-expanded={open} onClick={() => {
-        if (open && dirty.current.size > 0 && !window.confirm('Discard changes?')) return;
-        setOpen(!open);
-      }}
-        className={`w-full cursor-pointer px-3 py-2 text-left lg:px-1 disabled:cursor-default ${open ? 'bg-[#f3f1f8]' : 'enabled:hover:bg-[#f7f6fb]'}`}>
-        <div className="grid grid-cols-[76px_minmax(0,1fr)_auto] items-start gap-2 lg:hidden">
+      {/* 줄 전체(이름 빼고)를 누르면 펼침. 이름은 프로필로 (QA-06: 버튼 안에 버튼 없이 — 바깥은 div, 펼치기 전용 버튼(›)은 키보드용) */}
+      <div onClick={canOpen ? toggle : undefined}
+        className={`w-full px-3 py-2 text-left lg:px-1 ${canOpen ? 'cursor-pointer' : ''} ${open ? 'bg-[#f3f1f8]' : canOpen ? 'hover:bg-[#f7f6fb]' : ''}`}>
+        {/* 휴대폰: 출결 상태는 이름 아래 줄 (QA-02: 긴 상태가 이름 폭을 빼앗지 않게) */}
+        <div className="grid grid-cols-[76px_minmax(0,1fr)_28px] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
             {time}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]">{k}</span>}
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-[14.5px] font-semibold">{name}</span>
+            <StudentName id={l.studentId} name={name} className="block max-w-full truncate text-[14.5px] font-semibold" />
             <span className="block text-[12.5px] text-[#6b6880]">
               {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min{kindTag(l) ? ` · ${kindTag(l)}` : ''}{paidCol && paid ? ` · Paid ${paid}` : ''}
             </span>
+            <span className={`block text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip}</span>
             {l.topics && <span className="block truncate text-[12.5px]">{l.topics}</span>}
           </span>
-          <span className={`text-right text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip && <span className="block">{remarksChip}</span>}</span>
+          {canOpen ? <button type="button" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={(e) => { e.stopPropagation(); toggle(); }}
+            className="flex h-[28px] w-[28px] items-center justify-center rounded-full text-[16px] text-[#6b6880]">{open ? '▴' : '▾'}</button> : <span />}
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
           <span className="font-semibold">{time}</span>
           {kst && <span className="text-[#6b6880]">{k?.replace(/^KST /, '')}</span>}
-          <span className="font-semibold"><span className="truncate">{name}</span></span>
+          <span className="font-semibold"><StudentName id={l.studentId} name={name} className="truncate" /></span>
           <span>{count}</span>
           <span>{minutesOf(l)}</span>
           <span>{kindTag(l) ?? 'Regular'}</span>
           <span className={`font-semibold ${stColor}`}>{stText}</span>
           {paidCol && <span>{paid}</span>}
-          <span className="flex-wrap text-[13px]">{l.topics}{remarksChip}</span>
+          <span className="flex-wrap text-[13px]">
+            <span className="min-w-0 flex-1">{l.topics}{remarksChip}</span>
+            {canOpen && <button type="button" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={(e) => { e.stopPropagation(); toggle(); }}
+              className="ml-1 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[15px] text-[#6b6880] hover:bg-[#e6e3ef]">{open ? '▴' : '▾'}</button>}
+          </span>
         </div>
-      </button>
+      </div>
       {open && (
         <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}

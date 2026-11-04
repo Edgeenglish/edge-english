@@ -135,6 +135,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     renewalPaid: false,
     confirmedOn: s.payments[0].confirmedOn,
     paid: true,
+    enrollmentStatus: 'active',
     lessons: [
       ...s.lessons.map((l) => ({ ...l, meetUrl: null, leavePostponed: false, substitute: false })),
       ...[7, 9, 11].map((d, i) => ({ id: `lv${i}`, kind: 'regular' as const, startsAt: at(d, '20:00'), minutes: 50, tutorName: '가상강사 Alex', state: 'scheduled' as const, meetUrl: null, leavePostponed: false, substitute: false })),

@@ -61,7 +61,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
           save: (action, cells, note, blockId) => saveSchedule(sb, adminTutor, action, cells, note, blockId),
         },
         profile: {
-          load: (studentId) => loadStudentProfile(sb, studentId),
+          load: (studentId) => loadStudentProfile(sb, studentId, adminTutor),
           save: (studentId, fields) => updateStudentProfile(sb, studentId, fields),
         },
         students: () => loadMyStudents(sb, adminTutor),

@@ -1570,6 +1570,7 @@ insert into tutors (id, name, country, timezone) values
 insert into app_users (auth_user_id, role, tutor_id) values
   ('bbbbbbbb-0000-0000-0000-00000000200a', 'tutor', '55555555-0000-0000-0000-00000000200a'),
   ('bbbbbbbb-0000-0000-0000-00000000200b', 'tutor', '55555555-0000-0000-0000-00000000200b');
+select pg_temp.open_all('55555555-0000-0000-0000-00000000200a');   -- 4500: 보강 답·확정은 강사가 연 시간만
 insert into students (id, name_ko, name_en, class_note_url) values ('99999999-0000-0000-0000-000000002000', '기록학생', 'Record S', 'https://docs.google.com/x');
 insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
 values ('99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', 1, 4, 2, 40, current_date - 10, current_date - 10 + 27, 8, 'active');
@@ -1684,6 +1685,8 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200b';
 select pg_temp.expect_error($$select tutor_makeup_answer((select id from mk20), '{}', 'x')$$, '42501');
 select pg_temp.ok(true, '다른 강사는 답할 수 없음');
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from mk20), ((current_date + 3) + time '12:00') at time zone 'Australia/Sydney')$$, '불가라고 답한');
+select pg_temp.ok((select status = 'requested' from makeup_requests where id = (select id from mk20)), '강사가 불가라고 답한 시간은 운영진도 확정 못 함 (QA-01 D, 4500)');
 select admin_makeup_confirm((select id from mk20), ((current_date + 2) + time '12:00') at time zone 'Australia/Sydney');
 select pg_temp.ok((select jsonb_array_length(tutor_screen('55555555-0000-0000-0000-00000000200a', current_date, current_date + 7) -> 'makeups') = 0)
               and (select count(*) = 1 from jsonb_array_elements(tutor_screen('55555555-0000-0000-0000-00000000200a', current_date, current_date + 7) -> 'lessons') x
@@ -1721,6 +1724,7 @@ reset role;
 -- 강사 붙임T. 학생 붙임A(20분)·붙임B(20분, 다른 학생)·붙임C(40분). 기준 시각 bb = 10일 뒤 정시
 reset role;
 insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000002300', '붙임T', 'Korea', pg_temp.noon_tz());
+select pg_temp.open_all('55555555-0000-0000-0000-000000002300');
 insert into students (id, name_ko, name_en) values
   ('99999999-0000-0000-0000-00000000230a', '붙임A', 'BtB A'), ('99999999-0000-0000-0000-00000000230b', '붙임B', 'BtB B'),
   ('99999999-0000-0000-0000-00000000230c', '붙임C', 'BtB C');
@@ -2161,7 +2165,8 @@ insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-000
 select pg_temp.ok(not lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 10:00 Australia/Melbourne'),
   '가능 시간을 안 넣은 강사는 어느 시간도 예약 가능 아님 (4200)');
 insert into tutor_availability (tutor_id, weekday, start_local, end_local, timezone, effective_from)
-values ('55555555-0000-0000-0000-000000004200', 1, '00:00', '23:30', 'Australia/Melbourne', '2026-01-01');
+values ('55555555-0000-0000-0000-000000004200', 1, '00:00', '23:30', 'Australia/Melbourne', '2026-01-01'),
+       ('55555555-0000-0000-0000-000000004200', 2, '00:00', '23:30', 'Australia/Melbourne', '2026-01-01');
 select pg_temp.ok(not lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 05:30 Australia/Melbourne')
               and lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 06:00 Australia/Melbourne')
               and lms_tutor_available('55555555-0000-0000-0000-000000004200', timestamptz '2026-11-09 22:30 Australia/Melbourne')
@@ -2379,5 +2384,145 @@ select pg_temp.ok((select student_id = '99999999-0000-0000-0000-000000004300' an
   '⑤ 짝 정하기 → 체크한 칸만 반영(레벨 4단계 값은 그대로) → 끝 표시 (4310)');
 select admin_sheet_row_done((select id from sheet_student_info where row_no = 2), null, true);
 select pg_temp.ok((select done_at is null from sheet_student_info where row_no = 2), '⑤ 다시 열기 (4310)');
+reset request.jwt.claim.sub;
+reset role;
+
+-- ---------- 4500 Work QA(11/4) 수정: 예약 확정 검사 · 권리 정합성 · 변경권 수동 조정 ----------
+-- 강사 QA(정오 시간대, 매일 열어 둠) · 학생 QA(4주·주2회·20분, 변경권 2개). 기준 시각 q0 = 지금 정시
+reset request.jwt.claim.sub;
+reset role;
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000004500', 'QaTutor', 'Korea', pg_temp.noon_tz());
+select pg_temp.open_all('55555555-0000-0000-0000-000000004500');
+insert into app_users (auth_user_id, role, tutor_id) values ('bbbbbbbb-0000-0000-0000-000000004500', 'tutor', '55555555-0000-0000-0000-000000004500');
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000004500', '큐에이', 'QA S');
+insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000004501', 'student', '99999999-0000-0000-0000-000000004500');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000004500', '99999999-0000-0000-0000-000000004500', 1, 4, 2, 20, current_date - 3, current_date - 3 + 27, 8, 'active');
+insert into enrollment_periods (id, enrollment_id, idx, start_date, end_date, credits_granted)
+values ('99999999-2000-0000-0000-000000004500', '99999999-1000-0000-0000-000000004500', 1, current_date - 3, current_date - 3 + 27, 2);
+create temp table q0 as select date_trunc('hour', now()) as t;
+grant select on q0 to authenticated;
+-- 수업: 1 = 2일 뒤 +2h (보강 신청용) · 2 = 3일 뒤 +2h · 3 = 4일 뒤 +2h · 4 = 어제 (노쇼용) · 5 = 5일 뒤 +2h
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select ('77777777-4500-0000-0000-00000000000' || n)::uuid, '99999999-1000-0000-0000-000000004500', '99999999-0000-0000-0000-000000004500',
+       '55555555-0000-0000-0000-000000004500', 'regular', n, t + o, t + o + interval '20 minutes'
+from q0, (values (1, interval '2 days 2 hours'), (2, interval '3 days 2 hours'), (3, interval '4 days 2 hours'), (4, interval '-1 day'), (5, interval '5 days 2 hours')) v(n, o);
+create or replace function pg_temp.qbal() returns int language sql as $$ select credit_balance('99999999-2000-0000-0000-000000004500') $$;
+create or replace function pg_temp.qrights() returns int language sql as $$
+  select jsonb_array_length(student_screen('99999999-0000-0000-0000-000000004500') -> 'makeup_rights') $$;
+create or replace function pg_temp.qcand(req uuid) returns uuid language sql as $$
+  select id from makeup_candidates where request_id = req and proposed_by = 'student' order by starts_at limit 1 $$;
+
+-- QA-01 C: 대체강사 판정에도 현지 06:00~22:30 시작 규칙 (내부 함수라 superuser 로 확인)
+select pg_temp.ok(lms_sub_conflict('55555555-0000-0000-0000-000000004500', (select t from q0) + interval '2 days 17 hours', (select t from q0) + interval '2 days 17 hours 20 minutes', null) like '%06:00~22:30%'
+              and lms_sub_conflict('55555555-0000-0000-0000-000000004500', (select t from q0) + interval '2 days 2 hours 30 minutes', (select t from q0) + interval '2 days 2 hours 50 minutes', null) is null,
+  'QA-01 C: 대체강사 현지 05:00 시작은 거절, 14:30 은 가능 (4500)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 운영자
+-- 수업 1 정상 취소(변경권 2→1) → 보강 신청 후보 2개 (2일 뒤 14:30 · 3일 뒤 14:30)
+select admin_change_lesson('c4500000-0000-0000-0000-000000000001', '77777777-4500-0000-0000-000000000001', 'student', now(), false);
+select pg_temp.ok(pg_temp.qbal() = 1 and pg_temp.qrights() = 1, '4500 준비: 정상 취소 → 변경권 1, 보강권 1');
+create temp table q1 as select (admin_makeup_request('77777777-4500-0000-0000-000000000001', null,
+  jsonb_build_array(jsonb_build_object('starts_at', (select t from q0) + interval '2 days 2 hours 30 minutes'), jsonb_build_object('starts_at', (select t from q0) + interval '3 days 2 hours 30 minutes')), now())
+  ->> 'makeup_request_id')::uuid as id;
+grant select on q1 to authenticated;
+-- QA-01 A: 후보가 생긴 뒤 강사가 그 요일을 닫음 → 강사 '가능' 답·운영진 확정 모두 거절, 강사 화면 busy. 그날만 다시 열면 확정됨
+reset role;
+update tutor_availability set end_local = '13:00' where tutor_id = '55555555-0000-0000-0000-000000004500'
+  and weekday = extract(dow from ((select t from q0) + interval '2 days 2 hours 30 minutes') at time zone (select timezone from tutors where id = '55555555-0000-0000-0000-000000004500'));
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004500';   -- 강사
+select pg_temp.ok((select (s ->> 'busy')::boolean from jsonb_array_elements(tutor_screen(null, current_date, current_date) -> 'makeups') m,
+                          jsonb_array_elements(m -> 'slots') s where (m ->> 'id')::uuid = (select id from q1) and (s ->> 'id')::uuid = pg_temp.qcand((select id from q1))),
+  'QA-01 A: 닫은 시간의 후보는 강사 화면에 busy (4500)');
+select pg_temp.expect_error($$select tutor_makeup_answer((select id from q1), array[pg_temp.qcand((select id from q1))], null)$$, 'no longer open');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from q1), (select t from q0) + interval '2 days 2 hours 30 minutes')$$, '열어 둔 시간이 아님');
+select pg_temp.ok((select status = 'requested' from makeup_requests where id = (select id from q1)), 'QA-01 A: 닫은 시간은 강사 가능 답·운영진 확정 모두 거절 (4500)');
+-- 강사가 Schedule 에서 그날만 열면(기록된 날짜별 개방) 확정됨
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004500';
+select tutor_schedule_save(null, 'open', array[to_char(((select t from q0) + interval '2 days 2 hours 30 minutes') at time zone (select timezone from tutors where id = '55555555-0000-0000-0000-000000004500'), 'YYYY-MM-DD"T"HH24:MI')], null);
+select tutor_makeup_answer((select id from q1), array[pg_temp.qcand((select id from q1))], null);
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+-- QA-01 D: 불가라고 답한 다른 후보(3일 뒤)는 확정 못 함, 강사가 말한 다른 시간(답 없는 시간)은 확정 가능
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from q1), (select t from q0) + interval '3 days 2 hours 30 minutes')$$, '불가라고 답한');
+select admin_makeup_confirm((select id from q1), (select t from q0) + interval '2 days 2 hours 30 minutes');
+select pg_temp.ok((select status = 'confirmed' from makeup_requests where id = (select id from q1)) and pg_temp.qrights() = 0,
+  'QA-01: 그날만 열어 둔 뒤 강사 가능 답 → 운영진 확정, 불가 답 후보는 거절 (4500)');
+-- QA-13: 변경권 1개 남음 → 보강 수업 정상 취소(변경권 1→0, 보강 수업 자체가 새 보강권) → 수업 2 취소(변경권 0 → 보강 없음)
+create temp table q1l as select confirmed_lesson_id as id from makeup_requests where id = (select id from q1);
+grant select on q1l to authenticated;
+select admin_change_lesson('c4500000-0000-0000-0000-000000000002', (select id from q1l), 'student', now(), false);
+select pg_temp.ok(pg_temp.qbal() = 0 and pg_temp.qrights() = 1
+              and (select (r ->> 'lesson_id')::uuid = (select id from q1l) from jsonb_array_elements(student_screen('99999999-0000-0000-0000-000000004500') -> 'makeup_rights') r),
+  'QA-13: 보강 수업을 정상 취소하면 새 보강권은 그 보강 수업 하나 (원래 수업 1은 다시 안 생김) (4500)');
+select pg_temp.expect_error($$select admin_makeup_request('77777777-4500-0000-0000-000000000001', null, jsonb_build_array(jsonb_build_object('starts_at', (select t from q0) + interval '9 days 2 hours 30 minutes')), now())$$, '이미 한 번 잡혔다가');
+select pg_temp.ok((select q ->> 'confirmed_state' = 'canceled' from jsonb_array_elements(student_screen('99999999-0000-0000-0000-000000004500') -> 'makeup_requests') q where (q ->> 'id')::uuid = (select id from q1)),
+  'QA-13: 원래 수업으로는 다시 보강 신청 불가, 신청 내역은 확정 수업이 취소됐다고 알림 (4500)');
+-- 변경권 0개: 보강권(취소된 보강 수업)으로 보강 확정 → 그 보강을 다시 취소 → 'No change credits left', 권리 되살아나지 않음, 남은 권리 0
+create temp table q2 as select (admin_makeup_request((select id from q1l), null,
+  jsonb_build_array(jsonb_build_object('starts_at', (select t from q0) + interval '6 days 2 hours 30 minutes')), now()) ->> 'makeup_request_id')::uuid as id;
+grant select on q2 to authenticated;
+select admin_makeup_confirm((select id from q2), (select t from q0) + interval '6 days 2 hours 30 minutes');
+create temp table q2l as select confirmed_lesson_id as id from makeup_requests where id = (select id from q2);
+grant select on q2l to authenticated;
+select pg_temp.ok(pg_temp.qrights() = 0, 'QA-13: 보강 확정 뒤 권리 0 (4500)');
+select admin_change_lesson('c4500000-0000-0000-0000-000000000003', (select id from q2l), 'student', now(), false);
+select pg_temp.ok((select class_status = 'No change credits left' from lessons where id = (select id from q2l)) and pg_temp.qrights() = 0 and pg_temp.qbal() = 0,
+  'QA-13: 변경권 0개 보강 취소 → 보강 없음·권리 되살아나지 않음 (4500)');
+select admin_revert_change((select id from change_requests where idempotency_key = 'c4500000-0000-0000-0000-000000000003'), 'QA 복구');
+select pg_temp.ok((select state = 'scheduled' from lessons where id = (select id from q2l)) and pg_temp.qrights() = 0,
+  'QA-13: 운영진 되돌리기 → 보강 수업 다시 예정, 권리 그대로 0 (4500)');
+-- QA-08: 강사가 모든 후보에 불가 → 학생 화면 tutor_declined_all
+select admin_change_lesson('c4500000-0000-0000-0000-000000000005', '77777777-4500-0000-0000-000000000005', 'tutor', now(), false);   -- 강사 사정 취소 → 변경권 그대로 보강권
+create temp table q5 as select (admin_makeup_request('77777777-4500-0000-0000-000000000005', null,
+  jsonb_build_array(jsonb_build_object('starts_at', (select t from q0) + interval '7 days 2 hours 30 minutes')), now()) ->> 'makeup_request_id')::uuid as id;
+grant select on q5 to authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004500';
+select tutor_makeup_answer((select id from q5), '{}', 'Not that week, sorry. Any day after.');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004501';   -- 학생
+select pg_temp.ok((select (q ->> 'tutor_declined_all')::boolean from jsonb_array_elements(student_screen(null) -> 'makeup_requests') q where (q ->> 'id')::uuid = (select id from q5))
+              and (select not (q ->> 'tutor_declined_all')::boolean from jsonb_array_elements(student_screen(null) -> 'makeup_requests') q where (q ->> 'id')::uuid = (select id from q1)),
+  'QA-08: 모든 후보 불가 → 학생 화면에 재조율 표시 신호, 가능 답이 있던 신청은 아님 (4500)');
+-- QA-12: 강사 노쇼 → 보상권 → 보상수업 확정 → Held 로 못 고침 → 보상수업 없애면 고칠 수 있음
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select tutor_record_class('77777777-4500-0000-0000-000000000004', 'tutor_no_show', null, 'QA no-show', false, null, false, null);
+create temp table q4c as select id from compensations where source_lesson_id = '77777777-4500-0000-0000-000000000004';
+grant select on q4c to authenticated;
+create temp table q4 as select (admin_makeup_request(null, null,
+  jsonb_build_array(jsonb_build_object('starts_at', (select t from q0) + interval '8 days 2 hours 30 minutes')), now(), (select id from q4c)) ->> 'makeup_request_id')::uuid as id;
+grant select on q4 to authenticated;
+select admin_makeup_confirm((select id from q4), (select t from q0) + interval '8 days 2 hours 30 minutes');
+select pg_temp.expect_error($$select tutor_record_class('77777777-4500-0000-0000-000000000004', 'held', 'Fixed', null, false, null, false, null)$$, 'already has compensation class');
+select pg_temp.ok((select class_status = 'Tutor no-show' from lessons where id = '77777777-4500-0000-0000-000000000004')
+              and (select status = 'used' from compensations where id = (select id from q4c)),
+  'QA-12: 보상수업이 잡힌 강사 노쇼는 Held 로 못 바꿈, 보상권·보상수업 그대로 (4500)');
+select admin_void_makeup((select confirmed_lesson_id from makeup_requests where id = (select id from q4)), 'QA 정리');
+select tutor_record_class('77777777-4500-0000-0000-000000000004', 'held', 'Fixed', null, false, null, false, null);
+select pg_temp.ok((select class_status = 'Normal' from lessons where id = '77777777-4500-0000-0000-000000000004')
+              and (select status = 'voided' from compensations where id = (select id from q4c)),
+  'QA-12: 운영진이 보상수업을 없앤 뒤에는 고칠 수 있고 보상권은 voided (4500)');
+-- 추가 요청 3: 운영진 변경권 수동 조정 (사유 필수 · ±1 · 한도 · 이력 · 학생 화면 반영)
+select pg_temp.expect_error($$select admin_credit_adjust('99999999-0000-0000-0000-000000004500', 1, '  ')$$, '사유');
+select pg_temp.expect_error($$select admin_credit_adjust('99999999-0000-0000-0000-000000004500', 2, 'x')$$, '1개씩');
+select pg_temp.expect_error($$select admin_credit_adjust('99999999-0000-0000-0000-000000004500', -1, '더 빼기')$$, '남은 변경권이 없어');
+create temp table qadj as select admin_credit_adjust('99999999-0000-0000-0000-000000004500', 1, '운영진 사전 안내: 2회 변경에 1개만 차감') as r;
+select pg_temp.ok((select (r ->> 'before')::int = 0 and (r ->> 'after')::int = 1 from qadj) and pg_temp.qbal() = 1,
+  '변경권 수동 조정: 사유 필수, 한 번에 1개, 0 아래로 못 뺌, +1 복구 → 잔여 1 (4500)');
+select admin_credit_adjust('99999999-0000-0000-0000-000000004500', 1, '한 번 더');
+select pg_temp.expect_error($$select admin_credit_adjust('99999999-0000-0000-0000-000000004500', 1, '지급 수량 초과')$$, '지급된 변경권');
+select pg_temp.ok((select (j ->> 'left')::int = 2 and (j ->> 'granted')::int = 2 and j -> 'uses' -> 0 ->> 'reason' = 'admin_adjust' and j -> 'uses' -> 0 ->> 'note' = '한 번 더'
+                          and (j -> 'uses' -> 0 ->> 'by')::uuid = 'bbbbbbbb-0000-0000-0000-000000000009'
+                   from admin_credits('99999999-0000-0000-0000-000000004500') j),
+  '변경권 수동 조정: 지급 수량(2)보다 많이 못 더함, 이력에 사유·조정자·시각 (4500)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004501';
+select pg_temp.ok((select (e ->> 'credits_left')::int = 2 from (select student_screen(null) -> 'enrollment' e) x)
+              and (select count(*) filter (where u ->> 'reason' = 'admin_adjust' and u ->> 'note' is not null) = 2 from jsonb_array_elements(student_screen(null) -> 'credit_uses') u),
+  '변경권 수동 조정: 학생 화면 잔여·기록(사유)에 바로 반영 (4500)');
+select pg_temp.expect_error($$select admin_credit_adjust('99999999-0000-0000-0000-000000004500', -1, '학생이 시도')$$, '운영자|42501');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004500';
+select pg_temp.expect_error($$select admin_credit_adjust('99999999-0000-0000-0000-000000004500', -1, '강사가 시도')$$, '운영자|42501');
+select pg_temp.expect_error($$select admin_credits('99999999-0000-0000-0000-000000004500')$$, '운영자|42501');
+select pg_temp.ok(true, '변경권 수동 조정은 운영진만 (4500)');
 reset request.jwt.claim.sub;
 reset role;

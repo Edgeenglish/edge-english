@@ -6,14 +6,14 @@
 // 판정(6시간·변경권·공휴일·보강 기한)과 중복 방지는 DB 함수 하나 — 화면 미리 보기와 저장 결과가 같음
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { formatInZone, instantToKstDate, kstToInstant } from '@/lms/rules/dates';
+import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lms/rules/dates';
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
 import {
   changeableLessons, dateLabel, tutorLocalLabel, decisionLines, EVENT_TEXT, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, STATUS_SHORT, studentNotice, tutorNotice,
   type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupRight, type NoticeContext,
 } from '@/lms/admin/lesson-change';
-import type { StudentLessonData } from '@/lms/admin/lesson-change-live';
+import type { AdminCredits, StudentLessonData } from '@/lms/admin/lesson-change-live';
 import { AdminHeader } from '../ui';
 import TimeInput from '../TimeInput';
 import { Card, inputCls } from '../students/new/parts';
@@ -27,6 +27,9 @@ export type ChangeActions = {
   withdrawMakeup: (requestId: string) => Promise<void>;
   voidMakeup: (lessonId: string, note: string) => Promise<void>;
   markSent: (noticeId: string) => Promise<void>;
+  /** 변경권 (4500): 읽기·수동 조정(±1, 사유 필수). 4500 전 DB 면 loadCredits 가 null */
+  loadCredits?: (studentId: string) => Promise<AdminCredits | null>;
+  adjustCredit?: (studentId: string, delta: 1 | -1, reason: string) => Promise<{ before: number; after: number }>;
 };
 
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5ffb] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
@@ -44,6 +47,14 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 const kstParts = (at: Date) => ({ date: instantToKstDate(at), time: formatInZone(at, 'Asia/Seoul').time });
+/** 존재하지 않는 날짜(2/30 등)는 null — 입력란 오류로만 보이고 화면이 멈추지 않게 (QA-16) */
+function safeInstant(date: string, time: string): Date | null {
+  try {
+    return kstToInstant(date, time);
+  } catch {
+    return null;
+  }
+}
 
 export default function LessonChange({ students, actions, nowIso, initialCode }: { students: ChStudent[]; actions: ChangeActions; nowIso: string; initialCode?: string }) {
   const [student, setStudent] = useState<ChStudent | null>(() => students.find((s) => s.code === initialCode) ?? null);
@@ -51,6 +62,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   const [data, setData] = useState<StudentLessonData | null>(null);
   const [loadErr, setLoadErr] = useState('');
   const [lessonId, setLessonId] = useState<string | null>(null);
+  const [credits, setCredits] = useState<AdminCredits | null>(null);
   const now = useMemo(() => new Date(nowIso), [nowIso]);
 
   const reload = useCallback(async () => {
@@ -58,6 +70,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
     try {
       setLoadErr('');
       setData(await actions.load(student.id));
+      if (actions.loadCredits) setCredits(await actions.loadCredits(student.id).catch(() => null));
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : '불러오지 못했어요.');
     }
@@ -142,6 +155,9 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
 
         {student && data && (
           <>
+            {credits?.period && actions.adjustCredit && (
+              <CreditsCard credits={credits} adjust={(d, r) => actions.adjustCredit!(student.id, d, r)} done={reload} />
+            )}
             <Card title="2. 수업">
               {choices.length === 0 ? (
                 <p className="text-[14px] text-[#6b6880]">예정 수업 없음</p>
@@ -327,6 +343,69 @@ function NoticeRow({ n, text, markSent }: { n: ChNotice; text: string; markSent:
   );
 }
 
+/** 변경권: 지금 기간 잔여·기록 + 운영진 수동 조정 (추가 요청 3, 4500). 자동 차감은 그대로, 조정은 사유 필수·한 번에 1개 */
+function CreditsCard({ credits, adjust, done }: { credits: AdminCredits; adjust: (delta: 1 | -1, reason: string) => Promise<{ before: number; after: number }>; done: () => Promise<void> }) {
+  const [mode, setMode] = useState<1 | -1 | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+  const describeUse = (u: AdminCredits['uses'][number]) =>
+    u.reason === 'student_change' ? `${u.lessonAt ? `${kstLabel(u.lessonAt)} 수업 ` : ''}취소 (자동 차감)`
+    : u.reason === 'admin_restore' ? `${u.lessonAt ? `${kstLabel(u.lessonAt)} 수업 ` : ''}취소 되돌림`
+    : `운영진 조정${u.note ? ` · ${u.note}` : ''}`;
+  async function run() {
+    if (!mode) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const r = await adjust(mode, reason.trim());
+      setMsg(`변경권 ${r.before}개 → ${r.after}개. 학생 화면에도 바로 반영돼요.`);
+      setMode(null);
+      setReason('');
+      await done();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '조정하지 못했어요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card title="변경권">
+      <div className="flex items-center gap-2">
+        <b className="flex-1 text-[16px] text-[#1d1b2b]">
+          남은 {credits.left}개 <span className="text-[13px] font-normal text-[#6b6880]">/ 이번 기간 {credits.granted}개 ({credits.period ? `${dateLabel(credits.period.start as KstDate)}~${dateLabel(credits.period.end as KstDate)}` : ''})</span>
+        </b>
+        <button type="button" className={btnSub} disabled={busy || credits.left >= credits.granted} onClick={() => { setMode(1); setMsg(''); }}>+1 복구·추가</button>
+        <button type="button" className={btnSub} disabled={busy || credits.left <= 0} onClick={() => { setMode(-1); setMsg(''); }}>−1 차감</button>
+      </div>
+      {mode && (
+        <div className="mt-2 grid gap-1.5 rounded-[12px] bg-[#f6f5fb] p-3">
+          <p className="text-[14px] text-[#1d1b2b]">변경권 {credits.left}개 → <b>{credits.left + mode}개</b> ({mode > 0 ? '1개 추가' : '1개 차감'}). 사유를 적어 주세요 — 조정자·시각과 함께 기록에 남아요.</p>
+          <input aria-label="조정 사유" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="예: 11/5 두 수업 변경에 1개만 차감하기로 사전 안내" className={inputCls(false)} />
+          <div className="grid grid-cols-2 gap-1.5">
+            <button type="button" className={btnSub} disabled={busy} onClick={() => setMode(null)}>취소</button>
+            <button type="button" className={btnMain} disabled={busy || !reason.trim()} onClick={run}>{mode > 0 ? '+1 적용' : '−1 적용'}</button>
+          </div>
+        </div>
+      )}
+      {msg && <p className="mt-1.5 text-[13px] text-[#1f7a4d]">{msg}</p>}
+      <Err>{err}</Err>
+      {credits.uses.length > 0 && (
+        <ul className="mt-2 grid gap-1 text-[13px] text-[#1d1b2b]">
+          {credits.uses.map((u, i) => (
+            <li key={i} className="flex justify-between gap-2 border-t border-[#eeecf4] pt-1">
+              <span>{sentLabel(u.at)} · {describeUse(u)}</span>
+              <b className={u.delta > 0 ? 'text-[#1f7a4d]' : ''}>{u.delta > 0 ? '+1' : '−1'}</b>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-1.5 text-[12px] text-[#6b6880]">한도: 0개 ~ 이번 기간 지급 수량. 자동 차감 규칙(POL-CHG-01~05)은 그대로이고, 수동 조정은 예외 처리 기록용이에요.</p>
+    </Card>
+  );
+}
+
 function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupRight; finalEnd: string | null; tutorTz: string; actions: ChangeActions; done: () => Promise<void> }) {
   const src = right.kind === 'migrated' ? null : right.source;
   const defTime = src ? kstParts(src.startsAt).time : '';
@@ -346,7 +425,8 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   // 보상수업 사용 기한 = 수강 종료일, 기한 안 재등록이면 다음 수강권 종료일 (4100)
   const lastDay = comp ? comp.useUntil : finalEnd;
   const until = comp ? `${dateLabel(comp.useUntil)}까지` : leave ? '강사 휴가 · 종료일 제한 없음 (뒤로 잡으면 그날까지 연장)' : finalEnd ? `${dateLabel(finalEnd)}까지` : '';
-  const toAt = (s: { date: string; time: string }) => (s.date && /^\d\d:\d\d$/.test(s.time) ? kstToInstant(s.date, s.time) : null);
+  // 날짜 입력 중(연도 '0002' 등)에는 변환하지 않음 — 완성된 날짜(2000~2099)·시각일 때만 (QA-16)
+  const toAt = (s: { date: string; time: string }) => (/^20\d\d-\d\d-\d\d$/.test(s.date) && /^\d\d:\d\d$/.test(s.time) ? safeInstant(s.date, s.time) : null);
   // 한국 시각으로 넣고, 강사 현지 날짜·시각은 바로 아래 자동 표시 (2026-10-26 대표)
   const Local = ({ at }: { at: Date | null }) => {
     const t = at && tutorLocalLabel(at, tutorTz);
@@ -383,9 +463,14 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
                 )}
                 <span className="block"><Local at={t} /></span>
               </span>
-              <button type="button" disabled={busy} className={btnMain} onClick={() => run(() => actions.confirmMakeup(open.id, t))}>확정</button>
+              {/* 강사가 불가라고 답한 시간은 확정 못 함 (QA-01 D, DB 도 거절) */}
+              <button type="button" disabled={busy || open.tutorAnswers?.[+t] === 'no'} className={btnMain} title={open.tutorAnswers?.[+t] === 'no' ? '강사가 불가라고 답한 시간이에요' : undefined}
+                onClick={() => run(() => actions.confirmMakeup(open.id, t))}>확정</button>
             </div>
           ))}
+          {open.tutorAnsweredAt && open.candidates.length > 0 && open.candidates.every((t) => open.tutorAnswers?.[+t] === 'no') && (
+            <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[13.5px] text-[#b3261e]">강사가 모든 날짜에 불가라고 답했어요. 강사 메모를 참고해 학생에게 다른 날짜를 받거나(카톡), 아래에 강사가 말한 시간을 넣어 확정해 주세요. 그 시간은 강사가 Schedule에서 연 시간이어야 해요.</p>
+          )}
           {open.tutorNote && <p className="rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] text-[#1d1b2b]">강사 메모: {open.tutorNote}</p>}
           <div className="grid grid-cols-[1.4fr_1fr_auto] gap-1.5">
             <input type="date" aria-label="다른 보강 날짜" value={other.date} onChange={(e) => setOther({ ...other, date: e.target.value })} className={inputCls(false)} />

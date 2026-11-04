@@ -44,12 +44,12 @@ describe('한국·강사·학생 시간 세 줄', () => {
 describe('복사 문구', () => {
   it('강사 제안은 확정 아님을 밝히고 강사 현지 시각으로', () => {
     expect(proposalMessage(base)).toBe(
-      'Hi Alex, new student request (not confirmed yet):\nMinji Kim, 50 min, 8 classes\nEvery Wed & Fri 11:00 your time\nFirst class: Wed 4 Nov 11:00\nCan you take this?',
+      'Hi Alex, new student request (not confirmed yet):\nMinji Kim, 50 min, 8 classes\nEvery Wed & Fri 11:00 Sydney Time (Wed & Fri 09:00 KST)\nFirst class: Wed 4 Nov 11:00\nCan you take this?',
     );
   });
   it('강사 확정: 첫·마지막 수업', () => {
     expect(tutorConfirmMessage(base)).toBe(
-      'CONFIRMED - new student\nMinji Kim, 50 min, 8 classes\nEvery Wed & Fri 11:00 your time\nFirst class: Wed 4 Nov 11:00 · last Fri 27 Nov\nPlease add it to your schedule. Thank you!',
+      'CONFIRMED - new student\nMinji Kim, 50 min, 8 classes\nEvery Wed & Fri 11:00 Sydney Time (Wed & Fri 09:00 KST)\nFirst class: Wed 4 Nov 11:00 · last Fri 27 Nov\nPlease add it to your schedule. Thank you!',
     );
   });
   it('학생 확정: 현지 시각 먼저, 한국 시각 아래', () => {

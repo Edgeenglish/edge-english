@@ -446,8 +446,9 @@ export async function loadOpsStats(sb: SupabaseClient, now: Date): Promise<OpsSt
   const dow = new Date(`${today}T00:00:00Z`).getUTCDay();
   const monday = addDays(today, -((dow + 6) % 7));
   const monthStart = `${today.slice(0, 8)}01`;
+  // '수강 중' = 학생 목록(admin_students)과 같은 기준: 끝나지 않은 수강권이 오늘 기간 안 (status 가 confirmed·pending_payment 여도 기간이 시작됐으면 수강 중) (QA-05)
   const [active, week, pays] = await Promise.all([
-    sb.from('enrollments').select('student_id').eq('status', 'active'),
+    sb.from('enrollments').select('student_id').not('status', 'in', '("completed","canceled")').lte('start_date', today).gte('final_end_date', today),
     sb.from('lessons').select('state').gte('kst_date', monday).lte('kst_date', addDays(monday, 6)).neq('state', 'canceled'),
     sb.from('payments').select('enrollment:enrollments(previous_enrollment_id)').gte('confirmed_at', `${monthStart}T00:00:00+09:00`),
   ]);

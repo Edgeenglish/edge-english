@@ -71,7 +71,8 @@ export function renewalPrompt(lessons: readonly StudentLesson[], renewal: Renewa
 }
 
 /** 신청 진행 상태. 학생이 기다리기만 하면 되는 단계는 할 일이 아님 */
-export type RequestStatus = 'tutor_reviewing' | 'admin_reviewing' | 'confirmed' | 'completed';
+/** rescheduling = 강사가 고른 날짜 모두 불가 → 운영진이 다른 날짜 조율 (QA-08) · canceled = 확정됐던 보강 수업이 취소됨 (QA-13) */
+export type RequestStatus = 'tutor_reviewing' | 'admin_reviewing' | 'rescheduling' | 'confirmed' | 'canceled' | 'completed';
 
 export type StudentRequest = {
   id: string;
@@ -90,12 +91,16 @@ export type StudentRequest = {
   originalTutor?: string | null;
   tutor?: string | null;
   confirmedAt?: Date | null;
+  /** 강사 메모 (모든 날짜 불가일 때 학생에게는 보이지 않음 — 운영진이 조율) */
+  tutorDeclinedAll?: boolean;
 };
 
 export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
   tutor_reviewing: '강사 확인 중',
   admin_reviewing: '최종 확정 대기',
+  rescheduling: '다른 일정 조율 중',
   confirmed: '확정',
+  canceled: '취소됨',
   completed: '처리 완료',
 };
 

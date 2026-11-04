@@ -81,6 +81,8 @@ export function firstLessonAt(v: Pick<PlanView, 'slots' | 'startDate'>): Date | 
 const EN_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const EN_WD_FULL: Record<string, string> = { 일: 'Sun', 월: 'Mon', 화: 'Tue', 수: 'Wed', 목: 'Thu', 금: 'Fri', 토: 'Sat' };
 const enDays = (text: string) => text.replace(/[일월화수목금토]/g, (c) => EN_WD_FULL[c]).replace(/·/g, ' & ');
+/** 'Toronto Time' / 'Korea Time (KST)' (students.ts enZone 과 같은 규칙) */
+const enZoneName = (tz: string) => (!tz || tz === 'Asia/Seoul' ? 'Korea Time (KST)' : `${tz.split('/').at(-1)?.replaceAll('_', ' ') || tz} Time`);
 
 /** 한 시점을 그 시간대 기준 'Wed 4 Nov 11:00' / '11월 4일(수) 09:00' */
 export function enWhen(at: Date, tz: string) {
@@ -104,7 +106,9 @@ function lastLessonAt(v: Pick<PlanView, 'slots' | 'endDate'>): Date | null {
 function tutorLine(v: PlanView) {
   const tz = v.tutorTz || 'Asia/Seoul';
   const local = timeLines({ ...v, studentTz: '' }).find((l) => l.who === '강사')?.text ?? timeLines(v)[0].text;
-  return `Every ${enDays(local)} your time${tz === 'Asia/Seoul' ? ' (KST)' : ''}`;
+  // 도시 이름으로 (QA UX: 'your time' 만 쓰지 않음). 해외 강사는 한국 시간도 같이
+  const kstLine = timeLines({ ...v, studentTz: '' }).find((l) => l.who === '한국')?.text;
+  return tz === 'Asia/Seoul' ? `Every ${enDays(local)} Korea Time (KST)` : `Every ${enDays(local)} ${enZoneName(tz)}${kstLine ? ` (${enDays(kstLine)} KST)` : ''}`;
 }
 
 /** 강사 제안 (WhatsApp, 영어). 확정이 아님을 분명히 */

@@ -33,7 +33,7 @@ export function applicationFromGoogle(response: GoogleApplication): FormResponse
     ageGroup: get(/^연령대/), gender: get(/^성별/), concern: get(/^현재 영어 고민/),
     duration: get(/^수업 길이를/), weekly: get(/^수업 횟수를/), term: get(/^수강 기간/),
     desiredTime: get(/^희망 수업시간/), wishGrid: grid ? wishes : null,
-    startWish: get(/^수업 시작 희망일/), payerName: get(/^입금자명/),
+    startWish: get(/^수업 시작 희망일/) || get(/^첫 수업 희망 날짜/) || get(/^첫 수업 희망일/), payerName: get(/^입금자명/),
     paymentMethod: get(/^결제 방법$/) === '계좌이체' ? 'bank_transfer' : get(/^결제 방법$/) === '카드결제' ? 'card_link' : null,
     raw: response.items.map(i => [i.title, i === grid ? wishes.map(w => `${['일', '월', '화', '수', '목', '금', '토'][w.weekday]} ${w.from}`).join(', ') : text(i.value)]),
   };

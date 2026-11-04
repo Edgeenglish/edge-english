@@ -146,7 +146,9 @@ export type Extension = { id: string; days: number; reason: string; note: string
 export type EnrollmentInfo = {
   id: string; seq: number; status: string; weeks: number | null; legacyLabel: string | null; weeklyCount: number; durationMin: number;
   startDate: KstDate; baseEndDate: KstDate; extensionDays: number; finalEndDate: KstDate; lessonsPurchased: number; lessonsCarriedIn: number;
-  sheet: { total: number | null; used: number | null } | null; done: number; leftRegular: number; leftAll: number; extensions: Extension[];
+  sheet: { total: number | null; used: number | null } | null; done: number; leftRegular: number; leftAll: number;
+  /** 날짜 안 잡은 보강권·보상권 (학생 홈 '남은 수업' 과 같은 기준, 4500). 옛 DB 는 0 */
+  leftUnbooked: number; extensions: Extension[];
 };
 export type Upcoming = { id: string; kind: string; seq: number | null; startsAt: Date; endsAt: Date; tutor: string; tutorTz: string; tutorId: string; substitute: boolean; leaveOpen: boolean };
 export type RecentTopic = { startsAt: Date; tutor: string; topics: string; kind: string; substitute: boolean };
@@ -186,7 +188,7 @@ export function parseEnrollment(e: any): EnrollmentInfo | null {
     startDate: e.start_date, baseEndDate: e.base_end_date, extensionDays: e.extension_days ?? 0, finalEndDate: e.final_end_date,
     lessonsPurchased: e.lessons_purchased ?? 0, lessonsCarriedIn: e.lessons_carried_in ?? 0,
     sheet: e.sheet ? { total: e.sheet.total ?? null, used: e.sheet.used ?? null } : null,
-    done: Number(e.done ?? 0), leftRegular: Number(e.left_regular ?? 0), leftAll: Number(e.left_all ?? 0),
+    done: Number(e.done ?? 0), leftRegular: Number(e.left_regular ?? 0), leftAll: Number(e.left_all ?? 0), leftUnbooked: Number(e.left_unbooked ?? 0),
     extensions: ((e.extensions ?? []) as any[]).map((x) => ({ id: x.id, days: x.days, reason: x.reason, note: x.note ?? null, auto: x.auto ?? null, at: new Date(x.at), by: x.by ?? null })),
   };
 }
@@ -288,7 +290,8 @@ export function regularNoticeEn(c: RegularNoticeCtx): string {
   const kst = !c.tutorTz || c.tutorTz === 'Asia/Seoul';
   const line = (t: Date) => (kst ? `${enWhen(t, 'Asia/Seoul')} ${enZone('Asia/Seoul')}` : `${enWhen(t, c.tutorTz)} ${enZone(c.tutorTz)} (${enWhen(t, 'Asia/Seoul')} KST)`);
   return [
-    `SCHEDULE CHANGE - ${c.studentNameEn} (${c.durationMin} min), from ${WD_EN[weekdayOf(c.effectiveFrom)]} ${MON_EN[Number(c.effectiveFrom.slice(5, 7)) - 1]} ${Number(c.effectiveFrom.slice(8))}`,
+    // 적용일은 한국 날짜 기준이라 'KST' 를 밝히고, 해외 강사에게는 첫 바뀐 수업의 현지 날짜·시각을 같이 (QA-09)
+    `SCHEDULE CHANGE - ${c.studentNameEn} (${c.durationMin} min), from ${WD_EN[weekdayOf(c.effectiveFrom)]} ${MON_EN[Number(c.effectiveFrom.slice(5, 7)) - 1]} ${Number(c.effectiveFrom.slice(8))} (KST)${!kst && c.moved.length > 0 ? ` — first changed class: ${line(c.moved[0].to)}` : ''}`,
     `New regular time: ${kst ? `${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} ${enZone('Asia/Seoul')}` : `${slotsInZone(c.newSlots, c.tutorTz, c.effectiveFrom, 'en')} ${enZone(c.tutorTz)} (${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} KST)`}`,
     `Changed classes (${c.moved.length}):\n${c.moved.map((m) => `- ${line(m.to)}`).join('\n')}`,
     'Confirmed make-up and cover classes stay as they are. Please update your schedule. Thank you!',

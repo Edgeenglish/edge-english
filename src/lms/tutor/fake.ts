@@ -95,7 +95,7 @@ export function fakeStudentProfile(studentId: string, now: Date): TutorStudentPr
   return {
     student: common,
     enrollment: { id: 'e', seq: 1, status: 'active', weeks: 12, legacyLabel: null, weeklyCount: 2, durationMin: 40, startDate: start, baseEndDate: base, extensionDays: 1, finalEndDate: addDays(base, 1),
-      lessonsPurchased: 24, lessonsCarriedIn: 1, sheet: null, done: 4, leftRegular: 20, leftAll: 21, extensions: [] },
+      lessonsPurchased: 24, lessonsCarriedIn: 1, sheet: null, done: 4, leftRegular: 20, leftAll: 21, leftUnbooked: 0, extensions: [] },
     slots: regular ? slots : [], nextSlots: [], upcoming: regular ? up : up.slice(0, 1), recentTopics: [{ startsAt: new Date(+now - 86400000 * 2), tutor: 'Emma', topics: 'Travel plans, airports', kind: 'regular', substitute: false }],
     access: regular ? 'regular' : 'substitute', me: { id: 'demo', timezone: 'Australia/Sydney' },
   };

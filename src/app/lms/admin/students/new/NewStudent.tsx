@@ -177,7 +177,8 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     const base = draft.startWish && draft.startWish > today ? draft.startWish : addDays(today, 1);
     return firstLessonDateOnOrAfter(base, slots.map((s) => s.weekday));
   }, [draft.startWish, today, slots]);
-  const firstDate = firstPick && slots.some((s) => s.weekday === weekdayOf(firstPick)) ? firstPick : suggested;
+  // 정규 요일이 정해졌으면 그 요일 중에서, 강사 미배정(요일 없음)이면 입력한 첫 수업일(희망 시작일)을 그대로 예정일로 (QA-11)
+  const firstDate = firstPick && (slots.length === 0 || slots.some((s) => s.weekday === weekdayOf(firstPick))) ? firstPick : suggested;
   const slotErr = tutor ? slotProblem(slots, draft.weeklyCount) : null;
 
   const plan = useMemo(() => {

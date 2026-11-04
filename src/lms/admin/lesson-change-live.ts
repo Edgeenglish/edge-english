@@ -150,6 +150,26 @@ export async function withdrawMakeup(sb: SupabaseClient, requestId: string): Pro
 export async function voidMakeup(sb: SupabaseClient, lessonId: string, note: string): Promise<void> {
   check(await sb.rpc('admin_void_makeup', { p_lesson: lessonId, p_note: note }));
 }
+/** 변경권 (4500): 지금 기간·지급·잔여·기록. period 가 null 이면 진행 중인 기간 없음 */
+export type AdminCredits = {
+  period: { id: string; idx: number; start: string; end: string } | null;
+  granted: number;
+  left: number;
+  uses: { at: Date; reason: 'student_change' | 'admin_restore' | 'admin_adjust'; delta: number; note: string | null; lessonAt: Date | null }[];
+};
+export async function loadCredits(sb: SupabaseClient, studentId: string): Promise<AdminCredits | null> {
+  const r = await sb.rpc('admin_credits', { p_student: studentId });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') return null;   // 4500 전 DB
+  const j = check(r) as { period: AdminCredits['period']; granted?: number; left?: number; uses?: { at: string; reason: AdminCredits['uses'][number]['reason']; delta: number; note: string | null; lesson_at: string | null }[] };
+  return {
+    period: j.period ?? null, granted: j.granted ?? 0, left: j.left ?? 0,
+    uses: (j.uses ?? []).map((u) => ({ at: new Date(u.at), reason: u.reason, delta: u.delta, note: u.note, lessonAt: u.lesson_at ? new Date(u.lesson_at) : null })),
+  };
+}
+/** 운영진 변경권 수동 조정 (4500): 한 번에 ±1, 사유 필수 — 이력은 DB(credit_ledger)에 남음 */
+export async function adjustCredit(sb: SupabaseClient, studentId: string, delta: 1 | -1, reason: string): Promise<{ before: number; after: number }> {
+  return check(await sb.rpc('admin_credit_adjust', { p_student: studentId, p_delta: delta, p_reason: reason }));
+}
 export async function markLessonNoticeSent(sb: SupabaseClient, noticeId: string): Promise<void> {
   check(await sb.rpc('admin_mark_lesson_notice_sent', { p_notice: noticeId }));
 }

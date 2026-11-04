@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  changeLesson, confirmMakeup, loadChangeStudents, loadStudentLessons, markLessonNoticeSent, requestMakeup, revertChange, voidMakeup, withdrawMakeup,
+  adjustCredit, changeLesson, confirmMakeup, loadChangeStudents, loadCredits, loadStudentLessons, markLessonNoticeSent, requestMakeup, revertChange, voidMakeup, withdrawMakeup,
 } from '@/lms/admin/lesson-change-live';
 import type { ChStudent } from '@/lms/admin/lesson-change';
 import { supabaseBrowser } from '@/lms/auth/client';
@@ -42,6 +42,8 @@ export default function ChangeLive({ code }: { code?: string }) {
         withdrawMakeup: (id) => withdrawMakeup(sb, id),
         voidMakeup: (id, note) => voidMakeup(sb, id, note),
         markSent: (id) => markLessonNoticeSent(sb, id),
+        loadCredits: (id) => loadCredits(sb, id),
+        adjustCredit: (id, delta, reason) => adjustCredit(sb, id, delta, reason),
       },
     [sb],
   );

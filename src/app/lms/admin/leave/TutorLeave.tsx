@@ -299,11 +299,11 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
         </label>
         <div className="grid grid-cols-2 gap-1.5">
           <label className="grid gap-1 text-[13px] text-[#6b6880]">
-            휴무 시작일
+            휴무 시작일 (한국 날짜)
             <input type="date" value={from} min={today} onChange={(e) => { setFrom(e.target.value); if (!to || to < e.target.value) setTo(e.target.value); }} className={inputCls(false)} />
           </label>
           <label className="grid gap-1 text-[13px] text-[#6b6880]">
-            휴무 종료일
+            휴무 종료일 (한국 날짜, 그날 끝까지)
             <input type="date" value={to} min={from || today} onChange={(e) => setTo(e.target.value)} className={inputCls(false)} />
           </label>
         </div>

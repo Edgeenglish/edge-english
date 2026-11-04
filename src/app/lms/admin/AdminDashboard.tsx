@@ -246,7 +246,7 @@ export default function AdminDashboard({
     }
     if (!preview) {
       // 실제 데이터: 처리(쓰기)는 서버 기능으로만 (POL-AC-07). 서버 기능을 만들기 전에는 보기만
-      setToast('처리 버튼은 서버 저장 기능을 만든 뒤 연결돼요. 지금은 실제 데이터 보기만 가능해요.');
+      setToast('이 처리는 해당 화면(신규 배정·수업 변경·강사 휴무)에서 저장돼요. 카드의 [열기]·[강사 배정] 버튼으로 이동해 주세요.');
       return;
     }
     setTasks((prev) => {

@@ -28,6 +28,9 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
   // 고른 요일 → 시간 (처음엔 지금 일정 그대로)
   const [times, setTimes] = useState<Record<number, string>>(() => Object.fromEntries(cur.map((s) => [s.weekday, s.time])));
   const [order, setOrder] = useState<number[]>(() => cur.map((s) => s.weekday));
+  // 바뀌는 수업·그대로 두는 수업은 기본 6·8회만 보이고 [전체 보기]로 모두 펼침 (QA-04: 정책 '변경될 향후 수업 전체 확인')
+  const [showAllMoved, setShowAllMoved] = useState(false);
+  const [showAllKept, setShowAllKept] = useState(false);
   const [reason, setReason] = useState('');
   const [pv, setPv] = useState<RegularPreview | null>(null);
   const [pvErr, setPvErr] = useState('');
@@ -83,7 +86,10 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
     );
   }
   const zones = [{ label: '학생', tz: stTz }, { label: '강사', tz: tutor.tutorTz }];
-  const shown = pv ? pv.moved.slice(0, 6) : [];
+  const shown = pv ? (showAllMoved ? pv.moved : pv.moved.slice(0, 6)) : [];
+  const keptShown = pv ? (showAllKept ? pv.kept : pv.kept.slice(0, 8)) : [];
+  // 강사 현지 예시: 첫 수업의 실제 시점을 날짜·요일·시각 함께 변환 (QA-09: 한국 날짜 + 현지 시각을 붙이면 틀림)
+  const firstMovedTo = pv && pv.moved.length > 0 ? pv.moved[0].to : complete ? kstToInstant(from, slots[0]?.time || cur[0].time) : null;
   const tutorLocalNew = slotsInZone(slots.length === n && complete ? slots : [], tutor.tutorTz, from);
   return (
     <Sheet title="정규 일정 수정" onClose={onClose} wide>
@@ -153,7 +159,13 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                       </li>
                     );
                   })}
-                  {pv.moved.length > shown.length && <li className="text-[12.5px] text-[#6b6880]">… {mdw(formatInZone(pv.moved[pv.moved.length - 1].to, 'Asia/Seoul').date)}까지 {pv.moved.length - shown.length}회 더 (같은 요일·시각)</li>}
+                  {pv.moved.length > shown.length && (
+                    <li className="text-[12.5px] text-[#6b6880]">
+                      … {mdw(formatInZone(pv.moved[pv.moved.length - 1].to, 'Asia/Seoul').date)}까지 {pv.moved.length - shown.length}회 더 (같은 요일·시각){' '}
+                      <button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setShowAllMoved(true)}>전체 {pv.moved.length}회 보기</button>
+                    </li>
+                  )}
+                  {showAllMoved && pv.moved.length > 6 && <li className="text-[12.5px]"><button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setShowAllMoved(false)}>접기</button></li>}
                 </ul>
                 {pv.skipped.length > 0 && (
                   <p className="mt-1 text-[12.5px] text-[#6b6880]">건너뛴 날: {pv.skipped.map((s) => `${mdw(s.date)} ${s.time}`).join(', ')} — 그날 학생의 다른 수업(보강·대체 등)이 있어 다음 회차로</p>
@@ -163,10 +175,13 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                 <section className="rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2">
                   <h3 className="text-[13px] font-extrabold text-[#6b6880]">그대로 두는 수업 {pv.kept.length}회</h3>
                   <ul className="mt-1 grid gap-1 text-[13px] text-[#1d1b2b]">
-                    {pv.kept.slice(0, 8).map((k) => (
+                    {keptShown.map((k) => (
                       <li key={k.lessonId}>{zoneLabel(k.startsAt, 'Asia/Seoul')} (한국 시간) · {KIND_KO[k.kind] ?? k.kind}{k.why === 'substitute' ? ` · 대체 ${k.tutor}` : ''} <span className="text-[#6b6880]">— {KEPT_WHY[k.why] ?? k.why}</span></li>
                     ))}
-                    {pv.kept.length > 8 && <li className="text-[12.5px] text-[#6b6880]">… {pv.kept.length - 8}회 더</li>}
+                    {pv.kept.length > keptShown.length && (
+                      <li className="text-[12.5px] text-[#6b6880]">… {pv.kept.length - keptShown.length}회 더 <button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setShowAllKept(true)}>전체 {pv.kept.length}회 보기</button></li>
+                    )}
+                    {showAllKept && pv.kept.length > 8 && <li className="text-[12.5px]"><button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setShowAllKept(false)}>접기</button></li>}
                   </ul>
                 </section>
               )}
@@ -204,7 +219,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
       </div>
       <p className="mt-2 text-[12px] text-[#6b6880]">
         저장하면 학생·강사·운영진 화면에 바로 반영돼요. 저장 뒤 학생(카카오톡)·강사(WhatsApp) 안내 문구를 복사해 보내고 [발송 완료]를 눌러 주세요. 지난 수업과 이미 확정된 보강·대체 수업은 바뀌지 않아요.
-        {tutor.tutorTz !== 'Asia/Seoul' && ` 강사 현지 시각은 수업 날짜마다 다시 계산해요 (예: ${mdw(from)} ${koZone(tutor.tutorTz)} ${formatInZone(kstToInstant(from, slots[0]?.time || cur[0].time), tutor.tutorTz).time}).`}
+        {tutor.tutorTz !== 'Asia/Seoul' && firstMovedTo && ` 강사 현지 시각은 수업 날짜마다 다시 계산해요 (예: 한국 ${zoneLabel(firstMovedTo, 'Asia/Seoul')} = ${koZone(tutor.tutorTz)} ${zoneLabel(firstMovedTo, tutor.tutorTz)}).`}
       </p>
     </Sheet>
   );

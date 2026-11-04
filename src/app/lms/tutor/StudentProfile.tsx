@@ -40,7 +40,7 @@ async function copy(text: string): Promise<boolean> {
   try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
 }
 
-export default function StudentProfile({ studentId, actions, onClose, now }: { studentId: string; actions: ProfileActions; onClose: () => void; now: Date }) {
+export default function StudentProfile({ studentId, actions, onClose, now, backLabel }: { studentId: string; actions: ProfileActions; onClose: () => void; now: Date; /** 어디서 열었는지에 맞춘 뒤로 가기 글자 (QA UX: Students 에서 열면 'Back to students') */ backLabel?: string }) {
   const [p, setP] = useState<TutorStudentProfile | null>(null);
   const [err, setErr] = useState('');
   const [editing, setEditing] = useState(false);
@@ -127,7 +127,8 @@ export default function StudentProfile({ studentId, actions, onClose, now }: { s
           </Section>
 
           <Section title="CLASS">
-            <Row k="Type of class" v={s.classType ?? NP} />
+            {/* 학생 선호(Class style)와 같은 데이터. 시트에서 온 예전 값은 참고로만 (QA-15) */}
+            <Row k="Type of class" v={s.classStyle ? <>{CLASS_STYLE_EN[s.classStyle]}{s.classType && <span className="block text-[12.5px] text-[#6b6880]">Earlier note (sheet): {s.classType}</span>}</> : (s.classType ?? NP)} />
             {s.textbook && <Row k="Textbook" v={s.textbook} />}
             <Row k="Corrections / feedback" v={s.correctionStyle ? CORRECTION_EN[s.correctionStyle] : (s.correctionPref ?? NA)} />
             <Row k="Class duration" v={e ? `${e.durationMin} min` : NP} />
@@ -149,7 +150,8 @@ export default function StudentProfile({ studentId, actions, onClose, now }: { s
           <Section title="ENROLLMENT">
             {!e ? <p className="py-2 text-[13.5px] text-[#6b6880]">No active enrollment.</p> : regular ? (
               <>
-                <Row k="Plan" v={e.weeks ? `${e.weeks / 4} month${e.weeks > 4 ? 's' : ''} (${e.weeks} weeks)` : (e.legacyLabel ?? '—')} />
+                {/* 시트에서 옮긴 수강권은 운영 메모(한국어)가 이름 칸에 있어 강사에게는 보이지 않음 — 기간을 모르면 추정하지 않고 'Not recorded' */}
+                <Row k="Plan" v={e.weeks ? `${e.weeks / 4} month${e.weeks > 4 ? 's' : ''} (${e.weeks} weeks)` : 'Not recorded (see course period)'} />
                 <Row k="Enrolled classes" v={`${e.lessonsPurchased}`} />
                 <Row k="Rollover classes" v={`${e.lessonsCarriedIn}`} />
                 <Row k="Course period" v={`${daysBetween(e.startDate, e.baseEndDate)} days`} />
@@ -157,7 +159,8 @@ export default function StudentProfile({ studentId, actions, onClose, now }: { s
                 <Row k="End date" v={enDateYear(e.baseEndDate)} />
                 {e.extensionDays > 0 && <Row k="Extended end date" v={`${enDateYear(e.finalEndDate)} (+${e.extensionDays} days)`} />}
                 <Row k="Final end" v={<>{finalEndLines(e.finalEndDate, tz, stTz).map((l) => <span key={l} className="block">{l}</span>)}</>} />
-                <Row k="Remaining" v={`${e.leftRegular} regular class${e.leftRegular === 1 ? '' : 'es'}${e.leftAll > e.leftRegular ? ` + ${e.leftAll - e.leftRegular} make-up` : ''}`} />
+                {/* 예약된 수업과 날짜 안 잡은 보강권을 구분해 보여 주고, 합계는 학생 홈 '남은 수업' 과 같음 (QA-05) */}
+                <Row k="Remaining" v={<>{e.leftAll + e.leftUnbooked} class{e.leftAll + e.leftUnbooked === 1 ? '' : 'es'}<span className="block text-[12.5px] text-[#6b6880]">{e.leftRegular} regular{e.leftAll > e.leftRegular ? ` · ${e.leftAll - e.leftRegular} make-up booked` : ''}{e.leftUnbooked > 0 ? ` · ${e.leftUnbooked} make-up not scheduled yet` : ''}</span></>} />
               </>
             ) : (
               <>
@@ -186,7 +189,7 @@ export default function StudentProfile({ studentId, actions, onClose, now }: { s
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={close}>
       <div role="dialog" aria-modal="true" aria-label="Student profile" onClick={(e) => e.stopPropagation()}
         className="relative max-h-[92vh] w-full max-w-[860px] overflow-y-auto rounded-t-[20px] bg-[#f6f5fa] p-4 pb-8 lg:rounded-[20px]">
-        <button type="button" onClick={close} className="mb-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0]">‹ Back to schedule</button>
+        <button type="button" onClick={close} className="mb-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0]">‹ {backLabel ?? 'Back'}</button>
         <button type="button" aria-label="Close" onClick={close}
           className="absolute right-3 top-3 flex h-[40px] w-[40px] items-center justify-center rounded-full bg-white text-[18px] text-[#1d1b2b]">✕</button>
         {body}

@@ -56,6 +56,8 @@ export type StudentView = {
   confirmedOn: KstDate | null;
   /** 결제 완료 여부 (결제 확인 기록, 또는 시트에서 옮긴 수강 중 수강권) */
   paid: boolean;
+  /** 수강권 상태 (pending_payment · confirmed · active · completed · canceled). 결제 전·수업 생성 전에는 '남은 0회' 재등록 안내를 띄우지 않음 (QA-05) */
+  enrollmentStatus: string | null;
   /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 학생 화면 표시는 '보강'으로 같음) */
   lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean })[];
   makeupRights: MakeupRight[];
@@ -67,7 +69,7 @@ export type StudentView = {
   points: PointsEvent[];
   /** 지금 변경권 기간과 쓴·돌려받은 기록 */
   creditPeriod: { start: KstDate; end: KstDate } | null;
-  creditUses: { at: Date; reason: 'student_change' | 'admin_restore' | 'admin_adjust'; delta: number; lessonAt: Date | null }[];
+  creditUses: { at: Date; reason: 'student_change' | 'admin_restore' | 'admin_adjust'; delta: number; lessonAt: Date | null; note?: string | null }[];
 };
 
 type Raw = {
@@ -87,12 +89,15 @@ type Raw = {
     /** 4100: 원래 수업 시각·강사, 보강 강사, 확정된 날짜 */
     /** 강사가 답한 시각 (있으면 운영진 최종 확정 대기) */
     tutor_answered_at?: string | null;
+    /** 4500: 강사가 모든 후보에 불가 답 / 확정된 보강 수업 상태(canceled 면 취소됨) */
+    tutor_declined_all?: boolean;
+    confirmed_state?: string | null;
     original_at?: string | null; original_time_known?: boolean; original_tutor?: string | null; tutor?: string | null; confirmed_at?: string | null;
   }[];
   leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; sub_meet_url: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string }[];
   holidays: KstDate[];
   credit_period: { start: KstDate; end: KstDate } | null;
-  credit_uses: { at: string; reason: 'student_change' | 'admin_restore' | 'admin_adjust'; delta: number; lesson_at: string | null }[];
+  credit_uses: { at: string; reason: 'student_change' | 'admin_restore' | 'admin_adjust'; delta: number; lesson_at: string | null; note?: string | null }[];
   points: { id: string; on: KstDate; kind: string; amount: number; note: string | null }[];
 };
 
@@ -147,6 +152,7 @@ export function parseStudentView(r: Raw): StudentView {
     renewalPaid: e?.renewal_paid ?? false,
     confirmedOn: e?.confirmed_on ?? null,
     paid: e ? paidStatus(e) : false,
+    enrollmentStatus: e?.status ?? null,
     lessons: r.lessons.map((l) => ({
       id: l.id,
       kind: lessonKind(l.kind),
@@ -183,7 +189,10 @@ export function parseStudentView(r: Raw): StudentView {
         kind: 'makeup',
         compensation: comp,
         title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso), (q.original_time_known ?? src?.time_known !== false) ? r.student.timezone || 'Asia/Seoul' : 'Asia/Seoul')} 수업분` : ''}`,
-        status: q.status === 'confirmed' ? 'confirmed' : q.tutor_answered_at ? 'admin_reviewing' : 'tutor_reviewing',
+        status: q.status === 'confirmed'
+          ? (q.confirmed_state === 'canceled' ? 'canceled' : 'confirmed')
+          : q.tutor_answered_at ? (q.tutor_declined_all ? 'rescheduling' : 'admin_reviewing') : 'tutor_reviewing',
+        tutorDeclinedAll: !!q.tutor_declined_all,
         candidates: q.candidates.map((c) => new Date(c)),
         createdAt: new Date(q.requested_at),
         note: '',
@@ -201,7 +210,7 @@ export function parseStudentView(r: Raw): StudentView {
     leavePending: (r.leave_pending ?? []).map((x) => ({ id: x.id, startsAt: new Date(x.starts_at), endsAt: new Date(x.ends_at) })),
     holidays: r.holidays,
     creditPeriod: r.credit_period,
-    creditUses: (r.credit_uses ?? []).map((c) => ({ at: new Date(c.at), reason: c.reason, delta: c.delta, lessonAt: c.lesson_at ? new Date(c.lesson_at) : null })),
+    creditUses: (r.credit_uses ?? []).map((c) => ({ at: new Date(c.at), reason: c.reason, delta: c.delta, lessonAt: c.lesson_at ? new Date(c.lesson_at) : null, note: c.note ?? null })),
     points: r.points.map((p) => ({ id: p.id, on: p.on, kind: p.amount > 0 ? 'grant' : 'use', amount: Math.abs(p.amount), reason: p.note || POINT_REASON[p.kind] || '적립금' })),
   };
 }

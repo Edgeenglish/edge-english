@@ -70,7 +70,8 @@ declare
                           'admin_students', 'admin_student_detail', 'admin_student_update', 'tutor_student_profile', 'tutor_student_update',
                           'admin_regular_change', 'admin_regular_change_sent', 'admin_extend_enrollment',
                           'admin_sheet_rows', 'admin_sheet_row_match', 'admin_sheet_row_done',
-                          'tutor_students_list', 'tutor_schedule', 'tutor_schedule_save'];
+                          'tutor_students_list', 'tutor_schedule', 'tutor_schedule_save',
+                          'admin_credits', 'admin_credit_adjust'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
   persona_uid uuid[];

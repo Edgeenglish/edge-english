@@ -54,7 +54,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     const conf = studentNotice('makeup_confirmed', c);
     expect(conf).toContain('원래 수업: 10월 29일(목) 오후 5시');
     expect(conf).toContain('보강 수업: 10월 30일(금) 오후 6시');
-    expect(tutorNotice('makeup_confirmed', c)).toContain('Make-up: Fri 30 Oct 17:00 your time');
+    expect(tutorNotice('makeup_confirmed', c)).toContain('Make-up: Fri 30 Oct 17:00 Manila Time (Fri 30 Oct 18:00 KST)');
     expect(tutorNotice('makeup_ask', { ...c, candidates: [kstToInstant('2026-10-30', '18:00')] })).toContain('not confirmed yet');
     const abroad = studentNotice('change', { ...c, student: { ...student, timezone: 'America/Toronto' } });
     expect(abroad).toContain('10월 29일(목) 오전 4시 (한국 10월 29일(목) 오후 5시)');

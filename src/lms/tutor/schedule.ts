@@ -104,6 +104,8 @@ export const otherZone = (viewZone: string, tutorZone: string): string | null =>
 
 /** Week 칸 모양 (화면 판정은 편의, 저장 때 DB 가 다시 검사) */
 export type CellKind = 'free' | 'closed' | 'blocked' | 'class' | 'request' | 'leave' | 'locked' | 'outside' | 'past' | 'far';
+/** 그날만 연 칸(x)인지 — Block 창에서 '추가 개방 철회(Remove extra hours)' 로 구분 (QA-03) */
+export const isExtraCell = (key: string, d: ScheduleData | null) => d?.cells?.[key] === 'x';
 export function cellKind(key: string, d: ScheduleData, hasLesson: boolean): CellKind {
   if (hasLesson) return 'class';
   const date = key.slice(0, 10);

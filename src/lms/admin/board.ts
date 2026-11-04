@@ -356,7 +356,10 @@ function toItem(t: TaskSource, now: Date): ItemBase {
               : { key: 'assign_tutor', label: '강사 배정', primary: true },
           t.studentNotifiedAt
             ? { key: 'notify_student', label: '수업 컨펌 완료', done: true }
-            : { key: 'notify_student', label: '수업 컨펌 완료', primary: !!t.tutorAssignedAt, disabled: !t.tutorAssignedAt },
+            // 실제 확정·안내 저장은 신규 배정 화면(일정안 확정 → 양쪽 안내 [보냄])에서만 — 여기서는 그 화면으로 바로 (QA-10: 서버 저장 없는 완료 버튼 금지)
+            : t.enrollmentId
+              ? { key: 'notify_student', label: '수업 컨펌 완료', primary: !!t.tutorAssignedAt, disabled: !t.tutorAssignedAt, href: `/lms/admin/assign?e=${t.enrollmentId}` }
+              : { key: 'notify_student', label: '수업 컨펌 완료', primary: !!t.tutorAssignedAt, disabled: !t.tutorAssignedAt },
         ],
       };
     }

@@ -73,8 +73,10 @@ export async function saveHours(sb: SupabaseClient, tutorId: string | null, week
 }
 
 /** 학생 프로필 (4300): 담당 정규 강사·대체강사(열람만)·운영자. 자격은 DB 함수가 확인 (담당 아니면 42501) */
-export async function loadStudentProfile(sb: SupabaseClient, studentId: string): Promise<TutorStudentProfile> {
-  const r = await sb.rpc('tutor_student_profile', { p_student: studentId });
+export async function loadStudentProfile(sb: SupabaseClient, studentId: string, tutorId: string | null = null): Promise<TutorStudentProfile> {
+  // tutorId: 운영자가 고른 강사 (강사 본인은 비움) — 운영자 보기에서 그 강사의 시간대로 보이게 (QA-07, 4500). 4500 전 DB 는 한 인자 판으로
+  let r = await sb.rpc('tutor_student_profile', tutorId ? { p_student: studentId, p_tutor: tutorId } : { p_student: studentId });
+  if (tutorId && r.error?.code === 'PGRST202') r = await sb.rpc('tutor_student_profile', { p_student: studentId });
   if (r.error?.code === 'PGRST202' || r.error?.code === '42883') throw new Error('Student profiles are not ready on this database yet (migration 4300).');
   if (r.error?.code === '42501') throw new Error(r.error.message || 'This student is not assigned to you.');
   return parseTutorProfile(check(r));

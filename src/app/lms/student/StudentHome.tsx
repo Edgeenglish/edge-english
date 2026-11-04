@@ -55,7 +55,9 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
 const STATUS_STYLE: Record<RequestStatus, string> = {
   tutor_reviewing: 'bg-[#fff1d6] text-[#8a5300]',
   admin_reviewing: 'bg-[#fff1d6] text-[#8a5300]',
+  rescheduling: 'bg-[#fdecea] text-[#7a1d12]',
   confirmed: 'bg-[#e3f5ea] text-[#13623a]',
+  canceled: 'bg-[#eeecf4] text-[#55526a]',
   completed: 'bg-[#e3f5ea] text-[#13623a]',
 };
 
@@ -207,7 +209,9 @@ export default function StudentHome(props: {
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
   const left = lessonsLeft(lessons, now, makeupsOwed);
-  const prompt = renewalPrompt(lessons, renewal, now, makeupsOwed);
+  // 결제 확인 전·강사 배정 전(수업이 아직 없음)에는 '수업이 0회 남았어요' 재등록 안내를 띄우지 않음 (QA-05)
+  const notStarted = !s.paid || (s.enrollmentStatus != null && s.enrollmentStatus !== 'active' && lessons.length === 0);
+  const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed);
   const endDate = s.finalEndDate;
   const dLeft = endDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, endDate) : 0;
   const points = pointsHistory(s.points);
@@ -312,7 +316,7 @@ export default function StudentHome(props: {
 
   const statusTiles = (
     <section aria-label="수강 현황" className="grid grid-cols-3 gap-2">
-      <Tile label="남은 수업" value={`${left.total}`} unit="회" sub={left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
+      <Tile label="남은 수업" value={notStarted ? '—' : `${left.total}`} unit={notStarted ? '' : '회'} sub={notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
       <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중 ›`} onClick={() => setOverlay({ kind: 'credits' })} />
       <Tile
         label="수강 종료"
@@ -995,7 +999,7 @@ function MakeupPicker(props: {
         {right.tutorLeave && <p className="text-[14px] font-semibold text-[#55526a]">사유: 강사 휴무</p>}
       </div>
       <KstToggle />
-      <p className="text-[14px] leading-relaxed text-[#55526a]">원하시는 일정을 최대 2개 고르실 수 있어요(선택). 2개를 고르시면 강사님이 확인 후 가능한 일정으로 확정해드립니다.</p>
+      <p className="text-[14px] leading-relaxed text-[#55526a]">원하시는 일정을 최대 2개 골라 주세요. 강사님 확인 후 운영진이 최종 확정해요.</p>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
       {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
@@ -1042,7 +1046,7 @@ function MakeupPicker(props: {
                 onClick={() => props.onSubmit(right, picked)}
                 className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-40"
               >
-                강사님께 확정 요청하기
+                {right.compId ? '보상수업 신청하기' : '보강 신청하기'}
               </button>
               <LaterButton onLater={props.onLater} />
             </section>
@@ -1164,7 +1168,9 @@ function Credits({ s }: { s: StudentView }) {
       ? `${c.lessonAt ? `${whenText(c.lessonAt)} 수업 취소` : '수업 취소'}`
       : c.reason === 'admin_restore'
         ? `${c.lessonAt ? `${whenText(c.lessonAt)} 수업 ` : ''}취소 되돌림`
-        : 'LMS 시작 전 사용';
+        : c.note
+          ? `운영진 조정 · ${c.note}`
+          : c.delta > 0 ? '운영진이 돌려드림' : 'LMS 시작 전 사용';
   return (
     <div className="grid gap-3.5">
       <h2 className="text-[18px] font-bold">변경권</h2>
@@ -1202,7 +1208,11 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
       <span>
         <span className="block text-[14px] font-semibold">{r.title}</span>
         <span className="block text-[12px] text-[#6b6880]">
-          {r.kind !== 'makeup' ? r.note : r.status === 'confirmed' && r.confirmedAt ? `${whenText(r.confirmedAt)} 확정` : `고른 날짜 ${r.candidates.length}개`}
+          {r.kind !== 'makeup' ? r.note
+            : r.status === 'confirmed' && r.confirmedAt ? `${whenText(r.confirmedAt)} 확정`
+            : r.status === 'canceled' && r.confirmedAt ? `${whenText(r.confirmedAt)} 보강 수업 취소됨`
+            : r.status === 'rescheduling' ? '강사님이 다른 일정을 요청했어요'
+            : `고른 날짜 ${r.candidates.length}개`}
         </span>
       </span>
       <span className="flex items-center gap-1.5">
@@ -1283,8 +1293,8 @@ function Sheet({ onClose, children, wide }: { onClose: () => void; children: Rea
 
 function RequestDetail({ r }: { r: StudentRequest }) {
   // 신청 → 강사 확인 → 최종 확정(운영진). 지금 단계는 주황, 끝난 단계는 보라 (11/3 점검 ②: 누가 확인 중인지)
-  const steps = ['신청', '강사 확인', '최종 확정'];
-  const at = r.status === 'tutor_reviewing' ? 1 : r.status === 'admin_reviewing' ? 2 : 3;
+  const steps = r.status === 'rescheduling' ? ['신청', '강사 확인', '일정 조율'] : ['신청', '강사 확인', '최종 확정'];
+  const at = r.status === 'tutor_reviewing' ? 1 : r.status === 'admin_reviewing' || r.status === 'rescheduling' ? 2 : 3;
   return (
     <div className="grid gap-3.5">
       <h2 className="text-[18px] font-bold">{r.title}</h2>
@@ -1293,6 +1303,11 @@ function RequestDetail({ r }: { r: StudentRequest }) {
           <span className="text-[13px] text-[#55526a]">지금 상태</span>
           <span className={`rounded-full px-3 py-1 text-[13px] font-semibold ${STATUS_STYLE[r.status]}`}>{REQUEST_STATUS_LABEL[r.status]}</span>
         </div>
+        {/* 상황별 안내 (추가 요청 6): 지금 무엇을 기다리는지, 다음에 누가 연락하는지 */}
+        {r.status === 'tutor_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님이 고른 날짜를 확인하고 있어요. 확인되면 운영진이 최종 확정해 드려요.</p>}
+        {r.status === 'admin_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님 확인이 끝났어요. 운영진이 최종 확정하면 일정에 바로 들어가요.</p>}
+        {r.status === 'rescheduling' && <p className="text-[13.5px] leading-relaxed text-[#7a1d12]">강사님이 고른 날짜에는 어렵다고 했어요. 운영진이 다른 일정을 조율해서 카카오톡으로 알려 드릴게요. 따로 하실 일은 없어요.</p>}
+        {r.status === 'canceled' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">확정됐던 보강 수업이 취소됐어요. 취소 때 안내된 규칙(변경권·보강 가능 여부)에 따라 처리됐어요.</p>}
         <ol className="flex gap-1.5">
           {steps.map((t, i) => (
             <li key={t} className="flex-1 text-center">
@@ -1466,7 +1481,7 @@ function CancelSheet(props: {
 
   if (!d.ok) {
     const msg =
-      d.reason === 'policy_pending' ? '보상 수업 취소 규칙이 아직 정해지지 않았어요. 카카오톡으로 문의해 주세요.' : d.reason === 'already_started' ? '이미 시작한 수업은 취소할 수 없어요.' : '수강기간이 지난 수업이에요.';
+      d.reason === 'policy_pending' ? '보상수업 변경·취소는 카카오톡으로 문의해 주세요.' : d.reason === 'already_started' ? '이미 시작한 수업은 취소할 수 없어요.' : '수강기간이 지난 수업이에요.';
     return (
       <div className="grid gap-3">
         <h2 className="text-[18px] font-bold">{title}</h2>

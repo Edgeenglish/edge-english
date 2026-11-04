@@ -12,7 +12,7 @@ import { ALL_HOURS, cityTime, localToInstant } from '@/lms/tutor/hours-view';
 import { classFill, plusDays, toMin } from '@/lms/tutor/hours';
 import {
   addMonth, blockAt, cellKind, dayItems, dayTag, dayText, inZone, lessonTag, localInstant, mondayOf, monthGrid, monthTitle, NOTE_HELP, NOTE_MAX, otherZone,
-  runFrom, slotText, slotTime, sourceKey, spanText, weekTitle, whenSpan, type CellKind, type DayItem, type ScheduleAction, type ScheduleBlock, type ScheduleData,
+  runFrom, slotText, slotTime, sourceKey, spanText, weekTitle, whenSpan, type CellKind, type DayItem, type ScheduleAction, type ScheduleBlock, type ScheduleData, isExtraCell,
 } from '@/lms/tutor/schedule';
 import { KOREA_TIME, minutesOf, statusText, type TutorLesson } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
@@ -36,7 +36,8 @@ const fillStyle = (f: { from: number; to: number }, dark: string, pale: string):
 const WEEK_HEAD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_HEAD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-type Pick = { kind: 'pick'; mode: 'block' | 'open'; date: string; kinds: CellKind[]; start: number; end: number; note: string };
+/** xs = 칸마다 그날만 연 칸(x)인지 — Block 창에서 전부 x 면 '추가 개방 철회' (QA-03) */
+type Pick = { kind: 'pick'; mode: 'block' | 'open'; date: string; kinds: CellKind[]; xs: boolean[]; start: number; end: number; note: string };
 type Dialog =
   | Pick
   | { kind: 'blocked'; block: ScheduleBlock; note: string }
@@ -110,6 +111,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   };
   const kindsOf = (date: string, src: ScheduleData): CellKind[] =>
     ALL_HOURS.map((t) => cellKind(sourceKey(date, t, viewZone, tz), src, !!lessonIn(date, t)));
+  const xsOf = (date: string, src: ScheduleData): boolean[] => ALL_HOURS.map((t) => isExtraCell(sourceKey(date, t, viewZone, tz), src));
   const keysOf = (date: string, a: number, b: number) => Array.from({ length: b - a }, (_, i) => sourceKey(date, slotTime(a + i), viewZone, tz));
   const at = (date: string, i: number) => localToInstant(date, slotTime(i), viewZone);
   const lastLocal = data?.last ?? to;
@@ -125,21 +127,23 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   function openPick(mode: 'block' | 'open', date: string, src: ScheduleData, start: number, end?: number) {
     setSaveErr('');
     const kinds = kindsOf(date, src);
-    setDialog({ kind: 'pick', mode, date, kinds, start, end: end ?? start + 1, note: '' });
+    setDialog({ kind: 'pick', mode, date, kinds, xs: xsOf(date, src), start, end: end ?? start + 1, note: '' });
   }
-  async function pickFromMonth(mode: 'block' | 'open', date: string) {
+  /** span: 그날 목록의 '추가 개방' 줄에서 열 때 그 시간 범위(QA-03: 추가 개방 줄에서 바로 철회) */
+  async function pickFromMonth(mode: 'block' | 'open', date: string, span?: { at: Date; end: Date }) {
     // Month 에서는 칸 판정을 그날만 따로 읽음
     setBusy(true);
     try {
       const src = await actions.load(plusDays(date, -1), plusDays(date, 1), true);
       const kinds = kindsOf(date, src);
       const want = mode === 'block' ? 'free' : 'closed';
-      const first = kinds.indexOf(want);
-      if (first < 0) {
+      const first = span ? Math.max(0, Math.round((toMin(inZone(span.at, viewZone).time) - toMin(ALL_HOURS[0])) / 30)) : kinds.indexOf(want);
+      const last = span ? first + Math.max(1, Math.round((+span.end - +span.at) / 1800000)) : first + 1;
+      if (first < 0 || (span && kinds[first] !== want)) {
         setDialog({ kind: 'info', title: dayText(date), body: mode === 'block' ? 'No available time to block on this day.' : 'No closed time to open on this day.' });
       } else {
         setSaveErr('');
-        setDialog({ kind: 'pick', mode, date, kinds, start: first, end: first + 1, note: '' });
+        setDialog({ kind: 'pick', mode, date, kinds, xs: xsOf(date, src), start: first, end: Math.min(last, kinds.length), note: '' });
       }
     } catch (e) {
       setDialog({ kind: 'info', title: dayText(date), body: e instanceof Error ? e.message : 'Could not load. Please try again.' });
@@ -313,6 +317,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
           if (it.kind === 'lesson') setDialog({ kind: 'lesson', lesson: it.lesson });
           else if (it.kind === 'block' && it.block.kind === 'block') { setSaveErr(''); setDialog({ kind: 'blocked', block: it.block, note: it.block.note ?? '' }); }
           else if (it.kind === 'block') setDialog({ kind: 'info', title: 'Leave', body: 'This time is in your leave.' });
+          else if (it.kind === 'open') void pickFromMonth('block', selected, { at: it.at, end: it.end });
         }} />)}
       </ul>
       <div className="grid grid-cols-2 gap-2">
@@ -470,11 +475,14 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     const b = d.end === 48 ? localToInstant(plusDays(d.date, 1), '00:00', viewZone) : at(d.date, d.end);
     const hit = d.mode === 'block' && run.cutBy !== null && d.end === run.ends[run.ends.length - 1] ? lessonIn(d.date, slotTime(run.cutBy)) : null;
     const isOpen = d.mode === 'open';
+    // 고른 칸이 모두 '그날만 연 칸'이면 막기가 아니라 추가 개방 철회 — 메모를 받지 않음 (DB 가 그 열기만 거둠, QA-03)
+    const removeExtra = !isOpen && d.end > d.start && d.xs.slice(d.start, d.end).every(Boolean);
+    const mixedExtra = !isOpen && !removeExtra && d.xs.slice(d.start, d.end).some(Boolean);
     return (
       <>
-        <strong className="text-[17px] text-[#1d1b2b]">{isOpen ? 'Make available' : 'Block time'}</strong>
+        <strong className="text-[17px] text-[#1d1b2b]">{isOpen ? 'Make available' : removeExtra ? 'Remove extra hours' : 'Block time'}</strong>
         <div>
-          <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(d.date)}</b> · {isOpen ? 'This day only' : viewLabel}</p>
+          <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(d.date)}</b> · {isOpen ? 'This day only' : removeExtra ? 'Back to your usual weekly hours (closed)' : viewLabel}</p>
           <p className="text-[13px] text-[#6b6880]">{spanText(a, b, viewZone)}{other ? ` · ${whenSpan(a, b, other)}` : ''}</p>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -510,12 +518,13 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
             You have a class at {inZone(hit.startsAt, viewZone).time} {viewLabel}. Classes can’t be blocked.
           </p>
         )}
-        {!isOpen && <NoteField value={d.note} onChange={(v) => setD({ ...d, note: v })} />}
+        {!isOpen && !removeExtra && <NoteField value={d.note} onChange={(v) => setD({ ...d, note: v })} />}
+        {mixedExtra && <p className="text-[13px] text-[#6b6880]">Part of this time is extra hours for this day only. That part just goes back to closed (no note is kept for it).</p>}
         {saveErr && <p role="alert" className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{saveErr}</p>}
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <button type="button" disabled={busy || d.end <= d.start} className={btnMain}
-            onClick={() => save(d.mode, keysOf(d.date, d.start, d.end), isOpen ? null : d.note, null, isOpen ? 'Made available ✓' : 'Blocked ✓')}>
-            {busy ? 'Saving…' : isOpen ? 'Make available' : 'Block'}
+            onClick={() => save(d.mode, keysOf(d.date, d.start, d.end), isOpen || removeExtra ? null : d.note, null, isOpen ? 'Made available ✓' : removeExtra ? 'Extra hours removed ✓' : 'Blocked ✓')}>
+            {busy ? 'Saving…' : isOpen ? 'Make available' : removeExtra ? 'Remove' : 'Block'}
           </button>
           <button type="button" disabled={busy} onClick={() => setDialog(null)} className={btnSub}>Cancel</button>
         </div>
@@ -593,7 +602,7 @@ function DayRow({ item, zone, onOpen }: { item: DayItem; zone: string; onOpen: (
   const block = item.kind === 'block';
   return (
     <li className="list-none">
-      <button type="button" onClick={onOpen} disabled={!block}
+      <button type="button" onClick={onOpen} disabled={block && item.block.kind === 'leave' && false}
         className="flex min-h-[48px] w-full items-center gap-2 rounded-[10px] border border-[#e6e3ef] bg-[#faf9fd] px-3 py-1.5 text-left enabled:hover:bg-[#f3f1f8]">
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14.5px] font-semibold text-[#1d1b2b]">

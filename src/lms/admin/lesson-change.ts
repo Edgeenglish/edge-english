@@ -6,6 +6,7 @@ import { formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { CONFIRMED } from '../rules/policy';
 import { grantsMakeup, type ClassStatus } from '../rules/status';
 import { enWhen } from './confirm';
+import { enZone } from './students';
 
 export type ChLesson = {
   id: string;
@@ -178,7 +179,10 @@ export function koAt(at: Date, tz: string): string {
   return `${koNice(at, tz)} (한국 ${kst})`;
 }
 const koDate = (d: KstDate) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일(${['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
-export const enAt = (at: Date, tz: string) => `${enWhen(at, tz || 'Asia/Seoul')}${!tz || tz === 'Asia/Seoul' ? ' KST' : ' your time'}`;
+/** 강사 안내 시각: 'Thu 5 Nov 22:00 Toronto Time (Fri 6 Nov 12:00 KST)' — 도시 이름 + 한국 시간 함께 (H26(43), QA UX: 'your time' 금지) */
+export const enAt = (at: Date, tz: string) => (!tz || tz === 'Asia/Seoul'
+  ? `${enWhen(at, 'Asia/Seoul')} KST`
+  : `${enWhen(at, tz)} ${enZone(tz)} (${enWhen(at, 'Asia/Seoul')} KST)`);
 
 export type NoticeContext = {
   student: ChStudent;
