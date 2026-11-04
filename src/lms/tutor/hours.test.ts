@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeChanges, diff, lessonAt, parseHours, runs, weekText, weeklyClassAt } from './hours';
+import { applyFromText, describeChanges, diff, lessonAt, parseHours, runs, weekText, weeklyClassAt } from './hours';
 
 describe('My hours', () => {
   it('붙은 30분 칸을 한 묶음으로', () => {
@@ -34,5 +34,8 @@ describe('My hours', () => {
       weekly_classes: [], cells: { '2026-10-26T09:00': 'p' }, lessons: [], history: [{ at: '2026-10-29T01:00:00Z', by_admin: true, changes: { from: '2026-11-02', weekly_open: ['1:09:00'] } }] });
     expect(h.history?.[0].changes.weeklyClose).toEqual([]);
     expect(parseHours({ tutor: { id: 't', name: 'T', timezone: 'Asia/Tokyo' }, history: null }).history).toBeNull();
+  });
+  it('Every week 적용일 안내: 강사 현지 월요일 날짜 그대로', () => {
+    expect(applyFromText('2026-11-09')).toBe('These hours apply from Mon, Nov 9.');
   });
 });

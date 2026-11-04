@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { answerCover, answerMakeup, createTutorLogin, loadHours, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveHours, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
+import { answerCover, answerMakeup, createTutorLogin, loadHours, loadMyStudents, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveHours, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
 import { weekOf, type TutorScreen } from '@/lms/tutor/screen';
 import TutorHome, { type TutorActions } from './TutorHome';
 
@@ -60,6 +60,8 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
           load: (studentId) => loadStudentProfile(sb, studentId),
           save: (studentId, fields) => updateStudentProfile(sb, studentId, fields),
         },
+        // 운영자 보기: tutor_my_students 는 로그인한 강사 본인 기준이라 운영자에게는 빈 목록 → 메뉴에 안내만
+        students: adminTutor ? undefined : () => loadMyStudents(sb),
       },
     [sb, adminTutor],
   );

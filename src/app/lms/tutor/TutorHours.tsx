@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  dateText, describeChanges, diff, fromText, lessonAt, plusDays, timeText, toMin, WEEK_DAYS, weekText, weeklyClassAt, type CellCode, type HoursData,
+  dateText, describeChanges, diff, applyFromText, fromText, lessonAt, plusDays, timeText, toMin, WEEK_DAYS, weekText, weeklyClassAt, type CellCode, type HoursData,
 } from '@/lms/tutor/hours';
 import { KOREA_TIME } from '@/lms/tutor/screen';
 
@@ -36,9 +36,10 @@ type Dialog =
   | { kind: 'info'; title: string; body: string[] }
   | { kind: 'day'; date: string; free: string[]; allShut: boolean }
   | { kind: 'save' }
-  | { kind: 'saved' };
+  | { kind: 'saved'; weekly: boolean; from: string };
 
-export default function TutorHours({ actions, onClose }: { actions: HoursActions; onClose: () => void }) {
+/** inline = 메뉴 안에 그대로 (2026-11-04 사이드바), 아니면 창 */
+export default function TutorHours({ actions, onClose, inline = false }: { actions: HoursActions; onClose: () => void; inline?: boolean }) {
   const [data, setData] = useState<HoursData | null>(null);
   const [err, setErr] = useState('');
   const [tab, setTab] = useState<'week' | 'once'>('week');
@@ -74,7 +75,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
 
   if (!data) {
     return (
-      <Panel onClose={onClose}>
+      <Panel onClose={onClose} inline={inline}>
         {err ? <p className="p-4 text-[14px] text-[#b3261e]">{err}</p> : <p className="p-4 text-[15px] text-[#6b6880]">Loading…</p>}
       </Panel>
     );
@@ -118,9 +119,10 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
     setBusy(true);
     setSaveErr('');
     try {
+      const saved = { weekly: weeklyChanged, from: d.from };
       await actions.save(weeklyChanged ? [...weekly] : null, o.added, o.removed);
       await load();
-      setDialog({ kind: 'saved' });
+      setDialog({ kind: 'saved', ...saved });
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
     } finally {
@@ -246,7 +248,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
   );
 
   return (
-    <Panel onClose={close} sub={viewLabel}>
+    <Panel onClose={close} sub={viewLabel} inline={inline}>
       <div className="flex min-h-0 flex-1 gap-5 lg:p-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div role="group" aria-label="Timetable time zone" className="mb-2 flex flex-wrap gap-2">
@@ -266,9 +268,14 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
           </div>
           <p className="mb-1.5 text-[12.5px] text-[#6b6880]">
             {tab === 'week'
-              ? `Tap a time to open or close it every week. Green = students can book a class starting then. ${fromText(d.from, 'en')}`
+              ? 'Tap a time to open or close it every week. Green = students can book a class starting then.'
               : 'Close free times for this week only. Tap a day to close the whole day.'}
           </p>
+          {tab === 'week' && (
+            <p className="mb-1.5 rounded-[8px] bg-[#eeeaff] px-2.5 py-1.5 text-[13px] font-semibold text-[#3a22b0]">
+              {applyFromText(d.from)} <span className="font-normal">This week stays as it is — use One week only to change this week.</span>
+            </p>
+          )}
           {tab === 'once' && (
             <div className="mb-1.5 flex items-center justify-between">
               <button type="button" aria-label="Previous week" disabled={wk === 0} onClick={() => setWk(wk - 1)} className={`${btnSub} min-h-[34px] px-3`}>‹</button>
@@ -284,7 +291,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
             {tab === 'once' && <Legend color="bg-[#d9d1ff]">Make-up</Legend>}
             {tab === 'once' && <Legend color="border border-dashed border-[#5b3fe0]">Request</Legend>}
           </div>
-          <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto border-t border-[#e6e3ef] lg:max-h-[560px] lg:flex-none">
+          <div ref={scroller} className={`min-h-0 flex-1 overflow-y-auto border-t border-[#e6e3ef] lg:max-h-[560px] lg:flex-none ${inline ? 'max-h-[58vh]' : ''}`}>
             <div className="grid grid-cols-[42px_repeat(7,minmax(0,1fr))] gap-[2px] pb-2 pt-1 tabular-nums">
               <div className="sticky top-0 z-[1] bg-white" />
               {WEEK_DAYS.map((_, i) => <div key={i} className="contents">{dayHead(i)}</div>)}
@@ -303,7 +310,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
           {history}
         </aside>
       </div>
-      <div className="flex items-center gap-2 border-t border-[#e6e3ef] bg-white px-1 pb-1 pt-2.5 lg:hidden">
+      <div className={`flex items-center gap-2 border-t border-[#e6e3ef] bg-white px-1 pb-1 pt-2.5 lg:hidden ${inline ? 'sticky bottom-[76px] z-10 -mx-1 rounded-b-[10px]' : ''}`}>
         <span className="flex-1 text-[13px] text-[#6b6880]">{lines.length > 0 ? `${lines.length} change${lines.length > 1 ? 's' : ''} not saved` : 'No changes'}</span>
         <button type="button" disabled={lines.length === 0} onClick={() => { setSaveErr(''); setDialog({ kind: 'save' }); }} className={btnMain}>Save</button>
       </div>
@@ -337,7 +344,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
                 <strong className="text-[16px] text-[#1d1b2b]">Save these changes?</strong>
                 <p className="text-[12px] text-[#6b6880]">{localLabel}</p>
                 <ul className="list-disc pl-5 text-[14px] text-[#1d1b2b]">{lines.map((x) => <li key={x}>{x}</li>)}</ul>
-                {weeklyChanged && <p className="text-[13px] text-[#6b6880]">{fromText(d.from, 'en')}</p>}
+                {weeklyChanged && <p className="text-[13px] font-semibold text-[#3a22b0]">Every week: {applyFromText(d.from).replace('These hours apply', 'these hours apply')}</p>}
                 <p className="text-[13px] text-[#6b6880]">Students can no longer pick closed times for make-ups. Your classes don’t change.</p>
                 {saveErr && <p role="alert" className="text-[14px] text-[#b3261e]">{saveErr}</p>}
                 <button type="button" disabled={busy} onClick={save} className={btnMain}>{busy ? 'Saving…' : 'Save'}</button>
@@ -347,6 +354,7 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
             {dialog.kind === 'saved' && (
               <>
                 <strong className="text-[16px] text-[#1f7a4d]">Saved ✓</strong>
+                {dialog.weekly && <p className="text-[14px] text-[#1d1b2b]">{applyFromText(dialog.from)} Until then your current hours stay the same.</p>}
                 <button type="button" onClick={() => setDialog(null)} className={btnSub}>Close</button>
               </>
             )}
@@ -357,19 +365,32 @@ export default function TutorHours({ actions, onClose }: { actions: HoursActions
   );
 }
 
-function Panel({ onClose, sub, children }: { onClose: () => void; sub?: string; children: ReactNode }) {
+function Panel({ onClose, sub, inline, children }: { onClose: () => void; sub?: string; inline?: boolean; children: ReactNode }) {
+  const head = (
+    <div className="mb-2 flex items-start justify-between gap-2">
+      <div>
+        <h2 className={`${inline ? 'text-[20px]' : 'text-[18px]'} font-bold text-[#1d1b2b]`}>My hours</h2>
+        {sub && <p className="text-[12.5px] text-[#6b6880]">{sub}</p>}
+      </div>
+      {!inline && (
+        <button type="button" aria-label="Close" onClick={onClose}
+          className="flex h-[40px] w-[40px] items-center justify-center rounded-[10px] border border-[#e6e3ef] text-[18px] text-[#1d1b2b]">✕</button>
+      )}
+    </div>
+  );
+  if (inline) {
+    return (
+      <section aria-label="My hours" className="relative flex min-h-[70vh] flex-col">
+        {head}
+        {children}
+      </section>
+    );
+  }
   return (
     <div className="fixed inset-0 z-40 flex justify-center bg-black/40 lg:items-center">
       <div role="dialog" aria-modal="true" aria-label="My hours"
         className="relative flex h-full w-full flex-col bg-white px-3 pt-3 lg:h-auto lg:max-h-[94vh] lg:max-w-[1080px] lg:rounded-[20px] lg:p-5">
-        <div className="mb-2 flex items-start justify-between gap-2">
-          <div>
-            <h2 className="text-[18px] font-bold text-[#1d1b2b]">My hours</h2>
-            {sub && <p className="text-[12.5px] text-[#6b6880]">{sub}</p>}
-          </div>
-          <button type="button" aria-label="Close" onClick={onClose}
-            className="flex h-[40px] w-[40px] items-center justify-center rounded-[10px] border border-[#e6e3ef] text-[18px] text-[#1d1b2b]">✕</button>
-        </div>
+        {head}
         {children}
       </div>
     </div>

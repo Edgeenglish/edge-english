@@ -37,6 +37,10 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
       load: async (id) => fakeStudentProfile(id, new Date(nowIso)),
       save: async () => {},
     },
+    students: async () => [
+      { id: 'demo-hajun', name: 'Hajun Kim', level: 'Intermediate', classType: 'Free talking', timezone: 'Asia/Seoul', noteUrl: 'https://docs.google.com/' },
+      { id: 'demo-seoyeon', name: 'Seoyeon Park (Sarah)', level: 'Pre-Intermediate', classType: 'Textbook', timezone: 'Australia/Melbourne', noteUrl: null },
+    ],
   }), [data, nowIso]);
   return <TutorHome initial={data.s} nowIso={nowIso} actions={actions} />;
 }

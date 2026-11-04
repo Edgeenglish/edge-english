@@ -10,6 +10,14 @@
 - **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(47)**, 다음은 (48)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
 - 10/30~11/3 결정은 H26(38)~(42)에 보충함(11/3), 시간 표기 원칙 (43), 학생 관리 ①~⑦ 전문 (44), 11/3 진행 (45)
 
+## ✅ 2026-11-04 강사 LMS 개편 + Class Record 출결·지각 (브랜치 claude/upbeat-davinci-e9clnn = lms-test 위, 시험용 DB 적용, 운영 미적용)
+- **migration 4400** `20261104120000_lms_class_record_late.sql` — 시험용 DB 적용됨. `class_records.student_late_min · tutor_late · tutor_late_min` 추가(기존 `student_late` 유지). `tutor_record_class` 8개 인자 새 함수(결과 held/student_no_show/tutor_no_show + 학생·강사 지각·분) + 예전 5개 인자 함수는 새 함수로 넘김(drop 없음). 예전 'Tutor Late - Student Present' 기록 → `tutor_late=true`(분 비움)로 자동 호환. `tutor_screen` 에 지각 3칸 추가
+- **결과 이름 규칙(대표 확인 필요)**: Held + 강사 지각 = 전처럼 `class_status='Tutor Late - Student Present'`(14개 상태·인센티브 'late'·급여 규칙 그대로). 학생 지각은 상태를 바꾸지 않음(Normal 등 + 분만 저장). 지각만으로 노쇼·보상 안 생김. 강사 지각은 Remarks(이유) 필수, 지각 분은 0 초과만
+- **화면** `TutorHome.tsx` 전면 개편: PC 왼쪽·휴대폰 아래 고정 메뉴 **Home · Schedule · Class Record · Students · My hours**. Home = 인사·현지 시각·KST·Meet·To do·오늘 수업(Record 버튼)·다음 수업 / Schedule = 주별 표(기록 안 함, 펼치면 Record this class → Class Record) / Class Record = 기록할 수업 카드(위) + 주별·학생별 표 / Students = `tutor_my_students` 목록 → 이름 누르면 Student Profile(기존 4300 창, 권한은 DB) / My hours = TutorHours `inline`. 기록 폼: 결과 버튼(Held · Student no-show · 운영자만 Tutor no-show) + 'Anyone late? (skip if not)' 학생/강사 줄 각각 5·10·15 min·Custom(분 입력)
+- **My hours 적용일 안내(4)**: `applyFromText` → Every week 달력 위 `These hours apply from Mon, Nov 9. This week stays as it is — use One week only to change this week.` + 저장 확인·Saved 창에도. 예약·적용 로직은 안 바꿈
+- **검증**: vitest 343 통과 · tsc · eslint. 시험용 DB SQL(강사 계정 흉내)로 저장→'Tutor Late - Student Present'+10/5분, 같은 값 재저장 repeated=true, 되돌리기→Normal·지각 없음, 오류 3종(강사 지각 사유 없음·0분·강사 노쇼 강사 금지), 보상 0건 확인. 화면은 `?demo=1` 가짜 데이터로 PC·휴대폰 5메뉴 캡처 확인(콘솔 오류 없음). **실제 로그인 클릭 검증(e2e-tutor 계정)은 아직** — 다음 세션에 lms-test 배포 후 대표 또는 Claude 클릭
+- **남은 것**: ① 운영자 보기(?tutor=)에서는 Students 목록이 본인 기준 함수라 안내문만 나옴(필요하면 admin용 목록 함수 추가) ② 대체강사 Students 목록은 DB `lms_tutor_student_access`(확정~수업 종료 24시간) 그대로, 화면에 Substitute 표시 없음 ③ 5번 문구 전체 점검은 바뀐 화면만 함 ④ 정책 원본 H26(48)에 기록 필요
+
 ## 📋 다음 세션 할 일 (2026-11-04 대표 요청 원문 요약 — 빠짐없이): 강사 LMS 화면 전체 개선 + Class Record 출결·지각 구조 변경
 - **시작**: 브랜치 `claude/busy-rubin-w3dii1`(= lms-test) 위에서. 대표가 첨부한 학생 화면·강사 화면 캡처는 이 세션에 안 보였음 → 새 세션 첫 메시지에 다시 첨부 요청. 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. 시험용 DB·lms-test 에서만, 운영 DB·lms-prod 금지. 완료 보고는 바뀐 화면·실제 검증 결과·남은 문제만 짧게
 1. **왼쪽 사이드바** (학생 LMS처럼 고정 메뉴, PC·모바일): **Home**(오늘 수업·해야 할 일) · **Schedule**(수업 일정) · **Class Record**(기록 조회·작성) · **Students**(담당 학생) · **My hours**. 메뉴 이름은 이 영문 그대로. 기존 기능을 메뉴로 나누기만 하지 말고 화면마다 목적이 분명하고 원하는 기능을 바로 찾게

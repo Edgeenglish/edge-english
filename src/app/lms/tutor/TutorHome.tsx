@@ -1,15 +1,17 @@
 'use client';
 
-// 강사 화면 (영어, 휴대폰 우선): ① 기록할 수업(Class Record) ② 보강 가능 여부 답 ③ 일정 목록(시트처럼 한 줄, 누르면 펼침)
+// 강사 화면 (영어, 휴대폰 우선, 2026-11-04 개편): 왼쪽(PC)·아래(휴대폰) 고정 메뉴 Home · Schedule · Class Record · Students · My hours
+// Home = 오늘 수업·할 일, Schedule = 주별 일정, Class Record = 기록 작성·조회, Students = 담당 학생 → 프로필, My hours = 가능 시간
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
+import { formatInZone } from '@/lms/rules/dates';
 import { STATUS_RULES } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
 import StudentProfile, { type ProfileActions } from './StudentProfile';
 import {
-  answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
+  answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   statusText, timeRange, weekOf, whenFull, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
 } from '@/lms/tutor/screen';
 
@@ -23,6 +25,8 @@ export type TutorActions = {
   hours: HoursActions;
   /** 학생 프로필 (4300): 학생 이름을 누르면 열림. 없으면 이름만 글자 */
   profile?: ProfileActions;
+  /** Students 메뉴: 담당 학생 목록 (tutor_my_students — 정규 담당·확정 대체만, DB 가 정함) */
+  students?: () => Promise<TutorStudentRow[]>;
 };
 
 /** 학생 이름 → 프로필 창 (이 화면 어디서든 같은 창) */
@@ -45,6 +49,26 @@ const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-
 const input = 'w-full rounded-[10px] border border-[#d9d5e6] bg-white px-3 py-2.5 text-[16px] text-[#1d1b2b]';
 const label = 'mb-1 block text-[13px] font-semibold text-[#55526a]';
 
+type Tab = 'home' | 'schedule' | 'record' | 'students' | 'hours';
+// 메뉴 이름은 대표가 정한 영문 그대로 (2026-11-04)
+const TABS: { key: Tab; label: string; icon: string }[] = [
+  { key: 'home', label: 'Home', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
+  { key: 'schedule', label: 'Schedule', icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
+  { key: 'record', label: 'Class Record', icon: 'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z' },
+  { key: 'students', label: 'Students', icon: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' },
+  { key: 'hours', label: 'My hours', icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+];
+function Icon({ d }: { d: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className="h-[20px] w-[20px] shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  );
+}
+
+/** Students 메뉴 한 줄 (tutor_my_students, 4300) */
+export type TutorStudentRow = { id: string; name: string; level: string | null; classType: string | null; timezone: string | null; noteUrl: string | null };
+
 export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout }: {
   initial: TutorScreen;
   nowIso: string;
@@ -54,6 +78,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
 }) {
   const [screen, setScreen] = useState(initial);
   const [now, setNow] = useState(() => new Date(nowIso));
+  const [tab, setTab] = useState<Tab>('home');
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -113,186 +138,299 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (학생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
-  const [panel, setPanel] = useState<'record' | 'cover' | 'makeup' | 'hours' | null>(null);
-  // 학생 프로필 창 (4300): 열어도 보던 주·고른 학생은 그대로, 닫으면 돌아옴
+  const [panel, setPanel] = useState<'cover' | 'makeup' | null>(null);
+  // 학생 프로필 창 (4300): 열어도 보던 메뉴·주·고른 학생은 그대로, 닫으면 돌아옴
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const openProfile = actions.profile ? setProfileOf : null;
-  const studentIdByName = new Map([...(allLessons ?? []), ...screen.lessons].filter((l) => l.studentId).map((l) => [l.student, l.studentId!]));
   const todoCount = [screen.toRecord.length, screen.covers.length, screen.makeups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
     ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), tz, { from: '1900-01-01', to: '2999-12-31' })
     : daysOf(screen.lessons, tz, week);
+  // Students 메뉴: 처음 열 때 한 번 읽음 (담당 학생만 — DB 가 정함, 4300)
+  const [students, setStudents] = useState<TutorStudentRow[] | null>(null);
+  const [studentsErr, setStudentsErr] = useState('');
+  useEffect(() => {
+    if (tab !== 'students' || students || !actions.students) return;
+    actions.students().then(setStudents).catch((e) => setStudentsErr(e instanceof Error ? e.message : 'Could not load.'));
+  }, [tab, students, actions]);
+
+  const today = localDate(now, tz);
+  const todayLessons = screen.lessons.filter((l) => localDate(l.startsAt, tz) === today).sort((a, b) => +a.startsAt - +b.startsAt);
+  const nextLesson = screen.lessons.filter((l) => l.state === 'scheduled' && l.startsAt > now && localDate(l.startsAt, tz) !== today).sort((a, b) => +a.startsAt - +b.startsAt)[0];
+  const localNow = formatInZone(now, tz).time;
+  const kstNow = kstText(now, tz);
+
+  const logo = (
+    <span className="inline-flex items-center gap-1.5">
+      <img src="/images/brand/edge-english-logo.svg" alt="Edge English" className="h-[22px] w-auto" />
+      <span className="rounded-[6px] bg-[#27230e] px-[7px] py-[3px] text-[12px] font-extrabold text-[#ffd401]">Tutor</span>
+    </span>
+  );
+  // 운영자 보기: 로고를 누르면 운영자 화면으로 (11/3 대표, 학생 화면과 같게)
+  const brand = adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : logo;
+  const tabBtn = (t: (typeof TABS)[number], mobile: boolean) => (
+    <button key={t.key} type="button" onClick={() => setTab(t.key)} aria-current={tab === t.key ? 'page' : undefined}
+      className={mobile
+        ? `flex min-h-[48px] flex-col items-center justify-center gap-0.5 text-[11px] ${tab === t.key ? 'font-bold text-[#5b3df0]' : 'text-[#55526a]'}`
+        : `flex min-h-[46px] items-center gap-2.5 rounded-[12px] px-3 text-left text-[15px] ${tab === t.key ? 'bg-[#efeaff] font-bold text-[#3a22b0]' : 'text-[#1d1b2b] hover:bg-[#f3f1f8]'}`}>
+      <Icon d={t.icon} />
+      {t.label}
+      {!mobile && t.key === 'record' && screen.toRecord.length > 0 && <span className="ml-auto rounded-full bg-[#f0a33a] px-2 py-0.5 text-[12px] font-bold text-white">{screen.toRecord.length}</span>}
+      {mobile && t.key === 'record' && screen.toRecord.length > 0 && <span className="sr-only">{screen.toRecord.length} to record</span>}
+    </button>
+  );
+  const weekNav = (
+    <div className="mb-2">
+      <div className="flex items-center gap-2">
+        <button type="button" aria-label="Previous week" disabled={loading} onClick={() => goWeek(offset - 1)} className={`${btnSub} shrink-0 px-3`}>‹</button>
+        <p aria-live="polite" className="min-w-0 flex-1 text-center text-[14.5px] font-semibold text-[#1d1b2b]">{dayLabel(week.from)} – {dayLabel(week.to)}</p>
+        <button type="button" aria-label="Next week" disabled={loading} onClick={() => goWeek(offset + 1)} className={`${btnSub} shrink-0 px-3`}>›</button>
+      </div>
+      {offset !== 0 && (
+        <div className="text-center">
+          <button type="button" disabled={loading} onClick={() => goWeek(0)} className="min-h-[36px] px-2 text-[13.5px] font-semibold text-[#5b3fe0] underline">Back to this week</button>
+        </div>
+      )}
+    </div>
+  );
+  const table = (mode: 'schedule' | 'record') => (
+    <>
+      {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
+      {days.length > 0 && (
+        <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
+          <div className="grid grid-cols-[76px_minmax(0,1fr)_auto] gap-2 border-b-2 border-[#5b3fe0] bg-[#efebff] px-3 py-2 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:hidden">
+            <span>{tzTimeLabel(tz)}</span><span>Student</span><span>Class Status</span>
+          </div>
+          <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:grid [&>*]:break-words [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
+            <span>{tzTimeLabel(tz)}</span>{kst && <span>{KOREA_TIME}</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
+          </div>
+          {days.map((d) => (
+            <div key={d.date}>
+              <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}{d.date === today ? ' · Today' : ''}</h3>
+              {d.lessons.map((l) => (
+                <ListRow key={l.id} lesson={l} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
+                  mode={mode} onRecord={() => setTab('record')}
+                  onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+  const viewControls = (
+    <>
+      <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+        {kstOn !== null && (
+          <label className="flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]">
+            <input type="checkbox" checked={kstOn} onChange={(e) => setKst(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
+            {KOREA_TIME}
+          </label>
+        )}
+        <label className="flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]">
+          <input type="checkbox" checked={paidCol} onChange={(e) => setPaidCol(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
+          Paid
+        </label>
+      </div>
+      <select
+        aria-label="Student"
+        value={student}
+        onFocus={() => void loadAll()}
+        onChange={async (e) => {
+          const v = e.target.value;
+          if (v) await loadAll();
+          setStudent(v);
+        }}
+        className="mb-2 min-h-[44px] w-full rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[15px] text-[#1d1b2b]"
+      >
+        <option value="">All students · by week</option>
+        {studentNames.map((n) => (
+          <option key={n} value={n}>{n} · all classes</option>
+        ))}
+      </select>
+      {!student && weekNav}
+    </>
+  );
 
   return (
     <ProfileCtx.Provider value={openProfile}>
-    <main className="mx-auto max-w-[680px] px-4 pb-16 pt-4 lg:max-w-[1080px] xl:max-w-[1280px]">
-      <div className="lg:max-w-[680px]">
-      {adminBar}
-      {profileOf && actions.profile && <StudentProfile studentId={profileOf} actions={actions.profile} now={now} onClose={() => setProfileOf(null)} />}
-      <header className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <p className="mb-1.5 flex items-center gap-1.5">
-            {/* 운영자 보기: 로고를 누르면 운영자 화면으로 (11/3 대표, 학생 화면과 같게) */}
-            {adminBar ? (
-              <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex"><img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" /></a>
-            ) : (
-              <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
-            )}
-            <span className="rounded-[6px] bg-[#27230e] px-[7px] py-[3px] text-[12px] font-extrabold text-[#ffd401]">Tutor</span>
-          </p>
-          <h1 className="text-[22px] font-bold text-[#1d1b2b]">{screen.tutor.name}</h1>
-          <p className="text-[13px] text-[#6b6880]">{tzHeader(tz)}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {screen.tutor.meetUrl && (
-              <a href={screen.tutor.meetUrl} target="_blank" rel="noreferrer" className={`${btnMain} inline-flex items-center`}>Classroom (Google Meet)</a>
-            )}
-            <button type="button" onClick={() => setPanel('hours')} className={btnSub}>My hours</button>
-          </div>
+    <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
+      {/* PC: 왼쪽 고정 메뉴 (학생 LMS 와 같은 자리·모양) */}
+      <nav aria-label="Menu" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
+        <div className="px-3 pb-4 pt-1">{brand}</div>
+        {TABS.map((t) => tabBtn(t, false))}
+        <div className="px-3 pt-5 text-[13px] text-[#55526a]">
+          <b className="block text-[14px] text-[#1d1b2b]">{screen.tutor.name}</b>
+          {tzHeader(tz)}
         </div>
-        {onLogout && (
-          <button type="button" onClick={onLogout} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13.5px] text-[#1d1b2b]">
-            Sign out
-          </button>
-        )}
-      </header>
-      {err && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
+        {onLogout && <button type="button" onClick={onLogout} className="mx-3 mt-1 min-h-[36px] text-left text-[13px] text-[#55526a] underline">Sign out</button>}
+      </nav>
 
-      {todoCount > 0 && (
-        <section aria-label="To do" className="mb-6 overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
-          <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
-            To do <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
-          </h2>
-          <div className="divide-y divide-[#f3e6c4]">
-            {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text="Classes to record" onClick={() => setPanel('record')} />}
-            {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text="Cover requests" onClick={() => setPanel('cover')} />}
-            {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text="Make-up requests" onClick={() => setPanel('makeup')} />}
+      <div className="min-w-0 flex-1 px-4 pb-24 lg:px-0 lg:pb-0">
+        {adminBar && <div className="pt-3 lg:pt-0">{adminBar}</div>}
+        <header className="flex items-center justify-between pb-3 pt-[14px] lg:hidden">
+          {brand}
+          {onLogout && <button type="button" onClick={onLogout} className="min-h-[36px] text-[13px] text-[#55526a] underline">Sign out</button>}
+        </header>
+        {profileOf && actions.profile && <StudentProfile studentId={profileOf} actions={actions.profile} now={now} onClose={() => setProfileOf(null)} />}
+        {err && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
+
+        {tab === 'home' && (
+          <div className="grid gap-4 lg:max-w-[720px]">
+            <header>
+              <h1 className="text-[22px] font-bold text-[#1d1b2b]">Hi, {screen.tutor.name}</h1>
+              <p className="text-[14px] text-[#6b6880]">{dayLabel(today)} · {localNow} {tzTimeLabel(tz)}{kstNow ? ` · ${kstNow}` : ''}</p>
+              {screen.tutor.meetUrl && (
+                <a href={screen.tutor.meetUrl} target="_blank" rel="noreferrer" className={`${btnMain} mt-3 inline-flex items-center`}>Classroom (Google Meet)</a>
+              )}
+            </header>
+
+            {todoCount > 0 && (
+              <section aria-label="To do" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
+                <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
+                  To do <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
+                </h2>
+                <div className="divide-y divide-[#f3e6c4]">
+                  {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text="Classes to record" onClick={() => setTab('record')} />}
+                  {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text="Cover requests" onClick={() => setPanel('cover')} />}
+                  {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text="Make-up requests" onClick={() => setPanel('makeup')} />}
+                </div>
+              </section>
+            )}
+            {todoCount === 0 && <p className={`${card} text-[15px] text-[#1f7a4d]`}>✓ Nothing to do right now</p>}
+
+            <section aria-label="Today" className={card}>
+              <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">Today’s classes <span className="text-[#6b6880]">{todayLessons.length || ''}</span></h2>
+              {todayLessons.length === 0 && <p className="text-[14.5px] text-[#6b6880]">No classes today.</p>}
+              <div className="divide-y divide-[#f0eef5]">
+                {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={tz} now={now} onRecord={() => setTab('record')} />)}
+              </div>
+              {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">Next class: {whenText(nextLesson.startsAt, tz)} {tzTimeLabel(tz)} · {nextLesson.student}</p>}
+              <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">Full schedule ›</button>
+            </section>
           </div>
-        </section>
-      )}
+        )}
 
-      {panel === 'hours' && <TutorHours actions={actions.hours} onClose={() => setPanel(null)} />}
+        {tab === 'schedule' && (
+          <section aria-label="Schedule">
+            <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">Schedule</h1>
+            <p className="mb-3 text-[13.5px] text-[#6b6880]">Your classes by week · {tzHeader(tz)}. Tap a class for notes and links.</p>
+            {viewControls}
+            {table('schedule')}
+          </section>
+        )}
 
-      {panel === 'record' && (
-        <Sheet onClose={() => setPanel(null)}>
-          <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">
-            Classes to record <span className="text-[#5b3fe0]">{screen.toRecord.length > 0 ? screen.toRecord.length : ''}</span>
-          </h2>
-          <div className="grid gap-3">
-            {toRecord.map((l) => (
-              <div key={l.id} className={card}>
-                <LessonHead lesson={l} tz={tz} now={now} />
-                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing={screen.toRecord.includes(l.id)} admin={!!adminBar}
-                  onSaved={async (saved) => {
-                    setRecordedHere((x) => [...x.filter((y) => y.id !== saved.id), saved]);
+        {tab === 'record' && (
+          <section aria-label="Class Record">
+            <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">Class Record</h1>
+            <p className="mb-3 text-[13.5px] text-[#6b6880]">Record each class after it ends. Tap a past class to edit its record.</p>
+            {toRecord.length > 0 && (
+              <section aria-label="Classes to record" className="mb-5 grid gap-3 lg:max-w-[760px]">
+                <h2 className="text-[16px] font-bold text-[#b3261e]">
+                  Classes to record {screen.toRecord.length > 0 && <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{screen.toRecord.length}</span>}
+                </h2>
+                {toRecord.map((l) => (
+                  <div key={l.id} className={`${card} border-[#f0a33a]`}>
+                    <LessonHead lesson={l} tz={tz} now={now} />
+                    <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing={screen.toRecord.includes(l.id)} admin={!!adminBar}
+                      onSaved={async (saved) => {
+                        setRecordedHere((x) => [...x.filter((y) => y.id !== saved.id), saved]);
+                        await reload();
+                      }} />
+                  </div>
+                ))}
+              </section>
+            )}
+            {viewControls}
+            {table('record')}
+          </section>
+        )}
+
+        {tab === 'students' && (
+          <section aria-label="Students">
+            <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">Students</h1>
+            <p className="mb-3 text-[13.5px] text-[#6b6880]">Your students. Tap a name to see their profile, preferences and recent topics.</p>
+            {!actions.students && <p className={`${card} text-[14.5px] text-[#6b6880]`}>Student list is not available here.</p>}
+            {studentsErr && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{studentsErr}</p>}
+            {actions.students && !students && !studentsErr && <p className="text-[15px] text-[#6b6880]">Loading…</p>}
+            {students && students.length === 0 && <p className={`${card} text-[14.5px] text-[#6b6880]`}>No students assigned to you yet.</p>}
+            {students && students.length > 0 && (
+              <ul className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
+                {[...students].sort((a, b) => a.name.localeCompare(b.name)).map((st) => (
+                  <li key={st.id} className="border-b border-[#e6e3ef] last:border-b-0">
+                    <button type="button" disabled={!openProfile} onClick={() => openProfile?.(st.id)}
+                      className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2 text-left hover:bg-[#f7f6fb]">
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[15.5px] font-semibold text-[#1d1b2b]">{st.name}</span>
+                        <span className="block text-[13px] text-[#6b6880]">
+                          {[st.level, st.classType, st.timezone ? tzTimeLabel(st.timezone) : null].filter(Boolean).join(' · ') || 'Profile'}
+                        </span>
+                      </span>
+                      <span className="text-[13px] font-semibold text-[#5b3fe0]">Profile ›</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} inline />}
+
+        {panel === 'cover' && (
+          <Sheet onClose={() => setPanel(null)}>
+            <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Cover requests</h2>
+            <div className="grid gap-3">
+              {groupCovers(screen.covers).map((g) => (
+                <CoverCard key={g.map((c) => c.id).join()} covers={g} tz={tz} actions={actions} onSent={() => reload()} />
+              ))}
+              {screen.covers.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ Sent</p>}
+            </div>
+          </Sheet>
+        )}
+
+        {panel === 'makeup' && (
+          <Sheet onClose={() => setPanel(null)}>
+            <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Make-up requests</h2>
+            <div className="grid gap-3">
+              {makeups.map((m) => (
+                <MakeupCard key={m.id} m={m} tz={tz} actions={actions} closed={!screen.makeups.some((x) => x.id === m.id)}
+                  onSent={async () => {
+                    setAnsweredHere((x) => [...x.filter((y) => y.id !== m.id), m]);
                     await reload();
                   }} />
-              </div>
-            ))}
-          </div>
-        </Sheet>
-      )}
-
-      {panel === 'cover' && (
-        <Sheet onClose={() => setPanel(null)}>
-          <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Cover requests</h2>
-          <div className="grid gap-3">
-            {groupCovers(screen.covers).map((g) => (
-              <CoverCard key={g.map((c) => c.id).join()} covers={g} tz={tz} actions={actions} onSent={() => reload()} />
-            ))}
-            {screen.covers.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ Sent</p>}
-          </div>
-        </Sheet>
-      )}
-
-      {panel === 'makeup' && (
-        <Sheet onClose={() => setPanel(null)}>
-          <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Make-up requests</h2>
-          <div className="grid gap-3">
-            {makeups.map((m) => (
-              <MakeupCard key={m.id} m={m} tz={tz} actions={actions} closed={!screen.makeups.some((x) => x.id === m.id)}
-                onSent={async () => {
-                  setAnsweredHere((x) => [...x.filter((y) => y.id !== m.id), m]);
-                  await reload();
-                }} />
-            ))}
-          </div>
-        </Sheet>
-      )}
-
+              ))}
+            </div>
+          </Sheet>
+        )}
       </div>
 
-      <section>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[17px] font-bold text-[#1d1b2b]">Class Record</h2>
-          {kstOn !== null && (
-            <label className="ml-auto flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]">
-              <input type="checkbox" checked={kstOn} onChange={(e) => setKst(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
-              {KOREA_TIME}
-            </label>
-          )}
-          <label className={`${kstOn === null ? 'ml-auto ' : ''}flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#55526a]`}>
-            <input type="checkbox" checked={paidCol} onChange={(e) => setPaidCol(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
-            Paid
-          </label>
-        </div>
-        <select
-          aria-label="Student"
-          value={student}
-          onFocus={() => void loadAll()}
-          onChange={async (e) => {
-            const v = e.target.value;
-            if (v) await loadAll();
-            setStudent(v);
-          }}
-          className="mb-2 min-h-[44px] w-full rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[15px] text-[#1d1b2b] lg:max-w-[680px]"
-        >
-          <option value="">All students · by week</option>
-          {studentNames.map((n) => (
-            <option key={n} value={n}>{n} · all classes</option>
-          ))}
-        </select>
-        {student && studentIdByName.get(student) && openProfile && (
-          <button type="button" onClick={() => openProfile(studentIdByName.get(student)!)} className={`${btnSub} mb-2 w-full text-[14px] lg:w-auto`}>Student profile — {student}</button>
-        )}
-        {/* 주 이동: [‹] 날짜 범위 [›] 한 줄, 누르면 범위 바로 바뀜. 지금 주가 아닐 때만 'Back to this week' (대표 11/3) */}
-        {!student && (
-          <div className="mb-2 lg:max-w-[680px]">
-            <div className="flex items-center gap-2">
-              <button type="button" aria-label="Previous week" disabled={loading} onClick={() => goWeek(offset - 1)} className={`${btnSub} shrink-0 px-3`}>‹</button>
-              <p aria-live="polite" className="min-w-0 flex-1 text-center text-[14.5px] font-semibold text-[#1d1b2b]">{dayLabel(week.from)} – {dayLabel(week.to)}</p>
-              <button type="button" aria-label="Next week" disabled={loading} onClick={() => goWeek(offset + 1)} className={`${btnSub} shrink-0 px-3`}>›</button>
-            </div>
-            {offset !== 0 && (
-              <div className="text-center">
-                <button type="button" disabled={loading} onClick={() => goWeek(0)} className="min-h-[36px] px-2 text-[13.5px] font-semibold text-[#5b3fe0] underline">Back to this week</button>
-              </div>
-            )}
-          </div>
-        )}
-        {days.length === 0 && <p className={`${card} text-[15px] text-[#6b6880]`}>No classes</p>}
-        {days.length > 0 && (
-          <div className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
-            <div className="grid grid-cols-[76px_minmax(0,1fr)_auto] gap-2 border-b-2 border-[#5b3fe0] bg-[#efebff] px-3 py-2 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:hidden">
-              <span>{tzTimeLabel(tz)}</span><span>Student</span><span>Class Status</span>
-            </div>
-            <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:grid [&>*]:break-words [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-              <span>{tzTimeLabel(tz)}</span>{kst && <span>{KOREA_TIME}</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
-            </div>
-            {days.map((d) => (
-              <div key={d.date}>
-                <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}</h3>
-                {d.lessons.map((l) => (
-                  <ListRow key={l.id} lesson={l} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
-                    onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-    </main>
+      {/* 휴대폰: 아래 고정 메뉴 */}
+      <nav aria-label="Menu" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
+        {TABS.map((t) => tabBtn(t, true))}
+      </nav>
+    </div>
     </ProfileCtx.Provider>
+  );
+}
+
+/** Home 의 오늘 수업 한 줄 */
+function TodayRow({ lesson: l, tz, now, onRecord }: { lesson: TutorLesson; tz: string; now: Date; onRecord: () => void }) {
+  const phase = phaseOf(l, now);
+  const tag = kindTag(l);
+  const st = statusText(l, now);
+  return (
+    <div className={`flex items-center gap-3 py-2 ${phase === 'canceled' ? 'text-[#8a879c]' : ''}`}>
+      <span className="w-[84px] shrink-0 text-[14px] font-bold tabular-nums">{timeRange(l, tz)}</span>
+      <span className="min-w-0 flex-1">
+        <StudentName id={l.studentId} name={l.student} className={`block truncate text-[15px] font-semibold ${phase === 'canceled' ? 'line-through' : ''}`} />
+        <span className="block text-[12.5px] text-[#6b6880]">{minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}</span>
+      </span>
+      {phase === 'to_record'
+        ? <button type="button" onClick={onRecord} className="min-h-[36px] rounded-[10px] bg-[#5b3fe0] px-3 text-[13px] font-bold text-white">Record</button>
+        : <span className={`text-[13px] font-semibold ${phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]'}`}>{phase === 'recorded' ? `✓ ${st}${lateText(l.late)}` : st}</span>}
+    </div>
   );
 }
 
@@ -395,8 +533,10 @@ function useSavedToggle(key: string): [boolean, (on: boolean) => void] {
 }
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
-function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, admin }: {
+function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, admin, mode = 'record', onRecord }: {
   lesson: TutorLesson; tz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
+  /** schedule = 일정만 (기록은 Class Record 메뉴에서), record = 펼치면 기록칸 */
+  mode?: 'schedule' | 'record'; onRecord?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [dirty, mark] = useDirtyList();
@@ -409,6 +549,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
   // 강사 노쇼는 운영자만 기록·수정 (4000)
   const recordable = canRecord(l, now) && (admin || l.classStatus !== 'Tutor no-show');
+  const recordHere = recordable && mode === 'record';
   const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
   const stText = phase === 'recorded' ? `✓ ${status}${lateText(l.late)}` : status;
@@ -468,7 +609,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
         <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
           {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
-          {recordable ? (
+          {recordHere ? (
             <div className="lg:max-w-[560px]">
               <DirtyCtx.Provider value={mark}>
                 <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing extra={links} admin={admin}
@@ -479,6 +620,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
             <div className="grid gap-2 pt-2">
               {l.remarks && <p className="text-[14px]"><b className="text-[13px] text-[#55526a]">Remarks</b> {l.remarks}</p>}
               <div className="flex flex-wrap items-center gap-1.5">
+                {recordable && onRecord && <button type="button" onClick={onRecord} className={`${btnMain} inline-flex items-center text-[14px]`}>{phase === 'recorded' ? 'Edit record' : 'Record this class'}</button>}
                 {links}
                 {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}
               </div>

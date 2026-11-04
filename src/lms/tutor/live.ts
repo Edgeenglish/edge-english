@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseHours, type HoursData } from './hours';
 import { parseScreen, type Late, type TutorResult, type TutorScreen } from './screen';
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
+import type { TutorStudentRow } from '@/app/lms/tutor/TutorHome';
 
 const NOT_APPLIED = 'The tutor page is not ready on this database yet (migration 2000).';
 
@@ -82,4 +83,10 @@ export async function updateStudentProfile(sb: SupabaseClient, studentId: string
   const r = await sb.rpc('tutor_student_update', { p_student: studentId, p: fields });
   if (r.error?.code === '42501') throw new Error(r.error.message || "Only the student's regular tutor can edit this.");
   check(r);
+}
+
+/** Students 메뉴 (4300 tutor_my_students): 정규 담당 학생 + 확정된 대체수업 학생(수업 끝 24시간까지). 누가 보이는지는 DB 가 정함 */
+export async function loadMyStudents(sb: SupabaseClient): Promise<TutorStudentRow[]> {
+  const rows = check(await sb.rpc('tutor_my_students')) as { student_id: string; display_name: string; level: string | null; class_type: string | null; timezone: string | null; class_note_url: string | null }[];
+  return rows.map((r) => ({ id: r.student_id, name: r.display_name, level: r.level, classType: r.class_type, timezone: r.timezone, noteUrl: r.class_note_url }));
 }

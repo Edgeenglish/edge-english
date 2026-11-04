@@ -135,5 +135,7 @@ export function describeChanges(ch: Omit<HoursChanges, 'from'> & { from?: string
   once(ch.onceOpen, false);
   return out;
 }
+/** Every week 적용일 안내 (2026-11-04 대표: 저장하면 바로 바뀌는 줄 오해) — 'These hours apply from Mon, Nov 9.' 강사 현지 날짜 */
+export const applyFromText = (from: string): string => { const p = parts(from); return `These hours apply from ${SHORT[p.dow]}, ${MONTHS[p.month]} ${p.day}.`; };
 /** 매주 변경 시작일 문구 */
 export const fromText = (from: string, lang: 'en' | 'ko'): string => (lang === 'en' ? `Every week changes start ${dateText(from)}.` : `${koDate(from)}부터`);
