@@ -297,6 +297,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
           <div className="mb-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-[#6b6880]">
             <Legend color="bg-[#e6f6ec]">Open</Legend>
             <Legend color="bg-[#ecebf1]">Closed</Legend>
+            <Legend color="border border-[#e6e3ef] bg-[#f6f5fa]">Can’t change</Legend>
             {tab === 'once' && <Legend style={hatch}>Unavailable this week</Legend>}
             <Legend color="bg-[#5b3fe0]">Class</Legend>
             {tab === 'once' && <Legend color="bg-[#d9d1ff]">Make-up</Legend>}
@@ -391,7 +392,7 @@ function Panel({ onClose, sub, inline, children }: { onClose: () => void; sub?: 
   );
   if (inline) {
     return (
-      <section aria-label="My hours" className="relative flex min-h-[70vh] flex-col">
+      <section aria-label="My hours" className="relative flex min-h-[70vh] flex-col rounded-[16px] bg-white p-3 lg:p-4">
         {head}
         {children}
       </section>

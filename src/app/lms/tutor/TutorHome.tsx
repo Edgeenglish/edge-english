@@ -306,7 +306,7 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
               <div className="divide-y divide-[#f0eef5]">
                 {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={tz} now={now} onRecord={() => setTab('record')} />)}
               </div>
-              {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">Next class: {whenText(nextLesson.startsAt, tz)} {tzTimeLabel(tz)} · {nextLesson.student}</p>}
+              {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">Next class: {whenFull(nextLesson.startsAt, tz)} · {nextLesson.student}</p>}
               <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">Full schedule ›</button>
             </section>
           </div>
@@ -422,14 +422,11 @@ function TodayRow({ lesson: l, tz, now, onRecord }: { lesson: TutorLesson; tz: s
   const st = statusText(l, now);
   return (
     <div className={`flex items-center gap-3 py-2 ${phase === 'canceled' ? 'text-[#8a879c]' : ''}`}>
-      {/* 시각에는 항상 어느 시간대인지 같이 (현지 + 한국) */}
-      <span className="w-[118px] shrink-0 tabular-nums">
-        <span className="block text-[14px] font-bold">{timeRange(l, tz)}</span>
-        <span className="block text-[11.5px] leading-tight text-[#6b6880]">{tzTimeLabel(tz)}</span>
-        {kstRange(l, tz) && <span className="block text-[11.5px] leading-tight text-[#6b6880]">{kstRange(l, tz)}</span>}
-      </span>
+      {/* 시각마다 그 옆에 어느 시간대인지 바로 적음 (현지 + 한국) */}
       <span className="min-w-0 flex-1">
-        <StudentName id={l.studentId} name={l.student} className={`block truncate text-[15px] font-semibold ${phase === 'canceled' ? 'line-through' : ''}`} />
+        <span className="block text-[14.5px] tabular-nums"><b>{timeRange(l, tz)}</b> <span className="text-[12.5px] text-[#55526a]">{tzTimeLabel(tz)}</span></span>
+        {kstRange(l, tz) && <span className="block text-[12.5px] tabular-nums text-[#55526a]">{kstRange(l, tz)}</span>}
+        <StudentName id={l.studentId} name={l.student} className={`mt-0.5 block truncate text-[15px] font-semibold ${phase === 'canceled' ? 'line-through' : ''}`} />
         <span className="block text-[12.5px] text-[#6b6880]">{minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}</span>
       </span>
       {phase === 'to_record'
