@@ -31,7 +31,7 @@ const lessonLabel = (student: string, min: number) => (
 );
 /** 같은 수업의 다음 칸은 위 칸과 붙여 한 덩어리로 */
 const cont = '-mt-[2px] h-[28px] rounded-t-none lg:h-[26px]';
-/** 수업 칸 색: 실제 수업 부분은 진하게, 같은 칸의 나머지(수업 직후 예약 불가)는 연하게 */
+/** 수업 칸 색: 실제 수업 분만큼만 칠하고 같은 칸의 나머지는 비워 둠 (40분 수업 → 둘째 칸 위 10분만) */
 const fillStyle = (f: { from: number; to: number }, dark: string, pale: string): CSSProperties => (f.from <= 0 && f.to >= 1
   ? { background: dark }
   : { background: `linear-gradient(to bottom, ${pale} ${f.from * 100}%, ${dark} ${f.from * 100}%, ${dark} ${f.to * 100}%, ${pale} ${f.to * 100}%)` });
@@ -153,7 +153,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
     if (cl) {
       return (
         <button type="button" className={`${cellBase} truncate px-0.5 text-white ${cl.first ? (cl.c.min > 30 ? 'rounded-b-none' : '') : cont}`} aria-label={`${when} class with ${cl.c.student}`}
-          style={fillStyle(classFill(toMin(cl.c.time), cl.c.min, toMin(t)), '#5b3fe0', '#d9d3f7')}
+          style={fillStyle(classFill(toMin(cl.c.time), cl.c.min, toMin(t)), '#5b3fe0', 'transparent')}
           onClick={() => setDialog({ kind: 'info', title: `Weekly class · ${cl.c.student}`, body: [
             `Every ${FULL[dow]} ${span(cl.c.time, cl.c.min)} ${localLabel} (${cl.c.min} min). You can’t close this time while the class is here.`,
             'To stop teaching this slot, please tell the Edge English team. We’ll move the class with the student first.'] })}>
@@ -180,7 +180,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
       return (
         <button type="button" aria-label={`${when} ${ls?.l.makeup ? 'make-up' : 'class'} with ${name}`}
           className={`${cellBase} truncate px-0.5 ${ls?.l.makeup ? 'text-[#3a2a99]' : 'text-white'} ${ls && !ls.first ? cont : ls && ls.l.min > 30 ? 'rounded-b-none' : ''}`}
-          style={ls ? fillStyle(classFill(toMin(ls.l.start.slice(11, 16)), ls.l.min, toMin(t)), ls.l.makeup ? '#c4b8ff' : '#5b3fe0', ls.l.makeup ? '#eeeaff' : '#d9d3f7') : undefined}
+          style={ls ? fillStyle(classFill(toMin(ls.l.start.slice(11, 16)), ls.l.min, toMin(t)), ls.l.makeup ? '#c4b8ff' : '#5b3fe0', 'transparent') : undefined}
           onClick={() => setDialog({ kind: 'info', title: `${name} · ${ls ? `${dateText(date)} ${span(ls.l.start.slice(11, 16), ls.l.min)} ${localLabel}` : when}`, body: [
             `${ls?.l.makeup ? 'Make-up' : 'Class'}${ls ? ` (${ls.l.min} min)` : ''}. This time has a class, so it can’t be closed here.`,
             'Can’t teach this class? Please tell the Edge English team.'] })}>
@@ -311,7 +311,6 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
             <Legend color="border border-[#e6e3ef] bg-[#f6f5fa]">Can’t change</Legend>
             {tab === 'once' && <Legend style={hatch}>Unavailable this week</Legend>}
             <Legend color="bg-[#5b3fe0]">Class</Legend>
-            <Legend color="bg-[#d9d3f7]">Right after class</Legend>
             {tab === 'once' && <Legend color="bg-[#d9d1ff]">Make-up</Legend>}
             {tab === 'once' && <Legend color="border border-dashed border-[#5b3fe0]">Request</Legend>}
           </div>

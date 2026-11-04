@@ -29,7 +29,7 @@
 - **못 한 것: 실제 강사 계정 로그인 클릭 검증** — 로그인이 이메일 코드 방식이라 Claude 가 세션을 못 만듦. 서비스 키 조회로 세션을 만드는 방법은 보안 분류기가 막아 시도 안 함(우회 안 함). 대표 결정 필요: ① 대표가 시험 주소에서 직접 클릭 ② 시험용 강사 계정에 임시 비밀번호/로그인 방법을 Claude 가 쓰도록 허용(시험용 DB 한정)
 
 ## ✅ 2026-11-04 실제 로그인 검증 완료 (시험용, 대표 허락: 시험용 e2e 강사 계정 임시 비밀번호)
-- My hours: (대표 확인 후 되돌림) 강사 도시 시간 / 한국 시간 **따로 보기 버튼 유지**, 마지막에 고른 쪽 기억(`lms_tutor_hours_zone`). 칸 깨짐 수정(줄 높이 = 칸 높이, 칸 block, 수업 칸 이어 붙이기). 수업 칸은 실제 분만 진하게(40분 수업 → 둘째 칸 위 1/3, 나머지 연한 보라 'Right after class', `classFill`). 마지막 선택 기억(이 기기): 메뉴(`lms_tutor_menu`)·My hours 탭(`lms_tutor_hours_tab`)·KST/Paid — `src/app/lms/tutor/useSaved.ts`
+- My hours: (대표 확인 후 되돌림) 강사 도시 시간 / 한국 시간 **따로 보기 버튼 유지**, 마지막에 고른 쪽 기억(`lms_tutor_hours_zone`). 칸 깨짐 수정(줄 높이 = 칸 높이, 칸 block, 수업 칸 이어 붙이기). 수업 칸은 실제 분만 진하게(40분 수업 → 둘째 칸 위 1/3, 나머지는 비워 둠, `classFill`). 마지막 선택 기억(이 기기): 메뉴(`lms_tutor_menu`)·My hours 탭(`lms_tutor_hours_tab`)·KST/Paid — `src/app/lms/tutor/useSaved.ts`
 - **실제 로그인(Blair, 로컬 앱 → 시험용 DB) PC·휴대폰 클릭 통과**: Home(현지+KST·To do 창) · Schedule(Edit record → Class Record) · Class Record(지각 저장·새로고침 후 유지·Tutor no-show 강사 저장·+1 Compensation·다시 Held·강사 본인 노쇼 수정) · Students(9명·프로필 창) · My hours(KST 열·적용일 안내·Changes 현지+KST·저장 팝업·Saved 창·되돌림·메뉴/탭/KST 기억) · 휴대폰 아래 메뉴·저장 팝업 안 가려짐·휴대폰 저장
 - 임시 비밀번호는 검증 뒤 아무도 모르는 값으로 바꿔 무효화(비밀번호 파일·스크립트 삭제). 로그인 방식·보안 설정은 안 바꿈
 - 검증 중 바뀐 시험 데이터(되돌리지 않음, 대표 허락): Blair 11/3·11/4 수업 3건 기록됨(지각·E2E 문구), 보상수업 voided 행 1건
