@@ -2288,3 +2288,31 @@ select pg_temp.ok((select d -> 'student' ->> 'name_ko' = '김서연' and d -> 's
   '운영진 상세: 한국 이름·바뀐 시간대·예전 레벨 참고·정규 변경 기록·수강권·수정 기록·연장 기록 (4300)');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------- 4310 ⑤ 시트 Student Info 비교·승인 ----------
+reset request.jwt.claim.sub;
+reset role;
+insert into sheet_student_info (sheet_name, row_no, enrollment_status, student_name, preferred_name, residence, self_intro, gender_age, email, level, class_type, docs_link)
+values ('RegTutor_Class record', 2, 'Active', '김서연', 'Sarah', 'Melbourne, Australia', '✅Job: Nurse', 'F / 30s', 'p4300@example.com', 'A2/B1', 'free convo', '김서연_RegTutor'),
+       ('RegTutor_Class record', 3, 'Completed', 'Park Dareun', null, 'Korea', null, null, 'x@example.com', 'B1', null, null),
+       ('RegTutor_Class record', 4, 'Completed', '아무개', null, 'Korea', null, null, null, null, null, null);
+set request.jwt.claims = '{"aal":"aal2"}';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004300';   -- 강사
+select pg_temp.ok(admin_sheet_rows() is null, '⑤ 강사는 시트 비교 표를 못 봄 (4310)');
+select pg_temp.expect_error($$select admin_sheet_row_match((select id from sheet_student_info where row_no = 2), '99999999-0000-0000-0000-000000004300')$$, '운영자|42501');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 운영자
+select pg_temp.ok((select (x -> 'suggest' ->> 'student_id') = '99999999-0000-0000-0000-000000004300' and x -> 'suggest' ->> 'how' = 'name_ko' from jsonb_array_elements(admin_sheet_rows()) x where (x ->> 'row_no')::int = 2)
+              and (select (x -> 'suggest' ->> 'student_id') = '99999999-0000-0000-0000-000000004301' and x -> 'suggest' ->> 'how' = 'name_en' from jsonb_array_elements(admin_sheet_rows()) x where (x ->> 'row_no')::int = 3)
+              and (select x -> 'suggest' is null or x -> 'suggest' = 'null'::jsonb from jsonb_array_elements(admin_sheet_rows()) x where (x ->> 'row_no')::int = 4),
+  '⑤ LMS 학생 자동 제안: 한국 이름 같음 / 영문 이름 같음 / 없으면 제안 없음 (4310)');
+select admin_sheet_row_match((select id from sheet_student_info where row_no = 2), '99999999-0000-0000-0000-000000004300');
+select admin_student_update('99999999-0000-0000-0000-000000004300', '{"level_note":"A2/B1","gender_age":"F / 30s"}');
+select admin_sheet_row_done((select id from sheet_student_info where row_no = 2), '2칸 반영');
+select pg_temp.ok((select student_id = '99999999-0000-0000-0000-000000004300' and done_at is not null and done_note = '2칸 반영' from sheet_student_info where row_no = 2)
+              and (select level_note = 'A2/B1' and gender_age = 'F / 30s' and level = 'Intermediate' from students where id = '99999999-0000-0000-0000-000000004300'),
+  '⑤ 짝 정하기 → 체크한 칸만 반영(레벨 4단계 값은 그대로) → 끝 표시 (4310)');
+select admin_sheet_row_done((select id from sheet_student_info where row_no = 2), null, true);
+select pg_temp.ok((select done_at is null from sheet_student_info where row_no = 2), '⑤ 다시 열기 (4310)');
+reset request.jwt.claim.sub;
+reset role;

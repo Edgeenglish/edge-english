@@ -12,7 +12,6 @@ import {
 import { AdminHeader, BottomNav, Icon } from '../../ui';
 import { Box, btnMain, btnSmall, btnSub, CopyButton, input, label, Row, Sheet, WHO_ROLE } from './parts';
 import RegularChange from './RegularChange';
-import SheetImport from './SheetImport';
 
 export type DetailActions = {
   reload: () => Promise<void>;
@@ -44,7 +43,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
   const e = data.enrollment;
   const slot = data.slots[0] ?? null;
   const status: StudentStatus = !e ? 'none' : e.status === 'completed' || e.status === 'canceled' || e.finalEndDate < today ? 'ended' : e.startDate > today ? 'upcoming' : 'active';
-  const [sheet, setSheet] = useState<null | 'profile' | 'answers' | 'regular' | 'extend' | 'import' | { notice: string }>(null);
+  const [sheet, setSheet] = useState<null | 'profile' | 'answers' | 'regular' | 'extend' | { notice: string }>(null);
   const pendingChanges = data.changes.filter((c) => !c.studentSentAt || !c.tutorSentAt);
   const autoExt = e ? e.extensions.filter((x) => x.auto).reduce((a, x) => a + x.days, 0) : 0;
   const manualExt = e ? e.extensions.filter((x) => !x.auto).reduce((a, x) => a + x.days, 0) : 0;
@@ -120,7 +119,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             )}
           </Box>
 
-          <Box title="프로필" action={<span className="flex gap-1.5"><button type="button" className={btnSmall} onClick={() => setSheet('import')}>시트에서 가져오기</button><button type="button" className={btnSmall} onClick={() => setSheet('profile')}>수정</button></span>}>
+          <Box title="프로필" action={<span className="flex gap-1.5"><Link href={`/lms/admin/students/sheet?student=${s.code}`} className={`${btnSmall} inline-flex items-center`}>시트 값 비교</Link><button type="button" className={btnSmall} onClick={() => setSheet('profile')}>수정</button></span>}>
             <Row k="영문 이름 (여권)" v={s.nameEn} strong />
             <Row k="Preferred Name" v={or(s.displayName)} />
             <Row k="거주" v={[s.country, s.city].filter(Boolean).join(' · ') || <i className="text-[#b9b6c8]">없음</i>} />
@@ -213,7 +212,6 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
       {sheet === 'extend' && e && <ExtendSheet enrollment={e} studentTz={s.timezone} today={today} extend={actions.extend} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
       {sheet === 'profile' && <ProfileSheet student={s} update={actions.update} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
       {sheet === 'answers' && <AnswersSheet student={s} update={actions.update} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
-      {sheet === 'import' && <SheetImport student={s} save={async (f) => { await actions.update(f); await actions.reload(); }} onClose={() => setSheet(null)} />}
       {sheet && typeof sheet === 'object' && (
         <NoticeSheet data={data} changeId={sheet.notice} sent={actions.sent} reload={actions.reload} onClose={() => setSheet(null)} />
       )}

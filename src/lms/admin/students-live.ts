@@ -45,3 +45,19 @@ export async function extendEnrollment(sb: SupabaseClient, enrollmentId: string,
   const r = check(await sb.rpc('admin_extend_enrollment', { p_enrollment: enrollmentId, p_new_end: newEnd, p_kind: kind, p_note: note })) as { final_end_date: KstDate; days: number };
   return { finalEndDate: r.final_end_date, days: r.days };
 }
+
+// ---- ⑤ 시트 Student Info 비교 (migration 4310) ----
+import { parseSheetRows, type SheetRow } from './sheet-compare';
+export async function loadSheetRows(sb: SupabaseClient): Promise<SheetRow[]> {
+  const r = await sb.rpc('admin_sheet_rows');
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') throw new Error('시트 비교 기능이 아직 이 DB에 적용되지 않았어요 (migration 4310).');
+  const j = check(r);
+  if (j === null) throw new Error('운영자 추가 인증(TOTP)이 필요해요. 다시 로그인해 주세요.');
+  return parseSheetRows(j);
+}
+export async function matchSheetRow(sb: SupabaseClient, rowId: string, studentId: string | null): Promise<void> {
+  check(await sb.rpc('admin_sheet_row_match', { p_row: rowId, p_student: studentId }));
+}
+export async function doneSheetRow(sb: SupabaseClient, rowId: string, note: string, undo = false): Promise<void> {
+  check(await sb.rpc('admin_sheet_row_done', { p_row: rowId, p_note: note, p_undo: undo }));
+}

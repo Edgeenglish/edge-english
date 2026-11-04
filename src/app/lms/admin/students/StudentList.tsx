@@ -40,7 +40,10 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
             </button>
           ))}
         </div>
-        <p className="text-[13px] text-[#6b6880]">{searching ? `'${q.trim()}' 검색 ` : ''}{list.length}명</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[13px] text-[#6b6880]">{searching ? `'${q.trim()}' 검색 ` : ''}{list.length}명</p>
+          <Link href="/lms/admin/students/sheet" className="min-h-[36px] rounded-[8px] border border-[#e6e3ef] bg-white px-3 text-[13px] font-semibold leading-[34px] text-[#5b3fe0]">시트 Student Info 비교</Link>
+        </div>
         {list.length === 0 && <p className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-8 text-center text-[14px] text-[#6b6880]">해당하는 학생이 없어요.</p>}
         <div className="grid gap-2 lg:grid-cols-2">
           {list.map((s) => {
