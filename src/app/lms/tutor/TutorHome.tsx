@@ -9,6 +9,7 @@ import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { formatInZone } from '@/lms/rules/dates';
 import { STATUS_RULES } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
+import { useSavedToggle, useSavedValue } from './useSaved';
 import StudentProfile, { type ProfileActions } from './StudentProfile';
 import {
   answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstRange, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
@@ -78,7 +79,8 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
 }) {
   const [screen, setScreen] = useState(initial);
   const [now, setNow] = useState(() => new Date(nowIso));
-  const [tab, setTab] = useState<Tab>('home');
+  // 마지막에 연 메뉴를 다음에도 그대로 (이 기기)
+  const [tab, setTab] = useSavedValue<Tab>('lms_tutor_menu', 'home', TABS.map((t) => t.key));
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -522,17 +524,6 @@ const cols = (kst: boolean, paid: boolean) => kst
   : (paid ? 'lg:grid-cols-[108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_56px_minmax(180px,1.8fr)]'
     : 'lg:grid-cols-[108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_minmax(180px,1.8fr)]');
 
-/** 켬/끔을 이 기기에 기억 (기본 켬) */
-function useSavedToggle(key: string): [boolean, (on: boolean) => void] {
-  const [on, setOn] = useState(true);
-  useEffect(() => {
-    try { if (localStorage.getItem(key) === '0') setOn(false); } catch { /* 저장 안 되는 브라우저 */ }
-  }, [key]);
-  return [on, (v: boolean) => {
-    setOn(v);
-    try { localStorage.setItem(key, v ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
-  }];
-}
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
 function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, admin, mode = 'record', onRecord }: {

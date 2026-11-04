@@ -9,8 +9,10 @@ import {
   dateText, describeChanges, describeChangesIn, diff, applyFromText, fromText, lessonAt, plusDays, timeText, toMin, WEEK_DAYS, weekText, weeklyClassAt, type CellCode, type HoursData,
 } from '@/lms/tutor/hours';
 import { KOREA_TIME } from '@/lms/tutor/screen';
+import { formatInZone } from '@/lms/rules/dates';
+import { useSavedToggle, useSavedValue } from './useSaved';
 
-import { ALL_HOURS, cityTime, sourceCell } from '@/lms/tutor/hours-view';
+import { ALL_HOURS, cityTime, localToInstant, sourceCell } from '@/lms/tutor/hours-view';
 
 export type HoursActions = {
   load: () => Promise<HoursData>;
@@ -42,9 +44,10 @@ type Dialog =
 export default function TutorHours({ actions, onClose, inline = false }: { actions: HoursActions; onClose: () => void; inline?: boolean }) {
   const [data, setData] = useState<HoursData | null>(null);
   const [err, setErr] = useState('');
-  const [tab, setTab] = useState<'week' | 'once'>('week');
+  const [tab, setTab] = useSavedValue<'week' | 'once'>('lms_tutor_hours_tab', 'week', ['week', 'once']);
   const [wk, setWk] = useState(0);
-  const [koreaTime, setKoreaTime] = useState(false);
+  // 정식 스케줄표처럼 강사 시간 열 + 한국 시간 열. 한국 시간 열은 끌 수 있고 마지막 선택을 기억 (Schedule 과 같은 설정)
+  const [kstPref, setKstPref] = useSavedToggle('lms_tutor_kst');
   const [weekly, setWeekly] = useState<Set<string>>(new Set());
   const [once, setOnce] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -83,8 +86,16 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
 
   const d = data;
   const localLabel = cityTime(d.tutor.timezone);
-  const viewZone = koreaTime ? 'Asia/Seoul' : d.tutor.timezone;
-  const viewLabel = koreaTime ? KOREA_TIME : localLabel;
+  const viewZone = d.tutor.timezone;
+  const viewLabel = localLabel;
+  const kstCol = kstPref && d.tutor.timezone !== 'Asia/Seoul';
+  /** 이 줄(강사 현지 t)의 한국 시각. 날짜가 바뀌면 +1/−1 표시. 기준 날짜 = 보고 있는 주의 월요일 */
+  const kstAt = (t: string) => {
+    const ref = tab === 'week' ? d.from : monday;
+    const k = formatInZone(localToInstant(ref, t, d.tutor.timezone), 'Asia/Seoul');
+    const dd = k.date === ref ? '' : k.date > ref ? '+1' : '−1';
+    return { time: timeText(toMin(k.time)), dd };
+  };
   const baseOnce = Object.keys(d.cells).filter((k) => d.cells[k] === 'b');
   const w = diff(d.weeklyOpen, weekly);
   const o = diff(baseOnce, once);
@@ -145,7 +156,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
     const cl = weeklyClassAt(d.weeklyClasses, dow, t);
     if (cl) {
       return (
-        <button type="button" className={`${cellBase} truncate px-0.5 bg-[#5b3fe0] text-white ${cl.first ? '' : cont}`} aria-label={`${when} class with ${cl.c.student}`}
+        <button type="button" className={`${cellBase} truncate px-0.5 bg-[#5b3fe0] text-white ${cl.first ? (cl.c.min > 30 ? 'rounded-b-none' : '') : cont}`} aria-label={`${when} class with ${cl.c.student}`}
           onClick={() => setDialog({ kind: 'info', title: `Weekly class · ${cl.c.student}`, body: [
             `Every ${FULL[dow]} ${span(cl.c.time, cl.c.min)} ${localLabel} (${cl.c.min} min). You can’t close this time while the class is here.`,
             'To stop teaching this slot, please tell the Edge English team. We’ll move the class with the student first.'] })}>
@@ -171,7 +182,7 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
       const name = ls?.l.student ?? '';
       return (
         <button type="button" aria-label={`${when} ${ls?.l.makeup ? 'make-up' : 'class'} with ${name}`}
-          className={`${cellBase} truncate px-0.5 ${ls?.l.makeup ? 'bg-[#d9d1ff] text-[#3a2a99]' : 'bg-[#5b3fe0] text-white'} ${ls && !ls.first ? cont : ''}`}
+          className={`${cellBase} truncate px-0.5 ${ls?.l.makeup ? 'bg-[#d9d1ff] text-[#3a2a99]' : 'bg-[#5b3fe0] text-white'} ${ls && !ls.first ? cont : ls && ls.l.min > 30 ? 'rounded-b-none' : ''}`}
           onClick={() => setDialog({ kind: 'info', title: `${name} · ${ls ? `${dateText(date)} ${span(ls.l.start.slice(11, 16), ls.l.min)} ${localLabel}` : when}`, body: [
             `${ls?.l.makeup ? 'Make-up' : 'Class'}${ls ? ` (${ls.l.min} min)` : ''}. This time has a class, so it can’t be closed here.`,
             'Can’t teach this class? Please tell the Edge English team.'] })}>
@@ -262,13 +273,12 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
     <Panel onClose={close} sub={viewLabel} inline={inline}>
       <div className="flex min-h-0 flex-1 gap-5 lg:p-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div role="group" aria-label="Timetable time zone" className="mb-2 flex flex-wrap gap-2">
-            {[false, true].map((korea) => <button key={String(korea)} type="button" aria-pressed={koreaTime === korea}
-              onClick={() => { setKoreaTime(korea); if (scroller.current) scroller.current.scrollTop = 0; }}
-              className={`min-h-[44px] rounded-[10px] border px-4 text-[15px] font-semibold ${koreaTime === korea ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
-              {koreaTime === korea ? '✓ ' : ''}{korea ? KOREA_TIME : localLabel}
-            </button>)}
-          </div>
+          {d.tutor.timezone !== 'Asia/Seoul' && (
+            <label className="mb-1 flex min-h-[40px] items-center gap-1.5 self-end text-[14px] font-semibold text-[#55526a]">
+              <input type="checkbox" checked={kstPref} onChange={(e) => setKstPref(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3fe0]" />
+              {KOREA_TIME}
+            </label>
+          )}
           <div role="tablist" className="mb-2 grid grid-cols-2 rounded-[11px] bg-[#ecebf1] p-[3px]">
             {(['week', 'once'] as const).map((t) => (
               <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
@@ -304,12 +314,14 @@ export default function TutorHours({ actions, onClose, inline = false }: { actio
             {tab === 'once' && <Legend color="border border-dashed border-[#5b3fe0]">Request</Legend>}
           </div>
           <div ref={scroller} className={`min-h-0 flex-1 overflow-y-auto border-t border-[#e6e3ef] lg:max-h-[560px] lg:flex-none ${inline ? 'max-h-[58vh]' : ''}`}>
-            <div className="grid grid-cols-[42px_repeat(7,minmax(0,1fr))] gap-[2px] pb-2 pt-1 tabular-nums">
-              <div className="sticky top-0 z-[1] bg-white" />
+            <div className={`grid ${kstCol ? 'grid-cols-[46px_46px_repeat(7,minmax(0,1fr))]' : 'grid-cols-[46px_repeat(7,minmax(0,1fr))]'} gap-[2px] pb-2 pt-1 tabular-nums`}>
+              <div className="sticky top-0 z-[1] bg-white pr-1 text-right text-[10px] font-bold leading-tight text-[#2b1c7a]">{localLabel}</div>
+              {kstCol && <div className="sticky top-0 z-[1] bg-white pr-1 text-right text-[10px] font-bold leading-tight text-[#2b1c7a]">KST</div>}
               {WEEK_DAYS.map((_, i) => <div key={i} className="contents">{dayHead(i)}</div>)}
               {ALL_HOURS.map((t) => (
                 <div key={t} className="contents">
-                  <div data-row={toMin(t)} className="pr-1 text-right text-[11px] leading-[26px] text-[#6b6880]">{t.endsWith('00') ? timeText(toMin(t)) : ''}</div>
+                  <div data-row={toMin(t)} className="pr-1 text-right text-[11px] leading-[26px] lg:leading-[24px] text-[#1d1b2b]">{t.endsWith('00') ? timeText(toMin(t)) : ''}</div>
+                  {kstCol && <div className="pr-1 text-right text-[11px] leading-[26px] lg:leading-[24px] text-[#6b6880]">{t.endsWith('00') ? <>{kstAt(t).time}{kstAt(t).dd && <sup className="text-[9px]">{kstAt(t).dd}</sup>}</> : ''}</div>}
                   {WEEK_DAYS.map((dow, i) => <div key={dow}>{displayCell(i, t)}</div>)}
                 </div>
               ))}

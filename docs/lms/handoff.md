@@ -28,6 +28,13 @@
 - Tutor no-show DB 검증(되돌림): 강사 기록→보상수업 available·payroll 0·규칙 consumes=false/tutor_paid=false, 강사가 본인 기록 되돌림→보상 voided, 운영진 기록→available·submitted_by 운영진, 강사가 운영진 기록 수정 시 'Edge English recorded this class…' 차단, 운영진이 되돌림→voided. (앞 단계 실제 실행으로 시험 수업 한 건에 voided 보상 행이 남아 있음 — 지울 수 없는 표, 무해)
 - **못 한 것: 실제 강사 계정 로그인 클릭 검증** — 로그인이 이메일 코드 방식이라 Claude 가 세션을 못 만듦. 서비스 키 조회로 세션을 만드는 방법은 보안 분류기가 막아 시도 안 함(우회 안 함). 대표 결정 필요: ① 대표가 시험 주소에서 직접 클릭 ② 시험용 강사 계정에 임시 비밀번호/로그인 방법을 Claude 가 쓰도록 허용(시험용 DB 한정)
 
+## ✅ 2026-11-04 실제 로그인 검증 완료 (시험용, 대표 허락: 시험용 e2e 강사 계정 임시 비밀번호)
+- My hours: 시간대 바꾸기 버튼 대신 정식 스케줄표처럼 **강사 시간 열 + KST 열**(KST 날짜가 다르면 +1/−1), KST 열 켬/끔. 줄 높이·수업 칸 이어 붙이기 수정(깨져 보이던 것). 마지막 선택 기억(이 기기): 메뉴(`lms_tutor_menu`)·My hours 탭(`lms_tutor_hours_tab`)·KST(`lms_tutor_kst`, Schedule 과 같은 설정)·Paid — `src/app/lms/tutor/useSaved.ts`
+- **실제 로그인(Blair, 로컬 앱 → 시험용 DB) PC·휴대폰 클릭 통과**: Home(현지+KST·To do 창) · Schedule(Edit record → Class Record) · Class Record(지각 저장·새로고침 후 유지·Tutor no-show 강사 저장·+1 Compensation·다시 Held·강사 본인 노쇼 수정) · Students(9명·프로필 창) · My hours(KST 열·적용일 안내·Changes 현지+KST·저장 팝업·Saved 창·되돌림·메뉴/탭/KST 기억) · 휴대폰 아래 메뉴·저장 팝업 안 가려짐·휴대폰 저장
+- 임시 비밀번호는 검증 뒤 아무도 모르는 값으로 바꿔 무효화(비밀번호 파일·스크립트 삭제). 로그인 방식·보안 설정은 안 바꿈
+- 검증 중 바뀐 시험 데이터(되돌리지 않음, 대표 허락): Blair 11/3·11/4 수업 3건 기록됨(지각·E2E 문구), 보상수업 voided 행 1건
+- 못 한 것: 운영자(TOTP) 실제 로그인 클릭 — 운영자 Tutor no-show·Students 운영자 보기는 DB 검증만
+
 ## 📋 다음 세션 할 일 (2026-11-04 대표 요청 원문 요약 — 빠짐없이): 강사 LMS 화면 전체 개선 + Class Record 출결·지각 구조 변경
 - **시작**: 브랜치 `claude/busy-rubin-w3dii1`(= lms-test) 위에서. 대표가 첨부한 학생 화면·강사 화면 캡처는 이 세션에 안 보였음 → 새 세션 첫 메시지에 다시 첨부 요청. 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. 시험용 DB·lms-test 에서만, 운영 DB·lms-prod 금지. 완료 보고는 바뀐 화면·실제 검증 결과·남은 문제만 짧게
 1. **왼쪽 사이드바** (학생 LMS처럼 고정 메뉴, PC·모바일): **Home**(오늘 수업·해야 할 일) · **Schedule**(수업 일정) · **Class Record**(기록 조회·작성) · **Students**(담당 학생) · **My hours**. 메뉴 이름은 이 영문 그대로. 기존 기능을 메뉴로 나누기만 하지 말고 화면마다 목적이 분명하고 원하는 기능을 바로 찾게
