@@ -42,6 +42,13 @@
 - 검증 뒤 e2e Blair 임시 비밀번호 무효화(파일·스크립트 삭제)
 - 이어서(대표): '바꿀 수 없는' 칸은 닫힘 회색과 헷갈려 **빗금**으로, 이름은 **Can't open**. 표 위에 왜 못 여는지 한 줄: `Striped = can't open: outside 06:00–22:30 [도시] Time (classes can only start in these hours)`(One week only 는 '지난 시간·6시간 안' 추가, 범위는 DB times 목록에서 읽음). 휴대폰 저장 막대 아래로 표가 비치던 틈은 흰 그림자로 막음
 
+## 📋 다음 세션 할 일: 강사 Schedule 메뉴 = Google Calendar 식 월간↔주간 (대표 결정 H26(49), 2026-11-04)
+- **시작**: 브랜치 `claude/upbeat-davinci-e9clnn`(= lms-test) 위에서. 새 세션. 먼저 **PC·휴대폰 시안**(Month·Week·수업 클릭 창)을 보여 주고 대표가 고른 뒤 개발
+- 기준 전문은 H26(49). 요약: 조회 전용(기록 칸 없음, 드래그 변경·추가·삭제 금지) / Month = 평소와 다른 날(취소·보강·대체·휴무·수강 종료) 짧은 글자로 눈에 띄게 / Week = My hours 시간표 격자 재사용(편집 없음, `TutorHours` 의 격자·`classFill`·`sourceCell` 참고) / 수업 클릭 → 학생·현지 시간+KST·종류 + [Class Record] 이동(해당 수업이 펼쳐지게) / 마지막 보기(Month/Week)·시간대 기억(`useSaved.ts`) / 휴대폰 Month 는 날짜 칸에 수업 수·점, 누르면 그날 목록
+- 데이터: `tutor_screen(p_tutor, from, to)` 가 기간을 받으므로 한 달 치 읽기(KST 날짜 기준 ±1일 넓혀 읽고 현지 날짜로 거르기 — `weekOf` 와 같은 방식). DB 변경 없음
+- 메뉴 복원: `TutorHome.tsx` TABS 에 `schedule` 다시 추가(아이콘은 이전 커밋 7273b81 이전 참고), 휴대폰 아래 메뉴 grid-cols-5, Home 'All classes ›' → Schedule 로
+- 끝나면: 실제 Blair 계정(시험용 e2e, 임시 비밀번호는 검증 뒤 무효화)으로 PC·휴대폰·현지/KST·Month/Week 캡처 확인 → lms-test push → 결과를 H26(50)에
+
 ## 📋 다음 세션 할 일 (2026-11-04 대표 요청 원문 요약 — 빠짐없이): 강사 LMS 화면 전체 개선 + Class Record 출결·지각 구조 변경
 - **시작**: 브랜치 `claude/busy-rubin-w3dii1`(= lms-test) 위에서. 대표가 첨부한 학생 화면·강사 화면 캡처는 이 세션에 안 보였음 → 새 세션 첫 메시지에 다시 첨부 요청. 큰 변경이라 Fable 5.1 / 노력 '높음' 권장. 시험용 DB·lms-test 에서만, 운영 DB·lms-prod 금지. 완료 보고는 바뀐 화면·실제 검증 결과·남은 문제만 짧게
 1. **왼쪽 사이드바** (학생 LMS처럼 고정 메뉴, PC·모바일): **Home**(오늘 수업·해야 할 일) · **Schedule**(수업 일정) · **Class Record**(기록 조회·작성) · **Students**(담당 학생) · **My hours**. 메뉴 이름은 이 영문 그대로. 기존 기능을 메뉴로 나누기만 하지 말고 화면마다 목적이 분명하고 원하는 기능을 바로 찾게
