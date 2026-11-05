@@ -14,7 +14,7 @@ import type { RegularSlot } from '@/lms/rules/schedule';
 import { proposalMessage, type PlanView } from '@/lms/admin/confirm';
 import type { MatchingCurrent, PlanActions } from '@/lms/admin/confirm-live';
 import { slotsText } from '@/lms/admin/students';
-import type { RegTutor } from '@/lms/admin/registration';
+import { firstDateBase, firstDateWarnings, type RegTutor } from '@/lms/admin/registration';
 import { dayLabel, weekOf } from '@/lms/admin/schedule';
 import PlanCard, { TimeRows, type PlanHandlers } from '../PlanCard';
 import { Card, EMPTY_FILTER, Legend, ProfileSheet, TutorPicker, WeekCalendar, type TutorFilter } from '../students/new/parts';
@@ -102,14 +102,14 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
     setSlots([...slots, { weekday: wd, time }].sort(bySlot));
   }
 
-  // 첫 수업일: 희망 시작일(또는 내일)부터 첫 정규 요일. 후보 4개 중 충돌 적은 날을 고를 수 있게
+  // 첫 수업일: 희망 시작일(또는 오늘 — 오늘 정규 시각이 지났으면 내일)부터 첫 정규 요일. 후보 4개 중 충돌 적은 날을 고를 수 있고, 날짜 칸으로 어느 날이든 직접 고를 수 있음 (2026-11-06 대표, H26(58)·(60))
   const suggested = useMemo(() => {
-    const base = info.startWish > today ? info.startWish : addDays(today, 1);
+    const base = info.startWish > today ? info.startWish : firstDateBase(today, now, slots);
     return firstLessonDateOnOrAfter(
       base,
       slots.map((s) => s.weekday)
     );
-  }, [info.startWish, today, slots]);
+  }, [info.startWish, today, now, slots]);
   const firstDate = firstPick && slots.some((s) => s.weekday === weekdayOf(firstPick)) ? firstPick : suggested;
   const check = (start: KstDate) =>
     tutor
@@ -339,6 +339,12 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
             )}
             {tutor && enough && firstDate && (
               <Card title="3. 첫 수업일">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <input type="date" value={firstPick || firstDate} onChange={(e) => setFirstPick(e.target.value)} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]" />
+                  <span className="text-[13px] text-[#6b6880]">{dayLabel(firstDate)}</span>
+                </div>
+                {firstPick && !slots.some((s) => s.weekday === weekdayOf(firstPick)) && <p className="mb-2 text-[13px] text-[#b3261e]">첫 수업일은 정규 요일 중 하나여야 해요. 추천 날짜로 바꿨어요.</p>}
+                {firstDateWarnings(firstDate, today, info.startWish).map((w) => <p key={w} className="mb-1 text-[13px] text-[#9a5b00]">{w}</p>)}
                 <div className="flex flex-wrap gap-1.5">
                   {candidates.map((c) => (
                     <button

@@ -183,7 +183,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   // 정규 요일이 정해졌으면 그 요일 중에서, 강사 미배정(요일 없음)이면 입력한 첫 수업일(희망 시작일)을 그대로 예정일로 (QA-11)
   const firstDate = firstPick && (slots.length === 0 || slots.some((s) => s.weekday === weekdayOf(firstPick))) ? firstPick : suggested;
   const slotErr = tutor ? slotProblem(slots, draft.weeklyCount) : null;
-  // 오늘을 직접 골랐는데 오늘 정규 시각이 이미 지났으면 저장 막음 (DB는 지난 시각을 따로 검사하지 않음)
+  // 오늘을 직접 골랐는데 오늘 정규 시각이 이미 지났으면 안내만 (2026-11-06 대표: 어느 날이든 당일이든 고를 수 있게 — 막지 않음)
   const todayPassed = firstDate === today && slotStarted(today, now, slots);
 
   const plan = useMemo(() => {
@@ -216,7 +216,6 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     ...(paid && plan && plan.issues.length ? [`일정 충돌 ${plan.issues.length}건을 먼저 해결해 주세요`] : []),
     ...payErr,
     ...(!summary ? ['첫 수업일(또는 희망 시작일)을 정해 주세요'] : []),
-    ...(todayPassed ? ['오늘 정규 수업 시각이 이미 지났어요 — 첫 수업일을 다른 날로 골라 주세요'] : []),
   ];
 
   function go(n: number) {
@@ -545,7 +544,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         {row(
           '첫 수업일',
           <span className="flex flex-wrap items-center gap-2">
-            <input type="date" value={firstPick || firstDate || ''} min={today} onChange={(e) => setFirstPick(e.target.value)} className="min-h-[38px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]" />
+            <input type="date" value={firstPick || firstDate || ''} onChange={(e) => setFirstPick(e.target.value)} className="min-h-[38px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]" />
             {firstDate && <span className="text-[13px] text-[#6b6880]">{dayLabel(firstDate)}</span>}
           </span>,
         )}
@@ -564,8 +563,8 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           </div>
         )}
         {firstPick && slots.length > 0 && !slots.some((s) => s.weekday === weekdayOf(firstPick)) && <p className="text-[13px] text-[#b3261e]">첫 수업일은 정규 요일({slots.map((s) => WEEKDAY_KO[s.weekday]).join('·')}) 중 하나여야 해요. 추천 날짜로 바꿨어요.</p>}
-        {todayPassed && <p className="text-[13px] text-[#b3261e]">오늘 정규 수업 시각이 이미 지났어요 — 첫 수업일을 다른 날로 골라 주세요.</p>}
-        {firstDate && !todayPassed && firstDateWarnings(firstDate, today, draft.startWish).map((w) => <p key={w} className="text-[13px] text-[#9a5b00]">{w}</p>)}
+        {todayPassed && <p className="text-[13px] text-[#9a5b00]">오늘 정규 수업 시각이 이미 지났어요 — 그래도 저장할 수 있어요 (첫 수업은 지난 시각으로 기록돼요)</p>}
+        {firstDate && firstDateWarnings(firstDate, today, draft.startWish).map((w) => <p key={w} className="text-[13px] text-[#9a5b00]">{w}</p>)}
         {summary && row('수강 기간', `${dayLabel(summary.startDate)} – ${dayLabel(summary.endDate)} · ${draft.weeks ? termText(draft.weeks) : ''}, 정규 ${summary.lessons}회`)}
         <p className="mt-2 text-[12.5px] text-[#6b6880]">수강 기간은 첫 정규 수업일부터 계산해요 (4주 = 28일, POL-PER-01~03). 재등록은 이 화면이 아니라 학생 화면의 재등록 절차(POL-RN-07)를 따라요.</p>
         {plan && <PlanResult issues={plan.issues} count={plan.lessons.length} />}
