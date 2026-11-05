@@ -7,7 +7,7 @@
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
 ## 📌 기록 방식 (2026-11-03 대표 결정, 정책 원본 H26(45))
-- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(54)**, 다음은 (55)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
+- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(55)**, 다음은 (56)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
 - 10/30~11/3 결정은 H26(38)~(42)에 보충함(11/3), 시간 표기 원칙 (43), 학생 관리 ①~⑦ 전문 (44), 11/3 진행 (45)
 
 ## ✅ 2026-11-04 강사 LMS 개편 + Class Record 출결·지각 (브랜치 claude/upbeat-davinci-e9clnn = lms-test 위, 시험용 DB 적용, 운영 미적용)
@@ -41,6 +41,15 @@
 - 대표 경고: My hours 가 다시 깨지거나 이상하게 보이면 안 됨 → 앞으로 My hours 를 건드리면 **실제 계정 데이터로 PC·휴대폰, 현지/KST, Every week/One week only 캡처를 모두 확인한 뒤** push
 - 검증 뒤 e2e Blair 임시 비밀번호 무효화(파일·스크립트 삭제)
 - 이어서(대표): '바꿀 수 없는' 칸은 닫힘 회색과 헷갈려 **빗금**으로, 이름은 **Can't open**. 표 위에 왜 못 여는지 한 줄: `Striped = can't open: outside 06:00–22:30 [도시] Time (classes can only start in these hours)`(One week only 는 '지난 시간·6시간 안' 추가, 범위는 DB times 목록에서 읽음). 휴대폰 저장 막대 아래로 표가 비치던 틈은 흰 그림자로 막음
+
+## ✅ 2026-11-05 밤: Work 3차 재검증(b16c683) R-20 서버 대조 보강·R-25 사유 우선순위 + R-23·24 추가 검증 (브랜치 claude/kind-maxwell-u4379m = lms-test, 시험용 DB 4540 적용, **운영 미적용**) — 결과 전문 정책 원본 H26(55)
+- **R-20 원인**: 서버에는 저장됐는데 '확인 필요' 가 남음 — 판정(reconcile)이 수업 변경 화면을 다시 열어 자료를 다 읽은 뒤에만 돌았고(몇 초 걸림), Home 띠에서는 판정하지 않았음. 보강: `src/lms/admin/pending-saves-live.ts verifyPending` — 띠(`PendingSavesBanner`)가 '확인 필요·응답 없음' 줄을 바로 서버 기록과 대조(change_requests·lessons·makeup_requests·lesson_notices·admin_credits), 저장 8종 모두 verify 종류 지정(ChangeLive: cancel·revert·confirm/withdraw/void makeup·request_makeup·mark_sent·adjust_credit). 문구: '저장 완료 (서버에서 확인)' / '저장되지 않았어요 (서버에서 확인) — 필요하면 다시 저장해 주세요.' / '확인 필요 — … 서버 기록을 확인하는 중' (조회 자체가 안 될 때만). 띠는 막대 아래 전체 폭(메뉴 안 눌림)
+- **R-20 검증(로컬 앱 + 시험 주소, 되돌리기 저장)**: A 서버 반영·응답만 지연 → 뒤로가기(다른 문서) → Home 띠 '저장 완료 (서버에서 확인)' · B 서버에 닿기 전 끊김 → '저장되지 않았어요 (서버에서 확인)' (DB applied 그대로 → UI 재시도로 복구) · C 조회(change_requests)까지 막힘 → '확인 필요' 유지 → 조회 되자 10초 안에 '저장 완료'. 시험 주소 PC(A)·휴대폰(B) 같음. 중복 방지: 같은 요청 번호 취소 두 번 → repeated(장부 1건), 새 번호 → '이미 처리된 수업', 되돌리기 두 번 → 장부 복구 1건만
+- **migration 4540** `20261105040000_lms_revalidation_fixes_3.sql`(시험용 적용, 커넥터 2묶음): `lms_makeup_conflict`·`lms_sub_conflict` 순서 = 휴무 → 다른 수업(휴식 10분) → 06:00~22:30 → 열지 않은 시간(Availability·Schedule, 막은 시간 포함) → 연속 규칙 · `lms_conflict_message_en` + `tutor_makeup_answer` 거절 문구 사유별('You are on leave at this time.' 등). DB 시험: 휴무+닫힘 → 휴무, 다른 수업+닫힘 → 다른 수업, 강사 화면 why=leave, 운영진 확정 '그 시간은 강사 휴무입니다.' (기존 시험 2곳 기대 문구 갱신: 막은 시간(block)은 '열어 둔 시간이 아닙니다', 강사 답 'another class at this time' / 'not in your open hours')
+- **R-23 운영진 안내문(시험 주소)**: Mia 11/23 학생 확정 안내 1건을 잠시 '보내기 전'으로 → 휴무 화면에서 글 열고 [복사] → 클립보드 = '…확정됐어요… / - 11월 23일(월) 오후 6시 30분 / 수업 링크는 수업 전에 보내 드려요.' (가짜 링크 없음) → [보냄]으로 다시 기록(sent_at 새로 찍힘). 학생 화면 문구는 2차와 같음, 강사 WhatsApp 글은 원래 링크 없음
+- **R-24(시험 DB, REST)**: STU-0003 10/26 원수업(강사 노쇼, 보강 5a99f80b 취소됨)으로 보강 신청 → 거절 '이 수업의 보강이 이미 한 번 잡혔다가 취소됐습니다…', 취소된 보강 수업으로 신청 → '보강을 받을 수 있는 수업이 아닙니다.' 전후 권리 1개(fd4a98ab)·변경권 0 그대로
+- **검증 도구**: vitest 372 · tsc · eslint 경고 3 기존 · test:db 통과 · lms-test = `9498154`, Vercel 시험 배포 새 코드 확인. 시험 데이터: STU-0004 11/24 취소/되돌리기 여러 번(모두 되돌림, 수업 scheduled·변경권 1·2·2), 변경권 +1/−1 원복, e2e 비밀번호 무효화
+- **남은 것**: R-20 은 수업 변경 화면 저장에만(다른 운영진 화면은 같은 방식으로 확장 가능) · 운영 강사 화면 R-25 문구는 DB 시험만(시험 데이터에 휴무 후보 없음) · 급여 마감 등 미구현 그대로
 
 ## ✅ 2026-11-05 저녁: Work 2차 재검증(67fbba0) R-20·R-22~25 수정 + R-06 실제 검증 (브랜치 claude/kind-maxwell-u4379m = lms-test, 시험용 DB 4530 적용, **운영 미적용**) — 결과 전문 정책 원본 H26(54)
 - **보고서 사본** `docs/lms/requests/2026-11-05-work-revalidation-report-2.md` (맨 위 최신 판정: 18건 통과, R-20 재현, R-06 미검증, 신규 R-22~25)
