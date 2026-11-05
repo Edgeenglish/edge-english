@@ -48,6 +48,11 @@
 - 운영 DB 4400 적용으로 `supabase/prod-setup/02-check.sql` 표 52개 기준과 같아짐. 시트 Student Info(4410) 표는 비어 있음 — 운영에 시트 데이터 넣기는 대표가 원할 때 따로
 - 남은 것: 대표 실제 로그인 확인(대시보드·수업 변경 저장 1회). 운영 배포 뒤 추가 수정은 새 세션에서
 
+## ✅ 2026-11-06 새벽 운영 정정: STU-0013 수강 시작일 11/10 → 11/06 (대표 승인, 백업 snapshots id 11, 정책 원본 H26(57))
+- 원인: 신규 등록 화면이 첫 수업일 후보를 항상 '오늘 다음 날'부터 잡음(`src/app/lms/admin/students/new/NewStudent.tsx` 177줄 `addDays(today, 1)`). 새벽 등록이라 당일(11/6 금) 시작을 고를 수 없어 11/10 화로 등록됨. 정규 일정 수정 화면의 적용 시작일 최소값 = 수강 시작일(정상)
+- 정정(SQL 한 트랜잭션, audit_log actor_via `admin_fix_start_date_20261106` 21줄): 수강권 11/06~12/03 · 변경권 기간 1 11/06~12/03 · 정규 일정 effective_from 11/06 · 일정안 start_date 11/06 · 수업 8회 11/06·10·13·17·20·24·27·12/01 13:00 KST (두 단계 이동). registration_requests.result 는 등록 당시 기록이라 그대로(11/10)
+- **대표 결정 대기**: 신규 등록 화면에서 등록 당일 첫 수업 허용할지 (정책 기준표에 당일 시작 금지 규칙 없음). 허용이면 새 세션에서 `NewStudent.tsx` 후보 시작을 오늘로 바꾸고 시험용 검증 뒤 배포 승인
+
 ## ✅ 2026-11-05 밤: Work 3차 재검증(b16c683) R-20 서버 대조 보강·R-25 사유 우선순위 + R-23·24 추가 검증 (브랜치 claude/kind-maxwell-u4379m = lms-test, 시험용 DB 4540 적용, **운영 미적용**) — 결과 전문 정책 원본 H26(55)
 - **R-20 원인**: 서버에는 저장됐는데 '확인 필요' 가 남음 — 판정(reconcile)이 수업 변경 화면을 다시 열어 자료를 다 읽은 뒤에만 돌았고(몇 초 걸림), Home 띠에서는 판정하지 않았음. 보강: `src/lms/admin/pending-saves-live.ts verifyPending` — 띠(`PendingSavesBanner`)가 '확인 필요·응답 없음' 줄을 바로 서버 기록과 대조(change_requests·lessons·makeup_requests·lesson_notices·admin_credits), 저장 8종 모두 verify 종류 지정(ChangeLive: cancel·revert·confirm/withdraw/void makeup·request_makeup·mark_sent·adjust_credit). 문구: '저장 완료 (서버에서 확인)' / '저장되지 않았어요 (서버에서 확인) — 필요하면 다시 저장해 주세요.' / '확인 필요 — … 서버 기록을 확인하는 중' (조회 자체가 안 될 때만). 띠는 막대 아래 전체 폭(메뉴 안 눌림)
 - **R-20 검증(로컬 앱 + 시험 주소, 되돌리기 저장)**: A 서버 반영·응답만 지연 → 뒤로가기(다른 문서) → Home 띠 '저장 완료 (서버에서 확인)' · B 서버에 닿기 전 끊김 → '저장되지 않았어요 (서버에서 확인)' (DB applied 그대로 → UI 재시도로 복구) · C 조회(change_requests)까지 막힘 → '확인 필요' 유지 → 조회 되자 10초 안에 '저장 완료'. 시험 주소 PC(A)·휴대폰(B) 같음. 중복 방지: 같은 요청 번호 취소 두 번 → repeated(장부 1건), 새 번호 → '이미 처리된 수업', 되돌리기 두 번 → 장부 복구 1건만
