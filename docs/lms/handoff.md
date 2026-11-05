@@ -7,7 +7,7 @@
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
 ## 📌 기록 방식 (2026-11-03 대표 결정, 정책 원본 H26(45))
-- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(53)**, 다음은 (54)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
+- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(54)**, 다음은 (55)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
 - 10/30~11/3 결정은 H26(38)~(42)에 보충함(11/3), 시간 표기 원칙 (43), 학생 관리 ①~⑦ 전문 (44), 11/3 진행 (45)
 
 ## ✅ 2026-11-04 강사 LMS 개편 + Class Record 출결·지각 (브랜치 claude/upbeat-davinci-e9clnn = lms-test 위, 시험용 DB 적용, 운영 미적용)
@@ -41,6 +41,16 @@
 - 대표 경고: My hours 가 다시 깨지거나 이상하게 보이면 안 됨 → 앞으로 My hours 를 건드리면 **실제 계정 데이터로 PC·휴대폰, 현지/KST, Every week/One week only 캡처를 모두 확인한 뒤** push
 - 검증 뒤 e2e Blair 임시 비밀번호 무효화(파일·스크립트 삭제)
 - 이어서(대표): '바꿀 수 없는' 칸은 닫힘 회색과 헷갈려 **빗금**으로, 이름은 **Can't open**. 표 위에 왜 못 여는지 한 줄: `Striped = can't open: outside 06:00–22:30 [도시] Time (classes can only start in these hours)`(One week only 는 '지난 시간·6시간 안' 추가, 범위는 DB times 목록에서 읽음). 휴대폰 저장 막대 아래로 표가 비치던 틈은 흰 그림자로 막음
+
+## ✅ 2026-11-05 저녁: Work 2차 재검증(67fbba0) R-20·R-22~25 수정 + R-06 실제 검증 (브랜치 claude/kind-maxwell-u4379m = lms-test, 시험용 DB 4530 적용, **운영 미적용**) — 결과 전문 정책 원본 H26(54)
+- **보고서 사본** `docs/lms/requests/2026-11-05-work-revalidation-report-2.md` (맨 위 최신 판정: 18건 통과, R-20 재현, R-06 미검증, 신규 R-22~25)
+- **migration 4530** `20261105030000_lms_revalidation_fixes_2.sql`(시험용 적용, 커넥터 한 묶음): R-25 `lms_conflict_code`(hours·closed·leave·busy·b2b·other)·`lms_conflict_message`, `admin_makeup_confirm` 거절 문구 사유별(detail=코드), `tutor_screen` slots/covers `why` · R-22 `admin_matching_current` upcoming·past_unrecorded·done_count·next_at(first_at = 첫 수업 전체)
+- **R-20** `src/lms/admin/pending-saves.ts`(localStorage `lms_admin_pending_saves`: trackSave → saving/ok/error/timeout(20초)/unknown(연결 끊김·화면 닫힘), `reconcile` 로 다시 열 때 서버 자료로 판정) + `PendingSavesBanner`(AdminHeader 아래 띠, [열기]·[확인]) + `useSavingGuard` popstate(뒤로가기 확인창, 임시 history 항목) + `ChangeLive` 저장 8종 trackSave 감쌈 + `LessonChange` reload 뒤 reconcileStored. 검증(로컬 앱, 응답 지연 route): PC·휴대폰 뒤로가기 확인창 → 취소=머무름 / 확인=이동 후 Home 띠에 기록, 새로고침 중 저장 → '확인 필요' → 다시 열면 '서버에서 확인: 반영됐어요' / 서버에 안 닿은 요청은 '반영되지 않았어요'. 시험 주소(휴대폰)에서도 확인창·띠 확인
+- **R-22** AssignSchedule 카드 '앞으로 수업 2회 · 다음 수업 11/10 · 첫 수업 10/20' + '끝난 1회 · 지난 5회는 Class Record 기록 전' (PC·휴대폰) · **R-23** StudentHome 휴무 안내 상단(링크 전부/없음/섞임 3문구), `tutor-leave.ts` 학생 확정 안내는 회의실 주소일 때만 링크 아니면 '수업 링크는 수업 전에 보내 드려요.' · **R-24** `lesson-change.ts makeupRights` live 기준 = 보강 수업 voided 아님(취소 포함) → student_screen(QA-13)과 같음, 시험 주소 STU-0003 에 10/26 권리 없음 확인 · **R-25** 강사 화면 `busyText`(closed/busy/leave/hours/b2b), 운영진 확정 오류 '강사가 열어 둔 시간이 아닙니다…' / '다른 수업과 겹칩니다 (앞뒤 휴식 10분 포함)' (DB 시험)
+- **R-06 실제 검증(시험 주소, e2e-admin)**: 처리 내역 권도현 '대조 완료' → 다시 열기(확인창) → checked_at null → 새로고침 → To do 카드 복귀 → 대조 완료 → checked_at·checked_by 새로 기록 → 처리 내역에 다시 보임. (권도현 checked_at 이 11/5 14:17 e2e-admin 으로 바뀜)
+- **추가 회귀**: R-02 재조회만 실패(student_screen route 차단) → '2회 취소는 저장됐지만 화면을 다시 읽지 못했어요' + [다시 읽기] → 복구 뒤 갱신(되돌림) · R-18 다음 수강권 충돌: 시험 DB 트랜잭션(끝에 예외로 전부 되돌림)에서 STU-0003 다음 수강권 12/9 임시 + 12/15 확정 → '다음 수강권 기간과 겹쳐 종료일을 늘릴 수 없습니다' 거절, 남은 행 0 · 권한: Blair 토큰으로 admin_matching_current/notified·admin_import_unmark_checked·admin_task_history·student_screen(타 학생)·tutor_screen(타 강사) 모두 403 42501 · vitest 369 · tsc · eslint 경고 3 기존 · test:db 통과(4530 블록, 기존 '열어 둔 시간이 아님' 기대 문구 보강)
+- **시험 데이터**: STU-0004 변경권 +1/−1·11/17·11/19·11/24 취소 모두 되돌림(잔여 1·2·2, 수업 모두 scheduled, 기록만 남음) · e2e 임시 비밀번호 검증 뒤 무효화
+- **못 한 것**: R-20 은 운영진 수업 변경 화면(저장 8종)에만 — 다른 운영진 화면(휴무·정규 변경 등)의 저장 중 이동은 전처럼 경고 없음(필요하면 같은 trackSave 로 확장) · 급여 마감 등 미구현 그대로 · R-07 가상 데이터 그대로
 
 ## ✅ 2026-11-05 Work 최종 재검증 R-01~21 수정 완료 (브랜치 claude/kind-maxwell-u4379m = vigilant-fermi 위, 시험용 DB 4520 적용, **운영 미적용**) — 결과 전문 정책 원본 H26(53)
 - **migration 4520** `20261105020000_lms_revalidation_fixes.sql`: R-18 `migrated_items_leave_extension` 트리거(lesson_id·tutor_leave·kind 바뀌면 `lms_leave_sync_extension`) + `admin_makeup_confirm` 이관권 연결 뒤 호출 · R-12 `student_screen.credit_periods` · R-16 `lms_hours_cell` 'a'(가능 답 보냄·확정 대기, r 은 답 전만) + `tutor_schedule_save` 문구 · R-15 `admin_regular_change` kept why 'same'(시간순 정렬) · R-09 `lms_leave_overlaps` + `admin_leave_create` overlap(미리 보기)·거절(hint leave_overlap) · R-10 `admin_matching_current`·`admin_matching_notified`(student·tutor_notified_at 둘 다 기록 → done; 일정안 있으면 거절) · R-06 `admin_task_history` ④ checked + `admin_import_unmark_checked` · R-05 `lms_meet_url_ok`(영숫자 xxx-xxxx-xxx 또는 lookup/, authenticated 만) + `admin_leave_student_ok` 검사. 지우는 문장 새로 없음(트리거는 guarded create)
