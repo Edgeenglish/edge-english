@@ -42,6 +42,12 @@
 - 검증 뒤 e2e Blair 임시 비밀번호 무효화(파일·스크립트 삭제)
 - 이어서(대표): '바꿀 수 없는' 칸은 닫힘 회색과 헷갈려 **빗금**으로, 이름은 **Can't open**. 표 위에 왜 못 여는지 한 줄: `Striped = can't open: outside 06:00–22:30 [도시] Time (classes can only start in these hours)`(One week only 는 '지난 시간·6시간 안' 추가, 범위는 DB times 목록에서 읽음). 휴대폰 저장 막대 아래로 표가 비치던 틈은 흰 그림자로 막음
 
+## ✅ 2026-11-05 운영 배포 완료 (대표 승인 · 결과 전문 정책 원본 H26(56))
+- 운영 DB(mfamixejxydodclhglbc): 직전 백업 `lms_backup.snapshots` id 10 → migration 4400·4410·4420·4430·4440·4450·4500·4510·4520·4530·4540 순서대로 커넥터 적용(저장소 파일 내용 그대로, 이름은 저장소 파일 이름). 적용 뒤 표 52·새 함수 18·트리거 4 확인, 백업 표 48개 모두 현재 구조와 맞음(복구 가능)
+- 코드: `lms-prod` 5ac0786 → **25108d2** push → Vercel 운영 새 빌드 확인. 운영 사이트 로그인 화면 PC·휴대폰 정상, 운영자 권한 읽기 전용 함수 호출 정상(학생 12·수업 129 그대로)
+- 운영 DB 4400 적용으로 `supabase/prod-setup/02-check.sql` 표 52개 기준과 같아짐. 시트 Student Info(4410) 표는 비어 있음 — 운영에 시트 데이터 넣기는 대표가 원할 때 따로
+- 남은 것: 대표 실제 로그인 확인(대시보드·수업 변경 저장 1회). 운영 배포 뒤 추가 수정은 새 세션에서
+
 ## ✅ 2026-11-05 밤: Work 3차 재검증(b16c683) R-20 서버 대조 보강·R-25 사유 우선순위 + R-23·24 추가 검증 (브랜치 claude/kind-maxwell-u4379m = lms-test, 시험용 DB 4540 적용, **운영 미적용**) — 결과 전문 정책 원본 H26(55)
 - **R-20 원인**: 서버에는 저장됐는데 '확인 필요' 가 남음 — 판정(reconcile)이 수업 변경 화면을 다시 열어 자료를 다 읽은 뒤에만 돌았고(몇 초 걸림), Home 띠에서는 판정하지 않았음. 보강: `src/lms/admin/pending-saves-live.ts verifyPending` — 띠(`PendingSavesBanner`)가 '확인 필요·응답 없음' 줄을 바로 서버 기록과 대조(change_requests·lessons·makeup_requests·lesson_notices·admin_credits), 저장 8종 모두 verify 종류 지정(ChangeLive: cancel·revert·confirm/withdraw/void makeup·request_makeup·mark_sent·adjust_credit). 문구: '저장 완료 (서버에서 확인)' / '저장되지 않았어요 (서버에서 확인) — 필요하면 다시 저장해 주세요.' / '확인 필요 — … 서버 기록을 확인하는 중' (조회 자체가 안 될 때만). 띠는 막대 아래 전체 폭(메뉴 안 눌림)
 - **R-20 검증(로컬 앱 + 시험 주소, 되돌리기 저장)**: A 서버 반영·응답만 지연 → 뒤로가기(다른 문서) → Home 띠 '저장 완료 (서버에서 확인)' · B 서버에 닿기 전 끊김 → '저장되지 않았어요 (서버에서 확인)' (DB applied 그대로 → UI 재시도로 복구) · C 조회(change_requests)까지 막힘 → '확인 필요' 유지 → 조회 되자 10초 안에 '저장 완료'. 시험 주소 PC(A)·휴대폰(B) 같음. 중복 방지: 같은 요청 번호 취소 두 번 → repeated(장부 1건), 새 번호 → '이미 처리된 수업', 되돌리기 두 번 → 장부 복구 1건만
