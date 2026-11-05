@@ -5,7 +5,7 @@
 // - 이메일이 같아도 기존 학생·계정에 자동 연결하지 않는다 (POL-AC-04). 같은 이메일이 있으면 알려 주기만
 
 import type { AvailabilityWindow, Busy } from '../rules/booking';
-import { diffDays, type KstDate } from '../rules/dates';
+import { addDays, diffDays, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
 import { computePeriods } from '../rules/period';
 import { parseCountryCity, suggestTimezone } from './places';
 import { CONFIRMED, type CourseWeeks } from '../rules/policy';
@@ -165,9 +165,21 @@ export function slotProblem(slots: readonly RegularSlot[], weeklyCount: number |
 export function firstDateWarnings(first: KstDate, today: KstDate, wish: KstDate | ''): string[] {
   const w: string[] = [];
   if (diffDays(today, first) < 0) w.push('첫 수업일이 오늘보다 앞이에요');
+  if (diffDays(today, first) === 0) w.push('첫 수업이 오늘이에요 — 강사·학생에게 바로 안내해 주세요');
   if (wish && diffDays(wish, first) < 0) w.push('학생 희망 시작일보다 빨라요');
   if (wish && diffDays(wish, first) > 14) w.push(`희망 시작일보다 ${diffDays(wish, first)}일 늦어요 — 학생 안내 필요`);
   return w;
+}
+
+/** 그 날짜의 정규 수업 시각이 이미 지났는지 (오늘을 첫 수업일로 잡을 때 검사). 그 요일에 정규 시간이 없으면 false */
+export function slotStarted(date: KstDate, now: Date, slots: readonly RegularSlot[]): boolean {
+  const s = slots.find((x) => x.weekday === weekdayOf(date));
+  return !!s && kstToInstant(date, s.time) <= now;
+}
+
+/** 첫 수업일 후보를 찾기 시작하는 날 — 등록 당일부터 (2026-11-06 대표 결정, 정책 원본 H26(58)). 오늘 정규 시각이 이미 지났으면 내일부터 */
+export function firstDateBase(today: KstDate, now: Date, slots: readonly RegularSlot[]): KstDate {
+  return slotStarted(today, now, slots) ? addDays(today, 1) : today;
 }
 
 /** 저장 요청 1건의 고유 번호. 같은 화면에서 저장을 여러 번 눌러도 이 번호가 같아 DB가 한 번만 만든다 */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { wishText, checkDraft, checkPayment, draftFromForm, EMPTY_DRAFT, EMPTY_PAYMENT, firstDateWarnings, planSummary, slotProblem, type FormResponse } from './registration';
+import { wishText, checkDraft, checkPayment, draftFromForm, EMPTY_DRAFT, EMPTY_PAYMENT, firstDateBase, firstDateWarnings, planSummary, slotProblem, slotStarted, type FormResponse } from './registration';
+import { kstToInstant } from '../rules/dates';
 
 const form: FormResponse = {
   ref: 'r1', submittedAt: '2026-10-15 14:22', nameKo: ' 가상학생 ', nameEn: 'Fake Student', email: 'Fake@Example.com ', phone: '010-0000-0000',
@@ -39,6 +40,17 @@ describe('정규 시간 · 첫 수업일 · 요약', () => {
   it('첫 수업일 경고', () => {
     expect(firstDateWarnings('2026-11-03', '2026-10-18', '2026-11-05')).toEqual(['학생 희망 시작일보다 빨라요']);
     expect(firstDateWarnings('2026-10-10', '2026-10-18', '')).toEqual(['첫 수업일이 오늘보다 앞이에요']);
+    expect(firstDateWarnings('2026-10-18', '2026-10-18', '')).toEqual(['첫 수업이 오늘이에요 — 강사·학생에게 바로 안내해 주세요']);
+  });
+  it('첫 수업일 후보는 등록 당일부터, 오늘 정규 시각이 지났으면 내일부터 (H26(58))', () => {
+    const fri = [{ weekday: 5, time: '13:00' }]; // 2026-11-06 = 금
+    expect(firstDateBase('2026-11-06', kstToInstant('2026-11-06', '01:50'), fri)).toBe('2026-11-06');
+    expect(firstDateBase('2026-11-06', kstToInstant('2026-11-06', '12:59'), fri)).toBe('2026-11-06');
+    expect(firstDateBase('2026-11-06', kstToInstant('2026-11-06', '13:00'), fri)).toBe('2026-11-07');
+    expect(firstDateBase('2026-11-06', kstToInstant('2026-11-06', '23:00'), [{ weekday: 2, time: '09:00' }])).toBe('2026-11-06');
+    expect(firstDateBase('2026-11-06', kstToInstant('2026-11-06', '23:00'), [])).toBe('2026-11-06');
+    expect(slotStarted('2026-11-06', kstToInstant('2026-11-06', '13:01'), fri)).toBe(true);
+    expect(slotStarted('2026-11-07', kstToInstant('2026-11-06', '13:01'), fri)).toBe(false);
   });
 });
 
