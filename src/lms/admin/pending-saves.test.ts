@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reconcile, type PendingSave } from './pending-saves';
+import { reconcile, verifyWith, type PendingSave } from './pending-saves';
 
 const base = (over: Partial<PendingSave>): PendingSave => ({ id: 'x', label: 'l', href: '/lms/admin/change', startedAt: 0, status: 'timeout', verify: { kind: 'none' }, ...over });
 
@@ -25,5 +25,28 @@ describe('저장 중 기록 판정 (R-20)', () => {
   });
   it('자료에 없는 대상은 판정하지 않음', () => {
     expect(reconcile([base({ verify: { kind: 'revert', changeId: 'zzz' } })], data)[0].status).toBe('timeout');
+  });
+});
+
+describe('저장 종류별 서버 대조 (R-20 보강)', () => {
+  const p = (verify: PendingSave['verify'], startedAt = 1000): PendingSave => base({ verify, startedAt, status: 'unknown' });
+  it('보강 신청: 시작 뒤 생긴 열린 신청이 있으면 반영, 없으면 미반영', () => {
+    const req = (requestedAt: number, status = 'requested') => ({ id: 'r', status, sourceLessonId: 'l1', migratedItemId: null, compensationId: null, requestedAt: new Date(requestedAt) });
+    expect(verifyWith(p({ kind: 'request_makeup', lessonId: 'l1' }), { changes: [], lessons: [], requests: [req(2000)] })).toBe(true);
+    expect(verifyWith(p({ kind: 'request_makeup', lessonId: 'l1' }), { changes: [], lessons: [], requests: [req(2000, 'withdrawn')] })).toBe(false);
+    expect(verifyWith(p({ kind: 'request_makeup', lessonId: 'l1' }), { changes: [], lessons: [], requests: [] })).toBe(false);
+    expect(verifyWith(p({ kind: 'request_makeup', compId: 'c1' }), { changes: [], lessons: [], requests: [{ ...req(2000), sourceLessonId: null, compensationId: 'c1' }] })).toBe(true);
+  });
+  it('안내 보냄: 안내 상태가 sent 면 반영, 자료에 없으면 모름', () => {
+    expect(verifyWith(p({ kind: 'mark_sent', noticeId: 'n1' }), { changes: [], lessons: [], requests: [], notices: [{ id: 'n1', status: 'sent' }] })).toBe(true);
+    expect(verifyWith(p({ kind: 'mark_sent', noticeId: 'n1' }), { changes: [], lessons: [], requests: [], notices: [{ id: 'n1', status: 'pending' }] })).toBe(false);
+    expect(verifyWith(p({ kind: 'mark_sent', noticeId: 'n1' }), { changes: [], lessons: [], requests: [] })).toBeNull();
+  });
+  it('변경권 조정: 같은 사유·방향의 조정 기록이 시작 뒤에 있으면 반영 (다른 학생 자료로는 판정 안 함)', () => {
+    const d = { changes: [], lessons: [], requests: [], studentId: 's1', creditUses: [{ reason: 'admin_adjust', note: '사전 안내', at: new Date(5000), delta: 1 }] };
+    expect(verifyWith(p({ kind: 'adjust_credit', studentId: 's1', delta: 1, reason: '사전 안내' }), d)).toBe(true);
+    expect(verifyWith(p({ kind: 'adjust_credit', studentId: 's1', delta: -1, reason: '사전 안내' }), d)).toBe(false);
+    expect(verifyWith(p({ kind: 'adjust_credit', studentId: 's2', delta: 1, reason: '사전 안내' }), d)).toBeNull();
+    expect(verifyWith(p({ kind: 'adjust_credit', studentId: 's1', delta: 1, reason: '사전 안내' }), { ...d, creditUses: undefined })).toBeNull();
   });
 });

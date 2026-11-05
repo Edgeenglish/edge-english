@@ -9,6 +9,11 @@ export type PendingVerify =
   | { kind: 'confirm_makeup'; requestId: string }
   | { kind: 'withdraw_makeup'; requestId: string }
   | { kind: 'void_makeup'; lessonId: string }
+  /** 보강 신청: 어느 권리(원래 수업·시트 보강·보상권)인지 — 시작 뒤 생긴 열린 신청이 있으면 반영 */
+  | { kind: 'request_makeup'; lessonId?: string | null; itemId?: string | null; compId?: string | null }
+  | { kind: 'mark_sent'; noticeId: string }
+  /** 변경권 조정: 같은 사유의 조정 기록이 시작 뒤에 생겼으면 반영 */
+  | { kind: 'adjust_credit'; studentId: string; delta: 1 | -1; reason: string }
   | { kind: 'none' };
 
 export type PendingStatus = 'saving' | 'ok' | 'error' | 'timeout' | 'unknown';
@@ -86,22 +91,48 @@ export function markOrphans(): void {
 export type ReconcileData = {
   changes: { id: string; status: 'applied' | 'reverted' }[];
   lessons: { id: string; state: 'scheduled' | 'canceled' | 'done'; voided: boolean }[];
-  requests: { id: string; status: string }[];
+  requests: { id: string; status: string; sourceLessonId?: string | null; migratedItemId?: string | null; compensationId?: string | null; requestedAt?: Date | null }[];
+  notices?: { id: string; status: string }[];
+  /** 변경권 조정 기록 (admin_credits 의 uses) */
+  creditUses?: { reason: string; note?: string | null; at: Date; delta: number }[];
+  /** 이 자료가 어느 학생 것인지 (변경권 조정 판정에만) */
+  studentId?: string | null;
 };
+export const APPLIED_TEXT = '저장 완료 (서버에서 확인)';
+export const NOT_APPLIED_TEXT = '저장되지 않았어요 (서버에서 확인) — 필요하면 다시 저장해 주세요.';
+/** 한 줄을 서버 자료로 판정: true 반영 · false 미반영 · null 이 자료로는 알 수 없음 */
+export function verifyWith(p: PendingSave, d: ReconcileData): boolean | null {
+  const v = p.verify;
+  if (v.kind === 'revert') { const c = d.changes.find((x) => x.id === v.changeId); return c ? c.status === 'reverted' : null; }
+  if (v.kind === 'cancel') { const l = d.lessons.find((x) => x.id === v.lessonId); return l ? l.state === 'canceled' : null; }
+  if (v.kind === 'confirm_makeup') { const r = d.requests.find((x) => x.id === v.requestId); return r ? r.status === 'confirmed' : null; }
+  if (v.kind === 'withdraw_makeup') { const r = d.requests.find((x) => x.id === v.requestId); return r ? r.status !== 'requested' && r.status !== 'countered' : null; }
+  if (v.kind === 'void_makeup') { const l = d.lessons.find((x) => x.id === v.lessonId); return l ? l.voided : null; }
+  if (v.kind === 'request_makeup') {
+    const mine = d.requests.filter((r) => (v.compId ? r.compensationId === v.compId : v.lessonId ? r.sourceLessonId === v.lessonId : v.itemId ? r.migratedItemId === v.itemId : false));
+    if (mine.length === 0) return false;
+    return mine.some((r) => (r.requestedAt ? +r.requestedAt >= p.startedAt - 60_000 : true) && r.status !== 'withdrawn' && r.status !== 'voided');
+  }
+  if (v.kind === 'mark_sent') { const n = d.notices?.find((x) => x.id === v.noticeId); return n ? n.status === 'sent' : null; }
+  if (v.kind === 'adjust_credit') {
+    if (!d.creditUses || (d.studentId && d.studentId !== v.studentId)) return null;
+    return d.creditUses.some((u) => u.reason === 'admin_adjust' && (u.note ?? '') === v.reason && u.delta === v.delta && +u.at >= p.startedAt - 60_000);
+  }
+  return null;
+}
 export function reconcile(list: PendingSave[], d: ReconcileData): PendingSave[] {
   const now = Date.now();
   return list.map((p) => {
     if (p.status !== 'timeout' && p.status !== 'unknown') return p;
-    const v = p.verify;
-    let ok: boolean | null = null;
-    if (v.kind === 'revert') { const c = d.changes.find((x) => x.id === v.changeId); ok = c ? c.status === 'reverted' : null; }
-    else if (v.kind === 'cancel') { const l = d.lessons.find((x) => x.id === v.lessonId); ok = l ? l.state === 'canceled' : null; }
-    else if (v.kind === 'confirm_makeup') { const r = d.requests.find((x) => x.id === v.requestId); ok = r ? r.status === 'confirmed' : null; }
-    else if (v.kind === 'withdraw_makeup') { const r = d.requests.find((x) => x.id === v.requestId); ok = r ? r.status !== 'requested' && r.status !== 'countered' : null; }
-    else if (v.kind === 'void_makeup') { const l = d.lessons.find((x) => x.id === v.lessonId); ok = l ? l.voided : null; }
+    const ok = verifyWith(p, d);
     if (ok === null) return p;
-    return ok ? { ...p, status: 'ok', endedAt: now, message: '서버에서 확인: 반영됐어요.' } : { ...p, status: 'error', endedAt: now, message: '서버에서 확인: 반영되지 않았어요. 다시 저장해 주세요.' };
+    return ok ? { ...p, status: 'ok', endedAt: now, message: APPLIED_TEXT } : { ...p, status: 'error', endedAt: now, message: NOT_APPLIED_TEXT };
   });
+}
+/** 띠에서 바로 판정한 결과를 기록 (verifyPending 결과) */
+export function settlePending(id: string, ok: boolean | null) {
+  if (ok === null) return;
+  updatePending(id, ok ? { status: 'ok', endedAt: Date.now(), message: APPLIED_TEXT } : { status: 'error', endedAt: Date.now(), message: NOT_APPLIED_TEXT });
 }
 export function reconcileStored(d: ReconcileData) {
   const list = listPending();
@@ -111,8 +142,8 @@ export function reconcileStored(d: ReconcileData) {
 
 export const PENDING_STATUS_TEXT: Record<PendingStatus, string> = {
   saving: '저장 중… 끝나면 여기에 결과가 보여요.',
-  ok: '완료됐어요.',
-  error: '실패했어요.',
-  timeout: '20초 동안 응답이 없어요. [열기]에서 다시 읽으면 서버 결과로 판정해요.',
-  unknown: '결과를 받지 못했어요(화면 이동·연결 끊김). 서버에는 저장됐을 수 있어요 — [열기]에서 다시 읽으면 판정해요.',
+  ok: '저장 완료',
+  error: '저장되지 않았어요.',
+  timeout: '확인 필요 — 20초 동안 응답이 없어요. 서버 기록을 확인하는 중이에요.',
+  unknown: '확인 필요 — 결과를 받지 못했어요(화면 이동·연결 끊김). 서버 기록을 확인하는 중이에요.',
 };

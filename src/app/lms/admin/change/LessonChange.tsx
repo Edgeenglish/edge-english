@@ -89,8 +89,19 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
       const d = await actions.load(student.id);
       setData(d);
       // 응답 없던·화면이 닫혔던 저장을 서버 자료로 판정 (R-20)
-      reconcileStored({ changes: d.changes.map((c) => ({ id: c.id, status: c.status })), lessons: d.lessons.map((l) => ({ id: l.id, state: l.state, voided: l.voided })), requests: d.makeupRequests.map((r) => ({ id: r.id, status: r.status })) });
-      if (actions.loadCredits) setCredits(await actions.loadCredits(student.id).catch(() => null));
+      const base = {
+        changes: d.changes.map((c) => ({ id: c.id, status: c.status })),
+        lessons: d.lessons.map((l) => ({ id: l.id, state: l.state, voided: l.voided })),
+        requests: d.makeupRequests.map((r) => ({ id: r.id, status: r.status, sourceLessonId: r.sourceLessonId, migratedItemId: r.migratedItemId, compensationId: r.compensationId, requestedAt: null })),
+        notices: d.notices.map((n) => ({ id: n.id, status: n.status })),
+        studentId: student.id,
+      };
+      reconcileStored(base);
+      if (actions.loadCredits) {
+        const cr = await actions.loadCredits(student.id).catch(() => null);
+        setCredits(cr);
+        if (cr) reconcileStored({ ...base, creditUses: cr.uses.map((u) => ({ reason: u.reason, note: u.note, at: u.at, delta: u.delta })) });
+      }
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : '불러오지 못했어요.');
     }
