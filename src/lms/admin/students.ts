@@ -260,6 +260,7 @@ export function problemText(p: RegularPreview['problems'][number], tutor: { name
 }
 export const KEPT_WHY: Record<string, string> = {
   before_from: '적용 전 수업 그대로', substitute: '대체 수업 그대로', makeup: '보강 확정 그대로', compensation: '보상 수업 그대로', leave_open: '강사 휴무 처리 중 그대로', other: '그대로',
+  same: '요일·시각 그대로 (바뀌지 않음)',
 };
 
 /** 수업 종류 한국어 */

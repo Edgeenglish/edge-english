@@ -10,19 +10,26 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import books from '@/data/books.json';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
-import { diffDays, formatInZone, hoursBetween, type KstDate } from '@/lms/rules/dates';
+import { diffDays, formatInZone, hoursBetween, instantToKstDate, type KstDate } from '@/lms/rules/dates';
+import { MEET_MISSING_KO, meetRoomUrl } from '@/lms/rules/meet';
 import type { PreviewExtras } from '@/lms/student/fake-data';
 import type { LeaveRow, MakeupOption, MakeupRight, Reminders, StudentActions, StudentView } from '@/lms/student/live';
 import {
+  cancelManySummary,
   cancelPreview,
+  creditPeriodFor,
+  creditsForDate,
   lessonsLeft,
   nextLesson,
   PAYMENT_METHOD_LABEL,
   pointsHistory,
   regularLessonsLeft,
+  planCancelMany,
   renewalPrompt,
   REQUEST_STATUS_LABEL,
   studentTodos,
+  type CancelResult,
+  type CreditPeriod,
   type PaymentSummary,
   type RenewalState,
   type RequestStatus,
@@ -199,6 +206,10 @@ export default function StudentHome(props: {
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reminders, setReminders] = useState<Reminders | null>(null);
+  /** 저장은 됐는데 화면을 다시 읽지 못함 (R-02) → 위에 안내 + [다시 읽기] */
+  const [stale, setStale] = useState<string | null>(null);
+  /** 여러 수업 취소가 중간에 멈춤 → 남은 수업만 다시 고른 상태로 창 유지 (R-02) */
+  const [retry, setRetry] = useState<{ ids: string[]; notice: string } | null>(null);
 
   const lessons = s.lessons;
   // 강사 휴무로 못 들은 수업도 학생 화면에서는 '보강' (2026-10-28 대표). DB 구분(lms_is_leave_postponed)은 그대로
@@ -271,27 +282,58 @@ export default function StudentHome(props: {
     const right = v.makeupRights.find((m) => m.lessonId === lesson.id && !m.requested);
     setOverlay(allowed && right ? { kind: 'makeup', right, canceled: true } : null);
   }
-  /** 여러 수업 한 번에 취소 (추가 요청 2): 시간순으로 하나씩 DB 판정 — 미리 보기(변경권 차례대로 차감)와 같은 순서. 하나가 실패하면 거기서 멈추고 그때까지 결과를 알림 */
+  /**
+   * 여러 수업 한 번에 취소 (추가 요청 2): 시간순으로 하나씩 DB 판정 — 미리 보기(기간별 변경권 차례 차감)와 같은 순서.
+   * 하나가 실패하면 거기서 멈추되(R-02) 그때까지 저장된 결과를 반드시 다시 읽고, 성공·실패를 나눠 알리고, 남은 수업만 다시 고른 상태로 창을 둔다.
+   * 완료 문구는 예상치가 아니라 저장 결과로 (R-01)
+   */
   async function confirmCancelMany(ls: StudentLesson[]) {
     const sorted = [...ls].sort((a, b) => +a.startsAt - +b.startsAt);
-    let done = 0;
-    let credits = 0;
-    let makeups = 0;
-    const v = await run(async () => {
-      try {
-        for (const l of sorted) {
-          const r = await actions.cancel(l.id);
-          done += 1;
-          if (r.uses_credit) credits += 1;
-          if (r.makeup_allowed) makeups += 1;
+    const done: { lesson: StudentLesson; r: CancelResult }[] = [];
+    let failed: { lesson: StudentLesson; message: string } | null = null;
+    setBusy(true);
+    setRetry(null);
+    try {
+      for (const l of sorted) {
+        try {
+          done.push({ lesson: l, r: await actions.cancel(l.id) });
+        } catch (e) {
+          failed = { lesson: l, message: e instanceof Error ? e.message : '오류' };
+          break;
         }
-      } catch (e) {
-        if (done === 0) throw e;
-        throw new Error(`${done}회 취소한 뒤 멈췄어요: ${e instanceof Error ? e.message : '오류'}`);
       }
-    }, `수업 ${sorted.length}회를 취소했어요 · 변경권 ${credits}개 사용${makeups ? ` · 보강 ${makeups}회는 ‘보강 신청’에서 날짜를 골라 주세요` : ''}`);
-    if (!v) return;
-    setOverlay(null);
+      // 저장된 것이 있으면(또는 실패했어도) 서버 상태를 다시 읽음 — 재조회가 실패하면 성공으로 보이지 않게 안내 + [다시 읽기]
+      let v: StudentView | null = null;
+      try {
+        v = await actions.reload();
+        setView(v);
+        setStale(null);
+      } catch {
+        setStale(`${done.length}회 취소는 저장됐지만 화면을 다시 읽지 못했어요. [다시 읽기]를 눌러 확인해 주세요.`);
+      }
+      const remaining = v
+        ? [...new Map(done.map((d) => { const p = creditPeriodFor(v!.creditPeriods, instantToKstDate(d.lesson.startsAt)); return [p?.start ?? '', { start: p?.start ?? null, left: p ? p.left : v!.creditsLeft }] as const; })).values()]
+        : [];
+      const summary = done.length > 0 ? cancelManySummary(done.map((d) => d.r), remaining) : '';
+      if (!failed) {
+        say(summary);
+        setOverlay(null);
+        return;
+      }
+      const rest = sorted.slice(sorted.findIndex((l) => l.id === failed!.lesson.id));
+      const restLeft = v ? rest.filter((l) => v!.lessons.some((x) => x.id === l.id && x.state === 'scheduled')) : rest;
+      const notice = `${done.length > 0 ? `${done.length}회는 취소했어요. ` : ''}${whenText(failed.lesson.startsAt)} 수업은 취소하지 못했어요: ${failed.message}${restLeft.length > 0 ? ` 아래 ${restLeft.length}회는 처리되지 않았어요. 다시 취소하려면 선택을 확인하고 버튼을 눌러 주세요.` : ''}`;
+      // 남은 수업이 그새 다른 경로로 처리돼 다시 할 것이 없으면, 성공 요약 뒤에 그 사실만 덧붙임
+      setToast(done.length > 0 ? (restLeft.length > 0 ? summary : `${summary} · ${whenText(failed.lesson.startsAt)} 수업은 ${failed.message}`) : notice);
+      if (restLeft.length > 0) {
+        setRetry({ ids: restLeft.map((l) => l.id), notice });
+        setOverlay({ kind: 'cancel', lessonId: null });
+      } else {
+        setOverlay(null);
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function answerLeave(answer: 'ok' | 'makeup') {
@@ -303,7 +345,7 @@ export default function StudentHome(props: {
   }
 
   const nextFull = next && s.lessons.find((l) => l.id === next.id);
-  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.leaveOpen ? null : nextFull?.meetUrl ?? null} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
+  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -425,7 +467,8 @@ export default function StudentHome(props: {
   const canceledAhead = lessons.filter((l) => l.state === 'canceled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   const leaveVisible = s.leave.length > 0;
   // 휴무 처리 확정 전 수업(일정 조율 중)은 입장 링크 없음 — 휴무 강사 링크로 들어가지 않게
-  const meetOf = (id: string) => { const x = s.lessons.find((l) => l.id === id); return x && !x.leaveOpen ? x.meetUrl : null; };
+  // 수업 링크는 회의실 주소(meet.google.com/xxx-xxxx-xxx)일 때만 (R-05) — 홈페이지 주소는 링크로 내보내지 않음
+  const meetOf = (id: string) => { const x = s.lessons.find((l) => l.id === id); return x && !x.leaveOpen ? meetRoomUrl(x.meetUrl) : null; };
   // 강사마다 수업 링크가 다름 → 앞으로 수업하는 강사별로 (대체강사 포함)
   const meetLinks = [...new Map(upcoming.map((l) => [l.tutorName, meetOf(l.id)] as const).filter(([, u]) => u)).entries()];
 
@@ -724,6 +767,9 @@ export default function StudentHome(props: {
               onPick={(id) => setOverlay({ kind: 'cancel', lessonId: id })}
               now={now}
               creditsLeft={s.creditsLeft}
+              creditPeriods={s.creditPeriods}
+              initialMany={retry?.ids}
+              notice={retry?.notice ?? null}
               finalEndDate={s.finalEndDate}
               makeupUntil={s.finalEndDate}
               holidays={holidays}
@@ -732,13 +778,14 @@ export default function StudentHome(props: {
               busy={busy}
               onConfirm={confirmCancel}
               onConfirmMany={confirmCancelMany}
-              onClose={() => setOverlay(null)}
+              onClose={() => { setRetry(null); setOverlay(null); }}
             />
           )}
           {overlay.kind === 'leave' && (
             <LeaveSheet
               rows={s.leave}
               rights={s.makeupRights}
+              requests={s.requests}
               busy={busy}
               onProfile={(name) => setOverlay({ kind: 'profile', name })}
               onAnswer={answerLeave}
@@ -775,6 +822,13 @@ export default function StudentHome(props: {
         </Sheet>
       )}
 
+      {stale && (
+        <div role="alert" className="fixed inset-x-4 top-4 z-30 mx-auto max-w-md rounded-[12px] border border-[#f3c2bb] bg-[#fff1ef] px-4 py-3 shadow-lg lg:bottom-24 lg:top-auto">
+          <p className="text-[13.5px] text-[#7a1d12]">{stale}</p>
+          <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { setView(await actions.reload()); setStale(null); say('다시 읽었어요.'); } catch { setToast('아직 읽지 못했어요. 잠시 뒤 다시 눌러 주세요.'); } finally { setBusy(false); } }}
+            className="mt-1.5 min-h-[40px] rounded-[10px] bg-[#b3261e] px-3 text-[13.5px] font-bold text-white disabled:opacity-40">다시 읽기</button>
+        </div>
+      )}
       {toast && (
         <div role="status" className="fixed inset-x-4 top-4 z-30 mx-auto max-w-md lg:bottom-6 lg:top-auto rounded-[12px] bg-[#1d1b2b] px-4 py-3 shadow-lg">
           <p className="text-[13.5px] text-white">{toast}</p>
@@ -802,6 +856,8 @@ function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () =>
 function LeaveSheet(props: {
   rows: LeaveRow[];
   rights: MakeupRight[];
+  /** 보강 신청 내역 — 신청한 보강의 상태를 신청 내역과 같게 (R-17) */
+  requests?: StudentRequest[];
   busy: boolean;
   onProfile: (name: string) => void;
   onAnswer: (a: 'ok' | 'makeup') => void;
@@ -838,10 +894,12 @@ function LeaveSheet(props: {
               {x.stage === 'confirmed' ? (
                 <span className="grid justify-items-end gap-1">
                   <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">확정 ✓</span>
-                  {x.subMeetUrl && (
-                    <a href={x.subMeetUrl} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-[#4b2fd6] underline">
+                  {meetRoomUrl(x.subMeetUrl) ? (
+                    <a href={meetRoomUrl(x.subMeetUrl)!} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-[#4b2fd6] underline">
                       {x.subTutor} 강사님 수업 링크
                     </a>
+                  ) : (
+                    <span className="text-right text-[12px] text-[#55526a]">{MEET_MISSING_KO}</span>
                   )}
                 </span>
               ) : (
@@ -873,9 +931,12 @@ function LeaveSheet(props: {
                 <span className="text-[15px] font-semibold">{whenText(x.startsAt)}</span>
                 {!r ? (
                   <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">보강 확정 ✓</span>
-                ) : r.requested ? (
-                  <span className="rounded-full bg-[#fff1d6] px-2.5 py-1 text-[12px] font-semibold text-[#8a5300]">신청함 · 강사 확인 중</span>
-                ) : (
+                ) : r.requested ? (() => {
+                  // 신청 내역의 같은 신청과 같은 상태로 (R-17: 전부 불가 → '다른 일정 조율 중', 강사 답 뒤 → '최종 확정 대기')
+                  const q = (props.requests ?? []).find((x) => x.kind === 'makeup' && !x.compId && ((r.lessonId && x.lessonId === r.lessonId) || (r.itemId && x.itemId === r.itemId)) && (x.status === 'tutor_reviewing' || x.status === 'admin_reviewing' || x.status === 'rescheduling'));
+                  const st: RequestStatus = q?.status ?? 'tutor_reviewing';
+                  return <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${STATUS_STYLE[st]}`}>신청함 · {REQUEST_STATUS_LABEL[st]}</span>;
+                })() : (
                   <button type="button" onClick={() => props.onMakeup(r)} className="min-h-[40px] rounded-[10px] bg-[#5b3df0] px-3 text-[13px] font-bold text-white">
                     보강 날짜 고르기
                   </button>
@@ -1234,7 +1295,7 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
           {r.kind !== 'makeup' ? r.note
             : r.status === 'confirmed' && r.confirmedAt ? `${whenText(r.confirmedAt)} 확정`
             : r.status === 'canceled' && r.confirmedAt ? `${whenText(r.confirmedAt)} 보강 수업 취소됨`
-            : r.status === 'rescheduling' ? '강사님이 다른 일정을 요청했어요'
+            : r.status === 'rescheduling' ? '강사님이 신청한 시간에는 어렵다고 답했어요'
             : `고른 날짜 ${r.candidates.length}개`}
         </span>
       </span>
@@ -1467,7 +1528,13 @@ function CancelSheet(props: {
   lessonId: string | null;
   onPick: (id: string) => void;
   now: Date;
+  /** 지금 기간 변경권 (기간 목록이 없는 옛 DB 용) */
   creditsLeft: number;
+  /** 모든 기간의 변경권 — 수업 날짜가 속한 기간으로 판정 (R-12) */
+  creditPeriods?: CreditPeriod[];
+  /** 중간에 멈춘 뒤 다시 고른 상태로 열 때 (R-02): 남은 수업 id + 안내 */
+  initialMany?: string[];
+  notice?: string | null;
   finalEndDate: KstDate;
   /** 보강 기한 = 수강 종료일 */
   makeupUntil: KstDate;
@@ -1481,23 +1548,20 @@ function CancelSheet(props: {
   onClose: () => void;
 }) {
   const [checked, setChecked] = useState(false);
-  const [many, setMany] = useState<Set<string>>(new Set());
+  const [many, setMany] = useState<Set<string>>(() => new Set(props.initialMany ?? []));
   const [manyChecked, setManyChecked] = useState(false);
   const lesson = props.lessons.find((l) => l.id === props.lessonId);
+  const periods = props.creditPeriods ?? [];
+  /** 그 수업 날짜가 속한 기간의 변경권 (R-12) */
+  const creditsOf = (l: StudentLesson) => creditsForDate(periods, instantToKstDate(l.startsAt), props.creditsLeft);
+  const periodText = (l: StudentLesson) => { const p = creditPeriodFor(periods, instantToKstDate(l.startsAt)); return p ? `${fmtDate(p.start)}~${fmtDate(p.end)} 기간` : null; };
 
   if (!lesson) {
-    // 여러 수업 고르기: 시간순으로 변경권을 차례로 차감해 미리 계산 (DB 도 같은 순서로 처리)
-    const picked = props.lessons.filter((l) => many.has(l.id)).sort((a, b) => +a.startsAt - +b.startsAt);
-    let credits = props.creditsLeft;
-    const plan = picked.map((l) => {
-      const d = cancelPreview({ lesson: l, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: credits, holidays: props.holidays }, null);
-      if (d.ok && d.usesCredit) credits -= 1;
-      return { l, d };
-    });
-    const uses = plan.filter((x) => x.d.ok && x.d.usesCredit).length;
-    const consumes = plan.filter((x) => x.d.ok && x.d.consumesLesson).length;
-    const makeups = plan.filter((x) => x.d.ok && x.d.makeupAllowed).length;
-    const bad = plan.filter((x) => !x.d.ok);
+    // 여러 수업 고르기: 시간순으로, 각 수업이 속한 기간의 변경권을 차례로 차감해 미리 계산 (DB 도 같은 순서·같은 기간 규칙, R-12)
+    const picked = props.lessons.filter((l) => many.has(l.id));
+    const plan = planCancelMany(picked, { now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, creditPeriods: periods, holidays: props.holidays });
+    const { uses, consumes, makeups } = plan;
+    const bad = plan.items.filter((x) => !x.decision.ok);
     const toggleMany = (id: string) => setMany((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
     return (
       <div className="grid gap-3">
@@ -1519,11 +1583,16 @@ function CancelSheet(props: {
             </div>
           );
         })}
+        {props.notice && <p className="rounded-[12px] border border-[#f3c2bb] bg-[#fff1ef] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#7a1d12]">{props.notice}</p>}
         {picked.length > 0 && props.onConfirmMany && (
           <section className={`${card} sticky bottom-0 z-10 grid gap-2 p-3.5 shadow-[0_-6px_16px_rgba(27,20,66,0.12)]`}>
-            <p className="text-[15px] font-bold">선택한 수업 {picked.length}회 · 변경권 {uses}개 사용 · 잔여 {Math.max(props.creditsLeft - uses, 0)}개</p>
+            <p className="text-[15px] font-bold">선택한 수업 {picked.length}회 · 변경권 {uses}개 사용</p>
+            {/* 기간별 잔여 (R-12): 수업이 속한 기간마다 차감 전 → 후 */}
+            <p className="text-[12.5px] text-[#55526a]">
+              {plan.periods.map((p) => `${p.start && p.end ? `${fmtDate(p.start)}~${fmtDate(p.end)} 기간 ` : ''}변경권 ${p.before}개 → ${p.after}개`).join(' · ')}
+            </p>
             <ul className="grid gap-1 text-[13px] text-[#1d1b2b]">
-              {plan.map(({ l, d }) => (
+              {plan.items.map(({ lesson: l, decision: d }) => (
                 <li key={l.id} className="flex justify-between gap-2">
                   <span>{whenText(l.startsAt)}</span>
                   <b className={d.ok && d.consumesLesson ? 'text-[#b3261e]' : ''}>
@@ -1533,7 +1602,8 @@ function CancelSheet(props: {
                 </li>
               ))}
             </ul>
-            <p className="text-[12.5px] text-[#55526a]">취소 뒤 남은 수업 {props.totalLeft}회 → {props.totalLeft - consumes}회{makeups ? ` (보강 ${makeups}회 포함)` : ''}. 보강 날짜는 취소 뒤 ‘보강 신청’에서 골라 주세요.</p>
+            {/* R-04: 보강 권리가 생기는 수업이 있을 때만 보강 신청 안내 */}
+            <p className="text-[12.5px] text-[#55526a]">취소 뒤 남은 수업 {props.totalLeft}회 → {props.totalLeft - consumes}회{makeups ? ` (보강 ${makeups}회 포함). 보강 날짜는 취소 뒤 ‘보강 신청’에서 골라 주세요.` : '.'}</p>
             {consumes > 0 && (
               <label className="flex min-h-[44px] items-start gap-2.5 text-[14px] leading-normal">
                 <input type="checkbox" checked={manyChecked} onChange={(e) => setManyChecked(e.target.checked)} className="mt-0.5 h-5 w-5 accent-[#b3261e]" />
@@ -1551,7 +1621,9 @@ function CancelSheet(props: {
     );
   }
 
-  const d = cancelPreview({ lesson, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, holidays: props.holidays }, null);
+  const creditsNow = creditsOf(lesson);   // 그 수업 날짜가 속한 기간의 변경권 (R-12)
+  const pText = periodText(lesson);
+  const d = cancelPreview({ lesson, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: creditsNow, holidays: props.holidays }, null);
   const title = `${whenText(lesson.startsAt)} 수업을 취소할까요?`;
 
   if (!d.ok) {
@@ -1571,7 +1643,7 @@ function CancelSheet(props: {
   const rows: [string, string][] = [
     ['수업 횟수', d.consumesLesson ? `1회 차감 (남은 ${props.totalLeft}회 → ${props.totalLeft - 1}회)` : '차감 안 됨'],
     ['보강', d.makeupAllowed ? `수강기간(~${endText(props.makeupUntil)}) 안에 보강 가능` : '불가'],
-    ['변경권', d.usesCredit ? `1개 사용 (${props.creditsLeft}개 → ${props.creditsLeft - 1}개)` : `사용 안 함 (${props.creditsLeft}개 그대로)`],
+    ['변경권', `${d.usesCredit ? `1개 사용 (${creditsNow}개 → ${creditsNow - 1}개)` : `사용 안 함 (${creditsNow}개 그대로)`}${pText ? ` · ${pText}` : ''}`],
   ];
 
   return (

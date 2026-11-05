@@ -133,3 +133,41 @@ export async function proposeSchedule(
   });
   return { planId: r.plan_id, state: r.state, tutorNoticeId: r.tutor_notice_id ?? null, studentNoticeId: r.student_notice_id ?? null };
 }
+
+/** 기존 배정이 있는 신규 매칭 (R-10, 4520): 일정안 없이 강사·정규 수업이 이미 있는 등록의 지금 배정 */
+export type MatchingCurrent = {
+  task: { id: string; status: 'open' | 'done' | 'canceled'; tutorAssignedAt: Date | null; studentNotifiedAt: Date | null } | null;
+  plan: { id: string; state: 'proposed' | 'confirmed' } | null;
+  tutor: { id: string; name: string; timezone: string } | null;
+  slots: RegularSlot[];
+  scheduled: number;
+  firstAt: Date | null;
+  startDate: string;
+  finalEndDate: string;
+  durationMin: number;
+  weeklyCount: number;
+  lessonsTotal: number;
+};
+export async function loadMatchingCurrent(sb: SupabaseClient, enrollmentId: string): Promise<MatchingCurrent | null> {
+  const { data, error } = await sb.rpc('admin_matching_current', { p_enrollment: enrollmentId });
+  if (error) return null;   // 4520 전 DB 면 함수가 없음 → 기존 흐름(새 배정)으로
+  const r = data as {
+    task: { id: string; status: 'open' | 'done' | 'canceled'; tutor_assigned_at: string | null; student_notified_at: string | null } | null;
+    plan: { id: string; state: 'proposed' | 'confirmed' } | null;
+    tutor: { id: string; name: string; timezone: string } | null;
+    slots: { weekday: number; time: string }[]; scheduled: number; first_at: string | null;
+    start_date: string; final_end_date: string; duration_min: number; weekly_count: number; lessons_total: number;
+  };
+  return {
+    task: r.task ? { id: r.task.id, status: r.task.status, tutorAssignedAt: r.task.tutor_assigned_at ? new Date(r.task.tutor_assigned_at) : null, studentNotifiedAt: r.task.student_notified_at ? new Date(r.task.student_notified_at) : null } : null,
+    plan: r.plan,
+    tutor: r.tutor,
+    slots: (r.slots ?? []).map((s) => ({ weekday: s.weekday, time: s.time })),
+    scheduled: r.scheduled,
+    firstAt: r.first_at ? new Date(r.first_at) : null,
+    startDate: r.start_date, finalEndDate: r.final_end_date, durationMin: r.duration_min, weeklyCount: r.weekly_count, lessonsTotal: r.lessons_total,
+  };
+}
+/** '수업 컨펌 완료' 기록 (R-10): 지금 배정을 강사·학생에게 확인했음 → 신규 매칭 업무 완료 */
+export const markMatchingNotified = (sb: SupabaseClient, enrollmentId: string) =>
+  call<{ task_id: string; repeated: boolean; student_notified_at: string }>(sb, 'admin_matching_notified', { p_enrollment: enrollmentId });

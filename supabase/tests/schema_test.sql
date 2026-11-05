@@ -1258,10 +1258,10 @@ insert into lv values (current_date + 10);
 grant select on lv to authenticated;
 create or replace function pg_temp.kst(days int, hhmm text) returns timestamptz language sql as $$
   select ((select d0 from lv) + days + hhmm::time) at time zone 'Asia/Seoul' $$;
-insert into tutors (id, name, country, timezone) values
-  ('55555555-0000-0000-0000-00000000180a', '휴무A', 'Korea', 'Asia/Seoul'),
-  ('55555555-0000-0000-0000-00000000180b', '휴무B', 'Korea', 'Asia/Seoul'),
-  ('55555555-0000-0000-0000-00000000180c', '휴무C', 'Korea', 'Asia/Seoul');
+insert into tutors (id, name, country, timezone, meet_url) values   -- 대체강사 확정에는 Meet 회의실 링크가 필요 (R-05, 4520)
+  ('55555555-0000-0000-0000-00000000180a', '휴무A', 'Korea', 'Asia/Seoul', 'https://meet.google.com/aaa-bbbb-ccc'),
+  ('55555555-0000-0000-0000-00000000180b', '휴무B', 'Korea', 'Asia/Seoul', 'https://meet.google.com/bbb-cccc-ddd'),
+  ('55555555-0000-0000-0000-00000000180c', '휴무C', 'Korea', 'Asia/Seoul', 'https://meet.google.com/ccc-dddd-eee');
 select pg_temp.open_all('55555555-0000-0000-0000-00000000180a');
 select pg_temp.open_all('55555555-0000-0000-0000-00000000180b');
 select pg_temp.open_all('55555555-0000-0000-0000-00000000180c');
@@ -2534,8 +2534,8 @@ reset role;
 create temp table wd (d0 date);
 insert into wd values (current_date + 12);
 grant select on wd to authenticated;
-insert into tutors (id, name, country, timezone) values
-  ('55555555-0000-0000-0000-00000000451a', '철회A', 'Korea', 'Asia/Seoul'), ('55555555-0000-0000-0000-00000000451b', '철회B', 'Korea', 'Asia/Seoul');
+insert into tutors (id, name, country, timezone, meet_url) values
+  ('55555555-0000-0000-0000-00000000451a', '철회A', 'Korea', 'Asia/Seoul', 'https://meet.google.com/waa-aaaa-aaa'), ('55555555-0000-0000-0000-00000000451b', '철회B', 'Korea', 'Asia/Seoul', 'https://meet.google.com/wbb-bbbb-bbb');
 select pg_temp.open_all('55555555-0000-0000-0000-00000000451a');
 select pg_temp.open_all('55555555-0000-0000-0000-00000000451b');
 insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000004510', '철회학생', 'Withdraw S');
@@ -2606,5 +2606,211 @@ select pg_temp.ok((select r -> 'blockers' ->> 0 like '%이미 시작%' from admi
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004500';   -- 강사
 select pg_temp.expect_error($$select admin_leave_withdraw((select id from woff2), 'x', true)$$, '운영자|42501');
 select pg_temp.ok(true, 'QA-17: 휴무 철회는 운영진만 (4510)');
+reset request.jwt.claim.sub;
+reset role;
+
+-- ---------- 4520 Work 최종 재검증(11/5) R-01~21 DB 수정 ----------
+-- 강사 재검A(452a, 서울)·재검B(452b, 대체, Meet 링크 없음), 학생 재검1(4520: 이관 휴무 보강·보강 답)·재검2(4521: 정규 변경·기존 배정 컨펌)
+-- d0 = 2주 뒤 이후 첫 월요일 (한국 날짜)
+reset request.jwt.claim.sub;
+reset role;
+create temp table rd (d0 date);
+insert into rd select (current_date + 14) + ((8 - extract(dow from current_date + 14)::int) % 7);
+grant select on rd to authenticated;
+create or replace function pg_temp.rk(days int, hhmm text) returns timestamptz language sql as $$
+  select ((select d0 from rd) + days + hhmm::time) at time zone 'Asia/Seoul' $$;
+insert into tutors (id, name, country, timezone) values
+  ('55555555-0000-0000-0000-00000000452a', '재검A', 'Korea', 'Asia/Seoul'), ('55555555-0000-0000-0000-00000000452b', '재검B', 'Korea', 'Asia/Seoul');
+select pg_temp.open_all('55555555-0000-0000-0000-00000000452a');
+select pg_temp.open_all('55555555-0000-0000-0000-00000000452b');
+insert into app_users (auth_user_id, role, tutor_id) values ('bbbbbbbb-0000-0000-0000-000000004520', 'tutor', '55555555-0000-0000-0000-00000000452a');
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000004520', '재검일', 'Reval One'), ('99999999-0000-0000-0000-000000004521', '재검이', 'Reval Two');
+-- 재검1: 4주 수강권 d0-21 ~ d0+6, 변경권 2, 정규 수업 d0+1 20:00, 시트에서 넘어온 휴가 보강(날짜 미정, tutor_leave)
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000004520', '99999999-0000-0000-0000-000000004520', 1, 4, 2, 40, d0 - 21, d0 + 6, 8, 'active' from rd;
+insert into enrollment_periods (id, enrollment_id, idx, start_date, end_date, credits_granted)
+select '99999999-2000-0000-0000-000000004520', '99999999-1000-0000-0000-000000004520', 1, d0 - 21, d0 + 6, 2 from rd;
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+values ('77777777-4520-0000-0000-000000000001', '99999999-1000-0000-0000-000000004520', '99999999-0000-0000-0000-000000004520', '55555555-0000-0000-0000-00000000452a', 'regular', 1, pg_temp.rk(1, '20:00'), pg_temp.rk(1, '20:40'));
+insert into migrated_items (id, enrollment_id, kind, original_date, tutor_leave)
+select '99999999-4000-0000-0000-000000004520', '99999999-1000-0000-0000-000000004520', 'makeup_open', d0 - 3, true from rd;
+-- 재검2: 4주 수강권 d0-7 ~ d0+20, 정규 월·수 20:00 (d0, d0+2, d0+7, d0+9), 신규 매칭 업무(강사 배정됨, 일정안 없음)
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000004521', '99999999-0000-0000-0000-000000004521', 1, 4, 2, 40, d0 - 7, d0 + 20, 8, 'active' from rd;
+insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+select '99999999-0000-0000-0000-000000004521', '55555555-0000-0000-0000-00000000452a', w, '20:00', 40, d0 - 7 from rd, (values (1), (3)) v(w);
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select ('77777777-4521-0000-0000-00000000000' || n)::uuid, '99999999-1000-0000-0000-000000004521', '99999999-0000-0000-0000-000000004521',
+       '55555555-0000-0000-0000-00000000452a', 'regular', n, pg_temp.rk(k, '20:00'), pg_temp.rk(k, '20:40')
+from (values (1, 0), (2, 2), (3, 7), (4, 9)) v(n, k);
+insert into admin_tasks (id, kind, enrollment_id, tutor_id, tutor_assigned_at)
+values ('99999999-7000-0000-0000-000000004521', 'new_student_matching', '99999999-1000-0000-0000-000000004521', '55555555-0000-0000-0000-00000000452a', now() - interval '1 day');
+create or replace function pg_temp.rend() returns date language sql as $$ select final_end_date from enrollments where id = '99999999-1000-0000-0000-000000004520' $$;
+create or replace function pg_temp.rext() returns int[] language sql as $$
+  select coalesce(array_agg(days order by created_at, days), '{}') from enrollment_extensions where enrollment_id = '99999999-1000-0000-0000-000000004520' and auto_source = 'leave_makeup' $$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 운영자
+-- R-18) 이관 휴무 보강 확정 → 종료일이 보강 날짜까지 자동 연장 (전에는 트리거가 이관권을 못 찾아 연장 누락)
+select pg_temp.ok(pg_temp.rend() = (select d0 + 6 from rd) and pg_temp.rext() = '{}', 'R-18 준비: 종료일 d0+6, 자동 연장 없음 (4520)');
+create temp table r18a as select (admin_makeup_request(null, '99999999-4000-0000-0000-000000004520',
+  jsonb_build_array(jsonb_build_object('starts_at', pg_temp.rk(13, '20:00'))), now()) ->> 'makeup_request_id')::uuid as id;
+grant select on r18a to authenticated;
+create temp table r18l as select (admin_makeup_confirm((select id from r18a), pg_temp.rk(13, '20:00')) ->> 'lesson_id')::uuid as id;
+grant select on r18l to authenticated;
+select pg_temp.ok(pg_temp.rend() = (select d0 + 13 from rd) and pg_temp.rext() = '{7}'
+              and (select kind = 'makeup_booked' and lesson_id = (select id from r18l) from migrated_items where id = '99999999-4000-0000-0000-000000004520'),
+  'R-18: 이관 휴무 보강 d0+13 확정 → 이관권 연결 + 종료일 d0+13 (자동 연장 7일, 같은 트랜잭션) (4520)');
+-- 없애면 회수, 다시 확정하면 그 날짜까지
+select admin_void_makeup((select id from r18l), 'QA 되돌림');
+select pg_temp.ok(pg_temp.rend() = (select d0 + 6 from rd) and pg_temp.rext() = '{7,-7}'
+              and (select kind = 'makeup_open' and lesson_id is null from migrated_items where id = '99999999-4000-0000-0000-000000004520'),
+  'R-18: 보강 없애기 → 이관권 다시 열림 + 자동 연장 회수(종료일 d0+6) (4520)');
+create temp table r18b as select (admin_makeup_request(null, '99999999-4000-0000-0000-000000004520',
+  jsonb_build_array(jsonb_build_object('starts_at', pg_temp.rk(10, '20:00'))), now()) ->> 'makeup_request_id')::uuid as id;
+grant select on r18b to authenticated;
+create temp table r18m as select (admin_makeup_confirm((select id from r18b), pg_temp.rk(10, '20:00')) ->> 'lesson_id')::uuid as id;
+grant select on r18m to authenticated;
+select pg_temp.ok(pg_temp.rend() = (select d0 + 10 from rd) and pg_temp.rext() = '{7,-7,4}', 'R-18: 다른 날짜(d0+10)로 재확정 → 종료일 d0+10 (4520)');
+-- 다음 수강권(d0+12 시작)과 겹치는 날짜로는 확정 못 함 (연장이 다음 기간을 침범)
+reset role;
+insert into enrollments (id, student_id, seq, previous_enrollment_id, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000004522', '99999999-0000-0000-0000-000000004520', 2, '99999999-1000-0000-0000-000000004520', 4, 2, 40, d0 + 12, d0 + 39, 8, 'confirmed' from rd;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_void_makeup((select id from r18m), 'QA 다시');
+create temp table r18c as select (admin_makeup_request(null, '99999999-4000-0000-0000-000000004520',
+  jsonb_build_array(jsonb_build_object('starts_at', pg_temp.rk(16, '20:00'))), now()) ->> 'makeup_request_id')::uuid as id;
+grant select on r18c to authenticated;
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from r18c), pg_temp.rk(16, '20:00'))$$, '다음 수강권');
+select pg_temp.ok(pg_temp.rend() = (select d0 + 6 from rd) and (select status = 'requested' from makeup_requests where id = (select id from r18c))
+              and (select kind = 'makeup_open' from migrated_items where id = '99999999-4000-0000-0000-000000004520'),
+  'R-18: 다음 수강권 기간을 침범하는 날짜는 확정 거절, 아무것도 안 바뀜 (4520)');
+select admin_makeup_withdraw((select id from r18c));
+-- 다음 수강권은 시험용이라 취소 (학생 화면은 수강 중·예정 수강권 중 최신을 보므로, 아래 시험은 1번 수강권으로)
+reset role;
+update enrollments set status = 'canceled' where id = '99999999-1000-0000-0000-000000004522';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+
+-- R-12) 학생 화면에 수강권의 모든 기간 변경권 (수업 날짜가 속한 기간으로 미리 보기)
+select pg_temp.ok((select jsonb_array_length(j -> 'credit_periods') = 1 and (j -> 'credit_periods' -> 0 ->> 'left')::int = 2 and (j -> 'credit_periods' -> 0 ->> 'granted')::int = 2
+                          and (j -> 'credit_periods' -> 0 ->> 'start')::date = (select d0 - 21 from rd) and (j -> 'credit_periods' -> 0 ->> 'end')::date = (select d0 + 6 from rd)
+                   from student_screen('99999999-0000-0000-0000-000000004520') j),
+  'R-12: student_screen.credit_periods = 기간마다 시작·끝·지급·잔여 (4520)');
+
+-- R-16) 보강 답 대기 칸: 답 전 r → 가능 답 뒤 a (운영진 확정 대기), 불가 답한 시간은 풀림
+select admin_change_lesson('c4520000-0000-0000-0000-000000000001', '77777777-4520-0000-0000-000000000001', 'student', now(), false);
+select pg_temp.ok((select (j -> 'credit_periods' -> 0 ->> 'left')::int = 1 from student_screen('99999999-0000-0000-0000-000000004520') j),
+  'R-12: 취소 뒤 그 기간 잔여 1 (4520)');
+create temp table r16 as select (admin_makeup_request('77777777-4520-0000-0000-000000000001', null,
+  jsonb_build_array(jsonb_build_object('starts_at', pg_temp.rk(3, '20:00')), jsonb_build_object('starts_at', pg_temp.rk(4, '20:00'))), now()) ->> 'makeup_request_id')::uuid as id;
+grant select on r16 to authenticated;
+reset role;
+select pg_temp.ok(lms_hours_cell('55555555-0000-0000-0000-00000000452a', pg_temp.rk(3, '20:00')) = 'r' and lms_hours_cell('55555555-0000-0000-0000-00000000452a', pg_temp.rk(4, '20:00')) = 'r',
+  'R-16: 답 전 후보 시간은 r (답 대기) (4520)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004520';   -- 강사 재검A
+select tutor_makeup_answer((select id from r16), array[(select c.id from makeup_candidates c where c.request_id = (select id from r16) and c.starts_at = pg_temp.rk(3, '20:00'))], null);
+reset role;
+select pg_temp.ok(lms_hours_cell('55555555-0000-0000-0000-00000000452a', pg_temp.rk(3, '20:00')) = 'a' and lms_hours_cell('55555555-0000-0000-0000-00000000452a', pg_temp.rk(4, '20:00')) = 'o',
+  'R-16: 가능 답한 시간은 a (운영진 확정 대기), 불가 답한 시간은 다시 열림 (4520)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004520';
+select pg_temp.expect_error($$select tutor_schedule_save(null, 'block', array[(select d0 + 3 from rd)::text || 'T20:00'], null, null)$$, 'Waiting for Edge English');
+select pg_temp.ok((select j -> 'cells' ->> ((select d0 + 3 from rd)::text || 'T20:00') = 'a' from tutor_schedule(null, (select d0 + 3 from rd), (select d0 + 3 from rd), true) j),
+  'R-16: 답 보낸 칸은 못 막고(확정 대기 안내) Schedule 칸 코드 a (4520)');
+
+-- R-10) 기존 배정이 있는 신규 매칭: 지금 배정 읽기 → 학생 안내 완료 기록 → 업무 완료
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select j -> 'task' ->> 'status' = 'open' and jsonb_typeof(j -> 'plan') = 'null' and j -> 'tutor' ->> 'name' = '재검A' and jsonb_array_length(j -> 'slots') = 2
+                          and (j ->> 'scheduled')::int = 4 and (j ->> 'first_at')::timestamptz = pg_temp.rk(0, '20:00')
+                   from admin_matching_current('99999999-1000-0000-0000-000000004521') j),
+  'R-10: 지금 배정 읽기 — 강사·정규 요일 2개·예정 수업 4회·첫 수업, 일정안 없음 (4520)');
+select pg_temp.expect_error($$select admin_matching_notified('99999999-1000-0000-0000-000000004520')$$, '신규 매칭 업무가 없습니다');
+create temp table r10a as select admin_matching_notified('99999999-1000-0000-0000-000000004521') as r;   -- 같은 문장 안에서는 함수가 바꾼 값이 안 보여 따로 호출
+grant select on r10a to authenticated;
+create temp table r10b as select admin_matching_notified('99999999-1000-0000-0000-000000004521') as r;
+grant select on r10b to authenticated;
+select pg_temp.ok((select not (r ->> 'repeated')::boolean from r10a)
+              and (select status = 'done' and student_notified_at is not null and tutor_notified_at is not null and done_by = 'bbbbbbbb-0000-0000-0000-000000000009' from admin_tasks where id = '99999999-7000-0000-0000-000000004521')
+              and (select (r ->> 'repeated')::boolean from r10b),
+  'R-10: 수업 컨펌 완료 기록 → 학생·강사 안내 시각 + 업무 완료, 두 번 눌러도 한 번 (4520)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004520';
+select pg_temp.expect_error($$select admin_matching_current('99999999-1000-0000-0000-000000004521')$$, '42501');
+select pg_temp.expect_error($$select admin_matching_notified('99999999-1000-0000-0000-000000004521')$$, '42501');
+select pg_temp.ok(true, 'R-10: 운영자만 (4520)');
+
+-- R-15) 정규 변경: 월 20:00→21:00, 수 그대로 → 바뀌는 수업 2(월), 그대로 2(수, same)
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+create temp table r15 as select admin_regular_change('99999999-0000-0000-0000-000000004521',
+  '[{"weekday":1,"time":"21:00"},{"weekday":3,"time":"20:00"}]'::jsonb, (select d0 from rd), null, true) as r;
+select pg_temp.ok((select (r ->> 'ok')::boolean and jsonb_array_length(r -> 'moved') = 2 and jsonb_array_length(r -> 'kept') = 2
+                          and (select bool_and(x ->> 'why' = 'same') from jsonb_array_elements(r -> 'kept') x)
+                          and (select bool_and((x ->> 'to')::timestamptz = (x ->> 'from')::timestamptz + interval '1 hour') from jsonb_array_elements(r -> 'moved') x)
+                   from r15),
+  'R-15 미리 보기: 월 2회만 바뀜, 수 2회는 그대로(same) (4520)');
+create temp table r15s as select admin_regular_change('99999999-0000-0000-0000-000000004521',
+  '[{"weekday":1,"time":"21:00"},{"weekday":3,"time":"20:00"}]'::jsonb, (select d0 from rd), '월요일만 한 시간 뒤로', false) as r;
+grant select on r15s to authenticated;
+select pg_temp.ok((select (r ->> 'moved')::int = 2 from r15s)
+              and (select array_agg(to_char(starts_at at time zone 'Asia/Seoul', 'DyHH24:MI') order by starts_at) from lessons where enrollment_id = '99999999-1000-0000-0000-000000004521')
+                  = '{Mon21:00,Wed20:00,Mon21:00,Wed20:00}'
+              and (select jsonb_array_length(moved) = 2 and jsonb_array_length(kept) = 2 from regular_changes where student_id = '99999999-0000-0000-0000-000000004521'),
+  'R-15 저장: 월 수업만 21:00, 수 수업 20:00 그대로, 기록도 바뀐 2·그대로 2 (4520)');
+
+-- R-09) 겹치는 휴무: 4510 의 철회A 휴무(d0~d0+5, wd) 안에 들어가는 날짜 → 미리 보기에 겹침, 저장 거절. 겹치지 않는 날짜는 그대로
+select pg_temp.ok((select jsonb_array_length(r -> 'overlap') = 1 and (r -> 'overlap' -> 0 ->> 'from')::date = (select d0 from wd) and (r -> 'overlap' -> 0 ->> 'to')::date = (select d0 + 5 from wd)
+                   from admin_leave_create('55555555-0000-0000-0000-00000000451a', (select d0 + 2 from wd), (select d0 + 3 from wd), '중복', true) r)
+              and (select jsonb_array_length(r -> 'overlap') = 0 from admin_leave_create('55555555-0000-0000-0000-00000000451a', (select d0 + 6 from wd), (select d0 + 7 from wd), '다음', true) r),
+  'R-09 미리 보기: 기존 휴무 기간 안의 날짜는 겹침 1건(기존 기간 표시), 바로 뒤 날짜는 겹침 없음 (4520)');
+select pg_temp.expect_error($$select admin_leave_create('55555555-0000-0000-0000-00000000451a', (select d0 + 2 from wd), (select d0 + 3 from wd), '중복', false)$$, '겹칩니다');
+select pg_temp.ok((select count(*) = 1 from tutor_time_off where tutor_id = '55555555-0000-0000-0000-00000000451a' and kind = 'leave' and withdrawn_at is null),
+  'R-09 저장: 겹치는 휴무는 저장 안 됨 (같은 기간 재입력은 전처럼 한 줄) (4520)');
+
+-- R-06) 처리 내역에 시트 대조 완료(④) + 다시 열기
+create temp table r06 as select e.id as eid from enrollments e join students s on s.id = e.student_id where s.name_ko = '확대A';
+grant select on r06 to authenticated;
+select pg_temp.ok((select count(*) >= 1 from jsonb_array_elements(admin_task_history()) x where x ->> 'source' = 'checked' and x ->> 'kind' = 'import_check' and x ->> 'name' = '확대A' and x ->> 'by' = '운영자'),
+  'R-06: 대조 완료 기록이 처리 내역에 보임 (처리자·시각) (4520)');
+select admin_import_unmark_checked((select eid from r06));
+select pg_temp.ok((select checked_at is null and checked_by is null from import_checks where enrollment_id = (select eid from r06))
+              and not exists (select 1 from jsonb_array_elements(admin_task_history()) x where x ->> 'source' = 'checked' and x ->> 'name' = '확대A'),
+  'R-06: 다시 열기 → 대조 전으로, 처리 내역에서 빠짐 (4520)');
+select admin_import_mark_checked((select eid from r06));
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004520';
+select pg_temp.expect_error($$select admin_import_unmark_checked((select eid from r06))$$, '42501');
+select pg_temp.ok(true, 'R-06: 다시 열기는 운영자만 (4520)');
+
+-- R-05) Meet 회의실 주소 검사 + 대체강사 확정은 회의실 링크가 있어야
+reset role;
+select pg_temp.ok(lms_meet_url_ok('https://meet.google.com/abc-defg-hij') and lms_meet_url_ok('https://meet.google.com/lookup/abc123')
+              and not lms_meet_url_ok('https://meet.google.com/') and not lms_meet_url_ok('https://meet.google.com') and not lms_meet_url_ok(null) and not lms_meet_url_ok('')
+              and not lms_meet_url_ok('https://workspace.google.com/products/meet/') and not lms_meet_url_ok('https://meet.google.com/abc'),
+  'R-05: 회의실 주소(xxx-xxxx-xxx·lookup)만 유효, 홈페이지 주소·빈 값은 아님 (4520)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_leave_create('55555555-0000-0000-0000-00000000452a', (select d0 + 9 from rd), (select d0 + 9 from rd), '재검 휴무', false);
+create temp table r05 as select id from leave_items where lesson_id = '77777777-4521-0000-0000-000000000004';
+grant select on r05 to authenticated;
+select admin_leave_choose(array[(select id from r05)], 'substitute', '55555555-0000-0000-0000-00000000452b');
+select admin_leave_sub_ok(array[(select id from r05)]);
+select pg_temp.expect_error($$select admin_leave_student_ok(array[(select id from r05)])$$, 'Meet');
+select pg_temp.ok((select sub_stage = 'tutor_ok' from leave_items where id = (select id from r05))
+              and (select tutor_id = '55555555-0000-0000-0000-00000000452a' from lessons where id = '77777777-4521-0000-0000-000000000004'),
+  'R-05: 대체강사 Meet 링크 없으면 확정 거절, 수업 강사 그대로 (4520)');
+reset role;
+update tutors set meet_url = 'https://meet.google.com/' where id = '55555555-0000-0000-0000-00000000452b';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_leave_student_ok(array[(select id from r05)])$$, 'Meet');
+reset role;
+update tutors set meet_url = 'https://meet.google.com/rrr-eval-two' where id = '55555555-0000-0000-0000-00000000452b';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_leave_student_ok(array[(select id from r05)]);
+select pg_temp.ok((select sub_stage = 'confirmed' from leave_items where id = (select id from r05))
+              and (select tutor_id = '55555555-0000-0000-0000-00000000452b' from lessons where id = '77777777-4521-0000-0000-000000000004'),
+  'R-05: 홈페이지 주소(meet.google.com/)도 거절, 회의실 링크를 넣으면 확정 (4520)');
 reset request.jwt.claim.sub;
 reset role;

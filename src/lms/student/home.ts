@@ -93,6 +93,10 @@ export type StudentRequest = {
   confirmedAt?: Date | null;
   /** 강사 메모 (모든 날짜 불가일 때 학생에게는 보이지 않음 — 운영진이 조율) */
   tutorDeclinedAll?: boolean;
+  /** 어느 권리(원래 수업·시트 보강·보상권)의 신청인지 — 휴무 안내 화면이 같은 상태를 보여 주기 위해 (R-17) */
+  lessonId?: string | null;
+  itemId?: string | null;
+  compId?: string | null;
 };
 
 export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
@@ -186,4 +190,95 @@ export function cancelPreview(
     },
     policy ?? POLICY_NOT_DECIDED,
   );
+}
+
+// ---------------------------------------------------------------------
+// 변경권 기간 (R-12): 변경권은 28일 기간마다 따로 지급·차감된다. 미래 수업을 취소할 때는 '지금' 기간이 아니라
+// 그 수업 날짜가 속한 기간의 잔여로 판정해야 DB(lms_lesson_period) 와 같다
+// ---------------------------------------------------------------------
+export type CreditPeriod = { start: KstDate; end: KstDate; granted: number; left: number };
+
+/** 그 날짜가 속한 기간 (없으면 그 날짜 이전에 시작한 마지막 기간 — DB lms_lesson_period 와 같은 규칙), 아무 기간도 없으면 null */
+export function creditPeriodFor(periods: readonly CreditPeriod[], date: KstDate): CreditPeriod | null {
+  const hit = periods.find((p) => p.start <= date && date <= p.end);
+  if (hit) return hit;
+  const before = periods.filter((p) => p.start <= date).sort((a, b) => (a.start < b.start ? 1 : -1));
+  return before[0] ?? null;
+}
+
+/** 그 날짜 수업의 변경권 잔여 (기간 목록이 없으면 fallback = 지금 기간 잔여) */
+export function creditsForDate(periods: readonly CreditPeriod[] | undefined, date: KstDate, fallback: number): number {
+  if (!periods || periods.length === 0) return fallback;
+  return creditPeriodFor(periods, date)?.left ?? 0;
+}
+
+export type CancelPlanItem = { lesson: StudentLesson; decision: CancelPreview; /** 그 수업이 속한 기간 (없으면 null) */ period: CreditPeriod | null };
+export type CancelPlan = {
+  items: CancelPlanItem[];
+  /** 변경권을 쓰는 수업 수 */
+  uses: number;
+  /** 보강 없이 수업 횟수가 차감되는 수 */
+  consumes: number;
+  /** 새로 생기는 보강 권리 수 */
+  makeups: number;
+  /** 취소할 수 없는 수업 수 */
+  bad: number;
+  /** 기간별 변경권 (차감 전 → 후). 기간 목록이 없으면 '지금' 하나 */
+  periods: { start: KstDate | null; end: KstDate | null; before: number; after: number }[];
+};
+
+/**
+ * 여러 수업 한 번에 취소 미리 보기 (추가 요청 2, R-12): 시간순으로 하나씩, 각 수업이 속한 기간의 잔여에서 차례로 차감.
+ * DB 도 같은 순서·같은 기간 규칙으로 처리하므로 저장 결과와 같아야 한다
+ */
+export function planCancelMany(
+  lessons: readonly StudentLesson[],
+  input: { now: Date; finalEndDate: KstDate; creditsLeft: number; creditPeriods?: readonly CreditPeriod[]; holidays: ReadonlySet<KstDate> },
+): CancelPlan {
+  const sorted = [...lessons].sort((a, b) => +a.startsAt - +b.startsAt);
+  const usePeriods = !!input.creditPeriods && input.creditPeriods.length > 0;
+  const left = new Map<string, number>();   // 기간 시작일 → 남은 변경권 (차감하며 갱신)
+  const order: { start: KstDate | null; end: KstDate | null; before: number }[] = [];
+  const key = (p: CreditPeriod | null) => p?.start ?? '';
+  const take = (p: CreditPeriod | null) => {
+    const k = key(p);
+    if (!left.has(k)) {
+      const before = usePeriods ? (p?.left ?? 0) : input.creditsLeft;
+      left.set(k, before);
+      order.push({ start: p?.start ?? null, end: p?.end ?? null, before });
+    }
+    return left.get(k)!;
+  };
+  const items: CancelPlanItem[] = sorted.map((lesson) => {
+    const date = instantToKstDate(lesson.startsAt);
+    const period = usePeriods ? creditPeriodFor(input.creditPeriods!, date) : null;
+    const credits = take(period);
+    const decision = cancelPreview({ lesson, now: input.now, finalEndDate: input.finalEndDate, creditsLeft: credits, holidays: input.holidays }, null);
+    if (decision.ok && decision.usesCredit) left.set(key(period), credits - 1);
+    return { lesson, decision, period };
+  });
+  const ok = items.map((x) => x.decision).filter((d): d is ChangeDecision & { ok: true } => d.ok);
+  return {
+    items,
+    uses: ok.filter((d) => d.usesCredit).length,
+    consumes: ok.filter((d) => d.consumesLesson).length,
+    makeups: ok.filter((d) => d.makeupAllowed).length,
+    bad: items.length - ok.length,
+    periods: order.map((o) => ({ ...o, after: left.get(o.start ?? '') ?? o.before })),
+  };
+}
+
+/** 취소 저장 결과 한 건 (DB student_change_lesson / admin_change_lesson 반환) */
+export type CancelResult = { uses_credit: boolean; makeup_allowed: boolean; credits_after?: number };
+
+/**
+ * 여러 수업 취소 완료 문구 (R-01): 미리 보기 예상이 아니라 저장된 결과로. 남은 변경권은 저장 뒤 다시 읽은 기간 잔여로
+ * remaining: 취소한 수업들이 속한 기간의 '저장 뒤' 잔여 (기간이 하나면 그 값, 여럿이면 기간별로)
+ */
+export function cancelManySummary(done: readonly CancelResult[], remaining: { start: KstDate | null; left: number }[]): string {
+  const credits = done.filter((r) => r.uses_credit).length;
+  const makeups = done.filter((r) => r.makeup_allowed).length;
+  const md = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  const left = remaining.length === 0 ? '' : remaining.length === 1 ? ` · 남은 변경권 ${remaining[0].left}개` : ` · 남은 변경권 ${remaining.map((r) => `${r.start ? `${md(r.start)}~ ` : ''}${r.left}개`).join(', ')}`;
+  return `수업 ${done.length}회를 취소했어요 · 변경권 ${credits}개 사용${left}${makeups ? ` · 보강 ${makeups}회는 ‘보강 신청’에서 날짜를 골라 주세요` : ''}`;
 }

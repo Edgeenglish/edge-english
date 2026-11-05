@@ -71,7 +71,11 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
   return { items, notices };
 }
 
-export type LeaveCreateResult = { dry_run: boolean; time_off_id?: string; lessons: number; items: number; students: number; existing?: number };
+export type LeaveCreateResult = {
+  dry_run: boolean; time_off_id?: string; lessons: number; items: number; students: number; existing?: number;
+  /** 같은 강사의 겹치는 휴무 (R-09, 4520): 있으면 저장 거절 */
+  overlap?: { id: string; from: KstDate; to: KstDate; reason: string | null }[];
+};
 
 export async function createLeave(sb: SupabaseClient, tutorId: string, from: KstDate, to: KstDate, reason: string, dryRun: boolean): Promise<LeaveCreateResult> {
   return check(await sb.rpc('admin_leave_create', { p_tutor: tutorId, p_from: from, p_to: to, p_reason: reason, p_dry_run: dryRun }));

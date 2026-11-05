@@ -7,7 +7,7 @@
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
 ## 📌 기록 방식 (2026-11-03 대표 결정, 정책 원본 H26(45))
-- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(52)**, 다음은 (53)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
+- **대표 결정·큰 진행 = Google Docs 정책 원본 H26 한 곳**(지금 마지막 번호 **(53)**, 다음은 (54)부터). 이 handoff에는 개발 메모와 H26 번호만. 새 세션은 handoff + 정책 원본 H26 최근 항목을 같이 읽고 시작
 - 10/30~11/3 결정은 H26(38)~(42)에 보충함(11/3), 시간 표기 원칙 (43), 학생 관리 ①~⑦ 전문 (44), 11/3 진행 (45)
 
 ## ✅ 2026-11-04 강사 LMS 개편 + Class Record 출결·지각 (브랜치 claude/upbeat-davinci-e9clnn = lms-test 위, 시험용 DB 적용, 운영 미적용)
@@ -41,6 +41,14 @@
 - 대표 경고: My hours 가 다시 깨지거나 이상하게 보이면 안 됨 → 앞으로 My hours 를 건드리면 **실제 계정 데이터로 PC·휴대폰, 현지/KST, Every week/One week only 캡처를 모두 확인한 뒤** push
 - 검증 뒤 e2e Blair 임시 비밀번호 무효화(파일·스크립트 삭제)
 - 이어서(대표): '바꿀 수 없는' 칸은 닫힘 회색과 헷갈려 **빗금**으로, 이름은 **Can't open**. 표 위에 왜 못 여는지 한 줄: `Striped = can't open: outside 06:00–22:30 [도시] Time (classes can only start in these hours)`(One week only 는 '지난 시간·6시간 안' 추가, 범위는 DB times 목록에서 읽음). 휴대폰 저장 막대 아래로 표가 비치던 틈은 흰 그림자로 막음
+
+## ✅ 2026-11-05 Work 최종 재검증 R-01~21 수정 완료 (브랜치 claude/kind-maxwell-u4379m = vigilant-fermi 위, 시험용 DB 4520 적용, **운영 미적용**) — 결과 전문 정책 원본 H26(53)
+- **migration 4520** `20261105020000_lms_revalidation_fixes.sql`: R-18 `migrated_items_leave_extension` 트리거(lesson_id·tutor_leave·kind 바뀌면 `lms_leave_sync_extension`) + `admin_makeup_confirm` 이관권 연결 뒤 호출 · R-12 `student_screen.credit_periods` · R-16 `lms_hours_cell` 'a'(가능 답 보냄·확정 대기, r 은 답 전만) + `tutor_schedule_save` 문구 · R-15 `admin_regular_change` kept why 'same'(시간순 정렬) · R-09 `lms_leave_overlaps` + `admin_leave_create` overlap(미리 보기)·거절(hint leave_overlap) · R-10 `admin_matching_current`·`admin_matching_notified`(student·tutor_notified_at 둘 다 기록 → done; 일정안 있으면 거절) · R-06 `admin_task_history` ④ checked + `admin_import_unmark_checked` · R-05 `lms_meet_url_ok`(영숫자 xxx-xxxx-xxx 또는 lookup/, authenticated 만) + `admin_leave_student_ok` 검사. 지우는 문장 새로 없음(트리거는 guarded create)
+- **시험용 DB 적용 메모**: Supabase 커넥터 `apply_migration` 으로 4묶음(1 R-18·R-16 셀, 2 student_screen, 3 regular_change, 4 나머지) 적용. **`tutor_schedule_save` 는 미적용**(4403 함수 안 `delete` 문 → 커넥터 승인 창 위험, 우회 안 함) — 시험용에서는 'a' 칸 막기 시도 시 DB 거절 문구가 'is already not available.' 로 나옴(화면은 어차피 안내 창으로 막음). 운영 적용 때는 파일 전체를 SQL 편집기로. ※ 처음 호출 실수로 `lms_revalidation_fixes` 라는 빈 migration 기록(select 1)이 schema_migrations 에 남음 — 내용은 그 뒤 4묶음으로 들어감
+- **화면**: 학생 `StudentHome` `confirmCancelMany` 재작성(실패해도 reload·성공/실패 구분·남은 수업 재선택 `retry`·재조회 실패 `stale` 배너 [다시 읽기]), `CancelSheet` 기간별 미리 보기(`planCancelMany`, `creditsForDate`, `creditPeriodFor`, `cancelManySummary` — `src/lms/student/home.ts`), 단일 취소도 그 수업 기간 변경권, R-04 안내 조건, R-11 문구, `LeaveSheet` requests 로 상태(R-17), Meet 링크 `meetRoomUrl`(`src/lms/rules/meet.ts`, `MEET_MISSING_KO`) / 강사 `status.ts tutorPaidFor`(R-19), `TutorSchedule`·`TutorHours` `onSaved` → `TutorHome.reload`(R-13), `schedule.ts` CellKind 'answered'·`dayItems` 날짜별 자르기+수업 시간 창 필터+`spans`(R-03), `lockReason`(R-16)·12주 밖 안내(R-21), `StudentProfile` 'N classes remaining' / 운영진 `AssignLive`+`AssignSchedule` `initialView`·`current`·`confirmCurrent`(R-10, `confirm-live.ts loadMatchingCurrent/markMatchingNotified`), `RegularChange` 'N회 바꾸고 저장 · M회 유지'·`KEPT_WHY.same`, `tutor-leave.ts makeupDatesText` 도시+한국 시간·`TutorLeave` 후보 'KST · 도시 시각'(R-14), `LessonChange` R-11 문구 + `useSavingGuard`(`src/app/lms/admin/useSavingGuard.ts`, beforeunload + 링크 클릭 확인, 저장 중 띠)(R-20), `task-history.ts` source 'checked'(R-06), `tutor-leave-live.ts overlap`+`TutorLeave` 겹침 경고·저장 잠금(R-09)
+- **검증**: vitest 366(home/schedule/status/meet/tutor-leave 시험 추가) · tsc · eslint 경고 3 기존 · `npm run test:db` 통과(4520 블록 26개; 1800·4510 가상 강사에 meet_url 추가 — R-05 때문) · authz-probe 목록 3개 추가 · 묶음 SQL·prod-setup.html 재생성. **실제 클릭(로컬 앱 → 시험용 DB, Playwright, e2e-admin TOTP + e2e Blair 임시 비밀번호 → 끝나고 무효화)**: 내용은 H26(53) ⑤. 시험 데이터 변경: STU-0004 수업 4건 취소→되돌림(변경권 1/2/2 복구, 변경 기록·감사만 남음), STU-0003 재조율 신청 c51c3c7c 확정→보강 삭제(voided, 종료일 11/30 복구, 이관권 makeup_open), Blair 11/5 19:30 막기→풀기(기록만)
+- **못 한 것 / 대표 결정 필요**: ① R-20 느린 응답 재현 안 함(코드만) ② R-19·R-16·R-03·R-14 는 단위·DB 시험(실제 데이터 없음) ③ R-10 실제 '수업 컨펌 완료' 클릭 안 함(STU-0002 카드 Work 재검증용으로 남김) ④ **운영 적용 전 확인**: 운영 강사 `tutors.meet_url` 이 회의실 주소인지(아니면 대체강사 확정 막힘, 의도된 동작) ⑤ R-07 가상 데이터 불일치 ⑥ 급여 마감·재등록 결제 이월·결제 대기 후속 입금 확인 미구현 그대로 ⑦ 보고서 7절 제한 그대로(네트워크 유실·실제 24h 등)
+- **다음**: Work 재검증 → 대표 승인 → 운영 DB 4400~4520 + lms-prod. 이 브랜치를 lms-test 로 push 할지는 대표 결정(지금 lms-test = vigilant-fermi)
 
 ## 📋 다음 세션 할 일 (2026-11-05 대표 요청): Work 최종 재검증 보고서 R-01~21 미해결 오류 수정 + 시험 검증
 - **시작**: 브랜치 `claude/vigilant-fermi-ud5cal`(= lms-test 최신 235103b) 위. 시험용 DB·lms-test 에만, 운영 DB·lms-prod·실제 발송 금지. 큰 변경이라 Fable 5.1 / 노력 '높음'

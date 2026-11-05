@@ -138,3 +138,58 @@ describe('변경·취소 최종 확인 (POL-CHG-01·02)', () => {
     expect(cancelPreview({ ...base, lesson: c, now: new Date(c.startsAt.getTime() - 24 * H) }, null)).toEqual({ ok: false, reason: 'policy_pending' });
   });
 });
+
+describe('여러 수업 취소 미리 보기 — 기간별 변경권 (R-12·R-01·R-04)', async () => {
+  const { planCancelMany, creditsForDate, creditPeriodFor, cancelManySummary } = await import('./home');
+  const now = kstToInstant('2026-11-05', '12:00');
+  const periods = [
+    { start: '2026-10-14' as const, end: '2026-11-10' as const, granted: 2, left: 1 },
+    { start: '2026-11-11' as const, end: '2026-12-08' as const, granted: 2, left: 2 },
+    { start: '2026-12-09' as const, end: '2027-01-05' as const, granted: 2, left: 2 },
+  ];
+  const base = { now, finalEndDate: '2027-01-05' as const, creditsLeft: 1, creditPeriods: periods, holidays: new Set<never>() };
+
+  it('수업 날짜가 속한 기간의 변경권으로 판정 (지금 기간 1개가 아니라 11/11~12/8 기간 2개)', () => {
+    expect(creditsForDate(periods, '2026-11-12', 1)).toBe(2);
+    expect(creditsForDate(periods, '2026-11-05', 9)).toBe(1);
+    expect(creditsForDate([], '2026-11-12', 7)).toBe(7);   // 옛 DB: 기간 목록 없으면 지금 잔여
+    // 기간 사이 빈 날짜는 그 전 마지막 기간 (DB lms_lesson_period 와 같음)
+    expect(creditPeriodFor(periods, '2027-02-01')?.start).toBe('2026-12-09');
+    expect(creditPeriodFor(periods, '2026-01-01')).toBeNull();
+  });
+  it('11/12·11/17 두 수업: 미래 기간 변경권 2개 → 0개, 둘 다 보강 가능 (실제 DB 결과와 같음)', () => {
+    const plan = planCancelMany([lesson('a', 'regular', '2026-11-12'), lesson('b', 'regular', '2026-11-17')], base);
+    expect(plan.uses).toBe(2);
+    expect(plan.makeups).toBe(2);
+    expect(plan.consumes).toBe(0);
+    expect(plan.periods).toEqual([{ start: '2026-11-11', end: '2026-12-08', before: 2, after: 0 }]);
+  });
+  it('기간이 다른 두 수업은 각자 기간에서 차감 (11/10 지금 기간 1개 → 0, 11/12 다음 기간 2개 → 1)', () => {
+    const plan = planCancelMany([lesson('b', 'regular', '2026-11-12'), lesson('a', 'regular', '2026-11-10')], base);
+    expect(plan.items.map((x) => x.lesson.id)).toEqual(['a', 'b']);   // 시간순
+    expect(plan.periods).toEqual([
+      { start: '2026-10-14', end: '2026-11-10', before: 1, after: 0 },
+      { start: '2026-11-11', end: '2026-12-08', before: 2, after: 1 },
+    ]);
+  });
+  it('같은 기간 수업 3개, 변경권 2개: 세 번째는 변경권 없음 → 1회 차감·보강 없음 (R-04: 보강 수는 2)', () => {
+    const plan = planCancelMany([lesson('a', 'regular', '2026-11-12'), lesson('b', 'regular', '2026-11-17'), lesson('c', 'regular', '2026-11-19')], base);
+    expect(plan.uses).toBe(2);
+    expect(plan.makeups).toBe(2);
+    expect(plan.consumes).toBe(1);
+    expect(plan.items[2].decision).toMatchObject({ ok: true, usesCredit: false, consumesLesson: true, makeupAllowed: false });
+  });
+  it('변경권 0 기간의 수업 2개: 보강 0 → 안내 문구 없이 차감만 (R-04)', () => {
+    const plan = planCancelMany([lesson('a', 'regular', '2026-11-12'), lesson('b', 'regular', '2026-11-13')], { ...base, creditPeriods: [{ ...periods[1], left: 0 }] });
+    expect(plan.makeups).toBe(0);
+    expect(plan.consumes).toBe(2);
+    expect(plan.uses).toBe(0);
+  });
+  it('완료 문구는 저장 결과로: 2개 차감·보강 2 → "변경권 2개 사용 · 남은 변경권 0개 · 보강 2회" (R-01)', () => {
+    const text = cancelManySummary([{ uses_credit: true, makeup_allowed: true }, { uses_credit: true, makeup_allowed: true }], [{ start: '2026-11-11', left: 0 }]);
+    expect(text).toBe('수업 2회를 취소했어요 · 변경권 2개 사용 · 남은 변경권 0개 · 보강 2회는 ‘보강 신청’에서 날짜를 골라 주세요');
+    expect(cancelManySummary([{ uses_credit: false, makeup_allowed: false }], [{ start: null, left: 0 }])).toBe('수업 1회를 취소했어요 · 변경권 0개 사용 · 남은 변경권 0개');
+    expect(cancelManySummary([{ uses_credit: true, makeup_allowed: true }, { uses_credit: true, makeup_allowed: true }], [{ start: '2026-10-14', left: 0 }, { start: '2026-11-11', left: 1 }]))
+      .toContain('남은 변경권 10/14~ 0개, 11/11~ 1개');
+  });
+});

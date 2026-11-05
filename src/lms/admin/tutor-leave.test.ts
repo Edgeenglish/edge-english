@@ -274,3 +274,22 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     expect(studentPhase(w2)).toBe('wait');
   });
 });
+
+describe('휴무 보강 날짜 안내 — 해외 학생 시간 기준 (R-14)', async () => {
+  const { makeupDatesText: text } = await import('./tutor-leave');
+  const { kstToInstant } = await import('../rules/dates');
+  it('도시 시간 + 한국 시간을 함께 (모두 같은 시간이면 위에 한 번)', () => {
+    const out = text('홍길동', 'Australia/Melbourne', [kstToInstant('2026-11-17', '09:30'), kstToInstant('2026-11-19', '09:30')]);
+    expect(out).toContain('⏰ 모두 평소 시간 오전 11시 30분 (Melbourne 시간) · 한국 오전 9시 30분');
+    expect(out).not.toContain('(현지 시간)');
+    expect(out).toContain('- 11/17(화) · 11/19(목)');
+  });
+  it('시간이 섞이면 줄마다 도시 시간 · 한국 시간', () => {
+    const out = text('홍길동', 'America/Toronto', [kstToInstant('2026-11-17', '09:30'), kstToInstant('2026-11-18', '22:00')]);
+    expect(out).toContain('- 11/16(월) 오후 7시 30분 (Toronto 시간) · 한국 오전 9시 30분');
+    expect(out).toContain('- 11/18(수) 오전 8시 (Toronto 시간) · 한국 오후 10시');
+  });
+  it('국내 학생은 전처럼 한국 시간만', () => {
+    expect(text('홍길동', 'Asia/Seoul', [kstToInstant('2026-11-17', '09:30')])).toContain('⏰ 모두 평소 시간 오전 9시 30분\n- 11/17(화)');
+  });
+});

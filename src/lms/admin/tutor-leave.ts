@@ -251,18 +251,20 @@ export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
 export function makeupDatesText(studentName: string, studentTz: string, dates: Date[]): string {
   const tz = studentTz || 'Asia/Seoul';
   const head = `[엣지영어] ${studentName}님, 보강 가능한 날짜예요. 편한 날을 ${MAKEUP_SLOTS_MAX}개까지 골라 주세요.(없다면 1개만 고르셔도 괜찮아요)`;
-  const local = tz === 'Asia/Seoul' ? '' : ' (현지 시간)';
+  // 해외 학생: 어느 도시 시간인지 + 한국 시간을 함께 (R-14: '(현지 시간)' 만으로는 기준이 없음)
+  const abroad = tz !== 'Asia/Seoul';
+  const city = `${(tz.split('/').pop() ?? tz).replace(/_/g, ' ')} 시간`;
   const days = new Map<string, { label: string; times: string[] }>();
   for (const d of [...dates].sort((a, b) => +a - +b)) {
     const f = formatInZone(d, tz);
     const day = days.get(f.date) ?? { label: `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))}(${KO_WEEKDAY[f.weekday]})`, times: [] };
-    const t = koTime(f.time);
+    const t = abroad ? `${koTime(f.time)} (${city}) · 한국 ${koTime(formatInZone(d, 'Asia/Seoul').time)}` : koTime(f.time);
     if (!day.times.includes(t)) day.times.push(t);
     days.set(f.date, day);
   }
   const list = [...days.entries()];
   const times = new Set(list.flatMap(([, v]) => v.times));
-  if (times.size !== 1) return [head, list.map(([, v]) => `- ${v.label} ${v.times.join(' · ')}`).join('\n') + local].join('\n\n');
+  if (times.size !== 1) return [head, list.map(([, v]) => `- ${v.label} ${v.times.join(' · ')}`).join('\n')].join('\n\n');
   // 한 주(월~일)씩 한 줄
   const weeks: string[][] = [];
   let key = '';
@@ -271,7 +273,7 @@ export function makeupDatesText(studentName: string, studentTz: string, dates: D
     if (k !== key) { weeks.push([]); key = k; }
     weeks[weeks.length - 1].push(v.label);
   }
-  return [head, [`⏰ 모두 평소 시간 ${[...times][0]}${local}`, ...weeks.map((w) => `- ${w.join(' · ')}`)].join('\n')].join('\n\n');
+  return [head, [`⏰ 모두 평소 시간 ${[...times][0]}`, ...weeks.map((w) => `- ${w.join(' · ')}`)].join('\n')].join('\n\n');
 }
 
 const KO_WEEKDAY: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토' };

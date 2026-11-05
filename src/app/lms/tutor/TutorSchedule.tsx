@@ -44,8 +44,10 @@ type Dialog =
   | { kind: 'lesson'; lesson: TutorLesson }
   | { kind: 'info'; title: string; body: string };
 
-export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile }: {
+export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile, onSaved }: {
   actions: ScheduleActions;
+  /** 막기·열기 저장 성공 뒤 — Home 의 보강 요청 가능 여부 등을 다시 읽게 (R-13) */
+  onSaved?: () => void | Promise<void>;
   /** 수업 (tutor_screen, 한국 날짜 범위) */
   loadLessons: (kstFrom: string, kstTo: string) => Promise<TutorLesson[]>;
   tz: string;
@@ -139,8 +141,15 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       const want = mode === 'block' ? 'free' : 'closed';
       const first = span ? Math.max(0, Math.round((toMin(inZone(span.at, viewZone).time) - toMin(ALL_HOURS[0])) / 30)) : kinds.indexOf(want);
       const last = span ? first + Math.max(1, Math.round((+span.end - +span.at) / 1800000)) : first + 1;
-      if (first < 0 || (span && kinds[first] !== want)) {
-        setDialog({ kind: 'info', title: dayText(date), body: mode === 'block' ? 'No available time to block on this day.' : 'No closed time to open on this day.' });
+      if (kinds.every((k) => k === 'far' || k === 'outside')) {
+        // 12주 밖 날짜 (R-21): '닫힌 시간 없음' 이 아니라 기간 제한 안내 (저장 함수도 같은 이유로 거절)
+        setDialog({ kind: 'info', title: 'Can’t change yet', body: `You can change times up to 12 weeks ahead (until ${dayText(src.last)}).` });
+      } else if (kinds.every((k) => k === 'past' || k === 'outside')) {
+        setDialog({ kind: 'info', title: dayText(date), body: 'This day has passed.' });
+      } else if (first < 0 || (span && kinds[first] !== want)) {
+        // 추가 개방 줄에서 왔는데 그 칸이 비어 있지 않음 → 왜 못 거두는지 (R-16: 답 보낸 요청 등)
+        const why = span ? lockReason(kinds[first]) : null;
+        setDialog({ kind: 'info', title: why ? why.title : dayText(date), body: why ? why.body : mode === 'block' ? 'No available time to block on this day.' : 'No closed time to open on this day.' });
       } else {
         setSaveErr('');
         setDialog({ kind: 'pick', mode, date, kinds, xs: xsOf(date, src), start: first, end: Math.min(last, kinds.length), note: '' });
@@ -159,6 +168,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       setDialog(null);
       setToast(done);
       await load();
+      void onSaved?.();
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
     } finally {
@@ -178,7 +188,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       return;
     }
     if (k === 'leave') return setDialog({ kind: 'info', title: 'Leave', body: 'This time is in your leave.' });
-    if (k === 'request') return setDialog({ kind: 'info', title: 'Request waiting', body: 'A make-up or cover request is waiting for this time. Answer it on Home first.' });
+    if (k === 'request' || k === 'answered') { const r = lockReason(k)!; return setDialog({ kind: 'info', title: r.title, body: r.body }); }
     if (k === 'locked') return setDialog({ kind: 'info', title: 'Can’t change', body: 'Can’t change: less than 6 hours away.' });
     if (k === 'outside') {
       return setDialog({ kind: 'info', title: 'Can’t change', body: `Classes can only start ${data.times[0]}–${data.times[data.times.length - 1]} ${cityTime(tz)}.` });
@@ -264,6 +274,10 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     if (k === 'request') {
       return <button type="button" {...handlers} aria-label={`${label} request waiting`} className={`${cellBase} border border-dashed border-[#5b3fe0] bg-white px-1 text-[#5b3fe0]`}>Request</button>;
     }
+    if (k === 'answered') {
+      // 가능 답을 보냈고 운영진 확정 대기 (R-16): 답 대기와 구분
+      return <button type="button" {...handlers} aria-label={`${label} answer sent, waiting for Edge English`} className={`${cellBase} border border-[#5b3fe0] bg-[#efebff] px-1 text-[#5b3fe0]`}>Sent ✓</button>;
+    }
     if (k === 'leave') return <button type="button" {...handlers} aria-label={`${label} leave`} className={`${cellBase} bg-[#ecebf1] px-1 text-[#8a879c]`}>Leave</button>;
     const free = k === 'free';
     return (
@@ -302,6 +316,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       <Legend color="bg-[#5b3fe0]">Class</Legend>
       <Legend style={blockedStyle}>Blocked</Legend>
       <Legend style={cantChange}>Can’t change</Legend>
+      <Legend color="bg-[#efebff] border border-[#5b3fe0]">Sent ✓ (waiting for Edge English)</Legend>
     </div>
   );
 
@@ -608,7 +623,11 @@ function DayRow({ item, zone, onOpen }: { item: DayItem; zone: string; onOpen: (
           <span className="block truncate text-[14.5px] font-semibold text-[#1d1b2b]">
             {block ? (item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Blocked') : 'Extra availability (this day only)'}
           </span>
-          <span className="block text-[12.5px] text-[#6b6880]">{spanText(item.at, item.end, zone)}</span>
+          <span className="block text-[12.5px] text-[#6b6880]">
+            {spanText(item.at, item.end, zone)}
+            {/* 날짜를 넘는 휴무·막기: 이 날 부분만 보이고, 전체 기간은 따로 (R-03) */}
+            {item.spans && ` · ${whenSpan(item.spans.at, item.spans.end, zone)}`}
+          </span>
         </span>
         <span className={`shrink-0 rounded-[6px] px-1.5 text-[12px] font-bold ${block ? 'bg-[#ecebf1] text-[#55526a]' : 'bg-[#e6f6ec] text-[#1f7a4d]'}`}>
           {block ? (item.block.kind === 'leave' ? 'Leave' : 'Blocked') : 'Extra'}
@@ -640,4 +659,16 @@ function Legend({ color = '', style, children }: { color?: string; style?: CSSPr
       {children}
     </span>
   );
+}
+
+/** 못 바꾸는 칸의 이유 (R-16: 답 전 요청과 답 보낸 뒤 확정 대기를 구분, 추가 개방 줄에서도 같은 안내) */
+function lockReason(k: CellKind | undefined): { title: string; body: string } | null {
+  switch (k) {
+    case 'request': return { title: 'Request waiting', body: 'A make-up or cover request is waiting for this time. Answer it on Home first.' };
+    case 'answered': return { title: 'Answer sent', body: 'Your answer has been sent for this time. Waiting for Edge English to confirm. To change this time, contact Edge English.' };
+    case 'class': return { title: 'Class', body: 'You have a class at this time. Classes can’t be blocked.' };
+    case 'locked': return { title: 'Can’t change', body: 'Can’t change: less than 6 hours away.' };
+    case 'leave': return { title: 'Leave', body: 'This time is in your leave.' };
+    default: return null;
+  }
 }

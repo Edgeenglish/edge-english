@@ -3,7 +3,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
-import type { PointsEvent, StudentLesson, StudentRequest } from './home';
+import type { CreditPeriod, PointsEvent, StudentLesson, StudentRequest } from './home';
 
 const NOT_APPLIED = '학생 화면이 이 DB에 아직 없어요 (migration 2800).';
 
@@ -69,6 +69,8 @@ export type StudentView = {
   points: PointsEvent[];
   /** 지금 변경권 기간과 쓴·돌려받은 기록 */
   creditPeriod: { start: KstDate; end: KstDate } | null;
+  /** 수강권의 모든 변경권 기간(지급·잔여) — 미래 수업 취소 미리 보기는 그 수업 날짜의 기간으로 (R-12, 4520). 옛 DB 면 빈 배열 */
+  creditPeriods: CreditPeriod[];
   creditUses: { at: Date; reason: 'student_change' | 'admin_restore' | 'admin_adjust'; delta: number; lessonAt: Date | null; note?: string | null }[];
 };
 
@@ -97,6 +99,7 @@ type Raw = {
   leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; sub_meet_url: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string }[];
   holidays: KstDate[];
   credit_period: { start: KstDate; end: KstDate } | null;
+  credit_periods?: { idx: number; start: KstDate; end: KstDate; granted: number; left: number }[];
   credit_uses: { at: string; reason: 'student_change' | 'admin_restore' | 'admin_adjust'; delta: number; lesson_at: string | null; note?: string | null }[];
   points: { id: string; on: KstDate; kind: string; amount: number; note: string | null }[];
 };
@@ -193,6 +196,9 @@ export function parseStudentView(r: Raw): StudentView {
           ? (q.confirmed_state === 'canceled' ? 'canceled' : 'confirmed')
           : q.tutor_answered_at ? (q.tutor_declined_all ? 'rescheduling' : 'admin_reviewing') : 'tutor_reviewing',
         tutorDeclinedAll: !!q.tutor_declined_all,
+        lessonId: q.lesson_id,
+        itemId: q.item_id,
+        compId: q.comp_id ?? null,
         candidates: q.candidates.map((c) => new Date(c)),
         createdAt: new Date(q.requested_at),
         note: '',
@@ -210,6 +216,7 @@ export function parseStudentView(r: Raw): StudentView {
     leavePending: (r.leave_pending ?? []).map((x) => ({ id: x.id, startsAt: new Date(x.starts_at), endsAt: new Date(x.ends_at) })),
     holidays: r.holidays,
     creditPeriod: r.credit_period,
+    creditPeriods: (r.credit_periods ?? []).map((p) => ({ start: p.start, end: p.end, granted: p.granted, left: p.left })),
     creditUses: (r.credit_uses ?? []).map((c) => ({ at: new Date(c.at), reason: c.reason, delta: c.delta, lessonAt: c.lesson_at ? new Date(c.lesson_at) : null, note: c.note ?? null })),
     points: r.points.map((p) => ({ id: p.id, on: p.on, kind: p.amount > 0 ? 'grant' : 'use', amount: Math.abs(p.amount), reason: p.note || POINT_REASON[p.kind] || '적립금' })),
   };

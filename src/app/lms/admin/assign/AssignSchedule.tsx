@@ -12,7 +12,8 @@ import { courseName } from '@/lms/rules/period';
 import type { CourseWeeks } from '@/lms/rules/policy';
 import type { RegularSlot } from '@/lms/rules/schedule';
 import { proposalMessage, type PlanView } from '@/lms/admin/confirm';
-import type { PlanActions } from '@/lms/admin/confirm-live';
+import type { MatchingCurrent, PlanActions } from '@/lms/admin/confirm-live';
+import { slotsText } from '@/lms/admin/students';
 import type { RegTutor } from '@/lms/admin/registration';
 import { dayLabel, weekOf } from '@/lms/admin/schedule';
 import PlanCard, { TimeRows, type PlanHandlers } from '../PlanCard';
@@ -56,11 +57,17 @@ type Props = {
       ) => Promise<ProposeResult>)
     | null;
   planActions?: PlanActions;
+  /** 이미 진행 중인 일정안 (답 대기·확정) — 있으면 새 시간 고르기 대신 그 카드로 (R-10) */
+  initialView?: PlanView | null;
+  /** 일정안 없이 강사·정규 수업이 이미 있는 등록의 지금 배정 (R-10) */
+  current?: MatchingCurrent | null;
+  /** '수업 컨펌 완료' 기록 — 지금 배정을 강사·학생에게 확인했음 → 신규 매칭 업무 완료 */
+  confirmCurrent?: () => Promise<{ repeated: boolean }>;
 };
 
 const bySlot = (a: RegularSlot, b: RegularSlot) => ((a.weekday + 6) % 7) - ((b.weekday + 6) % 7);
 
-export default function AssignSchedule({ nowIso, demo, info, tutors, propose, planActions }: Props) {
+export default function AssignSchedule({ nowIso, demo, info, tutors, propose, planActions, initialView = null, current = null, confirmCurrent }: Props) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const today = instantToKstDate(now);
   const [tutorId, setTutorId] = useState<string | null>(null);
@@ -73,7 +80,11 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
-  const [view, setView] = useState<PlanView | null>(null);
+  const [view, setView] = useState<PlanView | null>(initialView);
+  // 기존 배정 확인 (R-10): 일정안이 없고 강사·예정 수업이 이미 있으면, 새 배정 대신 지금 배정을 보여 주고 컨펌 완료를 기록
+  const hasCurrent = !view && !!current && !current.plan && !!current.tutor && current.scheduled > 0 && current.task?.status !== 'canceled';
+  const [currentDone, setCurrentDone] = useState<boolean>(!!current?.task?.studentNotifiedAt || current?.task?.status === 'done');
+  const [showNew, setShowNew] = useState(false);
 
   const tutor = tutors.find((t) => t.id === tutorId) ?? null;
   const week = useMemo(() => weekOf(weekStart), [weekStart]);
@@ -263,7 +274,30 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
           </span>
         </Card>
 
-        {view ? (
+        {hasCurrent && !showNew && (
+          <Card title={currentDone ? '수업 컨펌 완료' : '지금 배정 · 강사·학생에게 확인했나요?'}>
+            <p className="text-[15px] font-bold text-[#1d1b2b]">{current!.tutor!.name} 강사 · {slotsText(current!.slots)} (한국 시간) · {current!.durationMin}분</p>
+            <p className="mt-1 text-[13.5px] text-[#3d3a52]">
+              예정 수업 {current!.scheduled}회{current!.firstAt ? ` · 첫 수업 ${dayLabel(instantToKstDate(current!.firstAt))}` : ''} · 수강 {dayLabel(current!.startDate)}–{dayLabel(current!.finalEndDate)}
+            </p>
+            <p className="mt-2 text-[13px] text-[#6b6880]">이 등록은 이미 강사와 정규 수업이 있어요. 시간을 바꾸려면 학생 상세의 [정규 일정 수정]을, 강사를 바꾸려면 운영진에게 알려 주세요. 여기서는 확인 완료만 기록해요.</p>
+            {currentDone ? (
+              <Link href={home} className="mt-3 flex min-h-[48px] items-center justify-center rounded-[12px] bg-[#e3f6ea] text-[15px] font-bold text-[#1e7a46]">✓ 기록했어요 — 처리할 일로</Link>
+            ) : (
+              <div className="mt-3 grid gap-2">
+                <button type="button" disabled={saving || !confirmCurrent} onClick={async () => {
+                  setErr('');
+                  setSaving(true);
+                  try { await confirmCurrent!(); setCurrentDone(true); } catch (e) { setErr(e instanceof Error ? e.message : '기록하지 못했어요.'); } finally { setSaving(false); }
+                }} className="min-h-[52px] rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
+                  {saving ? '기록 중…' : '수업 컨펌 완료 (강사·학생에게 확인함)'}
+                </button>
+                <button type="button" onClick={() => setShowNew(true)} className="min-h-[44px] text-[13.5px] font-semibold text-[#55526a] underline">다른 강사·시간으로 새 일정안을 만들어야 해요</button>
+              </div>
+            )}
+          </Card>
+        )}
+        {hasCurrent && !showNew ? null : view ? (
           <Card title={view.state === 'proposed' ? '강사 답 대기' : '확정 · 양쪽에 안내를 보내 주세요'}>
             <PlanCard view={view} handlers={handlers} />
             {view.state === 'confirmed' && view.tutorNotice?.status === 'sent' && view.studentNotice?.status === 'sent' && (

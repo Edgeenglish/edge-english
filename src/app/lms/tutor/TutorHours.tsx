@@ -43,7 +43,7 @@ type Dialog =
   | { kind: 'saved'; weekly: boolean; from: string };
 
 /** inline = 메뉴 안에 그대로 (2026-11-04 사이드바), 아니면 창 */
-export default function TutorHours({ actions, onClose, onSchedule, inline = false, onDirty }: { actions: HoursActions; onClose: () => void; onSchedule?: () => void; inline?: boolean; /** 저장 안 한 변경이 있는지 알림 — 메뉴를 바꿀 때 확인 (QA UX) */ onDirty?: (dirty: boolean) => void }) {
+export default function TutorHours({ actions, onClose, onSchedule, inline = false, onDirty, onSaved }: { actions: HoursActions; onClose: () => void; onSchedule?: () => void; inline?: boolean; /** 저장 안 한 변경이 있는지 알림 — 메뉴를 바꿀 때 확인 (QA UX) */ onDirty?: (dirty: boolean) => void; /** 저장 성공 뒤 — Home 의 보강 요청·충돌 자료를 다시 읽게 (R-13) */ onSaved?: () => void | Promise<void> }) {
   const [data, setData] = useState<HoursData | null>(null);
   const [err, setErr] = useState('');
   // 예전 탭 기억(Every week / One week only)은 탭이 없어져 지움
@@ -139,6 +139,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
       await actions.save(weeklyChanged ? [...weekly] : null, [], []);
       await load();
       setDialog({ kind: 'saved', ...saved });
+      void onSaved?.();
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
     } finally {

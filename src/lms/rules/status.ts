@@ -59,3 +59,14 @@ export function grantsMakeup(status: ClassStatus): boolean {
   const r = STATUS_RULES[status];
   return !r.consumesLesson && status !== 'Tutor long-term leave' && status !== 'Student long-term leave';
 }
+
+/**
+ * 강사 급여 대상 판정 — 상태 규칙(tutorPaid) + 수업 종류 (R-19).
+ * 보상수업(compensation, 강사 노쇼 무료 보상 4000)은 결과가 Normal 이어도 무급. 기록 전(상태 없음)은 null.
+ * 화면 Paid 표시와 앞으로의 급여 산식이 이 함수 하나를 쓴다
+ */
+export function tutorPaidFor(kind: 'regular' | 'makeup' | 'compensation' | string, status: ClassStatus | null): boolean | null {
+  if (!status) return null;
+  if (kind === 'compensation') return false;
+  return STATUS_RULES[status].tutorPaid;
+}

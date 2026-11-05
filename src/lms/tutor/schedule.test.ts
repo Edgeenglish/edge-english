@@ -27,3 +27,44 @@ describe('Schedule', () => {
     expect(runFrom(['closed', 'closed', 'free'], 0, 'closed')).toEqual({ ends: [1, 2], cutBy: null });
   });
 });
+
+describe('Schedule — 재검증 수정 (R-03·R-16)', async () => {
+  const { cellKind, dayItems } = await import('./schedule');
+  const times = Array.from({ length: 34 }, (_, i) => `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);   // 06:00~22:30
+  const data = (cells: Record<string, 'c' | 'r' | 'a' | 'l' | 'p' | 's' | 'b' | 'o' | 'x'>, blocks: { start: string; end: string }[] = []) => ({
+    tutor: { id: 't', name: 'Alex', timezone: 'Australia/Sydney' }, today: '2026-11-01', last: '2027-01-24', times, cells,
+    blocks: blocks.map((b, i) => ({ id: `b${i}`, kind: 'leave' as const, note: null, ...b })), opens: [],
+  });
+  it('가능 답을 보낸 칸(a)은 답 대기(r)와 구분 (R-16)', () => {
+    const d = data({ '2026-11-13T16:00': 'a', '2026-11-13T16:30': 'r' });
+    expect(cellKind('2026-11-13T16:00', d, false)).toBe('answered');
+    expect(cellKind('2026-11-13T16:30', d, false)).toBe('request');
+    expect(cellKind('2026-11-13T17:00', d, false)).toBe('free');
+  });
+  it('휴무가 다음 날 새벽(수업 시간 전)에 끝나면 다음 날에는 줄이 없고, 시작한 날에는 그날 부분 + 전체 기간 (R-03)', () => {
+    // 한국 11/4 하루 휴무 = Sydney 11/4 02:00 ~ 11/5 02:00
+    const d = data({}, [{ start: '2026-11-04T02:00', end: '2026-11-05T02:00' }]);
+    expect(dayItems('2026-11-05', 'Australia/Sydney', [], d)).toEqual([]);
+    const nov4 = dayItems('2026-11-04', 'Australia/Sydney', [], d);
+    expect(nov4).toHaveLength(1);
+    const it0 = nov4[0];
+    expect(it0.kind).toBe('block');
+    if (it0.kind === 'block') {
+      expect(it0.at.toISOString()).toBe(new Date('2026-11-04T02:00:00+11:00').toISOString());
+      expect(it0.end.toISOString()).toBe(new Date('2026-11-05T00:00:00+11:00').toISOString());   // 그날 끝까지
+      expect(it0.spans?.end.toISOString()).toBe(new Date('2026-11-05T02:00:00+11:00').toISOString());   // 전체는 다음 날 02:00 까지
+    }
+    expect(dayTag(nov4)).toBe('Leave');
+    expect(dayTag(dayItems('2026-11-05', 'Australia/Sydney', [], d))).toBeNull();
+  });
+  it('수업 시간 안에서 끝나는 휴무는 다음 날에도 보임 (그날 부분만)', () => {
+    const d = data({}, [{ start: '2026-11-04T02:00', end: '2026-11-05T09:00' }]);
+    const nov5 = dayItems('2026-11-05', 'Australia/Sydney', [], d);
+    expect(nov5).toHaveLength(1);
+    if (nov5[0].kind === 'block') {
+      expect(nov5[0].at.toISOString()).toBe(new Date('2026-11-05T00:00:00+11:00').toISOString());
+      expect(nov5[0].end.toISOString()).toBe(new Date('2026-11-05T09:00:00+11:00').toISOString());
+      expect(nov5[0].spans?.at.toISOString()).toBe(new Date('2026-11-04T02:00:00+11:00').toISOString());
+    }
+  });
+});

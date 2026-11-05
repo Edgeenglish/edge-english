@@ -8,7 +8,7 @@ import { plusDays, toMin, type CellCode } from './hours';
 import { kindTag, type TutorLesson } from './screen';
 
 /** 칸 판정 (4403): My hours 와 같고 x = 매주 닫혔지만 그날만 연 칸 */
-export type ScheduleCode = CellCode | 'x';
+export type ScheduleCode = CellCode | 'x' | 'a';   // a = 가능 답 보냄·운영진 확정 대기 (R-16, 4520)
 export type ScheduleBlock = { id: string; kind: 'block' | 'leave'; start: string; end: string; note: string | null };
 export type ScheduleOpen = { start: string; end: string };
 export type ScheduleData = {
@@ -103,7 +103,7 @@ export const otherZone = (viewZone: string, tutorZone: string): string | null =>
   tutorZone === 'Asia/Seoul' ? null : viewZone === tutorZone ? 'Asia/Seoul' : tutorZone;
 
 /** Week 칸 모양 (화면 판정은 편의, 저장 때 DB 가 다시 검사) */
-export type CellKind = 'free' | 'closed' | 'blocked' | 'class' | 'request' | 'leave' | 'locked' | 'outside' | 'past' | 'far';
+export type CellKind = 'free' | 'closed' | 'blocked' | 'class' | 'request' | 'answered' | 'leave' | 'locked' | 'outside' | 'past' | 'far';
 /** 그날만 연 칸(x)인지 — Block 창에서 '추가 개방 철회(Remove extra hours)' 로 구분 (QA-03) */
 export const isExtraCell = (key: string, d: ScheduleData | null) => d?.cells?.[key] === 'x';
 export function cellKind(key: string, d: ScheduleData, hasLesson: boolean): CellKind {
@@ -115,6 +115,7 @@ export function cellKind(key: string, d: ScheduleData, hasLesson: boolean): Cell
   const c = d.cells?.[key] ?? 'o';
   if (c === 'c') return 'class';
   if (c === 'r') return 'request';
+  if (c === 'a') return 'answered';   // 가능 답 보냄 · 운영진 확정 대기 (R-16, 4520)
   if (c === 'l') return 'leave';
   if (c === 'p') return 'locked';
   if (c === 's') return 'closed';
@@ -129,24 +130,40 @@ export function blockAt(blocks: ScheduleBlock[], at: Date, tz: string): Schedule
 }
 
 /** 그 날(보는 시간대)의 일정: 수업 + 막은 시간 + 그날만 연 시간 */
+/** at·end = 그날 부분만(날짜를 넘으면 자름). spans = 전체 기간이 그날을 넘을 때 원래 시작·끝 (R-03) */
 export type DayItem =
   | { kind: 'lesson'; at: Date; lesson: TutorLesson }
-  | { kind: 'block'; at: Date; end: Date; block: ScheduleBlock }
-  | { kind: 'open'; at: Date; end: Date };
+  | { kind: 'block'; at: Date; end: Date; block: ScheduleBlock; spans?: { at: Date; end: Date } }
+  | { kind: 'open'; at: Date; end: Date; spans?: { at: Date; end: Date } };
+/**
+ * 그날(보는 시간대)의 일정: 수업 + 막은 시간 + 그날만 연 시간.
+ * 휴무·막기는 반열린 구간 [start, end) 으로 날짜별로 자르고(R-03: 끝나는 시각이 다음 날 00:00 이면 그날 줄 없음),
+ * 그날 부분이 수업 가능 시간(times 첫 칸 ~ 마지막 칸+30분, 강사 현지 보기일 때)에 전혀 걸치지 않으면 숨김 — 전날 휴무가 새벽 02:00 에 끝나는 식의 '0분짜리' 줄 방지
+ */
 export function dayItems(date: string, zone: string, lessons: TutorLesson[], d: ScheduleData | null): DayItem[] {
   const tz = d?.tutor.timezone ?? zone;
   const dayStart = +localToInstant(date, '00:00', zone);
   const dayEnd = +localToInstant(plusDays(date, 1), '00:00', zone);
+  // 수업 가능 시간 창 (강사 현지 보기일 때만 정확 — 다른 시간대 보기는 하루 전체)
+  const times = d?.times ?? [];
+  const win = zone === tz && times.length > 0
+    ? { a: +localToInstant(date, times[0], zone), b: +localToInstant(date, times[times.length - 1], zone) + 30 * 60000 }
+    : { a: dayStart, b: dayEnd };
   const items: DayItem[] = lessons.filter((l) => inZone(l.startsAt, zone).date === date).map((l) => ({ kind: 'lesson', at: l.startsAt, lesson: l }));
+  const clip = (a: Date, e: Date): { at: Date; end: Date; spans?: { at: Date; end: Date } } | null => {
+    if (!(+a < dayEnd && dayStart < +e)) return null;
+    const at = new Date(Math.max(+a, dayStart));
+    const end = new Date(Math.min(+e, dayEnd));
+    if (!(+at < win.b && win.a < +end)) return null;
+    return { at, end, spans: +at !== +a || +end !== +e ? { at: a, end: e } : undefined };
+  };
   for (const b of d?.blocks ?? []) {
-    const a = localInstant(b.start, tz);
-    const e = localInstant(b.end, tz);
-    if (+a < dayEnd && dayStart < +e) items.push({ kind: 'block', at: a, end: e, block: b });
+    const c = clip(localInstant(b.start, tz), localInstant(b.end, tz));
+    if (c) items.push({ kind: 'block', block: b, ...c });
   }
   for (const o of d?.opens ?? []) {
-    const a = localInstant(o.start, tz);
-    const e = localInstant(o.end, tz);
-    if (+a < dayEnd && dayStart < +e) items.push({ kind: 'open', at: a, end: e });
+    const c = clip(localInstant(o.start, tz), localInstant(o.end, tz));
+    if (c) items.push({ kind: 'open', ...c });
   }
   return items.sort((x, y) => +x.at - +y.at);
 }

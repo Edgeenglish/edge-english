@@ -149,6 +149,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     ],
     holidays: [],
     creditPeriod: { start: s.periodStart, end: addDays(s.periodStart, 27) },
+    creditPeriods: [{ start: s.periodStart, end: addDays(s.periodStart, 27), granted: s.creditsPerPeriod, left: s.creditsLeft }],
     creditUses: [{ at: s.lessons[4].startsAt, reason: 'student_change', delta: -1, lessonAt: s.lessons[4].startsAt }],
     points: s.points,
   };
@@ -185,6 +186,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
         ...view,
         lessons: view.lessons.map((x) => (x.id === lessonId ? { ...x, state: 'canceled' } : x)),
         creditsLeft: view.creditsLeft - (uses ? 1 : 0),
+        creditPeriods: view.creditPeriods.map((p, i) => (i === 0 ? { ...p, left: p.left - (uses ? 1 : 0) } : p)),
         makeupRights: uses ? [...view.makeupRights, { lessonId, itemId: null, originalAt: l.startsAt, tutorLeave: false, requested: false }] : view.makeupRights,
       });
       return { status: '', uses_credit: uses, makeup_allowed: uses };

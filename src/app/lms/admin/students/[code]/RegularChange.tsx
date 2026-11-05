@@ -214,7 +214,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
       <div className="mt-4 flex gap-2">
         <button type="button" className={btnSub} onClick={onClose} disabled={busy}>취소</button>
         <button type="button" className={`${btnMain} flex-1`} disabled={!pv?.ok || !reason.trim() || busy} onClick={onSave}>
-          {busy ? '저장 중…' : pv ? `${pv.moved.length}회 바꾸고 저장` : '저장'}
+          {busy ? '저장 중…' : pv ? `${pv.moved.length}회 바꾸고 저장${pv.kept.filter((k) => k.why === 'same').length ? ` · ${pv.kept.filter((k) => k.why === 'same').length}회 유지` : ''}` : '저장'}
         </button>
       </div>
       <p className="mt-2 text-[12px] text-[#6b6880]">

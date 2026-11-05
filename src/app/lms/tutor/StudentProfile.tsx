@@ -160,7 +160,7 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
                 {e.extensionDays > 0 && <Row k="Extended end date" v={`${enDateYear(e.finalEndDate)} (+${e.extensionDays} days)`} />}
                 <Row k="Final end" v={<>{finalEndLines(e.finalEndDate, tz, stTz).map((l) => <span key={l} className="block">{l}</span>)}</>} />
                 {/* 예약된 수업과 날짜 안 잡은 보강권을 구분해 보여 주고, 합계는 학생 홈 '남은 수업' 과 같음 (QA-05) */}
-                <Row k="Remaining" v={<>{e.leftAll + e.leftUnbooked} class{e.leftAll + e.leftUnbooked === 1 ? '' : 'es'}<span className="block text-[12.5px] text-[#6b6880]">{e.leftRegular} regular{e.leftAll > e.leftRegular ? ` · ${e.leftAll - e.leftRegular} make-up booked` : ''}{e.leftUnbooked > 0 ? ` · ${e.leftUnbooked} make-up not scheduled yet` : ''}</span></>} />
+                <Row k="Remaining" v={<>{`${e.leftAll + e.leftUnbooked} ${e.leftAll + e.leftUnbooked === 1 ? 'class' : 'classes'} remaining`}<span className="block text-[12.5px] text-[#6b6880]">{e.leftRegular} regular{e.leftAll > e.leftRegular ? ` · ${e.leftAll - e.leftRegular} make-up booked` : ''}{e.leftUnbooked > 0 ? ` · ${e.leftUnbooked} make-up not scheduled yet` : ''}</span></>} />
               </>
             ) : (
               <>

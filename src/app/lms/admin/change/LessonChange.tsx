@@ -5,7 +5,8 @@
 //       · 4 안내(학생·강사 각각 [복사] → 보낸 뒤 [보냄], 누른 버튼은 회색으로 남음) · 5 보강(신청 → 강사 확인 → [확정]) · 6 변경 기록([되돌리기])
 // 판정(6시간·변경권·공휴일·보강 기한)과 중복 방지는 DB 함수 하나 — 화면 미리 보기와 저장 결과가 같음
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useSavingGuard } from '../useSavingGuard';
 import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lms/rules/dates';
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
@@ -56,7 +57,22 @@ function safeInstant(date: string, time: string): Date | null {
   }
 }
 
+/** 저장 중인 카드 수 (R-20): 하나라도 저장 중이면 화면을 떠나기 전에 확인 */
+const SavingCtx = createContext<(d: 1 | -1) => void>(() => {});
+/** useState(false) 대신 — 바뀔 때 저장 중 수를 위에 알림 */
+function useBusyState(): [boolean, (b: boolean) => void] {
+  const report = useContext(SavingCtx);
+  const [busy, set] = useState(false);
+  const ref = useRef(false);
+  const setBusy = useCallback((b: boolean) => { if (b !== ref.current) { ref.current = b; report(b ? 1 : -1); } set(b); }, [report]);
+  useEffect(() => () => { if (ref.current) { ref.current = false; report(-1); } }, [report]);
+  return [busy, setBusy];
+}
+
 export default function LessonChange({ students, actions, nowIso, initialCode }: { students: ChStudent[]; actions: ChangeActions; nowIso: string; initialCode?: string }) {
+  const [saving, setSaving] = useState(0);
+  const reportSaving = useCallback((d: 1 | -1) => setSaving((n) => Math.max(0, n + d)), []);
+  useSavingGuard(saving > 0, '아직 저장 중이에요. 지금 이동하면 처리 결과를 확인할 수 없어요. 그래도 이동할까요?');
   const [student, setStudent] = useState<ChStudent | null>(() => students.find((s) => s.code === initialCode) ?? null);
   const [q, setQ] = useState('');
   const [data, setData] = useState<StudentLessonData | null>(null);
@@ -128,8 +144,11 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   const shownNotices = [...notices.filter((n) => n.status === 'pending'), ...notices.filter((n) => n.status === 'sent').reverse().slice(0, 4)];
 
   return (
+    <SavingCtx.Provider value={reportSaving}>
     <div className="pb-24">
       <AdminHeader active="students" demo={false} />
+      {/* 저장 중 안내 (R-20): 이 동안 홈·메뉴로 이동하면 확인창 */}
+      {saving > 0 && <p role="status" className="sticky top-[57px] z-10 bg-[#fff8d6] px-4 py-2 text-center text-[13.5px] font-semibold text-[#5c4a00]">저장 중이에요… 끝날 때까지 이 화면에 있어 주세요.</p>}
       <main className="mx-auto grid max-w-[720px] gap-3 px-4 py-4">
         <h1 className="text-[20px] font-extrabold text-[#1d1b2b]">수업 변경·보강</h1>
 
@@ -229,6 +248,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
         )}
       </main>
     </div>
+    </SavingCtx.Provider>
   );
 }
 
@@ -239,7 +259,7 @@ function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson
   const [time, setTime] = useState(init.time);
   const [preview, setPreview] = useState<ChangeDecision | null>(null);
   const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useBusyState();
   const [requestId] = useState(newRequestId);
   const [voiding, setVoiding] = useState(false);
   const requestedAt = date && /^\d\d:\d\d$/.test(time) ? kstToInstant(date, time) : null;
@@ -317,7 +337,7 @@ function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson
 }
 
 function NoticeRow({ n, text, markSent }: { n: ChNotice; text: string; markSent: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState(false);
   const [manual, setManual] = useState(false);
@@ -355,7 +375,7 @@ function NoticeRow({ n, text, markSent }: { n: ChNotice; text: string; markSent:
 function CreditsCard({ credits, adjust, done }: { credits: AdminCredits; adjust: (delta: 1 | -1, reason: string) => Promise<{ before: number; after: number }>; done: () => Promise<void> }) {
   const [mode, setMode] = useState<1 | -1 | null>(null);
   const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const describeUse = (u: AdminCredits['uses'][number]) =>
@@ -419,7 +439,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const defTime = src ? kstParts(src.startsAt).time : '';
   const [slots, setSlots] = useState<{ date: string; time: string }[]>([{ date: '', time: defTime }]);
   const [other, setOther] = useState({ date: '', time: defTime });
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
   const open = right.open;
   const comp = right.kind === 'compensation' ? right.comp : null;
@@ -477,7 +497,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
             </div>
           ))}
           {open.tutorAnsweredAt && open.candidates.length > 0 && open.candidates.every((t) => open.tutorAnswers?.[+t] === 'no') && (
-            <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[13.5px] text-[#b3261e]">강사가 모든 날짜에 불가라고 답했어요. 강사 메모를 참고해 학생에게 다른 날짜를 받거나(카톡), 아래에 강사가 말한 시간을 넣어 확정해 주세요. 그 시간은 강사가 Schedule에서 연 시간이어야 해요.</p>
+            <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[13.5px] text-[#b3261e]">강사가 모든 날짜에 불가라고 답했어요. 강사 메모를 참고해 학생에게 다른 날짜를 받거나(카톡), 강사에게 다시 확인한 시간이 있으면 아래에 넣어 확정해 주세요. 그 시간은 강사가 Schedule에서 연 시간이어야 해요.</p>
           )}
           {open.tutorNote && <p className="rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] text-[#1d1b2b]">강사 메모: {open.tutorNote}</p>}
           <div className="grid grid-cols-[1.4fr_1fr_auto] gap-1.5">
@@ -518,7 +538,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
 function HistoryRow({ change, lesson, actions, done }: { change: StudentLessonData['changes'][number]; lesson: ChLesson; actions: ChangeActions; done: () => Promise<void> }) {
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
   const reverted = change.status === 'reverted';
   return (

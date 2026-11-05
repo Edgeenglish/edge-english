@@ -10,7 +10,7 @@
 import Link from 'next/link';
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { instantToKstDate, type KstDate } from '@/lms/rules/dates';
-import { dateLabel, enAt, kstLabel, MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
+import { dateLabel, enAt, kstLabel, MAKEUP_SLOTS_MAX, tutorLocalLabel } from '@/lms/admin/lesson-change';
 import {
   groupByStudent, groupRenewals, itemStatus, leaveMessages, pendingNoticeKeys, studentPhase, tutorBundles, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork,
   type LvAskMsg, type LvItem, type LvProposal, type LvTutorBundle, type LvRenewal, type LvRenewalGroup, type LvMakeupOption, type LvMessage, type LvNotice, type LvStep, type LvStudentGroup, type LvStudentWork, type LvSubOption, type LvTimeOff,
@@ -394,10 +394,17 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
             {preview.existing ? ` · 이미 목록 ${preview.existing}회` : ''}
           </p>
         )}
+        {/* 같은 강사의 겹치는 휴무 (R-09): 기존 기간을 보여 주고 저장은 막음 (DB 도 거절) */}
+        {preview && (preview.overlap?.length ?? 0) > 0 && (
+          <p className="rounded-[12px] bg-[#fdecea] px-3 py-2.5 text-[14px] text-[#b3261e]">
+            이미 있는 휴무와 겹쳐요: {preview.overlap!.map((o) => `${dateLabel(o.from)}~${dateLabel(o.to)}${o.reason ? ` (${o.reason})` : ''}`).join(', ')}.
+            기존 휴무를 철회하고 다시 넣거나, 겹치지 않는 날짜로 나눠 넣어 주세요.
+          </p>
+        )}
         <Err>{err}</Err>
         <div className="grid grid-cols-2 gap-1.5">
           <button type="button" className={btnSub} onClick={onClose}>닫기</button>
-          <button type="button" className={btnMain} disabled={!preview || busy} onClick={async () => {
+          <button type="button" className={btnMain} disabled={!preview || busy || (preview.overlap?.length ?? 0) > 0} onClick={async () => {
             setBusy(true);
             setErr('');
             try {
@@ -846,7 +853,8 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
                 <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
                   <input type="checkbox" className="h-5 w-5" checked={on} disabled={!on && picked.size >= MAKEUP_SLOTS_MAX}
                     onChange={(e) => { const n = new Set(picked); if (e.target.checked) n.add(+o.startsAt); else n.delete(+o.startsAt); setPicked(n); }} />
-                  {kstLabel(o.startsAt)}
+                  {/* 어느 기준 시간인지 (R-14): 한국 시간 + 해외 학생은 학생 도시 시간 */}
+                  <span>{kstLabel(o.startsAt)} KST{tutorLocalLabel(o.startsAt, item.studentTz) ? <span className="text-[#6b6880]"> · {(item.studentTz.split('/').pop() ?? '').replace(/_/g, ' ')} {tutorLocalLabel(o.startsAt, item.studentTz)}</span> : null}</span>
                 </label>
               </li>
             );

@@ -8,7 +8,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { formatInZone } from '@/lms/rules/dates';
-import { STATUS_RULES } from '@/lms/rules/status';
+import { tutorPaidFor } from '@/lms/rules/status';
 import TutorHours, { type HoursActions } from './TutorHours';
 import TutorSchedule, { type ScheduleActions } from './TutorSchedule';
 import { useSavedToggle, useSavedValue } from './useSaved';
@@ -393,10 +393,10 @@ export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout
 
         {tab === 'schedule' && (
           <TutorSchedule actions={actions.schedule} tz={tz} now={now} openProfile={openProfile} onRecord={openInRecord}
-            loadLessons={loadLessons} />
+            loadLessons={loadLessons} onSaved={() => reload()} />
         )}
 
-        {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} inline onDirty={(d) => { hoursDirty.current = d; }} />}
+        {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} inline onDirty={(d) => { hoursDirty.current = d; }} onSaved={() => reload()} />}
 
         {panel === 'cover' && (
           <Sheet onClose={() => setPanel(null)}>
@@ -572,8 +572,9 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   const stColor = phase === 'to_record' ? 'text-[#b3261e]' : phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]';
   const stText = phase === 'recorded' ? `✓ ${status}${lateText(l.late)}` : status;
-  // 페이 대상 Y/N (상태 규칙 tutorPaid, 대표 10/29 가안). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
-  const paid = l.classStatus ? (STATUS_RULES[l.classStatus].tutorPaid ? (l.locked ? 'Y ✓' : 'Y') : 'N') : '';
+  // 페이 대상 Y/N (상태 규칙 tutorPaid + 보상수업은 무급, R-19: 공통 규칙 tutorPaidFor). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
+  const paidRule = tutorPaidFor(l.kind, l.classStatus);
+  const paid = paidRule === null ? '' : paidRule ? (l.locked ? 'Y ✓' : 'Y') : 'N';
   const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
   const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
   const openProfile = useContext(ProfileCtx);
