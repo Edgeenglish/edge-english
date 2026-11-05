@@ -125,7 +125,8 @@ export type MakeupRight =
 /** 보강 받을 권리: 보강 받는 결과로 끝났는데 살아 있는 보강이 없는 수업 + 강사 휴무 '기다림' 수업(1800) + 이관한 미예약 보강 */
 /** + 강사 노쇼 무료 보상수업(4100): 날짜 안 잡은 보상권, 원래 수업 보강과 따로 신청 */
 export function makeupRights(lessons: ChLesson[], migrated: ChMigratedOpen[], requests: ChMakeupRequest[], comps: ChCompensation[] = []): MakeupRight[] {
-  const live = new Set(lessons.filter((l) => l.makeupOf && l.state !== 'canceled').map((l) => l.makeupOf));
+  // 보강 수업이 한 번 잡힌 원래 수업은 그 보강이 '없애기(voided)' 되지 않는 한 다시 권리가 아님 — 취소된 보강도 포함 (QA-13·R-24, student_screen 과 같은 규칙)
+  const live = new Set(lessons.filter((l) => l.makeupOf && !l.voided).map((l) => l.makeupOf));
   const openFor = (f: (r: ChMakeupRequest) => boolean) => requests.find((r) => (r.status === 'requested' || r.status === 'countered') && f(r)) ?? null;
   const fromLessons: MakeupRight[] = lessons
     .filter((l) => !l.voided && l.classStatus && (grantsMakeup(l.classStatus) || l.classStatus === 'Tutor long-term leave') && !live.has(l.id))

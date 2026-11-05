@@ -10,6 +10,7 @@
 
 import { formatInZone, type KstDate } from '../rules/dates';
 import { enAt, koAt, MAKEUP_SLOTS_MAX } from './lesson-change';
+import { meetRoomUrl } from '../rules/meet';
 
 export type LvChoice = 'undecided' | 'substitute' | 'wait';
 export type LvStage = 'asked' | 'tutor_ok' | 'confirmed';
@@ -228,8 +229,10 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
     ].join('\n');
   }
   if (recipient === 'student') {
+    // R-23: 회의실 주소(meet.google.com/xxx-xxxx-xxx)일 때만 링크를 넣고, 아니면 수업 전에 따로 보냄
+    const room = meetRoomUrl(i.subTutorMeetUrl);
     return [`[엣지영어] ${i.studentName}님, 아래 수업은 대체강사 ${i.subTutorName} 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.`, dates,
-      ...(i.subTutorMeetUrl ? [`수업 입장: ${i.subTutorMeetUrl}`] : [])].join('\n\n');
+      room ? `수업 입장: ${room}` : '수업 링크는 수업 전에 보내 드려요.'].join('\n\n');
   }
   return [
     `CONFIRMED substitute classes - ${i.studentNameEn} (${i.durationMin} min)`,

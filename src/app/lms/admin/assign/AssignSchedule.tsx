@@ -82,7 +82,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
   const [msg, setMsg] = useState('');
   const [view, setView] = useState<PlanView | null>(initialView);
   // 기존 배정 확인 (R-10): 일정안이 없고 강사·예정 수업이 이미 있으면, 새 배정 대신 지금 배정을 보여 주고 컨펌 완료를 기록
-  const hasCurrent = !view && !!current && !current.plan && !!current.tutor && current.scheduled > 0 && current.task?.status !== 'canceled';
+  const hasCurrent = !view && !!current && !current.plan && !!current.tutor && current.scheduled > 0 && current.task?.status !== 'canceled';   // scheduled = 앞으로 + 지난 미기록 (컨펌 기록 조건은 DB 가 다시 검사)
   const [currentDone, setCurrentDone] = useState<boolean>(!!current?.task?.studentNotifiedAt || current?.task?.status === 'done');
   const [showNew, setShowNew] = useState(false);
 
@@ -277,9 +277,16 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
         {hasCurrent && !showNew && (
           <Card title={currentDone ? '수업 컨펌 완료' : '지금 배정 · 강사·학생에게 확인했나요?'}>
             <p className="text-[15px] font-bold text-[#1d1b2b]">{current!.tutor!.name} 강사 · {slotsText(current!.slots)} (한국 시간) · {current!.durationMin}분</p>
+            {/* R-22: 앞으로 수업과 지난 미기록 수업을 나눠서 */}
             <p className="mt-1 text-[13.5px] text-[#3d3a52]">
-              예정 수업 {current!.scheduled}회{current!.firstAt ? ` · 첫 수업 ${dayLabel(instantToKstDate(current!.firstAt))}` : ''} · 수강 {dayLabel(current!.startDate)}–{dayLabel(current!.finalEndDate)}
+              앞으로 수업 {current!.upcoming}회{current!.nextAt ? ` · 다음 수업 ${dayLabel(instantToKstDate(current!.nextAt))}` : ''}
+              {current!.firstAt ? ` · 첫 수업 ${dayLabel(instantToKstDate(current!.firstAt))}` : ''} · 수강 {dayLabel(current!.startDate)}–{dayLabel(current!.finalEndDate)}
             </p>
+            {(current!.pastUnrecorded > 0 || current!.doneCount > 0) && (
+              <p className="mt-0.5 text-[13px] text-[#6b6880]">
+                {[current!.doneCount > 0 && `끝난 수업 ${current!.doneCount}회`, current!.pastUnrecorded > 0 && `지난 수업 ${current!.pastUnrecorded}회는 Class Record 기록 전`].filter(Boolean).join(' · ')}
+              </p>
+            )}
             <p className="mt-2 text-[13px] text-[#6b6880]">이 등록은 이미 강사와 정규 수업이 있어요. 시간을 바꾸려면 학생 상세의 [정규 일정 수정]을, 강사를 바꾸려면 운영진에게 알려 주세요. 여기서는 확인 완료만 기록해요.</p>
             {currentDone ? (
               <Link href={home} className="mt-3 flex min-h-[48px] items-center justify-center rounded-[12px] bg-[#e3f6ea] text-[15px] font-bold text-[#1e7a46]">✓ 기록했어요 — 처리할 일로</Link>

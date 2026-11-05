@@ -7,6 +7,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useSavingGuard } from '../useSavingGuard';
+import { markOrphans, reconcileStored, setPendingHref } from '@/lms/admin/pending-saves';
 import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lms/rules/dates';
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
@@ -85,7 +86,10 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
     if (!student) return;
     try {
       setLoadErr('');
-      setData(await actions.load(student.id));
+      const d = await actions.load(student.id);
+      setData(d);
+      // 응답 없던·화면이 닫혔던 저장을 서버 자료로 판정 (R-20)
+      reconcileStored({ changes: d.changes.map((c) => ({ id: c.id, status: c.status })), lessons: d.lessons.map((l) => ({ id: l.id, state: l.state, voided: l.voided })), requests: d.makeupRequests.map((r) => ({ id: r.id, status: r.status })) });
       if (actions.loadCredits) setCredits(await actions.loadCredits(student.id).catch(() => null));
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : '불러오지 못했어요.');
@@ -94,8 +98,10 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   useEffect(() => {
     setData(null);
     setLessonId(null);
+    markOrphans();
+    if (student) setPendingHref(`/lms/admin/change?student=${encodeURIComponent(student.code)}`);
     reload();
-  }, [reload]);
+  }, [reload, student]);
 
   const found = useMemo(() => {
     const t = q.trim().toLowerCase();

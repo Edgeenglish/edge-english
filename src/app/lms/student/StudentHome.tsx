@@ -879,9 +879,14 @@ function LeaveSheet(props: {
       <p className="rounded-[14px] bg-[#efeaff] px-4 py-3 text-[15px] font-semibold leading-relaxed text-[#2b1c7a]">
         {[fixed.length && `대체강사 확정 ${fixed.length}회`, ask.length && `답변 필요 ${ask.length}회`, waits.length && `기존 강사님과 보강 ${waits.length}회`].filter(Boolean).join(' · ')}
       </p>
-      {fixed.length > 0 && (
-        <p className="rounded-[14px] bg-[#ffd66b] px-4 py-3 text-[15px] font-bold leading-snug text-[#1b1442]">⚠️ 대체강사 수업은 아래 링크에서 진행됩니다.</p>
-      )}
+      {fixed.length > 0 && (() => {
+        // R-23: 회의실 링크가 있는 수업만 '아래 링크', 없으면 카톡으로 보냄
+        const withLink = fixed.filter((x) => meetRoomUrl(x.subMeetUrl)).length;
+        const text = withLink === fixed.length ? '⚠️ 대체강사 수업은 아래 링크에서 진행됩니다.'
+          : withLink === 0 ? `⚠️ 대체강사 수업 링크는 수업 전에 카카오톡으로 보내 드려요.`
+          : '⚠️ 대체강사 수업은 아래 링크에서 진행됩니다. 링크가 없는 수업은 수업 전에 카카오톡으로 보내 드려요.';
+        return <p className="rounded-[14px] bg-[#ffd66b] px-4 py-3 text-[15px] font-bold leading-snug text-[#1b1442]">{text}</p>;
+      })()}
       {[{ title: '대체강사 수업 · 확정', list: fixed }, { title: '대체강사 수업 · 답변 필요', list: ask }].filter((x) => x.list.length > 0).map(({ title, list }) => (
         <section key={title} className={`${card} grid gap-1 p-4`}>
           <h3 className="text-[15px] font-bold">{title}</h3>

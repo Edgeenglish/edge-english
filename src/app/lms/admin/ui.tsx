@@ -2,6 +2,7 @@
 // ?demo=1(가상 데이터 미리보기)을 메뉴 이동 때도 유지한다
 
 import Link from 'next/link';
+import PendingSavesBanner from './PendingSavesBanner';
 
 const PATHS = {
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
@@ -98,6 +99,8 @@ export function AdminHeader({ active, demo, right }: { active: AdminTab; demo: b
       <span className="flex-1" />
       {/* 휴대폰: 버튼이 많으면 다음 줄로 (글자가 세로로 깨지지 않게) */}
       {right && <div className="flex w-full flex-wrap items-center justify-end gap-2 whitespace-nowrap lg:w-auto lg:flex-nowrap">{right}</div>}
+      {/* 저장 중에 화면을 떠난 저장의 결과 (R-20) — 운영자 화면 어디서나 */}
+      <div className="w-full basis-full -mx-4 -mb-3 lg:-mx-7"><PendingSavesBanner /></div>
     </header>
   );
 }

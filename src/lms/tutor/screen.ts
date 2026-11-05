@@ -47,7 +47,9 @@ export type TutorLesson = {
   compensationOf?: Date | null;
 };
 
-export type MakeupSlot = { id: string; startsAt: Date; endsAt: Date; answer: 'yes' | 'no' | null; busy: boolean; past: boolean };
+/** why: 왜 못 고르는지 (4530) — closed 강사가 열지 않은 시간 · busy 다른 수업 · leave 휴무 · hours 06:00~22:30 밖 · b2b 연속 수업 규칙 */
+export type ConflictWhy = 'closed' | 'busy' | 'leave' | 'hours' | 'b2b' | 'other';
+export type MakeupSlot = { id: string; startsAt: Date; endsAt: Date; answer: 'yes' | 'no' | null; busy: boolean; why?: ConflictWhy | null; past: boolean };
 export type TutorMakeup = {
   id: string;
   student: string;
@@ -62,7 +64,7 @@ export type TutorMakeup = {
 };
 
 /** 대체 수업 요청 (2600): 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 */
-export type TutorCover = { id: string; student: string; studentId?: string; startsAt: Date; endsAt: Date; busy: boolean };
+export type TutorCover = { id: string; student: string; studentId?: string; startsAt: Date; endsAt: Date; busy: boolean; why?: ConflictWhy | null };
 
 export type TutorScreen = {
   tutor: { id: string; name: string; timezone: string; meetUrl: string | null };
@@ -92,9 +94,9 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
     toRecord: j.to_record ?? [],
     makeups: (j.makeups ?? []).map((m: any) => ({
       id: m.id, student: m.student, studentId: m.student_id ?? undefined, originalAt: at(m.original_at), originalDate: m.original_date ?? null, note: m.note ?? null, answeredAt: at(m.answered_at), compensation: !!m.compensation,
-      slots: (m.slots ?? []).map((s: any) => ({ id: s.id, startsAt: new Date(s.starts_at), endsAt: new Date(s.ends_at), answer: s.answer ?? null, busy: !!s.busy, past: !!s.past })),
+      slots: (m.slots ?? []).map((s: any) => ({ id: s.id, startsAt: new Date(s.starts_at), endsAt: new Date(s.ends_at), answer: s.answer ?? null, busy: !!s.busy, why: s.why ?? null, past: !!s.past })),
     })),
-    covers: (j.covers ?? []).map((c: any) => ({ id: c.id, student: c.student, studentId: c.student_id ?? undefined, startsAt: new Date(c.starts_at), endsAt: new Date(c.ends_at), busy: !!c.busy })),
+    covers: (j.covers ?? []).map((c: any) => ({ id: c.id, student: c.student, studentId: c.student_id ?? undefined, startsAt: new Date(c.starts_at), endsAt: new Date(c.ends_at), busy: !!c.busy, why: c.why ?? null })),
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -264,4 +266,16 @@ export function makeupOrigin(m: TutorMakeup, tz: string): string {
 /** 보강 답을 보낼 수 있는지: 가능한 시간이 하나 이상이거나, 모두 안 되면 다른 가능 시간 메모 */
 export function answerReady(yes: ReadonlySet<string>, note: string): boolean {
   return yes.size > 0 || !!note.trim();
+}
+
+/** 강사 화면 '못 고르는 이유' 한 줄 (R-25). 쉽고 짧게, 실제 원인만 */
+export function busyText(why: ConflictWhy | null | undefined, city: string): string {
+  switch (why) {
+    case 'closed': return 'Not in your open hours. Open this time in Schedule to accept it.';
+    case 'busy': return 'You have another class then.';
+    case 'leave': return 'You are on leave then.';
+    case 'hours': return `Outside class hours (06:00–22:30 ${city}).`;
+    case 'b2b': return 'Too many classes in a row without a break.';
+    default: return 'This time is not available.';
+  }
 }

@@ -7,6 +7,7 @@ import {
   adjustCredit, changeLesson, confirmMakeup, loadChangeStudents, loadCredits, loadStudentLessons, markLessonNoticeSent, requestMakeup, revertChange, voidMakeup, withdrawMakeup,
 } from '@/lms/admin/lesson-change-live';
 import type { ChStudent } from '@/lms/admin/lesson-change';
+import { pendingHref, trackSave } from '@/lms/admin/pending-saves';
 import { supabaseBrowser } from '@/lms/auth/client';
 import LessonChange, { type ChangeActions } from './LessonChange';
 
@@ -35,15 +36,17 @@ export default function ChangeLive({ code }: { code?: string }) {
     () =>
       sb && {
         load: (id) => loadStudentLessons(sb, id),
-        change: (rid, lid, who, at, dry) => changeLesson(sb, rid, lid, who, at, dry),
-        revert: (id, note) => revertChange(sb, id, note),
-        requestMakeup: (src, slots) => requestMakeup(sb, src, slots),
-        confirmMakeup: (id, at) => confirmMakeup(sb, id, at),
-        withdrawMakeup: (id) => withdrawMakeup(sb, id),
-        voidMakeup: (id, note) => voidMakeup(sb, id, note),
-        markSent: (id) => markLessonNoticeSent(sb, id),
+        // 저장은 '저장 중 기록'으로 감싸서 화면을 떠나도 결과가 남게 (R-20). 미리 보기(dry)는 기록 안 함
+        change: (rid, lid, who, at, dry) => dry ? changeLesson(sb, rid, lid, who, at, dry)
+          : trackSave({ label: `수업 취소 저장 (${who === 'student' ? '학생' : '강사'} 사정)`, href: pendingHref(), verify: { kind: 'cancel', lessonId: lid } }, () => changeLesson(sb, rid, lid, who, at, dry)),
+        revert: (id, note) => trackSave({ label: '취소 되돌리기', href: pendingHref(), verify: { kind: 'revert', changeId: id } }, () => revertChange(sb, id, note)),
+        requestMakeup: (src, slots) => trackSave({ label: '보강 신청', href: pendingHref() }, () => requestMakeup(sb, src, slots)),
+        confirmMakeup: (id, at) => trackSave({ label: '보강 확정', href: pendingHref(), verify: { kind: 'confirm_makeup', requestId: id } }, () => confirmMakeup(sb, id, at)),
+        withdrawMakeup: (id) => trackSave({ label: '보강 신청 닫기', href: pendingHref(), verify: { kind: 'withdraw_makeup', requestId: id } }, () => withdrawMakeup(sb, id)),
+        voidMakeup: (id, note) => trackSave({ label: '보강 삭제', href: pendingHref(), verify: { kind: 'void_makeup', lessonId: id } }, () => voidMakeup(sb, id, note)),
+        markSent: (id) => trackSave({ label: '안내 보냄 기록', href: pendingHref() }, () => markLessonNoticeSent(sb, id)),
         loadCredits: (id) => loadCredits(sb, id),
-        adjustCredit: (id, delta, reason) => adjustCredit(sb, id, delta, reason),
+        adjustCredit: (id, delta, reason) => trackSave({ label: `변경권 ${delta > 0 ? '+1' : '−1'}`, href: pendingHref() }, () => adjustCredit(sb, id, delta, reason)),
       },
     [sb],
   );

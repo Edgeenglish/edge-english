@@ -150,7 +150,12 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     const m = leaveMessages(items, notices);
     expect(m.map((x) => [x.recipient, x.to])).toEqual([['tutor', 'Benny'], ['student', '김민수']]);
     expect(m[0].text).toContain('CONFIRMED substitute classes');
-    expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 대체강사 Benny 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.\n\n- 11월 2일(월) 오후 8시');
+    // R-23: 회의실 링크가 없으면(또는 홈페이지 주소면) 링크 대신 '수업 전에 보내 드려요'
+    expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 대체강사 Benny 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.\n\n- 11월 2일(월) 오후 8시\n\n수업 링크는 수업 전에 보내 드려요.');
+    const bogus = leaveMessages([I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', subTutorMeetUrl: 'https://meet.google.com/' })], notices);
+    expect(bogus[1].text).toContain('수업 링크는 수업 전에 보내 드려요.');
+    const room = leaveMessages([I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', subTutorMeetUrl: 'https://meet.google.com/abc-defg-hij' })], notices);
+    expect(room[1].text).toContain('수업 입장: https://meet.google.com/abc-defg-hij');
     expect(studentWork(groupByStudent(items)[0], m, now).confirm.confirmedMsgs).toHaveLength(2);
   });
 

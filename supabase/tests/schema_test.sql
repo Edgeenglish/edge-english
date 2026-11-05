@@ -2437,7 +2437,7 @@ select pg_temp.ok((select (s ->> 'busy')::boolean from jsonb_array_elements(tuto
   'QA-01 A: 닫은 시간의 후보는 강사 화면에 busy (4500)');
 select pg_temp.expect_error($$select tutor_makeup_answer((select id from q1), array[pg_temp.qcand((select id from q1))], null)$$, 'no longer open');
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
-select pg_temp.expect_error($$select admin_makeup_confirm((select id from q1), (select t from q0) + interval '2 days 2 hours 30 minutes')$$, '열어 둔 시간이 아님');
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from q1), (select t from q0) + interval '2 days 2 hours 30 minutes')$$, '열어 둔 시간이 아님|열어 둔 시간이 아닙니다');
 select pg_temp.ok((select status = 'requested' from makeup_requests where id = (select id from q1)), 'QA-01 A: 닫은 시간은 강사 가능 답·운영진 확정 모두 거절 (4500)');
 -- 강사가 Schedule 에서 그날만 열면(기록된 날짜별 개방) 확정됨
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004500';
@@ -2724,9 +2724,9 @@ select pg_temp.ok((select j -> 'cells' ->> ((select d0 + 3 from rd)::text || 'T2
 -- R-10) 기존 배정이 있는 신규 매칭: 지금 배정 읽기 → 학생 안내 완료 기록 → 업무 완료
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select pg_temp.ok((select j -> 'task' ->> 'status' = 'open' and jsonb_typeof(j -> 'plan') = 'null' and j -> 'tutor' ->> 'name' = '재검A' and jsonb_array_length(j -> 'slots') = 2
-                          and (j ->> 'scheduled')::int = 4 and (j ->> 'first_at')::timestamptz = pg_temp.rk(0, '20:00')
+                          and (j ->> 'scheduled')::int = 4 and (j ->> 'upcoming')::int = 4 and (j ->> 'past_unrecorded')::int = 0 and (j ->> 'next_at')::timestamptz = pg_temp.rk(0, '20:00') and (j ->> 'first_at')::timestamptz = pg_temp.rk(0, '20:00')
                    from admin_matching_current('99999999-1000-0000-0000-000000004521') j),
-  'R-10: 지금 배정 읽기 — 강사·정규 요일 2개·예정 수업 4회·첫 수업, 일정안 없음 (4520)');
+  'R-10·R-22: 지금 배정 읽기 — 강사·정규 요일 2개·앞으로 4회(지난 미기록 0)·다음 수업, 일정안 없음 (4520·4530)');
 select pg_temp.expect_error($$select admin_matching_notified('99999999-1000-0000-0000-000000004520')$$, '신규 매칭 업무가 없습니다');
 create temp table r10a as select admin_matching_notified('99999999-1000-0000-0000-000000004521') as r;   -- 같은 문장 안에서는 함수가 바꾼 값이 안 보여 따로 호출
 grant select on r10a to authenticated;
@@ -2812,5 +2812,42 @@ select admin_leave_student_ok(array[(select id from r05)]);
 select pg_temp.ok((select sub_stage = 'confirmed' from leave_items where id = (select id from r05))
               and (select tutor_id = '55555555-0000-0000-0000-00000000452b' from lessons where id = '77777777-4521-0000-0000-000000000004'),
   'R-05: 홈페이지 주소(meet.google.com/)도 거절, 회의실 링크를 넣으면 확정 (4520)');
+reset request.jwt.claim.sub;
+reset role;
+
+-- ---------- 4530 Work 2차 재검증(67fbba0) R-22·R-25 ----------
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok(lms_conflict_code('강사가 열어 둔 시간이 아님(Availability·Schedule)') = 'closed' and lms_conflict_code('강사 휴무') = 'leave'
+              and lms_conflict_code('강사 다른 수업(휴식 10분 포함)') = 'busy' and lms_conflict_code('강사 현지 06:00~22:30 밖의 시작 시각') = 'hours'
+              and lms_conflict_code('쉬지 않고 이어 붙이는 수업(20분 2개까지)') = 'b2b' and lms_conflict_code(null) is null
+              and lms_conflict_message('강사가 열어 둔 시간이 아님(Availability·Schedule)') like '강사가 열어 둔 시간이 아닙니다.%'
+              and lms_conflict_message('강사 휴무') = '그 시간은 강사 휴무입니다.'
+              and lms_conflict_message('강사 다른 수업(휴식 10분 포함)') not like '%와 겹칩니다 (%' ,
+  'R-25: 예약 불가 사유 코드·문구 (4530)');
+-- 재검2 학생(4521)의 수업이 있는 시간에 재검1 보강 확정 → '다른 수업' 사유 문장, 강사가 닫은 시간 → '열어 둔 시간이 아닙니다'
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_makeup_withdraw((select id from r16));   -- 같은 수업의 열린 신청(R-16 시험)을 닫아야 새 신청이 생김
+create temp table r25 as select (admin_makeup_request('77777777-4520-0000-0000-000000000001', null,
+  jsonb_build_array(jsonb_build_object('starts_at', pg_temp.rk(2, '19:00'))), now()) ->> 'makeup_request_id')::uuid as id;
+grant select on r25 to authenticated;
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from r25), pg_temp.rk(2, '20:00'))$$, '다른 수업과 겹칩니다 \(앞뒤 휴식 10분 포함\)');
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from r25), pg_temp.rk(2, '04:00'))$$, '06:00~22:30');
+select pg_temp.ok(true, 'R-25: 운영진 확정 거절 문구가 실제 원인(다른 수업 / 시작 가능 시간 밖)으로 나옴, ''○○와 겹칩니다'' 연결 없음 (4530)');
+reset role;
+update tutor_availability set end_local = '18:00' where tutor_id = '55555555-0000-0000-0000-00000000452a' and weekday = extract(dow from (select d0 + 2 from rd));
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_makeup_confirm((select id from r25), pg_temp.rk(2, '19:00'))$$, '열어 둔 시간이 아닙니다');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004520';   -- 강사 재검A 화면: 후보 why = closed
+select pg_temp.ok((select m -> 'slots' -> 0 ->> 'why' = 'closed' and (m -> 'slots' -> 0 ->> 'busy')::boolean
+                   from jsonb_array_elements(tutor_screen(null, (select d0 + 2 from rd), (select d0 + 2 from rd)) -> 'makeups') m
+                   where m ->> 'id' = (select id::text from r25)),
+  'R-25: 강사 화면 보강 후보에 why=closed (열지 않은 시간) (4530)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_makeup_withdraw((select id from r25));
+reset role;
+update tutor_availability set end_local = '23:30' where tutor_id = '55555555-0000-0000-0000-00000000452a' and weekday = extract(dow from (select d0 + 2 from rd));
 reset request.jwt.claim.sub;
 reset role;

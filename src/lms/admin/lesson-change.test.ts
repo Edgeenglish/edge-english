@@ -126,3 +126,18 @@ describe('보강 시간 입력: 강사 현지 날짜·시각 (2026-10-26 대표)
     expect(tutorNotice('makeup_ask', c)).toContain('not confirmed yet');
   });
 });
+
+describe('보강 권리 목록 — 보강이 한 번 잡힌 원래 수업은 권리 아님 (QA-13·R-24)', async () => {
+  const { makeupRights } = await import('./lesson-change');
+  const L = (over: Partial<import('./lesson-change').ChLesson>): import('./lesson-change').ChLesson => ({
+    id: 'x', kind: 'regular', startsAt: new Date('2026-10-26T11:00:00Z'), endsAt: new Date('2026-10-26T11:40:00Z'), state: 'scheduled', classStatus: null,
+    makeupOf: null, voided: false, ...over,
+  } as import('./lesson-change').ChLesson);
+  it('취소된 보강(voided 아님)이 달린 원래 수업은 목록에 없고(권리는 그 보강 수업을 따름), 보강을 없애면(voided) 원래 수업이 다시 권리', () => {
+    const orig = L({ id: 'o', state: 'canceled', classStatus: 'Student canceled in advance' });
+    const canceledMakeup = L({ id: 'm', kind: 'makeup', makeupOf: 'o', state: 'canceled', classStatus: 'Student canceled in advance' });
+    expect(makeupRights([orig, canceledMakeup], [], []).map((r) => r.key)).toEqual(['m']);
+    expect(makeupRights([orig, { ...canceledMakeup, voided: true }], [], []).map((r) => r.key)).toEqual(['o']);
+    expect(makeupRights([orig], [], []).map((r) => r.key)).toEqual(['o']);
+  });
+});

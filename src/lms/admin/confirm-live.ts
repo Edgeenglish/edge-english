@@ -141,6 +141,12 @@ export type MatchingCurrent = {
   tutor: { id: string; name: string; timezone: string } | null;
   slots: RegularSlot[];
   scheduled: number;
+  /** 앞으로 수업 / 지난 미기록(시작했지만 Class Record 전) / 끝난 수업 (R-22, 4530) */
+  upcoming: number;
+  pastUnrecorded: number;
+  doneCount: number;
+  /** 다음 수업(앞으로 첫 수업) / 이 등록의 첫 수업(지난 것 포함) */
+  nextAt: Date | null;
   firstAt: Date | null;
   startDate: string;
   finalEndDate: string;
@@ -156,6 +162,7 @@ export async function loadMatchingCurrent(sb: SupabaseClient, enrollmentId: stri
     plan: { id: string; state: 'proposed' | 'confirmed' } | null;
     tutor: { id: string; name: string; timezone: string } | null;
     slots: { weekday: number; time: string }[]; scheduled: number; first_at: string | null;
+    upcoming?: number; past_unrecorded?: number; done_count?: number; next_at?: string | null;
     start_date: string; final_end_date: string; duration_min: number; weekly_count: number; lessons_total: number;
   };
   return {
@@ -164,6 +171,10 @@ export async function loadMatchingCurrent(sb: SupabaseClient, enrollmentId: stri
     tutor: r.tutor,
     slots: (r.slots ?? []).map((s) => ({ weekday: s.weekday, time: s.time })),
     scheduled: r.scheduled,
+    upcoming: r.upcoming ?? r.scheduled,
+    pastUnrecorded: r.past_unrecorded ?? 0,
+    doneCount: r.done_count ?? 0,
+    nextAt: r.next_at ? new Date(r.next_at) : null,
     firstAt: r.first_at ? new Date(r.first_at) : null,
     startDate: r.start_date, finalEndDate: r.final_end_date, durationMin: r.duration_min, weeklyCount: r.weekly_count, lessonsTotal: r.lessons_total,
   };

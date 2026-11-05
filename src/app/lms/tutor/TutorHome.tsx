@@ -9,14 +9,14 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { formatInZone } from '@/lms/rules/dates';
 import { tutorPaidFor } from '@/lms/rules/status';
+import { cityTime } from '@/lms/tutor/hours-view';
 import TutorHours, { type HoursActions } from './TutorHours';
 import TutorSchedule, { type ScheduleActions } from './TutorSchedule';
 import { useSavedToggle, useSavedValue } from './useSaved';
 import StudentProfile, { type ProfileActions } from './StudentProfile';
 import {
   answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstRange, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
-  statusText, timeRange, weekOf, whenFull, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen,
-} from '@/lms/tutor/screen';
+  statusText, timeRange, weekOf, whenFull, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
 
 export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
@@ -832,7 +832,7 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
               <span className="flex-1">
                 <b className="block text-[15px] text-[#1d1b2b]">{whenText(c.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(c, tz)} {tzTimeLabel(tz)}</b>
                 {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
-                {c.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">You have another class or time off then</span>}
+                {c.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(c.why, cityTime(tz))}</span>}
               </span>
             </button>
           );
@@ -903,7 +903,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
                   <span className="flex-1">
                     <b className="block text-[15px] text-[#1d1b2b]">{whenText(s.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(s, tz)} {tzTimeLabel(tz)}</b>
                     {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
-                    {s.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">You have another class or time off then</span>}
+                    {s.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(s.why, cityTime(tz))}</span>}
                   </span>
                 </button>
               );
