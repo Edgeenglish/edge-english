@@ -160,9 +160,9 @@ export default function AdminDashboard({
       setTasks((prev) => prev.filter((t) => t !== task));
       setLastClosed(task);
       setDoneCount((n) => n + 1);
-      setToast('처리할 일에서 종료했어요.');
+      setToast('카드를 닫았어요.');
     } catch (e) {
-      setToast(e instanceof Error ? e.message : '종료하지 못했어요.');
+      setToast(e instanceof Error ? e.message : '카드를 닫지 못했어요.');
     } finally { setClosing(null); }
   }
 
@@ -177,7 +177,7 @@ export default function AdminDashboard({
       } else setTasks((prev) => [...prev, lastClosed]);
       setLastClosed(null);
       setDoneCount((n) => Math.max(0, n - 1));
-      setToast('종료를 되돌렸어요.');
+      setToast('카드를 다시 열었어요.');
     } catch (e) { setToast(e instanceof Error ? e.message : '되돌리지 못했어요.'); }
     finally { setClosing(null); }
   }
@@ -476,7 +476,7 @@ export default function AdminDashboard({
               <p className="mt-1 text-[13px] text-[#6b6880]">오늘 {doneCount}건을 마쳤어요.</p>
             </div>
           )}
-          {lastClosed && <button type="button" disabled={!!closing} onClick={undoClose} className="min-h-[40px] text-left text-[13px] font-semibold text-[#5b3fe0]">방금 종료한 일 되돌리기</button>}
+          {lastClosed && <button type="button" disabled={!!closing} onClick={undoClose} className="min-h-[40px] text-left text-[13px] font-semibold text-[#5b3fe0]">방금 닫은 카드 다시 열기</button>}
           {shown.map((item) => (
             <article key={`${item.kind}:${item.id}`} className="grid gap-2 rounded-[14px] border border-[#e6e3ef] bg-white px-3.5 py-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -484,7 +484,7 @@ export default function AdminDashboard({
                   {item.severity === 'overdue' && !item.error ? `${item.tag} · 기한 초과` : item.tag}
                 </span>
                 <h3 className="text-[15px] font-bold text-[#1d1b2b]">{item.title}</h3>
-                <button type="button" disabled={!!closing} onClick={() => closeTask(item)} aria-label={`${item.title} 처리 종료`} className="ml-auto min-h-[40px] rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#6b6880] disabled:opacity-50">{closing === `${item.kind}:${item.id}` ? '저장 중…' : '처리 종료'}</button>
+                <button type="button" disabled={!!closing} onClick={() => closeTask(item)} aria-label={`${item.title} 카드 닫기`} className="ml-auto min-h-[40px] rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#6b6880] disabled:opacity-50">{closing === `${item.kind}:${item.id}` ? '저장 중…' : '카드 닫기'}</button>
                 {/* 학생 상세·일정·학생 목록은 실제 데이터 연결 전까지 미리보기에서만 (대표 11/2) */}
                 {item.studentCode && preview && (
                   <Link

@@ -1,6 +1,6 @@
 'use client';
 
-// 처리 내역 (3900): 처리 종료 · 자동 제외 · 수강 종료한 카드 보기, [다시 열기]
+// 처리 내역 (3900): 카드 닫음(예전 이름 '처리 종료', QA C-05 2026-11-07) · 자동 제외 · 수강 종료한 카드 보기, [다시 열기]
 import { useEffect, useState } from 'react';
 import { HISTORY_REASON, HISTORY_STATUS, TASK_KIND_TEXT, type HistoryRow } from '@/lms/admin/task-history';
 

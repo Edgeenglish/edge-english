@@ -39,5 +39,5 @@ export async function saveTaskClosure(sb: SupabaseClient, task: TaskSource, clos
   const { error } = await sb.rpc('admin_set_task_closed', {
     p_kind: task.kind, p_id: task.id, p_signature: taskSignature(task), p_closed: closed,
   });
-  if (error) throw new Error('처리 종료를 저장하지 못했어요. 다시 시도해 주세요.');
+  if (error) throw new Error('카드 닫기를 저장하지 못했어요. 다시 시도해 주세요.');
 }
