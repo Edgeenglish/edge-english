@@ -580,7 +580,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
         {w.confirm.makeupRequested.length > 0 && (
           <Block title={w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll) ? `${leaveTutor} 강사님 모든 날짜 불가 · 학생에게 다른 날짜 받기` : `${leaveTutor} 강사님 확인 후 보강 확정`}>
             <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5ffb] text-[14px] font-semibold text-[#5b3fe0]">
-              보강 확정
+              {w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll) ? '다른 날짜로 보강 확정' : '보강 확정'}
             </Link>
           </Block>
         )}
