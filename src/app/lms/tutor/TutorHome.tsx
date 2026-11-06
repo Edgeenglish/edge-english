@@ -152,6 +152,8 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
       const w = weekOf(n, tz, off);
       setScreen(await actions.load(w.kstFrom, w.kstTo));
       setNow(n);
+      // 첫 수업 기록(Held) 저장 뒤 홈 To-do 에 '첫 수업 후 확인'이 바로 보이게 같이 다시 읽음 (Work QA 11/7: 새로고침해야 보이던 오류)
+      void refreshFollowups();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not load. Please try again.');
     } finally {
