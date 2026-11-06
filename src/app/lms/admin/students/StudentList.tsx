@@ -8,7 +8,7 @@ import { matchStudent, md, productText, slotsText, STATUS_TEXT, type StudentRow,
 import { AdminHeader, BottomNav, Icon } from '../ui';
 
 const STATUS_STYLE: Record<StudentStatus, string> = {
-  active: 'bg-[#e3f5ea] text-[#13623a]', upcoming: 'bg-[#efebff] text-[#5b3fe0]', ended: 'bg-[#f0eef6] text-[#6b6880]', none: 'bg-[#fff1d6] text-[#8a5300]',
+  active: 'bg-[#e3f5ea] text-[#13623a]', upcoming: 'bg-[#efebff] text-[#5b3fe0]', pending: 'bg-[#fff1d6] text-[#8a5300]', ended: 'bg-[#f0eef6] text-[#6b6880]', none: 'bg-[#fff1d6] text-[#8a5300]',
 };
 type Tab = 'active' | 'upcoming' | 'ended' | 'all';
 const TABS: { key: Tab; label: string }[] = [{ key: 'active', label: '수강 중' }, { key: 'upcoming', label: '수강 예정' }, { key: 'ended', label: '종료' }, { key: 'all', label: '전체' }];
@@ -18,10 +18,12 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
   const [q, setQ] = useState(initialQuery);
   const [tab, setTab] = useState<Tab>(TABS.some((t) => t.key === initialTab) ? (initialTab as Tab) : 'active');
   const counts = { active: 0, upcoming: 0, ended: 0, all: rows.length } as Record<Tab, number>;
-  for (const r of rows) if (r.status in counts) counts[r.status as Tab] += 1;
+  // 결제 확인 전 학생은 '수강 예정' 칸에서 보임 (배지는 '결제 확인 전', B-01)
+  const tabOf = (r: StudentRow): Tab => (r.status === 'pending' ? 'upcoming' : r.status === 'none' ? 'ended' : (r.status as Tab));
+  for (const r of rows) counts[tabOf(r)] += 1;
   const searching = q.trim().length > 0;
   // 검색할 때는 상태와 상관없이 전체에서 찾음 (이름만 알고 찾는 경우)
-  const list = rows.filter((r) => matchStudent(r, q) && (searching || tab === 'all' || r.status === tab || (tab === 'ended' && r.status === 'none')));
+  const list = rows.filter((r) => matchStudent(r, q) && (searching || tab === 'all' || tabOf(r) === tab));
   return (
     <div className="mx-auto min-h-dvh max-w-[1280px] pb-24 lg:pb-8">
       <AdminHeader active="students" demo={false} />
@@ -48,7 +50,10 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
         <div className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
           {list.map((s) => {
             const d = s.finalEndDate ? diffDays(today, s.finalEndDate) : null;
-            const line2 = [
+            const line2 = s.status === 'pending'
+              // 결제 확인 전: 수업·일정이 아직 없음 — 결제 확인 뒤 N회 생성·강사 배정 (B-01)
+              ? [productText(s.weeklyCount && s.durationMin ? { weeks: s.weeks, legacyLabel: s.legacyLabel, weeklyCount: s.weeklyCount, durationMin: s.durationMin } : null), '강사 배정 전', `결제 확인 후 수업 ${s.weeklyCount && s.weeks ? s.weeklyCount * s.weeks : ''}회 생성`, s.startDate ? `희망 시작 ${md(s.startDate)}` : null].filter(Boolean).join(' · ')
+              : [
               s.tutor ?? (s.status === 'active' || s.status === 'upcoming' ? '강사 배정 전' : null),
               s.slots.length ? `${slotsText(s.slots)} (한국 시간)` : null,
               s.status === 'none' ? null : productText(s.weeklyCount && s.durationMin ? { weeks: s.weeks, legacyLabel: s.legacyLabel, weeklyCount: s.weeklyCount, durationMin: s.durationMin } : null),

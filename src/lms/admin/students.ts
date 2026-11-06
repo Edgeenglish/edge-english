@@ -107,8 +107,14 @@ export function productText(e: { weeks: number | null; legacyLabel: string | nul
   return [term, `주 ${e.weeklyCount}회`, `${e.durationMin}분`].filter(Boolean).join(' · ');
 }
 
-export type StudentStatus = 'active' | 'upcoming' | 'ended' | 'none';
-export const STATUS_TEXT: Record<StudentStatus, string> = { active: '수강 중', upcoming: '수강 예정', ended: '종료', none: '수강권 없음' };
+/** pending = 결제 확인 전 (등록만 있고 수업·일정 없음, QA B-01: '수강 예정·0/4회'로 보이지 않게) */
+export type StudentStatus = 'active' | 'upcoming' | 'pending' | 'ended' | 'none';
+export const STATUS_TEXT: Record<StudentStatus, string> = { active: '수강 중', upcoming: '수강 예정', pending: '결제 확인 전', ended: '종료', none: '수강권 없음' };
+/** DB 가 준 수강 상태 + 수강권 상태 → 화면 상태 (결제 대기는 따로) */
+export function studentStatusOf(status: string, enrollmentStatus: string | null): StudentStatus {
+  if (enrollmentStatus === 'pending_payment' && (status === 'upcoming' || status === 'active')) return 'pending';
+  return (['active', 'upcoming', 'ended', 'none'].includes(status) ? status : 'none') as StudentStatus;
+}
 
 export type StudentRow = {
   id: string; code: string; nameKo: string; nameEn: string; displayName: string | null; email: string | null; timezone: string;
@@ -120,7 +126,7 @@ export type StudentRow = {
 export function parseStudentRows(j: any): StudentRow[] {
   return ((j ?? []) as any[]).map((s) => ({
     id: s.id, code: s.code, nameKo: s.name_ko, nameEn: s.name_en, displayName: s.display_name ?? null, email: s.email ?? null, timezone: s.timezone,
-    status: s.status, enrollmentStatus: s.enrollment_status ?? null, startDate: s.start_date ?? null, finalEndDate: s.final_end_date ?? null,
+    status: studentStatusOf(s.status, s.enrollment_status ?? null), enrollmentStatus: s.enrollment_status ?? null, startDate: s.start_date ?? null, finalEndDate: s.final_end_date ?? null,
     weeks: s.weeks ?? null, legacyLabel: s.legacy_label ?? null, weeklyCount: s.weekly_count ?? null, durationMin: s.duration_min ?? null,
     leftRegular: Number(s.left_regular ?? 0), tutor: s.tutor ?? null, slots: (s.slots ?? []) as Slot[], noticePending: !!s.notice_pending,
   }));

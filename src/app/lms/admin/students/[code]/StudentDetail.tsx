@@ -36,7 +36,7 @@ const FIELD_KO: Record<string, string> = {
   level: '레벨', level_note: '예전 레벨 표기', class_type: 'Type of class', textbook: '교재', class_note_url: 'Google Docs', admin_memo: '운영 메모', self_intro_en: '기존 자기소개', correction_pref: '교정 선호(시트)',
   job: '직업', hobbies: '취미', interests: '관심사', improve: '개선하고 싶은 부분', hopes: '바라는 점·분위기', correction_style: '선호 교정 방식', correction_note: '교정 설명', class_style: '선호 수업 스타일', class_style_note: '스타일 설명',
 };
-const STATUS_STYLE: Record<StudentStatus, string> = { active: 'bg-[#e3f5ea] text-[#13623a]', upcoming: 'bg-[#efebff] text-[#5b3fe0]', ended: 'bg-[#f0eef6] text-[#6b6880]', none: 'bg-[#fff1d6] text-[#8a5300]' };
+const STATUS_STYLE: Record<StudentStatus, string> = { active: 'bg-[#e3f5ea] text-[#13623a]', upcoming: 'bg-[#efebff] text-[#5b3fe0]', pending: 'bg-[#fff1d6] text-[#8a5300]', ended: 'bg-[#f0eef6] text-[#6b6880]', none: 'bg-[#fff1d6] text-[#8a5300]' };
 const NA = <i className="text-[#b9b6c8]">미응답</i>;
 const or = (v: string | null | undefined, fallback: ReactNode = <i className="text-[#b9b6c8]">없음</i>) => (v ? v : fallback);
 
@@ -46,7 +46,9 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
   const s = data.student;
   const e = data.enrollment;
   const slot = data.slots[0] ?? null;
-  const status: StudentStatus = !e ? 'none' : e.status === 'completed' || e.status === 'canceled' || e.finalEndDate < today ? 'ended' : e.startDate > today ? 'upcoming' : 'active';
+  // 결제 확인 전(pending_payment)은 수업·일정이 없으므로 '수강 예정·0/4회'가 아니라 '결제 확인 전 · 강사 배정 전'으로 (QA B-01)
+  const status: StudentStatus = !e ? 'none' : e.status === 'completed' || e.status === 'canceled' || e.finalEndDate < today ? 'ended' : e.status === 'pending_payment' ? 'pending' : e.startDate > today ? 'upcoming' : 'active';
+  const pending = status === 'pending';
   const [sheet, setSheet] = useState<null | 'profile' | 'answers' | 'regular' | 'extend' | 'prestart' | { notice: string }>(null);
   // 첫 수업 시작 전: 이 수강권의 정규 수업이 모두 아직 앞으로 남아 있을 때만 (시작 뒤는 수업 변경·변경권 절차)
   const regularAhead = data.upcoming.filter((l) => l.kind === 'regular' && !l.substitute && !l.leaveOpen);
@@ -71,16 +73,22 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
               <span className={`ml-2 rounded-full px-2 py-0.5 align-middle text-[11.5px] font-bold ${STATUS_STYLE[status]}`}>{STATUS_TEXT[status]}</span>
             </p>
             <p className="text-[13px] text-[#d8d3f5]">
-              {productText(e)}{slot ? ` · ${slot.tutor}${slot.tutorCountry ? ` (${slot.tutorCountry})` : ''}` : e ? ' · 강사 배정 전' : ''}
+              {productText(e)}{pending ? ' · 결제 확인 전 · 강사 배정 전' : slot ? ` · ${slot.tutor}${slot.tutorCountry ? ` (${slot.tutorCountry})` : ''}` : e ? ' · 강사 배정 전' : ''}
             </p>
           </div>
           {e && (
             <div className="grid grid-cols-3 gap-2 text-center">
-              {[
+              {(pending
+                ? [
+                    ['수업', `결제 확인 후 ${e.lessonsPurchased}회 생성`],
+                    ['강사', '배정 전'],
+                    ['희망 시작', md(e.startDate)],
+                  ]
+                : [
                 ['남은 정규', `${e.leftRegular}/${e.lessonsPurchased}`],
                 ['이월', `${e.lessonsCarriedIn}회`],
                 ['최종 종료', status === 'ended' ? md(e.finalEndDate) : `${md(e.finalEndDate)} (D-${Math.max(0, diffDays(today, e.finalEndDate))})`],
-              ].map(([k, v]) => (
+              ]).map(([k, v]) => (
                 <span key={k} className="rounded-[10px] bg-[#2c2263] px-3 py-1.5">
                   <span className="block text-[11px] text-[#c9c0ff]">{k}</span>
                   <b className="block text-[15px] text-white">{v}</b>
@@ -100,7 +108,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
 
         <div className="grid gap-3 lg:grid-cols-3 lg:items-start">
           <Box title="정규 일정" action={e && status !== 'ended' ? <button type="button" className={btnSmall} onClick={() => setSheet('regular')}>정규 일정 수정</button> : undefined}>
-            {data.slots.length === 0 ? <p className="py-2 text-[13px] text-[#6b6880]">정규 일정이 없어요{e ? ' (강사 배정·일정 확정 전)' : ''}.</p> : (
+            {data.slots.length === 0 ? <p className="py-2 text-[13px] text-[#6b6880]">정규 일정이 없어요{pending ? ' (결제 확인 전 — 확인한 뒤 강사 배정·일정 확정)' : e ? ' (강사 배정·일정 확정 전)' : ''}.</p> : (
               <>
                 <Row k="한국 시간" v={<>{slotsText(data.slots)} · {slot!.durationMin}분</>} strong />
                 {s.timezone !== 'Asia/Seoul' && <Row k={`학생 · ${koZone(s.timezone)}`} v={slotsInZone(data.slots, s.timezone, today)} />}
@@ -112,15 +120,17 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             )}
           </Box>
 
-          <Box title="수강" action={e && e.status !== 'completed' && e.status !== 'canceled' ? <button type="button" className={btnSmall} onClick={() => setSheet('extend')}>종료일 연장</button> : undefined}>
+          <Box title="수강" action={e && !pending && e.status !== 'completed' && e.status !== 'canceled' ? <button type="button" className={btnSmall} onClick={() => setSheet('extend')}>종료일 연장</button> : undefined}>
             {!e ? <p className="py-2 text-[13px] text-[#6b6880]">수강권이 없어요.</p> : (
               <>
                 <Row k="등록 상품" v={productText(e)} strong />
                 <Row k="등록 수업" v={`${e.lessonsPurchased}회${e.lessonsCarriedIn ? ` + 이월 ${e.lessonsCarriedIn}회` : ''}`} />
-                <Row k="진행 · 남은" v={`진행 ${e.done}회 · 남은 정규 ${e.leftRegular}회 (보강 포함 ${e.leftAll}회)`} />
-                <Row k="기간" v={`${md(e.startDate)} – ${md(e.baseEndDate)} (${diffDays(e.startDate, e.baseEndDate) + 1}일)`} />
+                {pending
+                  ? <Row k="수업 · 일정" v={`결제 확인 전 — 확인하면 수업 ${e.lessonsPurchased}회가 만들어져요 (아직 0회)`} />
+                  : <Row k="진행 · 남은" v={`진행 ${e.done}회 · 남은 정규 ${e.leftRegular}회 (보강 포함 ${e.leftAll}회)`} />}
+                <Row k={pending ? '희망 기간' : '기간'} v={`${md(e.startDate)} – ${md(e.baseEndDate)} (${diffDays(e.startDate, e.baseEndDate) + 1}일)${pending ? ' · 결제 확인 후 첫 수업일 기준으로 확정' : ''}`} />
                 {e.extensionDays > 0 && <Row k="연장" v={[autoExt ? `+${autoExt}일 (휴무 자동)` : '', manualExt ? `${manualExt > 0 ? '+' : ''}${manualExt}일 (운영진)` : ''].filter(Boolean).join(' · ')} />}
-                <Row k="최종 종료" v={finalEndText(e.finalEndDate, s.timezone)} strong />
+                {!pending && <Row k="최종 종료" v={finalEndText(e.finalEndDate, s.timezone)} strong />}
                 {e.sheet && <Row k="시트 기준" v={`${e.sheet.used ?? 0}/${e.sheet.total ?? '?'}회`} />}
               </>
             )}
