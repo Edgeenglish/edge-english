@@ -12,6 +12,7 @@ import { dayLabel, localTime } from '@/lms/admin/schedule';
 import { prestartMoveNotices } from '@/lms/admin/confirm';
 import type { Upcoming } from '@/lms/admin/students';
 import { CopyButton, Sheet } from './parts';
+import DateInput from '../../DateInput';
 
 const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 const kstOf = (d: Date) => ({ date: instantToKstDate(d), time: formatInZone(d, 'Asia/Seoul').time });
@@ -39,6 +40,8 @@ export default function PrestartMove(p: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<{ id: string; msg: string } | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
+  // 날짜 칸에 치는 중(미완성)이면 저장을 막고 안내 (QA A-02)
+  const [partial, setPartial] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -48,8 +51,10 @@ export default function PrestartMove(p: {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const changed = p.lessons.filter((l) => moved?.[l.id]);
-  const others = p.lessons.filter((l) => !moved?.[l.id]);
+  // 옮겼다가 처음 시각으로 되돌린 수업은 '바꾼 수업'으로 치지 않음 (처음 = 지금이면 바뀐 게 없음)
+  const firstOf = (l: Upcoming): string | null => (moved?.[l.id] && new Date(moved[l.id]).getTime() !== l.startsAt.getTime() ? moved[l.id] : null);
+  const changed = p.lessons.filter((l) => firstOf(l));
+  const others = p.lessons.filter((l) => !firstOf(l));
   const othersOpen = showOthers ?? changed.length === 0;
 
   function edit(l: Upcoming) {
@@ -82,8 +87,8 @@ export default function PrestartMove(p: {
   const row = (l: Upcoming) => {
     const k = kstOf(l.startsAt);
     const loc = local(l.startsAt, l.tutorTz);
-    const first = moved?.[l.id];
-    const newLoc = date && time ? local(kstToInstant(date, time), l.tutorTz) : null;
+    const first = firstOf(l);
+    const newLoc = !partial && date && time ? local(kstToInstant(date, time), l.tutorTz) : null;
     return (
       <div key={l.id} className="border-b border-[#f0eef6] py-2.5 last:border-0">
         <div className="flex items-center gap-2">
@@ -102,7 +107,7 @@ export default function PrestartMove(p: {
         </div>
         {open === l.id && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded-[10px] bg-[#f6f5fb] p-2.5">
-            <input type="date" aria-label={`${l.seq ?? ''}회 새 날짜`} value={date} min={p.period.start} max={p.period.end} onChange={(e) => setDate(e.target.value)} className="min-h-[42px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14.5px] text-[#1d1b2b]" />
+            <DateInput aria-label={`${l.seq ?? ''}회 새 날짜`} value={date} min={p.period.start} max={p.period.end} onChange={setDate} onPartial={setPartial} className="min-h-[42px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14.5px] text-[#1d1b2b]" />
             <select aria-label={`${l.seq ?? ''}회 새 시간`} value={time} onChange={(e) => setTime(e.target.value)} className="min-h-[42px] w-[110px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14.5px] text-[#1d1b2b]">
               {(TIMES.includes(time) ? TIMES : [time, ...TIMES]).map((t) => (
                 <option key={t} value={t}>
@@ -117,12 +122,14 @@ export default function PrestartMove(p: {
             </button>
             <button
               type="button"
-              disabled={busy || !date || !time || (date === k.date && time === k.time)}
+              disabled={busy || partial || !date || !time || (date === k.date && time === k.time)}
               onClick={() => save(l)}
               className="min-h-[40px] rounded-[10px] bg-[#7d5ffb] px-4 text-[13.5px] font-bold text-white disabled:bg-[#cfc4ff]"
             >
-              {busy ? '저장 중…' : '저장'}
+              {/* 실제로 저장될 날짜를 버튼에 그대로 (QA A-02) */}
+              {busy ? '저장 중…' : !partial && date && time ? `저장 · ${dayLabel(date)} ${time}` : '저장'}
             </button>
+            {partial && <p className="w-full text-[12.5px] text-[#b3261e]">날짜를 다시 선택해 주세요 (연·월·일을 모두 채워야 저장돼요)</p>}
           </div>
         )}
         {err?.id === l.id && <p className="mt-1.5 text-[13px] text-[#b3261e]">{err.msg}</p>}

@@ -4,6 +4,7 @@
 // 시트에서 날짜를 찾으면 넣고, 끝내 알 수 없으면 '확인 불가'로 정리 (가짜 날짜를 넣지 않음). 입력 시작일 이후 날짜는 DB가 거절
 
 import { useState } from 'react';
+import DateInput from './DateInput';
 
 export default function OriginFix({ items, onSave }: { items: { id: string; label: string }[]; onSave: (itemId: string, date: string | null) => Promise<void> }) {
   const [dates, setDates] = useState<Record<string, string>>({});
@@ -28,12 +29,11 @@ export default function OriginFix({ items, onSave }: { items: { id: string; labe
         <li key={o.id} className="grid gap-1.5 rounded-[12px] bg-[#f6f5fb] p-2.5">
           <span className="text-[13px] text-[#1d1b2b]">{o.label} · 원래 수업 날짜</span>
           <div className="flex flex-wrap items-center gap-1.5">
-            <input
+            <DateInput
               id={`origin-${o.id}`}
               aria-label={`${o.label} 원래 수업 날짜`}
-              type="date"
               value={dates[o.id] ?? ''}
-              onChange={(e) => setDates((d) => ({ ...d, [o.id]: e.target.value }))}
+              onChange={(v) => setDates((d) => ({ ...d, [o.id]: v }))}
               className="min-h-[40px] min-w-0 flex-1 rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]"
             />
             <button

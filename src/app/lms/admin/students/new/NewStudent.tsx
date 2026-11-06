@@ -9,6 +9,7 @@
 import Link from 'next/link';
 import ApplicationPicker from './ApplicationPicker';
 import { useEffect, useMemo, useState } from 'react';
+import DateInput from '../../DateInput';
 import { checkLessonList, firstLessonDateOnOrAfter, issueText, type CellState, type PlanIssue } from '@/lms/rules/booking';
 import { instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '@/lms/rules/dates';
 import { buildLessons, lessonPayload, needsLessonList, type LessonDate } from '@/lms/rules/lessons';
@@ -484,7 +485,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       {row('수업 길이', pick('durationMin', CONFIRMED.durations, (n) => `${n}분`))}
       {row('주 횟수', pick('weeklyCount', CONFIRMED.weeklyCounts, (n) => `주 ${n}회`))}
       {row('수강 기간', pick('weeks', CONFIRMED.courseWeeks, (n) => `${n / 4}개월 (${n}주 · ${n * 7}일)`))}
-      {row('시작 희망일', <input type="date" readOnly={locked} value={draft.startWish} onChange={(e) => set('startWish', e.target.value)} className={`${inputCls(locked)} min-h-[38px] text-[14px]`} />)}
+      {row('시작 희망일', <DateInput readOnly={locked} value={draft.startWish} onChange={(v) => set('startWish', v)} aria-label="시작 희망일" className={`${inputCls(locked)} min-h-[38px] text-[14px]`} />)}
       {row('학습 목표', <input readOnly={locked} value={draft.goal} onChange={(e) => set('goal', e.target.value)} className={`${inputCls(locked)} min-h-[38px] text-[14px]`} />)}
     </Card>
   );

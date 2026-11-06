@@ -11,6 +11,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import DateInput from '../../DateInput';
 import { addDays, instantToKstDate, weekdayOf } from '@/lms/rules/dates';
 import {
   DURATIONS, emptyImport, IMPORT_REASON_TEXT, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings,
@@ -272,7 +273,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
               {tried && !d.weeks && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
             </div>
             <Field label="수강 시작일" problem={tried && !d.courseStart ? '필요해요' : undefined}>
-              <input id="imp-course-start" type="date" value={d.courseStart} disabled={saved} onChange={(e) => setD((x) => withAutoEnd(x, { ...x, courseStart: e.target.value, periodOverride: null }))} className={inputCls(saved, tried && !d.courseStart)} />
+              <DateInput id="imp-course-start" value={d.courseStart} disabled={saved} onChange={(v) => setD((x) => withAutoEnd(x, { ...x, courseStart: v, periodOverride: null }))} className={inputCls(saved, tried && !d.courseStart)} />
             </Field>
             {warn.courseDay && <Note tone="info">{warn.courseDay}</Note>}
             {periods.length > 0 && (
@@ -314,7 +315,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
               {tried && d.creditsLeft === null && <span className="mt-1 block text-[12px] text-[#b3261e]">필요해요</span>}
             </div>
             <Field label="현재 수강 종료일" problem={tried && !d.endDate ? '필요해요' : undefined}>
-              <input id="imp-end" type="date" value={d.endDate} disabled={saved} onChange={(e) => set('endDate', e.target.value)} className={inputCls(saved, tried && !d.endDate)} />
+              <DateInput id="imp-end" value={d.endDate} disabled={saved} onChange={(v) => set('endDate', v)} className={inputCls(saved, tried && !d.endDate)} />
             </Field>
             {warn.end ? (
               <div className="grid gap-2 rounded-[10px] bg-[#fff8d6] px-3 py-2.5 text-[13px] text-[#5c4a00]">
@@ -396,7 +397,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
               </div>
             </div>
             <Field label="앞으로 남은 첫 정규 수업일">
-              <input id="imp-from" type="date" value={d.fromDate} min={addDays(today, -7)} disabled={saved} onChange={(e) => set('fromDate', e.target.value || autoFromDate(d))} className={inputCls(saved)} />
+              <DateInput id="imp-from" value={d.fromDate} min={addDays(today, -7)} disabled={saved} onChange={(v) => set('fromDate', v || autoFromDate(d))} className={inputCls(saved)} />
             </Field>
           </div>
         </Card>
@@ -431,13 +432,12 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                   <div>
                     <span className="mb-1 block text-[13px] text-[#6b6880]">원래 수업 날짜</span>
                     <div className="flex items-center gap-2">
-                      <input
+                      <DateInput
                         id={`imp-mk-orig-${i}`}
                         aria-label={`보강 ${i + 1} 원래 수업 날짜`}
-                        type="date"
                         value={m.originalDate}
                         disabled={saved || m.originUnknown}
-                        onChange={(e) => setMakeup(i, { originalDate: e.target.value, originUnknown: false })}
+                        onChange={(v) => setMakeup(i, { originalDate: v, originUnknown: false })}
                         className={`${inputCls(saved || m.originUnknown, tried && !m.originalDate && !m.originUnknown)} min-w-0 flex-1`}
                       />
                       <button
@@ -457,7 +457,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <Field label="보강 날짜">
-                          <input id={`imp-mk-date-${i}`} type="date" value={m.date} min={d.fromDate} disabled={saved} onChange={(e) => setMakeup(i, { date: e.target.value })} className={inputCls(saved, tried && !m.date)} />
+                          <DateInput id={`imp-mk-date-${i}`} value={m.date} min={d.fromDate} disabled={saved} onChange={(v) => setMakeup(i, { date: v })} className={inputCls(saved, tried && !m.date)} />
                         </Field>
                         <Field label="한국 시각">
                           <TimeInput id={`imp-mk-time-${i}`} value={m.time} disabled={saved} onChange={(v) => setMakeup(i, { time: v })} className={inputCls(saved, tried && !m.time)} />
@@ -548,7 +548,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="날짜">
-                    <input id={`imp-ex-date-${i}`} type="date" value={x.date} min={d.fromDate} max={d.endDate || undefined} disabled={saved} onChange={(e) => setExtra(i, { date: e.target.value })} className={inputCls(saved, tried && !x.date)} />
+                    <DateInput id={`imp-ex-date-${i}`} value={x.date} min={d.fromDate} max={d.endDate || undefined} disabled={saved} onChange={(v) => setExtra(i, { date: v })} className={inputCls(saved, tried && !x.date)} />
                   </Field>
                   <Field label="한국 시각">
                     <TimeInput id={`imp-ex-time-${i}`} value={x.time} disabled={saved} onChange={(v) => setExtra(i, { time: v })} className={inputCls(saved, tried && !x.time)} />

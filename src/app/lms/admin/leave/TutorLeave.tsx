@@ -9,6 +9,7 @@
 
 import Link from 'next/link';
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import DateInput from '../DateInput';
 import { instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { dateLabel, enAt, kstLabel, MAKEUP_SLOTS_MAX, tutorLocalLabel } from '@/lms/admin/lesson-change';
 import {
@@ -376,11 +377,11 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
         <div className="grid grid-cols-2 gap-1.5">
           <label className="grid gap-1 text-[13px] text-[#6b6880]">
             휴무 시작일 (한국 날짜)
-            <input type="date" value={from} min={today} onChange={(e) => { setFrom(e.target.value); if (!to || to < e.target.value) setTo(e.target.value); }} className={inputCls(false)} />
+            <DateInput value={from} min={today} onChange={(v) => { setFrom(v); if (!to || to < v) setTo(v); }} className={inputCls(false)} />
           </label>
           <label className="grid gap-1 text-[13px] text-[#6b6880]">
             휴무 종료일 (한국 날짜, 그날 끝까지)
-            <input type="date" value={to} min={from || today} onChange={(e) => setTo(e.target.value)} className={inputCls(false)} />
+            <DateInput value={to} min={from || today} onChange={setTo} className={inputCls(false)} />
           </label>
         </div>
         <label className="grid gap-1 text-[13px] text-[#6b6880]">
@@ -402,6 +403,9 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
           </p>
         )}
         <Err>{err}</Err>
+        {/* 저장이 왜 안 눌리는지 바로 알려 줌 (QA A-04): 조건 미충족 / 걸리는 수업 확인 중 */}
+        {!ready && <p className="text-[13px] text-[#8a5300]">강사·시작일·종료일을 선택하면 걸리는 수업을 확인하고 저장할 수 있어요.</p>}
+        {ready && !preview && !err && <p className="text-[13px] text-[#6b6880]">걸리는 수업을 확인하는 중…</p>}
         <div className="grid grid-cols-2 gap-1.5">
           <button type="button" className={btnSub} onClick={onClose}>닫기</button>
           <button type="button" className={btnMain} disabled={!preview || busy || (preview.overlap?.length ?? 0) > 0} onClick={async () => {

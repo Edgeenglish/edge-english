@@ -31,6 +31,17 @@ function parseTime(time: KstTime): [number, number] {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/** 화면 날짜 칸 값이 완성된 실제 날짜인지 (2000~2099). 브라우저 날짜 칸은 연도를 치는 중에 '0002-11-20' 같은 값을 주므로
+ *  그대로 계산에 쓰면 오류 — 날짜 칸은 이 검사를 통과한 값만 상태에 넣는다 (QA A-02) */
+export function isKstDate(v: string): v is KstDate {
+  const m = DATE_RE.exec(v);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (y < 2000 || y > 2099) return false;
+  const check = new Date(Date.UTC(y, mo - 1, d));
+  return check.getUTCFullYear() === y && check.getUTCMonth() === mo - 1 && check.getUTCDate() === d;
+}
+
 /** 한국 날짜에 일수를 더함 (시작일 포함 28일 = addDays(시작일, 27)) */
 export function addDays(date: KstDate, days: number): KstDate {
   const [y, m, d] = parseDate(date);

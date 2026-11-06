@@ -6,6 +6,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import DateInput from '../DateInput';
 import { checkLessonList, checkRegularPlan, firstLessonDateOnOrAfter, issueText, type CellState } from '@/lms/rules/booking';
 import { buildLessons, lessonPayload, needsLessonList, type LessonDate } from '@/lms/rules/lessons';
 import { addDays, instantToKstDate, weekdayOf, type KstDate } from '@/lms/rules/dates';
@@ -365,7 +366,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
             {tutor && enough && firstDate && (
               <Card title="3. 첫 수업일">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <input type="date" value={firstPick || firstDate} onChange={(e) => setFirstPick(e.target.value)} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]" />
+                  <DateInput value={firstPick || firstDate} onChange={(v) => setFirstPick(v)} aria-label="첫 수업일" className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]" />
                   <span className="text-[13px] text-[#6b6880]">{dayLabel(firstDate)}</span>
                 </div>
                 {firstDateWarnings(firstDate, today, info.startWish).map((w) => <p key={w} className="mb-1 text-[13px] text-[#9a5b00]">{w}</p>)}

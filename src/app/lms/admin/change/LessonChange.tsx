@@ -6,6 +6,7 @@
 // 판정(6시간·변경권·공휴일·보강 기한)과 중복 방지는 DB 함수 하나 — 화면 미리 보기와 저장 결과가 같음
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import DateInput from '../DateInput';
 import { useSavingGuard } from '../useSavingGuard';
 import { markOrphans, reconcileStored, setPendingHref } from '@/lms/admin/pending-saves';
 import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lms/rules/dates';
@@ -323,7 +324,7 @@ function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson
         <label className="grid gap-1 text-[13px] text-[#6b6880]">
           요청 받은 시각 (한국)
           <div className="grid grid-cols-[1.4fr_1fr] gap-1.5">
-            <input type="date" aria-label="요청 받은 날짜" value={date} max={init.date} onChange={(e) => setDate(e.target.value)} className={inputCls(false)} />
+            <DateInput aria-label="요청 받은 날짜" value={date} max={init.date} onChange={setDate} className={inputCls(false)} />
             <TimeInput aria-label="요청 받은 시각" value={time} onChange={setTime} className={inputCls(false)} />
           </div>
         </label>
@@ -518,7 +519,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
           )}
           {open.tutorNote && <p className="rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] text-[#1d1b2b]">강사 메모: {open.tutorNote}</p>}
           <div className="grid grid-cols-[1.4fr_1fr_auto] gap-1.5">
-            <input type="date" aria-label="다른 보강 날짜" value={other.date} onChange={(e) => setOther({ ...other, date: e.target.value })} className={inputCls(false)} />
+            <DateInput aria-label="다른 보강 날짜" value={other.date} onChange={(v) => setOther({ ...other, date: v })} className={inputCls(false)} />
             <TimeInput aria-label="다른 보강 시각" value={other.time} onChange={(v) => setOther({ ...other, time: v })} className={inputCls(false)} />
             <button type="button" disabled={busy || !toAt(other)} className={btnMain} onClick={() => run(() => actions.confirmMakeup(open.id, toAt(other)!))}>확정</button>
           </div>
@@ -530,8 +531,8 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
           {slots.map((s, i) => (
             <div key={i} className="grid gap-1">
             <div className="grid grid-cols-[1.4fr_1fr] gap-1.5">
-              <input type="date" aria-label={`보강 희망 날짜 ${i + 1}`} value={s.date} max={leave ? undefined : lastDay ?? undefined}
-                onChange={(e) => setSlots(slots.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)))} className={inputCls(false)} />
+              <DateInput aria-label={`보강 희망 날짜 ${i + 1}`} value={s.date} max={leave ? undefined : lastDay ?? undefined}
+                onChange={(v) => setSlots(slots.map((x, j) => (j === i ? { ...x, date: v } : x)))} className={inputCls(false)} />
               <TimeInput aria-label={`보강 희망 시각 ${i + 1}`} value={s.time}
                 onChange={(v) => setSlots(slots.map((x, j) => (j === i ? { ...x, time: v } : x)))} className={inputCls(false)} />
             </div>

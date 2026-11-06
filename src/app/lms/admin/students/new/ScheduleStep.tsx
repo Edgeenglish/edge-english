@@ -13,6 +13,7 @@ import type { RegularSlot } from '@/lms/rules/schedule';
 import type { RegTutor } from '@/lms/admin/registration';
 import { dayLabel, localTime, WEEKDAY_KO } from '@/lms/admin/schedule';
 import { slotLocal } from './parts';
+import DateInput from '../../DateInput';
 
 const ORDER = [1, 2, 3, 4, 5, 6, 0];
 const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
@@ -116,11 +117,10 @@ function FirstDateInput({ firstDate, onFirstDate, small }: Pick<ScheduleProps, '
   return (
     <label className={`flex items-center gap-3 rounded-[10px] border border-[#e6e3ef] bg-white px-3 ${small ? 'min-h-[44px]' : 'min-h-[50px] w-[300px]'}`}>
       <CalIcon />
-      <input
-        type="date"
+      <DateInput
         aria-label="첫 수업일"
         value={firstDate ?? ''}
-        onChange={(e) => e.target.value && onFirstDate(e.target.value)}
+        onChange={(v) => v && onFirstDate(v)}
         className={`min-w-0 flex-1 bg-transparent text-[#1d1b2b] outline-none ${small ? 'text-[14.5px]' : 'text-[17px]'}`}
       />
       {firstDate && <span className={`shrink-0 text-[#1d1b2b] ${small ? 'text-[14px]' : 'text-[16px]'}`}>({WEEKDAY_KO[new Date(`${firstDate}T00:00:00Z`).getUTCDay()]})</span>}
@@ -225,6 +225,8 @@ export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: Le
   const [open, setOpen] = useState<KstDate | null>(null);
   const [date, setDate] = useState<KstDate>('');
   const [time, setTime] = useState('');
+  // 날짜 칸에 치는 중(미완성)이면 적용을 막고 안내 (QA A-02)
+  const [partial, setPartial] = useState(false);
   const changed = plan.lessons.filter((l) => l.original);
   const others = plan.lessons.filter((l) => !l.original);
   const [showOthers, setShowOthers] = useState(changed.length === 0);
@@ -268,7 +270,7 @@ export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: Le
         ))}
         {open === l.key && !l.original && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded-[10px] bg-[#f6f5fb] p-2.5">
-            <input type="date" aria-label={`${l.n}회 새 날짜`} value={date} onChange={(e) => setDate(e.target.value)} className="min-h-[42px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14.5px] text-[#1d1b2b]" />
+            <DateInput aria-label={`${l.n}회 새 날짜`} value={date} onChange={setDate} onPartial={setPartial} className="min-h-[42px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14.5px] text-[#1d1b2b]" />
             <TimeSelect value={time} onChange={setTime} label={`${l.n}회 새 시간`} small />
             <span className="text-[12.5px] text-[#6b6880]">KST{date && time && localOf(tutor, date, time) ? ` · 현지 ${localOf(tutor, date, time)}` : ''}</span>
             <span className="flex-1" />
@@ -277,15 +279,17 @@ export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: Le
             </button>
             <button
               type="button"
-              disabled={!date || !time || (date === l.date && time === l.time)}
+              disabled={partial || !date || !time || (date === l.date && time === l.time)}
               onClick={() => {
                 onEdit(l.key, { date, time });
                 setOpen(null);
               }}
               className="min-h-[40px] rounded-[10px] bg-[#7d5ffb] px-4 text-[13.5px] font-bold text-white disabled:bg-[#cfc4ff]"
             >
-              적용
+              {/* 실제로 적용될 날짜를 버튼에 그대로 (QA A-02: 입력값과 저장값이 다른 일이 없게) */}
+              {!partial && date && time ? `적용 · ${dayLabel(date)} ${time}` : '적용'}
             </button>
+            {partial && <p className="w-full text-[12.5px] text-[#b3261e]">날짜를 다시 선택해 주세요 (연·월·일을 모두 채워야 적용돼요)</p>}
           </div>
         )}
       </li>
