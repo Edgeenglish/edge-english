@@ -257,14 +257,15 @@ begin
     foreach r in array rels loop
       execute 'set local role authenticated';
       begin
-        execute format('select count(*) from public.%I', r) into n;
+        -- students 는 운영 메모 칸을 뺀 칸 단위 권한 (QA D-03) → 칸을 하나 이름으로 읽어야 함
+        execute case when r = 'students' then 'select count(id) from public.students' else format('select count(*) from public.%I', r) end into n;
       exception when insufficient_privilege then n := 0;
       end;
       if n > 0 and persona_owner[i] is not null and r <> all (reference_rels) then
         -- 본인 범위(_own)에 닿지 않는 행 수 / 다른 학생·강사 범위에만 닿는 행 수
         execute format($q$
           select count(*) filter (where not exists (select 1 from jsonb_each_text(to_jsonb(t)) kv join _own o on o.val = kv.value and o.who = %L))
-          from public.%I t$q$, persona_owner[i], r) into bad;
+          from %s t$q$, persona_owner[i], case when r = 'students' then '(select id, code, email from public.students)' else format('public.%I', r) end) into bad;
       else
         bad := 0;
       end if;
@@ -411,6 +412,13 @@ begin
   left join _seen x on x.who = e.who and x.rel = e.rel
   where coalesce(x.n, 0) <> e.want;
   if v is not null then fails := fails || format('[점검 자체] 본인 것이 예상대로 보이지 않음: %s', v); else passes := passes + 1; end if;
+
+  -- 운영 메모(admin_memo)는 로그인 사용자 누구도 표에서 직접 못 읽음 — 운영진 화면은 서버 함수로만 (QA D-03, 2026-11-07)
+  if has_column_privilege('authenticated', 'public.students', 'admin_memo', 'select') then
+    fails := fails || '[권한] authenticated 가 students.admin_memo 를 직접 읽을 수 있음'::text;
+  elsif not has_column_privilege('authenticated', 'public.students', 'name_ko', 'select') then
+    fails := fails || '[권한] authenticated 가 students 다른 칸도 못 읽음 (본인 줄 읽기 깨짐)'::text;
+  else passes := passes + 1; end if;
 
   -- 운영자는 읽기 전용 (쓰기는 서버 전용 키로만) — 위 4번에서 운영자도 모두 거절돼야 통과
   -- 기능 확인: 학생 B는 본인 결제·환불을 앱에서 직접 보지 못함 (RLS 정책 없음, 화면은 서버가 필요한 칸만 보여 줄 예정)
