@@ -40,6 +40,8 @@ export type LvItem = {
   makeupAt: Date | null;
   /** 기존 강사 보강: 보강 신청(강사 확인 중)이 있음 */
   makeupRequested: boolean;
+  /** 보강 신청에 강사가 모든 날짜 불가로 답함 → 운영진이 다른 날짜 조율 */
+  makeupDeclinedAll?: boolean;
   /** 보강 신청 대상 (수업 또는 시트 휴가 보강) */
   lessonId: string | null;
   migratedItemId: string | null;
@@ -110,6 +112,7 @@ export function itemStatus(i: LvItem, pending?: ReadonlySet<string>): { text: st
   if (i.choice === 'wait') {
     if (i.makeupAt) return { text: `기존 강사 보강 · ${koShort(i.makeupAt)}`, tone: 'done' };
     if (proposalUnsent) return { text: '기존 강사 보강 · 날짜 미정', tone: 'todo', next: '학생에게 휴무 안내 보내기' };
+    if (i.makeupRequested && i.makeupDeclinedAll) return { text: '기존 강사 보강 · 강사님 모든 날짜 불가', tone: 'todo', next: '학생에게 다른 날짜 받기' };
     return i.makeupRequested
       ? { text: '기존 강사 보강 · 날짜 미정', tone: 'wait', wait: '강사님 보강 확인' }
       : { text: '기존 강사 보강 · 날짜 미정', tone: 'wait', wait: '학생 보강 신청' };
@@ -477,7 +480,8 @@ export function subAskBundleText(items: LvItem[]): string {
 
 /** 학생 목록 묶음: 운영진이 할 것 / 답 기다림 / 끝남 (R15·R29) */
 export function studentPhase(w: LvStudentWork): 'todo' | 'wait' | 'done' {
-  if (w.pick.length || w.tutor.some((t) => t.ask) || w.proposal?.status === 'pending' || w.confirm.confirmedMsgs.length || w.confirm.makeup.length) return 'todo';
+  if (w.pick.length || w.tutor.some((t) => t.ask) || w.proposal?.status === 'pending' || w.confirm.confirmedMsgs.length || w.confirm.makeup.length
+    || w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll)) return 'todo';
   if (w.tutor.length || w.answer.length || w.confirm.makeupRequested.length) return 'wait';
   return 'done';
 }

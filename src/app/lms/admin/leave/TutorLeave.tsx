@@ -333,6 +333,7 @@ function nextText(g: LvStudentGroup, w: LvStudentWork): string {
   if (w.confirm.makeup.length) return `${md(w.confirm.makeup[0])} 보강 날짜 잡기`;
   if (w.tutor.length) return w.tutor.map((t) => (t.ask ? `${t.subTutorName} 강사님에게 문의 보내기 전` : `${t.subTutorName} 강사님 답`)).join(' · ');
   if (w.answer.length) return `학생 답 · 첫 수업 ${md(w.answer[0])}`;
+  if (w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll)) return '보강 · 강사님 모든 날짜 불가 · 다른 날짜 받기';
   if (w.confirm.makeupRequested.length) return '보강 · 강사님 확인 기다림';
   return `${g.items.length}회 · ✓ 완료`;
 }
@@ -577,7 +578,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
         })}
         {w.confirm.makeup.length > 0 && <Block title={`${leaveTutor} 강사님 복귀 뒤 보강 날짜 잡기`}><MakeupPick g={g} items={w.confirm.makeup} actions={actions} done={done} /></Block>}
         {w.confirm.makeupRequested.length > 0 && (
-          <Block title={`${leaveTutor} 강사님 확인 후 보강 확정`}>
+          <Block title={w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll) ? `${leaveTutor} 강사님 모든 날짜 불가 · 학생에게 다른 날짜 받기` : `${leaveTutor} 강사님 확인 후 보강 확정`}>
             <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5ffb] text-[14px] font-semibold text-[#5b3fe0]">
               보강 확정
             </Link>

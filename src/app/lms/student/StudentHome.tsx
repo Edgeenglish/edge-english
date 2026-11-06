@@ -6,7 +6,7 @@
 // 미리보기(?demo=1)는 같은 화면에 브라우저 안에서만 흉내 내는 동작(fakeStore)을 넣음 — 저장·발송 없음
 
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
@@ -203,6 +203,21 @@ export default function StudentHome(props: {
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
   const [overlay, setOverlay] = useState<Overlay>(null);
+  // 창이 열리면 history 에 한 칸 → 휴대폰 뒤로가기(제스처 포함)는 창만 닫고 학생 화면에 머묾 (Work QA 11/7: 수업 변경 창에서 뒤로가기 → 화면 이탈)
+  const overlayOpen = overlay !== null;
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);   // 화면을 떠날 때(다른 페이지)는 아래에서 history 를 건드리지 않게
+  useEffect(() => {
+    if (!overlayOpen) return;
+    if (!window.history.state?.studentSheet) window.history.pushState({ ...(window.history.state ?? {}), studentSheet: true }, '');
+    const onPop = () => setOverlay(null);
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      // ✕·바깥 누름 등 화면에서 닫았으면 넣어 둔 칸을 빼서, 다음 뒤로가기가 한 번에 이전 화면으로 가게
+      if (mounted.current && window.history.state?.studentSheet) window.history.back();
+    };
+  }, [overlayOpen]);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reminders, setReminders] = useState<Reminders | null>(null);

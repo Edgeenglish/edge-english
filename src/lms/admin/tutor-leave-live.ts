@@ -52,9 +52,13 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
     lessonIds.length ? sb.from('lessons').select('makeup_of, starts_at').in('makeup_of', lessonIds).neq('state', 'canceled') : Promise.resolve({ data: [], error: null }),
     migIds.length ? sb.from('migrated_items').select('id, lesson:lessons(starts_at)').in('id', migIds) : Promise.resolve({ data: [], error: null }),
     ids.length ? sb.from('lesson_notices').select('id, leave_item_id, event, recipient_kind, recipient_id, status, sent_at, was_sent_at').in('leave_item_id', ids) : Promise.resolve({ data: [], error: null }),
-    ids.length ? sb.from('makeup_requests').select('source_lesson_id, migrated_item_id').in('status', ['requested', 'countered']) : Promise.resolve({ data: [], error: null }),
+    ids.length ? sb.from('makeup_requests').select('source_lesson_id, migrated_item_id, tutor_answered_at, candidates:makeup_candidates(tutor_answer)').in('status', ['requested', 'countered']) : Promise.resolve({ data: [], error: null }),
   ]);
-  const requested = new Set((check(rq) as { source_lesson_id: string | null; migrated_item_id: string | null }[]).map((r) => r.source_lesson_id ?? r.migrated_item_id));
+  const rqRows = check(rq) as { source_lesson_id: string | null; migrated_item_id: string | null; tutor_answered_at?: string | null; candidates?: { tutor_answer: string | null }[] }[];
+  const requested = new Set(rqRows.map((r) => r.source_lesson_id ?? r.migrated_item_id));
+  // 강사가 보강 날짜 모두 불가라고 답함 → 운영진이 학생에게 다른 날짜를 받아야 함 (Work QA 11/7: '강사 확인 기다림'으로 남던 오류)
+  const declinedAll = new Set(rqRows.filter((r) => r.tutor_answered_at && (r.candidates ?? []).length > 0 && (r.candidates ?? []).every((c) => c.tutor_answer === 'no'))
+    .map((r) => r.source_lesson_id ?? r.migrated_item_id));
   const makeupOf = new Map((check(mk) as { makeup_of: string; starts_at: string }[]).map((m) => [m.makeup_of, new Date(m.starts_at)]));
   const migLesson = new Map((check(mig) as unknown as { id: string; lesson: { starts_at: string } | null }[]).map((m) => [m.id, m.lesson ? new Date(m.lesson.starts_at) : null]));
   const items: LvItem[] = rows.map((r) => ({
@@ -64,6 +68,7 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
     choice: r.choice, subTutorId: r.sub_tutor_id, subTutorName: r.sub?.name ?? null, subTutorTz: r.sub?.timezone ?? null, subTutorMeetUrl: r.sub?.meet_url ?? null, subStage: r.sub_stage,
     makeupAt: r.choice !== 'wait' ? null : r.lesson_id ? makeupOf.get(r.lesson_id) ?? null : migLesson.get(r.migrated_item_id ?? '') ?? null,
     makeupRequested: requested.has(r.lesson_id ?? r.migrated_item_id),
+    makeupDeclinedAll: declinedAll.has(r.lesson_id ?? r.migrated_item_id),
     lessonId: r.lesson_id, migratedItemId: r.migrated_item_id, lessonGone: !!r.lesson_gone_at,
   }));
   const notices = (check(nt) as { id: string; leave_item_id: string; event: LvNotice['event']; recipient_kind: 'student' | 'tutor'; recipient_id: string; status: LvNotice['status']; sent_at: string | null; was_sent_at?: string | null }[])
