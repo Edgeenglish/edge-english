@@ -3037,12 +3037,12 @@ insert into tutors (id, name, country, timezone) values
 insert into students (id, name_ko, name_en, display_name, timezone, email, class_style, class_style_note, improve, textbook)
 values ('99999999-0000-0000-0000-000000004600', '이첫수', 'Lee Cheotsu', null, 'Asia/Seoul', 'f4600@example.com', 'free_talking', 'wants to talk a lot', 'operator wrote this first', null);
 insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
-values ('99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', 1, 4, 1, 40, current_date - 10, current_date + 17, 4, 'active');
+values ('99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', 1, 4, 1, 40, (now() at time zone 'Asia/Seoul')::date, (now() at time zone 'Asia/Seoul')::date + 27, 4, 'active');
 insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
-values ('99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 3, '20:00', 40, current_date - 10);
--- 수업 2회: 1회(지남, 아직 기록 전) · 2회(앞으로)
+values ('99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 3, '20:00', 40, (now() at time zone 'Asia/Seoul')::date);
+-- 수업 2회: 1회(조금 전, 아직 기록 전) · 2회(앞으로). 4601: 기준일(기능 시작일 = 오늘) 이후 시작한 새 학생
 insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at) values
-  ('77777777-4600-0000-0000-000000000001', '99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 'regular', 1, now() - interval '3 days', now() - interval '3 days' + interval '40 minutes'),
+  ('77777777-4600-0000-0000-000000000001', '99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 'regular', 1, now() - interval '2 hours', now() - interval '2 hours' + interval '40 minutes'),
   ('77777777-4600-0000-0000-000000000002', '99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 'regular', 2, now() + interval '4 days', now() + interval '4 days' + interval '40 minutes');
 insert into app_users (auth_user_id, role, tutor_id) values
   ('bbbbbbbb-0000-0000-0000-000000004600', 'tutor', '55555555-0000-0000-0000-000000004600'),
@@ -3105,6 +3105,21 @@ select pg_temp.ok(tutor_first_lesson_todos(null) = '[]'::jsonb
 select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"conversation"}');
 select pg_temp.ok((select (x).tutor_class_style = 'conversation' and (x).tutor_class_style_mix is null and (x).textbook = 'Speak now 2' from pg_temp.s4600() x),
   'Conversation 으로 바꾸면 구성은 비우고 교재 칸은 그대로 (4600)');
+-- 4601: 기존 학생(기준일 전에 진행한 수업이 있음)은 첫 Held 수업이 있어도 To-do 없음
+reset role;
+insert into students (id, name_ko, name_en, timezone) values ('99999999-0000-0000-0000-000000004601', '박오래', 'Park Orae', 'Asia/Seoul');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000004601', '99999999-0000-0000-0000-000000004601', 2, 4, 1, 40, (now() at time zone 'Asia/Seoul')::date, (now() at time zone 'Asia/Seoul')::date + 27, 4, 'active');
+insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+values ('99999999-0000-0000-0000-000000004601', '55555555-0000-0000-0000-000000004600', 4, '20:00', 40, (now() at time zone 'Asia/Seoul')::date);
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, class_status) values
+  ('77777777-4601-0000-0000-000000000001', '99999999-1000-0000-0000-000000004601', '99999999-0000-0000-0000-000000004601', '55555555-0000-0000-0000-000000004600', 'regular', 1, now() - interval '40 days', now() - interval '40 days' + interval '40 minutes', 'done', 'Normal'),
+  ('77777777-4601-0000-0000-000000000002', '99999999-1000-0000-0000-000000004601', '99999999-0000-0000-0000-000000004601', '55555555-0000-0000-0000-000000004600', 'regular', 2, now() - interval '1 hour', now() - interval '1 hour' + interval '40 minutes', 'done', 'Normal');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004600';
+select pg_temp.ok(tutor_first_lesson_todos(null) = '[]'::jsonb
+              and (select p -> 'followup' = 'null'::jsonb or p -> 'followup' is null from tutor_student_profile('99999999-0000-0000-0000-000000004601', null) p),
+  '4601: 기준일 전에 수업한 기존 학생은 새 수강권을 시작해도 To-do 가 생기지 않음');
 -- 권한: 담당 아닌 강사(대체 아님) 거절 · 모르는 칸 거절
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004601';
 select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Beginner"}')$$, 'regular tutor|42501');

@@ -5,8 +5,8 @@ select 항목, case when ok then '통과' else '실패' end as 결과 from (
   union all select 3, '로그인 안 한 사용자(anon)가 읽을 수 있는 표 없음',
     not exists (select 1 from pg_class c join pg_namespace s on s.oid = c.relnamespace
                 where s.nspname = 'public' and c.relkind in ('r', 'v') and has_table_privilege('anon', c.oid, 'select'))
-  union all select 4, '기준 데이터: 상태값 14 · 판본 16 · 기능 스위치 5',
-    (select count(*) from class_status_rules) = 14 and (select count(*) from terms_versions) = 16 and (select count(*) from feature_flags) = 5
+  union all select 4, '기준 데이터: 상태값 14 · 판본 16 · 기능 스위치 5 + 첫 수업 To-do 시작일 1',
+    (select count(*) from class_status_rules) = 14 and (select count(*) from terms_versions) = 16 and (select count(*) from feature_flags) = 6
   union all select 5, '최신 기능까지 (신규 배정 확정·운영자 TOTP)',
     to_regclass('public.schedule_plans') is not null and exists (select 1 from pg_proc where proname = 'is_owner')
   union all select 6, '서버 키 권한 (학생 표 읽기·쓰기)',
