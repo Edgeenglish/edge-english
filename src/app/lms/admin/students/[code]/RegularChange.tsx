@@ -2,6 +2,8 @@
 
 // ① 정규 일정 수정 (H26(44) ①·②): 요일·시작 시간(한국 시간)·적용 시작일 → 바뀌는 수업 전체 미리 보기 → 검사 → 사유 → 저장
 // 주 횟수·수업 길이·강사는 여기서 바꾸지 않음. 종료일은 연장하지 않음(넘치면 저장 차단). 검사·저장은 DB 함수가 다시 함
+// A-03 (20261107): '지금 적용 중' 과 '○○부터 적용 예정'(data.nextSlots) 을 구분. 적용 예정 변경은 적용일 전에 취소([예정 변경 취소] = 원래 일정을
+// 적용 예정일부터 다시 저장)·수정(새 시간 고르기)할 수 있음. '같은 일정' 판정은 고른 적용 시작일에 유효한 일정 기준, 그 뒤 예정 변경이 있으면 같다고 보지 않음
 import { useEffect, useMemo, useState } from 'react';
 import { formatInZone, kstToInstant, type KstDate } from '@/lms/rules/dates';
 import {
@@ -25,6 +27,9 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
   const minFrom = e && e.startDate > today ? e.startDate : today;
   const dates = useMemo(() => (e ? dateOptions(minFrom, e.finalEndDate) : []), [e, minFrom]);
   const [from, setFrom] = useState<KstDate>(dates[0] ?? today);
+  // 아직 적용 전인 변경 (가장 가까운 것). 적용 시작일이 그 날 이후면 그 일정이 '그때 유효한 일정'
+  const pending: Slot[] = data.nextSlots.map((s) => ({ weekday: s.weekday, time: s.time }));
+  const pendingFrom: KstDate | null = data.nextSlots[0]?.from ?? null;
   // 고른 요일 → 시간 (처음엔 지금 일정 그대로)
   const [times, setTimes] = useState<Record<number, string>>(() => Object.fromEntries(cur.map((s) => [s.weekday, s.time])));
   const [order, setOrder] = useState<number[]>(() => cur.map((s) => s.weekday));
@@ -39,8 +44,20 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
 
   const slots: Slot[] = order.map((w) => ({ weekday: w, time: times[w] ?? '' })).sort((a, b) => a.weekday - b.weekday);
   const complete = order.length === n && slots.every((s) => /^\d\d:\d\d$/.test(s.time) && ['00', '30'].includes(s.time.slice(3)));
-  const same = complete && JSON.stringify(slots) === JSON.stringify(cur.map((s) => ({ weekday: s.weekday, time: s.time })));
+  const plain = (xs: Slot[]) => JSON.stringify([...xs].map((s) => ({ weekday: s.weekday, time: s.time })).sort((a, b) => a.weekday - b.weekday));
+  const effectiveAtFrom: Slot[] = pendingFrom && from >= pendingFrom ? pending : cur;
+  const cancelsPending = !!pendingFrom && from < pendingFrom;   // 저장하면 그 뒤 예정 변경은 취소됨 (DB 도 같은 기준)
+  const same = complete && plain(slots) === plain(effectiveAtFrom) && !cancelsPending;
   const key = complete ? `${from}|${JSON.stringify(slots)}` : '';
+
+  /** [예정 변경 취소]: 원래(지금 적용 중) 일정을 적용 예정일부터 다시 저장 → 옮겨 둔 수업이 원래 시각으로 돌아오고 예정 줄은 치워짐. 변경권·수업 수 변화 없음 */
+  function cancelPending() {
+    if (!pendingFrom) return;
+    setOrder(cur.map((s) => s.weekday));
+    setTimes(Object.fromEntries(cur.map((s) => [s.weekday, s.time])));
+    setFrom(dates.includes(pendingFrom) ? pendingFrom : dates[0] ?? today);
+    if (!reason.trim()) setReason('예정 변경 취소');
+  }
 
   function toggle(w: number) {
     if (order.includes(w)) return setOrder(order.filter((x) => x !== w));
@@ -93,9 +110,16 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
   const tutorLocalNew = slotsInZone(slots.length === n && complete ? slots : [], tutor.tutorTz, from);
   return (
     <Sheet title="정규 일정 수정" onClose={onClose} wide>
-      <p className="mb-3 text-[13px] text-[#6b6880]">
-        지금: {slotsText(cur)} (한국 시간) · {e.durationMin}분 · {tutor.tutor} 강사. 요일·시작 시간만 바꿔요. 주 {n}회·수업 길이·강사는 그대로예요.
+      <p className="mb-1 text-[13px] text-[#6b6880]">
+        지금 적용 중: {slotsText(cur)} (한국 시간) · {e.durationMin}분 · {tutor.tutor} 강사. 요일·시작 시간만 바꿔요. 주 {n}회·수업 길이·강사는 그대로예요.
       </p>
+      {pendingFrom && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[10px] border border-[#d9d2f5] bg-[#f3f0fd] px-3 py-2 text-[13.5px] text-[#1d1b2b]">
+          <span><b>{mdw(pendingFrom)}부터 적용 예정:</b> {slotsText(pending)} (한국 시간)</span>
+          <button type="button" className={`${btnSub} !min-h-[36px] !py-1 text-[13px]`} onClick={cancelPending} disabled={busy}>예정 변경 취소</button>
+        </div>
+      )}
+      {!pendingFrom && <div className="mb-2" />}
       <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr]">
         <div className="grid gap-3">
           <div>
@@ -140,12 +164,17 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
         </div>
 
         <div className="grid content-start gap-2">
-          {same && <p className="rounded-[10px] bg-white px-3 py-2 text-[13.5px] text-[#6b6880]">지금 정규 일정과 같아요. 바꿀 요일·시간을 골라 주세요.</p>}
+          {same && <p className="rounded-[10px] bg-white px-3 py-2 text-[13.5px] text-[#6b6880]">{pendingFrom && from >= pendingFrom ? `${mdw(pendingFrom)}부터 적용 예정인 일정과 같아요.` : '지금 정규 일정과 같아요.'} 바꿀 요일·시간을 골라 주세요.</p>}
           {!complete && !same && <p className="rounded-[10px] bg-white px-3 py-2 text-[13.5px] text-[#6b6880]">요일 {n}개와 시작 시간을 고르면 바뀌는 수업을 미리 보여 드려요.</p>}
           {pvErr && <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[13.5px] text-[#b3261e]">{pvErr}</p>}
           {complete && !same && !pv && !pvErr && <p className="text-[13px] text-[#6b6880]">미리 보기 계산 중…</p>}
           {pv && (
             <>
+              {(pv.cancelsPending || cancelsPending) && pendingFrom && (
+                <p className="rounded-[10px] bg-[#f3f0fd] px-3 py-2 text-[13.5px] text-[#1d1b2b]">
+                  저장하면 <b>{mdw(pendingFrom)}부터 적용 예정</b>이던 변경({slotsText(pending)})은 취소되고, {mdw(from)}부터 아래 일정이 적용돼요.
+                </p>
+              )}
               <section className="rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2">
                 <h3 className="text-[13px] font-extrabold text-[#6b6880]">바뀌는 수업 {pv.moved.length}회</h3>
                 <ul className="mt-1 grid gap-1.5 text-[13.5px]">
@@ -214,7 +243,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
       <div className="mt-4 flex gap-2">
         <button type="button" className={btnSub} onClick={onClose} disabled={busy}>취소</button>
         <button type="button" className={`${btnMain} flex-1`} disabled={!pv?.ok || !reason.trim() || busy} onClick={onSave}>
-          {busy ? '저장 중…' : pv ? `${pv.moved.length}회 바꾸고 저장${pv.kept.filter((k) => k.why === 'same').length ? ` · ${pv.kept.filter((k) => k.why === 'same').length}회 유지` : ''}` : '저장'}
+          {busy ? '저장 중…' : pv ? pv.moved.length === 0 && (pv.cancelsPending || cancelsPending) ? '예정 변경 취소하고 저장' : `${pv.moved.length}회 바꾸고 저장${pv.kept.filter((k) => k.why === 'same').length ? ` · ${pv.kept.filter((k) => k.why === 'same').length}회 유지` : ''}` : '저장'}
         </button>
       </div>
       <p className="mt-2 text-[12px] text-[#6b6880]">

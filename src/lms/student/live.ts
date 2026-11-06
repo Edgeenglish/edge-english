@@ -253,18 +253,18 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
       return { regular: r.regular, makeup: r.makeup, hasEmail: r.has_email };
     },
     makeupOptions: (right: RightRef) => loadMakeupOptions(sb, adminStudentId, right),
-    /** 수업 취소 (판정 시각 = 지금). 결과는 DB 판정 */
+    /** 수업 취소 (판정 시각 = 지금 = 서버 시각. A-01: 브라우저 시각을 보내면 시계가 빠른 기기에서 '요청 받은 시각이 지금보다 늦습니다' 로 거절됨). 결과는 DB 판정 */
     cancel: async (lessonId: string): Promise<{ status: string; uses_credit: boolean; makeup_allowed: boolean }> => {
       const id = crypto.randomUUID();
       return admin
-        ? check(await sb.rpc('admin_change_lesson', { p_request_id: id, p_lesson: lessonId, p_who: 'student', p_requested_at: new Date().toISOString(), p_dry_run: false }))
+        ? check(await sb.rpc('admin_change_lesson', { p_request_id: id, p_lesson: lessonId, p_who: 'student', p_requested_at: null, p_dry_run: false }))
         : check(await sb.rpc('student_change_lesson', { p_request_id: id, p_lesson: lessonId, p_dry_run: false }));
     },
     requestMakeup: async (right: RightRef, slots: Date[]): Promise<void> => {
       const p_slots = slots.map((s) => ({ starts_at: s.toISOString() }));
       check(
         admin
-          ? await sb.rpc('admin_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, p_requested_at: new Date().toISOString(), ...compArg(right) })
+          ? await sb.rpc('admin_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, p_requested_at: null, ...compArg(right) })
           : await sb.rpc('student_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, ...compArg(right) }),
       );
     },

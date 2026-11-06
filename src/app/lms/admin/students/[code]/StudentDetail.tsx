@@ -106,7 +106,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
                 {s.timezone !== 'Asia/Seoul' && <Row k={`학생 · ${koZone(s.timezone)}`} v={slotsInZone(data.slots, s.timezone, today)} />}
                 {slot!.tutorTz !== 'Asia/Seoul' && <Row k={`강사 ${slot!.tutor} · ${koZone(slot!.tutorTz)}`} v={slotsInZone(data.slots, slot!.tutorTz, today)} />}
                 <Row k="적용" v={`${md(slot!.from)}부터`} />
-                {data.nextSlots.length > 0 && <Row k={`${mdw(data.nextSlots[0].from)}부터`} v={<b className="text-[#5b3fe0]">{slotsText(data.nextSlots)} (한국 시간)</b>} />}
+                {data.nextSlots.length > 0 && <Row k={`${mdw(data.nextSlots[0].from)}부터 적용 예정`} v={<b className="text-[#5b3fe0]">{slotsText(data.nextSlots)} (한국 시간)</b>} />}
                 <Row k="바뀐 기록" v={data.changes.length === 0 ? '없음' : <button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setSheet({ notice: data.changes[0].id })}>{data.changes.length}건 보기</button>} />
               </>
             )}

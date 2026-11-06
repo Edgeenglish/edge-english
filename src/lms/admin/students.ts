@@ -231,6 +231,8 @@ export type RegularPreview = {
   enrollment: { id: string; finalEndDate: KstDate; durationMin: number }; oldSlots: Slot[]; newSlots: Slot[]; effectiveFrom: KstDate;
   moved: MovedLesson[]; kept: KeptLesson[]; skipped: { date: KstDate; time: string; why: string }[];
   problems: { lessonId: string; seq: number | null; date: KstDate; time: string; why: string; other: string | null }[]; lastDate: KstDate | null;
+  /** 적용 시작일 뒤에 시작하는(아직 효력 전) 정규 일정 변경이 있어 저장하면 그 예정 변경이 취소됨 (A-03, 20261107) */
+  cancelsPending: boolean;
 };
 export function parsePreview(j: any): RegularPreview {
   return {
@@ -239,7 +241,7 @@ export function parsePreview(j: any): RegularPreview {
     oldSlots: j.old_slots ?? [], newSlots: j.new_slots ?? [], effectiveFrom: j.effective_from, moved: parseMoved(j.moved), kept: parseKept(j.kept),
     skipped: ((j.skipped ?? []) as any[]).map((s) => ({ date: s.date, time: s.time, why: s.why })),
     problems: ((j.problems ?? []) as any[]).map((p) => ({ lessonId: p.lesson_id, seq: p.seq ?? null, date: p.date, time: p.time, why: p.why, other: p.other ?? null })),
-    lastDate: j.last_date ?? null,
+    lastDate: j.last_date ?? null, cancelsPending: !!j.cancels_pending,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

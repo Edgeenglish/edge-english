@@ -1239,8 +1239,9 @@ select pg_temp.ok((pg_temp.chg(gen_random_uuid()::text, 2, 'student', now(), tru
               and (pg_temp.chg(gen_random_uuid()::text, 2, 'student', now() - interval '5 hours', true) ->> 'status') = 'Student canceled in advance',
   '같은 수업도 카톡 받은 시각(8시간 전)이면 정상 변경, 지금(3시간 전)이면 늦은 변경');
 select pg_temp.expect_error($$select pg_temp.chg(gen_random_uuid()::text, 2, 'student', now() + interval '1 hour', true)$$, '지금보다 늦');
-select pg_temp.expect_error($$select pg_temp.chg(gen_random_uuid()::text, 2, 'student', null, true)$$, '요청 받은 시각');
-select pg_temp.ok(true, '요청 시각이 없거나 미래면 거절');
+select pg_temp.ok((pg_temp.chg(gen_random_uuid()::text, 2, 'student', null, true) ->> 'status') = 'Student canceled late',
+  'A-01: 요청 시각을 비우면 서버 시각(지금)으로 판정 — 학생 화면 운영자 보기 (20261107)');
+select pg_temp.ok(true, '요청 시각이 미래면 거절');
 -- 5) 늦은 변경: 변경권 그대로, 보강 없음
 select pg_temp.chg('c0000000-0000-0000-0000-000000000002', 2, 'student', now(), false);
 select pg_temp.ok(pg_temp.st(2) = 'canceled:Student canceled late' and pg_temp.bal() = 1, '늦은 변경: 수업 1회 소진, 변경권 차감 없음');
@@ -2386,6 +2387,29 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select pg_temp.ok((select (r ->> 'ok')::boolean from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"22:00"},{"weekday":2,"time":"20:30"}]', (select from_day from p4300), '한 번 더', false) r)
               and (select (r ->> 'ok')::boolean from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"22:00"},{"weekday":2,"time":"20:00"}]', (select from_day from p4300), '다시 원래대로', false) r),
   '① 같은 적용일로 두 번 더 바꿔도 저장됨 (예정 일정 줄은 효력 없는 날짜로 치움, 지우지 않음) (4300)');
+-- A-03) 예정 변경 취소 (20261107): 지금 일정(월·화 20:00)과 같은 시간을 오늘부터 → 전에는 '같습니다' 거절, 이제는 예정 줄 취소 + 옮겨 둔 수업 원복
+create temp view a03 as select (now() at time zone 'Asia/Seoul')::date as today;
+grant select on a03 to authenticated;
+select pg_temp.ok((select (r ->> 'ok')::boolean and (r ->> 'cancels_pending')::boolean and jsonb_array_length(r -> 'moved') = 1 and jsonb_array_length(r -> 'problems') = 0
+                          and (r -> 'moved' -> 0 ->> 'to')::timestamptz = ((select from_day from p4300) + time '20:00') at time zone 'Asia/Seoul'
+                   from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"20:00"},{"weekday":2,"time":"20:00"}]', (select today from a03), null, true) r),
+  'A-03 미리 보기: 적용 전 변경이 있으면 원래 시간으로 되돌리는 저장 허용(cancels_pending), 옮겨 둔 다음 주 월 수업이 20:00 으로 돌아옴 (4300)');
+select pg_temp.ok((select (r ->> 'ok')::boolean and (r ->> 'moved')::int = 1
+                   from admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"20:00"},{"weekday":2,"time":"20:00"}]', (select today from a03), '예정 변경 취소', false) r),
+  'A-03 저장 성공 (4300)');
+reset role;
+select pg_temp.ok((select starts_at = ((select from_day from p4300) + time '20:00') at time zone 'Asia/Seoul' from lessons where enrollment_id = '99999999-1000-0000-0000-000000004300' and seq = 8)
+              and (select count(*) from lessons where enrollment_id = '99999999-1000-0000-0000-000000004300' and kind = 'regular' and state = 'scheduled') = 8
+              and (select count(*) = 2 and bool_and(start_time_kst = '20:00' and effective_from = (select mon - 20 from t4300) and change_reason like '%다시 이어 감: 예정 변경 취소%') from regular_schedules where student_id = '99999999-0000-0000-0000-000000004300' and effective_to is null)
+              and (select count(*) from regular_schedules where student_id = '99999999-0000-0000-0000-000000004300' and effective_from > date '1950-01-01') = 2
+              and not exists (select 1 from regular_schedules where student_id = '99999999-0000-0000-0000-000000004300' and effective_from > (select today from a03) and effective_from > date '1950-01-01')
+              and (select count(*) from regular_changes where student_id = '99999999-0000-0000-0000-000000004300') = 4
+              and (select count(*) from credit_ledger cl join enrollment_periods ep on ep.id = cl.period_id join enrollments en on en.id = ep.enrollment_id where en.student_id = '99999999-0000-0000-0000-000000004300') = 0,
+  'A-03 저장 뒤: 다음 주 월 수업 20:00 원복, 수업 8회 그대로, 원래 줄 그대로 이어 감(쪼개지 않음)·예정 줄은 치워 둠, 변경 기록 +1, 변경권 변화 없음 (4300)');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_regular_change('99999999-0000-0000-0000-000000004300', '[{"weekday":1,"time":"20:00"},{"weekday":2,"time":"20:00"}]', (select today from a03), null, true)$$, '같습니다');
+select pg_temp.ok(true, 'A-03: 예정 변경이 없으면 같은 일정은 전처럼 거절 (4300)');
 select pg_temp.ok((select (x ->> 'notice_pending')::boolean and x ->> 'status' = 'active' and x ->> 'tutor' = 'RegTutor'
                    from jsonb_array_elements(admin_students()) x where x ->> 'code' = (select code from students where id = '99999999-0000-0000-0000-000000004300')),
   '운영진 학생 목록: 수강 상태·강사·안내 안 보냄 표시 (4300)');
@@ -2469,7 +2493,7 @@ select admin_student_update('99999999-0000-0000-0000-000000004300', '{"display_n
 select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-0000-000000004300', '{"timezone":"Mars/Base"}')$$, 'time zone');
 select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-0000-000000004300', '{"email":"nope"}')$$, 'email');
 select pg_temp.ok((select d -> 'student' ->> 'name_ko' = '김서연' and d -> 'student' ->> 'timezone' = 'America/Toronto' and d -> 'student' ->> 'level_note' = 'A2/B1 (시트)'
-                          and jsonb_array_length(d -> 'changes') = 3 and jsonb_array_length(d -> 'enrollments') = 2 and (d -> 'edits' -> 0 ->> 'role') = 'admin'
+                          and jsonb_array_length(d -> 'changes') = 4 and jsonb_array_length(d -> 'enrollments') = 2 and (d -> 'edits' -> 0 ->> 'role') = 'admin'
                           and (d -> 'enrollment' ->> 'seq')::int = 2 and (d -> 'enrollments' -> 1 ->> 'seq')::int = 1
                    from admin_student_detail('99999999-0000-0000-0000-000000004300') d),
   '운영진 상세: 한국 이름·바뀐 시간대·예전 레벨 참고·정규 변경 기록·수강권·수정 기록·연장 기록 (4300)');
