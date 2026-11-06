@@ -246,7 +246,7 @@ export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: Le
             <span className={`tabular-nums ${l.original ? 'font-bold' : ''}`}>
               {dayLabel(l.date)} {l.time}
             </span>
-            {loc && <span className="ml-1.5 text-[12.5px] text-[#6b6880]">현지 {loc}</span>}
+            {loc && <span className="ml-1.5 whitespace-nowrap text-[12.5px] text-[#6b6880]">현지 {loc}</span>}
             {l.n === 1 && <span className="ml-1.5 rounded-full bg-[#efebff] px-2 py-0.5 text-[12px] font-semibold text-[#5b3fe0]">첫 수업</span>}
           </div>
           {l.original ? (
@@ -295,8 +295,10 @@ export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: Le
     <div role="dialog" aria-modal="true" aria-label="특정 수업 날짜 변경" className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
       <div className="flex max-h-[88vh] w-full max-w-[560px] flex-col rounded-t-[18px] bg-white lg:rounded-[18px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center border-b border-[#f0eef6] px-5 py-4">
-          <b className="text-[17px] text-[#1d1b2b]">특정 수업 날짜 변경</b>
-          <span className="ml-2 text-[13px] text-[#6b6880]">변경권 차감 없음 · 한국 시간(KST)</span>
+          <div>
+            <b className="block text-[17px] text-[#1d1b2b]">특정 수업 날짜 변경</b>
+            <span className="text-[13px] text-[#6b6880]">변경권 차감 없음 · 한국 시간(KST)</span>
+          </div>
           <span className="flex-1" />
           <button type="button" onClick={onClose} aria-label="닫기" className="h-10 w-10 text-[20px] text-[#6b6880]">
             ×

@@ -92,7 +92,7 @@ export default function PrestartMove(p: {
             {first && <s className="mr-1 text-[13px] text-[#9a97a8]">{label(new Date(first))}</s>}
             {first && <span className="mr-1 text-[#9a97a8]">→</span>}
             <span className={`tabular-nums ${first ? 'font-bold' : ''}`}>{dayLabel(k.date)} {k.time}</span>
-            {loc && <span className="ml-1.5 text-[12.5px] text-[#6b6880]">현지 {loc}</span>}
+            {loc && <span className="ml-1.5 whitespace-nowrap text-[12.5px] text-[#6b6880]">현지 {loc}</span>}
           </div>
           {open !== l.id && (
             <button type="button" onClick={() => edit(l)} className="min-h-[38px] shrink-0 rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px] font-semibold text-[#1d1b2b]">
