@@ -23,6 +23,7 @@ export type DetailActions = {
   extend: (enrollmentId: string, newEnd: KstDate, kind: 'student_long_term_leave' | 'admin_exception' | 'correction', note: string) => Promise<{ finalEndDate: KstDate; days: number }>;
   /** 첫 수업 시작 전 개별 수업 날짜 변경 (변경권 차감 없음, H26(62)) */
   prestart: (lessonId: string, startsAt: string) => Promise<unknown>;
+  prestartMoved: () => Promise<Record<string, string>>;
 };
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
@@ -221,7 +222,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
       )}
       {sheet === 'prestart' && e && (
         <PrestartMove lessons={regularAhead} period={{ start: e.startDate, end: e.finalEndDate }} student={{ nameEn: s.nameEn, timezone: s.timezone, city: s.city }}
-          move={actions.prestart} onSaved={actions.reload} onClose={() => setSheet(null)} />
+          move={actions.prestart} loadMoved={actions.prestartMoved} onSaved={actions.reload} onClose={() => setSheet(null)} />
       )}
       {sheet === 'extend' && e && <ExtendSheet enrollment={e} studentTz={s.timezone} today={today} extend={actions.extend} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
       {sheet === 'profile' && <ProfileSheet student={s} update={actions.update} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}

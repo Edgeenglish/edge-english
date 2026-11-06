@@ -3,7 +3,7 @@
 // 학생 상세 실제 데이터 (migration 4300). 쓰기는 모두 DB 함수(운영자 aal2 확인·검사·기록은 DB)
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  extendEnrollment, findStudentId, loadStudentDetail, markRegularChangeSent, prestartMove, previewRegularChange, saveRegularChange, updateStudent,
+  extendEnrollment, findStudentId, loadStudentDetail, markRegularChangeSent, loadPrestartMoved, prestartMove, previewRegularChange, saveRegularChange, updateStudent,
 } from '@/lms/admin/students-live';
 import type { StudentDetailData } from '@/lms/admin/students';
 import { supabaseBrowser } from '@/lms/auth/client';
@@ -47,6 +47,7 @@ export default function StudentDetailLive({ code }: { code: string }) {
     sent: (changeId, who, undo) => markRegularChangeSent(sb, changeId, who, undo),
     extend: (enrollmentId, newEnd, kind, note) => extendEnrollment(sb, enrollmentId, newEnd, kind, note),
     prestart: (lessonId, startsAt) => prestartMove(sb, lessonId, startsAt),
+    prestartMoved: () => loadPrestartMoved(sb, id),
   } : null, [sb, id, load]);
 
   if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;

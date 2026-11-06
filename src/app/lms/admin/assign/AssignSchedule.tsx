@@ -149,7 +149,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
   const candidates = useMemo(() => {
     if (!enough || !suggested || !tutor) return [];
     const out: { date: KstDate; issues: number }[] = [];
-    for (let d = suggested; out.length < 4; d = addDays(d, 1)) if (slots.some((s) => s.weekday === weekdayOf(d))) out.push({ date: d, issues: check(d)?.issues.length ?? 0 });
+    for (let d = suggested; out.length < 4; d = addDays(d, 1)) if (slots.some((s) => s.weekday === weekdayOf(d))) out.push({ date: d, issues: new Set(check(d)?.issues.map((i) => i.kstDate) ?? []).size });
     return out;
   }, [enough, suggested, tutor, slots]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -377,7 +377,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                       onClick={() => setFirstPick(c.date)}
                       className={`min-h-[40px] rounded-full border px-3 text-[13.5px] ${c.date === firstDate ? 'border-[#7d5ffb] bg-[#efebff] font-semibold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
                     >
-                      {dayLabel(c.date)} {c.issues === 0 ? '✓' : `충돌 ${c.issues}`}
+                      {dayLabel(c.date)} {c.issues === 0 ? '✓' : `· ${c.issues}회 예약 불가`}
                     </button>
                   ))}
                 </div>
@@ -406,14 +406,16 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                 )}
                 {sheetOpen && lessonPlan && <ChangeSheet plan={lessonPlan} issues={listIssues} tutor={tutor} onEdit={setEdit} onClose={() => setSheetOpen(false)} />}
                 {plan && plan.issues.length > 0 && (
-                  <ul className="mt-3 space-y-1 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
-                    {plan.issues.slice(0, 5).map((i, k) => (
-                      <li key={k}>
-                        • {dayLabel(i.kstDate)} {i.kstTime} · {issueText(i.reason)}
-                      </li>
-                    ))}
-                    {plan.issues.length > 5 && <li>외 {plan.issues.length - 5}건 — 다른 시간이나 첫 수업일을 골라 주세요</li>}
-                  </ul>
+                  <div className="mt-3 rounded-[10px] bg-[#fdecec] px-3 py-2.5 text-[13px]">
+                    <p className="font-bold text-[#b3261e]">예약 불가 {new Set(plan.issues.map((i) => i.kstDate)).size}회</p>
+                    <ul className="mt-1 space-y-1">
+                      {[...new Map(plan.issues.map((i) => [i.kstDate, i])).values()].map((i) => (
+                        <li key={i.kstDate} className="text-[#1d1b2b]">
+                          {i.seq}회 {dayLabel(i.kstDate)} {i.kstTime} (한국 시간) — <span className="text-[#b3261e]">{plan.issues.filter((x) => x.kstDate === i.kstDate).map((x) => issueText(x.reason)).join(' · ')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </Card>
             )}

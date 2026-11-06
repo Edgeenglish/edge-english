@@ -219,22 +219,84 @@ function PeriodBox({ plan, slots, weeks }: { plan: LessonPlan; slots: RegularSlo
   );
 }
 
-/** 특정 수업 날짜 변경 창 (PC 가운데 · 휴대폰 아래에서 올라옴) */
+/** 특정 수업 날짜 변경 창 (PC 가운데 · 휴대폰 아래에서 올라옴)
+ *  바꾼 수업을 먼저, 나머지 회차는 [다른 회차 바꾸기]를 눌러야 펼침 (바꾼 수업이 없으면 처음부터 펼침) */
 export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: LessonPlan; issues: PlanIssue[]; tutor: RegTutor | null; onEdit: ScheduleProps['onEdit']; onClose: () => void }) {
   const [open, setOpen] = useState<KstDate | null>(null);
   const [date, setDate] = useState<KstDate>('');
   const [time, setTime] = useState('');
+  const changed = plan.lessons.filter((l) => l.original);
+  const others = plan.lessons.filter((l) => !l.original);
+  const [showOthers, setShowOthers] = useState(changed.length === 0);
   const edit = (l: PlanLesson) => {
     setOpen(l.key);
     setDate(l.date);
     setTime(l.time);
+  };
+  const row = (l: PlanLesson) => {
+    const bad = issues.filter((x) => x.kstDate === l.date);
+    const loc = localOf(tutor, l.date, l.time);
+    return (
+      <li key={l.key} className="border-b border-[#f0eef6] py-2.5 last:border-b-0">
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 text-[14.5px] text-[#1d1b2b]">
+            <span className="mr-2 inline-block w-9">{l.n}회</span>
+            {l.original && <s className="mr-1 text-[13px] text-[#9a97a8]">{dayLabel(l.original.date)}{l.original.time !== l.time ? ` ${l.original.time}` : ''}</s>}
+            {l.original && <span className="mr-1 text-[#9a97a8]">→</span>}
+            <span className={`tabular-nums ${l.original ? 'font-bold' : ''}`}>
+              {dayLabel(l.date)} {l.time}
+            </span>
+            {loc && <span className="ml-1.5 text-[12.5px] text-[#6b6880]">현지 {loc}</span>}
+            {l.n === 1 && <span className="ml-1.5 rounded-full bg-[#efebff] px-2 py-0.5 text-[12px] font-semibold text-[#5b3fe0]">첫 수업</span>}
+          </div>
+          {l.original ? (
+            <button type="button" onClick={() => onEdit(l.key, null)} className="min-h-[38px] shrink-0 rounded-[10px] border border-[#cfc4ff] px-3 text-[13px] font-semibold text-[#5b3fe0]">
+              원래대로
+            </button>
+          ) : (
+            open !== l.key && (
+              <button type="button" onClick={() => edit(l)} className="min-h-[38px] shrink-0 rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#1d1b2b]">
+                변경
+              </button>
+            )
+          )}
+        </div>
+        {bad.map((x, k) => (
+          <p key={k} className="mt-1 pl-11 text-[12.5px] text-[#b3261e]">
+            {x.detail}
+          </p>
+        ))}
+        {open === l.key && !l.original && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-[10px] bg-[#f6f5fb] p-2.5">
+            <input type="date" aria-label={`${l.n}회 새 날짜`} value={date} onChange={(e) => setDate(e.target.value)} className="min-h-[42px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14.5px] text-[#1d1b2b]" />
+            <TimeSelect value={time} onChange={setTime} label={`${l.n}회 새 시간`} small />
+            <span className="text-[12.5px] text-[#6b6880]">KST{date && time && localOf(tutor, date, time) ? ` · 현지 ${localOf(tutor, date, time)}` : ''}</span>
+            <span className="flex-1" />
+            <button type="button" onClick={() => setOpen(null)} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13.5px] text-[#1d1b2b]">
+              취소
+            </button>
+            <button
+              type="button"
+              disabled={!date || !time || (date === l.date && time === l.time)}
+              onClick={() => {
+                onEdit(l.key, { date, time });
+                setOpen(null);
+              }}
+              className="min-h-[40px] rounded-[10px] bg-[#7d5ffb] px-4 text-[13.5px] font-bold text-white disabled:bg-[#cfc4ff]"
+            >
+              적용
+            </button>
+          </div>
+        )}
+      </li>
+    );
   };
   return (
     <div role="dialog" aria-modal="true" aria-label="특정 수업 날짜 변경" className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
       <div className="flex max-h-[88vh] w-full max-w-[560px] flex-col rounded-t-[18px] bg-white lg:rounded-[18px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center border-b border-[#f0eef6] px-5 py-4">
           <b className="text-[17px] text-[#1d1b2b]">특정 수업 날짜 변경</b>
-          <span className="ml-2 text-[13px] text-[#6b6880]">변경권 차감 없음</span>
+          <span className="ml-2 text-[13px] text-[#6b6880]">변경권 차감 없음 · 한국 시간(KST)</span>
           <span className="flex-1" />
           <button type="button" onClick={onClose} aria-label="닫기" className="h-10 w-10 text-[20px] text-[#6b6880]">
             ×
@@ -246,65 +308,23 @@ export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: Le
               {p}
             </p>
           ))}
-          <p className="pb-1 text-[12.5px] text-[#6b6880]">한국 시간(KST)</p>
-          <ul>
-            {plan.lessons.map((l) => {
-              const bad = issues.filter((x) => x.kstDate === l.date);
-              const loc = localOf(tutor, l.date, l.time);
-              return (
-                <li key={l.key} className={`border-b border-[#f0eef6] py-2.5 last:border-b-0 ${l.original ? 'bg-[#fff8e8]' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-[14.5px] text-[#1d1b2b]">
-                      <span className="w-9 shrink-0">{l.n}회</span>
-                      <span className="tabular-nums">
-                        {dayLabel(l.date)} {l.time}
-                      </span>
-                      {loc && <span className="text-[12.5px] text-[#6b6880]">현지 {loc}</span>}
-                      <Tags l={l} />
-                    </div>
-                    {l.original ? (
-                      <button type="button" onClick={() => onEdit(l.key, null)} className="min-h-[38px] shrink-0 rounded-[10px] border border-[#cfc4ff] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                        원래 날짜로
-                      </button>
-                    ) : (
-                      open !== l.key && (
-                        <button type="button" onClick={() => edit(l)} className="min-h-[38px] shrink-0 rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#1d1b2b]">
-                          변경
-                        </button>
-                      )
-                    )}
-                  </div>
-                  {bad.map((x, k) => (
-                    <p key={k} className="mt-1 text-[12.5px] text-[#b3261e]">
-                      {x.detail}
-                    </p>
-                  ))}
-                  {open === l.key && !l.original && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-[10px] bg-[#f6f5fb] p-2.5">
-                      <input type="date" aria-label={`${l.n}회 새 날짜`} value={date} onChange={(e) => setDate(e.target.value)} className="min-h-[42px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14.5px] text-[#1d1b2b]" />
-                      <TimeSelect value={time} onChange={setTime} label={`${l.n}회 새 시간`} small />
-                      <span className="text-[12.5px] text-[#6b6880]">KST{date && time && localOf(tutor, date, time) ? ` · 현지 ${localOf(tutor, date, time)}` : ''}</span>
-                      <span className="flex-1" />
-                      <button type="button" onClick={() => setOpen(null)} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13.5px] text-[#1d1b2b]">
-                        취소
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!date || !time || (date === l.date && time === l.time)}
-                        onClick={() => {
-                          onEdit(l.key, { date, time });
-                          setOpen(null);
-                        }}
-                        className="min-h-[40px] rounded-[10px] bg-[#7d5ffb] px-4 text-[13.5px] font-bold text-white disabled:bg-[#cfc4ff]"
-                      >
-                        적용
-                      </button>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          {changed.length > 0 && (
+            <>
+              <p className="pb-1 text-[13px] font-bold text-[#1d1b2b]">바꾼 수업 {changed.length}</p>
+              <ul className="mb-2 rounded-[12px] bg-[#fff8e8] px-3">{changed.map(row)}</ul>
+            </>
+          )}
+          <button
+            type="button"
+            aria-expanded={showOthers}
+            onClick={() => setShowOthers((v) => !v)}
+            className="flex min-h-[44px] w-full items-center gap-2 text-left text-[14px] font-semibold text-[#4b33c4]"
+          >
+            {changed.length > 0 ? '다른 회차 바꾸기' : '회차 고르기'} <span className="text-[13px] font-normal text-[#6b6880]">({others.length})</span>
+            <span className="flex-1" />
+            <span aria-hidden className={`text-[16px] transition-transform ${showOthers ? 'rotate-180' : ''}`}>⌄</span>
+          </button>
+          {showOthers && <ul>{others.map(row)}</ul>}
         </div>
         <div className="border-t border-[#f0eef6] px-5 py-3">
           <button type="button" onClick={onClose} className="min-h-[48px] w-full rounded-[12px] bg-[#7d5ffb] text-[15px] font-bold text-white">

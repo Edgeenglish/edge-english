@@ -46,6 +46,14 @@ export async function prestartMove(sb: SupabaseClient, lessonId: string, startsA
   const r = check(await sb.rpc('admin_prestart_move', { p_lesson: lessonId, p_starts_at: startsAt, p_dry_run: dryRun })) as { seq: number | null; from: string; to: string };
   return { seq: r.seq, from: r.from, to: r.to };
 }
+/** 이미 시작 전 변경으로 옮긴 수업: 수업 id → 처음(원래) 시각. 표가 없는 DB(운영 반영 전)면 빈 값 */
+export async function loadPrestartMoved(sb: SupabaseClient, studentId: string): Promise<Record<string, string>> {
+  const r = await sb.from('prestart_moves').select('lesson_id, from_starts_at').eq('student_id', studentId).order('created_at', { ascending: true });
+  if (r.error) return {};
+  const out: Record<string, string> = {};
+  for (const x of (r.data ?? []) as { lesson_id: string; from_starts_at: string }[]) out[x.lesson_id] ??= x.from_starts_at;
+  return out;
+}
 export async function extendEnrollment(sb: SupabaseClient, enrollmentId: string, newEnd: KstDate, kind: 'student_long_term_leave' | 'admin_exception' | 'correction', note: string): Promise<{ finalEndDate: KstDate; days: number }> {
   const r = check(await sb.rpc('admin_extend_enrollment', { p_enrollment: enrollmentId, p_new_end: newEnd, p_kind: kind, p_note: note })) as { final_end_date: KstDate; days: number };
   return { finalEndDate: r.final_end_date, days: r.days };
