@@ -30,17 +30,39 @@ export function Box({ title, action, children }: { title: string; action?: React
   );
 }
 
-/** 아래에서 올라오는 창 (휴대폰) / 가운데 창 (PC). 닫기 ✕, 바깥 누르면 닫힘. 휴대폰 뒤로가기도 창만 닫히게 history 에 한 칸 */
-export function Sheet({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+/** 아래에서 올라오는 창 (휴대폰) / 가운데 창 (PC). 닫기 ✕, 바깥 누르면 닫힘. 휴대폰 뒤로가기도 창만 닫히게 history 에 한 칸
+ *  dirty: 입력 중(저장 안 한 변경)이면 바깥 누름·✕·뒤로가기·화면 이탈 때 확인을 받고, 확인 없이는 닫지 않음
+ *  (2026-11-06 대표: 프로필 수정 중 창이 갑자기 닫힘 — 뒤로가기 제스처·바깥 터치·화면 새로고침으로 입력이 사라지지 않게) */
+export function Sheet({ title, onClose, children, wide, dirty = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean; dirty?: boolean }) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const DISCARD = '입력 중인 내용이 있어요. 저장하지 않고 닫을까요?';
   useEffect(() => {
-    const onPop = () => onCloseRef.current();
+    const onPop = () => {
+      if (dirtyRef.current && !window.confirm(DISCARD)) {
+        // 뒤로가기(제스처 포함)로 빠져나간 history 칸을 다시 넣어 창을 유지
+        window.history.pushState({ sheet: title }, '');
+        return;
+      }
+      onCloseRef.current();
+    };
     if (window.history.state?.sheet !== title) window.history.pushState({ sheet: title }, '');
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, [title]);
-  const close = () => { if (window.history.state?.sheet === title) window.history.back(); else onClose(); };
+  // 입력 중에 새로고침·탭 닫기 → 브라우저 확인창
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  const close = () => {
+    if (dirtyRef.current && !window.confirm(DISCARD)) return;
+    if (window.history.state?.sheet === title) window.history.back(); else onClose();
+  };
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={close}>
       <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}

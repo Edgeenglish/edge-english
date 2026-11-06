@@ -3,7 +3,7 @@
 // 운영진 학생 상세 (H26(44) ①~⑤, migration 4300): 정규 일정 · 수강 · 프로필 · 자기소개/선호 7항목 · 운영진만(결제·메모) · 수업 · 변경 기록·안내
 // 시간은 모두 '한국 시간 · 학생 도시 시간 · 강사 도시 시간' 이름과 같이, 실제 수업 날짜로 계산 (H26(43))
 import Link from 'next/link';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { diffDays, instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import {
   dateOptions, finalEndText, KIND_KO, koZone, kstWithZones, md, mdw, productText, regularNoticeEn, regularNoticeKo, slotsInZone, slotsText, STATUS_TEXT, zoneLabel,
@@ -51,6 +51,11 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
   const status: StudentStatus = !e ? 'none' : e.status === 'completed' || e.status === 'canceled' || e.finalEndDate < today ? 'ended' : e.status === 'pending_payment' ? 'pending' : e.startDate > today ? 'upcoming' : 'active';
   const pending = status === 'pending';
   const [sheet, setSheet] = useState<null | 'profile' | 'answers' | 'regular' | 'extend' | 'prestart' | { notice: string }>(null);
+  // 입력 중에 화면이 새로고침·재실행되면(휴대폰 앱 전환 뒤 등) 임시 저장한 입력이 있는 창을 다시 열어 줌 (2026-11-06 대표 보고: 프로필 수정 중 창이 닫힘)
+  useEffect(() => {
+    if (readDraft(s.id, '프로필 수정')) setSheet('profile');
+    else if (readDraft(s.id, '자기소개 · 수업 선호 (학생 답 입력)')) setSheet('answers');
+  }, [s.id]);
   // 첫 수업 시작 전: 이 수강권의 정규 수업이 모두 아직 앞으로 남아 있을 때만 (시작 뒤는 수업 변경·변경권 절차)
   const regularAhead = data.upcoming.filter((l) => l.kind === 'regular' && !l.substitute && !l.leaveOpen);
   const prestartOpen = !!e && (e.status === 'confirmed' || e.status === 'active') && regularAhead.length > 0 && regularAhead.length >= e.lessonsPurchased;
@@ -407,19 +412,38 @@ function valueOf(s: StudentProfile, key: string): string {
   return m[key] ?? '';
 }
 
+// 입력 중 임시 저장 (이 기기, 학생·창마다): 창이 닫히거나 화면이 새로고침돼도 입력이 사라지지 않게. 저장하거나 '닫을까요?'에 확인하면 지움
+const draftKey = (studentId: string, title: string) => `lms_admin_draft_${studentId}_${title}`;
+function readDraft(studentId: string, title: string): Record<string, string> | null {
+  try { const s = localStorage.getItem(draftKey(studentId, title)); return s ? (JSON.parse(s) as Record<string, string>) : null; } catch { return null; }
+}
+function writeDraft(studentId: string, title: string, v: Record<string, string> | null) {
+  try { if (v) localStorage.setItem(draftKey(studentId, title), JSON.stringify(v)); else localStorage.removeItem(draftKey(studentId, title)); } catch { /* 저장 안 되는 브라우저 */ }
+}
 function FieldsSheet({ title, fields, student, update, onClose, onSaved, foot }: {
   title: string; fields: Field[]; student: StudentProfile; update: DetailActions['update']; onClose: () => void; onSaved: () => Promise<void>; foot?: ReactNode;
 }) {
-  const [v, setV] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.key, valueOf(student, f.key)])));
+  const base = useMemo(() => Object.fromEntries(fields.map((f) => [f.key, valueOf(student, f.key)])), [fields, student]);
+  const [restored, setRestored] = useState(() => readDraft(student.id, title));
+  const [v, setV] = useState<Record<string, string>>(() => ({ ...base, ...(readDraft(student.id, title) ?? {}) }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const changed = Object.fromEntries(fields.filter((f) => (v[f.key] ?? '').trim() !== valueOf(student, f.key).trim()).map((f) => [f.key, (v[f.key] ?? '').trim() || null]));
   const n = Object.keys(changed).length;
+  const set = (key: string, val: string) => {
+    const next = { ...v, [key]: val };
+    setV(next);
+    const diff = Object.fromEntries(Object.entries(next).filter(([k, x]) => (x ?? '').trim() !== (base[k] ?? '').trim()));
+    writeDraft(student.id, title, Object.keys(diff).length ? diff : null);
+  };
+  // 닫기(확인한 뒤)·취소 → 임시 저장도 지움
+  const closeAndClear = () => { writeDraft(student.id, title, null); onClose(); };
   async function onSave() {
     setBusy(true);
     setErr('');
     try {
       await update(changed);
+      writeDraft(student.id, title, null);
       await onSaved();
     } catch (x) {
       setErr(x instanceof Error ? x.message : '저장하지 못했어요.');
@@ -427,19 +451,25 @@ function FieldsSheet({ title, fields, student, update, onClose, onSaved, foot }:
     }
   }
   return (
-    <Sheet title={title} onClose={onClose}>
+    <Sheet title={title} onClose={closeAndClear} dirty={n > 0 && !busy}>
+      {restored && n > 0 && (
+        <p className="mb-3 flex items-center gap-2 rounded-[10px] bg-[#fff4d6] px-3 py-2 text-[13px] text-[#5c3b00]">
+          <span className="flex-1">저장하지 않았던 입력을 되살렸어요.</span>
+          <button type="button" className="min-h-[32px] rounded-[8px] border border-[#e6e3ef] bg-white px-2.5 text-[12.5px] font-semibold text-[#1d1b2b]" onClick={() => { setV(base); writeDraft(student.id, title, null); setRestored(null); }}>원래대로</button>
+        </p>
+      )}
       <div className="grid gap-3">
         {fields.map((f) => (
           <div key={f.key}>
             <label htmlFor={`f-${f.key}`} className={label}>{f.title}</label>
             {f.kind === 'select' ? (
-              <select id={`f-${f.key}`} value={v[f.key] ?? ''} onChange={(e) => setV({ ...v, [f.key]: e.target.value })} className={input}>
+              <select id={`f-${f.key}`} value={v[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} className={input}>
                 {f.options!.map(([val, t]) => <option key={val} value={val}>{t}</option>)}
               </select>
             ) : f.kind === 'textarea' ? (
-              <textarea id={`f-${f.key}`} value={v[f.key] ?? ''} onChange={(e) => setV({ ...v, [f.key]: e.target.value })} rows={3} className={input} />
+              <textarea id={`f-${f.key}`} value={v[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} rows={3} className={input} />
             ) : (
-              <input id={`f-${f.key}`} value={v[f.key] ?? ''} onChange={(e) => setV({ ...v, [f.key]: e.target.value })} className={input} />
+              <input id={`f-${f.key}`} value={v[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} className={input} />
             )}
           </div>
         ))}
@@ -447,7 +477,7 @@ function FieldsSheet({ title, fields, student, update, onClose, onSaved, foot }:
       {foot}
       {err && <p className="mt-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
       <div className="mt-4 flex gap-2">
-        <button type="button" className={btnSub} onClick={onClose} disabled={busy}>취소</button>
+        <button type="button" className={btnSub} onClick={() => { if (n > 0 && !window.confirm('입력 중인 내용이 있어요. 저장하지 않고 닫을까요?')) return; closeAndClear(); }} disabled={busy}>취소</button>
         <button type="button" className={`${btnMain} flex-1`} disabled={n === 0 || busy} onClick={onSave}>{busy ? '저장 중…' : n === 0 ? '바뀐 것 없음' : `${n}칸 저장`}</button>
       </div>
     </Sheet>
