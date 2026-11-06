@@ -92,6 +92,8 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   const [appRef, setAppRef] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [editing, setEditing] = useState(true);
+  /** 등록 방법 (QA C-01): Google Form 신청서 / 신청서 없이 직접 — 고른 방법에 필요한 칸만 보임 */
+  const [source, setSource] = useState<'form' | 'manual'>('form');
   const [showRaw, setShowRaw] = useState(false);
   const [tutorId, setTutorId] = useState<string | null>(null);
   const [filter, setFilter] = useState<TutorFilter>(EMPTY_FILTER);
@@ -159,6 +161,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     if (a.startWish && /^\d{4}-\d{2}-\d{2}$/.test(a.startWish)) setWeekStart(a.startWish < today ? today : a.startWish);
   }
   function manual() {
+    setSource('manual');
     setAppRef(null);
     setDraft(EMPTY_DRAFT);
     setTzWhy('');
@@ -361,17 +364,30 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   const studentCard = (
     <Card
       title="1. 학생 정보"
-      badge={app ? <Badge tone="green">신청서 연동 완료</Badge> : <Badge tone="gray">직접 입력</Badge>}
+      badge={app ? <Badge tone="green">신청서 연동 완료</Badge> : source === 'manual' ? <Badge tone="gray">직접 입력</Badge> : <Badge tone="gray">신청서 고르기 전</Badge>}
     >
-      <ApplicationPicker applications={applications} selected={appRef} onSelect={loadApp} onManual={manual} />
-      <div className="mb-3 flex gap-2">
-        {app && (
-          <button type="button" onClick={() => setShowRaw(true)} className="min-h-[44px] shrink-0 whitespace-nowrap rounded-[10px] border border-[#e6e3ef] px-3 text-[13.5px] font-semibold text-[#1d1b2b]">
-            원본 보기
+      <div className="mb-3 grid grid-cols-2 gap-1.5" role="group" aria-label="등록 방법">
+        {([['form', '구글폼 신청서로 등록'], ['manual', '신청서 없이 직접 등록']] as const).map(([k, label]) => (
+          <button key={k} type="button" aria-pressed={source === k}
+            onClick={() => { if (k === source) return; if (k === 'manual') manual(); else setSource('form'); }}
+            className={`min-h-[44px] rounded-[10px] border px-2 text-[14px] font-semibold ${source === k ? 'border-[#7d5ffb] bg-[#efebff] text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
+            {label}
           </button>
-        )}
+        ))}
       </div>
-      {applicationsNote && <p className="-mt-1 mb-3 text-[12.5px] text-[#6b6880]">{applicationsNote}</p>}
+      {source === 'form' && (
+        <>
+          <ApplicationPicker applications={applications} selected={appRef} onSelect={loadApp} />
+          {app && (
+            <div className="mb-3 flex gap-2">
+              <button type="button" onClick={() => setShowRaw(true)} className="min-h-[44px] shrink-0 whitespace-nowrap rounded-[10px] border border-[#e6e3ef] px-3 text-[13.5px] font-semibold text-[#1d1b2b]">
+                원본 보기
+              </button>
+            </div>
+          )}
+          {applicationsNote && <p className="-mt-1 mb-3 text-[12.5px] text-[#6b6880]">{applicationsNote}</p>}
+        </>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="이름(한글)" problem={prob('nameKo')}>
           <input readOnly={locked} value={draft.nameKo} onChange={(e) => set('nameKo', e.target.value)} className={inputCls(locked, !!prob('nameKo'))} />
@@ -441,9 +457,9 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         </p>
       )}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => setEditing((v) => !v)} className={`min-h-[44px] rounded-[10px] border text-[14px] font-semibold ${editing ? 'border-[#7d5ffb] bg-[#efebff] text-[#5b3fe0]' : 'border-[#cfc4ff] text-[#5b3fe0]'}`}>
+        {source === 'manual' ? <span /> : <button type="button" onClick={() => setEditing((v) => !v)} className={`min-h-[44px] rounded-[10px] border text-[14px] font-semibold ${editing ? 'border-[#7d5ffb] bg-[#efebff] text-[#5b3fe0]' : 'border-[#cfc4ff] text-[#5b3fe0]'}`}>
           {editing ? '수정 끝내기' : '✎ 신청서 내용 수정'}
-        </button>
+        </button>}
         <Field label="" wide={false}>
           <textarea value={draft.memo} onChange={(e) => set('memo', e.target.value)} placeholder="추가 메모 (운영자만 봄)" rows={1} className="min-h-[44px] w-full rounded-[10px] border border-[#e6e3ef] px-3 py-2.5 text-[14px] text-[#1d1b2b]" />
         </Field>
