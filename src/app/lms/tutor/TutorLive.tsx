@@ -19,7 +19,7 @@ type State =
 export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   // 운영자 보기 전용 언어 (H26(73) 수정판): 강사 본인은 늘 영어, 운영진만 한국어/English 전환 — 이 기기에 기억
-  const [adminLang, setAdminLang] = useSavedValue<Lang>('lms_tutor_lang_admin', 'en', LANGS);
+  const [adminLang, setAdminLang] = useSavedValue<Lang>('lms_tutor_lang_admin', 'ko', LANGS);   // H26(73): 운영자 보기 초기 한국어 권장
   const sb = supabaseBrowser();
   const adminTutor = state.kind === 'ready' && state.admin ? state.admin.tutorId : null;
 
