@@ -623,6 +623,10 @@ export default function StudentHome(props: {
 
         {tab === 'requests' && (
           <TabPage title="신청 내역">
+            {/* 빈 상태 (QA C-04): 오류인지 비어 있는지 알 수 있게 — 상태만, 사용법 안내는 넣지 않음 */}
+            {s.requests.length === 0 && openRights.length === 0 && (
+              <p className={`${card} px-4 py-5 text-center text-[14px] text-[#6b6880]`}>아직 신청한 내용이 없어요.</p>
+            )}
             {s.requests.length > 0 && (
               <section className={`${card} grid gap-1 p-4`}>
                 {s.requests.map((r) => (
