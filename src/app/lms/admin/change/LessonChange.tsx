@@ -25,7 +25,7 @@ export type ChangeActions = {
   load: (studentId: string) => Promise<StudentLessonData>;
   change: (requestId: string, lessonId: string, who: 'student' | 'tutor', requestedAt: Date, dryRun: boolean) => Promise<ChangeDecision>;
   revert: (changeId: string, note: string) => Promise<void>;
-  requestMakeup: (source: { lessonId?: string; itemId?: string; compId?: string }, slots: Date[]) => Promise<void>;
+  requestMakeup: (source: { lessonId?: string; itemId?: string; compId?: string }, slots: Date[]) => Promise<{ repeated: boolean }>;
   confirmMakeup: (requestId: string, at: Date) => Promise<void>;
   withdrawMakeup: (requestId: string) => Promise<void>;
   voidMakeup: (lessonId: string, note: string) => Promise<void>;
@@ -81,6 +81,8 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   const [loadErr, setLoadErr] = useState('');
   const [lessonId, setLessonId] = useState<string | null>(null);
   const [credits, setCredits] = useState<AdminCredits | null>(null);
+  /** 방금 저장한 수업 취소 결과 (QA B-03): 카드가 닫혀도 무엇이 저장됐는지 보이게 */
+  const [canceled, setCanceled] = useState<string | null>(null);
   const now = useMemo(() => new Date(nowIso), [nowIso]);
 
   const reload = useCallback(async () => {
@@ -110,6 +112,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   useEffect(() => {
     setData(null);
     setLessonId(null);
+    setCanceled(null);
     markOrphans();
     if (student) setPendingHref(`/lms/admin/change?student=${encodeURIComponent(student.code)}`);
     reload();
@@ -213,7 +216,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                       <button
                         type="button"
                         aria-pressed={l.id === lessonId}
-                        onClick={() => setLessonId(l.id === lessonId ? null : l.id)}
+                        onClick={() => { setLessonId(l.id === lessonId ? null : l.id); setCanceled(null); }}
                         className={`flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border px-3 py-2 text-left ${l.id === lessonId ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}
                       >
                         <b className="text-[16px] text-[#1d1b2b]">{kstLabel(l.startsAt)}</b>
@@ -227,8 +230,9 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
 
             {lesson && (
               <ChangeCard key={lesson.id} lesson={lesson} now={now} actions={actions} isMakeup={!!data.makeupRequests.find((r) => r.confirmedLessonId === lesson.id)}
-                done={async () => { setLessonId(null); await reload(); }} />
+                done={async (msg) => { setLessonId(null); if (msg) setCanceled(msg); await reload(); }} />
             )}
+            {canceled && <p role="status" className="rounded-[12px] bg-[#e8f5ee] px-3 py-2.5 text-[14.5px] font-bold text-[#1f7a4d]">✓ {canceled}</p>}
 
             {shownNotices.length > 0 && (
               <Card title="안내">
@@ -270,7 +274,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   );
 }
 
-function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson; now: Date; actions: ChangeActions; isMakeup: boolean; done: () => Promise<void> }) {
+function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson; now: Date; actions: ChangeActions; isMakeup: boolean; done: (msg?: string) => Promise<void> }) {
   const [who, setWho] = useState<'student' | 'tutor'>('student');
   const init = kstParts(now);
   const [date, setDate] = useState(init.date);
@@ -297,12 +301,12 @@ function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson.id, who, date, time]);
 
-  async function run(f: () => Promise<void>) {
+  async function run(f: () => Promise<string | void>) {
     setBusy(true);
     setErr('');
     try {
-      await f();
-      await done();
+      const msg = await f();
+      await done(msg || undefined);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '처리하지 못했어요.');
     } finally {
@@ -310,8 +314,9 @@ function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson
     }
   }
 
+  // 이 화면의 저장은 늘 '수업 취소' (날짜를 옮기는 것은 아래 '보강' 에서) — 버튼·제목이 실제 저장 내용을 말하게 (QA B-03)
   return (
-    <Card title={`변경 · ${kstLabel(lesson.startsAt)}`}>
+    <Card title={`수업 취소 · ${kstLabel(lesson.startsAt)} 한국`}>
       <div className="grid gap-3">
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="요청한 사람">
           {(['student', 'tutor'] as const).map((w) => (
@@ -336,8 +341,11 @@ function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson
           </ul>
         )}
         <Err>{err}</Err>
-        <button type="button" className={btnMain} disabled={!preview || busy} onClick={() => run(async () => { await actions.change(requestId, lesson.id, who, requestedAt!, false); })}>
-          변경
+        <button type="button" className={btnMain} disabled={!preview || busy} onClick={() => run(async () => {
+          const d = await actions.change(requestId, lesson.id, who, requestedAt!, false);
+          return `${kstLabel(lesson.startsAt)} 한국 수업 취소 저장 · ${decisionLines(d).join(' · ')}`;
+        })}>
+          {busy ? '저장 중…' : '수업 취소 저장'}
         </button>
         {isMakeup && (
           voiding ? (
@@ -459,6 +467,8 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const [other, setOther] = useState({ date: '', time: defTime });
   const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
+  /** 방금 누른 [신청] 결과 (QA B-04): 새 신청 / 이미 열린 신청 */
+  const [sent, setSent] = useState<'new' | 'repeated' | null>(null);
   const open = right.open;
   const comp = right.kind === 'compensation' ? right.comp : null;
   const title = comp
@@ -498,10 +508,20 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
       <span className="text-[12.5px] text-[#6b6880]">{until}</span>
       {open ? (
         <div className="mt-2 grid gap-1.5">
+          {sent && (
+            <p role="status" className="rounded-[10px] bg-[#e8f5ee] px-3 py-2 text-[14px] font-bold text-[#1f7a4d]">
+              {sent === 'new' ? '✓ 강사에게 확인 요청을 보냈어요. 답변 대기 중' : '이미 신청한 보강이 있어요. 아래 신청 그대로예요.'}
+            </p>
+          )}
+          <p className="text-[13px] text-[#6b6880]">
+            {open.tutorAnsweredAt ? `강사 답변 ${sentLabel(open.tutorAnsweredAt)} (한국)` : '강사 답변 대기 중'}
+            {open.requestedAt ? ` · 신청 ${sentLabel(open.requestedAt)} (한국)` : ''}
+            {open.via === 'student_app' ? ' · 학생이 LMS에서 신청' : open.via === 'admin_on_behalf' ? ' · 운영진 대신 신청' : ''}
+          </p>
           {open.candidates.map((t) => (
             <div key={+t} className="flex items-center gap-2">
               <span className="flex-1 text-[15px] text-[#1d1b2b]">
-                {kstLabel(t)}
+                {kstLabel(t)} 한국
                 {open.tutorAnswers?.[+t] && (
                   <b className={`ml-1.5 text-[13px] ${open.tutorAnswers[+t] === 'yes' ? 'text-[#1f7a4d]' : 'text-[#b3261e]'}`}>
                     {open.tutorAnswers[+t] === 'yes' ? '강사 가능' : '강사 불가'}
@@ -542,8 +562,12 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
           <div className="grid grid-cols-2 gap-1.5">
             <button type="button" disabled={slots.length >= MAKEUP_SLOTS_MAX} className={btnSub} onClick={() => setSlots([...slots, { date: '', time: defTime }])}>+ 시간</button>
             <button type="button" disabled={busy || slots.every((s) => !toAt(s))} className={btnMain}
-              onClick={() => run(() => actions.requestMakeup(right.kind === 'lesson' ? { lessonId: right.source.id } : right.kind === 'compensation' ? { compId: right.comp.id } : { itemId: right.item.id }, slots.map(toAt).filter((t): t is Date => !!t)))}>
-              신청
+              onClick={() => run(async () => {
+                setSent(null);
+                const r = await actions.requestMakeup(right.kind === 'lesson' ? { lessonId: right.source.id } : right.kind === 'compensation' ? { compId: right.comp.id } : { itemId: right.item.id }, slots.map(toAt).filter((t): t is Date => !!t));
+                setSent(r.repeated ? 'repeated' : 'new');
+              })}>
+              {busy ? '신청 중…' : '신청'}
             </button>
           </div>
         </div>

@@ -62,6 +62,9 @@ export type ChMakeupRequest = {
   tutorAnsweredAt?: Date | null;
   /** 강사 노쇼 무료 보상수업 신청이면 보상권 id (4100). 같은 노쇼 수업의 원래 수업 보강과 따로 */
   compensationId?: string | null;
+  /** 신청 시각·경로 (QA B-04): admin_on_behalf = 운영진 대신, student_app = 학생 LMS */
+  requestedAt?: Date | null;
+  via?: string | null;
 };
 
 /** 강사 노쇼 무료 보상수업 (4100). useUntil = 사용 기한(수강 종료일, 기한 안 재등록이면 이월) */

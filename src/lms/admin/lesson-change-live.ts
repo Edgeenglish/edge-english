@@ -44,13 +44,14 @@ type MakeupRow = {
   id: string; source_lesson_id: string | null; migrated_item_id: string | null; status: ChMakeupRequest['status']; confirmed_lesson_id: string | null;
   tutor_note?: string | null; tutor_answered_at?: string | null; candidates: { starts_at: string; tutor_answer?: 'yes' | 'no' | null }[];
   compensation_id?: string | null;
+  requested_at?: string | null; via?: string | null;
 };
 /** 새 칸(보상권 4100, 강사 답 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
 async function loadMakeupRequests(sb: SupabaseClient, studentId: string) {
   const q = (cols: string) => sb.from('makeup_requests').select(cols).eq('student_id', studentId).order('created_at');
   const missing = (r: { error: { code?: string } | null }) => r.error?.code === '42703' || r.error?.code === 'PGRST200';
-  let r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
-  if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
+  let r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, requested_at, via, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
+  if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, status, requested_at, via, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
   if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, candidates:makeup_candidates(starts_at)');
   return r;
 }
@@ -121,6 +122,8 @@ export async function loadStudentLessons(sb: SupabaseClient, studentId: string):
       tutorNote: m.tutor_note ?? null,
       tutorAnsweredAt: m.tutor_answered_at ? new Date(m.tutor_answered_at) : null,
       compensationId: m.compensation_id ?? null,
+      requestedAt: m.requested_at ? new Date(m.requested_at) : null,
+      via: m.via ?? null,
     })),
     compensations: await loadCompensations(sb, studentId),
     migrated: (check(migrated) as { id: string; original_date: string | null; tutor_leave: boolean | null }[]).map((m) => ({ id: m.id, originalDate: m.original_date, tutorLeave: !!m.tutor_leave })),
@@ -135,11 +138,13 @@ export async function revertChange(sb: SupabaseClient, changeId: string, note: s
   check(await sb.rpc('admin_revert_change', { p_change: changeId, p_note: note }));
 }
 /** compId = 강사 노쇼 무료 보상수업 (4100). 보상수업이 아니면 예전과 같은 인자 */
-export async function requestMakeup(sb: SupabaseClient, source: { lessonId?: string; itemId?: string; compId?: string }, slots: Date[]): Promise<void> {
-  check(await sb.rpc('admin_makeup_request', {
-    p_lesson: source.lessonId ?? null, p_item: source.itemId ?? null, p_slots: slots.map((t) => ({ starts_at: t.toISOString() })), p_requested_at: new Date().toISOString(),
+/** repeated = 같은 수업에 이미 열린 신청이 있어 새로 만들지 않음 (DB lms_makeup_request_core) */
+export async function requestMakeup(sb: SupabaseClient, source: { lessonId?: string; itemId?: string; compId?: string }, slots: Date[]): Promise<{ repeated: boolean }> {
+  const r = check(await sb.rpc('admin_makeup_request', {
+    p_lesson: source.lessonId ?? null, p_item: source.itemId ?? null, p_slots: slots.map((t) => ({ starts_at: t.toISOString() })), p_requested_at: null,   // 신청 시각 = 서버 시각 (A-01 과 같은 이유: 기기 시계 차이)
     ...(source.compId ? { p_comp: source.compId } : {}),
-  }));
+  })) as { repeated?: boolean } | null;
+  return { repeated: !!r?.repeated };
 }
 export async function confirmMakeup(sb: SupabaseClient, requestId: string, at: Date): Promise<void> {
   check(await sb.rpc('admin_makeup_confirm', { p_makeup_request: requestId, p_starts_at: at.toISOString() }));

@@ -44,7 +44,7 @@ export default function LeaveLive({ offId, startNew }: { offId?: string; startNe
         withdraw: (id, note, dry) => withdrawLeave(sb, id, note, dry),
         subOptions: (ids) => subOptions(sb, ids),
         makeupOptions: (ids) => makeupOptions(sb, ids),
-        requestMakeup: (src, slots) => requestMakeup(sb, src, slots),
+        requestMakeup: async (src, slots) => { await requestMakeup(sb, src, slots); },
         markSent: (ids) => markLessonNoticesSent(sb, ids),
       },
     [sb],
