@@ -1,0 +1,538 @@
+<title>엣지영어 LMS 화면 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=Montserrat:wght@600;700;800&display=swap">
+<style>
+/* 레이아웃: 위쪽 선택 막대(화면·시안·기기) → 휴대폰·PC 실제 크기 프레임 나란히 → 아래 장단점 */
+:root {
+  /* 바깥 페이지 (테마 따라감) */
+  --page: #f3f2f8;
+  --ink: #1d1b2b;
+  --muted: #646177;
+  --line: #dddae8;
+  --panel: #ffffff;
+  --brand: #7d5fff;       /* 홈페이지 edge-purple */
+  --brand-ink: #ffffff;
+  --brand-soft: #ece7ff;
+  /* 시안 안쪽 (실제 앱은 밝은 화면으로 고정) */
+  --m-bg: #f6f5fa;
+  --m-card: #ffffff;
+  --m-ink: #1d1b2b;
+  --m-sub: #6b6880;
+  --m-line: #e6e3ef;
+  --m-brand: #7d5fff;
+  --m-brand-soft: #efebff;
+  --m-yellow: #ffd401;    /* 홈페이지 edge-yellow */
+  --m-navy: #09246b;
+  --m-ok: #13804b;   --m-ok-soft: #e3f5ea;
+  --m-warn: #a35b00; --m-warn-soft: #fff1d6;
+  --m-bad: #c62b2b;  --m-bad-soft: #fde6e6;
+  --m-gray-soft: #eeedf3;
+  --f-body: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+  --f-num: "Montserrat", "Noto Sans KR", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #15141d; --ink: #ecebf5; --muted: #a8a5bb; --line: #2e2c3d; --panel: #1e1d29;
+    --brand: #9b85ff; --brand-ink: #15141d; --brand-soft: #2b2647; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #15141d; --ink: #ecebf5; --muted: #a8a5bb; --line: #2e2c3d; --panel: #1e1d29;
+  --brand: #9b85ff; --brand-ink: #15141d; --brand-soft: #2b2647; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--page); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+h1 { font-size: 1.5rem; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+.lead { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.controls { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row > .lbl { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; min-width: 3.5em; }
+.seg button {
+  font: inherit; font-size: 14px; border: 1px solid var(--line); background: transparent; color: var(--ink);
+  padding: 8px 14px; border-radius: 999px; cursor: pointer; min-height: 40px;
+}
+.seg button[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 700; }
+.seg button:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.rec { font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: var(--m-yellow); color: #3a2e00; margin-left: 4px; }
+
+.stage { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.dev { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
+.dev-cap { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+.dev.pc { flex: 1 1 560px; }
+.dev.phone { flex: 0 1 402px; max-width: 100%; }
+.frame { position: relative; overflow: hidden; border-radius: 16px; border: 1px solid var(--line); background: var(--m-bg); }
+.phone .frame { box-sizing: content-box; width: min(390px, calc(100% - 12px)); height: 780px; border-radius: 28px; border: 6px solid #1d1b2b; }
+.pc .frame { width: 100%; }
+.pc .scaler { width: 1280px; height: 800px; transform-origin: 0 0; position: absolute; left: 0; top: 0; }
+.notes { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 10px; }
+.notes h2 { font-size: 1.1rem; margin: 0; }
+.notes .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.notes h3 { font-size: 13px; margin: 0 0 4px; color: var(--muted); letter-spacing: .04em; }
+.notes ul { margin: 0; padding-left: 1.1em; }
+.notes .verdict { background: var(--brand-soft); border-radius: 10px; padding: 10px 12px; }
+.foot { color: var(--muted); font-size: 13px; }
+
+/* ================= 시안 공통 (실제 앱 모습) ================= */
+.app { container-type: inline-size; width: 100%; height: 100%; background: var(--m-bg); color: var(--m-ink); font-family: var(--f-body); font-size: 14px; line-height: 1.45; overflow: auto; position: relative; }
+.app * { box-sizing: border-box; }
+.app .top { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--m-card); border-bottom: 1px solid var(--m-line); position: sticky; top: 0; z-index: 2; }
+.app .logo { font-family: var(--f-num); font-weight: 800; color: var(--m-navy); font-size: 15px; letter-spacing: -.01em; }
+.app .logo b { color: var(--m-brand); }
+.app .top .sp { flex: 1; }
+.app .date { color: var(--m-sub); font-size: 13px; }
+.app .btn { font: inherit; border: 1px solid var(--m-line); background: var(--m-card); color: var(--m-ink); border-radius: 10px; padding: 9px 12px; min-height: 40px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.app .btn.pri { background: var(--m-brand); border-color: var(--m-brand); color: #fff; }
+.app .btn.bad { background: var(--m-bad); border-color: var(--m-bad); color: #fff; }
+.app .btn.sm { min-height: 34px; padding: 6px 10px; font-size: 13px; }
+.app .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.app .p-bad { background: var(--m-bad-soft); color: var(--m-bad); }
+.app .p-warn { background: var(--m-warn-soft); color: var(--m-warn); }
+.app .p-ok { background: var(--m-ok-soft); color: var(--m-ok); }
+.app .p-brand { background: var(--m-brand-soft); color: var(--m-brand); }
+.app .p-gray { background: var(--m-gray-soft); color: var(--m-sub); }
+.app .num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+.app .card { background: var(--m-card); border: 1px solid var(--m-line); border-radius: 14px; }
+.app .sub { color: var(--m-sub); font-size: 12.5px; }
+.app h4 { margin: 0; font-size: 15px; }
+.app .sec-t { font-size: 12px; font-weight: 800; color: var(--m-sub); letter-spacing: .05em; margin: 0; }
+.app .tabbar { position: sticky; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--m-card); border-top: 1px solid var(--m-line); }
+.app .tabbar span { text-align: center; padding: 10px 0 12px; font-size: 12px; color: var(--m-sub); font-weight: 600; }
+.app .tabbar span.on { color: var(--m-brand); }
+.app .pc-only { display: none !important; }
+@container (min-width: 900px) {
+  .app .pc-only { display: revert !important; }
+  .app .m-only { display: none !important; }
+}
+.app .field { display: grid; gap: 4px; }
+.app .field label { font-size: 12.5px; color: var(--m-sub); font-weight: 600; }
+.app .input { border: 1px solid var(--m-line); border-radius: 10px; padding: 10px 12px; min-height: 44px; background: var(--m-card); font-size: 14.5px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.app .input.from { background: var(--m-brand-soft); border-color: transparent; }
+.app .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.app .chip { border: 1px solid var(--m-line); border-radius: 10px; padding: 8px 12px; min-height: 42px; display: inline-flex; align-items: center; font-weight: 600; background: var(--m-card); }
+.app .chip.on { background: var(--m-brand); border-color: var(--m-brand); color: #fff; }
+.app .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ---- 대시보드 A: 처리할 일 목록 ---- */
+.dA .body { padding: 14px 16px 90px; display: grid; gap: 14px; }
+.dA .counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.dA .counts .card { padding: 10px 12px; }
+.dA .counts b { font-size: 22px; display: block; }
+.dA .task { padding: 12px 14px; display: grid; gap: 8px; }
+.dA .task .hd { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dA .task .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.dA .fab { position: absolute; right: 16px; bottom: 64px; border-radius: 999px; padding: 12px 18px; box-shadow: 0 6px 18px rgba(60, 40, 160, .28); }
+.dA .today .li { display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--m-line); }
+@container (min-width: 900px) {
+  .dA .body { grid-template-columns: 1fr 380px; align-items: start; padding: 22px 28px; gap: 20px; }
+  .dA .counts { grid-template-columns: repeat(4, 1fr); grid-column: 1 / -1; }
+  .dA .fab { display: none; }
+  .dA .tabbar { display: none; }
+}
+
+/* ---- 대시보드 B: 오늘 타임라인 ---- */
+.dB .body { padding: 12px 16px 80px; display: grid; gap: 12px; }
+.dB .alert { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--m-bad-soft); color: var(--m-bad); border-radius: 12px; font-weight: 700; }
+.dB .tl { display: grid; gap: 0; }
+.dB .slot { display: grid; grid-template-columns: 48px 1fr; gap: 10px; }
+.dB .slot .t { font-family: var(--f-num); font-size: 12px; color: var(--m-sub); padding-top: 10px; }
+.dB .slot .evs { border-left: 2px solid var(--m-line); padding: 6px 0 6px 10px; display: grid; gap: 6px; }
+.dB .ev { border-radius: 10px; padding: 8px 10px; display: flex; gap: 8px; align-items: center; justify-content: space-between; border: 1px solid var(--m-line); background: var(--m-card); }
+.dB .ev.done { background: var(--m-gray-soft); color: var(--m-sub); }
+.dB .ev.alertev { border-color: var(--m-bad); background: var(--m-bad-soft); }
+.dB .ev.mk { border-style: dashed; border-color: var(--m-brand); }
+.dB .grid { display: none; }
+@container (min-width: 900px) {
+  .dB .body { padding: 18px 24px; grid-template-columns: 1fr 300px; align-items: start; }
+  .dB .tl { display: none; }
+  .dB .grid { display: grid; grid-template-columns: 54px repeat(4, 1fr); border: 1px solid var(--m-line); border-radius: 14px; overflow: hidden; background: var(--m-card); }
+  .dB .grid > div { border-bottom: 1px solid var(--m-line); border-left: 1px solid var(--m-line); min-height: 44px; padding: 4px 6px; font-size: 12.5px; }
+  .dB .grid .h { font-weight: 800; background: var(--m-bg); min-height: 36px; display: flex; align-items: center; }
+  .dB .grid .t { font-family: var(--f-num); color: var(--m-sub); border-left: 0; }
+  .dB .grid .b { border-radius: 8px; padding: 4px 6px; height: 100%; display: grid; align-content: start; gap: 2px; }
+  .dB .tabbar { display: none; }
+}
+.dB .b.done { background: var(--m-gray-soft); color: var(--m-sub); }
+.dB .b.sch { background: var(--m-brand-soft); }
+.dB .b.mk { background: var(--m-card); border: 1.5px dashed var(--m-brand); }
+.dB .b.cx { background: var(--m-warn-soft); color: var(--m-warn); text-decoration: line-through; }
+.dB .b.al { background: var(--m-bad-soft); color: var(--m-bad); font-weight: 700; }
+
+/* ---- 대시보드 C: 학생 찾기 ---- */
+.dC .body { padding: 12px 16px 80px; display: grid; gap: 12px; }
+.dC .search { display: flex; align-items: center; gap: 8px; border: 2px solid var(--m-brand); border-radius: 14px; padding: 12px 14px; background: var(--m-card); font-size: 15px; color: var(--m-sub); }
+.dC .stu { padding: 12px 14px; display: grid; gap: 8px; }
+.dC .stu .hd { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.dC .meter { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.dC .meter div { background: var(--m-bg); border-radius: 10px; padding: 6px 8px; }
+.dC .meter b { display: block; font-size: 16px; }
+.dC .detail { display: none; }
+@container (min-width: 900px) {
+  .dC .body { padding: 18px 24px; grid-template-columns: 1fr 420px; align-items: start; }
+  .dC .head { grid-column: 1 / -1; display: grid; gap: 10px; }
+  .dC .detail { display: grid; gap: 10px; padding: 16px; position: sticky; top: 70px; }
+  .dC .list { display: grid; gap: 0; background: var(--m-card); border: 1px solid var(--m-line); border-radius: 14px; overflow: hidden; }
+  .dC .list .stu { border: 0; border-radius: 0; border-bottom: 1px solid var(--m-line); grid-template-columns: 1.3fr 2fr auto; align-items: center; }
+  .dC .list .stu.sel { background: var(--m-brand-soft); }
+  .dC .tabbar { display: none; }
+}
+
+/* ---- 등록 공통 ---- */
+.rg .body { padding: 14px 16px 120px; display: grid; gap: 14px; }
+.rg .sec { padding: 14px; display: grid; gap: 10px; }
+.rg .made { display: grid; gap: 6px; }
+.rg .made div { display: flex; justify-content: space-between; gap: 8px; }
+.rg .bar { position: sticky; bottom: 0; background: var(--m-card); border-top: 1px solid var(--m-line); padding: 10px 16px 14px; display: flex; align-items: center; gap: 10px; }
+.rg .bar .sp { flex: 1; }
+@container (min-width: 900px) {
+  .rg .bar { display: none; }
+}
+/* 등록 A: 한 페이지 */
+@container (min-width: 900px) {
+  .rA .body { grid-template-columns: 1fr 360px; padding: 22px 28px; align-items: start; }
+  .rA .form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .rA .form .wide { grid-column: 1 / -1; }
+  .rA .side { position: sticky; top: 70px; }
+}
+.rA .form { display: grid; gap: 14px; }
+.rA .side { display: grid; gap: 10px; padding: 14px; }
+/* 등록 B: 단계별 */
+.rB .steps { display: flex; gap: 6px; }
+.rB .steps i { flex: 1; height: 5px; border-radius: 9px; background: var(--m-line); }
+.rB .steps i.on { background: var(--m-brand); }
+.rB .q { font-size: 20px; font-weight: 800; margin: 2px 0 0; }
+.rB .big .chip { min-height: 52px; font-size: 16px; padding: 0 16px; }
+.rB .stepnav { display: none; }
+@container (min-width: 900px) {
+  .rB .body { grid-template-columns: 240px minmax(0, 640px); justify-content: center; padding: 28px; align-items: start; }
+  .rB .stepnav { display: grid; gap: 4px; }
+  .rB .stepnav div { padding: 10px 12px; border-radius: 10px; color: var(--m-sub); font-weight: 600; }
+  .rB .stepnav div.on { background: var(--m-brand-soft); color: var(--m-brand); }
+  .rB .stepnav div.done { color: var(--m-ok); }
+  .rB .pcnav { display: flex; justify-content: space-between; }
+}
+.rB .pcnav { display: none; }
+/* 등록 C: 신청서 불러오기 */
+.rC .apps { display: grid; gap: 8px; }
+.rC .app-c { padding: 12px 14px; display: grid; gap: 6px; }
+.rC .app-c.sel { border: 2px solid var(--m-brand); }
+.rC .raw { display: none; }
+.rC .avail { display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 3px; font-size: 11.5px; text-align: center; }
+.rC .avail span { padding: 6px 0; border-radius: 6px; background: var(--m-gray-soft); color: var(--m-sub); }
+.rC .avail span.free { background: var(--m-ok-soft); color: var(--m-ok); font-weight: 700; }
+.rC .avail span.pick { background: var(--m-brand); color: #fff; font-weight: 800; }
+.rC .avail span.h { background: transparent; font-weight: 700; }
+@container (min-width: 900px) {
+  .rC .body { grid-template-columns: 300px 1fr 340px; padding: 18px 24px; align-items: start; }
+  .rC .raw { display: grid; gap: 8px; padding: 14px; }
+}
+.rC .qa { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--m-line); }
+.rC mark { background: var(--m-yellow); color: var(--m-ink); padding: 0 2px; border-radius: 3px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>엣지영어 LMS 화면 시안</h1>
+    <p class="lead">2단계에서 먼저 만들 두 화면의 시안입니다. 화면마다 사용 동선이 다른 3가지를 준비했고, 왼쪽은 휴대폰(390px), 오른쪽은 PC(1280px) 실제 크기를 줄여서 보여 줍니다. 이름·금액은 모두 예시입니다.</p>
+  </header>
+
+  <div class="controls" role="group" aria-label="시안 선택">
+    <div class="row seg" id="screenSeg"><span class="lbl">화면</span></div>
+    <div class="row seg" id="variantSeg"><span class="lbl">시안</span></div>
+    <div class="row seg" id="deviceSeg"><span class="lbl">보기</span></div>
+  </div>
+
+  <div class="stage" id="stage"></div>
+
+  <section class="notes" id="notes" aria-live="polite"></section>
+  <p class="foot">이 시안은 화면 배치와 동선을 고르기 위한 것입니다. 색·글꼴은 홈페이지(보라·노랑)를 따르며, 고르신 뒤 실제 화면에서 다듬습니다. 휴대폰 모습은 오른쪽 PC와 같은 화면이 폭에 맞춰 바뀐 것입니다.</p>
+</div>
+
+<script>
+const SCREENS = {
+  dash: { name: '운영자 대시보드', variants: ['A', 'B', 'C'] },
+  reg: { name: '신규 학생 등록', variants: ['A', 'B', 'C'] },
+};
+const NAMES = {
+  dashA: '처리할 일 목록', dashB: '오늘 수업 시간표', dashC: '학생 찾기 중심',
+  regA: '한 페이지 입력', regB: '단계별 질문', regC: '신청서 불러오기',
+};
+const RECOMMEND = { dash: 'A', reg: 'C' };
+
+const topbar = (right) => `<div class="top"><span class="logo">Edge<b>English</b> 운영</span><span class="sp"></span>${right}</div>`;
+const tabbar = (on) => `<nav class="tabbar">${['홈', '학생', '일정', '더보기'].map((t, i) => `<span class="${i === on ? 'on' : ''}">${t}</span>`).join('')}</nav>`;
+
+const MOCKS = {
+  dashA: () => `<div class="app dA">${topbar('<span class="date">10월 16일 (금)</span><button class="btn pri sm pc-only">+ 학생 등록</button>')}
+    <div class="body">
+      <div class="counts">
+        <div class="card"><span class="sub">처리할 일</span><b class="num" style="color:var(--m-bad)">5</b></div>
+        <div class="card"><span class="sub">오늘 수업</span><b class="num">23</b></div>
+        <div class="card"><span class="sub">입금 확인 대기</span><b class="num">2</b></div>
+        <div class="card pc-only"><span class="sub">캘린더 반영 실패</span><b class="num" style="color:var(--m-ok)">0</b></div>
+      </div>
+      <div style="display:grid;gap:10px">
+        <p class="sec-t">지금 처리할 일 · 급한 순서</p>
+        <div class="card task"><div class="hd"><span class="pill p-bad">노쇼 신고</span><h4>최도현 · 19:00 · Tutor Liam</h4></div>
+          <span class="sub">학생이 7분 전에 '강사가 안 들어왔어요'를 눌렀어요.</span>
+          <div class="acts"><button class="btn sm">강사 들어옴(지각)</button><button class="btn bad sm">노쇼 확정</button></div></div>
+        <div class="card task"><div class="hd"><span class="pill p-warn">강사 무응답 24시간</span><h4>박서윤 보강 신청 → Tutor Emma</h4></div>
+          <span class="sub">희망 시간 3개 · 10/18(일) 10:00, 10/20(화) 21:00, 10/21(수) 21:30</span>
+          <div class="acts"><button class="btn sm">강사에게 다시 알림</button><button class="btn pri sm">대신 확정</button></div></div>
+        <div class="card task"><div class="hd"><span class="pill p-brand">입금 확인</span><h4>정하린 · 40분 주3회 4주</h4></div>
+          <span class="sub">결제할 금액 <b class="num">420,000</b>원 · 입금자명 정하린 · 금액 일치 ✓</span>
+          <div class="acts"><button class="btn pri sm">입금 확인 → 등록</button></div></div>
+        <div class="card task"><div class="hd"><span class="pill p-warn">금액 다름</span><h4>한지우 · 40분 주2회 4주</h4></div>
+          <span class="sub">결제할 금액 <b class="num">290,000</b>원 · 입금 <b class="num">280,000</b>원 · 10,000원 부족</span>
+          <div class="acts"><button class="btn sm">학생에게 안내</button><button class="btn sm">그대로 확인</button></div></div>
+        <div class="card task"><div class="hd"><span class="pill p-gray">기록 누락</span><h4>수업 기록 3건 미입력</h4></div>
+          <span class="sub">Tutor Noah 2건 · Tutor Emma 1건 (수업 끝나고 10분 지남)</span>
+          <div class="acts"><button class="btn sm">기록 독촉 보내기</button></div></div>
+      </div>
+      <div class="card today pc-only" style="padding:14px 16px">
+        <p class="sec-t">오늘 수업</p>
+        ${[['17:00', '김예준 · Emma', '<span class="pill p-gray">완료</span>'], ['18:00', '이수아 · Noah', '<span class="pill p-gray">완료</span>'], ['19:00', '최도현 · Liam', '<span class="pill p-bad">노쇼 신고</span>'], ['20:00', '윤채원 · Emma', '<span class="pill p-brand">예정</span>'], ['20:00', '오지훈 · Liam', '<span class="pill p-warn">학생 변경</span>'], ['21:00', '박서윤 · Emma', '<span class="pill p-brand">보강</span>'], ['21:30', '서민재 · Noah', '<span class="pill p-brand">예정</span>']].map(([t, n, s]) => `<div class="li"><span class="num sub">${t}</span><span>${n}</span>${s}</div>`).join('')}
+      </div>
+    </div>
+    <button class="btn pri fab">+ 학생 등록</button>${tabbar(0)}</div>`,
+
+  dashB: () => {
+    const tutors = ['Emma', 'Liam', 'Noah', 'Olive'];
+    const rows = [
+      ['17:00', [['done', '김예준 50분'], ['done', '이도윤 40분'], ['', ''], ['done', '한소율 20분']]],
+      ['18:00', [['', ''], ['done', '정우진 50분'], ['done', '이수아 40분'], ['', '']]],
+      ['19:00', [['sch', '강하은 40분'], ['al', '최도현 · 노쇼 신고'], ['', ''], ['sch', '문지아 50분']]],
+      ['20:00', [['sch', '윤채원 50분'], ['cx', '오지훈 · 학생 변경'], ['sch', '배서준 40분'], ['', '']]],
+      ['21:00', [['mk', '박서윤 · 보강'], ['', ''], ['sch', '서민재 50분'], ['sch', '조하준 20분']]],
+      ['22:00', [['', ''], ['sch', '임채아 40분'], ['', ''], ['', '']]],
+    ];
+    const grid = `<div class="grid"><div class="h t"></div>${tutors.map((t) => `<div class="h">Tutor ${t}</div>`).join('')}
+      ${rows.map(([t, cells]) => `<div class="t num">${t}</div>${cells.map(([c, txt]) => `<div>${c ? `<div class="b ${c}">${txt}</div>` : ''}</div>`).join('')}`).join('')}</div>`;
+    const tl = `<div class="tl">${[
+      ['17:00', [['done', '김예준 · Emma', '완료'], ['done', '이도윤 · Liam', '완료']]],
+      ['19:00', [['alertev', '최도현 · Liam', '노쇼 신고'], ['', '강하은 · Emma', '예정']]],
+      ['20:00', [['', '윤채원 · Emma', '예정'], ['done', '오지훈 · Liam', '학생 변경']]],
+      ['21:00', [['mk', '박서윤 · Emma', '보강'], ['', '서민재 · Noah', '예정']]],
+    ].map(([t, evs]) => `<div class="slot"><span class="t">${t}</span><div class="evs">${evs.map(([c, n, s]) => `<div class="ev ${c}"><span>${n}</span><span class="pill ${c === 'alertev' ? 'p-bad' : c === 'mk' ? 'p-brand' : 'p-gray'}">${s}</span></div>`).join('')}</div></div>`).join('')}</div>`;
+    return `<div class="app dB">${topbar('<button class="btn sm">‹</button><span class="date"><b>10/16 (금)</b> 오늘</span><button class="btn sm">›</button>')}
+      <div class="body"><div style="display:grid;gap:12px;min-width:0">
+        <div class="alert">⚠ 처리할 일 5건 <span style="flex:1"></span><span>보기 ›</span></div>
+        <div class="row" style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill p-gray">완료 9</span><span class="pill p-brand">예정 12</span><span class="pill p-warn">변경 2</span><span class="pill p-bad">신고 1</span></div>
+        ${tl}${grid}
+      </div>
+      <div class="card pc-only" style="padding:14px;display:grid;gap:10px"><p class="sec-t">처리할 일</p>
+        <div><span class="pill p-bad">노쇼 신고</span> 최도현 19:00</div><div><span class="pill p-warn">무응답</span> 박서윤 보강</div><div><span class="pill p-brand">입금</span> 정하린 · 한지우</div><div><span class="pill p-gray">기록 누락</span> 3건</div>
+        <button class="btn pri">+ 학생 등록</button></div>
+      </div>${tabbar(2)}</div>`;
+  },
+
+  dashC: () => {
+    const studs = [
+      ['박서윤', 'STU-0021', 'Emma · 화목 21:00', '5/24', '1/2', 'D-6', 'p-warn', '재등록 임박'],
+      ['김예준', 'STU-0008', 'Emma · 월수금 17:00', '30/36', '3/3', 'D-61', 'p-ok', '수강 중'],
+      ['정하린', '신규', '배정 전', '-', '-', '', 'p-brand', '입금 확인 대기'],
+      ['오지훈', 'STU-0015', 'Liam · 화목 20:00', '11/16', '0/2', 'D-20', 'p-bad', '변경권 0'],
+    ];
+    return `<div class="app dC">${topbar('<button class="btn pri sm pc-only">+ 학생 등록</button>')}
+      <div class="body">
+        <div class="head" style="display:grid;gap:10px">
+          <div class="search">🔍 학생 이름, STU 번호, 강사로 찾기</div>
+          <div class="chips"><span class="chip on">수강 중 42</span><span class="chip">재등록 임박 5</span><span class="chip">입금 대기 2</span><span class="chip">변경권 0 · 3</span></div>
+          <div class="alert" style="display:flex;gap:8px;padding:8px 12px;border-radius:10px;background:var(--m-bad-soft);color:var(--m-bad);font-weight:700;font-size:13px">처리할 일 5건 (노쇼 신고 1) ›</div>
+        </div>
+        <div class="list" style="display:grid;gap:8px">
+          ${studs.map(([n, id, t, left, cr, d, pc, pl], i) => `<div class="card stu ${i === 0 ? 'sel' : ''}">
+            <div class="hd"><div><h4>${n} <span class="sub num">${id}</span></h4><span class="sub">${t}</span></div><span class="pill ${pc}">${pl}</span></div>
+            <div class="meter"><div><span class="sub">남은 회차</span><b class="num">${left}</b></div><div><span class="sub">변경권</span><b class="num">${cr}</b></div><div><span class="sub">종료</span><b class="num">${d || '-'}</b></div></div>
+          </div>`).join('')}
+        </div>
+        <div class="card detail">
+          <div style="display:flex;justify-content:space-between;align-items:center"><h4>박서윤 <span class="sub num">STU-0021</span></h4><span class="pill p-warn">재등록 임박</span></div>
+          <span class="sub">12주 · 50분 주2회 · Tutor Emma · 화목 21:00 (KST)</span>
+          <div class="grid2"><button class="btn">수업 변경 대신 처리</button><button class="btn pri">재등록</button></div>
+          <p class="sec-t">다가오는 수업</p>
+          ${['10/16 (금) 21:00 보강', '10/20 (화) 21:00', '10/22 (목) 21:00 · 마지막'].map((x) => `<div class="input">${x}<span class="sub">변경 ›</span></div>`).join('')}
+          <p class="sec-t">최근 변경 이력</p>
+          <span class="sub">10/13 학생 정상 변경 (변경권 1개 사용) · 10/14 보강 신청 → 강사 대기</span>
+        </div>
+      </div>${tabbar(1)}</div>`;
+  },
+
+  regA: () => `<div class="app rg rA">${topbar('<span class="date">신규 학생 등록</span>')}
+    <div class="body">
+      <div class="form">
+        <div class="card sec wide"><p class="sec-t">학생</p>
+          <div class="grid2"><div class="field"><label>이름(한글)</label><div class="input">정하린</div></div><div class="field"><label>영문 이름</label><div class="input">Harin Jung</div></div></div>
+          <div class="grid2"><div class="field"><label>이메일 (로그인용)</label><div class="input">harin@example.com</div></div><div class="field"><label>휴대폰</label><div class="input">010-0000-0000</div></div></div>
+          <div class="field"><label>사는 곳 · 시간대</label><div class="input">한국 (Asia/Seoul) <span class="sub">▾</span></div></div></div>
+        <div class="card sec"><p class="sec-t">수강</p>
+          <div class="field"><label>기간</label><div class="chips"><span class="chip">4주</span><span class="chip on">12주</span><span class="chip">24주</span></div></div>
+          <div class="field"><label>수업 길이 · 횟수</label><div class="chips"><span class="chip">20분</span><span class="chip">40분</span><span class="chip on">50분</span><span class="chip">주1회</span><span class="chip on">주2회</span><span class="chip">주3회</span></div></div>
+          <div class="field"><label>결제할 금액 (자동)</label><div class="input"><b class="num">1,011,750원</b><span class="sub">정가 1,065,000 · 5% 할인</span></div></div></div>
+        <div class="card sec"><p class="sec-t">강사 · 고정 시간</p>
+          <div class="field"><label>담당 강사</label><div class="input">Tutor Emma (호주 · 시드니) <span class="sub">▾</span></div></div>
+          <div class="field"><label>요일 · 시각 (한국 시간)</label><div class="chips"><span class="chip">월</span><span class="chip on">화</span><span class="chip">수</span><span class="chip on">목</span><span class="chip">금</span><span class="chip">토</span><span class="chip">일</span></div><div class="input">20:00 <span class="sub">강사 현지 22:00</span></div></div>
+          <div class="field"><label>첫 수업일</label><div class="input">2026-11-03 (화)</div></div>
+          <span class="pill p-ok">✓ 화 20:00 비어 있음</span> <span class="pill p-warn">목 11/26 20:00 보강 1건과 겹침 → 그날만 확인</span></div>
+      </div>
+      <div class="card side">
+        <p class="sec-t">저장하면 한 번에 만들어지는 것</p>
+        <div class="made">
+          <div><span>학생 번호</span><b class="num">STU-0042</b></div>
+          <div><span>수강 기간</span><b class="num">11/3 – 1/25</b></div>
+          <div><span>기간 (28일)</span><b>3개</b></div>
+          <div><span>정규 수업</span><b class="num">24회</b></div>
+          <div><span>변경권</span><b>기간마다 2개</b></div>
+          <div><span>마지막 수업</span><b class="num">1/21 (목)</b></div>
+          <div><span>강사 화면</span><b>Tutor Emma에 연결</b></div>
+          <div><span>학생 로그인</span><b>초대 메일 (승인 후 발송)</b></div>
+        </div>
+        <button class="btn pri" style="width:100%">확인하고 저장</button>
+      </div>
+    </div>
+    <div class="bar"><div><b class="num">24회 · 11/3–1/25</b><div class="sub">1,011,750원 · 겹침 1건 확인</div></div><span class="sp"></span><button class="btn pri">확인하고 저장</button></div></div>`,
+
+  regB: () => `<div class="app rg rB">${topbar('<span class="date">신규 학생 등록</span><button class="btn sm">닫기</button>')}
+    <div class="body">
+      <div class="stepnav"><div class="done">✓ 1. 학생 정보</div><div class="done">✓ 2. 수강 상품</div><div class="on">3. 강사 · 고정 시간</div><div>4. 확인</div></div>
+      <div style="display:grid;gap:16px;min-width:0">
+        <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+        <span class="sub">3 / 4 · 정하린 · 50분 주2회 12주</span>
+        <p class="q">어느 강사님과, 언제 수업하나요?</p>
+        <div class="field"><label>담당 강사</label><div class="chips big"><span class="chip on">Emma</span><span class="chip">Liam</span><span class="chip">Noah</span><span class="chip">Olive</span></div></div>
+        <div class="field"><label>요일 (주 2회 → 2개 선택)</label><div class="chips big"><span class="chip">월</span><span class="chip on">화</span><span class="chip">수</span><span class="chip on">목</span><span class="chip">금</span><span class="chip">토</span><span class="chip">일</span></div></div>
+        <div class="field"><label>Emma가 화·목 둘 다 비어 있는 시각 (한국 시간)</label><div class="chips big"><span class="chip">19:00</span><span class="chip on">20:00</span><span class="chip">21:30</span></div></div>
+        <div class="field"><label>첫 수업일</label><div class="chips big"><span class="chip on">11/3 (화)</span><span class="chip">11/5 (목)</span><span class="chip">다른 날</span></div></div>
+        <div class="card" style="padding:12px 14px"><b>11/3 – 1/25 · 정규 24회 · 변경권 기간마다 2개</b><div class="sub">다음 단계에서 전체 내용을 확인하고 저장해요.</div></div>
+        <div class="pcnav"><button class="btn">이전</button><button class="btn pri">다음: 확인</button></div>
+      </div>
+    </div>
+    <div class="bar"><button class="btn">이전</button><span class="sp"></span><button class="btn pri">다음: 확인</button></div></div>`,
+
+  regC: () => `<div class="app rg rC">${topbar('<span class="date">신규 학생 등록</span>')}
+    <div class="body">
+      <div style="display:grid;gap:8px;min-width:0">
+        <p class="sec-t">새 신청서 3건 · 구글폼에서 가져옴</p>
+        <div class="apps">
+          <div class="card app-c sel"><div style="display:flex;justify-content:space-between"><b>정하린</b><span class="pill p-ok">입금 확인됨</span></div><span class="sub">50분 · 주2회 · 12주 · 10/15 신청</span></div>
+          <div class="card app-c"><div style="display:flex;justify-content:space-between"><b>한지우</b><span class="pill p-warn">금액 다름</span></div><span class="sub">40분 · 주2회 · 4주 · 10/15 신청</span></div>
+          <div class="card app-c pc-only"><div style="display:flex;justify-content:space-between"><b>송유나</b><span class="pill p-gray">입금 확인 전</span></div><span class="sub">20분 · 주3회 · 24주 · 10/16 신청</span></div>
+        </div>
+        <button class="btn m-only">신청서 없이 직접 입력</button>
+      </div>
+      <div class="card raw">
+        <p class="sec-t">정하린 님 신청서 원문</p>
+        <div class="qa"><span class="sub">희망 수업 시간</span><span><mark>화/목 저녁 8시</mark>, 월/수 9시반도 가능</span></div>
+        <div class="qa"><span class="sub">시작 희망일</span><span>11월 첫째 주</span></div>
+        <div class="qa"><span class="sub">영어 고민</span><span>회의에서 말이 막혀요. 발음 교정 원함</span></div>
+        <div class="qa"><span class="sub">입금자명 · 방법</span><span>정하린 · 계좌이체</span></div>
+        <button class="btn">신청서 없이 직접 입력</button>
+      </div>
+      <div class="card sec">
+        <p class="sec-t">신청서에서 채운 칸 <span class="pill p-brand">자동</span></p>
+        <div class="grid2"><div class="input from">정하린 · Harin Jung</div><div class="input from">50분 주2회 12주</div></div>
+        <div class="input from">harin@example.com · 한국 <span class="sub">고치기</span></div>
+        <p class="sec-t" style="margin-top:6px">운영자가 고를 칸</p>
+        <div class="field"><label>담당 강사</label><div class="input">Tutor Emma <span class="sub">▾ 빈 시간 많은 순</span></div></div>
+        <div class="field"><label>Emma 빈 시간 (한국 시간) · 탭해서 고르기</label>
+          <div class="avail">
+            <span class="h"></span>${['월', '화', '수', '목', '금', '토', '일'].map((d) => `<span class="h">${d}</span>`).join('')}
+            ${[['19:00', [0, 1, 0, 1, 0, 1, 1]], ['20:00', [1, 2, 0, 2, 1, 0, 0]], ['21:30', [1, 0, 1, 1, 0, 0, 0]]].map(([t, v]) => `<span class="h num">${t}</span>${v.map((x) => `<span class="${x === 2 ? 'pick' : x ? 'free' : ''}">${x === 2 ? '✓' : x ? '빈' : '–'}</span>`).join('')}`).join('')}
+          </div></div>
+        <div class="field"><label>첫 수업일</label><div class="input">2026-11-03 (화)</div></div>
+        <div class="made" style="border-top:1px solid var(--m-line);padding-top:8px">
+          <div><span>저장하면</span><b class="num">STU-0042 · 24회 · 11/3–1/25</b></div>
+          <div><span>변경권</span><b>기간마다 2개 · 기간 3개</b></div>
+        </div>
+        <button class="btn pri pc-only" style="width:100%">확인하고 저장</button>
+      </div>
+    </div>
+    <div class="bar"><div><b class="num">24회 · 11/3–1/25</b><div class="sub">정하린 · Emma 화목 20:00</div></div><span class="sp"></span><button class="btn pri">확인하고 저장</button></div></div>`,
+};
+
+const NOTES = {
+  dashA: {
+    good: ['밖에서 휴대폰을 열면 "지금 내가 할 일"만 급한 순서로 보임', '각 항목에서 버튼 한 번으로 처리 (노쇼 확정, 입금 확인, 재알림)', '"운영진은 예외와 확인만" 원칙과 가장 잘 맞음'],
+    bad: ['오늘 전체 수업 흐름은 PC 오른쪽에서만 한눈에 보임', '처리할 일이 0건이면 화면이 단순해 보일 수 있음'],
+  },
+  dashB: {
+    good: ['오늘 누가 언제 수업하는지 한눈에 (PC는 강사별 칸)', '빈 시간·겹침을 눈으로 바로 확인', '지금 시트·캘린더를 보던 방식과 비슷해 익숙함'],
+    bad: ['휴대폰에서는 시간표가 길어져 스크롤이 많음', '처리할 일이 시간표 속에 흩어져 놓치기 쉬움', '강사가 늘면 PC에서도 칸이 좁아짐'],
+  },
+  dashC: {
+    good: ['카톡 문의가 오면 이름으로 바로 찾아 처리', '학생별 남은 회차·변경권·종료일이 바로 보임', '재등록 임박·변경권 0 같은 묶음 보기'],
+    bad: ['급한 일(노쇼 신고 등)이 위쪽 띠 하나로만 보여 눈에 덜 띔', '오늘 수업 전체 흐름은 따로 들어가야 봄'],
+  },
+  regA: {
+    good: ['모든 칸이 한 화면에 있어 PC에서 가장 빠름', '오른쪽(휴대폰은 아래 띠)에 "저장하면 만들어지는 것"이 실시간 표시', '강사 시간 겹침을 저장 전에 알려 줌'],
+    bad: ['휴대폰에서는 아래로 길게 스크롤', '신청서 내용을 다시 옮겨 적어야 함 (복사·붙여넣기)'],
+  },
+  regB: {
+    good: ['휴대폰에서 큰 버튼으로 한 단계씩, 실수 적음', '고른 강사·요일에 맞춰 빈 시각만 보여 줌', '처음 쓰는 사람도 헷갈리지 않음'],
+    bad: ['PC에서는 단계 이동이 오히려 느림', '앞 단계를 고치려면 되돌아가야 함', '신청서 내용을 다시 입력해야 함'],
+  },
+  regC: {
+    good: ['구글폼 신청서 내용(이름·이메일·상품·연락처)이 자동으로 채워져 입력이 가장 적음', '운영자는 강사·시간·첫 수업일만 고르면 됨 (휴대폰에서도 빠름)', '신청서 원문(희망 시간)을 보며 강사 빈 시간에서 바로 선택', '입금 확인 상태가 함께 보여 순서를 놓치지 않음'],
+    bad: ['신청서 시트를 읽어 오는 연결이 하나 더 필요 (읽기만, 시트는 수정하지 않음)', '신청서 항목이 바뀌면 연결 설정도 함께 고쳐야 함', '신청서 없는 학생은 직접 입력 화면(A 방식)으로 처리'],
+  },
+};
+const VERDICT = {
+  dash: '추천: A (처리할 일 목록). 외부에서 휴대폰으로 확인·처리하는 일이 대부분이라 "할 일"이 첫 화면에 있어야 놓치지 않습니다. B의 오늘 시간표는 A의 PC 오른쪽 칸과 "일정" 탭으로 함께 넣을 수 있습니다.',
+  reg: '추천: C (신청서 불러오기) + 신청서 없는 경우 A 방식 직접 입력. 신청서에 이미 있는 내용을 다시 치지 않아도 되어 휴대폰 등록 시간이 가장 짧고, 오타로 이메일(로그인)이 틀어질 위험도 줄어듭니다.',
+};
+
+const state = { screen: 'dash', variant: 'A', device: 'both' };
+try { Object.assign(state, JSON.parse(localStorage.getItem('lms-drafts') || '{}')); } catch (e) {}
+
+function seg(el, items, current, key) {
+  el.querySelectorAll('button').forEach((b) => b.remove());
+  for (const [val, label] of items) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = label;
+    b.setAttribute('aria-pressed', String(val === current));
+    b.addEventListener('click', () => { state[key] = val; if (key === 'screen') state.variant = 'A'; render(); });
+    el.appendChild(b);
+  }
+}
+
+function fitPc() {
+  document.querySelectorAll('.pc .frame').forEach((f) => {
+    const s = f.clientWidth / 1280;
+    const sc = f.querySelector('.scaler');
+    sc.style.transform = `scale(${s})`;
+    f.style.height = `${Math.round(800 * s)}px`;
+  });
+}
+
+function render() {
+  try { localStorage.setItem('lms-drafts', JSON.stringify(state)); } catch (e) {}
+  const key = state.screen + state.variant;
+  seg(document.getElementById('screenSeg'), Object.entries(SCREENS).map(([k, v]) => [k, v.name]), state.screen, 'screen');
+  seg(document.getElementById('variantSeg'), SCREENS[state.screen].variants.map((v) => [v, `${v}. ${NAMES[state.screen + v]}${RECOMMEND[state.screen] === v ? '<span class="rec">추천</span>' : ''}`]), state.variant, 'variant');
+  seg(document.getElementById('deviceSeg'), [['both', '휴대폰 + PC'], ['phone', '휴대폰만'], ['pc', 'PC만']], state.device, 'device');
+
+  const html = MOCKS[key]();
+  const stage = document.getElementById('stage');
+  stage.innerHTML = '';
+  if (state.device !== 'pc') stage.insertAdjacentHTML('beforeend', `<div class="dev phone"><span class="dev-cap">휴대폰 390 × 780</span><div class="frame">${html}</div></div>`);
+  if (state.device !== 'phone') stage.insertAdjacentHTML('beforeend', `<div class="dev pc"><span class="dev-cap">PC 1280 × 800 (축소 표시)</span><div class="frame"><div class="scaler">${html}</div></div></div>`);
+  fitPc();
+
+  const n = NOTES[key];
+  document.getElementById('notes').innerHTML = `<h2>${SCREENS[state.screen].name} · 시안 ${state.variant}. ${NAMES[key]}</h2>
+    <div class="cols"><div><h3>좋은 점</h3><ul>${n.good.map((x) => `<li>${x}</li>`).join('')}</ul></div>
+    <div><h3>아쉬운 점</h3><ul>${n.bad.map((x) => `<li>${x}</li>`).join('')}</ul></div></div>
+    <div class="verdict">${VERDICT[state.screen]}</div>`;
+}
+
+window.addEventListener('resize', fitPc);
+render();
+</script>

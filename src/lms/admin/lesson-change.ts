@@ -1,0 +1,334 @@
+// 수업 변경·보강 화면 계산 (1순위, migration 1700) — 판정은 DB 함수가 하고, 여기는 목록·보강 권리·안내 문구만
+// - 날짜는 사람이 타이핑하지 않고 실제 수업 목록에서 고름 ('다음 주 목요일' 오해 방지, 17번 2절)
+// - 안내 문구는 DB에 저장된 원래 수업·바뀐 수업 시각으로 만듦 (원래 날짜와 변경·보강 날짜 모두 표기)
+
+import { formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
+import { CONFIRMED } from '../rules/policy';
+import { grantsMakeup, type ClassStatus } from '../rules/status';
+import { enWhen } from './confirm';
+import { enZone } from './students';
+
+export type ChLesson = {
+  id: string;
+  kind: 'regular' | 'makeup' | 'compensation' | 'carryover' | 'migrated_makeup' | 'migrated_extra';
+  seq: number | null;
+  startsAt: Date;
+  state: 'scheduled' | 'canceled' | 'done';
+  classStatus: ClassStatus | null;
+  makeupOf: string | null;
+  voided: boolean;
+  tutorId: string;
+  tutorName: string;
+  tutorTz: string;
+};
+
+export type ChChange = {
+  id: string;
+  lessonId: string;
+  type: 'student_cancel' | 'tutor_cancel';
+  status: 'applied' | 'reverted';
+  requestedAt: Date | null;
+  decidedAt: Date;
+  decision: ChangeDecision;
+};
+
+/** DB admin_change_lesson 결과 (미리 보기·확정 같은 모양) */
+export type ChangeDecision = {
+  status: ClassStatus;
+  timing: 'advance' | 'late';
+  who: 'student' | 'tutor';
+  hours_before: number;
+  uses_credit: boolean;
+  credits_left: number;
+  credits_after: number;
+  makeup_allowed: boolean;
+  makeup_until: KstDate | null;
+  reward_won: number;
+  holiday: boolean;
+  change_request_id?: string;
+  repeated?: boolean;
+};
+
+export type ChMakeupRequest = {
+  id: string;
+  sourceLessonId: string | null;
+  migratedItemId: string | null;
+  status: 'requested' | 'countered' | 'confirmed' | 'declined' | 'expired' | 'withdrawn' | 'voided';
+  candidates: Date[];
+  confirmedLessonId: string | null;
+  /** 강사 LMS 답 (migration 2000): 시각(ms)별 가능/불가, 메모. 답 전이면 비어 있음 */
+  tutorAnswers?: Record<number, 'yes' | 'no'>;
+  tutorNote?: string | null;
+  tutorAnsweredAt?: Date | null;
+  /** 강사 노쇼 무료 보상수업 신청이면 보상권 id (4100). 같은 노쇼 수업의 원래 수업 보강과 따로 */
+  compensationId?: string | null;
+};
+
+/** 강사 노쇼 무료 보상수업 (4100). useUntil = 사용 기한(수강 종료일, 기한 안 재등록이면 이월) */
+export type ChCompensation = { id: string; sourceLessonId: string; status: 'available' | 'used' | 'expired' | 'voided'; useUntil: KstDate };
+
+export type ChMigratedOpen = { id: string; originalDate: KstDate | null; tutorLeave: boolean };
+
+export type NoticeEvent = 'change' | 'makeup_ask' | 'makeup_confirmed' | 'makeup_voided' | 'revert';
+export type ChNotice = {
+  id: string;
+  changeRequestId: string | null;
+  makeupRequestId: string | null;
+  event: NoticeEvent;
+  recipient: 'student' | 'tutor';
+  status: 'pending' | 'sent' | 'not_needed';
+  sentAt: Date | null;
+  createdAt: Date;
+};
+
+export type ChStudent = { id: string; code: string; nameKo: string; nameEn: string; timezone: string };
+export type ChEnrollment = { id: string; finalEndDate: KstDate; durationMin: number };
+
+const WD = ['일', '월', '화', '수', '목', '금', '토'];
+/** '10/29 (목) 17:00' 한국 시각 */
+export function kstLabel(at: Date): string {
+  const f = formatInZone(at, 'Asia/Seoul');
+  const d = instantToKstDate(at);
+  return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]}) ${f.time}`;
+}
+/** 강사 현지 '11/6 (금) 09:00' — 한국과 날짜가 달라도 그 나라 날짜로. 강사가 한국 시간대면 null (같은 시각이라 표시 안 함) */
+export function tutorLocalLabel(at: Date, tz: string): string | null {
+  if (!tz || tz === 'Asia/Seoul') return null;
+  const f = formatInZone(at, tz);
+  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))} (${WD[new Date(`${f.date}T00:00:00Z`).getUTCDay()]}) ${f.time}`;
+}
+export function dateLabel(d: KstDate): string {
+  return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
+}
+
+/** 보강 시간은 한 수업당 강사에게 최대 2개 (2026-10-27 대표: 학생에게 2개 권장, 1개도 허용) */
+export const MAKEUP_SLOTS_MAX = 2;
+
+export const KIND_TEXT: Record<ChLesson['kind'], string> = {
+  regular: '정규', makeup: '보강', migrated_makeup: '보강', compensation: '보상', carryover: '이월', migrated_extra: '추가',
+};
+export function lessonTag(l: ChLesson): string {
+  return l.kind === 'regular' && l.seq ? `정규 ${l.seq}회` : KIND_TEXT[l.kind];
+}
+
+/** 고를 수 있는 수업: 아직 진행 전(예정)인 수업, 오늘(한국)부터. 시간순 */
+export function changeableLessons(lessons: ChLesson[], now: Date): ChLesson[] {
+  const today = instantToKstDate(now);
+  return lessons.filter((l) => l.state === 'scheduled' && instantToKstDate(l.startsAt) >= today).sort((a, b) => +a.startsAt - +b.startsAt);
+}
+
+export type MakeupRight =
+  | { kind: 'lesson'; key: string; source: ChLesson; open: ChMakeupRequest | null }
+  | { kind: 'migrated'; key: string; item: ChMigratedOpen; open: ChMakeupRequest | null }
+  | { kind: 'compensation'; key: string; comp: ChCompensation; source: ChLesson | null; open: ChMakeupRequest | null };
+
+/** 보강 받을 권리: 보강 받는 결과로 끝났는데 살아 있는 보강이 없는 수업 + 강사 휴무 '기다림' 수업(1800) + 이관한 미예약 보강 */
+/** + 강사 노쇼 무료 보상수업(4100): 날짜 안 잡은 보상권, 원래 수업 보강과 따로 신청 */
+export function makeupRights(lessons: ChLesson[], migrated: ChMigratedOpen[], requests: ChMakeupRequest[], comps: ChCompensation[] = []): MakeupRight[] {
+  // 보강 수업이 한 번 잡힌 원래 수업은 그 보강이 '없애기(voided)' 되지 않는 한 다시 권리가 아님 — 취소된 보강도 포함 (QA-13·R-24, student_screen 과 같은 규칙)
+  const live = new Set(lessons.filter((l) => l.makeupOf && !l.voided).map((l) => l.makeupOf));
+  const openFor = (f: (r: ChMakeupRequest) => boolean) => requests.find((r) => (r.status === 'requested' || r.status === 'countered') && f(r)) ?? null;
+  const fromLessons: MakeupRight[] = lessons
+    .filter((l) => !l.voided && l.classStatus && (grantsMakeup(l.classStatus) || l.classStatus === 'Tutor long-term leave') && !live.has(l.id))
+    .sort((a, b) => +a.startsAt - +b.startsAt)
+    .map((l) => ({ kind: 'lesson', key: l.id, source: l, open: openFor((r) => !r.compensationId && r.sourceLessonId === l.id) }));
+  const fromSheet: MakeupRight[] = migrated.map((m) => ({ kind: 'migrated', key: m.id, item: m, open: openFor((r) => r.migratedItemId === m.id) }));
+  const fromComps: MakeupRight[] = comps
+    .filter((c) => c.status === 'available')
+    .map((c) => ({ kind: 'compensation', key: `comp-${c.id}`, comp: c, source: lessons.find((l) => l.id === c.sourceLessonId) ?? null, open: openFor((r) => r.compensationId === c.id) }));
+  return [...fromLessons, ...fromSheet, ...fromComps];
+}
+
+export const STATUS_SHORT: Partial<Record<ClassStatus, string>> = {
+  'Student canceled in advance': '학생 정상 변경',
+  'Student canceled in advance (public holiday)': '공휴일 정상 변경',
+  'Student canceled late': '학생 늦은 변경',
+  'No change credits left': '변경권 없음',
+  'Tutor canceled in advance': '강사 정상 취소',
+  'Tutor canceled late': '강사 늦은 취소',
+  'Tutor long-term leave': '강사 휴무',
+};
+
+/** 미리 보기 결과 줄 (화면 표시용, 짧게) */
+export function decisionLines(d: ChangeDecision): string[] {
+  const lines = [`${STATUS_SHORT[d.status] ?? d.status} · 수업 ${d.hours_before}시간 전 요청`];
+  if (d.who === 'student') {
+    if (d.uses_credit) lines.push(`변경권 ${d.credits_left} → ${d.credits_after}`);
+    else lines.push(`변경권 ${d.credits_left} (차감 없음)`);
+  }
+  if (d.makeup_allowed && d.makeup_until) lines.push(`보강 ${dateLabel(d.makeup_until)}까지`);
+  else lines.push('보강 없음 · 수업 1회 차감');
+  if (d.reward_won > 0) lines.push(`학생 적립금 ${d.reward_won.toLocaleString('ko-KR')}원`);
+  return lines;
+}
+
+// ---------------------------------------------------------------------
+// 안내 문구 (학생: 카카오톡 한국어 / 강사: WhatsApp 영어). 해외 학생은 현지 시각을 앞에, 한국 시각을 괄호로
+// ---------------------------------------------------------------------
+
+const KO_WD: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토' };
+/** '11월 5일(목) 오전 10시' / '오후 5시 30분' (학생 안내, 2026-10-26 대표 문구) */
+function koNice(at: Date, tz: string): string {
+  const f = formatInZone(at, tz);
+  const [h, m] = f.time.split(':').map(Number);
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8))}일(${KO_WD[f.weekday]}) ${h < 12 ? '오전' : '오후'} ${h12}시${m ? ` ${m}분` : ''}`;
+}
+export function koAt(at: Date, tz: string): string {
+  const kst = koNice(at, 'Asia/Seoul');
+  if (!tz || tz === 'Asia/Seoul') return kst;
+  return `${koNice(at, tz)} (한국 ${kst})`;
+}
+const koDate = (d: KstDate) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일(${['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
+/** 강사 안내 시각: 'Thu 5 Nov 22:00 Toronto Time (Fri 6 Nov 12:00 KST)' — 도시 이름 + 한국 시간 함께 (H26(43), QA UX: 'your time' 금지) */
+export const enAt = (at: Date, tz: string) => (!tz || tz === 'Asia/Seoul'
+  ? `${enWhen(at, 'Asia/Seoul')} KST`
+  : `${enWhen(at, tz)} ${enZone(tz)} (${enWhen(at, 'Asia/Seoul')} KST)`);
+
+export type NoticeContext = {
+  student: ChStudent;
+  durationMin: number;
+  /** 변경된(취소된) 수업 또는 보강의 원래 수업 */
+  lesson?: ChLesson;
+  decision?: ChangeDecision;
+  /** 보강: 후보 시간 / 확정된·없앤 보강 수업 시각 */
+  candidates?: Date[];
+  makeupAt?: Date;
+  /** 이관 보강의 원래 수업 날짜 (모르면 null) */
+  originalDate?: KstDate | null;
+  tutorName: string;
+  tutorTz: string;
+  /** 강사 노쇼 무료 보상수업 안내 (4100) */
+  compensation?: boolean;
+  /** 취소 안내를 보내는 시점의 보강 진행 상태 (추가 요청 6: 취소만 / 신청 중 / 강사 확인 끝 / 전부 불가 / 확정) */
+  makeup?: { state: 'none' | 'requested' | 'tutor_answered' | 'declined' | 'confirmed'; candidates?: Date[]; at?: Date | null };
+};
+
+function originKo(c: NoticeContext): string {
+  if (c.lesson) return koAt(c.lesson.startsAt, c.student.timezone);
+  return c.originalDate ? `${Number(c.originalDate.slice(5, 7))}월 ${Number(c.originalDate.slice(8))}일` : '시트 기록 보강';
+}
+function originEn(c: NoticeContext): string {
+  if (c.lesson) return enAt(c.lesson.startsAt, c.tutorTz);
+  return c.originalDate ? c.originalDate : 'earlier class';
+}
+
+/** 보강은 학생이 수업 시간에 강사와 정해도 되고 운영진에게 말해도 됨 (확정은 운영진, D-43) */
+const makeupLineKo = (until: KstDate) => `보강은 수강기간 종료일인 ${koDate(until)}까지 진행하실 수 있어요. 강사님과 수업 중에 일정을 정하시거나, 저희에게 말씀해 주세요.`;
+/** 취소 안내의 보강 줄 — 보내는 시점의 실제 상태에 맞게 (추가 요청 6). 상태를 모르면 예전 문구 */
+function makeupStateKo(c: NoticeContext, until: KstDate): string {
+  const m = c.makeup;
+  const tz = c.student.timezone;
+  if (!m || m.state === 'none') return makeupLineKo(until);   // 대표 문구 그대로 (2026-10-26)
+  if (m.state === 'confirmed' && m.at) return `보강 수업: ${koAt(m.at, tz)} (확정)`;
+  const picked = m.candidates && m.candidates.length > 0 ? `신청하신 날짜: ${m.candidates.map((t) => koAt(t, tz)).join(' / ')}` : '보강 날짜를 신청하셨어요.';
+  if (m.state === 'requested') return `${picked}\n강사님 확인 후 확정 안내 드릴게요.`;
+  if (m.state === 'tutor_answered') return `${picked}\n강사님 확인이 끝나 곧 확정 안내 드릴게요.`;
+  return `${picked}\n강사님이 그 날짜에는 어렵다고 해요. 다른 날짜를 알려 주시면 조율해 드릴게요 (종료일 ${koDate(until)}까지).`;
+}
+const EN_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const EN_WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const enDate = (d: KstDate) => `${EN_WD[new Date(`${d}T00:00:00Z`).getUTCDay()]} ${Number(d.slice(8))} ${EN_MON[Number(d.slice(5, 7)) - 1]}`;
+/** 강사가 학생과 보강 시간을 이야기해도 되지만 직접 확정하지 않고 운영진에게 먼저 (2026-10-26 대표) */
+const makeupLinesEn = (until: KstDate) => [
+  `Make-up: you can agree on a make-up time with the student during class (any day until ${enDate(until)}).`,
+  'Please do NOT confirm it yourself. Send us the agreed date and time first, and we will confirm it.',
+];
+
+export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
+  const name = c.student.nameKo;
+  if (event === 'change' && c.lesson && c.decision) {
+    const d = c.decision;
+    const at = koAt(c.lesson.startsAt, c.student.timezone);
+    // 단락 사이 빈 줄 (2026-10-26 대표 문구)
+    if (d.who === 'tutor') {
+      return [
+        `[엣지영어] ${name}님, 강사 사정으로 수업이 취소됐어요.`,
+        `취소된 수업: ${at}`,
+        d.reward_won > 0
+          ? `불편을 드려 정말 죄송합니다. 사과의 마음으로 다음 수강 등록 시 사용하실 수 있는 적립금 ${d.reward_won.toLocaleString('ko-KR')}원을 드렸어요 (유효기간 없음).`
+          : '불편을 드려 정말 죄송합니다.',
+        d.makeup_until ? makeupLineKo(d.makeup_until) : '',
+      ].filter(Boolean).join('\n\n');
+    }
+    const result =
+      d.status === 'Student canceled in advance' ? `변경권 1개 사용 (잔여 ${d.credits_after}개)`
+      : d.status === 'Student canceled in advance (public holiday)' ? '공휴일 수업이라 변경권은 차감되지 않아요.'
+      : d.status === 'Student canceled late' ? `수업 ${CONFIRMED.changeNoticeHours}시간 전이 지나 보강 없이 수업 1회가 차감돼요 (변경권은 그대로).`
+      : d.status === 'No change credits left' ? '이번 기간 변경권이 없어 보강 없이 수업 1회가 차감돼요.'
+      : '';
+    return [
+      `[엣지영어] ${name}님, 요청하신 수업이 취소됐어요.`,
+      [`취소된 수업: ${at}`, result].filter(Boolean).join('\n'),
+      d.makeup_allowed && d.makeup_until ? makeupStateKo(c, d.makeup_until) : '',
+      '취소된 수업 날짜가 요청하신 날짜와 다르다면 바로 알려주세요.',
+    ].filter(Boolean).join('\n\n');
+  }
+  if (event === 'makeup_confirmed' && c.makeupAt) {
+    if (c.compensation) {
+      return [`[엣지영어] ${name}님, 무료 보상수업이 확정됐어요`, `강사 노쇼 수업: ${originKo(c)}`, `보상수업: ${koAt(c.makeupAt, c.student.timezone)}`, `강사: ${c.tutorName}`].join('\n');
+    }
+    return [`[엣지영어] ${name}님, 보강이 확정됐어요`, `원래 수업: ${originKo(c)}`, `보강 수업: ${koAt(c.makeupAt, c.student.timezone)}`, `강사: ${c.tutorName}`].join('\n');
+  }
+  if (event === 'makeup_voided' && c.makeupAt) {
+    const w = c.compensation ? '보상수업' : '보강';
+    return [`[엣지영어] ${name}님, ${w} 일정 정정 안내`, `${w} ${koAt(c.makeupAt, c.student.timezone)}은 진행하지 않아요`, `원래 수업: ${originKo(c)}`, `${w} 날짜는 다시 잡아 드릴게요`].join('\n');
+  }
+  if (event === 'revert' && c.lesson) {
+    return [
+      `[엣지영어] ${name}님, 수업 취소 정정 안내`,
+      `${koAt(c.lesson.startsAt, c.student.timezone)} 수업은 그대로 진행해요`,
+      c.decision?.uses_credit ? '사용한 변경권은 돌려드렸어요' : '',
+      c.makeupAt ? `잡혀 있던 보강 ${koAt(c.makeupAt, c.student.timezone)}은 진행하지 않아요` : '',
+    ].filter(Boolean).join('\n');
+  }
+  return '';
+}
+
+export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
+  const who = c.student.nameEn;
+  if (event === 'change' && c.lesson && c.decision) {
+    const d = c.decision;
+    const m = c.makeup;
+    const makeupEn = !d.makeup_allowed || !d.makeup_until ? []
+      : m?.state === 'confirmed' && m.at ? [`Make-up already confirmed: ${enAt(m.at, c.tutorTz)}. Please add it to your schedule.`]
+      : m?.state === 'requested' && m.candidates?.length ? [`The student asked for a make-up at: ${m.candidates.map((t) => enAt(t, c.tutorTz)).join(' / ')}.`, 'Please answer on your Home page (Make-up requests). Edge English will confirm.']
+      : m?.state === 'tutor_answered' ? ['You already answered the make-up request. Edge English will confirm and let you know.']
+      : m?.state === 'declined' ? ['You said the requested make-up times do not work. Edge English will arrange another time with the student.']
+      : makeupLinesEn(d.makeup_until);
+    return [
+      d.who === 'tutor' ? `CANCELED (tutor) - ${who}` : `CANCELED - ${who}`,
+      `Class: ${enAt(c.lesson.startsAt, c.tutorTz)}`,
+      'No class at this time.',
+      ...makeupEn,
+    ].join('\n');
+  }
+  if (event === 'makeup_ask' && c.candidates) {
+    return [
+      `${c.compensation ? 'Compensation class request' : 'Make-up request'} - ${who} (${c.durationMin} min), not confirmed yet`,
+      `Original class: ${originEn(c)}`,
+      'Are you available at any of these times?',
+      ...c.candidates.map((t, i) => `${i + 1}) ${enAt(t, c.tutorTz)}`),
+    ].join('\n');
+  }
+  if (event === 'makeup_confirmed' && c.makeupAt) {
+    const w = c.compensation ? 'Compensation class' : 'Make-up';
+    return [`CONFIRMED ${w.toLowerCase()} - ${who} (${c.durationMin} min)`, `Original class: ${originEn(c)}`, `${w}: ${enAt(c.makeupAt, c.tutorTz)}`, 'Please add it to your schedule. Thank you!'].join('\n');
+  }
+  if (event === 'makeup_voided' && c.makeupAt) {
+    const w = c.compensation ? 'Compensation class' : 'Make-up';
+    return [`CANCELED ${w.toLowerCase()} - ${who}`, `${w}: ${enAt(c.makeupAt, c.tutorTz)}`, 'No class at this time.'].join('\n');
+  }
+  if (event === 'revert' && c.lesson) {
+    return [
+      `CORRECTION - ${who}`,
+      `Class ${enAt(c.lesson.startsAt, c.tutorTz)} will go ahead as scheduled.`,
+      c.makeupAt ? `Make-up ${enAt(c.makeupAt, c.tutorTz)} is canceled.` : '',
+    ].filter(Boolean).join('\n');
+  }
+  return '';
+}
+
+export const EVENT_TEXT: Record<NoticeEvent, string> = {
+  change: '변경 안내', makeup_ask: '보강 가능 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 정정 안내', revert: '정정 안내',
+};

@@ -1,0 +1,13298 @@
+-- 자동 생성 파일 (직접 고치지 말 것): node scripts/lms-test-bundle.mjs
+-- 시험용 Supabase 프로젝트에만 사용. 빈 프로젝트에 한 번 실행 (두 번 실행하면 "이미 있음" 오류)
+begin;
+-- >>> 20261016000000_lms_core.sql
+-- =====================================================================
+-- 엣지영어 LMS 핵심 스키마 v0.2 (2026-10-16)
+-- 설계 설명: docs/lms/05-architecture.md, 재검토 기록: docs/lms/09-design-review.md
+--
+-- ⚠️ 초안입니다. 실제 Supabase 프로젝트에는 운영자 승인 전까지 적용하지 않습니다.
+--    로컬 PostgreSQL 검증: npm run test:db
+--
+-- 단계별 파일 (필요한 단계에서만 적용)
+--   20261016000000_lms_core.sql          1~3단계: 학생·강사·등록·회차·기록·변경·변경권·이력·권한
+--   20261016000100_lms_selfservice.sql   4단계: 강사 가능 시간·보강 신청
+--   20261016000200_lms_notify_calendar.sql 5단계: 알림·캘린더 반영
+--   20261016000300_lms_payroll.sql       6단계: 강사 계약 조건·정산
+--
+-- 원칙
+--  1. 데이터 원본은 이 DB 하나. Google 시트·캘린더는 복사본(보고·표시용)
+--  2. 시각은 timestamptz(UTC)로 저장, 운영 규칙·기간은 한국 날짜(date) 기준
+--  3. 수업·기록·장부는 지우지 않는다 (취소 = 상태 변경). 모든 변경은 audit_log 에 남음
+--  4. 겹치는 수업·두 번 차감은 DB 제약으로 막는다 (화면·서버 검사가 뚫려도 마지막 방어선)
+--  5. 학생·강사의 쓰기는 서버(검증된 로그인 + 규칙 검사)만. 앱 사용자에게는 본인 것 읽기만
+--  6. 운영정책 값은 DB에 두지 않는다 (docs/lms/policy/register.md → src/lms/rules/). 미확정 값은 비워 둔다
+--  7. 학생·강사가 받은 계약서·안내서 판본과 전달·동의 근거를 기록한다. 받지 않은 문서의 판본을 붙이지 않는다
+-- =====================================================================
+
+create extension if not exists btree_gist;
+
+-- ---------------------------------------------------------------------
+-- 공통 함수
+-- ---------------------------------------------------------------------
+
+create or replace function is_valid_timezone(tz text) returns boolean
+language plpgsql immutable as $$
+begin
+  perform now() at time zone tz;
+  return true;
+exception when others then
+  return false;
+end $$;
+
+create or replace function touch_updated_at() returns trigger
+language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end $$;
+
+-- 수업·기록·장부는 삭제 금지 (취소·정정으로만 처리)
+create or replace function forbid_delete() returns trigger
+language plpgsql as $$
+begin
+  raise exception '% 의 기록은 삭제할 수 없습니다. 취소·정정으로 처리하세요.', tg_table_name;
+end $$;
+
+create or replace function forbid_update() returns trigger
+language plpgsql as $$
+begin
+  raise exception '% 은(는) 수정할 수 없습니다. 반대 기록을 추가하세요.', tg_table_name;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 변경 이력 (누가, 언제, 무엇을 → 이전 상태로 복구 가능)
+-- ---------------------------------------------------------------------
+
+create table audit_log (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  actor uuid,                              -- 서버가 트랜잭션마다 set local app.actor_id = '...'
+  actor_via text,
+  table_name text not null,
+  row_id text not null,
+  action text not null check (action in ('INSERT', 'UPDATE', 'DELETE')),
+  old_row jsonb,
+  new_row jsonb
+);
+create index audit_log_row on audit_log (table_name, row_id, at);
+create trigger audit_log_no_update before update on audit_log for each row execute function forbid_update();
+create trigger audit_log_no_delete before delete on audit_log for each row execute function forbid_delete();
+
+create or replace function write_audit() returns trigger
+language plpgsql as $$
+declare
+  r jsonb := case when tg_op = 'DELETE' then to_jsonb(old) else to_jsonb(new) end;
+begin
+  insert into audit_log (actor, actor_via, table_name, row_id, action, old_row, new_row)
+  values (
+    nullif(current_setting('app.actor_id', true), '')::uuid,
+    nullif(current_setting('app.actor_via', true), ''),
+    tg_table_name,
+    coalesce(r ->> 'id', r ->> 'lesson_id', r ->> 'code', r ->> 'key', r ->> 'day', r ->> 'auth_user_id', r ->> 'status'),
+    tg_op,
+    case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) end,
+    case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) end);
+  return null;
+end $$;
+
+-- 표 하나를 LMS 기본 보호 상태로: 변경 이력 + RLS(앱 사용자는 정책으로 허용된 읽기만) + 운영자 읽기
+-- 다음 단계 파일에서도 새 표를 만들면 이 함수를 부른다
+create or replace function lms_protect(t regclass) returns void
+language plpgsql as $$
+begin
+  execute format('create trigger %I after insert or update or delete on %s for each row execute function write_audit()',
+                 replace(t::text, '.', '_') || '_audit', t);
+  execute format('alter table %s enable row level security', t);
+  execute format('revoke all on %s from anon, authenticated', t);
+  execute format('grant select on %s to authenticated', t);
+  execute format('create policy admin_read on %s for select to authenticated using (is_admin())', t);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 계약서·안내서 판본 (기존 학생·강사와 신규의 적용 조건이 다를 수 있음)
+-- - contract: 수강계약서·강사계약서 (서명 또는 결제로 동의하는 문서)
+-- - guide: 수업 전 필독안내서 등 안내 문서 (계약서와 법적 성격이 다를 수 있음 — 미확인)
+-- 2026년 초 어느 시점부터 학생 계약서 발송을 중단하고 필독안내서만 보냄 (POL-OP-09)
+-- → 계약서를 받지 않은 학생에게 계약서 판본을 붙이지 않는다. 받은 문서가 없으면 비워 둔다(미확인)
+-- 판본별 규칙 값은 코드(src/lms/rules)와 정책 기준표에 있고, 여기는 "누가 어떤 문서를 받았는지"만
+-- ---------------------------------------------------------------------
+
+create table terms_versions (
+  code text primary key check (code ~ '^[A-Z0-9_]+$'),
+  -- class_terms: LMS에서 클릭으로 확인·동의하는 수업 안내·수강규정 / privacy_notice·marketing 은 수강규정과 따로 받음 (POL-OP-12)
+  kind text not null check (kind in ('contract', 'guide', 'class_terms', 'privacy_notice', 'marketing')),
+  audience text not null check (audience in ('student', 'tutor')),
+  title text not null,
+  first_seen date,                         -- 확인된 가장 이른 서명·작성일
+  is_draft boolean not null default false, -- 초안(아직 누구에게도 적용 안 됨)
+  source_ref text not null,                -- docs/lms/policy/sources.md 의 SRC-ID
+  note text
+);
+insert into terms_versions (code, kind, audience, title, first_seen, is_draft, source_ref, note) values
+  ('SC0A', 'contract', 'student', '학생 계약 2024-09 이전 판 (12시간 기준)', null, false, 'SRC-SC0A', '취소 12시간 전, 4주 2/3/5회, 보강 2주 안'),
+  ('SC0B', 'contract', 'student', '학생 계약 2024-11 판 (30일, 효력 조항 없음)', '2024-11-16', false, 'SRC-SC0B', '재등록 시 효력 조항 없음'),
+  ('SC0C', 'contract', 'student', '학생 계약 2025-05 판 (30일)', '2025-05-27', false, 'SRC-SC0C', null),
+  ('SC1', 'contract', 'student', '수강계약서 1판 (30일 기준)', '2025-10-22', false, 'SRC-SC1', '변경권 4·6·10회/30일, 연기 30일'),
+  ('SC2', 'contract', 'student', '수강계약서 2판 (28일 기준)', '2026-01-14', false, 'SRC-SC2', '변경권 1·2·3회/28일, 연기 28일'),
+  ('SC3', 'contract', 'student', '수강계약서 3판 초안', '2026-10-02', true, 'SRC-SC3', '내부 메모 정리 전'),
+  ('GV1', 'guide', 'student', '필독안내서 옛 판 1 (30일, 4·6·10회, 이월 없음, 1장)', null, false, 'SRC-GUIDE', '학생 시트에서 발견, 날짜 미상'),
+  ('GV2', 'guide', 'student', '필독안내서 옛 판 2 (28일, 4·6·10회, 이월 없음, 1장)', null, false, 'SRC-GUIDE', '학생 시트에서 발견, 날짜 미상'),
+  ('GV3', 'guide', 'student', '필독안내서 옛 판 3 (28일, 월 1·2·3회, 이월 없음, 1장)', null, false, 'SRC-GUIDE', '학생 시트에서 발견, 날짜 미상'),
+  ('GV4', 'guide', 'student', '필독안내서 옛 판 4 (28일, 월 1·2·3회, 종료 후 이틀 이월, 1장)', null, false, 'SRC-GUIDE', '학생 시트에서 발견, 날짜 미상'),
+  ('G20260709', 'guide', 'student', '수업 전 필독안내서 2026-07-09 판 (이미지 2장)', '2026-07-09', false, 'SRC-GUIDE', '현행. 일부 옛 시트는 이 판으로 교체됨'),
+  ('TC0', 'contract', 'tutor', '국내 강사 계약 2024-08 (원화 시급)', '2024-08-10', false, 'SRC-TC0', '기간 고정, 만료 후 상호 협의 연장'),
+  ('TC0B', 'contract', 'tutor', '강사 계약 2025-11-04 판 ($14 + 최대 $2, 자동 갱신)', '2025-11-04', false, 'SRC-TC0B', null),
+  ('TC1', 'contract', 'tutor', '강사계약서 1판 (기본 $14 + 최대 $3)', '2025-11-27', false, 'SRC-TC1', '1년, 갱신은 서면 동의'),
+  ('TC2', 'contract', 'tutor', '강사계약서 2판 (기본 $11)', '2026-01-09', false, 'SRC-TC2', null),
+  ('TC3', 'contract', 'tutor', '강사계약서 3판 (기본 $11, 보강+보상)', '2026-08-24', false, 'SRC-TC3', null);
+
+create or replace function terms_kind_is(p_code text, p_kind text, p_audience text) returns boolean
+language sql stable as $$
+  select p_code is null or exists (select 1 from terms_versions where code = p_code and kind = p_kind and audience = p_audience)
+$$;
+
+-- ---------------------------------------------------------------------
+-- 사람: 학생 · 강사 · 로그인 연결
+-- ---------------------------------------------------------------------
+
+create sequence student_code_seq start 1;   -- 이관 후 setval 로 기존 최대 번호 다음부터
+
+create table students (
+  id uuid primary key default gen_random_uuid(),
+  -- 영구 고유번호 (POL-OP-05). 재등록해도 그대로
+  code text not null unique default ('STU-' || lpad(nextval('student_code_seq')::text, 4, '0'))
+    check (code ~ '^STU-\d{4,}$'),
+  name_ko text not null,
+  name_en text not null,
+  display_name text,                       -- 강사에게 보이는 이름 (영문 이름이 겹칠 때만)
+  email text,
+  phone text,                              -- 국내: 휴대폰, 해외: 카카오톡 ID 등
+  country text,
+  city text,
+  timezone text not null default 'Asia/Seoul' check (is_valid_timezone(timezone)),
+  gender_age text,
+  self_intro_en text,
+  level text,
+  class_type text,
+  correction_pref text,
+  textbook text,
+  class_note_url text,
+  admin_memo text,                         -- 운영자만 봄
+  legacy_row_ref text,                     -- 이관 시 원래 시트 위치 (검증용)
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+  -- '수강 중/종료' 상태 칸은 두지 않음: 수강등록에서 계산 (같은 사실을 두 번 저장하지 않음)
+);
+create trigger students_touch before update on students for each row execute function touch_updated_at();
+
+create table tutors (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  name_ko_sound text,
+  country text not null,
+  timezone text not null check (is_valid_timezone(timezone)),   -- IANA (고정 시차 아님)
+  email text,
+  meet_url text,
+  google_calendar_id text,
+  active boolean not null default true,    -- 휴무 여부는 tutor_time_off 에서 계산
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create trigger tutors_touch before update on tutors for each row execute function touch_updated_at();
+
+create table app_users (
+  auth_user_id uuid primary key,           -- Supabase auth.users.id
+  role text not null check (role in ('admin', 'tutor', 'student')),
+  student_id uuid unique references students(id),
+  tutor_id uuid unique references tutors(id),
+  created_at timestamptz not null default now(),
+  check ((role = 'student') = (student_id is not null)),
+  check ((role = 'tutor') = (tutor_id is not null))
+);
+
+-- 권한 확인 함수 (RLS에서 사용)
+create or replace function my_student_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select student_id from app_users where auth_user_id = auth.uid()
+$$;
+create or replace function my_tutor_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select tutor_id from app_users where auth_user_id = auth.uid()
+$$;
+create or replace function is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select role = 'admin' from app_users where auth_user_id = auth.uid()), false)
+$$;
+
+-- ---------------------------------------------------------------------
+-- 수강등록 · 기간 · 연장 · 결제 · 환불
+-- ---------------------------------------------------------------------
+
+create table enrollments (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  seq integer not null check (seq >= 1),                         -- 몇 번째 등록
+  previous_enrollment_id uuid unique references enrollments(id), -- 재등록이면 직전 등록
+  -- 이 등록 때 학생이 받은 문서 (운영자가 근거 기록(terms_deliveries)을 보고 정함, 모르면 비워 둠 = 미확인)
+  contract_version text references terms_versions(code)
+    check (terms_kind_is(contract_version, 'contract', 'student')),
+  guide_version text references terms_versions(code)
+    check (terms_kind_is(guide_version, 'guide', 'student')),
+  weeks smallint check (weeks in (4, 12, 24)),                   -- 현행 상품 (POL-PER-01)
+  legacy_label text,                                             -- 옛 상품 (예: '1개월(30일)', '2개월')
+  weekly_count smallint not null check (weekly_count in (1, 2, 3, 5)),
+  duration_min smallint not null check (duration_min in (20, 40, 50)),
+  start_date date not null,
+  base_end_date date not null,
+  extension_days integer not null default 0 check (extension_days >= 0),  -- enrollment_extensions 합계 (직접 수정 불가)
+  final_end_date date generated always as (base_end_date + extension_days) stored,
+  lessons_purchased integer not null check (lessons_purchased > 0),
+  lessons_carried_in integer not null default 0 check (lessons_carried_in >= 0),
+  amount_due integer check (amount_due >= 0),                   -- 등록 당시 결제할 금액 (원, 스냅샷)
+  status text not null default 'pending_payment'
+    check (status in ('pending_payment', 'confirmed', 'active', 'completed', 'canceled')),
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (student_id, seq),
+  check (base_end_date >= start_date),
+  check ((weeks is not null) <> (legacy_label is not null)),     -- 현행 상품이거나 옛 상품 둘 중 하나
+  -- 현행 상품은 28일 규칙 (POL-PER-02). 옛 상품은 시트의 실제 날짜를 그대로 이관
+  check (weeks is null or base_end_date = start_date + (weeks / 4 * 28 - 1)),
+  check (weeks is null or lessons_purchased = weekly_count * weeks),
+  -- 같은 학생의 수강기간은 겹칠 수 없음
+  exclude using gist (student_id with =, daterange(start_date, final_end_date, '[]') with &&)
+    where (status <> 'canceled')
+);
+create trigger enrollments_touch before update on enrollments for each row execute function touch_updated_at();
+
+-- 변경권 지급 단위 기간 (현행 28일, 1판 계약은 30일일 수 있어 길이는 코드가 판본별로 계산)
+create table enrollment_periods (
+  id uuid primary key default gen_random_uuid(),
+  enrollment_id uuid not null references enrollments(id),
+  idx smallint not null check (idx between 1 and 12),
+  start_date date not null,
+  end_date date not null,
+  credits_granted smallint not null check (credits_granted between 0 and 10),
+  unique (enrollment_id, idx),
+  check (end_date >= start_date)
+);
+
+-- 기간 연장 장부 (장기 연기·강사 휴무·예외). 합계가 enrollments.extension_days 로 자동 반영
+create table enrollment_extensions (
+  id uuid primary key default gen_random_uuid(),
+  enrollment_id uuid not null references enrollments(id),
+  days integer not null check (days <> 0), -- 정정은 음수 행 추가
+  reason text not null check (reason in ('student_long_term_leave', 'tutor_long_term_leave', 'admin_exception', 'correction')),
+  change_request_id uuid,                  -- 근거가 된 요청 (아래 change_requests)
+  note text,
+  approved_by uuid not null,
+  created_at timestamptz not null default now()
+);
+create trigger enrollment_extensions_no_update before update on enrollment_extensions for each row execute function forbid_update();
+create trigger enrollment_extensions_no_delete before delete on enrollment_extensions for each row execute function forbid_delete();
+
+create or replace function sync_extension_days() returns trigger
+language plpgsql as $$
+declare
+  total integer;
+begin
+  select coalesce(sum(days), 0) into total from enrollment_extensions where enrollment_id = new.enrollment_id;
+  if total < 0 then raise exception '연장 일수 합계가 0보다 작아질 수 없습니다.'; end if;
+  perform set_config('lms.extension_sync', 'on', true);
+  update enrollments set extension_days = total where id = new.enrollment_id;
+  perform set_config('lms.extension_sync', 'off', true);
+  return null;
+end $$;
+create trigger enrollment_extensions_sync after insert on enrollment_extensions
+  for each row execute function sync_extension_days();
+
+create or replace function guard_extension_days() returns trigger
+language plpgsql as $$
+begin
+  if new.extension_days is distinct from old.extension_days
+     and coalesce(current_setting('lms.extension_sync', true), 'off') <> 'on' then
+    raise exception '연장 일수는 직접 고칠 수 없습니다. 연장 기록(enrollment_extensions)을 추가하세요.';
+  end if;
+  return new;
+end $$;
+create trigger enrollments_guard_extension before update on enrollments
+  for each row execute function guard_extension_days();
+
+-- 실제 입금 기록 (결제할 금액은 enrollments.amount_due 한 곳에만. 나눠 낸 경우 행이 여러 개)
+create table payments (
+  id uuid primary key default gen_random_uuid(),
+  enrollment_id uuid not null references enrollments(id),
+  method text not null check (method in ('bank_transfer', 'card_link')),
+  payer_name text,
+  amount_received integer not null check (amount_received > 0),
+  received_on date not null,
+  confirmed_by uuid not null,
+  confirmed_at timestamptz not null default now(),
+  note text
+);
+
+-- 환불: 금액은 운영자가 직접 입력·승인. 자동 계산하지 않음 (POL-PAY-04 보류)
+create table refunds (
+  id uuid primary key default gen_random_uuid(),
+  enrollment_id uuid not null references enrollments(id),
+  amount integer not null check (amount > 0),
+  reason text not null,
+  status text not null default 'requested' check (status in ('requested', 'approved', 'paid', 'rejected')),
+  approved_by uuid,
+  approved_at timestamptz,
+  paid_at timestamptz,
+  note text,
+  created_at timestamptz not null default now(),
+  check (status not in ('approved', 'paid') or approved_by is not null)
+);
+
+-- ---------------------------------------------------------------------
+-- 고정 스케줄 · 수업
+-- ---------------------------------------------------------------------
+
+-- 매주 고정 요일·시각(KST). 학생에 붙어 있어 재등록해도 그대로 (POL-RN-03)
+-- 바뀌면 기존 행 effective_to 를 닫고 새 행 추가 (이력 보존)
+create table regular_schedules (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  tutor_id uuid not null references tutors(id),
+  weekday smallint not null check (weekday between 0 and 6),   -- 0=일 … 6=토 (한국 날짜 기준)
+  start_time_kst time not null,
+  duration_min smallint not null check (duration_min in (20, 40, 50)),
+  effective_from date not null,
+  effective_to date,
+  change_reason text,
+  created_at timestamptz not null default now(),
+  exclude using gist (student_id with =, weekday with =,
+                      daterange(effective_from, effective_to, '[]') with &&)
+);
+
+create type class_status as enum (
+  'Normal',
+  'Make-up completed',
+  'Student canceled in advance',
+  'Student canceled in advance (public holiday)',
+  'Tutor canceled in advance',
+  'Student canceled late',
+  'Tutor canceled late',
+  'Student no-show',
+  'Tutor no-show',
+  'Tutor long-term leave',
+  'Student long-term leave',
+  'No change credits left',
+  'Tutor Late - Student Present',
+  'Covered by another tutor'
+);
+
+-- 상태매핑표 (POL-ST-01). 값은 src/lms/rules/status.ts 와 같아야 함 (자동 테스트로 확인)
+-- DB에도 두는 이유: 보고·정산 SQL이 같은 표를 쓰게 하려고
+create table class_status_rules (
+  status class_status primary key,
+  student_label text not null,
+  consumes_lesson boolean not null,
+  uses_credit boolean not null,
+  tutor_paid boolean not null,
+  incentive text not null check (incentive in ('none', 'late_cancel', 'no_show', 'late')),
+  outcome text not null check (outcome in ('held', 'canceled', 'missed'))  -- 진행 / 시작 전 취소 / 시간에 못 함
+);
+insert into class_status_rules values
+  ('Normal', '정상 진행', true, false, true, 'none', 'held'),
+  ('Make-up completed', '보강 완료', true, false, true, 'none', 'held'),
+  ('Student canceled in advance', '학생 정상 취소 👉 수강기간 내 보강 가능', false, true, false, 'none', 'canceled'),
+  ('Student canceled in advance (public holiday)', '공휴일 취소 👉 수강기간 내 보강 가능', false, false, false, 'none', 'canceled'),
+  ('Tutor canceled in advance', '강사 정상 취소 👉 수강기간 내 보강 가능', false, false, false, 'none', 'canceled'),
+  ('Student canceled late', '학생 늦은 취소 👉 보강 불가', true, false, true, 'none', 'canceled'),
+  ('Tutor canceled late', '강사 늦은 취소 👉 수강기간 내 보강 가능', false, false, false, 'late_cancel', 'canceled'),
+  ('Student no-show', '학생 노쇼 👉 보강 불가', true, false, true, 'none', 'missed'),
+  ('Tutor no-show', '강사 노쇼 👉 보강 1회 + 보상수업 1회(무료)', false, false, false, 'no_show', 'missed'),
+  ('Tutor long-term leave', '강사 장기 휴식 👉 수강기간 연장', false, false, false, 'none', 'canceled'),
+  ('Student long-term leave', '학생 장기 연기 👉 수강기간 최대 2주 연장(6개월(24주) 수강 학생만)', false, false, false, 'none', 'canceled'),
+  ('No change credits left', '변경권 소진 👉 보강 불가', true, false, true, 'none', 'canceled'),
+  ('Tutor Late - Student Present', '강사 지각(정상 진행)', true, false, true, 'late', 'held'),
+  ('Covered by another tutor', '대타 강사 진행', true, false, true, 'none', 'held');
+
+create table lessons (
+  id uuid primary key default gen_random_uuid(),
+  enrollment_id uuid not null references enrollments(id),
+  student_id uuid not null references students(id),    -- 겹침 방지 제약용 (등록의 학생과 같아야 함 — 트리거로 확인)
+  tutor_id uuid not null references tutors(id),        -- 실제 수업하는 강사
+  original_tutor_id uuid references tutors(id),        -- 대체 강사 배정 시 원래 담당
+  kind text not null check (kind in ('regular', 'makeup', 'compensation', 'carryover')),
+  seq integer,                                         -- 정규 회차 번호
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  -- 한국 날짜 (KST = UTC+9 고정, 서머타임 없음)
+  kst_date date generated always as (((starts_at at time zone 'UTC') + interval '9 hours')::date) stored,
+  state text not null default 'scheduled' check (state in ('scheduled', 'canceled', 'done')),
+  class_status class_status,                            -- 결과 (원본은 여기 하나, POL-ST-02)
+  makeup_of uuid references lessons(id),                -- 보강이면 원래 수업
+  compensation_id uuid,                                 -- 보상 수업이면 보상권
+  canceled_at timestamptz,
+  cancel_reason text,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (ends_at > starts_at),
+  check ((kind = 'makeup') = (makeup_of is not null)),
+  check ((kind = 'compensation') = (compensation_id is not null)),
+  check ((kind = 'regular') = (seq is not null)),
+  check (state <> 'canceled' or canceled_at is not null),
+  check ((state = 'scheduled') = (class_status is null)),   -- 예정이면 결과 없음, 끝났거나 취소면 결과 필수
+  constraint lessons_no_tutor_overlap exclude using gist
+    (tutor_id with =, tstzrange(starts_at, ends_at) with &&) where (state <> 'canceled'),
+  constraint lessons_no_student_overlap exclude using gist
+    (student_id with =, tstzrange(starts_at, ends_at) with &&) where (state <> 'canceled')
+);
+create trigger lessons_touch before update on lessons for each row execute function touch_updated_at();
+create trigger lessons_no_delete before delete on lessons for each row execute function forbid_delete();
+create index lessons_tutor_time on lessons (tutor_id, starts_at);
+create index lessons_student_time on lessons (student_id, starts_at);
+create unique index lessons_regular_seq on lessons (enrollment_id, seq) where kind = 'regular';
+create unique index lessons_one_live_makeup on lessons (makeup_of) where state <> 'canceled';
+
+-- 상태와 결과의 짝 확인 + 학생 일치 확인
+create or replace function check_lesson_consistency() returns trigger
+language plpgsql as $$
+declare
+  o text;
+begin
+  if new.student_id <> (select student_id from enrollments where id = new.enrollment_id) then
+    raise exception '수업의 학생과 수강등록의 학생이 다릅니다.';
+  end if;
+  if new.class_status is not null then
+    select outcome into o from class_status_rules where status = new.class_status;
+    if new.state = 'canceled' and o <> 'canceled' then
+      raise exception '취소된 수업에 진행 결과(%)를 넣을 수 없습니다.', new.class_status;
+    end if;
+    if new.state = 'done' and o = 'canceled' then
+      raise exception '진행된 수업에 취소 결과(%)를 넣을 수 없습니다.', new.class_status;
+    end if;
+  end if;
+  return new;
+end $$;
+create trigger lessons_consistency before insert or update on lessons
+  for each row execute function check_lesson_consistency();
+
+-- 강사 수업 기록 (Covered Topics · Remarks · 기록 시각). 결과 상태는 lessons.class_status
+create table class_records (
+  lesson_id uuid primary key references lessons(id),
+  covered_topics text,
+  remarks text,
+  first_submitted_at timestamptz not null default now(),  -- 인센티브 '10분 안 기록' 기준 (POL-TU-06)
+  submitted_by uuid,
+  updated_at timestamptz not null default now()
+);
+create trigger class_records_touch before update on class_records for each row execute function touch_updated_at();
+create trigger class_records_no_delete before delete on class_records for each row execute function forbid_delete();
+create or replace function keep_first_submitted_at() returns trigger
+language plpgsql as $$
+begin
+  new.first_submitted_at := old.first_submitted_at;
+  return new;
+end $$;
+create trigger class_records_keep_first before update on class_records
+  for each row execute function keep_first_submitted_at();
+
+-- ---------------------------------------------------------------------
+-- 변경 요청 · 변경권 · 보상 수업 · 노쇼 신고
+-- ---------------------------------------------------------------------
+
+-- 진행 상태(신청·승인·거절…)는 여기, 수업 결과(14개)는 lessons.class_status (POL-ST-02)
+create table change_requests (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid references lessons(id),
+  student_id uuid references students(id),
+  tutor_id uuid references tutors(id),
+  type text not null check (type in (
+    'student_cancel', 'tutor_cancel', 'admin_cancel',
+    'fixed_schedule_change', 'tutor_change', 'student_long_term_leave', 'tutor_leave')),
+  status text not null check (status in ('applied', 'pending', 'approved', 'rejected', 'withdrawn', 'reverted')),
+  via text not null check (via in ('student_app', 'tutor_app', 'admin_app', 'admin_on_behalf', 'system')),
+  policy_refs text[] not null default '{}',  -- 판정에 쓴 정책 ID (예: {POL-CHG-01,POL-CHG-03})
+  decision jsonb,                            -- 규칙 검사 결과 그대로 (나중에 왜 그렇게 됐는지 확인용)
+  reason text,
+  batch_id uuid,                             -- 일괄 처리 묶음 (한 번에 되돌리기)
+  idempotency_key text unique,               -- 같은 요청 두 번 처리 방지
+  requested_by uuid,
+  decided_by uuid,
+  created_at timestamptz not null default now(),
+  decided_at timestamptz
+);
+create index change_requests_batch on change_requests (batch_id) where batch_id is not null;
+alter table enrollment_extensions add constraint enrollment_extensions_request_fk
+  foreign key (change_request_id) references change_requests(id);
+
+-- 계약서·안내서 전달·동의 근거 기록 (과거 기록 이관 + 앞으로 LMS 온라인 동의)
+-- 날짜·시점을 모르면 비워 두고 timing 'unknown' — 같은 시점에 받았다고 가정하지 않음
+create table terms_deliveries (
+  id uuid primary key default gen_random_uuid(),
+  terms_code text not null references terms_versions(code),
+  student_id uuid references students(id),
+  tutor_id uuid references tutors(id),
+  enrollment_id uuid references enrollments(id),   -- 어느 등록(신규·재등록) 때 받았는지
+  delivered_on date,
+  timing text not null check (timing in ('before_payment', 'after_payment', 'at_matching', 'at_signing', 'unknown')),
+  channel text not null check (channel in ('kakao', 'student_sheet', 'email', 'esign', 'online_page', 'in_person', 'unknown')),  -- student_sheet: 학생 수강현황 시트에 이미지로 게시 (POL-OP-09)
+  consent_kind text check (consent_kind in ('payment_after_delivery', 'signature', 'esign_completed', 'online_accept')),
+  consent_on timestamptz,
+  evidence_note text,                      -- 근거 위치 (예: '카톡 채널 대화 2026-02-03') — 이름·연락처는 적지 않음
+  recorded_by uuid,
+  created_at timestamptz not null default now(),
+  check ((student_id is null) <> (tutor_id is null)),
+  check ((consent_kind is null) = (consent_on is null)),
+  check (enrollment_id is null or student_id is not null)
+);
+create trigger terms_deliveries_no_update before update on terms_deliveries for each row execute function forbid_update();
+create trigger terms_deliveries_no_delete before delete on terms_deliveries for each row execute function forbid_delete();
+
+-- 변경권 장부: 지급은 enrollment_periods.credits_granted, 사용·복구는 여기에 한 줄씩
+create table credit_ledger (
+  id uuid primary key default gen_random_uuid(),
+  period_id uuid not null references enrollment_periods(id),
+  lesson_id uuid references lessons(id),
+  reason text not null check (reason in ('student_change', 'admin_restore', 'admin_adjust')),
+  delta smallint not null check (delta in (-1, 1)),
+  note text,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  unique (lesson_id, reason)               -- 같은 수업 두 번 차감 방지
+);
+create trigger credit_ledger_no_delete before delete on credit_ledger for each row execute function forbid_delete();
+create trigger credit_ledger_no_update before update on credit_ledger for each row execute function forbid_update();
+
+create or replace function credit_balance(p_period uuid) returns integer
+language sql stable as $$
+  select p.credits_granted + coalesce((select sum(delta) from credit_ledger where period_id = p.id), 0)::int
+  from enrollment_periods p where p.id = p_period
+$$;
+
+-- 0개 미만·지급량 초과 방지. 기간 행을 잠가서 동시에 두 번 눌러도 순서대로 처리
+create or replace function credit_ledger_guard() returns trigger
+language plpgsql as $$
+declare
+  granted integer;
+  bal integer;
+begin
+  select credits_granted into granted from enrollment_periods where id = new.period_id for update;
+  bal := credit_balance(new.period_id) + new.delta;
+  if bal < 0 then raise exception '변경권이 남아 있지 않습니다.'; end if;
+  if bal > granted then raise exception '지급된 변경권보다 많이 복구할 수 없습니다.'; end if;
+  return new;
+end $$;
+create trigger credit_ledger_guard before insert on credit_ledger for each row execute function credit_ledger_guard();
+
+-- 보상 수업권 (강사 노쇼 등). 사용 기한은 미확정(D-8) → expires_on 비워 둠
+create table compensations (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  enrollment_id uuid not null references enrollments(id),
+  source_lesson_id uuid not null unique references lessons(id),
+  reason text not null check (reason in ('tutor_no_show', 'admin_exception')),
+  status text not null default 'available' check (status in ('available', 'used', 'expired', 'voided')),
+  expires_on date,
+  used_lesson_id uuid unique references lessons(id),
+  confirmed_by uuid not null,              -- 운영자 확정 필수
+  created_at timestamptz not null default now(),
+  check ((status = 'used') = (used_lesson_id is not null))
+);
+alter table lessons add constraint lessons_compensation_fk foreign key (compensation_id) references compensations(id);
+
+-- 학생 '[강사가 안 들어왔어요]' 신고. 노쇼 확정은 운영자
+create table no_show_reports (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null unique references lessons(id),
+  reported_at timestamptz not null default now(),
+  status text not null default 'open' check (status in ('open', 'tutor_arrived', 'confirmed_no_show', 'dismissed')),
+  resolved_by uuid,
+  resolved_at timestamptz,
+  note text
+);
+
+-- 강사 막은 날·장기 휴무 (휴무 일괄 처리의 기준, 3단계)
+create table tutor_time_off (
+  id uuid primary key default gen_random_uuid(),
+  tutor_id uuid not null references tutors(id),
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  kind text not null check (kind in ('block', 'leave')),
+  reason text,
+  notice_given_on date,                    -- 강사계약서 10조: 14일 전 서면 통보
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+
+-- ---------------------------------------------------------------------
+-- 공휴일 · 기능 스위치
+-- ---------------------------------------------------------------------
+
+-- 변경권 차감 없이 처리할 한국 공휴일 (POL-CHG-07: 어떤 날을 넣을지는 운영자 결정, 비어 있으면 면제 없음)
+create table holidays (
+  day date primary key,
+  name text not null,
+  created_by uuid,
+  created_at timestamptz not null default now()
+);
+
+-- 기능 켜기/끄기만 (운영정책 값은 여기 두지 않음 — POL-OP-07)
+create table feature_flags (
+  key text primary key check (key ~ '^[a-z_]+$'),
+  enabled boolean not null default false,
+  note text,
+  updated_by uuid,
+  updated_at timestamptz not null default now()
+);
+insert into feature_flags (key, enabled, note) values
+  ('student_view', false, '학생 화면 보기 (4-a)'),
+  ('student_self_change', false, '학생 셀프 변경 (4-b)'),
+  ('makeup_requests', false, '보강 신청 (4-c)'),
+  ('send_emails', false, '실제 메일 발송 (꺼져 있으면 support@ 로만)'),
+  ('calendar_write', false, 'Google 캘린더에 쓰기');
+
+-- ---------------------------------------------------------------------
+-- 보호 적용 (이력 + RLS + 운영자 읽기)
+-- ---------------------------------------------------------------------
+
+select lms_protect(t::regclass) from unnest(array[
+  'terms_versions', 'students', 'tutors', 'app_users', 'enrollments', 'enrollment_periods', 'enrollment_extensions',
+  'payments', 'refunds', 'regular_schedules', 'class_status_rules', 'lessons', 'class_records',
+  'change_requests', 'credit_ledger', 'compensations', 'no_show_reports', 'tutor_time_off', 'holidays', 'feature_flags',
+  'terms_deliveries'
+]) as t;
+alter table audit_log enable row level security;
+revoke all on audit_log from anon, authenticated;
+grant select on audit_log to authenticated;
+create policy admin_read on audit_log for select to authenticated using (is_admin());
+
+-- 학생: 본인 정보·수강·수업·변경 요청·변경권·보상권만
+create policy student_self on students for select to authenticated using (id = my_student_id());
+create policy student_own on enrollments for select to authenticated using (student_id = my_student_id());
+create policy student_own on enrollment_periods for select to authenticated
+  using (exists (select 1 from enrollments e where e.id = enrollment_id and e.student_id = my_student_id()));
+create policy student_own on lessons for select to authenticated using (student_id = my_student_id());
+create policy student_own on change_requests for select to authenticated using (student_id = my_student_id());
+create policy student_own on compensations for select to authenticated using (student_id = my_student_id());
+create policy student_own on credit_ledger for select to authenticated
+  using (exists (select 1 from enrollment_periods p join enrollments e on e.id = p.enrollment_id
+                 where p.id = period_id and e.student_id = my_student_id()));
+create policy student_own on terms_deliveries for select to authenticated using (student_id = my_student_id());
+create policy everyone_read on terms_versions for select to authenticated using (true);
+create policy everyone_read on class_status_rules for select to authenticated using (true);
+create policy everyone_read on holidays for select to authenticated using (true);
+
+-- 강사: 본인 수업·본인 정보·본인 휴무만. 학생 정보는 아래 함수로 필요한 칸만
+create policy tutor_self on tutors for select to authenticated using (id = my_tutor_id());
+create policy tutor_own on lessons for select to authenticated using (tutor_id = my_tutor_id());
+create policy tutor_own on class_records for select to authenticated
+  using (exists (select 1 from lessons l where l.id = lesson_id and l.tutor_id = my_tutor_id()));
+create policy tutor_own on tutor_time_off for select to authenticated using (tutor_id = my_tutor_id());
+create policy tutor_self on terms_deliveries for select to authenticated using (tutor_id = my_tutor_id());
+
+-- 강사가 볼 수 있는 학생 정보: 최근·예정 수업이 있는 담당 학생, 수업에 필요한 칸만 (휴대폰·한글 실명·운영 메모 제외, POL-OP-06)
+create or replace function tutor_my_students()
+returns table (student_id uuid, display_name text, country text, timezone text, gender_age text,
+               self_intro_en text, level text, class_type text, correction_pref text, textbook text,
+               email text, class_note_url text)
+language sql stable security definer set search_path = public as $$
+  select s.id, coalesce(s.display_name, s.name_en), s.country, s.timezone, s.gender_age, s.self_intro_en,
+         s.level, s.class_type, s.correction_pref, s.textbook, s.email, s.class_note_url
+  from students s
+  where my_tutor_id() is not null
+    and exists (select 1 from lessons l
+                where l.student_id = s.id and l.tutor_id = my_tutor_id()
+                  and l.starts_at > now() - interval '60 days')
+$$;
+revoke all on function tutor_my_students() from public, anon;
+grant execute on function tutor_my_students() to authenticated;
+
+-- 학생이 볼 수 있는 담당 강사 정보: 이름·국가·강의실 링크만
+create or replace function student_my_tutors()
+returns table (tutor_id uuid, name text, name_ko_sound text, country text, meet_url text)
+language sql stable security definer set search_path = public as $$
+  select t.id, t.name, t.name_ko_sound, t.country, t.meet_url
+  from tutors t
+  where my_student_id() is not null
+    and exists (select 1 from lessons l where l.tutor_id = t.id and l.student_id = my_student_id()
+                  and l.starts_at > now() - interval '60 days')
+$$;
+revoke all on function student_my_tutors() from public, anon;
+grant execute on function student_my_tutors() to authenticated;
+
+-- >>> 20261016000100_lms_selfservice.sql
+-- =====================================================================
+-- LMS 4단계: 강사 가능 시간 · 학생 보강 신청 (초안 v0.2)
+-- 4단계 시작 전에는 적용하지 않는다. 3단계까지는 운영자가 보강을 lessons 에 직접 넣는다.
+-- =====================================================================
+
+-- 주간 수업 가능 시간 (강사 현지 시각 + 시간대 → 서머타임이 바뀌어도 강사 기준 유지)
+create table tutor_availability (
+  id uuid primary key default gen_random_uuid(),
+  tutor_id uuid not null references tutors(id),
+  weekday smallint not null check (weekday between 0 and 6),
+  start_local time not null,
+  end_local time not null,
+  timezone text not null check (is_valid_timezone(timezone)),
+  effective_from date not null default current_date,
+  effective_to date,
+  check (end_local > start_local)
+);
+
+-- 보강 신청: 진행 상태만 (결과는 확정 시 만들어지는 lessons 행)
+create table makeup_requests (
+  id uuid primary key default gen_random_uuid(),
+  source_lesson_id uuid not null references lessons(id),
+  student_id uuid not null references students(id),
+  tutor_id uuid not null references tutors(id),
+  status text not null default 'requested'
+    check (status in ('requested', 'countered', 'confirmed', 'declined', 'expired', 'withdrawn')),
+  confirmed_lesson_id uuid unique references lessons(id),
+  tutor_note text,
+  remind_at timestamptz,                   -- 강사 무응답 재알림 시각 (기준 시간은 미확정 D-11)
+  created_at timestamptz not null default now(),
+  decided_at timestamptz,
+  check ((status = 'confirmed') = (confirmed_lesson_id is not null))
+);
+create unique index makeup_requests_one_open on makeup_requests (source_lesson_id)
+  where status in ('requested', 'countered');
+
+create table makeup_candidates (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references makeup_requests(id),
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  proposed_by text not null check (proposed_by in ('student', 'tutor')),
+  check (ends_at > starts_at)
+);
+
+select lms_protect(t::regclass) from unnest(array['tutor_availability', 'makeup_requests', 'makeup_candidates']) as t;
+
+create policy tutor_own on tutor_availability for select to authenticated using (tutor_id = my_tutor_id());
+create policy student_own on makeup_requests for select to authenticated using (student_id = my_student_id());
+create policy tutor_own on makeup_requests for select to authenticated using (tutor_id = my_tutor_id());
+create policy own on makeup_candidates for select to authenticated
+  using (exists (select 1 from makeup_requests r where r.id = request_id
+                 and (r.student_id = my_student_id() or r.tutor_id = my_tutor_id())));
+
+-- >>> 20261016000200_lms_notify_calendar.sql
+-- =====================================================================
+-- LMS 5단계: 알림 · Google 캘린더 반영 (초안 v0.2)
+-- 실제 발송·캘린더 쓰기는 feature_flags(send_emails, calendar_write)를 운영자가 켜야 동작
+-- =====================================================================
+
+create table notifications (
+  id uuid primary key default gen_random_uuid(),
+  recipient_kind text not null check (recipient_kind in ('student', 'tutor', 'admin')),
+  recipient_id uuid,
+  email text not null,
+  locale text not null check (locale in ('ko', 'en')),
+  template text not null,
+  payload jsonb not null default '{}',
+  dedupe_key text not null unique,         -- 같은 알림 두 번 안 보냄
+  send_after timestamptz not null default now(),
+  status text not null default 'queued' check (status in ('queued', 'sent', 'failed', 'canceled')),
+  attempts integer not null default 0,
+  last_error text,
+  sent_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index notifications_due on notifications (send_after) where status = 'queued';
+
+-- DB 수업 → 강사 Google 캘린더 반영 상태 (DB가 원본, 캘린더는 복사본)
+create table calendar_sync (
+  lesson_id uuid primary key references lessons(id),
+  calendar_id text not null,
+  google_event_id text,                    -- 수업 id로 만든 고정 id → 재시도해도 중복 일정 안 생김
+  desired_version integer not null default 1,
+  synced_version integer not null default 0,
+  attempts integer not null default 0,
+  last_error text,
+  last_synced_at timestamptz
+);
+create index calendar_sync_pending on calendar_sync (lesson_id) where synced_version < desired_version;
+
+-- 수업이 바뀌면 같은 트랜잭션에서 반영 대기열에 올림 (수업 변경과 함께 저장되거나 함께 취소)
+create or replace function enqueue_calendar_sync() returns trigger
+language plpgsql as $$
+declare
+  cal text;
+begin
+  select google_calendar_id into cal from tutors where id = new.tutor_id;
+  if cal is null then return new; end if;
+  insert into calendar_sync (lesson_id, calendar_id) values (new.id, cal)
+  on conflict (lesson_id) do update
+    set desired_version = calendar_sync.desired_version + 1, calendar_id = excluded.calendar_id;
+  return new;
+end $$;
+create trigger lessons_calendar_sync after insert or update of starts_at, ends_at, state, tutor_id on lessons
+  for each row execute function enqueue_calendar_sync();
+
+select lms_protect(t::regclass) from unnest(array['notifications', 'calendar_sync']) as t;
+
+-- >>> 20261016000300_lms_payroll.sql
+-- =====================================================================
+-- LMS 6단계: 강사 계약 조건 · 정산 (초안 v0.2)
+-- 급여 기준이 확정(D-13~15, D-17)되기 전에는 적용하지 않는다.
+-- =====================================================================
+
+-- 강사별 계약 조건 (CF-08: 판본마다 기본 시급이 다름 — TC1 $14, TC2·TC3 $11)
+create table tutor_contracts (
+  id uuid primary key default gen_random_uuid(),
+  tutor_id uuid not null references tutors(id),
+  terms_version text not null references terms_versions(code)
+    check (terms_kind_is(terms_version, 'contract', 'tutor')),  -- 서명한 계약서가 있는 강사만 행을 만듦
+  signed_on date not null,
+  base_rate_usd numeric(6, 2) not null check (base_rate_usd > 0),
+  max_rate_usd numeric(6, 2) not null,
+  valid_to date,
+  note text,
+  check (max_rate_usd >= base_rate_usd),
+  exclude using gist (tutor_id with =, daterange(signed_on, valid_to, '[]') with &&)
+);
+
+-- 승인된 인센티브 규칙 (승인 전에는 행이 없어 계산 자체가 안 됨)
+create table pay_policies (
+  id uuid primary key default gen_random_uuid(),
+  effective_from date not null unique,
+  rules jsonb not null,                    -- 인센티브 조건·가산액 (register.md POL-WG-02 의 승인된 값)
+  policy_refs text[] not null,
+  approved_by uuid not null,
+  approved_at timestamptz not null default now()
+);
+
+create table payroll_runs (
+  id uuid primary key default gen_random_uuid(),
+  tutor_id uuid not null references tutors(id),
+  month date not null check (extract(day from month) = 1),
+  contract_id uuid references tutor_contracts(id),
+  policy_id uuid references pay_policies(id),
+  status text not null default 'draft' check (status in ('draft', 'approved', 'paid')),
+  computed jsonb,                          -- 자동 계산 결과 (참고용)
+  final_amount_usd numeric(8, 2),          -- 운영자가 확인·승인한 최종 금액
+  approved_by uuid,
+  approved_at timestamptz,
+  paid_at timestamptz,
+  unique (tutor_id, month),
+  check (status = 'draft' or (final_amount_usd is not null and approved_by is not null))
+);
+
+create table payroll_items (
+  id uuid primary key default gen_random_uuid(),
+  run_id uuid not null references payroll_runs(id),
+  lesson_id uuid not null unique references lessons(id),   -- 같은 수업 두 번 정산 방지
+  minutes integer not null check (minutes > 0),
+  payable boolean not null,                -- 상태매핑표 + 수업 종류(보상 수업은 미지급, POL-WG-08)
+  note text
+);
+
+select lms_protect(t::regclass) from unnest(array['tutor_contracts', 'pay_policies', 'payroll_runs', 'payroll_items']) as t;
+
+create policy tutor_own on payroll_runs for select to authenticated using (tutor_id = my_tutor_id() and status <> 'draft');
+create policy tutor_own on tutor_contracts for select to authenticated using (tutor_id = my_tutor_id());
+
+-- >>> 20261016000400_lms_terms_consent.sql
+-- =====================================================================
+-- LMS 수업 안내 확인·동의 (초안 v0.1) — POL-OP-12 변경 제안, docs/lms/10-terms-consent-design.md
+-- 대표 승인(D-22~D-25) 전에는 어떤 Supabase에도 적용하지 않는다.
+--
+-- 원칙
+-- - 문서 원본은 덮어쓰지 않는다. 고치면 새 판(terms_versions) 또는 새 revision.
+-- - 동의는 학생 본인만, 서버 함수로만 기록한다. 운영자도 대신 동의할 수 없다.
+-- - 동의 기록은 고치거나 지울 수 없다. 철회·재확인도 새 줄로 쌓는다.
+-- - 동의하지 않았다고 수업·등록을 막지 않는다 (lessons·enrollments 에 연결된 제약 없음).
+-- - 예전 계약·안내서 근거(terms_deliveries)는 그대로 두고, 이 표들은 LMS 온라인 동의만 기록한다.
+-- =====================================================================
+
+-- 학생에게 실제로 보여 준 문서 원본
+create table terms_documents (
+  id uuid primary key default gen_random_uuid(),
+  terms_code text not null references terms_versions(code),
+  revision smallint not null default 1 check (revision > 0),  -- 오탈자 수정도 새 revision (이전 것은 그대로 남음)
+  format text not null check (format in ('text', 'image_set')),
+  body_md text,                            -- 학생 화면에 보여 준 텍스트 원문
+  assets jsonb not null default '[]',      -- 이미지 원본 [{page, path, sha256}] — 비공개 저장소 경로
+  required_items jsonb not null default '[]',  -- 필수 체크 항목 [{key, text}]
+  optional_items jsonb not null default '[]',  -- 선택 항목 (예: 마케팅 수신) — 수강규정과 섞지 않음
+  content_sha256 text not null default '', -- 위 4개로 DB가 계산 (앱이 넣은 값은 무시)
+  status text not null default 'draft' check (status in ('draft', 'published', 'retired')),
+  published_at timestamptz,
+  published_by uuid,
+  created_at timestamptz not null default now(),
+  unique (terms_code, revision),
+  check (format <> 'text' or body_md is not null),
+  check (format <> 'image_set' or jsonb_array_length(assets) > 0),
+  check ((status = 'draft') = (published_at is null))
+);
+
+create or replace function terms_document_guard() returns trigger
+language plpgsql as $$
+begin
+  if tg_op = 'UPDATE' and old.status <> 'draft' then
+    -- 게시된 문서는 내용을 바꿀 수 없고, 게시 → 내림(retired)만 가능
+    if (new.body_md, new.assets, new.required_items, new.optional_items, new.format, new.terms_code, new.revision)
+       is distinct from (old.body_md, old.assets, old.required_items, old.optional_items, old.format, old.terms_code, old.revision)
+       or not (new.status = 'retired' or new.status = old.status) then
+      raise exception '게시된 안내 문서는 고칠 수 없습니다. 새 판을 만드세요.';
+    end if;
+  end if;
+  new.content_sha256 := encode(sha256(convert_to(
+    coalesce(new.body_md, '') || new.assets::text || new.required_items::text || new.optional_items::text, 'UTF8')), 'hex');
+  return new;
+end $$;
+create trigger terms_document_guard before insert or update on terms_documents for each row execute function terms_document_guard();
+create trigger terms_documents_no_delete before delete on terms_documents for each row execute function forbid_delete();
+
+-- 운영자가 학생에게 보낸 확인 요청 (등록 1건 × 문서 1건)
+create table consent_requests (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  enrollment_id uuid not null references enrollments(id),
+  document_id uuid not null references terms_documents(id),
+  reason text not null check (reason in ('new', 'renewal', 'reconfirm', 'policy_change')),
+  required boolean not null default true,  -- 마케팅 등 선택 문서는 false
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  canceled_at timestamptz,                 -- 잘못 보낸 요청 취소 (줄은 남김)
+  cancel_note text,
+  unique (enrollment_id, document_id),
+  check ((canceled_at is null) = (cancel_note is null))
+);
+
+create or replace function consent_request_guard() returns trigger
+language plpgsql as $$
+begin
+  if tg_op = 'INSERT' then
+    if not exists (select 1 from enrollments where id = new.enrollment_id and student_id = new.student_id) then
+      raise exception '학생과 수강등록의 학생이 다릅니다.';
+    end if;
+    if not exists (select 1 from terms_documents where id = new.document_id and status = 'published') then
+      raise exception '게시된 문서만 요청할 수 있습니다.';
+    end if;
+  elsif (new.student_id, new.enrollment_id, new.document_id, new.reason, new.required, new.created_at)
+        is distinct from (old.student_id, old.enrollment_id, old.document_id, old.reason, old.required, old.created_at)
+        or old.canceled_at is not null then
+    raise exception '확인 요청은 취소만 할 수 있습니다.';
+  end if;
+  return new;
+end $$;
+create trigger consent_request_guard before insert or update on consent_requests for each row execute function consent_request_guard();
+create trigger consent_requests_no_delete before delete on consent_requests for each row execute function forbid_delete();
+
+-- 열람·동의·철회 기록 (쌓기만 함)
+create table consent_events (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references consent_requests(id),
+  action text not null check (action in ('viewed', 'accepted', 'withdrawn')),
+  checked_items text[] not null default '{}',  -- 학생이 직접 체크한 항목 key
+  document_sha256 text not null,           -- 그 순간 보여 준 문서 해시
+  acted_at timestamptz not null default now(),  -- 서버 시각 (학생 기기 시각을 쓰지 않음)
+  actor_auth_id uuid not null,
+  actor_role text not null check (actor_role in ('student', 'admin')),
+  note text,                               -- 철회 사유 등 (이름·연락처 적지 않음)
+  check (action <> 'accepted' or actor_role = 'student'),   -- 동의는 학생 본인만
+  check (action <> 'withdrawn' or actor_role = 'student' or note is not null)
+);
+create trigger consent_events_no_update before update on consent_events for each row execute function forbid_update();
+create trigger consent_events_no_delete before delete on consent_events for each row execute function forbid_delete();
+
+select lms_protect(t::regclass) from unnest(array['terms_documents', 'consent_requests', 'consent_events']) as t;
+
+create policy everyone_read on terms_documents for select to authenticated using (status <> 'draft');
+create policy student_own on consent_requests for select to authenticated using (student_id = my_student_id());
+create policy student_own on consent_events for select to authenticated
+  using (request_id in (select id from consent_requests where student_id = my_student_id()));
+
+-- ---------------------------------------------------------------------
+-- 학생 화면에서 부르는 함수 (로그인한 본인 확인은 DB가 직접 함)
+-- ---------------------------------------------------------------------
+
+create or replace function consent_record(p_request uuid, p_action text, p_items text[] default '{}', p_note text default null)
+returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  r consent_requests;
+  d terms_documents;
+  me uuid := my_student_id();
+  role text;
+  required_keys text[];
+  allowed_keys text[];
+  last_action text;
+  new_id uuid;
+begin
+  select * into r from consent_requests where id = p_request;
+  if r.id is null or r.canceled_at is not null then raise exception '확인 요청을 찾을 수 없습니다.'; end if;
+
+  if me is not null and r.student_id = me then
+    role := 'student';
+  elsif is_admin() and p_action = 'withdrawn' then
+    role := 'admin';                       -- 학생이 카톡 등으로 철회를 요청했을 때 운영자가 대신 기록 (사유 필수)
+  else
+    raise exception '본인의 확인 요청이 아닙니다.';   -- 다른 학생·강사·운영자의 대신 동의 차단
+  end if;
+
+  select * into d from terms_documents where id = r.document_id;
+  if d.status <> 'published' and p_action = 'accepted' then raise exception '내려간 문서에는 새로 동의할 수 없습니다.'; end if;
+
+  select action into last_action from consent_events
+   where request_id = r.id and action <> 'viewed' order by acted_at desc, id desc limit 1;
+
+  if p_action = 'accepted' then
+    select coalesce(array_agg(x->>'key'), '{}') into required_keys from jsonb_array_elements(d.required_items) x;
+    select coalesce(array_agg(x->>'key'), '{}') into allowed_keys
+      from jsonb_array_elements(d.required_items || d.optional_items) x;
+    if not (required_keys <@ p_items) then raise exception '필수 항목을 모두 체크해야 합니다.'; end if;
+    if not (p_items <@ allowed_keys) then raise exception '문서에 없는 항목입니다.'; end if;
+    if last_action = 'accepted' then
+      return (select id from consent_events where request_id = r.id and action = 'accepted' order by acted_at desc, id desc limit 1);
+    end if;
+  elsif p_action = 'withdrawn' then
+    if last_action is distinct from 'accepted' then raise exception '동의한 상태가 아닙니다.'; end if;
+    p_items := '{}';
+  elsif p_action = 'viewed' then
+    p_items := '{}';
+  else
+    raise exception '알 수 없는 동작입니다.';
+  end if;
+
+  insert into consent_events (request_id, action, checked_items, document_sha256, actor_auth_id, actor_role, note)
+  values (r.id, p_action, p_items, d.content_sha256, auth.uid(), role, p_note)
+  returning id into new_id;
+  return new_id;
+end $$;
+revoke all on function consent_record(uuid, text, text[], text) from public, anon;
+grant execute on function consent_record(uuid, text, text[], text) to authenticated;
+
+-- 운영자 현황: 요청마다 마지막 상태 (RLS 를 그대로 따름 — 학생은 본인 것만)
+create view consent_status with (security_invoker = true) as
+select r.id as request_id, r.student_id, r.enrollment_id, r.document_id, d.terms_code, d.revision, r.reason, r.required,
+       r.created_at as requested_at, r.canceled_at,
+       (select e.action from consent_events e where e.request_id = r.id and e.action <> 'viewed'
+         order by e.acted_at desc, e.id desc limit 1) as last_action,
+       (select max(e.acted_at) from consent_events e where e.request_id = r.id and e.action = 'accepted') as accepted_at,
+       (select min(e.acted_at) from consent_events e where e.request_id = r.id and e.action = 'viewed') as first_viewed_at
+from consent_requests r join terms_documents d on d.id = r.document_id;
+grant select on consent_status to authenticated;
+
+-- >>> 20261016000500_lms_policy_v1.sql
+-- =====================================================================
+-- LMS 정책 원본 v1.0 반영 (2026-10-16 대표확정, docs/lms/policy/official-source.md)
+-- 어떤 Supabase에도 적용하지 않은 초안. 실제 운영 DB 적용은 대표 승인 후.
+--
+-- 1. 등록별 자동 적용 규칙 (POL-OP-16 — 소급 금지)
+-- 2. 실제 결제 완료 시각 (POL-RN-01 — 이월은 운영자 확인 시각이 아니라 실제 결제 시각 기준)
+-- 3. 공휴일 종류 (POL-CHG-07 — 법정·대체·임시공휴일만)
+-- 4. 강사 노쇼 보상 수업 7일 기한 (POL-TU-03)
+-- 5. 보상 적립금 단일 원장 (POL-PAY-09)
+-- 6. 운영 업무: 신규 매칭 3영업일·재등록 강사 통보 확인 (POL-OP-13·14)
+-- 7. 학생 장기 연기 신청 (POL-LV-01)
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 등록별 자동 적용 규칙
+-- 'policy_v1' = 정책 원본 v1.0 조건을 안내·동의받은 등록(신규·갱신)만. 기존 등록을 일괄로 바꾸지 않는다.
+-- 'legacy' = 예전 계약서·예전 안내서·미확인 → 판본마다 다를 수 있는 규칙은 운영자가 확인
+-- ---------------------------------------------------------------------
+alter table enrollments add column policy_basis text not null default 'legacy'
+  check (policy_basis in ('policy_v1', 'legacy'));
+
+-- ---------------------------------------------------------------------
+-- 2. 실제 결제 완료 시각
+-- ---------------------------------------------------------------------
+alter table payments add column paid_at timestamptz not null;   -- 실제 입금·결제 완료 시각 (은행 거래내역·아임웹 주문 시각)
+alter table payments add column external_ref text unique;       -- 아임웹 주문번호·은행 거래 식별값 (같은 결제 두 번 기록 방지)
+alter table payments add constraint payments_paid_on_matches
+  check (((paid_at at time zone 'UTC') + interval '9 hours')::date = received_on);
+
+-- ---------------------------------------------------------------------
+-- 3. 공휴일 종류 (운영자 임의 추가일 없음)
+-- ---------------------------------------------------------------------
+alter table holidays add column kind text not null default 'legal'
+  check (kind in ('legal', 'substitute', 'temporary'));         -- 법정공휴일 · 대체공휴일 · 임시공휴일
+
+-- ---------------------------------------------------------------------
+-- 4. 강사 노쇼 보상 수업 기한: 지급일(KST)부터 7일째 날까지 수업 완료 (A14)
+-- 'policy_v1' 등록은 비어 있으면 자동으로 채움. 기한이 지나도 자동 소멸시키지 않음 (예외 미확정 POL-TU-10)
+-- ---------------------------------------------------------------------
+create or replace function compensation_set_deadline() returns trigger
+language plpgsql as $$
+begin
+  if new.expires_on is null and (select policy_basis from enrollments where id = new.enrollment_id) = 'policy_v1' then
+    new.expires_on := ((new.created_at at time zone 'UTC') + interval '9 hours')::date + 7;
+  end if;
+  return new;
+end $$;
+create trigger compensations_deadline before insert on compensations
+  for each row execute function compensation_set_deadline();
+
+-- ---------------------------------------------------------------------
+-- 5. 보상 적립금 단일 원장 (아임웹 회원 적립금 병행 안 함, 유효기간 없음)
+-- 사용 흐름: 예약(held, 잔액에서 빠짐) → 실제 결제 확인 후 확정(confirmed) / 미결제·취소면 복구(released)
+--           확정 후 결제가 취소·환불되면 운영자가 복구(restored)
+-- ---------------------------------------------------------------------
+create table reward_redemptions (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  enrollment_id uuid not null references enrollments(id),     -- 적립금을 쓸 등록(재등록)
+  amount integer not null check (amount > 0),
+  method text not null check (method in ('bank_transfer', 'card_link')),
+  coupon_code text,                                           -- 카드결제 연계 방식은 미확정 (POL-PAY-10)
+  status text not null default 'held' check (status in ('held', 'confirmed', 'released', 'restored')),
+  payment_id uuid unique references payments(id),             -- 확정 근거. 같은 결제에 두 번 적용 불가
+  note text,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  decided_by uuid,
+  decided_at timestamptz,
+  check ((status in ('confirmed', 'restored')) = (payment_id is not null)),
+  check (status not in ('released', 'restored') or note is not null)   -- 되돌린 이유
+);
+create unique index reward_redemptions_one_live on reward_redemptions (enrollment_id) where status in ('held', 'confirmed');
+create trigger reward_redemptions_no_delete before delete on reward_redemptions for each row execute function forbid_delete();
+
+create table reward_ledger (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  kind text not null check (kind in ('grant_tutor_late_cancel', 'grant_admin', 'hold', 'release', 'refund_restore', 'admin_adjust')),
+  amount integer not null check (amount <> 0),                -- +적립 / −사용(예약)
+  lesson_id uuid references lessons(id),                      -- 강사 늦은 취소 지급의 근거 수업
+  redemption_id uuid references reward_redemptions(id),
+  note text,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  check (kind <> 'grant_tutor_late_cancel' or (lesson_id is not null and amount > 0)),
+  check (kind not in ('hold', 'release', 'refund_restore') or redemption_id is not null),
+  check (kind <> 'hold' or amount < 0),
+  check (kind not in ('grant_admin', 'release', 'refund_restore') or amount > 0),
+  check (kind not in ('grant_admin', 'admin_adjust') or note is not null)
+);
+create unique index reward_ledger_one_grant_per_lesson on reward_ledger (lesson_id) where kind = 'grant_tutor_late_cancel';  -- 중복 지급 방지
+create unique index reward_ledger_once_per_redemption on reward_ledger (redemption_id, kind) where redemption_id is not null;
+create trigger reward_ledger_no_update before update on reward_ledger for each row execute function forbid_update();
+create trigger reward_ledger_no_delete before delete on reward_ledger for each row execute function forbid_delete();
+
+create or replace function reward_balance(p_student uuid) returns integer
+language sql stable as $$
+  select coalesce(sum(amount), 0)::int from reward_ledger where student_id = p_student
+$$;
+
+-- 원장 한 줄을 넣기 전 검사: 학생 행을 잠가 동시에 눌러도 순서대로, 잔액 0 미만 금지, 근거 확인
+create or replace function reward_ledger_guard() returns trigger
+language plpgsql as $$
+declare
+  l record;
+  r record;
+begin
+  perform 1 from students where id = new.student_id for update;
+  if new.kind = 'grant_tutor_late_cancel' then
+    select ls.student_id, ls.class_status into l from lessons ls where ls.id = new.lesson_id;
+    if l.student_id is distinct from new.student_id then raise exception '다른 학생의 수업으로 적립할 수 없습니다.'; end if;
+    if l.class_status is distinct from 'Tutor canceled late' then raise exception '강사 6시간 미만 취소 수업에만 자동 적립합니다.'; end if;
+    -- 학생에게 유리한 규칙이라 기존 학생(legacy 등록)에도 적용 (POL-OP-17, 2026-10-16 대표 결정)
+  end if;
+  if new.redemption_id is not null then
+    select * into r from reward_redemptions where id = new.redemption_id;
+    if r.student_id <> new.student_id then raise exception '다른 학생의 사용 요청입니다.'; end if;
+    if new.kind in ('hold', 'release', 'refund_restore') and abs(new.amount) <> r.amount then
+      raise exception '사용 요청 금액과 다릅니다.';
+    end if;
+  end if;
+  if reward_balance(new.student_id) + new.amount < 0 then raise exception '적립금 잔액이 부족합니다.'; end if;
+  return new;
+end $$;
+create trigger reward_ledger_guard before insert on reward_ledger for each row execute function reward_ledger_guard();
+
+-- 사용 요청 상태는 정해진 순서로만: held → confirmed / released, confirmed → restored
+create or replace function reward_redemption_check() returns trigger
+language plpgsql as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.status <> 'held' then raise exception '사용 요청은 예약(held)으로 시작합니다.'; end if;
+    if (select student_id from enrollments where id = new.enrollment_id) <> new.student_id then
+      raise exception '다른 학생의 등록에는 적립금을 쓸 수 없습니다.';
+    end if;
+    return new;
+  end if;
+  if (old.student_id, old.enrollment_id, old.amount, old.method, old.created_at)
+     is distinct from (new.student_id, new.enrollment_id, new.amount, new.method, new.created_at) then
+    raise exception '사용 요청의 학생·등록·금액은 바꿀 수 없습니다. 되돌린 뒤 새로 만드세요.';
+  end if;
+  if old.status in ('released', 'restored') then raise exception '끝난 사용 요청은 바꿀 수 없습니다.'; end if;
+  if old.status = new.status then return new; end if;
+  if not ((old.status = 'held' and new.status in ('confirmed', 'released')) or (old.status = 'confirmed' and new.status = 'restored')) then
+    raise exception '사용 요청 상태를 % → % 로 바꿀 수 없습니다.', old.status, new.status;
+  end if;
+  if new.status = 'confirmed'
+     and (select enrollment_id from payments where id = new.payment_id) is distinct from new.enrollment_id then
+    raise exception '이 등록의 결제 기록으로만 확정할 수 있습니다.';
+  end if;
+  if new.decided_at is null then new.decided_at := now(); end if;
+  return new;
+end $$;
+create trigger reward_redemptions_check before insert or update on reward_redemptions
+  for each row execute function reward_redemption_check();
+
+-- 원장 기록은 상태와 함께 자동 (예약 = −금액, 복구 = +금액, 확정은 원장 변화 없음)
+create or replace function reward_redemption_ledger() returns trigger
+language plpgsql as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into reward_ledger (student_id, kind, amount, redemption_id, created_by)
+    values (new.student_id, 'hold', -new.amount, new.id, new.created_by);
+  elsif new.status <> old.status and new.status in ('released', 'restored') then
+    insert into reward_ledger (student_id, kind, amount, redemption_id, note, created_by)
+    values (new.student_id, case new.status when 'released' then 'release' else 'refund_restore' end,
+            new.amount, new.id, new.note, new.decided_by);
+  end if;
+  return null;
+end $$;
+create trigger reward_redemptions_ledger after insert or update on reward_redemptions
+  for each row execute function reward_redemption_ledger();
+
+-- ---------------------------------------------------------------------
+-- 6. 운영 업무 (관리자 '처리할 일') — 결제 확인 즉시 자동 생성, 완료 조건을 채우기 전에는 닫을 수 없음
+-- - new_student_matching: 신규 학생 강사 매칭 + 학생 안내 (3영업일, POL-OP-13)
+-- - renewal_tutor_notice: 재등록 사실·기간·일정 강사 통보 + 강사 확인 + 일정 조치 (POL-OP-14)
+-- ---------------------------------------------------------------------
+
+-- 영업일 = 토·일·holidays 제외. 시작 날짜 다음 날부터 셈
+create or replace function add_business_days(p_from date, p_n integer) returns date
+language plpgsql stable as $$
+declare
+  d date := p_from;
+  left_days integer := p_n;
+begin
+  if p_n is null or p_n < 1 then raise exception '영업일 수가 올바르지 않습니다: %', p_n; end if;
+  while left_days > 0 loop
+    d := d + 1;
+    if extract(isodow from d) < 6 and not exists (select 1 from holidays where day = d) then
+      left_days := left_days - 1;
+    end if;
+  end loop;
+  return d;
+end $$;
+
+create table admin_tasks (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('new_student_matching', 'renewal_tutor_notice')),
+  enrollment_id uuid not null references enrollments(id),
+  payment_id uuid references payments(id),           -- 업무를 만든 결제 확인
+  tutor_id uuid references tutors(id),               -- 매칭한 강사 / 통보할 담당 강사
+  due_at timestamptz,                                -- 처리 기한 (매칭: 3영업일 23:59 KST, 재등록 통보: 기준 미정 → 비워 둠)
+  tutor_assigned_at timestamptz,                     -- 매칭: 강사 배정
+  student_notified_at timestamptz,                   -- 매칭: 학생에게 강사·일정 안내
+  tutor_notified_at timestamptz,                     -- 재등록: 강사에게 연장·기간·일정 통보
+  tutor_acknowledged_at timestamptz,                 -- 재등록: 강사가 [확인] (발송 성공만으로 끝내지 않음)
+  schedule_checked_at timestamptz,                   -- 재등록: 필요한 일정 조치 완료
+  tutor_change_planned boolean not null default false, -- 재등록 때 강사 변경 예정 → 별도 처리 표시
+  status text not null default 'open' check (status in ('open', 'done', 'canceled')),
+  done_at timestamptz,
+  done_by uuid,
+  cancel_reason text,
+  created_at timestamptz not null default now(),
+  unique (kind, enrollment_id),                      -- 같은 등록에 같은 업무는 하나 (중복·누락 방지)
+  check (status <> 'done' or done_at is not null),
+  check (status <> 'canceled' or cancel_reason is not null),
+  check (status <> 'done' or kind <> 'new_student_matching'
+         or (tutor_id is not null and tutor_assigned_at is not null and student_notified_at is not null)),
+  check (status <> 'done' or kind <> 'renewal_tutor_notice'
+         or (tutor_id is not null and tutor_notified_at is not null and tutor_acknowledged_at is not null and schedule_checked_at is not null))
+);
+create trigger admin_tasks_no_delete before delete on admin_tasks for each row execute function forbid_delete();
+
+-- 결제 확인 기록이 들어오면 업무 자동 생성 (첫 결제만, 나눠 낸 두 번째 결제는 무시)
+create or replace function create_task_on_payment() returns trigger
+language plpgsql as $$
+declare
+  e record;
+  t uuid;
+  kst_day date := ((new.confirmed_at at time zone 'UTC') + interval '9 hours')::date;
+begin
+  select id, student_id, previous_enrollment_id into e from enrollments where id = new.enrollment_id;
+  if e.previous_enrollment_id is null then
+    insert into admin_tasks (kind, enrollment_id, payment_id, due_at)
+    values ('new_student_matching', e.id, new.id,
+            (add_business_days(kst_day, 3) + interval '1 day') at time zone 'Asia/Seoul' - interval '1 microsecond')
+    on conflict (kind, enrollment_id) do nothing;
+  else
+    select tutor_id into t from regular_schedules
+      where student_id = e.student_id and (effective_to is null or effective_to >= kst_day)
+      order by effective_from desc limit 1;
+    insert into admin_tasks (kind, enrollment_id, payment_id, tutor_id)
+    values ('renewal_tutor_notice', e.id, new.id, t)
+    on conflict (kind, enrollment_id) do nothing;
+  end if;
+  return null;
+end $$;
+create trigger payments_create_task after insert on payments for each row execute function create_task_on_payment();
+
+-- 관리자 화면용: 열린 업무와 급한 정도 (overdue 기한 초과 · due_soon 24시간 안 · open)
+create view admin_task_board with (security_invoker = true) as
+select t.*,
+       case when t.due_at is not null and now() > t.due_at then 'overdue'
+            when t.due_at is not null and now() > t.due_at - interval '24 hours' then 'due_soon'
+            else 'open' end as urgency,
+       case t.kind
+         when 'new_student_matching' then
+           array_remove(array[case when t.tutor_assigned_at is null then 'assign_tutor' end,
+                              case when t.student_notified_at is null then 'notify_student' end], null)
+         else
+           array_remove(array[case when t.tutor_id is null then 'set_tutor' end,
+                              case when t.tutor_change_planned then 'tutor_change' end,
+                              case when t.tutor_notified_at is null then 'notify_tutor' end,
+                              case when t.tutor_acknowledged_at is null then 'tutor_ack' end,
+                              case when t.schedule_checked_at is null then 'check_schedule' end], null)
+       end as missing_steps
+from admin_tasks t
+where t.status = 'open';
+revoke all on admin_task_board from anon, authenticated;
+grant select on admin_task_board to authenticated;   -- security_invoker: 실제로 보이는 행은 admin_tasks 의 RLS 대로
+
+-- ---------------------------------------------------------------------
+-- 7. 학생 장기 연기 신청 (24주만, 총 14일, 7일 단위 최대 2회 — 'policy_v1' 등록)
+-- 기한(시작 4일 전)·사유 검사는 서버 규칙(leave.ts evaluateLongLeaveRequest)이 하고, DB는 한도를 마지막으로 지킴.
+-- 승인되면 서버가 enrollment_extensions(student_long_term_leave)를 함께 기록
+-- ---------------------------------------------------------------------
+create table long_leave_requests (
+  id uuid primary key default gen_random_uuid(),
+  enrollment_id uuid not null references enrollments(id),
+  change_request_id uuid unique references change_requests(id),
+  leave_start date not null,
+  days integer not null check (days in (7, 14)),
+  reason_kind text not null check (reason_kind in ('health', 'family_emergency', 'business_trip', 'other_special')),
+  evidence_note text,                       -- 증빙 확인 메모 (진단서 등 파일 자체는 비공개 저장소, 이름·병명은 적지 않음)
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected', 'withdrawn')),
+  extension_id uuid unique references enrollment_extensions(id),
+  decided_by uuid,
+  decided_at timestamptz,
+  created_at timestamptz not null default now(),
+  check ((status = 'approved') = (extension_id is not null)),
+  check (status <> 'approved' or evidence_note is not null)
+);
+create trigger long_leave_requests_no_delete before delete on long_leave_requests for each row execute function forbid_delete();
+
+create or replace function long_leave_guard() returns trigger
+language plpgsql as $$
+declare
+  e record;
+  used_days integer;
+  used_count integer;
+begin
+  select * into e from enrollments where id = new.enrollment_id for update;
+  if e.policy_basis <> 'policy_v1' then
+    raise exception '정책 원본 적용 등록이 아니라 장기 연기를 자동 접수하지 않습니다. 계약 조건을 확인해 운영자가 처리하세요.';
+  end if;
+  if e.weeks is distinct from 24 then raise exception '장기 연기는 24주 수강권만 가능합니다.'; end if;
+  if new.leave_start < e.start_date or new.leave_start > e.final_end_date then
+    raise exception '연기 시작일은 수강기간 안이어야 합니다.';
+  end if;
+  if new.status in ('pending', 'approved') then
+    select coalesce(sum(days), 0), count(*) into used_days, used_count from long_leave_requests
+      where enrollment_id = new.enrollment_id and status in ('pending', 'approved') and id <> new.id;
+    if used_count + 1 > 2 or used_days + new.days > 14 then
+      raise exception '장기 연기는 수강기간 동안 최대 14일(2회)까지입니다.';
+    end if;
+  end if;
+  return new;
+end $$;
+create trigger long_leave_requests_guard before insert or update on long_leave_requests
+  for each row execute function long_leave_guard();
+
+-- ---------------------------------------------------------------------
+-- 보호 적용 · 읽기 권한
+-- ---------------------------------------------------------------------
+select lms_protect(t::regclass) from unnest(array['reward_redemptions', 'reward_ledger', 'admin_tasks', 'long_leave_requests']) as t;
+
+create policy student_own on reward_ledger for select to authenticated using (student_id = my_student_id());
+create policy student_own on reward_redemptions for select to authenticated using (student_id = my_student_id());
+create policy student_own on long_leave_requests for select to authenticated
+  using (exists (select 1 from enrollments e where e.id = enrollment_id and e.student_id = my_student_id()));
+-- 강사는 본인에게 온 재등록 통보만 (매칭 업무·학생 결제 정보는 보이지 않음)
+create policy tutor_own on admin_tasks for select to authenticated
+  using (kind = 'renewal_tutor_notice' and tutor_id = my_tutor_id());
+
+-- >>> 20261016000600_lms_supabase_hardening.sql
+-- =====================================================================
+-- Supabase 실제 프로젝트용 권한 정리 (시험용 프로젝트 적용 전 추가)
+-- Supabase는 public 스키마의 새 표·함수·시퀀스에 anon(로그인 안 한 사용자)·authenticated 권한을
+-- 기본으로 줌. 표는 lms_protect 가 이미 막았고, 여기서는 함수·시퀀스를 막는다.
+-- - 로그인 안 한 사용자(anon): LMS 함수·시퀀스 사용 불가
+-- - 로그인 사용자(authenticated): 권한 정책(RLS)이 쓰는 함수만 실행 가능, 학생 번호 시퀀스는 사용 불가
+-- - 쓰기는 서버(service_role)만
+-- =====================================================================
+revoke all on sequence student_code_seq from public, anon, authenticated;
+
+revoke execute on all functions in schema public from public, anon;
+grant execute on all functions in schema public to authenticated;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    execute 'grant execute on all functions in schema public to service_role';
+    execute 'grant usage, select on sequence student_code_seq to service_role';
+  end if;
+end $$;
+
+-- 앞으로 만드는 함수도 anon 에게 자동으로 열리지 않게
+alter default privileges in schema public revoke execute on functions from public, anon;
+
+-- >>> 20261016000700_lms_authz_hardening.sql
+-- =====================================================================
+-- 권한 정리 2차 (2026-10-17 로그인 사용자 권한 점검 authz-probe 결과)
+-- Supabase 는 public 에 새로 만든 표·보기·시퀀스에 anon·authenticated 모든 권한을 자동으로 준다.
+-- 표는 lms_protect 가 막았지만 아래 두 가지가 남아 있었다 (데이터가 새지는 않음, 미리 닫음):
+--   - consent_status 보기: 추가·수정·삭제 권한이 남아 있음 (보기가 RLS를 따르고 원본 표가 막혀 실제 쓰기는 안 됨)
+--   - audit_log_id_seq: 앱 사용자가 이력 번호를 건드릴 수 있음 (REST API로는 못 부르지만 닫음)
+-- 그리고 표 보호용 내부 함수 lms_protect 를 로그인 사용자 실행 목록에서 뺀다 (불러도 소유자가 아니라 실패하지만 닫음).
+-- 다시 실행해도 같은 결과 (권한 회수·부여만 함, 데이터 변경 없음)
+-- =====================================================================
+
+revoke all on consent_status from anon, authenticated;
+grant select on consent_status to authenticated;   -- security_invoker: 실제로 보이는 행은 원본 표의 RLS 대로
+
+revoke all on all sequences in schema public from anon, authenticated;
+
+revoke execute on function lms_protect(regclass) from authenticated;
+
+-- 앞으로 만드는 표·보기·시퀀스도 앱 사용자에게 자동으로 열리지 않게 (필요한 읽기 권한은 lms_protect·각 파일에서 직접 부여)
+alter default privileges in schema public revoke all on tables from anon, authenticated;
+alter default privileges in schema public revoke all on sequences from anon, authenticated;
+
+-- >>> 20261016000710_lms_service_role_grants.sql
+-- =====================================================================
+-- 서버 키(service_role) 표 권한 명시 (2026-10-17 5-4 실물 점검에서 발견)
+-- 시험용 프로젝트에서는 새 표가 service_role 에게 자동으로 열리지 않았다 → 서버 키로 app_users 연결이 403
+-- (GET app_users·audit_log·students 모두 42501 permission denied 확인). 지금까지는 Supabase 기본 권한에 기대고 있었음.
+-- - 서버 키: LMS 표 읽기·쓰기 (RLS는 service_role 의 bypassrls 로 통과 — 쓰기는 서버 기능만 하는 설계)
+-- - 변경 이력(audit_log)은 서버 키도 고치거나 지울 수 없음 (추가·읽기만)
+-- - 앱 사용자(anon·authenticated) 권한은 바꾸지 않음
+-- 다시 실행해도 같은 결과 (권한 부여·회수만, 데이터 변경 없음)
+-- =====================================================================
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    execute 'grant usage on schema public to service_role';
+    execute 'grant select, insert, update, delete on all tables in schema public to service_role';
+    execute 'revoke update, delete, truncate on audit_log from service_role';
+    execute 'grant usage, select on all sequences in schema public to service_role';
+    execute 'grant execute on all functions in schema public to service_role';
+    -- 앞으로 만드는 표·시퀀스·함수도 서버 키에 같은 권한
+    execute 'alter default privileges in schema public grant select, insert, update, delete on tables to service_role';
+    execute 'alter default privileges in schema public grant usage, select on sequences to service_role';
+    execute 'alter default privileges in schema public grant execute on functions to service_role';
+  end if;
+end $$;
+
+-- >>> 20261016000800_lms_admin_mfa.sql
+-- =====================================================================
+-- 운영자 추가 인증(TOTP) 강제 + 운영자 역할 분리 (POL-AC-05·07, 정책 원본 A27·A34, D-29)
+-- - 운영자 권한(is_admin)은 TOTP까지 마친 세션(Supabase JWT 의 aal = 'aal2')에서만 참
+--   → 이메일 코드만 통과한 운영자 세션은 RLS상 학생·결제·수업 데이터를 한 줄도 못 봄 (화면이 아니라 DB가 막음)
+-- - 운영자 역할: owner(대표) / staff(운영직원). 대표 전용 작업(환불 실행·승인, 적립금 지급·조정·취소,
+--   금전 관련 중요 설정)은 서버 쓰기 기능이 is_owner() 로 확인한다. 쓰기 자체는 지금처럼 서버(service_role)만
+-- - 직원의 읽기 범위는 아직 정하지 않음 → 지금은 운영자와 같음. 직원 계정을 실제로 만들기 전에 정한다 (07-decisions)
+-- - 강사·학생은 TOTP 없음 (이메일 코드만)
+-- 다시 실행해도 같은 결과
+-- =====================================================================
+
+alter table app_users add column if not exists admin_level text check (admin_level in ('owner', 'staff'));
+-- 이미 있는 운영자 계정은 낮은 권한(staff)으로 둔다. 대표 계정은 서버·SQL Editor 에서 owner 로 따로 지정 (최소 권한)
+update app_users set admin_level = 'staff' where role = 'admin' and admin_level is null;
+update app_users set admin_level = null where role <> 'admin' and admin_level is not null;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'app_users_admin_level_role') then
+    alter table app_users add constraint app_users_admin_level_role check ((role = 'admin') = (admin_level is not null));
+  end if;
+end $$;
+
+-- TOTP까지 마친 세션인지 (Supabase Auth 가 발급한 JWT 의 aal 값)
+create or replace function auth_is_aal2() returns boolean
+language sql stable set search_path = public as $$
+  select coalesce(auth.jwt() ->> 'aal', '') = 'aal2'
+$$;
+
+create or replace function is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select auth_is_aal2()
+     and coalesce((select role = 'admin' from app_users where auth_user_id = auth.uid()), false)
+$$;
+
+-- 대표 전용 권한 확인 (서버 쓰기 기능이 호출 운영자 확인에 사용, POL-AC-07)
+create or replace function is_owner() returns boolean
+language sql stable security definer set search_path = public as $$
+  select auth_is_aal2()
+     and coalesce((select role = 'admin' and admin_level = 'owner' from app_users where auth_user_id = auth.uid()), false)
+$$;
+
+revoke all on function auth_is_aal2() from public, anon;
+revoke all on function is_owner() from public, anon;
+grant execute on function auth_is_aal2(), is_admin(), is_owner() to authenticated;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    execute 'grant execute on function auth_is_aal2(), is_admin(), is_owner() to service_role';
+  end if;
+end $$;
+
+-- >>> 20261016000820_lms_my_role.sql
+-- =====================================================================
+-- 로그인 직후 본인 역할 확인 (로그인 화면용, POL-AC-04·05)
+-- 메일 코드만 통과한(aal1) 운영자도 '인증 앱 코드를 물어야 하는 사람'인지 알아야 하므로, 본인 역할 하나만 돌려준다.
+-- - 본인 것만: auth.uid() 의 app_users.role (student / tutor / admin), 연결 안 된 계정은 null
+-- - 다른 사람 역할·학생 번호 등은 돌려주지 않음. 운영자 권한 자체는 여전히 is_admin()(aal2) 로만
+-- 다시 실행해도 같은 결과
+-- =====================================================================
+create or replace function my_role() returns text
+language sql stable security definer set search_path = public as $$
+  select role from app_users where auth_user_id = auth.uid()
+$$;
+
+revoke all on function my_role() from public, anon;
+grant execute on function my_role() to authenticated;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    execute 'grant execute on function my_role() to service_role';
+  end if;
+end $$;
+
+-- >>> 20261018000900_lms_register_student.sql
+-- =====================================================================
+-- 신규 학생 등록 저장 (2026-10-18 대표 최종 시안: 신청서 불러오기 + 강사·스케줄 선택)
+-- 화면이 한 번 부르면 학생 · 수강등록 · (결제 확인) · (고정 일정 · 정규 수업)을 한 트랜잭션으로 만든다.
+-- - 권한: TOTP까지 마친 운영자(is_admin, aal2)만. 표에는 앱 쓰기 권한을 주지 않고 이 함수만 연다 (POL-AC-07: 쓰기는 서버 쪽에서만)
+-- - 중복 방지: 화면이 만든 요청 번호(request_id)가 같으면 처음 결과를 그대로 돌려준다 (저장 버튼 여러 번 눌러도 1번)
+-- - 결제 확인 전에는 강사·정규 일정을 확정하지 않는다 (POL-OP-13). 결제 확인 기록이 들어가면 '신규 매칭' 업무가 기존 트리거로 생긴다
+-- - 강사 배정까지 하면 업무의 '강사 배정'만 채운다. '학생 안내'는 안내가 실제로 끝났을 때 따로 (업무는 그때 사라짐)
+-- - 일정 충돌: 강사의 다른 수업과 겹침 + 수업 사이 휴식 10분 + 강사 휴무 (POL-OP-21). 하나라도 있으면 아무것도 저장하지 않고
+--   충돌 날짜 목록을 오류 상세(JSON)로 돌려준다. 화면이 먼저 같은 검사를 하지만, 그 사이 다른 등록이 생길 수 있어 여기서 다시 확인
+-- - 수강등록의 적용 규칙(policy_basis)은 기본값(legacy) 그대로. 정책 원본 조건 안내·동의를 확인한 뒤 운영자가 바꾼다 (자동으로 최신 판본을 고르지 않음)
+-- - 이메일이 같아도 기존 학생·계정에 연결하지 않는다 (POL-AC-04). 항상 새 학생 번호
+-- 다시 실행해도 같은 결과
+-- =====================================================================
+
+create table if not exists registration_requests (
+  id uuid primary key,                    -- 화면이 만든 요청 번호 (변경 이력이 id 로 행을 찾음)
+  created_by uuid not null,
+  student_id uuid not null references students(id),
+  enrollment_id uuid not null references enrollments(id),
+  result jsonb not null,
+  created_at timestamptz not null default now()
+);
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'registration_requests_audit') then
+    perform lms_protect('registration_requests'::regclass);
+  end if;
+end $$;
+
+create or replace function admin_register_student(p_request_id uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  prev jsonb;
+  st jsonb := p -> 'student';
+  co jsonb := p -> 'course';
+  pay jsonb := p -> 'payment';
+  slots jsonb := coalesce(p -> 'slots', '[]'::jsonb);
+  v_tutor uuid := nullif(p ->> 'tutor_id', '')::uuid;
+  v_weeks smallint := (co ->> 'weeks')::smallint;
+  v_weekly smallint := (co ->> 'weekly_count')::smallint;
+  v_dur smallint := (co ->> 'duration_min')::smallint;
+  v_start date := (co ->> 'start_date')::date;
+  v_end date;
+  v_paid boolean := jsonb_typeof(p -> 'payment') = 'object';
+  v_break interval := interval '10 minutes';   -- POL-OP-21 (코드 CONFIRMED.minBreakMin 과 같아야 함)
+  sid uuid;
+  scode text;
+  eid uuid;
+  d date;
+  s jsonb;
+  n integer := 0;
+  t0 timestamptz;
+  t1 timestamptz;
+  conflicts jsonb := '[]'::jsonb;
+  res jsonb;
+begin
+  if not is_admin() then
+    raise exception '운영자(추가 인증 완료)만 학생을 등록할 수 있습니다.' using errcode = '42501';
+  end if;
+  if p_request_id is null then raise exception '요청 번호가 없습니다.'; end if;
+
+  -- 같은 요청이 동시에 두 번 와도 하나씩 처리 → 두 번째는 첫 결과를 받음
+  perform pg_advisory_xact_lock(hashtextextended(p_request_id::text, 0));
+  select result into prev from registration_requests where id = p_request_id;
+  if found then return prev || '{"repeated": true}'::jsonb; end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_register_student', true);
+
+  if v_weeks is null or v_weeks not in (4, 12, 24) then raise exception '수강 기간은 4·12·24주만 가능합니다.'; end if;
+  if v_start is null then raise exception '첫 수업일(수강 시작일)이 없습니다.'; end if;
+  v_end := v_start + (v_weeks / 4 * 28 - 1);
+
+  if not v_paid and (v_tutor is not null or jsonb_array_length(slots) > 0) then
+    raise exception '결제 확인 전에는 강사·정규 일정을 확정할 수 없습니다 (POL-OP-13).';
+  end if;
+  if v_tutor is not null then
+    if jsonb_array_length(slots) <> v_weekly then
+      raise exception '정규 시간 수(%)가 주 횟수(%)와 다릅니다.', jsonb_array_length(slots), v_weekly;
+    end if;
+    if (select count(distinct (x ->> 'weekday')::int) from jsonb_array_elements(slots) x) <> jsonb_array_length(slots) then
+      raise exception '같은 요일에 정규 수업을 2개 넣을 수 없습니다.';
+    end if;
+    if not exists (select 1 from jsonb_array_elements(slots) x where (x ->> 'weekday')::int = extract(dow from v_start)) then
+      raise exception '수강 시작일은 첫 정규 수업일이어야 합니다 (시작일 요일이 수업 요일에 없음).';
+    end if;
+    if not exists (select 1 from tutors where id = v_tutor and active) then raise exception '활동 중인 강사가 아닙니다.'; end if;
+  elsif jsonb_array_length(slots) > 0 then
+    raise exception '정규 시간을 정하려면 강사도 정해야 합니다.';
+  end if;
+
+  -- 학생 (항상 새 학생 번호. 같은 이메일이 있어도 연결·병합하지 않음)
+  insert into students (name_ko, name_en, email, phone, country, city, timezone, admin_memo)
+  values (st ->> 'name_ko', st ->> 'name_en', nullif(lower(trim(st ->> 'email')), ''), nullif(st ->> 'phone', ''),
+          nullif(st ->> 'country', ''), nullif(st ->> 'city', ''), st ->> 'timezone', nullif(st ->> 'admin_memo', ''))
+  returning id, code into sid, scode;
+
+  insert into enrollments (student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date,
+                           lessons_purchased, amount_due, status, created_by)
+  values (sid, 1, v_weeks, v_weekly, v_dur, v_start, v_end, v_weekly * v_weeks,
+          nullif(co ->> 'amount_due', '')::integer, case when v_paid then 'confirmed' else 'pending_payment' end, me)
+  returning id into eid;
+
+  if v_paid then
+    -- paid_at = 실제 입금·결제 완료 시각 (은행 거래내역·아임웹 주문 시각), external_ref = 아임웹 주문번호 등 (같은 결제 두 번 기록 방지)
+    insert into payments (enrollment_id, method, payer_name, amount_received, paid_at, received_on, external_ref, confirmed_by)
+    values (eid, pay ->> 'method', nullif(pay ->> 'payer_name', ''), (pay ->> 'amount')::integer, (pay ->> 'paid_at')::timestamptz,
+            (((pay ->> 'paid_at')::timestamptz at time zone 'UTC') + interval '9 hours')::date, nullif(pay ->> 'external_ref', ''), me);
+  end if;
+
+  if v_tutor is not null then
+    for s in select * from jsonb_array_elements(slots) loop
+      insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+      values (sid, v_tutor, (s ->> 'weekday')::smallint, (s ->> 'time')::time, v_dur, v_start);
+    end loop;
+
+    d := v_start;
+    while d <= v_end loop
+      select x into s from jsonb_array_elements(slots) x where (x ->> 'weekday')::int = extract(dow from d);
+      if found then
+        n := n + 1;
+        t0 := (d + (s ->> 'time')::time) at time zone 'Asia/Seoul';
+        t1 := t0 + make_interval(mins => v_dur);
+        conflicts := conflicts || coalesce((
+          select jsonb_agg(jsonb_build_object('date', d, 'time', s ->> 'time', 'reason',
+                   case when l.starts_at < t1 and t0 < l.ends_at then (case when l.kind = 'regular' then 'tutor_regular' else 'tutor_makeup' end) else 'break' end,
+                   'other_starts_at', l.starts_at, 'other_ends_at', l.ends_at))
+          from lessons l
+          where l.tutor_id = v_tutor and l.state <> 'canceled'
+            and l.starts_at < t1 + v_break and t0 - v_break < l.ends_at), '[]'::jsonb);
+        conflicts := conflicts || coalesce((
+          select jsonb_agg(jsonb_build_object('date', d, 'time', s ->> 'time', 'reason', 'tutor_time_off',
+                   'other_starts_at', o.starts_at, 'other_ends_at', o.ends_at))
+          from tutor_time_off o where o.tutor_id = v_tutor and o.starts_at < t1 and t0 < o.ends_at), '[]'::jsonb);
+        -- 충돌이 하나라도 나오면 더 넣지 않고 끝까지 검사만 (겹침 제약 오류 대신 충돌 날짜 전체를 돌려주려고)
+        if jsonb_array_length(conflicts) = 0 then
+          insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, created_by)
+          values (eid, sid, v_tutor, 'regular', n, t0, t1, me);
+        end if;
+      end if;
+      d := d + 1;
+    end loop;
+
+    if jsonb_array_length(conflicts) > 0 then
+      raise exception '일정 충돌 %건 — 저장하지 않았습니다.', jsonb_array_length(conflicts)
+        using errcode = 'P0001', detail = conflicts::text, hint = 'schedule_conflict';
+    end if;
+    if n <> v_weekly * v_weeks then
+      raise exception '만들어진 정규 수업 수(%)가 등록 회차(%)와 다릅니다.', n, v_weekly * v_weeks;
+    end if;
+
+    update admin_tasks set tutor_id = v_tutor, tutor_assigned_at = now()
+    where kind = 'new_student_matching' and enrollment_id = eid;
+  end if;
+
+  res := jsonb_build_object('student_id', sid, 'student_code', scode, 'enrollment_id', eid,
+                            'status', case when v_paid then 'confirmed' else 'pending_payment' end,
+                            'lessons', n, 'start_date', v_start, 'end_date', v_end);
+  insert into registration_requests (id, created_by, student_id, enrollment_id, result)
+  values (p_request_id, me, sid, eid, res);
+  return res;
+end $$;
+
+revoke all on function admin_register_student(uuid, jsonb) from public, anon;
+grant execute on function admin_register_student(uuid, jsonb) to authenticated;
+
+-- 같은 이메일 학생이 이미 있는지 (연결하지 않고 알려 주기만 — POL-AC-04). 운영자만
+create or replace function admin_students_with_email(p_email text)
+returns table (code text, name_ko text)
+language sql stable security definer set search_path = public as $$
+  select code, name_ko from students
+  where is_admin() and email is not null and lower(email) = lower(trim(p_email))
+  order by code
+$$;
+revoke all on function admin_students_with_email(text) from public, anon;
+grant execute on function admin_students_with_email(text) to authenticated;
+
+-- >>> 20261021001000_lms_schedule_confirm.sql
+-- =====================================================================
+-- 신규 배정 확정 관리 (2026-10-21, 정책 원본 H22 · B01 · D-50 4번 절차)
+-- 사고: 강사가 '그 일정 가능'이라고만 답했고, 운영자가 학생에게만 최종 확정을 보내고 강사에게는 안 보냄 → 학생만 기다림
+--
+-- 구조
+--  1. 일정안(schedule_plans): 등록 하나에 버전 1, 2, … 강사·요일·시각·첫 수업일 한 벌
+--     - proposed  강사에게 제안함, 답 대기. 수업은 아직 만들지 않음 (강사 '가능' 답 ≠ 확정)
+--     - confirmed 운영자가 '강사 가능 → 확정'을 한 번 누름 → 같은 트랜잭션에서 정규 일정·수업 생성 + 양쪽 최종 안내 2건 생성
+--     - declined / withdrawn 강사가 안 됨 / 운영자가 다른 안으로 바꿈 (지우지 않고 남김)
+--  2. 최종 안내(schedule_notices): 확정된 일정안 × 받는 사람(학생·강사) = 정확히 1건씩 (unique = 중복 방지 키)
+--     - 일정 확정 상태와 안내 상태는 따로. 둘 다 '보냄'이 되어야 신규 매칭 업무가 끝남 (한쪽만이면 열려 있음)
+--     - 지금은 자동 발송 연결이 없음 → 운영자가 [문구 복사]를 누른 시각을 '보냄'으로 기록 (sent_via = 'copy').
+--       복사 = 보냄이지 '받음·읽음'이 아님. 받음·읽음 확인 칸은 채널이 정해지면 추가 (H22 3번)
+--     - 나중에 자동 발송기(이메일·캘린더·WhatsApp API 등, 채널 미결정)가 붙으면 lms_notice_result 로 결과를 기록.
+--       재시도는 '보냄'이 아닌 건만 (pending·failed). 결과가 불명확(unknown)하면 자동 재시도하지 않고 운영자 확인
+--  3. 확정 후 일정 변경(강사·시각·시작일)은 아직 없음 → 새 버전을 만들고 새 안내 2건을 받아야 함 (예전 안내는 새 일정의 근거가 아님).
+--     그 기능을 만들 때 'superseded' 상태를 추가한다. 지금은 확정된 안이 있으면 새 확정을 거절
+--
+-- 미결정 (대표 질문, 코드에 기본값 넣지 않음): 발송 채널·자동화, 강사 확인 회신 의무, 경고 시각(첫 수업 몇 시간 전 등), 답 대기 경고 시각
+-- 권한: 운영자(is_admin, TOTP)만. 표에는 앱 쓰기 권한 없음 — 함수로만 (POL-AC-07)
+-- 다시 실행해도 같은 결과
+-- =====================================================================
+
+create table if not exists schedule_plans (
+  id uuid primary key,                         -- 화면이 만든 요청 번호 (같은 제안 두 번 눌러도 1건)
+  enrollment_id uuid not null references enrollments(id),
+  version integer not null check (version >= 1),
+  tutor_id uuid not null references tutors(id),
+  slots jsonb not null,                        -- [{"weekday":2,"time":"20:00"}] 한국 시각
+  start_date date not null,                    -- 첫 정규 수업일
+  state text not null default 'proposed' check (state in ('proposed', 'confirmed', 'declined', 'withdrawn')),
+  proposal_sent_at timestamptz,                -- 강사에게 보낼 제안 문구를 복사한 시각 (= 제안 보냄)
+  confirmed_at timestamptz,                    -- 운영자가 '강사 가능 → 확정'을 누른 시각
+  confirmed_by uuid,
+  closed_at timestamptz,
+  close_reason text,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  unique (enrollment_id, version),
+  check ((state = 'confirmed') = (confirmed_at is not null and confirmed_by is not null)),
+  check ((state in ('declined', 'withdrawn')) = (closed_at is not null))
+);
+create unique index if not exists schedule_plans_one_open on schedule_plans (enrollment_id) where state = 'proposed';
+create unique index if not exists schedule_plans_one_confirmed on schedule_plans (enrollment_id) where state = 'confirmed';
+
+create table if not exists schedule_notices (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references schedule_plans(id),
+  recipient_kind text not null check (recipient_kind in ('student', 'tutor')),
+  recipient_id uuid not null,
+  -- 지금: 학생 카카오톡 채널(수동), 강사 WhatsApp(수동). 자동 채널은 대표 결정 후 사용
+  channel text not null check (channel in ('kakao_manual', 'whatsapp_manual', 'email', 'google_calendar', 'whatsapp_api')),
+  status text not null default 'pending' check (status in ('pending', 'sent', 'failed', 'unknown')),
+  sent_at timestamptz,
+  sent_by uuid,                                -- 복사한 운영자 (자동 발송이면 비움)
+  sent_via text check (sent_via in ('copy', 'system')),
+  attempts integer not null default 0,
+  last_error text,
+  last_attempt_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (plan_id, recipient_kind),            -- 일정 버전 × 받는 사람 = 1건 (중복 안내 방지)
+  check ((status = 'sent') = (sent_at is not null and sent_via is not null))
+);
+
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'schedule_plans_audit') then
+    perform lms_protect('schedule_plans'::regclass);
+    perform lms_protect('schedule_notices'::regclass);
+    create trigger schedule_plans_no_delete before delete on schedule_plans for each row execute function forbid_delete();
+    create trigger schedule_notices_no_delete before delete on schedule_notices for each row execute function forbid_delete();
+  end if;
+end $$;
+
+-- 신규 매칭 업무는 강사 안내까지 끝나야 완료 (기존: 강사 배정 + 학생 안내만 보던 것에 추가)
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'admin_tasks_matching_tutor_notified') then
+    alter table admin_tasks add constraint admin_tasks_matching_tutor_notified
+      check (status <> 'done' or kind <> 'new_student_matching' or tutor_notified_at is not null);
+  end if;
+end $$;
+
+-- 일정안의 등록기간 전체 충돌 (강사 다른 수업 겹침·휴식 10분·휴무, POL-OP-21). 저장은 하지 않고 목록만
+create or replace function lms_plan_conflicts(p_tutor uuid, p_slots jsonb, p_start date, p_end date, p_dur smallint)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break interval := interval '10 minutes';   -- POL-OP-21 (코드 CONFIRMED.minBreakMin 과 같아야 함)
+  d date := p_start;
+  s jsonb;
+  t0 timestamptz;
+  t1 timestamptz;
+  out jsonb := '[]'::jsonb;
+begin
+  while d <= p_end loop
+    select x into s from jsonb_array_elements(p_slots) x where (x ->> 'weekday')::int = extract(dow from d);
+    if found then
+      t0 := (d + (s ->> 'time')::time) at time zone 'Asia/Seoul';
+      t1 := t0 + make_interval(mins => p_dur);
+      out := out || coalesce((
+        select jsonb_agg(jsonb_build_object('date', d, 'time', s ->> 'time', 'reason',
+                 case when l.starts_at < t1 and t0 < l.ends_at then (case when l.kind = 'regular' then 'tutor_regular' else 'tutor_makeup' end) else 'break' end,
+                 'other_starts_at', l.starts_at, 'other_ends_at', l.ends_at))
+        from lessons l
+        where l.tutor_id = p_tutor and l.state <> 'canceled'
+          and l.starts_at < t1 + v_break and t0 - v_break < l.ends_at), '[]'::jsonb);
+      out := out || coalesce((
+        select jsonb_agg(jsonb_build_object('date', d, 'time', s ->> 'time', 'reason', 'tutor_time_off',
+                 'other_starts_at', o.starts_at, 'other_ends_at', o.ends_at))
+        from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < t1 and t0 < o.ends_at), '[]'::jsonb);
+    end if;
+    d := d + 1;
+  end loop;
+  return out;
+end $$;
+revoke all on function lms_plan_conflicts(uuid, jsonb, date, date, smallint) from public, anon, authenticated;
+
+-- 일정안 모양 검사 (주 횟수·요일·첫 수업일). 오류면 예외
+create or replace function lms_check_plan_shape(p_enrollment uuid, p_tutor uuid, p_slots jsonb, p_start date)
+returns void
+language plpgsql stable security definer set search_path = public as $$
+declare
+  e record;
+begin
+  select * into e from enrollments where id = p_enrollment;
+  if not found then raise exception '수강등록이 없습니다.'; end if;
+  if e.status = 'pending_payment' or not exists (select 1 from payments where enrollment_id = p_enrollment) then
+    raise exception '결제 확인 전에는 강사·정규 일정을 제안·확정할 수 없습니다 (POL-OP-13).';
+  end if;
+  if p_start is distinct from e.start_date then
+    raise exception '첫 수업일(%)이 수강 시작일(%)과 다릅니다.', p_start, e.start_date;
+  end if;
+  if jsonb_typeof(p_slots) <> 'array' or jsonb_array_length(p_slots) <> e.weekly_count then
+    raise exception '정규 시간 수(%)가 주 횟수(%)와 다릅니다.', coalesce(jsonb_array_length(p_slots), 0), e.weekly_count;
+  end if;
+  if (select count(distinct (x ->> 'weekday')::int) from jsonb_array_elements(p_slots) x) <> jsonb_array_length(p_slots) then
+    raise exception '같은 요일에 정규 수업을 2개 넣을 수 없습니다.';
+  end if;
+  if not exists (select 1 from jsonb_array_elements(p_slots) x where (x ->> 'weekday')::int = extract(dow from p_start)) then
+    raise exception '수강 시작일은 첫 정규 수업일이어야 합니다 (시작일 요일이 수업 요일에 없음).';
+  end if;
+  if not exists (select 1 from tutors where id = p_tutor and active) then raise exception '활동 중인 강사가 아닙니다.'; end if;
+end $$;
+revoke all on function lms_check_plan_shape(uuid, uuid, jsonb, date) from public, anon, authenticated;
+
+-- 일정안 만들기 (proposed). 같은 등록에 답 대기 중인 안이 있으면 '다른 안으로 바꿈'으로 닫음. 충돌이 있으면 저장하지 않음
+create or replace function lms_new_plan(p_plan_id uuid, p_enrollment uuid, p_tutor uuid, p_slots jsonb, p_start date, p_me uuid)
+returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  e record;
+  v integer;
+  conflicts jsonb;
+begin
+  if exists (select 1 from schedule_plans where enrollment_id = p_enrollment and state = 'confirmed') then
+    raise exception '이미 확정된 일정이 있습니다. 확정 후 변경은 일정 변경 기능으로 (아직 없음).';
+  end if;
+  -- 아직 수업이 하나도 없으면 (결제만 저장한 학생·강사가 거절한 뒤 다른 안) 첫 수업일에 맞춰 수강 기간을 옮김.
+  -- 수강 기간은 첫 정규 수업일부터 (POL-PER-01~03)
+  update enrollments set start_date = p_start, base_end_date = p_start + (weeks / 4 * 28 - 1)
+  where id = p_enrollment and p_start is not null and start_date is distinct from p_start and weeks is not null
+    and not exists (select 1 from lessons where enrollment_id = p_enrollment);
+  perform lms_check_plan_shape(p_enrollment, p_tutor, p_slots, p_start);
+  select * into e from enrollments where id = p_enrollment;
+  conflicts := lms_plan_conflicts(p_tutor, p_slots, e.start_date, e.base_end_date, e.duration_min);
+  if jsonb_array_length(conflicts) > 0 then
+    raise exception '일정 충돌 %건 — 저장하지 않았습니다.', jsonb_array_length(conflicts)
+      using errcode = 'P0001', detail = conflicts::text, hint = 'schedule_conflict';
+  end if;
+  update schedule_plans set state = 'withdrawn', closed_at = now(), close_reason = '다른 안으로 바꿈'
+  where enrollment_id = p_enrollment and state = 'proposed';
+  select coalesce(max(version), 0) + 1 into v from schedule_plans where enrollment_id = p_enrollment;
+  insert into schedule_plans (id, enrollment_id, version, tutor_id, slots, start_date, created_by)
+  values (p_plan_id, p_enrollment, v, p_tutor, p_slots, p_start, p_me);
+  return v;
+end $$;
+revoke all on function lms_new_plan(uuid, uuid, uuid, jsonb, date, uuid) from public, anon, authenticated;
+
+-- 확정 결과에 안내 2건의 번호를 붙여 화면이 바로 [복사]를 기록할 수 있게
+create or replace function lms_plan_notice_ids(p_plan_id uuid)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'tutor_notice_id', (select id from schedule_notices where plan_id = p_plan_id and recipient_kind = 'tutor'),
+    'student_notice_id', (select id from schedule_notices where plan_id = p_plan_id and recipient_kind = 'student'))
+$$;
+revoke all on function lms_plan_notice_ids(uuid) from public, anon, authenticated;
+
+-- 확정 (내부): 정규 일정·수업 + 양쪽 최종 안내 2건을 한 트랜잭션으로. 이미 확정이면 그대로 돌려줌
+create or replace function lms_confirm_plan(p_plan_id uuid, p_me uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  pl record;
+  e record;
+  conflicts jsonb;
+  s jsonb;
+  d date;
+  n integer := 0;
+  t0 timestamptz;
+begin
+  select * into pl from schedule_plans where id = p_plan_id for update;
+  if not found then raise exception '일정안이 없습니다.'; end if;
+  if pl.state = 'confirmed' then
+    return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', 'confirmed', 'repeated', true,
+                              'lessons', (select count(*) from lessons where enrollment_id = pl.enrollment_id and kind = 'regular'))
+           || lms_plan_notice_ids(pl.id);
+  end if;
+  if pl.state <> 'proposed' then raise exception '닫힌 일정안(%)은 확정할 수 없습니다.', pl.state; end if;
+  perform lms_check_plan_shape(pl.enrollment_id, pl.tutor_id, pl.slots, pl.start_date);
+  select * into e from enrollments where id = pl.enrollment_id;
+
+  -- 제안 뒤에 다른 수업·휴무가 생겼을 수 있어 다시 검사
+  conflicts := lms_plan_conflicts(pl.tutor_id, pl.slots, e.start_date, e.base_end_date, e.duration_min);
+  if jsonb_array_length(conflicts) > 0 then
+    raise exception '일정 충돌 %건 — 확정하지 않았습니다.', jsonb_array_length(conflicts)
+      using errcode = 'P0001', detail = conflicts::text, hint = 'schedule_conflict';
+  end if;
+
+  for s in select * from jsonb_array_elements(pl.slots) loop
+    insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+    values (e.student_id, pl.tutor_id, (s ->> 'weekday')::smallint, (s ->> 'time')::time, e.duration_min, e.start_date);
+  end loop;
+  d := e.start_date;
+  while d <= e.base_end_date loop
+    select x into s from jsonb_array_elements(pl.slots) x where (x ->> 'weekday')::int = extract(dow from d);
+    if found then
+      n := n + 1;
+      t0 := (d + (s ->> 'time')::time) at time zone 'Asia/Seoul';
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, created_by)
+      values (e.id, e.student_id, pl.tutor_id, 'regular', n, t0, t0 + make_interval(mins => e.duration_min), p_me);
+    end if;
+    d := d + 1;
+  end loop;
+  if n <> e.lessons_purchased then
+    raise exception '만들어진 정규 수업 수(%)가 등록 회차(%)와 다릅니다.', n, e.lessons_purchased;
+  end if;
+
+  update schedule_plans set state = 'confirmed', confirmed_at = now(), confirmed_by = p_me where id = pl.id;
+  insert into schedule_notices (plan_id, recipient_kind, recipient_id, channel) values
+    (pl.id, 'tutor', pl.tutor_id, 'whatsapp_manual'),
+    (pl.id, 'student', e.student_id, 'kakao_manual')
+  on conflict (plan_id, recipient_kind) do nothing;
+  update admin_tasks set tutor_id = pl.tutor_id, tutor_assigned_at = now()
+  where kind = 'new_student_matching' and enrollment_id = e.id and status = 'open';
+
+  return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', 'confirmed', 'lessons', n) || lms_plan_notice_ids(pl.id);
+end $$;
+revoke all on function lms_confirm_plan(uuid, uuid) from public, anon, authenticated;
+
+-- 안내 '보냄'을 신규 매칭 업무에 옮김. 양쪽 모두 '보냄'이면 업무 완료 (사람이 따로 닫지 않음)
+create or replace function lms_finish_matching(p_plan_id uuid, p_me uuid)
+returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  pl record;
+  st timestamptz;
+  tt timestamptz;
+begin
+  select * into pl from schedule_plans where id = p_plan_id;
+  if pl.state is distinct from 'confirmed' then return false; end if;
+  select sent_at into st from schedule_notices where plan_id = p_plan_id and recipient_kind = 'student' and status = 'sent';
+  select sent_at into tt from schedule_notices where plan_id = p_plan_id and recipient_kind = 'tutor' and status = 'sent';
+  -- 보낸 쪽은 바로 기록 (화면에 남은 쪽만 보이게), 둘 다 보냈을 때만 완료
+  update admin_tasks set student_notified_at = st, tutor_notified_at = tt,
+         status = case when st is not null and tt is not null then 'done' else status end,
+         done_at = case when st is not null and tt is not null then now() end,
+         done_by = case when st is not null and tt is not null then p_me end
+  where kind = 'new_student_matching' and enrollment_id = pl.enrollment_id and status = 'open';
+  return st is not null and tt is not null;
+end $$;
+revoke all on function lms_finish_matching(uuid, uuid) from public, anon, authenticated;
+
+-- ---------- 화면에서 부르는 함수 (운영자 TOTP 세션만) ----------
+
+-- 이미 저장된 등록(결제 확인)에 일정안 제안. p = {tutor_id, slots, start_date, tutor_answer}
+-- tutor_answer = 'accepted' 이면 (강사가 이미 가능하다고 답한 경우) 제안과 확정을 한 번에
+create or replace function admin_propose_schedule(p_plan_id uuid, p_enrollment uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  pl record;
+  v integer;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 일정을 제안할 수 있습니다.' using errcode = '42501'; end if;
+  if p_plan_id is null then raise exception '요청 번호가 없습니다.'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_enrollment::text, 0));
+  select * into pl from schedule_plans where id = p_plan_id;
+  if found then
+    if pl.enrollment_id <> p_enrollment then raise exception '요청 번호가 다른 등록에 쓰였습니다.'; end if;
+    return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', pl.state, 'repeated', true);
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_propose_schedule', true);
+  v := lms_new_plan(p_plan_id, p_enrollment, nullif(p ->> 'tutor_id', '')::uuid, coalesce(p -> 'slots', '[]'::jsonb), (p ->> 'start_date')::date, me);
+  if p ->> 'tutor_answer' = 'accepted' then return lms_confirm_plan(p_plan_id, me); end if;
+  return jsonb_build_object('plan_id', p_plan_id, 'version', v, 'state', 'proposed');
+end $$;
+
+-- 강사가 가능하다고 답함 → 운영자가 한 번 누름 = 확정 (정규 일정·수업 + 양쪽 안내 2건). 두 번 눌러도 한 번
+create or replace function admin_confirm_schedule(p_plan_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  eid uuid;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 일정을 확정할 수 있습니다.' using errcode = '42501'; end if;
+  select enrollment_id into eid from schedule_plans where id = p_plan_id;
+  if eid is null then raise exception '일정안이 없습니다.'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(eid::text, 0));
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_confirm_schedule', true);
+  return lms_confirm_plan(p_plan_id, me);
+end $$;
+
+-- 강사가 안 된다고 함(declined) / 운영자가 이 안을 접음(withdrawn). 확정된 안은 여기서 닫지 않음
+create or replace function admin_close_plan(p_plan_id uuid, p_state text, p_reason text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  pl record;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 바꿀 수 있습니다.' using errcode = '42501'; end if;
+  if p_state not in ('declined', 'withdrawn') then raise exception '닫는 이유는 declined·withdrawn 만 가능합니다.'; end if;
+  select * into pl from schedule_plans where id = p_plan_id for update;
+  if not found then raise exception '일정안이 없습니다.'; end if;
+  if pl.state = p_state then return jsonb_build_object('plan_id', pl.id, 'state', pl.state, 'repeated', true); end if;
+  if pl.state <> 'proposed' then raise exception '답 대기 중인 안만 닫을 수 있습니다 (지금: %).', pl.state; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_close_plan', true);
+  update schedule_plans set state = p_state, closed_at = now(), close_reason = nullif(trim(p_reason), '') where id = p_plan_id;
+  return jsonb_build_object('plan_id', pl.id, 'state', p_state);
+end $$;
+
+-- 강사 제안 문구 복사 = 제안 보냄 (처음 복사한 시각만 남김)
+create or replace function admin_mark_proposal_sent(p_plan_id uuid)
+returns timestamptz
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  t timestamptz;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_mark_proposal_sent', true);
+  update schedule_plans set proposal_sent_at = coalesce(proposal_sent_at, now())
+  where id = p_plan_id and state = 'proposed'
+  returning proposal_sent_at into t;
+  if t is null then raise exception '답 대기 중인 일정안이 아닙니다.'; end if;
+  return t;
+end $$;
+
+-- 최종 안내 문구 복사 = 그쪽 안내 보냄. 이미 보낸 건은 그대로(시각 안 바뀜). 양쪽 다 보내면 매칭 업무 완료
+create or replace function admin_mark_notice_sent(p_notice_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  nt record;
+  done boolean;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select n.*, p.state as plan_state into nt from schedule_notices n join schedule_plans p on p.id = n.plan_id where n.id = p_notice_id for update of n;
+  if not found then raise exception '안내가 없습니다.'; end if;
+  if nt.plan_state <> 'confirmed' then raise exception '확정된 일정의 안내가 아닙니다.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_mark_notice_sent', true);
+  if nt.status <> 'sent' then
+    update schedule_notices set status = 'sent', sent_at = now(), sent_by = me, sent_via = 'copy',
+                                attempts = attempts + 1, last_attempt_at = now()
+    where id = p_notice_id;
+  end if;
+  done := lms_finish_matching(nt.plan_id, me);
+  return jsonb_build_object('notice_id', p_notice_id, 'status', 'sent', 'repeated', nt.status = 'sent', 'all_sent', done);
+end $$;
+
+-- 자동 발송기(서버) 결과 기록 — 채널이 정해지면 사용. 앱 사용자는 못 부름
+-- 이미 'sent'인 건은 바꾸지 않음 (성공한 안내를 다시 보내거나 실패로 덮지 않음)
+create or replace function lms_notice_result(p_notice_id uuid, p_status text, p_error text)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  nt record;
+begin
+  if p_status not in ('sent', 'failed', 'unknown') then raise exception '결과는 sent·failed·unknown 만 가능합니다.'; end if;
+  select * into nt from schedule_notices where id = p_notice_id for update;
+  if not found or nt.status = 'sent' then return; end if;
+  perform set_config('app.actor_via', 'lms_notice_result', true);
+  update schedule_notices
+  set status = p_status, attempts = attempts + 1, last_attempt_at = now(), last_error = nullif(p_error, ''),
+      sent_at = case when p_status = 'sent' then now() end, sent_via = case when p_status = 'sent' then 'system' end
+  where id = p_notice_id;
+  if p_status = 'sent' then perform lms_finish_matching(nt.plan_id, null); end if;
+end $$;
+revoke all on function lms_notice_result(uuid, text, text) from public, anon, authenticated;
+
+revoke all on function admin_propose_schedule(uuid, uuid, jsonb), admin_confirm_schedule(uuid), admin_close_plan(uuid, text, text),
+                       admin_mark_proposal_sent(uuid), admin_mark_notice_sent(uuid) from public, anon;
+grant execute on function admin_propose_schedule(uuid, uuid, jsonb), admin_confirm_schedule(uuid), admin_close_plan(uuid, text, text),
+                          admin_mark_proposal_sent(uuid), admin_mark_notice_sent(uuid) to authenticated;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    execute 'grant execute on function lms_notice_result(uuid, text, text) to service_role';
+  end if;
+end $$;
+
+-- 자동 발송기가 다시 보낼 대상: 확정된 일정의 '보냄 아님' 중 pending·failed 만 (unknown 은 운영자 확인 후)
+create or replace view schedule_notice_outbox with (security_invoker = true) as
+select n.* from schedule_notices n join schedule_plans p on p.id = n.plan_id
+where p.state = 'confirmed' and n.status in ('pending', 'failed');
+revoke all on schedule_notice_outbox from anon, authenticated;
+
+-- 운영자 화면: 손이 필요한 일정안만 — 강사 답 대기 / 확정했지만 한쪽이라도 안내 안 됨.
+-- 경고 시각(첫 수업 몇 시간 전 등)은 미결정 → 숫자(hours_to_first_lesson)만 주고 화면 규칙이 판단
+create or replace view schedule_plan_board with (security_invoker = true) as
+select p.id as plan_id, p.enrollment_id, p.version, p.state, p.tutor_id, t.name as tutor_name,
+       e.student_id, s.name_ko as student_name, s.code as student_code,
+       p.slots, p.start_date, p.proposal_sent_at, p.confirmed_at, p.created_at,
+       coalesce(
+         (select min(l.starts_at) from lessons l where l.enrollment_id = p.enrollment_id and l.kind = 'regular' and l.state <> 'canceled'),
+         (select (p.start_date + (x ->> 'time')::time) at time zone 'Asia/Seoul' from jsonb_array_elements(p.slots) x
+           where (x ->> 'weekday')::int = extract(dow from p.start_date) limit 1)) as first_lesson_at,
+       sn.id as student_notice_id, sn.status as student_notice_status, sn.sent_at as student_notice_sent_at,
+       tn.id as tutor_notice_id, tn.status as tutor_notice_status, tn.sent_at as tutor_notice_sent_at
+from schedule_plans p
+join enrollments e on e.id = p.enrollment_id
+join students s on s.id = e.student_id
+join tutors t on t.id = p.tutor_id
+left join schedule_notices sn on sn.plan_id = p.id and sn.recipient_kind = 'student'
+left join schedule_notices tn on tn.plan_id = p.id and tn.recipient_kind = 'tutor'
+where p.state = 'proposed'
+   or (p.state = 'confirmed' and (sn.status is distinct from 'sent' or tn.status is distinct from 'sent'));
+revoke all on schedule_plan_board from anon, authenticated;
+grant select on schedule_plan_board to authenticated;   -- security_invoker: 보이는 행은 각 표의 RLS 대로 (운영자만)
+
+-- 신규 매칭 업무의 남은 단계에 '강사에게 최종 안내' 추가 (열은 그대로)
+create or replace view admin_task_board with (security_invoker = true) as
+select t.*,
+       case when t.due_at is not null and now() > t.due_at then 'overdue'
+            when t.due_at is not null and now() > t.due_at - interval '24 hours' then 'due_soon'
+            else 'open' end as urgency,
+       case t.kind
+         when 'new_student_matching' then
+           array_remove(array[case when t.tutor_assigned_at is null then 'assign_tutor' end,
+                              case when t.tutor_notified_at is null then 'notify_tutor' end,
+                              case when t.student_notified_at is null then 'notify_student' end], null)
+         else
+           array_remove(array[case when t.tutor_id is null then 'set_tutor' end,
+                              case when t.tutor_change_planned then 'tutor_change' end,
+                              case when t.tutor_notified_at is null then 'notify_tutor' end,
+                              case when t.tutor_acknowledged_at is null then 'tutor_ack' end,
+                              case when t.schedule_checked_at is null then 'check_schedule' end], null)
+       end as missing_steps
+from admin_tasks t
+where t.status = 'open';
+
+-- ---------- 신규 학생 등록 함수 갱신: 강사·시간을 고르면 '일정안'으로 저장 ----------
+-- 강사가 이미 가능하다고 답했으면 p.tutor_answer = 'accepted' → 같은 저장에서 확정까지 (운영자 동작 1번)
+-- 그렇지 않으면 학생·수강권·결제 + 제안(답 대기)만. 수업은 확정 때 생김 (강사 '가능' 답 전 확정 금지, D-50·H22)
+create or replace function admin_register_student(p_request_id uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  prev jsonb;
+  st jsonb := p -> 'student';
+  co jsonb := p -> 'course';
+  pay jsonb := p -> 'payment';
+  slots jsonb := coalesce(p -> 'slots', '[]'::jsonb);
+  v_tutor uuid := nullif(p ->> 'tutor_id', '')::uuid;
+  v_weeks smallint := (co ->> 'weeks')::smallint;
+  v_weekly smallint := (co ->> 'weekly_count')::smallint;
+  v_dur smallint := (co ->> 'duration_min')::smallint;
+  v_start date := (co ->> 'start_date')::date;
+  v_end date;
+  v_paid boolean := jsonb_typeof(p -> 'payment') = 'object';
+  sid uuid;
+  scode text;
+  eid uuid;
+  plan_id uuid;
+  conf jsonb;
+  res jsonb;
+begin
+  if not is_admin() then
+    raise exception '운영자(추가 인증 완료)만 학생을 등록할 수 있습니다.' using errcode = '42501';
+  end if;
+  if p_request_id is null then raise exception '요청 번호가 없습니다.'; end if;
+
+  -- 같은 요청이 동시에 두 번 와도 하나씩 처리 → 두 번째는 첫 결과를 받음
+  perform pg_advisory_xact_lock(hashtextextended(p_request_id::text, 0));
+  select result into prev from registration_requests where id = p_request_id;
+  if found then return prev || '{"repeated": true}'::jsonb; end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_register_student', true);
+
+  if v_weeks is null or v_weeks not in (4, 12, 24) then raise exception '수강 기간은 4·12·24주만 가능합니다.'; end if;
+  if v_start is null then raise exception '첫 수업일(수강 시작일)이 없습니다.'; end if;
+  v_end := v_start + (v_weeks / 4 * 28 - 1);
+
+  if not v_paid and (v_tutor is not null or jsonb_array_length(slots) > 0) then
+    raise exception '결제 확인 전에는 강사·정규 일정을 확정할 수 없습니다 (POL-OP-13).';
+  end if;
+  if v_tutor is null and jsonb_array_length(slots) > 0 then
+    raise exception '정규 시간을 정하려면 강사도 정해야 합니다.';
+  end if;
+
+  -- 학생 (항상 새 학생 번호. 같은 이메일이 있어도 연결·병합하지 않음)
+  insert into students (name_ko, name_en, email, phone, country, city, timezone, admin_memo)
+  values (st ->> 'name_ko', st ->> 'name_en', nullif(lower(trim(st ->> 'email')), ''), nullif(st ->> 'phone', ''),
+          nullif(st ->> 'country', ''), nullif(st ->> 'city', ''), st ->> 'timezone', nullif(st ->> 'admin_memo', ''))
+  returning id, code into sid, scode;
+
+  insert into enrollments (student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date,
+                           lessons_purchased, amount_due, status, created_by)
+  values (sid, 1, v_weeks, v_weekly, v_dur, v_start, v_end, v_weekly * v_weeks,
+          nullif(co ->> 'amount_due', '')::integer, case when v_paid then 'confirmed' else 'pending_payment' end, me)
+  returning id into eid;
+
+  if v_paid then
+    -- paid_at = 실제 입금·결제 완료 시각 (은행 거래내역·아임웹 주문 시각), external_ref = 아임웹 주문번호 등 (같은 결제 두 번 기록 방지)
+    insert into payments (enrollment_id, method, payer_name, amount_received, paid_at, received_on, external_ref, confirmed_by)
+    values (eid, pay ->> 'method', nullif(pay ->> 'payer_name', ''), (pay ->> 'amount')::integer, (pay ->> 'paid_at')::timestamptz,
+            (((pay ->> 'paid_at')::timestamptz at time zone 'UTC') + interval '9 hours')::date, nullif(pay ->> 'external_ref', ''), me);
+  end if;
+
+  if v_tutor is not null then
+    plan_id := gen_random_uuid();
+    perform lms_new_plan(plan_id, eid, v_tutor, slots, v_start, me);   -- 충돌이면 여기서 오류 → 아무것도 저장 안 됨
+    if p ->> 'tutor_answer' = 'accepted' then conf := lms_confirm_plan(plan_id, me); end if;
+  end if;
+
+  res := jsonb_build_object('student_id', sid, 'student_code', scode, 'enrollment_id', eid,
+                            'status', case when v_paid then 'confirmed' else 'pending_payment' end,
+                            'plan_id', plan_id,
+                            'plan_state', case when plan_id is null then null when conf is null then 'proposed' else 'confirmed' end,
+                            'lessons', coalesce((conf ->> 'lessons')::int, 0), 'start_date', v_start, 'end_date', v_end,
+                            'tutor_notice_id', conf ->> 'tutor_notice_id', 'student_notice_id', conf ->> 'student_notice_id');
+  insert into registration_requests (id, created_by, student_id, enrollment_id, result)
+  values (p_request_id, me, sid, eid, res);
+  return res;
+end $$;
+
+revoke all on function admin_register_student(uuid, jsonb) from public, anon;
+grant execute on function admin_register_student(uuid, jsonb) to authenticated;
+
+-- >>> 20261022001100_lms_backup_guard.sql
+-- =====================================================================
+-- 복구 안전장치 (2026-10-22, 정책 원본 H23(5) 예외: 비상 복구는 대표 승인 + 복구 직전 백업 후)
+--  1. lms_backup.project: 이 DB가 어느 프로젝트인지 이름 한 줄 (시험용 edgeenglish-lms-test / 운영 edgeenglish-lms)
+--     - 이름은 프로젝트마다 다르므로 이 파일이 아니라 각 프로젝트 적용 안내에서 한 번 넣는다
+--     - 백업에 이름이 같이 기록되고, 복구는 ① 입력한 이름 ② 이 표의 이름 ③ 백업의 이름이 모두 같아야 실행됨
+--       → 시험용·운영 DB를 헷갈리거나 다른 프로젝트 백업을 넣으려 하면 아무것도 바뀌지 않음
+--  2. lms_backup.snapshots: 복구가 지금 내용을 지우기 직전에 같은 묶음 안에서 지금 상태를 통째로 저장
+--     → 잘못 복구해도 그 직전으로 되돌릴 수 있음 (supabase/backup/from-snapshot.sql)
+-- 앱(로그인 사용자·비로그인)은 이 영역을 전혀 못 씀: public 이 아닌 별도 영역이라 Data API 에도 안 나옴
+-- 기존 표·데이터는 바꾸지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create schema if not exists lms_backup;
+revoke all on schema lms_backup from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on schema lms_backup from anon, authenticated';
+  end if;
+end $$;
+
+create table if not exists lms_backup.project (
+  name text primary key check (name in ('edgeenglish-lms-test', 'edgeenglish-lms')),
+  set_at timestamptz not null default now()
+);
+create unique index if not exists project_one_row on lms_backup.project ((true));
+
+create table if not exists lms_backup.snapshots (
+  id bigint generated always as identity primary key,
+  taken_at timestamptz not null default now(),
+  taken_by text not null default current_user,
+  reason text not null,
+  backup jsonb not null          -- backup.sql 결과와 같은 모양: {"_meta": …, "students": [...], …, "_sequences": {...}}
+);
+
+-- 행 단위 잠금(RLS)도 켬: 정책이 없으므로 앱 사용자는 0행. 복구·백업은 표 소유자(SQL Editor)라 영향 없음
+-- (Supabase SQL Editor 가 'RLS 없이 표를 만든다'고 묻는 창도 이 두 줄로 안 뜸 — 2026-10-22 대표 화면)
+alter table lms_backup.project enable row level security;
+alter table lms_backup.snapshots enable row level security;
+
+revoke all on all tables in schema lms_backup from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on all tables in schema lms_backup from anon, authenticated';
+  end if;
+end $$;
+
+-- >>> 20261022001200_lms_notice_sent_button.sql
+-- =====================================================================
+-- 최종 안내: [복사] ≠ 보냄 → 운영자가 [보냈어요]를 눌러야 '보냄' (2026-10-22 대표 승인, 정책 원본 A39(2) 갱신)
+--  - 화면의 [복사]는 문구를 클립보드에 넣기만 하고 아무것도 기록하지 않는다
+--  - [보냈어요] = admin_mark_notice_sent → 그 받는 사람(학생 또는 강사)만 '보냄' (sent_via = 'manual')
+--  - 학생·강사 둘 다 '보냄'이어야 신규 매칭 업무 완료. 한쪽이라도 아니면 처리할 일에 계속 남음 (lms_finish_matching, 그대로)
+--  - 예전 방식으로 기록된 행(sent_via = 'copy', 시험용 DB)은 그대로 둠
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'schedule_notices_sent_via_check'
+             and pg_get_constraintdef(oid) not like '%manual%') then
+    alter table schedule_notices drop constraint schedule_notices_sent_via_check;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'schedule_notices_sent_via_check') then
+    alter table schedule_notices add constraint schedule_notices_sent_via_check
+      check (sent_via in ('copy', 'manual', 'system'));   -- copy = 예전(복사 = 보냄), manual = [보냈어요], system = 자동 발송기
+  end if;
+end $$;
+
+-- [보냈어요] = 그쪽 안내 보냄. 이미 보낸 건은 그대로(시각 안 바뀜). 양쪽 다 보내면 매칭 업무 완료
+create or replace function admin_mark_notice_sent(p_notice_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  nt record;
+  done boolean;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select n.*, p.state as plan_state into nt from schedule_notices n join schedule_plans p on p.id = n.plan_id where n.id = p_notice_id for update of n;
+  if not found then raise exception '안내가 없습니다.'; end if;
+  if nt.plan_state <> 'confirmed' then raise exception '확정된 일정의 안내가 아닙니다.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_mark_notice_sent', true);
+  if nt.status <> 'sent' then
+    update schedule_notices set status = 'sent', sent_at = now(), sent_by = me, sent_via = 'manual',
+                                attempts = attempts + 1, last_attempt_at = now()
+    where id = p_notice_id;
+  end if;
+  done := lms_finish_matching(nt.plan_id, me);
+  return jsonb_build_object('notice_id', p_notice_id, 'status', 'sent', 'repeated', nt.status = 'sent', 'all_sent', done);
+end $$;
+
+-- >>> 20261022001300_lms_import_existing_student.sql
+-- =====================================================================
+-- 기존 학생 간단 입력 (D-52, 정책 원본 H23(3), 2026-10-22 대표 승인)
+--  - 지금 수업 중인 학생의 고정 시간표만: 이름·강사·요일·시각·수업 길이·지금 수강 종료일 → 시작일(기본 오늘)~종료일 정규 수업
+--  - 지난 수업 기록·변경권·보강 권리·결제는 옮기지 않음 (종료 때까지 시트, 재등록 때 정식 등록)
+--  - 확정된 미래 보강: 날짜·시각·수업 길이·담당 강사 → 그날 하나만 있는 수업(kind = 'migrated_makeup')
+--    · 원래 수업이 시트에 있어 makeup_of 를 채울 수 없으므로 일반 보강(makeup)과 구분
+--    · 정규 시간표(regular_schedules)에 넣지 않음 → 그 요일·시각의 정규 수업 가능 시간을 매주 막지 않고 그날만 막음
+--  - 충돌 검사 (저장 전, 하나라도 있으면 아무것도 저장 안 함): 정규·보강 각각
+--    · 같은 강사의 다른 수업과 겹침 / 앞뒤 휴식 10분 부족 (A38, POL-OP-21)
+--    · 강사 휴무·막은 시간 (tutor_time_off)
+--    · 이번 입력끼리 (정규와 보강이 겹침 등)
+--  - 결제 기록이 없으므로 신규 매칭 업무·안내는 만들지 않음 (이미 수업 중인 학생)
+--  - 강사 가능 시간·A37(수업 시작 시각) 밖이어도 막지 않음: 이미 하고 있는 실제 시간표를 옮기는 것이므로
+-- 권한: 운영자(TOTP)만. 같은 요청 번호로 두 번 저장해도 1번만 (registration_requests 재사용)
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- 수업 종류에 '이관 보강' 추가 (제약 교체 — 데이터는 그대로)
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'lessons_kind_check'
+             and pg_get_constraintdef(oid) not like '%migrated_makeup%') then
+    alter table lessons drop constraint lessons_kind_check;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'lessons_kind_check') then
+    alter table lessons add constraint lessons_kind_check
+      check (kind in ('regular', 'makeup', 'compensation', 'carryover', 'migrated_makeup'));
+  end if;
+end $$;
+
+-- 입력 → 수업 후보 (정규 + 보강). 저장하지 않고 목록만
+create or replace function lms_import_candidates(p jsonb)
+returns table (n int, kind text, tutor_id uuid, starts_at timestamptz, ends_at timestamptz, kst_date date, kst_time text)
+language sql stable security definer set search_path = public as $$
+  with slots as (
+    select (x ->> 'weekday')::int as wd, (x ->> 'time')::time as t from jsonb_array_elements(coalesce(p -> 'slots', '[]'::jsonb)) x
+  ), reg as (
+    select d::date as dd, s.t
+    from generate_series((p ->> 'from_date')::date, (p ->> 'end_date')::date, interval '1 day') d
+    join slots s on extract(dow from d)::int = s.wd
+  ), c as (
+    select 'regular'::text as kind, (p ->> 'tutor_id')::uuid as tutor_id, (dd + t) at time zone 'Asia/Seoul' as s0,
+           ((p ->> 'duration_min')::int) as dur, dd, t
+    from reg
+    union all
+    select 'migrated_makeup', (m ->> 'tutor_id')::uuid, ((m ->> 'date')::date + (m ->> 'time')::time) at time zone 'Asia/Seoul',
+           (m ->> 'duration_min')::int, (m ->> 'date')::date, (m ->> 'time')::time
+    from jsonb_array_elements(coalesce(p -> 'makeups', '[]'::jsonb)) m
+  )
+  select (row_number() over (order by s0, kind))::int, kind, tutor_id, s0, s0 + make_interval(mins => dur), dd, to_char(t, 'HH24:MI')
+  from c
+$$;
+revoke all on function lms_import_candidates(jsonb) from public, anon, authenticated;
+
+-- 후보의 충돌 목록 (등록 화면과 같은 모양: date·time·reason + kind·other_*)
+create or replace function lms_import_conflicts(p jsonb)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  with c as (select * from lms_import_candidates(p)),
+  brk as (select interval '10 minutes' as v),   -- A38 (코드 CONFIRMED.minBreakMin 과 같아야 함)
+  hits as (
+    -- 같은 강사의 기존 수업: 겹치면 그 수업 종류, 휴식 10분 안이면 break
+    select c.n, c.kind, c.kst_date, c.kst_time,
+           case when l.starts_at < c.ends_at and c.starts_at < l.ends_at
+                then case when l.kind = 'regular' then 'tutor_regular' else 'tutor_makeup' end else 'break' end as reason,
+           l.starts_at as o0, l.ends_at as o1, s.name_ko as other
+    from c join lessons l on l.tutor_id = c.tutor_id and l.state <> 'canceled'
+                         and l.starts_at < c.ends_at + (select v from brk) and c.starts_at - (select v from brk) < l.ends_at
+    left join students s on s.id = l.student_id
+    union all
+    select c.n, c.kind, c.kst_date, c.kst_time, 'tutor_time_off', o.starts_at, o.ends_at, coalesce(o.reason, '휴무')
+    from c join tutor_time_off o on o.tutor_id = c.tutor_id and o.starts_at < c.ends_at and c.starts_at < o.ends_at
+    union all
+    -- 이번 입력끼리: 같은 강사면 휴식 10분까지, 다른 강사여도 학생 본인 시간이 겹치면
+    select a.n, a.kind, a.kst_date, a.kst_time,
+           case when b.starts_at < a.ends_at and a.starts_at < b.ends_at then 'self' else 'break' end,
+           b.starts_at, b.ends_at, '이번 입력'
+    from c a join c b on a.n <> b.n
+      and ((a.tutor_id = b.tutor_id and b.starts_at < a.ends_at + (select v from brk) and a.starts_at - (select v from brk) < b.ends_at)
+           or (b.starts_at < a.ends_at and a.starts_at < b.ends_at))
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('date', kst_date, 'time', kst_time, 'kind', kind, 'reason', reason,
+                                               'other_starts_at', o0, 'other_ends_at', o1, 'other', other) order by n), '[]'::jsonb)
+  from hits
+$$;
+revoke all on function lms_import_conflicts(jsonb) from public, anon, authenticated;
+
+-- 화면에서 부르는 함수 (운영자 TOTP 세션만)
+-- p = {student:{name_ko,name_en,email,phone,country,city,timezone,admin_memo}, tutor_id, slots:[{weekday,time}],
+--      duration_min, from_date, end_date, makeups:[{date,time,duration_min,tutor_id}]}
+create or replace function admin_import_existing_student(p_request_id uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  prev jsonb;
+  st jsonb := p -> 'student';
+  v_tutor uuid := nullif(p ->> 'tutor_id', '')::uuid;
+  v_dur int := (p ->> 'duration_min')::int;
+  v_from date := (p ->> 'from_date')::date;
+  v_end date := (p ->> 'end_date')::date;
+  v_slots jsonb := coalesce(p -> 'slots', '[]'::jsonb);
+  v_makeups jsonb := coalesce(p -> 'makeups', '[]'::jsonb);
+  m jsonb;
+  s jsonb;
+  conflicts jsonb;
+  n_reg int;
+  n_mk int;
+  sid uuid;
+  scode text;
+  eid uuid;
+  r record;
+  seqn int := 0;
+  res jsonb;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 학생을 입력할 수 있습니다.' using errcode = '42501'; end if;
+  if p_request_id is null then raise exception '요청 번호가 없습니다.'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_request_id::text, 0));
+  select result into prev from registration_requests where id = p_request_id;
+  if found then return prev || '{"repeated": true}'::jsonb; end if;
+
+  -- 입력 확인
+  if coalesce(trim(st ->> 'name_ko'), '') = '' or coalesce(trim(st ->> 'name_en'), '') = '' then raise exception '이름(한글·영문)을 넣어 주세요.'; end if;
+  if v_tutor is null or not exists (select 1 from tutors where id = v_tutor and active) then raise exception '담당 강사를 골라 주세요.'; end if;
+  if v_dur is null or v_dur not in (20, 40, 50) then raise exception '수업 길이는 20·40·50분만 가능합니다.'; end if;
+  if v_from is null or v_end is null or v_end < v_from then raise exception '수강 종료일이 시작일보다 빠릅니다.'; end if;
+  if jsonb_array_length(v_slots) not in (1, 2, 3, 5) then raise exception '주 수업 횟수는 1·2·3·5회만 가능합니다 (지금 %회).', jsonb_array_length(v_slots); end if;
+  if (select count(distinct (x ->> 'weekday')::int) from jsonb_array_elements(v_slots) x) <> jsonb_array_length(v_slots) then
+    raise exception '같은 요일에 정규 수업을 2개 넣을 수 없습니다.';
+  end if;
+  for m in select * from jsonb_array_elements(v_makeups) loop
+    if (m ->> 'date')::date < v_from then raise exception '보강 날짜(%)가 시작일(%)보다 빠릅니다. 지난 보강은 넣지 않아요.', m ->> 'date', v_from; end if;
+    if (m ->> 'duration_min')::int not in (20, 40, 50) then raise exception '보강 수업 길이는 20·40·50분만 가능합니다.'; end if;
+    if not exists (select 1 from tutors where id = (m ->> 'tutor_id')::uuid and active) then raise exception '보강 강사를 골라 주세요.'; end if;
+  end loop;
+
+  select count(*) filter (where kind = 'regular'), count(*) filter (where kind = 'migrated_makeup') into n_reg, n_mk
+  from lms_import_candidates(p);
+  if n_reg = 0 then raise exception '시작일~종료일 사이에 정규 수업이 없습니다. 날짜·요일을 확인해 주세요.'; end if;
+
+  conflicts := lms_import_conflicts(p);
+  if jsonb_array_length(conflicts) > 0 then
+    raise exception '일정 충돌 %건 — 저장하지 않았습니다.', jsonb_array_length(conflicts)
+      using errcode = 'P0001', detail = conflicts::text, hint = 'schedule_conflict';
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_import_existing_student', true);
+
+  insert into students (name_ko, name_en, email, phone, country, city, timezone, admin_memo)
+  values (trim(st ->> 'name_ko'), trim(st ->> 'name_en'), nullif(lower(trim(st ->> 'email')), ''), nullif(st ->> 'phone', ''),
+          nullif(st ->> 'country', ''), nullif(st ->> 'city', ''), st ->> 'timezone', nullif(st ->> 'admin_memo', ''))
+  returning id, code into sid, scode;
+
+  -- 옛 상품 형태(legacy_label)로: 지금 등록의 남은 기간만. 결제·변경권은 시트에 있음 (policy_basis 기본 legacy)
+  insert into enrollments (student_id, seq, legacy_label, weekly_count, duration_min, start_date, base_end_date,
+                           lessons_purchased, status, created_by)
+  values (sid, 1, '기존 학생 이관 (남은 기간만, 결제·변경권은 시트)', jsonb_array_length(v_slots), v_dur, v_from, v_end, n_reg, 'active', me)
+  returning id into eid;
+
+  for s in select * from jsonb_array_elements(v_slots) loop
+    insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from, change_reason)
+    values (sid, v_tutor, (s ->> 'weekday')::smallint, (s ->> 'time')::time, v_dur, v_from, '기존 학생 이관 (D-52)');
+  end loop;
+
+  for r in select * from lms_import_candidates(p) order by starts_at loop
+    if r.kind = 'regular' then seqn := seqn + 1; end if;
+    insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, created_by)
+    values (eid, sid, r.tutor_id, r.kind, case when r.kind = 'regular' then seqn end, r.starts_at, r.ends_at, me);
+  end loop;
+
+  res := jsonb_build_object('student_id', sid, 'student_code', scode, 'enrollment_id', eid, 'lessons', n_reg, 'makeups', n_mk,
+                            'start_date', v_from, 'end_date', v_end);
+  insert into registration_requests (id, created_by, student_id, enrollment_id, result)
+  values (p_request_id, me, sid, eid, res);
+  return res;
+end $$;
+revoke all on function admin_import_existing_student(uuid, jsonb) from public, anon;
+grant execute on function admin_import_existing_student(uuid, jsonb) to authenticated;
+
+-- >>> 20261022001400_lms_fixed_slot_hold.sql
+-- =====================================================================
+-- 재등록 대기 자리 맡아 두기 (정책 원본 A22 · POL-RN-02, 2026-10-22 대표 '넣어', 마감 오후 11:59 확인)
+--  - 수업 중인 학생의 고정 시간(regular_schedules)은 그 학생의 마지막 수강 종료일 23:59 KST까지
+--    종료일 '뒤' 날짜에서도 다른 학생에게 배정하지 않는다 (재등록하면 같은 시간 유지, POL-RN-03)
+--  - 종료일 안쪽은 실제 수업(lessons)이 이미 막고 있으므로, 여기서는 종료일 다음 날부터만 계산
+--  - 마감(종료일 23:59)이 지나면 자동으로 풀림. 재등록하면 새 등록의 수업·종료일 기준으로 다시 계산
+--  - 대상: 결제 확인·수강 중(confirmed·active) 등록이 있는 학생. 결제 대기·완료·취소 등록만 있으면 대상 아님
+--  - 쓰는 곳: 일정안 충돌(lms_plan_conflicts → 신규 등록·강사 시간 고르기·확정 재검사), 기존 학생 입력(lms_import_conflicts)
+--  - 아직 없는 것: 운영자가 '재등록 안 함'으로 미리 푸는 버튼 (필요해지면 추가, 대표 2026-10-22)
+-- 기존 표·데이터를 바꾸지 않음 (함수만 교체). 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- 강사의 [p_start, p_end) 수업 후보가 재등록 대기 중인 고정 시간과 겹치거나 휴식 10분 안인지
+create or replace function lms_slot_hold_hits(p_tutor uuid, p_start timestamptz, p_end timestamptz)
+returns table (student_id uuid, student_name text, hold_end date, o0 timestamptz, o1 timestamptz)
+language sql stable security definer set search_path = public as $$
+  with last_end as (
+    select e.student_id, max(e.final_end_date) as end_date
+    from enrollments e
+    where e.status in ('confirmed', 'active')
+    group by e.student_id
+  ), day as (
+    select ((p_start at time zone 'Asia/Seoul')::date) as d
+  )
+  select rs.student_id, st.name_ko, le.end_date, x.o0, x.o0 + make_interval(mins => rs.duration_min)
+  from regular_schedules rs
+  join last_end le on le.student_id = rs.student_id
+  join students st on st.id = rs.student_id
+  cross join day
+  cross join lateral (select ((day.d + rs.start_time_kst) at time zone 'Asia/Seoul') as o0) x
+  where rs.tutor_id = p_tutor
+    and day.d > le.end_date                                                   -- 종료일 뒤 날짜만 (안쪽은 실제 수업이 막음)
+    and extract(dow from day.d)::int = rs.weekday
+    and rs.effective_from <= le.end_date and (rs.effective_to is null or rs.effective_to >= le.end_date)
+    and now() < ((le.end_date + 1)::timestamp at time zone 'Asia/Seoul')     -- 종료일 23:59 KST까지
+    and x.o0 < p_end + interval '10 minutes' and p_start - interval '10 minutes' < x.o0 + make_interval(mins => rs.duration_min)
+$$;
+revoke all on function lms_slot_hold_hits(uuid, timestamptz, timestamptz) from public, anon, authenticated;
+
+create or replace function lms_plan_conflicts(p_tutor uuid, p_slots jsonb, p_start date, p_end date, p_dur smallint)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break interval := interval '10 minutes';   -- POL-OP-21 (코드 CONFIRMED.minBreakMin 과 같아야 함)
+  d date := p_start;
+  s jsonb;
+  t0 timestamptz;
+  t1 timestamptz;
+  out jsonb := '[]'::jsonb;
+begin
+  while d <= p_end loop
+    select x into s from jsonb_array_elements(p_slots) x where (x ->> 'weekday')::int = extract(dow from d);
+    if found then
+      t0 := (d + (s ->> 'time')::time) at time zone 'Asia/Seoul';
+      t1 := t0 + make_interval(mins => p_dur);
+      out := out || coalesce((
+        select jsonb_agg(jsonb_build_object('date', d, 'time', s ->> 'time', 'reason',
+                 case when l.starts_at < t1 and t0 < l.ends_at then (case when l.kind = 'regular' then 'tutor_regular' else 'tutor_makeup' end) else 'break' end,
+                 'other_starts_at', l.starts_at, 'other_ends_at', l.ends_at))
+        from lessons l
+        where l.tutor_id = p_tutor and l.state <> 'canceled'
+          and l.starts_at < t1 + v_break and t0 - v_break < l.ends_at), '[]'::jsonb);
+      out := out || coalesce((
+        select jsonb_agg(jsonb_build_object('date', d, 'time', s ->> 'time', 'reason', 'tutor_time_off',
+                 'other_starts_at', o.starts_at, 'other_ends_at', o.ends_at))
+        from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < t1 and t0 < o.ends_at), '[]'::jsonb);
+      -- 재등록 대기 중인 다른 학생의 고정 시간 (A22, migration 1400)
+      out := out || coalesce((
+        select jsonb_agg(jsonb_build_object('date', d, 'time', s ->> 'time', 'reason', 'tutor_hold',
+                 'other_starts_at', h.o0, 'other_ends_at', h.o1, 'other', h.student_name, 'hold_end', h.hold_end))
+        from lms_slot_hold_hits(p_tutor, t0, t1) h), '[]'::jsonb);
+    end if;
+    d := d + 1;
+  end loop;
+  return out;
+end $$;
+revoke all on function lms_plan_conflicts(uuid, jsonb, date, date, smallint) from public, anon, authenticated;
+
+create or replace function lms_import_conflicts(p jsonb)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  with c as (select * from lms_import_candidates(p)),
+  brk as (select interval '10 minutes' as v),   -- A38 (코드 CONFIRMED.minBreakMin 과 같아야 함)
+  hits as (
+    -- 같은 강사의 기존 수업: 겹치면 그 수업 종류, 휴식 10분 안이면 break
+    select c.n, c.kind, c.kst_date, c.kst_time,
+           case when l.starts_at < c.ends_at and c.starts_at < l.ends_at
+                then case when l.kind = 'regular' then 'tutor_regular' else 'tutor_makeup' end else 'break' end as reason,
+           l.starts_at as o0, l.ends_at as o1, s.name_ko as other
+    from c join lessons l on l.tutor_id = c.tutor_id and l.state <> 'canceled'
+                         and l.starts_at < c.ends_at + (select v from brk) and c.starts_at - (select v from brk) < l.ends_at
+    left join students s on s.id = l.student_id
+    union all
+    select c.n, c.kind, c.kst_date, c.kst_time, 'tutor_time_off', o.starts_at, o.ends_at, coalesce(o.reason, '휴무')
+    from c join tutor_time_off o on o.tutor_id = c.tutor_id and o.starts_at < c.ends_at and c.starts_at < o.ends_at
+    union all
+    -- 재등록 대기 중인 다른 학생의 고정 시간 (A22, migration 1400)
+    select c.n, c.kind, c.kst_date, c.kst_time, 'tutor_hold', h.o0, h.o1, h.student_name || ' · ' || to_char(h.hold_end, 'MM/DD') || ' 23:59까지'
+    from c cross join lateral lms_slot_hold_hits(c.tutor_id, c.starts_at, c.ends_at) h
+    union all
+    -- 이번 입력끼리: 같은 강사면 휴식 10분까지, 다른 강사여도 학생 본인 시간이 겹치면
+    select a.n, a.kind, a.kst_date, a.kst_time,
+           case when b.starts_at < a.ends_at and a.starts_at < b.ends_at then 'self' else 'break' end,
+           b.starts_at, b.ends_at, '이번 입력'
+    from c a join c b on a.n <> b.n
+      and ((a.tutor_id = b.tutor_id and b.starts_at < a.ends_at + (select v from brk) and a.starts_at - (select v from brk) < b.ends_at)
+           or (b.starts_at < a.ends_at and a.starts_at < b.ends_at))
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('date', kst_date, 'time', kst_time, 'kind', kind, 'reason', reason,
+                                               'other_starts_at', o0, 'other_ends_at', o1, 'other', other) order by n), '[]'::jsonb)
+  from hits
+$$;
+revoke all on function lms_import_conflicts(jsonb) from public, anon, authenticated;
+
+-- >>> 20261024001500_lms_import_expanded.sql
+-- =====================================================================
+-- 기존 학생 입력 확대 (D-52 확대판, 정책 원본 H26 · 2026-10-24 대표 결정 6가지)
+--  기존 화면(migration 1300)·충돌 검사(1400)는 그대로 쓰고, 넣는 내용만 늘림
+--  1. 남은 수업 = 아직 진행·차감되지 않은 수업 전부 = 정규 + 예약된 보강 + 미예약 보강 + 추가 수업
+--     · 시트에는 남은 수가 따로 없음 → '시트 총 수업 수 − 이미 진행·차감된 수(Class Status 기준, 회차 번호 아님)'와 비교
+--     · 한 수업을 정규·보강으로 두 번 세지 않음: 보강의 원래 수업 날짜가 시작일 이후면 그날 정규 수업을 만들지 않음
+--  2. 숫자가 달라도 저장. 시트 대조 전·원래 날짜 확인 필요는 대시보드 '처리할 일'에 남고, 확인하면 사라짐
+--  3. [+ 수업 날짜 추가](근거 필수, 그날 하나만) · [+ 미예약 보강](원래 수업 날짜 또는 '날짜 확인 필요') 구분
+--  4. 보강의 원래 수업 날짜는 원칙적으로 필수. 시트에서 알 수 없으면 가짜 날짜 대신 '날짜 확인 필요'
+--  5. 시트 대조 결과는 확인 시각·담당자로 기록 (import_checks) — 한 번 확인한 학생은 다시 묻지 않음
+--  6. LMS 전환일(students.lms_since)은 비워 둠 = 시트로 관리. 학생 상세에서 나중에 정함 (입력일 ≠ 전환일, H26(7))
+--  + 지금 28일 수강기간·그 기간 남은 변경권 (기존 정책: 기간마다 주1회 1·주2회 2·주3회 이상 3, 이월 없음)
+-- 권한: 운영자(TOTP)만. 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- 수업 종류에 '이관 추가 수업' 추가 (제약 교체 — 데이터는 그대로)
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'lessons_kind_check'
+             and pg_get_constraintdef(oid) not like '%migrated_extra%') then
+    alter table lessons drop constraint lessons_kind_check;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'lessons_kind_check') then
+    alter table lessons add constraint lessons_kind_check
+      check (kind in ('regular', 'makeup', 'compensation', 'carryover', 'migrated_makeup', 'migrated_extra'));
+  end if;
+end $$;
+
+-- LMS 전환일: 이날부터 이 학생의 수업기록·변경권·보강은 LMS만. 비어 있으면 시트로 관리 (학생 상세에서 정함)
+alter table students add column if not exists lms_since date;
+
+-- 이관한 보강·추가 수업 (원래 수업은 시트에 있어 lessons.makeup_of 로 연결할 수 없음)
+create table if not exists migrated_items (
+  id uuid primary key default gen_random_uuid(),
+  enrollment_id uuid not null references enrollments(id),
+  kind text not null check (kind in ('makeup_booked', 'makeup_open', 'extra')),
+  lesson_id uuid unique references lessons(id),     -- 예약된 보강·추가 수업의 그날 수업 (미예약 보강은 없음)
+  original_date date,                               -- 보강의 원래 수업 날짜 (한국 날짜)
+  origin_unknown boolean not null default false,    -- 시트에서 원래 날짜를 알 수 없음 → '날짜 확인 필요' (가짜 날짜 금지)
+  origin_checked_at timestamptz,                    -- 나중에 날짜를 넣었거나 '확인 불가'로 정리한 시각
+  origin_checked_by uuid,
+  reason text,                                      -- 추가 수업의 근거 (예: 시트 18회차 · 이월 1회)
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  check ((kind = 'makeup_open') = (lesson_id is null)),
+  check (kind = 'extra' or ((original_date is not null) <> origin_unknown)),
+  check (kind <> 'extra' or (coalesce(trim(reason), '') <> '' and original_date is null and not origin_unknown)),
+  check (not origin_unknown or origin_checked_at is null or origin_checked_by is not null)
+);
+create index if not exists migrated_items_enrollment on migrated_items (enrollment_id);
+-- 같은 원래 수업으로 보강 두 개 금지 (한 수업 = 보강 하나)
+create unique index if not exists migrated_items_one_makeup_per_origin on migrated_items (enrollment_id, original_date)
+  where original_date is not null;
+
+-- 시트 대조 기록 (입력 때 숫자 + 운영진 확인 시각·담당자)
+create table if not exists import_checks (
+  id uuid primary key default gen_random_uuid(),
+  enrollment_id uuid not null unique references enrollments(id),
+  sheet_total integer not null check (sheet_total >= 0),                         -- 시트의 등록 총 수업 수
+  sheet_used integer not null check (sheet_used >= 0 and sheet_used <= sheet_total),  -- 시트에서 이미 진행·차감된 수
+  lms_left integer not null check (lms_left >= 0),                               -- 저장 때 LMS 남은 수업 (정규+보강+미예약+추가)
+  checked_at timestamptz,
+  checked_by uuid,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  check ((checked_at is null) = (checked_by is null))
+);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['migrated_items', 'import_checks'] loop
+    if not exists (select 1 from pg_trigger where tgname = t || '_audit') then
+      perform lms_protect(t::regclass);   -- 변경 이력 + RLS(운영자만 읽기) + 앱 사용자 쓰기 금지
+      execute format('create trigger %I before delete on %I for each row execute function forbid_delete()', t || '_no_delete', t);
+    end if;
+  end loop;
+end $$;
+
+-- 입력 → 수업 후보 (출력 모양은 1300과 같음). 저장하지 않고 목록만
+--  · 정규: 시작일~종료일, 보강의 원래 날짜(시작일 이후)·운영진이 뺀 날짜(skip_dates)는 만들지 않음
+--  · 예약된 보강(status booked) → migrated_makeup, 수업 날짜 추가 → migrated_extra (정규 강사·길이)
+create or replace function lms_import_candidates(p jsonb)
+returns table (n int, kind text, tutor_id uuid, starts_at timestamptz, ends_at timestamptz, kst_date date, kst_time text)
+language sql stable security definer set search_path = public as $$
+  with slots as (
+    select (x ->> 'weekday')::int as wd, (x ->> 'time')::time as t from jsonb_array_elements(coalesce(p -> 'slots', '[]'::jsonb)) x
+  ), skip as (
+    select (m ->> 'original_date')::date as d from jsonb_array_elements(coalesce(p -> 'makeups', '[]'::jsonb)) m
+    where nullif(m ->> 'original_date', '') is not null
+    union
+    select x::date from jsonb_array_elements_text(coalesce(p -> 'skip_dates', '[]'::jsonb)) x
+  ), reg as (
+    select d::date as dd, s.t
+    from generate_series((p ->> 'from_date')::date, (p ->> 'end_date')::date, interval '1 day') d
+    join slots s on extract(dow from d)::int = s.wd
+    where d::date not in (select d from skip where d is not null)
+  ), c as (
+    select 'regular'::text as kind, (p ->> 'tutor_id')::uuid as tutor_id, (dd + t) at time zone 'Asia/Seoul' as s0,
+           ((p ->> 'duration_min')::int) as dur, dd, t
+    from reg
+    union all
+    select 'migrated_makeup', (m ->> 'tutor_id')::uuid, ((m ->> 'date')::date + (m ->> 'time')::time) at time zone 'Asia/Seoul',
+           (m ->> 'duration_min')::int, (m ->> 'date')::date, (m ->> 'time')::time
+    from jsonb_array_elements(coalesce(p -> 'makeups', '[]'::jsonb)) m
+    where coalesce(m ->> 'status', 'booked') = 'booked'
+    union all
+    select 'migrated_extra', (p ->> 'tutor_id')::uuid, ((x ->> 'date')::date + (x ->> 'time')::time) at time zone 'Asia/Seoul',
+           (p ->> 'duration_min')::int, (x ->> 'date')::date, (x ->> 'time')::time
+    from jsonb_array_elements(coalesce(p -> 'extras', '[]'::jsonb)) x
+  )
+  select (row_number() over (order by s0, kind))::int, kind, tutor_id, s0, s0 + make_interval(mins => dur), dd, to_char(t, 'HH24:MI')
+  from c
+$$;
+revoke all on function lms_import_candidates(jsonb) from public, anon, authenticated;
+
+-- 화면에서 부르는 함수 (운영자 TOTP 세션만). 1300의 입력에 더해:
+-- p.course = {weeks, period_idx, period_start, credits_left}   지금 28일 기간·그 기간 남은 변경권
+-- p.sheet = {total, used}                                       시트 총 수업 수·이미 진행·차감된 수
+-- p.makeups[] = {status: booked|open, original_date | origin_unknown, date, time, duration_min, tutor_id (booked만)}
+-- p.extras[] = {date, time, reason}                             수업 날짜 추가 (근거 필수)
+-- p.skip_dates[] = 정규에서 뺄 날짜 (시트보다 많을 때 운영진이 고름)
+create or replace function admin_import_existing_student(p_request_id uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  prev jsonb;
+  st jsonb := p -> 'student';
+  co jsonb := p -> 'course';
+  sh jsonb := p -> 'sheet';
+  v_tutor uuid := nullif(p ->> 'tutor_id', '')::uuid;
+  v_dur int := (p ->> 'duration_min')::int;
+  v_from date := (p ->> 'from_date')::date;
+  v_end date := (p ->> 'end_date')::date;
+  v_slots jsonb := coalesce(p -> 'slots', '[]'::jsonb);
+  v_makeups jsonb := coalesce(p -> 'makeups', '[]'::jsonb);
+  v_extras jsonb := coalesce(p -> 'extras', '[]'::jsonb);
+  v_weeks int := (co ->> 'weeks')::int;
+  v_pidx int := (co ->> 'period_idx')::int;
+  v_pstart date := (co ->> 'period_start')::date;
+  v_cleft int := (co ->> 'credits_left')::int;
+  v_total int := (sh ->> 'total')::int;
+  v_used int := (sh ->> 'used')::int;
+  v_grant int;
+  m jsonb;
+  s jsonb;
+  conflicts jsonb;
+  n_reg int;
+  n_mk int;
+  n_open int;
+  n_ex int;
+  sid uuid;
+  scode text;
+  eid uuid;
+  pid uuid;
+  lid uuid;
+  r record;
+  i int;
+  seqn int := 0;
+  res jsonb;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 학생을 입력할 수 있습니다.' using errcode = '42501'; end if;
+  if p_request_id is null then raise exception '요청 번호가 없습니다.'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_request_id::text, 0));
+  select result into prev from registration_requests where id = p_request_id;
+  if found then return prev || '{"repeated": true}'::jsonb; end if;
+
+  -- 입력 확인
+  if coalesce(trim(st ->> 'name_ko'), '') = '' or coalesce(trim(st ->> 'name_en'), '') = '' then raise exception '이름(한글·영문)을 넣어 주세요.'; end if;
+  if v_tutor is null or not exists (select 1 from tutors where id = v_tutor and active) then raise exception '담당 강사를 골라 주세요.'; end if;
+  if v_dur is null or v_dur not in (20, 40, 50) then raise exception '수업 길이는 20·40·50분만 가능합니다.'; end if;
+  if v_from is null or v_end is null or v_end < v_from then raise exception '수강 종료일이 시작일보다 빠릅니다.'; end if;
+  if jsonb_array_length(v_slots) not in (1, 2, 3, 5) then raise exception '주 수업 횟수는 1·2·3·5회만 가능합니다 (지금 %회).', jsonb_array_length(v_slots); end if;
+  if (select count(distinct (x ->> 'weekday')::int) from jsonb_array_elements(v_slots) x) <> jsonb_array_length(v_slots) then
+    raise exception '같은 요일에 정규 수업을 2개 넣을 수 없습니다.';
+  end if;
+  v_grant := least(jsonb_array_length(v_slots), 3);   -- 기간마다 변경권: 주1회 1·주2회 2·주3회 이상 3 (POL-CHG-03, credits.ts)
+
+  if v_weeks is null or v_weeks not in (4, 12, 24) then raise exception '상품(1·3·6개월)을 골라 주세요.'; end if;
+  if v_pidx is null or v_pidx < 1 or v_pidx > v_weeks / 4 then raise exception '지금 몇 번째 기간인지 골라 주세요.'; end if;
+  if v_pstart is null then raise exception '지금 기간의 시작일을 넣어 주세요.'; end if;
+  if v_cleft is null or v_cleft < 0 or v_cleft > v_grant then raise exception '이 기간 남은 변경권은 0~%개입니다.', v_grant; end if;
+  if v_total is null or v_used is null or v_total < 0 or v_used < 0 or v_used > v_total then
+    raise exception '시트의 총 수업 수와 진행·차감된 수를 확인해 주세요.';
+  end if;
+
+  for m in select * from jsonb_array_elements(v_makeups) loop
+    if coalesce(m ->> 'status', '') not in ('booked', 'open') then raise exception '보강이 예약됨인지 미예약인지 골라 주세요.'; end if;
+    if (nullif(m ->> 'original_date', '') is null) = not coalesce((m ->> 'origin_unknown')::boolean, false) then
+      raise exception '보강의 원래 수업 날짜를 넣거나 ''날짜 확인 필요''를 골라 주세요.';
+    end if;
+    if m ->> 'status' = 'booked' then
+      if (m ->> 'date')::date < v_from then raise exception '보강 날짜(%)가 시작일(%)보다 빠릅니다. 지난 보강은 넣지 않아요.', m ->> 'date', v_from; end if;
+      if (m ->> 'duration_min')::int not in (20, 40, 50) then raise exception '보강 수업 길이는 20·40·50분만 가능합니다.'; end if;
+      if not exists (select 1 from tutors where id = (m ->> 'tutor_id')::uuid and active) then raise exception '보강 강사를 골라 주세요.'; end if;
+    end if;
+  end loop;
+  if (select count(*) - count(distinct y ->> 'original_date') from jsonb_array_elements(v_makeups) y where nullif(y ->> 'original_date', '') is not null) > 0 then
+    raise exception '같은 원래 수업 날짜의 보강이 두 개 있어요. 한 수업에는 보강 하나입니다.';
+  end if;
+  for m in select * from jsonb_array_elements(v_extras) loop
+    if coalesce(trim(m ->> 'reason'), '') = '' then raise exception '추가 수업의 근거를 적어 주세요 (예: 시트 몇 회차).'; end if;
+    if (m ->> 'date')::date < v_from then raise exception '추가 수업 날짜(%)가 시작일보다 빠릅니다.', m ->> 'date'; end if;
+  end loop;
+
+  select count(*) filter (where kind = 'regular'), count(*) filter (where kind = 'migrated_makeup'), count(*) filter (where kind = 'migrated_extra')
+    into n_reg, n_mk, n_ex
+  from lms_import_candidates(p);
+  n_open := (select count(*) from jsonb_array_elements(v_makeups) y where y ->> 'status' = 'open');
+  if n_reg = 0 then raise exception '시작일~종료일 사이에 정규 수업이 없습니다. 날짜·요일을 확인해 주세요.'; end if;
+
+  conflicts := lms_import_conflicts(p);
+  if jsonb_array_length(conflicts) > 0 then
+    raise exception '일정 충돌 %건 — 저장하지 않았습니다.', jsonb_array_length(conflicts)
+      using errcode = 'P0001', detail = conflicts::text, hint = 'schedule_conflict';
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_import_existing_student', true);
+
+  insert into students (name_ko, name_en, email, phone, country, city, timezone, admin_memo)
+  values (trim(st ->> 'name_ko'), trim(st ->> 'name_en'), nullif(lower(trim(st ->> 'email')), ''), nullif(st ->> 'phone', ''),
+          nullif(st ->> 'country', ''), nullif(st ->> 'city', ''), st ->> 'timezone', nullif(st ->> 'admin_memo', ''))
+  returning id, code into sid, scode;   -- lms_since 비움 = 시트로 관리
+
+  -- 옛 상품 형태(legacy_label): 지금 등록의 남은 기간. 총 수업 수는 시트 숫자, 결제는 시트
+  insert into enrollments (student_id, seq, legacy_label, weekly_count, duration_min, start_date, base_end_date,
+                           lessons_purchased, status, created_by)
+  values (sid, 1, format('기존 학생 이관 · %s주 (결제는 시트)', v_weeks), jsonb_array_length(v_slots), v_dur, v_from, v_end,
+          greatest(v_total, 1), 'active', me)
+  returning id into eid;
+
+  -- 지금 기간 ~ 마지막 기간 (28일씩). 지금 기간은 남은 변경권만큼 남기고, 다음 기간부터 새로 지급
+  for i in v_pidx .. v_weeks / 4 loop
+    insert into enrollment_periods (enrollment_id, idx, start_date, end_date, credits_granted)
+    values (eid, i, v_pstart + (i - v_pidx) * 28, v_pstart + (i - v_pidx) * 28 + 27, v_grant)
+    returning id into pid;
+    if i = v_pidx then
+      for seqn in 1 .. v_grant - v_cleft loop
+        insert into credit_ledger (period_id, reason, delta, note, created_by)
+        values (pid, 'admin_adjust', -1, '기존 학생 이관: 시트에서 이미 사용한 변경권', me);
+      end loop;
+    end if;
+  end loop;
+  seqn := 0;
+
+  for s in select * from jsonb_array_elements(v_slots) loop
+    insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from, change_reason)
+    values (sid, v_tutor, (s ->> 'weekday')::smallint, (s ->> 'time')::time, v_dur, v_from, '기존 학생 이관 (D-52)');
+  end loop;
+
+  for r in select * from lms_import_candidates(p) order by starts_at loop
+    if r.kind = 'regular' then seqn := seqn + 1; end if;
+    insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, created_by)
+    values (eid, sid, r.tutor_id, r.kind, case when r.kind = 'regular' then seqn end, r.starts_at, r.ends_at, me)
+    returning id into lid;
+    if r.kind = 'migrated_makeup' then
+      select x into m from jsonb_array_elements(v_makeups) x
+      where x ->> 'status' = 'booked' and (x ->> 'date')::date = r.kst_date and to_char((x ->> 'time')::time, 'HH24:MI') = r.kst_time limit 1;
+      insert into migrated_items (enrollment_id, kind, lesson_id, original_date, origin_unknown, created_by)
+      values (eid, 'makeup_booked', lid, nullif(m ->> 'original_date', '')::date, coalesce((m ->> 'origin_unknown')::boolean, false), me);
+    elsif r.kind = 'migrated_extra' then
+      select x into m from jsonb_array_elements(v_extras) x
+      where (x ->> 'date')::date = r.kst_date and to_char((x ->> 'time')::time, 'HH24:MI') = r.kst_time limit 1;
+      insert into migrated_items (enrollment_id, kind, lesson_id, reason, created_by) values (eid, 'extra', lid, trim(m ->> 'reason'), me);
+    end if;
+  end loop;
+  for m in select * from jsonb_array_elements(v_makeups) x where x ->> 'status' = 'open' loop
+    insert into migrated_items (enrollment_id, kind, original_date, origin_unknown, created_by)
+    values (eid, 'makeup_open', nullif(m ->> 'original_date', '')::date, coalesce((m ->> 'origin_unknown')::boolean, false), me);
+  end loop;
+
+  insert into import_checks (enrollment_id, sheet_total, sheet_used, lms_left, created_by)
+  values (eid, v_total, v_used, n_reg + n_mk + n_open + n_ex, me);
+
+  res := jsonb_build_object('student_id', sid, 'student_code', scode, 'enrollment_id', eid, 'lessons', n_reg, 'makeups', n_mk,
+                            'open_makeups', n_open, 'extras', n_ex, 'lms_left', n_reg + n_mk + n_open + n_ex,
+                            'sheet_left', v_total - v_used, 'start_date', v_from, 'end_date', v_end);
+  insert into registration_requests (id, created_by, student_id, enrollment_id, result)
+  values (p_request_id, me, sid, eid, res);
+  return res;
+end $$;
+revoke all on function admin_import_existing_student(uuid, jsonb) from public, anon;
+grant execute on function admin_import_existing_student(uuid, jsonb) to authenticated;
+
+-- 시트와 대조 완료: 확인 시각·담당자 기록 → 처리할 일에서 빠짐. 이미 완료면 그대로 (다시 묻지 않음)
+create or replace function admin_import_mark_checked(p_enrollment uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  c import_checks;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into c from import_checks where enrollment_id = p_enrollment for update;
+  if not found then raise exception '이관 기록이 없는 수강등록입니다.'; end if;
+  if c.checked_at is null then
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_import_mark_checked', true);
+    update import_checks set checked_at = now(), checked_by = me where enrollment_id = p_enrollment returning * into c;
+  end if;
+  return jsonb_build_object('checked_at', c.checked_at, 'checked_by', c.checked_by);
+end $$;
+revoke all on function admin_import_mark_checked(uuid) from public, anon;
+grant execute on function admin_import_mark_checked(uuid) to authenticated;
+
+-- 보강의 원래 수업 날짜 '확인 필요' 정리: 날짜를 찾았으면 넣고(입력 시작일 전 날짜만 — 그 뒤 날짜는 정규 수업이 이미 있어
+-- 두 번 세게 됨), 시트에서도 끝내 알 수 없으면 p_date 없이 '확인 불가'로 정리 (가짜 날짜 금지)
+create or replace function admin_import_set_origin(p_item uuid, p_date date)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it migrated_items;
+  v_from date;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into it from migrated_items where id = p_item for update;
+  if not found or it.kind = 'extra' then raise exception '보강 기록이 아닙니다.'; end if;
+  if not it.origin_unknown then raise exception '이미 원래 날짜가 있는 보강입니다.'; end if;
+  select start_date into v_from from enrollments where id = it.enrollment_id;
+  if p_date is not null and p_date >= v_from then
+    raise exception '원래 날짜는 입력 시작일(%) 전이어야 합니다. 그 뒤 날짜는 정규 수업이 이미 있어요.', v_from;
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_import_set_origin', true);
+  if p_date is not null then
+    update migrated_items set original_date = p_date, origin_unknown = false, origin_checked_at = now(), origin_checked_by = me where id = p_item;
+  else
+    update migrated_items set origin_checked_at = now(), origin_checked_by = me where id = p_item;
+  end if;
+end $$;
+revoke all on function admin_import_set_origin(uuid, date) from public, anon;
+grant execute on function admin_import_set_origin(uuid, date) to authenticated;
+
+-- >>> 20261026001600_lms_import_course_dates.sql
+-- =====================================================================
+-- 기존 학생 입력 시안 2 (D-52, 2026-10-26 대표 승인 · 강사 휴가 처리 원칙 A41 ④)
+--  1500(기존 학생 입력 확대) 위에 고침. 함수 교체 + import_checks 칸 2개 추가. 기존 데이터는 바꾸지 않음
+--  1. 정규 수업은 28일 기간 계산 끝까지만 만든다. 종료일이 그보다 늦어도(연장) 늘어난 날에는 정규 수업을 만들지 않는다
+--     (연장 = 새 정규 수업 추가가 아니라 미완료 수업을 끝낼 수 있는 기간 확대. 늘어난 날에는 보강·추가 수업만)
+--  2. 늘어난 날은 연장 기록(enrollment_extensions)으로 남김: base_end = 계산 끝, final_end = 시트 종료일
+--     이유: 강사 장기 휴무 연장 / 학생 장기 연기(24주만) / 기타(메모). 안 고르면 저장은 하되 '종료일 이유 확인'으로 처리할 일에 남김
+--     (2026-10-26 대표: 기록만 남기고 끝내지 않음) → 운영진이 이유를 고르면(admin_import_set_end_reason) 사라짐
+--  3. 수강 시작일(1기간 시작)부터 모든 28일 기간을 기록 (지난 기간 포함). 지금 기간의 남은 변경권만 시트 값으로
+--  4. 보강·추가 수업 날짜는 수강 종료일(연장 포함)까지만
+--  5. 원래 날짜 정리(admin_import_set_origin)의 기준 '입력 시작일' = LMS가 만든 첫 수업 날 (start_date 가 수강 시작일로 바뀌어서)
+-- 다시 실행해도 같은 결과
+-- =====================================================================
+
+alter table import_checks add column if not exists end_reason text;   -- 종료일이 계산과 다를 때 이유 (enrollment_extensions.reason 과 같은 값)
+alter table import_checks add column if not exists end_note text;
+alter table import_checks add column if not exists end_days integer not null default 0;     -- 종료일 − 기간 계산 끝 (0 = 같음)
+alter table import_checks add column if not exists weeks integer;                            -- 상품 (학생 장기 연기는 24주만 확인용)
+alter table import_checks add column if not exists end_checked_at timestamptz;               -- 종료일 이유를 정한 시각·담당자
+alter table import_checks add column if not exists end_checked_by uuid;
+-- 강사 휴가로 생긴 보강 (A41): 수강 종료일이 지나도 보강 권리가 사라지지 않고, 보강을 종료일 뒤로 잡으면 연장으로 처리
+alter table migrated_items add column if not exists tutor_leave boolean not null default false;
+
+-- 정규 수업 마지막 날 = 종료일과 28일 기간 계산 끝 중 빠른 날 (course 가 없으면 종료일)
+create or replace function lms_import_regular_end(p jsonb)
+returns date
+language sql immutable as $$
+  select case when p -> 'course' ->> 'period_start' is null then (p ->> 'end_date')::date
+              else least((p ->> 'end_date')::date,
+                         (p -> 'course' ->> 'period_start')::date
+                           + ((p -> 'course' ->> 'weeks')::int / 4 - (p -> 'course' ->> 'period_idx')::int + 1) * 28 - 1) end
+$$;
+revoke all on function lms_import_regular_end(jsonb) from public, anon, authenticated;
+
+-- 입력 → 수업 후보: 정규는 위 마지막 날까지
+create or replace function lms_import_candidates(p jsonb)
+returns table (n int, kind text, tutor_id uuid, starts_at timestamptz, ends_at timestamptz, kst_date date, kst_time text)
+language sql stable security definer set search_path = public as $$
+  with slots as (
+    select (x ->> 'weekday')::int as wd, (x ->> 'time')::time as t from jsonb_array_elements(coalesce(p -> 'slots', '[]'::jsonb)) x
+  ), skip as (
+    select (m ->> 'original_date')::date as d from jsonb_array_elements(coalesce(p -> 'makeups', '[]'::jsonb)) m
+    where nullif(m ->> 'original_date', '') is not null
+    union
+    select x::date from jsonb_array_elements_text(coalesce(p -> 'skip_dates', '[]'::jsonb)) x
+  ), reg as (
+    select d::date as dd, s.t
+    from generate_series((p ->> 'from_date')::date, lms_import_regular_end(p), interval '1 day') d
+    join slots s on extract(dow from d)::int = s.wd
+    where d::date not in (select d from skip where d is not null)
+  ), c as (
+    select 'regular'::text as kind, (p ->> 'tutor_id')::uuid as tutor_id, (dd + t) at time zone 'Asia/Seoul' as s0,
+           ((p ->> 'duration_min')::int) as dur, dd, t
+    from reg
+    union all
+    select 'migrated_makeup', (m ->> 'tutor_id')::uuid, ((m ->> 'date')::date + (m ->> 'time')::time) at time zone 'Asia/Seoul',
+           (m ->> 'duration_min')::int, (m ->> 'date')::date, (m ->> 'time')::time
+    from jsonb_array_elements(coalesce(p -> 'makeups', '[]'::jsonb)) m
+    where coalesce(m ->> 'status', 'booked') = 'booked'
+    union all
+    select 'migrated_extra', (p ->> 'tutor_id')::uuid, ((x ->> 'date')::date + (x ->> 'time')::time) at time zone 'Asia/Seoul',
+           (p ->> 'duration_min')::int, (x ->> 'date')::date, (x ->> 'time')::time
+    from jsonb_array_elements(coalesce(p -> 'extras', '[]'::jsonb)) x
+  )
+  select (row_number() over (order by s0, kind))::int, kind, tutor_id, s0, s0 + make_interval(mins => dur), dd, to_char(t, 'HH24:MI')
+  from c
+$$;
+revoke all on function lms_import_candidates(jsonb) from public, anon, authenticated;
+
+-- 저장 함수 (1500과 같고 위 1~4만 다름)
+create or replace function admin_import_existing_student(p_request_id uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  prev jsonb;
+  st jsonb := p -> 'student';
+  co jsonb := p -> 'course';
+  sh jsonb := p -> 'sheet';
+  v_tutor uuid := nullif(p ->> 'tutor_id', '')::uuid;
+  v_dur int := (p ->> 'duration_min')::int;
+  v_from date := (p ->> 'from_date')::date;
+  v_end date := (p ->> 'end_date')::date;
+  v_slots jsonb := coalesce(p -> 'slots', '[]'::jsonb);
+  v_makeups jsonb := coalesce(p -> 'makeups', '[]'::jsonb);
+  v_extras jsonb := coalesce(p -> 'extras', '[]'::jsonb);
+  v_weeks int := (co ->> 'weeks')::int;
+  v_pidx int := (co ->> 'period_idx')::int;
+  v_pstart date := (co ->> 'period_start')::date;
+  v_cleft int := (co ->> 'credits_left')::int;
+  v_total int := (sh ->> 'total')::int;
+  v_used int := (sh ->> 'used')::int;
+  v_grant int;
+  v_cstart date;     -- 수강 시작일 (1기간 시작)
+  v_calc_end date;   -- 28일 기간 계산 끝 = 정규 수업 마지막 날 상한
+  v_reason text := nullif(p -> 'extension' ->> 'reason', '');
+  v_note text := nullif(trim(p -> 'extension' ->> 'note'), '');
+  m jsonb;
+  s jsonb;
+  conflicts jsonb;
+  n_reg int;
+  n_mk int;
+  n_open int;
+  n_ex int;
+  sid uuid;
+  scode text;
+  eid uuid;
+  pid uuid;
+  lid uuid;
+  r record;
+  i int;
+  seqn int := 0;
+  res jsonb;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 학생을 입력할 수 있습니다.' using errcode = '42501'; end if;
+  if p_request_id is null then raise exception '요청 번호가 없습니다.'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_request_id::text, 0));
+  select result into prev from registration_requests where id = p_request_id;
+  if found then return prev || '{"repeated": true}'::jsonb; end if;
+
+  -- 입력 확인
+  if coalesce(trim(st ->> 'name_ko'), '') = '' or coalesce(trim(st ->> 'name_en'), '') = '' then raise exception '이름(한글·영문)을 넣어 주세요.'; end if;
+  if v_tutor is null or not exists (select 1 from tutors where id = v_tutor and active) then raise exception '담당 강사를 골라 주세요.'; end if;
+  if v_dur is null or v_dur not in (20, 40, 50) then raise exception '수업 길이는 20·40·50분만 가능합니다.'; end if;
+  if v_from is null or v_end is null or v_end < v_from then raise exception '수강 종료일이 시작일보다 빠릅니다.'; end if;
+  if jsonb_array_length(v_slots) not in (1, 2, 3, 5) then raise exception '주 수업 횟수는 1·2·3·5회만 가능합니다 (지금 %회).', jsonb_array_length(v_slots); end if;
+  if (select count(distinct (x ->> 'weekday')::int) from jsonb_array_elements(v_slots) x) <> jsonb_array_length(v_slots) then
+    raise exception '같은 요일에 정규 수업을 2개 넣을 수 없습니다.';
+  end if;
+  v_grant := least(jsonb_array_length(v_slots), 3);   -- 기간마다 변경권: 주1회 1·주2회 2·주3회 이상 3 (POL-CHG-03, credits.ts)
+
+  if v_weeks is null or v_weeks not in (4, 12, 24) then raise exception '상품(1·3·6개월)을 골라 주세요.'; end if;
+  if v_pidx is null or v_pidx < 1 or v_pidx > v_weeks / 4 then raise exception '지금 몇 번째 기간인지 골라 주세요.'; end if;
+  if v_pstart is null then raise exception '지금 기간의 시작일을 넣어 주세요.'; end if;
+  if v_cleft is null or v_cleft < 0 or v_cleft > v_grant then raise exception '이 기간 남은 변경권은 0~%개입니다.', v_grant; end if;
+  v_cstart := v_pstart - (v_pidx - 1) * 28;
+  v_calc_end := v_pstart + (v_weeks / 4 - v_pidx + 1) * 28 - 1;
+  -- 종료일이 계산과 다르면 이유를 기록 (막지 않음). 이유를 안 골랐으면 v_reason 은 비운 채 저장 → 처리할 일 '종료일 이유 확인'
+  if v_end <> v_calc_end then
+    if v_reason is not null and v_reason not in ('tutor_long_term_leave', 'student_long_term_leave', 'admin_exception') then
+      raise exception '종료일 변경 사유가 올바르지 않습니다.';
+    end if;
+    if v_reason = 'student_long_term_leave' and v_weeks <> 24 then raise exception '학생 장기 연기는 24주 상품만 가능합니다 (A09).'; end if;
+    if v_reason = 'admin_exception' then v_note := coalesce(v_note, '기타'); end if;
+  else
+    v_reason := null; v_note := null;
+  end if;
+  if v_total is null or v_used is null or v_total < 0 or v_used < 0 or v_used > v_total then
+    raise exception '시트의 총 수업 수와 진행·차감된 수를 확인해 주세요.';
+  end if;
+
+  for m in select * from jsonb_array_elements(v_makeups) loop
+    if coalesce(m ->> 'status', '') not in ('booked', 'open') then raise exception '보강이 예약됨인지 미예약인지 골라 주세요.'; end if;
+    if (nullif(m ->> 'original_date', '') is null) = not coalesce((m ->> 'origin_unknown')::boolean, false) then
+      raise exception '보강의 원래 수업 날짜를 넣거나 ''날짜 확인 필요''를 골라 주세요.';
+    end if;
+    if m ->> 'status' = 'booked' then
+      if (m ->> 'date')::date < v_from then raise exception '보강 날짜(%)가 시작일(%)보다 빠릅니다. 지난 보강은 넣지 않아요.', m ->> 'date', v_from; end if;
+      if (m ->> 'date')::date > v_end then raise exception '보강 날짜(%)가 수강 종료일(%) 뒤예요. 종료일(연장)을 먼저 맞춰 주세요.', m ->> 'date', v_end; end if;
+      if (m ->> 'duration_min')::int not in (20, 40, 50) then raise exception '보강 수업 길이는 20·40·50분만 가능합니다.'; end if;
+      if not exists (select 1 from tutors where id = (m ->> 'tutor_id')::uuid and active) then raise exception '보강 강사를 골라 주세요.'; end if;
+    end if;
+  end loop;
+  if (select count(*) - count(distinct y ->> 'original_date') from jsonb_array_elements(v_makeups) y where nullif(y ->> 'original_date', '') is not null) > 0 then
+    raise exception '같은 원래 수업 날짜의 보강이 두 개 있어요. 한 수업에는 보강 하나입니다.';
+  end if;
+  for m in select * from jsonb_array_elements(v_extras) loop
+    if coalesce(trim(m ->> 'reason'), '') = '' then raise exception '추가 수업의 근거를 적어 주세요 (예: 시트 몇 회차).'; end if;
+    if (m ->> 'date')::date < v_from then raise exception '추가 수업 날짜(%)가 시작일보다 빠릅니다.', m ->> 'date'; end if;
+    if (m ->> 'date')::date > v_end then raise exception '추가 수업 날짜(%)가 수강 종료일(%) 뒤예요.', m ->> 'date', v_end; end if;
+  end loop;
+
+  select count(*) filter (where kind = 'regular'), count(*) filter (where kind = 'migrated_makeup'), count(*) filter (where kind = 'migrated_extra')
+    into n_reg, n_mk, n_ex
+  from lms_import_candidates(p);
+  n_open := (select count(*) from jsonb_array_elements(v_makeups) y where y ->> 'status' = 'open');
+  if n_reg = 0 then raise exception '시작일~종료일 사이에 정규 수업이 없습니다. 날짜·요일을 확인해 주세요.'; end if;
+
+  conflicts := lms_import_conflicts(p);
+  if jsonb_array_length(conflicts) > 0 then
+    raise exception '일정 충돌 %건 — 저장하지 않았습니다.', jsonb_array_length(conflicts)
+      using errcode = 'P0001', detail = conflicts::text, hint = 'schedule_conflict';
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_import_existing_student', true);
+
+  insert into students (name_ko, name_en, email, phone, country, city, timezone, admin_memo)
+  values (trim(st ->> 'name_ko'), trim(st ->> 'name_en'), nullif(lower(trim(st ->> 'email')), ''), nullif(st ->> 'phone', ''),
+          nullif(st ->> 'country', ''), nullif(st ->> 'city', ''), st ->> 'timezone', nullif(st ->> 'admin_memo', ''))
+  returning id, code into sid, scode;   -- lms_since 비움 = 시트로 관리
+
+  -- 옛 상품 형태(legacy_label): 수강 시작일~계산 끝(base), 늘어난 날은 연장 기록으로 (final = base + 연장). 결제는 시트
+  insert into enrollments (student_id, seq, legacy_label, weekly_count, duration_min, start_date, base_end_date,
+                           lessons_purchased, status, created_by)
+  values (sid, 1, format('기존 학생 이관 · %s주 (결제는 시트)', v_weeks), jsonb_array_length(v_slots), v_dur, v_cstart, least(v_end, v_calc_end),
+          greatest(v_total, 1), 'active', me)
+  returning id into eid;
+  if v_end > v_calc_end then
+    insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by)
+    values (eid, v_end - v_calc_end, coalesce(v_reason, 'admin_exception'),
+            case when v_reason is null then '이유 확인 필요 (기존 학생 이관)' else coalesce(v_note, '기존 학생 이관 (시트 종료일)') end, me);
+  end if;
+
+  -- 1기간 ~ 마지막 기간 (28일씩, 지난 기간은 기록용). 지금 기간은 남은 변경권만큼 남기고, 다음 기간부터 새로 지급
+  for i in 1 .. v_weeks / 4 loop
+    insert into enrollment_periods (enrollment_id, idx, start_date, end_date, credits_granted)
+    values (eid, i, v_cstart + (i - 1) * 28, v_cstart + (i - 1) * 28 + 27, v_grant)
+    returning id into pid;
+    if i = v_pidx then
+      for seqn in 1 .. v_grant - v_cleft loop
+        insert into credit_ledger (period_id, reason, delta, note, created_by)
+        values (pid, 'admin_adjust', -1, '기존 학생 이관: 시트에서 이미 사용한 변경권', me);
+      end loop;
+    end if;
+  end loop;
+  seqn := 0;
+
+  for s in select * from jsonb_array_elements(v_slots) loop
+    insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from, change_reason)
+    values (sid, v_tutor, (s ->> 'weekday')::smallint, (s ->> 'time')::time, v_dur, v_from, '기존 학생 이관 (D-52)');
+  end loop;
+
+  for r in select * from lms_import_candidates(p) order by starts_at loop
+    if r.kind = 'regular' then seqn := seqn + 1; end if;
+    insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, created_by)
+    values (eid, sid, r.tutor_id, r.kind, case when r.kind = 'regular' then seqn end, r.starts_at, r.ends_at, me)
+    returning id into lid;
+    if r.kind = 'migrated_makeup' then
+      select x into m from jsonb_array_elements(v_makeups) x
+      where x ->> 'status' = 'booked' and (x ->> 'date')::date = r.kst_date and to_char((x ->> 'time')::time, 'HH24:MI') = r.kst_time limit 1;
+      insert into migrated_items (enrollment_id, kind, lesson_id, original_date, origin_unknown, tutor_leave, created_by)
+      values (eid, 'makeup_booked', lid, nullif(m ->> 'original_date', '')::date, coalesce((m ->> 'origin_unknown')::boolean, false),
+              coalesce((m ->> 'tutor_leave')::boolean, false), me);
+    elsif r.kind = 'migrated_extra' then
+      select x into m from jsonb_array_elements(v_extras) x
+      where (x ->> 'date')::date = r.kst_date and to_char((x ->> 'time')::time, 'HH24:MI') = r.kst_time limit 1;
+      insert into migrated_items (enrollment_id, kind, lesson_id, reason, created_by) values (eid, 'extra', lid, trim(m ->> 'reason'), me);
+    end if;
+  end loop;
+  for m in select * from jsonb_array_elements(v_makeups) x where x ->> 'status' = 'open' loop
+    insert into migrated_items (enrollment_id, kind, original_date, origin_unknown, tutor_leave, created_by)
+    values (eid, 'makeup_open', nullif(m ->> 'original_date', '')::date, coalesce((m ->> 'origin_unknown')::boolean, false),
+            coalesce((m ->> 'tutor_leave')::boolean, false), me);
+  end loop;
+
+  insert into import_checks (enrollment_id, sheet_total, sheet_used, lms_left, end_reason, end_note, end_days, weeks,
+                             end_checked_at, end_checked_by, created_by)
+  values (eid, v_total, v_used, n_reg + n_mk + n_open + n_ex, v_reason, v_note, v_end - v_calc_end, v_weeks,
+          case when v_reason is not null then now() end, case when v_reason is not null then me end, me);
+
+  res := jsonb_build_object('student_id', sid, 'student_code', scode, 'enrollment_id', eid, 'lessons', n_reg, 'makeups', n_mk,
+                            'open_makeups', n_open, 'extras', n_ex, 'lms_left', n_reg + n_mk + n_open + n_ex,
+                            'sheet_left', v_total - v_used, 'start_date', v_from, 'end_date', v_end,
+                            'course_start', v_cstart, 'regular_end', least(v_end, v_calc_end),
+                            'end_reason_missing', v_end <> v_calc_end and v_reason is null);
+  insert into registration_requests (id, created_by, student_id, enrollment_id, result)
+  values (p_request_id, me, sid, eid, res);
+  return res;
+end $$;
+revoke all on function admin_import_existing_student(uuid, jsonb) from public, anon;
+grant execute on function admin_import_existing_student(uuid, jsonb) to authenticated;
+
+-- 원래 날짜 정리 (5)
+create or replace function admin_import_set_origin(p_item uuid, p_date date)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it migrated_items;
+  v_from date;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into it from migrated_items where id = p_item for update;
+  if not found or it.kind = 'extra' then raise exception '보강 기록이 아닙니다.'; end if;
+  if not it.origin_unknown then raise exception '이미 원래 날짜가 있는 보강입니다.'; end if;
+  -- 입력 시작일 = 이 등록에서 LMS가 만든 첫 수업 날 (1600부터 enrollments.start_date 는 수강 시작일이라 따로 구함)
+  select coalesce(min(kst_date), (select start_date from enrollments where id = it.enrollment_id)) into v_from from lessons where enrollment_id = it.enrollment_id;
+  if p_date is not null and p_date >= v_from then
+    raise exception '원래 날짜는 입력 시작일(%) 전이어야 합니다. 그 뒤 날짜는 정규 수업이 이미 있어요.', v_from;
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_import_set_origin', true);
+  if p_date is not null then
+    update migrated_items set original_date = p_date, origin_unknown = false, origin_checked_at = now(), origin_checked_by = me where id = p_item;
+  else
+    update migrated_items set origin_checked_at = now(), origin_checked_by = me where id = p_item;
+  end if;
+end $$;
+revoke all on function admin_import_set_origin(uuid, date) from public, anon;
+grant execute on function admin_import_set_origin(uuid, date) to authenticated;
+
+-- 종료일 이유 확인 (처리할 일 '종료일 이유 확인'에서): 이유를 정하면 그 항목이 사라짐. 이미 정했으면 다시 바꿀 수 있음
+-- 연장 기록은 고치지 않고 정정 2줄(빼기 → 새 이유로 더하기)을 남겨 이력 보존. 일수는 그대로
+create or replace function admin_import_set_end_reason(p_enrollment uuid, p_reason text, p_note text)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  c import_checks;
+  v_note text := nullif(trim(p_note), '');
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into c from import_checks where enrollment_id = p_enrollment for update;
+  if not found then raise exception '이관 기록이 없는 수강등록입니다.'; end if;
+  if c.end_days = 0 then raise exception '종료일이 기간 계산과 같아서 이유가 필요 없습니다.'; end if;
+  if p_reason not in ('tutor_long_term_leave', 'student_long_term_leave', 'admin_exception') then raise exception '종료일 변경 사유가 올바르지 않습니다.'; end if;
+  if p_reason = 'student_long_term_leave' and c.weeks <> 24 then raise exception '학생 장기 연기는 24주 상품만 가능합니다 (A09).'; end if;
+  if p_reason = 'admin_exception' and v_note is null then raise exception '기타는 메모를 적어 주세요.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_import_set_end_reason', true);
+  if c.end_days > 0 then
+    insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by)
+    values (p_enrollment, -c.end_days, 'correction', '종료일 이유 확인: 이전 기록 정정', me),
+           (p_enrollment, c.end_days, p_reason, coalesce(v_note, '기존 학생 이관 (시트 종료일)'), me);
+  end if;
+  update import_checks set end_reason = p_reason, end_note = v_note, end_checked_at = now(), end_checked_by = me
+  where enrollment_id = p_enrollment;
+end $$;
+revoke all on function admin_import_set_end_reason(uuid, text, text) from public, anon;
+grant execute on function admin_import_set_end_reason(uuid, text, text) to authenticated;
+
+-- >>> 20261026001700_lms_lesson_change.sql
+-- =====================================================================
+-- 1순위: 수업 변경(취소)·보강·되돌리기·안내 기록 — 공통 처리 (2026-10-26 대표 우선순위, 17번 문서 3절 ①·5절)
+--  - 학생·강사·운영진(카톡 대신 입력) 모두 같은 함수 lms_change_core 로 처리 → 같은 검사·같은 기록
+--  - 판정 기준 시각 = 실제 요청 시각 (운영진 입력은 카톡·WhatsApp 받은 시각, 학생 직접은 지금)
+--  - 미리 보기(p_dry_run)도 같은 함수 → 화면과 저장 결과가 다를 수 없음
+--  - 중복 방지: 같은 요청 키 1번, 같은 수업에 적용 중인 변경 1건, 변경권·적립금은 '요청 1건당 1번'
+--    (되돌린 수업은 다시 정상 변경 가능 — 17번 5절)
+--  - 보강은 학생(또는 운영진 대신) 신청 → 강사 확인 → 운영진 확정만 (D-43). 학생 선택만으로 확정되는 경로 없음
+--  - 안내: 학생·강사 각각 [복사] → 실제로 보낸 뒤 [보냈어요] (A39와 같음). 복사는 기록하지 않음
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- 숫자: 6시간(POL-CHG-01)·2,000원(POL-TU-04)·휴식 10분(POL-OP-21)은 코드 src/lms/rules/policy.ts 와 같아야 함 (자동 테스트)
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 되돌리기로 없어진 보강 수업 = 'voided' (state 'canceled' + voided_at, 결과 상태 없음)
+--    상태매핑표 14개에 없는 '잘못 만든 수업'을 억지로 다른 상태로 적지 않기 위해
+-- ---------------------------------------------------------------------
+alter table lessons add column if not exists voided_at timestamptz;
+alter table lessons add column if not exists voided_by uuid;
+alter table lessons add column if not exists void_note text;
+do $$
+declare
+  c text;
+begin
+  select conname into c from pg_constraint
+  where conrelid = 'lessons'::regclass and contype = 'c'
+    and pg_get_constraintdef(oid) = 'CHECK (((state = ''scheduled''::text) = (class_status IS NULL)))';
+  if c is not null then execute format('alter table lessons drop constraint %I', c); end if;
+  if not exists (select 1 from pg_constraint where conname = 'lessons_status_present') then
+    alter table lessons add constraint lessons_status_present
+      check ((class_status is null) = (state = 'scheduled' or voided_at is not null));
+    alter table lessons add constraint lessons_void_canceled
+      check (voided_at is null or (state = 'canceled' and voided_by is not null));
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 2. 변경 요청: 실제 요청 시각, 되돌린 시각·사람
+-- ---------------------------------------------------------------------
+alter table change_requests add column if not exists requested_at timestamptz;   -- 학생이 실제로 요청한 시각 (카톡 시각)
+alter table change_requests add column if not exists reverted_at timestamptz;
+alter table change_requests add column if not exists reverted_by uuid;
+alter table change_requests add column if not exists revert_note text;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'change_requests_reverted_who') then
+    alter table change_requests add constraint change_requests_reverted_who
+      check ((status = 'reverted') = (reverted_at is not null) and (reverted_at is null or reverted_by is not null));
+  end if;
+end $$;
+-- 같은 수업에 적용 중인 변경은 1건 (학생·운영진 동시 처리 → 하나만 성공)
+create unique index if not exists change_requests_one_applied on change_requests (lesson_id)
+  where status = 'applied' and type in ('student_cancel', 'tutor_cancel', 'admin_cancel');
+
+-- ---------------------------------------------------------------------
+-- 3. 변경권 장부: '수업당 1번' → '요청 1건당 1번' (되돌린 뒤 다시 변경 가능, 17번 5절)
+-- ---------------------------------------------------------------------
+alter table credit_ledger add column if not exists change_request_id uuid references change_requests(id);
+alter table credit_ledger drop constraint if exists credit_ledger_lesson_id_reason_key;
+create unique index if not exists credit_ledger_once_per_request on credit_ledger (change_request_id, reason)
+  where change_request_id is not null;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'credit_ledger_request_required') then
+    -- 앞으로의 차감·복구는 근거 요청이 있어야 함 (기존 행은 그대로: not valid)
+    alter table credit_ledger add constraint credit_ledger_request_required
+      check (reason = 'admin_adjust' or change_request_id is not null) not valid;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 4. 적립금 장부: 강사 늦은 취소 지급도 '취소 1건당 1번', 되돌리면 회수 줄 추가 (2026-10-22 대표)
+-- ---------------------------------------------------------------------
+alter table reward_ledger add column if not exists change_request_id uuid references change_requests(id);
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'reward_ledger_kind_check'
+             and pg_get_constraintdef(oid) not like '%revoke_tutor_late_cancel%') then
+    alter table reward_ledger drop constraint reward_ledger_kind_check;
+    alter table reward_ledger add constraint reward_ledger_kind_check check (kind in (
+      'grant_tutor_late_cancel', 'revoke_tutor_late_cancel', 'grant_admin', 'hold', 'release', 'refund_restore', 'admin_adjust'));
+    alter table reward_ledger add constraint reward_ledger_revoke_shape
+      check (kind <> 'revoke_tutor_late_cancel' or (lesson_id is not null and change_request_id is not null and amount < 0));
+  end if;
+end $$;
+drop index if exists reward_ledger_one_grant_per_lesson;
+create unique index if not exists reward_ledger_once_per_request on reward_ledger (change_request_id, kind)
+  where change_request_id is not null;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'reward_ledger_request_required') then
+    alter table reward_ledger add constraint reward_ledger_request_required
+      check (kind <> 'grant_tutor_late_cancel' or change_request_id is not null) not valid;
+  end if;
+end $$;
+
+-- 지급 근거 확인은 그대로, 회수는 같은 요청의 지급이 있어야 함
+create or replace function reward_ledger_guard() returns trigger
+language plpgsql as $$
+declare
+  l record;
+  r record;
+begin
+  perform 1 from students where id = new.student_id for update;
+  if new.kind = 'grant_tutor_late_cancel' then
+    select ls.student_id, ls.class_status into l from lessons ls where ls.id = new.lesson_id;
+    if l.student_id is distinct from new.student_id then raise exception '다른 학생의 수업으로 적립할 수 없습니다.'; end if;
+    if l.class_status is distinct from 'Tutor canceled late' then raise exception '강사 6시간 미만 취소 수업에만 자동 적립합니다.'; end if;
+    -- 학생에게 유리한 규칙이라 기존 학생(legacy 등록)에도 적용 (POL-OP-17, 2026-10-16 대표 결정)
+  end if;
+  if new.kind = 'revoke_tutor_late_cancel' then
+    if not exists (select 1 from reward_ledger g where g.change_request_id = new.change_request_id
+                   and g.kind = 'grant_tutor_late_cancel' and g.amount = -new.amount and g.student_id = new.student_id) then
+      raise exception '회수할 적립 기록이 없습니다.';
+    end if;
+  end if;
+  if new.redemption_id is not null then
+    select * into r from reward_redemptions where id = new.redemption_id;
+    if r.student_id <> new.student_id then raise exception '다른 학생의 사용 요청입니다.'; end if;
+    if new.kind in ('hold', 'release', 'refund_restore') and abs(new.amount) <> r.amount then
+      raise exception '사용 요청 금액과 다릅니다.';
+    end if;
+  end if;
+  if reward_balance(new.student_id) + new.amount < 0 then raise exception '적립금 잔액이 부족합니다.'; end if;
+  return new;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 5. 보강 신청: 이관한 미예약 보강(migrated_items)도 같은 흐름, 되돌린 보강 = voided
+-- ---------------------------------------------------------------------
+alter table makeup_requests alter column source_lesson_id drop not null;
+alter table makeup_requests add column if not exists migrated_item_id uuid references migrated_items(id);
+alter table makeup_requests add column if not exists via text;
+alter table makeup_requests add column if not exists requested_at timestamptz;
+alter table makeup_requests add column if not exists requested_by uuid;
+alter table makeup_requests add column if not exists decided_by uuid;
+do $$
+declare
+  c text;
+begin
+  if not exists (select 1 from pg_constraint where conname = 'makeup_requests_one_source') then
+    alter table makeup_requests add constraint makeup_requests_one_source
+      check ((source_lesson_id is null) <> (migrated_item_id is null));
+    alter table makeup_requests add constraint makeup_requests_via_check
+      check (via is null or via in ('student_app', 'admin_on_behalf'));
+    alter table makeup_requests drop constraint if exists makeup_requests_status_check;
+    alter table makeup_requests add constraint makeup_requests_status_check
+      check (status in ('requested', 'countered', 'confirmed', 'declined', 'expired', 'withdrawn', 'voided'));
+    perform 1;
+    for c in select conname from pg_constraint where conrelid = 'makeup_requests'::regclass and contype = 'c'
+             and pg_get_constraintdef(oid) like '%confirmed''::text) = (confirmed_lesson_id IS NOT NULL)%' loop
+      execute format('alter table makeup_requests drop constraint %I', c);
+    end loop;
+    alter table makeup_requests add constraint makeup_requests_lesson_link
+      check ((status in ('confirmed', 'voided')) = (confirmed_lesson_id is not null));
+  end if;
+end $$;
+create unique index if not exists makeup_requests_one_open_migrated on makeup_requests (migrated_item_id)
+  where status in ('requested', 'countered');
+
+-- ---------------------------------------------------------------------
+-- 6. 수업 변경·보강 안내 기록 (학생·강사 각각, [보냈어요]로만 '보냄')
+--    event: change(변경 처리) / makeup_ask(강사에게 보강 가능 확인) / makeup_confirmed / makeup_voided / revert(되돌림)
+--    문구는 화면이 DB의 원래 수업·바뀐 수업 날짜로 만듦 (날짜를 사람이 타이핑하지 않음)
+-- ---------------------------------------------------------------------
+create table if not exists lesson_notices (
+  id uuid primary key default gen_random_uuid(),
+  change_request_id uuid references change_requests(id),
+  makeup_request_id uuid references makeup_requests(id),
+  event text not null check (event in ('change', 'makeup_ask', 'makeup_confirmed', 'makeup_voided', 'revert')),
+  recipient_kind text not null check (recipient_kind in ('student', 'tutor')),
+  recipient_id uuid not null,
+  status text not null default 'pending' check (status in ('pending', 'sent', 'not_needed')),
+  sent_at timestamptz,
+  sent_by uuid,
+  created_at timestamptz not null default now(),
+  check ((change_request_id is null) <> (makeup_request_id is null)),
+  check ((status = 'sent') = (sent_at is not null)),
+  check ((event in ('change', 'revert')) = (change_request_id is not null))
+);
+create unique index if not exists lesson_notices_once_change on lesson_notices (change_request_id, event, recipient_kind) where change_request_id is not null;
+create unique index if not exists lesson_notices_once_makeup on lesson_notices (makeup_request_id, event, recipient_kind) where makeup_request_id is not null;
+create index if not exists lesson_notices_pending on lesson_notices (created_at) where status = 'pending';
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'lesson_notices_audit') then
+    perform lms_protect('lesson_notices'::regclass);
+    create trigger lesson_notices_no_delete before delete on lesson_notices for each row execute function forbid_delete();
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 7. 공통 판정 + 처리
+-- ---------------------------------------------------------------------
+
+-- 보강 받을 권리가 있는 결과인지 (rules/status.ts grantsMakeup 과 같음)
+create or replace function lms_grants_makeup(s class_status) returns boolean
+language sql immutable as $$
+  select s is not null
+     and s not in ('Normal', 'Make-up completed', 'Student canceled late', 'Student no-show', 'No change credits left',
+                   'Tutor Late - Student Present', 'Covered by another tutor', 'Tutor long-term leave', 'Student long-term leave')
+$$;
+revoke all on function lms_grants_makeup(class_status) from public, anon, authenticated;
+
+-- 수업 날짜가 속한 변경권 기간 (연장일 등 기간 밖이면 마지막 기간)
+create or replace function lms_lesson_period(p_enrollment uuid, p_day date) returns uuid
+language sql stable as $$
+  select coalesce(
+    (select id from enrollment_periods where enrollment_id = p_enrollment and p_day between start_date and end_date),
+    (select id from enrollment_periods where enrollment_id = p_enrollment and start_date <= p_day order by idx desc limit 1))
+$$;
+revoke all on function lms_lesson_period(uuid, date) from public, anon, authenticated;
+
+-- p_who: 'student' | 'tutor' / p_via: 'student_app' | 'admin_on_behalf'
+create or replace function lms_change_core(p_key text, p_lesson uuid, p_who text, p_via text,
+                                           p_requested_at timestamptz, p_dry_run boolean, p_actor uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_notice constant interval := interval '6 hours';   -- POL-CHG-01 (policy.ts CONFIRMED.changeNoticeHours)
+  v_reward constant integer := 2000;                  -- POL-TU-04 (policy.ts FAVORABLE_FOR_ALL.tutorLateCancelRewardWon)
+  l lessons;
+  e enrollments;
+  prev change_requests;
+  v_period uuid;
+  v_left integer;
+  v_advance boolean;
+  v_holiday boolean;
+  v_status class_status;
+  v_uses boolean := false;
+  v_reward_won integer := 0;
+  v_refs text[];
+  v_cr uuid;
+  out jsonb;
+begin
+  if p_who not in ('student', 'tutor') then raise exception '요청한 사람이 올바르지 않습니다.'; end if;
+  if p_requested_at is null then raise exception '요청 받은 시각을 넣어 주세요.'; end if;
+  if p_requested_at > now() then raise exception '요청 받은 시각이 지금보다 늦습니다.'; end if;
+
+  if not p_dry_run then
+    select * into prev from change_requests where idempotency_key = p_key;
+    if found then
+      return (prev.decision || jsonb_build_object('change_request_id', prev.id, 'repeated', true, 'dry_run', false));
+    end if;
+  end if;
+
+  select * into l from lessons where id = p_lesson for update;
+  if not found then raise exception '수업이 없습니다.'; end if;
+  if l.state <> 'scheduled' then
+    raise exception '이미 처리된 수업입니다 (%).', coalesce(l.class_status::text, '되돌린 보강') using hint = 'not_scheduled';
+  end if;
+  if p_requested_at >= l.starts_at then raise exception '수업 시작 뒤에 받은 요청이라 변경할 수 없습니다.' using hint = 'already_started'; end if;
+  if l.kind = 'compensation' then raise exception '보상 수업 변경 규칙은 아직 정해지지 않았습니다 (POL-TU-10).'; end if;
+  select * into e from enrollments where id = l.enrollment_id;
+  if l.starts_at >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') and p_who = 'student' then
+    raise exception '수강기간 밖의 수업입니다.' using hint = 'outside_enrollment';
+  end if;
+
+  v_advance := l.starts_at - p_requested_at >= v_notice;
+  v_period := lms_lesson_period(e.id, l.kst_date);
+  v_left := case when v_period is null then 0 else credit_balance(v_period) end;
+  v_holiday := exists (select 1 from holidays where day = l.kst_date);
+
+  if p_who = 'tutor' then
+    -- 강사 사유: 학생 변경권은 절대 차감하지 않음. 6시간 미만이면 학생 적립금 (A15·A16)
+    v_status := case when v_advance then 'Tutor canceled in advance' else 'Tutor canceled late' end;
+    v_reward_won := case when v_advance then 0 else v_reward end;
+    v_refs := array['POL-TU-04', 'POL-TU-05'];
+  elsif not v_advance then
+    v_status := 'Student canceled late';
+    v_refs := array['POL-CHG-01', 'POL-CHG-02'];
+  elsif v_holiday then
+    v_status := 'Student canceled in advance (public holiday)';
+    v_refs := array['POL-CHG-01', 'POL-CHG-06'];
+  elsif v_left <= 0 then
+    v_status := 'No change credits left';
+    v_refs := array['POL-CHG-01', 'POL-CHG-04'];
+  else
+    v_status := 'Student canceled in advance';
+    v_uses := true;
+    v_refs := array['POL-CHG-01', 'POL-CHG-03'];
+  end if;
+  if l.kind <> 'regular' then v_refs := v_refs || array['POL-CHG-08']; end if;   -- 보강·추가 수업도 정규와 같은 규칙 (A03)
+
+  out := jsonb_build_object(
+    'lesson_id', l.id, 'who', p_who, 'status', v_status, 'timing', case when v_advance then 'advance' else 'late' end,
+    'requested_at', p_requested_at, 'starts_at', l.starts_at,
+    'hours_before', round(extract(epoch from (l.starts_at - p_requested_at)) / 3600.0, 1),
+    'uses_credit', v_uses, 'credits_left', v_left, 'credits_after', v_left - case when v_uses then 1 else 0 end,
+    'makeup_allowed', lms_grants_makeup(v_status), 'makeup_until', case when lms_grants_makeup(v_status) then e.final_end_date end,
+    'reward_won', v_reward_won, 'holiday', v_holiday);
+  if p_dry_run then return out || jsonb_build_object('dry_run', true, 'repeated', false); end if;
+
+  if exists (select 1 from change_requests where lesson_id = l.id and status = 'applied'
+             and type in ('student_cancel', 'tutor_cancel', 'admin_cancel')) then
+    raise exception '이 수업에 이미 적용된 변경이 있습니다.' using hint = 'not_scheduled';
+  end if;
+
+  perform set_config('app.actor_id', coalesce(p_actor::text, ''), true);
+  perform set_config('app.actor_via', 'lms_change_core', true);
+  insert into change_requests (lesson_id, student_id, tutor_id, type, status, via, policy_refs, decision,
+                               idempotency_key, requested_by, decided_by, decided_at, requested_at)
+  values (l.id, l.student_id, l.tutor_id, case when p_who = 'tutor' then 'tutor_cancel' else 'student_cancel' end,
+          'applied', p_via, v_refs, out, p_key, p_actor, p_actor, now(), p_requested_at)
+  returning id into v_cr;
+  update lessons set state = 'canceled', class_status = v_status, canceled_at = now(),
+                     cancel_reason = case when p_who = 'tutor' then 'tutor' else 'student' end
+  where id = l.id;
+  if v_uses then
+    insert into credit_ledger (period_id, lesson_id, change_request_id, reason, delta, created_by)
+    values (v_period, l.id, v_cr, 'student_change', -1, p_actor);
+  end if;
+  if v_reward_won > 0 then
+    insert into reward_ledger (student_id, kind, amount, lesson_id, change_request_id, created_by)
+    values (l.student_id, 'grant_tutor_late_cancel', v_reward_won, l.id, v_cr, p_actor);
+  end if;
+  insert into lesson_notices (change_request_id, event, recipient_kind, recipient_id)
+  values (v_cr, 'change', 'student', l.student_id), (v_cr, 'change', 'tutor', l.tutor_id);
+  return out || jsonb_build_object('change_request_id', v_cr, 'dry_run', false, 'repeated', false);
+end $$;
+revoke all on function lms_change_core(text, uuid, text, text, timestamptz, boolean, uuid) from public, anon, authenticated;
+
+-- 운영진이 카톡·WhatsApp 요청을 대신 처리 (요청 받은 시각으로 판정)
+create or replace function admin_change_lesson(p_request_id uuid, p_lesson uuid, p_who text, p_requested_at timestamptz, p_dry_run boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  return lms_change_core(p_request_id::text, p_lesson, p_who, 'admin_on_behalf', p_requested_at, p_dry_run, auth.uid());
+end $$;
+revoke all on function admin_change_lesson(uuid, uuid, text, timestamptz, boolean) from public, anon;
+grant execute on function admin_change_lesson(uuid, uuid, text, timestamptz, boolean) to authenticated;
+
+-- 학생 본인 (학생 화면 연결 단계에서 사용, 판정 시각 = 지금)
+create or replace function student_change_lesson(p_request_id uuid, p_lesson uuid, p_dry_run boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if my_student_id() is null or not exists (select 1 from lessons where id = p_lesson and student_id = my_student_id()) then
+    raise exception '본인 수업만 변경할 수 있습니다.' using errcode = '42501';
+  end if;
+  return lms_change_core(p_request_id::text, p_lesson, 'student', 'student_app', now(), p_dry_run, auth.uid());
+end $$;
+revoke all on function student_change_lesson(uuid, uuid, boolean) from public, anon;
+grant execute on function student_change_lesson(uuid, uuid, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 8. 되돌리기 = 정확한 원상복구 (17번 5절): 수업 다시 '예정', 변경권 +1, 적립금 회수, 그 취소로 생긴 보강·신청 정리
+--    이력은 지우지 않음. 아직 안 보낸 안내는 '보낼 필요 없음', 이미 보낸 쪽에만 되돌림 안내
+-- ---------------------------------------------------------------------
+create or replace function admin_revert_change(p_change uuid, p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  cr change_requests;
+  l lessons;
+  m lessons;
+  g reward_ledger;
+  c credit_ledger;
+  v_voided uuid;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into cr from change_requests where id = p_change for update;
+  if not found then raise exception '변경 기록이 없습니다.'; end if;
+  if cr.status = 'reverted' then return jsonb_build_object('change_request_id', cr.id, 'repeated', true); end if;
+  if cr.status <> 'applied' or cr.type not in ('student_cancel', 'tutor_cancel') then raise exception '되돌릴 수 있는 변경이 아닙니다.'; end if;
+  select * into l from lessons where id = cr.lesson_id for update;
+
+  -- 그 수업으로 잡은 보강: 이미 끝났거나 다시 변경된 보강이 있으면 그쪽부터
+  for m in select * from lessons where makeup_of = l.id and voided_at is null for update loop
+    if m.state = 'done' then raise exception '이 수업의 보강(%)이 이미 진행됐습니다.', m.kst_date; end if;
+    if m.state = 'canceled' then raise exception '이 수업의 보강(%)이 다시 변경됐습니다. 그 변경부터 되돌려 주세요.', m.kst_date; end if;
+  end loop;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_revert_change', true);
+  update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = me, void_note = '원래 수업 변경 되돌림'
+  where makeup_of = l.id and state = 'scheduled' and voided_at is null
+  returning id into v_voided;
+  update makeup_requests set status = 'voided', decided_at = now(), decided_by = me
+  where source_lesson_id = l.id and status = 'confirmed';
+  update makeup_requests set status = 'withdrawn', decided_at = now(), decided_by = me
+  where source_lesson_id = l.id and status in ('requested', 'countered');
+  update lesson_notices set status = 'not_needed'
+  where status = 'pending' and makeup_request_id in (select id from makeup_requests where source_lesson_id = l.id);
+
+  begin
+    update lessons set state = 'scheduled', class_status = null, canceled_at = null, cancel_reason = null where id = l.id;
+  exception when exclusion_violation then
+    raise exception '그 시간에 이미 다른 수업이 있어 되돌릴 수 없습니다.';
+  end;
+  for c in select * from credit_ledger where change_request_id = cr.id and reason = 'student_change' loop
+    insert into credit_ledger (period_id, lesson_id, change_request_id, reason, delta, note, created_by)
+    values (c.period_id, l.id, cr.id, 'admin_restore', 1, '변경 되돌림', me);
+  end loop;
+  for g in select * from reward_ledger where change_request_id = cr.id and kind = 'grant_tutor_late_cancel' loop
+    begin
+      insert into reward_ledger (student_id, kind, amount, lesson_id, change_request_id, note, created_by)
+      values (g.student_id, 'revoke_tutor_late_cancel', -g.amount, l.id, cr.id, '변경 되돌림', me);
+    exception when raise_exception then
+      raise exception '학생이 이 적립금을 이미 사용해서 회수할 수 없습니다. 대표 확인이 필요합니다.' using hint = 'reward_used';
+    end;
+  end loop;
+  update change_requests set status = 'reverted', reverted_at = now(), reverted_by = me, revert_note = nullif(trim(p_note), '')
+  where id = cr.id;
+  update lesson_notices set status = 'not_needed' where change_request_id = cr.id and event = 'change' and status = 'pending';
+  insert into lesson_notices (change_request_id, event, recipient_kind, recipient_id)
+  select cr.id, 'revert', n.recipient_kind, n.recipient_id from lesson_notices n
+  where n.change_request_id = cr.id and n.event = 'change' and n.status = 'sent'
+  on conflict do nothing;
+  return jsonb_build_object('change_request_id', cr.id, 'lesson_id', l.id, 'voided_makeup', v_voided, 'repeated', false);
+end $$;
+revoke all on function admin_revert_change(uuid, text) from public, anon;
+grant execute on function admin_revert_change(uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 9. 보강: 신청(후보 시간) → 강사에게 확인 [보냈어요] → 강사 가능 → 운영진 확정
+-- ---------------------------------------------------------------------
+
+-- 보강 권리 확인: 보강 받는 결과로 끝난 수업이고 살아 있는 보강이 없음 / 이관한 미예약 보강
+create or replace function lms_makeup_source(p_lesson uuid, p_item uuid, out enrollment_id uuid, out student_id uuid,
+                                             out tutor_id uuid, out tutor_leave boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  l lessons;
+  it migrated_items;
+begin
+  if (p_lesson is null) = (p_item is null) then raise exception '보강할 수업을 하나 골라 주세요.'; end if;
+  if p_lesson is not null then
+    select * into l from lessons where id = p_lesson;
+    if not found or not lms_grants_makeup(l.class_status) then raise exception '보강을 받을 수 있는 수업이 아닙니다.'; end if;
+    if exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled') then raise exception '이미 보강이 잡혀 있습니다.'; end if;
+    enrollment_id := l.enrollment_id; student_id := l.student_id; tutor_id := l.tutor_id; tutor_leave := false;
+  else
+    select * into it from migrated_items where id = p_item;
+    if not found or it.kind <> 'makeup_open' then raise exception '예약 전 보강이 아닙니다.'; end if;
+    select e.student_id into student_id from enrollments e where e.id = it.enrollment_id;
+    select x.tutor_id into tutor_id from lessons x where x.enrollment_id = it.enrollment_id order by x.starts_at desc limit 1;
+    enrollment_id := it.enrollment_id; tutor_leave := coalesce(it.tutor_leave, false);
+  end if;
+end $$;
+revoke all on function lms_makeup_source(uuid, uuid) from public, anon, authenticated;
+
+-- p_slots: [{"starts_at": "2026-11-05T08:00:00Z"}, ...] 학생이 원하는 시간 (1개 이상)
+create or replace function admin_makeup_request(p_lesson uuid, p_item uuid, p_slots jsonb, p_requested_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  s record;
+  e enrollments;
+  v_id uuid;
+  x jsonb;
+  t timestamptz;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into s from lms_makeup_source(p_lesson, p_item);
+  select * into e from enrollments where id = s.enrollment_id;
+  if jsonb_typeof(p_slots) <> 'array' or jsonb_array_length(p_slots) = 0 then raise exception '보강 시간을 하나 이상 넣어 주세요.'; end if;
+  select id into v_id from makeup_requests
+  where status in ('requested', 'countered') and (source_lesson_id = p_lesson or migrated_item_id = p_item);
+  if found then return jsonb_build_object('makeup_request_id', v_id, 'repeated', true); end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_makeup_request', true);
+  insert into makeup_requests (source_lesson_id, migrated_item_id, student_id, tutor_id, via, requested_at, requested_by)
+  values (p_lesson, p_item, s.student_id, s.tutor_id, 'admin_on_behalf', coalesce(p_requested_at, now()), me)
+  returning id into v_id;
+  for x in select * from jsonb_array_elements(p_slots) loop
+    t := (x ->> 'starts_at')::timestamptz;
+    if t <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+    if not s.tutor_leave and t >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+    end if;
+    insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by)
+    values (v_id, t, t + make_interval(mins => e.duration_min), 'student');
+  end loop;
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id) values (v_id, 'makeup_ask', 'tutor', s.tutor_id);
+  return jsonb_build_object('makeup_request_id', v_id, 'repeated', false);
+end $$;
+revoke all on function admin_makeup_request(uuid, uuid, jsonb, timestamptz) from public, anon;
+grant execute on function admin_makeup_request(uuid, uuid, jsonb, timestamptz) to authenticated;
+
+-- 강사가 가능하다고 한 시간으로 확정 (후보 중 하나 또는 강사가 다른 시간을 말한 경우 그 시간)
+create or replace function admin_makeup_confirm(p_makeup_request uuid, p_starts_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+  me uuid := auth.uid();
+  r makeup_requests;
+  s record;
+  e enrollments;
+  v_end timestamptz;
+  v_lesson uuid;
+  v_conf text;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into r from makeup_requests where id = p_makeup_request for update;
+  if not found then raise exception '보강 신청이 없습니다.'; end if;
+  if r.status = 'confirmed' then return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', r.confirmed_lesson_id, 'repeated', true); end if;
+  if r.status not in ('requested', 'countered') then raise exception '이미 닫힌 보강 신청입니다.'; end if;
+  select * into s from lms_makeup_source(r.source_lesson_id, r.migrated_item_id);
+  select * into e from enrollments where id = s.enrollment_id;
+  if p_starts_at <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+  if not s.tutor_leave and p_starts_at >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+    raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+  end if;
+  v_end := p_starts_at + make_interval(mins => e.duration_min);
+  select case when o.id is not null then '강사 휴무' else '강사 다른 수업(휴식 10분 포함)' end into v_conf
+  from (select 1) d
+  left join lateral (select x.id from lessons x where x.tutor_id = r.tutor_id and x.state <> 'canceled'
+                     and x.starts_at < v_end + v_break and p_starts_at - v_break < x.ends_at limit 1) k on true
+  left join lateral (select o.id from tutor_time_off o where o.tutor_id = r.tutor_id
+                     and o.starts_at < v_end and p_starts_at < o.ends_at limit 1) o on true
+  where k.id is not null or o.id is not null;
+  if v_conf is not null then raise exception '그 시간은 %와 겹칩니다.', v_conf using hint = 'schedule_conflict'; end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+  if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+    insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+  end if;
+  begin
+    insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of, created_by)
+    values (s.enrollment_id, s.student_id, r.tutor_id,
+            case when r.source_lesson_id is null then 'migrated_makeup' else 'makeup' end,
+            p_starts_at, v_end, r.source_lesson_id, me)
+    returning id into v_lesson;
+  exception when exclusion_violation then
+    raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+  end;
+  if r.migrated_item_id is not null then
+    update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = r.migrated_item_id;
+  end if;
+  update makeup_requests set status = 'confirmed', confirmed_lesson_id = v_lesson, decided_at = now(), decided_by = me where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  values (r.id, 'makeup_confirmed', 'student', s.student_id), (r.id, 'makeup_confirmed', 'tutor', r.tutor_id);
+  return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', v_lesson, 'repeated', false);
+end $$;
+revoke all on function admin_makeup_confirm(uuid, timestamptz) from public, anon;
+grant execute on function admin_makeup_confirm(uuid, timestamptz) to authenticated;
+
+-- 확정 전 신청 닫기 (강사가 모두 안 된다고 함·학생이 철회)
+create or replace function admin_makeup_withdraw(p_makeup_request uuid)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_makeup_withdraw', true);
+  update makeup_requests set status = 'withdrawn', decided_at = now(), decided_by = me
+  where id = p_makeup_request and status in ('requested', 'countered');
+  update lesson_notices set status = 'not_needed' where makeup_request_id = p_makeup_request and status = 'pending';
+end $$;
+revoke all on function admin_makeup_withdraw(uuid) from public, anon;
+grant execute on function admin_makeup_withdraw(uuid) to authenticated;
+
+-- 확정한 보강을 잘못 넣었을 때 없애기 (변경권 없이, 보강 권리는 다시 열림). 학생이 바꾸는 건 일반 변경(변경권 사용, A03)
+create or replace function admin_void_makeup(p_lesson uuid, p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  l lessons;
+  r makeup_requests;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into l from lessons where id = p_lesson for update;
+  if not found or l.kind not in ('makeup', 'migrated_makeup') then raise exception '보강 수업이 아닙니다.'; end if;
+  if l.voided_at is not null then return jsonb_build_object('lesson_id', l.id, 'repeated', true); end if;
+  if l.state <> 'scheduled' then raise exception '이미 진행·변경된 보강입니다.'; end if;
+  select * into r from makeup_requests where confirmed_lesson_id = l.id;
+  if not found then raise exception '보강 신청 기록이 없는 보강입니다 (이관한 보강은 시트에서 확인).'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_void_makeup', true);
+  update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = me, void_note = nullif(trim(p_note), '')
+  where id = l.id;
+  update makeup_requests set status = 'voided', decided_at = now(), decided_by = me where id = r.id;
+  if r.migrated_item_id is not null then
+    update migrated_items set kind = 'makeup_open', lesson_id = null where id = r.migrated_item_id;
+  end if;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_confirmed' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  select r.id, 'makeup_voided', n.recipient_kind, n.recipient_id from lesson_notices n
+  where n.makeup_request_id = r.id and n.event = 'makeup_confirmed' and n.status = 'sent'
+  on conflict do nothing;
+  return jsonb_build_object('lesson_id', l.id, 'repeated', false);
+end $$;
+revoke all on function admin_void_makeup(uuid, text) from public, anon;
+grant execute on function admin_void_makeup(uuid, text) to authenticated;
+
+-- [보냈어요]
+create or replace function admin_mark_lesson_notice_sent(p_notice uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  n lesson_notices;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into n from lesson_notices where id = p_notice for update;
+  if not found then raise exception '안내가 없습니다.'; end if;
+  if n.status = 'not_needed' then raise exception '보낼 필요가 없어진 안내입니다.'; end if;
+  if n.status = 'pending' then
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_mark_lesson_notice_sent', true);
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me where id = p_notice;
+  end if;
+  return jsonb_build_object('notice_id', p_notice, 'repeated', n.status = 'sent');
+end $$;
+revoke all on function admin_mark_lesson_notice_sent(uuid) from public, anon;
+grant execute on function admin_mark_lesson_notice_sent(uuid) to authenticated;
+
+-- >>> 20261027001800_lms_tutor_leave.sql
+-- =====================================================================
+-- 2순위 ①: 강사 휴무·대체강사 (운영진) — 정책 원본 A41·A20, 2026-10-27 대표 시안 승인 (Q1 학생별+일부 날짜 예외, Q2 학생 OK 뒤 확정)
+--  - 휴무 넣기 → 그 기간 강사 수업(+ 시트에서 넘어온 휴가 보강)을 휴무 처리 목록(leave_items)으로 모음
+--  - 학생 선택지는 둘뿐: 1순위 대체강사가 원래 날짜·시간(추천) / 2순위 기존 강사와 보강 — 두 가지를 처음부터 함께 안내 (leave_options)
+--    학생 답을 받기 전에는 '학생 선택 미확인'(undecided). 시트에서 넘어온 휴가 보강도 미확인으로 시작 (2026-10-27 대표)
+--  - 대체강사: 강사에게 안내 [보냈어요] → 강사 가능 → 학생 안내 → 학생 OK → 확정 (학생 OK 전에는 수업 강사가 안 바뀜)
+--  - 기다림: 수업 결과 'Tutor long-term leave' → 기존 보강 흐름(1700)으로 보강. 변경권 차감 없음
+--    보강이 종료일 뒤로 확정되면 마지막 보강일까지만 자동 연장, 날짜가 바뀌면 다시 계산 (A20). 연장된 날 정규 수업 없음
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- 숫자: 휴식 10분(POL-OP-21)은 코드 src/lms/rules/policy.ts 와 같아야 함 (자동 테스트)
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 휴무 처리 목록: 휴무 날짜의 수업 1개(또는 시트 휴가 보강 1개)당 1줄
+-- ---------------------------------------------------------------------
+create table if not exists leave_items (
+  id uuid primary key default gen_random_uuid(),
+  time_off_id uuid not null references tutor_time_off(id),
+  tutor_id uuid not null references tutors(id),               -- 휴무인 원래 강사
+  student_id uuid not null references students(id),
+  enrollment_id uuid not null references enrollments(id),
+  lesson_id uuid references lessons(id),                       -- 휴무 날짜의 수업
+  migrated_item_id uuid references migrated_items(id),         -- 시트에서 넘어온 휴가 보강 (수업이 아직 없음)
+  starts_at timestamptz not null,                              -- 원래 수업 시각
+  ends_at timestamptz not null,
+  choice text not null default 'undecided' check (choice in ('undecided', 'substitute', 'wait')),
+  sub_tutor_id uuid references tutors(id),
+  sub_stage text check (sub_stage in ('asked', 'tutor_ok', 'confirmed')),
+  sub_lesson_id uuid references lessons(id),                   -- 확정된 대체 수업
+  decided_at timestamptz,
+  decided_by uuid,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  check ((lesson_id is null) <> (migrated_item_id is null)),
+  check (ends_at > starts_at),
+  check ((choice = 'substitute') = (sub_tutor_id is not null) and (sub_tutor_id is null) = (sub_stage is null)),
+  check ((coalesce(sub_stage, '') = 'confirmed') = (sub_lesson_id is not null)),
+  check (sub_tutor_id is distinct from tutor_id)
+);
+create unique index if not exists leave_items_one_per_lesson on leave_items (lesson_id) where lesson_id is not null;
+create unique index if not exists leave_items_one_per_migrated on leave_items (migrated_item_id) where migrated_item_id is not null;
+create index if not exists leave_items_time_off on leave_items (time_off_id);
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'leave_items_audit') then
+    perform lms_protect('leave_items'::regclass);
+    create trigger leave_items_no_delete before delete on leave_items for each row execute function forbid_delete();
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 2. 안내 기록: leave_options 학생에게 두 가지 선택 안내 / sub_ask 대체강사에게 가능 확인 / sub_student 학생에게 대체강사 제안(프로필·날짜) / sub_confirmed 학생·대체강사에게 최종 확정 (2026-10-27 대표)
+-- ---------------------------------------------------------------------
+alter table lesson_notices add column if not exists leave_item_id uuid references leave_items(id);
+do $$
+declare
+  c text;
+begin
+  if not exists (select 1 from pg_constraint where conname = 'lesson_notices_one_source') then
+    for c in select conname from pg_constraint where conrelid = 'lesson_notices'::regclass and contype = 'c'
+             and (pg_get_constraintdef(oid) like '%makeup_request_id%' or pg_get_constraintdef(oid) like '%event%') loop
+      execute format('alter table lesson_notices drop constraint %I', c);
+    end loop;
+    alter table lesson_notices add constraint lesson_notices_event_check check (event in (
+      'change', 'makeup_ask', 'makeup_confirmed', 'makeup_voided', 'revert', 'leave_options', 'sub_ask', 'sub_student', 'sub_confirmed'));
+    alter table lesson_notices add constraint lesson_notices_one_source
+      check (num_nonnulls(change_request_id, makeup_request_id, leave_item_id) = 1);
+    alter table lesson_notices add constraint lesson_notices_change_events
+      check ((event in ('change', 'revert')) = (change_request_id is not null));
+    alter table lesson_notices add constraint lesson_notices_leave_events
+      check ((event in ('leave_options', 'sub_ask', 'sub_student', 'sub_confirmed')) = (leave_item_id is not null));
+  end if;
+end $$;
+-- 같은 안내는 한 번 (대체강사를 바꿨다가 다시 고르면 예전 안내는 '보낼 필요 없음'이라 새로 생김)
+create unique index if not exists lesson_notices_once_leave on lesson_notices (leave_item_id, event, recipient_id)
+  where leave_item_id is not null and status <> 'not_needed';
+
+-- ---------------------------------------------------------------------
+-- 3. 강사 휴무 보강 연장 (A20): 자동 연장 줄은 auto_source 로 구분 — 시트에서 넘어온 연장·예외 연장은 건드리지 않음
+-- ---------------------------------------------------------------------
+alter table enrollment_extensions add column if not exists auto_source text check (auto_source in ('leave_makeup'));
+
+-- 기존 강사를 기다린 보강(휴무 수업의 보강 + 시트 휴가 보강을 예약한 수업) 중 마지막 날까지만 연장.
+-- 기준 = '휴가 자동 연장 전' 종료일 → 보강 날짜가 앞당겨지면 연장도 줄어듦
+create or replace function lms_leave_sync_extension(p_enrollment uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  e enrollments;
+  v_actor uuid := coalesce(nullif(current_setting('app.actor_id', true), '')::uuid, auth.uid());
+  v_pre date;
+  v_last date;
+  v_cur integer;
+  v_target integer;
+begin
+  select * into e from enrollments where id = p_enrollment for update;
+  if not found then return; end if;
+  select e.base_end_date + coalesce(sum(days) filter (where auto_source is null), 0)::int,
+         coalesce(sum(days) filter (where auto_source = 'leave_makeup'), 0)::int
+  into v_pre, v_cur from enrollment_extensions where enrollment_id = e.id;
+  select max(x.kst_date) into v_last from lessons x
+  where x.enrollment_id = e.id and x.state <> 'canceled'
+    and ((x.kind = 'makeup' and exists (select 1 from lessons o where o.id = x.makeup_of and o.class_status = 'Tutor long-term leave'))
+      or (x.kind = 'migrated_makeup' and exists (select 1 from migrated_items m where m.lesson_id = x.id and m.tutor_leave)));
+  v_target := greatest(coalesce(v_last - v_pre, 0), 0);
+  if v_target = v_cur then return; end if;
+  if v_actor is null then raise exception '처리한 사람을 알 수 없습니다.'; end if;
+  begin
+    insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by, auto_source)
+    values (e.id, v_target - v_cur, 'tutor_long_term_leave', 'LMS 강사 휴무 보강 자동 연장 (A20)', v_actor, 'leave_makeup');
+  exception when exclusion_violation then
+    raise exception '다음 수강권 기간과 겹쳐 종료일을 늘릴 수 없습니다. 보강 날짜를 다시 확인해 주세요.' using hint = 'next_enrollment';
+  end;
+end $$;
+revoke all on function lms_leave_sync_extension(uuid) from public, anon, authenticated;
+
+-- 보강이 생기거나 없어지거나 날짜가 바뀌면 다시 계산 (확정·없애기·되돌리기 어느 경로든 같게)
+create or replace function lessons_leave_extension() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.kind in ('makeup', 'migrated_makeup') then
+    perform lms_leave_sync_extension(new.enrollment_id);
+  end if;
+  return null;
+end $$;
+revoke all on function lessons_leave_extension() from public, anon, authenticated;
+drop trigger if exists lessons_leave_extension on lessons;
+create trigger lessons_leave_extension after insert or update of state, starts_at on lessons
+  for each row execute function lessons_leave_extension();
+
+-- ---------------------------------------------------------------------
+-- 4. 보강 권리: 강사 휴무로 '기다림'을 고른 수업도 보강 받음 (종료일 제한 없음, A41 ⑦)
+--    이관 보강의 강사 = 원래 담당 (대체 수업의 강사가 아님)
+-- ---------------------------------------------------------------------
+create or replace function lms_makeup_source(p_lesson uuid, p_item uuid, out enrollment_id uuid, out student_id uuid,
+                                             out tutor_id uuid, out tutor_leave boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  l lessons;
+  it migrated_items;
+begin
+  if (p_lesson is null) = (p_item is null) then raise exception '보강할 수업을 하나 골라 주세요.'; end if;
+  if p_lesson is not null then
+    select * into l from lessons where id = p_lesson;
+    if not found or not (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave') then
+      raise exception '보강을 받을 수 있는 수업이 아닙니다.';
+    end if;
+    if exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled') then raise exception '이미 보강이 잡혀 있습니다.'; end if;
+    enrollment_id := l.enrollment_id; student_id := l.student_id; tutor_id := l.tutor_id;
+    tutor_leave := l.class_status = 'Tutor long-term leave';
+  else
+    select * into it from migrated_items where id = p_item;
+    if not found or it.kind <> 'makeup_open' then raise exception '예약 전 보강이 아닙니다.'; end if;
+    select e.student_id into student_id from enrollments e where e.id = it.enrollment_id;
+    select coalesce(x.original_tutor_id, x.tutor_id) into tutor_id from lessons x
+    where x.enrollment_id = it.enrollment_id and x.voided_at is null order by x.starts_at desc limit 1;
+    enrollment_id := it.enrollment_id; tutor_leave := coalesce(it.tutor_leave, false);
+  end if;
+end $$;
+revoke all on function lms_makeup_source(uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 5. 대체강사 가능 여부: 그 강사의 다른 수업(휴식 10분 포함)·휴무와 겹치는지. 겹치지 않으면 null
+-- ---------------------------------------------------------------------
+create or replace function lms_sub_conflict(p_tutor uuid, p_start timestamptz, p_end timestamptz, p_except_lesson uuid)
+returns text
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+begin
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사 휴무';
+  end if;
+  if exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled' and x.id is distinct from p_except_lesson
+             and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at) then
+    return '강사 다른 수업(휴식 10분 포함)';
+  end if;
+  return null;
+end $$;
+revoke all on function lms_sub_conflict(uuid, timestamptz, timestamptz, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 6. 휴무 넣기 (미리 보기 같은 함수): 휴무 기록 + 걸리는 수업·시트 휴가 보강을 목록으로. 다시 실행하면 새로 생긴 수업만 추가
+-- ---------------------------------------------------------------------
+
+-- 휴무 기간(KST 날짜, 양 끝 포함)에 걸리는, 아직 목록에 없는 것
+--  · 그 강사의 예정 수업 → 학생 선택 미확인
+--  · 시트에서 넘어온 휴가 보강(기존 학생 입력 때 '강사 휴가'로 넣은 것) → 불러오기만으로 '기존 강사 보강'을 골랐다고 보지 않음: 학생 선택 미확인.
+--    원래 시각 = 그 요일 고정 시각 (대체강사 제안에 씀)
+create or replace function lms_leave_candidates(p_tutor uuid, p_from date, p_to date)
+returns table (lesson_id uuid, migrated_item_id uuid, student_id uuid, enrollment_id uuid, starts_at timestamptz, ends_at timestamptz, choice text)
+language sql stable security definer set search_path = public as $$
+  select l.id, null::uuid, l.student_id, l.enrollment_id, l.starts_at, l.ends_at, 'undecided'
+  from lessons l
+  where l.tutor_id = p_tutor and l.state = 'scheduled'
+    and l.starts_at < ((p_to + 1)::timestamp at time zone 'Asia/Seoul') and (p_from::timestamp at time zone 'Asia/Seoul') < l.ends_at
+    and not exists (select 1 from leave_items i where i.lesson_id = l.id)
+  union all
+  select null::uuid, m.id, e.student_id, e.id,
+         ((m.original_date + rs.start_time_kst) at time zone 'Asia/Seoul'),
+         ((m.original_date + rs.start_time_kst) at time zone 'Asia/Seoul') + make_interval(mins => rs.duration_min), 'undecided'
+  from migrated_items m
+  join enrollments e on e.id = m.enrollment_id
+  join regular_schedules rs on rs.student_id = e.student_id and rs.tutor_id = p_tutor
+   and rs.weekday = extract(dow from m.original_date) and rs.effective_from <= m.original_date
+   and (rs.effective_to is null or rs.effective_to >= m.original_date)
+  where m.kind = 'makeup_open' and m.tutor_leave and m.original_date between p_from and p_to
+    and not exists (select 1 from leave_items i where i.migrated_item_id = m.id)
+$$;
+revoke all on function lms_leave_candidates(uuid, date, date) from public, anon, authenticated;
+
+create or replace function admin_leave_create(p_tutor uuid, p_from date, p_to date, p_reason text, p_dry_run boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  t0 timestamptz := (p_from::timestamp at time zone 'Asia/Seoul');
+  t1 timestamptz := ((p_to + 1)::timestamp at time zone 'Asia/Seoul');
+  v_off uuid;
+  v_lessons integer;
+  v_items integer;
+  v_students integer;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_from is null or p_to is null or p_to < p_from then raise exception '휴무 끝일이 시작일보다 빠릅니다.'; end if;
+  if not exists (select 1 from tutors where id = p_tutor) then raise exception '강사가 없습니다.'; end if;
+
+  select count(*) filter (where n.lesson_id is not null), count(*), count(distinct n.student_id)
+  into v_lessons, v_items, v_students from lms_leave_candidates(p_tutor, p_from, p_to) n;
+  if p_dry_run then
+    return jsonb_build_object('dry_run', true, 'lessons', v_lessons, 'items', v_items, 'students', v_students,
+      'existing', (select count(*) from leave_items i join tutor_time_off o on o.id = i.time_off_id
+                   where o.tutor_id = p_tutor and o.starts_at = t0 and o.ends_at = t1));
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_create', true);
+  select id into v_off from tutor_time_off where tutor_id = p_tutor and kind = 'leave' and starts_at = t0 and ends_at = t1;
+  if v_off is null then
+    insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by)
+    values (p_tutor, t0, t1, 'leave', nullif(trim(p_reason), ''), me) returning id into v_off;
+  end if;
+  -- 새로 들어온 줄마다 학생에게 두 가지 선택 안내 (화면은 학생마다 한 메시지로 묶어 복사)
+  with ins as (
+    insert into leave_items (time_off_id, tutor_id, student_id, enrollment_id, lesson_id, migrated_item_id, starts_at, ends_at, choice, created_by)
+    select v_off, p_tutor, n.student_id, n.enrollment_id, n.lesson_id, n.migrated_item_id, n.starts_at, n.ends_at, n.choice, me
+    from lms_leave_candidates(p_tutor, p_from, p_to) n
+    on conflict do nothing
+    returning id, student_id
+  )
+  insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id)
+  select id, 'leave_options', 'student', student_id from ins;
+  return jsonb_build_object('dry_run', false, 'time_off_id', v_off, 'lessons', v_lessons, 'items', v_items, 'students', v_students);
+end $$;
+revoke all on function admin_leave_create(uuid, date, date, text, boolean) from public, anon;
+grant execute on function admin_leave_create(uuid, date, date, text, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 7. 대체강사 / 기다림 고르기 (학생별로 여러 줄 한 번에, 일부 날짜만 다르게도 같은 함수)
+-- ---------------------------------------------------------------------
+create or replace function admin_leave_choose(p_items uuid[], p_choice text, p_sub_tutor uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  l lessons;
+  v_conf text;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_choice not in ('substitute', 'wait') then raise exception '대체강사 또는 기다림 중에서 골라 주세요.'; end if;
+  if p_choice = 'substitute' and p_sub_tutor is null then raise exception '대체강사를 골라 주세요.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_choose', true);
+
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if it.choice = p_choice and (p_choice = 'wait' or it.sub_tutor_id = p_sub_tutor) then continue; end if;
+    if p_choice = 'substitute' and p_sub_tutor = it.tutor_id then raise exception '휴무인 강사는 대체강사가 될 수 없습니다.'; end if;
+    if it.lesson_id is not null then select * into l from lessons where id = it.lesson_id for update; end if;
+    -- 학생이 골랐으면 두 가지 선택 안내는 보낸 것
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me
+    where leave_item_id = it.id and event = 'leave_options' and status = 'pending';
+
+    -- 지금 상태 풀기
+    if it.choice = 'substitute' then
+      if it.sub_stage = 'confirmed' then
+        if it.lesson_id is not null then
+          if l.state <> 'scheduled' then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+          begin
+            update lessons set tutor_id = it.tutor_id, original_tutor_id = null where id = l.id;
+          exception when exclusion_violation then
+            raise exception '원래 강사의 그 시간에 다른 수업이 있어 되돌릴 수 없습니다.';
+          end;
+        else
+          update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = me, void_note = '대체강사 수업 취소(휴무 처리 변경)'
+          where id = it.sub_lesson_id and state = 'scheduled';
+          if not found then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+          update migrated_items set kind = 'makeup_open', lesson_id = null where id = it.migrated_item_id;
+        end if;
+      end if;
+      update lesson_notices set status = 'not_needed' where leave_item_id = it.id and status = 'pending';
+    elsif it.choice = 'wait' and p_choice = 'substitute' then
+      if it.lesson_id is not null then
+        if exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+           or exists (select 1 from makeup_requests r where r.source_lesson_id = l.id and r.status in ('requested', 'countered', 'confirmed')) then
+          raise exception '% 수업은 보강 신청·확정이 있어 대체강사로 바꿀 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+        end if;
+        if l.state = 'canceled' and l.class_status = 'Tutor long-term leave' then
+          update lessons set state = 'scheduled', class_status = null, canceled_at = null, cancel_reason = null where id = l.id;
+          l.state := 'scheduled';
+        end if;
+      else
+        if exists (select 1 from migrated_items m where m.id = it.migrated_item_id and m.kind <> 'makeup_open')
+           or exists (select 1 from makeup_requests r where r.migrated_item_id = it.migrated_item_id and r.status in ('requested', 'countered')) then
+          raise exception '% 휴가 보강은 보강 신청·확정이 있어 대체강사로 바꿀 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+        end if;
+      end if;
+    end if;
+
+    -- 새 상태
+    if p_choice = 'wait' then
+      if it.lesson_id is not null and l.state = 'scheduled' then
+        update lessons set state = 'canceled', class_status = 'Tutor long-term leave', canceled_at = now(), cancel_reason = 'tutor_leave'
+        where id = l.id;
+      elsif it.lesson_id is not null and l.class_status is distinct from 'Tutor long-term leave' then
+        raise exception '% 수업이 이미 처리됐습니다 (%).', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'), l.class_status;
+      end if;
+      update leave_items set choice = 'wait', sub_tutor_id = null, sub_stage = null, sub_lesson_id = null, decided_at = now(), decided_by = me
+      where id = it.id;
+    else
+      if it.starts_at <= now() then raise exception '% 수업 시간이 지나 대체강사를 정할 수 없습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      if it.lesson_id is not null and l.state <> 'scheduled' then
+        raise exception '% 수업이 이미 처리됐습니다 (%).', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'), l.class_status;
+      end if;
+      v_conf := lms_sub_conflict(p_sub_tutor, it.starts_at, it.ends_at, it.lesson_id);
+      if v_conf is not null then
+        raise exception '% 수업 시간은 대체강사의 %와 겹칩니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI'), v_conf using hint = 'schedule_conflict';
+      end if;
+      update leave_items set choice = 'substitute', sub_tutor_id = p_sub_tutor, sub_stage = 'asked', sub_lesson_id = null,
+                             decided_at = now(), decided_by = me
+      where id = it.id;
+      update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+      where leave_item_id = it.id and event = 'sub_ask' and recipient_id = p_sub_tutor and status = 'sent';
+      insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values (it.id, 'sub_ask', 'tutor', p_sub_tutor);
+    end if;
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_choose(uuid[], text, uuid) from public, anon;
+grant execute on function admin_leave_choose(uuid[], text, uuid) to authenticated;
+
+-- 대체강사가 가능하다고 함 → 학생에게 대체강사 안내 (강사가 답했으면 가능 확인 안내는 보낸 것)
+create or replace function admin_leave_sub_ok(p_items uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_sub_ok', true);
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if it.choice <> 'substitute' then raise exception '대체강사를 고른 수업이 아닙니다.'; end if;
+    if it.sub_stage <> 'asked' then continue; end if;
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me
+    where leave_item_id = it.id and event = 'sub_ask' and status = 'pending';
+    update leave_items set sub_stage = 'tutor_ok' where id = it.id;
+    update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+    where leave_item_id = it.id and event = 'sub_student' and status = 'sent';
+    insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values (it.id, 'sub_student', 'student', it.student_id);
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_sub_ok(uuid[]) from public, anon;
+grant execute on function admin_leave_sub_ok(uuid[]) to authenticated;
+
+-- 학생 OK → 확정: 그 수업 강사가 대체강사로 바뀜 (원래 강사는 original_tutor_id). 학생 남은 횟수·종료일 그대로
+create or replace function admin_leave_student_ok(p_items uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  v_conf text;
+  v_lesson uuid;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_student_ok', true);
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if it.choice <> 'substitute' then raise exception '대체강사를 고른 수업이 아닙니다.'; end if;
+    if it.sub_stage = 'confirmed' then continue; end if;
+    if it.sub_stage <> 'tutor_ok' then raise exception '대체강사가 가능하다고 한 뒤에 확정할 수 있습니다.'; end if;
+    if it.starts_at <= now() then raise exception '% 수업 시간이 지났습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+    v_conf := lms_sub_conflict(it.sub_tutor_id, it.starts_at, it.ends_at, it.lesson_id);
+    if v_conf is not null then
+      raise exception '% 수업 시간은 대체강사의 %와 겹칩니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI'), v_conf using hint = 'schedule_conflict';
+    end if;
+    begin
+      if it.lesson_id is not null then
+        update lessons set tutor_id = it.sub_tutor_id, original_tutor_id = it.tutor_id where id = it.lesson_id and state = 'scheduled'
+        returning id into v_lesson;
+        if v_lesson is null then raise exception '% 수업이 이미 처리됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      else
+        insert into lessons (enrollment_id, student_id, tutor_id, original_tutor_id, kind, starts_at, ends_at, created_by)
+        values (it.enrollment_id, it.student_id, it.sub_tutor_id, it.tutor_id, 'migrated_makeup', it.starts_at, it.ends_at, me)
+        returning id into v_lesson;
+        update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = it.migrated_item_id and kind = 'makeup_open';
+        if not found then raise exception '% 휴가 보강이 이미 예약됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      end if;
+    exception when exclusion_violation then
+      raise exception '% 그 시간에 학생 또는 대체강사의 다른 수업이 있습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI') using hint = 'schedule_conflict';
+    end;
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me
+    where leave_item_id = it.id and event = 'sub_student' and status = 'pending';
+    update leave_items set sub_stage = 'confirmed', sub_lesson_id = v_lesson where id = it.id;
+    update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+    where leave_item_id = it.id and event = 'sub_confirmed' and recipient_id in (it.sub_tutor_id, it.student_id) and status = 'sent';
+    -- 학생 OK → 학생·강사 모두에게 최종 확정 안내 (2026-10-27 대표)
+    insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values
+      (it.id, 'sub_confirmed', 'tutor', it.sub_tutor_id), (it.id, 'sub_confirmed', 'student', it.student_id);
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_student_ok(uuid[]) from public, anon;
+grant execute on function admin_leave_student_ok(uuid[]) to authenticated;
+
+-- 대체강사 고르기 목록: 강사마다 고른 수업 중 몇 회가 비어 있는지
+create or replace function admin_leave_sub_options(p_items uuid[])
+returns table (tutor_id uuid, name text, timezone text, free integer, busy_dates text[])
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return query
+  select t.id, t.name, t.timezone,
+         count(*) filter (where lms_sub_conflict(t.id, i.starts_at, i.ends_at, i.lesson_id) is null)::int,
+         coalesce(array_agg(to_char(i.starts_at at time zone 'Asia/Seoul', 'FMMM/FMDD') order by i.starts_at)
+                  filter (where lms_sub_conflict(t.id, i.starts_at, i.ends_at, i.lesson_id) is not null), '{}')
+  from tutors t cross join leave_items i
+  where i.id = any(p_items) and t.id <> i.tutor_id and t.active
+  group by t.id, t.name, t.timezone
+  order by 4 desc, t.name;
+end $$;
+revoke all on function admin_leave_sub_options(uuid[]) from public, anon;
+grant execute on function admin_leave_sub_options(uuid[]) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 8. 기존 강사 보강을 고른 학생: 보강 시간 후보
+--    in_period = 강사 복귀 뒤 ~ 지금 종료일 사이, 평소 수업 시각으로 정규 수업이 없는 요일 (먼저 보여 줌)
+--    after_end = 종료일 뒤 평소 요일·시간 (평소 시간을 유지하고 싶을 때). 필요한 보강 수만큼 — 확정하면 그날까지 자동 연장 (A20)
+--    강사 다른 수업(휴식 10분)·휴무, 학생 다른 수업과 겹치는 시간은 뺌. 확정은 기존 보강 흐름(강사 확인 → 운영진 확정)
+-- ---------------------------------------------------------------------
+create or replace function admin_leave_makeup_options(p_items uuid[])
+returns table (section text, starts_at timestamptz, ends_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  it leave_items;
+  e enrollments;
+  v_back date;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_need integer;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  select * into it from leave_items where id = any(p_items) order by starts_at limit 1;
+  if not found then return; end if;
+  if exists (select 1 from leave_items where id = any(p_items) and student_id <> it.student_id) then
+    raise exception '한 학생의 수업만 골라 주세요.';
+  end if;
+  select count(*) into v_need from leave_items where id = any(p_items);
+  select * into e from enrollments where id = it.enrollment_id;
+  select (o.ends_at at time zone 'Asia/Seoul')::date into v_back from tutor_time_off o where o.id = it.time_off_id;
+
+  return query
+  with rs as (
+    select r.weekday, r.start_time_kst from regular_schedules r
+    where r.student_id = it.student_id and r.tutor_id = it.tutor_id and (r.effective_to is null or r.effective_to >= v_today)
+  ),
+  slots as (
+    select 'in_period'::text as sec, ((d::date + t.start_time_kst) at time zone 'Asia/Seoul') as s
+    from generate_series(greatest(v_today + 1, v_back), e.final_end_date, interval '1 day') d
+    cross join (select distinct start_time_kst from rs) t
+    where extract(dow from d) not in (select weekday from rs)
+    union all
+    select 'after_end', ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul')
+    from generate_series(greatest(e.final_end_date + 1, v_back, v_today + 1), greatest(e.final_end_date + 1, v_back, v_today + 1) + 180, interval '1 day') d
+    join rs on rs.weekday = extract(dow from d)
+  ),
+  free as (
+    select x.sec, x.s, x.s + make_interval(mins => e.duration_min) as f from slots x
+    where x.s > now()
+      and lms_sub_conflict(it.tutor_id, x.s, x.s + make_interval(mins => e.duration_min), null) is null
+      and not exists (select 1 from lessons l where l.student_id = it.student_id and l.state <> 'canceled'
+                      and l.starts_at < x.s + make_interval(mins => e.duration_min) and x.s < l.ends_at)
+  )
+  select z.sec, z.s, z.f from (
+    select f1.sec, f1.s, f1.f, row_number() over (partition by f1.sec order by f1.s) as n from free f1
+  ) z
+  where z.sec = 'in_period' or z.n <= v_need
+  order by z.s;
+end $$;
+revoke all on function admin_leave_makeup_options(uuid[]) from public, anon;
+grant execute on function admin_leave_makeup_options(uuid[]) to authenticated;
+
+-- 시트 휴가 보강에 보강 신청이 들어오면 = 학생이 기존 강사 보강을 고른 것 (미확인 → 기존 강사 보강)
+create or replace function makeup_requests_leave_choice() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  it leave_items;
+begin
+  if new.migrated_item_id is null then return null; end if;
+  select * into it from leave_items where migrated_item_id = new.migrated_item_id for update;
+  if not found then return null; end if;
+  if it.choice = 'substitute' then
+    raise exception '대체강사로 진행 중인 휴무 수업입니다. 강사 휴무 화면에서 먼저 기존 강사 보강으로 바꿔 주세요.';
+  end if;
+  if it.choice = 'undecided' then
+    update leave_items set choice = 'wait', decided_at = now(), decided_by = new.requested_by where id = it.id;
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = new.requested_by
+    where leave_item_id = it.id and event = 'leave_options' and status = 'pending';
+  end if;
+  return null;
+end $$;
+revoke all on function makeup_requests_leave_choice() from public, anon, authenticated;
+drop trigger if exists makeup_requests_leave_choice on makeup_requests;
+create trigger makeup_requests_leave_choice after insert on makeup_requests
+  for each row execute function makeup_requests_leave_choice();
+
+-- ---------------------------------------------------------------------
+-- 9. 이전 단계로 되돌리기 (2026-10-27 대표): 확정 전(학생 OK 대기) / 강사 답 전(가능 확인 중) / 학생 답 전(미확인)
+--    대체 확정 수업은 원래 강사로, 기다림(강사 장기 휴식) 수업은 다시 예정으로. 안 보낸 안내는 보낼 필요 없음. 지난 수업은 안 됨
+--    안내 '보냄'도 되돌릴 수 있음 (그 안내 단계에 있을 때만)
+-- ---------------------------------------------------------------------
+create or replace function lms_leave_unconfirm(it leave_items, p_me uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  l lessons;
+begin
+  if it.lesson_id is not null then
+    select * into l from lessons where id = it.lesson_id for update;
+    if l.state <> 'scheduled' then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+    begin
+      update lessons set tutor_id = it.tutor_id, original_tutor_id = null where id = l.id;
+    exception when exclusion_violation then
+      raise exception '원래 강사의 그 시간에 다른 수업이 있어 되돌릴 수 없습니다.';
+    end;
+  else
+    update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = p_me, void_note = '대체강사 수업 취소(휴무 처리 되돌림)'
+    where id = it.sub_lesson_id and state = 'scheduled';
+    if not found then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+    update migrated_items set kind = 'makeup_open', lesson_id = null where id = it.migrated_item_id;
+  end if;
+end $$;
+revoke all on function lms_leave_unconfirm(leave_items, uuid) from public, anon, authenticated;
+
+create or replace function admin_leave_back(p_items uuid[], p_to text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  l lessons;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_to not in ('undecided', 'asked', 'tutor_ok') then raise exception '되돌릴 단계를 골라 주세요.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_back', true);
+
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if p_to = 'tutor_ok' and (it.choice <> 'substitute' or it.sub_stage <> 'confirmed') then continue; end if;
+    if p_to = 'asked' and (it.choice <> 'substitute' or it.sub_stage = 'asked') then continue; end if;
+    if p_to = 'undecided' and it.choice = 'undecided' then continue; end if;
+    if it.starts_at <= now() then raise exception '% 수업 시간이 지나 되돌릴 수 없습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+
+    if it.choice = 'substitute' then
+      if it.sub_stage = 'confirmed' then perform lms_leave_unconfirm(it, me); end if;
+      update lesson_notices set status = 'not_needed'
+      where leave_item_id = it.id and status = 'pending'
+        and event = any(case p_to when 'tutor_ok' then array['sub_confirmed'] when 'asked' then array['sub_student', 'sub_confirmed']
+                                  else array['sub_ask', 'sub_student', 'sub_confirmed'] end);
+    else
+      -- 기다림 → 학생 답 전: 보강 신청·확정이 없을 때만, 수업은 다시 예정으로
+      if it.lesson_id is not null then
+        select * into l from lessons where id = it.lesson_id for update;
+        if exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+           or exists (select 1 from makeup_requests r where r.source_lesson_id = l.id and r.status in ('requested', 'countered', 'confirmed')) then
+          raise exception '% 수업은 보강 신청·확정이 있어 되돌릴 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+        end if;
+        if l.state = 'canceled' and l.class_status = 'Tutor long-term leave' then
+          begin
+            update lessons set state = 'scheduled', class_status = null, canceled_at = null, cancel_reason = null where id = l.id;
+          exception when exclusion_violation then
+            raise exception '% 그 시간에 다른 수업이 있어 되돌릴 수 없습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI');
+          end;
+        end if;
+      elsif exists (select 1 from migrated_items m where m.id = it.migrated_item_id and m.kind <> 'makeup_open')
+            or exists (select 1 from makeup_requests r where r.migrated_item_id = it.migrated_item_id and r.status in ('requested', 'countered')) then
+        raise exception '% 휴가 보강은 보강 신청·확정이 있어 되돌릴 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+      end if;
+    end if;
+
+    if p_to = 'undecided' then
+      update leave_items set choice = 'undecided', sub_tutor_id = null, sub_stage = null, sub_lesson_id = null, decided_at = null, decided_by = null
+      where id = it.id;
+    else
+      update leave_items set sub_stage = p_to, sub_lesson_id = null where id = it.id;
+    end if;
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_back(uuid[], text) from public, anon;
+grant execute on function admin_leave_back(uuid[], text) to authenticated;
+
+create or replace function admin_leave_notice_unsend(p_notices uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  n lesson_notices;
+  it leave_items;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_notice_unsend', true);
+  for n in select * from lesson_notices where id = any(p_notices) and leave_item_id is not null for update loop
+    if n.status <> 'sent' then continue; end if;
+    select * into it from leave_items where id = n.leave_item_id;
+    if (n.event = 'leave_options' and it.choice <> 'undecided')
+       or (n.event = 'sub_ask' and it.sub_stage is distinct from 'asked')
+       or (n.event = 'sub_student' and it.sub_stage is distinct from 'tutor_ok')
+       or (n.event = 'sub_confirmed' and it.sub_stage is distinct from 'confirmed') then
+      raise exception '이미 다음 단계로 넘어간 안내입니다. 단계를 먼저 되돌려 주세요.';
+    end if;
+    update lesson_notices set status = 'pending', sent_at = null, sent_by = null where id = n.id;
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_notice_unsend(uuid[]) from public, anon;
+grant execute on function admin_leave_notice_unsend(uuid[]) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 10. 재등록 대기 학생 (2026-10-27 대표): 구글 캘린더·수업 목록에는 결제된 수업만 있어서, 재등록 전 학생의 평소 시간은
+--     휴무 기간에 비어 보임 → 대체강사 섭외 때 누락. 고정 시간을 맡아 두는 동안(종료일 23:59 KST까지, POL-RN-02 · lms_slot_hold_hits와 같은 기준)
+--     그 강사의 평소 요일·시간 중 종료일 뒤 ~ 휴무 끝 사이에 걸리는 날짜를 보여 줌. 수업이 아니라서 처리 목록에는 안 넣음
+--     (재등록 결제로 수업이 생기면 휴무를 다시 저장 → 처리 목록에 들어옴)
+-- ---------------------------------------------------------------------
+create or replace function admin_leave_renewal_pending(p_time_off uuid)
+returns table (student_id uuid, student_name text, student_code text, end_date date, starts_at timestamptz, duration_min integer)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  o tutor_time_off;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  select * into o from tutor_time_off where id = p_time_off;
+  if not found then return; end if;
+  return query
+  with last_end as (
+    select e.student_id, max(e.final_end_date) as end_date
+    from enrollments e
+    where e.status in ('confirmed', 'active')
+    group by e.student_id
+  )
+  select rs.student_id, st.name_ko, st.code, le.end_date, ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul'), rs.duration_min::integer
+  from regular_schedules rs
+  join last_end le on le.student_id = rs.student_id
+  join students st on st.id = rs.student_id
+  cross join lateral generate_series(greatest((o.starts_at at time zone 'Asia/Seoul')::date, le.end_date + 1),
+                                     (o.ends_at at time zone 'Asia/Seoul')::date - 1, interval '1 day') d
+  where rs.tutor_id = o.tutor_id
+    and extract(dow from d)::int = rs.weekday
+    and rs.effective_from <= le.end_date and (rs.effective_to is null or rs.effective_to >= le.end_date)
+    and now() < ((le.end_date + 1)::timestamp at time zone 'Asia/Seoul')
+  order by 2, 5;
+end $$;
+revoke all on function admin_leave_renewal_pending(uuid) from public, anon;
+grant execute on function admin_leave_renewal_pending(uuid) to authenticated;
+
+-- >>> 20261028001900_lms_renewal_notice.sql
+-- =====================================================================
+-- 종료 임박 카드: 재등록 안내 [보냄] 기록 (2026-10-28 대표: 당분간 문자로 안내 → 문자 복사 + 누른 버튼은 회색으로 남게)
+--  - 수강권 1개당 1줄. 한 번 보냄으로 기록하면 그대로 (다시 눌러도 같은 결과, 지우지 않음)
+--  - 카드는 지금처럼 재등록 결제가 확인되면 빠짐 (POL-RN-08). 이 기록은 '보냄 ✓' 표시에만 씀
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create table if not exists renewal_notices (
+  id uuid primary key default gen_random_uuid(),
+  enrollment_id uuid not null unique references enrollments(id),
+  sent_at timestamptz not null default now(),
+  sent_by uuid
+);
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'renewal_notices_audit') then
+    perform lms_protect('renewal_notices'::regclass);
+    create trigger renewal_notices_no_delete before delete on renewal_notices for each row execute function forbid_delete();
+  end if;
+end $$;
+
+create or replace function admin_renewal_notice_sent(p_enrollment uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r renewal_notices;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  if not exists (select 1 from enrollments where id = p_enrollment) then raise exception '수강등록을 찾지 못했습니다.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_renewal_notice_sent', true);
+  insert into renewal_notices (enrollment_id, sent_by) values (p_enrollment, me) on conflict (enrollment_id) do nothing;
+  select * into r from renewal_notices where enrollment_id = p_enrollment;
+  return jsonb_build_object('sent_at', r.sent_at);
+end $$;
+revoke all on function admin_renewal_notice_sent(uuid) from public, anon;
+grant execute on function admin_renewal_notice_sent(uuid) to authenticated;
+
+-- >>> 20261028002000_lms_tutor_screen.sql
+-- =====================================================================
+-- ② 강사 LMS: 수업 일정 확인 · Class Record 직접 입력 · 보강 가능 여부 응답 (2026-10-27 대표 확정 순서 나안, H26(18))
+--  - 수업 결과는 lessons.class_status 하나 (POL-ST-02). 강사가 고르는 것은 '진행 / 강사 지각 / 학생 노쇼' 셋뿐이고
+--    정확한 상태 이름(Normal · Make-up completed · Covered by another tutor)은 수업 종류·대체 여부로 DB가 정함
+--    → class_status_rules 로 회차·변경권·급여 지급이 자동 (같은 표를 정산이 씀)
+--  - 취소·휴무 같은 '시스템이 아는 결과'는 1700·1800 처리에서 이미 기록됨 → 강사는 진행 대상 수업만 입력 (POL-TU-07)
+--  - 원래 수업 길이(lessons.starts_at~ends_at)는 기록으로 바뀌지 않음. 급여 인정 시간은 정산 때 payroll_items.minutes 로 따로
+--  - 정산 표(payroll_items)에 들어간 수업은 강사가 결과를 못 고침
+--  - 보강: 강사는 학생이 원한 시간마다 가능/불가만 답함. 확정은 지금처럼 운영진 admin_makeup_confirm (D-43, 가능 ≠ 확정)
+--  - 운영자(TOTP 완료)는 강사 화면을 그대로 열어 볼 수 있고, 같은 함수로 대신 입력할 수 있음 (같은 검사·같은 기록)
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 보강 시간별 강사 답 (가능/불가)
+-- ---------------------------------------------------------------------
+alter table makeup_candidates add column if not exists tutor_answer text;
+alter table makeup_candidates add column if not exists answered_at timestamptz;
+alter table makeup_candidates add column if not exists answered_by uuid;
+alter table makeup_requests add column if not exists tutor_answered_at timestamptz;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'makeup_candidates_answer_check') then
+    alter table makeup_candidates add constraint makeup_candidates_answer_check
+      check (tutor_answer is null or tutor_answer in ('yes', 'no'));
+    alter table makeup_candidates add constraint makeup_candidates_answer_when
+      check ((tutor_answer is null) = (answered_at is null));
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 2. 누구의 강사 화면인지: 강사 본인, 또는 운영자(TOTP 완료)가 고른 강사
+-- ---------------------------------------------------------------------
+create or replace function lms_screen_tutor(p_tutor uuid) returns uuid
+language plpgsql stable security definer set search_path = public as $$
+declare
+  mine uuid := my_tutor_id();
+begin
+  if is_admin() and p_tutor is not null then return p_tutor; end if;
+  if mine is null or (p_tutor is not null and p_tutor <> mine) then
+    raise exception 'Please sign in with your tutor account.' using errcode = '42501';
+  end if;
+  return mine;
+end $$;
+revoke all on function lms_screen_tutor(uuid) from public, anon, authenticated;
+
+-- 수업 회차 (시트 Class Count 'n/총'): 학생 수업이 소진되는 수업만 번호가 붙음 (POL-ST-01 consumes_lesson)
+--  · 기존 학생 입력(import_checks)이면 시트에서 이미 진행된 수부터 이어서 셈
+--  · 예정 수업은 그대로 진행된다고 보고 번호를 미리 붙임, 보상 수업은 셈에서 뺌
+create or replace function lms_lesson_count(p_lesson uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when l.voided_at is not null or l.kind = 'compensation'
+              or (l.class_status is not null and not r.consumes_lesson) then null
+         else jsonb_build_object(
+           'n', coalesce(c.sheet_used, 0) + (
+             select count(*) from lessons x left join class_status_rules xr on xr.status = x.class_status
+             where x.enrollment_id = l.enrollment_id and x.voided_at is null and x.kind <> 'compensation'
+               and (x.class_status is null or xr.consumes_lesson)
+               and (x.starts_at, x.id) <= (l.starts_at, l.id)),
+           'total', coalesce(c.sheet_total, e.lessons_purchased + e.lessons_carried_in)) end
+  from lessons l
+  join enrollments e on e.id = l.enrollment_id
+  left join class_status_rules r on r.status = l.class_status
+  left join import_checks c on c.enrollment_id = e.id
+  where l.id = p_lesson
+$$;
+revoke all on function lms_lesson_count(uuid) from public, anon, authenticated;
+
+-- 그 시간에 강사의 다른 수업(휴식 10분 포함)·휴무가 있는지 (admin_makeup_confirm 과 같은 기준)
+create or replace function lms_tutor_busy(p_tutor uuid, p_start timestamptz, p_end timestamptz) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled'
+                 and x.starts_at < p_end + interval '10 minutes' and p_start - interval '10 minutes' < x.ends_at)   -- POL-OP-21
+      or exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < p_end and p_start < o.ends_at)
+$$;
+revoke all on function lms_tutor_busy(uuid, timestamptz, timestamptz) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 3. 강사 화면 한 번에 읽기: 강사 정보 + 기간 안 수업(한국 날짜 기준) + 답할 보강 신청
+--    학생 정보는 수업에 필요한 것만 (이름·레벨·수업 노트 링크) — 연락처·결제·변경권은 주지 않음
+-- ---------------------------------------------------------------------
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', coalesce(s.display_name, s.name_en), 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    -- 기록할 수업: 시작했는데 결과가 없는 수업 (강사 LMS 계정이 생긴 뒤 시작한 수업만 — 그 전 수업은 시트에 기록됨)
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', coalesce(s.display_name, s.name_en),
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_tutor_busy(r.tutor_id, c.starts_at, c.ends_at), 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 4. Class Record 입력 (강사 본인 또는 운영자 대신 입력)
+--    p_result: 'held'(진행) | 'late'(강사 지각, 학생 있음 — 사유 필수 POL-TU-01) | 'student_no_show'(학생 노쇼 POL-TU-09)
+--    · 시작 시각 뒤에만, 예정·진행 기록된 수업만 (취소된 수업은 이미 결과가 있음)
+--    · 다시 저장하면 고침 (첫 기록 시각은 그대로 — POL-TU-06 10분 기준). 정산에 들어간 수업은 못 고침
+-- ---------------------------------------------------------------------
+create or replace function tutor_record_class(p_lesson uuid, p_result text, p_topics text, p_remarks text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  l lessons;
+  v_status class_status;
+  v_topics text := nullif(trim(coalesce(p_topics, '')), '');
+  v_remarks text := nullif(trim(coalesce(p_remarks, '')), '');
+  v_old class_records;
+begin
+  select * into l from lessons where id = p_lesson for update;
+  if not found then raise exception 'Class not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and l.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your class.' using errcode = '42501';
+  end if;
+  if l.voided_at is not null or l.state = 'canceled' then
+    raise exception 'This class was canceled (%). No record needed.', coalesce(l.class_status::text, 'removed') using hint = 'canceled';
+  end if;
+  if l.starts_at > now() then raise exception 'You can record this class after it starts.' using hint = 'not_started'; end if;
+  if exists (select 1 from payroll_items where lesson_id = l.id) then
+    raise exception 'This class is already in payroll. Please contact Edge English to change it.' using hint = 'locked';
+  end if;
+  if p_result = 'held' then
+    if v_topics is null then raise exception 'Please enter the covered topics.' using hint = 'topics'; end if;
+    v_status := case when l.kind in ('makeup', 'migrated_makeup', 'compensation') then 'Make-up completed'
+                     when l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id then 'Covered by another tutor'
+                     else 'Normal' end;
+  elsif p_result = 'late' then
+    if v_topics is null then raise exception 'Please enter the covered topics.' using hint = 'topics'; end if;
+    if v_remarks is null then raise exception 'Please write the reason for being late in Remarks.' using hint = 'remarks'; end if;
+    v_status := 'Tutor Late - Student Present';
+  elsif p_result = 'student_no_show' then
+    v_status := 'Student no-show';
+  else
+    raise exception 'Please choose how the class went.';
+  end if;
+
+  select * into v_old from class_records where lesson_id = l.id;
+  if l.state = 'done' and l.class_status = v_status and found
+     and v_old.covered_topics is not distinct from v_topics and v_old.remarks is not distinct from v_remarks then
+    return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', true);
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_record_class' else 'tutor_record_class' end, true);
+  update lessons set state = 'done', class_status = v_status where id = l.id and (state, class_status) is distinct from ('done', v_status);
+  insert into class_records (lesson_id, covered_topics, remarks, submitted_by)
+  values (l.id, v_topics, v_remarks, me)
+  on conflict (lesson_id) do update set covered_topics = excluded.covered_topics, remarks = excluded.remarks, submitted_by = excluded.submitted_by;
+  return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', false);
+end $$;
+revoke all on function tutor_record_class(uuid, text, text, text) from public, anon;
+grant execute on function tutor_record_class(uuid, text, text, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 5. 보강 가능 여부 답 (학생이 원한 시간마다 가능/불가 + 메모). 확정은 운영진 (D-43)
+--    · 다시 답하면 고침. 답이 오면 강사에게 WhatsApp으로 물어볼 안내(makeup_ask)는 '보낼 필요 없음'
+-- ---------------------------------------------------------------------
+create or replace function tutor_makeup_answer(p_request uuid, p_yes uuid[], p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  v_note text := nullif(trim(coalesce(p_note, '')), '');
+  v_yes uuid[] := coalesce(p_yes, '{}');
+begin
+  select * into r from makeup_requests where id = p_request for update;
+  if not found then raise exception 'Make-up request not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and r.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your make-up request.' using errcode = '42501';
+  end if;
+  if r.status not in ('requested', 'countered') then
+    raise exception 'This make-up request is already closed.' using hint = 'closed';
+  end if;
+  if exists (select 1 from unnest(v_yes) y where not exists
+             (select 1 from makeup_candidates c where c.id = y and c.request_id = r.id and c.proposed_by = 'student')) then
+    raise exception 'Unknown time in your answer. Please reload the page.';
+  end if;
+  if cardinality(v_yes) = 0 and v_note is null then
+    raise exception 'None of the times work? Please write other times you are available in the note.' using hint = 'note';
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_makeup_answer' else 'tutor_makeup_answer' end, true);
+  update makeup_candidates c set tutor_answer = case when c.id = any(v_yes) then 'yes' else 'no' end, answered_at = now(), answered_by = me
+  where c.request_id = r.id and c.proposed_by = 'student'
+    and c.tutor_answer is distinct from case when c.id = any(v_yes) then 'yes' else 'no' end;
+  update makeup_requests set tutor_note = v_note, tutor_answered_at = now() where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  return jsonb_build_object('makeup_request_id', r.id, 'yes', cardinality(v_yes));
+end $$;
+revoke all on function tutor_makeup_answer(uuid, uuid[], text) from public, anon;
+grant execute on function tutor_makeup_answer(uuid, uuid[], text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 6. 운영자: 강사 화면을 열 강사 목록 (LMS 로그인 계정 연결 여부 포함)
+-- ---------------------------------------------------------------------
+create or replace function admin_tutor_accounts()
+returns table (tutor_id uuid, name text, timezone text, active boolean, has_login boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return query select t.id, t.name, t.timezone, t.active, exists (select 1 from app_users u where u.tutor_id = t.id)
+  from tutors t order by t.active desc, t.name;
+end $$;
+revoke all on function admin_tutor_accounts() from public, anon;
+grant execute on function admin_tutor_accounts() to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 7. 운영자 대시보드: Class Record 미기록 (강사 LMS 계정이 있는 강사의 수업만, 끝나고 10분 지남 — POL-TU-06)
+-- ---------------------------------------------------------------------
+create or replace function admin_class_record_missing()
+returns table (lesson_id uuid, tutor_id uuid, tutor_name text, student_name text, student_code text, starts_at timestamptz, ends_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return query
+  select l.id, t.id, t.name, s.name_ko, s.code, l.starts_at, l.ends_at
+  from lessons l
+  join tutors t on t.id = l.tutor_id
+  join students s on s.id = l.student_id
+  join lateral (select min(u.created_at) as since from app_users u where u.tutor_id = t.id) a on a.since is not null
+  where l.state = 'scheduled' and l.voided_at is null
+    and l.ends_at + interval '10 minutes' <= now()   -- POL-TU-06 수업 끝나고 10분 안 기록
+    and l.starts_at >= a.since
+  order by l.starts_at;
+end $$;
+revoke all on function admin_class_record_missing() from public, anon;
+grant execute on function admin_class_record_missing() to authenticated;
+
+-- >>> 20261028002100_lms_tutor_login.sql
+-- =====================================================================
+-- 강사 로그인 계정 만들기 (2026-10-28 대표: 'Claude가 해, 내 손 안 거치게')
+--  - 대표(owner, TOTP 완료)가 강사 화면 '운영자 보기'에서 이메일만 넣으면
+--    로그인 계정(auth.users, 이메일 확인됨) + 강사 연결(app_users) + tutors.email 을 한 번에 만든다
+--  - 비밀번호 없음: 강사는 이메일 6자리 코드로 로그인 (POL-AC-03). 초대 메일 기능은 쓰지 않음(supabase-test-setup ⑥)
+--  - 이미 같은 이메일 계정이 있으면 새로 만들지 않고 연결만. 다른 학생·강사·운영자에 연결된 계정이면 거절
+--  - 강사 1명 = 계정 1개 (app_users.tutor_id unique). 이미 연결된 강사면 그대로 돌려줌(다시 눌러도 안전)
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function admin_tutor_login(p_tutor uuid, p_email text)
+returns table (tutor_name text, email text, created boolean)
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_email text := lower(trim(coalesce(p_email, '')));
+  v_name text;
+  v_linked uuid;
+  v_uid uuid;
+  v_role text;
+  v_new boolean := false;
+begin
+  if not is_owner() then raise exception '대표 계정(추가 인증 완료)만 강사 로그인 계정을 만들 수 있습니다.' using errcode = '42501'; end if;
+  if v_email !~ '^[^\s@]+@[^\s@]+\.[^\s@]+$' then raise exception '이메일 주소를 다시 확인해 주세요.' using errcode = '22023'; end if;
+  select t.name into v_name from tutors t where t.id = p_tutor for update;
+  if v_name is null then raise exception '강사를 찾을 수 없습니다.' using errcode = 'P0002'; end if;
+
+  -- 이미 연결된 강사: 같은 이메일이면 그대로, 다르면 거절 (계정 바꾸기는 대표 확인 뒤 따로)
+  select u.auth_user_id into v_linked from app_users u where u.tutor_id = p_tutor;
+  if v_linked is not null then
+    if (select lower(a.email) from auth.users a where a.id = v_linked) = v_email then
+      return query select v_name, v_email, false; return;
+    end if;
+    raise exception '% 강사는 이미 다른 이메일로 연결돼 있습니다.', v_name using errcode = '23505';
+  end if;
+
+  select a.id into v_uid from auth.users a where lower(a.email) = v_email;
+  if v_uid is not null then
+    select u.role into v_role from app_users u where u.auth_user_id = v_uid;
+    if v_role is not null then raise exception '이 이메일은 이미 다른 사람(%)에 연결돼 있습니다.', v_role using errcode = '23505'; end if;
+    update auth.users set email_confirmed_at = coalesce(email_confirmed_at, now()) where id = v_uid;
+  else
+    v_uid := gen_random_uuid();
+    v_new := true;
+    -- 대시보드 'Add user · Auto Confirm' 과 같은 모양. 토큰 칸은 null 이면 로그인 서버가 읽다 실패하므로 빈 글자
+    insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+      confirmation_token, recovery_token, email_change_token_new, email_change, email_change_token_current,
+      phone_change, phone_change_token, reauthentication_token, is_sso_user, is_anonymous)
+    values ('00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated', v_email,
+      crypt(gen_random_uuid()::text, gen_salt('bf')), now(),
+      '{"provider":"email","providers":["email"]}', '{}', now(), now(),
+      '', '', '', '', '', '', '', '', false, false);
+    insert into auth.identities (id, user_id, provider_id, provider, identity_data, created_at, updated_at)
+    values (gen_random_uuid(), v_uid, v_uid::text, 'email',
+      jsonb_build_object('sub', v_uid::text, 'email', v_email, 'email_verified', true, 'phone_verified', false), now(), now());
+  end if;
+
+  insert into app_users (auth_user_id, role, tutor_id) values (v_uid, 'tutor', p_tutor);
+  update tutors t set email = v_email where t.id = p_tutor and t.email is distinct from v_email;
+  return query select v_name, v_email, v_new;
+end $$;
+revoke all on function admin_tutor_login(uuid, text) from public, anon;
+grant execute on function admin_tutor_login(uuid, text) to authenticated;
+
+-- >>> 20261028002200_lms_import_ended_enrollment.sql
+-- =====================================================================
+-- 기존 학생 입력: 시트에서 이미 다 끝난 수강권(남은 수업 0회)도 '기록용'으로 넣기 (2026-10-28 대표 '응')
+--  - 재등록을 기다리는 학생(예: 정O연, 10/29 종료·남은 0회)을 LMS에 넣어 대시보드 '종료 임박' 카드로 계속 보이게 함
+--    (카드는 종료일이 지나도 대표가 재등록 입력 또는 [끝냄]할 때까지 남음 — H26(28) ⑦)
+--  - 바뀐 것은 한 줄: 정규 수업이 0회여도, 시트 남은 수가 보강·추가 수업 수와 같으면(보통 0) 거절하지 않음
+--    그 밖의 검사·계산은 1600 그대로. 재등록 대기 자리(1400)도 그대로 종료일 23:59까지 맡아 둠
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function admin_import_existing_student(p_request_id uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  prev jsonb;
+  st jsonb := p -> 'student';
+  co jsonb := p -> 'course';
+  sh jsonb := p -> 'sheet';
+  v_tutor uuid := nullif(p ->> 'tutor_id', '')::uuid;
+  v_dur int := (p ->> 'duration_min')::int;
+  v_from date := (p ->> 'from_date')::date;
+  v_end date := (p ->> 'end_date')::date;
+  v_slots jsonb := coalesce(p -> 'slots', '[]'::jsonb);
+  v_makeups jsonb := coalesce(p -> 'makeups', '[]'::jsonb);
+  v_extras jsonb := coalesce(p -> 'extras', '[]'::jsonb);
+  v_weeks int := (co ->> 'weeks')::int;
+  v_pidx int := (co ->> 'period_idx')::int;
+  v_pstart date := (co ->> 'period_start')::date;
+  v_cleft int := (co ->> 'credits_left')::int;
+  v_total int := (sh ->> 'total')::int;
+  v_used int := (sh ->> 'used')::int;
+  v_grant int;
+  v_cstart date;     -- 수강 시작일 (1기간 시작)
+  v_calc_end date;   -- 28일 기간 계산 끝 = 정규 수업 마지막 날 상한
+  v_reason text := nullif(p -> 'extension' ->> 'reason', '');
+  v_note text := nullif(trim(p -> 'extension' ->> 'note'), '');
+  m jsonb;
+  s jsonb;
+  conflicts jsonb;
+  n_reg int;
+  n_mk int;
+  n_open int;
+  n_ex int;
+  sid uuid;
+  scode text;
+  eid uuid;
+  pid uuid;
+  lid uuid;
+  r record;
+  i int;
+  seqn int := 0;
+  res jsonb;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 학생을 입력할 수 있습니다.' using errcode = '42501'; end if;
+  if p_request_id is null then raise exception '요청 번호가 없습니다.'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_request_id::text, 0));
+  select result into prev from registration_requests where id = p_request_id;
+  if found then return prev || '{"repeated": true}'::jsonb; end if;
+
+  -- 입력 확인
+  if coalesce(trim(st ->> 'name_ko'), '') = '' or coalesce(trim(st ->> 'name_en'), '') = '' then raise exception '이름(한글·영문)을 넣어 주세요.'; end if;
+  if v_tutor is null or not exists (select 1 from tutors where id = v_tutor and active) then raise exception '담당 강사를 골라 주세요.'; end if;
+  if v_dur is null or v_dur not in (20, 40, 50) then raise exception '수업 길이는 20·40·50분만 가능합니다.'; end if;
+  if v_from is null or v_end is null or v_end < v_from then raise exception '수강 종료일이 시작일보다 빠릅니다.'; end if;
+  if jsonb_array_length(v_slots) not in (1, 2, 3, 5) then raise exception '주 수업 횟수는 1·2·3·5회만 가능합니다 (지금 %회).', jsonb_array_length(v_slots); end if;
+  if (select count(distinct (x ->> 'weekday')::int) from jsonb_array_elements(v_slots) x) <> jsonb_array_length(v_slots) then
+    raise exception '같은 요일에 정규 수업을 2개 넣을 수 없습니다.';
+  end if;
+  v_grant := least(jsonb_array_length(v_slots), 3);   -- 기간마다 변경권: 주1회 1·주2회 2·주3회 이상 3 (POL-CHG-03, credits.ts)
+
+  if v_weeks is null or v_weeks not in (4, 12, 24) then raise exception '상품(1·3·6개월)을 골라 주세요.'; end if;
+  if v_pidx is null or v_pidx < 1 or v_pidx > v_weeks / 4 then raise exception '지금 몇 번째 기간인지 골라 주세요.'; end if;
+  if v_pstart is null then raise exception '지금 기간의 시작일을 넣어 주세요.'; end if;
+  if v_cleft is null or v_cleft < 0 or v_cleft > v_grant then raise exception '이 기간 남은 변경권은 0~%개입니다.', v_grant; end if;
+  v_cstart := v_pstart - (v_pidx - 1) * 28;
+  v_calc_end := v_pstart + (v_weeks / 4 - v_pidx + 1) * 28 - 1;
+  -- 종료일이 계산과 다르면 이유를 기록 (막지 않음). 이유를 안 골랐으면 v_reason 은 비운 채 저장 → 처리할 일 '종료일 이유 확인'
+  if v_end <> v_calc_end then
+    if v_reason is not null and v_reason not in ('tutor_long_term_leave', 'student_long_term_leave', 'admin_exception') then
+      raise exception '종료일 변경 사유가 올바르지 않습니다.';
+    end if;
+    if v_reason = 'student_long_term_leave' and v_weeks <> 24 then raise exception '학생 장기 연기는 24주 상품만 가능합니다 (A09).'; end if;
+    if v_reason = 'admin_exception' then v_note := coalesce(v_note, '기타'); end if;
+  else
+    v_reason := null; v_note := null;
+  end if;
+  if v_total is null or v_used is null or v_total < 0 or v_used < 0 or v_used > v_total then
+    raise exception '시트의 총 수업 수와 진행·차감된 수를 확인해 주세요.';
+  end if;
+
+  for m in select * from jsonb_array_elements(v_makeups) loop
+    if coalesce(m ->> 'status', '') not in ('booked', 'open') then raise exception '보강이 예약됨인지 미예약인지 골라 주세요.'; end if;
+    if (nullif(m ->> 'original_date', '') is null) = not coalesce((m ->> 'origin_unknown')::boolean, false) then
+      raise exception '보강의 원래 수업 날짜를 넣거나 ''날짜 확인 필요''를 골라 주세요.';
+    end if;
+    if m ->> 'status' = 'booked' then
+      if (m ->> 'date')::date < v_from then raise exception '보강 날짜(%)가 시작일(%)보다 빠릅니다. 지난 보강은 넣지 않아요.', m ->> 'date', v_from; end if;
+      if (m ->> 'date')::date > v_end then raise exception '보강 날짜(%)가 수강 종료일(%) 뒤예요. 종료일(연장)을 먼저 맞춰 주세요.', m ->> 'date', v_end; end if;
+      if (m ->> 'duration_min')::int not in (20, 40, 50) then raise exception '보강 수업 길이는 20·40·50분만 가능합니다.'; end if;
+      if not exists (select 1 from tutors where id = (m ->> 'tutor_id')::uuid and active) then raise exception '보강 강사를 골라 주세요.'; end if;
+    end if;
+  end loop;
+  if (select count(*) - count(distinct y ->> 'original_date') from jsonb_array_elements(v_makeups) y where nullif(y ->> 'original_date', '') is not null) > 0 then
+    raise exception '같은 원래 수업 날짜의 보강이 두 개 있어요. 한 수업에는 보강 하나입니다.';
+  end if;
+  for m in select * from jsonb_array_elements(v_extras) loop
+    if coalesce(trim(m ->> 'reason'), '') = '' then raise exception '추가 수업의 근거를 적어 주세요 (예: 시트 몇 회차).'; end if;
+    if (m ->> 'date')::date < v_from then raise exception '추가 수업 날짜(%)가 시작일보다 빠릅니다.', m ->> 'date'; end if;
+    if (m ->> 'date')::date > v_end then raise exception '추가 수업 날짜(%)가 수강 종료일(%) 뒤예요.', m ->> 'date', v_end; end if;
+  end loop;
+
+  select count(*) filter (where kind = 'regular'), count(*) filter (where kind = 'migrated_makeup'), count(*) filter (where kind = 'migrated_extra')
+    into n_reg, n_mk, n_ex
+  from lms_import_candidates(p);
+  n_open := (select count(*) from jsonb_array_elements(v_makeups) y where y ->> 'status' = 'open');
+  if n_reg = 0 and (v_total - v_used) <> n_mk + n_open + n_ex then
+    raise exception '시작일~종료일 사이에 정규 수업이 없습니다. 날짜·요일을 확인해 주세요.';
+  end if;
+
+  conflicts := lms_import_conflicts(p);
+  if jsonb_array_length(conflicts) > 0 then
+    raise exception '일정 충돌 %건 — 저장하지 않았습니다.', jsonb_array_length(conflicts)
+      using errcode = 'P0001', detail = conflicts::text, hint = 'schedule_conflict';
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_import_existing_student', true);
+
+  insert into students (name_ko, name_en, email, phone, country, city, timezone, admin_memo)
+  values (trim(st ->> 'name_ko'), trim(st ->> 'name_en'), nullif(lower(trim(st ->> 'email')), ''), nullif(st ->> 'phone', ''),
+          nullif(st ->> 'country', ''), nullif(st ->> 'city', ''), st ->> 'timezone', nullif(st ->> 'admin_memo', ''))
+  returning id, code into sid, scode;   -- lms_since 비움 = 시트로 관리
+
+  -- 옛 상품 형태(legacy_label): 수강 시작일~계산 끝(base), 늘어난 날은 연장 기록으로 (final = base + 연장). 결제는 시트
+  insert into enrollments (student_id, seq, legacy_label, weekly_count, duration_min, start_date, base_end_date,
+                           lessons_purchased, status, created_by)
+  values (sid, 1, format('기존 학생 이관 · %s주 (결제는 시트)', v_weeks), jsonb_array_length(v_slots), v_dur, v_cstart, least(v_end, v_calc_end),
+          greatest(v_total, 1), 'active', me)
+  returning id into eid;
+  if v_end > v_calc_end then
+    insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by)
+    values (eid, v_end - v_calc_end, coalesce(v_reason, 'admin_exception'),
+            case when v_reason is null then '이유 확인 필요 (기존 학생 이관)' else coalesce(v_note, '기존 학생 이관 (시트 종료일)') end, me);
+  end if;
+
+  -- 1기간 ~ 마지막 기간 (28일씩, 지난 기간은 기록용). 지금 기간은 남은 변경권만큼 남기고, 다음 기간부터 새로 지급
+  for i in 1 .. v_weeks / 4 loop
+    insert into enrollment_periods (enrollment_id, idx, start_date, end_date, credits_granted)
+    values (eid, i, v_cstart + (i - 1) * 28, v_cstart + (i - 1) * 28 + 27, v_grant)
+    returning id into pid;
+    if i = v_pidx then
+      for seqn in 1 .. v_grant - v_cleft loop
+        insert into credit_ledger (period_id, reason, delta, note, created_by)
+        values (pid, 'admin_adjust', -1, '기존 학생 이관: 시트에서 이미 사용한 변경권', me);
+      end loop;
+    end if;
+  end loop;
+  seqn := 0;
+
+  for s in select * from jsonb_array_elements(v_slots) loop
+    insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from, change_reason)
+    values (sid, v_tutor, (s ->> 'weekday')::smallint, (s ->> 'time')::time, v_dur, v_from, '기존 학생 이관 (D-52)');
+  end loop;
+
+  for r in select * from lms_import_candidates(p) order by starts_at loop
+    if r.kind = 'regular' then seqn := seqn + 1; end if;
+    insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, created_by)
+    values (eid, sid, r.tutor_id, r.kind, case when r.kind = 'regular' then seqn end, r.starts_at, r.ends_at, me)
+    returning id into lid;
+    if r.kind = 'migrated_makeup' then
+      select x into m from jsonb_array_elements(v_makeups) x
+      where x ->> 'status' = 'booked' and (x ->> 'date')::date = r.kst_date and to_char((x ->> 'time')::time, 'HH24:MI') = r.kst_time limit 1;
+      insert into migrated_items (enrollment_id, kind, lesson_id, original_date, origin_unknown, tutor_leave, created_by)
+      values (eid, 'makeup_booked', lid, nullif(m ->> 'original_date', '')::date, coalesce((m ->> 'origin_unknown')::boolean, false),
+              coalesce((m ->> 'tutor_leave')::boolean, false), me);
+    elsif r.kind = 'migrated_extra' then
+      select x into m from jsonb_array_elements(v_extras) x
+      where (x ->> 'date')::date = r.kst_date and to_char((x ->> 'time')::time, 'HH24:MI') = r.kst_time limit 1;
+      insert into migrated_items (enrollment_id, kind, lesson_id, reason, created_by) values (eid, 'extra', lid, trim(m ->> 'reason'), me);
+    end if;
+  end loop;
+  for m in select * from jsonb_array_elements(v_makeups) x where x ->> 'status' = 'open' loop
+    insert into migrated_items (enrollment_id, kind, original_date, origin_unknown, tutor_leave, created_by)
+    values (eid, 'makeup_open', nullif(m ->> 'original_date', '')::date, coalesce((m ->> 'origin_unknown')::boolean, false),
+            coalesce((m ->> 'tutor_leave')::boolean, false), me);
+  end loop;
+
+  insert into import_checks (enrollment_id, sheet_total, sheet_used, lms_left, end_reason, end_note, end_days, weeks,
+                             end_checked_at, end_checked_by, created_by)
+  values (eid, v_total, v_used, n_reg + n_mk + n_open + n_ex, v_reason, v_note, v_end - v_calc_end, v_weeks,
+          case when v_reason is not null then now() end, case when v_reason is not null then me end, me);
+
+  res := jsonb_build_object('student_id', sid, 'student_code', scode, 'enrollment_id', eid, 'lessons', n_reg, 'makeups', n_mk,
+                            'open_makeups', n_open, 'extras', n_ex, 'lms_left', n_reg + n_mk + n_open + n_ex,
+                            'sheet_left', v_total - v_used, 'start_date', v_from, 'end_date', v_end,
+                            'course_start', v_cstart, 'regular_end', least(v_end, v_calc_end),
+                            'end_reason_missing', v_end <> v_calc_end and v_reason is null);
+  insert into registration_requests (id, created_by, student_id, enrollment_id, result)
+  values (p_request_id, me, sid, eid, res);
+  return res;
+end $$;
+revoke all on function admin_import_existing_student(uuid, jsonb) from public, anon;
+grant execute on function admin_import_existing_student(uuid, jsonb) to authenticated;
+
+-- >>> 20261029002300_lms_back_to_back.sql
+-- =====================================================================
+-- 보강 back to back: 같은 학생 수업에 이어서 보강 잡기 (2026-10-28 대표 확정, 정책 원본 H26(30)+보완, POL-OP-21 예외)
+--  - 학생이 원한 시간(보강 신청 때 학생이 낸 시간)일 때만. 강사가 말한 다른 시간에는 예외 없음 (강사가 요청할 수 없음)
+--  - 기본은 수업 사이 휴식 10분 그대로 (10분 쉬고 이어도 back to back)
+--  - 예외: 20분 수업끼리, 같은 학생이면 휴식 없이(10분 미만) 붙일 수 있음. 쉬지 않고 붙이는 건 2개(연속 40분)까지
+--  - 40·50분 수업은 같은 학생이어도 반드시 10분 휴식. 다른 학생 수업과는 항상 10분
+--  - 바뀌는 곳: 보강 확정(admin_makeup_confirm) · 강사 화면 보강 시간 '이미 수업 있음' 표시(tutor_screen)
+--    다른 판정(신규 등록·기존 학생 입력·대체강사·휴무 보강 가능 날짜)은 그대로 10분
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 보강 시간 충돌: 강사 휴무 · 강사 다른 수업(휴식 10분, 위 예외) · 쉬지 않고 3개 이상. 문제 없으면 null
+--    p_student_wants = 학생이 원한 시간인지 (아니면 예외 없이 10분)
+-- ---------------------------------------------------------------------
+create or replace function lms_makeup_conflict(p_tutor uuid, p_student uuid, p_start timestamptz, p_end timestamptz, p_student_wants boolean)
+returns text
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';      -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+  v_b2b_min constant integer := 20;                         -- POL-OP-21 예외 (policy.ts CONFIRMED.backToBackNoBreakDurationMin)
+  v_b2b_max constant integer := 2;                          -- POL-OP-21 예외 (policy.ts CONFIRMED.backToBackNoBreakMaxLessons)
+  v_new_b2b boolean := p_student_wants and p_end - p_start = make_interval(mins => v_b2b_min);
+  v_near uuid[];
+  v_chain integer;
+begin
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사 휴무';
+  end if;
+  -- 겹치는 수업, 또는 휴식 10분 안인데 예외(같은 학생·둘 다 20분·학생이 원한 시간)가 아닌 수업
+  if exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled'
+             and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at
+             and (x.starts_at < p_end and p_start < x.ends_at
+                  or not (v_new_b2b and x.student_id = p_student and x.ends_at - x.starts_at = make_interval(mins => v_b2b_min)))) then
+    return '강사 다른 수업(휴식 10분 포함)';
+  end if;
+  -- 쉬지 않고 붙는 수업 수: 새 수업 + 휴식 10분 안의 수업들 + 그 수업들에 다시 10분 안으로 붙은 수업들
+  select coalesce(array_agg(x.id), '{}') into v_near from lessons x
+  where x.tutor_id = p_tutor and x.state <> 'canceled'
+    and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at;
+  if cardinality(v_near) = 0 then return null; end if;
+  select 1 + cardinality(v_near) + count(distinct y.id) into v_chain from lessons y
+  where y.tutor_id = p_tutor and y.state <> 'canceled' and y.id <> all(v_near)
+    and not (y.starts_at < p_end + v_break and p_start - v_break < y.ends_at)
+    and exists (select 1 from lessons x where x.id = any(v_near)
+                and y.starts_at < x.ends_at + v_break and x.starts_at - v_break < y.ends_at);
+  if v_chain > v_b2b_max then
+    return format('쉬지 않고 이어 붙이는 수업(%s분 %s개까지)', v_b2b_min, v_b2b_max);
+  end if;
+  return null;
+end $$;
+revoke all on function lms_makeup_conflict(uuid, uuid, timestamptz, timestamptz, boolean) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 2. 보강 확정: 충돌 판정만 위 함수로 (나머지는 1700 그대로)
+-- ---------------------------------------------------------------------
+create or replace function admin_makeup_confirm(p_makeup_request uuid, p_starts_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  s record;
+  e enrollments;
+  v_end timestamptz;
+  v_lesson uuid;
+  v_conf text;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into r from makeup_requests where id = p_makeup_request for update;
+  if not found then raise exception '보강 신청이 없습니다.'; end if;
+  if r.status = 'confirmed' then return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', r.confirmed_lesson_id, 'repeated', true); end if;
+  if r.status not in ('requested', 'countered') then raise exception '이미 닫힌 보강 신청입니다.'; end if;
+  select * into s from lms_makeup_source(r.source_lesson_id, r.migrated_item_id);
+  select * into e from enrollments where id = s.enrollment_id;
+  if p_starts_at <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+  if not s.tutor_leave and p_starts_at >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+    raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+  end if;
+  v_end := p_starts_at + make_interval(mins => e.duration_min);
+  v_conf := lms_makeup_conflict(r.tutor_id, s.student_id, p_starts_at, v_end,
+              exists (select 1 from makeup_candidates c where c.request_id = r.id and c.starts_at = p_starts_at and c.proposed_by = 'student'));
+  if v_conf is not null then raise exception '그 시간은 %와 겹칩니다.', v_conf using hint = 'schedule_conflict'; end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+  if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+    insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+  end if;
+  begin
+    insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of, created_by)
+    values (s.enrollment_id, s.student_id, r.tutor_id,
+            case when r.source_lesson_id is null then 'migrated_makeup' else 'makeup' end,
+            p_starts_at, v_end, r.source_lesson_id, me)
+    returning id into v_lesson;
+  exception when exclusion_violation then
+    raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+  end;
+  if r.migrated_item_id is not null then
+    update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = r.migrated_item_id;
+  end if;
+  update makeup_requests set status = 'confirmed', confirmed_lesson_id = v_lesson, decided_at = now(), decided_by = me where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  values (r.id, 'makeup_confirmed', 'student', s.student_id), (r.id, 'makeup_confirmed', 'tutor', r.tutor_id);
+  return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', v_lesson, 'repeated', false);
+end $$;
+revoke all on function admin_makeup_confirm(uuid, timestamptz) from public, anon;
+grant execute on function admin_makeup_confirm(uuid, timestamptz) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 3. 강사 화면: 학생이 원한 보강 시간의 '이미 수업 있음'(busy)도 같은 기준 (admin_makeup_confirm 과 같게)
+-- ---------------------------------------------------------------------
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', coalesce(s.display_name, s.name_en), 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    -- 기록할 수업: 시작했는데 결과가 없는 수업 (강사 LMS 계정이 생긴 뒤 시작한 수업만 — 그 전 수업은 시트에 기록됨)
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', coalesce(s.display_name, s.name_en),
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null, 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- >>> 20261029002400_lms_sub_availability.sql
+-- =====================================================================
+-- 대체강사 판정에 강사 수업 가능 시간(tutor_availability) 연결 (2026-10-28 대표 지적: 한국 20시 수업에 Benny가 가능으로 나옴)
+--  - 반영 목록 8번: 가능 시간은 운영 DB에 넣어 놓고 대체강사 판정(lms_sub_conflict)에 연결이 빠져 있었음
+--  - 수업 시작 시각이 강사 가능 시간(시작 기준, 끝 시각 포함, 행마다 그 시간대 현지 요일·시각) 밖이면 '강사 수업 가능 시간 밖'
+--    (코드 booking.ts startsWithinAvailability 와 같은 기준). 가능 시간이 한 줄도 없는 강사는 이 검사 안 함
+--  - 같은 함수를 쓰는 곳 모두 적용: 대체강사 목록(admin_leave_sub_options) · 대체강사 고르기(admin_leave_choose) ·
+--    강사 가능 처리(admin_leave_sub_ok) · 기존 강사 보강 가능 날짜(admin_leave_makeup_options)
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function lms_tutor_available(p_tutor uuid, p_start timestamptz) returns boolean
+language sql stable security definer set search_path = public as $$
+  select not exists (select 1 from tutor_availability a where a.tutor_id = p_tutor)
+      or exists (select 1 from tutor_availability a
+                 where a.tutor_id = p_tutor
+                   and a.effective_from <= (p_start at time zone 'Asia/Seoul')::date
+                   and (a.effective_to is null or a.effective_to >= (p_start at time zone 'Asia/Seoul')::date)
+                   and extract(dow from (p_start at time zone a.timezone)) = a.weekday
+                   and (p_start at time zone a.timezone)::time between a.start_local and a.end_local)
+$$;
+revoke all on function lms_tutor_available(uuid, timestamptz) from public, anon, authenticated;
+
+create or replace function lms_sub_conflict(p_tutor uuid, p_start timestamptz, p_end timestamptz, p_except_lesson uuid)
+returns text
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+begin
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사 휴무';
+  end if;
+  if not lms_tutor_available(p_tutor, p_start) then
+    return '강사 수업 가능 시간 밖';
+  end if;
+  if exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled' and x.id is distinct from p_except_lesson
+             and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at) then
+    return '강사 다른 수업(휴식 10분 포함)';
+  end if;
+  return null;
+end $$;
+revoke all on function lms_sub_conflict(uuid, timestamptz, timestamptz, uuid) from public, anon, authenticated;
+
+-- >>> 20261029002500_lms_leave_new_order.sql
+-- =====================================================================
+-- 강사 휴무 새 순서 (2026-10-28 대표 시안 승인, 정책 원본 H26(27), 반영 목록 16)
+--  1 대체 강사에게 묻기 → 2 학생에게 휴무 안내 · 대체 강사 제안 (글 하나) → 3 학생 답 입력 → 4 확정 안내 보내기
+--  - 운영진이 먼저 대체강사(또는 '대체 강사 없음 → 보강')를 고름 → 대체강사 고르기가 학생 답이 아니게 됨
+--    · admin_leave_choose: 고를 때 휴무 안내(leave_options)를 '보냄'으로 바꾸지 않고, 대체강사를 바꿀 때도 '보낼 필요 없음'으로 만들지 않음 (2단계 글 [보냄]으로 보냄)
+--    · admin_leave_student_ok: 학생이 '좋아요' 하면 2단계 글(휴무 안내 + 대체강사 제안)은 보낸 것
+--    · admin_leave_notice_unsend: 2단계 글을 되돌릴 수 있는 때 = 확정 전 · 보강 신청 전 (예전: 학생 답 전)
+--  나머지(대체강사 묻기·가능·확정·보강·되돌리기)는 1800 그대로
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function admin_leave_choose(p_items uuid[], p_choice text, p_sub_tutor uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  l lessons;
+  v_conf text;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_choice not in ('substitute', 'wait') then raise exception '대체강사 또는 기다림 중에서 골라 주세요.'; end if;
+  if p_choice = 'substitute' and p_sub_tutor is null then raise exception '대체강사를 골라 주세요.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_choose', true);
+
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if it.choice = p_choice and (p_choice = 'wait' or it.sub_tutor_id = p_sub_tutor) then continue; end if;
+    if p_choice = 'substitute' and p_sub_tutor = it.tutor_id then raise exception '휴무인 강사는 대체강사가 될 수 없습니다.'; end if;
+    if it.lesson_id is not null then select * into l from lessons where id = it.lesson_id for update; end if;
+    -- (2500 전에는 여기서 휴무 안내를 '보냄'으로 바꿨음 — 새 순서에서는 운영진이 대체강사를 먼저 고르므로 학생 안내는 2단계에서 따로 보냄)
+
+    -- 지금 상태 풀기
+    if it.choice = 'substitute' then
+      if it.sub_stage = 'confirmed' then
+        if it.lesson_id is not null then
+          if l.state <> 'scheduled' then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+          begin
+            update lessons set tutor_id = it.tutor_id, original_tutor_id = null where id = l.id;
+          exception when exclusion_violation then
+            raise exception '원래 강사의 그 시간에 다른 수업이 있어 되돌릴 수 없습니다.';
+          end;
+        else
+          update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = me, void_note = '대체강사 수업 취소(휴무 처리 변경)'
+          where id = it.sub_lesson_id and state = 'scheduled';
+          if not found then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+          update migrated_items set kind = 'makeup_open', lesson_id = null where id = it.migrated_item_id;
+        end if;
+      end if;
+      -- 휴무 안내(2단계 글)는 남김: 1단계에서 대체강사 → 보강으로 바꿔도 학생에게는 아직 알려야 함
+      update lesson_notices set status = 'not_needed' where leave_item_id = it.id and status = 'pending' and event <> 'leave_options';
+    elsif it.choice = 'wait' and p_choice = 'substitute' then
+      if it.lesson_id is not null then
+        if exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+           or exists (select 1 from makeup_requests r where r.source_lesson_id = l.id and r.status in ('requested', 'countered', 'confirmed')) then
+          raise exception '% 수업은 보강 신청·확정이 있어 대체강사로 바꿀 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+        end if;
+        if l.state = 'canceled' and l.class_status = 'Tutor long-term leave' then
+          update lessons set state = 'scheduled', class_status = null, canceled_at = null, cancel_reason = null where id = l.id;
+          l.state := 'scheduled';
+        end if;
+      else
+        if exists (select 1 from migrated_items m where m.id = it.migrated_item_id and m.kind <> 'makeup_open')
+           or exists (select 1 from makeup_requests r where r.migrated_item_id = it.migrated_item_id and r.status in ('requested', 'countered')) then
+          raise exception '% 휴가 보강은 보강 신청·확정이 있어 대체강사로 바꿀 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+        end if;
+      end if;
+    end if;
+
+    -- 새 상태
+    if p_choice = 'wait' then
+      if it.lesson_id is not null and l.state = 'scheduled' then
+        update lessons set state = 'canceled', class_status = 'Tutor long-term leave', canceled_at = now(), cancel_reason = 'tutor_leave'
+        where id = l.id;
+      elsif it.lesson_id is not null and l.class_status is distinct from 'Tutor long-term leave' then
+        raise exception '% 수업이 이미 처리됐습니다 (%).', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'), l.class_status;
+      end if;
+      update leave_items set choice = 'wait', sub_tutor_id = null, sub_stage = null, sub_lesson_id = null, decided_at = now(), decided_by = me
+      where id = it.id;
+    else
+      if it.starts_at <= now() then raise exception '% 수업 시간이 지나 대체강사를 정할 수 없습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      if it.lesson_id is not null and l.state <> 'scheduled' then
+        raise exception '% 수업이 이미 처리됐습니다 (%).', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'), l.class_status;
+      end if;
+      v_conf := lms_sub_conflict(p_sub_tutor, it.starts_at, it.ends_at, it.lesson_id);
+      if v_conf is not null then
+        raise exception '% 수업 시간은 대체강사의 %와 겹칩니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI'), v_conf using hint = 'schedule_conflict';
+      end if;
+      update leave_items set choice = 'substitute', sub_tutor_id = p_sub_tutor, sub_stage = 'asked', sub_lesson_id = null,
+                             decided_at = now(), decided_by = me
+      where id = it.id;
+      update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+      where leave_item_id = it.id and event = 'sub_ask' and recipient_id = p_sub_tutor and status = 'sent';
+      insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values (it.id, 'sub_ask', 'tutor', p_sub_tutor);
+    end if;
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_choose(uuid[], text, uuid) from public, anon;
+grant execute on function admin_leave_choose(uuid[], text, uuid) to authenticated;
+
+create or replace function admin_leave_student_ok(p_items uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  v_conf text;
+  v_lesson uuid;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_student_ok', true);
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if it.choice <> 'substitute' then raise exception '대체강사를 고른 수업이 아닙니다.'; end if;
+    if it.sub_stage = 'confirmed' then continue; end if;
+    if it.sub_stage <> 'tutor_ok' then raise exception '대체강사가 가능하다고 한 뒤에 확정할 수 있습니다.'; end if;
+    if it.starts_at <= now() then raise exception '% 수업 시간이 지났습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+    v_conf := lms_sub_conflict(it.sub_tutor_id, it.starts_at, it.ends_at, it.lesson_id);
+    if v_conf is not null then
+      raise exception '% 수업 시간은 대체강사의 %와 겹칩니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI'), v_conf using hint = 'schedule_conflict';
+    end if;
+    begin
+      if it.lesson_id is not null then
+        update lessons set tutor_id = it.sub_tutor_id, original_tutor_id = it.tutor_id where id = it.lesson_id and state = 'scheduled'
+        returning id into v_lesson;
+        if v_lesson is null then raise exception '% 수업이 이미 처리됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      else
+        insert into lessons (enrollment_id, student_id, tutor_id, original_tutor_id, kind, starts_at, ends_at, created_by)
+        values (it.enrollment_id, it.student_id, it.sub_tutor_id, it.tutor_id, 'migrated_makeup', it.starts_at, it.ends_at, me)
+        returning id into v_lesson;
+        update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = it.migrated_item_id and kind = 'makeup_open';
+        if not found then raise exception '% 휴가 보강이 이미 예약됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      end if;
+    exception when exclusion_violation then
+      raise exception '% 그 시간에 학생 또는 대체강사의 다른 수업이 있습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI') using hint = 'schedule_conflict';
+    end;
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me
+    where leave_item_id = it.id and event in ('leave_options', 'sub_student') and status = 'pending';
+    update leave_items set sub_stage = 'confirmed', sub_lesson_id = v_lesson where id = it.id;
+    update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+    where leave_item_id = it.id and event = 'sub_confirmed' and recipient_id in (it.sub_tutor_id, it.student_id) and status = 'sent';
+    -- 학생 OK → 학생·강사 모두에게 최종 확정 안내 (2026-10-27 대표)
+    insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values
+      (it.id, 'sub_confirmed', 'tutor', it.sub_tutor_id), (it.id, 'sub_confirmed', 'student', it.student_id);
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_student_ok(uuid[]) from public, anon;
+grant execute on function admin_leave_student_ok(uuid[]) to authenticated;
+
+create or replace function admin_leave_notice_unsend(p_notices uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  n lesson_notices;
+  it leave_items;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_notice_unsend', true);
+  for n in select * from lesson_notices where id = any(p_notices) and leave_item_id is not null for update loop
+    if n.status <> 'sent' then continue; end if;
+    select * into it from leave_items where id = n.leave_item_id;
+    if (n.event = 'leave_options' and ((it.choice = 'substitute' and it.sub_stage = 'confirmed')
+                                       or (it.choice = 'wait' and exists (select 1 from makeup_requests r where (r.source_lesson_id = it.lesson_id or r.migrated_item_id = it.migrated_item_id)
+                                                                           and r.status in ('requested', 'countered', 'confirmed')))))
+       or (n.event = 'sub_ask' and it.sub_stage is distinct from 'asked')
+       or (n.event = 'sub_student' and it.sub_stage is distinct from 'tutor_ok')
+       or (n.event = 'sub_confirmed' and it.sub_stage is distinct from 'confirmed') then
+      raise exception '이미 다음 단계로 넘어간 안내입니다. 단계를 먼저 되돌려 주세요.';
+    end if;
+    update lesson_notices set status = 'pending', sent_at = null, sent_by = null where id = n.id;
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_notice_unsend(uuid[]) from public, anon;
+grant execute on function admin_leave_notice_unsend(uuid[]) to authenticated;
+
+-- >>> 20261029002600_lms_tutor_sub_answer.sql
+-- =====================================================================
+-- 강사 화면에서 대체 수업 요청에 가능/불가 답하기 (2026-10-28 대표: 대표와 강사 사이 WhatsApp 대화 줄이기)
+--  - 정책 원본 H26(27): 대체강사는 운영진이 골라 학생에게 제안 (학생이 강사를 고르지 않음). 강사는 운영진이 고른 수업에 답만
+--  - 가능 → 휴무 화면 1단계의 '가능한 수업 저장'(admin_leave_sub_ok)과 같은 결과 (학생에게 제안할 수 있게 됨)
+--  - 불가 → 그 수업은 다시 '대체 강사 고르기 필요'로, 그 강사는 이 수업의 대체 강사 목록에서 '불가'로 보임 (leave_items.sub_declined)
+--  - 운영자(TOTP)도 강사 화면에서 같은 함수로 대신 답할 수 있음. 강사 화면에는 휴무 강사 이름을 보이지 않음
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+alter table leave_items add column if not exists sub_declined uuid[] not null default '{}';
+
+create or replace function tutor_sub_answer(p_items uuid[], p_yes uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  v_yes uuid[] := coalesce(p_yes, '{}');
+  v_changed integer := 0;
+begin
+  if exists (select 1 from unnest(v_yes) y where y <> all(coalesce(p_items, '{}'))) then
+    raise exception 'Unknown class in your answer. Please reload the page.';
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_sub_answer' else 'tutor_sub_answer' end, true);
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if not (is_admin() or (my_tutor_id() is not null and it.sub_tutor_id = my_tutor_id())) then
+      raise exception 'This is not your cover request.' using errcode = '42501';
+    end if;
+    if it.choice <> 'substitute' or it.sub_stage <> 'asked' then
+      raise exception 'This cover request is already closed. Please reload the page.' using hint = 'closed';
+    end if;
+    -- 강사가 화면에서 답했으면 WhatsApp으로 물어볼 글은 보낼 필요 없음 (이미 보냈으면 그대로)
+    update lesson_notices set status = 'not_needed' where leave_item_id = it.id and event = 'sub_ask' and status = 'pending';
+    if it.id = any(v_yes) then
+      if it.starts_at <= now() then raise exception 'This class has already started.'; end if;
+      update leave_items set sub_stage = 'tutor_ok' where id = it.id;
+      update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+      where leave_item_id = it.id and event = 'sub_student' and status = 'sent';
+      insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values (it.id, 'sub_student', 'student', it.student_id);
+    else
+      update leave_items set choice = 'undecided', sub_tutor_id = null, sub_stage = null, sub_lesson_id = null, decided_at = null, decided_by = null,
+                             sub_declined = case when it.sub_tutor_id = any(sub_declined) then sub_declined else sub_declined || it.sub_tutor_id end
+      where id = it.id;
+    end if;
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed, 'yes', cardinality(v_yes));
+end $$;
+revoke all on function tutor_sub_answer(uuid[], uuid[]) from public, anon;
+grant execute on function tutor_sub_answer(uuid[], uuid[]) to authenticated;
+
+create or replace function admin_leave_sub_options(p_items uuid[])
+returns table (tutor_id uuid, name text, timezone text, free integer, busy_dates text[])
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return query
+  select t.id, t.name, t.timezone,
+         count(*) filter (where lms_sub_conflict(t.id, i.starts_at, i.ends_at, i.lesson_id) is null and not t.id = any(i.sub_declined))::int,
+         coalesce(array_agg(to_char(i.starts_at at time zone 'Asia/Seoul', 'FMMM/FMDD') order by i.starts_at)
+                  filter (where lms_sub_conflict(t.id, i.starts_at, i.ends_at, i.lesson_id) is not null or t.id = any(i.sub_declined)), '{}')
+  from tutors t cross join leave_items i
+  where i.id = any(p_items) and t.id <> i.tutor_id and t.active
+  group by t.id, t.name, t.timezone
+  order by 4 desc, t.name;
+end $$;
+revoke all on function admin_leave_sub_options(uuid[]) from public, anon;
+grant execute on function admin_leave_sub_options(uuid[]) to authenticated;
+
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', coalesce(s.display_name, s.name_en), 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    -- 기록할 수업: 시작했는데 결과가 없는 수업 (강사 LMS 계정이 생긴 뒤 시작한 수업만 — 그 전 수업은 시트에 기록됨)
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', coalesce(s.display_name, s.name_en),
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null, 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb),
+    -- 대체 수업 요청: 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 (2600). 휴무 강사 이름은 안 보임
+    'covers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'student', coalesce(s.display_name, s.name_en), 'starts_at', i.starts_at, 'ends_at', i.ends_at,
+        'busy', lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id) is not null)
+        order by i.starts_at)
+      from leave_items i join students s on s.id = i.student_id
+      where i.sub_tutor_id = v_tutor and i.choice = 'substitute' and i.sub_stage = 'asked' and i.starts_at > now()), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- >>> 20261029002700_lms_sub_usual_hours.sql
+-- =====================================================================
+-- 강사 가능 시간 = '보통 수업하는 시간' (2026-10-28 대표: 예외가 항상 있음, 그 밖이 무조건 안 되는 뜻이 아님)
+--  - 2400에서 가능 시간 밖이면 대체강사로 못 고르게 막은 것을 되돌림: 막는 것은 휴무·다른 수업(휴식 10분)·강사가 불가라고 답한 수업만
+--  - 대체강사 목록: free = 보통 시간 안에서 맡을 수 있는 횟수(많은 순), busy_dates = 못 하는 날짜, off_hours = 보통 시간 밖 날짜(골라도 됨)
+--  - 기존 강사 보강 가능 날짜 제안은 보통 시간 안에서만
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function lms_sub_conflict(p_tutor uuid, p_start timestamptz, p_end timestamptz, p_except_lesson uuid)
+returns text
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+begin
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사 휴무';
+  end if;
+  if exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled' and x.id is distinct from p_except_lesson
+             and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at) then
+    return '강사 다른 수업(휴식 10분 포함)';
+  end if;
+  return null;
+end $$;
+revoke all on function lms_sub_conflict(uuid, timestamptz, timestamptz, uuid) from public, anon, authenticated;
+
+create or replace function lms_sub_option_rows(p_items uuid[])
+returns table (id uuid, name text, timezone text, free integer, busy_dates text[], off_hours text[])
+language sql stable security definer set search_path = public as $$
+  with x as (
+    select t.id, t.name, t.timezone, i.starts_at,
+           lms_sub_conflict(t.id, i.starts_at, i.ends_at, i.lesson_id) is not null or t.id = any(i.sub_declined) as blocked,
+           lms_tutor_available(t.id, i.starts_at) as usual
+    from tutors t cross join leave_items i
+    where i.id = any(p_items) and t.id <> i.tutor_id and t.active
+  )
+  select x.id, x.name, x.timezone,
+         (count(*) filter (where not x.blocked and x.usual))::int,
+         coalesce(array_agg(to_char(x.starts_at at time zone 'Asia/Seoul', 'FMMM/FMDD') order by x.starts_at) filter (where x.blocked), '{}'),
+         coalesce(array_agg(to_char(x.starts_at at time zone 'Asia/Seoul', 'FMMM/FMDD') order by x.starts_at) filter (where not x.blocked and not x.usual), '{}')
+  from x group by x.id, x.name, x.timezone
+$$;
+revoke all on function lms_sub_option_rows(uuid[]) from public, anon, authenticated;
+
+create or replace function admin_leave_sub_options(p_items uuid[])
+returns table (tutor_id uuid, name text, timezone text, free integer, busy_dates text[])
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return query
+  select x.id, x.name, x.timezone, x.free, x.busy_dates from lms_sub_option_rows(p_items) x order by x.free desc, x.name;
+end $$;
+revoke all on function admin_leave_sub_options(uuid[]) from public, anon;
+grant execute on function admin_leave_sub_options(uuid[]) to authenticated;
+
+-- 보통 시간 밖 날짜 (강사마다). 목록 화면이 admin_leave_sub_options 와 같이 읽음
+create or replace function admin_leave_sub_off_hours(p_items uuid[])
+returns table (tutor_id uuid, off_hours text[])
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return query select x.id, x.off_hours from lms_sub_option_rows(p_items) x;
+end $$;
+revoke all on function admin_leave_sub_off_hours(uuid[]) from public, anon;
+grant execute on function admin_leave_sub_off_hours(uuid[]) to authenticated;
+
+create or replace function admin_leave_makeup_options(p_items uuid[])
+returns table (section text, starts_at timestamptz, ends_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  it leave_items;
+  e enrollments;
+  v_back date;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_need integer;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  select * into it from leave_items where id = any(p_items) order by starts_at limit 1;
+  if not found then return; end if;
+  if exists (select 1 from leave_items where id = any(p_items) and student_id <> it.student_id) then
+    raise exception '한 학생의 수업만 골라 주세요.';
+  end if;
+  select count(*) into v_need from leave_items where id = any(p_items);
+  select * into e from enrollments where id = it.enrollment_id;
+  select (o.ends_at at time zone 'Asia/Seoul')::date into v_back from tutor_time_off o where o.id = it.time_off_id;
+
+  return query
+  with rs as (
+    select r.weekday, r.start_time_kst from regular_schedules r
+    where r.student_id = it.student_id and r.tutor_id = it.tutor_id and (r.effective_to is null or r.effective_to >= v_today)
+  ),
+  slots as (
+    select 'in_period'::text as sec, ((d::date + t.start_time_kst) at time zone 'Asia/Seoul') as s
+    from generate_series(greatest(v_today + 1, v_back), e.final_end_date, interval '1 day') d
+    cross join (select distinct start_time_kst from rs) t
+    where extract(dow from d) not in (select weekday from rs)
+    union all
+    select 'after_end', ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul')
+    from generate_series(greatest(e.final_end_date + 1, v_back, v_today + 1), greatest(e.final_end_date + 1, v_back, v_today + 1) + 180, interval '1 day') d
+    join rs on rs.weekday = extract(dow from d)
+  ),
+  free as (
+    select x.sec, x.s, x.s + make_interval(mins => e.duration_min) as f from slots x
+    where x.s > now()
+      and lms_sub_conflict(it.tutor_id, x.s, x.s + make_interval(mins => e.duration_min), null) is null
+      and lms_tutor_available(it.tutor_id, x.s)   -- 보강 가능한 날짜 제안은 강사 보통 수업 시간 안에서만 (2700)
+      and not exists (select 1 from lessons l where l.student_id = it.student_id and l.state <> 'canceled'
+                      and l.starts_at < x.s + make_interval(mins => e.duration_min) and x.s < l.ends_at)
+  )
+  select z.sec, z.s, z.f from (
+    select f1.sec, f1.s, f1.f, row_number() over (partition by f1.sec order by f1.s) as n from free f1
+  ) z
+  where z.sec = 'in_period' or z.n <= v_need
+  order by z.s;
+end $$;
+revoke all on function admin_leave_makeup_options(uuid[]) from public, anon;
+grant execute on function admin_leave_makeup_options(uuid[]) to authenticated;
+
+-- >>> 20261029002750_lms_leave_postponed.sql
+-- =====================================================================
+-- 강사 장기휴무로 못 들은 수업 = '휴무로 미뤄진 수업' (2026-10-28 대표 최종: 종료일 연장 유지 + 구분만)
+--  - 수강기간은 기존처럼 마지막 휴무 보강일까지 연장(A20), 재등록 결제 마감 = 연장된 종료일 23:59 — 기존 그대로
+--  - DB에서 일반 보강과 휴무로 미뤄진 수업을 구분(학생 화면 표시 · 나중에 강사 인센티브 근거)
+--  - 다음 수강권 정규 수업은 이전 수강권의 휴무로 미뤄진 수업을 마친 뒤부터 (정규 수업 넣을 때 DB가 막음)
+-- 기존 표·데이터를 지우거나 바꾸지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- 휴무로 미뤄진 수업인지: 강사 장기휴무로 취소된 수업의 보강, 또는 시트에서 넘어온 강사 휴가 보강을 예약한 수업
+create or replace function lms_is_leave_postponed(p_lesson uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from lessons l join lessons o on o.id = l.makeup_of
+                 where l.id = p_lesson and o.class_status = 'Tutor long-term leave')
+      or exists (select 1 from migrated_items m where m.lesson_id = p_lesson and m.tutor_leave)
+$$;
+revoke all on function lms_is_leave_postponed(uuid) from public, anon, authenticated;
+
+-- 다음 정규 수업을 시작할 수 있는 첫날: 종료일 다음 날, 휴무로 미뤄진 수업이 그 뒤에 잡혀 있으면 마지막 수업 다음 날
+-- 날짜를 아직 안 잡은 휴무로 미뤄진 수업이 있으면 null (날짜부터 잡아야 함)
+create or replace function lms_next_regular_from(p_enrollment uuid) returns date
+language sql stable security definer set search_path = public as $$
+  select case
+    when exists (select 1 from lessons l where l.enrollment_id = p_enrollment and l.voided_at is null and l.class_status = 'Tutor long-term leave'
+                 and not exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled'))
+      or exists (select 1 from migrated_items m where m.enrollment_id = p_enrollment and m.kind = 'makeup_open' and m.tutor_leave)
+    then null
+    else greatest((select e.final_end_date from enrollments e where e.id = p_enrollment),
+                  coalesce((select max((l.starts_at at time zone 'Asia/Seoul')::date) from lessons l
+                            where l.enrollment_id = p_enrollment and l.state <> 'canceled' and l.voided_at is null and lms_is_leave_postponed(l.id)),
+                           (select e.final_end_date from enrollments e where e.id = p_enrollment))) + 1 end
+$$;
+revoke all on function lms_next_regular_from(uuid) from public, anon, authenticated;
+
+-- 다음 수강권 정규 수업이 이전 수강권의 휴무로 미뤄진 수업보다 먼저 생기지 않게
+create or replace function lessons_after_leave_postponed() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  prev uuid;
+  v_from date;
+begin
+  if new.kind <> 'regular' then return new; end if;
+  select e.previous_enrollment_id into prev from enrollments e where e.id = new.enrollment_id;
+  if prev is null then return new; end if;
+  if not exists (select 1 from lessons l where l.enrollment_id = prev and lms_is_leave_postponed(l.id))
+     and not exists (select 1 from lessons l where l.enrollment_id = prev and l.class_status = 'Tutor long-term leave')
+     and not exists (select 1 from migrated_items m where m.enrollment_id = prev and m.tutor_leave) then
+    return new;   -- 휴무로 미뤄진 수업이 없던 수강권은 그대로
+  end if;
+  v_from := lms_next_regular_from(prev);
+  if v_from is null then
+    raise exception '이전 수강권에 날짜를 안 잡은 휴무로 미뤄진 수업이 있어요. 그 날짜를 먼저 잡아 주세요.' using hint = 'leave_postponed_open';
+  end if;
+  if (new.starts_at at time zone 'Asia/Seoul')::date < v_from then
+    raise exception '다음 정규 수업은 휴무로 미뤄진 수업을 마친 뒤(%부터) 시작할 수 있어요.', v_from using hint = 'leave_postponed_first';
+  end if;
+  return new;
+end $$;
+revoke all on function lessons_after_leave_postponed() from public, anon, authenticated;
+drop trigger if exists lessons_after_leave_postponed on lessons;
+create trigger lessons_after_leave_postponed before insert on lessons for each row execute function lessons_after_leave_postponed();
+
+-- >>> 20261029002800_lms_student_screen.sql
+-- =====================================================================
+-- ③ 학생 LMS: 수업 확인 · 직접 취소 · 보강 신청 · 강사 휴무 안내에 답하기 (2026-10-28 대표: Q1 A안 · Q2 날짜 고르기 · Q3 처음부터 켬)
+--  - 학생 본인(이메일 코드 로그인), 또는 운영자(TOTP 완료)가 ?student= 로 그대로 보기·대신 입력 (같은 검사, 운영자는 admin_ 함수)
+--  - 취소: 이미 있는 student_change_lesson / admin_change_lesson (1700) 그대로
+--  - 보강 신청: admin_makeup_request 와 같은 처리(lms_makeup_request_core). 학생은 '보강 가능한 날짜' 중에서만, 최대 2개
+--    → 강사 화면 보강 요청 → 운영진 확정 (D-43, 학생 신청만으로 확정되지 않음)
+--  - 휴무 안내 답 (A안 한 번에): [좋아요] = admin_leave_student_ok 와 같은 처리 (대체강사가 가능하다고 한 수업만)
+--    [기존 강사님과 보강] = admin_leave_choose 'wait' 와 같은 처리 → 이어서 보강 날짜 고르기
+--  - 학생 화면 보기 전 운영진이 준비 중인 휴무 수업(대체강사 묻는 중)은 학생에게 보이지 않음
+--  - 학생 로그인 계정 만들기 admin_student_login (강사 admin_tutor_login 과 같은 방식)
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+--  - 2750: 강사 장기휴무로 못 들은 수업은 학생 화면에서 '휴무로 미뤄진 수업' (수강기간 연장은 기존 그대로)
+-- =====================================================================
+
+-- 누구의 학생 화면인지: 학생 본인, 또는 운영자(TOTP 완료)가 고른 학생
+create or replace function lms_screen_student(p_student uuid) returns uuid
+language plpgsql stable security definer set search_path = public as $$
+declare
+  mine uuid := my_student_id();
+begin
+  if is_admin() and p_student is not null then return p_student; end if;
+  if mine is null or (p_student is not null and p_student <> mine) then
+    raise exception '학생 계정으로 로그인해 주세요.' using errcode = '42501';
+  end if;
+  return mine;
+end $$;
+revoke all on function lms_screen_student(uuid) from public, anon, authenticated;
+
+-- 학생 화면에서 보는 수강권: 수강 중·결제 확인된 것 중 가장 최근 (없으면 가장 최근 것)
+create or replace function lms_student_enrollment(p_student uuid) returns uuid
+language sql stable security definer set search_path = public as $$
+  select e.id from enrollments e where e.student_id = p_student
+  order by (e.status in ('active', 'confirmed')) desc, e.seq desc limit 1
+$$;
+revoke all on function lms_student_enrollment(uuid) from public, anon, authenticated;
+
+-- 보강 받을 수 있는 수업인지 (1800 그대로 + 고침: 아직 안 한 수업(결과 없음)이 통과되던 것 — 결과가 비어 있으면 거절)
+create or replace function lms_makeup_source(p_lesson uuid, p_item uuid, out enrollment_id uuid, out student_id uuid,
+                                             out tutor_id uuid, out tutor_leave boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  l lessons;
+  it migrated_items;
+begin
+  if (p_lesson is null) = (p_item is null) then raise exception '보강할 수업을 하나 골라 주세요.'; end if;
+  if p_lesson is not null then
+    select * into l from lessons where id = p_lesson;
+    if not found or not coalesce(lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave', false) then
+      raise exception '보강을 받을 수 있는 수업이 아닙니다.';
+    end if;
+    if exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled') then raise exception '이미 보강이 잡혀 있습니다.'; end if;
+    enrollment_id := l.enrollment_id; student_id := l.student_id; tutor_id := l.tutor_id;
+    tutor_leave := coalesce(l.class_status = 'Tutor long-term leave', false);
+  else
+    select * into it from migrated_items where id = p_item;
+    if not found or it.kind <> 'makeup_open' then raise exception '예약 전 보강이 아닙니다.'; end if;
+    select e.student_id into student_id from enrollments e where e.id = it.enrollment_id;
+    select coalesce(x.original_tutor_id, x.tutor_id) into tutor_id from lessons x
+    where x.enrollment_id = it.enrollment_id and x.voided_at is null order by x.starts_at desc limit 1;
+    enrollment_id := it.enrollment_id; tutor_leave := coalesce(it.tutor_leave, false);
+  end if;
+end $$;
+revoke all on function lms_makeup_source(uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 1. 보강 가능한 날짜 (운영진 휴무 화면 admin_leave_makeup_options 와 같은 계산을 모든 보강에)
+--    강사 일정·휴무·보통 수업 시간 · 학생 다른 수업 · 종료일 / 30분 단위 시작 시각 (운영진 휴무 화면은 정규 시각 그대로)
+--    강사 휴무 보강은 휴무가 끝난 날부터, 종료일 뒤 정규 요일도 (휴무 보강은 종료일 제한 없음, A41)
+-- ---------------------------------------------------------------------
+create or replace function lms_makeup_options(p_lesson uuid, p_item uuid)
+returns table (section text, starts_at timestamptz, ends_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  s record;
+  e enrollments;
+  v_leave boolean;
+  v_back date;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  select * into s from lms_makeup_source(p_lesson, p_item);
+  select * into e from enrollments where id = s.enrollment_id;
+  v_leave := s.tutor_leave or exists (select 1 from lessons l where l.id = p_lesson and l.class_status = 'Tutor long-term leave');
+  select (o.ends_at at time zone 'Asia/Seoul')::date into v_back
+  from leave_items li join tutor_time_off o on o.id = li.time_off_id
+  where (li.lesson_id = p_lesson or li.migrated_item_id = p_item) limit 1;
+  v_back := coalesce(v_back, v_today + 1);
+
+  return query
+  with rs as (
+    select r.weekday, r.start_time_kst from regular_schedules r
+    where r.student_id = s.student_id and r.tutor_id = s.tutor_id and (r.effective_to is null or r.effective_to >= v_today)
+  ),
+  slots as (
+    -- 수업 시작은 항상 30분 단위 (2026-10-28 대표) → 강사 보통 수업 시간 안의 :00·:30 모두
+    select 'in_period'::text as sec, ((d::date::timestamp + make_interval(mins => n * 30)) at time zone 'Asia/Seoul') as x
+    from generate_series(greatest(v_today + 1, v_back), e.final_end_date, interval '1 day') d
+    cross join generate_series(0, 47) n
+    union all
+    select 'after_end', ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul')
+    from generate_series(greatest(e.final_end_date + 1, v_back, v_today + 1), greatest(e.final_end_date + 1, v_back, v_today + 1) + 180, interval '1 day') d
+    join rs on rs.weekday = extract(dow from d)
+    where v_leave
+  ),
+  free as (
+    select y.sec, y.x, y.x + make_interval(mins => e.duration_min) as f from slots y
+    where y.x > now()
+      and lms_sub_conflict(s.tutor_id, y.x, y.x + make_interval(mins => e.duration_min), null) is null
+      and lms_tutor_available(s.tutor_id, y.x)
+      and not exists (select 1 from lessons l where l.student_id = s.student_id and l.state <> 'canceled'
+                      and l.starts_at < y.x + make_interval(mins => e.duration_min) and y.x < l.ends_at)
+  )
+  select z.sec, z.x, z.f from (select f1.*, row_number() over (partition by f1.sec order by f1.x) as n from free f1) z
+  where z.sec = 'in_period' or z.n <= 1
+  order by z.x;
+end $$;
+revoke all on function lms_makeup_options(uuid, uuid) from public, anon, authenticated;
+
+create or replace function student_makeup_options(p_student uuid, p_lesson uuid, p_item uuid)
+returns table (section text, starts_at timestamptz, ends_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+begin
+  if (select x.student_id from lms_makeup_source(p_lesson, p_item) x) <> v_student then
+    raise exception '본인 수업만 볼 수 있습니다.' using errcode = '42501';
+  end if;
+  return query select * from lms_makeup_options(p_lesson, p_item);
+end $$;
+revoke all on function student_makeup_options(uuid, uuid, uuid) from public, anon;
+grant execute on function student_makeup_options(uuid, uuid, uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 2. 보강 신청: 운영진 대신 입력(admin_makeup_request)과 학생 신청이 같은 처리
+-- ---------------------------------------------------------------------
+create or replace function lms_makeup_request_core(p_lesson uuid, p_item uuid, p_slots jsonb, p_requested_at timestamptz, p_via text, p_actor uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  s record;
+  e enrollments;
+  v_id uuid;
+  x jsonb;
+  t timestamptz;
+begin
+  select * into s from lms_makeup_source(p_lesson, p_item);
+  select * into e from enrollments where id = s.enrollment_id;
+  if jsonb_typeof(p_slots) <> 'array' or jsonb_array_length(p_slots) = 0 then raise exception '보강 시간을 하나 이상 넣어 주세요.'; end if;
+  select id into v_id from makeup_requests
+  where status in ('requested', 'countered') and (source_lesson_id = p_lesson or migrated_item_id = p_item);
+  if found then return jsonb_build_object('makeup_request_id', v_id, 'repeated', true); end if;
+  perform set_config('app.actor_id', coalesce(p_actor::text, ''), true);
+  perform set_config('app.actor_via', 'lms_makeup_request_core', true);
+  insert into makeup_requests (source_lesson_id, migrated_item_id, student_id, tutor_id, via, requested_at, requested_by)
+  values (p_lesson, p_item, s.student_id, s.tutor_id, p_via, coalesce(p_requested_at, now()), p_actor)
+  returning id into v_id;
+  for x in select * from jsonb_array_elements(p_slots) loop
+    t := (x ->> 'starts_at')::timestamptz;
+    if t <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+    if not s.tutor_leave and t >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+    end if;
+    insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by)
+    values (v_id, t, t + make_interval(mins => e.duration_min), 'student');
+  end loop;
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id) values (v_id, 'makeup_ask', 'tutor', s.tutor_id);
+  return jsonb_build_object('makeup_request_id', v_id, 'repeated', false);
+end $$;
+revoke all on function lms_makeup_request_core(uuid, uuid, jsonb, timestamptz, text, uuid) from public, anon, authenticated;
+
+create or replace function admin_makeup_request(p_lesson uuid, p_item uuid, p_slots jsonb, p_requested_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  return lms_makeup_request_core(p_lesson, p_item, p_slots, p_requested_at, 'admin_on_behalf', auth.uid());
+end $$;
+revoke all on function admin_makeup_request(uuid, uuid, jsonb, timestamptz) from public, anon;
+grant execute on function admin_makeup_request(uuid, uuid, jsonb, timestamptz) to authenticated;
+
+-- 학생 본인: 보강 가능한 날짜 중에서만, 한 수업당 최대 2개 (2026-10-27 대표)
+create or replace function student_makeup_request(p_lesson uuid, p_item uuid, p_slots jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student uuid := my_student_id();
+  x jsonb;
+begin
+  if v_student is null or (select s.student_id from lms_makeup_source(p_lesson, p_item) s) <> v_student then
+    raise exception '본인 수업만 보강 신청할 수 있습니다.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_slots) <> 'array' or jsonb_array_length(p_slots) not between 1 and 2 then
+    raise exception '보강 날짜를 1~2개 골라 주세요.';
+  end if;
+  for x in select * from jsonb_array_elements(p_slots) loop
+    if not exists (select 1 from lms_makeup_options(p_lesson, p_item) o where o.starts_at = (x ->> 'starts_at')::timestamptz) then
+      raise exception '보강 가능한 날짜가 아닙니다. 화면을 새로 열어 다시 골라 주세요.' using hint = 'not_an_option';
+    end if;
+  end loop;
+  return lms_makeup_request_core(p_lesson, p_item, p_slots, now(), 'student_app', auth.uid());
+end $$;
+revoke all on function student_makeup_request(uuid, uuid, jsonb) from public, anon;
+grant execute on function student_makeup_request(uuid, uuid, jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 3. 휴무 안내 답: 운영진 화면과 같은 처리 (권한 검사만 뺀 사본 — 운영진 함수는 그대로)
+-- ---------------------------------------------------------------------
+create or replace function lms_leave_choose_core(p_items uuid[], p_choice text, p_sub_tutor uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  l lessons;
+  v_conf text;
+  v_changed integer := 0;
+begin
+  if p_choice not in ('substitute', 'wait') then raise exception '대체강사 또는 기다림 중에서 골라 주세요.'; end if;
+  if p_choice = 'substitute' and p_sub_tutor is null then raise exception '대체강사를 골라 주세요.'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'lms_leave_choose_core', true);
+
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if it.choice = p_choice and (p_choice = 'wait' or it.sub_tutor_id = p_sub_tutor) then continue; end if;
+    if p_choice = 'substitute' and p_sub_tutor = it.tutor_id then raise exception '휴무인 강사는 대체강사가 될 수 없습니다.'; end if;
+    if it.lesson_id is not null then select * into l from lessons where id = it.lesson_id for update; end if;
+    -- (2500 전에는 여기서 휴무 안내를 '보냄'으로 바꿨음 — 새 순서에서는 운영진이 대체강사를 먼저 고르므로 학생 안내는 2단계에서 따로 보냄)
+
+    -- 지금 상태 풀기
+    if it.choice = 'substitute' then
+      if it.sub_stage = 'confirmed' then
+        if it.lesson_id is not null then
+          if l.state <> 'scheduled' then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+          begin
+            update lessons set tutor_id = it.tutor_id, original_tutor_id = null where id = l.id;
+          exception when exclusion_violation then
+            raise exception '원래 강사의 그 시간에 다른 수업이 있어 되돌릴 수 없습니다.';
+          end;
+        else
+          update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = me, void_note = '대체강사 수업 취소(휴무 처리 변경)'
+          where id = it.sub_lesson_id and state = 'scheduled';
+          if not found then raise exception '% 대체 수업이 이미 진행·변경됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+          update migrated_items set kind = 'makeup_open', lesson_id = null where id = it.migrated_item_id;
+        end if;
+      end if;
+      -- 휴무 안내(2단계 글)는 남김: 1단계에서 대체강사 → 보강으로 바꿔도 학생에게는 아직 알려야 함
+      update lesson_notices set status = 'not_needed' where leave_item_id = it.id and status = 'pending' and event <> 'leave_options';
+    elsif it.choice = 'wait' and p_choice = 'substitute' then
+      if it.lesson_id is not null then
+        if exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+           or exists (select 1 from makeup_requests r where r.source_lesson_id = l.id and r.status in ('requested', 'countered', 'confirmed')) then
+          raise exception '% 수업은 보강 신청·확정이 있어 대체강사로 바꿀 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+        end if;
+        if l.state = 'canceled' and l.class_status = 'Tutor long-term leave' then
+          update lessons set state = 'scheduled', class_status = null, canceled_at = null, cancel_reason = null where id = l.id;
+          l.state := 'scheduled';
+        end if;
+      else
+        if exists (select 1 from migrated_items m where m.id = it.migrated_item_id and m.kind <> 'makeup_open')
+           or exists (select 1 from makeup_requests r where r.migrated_item_id = it.migrated_item_id and r.status in ('requested', 'countered')) then
+          raise exception '% 휴가 보강은 보강 신청·확정이 있어 대체강사로 바꿀 수 없습니다. 보강부터 정리해 주세요.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD');
+        end if;
+      end if;
+    end if;
+
+    -- 새 상태
+    if p_choice = 'wait' then
+      if it.lesson_id is not null and l.state = 'scheduled' then
+        update lessons set state = 'canceled', class_status = 'Tutor long-term leave', canceled_at = now(), cancel_reason = 'tutor_leave'
+        where id = l.id;
+      elsif it.lesson_id is not null and l.class_status is distinct from 'Tutor long-term leave' then
+        raise exception '% 수업이 이미 처리됐습니다 (%).', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'), l.class_status;
+      end if;
+      update leave_items set choice = 'wait', sub_tutor_id = null, sub_stage = null, sub_lesson_id = null, decided_at = now(), decided_by = me
+      where id = it.id;
+    else
+      if it.starts_at <= now() then raise exception '% 수업 시간이 지나 대체강사를 정할 수 없습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      if it.lesson_id is not null and l.state <> 'scheduled' then
+        raise exception '% 수업이 이미 처리됐습니다 (%).', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'), l.class_status;
+      end if;
+      v_conf := lms_sub_conflict(p_sub_tutor, it.starts_at, it.ends_at, it.lesson_id);
+      if v_conf is not null then
+        raise exception '% 수업 시간은 대체강사의 %와 겹칩니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI'), v_conf using hint = 'schedule_conflict';
+      end if;
+      update leave_items set choice = 'substitute', sub_tutor_id = p_sub_tutor, sub_stage = 'asked', sub_lesson_id = null,
+                             decided_at = now(), decided_by = me
+      where id = it.id;
+      update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+      where leave_item_id = it.id and event = 'sub_ask' and recipient_id = p_sub_tutor and status = 'sent';
+      insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values (it.id, 'sub_ask', 'tutor', p_sub_tutor);
+    end if;
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function lms_leave_choose_core(uuid[], text, uuid) from public, anon, authenticated;
+
+create or replace function lms_leave_student_ok_core(p_items uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  v_conf text;
+  v_lesson uuid;
+  v_changed integer := 0;
+begin
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'lms_leave_student_ok_core', true);
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if it.choice <> 'substitute' then raise exception '대체강사를 고른 수업이 아닙니다.'; end if;
+    if it.sub_stage = 'confirmed' then continue; end if;
+    if it.sub_stage <> 'tutor_ok' then raise exception '대체강사가 가능하다고 한 뒤에 확정할 수 있습니다.'; end if;
+    if it.starts_at <= now() then raise exception '% 수업 시간이 지났습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+    v_conf := lms_sub_conflict(it.sub_tutor_id, it.starts_at, it.ends_at, it.lesson_id);
+    if v_conf is not null then
+      raise exception '% 수업 시간은 대체강사의 %와 겹칩니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI'), v_conf using hint = 'schedule_conflict';
+    end if;
+    begin
+      if it.lesson_id is not null then
+        update lessons set tutor_id = it.sub_tutor_id, original_tutor_id = it.tutor_id where id = it.lesson_id and state = 'scheduled'
+        returning id into v_lesson;
+        if v_lesson is null then raise exception '% 수업이 이미 처리됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      else
+        insert into lessons (enrollment_id, student_id, tutor_id, original_tutor_id, kind, starts_at, ends_at, created_by)
+        values (it.enrollment_id, it.student_id, it.sub_tutor_id, it.tutor_id, 'migrated_makeup', it.starts_at, it.ends_at, me)
+        returning id into v_lesson;
+        update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = it.migrated_item_id and kind = 'makeup_open';
+        if not found then raise exception '% 휴가 보강이 이미 예약됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      end if;
+    exception when exclusion_violation then
+      raise exception '% 그 시간에 학생 또는 대체강사의 다른 수업이 있습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI') using hint = 'schedule_conflict';
+    end;
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me
+    where leave_item_id = it.id and event in ('leave_options', 'sub_student') and status = 'pending';
+    update leave_items set sub_stage = 'confirmed', sub_lesson_id = v_lesson where id = it.id;
+    update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+    where leave_item_id = it.id and event = 'sub_confirmed' and recipient_id in (it.sub_tutor_id, it.student_id) and status = 'sent';
+    -- 학생 OK → 학생·강사 모두에게 최종 확정 안내 (2026-10-27 대표)
+    insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values
+      (it.id, 'sub_confirmed', 'tutor', it.sub_tutor_id), (it.id, 'sub_confirmed', 'student', it.student_id);
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function lms_leave_student_ok_core(uuid[]) from public, anon, authenticated;
+
+-- p_answer: 'ok' = 좋아요(대체강사와 평소 시간) / 'makeup' = 기존 강사님과 보강
+-- 학생이 답할 수 있는 수업 = 대체강사가 가능하다고 한(tutor_ok) 아직 확정 전 · 시작 전 수업
+create or replace function student_leave_answer(p_items uuid[], p_answer text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student uuid := my_student_id();
+  v jsonb;
+begin
+  if p_answer not in ('ok', 'makeup') then raise exception '답을 골라 주세요.'; end if;
+  if coalesce(array_length(p_items, 1), 0) = 0 then raise exception '수업이 없습니다.'; end if;
+  if v_student is null or exists (select 1 from leave_items where id = any(p_items) and student_id <> v_student)
+     or (select count(*) from leave_items where id = any(p_items)) <> array_length(p_items, 1) then
+    raise exception '본인 수업만 답할 수 있습니다.' using errcode = '42501';
+  end if;
+  if exists (select 1 from leave_items where id = any(p_items)
+             and (choice <> 'substitute' or sub_stage <> 'tutor_ok' or starts_at <= now())) then
+    raise exception '이미 정해졌거나 지난 수업이 있어요. 화면을 새로 열어 주세요.' using hint = 'not_open';
+  end if;
+  -- 학생이 LMS에서 직접 답함 = 2단계 글(휴무 안내)은 받은 것, 학생 확정 카톡은 필요 없음 (대표 10/29: 휴무 안내 카톡 + LMS로 끝)
+  --  대체강사에게 가는 확정 안내는 그대로 남김
+  if p_answer = 'ok' then
+    v := lms_leave_student_ok_core(p_items);
+  else
+    v := lms_leave_choose_core(p_items, 'wait', null);
+  end if;
+  update lesson_notices set status = 'sent', sent_at = now(), sent_by = auth.uid()
+  where leave_item_id = any(p_items) and event in ('leave_options', 'sub_student') and status = 'pending';
+  update lesson_notices set status = 'not_needed'
+  where leave_item_id = any(p_items) and event = 'sub_confirmed' and recipient_kind = 'student' and status = 'pending';
+  return v;
+end $$;
+revoke all on function student_leave_answer(uuid[], text) from public, anon;
+grant execute on function student_leave_answer(uuid[], text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 4. 학생 화면 한 번에 읽기 (본인 것만: 수업·변경권·보강·휴무 안내·결제 확인일·적립금)
+-- ---------------------------------------------------------------------
+create or replace function student_screen(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+  e enrollments;
+  v_period enrollment_periods;
+  v_open uuid[];
+begin
+  select * into st from students where id = v_student;
+  select * into e from enrollments where id = lms_student_enrollment(v_student);
+  select * into v_period from enrollment_periods p
+  where p.enrollment_id = e.id and p.start_date <= (now() at time zone 'Asia/Seoul')::date order by p.idx desc limit 1;
+  -- 수업·보강은 지금 수강권 + 아직 열린 다른 수강권(재등록 결제 뒤에도 이전 수강권의 보강이 남을 수 있음)
+  v_open := array(select x.id from enrollments x where x.student_id = v_student and (x.status in ('active', 'confirmed') or x.id = e.id));
+  return jsonb_build_object(
+    'student', jsonb_build_object('id', st.id, 'code', st.code, 'name_ko', st.name_ko, 'timezone', st.timezone),
+    'enrollment', case when e.id is null then null else jsonb_build_object(
+      'id', e.id, 'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'start_date', e.start_date, 'final_end_date', e.final_end_date, 'status', e.status,
+      'next_regular_from', lms_next_regular_from(e.id),
+      'lessons_total', coalesce((select c.sheet_total from import_checks c where c.enrollment_id = e.id), e.lessons_purchased + e.lessons_carried_in),
+      'credits_left', case when v_period.id is null then 0 else credit_balance(v_period.id) end,
+      'credits_granted', coalesce(v_period.credits_granted, 0),
+      'confirmed_on', (select min((p.confirmed_at at time zone 'Asia/Seoul')::date) from payments p where p.enrollment_id = e.id and p.confirmed_at is not null),
+      'renewal_paid', exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))) end,
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id),
+        'substitute', l.original_tutor_id is not null) order by l.starts_at)
+      from lessons l join tutors t on t.id = l.tutor_id
+      where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
+    -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강)
+    'makeup_rights', coalesce((
+      select jsonb_agg(r order by r ->> 'original_at') from (
+        select jsonb_build_object('lesson_id', l.id, 'item_id', null, 'original_at', l.starts_at,
+                 'tutor_leave', l.class_status = 'Tutor long-term leave') as r
+        from lessons l
+        where l.enrollment_id = any(v_open) and l.voided_at is null and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+          and not exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+        union all
+        select jsonb_build_object('lesson_id', null, 'item_id', m.id, 'original_at', m.original_date::timestamp at time zone 'Asia/Seoul',
+                 'tutor_leave', coalesce(m.tutor_leave, false))
+        from migrated_items m where m.enrollment_id = any(v_open) and m.kind = 'makeup_open') q), '[]'::jsonb),
+    'makeup_requests', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id,
+        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id,
+        'tutor_leave', (select x.tutor_leave from lms_makeup_source(r.source_lesson_id, r.migrated_item_id) x),
+        'candidates', (select coalesce(jsonb_agg(c.starts_at order by c.starts_at), '[]'::jsonb) from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.requested_at desc)
+      from makeup_requests r where r.student_id = v_student and r.status in ('requested', 'countered', 'confirmed')
+        and r.requested_at > now() - interval '60 days'), '[]'::jsonb),
+    -- 휴무 안내: 대체강사가 가능하다고 한 수업(답 기다림)·확정된 대체 수업·보강으로 정한 수업만. 지난 수업은 빼고
+    'leave', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name, 'sub_meet_url', sub.meet_url,
+        'lesson_id', li.lesson_id, 'item_id', li.migrated_item_id,
+        'off_from', o.starts_at, 'off_to', o.ends_at) order by li.starts_at)
+      from leave_items li
+      join tutor_time_off o on o.id = li.time_off_id
+      left join tutors sub on sub.id = li.sub_tutor_id
+      where li.student_id = v_student and li.starts_at > now()
+        and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    -- 변경권: 지금 기간과 쓴 기록 (대표 10/29: 변경권 칸 누르면 언제 썼는지)
+    'credit_period', case when v_period.id is null then null else jsonb_build_object('start', v_period.start_date, 'end', v_period.end_date) end,
+    'credit_uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'lesson_at', l.starts_at) order by c.created_at)
+      from credit_ledger c left join lessons l on l.id = c.lesson_id where c.period_id = v_period.id), '[]'::jsonb),
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
+      where h.day between (now() at time zone 'Asia/Seoul')::date and (now() at time zone 'Asia/Seoul')::date + 200), '[]'::jsonb),
+    'points', coalesce((
+      select jsonb_agg(jsonb_build_object('id', g.id, 'on', (g.created_at at time zone 'Asia/Seoul')::date, 'kind', g.kind, 'amount', g.amount, 'note', g.note)
+        order by g.created_at)
+      from reward_ledger g where g.student_id = v_student), '[]'::jsonb));
+end $$;
+revoke all on function student_screen(uuid) from public, anon;
+grant execute on function student_screen(uuid) to authenticated;
+
+-- 운영자 보기 막대: 학생 목록 + 로그인 계정 여부
+-- 이름이 같은 학생을 구별하도록 영문 이름·지금 강사도 같이 (대표 10/29: 검색, 동명이인)
+drop function if exists admin_student_accounts();
+create function admin_student_accounts()
+returns table (id uuid, code text, name_ko text, name_en text, tutors text, has_login boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return query select s.id, s.code, s.name_ko, s.name_en,
+    (select string_agg(distinct t.name, ', ') from lessons l join tutors t on t.id = l.tutor_id
+     where l.student_id = s.id and l.state = 'scheduled' and l.voided_at is null),
+    exists (select 1 from app_users u where u.student_id = s.id)
+  from students s order by s.code;
+end $$;
+revoke all on function admin_student_accounts() from public, anon;
+grant execute on function admin_student_accounts() to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 5. 학생 로그인 계정 만들기 (admin_tutor_login 과 같은 방식, 대표만). 비밀번호 없음 — 이메일 6자리 코드 (POL-AC-03)
+--    학생 기록의 이메일 칸은 바꾸지 않음 (POL-AC-04: 이메일이 같다고 자동 연결하지 않고, 대표가 고른 학생에만 연결)
+-- ---------------------------------------------------------------------
+create or replace function admin_student_login(p_student uuid, p_email text)
+returns table (student_name text, email text, created boolean)
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_email text := lower(trim(coalesce(p_email, '')));
+  v_name text;
+  v_linked uuid;
+  v_uid uuid;
+  v_role text;
+  v_new boolean := false;
+begin
+  if not is_owner() then raise exception '대표 계정(추가 인증 완료)만 학생 로그인 계정을 만들 수 있습니다.' using errcode = '42501'; end if;
+  if v_email !~ '^[^\s@]+@[^\s@]+\.[^\s@]+$' then raise exception '이메일 주소를 다시 확인해 주세요.' using errcode = '22023'; end if;
+  select s.name_ko into v_name from students s where s.id = p_student for update;
+  if v_name is null then raise exception '학생을 찾을 수 없습니다.' using errcode = 'P0002'; end if;
+
+  select u.auth_user_id into v_linked from app_users u where u.student_id = p_student;
+  if v_linked is not null then
+    if (select lower(a.email) from auth.users a where a.id = v_linked) = v_email then
+      return query select v_name, v_email, false; return;
+    end if;
+    raise exception '% 학생은 이미 다른 이메일로 연결돼 있습니다.', v_name using errcode = '23505';
+  end if;
+
+  select a.id into v_uid from auth.users a where lower(a.email) = v_email;
+  if v_uid is not null then
+    select u.role into v_role from app_users u where u.auth_user_id = v_uid;
+    if v_role is not null then raise exception '이 이메일은 이미 다른 사람(%)에 연결돼 있습니다.', v_role using errcode = '23505'; end if;
+    update auth.users set email_confirmed_at = coalesce(email_confirmed_at, now()) where id = v_uid;
+  else
+    v_uid := gen_random_uuid();
+    v_new := true;
+    insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+      confirmation_token, recovery_token, email_change_token_new, email_change, email_change_token_current,
+      phone_change, phone_change_token, reauthentication_token, is_sso_user, is_anonymous)
+    values ('00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated', v_email,
+      crypt(gen_random_uuid()::text, gen_salt('bf')), now(),
+      '{"provider":"email","providers":["email"]}', '{}', now(), now(),
+      '', '', '', '', '', '', '', '', false, false);
+    insert into auth.identities (id, user_id, provider_id, provider, identity_data, created_at, updated_at)
+    values (gen_random_uuid(), v_uid, v_uid::text, 'email',
+      jsonb_build_object('sub', v_uid::text, 'email', v_email, 'email_verified', true, 'phone_verified', false), now(), now());
+  end if;
+
+  insert into app_users (auth_user_id, role, student_id) values (v_uid, 'student', p_student);
+  return query select v_name, v_email, v_new;
+end $$;
+revoke all on function admin_student_login(uuid, text) from public, anon;
+grant execute on function admin_student_login(uuid, text) to authenticated;
+
+-- >>> 20261029002900_lms_lesson_reminders.sql
+-- =====================================================================
+-- 학생 수업 알림 메일 (POL-OP-18 변경, 2026-10-29 대표 확정)
+--  - 정규·보강 모두 기본 켬, 수업 24시간 전 1번 + 2시간 전 1번 (시간 고정)
+--  - 학생이 정규·보강을 따로 켬/끔 (정규 = 정규 수업, 보강 = 그 밖의 수업: 보강·보상·이월)
+--  - 대체강사 수업이면 '대체강사 수업이에요. 수업 링크가 달라요.' + 대체강사 링크
+--  - 시작 시각을 24시간(2시간) 안에 정한 수업은 그 알림을 건너뜀 · 취소된 수업은 안 보냄
+--    · 시간이 바뀌면 새 시간으로 다시 (같은 수업·같은 시각·같은 알림은 한 번만: notifications.dedupe_key)
+--  - 보내기: Supabase 예약 실행(pg_cron)이 lms_send_lesson_reminders() 를 주기적으로 부름 → pg_net 으로 Resend API
+--    Resend 키는 Supabase Vault 'resend_api_key' (키는 Supabase 화면에만). 키가 없으면 아무것도 안 보냄
+--  - feature_flags.send_emails 가 꺼져 있으면 모두 support@edgeenglish.kr 로만 감 (시험)
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+alter table students add column if not exists remind_regular boolean not null default true;
+alter table students add column if not exists remind_makeup boolean not null default true;
+
+-- 수업 시작 시각을 정한 때 (비어 있으면 이 기능 전부터 있던 수업)
+alter table lessons add column if not exists time_set_at timestamptz;
+alter table lessons alter column time_set_at set default now();
+
+create or replace function lessons_time_set_at() returns trigger
+language plpgsql as $$
+begin
+  if tg_op = 'INSERT' or new.starts_at is distinct from old.starts_at then new.time_set_at := now(); end if;
+  return new;
+end $$;
+drop trigger if exists lessons_time_set_at on lessons;
+create trigger lessons_time_set_at before insert or update of starts_at on lessons
+  for each row execute function lessons_time_set_at();
+revoke all on function lessons_time_set_at() from public, anon, authenticated;
+
+alter table notifications add column if not exists net_request_id bigint;
+
+-- ---------------------------------------------------------------------
+-- 글자 도우미
+-- ---------------------------------------------------------------------
+create or replace function lms_html(p text) returns text
+language sql immutable as $$
+  select replace(replace(replace(replace(coalesce(p, ''), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '"', '&quot;')
+$$;
+revoke all on function lms_html(text) from public, anon, authenticated;
+
+-- 10/30(금) 오후 8:00
+create or replace function lms_ko_when(p_at timestamptz, p_tz text) returns text
+language sql stable as $$
+  select to_char(x, 'FMMM/FMDD') || '(' || (array['일', '월', '화', '수', '목', '금', '토'])[extract(dow from x)::int + 1] || ') '
+         || case when extract(hour from x) < 12 then '오전 ' else '오후 ' end
+         || (case when extract(hour from x)::int % 12 = 0 then 12 else extract(hour from x)::int % 12 end) || ':' || to_char(x, 'MI')
+  from (select p_at at time zone p_tz as x) q
+$$;
+revoke all on function lms_ko_when(timestamptz, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 지금 보낼 알림 (보내지는 않음 — 시험에서 그대로 확인)
+-- ---------------------------------------------------------------------
+create or replace function lms_lesson_reminders_due(p_now timestamptz default now())
+returns table (dedupe_key text, student_id uuid, lesson_id uuid, which text, to_email text, intended_email text, subject text, html text)
+language sql stable security definer set search_path = public as $$
+  with c as (
+    select l.*, s.name_ko, s.email as s_email, s.timezone as s_tz, s.city as s_city, s.code as s_code,
+           t.name as tutor_name, t.meet_url,
+           case when p_now >= l.starts_at - interval '2 hours' then '2h' else '24h' end as which,
+           round(extract(epoch from l.ends_at - l.starts_at) / 60)::int as minutes
+    from lessons l
+    join students s on s.id = l.student_id
+    join tutors t on t.id = l.tutor_id
+    where l.state = 'scheduled' and l.voided_at is null
+      and l.starts_at > p_now and l.starts_at <= p_now + interval '24 hours'
+      and case when l.kind = 'regular' then s.remind_regular else s.remind_makeup end
+      and nullif(trim(s.email), '') is not null
+  ), d as (
+    select c.*,
+           'lesson_reminder:' || c.id || ':' || to_char(c.starts_at at time zone 'UTC', 'YYYYMMDD"T"HH24MI') || ':' || c.which as key,
+           coalesce((select f.enabled from feature_flags f where f.key = 'send_emails'), false) as live,
+           lms_ko_when(c.starts_at, 'Asia/Seoul') as kst,
+           case when c.kind = 'regular' then '수업' else '보강 수업' end as kind_label,
+           c.original_tutor_id is not null as sub
+    from c
+    -- 시작 시각을 알림 시점 뒤에 정했으면 그 알림은 건너뜀
+    where coalesce(c.time_set_at, '-infinity') <= c.starts_at - case when c.which = '2h' then interval '2 hours' else interval '24 hours' end
+  )
+  select d.key, d.student_id, d.id, d.which,
+         case when d.live then trim(d.s_email) else 'support@edgeenglish.kr' end,
+         trim(d.s_email),
+         case when d.live then '' else '[시험 · ' || d.s_code || '] ' end
+           || '[엣지영어] ' || d.kst || ' ' || d.kind_label || case when d.sub then ' · 대체강사' else '' end,
+         '<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1d1b2a;max-width:480px">'
+         || '<p>' || lms_html(d.name_ko) || '님, ' || d.kind_label || ' 안내드려요.</p>'
+         || case when d.sub then '<p style="background:#fff6dd;color:#7a5200;border-radius:8px;padding:9px 11px;font-weight:600">대체강사 수업이에요. 수업 링크가 달라요.</p>' else '' end
+         || '<p><span style="color:#55526a">일시</span>&nbsp; <b>' || d.kst || ' (' || d.minutes || '분)'
+         || case when d.s_tz <> 'Asia/Seoul'
+                 then ' 한국 시간<br>' || lms_ko_when(d.starts_at, d.s_tz) || ' ' || lms_html(coalesce(nullif(trim(d.s_city), ''), d.s_tz))
+                 else '' end || '</b><br>'
+         || '<span style="color:#55526a">강사</span>&nbsp; <b>' || lms_html(d.tutor_name) || case when d.sub then ' (대체강사)' else '' end || '</b></p>'
+         || case when nullif(trim(d.meet_url), '') is null then ''
+                 else '<p><a href="' || lms_html(trim(d.meet_url)) || '" style="display:inline-block;background:#5b3df0;color:#fff;border-radius:10px;padding:11px 18px;font-weight:700;text-decoration:none">'
+                      || case when d.sub then lms_html(d.tutor_name) || ' 강사님 수업 들어가기' else '수업 들어가기 (Google Meet)' end || '</a></p>' end
+         || '<p style="font-size:12px;color:#55526a">알림 끄기: 엣지영어 LMS › 내 정보 › 수업 알림 메일</p></div>'
+  from d
+  where not exists (select 1 from notifications n where n.dedupe_key = d.key)
+  order by d.starts_at
+$$;
+revoke all on function lms_lesson_reminders_due(timestamptz) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 보내기 (예약 실행이 부름): ① 지난번에 보낸 것의 결과 기록 ② 지금 보낼 것을 Resend 로
+-- ---------------------------------------------------------------------
+create or replace function lms_send_lesson_reminders() returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  v_key text;
+  r record;
+  v_id uuid;
+  v_req bigint;
+  n integer := 0;
+begin
+  update notifications x
+  set status = case when h.status_code between 200 and 299 then 'sent' else 'failed' end,
+      sent_at = case when h.status_code between 200 and 299 then h.created end,
+      last_error = case when h.status_code between 200 and 299 then null
+                        else left(coalesce(h.status_code::text || ' ', '') || coalesce(h.error_msg, h.content::text, ''), 500) end
+  from net._http_response h
+  where x.net_request_id = h.id and x.status = 'queued';
+
+  select decrypted_secret into v_key from vault.decrypted_secrets where name = 'resend_api_key';
+  if nullif(trim(v_key), '') is null then return 0; end if;
+
+  for r in select * from lms_lesson_reminders_due(now()) loop
+    insert into notifications (recipient_kind, recipient_id, email, locale, template, payload, dedupe_key)
+    values ('student', r.student_id, r.to_email, 'ko', 'lesson_reminder_' || r.which,
+            jsonb_build_object('lesson_id', r.lesson_id, 'intended_email', r.intended_email, 'subject', r.subject), r.dedupe_key)
+    on conflict (dedupe_key) do nothing
+    returning id into v_id;
+    continue when v_id is null;
+    v_req := net.http_post(
+      url := 'https://api.resend.com/emails',
+      body := jsonb_build_object('from', '엣지영어 <support@edgeenglish.kr>', 'to', jsonb_build_array(r.to_email),
+                                 'subject', r.subject, 'html', r.html),
+      headers := jsonb_build_object('Authorization', 'Bearer ' || trim(v_key), 'Content-Type', 'application/json',
+                                    'Idempotency-Key', r.dedupe_key));
+    update notifications set net_request_id = v_req, attempts = attempts + 1 where id = v_id;
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke all on function lms_send_lesson_reminders() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 학생 알림 설정: 읽기(둘 다 null) · 바꾸기. 학생 본인 또는 운영자(?student=)
+-- ---------------------------------------------------------------------
+create or replace function student_reminders(p_student uuid, p_regular boolean default null, p_makeup boolean default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+begin
+  if p_regular is not null or p_makeup is not null then
+    perform set_config('app.actor_id', auth.uid()::text, true);
+    perform set_config('app.actor_via', case when is_admin() then 'admin_for_student' else 'student' end, true);
+    update students set remind_regular = coalesce(p_regular, remind_regular), remind_makeup = coalesce(p_makeup, remind_makeup)
+    where id = v_student;
+  end if;
+  select * into st from students where id = v_student;
+  return jsonb_build_object('regular', st.remind_regular, 'makeup', st.remind_makeup, 'has_email', nullif(trim(st.email), '') is not null);
+end $$;
+revoke all on function student_reminders(uuid, boolean, boolean) from public, anon;
+grant execute on function student_reminders(uuid, boolean, boolean) to authenticated;
+
+-- >>> 20261029003000_lms_student_late.sql
+-- 학생 지각 표시 (2026-10-29 대표 다안): 정상 수업 + 'Student was late' 체크.
+-- Class Status를 늘리지 않아 수업 횟수·페이·보강 규칙은 그대로. 강사 일정 표에 '· Student late'로 보임
+
+alter table class_records add column student_late boolean not null default false;
+
+drop function tutor_record_class(uuid, text, text, text);
+create or replace function tutor_record_class(p_lesson uuid, p_result text, p_topics text, p_remarks text, p_student_late boolean default false)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  l lessons;
+  v_status class_status;
+  v_topics text := nullif(trim(coalesce(p_topics, '')), '');
+  v_remarks text := nullif(trim(coalesce(p_remarks, '')), '');
+  v_old class_records;
+  v_late boolean := p_result = 'held' and coalesce(p_student_late, false);   -- 학생 지각은 정상 진행(Held)일 때만
+begin
+  select * into l from lessons where id = p_lesson for update;
+  if not found then raise exception 'Class not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and l.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your class.' using errcode = '42501';
+  end if;
+  if l.voided_at is not null or l.state = 'canceled' then
+    raise exception 'This class was canceled (%). No record needed.', coalesce(l.class_status::text, 'removed') using hint = 'canceled';
+  end if;
+  if l.starts_at > now() then raise exception 'You can record this class after it starts.' using hint = 'not_started'; end if;
+  if exists (select 1 from payroll_items where lesson_id = l.id) then
+    raise exception 'This class is already in payroll. Please contact Edge English to change it.' using hint = 'locked';
+  end if;
+  if p_result = 'held' then
+    if v_topics is null then raise exception 'Please enter the covered topics.' using hint = 'topics'; end if;
+    v_status := case when l.kind in ('makeup', 'migrated_makeup', 'compensation') then 'Make-up completed'
+                     when l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id then 'Covered by another tutor'
+                     else 'Normal' end;
+  elsif p_result = 'late' then
+    if v_topics is null then raise exception 'Please enter the covered topics.' using hint = 'topics'; end if;
+    if v_remarks is null then raise exception 'Please write the reason for being late in Remarks.' using hint = 'remarks'; end if;
+    v_status := 'Tutor Late - Student Present';
+  elsif p_result = 'student_no_show' then
+    v_status := 'Student no-show';
+  else
+    raise exception 'Please choose how the class went.';
+  end if;
+
+  select * into v_old from class_records where lesson_id = l.id;
+  if l.state = 'done' and l.class_status = v_status and found
+     and v_old.covered_topics is not distinct from v_topics and v_old.remarks is not distinct from v_remarks
+     and v_old.student_late = v_late then
+    return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', true);
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_record_class' else 'tutor_record_class' end, true);
+  update lessons set state = 'done', class_status = v_status where id = l.id and (state, class_status) is distinct from ('done', v_status);
+  insert into class_records (lesson_id, covered_topics, remarks, student_late, submitted_by)
+  values (l.id, v_topics, v_remarks, v_late, me)
+  on conflict (lesson_id) do update set covered_topics = excluded.covered_topics, remarks = excluded.remarks,
+    student_late = excluded.student_late, submitted_by = excluded.submitted_by;
+  return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', false);
+end $$;
+revoke all on function tutor_record_class(uuid, text, text, text, boolean) from public, anon;
+grant execute on function tutor_record_class(uuid, text, text, text, boolean) to authenticated;
+
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', coalesce(s.display_name, s.name_en), 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'student_late', coalesce(cr.student_late, false), 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    -- 기록할 수업: 시작했는데 결과가 없는 수업 (강사 LMS 계정이 생긴 뒤 시작한 수업만 — 그 전 수업은 시트에 기록됨)
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', coalesce(s.display_name, s.name_en),
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null, 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb),
+    -- 대체 수업 요청: 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 (2600). 휴무 강사 이름은 안 보임
+    'covers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'student', coalesce(s.display_name, s.name_en), 'starts_at', i.starts_at, 'ends_at', i.ends_at,
+        'busy', lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id) is not null)
+        order by i.starts_at)
+      from leave_items i join students s on s.id = i.student_id
+      where i.sub_tutor_id = v_tutor and i.choice = 'substitute' and i.sub_stage = 'asked' and i.starts_at > now()), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- >>> 20261029003100_lms_tutor_hours.sql
+-- =====================================================================
+-- 강사 본인 가능 시간 고치기 [My hours] (2026-10-29 대표 확정, 정책 원본 H26(37), 시안 docs/lms/previews/tutor-hours-drafts.html)
+--  - Every week: tutor_availability (30분 칸 = 그 시각 수업 시작 가능, 강사 현지 시각). 바꾸면 **다음 주 월요일(한국 날짜)부터**
+--    → 그날 이후에도 살아 있는 기존 줄은 effective_to = 그 전날로 끝내고(이미 그날부터 시작하는 줄은 지움) 새 줄을 넣음. 지난 기록은 남음
+--    → 고정 수업(앞으로 남은 정규 수업)이 있는 칸은 닫을 수 없음 (운영진에게 요청)
+--  - One week only: tutor_time_off kind 'block' (붙은 칸은 한 줄로 합침, 다시 열면 그 칸만 잘라 냄). 이번 주 포함 4주(강사 현지 월~일)
+--    → 빈 시간만, 수업 시작 6시간 전까지. 수업·보강·보강 신청 중(강사 불가 답 제외)·대체 요청 중인 시간, 휴무('leave')는 잠김
+--  - 칸: 강사 현지 22:00 시작까지 + 한국 06:00~22:30 시작 (POL-OP-02)
+--  - 화면 잠금만 믿지 않고 저장 함수가 같은 판정(lms_hours_cell)으로 다시 검사. 강사 본인, 또는 운영자(TOTP)가 ?tutor= 로 같은 함수
+--  - 저장 즉시 반영 + 바뀐 기록(tutor_hours_changes) → 운영자 보기 화면에 표시
+-- 기존 표·데이터를 지우지 않음 (tutor_availability 는 아직 시작 안 한 줄만 지울 수 있음, audit_log 에 남음). 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 한 칸짜리 줄 허용: 시작 기준이라 시작 = 끝이면 그 시각 하나만 가능
+-- ---------------------------------------------------------------------
+alter table tutor_availability drop constraint if exists tutor_availability_check;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'tutor_availability_start_le_end') then
+    alter table tutor_availability add constraint tutor_availability_start_le_end check (end_local >= start_local);
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 2. 바뀐 기록 (지우기·고치기 금지)
+--    changes = {from, weekly_open[], weekly_close[] ('요일(0=일):HH:MI'), once_close[], once_open[] ('YYYY-MM-DDTHH:MI' 강사 현지)}
+-- ---------------------------------------------------------------------
+create table if not exists tutor_hours_changes (
+  id uuid primary key default gen_random_uuid(),
+  tutor_id uuid not null references tutors(id),
+  at timestamptz not null default now(),
+  actor uuid,
+  by_admin boolean not null,
+  changes jsonb not null
+);
+create index if not exists tutor_hours_changes_tutor on tutor_hours_changes (tutor_id, at);
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'tutor_hours_changes_audit') then
+    perform lms_protect('tutor_hours_changes'::regclass);
+    create trigger tutor_hours_changes_no_update before update on tutor_hours_changes for each row execute function forbid_update();
+    create trigger tutor_hours_changes_no_delete before delete on tutor_hours_changes for each row execute function forbid_delete();
+    create policy tutor_own on tutor_hours_changes for select to authenticated using (tutor_id = my_tutor_id());
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 3. 날짜·칸
+-- ---------------------------------------------------------------------
+-- 매주 변경이 시작되는 날: 다음 주 월요일 (한국 날짜)
+create or replace function lms_next_monday() returns date
+language sql stable as $$
+  select d + (8 - extract(isodow from d)::int) from (select (now() at time zone 'Asia/Seoul')::date as d) x
+$$;
+
+-- 강사 현지 이번 주 월요일
+create or replace function lms_local_monday(p_tz text) returns date
+language sql stable as $$
+  select d - (extract(isodow from d)::int - 1) from (select (now() at time zone p_tz)::date as d) x
+$$;
+
+-- 그 주 칸 시각 (강사 현지 30분): 현지 22:00 시작까지 + 한국 06:00~22:30 시작 (POL-OP-02)
+create or replace function lms_hours_times(p_tz text, p_monday date) returns setof time
+language sql stable as $$
+  select distinct g::time from generate_series(0, 6) d
+  cross join generate_series(timestamp '2000-01-01 00:00', timestamp '2000-01-01 22:00', interval '30 minutes') g
+  where ((((p_monday + d) + g::time) at time zone p_tz) at time zone 'Asia/Seoul')::time between time '06:00' and time '22:30'
+  order by 1
+$$;
+revoke all on function lms_next_monday() from public, anon, authenticated;
+revoke all on function lms_local_monday(text) from public, anon, authenticated;
+revoke all on function lms_hours_times(text, date) from public, anon, authenticated;
+
+-- 매주 가능 시간: p_from 에 살아 있는 줄 기준으로 그 주(현지 날짜 p_from~+6)의 열린 칸 '요일:HH:MI'.
+-- 줄이 한 번도 없는 강사는 지금 판정(lms_tutor_available)처럼 모든 칸이 열림
+create or replace function lms_weekly_open(p_tutor uuid, p_tz text, p_from date, p_times time[]) returns setof text
+language sql stable security definer set search_path = public as $$
+  select extract(dow from ld)::int || ':' || to_char(tm, 'HH24:MI')
+  from generate_series(p_from, p_from + 6, interval '1 day') g(ld0)
+  cross join lateral (select g.ld0::date as ld) d
+  cross join unnest(p_times) tm
+  where not exists (select 1 from tutor_availability a where a.tutor_id = p_tutor)
+     or exists (select 1 from tutor_availability a
+                where a.tutor_id = p_tutor
+                  and a.effective_from <= p_from and (a.effective_to is null or a.effective_to >= p_from)
+                  and extract(dow from (((ld + tm) at time zone p_tz) at time zone a.timezone)) = a.weekday
+                  and ((((ld + tm) at time zone p_tz) at time zone a.timezone))::time between a.start_local and a.end_local)
+$$;
+revoke all on function lms_weekly_open(uuid, text, date, time[]) from public, anon, authenticated;
+
+-- 고정 수업: p_from(한국 날짜 0시) 이후 남은 정규 수업의 현지 요일·시각·길이 (같은 것은 하나로)
+create or replace function lms_weekly_classes(p_tutor uuid, p_tz text, p_from date)
+returns table (d int, start_local time, minutes int, student text)
+language sql stable security definer set search_path = public as $$
+  select distinct extract(dow from l.starts_at at time zone p_tz)::int, (l.starts_at at time zone p_tz)::time,
+         (extract(epoch from l.ends_at - l.starts_at) / 60)::int, coalesce(s.display_name, s.name_en)
+  from lessons l join students s on s.id = l.student_id
+  where l.tutor_id = p_tutor and l.kind = 'regular' and l.state = 'scheduled' and l.voided_at is null
+    and l.starts_at >= (p_from::timestamp at time zone 'Asia/Seoul')
+$$;
+revoke all on function lms_weekly_classes(uuid, text, date) from public, anon, authenticated;
+
+-- 그 주만 칸 판정 (30분 [p_at, p_at+30분)):
+--  c 수업·보강 · r 보강 신청 중/대체 요청 중 · l 휴무 · p 6시간 안·지난 시간 · s 매주 닫힌 시간 · b 그 주만 닫음 · o 열림
+create or replace function lms_hours_cell(p_tutor uuid, p_at timestamptz) returns text
+language sql stable security definer set search_path = public as $$
+  select case
+    when exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled' and x.voided_at is null
+                 and x.starts_at < p_at + interval '30 minutes' and p_at < x.ends_at) then 'c'
+    when exists (select 1 from makeup_candidates c join makeup_requests r on r.id = c.request_id
+                 where r.tutor_id = p_tutor and r.status in ('requested', 'countered') and coalesce(c.tutor_answer, 'yes') = 'yes'
+                   and c.starts_at < p_at + interval '30 minutes' and p_at < c.ends_at)
+      or exists (select 1 from leave_items i where i.sub_tutor_id = p_tutor and i.sub_stage in ('asked', 'tutor_ok')
+                 and i.starts_at < p_at + interval '30 minutes' and p_at < i.ends_at) then 'r'
+    when exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'leave'
+                 and o.starts_at < p_at + interval '30 minutes' and p_at < o.ends_at) then 'l'
+    when p_at < now() + interval '6 hours' then 'p'
+    when not lms_tutor_available(p_tutor, p_at) then 's'
+    when exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'block'
+                 and o.starts_at < p_at + interval '30 minutes' and p_at < o.ends_at) then 'b'
+    else 'o' end
+$$;
+revoke all on function lms_hours_cell(uuid, timestamptz) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 4. 화면 읽기
+-- ---------------------------------------------------------------------
+create or replace function tutor_hours(p_tutor uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+  v_from date := lms_next_monday();
+  v_mon date;
+  v_times time[];
+begin
+  select * into t from tutors where id = v_tutor;
+  v_mon := lms_local_monday(t.timezone);
+  v_times := array(select lms_hours_times(t.timezone, v_mon));
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone),
+    'from', v_from,
+    'monday', v_mon,
+    'times', to_jsonb(array(select to_char(x, 'HH24:MI') from unnest(v_times) x)),
+    'weekly_open', to_jsonb(array(select lms_weekly_open(v_tutor, t.timezone, v_from, v_times))),
+    'weekly_classes', coalesce((select jsonb_agg(jsonb_build_object('d', w.d, 'time', to_char(w.start_local, 'HH24:MI'), 'min', w.minutes, 'student', w.student))
+                                from lms_weekly_classes(v_tutor, t.timezone, v_from) w), '[]'::jsonb),
+    -- 그 주만 4주: 열림(o)이 아닌 칸만
+    'cells', coalesce((select jsonb_object_agg(k, c) from (
+        select to_char(ld + tm, 'YYYY-MM-DD"T"HH24:MI') k, lms_hours_cell(v_tutor, (ld + tm) at time zone t.timezone) c
+        from generate_series(v_mon, v_mon + 27, interval '1 day') g cross join lateral (select g::date ld) d cross join unnest(v_times) tm) z
+      where c <> 'o'), '{}'::jsonb),
+    'lessons', coalesce((select jsonb_agg(jsonb_build_object(
+        'start', to_char(l.starts_at at time zone t.timezone, 'YYYY-MM-DD"T"HH24:MI'),
+        'min', (extract(epoch from l.ends_at - l.starts_at) / 60)::int,
+        'student', coalesce(s.display_name, s.name_en), 'makeup', l.kind <> 'regular') order by l.starts_at)
+      from lessons l join students s on s.id = l.student_id
+      where l.tutor_id = v_tutor and l.state <> 'canceled' and l.voided_at is null
+        and l.ends_at > (v_mon::timestamp at time zone t.timezone) and l.starts_at < ((v_mon + 28)::timestamp at time zone t.timezone)), '[]'::jsonb),
+    -- 바뀐 기록: 운영자 보기에서만
+    'history', case when is_admin() then coalesce((select jsonb_agg(jsonb_build_object('at', h.at, 'by_admin', h.by_admin, 'changes', h.changes) order by h.at desc)
+                                                    from tutor_hours_changes h where h.tutor_id = v_tutor), '[]'::jsonb) end);
+end $$;
+revoke all on function tutor_hours(uuid) from public, anon;
+grant execute on function tutor_hours(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 5. 저장: p_weekly = 바꾼 뒤 매주 열린 칸 전체 (안 바꾸면 null), p_close·p_open = 그 주만 닫을·다시 열 칸
+-- ---------------------------------------------------------------------
+create or replace function tutor_hours_save(p_tutor uuid, p_weekly text[], p_close text[], p_open text[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  v_tz text;
+  v_from date := lms_next_monday();
+  v_mon date;
+  v_times time[];
+  v_old text[];
+  v_new text[];
+  v_add text[] := '{}';
+  v_del text[] := '{}';
+  k text;
+  w record;
+  v_ld date;
+  v_tm time;
+  v_at timestamptz;
+  v_end timestamptz;
+  v_s timestamptz;
+  v_e timestamptz;
+  o record;
+  v_changes jsonb;
+begin
+  select timezone into v_tz from tutors where id = v_tutor;
+  v_mon := lms_local_monday(v_tz);
+  v_times := array(select lms_hours_times(v_tz, v_mon));
+  perform set_config('app.actor_id', coalesce(auth.uid()::text, ''), true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_tutor_hours' else 'tutor_hours' end, true);
+
+  -- 매주
+  if p_weekly is not null then
+    foreach k in array p_weekly loop
+      if k !~ '^[0-6]:\d\d:\d\d$' or not (substr(k, 3)::time = any (v_times)) then raise exception 'Invalid time: %', k; end if;
+    end loop;
+    v_old := array(select lms_weekly_open(v_tutor, v_tz, v_from, v_times));
+    v_new := array(select distinct x from unnest(p_weekly) x);
+    v_add := array(select x from unnest(v_new) x where not (x = any (v_old)) order by 1);
+    v_del := array(select x from unnest(v_old) x where not (x = any (v_new)) order by 1);
+    -- 고정 수업이 걸친 칸은 닫을 수 없음
+    for w in select * from lms_weekly_classes(v_tutor, v_tz, v_from) loop
+      foreach k in array v_del loop
+        v_tm := substr(k, 3)::time;
+        if split_part(k, ':', 1)::int = w.d and v_tm < w.start_local + make_interval(mins => w.minutes) and w.start_local < v_tm + interval '30 minutes' then
+          raise exception 'Every % % has a weekly class with %. Please ask the Edge English team to change it.',
+            to_char(date '2026-11-01' + w.d, 'FMDay'), to_char(w.start_local, 'FMHH24:MI'), w.student;
+        end if;
+      end loop;
+    end loop;
+    if cardinality(v_add) + cardinality(v_del) > 0 then
+      delete from tutor_availability where tutor_id = v_tutor and effective_from >= v_from;
+      update tutor_availability set effective_to = v_from - 1
+      where tutor_id = v_tutor and effective_from < v_from and (effective_to is null or effective_to >= v_from);
+      -- 이어진 칸 = 한 줄 (시작 = 처음 칸, 끝 = 마지막 칸 시각)
+      insert into tutor_availability (tutor_id, weekday, start_local, end_local, timezone, effective_from)
+      select v_tutor, d, min(tm), max(tm), v_tz, v_from
+      from (select d, tm, (extract(epoch from tm)::int / 1800) - row_number() over (partition by d order by tm) grp
+            from (select split_part(x, ':', 1)::int d, substr(x, 3)::time tm from unnest(v_new) x) a) b
+      group by d, grp;
+    end if;
+  end if;
+
+  -- 그 주만: 다시 열기 먼저, 그다음 닫기
+  foreach k in array coalesce(p_open, '{}') || coalesce(p_close, '{}') loop
+    if k !~ '^\d{4}-\d\d-\d\dT\d\d:\d\d$' then raise exception 'Invalid time: %', k; end if;
+    v_ld := left(k, 10)::date;
+    v_tm := right(k, 5)::time;
+    if v_ld < v_mon or v_ld > v_mon + 27 or not (v_tm = any (v_times)) then raise exception 'Invalid time: %', k; end if;
+  end loop;
+  foreach k in array coalesce(p_open, '{}') loop
+    v_at := (left(k, 10)::date + right(k, 5)::time) at time zone v_tz;
+    v_end := v_at + interval '30 minutes';
+    if lms_hours_cell(v_tutor, v_at) <> 'b' then raise exception '% % can''t be opened here.', left(k, 10), right(k, 5); end if;
+    for o in select * from tutor_time_off where tutor_id = v_tutor and kind = 'block' and starts_at < v_end and v_at < ends_at loop
+      delete from tutor_time_off where id = o.id;
+      if o.starts_at < v_at then
+        insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by) values (v_tutor, o.starts_at, v_at, 'block', o.reason, auth.uid());
+      end if;
+      if v_end < o.ends_at then
+        insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by) values (v_tutor, v_end, o.ends_at, 'block', o.reason, auth.uid());
+      end if;
+    end loop;
+  end loop;
+  foreach k in array coalesce(p_close, '{}') loop
+    v_at := (left(k, 10)::date + right(k, 5)::time) at time zone v_tz;
+    if lms_hours_cell(v_tutor, v_at) <> 'o' then raise exception '% % can''t be closed here.', left(k, 10), right(k, 5); end if;
+    -- 붙어 있는 그 주만 닫은 줄과 합쳐 한 줄로
+    v_s := v_at;
+    v_e := v_at + interval '30 minutes';
+    for o in select * from tutor_time_off where tutor_id = v_tutor and kind = 'block' and starts_at <= v_e and v_s <= ends_at loop
+      v_s := least(v_s, o.starts_at);
+      v_e := greatest(v_e, o.ends_at);
+      delete from tutor_time_off where id = o.id;
+    end loop;
+    insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by)
+    values (v_tutor, v_s, v_e, 'block', 'Unavailable this week (My hours)', auth.uid());
+  end loop;
+
+  v_changes := jsonb_build_object('from', v_from, 'weekly_open', to_jsonb(v_add), 'weekly_close', to_jsonb(v_del),
+    'once_close', to_jsonb(array(select distinct x from unnest(coalesce(p_close, '{}')) x order by 1)),
+    'once_open', to_jsonb(array(select distinct x from unnest(coalesce(p_open, '{}')) x order by 1)));
+  if cardinality(v_add) + cardinality(v_del) + cardinality(coalesce(p_close, '{}')) + cardinality(coalesce(p_open, '{}')) > 0 then
+    insert into tutor_hours_changes (tutor_id, actor, by_admin, changes) values (v_tutor, auth.uid(), is_admin(), v_changes);
+  end if;
+  return v_changes;
+end $$;
+revoke all on function tutor_hours_save(uuid, text[], text[], text[]) from public, anon;
+grant execute on function tutor_hours_save(uuid, text[], text[], text[]) to authenticated;
+
+-- >>> 20261030003200_lms_leave_lesson_gone.sql
+-- =====================================================================
+-- 휴무 처리 줄과 실제 수업 상태 맞추기 (2026-10-30 전체 흐름 재설계 R5, docs/lms/requests/2026-10-30-flow-redesign.md)
+--  - 문제: 학생이 휴무에 걸린 수업(대체 확정 포함)을 취소·변경해도 휴무 처리 줄은 그대로 → 학생 휴무 안내에 대체강사 확정·입장 링크가 계속,
+--    강사 대체 요청·운영진 휴무 화면·대시보드에도 할 일로 남음
+--  - leave_items.lesson_gone_at: 그 수업(또는 확정된 대체 수업)이 휴무 처리 밖에서 취소되면 시각을 적고, 수업이 되살아나면(변경 되돌리기) 지움
+--    휴무 처리 자체의 취소('Tutor long-term leave' = 기존 강사와 보강)와 운영진 무르기(voided)는 '밖에서 취소'가 아님
+--  - 학생 화면 휴무 안내 · 강사 화면 대체 요청에서 뺌 (운영진 화면·대시보드는 앱이 같은 칸으로 거름)
+-- 기존 표·데이터를 지우지 않음 (새 칸만 채움). 다시 실행해도 같은 결과
+-- =====================================================================
+
+alter table leave_items add column if not exists lesson_gone_at timestamptz;
+
+create or replace function lms_lesson_gone(l lessons) returns boolean
+language sql immutable as $$
+  select l.state = 'canceled' and l.voided_at is null and l.class_status is distinct from 'Tutor long-term leave'
+$$;
+
+create or replace function lessons_leave_gone() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  update leave_items i
+  set lesson_gone_at = case when lms_lesson_gone(new) then coalesce(i.lesson_gone_at, now()) end
+  where (i.lesson_id = new.id or i.sub_lesson_id = new.id)
+    and (i.lesson_gone_at is null) = lms_lesson_gone(new);
+  return null;
+end $$;
+
+revoke all on function lms_lesson_gone(lessons) from public, anon, authenticated;
+revoke all on function lessons_leave_gone() from public, anon, authenticated;
+
+drop trigger if exists lessons_leave_gone on lessons;
+create trigger lessons_leave_gone after update of state, class_status, voided_at on lessons
+  for each row when (old.state is distinct from new.state or old.class_status is distinct from new.class_status or old.voided_at is distinct from new.voided_at)
+  execute function lessons_leave_gone();
+
+-- 이미 밖에서 취소된 수업 채우기 (새 칸만)
+update leave_items i set lesson_gone_at = coalesce(l.canceled_at, now())
+from lessons l
+where l.id = coalesce(i.sub_lesson_id, i.lesson_id) and lms_lesson_gone(l) and i.lesson_gone_at is null;
+
+-- 학생 화면: 2800 그대로 + 휴무 안내에서 밖에서 취소된 수업 뺌
+create or replace function student_screen(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+  e enrollments;
+  v_period enrollment_periods;
+  v_open uuid[];
+begin
+  select * into st from students where id = v_student;
+  select * into e from enrollments where id = lms_student_enrollment(v_student);
+  select * into v_period from enrollment_periods p
+  where p.enrollment_id = e.id and p.start_date <= (now() at time zone 'Asia/Seoul')::date order by p.idx desc limit 1;
+  -- 수업·보강은 지금 수강권 + 아직 열린 다른 수강권(재등록 결제 뒤에도 이전 수강권의 보강이 남을 수 있음)
+  v_open := array(select x.id from enrollments x where x.student_id = v_student and (x.status in ('active', 'confirmed') or x.id = e.id));
+  return jsonb_build_object(
+    'student', jsonb_build_object('id', st.id, 'code', st.code, 'name_ko', st.name_ko, 'timezone', st.timezone),
+    'enrollment', case when e.id is null then null else jsonb_build_object(
+      'id', e.id, 'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'start_date', e.start_date, 'final_end_date', e.final_end_date, 'status', e.status,
+      'next_regular_from', lms_next_regular_from(e.id),
+      'lessons_total', coalesce((select c.sheet_total from import_checks c where c.enrollment_id = e.id), e.lessons_purchased + e.lessons_carried_in),
+      'credits_left', case when v_period.id is null then 0 else credit_balance(v_period.id) end,
+      'credits_granted', coalesce(v_period.credits_granted, 0),
+      'confirmed_on', (select min((p.confirmed_at at time zone 'Asia/Seoul')::date) from payments p where p.enrollment_id = e.id and p.confirmed_at is not null),
+      'renewal_paid', exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))) end,
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id),
+        'substitute', l.original_tutor_id is not null) order by l.starts_at)
+      from lessons l join tutors t on t.id = l.tutor_id
+      where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
+    -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강)
+    'makeup_rights', coalesce((
+      select jsonb_agg(r order by r ->> 'original_at') from (
+        select jsonb_build_object('lesson_id', l.id, 'item_id', null, 'original_at', l.starts_at,
+                 'tutor_leave', l.class_status = 'Tutor long-term leave') as r
+        from lessons l
+        where l.enrollment_id = any(v_open) and l.voided_at is null and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+          and not exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+        union all
+        select jsonb_build_object('lesson_id', null, 'item_id', m.id, 'original_at', m.original_date::timestamp at time zone 'Asia/Seoul',
+                 'tutor_leave', coalesce(m.tutor_leave, false))
+        from migrated_items m where m.enrollment_id = any(v_open) and m.kind = 'makeup_open') q), '[]'::jsonb),
+    'makeup_requests', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id,
+        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id,
+        'tutor_leave', (select x.tutor_leave from lms_makeup_source(r.source_lesson_id, r.migrated_item_id) x),
+        'candidates', (select coalesce(jsonb_agg(c.starts_at order by c.starts_at), '[]'::jsonb) from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.requested_at desc)
+      from makeup_requests r where r.student_id = v_student and r.status in ('requested', 'countered', 'confirmed')
+        and r.requested_at > now() - interval '60 days'), '[]'::jsonb),
+    -- 휴무 안내: 대체강사가 가능하다고 한 수업(답 기다림)·확정된 대체 수업·보강으로 정한 수업만. 지난 수업은 빼고
+    'leave', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name, 'sub_meet_url', sub.meet_url,
+        'lesson_id', li.lesson_id, 'item_id', li.migrated_item_id,
+        'off_from', o.starts_at, 'off_to', o.ends_at) order by li.starts_at)
+      from leave_items li
+      join tutor_time_off o on o.id = li.time_off_id
+      left join tutors sub on sub.id = li.sub_tutor_id
+      where li.student_id = v_student and li.starts_at > now() and li.lesson_gone_at is null
+        and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    -- 변경권: 지금 기간과 쓴 기록 (대표 10/29: 변경권 칸 누르면 언제 썼는지)
+    'credit_period', case when v_period.id is null then null else jsonb_build_object('start', v_period.start_date, 'end', v_period.end_date) end,
+    'credit_uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'lesson_at', l.starts_at) order by c.created_at)
+      from credit_ledger c left join lessons l on l.id = c.lesson_id where c.period_id = v_period.id), '[]'::jsonb),
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
+      where h.day between (now() at time zone 'Asia/Seoul')::date and (now() at time zone 'Asia/Seoul')::date + 200), '[]'::jsonb),
+    'points', coalesce((
+      select jsonb_agg(jsonb_build_object('id', g.id, 'on', (g.created_at at time zone 'Asia/Seoul')::date, 'kind', g.kind, 'amount', g.amount, 'note', g.note)
+        order by g.created_at)
+      from reward_ledger g where g.student_id = v_student), '[]'::jsonb));
+end $$;
+revoke all on function student_screen(uuid) from public, anon;
+grant execute on function student_screen(uuid) to authenticated;
+
+-- 강사 화면: 3000 그대로 + 대체 요청에서 밖에서 취소된 수업 뺌
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', coalesce(s.display_name, s.name_en), 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'student_late', coalesce(cr.student_late, false), 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    -- 기록할 수업: 시작했는데 결과가 없는 수업 (강사 LMS 계정이 생긴 뒤 시작한 수업만 — 그 전 수업은 시트에 기록됨)
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', coalesce(s.display_name, s.name_en),
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null, 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb),
+    -- 대체 수업 요청: 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 (2600). 휴무 강사 이름은 안 보임
+    'covers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'student', coalesce(s.display_name, s.name_en), 'starts_at', i.starts_at, 'ends_at', i.ends_at,
+        'busy', lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id) is not null)
+        order by i.starts_at)
+      from leave_items i join students s on s.id = i.student_id
+      where i.sub_tutor_id = v_tutor and i.choice = 'substitute' and i.sub_stage = 'asked' and i.starts_at > now() and i.lesson_gone_at is null), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- >>> 20261030003300_lms_student_leave_open.sql
+-- =====================================================================
+-- 학생 홈 · 일정과 휴무 안내 맞추기 (2026-10-30 대표 확인 3번)
+--  - 문제: 휴무 처리 중(대체강사 미정·답 기다림·학생 답 전)인 수업이 학생 홈에는 휴무 강사와 정상 수업처럼 입장 버튼까지 보임
+--  - lessons 마다 leave_open: 휴무 처리가 아직 확정 전인 수업 (미정 · 대체강사 확정 전). 화면은 '일정 조율 중' + 입장 버튼 안 보임
+--  - student_screen 만 바꿈 (3200 그대로 + leave_open). 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function student_screen(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+  e enrollments;
+  v_period enrollment_periods;
+  v_open uuid[];
+begin
+  select * into st from students where id = v_student;
+  select * into e from enrollments where id = lms_student_enrollment(v_student);
+  select * into v_period from enrollment_periods p
+  where p.enrollment_id = e.id and p.start_date <= (now() at time zone 'Asia/Seoul')::date order by p.idx desc limit 1;
+  -- 수업·보강은 지금 수강권 + 아직 열린 다른 수강권(재등록 결제 뒤에도 이전 수강권의 보강이 남을 수 있음)
+  v_open := array(select x.id from enrollments x where x.student_id = v_student and (x.status in ('active', 'confirmed') or x.id = e.id));
+  return jsonb_build_object(
+    'student', jsonb_build_object('id', st.id, 'code', st.code, 'name_ko', st.name_ko, 'timezone', st.timezone),
+    'enrollment', case when e.id is null then null else jsonb_build_object(
+      'id', e.id, 'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'start_date', e.start_date, 'final_end_date', e.final_end_date, 'status', e.status,
+      'next_regular_from', lms_next_regular_from(e.id),
+      'lessons_total', coalesce((select c.sheet_total from import_checks c where c.enrollment_id = e.id), e.lessons_purchased + e.lessons_carried_in),
+      'credits_left', case when v_period.id is null then 0 else credit_balance(v_period.id) end,
+      'credits_granted', coalesce(v_period.credits_granted, 0),
+      'confirmed_on', (select min((p.confirmed_at at time zone 'Asia/Seoul')::date) from payments p where p.enrollment_id = e.id and p.confirmed_at is not null),
+      'renewal_paid', exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))) end,
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id),
+        'substitute', l.original_tutor_id is not null,
+        'leave_open', exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))) order by l.starts_at)
+      from lessons l join tutors t on t.id = l.tutor_id
+      where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
+    -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강)
+    'makeup_rights', coalesce((
+      select jsonb_agg(r order by r ->> 'original_at') from (
+        select jsonb_build_object('lesson_id', l.id, 'item_id', null, 'original_at', l.starts_at,
+                 'tutor_leave', l.class_status = 'Tutor long-term leave') as r
+        from lessons l
+        where l.enrollment_id = any(v_open) and l.voided_at is null and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+          and not exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+        union all
+        select jsonb_build_object('lesson_id', null, 'item_id', m.id, 'original_at', m.original_date::timestamp at time zone 'Asia/Seoul',
+                 'tutor_leave', coalesce(m.tutor_leave, false))
+        from migrated_items m where m.enrollment_id = any(v_open) and m.kind = 'makeup_open') q), '[]'::jsonb),
+    'makeup_requests', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id,
+        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id,
+        'tutor_leave', (select x.tutor_leave from lms_makeup_source(r.source_lesson_id, r.migrated_item_id) x),
+        'candidates', (select coalesce(jsonb_agg(c.starts_at order by c.starts_at), '[]'::jsonb) from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.requested_at desc)
+      from makeup_requests r where r.student_id = v_student and r.status in ('requested', 'countered', 'confirmed')
+        and r.requested_at > now() - interval '60 days'), '[]'::jsonb),
+    -- 휴무 안내: 대체강사가 가능하다고 한 수업(답 기다림)·확정된 대체 수업·보강으로 정한 수업만. 지난 수업은 빼고
+    'leave', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name, 'sub_meet_url', sub.meet_url,
+        'lesson_id', li.lesson_id, 'item_id', li.migrated_item_id,
+        'off_from', o.starts_at, 'off_to', o.ends_at) order by li.starts_at)
+      from leave_items li
+      join tutor_time_off o on o.id = li.time_off_id
+      left join tutors sub on sub.id = li.sub_tutor_id
+      where li.student_id = v_student and li.starts_at > now() and li.lesson_gone_at is null
+        and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    -- 변경권: 지금 기간과 쓴 기록 (대표 10/29: 변경권 칸 누르면 언제 썼는지)
+    'credit_period', case when v_period.id is null then null else jsonb_build_object('start', v_period.start_date, 'end', v_period.end_date) end,
+    'credit_uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'lesson_at', l.starts_at) order by c.created_at)
+      from credit_ledger c left join lessons l on l.id = c.lesson_id where c.period_id = v_period.id), '[]'::jsonb),
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
+      where h.day between (now() at time zone 'Asia/Seoul')::date and (now() at time zone 'Asia/Seoul')::date + 200), '[]'::jsonb),
+    'points', coalesce((
+      select jsonb_agg(jsonb_build_object('id', g.id, 'on', (g.created_at at time zone 'Asia/Seoul')::date, 'kind', g.kind, 'amount', g.amount, 'note', g.note)
+        order by g.created_at)
+      from reward_ledger g where g.student_id = v_student), '[]'::jsonb));
+end $$;
+revoke all on function student_screen(uuid) from public, anon;
+grant execute on function student_screen(uuid) to authenticated;
+
+-- 안내 여러 건을 한 번에 '보냄' (대표 10/30 확인 2번): 묶음으로 보낸 글은 같은 보낸 시각 → 화면이 보낸 글 원문·번호를 그대로 다시 만들 수 있음
+-- admin_mark_lesson_notice_sent 와 같은 검사, 한 묶음(한 트랜잭션)이라 sent_at 이 모두 같음
+create or replace function admin_mark_lesson_notices_sent(p_notices uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  n lesson_notices;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_mark_lesson_notices_sent', true);
+  for n in select * from lesson_notices where id = any(p_notices) order by id for update loop
+    if n.status = 'not_needed' then raise exception '보낼 필요가 없어진 안내가 있습니다. 화면을 새로 고쳐 주세요.'; end if;
+    if n.status = 'pending' then
+      update lesson_notices set status = 'sent', sent_at = now(), sent_by = me where id = n.id;
+      v_changed := v_changed + 1;
+    end if;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_mark_lesson_notices_sent(uuid[]) from public, anon;
+grant execute on function admin_mark_lesson_notices_sent(uuid[]) to authenticated;
+
+-- >>> 20261030003400_lms_notice_sent_history.sql
+-- =====================================================================
+-- 보낸 안내 기록 남기기 (2026-10-30 대표 시험: 한 수업만 '다시 고르기' 뒤 같은 강사를 다시 고르면 예전 보낸 문의 글에서 그 수업이 빠지고 번호가 바뀜)
+--  - 원인: 다시 고르기·다시 묻기 때 보낸 안내를 not_needed 로 바꾸며 sent_at 을 지움 (새 안내를 만들려고, 한 수업·한 받는 사람에 살아 있는 안내는 하나)
+--  - lesson_notices.was_sent_at: 보낸 안내가 보낼 필요 없음으로 바뀌어도 보낸 시각을 남김 → 화면이 보낸 원문·번호를 그대로 다시 만듦
+--    '보냄 되돌리기'(sent → pending)는 보낸 기록이 아님 (남기지 않음)
+--  - 이미 지워진 것은 변경 이력(audit_log)에서 채움 (새 칸만). 다시 실행해도 같은 결과
+-- =====================================================================
+
+alter table lesson_notices add column if not exists was_sent_at timestamptz;
+
+create or replace function lesson_notices_keep_sent() returns trigger
+language plpgsql as $$
+begin
+  if old.status = 'sent' and new.status = 'not_needed' then
+    new.was_sent_at := coalesce(old.was_sent_at, old.sent_at);
+  end if;
+  return new;
+end $$;
+revoke all on function lesson_notices_keep_sent() from public, anon, authenticated;
+
+drop trigger if exists lesson_notices_keep_sent on lesson_notices;
+create trigger lesson_notices_keep_sent before update of status on lesson_notices
+  for each row execute function lesson_notices_keep_sent();
+
+-- 이미 지워진 보낸 시각: 변경 이력에서 '보냄 → 보낼 필요 없음'으로 바뀐 마지막 기록의 보낸 시각
+update lesson_notices n set was_sent_at = h.sent_at
+from (
+  select distinct on (a.row_id) a.row_id, (a.old_row ->> 'sent_at')::timestamptz as sent_at
+  from audit_log a
+  where a.table_name = 'lesson_notices' and a.action = 'UPDATE'
+    and a.old_row ->> 'status' = 'sent' and a.new_row ->> 'status' = 'not_needed' and a.old_row ->> 'sent_at' is not null
+  order by a.row_id, a.at desc
+) h
+where n.id::text = h.row_id and n.status = 'not_needed' and n.was_sent_at is null;
+
+-- >>> 20261031003500_lms_tutor_leave_open.sql
+-- =====================================================================
+-- 휴무 강사 화면에도 '휴무 처리 중' 수업 표시 (2026-10-31 대표 시험: 학생 홈은 '강사님 휴무로 일정 조율 중'인데 휴무 강사 화면은 'Regular · Upcoming')
+--  - tutor_screen = 3200 그대로 + lessons 마다 leave_open (student_screen 3300 과 같은 판정: 미정 · 대체강사 확정 전)
+--  - 기록할 수업(to_record)에서 휴무 처리 중 수업은 뺌 (휴무 강사가 기록할 수업이 아님)
+--  - 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', coalesce(s.display_name, s.name_en), 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'student_late', coalesce(cr.student_late, false), 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id),
+        'leave_open', l.state = 'scheduled' and exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    -- 기록할 수업: 시작했는데 결과가 없는 수업 (강사 LMS 계정이 생긴 뒤 시작한 수업만 — 그 전 수업은 시트에 기록됨)
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)
+        and not exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                         and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', coalesce(s.display_name, s.name_en),
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null, 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb),
+    -- 대체 수업 요청: 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 (2600). 휴무 강사 이름은 안 보임
+    'covers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'student', coalesce(s.display_name, s.name_en), 'starts_at', i.starts_at, 'ends_at', i.ends_at,
+        'busy', lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id) is not null)
+        order by i.starts_at)
+      from leave_items i join students s on s.id = i.student_id
+      where i.sub_tutor_id = v_tutor and i.choice = 'substitute' and i.sub_stage = 'asked' and i.starts_at > now() and i.lesson_gone_at is null), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- >>> 20261101003600_lms_student_screen_confirmed_makeup.sql
+-- =====================================================================
+-- 학생 화면이 보강 확정 뒤 열리지 않음 (2026-11-01 대표 시험: 취소 → 보강 신청 → 강사 가능 → 운영 확정 뒤 학생 화면 전체가 '이미 보강이 잡혀 있습니다.')
+--  - 원인: student_screen 신청 내역의 tutor_leave 를 신청 검사 함수 lms_makeup_source 로 구함 → 보강이 생긴 수업이면 예외
+--  - student_screen = 3300 그대로 + tutor_leave 를 수업·이관 항목에서 바로 읽음. 보강 중복 막기(lms_makeup_source)는 그대로
+--  - 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function student_screen(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+  e enrollments;
+  v_period enrollment_periods;
+  v_open uuid[];
+begin
+  select * into st from students where id = v_student;
+  select * into e from enrollments where id = lms_student_enrollment(v_student);
+  select * into v_period from enrollment_periods p
+  where p.enrollment_id = e.id and p.start_date <= (now() at time zone 'Asia/Seoul')::date order by p.idx desc limit 1;
+  -- 수업·보강은 지금 수강권 + 아직 열린 다른 수강권(재등록 결제 뒤에도 이전 수강권의 보강이 남을 수 있음)
+  v_open := array(select x.id from enrollments x where x.student_id = v_student and (x.status in ('active', 'confirmed') or x.id = e.id));
+  return jsonb_build_object(
+    'student', jsonb_build_object('id', st.id, 'code', st.code, 'name_ko', st.name_ko, 'timezone', st.timezone),
+    'enrollment', case when e.id is null then null else jsonb_build_object(
+      'id', e.id, 'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'start_date', e.start_date, 'final_end_date', e.final_end_date, 'status', e.status,
+      'next_regular_from', lms_next_regular_from(e.id),
+      'lessons_total', coalesce((select c.sheet_total from import_checks c where c.enrollment_id = e.id), e.lessons_purchased + e.lessons_carried_in),
+      'credits_left', case when v_period.id is null then 0 else credit_balance(v_period.id) end,
+      'credits_granted', coalesce(v_period.credits_granted, 0),
+      'confirmed_on', (select min((p.confirmed_at at time zone 'Asia/Seoul')::date) from payments p where p.enrollment_id = e.id and p.confirmed_at is not null),
+      'renewal_paid', exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))) end,
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id),
+        'substitute', l.original_tutor_id is not null,
+        'leave_open', exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))) order by l.starts_at)
+      from lessons l join tutors t on t.id = l.tutor_id
+      where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
+    -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강)
+    'makeup_rights', coalesce((
+      select jsonb_agg(r order by r ->> 'original_at') from (
+        select jsonb_build_object('lesson_id', l.id, 'item_id', null, 'original_at', l.starts_at,
+                 'tutor_leave', l.class_status = 'Tutor long-term leave') as r
+        from lessons l
+        where l.enrollment_id = any(v_open) and l.voided_at is null and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+          and not exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+        union all
+        select jsonb_build_object('lesson_id', null, 'item_id', m.id, 'original_at', m.original_date::timestamp at time zone 'Asia/Seoul',
+                 'tutor_leave', coalesce(m.tutor_leave, false))
+        from migrated_items m where m.enrollment_id = any(v_open) and m.kind = 'makeup_open') q), '[]'::jsonb),
+    'makeup_requests', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id,
+        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id,
+        -- 보여 주기만: 신청 검사 함수(lms_makeup_source)를 쓰면 확정 뒤 '이미 보강이 잡혀 있습니다'로 화면 전체가 막힘 (3600)
+        'tutor_leave', coalesce((select x.class_status = 'Tutor long-term leave' from lessons x where x.id = r.source_lesson_id),
+                                (select m.tutor_leave from migrated_items m where m.id = r.migrated_item_id), false),
+        'candidates', (select coalesce(jsonb_agg(c.starts_at order by c.starts_at), '[]'::jsonb) from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.requested_at desc)
+      from makeup_requests r where r.student_id = v_student and r.status in ('requested', 'countered', 'confirmed')
+        and r.requested_at > now() - interval '60 days'), '[]'::jsonb),
+    -- 휴무 안내: 대체강사가 가능하다고 한 수업(답 기다림)·확정된 대체 수업·보강으로 정한 수업만. 지난 수업은 빼고
+    'leave', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name, 'sub_meet_url', sub.meet_url,
+        'lesson_id', li.lesson_id, 'item_id', li.migrated_item_id,
+        'off_from', o.starts_at, 'off_to', o.ends_at) order by li.starts_at)
+      from leave_items li
+      join tutor_time_off o on o.id = li.time_off_id
+      left join tutors sub on sub.id = li.sub_tutor_id
+      where li.student_id = v_student and li.starts_at > now() and li.lesson_gone_at is null
+        and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    -- 변경권: 지금 기간과 쓴 기록 (대표 10/29: 변경권 칸 누르면 언제 썼는지)
+    'credit_period', case when v_period.id is null then null else jsonb_build_object('start', v_period.start_date, 'end', v_period.end_date) end,
+    'credit_uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'lesson_at', l.starts_at) order by c.created_at)
+      from credit_ledger c left join lessons l on l.id = c.lesson_id where c.period_id = v_period.id), '[]'::jsonb),
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
+      where h.day between (now() at time zone 'Asia/Seoul')::date and (now() at time zone 'Asia/Seoul')::date + 200), '[]'::jsonb),
+    'points', coalesce((
+      select jsonb_agg(jsonb_build_object('id', g.id, 'on', (g.created_at at time zone 'Asia/Seoul')::date, 'kind', g.kind, 'amount', g.amount, 'note', g.note)
+        order by g.created_at)
+      from reward_ledger g where g.student_id = v_student), '[]'::jsonb));
+end $$;
+revoke all on function student_screen(uuid) from public, anon;
+grant execute on function student_screen(uuid) to authenticated;
+
+-- >>> 20261102003700_lms_student_leave_items_time.sql
+-- =====================================================================
+-- 학생 화면: 시트에서 옮긴 휴가 보강의 원래 수업 시각 · 일정에 빠진 '일정 조율 중' 수업 (2026-11-02 대표 화면 점검)
+--  - makeup_rights: 시트에서 옮긴 보강(날짜만)이 00:00 으로 보임 → 휴무 처리 수업이면 그 수업 시각, 아니면 time_known=false(화면은 날짜만)
+--  - 휴무 처리에서 미정·대체강사 답 대기인 시트 휴가 수업은 보강 신청 목록에서 뺌 (대표 11/2: 이O옥 11/9가 보강 신청에 보임)
+--  - leave_pending: 휴무 처리 중인데 수업 줄이 없는 수업(예: 시트 휴가 수업 대체강사 학생 답 대기) → 일정에 '일정 조율 중'
+--  - student_screen = 3600 그대로 + 위 두 가지. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function student_screen(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+  e enrollments;
+  v_period enrollment_periods;
+  v_open uuid[];
+begin
+  select * into st from students where id = v_student;
+  select * into e from enrollments where id = lms_student_enrollment(v_student);
+  select * into v_period from enrollment_periods p
+  where p.enrollment_id = e.id and p.start_date <= (now() at time zone 'Asia/Seoul')::date order by p.idx desc limit 1;
+  -- 수업·보강은 지금 수강권 + 아직 열린 다른 수강권(재등록 결제 뒤에도 이전 수강권의 보강이 남을 수 있음)
+  v_open := array(select x.id from enrollments x where x.student_id = v_student and (x.status in ('active', 'confirmed') or x.id = e.id));
+  return jsonb_build_object(
+    'student', jsonb_build_object('id', st.id, 'code', st.code, 'name_ko', st.name_ko, 'timezone', st.timezone),
+    'enrollment', case when e.id is null then null else jsonb_build_object(
+      'id', e.id, 'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'start_date', e.start_date, 'final_end_date', e.final_end_date, 'status', e.status,
+      'next_regular_from', lms_next_regular_from(e.id),
+      'lessons_total', coalesce((select c.sheet_total from import_checks c where c.enrollment_id = e.id), e.lessons_purchased + e.lessons_carried_in),
+      'credits_left', case when v_period.id is null then 0 else credit_balance(v_period.id) end,
+      'credits_granted', coalesce(v_period.credits_granted, 0),
+      'confirmed_on', (select min((p.confirmed_at at time zone 'Asia/Seoul')::date) from payments p where p.enrollment_id = e.id and p.confirmed_at is not null),
+      'renewal_paid', exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))) end,
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id),
+        'substitute', l.original_tutor_id is not null,
+        'leave_open', exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))) order by l.starts_at)
+      from lessons l join tutors t on t.id = l.tutor_id
+      where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
+    -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강)
+    'makeup_rights', coalesce((
+      select jsonb_agg(r order by r ->> 'original_at') from (
+        select jsonb_build_object('lesson_id', l.id, 'item_id', null, 'original_at', l.starts_at,
+                 'tutor_leave', l.class_status = 'Tutor long-term leave') as r
+        from lessons l
+        where l.enrollment_id = any(v_open) and l.voided_at is null and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+          and not exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+        union all
+        -- 시트에서 옮긴 보강은 날짜만 있음 → 휴무 처리 수업이면 그 수업 시각, 아니면 날짜만 (3700: 00:00 으로 보이던 것)
+        select jsonb_build_object('lesson_id', null, 'item_id', m.id,
+                 'original_at', coalesce((select li.starts_at from leave_items li where li.migrated_item_id = m.id order by li.starts_at limit 1),
+                                         m.original_date::timestamp at time zone 'Asia/Seoul'),
+                 'time_known', exists (select 1 from leave_items li where li.migrated_item_id = m.id),
+                 'tutor_leave', coalesce(m.tutor_leave, false))
+        from migrated_items m where m.enrollment_id = any(v_open) and m.kind = 'makeup_open'
+          -- 휴무 처리에서 대체강사 답 대기·미정인 수업은 보강 신청 대상이 아님 (기존 강사 보강으로 정하면 그때 보강)
+          and not exists (select 1 from leave_items li where li.migrated_item_id = m.id and li.lesson_gone_at is null
+                          and li.choice in ('undecided', 'substitute'))) q), '[]'::jsonb),
+    -- 휴무 처리 중인데 수업 줄이 아직 없는 수업 (시트에서 옮긴 휴가 수업 · 미정 또는 대체강사 확정 전) → 일정에 '일정 조율 중' (3700)
+    'leave_pending', coalesce((
+      select jsonb_agg(jsonb_build_object('id', li.id, 'starts_at', li.starts_at, 'ends_at', li.ends_at) order by li.starts_at)
+      from leave_items li
+      where li.student_id = v_student and li.lesson_id is null and li.lesson_gone_at is null and li.starts_at > now()
+        and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))), '[]'::jsonb),
+    'makeup_requests', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id,
+        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id,
+        'tutor_leave', coalesce((select x.class_status = 'Tutor long-term leave' from lessons x where x.id = r.source_lesson_id),
+                                (select m.tutor_leave from migrated_items m where m.id = r.migrated_item_id), false),
+        'candidates', (select coalesce(jsonb_agg(c.starts_at order by c.starts_at), '[]'::jsonb) from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.requested_at desc)
+      from makeup_requests r where r.student_id = v_student and r.status in ('requested', 'countered', 'confirmed')
+        and r.requested_at > now() - interval '60 days'), '[]'::jsonb),
+    -- 휴무 안내: 대체강사가 가능하다고 한 수업(답 기다림)·확정된 대체 수업·보강으로 정한 수업만. 지난 수업은 빼고
+    'leave', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name, 'sub_meet_url', sub.meet_url,
+        'lesson_id', li.lesson_id, 'item_id', li.migrated_item_id,
+        'off_from', o.starts_at, 'off_to', o.ends_at) order by li.starts_at)
+      from leave_items li
+      join tutor_time_off o on o.id = li.time_off_id
+      left join tutors sub on sub.id = li.sub_tutor_id
+      where li.student_id = v_student and li.starts_at > now() and li.lesson_gone_at is null
+        and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    -- 변경권: 지금 기간과 쓴 기록 (대표 10/29: 변경권 칸 누르면 언제 썼는지)
+    'credit_period', case when v_period.id is null then null else jsonb_build_object('start', v_period.start_date, 'end', v_period.end_date) end,
+    'credit_uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'lesson_at', l.starts_at) order by c.created_at)
+      from credit_ledger c left join lessons l on l.id = c.lesson_id where c.period_id = v_period.id), '[]'::jsonb),
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
+      where h.day between (now() at time zone 'Asia/Seoul')::date and (now() at time zone 'Asia/Seoul')::date + 200), '[]'::jsonb),
+    'points', coalesce((
+      select jsonb_agg(jsonb_build_object('id', g.id, 'on', (g.created_at at time zone 'Asia/Seoul')::date, 'kind', g.kind, 'amount', g.amount, 'note', g.note)
+        order by g.created_at)
+      from reward_ledger g where g.student_id = v_student), '[]'::jsonb));
+end $$;
+revoke all on function student_screen(uuid) from public, anon;
+grant execute on function student_screen(uuid) to authenticated;
+
+-- >>> 20261102003800_lms_enrollment_close.sql
+-- =====================================================================
+-- 재등록 안 하는 학생 수강 종료 (2026-11-02 대표: 정O연 재등록 안내에 답 없음, 할 일에 계속 떠 있지 않게 직접 끄기)
+--  - admin_enrollment_close: 운영자(TOTP)만. 수강기간이 끝났고 남은 예정 수업이 없는 수강권만 status 'completed'
+--    → 대시보드 '수강기간 종료 임박'·'수강 중 학생'에서 빠짐. 학생·수업·결제 기록은 그대로(지우지 않음), 변경 이력은 audit_log
+--  - p_undo = true: 'completed' → 'active' 되돌리기 (잘못 눌렀을 때)
+--  - 다시 오면 재등록(새 수강권)으로 시작. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function admin_enrollment_close(p_enrollment uuid, p_undo boolean default false)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  e enrollments;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into e from enrollments where id = p_enrollment for update;
+  if not found then raise exception '수강권을 찾을 수 없습니다.'; end if;
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_enrollment_close', true);
+  if p_undo then
+    if e.status <> 'completed' then return jsonb_build_object('status', e.status, 'repeated', true); end if;
+    update enrollments set status = 'active' where id = e.id;
+    return jsonb_build_object('status', 'active', 'repeated', false);
+  end if;
+  if e.status = 'completed' then return jsonb_build_object('status', 'completed', 'repeated', true); end if;
+  if e.status not in ('active', 'confirmed') then raise exception '수강 중인 수강권이 아닙니다.'; end if;
+  if e.final_end_date >= (now() at time zone 'Asia/Seoul')::date then
+    raise exception '수강기간이 아직 끝나지 않았습니다 (종료일 %).', e.final_end_date;
+  end if;
+  if exists (select 1 from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' and l.voided_at is null and l.starts_at > now()) then
+    raise exception '앞으로 남은 수업이 있어 종료할 수 없습니다.';
+  end if;
+  update enrollments set status = 'completed' where id = e.id;
+  return jsonb_build_object('status', 'completed', 'repeated', false);
+end $$;
+revoke all on function admin_enrollment_close(uuid, boolean) from public, anon;
+grant execute on function admin_enrollment_close(uuid, boolean) to authenticated;
+
+-- >>> 20261102084310_lms_admin_task_closure.sql
+-- 운영진이 대시보드 업무만 종료. 수업·결제·안내의 실제 상태는 변경하지 않는다.
+create table public.admin_task_closures (
+  id uuid primary key default gen_random_uuid(),
+  task_kind text not null,
+  task_id text not null,
+  signature text not null,
+  closed boolean not null default true,
+  closed_at timestamptz not null default now(),
+  closed_by uuid not null,
+  unique(task_kind, task_id)
+);
+select lms_protect('public.admin_task_closures'::regclass);
+
+create function public.admin_set_task_closed(p_kind text, p_id text, p_signature text, p_closed boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or not is_admin() then
+    raise exception '추가 인증을 완료한 운영자만 처리할 수 있습니다.' using errcode = '42501';
+  end if;
+  if p_kind not in ('new_student_matching', 'renewal_tutor_notice', 'long_leave_request', 'no_show_report', 'ending_soon', 'makeup_unrequested', 'auto_failure', 'import_check', 'lesson_change', 'tutor_leave', 'class_record_missing')
+    or p_id is null or p_id = '' or p_signature is null or p_signature = '' or p_closed is null then
+    raise exception '업무 정보가 올바르지 않습니다.';
+  end if;
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_set_task_closed', true);
+  insert into public.admin_task_closures(task_kind, task_id, signature, closed, closed_at, closed_by)
+  values (p_kind, p_id, p_signature, p_closed, now(), auth.uid())
+  on conflict(task_kind, task_id) do update
+  set signature = excluded.signature, closed = excluded.closed, closed_at = excluded.closed_at, closed_by = excluded.closed_by;
+end $$;
+revoke all on function public.admin_set_task_closed(text, text, text, boolean) from public, anon;
+grant execute on function public.admin_set_task_closed(text, text, text, boolean) to authenticated;
+
+-- >>> 20261102090000_lms_task_history.sql
+-- =====================================================================
+-- 처리 내역 보기 (2026-11-02 대표: 정O연 카드가 사라진 뒤 어디서도 다시 볼 수 없음)
+--  - admin_task_history(): 운영자만. ① [처리 종료]한 카드(admin_task_closures) ② 종료일 3일 지나 자동으로 빠진 '수강기간 종료 임박'
+--    ③ [수강 종료](3800)한 수강권. 학생 이름 · 업무 · 상태 · 날짜 · 처리자 · 사유. 읽기만
+--  - 다시 열기는 기존 함수: admin_set_task_closed(…, false) · admin_enrollment_close(…, true)
+--    자동 제외 카드를 다시 열면 admin_task_closures 에 closed=false 줄 → 화면이 그 카드는 자동 제외하지 않음
+--  - 기록을 지우거나 학생·수업 데이터를 바꾸지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function admin_task_history()
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return coalesce((select jsonb_agg(x order by x ->> 'at' desc nulls last) from (
+    -- ① 운영진이 [처리 종료]한 카드
+    select jsonb_build_object('source', 'closed', 'kind', c.task_kind, 'task_id', c.task_id, 'signature', c.signature, 'at', c.closed_at,
+      'by', (select case u.role when 'admin' then '운영자' when 'tutor' then '강사' else u.role end from app_users u where u.auth_user_id = c.closed_by),
+      'name', coalesce((select s.name_ko from enrollments e join students s on s.id = e.student_id where c.task_kind = 'ending_soon' and e.id::text = c.task_id),
+                       case when c.signature ~ '^\{' then coalesce(c.signature::jsonb ->> 'studentName', c.signature::jsonb ->> 'tutorName') end)) as x
+    from admin_task_closures c where c.closed
+    union all
+    -- ② 종료일 3일 지나 자동으로 빠진 수강기간 종료 임박 (재등록 결제 안 됨, 다시 열지 않음)
+    select jsonb_build_object('source', 'auto', 'kind', 'ending_soon', 'task_id', e.id, 'signature', e.id::text,
+      'at', ((e.final_end_date + 3)::timestamp at time zone 'Asia/Seoul'), 'by', null, 'name', s.name_ko)
+    from enrollments e join students s on s.id = e.student_id
+    where e.status in ('active', 'confirmed') and e.final_end_date + 3 <= v_today
+      and not exists (select 1 from enrollments n where n.student_id = e.student_id and n.status in ('active', 'confirmed') and n.final_end_date > e.final_end_date)
+      and not exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))
+      and not exists (select 1 from admin_task_closures c where c.task_kind = 'ending_soon' and c.task_id = e.id::text)
+    union all
+    -- ③ [수강 종료]한 수강권
+    select jsonb_build_object('source', 'enrollment', 'kind', 'ending_soon', 'task_id', e.id, 'signature', e.id::text,
+      'at', h.at, 'by', h.email, 'name', s.name_ko)
+    from enrollments e join students s on s.id = e.student_id
+    left join lateral (select l.at, (select case u.role when 'admin' then '운영자' else u.role end from app_users u where u.auth_user_id = l.actor) email
+                       from audit_log l where l.table_name = 'enrollments' and l.row_id = e.id::text and l.actor_via = 'admin_enrollment_close'
+                       order by l.at desc limit 1) h on true
+    where e.status = 'completed' and h.at is not null
+  ) q), '[]'::jsonb);
+end $$;
+revoke all on function admin_task_history() from public, anon;
+grant execute on function admin_task_history() to authenticated;
+
+-- >>> 20261102091000_lms_tutor_no_show.sql
+-- =====================================================================
+-- 강사 노쇼 기록 (2026-11-02 대표: Maria 11/2 18:00 보강 강사 노쇼, 강사 화면 기록 버튼에 없음)
+--  - tutor_record_class: 'tutor_no_show' = 운영자만(강사 화면 운영자 보기). 결과 'Tutor no-show'(시간에 못 한 수업, 차감 없음·강사 급여 없음)
+--    → 학생에게 보강 1회(기존 보강 권리 계산), 보상 수업 1회 = compensations 'available' (POL-TU-03, 7일 기한은 기존 트리거)
+--    다른 결과로 고치면 안 쓴 보상 수업은 'voided'(지우지 않음). 강사는 운영자가 기록한 강사 노쇼를 고칠 수 없음
+--  - tutor_screen: 수업마다 compensation(보상 수업 상태) → Class Record 에 '+1 Compensation'
+--  - 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function tutor_record_class(p_lesson uuid, p_result text, p_topics text, p_remarks text, p_student_late boolean default false)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  l lessons;
+  v_status class_status;
+  v_topics text := nullif(trim(coalesce(p_topics, '')), '');
+  v_remarks text := nullif(trim(coalesce(p_remarks, '')), '');
+  v_old class_records;
+  v_late boolean := p_result = 'held' and coalesce(p_student_late, false);   -- 학생 지각은 정상 진행(Held)일 때만
+begin
+  select * into l from lessons where id = p_lesson for update;
+  if not found then raise exception 'Class not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and l.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your class.' using errcode = '42501';
+  end if;
+  -- 강사 노쇼로 운영자가 기록한 수업은 운영자만 고칠 수 있음 (4000)
+  if l.class_status = 'Tutor no-show' and not is_admin() then
+    raise exception 'Edge English recorded this class. Please contact the Edge English team.' using hint = 'locked';
+  end if;
+  if l.voided_at is not null or l.state = 'canceled' then
+    raise exception 'This class was canceled (%). No record needed.', coalesce(l.class_status::text, 'removed') using hint = 'canceled';
+  end if;
+  if l.starts_at > now() then raise exception 'You can record this class after it starts.' using hint = 'not_started'; end if;
+  if exists (select 1 from payroll_items where lesson_id = l.id) then
+    raise exception 'This class is already in payroll. Please contact Edge English to change it.' using hint = 'locked';
+  end if;
+  if p_result = 'held' then
+    if v_topics is null then raise exception 'Please enter the covered topics.' using hint = 'topics'; end if;
+    v_status := case when l.kind in ('makeup', 'migrated_makeup', 'compensation') then 'Make-up completed'
+                     when l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id then 'Covered by another tutor'
+                     else 'Normal' end;
+  elsif p_result = 'late' then
+    if v_topics is null then raise exception 'Please enter the covered topics.' using hint = 'topics'; end if;
+    if v_remarks is null then raise exception 'Please write the reason for being late in Remarks.' using hint = 'remarks'; end if;
+    v_status := 'Tutor Late - Student Present';
+  elsif p_result = 'student_no_show' then
+    v_status := 'Student no-show';
+  elsif p_result = 'tutor_no_show' then
+    -- 강사 노쇼: 운영자만 확정 (POL-TU-03). 차감 없음 → 학생 보강 1회(보강 권리), 보상 수업 1회는 compensations
+    if not is_admin() then raise exception 'Only the Edge English team can record a tutor no-show.' using errcode = '42501'; end if;
+    v_status := 'Tutor no-show';
+  else
+    raise exception 'Please choose how the class went.';
+  end if;
+
+  select * into v_old from class_records where lesson_id = l.id;
+  if l.state = 'done' and l.class_status = v_status and found
+     and v_old.covered_topics is not distinct from v_topics and v_old.remarks is not distinct from v_remarks
+     and v_old.student_late = v_late then
+    return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', true);
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_record_class' else 'tutor_record_class' end, true);
+  update lessons set state = 'done', class_status = v_status where id = l.id and (state, class_status) is distinct from ('done', v_status);
+  if v_status = 'Tutor no-show' then
+    -- 보상 수업 1회 (같은 수업에 한 번만, 예전에 되돌린 것이 있으면 다시 살림)
+    insert into compensations (student_id, enrollment_id, source_lesson_id, reason, confirmed_by)
+    values (l.student_id, l.enrollment_id, l.id, 'tutor_no_show', me)
+    on conflict (source_lesson_id) do update set status = 'available' where compensations.status = 'voided';
+  else
+    -- 강사 노쇼를 다른 결과로 고치면 아직 안 쓴 보상 수업은 되돌림(기록은 남김)
+    update compensations set status = 'voided' where source_lesson_id = l.id and status = 'available';
+  end if;
+  insert into class_records (lesson_id, covered_topics, remarks, student_late, submitted_by)
+  values (l.id, v_topics, v_remarks, v_late, me)
+  on conflict (lesson_id) do update set covered_topics = excluded.covered_topics, remarks = excluded.remarks,
+    student_late = excluded.student_late, submitted_by = excluded.submitted_by;
+  return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', false);
+end $$;
+revoke all on function tutor_record_class(uuid, text, text, text, boolean) from public, anon;
+grant execute on function tutor_record_class(uuid, text, text, text, boolean) to authenticated;
+
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', coalesce(s.display_name, s.name_en), 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'student_late', coalesce(cr.student_late, false), 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id),
+        'compensation', (select c.status from compensations c where c.source_lesson_id = l.id),
+        'leave_open', l.state = 'scheduled' and exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    -- 기록할 수업: 시작했는데 결과가 없는 수업 (강사 LMS 계정이 생긴 뒤 시작한 수업만 — 그 전 수업은 시트에 기록됨)
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)
+        and not exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                         and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', coalesce(s.display_name, s.name_en),
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null, 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb),
+    -- 대체 수업 요청: 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 (2600). 휴무 강사 이름은 안 보임
+    'covers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'student', coalesce(s.display_name, s.name_en), 'starts_at', i.starts_at, 'ends_at', i.ends_at,
+        'busy', lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id) is not null)
+        order by i.starts_at)
+      from leave_items i join students s on s.id = i.student_id
+      where i.sub_tutor_id = v_tutor and i.choice = 'substitute' and i.sub_stage = 'asked' and i.starts_at > now() and i.lesson_gone_at is null), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- >>> 20261102100000_lms_compensation_makeup.sql
+-- =====================================================================
+-- 4100 강사 노쇼 무료 보상수업 = 기존 보강 기능 재사용 (2026-11-02 대표 최종 결정, 정책 원본 H항목 · POL-TU-03)
+--  - 7일 사용 제한 폐지: compensations_deadline 트리거(지급일+7일) 없앰. expires_on 칸은 그대로 두고 쓰지 않음(기록 보존)
+--  - 사용 기한 = 일반 보강과 같이 수강기간(종료일)까지. 종료일 23:59 KST까지 재등록 결제가 된 다음 수강권이 있으면
+--    그 수강권 종료일까지 이월(이어서 반복, POL-RN-01). 재등록 안 하면 보강과 같이 소멸(화면에서 빠짐, 기록은 남김)
+--  - 신청: 학생이 일반 보강처럼 '보강 가능한 날짜'에서 1~2개 고름 → 강사 화면 Make-up requests 답 → 운영진 확정
+--    makeup_requests.compensation_id 로 구분 (같은 노쇼 수업의 '원래 수업 보강'과 '무료 보상 +1'이 따로 열림)
+--  - 확정: lessons kind='compensation'·compensation_id (차감·회차 없음, lms_lesson_count 그대로), compensations 'used'·used_lesson_id
+--    이월된 날짜면 그 날짜가 들어가는 재등록 수강권에 수업을 붙임
+--  - 중복 막기: 보상권당 열린 신청 1개(unique) · 살아 있는 보상 수업 1개(unique) · 확정 때 보상권 잠금·상태 확인
+--  - 보상권이 없어지면(강사 노쇼를 다른 결과로 고침 → voided) 열린 신청도 닫음
+--  - 운영진 보강 없애기(admin_void_makeup)는 보상 수업도 → 보상권 다시 'available'
+--  - 화면: student_screen(보상 권리·신청 상세 원래 수업·강사·확정 날짜), tutor_screen(Compensation 표시)
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 7일 기한 없애기 · 신청에 보상권 칸
+-- ---------------------------------------------------------------------
+drop trigger if exists compensations_deadline on compensations;
+drop function if exists compensation_set_deadline();
+
+alter table makeup_requests add column if not exists compensation_id uuid references compensations(id);
+-- 원래 수업 보강의 '열린 신청 1개'는 보상 신청과 따로 셈
+drop index if exists makeup_requests_one_open;
+create unique index makeup_requests_one_open on makeup_requests (source_lesson_id)
+  where status in ('requested', 'countered') and compensation_id is null;
+create unique index if not exists makeup_requests_one_open_comp on makeup_requests (compensation_id)
+  where status in ('requested', 'countered') and compensation_id is not null;
+-- 보상권 하나에 살아 있는 보상 수업 하나
+create unique index if not exists lessons_one_live_compensation on lessons (compensation_id)
+  where compensation_id is not null and state <> 'canceled';
+
+-- ---------------------------------------------------------------------
+-- 2. 사용 기한: 수강권 종료일 → 종료일 23:59 KST까지 결제된 재등록이 있으면 그 수강권 종료일 (이어서)
+--    결제 기록이 하나도 없는 재등록(시트에서 옮긴 수강권, 결제는 시트)은 운영진이 등록한 것으로 보고 이월
+-- ---------------------------------------------------------------------
+create or replace function lms_comp_chain(p_enrollment uuid)
+returns table (enrollment_id uuid, start_date date, final_end_date date)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  e enrollments;
+  n enrollments;
+  i int := 0;
+begin
+  select * into e from enrollments where id = p_enrollment;
+  if not found then return; end if;
+  loop
+    enrollment_id := e.id; start_date := e.start_date; final_end_date := e.final_end_date;
+    return next;
+    select x.* into n from enrollments x
+    where x.previous_enrollment_id = e.id and x.status in ('confirmed', 'active', 'completed')
+      and (not exists (select 1 from payments p where p.enrollment_id = x.id)
+           or exists (select 1 from payments p where p.enrollment_id = x.id
+                      and p.paid_at < ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul')));
+    exit when not found;
+    i := i + 1;
+    exit when i > 50;
+    e := n;
+  end loop;
+end $$;
+revoke all on function lms_comp_chain(uuid) from public, anon, authenticated;
+
+create or replace function lms_comp_use_until(p_enrollment uuid) returns date
+language sql stable security definer set search_path = public as $$
+  select max(c.final_end_date) from lms_comp_chain(p_enrollment) c
+$$;
+revoke all on function lms_comp_use_until(uuid) from public, anon, authenticated;
+
+-- 보상 신청할 수 있는 보상권인지 (쓸 수 있는 상태 · 기한 안)
+create or replace function lms_comp_source(p_comp uuid, out enrollment_id uuid, out student_id uuid, out tutor_id uuid,
+                                           out source_lesson_id uuid, out use_until date)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  c compensations;
+begin
+  select * into c from compensations where id = p_comp;
+  if not found then raise exception '보상수업이 없습니다.'; end if;
+  if c.status = 'used' then raise exception '이미 날짜를 잡은 보상수업입니다.' using hint = 'comp_used'; end if;
+  if c.status <> 'available' then raise exception '쓸 수 없는 보상수업입니다.' using hint = 'comp_closed'; end if;
+  use_until := lms_comp_use_until(c.enrollment_id);
+  if use_until < (now() at time zone 'Asia/Seoul')::date then
+    raise exception '보상수업 사용 기한(%)이 지났습니다.', use_until using hint = 'comp_expired';
+  end if;
+  enrollment_id := c.enrollment_id; student_id := c.student_id; source_lesson_id := c.source_lesson_id;
+  -- 노쇼한 수업의 강사 (원래 수업 보강과 같은 강사, lms_makeup_source 와 같게)
+  select l.tutor_id into tutor_id from lessons l where l.id = c.source_lesson_id;
+end $$;
+revoke all on function lms_comp_source(uuid) from public, anon, authenticated;
+
+-- 이월된 날짜면 그 날짜가 들어가는 재등록 수강권
+create or replace function lms_comp_lesson_enrollment(p_comp uuid, p_day date) returns uuid
+language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select c.enrollment_id from lms_comp_chain((select enrollment_id from compensations where id = p_comp)) c
+     where c.final_end_date >= p_day order by c.final_end_date limit 1),
+    (select enrollment_id from compensations where id = p_comp))
+$$;
+revoke all on function lms_comp_lesson_enrollment(uuid, date) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 3. 보강 가능한 날짜: 보상수업도 같은 계산 (2800 그대로 + p_comp). 보상수업은 사용 기한까지(종료일 뒤 정규 요일 없음)
+-- ---------------------------------------------------------------------
+drop function if exists student_makeup_options(uuid, uuid, uuid);
+drop function if exists lms_makeup_options(uuid, uuid);
+create or replace function lms_makeup_options(p_lesson uuid, p_item uuid, p_comp uuid default null)
+returns table (section text, starts_at timestamptz, ends_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  s record;
+  e enrollments;
+  v_leave boolean;
+  v_back date;
+  v_until date;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  if p_comp is not null then
+    select * into s from lms_comp_source(p_comp);
+    select * into e from enrollments where id = s.enrollment_id;
+    v_leave := false;
+    v_back := v_today + 1;
+    v_until := s.use_until;
+  else
+    select * into s from lms_makeup_source(p_lesson, p_item);
+    select * into e from enrollments where id = s.enrollment_id;
+    v_leave := s.tutor_leave or exists (select 1 from lessons l where l.id = p_lesson and l.class_status = 'Tutor long-term leave');
+    select (o.ends_at at time zone 'Asia/Seoul')::date into v_back
+    from leave_items li join tutor_time_off o on o.id = li.time_off_id
+    where (li.lesson_id = p_lesson or li.migrated_item_id = p_item) limit 1;
+    v_back := coalesce(v_back, v_today + 1);
+    v_until := e.final_end_date;
+  end if;
+
+  return query
+  with rs as (
+    select r.weekday, r.start_time_kst from regular_schedules r
+    where r.student_id = s.student_id and r.tutor_id = s.tutor_id and (r.effective_to is null or r.effective_to >= v_today)
+  ),
+  slots as (
+    -- 수업 시작은 항상 30분 단위 (2026-10-28 대표) → 강사 보통 수업 시간 안의 :00·:30 모두
+    select 'in_period'::text as sec, ((d::date::timestamp + make_interval(mins => n * 30)) at time zone 'Asia/Seoul') as x
+    from generate_series(greatest(v_today + 1, v_back), v_until, interval '1 day') d
+    cross join generate_series(0, 47) n
+    union all
+    select 'after_end', ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul')
+    from generate_series(greatest(e.final_end_date + 1, v_back, v_today + 1), greatest(e.final_end_date + 1, v_back, v_today + 1) + 180, interval '1 day') d
+    join rs on rs.weekday = extract(dow from d)
+    where v_leave
+  ),
+  free as (
+    select y.sec, y.x, y.x + make_interval(mins => e.duration_min) as f from slots y
+    where y.x > now()
+      and lms_sub_conflict(s.tutor_id, y.x, y.x + make_interval(mins => e.duration_min), null) is null
+      and lms_tutor_available(s.tutor_id, y.x)
+      and not exists (select 1 from lessons l where l.student_id = s.student_id and l.state <> 'canceled'
+                      and l.starts_at < y.x + make_interval(mins => e.duration_min) and y.x < l.ends_at)
+  )
+  select z.sec, z.x, z.f from (select f1.*, row_number() over (partition by f1.sec order by f1.x) as n from free f1) z
+  where z.sec = 'in_period' or z.n <= 1
+  order by z.x;
+end $$;
+revoke all on function lms_makeup_options(uuid, uuid, uuid) from public, anon, authenticated;
+
+create or replace function student_makeup_options(p_student uuid, p_lesson uuid, p_item uuid, p_comp uuid default null)
+returns table (section text, starts_at timestamptz, ends_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  v_owner uuid;
+begin
+  if p_comp is not null then
+    select x.student_id into v_owner from lms_comp_source(p_comp) x;
+  else
+    select x.student_id into v_owner from lms_makeup_source(p_lesson, p_item) x;
+  end if;
+  if v_owner <> v_student then raise exception '본인 수업만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return query select * from lms_makeup_options(p_lesson, p_item, p_comp);
+end $$;
+revoke all on function student_makeup_options(uuid, uuid, uuid, uuid) from public, anon;
+grant execute on function student_makeup_options(uuid, uuid, uuid, uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 4. 보강 신청: 원래 수업 보강 · 보상수업 같은 처리 (2800 그대로 + p_comp)
+--    고침: 원래 수업 보강의 '이미 열린 신청' 찾기에서 보상 신청을 뺌 (같은 노쇼 수업에 둘 다 열릴 수 있음)
+-- ---------------------------------------------------------------------
+drop function if exists admin_makeup_request(uuid, uuid, jsonb, timestamptz);
+drop function if exists student_makeup_request(uuid, uuid, jsonb);
+drop function if exists lms_makeup_request_core(uuid, uuid, jsonb, timestamptz, text, uuid);
+create or replace function lms_makeup_request_core(p_lesson uuid, p_item uuid, p_slots jsonb, p_requested_at timestamptz, p_via text, p_actor uuid,
+                                                   p_comp uuid default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  s record;
+  c record;
+  e enrollments;
+  v_id uuid;
+  x jsonb;
+  t timestamptz;
+begin
+  if jsonb_typeof(p_slots) <> 'array' or jsonb_array_length(p_slots) = 0 then raise exception '보강 시간을 하나 이상 넣어 주세요.'; end if;
+  perform set_config('app.actor_id', coalesce(p_actor::text, ''), true);
+  perform set_config('app.actor_via', 'lms_makeup_request_core', true);
+  if p_comp is not null then
+    perform 1 from compensations where id = p_comp for update;   -- 같은 보상권 동시 신청 막기
+    select * into c from lms_comp_source(p_comp);
+    select * into e from enrollments where id = c.enrollment_id;
+    select id into v_id from makeup_requests where status in ('requested', 'countered') and compensation_id = p_comp;
+    if found then return jsonb_build_object('makeup_request_id', v_id, 'repeated', true); end if;
+    insert into makeup_requests (source_lesson_id, compensation_id, student_id, tutor_id, via, requested_at, requested_by)
+    values (c.source_lesson_id, p_comp, c.student_id, c.tutor_id, p_via, coalesce(p_requested_at, now()), p_actor)
+    returning id into v_id;
+    for x in select * from jsonb_array_elements(p_slots) loop
+      t := (x ->> 'starts_at')::timestamptz;
+      if t <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+      if t >= ((c.use_until + 1)::timestamp at time zone 'Asia/Seoul') then
+        raise exception '보상수업 사용 기한(%) 뒤의 시간입니다.', c.use_until using hint = 'after_end';
+      end if;
+      insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by)
+      values (v_id, t, t + make_interval(mins => e.duration_min), 'student');
+    end loop;
+    insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id) values (v_id, 'makeup_ask', 'tutor', c.tutor_id);
+    return jsonb_build_object('makeup_request_id', v_id, 'repeated', false);
+  end if;
+
+  select * into s from lms_makeup_source(p_lesson, p_item);
+  select * into e from enrollments where id = s.enrollment_id;
+  select id into v_id from makeup_requests
+  where status in ('requested', 'countered') and compensation_id is null and (source_lesson_id = p_lesson or migrated_item_id = p_item);
+  if found then return jsonb_build_object('makeup_request_id', v_id, 'repeated', true); end if;
+  insert into makeup_requests (source_lesson_id, migrated_item_id, student_id, tutor_id, via, requested_at, requested_by)
+  values (p_lesson, p_item, s.student_id, s.tutor_id, p_via, coalesce(p_requested_at, now()), p_actor)
+  returning id into v_id;
+  for x in select * from jsonb_array_elements(p_slots) loop
+    t := (x ->> 'starts_at')::timestamptz;
+    if t <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+    if not s.tutor_leave and t >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+    end if;
+    insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by)
+    values (v_id, t, t + make_interval(mins => e.duration_min), 'student');
+  end loop;
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id) values (v_id, 'makeup_ask', 'tutor', s.tutor_id);
+  return jsonb_build_object('makeup_request_id', v_id, 'repeated', false);
+end $$;
+revoke all on function lms_makeup_request_core(uuid, uuid, jsonb, timestamptz, text, uuid, uuid) from public, anon, authenticated;
+
+create or replace function admin_makeup_request(p_lesson uuid, p_item uuid, p_slots jsonb, p_requested_at timestamptz, p_comp uuid default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  return lms_makeup_request_core(p_lesson, p_item, p_slots, p_requested_at, 'admin_on_behalf', auth.uid(), p_comp);
+end $$;
+revoke all on function admin_makeup_request(uuid, uuid, jsonb, timestamptz, uuid) from public, anon;
+grant execute on function admin_makeup_request(uuid, uuid, jsonb, timestamptz, uuid) to authenticated;
+
+-- 학생 본인: 보강 가능한 날짜 중에서만, 한 번에 최대 2개 (2026-10-27 대표) — 보상수업도 같음
+create or replace function student_makeup_request(p_lesson uuid, p_item uuid, p_slots jsonb, p_comp uuid default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student uuid := my_student_id();
+  v_owner uuid;
+  x jsonb;
+begin
+  if p_comp is not null then
+    select s.student_id into v_owner from lms_comp_source(p_comp) s;
+  else
+    select s.student_id into v_owner from lms_makeup_source(p_lesson, p_item) s;
+  end if;
+  if v_student is null or v_owner <> v_student then
+    raise exception '본인 수업만 보강 신청할 수 있습니다.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_slots) <> 'array' or jsonb_array_length(p_slots) not between 1 and 2 then
+    raise exception '보강 날짜를 1~2개 골라 주세요.';
+  end if;
+  for x in select * from jsonb_array_elements(p_slots) loop
+    if not exists (select 1 from lms_makeup_options(p_lesson, p_item, p_comp) o where o.starts_at = (x ->> 'starts_at')::timestamptz) then
+      raise exception '보강 가능한 날짜가 아닙니다. 화면을 새로 열어 다시 골라 주세요.' using hint = 'not_an_option';
+    end if;
+  end loop;
+  return lms_makeup_request_core(p_lesson, p_item, p_slots, now(), 'student_app', auth.uid(), p_comp);
+end $$;
+revoke all on function student_makeup_request(uuid, uuid, jsonb, uuid) from public, anon;
+grant execute on function student_makeup_request(uuid, uuid, jsonb, uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 5. 운영진 확정: 보상 신청이면 보상 수업(kind compensation) + 보상권 'used' (2300 그대로 + 보상 분기)
+-- ---------------------------------------------------------------------
+create or replace function admin_makeup_confirm(p_makeup_request uuid, p_starts_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  s record;
+  c record;
+  e enrollments;
+  v_end timestamptz;
+  v_lesson uuid;
+  v_conf text;
+  v_enr uuid;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into r from makeup_requests where id = p_makeup_request for update;
+  if not found then raise exception '보강 신청이 없습니다.'; end if;
+  if r.status = 'confirmed' then return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', r.confirmed_lesson_id, 'repeated', true); end if;
+  if r.status not in ('requested', 'countered') then raise exception '이미 닫힌 보강 신청입니다.'; end if;
+  if p_starts_at <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+
+  if r.compensation_id is not null then
+    perform 1 from compensations where id = r.compensation_id for update;   -- 같은 보상권 두 번 쓰기 막기
+    select * into c from lms_comp_source(r.compensation_id);
+    if p_starts_at >= ((c.use_until + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '보상수업 사용 기한(%) 뒤의 시간입니다.', c.use_until using hint = 'after_end';
+    end if;
+    select * into e from enrollments where id = c.enrollment_id;
+    v_end := p_starts_at + make_interval(mins => e.duration_min);
+    v_conf := lms_makeup_conflict(r.tutor_id, c.student_id, p_starts_at, v_end,
+                exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student'));
+    if v_conf is not null then raise exception '그 시간은 %와 겹칩니다.', v_conf using hint = 'schedule_conflict'; end if;
+    v_enr := lms_comp_lesson_enrollment(r.compensation_id, (p_starts_at at time zone 'Asia/Seoul')::date);
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+    if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+      insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+    end if;
+    begin
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, compensation_id, created_by)
+      values (v_enr, c.student_id, r.tutor_id, 'compensation', p_starts_at, v_end, r.compensation_id, me)
+      returning id into v_lesson;
+    exception when exclusion_violation then
+      raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+    end;
+    update compensations set status = 'used', used_lesson_id = v_lesson where id = r.compensation_id;
+  else
+    select * into s from lms_makeup_source(r.source_lesson_id, r.migrated_item_id);
+    select * into e from enrollments where id = s.enrollment_id;
+    if not s.tutor_leave and p_starts_at >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+    end if;
+    v_end := p_starts_at + make_interval(mins => e.duration_min);
+    v_conf := lms_makeup_conflict(r.tutor_id, s.student_id, p_starts_at, v_end,
+                exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student'));
+    if v_conf is not null then raise exception '그 시간은 %와 겹칩니다.', v_conf using hint = 'schedule_conflict'; end if;
+
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+    if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+      insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+    end if;
+    begin
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of, created_by)
+      values (s.enrollment_id, s.student_id, r.tutor_id,
+              case when r.source_lesson_id is null then 'migrated_makeup' else 'makeup' end,
+              p_starts_at, v_end, r.source_lesson_id, me)
+      returning id into v_lesson;
+    exception when exclusion_violation then
+      raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+    end;
+    if r.migrated_item_id is not null then
+      update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = r.migrated_item_id;
+    end if;
+  end if;
+  update makeup_requests set status = 'confirmed', confirmed_lesson_id = v_lesson, decided_at = now(), decided_by = me where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  values (r.id, 'makeup_confirmed', 'student', r.student_id), (r.id, 'makeup_confirmed', 'tutor', r.tutor_id);
+  return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', v_lesson, 'repeated', false);
+end $$;
+revoke all on function admin_makeup_confirm(uuid, timestamptz) from public, anon;
+grant execute on function admin_makeup_confirm(uuid, timestamptz) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 6. 확정한 보강을 잘못 넣었을 때 없애기 (1700 그대로 + 보상 수업이면 보상권 다시 'available')
+-- ---------------------------------------------------------------------
+create or replace function admin_void_makeup(p_lesson uuid, p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  l lessons;
+  r makeup_requests;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into l from lessons where id = p_lesson for update;
+  if not found or l.kind not in ('makeup', 'migrated_makeup', 'compensation') then raise exception '보강 수업이 아닙니다.'; end if;
+  if l.voided_at is not null then return jsonb_build_object('lesson_id', l.id, 'repeated', true); end if;
+  if l.state <> 'scheduled' then raise exception '이미 진행·변경된 보강입니다.'; end if;
+  select * into r from makeup_requests where confirmed_lesson_id = l.id;
+  if not found then raise exception '보강 신청 기록이 없는 보강입니다 (이관한 보강은 시트에서 확인).'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_void_makeup', true);
+  update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = me, void_note = nullif(trim(p_note), '')
+  where id = l.id;
+  update makeup_requests set status = 'voided', decided_at = now(), decided_by = me where id = r.id;
+  if r.migrated_item_id is not null then
+    update migrated_items set kind = 'makeup_open', lesson_id = null where id = r.migrated_item_id;
+  end if;
+  if l.kind = 'compensation' then
+    update compensations set status = 'available', used_lesson_id = null where id = l.compensation_id and used_lesson_id = l.id;
+  end if;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_confirmed' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  select r.id, 'makeup_voided', n.recipient_kind, n.recipient_id from lesson_notices n
+  where n.makeup_request_id = r.id and n.event = 'makeup_confirmed' and n.status = 'sent'
+  on conflict do nothing;
+  return jsonb_build_object('lesson_id', l.id, 'repeated', false);
+end $$;
+revoke all on function admin_void_makeup(uuid, text) from public, anon;
+grant execute on function admin_void_makeup(uuid, text) to authenticated;
+
+-- 보상권이 없어지면(강사 노쇼를 다른 결과로 고침 → voided) 열린 보상 신청도 닫음 (기록은 남김)
+create or replace function compensations_close_requests() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'voided' and old.status <> 'voided' then
+    update makeup_requests set status = 'withdrawn', decided_at = now()
+    where compensation_id = new.id and status in ('requested', 'countered');
+    update lesson_notices set status = 'not_needed'
+    where status = 'pending' and makeup_request_id in (select id from makeup_requests where compensation_id = new.id);
+  end if;
+  return null;
+end $$;
+revoke all on function compensations_close_requests() from public, anon, authenticated;
+drop trigger if exists compensations_close_requests on compensations;
+create trigger compensations_close_requests after update of status on compensations
+  for each row execute function compensations_close_requests();
+
+-- ---------------------------------------------------------------------
+-- 7. 학생 화면 (3700 그대로 + 보상 권리 · 신청 내역에 원래 수업·강사·확정 날짜·보상 구분)
+-- ---------------------------------------------------------------------
+create or replace function student_screen(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+  e enrollments;
+  v_period enrollment_periods;
+  v_open uuid[];
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  select * into st from students where id = v_student;
+  select * into e from enrollments where id = lms_student_enrollment(v_student);
+  select * into v_period from enrollment_periods p
+  where p.enrollment_id = e.id and p.start_date <= v_today order by p.idx desc limit 1;
+  -- 수업·보강은 지금 수강권 + 아직 열린 다른 수강권(재등록 결제 뒤에도 이전 수강권의 보강이 남을 수 있음)
+  v_open := array(select x.id from enrollments x where x.student_id = v_student and (x.status in ('active', 'confirmed') or x.id = e.id));
+  return jsonb_build_object(
+    'student', jsonb_build_object('id', st.id, 'code', st.code, 'name_ko', st.name_ko, 'timezone', st.timezone),
+    'enrollment', case when e.id is null then null else jsonb_build_object(
+      'id', e.id, 'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'start_date', e.start_date, 'final_end_date', e.final_end_date, 'status', e.status,
+      'next_regular_from', lms_next_regular_from(e.id),
+      'lessons_total', coalesce((select c.sheet_total from import_checks c where c.enrollment_id = e.id), e.lessons_purchased + e.lessons_carried_in),
+      'credits_left', case when v_period.id is null then 0 else credit_balance(v_period.id) end,
+      'credits_granted', coalesce(v_period.credits_granted, 0),
+      'confirmed_on', (select min((p.confirmed_at at time zone 'Asia/Seoul')::date) from payments p where p.enrollment_id = e.id and p.confirmed_at is not null),
+      'renewal_paid', exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))) end,
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id),
+        'substitute', l.original_tutor_id is not null,
+        'leave_open', exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))) order by l.starts_at)
+      from lessons l join tutors t on t.id = l.tutor_id
+      where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
+    -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강 · 강사 노쇼 무료 보상수업)
+    'makeup_rights', coalesce((
+      select jsonb_agg(r order by r ->> 'original_at', r ->> 'comp_id' nulls first) from (
+        select jsonb_build_object('lesson_id', l.id, 'item_id', null, 'original_at', l.starts_at,
+                 'tutor_leave', l.class_status = 'Tutor long-term leave') as r
+        from lessons l
+        where l.enrollment_id = any(v_open) and l.voided_at is null and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+          and not exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+        union all
+        -- 시트에서 옮긴 보강은 날짜만 있음 → 휴무 처리 수업이면 그 수업 시각, 아니면 날짜만 (3700: 00:00 으로 보이던 것)
+        select jsonb_build_object('lesson_id', null, 'item_id', m.id,
+                 'original_at', coalesce((select li.starts_at from leave_items li where li.migrated_item_id = m.id order by li.starts_at limit 1),
+                                         m.original_date::timestamp at time zone 'Asia/Seoul'),
+                 'time_known', exists (select 1 from leave_items li where li.migrated_item_id = m.id),
+                 'tutor_leave', coalesce(m.tutor_leave, false))
+        from migrated_items m where m.enrollment_id = any(v_open) and m.kind = 'makeup_open'
+          -- 휴무 처리에서 대체강사 답 대기·미정인 수업은 보강 신청 대상이 아님 (기존 강사 보강으로 정하면 그때 보강)
+          and not exists (select 1 from leave_items li where li.migrated_item_id = m.id and li.lesson_gone_at is null
+                          and li.choice in ('undecided', 'substitute'))
+        union all
+        -- 강사 노쇼 무료 보상수업 (4100): 날짜를 안 잡은 것, 사용 기한(수강기간·기한 안 재등록이면 이월) 안
+        select jsonb_build_object('lesson_id', null, 'item_id', null, 'comp_id', c.id, 'original_at', src.starts_at,
+                 'tutor', t.name, 'use_until', lms_comp_use_until(c.enrollment_id), 'tutor_leave', false)
+        from compensations c
+        join lessons src on src.id = c.source_lesson_id
+        join tutors t on t.id = src.tutor_id
+        where c.student_id = v_student and c.status = 'available' and lms_comp_use_until(c.enrollment_id) >= v_today) q), '[]'::jsonb),
+    -- 휴무 처리 중인데 수업 줄이 아직 없는 수업 (시트에서 옮긴 휴가 수업 · 미정 또는 대체강사 확정 전) → 일정에 '일정 조율 중' (3700)
+    'leave_pending', coalesce((
+      select jsonb_agg(jsonb_build_object('id', li.id, 'starts_at', li.starts_at, 'ends_at', li.ends_at) order by li.starts_at)
+      from leave_items li
+      where li.student_id = v_student and li.lesson_id is null and li.lesson_gone_at is null and li.starts_at > now()
+        and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))), '[]'::jsonb),
+    -- 신청 내역: 원래 수업 시각·강사, 확정된 날짜 (4100: 확정 뒤 상세에 원래 수업·강사가 안 보이던 것)
+    'makeup_requests', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id, 'comp_id', r.compensation_id,
+        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id, 'tutor_answered_at', r.tutor_answered_at,
+        'original_at', coalesce(src.starts_at, (select m.original_date::timestamp at time zone 'Asia/Seoul' from migrated_items m where m.id = r.migrated_item_id)),
+        'original_time_known', src.id is not null,
+        'original_tutor', srct.name,
+        'tutor', rt.name,
+        'confirmed_at', cl.starts_at,
+        'tutor_leave', coalesce(src.class_status = 'Tutor long-term leave',
+                                (select m.tutor_leave from migrated_items m where m.id = r.migrated_item_id), false),
+        'candidates', (select coalesce(jsonb_agg(c.starts_at order by c.starts_at), '[]'::jsonb) from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.requested_at desc)
+      from makeup_requests r
+      left join lessons src on src.id = r.source_lesson_id
+      left join tutors srct on srct.id = src.tutor_id
+      left join tutors rt on rt.id = r.tutor_id
+      left join lessons cl on cl.id = r.confirmed_lesson_id
+      where r.student_id = v_student and r.status in ('requested', 'countered', 'confirmed')
+        and r.requested_at > now() - interval '60 days'), '[]'::jsonb),
+    -- 휴무 안내: 대체강사가 가능하다고 한 수업(답 기다림)·확정된 대체 수업·보강으로 정한 수업만. 지난 수업은 빼고
+    'leave', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name, 'sub_meet_url', sub.meet_url,
+        'lesson_id', li.lesson_id, 'item_id', li.migrated_item_id,
+        'off_from', o.starts_at, 'off_to', o.ends_at) order by li.starts_at)
+      from leave_items li
+      join tutor_time_off o on o.id = li.time_off_id
+      left join tutors sub on sub.id = li.sub_tutor_id
+      where li.student_id = v_student and li.starts_at > now() and li.lesson_gone_at is null
+        and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    -- 변경권: 지금 기간과 쓴 기록 (대표 10/29: 변경권 칸 누르면 언제 썼는지)
+    'credit_period', case when v_period.id is null then null else jsonb_build_object('start', v_period.start_date, 'end', v_period.end_date) end,
+    'credit_uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'lesson_at', l.starts_at) order by c.created_at)
+      from credit_ledger c left join lessons l on l.id = c.lesson_id where c.period_id = v_period.id), '[]'::jsonb),
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
+      where h.day between v_today and v_today + 200), '[]'::jsonb),
+    'points', coalesce((
+      select jsonb_agg(jsonb_build_object('id', g.id, 'on', (g.created_at at time zone 'Asia/Seoul')::date, 'kind', g.kind, 'amount', g.amount, 'note', g.note)
+        order by g.created_at)
+      from reward_ledger g where g.student_id = v_student), '[]'::jsonb));
+end $$;
+revoke all on function student_screen(uuid) from public, anon;
+grant execute on function student_screen(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 8. 강사 화면 (4000 그대로 + 보상 신청·보상 수업 구분: makeups.compensation, lessons.compensation_of)
+-- ---------------------------------------------------------------------
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', coalesce(s.display_name, s.name_en), 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'compensation_of', (select x.starts_at from compensations cc join lessons x on x.id = cc.source_lesson_id where cc.id = l.compensation_id),
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'student_late', coalesce(cr.student_late, false), 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id),
+        'compensation', (select c.status from compensations c where c.source_lesson_id = l.id),
+        'leave_open', l.state = 'scheduled' and exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    -- 기록할 수업: 시작했는데 결과가 없는 수업 (강사 LMS 계정이 생긴 뒤 시작한 수업만 — 그 전 수업은 시트에 기록됨)
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)
+        and not exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                         and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', coalesce(s.display_name, s.name_en),
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'compensation', r.compensation_id is not null,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null, 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb),
+    -- 대체 수업 요청: 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 (2600). 휴무 강사 이름은 안 보임
+    'covers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'student', coalesce(s.display_name, s.name_en), 'starts_at', i.starts_at, 'ends_at', i.ends_at,
+        'busy', lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id) is not null)
+        order by i.starts_at)
+      from leave_items i join students s on s.id = i.student_id
+      where i.sub_tutor_id = v_tutor and i.choice = 'substitute' and i.sub_stage = 'asked' and i.starts_at > now() and i.lesson_gone_at is null), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 9. 강사 보강 답: 다른 수업·휴무와 겹치는 시간은 '가능'으로 보낼 수 없음 (11/3 ChatGPT 점검 ①: 겹치는 시간도 체크·전송됨)
+--    강사 화면 'busy'·운영진 확정과 같은 판정(lms_makeup_conflict). 2000 그대로 + 이 검사
+-- ---------------------------------------------------------------------
+create or replace function tutor_makeup_answer(p_request uuid, p_yes uuid[], p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  v_note text := nullif(trim(coalesce(p_note, '')), '');
+  v_yes uuid[] := coalesce(p_yes, '{}');
+begin
+  select * into r from makeup_requests where id = p_request for update;
+  if not found then raise exception 'Make-up request not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and r.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your make-up request.' using errcode = '42501';
+  end if;
+  if r.status not in ('requested', 'countered') then
+    raise exception 'This make-up request is already closed.' using hint = 'closed';
+  end if;
+  if exists (select 1 from unnest(v_yes) y where not exists
+             (select 1 from makeup_candidates c where c.id = y and c.request_id = r.id and c.proposed_by = 'student')) then
+    raise exception 'Unknown time in your answer. Please reload the page.';
+  end if;
+  if exists (select 1 from makeup_candidates c where c.id = any(v_yes)
+             and (c.starts_at <= now() or lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null)) then
+    raise exception 'One of the times you chose overlaps another class or time off. Please reload the page.' using hint = 'busy';
+  end if;
+  if cardinality(v_yes) = 0 and v_note is null then
+    raise exception 'None of the times work? Please write other times you are available in the note.' using hint = 'note';
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_makeup_answer' else 'tutor_makeup_answer' end, true);
+  update makeup_candidates c set tutor_answer = case when c.id = any(v_yes) then 'yes' else 'no' end, answered_at = now(), answered_by = me
+  where c.request_id = r.id and c.proposed_by = 'student'
+    and c.tutor_answer is distinct from case when c.id = any(v_yes) then 'yes' else 'no' end;
+  update makeup_requests set tutor_note = v_note, tutor_answered_at = now() where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  return jsonb_build_object('makeup_request_id', r.id, 'yes', cardinality(v_yes));
+end $$;
+revoke all on function tutor_makeup_answer(uuid, uuid[], text) from public, anon;
+grant execute on function tutor_makeup_answer(uuid, uuid[], text) to authenticated;
+
+-- >>> 20261103095424_tutor_hours_local_0600_2230.sql
+-- 대표 요청 2026-11-03: My hours 선택 범위는 강사 현지 06:00~22:30 시작.
+-- 한국 시간 보기에서도 같은 현지 칸을 변환한다. 기존 가능 시간·수업 데이터는 변경하지 않는다.
+-- 읽기(tutor_hours)와 저장(tutor_hours_save)이 같은 함수를 사용한다.
+create or replace function public.lms_hours_times(p_tz text, p_monday date) returns setof time
+language sql stable as $$
+  select g::time
+  from generate_series(timestamp '2000-01-01 06:00', timestamp '2000-01-01 22:30', interval '30 minutes') g
+  order by 1
+$$;
+revoke all on function public.lms_hours_times(text, date) from public, anon, authenticated;
+
+-- >>> 20261103110000_lms_tutor_local_start_guard.sql
+-- =====================================================================
+-- 4200 강사 현지 06:00~22:30 시작 — DB에서 막기 (2026-11-03 대표: 현지 06:00 전은 절대 안 됨, 강사 컨디션 컴플레인 / 22:30까지 허용 / 한국시간 제한 없음, POL-OP-02)
+--  - lms_tutor_start_ok: 강사 현지 시각으로 06:00~22:30 시작인지 (서머타임은 그날 실제 시차)
+--  - lms_tutor_available: 강사가 직접 연 시간(tutor_availability)만 가능. 가능 시간을 안 넣은 강사는 어느 시간도 '가능'이 아님
+--    (전에는 줄이 없으면 하루 종일 가능 → 보강 날짜에 새벽이 뜰 수 있었음, 11/3 대표·ChatGPT 확인). 칸 = 수업 시작 가능 시각 그대로(POL-TU-11)
+--    → 학생 보강 가능한 날짜·대체강사 '평소 시간' 표시·My hours 판정에 그대로 반영
+--  - lms_makeup_conflict: 범위 밖이면 충돌 → 운영진 보강·보상 확정, 강사 화면 busy, 강사 '가능' 답 모두 거절
+--  - 운영진이 직접 넣는 신규 등록·기존 학생 입력 시각은 이번에 건드리지 않음
+-- 기존 표·데이터를 바꾸지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function lms_tutor_start_ok(p_tutor uuid, p_start timestamptz) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select (p_start at time zone t.timezone)::time between time '06:00' and time '22:30' from tutors t where t.id = p_tutor), false)
+$$;
+revoke all on function lms_tutor_start_ok(uuid, timestamptz) from public, anon, authenticated;
+
+create or replace function lms_tutor_available(p_tutor uuid, p_start timestamptz) returns boolean
+language sql stable security definer set search_path = public as $$
+  select lms_tutor_start_ok(p_tutor, p_start)
+     and exists (select 1 from tutor_availability a
+                 where a.tutor_id = p_tutor
+                   and a.effective_from <= (p_start at time zone 'Asia/Seoul')::date
+                   and (a.effective_to is null or a.effective_to >= (p_start at time zone 'Asia/Seoul')::date)
+                   and extract(dow from (p_start at time zone a.timezone)) = a.weekday
+                   and (p_start at time zone a.timezone)::time between a.start_local and a.end_local)
+$$;
+revoke all on function lms_tutor_available(uuid, timestamptz) from public, anon, authenticated;
+
+create or replace function lms_makeup_conflict(p_tutor uuid, p_student uuid, p_start timestamptz, p_end timestamptz, p_student_wants boolean)
+returns text
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';      -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+  v_b2b_min constant integer := 20;                         -- POL-OP-21 예외 (policy.ts CONFIRMED.backToBackNoBreakDurationMin)
+  v_b2b_max constant integer := 2;                          -- POL-OP-21 예외 (policy.ts CONFIRMED.backToBackNoBreakMaxLessons)
+  v_new_b2b boolean := p_student_wants and p_end - p_start = make_interval(mins => v_b2b_min);
+  v_near uuid[];
+  v_chain integer;
+begin
+  -- 강사 현지 06:00~22:30 시작만 (POL-OP-02, 4200)
+  if not lms_tutor_start_ok(p_tutor, p_start) then
+    return '강사 현지 06:00~22:30 밖의 시작 시각';
+  end if;
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사 휴무';
+  end if;
+  if exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled'
+             and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at
+             and (x.starts_at < p_end and p_start < x.ends_at
+                  or not (v_new_b2b and x.student_id = p_student and x.ends_at - x.starts_at = make_interval(mins => v_b2b_min)))) then
+    return '강사 다른 수업(휴식 10분 포함)';
+  end if;
+  select coalesce(array_agg(x.id), '{}') into v_near from lessons x
+  where x.tutor_id = p_tutor and x.state <> 'canceled'
+    and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at;
+  if cardinality(v_near) = 0 then return null; end if;
+  select 1 + cardinality(v_near) + count(distinct y.id) into v_chain from lessons y
+  where y.tutor_id = p_tutor and y.state <> 'canceled' and y.id <> all(v_near)
+    and not (y.starts_at < p_end + v_break and p_start - v_break < y.ends_at)
+    and exists (select 1 from lessons x where x.id = any(v_near)
+                and y.starts_at < x.ends_at + v_break and x.starts_at - v_break < y.ends_at);
+  if v_chain > v_b2b_max then
+    return format('쉬지 않고 이어 붙이는 수업(%s분 %s개까지)', v_b2b_min, v_b2b_max);
+  end if;
+  return null;
+end $$;
+revoke all on function lms_makeup_conflict(uuid, uuid, timestamptz, timestamptz, boolean) from public, anon, authenticated;
+
+-- >>> 20261104000000_lms_student_management.sql
+-- =====================================================================
+-- 4300 학생 관리 ①~⑥ (2026-11-03 대표 확정, 정책 원본 H26(44))
+--  ※ 지우는 문장 없이 씀 — Supabase 커넥터가 지우는 SQL 에 승인 창을 띄우는데 그 창이 안 보여 적용이 막혔기 때문(2026-11-03).
+--    이미 있는 제약·트리거·정책은 pg_catalog 를 보고 건너뜀. 다시 실행해도 같은 결과
+--  ① admin_regular_change: 운영진이 기존 학생의 정규 요일·시작 시간만 변경 (주 횟수·길이·강사는 그대로).
+--     적용 시작일부터 바뀔 수업 전체를 미리 보기(p_dry_run) → 저장할 때 DB에서 다시 검사.
+--     검사 = 강사 가능 시간(My hours)·현지 06:00~22:30·다른 수업(휴식 10분)·휴무·재등록 대기 자리·30분 단위.
+--     지난 수업, 확정된 보강·대체수업·보상수업, 휴무 처리 중 수업은 건드리지 않음. 변경 전후·사유는 regular_changes 에 보존.
+--  ② 종료일은 연장하지 않음: 옮긴 뒤 마지막 정규 수업이 최종 종료일을 넘으면 저장 차단(구체적 안내). 넘친 수업을 보강으로 바꾸지 않음.
+--  ③ 저장하면 학생·강사·운영진 화면에 바로 반영(lessons 가 바뀜). 안내 문구는 화면이 만들고, 운영진이 복사해 보낸 뒤
+--     admin_regular_change_sent 로 학생·강사 각각 [발송 완료] 기록 (자동 메일 없음).
+--  ④ 이름: name_ko(운영진 식별) · name_en(여권 영문, 강사 공식 식별) · display_name(Preferred Name, 선택). English Name 칸 없음.
+--     강사 화면 표기 'Kim Seoyeon (Sarah)' 는 lms_tutor_student_label 하나로.
+--  ⑤ 시트 → LMS 이전은 화면(운영진 승인)에서 admin_student_update 로 한 명씩. 자기소개 원문은 self_intro_en 그대로, 예전 레벨은 level_note.
+--  ⑥ 대체강사 = 열람만. 대체수업 확정(lessons.tutor_id 가 대체강사로 바뀐 때)부터 그 수업 종료 24시간 뒤까지 (lms_tutor_student_access).
+--     이메일·결제·운영 메모는 안 보임. 정규 담당 강사 = 기존 권한 유지(레벨·자기소개·선호 수정). 숨기기가 아니라 DB 함수에서 차단.
+--  새 칸: students 자기소개·선호 7항목(job·hobbies·interests·improve·hopes·correction_style(+note)·class_style(+note)), level 4단계 제한, level_note·level_by·level_at
+--  새 표: student_profile_edits(누가 언제 어느 칸을 어떻게), regular_changes(정규 일정 변경 기록 + 안내 발송 상태)
+--  운영진 종료일 연장: admin_extend_enrollment → enrollment_extensions 한 줄 (휴무 자동 연장 줄은 그대로, 합계로 계산 → 중복 없음, 회차 안 늘어남)
+--  다시 실행해도 같은 결과. 기존 데이터는 바꾸지 않음(운영 DB 학생 level 은 모두 비어 있고 시험용 'Intermediate' 는 4단계 안)
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. students 새 칸 + 레벨 4단계 (English Speaking Level Rubric 원본 그대로: Beginner · Pre-Intermediate · Intermediate · Advanced)
+-- ---------------------------------------------------------------------
+alter table students
+  add column if not exists job text,
+  add column if not exists hobbies text,
+  add column if not exists interests text,
+  add column if not exists improve text,
+  add column if not exists hopes text,
+  add column if not exists correction_style text,
+  add column if not exists correction_note text,
+  add column if not exists class_style text,
+  add column if not exists class_style_note text,
+  add column if not exists level_note text,
+  add column if not exists level_by uuid,
+  add column if not exists level_at timestamptz,
+  add column if not exists answers_by uuid,
+  add column if not exists answers_at timestamptz;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'students_level_rubric') then
+    alter table students add constraint students_level_rubric
+      check (level is null or level in ('Beginner', 'Pre-Intermediate', 'Intermediate', 'Advanced'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'students_correction_style_check') then
+    alter table students add constraint students_correction_style_check
+      check (correction_style is null or correction_style in ('immediate', 'major_only'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'students_class_style_check') then
+    alter table students add constraint students_class_style_check
+      check (class_style is null or class_style in ('textbook', 'free_talking', 'not_sure'));
+  end if;
+end $$;
+comment on column students.correction_pref is '시트에서 가져온 예전 교정 선호 글(참고). 새 입력은 correction_style(+correction_note)';
+comment on column students.level_note is '시트의 예전 레벨 표기(A2/B1 등) — 4단계로 자동 변환하지 않고 참고로만';
+
+-- 프로필 수정 기록: 누가(운영진/정규 강사) 언제 어느 칸을 어떻게 (강사 레벨 평가와 학생 답변은 field 이름으로 구분)
+create table if not exists student_profile_edits (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  field text not null,
+  old_value text,
+  new_value text,
+  edited_by uuid not null,
+  edited_role text not null check (edited_role in ('admin', 'tutor')),
+  via text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists student_profile_edits_student on student_profile_edits (student_id, created_at);
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'student_profile_edits_no_update') then
+    create trigger student_profile_edits_no_update before update on student_profile_edits for each row execute function forbid_update();
+  end if;
+  if not exists (select 1 from pg_trigger where tgname = 'student_profile_edits_no_delete') then
+    create trigger student_profile_edits_no_delete before delete on student_profile_edits for each row execute function forbid_delete();
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'student_profile_edits' and policyname = 'admin_read') then
+    create policy admin_read on student_profile_edits for select to authenticated using (is_admin());
+  end if;
+end $$;
+alter table student_profile_edits enable row level security;
+revoke all on student_profile_edits from public, anon;
+grant select on student_profile_edits to authenticated;
+
+-- 정규 일정 변경 기록 (변경 전후·사유·옮긴 수업·안내 발송 상태)
+create table if not exists regular_changes (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id),
+  enrollment_id uuid not null references enrollments(id),
+  tutor_id uuid not null references tutors(id),
+  effective_from date not null,
+  old_slots jsonb not null,            -- [{weekday, time}] (한국 시간)
+  new_slots jsonb not null,
+  moved jsonb not null,                -- [{lesson_id, seq, from, to}]
+  kept jsonb not null default '[]',    -- 그대로 둔 앞으로의 수업 [{lesson_id, kind, starts_at, why}]
+  reason text not null,
+  created_by uuid not null,
+  created_at timestamptz not null default now(),
+  student_sent_at timestamptz,
+  student_sent_by uuid,
+  tutor_sent_at timestamptz,
+  tutor_sent_by uuid
+);
+create index if not exists regular_changes_student on regular_changes (student_id, created_at);
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'regular_changes_no_delete') then
+    create trigger regular_changes_no_delete before delete on regular_changes for each row execute function forbid_delete();
+  end if;
+  if not exists (select 1 from pg_trigger where tgname = 'regular_changes_audit') then
+    create trigger regular_changes_audit after insert or update on regular_changes for each row execute function write_audit();
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'regular_changes' and policyname = 'admin_read') then
+    create policy admin_read on regular_changes for select to authenticated using (is_admin());
+  end if;
+end $$;
+alter table regular_changes enable row level security;
+revoke all on regular_changes from public, anon;
+grant select on regular_changes to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 2. 이름 표기 (④) · 강사 접근 권한 (⑥)
+-- ---------------------------------------------------------------------
+-- 강사 화면 학생 이름: 'Kim Seoyeon (Sarah)' — Preferred Name 이 없거나 영문 이름과 같으면 괄호 없이
+create or replace function lms_tutor_student_label(p_name_en text, p_display text) returns text
+language sql immutable as $$
+  select case when nullif(trim(coalesce(p_display, '')), '') is null or lower(trim(p_display)) = lower(trim(coalesce(p_name_en, '')))
+              then coalesce(p_name_en, '') else p_name_en || ' (' || trim(p_display) || ')' end
+$$;
+revoke all on function lms_tutor_student_label(text, text) from public, anon;
+
+-- 강사가 이 학생 정보를 볼 수 있는 자격: 'regular'(담당 정규 강사) · 'substitute'(대체강사, 열람만) · null(없음)
+--  regular   = 지금 정규 일정의 강사이거나, 최근 60일~앞으로 이 학생의 정규·보강 수업 강사(대체가 아닌)
+--  substitute= 대체수업(원래 강사가 따로 있는 수업)의 강사: 확정 시점(lessons 에 대체강사로 들어간 때)부터 그 수업 종료 24시간 뒤까지.
+--              대체수업이 취소되면 그 수업에 따른 자격은 끝남. 여러 대체수업이면 각각
+create or replace function lms_tutor_student_access(p_tutor uuid, p_student uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select case
+    when p_tutor is null or p_student is null then null
+    when exists (select 1 from regular_schedules rs where rs.student_id = p_student and rs.tutor_id = p_tutor
+                 and (rs.effective_to is null or rs.effective_to >= (now() at time zone 'Asia/Seoul')::date - 60))
+      or exists (select 1 from lessons l where l.student_id = p_student and l.state <> 'canceled' and l.voided_at is null
+                 and coalesce(l.original_tutor_id, l.tutor_id) = p_tutor
+                 and l.ends_at > now() - interval '60 days')
+      then 'regular'
+    when exists (select 1 from lessons l where l.student_id = p_student and l.tutor_id = p_tutor
+                 and l.original_tutor_id is not null and l.original_tutor_id <> p_tutor
+                 and l.state <> 'canceled' and l.voided_at is null
+                 and now() <= l.ends_at + interval '24 hours')
+      then 'substitute'
+    else null end
+$$;
+revoke all on function lms_tutor_student_access(uuid, uuid) from public, anon, authenticated;
+
+-- tutor_my_students (core): '지난 60일' 공통 규칙 → 위 기준으로 교체 (돌려주는 칸은 그대로). 대체강사에게는 이메일을 주지 않음
+create or replace function tutor_my_students()
+returns table (student_id uuid, display_name text, country text, timezone text, gender_age text, self_intro_en text, level text,
+               class_type text, correction_pref text, textbook text, email text, class_note_url text)
+language sql stable security definer set search_path = public as $$
+  select s.id, lms_tutor_student_label(s.name_en, s.display_name), s.country, s.timezone, s.gender_age, s.self_intro_en,
+         s.level, s.class_type, s.correction_pref, s.textbook,
+         case when a.access = 'regular' then s.email end, s.class_note_url
+  from students s
+  cross join lateral (select lms_tutor_student_access(my_tutor_id(), s.id) as access) a
+  where my_tutor_id() is not null and a.access is not null
+$$;
+revoke all on function tutor_my_students() from public, anon;
+grant execute on function tutor_my_students() to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 3. 프로필 공통 JSON (운영진·강사 함수가 같이 씀) + 수정 기록 도우미
+-- ---------------------------------------------------------------------
+-- 지금 유효한 정규 일정. 아직 시작 전(수강 예정·다음 주부터 바뀜)이면 가장 가까운 앞으로의 일정
+create or replace function lms_current_slots(p_student uuid, p_day date default (now() at time zone 'Asia/Seoul')::date)
+returns setof regular_schedules
+language sql stable security definer set search_path = public as $$
+  with cur as (select rs.* from regular_schedules rs where rs.student_id = p_student and rs.effective_from <= p_day and (rs.effective_to is null or rs.effective_to >= p_day)),
+       nxt as (select rs.* from regular_schedules rs where rs.student_id = p_student and rs.effective_from > p_day
+               and rs.effective_from = (select min(x.effective_from) from regular_schedules x where x.student_id = p_student and x.effective_from > p_day))
+  select * from cur
+  union all
+  select * from nxt where not exists (select 1 from cur)
+$$;
+revoke all on function lms_current_slots(uuid, date) from public, anon, authenticated;
+
+create or replace function lms_student_profile_json(p_student uuid, p_access text)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  s students;
+  e enrollments;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_full boolean := p_access in ('admin', 'regular');
+begin
+  select * into s from students where id = p_student;
+  if not found then raise exception 'Student not found.' using errcode = 'P0002'; end if;
+  select * into e from enrollments x where x.id = lms_student_enrollment(p_student);
+  return jsonb_build_object(
+    'student', jsonb_strip_nulls(jsonb_build_object(
+      'id', s.id, 'code', case when p_access = 'admin' then s.code end,
+      'name_ko', case when p_access = 'admin' then s.name_ko end,
+      'name_en', s.name_en, 'display_name', s.display_name, 'label', lms_tutor_student_label(s.name_en, s.display_name),
+      'country', s.country, 'city', s.city, 'timezone', s.timezone, 'gender_age', s.gender_age,
+      'email', case when v_full then s.email end,
+      'phone', case when p_access = 'admin' then s.phone end,
+      'admin_memo', case when p_access = 'admin' then s.admin_memo end,
+      'level', s.level, 'level_note', s.level_note, 'level_at', s.level_at,
+      'level_by', case when s.level_by is null then null else coalesce(
+        (select t.name from app_users u join tutors t on t.id = u.tutor_id where u.auth_user_id = s.level_by),
+        (select case when u.role = 'admin' then 'Edge English' end from app_users u where u.auth_user_id = s.level_by)) end,
+      'class_type', s.class_type, 'textbook', s.textbook, 'class_note_url', s.class_note_url,
+      'correction_pref', s.correction_pref, 'self_intro_en', s.self_intro_en,
+      'job', s.job, 'hobbies', s.hobbies, 'interests', s.interests, 'improve', s.improve, 'hopes', s.hopes,
+      'correction_style', s.correction_style, 'correction_note', s.correction_note,
+      'class_style', s.class_style, 'class_style_note', s.class_style_note,
+      'answers_at', s.answers_at, 'lms_since', s.lms_since)),
+    'enrollment', case when e.id is null then null else jsonb_build_object(
+      'id', e.id, 'seq', e.seq, 'status', e.status, 'weeks', e.weeks, 'legacy_label', e.legacy_label,
+      'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'start_date', e.start_date, 'base_end_date', e.base_end_date, 'extension_days', e.extension_days, 'final_end_date', e.final_end_date,
+      'lessons_purchased', e.lessons_purchased, 'lessons_carried_in', e.lessons_carried_in,
+      'sheet', (select jsonb_build_object('total', c.sheet_total, 'used', c.sheet_used) from import_checks c where c.enrollment_id = e.id),
+      'done', (select count(*) from lessons l left join class_status_rules r on r.status = l.class_status
+               where l.enrollment_id = e.id and l.voided_at is null and l.kind <> 'compensation'
+                 and l.state <> 'scheduled' and (l.class_status is null or r.consumes_lesson)),
+      'left_regular', (select count(*) from lessons l where l.enrollment_id = e.id and l.kind = 'regular' and l.state = 'scheduled' and l.voided_at is null and l.starts_at > now()),
+      'left_all', (select count(*) from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' and l.voided_at is null and l.starts_at > now()),
+      'extensions', case when v_full then coalesce((
+        select jsonb_agg(jsonb_build_object('id', x.id, 'days', x.days, 'reason', x.reason, 'note', case when p_access = 'admin' then x.note end,
+                 'auto', x.auto_source, 'at', x.created_at,
+                 'by', case when p_access = 'admin' then (select coalesce(u.role, '') from app_users u where u.auth_user_id = x.approved_by) end) order by x.created_at)
+        from enrollment_extensions x where x.enrollment_id = e.id), '[]'::jsonb) else '[]'::jsonb end) end,
+    'slots', coalesce((
+      select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI'), 'duration_min', rs.duration_min,
+               'tutor_id', rs.tutor_id, 'tutor', t.name, 'tutor_tz', t.timezone, 'tutor_country', t.country,
+               'from', rs.effective_from, 'to', rs.effective_to) order by rs.weekday, rs.start_time_kst)
+      from lms_current_slots(p_student, v_today) rs join tutors t on t.id = rs.tutor_id), '[]'::jsonb),
+    -- 지금 일정이 있고 앞으로 바뀔 일정도 있으면 따로 (운영진 화면 '○○부터 바뀜')
+    'next_slots', coalesce((
+      select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI'), 'from', rs.effective_from) order by rs.weekday)
+      from regular_schedules rs
+      where rs.student_id = p_student and rs.effective_from > v_today
+        and exists (select 1 from lms_current_slots(p_student, v_today) c where c.effective_from <= v_today)
+        and rs.effective_from = (select min(x.effective_from) from regular_schedules x where x.student_id = p_student and x.effective_from > v_today)), '[]'::jsonb),
+    -- 앞으로 수업 (강사 화면은 자기 자격 범위에서 쓰고, 시각 계산은 화면이 수업 날짜로 함)
+    'upcoming', coalesce((
+      select jsonb_agg(jsonb_build_object('id', l.id, 'kind', l.kind, 'seq', l.seq, 'starts_at', l.starts_at, 'ends_at', l.ends_at,
+               'tutor', t.name, 'tutor_tz', t.timezone, 'tutor_id', l.tutor_id, 'substitute', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+               'leave_open', exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                                      and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))) order by l.starts_at)
+      from lessons l join tutors t on t.id = l.tutor_id
+      where l.student_id = p_student and l.state = 'scheduled' and l.voided_at is null and l.starts_at > now()), '[]'::jsonb),
+    -- 최근 수업 기록 3건: Covered Topics 가 적힌 최신 수업 (정규·대체 모두)
+    'recent_topics', coalesce((
+      select jsonb_agg(jsonb_build_object('starts_at', l.starts_at, 'tutor', t.name, 'topics', cr.covered_topics, 'kind', l.kind,
+               'substitute', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id) order by l.starts_at desc)
+      from (select l.* from lessons l join class_records cr on cr.lesson_id = l.id
+            where l.student_id = p_student and nullif(trim(cr.covered_topics), '') is not null
+            order by l.starts_at desc limit 3) l
+      join class_records cr on cr.lesson_id = l.id
+      join tutors t on t.id = l.tutor_id), '[]'::jsonb),
+    'access', p_access,
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h where h.day between v_today and v_today + 200), '[]'::jsonb));
+end $$;
+revoke all on function lms_student_profile_json(uuid, text) from public, anon, authenticated;
+
+create or replace function lms_profile_edit(p_student uuid, p_field text, p_old text, p_new text, p_role text, p_via text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_old is distinct from p_new then
+    insert into student_profile_edits (student_id, field, old_value, new_value, edited_by, edited_role, via)
+    values (p_student, p_field, p_old, p_new, auth.uid(), p_role, p_via);
+  end if;
+end $$;
+revoke all on function lms_profile_edit(uuid, text, text, text, text, text) from public, anon, authenticated;
+
+-- 프로필 칸 바꾸기 공통: p 의 키만 바꿈. 빈 글은 null 로 저장(미응답). 바뀐 칸마다 기록
+create or replace function lms_student_apply(p_student uuid, p jsonb, p_allowed text[], p_role text, p_via text) returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  s students;
+  k text;
+  v text;
+  n integer := 0;
+  v_level_changed boolean := false;
+  v_answer_changed boolean := false;
+begin
+  select * into s from students where id = p_student for update;
+  if not found then raise exception 'Student not found.' using errcode = 'P0002'; end if;
+  for k in select jsonb_object_keys(p) loop
+    if not (k = any(p_allowed)) then raise exception 'Field % cannot be changed here.', k using errcode = '42501'; end if;
+    v := nullif(trim(coalesce(p ->> k, '')), '');
+    if k = 'timezone' and v is not null and not is_valid_timezone(v) then raise exception 'Unknown time zone: %', v using errcode = '22023'; end if;
+    if k = 'email' and v is not null and v !~ '^[^\s@]+@[^\s@]+\.[^\s@]+$' then raise exception 'Please check the email address.' using errcode = '22023'; end if;
+    if k = 'level' and v is not null and v not in ('Beginner', 'Pre-Intermediate', 'Intermediate', 'Advanced') then
+      raise exception 'Level must be one of the rubric levels.' using errcode = '22023';
+    end if;
+    if k = 'class_note_url' and v is not null and v !~ '^https?://' then raise exception 'Class notes link must start with https://' using errcode = '22023'; end if;
+    if (to_jsonb(s) ->> k) is distinct from v then
+      perform lms_profile_edit(p_student, k, to_jsonb(s) ->> k, v, p_role, p_via);
+      execute format('update students set %I = $1 where id = $2', k) using v, p_student;
+      n := n + 1;
+      if k = 'level' then v_level_changed := true; end if;
+      if k in ('job', 'hobbies', 'interests', 'improve', 'hopes', 'correction_style', 'correction_note', 'class_style', 'class_style_note') then v_answer_changed := true; end if;
+    end if;
+  end loop;
+  if v_level_changed then update students set level_by = auth.uid(), level_at = now() where id = p_student; end if;
+  if v_answer_changed then update students set answers_by = auth.uid(), answers_at = now() where id = p_student; end if;
+  return n;
+end $$;
+revoke all on function lms_student_apply(uuid, jsonb, text[], text, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 4. 운영진: 학생 목록 · 상세 · 정보 수정
+-- ---------------------------------------------------------------------
+-- 수강 상태: active(수강 중) · upcoming(수강 예정 = 시작 전 수강권) · ended(종료) · none(수강권 없음)
+create or replace function admin_students()
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when not is_admin() then null else coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', s.id, 'code', s.code, 'name_ko', s.name_ko, 'name_en', s.name_en, 'display_name', s.display_name, 'email', s.email, 'timezone', s.timezone,
+      'status', case when e.id is null then 'none'
+                     when e.status in ('completed', 'canceled') then 'ended'
+                     when e.final_end_date < (now() at time zone 'Asia/Seoul')::date then 'ended'
+                     when e.start_date > (now() at time zone 'Asia/Seoul')::date then 'upcoming'
+                     else 'active' end,
+      'enrollment_status', e.status, 'start_date', e.start_date, 'final_end_date', e.final_end_date,
+      'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'left_regular', (select count(*) from lessons l where l.enrollment_id = e.id and l.kind = 'regular' and l.state = 'scheduled' and l.voided_at is null and l.starts_at > now()),
+      'tutor', (select t.name from lms_current_slots(s.id) rs join tutors t on t.id = rs.tutor_id limit 1),
+      'slots', (select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI')) order by rs.weekday) from lms_current_slots(s.id) rs),
+      'notice_pending', exists (select 1 from regular_changes rc where rc.student_id = s.id and (rc.student_sent_at is null or rc.tutor_sent_at is null)))
+      order by s.name_ko)
+    from students s
+    left join enrollments e on e.id = lms_student_enrollment(s.id)), '[]'::jsonb) end
+$$;
+revoke all on function admin_students() from public, anon;
+grant execute on function admin_students() to authenticated;
+
+create or replace function admin_student_detail(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  j jsonb;
+  v_login jsonb;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  j := lms_student_profile_json(p_student, 'admin');
+  if to_regclass('auth.users') is not null then
+    execute 'select jsonb_build_object(''email'', a.email) from app_users u join auth.users a on a.id = u.auth_user_id where u.student_id = $1 limit 1' into v_login using p_student;
+  end if;
+  return j || jsonb_build_object(
+    'enrollments', coalesce((
+      select jsonb_agg(jsonb_build_object('id', e.id, 'seq', e.seq, 'status', e.status, 'weeks', e.weeks, 'legacy_label', e.legacy_label,
+               'weekly_count', e.weekly_count, 'duration_min', e.duration_min, 'start_date', e.start_date, 'final_end_date', e.final_end_date,
+               'lessons_purchased', e.lessons_purchased, 'lessons_carried_in', e.lessons_carried_in, 'amount_due', e.amount_due,
+               'payments', coalesce((select jsonb_agg(jsonb_build_object('on', p.received_on, 'method', p.method, 'amount', p.amount_received,
+                                       'confirmed', p.confirmed_at is not null) order by p.received_on) from payments p where p.enrollment_id = e.id), '[]'::jsonb))
+               order by e.seq desc)
+      from enrollments e where e.student_id = p_student), '[]'::jsonb),
+    'changes', coalesce((
+      select jsonb_agg(jsonb_build_object('id', rc.id, 'effective_from', rc.effective_from, 'old_slots', rc.old_slots, 'new_slots', rc.new_slots,
+               'moved', rc.moved, 'kept', rc.kept, 'reason', rc.reason, 'at', rc.created_at, 'tutor', t.name, 'tutor_tz', t.timezone,
+               'student_sent_at', rc.student_sent_at, 'tutor_sent_at', rc.tutor_sent_at) order by rc.created_at desc)
+      from regular_changes rc join tutors t on t.id = rc.tutor_id where rc.student_id = p_student), '[]'::jsonb),
+    'edits', coalesce((
+      select jsonb_agg(jsonb_build_object('field', x.field, 'old', x.old_value, 'new', x.new_value, 'role', x.edited_role, 'at', x.created_at,
+               'by', coalesce((select t.name from app_users u join tutors t on t.id = u.tutor_id where u.auth_user_id = x.edited_by), '운영진')) order by x.created_at desc)
+      from (select * from student_profile_edits where student_id = p_student order by created_at desc limit 50) x), '[]'::jsonb),
+    'recent', coalesce((
+      select jsonb_agg(jsonb_build_object('id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'state', l.state, 'class_status', l.class_status,
+               'tutor', t.name, 'tutor_tz', t.timezone) order by l.starts_at desc)
+      from (select * from lessons where student_id = p_student and starts_at <= now() and voided_at is null order by starts_at desc limit 5) l
+      join tutors t on t.id = l.tutor_id), '[]'::jsonb),
+    'login', v_login);
+end $$;
+revoke all on function admin_student_detail(uuid) from public, anon;
+grant execute on function admin_student_detail(uuid) to authenticated;
+
+-- 운영진 정보 수정: 전체 칸 (결제·수강권 칸은 여기서 안 바꿈 — 등록·이관 흐름)
+create or replace function admin_student_update(p_student uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  n integer;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 바꿀 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_student_update', true);
+  n := lms_student_apply(p_student, p, array['name_ko', 'name_en', 'display_name', 'country', 'city', 'timezone', 'gender_age', 'email', 'phone',
+         'level', 'level_note', 'class_type', 'textbook', 'class_note_url', 'admin_memo', 'self_intro_en', 'correction_pref',
+         'job', 'hobbies', 'interests', 'improve', 'hopes', 'correction_style', 'correction_note', 'class_style', 'class_style_note'],
+         'admin', 'admin_student_update');
+  return jsonb_build_object('changed', n);
+end $$;
+revoke all on function admin_student_update(uuid, jsonb) from public, anon;
+grant execute on function admin_student_update(uuid, jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 5. 강사: 학생 프로필 보기 · (정규 담당만) 레벨·자기소개·선호 수정
+-- ---------------------------------------------------------------------
+create or replace function tutor_student_profile(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  me uuid := my_tutor_id();
+  v_access text;
+  j jsonb;
+begin
+  if is_admin() then
+    v_access := 'regular';   -- 운영자가 강사 화면을 대신 볼 때(?tutor=)는 담당 강사와 같은 범위
+  else
+    if me is null then raise exception 'Please sign in with your tutor account.' using errcode = '42501'; end if;
+    v_access := lms_tutor_student_access(me, p_student);
+    if v_access is null then raise exception 'This student is not assigned to you.' using errcode = '42501'; end if;
+  end if;
+  j := lms_student_profile_json(p_student, v_access);
+  if v_access = 'substitute' then
+    -- 대체강사: 자기가 맡은 대체수업만, 수강 정보 상세(연장 기록 등)는 빼고 수업 길이·기간만
+    j := j - 'upcoming' - 'enrollment' || jsonb_build_object(
+      'upcoming', (select coalesce(jsonb_agg(x) filter (where (x ->> 'tutor_id')::uuid = me), '[]'::jsonb) from jsonb_array_elements(j -> 'upcoming') x),
+      'enrollment', case when j -> 'enrollment' is null or j -> 'enrollment' = 'null'::jsonb then null else
+        jsonb_build_object('duration_min', j -> 'enrollment' -> 'duration_min', 'weekly_count', j -> 'enrollment' -> 'weekly_count',
+                           'final_end_date', j -> 'enrollment' -> 'final_end_date') end);
+  end if;
+  return j || jsonb_build_object('me', jsonb_build_object('id', me, 'timezone', (select timezone from tutors where id = me)));
+end $$;
+revoke all on function tutor_student_profile(uuid) from public, anon;
+grant execute on function tutor_student_profile(uuid) to authenticated;
+
+create or replace function tutor_student_update(p_student uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := my_tutor_id();
+  n integer;
+begin
+  if not is_admin() then
+    if me is null or lms_tutor_student_access(me, p_student) is distinct from 'regular' then
+      raise exception 'Only the student''s regular tutor can edit this.' using errcode = '42501';
+    end if;
+  end if;
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'tutor_student_update', true);
+  n := lms_student_apply(p_student, p, array['level', 'job', 'hobbies', 'interests', 'improve', 'hopes',
+         'correction_style', 'correction_note', 'class_style', 'class_style_note'],
+         case when is_admin() and me is null then 'admin' else 'tutor' end, 'tutor_student_update');
+  return jsonb_build_object('changed', n);
+end $$;
+revoke all on function tutor_student_update(uuid, jsonb) from public, anon;
+grant execute on function tutor_student_update(uuid, jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 6. ① 정규 일정 수정 (미리 보기 / 저장) · ② 종료일 안 검사
+-- ---------------------------------------------------------------------
+create or replace function admin_regular_change(p_student uuid, p_slots jsonb, p_from date, p_reason text, p_dry_run boolean default true)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21
+  e enrollments;
+  t tutors;
+  v_tutor uuid;
+  v_lid uuid;
+  v_old jsonb;
+  v_new jsonb;
+  v_n_slots integer;
+  s jsonb;
+  v_reason text := nullif(trim(coalesce(p_reason, '')), '');
+  v_movable uuid[];
+  v_moved jsonb := '[]'::jsonb;
+  v_kept jsonb;
+  v_skipped jsonb := '[]'::jsonb;
+  v_problems jsonb := '[]'::jsonb;
+  l lessons;
+  d date;
+  i integer := 0;
+  t0 timestamptz;
+  t1 timestamptz;
+  v_why text;
+  v_last date;
+  v_change uuid;
+  v_guard integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 정규 일정을 바꿀 수 있습니다.' using errcode = '42501'; end if;
+  select * into e from enrollments x where x.id = lms_student_enrollment(p_student);
+  if e.id is null or e.status not in ('confirmed', 'active') then
+    raise exception '수강 중이거나 시작 예정인 수강권이 없어 정규 일정을 바꿀 수 없습니다.';
+  end if;
+  if p_from is null or p_from < v_today then raise exception '적용 시작일은 오늘(한국 날짜) 이후여야 합니다.'; end if;
+  if p_from > e.final_end_date then raise exception '적용 시작일(%)이 최종 종료일(%) 뒤입니다.', p_from, e.final_end_date; end if;
+
+  -- 지금 정규 일정 (적용 시작일에 유효한 것). 강사는 하나
+  select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI')) order by rs.weekday, rs.start_time_kst),
+         count(distinct rs.tutor_id), (array_agg(distinct rs.tutor_id))[1]
+    into v_old, v_n_slots, v_tutor
+  from regular_schedules rs
+  where rs.student_id = p_student and rs.effective_from <= greatest(p_from, e.start_date)
+    and (rs.effective_to is null or rs.effective_to >= greatest(p_from, e.start_date));
+  if v_old is null then raise exception '이 학생의 정규 일정이 없습니다 (등록·이관 때 정규 일정이 만들어집니다).'; end if;
+  if v_n_slots <> 1 then raise exception '정규 일정의 강사가 하나가 아닙니다. 운영진이 확인해 주세요.'; end if;
+  select * into t from tutors where id = v_tutor;
+
+  -- 새 일정 모양: 지금과 같은 수(주 횟수 그대로), 요일 0~6 중복 없음, 30분 단위
+  if p_slots is null or jsonb_typeof(p_slots) <> 'array' then raise exception '새 정규 일정이 비어 있습니다.'; end if;
+  if jsonb_array_length(p_slots) <> jsonb_array_length(v_old) then
+    raise exception '주 %회 수강권이라 요일을 %개 골라야 합니다 (주 횟수는 이 화면에서 바꾸지 않습니다).', jsonb_array_length(v_old), jsonb_array_length(v_old);
+  end if;
+  select jsonb_agg(jsonb_build_object('weekday', (x ->> 'weekday')::int, 'time', to_char((x ->> 'time')::time, 'HH24:MI')) order by (x ->> 'weekday')::int)
+    into v_new from jsonb_array_elements(p_slots) x;
+  for s in select * from jsonb_array_elements(v_new) loop
+    if (s ->> 'weekday')::int not between 0 and 6 then raise exception '요일 값이 잘못됐습니다.'; end if;
+    if extract(minute from (s ->> 'time')::time)::int not in (0, 30) then raise exception '시작 시간은 30분 단위(예: 22:00, 22:30)로 골라 주세요.'; end if;
+  end loop;
+  if (select count(distinct x ->> 'weekday') from jsonb_array_elements(v_new) x) <> jsonb_array_length(v_new) then
+    raise exception '같은 요일을 두 번 고를 수 없습니다.';
+  end if;
+  if v_new = v_old then raise exception '지금 정규 일정과 같습니다. 바꿀 요일·시간을 골라 주세요.'; end if;
+  if not p_dry_run and v_reason is null then raise exception '수정 사유를 적어 주세요.'; end if;
+
+  -- 옮길 수업: 이 수강권의 앞으로 정규 수업 중 적용 시작일 이후, 대체강사 아님, 휴무 처리 중 아님
+  select coalesce(array_agg(x.id order by x.starts_at), '{}') into v_movable
+  from lessons x
+  where x.enrollment_id = e.id and x.kind = 'regular' and x.state = 'scheduled' and x.voided_at is null
+    and x.starts_at > now() and x.kst_date >= p_from
+    and x.original_tutor_id is null and x.tutor_id = t.id
+    and not exists (select 1 from leave_items li where li.lesson_id = x.id and li.lesson_gone_at is null);
+  -- 그대로 두는 앞으로의 수업 (왜 그대로인지 같이)
+  select coalesce(jsonb_agg(jsonb_build_object('lesson_id', x.id, 'kind', x.kind, 'seq', x.seq, 'starts_at', x.starts_at, 'ends_at', x.ends_at,
+           'tutor', xt.name, 'tutor_tz', xt.timezone,
+           'why', case when x.kst_date < p_from then 'before_from'
+                       when x.original_tutor_id is not null and x.original_tutor_id <> x.tutor_id then 'substitute'
+                       when x.kind = 'makeup' then 'makeup' when x.kind = 'compensation' then 'compensation'
+                       when x.kind in ('migrated_makeup', 'migrated_extra', 'carryover') then 'makeup'
+                       when exists (select 1 from leave_items li where li.lesson_id = x.id and li.lesson_gone_at is null) then 'leave_open'
+                       else 'other' end) order by x.starts_at), '[]'::jsonb)
+    into v_kept
+  from lessons x join tutors xt on xt.id = x.tutor_id
+  where x.student_id = p_student and x.state = 'scheduled' and x.voided_at is null and x.starts_at > now()
+    and not (x.id = any(v_movable));
+  if cardinality(v_movable) = 0 then
+    raise exception '적용 시작일(%) 이후에 옮길 정규 수업이 없습니다.', p_from;
+  end if;
+
+  -- 새 날짜에 차례로 배치: 적용 시작일부터 새 요일에 맞는 날을 순서대로. 학생의 그대로 두는 수업과 겹치는 날은 건너뜀
+  d := p_from;
+  foreach v_lid in array v_movable loop
+    select * into l from lessons where id = v_lid;
+    loop
+      v_guard := v_guard + 1;
+      if v_guard > 2000 then raise exception '새 일정 날짜를 찾지 못했습니다.'; end if;
+      select x into s from jsonb_array_elements(v_new) x where (x ->> 'weekday')::int = extract(dow from d);
+      if found then
+        t0 := (d + (s ->> 'time')::time) at time zone 'Asia/Seoul';
+        t1 := t0 + make_interval(mins => e.duration_min);
+        -- 학생 본인의 그대로 두는 수업과 겹치면 이 날은 건너뜀
+        if exists (select 1 from lessons y where y.student_id = p_student and y.state <> 'canceled' and y.voided_at is null
+                   and not (y.id = any(v_movable)) and y.starts_at < t1 and t0 < y.ends_at) then
+          v_skipped := v_skipped || jsonb_build_object('date', d, 'time', s ->> 'time', 'why', 'student_busy');
+          d := d + 1; continue;
+        end if;
+        exit;
+      end if;
+      d := d + 1;
+    end loop;
+    -- 검사 (강사 기준)
+    v_why := null;
+    if not lms_tutor_start_ok(t.id, t0) then v_why := 'tutor_hours_range';
+    elsif not lms_tutor_available(t.id, t0) then v_why := 'tutor_unavailable';
+    elsif exists (select 1 from tutor_time_off o where o.tutor_id = t.id and o.starts_at < t1 and t0 < o.ends_at) then v_why := 'tutor_time_off';
+    elsif exists (select 1 from lessons y where y.tutor_id = t.id and y.state <> 'canceled' and not (y.id = any(v_movable))
+                  and y.starts_at < t1 + v_break and t0 - v_break < y.ends_at) then v_why := 'tutor_busy';
+    elsif exists (select 1 from lms_slot_hold_hits(t.id, t0, t1) h where h.student_id <> p_student) then v_why := 'tutor_hold';
+    end if;
+    if d > e.final_end_date then v_why := coalesce(v_why, 'after_end'); end if;
+    if v_why is not null then
+      v_problems := v_problems || jsonb_build_object('lesson_id', l.id, 'seq', l.seq, 'date', d, 'time', s ->> 'time', 'why', v_why,
+        'other', case when v_why = 'tutor_busy' then (select st.name_ko || ' ' || to_char(y.starts_at at time zone 'Asia/Seoul', 'HH24:MI') || '–' || to_char(y.ends_at at time zone 'Asia/Seoul', 'HH24:MI')
+                                                  from lessons y join students st on st.id = y.student_id
+                                                  where y.tutor_id = t.id and y.state <> 'canceled' and not (y.id = any(v_movable))
+                                                    and y.starts_at < t1 + v_break and t0 - v_break < y.ends_at order by y.starts_at limit 1)
+                      when v_why = 'tutor_hold' then (select h.student_name from lms_slot_hold_hits(t.id, t0, t1) h where h.student_id <> p_student limit 1) end);
+    end if;
+    v_moved := v_moved || jsonb_build_object('lesson_id', l.id, 'seq', l.seq, 'from', l.starts_at, 'from_end', l.ends_at, 'to', t0, 'to_end', t1, 'problem', v_why);
+    v_last := d;
+    d := d + 1;
+  end loop;
+
+  if p_dry_run then
+    return jsonb_build_object('ok', jsonb_array_length(v_problems) = 0, 'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone),
+      'student_timezone', (select timezone from students where id = p_student),
+      'enrollment', jsonb_build_object('id', e.id, 'final_end_date', e.final_end_date, 'duration_min', e.duration_min),
+      'old_slots', v_old, 'new_slots', v_new, 'effective_from', p_from, 'moved', v_moved, 'kept', v_kept, 'skipped', v_skipped,
+      'problems', v_problems, 'last_date', v_last);
+  end if;
+  if jsonb_array_length(v_problems) > 0 then
+    raise exception '새 일정에 문제가 %건 있어 저장하지 않았습니다. 미리 보기를 다시 확인해 주세요.', jsonb_array_length(v_problems)
+      using errcode = 'P0001', detail = v_problems::text, hint = 'regular_change_problems';
+  end if;
+
+  -- 저장: 옮기는 중 같은 학생 수업끼리 잠깐 겹치지 않게 두 단계로 (먼저 200년 뒤로 비켜 두고, 다시 새 시각으로)
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_regular_change', true);
+  for s in select * from jsonb_array_elements(v_moved) loop
+    update lessons set starts_at = (s ->> 'to')::timestamptz + interval '200 years', ends_at = (s ->> 'to_end')::timestamptz + interval '200 years'
+    where id = (s ->> 'lesson_id')::uuid;
+  end loop;
+  for s in select * from jsonb_array_elements(v_moved) loop
+    update lessons set starts_at = (s ->> 'to')::timestamptz, ends_at = (s ->> 'to_end')::timestamptz where id = (s ->> 'lesson_id')::uuid;
+  end loop;
+  -- 정규 일정 표: 적용 시작일 전날까지로 닫고 새 줄. 적용 시작일 이후에 시작하는(아직 효력 전) 줄은 효력 없는 날짜(1900-01-01)로 치워 둠(지우지 않음)
+  update regular_schedules rs
+     set effective_from = date '1900-01-01' + (select count(*) from regular_schedules r2 where r2.student_id = rs.student_id and r2.weekday = rs.weekday and r2.effective_to < date '1950-01-01')::int,
+         effective_to = date '1900-01-01' + (select count(*) from regular_schedules r2 where r2.student_id = rs.student_id and r2.weekday = rs.weekday and r2.effective_to < date '1950-01-01')::int,
+         change_reason = coalesce(rs.change_reason, '') || ' [취소됨 ' || p_from || ']'
+  where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from >= p_from;
+  update regular_schedules rs set effective_to = p_from - 1
+  where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from < p_from and (rs.effective_to is null or rs.effective_to >= p_from);
+  for s in select * from jsonb_array_elements(v_new) loop
+    insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from, change_reason)
+    values (p_student, t.id, (s ->> 'weekday')::smallint, (s ->> 'time')::time, e.duration_min, p_from, v_reason);
+  end loop;
+  insert into regular_changes (student_id, enrollment_id, tutor_id, effective_from, old_slots, new_slots, moved, kept, reason, created_by)
+  values (p_student, e.id, t.id, p_from, v_old, v_new, v_moved, v_kept, v_reason, auth.uid())
+  returning id into v_change;
+  return jsonb_build_object('ok', true, 'change_id', v_change, 'moved', jsonb_array_length(v_moved), 'effective_from', p_from, 'last_date', v_last);
+exception
+  when exclusion_violation then
+    raise exception '저장 중 겹침이 생겨 저장하지 않았습니다 (%). 미리 보기를 다시 확인해 주세요.', sqlerrm;
+end $$;
+revoke all on function admin_regular_change(uuid, jsonb, date, text, boolean) from public, anon;
+grant execute on function admin_regular_change(uuid, jsonb, date, text, boolean) to authenticated;
+
+-- ③ 안내 발송 기록: 학생·강사 따로 [발송 완료]
+create or replace function admin_regular_change_sent(p_change uuid, p_who text, p_undo boolean default false)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  rc regular_changes;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_who not in ('student', 'tutor') then raise exception '받는 사람은 student 또는 tutor 입니다.'; end if;
+  select * into rc from regular_changes where id = p_change for update;
+  if not found then raise exception '변경 기록을 찾을 수 없습니다.'; end if;
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_regular_change_sent', true);
+  if p_who = 'student' then
+    update regular_changes set student_sent_at = case when p_undo then null else coalesce(student_sent_at, now()) end,
+                               student_sent_by = case when p_undo then null else coalesce(student_sent_by, auth.uid()) end where id = p_change;
+  else
+    update regular_changes set tutor_sent_at = case when p_undo then null else coalesce(tutor_sent_at, now()) end,
+                               tutor_sent_by = case when p_undo then null else coalesce(tutor_sent_by, auth.uid()) end where id = p_change;
+  end if;
+  select * into rc from regular_changes where id = p_change;
+  return jsonb_build_object('student_sent_at', rc.student_sent_at, 'tutor_sent_at', rc.tutor_sent_at);
+end $$;
+revoke all on function admin_regular_change_sent(uuid, text, boolean) from public, anon;
+grant execute on function admin_regular_change_sent(uuid, text, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 7. 운영진만 종료일 연장 (기존 enrollment_extensions 한 줄, 강사 불가)
+--    새 최종 종료일을 받아 차이만큼 기록. 줄이기(정정)도 가능하지만 예정된 수업보다 앞으로는 못 줄임. 다음 수강권과 겹치면 DB 가 막음
+-- ---------------------------------------------------------------------
+create or replace function admin_extend_enrollment(p_enrollment uuid, p_new_end date, p_kind text, p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  e enrollments;
+  v_days integer;
+  v_note text := nullif(trim(coalesce(p_note, '')), '');
+  v_last date;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 종료일을 바꿀 수 있습니다.' using errcode = '42501'; end if;
+  if p_kind not in ('student_long_term_leave', 'admin_exception', 'correction') then raise exception '연장 사유 종류가 잘못됐습니다.'; end if;
+  if v_note is null then raise exception '사유를 적어 주세요.'; end if;
+  select * into e from enrollments where id = p_enrollment for update;
+  if not found then raise exception '수강권을 찾을 수 없습니다.'; end if;
+  if e.status in ('canceled', 'completed') then raise exception '끝난 수강권(%)의 종료일은 바꿀 수 없습니다.', e.status; end if;
+  if p_new_end is null then raise exception '새 종료일을 골라 주세요.'; end if;
+  v_days := p_new_end - e.final_end_date;
+  if v_days = 0 then raise exception '지금 최종 종료일(%)과 같습니다.', e.final_end_date; end if;
+  if p_new_end < e.base_end_date then raise exception '원래 종료일(%)보다 앞으로는 줄일 수 없습니다.', e.base_end_date; end if;
+  select max(x.kst_date) into v_last from lessons x where x.enrollment_id = e.id and x.state = 'scheduled' and x.voided_at is null;
+  if v_last is not null and p_new_end < v_last then
+    raise exception '%에 예정된 수업이 있어 종료일을 그보다 앞으로 줄일 수 없습니다.', v_last;
+  end if;
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_extend_enrollment', true);
+  begin
+    insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by)
+    values (e.id, v_days, p_kind, v_note, auth.uid());
+  exception when exclusion_violation then
+    raise exception '다음 수강권 기간과 겹쳐 종료일을 %로 바꿀 수 없습니다.', p_new_end using hint = 'next_enrollment';
+  end;
+  select * into e from enrollments where id = p_enrollment;
+  return jsonb_build_object('final_end_date', e.final_end_date, 'days', v_days, 'extension_days', e.extension_days);
+end $$;
+revoke all on function admin_extend_enrollment(uuid, date, text, text) from public, anon;
+grant execute on function admin_extend_enrollment(uuid, date, text, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 8. 강사 화면 (4100 그대로 + 학생 id·이름 표기 ④ 'Kim Seoyeon (Sarah)')
+-- ---------------------------------------------------------------------
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', lms_tutor_student_label(s.name_en, s.display_name), 'student_id', s.id, 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'compensation_of', (select x.starts_at from compensations cc join lessons x on x.id = cc.source_lesson_id where cc.id = l.compensation_id),
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'student_late', coalesce(cr.student_late, false), 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id),
+        'compensation', (select c.status from compensations c where c.source_lesson_id = l.id),
+        'leave_open', l.state = 'scheduled' and exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)
+        and not exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                         and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', lms_tutor_student_label(s.name_en, s.display_name), 'student_id', s.id,
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'compensation', r.compensation_id is not null,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null, 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb),
+    'covers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'student', lms_tutor_student_label(s.name_en, s.display_name), 'student_id', s.id, 'starts_at', i.starts_at, 'ends_at', i.ends_at,
+        'busy', lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id) is not null)
+        order by i.starts_at)
+      from leave_items i join students s on s.id = i.student_id
+      where i.sub_tutor_id = v_tutor and i.choice = 'substitute' and i.sub_stage = 'asked' and i.starts_at > now() and i.lesson_gone_at is null), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- >>> 20261104010000_lms_sheet_student_info.sql
+-- =====================================================================
+-- 4310 ⑤ 기존 Google Sheets 'Student Info' 이전 — 학생별 비교·승인 (H26(44) ⑤ B안)
+--  - 시트는 읽기 전용: Claude 가 Google Sheets 커넥터로 강사별 Class Record 'Student Info' 탭을 읽어 이 표(sheet_student_info)에 넣는다 (시트는 절대 고치지 않음)
+--  - 운영진 화면 '시트 Student Info 비교': 학생별로 시트 값 ↔ LMS 값을 나란히 보여 주고, 대표가 체크한 칸만 admin_student_update 로 반영 (기존 LMS 값 덮어쓰기 없음)
+--  - 자기소개는 원문 그대로(7개로 나누지 않음), 예전 레벨(A2/B1 등)은 level_note(참고), 일정·회차·기간은 LMS 가 원본이라 참고로만 보여 줌
+--  - 학생 짝: 한국 이름이 같으면 자동 제안, 아니면 운영진이 고름 (admin_sheet_row_match). 반영 끝나면 admin_sheet_row_done
+--  지우는 문장 없음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create table if not exists sheet_student_info (
+  id uuid primary key default gen_random_uuid(),
+  sheet_name text not null,            -- 예: 'Benny_Class record'
+  row_no integer not null,             -- 시트의 줄 번호 (머리글 다음부터 2)
+  enrollment_status text,              -- 시트 'Enrollment' (Active/Completed)
+  enrolled_classes text,
+  rollover_classes text,
+  student_name text,
+  preferred_name text,
+  residence text,
+  self_intro text,
+  gender_age text,
+  email text,
+  level text,
+  class_type text,
+  correction_pref text,
+  class_duration text,
+  days_kst text,
+  time_kst text,
+  days_local text,
+  time_local text,
+  docs_link text,
+  course_period text,
+  start_date text,
+  end_date text,
+  extended_end text,
+  student_id uuid references students(id),   -- 운영진이 고른(또는 자동 제안을 확인한) LMS 학생
+  matched_by uuid,
+  matched_at timestamptz,
+  done_at timestamptz,                 -- 반영(또는 '반영 안 함') 끝
+  done_by uuid,
+  done_note text,
+  imported_at timestamptz not null default now(),
+  unique (sheet_name, row_no)
+);
+alter table sheet_student_info enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename = 'sheet_student_info' and policyname = 'admin_read') then
+    create policy admin_read on sheet_student_info for select to authenticated using (is_admin());
+  end if;
+  if not exists (select 1 from pg_trigger where tgname = 'sheet_student_info_audit') then
+    create trigger sheet_student_info_audit after insert or update on sheet_student_info for each row execute function write_audit();
+  end if;
+end $$;
+revoke all on sheet_student_info from public, anon;
+grant select on sheet_student_info to authenticated;
+
+-- 운영진: 시트 줄 전체 + LMS 학생 자동 제안(한국 이름 같음 → 'name_ko', 영문 이름 포함 → 'name_en')
+create or replace function admin_sheet_rows()
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when not is_admin() then null else coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', r.id, 'sheet', r.sheet_name, 'row_no', r.row_no, 'status', r.enrollment_status,
+      'enrolled_classes', r.enrolled_classes, 'rollover_classes', r.rollover_classes,
+      'student_name', r.student_name, 'preferred_name', r.preferred_name, 'residence', r.residence, 'self_intro', r.self_intro,
+      'gender_age', r.gender_age, 'email', r.email, 'level', r.level, 'class_type', r.class_type, 'correction_pref', r.correction_pref,
+      'class_duration', r.class_duration, 'days_kst', r.days_kst, 'time_kst', r.time_kst, 'days_local', r.days_local, 'time_local', r.time_local,
+      'docs_link', r.docs_link, 'course_period', r.course_period, 'start_date', r.start_date, 'end_date', r.end_date, 'extended_end', r.extended_end,
+      'student_id', r.student_id, 'matched_at', r.matched_at, 'done_at', r.done_at, 'done_note', r.done_note, 'imported_at', r.imported_at,
+      'suggest', case when r.student_id is not null then null else (
+        select jsonb_build_object('student_id', s.id, 'how', m.how)
+        from (
+          select s2.id, 'name_ko' as how, 1 as pri from students s2 where s2.name_ko = trim(coalesce(r.student_name, ''))
+          union all
+          select s2.id, 'name_en', 2 from students s2
+          where trim(coalesce(r.student_name, '')) <> '' and (lower(s2.name_en) = lower(trim(r.student_name))
+                 or lower(replace(s2.name_en, ' ', '')) = lower(replace(regexp_replace(r.student_name, '\s*\(.*\)', ''), ' ', '')))
+        ) m join students s on s.id = m.id order by m.pri limit 1) end)
+      order by r.sheet_name, r.row_no)
+    from sheet_student_info r), '[]'::jsonb) end
+$$;
+revoke all on function admin_sheet_rows() from public, anon;
+grant execute on function admin_sheet_rows() to authenticated;
+
+-- 짝 정하기 / 풀기 (p_student null 이면 풀기)
+create or replace function admin_sheet_row_match(p_row uuid, p_student uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_student is not null and not exists (select 1 from students where id = p_student) then raise exception '학생을 찾을 수 없습니다.'; end if;
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_sheet_row_match', true);
+  update sheet_student_info set student_id = p_student, matched_by = case when p_student is null then null else auth.uid() end,
+         matched_at = case when p_student is null then null else now() end, done_at = null, done_by = null, done_note = null
+  where id = p_row;
+  if not found then raise exception '시트 줄을 찾을 수 없습니다.'; end if;
+  return jsonb_build_object('ok', true);
+end $$;
+revoke all on function admin_sheet_row_match(uuid, uuid) from public, anon;
+grant execute on function admin_sheet_row_match(uuid, uuid) to authenticated;
+
+-- 반영 끝 표시 (실제 값 반영은 admin_student_update 로 — 체크한 칸만). p_note: '반영 3칸' / '반영 안 함' 등. p_undo 로 되돌림
+create or replace function admin_sheet_row_done(p_row uuid, p_note text, p_undo boolean default false)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_sheet_row_done', true);
+  update sheet_student_info set done_at = case when p_undo then null else now() end, done_by = case when p_undo then null else auth.uid() end,
+         done_note = case when p_undo then null else nullif(trim(coalesce(p_note, '')), '') end
+  where id = p_row;
+  if not found then raise exception '시트 줄을 찾을 수 없습니다.'; end if;
+  return jsonb_build_object('ok', true);
+end $$;
+revoke all on function admin_sheet_row_done(uuid, text, boolean) from public, anon;
+grant execute on function admin_sheet_row_done(uuid, text, boolean) to authenticated;
+
+-- >>> 20261104120000_lms_class_record_late.sql
+-- =====================================================================
+-- 4400. Class Record 출결·지각 구조 (2026-11-04 대표 요청 7)
+--  - 수업 결과(하나): Held · Student no-show · Tutor no-show(운영자만, 4000) + 지각(별도): Student late · Tutor late (분 단위)
+--  - class_records: student_late_min · tutor_late · tutor_late_min 추가. 기존 student_late(boolean)는 그대로 두고 함께 맞춤
+--  - 결과 이름은 전과 같이 DB가 정함: Held + 강사 지각 = 'Tutor Late - Student Present'(14개 상태·인센티브 'late' 그대로, POL-ST-01)
+--    → 예전 'I was late' 기록은 자동으로 Held + Tutor late 로 읽힘 (분은 비어 있음). 지각만으로 노쇼·보상은 생기지 않음
+--  - tutor_record_class 7개 인자 새 함수 + 예전 5개 인자 함수는 새 함수로 넘김 (지우는 문장 없이, PostgREST 겹침 없음: 새 인자에 기본값 없음)
+--  - 다시 실행해도 같은 결과
+-- =====================================================================
+
+alter table class_records add column if not exists student_late_min int check (student_late_min is null or student_late_min > 0);
+alter table class_records add column if not exists tutor_late boolean not null default false;
+alter table class_records add column if not exists tutor_late_min int check (tutor_late_min is null or tutor_late_min > 0);
+
+-- 예전 기록 호환: 'Tutor Late - Student Present' = 강사 지각 (분은 모름 → 비움)
+update class_records cr set tutor_late = true
+from lessons l where l.id = cr.lesson_id and l.class_status = 'Tutor Late - Student Present' and not cr.tutor_late;
+
+create or replace function tutor_record_class(p_lesson uuid, p_result text, p_topics text, p_remarks text,
+                                              p_student_late boolean, p_student_late_min int, p_tutor_late boolean, p_tutor_late_min int)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  l lessons;
+  v_status class_status;
+  v_topics text := nullif(trim(coalesce(p_topics, '')), '');
+  v_remarks text := nullif(trim(coalesce(p_remarks, '')), '');
+  v_old class_records;
+  v_result text := case when p_result = 'late' then 'held' else p_result end;   -- 예전 화면 호환
+  v_held boolean := v_result = 'held';
+  -- 지각은 수업이 진행됐을(Held) 때만 뜻이 있음
+  v_s_late boolean := v_held and coalesce(p_student_late, false);
+  v_t_late boolean := v_held and (coalesce(p_tutor_late, false) or p_result = 'late');
+  v_s_min int := case when v_s_late then p_student_late_min end;
+  v_t_min int := case when v_t_late then p_tutor_late_min end;
+begin
+  select * into l from lessons where id = p_lesson for update;
+  if not found then raise exception 'Class not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and l.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your class.' using errcode = '42501';
+  end if;
+  if l.class_status = 'Tutor no-show' and not is_admin() then
+    raise exception 'Edge English recorded this class. Please contact the Edge English team.' using hint = 'locked';
+  end if;
+  if l.voided_at is not null or l.state = 'canceled' then
+    raise exception 'This class was canceled (%). No record needed.', coalesce(l.class_status::text, 'removed') using hint = 'canceled';
+  end if;
+  if l.starts_at > now() then raise exception 'You can record this class after it starts.' using hint = 'not_started'; end if;
+  if exists (select 1 from payroll_items where lesson_id = l.id) then
+    raise exception 'This class is already in payroll. Please contact Edge English to change it.' using hint = 'locked';
+  end if;
+  if (v_s_min is not null and v_s_min <= 0) or (v_t_min is not null and v_t_min <= 0) then
+    raise exception 'Late minutes must be more than 0.' using hint = 'late';
+  end if;
+  if v_held then
+    if v_topics is null then raise exception 'Please enter the covered topics.' using hint = 'topics'; end if;
+    if v_t_late and v_remarks is null then raise exception 'Please write why you were late in Remarks.' using hint = 'remarks'; end if;
+    v_status := case when v_t_late then 'Tutor Late - Student Present'
+                     when l.kind in ('makeup', 'migrated_makeup', 'compensation') then 'Make-up completed'
+                     when l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id then 'Covered by another tutor'
+                     else 'Normal' end;
+  elsif v_result = 'student_no_show' then
+    v_status := 'Student no-show';
+  elsif v_result = 'tutor_no_show' then
+    if not is_admin() then raise exception 'Only the Edge English team can record a tutor no-show.' using errcode = '42501'; end if;
+    v_status := 'Tutor no-show';
+  else
+    raise exception 'Please choose how the class went.';
+  end if;
+
+  select * into v_old from class_records where lesson_id = l.id;
+  if l.state = 'done' and l.class_status = v_status and found
+     and v_old.covered_topics is not distinct from v_topics and v_old.remarks is not distinct from v_remarks
+     and v_old.student_late = v_s_late and v_old.student_late_min is not distinct from v_s_min
+     and v_old.tutor_late = v_t_late and v_old.tutor_late_min is not distinct from v_t_min then
+    return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', true);
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_record_class' else 'tutor_record_class' end, true);
+  update lessons set state = 'done', class_status = v_status where id = l.id and (state, class_status) is distinct from ('done', v_status);
+  if v_status = 'Tutor no-show' then
+    insert into compensations (student_id, enrollment_id, source_lesson_id, reason, confirmed_by)
+    values (l.student_id, l.enrollment_id, l.id, 'tutor_no_show', me)
+    on conflict (source_lesson_id) do update set status = 'available' where compensations.status = 'voided';
+  else
+    update compensations set status = 'voided' where source_lesson_id = l.id and status = 'available';
+  end if;
+  insert into class_records (lesson_id, covered_topics, remarks, student_late, student_late_min, tutor_late, tutor_late_min, submitted_by)
+  values (l.id, v_topics, v_remarks, v_s_late, v_s_min, v_t_late, v_t_min, me)
+  on conflict (lesson_id) do update set covered_topics = excluded.covered_topics, remarks = excluded.remarks,
+    student_late = excluded.student_late, student_late_min = excluded.student_late_min,
+    tutor_late = excluded.tutor_late, tutor_late_min = excluded.tutor_late_min, submitted_by = excluded.submitted_by;
+  return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', false);
+end $$;
+revoke all on function tutor_record_class(uuid, text, text, text, boolean, int, boolean, int) from public, anon;
+grant execute on function tutor_record_class(uuid, text, text, text, boolean, int, boolean, int) to authenticated;
+
+-- 예전 화면(5개 인자) 호환: 새 함수로 넘김
+create or replace function tutor_record_class(p_lesson uuid, p_result text, p_topics text, p_remarks text, p_student_late boolean default false)
+returns jsonb
+language sql security definer set search_path = public as $$
+  select tutor_record_class(p_lesson, p_result, p_topics, p_remarks, p_student_late, null::int, p_result = 'late', null::int);
+$$;
+
+-- 강사 화면: 지각 칸 추가 (4300 그대로 + student_late_min · tutor_late · tutor_late_min)
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', lms_tutor_student_label(s.name_en, s.display_name), 'student_id', s.id, 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'compensation_of', (select x.starts_at from compensations cc join lessons x on x.id = cc.source_lesson_id where cc.id = l.compensation_id),
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'student_late', coalesce(cr.student_late, false), 'student_late_min', cr.student_late_min, 'tutor_late', coalesce(cr.tutor_late, false), 'tutor_late_min', cr.tutor_late_min, 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id),
+        'compensation', (select c.status from compensations c where c.source_lesson_id = l.id),
+        'leave_open', l.state = 'scheduled' and exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)
+        and not exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                         and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', lms_tutor_student_label(s.name_en, s.display_name), 'student_id', s.id,
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'compensation', r.compensation_id is not null,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null, 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb),
+    'covers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'student', lms_tutor_student_label(s.name_en, s.display_name), 'student_id', s.id, 'starts_at', i.starts_at, 'ends_at', i.ends_at,
+        'busy', lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id) is not null)
+        order by i.starts_at)
+      from leave_items i join students s on s.id = i.student_id
+      where i.sub_tutor_id = v_tutor and i.choice = 'substitute' and i.sub_stage = 'asked' and i.starts_at > now() and i.lesson_gone_at is null), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+-- >>> 20261104130000_lms_tutor_self_no_show.sql
+-- =====================================================================
+-- 4401. 강사 본인도 Tutor no-show 기록 (2026-11-04 대표: 강사가 직접 고를 수 있어야 함, 4000 '운영자만' 변경)
+--  - 결과·보상수업 1회·학생 보강 1회·강사 급여 없음은 4000 그대로 (기록 방식만 열림)
+--  - 운영자가 기록한 강사 노쇼는 여전히 강사가 못 고침(submitted_by 가 본인일 때만 고칠 수 있음)
+--  - 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function tutor_record_class(p_lesson uuid, p_result text, p_topics text, p_remarks text,
+                                              p_student_late boolean, p_student_late_min int, p_tutor_late boolean, p_tutor_late_min int)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  l lessons;
+  v_status class_status;
+  v_topics text := nullif(trim(coalesce(p_topics, '')), '');
+  v_remarks text := nullif(trim(coalesce(p_remarks, '')), '');
+  v_old class_records;
+  v_result text := case when p_result = 'late' then 'held' else p_result end;   -- 예전 화면 호환
+  v_held boolean := v_result = 'held';
+  -- 지각은 수업이 진행됐을(Held) 때만 뜻이 있음
+  v_s_late boolean := v_held and coalesce(p_student_late, false);
+  v_t_late boolean := v_held and (coalesce(p_tutor_late, false) or p_result = 'late');
+  v_s_min int := case when v_s_late then p_student_late_min end;
+  v_t_min int := case when v_t_late then p_tutor_late_min end;
+begin
+  select * into l from lessons where id = p_lesson for update;
+  if not found then raise exception 'Class not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and l.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your class.' using errcode = '42501';
+  end if;
+  -- 운영자가 기록한 강사 노쇼는 강사가 못 고침. 강사 본인이 기록한 것은 본인이 고칠 수 있음 (4401)
+  if l.class_status = 'Tutor no-show' and not is_admin()
+     and (select cr0.submitted_by from class_records cr0 where cr0.lesson_id = l.id) is distinct from me then
+    raise exception 'Edge English recorded this class. Please contact the Edge English team.' using hint = 'locked';
+  end if;
+  if l.voided_at is not null or l.state = 'canceled' then
+    raise exception 'This class was canceled (%). No record needed.', coalesce(l.class_status::text, 'removed') using hint = 'canceled';
+  end if;
+  if l.starts_at > now() then raise exception 'You can record this class after it starts.' using hint = 'not_started'; end if;
+  if exists (select 1 from payroll_items where lesson_id = l.id) then
+    raise exception 'This class is already in payroll. Please contact Edge English to change it.' using hint = 'locked';
+  end if;
+  if (v_s_min is not null and v_s_min <= 0) or (v_t_min is not null and v_t_min <= 0) then
+    raise exception 'Late minutes must be more than 0.' using hint = 'late';
+  end if;
+  if v_held then
+    if v_topics is null then raise exception 'Please enter the covered topics.' using hint = 'topics'; end if;
+    if v_t_late and v_remarks is null then raise exception 'Please write why you were late in Remarks.' using hint = 'remarks'; end if;
+    v_status := case when v_t_late then 'Tutor Late - Student Present'
+                     when l.kind in ('makeup', 'migrated_makeup', 'compensation') then 'Make-up completed'
+                     when l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id then 'Covered by another tutor'
+                     else 'Normal' end;
+  elsif v_result = 'student_no_show' then
+    v_status := 'Student no-show';
+  elsif v_result = 'tutor_no_show' then
+    v_status := 'Tutor no-show';
+  else
+    raise exception 'Please choose how the class went.';
+  end if;
+
+  select * into v_old from class_records where lesson_id = l.id;
+  if l.state = 'done' and l.class_status = v_status and found
+     and v_old.covered_topics is not distinct from v_topics and v_old.remarks is not distinct from v_remarks
+     and v_old.student_late = v_s_late and v_old.student_late_min is not distinct from v_s_min
+     and v_old.tutor_late = v_t_late and v_old.tutor_late_min is not distinct from v_t_min then
+    return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', true);
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_record_class' else 'tutor_record_class' end, true);
+  update lessons set state = 'done', class_status = v_status where id = l.id and (state, class_status) is distinct from ('done', v_status);
+  if v_status = 'Tutor no-show' then
+    insert into compensations (student_id, enrollment_id, source_lesson_id, reason, confirmed_by)
+    values (l.student_id, l.enrollment_id, l.id, 'tutor_no_show', me)
+    on conflict (source_lesson_id) do update set status = 'available' where compensations.status = 'voided';
+  else
+    update compensations set status = 'voided' where source_lesson_id = l.id and status = 'available';
+  end if;
+  insert into class_records (lesson_id, covered_topics, remarks, student_late, student_late_min, tutor_late, tutor_late_min, submitted_by)
+  values (l.id, v_topics, v_remarks, v_s_late, v_s_min, v_t_late, v_t_min, me)
+  on conflict (lesson_id) do update set covered_topics = excluded.covered_topics, remarks = excluded.remarks,
+    student_late = excluded.student_late, student_late_min = excluded.student_late_min,
+    tutor_late = excluded.tutor_late, tutor_late_min = excluded.tutor_late_min, submitted_by = excluded.submitted_by;
+  return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', false);
+end $$;
+revoke all on function tutor_record_class(uuid, text, text, text, boolean, int, boolean, int) from public, anon;
+grant execute on function tutor_record_class(uuid, text, text, text, boolean, int, boolean, int) to authenticated;
+
+-- >>> 20261104140000_lms_tutor_students_admin_view.sql
+-- =====================================================================
+-- 4402. 강사 화면 Students 메뉴 — 운영자 보기 (2026-11-04 대표: 강사 계정 접근 권한은 그대로, 운영자도 같은 목록)
+--  - tutor_students_list(p_tutor): 강사 본인(p_tutor 비움) 또는 운영자(TOTP, 강사 고름) — lms_screen_tutor 가 확인
+--  - 누가 보이는지는 4300 lms_tutor_student_access 그대로 (정규 담당 + 확정된 대체수업 학생, 대체는 이메일 없음)
+--  - tutor_my_students 는 그대로 둠 (지우는 문장 없음). 다시 실행해도 같은 결과
+-- =====================================================================
+create or replace function tutor_students_list(p_tutor uuid default null)
+returns table (student_id uuid, display_name text, country text, timezone text, level text, class_type text, class_note_url text, access text)
+language sql stable security definer set search_path = public as $$
+  select s.id, lms_tutor_student_label(s.name_en, s.display_name), s.country, s.timezone, s.level, s.class_type, s.class_note_url, a.access
+  from students s
+  cross join lateral (select lms_tutor_student_access(lms_screen_tutor(p_tutor), s.id) as access) a
+  where a.access is not null
+$$;
+revoke all on function tutor_students_list(uuid) from public, anon;
+grant execute on function tutor_students_list(uuid) to authenticated;
+
+-- >>> 20261104150000_lms_tutor_schedule_blocks.sql
+-- =====================================================================
+-- 4403. 강사 Schedule — 날짜별 막기(Block time)·열기(Make available) (2026-11-04 대표 결정, 정책 원본 H26(49)+(50),
+--       시안 docs/lms/previews/tutor-schedule-drafts.html 시안 2)
+--  - My hours 의 'One week only' 를 없애고 Schedule 에서 날짜별로 바꿈. 기간 = 강사 현지 오늘부터 12주(84일) 후까지 (대표 H26(50) ②)
+--  - 막기: tutor_time_off kind 'block' (기존 One week only 와 같은 표) + 메모(reason, 선택, 최대 100자, 대표 H26(50) ③)
+--    메모는 강사 본인·운영진만 봄. 학생 쪽 함수는 reason 을 돌려주지 않음(그대로)
+--  - 그날만 열기: 새 표 tutor_open_once — 매주 닫힌 칸(회색)을 그날만 엶. lms_tutor_available 이 이 표도 봄
+--    (보강 날짜·대체강사 판정에 바로 반영). 현지 06:00~22:30 시작 규칙(4200)은 그대로
+--  - 그대로 지킴: 수업·보강·답 대기·휴무 칸은 못 막음, 지난 시간·6시간 안은 못 바꿈. 판정은 lms_hours_cell 하나
+--  - 바뀐 기록은 tutor_hours_changes 에 (운영자 보기 '바뀐 기록')
+-- 기존 표·데이터·함수 인자는 그대로 (tutor_hours·tutor_hours_save 는 Availability 화면이 계속 씀). 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 그날만 연 시간 (30분 칸 = 그 시각 수업 시작 가능, [starts_at, ends_at) 안의 칸 시작)
+-- ---------------------------------------------------------------------
+create table if not exists tutor_open_once (
+  id uuid primary key default gen_random_uuid(),
+  tutor_id uuid not null references tutors(id),
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+create index if not exists tutor_open_once_tutor on tutor_open_once (tutor_id, starts_at);
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'tutor_open_once_audit') then
+    perform lms_protect('tutor_open_once'::regclass);
+    create policy tutor_own on tutor_open_once for select to authenticated using (tutor_id = my_tutor_id());
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 2. 가능 판정: 매주 가능 시간(4200 그대로) 또는 그날만 연 시간
+-- ---------------------------------------------------------------------
+create or replace function lms_tutor_weekly_ok(p_tutor uuid, p_start timestamptz) returns boolean
+language sql stable security definer set search_path = public as $$
+  select lms_tutor_start_ok(p_tutor, p_start)
+     and exists (select 1 from tutor_availability a
+                 where a.tutor_id = p_tutor
+                   and a.effective_from <= (p_start at time zone 'Asia/Seoul')::date
+                   and (a.effective_to is null or a.effective_to >= (p_start at time zone 'Asia/Seoul')::date)
+                   and extract(dow from (p_start at time zone a.timezone)) = a.weekday
+                   and (p_start at time zone a.timezone)::time between a.start_local and a.end_local)
+$$;
+revoke all on function lms_tutor_weekly_ok(uuid, timestamptz) from public, anon, authenticated;
+
+create or replace function lms_tutor_available(p_tutor uuid, p_start timestamptz) returns boolean
+language sql stable security definer set search_path = public as $$
+  select lms_tutor_weekly_ok(p_tutor, p_start)
+      or (lms_tutor_start_ok(p_tutor, p_start)
+          and exists (select 1 from tutor_open_once o where o.tutor_id = p_tutor and o.starts_at <= p_start and p_start < o.ends_at))
+$$;
+revoke all on function lms_tutor_available(uuid, timestamptz) from public, anon, authenticated;
+
+-- 칸 판정 (3100 과 같고 x 추가): c 수업·보강 · r 보강 신청/대체 요청 답 대기 · l 휴무 · p 6시간 안·지난 시간
+--  · s 매주 닫힘 · b 막음 · x 매주 닫혔지만 그날만 엶 · o 열림
+create or replace function lms_hours_cell(p_tutor uuid, p_at timestamptz) returns text
+language sql stable security definer set search_path = public as $$
+  select case
+    when exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled' and x.voided_at is null
+                 and x.starts_at < p_at + interval '30 minutes' and p_at < x.ends_at) then 'c'
+    when exists (select 1 from makeup_candidates c join makeup_requests r on r.id = c.request_id
+                 where r.tutor_id = p_tutor and r.status in ('requested', 'countered') and coalesce(c.tutor_answer, 'yes') = 'yes'
+                   and c.starts_at < p_at + interval '30 minutes' and p_at < c.ends_at)
+      or exists (select 1 from leave_items i where i.sub_tutor_id = p_tutor and i.sub_stage in ('asked', 'tutor_ok')
+                 and i.starts_at < p_at + interval '30 minutes' and p_at < i.ends_at) then 'r'
+    when exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'leave'
+                 and o.starts_at < p_at + interval '30 minutes' and p_at < o.ends_at) then 'l'
+    when p_at < now() + interval '6 hours' then 'p'
+    when not lms_tutor_available(p_tutor, p_at) then 's'
+    when exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'block'
+                 and o.starts_at < p_at + interval '30 minutes' and p_at < o.ends_at) then 'b'
+    when not lms_tutor_weekly_ok(p_tutor, p_at) then 'x'
+    else 'o' end
+$$;
+revoke all on function lms_hours_cell(uuid, timestamptz) from public, anon, authenticated;
+
+-- 시간대 이름 (화면 cityTime 과 같음): 'Toronto Time' · 'Korea Time (KST)'
+create or replace function lms_city_time(p_tz text) returns text
+language sql immutable as $$
+  select case when p_tz = 'Asia/Seoul' then 'Korea Time (KST)' else replace(regexp_replace(p_tz, '^.*/', ''), '_', ' ') || ' Time' end
+$$;
+revoke all on function lms_city_time(text) from public, anon, authenticated;
+
+-- 예전 One week only 로 막은 줄의 고정 글 → 화면에서는 메모 없음
+create or replace function lms_block_note(p_reason text) returns text
+language sql immutable as $$
+  select nullif(nullif(btrim(coalesce(p_reason, '')), ''), 'Unavailable this week (My hours)')
+$$;
+revoke all on function lms_block_note(text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 3. 화면 읽기: p_from~p_to (강사 현지 날짜, 최대 50일 — 한 달 표 6주 + 앞뒤 하루). p_cells = 칸 판정도 (Week 보기만, 오늘~12주 안 날짜만)
+-- ---------------------------------------------------------------------
+create or replace function tutor_schedule(p_tutor uuid, p_from date, p_to date, p_cells boolean default false)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+  v_today date;
+  v_last date;
+  v_times time[];
+  v_a timestamptz;
+  v_b timestamptz;
+begin
+  if p_from is null or p_to is null or p_to < p_from or p_to - p_from > 49 then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  v_today := (now() at time zone t.timezone)::date;
+  v_last := v_today + 84;   -- 오늘부터 12주 후까지 (대표 H26(50) ②)
+  v_times := array(select lms_hours_times(t.timezone, v_today));
+  v_a := p_from::timestamp at time zone t.timezone;
+  v_b := (p_to + 1)::timestamp at time zone t.timezone;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone),
+    'today', v_today,
+    'last', v_last,
+    'times', to_jsonb(array(select to_char(x, 'HH24:MI') from unnest(v_times) x)),
+    'cells', case when p_cells then coalesce((select jsonb_object_agg(k, c) from (
+        select to_char(ld + tm, 'YYYY-MM-DD"T"HH24:MI') k, lms_hours_cell(v_tutor, (ld + tm) at time zone t.timezone) c
+        from generate_series(greatest(p_from, v_today), least(p_to, v_last), interval '1 day') g
+        cross join lateral (select g::date ld) d cross join unnest(v_times) tm) z
+      where c <> 'o'), '{}'::jsonb) end,
+    'blocks', coalesce((select jsonb_agg(jsonb_build_object(
+        'id', o.id, 'kind', o.kind,
+        'start', to_char(o.starts_at at time zone t.timezone, 'YYYY-MM-DD"T"HH24:MI'),
+        'end', to_char(o.ends_at at time zone t.timezone, 'YYYY-MM-DD"T"HH24:MI'),
+        -- 휴무(leave) 사유는 운영진이 적은 글이라 강사 화면에 안 보냄
+        'note', case when o.kind = 'block' then lms_block_note(o.reason) end) order by o.starts_at)
+      from tutor_time_off o where o.tutor_id = v_tutor and o.starts_at < v_b and v_a < o.ends_at), '[]'::jsonb),
+    'opens', coalesce((select jsonb_agg(jsonb_build_object(
+        'start', to_char(o.starts_at at time zone t.timezone, 'YYYY-MM-DD"T"HH24:MI'),
+        'end', to_char(o.ends_at at time zone t.timezone, 'YYYY-MM-DD"T"HH24:MI')) order by o.starts_at)
+      from tutor_open_once o where o.tutor_id = v_tutor and o.starts_at < v_b and v_a < o.ends_at), '[]'::jsonb));
+end $$;
+revoke all on function tutor_schedule(uuid, date, date, boolean) from public, anon;
+grant execute on function tutor_schedule(uuid, date, date, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 4. 저장
+--  p_action 'block'   p_cells(강사 현지 'YYYY-MM-DDTHH:MI') 막기 + p_note. 그날만 연 칸(x)이면 그 열기를 거둠
+--           'open'    p_cells 그날만 열기 (매주 닫힌 칸 s 만)
+--           'note'    p_block 메모 고치기 (비우면 메모 없음)
+--           'unblock' p_block 막기 풀기 (6시간 안 부분은 그대로 둠)
+-- ---------------------------------------------------------------------
+create or replace function tutor_schedule_save(p_tutor uuid, p_action text, p_cells text[] default null, p_note text default null, p_block uuid default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  v_tz text;
+  v_today date;
+  v_last date;
+  v_times time[];
+  v_note text := nullif(btrim(coalesce(p_note, '')), '');
+  v_keys text[];
+  k text;
+  v_c text;
+  v_at timestamptz;
+  v_end timestamptz;
+  v_cut timestamptz;
+  o record;
+  v_s timestamptz;
+  v_e timestamptz;
+  v_runs tstzrange[];
+  v_xs boolean[];
+  i int;
+  v_changes jsonb;
+begin
+  select timezone into v_tz from tutors where id = v_tutor;
+  v_today := (now() at time zone v_tz)::date;
+  v_last := v_today + 84;   -- 오늘부터 12주 후까지 (대표 H26(50) ②)
+  v_times := array(select lms_hours_times(v_tz, v_today));
+  perform set_config('app.actor_id', coalesce(auth.uid()::text, ''), true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_tutor_schedule' else 'tutor_schedule' end, true);
+  if v_note is not null and char_length(v_note) > 100 then raise exception 'Note is too long (100 characters max).'; end if;   -- 대표 H26(50) ③
+
+  if p_action in ('block', 'open') then
+    v_keys := array(select distinct x from unnest(coalesce(p_cells, '{}')) x order by 1);
+    if cardinality(v_keys) = 0 then raise exception 'Pick a time.'; end if;
+    foreach k in array v_keys loop
+      if k !~ '^\d{4}-\d\d-\d\dT\d\d:\d\d$' or not (right(k, 5)::time = any (v_times)) then raise exception 'Invalid time: %', k; end if;
+      if left(k, 10)::date < v_today or left(k, 10)::date > v_last then raise exception 'You can only change times up to 12 weeks ahead.'; end if;
+      v_at := (left(k, 10)::date + right(k, 5)::time) at time zone v_tz;
+      v_c := lms_hours_cell(v_tutor, v_at);
+      if v_c = 'c' then
+        select format('You have a class at %s %s. Classes can''t be blocked.', to_char(x.starts_at at time zone v_tz, 'HH24:MI'), lms_city_time(v_tz)) into k
+        from lessons x where x.tutor_id = v_tutor and x.state <> 'canceled' and x.voided_at is null
+          and x.starts_at < v_at + interval '30 minutes' and v_at < x.ends_at order by x.starts_at limit 1;
+        raise exception '%', k;
+      end if;
+      if v_c = 'p' then raise exception 'Can''t change: less than 6 hours away.'; end if;
+      if v_c = 'r' then raise exception 'A make-up or cover request is waiting for this time. Answer it first.'; end if;
+      if v_c = 'l' then raise exception 'This time is in your leave.'; end if;
+      if p_action = 'block' and v_c not in ('o', 'x') then
+        raise exception '% % is already %.', left(k, 10), right(k, 5), case v_c when 'b' then 'blocked' else 'not available' end;
+      end if;
+      if p_action = 'open' and v_c <> 's' then raise exception '% % is already available.', left(k, 10), right(k, 5); end if;
+    end loop;
+
+    -- 이어진 칸 = 한 줄 (메모는 줄마다 그대로, 다른 줄과 합치지 않음). 바꾸기 전에 묶음을 먼저 다 계산해 둠
+    select array_agg(tstzrange(s, e) order by s), array_agg(all_x order by s) into v_runs, v_xs
+    from (select min(a) s, max(a) + interval '30 minutes' e, bool_and(c = 'x') all_x
+          from (select a, c, extract(epoch from a)::bigint / 1800 - row_number() over (partition by c = 'x' order by a) grp
+                from (select (left(x, 10)::date + right(x, 5)::time) at time zone v_tz a, lms_hours_cell(v_tutor, (left(x, 10)::date + right(x, 5)::time) at time zone v_tz) c
+                      from unnest(v_keys) x) q) z
+          group by grp, (c = 'x')) w;
+    for i in 1 .. cardinality(v_runs) loop
+      v_s := lower(v_runs[i]);
+      v_e := upper(v_runs[i]);
+      if p_action = 'open' then
+        -- 붙어 있는 그날만 연 줄과 합침
+        v_at := v_s;
+        v_end := v_e;
+        for o in select * from tutor_open_once where tutor_id = v_tutor and starts_at <= v_end and v_at <= ends_at loop
+          v_at := least(v_at, o.starts_at);
+          v_end := greatest(v_end, o.ends_at);
+          delete from tutor_open_once where id = o.id;
+        end loop;
+        insert into tutor_open_once (tutor_id, starts_at, ends_at, created_by) values (v_tutor, v_at, v_end, auth.uid());
+      elsif v_xs[i] then
+        -- 그날만 연 칸을 다시 막음 = 그 열기를 그 칸만 거둠 (매주 닫힌 시간으로 돌아감)
+        for o in select * from tutor_open_once where tutor_id = v_tutor and starts_at < v_e and v_s < ends_at loop
+          delete from tutor_open_once where id = o.id;
+          if o.starts_at < v_s then insert into tutor_open_once (tutor_id, starts_at, ends_at, created_by) values (v_tutor, o.starts_at, v_s, o.created_by); end if;
+          if v_e < o.ends_at then insert into tutor_open_once (tutor_id, starts_at, ends_at, created_by) values (v_tutor, v_e, o.ends_at, o.created_by); end if;
+        end loop;
+      else
+        insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by) values (v_tutor, v_s, v_e, 'block', v_note, auth.uid());
+      end if;
+    end loop;
+    v_changes := jsonb_build_object('from', v_today, 'weekly_open', '[]'::jsonb, 'weekly_close', '[]'::jsonb,
+      'once_close', case when p_action = 'block' then to_jsonb(v_keys) else '[]'::jsonb end, 'once_open', '[]'::jsonb,
+      'day_open', case when p_action = 'open' then to_jsonb(v_keys) else '[]'::jsonb end, 'note', v_note);
+
+  elsif p_action in ('note', 'unblock') then
+    select * into o from tutor_time_off where id = p_block and tutor_id = v_tutor and kind = 'block';
+    if not found then raise exception 'This blocked time is gone. Please refresh.'; end if;
+    if o.ends_at <= now() then raise exception 'Can''t change: this time has passed.'; end if;
+    if p_action = 'note' then
+      update tutor_time_off set reason = v_note where id = o.id;
+      v_changes := jsonb_build_object('from', v_today, 'weekly_open', '[]'::jsonb, 'weekly_close', '[]'::jsonb, 'once_close', '[]'::jsonb, 'once_open', '[]'::jsonb,
+        'day_open', '[]'::jsonb, 'note', v_note,
+        'note_of', to_char(o.starts_at at time zone v_tz, 'YYYY-MM-DD"T"HH24:MI') || '/' || to_char(o.ends_at at time zone v_tz, 'YYYY-MM-DD"T"HH24:MI'));
+    else
+      -- 6시간 안 부분은 못 바꿈 → 그 뒤 첫 30분 칸(강사 현지)부터만 풂
+      v_cut := date_bin(interval '30 minutes', ((now() + interval '6 hours') at time zone v_tz) + interval '30 minutes' - interval '1 microsecond', timestamp '2000-01-01') at time zone v_tz;
+      if o.ends_at <= v_cut then raise exception 'Can''t change: less than 6 hours away.'; end if;
+      v_keys := array(select to_char(g at time zone v_tz, 'YYYY-MM-DD"T"HH24:MI')
+                      from generate_series(greatest(o.starts_at, v_cut), o.ends_at - interval '1 second', interval '30 minutes') g
+                      where (g at time zone v_tz)::time = any (v_times));
+      delete from tutor_time_off where id = o.id;
+      if o.starts_at < v_cut then
+        insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by) values (v_tutor, o.starts_at, v_cut, 'block', o.reason, o.created_by);
+      end if;
+      v_changes := jsonb_build_object('from', v_today, 'weekly_open', '[]'::jsonb, 'weekly_close', '[]'::jsonb, 'once_close', '[]'::jsonb,
+        'once_open', to_jsonb(v_keys), 'day_open', '[]'::jsonb, 'note', null);
+    end if;
+  else
+    raise exception 'Invalid action.';
+  end if;
+
+  insert into tutor_hours_changes (tutor_id, actor, by_admin, changes) values (v_tutor, auth.uid(), is_admin(), v_changes);
+  return v_changes;
+end $$;
+revoke all on function tutor_schedule_save(uuid, text, text[], text, uuid) from public, anon;
+grant execute on function tutor_schedule_save(uuid, text, text[], text, uuid) to authenticated;
+
+-- >>> 20261105000000_lms_qa1104_booking_guards.sql
+-- =====================================================================
+-- 4500. Work QA(2026-11-04) 보고서 수정 — 예약 확정 검사·권리 정합성 (QA-01 · QA-12 · QA-13 · QA-08) + 대표 추가 요청 1·3
+--  QA-01 강사 불가 답·닫힌 시간·현지 06:00 전인데도 확정됨
+--   - lms_makeup_conflict: 강사가 연 시간(매주 Availability 또는 Schedule 그날만 열기, lms_tutor_available)이 아니면 충돌
+--     → 운영진 보강·보상 확정, 강사 '가능' 답, 강사 화면 busy, 학생 보강 가능한 날짜 모두 같은 판정.
+--     학생 후보는 처음부터 연 시간에서만 나오므로(2800·4200), 후보가 생긴 뒤 강사가 그 시간을 닫으면 확정이 막힘 (QA-01 A)
+--     강사가 말한 다른 시간을 운영진이 넣을 때도 같음 — 그 시간은 강사가 Schedule 에서 먼저 열어야 함(기록된 날짜별 개방 = 최종 검사와 일치)
+--   - lms_sub_conflict(대체강사): 강사 현지 06:00~22:30 시작 규칙(4200, POL-OP-02)을 대체 묻기·가능·확정 모든 경로에 적용 (QA-01 C)
+--     '보통 시간 밖' 은 2700 대표 결정(예외는 항상 있음, 강사가 받아 주면 됨) 그대로 안내만 — 정책 변경은 대표 결정 사항으로 보고 (QA-01 B)
+--   - admin_makeup_confirm: 강사가 '불가' 라고 답한 학생 후보 시간은 확정 못 함 (QA-01 D)
+--  QA-12 보강·보상수업이 이미 잡힌 강사 노쇼를 Held 로 바꾸면 조용히 모순 상태가 남음
+--   - tutor_record_class: 노쇼를 다른 결과로 고치기 전에 사용된 보상권·살아 있는 보강·열린 보강 신청을 확인 → 있으면 거절(운영진이 먼저 정리)
+--  QA-13 변경권 0개(또는 6시간 안) 보강 취소 뒤 원래 수업의 보강권이 되살아남
+--   - 보강 수업이 '취소'(voided 아님)되면 그 권리는 보강 수업 자체의 결과로 이어진 것 → 원래 수업은 다시 보강권이 되지 않음
+--     (student_screen makeup_rights · lms_makeup_source · 화면 makeupRights 같은 기준). 운영진 '보강 없애기'·'되돌리기'(voided)는 전처럼 원래 권리 복구
+--   - 신청 내역: 확정된 보강 수업이 취소되면 '확정' 대신 취소로 보임 (confirmed_state)
+--  QA-08 강사가 모든 후보에 '불가' 라고 답하면 학생에게 '최종 확정 대기' 대신 재조율 상태로 (tutor_declined_all)
+--  추가 요청 1 (Back-to-back): 학생 '보강 가능한 날짜' 가 10분 휴식만 보던 것을 lms_makeup_conflict(같은 학생 20분 수업끼리 예외, POL-OP-21)로 → 학생이 직접 이어 붙일 수 있음
+--  추가 요청 3: 운영진 변경권 수동 조정 admin_credit_adjust(사유 필수, ±1, 이력 = credit_ledger 'admin_adjust', 전후 수량 반환) + admin_credits 읽기
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과. 숫자(휴식 10분·20분·2개·06:00~22:30)는 기존 값 그대로
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. 보강 충돌: 강사가 연 시간이 아니면 충돌 (QA-01 A) — 나머지는 4200 그대로
+-- ---------------------------------------------------------------------
+create or replace function lms_makeup_conflict(p_tutor uuid, p_student uuid, p_start timestamptz, p_end timestamptz, p_student_wants boolean)
+returns text
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';      -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+  v_b2b_min constant integer := 20;                         -- POL-OP-21 예외 (policy.ts CONFIRMED.backToBackNoBreakDurationMin)
+  v_b2b_max constant integer := 2;                          -- POL-OP-21 예외 (policy.ts CONFIRMED.backToBackNoBreakMaxLessons)
+  v_new_b2b boolean := p_student_wants and p_end - p_start = make_interval(mins => v_b2b_min);
+  v_near uuid[];
+  v_chain integer;
+begin
+  -- 강사 현지 06:00~22:30 시작만 (POL-OP-02, 4200)
+  if not lms_tutor_start_ok(p_tutor, p_start) then
+    return '강사 현지 06:00~22:30 밖의 시작 시각';
+  end if;
+  -- 강사가 연 시간(매주 Availability 또는 Schedule 에서 그날만 열기)이어야 함 (QA-01, 4500)
+  if not lms_tutor_available(p_tutor, p_start) then
+    return '강사가 열어 둔 시간이 아님(Availability·Schedule)';
+  end if;
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사 휴무';
+  end if;
+  if exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled'
+             and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at
+             and (x.starts_at < p_end and p_start < x.ends_at
+                  or not (v_new_b2b and x.student_id = p_student and x.ends_at - x.starts_at = make_interval(mins => v_b2b_min)))) then
+    return '강사 다른 수업(휴식 10분 포함)';
+  end if;
+  select coalesce(array_agg(x.id), '{}') into v_near from lessons x
+  where x.tutor_id = p_tutor and x.state <> 'canceled'
+    and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at;
+  if cardinality(v_near) = 0 then return null; end if;
+  select 1 + cardinality(v_near) + count(distinct y.id) into v_chain from lessons y
+  where y.tutor_id = p_tutor and y.state <> 'canceled' and y.id <> all(v_near)
+    and not (y.starts_at < p_end + v_break and p_start - v_break < y.ends_at)
+    and exists (select 1 from lessons x where x.id = any(v_near)
+                and y.starts_at < x.ends_at + v_break and x.starts_at - v_break < y.ends_at);
+  if v_chain > v_b2b_max then
+    return format('쉬지 않고 이어 붙이는 수업(%s분 %s개까지)', v_b2b_min, v_b2b_max);
+  end if;
+  return null;
+end $$;
+revoke all on function lms_makeup_conflict(uuid, uuid, timestamptz, timestamptz, boolean) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 1-b. Schedule 칸 판정 (4403 그대로, 순서만): 매주 닫힌 칸(s)은 답 대기(r)보다 먼저 —
+--      후보 시간을 강사가 닫아 두면 그 칸은 '닫힘' 으로 보이고 Make available 로 다시 열 수 있음 (QA-01 A 재조율 경로).
+--      전에는 r 이 먼저라 '먼저 답하세요' 와 '닫힌 시간은 가능 답 불가' 가 서로 막았음. 열린 칸의 답 대기(r)·6시간 안(p)·수업(c)·휴무(l)는 그대로
+-- ---------------------------------------------------------------------
+create or replace function lms_hours_cell(p_tutor uuid, p_at timestamptz) returns text
+language sql stable security definer set search_path = public as $$
+  select case
+    when exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled' and x.voided_at is null
+                 and x.starts_at < p_at + interval '30 minutes' and p_at < x.ends_at) then 'c'
+    when exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'leave'
+                 and o.starts_at < p_at + interval '30 minutes' and p_at < o.ends_at) then 'l'
+    when p_at < now() + interval '6 hours' then 'p'
+    when not lms_tutor_available(p_tutor, p_at) then 's'
+    when exists (select 1 from makeup_candidates c join makeup_requests r on r.id = c.request_id
+                 where r.tutor_id = p_tutor and r.status in ('requested', 'countered') and coalesce(c.tutor_answer, 'yes') = 'yes'
+                   and c.starts_at < p_at + interval '30 minutes' and p_at < c.ends_at)
+      or exists (select 1 from leave_items i where i.sub_tutor_id = p_tutor and i.sub_stage in ('asked', 'tutor_ok')
+                 and i.starts_at < p_at + interval '30 minutes' and p_at < i.ends_at) then 'r'
+    when exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'block'
+                 and o.starts_at < p_at + interval '30 minutes' and p_at < o.ends_at) then 'b'
+    when not lms_tutor_weekly_ok(p_tutor, p_at) then 'x'
+    else 'o' end
+$$;
+revoke all on function lms_hours_cell(uuid, timestamptz) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 2. 대체강사 충돌: 현지 06:00~22:30 시작 규칙 추가 (QA-01 C). 보통 시간 밖은 2700 그대로(안내만, 강사가 받아 주면 됨)
+-- ---------------------------------------------------------------------
+create or replace function lms_sub_conflict(p_tutor uuid, p_start timestamptz, p_end timestamptz, p_except_lesson uuid)
+returns text
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+begin
+  if not lms_tutor_start_ok(p_tutor, p_start) then
+    return '강사 현지 06:00~22:30 밖의 시작 시각';
+  end if;
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사 휴무';
+  end if;
+  if exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled' and x.id is distinct from p_except_lesson
+             and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at) then
+    return '강사 다른 수업(휴식 10분 포함)';
+  end if;
+  return null;
+end $$;
+revoke all on function lms_sub_conflict(uuid, timestamptz, timestamptz, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 3. 학생 보강 가능한 날짜: 강사 충돌 판정을 보강 확정과 같은 함수로 (추가 요청 1: 같은 학생 20분 수업끼리 이어 붙이기 예외가 학생 화면에도 통함)
+--    나머지(기간·30분 단위·학생 다른 수업·강사 연 시간)는 4100 그대로
+-- ---------------------------------------------------------------------
+create or replace function lms_makeup_options(p_lesson uuid, p_item uuid, p_comp uuid default null)
+returns table (section text, starts_at timestamptz, ends_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  s record;
+  e enrollments;
+  v_leave boolean;
+  v_back date;
+  v_until date;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  if p_comp is not null then
+    select * into s from lms_comp_source(p_comp);
+    select * into e from enrollments where id = s.enrollment_id;
+    v_leave := false;
+    v_back := v_today + 1;
+    v_until := s.use_until;
+  else
+    select * into s from lms_makeup_source(p_lesson, p_item);
+    select * into e from enrollments where id = s.enrollment_id;
+    v_leave := s.tutor_leave or exists (select 1 from lessons l where l.id = p_lesson and l.class_status = 'Tutor long-term leave');
+    select (o.ends_at at time zone 'Asia/Seoul')::date into v_back
+    from leave_items li join tutor_time_off o on o.id = li.time_off_id
+    where (li.lesson_id = p_lesson or li.migrated_item_id = p_item) limit 1;
+    v_back := coalesce(v_back, v_today + 1);
+    v_until := e.final_end_date;
+  end if;
+
+  return query
+  with rs as (
+    select r.weekday, r.start_time_kst from regular_schedules r
+    where r.student_id = s.student_id and r.tutor_id = s.tutor_id and (r.effective_to is null or r.effective_to >= v_today)
+  ),
+  slots as (
+    -- 수업 시작은 항상 30분 단위 (2026-10-28 대표) → 강사 보통 수업 시간 안의 :00·:30 모두
+    select 'in_period'::text as sec, ((d::date::timestamp + make_interval(mins => n * 30)) at time zone 'Asia/Seoul') as x
+    from generate_series(greatest(v_today + 1, v_back), v_until, interval '1 day') d
+    cross join generate_series(0, 47) n
+    union all
+    select 'after_end', ((d::date + rs.start_time_kst) at time zone 'Asia/Seoul')
+    from generate_series(greatest(e.final_end_date + 1, v_back, v_today + 1), greatest(e.final_end_date + 1, v_back, v_today + 1) + 180, interval '1 day') d
+    join rs on rs.weekday = extract(dow from d)
+    where v_leave
+  ),
+  free as (
+    select y.sec, y.x, y.x + make_interval(mins => e.duration_min) as f from slots y
+    where y.x > now()
+      and lms_tutor_available(s.tutor_id, y.x)
+      -- 학생이 고르는 시간 = 학생이 원한 시간 → 같은 학생 20분 수업끼리 휴식 없이 붙이기 예외 적용 (POL-OP-21, 4500)
+      and lms_makeup_conflict(s.tutor_id, s.student_id, y.x, y.x + make_interval(mins => e.duration_min), true) is null
+      and not exists (select 1 from lessons l where l.student_id = s.student_id and l.state <> 'canceled'
+                      and l.starts_at < y.x + make_interval(mins => e.duration_min) and y.x < l.ends_at)
+  )
+  select z.sec, z.x, z.f from (select f1.*, row_number() over (partition by f1.sec order by f1.x) as n from free f1) z
+  where z.sec = 'in_period' or z.n <= 1
+  order by z.x;
+end $$;
+revoke all on function lms_makeup_options(uuid, uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 4. 보강 권리의 원본 판정 (QA-13): 보강 수업이 취소(voided 아님)되면 원래 수업은 다시 보강권이 되지 않음 — 2800 그대로 + 이 기준
+-- ---------------------------------------------------------------------
+create or replace function lms_makeup_source(p_lesson uuid, p_item uuid, out enrollment_id uuid, out student_id uuid,
+                                             out tutor_id uuid, out tutor_leave boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  l lessons;
+  it migrated_items;
+begin
+  if (p_lesson is null) = (p_item is null) then raise exception '보강할 수업을 하나 골라 주세요.'; end if;
+  if p_lesson is not null then
+    select * into l from lessons where id = p_lesson;
+    if not found or not coalesce(lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave', false) then
+      raise exception '보강을 받을 수 있는 수업이 아닙니다.';
+    end if;
+    if exists (select 1 from lessons x where x.makeup_of = l.id and x.voided_at is null and x.state <> 'canceled') then
+      raise exception '이미 보강이 잡혀 있습니다.';
+    end if;
+    if exists (select 1 from lessons x where x.makeup_of = l.id and x.voided_at is null and x.state = 'canceled') then
+      raise exception '이 수업의 보강이 이미 한 번 잡혔다가 취소됐습니다. 보강권은 그 보강 수업의 결과를 따릅니다 (POL-CHG-04·08).' using hint = 'makeup_consumed';
+    end if;
+    enrollment_id := l.enrollment_id; student_id := l.student_id; tutor_id := l.tutor_id;
+    tutor_leave := coalesce(l.class_status = 'Tutor long-term leave', false);
+  else
+    select * into it from migrated_items where id = p_item;
+    if not found or it.kind <> 'makeup_open' then raise exception '예약 전 보강이 아닙니다.'; end if;
+    select e.student_id into student_id from enrollments e where e.id = it.enrollment_id;
+    select coalesce(x.original_tutor_id, x.tutor_id) into tutor_id from lessons x
+    where x.enrollment_id = it.enrollment_id and x.voided_at is null order by x.starts_at desc limit 1;
+    enrollment_id := it.enrollment_id; tutor_leave := coalesce(it.tutor_leave, false);
+  end if;
+end $$;
+revoke all on function lms_makeup_source(uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 5. 운영진 보강 확정: 강사가 '불가' 라고 답한 후보 시간은 확정 못 함 (QA-01 D). 나머지는 4100 그대로
+--    (강사 답이 없는 후보는 전처럼 확정 가능 — 카톡·WhatsApp 으로 이미 확인한 내용을 다시 묻지 않음, 추가 요청 5)
+-- ---------------------------------------------------------------------
+create or replace function admin_makeup_confirm(p_makeup_request uuid, p_starts_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  s record;
+  c record;
+  e enrollments;
+  v_end timestamptz;
+  v_lesson uuid;
+  v_conf text;
+  v_enr uuid;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into r from makeup_requests where id = p_makeup_request for update;
+  if not found then raise exception '보강 신청이 없습니다.'; end if;
+  if r.status = 'confirmed' then return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', r.confirmed_lesson_id, 'repeated', true); end if;
+  if r.status not in ('requested', 'countered') then raise exception '이미 닫힌 보강 신청입니다.'; end if;
+  if p_starts_at <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+  -- 강사가 불가라고 답한 시간 (QA-01 D, 4500)
+  if exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student' and x.tutor_answer = 'no') then
+    raise exception '강사가 불가라고 답한 시간입니다. 다른 시간을 고르거나 학생에게 다시 날짜를 받아 주세요.' using hint = 'tutor_no';
+  end if;
+
+  if r.compensation_id is not null then
+    perform 1 from compensations where id = r.compensation_id for update;   -- 같은 보상권 두 번 쓰기 막기
+    select * into c from lms_comp_source(r.compensation_id);
+    if p_starts_at >= ((c.use_until + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '보상수업 사용 기한(%) 뒤의 시간입니다.', c.use_until using hint = 'after_end';
+    end if;
+    select * into e from enrollments where id = c.enrollment_id;
+    v_end := p_starts_at + make_interval(mins => e.duration_min);
+    v_conf := lms_makeup_conflict(r.tutor_id, c.student_id, p_starts_at, v_end,
+                exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student'));
+    if v_conf is not null then raise exception '그 시간은 %와 겹칩니다.', v_conf using hint = 'schedule_conflict'; end if;
+    v_enr := lms_comp_lesson_enrollment(r.compensation_id, (p_starts_at at time zone 'Asia/Seoul')::date);
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+    if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+      insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+    end if;
+    begin
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, compensation_id, created_by)
+      values (v_enr, c.student_id, r.tutor_id, 'compensation', p_starts_at, v_end, r.compensation_id, me)
+      returning id into v_lesson;
+    exception when exclusion_violation then
+      raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+    end;
+    update compensations set status = 'used', used_lesson_id = v_lesson where id = r.compensation_id;
+  else
+    select * into s from lms_makeup_source(r.source_lesson_id, r.migrated_item_id);
+    select * into e from enrollments where id = s.enrollment_id;
+    if not s.tutor_leave and p_starts_at >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+    end if;
+    v_end := p_starts_at + make_interval(mins => e.duration_min);
+    v_conf := lms_makeup_conflict(r.tutor_id, s.student_id, p_starts_at, v_end,
+                exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student'));
+    if v_conf is not null then raise exception '그 시간은 %와 겹칩니다.', v_conf using hint = 'schedule_conflict'; end if;
+
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+    if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+      insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+    end if;
+    begin
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of, created_by)
+      values (s.enrollment_id, s.student_id, r.tutor_id,
+              case when r.source_lesson_id is null then 'migrated_makeup' else 'makeup' end,
+              p_starts_at, v_end, r.source_lesson_id, me)
+      returning id into v_lesson;
+    exception when exclusion_violation then
+      raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+    end;
+    if r.migrated_item_id is not null then
+      update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = r.migrated_item_id;
+    end if;
+  end if;
+  update makeup_requests set status = 'confirmed', confirmed_lesson_id = v_lesson, decided_at = now(), decided_by = me where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  values (r.id, 'makeup_confirmed', 'student', r.student_id), (r.id, 'makeup_confirmed', 'tutor', r.tutor_id);
+  return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', v_lesson, 'repeated', false);
+end $$;
+revoke all on function admin_makeup_confirm(uuid, timestamptz) from public, anon;
+grant execute on function admin_makeup_confirm(uuid, timestamptz) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 6. 강사 보강 답: 닫힌 시간도 '가능' 으로 못 보냄 (판정은 lms_makeup_conflict 하나) — 4100 그대로 + 문구
+-- ---------------------------------------------------------------------
+create or replace function tutor_makeup_answer(p_request uuid, p_yes uuid[], p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  v_note text := nullif(trim(coalesce(p_note, '')), '');
+  v_yes uuid[] := coalesce(p_yes, '{}');
+begin
+  select * into r from makeup_requests where id = p_request for update;
+  if not found then raise exception 'Make-up request not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and r.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your make-up request.' using errcode = '42501';
+  end if;
+  if r.status not in ('requested', 'countered') then
+    raise exception 'This make-up request is already closed.' using hint = 'closed';
+  end if;
+  if exists (select 1 from unnest(v_yes) y where not exists
+             (select 1 from makeup_candidates c where c.id = y and c.request_id = r.id and c.proposed_by = 'student')) then
+    raise exception 'Unknown time in your answer. Please reload the page.';
+  end if;
+  if exists (select 1 from makeup_candidates c where c.id = any(v_yes)
+             and (c.starts_at <= now() or lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null)) then
+    raise exception 'One of the times you chose is no longer open in your schedule, or overlaps another class or time off. Please reload the page.' using hint = 'busy';
+  end if;
+  if cardinality(v_yes) = 0 and v_note is null then
+    raise exception 'None of the times work? Please write other times you are available in the note.' using hint = 'note';
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_makeup_answer' else 'tutor_makeup_answer' end, true);
+  update makeup_candidates c set tutor_answer = case when c.id = any(v_yes) then 'yes' else 'no' end, answered_at = now(), answered_by = me
+  where c.request_id = r.id and c.proposed_by = 'student'
+    and c.tutor_answer is distinct from case when c.id = any(v_yes) then 'yes' else 'no' end;
+  update makeup_requests set tutor_note = v_note, tutor_answered_at = now() where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  return jsonb_build_object('makeup_request_id', r.id, 'yes', cardinality(v_yes));
+end $$;
+revoke all on function tutor_makeup_answer(uuid, uuid[], text) from public, anon;
+grant execute on function tutor_makeup_answer(uuid, uuid[], text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 7. Class Record: 보강·보상수업이 이미 잡힌 강사 노쇼는 결과를 바로 못 바꿈 (QA-12). 4401 그대로 + 이 검사
+--    운영진이 수업 변경·보강 화면에서 보강/보상수업을 먼저 없애면(admin_void_makeup) 그 뒤 고칠 수 있음. 확정 수업을 자동으로 취소하지 않음
+-- ---------------------------------------------------------------------
+create or replace function tutor_record_class(p_lesson uuid, p_result text, p_topics text, p_remarks text,
+                                              p_student_late boolean, p_student_late_min int, p_tutor_late boolean, p_tutor_late_min int)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  l lessons;
+  v_status class_status;
+  v_topics text := nullif(trim(coalesce(p_topics, '')), '');
+  v_remarks text := nullif(trim(coalesce(p_remarks, '')), '');
+  v_old class_records;
+  v_result text := case when p_result = 'late' then 'held' else p_result end;   -- 예전 화면 호환
+  v_held boolean := v_result = 'held';
+  v_s_late boolean := v_held and coalesce(p_student_late, false);
+  v_t_late boolean := v_held and (coalesce(p_tutor_late, false) or p_result = 'late');
+  v_s_min int := case when v_s_late then p_student_late_min end;
+  v_t_min int := case when v_t_late then p_tutor_late_min end;
+  v_linked text[];
+begin
+  select * into l from lessons where id = p_lesson for update;
+  if not found then raise exception 'Class not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and l.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your class.' using errcode = '42501';
+  end if;
+  if l.class_status = 'Tutor no-show' and not is_admin()
+     and (select cr0.submitted_by from class_records cr0 where cr0.lesson_id = l.id) is distinct from me then
+    raise exception 'Edge English recorded this class. Please contact the Edge English team.' using hint = 'locked';
+  end if;
+  if l.voided_at is not null or l.state = 'canceled' then
+    raise exception 'This class was canceled (%). No record needed.', coalesce(l.class_status::text, 'removed') using hint = 'canceled';
+  end if;
+  if l.starts_at > now() then raise exception 'You can record this class after it starts.' using hint = 'not_started'; end if;
+  if exists (select 1 from payroll_items where lesson_id = l.id) then
+    raise exception 'This class is already in payroll. Please contact Edge English to change it.' using hint = 'locked';
+  end if;
+  if (v_s_min is not null and v_s_min <= 0) or (v_t_min is not null and v_t_min <= 0) then
+    raise exception 'Late minutes must be more than 0.' using hint = 'late';
+  end if;
+  if v_held then
+    if v_topics is null then raise exception 'Please enter the covered topics.' using hint = 'topics'; end if;
+    if v_t_late and v_remarks is null then raise exception 'Please write why you were late in Remarks.' using hint = 'remarks'; end if;
+    v_status := case when v_t_late then 'Tutor Late - Student Present'
+                     when l.kind in ('makeup', 'migrated_makeup', 'compensation') then 'Make-up completed'
+                     when l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id then 'Covered by another tutor'
+                     else 'Normal' end;
+  elsif v_result = 'student_no_show' then
+    v_status := 'Student no-show';
+  elsif v_result = 'tutor_no_show' then
+    v_status := 'Tutor no-show';
+  else
+    raise exception 'Please choose how the class went.';
+  end if;
+
+  -- 강사 노쇼 → 다른 결과: 이미 잡힌(확정된) 보강·보상수업이 있으면 먼저 정리 (QA-12, 4500). 확정 수업을 자동 취소하지 않음
+  --  날짜만 신청 중(확정 전)인 원래 수업 보강 신청은 아래에서 닫음 (보상 신청은 보상권 voided 트리거가 닫음, 4100)
+  if l.class_status = 'Tutor no-show' and v_status <> 'Tutor no-show' then
+    select array_remove(array[
+      (select format('compensation class %s', to_char(x.starts_at at time zone 'Asia/Seoul', 'Mon DD HH24:MI "KST"'))
+         from compensations c join lessons x on x.id = c.used_lesson_id where c.source_lesson_id = l.id and c.status = 'used' and x.voided_at is null and x.state <> 'canceled' limit 1),
+      (select format('make-up class %s', to_char(x.starts_at at time zone 'Asia/Seoul', 'Mon DD HH24:MI "KST"'))
+         from lessons x where x.makeup_of = l.id and x.voided_at is null and x.state <> 'canceled' order by x.starts_at limit 1)
+    ], null) into v_linked;
+    if cardinality(v_linked) > 0 then
+      raise exception 'This no-show already has % booked. Edge English must remove it first (Lesson change > Make-up), then the result can be changed.',
+        array_to_string(v_linked, ', ') using hint = 'linked';
+    end if;
+  end if;
+
+  select * into v_old from class_records where lesson_id = l.id;
+  if l.state = 'done' and l.class_status = v_status and found
+     and v_old.covered_topics is not distinct from v_topics and v_old.remarks is not distinct from v_remarks
+     and v_old.student_late = v_s_late and v_old.student_late_min is not distinct from v_s_min
+     and v_old.tutor_late = v_t_late and v_old.tutor_late_min is not distinct from v_t_min then
+    return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', true);
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_record_class' else 'tutor_record_class' end, true);
+  update lessons set state = 'done', class_status = v_status where id = l.id and (state, class_status) is distinct from ('done', v_status);
+  if v_status = 'Tutor no-show' then
+    insert into compensations (student_id, enrollment_id, source_lesson_id, reason, confirmed_by)
+    values (l.student_id, l.enrollment_id, l.id, 'tutor_no_show', me)
+    on conflict (source_lesson_id) do update set status = 'available' where compensations.status = 'voided';
+  else
+    update compensations set status = 'voided' where source_lesson_id = l.id and status = 'available';
+    -- 더는 보강을 받을 수 없는 결과면 날짜만 신청 중이던 원래 수업 보강 신청은 닫음 (기록은 남김, QA-12 4500)
+    if not lms_grants_makeup(v_status) then
+      update makeup_requests set status = 'withdrawn', decided_at = now(), decided_by = me
+      where source_lesson_id = l.id and compensation_id is null and status in ('requested', 'countered');
+      update lesson_notices set status = 'not_needed'
+      where status = 'pending' and makeup_request_id in (select id from makeup_requests where source_lesson_id = l.id and compensation_id is null and status = 'withdrawn');
+    end if;
+  end if;
+  insert into class_records (lesson_id, covered_topics, remarks, student_late, student_late_min, tutor_late, tutor_late_min, submitted_by)
+  values (l.id, v_topics, v_remarks, v_s_late, v_s_min, v_t_late, v_t_min, me)
+  on conflict (lesson_id) do update set covered_topics = excluded.covered_topics, remarks = excluded.remarks,
+    student_late = excluded.student_late, student_late_min = excluded.student_late_min,
+    tutor_late = excluded.tutor_late, tutor_late_min = excluded.tutor_late_min, submitted_by = excluded.submitted_by;
+  return jsonb_build_object('lesson_id', l.id, 'class_status', v_status, 'repeated', false);
+end $$;
+revoke all on function tutor_record_class(uuid, text, text, text, boolean, int, boolean, int) from public, anon;
+grant execute on function tutor_record_class(uuid, text, text, text, boolean, int, boolean, int) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 8. 운영진 변경권 수동 조정 (추가 요청 3): 사유 필수, 한 번에 ±1, 이력 = credit_ledger(reason 'admin_adjust', note, created_by, created_at)
+--    한도는 기존 안전장치(credit_ledger_guard: 0 ~ 지급 수량) 그대로. 자동 차감(lms_change_core)은 바꾸지 않음
+-- ---------------------------------------------------------------------
+create or replace function admin_credits(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  e enrollments;
+  p enrollment_periods;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  select * into e from enrollments where id = lms_student_enrollment(p_student);
+  if not found then return jsonb_build_object('period', null); end if;
+  select * into p from enrollment_periods x where x.enrollment_id = e.id and x.start_date <= v_today order by x.idx desc limit 1;
+  if not found then return jsonb_build_object('period', null); end if;
+  return jsonb_build_object(
+    'period', jsonb_build_object('id', p.id, 'idx', p.idx, 'start', p.start_date, 'end', p.end_date),
+    'granted', p.credits_granted,
+    'left', credit_balance(p.id),
+    'uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'note', c.note, 'lesson_at', l.starts_at,
+                                          'by', c.created_by) order by c.created_at desc)
+      from credit_ledger c
+      left join lessons l on l.id = c.lesson_id
+      where c.period_id = p.id), '[]'::jsonb));
+end $$;
+revoke all on function admin_credits(uuid) from public, anon;
+grant execute on function admin_credits(uuid) to authenticated;
+
+create or replace function admin_credit_adjust(p_student uuid, p_delta integer, p_reason text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  e enrollments;
+  p enrollment_periods;
+  v_reason text := nullif(btrim(coalesce(p_reason, '')), '');
+  v_before integer;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_delta not in (-1, 1) then raise exception '변경권은 한 번에 1개씩 더하거나 뺄 수 있습니다.'; end if;
+  if v_reason is null then raise exception '조정 사유를 적어 주세요.' using hint = 'reason'; end if;
+  if char_length(v_reason) > 200 then raise exception '사유는 200자까지 적을 수 있습니다.' using hint = 'reason'; end if;
+  select * into e from enrollments where id = lms_student_enrollment(p_student);
+  if not found then raise exception '수강 중인 수강권이 없습니다.'; end if;
+  select * into p from enrollment_periods x where x.enrollment_id = e.id and x.start_date <= v_today order by x.idx desc limit 1 for update;
+  if not found then raise exception '지금 진행 중인 변경권 기간이 없습니다.'; end if;
+  v_before := credit_balance(p.id);
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_credit_adjust', true);
+  begin
+    insert into credit_ledger (period_id, reason, delta, note, created_by) values (p.id, 'admin_adjust', p_delta, v_reason, me);
+  exception when raise_exception then
+    if p_delta > 0 then
+      raise exception '이번 기간에 지급된 변경권(%개)보다 많이 가질 수 없습니다.', p.credits_granted using hint = 'limit';
+    else
+      raise exception '남은 변경권이 없어 더 뺄 수 없습니다.' using hint = 'limit';
+    end if;
+  end;
+  return jsonb_build_object('period_id', p.id, 'before', v_before, 'after', v_before + p_delta, 'granted', p.credits_granted, 'reason', v_reason);
+end $$;
+revoke all on function admin_credit_adjust(uuid, integer, text) from public, anon;
+grant execute on function admin_credit_adjust(uuid, integer, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 9. 학생 화면 (4100 그대로 + QA-13 보강권 기준 · 신청 내역 확정 수업 상태 · QA-08 강사 전부 불가 · 변경권 기록 메모)
+-- ---------------------------------------------------------------------
+create or replace function student_screen(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+  e enrollments;
+  v_period enrollment_periods;
+  v_open uuid[];
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  select * into st from students where id = v_student;
+  select * into e from enrollments where id = lms_student_enrollment(v_student);
+  select * into v_period from enrollment_periods p
+  where p.enrollment_id = e.id and p.start_date <= v_today order by p.idx desc limit 1;
+  v_open := array(select x.id from enrollments x where x.student_id = v_student and (x.status in ('active', 'confirmed') or x.id = e.id));
+  return jsonb_build_object(
+    'student', jsonb_build_object('id', st.id, 'code', st.code, 'name_ko', st.name_ko, 'timezone', st.timezone),
+    'enrollment', case when e.id is null then null else jsonb_build_object(
+      'id', e.id, 'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'start_date', e.start_date, 'final_end_date', e.final_end_date, 'status', e.status,
+      'next_regular_from', lms_next_regular_from(e.id),
+      'lessons_total', coalesce((select c.sheet_total from import_checks c where c.enrollment_id = e.id), e.lessons_purchased + e.lessons_carried_in),
+      'credits_left', case when v_period.id is null then 0 else credit_balance(v_period.id) end,
+      'credits_granted', coalesce(v_period.credits_granted, 0),
+      'confirmed_on', (select min((p.confirmed_at at time zone 'Asia/Seoul')::date) from payments p where p.enrollment_id = e.id and p.confirmed_at is not null),
+      'renewal_paid', exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))) end,
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id),
+        'substitute', l.original_tutor_id is not null,
+        'leave_open', exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))) order by l.starts_at)
+      from lessons l join tutors t on t.id = l.tutor_id
+      where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
+    -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강 · 강사 노쇼 무료 보상수업)
+    -- QA-13 (4500): 보강 수업이 잡힌 뒤 취소(voided 아님)된 원래 수업은 다시 권리가 되지 않음 — 권리는 그 보강 수업의 결과를 따름
+    'makeup_rights', coalesce((
+      select jsonb_agg(r order by r ->> 'original_at', r ->> 'comp_id' nulls first) from (
+        select jsonb_build_object('lesson_id', l.id, 'item_id', null, 'original_at', l.starts_at,
+                 'tutor_leave', l.class_status = 'Tutor long-term leave') as r
+        from lessons l
+        where l.enrollment_id = any(v_open) and l.voided_at is null and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+          and not exists (select 1 from lessons x where x.makeup_of = l.id and x.voided_at is null)
+        union all
+        select jsonb_build_object('lesson_id', null, 'item_id', m.id,
+                 'original_at', coalesce((select li.starts_at from leave_items li where li.migrated_item_id = m.id order by li.starts_at limit 1),
+                                         m.original_date::timestamp at time zone 'Asia/Seoul'),
+                 'time_known', exists (select 1 from leave_items li where li.migrated_item_id = m.id),
+                 'tutor_leave', coalesce(m.tutor_leave, false))
+        from migrated_items m where m.enrollment_id = any(v_open) and m.kind = 'makeup_open'
+          and not exists (select 1 from leave_items li where li.migrated_item_id = m.id and li.lesson_gone_at is null
+                          and li.choice in ('undecided', 'substitute'))
+        union all
+        select jsonb_build_object('lesson_id', null, 'item_id', null, 'comp_id', c.id, 'original_at', src.starts_at,
+                 'tutor', t.name, 'use_until', lms_comp_use_until(c.enrollment_id), 'tutor_leave', false)
+        from compensations c
+        join lessons src on src.id = c.source_lesson_id
+        join tutors t on t.id = src.tutor_id
+        where c.student_id = v_student and c.status = 'available' and lms_comp_use_until(c.enrollment_id) >= v_today) q), '[]'::jsonb),
+    'leave_pending', coalesce((
+      select jsonb_agg(jsonb_build_object('id', li.id, 'starts_at', li.starts_at, 'ends_at', li.ends_at) order by li.starts_at)
+      from leave_items li
+      where li.student_id = v_student and li.lesson_id is null and li.lesson_gone_at is null and li.starts_at > now()
+        and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))), '[]'::jsonb),
+    -- 신청 내역 (4100 + 4500: 확정 수업 상태 · 강사가 모든 후보에 불가 답)
+    'makeup_requests', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id, 'comp_id', r.compensation_id,
+        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id, 'tutor_answered_at', r.tutor_answered_at,
+        'confirmed_state', cl.state,
+        'tutor_declined_all', r.tutor_answered_at is not null
+          and not exists (select 1 from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student' and c.tutor_answer = 'yes'),
+        'original_at', coalesce(src.starts_at, (select m.original_date::timestamp at time zone 'Asia/Seoul' from migrated_items m where m.id = r.migrated_item_id)),
+        'original_time_known', src.id is not null,
+        'original_tutor', srct.name,
+        'tutor', rt.name,
+        'confirmed_at', cl.starts_at,
+        'tutor_leave', coalesce(src.class_status = 'Tutor long-term leave',
+                                (select m.tutor_leave from migrated_items m where m.id = r.migrated_item_id), false),
+        'candidates', (select coalesce(jsonb_agg(c.starts_at order by c.starts_at), '[]'::jsonb) from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.requested_at desc)
+      from makeup_requests r
+      left join lessons src on src.id = r.source_lesson_id
+      left join tutors srct on srct.id = src.tutor_id
+      left join tutors rt on rt.id = r.tutor_id
+      left join lessons cl on cl.id = r.confirmed_lesson_id
+      where r.student_id = v_student and r.status in ('requested', 'countered', 'confirmed')
+        and r.requested_at > now() - interval '60 days'), '[]'::jsonb),
+    'leave', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name, 'sub_meet_url', sub.meet_url,
+        'lesson_id', li.lesson_id, 'item_id', li.migrated_item_id,
+        'off_from', o.starts_at, 'off_to', o.ends_at) order by li.starts_at)
+      from leave_items li
+      join tutor_time_off o on o.id = li.time_off_id
+      left join tutors sub on sub.id = li.sub_tutor_id
+      where li.student_id = v_student and li.starts_at > now() and li.lesson_gone_at is null
+        and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    'credit_period', case when v_period.id is null then null else jsonb_build_object('start', v_period.start_date, 'end', v_period.end_date) end,
+    'credit_uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'note', c.note, 'lesson_at', l.starts_at) order by c.created_at)
+      from credit_ledger c left join lessons l on l.id = c.lesson_id where c.period_id = v_period.id), '[]'::jsonb),
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
+      where h.day between v_today and v_today + 200), '[]'::jsonb),
+    'points', coalesce((
+      select jsonb_agg(jsonb_build_object('id', g.id, 'on', (g.created_at at time zone 'Asia/Seoul')::date, 'kind', g.kind, 'amount', g.amount, 'note', g.note)
+        order by g.created_at)
+      from reward_ledger g where g.student_id = v_student), '[]'::jsonb));
+end $$;
+revoke all on function student_screen(uuid) from public, anon;
+grant execute on function student_screen(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 10. 강사용 Student profile — 운영자 보기(?tutor=)에서 고른 강사 문맥 (QA-07): p_tutor 를 받아 그 강사의 시간대·권한 범위로.
+--     강사 본인은 비움(전과 같음). 운영자가 고른 강사도 lms_screen_tutor 로 확인(강사는 다른 강사 못 고름). 4300 함수는 그대로 두고 인자 하나 더 받는 판을 추가
+--     + 남은 수업 집계(QA-05): left_all(예약된 수업) 과 따로 left_unbooked(날짜 안 잡은 보강권·보상권) — 학생 홈 '남은 수업' 과 같은 기준
+-- ---------------------------------------------------------------------
+create or replace function tutor_student_profile(p_student uuid, p_tutor uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  me uuid := case when is_admin() and p_tutor is not null then lms_screen_tutor(p_tutor) else my_tutor_id() end;
+  v_access text;
+  j jsonb;
+  v_unbooked integer;
+begin
+  if is_admin() then
+    v_access := 'regular';   -- 운영자가 강사 화면을 대신 볼 때(?tutor=)는 담당 강사와 같은 범위
+  else
+    if me is null then raise exception 'Please sign in with your tutor account.' using errcode = '42501'; end if;
+    v_access := lms_tutor_student_access(me, p_student);
+    if v_access is null then raise exception 'This student is not assigned to you.' using errcode = '42501'; end if;
+  end if;
+  j := lms_student_profile_json(p_student, v_access);
+  if v_access = 'substitute' then
+    j := j - 'upcoming' - 'enrollment' || jsonb_build_object(
+      'upcoming', (select coalesce(jsonb_agg(x) filter (where (x ->> 'tutor_id')::uuid = me), '[]'::jsonb) from jsonb_array_elements(j -> 'upcoming') x),
+      'enrollment', case when j -> 'enrollment' is null or j -> 'enrollment' = 'null'::jsonb then null else
+        jsonb_build_object('duration_min', j -> 'enrollment' -> 'duration_min', 'weekly_count', j -> 'enrollment' -> 'weekly_count',
+                           'final_end_date', j -> 'enrollment' -> 'final_end_date') end);
+  elsif j -> 'enrollment' is not null and j -> 'enrollment' <> 'null'::jsonb then
+    -- 날짜 안 잡은 보강권(취소 수업·시트 미예약 보강·보상권) — student_screen makeup_rights 와 같은 기준 (4500)
+    select count(*) into v_unbooked from (
+      select 1 from lessons l where l.enrollment_id = (j -> 'enrollment' ->> 'id')::uuid and l.voided_at is null
+        and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+        and not exists (select 1 from lessons x where x.makeup_of = l.id and x.voided_at is null)
+      union all
+      select 1 from migrated_items m where m.enrollment_id = (j -> 'enrollment' ->> 'id')::uuid and m.kind = 'makeup_open'
+      union all
+      select 1 from compensations c where c.enrollment_id = (j -> 'enrollment' ->> 'id')::uuid and c.status = 'available'
+        and lms_comp_use_until(c.enrollment_id) >= (now() at time zone 'Asia/Seoul')::date) q;
+    j := jsonb_set(j, '{enrollment,left_unbooked}', to_jsonb(coalesce(v_unbooked, 0)));
+  end if;
+  return j || jsonb_build_object('me', jsonb_build_object('id', me, 'timezone', (select timezone from tutors where id = me)));
+end $$;
+revoke all on function tutor_student_profile(uuid, uuid) from public, anon;
+grant execute on function tutor_student_profile(uuid, uuid) to authenticated;
+-- 예전 한 인자 판은 새 판으로 넘김 (호출하는 옛 화면 호환)
+create or replace function tutor_student_profile(p_student uuid)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select tutor_student_profile(p_student, null)
+$$;
+revoke all on function tutor_student_profile(uuid) from public, anon;
+grant execute on function tutor_student_profile(uuid) to authenticated;
+
+-- >>> 20261105010000_lms_leave_withdraw.sql
+-- =====================================================================
+-- 4510. 강사 휴무 철회 (Work QA 11/4 QA-17: 날짜·강사를 잘못 넣은 휴무를 되돌릴 화면 경로가 없음)
+--  - admin_leave_withdraw(p_time_off, p_note, p_dry_run): 영향 미리 보기 → 사유 필수 → 철회
+--    · 확정된 대체 수업 → 원래 강사로 되돌림(1800 lms_leave_unconfirm) · 대체 묻기/가능 단계 → 비움
+--    · '기존 강사 보강' 으로 취소된 수업(Tutor long-term leave) → 다시 예정. 보강 신청·확정이 이미 있으면 철회 거절(보강부터 정리)
+--    · 지난 수업(이미 시작·진행)이 걸려 있으면 거절 — 과거·완료 수업은 되돌리지 않음
+--    · 안내 기록은 '보낼 필요 없음' 으로(보낸 시각은 was_sent_at 에 남음), 휴무 줄·수업 줄은 지우지 않음
+--  - 표에서 지우지 않음: leave_items 는 삭제 금지(1800) → withdrawn_at 표시 + lesson_gone_at(닫힘 표시, 기존 화면이 모두 이 칸으로 거름)
+--    tutor_time_off 는 기간을 효력 없는 날짜(1900-01-01, 4300 과 같은 방식)로 치우고 withdrawn_at·원래 기간·사유를 남김 → 충돌 판정·Schedule·휴무 목록에서 자동으로 빠짐
+--  - 같은 수업을 나중에 다시 휴무에 넣을 수 있게: lms_leave_candidates 는 철회된 줄을 없는 것으로 보고, admin_leave_create 는 철회된 줄을 되살려 씀(수업당 한 줄 규칙 그대로)
+--  - 3200 lessons_leave_gone 트리거는 철회된 줄을 다시 열지 않음
+-- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+alter table leave_items add column if not exists withdrawn_at timestamptz;
+alter table tutor_time_off add column if not exists withdrawn_at timestamptz;
+alter table tutor_time_off add column if not exists withdrawn_by uuid;
+alter table tutor_time_off add column if not exists withdraw_note text;
+alter table tutor_time_off add column if not exists withdrawn_range tstzrange;
+
+-- 3200 그대로 + 철회된 줄은 건드리지 않음
+create or replace function lessons_leave_gone() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  update leave_items i
+  set lesson_gone_at = case when lms_lesson_gone(new) then coalesce(i.lesson_gone_at, now()) end
+  where (i.lesson_id = new.id or i.sub_lesson_id = new.id)
+    and i.withdrawn_at is null
+    and (i.lesson_gone_at is null) = lms_lesson_gone(new);
+  return null;
+end $$;
+revoke all on function lessons_leave_gone() from public, anon, authenticated;
+
+-- 1800 그대로 + 철회된 줄은 없는 것으로 (다시 휴무에 넣을 수 있음)
+create or replace function lms_leave_candidates(p_tutor uuid, p_from date, p_to date)
+returns table (lesson_id uuid, migrated_item_id uuid, student_id uuid, enrollment_id uuid, starts_at timestamptz, ends_at timestamptz, choice text)
+language sql stable security definer set search_path = public as $$
+  select l.id, null::uuid, l.student_id, l.enrollment_id, l.starts_at, l.ends_at, 'undecided'
+  from lessons l
+  where l.tutor_id = p_tutor and l.state = 'scheduled'
+    and l.starts_at < ((p_to + 1)::timestamp at time zone 'Asia/Seoul') and (p_from::timestamp at time zone 'Asia/Seoul') < l.ends_at
+    and not exists (select 1 from leave_items i where i.lesson_id = l.id and i.withdrawn_at is null)
+  union all
+  select null::uuid, m.id, e.student_id, e.id,
+         ((m.original_date + rs.start_time_kst) at time zone 'Asia/Seoul'),
+         ((m.original_date + rs.start_time_kst) at time zone 'Asia/Seoul') + make_interval(mins => rs.duration_min), 'undecided'
+  from migrated_items m
+  join enrollments e on e.id = m.enrollment_id
+  join regular_schedules rs on rs.student_id = e.student_id and rs.tutor_id = p_tutor
+   and rs.weekday = extract(dow from m.original_date) and rs.effective_from <= m.original_date
+   and (rs.effective_to is null or rs.effective_to >= m.original_date)
+  where m.kind = 'makeup_open' and m.tutor_leave and m.original_date between p_from and p_to
+    and not exists (select 1 from leave_items i where i.migrated_item_id = m.id and i.withdrawn_at is null)
+$$;
+revoke all on function lms_leave_candidates(uuid, date, date) from public, anon, authenticated;
+
+-- 1800 그대로 + 철회된 줄 되살리기
+create or replace function admin_leave_create(p_tutor uuid, p_from date, p_to date, p_reason text, p_dry_run boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  t0 timestamptz := (p_from::timestamp at time zone 'Asia/Seoul');
+  t1 timestamptz := ((p_to + 1)::timestamp at time zone 'Asia/Seoul');
+  v_off uuid;
+  v_lessons integer;
+  v_items integer;
+  v_students integer;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_from is null or p_to is null or p_to < p_from then raise exception '휴무 끝일이 시작일보다 빠릅니다.'; end if;
+  if not exists (select 1 from tutors where id = p_tutor) then raise exception '강사가 없습니다.'; end if;
+
+  select count(*) filter (where n.lesson_id is not null), count(*), count(distinct n.student_id)
+  into v_lessons, v_items, v_students from lms_leave_candidates(p_tutor, p_from, p_to) n;
+  if p_dry_run then
+    return jsonb_build_object('dry_run', true, 'lessons', v_lessons, 'items', v_items, 'students', v_students,
+      'existing', (select count(*) from leave_items i join tutor_time_off o on o.id = i.time_off_id
+                   where o.tutor_id = p_tutor and o.starts_at = t0 and o.ends_at = t1 and o.withdrawn_at is null and i.withdrawn_at is null));
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_create', true);
+  select id into v_off from tutor_time_off where tutor_id = p_tutor and kind = 'leave' and starts_at = t0 and ends_at = t1 and withdrawn_at is null;
+  if v_off is null then
+    insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by)
+    values (p_tutor, t0, t1, 'leave', nullif(trim(p_reason), ''), me) returning id into v_off;
+  end if;
+  -- 전에 철회한 휴무의 줄이 남아 있으면(수업당 한 줄 규칙) 그 줄을 이 휴무로 되살림
+  with rev as (
+    update leave_items i
+    set time_off_id = v_off, tutor_id = p_tutor, student_id = n.student_id, enrollment_id = n.enrollment_id, starts_at = n.starts_at, ends_at = n.ends_at,
+        choice = 'undecided', sub_tutor_id = null, sub_stage = null, sub_lesson_id = null, decided_at = null, decided_by = null,
+        sub_declined = '{}', lesson_gone_at = null, withdrawn_at = null, created_by = me, created_at = now()
+    from lms_leave_candidates(p_tutor, p_from, p_to) n
+    where i.withdrawn_at is not null
+      and ((n.lesson_id is not null and i.lesson_id = n.lesson_id) or (n.migrated_item_id is not null and i.migrated_item_id = n.migrated_item_id))
+    returning i.id, i.student_id
+  )
+  insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id)
+  select id, 'leave_options', 'student', student_id from rev;
+  -- 새로 들어온 줄마다 학생에게 두 가지 선택 안내 (화면은 학생마다 한 메시지로 묶어 복사)
+  with ins as (
+    insert into leave_items (time_off_id, tutor_id, student_id, enrollment_id, lesson_id, migrated_item_id, starts_at, ends_at, choice, created_by)
+    select v_off, p_tutor, n.student_id, n.enrollment_id, n.lesson_id, n.migrated_item_id, n.starts_at, n.ends_at, n.choice, me
+    from lms_leave_candidates(p_tutor, p_from, p_to) n
+    on conflict do nothing
+    returning id, student_id
+  )
+  insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id)
+  select id, 'leave_options', 'student', student_id from ins;
+  return jsonb_build_object('dry_run', false, 'time_off_id', v_off, 'lessons', v_lessons, 'items', v_items, 'students', v_students);
+end $$;
+revoke all on function admin_leave_create(uuid, date, date, text, boolean) from public, anon;
+grant execute on function admin_leave_create(uuid, date, date, text, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 휴무 철회: p_dry_run = 영향 미리 보기(바꾸지 않음). 사유 필수(철회 때)
+-- ---------------------------------------------------------------------
+create or replace function admin_leave_withdraw(p_time_off uuid, p_note text, p_dry_run boolean default true)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  o tutor_time_off;
+  it leave_items;
+  l lessons;
+  v_note text := nullif(btrim(coalesce(p_note, '')), '');
+  v_sub_back integer := 0;    -- 확정된 대체 수업 → 원래 강사
+  v_ask_clear integer := 0;   -- 대체 묻기·가능 단계 비움
+  v_wait_back integer := 0;   -- 보강 기다림 수업 → 다시 예정
+  v_untouched integer := 0;   -- 미정 그대로 / 밖에서 취소된 수업
+  v_notices integer := 0;
+  v_block text[] := '{}';
+  v_when text;
+  v_ids uuid[] := '{}';
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into o from tutor_time_off where id = p_time_off for update;
+  if not found or o.kind <> 'leave' then raise exception '휴무가 없습니다.'; end if;
+  if o.withdrawn_at is not null then return jsonb_build_object('repeated', true, 'withdrawn_at', o.withdrawn_at); end if;
+
+  for it in select * from leave_items where time_off_id = o.id and withdrawn_at is null order by starts_at loop
+    v_ids := v_ids || it.id;
+    v_when := to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI');
+    if it.lesson_gone_at is not null then v_untouched := v_untouched + 1; continue; end if;
+    if it.lesson_id is not null then
+      select * into l from lessons where id = it.lesson_id;
+      if l.state = 'done' or (l.starts_at <= now() and l.state <> 'canceled') then
+        v_block := v_block || format('%s 수업은 이미 시작·진행됐어요 (되돌리지 않음)', v_when); continue;
+      end if;
+    end if;
+    if it.choice = 'substitute' then
+      if it.sub_stage = 'confirmed' then
+        if it.lesson_id is not null and l.state <> 'scheduled' then v_block := v_block || format('%s 대체 수업이 이미 진행·변경됐어요', v_when); continue; end if;
+        v_sub_back := v_sub_back + 1;
+      else
+        v_ask_clear := v_ask_clear + 1;
+      end if;
+    elsif it.choice = 'wait' then
+      if it.lesson_id is not null then
+        if exists (select 1 from lessons x where x.makeup_of = l.id and x.state <> 'canceled')
+           or exists (select 1 from makeup_requests r where r.source_lesson_id = l.id and r.status in ('requested', 'countered', 'confirmed')) then
+          v_block := v_block || format('%s 수업은 보강 신청·확정이 있어요 — 보강부터 정리해 주세요', v_when); continue;
+        end if;
+        if l.state = 'canceled' and l.class_status = 'Tutor long-term leave' then v_wait_back := v_wait_back + 1; else v_untouched := v_untouched + 1; end if;
+      else
+        if exists (select 1 from migrated_items m where m.id = it.migrated_item_id and m.kind <> 'makeup_open')
+           or exists (select 1 from makeup_requests r where r.migrated_item_id = it.migrated_item_id and r.status in ('requested', 'countered')) then
+          v_block := v_block || format('%s 휴가 보강은 보강 신청·확정이 있어요 — 보강부터 정리해 주세요', v_when); continue;
+        end if;
+        v_untouched := v_untouched + 1;
+      end if;
+    else
+      v_untouched := v_untouched + 1;
+    end if;
+  end loop;
+  select count(*) into v_notices from lesson_notices where leave_item_id = any(v_ids) and status = 'pending';
+
+  if p_dry_run or cardinality(v_block) > 0 then
+    if not p_dry_run then
+      raise exception '철회할 수 없어요: %', array_to_string(v_block, ' / ') using hint = 'blocked';
+    end if;
+    return jsonb_build_object('dry_run', true, 'items', cardinality(v_ids), 'sub_back', v_sub_back, 'ask_clear', v_ask_clear, 'wait_back', v_wait_back,
+      'untouched', v_untouched, 'notices_pending', v_notices, 'blockers', to_jsonb(v_block),
+      'from', (o.starts_at at time zone 'Asia/Seoul')::date, 'to', ((o.ends_at - interval '1 second') at time zone 'Asia/Seoul')::date);
+  end if;
+  if v_note is null then raise exception '철회 사유를 적어 주세요.' using hint = 'reason'; end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_withdraw', true);
+  for it in select * from leave_items where id = any(v_ids) order by starts_at loop
+    if it.lesson_gone_at is null then
+      if it.choice = 'substitute' and it.sub_stage = 'confirmed' then
+        perform lms_leave_unconfirm(it, me);
+      elsif it.choice = 'wait' and it.lesson_id is not null then
+        select * into l from lessons where id = it.lesson_id for update;
+        if l.state = 'canceled' and l.class_status = 'Tutor long-term leave' then
+          begin
+            update lessons set state = 'scheduled', class_status = null, canceled_at = null, cancel_reason = null where id = l.id;
+          exception when exclusion_violation then
+            raise exception '% 그 시간에 다른 수업이 있어 되돌릴 수 없습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI');
+          end;
+        end if;
+      end if;
+    end if;
+    -- 안내는 모두 '보낼 필요 없음' (보낸 것은 was_sent_at 에 남음, 3400). 줄은 닫힘(lesson_gone_at) + 철회 표시
+    update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null where leave_item_id = it.id and status in ('pending', 'sent');
+    update leave_items set choice = 'undecided', sub_tutor_id = null, sub_stage = null, sub_lesson_id = null, decided_at = null, decided_by = null,
+                           lesson_gone_at = coalesce(lesson_gone_at, now()), withdrawn_at = now()
+    where id = it.id;
+  end loop;
+  update tutor_time_off
+  set withdrawn_range = tstzrange(starts_at, ends_at), starts_at = timestamptz '1900-01-01 00:00:00+09', ends_at = timestamptz '1900-01-01 00:00:01+09',
+      withdrawn_at = now(), withdrawn_by = me, withdraw_note = v_note
+  where id = o.id;
+  return jsonb_build_object('dry_run', false, 'items', cardinality(v_ids), 'sub_back', v_sub_back, 'ask_clear', v_ask_clear, 'wait_back', v_wait_back,
+    'untouched', v_untouched, 'notices_pending', v_notices, 'repeated', false);
+end $$;
+revoke all on function admin_leave_withdraw(uuid, text, boolean) from public, anon;
+grant execute on function admin_leave_withdraw(uuid, text, boolean) to authenticated;
+
+-- >>> 20261105020000_lms_revalidation_fixes.sql
+-- =====================================================================
+-- 4520 Work 최종 재검증(2026-11-05) R-01~21 중 DB 쪽 수정 — 시험용 DB 먼저, 운영 DB 는 대표 승인 뒤
+--  1. R-18 이관 휴무 보강(migrated_makeup) 확정 때 종료일 자동 연장이 빠짐: admin_makeup_confirm 이 lessons INSERT 뒤에
+--     migrated_items.lesson_id 를 연결해 lessons 의 AFTER INSERT 트리거(lessons_leave_extension)가 그 이관권을 못 찾았음
+--     → migrated_items 에 연결(lesson_id·tutor_leave·kind)이 바뀌면 같은 트랜잭션에서 lms_leave_sync_extension 을 다시 계산하는 트리거 +
+--       admin_makeup_confirm 도 연결 뒤 바로 호출. 확정·없애기·되돌리기·재확정 어느 경로든 같은 최종 종료일 기준
+--  2. R-12 student_screen.credit_periods: 수강권의 모든 28일 기간(시작·끝·지급·잔여) — 화면이 수업 날짜가 속한 기간의 변경권으로 미리 보기
+--  3. R-16 lms_hours_cell: 답 대기 'r' 은 아직 답하지 않은 후보만, 이미 '가능' 이라고 답해 운영진 확정을 기다리는 칸은 'a'
+--     (잠금 정책은 그대로 — 안내만 구분). tutor_schedule_save 의 거절 문구도 구분
+--  4. R-15 admin_regular_change: 새 일정에서도 날짜·시각이 그대로인 수업은 '바뀌는 수업' 이 아니라 '그대로 두는 수업(same)'
+--  5. R-09 admin_leave_create: 같은 강사의 겹치는 휴무가 있으면 미리 보기에 보여 주고 저장은 거절(hint leave_overlap). 같은 기간 재입력은 전처럼 한 줄
+--  6. R-10 기존 배정이 있는 신규 매칭의 '수업 컨펌 완료': admin_matching_current(읽기) · admin_matching_notified(학생 안내 완료 기록 → 업무 완료)
+--  7. R-06 처리 내역에 시트 '대조 완료' 기록(④) + 다시 열기 admin_import_unmark_checked
+--  8. R-05 Google Meet 회의실 주소 검사 lms_meet_url_ok: 대체강사 확정(admin_leave_student_ok)은 유효한 회의실 링크가 있어야 함
+-- 지우는 문장(drop·delete) 새로 없음 (tutor_schedule_save 안의 delete 는 4403 함수 내용 그대로). 기존 표·데이터 그대로. 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. R-18 이관권 연결이 바뀌면 휴무 자동 연장 재계산
+-- ---------------------------------------------------------------------
+create or replace function migrated_items_leave_extension() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.enrollment_id is not null and (new.lesson_id is distinct from old.lesson_id or new.tutor_leave is distinct from old.tutor_leave or new.kind is distinct from old.kind) then
+    perform lms_leave_sync_extension(new.enrollment_id);
+  end if;
+  return null;
+end $$;
+revoke all on function migrated_items_leave_extension() from public, anon, authenticated;
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'migrated_items_leave_extension' and tgrelid = 'migrated_items'::regclass) then
+    create trigger migrated_items_leave_extension after update of lesson_id, tutor_leave, kind on migrated_items
+      for each row execute function migrated_items_leave_extension();
+  end if;
+end $$;
+
+-- admin_makeup_confirm: 4500 그대로 + 이관권 연결 뒤 연장 재계산을 같은 트랜잭션에서 (트리거와 같은 계산 — 두 번 불려도 결과 같음)
+create or replace function admin_makeup_confirm(p_makeup_request uuid, p_starts_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  s record;
+  c record;
+  e enrollments;
+  v_end timestamptz;
+  v_lesson uuid;
+  v_conf text;
+  v_enr uuid;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into r from makeup_requests where id = p_makeup_request for update;
+  if not found then raise exception '보강 신청이 없습니다.'; end if;
+  if r.status = 'confirmed' then return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', r.confirmed_lesson_id, 'repeated', true); end if;
+  if r.status not in ('requested', 'countered') then raise exception '이미 닫힌 보강 신청입니다.'; end if;
+  if p_starts_at <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+  -- 강사가 불가라고 답한 시간 (QA-01 D, 4500)
+  if exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student' and x.tutor_answer = 'no') then
+    raise exception '강사가 불가라고 답한 시간입니다. 다른 시간을 고르거나 학생에게 다시 날짜를 받아 주세요.' using hint = 'tutor_no';
+  end if;
+
+  if r.compensation_id is not null then
+    perform 1 from compensations where id = r.compensation_id for update;   -- 같은 보상권 두 번 쓰기 막기
+    select * into c from lms_comp_source(r.compensation_id);
+    if p_starts_at >= ((c.use_until + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '보상수업 사용 기한(%) 뒤의 시간입니다.', c.use_until using hint = 'after_end';
+    end if;
+    select * into e from enrollments where id = c.enrollment_id;
+    v_end := p_starts_at + make_interval(mins => e.duration_min);
+    v_conf := lms_makeup_conflict(r.tutor_id, c.student_id, p_starts_at, v_end,
+                exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student'));
+    if v_conf is not null then raise exception '그 시간은 %와 겹칩니다.', v_conf using hint = 'schedule_conflict'; end if;
+    v_enr := lms_comp_lesson_enrollment(r.compensation_id, (p_starts_at at time zone 'Asia/Seoul')::date);
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+    if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+      insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+    end if;
+    begin
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, compensation_id, created_by)
+      values (v_enr, c.student_id, r.tutor_id, 'compensation', p_starts_at, v_end, r.compensation_id, me)
+      returning id into v_lesson;
+    exception when exclusion_violation then
+      raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+    end;
+    update compensations set status = 'used', used_lesson_id = v_lesson where id = r.compensation_id;
+  else
+    select * into s from lms_makeup_source(r.source_lesson_id, r.migrated_item_id);
+    select * into e from enrollments where id = s.enrollment_id;
+    if not s.tutor_leave and p_starts_at >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+    end if;
+    v_end := p_starts_at + make_interval(mins => e.duration_min);
+    v_conf := lms_makeup_conflict(r.tutor_id, s.student_id, p_starts_at, v_end,
+                exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student'));
+    if v_conf is not null then raise exception '그 시간은 %와 겹칩니다.', v_conf using hint = 'schedule_conflict'; end if;
+
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+    if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+      insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+    end if;
+    begin
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of, created_by)
+      values (s.enrollment_id, s.student_id, r.tutor_id,
+              case when r.source_lesson_id is null then 'migrated_makeup' else 'makeup' end,
+              p_starts_at, v_end, r.source_lesson_id, me)
+      returning id into v_lesson;
+    exception when exclusion_violation then
+      raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+    end;
+    if r.migrated_item_id is not null then
+      update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = r.migrated_item_id;
+      -- R-18 (4520): 이관권이 수업에 연결된 뒤 휴무 자동 연장 재계산 (lessons 트리거는 연결 전에 돌아 못 찾았음)
+      perform lms_leave_sync_extension(s.enrollment_id);
+    end if;
+  end if;
+  update makeup_requests set status = 'confirmed', confirmed_lesson_id = v_lesson, decided_at = now(), decided_by = me where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  values (r.id, 'makeup_confirmed', 'student', r.student_id), (r.id, 'makeup_confirmed', 'tutor', r.tutor_id);
+  return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', v_lesson, 'repeated', false);
+end $$;
+revoke all on function admin_makeup_confirm(uuid, timestamptz) from public, anon;
+grant execute on function admin_makeup_confirm(uuid, timestamptz) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 3. R-16 칸 판정: r = 아직 답하지 않은 후보 / a = '가능' 이라고 답했고 운영진 확정 대기 (둘 다 못 바꾸는 칸, 안내만 다름)
+--    순서 c·l·p·s·r·a·b·x·o (4500 그대로 + a)
+-- ---------------------------------------------------------------------
+create or replace function lms_hours_cell(p_tutor uuid, p_at timestamptz) returns text
+language sql stable security definer set search_path = public as $$
+  select case
+    when exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled' and x.voided_at is null
+                 and x.starts_at < p_at + interval '30 minutes' and p_at < x.ends_at) then 'c'
+    when exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'leave'
+                 and o.starts_at < p_at + interval '30 minutes' and p_at < o.ends_at) then 'l'
+    when p_at < now() + interval '6 hours' then 'p'
+    when not lms_tutor_available(p_tutor, p_at) then 's'
+    when exists (select 1 from makeup_candidates c join makeup_requests r on r.id = c.request_id
+                 where r.tutor_id = p_tutor and r.status in ('requested', 'countered') and c.tutor_answer is null
+                   and c.starts_at < p_at + interval '30 minutes' and p_at < c.ends_at)
+      or exists (select 1 from leave_items i where i.sub_tutor_id = p_tutor and i.sub_stage = 'asked'
+                 and i.starts_at < p_at + interval '30 minutes' and p_at < i.ends_at) then 'r'
+    when exists (select 1 from makeup_candidates c join makeup_requests r on r.id = c.request_id
+                 where r.tutor_id = p_tutor and r.status in ('requested', 'countered') and c.tutor_answer = 'yes'
+                   and c.starts_at < p_at + interval '30 minutes' and p_at < c.ends_at)
+      or exists (select 1 from leave_items i where i.sub_tutor_id = p_tutor and i.sub_stage = 'tutor_ok'
+                 and i.starts_at < p_at + interval '30 minutes' and p_at < i.ends_at) then 'a'
+    when exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'block'
+                 and o.starts_at < p_at + interval '30 minutes' and p_at < o.ends_at) then 'b'
+    when not lms_tutor_weekly_ok(p_tutor, p_at) then 'x'
+    else 'o' end
+$$;
+revoke all on function lms_hours_cell(uuid, timestamptz) from public, anon, authenticated;
+
+-- tutor_schedule_save: 4403 그대로 + 'a'(답 보냄·확정 대기) 거절 문구 구분 (R-16)
+create or replace function tutor_schedule_save(p_tutor uuid, p_action text, p_cells text[] default null, p_note text default null, p_block uuid default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  v_tz text;
+  v_today date;
+  v_last date;
+  v_times time[];
+  v_note text := nullif(btrim(coalesce(p_note, '')), '');
+  v_keys text[];
+  k text;
+  v_c text;
+  v_at timestamptz;
+  v_end timestamptz;
+  v_cut timestamptz;
+  o record;
+  v_s timestamptz;
+  v_e timestamptz;
+  v_runs tstzrange[];
+  v_xs boolean[];
+  i int;
+  v_changes jsonb;
+begin
+  select timezone into v_tz from tutors where id = v_tutor;
+  v_today := (now() at time zone v_tz)::date;
+  v_last := v_today + 84;   -- 오늘부터 12주 후까지 (대표 H26(50) ②)
+  v_times := array(select lms_hours_times(v_tz, v_today));
+  perform set_config('app.actor_id', coalesce(auth.uid()::text, ''), true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_tutor_schedule' else 'tutor_schedule' end, true);
+  if v_note is not null and char_length(v_note) > 100 then raise exception 'Note is too long (100 characters max).'; end if;   -- 대표 H26(50) ③
+
+  if p_action in ('block', 'open') then
+    v_keys := array(select distinct x from unnest(coalesce(p_cells, '{}')) x order by 1);
+    if cardinality(v_keys) = 0 then raise exception 'Pick a time.'; end if;
+    foreach k in array v_keys loop
+      if k !~ '^\d{4}-\d\d-\d\dT\d\d:\d\d$' or not (right(k, 5)::time = any (v_times)) then raise exception 'Invalid time: %', k; end if;
+      if left(k, 10)::date < v_today or left(k, 10)::date > v_last then raise exception 'You can only change times up to 12 weeks ahead.'; end if;
+      v_at := (left(k, 10)::date + right(k, 5)::time) at time zone v_tz;
+      v_c := lms_hours_cell(v_tutor, v_at);
+      if v_c = 'c' then
+        select format('You have a class at %s %s. Classes can''t be blocked.', to_char(x.starts_at at time zone v_tz, 'HH24:MI'), lms_city_time(v_tz)) into k
+        from lessons x where x.tutor_id = v_tutor and x.state <> 'canceled' and x.voided_at is null
+          and x.starts_at < v_at + interval '30 minutes' and v_at < x.ends_at order by x.starts_at limit 1;
+        raise exception '%', k;
+      end if;
+      if v_c = 'p' then raise exception 'Can''t change: less than 6 hours away.'; end if;
+      if v_c = 'r' then raise exception 'A make-up or cover request is waiting for this time. Answer it first.'; end if;
+      if v_c = 'a' then raise exception 'Your answer has been sent for this time. Waiting for Edge English to confirm. Contact Edge English to change it.'; end if;
+      if v_c = 'l' then raise exception 'This time is in your leave.'; end if;
+      if p_action = 'block' and v_c not in ('o', 'x') then
+        raise exception '% % is already %.', left(k, 10), right(k, 5), case v_c when 'b' then 'blocked' else 'not available' end;
+      end if;
+      if p_action = 'open' and v_c <> 's' then raise exception '% % is already available.', left(k, 10), right(k, 5); end if;
+    end loop;
+
+    -- 이어진 칸 = 한 줄 (메모는 줄마다 그대로, 다른 줄과 합치지 않음). 바꾸기 전에 묶음을 먼저 다 계산해 둠
+    select array_agg(tstzrange(s, e) order by s), array_agg(all_x order by s) into v_runs, v_xs
+    from (select min(a) s, max(a) + interval '30 minutes' e, bool_and(c = 'x') all_x
+          from (select a, c, extract(epoch from a)::bigint / 1800 - row_number() over (partition by c = 'x' order by a) grp
+                from (select (left(x, 10)::date + right(x, 5)::time) at time zone v_tz a, lms_hours_cell(v_tutor, (left(x, 10)::date + right(x, 5)::time) at time zone v_tz) c
+                      from unnest(v_keys) x) q) z
+          group by grp, (c = 'x')) w;
+    for i in 1 .. cardinality(v_runs) loop
+      v_s := lower(v_runs[i]);
+      v_e := upper(v_runs[i]);
+      if p_action = 'open' then
+        -- 붙어 있는 그날만 연 줄과 합침
+        v_at := v_s;
+        v_end := v_e;
+        for o in select * from tutor_open_once where tutor_id = v_tutor and starts_at <= v_end and v_at <= ends_at loop
+          v_at := least(v_at, o.starts_at);
+          v_end := greatest(v_end, o.ends_at);
+          delete from tutor_open_once where id = o.id;
+        end loop;
+        insert into tutor_open_once (tutor_id, starts_at, ends_at, created_by) values (v_tutor, v_at, v_end, auth.uid());
+      elsif v_xs[i] then
+        -- 그날만 연 칸을 다시 막음 = 그 열기를 그 칸만 거둠 (매주 닫힌 시간으로 돌아감)
+        for o in select * from tutor_open_once where tutor_id = v_tutor and starts_at < v_e and v_s < ends_at loop
+          delete from tutor_open_once where id = o.id;
+          if o.starts_at < v_s then insert into tutor_open_once (tutor_id, starts_at, ends_at, created_by) values (v_tutor, o.starts_at, v_s, o.created_by); end if;
+          if v_e < o.ends_at then insert into tutor_open_once (tutor_id, starts_at, ends_at, created_by) values (v_tutor, v_e, o.ends_at, o.created_by); end if;
+        end loop;
+      else
+        insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by) values (v_tutor, v_s, v_e, 'block', v_note, auth.uid());
+      end if;
+    end loop;
+    v_changes := jsonb_build_object('from', v_today, 'weekly_open', '[]'::jsonb, 'weekly_close', '[]'::jsonb,
+      'once_close', case when p_action = 'block' then to_jsonb(v_keys) else '[]'::jsonb end, 'once_open', '[]'::jsonb,
+      'day_open', case when p_action = 'open' then to_jsonb(v_keys) else '[]'::jsonb end, 'note', v_note);
+
+  elsif p_action in ('note', 'unblock') then
+    select * into o from tutor_time_off where id = p_block and tutor_id = v_tutor and kind = 'block';
+    if not found then raise exception 'This blocked time is gone. Please refresh.'; end if;
+    if o.ends_at <= now() then raise exception 'Can''t change: this time has passed.'; end if;
+    if p_action = 'note' then
+      update tutor_time_off set reason = v_note where id = o.id;
+      v_changes := jsonb_build_object('from', v_today, 'weekly_open', '[]'::jsonb, 'weekly_close', '[]'::jsonb, 'once_close', '[]'::jsonb, 'once_open', '[]'::jsonb,
+        'day_open', '[]'::jsonb, 'note', v_note,
+        'note_of', to_char(o.starts_at at time zone v_tz, 'YYYY-MM-DD"T"HH24:MI') || '/' || to_char(o.ends_at at time zone v_tz, 'YYYY-MM-DD"T"HH24:MI'));
+    else
+      -- 6시간 안 부분은 못 바꿈 → 그 뒤 첫 30분 칸(강사 현지)부터만 풂
+      v_cut := date_bin(interval '30 minutes', ((now() + interval '6 hours') at time zone v_tz) + interval '30 minutes' - interval '1 microsecond', timestamp '2000-01-01') at time zone v_tz;
+      if o.ends_at <= v_cut then raise exception 'Can''t change: less than 6 hours away.'; end if;
+      v_keys := array(select to_char(g at time zone v_tz, 'YYYY-MM-DD"T"HH24:MI')
+                      from generate_series(greatest(o.starts_at, v_cut), o.ends_at - interval '1 second', interval '30 minutes') g
+                      where (g at time zone v_tz)::time = any (v_times));
+      delete from tutor_time_off where id = o.id;
+      if o.starts_at < v_cut then
+        insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by) values (v_tutor, o.starts_at, v_cut, 'block', o.reason, o.created_by);
+      end if;
+      v_changes := jsonb_build_object('from', v_today, 'weekly_open', '[]'::jsonb, 'weekly_close', '[]'::jsonb, 'once_close', '[]'::jsonb,
+        'once_open', to_jsonb(v_keys), 'day_open', '[]'::jsonb, 'note', null);
+    end if;
+  else
+    raise exception 'Invalid action.';
+  end if;
+
+  insert into tutor_hours_changes (tutor_id, actor, by_admin, changes) values (v_tutor, auth.uid(), is_admin(), v_changes);
+  return v_changes;
+end $$;
+revoke all on function tutor_schedule_save(uuid, text, text[], text, uuid) from public, anon;
+grant execute on function tutor_schedule_save(uuid, text, text[], text, uuid) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- 2. R-12 학생 화면: 4500 그대로 + credit_periods (수강권의 모든 기간: 수업 날짜가 속한 기간의 변경권으로 미리 보기)
+-- ---------------------------------------------------------------------
+create or replace function student_screen(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+  e enrollments;
+  v_period enrollment_periods;
+  v_open uuid[];
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  select * into st from students where id = v_student;
+  select * into e from enrollments where id = lms_student_enrollment(v_student);
+  select * into v_period from enrollment_periods p
+  where p.enrollment_id = e.id and p.start_date <= v_today order by p.idx desc limit 1;
+  v_open := array(select x.id from enrollments x where x.student_id = v_student and (x.status in ('active', 'confirmed') or x.id = e.id));
+  return jsonb_build_object(
+    'student', jsonb_build_object('id', st.id, 'code', st.code, 'name_ko', st.name_ko, 'timezone', st.timezone),
+    'enrollment', case when e.id is null then null else jsonb_build_object(
+      'id', e.id, 'weeks', e.weeks, 'legacy_label', e.legacy_label, 'weekly_count', e.weekly_count, 'duration_min', e.duration_min,
+      'start_date', e.start_date, 'final_end_date', e.final_end_date, 'status', e.status,
+      'next_regular_from', lms_next_regular_from(e.id),
+      'lessons_total', coalesce((select c.sheet_total from import_checks c where c.enrollment_id = e.id), e.lessons_purchased + e.lessons_carried_in),
+      'credits_left', case when v_period.id is null then 0 else credit_balance(v_period.id) end,
+      'credits_granted', coalesce(v_period.credits_granted, 0),
+      'confirmed_on', (select min((p.confirmed_at at time zone 'Asia/Seoul')::date) from payments p where p.enrollment_id = e.id and p.confirmed_at is not null),
+      'renewal_paid', exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))) end,
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'state', l.state, 'class_status', l.class_status,
+        'tutor', t.name, 'meet_url', t.meet_url, 'makeup_of', l.makeup_of, 'leave_postponed', lms_is_leave_postponed(l.id),
+        'substitute', l.original_tutor_id is not null,
+        'leave_open', exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))) order by l.starts_at)
+      from lessons l join tutors t on t.id = l.tutor_id
+      where l.enrollment_id = any(v_open) and l.voided_at is null), '[]'::jsonb),
+    -- 보강을 받을 수 있는데 아직 날짜가 없는 것 (취소한 수업 · 시트에서 넘어온 날짜 미정 보강 · 강사 노쇼 무료 보상수업)
+    -- QA-13 (4500): 보강 수업이 잡힌 뒤 취소(voided 아님)된 원래 수업은 다시 권리가 되지 않음 — 권리는 그 보강 수업의 결과를 따름
+    'makeup_rights', coalesce((
+      select jsonb_agg(r order by r ->> 'original_at', r ->> 'comp_id' nulls first) from (
+        select jsonb_build_object('lesson_id', l.id, 'item_id', null, 'original_at', l.starts_at,
+                 'tutor_leave', l.class_status = 'Tutor long-term leave') as r
+        from lessons l
+        where l.enrollment_id = any(v_open) and l.voided_at is null and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+          and not exists (select 1 from lessons x where x.makeup_of = l.id and x.voided_at is null)
+        union all
+        select jsonb_build_object('lesson_id', null, 'item_id', m.id,
+                 'original_at', coalesce((select li.starts_at from leave_items li where li.migrated_item_id = m.id order by li.starts_at limit 1),
+                                         m.original_date::timestamp at time zone 'Asia/Seoul'),
+                 'time_known', exists (select 1 from leave_items li where li.migrated_item_id = m.id),
+                 'tutor_leave', coalesce(m.tutor_leave, false))
+        from migrated_items m where m.enrollment_id = any(v_open) and m.kind = 'makeup_open'
+          and not exists (select 1 from leave_items li where li.migrated_item_id = m.id and li.lesson_gone_at is null
+                          and li.choice in ('undecided', 'substitute'))
+        union all
+        select jsonb_build_object('lesson_id', null, 'item_id', null, 'comp_id', c.id, 'original_at', src.starts_at,
+                 'tutor', t.name, 'use_until', lms_comp_use_until(c.enrollment_id), 'tutor_leave', false)
+        from compensations c
+        join lessons src on src.id = c.source_lesson_id
+        join tutors t on t.id = src.tutor_id
+        where c.student_id = v_student and c.status = 'available' and lms_comp_use_until(c.enrollment_id) >= v_today) q), '[]'::jsonb),
+    'leave_pending', coalesce((
+      select jsonb_agg(jsonb_build_object('id', li.id, 'starts_at', li.starts_at, 'ends_at', li.ends_at) order by li.starts_at)
+      from leave_items li
+      where li.student_id = v_student and li.lesson_id is null and li.lesson_gone_at is null and li.starts_at > now()
+        and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))), '[]'::jsonb),
+    -- 신청 내역 (4100 + 4500: 확정 수업 상태 · 강사가 모든 후보에 불가 답)
+    'makeup_requests', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'status', r.status, 'lesson_id', r.source_lesson_id, 'item_id', r.migrated_item_id, 'comp_id', r.compensation_id,
+        'requested_at', r.requested_at, 'confirmed_lesson_id', r.confirmed_lesson_id, 'tutor_answered_at', r.tutor_answered_at,
+        'confirmed_state', cl.state,
+        'tutor_declined_all', r.tutor_answered_at is not null
+          and not exists (select 1 from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student' and c.tutor_answer = 'yes'),
+        'original_at', coalesce(src.starts_at, (select m.original_date::timestamp at time zone 'Asia/Seoul' from migrated_items m where m.id = r.migrated_item_id)),
+        'original_time_known', src.id is not null,
+        'original_tutor', srct.name,
+        'tutor', rt.name,
+        'confirmed_at', cl.starts_at,
+        'tutor_leave', coalesce(src.class_status = 'Tutor long-term leave',
+                                (select m.tutor_leave from migrated_items m where m.id = r.migrated_item_id), false),
+        'candidates', (select coalesce(jsonb_agg(c.starts_at order by c.starts_at), '[]'::jsonb) from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.requested_at desc)
+      from makeup_requests r
+      left join lessons src on src.id = r.source_lesson_id
+      left join tutors srct on srct.id = src.tutor_id
+      left join tutors rt on rt.id = r.tutor_id
+      left join lessons cl on cl.id = r.confirmed_lesson_id
+      where r.student_id = v_student and r.status in ('requested', 'countered', 'confirmed')
+        and r.requested_at > now() - interval '60 days'), '[]'::jsonb),
+    'leave', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', li.id, 'starts_at', li.starts_at, 'choice', li.choice, 'stage', li.sub_stage, 'sub_tutor', sub.name, 'sub_meet_url', sub.meet_url,
+        'lesson_id', li.lesson_id, 'item_id', li.migrated_item_id,
+        'off_from', o.starts_at, 'off_to', o.ends_at) order by li.starts_at)
+      from leave_items li
+      join tutor_time_off o on o.id = li.time_off_id
+      left join tutors sub on sub.id = li.sub_tutor_id
+      where li.student_id = v_student and li.starts_at > now() and li.lesson_gone_at is null
+        and ((li.choice = 'substitute' and li.sub_stage in ('tutor_ok', 'confirmed')) or li.choice = 'wait')), '[]'::jsonb),
+    'credit_period', case when v_period.id is null then null else jsonb_build_object('start', v_period.start_date, 'end', v_period.end_date) end,
+    -- R-12 (4520): 모든 기간의 잔여 — 미래 수업 취소 미리 보기는 그 수업 날짜가 속한 기간으로
+    'credit_periods', coalesce((
+      select jsonb_agg(jsonb_build_object('idx', p.idx, 'start', p.start_date, 'end', p.end_date, 'granted', p.credits_granted, 'left', credit_balance(p.id)) order by p.idx)
+      from enrollment_periods p where p.enrollment_id = e.id), '[]'::jsonb),
+    'credit_uses', coalesce((
+      select jsonb_agg(jsonb_build_object('at', c.created_at, 'reason', c.reason, 'delta', c.delta, 'note', c.note, 'lesson_at', l.starts_at) order by c.created_at)
+      from credit_ledger c left join lessons l on l.id = c.lesson_id where c.period_id = v_period.id), '[]'::jsonb),
+    'holidays', coalesce((select jsonb_agg(h.day order by h.day) from holidays h
+      where h.day between v_today and v_today + 200), '[]'::jsonb),
+    'points', coalesce((
+      select jsonb_agg(jsonb_build_object('id', g.id, 'on', (g.created_at at time zone 'Asia/Seoul')::date, 'kind', g.kind, 'amount', g.amount, 'note', g.note)
+        order by g.created_at)
+      from reward_ledger g where g.student_id = v_student), '[]'::jsonb));
+end $$;
+revoke all on function student_screen(uuid) from public, anon;
+grant execute on function student_screen(uuid) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- 4. R-15 정규 일정 수정: 4300 그대로 + 새 일정에서도 날짜·시각이 그대로인 수업은 moved 가 아니라 kept(why 'same')
+--    (바뀌는 수업 수·저장 결과·변경 이력·안내문이 같은 목록을 씀)
+-- ---------------------------------------------------------------------
+create or replace function admin_regular_change(p_student uuid, p_slots jsonb, p_from date, p_reason text, p_dry_run boolean default true)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21
+  e enrollments;
+  t tutors;
+  v_tutor uuid;
+  v_lid uuid;
+  v_old jsonb;
+  v_new jsonb;
+  v_n_slots integer;
+  s jsonb;
+  v_reason text := nullif(trim(coalesce(p_reason, '')), '');
+  v_movable uuid[];
+  v_moved jsonb := '[]'::jsonb;
+  v_kept jsonb;
+  v_skipped jsonb := '[]'::jsonb;
+  v_problems jsonb := '[]'::jsonb;
+  l lessons;
+  d date;
+  i integer := 0;
+  t0 timestamptz;
+  t1 timestamptz;
+  v_why text;
+  v_last date;
+  v_change uuid;
+  v_guard integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 정규 일정을 바꿀 수 있습니다.' using errcode = '42501'; end if;
+  select * into e from enrollments x where x.id = lms_student_enrollment(p_student);
+  if e.id is null or e.status not in ('confirmed', 'active') then
+    raise exception '수강 중이거나 시작 예정인 수강권이 없어 정규 일정을 바꿀 수 없습니다.';
+  end if;
+  if p_from is null or p_from < v_today then raise exception '적용 시작일은 오늘(한국 날짜) 이후여야 합니다.'; end if;
+  if p_from > e.final_end_date then raise exception '적용 시작일(%)이 최종 종료일(%) 뒤입니다.', p_from, e.final_end_date; end if;
+
+  -- 지금 정규 일정 (적용 시작일에 유효한 것). 강사는 하나
+  select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI')) order by rs.weekday, rs.start_time_kst),
+         count(distinct rs.tutor_id), (array_agg(distinct rs.tutor_id))[1]
+    into v_old, v_n_slots, v_tutor
+  from regular_schedules rs
+  where rs.student_id = p_student and rs.effective_from <= greatest(p_from, e.start_date)
+    and (rs.effective_to is null or rs.effective_to >= greatest(p_from, e.start_date));
+  if v_old is null then raise exception '이 학생의 정규 일정이 없습니다 (등록·이관 때 정규 일정이 만들어집니다).'; end if;
+  if v_n_slots <> 1 then raise exception '정규 일정의 강사가 하나가 아닙니다. 운영진이 확인해 주세요.'; end if;
+  select * into t from tutors where id = v_tutor;
+
+  -- 새 일정 모양: 지금과 같은 수(주 횟수 그대로), 요일 0~6 중복 없음, 30분 단위
+  if p_slots is null or jsonb_typeof(p_slots) <> 'array' then raise exception '새 정규 일정이 비어 있습니다.'; end if;
+  if jsonb_array_length(p_slots) <> jsonb_array_length(v_old) then
+    raise exception '주 %회 수강권이라 요일을 %개 골라야 합니다 (주 횟수는 이 화면에서 바꾸지 않습니다).', jsonb_array_length(v_old), jsonb_array_length(v_old);
+  end if;
+  select jsonb_agg(jsonb_build_object('weekday', (x ->> 'weekday')::int, 'time', to_char((x ->> 'time')::time, 'HH24:MI')) order by (x ->> 'weekday')::int)
+    into v_new from jsonb_array_elements(p_slots) x;
+  for s in select * from jsonb_array_elements(v_new) loop
+    if (s ->> 'weekday')::int not between 0 and 6 then raise exception '요일 값이 잘못됐습니다.'; end if;
+    if extract(minute from (s ->> 'time')::time)::int not in (0, 30) then raise exception '시작 시간은 30분 단위(예: 22:00, 22:30)로 골라 주세요.'; end if;
+  end loop;
+  if (select count(distinct x ->> 'weekday') from jsonb_array_elements(v_new) x) <> jsonb_array_length(v_new) then
+    raise exception '같은 요일을 두 번 고를 수 없습니다.';
+  end if;
+  if v_new = v_old then raise exception '지금 정규 일정과 같습니다. 바꿀 요일·시간을 골라 주세요.'; end if;
+  if not p_dry_run and v_reason is null then raise exception '수정 사유를 적어 주세요.'; end if;
+
+  -- 옮길 수업: 이 수강권의 앞으로 정규 수업 중 적용 시작일 이후, 대체강사 아님, 휴무 처리 중 아님
+  select coalesce(array_agg(x.id order by x.starts_at), '{}') into v_movable
+  from lessons x
+  where x.enrollment_id = e.id and x.kind = 'regular' and x.state = 'scheduled' and x.voided_at is null
+    and x.starts_at > now() and x.kst_date >= p_from
+    and x.original_tutor_id is null and x.tutor_id = t.id
+    and not exists (select 1 from leave_items li where li.lesson_id = x.id and li.lesson_gone_at is null);
+  -- 그대로 두는 앞으로의 수업 (왜 그대로인지 같이)
+  select coalesce(jsonb_agg(jsonb_build_object('lesson_id', x.id, 'kind', x.kind, 'seq', x.seq, 'starts_at', x.starts_at, 'ends_at', x.ends_at,
+           'tutor', xt.name, 'tutor_tz', xt.timezone,
+           'why', case when x.kst_date < p_from then 'before_from'
+                       when x.original_tutor_id is not null and x.original_tutor_id <> x.tutor_id then 'substitute'
+                       when x.kind = 'makeup' then 'makeup' when x.kind = 'compensation' then 'compensation'
+                       when x.kind in ('migrated_makeup', 'migrated_extra', 'carryover') then 'makeup'
+                       when exists (select 1 from leave_items li where li.lesson_id = x.id and li.lesson_gone_at is null) then 'leave_open'
+                       else 'other' end) order by x.starts_at), '[]'::jsonb)
+    into v_kept
+  from lessons x join tutors xt on xt.id = x.tutor_id
+  where x.student_id = p_student and x.state = 'scheduled' and x.voided_at is null and x.starts_at > now()
+    and not (x.id = any(v_movable));
+  if cardinality(v_movable) = 0 then
+    raise exception '적용 시작일(%) 이후에 옮길 정규 수업이 없습니다.', p_from;
+  end if;
+
+  -- 새 날짜에 차례로 배치: 적용 시작일부터 새 요일에 맞는 날을 순서대로. 학생의 그대로 두는 수업과 겹치는 날은 건너뜀
+  d := p_from;
+  foreach v_lid in array v_movable loop
+    select * into l from lessons where id = v_lid;
+    loop
+      v_guard := v_guard + 1;
+      if v_guard > 2000 then raise exception '새 일정 날짜를 찾지 못했습니다.'; end if;
+      select x into s from jsonb_array_elements(v_new) x where (x ->> 'weekday')::int = extract(dow from d);
+      if found then
+        t0 := (d + (s ->> 'time')::time) at time zone 'Asia/Seoul';
+        t1 := t0 + make_interval(mins => e.duration_min);
+        -- 학생 본인의 그대로 두는 수업과 겹치면 이 날은 건너뜀
+        if exists (select 1 from lessons y where y.student_id = p_student and y.state <> 'canceled' and y.voided_at is null
+                   and not (y.id = any(v_movable)) and y.starts_at < t1 and t0 < y.ends_at) then
+          v_skipped := v_skipped || jsonb_build_object('date', d, 'time', s ->> 'time', 'why', 'student_busy');
+          d := d + 1; continue;
+        end if;
+        exit;
+      end if;
+      d := d + 1;
+    end loop;
+    -- R-15 (4520): 새 일정에서도 같은 날짜·시각이면 바뀌는 수업이 아님 → 그대로 두는 수업(same), 검사도 안 함
+    if t0 = l.starts_at and t1 = l.ends_at then
+      v_kept := v_kept || jsonb_build_object('lesson_id', l.id, 'kind', l.kind, 'seq', l.seq, 'starts_at', l.starts_at, 'ends_at', l.ends_at,
+                 'tutor', t.name, 'tutor_tz', t.timezone, 'why', 'same');
+      v_last := d;
+      d := d + 1;
+      continue;
+    end if;
+    -- 검사 (강사 기준)
+    v_why := null;
+    if not lms_tutor_start_ok(t.id, t0) then v_why := 'tutor_hours_range';
+    elsif not lms_tutor_available(t.id, t0) then v_why := 'tutor_unavailable';
+    elsif exists (select 1 from tutor_time_off o where o.tutor_id = t.id and o.starts_at < t1 and t0 < o.ends_at) then v_why := 'tutor_time_off';
+    elsif exists (select 1 from lessons y where y.tutor_id = t.id and y.state <> 'canceled' and not (y.id = any(v_movable))
+                  and y.starts_at < t1 + v_break and t0 - v_break < y.ends_at) then v_why := 'tutor_busy';
+    elsif exists (select 1 from lms_slot_hold_hits(t.id, t0, t1) h where h.student_id <> p_student) then v_why := 'tutor_hold';
+    end if;
+    if d > e.final_end_date then v_why := coalesce(v_why, 'after_end'); end if;
+    if v_why is not null then
+      v_problems := v_problems || jsonb_build_object('lesson_id', l.id, 'seq', l.seq, 'date', d, 'time', s ->> 'time', 'why', v_why,
+        'other', case when v_why = 'tutor_busy' then (select st.name_ko || ' ' || to_char(y.starts_at at time zone 'Asia/Seoul', 'HH24:MI') || '–' || to_char(y.ends_at at time zone 'Asia/Seoul', 'HH24:MI')
+                                                  from lessons y join students st on st.id = y.student_id
+                                                  where y.tutor_id = t.id and y.state <> 'canceled' and not (y.id = any(v_movable))
+                                                    and y.starts_at < t1 + v_break and t0 - v_break < y.ends_at order by y.starts_at limit 1)
+                      when v_why = 'tutor_hold' then (select h.student_name from lms_slot_hold_hits(t.id, t0, t1) h where h.student_id <> p_student limit 1) end);
+    end if;
+    v_moved := v_moved || jsonb_build_object('lesson_id', l.id, 'seq', l.seq, 'from', l.starts_at, 'from_end', l.ends_at, 'to', t0, 'to_end', t1, 'problem', v_why);
+    v_last := d;
+    d := d + 1;
+  end loop;
+
+  -- 그대로 두는 수업은 시간순으로 (same 이 뒤에 붙었음)
+  select coalesce(jsonb_agg(x order by (x ->> 'starts_at')::timestamptz), '[]'::jsonb) into v_kept from jsonb_array_elements(v_kept) x;
+  if p_dry_run then
+    return jsonb_build_object('ok', jsonb_array_length(v_problems) = 0, 'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone),
+      'student_timezone', (select timezone from students where id = p_student),
+      'enrollment', jsonb_build_object('id', e.id, 'final_end_date', e.final_end_date, 'duration_min', e.duration_min),
+      'old_slots', v_old, 'new_slots', v_new, 'effective_from', p_from, 'moved', v_moved, 'kept', v_kept, 'skipped', v_skipped,
+      'problems', v_problems, 'last_date', v_last);
+  end if;
+  if jsonb_array_length(v_problems) > 0 then
+    raise exception '새 일정에 문제가 %건 있어 저장하지 않았습니다. 미리 보기를 다시 확인해 주세요.', jsonb_array_length(v_problems)
+      using errcode = 'P0001', detail = v_problems::text, hint = 'regular_change_problems';
+  end if;
+
+  -- 저장: 옮기는 중 같은 학생 수업끼리 잠깐 겹치지 않게 두 단계로 (먼저 200년 뒤로 비켜 두고, 다시 새 시각으로)
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_regular_change', true);
+  for s in select * from jsonb_array_elements(v_moved) loop
+    update lessons set starts_at = (s ->> 'to')::timestamptz + interval '200 years', ends_at = (s ->> 'to_end')::timestamptz + interval '200 years'
+    where id = (s ->> 'lesson_id')::uuid;
+  end loop;
+  for s in select * from jsonb_array_elements(v_moved) loop
+    update lessons set starts_at = (s ->> 'to')::timestamptz, ends_at = (s ->> 'to_end')::timestamptz where id = (s ->> 'lesson_id')::uuid;
+  end loop;
+  -- 정규 일정 표: 적용 시작일 전날까지로 닫고 새 줄. 적용 시작일 이후에 시작하는(아직 효력 전) 줄은 효력 없는 날짜(1900-01-01)로 치워 둠(지우지 않음)
+  update regular_schedules rs
+     set effective_from = date '1900-01-01' + (select count(*) from regular_schedules r2 where r2.student_id = rs.student_id and r2.weekday = rs.weekday and r2.effective_to < date '1950-01-01')::int,
+         effective_to = date '1900-01-01' + (select count(*) from regular_schedules r2 where r2.student_id = rs.student_id and r2.weekday = rs.weekday and r2.effective_to < date '1950-01-01')::int,
+         change_reason = coalesce(rs.change_reason, '') || ' [취소됨 ' || p_from || ']'
+  where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from >= p_from;
+  update regular_schedules rs set effective_to = p_from - 1
+  where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from < p_from and (rs.effective_to is null or rs.effective_to >= p_from);
+  for s in select * from jsonb_array_elements(v_new) loop
+    insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from, change_reason)
+    values (p_student, t.id, (s ->> 'weekday')::smallint, (s ->> 'time')::time, e.duration_min, p_from, v_reason);
+  end loop;
+  insert into regular_changes (student_id, enrollment_id, tutor_id, effective_from, old_slots, new_slots, moved, kept, reason, created_by)
+  values (p_student, e.id, t.id, p_from, v_old, v_new, v_moved, v_kept, v_reason, auth.uid())
+  returning id into v_change;
+  return jsonb_build_object('ok', true, 'change_id', v_change, 'moved', jsonb_array_length(v_moved), 'effective_from', p_from, 'last_date', v_last);
+exception
+  when exclusion_violation then
+    raise exception '저장 중 겹침이 생겨 저장하지 않았습니다 (%). 미리 보기를 다시 확인해 주세요.', sqlerrm;
+end $$;
+revoke all on function admin_regular_change(uuid, jsonb, date, text, boolean) from public, anon;
+grant execute on function admin_regular_change(uuid, jsonb, date, text, boolean) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- 5. R-09 휴무 넣기: 같은 강사의 겹치는(또는 포함되는) 휴무가 있으면 미리 보기에 'overlap' 으로 보여 주고, 저장은 거절 (hint leave_overlap)
+--    같은 기간을 다시 넣는 것은 전처럼 같은 휴무 한 줄(4510). 철회된 휴무는 겹침으로 보지 않음
+-- ---------------------------------------------------------------------
+create or replace function lms_leave_overlaps(p_tutor uuid, p_from date, p_to date) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'from', (o.starts_at at time zone 'Asia/Seoul')::date,
+                                                        'to', ((o.ends_at at time zone 'Asia/Seoul')::date - 1), 'reason', o.reason) order by o.starts_at)
+    from tutor_time_off o
+    where o.tutor_id = p_tutor and o.kind = 'leave' and o.withdrawn_at is null
+      and o.starts_at < ((p_to + 1)::timestamp at time zone 'Asia/Seoul') and (p_from::timestamp at time zone 'Asia/Seoul') < o.ends_at
+      and not (o.starts_at = (p_from::timestamp at time zone 'Asia/Seoul') and o.ends_at = ((p_to + 1)::timestamp at time zone 'Asia/Seoul'))), '[]'::jsonb)
+$$;
+revoke all on function lms_leave_overlaps(uuid, date, date) from public, anon, authenticated;
+
+create or replace function admin_leave_create(p_tutor uuid, p_from date, p_to date, p_reason text, p_dry_run boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  t0 timestamptz := (p_from::timestamp at time zone 'Asia/Seoul');
+  t1 timestamptz := ((p_to + 1)::timestamp at time zone 'Asia/Seoul');
+  v_off uuid;
+  v_lessons integer;
+  v_items integer;
+  v_students integer;
+  v_overlap jsonb;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  if p_from is null or p_to is null or p_to < p_from then raise exception '휴무 끝일이 시작일보다 빠릅니다.'; end if;
+  if not exists (select 1 from tutors where id = p_tutor) then raise exception '강사가 없습니다.'; end if;
+
+  v_overlap := lms_leave_overlaps(p_tutor, p_from, p_to);
+  select count(*) filter (where n.lesson_id is not null), count(*), count(distinct n.student_id)
+  into v_lessons, v_items, v_students from lms_leave_candidates(p_tutor, p_from, p_to) n;
+  if p_dry_run then
+    return jsonb_build_object('dry_run', true, 'lessons', v_lessons, 'items', v_items, 'students', v_students, 'overlap', v_overlap,
+      'existing', (select count(*) from leave_items i join tutor_time_off o on o.id = i.time_off_id
+                   where o.tutor_id = p_tutor and o.starts_at = t0 and o.ends_at = t1 and o.withdrawn_at is null and i.withdrawn_at is null));
+  end if;
+  if jsonb_array_length(v_overlap) > 0 then
+    raise exception '이미 있는 휴무(%~%)와 겹칩니다. 기존 휴무를 철회하고 다시 넣거나, 겹치지 않는 날짜로 나눠 넣어 주세요.',
+      to_char((v_overlap -> 0 ->> 'from')::date, 'MM/DD'), to_char((v_overlap -> 0 ->> 'to')::date, 'MM/DD') using hint = 'leave_overlap';
+  end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_create', true);
+  select id into v_off from tutor_time_off where tutor_id = p_tutor and kind = 'leave' and starts_at = t0 and ends_at = t1 and withdrawn_at is null;
+  if v_off is null then
+    insert into tutor_time_off (tutor_id, starts_at, ends_at, kind, reason, created_by)
+    values (p_tutor, t0, t1, 'leave', nullif(trim(p_reason), ''), me) returning id into v_off;
+  end if;
+  -- 전에 철회한 휴무의 줄이 남아 있으면(수업당 한 줄 규칙) 그 줄을 이 휴무로 되살림
+  with rev as (
+    update leave_items i
+    set time_off_id = v_off, tutor_id = p_tutor, student_id = n.student_id, enrollment_id = n.enrollment_id, starts_at = n.starts_at, ends_at = n.ends_at,
+        choice = 'undecided', sub_tutor_id = null, sub_stage = null, sub_lesson_id = null, decided_at = null, decided_by = null,
+        sub_declined = '{}', lesson_gone_at = null, withdrawn_at = null, created_by = me, created_at = now()
+    from lms_leave_candidates(p_tutor, p_from, p_to) n
+    where i.withdrawn_at is not null
+      and ((n.lesson_id is not null and i.lesson_id = n.lesson_id) or (n.migrated_item_id is not null and i.migrated_item_id = n.migrated_item_id))
+    returning i.id, i.student_id
+  )
+  insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id)
+  select id, 'leave_options', 'student', student_id from rev;
+  -- 새로 들어온 줄마다 학생에게 두 가지 선택 안내 (화면은 학생마다 한 메시지로 묶어 복사)
+  with ins as (
+    insert into leave_items (time_off_id, tutor_id, student_id, enrollment_id, lesson_id, migrated_item_id, starts_at, ends_at, choice, created_by)
+    select v_off, p_tutor, n.student_id, n.enrollment_id, n.lesson_id, n.migrated_item_id, n.starts_at, n.ends_at, n.choice, me
+    from lms_leave_candidates(p_tutor, p_from, p_to) n
+    on conflict do nothing
+    returning id, student_id
+  )
+  insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id)
+  select id, 'leave_options', 'student', student_id from ins;
+  return jsonb_build_object('dry_run', false, 'time_off_id', v_off, 'lessons', v_lessons, 'items', v_items, 'students', v_students);
+end $$;
+revoke all on function admin_leave_create(uuid, date, date, text, boolean) from public, anon;
+grant execute on function admin_leave_create(uuid, date, date, text, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 6. R-10 기존 배정이 있는 신규 매칭: 일정안(schedule_plans) 없이 강사·정규 수업이 이미 있는 등록(시트 이관·수동 배정)의
+--    '수업 컨펌 완료' = 지금 배정 내용을 확인하고 학생 안내 완료를 기록 → 업무 완료. 일정안이 있으면 그 카드의 [보냄]으로 (이 함수는 거절)
+-- ---------------------------------------------------------------------
+create or replace function admin_matching_current(p_enrollment uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  e enrollments;
+  a admin_tasks;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  select * into e from enrollments where id = p_enrollment;
+  if not found then raise exception '수강등록을 찾지 못했어요.'; end if;
+  select * into a from admin_tasks where kind = 'new_student_matching' and enrollment_id = e.id;
+  return jsonb_build_object(
+    'enrollment_id', e.id,
+    'task', case when a.id is null then null else jsonb_build_object('id', a.id, 'status', a.status, 'tutor_assigned_at', a.tutor_assigned_at,
+                                                                   'student_notified_at', a.student_notified_at, 'done_at', a.done_at) end,
+    'plan', (select jsonb_build_object('id', p.id, 'state', p.state) from schedule_plans p where p.enrollment_id = e.id and p.state in ('proposed', 'confirmed') order by p.created_at desc limit 1),
+    'tutor', (select jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone) from tutors t
+              where t.id = coalesce(a.tutor_id, (select l.tutor_id from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' order by l.starts_at limit 1))),
+    'slots', coalesce((select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI')) order by rs.weekday, rs.start_time_kst)
+                       from lms_current_slots(e.student_id, greatest(e.start_date, (now() at time zone 'Asia/Seoul')::date)) rs), '[]'::jsonb),
+    'scheduled', (select count(*) from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' and l.voided_at is null),
+    'first_at', (select min(l.starts_at) from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' and l.voided_at is null),
+    'start_date', e.start_date, 'final_end_date', e.final_end_date, 'duration_min', e.duration_min, 'weekly_count', e.weekly_count,
+    'lessons_total', e.lessons_purchased + e.lessons_carried_in);
+end $$;
+revoke all on function admin_matching_current(uuid) from public, anon;
+grant execute on function admin_matching_current(uuid) to authenticated;
+
+create or replace function admin_matching_notified(p_enrollment uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  a admin_tasks;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into a from admin_tasks where kind = 'new_student_matching' and enrollment_id = p_enrollment for update;
+  if not found then raise exception '이 등록의 신규 매칭 업무가 없습니다.'; end if;
+  if a.status = 'done' then return jsonb_build_object('task_id', a.id, 'repeated', true, 'student_notified_at', a.student_notified_at); end if;
+  if a.status <> 'open' then raise exception '이미 닫힌 업무입니다.'; end if;
+  if a.tutor_id is null or a.tutor_assigned_at is null then raise exception '강사 배정이 먼저입니다.' using hint = 'assign_first'; end if;
+  if exists (select 1 from schedule_plans p where p.enrollment_id = p_enrollment and p.state in ('proposed', 'confirmed')) then
+    raise exception '일정안이 있는 등록은 일정안 카드의 [보냄]으로 안내 완료를 기록해 주세요.' using hint = 'has_plan';
+  end if;
+  if not exists (select 1 from lessons l where l.enrollment_id = p_enrollment and l.tutor_id = a.tutor_id and l.state = 'scheduled' and l.voided_at is null) then
+    raise exception '이 강사의 예정된 수업이 없어 컨펌 완료로 기록할 수 없습니다. 먼저 수업(정규 일정)을 만들어 주세요.' using hint = 'no_lessons';
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_matching_notified', true);
+  -- '수업 컨펌 완료' = 강사·학생 양쪽에 지금 배정을 확인함 (일정안 경로의 양쪽 [보냄]과 같은 뜻 — 강사는 이미 배정돼 수업이 있음)
+  update admin_tasks set student_notified_at = coalesce(student_notified_at, now()), tutor_notified_at = coalesce(tutor_notified_at, now()),
+         status = 'done', done_at = now(), done_by = me
+  where id = a.id returning * into a;
+  return jsonb_build_object('task_id', a.id, 'repeated', false, 'student_notified_at', a.student_notified_at);
+end $$;
+revoke all on function admin_matching_notified(uuid) from public, anon;
+grant execute on function admin_matching_notified(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 7. R-06 처리 내역: ④ 시트 '대조 완료' 기록(import_checks.checked_at) + 다시 열기(대조 전으로)
+-- ---------------------------------------------------------------------
+create or replace function admin_task_history()
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  return coalesce((select jsonb_agg(x order by x ->> 'at' desc nulls last) from (
+    -- ① 운영진이 [처리 종료]한 카드
+    select jsonb_build_object('source', 'closed', 'kind', c.task_kind, 'task_id', c.task_id, 'signature', c.signature, 'at', c.closed_at,
+      'by', (select case u.role when 'admin' then '운영자' when 'tutor' then '강사' else u.role end from app_users u where u.auth_user_id = c.closed_by),
+      'name', coalesce((select s.name_ko from enrollments e join students s on s.id = e.student_id where c.task_kind = 'ending_soon' and e.id::text = c.task_id),
+                       case when c.signature ~ '^\{' then coalesce(c.signature::jsonb ->> 'studentName', c.signature::jsonb ->> 'tutorName') end)) as x
+    from admin_task_closures c where c.closed
+    union all
+    -- ② 종료일 3일 지나 자동으로 빠진 수강기간 종료 임박 (재등록 결제 안 됨, 다시 열지 않음)
+    select jsonb_build_object('source', 'auto', 'kind', 'ending_soon', 'task_id', e.id, 'signature', e.id::text,
+      'at', ((e.final_end_date + 3)::timestamp at time zone 'Asia/Seoul'), 'by', null, 'name', s.name_ko)
+    from enrollments e join students s on s.id = e.student_id
+    where e.status in ('active', 'confirmed') and e.final_end_date + 3 <= v_today
+      and not exists (select 1 from enrollments n where n.student_id = e.student_id and n.status in ('active', 'confirmed') and n.final_end_date > e.final_end_date)
+      and not exists (select 1 from enrollments n where n.previous_enrollment_id = e.id and n.status in ('confirmed', 'active'))
+      and not exists (select 1 from admin_task_closures c where c.task_kind = 'ending_soon' and c.task_id = e.id::text)
+    union all
+    -- ③ [수강 종료]한 수강권
+    select jsonb_build_object('source', 'enrollment', 'kind', 'ending_soon', 'task_id', e.id, 'signature', e.id::text,
+      'at', h.at, 'by', h.email, 'name', s.name_ko)
+    from enrollments e join students s on s.id = e.student_id
+    left join lateral (select l.at, (select case u.role when 'admin' then '운영자' else u.role end from app_users u where u.auth_user_id = l.actor) email
+                       from audit_log l where l.table_name = 'enrollments' and l.row_id = e.id::text and l.actor_via = 'admin_enrollment_close'
+                       order by l.at desc limit 1) h on true
+    where e.status = 'completed' and h.at is not null
+    union all
+    -- ④ 시트 [대조 완료] (R-06, 4520): 누가 언제 완료했는지, 다시 열기 = 대조 전으로
+    select jsonb_build_object('source', 'checked', 'kind', 'import_check', 'task_id', c.enrollment_id, 'signature', c.enrollment_id::text,
+      'at', c.checked_at, 'by', (select case u.role when 'admin' then '운영자' when 'tutor' then '강사' else u.role end from app_users u where u.auth_user_id = c.checked_by),
+      'name', s.name_ko)
+    from import_checks c join enrollments e on e.id = c.enrollment_id join students s on s.id = e.student_id
+    where c.checked_at is not null
+  ) q), '[]'::jsonb);
+end $$;
+revoke all on function admin_task_history() from public, anon;
+grant execute on function admin_task_history() to authenticated;
+
+create or replace function admin_import_unmark_checked(p_enrollment uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  c import_checks;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into c from import_checks where enrollment_id = p_enrollment for update;
+  if not found then raise exception '이관 기록이 없는 수강등록입니다.'; end if;
+  if c.checked_at is not null then
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_import_unmark_checked', true);
+    update import_checks set checked_at = null, checked_by = null where enrollment_id = p_enrollment returning * into c;
+  end if;
+  return jsonb_build_object('checked_at', c.checked_at, 'checked_by', c.checked_by);
+end $$;
+revoke all on function admin_import_unmark_checked(uuid) from public, anon;
+grant execute on function admin_import_unmark_checked(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 8. R-05 Google Meet 회의실 주소 검사: https://meet.google.com/xxx-xxxx-xxx (또는 /lookup/…). 홈페이지 주소(meet.google.com/)는 회의실이 아님
+--    대체강사 확정(admin_leave_student_ok)은 대체강사의 회의실 링크가 있어야 함 — 학생 화면에 '수업 링크' 로 나가기 때문
+-- ---------------------------------------------------------------------
+create or replace function lms_meet_url_ok(p_url text) returns boolean
+language sql immutable as $$
+  select coalesce(p_url, '') ~* '^https://meet\.google\.com/([a-z0-9]{3}-[a-z0-9]{4}-[a-z0-9]{3}|lookup/[A-Za-z0-9_-]+)(\?.*)?$'
+$$;
+revoke all on function lms_meet_url_ok(text) from public, anon;
+grant execute on function lms_meet_url_ok(text) to authenticated;
+
+-- admin_leave_student_ok: 2500 그대로 + 대체강사 Meet 회의실 링크 검사 (R-05)
+create or replace function admin_leave_student_ok(p_items uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  it leave_items;
+  v_conf text;
+  v_lesson uuid;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_leave_student_ok', true);
+  for it in select * from leave_items where id = any(p_items) order by starts_at for update loop
+    if it.choice <> 'substitute' then raise exception '대체강사를 고른 수업이 아닙니다.'; end if;
+    if it.sub_stage = 'confirmed' then continue; end if;
+    if it.sub_stage <> 'tutor_ok' then raise exception '대체강사가 가능하다고 한 뒤에 확정할 수 있습니다.'; end if;
+    if it.starts_at <= now() then raise exception '% 수업 시간이 지났습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+    -- R-05 (4520): 학생에게 '수업 링크' 로 나가는 대체강사 Meet 주소가 회의실 주소여야 확정
+    if not lms_meet_url_ok((select meet_url from tutors where id = it.sub_tutor_id)) then
+      raise exception '대체강사 %의 Google Meet 회의실 링크가 없거나 회의실 주소가 아닙니다 (예: https://meet.google.com/abc-defg-hij). 강사 정보에 링크를 먼저 넣어 주세요.',
+        (select name from tutors where id = it.sub_tutor_id) using hint = 'meet_url';
+    end if;
+    v_conf := lms_sub_conflict(it.sub_tutor_id, it.starts_at, it.ends_at, it.lesson_id);
+    if v_conf is not null then
+      raise exception '% 수업 시간은 대체강사의 %와 겹칩니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI'), v_conf using hint = 'schedule_conflict';
+    end if;
+    begin
+      if it.lesson_id is not null then
+        update lessons set tutor_id = it.sub_tutor_id, original_tutor_id = it.tutor_id where id = it.lesson_id and state = 'scheduled'
+        returning id into v_lesson;
+        if v_lesson is null then raise exception '% 수업이 이미 처리됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      else
+        insert into lessons (enrollment_id, student_id, tutor_id, original_tutor_id, kind, starts_at, ends_at, created_by)
+        values (it.enrollment_id, it.student_id, it.sub_tutor_id, it.tutor_id, 'migrated_makeup', it.starts_at, it.ends_at, me)
+        returning id into v_lesson;
+        update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = it.migrated_item_id and kind = 'makeup_open';
+        if not found then raise exception '% 휴가 보강이 이미 예약됐습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD'); end if;
+      end if;
+    exception when exclusion_violation then
+      raise exception '% 그 시간에 학생 또는 대체강사의 다른 수업이 있습니다.', to_char(it.starts_at at time zone 'Asia/Seoul', 'MM/DD HH24:MI') using hint = 'schedule_conflict';
+    end;
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me
+    where leave_item_id = it.id and event in ('leave_options', 'sub_student') and status = 'pending';
+    update leave_items set sub_stage = 'confirmed', sub_lesson_id = v_lesson where id = it.id;
+    update lesson_notices set status = 'not_needed', sent_at = null, sent_by = null
+    where leave_item_id = it.id and event = 'sub_confirmed' and recipient_id in (it.sub_tutor_id, it.student_id) and status = 'sent';
+    -- 학생 OK → 학생·강사 모두에게 최종 확정 안내 (2026-10-27 대표)
+    insert into lesson_notices (leave_item_id, event, recipient_kind, recipient_id) values
+      (it.id, 'sub_confirmed', 'tutor', it.sub_tutor_id), (it.id, 'sub_confirmed', 'student', it.student_id);
+    v_changed := v_changed + 1;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_leave_student_ok(uuid[]) from public, anon;
+grant execute on function admin_leave_student_ok(uuid[]) to authenticated;
+
+-- >>> 20261105030000_lms_revalidation_fixes_2.sql
+-- =====================================================================
+-- 4530 Work 2차 재검증(2026-11-05, 67fbba0) R-22·R-25 DB 쪽 수정 — 시험용 DB 먼저, 운영 DB 는 대표 승인 뒤
+--  1. R-25 예약 불가 사유 구분: lms_conflict_code(사유 글 → 코드 hours·closed·leave·busy·b2b·other) · lms_conflict_message(운영진 문구)
+--     admin_makeup_confirm 은 '그 시간은 ○○와 겹칩니다' 대신 사유별 문장, tutor_screen 보강 후보·대체 요청에 why 코드(강사 화면 문구 구분)
+--  2. R-22 admin_matching_current: 예정(앞으로) 수업과 지난 미기록 수업을 나눠 돌려줌(upcoming·past_unrecorded·next_at·first_at)
+-- 지우는 문장 없음. 기존 표·데이터 그대로. 다시 실행해도 같은 결과
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. R-25 사유 코드·문구 (lms_makeup_conflict / lms_sub_conflict 가 돌려주는 글 기준)
+-- ---------------------------------------------------------------------
+create or replace function lms_conflict_code(p_text text) returns text
+language sql immutable as $$
+  select case
+    when p_text is null then null
+    when p_text like '%06:00~22:30%' then 'hours'
+    when p_text like '%열어 둔 시간%' then 'closed'
+    when p_text like '%휴무%' then 'leave'
+    when p_text like '%이어 붙이는%' then 'b2b'
+    when p_text like '%다른 수업%' then 'busy'
+    else 'other' end
+$$;
+revoke all on function lms_conflict_code(text) from public, anon, authenticated;
+
+create or replace function lms_conflict_message(p_text text) returns text
+language sql immutable as $$
+  select case lms_conflict_code(p_text)
+    when 'hours' then '강사 현지 06:00~22:30 에 시작하는 시간만 예약할 수 있습니다.'
+    when 'closed' then '강사가 열어 둔 시간이 아닙니다. 강사가 Schedule·Availability 에서 연 시간만 예약할 수 있습니다.'
+    when 'leave' then '그 시간은 강사 휴무입니다.'
+    when 'busy' then '그 시간은 강사의 다른 수업과 겹칩니다 (앞뒤 휴식 10분 포함).'
+    when 'b2b' then p_text || ' 규칙에 걸립니다.'
+    else '그 시간은 예약할 수 없습니다 (' || coalesce(p_text, '') || ').' end
+$$;
+revoke all on function lms_conflict_message(text) from public, anon, authenticated;
+
+-- admin_makeup_confirm: 4520 그대로 + 예약 불가 사유별 문구 (R-25)
+create or replace function admin_makeup_confirm(p_makeup_request uuid, p_starts_at timestamptz)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  s record;
+  c record;
+  e enrollments;
+  v_end timestamptz;
+  v_lesson uuid;
+  v_conf text;
+  v_enr uuid;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  select * into r from makeup_requests where id = p_makeup_request for update;
+  if not found then raise exception '보강 신청이 없습니다.'; end if;
+  if r.status = 'confirmed' then return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', r.confirmed_lesson_id, 'repeated', true); end if;
+  if r.status not in ('requested', 'countered') then raise exception '이미 닫힌 보강 신청입니다.'; end if;
+  if p_starts_at <= now() then raise exception '지난 시간은 보강으로 넣을 수 없습니다.'; end if;
+  -- 강사가 불가라고 답한 시간 (QA-01 D, 4500)
+  if exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student' and x.tutor_answer = 'no') then
+    raise exception '강사가 불가라고 답한 시간입니다. 다른 시간을 고르거나 학생에게 다시 날짜를 받아 주세요.' using hint = 'tutor_no';
+  end if;
+
+  if r.compensation_id is not null then
+    perform 1 from compensations where id = r.compensation_id for update;   -- 같은 보상권 두 번 쓰기 막기
+    select * into c from lms_comp_source(r.compensation_id);
+    if p_starts_at >= ((c.use_until + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '보상수업 사용 기한(%) 뒤의 시간입니다.', c.use_until using hint = 'after_end';
+    end if;
+    select * into e from enrollments where id = c.enrollment_id;
+    v_end := p_starts_at + make_interval(mins => e.duration_min);
+    v_conf := lms_makeup_conflict(r.tutor_id, c.student_id, p_starts_at, v_end,
+                exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student'));
+    if v_conf is not null then raise exception '%', lms_conflict_message(v_conf) using hint = 'schedule_conflict', detail = lms_conflict_code(v_conf); end if;
+    v_enr := lms_comp_lesson_enrollment(r.compensation_id, (p_starts_at at time zone 'Asia/Seoul')::date);
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+    if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+      insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+    end if;
+    begin
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, compensation_id, created_by)
+      values (v_enr, c.student_id, r.tutor_id, 'compensation', p_starts_at, v_end, r.compensation_id, me)
+      returning id into v_lesson;
+    exception when exclusion_violation then
+      raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+    end;
+    update compensations set status = 'used', used_lesson_id = v_lesson where id = r.compensation_id;
+  else
+    select * into s from lms_makeup_source(r.source_lesson_id, r.migrated_item_id);
+    select * into e from enrollments where id = s.enrollment_id;
+    if not s.tutor_leave and p_starts_at >= ((e.final_end_date + 1)::timestamp at time zone 'Asia/Seoul') then
+      raise exception '수강 종료일(%) 뒤의 시간입니다.', e.final_end_date using hint = 'after_end';
+    end if;
+    v_end := p_starts_at + make_interval(mins => e.duration_min);
+    v_conf := lms_makeup_conflict(r.tutor_id, s.student_id, p_starts_at, v_end,
+                exists (select 1 from makeup_candidates x where x.request_id = r.id and x.starts_at = p_starts_at and x.proposed_by = 'student'));
+    if v_conf is not null then raise exception '%', lms_conflict_message(v_conf) using hint = 'schedule_conflict', detail = lms_conflict_code(v_conf); end if;
+
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_makeup_confirm', true);
+    if not exists (select 1 from makeup_candidates where request_id = r.id and starts_at = p_starts_at) then
+      insert into makeup_candidates (request_id, starts_at, ends_at, proposed_by) values (r.id, p_starts_at, v_end, 'tutor');
+    end if;
+    begin
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of, created_by)
+      values (s.enrollment_id, s.student_id, r.tutor_id,
+              case when r.source_lesson_id is null then 'migrated_makeup' else 'makeup' end,
+              p_starts_at, v_end, r.source_lesson_id, me)
+      returning id into v_lesson;
+    exception when exclusion_violation then
+      raise exception '그 시간에 학생 또는 강사의 다른 수업이 있습니다.' using hint = 'schedule_conflict';
+    end;
+    if r.migrated_item_id is not null then
+      update migrated_items set kind = 'makeup_booked', lesson_id = v_lesson where id = r.migrated_item_id;
+      -- R-18 (4520): 이관권이 수업에 연결된 뒤 휴무 자동 연장 재계산
+      perform lms_leave_sync_extension(s.enrollment_id);
+    end if;
+  end if;
+  update makeup_requests set status = 'confirmed', confirmed_lesson_id = v_lesson, decided_at = now(), decided_by = me where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  insert into lesson_notices (makeup_request_id, event, recipient_kind, recipient_id)
+  values (r.id, 'makeup_confirmed', 'student', r.student_id), (r.id, 'makeup_confirmed', 'tutor', r.tutor_id);
+  return jsonb_build_object('makeup_request_id', r.id, 'lesson_id', v_lesson, 'repeated', false);
+end $$;
+revoke all on function admin_makeup_confirm(uuid, timestamptz) from public, anon;
+grant execute on function admin_makeup_confirm(uuid, timestamptz) to authenticated;
+
+-- tutor_screen: 4400 그대로 + 보강 후보 slots.why · 대체 요청 covers.why (R-25: 강사 화면에서 왜 못 고르는지 구분)
+create or replace function tutor_screen(p_tutor uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  t tutors;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Invalid date range.'; end if;
+  select * into t from tutors where id = v_tutor;
+  return jsonb_build_object(
+    'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone, 'meet_url', t.meet_url),
+    'lessons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id, 'starts_at', l.starts_at, 'ends_at', l.ends_at, 'kind', l.kind, 'state', l.state, 'class_status', l.class_status,
+        'student', lms_tutor_student_label(s.name_en, s.display_name), 'student_id', s.id, 'level', s.level, 'note_url', s.class_note_url,
+        'covering', l.original_tutor_id is not null and l.original_tutor_id <> l.tutor_id,
+        'makeup_of', o.starts_at,
+        'compensation_of', (select x.starts_at from compensations cc join lessons x on x.id = cc.source_lesson_id where cc.id = l.compensation_id),
+        'count', lms_lesson_count(l.id),
+        'topics', cr.covered_topics, 'remarks', cr.remarks, 'student_late', coalesce(cr.student_late, false), 'student_late_min', cr.student_late_min, 'tutor_late', coalesce(cr.tutor_late, false), 'tutor_late_min', cr.tutor_late_min, 'recorded_at', cr.first_submitted_at,
+        'locked', exists (select 1 from payroll_items p where p.lesson_id = l.id),
+        'compensation', (select c.status from compensations c where c.source_lesson_id = l.id),
+        'leave_open', l.state = 'scheduled' and exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                              and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed'))))
+        order by l.starts_at)
+      from lessons l
+      join students s on s.id = l.student_id
+      left join lessons o on o.id = l.makeup_of
+      left join class_records cr on cr.lesson_id = l.id
+      where l.tutor_id = v_tutor and l.voided_at is null
+        and (l.kst_date between p_from and p_to
+             or (l.state = 'scheduled' and l.starts_at <= now()
+                 and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)))), '[]'::jsonb),
+    'to_record', coalesce((
+      select jsonb_agg(l.id order by l.starts_at)
+      from lessons l
+      where l.tutor_id = v_tutor and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()
+        and l.starts_at >= (select min(u.created_at) from app_users u where u.tutor_id = v_tutor)
+        and not exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
+                         and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))), '[]'::jsonb),
+    'makeups', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'student', lms_tutor_student_label(s.name_en, s.display_name), 'student_id', s.id,
+        'original_at', src.starts_at, 'original_date', mi.original_date,
+        'compensation', r.compensation_id is not null,
+        'note', r.tutor_note, 'answered_at', r.tutor_answered_at,
+        'slots', (select jsonb_agg(jsonb_build_object(
+                    'id', c.id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'answer', c.tutor_answer,
+                    'busy', lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null,
+                    'why', lms_conflict_code(lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true)), 'past', c.starts_at <= now())
+                    order by c.starts_at)
+                  from makeup_candidates c where c.request_id = r.id and c.proposed_by = 'student'))
+        order by r.created_at)
+      from makeup_requests r
+      join students s on s.id = r.student_id
+      left join lessons src on src.id = r.source_lesson_id
+      left join migrated_items mi on mi.id = r.migrated_item_id
+      where r.tutor_id = v_tutor and r.status in ('requested', 'countered')), '[]'::jsonb),
+    'covers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id, 'student', lms_tutor_student_label(s.name_en, s.display_name), 'student_id', s.id, 'starts_at', i.starts_at, 'ends_at', i.ends_at,
+        'busy', lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id) is not null,
+        'why', lms_conflict_code(lms_sub_conflict(v_tutor, i.starts_at, i.ends_at, i.lesson_id)))
+        order by i.starts_at)
+      from leave_items i join students s on s.id = i.student_id
+      where i.sub_tutor_id = v_tutor and i.choice = 'substitute' and i.sub_stage = 'asked' and i.starts_at > now() and i.lesson_gone_at is null), '[]'::jsonb));
+end $$;
+revoke all on function tutor_screen(uuid, date, date) from public, anon;
+grant execute on function tutor_screen(uuid, date, date) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- 2. R-22 기존 배정 읽기: 예정(앞으로) 수업과 지난 미기록 수업을 나눔. scheduled 는 예전 호환(전체 scheduled 수)
+-- ---------------------------------------------------------------------
+create or replace function admin_matching_current(p_enrollment uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  e enrollments;
+  a admin_tasks;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  select * into e from enrollments where id = p_enrollment;
+  if not found then raise exception '수강등록을 찾지 못했어요.'; end if;
+  select * into a from admin_tasks where kind = 'new_student_matching' and enrollment_id = e.id;
+  return jsonb_build_object(
+    'enrollment_id', e.id,
+    'task', case when a.id is null then null else jsonb_build_object('id', a.id, 'status', a.status, 'tutor_assigned_at', a.tutor_assigned_at,
+                                                                   'student_notified_at', a.student_notified_at, 'done_at', a.done_at) end,
+    'plan', (select jsonb_build_object('id', p.id, 'state', p.state) from schedule_plans p where p.enrollment_id = e.id and p.state in ('proposed', 'confirmed') order by p.created_at desc limit 1),
+    'tutor', (select jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone) from tutors t
+              where t.id = coalesce(a.tutor_id, (select l.tutor_id from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' order by l.starts_at limit 1))),
+    'slots', coalesce((select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI')) order by rs.weekday, rs.start_time_kst)
+                       from lms_current_slots(e.student_id, greatest(e.start_date, (now() at time zone 'Asia/Seoul')::date)) rs), '[]'::jsonb),
+    'scheduled', (select count(*) from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' and l.voided_at is null),
+    -- R-22 (4530): 앞으로 수업 / 지난 미기록 수업(시작했지만 Class Record 전) 따로
+    'upcoming', (select count(*) from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' and l.voided_at is null and l.starts_at > now()),
+    'past_unrecorded', (select count(*) from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' and l.voided_at is null and l.starts_at <= now()),
+    'done_count', (select count(*) from lessons l where l.enrollment_id = e.id and l.state = 'done' and l.voided_at is null),
+    'next_at', (select min(l.starts_at) from lessons l where l.enrollment_id = e.id and l.state = 'scheduled' and l.voided_at is null and l.starts_at > now()),
+    'first_at', (select min(l.starts_at) from lessons l where l.enrollment_id = e.id and l.state <> 'canceled' and l.voided_at is null),
+    'start_date', e.start_date, 'final_end_date', e.final_end_date, 'duration_min', e.duration_min, 'weekly_count', e.weekly_count,
+    'lessons_total', e.lessons_purchased + e.lessons_carried_in);
+end $$;
+revoke all on function admin_matching_current(uuid) from public, anon;
+grant execute on function admin_matching_current(uuid) to authenticated;
+
+-- >>> 20261105040000_lms_revalidation_fixes_3.sql
+-- =====================================================================
+-- 4540 Work 3차 재검증(b16c683) R-25 보완 — 시험용 DB 먼저, 운영 DB 는 대표 승인 뒤
+--  예약 불가 사유가 겹칠 때 먼저 풀어야 하는 제약부터: 휴무 → 다른 수업(휴식 10분) → 현지 06:00~22:30 → 강사가 열지 않은 시간 → 연속 수업 규칙
+--  (전에는 '열지 않은 시간' 을 휴무보다 먼저 봐서, 휴무 중인 닫힌 시간에 '시간을 열라' 고 안내했음)
+--  강사 '가능' 답 거절 문구도 사유별 영어 문장(lms_conflict_message_en)
+-- 지우는 문장 없음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function lms_conflict_message_en(p_text text) returns text
+language sql immutable as $$
+  select case lms_conflict_code(p_text)
+    when 'leave' then 'You are on leave at this time.'
+    when 'busy' then 'You have another class at this time (10-minute break included).'
+    when 'hours' then 'Outside class hours (06:00–22:30 your local time).'
+    when 'closed' then 'This time is not in your open hours. Open it in Schedule first, then answer again.'
+    when 'b2b' then 'Too many classes in a row without a break.'
+    else 'This time is not available.' end
+$$;
+revoke all on function lms_conflict_message_en(text) from public, anon, authenticated;
+
+-- 4500 그대로 + 검사 순서만 (휴무·다른 수업·시작 가능 시간·열지 않은 시간·연속 규칙)
+create or replace function lms_makeup_conflict(p_tutor uuid, p_student uuid, p_start timestamptz, p_end timestamptz, p_student_wants boolean)
+returns text
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';      -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+  v_b2b_min constant integer := 20;                         -- POL-OP-21 예외 (policy.ts CONFIRMED.backToBackNoBreakDurationMin)
+  v_b2b_max constant integer := 2;                          -- POL-OP-21 예외 (policy.ts CONFIRMED.backToBackNoBreakMaxLessons)
+  v_new_b2b boolean := p_student_wants and p_end - p_start = make_interval(mins => v_b2b_min);
+  v_near uuid[];
+  v_chain integer;
+begin
+  -- 1) 강사 휴무 (열어도 소용없음)
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'leave' and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사 휴무';
+  end if;
+  -- 2) 강사 다른 수업 (휴식 10분 포함, 같은 학생 20분 수업 2개까지 이어 붙이기 예외)
+  if exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled'
+             and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at
+             and (x.starts_at < p_end and p_start < x.ends_at
+                  or not (v_new_b2b and x.student_id = p_student and x.ends_at - x.starts_at = make_interval(mins => v_b2b_min)))) then
+    return '강사 다른 수업(휴식 10분 포함)';
+  end if;
+  -- 3) 강사 현지 06:00~22:30 시작만 (POL-OP-02, 4200)
+  if not lms_tutor_start_ok(p_tutor, p_start) then
+    return '강사 현지 06:00~22:30 밖의 시작 시각';
+  end if;
+  -- 4) 강사가 연 시간(매주 Availability 또는 Schedule 에서 그날만 열기)이어야 함 (QA-01, 4500). 그날만 막은 시간(block)도 여기
+  if not lms_tutor_available(p_tutor, p_start)
+     or exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'block' and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사가 열어 둔 시간이 아님(Availability·Schedule)';
+  end if;
+  -- 5) 이어 붙이기 규칙
+  select coalesce(array_agg(x.id), '{}') into v_near from lessons x
+  where x.tutor_id = p_tutor and x.state <> 'canceled'
+    and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at;
+  if cardinality(v_near) = 0 then return null; end if;
+  select 1 + cardinality(v_near) + count(distinct y.id) into v_chain from lessons y
+  where y.tutor_id = p_tutor and y.state <> 'canceled' and y.id <> all(v_near)
+    and not (y.starts_at < p_end + v_break and p_start - v_break < y.ends_at)
+    and exists (select 1 from lessons x where x.id = any(v_near)
+                and y.starts_at < x.ends_at + v_break and x.starts_at - v_break < y.ends_at);
+  if v_chain > v_b2b_max then
+    return format('쉬지 않고 이어 붙이는 수업(%s분 %s개까지)', v_b2b_min, v_b2b_max);
+  end if;
+  return null;
+end $$;
+revoke all on function lms_makeup_conflict(uuid, uuid, timestamptz, timestamptz, boolean) from public, anon, authenticated;
+
+-- tutor_makeup_answer: 4500 그대로 + 거절 문구를 사유별로 (R-25)
+create or replace function tutor_makeup_answer(p_request uuid, p_yes uuid[], p_note text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  r makeup_requests;
+  v_note text := nullif(trim(coalesce(p_note, '')), '');
+  v_yes uuid[] := coalesce(p_yes, '{}');
+  v_conf text;
+begin
+  select * into r from makeup_requests where id = p_request for update;
+  if not found then raise exception 'Make-up request not found.'; end if;
+  if not (is_admin() or (my_tutor_id() is not null and r.tutor_id = my_tutor_id())) then
+    raise exception 'This is not your make-up request.' using errcode = '42501';
+  end if;
+  if r.status not in ('requested', 'countered') then
+    raise exception 'This make-up request is already closed.' using hint = 'closed';
+  end if;
+  if exists (select 1 from unnest(v_yes) y where not exists
+             (select 1 from makeup_candidates c where c.id = y and c.request_id = r.id and c.proposed_by = 'student')) then
+    raise exception 'Unknown time in your answer. Please reload the page.';
+  end if;
+  if exists (select 1 from makeup_candidates c where c.id = any(v_yes) and c.starts_at <= now()) then
+    raise exception 'One of the times you chose has already passed. Please reload the page.' using hint = 'busy';
+  end if;
+  select lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) into v_conf
+  from makeup_candidates c where c.id = any(v_yes) and lms_makeup_conflict(r.tutor_id, r.student_id, c.starts_at, c.ends_at, true) is not null
+  order by c.starts_at limit 1;
+  if v_conf is not null then
+    raise exception 'You can''t say yes to one of these times: %', lms_conflict_message_en(v_conf) using hint = 'busy', detail = lms_conflict_code(v_conf);
+  end if;
+  if cardinality(v_yes) = 0 and v_note is null then
+    raise exception 'None of the times work? Please write other times you are available in the note.' using hint = 'note';
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_makeup_answer' else 'tutor_makeup_answer' end, true);
+  update makeup_candidates c set tutor_answer = case when c.id = any(v_yes) then 'yes' else 'no' end, answered_at = now(), answered_by = me
+  where c.request_id = r.id and c.proposed_by = 'student'
+    and c.tutor_answer is distinct from case when c.id = any(v_yes) then 'yes' else 'no' end;
+  update makeup_requests set tutor_note = v_note, tutor_answered_at = now() where id = r.id;
+  update lesson_notices set status = 'not_needed' where makeup_request_id = r.id and event = 'makeup_ask' and status = 'pending';
+  return jsonb_build_object('makeup_request_id', r.id, 'yes', cardinality(v_yes));
+end $$;
+revoke all on function tutor_makeup_answer(uuid, uuid[], text) from public, anon;
+grant execute on function tutor_makeup_answer(uuid, uuid[], text) to authenticated;
+
+-- lms_sub_conflict: 대체강사 판정도 같은 순서·같은 말 (휴무 / 다른 수업 / 시작 가능 시간 / 강사가 막은 시간 = 열지 않은 시간)
+create or replace function lms_sub_conflict(p_tutor uuid, p_start timestamptz, p_end timestamptz, p_except_lesson uuid)
+returns text
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21 (policy.ts CONFIRMED.minBreakMin)
+begin
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'leave' and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사 휴무';
+  end if;
+  if exists (select 1 from lessons x where x.tutor_id = p_tutor and x.state <> 'canceled' and x.id is distinct from p_except_lesson
+             and x.starts_at < p_end + v_break and p_start - v_break < x.ends_at) then
+    return '강사 다른 수업(휴식 10분 포함)';
+  end if;
+  if not lms_tutor_start_ok(p_tutor, p_start) then
+    return '강사 현지 06:00~22:30 밖의 시작 시각';
+  end if;
+  if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.kind = 'block' and o.starts_at < p_end and p_start < o.ends_at) then
+    return '강사가 열어 둔 시간이 아님(Schedule 에서 막은 시간)';
+  end if;
+  return null;
+end $$;
+revoke all on function lms_sub_conflict(uuid, timestamptz, timestamptz, uuid) from public, anon, authenticated;
+
+-- >>> 20261106000000_lms_lesson_dates.sql
+-- =====================================================================
+-- 회차별 수업 날짜 (2026-11-06 대표 요청 · 정책 원본 H26(60)·(61))
+--  - 일정안(schedule_plans)에 lesson_dates 추가: null = 예전처럼 정규 요일대로 자동 생성,
+--    값 = [{date, time}] 실제 수업 날짜·시각(KST) 전체 목록. 첫 수업일이 정규 요일이 아니어도,
+--    특정 회차만 다른 날·시간이어도 그 목록 그대로 수업을 만듦 (변경권 사용 없음 — 등록 때 정하는 일정)
+--  - 검사: 회차 수 = 등록 회차, 같은 날 2회 금지, 첫 날짜 = 수강 시작일, 모두 수강 기간 안,
+--    충돌(다른 수업·휴식 10분·휴무·재등록 대기 자리)은 기존 lms_plan_conflicts 를 회차마다 그대로 호출
+--  - admin_register_student·admin_propose_schedule 은 p.lessons 를 받음 (없으면 예전과 같음)
+--  - 기존 표·데이터를 바꾸지 않고 열 하나만 추가. 다시 실행해도 같은 결과. 삭제·덮어쓰기 없음
+-- =====================================================================
+
+alter table schedule_plans add column if not exists lesson_dates jsonb;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'schedule_plans_lesson_dates_array') then
+    alter table schedule_plans add constraint schedule_plans_lesson_dates_array
+      check (lesson_dates is null or jsonb_typeof(lesson_dates) = 'array');
+  end if;
+end $$;
+
+-- 회차 목록의 충돌: 회차마다 기존 충돌 검사를 한 번씩 그대로 부름 (이유 이름·재등록 대기 자리 포함 같은 결과)
+create or replace function lms_lessons_conflicts(p_tutor uuid, p_lessons jsonb, p_dur smallint)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  x jsonb;
+  d date;
+  out jsonb := '[]'::jsonb;
+begin
+  for x in select * from jsonb_array_elements(p_lessons) loop
+    d := (x ->> 'date')::date;
+    out := out || lms_plan_conflicts(p_tutor,
+      jsonb_build_array(jsonb_build_object('weekday', extract(dow from d)::int, 'time', x ->> 'time')), d, d, p_dur);
+  end loop;
+  return out;
+end $$;
+revoke all on function lms_lessons_conflicts(uuid, jsonb, smallint) from public, anon, authenticated;
+
+-- 일정안 모양 검사. p_lessons 가 없으면 예전 검사 그대로, 있으면 '시작일 = 정규 요일' 대신 회차 목록을 검사
+create or replace function lms_check_plan_shape_lessons(p_enrollment uuid, p_tutor uuid, p_slots jsonb, p_start date, p_lessons jsonb)
+returns void
+language plpgsql stable security definer set search_path = public as $$
+declare
+  e record;
+  n integer;
+  nd integer;
+  first_d date;
+  last_d date;
+begin
+  if p_lessons is null then
+    perform lms_check_plan_shape(p_enrollment, p_tutor, p_slots, p_start);
+    return;
+  end if;
+  select * into e from enrollments where id = p_enrollment;
+  if not found then raise exception '수강등록이 없습니다.'; end if;
+  if e.status = 'pending_payment' or not exists (select 1 from payments where enrollment_id = p_enrollment) then
+    raise exception '결제 확인 전에는 강사·정규 일정을 제안·확정할 수 없습니다 (POL-OP-13).';
+  end if;
+  if p_start is distinct from e.start_date then
+    raise exception '첫 수업일(%)이 수강 시작일(%)과 다릅니다.', p_start, e.start_date;
+  end if;
+  if jsonb_typeof(p_slots) <> 'array' or jsonb_array_length(p_slots) <> e.weekly_count then
+    raise exception '정규 시간 수(%)가 주 횟수(%)와 다릅니다.', coalesce(jsonb_array_length(p_slots), 0), e.weekly_count;
+  end if;
+  if (select count(distinct (x ->> 'weekday')::int) from jsonb_array_elements(p_slots) x) <> jsonb_array_length(p_slots) then
+    raise exception '같은 요일에 정규 수업을 2개 넣을 수 없습니다.';
+  end if;
+  if jsonb_typeof(p_lessons) <> 'array' then raise exception '수업 날짜 목록 모양이 맞지 않습니다.'; end if;
+  select count(*), count(distinct (x ->> 'date')::date), min((x ->> 'date')::date), max((x ->> 'date')::date)
+    into n, nd, first_d, last_d from jsonb_array_elements(p_lessons) x;
+  if n <> e.lessons_purchased then raise exception '수업 날짜 수(%)가 등록 회차(%)와 다릅니다.', n, e.lessons_purchased; end if;
+  if nd <> n then raise exception '같은 날에 수업이 둘 이상 있습니다.'; end if;
+  if first_d is distinct from p_start then raise exception '첫 수업일(%)이 수업 날짜 목록의 첫 날짜(%)와 다릅니다.', p_start, first_d; end if;
+  if last_d > e.base_end_date then raise exception '수강 기간(%까지) 밖의 수업 날짜가 있습니다: %', e.base_end_date, last_d; end if;
+  if exists (select 1 from jsonb_array_elements(p_lessons) x where (x ->> 'time') !~ '^[0-2][0-9]:[0-5][0-9]$') then
+    raise exception '수업 시각 형식이 맞지 않습니다 (HH:MM).';
+  end if;
+  if not exists (select 1 from tutors where id = p_tutor and active) then raise exception '활동 중인 강사가 아닙니다.'; end if;
+end $$;
+revoke all on function lms_check_plan_shape_lessons(uuid, uuid, jsonb, date, jsonb) from public, anon, authenticated;
+
+create or replace function lms_new_plan_lessons(p_plan_id uuid, p_enrollment uuid, p_tutor uuid, p_slots jsonb, p_start date, p_me uuid, p_lessons jsonb)
+returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  e record;
+  v integer;
+  conflicts jsonb;
+begin
+  if exists (select 1 from schedule_plans where enrollment_id = p_enrollment and state = 'confirmed') then
+    raise exception '이미 확정된 일정이 있습니다. 확정 후 변경은 일정 변경 기능으로 (아직 없음).';
+  end if;
+  -- 아직 수업이 하나도 없으면 (결제만 저장한 학생·강사가 거절한 뒤 다른 안) 첫 수업일에 맞춰 수강 기간을 옮김.
+  -- 수강 기간은 첫 정규 수업일부터 (POL-PER-01~03)
+  update enrollments set start_date = p_start, base_end_date = p_start + (weeks / 4 * 28 - 1)
+  where id = p_enrollment and p_start is not null and start_date is distinct from p_start and weeks is not null
+    and not exists (select 1 from lessons where enrollment_id = p_enrollment);
+  perform lms_check_plan_shape_lessons(p_enrollment, p_tutor, p_slots, p_start, p_lessons);
+  select * into e from enrollments where id = p_enrollment;
+  if p_lessons is null then
+    conflicts := lms_plan_conflicts(p_tutor, p_slots, e.start_date, e.base_end_date, e.duration_min);
+  else
+    conflicts := lms_lessons_conflicts(p_tutor, p_lessons, e.duration_min);
+  end if;
+  if jsonb_array_length(conflicts) > 0 then
+    raise exception '일정 충돌 %건 — 저장하지 않았습니다.', jsonb_array_length(conflicts)
+      using errcode = 'P0001', detail = conflicts::text, hint = 'schedule_conflict';
+  end if;
+  update schedule_plans set state = 'withdrawn', closed_at = now(), close_reason = '다른 안으로 바꿈'
+  where enrollment_id = p_enrollment and state = 'proposed';
+  select coalesce(max(version), 0) + 1 into v from schedule_plans where enrollment_id = p_enrollment;
+  insert into schedule_plans (id, enrollment_id, version, tutor_id, slots, start_date, lesson_dates, created_by)
+  values (p_plan_id, p_enrollment, v, p_tutor, p_slots, p_start, p_lessons, p_me);
+  return v;
+end $$;
+revoke all on function lms_new_plan_lessons(uuid, uuid, uuid, jsonb, date, uuid, jsonb) from public, anon, authenticated;
+
+-- 예전 이름·모양(6개 인자)은 그대로 두고 새 함수로 넘김
+create or replace function lms_new_plan(p_plan_id uuid, p_enrollment uuid, p_tutor uuid, p_slots jsonb, p_start date, p_me uuid)
+returns integer
+language sql security definer set search_path = public as $$
+  select lms_new_plan_lessons(p_plan_id, p_enrollment, p_tutor, p_slots, p_start, p_me, null::jsonb)
+$$;
+revoke all on function lms_new_plan(uuid, uuid, uuid, jsonb, date, uuid) from public, anon, authenticated;
+
+create or replace function lms_confirm_plan(p_plan_id uuid, p_me uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  pl record;
+  e record;
+  conflicts jsonb;
+  s jsonb;
+  d date;
+  n integer := 0;
+  t0 timestamptz;
+begin
+  select * into pl from schedule_plans where id = p_plan_id for update;
+  if not found then raise exception '일정안이 없습니다.'; end if;
+  if pl.state = 'confirmed' then
+    return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', 'confirmed', 'repeated', true,
+                              'lessons', (select count(*) from lessons where enrollment_id = pl.enrollment_id and kind = 'regular'))
+           || lms_plan_notice_ids(pl.id);
+  end if;
+  if pl.state <> 'proposed' then raise exception '닫힌 일정안(%)은 확정할 수 없습니다.', pl.state; end if;
+  perform lms_check_plan_shape_lessons(pl.enrollment_id, pl.tutor_id, pl.slots, pl.start_date, pl.lesson_dates);
+  select * into e from enrollments where id = pl.enrollment_id;
+
+  -- 제안 뒤에 다른 수업·휴무가 생겼을 수 있어 다시 검사
+  if pl.lesson_dates is null then
+    conflicts := lms_plan_conflicts(pl.tutor_id, pl.slots, e.start_date, e.base_end_date, e.duration_min);
+  else
+    conflicts := lms_lessons_conflicts(pl.tutor_id, pl.lesson_dates, e.duration_min);
+  end if;
+  if jsonb_array_length(conflicts) > 0 then
+    raise exception '일정 충돌 %건 — 확정하지 않았습니다.', jsonb_array_length(conflicts)
+      using errcode = 'P0001', detail = conflicts::text, hint = 'schedule_conflict';
+  end if;
+
+  for s in select * from jsonb_array_elements(pl.slots) loop
+    insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+    values (e.student_id, pl.tutor_id, (s ->> 'weekday')::smallint, (s ->> 'time')::time, e.duration_min, e.start_date);
+  end loop;
+  if pl.lesson_dates is null then
+    d := e.start_date;
+    while d <= e.base_end_date loop
+      select x into s from jsonb_array_elements(pl.slots) x where (x ->> 'weekday')::int = extract(dow from d);
+      if found then
+        n := n + 1;
+        t0 := (d + (s ->> 'time')::time) at time zone 'Asia/Seoul';
+        insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, created_by)
+        values (e.id, e.student_id, pl.tutor_id, 'regular', n, t0, t0 + make_interval(mins => e.duration_min), p_me);
+      end if;
+      d := d + 1;
+    end loop;
+  else
+    -- 회차별 날짜·시각을 정한 일정안: 그 목록 그대로 날짜순으로 수업을 만듦 (정규 요일 반복 아님)
+    for s in select x from jsonb_array_elements(pl.lesson_dates) x order by x ->> 'date' loop
+      n := n + 1;
+      t0 := ((s ->> 'date')::date + (s ->> 'time')::time) at time zone 'Asia/Seoul';
+      insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, created_by)
+      values (e.id, e.student_id, pl.tutor_id, 'regular', n, t0, t0 + make_interval(mins => e.duration_min), p_me);
+    end loop;
+  end if;
+  if n <> e.lessons_purchased then
+    raise exception '만들어진 정규 수업 수(%)가 등록 회차(%)와 다릅니다.', n, e.lessons_purchased;
+  end if;
+
+  update schedule_plans set state = 'confirmed', confirmed_at = now(), confirmed_by = p_me where id = pl.id;
+  insert into schedule_notices (plan_id, recipient_kind, recipient_id, channel) values
+    (pl.id, 'tutor', pl.tutor_id, 'whatsapp_manual'),
+    (pl.id, 'student', e.student_id, 'kakao_manual')
+  on conflict (plan_id, recipient_kind) do nothing;
+  update admin_tasks set tutor_id = pl.tutor_id, tutor_assigned_at = now()
+  where kind = 'new_student_matching' and enrollment_id = e.id and status = 'open';
+
+  return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', 'confirmed', 'lessons', n) || lms_plan_notice_ids(pl.id);
+end $$;
+revoke all on function lms_confirm_plan(uuid, uuid) from public, anon, authenticated;
+
+-- 일정안 제안: p.lessons(선택)를 일정안에 함께 저장
+create or replace function admin_propose_schedule(p_plan_id uuid, p_enrollment uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  pl record;
+  v integer;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 일정을 제안할 수 있습니다.' using errcode = '42501'; end if;
+  if p_plan_id is null then raise exception '요청 번호가 없습니다.'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_enrollment::text, 0));
+  select * into pl from schedule_plans where id = p_plan_id;
+  if found then
+    if pl.enrollment_id <> p_enrollment then raise exception '요청 번호가 다른 등록에 쓰였습니다.'; end if;
+    return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', pl.state, 'repeated', true);
+  end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_propose_schedule', true);
+  v := lms_new_plan_lessons(p_plan_id, p_enrollment, nullif(p ->> 'tutor_id', '')::uuid, coalesce(p -> 'slots', '[]'::jsonb), (p ->> 'start_date')::date, me,
+                            nullif(p -> 'lessons', 'null'::jsonb));
+  if p ->> 'tutor_answer' = 'accepted' then return lms_confirm_plan(p_plan_id, me); end if;
+  return jsonb_build_object('plan_id', p_plan_id, 'version', v, 'state', 'proposed');
+end $$;
+
+-- 신규 등록 저장: p.lessons(선택) 전달
+create or replace function admin_register_student(p_request_id uuid, p jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  prev jsonb;
+  st jsonb := p -> 'student';
+  co jsonb := p -> 'course';
+  pay jsonb := p -> 'payment';
+  slots jsonb := coalesce(p -> 'slots', '[]'::jsonb);
+  v_tutor uuid := nullif(p ->> 'tutor_id', '')::uuid;
+  v_weeks smallint := (co ->> 'weeks')::smallint;
+  v_weekly smallint := (co ->> 'weekly_count')::smallint;
+  v_dur smallint := (co ->> 'duration_min')::smallint;
+  v_start date := (co ->> 'start_date')::date;
+  v_end date;
+  v_paid boolean := jsonb_typeof(p -> 'payment') = 'object';
+  sid uuid;
+  scode text;
+  eid uuid;
+  plan_id uuid;
+  conf jsonb;
+  res jsonb;
+begin
+  if not is_admin() then
+    raise exception '운영자(추가 인증 완료)만 학생을 등록할 수 있습니다.' using errcode = '42501';
+  end if;
+  if p_request_id is null then raise exception '요청 번호가 없습니다.'; end if;
+
+  -- 같은 요청이 동시에 두 번 와도 하나씩 처리 → 두 번째는 첫 결과를 받음
+  perform pg_advisory_xact_lock(hashtextextended(p_request_id::text, 0));
+  select result into prev from registration_requests where id = p_request_id;
+  if found then return prev || '{"repeated": true}'::jsonb; end if;
+
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_register_student', true);
+
+  if v_weeks is null or v_weeks not in (4, 12, 24) then raise exception '수강 기간은 4·12·24주만 가능합니다.'; end if;
+  if v_start is null then raise exception '첫 수업일(수강 시작일)이 없습니다.'; end if;
+  v_end := v_start + (v_weeks / 4 * 28 - 1);
+
+  if not v_paid and (v_tutor is not null or jsonb_array_length(slots) > 0) then
+    raise exception '결제 확인 전에는 강사·정규 일정을 확정할 수 없습니다 (POL-OP-13).';
+  end if;
+  if v_tutor is null and jsonb_array_length(slots) > 0 then
+    raise exception '정규 시간을 정하려면 강사도 정해야 합니다.';
+  end if;
+
+  -- 학생 (항상 새 학생 번호. 같은 이메일이 있어도 연결·병합하지 않음)
+  insert into students (name_ko, name_en, email, phone, country, city, timezone, admin_memo)
+  values (st ->> 'name_ko', st ->> 'name_en', nullif(lower(trim(st ->> 'email')), ''), nullif(st ->> 'phone', ''),
+          nullif(st ->> 'country', ''), nullif(st ->> 'city', ''), st ->> 'timezone', nullif(st ->> 'admin_memo', ''))
+  returning id, code into sid, scode;
+
+  insert into enrollments (student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date,
+                           lessons_purchased, amount_due, status, created_by)
+  values (sid, 1, v_weeks, v_weekly, v_dur, v_start, v_end, v_weekly * v_weeks,
+          nullif(co ->> 'amount_due', '')::integer, case when v_paid then 'confirmed' else 'pending_payment' end, me)
+  returning id into eid;
+
+  if v_paid then
+    -- paid_at = 실제 입금·결제 완료 시각 (은행 거래내역·아임웹 주문 시각), external_ref = 아임웹 주문번호 등 (같은 결제 두 번 기록 방지)
+    insert into payments (enrollment_id, method, payer_name, amount_received, paid_at, received_on, external_ref, confirmed_by)
+    values (eid, pay ->> 'method', nullif(pay ->> 'payer_name', ''), (pay ->> 'amount')::integer, (pay ->> 'paid_at')::timestamptz,
+            (((pay ->> 'paid_at')::timestamptz at time zone 'UTC') + interval '9 hours')::date, nullif(pay ->> 'external_ref', ''), me);
+  end if;
+
+  if v_tutor is not null then
+    plan_id := gen_random_uuid();
+    perform lms_new_plan_lessons(plan_id, eid, v_tutor, slots, v_start, me, nullif(p -> 'lessons', 'null'::jsonb));   -- 충돌이면 여기서 오류 → 아무것도 저장 안 됨
+    if p ->> 'tutor_answer' = 'accepted' then conf := lms_confirm_plan(plan_id, me); end if;
+  end if;
+
+  res := jsonb_build_object('student_id', sid, 'student_code', scode, 'enrollment_id', eid,
+                            'status', case when v_paid then 'confirmed' else 'pending_payment' end,
+                            'plan_id', plan_id,
+                            'plan_state', case when plan_id is null then null when conf is null then 'proposed' else 'confirmed' end,
+                            'lessons', coalesce((conf ->> 'lessons')::int, 0), 'start_date', v_start, 'end_date', v_end,
+                            'tutor_notice_id', conf ->> 'tutor_notice_id', 'student_notice_id', conf ->> 'student_notice_id');
+  insert into registration_requests (id, created_by, student_id, enrollment_id, result)
+  values (p_request_id, me, sid, eid, res);
+  return res;
+end $$;
+
+revoke all on function admin_register_student(uuid, jsonb) from public, anon;
+grant execute on function admin_register_student(uuid, jsonb) to authenticated;
+
+-- >>> 20261106010000_lms_prestart_move.sql
+-- =====================================================================
+-- 첫 수업 시작 전 개별 수업 날짜 변경 — 변경권 차감 없음 (2026-11-06 대표 요청, 정책 원본 H26(60)·(62))
+--  - 등록을 마친 학생이 첫 수업 전에 특정 날짜를 바꾸고 싶다고 하면, 운영진이 학생 상세에서 그 수업만 옮김
+--  - 조건: 그 수강권의 첫 수업(취소·무효 제외) 시작 전, 정규·예정 수업, 새 날짜는 수강 기간 안, 지난 시각 불가,
+--          같은 날 이 학생 다른 수업 없음
+--  - 강사 쪽 검사는 보강 확정과 같은 기준(lms_makeup_conflict 순서): 휴무 → 다른 수업(휴식 10분) → 현지 06:00~22:30
+--    → 강사가 연 시간(Availability·Schedule, 막은 시간 포함) → 재등록 대기 자리. 옮기는 수업 자신은 빼고 검사
+--  - 변경권·보강 기록은 만들지 않음. 기록은 prestart_moves + lessons 변경 이력(actor_via = admin_prestart_move)
+--  - 날짜 순서가 바뀌면 정규 회차 번호를 날짜순으로 다시 매김 (시작 전이라 기록된 수업 없음)
+--  - 기존 표·데이터를 바꾸지 않고 표 하나·함수 하나 추가. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create table if not exists prestart_moves (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references lessons(id),
+  enrollment_id uuid not null references enrollments(id),
+  student_id uuid not null references students(id),
+  from_starts_at timestamptz not null,
+  from_ends_at timestamptz not null,
+  to_starts_at timestamptz not null,
+  to_ends_at timestamptz not null,
+  created_by uuid not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists prestart_moves_student on prestart_moves (student_id, created_at);
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'prestart_moves_no_delete') then
+    create trigger prestart_moves_no_delete before delete on prestart_moves for each row execute function forbid_delete();
+  end if;
+  if not exists (select 1 from pg_trigger where tgname = 'prestart_moves_audit') then
+    create trigger prestart_moves_audit after insert or update on prestart_moves for each row execute function write_audit();
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'prestart_moves' and policyname = 'admin_read') then
+    create policy admin_read on prestart_moves for select to authenticated using (is_admin());
+  end if;
+end $$;
+alter table prestart_moves enable row level security;
+revoke all on prestart_moves from public, anon;
+grant select on prestart_moves to authenticated;
+
+-- 수업 하나를 새 시각으로 (p_dry_run = 검사만). 문제가 있으면 오류(hint = prestart_move)로 사유를 돌려줌
+create or replace function admin_prestart_move(p_lesson uuid, p_starts_at timestamptz, p_dry_run boolean default false)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21
+  l lessons;
+  e enrollments;
+  v_first timestamptz;
+  t0 timestamptz := p_starts_at;
+  t1 timestamptz;
+  d date;
+  v_why text;
+  v_move uuid;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 수업 날짜를 바꿀 수 있습니다.' using errcode = '42501'; end if;
+  select * into l from lessons where id = p_lesson for update;
+  if not found then raise exception '수업이 없습니다.'; end if;
+  if l.kind <> 'regular' or l.state <> 'scheduled' or l.voided_at is not null then
+    raise exception '예정된 정규 수업만 바꿀 수 있습니다.';
+  end if;
+  select * into e from enrollments where id = l.enrollment_id;
+  if e.status not in ('confirmed', 'active') then raise exception '결제 확인된 수강권의 수업만 바꿀 수 있습니다.'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(e.id::text, 0));
+  select min(x.starts_at) into v_first from lessons x where x.enrollment_id = e.id and x.state <> 'canceled' and x.voided_at is null;
+  if now() >= v_first then
+    raise exception '첫 수업이 이미 시작됐습니다. 시작 뒤 변경은 수업 변경(변경권)으로 처리해 주세요.' using hint = 'prestart_move';
+  end if;
+  if t0 is null or t0 <= now() then raise exception '지난 시각으로는 옮길 수 없습니다.' using hint = 'prestart_move'; end if;
+  t1 := t0 + (l.ends_at - l.starts_at);
+  d := (t0 at time zone 'Asia/Seoul')::date;
+  if t0 = l.starts_at then raise exception '지금 시각과 같습니다.' using hint = 'prestart_move'; end if;
+  if d < e.start_date or d > e.final_end_date then
+    raise exception '수강 기간(% ~ %) 밖 날짜입니다.', to_char(e.start_date, 'FMMM/FMDD'), to_char(e.final_end_date, 'FMMM/FMDD') using hint = 'prestart_move';
+  end if;
+  if exists (select 1 from lessons y where y.student_id = l.student_id and y.id <> l.id and y.state <> 'canceled' and y.voided_at is null
+             and (y.starts_at at time zone 'Asia/Seoul')::date = d) then
+    raise exception '그날 이 학생 수업이 이미 있습니다.' using hint = 'prestart_move';
+  end if;
+
+  -- 강사 쪽 (보강 확정과 같은 순서, 옮기는 수업 자신은 제외)
+  if exists (select 1 from tutor_time_off o where o.tutor_id = l.tutor_id and o.kind = 'leave' and o.starts_at < t1 and t0 < o.ends_at) then
+    v_why := '그 시간은 강사 휴무입니다.';
+  elsif exists (select 1 from lessons x where x.tutor_id = l.tutor_id and x.id <> l.id and x.state <> 'canceled'
+                and x.starts_at < t1 + v_break and t0 - v_break < x.ends_at) then
+    v_why := '그 시간은 강사의 다른 수업과 겹칩니다 (앞뒤 휴식 10분 포함).';
+  elsif not lms_tutor_start_ok(l.tutor_id, t0) then
+    v_why := '강사 현지 06:00~22:30 에 시작하는 시간만 예약할 수 있습니다.';
+  elsif not lms_tutor_available(l.tutor_id, t0)
+        or exists (select 1 from tutor_time_off o where o.tutor_id = l.tutor_id and o.kind = 'block' and o.starts_at < t1 and t0 < o.ends_at) then
+    v_why := '강사가 열어 둔 시간이 아닙니다 (Availability·Schedule).';
+  elsif exists (select 1 from lms_slot_hold_hits(l.tutor_id, t0, t1) h where h.student_id <> l.student_id) then
+    v_why := '재등록 대기 중인 다른 학생의 고정 시간입니다.';
+  end if;
+  if v_why is not null then raise exception '%', v_why using hint = 'prestart_move'; end if;
+
+  if p_dry_run then
+    return jsonb_build_object('ok', true, 'lesson_id', l.id, 'seq', l.seq, 'from', l.starts_at, 'to', t0);
+  end if;
+
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_prestart_move', true);
+  update lessons set starts_at = t0, ends_at = t1 where id = l.id;
+  -- 정규 회차 번호를 날짜순으로 (고유 번호라 두 단계로)
+  update lessons set seq = seq + 100000 where enrollment_id = e.id and kind = 'regular';
+  update lessons x set seq = r.n
+  from (select id, row_number() over (order by starts_at, id) as n from lessons where enrollment_id = e.id and kind = 'regular') r
+  where x.id = r.id;
+  insert into prestart_moves (lesson_id, enrollment_id, student_id, from_starts_at, from_ends_at, to_starts_at, to_ends_at, created_by)
+  values (l.id, e.id, l.student_id, l.starts_at, l.ends_at, t0, t1, auth.uid())
+  returning id into v_move;
+  return jsonb_build_object('ok', true, 'move_id', v_move, 'lesson_id', l.id, 'from', l.starts_at, 'to', t0,
+                            'seq', (select seq from lessons where id = l.id));
+exception
+  when exclusion_violation then
+    raise exception '그 시간에 이 학생 또는 강사의 다른 수업이 있어 저장하지 않았습니다.' using hint = 'prestart_move';
+end $$;
+revoke all on function admin_prestart_move(uuid, timestamptz, boolean) from public, anon;
+grant execute on function admin_prestart_move(uuid, timestamptz, boolean) to authenticated;
+
+-- >>> 20261107000000_lms_qa_a01_a03.sql
+-- =====================================================================
+-- 전체 QA·UX 보고서 반영 ① A-01 · A-03 (2026-11-07, docs/lms/requests/2026-11-06-full-qa-ux-audit.md, 정책 원본 H26(70))
+--  A-01 학생 화면 수업 취소: 운영자 보기(?student=)가 브라우저 시각을 요청 시각으로 보내 '요청 받은 시각이 지금보다 늦습니다'
+--       로 저장이 거절되던 것 → admin_change_lesson 의 p_requested_at 이 비어 있으면 서버 시각(now())으로 판정.
+--       6시간 규칙·판정 내용은 그대로. 운영진 수업 변경 화면(요청 받은 시각을 직접 적는 곳)은 전과 같이 적은 시각으로 판정.
+--       학생 본인 로그인(student_change_lesson)은 원래부터 now() 였음(바뀐 것 없음)
+--  A-03 정규 일정 수정: 아직 적용 전인('적용 예정') 변경을 적용일 전에 취소·수정할 수 있게.
+--       지금까지는 새 일정이 '적용 시작일에 유효한 일정'과 같으면 무조건 거절해, 예정 변경을 원래 시간으로 되돌리는
+--       저장이 막혔음 → 적용 시작일 뒤에 시작하는(아직 효력 전) 정규 일정 줄이 있으면 같은 시간이라도 저장 허용
+--       (그 줄은 전처럼 효력 없는 날짜로 치워 두고, 옮겨 둔 수업은 새 일정 = 원래 시각으로 되돌아옴).
+--       나머지 검사·저장 방식·변경권(쓰지 않음)·수업 수는 그대로
+-- =====================================================================
+
+-- A-01 ---------------------------------------------------------------
+create or replace function admin_change_lesson(p_request_id uuid, p_lesson uuid, p_who text, p_requested_at timestamptz, p_dry_run boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 처리할 수 있습니다.' using errcode = '42501'; end if;
+  -- 요청 시각을 비우면 서버 시각(지금)으로 판정 — 학생 화면 운영자 보기(지금 받은 요청)가 쓰는 길
+  return lms_change_core(p_request_id::text, p_lesson, p_who, 'admin_on_behalf', coalesce(p_requested_at, now()), p_dry_run, auth.uid());
+end $$;
+revoke all on function admin_change_lesson(uuid, uuid, text, timestamptz, boolean) from public, anon;
+grant execute on function admin_change_lesson(uuid, uuid, text, timestamptz, boolean) to authenticated;
+
+-- A-03 ---------------------------------------------------------------
+create or replace function admin_regular_change(p_student uuid, p_slots jsonb, p_from date, p_reason text, p_dry_run boolean default true)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_break constant interval := interval '10 minutes';   -- POL-OP-21
+  e enrollments;
+  t tutors;
+  v_tutor uuid;
+  v_lid uuid;
+  v_old jsonb;
+  v_new jsonb;
+  v_n_slots integer;
+  s jsonb;
+  v_reason text := nullif(trim(coalesce(p_reason, '')), '');
+  v_movable uuid[];
+  v_moved jsonb := '[]'::jsonb;
+  v_kept jsonb;
+  v_skipped jsonb := '[]'::jsonb;
+  v_problems jsonb := '[]'::jsonb;
+  l lessons;
+  d date;
+  i integer := 0;
+  t0 timestamptz;
+  t1 timestamptz;
+  v_why text;
+  v_last date;
+  v_change uuid;
+  v_guard integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 정규 일정을 바꿀 수 있습니다.' using errcode = '42501'; end if;
+  select * into e from enrollments x where x.id = lms_student_enrollment(p_student);
+  if e.id is null or e.status not in ('confirmed', 'active') then
+    raise exception '수강 중이거나 시작 예정인 수강권이 없어 정규 일정을 바꿀 수 없습니다.';
+  end if;
+  if p_from is null or p_from < v_today then raise exception '적용 시작일은 오늘(한국 날짜) 이후여야 합니다.'; end if;
+  if p_from > e.final_end_date then raise exception '적용 시작일(%)이 최종 종료일(%) 뒤입니다.', p_from, e.final_end_date; end if;
+
+  -- 지금 정규 일정 (적용 시작일에 유효한 것). 강사는 하나
+  select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI')) order by rs.weekday, rs.start_time_kst),
+         count(distinct rs.tutor_id), (array_agg(distinct rs.tutor_id))[1]
+    into v_old, v_n_slots, v_tutor
+  from regular_schedules rs
+  where rs.student_id = p_student and rs.effective_from <= greatest(p_from, e.start_date)
+    and (rs.effective_to is null or rs.effective_to >= greatest(p_from, e.start_date));
+  if v_old is null then raise exception '이 학생의 정규 일정이 없습니다 (등록·이관 때 정규 일정이 만들어집니다).'; end if;
+  if v_n_slots <> 1 then raise exception '정규 일정의 강사가 하나가 아닙니다. 운영진이 확인해 주세요.'; end if;
+  select * into t from tutors where id = v_tutor;
+
+  -- 새 일정 모양: 지금과 같은 수(주 횟수 그대로), 요일 0~6 중복 없음, 30분 단위
+  if p_slots is null or jsonb_typeof(p_slots) <> 'array' then raise exception '새 정규 일정이 비어 있습니다.'; end if;
+  if jsonb_array_length(p_slots) <> jsonb_array_length(v_old) then
+    raise exception '주 %회 수강권이라 요일을 %개 골라야 합니다 (주 횟수는 이 화면에서 바꾸지 않습니다).', jsonb_array_length(v_old), jsonb_array_length(v_old);
+  end if;
+  select jsonb_agg(jsonb_build_object('weekday', (x ->> 'weekday')::int, 'time', to_char((x ->> 'time')::time, 'HH24:MI')) order by (x ->> 'weekday')::int)
+    into v_new from jsonb_array_elements(p_slots) x;
+  for s in select * from jsonb_array_elements(v_new) loop
+    if (s ->> 'weekday')::int not between 0 and 6 then raise exception '요일 값이 잘못됐습니다.'; end if;
+    if extract(minute from (s ->> 'time')::time)::int not in (0, 30) then raise exception '시작 시간은 30분 단위(예: 22:00, 22:30)로 골라 주세요.'; end if;
+  end loop;
+  if (select count(distinct x ->> 'weekday') from jsonb_array_elements(v_new) x) <> jsonb_array_length(v_new) then
+    raise exception '같은 요일을 두 번 고를 수 없습니다.';
+  end if;
+  -- A-03: 적용 시작일 뒤에 시작하는(아직 효력 전) 정규 일정 줄이 있으면 같은 시간이라도 저장 = 그 예정 변경 취소
+  if v_new = v_old and not exists (select 1 from regular_schedules rs
+                                   where rs.student_id = p_student and rs.tutor_id = t.id
+                                     and rs.effective_from > greatest(p_from, e.start_date) and rs.effective_from > date '1950-01-01') then
+    raise exception '지금 정규 일정과 같습니다. 바꿀 요일·시간을 골라 주세요.';
+  end if;
+  if not p_dry_run and v_reason is null then raise exception '수정 사유를 적어 주세요.'; end if;
+
+  -- 옮길 수업: 이 수강권의 앞으로 정규 수업 중 적용 시작일 이후, 대체강사 아님, 휴무 처리 중 아님
+  select coalesce(array_agg(x.id order by x.starts_at), '{}') into v_movable
+  from lessons x
+  where x.enrollment_id = e.id and x.kind = 'regular' and x.state = 'scheduled' and x.voided_at is null
+    and x.starts_at > now() and x.kst_date >= p_from
+    and x.original_tutor_id is null and x.tutor_id = t.id
+    and not exists (select 1 from leave_items li where li.lesson_id = x.id and li.lesson_gone_at is null);
+  -- 그대로 두는 앞으로의 수업 (왜 그대로인지 같이)
+  select coalesce(jsonb_agg(jsonb_build_object('lesson_id', x.id, 'kind', x.kind, 'seq', x.seq, 'starts_at', x.starts_at, 'ends_at', x.ends_at,
+           'tutor', xt.name, 'tutor_tz', xt.timezone,
+           'why', case when x.kst_date < p_from then 'before_from'
+                       when x.original_tutor_id is not null and x.original_tutor_id <> x.tutor_id then 'substitute'
+                       when x.kind = 'makeup' then 'makeup' when x.kind = 'compensation' then 'compensation'
+                       when x.kind in ('migrated_makeup', 'migrated_extra', 'carryover') then 'makeup'
+                       when exists (select 1 from leave_items li where li.lesson_id = x.id and li.lesson_gone_at is null) then 'leave_open'
+                       else 'other' end) order by x.starts_at), '[]'::jsonb)
+    into v_kept
+  from lessons x join tutors xt on xt.id = x.tutor_id
+  where x.student_id = p_student and x.state = 'scheduled' and x.voided_at is null and x.starts_at > now()
+    and not (x.id = any(v_movable));
+  if cardinality(v_movable) = 0 then
+    raise exception '적용 시작일(%) 이후에 옮길 정규 수업이 없습니다.', p_from;
+  end if;
+
+  -- 새 날짜에 차례로 배치: 적용 시작일부터 새 요일에 맞는 날을 순서대로. 학생의 그대로 두는 수업과 겹치는 날은 건너뜀
+  d := p_from;
+  foreach v_lid in array v_movable loop
+    select * into l from lessons where id = v_lid;
+    loop
+      v_guard := v_guard + 1;
+      if v_guard > 2000 then raise exception '새 일정 날짜를 찾지 못했습니다.'; end if;
+      select x into s from jsonb_array_elements(v_new) x where (x ->> 'weekday')::int = extract(dow from d);
+      if found then
+        t0 := (d + (s ->> 'time')::time) at time zone 'Asia/Seoul';
+        t1 := t0 + make_interval(mins => e.duration_min);
+        -- 학생 본인의 그대로 두는 수업과 겹치면 이 날은 건너뜀
+        if exists (select 1 from lessons y where y.student_id = p_student and y.state <> 'canceled' and y.voided_at is null
+                   and not (y.id = any(v_movable)) and y.starts_at < t1 and t0 < y.ends_at) then
+          v_skipped := v_skipped || jsonb_build_object('date', d, 'time', s ->> 'time', 'why', 'student_busy');
+          d := d + 1; continue;
+        end if;
+        exit;
+      end if;
+      d := d + 1;
+    end loop;
+    -- R-15 (4520): 새 일정에서도 같은 날짜·시각이면 바뀌는 수업이 아님 → 그대로 두는 수업(same), 검사도 안 함
+    if t0 = l.starts_at and t1 = l.ends_at then
+      v_kept := v_kept || jsonb_build_object('lesson_id', l.id, 'kind', l.kind, 'seq', l.seq, 'starts_at', l.starts_at, 'ends_at', l.ends_at,
+                 'tutor', t.name, 'tutor_tz', t.timezone, 'why', 'same');
+      v_last := d;
+      d := d + 1;
+      continue;
+    end if;
+    -- 검사 (강사 기준)
+    v_why := null;
+    if not lms_tutor_start_ok(t.id, t0) then v_why := 'tutor_hours_range';
+    elsif not lms_tutor_available(t.id, t0) then v_why := 'tutor_unavailable';
+    elsif exists (select 1 from tutor_time_off o where o.tutor_id = t.id and o.starts_at < t1 and t0 < o.ends_at) then v_why := 'tutor_time_off';
+    elsif exists (select 1 from lessons y where y.tutor_id = t.id and y.state <> 'canceled' and not (y.id = any(v_movable))
+                  and y.starts_at < t1 + v_break and t0 - v_break < y.ends_at) then v_why := 'tutor_busy';
+    elsif exists (select 1 from lms_slot_hold_hits(t.id, t0, t1) h where h.student_id <> p_student) then v_why := 'tutor_hold';
+    end if;
+    if d > e.final_end_date then v_why := coalesce(v_why, 'after_end'); end if;
+    if v_why is not null then
+      v_problems := v_problems || jsonb_build_object('lesson_id', l.id, 'seq', l.seq, 'date', d, 'time', s ->> 'time', 'why', v_why,
+        'other', case when v_why = 'tutor_busy' then (select st.name_ko || ' ' || to_char(y.starts_at at time zone 'Asia/Seoul', 'HH24:MI') || '–' || to_char(y.ends_at at time zone 'Asia/Seoul', 'HH24:MI')
+                                                  from lessons y join students st on st.id = y.student_id
+                                                  where y.tutor_id = t.id and y.state <> 'canceled' and not (y.id = any(v_movable))
+                                                    and y.starts_at < t1 + v_break and t0 - v_break < y.ends_at order by y.starts_at limit 1)
+                      when v_why = 'tutor_hold' then (select h.student_name from lms_slot_hold_hits(t.id, t0, t1) h where h.student_id <> p_student limit 1) end);
+    end if;
+    v_moved := v_moved || jsonb_build_object('lesson_id', l.id, 'seq', l.seq, 'from', l.starts_at, 'from_end', l.ends_at, 'to', t0, 'to_end', t1, 'problem', v_why);
+    v_last := d;
+    d := d + 1;
+  end loop;
+
+  -- 그대로 두는 수업은 시간순으로 (same 이 뒤에 붙었음)
+  select coalesce(jsonb_agg(x order by (x ->> 'starts_at')::timestamptz), '[]'::jsonb) into v_kept from jsonb_array_elements(v_kept) x;
+  if p_dry_run then
+    return jsonb_build_object('ok', jsonb_array_length(v_problems) = 0, 'tutor', jsonb_build_object('id', t.id, 'name', t.name, 'timezone', t.timezone),
+      'student_timezone', (select timezone from students where id = p_student),
+      'enrollment', jsonb_build_object('id', e.id, 'final_end_date', e.final_end_date, 'duration_min', e.duration_min),
+      'old_slots', v_old, 'new_slots', v_new, 'effective_from', p_from, 'moved', v_moved, 'kept', v_kept, 'skipped', v_skipped,
+      'problems', v_problems, 'last_date', v_last,
+      'cancels_pending', exists (select 1 from regular_schedules rs where rs.student_id = p_student and rs.tutor_id = t.id
+                                 and rs.effective_from > greatest(p_from, e.start_date) and rs.effective_from > date '1950-01-01'));
+  end if;
+  if jsonb_array_length(v_problems) > 0 then
+    raise exception '새 일정에 문제가 %건 있어 저장하지 않았습니다. 미리 보기를 다시 확인해 주세요.', jsonb_array_length(v_problems)
+      using errcode = 'P0001', detail = v_problems::text, hint = 'regular_change_problems';
+  end if;
+
+  -- 저장: 옮기는 중 같은 학생 수업끼리 잠깐 겹치지 않게 두 단계로 (먼저 200년 뒤로 비켜 두고, 다시 새 시각으로)
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'admin_regular_change', true);
+  for s in select * from jsonb_array_elements(v_moved) loop
+    update lessons set starts_at = (s ->> 'to')::timestamptz + interval '200 years', ends_at = (s ->> 'to_end')::timestamptz + interval '200 years'
+    where id = (s ->> 'lesson_id')::uuid;
+  end loop;
+  for s in select * from jsonb_array_elements(v_moved) loop
+    update lessons set starts_at = (s ->> 'to')::timestamptz, ends_at = (s ->> 'to_end')::timestamptz where id = (s ->> 'lesson_id')::uuid;
+  end loop;
+  -- 정규 일정 표: 적용 시작일 전날까지로 닫고 새 줄. 적용 시작일 이후에 시작하는(아직 효력 전) 줄은 효력 없는 날짜(1900-01-01)로 치워 둠(지우지 않음)
+  update regular_schedules rs
+     set effective_from = date '1900-01-01' + (select count(*) from regular_schedules r2 where r2.student_id = rs.student_id and r2.weekday = rs.weekday and r2.effective_to < date '1950-01-01')::int,
+         effective_to = date '1900-01-01' + (select count(*) from regular_schedules r2 where r2.student_id = rs.student_id and r2.weekday = rs.weekday and r2.effective_to < date '1950-01-01')::int,
+         change_reason = coalesce(rs.change_reason, '') || ' [취소됨 ' || p_from || ']'
+  where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from >= p_from;
+  -- A-03: 새 일정이 적용 시작일 직전까지 유효한 줄과 같으면(예정 변경 취소 = 원래대로) 그 줄을 닫지 않고 그대로 이어 감 (줄을 쪼개지 않음)
+  if v_new = (select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI')) order by rs.weekday, rs.start_time_kst)
+              from regular_schedules rs
+              where rs.student_id = p_student and rs.tutor_id = t.id and rs.duration_min = e.duration_min
+                and rs.effective_from > date '1950-01-01' and rs.effective_from < p_from and rs.effective_to >= p_from - 1) then
+    update regular_schedules rs set effective_to = null,
+           change_reason = coalesce(rs.change_reason, '') || ' [' || p_from || ' 다시 이어 감: ' || v_reason || ']'
+    where rs.student_id = p_student and rs.tutor_id = t.id
+      and rs.effective_from > date '1950-01-01' and rs.effective_from < p_from and rs.effective_to >= p_from - 1;
+  else
+    update regular_schedules rs set effective_to = p_from - 1
+    where rs.student_id = p_student and rs.tutor_id = t.id and rs.effective_from < p_from and (rs.effective_to is null or rs.effective_to >= p_from);
+    for s in select * from jsonb_array_elements(v_new) loop
+      insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from, change_reason)
+      values (p_student, t.id, (s ->> 'weekday')::smallint, (s ->> 'time')::time, e.duration_min, p_from, v_reason);
+    end loop;
+  end if;
+  insert into regular_changes (student_id, enrollment_id, tutor_id, effective_from, old_slots, new_slots, moved, kept, reason, created_by)
+  values (p_student, e.id, t.id, p_from, v_old, v_new, v_moved, v_kept, v_reason, auth.uid())
+  returning id into v_change;
+  return jsonb_build_object('ok', true, 'change_id', v_change, 'moved', jsonb_array_length(v_moved), 'effective_from', p_from, 'last_date', v_last);
+exception
+  when exclusion_violation then
+    raise exception '저장 중 겹침이 생겨 저장하지 않았습니다 (%). 미리 보기를 다시 확인해 주세요.', sqlerrm;
+end $$;
+revoke all on function admin_regular_change(uuid, jsonb, date, text, boolean) from public, anon;
+grant execute on function admin_regular_change(uuid, jsonb, date, text, boolean) to authenticated;
+
+-- >>> 20261107010000_lms_first_lesson_followup.sql
+-- =====================================================================
+-- 4600. 첫 수업 후 강사 To-do · 실제 Class Style (2026-11-06 대표 요청, 정책 원본 H26(67)·(68)·(71))
+--  ① 첫 수업이 Held 로 기록되면 강사 Home 에 학생별 First Lesson Follow-up:
+--     1 English Level · 2 Wants to Improve · 3 Class Style(교재는 조건부) · 4 Class Record(첫 수업 기록과 자동 연결)
+--  ② 완료는 체크박스가 아니라 저장된 값으로 판정: level_by(평가 기록) · improve_tutor_at · tutor_class_style_at · 첫 Held 수업의 기록
+--  ③ 학생의 원래 답(운영진이 입력한 job·hobbies·interests·hopes·correction·class_style 7항목)은 건드리지 않음.
+--     강사가 확인한 실제 수업 방식은 새 칸(tutor_class_style·tutor_class_style_mix·tutor_materials_note)에 따로
+--  ④ 교재는 students.textbook 그대로 (운영진 화면 '교재' 와 같은 칸). 교재 목록은 홈페이지 교재 데이터를 화면이 가짐
+--  ⑤ 권한: 정규 담당 강사 본인 또는 운영자(TOTP, ?tutor= 강사 문맥). 대체강사는 못 씀
+--  다시 실행해도 같은 결과. 지우는 문장 없음
+-- =====================================================================
+alter table students
+  add column if not exists tutor_class_style text,              -- conversation · textbook · student_materials · mixed
+  add column if not exists tutor_class_style_mix text[],        -- mixed 일 때 구성: conversation · textbook · student_materials · other
+  add column if not exists tutor_materials_note text,           -- 학생 제공 자료 이름·종류 (선택)
+  add column if not exists tutor_class_style_at timestamptz,    -- 강사가 확인·저장한 시각 (같은 값이어도 '확인함')
+  add column if not exists tutor_class_style_by uuid,
+  add column if not exists improve_tutor_at timestamptz,        -- 강사가 첫 수업에서 직접 물어 적은 시각
+  add column if not exists improve_tutor_by uuid;
+do $$ begin
+  alter table students add constraint students_tutor_class_style_check
+    check (tutor_class_style is null or tutor_class_style in ('conversation', 'textbook', 'student_materials', 'mixed'));
+exception when duplicate_object then null; end $$;
+
+-- 이 강사가 이 학생과 처음 '진행한(Held)' 수업 — 출결 규칙 outcome = held (정상·강사 지각·보강 완료·대타 진행)
+create or replace function lms_first_held_lesson(p_tutor uuid, p_student uuid)
+returns lessons
+language sql stable security definer set search_path = public as $$
+  select l.* from lessons l join class_status_rules r on r.status = l.class_status
+  where l.student_id = p_student and l.tutor_id = p_tutor and l.state = 'done' and l.voided_at is null and r.outcome = 'held'
+  order by l.starts_at limit 1
+$$;
+revoke all on function lms_first_held_lesson(uuid, uuid) from public, anon, authenticated;
+
+-- 학생 한 명의 To-do 상태. 첫 Held 수업이 없으면 null (수업 전에는 To-do 없음)
+create or replace function lms_first_lesson_todo(p_tutor uuid, p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  s students;
+  l lessons;
+  cr class_records;
+  d_level boolean;
+  d_improve boolean;
+  d_style boolean;
+  v_needs_book boolean;
+begin
+  if p_tutor is null then return null; end if;
+  select * into s from students where id = p_student;
+  if not found then return null; end if;
+  l := lms_first_held_lesson(p_tutor, p_student);
+  if l.id is null then return null; end if;
+  select * into cr from class_records where lesson_id = l.id;
+  d_level := s.level is not null and s.level_by is not null;
+  d_improve := nullif(trim(coalesce(s.improve, '')), '') is not null and s.improve_tutor_at is not null;
+  v_needs_book := s.tutor_class_style = 'textbook' or (s.tutor_class_style = 'mixed' and 'textbook' = any(coalesce(s.tutor_class_style_mix, '{}')));
+  d_style := s.tutor_class_style is not null and s.tutor_class_style_at is not null
+    and (s.tutor_class_style <> 'mixed' or coalesce(array_length(s.tutor_class_style_mix, 1), 0) > 0)
+    and (not v_needs_book or nullif(trim(coalesce(s.textbook, '')), '') is not null);
+  return jsonb_build_object(
+    'first_lesson', jsonb_build_object('id', l.id, 'starts_at', l.starts_at, 'status', l.class_status, 'topics', cr.covered_topics, 'recorded_at', cr.first_submitted_at),
+    'done', jsonb_build_object('level', d_level, 'improve', d_improve, 'style', d_style, 'record', true),
+    'pending', (case when d_level then 0 else 1 end) + (case when d_improve then 0 else 1 end) + (case when d_style then 0 else 1 end));
+end $$;
+revoke all on function lms_first_lesson_todo(uuid, uuid) from public, anon, authenticated;
+
+-- 강사 Home To-do: 정규 담당 학생 중 첫 Held 수업이 있고 아직 덜 한 항목이 있는 학생 (강사 본인 또는 운영자가 고른 강사)
+create or replace function tutor_first_lesson_todos(p_tutor uuid default null)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  me uuid := lms_screen_tutor(p_tutor);
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('student_id', s.id, 'student', lms_tutor_student_label(s.name_en, s.display_name),
+             'first_lesson_at', t.j -> 'first_lesson' -> 'starts_at', 'pending', t.j -> 'pending', 'done', t.j -> 'done')
+             order by (t.j -> 'first_lesson' ->> 'starts_at')::timestamptz, s.name_en)
+    from students s
+    cross join lateral (select lms_first_lesson_todo(me, s.id) as j) t
+    where lms_tutor_student_access(me, s.id) = 'regular' and t.j is not null and (t.j ->> 'pending')::int > 0), '[]'::jsonb);
+end $$;
+revoke all on function tutor_first_lesson_todos(uuid) from public, anon;
+grant execute on function tutor_first_lesson_todos(uuid) to authenticated;
+
+-- 강사 입력 저장 (한 번에 한 항목씩 또는 여러 항목). 같은 값을 다시 골라도 '확인함'으로 기록
+--  p 키: level · improve · class_style · class_style_mix(배열) · textbook · materials_note
+create or replace function tutor_first_lesson_save(p_student uuid, p jsonb, p_tutor uuid default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := case when is_admin() and p_tutor is not null then lms_screen_tutor(p_tutor) else my_tutor_id() end;
+  s students;
+  k text;
+  v text;
+  v_style text;
+  v_mix text[];
+  v_role text := case when is_admin() and my_tutor_id() is null then 'admin' else 'tutor' end;
+begin
+  if not is_admin() then
+    if me is null or lms_tutor_student_access(me, p_student) is distinct from 'regular' then
+      raise exception 'Only the student''s regular tutor can edit this.' using errcode = '42501';
+    end if;
+  end if;
+  select * into s from students where id = p_student for update;
+  if not found then raise exception 'Student not found.' using errcode = 'P0002'; end if;
+  for k in select jsonb_object_keys(coalesce(p, '{}'::jsonb)) loop
+    if k not in ('level', 'improve', 'class_style', 'class_style_mix', 'textbook', 'materials_note') then
+      raise exception 'Field % cannot be changed here.', k using errcode = '42501';
+    end if;
+  end loop;
+  perform set_config('app.actor_id', auth.uid()::text, true);
+  perform set_config('app.actor_via', 'tutor_first_lesson_save', true);
+
+  -- 1 English Level: 바뀌지 않아도 평가한 사람·시각을 기록 (lms_student_apply 는 바뀔 때만 기록하므로 따로)
+  if p ? 'level' then
+    v := nullif(trim(coalesce(p ->> 'level', '')), '');
+    if v is null then raise exception 'Please choose a level.' using errcode = '22023'; end if;
+    if v not in ('Beginner', 'Pre-Intermediate', 'Intermediate', 'Advanced') then raise exception 'Level must be one of the rubric levels.' using errcode = '22023'; end if;
+    perform lms_profile_edit(p_student, 'level', s.level, v, v_role, 'tutor_first_lesson_save');
+    update students set level = v, level_by = auth.uid(), level_at = now() where id = p_student;
+  end if;
+
+  -- 2 Wants to improve: 강사가 첫 수업에서 직접 물어 적음 (운영진 사전 입력이 있어도 강사가 확인해 적어야 완료)
+  if p ? 'improve' then
+    v := nullif(trim(coalesce(p ->> 'improve', '')), '');
+    if v is null then raise exception 'Please write what the student wants to improve.' using errcode = '22023'; end if;
+    perform lms_profile_edit(p_student, 'improve', s.improve, v, v_role, 'tutor_first_lesson_save');
+    update students set improve = v, improve_tutor_at = now(), improve_tutor_by = auth.uid() where id = p_student;
+  end if;
+
+  -- 3 Class Style (실제 수업 방식) — 학생의 원래 답 class_style·class_style_note 는 건드리지 않음
+  if p ? 'class_style' then
+    v_style := nullif(trim(coalesce(p ->> 'class_style', '')), '');
+    if v_style is null or v_style not in ('conversation', 'textbook', 'student_materials', 'mixed') then
+      raise exception 'Please choose a class style.' using errcode = '22023';
+    end if;
+    v_mix := null;
+    if v_style = 'mixed' then
+      select array_agg(distinct x order by x) into v_mix from jsonb_array_elements_text(coalesce(p -> 'class_style_mix', '[]'::jsonb)) x;
+      if coalesce(array_length(v_mix, 1), 0) = 0 then raise exception 'Choose what the mixed class includes.' using errcode = '22023'; end if;
+      if exists (select 1 from unnest(v_mix) x where x not in ('conversation', 'textbook', 'student_materials', 'other')) then
+        raise exception 'Unknown mix option.' using errcode = '22023';
+      end if;
+    end if;
+    if v_style = 'textbook' or (v_style = 'mixed' and 'textbook' = any(v_mix)) then
+      v := case when p ? 'textbook' then nullif(trim(coalesce(p ->> 'textbook', '')), '') else nullif(trim(coalesce(s.textbook, '')), '') end;
+      if v is null then raise exception 'Please choose the textbook.' using errcode = '22023'; end if;
+      perform lms_profile_edit(p_student, 'textbook', s.textbook, v, v_role, 'tutor_first_lesson_save');
+      update students set textbook = v where id = p_student;
+    end if;
+    -- 교재를 안 쓰는 방식으로 바꿔도 교재 칸은 지우지 않음 (나중에 다시 쓸 수 있음)
+    if v_style = 'student_materials' or (v_style = 'mixed' and 'student_materials' = any(v_mix)) then
+      if p ? 'materials_note' then
+        v := nullif(trim(coalesce(p ->> 'materials_note', '')), '');
+        perform lms_profile_edit(p_student, 'tutor_materials_note', s.tutor_materials_note, v, v_role, 'tutor_first_lesson_save');
+        update students set tutor_materials_note = v where id = p_student;
+      end if;
+    end if;
+    perform lms_profile_edit(p_student, 'tutor_class_style', s.tutor_class_style, v_style, v_role, 'tutor_first_lesson_save');
+    perform lms_profile_edit(p_student, 'tutor_class_style_mix', array_to_string(s.tutor_class_style_mix, ','), array_to_string(v_mix, ','), v_role, 'tutor_first_lesson_save');
+    update students set tutor_class_style = v_style, tutor_class_style_mix = v_mix, tutor_class_style_at = now(), tutor_class_style_by = auth.uid()
+    where id = p_student;
+  end if;
+  return coalesce(lms_first_lesson_todo(me, p_student), jsonb_build_object('first_lesson', null, 'done', null, 'pending', null));
+end $$;
+revoke all on function tutor_first_lesson_save(uuid, jsonb, uuid) from public, anon;
+grant execute on function tutor_first_lesson_save(uuid, jsonb, uuid) to authenticated;
+
+-- 프로필 JSON 에 강사 확인 값 덧붙이기 (강사 화면·운영진 상세 둘 다)
+create or replace function lms_followup_fields(p_student uuid)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_strip_nulls(jsonb_build_object(
+    'tutor_class_style', s.tutor_class_style, 'tutor_class_style_mix', to_jsonb(s.tutor_class_style_mix), 'tutor_materials_note', s.tutor_materials_note,
+    'tutor_class_style_at', s.tutor_class_style_at, 'improve_tutor_at', s.improve_tutor_at,
+    'tutor_class_style_by', case when s.tutor_class_style_by is null then null else coalesce(
+        (select t.name from app_users u join tutors t on t.id = u.tutor_id where u.auth_user_id = s.tutor_class_style_by),
+        (select case when u.role = 'admin' then 'Edge English' end from app_users u where u.auth_user_id = s.tutor_class_style_by)) end))
+  from students s where s.id = p_student
+$$;
+revoke all on function lms_followup_fields(uuid) from public, anon, authenticated;
+
+-- 강사용 Student profile: 4500 판 그대로 + student 에 강사 확인 값 + followup(To-do 상태, 첫 Held 수업 없으면 null)
+create or replace function tutor_student_profile(p_student uuid, p_tutor uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  me uuid := case when is_admin() and p_tutor is not null then lms_screen_tutor(p_tutor) else my_tutor_id() end;
+  v_access text;
+  j jsonb;
+  v_unbooked integer;
+begin
+  if is_admin() then
+    v_access := 'regular';   -- 운영자가 강사 화면을 대신 볼 때(?tutor=)는 담당 강사와 같은 범위
+  else
+    if me is null then raise exception 'Please sign in with your tutor account.' using errcode = '42501'; end if;
+    v_access := lms_tutor_student_access(me, p_student);
+    if v_access is null then raise exception 'This student is not assigned to you.' using errcode = '42501'; end if;
+  end if;
+  j := lms_student_profile_json(p_student, v_access);
+  if v_access = 'substitute' then
+    j := j - 'upcoming' - 'enrollment' || jsonb_build_object(
+      'upcoming', (select coalesce(jsonb_agg(x) filter (where (x ->> 'tutor_id')::uuid = me), '[]'::jsonb) from jsonb_array_elements(j -> 'upcoming') x),
+      'enrollment', case when j -> 'enrollment' is null or j -> 'enrollment' = 'null'::jsonb then null else
+        jsonb_build_object('duration_min', j -> 'enrollment' -> 'duration_min', 'weekly_count', j -> 'enrollment' -> 'weekly_count',
+                           'final_end_date', j -> 'enrollment' -> 'final_end_date') end);
+  elsif j -> 'enrollment' is not null and j -> 'enrollment' <> 'null'::jsonb then
+    -- 날짜 안 잡은 보강권(취소 수업·시트 미예약 보강·보상권) — student_screen makeup_rights 와 같은 기준 (4500)
+    select count(*) into v_unbooked from (
+      select 1 from lessons l where l.enrollment_id = (j -> 'enrollment' ->> 'id')::uuid and l.voided_at is null
+        and (lms_grants_makeup(l.class_status) or l.class_status = 'Tutor long-term leave')
+        and not exists (select 1 from lessons x where x.makeup_of = l.id and x.voided_at is null)
+      union all
+      select 1 from migrated_items m where m.enrollment_id = (j -> 'enrollment' ->> 'id')::uuid and m.kind = 'makeup_open'
+      union all
+      select 1 from compensations c where c.enrollment_id = (j -> 'enrollment' ->> 'id')::uuid and c.status = 'available'
+        and lms_comp_use_until(c.enrollment_id) >= (now() at time zone 'Asia/Seoul')::date) q;
+    j := jsonb_set(j, '{enrollment,left_unbooked}', to_jsonb(coalesce(v_unbooked, 0)));
+  end if;
+  j := jsonb_set(j, '{student}', (j -> 'student') || lms_followup_fields(p_student));
+  return j || jsonb_build_object('me', jsonb_build_object('id', me, 'timezone', (select timezone from tutors where id = me)),
+                                 'followup', case when v_access = 'regular' then lms_first_lesson_todo(me, p_student) end);
+end $$;
+revoke all on function tutor_student_profile(uuid, uuid) from public, anon;
+grant execute on function tutor_student_profile(uuid, uuid) to authenticated;
+
+-- 운영진 학생 상세: 4300 판 그대로 + student 에 강사 확인 값
+create or replace function admin_student_detail(p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  j jsonb;
+  v_login jsonb;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 볼 수 있습니다.' using errcode = '42501'; end if;
+  j := lms_student_profile_json(p_student, 'admin');
+  j := jsonb_set(j, '{student}', (j -> 'student') || lms_followup_fields(p_student));
+  if to_regclass('auth.users') is not null then
+    execute 'select jsonb_build_object(''email'', a.email) from app_users u join auth.users a on a.id = u.auth_user_id where u.student_id = $1 limit 1' into v_login using p_student;
+  end if;
+  return j || jsonb_build_object(
+    'enrollments', coalesce((
+      select jsonb_agg(jsonb_build_object('id', e.id, 'seq', e.seq, 'status', e.status, 'weeks', e.weeks, 'legacy_label', e.legacy_label,
+               'weekly_count', e.weekly_count, 'duration_min', e.duration_min, 'start_date', e.start_date, 'final_end_date', e.final_end_date,
+               'lessons_purchased', e.lessons_purchased, 'lessons_carried_in', e.lessons_carried_in, 'amount_due', e.amount_due,
+               'payments', coalesce((select jsonb_agg(jsonb_build_object('on', p.received_on, 'method', p.method, 'amount', p.amount_received,
+                                       'confirmed', p.confirmed_at is not null) order by p.received_on) from payments p where p.enrollment_id = e.id), '[]'::jsonb))
+               order by e.seq desc)
+      from enrollments e where e.student_id = p_student), '[]'::jsonb),
+    'changes', coalesce((
+      select jsonb_agg(jsonb_build_object('id', rc.id, 'effective_from', rc.effective_from, 'old_slots', rc.old_slots, 'new_slots', rc.new_slots,
+               'moved', rc.moved, 'kept', rc.kept, 'reason', rc.reason, 'at', rc.created_at, 'tutor', t.name, 'tutor_tz', t.timezone,
+               'student_sent_at', rc.student_sent_at, 'tutor_sent_at', rc.tutor_sent_at) order by rc.created_at desc)
+      from regular_changes rc join tutors t on t.id = rc.tutor_id where rc.student_id = p_student), '[]'::jsonb),
+    'edits', coalesce((
+      select jsonb_agg(jsonb_build_object('field', x.field, 'old', x.old_value, 'new', x.new_value, 'role', x.edited_role, 'at', x.created_at,
+               'by', coalesce((select t.name from app_users u join tutors t on t.id = u.tutor_id where u.auth_user_id = x.edited_by), '운영진')) order by x.created_at desc)
+      from (select * from student_profile_edits where student_id = p_student order by created_at desc limit 50) x), '[]'::jsonb),
+    'recent', coalesce((
+      select jsonb_agg(jsonb_build_object('id', l.id, 'kind', l.kind, 'starts_at', l.starts_at, 'state', l.state, 'class_status', l.class_status,
+               'tutor', t.name, 'tutor_tz', t.timezone) order by l.starts_at desc)
+      from (select * from lessons where student_id = p_student and starts_at <= now() and voided_at is null order by starts_at desc limit 5) l
+      join tutors t on t.id = l.tutor_id), '[]'::jsonb),
+    'login', v_login);
+end $$;
+revoke all on function admin_student_detail(uuid) from public, anon;
+grant execute on function admin_student_detail(uuid) to authenticated;
+
+-- >>> 20261107020000_lms_first_lesson_followup_new_only.sql
+-- =====================================================================
+-- 4601. 첫 수업 후 To-do 는 '앞으로 새로 시작하는 학생'에게만 (2026-11-06 대표 지시)
+--  기준: feature_flags 'first_lesson_followup_since' 줄의 updated_at(이 migration 을 적용한 시각 = 기능 시작 시각, 한국 날짜).
+--   (켜고 끄는 스위치가 아니라 시작일 기록용 — enabled 는 쓰지 않음, 다른 스위치처럼 false 로 둠)
+--   - 그 날짜 이후에 시작한 수강권(enrollments.start_date >= 기준일)의 수업만 대상
+--   - 기준일 전에 이미 진행한(done) 수업이 있는 학생(기존 학생)은 제외 → 밀린 To-do 가 한꺼번에 생기지 않음
+--  기준일을 바꾸려면 그 줄의 updated_at 만 고치면 됨 (대표 결정). 다시 실행해도 같은 결과
+-- =====================================================================
+insert into feature_flags (key, enabled, note)
+values ('first_lesson_followup_since', false, '첫 수업 후 강사 To-do 시작일 — 이 줄의 updated_at(한국 날짜) 이후 시작한 수강권·그 전에 수업한 적 없는 학생만 (스위치 아님)')
+on conflict (key) do nothing;
+
+create or replace function lms_first_lesson_followup_since()
+returns date
+language sql stable security definer set search_path = public as $$
+  select (f.updated_at at time zone 'Asia/Seoul')::date from feature_flags f where f.key = 'first_lesson_followup_since'
+$$;
+revoke all on function lms_first_lesson_followup_since() from public, anon, authenticated;
+
+-- 이 강사가 이 학생과 처음 진행한(Held) 수업 — 새로 시작한 학생만 (기준일 전 수업 이력이 있는 학생·기준일 전에 시작한 수강권은 null)
+create or replace function lms_first_held_lesson(p_tutor uuid, p_student uuid)
+returns lessons
+language sql stable security definer set search_path = public as $$
+  select l.* from lessons l
+  join class_status_rules r on r.status = l.class_status
+  join enrollments e on e.id = l.enrollment_id
+  where l.student_id = p_student and l.tutor_id = p_tutor and l.state = 'done' and l.voided_at is null and r.outcome = 'held'
+    and lms_first_lesson_followup_since() is not null
+    and e.start_date >= lms_first_lesson_followup_since()
+    and not exists (select 1 from lessons x where x.student_id = p_student and x.state = 'done' and x.voided_at is null
+                    and (x.starts_at at time zone 'Asia/Seoul')::date < lms_first_lesson_followup_since())
+  order by l.starts_at limit 1
+$$;
+revoke all on function lms_first_held_lesson(uuid, uuid) from public, anon, authenticated;
+
+insert into lms_backup.project (name) values ('edgeenglish-lms-test');   -- 이 DB의 프로젝트 이름 (복구 안전장치)
+commit;

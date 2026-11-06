@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>하위 화면 위치</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1040px; box-sizing: border-box; background: #ffffff; font-family: 'IBM Plex Sans KR', sans-serif; color: #1d1b2b; padding: 20px 18px; display: flex; flex-direction: column; gap: 14px">
+  <h1 style="margin: 0; font-size: 20px; font-weight: 700">기능은 어디에 있나</h1>
+  <div style="font-size: 13px; color: #55526a; line-height: 1.6">메인에는 자주 쓰는 것만. 나머지는 아래 탭과 '필요할 때만 보이는' 안내로.</div>
+
+  <section style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 15px; font-weight: 700; color: #5b3df0">홈 — 필요할 때만 나타남</div>
+    <div style="font-size: 13px; line-height: 1.6">· <b>강사 미입장 신고</b>: 수업 시작 5분 뒤부터 '다음 수업' 칸에 [강사가 아직 안 들어왔어요] 버튼</div>
+    <div style="font-size: 13px; line-height: 1.6">· <b>재등록 안내</b>: 남은 정규 수업 2회 이하일 때만, 재등록 결제가 확인되면 사라짐</div>
+    <div style="font-size: 13px; line-height: 1.6">· <b>수업 안내 확인</b>: 새 안내문에 동의가 필요할 때만</div>
+  </section>
+
+  <section style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 15px; font-weight: 700">일정</div>
+    <div style="font-size: 13px; line-height: 1.6">· 예정·지난 수업 전체 (KST, 해외 학생은 현지 시각 함께)</div>
+    <div style="font-size: 13px; line-height: 1.6">· 수업마다 [변경·취소] → 확인 화면 (6시간 전 / 이내 결과 안내)</div>
+  </section>
+
+  <section style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 15px; font-weight: 700">신청 내역</div>
+    <div style="font-size: 13px; line-height: 1.6">· 진행 중·완료된 신청 전체</div>
+    <div style="font-size: 13px; line-height: 1.6">· 새 신청: <b>보강 신청</b>, <b>고정 요일·시간 변경</b> (28일마다 1회, 4일 전), <b>강사·교재 변경 요청</b>, <b>장기 연기 신청</b> (24주 수강권 학생에게만 보임, 4일 전)</div>
+  </section>
+
+  <section style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 15px; font-weight: 700">학습자료</div>
+    <div style="font-size: 13px; line-height: 1.6">· 지금 교재 (홈페이지 교재 목록과 연결) · 수업 노트 · <b>최근 수업 기록</b> · 받은 자료 · 전체 교재</div>
+  </section>
+
+  <section style="border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 15px; font-weight: 700">내 정보</div>
+    <div style="font-size: 13px; line-height: 1.6">· 수강·결제·적립금 자세히 · <b>알림 설정</b> (보강 리마인더 켜기/끄기) · 동의한 수업 안내 · 이메일 · 카카오톡 문의 · 로그아웃</div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

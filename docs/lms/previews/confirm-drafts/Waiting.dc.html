@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>강사 답 대기</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#5b3fd9}a:hover{color:#3f27a8}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f6f5fa; font-family: 'Pretendard', system-ui, -apple-system, sans-serif; color: #1d1b2b; display: flex; flex-direction: column">
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #ffffff; border-bottom: 1px solid #e6e3ef">
+    <span style="font-size: 16px; font-weight: 700">처리할 일</span>
+    <span style="font-size: 13px; color: #6b6880">신규 학생 매칭 · 2</span>
+  </div>
+  <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+    <div style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <span style="font-size: 15.5px; font-weight: 700">가상학생일 · 50분 주2회 4주</span>
+        <span style="font-size: 12.5px; font-weight: 700; color: #6a4a00; background: #fff1c2; border-radius: 999px; padding: 3px 10px">강사 답 대기</span>
+      </div>
+      <div style="font-size: 14px; line-height: 1.6; color: #3d3a52">
+        가상강사 Alex · 화·목 19:00 (강사 21:00)<br>
+        첫 수업 11/3(화) · 제안 보냄 10/21 15:42
+      </div>
+      <div style="font-size: 13px; color: #6b6880">매칭 기한 10/26(월) 23:59 · 5일 남음</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+        <button type="button" style="grid-column: span 2; min-height: 50px; border-radius: 12px; border: 0; background: #7d5fff; color: #ffffff; font-size: 15.5px; font-weight: 700; cursor: pointer">강사 가능 → 확정</button>
+        <button type="button" style="min-height: 46px; border-radius: 12px; border: 1px solid #e6e3ef; background: #ffffff; color: #1d1b2b; font-size: 14px; cursor: pointer">안 된대요 → 다른 안</button>
+        <button type="button" style="min-height: 46px; border-radius: 12px; border: 1px solid #e6e3ef; background: #ffffff; color: #1d1b2b; font-size: 14px; cursor: pointer">제안 문구 다시 복사</button>
+      </div>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <span style="font-size: 15.5px; font-weight: 700">가상학생삼 · 50분 주1회 12주</span>
+        <span style="font-size: 12.5px; font-weight: 700; color: #4b33c4; background: #efeaff; border-radius: 999px; padding: 3px 10px">강사 고르기</span>
+      </div>
+      <div style="font-size: 14px; line-height: 1.6; color: #3d3a52">결제 확인 10/21 · 아직 제안 없음</div>
+      <div style="font-size: 13px; color: #b42318; font-weight: 600">매칭 기한 오늘 23:59</div>
+      <button type="button" style="min-height: 46px; border-radius: 12px; border: 1px solid #7d5fff; background: #ffffff; color: #4b33c4; font-size: 14.5px; font-weight: 700; cursor: pointer">강사·시간 고르기 →</button>
+    </div>
+    <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #6b6880">[강사 가능 → 확정]을 누르는 순간 정규 수업이 만들어지고, 같은 카드가 '양쪽 안내' 단계로 바뀌어요 (③).</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

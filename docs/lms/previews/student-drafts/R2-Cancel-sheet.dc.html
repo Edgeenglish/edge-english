@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>변경 취소 확인</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#4b2fd6}a:hover{color:#3a22b0}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1040px; box-sizing: border-box; background: #e9e7f0; font-family: 'IBM Plex Sans KR', sans-serif; color: #1d1b2b; display: flex; flex-direction: column; gap: 16px; padding: 16px 0">
+  <div style="font-size: 13px; font-weight: 700; color: #55526a; padding: 0 20px">① 수업 시작까지 6시간 넘게 남았을 때</div>
+  <section aria-label="취소 확인 6시간 전" style="background: #ffffff; border-radius: 22px; margin: 0 8px; padding: 22px 20px; display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-size: 19px; font-weight: 700">10/20 (화) 20:00 수업을 취소할까요?</h2>
+    <div style="background: #f1eefc; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5">
+      <div style="display: flex; justify-content: space-between"><span>변경권</span><b>1개 사용 → 남은 0개</b></div>
+      <div style="display: flex; justify-content: space-between"><span>수업 횟수</span><b>차감 안 됨</b></div>
+      <div style="display: flex; justify-content: space-between"><span>보강</span><b style="color: #13623a">수강기간 안에 보강 가능</b></div>
+    </div>
+    <div style="font-size: 12px; color: #55526a; line-height: 1.6">변경권이 0개면 6시간 전이라도 보강 없이 수업 1회가 차감돼요. 대한민국 공휴일 수업은 변경권 없이 보강할 수 있어요.</div>
+    <button type="button" style="min-height: 52px; border: 0; border-radius: 14px; background: #5b3df0; color: #ffffff; font-family: inherit; font-size: 16px; font-weight: 700">취소하고 보강 시간 고르기</button>
+    <button type="button" style="min-height: 44px; border: 0; background: transparent; color: #55526a; font-family: inherit; font-size: 14px">취소 안 함</button>
+  </section>
+
+  <div style="font-size: 13px; font-weight: 700; color: #55526a; padding: 0 20px; margin-top: 8px">② 수업 시작까지 6시간이 안 남았을 때</div>
+  <section aria-label="취소 확인 6시간 이내" style="background: #ffffff; border-radius: 22px; margin: 0 8px; padding: 22px 20px; display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-size: 19px; font-weight: 700">수업 시작 4시간 전이에요</h2>
+    <div style="background: #fff1ef; border: 1px solid #f3c2bb; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; color: #7a1d12">
+      <div style="font-weight: 700">지금 취소하면</div>
+      <div style="display: flex; justify-content: space-between"><span>수업 횟수</span><b>1회 차감 (남은 2회 → 1회)</b></div>
+      <div style="display: flex; justify-content: space-between"><span>보강</span><b>없음</b></div>
+      <div style="display: flex; justify-content: space-between"><span>변경권</span><b>차감 안 됨 (1개 그대로)</b></div>
+    </div>
+    <label style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; min-height: 44px">
+      <input type="checkbox" style="width: 20px; height: 20px; margin: 2px 0 0; accent-color: #b3261e">
+      수업 1회가 차감되고 보강이 없다는 것을 확인했어요
+    </label>
+    <button type="button" style="min-height: 52px; border: 0; border-radius: 14px; background: #b3261e; color: #ffffff; font-family: inherit; font-size: 16px; font-weight: 700">1회 차감하고 취소</button>
+    <button type="button" style="min-height: 44px; border: 0; background: transparent; color: #55526a; font-family: inherit; font-size: 14px">수업 그대로 하기</button>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

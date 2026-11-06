@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>보강 신청 상세</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#4b2fd6}a:hover{color:#3a22b0}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1040px; box-sizing: border-box; background: #f6f5fa; font-family: 'IBM Plex Sans KR', sans-serif; color: #1d1b2b; display: flex; flex-direction: column">
+  <header style="display: flex; align-items: center; gap: 8px; padding: 14px 12px 8px">
+    <a href="#" aria-label="뒤로" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; color: #1d1b2b; text-decoration: none; font-size: 22px">‹</a>
+    <h1 style="margin: 0; font-size: 18px; font-weight: 700">보강 신청 · 10/13 수업분</h1>
+  </header>
+  <main style="display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 24px">
+    <section style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 13px; color: #55526a">지금 상태</span><span style="font-size: 13px; font-weight: 600; background: #fff1d6; color: #8a5300; border-radius: 999px; padding: 5px 12px">강사 확인 중</span></div>
+      <div style="font-size: 14px; line-height: 1.6">강사가 아래 후보 중 하나를 고르면 <b>이메일로 알려 드려요.</b> 지금 학생이 할 일은 없어요.</div>
+      <ol style="list-style: none; margin: 0; padding: 0; display: flex; gap: 6px">
+        <li style="flex: 1; text-align: center"><div style="height: 6px; border-radius: 3px; background: #5b3df0"></div><div style="font-size: 12px; margin-top: 6px; color: #5b3df0; font-weight: 600">신청</div></li>
+        <li style="flex: 1; text-align: center"><div style="height: 6px; border-radius: 3px; background: #f0a33a"></div><div style="font-size: 12px; margin-top: 6px; color: #8a5300; font-weight: 700">강사 확인</div></li>
+        <li style="flex: 1; text-align: center"><div style="height: 6px; border-radius: 3px; background: #e6e3ef"></div><div style="font-size: 12px; margin-top: 6px; color: #8b88a0">확정</div></li>
+      </ol>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 700">내가 고른 보강 후보</h2>
+      <div style="display: flex; align-items: center; gap: 12px; border: 1px solid #e6e3ef; border-radius: 12px; padding: 12px 14px"><span style="font-size: 12px; font-weight: 700; color: #5b3df0">후보 1</span><span style="font-size: 16px; font-weight: 700">10/23 (금) 19:00</span></div>
+      <div style="display: flex; align-items: center; gap: 12px; border: 1px solid #e6e3ef; border-radius: 12px; padding: 12px 14px"><span style="font-size: 12px; font-weight: 700; color: #5b3df0">후보 2</span><span style="font-size: 16px; font-weight: 700">10/24 (토) 10:00</span></div>
+      <div style="font-size: 12px; color: #55526a">50분 · 가상강사 Alex · 한국 시간</div>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px">
+      <h2 style="margin: 0 0 4px; font-size: 15px; font-weight: 700">신청 정보</h2>
+      <div style="display: flex; justify-content: space-between"><span style="color: #55526a">보강할 수업</span><span>10/13 (화) 20:00</span></div>
+      <div style="display: flex; justify-content: space-between"><span style="color: #55526a">사용한 변경권</span><span>1개</span></div>
+      <div style="display: flex; justify-content: space-between"><span style="color: #55526a">신청한 날</span><span>10/12 (월) 09:14</span></div>
+    </section>
+
+    <div style="font-size: 12px; color: #55526a; line-height: 1.6; padding: 0 4px">후보를 바꾸거나 신청을 취소하는 규칙은 아직 정하지 않아 시안에 버튼을 넣지 않았어요. 문의는 카카오톡으로.</div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

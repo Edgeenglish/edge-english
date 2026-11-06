@@ -1,0 +1,464 @@
+'use client';
+
+// 이미 저장된 학생에게 강사·시간 고르기 (결제만 저장한 학생, 강사가 '안 된대요' 한 뒤 다른 안)
+// 2026-10-22 대표: "너무 복잡하지 않게" → 한 화면: 학생 요약 → 강사 → 주간 칸 → 첫 수업일 → [아직 → 제안 문구 복사] / [가능하대요 → 확정]
+// 등록 화면의 강사 고르기·캘린더를 그대로 씀. 저장은 DB 함수 admin_propose_schedule (같은 요청 번호면 1번만)
+
+import Link from 'next/link';
+import { useMemo, useState } from 'react';
+import DateInput from '../DateInput';
+import { checkLessonList, checkRegularPlan, firstLessonDateOnOrAfter, issueText, type CellState } from '@/lms/rules/booking';
+import { buildLessons, lessonPayload, needsLessonList, type LessonDate } from '@/lms/rules/lessons';
+import { addDays, instantToKstDate, weekdayOf, type KstDate } from '@/lms/rules/dates';
+import { courseName } from '@/lms/rules/period';
+import type { CourseWeeks } from '@/lms/rules/policy';
+import type { RegularSlot } from '@/lms/rules/schedule';
+import { proposalMessage, type PlanView } from '@/lms/admin/confirm';
+import type { MatchingCurrent, PlanActions } from '@/lms/admin/confirm-live';
+import { slotsText } from '@/lms/admin/students';
+import { firstDateBase, firstDateWarnings, type RegTutor } from '@/lms/admin/registration';
+import { dayLabel, weekOf } from '@/lms/admin/schedule';
+import PlanCard, { TimeRows, type PlanHandlers } from '../PlanCard';
+import { Card, EMPTY_FILTER, Legend, ProfileSheet, TutorPicker, WeekCalendar, type TutorFilter } from '../students/new/parts';
+import { ChangeSheet } from '../students/new/ScheduleStep';
+
+export type AssignInfo = {
+  enrollmentId: string;
+  studentCode: string;
+  studentName: string;
+  nameEn: string;
+  place: string; // '미국 뉴욕'
+  timezone: string;
+  weeks: CourseWeeks;
+  weeklyCount: number;
+  durationMin: number;
+  startWish: KstDate; // 지금 수강등록의 시작일 (희망 시작일)
+};
+
+export type ProposeResult = {
+  planId: string;
+  state: 'proposed' | 'confirmed';
+  tutorNoticeId: string | null;
+  studentNoticeId: string | null;
+};
+
+type Props = {
+  nowIso: string;
+  demo: boolean;
+  info: AssignInfo;
+  tutors: RegTutor[];
+  /** 저장 (미리보기는 null → 화면 안에서만) */
+  propose:
+    | ((
+        planId: string,
+        p: {
+          tutor_id: string;
+          slots: RegularSlot[];
+          start_date: KstDate;
+          tutor_answer: 'accepted' | null;
+          lessons?: LessonDate[] | null;
+        }
+      ) => Promise<ProposeResult>)
+    | null;
+  planActions?: PlanActions;
+  /** 이미 진행 중인 일정안 (답 대기·확정) — 있으면 새 시간 고르기 대신 그 카드로 (R-10) */
+  initialView?: PlanView | null;
+  /** 일정안 없이 강사·정규 수업이 이미 있는 등록의 지금 배정 (R-10) */
+  current?: MatchingCurrent | null;
+  /** '수업 컨펌 완료' 기록 — 지금 배정을 강사·학생에게 확인했음 → 신규 매칭 업무 완료 */
+  confirmCurrent?: () => Promise<{ repeated: boolean }>;
+};
+
+const bySlot = (a: RegularSlot, b: RegularSlot) => ((a.weekday + 6) % 7) - ((b.weekday + 6) % 7);
+
+export default function AssignSchedule({ nowIso, demo, info, tutors, propose, planActions, initialView = null, current = null, confirmCurrent }: Props) {
+  const now = useMemo(() => new Date(nowIso), [nowIso]);
+  const today = instantToKstDate(now);
+  const [tutorId, setTutorId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<TutorFilter>(EMPTY_FILTER);
+  const [weekStart, setWeekStart] = useState<KstDate>(info.startWish > today ? info.startWish : today);
+  const [slots, setSlots] = useState<RegularSlot[]>([]);
+  const [firstPick, setFirstPick] = useState<KstDate | ''>('');
+  const [profile, setProfile] = useState<RegTutor | null>(null);
+  const [requestId] = useState(() => crypto.randomUUID());
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+  const [view, setView] = useState<PlanView | null>(initialView);
+  // 저장하면서 제안 문구를 복사했는지 (복사 ≠ 보냄, B-02 — 보낸 시각은 [강사에게 보냈어요]로만 기록)
+  const [copiedProposal, setCopiedProposal] = useState(false);
+  // 기존 배정 확인 (R-10): 일정안이 없고 강사·예정 수업이 이미 있으면, 새 배정 대신 지금 배정을 보여 주고 컨펌 완료를 기록
+  const hasCurrent = !view && !!current && !current.plan && !!current.tutor && current.scheduled > 0 && current.task?.status !== 'canceled';   // scheduled = 앞으로 + 지난 미기록 (컨펌 기록 조건은 DB 가 다시 검사)
+  const [currentDone, setCurrentDone] = useState<boolean>(!!current?.task?.studentNotifiedAt || current?.task?.status === 'done');
+  const [showNew, setShowNew] = useState(false);
+
+  const tutor = tutors.find((t) => t.id === tutorId) ?? null;
+  const week = useMemo(() => weekOf(weekStart), [weekStart]);
+  const product = `${info.durationMin}분 · 주${info.weeklyCount}회 · ${courseName(info.weeks)}`;
+  const enough = slots.length === info.weeklyCount;
+
+  function toggle(date: KstDate, time: string, state: CellState) {
+    const wd = weekdayOf(date);
+    const same = slots.find((s) => s.weekday === wd);
+    if (same && same.time === time) return setSlots(slots.filter((s) => s !== same));
+    if (same) return setSlots(slots.map((s) => (s === same ? { weekday: wd, time } : s)).sort(bySlot));
+    if (slots.length >= info.weeklyCount) return setMsg(`주 ${info.weeklyCount}회예요. 먼저 고른 시간을 하나 빼 주세요.`);
+    if (state === 'makeup' || state === 'off') setMsg('그날만 보강·휴무가 있어요. 아래 기간 전체 검사에서 그 날짜를 알려 드려요.');
+    else setMsg('');
+    setSlots([...slots, { weekday: wd, time }].sort(bySlot));
+  }
+
+  // 첫 수업일: 희망 시작일(또는 오늘 — 오늘 정규 시각이 지났으면 내일)부터 첫 정규 요일. 후보 4개 중 충돌 적은 날을 고를 수 있고, 날짜 칸으로 어느 날이든 직접 고를 수 있음 (2026-11-06 대표, H26(58)·(60))
+  const suggested = useMemo(() => {
+    const base = info.startWish > today ? info.startWish : firstDateBase(today, now, slots);
+    return firstLessonDateOnOrAfter(
+      base,
+      slots.map((s) => s.weekday)
+    );
+  }, [info.startWish, today, now, slots]);
+  // 첫 수업일은 어느 날이든, 특정 회차만 다른 날·시각 (신규 등록 화면과 같은 규칙·창, H26(61)·(62))
+  const firstDate = firstPick || suggested;
+  const editBasis = JSON.stringify([slots, firstDate]);
+  const [editState, setEditState] = useState<{ basis: string; map: Record<KstDate, LessonDate> }>({ basis: '', map: {} });
+  const edits = useMemo(() => (editState.basis === editBasis ? editState.map : {}), [editState, editBasis]);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  function setEdit(key: KstDate, to: LessonDate | null) {
+    const map = { ...edits };
+    if (to) map[key] = to;
+    else delete map[key];
+    setEditState({ basis: editBasis, map });
+  }
+  const lessonPlan = useMemo(
+    () => (tutor && enough && firstDate && slots.every((s) => s.time) ? buildLessons({ firstDate, weeks: info.weeks, weeklyCount: info.weeklyCount, slots, edits }) : null),
+    [tutor, enough, firstDate, slots, edits, info.weeks, info.weeklyCount],
+  );
+  const listIssues = useMemo(
+    () => (lessonPlan && tutor ? checkLessonList({ lessons: lessonPayload(lessonPlan), durationMin: info.durationMin, tutorBusy: tutor.busy, availability: tutor.availability }) : []),
+    [lessonPlan, tutor, info.durationMin],
+  );
+  const changed = lessonPlan?.lessons.filter((l) => l.original) ?? [];
+  const check = (start: KstDate) =>
+    tutor
+      ? checkRegularPlan({
+          startDate: start,
+          weeks: info.weeks,
+          slots,
+          durationMin: info.durationMin,
+          tutorBusy: tutor.busy,
+          availability: tutor.availability,
+        })
+      : null;
+  const plan = lessonPlan && lessonPlan.lessons.length ? { issues: listIssues, lessons: lessonPlan.lessons } : null;
+  const candidates = useMemo(() => {
+    if (!enough || !suggested || !tutor) return [];
+    const out: { date: KstDate; issues: number }[] = [];
+    for (let d = suggested; out.length < 4; d = addDays(d, 1)) if (slots.some((s) => s.weekday === weekdayOf(d))) out.push({ date: d, issues: new Set(check(d)?.issues.map((i) => i.kstDate) ?? []).size });
+    return out;
+  }, [enough, suggested, tutor, slots]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const draft: PlanView | null =
+    tutor && enough && firstDate && plan
+      ? {
+          planId: '',
+          state: 'proposed',
+          studentNameEn: info.nameEn,
+          studentPlace: info.place,
+          studentTz: info.timezone || 'Asia/Seoul',
+          tutorName: tutor.name,
+          tutorPlace: tutor.country,
+          tutorTz: tutor.timezone,
+          slots,
+          startDate: lessonPlan?.startDate ?? firstDate,
+          endDate: lessonPlan?.endDate ?? addDays(firstDate, (info.weeks / 4) * 28 - 1),
+          lessons: info.weeklyCount * info.weeks,
+          lessonList: lessonPlan && needsLessonList(lessonPlan) ? lessonPayload(lessonPlan) : null,
+          durationMin: info.durationMin,
+          proposalSentAt: null,
+          confirmedAt: null,
+          tutorNotice: null,
+          studentNotice: null,
+        }
+      : null;
+  const ready = !!draft && plan!.issues.length === 0 && (lessonPlan?.problems.length ?? 0) === 0;
+
+  async function save(accepted: boolean) {
+    if (!draft || !ready || saving) return;
+    setErr('');
+    // 제안 문구는 누른 순간 복사 (휴대폰은 저장을 기다린 뒤엔 복사가 막힘)
+    let copied = false;
+    if (!accepted) {
+      try {
+        await navigator.clipboard.writeText(proposalMessage(draft));
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+    setSaving(true);
+    try {
+      const nowD = new Date();
+      if (!propose) {
+        setView(
+          accepted
+            ? {
+                ...draft,
+                planId: 'preview',
+                state: 'confirmed',
+                confirmedAt: nowD,
+                tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null },
+                studentNotice: { id: 'pv-s', status: 'pending', sentAt: null },
+              }
+            : { ...draft, planId: 'preview', proposalSentAt: null }
+        );
+        setCopiedProposal(copied);
+        return;
+      }
+      const r = await propose(requestId, {
+        tutor_id: tutor!.id,
+        slots,
+        start_date: draft.startDate,
+        tutor_answer: accepted ? 'accepted' : null,
+        lessons: draft.lessonList ?? null,
+      });
+      if (r.state === 'confirmed') {
+        setView({
+          ...draft,
+          planId: r.planId,
+          state: 'confirmed',
+          confirmedAt: nowD,
+          tutorNotice: r.tutorNoticeId ? { id: r.tutorNoticeId, status: 'pending', sentAt: null } : null,
+          studentNotice: r.studentNoticeId ? { id: r.studentNoticeId, status: 'pending', sentAt: null } : null,
+        });
+      } else {
+        // 복사만으로는 보낸 것으로 기록하지 않음 (B-02). 실제로 보낸 뒤 [강사에게 보냈어요]
+        setCopiedProposal(copied);
+        setView({ ...draft, planId: r.planId, proposalSentAt: null });
+      }
+    } catch (e) {
+      setErr(`${e instanceof Error ? e.message : '저장하지 못했어요.'}${copied ? ' 제안 문구는 복사됐지만 저장되지 않았어요 — 강사에게 보내지 마세요.' : ''}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const live = !!planActions && !demo;
+  const handlers: PlanHandlers = {
+    confirm: async () => {
+      if (!view) return;
+      const r = live ? await planActions!.confirm(view.planId) : { tutor_notice_id: 'pv-t', student_notice_id: 'pv-s' };
+      setView({
+        ...view,
+        state: 'confirmed',
+        confirmedAt: new Date(),
+        tutorNotice: { id: r.tutor_notice_id, status: 'pending', sentAt: null },
+        studentNotice: { id: r.student_notice_id, status: 'pending', sentAt: null },
+      });
+    },
+    decline: async () => {
+      if (!view) return;
+      if (live) await planActions!.decline(view.planId);
+      setView(null);
+      setSlots([]);
+      setTutorId(null);
+      setMsg('이 안을 닫았어요. 다른 강사·시간을 골라 주세요.');
+    },
+    proposalSent: async () => {
+      if (!view) return;
+      const at = live ? new Date(await planActions!.proposalSent(view.planId)) : new Date();
+      setView({ ...view, proposalSentAt: view.proposalSentAt ?? (isNaN(at.getTime()) ? new Date() : at) });
+    },
+    noticeSent: async (who) => {
+      if (!view) return;
+      const n = who === 'tutor' ? view.tutorNotice : view.studentNotice;
+      if (!n) return;
+      if (live) await planActions!.noticeSent(n.id);
+      const sent = { ...n, status: 'sent' as const, sentAt: n.sentAt ?? new Date() };
+      setView(who === 'tutor' ? { ...view, tutorNotice: sent } : { ...view, studentNotice: sent });
+    },
+  };
+
+  const home = demo ? '/lms/admin?demo=1' : '/lms/admin';
+  return (
+    <div className="min-h-screen bg-[#f6f5fb] pb-10">
+      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-[#e6e3ef] bg-white px-4 py-3">
+        <b className="text-[17px] text-[#1d1b2b]">강사·시간 고르기</b>
+        <span className="flex-1" />
+        <Link href={home} aria-label="닫기" className="flex h-10 w-10 items-center justify-center text-[22px] text-[#1d1b2b]">
+          ×
+        </Link>
+      </header>
+      {demo && <p className="mx-4 mt-3 rounded-[12px] bg-[#fff8d6] px-4 py-2.5 text-[13.5px] text-[#5c4a00]">가상 데이터 미리보기 — 저장·발송 안 됨</p>}
+
+      <main className="mx-auto max-w-[1100px] space-y-4 px-4 pt-4">
+        <Card>
+          <b className="block text-[16px] text-[#1d1b2b]">
+            {info.studentName}
+            {info.place && <span className="font-normal text-[#6b6880]"> · {info.place}</span>}
+          </b>
+          <span className="text-[14px] text-[#3d3a52]">
+            {info.studentCode} · {product} · 희망 시작 {dayLabel(info.startWish)}
+          </span>
+        </Card>
+
+        {hasCurrent && !showNew && (
+          <Card title={currentDone ? '수업 컨펌 완료' : '지금 배정 · 강사·학생에게 확인했나요?'}>
+            <p className="text-[15px] font-bold text-[#1d1b2b]">{current!.tutor!.name} 강사 · {slotsText(current!.slots)} (한국 시간) · {current!.durationMin}분</p>
+            {/* R-22: 앞으로 수업과 지난 미기록 수업을 나눠서 */}
+            <p className="mt-1 text-[13.5px] text-[#3d3a52]">
+              앞으로 수업 {current!.upcoming}회{current!.nextAt ? ` · 다음 수업 ${dayLabel(instantToKstDate(current!.nextAt))}` : ''}
+              {current!.firstAt ? ` · 첫 수업 ${dayLabel(instantToKstDate(current!.firstAt))}` : ''} · 수강 {dayLabel(current!.startDate)}–{dayLabel(current!.finalEndDate)}
+            </p>
+            {(current!.pastUnrecorded > 0 || current!.doneCount > 0) && (
+              <p className="mt-0.5 text-[13px] text-[#6b6880]">
+                {[current!.doneCount > 0 && `끝난 수업 ${current!.doneCount}회`, current!.pastUnrecorded > 0 && `지난 수업 ${current!.pastUnrecorded}회는 Class Record 기록 전`].filter(Boolean).join(' · ')}
+              </p>
+            )}
+            <p className="mt-2 text-[13px] text-[#6b6880]">이 등록은 이미 강사와 정규 수업이 있어요. 시간을 바꾸려면 학생 상세의 [정규 일정 수정]을, 강사를 바꾸려면 운영진에게 알려 주세요. 여기서는 확인 완료만 기록해요.</p>
+            {currentDone ? (
+              <Link href={home} className="mt-3 flex min-h-[48px] items-center justify-center rounded-[12px] bg-[#e3f6ea] text-[15px] font-bold text-[#1e7a46]">✓ 기록했어요 — 처리할 일로</Link>
+            ) : (
+              <div className="mt-3 grid gap-2">
+                <button type="button" disabled={saving || !confirmCurrent} onClick={async () => {
+                  setErr('');
+                  setSaving(true);
+                  try { await confirmCurrent!(); setCurrentDone(true); } catch (e) { setErr(e instanceof Error ? e.message : '기록하지 못했어요.'); } finally { setSaving(false); }
+                }} className="min-h-[52px] rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
+                  {saving ? '기록 중…' : '수업 컨펌 완료 (강사·학생에게 확인함)'}
+                </button>
+                <button type="button" onClick={() => setShowNew(true)} className="min-h-[44px] text-[13.5px] font-semibold text-[#55526a] underline">다른 강사·시간으로 새 일정안을 만들어야 해요</button>
+              </div>
+            )}
+          </Card>
+        )}
+        {hasCurrent && !showNew ? null : view ? (
+          <Card title={view.state === 'proposed' ? '강사 답 대기' : '확정 · 양쪽에 안내를 보내 주세요'}>
+            <PlanCard view={view} handlers={handlers} proposalCopied={copiedProposal} />
+            {view.state === 'confirmed' && view.tutorNotice?.status === 'sent' && view.studentNotice?.status === 'sent' && (
+              <Link href={home} className="mt-3 flex min-h-[48px] items-center justify-center rounded-[12px] bg-[#e3f6ea] text-[15px] font-bold text-[#1e7a46]">
+                ✓ 끝 — 처리할 일로
+              </Link>
+            )}
+          </Card>
+        ) : (
+          <>
+            <Card title="1. 강사">
+              <TutorPicker
+                tutors={tutors}
+                selectedId={tutorId}
+                onSelect={(id) => (id !== tutorId ? (setTutorId(id), setSlots([]), setFirstPick('')) : null)}
+                week={week}
+                durationMin={info.durationMin}
+                wish={[]}
+                filter={filter}
+                setFilter={setFilter}
+                onProfile={setProfile}
+              />
+            </Card>
+            {tutor && (
+              <Card title={`2. 시간 ${slots.length}/${info.weeklyCount}`}>
+                <div className="mb-3">
+                  <Legend />
+                </div>
+                <WeekCalendar tutor={tutor} week={week} today={today} slots={slots} onToggle={toggle} wish={[]} studentTz={info.timezone} durationMin={info.durationMin} onWeek={setWeekStart} />
+                {msg && <p className="mt-2 text-[13px] text-[#9a5b00]">{msg}</p>}
+              </Card>
+            )}
+            {tutor && enough && firstDate && (
+              <Card title="3. 첫 수업일">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <DateInput value={firstPick || firstDate} onChange={(v) => setFirstPick(v)} aria-label="첫 수업일" className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]" />
+                  <span className="text-[13px] text-[#6b6880]">{dayLabel(firstDate)}</span>
+                </div>
+                {firstDateWarnings(firstDate, today, info.startWish).map((w) => <p key={w} className="mb-1 text-[13px] text-[#9a5b00]">{w}</p>)}
+                <div className="flex flex-wrap gap-1.5">
+                  {changed.length === 0 && candidates.map((c) => (
+                    <button
+                      key={c.date}
+                      type="button"
+                      onClick={() => setFirstPick(c.date)}
+                      className={`min-h-[40px] rounded-full border px-3 text-[13.5px] ${c.date === firstDate ? 'border-[#7d5ffb] bg-[#efebff] font-semibold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
+                    >
+                      {dayLabel(c.date)} {c.issues === 0 ? '✓' : `· ${c.issues}회 예약 불가`}
+                    </button>
+                  ))}
+                </div>
+                {lessonPlan && (
+                  <div className="mt-3 rounded-[12px] border border-[#ebe8f3] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <b className="text-[14px] text-[#1d1b2b]">특정 수업 날짜 변경</b>
+                      <span className="text-[12.5px] text-[#6b6880]">(선택 · 변경권 차감 없음)</span>
+                      <span className="flex-1" />
+                      <button type="button" onClick={() => setSheetOpen(true)} className="min-h-[40px] rounded-[10px] border-[1.5px] border-[#7d5ffb] bg-white px-3 text-[13.5px] font-bold text-[#4b33c4]">
+                        특정 수업 날짜 변경{changed.length ? ` · ${changed.length}건` : ''}
+                      </button>
+                    </div>
+                    {lessonPlan.extraFirst && <p className="mt-2 text-[13px] text-[#1d1b2b]">1회 {dayLabel(lessonPlan.lessons[0].date)} {lessonPlan.lessons[0].time} (한국 시간) · 첫 수업</p>}
+                    {changed.map((l) => (
+                      <p key={l.key} className="mt-1 text-[13px] text-[#1d1b2b]">
+                        {l.n}회 <s className="text-[#9a97a8]">{dayLabel(l.original!.date)} {l.original!.time}</s> → <b>{dayLabel(l.date)} {l.time}</b> (한국 시간)
+                      </p>
+                    ))}
+                    {lessonPlan.problems.map((p) => (
+                      <p key={p} className="mt-1 text-[13px] text-[#b3261e]">
+                        {p}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {sheetOpen && lessonPlan && <ChangeSheet plan={lessonPlan} issues={listIssues} tutor={tutor} onEdit={setEdit} onClose={() => setSheetOpen(false)} />}
+                {plan && plan.issues.length > 0 && (
+                  <div className="mt-3 rounded-[10px] bg-[#fdecec] px-3 py-2.5 text-[13px]">
+                    <p className="font-bold text-[#b3261e]">예약 불가 {new Set(plan.issues.map((i) => i.kstDate)).size}회</p>
+                    <ul className="mt-1 space-y-1">
+                      {[...new Map(plan.issues.map((i) => [i.kstDate, i])).values()].map((i) => (
+                        <li key={i.kstDate} className="text-[#1d1b2b]">
+                          {i.seq}회 {dayLabel(i.kstDate)} {i.kstTime} (한국 시간) — <span className="text-[#b3261e]">{plan.issues.filter((x) => x.kstDate === i.kstDate).map((x) => issueText(x.reason)).join(' · ')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </Card>
+            )}
+            {draft && (
+              <Card title="확인">
+                <TimeRows view={draft} />
+                <p className="mt-2 text-[13px] text-[#6b6880]">
+                  첫 수업 {dayLabel(draft.startDate)} · {draft.lessons}회 · {dayLabel(draft.startDate)}–{dayLabel(draft.endDate)}
+                </p>
+                <p className="mt-4 text-[15px] font-bold text-[#1d1b2b]">강사에게 물어봤나요?</p>
+                <div className="mt-2 grid gap-2">
+                  <details className="rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px]">
+                  <summary className="flex min-h-[44px] cursor-pointer list-none items-center font-semibold text-[#4b33c4]">
+                    강사 제안 문구 보기<span className="flex-1" /><span aria-hidden className="text-[#6b6880]">⌄</span>
+                  </summary>
+                  <p className="whitespace-pre-line rounded-[10px] bg-[#f6f5fa] p-2.5 pb-3 text-[#1d1b2b]">{proposalMessage(draft)}</p>
+                  <div className="h-2" />
+                </details>
+                  <button
+                    type="button"
+                    disabled={!ready || saving}
+                    onClick={() => save(false)}
+                    className="min-h-[52px] rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]"
+                  >
+                    {saving ? '저장 중…' : '아직 → 제안 문구 복사'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!ready || saving}
+                    onClick={() => save(true)}
+                    className="min-h-[52px] rounded-[12px] border-[1.5px] border-[#7d5ffb] bg-white text-[16px] font-bold text-[#4b33c4] disabled:opacity-50"
+                  >
+                    가능하대요 → 확정
+                  </button>
+                </div>
+              </Card>
+            )}
+          </>
+        )}
+        {err && <p className="rounded-[10px] bg-[#fdecec] px-3 py-2.5 text-[13.5px] text-[#b3261e]">{err}</p>}
+      </main>
+      {profile && <ProfileSheet tutor={profile} onClose={() => setProfile(null)} />}
+    </div>
+  );
+}

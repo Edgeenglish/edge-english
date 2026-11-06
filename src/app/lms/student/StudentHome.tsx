@@ -1,0 +1,1690 @@
+'use client';
+
+// 학생 마이페이지 A-1 (카드 쌓기형) — 휴대폰: 카드 순서대로 + 아래 탭 / PC: 왼쪽 메뉴 + 가운데 카드 + 오른쪽 현황·결제
+// 판정은 src/lms/student/home.ts (6시간 규칙은 rules/change.ts), 저장은 DB 함수(migration 2800, StudentActions).
+// ③ 학생 LMS (2026-10-28 대표): 휴무 안내에 한 번에 답(A안) · 보강 날짜는 달력에서 고르기 · 직접 취소
+// 미리보기(?demo=1)는 같은 화면에 브라우저 안에서만 흉내 내는 동작(fakeStore)을 넣음 — 저장·발송 없음
+
+import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import books from '@/data/books.json';
+import { homepageProfile } from '@/lms/admin/homepage-tutor';
+import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
+import { diffDays, formatInZone, hoursBetween, instantToKstDate, type KstDate } from '@/lms/rules/dates';
+import { MEET_MISSING_KO, meetRoomUrl } from '@/lms/rules/meet';
+import type { PreviewExtras } from '@/lms/student/fake-data';
+import type { LeaveRow, MakeupOption, MakeupRight, Reminders, StudentActions, StudentView } from '@/lms/student/live';
+import {
+  cancelManySummary,
+  cancelPreview,
+  creditPeriodFor,
+  creditsForDate,
+  lessonsLeft,
+  nextLesson,
+  PAYMENT_METHOD_LABEL,
+  pointsHistory,
+  regularLessonsLeft,
+  planCancelMany,
+  renewalPrompt,
+  REQUEST_STATUS_LABEL,
+  studentTodos,
+  type CancelResult,
+  type CreditPeriod,
+  type PaymentSummary,
+  type RenewalState,
+  type RequestStatus,
+  type StudentLesson,
+  type StudentRequest,
+} from '@/lms/student/home';
+
+type Tab = 'home' | 'schedule' | 'requests' | 'materials' | 'me';
+type Right = Pick<MakeupRight, 'lessonId' | 'itemId' | 'compId'>;
+type Overlay =
+  | null
+  | { kind: 'request'; id: string }
+  | { kind: 'payments' }
+  | { kind: 'points' }
+  | { kind: 'consent' }
+  | { kind: 'cancel'; lessonId: string | null }
+  | { kind: 'leave' }
+  | { kind: 'profile'; name: string }
+  | { kind: 'makeup'; right: Right | null; canceled?: boolean }
+  | { kind: 'credits' };
+
+const TABS: { key: Tab; label: string; icon: string }[] = [
+  { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
+  { key: 'schedule', label: '일정', icon: 'M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8 2v4M16 2v4M3 10h18' },
+  { key: 'requests', label: '신청 내역', icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' },
+  { key: 'materials', label: '학습자료', icon: 'M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z' },
+  { key: 'me', label: '내 정보', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1.5-4 4.5-6 8-6s6.5 2 8 6' },
+];
+
+const STATUS_STYLE: Record<RequestStatus, string> = {
+  tutor_reviewing: 'bg-[#fff1d6] text-[#8a5300]',
+  admin_reviewing: 'bg-[#fff1d6] text-[#8a5300]',
+  rescheduling: 'bg-[#fdecea] text-[#7a1d12]',
+  confirmed: 'bg-[#e3f5ea] text-[#13623a]',
+  canceled: 'bg-[#eeecf4] text-[#55526a]',
+  completed: 'bg-[#e3f5ea] text-[#13623a]',
+};
+
+const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
+
+// 학생 화면 시각은 학생이 사는 곳 시간대로 (11/3 대표: 해외 학생은 본인 나라 시간으로 캘린더). 국내 학생은 한국 시간 그대로.
+// 화면 하나에 학생 한 명이라 렌더할 때 정해 둠. 판정(6시간 규칙·수강 종료일 23:59 KST)은 그대로
+let VIEW_TZ = 'Asia/Seoul';
+/** 시각 기준 이름: '한국 시간' / 'Toronto 시간' */
+const zoneText = () => (VIEW_TZ === 'Asia/Seoul' ? '한국 시간' : `${(VIEW_TZ.split('/').pop() ?? VIEW_TZ).replace(/_/g, ' ')} 시간`);
+/** 이름은 예전 그대로(kst) — 보여 주는 시간대는 VIEW_TZ */
+function kst(d: Date) {
+  const f = formatInZone(d, VIEW_TZ);
+  return { md: `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}`, wd: wdOf(f.date), time: f.time, date: f.date };
+}
+/** 'YYYY-MM-DD' 의 요일 (그 날짜 글자 그대로 — 시간대 바꿈 없음) */
+const wdOf = (date: string) => '일월화수목금토'[new Date(`${date.slice(0, 10)}T00:00:00Z`).getUTCDay()];
+const fmtDate = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+
+/*
+ * 시각 표기 원칙 (2026-11-03 대표: '어디 기준 시간인지 빠지면 절대 안 됨'):
+ * 학생 화면의 모든 시각 = 학생 시간 + 기준 이름, 해외 학생은 한국 시간도 같이 (학생이 끌 수 있음).
+ * 국내 학생은 학생 시간 = 한국 시간이라 '(한국 시간)' 하나.
+ */
+let SHOW_KST = true;
+const overseas = () => VIEW_TZ !== 'Asia/Seoul';
+/** 한국 시간 짝: '한국 17:00' (학생 날짜와 다르면 '한국 11/3 (화) 23:00'). 국내 학생이거나 꺼 두면 null */
+function kstPair(d: Date): string | null {
+  if (!overseas() || !SHOW_KST) return null;
+  const v = formatInZone(d, VIEW_TZ);
+  const k = formatInZone(d, 'Asia/Seoul');
+  return `한국 ${v.date === k.date ? '' : `${fmtDate(k.date as KstDate)} (${wdOf(k.date)}) `}${k.time}`;
+}
+/** '(Sydney 시간 · 한국 17:00)' / '(한국 시간)' */
+const zoneTag = (d: Date) => {
+  const p = kstPair(d);
+  return `(${zoneText()}${p ? ` · ${p}` : ''})`;
+};
+/** 한국 시간 같이 보기 (해외 학생만, 기기에 저장) */
+const KstCtx = createContext<{ on: boolean; set: (v: boolean) => void }>({ on: true, set: () => {} });
+function KstToggle() {
+  const c = useContext(KstCtx);
+  if (!overseas()) return null;
+  return (
+    <label className="flex min-h-[40px] w-fit items-center gap-2 text-[13.5px] font-semibold text-[#55526a]">
+      <input type="checkbox" checked={c.on} onChange={(e) => c.set(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3df0]" />
+      한국 시간 같이 보기
+    </label>
+  );
+}
+/**
+ * 수강 종료(재등록 마감) 시각: 기준은 한국 종료일 23:59 (POL-RN-01). 국내 학생 '11/30 23:59',
+ * 해외 학생은 본인 시간으로 바꿔 '11/30 09:59 (Toronto 시간)' (11/3 대표·ChatGPT: 종료 시각도 현지로 정확히)
+ */
+const endText = (d: KstDate) => {
+  if (VIEW_TZ === 'Asia/Seoul') return `${fmtDate(d)} 23:59 (한국 시간)`;
+  const at = new Date(`${d}T23:59:00+09:00`);
+  const k = kst(at);
+  return `${k.md} ${k.time} ${zoneTag(at)}`;
+};
+const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
+
+function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {/* globals.css 의 '* { color }' 때문에 path 가 부모 색을 잃지 않도록 */}
+      <path d={d} style={{ color: 'inherit' }} />
+    </svg>
+  );
+}
+
+
+// 같은 노쇼 수업이라도 원래 수업 보강과 무료 보상수업은 다른 권리 (4100)
+const sameRight = (a: Right, b: Right) =>
+  a.compId || b.compId ? !!a.compId && a.compId === b.compId : (a.lessonId !== null && a.lessonId === b.lessonId) || (a.itemId !== null && a.itemId === b.itemId);
+const whenText = (d: Date) => {
+  const k = kst(d);
+  return `${k.md} (${k.wd}) ${k.time} ${zoneTag(d)}`;
+};
+/** 보강 권리의 원래 수업: 시트에서 옮긴 보강은 날짜만 (00:00 으로 보이지 않게, 3700) */
+const rightText = (m: { originalAt: Date; timeKnown?: boolean }) => {
+  if (m.timeKnown !== false) return whenText(m.originalAt);
+  return kstDateOnly(m.originalAt);
+};
+/** 시트에서 옮긴 수업(시각 모름): 한국 날짜만 — 해외 학생 날짜로 바꾸면 하루 어긋날 수 있음 */
+function kstDateOnly(d: Date) {
+  const k = formatInZone(d, 'Asia/Seoul').date;
+  return `${fmtDate(k as KstDate)} (${wdOf(k)})${overseas() ? ' 한국 날짜' : ''}`;
+}
+/** 보강할 수업 이름: 날짜·시간 + 강사 (대표 11/2: 어떤 수업인지 분명하게) */
+const rightLabel = (m: { originalAt: Date; timeKnown?: boolean; tutor?: string | null }) => `${rightText(m)}${m.tutor ? ` ${m.tutor} 강사님` : ''} 수업`;
+/** 보강 권리 제목: 원래 수업 보강 / 무료 보상수업 (4100: 같은 노쇼 수업에서 각각 신청) */
+const rightTitle = (m: MakeupRight) => (m.compId ? '무료 보상수업 1회' : `${rightLabel(m)}에 대한 보강`);
+/** 제목 아래 사유 한 줄 */
+const rightReason = (m: MakeupRight) =>
+  m.compId
+    ? `사유: ${rightLabel(m)} 강사 노쇼${m.useUntil ? ` · ${endText(m.useUntil)}까지` : ''}`
+    : m.tutorNoShow
+      ? '사유: 강사 노쇼 · 보상수업 1회 추가'
+      : null;
+/**
+ * 수업까지 남은 때 (홈 '다음 수업'·수업 변경 창 같은 글, 11/2 점검 ④): 24시간 안이면 'n시간 후', 아니면 한국 날짜 차이로 '내일'·'n일 후'.
+ * 판정(6시간 규칙 등) 계산은 그대로 — 화면 글만 하나로
+ */
+function untilText(now: Date, at: Date): string {
+  const hours = hoursBetween(now, at);
+  if (hours < 24) return `${Math.max(1, Math.floor(hours))}시간 후`;
+  const days = diffDays(formatInZone(now, VIEW_TZ).date, kst(at).date);
+  return days === 1 ? '내일' : `${days}일 후`;
+}
+
+export default function StudentHome(props: {
+  nowIso: string;
+  initial: StudentView;
+  actions: StudentActions;
+  /** 미리보기에만: 교재·결제 내역·동의 할 일 (실제 데이터 연결 전 항목) */
+  extras?: PreviewExtras;
+  preview: boolean;
+  adminBar?: React.ReactNode;
+  onLogout?: () => void;
+}) {
+  const { actions, extras, preview } = props;
+  const now = useMemo(() => new Date(props.nowIso), [props.nowIso]);
+  const [s, setView] = useState<StudentView>(props.initial);
+  VIEW_TZ = s.timezone || props.initial.timezone || 'Asia/Seoul';
+  const [showKst, setShowKstState] = useState(true);
+  useEffect(() => {
+    try { if (localStorage.getItem('lms_student_kst') === '0') setShowKstState(false); } catch { /* 저장 안 되는 브라우저 */ }
+  }, []);
+  const setShowKst = (v: boolean) => {
+    setShowKstState(v);
+    try { localStorage.setItem('lms_student_kst', v ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
+  };
+  SHOW_KST = showKst;
+  const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
+  const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
+  const [tab, setTab] = useState<Tab>('home');
+  const [overlay, setOverlay] = useState<Overlay>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [reminders, setReminders] = useState<Reminders | null>(null);
+  /** 저장은 됐는데 화면을 다시 읽지 못함 (R-02) → 위에 안내 + [다시 읽기] */
+  const [stale, setStale] = useState<string | null>(null);
+  /** 여러 수업 취소가 중간에 멈춤 → 남은 수업만 다시 고른 상태로 창 유지 (R-02) */
+  const [retry, setRetry] = useState<{ ids: string[]; notice: string } | null>(null);
+
+  const lessons = s.lessons;
+  // 강사 휴무로 못 들은 수업도 학생 화면에서는 '보강' (2026-10-28 대표). DB 구분(lms_is_leave_postponed)은 그대로
+  const openRights = s.makeupRights.filter((m) => !m.requested);
+  // 휴무 처리 중인 시트 휴가 수업(수업 줄 없음)도 남은 수업 — 보강 신청 목록에서만 빠짐 (3700, 대시보드와 같은 수)
+  const makeupsOwed = s.makeupRights.length + (s.leavePending?.length ?? 0);
+  const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
+  const todos = studentTodos({ pendingConsents: consents });
+  const next = nextLesson(lessons, now);
+  const left = lessonsLeft(lessons, now, makeupsOwed);
+  // 결제 확인 전·강사 배정 전(수업이 아직 없음)에는 '수업이 0회 남았어요' 재등록 안내를 띄우지 않음 (QA-05)
+  const notStarted = !s.paid || (s.enrollmentStatus != null && s.enrollmentStatus !== 'active' && lessons.length === 0);
+  const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed);
+  const endDate = s.finalEndDate;
+  const dLeft = endDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, endDate) : 0;
+  const points = pointsHistory(s.points);
+  const textbook = extras?.textbook ?? null;
+  const book = textbook && books.find((b) => b.title.replace(/\s/g, '') === textbook.title.replace(/\s/g, ''));
+  const holidays = useMemo(() => new Set(s.holidays), [s.holidays]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
+    actions.reminders().then(setReminders, () => setReminders(null));
+  }, [actions]);
+
+  async function saveReminder(change: { regular?: boolean; makeup?: boolean }) {
+    setBusy(true);
+    try {
+      setReminders(await actions.reminders(change));
+      say('저장했어요.');
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '저장하지 못했어요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function say(msg: string) {
+    setToast(`${msg}${preview ? ' (미리보기: 실제로 저장되지 않아요)' : ''}`);
+  }
+
+  /** 저장 → 화면 다시 읽기. 실패하면 DB 오류 문구 그대로 */
+  async function run(work: () => Promise<unknown>, done: string): Promise<StudentView | null> {
+    setBusy(true);
+    try {
+      await work();
+      const v = await actions.reload();
+      setView(v);
+      say(done);
+      return v;
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '저장하지 못했어요.');
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmCancel(lesson: StudentLesson) {
+    let allowed = false;
+    const v = await run(async () => {
+      allowed = (await actions.cancel(lesson.id)).makeup_allowed;
+    }, '수업을 취소했어요.');
+    if (!v) return;
+    const right = v.makeupRights.find((m) => m.lessonId === lesson.id && !m.requested);
+    setOverlay(allowed && right ? { kind: 'makeup', right, canceled: true } : null);
+  }
+  /**
+   * 여러 수업 한 번에 취소 (추가 요청 2): 시간순으로 하나씩 DB 판정 — 미리 보기(기간별 변경권 차례 차감)와 같은 순서.
+   * 하나가 실패하면 거기서 멈추되(R-02) 그때까지 저장된 결과를 반드시 다시 읽고, 성공·실패를 나눠 알리고, 남은 수업만 다시 고른 상태로 창을 둔다.
+   * 완료 문구는 예상치가 아니라 저장 결과로 (R-01)
+   */
+  async function confirmCancelMany(ls: StudentLesson[]) {
+    const sorted = [...ls].sort((a, b) => +a.startsAt - +b.startsAt);
+    const done: { lesson: StudentLesson; r: CancelResult }[] = [];
+    let failed: { lesson: StudentLesson; message: string } | null = null;
+    setBusy(true);
+    setRetry(null);
+    try {
+      for (const l of sorted) {
+        try {
+          done.push({ lesson: l, r: await actions.cancel(l.id) });
+        } catch (e) {
+          failed = { lesson: l, message: e instanceof Error ? e.message : '오류' };
+          break;
+        }
+      }
+      // 저장된 것이 있으면(또는 실패했어도) 서버 상태를 다시 읽음 — 재조회가 실패하면 성공으로 보이지 않게 안내 + [다시 읽기]
+      let v: StudentView | null = null;
+      try {
+        v = await actions.reload();
+        setView(v);
+        setStale(null);
+      } catch {
+        setStale(`${done.length}회 취소는 저장됐지만 화면을 다시 읽지 못했어요. [다시 읽기]를 눌러 확인해 주세요.`);
+      }
+      const remaining = v
+        ? [...new Map(done.map((d) => { const p = creditPeriodFor(v!.creditPeriods, instantToKstDate(d.lesson.startsAt)); return [p?.start ?? '', { start: p?.start ?? null, left: p ? p.left : v!.creditsLeft }] as const; })).values()]
+        : [];
+      const summary = done.length > 0 ? cancelManySummary(done.map((d) => d.r), remaining) : '';
+      if (!failed) {
+        say(summary);
+        setOverlay(null);
+        return;
+      }
+      const rest = sorted.slice(sorted.findIndex((l) => l.id === failed!.lesson.id));
+      const restLeft = v ? rest.filter((l) => v!.lessons.some((x) => x.id === l.id && x.state === 'scheduled')) : rest;
+      const notice = `${done.length > 0 ? `${done.length}회는 취소했어요. ` : ''}${whenText(failed.lesson.startsAt)} 수업은 취소하지 못했어요: ${failed.message}${restLeft.length > 0 ? ` 아래 ${restLeft.length}회는 처리되지 않았어요. 다시 취소하려면 선택을 확인하고 버튼을 눌러 주세요.` : ''}`;
+      // 남은 수업이 그새 다른 경로로 처리돼 다시 할 것이 없으면, 성공 요약 뒤에 그 사실만 덧붙임
+      setToast(done.length > 0 ? (restLeft.length > 0 ? summary : `${summary} · ${whenText(failed.lesson.startsAt)} 수업은 ${failed.message}`) : notice);
+      if (restLeft.length > 0) {
+        setRetry({ ids: restLeft.map((l) => l.id), notice });
+        setOverlay({ kind: 'cancel', lessonId: null });
+      } else {
+        setOverlay(null);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function answerLeave(answer: 'ok' | 'makeup') {
+    const ids = leaveAsk.map((x) => x.id);
+    const v = await run(() => actions.answerLeave(ids, answer), answer === 'ok' ? '확정했어요.' : '기존 강사님과 수업하기로 정했어요.');
+    if (!v || answer === 'ok') return;
+    const right = v.makeupRights.find((m) => !m.requested && leaveAsk.some((x) => (x.lessonId && x.lessonId === m.lessonId) || (x.itemId && x.itemId === m.itemId)));
+    if (right) setOverlay({ kind: 'makeup', right });
+  }
+
+  const nextFull = next && s.lessons.find((l) => l.id === next.id);
+  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
+
+  const renewalCard = prompt && (
+    <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
+      <div className="lg:flex-1">
+        <h2 className="text-[15px] font-bold text-[#5c3b00]">수업이 {prompt.left}회 남았어요</h2>
+        {prompt.mode === 'request' ? (
+          <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
+            종료일 {endText(endDate)}까지 재등록 결제하면 남은 수업을 다음 등록으로 옮길 수 있고, 지금 고정 시간도 유지돼요.
+          </p>
+        ) : (
+          <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
+            <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {endText(endDate)}예요.
+          </p>
+        )}
+      </div>
+      {/* 재등록 신청 저장은 아직 DB에 없음 → 미리보기에서만 버튼 */}
+      {preview && prompt.mode === 'request' && (
+        <button
+          type="button"
+          onClick={() => {
+            setRenewal('requested');
+            say('재등록을 신청했어요.');
+          }}
+          className="min-h-[46px] rounded-[12px] bg-[#1b1442] px-5 text-[15px] font-bold text-white"
+        >
+          재등록 신청
+        </button>
+      )}
+      {prompt.mode === 'awaiting_payment' && <span className="justify-self-start rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#8a5300]">결제 확인 대기</span>}
+    </section>
+  );
+
+  const statusTiles = (
+    <section aria-label="수강 현황" className="grid grid-cols-3 gap-2">
+      <Tile label="남은 수업" value={notStarted ? '—' : `${left.total}`} unit={notStarted ? '' : '회'} sub={notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
+      <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중 ›`} onClick={() => setOverlay({ kind: 'credits' })} />
+      <Tile
+        label="수강 종료"
+        value={!endDate ? '-' : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'}
+        sub={!endDate ? '' : VIEW_TZ === 'Asia/Seoul' ? `${fmtDate(endDate)} (${kst(new Date(`${endDate}T12:00:00+09:00`)).wd})` : `${endText(endDate)}까지`}
+      />
+    </section>
+  );
+
+  const quick = (
+    <section aria-label="빠른 신청" className="grid grid-cols-2 gap-2">
+      <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: null })} className={`${card} grid content-start gap-1.5 p-4 text-left`}>
+        <Icon d={TABS[1].icon} className="h-[22px] w-[22px] text-[#5b3df0]" />
+        <span className="text-[15px] font-bold">수업 변경·취소</span>
+        <span className="text-[12px] leading-[1.55] text-[#55526a]">
+          6시간 전: 변경권 1개 사용 · 보강 가능
+          <br />
+          6시간 이내: 수업 1회 차감 · 보강 불가 · 변경권 유지
+        </span>
+      </button>
+      <button
+        type="button"
+        disabled={openRights.length === 0}
+        onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })}
+        className={`${card} grid content-start gap-1.5 p-4 text-left disabled:opacity-50`}
+      >
+        <Icon d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" className="h-[22px] w-[22px] text-[#5b3df0]" />
+        <span className="text-[15px] font-bold">보강 신청</span>
+        <span className="text-[12px] leading-[1.55] text-[#55526a]">
+          보강할 수업 {openRights.filter((m) => !m.compId).length}회
+          {openRights.some((m) => m.compId) && (
+            <>
+              <br />
+              무료 보상수업 {openRights.filter((m) => m.compId).length}회
+            </>
+          )}
+        </span>
+      </button>
+    </section>
+  );
+
+  const requestList = s.requests.length > 0 && (
+    <section aria-label="신청 진행 상태" className={`${card} grid gap-1 p-4`}>
+      <div className="flex items-center justify-between">
+        <h2 className="text-[15px] font-bold">신청 진행 상태</h2>
+        <button type="button" onClick={() => setTab('requests')} className="min-h-[36px] text-[13px] text-[#4b2fd6] underline">
+          전체 ›
+        </button>
+      </div>
+      {s.requests.slice(0, 3).map((r) => (
+        <RequestRow key={r.id} r={r} onOpen={() => setOverlay({ kind: 'request', id: r.id })} />
+      ))}
+    </section>
+  );
+
+  const payBox = (
+    <section aria-label="수강과 결제" className={`${card} px-4 pb-1.5 pt-4`}>
+      <h2 className="mb-2 text-[15px] font-bold">수강·결제·적립금</h2>
+      <LinkRow label="수강권" value={s.product} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
+      <LinkRow label="결제" value={s.paid ? `결제 완료${s.confirmedOn ? ` (${fmtDate(s.confirmedOn)})` : ''}` : '결제 확인 중'} valueClass={s.paid ? 'text-[#13623a]' : 'text-[#8a5300]'} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
+      <LinkRow label="적립금 내역" value={won(points.balance)} valueClass="font-bold" onClick={() => setOverlay({ kind: 'points' })} />
+    </section>
+  );
+
+  // 할 일: 학생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
+  const todoItems = (
+    <>
+      {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
+      {openRights.length > 0 && <TodoBar n={openRights.length} text="보강 날짜 고르기" onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
+      {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
+    </>
+  );
+  const todoCount = (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
+  const todoBars = todoCount > 0 && (
+    <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
+      <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
+        할 일 <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
+      </h2>
+      <div className="divide-y divide-[#f3e6c4]">{todoItems}</div>
+    </section>
+  );
+
+  const upcoming = lessons.filter((l) => l.state === 'scheduled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const canceledAhead = lessons.filter((l) => l.state === 'canceled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const leaveVisible = s.leave.length > 0;
+  // 휴무 처리 확정 전 수업(일정 조율 중)은 입장 링크 없음 — 휴무 강사 링크로 들어가지 않게
+  // 수업 링크는 회의실 주소(meet.google.com/xxx-xxxx-xxx)일 때만 (R-05) — 홈페이지 주소는 링크로 내보내지 않음
+  const meetOf = (id: string) => { const x = s.lessons.find((l) => l.id === id); return x && !x.leaveOpen ? meetRoomUrl(x.meetUrl) : null; };
+  // 강사마다 수업 링크가 다름 → 앞으로 수업하는 강사별로 (대체강사 포함)
+  const meetLinks = [...new Map(upcoming.map((l) => [l.tutorName, meetOf(l.id)] as const).filter(([, u]) => u)).entries()];
+
+  return (
+    <KstCtx.Provider value={{ on: showKst, set: setShowKst }}>
+    <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
+      <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
+        {props.adminBar ? (
+          <a href="/lms/admin" className="px-3 pb-4 pt-1 text-[20px] font-bold text-[#09246b]">
+            Edge<span className="text-[#5b3df0]">English</span>
+          </a>
+        ) : (
+          <div className="px-3 pb-4 pt-1 text-[20px] font-bold text-[#09246b]">
+            Edge<span className="text-[#5b3df0]">English</span>
+          </div>
+        )}
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            aria-current={tab === t.key ? 'page' : undefined}
+            className={`flex min-h-[46px] items-center gap-2.5 rounded-[12px] px-3 text-left text-[15px] ${tab === t.key ? 'bg-[#efeaff] font-bold text-[#3a22b0]' : ''}`}
+          >
+            <Icon d={t.icon} />
+            {t.label}
+          </button>
+        ))}
+        <span className="px-3 pt-5 text-[13px] text-[#55526a]">{s.name} 님</span>
+        {props.onLogout && (
+          <button type="button" onClick={props.onLogout} className="mx-3 mt-1 min-h-[36px] text-left text-[13px] text-[#55526a] underline">
+            로그아웃
+          </button>
+        )}
+      </nav>
+
+      <div className="min-w-0 flex-1 pb-24 lg:pb-0">
+        {props.adminBar && <div className="px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}</div>}
+        <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
+          {props.adminBar ? (
+            <a href="/lms/admin" className="text-[17px] font-bold text-[#09246b]">
+              Edge<span className="text-[#5b3df0]">English</span>
+            </a>
+          ) : (
+            <span className="text-[17px] font-bold text-[#09246b]">
+              Edge<span className="text-[#5b3df0]">English</span>
+            </span>
+          )}
+          <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
+        </header>
+
+        {preview && (
+          <div className="mx-4 mb-3 grid gap-2 rounded-[12px] bg-[#fff8d6] px-3 py-2.5 text-[12.5px] text-[#5c4a00] lg:mx-0">
+            <p>가상 데이터 미리보기예요. 눌러도 실제로 저장·발송되지 않아요.</p>
+            <div className="flex flex-wrap gap-1.5">
+              <PreviewChip on={consents.length > 0} onClick={() => setConsents(consents.length ? [] : (extras?.pendingConsents ?? []))}>
+                할 일 {consents.length ? '있음' : '없음'}
+              </PreviewChip>
+              {(['not_requested', 'requested', 'payment_confirmed'] as const).map((r) => (
+                <PreviewChip key={r} on={renewal === r} onClick={() => setRenewal(r)}>
+                  재등록 {r === 'not_requested' ? '미신청' : r === 'requested' ? '신청함' : '결제 확인'}
+                </PreviewChip>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tab === 'home' && (
+          <div className="grid gap-3.5 px-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5 lg:px-0">
+            <div className="grid min-w-0 gap-3.5">
+              {todoBars}
+              {nextCard}
+              {renewalCard}
+              <div className="lg:hidden">{statusTiles}</div>
+              {quick}
+              {leaveVisible && leaveAsk.length === 0 && (
+                <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
+                  <span className="font-semibold">담당 강사님 휴무 안내</span>
+                  <span className="text-[#8b88a0]">›</span>
+                </button>
+              )}
+              {requestList}
+              <div className="lg:hidden">{payBox}</div>
+            </div>
+            <aside className="hidden gap-4 lg:grid">
+              {statusTiles}
+              {payBox}
+            </aside>
+          </div>
+        )}
+
+        {tab === 'schedule' && (
+          <TabPage title="일정">
+            <div className="flex flex-wrap items-center justify-between gap-x-3">
+              <p className="text-[13px] text-[#55526a]">{zoneText()} 기준이에요.{overseas() && showKst ? ' 한국 시간도 같이 보여요.' : ''}</p>
+              <KstToggle />
+            </div>
+            {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p }))]
+              .sort((a, b) => a.at.getTime() - b.at.getTime())
+              .map(({ l, p }) => p ? (
+              // 휴무 처리 중인데 수업 줄이 아직 없는 수업 (3700, 대표 11/2: 휴무 안내에는 보이는데 일정에 없음)
+              <div key={p.id} className={`${card} p-4`}>
+                <p className="text-[15px] font-semibold">{whenText(p.startsAt)}</p>
+                <p className="text-[12.5px] text-[#6b6880]">{Math.round((p.endsAt.getTime() - p.startsAt.getTime()) / 60000)}분</p>
+                <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
+              </div>
+            ) : l && (
+              <div key={l.id} className={`${card} flex items-center justify-between gap-3 p-4`}>
+                <div className="min-w-0">
+                  <p className="text-[15px] font-semibold">{whenText(l.startsAt)}</p>
+                  <p className="text-[12.5px] text-[#6b6880]">
+                    {l.minutes}분{s.lessons.find((x) => x.id === l.id)?.leaveOpen ? '' : ` · ${l.tutorName}`} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
+                  </p>
+                  {s.lessons.find((x) => x.id === l.id)?.substitute && (
+                    <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 대체강사 수업</p>
+                  )}
+                  {s.lessons.find((x) => x.id === l.id)?.leaveOpen && (
+                    <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
+                  )}
+                  {meetOf(l.id) && (
+                    <a href={meetOf(l.id)!} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold text-[#4b2fd6] underline">
+                      수업 링크 (Google Meet)
+                    </a>
+                  )}
+                  {l.kind === 'makeup' && <AddToCalendar ev={{ title: '엣지영어 보강 수업', start: l.startsAt, end: new Date(l.startsAt.getTime() + l.minutes * 60000), details: meetOf(l.id) }} google="구글 캘린더에 추가" file="애플·삼성 캘린더에 추가" />}
+                </div>
+                <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: l.id })} className="min-h-[44px] rounded-[12px] border border-[#d9d5e8] px-3 text-[14px] font-semibold">
+                  변경·취소
+                </button>
+              </div>
+            ))}
+            {/* 앞으로의 취소 수업은 '지난 수업'과 따로 (대표 10/30) */}
+            {canceledAhead.length > 0 && <h2 className="pt-2 text-[14px] font-bold text-[#55526a]">취소된 수업</h2>}
+            {canceledAhead.map((l) => (
+              <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">
+                <span>{whenText(l.startsAt)}</span>
+                <span className="text-[#6b6880]">취소</span>
+              </div>
+            ))}
+            <h2 className="pt-2 text-[14px] font-bold text-[#55526a]">지난 수업</h2>
+            {lessons
+              .filter((l) => l.startsAt.getTime() <= now.getTime())
+              .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
+              .map((l) => (
+                <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">
+                  <span>{whenText(l.startsAt)}</span>
+                  <span className="text-[#6b6880]">{l.state === 'done' ? (s.lessons.find((x) => x.id === l.id)?.tutorNoShow ? '강사 노쇼' : '진행') : l.state === 'canceled' ? '취소' : l.startsAt.getTime() + l.minutes * 60_000 > now.getTime() ? '진행 중' : '기록 전'}</span>
+                </div>
+              ))}
+          </TabPage>
+        )}
+
+        {tab === 'requests' && (
+          <TabPage title="신청 내역">
+            {s.requests.length > 0 && (
+              <section className={`${card} grid gap-1 p-4`}>
+                {s.requests.map((r) => (
+                  <RequestRow key={r.id} r={r} onOpen={() => setOverlay({ kind: 'request', id: r.id })} />
+                ))}
+              </section>
+            )}
+            {openRights.length > 0 && (
+              <section className={`${card} grid gap-1 p-4`}>
+                {openRights.map((m) => (
+                  <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })}
+                    className="flex min-h-[56px] w-full items-center justify-between gap-2 border-b border-[#eeecf4] py-2 text-left last:border-0">
+                    <span>
+                      <span className="block text-[14px] font-semibold">{rightTitle(m)}</span>
+                      {rightReason(m) && <span className="block text-[12px] text-[#6b6880]">{rightReason(m)}</span>}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="whitespace-nowrap rounded-full bg-[#fff1d6] px-2.5 py-1 text-[12px] font-semibold text-[#8a5300]">날짜 선택 필요</span>
+                      <span className="text-[#8b88a0]">›</span>
+                    </span>
+                  </button>
+                ))}
+              </section>
+            )}
+          </TabPage>
+        )}
+
+        {tab === 'materials' && (
+          <TabPage title="학습자료">
+            {textbook && (
+              <section className={`${card} grid gap-3 p-4`}>
+                <p className="text-[13px] font-bold text-[#5b3df0]">지금 수업 교재</p>
+                <p className="text-[17px] font-bold">{textbook.title}</p>
+                <p className="text-[13px] text-[#55526a]">
+                  {book ? `${book.category} · ${book.level.join('·')}` : ''} · 지난 수업 Unit {textbook.lastUnit}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {book?.pdf && (
+                    <a href={book.pdf} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center rounded-[12px] bg-[#5b3df0] text-[14px] font-bold text-white">
+                      미리보기 열기
+                    </a>
+                  )}
+                  {book?.buyLink && (
+                    <a href={book.buyLink} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center rounded-[12px] border border-[#d9d5e8] text-[14px] font-semibold">
+                      교재 구매
+                    </a>
+                  )}
+                </div>
+              </section>
+            )}
+            <a href="/books" className={`${card} flex min-h-[52px] items-center justify-between px-4 text-[15px] font-semibold`}>
+              전체 교재 둘러보기 (홈페이지 교재 소개) <span className="text-[#8b88a0]">›</span>
+            </a>
+          </TabPage>
+        )}
+
+        {tab === 'me' && (
+          <TabPage title="내 정보">
+            {overseas() && (
+              <section className={`${card} grid gap-1 px-4 py-3`}>
+                <h2 className="text-[15px] font-bold">시간 표시</h2>
+                <p className="text-[13px] text-[#55526a]">모든 시간은 {zoneText()} 기준으로 보여요.</p>
+                <KstToggle />
+              </section>
+            )}
+            {meetLinks.length > 0 && (
+              <section className={`${card} grid gap-1 px-4 py-3`}>
+                <h2 className="text-[15px] font-bold">수업 링크</h2>
+                {meetLinks.map(([name, url]) => (
+                  <a key={name} href={url!} target="_blank" rel="noreferrer" className="flex min-h-[48px] items-center justify-between border-t border-[#eeecf4] text-[14px] first-of-type:border-0">
+                    <span>{name} 강사님</span>
+                    <span className="font-semibold text-[#4b2fd6]">Google Meet ›</span>
+                  </a>
+                ))}
+              </section>
+            )}
+            {reminders && (
+              <section className={`${card} grid px-4 pb-1.5 pt-3`}>
+                <h2 className="text-[15px] font-bold">수업 알림 메일</h2>
+                <p className="text-[13px] text-[#55526a]">수업 24시간 전 · 2시간 전</p>
+                {!reminders.hasEmail && <p className="mt-1 text-[13px] font-semibold text-[#c0392b]">등록된 이메일이 없어 메일을 받을 수 없어요.</p>}
+                <Switch label="정규 수업" on={reminders.regular} disabled={busy} onChange={(v) => saveReminder({ regular: v })} />
+                <Switch label="보강 수업" on={reminders.makeup} disabled={busy} onChange={(v) => saveReminder({ makeup: v })} />
+              </section>
+            )}
+            <section className={`${card} px-4 pb-1.5 pt-2`}>
+              {extras && <LinkRow label="결제 내역" value="" onClick={() => setOverlay({ kind: 'payments' })} />}
+              <LinkRow label="적립금 내역" value={won(points.balance)} onClick={() => setOverlay({ kind: 'points' })} />
+            </section>
+            {props.onLogout && (
+              <button type="button" onClick={props.onLogout} className="min-h-[44px] text-left text-[14px] text-[#55526a] underline">
+                로그아웃
+              </button>
+            )}
+          </TabPage>
+        )}
+      </div>
+
+      <nav aria-label="아래 메뉴" className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            aria-current={tab === t.key ? 'page' : undefined}
+            className={`flex min-h-[48px] flex-col items-center justify-center gap-0.5 text-[11px] ${tab === t.key ? 'font-bold text-[#5b3df0]' : 'text-[#55526a]'}`}
+          >
+            <Icon d={t.icon} />
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
+      {overlay && (
+        <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
+          {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} />}
+          {overlay.kind === 'payments' && extras && <Payments payments={extras.payments} />}
+          {overlay.kind === 'points' && <Points history={points} />}
+          {overlay.kind === 'credits' && <Credits s={s} />}
+          {overlay.kind === 'consent' && (
+            <div className="grid gap-3">
+              <h2 className="text-[18px] font-bold">새 수업 안내 확인</h2>
+              <p className="text-[14px] leading-relaxed text-[#55526a]">수업 안내 확인·동의 화면은 시안(previews/consent-drafts) 확정 후 이 자리에 연결해요.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setConsents([]);
+                  setOverlay(null);
+                  say('동의했어요.');
+                }}
+                className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white"
+              >
+                (미리보기) 동의 완료로 표시
+              </button>
+            </div>
+          )}
+          {overlay.kind === 'cancel' && (
+            <CancelSheet
+              key={overlay.lessonId ?? 'pick'}
+              lessons={upcoming}
+              lessonId={overlay.lessonId}
+              onPick={(id) => setOverlay({ kind: 'cancel', lessonId: id })}
+              now={now}
+              creditsLeft={s.creditsLeft}
+              creditPeriods={s.creditPeriods}
+              initialMany={retry?.ids}
+              notice={retry?.notice ?? null}
+              finalEndDate={s.finalEndDate}
+              makeupUntil={s.finalEndDate}
+              holidays={holidays}
+              regularLeft={regularLessonsLeft(lessons, now)}
+              totalLeft={left.total}
+              busy={busy}
+              onConfirm={confirmCancel}
+              onConfirmMany={confirmCancelMany}
+              onClose={() => { setRetry(null); setOverlay(null); }}
+            />
+          )}
+          {overlay.kind === 'leave' && (
+            <LeaveSheet
+              rows={s.leave}
+              rights={s.makeupRights}
+              requests={s.requests}
+              busy={busy}
+              onProfile={(name) => setOverlay({ kind: 'profile', name })}
+              onAnswer={answerLeave}
+              onMakeup={(right) => setOverlay({ kind: 'makeup', right })}
+            />
+          )}
+          {overlay.kind === 'profile' && <Profile name={overlay.name} onBack={() => setOverlay({ kind: 'leave' })} />}
+          {overlay.kind === 'makeup' &&
+            (overlay.right ? (
+              <MakeupPicker
+                key={`${overlay.right.lessonId}${overlay.right.itemId}${overlay.right.compId}`}
+                right={s.makeupRights.find((m) => sameRight(m, overlay.right!)) ?? null}
+                canceled={overlay.canceled ?? false}
+                endDate={endDate}
+                load={actions.makeupOptions}
+                busy={busy}
+                onLater={() => setOverlay(null)}
+                onSubmit={async (right, slots) => {
+                  const v = await run(() => actions.requestMakeup(right, slots), '요청했어요. 강사님 확인 후 최종 확정돼요.');
+                  if (v) setOverlay(null);
+                }}
+              />
+            ) : (
+              <div className="grid gap-3">
+                <h2 className="text-[18px] font-bold">보강할 수업</h2>
+                {openRights.map((m) => (
+                  <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })} className={`${card} flex min-h-[56px] items-center justify-between px-4 py-2 text-left`}>
+                    <span className="grid text-[15px] font-semibold">{rightTitle(m)}{rightReason(m) && <span className="text-[13px] font-semibold text-[#b3261e]">{rightReason(m)}</span>}</span>
+                    <span className="text-[#8b88a0]">›</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+        </Sheet>
+      )}
+
+      {stale && (
+        <div role="alert" className="fixed inset-x-4 top-4 z-30 mx-auto max-w-md rounded-[12px] border border-[#f3c2bb] bg-[#fff1ef] px-4 py-3 shadow-lg lg:bottom-24 lg:top-auto">
+          <p className="text-[13.5px] text-[#7a1d12]">{stale}</p>
+          <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { setView(await actions.reload()); setStale(null); say('다시 읽었어요.'); } catch { setToast('아직 읽지 못했어요. 잠시 뒤 다시 눌러 주세요.'); } finally { setBusy(false); } }}
+            className="mt-1.5 min-h-[40px] rounded-[10px] bg-[#b3261e] px-3 text-[13.5px] font-bold text-white disabled:opacity-40">다시 읽기</button>
+        </div>
+      )}
+      {toast && (
+        <div role="status" className="fixed inset-x-4 top-4 z-30 mx-auto max-w-md lg:bottom-6 lg:top-auto rounded-[12px] bg-[#1d1b2b] px-4 py-3 shadow-lg">
+          <p className="text-[13.5px] text-white">{toast}</p>
+          <button type="button" onClick={() => setToast(null)} className="mt-1 text-[12.5px] font-semibold text-[#c9bcff] underline">
+            닫기
+          </button>
+        </div>
+      )}
+    </div>
+    </KstCtx.Provider>
+  );
+}
+
+function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex min-h-[54px] w-full items-center gap-3 px-4 py-3 text-left">
+      <span className="flex-1 text-[15px] font-semibold leading-snug">{text}</span>
+      {n > 1 && <span className="text-[13px] text-[#8a5300]">{n}건</span>}
+      <span className="whitespace-nowrap rounded-[10px] bg-[#5b3df0] px-3 py-1.5 text-[13px] font-bold text-white">확인 ›</span>
+    </button>
+  );
+}
+
+// 강사 휴무 안내 (A안 한 번에 답, 2026-10-28 대표). 학생은 강사를 고르지 않음 — 운영진이 정한 대체강사만 보여 줌
+function LeaveSheet(props: {
+  rows: LeaveRow[];
+  rights: MakeupRight[];
+  /** 보강 신청 내역 — 신청한 보강의 상태를 신청 내역과 같게 (R-17) */
+  requests?: StudentRequest[];
+  busy: boolean;
+  onProfile: (name: string) => void;
+  onAnswer: (a: 'ok' | 'makeup') => void;
+  onMakeup: (r: Right) => void;
+}) {
+  const subs = props.rows.filter((x) => x.choice === 'substitute');
+  const waits = props.rows.filter((x) => x.choice === 'wait');
+  const ask = subs.filter((x) => x.stage === 'tutor_ok');
+  const fixed = subs.filter((x) => x.stage === 'confirmed');
+  const off = props.rows[0];
+  const offText = off && `${fmtDate(formatInZone(off.offFrom, VIEW_TZ).date)} ~ ${fmtDate(formatInZone(new Date(off.offTo.getTime() - 1), VIEW_TZ).date)}`;
+  return (
+    <div className="grid gap-3.5">
+      <div>
+        <h2 className="text-[18px] font-bold">담당 강사님 휴무 안내</h2>
+        {offText && <p className="mt-0.5 text-[13px] text-[#55526a]">휴무 {offText}</p>}
+      </div>
+      {/* 확정·답변 필요·기존 강사 보강을 따로 (대표 11/2: 확정 2회·미정 1회인데 '3회 대체수업'으로 보임) */}
+      <p className="rounded-[14px] bg-[#efeaff] px-4 py-3 text-[15px] font-semibold leading-relaxed text-[#2b1c7a]">
+        {[fixed.length && `대체강사 확정 ${fixed.length}회`, ask.length && `답변 필요 ${ask.length}회`, waits.length && `기존 강사님과 보강 ${waits.length}회`].filter(Boolean).join(' · ')}
+      </p>
+      {fixed.length > 0 && (() => {
+        // R-23: 회의실 링크가 있는 수업만 '아래 링크', 없으면 카톡으로 보냄
+        const withLink = fixed.filter((x) => meetRoomUrl(x.subMeetUrl)).length;
+        const text = withLink === fixed.length ? '⚠️ 대체강사 수업은 아래 링크에서 진행됩니다.'
+          : withLink === 0 ? `⚠️ 대체강사 수업 링크는 수업 전에 카카오톡으로 보내 드려요.`
+          : '⚠️ 대체강사 수업은 아래 링크에서 진행됩니다. 링크가 없는 수업은 수업 전에 카카오톡으로 보내 드려요.';
+        return <p className="rounded-[14px] bg-[#ffd66b] px-4 py-3 text-[15px] font-bold leading-snug text-[#1b1442]">{text}</p>;
+      })()}
+      {[{ title: '대체강사 수업 · 확정', list: fixed }, { title: '대체강사 수업 · 답변 필요', list: ask }].filter((x) => x.list.length > 0).map(({ title, list }) => (
+        <section key={title} className={`${card} grid gap-1 p-4`}>
+          <h3 className="text-[15px] font-bold">{title}</h3>
+          {list.map((x) => (
+            <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
+              <span>
+                <span className="block text-[15px] font-semibold">{whenText(x.startsAt)}</span>
+                <span className="block text-[13px] text-[#55526a]">{x.subTutor} 강사님</span>
+              </span>
+              {x.stage === 'confirmed' ? (
+                <span className="grid justify-items-end gap-1">
+                  <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">확정 ✓</span>
+                  {meetRoomUrl(x.subMeetUrl) ? (
+                    <a href={meetRoomUrl(x.subMeetUrl)!} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-[#4b2fd6] underline">
+                      {x.subTutor} 강사님 수업 링크
+                    </a>
+                  ) : (
+                    <span className="text-right text-[12px] text-[#55526a]">{MEET_MISSING_KO}</span>
+                  )}
+                </span>
+              ) : (
+                <button type="button" onClick={() => props.onProfile(x.subTutor ?? '')} className="min-h-[40px] rounded-[10px] border border-[#d9d5e8] px-3 text-[13px] font-semibold">
+                  프로필 보기
+                </button>
+              )}
+            </div>
+          ))}
+          {list === ask && (
+            <div className="mt-2 grid gap-2">
+              <button type="button" disabled={props.busy} onClick={() => props.onAnswer('ok')} className="min-h-[52px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-50">
+                {ask.length > 1 ? `좋아요, ${ask.length}회 모두 이대로 할게요` : '좋아요, 이대로 할게요'}
+              </button>
+              <button type="button" disabled={props.busy} onClick={() => props.onAnswer('makeup')} className="min-h-[50px] rounded-[14px] border border-[#5b3df0] text-[15px] font-bold text-[#4b2fd6] disabled:opacity-50">
+                {ask.length > 1 ? `${ask.length}회 모두 기존 강사님과 보강할게요` : '기존 강사님과 보강할게요'}
+              </button>
+            </div>
+          )}
+        </section>
+      ))}
+      {waits.length > 0 && (
+        <section className={`${card} grid gap-1 p-4`}>
+          <h3 className="text-[15px] font-bold">기존 강사님과 보강</h3>
+          {waits.map((x) => {
+            const r = props.rights.find((m) => (x.lessonId && m.lessonId === x.lessonId) || (x.itemId && m.itemId === x.itemId));
+            return (
+              <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
+                <span className="text-[15px] font-semibold">{whenText(x.startsAt)}</span>
+                {!r ? (
+                  <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">보강 확정 ✓</span>
+                ) : r.requested ? (() => {
+                  // 신청 내역의 같은 신청과 같은 상태로 (R-17: 전부 불가 → '다른 일정 조율 중', 강사 답 뒤 → '최종 확정 대기')
+                  const q = (props.requests ?? []).find((x) => x.kind === 'makeup' && !x.compId && ((r.lessonId && x.lessonId === r.lessonId) || (r.itemId && x.itemId === r.itemId)) && (x.status === 'tutor_reviewing' || x.status === 'admin_reviewing' || x.status === 'rescheduling'));
+                  const st: RequestStatus = q?.status ?? 'tutor_reviewing';
+                  return <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${STATUS_STYLE[st]}`}>신청함 · {REQUEST_STATUS_LABEL[st]}</span>;
+                })() : (
+                  <button type="button" onClick={() => props.onMakeup(r)} className="min-h-[40px] rounded-[10px] bg-[#5b3df0] px-3 text-[13px] font-bold text-white">
+                    보강 날짜 고르기
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </section>
+      )}
+    </div>
+  );
+}
+
+// 대체강사 프로필: 홈페이지 강사 소개(src/data/tutors.json)에 이미 공개된 내용만 (2026-10-28 대표: 홈페이지 보고 가져오기)
+function Profile({ name, onBack }: { name: string; onBack: () => void }) {
+  const p = homepageProfile(name);
+  const video = p?.videoUrl.replace('/embed/', '/watch?v=');
+  return (
+    <div className="grid gap-3.5">
+      <button type="button" onClick={onBack} className="flex min-h-[44px] items-center gap-1 justify-self-start rounded-[12px] border border-[#5b3df0] px-4 text-[15px] font-bold text-[#4b2fd6]">
+        ← 휴무 안내로 돌아가기
+      </button>
+      <h2 className="text-[18px] font-bold">{p?.name ?? name} 강사님</h2>
+      {p ? (
+        <section className={`${card} grid gap-3 p-4 text-[14px] leading-relaxed`}>
+          {p.career && (
+            <div>
+              <p className="text-[12.5px] font-bold text-[#5b3df0]">이력</p>
+              <p className="whitespace-pre-line">{p.career}</p>
+            </div>
+          )}
+          {p.intro && (
+            <div>
+              <p className="text-[12.5px] font-bold text-[#5b3df0]">소개</p>
+              <p className="whitespace-pre-line">{p.intro}</p>
+            </div>
+          )}
+          {video && (
+            <a href={video} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center gap-2 rounded-[12px] bg-[#efeaff] text-[14px] font-bold text-[#4b2fd6]">
+              ▶ 자기소개 영상 보기
+            </a>
+          )}
+        </section>
+      ) : (
+        <p className="text-[14px] text-[#55526a]">프로필을 찾지 못했어요.</p>
+      )}
+    </div>
+  );
+}
+
+// 보강 날짜 고르기 (2026-10-28 대표: 목록 대신 달력 — PC·휴대폰 같은 모양, 스크롤 줄이기)
+// 달력에서 날짜 → 그날 가능한 시각 → 고른 날짜 최대 2개 → 신청. 날짜는 DB '보강 가능한 날짜'(강사 일정·휴무·종료일)만
+function MakeupPicker(props: {
+  right: MakeupRight | null;
+  /** 방금 수업을 취소하고 넘어왔으면 맨 위에 결과 표시 */
+  canceled: boolean;
+  endDate: KstDate;
+  load: (r: Right) => Promise<MakeupOption[]>;
+  busy: boolean;
+  onSubmit: (r: Right, slots: Date[]) => void;
+  /** 나중에 고르기 = 창 닫기 */
+  onLater: () => void;
+}) {
+  const [opts, setOpts] = useState<MakeupOption[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [day, setDay] = useState<string | null>(null);
+  const [month, setMonth] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Date[]>([]);
+  const { right, load } = props;
+
+  useEffect(() => {
+    if (!right) return;
+    load(right)
+      .then((o) => {
+        setOpts(o);
+        if (o[0]) setMonth(kst(o[0].startsAt).date.slice(0, 7));
+      })
+      .catch((e) => setErr(e instanceof Error ? e.message : '불러오지 못했어요.'));
+  }, [right, load]);
+
+  if (!right) return <p className="text-[14px]">이미 신청했거나 신청할 수 없는 수업이에요.</p>;
+  const byDay = new Map<string, Date[]>();
+  for (const o of opts ?? []) {
+    const d = kst(o.startsAt).date;
+    byDay.set(d, [...(byDay.get(d) ?? []), o.startsAt]);
+  }
+  const months = [...new Set([...byDay.keys()].map((d) => d.slice(0, 7)))].sort();
+  const mi = month ? months.indexOf(month) : -1;
+  const isPicked = (t: Date) => picked.some((p) => p.getTime() === t.getTime());
+  const toggle = (t: Date) => setPicked(isPicked(t) ? picked.filter((p) => p.getTime() !== t.getTime()) : picked.length < MAKEUP_SLOTS_MAX ? [...picked, t].sort((a, b) => a.getTime() - b.getTime()) : picked);
+
+  const calendar = month && (
+    <section className={`${card} grid gap-2 p-3`}>
+      <div className="flex items-center justify-between">
+        <button type="button" aria-label="이전 달" disabled={mi <= 0} onClick={() => setMonth(months[mi - 1])} className="h-10 w-10 rounded-[10px] text-[18px] disabled:opacity-30">
+          ‹
+        </button>
+        <span className="text-[15px] font-bold">
+          {month.slice(0, 4)}년 {Number(month.slice(5))}월
+        </span>
+        <button type="button" aria-label="다음 달" disabled={mi < 0 || mi >= months.length - 1} onClick={() => setMonth(months[mi + 1])} className="h-10 w-10 rounded-[10px] text-[18px] disabled:opacity-30">
+          ›
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[12px] text-[#6b6880]">
+        {'일월화수목금토'.split('').map((w) => (
+          <span key={w}>{w}</span>
+        ))}
+        {monthCells(month).map((d, i) =>
+          !d ? (
+            <span key={i} />
+          ) : (
+            <button
+              key={d}
+              type="button"
+              disabled={!byDay.has(d)}
+              onClick={() => setDay(d)}
+              aria-pressed={day === d}
+              className={`relative flex h-10 items-center justify-center rounded-full text-[14px] ${
+                day === d ? 'bg-[#5b3df0] font-bold text-white' : byDay.has(d) ? 'bg-[#efeaff] font-semibold text-[#3a22b0]' : 'text-[#c4c1d2]'
+              }`}
+            >
+              {Number(d.slice(8))}
+              {(byDay.get(d) ?? []).some(isPicked) && day !== d && <span aria-hidden className="absolute bottom-1 h-1 w-1 rounded-full bg-[#5b3df0]" />}
+            </button>
+          ),
+        )}
+      </div>
+      {right.compId && right.useUntil ? (
+        <p className="text-[12px] text-[#6b6880]">사용 기한 {endText(right.useUntil)}</p>
+      ) : (
+        props.endDate && !right.tutorLeave && <p className="text-[12px] text-[#6b6880]">수강 종료 {endText(props.endDate)}</p>
+      )}
+    </section>
+  );
+
+  return (
+    <div className="grid gap-3.5">
+      {props.canceled && <p className="rounded-[12px] bg-[#e3f5ea] px-3.5 py-2.5 text-[15px] font-bold text-[#13623a]">✓ {rightText(right)} 수업을 취소했어요</p>}
+      <h2 className="text-[18px] font-bold">{right.compId ? '보상수업 날짜 고르기' : '보강 날짜 고르기'}</h2>
+      <div className={`${card} grid gap-1 px-4 py-3`}>
+        <p className="text-[15px] font-bold">{rightTitle(right)}</p>
+        {rightReason(right) && <p className="text-[14px] font-semibold text-[#b3261e]">{rightReason(right)}</p>}
+        {right.tutorLeave && <p className="text-[14px] font-semibold text-[#55526a]">사유: 강사 휴무</p>}
+      </div>
+      <KstToggle />
+      <p className="text-[14px] leading-relaxed text-[#55526a]">원하시는 일정을 최대 2개 골라 주세요. 강사님 확인 후 운영진이 최종 확정해요.</p>
+      {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
+      {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
+      {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
+      {opts && opts.length > 0 && (
+        <div className="grid gap-3.5 lg:grid-cols-2 lg:items-start">
+          {calendar}
+          <div className="grid gap-3">
+            <section className={`${card} grid gap-2 p-3`}>
+              <p className="text-[14px] font-bold">{day ? `${fmtDate(day as KstDate)} (${wdOf(day)}) · ${zoneText()}` : '날짜를 골라 주세요'}</p>
+              {day && (
+                <div className="grid grid-cols-3 gap-2">
+                  {(byDay.get(day) ?? []).map((t) => (
+                    <button
+                      key={t.getTime()}
+                      type="button"
+                      aria-pressed={isPicked(t)}
+                      disabled={!isPicked(t) && picked.length >= MAKEUP_SLOTS_MAX}
+                      onClick={() => toggle(t)}
+                      className={`min-h-[44px] rounded-[10px] border text-[14px] font-semibold disabled:opacity-40 ${isPicked(t) ? 'border-[#5b3df0] bg-[#5b3df0] text-white' : 'border-[#d9d5e8]'}`}
+                    >
+                      {kst(t).time}
+                      {isPicked(t) ? ' ✓' : ''}
+                      {kstPair(t) && <span className={`block text-[11.5px] font-medium ${isPicked(t) ? 'text-[#e4ddff]' : 'text-[#6b6880]'}`}>{kstPair(t)}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+            <section className={`${card} sticky bottom-0 z-10 grid gap-2 p-3 shadow-[0_-6px_16px_rgba(27,20,66,0.12)]`}>
+              <p className="text-[14px] font-bold">
+                고른 날짜 {picked.length}/{MAKEUP_SLOTS_MAX}
+              </p>
+              {picked.map((t) => (
+                <div key={t.getTime()} className="flex items-center justify-between rounded-[10px] border border-[#e6e3ef] px-3 py-2 text-[14px]">
+                  <span className="font-semibold">{whenText(t)}</span>
+                  <button type="button" aria-label="빼기" onClick={() => toggle(t)} className="h-8 w-8 text-[16px] text-[#55526a]">
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                disabled={picked.length === 0 || props.busy}
+                onClick={() => props.onSubmit(right, picked)}
+                className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-40"
+              >
+                {right.compId ? '보상수업 신청하기' : '보강 신청하기'}
+              </button>
+              <LaterButton onLater={props.onLater} />
+            </section>
+          </div>
+        </div>
+      )}
+      {!(opts && opts.length > 0) && <LaterButton onLater={props.onLater} />}
+    </div>
+  );
+}
+
+/** 대표 11/3: 취소하면 바로 보강 고르기로 넘어옴 → 지금 안 고르고 창 닫기. 보강 권리는 홈 '할 일'에 그대로 남음 */
+function LaterButton({ onLater }: { onLater: () => void }) {
+  return (
+    <>
+      <button type="button" onClick={onLater} className="min-h-[46px] rounded-[14px] border border-[#d9d5e8] bg-white text-[15px] font-semibold text-[#1d1b2b]">
+        나중에 고르기
+      </button>
+      <p className="text-center text-[12px] text-[#6b6880]">홈 &lsquo;할 일&rsquo;에서 언제든 다시 고를 수 있어요.</p>
+    </>
+  );
+}
+
+/** 'YYYY-MM' 달력 칸 (일요일 시작, 앞쪽 빈칸 null) */
+function monthCells(month: string): (string | null)[] {
+  const first = new Date(`${month}-01T00:00:00Z`);
+  const days = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  return [...Array<null>(first.getUTCDay()).fill(null), ...Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
+}
+
+/** 보강을 캘린더에 더하기 (2026-10-29 대표, 학생·강사 화면 같은 버튼) */
+export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google: string; file: string }) {
+  const cls = 'inline-flex min-h-[36px] items-center rounded-[10px] border border-[#d9d5e8] bg-white px-2.5 text-[13px] font-semibold text-[#1b1442]';
+  return (
+    <span className="mt-1.5 flex flex-wrap gap-1.5">
+      <a href={googleCalendarUrl(ev)} target="_blank" rel="noreferrer" className={cls}>{google}</a>
+      <a href={icsUrl(ev)} className={cls}>{file}</a>
+    </span>
+  );
+}
+
+function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
+  const k = kst(lesson.startsAt);
+  const started = now.getTime() >= lesson.startsAt.getTime();
+  const badge = started ? '진행 중' : untilText(now, lesson.startsAt);
+  return (
+    <section aria-label="다음 수업" className="grid gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
+        <span className="rounded-full bg-[#ffd66b] px-2.5 py-1 text-[12px] font-semibold text-[#1b1442]">{badge}</span>
+      </div>
+      {/* 대체강사 수업은 수업 링크가 다름 — 늘 쓰던 링크로 들어가는 일이 잦음 (대표 10/29) */}
+      {/* 휴무 처리 확정 전: 휴무 강사와 정상 수업처럼 보이지 않게 (대표 10/30) */}
+      {leaveOpen && (
+        <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">⚠️ 강사님 휴무로 일정 조율 중</p>
+      )}
+      {substitute && (
+        <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">
+          ⚠️ 대체강사 {lesson.tutorName} 강사님 수업이에요. 아래 &lsquo;수업 입장&rsquo; 링크에서 진행됩니다.
+        </p>
+      )}
+      <div>
+        <p className="text-[26px] font-bold tracking-tight text-white lg:text-[30px]">
+          {Number(k.md.split('/')[0])}월 {Number(k.md.split('/')[1])}일 ({k.wd}) {k.time}
+        </p>
+        <p className="mt-1 text-[14px] text-[#d8d3f5]">
+          {zoneText()} · {lesson.minutes}분{leaveOpen ? '' : ` · ${lesson.tutorName}`}{lesson.kind === 'makeup' ? ' · 보강' : ''}
+        </p>
+        {kstPair(lesson.startsAt) && <p className="text-[14px] font-semibold text-[#ffd66b]">{kstPair(lesson.startsAt)}</p>}
+      </div>
+      <div className="grid gap-2.5 lg:grid-cols-2">
+        {textbook && (
+        <a href="/books" className="flex min-h-[44px] items-center justify-between gap-2.5 rounded-[12px] bg-[#2c2263] px-3.5 py-3 text-[14px] lg:order-2">
+          <span className="flex items-center gap-2.5">
+            <Icon d={TABS[3].icon} className="h-[18px] w-[18px] text-[#c9c0ff]" />
+            <span className="text-white">
+              교재 <b className="text-white">{textbook.title}</b> · Unit {textbook.lastUnit}
+            </span>
+          </span>
+          <span className="whitespace-nowrap text-[13px] text-[#c9c0ff]">보기 ›</span>
+        </a>
+        )}
+        {meetUrl ? (
+          <a href={meetUrl} target="_blank" rel="noreferrer" className="flex min-h-[50px] items-center justify-center gap-2 rounded-[14px] bg-white text-[16px] font-bold text-[#1b1442] lg:order-1">
+            <Icon d="M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM16 10l6-3v10l-6-3z" />
+            수업 입장 (Google Meet)
+          </a>
+        ) : null}
+      </div>
+
+    </section>
+  );
+}
+
+function Tile({ label, value, unit, sub, onClick }: { label: string; value: string; unit?: string; sub: string; onClick?: () => void }) {
+  const body = (
+    <>
+      <p className="text-[12px] text-[#55526a]">{label}</p>
+      <p className="mt-1 text-[22px] font-bold">
+        {value}
+        {unit && <span className="text-[13px] font-medium">{unit}</span>}
+      </p>
+      <p className="text-[11px] text-[#6b6880]">{sub}</p>
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`${card} p-3 text-left lg:p-4`}>
+      {body}
+    </button>
+  ) : (
+    <div className={`${card} p-3 lg:p-4`}>{body}</div>
+  );
+}
+
+// 변경권: 지금 기간과 언제 썼는지 (대표 10/29)
+function Credits({ s }: { s: StudentView }) {
+  const text = (c: StudentView['creditUses'][number]) =>
+    c.reason === 'student_change'
+      ? `${c.lessonAt ? `${whenText(c.lessonAt)} 수업 취소` : '수업 취소'}`
+      : c.reason === 'admin_restore'
+        ? `${c.lessonAt ? `${whenText(c.lessonAt)} 수업 ` : ''}취소 되돌림`
+        : c.note
+          ? `운영진 조정 · ${c.note}`
+          : c.delta > 0 ? '운영진이 돌려드림' : 'LMS 시작 전 사용';
+  return (
+    <div className="grid gap-3.5">
+      <h2 className="text-[18px] font-bold">변경권</h2>
+      <section className="flex items-center justify-between rounded-[18px] bg-[#1b1442] p-4 text-white">
+        <div>
+          <p className="text-[13px] text-[#c9c0ff]">남은 변경권</p>
+          <p className="mt-0.5 text-[26px] font-bold text-white">
+            {s.creditsLeft}개 <span className="text-[14px] font-medium text-[#d8d3f5]">/ {s.creditsPerPeriod}개</span>
+          </p>
+        </div>
+        {s.creditPeriod && (
+          <p className="text-right text-[12.5px] text-[#d8d3f5]">
+            이번 기간
+            <br />
+            {fmtDate(s.creditPeriod.start)} ~ {fmtDate(s.creditPeriod.end)}
+          </p>
+        )}
+      </section>
+      <section className={`${card} px-4`}>
+        {s.creditUses.length === 0 && <p className="py-4 text-[14px] text-[#6b6880]">이번 기간에 쓴 변경권이 없어요.</p>}
+        {s.creditUses.map((c, i) => (
+          <div key={i} className="flex items-center justify-between gap-3 border-b border-[#eeecf4] py-3 text-[14px] last:border-0">
+            <span>{text(c)}</span>
+            <b className={c.delta > 0 ? 'text-[#13623a]' : ''}>{c.delta > 0 ? '+1' : '−1'}</b>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen} className="flex min-h-[56px] w-full items-center justify-between gap-2 border-b border-[#eeecf4] py-2 text-left last:border-0">
+      <span>
+        <span className="block text-[14px] font-semibold">{r.title}</span>
+        <span className="block text-[12px] text-[#6b6880]">
+          {r.kind !== 'makeup' ? r.note
+            : r.status === 'confirmed' && r.confirmedAt ? `${whenText(r.confirmedAt)} 확정`
+            : r.status === 'canceled' && r.confirmedAt ? `${whenText(r.confirmedAt)} 보강 수업 취소됨`
+            : r.status === 'rescheduling' ? '강사님이 신청한 시간에는 어렵다고 답했어요'
+            : `고른 날짜 ${r.candidates.length}개`}
+        </span>
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold ${STATUS_STYLE[r.status]}`}>{REQUEST_STATUS_LABEL[r.status]}</span>
+        <span className="text-[#8b88a0]">›</span>
+      </span>
+    </button>
+  );
+}
+
+// 누를 곳이 없으면 버튼 모양(›) 없이 글만 (R8)
+function LinkRow({ label, value, valueClass = 'font-semibold', onClick }: { label: string; value: string; valueClass?: string; onClick?: () => void }) {
+  if (!onClick) return (
+    <div className="flex min-h-[52px] w-full items-center justify-between border-t border-[#eeecf4] text-[14px] first:border-0">
+      <span className="text-[#55526a]">{label}</span>
+      <span className={valueClass}>{value}</span>
+    </div>
+  );
+  return (
+    <button type="button" onClick={onClick} className="flex min-h-[52px] w-full items-center justify-between border-t border-[#eeecf4] text-left text-[14px] first:border-0">
+      <span className="text-[#55526a]">{label}</span>
+      <span className={valueClass}>
+        {value} <span className="font-normal text-[#8b88a0]">›</span>
+      </span>
+    </button>
+  );
+}
+
+function Switch({ label, on, disabled, onChange }: { label: string; on: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className="flex min-h-[48px] items-center justify-between border-t border-[#eeecf4] text-left text-[15px] first-of-type:border-0"
+    >
+      <span>{label}</span>
+      <span className={`relative h-7 w-[46px] flex-none rounded-full transition-colors ${on ? 'bg-[#5b3df0]' : 'bg-[#dcd8e8]'}`}>
+        <span className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white transition-all ${on ? 'right-[3px]' : 'left-[3px]'}`} />
+      </span>
+    </button>
+  );
+}
+
+function PreviewChip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className={`min-h-[32px] rounded-full border px-2.5 text-[12px] font-semibold ${on ? 'border-[#5c4a00] bg-[#5c4a00] text-white' : 'border-[#e0cf8a] bg-white'}`}>
+      {children}
+    </button>
+  );
+}
+
+function TabPage({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-3 px-4 lg:max-w-[720px] lg:px-0">
+      <h1 className="text-[22px] font-bold">{title}</h1>
+      {children}
+    </div>
+  );
+}
+
+function Sheet({ onClose, children, wide }: { onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+  return (
+    <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
+      <div role="dialog" aria-modal className={`max-h-[90dvh] w-full ${wide ? 'max-w-[520px] lg:max-w-[860px]' : 'max-w-[520px]'} overflow-y-auto rounded-t-[22px] bg-[#f6f5fa] p-5 lg:rounded-[22px]`} onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-end">
+          <button type="button" aria-label="닫기" onClick={onClose} className="-mr-2 -mt-2 flex h-11 w-11 items-center justify-center rounded-full text-[22px] leading-none text-[#55526a] hover:bg-[#ebe8f5]">
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RequestDetail({ r }: { r: StudentRequest }) {
+  // 신청 → 강사 확인 → 최종 확정(운영진). 지금 단계는 주황, 끝난 단계는 보라 (11/3 점검 ②: 누가 확인 중인지)
+  const steps = r.status === 'rescheduling' ? ['신청', '강사 확인', '일정 조율'] : ['신청', '강사 확인', '최종 확정'];
+  const at = r.status === 'tutor_reviewing' ? 1 : r.status === 'admin_reviewing' || r.status === 'rescheduling' ? 2 : 3;
+  return (
+    <div className="grid gap-3.5">
+      <h2 className="text-[18px] font-bold">{r.title}</h2>
+      <section className={`${card} grid gap-3.5 p-4`}>
+        <div className="flex items-center justify-between">
+          <span className="text-[13px] text-[#55526a]">지금 상태</span>
+          <span className={`rounded-full px-3 py-1 text-[13px] font-semibold ${STATUS_STYLE[r.status]}`}>{REQUEST_STATUS_LABEL[r.status]}</span>
+        </div>
+        {/* 상황별 안내 (추가 요청 6): 지금 무엇을 기다리는지, 다음에 누가 연락하는지 */}
+        {r.status === 'tutor_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님이 고른 날짜를 확인하고 있어요. 확인되면 운영진이 최종 확정해 드려요.</p>}
+        {r.status === 'admin_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님 확인이 끝났어요. 운영진이 최종 확정하면 일정에 바로 들어가요.</p>}
+        {r.status === 'rescheduling' && <p className="text-[13.5px] leading-relaxed text-[#7a1d12]">강사님이 고른 날짜에는 어렵다고 했어요. 운영진이 다른 일정을 조율해서 카카오톡으로 알려 드릴게요. 따로 하실 일은 없어요.</p>}
+        {r.status === 'canceled' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">확정됐던 보강 수업이 취소됐어요. 취소 때 안내된 규칙(변경권·보강 가능 여부)에 따라 처리됐어요.</p>}
+        <ol className="flex gap-1.5">
+          {steps.map((t, i) => (
+            <li key={t} className="flex-1 text-center">
+              <div className={`h-1.5 rounded ${i < at ? 'bg-[#5b3df0]' : i === at ? 'bg-[#f0a33a]' : 'bg-[#e6e3ef]'}`} />
+              <span className={`mt-1.5 block text-[12px] ${i <= at ? 'font-semibold' : 'text-[#8b88a0]'}`}>{t}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+      {r.candidates.length > 0 && (
+        <section className={`${card} grid gap-2.5 p-4`}>
+          <h3 className="text-[15px] font-bold">내가 고른 날짜</h3>
+          {r.candidates.map((d, i) => (
+            <div key={i} className="flex items-center gap-3 rounded-[12px] border border-[#e6e3ef] px-3.5 py-3">
+              <span className="text-[12px] font-bold text-[#5b3df0]">{i + 1}</span>
+              <span className="text-[16px] font-bold">{whenText(d)}</span>
+            </div>
+          ))}
+        </section>
+      )}
+      <section className={`${card} grid gap-2 p-4 text-[14px]`}>
+        {r.originalAt && (
+          <div className="flex justify-between gap-3">
+            <span className="shrink-0 text-[#55526a]">원래 수업</span>
+            <span className="text-right">
+              {r.originalTimeKnown === false ? kstDateOnly(r.originalAt) : whenText(r.originalAt)}
+              {r.compensation ? ' · 강사 노쇼' : ''}
+            </span>
+          </div>
+        )}
+        {(r.tutor || r.originalTutor) && (
+          <div className="flex justify-between gap-3">
+            <span className="shrink-0 text-[#55526a]">담당 강사</span>
+            <span className="text-right">{r.tutor ?? r.originalTutor}</span>
+          </div>
+        )}
+        {r.status === 'confirmed' && r.confirmedAt && (
+          <div className="flex justify-between gap-3">
+            <span className="shrink-0 text-[#55526a]">확정 날짜</span>
+            <b className="text-right">{whenText(r.confirmedAt)}</b>
+          </div>
+        )}
+        {r.note && (
+          <div className="flex justify-between gap-3">
+            <span className="shrink-0 text-[#55526a]">내용</span>
+            <span className="text-right">{r.note}</span>
+          </div>
+        )}
+        <div className="flex justify-between">
+          <span className="text-[#55526a]">신청한 날</span>
+          <span className="text-right">{whenText(r.createdAt)}</span>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Payments({ payments }: { payments: PaymentSummary[] }) {
+  // 금액·카드 정보는 보여 주지 않음 (POL-PAY-11). 카드 영수증은 아임웹 주문조회로
+  return (
+    <div className="grid gap-3.5">
+      <h2 className="text-[18px] font-bold">결제 내역</h2>
+      {payments.map((p) => (
+        <section key={p.id} className={`${card} grid gap-2.5 p-4 text-[14px]`}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-[15px] font-bold">{p.current ? '지금 수강권' : '지난 수강권'}</h3>
+            <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${p.confirmedOn ? 'bg-[#e3f5ea] text-[#13623a]' : 'bg-[#fff1d6] text-[#8a5300]'}`}>
+              {p.confirmedOn ? '결제 확인 완료' : '결제 확인 중'}
+            </span>
+          </div>
+          <Row k="수강권" v={p.product} />
+          <Row k="수강 기간" v={`${fmtDate(p.periodStart)} ~ ${fmtDate(p.periodEnd)}`} />
+          <Row k="결제 방법" v={PAYMENT_METHOD_LABEL[p.method]} />
+          <Row k="확인한 날" v={p.confirmedOn ? `${fmtDate(p.confirmedOn)} · 운영자 확인` : '-'} />
+          {p.method === 'card_imweb' && (
+            <span aria-disabled title="아임웹 주문조회 주소 확인 후 연결" className="mt-1 flex min-h-[46px] items-center justify-center rounded-[12px] border border-[#d9d5e8] text-[14px] font-semibold text-[#55526a]">
+              카드 영수증 · 주문 보기 (아임웹) ↗
+            </span>
+          )}
+        </section>
+      ))}
+      <p className="text-[12px] leading-relaxed text-[#55526a]">결제 금액·카드 정보는 이 화면에 따로 표시하지 않아요 (아임웹 주문조회에서 확인). 결제는 운영자가 직접 확인해요.</p>
+    </div>
+  );
+}
+
+function Points({ history }: { history: ReturnType<typeof pointsHistory> }) {
+  return (
+    <div className="grid gap-3.5">
+      <h2 className="text-[18px] font-bold">적립금 내역</h2>
+      <section className="flex items-center justify-between rounded-[18px] bg-[#1b1442] p-4 text-white">
+        <div>
+          <p className="text-[13px] text-[#c9c0ff]">사용할 수 있는 적립금</p>
+          <p className="mt-0.5 text-[26px] font-bold text-white">{won(history.balance)}</p>
+        </div>
+        <p className="text-right text-[12px] leading-relaxed text-[#d8d3f5]">
+          유효기간 없음
+          <br />
+          재등록 결제 때 사용
+        </p>
+      </section>
+      <section className={`${card} px-4`}>
+        {history.rows.map((r) => (
+          <div key={r.id} className="grid grid-cols-[1fr_auto] gap-x-3 border-b border-[#eeecf4] py-3 last:border-0">
+            <span className="text-[14px]">{r.reason}</span>
+            <b className={`text-right text-[14px] ${r.signed > 0 ? 'text-[#13623a]' : ''}`}>
+              {r.signed > 0 ? '+' : '−'}
+              {won(Math.abs(r.signed))}
+            </b>
+            <span className="text-[12px] text-[#6b6880]">{fmtDate(r.on)}</span>
+            <span className="text-right text-[12px] text-[#6b6880]">잔액 {won(r.balanceAfter)}</span>
+          </div>
+        ))}
+      </section>
+      <p className="text-[12px] leading-relaxed text-[#55526a]">사용 신청은 재등록할 때 해요. 결제가 취소·환불되면 사용한 적립금은 다시 돌아와요.</p>
+    </div>
+  );
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-[#55526a]">{k}</span>
+      <span className="text-right">{v}</span>
+    </div>
+  );
+}
+
+// 6시간 이내 취소 확인 문구 (대표 원문, docs/lms-기획서-원문.md 3-3)
+const LATE_CANCEL_TEXT = '수업 시작까지 6시간이 남지 않았어요. 지금 취소하면 보강 없이 수업 1회가 소진돼요. (변경권은 차감되지 않아요) 그래도 미리 알려주시면 강사님이 기다리지 않아도 돼요. 취소할까요?';
+
+function CancelSheet(props: {
+  lessons: StudentLesson[];
+  lessonId: string | null;
+  onPick: (id: string) => void;
+  now: Date;
+  /** 지금 기간 변경권 (기간 목록이 없는 옛 DB 용) */
+  creditsLeft: number;
+  /** 모든 기간의 변경권 — 수업 날짜가 속한 기간으로 판정 (R-12) */
+  creditPeriods?: CreditPeriod[];
+  /** 중간에 멈춘 뒤 다시 고른 상태로 열 때 (R-02): 남은 수업 id + 안내 */
+  initialMany?: string[];
+  notice?: string | null;
+  finalEndDate: KstDate;
+  /** 보강 기한 = 수강 종료일 */
+  makeupUntil: KstDate;
+  holidays: ReadonlySet<KstDate>;
+  regularLeft: number;
+  totalLeft: number;
+  busy: boolean;
+  onConfirm: (l: StudentLesson) => void;
+  /** 여러 수업 한 번에 (추가 요청 2) */
+  onConfirmMany?: (ls: StudentLesson[]) => void;
+  onClose: () => void;
+}) {
+  const [checked, setChecked] = useState(false);
+  const [many, setMany] = useState<Set<string>>(() => new Set(props.initialMany ?? []));
+  const [manyChecked, setManyChecked] = useState(false);
+  const lesson = props.lessons.find((l) => l.id === props.lessonId);
+  const periods = props.creditPeriods ?? [];
+  /** 그 수업 날짜가 속한 기간의 변경권 (R-12) */
+  const creditsOf = (l: StudentLesson) => creditsForDate(periods, instantToKstDate(l.startsAt), props.creditsLeft);
+  const periodText = (l: StudentLesson) => { const p = creditPeriodFor(periods, instantToKstDate(l.startsAt)); return p ? `${fmtDate(p.start)}~${fmtDate(p.end)} 기간` : null; };
+
+  if (!lesson) {
+    // 여러 수업 고르기: 시간순으로, 각 수업이 속한 기간의 변경권을 차례로 차감해 미리 계산 (DB 도 같은 순서·같은 기간 규칙, R-12)
+    const picked = props.lessons.filter((l) => many.has(l.id));
+    const plan = planCancelMany(picked, { now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, creditPeriods: periods, holidays: props.holidays });
+    const { uses, consumes, makeups } = plan;
+    const bad = plan.items.filter((x) => !x.decision.ok);
+    const toggleMany = (id: string) => setMany((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    return (
+      <div className="grid gap-3">
+        <h2 className="text-[18px] font-bold">어느 수업을 바꿀까요?</h2>
+        <KstToggle />
+        <p className="text-[13px] text-[#55526a]">수업을 누르면 하나씩 취소해요. 여러 수업을 한 번에 취소하려면 왼쪽 네모를 체크해 주세요.</p>
+        {props.lessons.map((l) => {
+          const h = hoursBetween(props.now, l.startsAt);
+          const on = many.has(l.id);
+          return (
+            <div key={l.id} className={`${card} flex min-h-[56px] items-center gap-2 pl-3 pr-4 ${on ? 'border-[#5b3df0] bg-[#f6f3ff]' : ''}`}>
+              {props.onConfirmMany && l.kind !== 'compensation' && (
+                <input type="checkbox" aria-label={`${whenText(l.startsAt)} 함께 취소`} checked={on} onChange={() => toggleMany(l.id)} className="h-5 w-5 shrink-0 accent-[#5b3df0]" />
+              )}
+              <button type="button" onClick={() => props.onPick(l.id)} className="flex min-h-[56px] min-w-0 flex-1 items-center justify-between text-left">
+                <span className="text-[15px] font-semibold">{whenText(l.startsAt)}</span>
+                <span className="shrink-0 pl-2 text-[12.5px] text-[#6b6880]">{h < 6 ? '6시간 이내' : untilText(props.now, l.startsAt)} ›</span>
+              </button>
+            </div>
+          );
+        })}
+        {props.notice && <p className="rounded-[12px] border border-[#f3c2bb] bg-[#fff1ef] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#7a1d12]">{props.notice}</p>}
+        {picked.length > 0 && props.onConfirmMany && (
+          <section className={`${card} sticky bottom-0 z-10 grid gap-2 p-3.5 shadow-[0_-6px_16px_rgba(27,20,66,0.12)]`}>
+            <p className="text-[15px] font-bold">선택한 수업 {picked.length}회 · 변경권 {uses}개 사용</p>
+            {/* 기간별 잔여 (R-12): 수업이 속한 기간마다 차감 전 → 후 */}
+            <p className="text-[12.5px] text-[#55526a]">
+              {plan.periods.map((p) => `${p.start && p.end ? `${fmtDate(p.start)}~${fmtDate(p.end)} 기간 ` : ''}변경권 ${p.before}개 → ${p.after}개`).join(' · ')}
+            </p>
+            <ul className="grid gap-1 text-[13px] text-[#1d1b2b]">
+              {plan.items.map(({ lesson: l, decision: d }) => (
+                <li key={l.id} className="flex justify-between gap-2">
+                  <span>{whenText(l.startsAt)}</span>
+                  <b className={d.ok && d.consumesLesson ? 'text-[#b3261e]' : ''}>
+                    {!d.ok ? '취소 불가' : d.consumesLesson ? (d.timing === 'late' ? '6시간 이내 · 1회 차감 · 보강 없음' : '변경권 없음 · 1회 차감 · 보강 없음')
+                      : d.usesCredit ? '변경권 1개 · 보강 가능' : '변경권 그대로 · 보강 가능'}
+                  </b>
+                </li>
+              ))}
+            </ul>
+            {/* R-04: 보강 권리가 생기는 수업이 있을 때만 보강 신청 안내 */}
+            <p className="text-[12.5px] text-[#55526a]">취소 뒤 남은 수업 {props.totalLeft}회 → {props.totalLeft - consumes}회{makeups ? ` (보강 ${makeups}회 포함). 보강 날짜는 취소 뒤 ‘보강 신청’에서 골라 주세요.` : '.'}</p>
+            {consumes > 0 && (
+              <label className="flex min-h-[44px] items-start gap-2.5 text-[14px] leading-normal">
+                <input type="checkbox" checked={manyChecked} onChange={(e) => setManyChecked(e.target.checked)} className="mt-0.5 h-5 w-5 accent-[#b3261e]" />
+                {consumes}회는 보강 없이 수업이 차감된다는 것을 확인했어요
+              </label>
+            )}
+            <button type="button" disabled={props.busy || bad.length > 0 || (consumes > 0 && !manyChecked)} onClick={() => props.onConfirmMany!(picked)}
+              className={`min-h-[52px] rounded-[14px] text-[16px] font-bold text-white disabled:opacity-40 ${consumes > 0 ? 'bg-[#b3261e]' : 'bg-[#5b3df0]'}`}>
+              {picked.length}회 취소하기
+            </button>
+            {bad.length > 0 && <p className="text-[12.5px] text-[#b3261e]">취소할 수 없는 수업이 있어요. 체크를 풀어 주세요.</p>}
+          </section>
+        )}
+      </div>
+    );
+  }
+
+  const creditsNow = creditsOf(lesson);   // 그 수업 날짜가 속한 기간의 변경권 (R-12)
+  const pText = periodText(lesson);
+  const d = cancelPreview({ lesson, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: creditsNow, holidays: props.holidays }, null);
+  const title = `${whenText(lesson.startsAt)} 수업을 취소할까요?`;
+
+  if (!d.ok) {
+    const msg =
+      d.reason === 'policy_pending' ? '보상수업 변경·취소는 카카오톡으로 문의해 주세요.' : d.reason === 'already_started' ? '이미 시작한 수업은 취소할 수 없어요.' : '수강기간이 지난 수업이에요.';
+    return (
+      <div className="grid gap-3">
+        <h2 className="text-[18px] font-bold">{title}</h2>
+        <p className="text-[14px]">{msg}</p>
+      </div>
+    );
+  }
+
+  const hours = hoursBetween(props.now, lesson.startsAt);
+  const needsCheck = d.consumesLesson; // 수업이 차감되면 한 번 더 확인
+  const late = d.timing === 'late';
+  const rows: [string, string][] = [
+    ['수업 횟수', d.consumesLesson ? `1회 차감 (남은 ${props.totalLeft}회 → ${props.totalLeft - 1}회)` : '차감 안 됨'],
+    ['보강', d.makeupAllowed ? `수강기간(~${endText(props.makeupUntil)}) 안에 보강 가능` : '불가'],
+    ['변경권', `${d.usesCredit ? `1개 사용 (${creditsNow}개 → ${creditsNow - 1}개)` : `사용 안 함 (${creditsNow}개 그대로)`}${pText ? ` · ${pText}` : ''}`],
+  ];
+
+  return (
+    <div className="grid gap-3.5">
+      <h2 className="text-[19px] font-bold">{d.timing === 'late' ? `수업 시작 ${hours < 1 ? '1시간 이내' : `${Math.floor(hours)}시간 전`}이에요` : title}</h2>
+      <section className={`grid gap-2 rounded-[14px] p-3.5 text-[14px] leading-normal ${needsCheck ? 'border border-[#f3c2bb] bg-[#fff1ef] text-[#7a1d12]' : 'bg-[#f1eefc]'}`}>
+        <p className={`font-bold ${needsCheck ? 'text-[#7a1d12]' : ''}`}>지금 취소하면</p>
+        {rows.map(([a, b]) => (
+          <div key={a} className="flex justify-between gap-3">
+            <span className={`shrink-0 ${needsCheck ? 'text-[#7a1d12]' : ''}`}>{a}</span>
+            <b className={`text-right ${needsCheck ? 'text-[#7a1d12]' : ''}`}>{b}</b>
+          </div>
+        ))}
+      </section>
+      {late ? (
+        <p className="text-[15px] leading-relaxed">{LATE_CANCEL_TEXT}</p>
+      ) : (
+        <p className="text-[12.5px] leading-relaxed text-[#55526a]">{d.studentMessage}</p>
+      )}
+      {needsCheck && !late && (
+        <label className="flex min-h-[44px] items-start gap-2.5 text-[14px] leading-normal">
+          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-5 w-5 accent-[#b3261e]" />
+          수업 1회가 차감되고 보강이 없다는 것을 확인했어요
+        </label>
+      )}
+      <button
+        type="button"
+        disabled={(needsCheck && !late && !checked) || props.busy}
+        onClick={() => props.onConfirm(lesson)}
+        className={`min-h-[52px] rounded-[14px] text-[16px] font-bold text-white disabled:opacity-40 ${needsCheck ? 'bg-[#b3261e]' : 'bg-[#5b3df0]'}`}
+      >
+        {late ? '취소할게요' : needsCheck ? '1회 차감하고 취소' : '취소하고 보강 시간 고르기'}
+      </button>
+      <button type="button" onClick={props.onClose} className="min-h-[44px] text-[14px] text-[#55526a]">
+        {late ? '돌아가기' : '취소 안 함'}
+      </button>
+    </div>
+  );
+}

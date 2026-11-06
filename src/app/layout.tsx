@@ -3,6 +3,7 @@ import './globals.css';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import FloatingMenu from '@/components/FloatingMenu';
+import SiteChrome from '@/components/SiteChrome';
 
 export const metadata: Metadata = {
   title: { default: '엣지영어', template: '%s | 엣지영어' },
@@ -46,12 +47,16 @@ export default function RootLayout({
   return (
     <html lang="ko" data-theme="light">
       <body>
-        <Header />
+        <SiteChrome>
+          <Header />
+        </SiteChrome>
 
         <main>{children}</main>
 
-        <FloatingMenu />
-        <Footer />
+        <SiteChrome>
+          <FloatingMenu />
+          <Footer />
+        </SiteChrome>
       </body>
     </html>
   );

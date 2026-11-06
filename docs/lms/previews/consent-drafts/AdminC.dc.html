@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>관리자 C · 학생별 이력</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&amp;family=Montserrat:wght@700;800&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#4a2fc4}a:hover{color:#2f1d8a}
+.top{height:56px;display:flex;align-items:center;gap:10px;padding:0 18px;background:#ffffff;border-bottom:1px solid #e6e3ef;flex:none}
+.logo{font-family:Montserrat,sans-serif;font-weight:800;font-size:17px;color:#09246b}
+.logo b{color:#5b3fd9}
+.sub{font-size:13px;color:#4a4760;line-height:1.5}
+.mono{font-family:Montserrat,sans-serif;font-weight:700}
+.pill{font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;white-space:nowrap}
+.p-ok{background:#e3f5ea;color:#13633b}
+.p-warn{background:#fff1d6;color:#7a4300}
+.p-gray{background:#eeedf3;color:#4a4760}
+.p-type{background:#efebff;color:#4a2fc4}
+.tl{display:flex;flex-direction:column;gap:0}
+.ev{display:flex;gap:12px}
+.rail{display:flex;flex-direction:column;align-items:center;width:18px;flex:none}
+.dot{width:14px;height:14px;border-radius:99px;background:#5b3fd9;border:3px solid #efebff;flex:none;margin-top:4px}
+.dot.g{background:#8f8aa6}
+.dot.w{background:#c27a00}
+.line{flex:1;width:2px;background:#ddd8ea}
+.box{flex:1;min-width:0;background:#ffffff;border:1px solid #e1ddeb;border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;flex-direction:column;gap:6px}
+.box h4{margin:0;font-size:14px;font-weight:800;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.log{font-size:12px;color:#2e2b40;display:grid;grid-template-columns:84px minmax(0,1fr);gap:2px 8px}
+.log span:nth-child(odd){color:#4a4760}
+.btn{min-height:44px;border-radius:10px;border:1px solid #d6d3e2;background:#ffffff;font:inherit;font-weight:700;font-size:14px;padding:0 14px;cursor:pointer;color:#1d1b2b}
+.pri{background:#5b3fd9;color:#ffffff;border-color:#5b3fd9}
+</style>
+</helmet>
+<div style="width: 1750px; height: 1000px; box-sizing: border-box; padding: 40px 48px; background: #ecebf2; font-family: 'Noto Sans KR', system-ui, sans-serif; color: #1d1b2b; display: flex; gap: 64px; align-items: flex-start">
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <p style="margin: 0; font-size: 13px; font-weight: 700; color: #4a4760">휴대폰 390px</p>
+    <div style="width: 390px; height: 844px; background: #f6f5fa; border-radius: 28px; overflow: hidden; border: 1px solid #d6d3e2; display: flex; flex-direction: column">
+      <div class="top"><span class="logo">Edge<b>English</b> 운영</span><span style="flex: 1"></span><span class="sub">학생 이력</span></div>
+      <div style="flex: none; background: #ffffff; padding: 12px 16px; border-bottom: 1px solid #e6e3ef; display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; gap: 8px; align-items: center"><b class="mono" style="font-size: 17px">STU-0012</b><span class="pill p-type">③ 계약 후 안내서</span></div>
+        <span class="sub">가짜 학생 · 지금 3회차 (11-03 ~ 11-30)</span>
+      </div>
+      <div style="flex: 1; overflow: hidden; padding: 14px 16px 0">
+        <div class="tl">
+          <div class="ev"><div class="rail"><span class="dot"></span><span class="line"></span></div><div class="box"><h4>3회차 · CT2026A <span class="pill p-ok">동의</span></h4><div class="log"><span>보냄</span><span>11-01 10:02</span><span>열람</span><span>11-01 21:14</span><span>동의</span><span>11-01 21:16 · 필수 2/2</span><span>소식 받기</span><span>안 함</span></div></div></div>
+          <div class="ev"><div class="rail"><span class="dot w"></span><span class="line"></span></div><div class="box"><h4>2회차 · 안내서 G20260709 <span class="pill p-warn">결제 후 전달</span></h4><span class="sub">카톡 08-05 · 학생 시트 게시. 동의 절차 없음. 적용 조건 미확인(법률)</span></div></div>
+          <div class="ev"><div class="rail"><span class="dot g"></span></div><div class="box"><h4>1회차 · 계약서 SC1 <span class="pill p-gray">확인됨</span></h4><span class="sub">카톡 2025-11-28 → 결제 11-29. 9조 있음 (사실)</span></div></div>
+        </div>
+      </div>
+      <div style="flex: none; background: #ffffff; border-top: 1px solid #e1ddeb; padding: 12px 16px 16px; display: flex; gap: 8px">
+        <button class="btn pri" type="button" style="flex: 1">링크 복사</button>
+        <button class="btn" type="button" style="flex: 1">더보기</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <p style="margin: 0; font-size: 13px; font-weight: 700; color: #4a4760">PC 1200px</p>
+    <div style="width: 1200px; height: 844px; background: #f6f5fa; border-radius: 12px; overflow: hidden; border: 1px solid #d6d3e2; display: flex; flex-direction: column">
+      <div class="top" style="padding: 0 32px"><span class="logo">Edge<b>English</b> 운영</span><span style="font-size: 14px; color: #4a4760; margin-left: 8px">학생 › STU-0012 › 안내·동의 이력</span></div>
+      <div style="flex: 1; display: flex; gap: 24px; padding: 24px 32px; overflow: hidden">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; gap: 10px; align-items: center"><b class="mono" style="font-size: 22px">STU-0012</b><span class="pill p-type">③ 예전 계약 + 재등록 때 안내서만</span><span class="sub">가짜 학생 · 40분 주 2회</span></div>
+          <div class="tl">
+            <div class="ev"><div class="rail"><span class="dot"></span><span class="line"></span></div><div class="box"><h4>3회차 (2026-11-03 ~ 11-30) · 온라인 확인 CT2026A rev 1 <span class="pill p-ok">동의</span></h4>
+              <div class="log" style="grid-template-columns: 120px minmax(0, 1fr)"><span>요청 보냄</span><span>2026-11-01 10:02 (메일 + 카톡 링크 복사)</span><span>처음 열람</span><span>2026-11-01 21:14</span><span>동의</span><span>2026-11-01 21:16 · 필수 2/2 체크 · 학생 본인 로그인</span><span>소식 받기 (선택)</span><span>체크 안 함</span><span>문서 지문</span><span class="mono">3f9a…c21e</span></div>
+              <div style="display: flex; gap: 8px"><button class="btn" type="button">그때 보여 준 원문 보기</button></div>
+            </div></div>
+            <div class="ev"><div class="rail"><span class="dot w"></span><span class="line"></span></div><div class="box"><h4>2회차 (2026-08) · 필독안내서 G20260709 (이미지 2장) <span class="pill p-warn">결제 후 전달</span></h4><span class="sub">카톡 채널 2026-08-05 (매칭 중) · 학생 수강현황 시트에 게시. 동의 절차 없음.<br>이 등록에 안내서 조건이 적용되는지, 1회차 계약이 이어지는지: 미확인(법률) · D-22</span></div></div>
+            <div class="ev"><div class="rail"><span class="dot g"></span></div><div class="box"><h4>1회차 (2025-12) · 수강계약서 SC1 <span class="pill p-gray">확인됨</span></h4><span class="sub">카톡 2025-11-28 → 결제 2025-11-29 (받은 뒤 결제). 계약서 9조(재등록 효력) 있음 — 사실 기록. 변경권 30일마다 주 2회 4회 (안내서와 다름)</span></div></div>
+          </div>
+        </div>
+        <div style="width: 300px; flex: none; display: flex; flex-direction: column; gap: 12px">
+          <div style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+            <b style="font-size: 14px">할 수 있는 일</b>
+            <button class="btn pri" type="button">링크 복사</button>
+            <button class="btn" type="button">재확인 요청 만들기</button>
+            <button class="btn" type="button">철회 기록 (사유 필수)</button>
+            <span class="sub">운영자는 학생 대신 '동의'를 누를 수 없어요.</span>
+          </div>
+          <div style="background: #fff8db; border: 1px solid #f1e3a0; border-radius: 14px; padding: 14px 16px; font-size: 13px; line-height: 1.55; color: #3d3510">적용 조건: <b>정하지 않음</b>. 이 화면은 받은 문서와 동의 기록만 보여 줘요 (D-22).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1750,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

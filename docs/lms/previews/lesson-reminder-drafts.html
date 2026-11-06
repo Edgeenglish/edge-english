@@ -1,0 +1,121 @@
+<title>수업 알림 메일 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위 질문 → 메일 3장(휴대폰 폭) → 알림 설정(휴대폰·PC) */
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2a;--muted:#55526a;--line:#e6e3ef;--accent:#5b3df0;--warn-bg:#fff6dd;--warn-fg:#7a5200;--q:#efeafe;
+--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--warn-bg:#3a2f12;--warn-fg:#ffd77a;--q:#2a2540;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--warn-bg:#3a2f12;--warn-fg:#ffd77a;--q:#2a2540;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+main{max-width:1080px;margin:0 auto;display:grid;gap:28px}
+h1{font-size:22px;margin:0}h2{font-size:18px;margin:0 0 10px}
+.q{background:var(--q);border-radius:14px;padding:14px 16px;display:grid;gap:10px}
+.q p{margin:0}.q b{color:var(--accent)}
+.row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.mail{background:var(--card);border:1px solid var(--line);border-radius:12px;width:340px;max-width:100%;overflow:hidden}
+.mail .head{padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
+.mail .head b{display:block;color:var(--fg);font-size:14px}
+.mail .body{padding:16px 14px;display:grid;gap:10px}
+.mail p{margin:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}.kv dt{color:var(--muted)}.kv dd{margin:0;font-weight:600}
+.btn{display:block;text-align:center;background:var(--accent);color:#fff;border-radius:10px;padding:11px;font-weight:700;text-decoration:none}
+.warn{background:var(--warn-bg);color:var(--warn-fg);border-radius:8px;padding:9px 11px;font-size:14px;font-weight:600}
+.foot{font-size:12px;color:var(--muted)}
+.cap{font-size:13px;color:var(--muted);margin:0 0 6px}
+.phone{width:340px;max-width:100%;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 16px;display:grid;gap:12px}
+.pc{flex:1 1 520px;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;display:grid;grid-template-columns:200px 1fr;gap:20px}
+.pc nav{display:grid;gap:4px;align-content:start;font-size:14px}.pc nav span{padding:8px 10px;border-radius:8px}.pc nav .on{background:var(--q);font-weight:700}
+.sw{display:flex;justify-content:space-between;align-items:center;min-height:48px;border-top:1px solid var(--line);font-size:15px}
+.sw:first-of-type{border:0}
+.tg{width:46px;height:28px;border-radius:14px;background:var(--accent);position:relative;flex:none}
+.tg::after{content:"";position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:#fff}
+.tg.off{background:var(--line)}.tg.off::after{right:auto;left:3px}
+.link{display:flex;justify-content:space-between;min-height:48px;align-items:center;border-top:1px solid var(--line);font-size:14px}
+.link span:last-child{color:var(--accent);font-weight:600}
+@media (max-width:640px){.pc{grid-template-columns:1fr}.pc nav{display:none}}
+</style>
+<main>
+<h1>학생 수업 알림 메일 · 시안</h1>
+
+<section class="q">
+<p><b>Q1. 예약 실행 간격</b> — 몇 분마다 '보낼 메일'을 확인할까요? 메일은 24시간 전·2시간 전이 된 뒤 이 시간 안에 나가요. (짧을수록 정확, 비용은 셋 다 0원)</p>
+<p>① 5분 &nbsp; ② 10분 (권장) &nbsp; ③ 15분</p>
+<p><b>Q2. 보상·이월 수업</b>은 '보강 수업 알림' 스위치를 따를까요? (학생 화면에는 정규·보강·보상 세 가지로 보임) — ① 예 (권장, 스위치는 2개 그대로) ② 정규 스위치를 따름</p>
+<p><b>Q3. 메일 글·화면</b> 아래 그대로 괜찮을까요?</p>
+</section>
+
+<section>
+<h2>메일 (휴대폰에서 본 모양)</h2>
+<div class="row">
+ <div>
+ <p class="cap">① 24시간 전 · 정규 수업</p>
+ <div class="mail">
+  <div class="head"><b>[엣지영어] 10/30(금) 오후 8:00 수업</b>엣지영어 &lt;support@edgeenglish.kr&gt;</div>
+  <div class="body">
+   <p>김O준님, 수업 안내드려요.</p>
+   <dl class="kv"><dt>일시</dt><dd>10/30(금) 오후 8:00 (50분)</dd><dt>강사</dt><dd>Emma</dd></dl>
+   <a class="btn" href="#">수업 들어가기 (Google Meet)</a>
+   <p class="foot">알림 끄기: 엣지영어 LMS › 내 정보 › 수업 알림 메일</p>
+  </div>
+ </div>
+ </div>
+ <div>
+ <p class="cap">② 2시간 전 · 대체강사 수업</p>
+ <div class="mail">
+  <div class="head"><b>[엣지영어] 10/30(금) 오후 8:00 수업 · 대체강사</b>엣지영어 &lt;support@edgeenglish.kr&gt;</div>
+  <div class="body">
+   <p>김O준님, 수업 안내드려요.</p>
+   <p class="warn">대체강사 수업이에요. 수업 링크가 달라요.</p>
+   <dl class="kv"><dt>일시</dt><dd>10/30(금) 오후 8:00 (50분)</dd><dt>강사</dt><dd>James (대체강사)</dd></dl>
+   <a class="btn" href="#">James 강사님 수업 들어가기</a>
+   <p class="foot">알림 끄기: 엣지영어 LMS › 내 정보 › 수업 알림 메일</p>
+  </div>
+ </div>
+ </div>
+ <div>
+ <p class="cap">③ 해외 학생 · 보강 수업</p>
+ <div class="mail">
+  <div class="head"><b>[엣지영어] 10/31(토) 오전 9:00 보강 수업</b>엣지영어 &lt;support@edgeenglish.kr&gt;</div>
+  <div class="body">
+   <p>박O연님, 보강 수업 안내드려요.</p>
+   <dl class="kv"><dt>일시</dt><dd>10/31(토) 오전 9:00 한국 시간<br>10/30(금) 오후 5:00 Los Angeles</dd><dt>강사</dt><dd>Emma</dd></dl>
+   <a class="btn" href="#">수업 들어가기 (Google Meet)</a>
+   <p class="foot">알림 끄기: 엣지영어 LMS › 내 정보 › 수업 알림 메일</p>
+  </div>
+ </div>
+ </div>
+</div>
+<p class="cap" style="margin-top:10px">정책 그대로: 시작 24시간 안에 잡힌 수업은 24시간 전 메일 없음 · 취소된 수업은 안 보냄 · 시간이 바뀌면 새 시간으로 · 시험 단계에서는 모두 support@로만 감</p>
+</section>
+
+<section>
+<h2>알림 설정 (학생 화면 › 내 정보)</h2>
+<div class="row">
+ <div>
+ <p class="cap">휴대폰</p>
+ <div class="phone">
+  <strong style="font-size:17px">내 정보</strong>
+  <div style="border:1px solid var(--line);border-radius:14px;padding:12px 14px">
+   <strong style="font-size:17px">수업 알림 메일</strong>
+   <p class="foot" style="margin:2px 0 8px">수업 24시간 전 · 2시간 전</p>
+   <div class="sw"><span>정규 수업</span><span class="tg"></span></div>
+   <div class="sw"><span>보강 수업</span><span class="tg off"></span></div>
+  </div>
+ </div>
+ </div>
+ <div class="pc">
+  <nav><span>홈</span><span>일정</span><span>신청</span><span>수업 기록</span><span class="on">내 정보</span></nav>
+  <div style="display:grid;gap:12px;align-content:start">
+   <strong style="font-size:18px">내 정보</strong>
+   <div style="border:1px solid var(--line);border-radius:12px;padding:12px 16px">
+    <strong>수업 알림 메일</strong>
+    <p class="foot" style="margin:2px 0 8px">수업 24시간 전 · 2시간 전</p>
+    <div class="sw"><span>정규 수업</span><span class="tg"></span></div>
+    <div class="sw"><span>보강 수업</span><span class="tg off"></span></div>
+   </div>
+   <p class="foot">휴대폰·PC 같은 모양 (내 정보에 바로 보임). 스위치 누르면 바로 저장 + '저장했어요'</p>
+  </div>
+ </div>
+</div>
+</section>
+</main>

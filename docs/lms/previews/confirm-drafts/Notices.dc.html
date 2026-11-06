@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>확정 직후 양쪽 안내</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#5b3fd9}a:hover{color:#3f27a8}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f6f5fa; font-family: 'Pretendard', system-ui, -apple-system, sans-serif; color: #1d1b2b; display: flex; flex-direction: column">
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #ffffff; border-bottom: 1px solid #e6e3ef">
+    <span style="font-size: 16px; font-weight: 700">처리할 일</span>
+    <span style="font-size: 13px; color: #6b6880">신규 학생 매칭 · 1</span>
+  </div>
+  <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+    <div style="background: #ffffff; border: 1.5px solid #e04f3c; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <span style="font-size: 15.5px; font-weight: 700">가상학생일 · 확정됨</span>
+        <span style="font-size: 12.5px; font-weight: 700; color: #ffffff; background: #c4321f; border-radius: 999px; padding: 3px 10px">강사 안내 안 함</span>
+      </div>
+      <div style="font-size: 14px; line-height: 1.6; color: #3d3a52">
+        가상강사 Alex · 화·목 19:00 · 정규 8회 생성<br>
+        첫 수업 <b>11/3(화) 19:00</b> · 13일 남음
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px; border: 1px solid #f2c4bd; background: #fff5f3; border-radius: 12px; padding: 10px 12px">
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 14.5px; font-weight: 700">강사 확정 안내 · WhatsApp</span>
+            <span style="font-size: 12.5px; color: #8a2a1b">아직 안 보냄</span>
+          </div>
+          <button type="button" style="min-height: 44px; border-radius: 10px; border: 0; background: #7d5fff; color: #ffffff; font-size: 14px; font-weight: 700; padding: 0 14px; cursor: pointer">문구 복사</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; border: 1px solid #cfe9db; background: #f2fbf6; border-radius: 12px; padding: 10px 12px">
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 14.5px; font-weight: 700">학생 확정 안내 · 카카오톡</span>
+            <span style="font-size: 12.5px; color: #1f6b44">보냄 10/21 16:05 (복사한 시각)</span>
+          </div>
+          <button type="button" style="min-height: 44px; border-radius: 10px; border: 1px solid #e6e3ef; background: #ffffff; color: #3d3a52; font-size: 13.5px; padding: 0 12px; cursor: pointer">다시 복사</button>
+        </div>
+      </div>
+      <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #6b6880">두 줄이 모두 '보냄'이 되면 이 카드는 자동으로 '처리 내역'으로 넘어가요. 따로 완료를 누르지 않아요.</p>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 14px; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px">
+      <span style="font-size: 13px; font-weight: 700; color: #6b6880">처리 내역 (오늘)</span>
+      <span style="font-size: 14px; color: #3d3a52">가상학생이 · Blair · 양쪽 안내 완료 14:10</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

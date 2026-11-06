@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>학습자료 탭</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#4b2fd6}a:hover{color:#3a22b0}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1040px; box-sizing: border-box; background: #f6f5fa; font-family: 'IBM Plex Sans KR', sans-serif; color: #1d1b2b; display: flex; flex-direction: column">
+  <header style="padding: 18px 20px 8px"><h1 style="margin: 0; font-size: 22px; font-weight: 700">학습자료</h1></header>
+  <main style="display: flex; flex-direction: column; gap: 14px; padding: 6px 16px 24px">
+    <section aria-label="내 교재" style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+      <div style="font-size: 13px; font-weight: 700; color: #5b3df0">지금 수업 교재</div>
+      <div style="display: flex; gap: 14px">
+        <div aria-hidden="true" style="width: 72px; height: 96px; border-radius: 8px; background: #dfe6f7; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #3a4a7a; text-align: center; flex-shrink: 0">표지<br>(홈페이지 교재 이미지)</div>
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <div style="font-size: 17px; font-weight: 700">Speak now 2</div>
+          <div style="font-size: 13px; color: #55526a">일반회화 · 초급~중급</div>
+          <div style="font-size: 13px; color: #55526a">지난 수업 Unit 7 · 다음 Unit 8 예정</div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+        <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 46px; border-radius: 12px; background: #5b3df0; color: #ffffff; font-size: 14px; font-weight: 700; text-decoration: none">미리보기 열기</a>
+        <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 46px; border-radius: 12px; border: 1px solid #d9d5e8; color: #1d1b2b; font-size: 14px; font-weight: 600; text-decoration: none">교재 구매</a>
+      </div>
+      <div style="font-size: 12px; color: #55526a; line-height: 1.5">홈페이지 '교재 소개'와 같은 목록에서 연결돼요. 출판사 교재는 저작권 때문에 미리보기·구매 링크로 열려요.</div>
+    </section>
+
+    <section aria-label="내 수업 자료" style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 18px; padding: 4px 16px">
+      <a href="#" style="display: flex; justify-content: space-between; align-items: center; min-height: 56px; border-bottom: 1px solid #eeecf4; text-decoration: none; color: #1d1b2b"><span style="font-size: 15px; font-weight: 600">수업 노트</span><span style="font-size: 13px; color: #55526a">강사와 함께 쓰는 노트 ›</span></a>
+      <a href="#" style="display: flex; justify-content: space-between; align-items: center; min-height: 56px; border-bottom: 1px solid #eeecf4; text-decoration: none; color: #1d1b2b"><span style="font-size: 15px; font-weight: 600">수업 기록</span><span style="font-size: 13px; color: #55526a">지난 수업에서 배운 내용 ›</span></a>
+      <a href="#" style="display: flex; justify-content: space-between; align-items: center; min-height: 56px; text-decoration: none; color: #1d1b2b"><span style="font-size: 15px; font-weight: 600">받은 자료</span><span style="font-size: 13px; color: #55526a">여행영어 eBook (PDF) ›</span></a>
+    </section>
+
+    <section aria-label="전체 교재" style="display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px"><h2 style="margin: 0; font-size: 16px; font-weight: 700">전체 교재 둘러보기</h2><a href="#" style="font-size: 13px">홈페이지 교재 소개 ›</a></div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; padding: 0 4px">
+        <span style="font-size: 12px; font-weight: 600; background: #1b1442; color: #ffffff; border-radius: 999px; padding: 6px 12px">전체</span>
+        <span style="font-size: 12px; font-weight: 600; background: #ffffff; border: 1px solid #d9d5e8; border-radius: 999px; padding: 6px 12px">일반회화</span>
+        <span style="font-size: 12px; font-weight: 600; background: #ffffff; border: 1px solid #d9d5e8; border-radius: 999px; padding: 6px 12px">입문</span>
+        <span style="font-size: 12px; font-weight: 600; background: #ffffff; border: 1px solid #d9d5e8; border-radius: 999px; padding: 6px 12px">중급</span>
+      </div>
+      <a href="#" style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 14px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; text-decoration: none; color: #1d1b2b; min-height: 44px"><span style="font-size: 14px; font-weight: 600">Can you believe it? 1</span><span style="font-size: 12px; color: #55526a">입문~중급 ›</span></a>
+      <a href="#" style="background: #ffffff; border: 1px solid #e6e3ef; border-radius: 14px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; text-decoration: none; color: #1d1b2b; min-height: 44px"><span style="font-size: 14px; font-weight: 600">Speak now 3</span><span style="font-size: 12px; color: #55526a">초급~중급 ›</span></a>
+      <div style="font-size: 12px; color: #55526a; padding: 0 4px; line-height: 1.5">교재를 바꾸고 싶으면 '신청 내역 › 강사·교재 변경 요청'으로 알려 주세요.</div>
+    </section>
+  </main>
+  <nav aria-label="메뉴" style="position: sticky; bottom: 0; margin-top: auto; background: #ffffff; border-top: 1px solid #e6e3ef; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 6px 0 14px">
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; color: #55526a; text-decoration: none">홈</a>
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; color: #55526a; text-decoration: none">일정</a>
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; color: #55526a; text-decoration: none">신청 내역</a>
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; font-weight: 700; color: #5b3df0; text-decoration: none">학습자료</a>
+    <a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: 12px; color: #55526a; text-decoration: none">내 정보</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
