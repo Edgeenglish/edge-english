@@ -9,8 +9,9 @@
 import Link from 'next/link';
 import ApplicationPicker from './ApplicationPicker';
 import { useEffect, useMemo, useState } from 'react';
-import { checkRegularPlan, firstLessonDateOnOrAfter, issueText, type CellState, type PlanIssue } from '@/lms/rules/booking';
-import { addDays, instantToKstDate, weekdayOf, type KstDate } from '@/lms/rules/dates';
+import { checkLessonList, firstLessonDateOnOrAfter, issueText, type CellState, type PlanIssue } from '@/lms/rules/booking';
+import { instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '@/lms/rules/dates';
+import { buildLessons, lessonPayload, needsLessonList, type LessonDate } from '@/lms/rules/lessons';
 import { courseName } from '@/lms/rules/period';
 import type { RegularSlot } from '@/lms/rules/schedule';
 import { CONFIRMED } from '@/lms/rules/policy';
@@ -26,19 +27,19 @@ import {
   planSummary,
   savePayload,
   slotProblem,
-  slotStarted,
   wishText,
   type Draft,
   type FormResponse,
   type Payment,
   type RegTutor,
 } from '@/lms/admin/registration';
-import { dayLabel, diffFromKst, weekOf, WEEKDAY_KO } from '@/lms/admin/schedule';
+import { dayLabel, diffFromKst, weekOf } from '@/lms/admin/schedule';
 import { eunNeun, findCity, findCountry, manyZones, searchCities, searchCountries, searchZones, suggestTimezone, zoneName } from '@/lms/admin/places';
 import { AdminHeader } from '../../ui';
 import { proposalMessage, type PlanView } from '@/lms/admin/confirm';
 import type { PlanActions } from '@/lms/admin/confirm-live';
 import PlanCard, { TimeRows, type PlanHandlers } from '../../PlanCard';
+import { FinalLessons, ScheduleStepMobile, ScheduleStepPc } from './ScheduleStep';
 import { Badge, Card, EMPTY_FILTER, Field, inputCls, Legend, nowLocal, ProfileSheet, SearchPick, slotLocal, slotText, TutorPicker, WeekCalendar, wishWindows, type TutorFilter } from './parts';
 
 export type SaveResult =
@@ -68,7 +69,7 @@ type Props = {
   planActions?: PlanActions;
 };
 
-const STEPS = ['학생 정보\n(신청서 불러오기)', '강사 & 스케줄 선택', '수업 정보 & 결제 확인', '최종 확인'];
+const STEPS = ['학생 정보\n(신청서 불러오기)', '강사 매칭', '수업 일정', '최종 확인'];
 const HINT: Record<PlanIssue['reason'], string> = {
   tutor_makeup: '그날 보강을 옮기거나 첫 수업일을 다음 주로',
   tutor_regular: '다른 시간을 고르세요 (매주 겹치면 이 시간은 불가)',
@@ -175,39 +176,51 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     setSlots([...slots, { weekday: wd, time }].sort(bySlot));
   }
 
+  // 3단계 직접 입력: 요일 누르기 = 넣기/빼기 (시간은 이미 고른 다른 요일의 시간을 그대로), 요일별 시간 고르기
+  function toggleDay(wd: number) {
+    const same = slots.find((s) => s.weekday === wd);
+    if (same) return setSlots(slots.filter((s) => s !== same));
+    if (draft.weeklyCount && slots.length >= draft.weeklyCount) return setToast(`주 ${draft.weeklyCount}회예요. 먼저 고른 요일을 하나 빼 주세요.`);
+    setSlots([...slots, { weekday: wd, time: slots.find((s) => s.time)?.time ?? '' }].sort(bySlot));
+  }
+  function setDayTime(wd: number, time: string) {
+    setSlots(slots.map((s) => (s.weekday === wd ? { ...s, time } : s)));
+  }
+
   // 첫 수업일 후보는 등록 당일부터 (2026-11-06 대표 결정, H26(58)). 오늘 정규 시각이 이미 지났으면 내일부터
   const suggested = useMemo(() => {
     const base = draft.startWish && draft.startWish > today ? draft.startWish : firstDateBase(today, now, slots);
     return firstLessonDateOnOrAfter(base, slots.map((s) => s.weekday));
   }, [draft.startWish, today, now, slots]);
-  // 정규 요일이 정해졌으면 그 요일 중에서, 강사 미배정(요일 없음)이면 입력한 첫 수업일(희망 시작일)을 그대로 예정일로 (QA-11)
-  const firstDate = firstPick && (slots.length === 0 || slots.some((s) => s.weekday === weekdayOf(firstPick))) ? firstPick : suggested;
-  const slotErr = tutor ? slotProblem(slots, draft.weeklyCount) : null;
-  // 오늘을 직접 골랐는데 오늘 정규 시각이 이미 지났으면 안내만 (2026-11-06 대표: 어느 날이든 당일이든 고를 수 있게 — 막지 않음)
-  const todayPassed = firstDate === today && slotStarted(today, now, slots);
+  // 첫 수업일은 어느 날이든 (2026-11-06 대표, H26(60)·(61)). 정규 요일이 아니면 그날이 1회로 들어감 (src/lms/rules/lessons.ts)
+  const firstDate = firstPick || suggested;
+  const slotErr = tutor ? slotProblem(slots, draft.weeklyCount) ?? (slots.some((s) => !s.time) ? '수업 시간을 골라 주세요' : null) : null;
 
-  const plan = useMemo(() => {
-    if (!tutor || slotErr || !firstDate || !draft.weeks || !draft.durationMin) return null;
-    try {
-      return checkRegularPlan({ startDate: firstDate, weeks: draft.weeks, slots, durationMin: draft.durationMin, tutorBusy: tutor.busy, availability: tutor.availability });
-    } catch {
-      return null;
-    }
-  }, [tutor, slotErr, firstDate, draft.weeks, draft.durationMin, slots]);
-  // 첫 수업일 후보: 추천일부터 정규 요일 4번 — 각 날짜로 시작하면 등록기간 전체에서 충돌이 몇 건인지
-  const firstCandidates = useMemo(() => {
-    if (!suggested || slotErr) return [];
-    const out: { date: KstDate; issues: number | null }[] = [];
-    for (let d = suggested; out.length < 4; d = addDays(d, 1)) {
-      if (!slots.some((s) => s.weekday === weekdayOf(d))) continue;
-      let issues: number | null = null;
-      if (tutor && draft.weeks && draft.durationMin)
-        issues = checkRegularPlan({ startDate: d, weeks: draft.weeks, slots, durationMin: draft.durationMin, tutorBusy: tutor.busy, availability: tutor.availability }).issues.length;
-      out.push({ date: d, issues });
-    }
-    return out;
-  }, [suggested, slotErr, slots, tutor, draft.weeks, draft.durationMin]);
-  const summary = planSummary(draft, firstDate ?? (draft.startWish || null));
+  // 특정 수업 날짜 변경: 기본 목록(정규 시간·첫 수업일·기간)이 바뀌면 지난 변경은 버림
+  const editBasis = JSON.stringify([slots, firstDate, draft.weeks, draft.weeklyCount]);
+  const [editState, setEditState] = useState<{ basis: string; map: Record<KstDate, LessonDate> }>({ basis: '', map: {} });
+  const edits = useMemo(() => (editState.basis === editBasis ? editState.map : {}), [editState, editBasis]);
+  function setEdit(key: KstDate, to: LessonDate | null) {
+    const map = { ...edits };
+    if (to) map[key] = to;
+    else delete map[key];
+    setEditState({ basis: editBasis, map });
+  }
+
+  const lessonPlan = useMemo(
+    () => (tutor && !slotErr && firstDate && draft.weeks && draft.weeklyCount ? buildLessons({ firstDate, weeks: draft.weeks, weeklyCount: draft.weeklyCount, slots, edits }) : null),
+    [tutor, slotErr, firstDate, draft.weeks, draft.weeklyCount, slots, edits],
+  );
+  // 충돌 검사: 기존 규칙 그대로 (다른 수업·보강·휴무·휴식 10분·강사 가능 시간) — 회차마다
+  const issues = useMemo(
+    () => (lessonPlan && tutor && draft.durationMin ? checkLessonList({ lessons: lessonPayload(lessonPlan), durationMin: draft.durationMin, tutorBusy: tutor.busy, availability: tutor.availability }) : []),
+    [lessonPlan, tutor, draft.durationMin],
+  );
+  const plan = lessonPlan && lessonPlan.lessons.length ? { issues, lessons: lessonPlan.lessons } : null;
+  // 첫 수업이 오늘인데 그 시각이 이미 지났으면 안내만 (막지 않음, H26(60))
+  const firstLesson = lessonPlan?.lessons[0];
+  const todayPassed = !!firstLesson && firstLesson.date === today && kstToInstant(firstLesson.date, firstLesson.time) <= now;
+  const summary = planSummary(draft, lessonPlan?.startDate ?? firstDate ?? (draft.startWish || null));
   const payErr = checkPayment(pay);
   const paid = pay.status === 'confirmed';
   const blockers = [
@@ -216,6 +229,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     ...(paid && plan && plan.issues.length ? [`일정 충돌 ${plan.issues.length}건을 먼저 해결해 주세요`] : []),
     ...payErr,
     ...(!summary ? ['첫 수업일(또는 희망 시작일)을 정해 주세요'] : []),
+    ...(paid && tutor && lessonPlan ? lessonPlan.problems : []),
   ];
 
   function go(n: number) {
@@ -230,7 +244,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
 
   // 저장하면서 강사·시간을 정했으면 일정안이 생김 (H22). 화면에 보일 일정안 모양
   const draftPlan: PlanView | null =
-    paid && tutor && summary && slots.length && draft.durationMin
+    paid && tutor && summary && slots.length && !slotErr && draft.durationMin
       ? {
           planId: '',
           state: 'proposed',
@@ -244,6 +258,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           startDate: summary.startDate,
           endDate: summary.endDate,
           lessons: summary.lessons,
+          lessonList: lessonPlan && needsLessonList(lessonPlan) ? lessonPayload(lessonPlan) : null,
           durationMin: draft.durationMin,
           proposalSentAt: null,
           confirmedAt: null,
@@ -266,7 +281,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     }
     setSaving(true);
     try {
-      const r = await save(requestId, savePayload(draft, slots, tutor?.id ?? null, summary.startDate, pay, tutorAccepted));
+      const r = await save(requestId, savePayload(draft, slots, tutor?.id ?? null, summary.startDate, pay, tutorAccepted, draftPlan?.lessonList ?? null));
       setResult(r);
       if (!draftPlan) return;
       const now = new Date();
@@ -483,7 +498,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           {row('방법', pay.method === 'card_link' ? '아임웹 카드' : '계좌이체')}
         </>
       ) : (
-        <p className="text-[13.5px] leading-relaxed text-[#6b6880]">결제·입금 확인 전에는 학생 정보와 수강권(결제 대기)만 저장하고 강사·정규 일정은 확정하지 않아요. 확인은 3단계에서 기록해요.</p>
+        <p className="text-[13.5px] leading-relaxed text-[#6b6880]">결제·입금 확인 전에는 학생 정보와 수강권(결제 대기)만 저장하고 강사·정규 일정은 확정하지 않아요. 확인은 4단계에서 기록해요.</p>
       )}
     </Card>
   );
@@ -523,7 +538,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       </div>
       {slots.length > 0 && firstDate && (
         <p className="mt-2 text-[13px] text-[#6b6880]">
-          강사 현지: {slots.map((s) => `${slotText(s)} → ${slotLocal(s, firstDate, tutor.timezone)}`).join(' · ')}
+          강사 현지: {slots.filter((s) => s.time).map((s) => `${slotText(s)} → ${slotLocal(s, firstDate, tutor.timezone)}`).join(' · ')}
         </p>
       )}
     </Card>
@@ -535,84 +550,81 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     </Card>
   );
 
+  // 3단계 수업 일정 (2026-11-06 대표 시안 그대로 — PC·휴대폰 따로 구성)
+  const scheduleProps = {
+    tutor,
+    weeklyCount: draft.weeklyCount,
+    weeks: draft.weeks,
+    slots,
+    onToggleDay: toggleDay,
+    onDayTime: setDayTime,
+    firstDate,
+    onFirstDate: (d: KstDate) => setFirstPick(d),
+    plan: lessonPlan,
+    issues,
+    slotErr,
+    warnings: [...(todayPassed ? ['오늘 첫 수업 시각이 이미 지났어요 — 그래도 저장할 수 있어요 (지난 시각으로 기록돼요)'] : []), ...(firstDate ? firstDateWarnings(firstDate, today, draft.startWish) : [])],
+    onEdit: setEdit,
+    onPrev: () => go(2),
+    onNext: () => go(4),
+  };
   const step3 = (
-    <div className="space-y-4">
-      <Card title="수업 정보">
-        {row('수강 상품', product(draft))}
-        {row('강사', tutor ? `${tutor.name} (${tutor.country})` : <span className="text-[#9a5b00]">미배정 — 저장 후 신규 매칭 업무로 남아요</span>)}
-        {row('정규 시간', slots.length ? slots.map(slotText).join(' × ') : '-')}
-        {row(
-          '첫 수업일',
-          <span className="flex flex-wrap items-center gap-2">
-            <input type="date" value={firstPick || firstDate || ''} onChange={(e) => setFirstPick(e.target.value)} className="min-h-[38px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]" />
-            {firstDate && <span className="text-[13px] text-[#6b6880]">{dayLabel(firstDate)}</span>}
-          </span>,
-        )}
-        {firstCandidates.length > 1 && (
-          <div className="flex flex-wrap gap-1.5 py-2">
-            {firstCandidates.map((c) => (
-              <button
-                key={c.date}
-                type="button"
-                onClick={() => setFirstPick(c.date)}
-                className={`min-h-[36px] rounded-full border px-3 text-[13px] ${c.date === firstDate ? 'border-[#7d5ffb] bg-[#efebff] font-semibold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}
-              >
-                {dayLabel(c.date)} {c.issues === null ? '' : c.issues === 0 ? '✓' : `충돌 ${c.issues}`}
-              </button>
-            ))}
-          </div>
-        )}
-        {firstPick && slots.length > 0 && !slots.some((s) => s.weekday === weekdayOf(firstPick)) && <p className="text-[13px] text-[#b3261e]">첫 수업일은 정규 요일({slots.map((s) => WEEKDAY_KO[s.weekday]).join('·')}) 중 하나여야 해요. 추천 날짜로 바꿨어요.</p>}
-        {todayPassed && <p className="text-[13px] text-[#9a5b00]">오늘 정규 수업 시각이 이미 지났어요 — 그래도 저장할 수 있어요 (첫 수업은 지난 시각으로 기록돼요)</p>}
-        {firstDate && firstDateWarnings(firstDate, today, draft.startWish).map((w) => <p key={w} className="text-[13px] text-[#9a5b00]">{w}</p>)}
-        {summary && row('수강 기간', `${dayLabel(summary.startDate)} – ${dayLabel(summary.endDate)} · ${draft.weeks ? termText(draft.weeks) : ''}, 정규 ${summary.lessons}회`)}
-        <p className="mt-2 text-[12.5px] text-[#6b6880]">수강 기간은 첫 정규 수업일부터 계산해요 (4주 = 28일, POL-PER-01~03). 재등록은 이 화면이 아니라 학생 화면의 재등록 절차(POL-RN-07)를 따라요.</p>
-        {plan && <PlanResult issues={plan.issues} count={plan.lessons.length} />}
-      </Card>
-      <Card title="결제·입금 확인">
-        <div className="grid grid-cols-2 gap-2">
-          {(['confirmed', 'unconfirmed'] as const).map((s) => (
-            <button key={s} type="button" aria-pressed={pay.status === s} onClick={() => setPay({ ...pay, status: s })} className={`min-h-[46px] rounded-[10px] border text-[14px] font-semibold ${pay.status === s ? 'border-[#7d5ffb] bg-[#efebff] text-[#5b3fe0]' : 'border-[#e6e3ef] text-[#1d1b2b]'}`}>
-              {s === 'confirmed' ? '입금·결제 확인함' : '아직 확인 전'}
-            </button>
+    <>
+      <div className="hidden lg:block">
+        <ScheduleStepPc {...scheduleProps} />
+      </div>
+      <div className="lg:hidden">
+        <ScheduleStepMobile {...scheduleProps} />
+      </div>
+    </>
+  );
+
+  const payCard = (
+    <Card title="결제·입금 확인">
+      <div className="grid grid-cols-2 gap-2">
+        {(['confirmed', 'unconfirmed'] as const).map((s) => (
+          <button key={s} type="button" aria-pressed={pay.status === s} onClick={() => setPay({ ...pay, status: s })} className={`min-h-[46px] rounded-[10px] border text-[14px] font-semibold ${pay.status === s ? 'border-[#7d5ffb] bg-[#efebff] text-[#5b3fe0]' : 'border-[#e6e3ef] text-[#1d1b2b]'}`}>
+            {s === 'confirmed' ? '입금·결제 확인함' : '아직 확인 전'}
+          </button>
+        ))}
+      </div>
+      {paid ? (
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Field label="방법">
+            <select value={pay.method ?? ''} onChange={(e) => setPay({ ...pay, method: (e.target.value || null) as Payment['method'] })} className={inputCls(false)}>
+              <option value="">골라 주세요</option>
+              <option value="bank_transfer">계좌이체</option>
+              <option value="card_link">아임웹 카드</option>
+            </select>
+          </Field>
+          <Field label="받은 금액 (원)">
+            <input inputMode="numeric" value={pay.amount ?? ''} onChange={(e) => setPay({ ...pay, amount: e.target.value ? Number(e.target.value.replace(/\D/g, '')) : null })} className={inputCls(false)} />
+            {pay.amount ? <span className="mt-1 block text-[12px] text-[#6b6880]">{won(pay.amount)}</span> : null}
+          </Field>
+          <Field label="입금·결제 완료 시각 (한국)">
+            <input type="datetime-local" value={pay.paidAt.slice(0, 16)} onChange={(e) => setPay({ ...pay, paidAt: e.target.value ? `${e.target.value}:00+09:00` : '' })} className={inputCls(false)} />
+          </Field>
+          <Field label="입금자명">
+            <input value={pay.payerName} onChange={(e) => setPay({ ...pay, payerName: e.target.value })} className={inputCls(false)} />
+          </Field>
+          <Field label="아임웹 주문번호 · 거래 식별값 (있으면)" wide>
+            <input value={pay.externalRef} onChange={(e) => setPay({ ...pay, externalRef: e.target.value })} className={inputCls(false)} />
+          </Field>
+          {payErr.map((e) => (
+            <p key={e} className="col-span-2 text-[13px] text-[#b3261e]">
+              {e}
+            </p>
           ))}
         </div>
-        {paid ? (
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <Field label="방법">
-              <select value={pay.method ?? ''} onChange={(e) => setPay({ ...pay, method: (e.target.value || null) as Payment['method'] })} className={inputCls(false)}>
-                <option value="">골라 주세요</option>
-                <option value="bank_transfer">계좌이체</option>
-                <option value="card_link">아임웹 카드</option>
-              </select>
-            </Field>
-            <Field label="받은 금액 (원)">
-              <input inputMode="numeric" value={pay.amount ?? ''} onChange={(e) => setPay({ ...pay, amount: e.target.value ? Number(e.target.value.replace(/\D/g, '')) : null })} className={inputCls(false)} />
-              {pay.amount ? <span className="mt-1 block text-[12px] text-[#6b6880]">{won(pay.amount)}</span> : null}
-            </Field>
-            <Field label="입금·결제 완료 시각 (한국)">
-              <input type="datetime-local" value={pay.paidAt.slice(0, 16)} onChange={(e) => setPay({ ...pay, paidAt: e.target.value ? `${e.target.value}:00+09:00` : '' })} className={inputCls(false)} />
-            </Field>
-            <Field label="입금자명">
-              <input value={pay.payerName} onChange={(e) => setPay({ ...pay, payerName: e.target.value })} className={inputCls(false)} />
-            </Field>
-            <Field label="아임웹 주문번호 · 거래 식별값 (있으면)" wide>
-              <input value={pay.externalRef} onChange={(e) => setPay({ ...pay, externalRef: e.target.value })} className={inputCls(false)} />
-            </Field>
-            {payErr.map((e) => (
-              <p key={e} className="col-span-2 text-[13px] text-[#b3261e]">
-                {e}
-              </p>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 text-[13.5px] leading-relaxed text-[#6b6880]">확인 전이면 학생·수강권(결제 대기)만 저장해요. 고른 강사·시간은 저장되지 않고, 결제 확인 후 매칭 때 다시 정해요 (POL-OP-13).</p>
-        )}
-      </Card>
-    </div>
+      ) : (
+        <p className="mt-3 text-[13.5px] leading-relaxed text-[#6b6880]">확인 전이면 학생·수강권(결제 대기)만 저장해요. 고른 강사·시간은 저장되지 않고, 결제 확인 후 매칭 때 다시 정해요 (POL-OP-13).</p>
+      )}
+    </Card>
   );
 
   const step4 = (
+    <div className="space-y-4">
+    {payCard}
     <Card title="최종 확인">
       {row('학생', `${draft.nameKo} (${draft.nameEn}) · ${draft.email}`)}
       {row('연락처', draft.phone || '-')}
@@ -624,6 +636,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       {row('첫 수업일', summary ? dayLabel(summary.startDate) + (paid && tutor ? '' : ' (예정)') : '-')}
       {row('수강 기간', summary ? `${dayLabel(summary.startDate)} – ${dayLabel(summary.endDate)}${draft.weeks ? ` · ${termText(draft.weeks)}` : ''}` : '-')}
       {row('만들어질 수업', paid && tutor && summary ? `정규 ${summary.lessons}회` : '없음 (강사 배정 때 생성)')}
+      {paid && tutor && lessonPlan && lessonPlan.lessons.length > 0 && <FinalLessons plan={lessonPlan} tutor={tutor} />}
       {dupes.length > 0 && <p className="mt-2 text-[13px] text-[#9a5b00]">같은 이메일 기존 학생: {dupes.map((x) => x.code).join(', ')} — 새 학생으로 따로 만들어요 (연결 안 함).</p>}
       {blockers.length > 0 && (
         <ul className="mt-3 space-y-1 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
@@ -657,9 +670,10 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           </button>
         ))}
     </Card>
+    </div>
   );
 
-  const nextLabel = ['다음: 강사 & 스케줄 →', '다음: 수업 정보 및 결제 확인 →', '다음: 최종 확인 →', ''][step - 1];
+  const nextLabel = ['다음: 강사 매칭 →', '다음: 수업 일정 →', '다음: 최종 확인 ›', ''][step - 1];
   const right = step <= 2 ? (
     <div className="space-y-4">
       {tutorCard}
@@ -685,14 +699,21 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           }
         />
       </div>
-      {/* 휴대폰 위쪽: 닫기 · 단계 */}
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-[#e6e3ef] bg-white px-4 py-3 lg:hidden">
-        <b className="text-[17px] text-[#1d1b2b]">신규 학생 등록</b>
-        <span className="text-[14px] text-[#6b6880]">{step}/4</span>
-        <span className="flex-1" />
-        <Link href={demo ? '/lms/admin?demo=1' : '/lms/admin'} aria-label="닫기" className="flex h-10 w-10 items-center justify-center text-[22px] text-[#1d1b2b]">
-          ×
-        </Link>
+      {/* 휴대폰 위쪽: ‹ 뒤로(이전 단계, 1단계면 목록) · 단계 (2026-11-06 대표 시안) */}
+      <header className="sticky top-0 z-10 border-b border-[#e6e3ef] bg-white lg:hidden">
+        <div className="flex items-center gap-1 px-2 py-2">
+          {step > 1 ? (
+            <button type="button" onClick={() => go(step - 1)} aria-label="이전 단계" className="flex h-10 w-10 items-center justify-center text-[24px] text-[#1d1b2b]">
+              ‹
+            </button>
+          ) : (
+            <Link href={demo ? '/lms/admin?demo=1' : '/lms/admin'} aria-label="목록으로" className="flex h-10 w-10 items-center justify-center text-[24px] text-[#1d1b2b]">
+              ‹
+            </Link>
+          )}
+          <b className="text-[17px] text-[#1d1b2b]">신규 학생 등록</b>
+        </div>
+        <MobileStepper step={step} />
       </header>
       {demo && <p className="mx-4 mt-3 rounded-[12px] bg-[#fff8d6] px-4 py-2.5 text-[13.5px] text-[#5c4a00] lg:mx-7">가상 데이터 미리보기예요. 신청서·강사·일정은 모두 가상이고, 저장을 눌러도 실제로 저장되지 않아요.</p>}
 
@@ -705,17 +726,17 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
 
       <Stepper step={step} onStep={go} />
 
-      <main className="mx-auto max-w-[1400px] px-4 lg:grid lg:grid-cols-[minmax(360px,420px)_1fr] lg:items-start lg:gap-5 lg:px-7">
+      <main className={`mx-auto max-w-[1400px] px-4 lg:px-7 ${step === 3 ? '' : 'lg:grid lg:grid-cols-[minmax(360px,420px)_1fr] lg:items-start lg:gap-5'}`}>
         {/* 왼쪽(PC) / 1단계(휴대폰) */}
-        <div className={`space-y-4 ${step === 1 ? '' : 'hidden lg:block'}`}>
+        <div className={`space-y-4 ${step === 1 ? '' : step === 3 ? 'hidden' : 'hidden lg:block'}`}>
           {studentCard}
           {wishCard}
           <div className="hidden lg:block">{payBox}</div>
         </div>
         {/* 오른쪽(PC) / 2~4단계(휴대폰) */}
-        <div className={`mt-4 lg:mt-0 ${step === 1 ? 'hidden lg:block' : ''}`}>
+        <div className={`mt-3 lg:mt-0 ${step === 1 ? 'hidden lg:block' : ''}`}>
           {right}
-          {step < 4 && (
+          {step < 3 && (
             <div className="mt-4 hidden justify-end gap-2 lg:flex">
               {step > 2 && (
                 <button type="button" onClick={() => go(step - 1)} className="min-h-[48px] rounded-[12px] border border-[#e6e3ef] bg-white px-5 text-[15px] text-[#1d1b2b]">
@@ -723,7 +744,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
                 </button>
               )}
               <button type="button" onClick={() => go(step <= 2 ? 3 : 4)} className="min-h-[48px] rounded-[12px] bg-[#7d5ffb] px-6 text-[15px] font-bold text-white">
-                {step <= 2 ? '다음: 수업 정보 및 결제 확인 →' : '다음: 최종 확인 →'}
+                {step <= 2 ? '다음: 수업 일정 →' : '다음: 최종 확인 →'}
               </button>
             </div>
           )}
@@ -781,6 +802,26 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
 
 const bySlot = (a: RegularSlot, b: RegularSlot) => ((a.weekday + 6) % 7) - ((b.weekday + 6) % 7);
 
+/** 휴대폰 단계 줄: 끝난 단계는 ✓, 지금 단계만 이름 */
+function MobileStepper({ step }: { step: number }) {
+  return (
+    <ol className="flex items-center gap-1.5 px-4 pb-2.5" aria-label={`${step}/4 단계`}>
+      {STEPS.map((label, i) => {
+        const n = i + 1;
+        const now = n === step;
+        return (
+          <li key={n} className="flex items-center gap-1.5">
+            {i > 0 && <span aria-hidden className="text-[13px] text-[#cfc4ff]">{now ? '⟶' : '›'}</span>}
+            <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[12.5px] font-bold ${now ? 'bg-[#5b3fe0] text-white' : n < step ? 'bg-[#e6e3ef] text-[#6b6880]' : 'border border-[#cfc4ff] text-[#6b6880]'}`}>{n}</span>
+            {n < step && <span aria-hidden className="text-[12px] text-[#6b6880]">✓</span>}
+            {now && <span className="text-[14px] font-bold text-[#5b3fe0]">{label.split('\n')[0]}</span>}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function Stepper({ step, onStep }: { step: number; onStep: (n: number) => void }) {
   return (
     <ol className="mx-auto hidden max-w-[900px] grid-cols-4 px-7 py-5 lg:grid">
@@ -794,7 +835,10 @@ function Stepper({ step, onStep }: { step: number; onStep: (n: number) => void }
             <button type="button" onClick={() => onStep(n)} className={`relative z-[1] flex h-8 w-8 items-center justify-center rounded-full text-[14px] font-bold ${on || done ? 'bg-[#7d5ffb] text-white' : 'bg-[#e4ddff] text-white'}`}>
               {n}
             </button>
-            <span className={`mt-1.5 whitespace-pre-line text-[13px] ${on ? 'font-bold text-[#1d1b2b]' : 'text-[#6b6880]'}`}>{label}</span>
+            <span className={`mt-1.5 whitespace-pre-line text-[13px] ${on ? 'font-bold text-[#1d1b2b]' : 'text-[#6b6880]'}`}>
+              {label}
+              {done && step > 2 && <span className="ml-1 text-[#5b3fe0]">✓</span>}
+            </span>
           </li>
         );
       })}

@@ -81,3 +81,39 @@ describe('경고 시각 (D-51-3)', () => {
     expect(planAlert({ ...p, proposalSentAt: null }, at('2026-10-30T00:00:00Z'))).toBe('none');
   });
 });
+
+describe('회차별 날짜를 정한 일정안 (H26(61))', () => {
+  // 수·금 09:00 인데 첫 수업은 월 11/2, 3회차 수 11/11 → 목 11/12
+  const custom: PlanView = {
+    ...base,
+    startDate: '2026-11-02',
+    endDate: '2026-11-29',
+    lessonList: [
+      { date: '2026-11-02', time: '09:00' },
+      { date: '2026-11-04', time: '09:00' },
+      { date: '2026-11-06', time: '09:00' },
+      { date: '2026-11-12', time: '09:00' },
+      { date: '2026-11-13', time: '09:00' },
+      { date: '2026-11-18', time: '09:00' },
+      { date: '2026-11-20', time: '09:00' },
+      { date: '2026-11-25', time: '09:00' },
+    ],
+  };
+  it('강사 제안: 첫 수업은 목록의 첫 날, 정규와 다른 날·수업 없는 날을 강사 현지 시각으로', () => {
+    const m = proposalMessage(custom).split('\n');
+    expect(m).toContain('First class: Mon 2 Nov 11:00');
+    expect(m).toContain('Different dates: Mon 2 Nov 11:00, Thu 12 Nov 11:00');
+    expect(m).toContain('No class on: Wed 11 Nov, Fri 27 Nov');
+  });
+  it('강사 확정: 마지막 수업도 목록 기준', () => {
+    expect(tutorConfirmMessage(custom)).toContain('First class: Mon 2 Nov 11:00 · last Wed 25 Nov');
+  });
+  it('학생 확정: 정규와 다른 날·수업 없는 날을 학생 현지 시각으로', () => {
+    const m = studentConfirmMessage(custom).split('\n');
+    expect(m.some((l) => l.startsWith('정규와 다른 날: 11월 1일(일) 19:00, 11월 11일(수) 19:00'))).toBe(true);
+    expect(m.some((l) => l.startsWith('수업 없는 날: 11월 10일(화), 11월 26일(목)'))).toBe(true);
+  });
+  it('목록이 없으면 예전 문구 그대로', () => {
+    expect(proposalMessage(base)).not.toContain('Different dates');
+  });
+});

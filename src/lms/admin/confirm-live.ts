@@ -10,6 +10,7 @@ type PlanRow = {
   state: 'proposed' | 'confirmed';
   slots: RegularSlot[];
   start_date: string;
+  lesson_dates?: { date: string; time: string }[] | null;
   proposal_sent_at: string | null;
   confirmed_at: string | null;
   tutor: { name: string; country: string | null; timezone: string } | null;
@@ -41,6 +42,7 @@ export function toPlanView(r: PlanRow): PlanView {
     slots: r.slots,
     startDate: r.start_date,
     endDate: r.enrollment?.base_end_date ?? r.start_date,
+    lessonList: r.lesson_dates ?? null,
     lessons: r.enrollment?.lessons_purchased ?? 0,
     durationMin: r.enrollment?.duration_min ?? 50,
     proposalSentAt: r.proposal_sent_at ? new Date(r.proposal_sent_at) : null,
@@ -57,7 +59,7 @@ export async function loadPlans(sb: SupabaseClient, enrollmentIds: string[]): Pr
   const { data, error } = await sb
     .from('schedule_plans')
     .select(
-      'id, enrollment_id, state, slots, start_date, proposal_sent_at, confirmed_at, tutor:tutors(name, country, timezone), enrollment:enrollments(base_end_date, lessons_purchased, duration_min, student:students(name_en, country, city, timezone)), notices:schedule_notices(id, recipient_kind, status, sent_at)',
+      'id, enrollment_id, state, slots, start_date, lesson_dates, proposal_sent_at, confirmed_at, tutor:tutors(name, country, timezone), enrollment:enrollments(base_end_date, lessons_purchased, duration_min, student:students(name_en, country, city, timezone)), notices:schedule_notices(id, recipient_kind, status, sent_at)',
     )
     .in('enrollment_id', enrollmentIds)
     .in('state', ['proposed', 'confirmed']);

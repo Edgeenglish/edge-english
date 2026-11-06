@@ -104,37 +104,55 @@ export const issueText = (r: PlanIssue['reason']) => REASON_TEXT[r];
 
 const hhmm = (d: Date) => formatInZone(d, 'Asia/Seoul').time;
 
-/**
- * 새 정규 일정 전체 검사: 등록기간의 모든 회차를 만들고 날짜마다 충돌을 찾는다.
- * 문제가 없으면 issues 가 빈 배열. 저장 전에 DB 함수가 같은 검사를 한 번 더 한다.
- */
-export function checkRegularPlan(input: {
-  startDate: KstDate;
-  weeks: CourseWeeks;
-  slots: RegularSlot[];
+type PlanCheckInput = {
   durationMin: number;
   tutorBusy: readonly Busy[];
   studentBusy?: readonly Busy[];
   availability: readonly AvailabilityWindow[];
   breakMin?: number;
+};
+
+/** 수업 1회의 문제: 강사 가능 시간 밖 · 강사 다른 수업·휴무·재등록 대기 · 휴식 10분 · 학생 본인 다른 수업 */
+function lessonIssues(l: PlannedLesson, input: PlanCheckInput): PlanIssue[] {
+  const issues: PlanIssue[] = [];
+  const base = { seq: l.seq, kstDate: l.kstDate, kstTime: l.kstTime };
+  if (!startsWithinAvailability(l.startsAt, input.availability)) {
+    issues.push({ ...base, reason: 'outside_availability', detail: REASON_TEXT.outside_availability });
+  }
+  for (const c of clashes(l.startsAt, l.endsAt, input.tutorBusy, input.breakMin)) {
+    const reason: PlanIssue['reason'] =
+      c.busy.kind === 'hold' ? 'tutor_hold' : c.reason === 'break' ? 'break' : c.busy.kind === 'time_off' ? 'tutor_time_off' : c.busy.kind === 'makeup' ? 'tutor_makeup' : 'tutor_regular';
+    issues.push({ ...base, reason, detail: `${REASON_TEXT[reason]} · ${hhmm(c.busy.startsAt)}–${hhmm(c.busy.endsAt)}${c.busy.label ? ` ${c.busy.label}` : ''}` });
+  }
+  for (const c of clashes(l.startsAt, l.endsAt, input.studentBusy ?? [], input.breakMin)) {
+    issues.push({ ...base, reason: 'student', detail: `${REASON_TEXT.student} · ${hhmm(c.busy.startsAt)}–${hhmm(c.busy.endsAt)}` });
+  }
+  return issues;
+}
+
+/**
+ * 새 정규 일정 전체 검사: 등록기간의 모든 회차를 만들고 날짜마다 충돌을 찾는다.
+ * 문제가 없으면 issues 가 빈 배열. 저장 전에 DB 함수가 같은 검사를 한 번 더 한다.
+ */
+export function checkRegularPlan(input: PlanCheckInput & {
+  startDate: KstDate;
+  weeks: CourseWeeks;
+  slots: RegularSlot[];
 }): { lessons: PlannedLesson[]; issues: PlanIssue[] } {
   const lessons = generateRegularLessons(input);
-  const issues: PlanIssue[] = [];
-  for (const l of lessons) {
-    const base = { seq: l.seq, kstDate: l.kstDate, kstTime: l.kstTime };
-    if (!startsWithinAvailability(l.startsAt, input.availability)) {
-      issues.push({ ...base, reason: 'outside_availability', detail: REASON_TEXT.outside_availability });
-    }
-    for (const c of clashes(l.startsAt, l.endsAt, input.tutorBusy, input.breakMin)) {
-      const reason: PlanIssue['reason'] =
-        c.busy.kind === 'hold' ? 'tutor_hold' : c.reason === 'break' ? 'break' : c.busy.kind === 'time_off' ? 'tutor_time_off' : c.busy.kind === 'makeup' ? 'tutor_makeup' : 'tutor_regular';
-      issues.push({ ...base, reason, detail: `${REASON_TEXT[reason]} · ${hhmm(c.busy.startsAt)}–${hhmm(c.busy.endsAt)}${c.busy.label ? ` ${c.busy.label}` : ''}` });
-    }
-    for (const c of clashes(l.startsAt, l.endsAt, input.studentBusy ?? [], input.breakMin)) {
-      issues.push({ ...base, reason: 'student', detail: `${REASON_TEXT.student} · ${hhmm(c.busy.startsAt)}–${hhmm(c.busy.endsAt)}` });
-    }
-  }
-  return { lessons, issues };
+  return { lessons, issues: lessons.flatMap((l) => lessonIssues(l, input)) };
+}
+
+/**
+ * 회차 목록 검사: 정규 요일 반복이 아니라 날짜·시각을 하나씩 정한 목록 (첫 수업일이 정규 요일이 아니거나 특정 회차만 바꾼 경우).
+ * 검사 규칙은 checkRegularPlan 과 같다 (lessonIssues). 회차 번호는 목록 순서(날짜순)
+ */
+export function checkLessonList(input: PlanCheckInput & { lessons: readonly { date: KstDate; time: KstTime }[] }): PlanIssue[] {
+  const planned: PlannedLesson[] = input.lessons.map((l, i) => {
+    const startsAt = kstToInstant(l.date, l.time);
+    return { seq: i + 1, periodIndex: 0, kstDate: l.date, kstTime: l.time, startsAt, endsAt: new Date(startsAt.getTime() + input.durationMin * MIN) };
+  });
+  return planned.flatMap((l) => lessonIssues(l, input));
 }
 
 export type CellState = 'available' | 'regular' | 'makeup' | 'off' | 'unavailable';

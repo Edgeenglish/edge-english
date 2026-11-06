@@ -7,6 +7,7 @@
 
 import { addDays, formatInZone, hoursBetween, kstToInstant, weekdayOf, WEEKDAY_KO, type KstDate } from '../rules/dates';
 import type { RegularSlot } from '../rules/schedule';
+import { regularDiff, type LessonDate } from '../rules/lessons';
 
 export const CONFIRM_ALERT = {
   unsentAfterConfirmH: 1, // 확정 후 이 시간이 지나도 한쪽이 '안 보냄'이면 긴급
@@ -30,6 +31,8 @@ export type PlanView = {
   startDate: KstDate;
   endDate: KstDate;
   lessons: number;
+  /** 회차별로 날짜를 정한 일정안이면 그 목록 (KST, 날짜순). 없으면 정규 요일대로 */
+  lessonList?: LessonDate[] | null;
   durationMin: number;
   proposalSentAt: Date | null;
   confirmedAt: Date | null;
@@ -73,7 +76,8 @@ export function timeLines(v: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 
 }
 
 /** 첫 수업 시점 (첫 수업일의 정규 시간) */
-export function firstLessonAt(v: Pick<PlanView, 'slots' | 'startDate'>): Date | null {
+export function firstLessonAt(v: Pick<PlanView, 'slots' | 'startDate' | 'lessonList'>): Date | null {
+  if (v.lessonList?.length) return kstToInstant(v.lessonList[0].date, v.lessonList[0].time);
   const s = v.slots.find((x) => x.weekday === weekdayOf(v.startDate));
   return s ? kstToInstant(v.startDate, s.time) : null;
 }
@@ -94,13 +98,31 @@ export function koWhen(at: Date, tz: string) {
   return `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8))}일(${EN_WD[f.weekday]}) ${f.time}`;
 }
 /** 마지막 정규 수업 시점 (기간 끝에서 거꾸로 첫 정규 요일) */
-function lastLessonAt(v: Pick<PlanView, 'slots' | 'endDate'>): Date | null {
+function lastLessonAt(v: Pick<PlanView, 'slots' | 'endDate' | 'lessonList'>): Date | null {
+  const l = v.lessonList?.at(-1);
+  if (l) return kstToInstant(l.date, l.time);
   for (let i = 0; i < 7; i++) {
     const d = addDays(v.endDate, -i);
     const s = v.slots.find((x) => x.weekday === weekdayOf(d));
     if (s) return kstToInstant(d, s.time);
   }
   return null;
+}
+
+/** 정규 요일과 다른 날 (회차별 일정안일 때만) */
+function otherDates(v: PlanView) {
+  return v.lessonList?.length ? regularDiff(v.lessonList, v.slots, v.startDate, v.endDate) : { added: [], removed: [] };
+}
+const at = (x: LessonDate) => kstToInstant(x.date, x.time);
+const dayOnly = (s: string) => s.replace(/ \d\d:\d\d$/, '');
+
+/** 강사 안내 (영어): 정규와 다른 날 / 수업 없는 정규 요일 */
+function enOtherLines(v: PlanView, tz: string): string[] {
+  const d = otherDates(v);
+  return [
+    d.added.length ? `Different dates: ${d.added.map((x) => enWhen(at(x), tz)).join(', ')}` : '',
+    d.removed.length ? `No class on: ${d.removed.map((x) => dayOnly(enWhen(at(x), tz))).join(', ')}` : '',
+  ];
 }
 
 function tutorLine(v: PlanView) {
@@ -119,6 +141,7 @@ export function proposalMessage(v: PlanView): string {
     `${v.studentNameEn}, ${v.durationMin} min, ${v.lessons} classes`,
     tutorLine(v),
     first ? `First class: ${enWhen(first, v.tutorTz || 'Asia/Seoul')}` : '',
+    ...enOtherLines(v, v.tutorTz || 'Asia/Seoul'),
     'Can you take this?',
   ]
     .filter(Boolean)
@@ -135,10 +158,20 @@ export function tutorConfirmMessage(v: PlanView): string {
     `${v.studentNameEn}, ${v.durationMin} min, ${v.lessons} classes`,
     tutorLine(v),
     first ? `First class: ${enWhen(first, tz)}${last ? ` · last ${enWhen(last, tz).replace(/ \d\d:\d\d$/, '')}` : ''}` : '',
+    ...enOtherLines(v, tz),
     'Please add it to your schedule. Thank you!',
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/** 학생 안내 (한국어): 정규와 다른 날 / 수업 없는 정규 요일 */
+function koOtherLines(v: PlanView, tz: string, suffix: string): string[] {
+  const d = otherDates(v);
+  return [
+    d.added.length ? `정규와 다른 날: ${d.added.map((x) => koWhen(at(x), tz)).join(', ')}${suffix}` : '',
+    d.removed.length ? `수업 없는 날: ${d.removed.map((x) => dayOnly(koWhen(at(x), tz))).join(', ')}` : '',
+  ];
 }
 
 /** 학생 최종 확정 (카카오톡, 한국어). 해외 학생은 현지 시각을 먼저, 한국 시각을 아래에 */
@@ -153,6 +186,7 @@ export function studentConfirmMessage(v: PlanView): string {
     `담당 강사: ${v.tutorName}`,
     local ? `매주 ${local.text} (${place} 시각)\n= 한국 ${kst}` : `매주 ${kst} (한국 시각)`,
     first ? `첫 수업: ${koWhen(first, local ? v.studentTz : 'Asia/Seoul')}${local ? ` (${place})` : ''}` : '',
+    ...koOtherLines(v, local ? v.studentTz : 'Asia/Seoul', local ? ` (${place})` : ''),
     `정규 ${v.lessons}회 · ${v.durationMin}분`,
   ]
     .filter(Boolean)

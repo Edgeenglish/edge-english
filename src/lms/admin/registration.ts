@@ -174,7 +174,7 @@ export function firstDateWarnings(first: KstDate, today: KstDate, wish: KstDate 
 /** 그 날짜의 정규 수업 시각이 이미 지났는지 (오늘을 첫 수업일로 잡을 때 검사). 그 요일에 정규 시간이 없으면 false */
 export function slotStarted(date: KstDate, now: Date, slots: readonly RegularSlot[]): boolean {
   const s = slots.find((x) => x.weekday === weekdayOf(date));
-  return !!s && kstToInstant(date, s.time) <= now;
+  return !!s && !!s.time && kstToInstant(date, s.time) <= now;
 }
 
 /** 첫 수업일 후보를 찾기 시작하는 날 — 등록 당일부터 (2026-11-06 대표 결정, 정책 원본 H26(58)). 오늘 정규 시각이 이미 지났으면 내일부터 */
@@ -208,7 +208,8 @@ export type RegTutor = {
 
 /** 저장 요청 (DB 함수 admin_register_student 의 p 와 같은 모양) */
 /** tutorAccepted: 강사가 이미 '가능'이라고 답함 → 저장과 확정을 한 번에. 아니면 일정안(강사 답 대기)만 저장 (H22, D-51) */
-export function savePayload(d: Draft, slots: readonly RegularSlot[], tutorId: string | null, firstDate: KstDate, pay: Payment, tutorAccepted = false) {
+/** lessons: 회차별 날짜 목록 (정규 요일 반복과 다를 때만, 2026-11-06 H26(61)). 없으면 DB가 정규 요일대로 만듦 */
+export function savePayload(d: Draft, slots: readonly RegularSlot[], tutorId: string | null, firstDate: KstDate, pay: Payment, tutorAccepted = false, lessons: readonly { date: KstDate; time: string }[] | null = null) {
   const paid = pay.status === 'confirmed';
   const memo = [d.goal && `학습 목표: ${d.goal}`, d.formRef && `신청서: ${d.formRef}`, d.memo].filter(Boolean).join('\n');
   return {
@@ -218,6 +219,7 @@ export function savePayload(d: Draft, slots: readonly RegularSlot[], tutorId: st
     tutor_id: paid ? tutorId : null,
     slots: paid && tutorId ? slots.map((s) => ({ weekday: s.weekday, time: s.time })) : [],
     tutor_answer: paid && tutorId && tutorAccepted ? ('accepted' as const) : null,
+    lessons: paid && tutorId && lessons?.length ? lessons.map((l) => ({ date: l.date, time: l.time })) : null,
     payment: paid ? { method: pay.method, amount: pay.amount, paid_at: pay.paidAt, external_ref: pay.externalRef, payer_name: pay.payerName } : null,
   };
 }

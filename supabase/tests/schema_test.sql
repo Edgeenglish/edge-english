@@ -665,6 +665,77 @@ select pg_temp.ok((select count(*) from admin_students_with_email('one@x.kr')) =
 reset request.jwt.claim.sub;
 reset role;
 
+-- ---------- 회차별 수업 날짜 (migration 20261106000000, 정책 원본 H26(60)·(61)) ----------
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000000901', 'TestTutorLessons', 'Korea', 'Asia/Seoul');
+create or replace function pg_temp.ldates(mail text) returns text
+language sql as $$
+  select string_agg(l.seq || '=' || to_char(l.starts_at at time zone 'Asia/Seoul', 'MM-DD HH24:MI'), ' ' order by l.seq)
+  from lessons l join students s on s.id = l.student_id where s.email = mail and l.kind = 'regular' $$;
+create or replace function pg_temp.eid(mail text) returns uuid
+language sql as $$ select e.id from enrollments e join students s on s.id = e.student_id where s.email = mail $$;
+create or replace function pg_temp.lbody(name text, email text, weekly int, start date, slots jsonb, lessons jsonb) returns jsonb
+language sql as $$
+  select pg_temp.body(name, email, 4, weekly, 50, start, '55555555-0000-0000-0000-000000000901', slots, true) || jsonb_build_object('lessons', lessons) $$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2)
+-- 화·목 19:00 주 2회·4주인데 첫 수업은 금요일(3/5), 3회차만 목 3/11 → 금 3/12 로 바꿈 (변경권 없이 등록 때 정함)
+select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000002001',
+  pg_temp.lbody('목록일', 'ld1@x.kr', 2, '2027-03-05', '[{"weekday":2,"time":"19:00"},{"weekday":4,"time":"19:00"}]',
+    '[{"date":"2027-03-05","time":"19:00"},{"date":"2027-03-09","time":"19:00"},{"date":"2027-03-12","time":"19:00"},{"date":"2027-03-16","time":"19:00"},
+      {"date":"2027-03-18","time":"19:00"},{"date":"2027-03-23","time":"19:00"},{"date":"2027-03-25","time":"19:00"},{"date":"2027-03-30","time":"19:00"}]')) ->> 'lessons')::int = 8,
+  '회차 목록으로 등록 = 정규 요일이 아닌 첫 수업일·바꾼 회차를 그대로 8회 생성');
+select pg_temp.ok(pg_temp.ldates('ld1@x.kr') = '1=03-05 19:00 2=03-09 19:00 3=03-12 19:00 4=03-16 19:00 5=03-18 19:00 6=03-23 19:00 7=03-25 19:00 8=03-30 19:00',
+  '생성된 수업 날짜·시각이 목록과 같고 회차 번호는 날짜순');
+reset role;
+select pg_temp.ok((select e.start_date = '2027-03-05' and e.base_end_date = '2027-04-01' and e.lessons_purchased = 8
+                   from enrollments e where e.id = pg_temp.eid('ld1@x.kr')),
+  '수강 기간은 실제 첫 수업일(3/5)부터 28일 (~4/1)');
+select pg_temp.ok((select count(*) from regular_schedules r join students s on s.id = r.student_id where s.email = 'ld1@x.kr') = 2
+              and (select lesson_dates is not null from schedule_plans where enrollment_id = pg_temp.eid('ld1@x.kr') and state = 'confirmed'),
+  '정규 요일(화·목)은 그대로 기록되고, 일정안에는 회차 목록이 남음');
+set role authenticated;
+select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000002001',
+  pg_temp.lbody('목록일', 'ld1@x.kr', 2, '2027-03-05', '[{"weekday":2,"time":"19:00"},{"weekday":4,"time":"19:00"}]', '[]')) ->> 'repeated')::boolean,
+  '같은 요청 번호로 다시 저장 → 처음 결과 (새로 만들지 않음)');
+select pg_temp.expect_error($$select pg_temp.reg('90000000-0000-0000-0000-000000002002',
+  pg_temp.lbody('개수', 'ld2@x.kr', 2, '2027-03-05', '[{"weekday":2,"time":"19:00"},{"weekday":4,"time":"19:00"}]',
+    '[{"date":"2027-03-05","time":"19:00"},{"date":"2027-03-09","time":"19:00"}]'))$$, '수업 날짜 수');
+select pg_temp.ok(true, '회차 수가 등록 회차(8)와 다르면 거절');
+select pg_temp.expect_error($$select pg_temp.reg('90000000-0000-0000-0000-000000002003',
+  pg_temp.lbody('같은날', 'ld3@x.kr', 1, '2027-03-02', '[{"weekday":2,"time":"21:00"}]',
+    '[{"date":"2027-03-02","time":"21:00"},{"date":"2027-03-02","time":"21:00"},{"date":"2027-03-16","time":"21:00"},{"date":"2027-03-23","time":"21:00"}]'))$$, '같은 날');
+select pg_temp.ok(true, '같은 날 수업 둘이면 거절');
+select pg_temp.expect_error($$select pg_temp.reg('90000000-0000-0000-0000-000000002004',
+  pg_temp.lbody('첫날다름', 'ld4@x.kr', 1, '2027-03-02', '[{"weekday":2,"time":"21:00"}]',
+    '[{"date":"2027-03-03","time":"21:00"},{"date":"2027-03-09","time":"21:00"},{"date":"2027-03-16","time":"21:00"},{"date":"2027-03-23","time":"21:00"}]'))$$, '첫 수업일');
+select pg_temp.ok(true, '첫 수업일과 목록의 첫 날짜가 다르면 거절');
+select pg_temp.expect_error($$select pg_temp.reg('90000000-0000-0000-0000-000000002005',
+  pg_temp.lbody('기간밖', 'ld5@x.kr', 1, '2027-03-02', '[{"weekday":2,"time":"21:00"}]',
+    '[{"date":"2027-03-02","time":"21:00"},{"date":"2027-03-09","time":"21:00"},{"date":"2027-03-16","time":"21:00"},{"date":"2027-03-30","time":"21:00"}]'))$$, '수강 기간');
+select pg_temp.ok(true, '수강 기간(3/2~3/29) 밖 날짜(3/30)가 있으면 거절');
+-- 바꾼 회차도 다른 학생 수업과의 충돌을 그대로 검사: ld1 의 3회차(금 3/12 19:00)와 겹침
+select pg_temp.ok((select jsonb_agg(c ->> 'date' || ' ' || (c ->> 'reason')) from jsonb_array_elements(
+  pg_temp.reg_conflicts('90000000-0000-0000-0000-000000002006',
+    pg_temp.lbody('겹침', 'ld6@x.kr', 1, '2027-03-12', '[{"weekday":5,"time":"19:00"}]',
+      '[{"date":"2027-03-12","time":"19:00"},{"date":"2027-03-19","time":"19:00"},{"date":"2027-03-26","time":"19:00"},{"date":"2027-04-02","time":"19:00"}]'))) c)
+  = '["2027-03-12 tutor_regular"]'::jsonb,
+  '바꾼 회차(3/12)가 다른 학생 수업과 겹치면 그 날짜만 충돌로 알려 줌');
+reset role;
+select pg_temp.ok(not exists (select 1 from students where email in ('ld2@x.kr', 'ld3@x.kr', 'ld4@x.kr', 'ld5@x.kr', 'ld6@x.kr')),
+  '거절·충돌이면 학생·수강권·수업 아무것도 저장 안 됨');
+-- 강사 답 전(제안) → 확정: 목록이 일정안에 저장되고 확정 때 그 목록 그대로 수업이 만들어짐
+set role authenticated;
+select pg_temp.ok((select r ->> 'plan_state' = 'proposed' and (r ->> 'lessons')::int = 0
+                   from pg_temp.reg('90000000-0000-0000-0000-000000002007',
+                     pg_temp.lbody('제안목록', 'ld7@x.kr', 1, '2027-03-01', '[{"weekday":1,"time":"21:00"}]',
+                       '[{"date":"2027-03-01","time":"21:00"},{"date":"2027-03-08","time":"21:00"},{"date":"2027-03-16","time":"21:00"},{"date":"2027-03-22","time":"21:00"}]') - 'tutor_answer') r),
+  '강사 답 전 = 제안만 저장 (목록 포함), 수업 0회');
+select admin_confirm_schedule((select id from schedule_plans where enrollment_id = pg_temp.eid('ld7@x.kr')));
+select pg_temp.ok(pg_temp.ldates('ld7@x.kr') = '1=03-01 21:00 2=03-08 21:00 3=03-16 21:00 4=03-22 21:00',
+  '확정하면 일정안의 회차 목록 그대로 수업 생성 (3회차는 화 3/16)');
+reset role;
+
 -- ---------- 신규 배정 확정 관리 (migration 1000, 정책 원본 H22 6번 필수 검증) ----------
 insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000001000', 'TestTutorConf', 'Korea', 'Asia/Seoul');
 create or replace function pg_temp.eid(mail text) returns uuid
