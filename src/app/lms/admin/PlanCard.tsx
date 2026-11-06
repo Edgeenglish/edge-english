@@ -83,6 +83,7 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
       {view.state === 'proposed' ? (
         <>
           <p className="text-[13px] text-[#6b6880]">{view.proposalSentAt ? `제안 보냄 ${sentLabel(view.proposalSentAt)}` : '강사에게 아직 제안 안 함'}</p>
+          <TextPeek title="강사 제안 문구 보기" text={proposalMessage(view)} />
           <div className="grid grid-cols-2 gap-2">
             <button type="button" disabled={busy} onClick={() => run(handlers.confirm)} className="col-span-2 min-h-[50px] rounded-[12px] bg-[#7d5ffb] text-[15.5px] font-bold text-white disabled:bg-[#cfc4ff]">
               가능하대요 → 확정
@@ -149,6 +150,7 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
                     )}
                   </div>
                 </div>
+                <TextPeek title="문구 보기" text={text} />
               </div>
             );
           })}
@@ -175,5 +177,19 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
       )}
       {err && <p className="text-[13px] text-[#b3261e]">{err}</p>}
     </div>
+  );
+}
+
+/** 안내문 미리보기 (접힘). 복사되는 문구와 똑같은 글 (H26(64)) */
+function TextPeek({ title, text }: { title: string; text: string }) {
+  return (
+    <details className="mt-1.5 text-[13px]">
+      <summary className="flex min-h-[36px] cursor-pointer list-none items-center font-semibold text-[#4b33c4]">
+        {title}
+        <span className="flex-1" />
+        <span aria-hidden className="text-[#6b6880]">⌄</span>
+      </summary>
+      <p className="whitespace-pre-line rounded-[10px] bg-white/70 p-2.5 text-[#1d1b2b]">{text}</p>
+    </details>
   );
 }

@@ -656,6 +656,13 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         (draftPlan ? (
           <div className="mt-4 grid gap-2">
             <p className="text-[15px] font-bold text-[#1d1b2b]">강사에게 물어봤나요?</p>
+            <details className="rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px]">
+                  <summary className="flex min-h-[44px] cursor-pointer list-none items-center font-semibold text-[#4b33c4]">
+                    강사 제안 문구 보기<span className="flex-1" /><span aria-hidden className="text-[#6b6880]">⌄</span>
+                  </summary>
+                  <p className="whitespace-pre-line rounded-[10px] bg-[#f6f5fa] p-2.5 pb-3 text-[#1d1b2b]">{proposalMessage(draftPlan)}</p>
+                  <div className="h-2" />
+                </details>
             <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit(false, true)} className="min-h-[52px] rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
               {saving ? '저장 중…' : '아직 → 제안 문구 복사'}
             </button>

@@ -3,7 +3,7 @@
 // 첫 수업 시작 전 개별 수업 날짜 변경 — 변경권 차감 없음 (2026-11-06 대표 요청, 정책 원본 H26(62))
 // - 학생 상세 '다가오는 수업' 의 [시작 전 날짜 변경] → 이 창
 // - 바꾼 수업을 먼저, 나머지는 [다른 수업 바꾸기]를 눌러 펼침 (바꾼 수업이 없으면 처음부터 펼침)
-// - 저장 뒤: 한 줄 결과 + [학생 안내 복사] [강사 안내 복사]
+// - 저장 뒤: 한 줄 결과 + 학생·강사 안내문 (접힌 칸을 펼치면 문구 전체 + [복사], H26(64))
 // - 검사·저장은 DB(admin_prestart_move): 수강 기간 안 · 같은 날 수업 없음 · 강사 휴무·다른 수업(휴식 10분)·현지 06:00~22:30·연 시간·재등록 대기
 
 import { useEffect, useState } from 'react';
@@ -17,7 +17,7 @@ const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).
 const kstOf = (d: Date) => ({ date: instantToKstDate(d), time: formatInZone(d, 'Asia/Seoul').time });
 const label = (d: Date) => `${dayLabel(kstOf(d).date)} ${kstOf(d).time}`;
 const local = (at: Date, tz: string) => (tz && tz !== 'Asia/Seoul' ? localTime(at, tz) : null);
-const copyCls = 'min-h-[44px] flex-1 rounded-[10px] border border-[#cfc4ff] bg-white px-3 text-[14px] font-semibold text-[#5b3fe0]';
+const copyCls = 'min-h-[44px] w-full rounded-[10px] border border-[#cfc4ff] bg-white px-3 text-[14px] font-semibold text-[#5b3fe0]';
 
 type Saved = { student: string; tutor: string; line: string };
 
@@ -136,21 +136,24 @@ export default function PrestartMove(p: {
       {saved && (
         <div className="mb-3 rounded-[14px] border border-[#cfe8d8] bg-white p-3">
           <p className="text-[14px] font-bold text-[#13623a]">✓ 저장했어요 · {saved.line}</p>
-          <div className="mt-2 flex gap-2">
-            <CopyButton text={saved.student} className={copyCls}>
-              학생 안내 복사
-            </CopyButton>
-            <CopyButton text={saved.tutor} className={copyCls}>
-              강사 안내 복사
-            </CopyButton>
-          </div>
-          <details className="mt-2 text-[13px]">
-            <summary className="cursor-pointer py-1 font-semibold text-[#5b3fe0]">안내 문구 보기</summary>
-            <p className="mt-1 text-[12.5px] font-semibold text-[#6b6880]">학생 카카오톡</p>
-            <p className="whitespace-pre-line rounded-[10px] bg-[#f6f5fa] p-2.5 text-[#1d1b2b]">{saved.student}</p>
-            <p className="mt-2 text-[12.5px] font-semibold text-[#6b6880]">강사 WhatsApp</p>
-            <p className="whitespace-pre-line rounded-[10px] bg-[#f6f5fa] p-2.5 text-[#1d1b2b]">{saved.tutor}</p>
-          </details>
+          {[
+            ['학생 카카오톡 안내', saved.student],
+            ['강사 WhatsApp 안내', saved.tutor],
+          ].map(([who, text]) => (
+            <details key={who} className="mt-2 rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px]">
+              <summary className="flex min-h-[44px] cursor-pointer list-none items-center font-semibold text-[#4b33c4]">
+                {who}
+                <span className="flex-1" />
+                <span aria-hidden className="text-[#6b6880]">⌄</span>
+              </summary>
+              <p className="whitespace-pre-line rounded-[10px] bg-[#f6f5fa] p-2.5 text-[#1d1b2b]">{text}</p>
+              <div className="py-2">
+                <CopyButton text={text} className={copyCls}>
+                  복사
+                </CopyButton>
+              </div>
+            </details>
+          ))}
         </div>
       )}
       {moved === null ? (

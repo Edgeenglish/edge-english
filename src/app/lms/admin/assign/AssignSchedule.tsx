@@ -427,6 +427,13 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                 </p>
                 <p className="mt-4 text-[15px] font-bold text-[#1d1b2b]">강사에게 물어봤나요?</p>
                 <div className="mt-2 grid gap-2">
+                  <details className="rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px]">
+                  <summary className="flex min-h-[44px] cursor-pointer list-none items-center font-semibold text-[#4b33c4]">
+                    강사 제안 문구 보기<span className="flex-1" /><span aria-hidden className="text-[#6b6880]">⌄</span>
+                  </summary>
+                  <p className="whitespace-pre-line rounded-[10px] bg-[#f6f5fa] p-2.5 pb-3 text-[#1d1b2b]">{proposalMessage(draft)}</p>
+                  <div className="h-2" />
+                </details>
                   <button
                     type="button"
                     disabled={!ready || saving}
