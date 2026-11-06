@@ -85,6 +85,8 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [view, setView] = useState<PlanView | null>(initialView);
+  // 저장하면서 제안 문구를 복사했는지 (복사 ≠ 보냄, B-02 — 보낸 시각은 [강사에게 보냈어요]로만 기록)
+  const [copiedProposal, setCopiedProposal] = useState(false);
   // 기존 배정 확인 (R-10): 일정안이 없고 강사·예정 수업이 이미 있으면, 새 배정 대신 지금 배정을 보여 주고 컨펌 완료를 기록
   const hasCurrent = !view && !!current && !current.plan && !!current.tutor && current.scheduled > 0 && current.task?.status !== 'canceled';   // scheduled = 앞으로 + 지난 미기록 (컨펌 기록 조건은 DB 가 다시 검사)
   const [currentDone, setCurrentDone] = useState<boolean>(!!current?.task?.studentNotifiedAt || current?.task?.status === 'done');
@@ -206,8 +208,9 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                 tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null },
                 studentNotice: { id: 'pv-s', status: 'pending', sentAt: null },
               }
-            : { ...draft, planId: 'preview', proposalSentAt: copied ? nowD : null }
+            : { ...draft, planId: 'preview', proposalSentAt: null }
         );
+        setCopiedProposal(copied);
         return;
       }
       const r = await propose(requestId, {
@@ -227,12 +230,9 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
           studentNotice: r.studentNoticeId ? { id: r.studentNoticeId, status: 'pending', sentAt: null } : null,
         });
       } else {
-        const at = copied && planActions ? new Date(await planActions.proposalSent(r.planId).catch(() => '')) : null;
-        setView({
-          ...draft,
-          planId: r.planId,
-          proposalSentAt: at && !isNaN(at.getTime()) ? at : null,
-        });
+        // 복사만으로는 보낸 것으로 기록하지 않음 (B-02). 실제로 보낸 뒤 [강사에게 보냈어요]
+        setCopiedProposal(copied);
+        setView({ ...draft, planId: r.planId, proposalSentAt: null });
       }
     } catch (e) {
       setErr(`${e instanceof Error ? e.message : '저장하지 못했어요.'}${copied ? ' 제안 문구는 복사됐지만 저장되지 않았어요 — 강사에게 보내지 마세요.' : ''}`);
@@ -262,10 +262,10 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
       setTutorId(null);
       setMsg('이 안을 닫았어요. 다른 강사·시간을 골라 주세요.');
     },
-    proposalCopied: async () => {
+    proposalSent: async () => {
       if (!view) return;
-      if (live) await planActions!.proposalSent(view.planId);
-      setView({ ...view, proposalSentAt: view.proposalSentAt ?? new Date() });
+      const at = live ? new Date(await planActions!.proposalSent(view.planId)) : new Date();
+      setView({ ...view, proposalSentAt: view.proposalSentAt ?? (isNaN(at.getTime()) ? new Date() : at) });
     },
     noticeSent: async (who) => {
       if (!view) return;
@@ -332,7 +332,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
         )}
         {hasCurrent && !showNew ? null : view ? (
           <Card title={view.state === 'proposed' ? '강사 답 대기' : '확정 · 양쪽에 안내를 보내 주세요'}>
-            <PlanCard view={view} handlers={handlers} />
+            <PlanCard view={view} handlers={handlers} proposalCopied={copiedProposal} />
             {view.state === 'confirmed' && view.tutorNotice?.status === 'sent' && view.studentNotice?.status === 'sent' && (
               <Link href={home} className="mt-3 flex min-h-[48px] items-center justify-center rounded-[12px] bg-[#e3f6ea] text-[15px] font-bold text-[#1e7a46]">
                 ✓ 끝 — 처리할 일로

@@ -103,6 +103,8 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<SaveResult | null>(null);
   const [planView, setPlanView] = useState<PlanView | null>(null);
+  // 저장하면서 제안 문구를 복사했는지 (복사 ≠ 보냄, B-02 — 보낸 시각은 [강사에게 보냈어요]로만 기록)
+  const [copiedProposal, setCopiedProposal] = useState(false);
   const [toast, setToast] = useState('');
   const [profile, setProfile] = useState<RegTutor | null>(null);
   const [dupes, setDupes] = useState<{ code: string; name_ko: string }[]>([]);
@@ -286,11 +288,12 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       setResult(r);
       if (!draftPlan) return;
       const now = new Date();
+      if (r.kind === 'preview' || r.kind === 'saved') setCopiedProposal(copied);
       if (r.kind === 'preview') {
         setPlanView(
           tutorAccepted
             ? { ...draftPlan, planId: 'preview', state: 'confirmed', confirmedAt: now, tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null }, studentNotice: { id: 'pv-s', status: 'pending', sentAt: null } }
-            : { ...draftPlan, planId: 'preview', proposalSentAt: copied ? now : null },
+            : { ...draftPlan, planId: 'preview', proposalSentAt: null },
         );
       } else if (r.kind === 'saved' && r.planId) {
         if (r.planState === 'confirmed') {
@@ -303,9 +306,8 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
             studentNotice: r.studentNoticeId ? { id: r.studentNoticeId, status: 'pending', sentAt: null } : null,
           });
         } else {
-          let sentAt: Date | null = null;
-          if (copied && planActions) sentAt = new Date(await planActions.proposalSent(r.planId).catch(() => ''));
-          setPlanView({ ...draftPlan, planId: r.planId, proposalSentAt: sentAt && !isNaN(sentAt.getTime()) ? sentAt : null });
+          // 복사만으로는 보낸 것으로 기록하지 않음 (B-02). 실제로 보낸 뒤 [강사에게 보냈어요]
+          setPlanView({ ...draftPlan, planId: r.planId, proposalSentAt: null });
         }
       } else if (r.kind === 'error' && copied) {
         setToast('제안 문구는 복사됐지만 저장되지 않았어요 — 강사에게 보내지 마세요.');
@@ -330,10 +332,10 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       setPlanView(null);
       setToast('이 안을 닫았어요. 처리할 일에 신규 매칭으로 남아요.');
     },
-    proposalCopied: async () => {
+    proposalSent: async () => {
       if (!planView) return;
-      if (planActions && !demo) await planActions.proposalSent(planView.planId);
-      setPlanView({ ...planView, proposalSentAt: planView.proposalSentAt ?? new Date() });
+      const at = planActions && !demo ? new Date(await planActions.proposalSent(planView.planId)) : new Date();
+      setPlanView({ ...planView, proposalSentAt: planView.proposalSentAt ?? (isNaN(at.getTime()) ? new Date() : at) });
     },
     noticeSent: async (who) => {
       if (!planView) return;
@@ -650,7 +652,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       {planView && (
         <div className="mt-3 rounded-[12px] border border-[#e6e3ef] bg-white p-3">
           <b className="mb-2 block text-[14.5px] text-[#1d1b2b]">{planView.state === 'proposed' ? '강사 답 대기' : '확정 · 양쪽에 안내를 보내 주세요'}</b>
-          <PlanCard view={planView} handlers={planHandlers} showTimes={false} />
+          <PlanCard view={planView} handlers={planHandlers} showTimes={false} proposalCopied={copiedProposal} />
         </div>
       )}
       {!(result?.kind === 'saved') && !(result?.kind === 'preview' && planView) &&

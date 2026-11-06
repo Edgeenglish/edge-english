@@ -203,7 +203,7 @@ export default function AdminDashboard({
       return {
         confirm: () => live((a) => a.confirm(p.planId), '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.'),
         decline: () => live((a) => a.decline(p.planId), '이 안을 닫았어요. 다른 강사·시간으로 다시 제안해 주세요.'),
-        proposalCopied: () => live((a) => a.proposalSent(p.planId), '제안 문구를 복사했어요. WhatsApp에 붙여 보내 주세요.'),
+        proposalSent: () => live((a) => a.proposalSent(p.planId), '강사에게 제안을 보낸 것으로 기록했어요. 답이 오면 [가능하대요 → 확정]을 눌러 주세요.'),
         noticeSent: (who) => {
           const n = who === 'tutor' ? p.tutorNotice : p.studentNotice;
           return n ? live((a) => a.noticeSent(n.id), `${who === 'tutor' ? '강사' : '학생'} 안내를 보냄으로 기록했어요.`) : Promise.resolve();
@@ -220,7 +220,7 @@ export default function AdminDashboard({
           '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.',
         ),
       decline: () => preview_(() => null, '이 안을 닫았어요.'),
-      proposalCopied: () => preview_((x) => ({ ...x, proposalSentAt: x.proposalSentAt ?? now() }), '제안 문구를 복사했어요.'),
+      proposalSent: () => preview_((x) => ({ ...x, proposalSentAt: x.proposalSentAt ?? now() }), '강사에게 제안을 보낸 것으로 기록했어요.'),
       noticeSent: async (who) => {
         const sent = (n: PlanView['tutorNotice']) => (n && n.status !== 'sent' ? { ...n, status: 'sent' as const, sentAt: now() } : n);
         const next = who === 'tutor' ? { ...p, tutorNotice: sent(p.tutorNotice) } : { ...p, studentNotice: sent(p.studentNotice) };

@@ -2,7 +2,9 @@
 
 // 신규 배정 일정안 카드 (시안 2차, D-51 2026-10-22 대표 승인)
 // - 시간: 한국 / 강사 / 학생 세 줄, 현지 요일이 다르면 노란 표시
-// - 답 대기: [가능하대요 → 확정] [안 된대요] [문구 다시 복사]
+// - 답 대기: [가능하대요 → 확정] [안 된대요] [제안 문구 복사] + [강사에게 보냈어요]
+//   제안 문구 [복사]는 복사만('문구 복사됨 · 아직 발송 안 함'), 실제로 보낸 뒤 [강사에게 보냈어요]를 눌러야 보낸 시각 기록
+//   (2026-11-06 대표 지시 H26(70), QA B-02 — 예전 A39(1) '복사 = 제안 보냄 기록'을 바꿈. 복사만 하고 안 보냈는데 보낸 것으로 남던 문제)
 // - 확정: 강사·학생 안내 두 줄 (강사 줄 위). [복사]는 문구만 복사(기록 없음), 보낸 뒤 [보냄]를 눌러야 그쪽 '보냄'
 //   (2026-10-22 대표 승인, A39(2) 갱신 — 복사만 하고 안 보내는 실수 방지). 양쪽 다 '보냄'이어야 매칭 업무 완료
 // 복사가 막힌 기기에서는 문구를 보여 주고 길게 눌러 직접 복사
@@ -13,7 +15,8 @@ import { proposalMessage, sentLabel, studentConfirmMessage, timeLines, tutorConf
 export type PlanHandlers = {
   confirm: () => Promise<void>;
   decline: () => Promise<void>;
-  proposalCopied: () => Promise<void>;
+  /** [강사에게 보냈어요] — 제안을 실제로 보낸 뒤 눌러 보낸 시각 기록 (복사만으로는 기록 안 함, B-02) */
+  proposalSent: () => Promise<void>;
   /** [보냄] — 그쪽 최종 안내를 보냄으로 기록 */
   noticeSent: (who: 'tutor' | 'student') => Promise<void>;
 };
@@ -42,11 +45,11 @@ export function TimeRows({ view }: { view: Pick<PlanView, 'slots' | 'startDate' 
   );
 }
 
-export default function PlanCard({ view, handlers, showTimes = true }: { view: PlanView; handlers: PlanHandlers; showTimes?: boolean }) {
+export default function PlanCard({ view, handlers, showTimes = true, proposalCopied = false }: { view: PlanView; handlers: PlanHandlers; showTimes?: boolean; /** 저장하면서 제안 문구를 이미 복사했으면 참 (화면 안에서만) */ proposalCopied?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [manual, setManual] = useState<{ text: string; done?: () => Promise<void> } | null>(null);
-  const [copied, setCopied] = useState<('tutor' | 'student')[]>([]);
+  const [copied, setCopied] = useState<('tutor' | 'student' | 'proposal')[]>(proposalCopied ? ['proposal'] : []);
   const [asking, setAsking] = useState(false);
 
   async function run(f: () => Promise<void>) {
@@ -61,13 +64,8 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
       setBusy(false);
     }
   }
-  // 제안 문구: 복사 = 제안 보냄 기록 (A39(1) 그대로). 복사가 막히면 문구를 보여 주고 직접 복사 후 기록
-  async function copyThen(text: string, record: () => Promise<void>) {
-    if (await copyText(text)) return run(record);
-    setManual({ text, done: record });
-  }
-  // 최종 안내: 복사만 (기록 없음). 보낸 뒤 [보냄]
-  async function copyOnly(who: 'tutor' | 'student', text: string) {
+  // 제안 문구·최종 안내 모두: 복사만 (기록 없음). 실제로 보낸 뒤 [강사에게 보냈어요]/[보냄]을 눌러야 기록 (B-02)
+  async function copyOnly(who: 'tutor' | 'student' | 'proposal', text: string) {
     if (await copyText(text)) setCopied((c) => [...c, who]);
     else setManual({ text });
   }
@@ -82,9 +80,17 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
       {showTimes && <TimeRows view={view} />}
       {view.state === 'proposed' ? (
         <>
-          <p className="text-[13px] text-[#6b6880]">{view.proposalSentAt ? `제안 보냄 ${sentLabel(view.proposalSentAt)}` : '강사에게 아직 제안 안 함'}</p>
+          <p className={`text-[13px] ${view.proposalSentAt ? 'text-[#1f6b44]' : 'text-[#8a2a1b]'}`}>
+            {view.proposalSentAt ? `강사에게 보냄 ${sentLabel(view.proposalSentAt)}` : copied.includes('proposal') ? '문구 복사됨 · 아직 발송 안 함 — WhatsApp 으로 보낸 뒤 [강사에게 보냈어요]' : '강사에게 아직 제안 안 보냄'}
+          </p>
           <TextPeek title="강사 제안 문구 보기" text={proposalMessage(view)} />
           <div className="grid grid-cols-2 gap-2">
+            {!view.proposalSentAt && (
+              <button type="button" disabled={busy} onClick={() => run(handlers.proposalSent)}
+                className={`col-span-2 min-h-[46px] rounded-[12px] text-[14.5px] font-bold ${copied.includes('proposal') ? 'bg-[#7d5ffb] text-white disabled:bg-[#cfc4ff]' : 'border border-[#cfc4ff] bg-white text-[#4b33c4] disabled:opacity-50'}`}>
+                강사에게 보냈어요 (보낸 시각 기록)
+              </button>
+            )}
             <button type="button" disabled={busy} onClick={() => run(handlers.confirm)} className="col-span-2 min-h-[50px] rounded-[12px] bg-[#7d5ffb] text-[15.5px] font-bold text-white disabled:bg-[#cfc4ff]">
               가능하대요 → 확정
             </button>
@@ -105,8 +111,9 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
                 <button type="button" onClick={() => setAsking(true)} className="min-h-[46px] rounded-[12px] border border-[#e6e3ef] bg-white text-[14px] text-[#1d1b2b]">
                   안 된대요
                 </button>
-                <button type="button" disabled={busy} onClick={() => copyThen(proposalMessage(view), handlers.proposalCopied)} className="min-h-[46px] rounded-[12px] border border-[#e6e3ef] bg-white text-[14px] text-[#1d1b2b]">
-                  {view.proposalSentAt ? '문구 다시 복사' : '제안 문구 복사'}
+                <button type="button" disabled={busy} onClick={() => copyOnly('proposal', proposalMessage(view))}
+                  className={`min-h-[46px] rounded-[12px] border text-[14px] ${copied.includes('proposal') ? 'border-[#c9c6d6] bg-[#d9d6e3] font-bold text-[#4a4760]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
+                  {copied.includes('proposal') ? '복사함 ✓ (다시 복사)' : view.proposalSentAt ? '문구 다시 복사' : '제안 문구 복사'}
                 </button>
               </>
             )}
@@ -159,7 +166,7 @@ export default function PlanCard({ view, handlers, showTimes = true }: { view: P
       {manual && (
         <div className="rounded-[12px] border border-[#e6e3ef] bg-white p-3">
           <p className="text-[13px] text-[#6b6880]">
-            이 기기에서는 자동 복사가 안 돼요. 아래 글을 길게 눌러 복사해 주세요.{manual.done ? ' 복사한 뒤 [복사했어요]를 눌러 주세요.' : ''}
+            이 기기에서는 자동 복사가 안 돼요. 아래 글을 길게 눌러 복사해 주세요.{manual.done ? ' 복사한 뒤 [복사했어요]를 눌러 주세요.' : ' 보낸 뒤에는 [보냈어요]를 눌러 기록해 주세요.'}
           </p>
           <textarea readOnly value={manual.text} rows={6} onFocus={(e) => e.currentTarget.select()} className="mt-2 w-full rounded-[10px] border border-[#e6e3ef] p-2 text-[13.5px] text-[#1d1b2b]" />
           <button

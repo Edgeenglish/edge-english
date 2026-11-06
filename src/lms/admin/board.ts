@@ -565,7 +565,7 @@ function planItem(t: MatchingTask, p: PlanView, now: Date): ItemBase {
   const studentUnsent = p.studentNotice?.status !== 'sent';
   const tag =
     p.state === 'proposed'
-      ? alert === 'no_reply' ? '강사 답 확인 필요' : '강사 답 대기'
+      ? !p.proposalSentAt ? '강사에게 제안 안 보냄' : alert === 'no_reply' ? '강사 답 확인 필요' : '강사 답 대기'
       : tutorUnsent && studentUnsent ? '양쪽 안내 안 함' : tutorUnsent ? '강사 안내 안 함' : '학생 안내 안 함';
   const first = firstLessonAt(p);
   return {
