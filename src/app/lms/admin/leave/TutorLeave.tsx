@@ -374,14 +374,15 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
             {tutors.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </label>
-        <div className="grid grid-cols-2 gap-1.5">
-          <label className="grid gap-1 text-[13px] text-[#6b6880]">
+        {/* 휴대폰: 날짜 칸이 카드 밖으로 넘치지 않게(min-w-0), 제목 줄 수가 달라도 칸 높이 맞춤(items-end) */}
+        <div className="grid grid-cols-2 items-end gap-1.5">
+          <label className="grid min-w-0 gap-1 text-[13px] text-[#6b6880]">
             휴무 시작일 (한국 날짜)
-            <DateInput value={from} min={today} onChange={(v) => { setFrom(v); if (!to || to < v) setTo(v); }} className={inputCls(false)} />
+            <DateInput value={from} min={today} onChange={(v) => { setFrom(v); if (!to || to < v) setTo(v); }} className={`${inputCls(false)} min-w-0`} />
           </label>
-          <label className="grid gap-1 text-[13px] text-[#6b6880]">
+          <label className="grid min-w-0 gap-1 text-[13px] text-[#6b6880]">
             휴무 종료일 (한국 날짜, 그날 끝까지)
-            <DateInput value={to} min={from || today} onChange={setTo} className={inputCls(false)} />
+            <DateInput value={to} min={from || today} onChange={setTo} className={`${inputCls(false)} min-w-0`} />
           </label>
         </div>
         <label className="grid gap-1 text-[13px] text-[#6b6880]">
