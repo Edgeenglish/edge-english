@@ -3137,3 +3137,26 @@ select pg_temp.ok((select count(*) = 0 from jsonb_array_elements(tutor_first_les
   '운영자: 강사 고른 문맥으로 To-do 조회·저장 가능(역할 admin 기록), 운영진 상세에도 강사 확인 값 (4600)');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------------------------------------------------------------------
+-- QA C-04 (2026-11-07): student_textbook — 학생 본인·운영자만, 수업 방식에 교재가 있을 때만
+-- ---------------------------------------------------------------------
+update students set textbook = 'Smart Choice 2', tutor_class_style = null, tutor_class_style_mix = null where id = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.ok(student_textbook(null) ->> 'textbook' = 'Smart Choice 2', 'C-04: 학생 본인 교재 보임 (강사 확인 수업 방식 없음 = 예전 학생)');
+select pg_temp.expect_error($$select student_textbook('44444444-4444-4444-4444-444444444444')$$, '학생 계정으로 로그인|42501');
+select pg_temp.ok(true, 'C-04: 다른 학생 교재 요청 거절');
+reset role;
+update students set tutor_class_style = 'conversation' where id = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+select pg_temp.ok(student_textbook(null) ->> 'textbook' is null, 'C-04: Conversation 이면 교재 칸이 남아 있어도 학생에게 안 보임');
+reset role;
+update students set tutor_class_style = 'mixed', tutor_class_style_mix = '{conversation,textbook}' where id = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+select pg_temp.ok(student_textbook(null) ->> 'textbook' = 'Smart Choice 2', 'C-04: Mixed 에 Textbook 포함이면 보임');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok(student_textbook('33333333-3333-3333-3333-333333333333') ->> 'textbook' = 'Smart Choice 2', 'C-04: 운영자 보기(학생 고름)도 같은 값');
+reset request.jwt.claim.sub;
+reset role;
+update students set textbook = null, tutor_class_style = null, tutor_class_style_mix = null where id = '33333333-3333-3333-3333-333333333333';

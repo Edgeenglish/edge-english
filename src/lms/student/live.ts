@@ -58,6 +58,8 @@ export type StudentView = {
   paid: boolean;
   /** 수강권 상태 (pending_payment · confirmed · active · completed · canceled). 결제 전·수업 생성 전에는 '남은 0회' 재등록 안내를 띄우지 않음 (QA-05) */
   enrollmentStatus: string | null;
+  /** 강사가 정한 교재 이름 (QA C-04). 없거나 수업 방식에 교재가 없으면 null */
+  textbook?: string | null;
   /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 학생 화면 표시는 '보강'으로 같음) */
   lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean })[];
   makeupRights: MakeupRight[];
@@ -224,7 +226,14 @@ export function parseStudentView(r: Raw): StudentView {
 
 /** studentId: 운영자가 고른 학생 (학생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
-  return parseStudentView(check(await sb.rpc('student_screen', { p_student: studentId })));
+  const [screen, book] = await Promise.all([sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId)]);
+  return { ...parseStudentView(check(screen)), textbook: book };
+}
+/** 강사가 정한 교재 (QA C-04, migration 20261107040000). 함수가 없는 옛 DB 면 null — 학습자료에 교재만 안 보임 */
+async function loadTextbook(sb: SupabaseClient, studentId: string | null): Promise<string | null> {
+  const r = await sb.rpc('student_textbook', { p_student: studentId });
+  if (r.error) return null;
+  return (r.data as { textbook: string | null } | null)?.textbook ?? null;
 }
 
 export type MakeupOption = { startsAt: Date; afterEnd: boolean };

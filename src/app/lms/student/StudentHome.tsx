@@ -226,7 +226,8 @@ export default function StudentHome(props: {
   const endDate = s.finalEndDate;
   const dLeft = endDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, endDate) : 0;
   const points = pointsHistory(s.points);
-  const textbook = extras?.textbook ?? null;
+  // 가상 화면은 extras(지난 Unit 포함), 실제 화면은 강사가 정한 교재 이름만 (QA C-04)
+  const textbook: { title: string; lastUnit?: number | null } | null = extras?.textbook ?? (s.textbook ? { title: s.textbook, lastUnit: null } : null);
   const book = textbook && books.find((b) => b.title.replace(/\s/g, '') === textbook.title.replace(/\s/g, ''));
   const holidays = useMemo(() => new Set(s.holidays), [s.holidays]);
 
@@ -656,12 +657,13 @@ export default function StudentHome(props: {
 
         {tab === 'materials' && (
           <TabPage title="학습자료">
+            {!textbook && <p className={`${card} px-4 py-5 text-center text-[14px] text-[#6b6880]`}>아직 정해진 교재가 없어요.</p>}
             {textbook && (
               <section className={`${card} grid gap-3 p-4`}>
                 <p className="text-[13px] font-bold text-[#5b3df0]">지금 수업 교재</p>
                 <p className="text-[17px] font-bold">{textbook.title}</p>
                 <p className="text-[13px] text-[#55526a]">
-                  {book ? `${book.category} · ${book.level.join('·')}` : ''} · 지난 수업 Unit {textbook.lastUnit}
+                  {[book ? `${book.category} · ${book.level.join('·')}` : '', textbook.lastUnit ? `지난 수업 Unit ${textbook.lastUnit}` : ''].filter(Boolean).join(' · ')}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {book?.pdf && (
@@ -1181,7 +1183,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit: number } | null; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
+function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit?: number | null } | null; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
   const k = kst(lesson.startsAt);
   const started = now.getTime() >= lesson.startsAt.getTime();
   const badge = started ? '진행 중' : untilText(now, lesson.startsAt);
@@ -1216,7 +1218,7 @@ function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: {
           <span className="flex items-center gap-2.5">
             <Icon d={TABS[3].icon} className="h-[18px] w-[18px] text-[#c9c0ff]" />
             <span className="text-white">
-              교재 <b className="text-white">{textbook.title}</b> · Unit {textbook.lastUnit}
+              교재 <b className="text-white">{textbook.title}</b>{textbook.lastUnit ? ` · Unit ${textbook.lastUnit}` : ''}
             </span>
           </span>
           <span className="whitespace-nowrap text-[13px] text-[#c9c0ff]">보기 ›</span>
