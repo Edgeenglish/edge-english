@@ -146,6 +146,11 @@ export type StudentProfile = {
   classType: string | null; textbook: string | null; classNoteUrl: string | null; correctionPref: string | null; selfIntroEn: string | null;
   job: string | null; hobbies: string | null; interests: string | null; improve: string | null; hopes: string | null;
   correctionStyle: 'immediate' | 'major_only' | null; correctionNote: string | null; classStyle: 'textbook' | 'free_talking' | 'not_sure' | null; classStyleNote: string | null;
+  /** 강사가 첫 수업 후 확인한 실제 수업 방식 (4600) — 학생 희망(classStyle)과 다른 칸 */
+  tutorClassStyle: 'conversation' | 'textbook' | 'student_materials' | 'mixed' | null; tutorClassStyleMix: string[]; tutorMaterialsNote: string | null;
+  tutorClassStyleAt: Date | null; tutorClassStyleBy: string | null;
+  /** 강사가 첫 수업에서 직접 물어 적은 시각 (improve) */
+  improveTutorAt: Date | null;
   answersAt: Date | null; lmsSince: KstDate | null;
 };
 export type Extension = { id: string; days: number; reason: string; note: string | null; auto: string | null; at: Date; by: string | null };
@@ -184,6 +189,8 @@ export function parseProfile(s: any): StudentProfile {
     classType: s.class_type ?? null, textbook: s.textbook ?? null, classNoteUrl: s.class_note_url ?? null, correctionPref: s.correction_pref ?? null, selfIntroEn: s.self_intro_en ?? null,
     job: s.job ?? null, hobbies: s.hobbies ?? null, interests: s.interests ?? null, improve: s.improve ?? null, hopes: s.hopes ?? null,
     correctionStyle: s.correction_style ?? null, correctionNote: s.correction_note ?? null, classStyle: s.class_style ?? null, classStyleNote: s.class_style_note ?? null,
+    tutorClassStyle: s.tutor_class_style ?? null, tutorClassStyleMix: Array.isArray(s.tutor_class_style_mix) ? (s.tutor_class_style_mix as string[]) : [], tutorMaterialsNote: s.tutor_materials_note ?? null,
+    tutorClassStyleAt: at(s.tutor_class_style_at), tutorClassStyleBy: s.tutor_class_style_by ?? null, improveTutorAt: at(s.improve_tutor_at),
     answersAt: at(s.answers_at), lmsSince: s.lms_since ?? null,
   };
 }

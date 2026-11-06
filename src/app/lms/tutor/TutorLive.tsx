@@ -5,7 +5,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { answerCover, answerMakeup, createTutorLogin, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
+import { answerCover, answerMakeup, createTutorLogin, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
+import { LANGS, type Lang } from '@/lms/tutor/lang';
+import { useSavedValue } from './useSaved';
 import { weekOf, type TutorScreen } from '@/lms/tutor/screen';
 import TutorHome, { type TutorActions } from './TutorHome';
 
@@ -16,6 +18,8 @@ type State =
 
 export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
+  // 운영자 보기 전용 언어 (H26(73) 수정판): 강사 본인은 늘 영어, 운영진만 한국어/English 전환 — 이 기기에 기억
+  const [adminLang, setAdminLang] = useSavedValue<Lang>('lms_tutor_lang_admin', 'en', LANGS);
   const sb = supabaseBrowser();
   const adminTutor = state.kind === 'ready' && state.admin ? state.admin.tutorId : null;
 
@@ -65,6 +69,8 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
           save: (studentId, fields) => updateStudentProfile(sb, studentId, fields),
         },
         students: () => loadMyStudents(sb, adminTutor),
+        followups: () => loadFollowupTodos(sb, adminTutor),
+        followupSave: (studentId, fields) => saveFollowup(sb, studentId, fields, adminTutor),
       },
     [sb, adminTutor],
   );
@@ -91,13 +97,21 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
           <option key={t.id} value={t.id}>{t.name}{t.hasLogin ? '' : ' · 강사 계정 없음'}{t.active ? '' : ' · 쉬는 중'}</option>
         ))}
       </select>
+      <span role="group" aria-label="강사 화면 언어 (운영자 보기 전용)" className="inline-flex overflow-hidden rounded-[8px] border border-white/30">
+        {LANGS.map((l) => (
+          <button key={l} type="button" aria-pressed={adminLang === l} onClick={() => setAdminLang(l)}
+            className={`min-h-[38px] px-2.5 text-[13px] font-semibold ${adminLang === l ? 'bg-white text-[#1d1b2b]' : 'text-white'}`}>
+            {l === 'ko' ? '한국어' : 'English'}
+          </button>
+        ))}
+      </span>
       <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">← 운영자 화면</a>
       {sb && !state.admin.tutors.find((t) => t.id === state.admin?.tutorId)?.hasLogin && (
         <TutorLoginForm onCreate={(email) => createTutorLogin(sb, state.admin!.tutorId, email)} />
       )}
     </div>
   );
-  return <TutorHome key={state.screen.tutor.id} initial={state.screen} nowIso={state.nowIso} actions={actions} adminBar={adminBar} onLogout={state.admin ? undefined : logout} />;
+  return <TutorHome key={state.screen.tutor.id} initial={state.screen} nowIso={state.nowIso} actions={actions} adminBar={adminBar} onLogout={state.admin ? undefined : logout} lang={state.admin ? adminLang : 'en'} />;
 }
 
 // 대표: 이 강사의 로그인 계정 만들기 (이메일만 넣으면 계정 + 강사 연결, 비밀번호 없음 — 강사는 이메일 코드로 로그인)

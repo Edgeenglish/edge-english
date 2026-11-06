@@ -5,6 +5,7 @@ import { parseHours, type HoursData } from './hours';
 import { parseSchedule, type ScheduleAction, type ScheduleData } from './schedule';
 import { parseScreen, type Late, type TutorResult, type TutorScreen } from './screen';
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
+import { parseFollowup, parseFollowupTodos, type Followup, type FollowupTodo } from './followup';
 import type { TutorStudentRow } from '@/app/lms/tutor/TutorHome';
 
 const NOT_APPLIED = 'The tutor page is not ready on this database yet (migration 2000).';
@@ -92,6 +93,19 @@ export async function updateStudentProfile(sb: SupabaseClient, studentId: string
 export async function loadMyStudents(sb: SupabaseClient, tutorId: string | null): Promise<TutorStudentRow[]> {
   const rows = check(await sb.rpc('tutor_students_list', { p_tutor: tutorId })) as { student_id: string; display_name: string; level: string | null; class_type: string | null; timezone: string | null; class_note_url: string | null }[];
   return rows.map((r) => ({ id: r.student_id, name: r.display_name, level: r.level, classType: r.class_type, timezone: r.timezone, noteUrl: r.class_note_url }));
+}
+
+/** 첫 수업 후 To-do (4600): Home 목록. tutorId: 운영자가 고른 강사 (강사 본인은 비움). 4600 전 DB 는 빈 목록 */
+export async function loadFollowupTodos(sb: SupabaseClient, tutorId: string | null): Promise<FollowupTodo[]> {
+  const r = await sb.rpc('tutor_first_lesson_todos', { p_tutor: tutorId });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') return [];
+  return parseFollowupTodos(check(r));
+}
+/** 첫 수업 후 입력 저장 (4600): level · improve · class_style · class_style_mix · textbook · materials_note. 완료 판정은 DB 가 돌려줌 */
+export async function saveFollowup(sb: SupabaseClient, studentId: string, fields: Record<string, string | string[] | null>, tutorId: string | null): Promise<Followup | null> {
+  const r = await sb.rpc('tutor_first_lesson_save', { p_student: studentId, p: fields, p_tutor: tutorId });
+  if (r.error?.code === '42501') throw new Error(r.error.message || "Only the student's regular tutor can edit this.");
+  return parseFollowup(check(r));
 }
 
 const SCHEDULE_NOT_APPLIED = 'Schedule is not ready on this database yet (migration 4403).';

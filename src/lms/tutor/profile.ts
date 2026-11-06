@@ -4,6 +4,7 @@
 
 import { enZone, nextDateOf, parseEnrollment, parseProfile, parseSlots, parseTopics, parseUpcoming, type EnrollmentInfo, type RecentTopic, type SlotFull, type StudentProfile, type Upcoming } from '../admin/students';
 import { formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
+import { parseFollowup, type Followup } from './followup';
 
 export type TutorAccess = 'regular' | 'substitute';
 export type TutorStudentProfile = {
@@ -12,6 +13,8 @@ export type TutorStudentProfile = {
   nextSlots: { weekday: number; time: string; from: KstDate }[];
   upcoming: Upcoming[]; recentTopics: RecentTopic[];
   access: TutorAccess; me: { id: string | null; timezone: string };
+  /** 첫 수업 후 To-do 상태 (4600). 첫 Held 수업 전·대체강사·옛 DB 는 null */
+  followup: Followup | null;
 };
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB JSON → 화면 모양 */
 export function parseTutorProfile(j: any): TutorStudentProfile {
@@ -20,6 +23,7 @@ export function parseTutorProfile(j: any): TutorStudentProfile {
     slots: parseSlots(j.slots), nextSlots: ((j.next_slots ?? []) as any[]).map((s) => ({ weekday: s.weekday, time: s.time, from: s.from })),
     upcoming: parseUpcoming(j.upcoming), recentTopics: parseTopics(j.recent_topics),
     access: j.access === 'substitute' ? 'substitute' : 'regular', me: { id: j.me?.id ?? null, timezone: j.me?.timezone ?? 'Asia/Seoul' },
+    followup: parseFollowup(j.followup),
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

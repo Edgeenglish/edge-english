@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { enZone } from '@/lms/admin/students';
 import { formatInZone } from '@/lms/rules/dates';
 import { CLASS_STYLE_EN, CORRECTION_EN, dstNote, enAt, enDate, enDateYear, finalEndLines, nextLesson, RUBRIC, slotsIn, todayKst, type TutorStudentProfile } from '@/lms/tutor/profile';
+import { styleText } from '@/lms/tutor/followup';
+import { useLang, useT } from '@/lms/tutor/lang';
 
 export type ProfileActions = { load: (studentId: string) => Promise<TutorStudentProfile>; save: (studentId: string, fields: Record<string, string | null>) => Promise<void> };
 
@@ -40,7 +42,14 @@ async function copy(text: string): Promise<boolean> {
   try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
 }
 
-export default function StudentProfile({ studentId, actions, onClose, now, backLabel }: { studentId: string; actions: ProfileActions; onClose: () => void; now: Date; /** 어디서 열었는지에 맞춘 뒤로 가기 글자 (QA UX: Students 에서 열면 'Back to students') */ backLabel?: string }) {
+export default function StudentProfile({ studentId, actions, onClose, now, backLabel, followupPending = null, onFollowup }: {
+  studentId: string; actions: ProfileActions; onClose: () => void; now: Date;
+  /** 어디서 열었는지에 맞춘 뒤로 가기 글자 (QA UX: Students 에서 열면 'Back to students') */ backLabel?: string;
+  /** 첫 수업 후 To-do 남은 수 (4600, Home 목록 기준). null = 모름 → 프로필의 followup 으로 판단 */ followupPending?: number | null;
+  /** [First lesson follow-up] 버튼 → 그 창으로 */ onFollowup?: () => void;
+}) {
+  const t = useT();
+  const lang = useLang();
   const [p, setP] = useState<TutorStudentProfile | null>(null);
   const [err, setErr] = useState('');
   const [editing, setEditing] = useState(false);
@@ -83,9 +92,16 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
         <header className="mb-3">
           <h2 className="pr-10 text-[20px] font-bold text-[#1d1b2b]">{s.nameEn}{s.displayName && s.displayName.toLowerCase() !== s.nameEn.toLowerCase() ? <span className="text-[#5b3fe0]"> “{s.displayName}”</span> : null}</h2>
           <p className="text-[13.5px] text-[#6b6880]">
-            {regular ? 'Your regular student' : 'Cover class — view only'}{p.slots.length ? ` · ${kst.text.split(' ').slice(0, 1)[0]}` : ''}{e ? ` · ${e.durationMin} min` : ''}
-            {!regular && ' · Email and payment details are not shared with cover tutors.'}
+            {regular ? t('Your regular student', '담당 학생') : t('Cover class — view only', '대체 수업 — 열람만')}{p.slots.length ? ` · ${kst.text.split(' ').slice(0, 1)[0]}` : ''}{e ? ` · ${e.durationMin} min` : ''}
+            {!regular && ` · ${t('Email and payment details are not shared with cover tutors.', '이메일·결제 정보는 대체강사에게 보이지 않아요.')}`}
           </p>
+          {/* 첫 수업 후 To-do (4600): 첫 Held 수업이 있는 담당 학생만. 남은 게 있으면 노란 버튼, 다 했으면 작은 링크 */}
+          {regular && onFollowup && p.followup && (() => { const left = followupPending ?? p.followup.pending; return (
+            <button type="button" onClick={onFollowup}
+              className={`mt-2 inline-flex min-h-[40px] items-center gap-2 rounded-[10px] px-3 text-[13.5px] font-bold ${left > 0 ? 'border-2 border-[#f0a33a] bg-[#fff4d6] text-[#5c3b00]' : 'border border-[#cfead9] bg-[#f5fcf7] text-[#167344]'}`}>
+              {left > 0 ? `${t('First lesson follow-up', '첫 수업 후 확인')} · ${left} ${t('left', '남음')}` : `✓ ${t('First lesson follow-up done', '첫 수업 후 확인 완료')}`} ›
+            </button>
+          ); })()}
         </header>
         <div className="grid gap-3 lg:grid-cols-2">
           <Section title="PROFILE">
@@ -114,10 +130,10 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
             <Row k="Job" v={s.job ?? NA} />
             <Row k="Hobbies" v={s.hobbies ?? NA} />
             <Row k="Interests" v={s.interests ?? NA} />
-            <Row k="Wants to improve" v={s.improve ?? NA} />
+            <Row k={t('Wants to improve', '개선 목표')} v={s.improve ? <>{s.improve}{s.improveTutorAt && <span className="block text-[12.5px] text-[#6b6880]">{t('Confirmed by the tutor', '강사가 확인')} · {enDate(formatInZone(s.improveTutorAt, tz).date)}</span>}</> : NA} />
             <Row k="Hopes for class" v={s.hopes ?? NA} />
             <Row k="Corrections" v={s.correctionStyle ? <>{CORRECTION_EN[s.correctionStyle]}{s.correctionNote && <span className="block text-[12.5px] text-[#6b6880]">{s.correctionNote}</span>}</> : NA} />
-            <Row k="Class style" v={s.classStyle ? <>{CLASS_STYLE_EN[s.classStyle]}{s.classStyleNote && <span className="block text-[12.5px] text-[#6b6880]">{s.classStyleNote}</span>}</> : NA} />
+            <Row k={t('Preferred class style', '희망 수업 방식')} v={s.classStyle ? <>{CLASS_STYLE_EN[s.classStyle]}{s.classStyleNote && <span className="block text-[12.5px] text-[#6b6880]">{s.classStyleNote}</span>}</> : NA} />
             {s.selfIntroEn && (
               <details className="mt-1 text-[13.5px]">
                 <summary className="cursor-pointer font-semibold text-[#5b3fe0]">Earlier self-introduction (from the sheet, unchanged)</summary>
@@ -127,9 +143,13 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
           </Section>
 
           <Section title="CLASS">
-            {/* 학생 선호(Class style)와 같은 데이터. 시트에서 온 예전 값은 참고로만 (QA-15) */}
-            <Row k="Type of class" v={s.classStyle ? <>{CLASS_STYLE_EN[s.classStyle]}{s.classType && <span className="block text-[12.5px] text-[#6b6880]">Earlier note (sheet): {s.classType}</span>}</> : (s.classType ?? NP)} />
-            {s.textbook && <Row k="Textbook" v={s.textbook} />}
+            {/* 'Type of class' → 'Class style' 로 통일 (H26(67)). 강사가 확인한 실제 방식(4600)이 있으면 그것, 없으면 학생 희망을 참고로. 시트의 예전 값은 참고로만 (QA-15) */}
+            <Row k={t('Class style', '수업 방식')} v={s.tutorClassStyle ? (
+              <>{styleText(s, lang)}<span className="block text-[12.5px] text-[#6b6880]">{t('Confirmed by', '확인')} {s.tutorClassStyleBy ?? t('tutor', '강사')}{s.tutorClassStyleAt ? ` · ${enDate(formatInZone(s.tutorClassStyleAt, tz).date)}` : ''}</span></>
+            ) : (
+              <>{s.classStyle ? <>{CLASS_STYLE_EN[s.classStyle]} <span className="text-[#6b6880]">({t("student's wish — not confirmed yet", '학생 희망 — 아직 확인 전')})</span></> : (s.classType ?? NP)}{s.classType && s.classStyle && <span className="block text-[12.5px] text-[#6b6880]">{t('Earlier note (sheet)', '예전 시트 메모')}: {s.classType}</span>}</>
+            )} />
+            {s.textbook && !(s.tutorClassStyle && styleText(s, lang)?.includes(s.textbook)) && <Row k={t('Textbook', '교재')} v={s.textbook} />}
             <Row k="Corrections / feedback" v={s.correctionStyle ? CORRECTION_EN[s.correctionStyle] : (s.correctionPref ?? NA)} />
             <Row k="Class duration" v={e ? `${e.durationMin} min` : NP} />
             {p.slots.length > 0 ? (

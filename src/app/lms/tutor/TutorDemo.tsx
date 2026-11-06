@@ -39,6 +39,8 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
       load: async (id) => fakeStudentProfile(id, new Date(nowIso)),
       save: async () => {},
     },
+    followups: async () => [{ studentId: 'demo-hajun', student: 'Hajun Kim', firstLessonAt: new Date(+new Date(nowIso) - 86400000 * 2), pending: 3, done: { level: false, improve: false, style: false, record: true } }],
+    followupSave: async () => ({ firstLesson: { id: 'd1', startsAt: new Date(+new Date(nowIso) - 86400000 * 2), status: 'Normal', topics: 'Travel plans, airports', recordedAt: new Date() }, done: { level: true, improve: true, style: true, record: true }, pending: 0 }),
     students: async () => [
       { id: 'demo-hajun', name: 'Hajun Kim', level: 'Intermediate', classType: 'Free talking', timezone: 'Asia/Seoul', noteUrl: 'https://docs.google.com/' },
       { id: 'demo-seoyeon', name: 'Seoyeon Park (Sarah)', level: 'Pre-Intermediate', classType: 'Textbook', timezone: 'Australia/Melbourne', noteUrl: null },

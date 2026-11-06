@@ -3027,3 +3027,98 @@ reset request.jwt.claim.sub;
 reset role;
 update tutor_availability set end_local = '23:30' where tutor_id = '55555555-0000-0000-0000-00000000452a';
 update tutor_time_off set starts_at = timestamptz '1900-01-01', ends_at = timestamptz '1900-01-02' where tutor_id = '55555555-0000-0000-0000-00000000452a' and reason = 'R-25 시험 휴무';
+
+-- ---------- 4600 첫 수업 후 강사 To-do · 실제 Class Style (20261107010000, H26(67)·(68)·(71)) ----------
+reset request.jwt.claim.sub;
+reset role;
+insert into tutors (id, name, country, timezone) values
+  ('55555555-0000-0000-0000-000000004600', 'FollowTutor', 'Canada', 'America/Toronto'),
+  ('55555555-0000-0000-0000-000000004601', 'FollowSub', 'Canada', 'America/Toronto');
+insert into students (id, name_ko, name_en, display_name, timezone, email, class_style, class_style_note, improve, textbook)
+values ('99999999-0000-0000-0000-000000004600', '이첫수', 'Lee Cheotsu', null, 'Asia/Seoul', 'f4600@example.com', 'free_talking', 'wants to talk a lot', 'operator wrote this first', null);
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', 1, 4, 1, 40, current_date - 10, current_date + 17, 4, 'active');
+insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+values ('99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 3, '20:00', 40, current_date - 10);
+-- 수업 2회: 1회(지남, 아직 기록 전) · 2회(앞으로)
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at) values
+  ('77777777-4600-0000-0000-000000000001', '99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 'regular', 1, now() - interval '3 days', now() - interval '3 days' + interval '40 minutes'),
+  ('77777777-4600-0000-0000-000000000002', '99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 'regular', 2, now() + interval '4 days', now() + interval '4 days' + interval '40 minutes');
+insert into app_users (auth_user_id, role, tutor_id) values
+  ('bbbbbbbb-0000-0000-0000-000000004600', 'tutor', '55555555-0000-0000-0000-000000004600'),
+  ('bbbbbbbb-0000-0000-0000-000000004601', 'tutor', '55555555-0000-0000-0000-000000004601');
+-- 시험용 읽기 도우미 (RLS 우회, 시험 안에서만)
+create function pg_temp.s4600() returns students language sql security definer as $$ select * from students where id = '99999999-0000-0000-0000-000000004600' $$;
+create function pg_temp.e4600(f text) returns bigint language sql security definer as $$ select count(*) from student_profile_edits where student_id = '99999999-0000-0000-0000-000000004600' and field = f $$;
+create function pg_temp.lastrole4600() returns text language sql security definer as $$ select edited_role from student_profile_edits where student_id = '99999999-0000-0000-0000-000000004600' and field = 'level' order by created_at desc limit 1 $$;
+set request.jwt.claims = '{"aal":"aal2"}';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004600';
+select pg_temp.ok(tutor_first_lesson_todos(null) = '[]'::jsonb
+              and (select p -> 'followup' = 'null'::jsonb or p -> 'followup' is null from tutor_student_profile('99999999-0000-0000-0000-000000004600', null) p),
+  '첫 수업이 Held 로 기록되기 전에는 To-do 없음 (4600)');
+-- 1회를 Held 로 기록 (출결 함수 그대로)
+select tutor_record_class('77777777-4600-0000-0000-000000000001', 'held', 'First class: intro', '', false, null, false, null);
+select pg_temp.ok((select count(*) = 1 and (jsonb_agg(x) -> 0 ->> 'pending')::int = 3 and (jsonb_agg(x) -> 0 ->> 'student') = 'Lee Cheotsu'
+                   from jsonb_array_elements(tutor_first_lesson_todos(null)) x),
+  '첫 수업 Held 기록 → To-do 1명, 덜 한 항목 3 (Level · Wants to improve · Class Style) (4600)');
+select pg_temp.ok((select p -> 'followup' -> 'done' = '{"level": false, "improve": false, "style": false, "record": true}'::jsonb
+                   and p -> 'followup' -> 'first_lesson' ->> 'topics' = 'First class: intro'
+                   from tutor_student_profile('99999999-0000-0000-0000-000000004600', null) p),
+  'Student profile 의 followup: Class Record 는 첫 수업 기록으로 자동 완료, 나머지 셋은 미완료 (4600)');
+-- 운영진이 미리 적어 둔 improve 는 강사가 확인해 적기 전까지 완료 아님 / 1 레벨 저장
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Expert"}')$$, 'rubric');
+create temp table f4600 as select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Intermediate"}') as r;
+grant select on f4600 to authenticated;
+select pg_temp.ok((select (r -> 'done' ->> 'level')::boolean and (r ->> 'pending')::int = 2 from f4600)
+              and (select (x).level = 'Intermediate' and (x).level_by = 'bbbbbbbb-0000-0000-0000-000000004600' and (x).level_at is not null from pg_temp.s4600() x),
+  '1 English Level 저장 → 완료, 평가자·시각 기록 (4600)');
+-- 같은 레벨을 다시 골라도 '확인함' (평가 시각 갱신) — 변경 기록은 안 늘어남
+delete from f4600; insert into f4600 select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Intermediate"}');
+select pg_temp.ok((select (r -> 'done' ->> 'level')::boolean from f4600)
+              and pg_temp.e4600('level') = 1,
+  '같은 레벨 다시 저장: 완료 유지, 바뀐 게 없으면 변경 기록 없음 (4600)');
+-- 2 Wants to improve
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"improve":"  "}')$$, 'wants to improve');
+delete from f4600; insert into f4600 select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"improve":"Speaking confidence at work"}');
+select pg_temp.ok((select (r -> 'done' ->> 'improve')::boolean and (r ->> 'pending')::int = 1 from f4600)
+              and (select (x).improve = 'Speaking confidence at work' and (x).improve_tutor_at is not null from pg_temp.s4600() x),
+  '2 Wants to improve: 강사가 적으면 완료 (4600)');
+-- 3 Class Style: 교재 방식인데 교재 없음 → 거절 / Mixed 구성 없음 → 거절 / 모르는 구성 → 거절
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"textbook"}')$$, 'textbook');
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"mixed","class_style_mix":[]}')$$, 'mixed class includes');
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"mixed","class_style_mix":["video"]}')$$, 'Unknown mix');
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"mixed","class_style_mix":["conversation","textbook"]}')$$, 'textbook');
+select pg_temp.ok(true, '3 Class Style: 교재 없는 Textbook/Mixed+Textbook · 구성 없는 Mixed · 모르는 구성은 거절 (4600)');
+delete from f4600; insert into f4600 select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"mixed","class_style_mix":["textbook","conversation","student_materials"],"textbook":"Speak now 2","materials_note":"work emails"}');
+select pg_temp.ok((select (r -> 'done' ->> 'style')::boolean and (r ->> 'pending')::int = 0 from f4600)
+              and (select (x).tutor_class_style = 'mixed' and (x).tutor_class_style_mix = '{conversation,student_materials,textbook}' and (x).textbook = 'Speak now 2'
+                          and (x).tutor_materials_note = 'work emails' and (x).tutor_class_style_at is not null
+                          and (x).class_style = 'free_talking' and (x).class_style_note = 'wants to talk a lot'
+                   from pg_temp.s4600() x),
+  '3 Mixed + 교재 + 학생 자료 저장 → 완료. 학생의 원래 답(class_style·note)은 그대로 (4600)');
+select pg_temp.ok(tutor_first_lesson_todos(null) = '[]'::jsonb
+              and (select (p -> 'followup' ->> 'pending')::int = 0 and p -> 'student' ->> 'tutor_class_style' = 'mixed' and p -> 'student' ->> 'tutor_class_style_by' = 'FollowTutor'
+                   from tutor_student_profile('99999999-0000-0000-0000-000000004600', null) p),
+  '넷 다 끝나면 Home To-do 에서 사라짐, 프로필에 강사 확인 값·확인한 강사 이름 (4600)');
+-- Conversation 으로 바꿔도 교재 칸은 지우지 않음 (나중에 다시 쓸 수 있음)
+select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"conversation"}');
+select pg_temp.ok((select (x).tutor_class_style = 'conversation' and (x).tutor_class_style_mix is null and (x).textbook = 'Speak now 2' from pg_temp.s4600() x),
+  'Conversation 으로 바꾸면 구성은 비우고 교재 칸은 그대로 (4600)');
+-- 권한: 담당 아닌 강사(대체 아님) 거절 · 모르는 칸 거절
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004601';
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Beginner"}')$$, 'regular tutor|42501');
+select pg_temp.ok(tutor_first_lesson_todos(null) = '[]'::jsonb, '담당 아닌 강사: 저장 거절, To-do 없음 (4600)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004600';
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"hobbies":"x"}')$$, 'cannot be changed');
+select pg_temp.ok(true, '학생 원래 답 칸(hobbies 등)은 이 함수로 못 바꿈 (4600)');
+-- 운영자(TOTP)가 강사 문맥(?tutor=)으로 대신: 같은 결과, 역할은 admin 으로 기록
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+delete from f4600; insert into f4600 select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Advanced"}', '55555555-0000-0000-0000-000000004600');
+select pg_temp.ok((select count(*) = 0 from jsonb_array_elements(tutor_first_lesson_todos('55555555-0000-0000-0000-000000004600')) x)
+              and (select (r -> 'done' ->> 'level')::boolean from f4600)
+              and pg_temp.lastrole4600() = 'admin'
+              and (select p -> 'student' ->> 'tutor_class_style' = 'conversation' from admin_student_detail('99999999-0000-0000-0000-000000004600') p),
+  '운영자: 강사 고른 문맥으로 To-do 조회·저장 가능(역할 admin 기록), 운영진 상세에도 강사 확인 값 (4600)');
+reset request.jwt.claim.sub;
+reset role;

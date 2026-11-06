@@ -13,7 +13,7 @@ const stu = (x: Partial<StudentProfile>): StudentProfile => ({
   id: 's1', code: 'STU-0001', nameKo: '김서연', nameEn: 'Kim Seoyeon', displayName: null, label: 'Kim Seoyeon', country: null, city: null, timezone: 'Asia/Seoul', genderAge: null,
   email: null, phone: null, adminMemo: null, level: null, levelNote: null, levelAt: null, levelBy: null, classType: null, textbook: null, classNoteUrl: null,
   correctionPref: null, selfIntroEn: null, job: null, hobbies: null, interests: null, improve: null, hopes: null, correctionStyle: null, correctionNote: null,
-  classStyle: null, classStyleNote: null, answersAt: null, lmsSince: null, ...x,
+  classStyle: null, classStyleNote: null, tutorClassStyle: null, tutorClassStyleMix: [], tutorMaterialsNote: null, tutorClassStyleAt: null, tutorClassStyleBy: null, improveTutorAt: null, answersAt: null, lmsSince: null, ...x,
 });
 
 describe('⑤ 시트 Student Info ↔ LMS 비교', () => {

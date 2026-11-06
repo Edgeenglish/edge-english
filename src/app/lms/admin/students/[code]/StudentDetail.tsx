@@ -10,6 +10,7 @@ import {
   type RegularPreview, type Slot, type StudentDetailData, type StudentProfile, type StudentStatus,
 } from '@/lms/admin/students';
 import { AdminHeader, BottomNav, Icon } from '../../ui';
+import { styleText } from '@/lms/tutor/followup';
 import { Box, btnMain, btnSmall, btnSub, CopyButton, input, label, Row, Sheet, WHO_ROLE } from './parts';
 import RegularChange from './RegularChange';
 import PrestartMove from './PrestartMove';
@@ -147,6 +148,8 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             <Row k="레벨 (강사 평가)" v={s.level ? <>{s.level}{s.levelBy || s.levelAt ? <span className="block text-[12px] text-[#6b6880]">{[s.levelBy, s.levelAt ? md(instantToKstDate(s.levelAt)) : ''].filter(Boolean).join(' · ')}</span> : null}</> : <i className="text-[#b9b6c8]">평가 전</i>} />
             {s.levelNote && <Row k="예전 레벨 표기" v={s.levelNote} />}
             <Row k="Type of class" v={or(s.classType)} />
+            {/* 강사가 첫 수업 후 확인한 실제 수업 방식 (4600) — 학생 희망(7번)과 다른 칸 */}
+            <Row k="수업 방식 (강사 확인)" v={s.tutorClassStyle ? <>{styleText(s, 'ko')}<span className="block text-[12.5px] text-[#6b6880]">{s.tutorClassStyleBy ?? '강사'} 확인{s.tutorClassStyleAt ? ` · ${md(instantToKstDate(s.tutorClassStyleAt))}` : ''}</span></> : <i className="text-[#b9b6c8]">첫 수업 후 강사 확인 전</i>} />
             <Row k="교재" v={or(s.textbook)} />
             <Row k="Google Docs" v={s.classNoteUrl ? <a href={s.classNoteUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#5b3fe0] underline">수업 노트 열기 ↗</a> : or(null)} />
           </Box>
@@ -155,7 +158,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             <Row k="1 직업" v={or(s.job, NA)} />
             <Row k="2 취미" v={or(s.hobbies, NA)} />
             <Row k="3 관심사" v={or(s.interests, NA)} />
-            <Row k="4 개선하고 싶은 부분" v={or(s.improve, NA)} />
+            <Row k="4 개선하고 싶은 부분" v={s.improve ? <>{s.improve}{s.improveTutorAt && <span className="block text-[12.5px] text-[#6b6880]">강사가 첫 수업에서 직접 확인 · {md(instantToKstDate(s.improveTutorAt))}</span>}</> : NA} />
             <Row k="5 바라는 점·분위기" v={or(s.hopes, NA)} />
             <Row k="6 선호 교정 방식" v={s.correctionStyle ? <>{CORRECTION[s.correctionStyle]}{s.correctionNote && <span className="block text-[12.5px] text-[#6b6880]">{s.correctionNote}</span>}</> : NA} />
             <Row k="7 선호 수업 스타일" v={s.classStyle ? <>{CLASS_STYLE[s.classStyle]}{s.classStyleNote && <span className="block text-[12.5px] text-[#6b6880]">{s.classStyleNote}</span>}</> : NA} />
