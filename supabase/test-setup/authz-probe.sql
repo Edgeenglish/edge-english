@@ -68,7 +68,7 @@ declare
                           'tutor_screen', 'tutor_hours', 'tutor_hours_save', 'tutor_record_class', 'tutor_makeup_answer', 'tutor_sub_answer', 'student_screen', 'student_makeup_options', 'student_makeup_request', 'student_leave_answer', 'student_reminders', 'admin_student_accounts', 'admin_student_login', 'admin_leave_sub_off_hours', 'admin_tutor_accounts', 'admin_class_record_missing',
                           'admin_tutor_login',
                           'admin_students', 'admin_student_detail', 'admin_student_update', 'tutor_student_profile', 'tutor_student_update',
-                          'admin_regular_change', 'admin_regular_change_sent', 'admin_extend_enrollment',
+                          'admin_regular_change', 'admin_regular_change_sent', 'admin_extend_enrollment', 'admin_prestart_move',
                           'admin_sheet_rows', 'admin_sheet_row_match', 'admin_sheet_row_done',
                           'tutor_students_list', 'tutor_schedule', 'tutor_schedule_save',
                           'admin_credits', 'admin_credit_adjust', 'admin_leave_withdraw',

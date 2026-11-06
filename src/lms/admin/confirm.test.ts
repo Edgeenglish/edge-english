@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstLessonAt, planAlert, proposalMessage, studentConfirmMessage, timeLines, tutorConfirmMessage, type PlanView } from './confirm';
+import { firstLessonAt, planAlert, prestartMoveNotices, proposalMessage, studentConfirmMessage, timeLines, tutorConfirmMessage, type PlanView } from './confirm';
 
 // 시안 2차 예시: 뉴욕 학생 · 시드니 강사 · 한국 수·금 09:00, 첫 수업 2026-11-04(수)
 const base: PlanView = {
@@ -82,7 +82,14 @@ describe('경고 시각 (D-51-3)', () => {
   });
 });
 
-describe('회차별 날짜를 정한 일정안 (H26(61))', () => {
+describe('회차별 날짜를 정한 일정안 (H26(61)·(62))', () => {
+  it('시작 전 날짜 변경 안내: 학생은 현지 시각 먼저 + 한국, 강사는 강사 현지', () => {
+    const n = prestartMoveNotices({ studentNameEn: 'Minji Kim', studentTz: 'America/New_York', studentCity: '뉴욕', tutorTz: 'Australia/Sydney', from: new Date('2026-11-04T00:00:00Z'), to: new Date('2026-11-05T00:00:00Z') });
+    expect(n.student).toBe('[엣지영어] 수업 날짜가 바뀌었어요\n11월 3일(화) 19:00 → 11월 4일(수) 19:00 (뉴욕 시각)\n= 한국 11월 5일(목) 09:00');
+    expect(n.tutor).toBe('Schedule change - Minji Kim\nWed 4 Nov 11:00 → Thu 5 Nov 11:00 Sydney Time\nPlease update your schedule. Thank you!');
+    const kr = prestartMoveNotices({ studentNameEn: 'A', studentTz: 'Asia/Seoul', studentCity: null, tutorTz: 'Asia/Seoul', from: new Date('2026-11-04T00:00:00Z'), to: new Date('2026-11-05T00:00:00Z') });
+    expect(kr.student).toBe('[엣지영어] 수업 날짜가 바뀌었어요\n11월 4일(수) 09:00 → 11월 5일(목) 09:00 (한국 시각)');
+  });
   // 수·금 09:00 인데 첫 수업은 월 11/2, 3회차 수 11/11 → 목 11/12
   const custom: PlanView = {
     ...base,
@@ -102,18 +109,19 @@ describe('회차별 날짜를 정한 일정안 (H26(61))', () => {
   it('강사 제안: 첫 수업은 목록의 첫 날, 정규와 다른 날·수업 없는 날을 강사 현지 시각으로', () => {
     const m = proposalMessage(custom).split('\n');
     expect(m).toContain('First class: Mon 2 Nov 11:00');
-    expect(m).toContain('Different dates: Mon 2 Nov 11:00, Thu 12 Nov 11:00');
-    expect(m).toContain('No class on: Wed 11 Nov, Fri 27 Nov');
+    expect(m).toContain('Other days: Thu 12 Nov 11:00');
+    expect(m.join('\n')).not.toContain('Other days: Mon 2 Nov');
+    expect(m).toContain('No class (regular day): Wed 11 Nov, Fri 27 Nov');
   });
   it('강사 확정: 마지막 수업도 목록 기준', () => {
     expect(tutorConfirmMessage(custom)).toContain('First class: Mon 2 Nov 11:00 · last Wed 25 Nov');
   });
   it('학생 확정: 정규와 다른 날·수업 없는 날을 학생 현지 시각으로', () => {
     const m = studentConfirmMessage(custom).split('\n');
-    expect(m.some((l) => l.startsWith('정규와 다른 날: 11월 1일(일) 19:00, 11월 11일(수) 19:00'))).toBe(true);
-    expect(m.some((l) => l.startsWith('수업 없는 날: 11월 10일(화), 11월 26일(목)'))).toBe(true);
+    expect(m.some((l) => l.startsWith('다른 요일 수업: 11월 11일(수) 19:00 (뉴욕)'))).toBe(true);
+    expect(m.some((l) => l.startsWith('수업 없는 정규 요일: 11월 10일(화), 11월 26일(목)'))).toBe(true);
   });
   it('목록이 없으면 예전 문구 그대로', () => {
-    expect(proposalMessage(base)).not.toContain('Different dates');
+    expect(proposalMessage(base)).not.toContain('Other days');
   });
 });

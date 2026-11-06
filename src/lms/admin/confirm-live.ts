@@ -126,7 +126,7 @@ export async function proposeSchedule(
   sb: SupabaseClient,
   enrollmentId: string,
   planId: string,
-  p: { tutor_id: string; slots: RegularSlot[]; start_date: string; tutor_answer: 'accepted' | null },
+  p: { tutor_id: string; slots: RegularSlot[]; start_date: string; tutor_answer: 'accepted' | null; lessons?: { date: string; time: string }[] | null },
 ) {
   const r = await call<{ plan_id: string; state: 'proposed' | 'confirmed'; tutor_notice_id?: string | null; student_notice_id?: string | null }>(sb, 'admin_propose_schedule', {
     p_plan_id: planId,

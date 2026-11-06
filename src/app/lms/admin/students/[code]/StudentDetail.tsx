@@ -12,6 +12,7 @@ import {
 import { AdminHeader, BottomNav, Icon } from '../../ui';
 import { Box, btnMain, btnSmall, btnSub, CopyButton, input, label, Row, Sheet, WHO_ROLE } from './parts';
 import RegularChange from './RegularChange';
+import PrestartMove from './PrestartMove';
 
 export type DetailActions = {
   reload: () => Promise<void>;
@@ -20,6 +21,8 @@ export type DetailActions = {
   save: (slots: Slot[], from: KstDate, reason: string) => Promise<{ changeId: string; moved: number }>;
   sent: (changeId: string, who: 'student' | 'tutor', undo?: boolean) => Promise<void>;
   extend: (enrollmentId: string, newEnd: KstDate, kind: 'student_long_term_leave' | 'admin_exception' | 'correction', note: string) => Promise<{ finalEndDate: KstDate; days: number }>;
+  /** 첫 수업 시작 전 개별 수업 날짜 변경 (변경권 차감 없음, H26(62)) */
+  prestart: (lessonId: string, startsAt: string) => Promise<unknown>;
 };
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
@@ -43,7 +46,10 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
   const e = data.enrollment;
   const slot = data.slots[0] ?? null;
   const status: StudentStatus = !e ? 'none' : e.status === 'completed' || e.status === 'canceled' || e.finalEndDate < today ? 'ended' : e.startDate > today ? 'upcoming' : 'active';
-  const [sheet, setSheet] = useState<null | 'profile' | 'answers' | 'regular' | 'extend' | { notice: string }>(null);
+  const [sheet, setSheet] = useState<null | 'profile' | 'answers' | 'regular' | 'extend' | 'prestart' | { notice: string }>(null);
+  // 첫 수업 시작 전: 이 수강권의 정규 수업이 모두 아직 앞으로 남아 있을 때만 (시작 뒤는 수업 변경·변경권 절차)
+  const regularAhead = data.upcoming.filter((l) => l.kind === 'regular' && !l.substitute && !l.leaveOpen);
+  const prestartOpen = !!e && (e.status === 'confirmed' || e.status === 'active') && regularAhead.length > 0 && regularAhead.length >= e.lessonsPurchased;
   const pendingChanges = data.changes.filter((c) => !c.studentSentAt || !c.tutorSentAt);
   const autoExt = e ? e.extensions.filter((x) => x.auto).reduce((a, x) => a + x.days, 0) : 0;
   const manualExt = e ? e.extensions.filter((x) => !x.auto).reduce((a, x) => a + x.days, 0) : 0;
@@ -167,7 +173,11 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             {s.lmsSince && <Row k="LMS 시작" v={s.lmsSince} />}
           </Box>
 
-          <Box title="다가오는 수업">
+          <Box title="다가오는 수업" action={prestartOpen ? (
+            <button type="button" onClick={() => setSheet('prestart')} className="min-h-[36px] rounded-[10px] border border-[#cfc4ff] bg-white px-3 text-[13px] font-semibold text-[#5b3fe0]">
+              시작 전 날짜 변경
+            </button>
+          ) : undefined}>
             {data.upcoming.length === 0 && <p className="py-2 text-[13px] text-[#6b6880]">예정된 수업이 없어요.</p>}
             {data.upcoming.slice(0, 8).map((l) => (
               <div key={l.id} className="border-b border-[#f0eef6] py-2 text-[13.5px] last:border-0">
@@ -208,6 +218,10 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
       {sheet === 'regular' && (
         <RegularChange data={data} today={today} preview={actions.preview} save={actions.save} onClose={() => setSheet(null)}
           onSaved={async (changeId) => { await actions.reload(); setSheet({ notice: changeId }); }} />
+      )}
+      {sheet === 'prestart' && e && (
+        <PrestartMove lessons={regularAhead} period={{ start: e.startDate, end: e.finalEndDate }} student={{ nameEn: s.nameEn, timezone: s.timezone, city: s.city }}
+          move={actions.prestart} onSaved={actions.reload} onClose={() => setSheet(null)} />
       )}
       {sheet === 'extend' && e && <ExtendSheet enrollment={e} studentTz={s.timezone} today={today} extend={actions.extend} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
       {sheet === 'profile' && <ProfileSheet student={s} update={actions.update} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}

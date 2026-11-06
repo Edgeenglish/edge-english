@@ -220,7 +220,7 @@ function PeriodBox({ plan, slots, weeks }: { plan: LessonPlan; slots: RegularSlo
 }
 
 /** 특정 수업 날짜 변경 창 (PC 가운데 · 휴대폰 아래에서 올라옴) */
-function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: LessonPlan; issues: PlanIssue[]; tutor: RegTutor | null; onEdit: ScheduleProps['onEdit']; onClose: () => void }) {
+export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: LessonPlan; issues: PlanIssue[]; tutor: RegTutor | null; onEdit: ScheduleProps['onEdit']; onClose: () => void }) {
   const [open, setOpen] = useState<KstDate | null>(null);
   const [date, setDate] = useState<KstDate>('');
   const [time, setTime] = useState('');

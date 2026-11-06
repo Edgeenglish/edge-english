@@ -736,6 +736,52 @@ select pg_temp.ok(pg_temp.ldates('ld7@x.kr') = '1=03-01 21:00 2=03-08 21:00 3=03
   '확정하면 일정안의 회차 목록 그대로 수업 생성 (3회차는 화 3/16)');
 reset role;
 
+-- ---------- 첫 수업 시작 전 개별 수업 날짜 변경 — 변경권 차감 없음 (migration 20261106010000, H26(62)) ----------
+insert into tutor_availability (tutor_id, weekday, start_local, end_local, timezone, effective_from)
+select '55555555-0000-0000-0000-000000000901', wd, '06:00', '22:30', 'Asia/Seoul', '2026-01-01' from generate_series(0, 6) wd;
+insert into tutor_time_off (tutor_id, starts_at, ends_at, kind) values ('55555555-0000-0000-0000-000000000901', '2027-03-29 00:00+09', '2027-03-30 00:00+09', 'leave');
+create or replace function pg_temp.lid(mail text, d text) returns uuid
+language sql as $$ select l.id from lessons l join students s on s.id = l.student_id
+                   where s.email = mail and to_char(l.starts_at at time zone 'Asia/Seoul', 'YYYY-MM-DD') = d $$;
+create or replace function pg_temp.pmove(mail text, d text, to_at text, dry boolean default false) returns jsonb
+language sql as $$ select admin_prestart_move(pg_temp.lid(mail, d), to_at::timestamptz, dry) $$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2)
+select pg_temp.ok((pg_temp.pmove('ld1@x.kr', '2027-03-09', '2027-03-10 19:00+09', true) ->> 'ok')::boolean
+              and pg_temp.ldates('ld1@x.kr') like '%2=03-09 19:00%',
+  '시작 전 날짜 변경: 미리 검사만 하면 바뀌지 않음');
+select pg_temp.ok((pg_temp.pmove('ld1@x.kr', '2027-03-09', '2027-03-31 19:00+09') ->> 'ok')::boolean,
+  '시작 전 날짜 변경: 2회 3/9 → 3/31 저장');
+select pg_temp.ok(pg_temp.ldates('ld1@x.kr') = '1=03-05 19:00 2=03-12 19:00 3=03-16 19:00 4=03-18 19:00 5=03-23 19:00 6=03-25 19:00 7=03-30 19:00 8=03-31 19:00',
+  '옮긴 뒤 회차 번호는 날짜순으로 다시 매김');
+select pg_temp.expect_error($$select pg_temp.pmove('ld1@x.kr', '2027-03-12', '2027-04-02 19:00+09')$$, '수강 기간');
+select pg_temp.ok(true, '수강 기간(~4/1) 밖으로는 못 옮김');
+select pg_temp.expect_error($$select pg_temp.pmove('ld1@x.kr', '2027-03-12', '2027-03-16 10:00+09')$$, '이 학생 수업');
+select pg_temp.ok(true, '그날 이 학생 수업이 이미 있으면 못 옮김');
+select pg_temp.expect_error($$select pg_temp.pmove('ld1@x.kr', '2027-03-12', '2027-03-08 20:30+09')$$, '다른 수업');
+select pg_temp.ok(true, '강사 다른 수업(ld7 21:00)과 휴식 10분 안이면 못 옮김');
+select pg_temp.expect_error($$select pg_temp.pmove('ld1@x.kr', '2027-03-12', '2027-03-29 19:00+09')$$, '휴무');
+select pg_temp.expect_error($$select pg_temp.pmove('ld1@x.kr', '2027-03-12', '2027-03-11 23:00+09')$$, '06:00~22:30');
+select pg_temp.ok(true, '강사 휴무·현지 06:00~22:30 밖도 못 옮김');
+select pg_temp.ok((pg_temp.pmove('ld1@x.kr', '2027-03-12', '2027-03-12 19:30+09') ->> 'ok')::boolean,
+  '같은 날 시간만 바꾸기 (자기 원래 시각과는 겹침 검사 안 함)');
+-- 첫 수업이 이미 지난 수강권 (지난 날짜로 등록)
+select pg_temp.ok((pg_temp.reg('90000000-0000-0000-0000-000000002008',
+  pg_temp.body('시작함', 'ld8@x.kr', 4, 1, 50, '2026-10-06', '55555555-0000-0000-0000-000000000901', '[{"weekday":2,"time":"19:00"}]', true)) ->> 'lessons')::int = 4,
+  '(준비) 첫 수업이 지난 수강권');
+select pg_temp.expect_error($$select pg_temp.pmove('ld8@x.kr', '2026-10-27', '2026-10-28 19:00+09')$$, '이미 시작');
+select pg_temp.ok(true, '첫 수업이 이미 시작된 수강권은 이 기능으로 못 바꿈 (변경권 절차로)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';   -- 학생
+select pg_temp.expect_error($$select pg_temp.pmove('ld1@x.kr', '2027-03-16', '2027-03-17 19:00+09')$$, '42501');
+select pg_temp.ok(true, '운영자가 아니면 부를 수 없음');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select count(*) from prestart_moves pm join students s on s.id = pm.student_id where s.email = 'ld1@x.kr') = 2
+              and not exists (select 1 from makeup_requests mr join lessons l on l.id = mr.source_lesson_id join students s on s.id = l.student_id where s.email = 'ld1@x.kr')
+              and (select count(*) from audit_log where table_name = 'lessons' and actor_via = 'admin_prestart_move') >= 2,
+  '기록은 시작 전 변경 2건 + 수업 변경 이력, 보강·변경권 기록 없음');
+
 -- ---------- 신규 배정 확정 관리 (migration 1000, 정책 원본 H22 6번 필수 검증) ----------
 insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000001000', 'TestTutorConf', 'Korea', 'Asia/Seoul');
 create or replace function pg_temp.eid(mail text) returns uuid

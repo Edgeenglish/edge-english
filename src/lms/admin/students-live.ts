@@ -41,6 +41,11 @@ export async function saveRegularChange(sb: SupabaseClient, studentId: string, s
 export async function markRegularChangeSent(sb: SupabaseClient, changeId: string, who: 'student' | 'tutor', undo = false): Promise<void> {
   check(await sb.rpc('admin_regular_change_sent', { p_change: changeId, p_who: who, p_undo: undo }));
 }
+/** 첫 수업 시작 전 개별 수업 날짜 변경 — 변경권 차감 없음 (migration 20261106010000). 문제가 있으면 DB 사유 문구로 오류 */
+export async function prestartMove(sb: SupabaseClient, lessonId: string, startsAt: string, dryRun = false): Promise<{ seq: number | null; from: string; to: string }> {
+  const r = check(await sb.rpc('admin_prestart_move', { p_lesson: lessonId, p_starts_at: startsAt, p_dry_run: dryRun })) as { seq: number | null; from: string; to: string };
+  return { seq: r.seq, from: r.from, to: r.to };
+}
 export async function extendEnrollment(sb: SupabaseClient, enrollmentId: string, newEnd: KstDate, kind: 'student_long_term_leave' | 'admin_exception' | 'correction', note: string): Promise<{ finalEndDate: KstDate; days: number }> {
   const r = check(await sb.rpc('admin_extend_enrollment', { p_enrollment: enrollmentId, p_new_end: newEnd, p_kind: kind, p_note: note })) as { final_end_date: KstDate; days: number };
   return { finalEndDate: r.final_end_date, days: r.days };

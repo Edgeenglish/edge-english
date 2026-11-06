@@ -6,7 +6,8 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { checkRegularPlan, firstLessonDateOnOrAfter, issueText, type CellState } from '@/lms/rules/booking';
+import { checkLessonList, checkRegularPlan, firstLessonDateOnOrAfter, issueText, type CellState } from '@/lms/rules/booking';
+import { buildLessons, lessonPayload, needsLessonList, type LessonDate } from '@/lms/rules/lessons';
 import { addDays, instantToKstDate, weekdayOf, type KstDate } from '@/lms/rules/dates';
 import { courseName } from '@/lms/rules/period';
 import type { CourseWeeks } from '@/lms/rules/policy';
@@ -18,6 +19,7 @@ import { firstDateBase, firstDateWarnings, type RegTutor } from '@/lms/admin/reg
 import { dayLabel, weekOf } from '@/lms/admin/schedule';
 import PlanCard, { TimeRows, type PlanHandlers } from '../PlanCard';
 import { Card, EMPTY_FILTER, Legend, ProfileSheet, TutorPicker, WeekCalendar, type TutorFilter } from '../students/new/parts';
+import { ChangeSheet } from '../students/new/ScheduleStep';
 
 export type AssignInfo = {
   enrollmentId: string;
@@ -53,6 +55,7 @@ type Props = {
           slots: RegularSlot[];
           start_date: KstDate;
           tutor_answer: 'accepted' | null;
+          lessons?: LessonDate[] | null;
         }
       ) => Promise<ProposeResult>)
     | null;
@@ -110,7 +113,27 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
       slots.map((s) => s.weekday)
     );
   }, [info.startWish, today, now, slots]);
-  const firstDate = firstPick && slots.some((s) => s.weekday === weekdayOf(firstPick)) ? firstPick : suggested;
+  // 첫 수업일은 어느 날이든, 특정 회차만 다른 날·시각 (신규 등록 화면과 같은 규칙·창, H26(61)·(62))
+  const firstDate = firstPick || suggested;
+  const editBasis = JSON.stringify([slots, firstDate]);
+  const [editState, setEditState] = useState<{ basis: string; map: Record<KstDate, LessonDate> }>({ basis: '', map: {} });
+  const edits = useMemo(() => (editState.basis === editBasis ? editState.map : {}), [editState, editBasis]);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  function setEdit(key: KstDate, to: LessonDate | null) {
+    const map = { ...edits };
+    if (to) map[key] = to;
+    else delete map[key];
+    setEditState({ basis: editBasis, map });
+  }
+  const lessonPlan = useMemo(
+    () => (tutor && enough && firstDate && slots.every((s) => s.time) ? buildLessons({ firstDate, weeks: info.weeks, weeklyCount: info.weeklyCount, slots, edits }) : null),
+    [tutor, enough, firstDate, slots, edits, info.weeks, info.weeklyCount],
+  );
+  const listIssues = useMemo(
+    () => (lessonPlan && tutor ? checkLessonList({ lessons: lessonPayload(lessonPlan), durationMin: info.durationMin, tutorBusy: tutor.busy, availability: tutor.availability }) : []),
+    [lessonPlan, tutor, info.durationMin],
+  );
+  const changed = lessonPlan?.lessons.filter((l) => l.original) ?? [];
   const check = (start: KstDate) =>
     tutor
       ? checkRegularPlan({
@@ -122,7 +145,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
           availability: tutor.availability,
         })
       : null;
-  const plan = useMemo(() => (enough && firstDate ? check(firstDate) : null), [enough, firstDate, tutor, slots]); // eslint-disable-line react-hooks/exhaustive-deps
+  const plan = lessonPlan && lessonPlan.lessons.length ? { issues: listIssues, lessons: lessonPlan.lessons } : null;
   const candidates = useMemo(() => {
     if (!enough || !suggested || !tutor) return [];
     const out: { date: KstDate; issues: number }[] = [];
@@ -142,9 +165,10 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
           tutorPlace: tutor.country,
           tutorTz: tutor.timezone,
           slots,
-          startDate: firstDate,
-          endDate: addDays(firstDate, (info.weeks / 4) * 28 - 1),
+          startDate: lessonPlan?.startDate ?? firstDate,
+          endDate: lessonPlan?.endDate ?? addDays(firstDate, (info.weeks / 4) * 28 - 1),
           lessons: info.weeklyCount * info.weeks,
+          lessonList: lessonPlan && needsLessonList(lessonPlan) ? lessonPayload(lessonPlan) : null,
           durationMin: info.durationMin,
           proposalSentAt: null,
           confirmedAt: null,
@@ -152,7 +176,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
           studentNotice: null,
         }
       : null;
-  const ready = !!draft && plan!.issues.length === 0;
+  const ready = !!draft && plan!.issues.length === 0 && (lessonPlan?.problems.length ?? 0) === 0;
 
   async function save(accepted: boolean) {
     if (!draft || !ready || saving) return;
@@ -190,6 +214,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
         slots,
         start_date: draft.startDate,
         tutor_answer: accepted ? 'accepted' : null,
+        lessons: draft.lessonList ?? null,
       });
       if (r.state === 'confirmed') {
         setView({
@@ -343,7 +368,6 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                   <input type="date" value={firstPick || firstDate} onChange={(e) => setFirstPick(e.target.value)} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b]" />
                   <span className="text-[13px] text-[#6b6880]">{dayLabel(firstDate)}</span>
                 </div>
-                {firstPick && !slots.some((s) => s.weekday === weekdayOf(firstPick)) && <p className="mb-2 text-[13px] text-[#b3261e]">첫 수업일은 정규 요일 중 하나여야 해요. 추천 날짜로 바꿨어요.</p>}
                 {firstDateWarnings(firstDate, today, info.startWish).map((w) => <p key={w} className="mb-1 text-[13px] text-[#9a5b00]">{w}</p>)}
                 <div className="flex flex-wrap gap-1.5">
                   {candidates.map((c) => (
@@ -357,6 +381,30 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                     </button>
                   ))}
                 </div>
+                {lessonPlan && (
+                  <div className="mt-3 rounded-[12px] border border-[#ebe8f3] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <b className="text-[14px] text-[#1d1b2b]">특정 수업 날짜 변경</b>
+                      <span className="text-[12.5px] text-[#6b6880]">(선택 · 변경권 차감 없음)</span>
+                      <span className="flex-1" />
+                      <button type="button" onClick={() => setSheetOpen(true)} className="min-h-[40px] rounded-[10px] border-[1.5px] border-[#7d5ffb] bg-white px-3 text-[13.5px] font-bold text-[#4b33c4]">
+                        특정 수업 날짜 변경{changed.length ? ` · ${changed.length}건` : ''}
+                      </button>
+                    </div>
+                    {lessonPlan.extraFirst && <p className="mt-2 text-[13px] text-[#1d1b2b]">1회 {dayLabel(lessonPlan.lessons[0].date)} {lessonPlan.lessons[0].time} (한국 시간) · 첫 수업</p>}
+                    {changed.map((l) => (
+                      <p key={l.key} className="mt-1 text-[13px] text-[#1d1b2b]">
+                        {l.n}회 <s className="text-[#9a97a8]">{dayLabel(l.original!.date)} {l.original!.time}</s> → <b>{dayLabel(l.date)} {l.time}</b> (한국 시간)
+                      </p>
+                    ))}
+                    {lessonPlan.problems.map((p) => (
+                      <p key={p} className="mt-1 text-[13px] text-[#b3261e]">
+                        {p}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {sheetOpen && lessonPlan && <ChangeSheet plan={lessonPlan} issues={listIssues} tutor={tutor} onEdit={setEdit} onClose={() => setSheetOpen(false)} />}
                 {plan && plan.issues.length > 0 && (
                   <ul className="mt-3 space-y-1 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
                     {plan.issues.slice(0, 5).map((i, k) => (

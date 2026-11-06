@@ -109,9 +109,12 @@ function lastLessonAt(v: Pick<PlanView, 'slots' | 'endDate' | 'lessonList'>): Da
   return null;
 }
 
-/** 정규 요일과 다른 날 (회차별 일정안일 때만) */
+/** 정규 요일과 다른 날 (회차별 일정안일 때만). 첫 수업은 '첫 수업' 줄에 이미 있으니 빼고 */
 function otherDates(v: PlanView) {
-  return v.lessonList?.length ? regularDiff(v.lessonList, v.slots, v.startDate, v.endDate) : { added: [], removed: [] };
+  if (!v.lessonList?.length) return { added: [], removed: [] };
+  const d = regularDiff(v.lessonList, v.slots, v.startDate, v.endDate);
+  const first = v.lessonList[0];
+  return { added: d.added.filter((x) => !(x.date === first.date && x.time === first.time)), removed: d.removed };
 }
 const at = (x: LessonDate) => kstToInstant(x.date, x.time);
 const dayOnly = (s: string) => s.replace(/ \d\d:\d\d$/, '');
@@ -120,8 +123,8 @@ const dayOnly = (s: string) => s.replace(/ \d\d:\d\d$/, '');
 function enOtherLines(v: PlanView, tz: string): string[] {
   const d = otherDates(v);
   return [
-    d.added.length ? `Different dates: ${d.added.map((x) => enWhen(at(x), tz)).join(', ')}` : '',
-    d.removed.length ? `No class on: ${d.removed.map((x) => dayOnly(enWhen(at(x), tz))).join(', ')}` : '',
+    d.added.length ? `Other days: ${d.added.map((x) => enWhen(at(x), tz)).join(', ')}` : '',
+    d.removed.length ? `No class (regular day): ${d.removed.map((x) => dayOnly(enWhen(at(x), tz))).join(', ')}` : '',
   ];
 }
 
@@ -169,8 +172,8 @@ export function tutorConfirmMessage(v: PlanView): string {
 function koOtherLines(v: PlanView, tz: string, suffix: string): string[] {
   const d = otherDates(v);
   return [
-    d.added.length ? `정규와 다른 날: ${d.added.map((x) => koWhen(at(x), tz)).join(', ')}${suffix}` : '',
-    d.removed.length ? `수업 없는 날: ${d.removed.map((x) => dayOnly(koWhen(at(x), tz))).join(', ')}` : '',
+    d.added.length ? `다른 요일 수업: ${d.added.map((x) => koWhen(at(x), tz)).join(', ')}${suffix}` : '',
+    d.removed.length ? `수업 없는 정규 요일: ${d.removed.map((x) => dayOnly(koWhen(at(x), tz))).join(', ')}` : '',
   ];
 }
 
@@ -214,4 +217,23 @@ export function planAlert(v: PlanView, now: Date): PlanAlert {
 export function sentLabel(at: Date): string {
   const f = formatInZone(at, 'Asia/Seoul');
   return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))} ${f.time}`;
+}
+
+/** 첫 수업 시작 전 개별 수업 날짜 변경 안내 (H26(62)): 학생 카톡(한국어, 현지 먼저) · 강사 WhatsApp(영어, 강사 현지) */
+export function prestartMoveNotices(p: { studentNameEn: string; studentTz: string; studentCity: string | null; tutorTz: string; from: Date; to: Date }): { student: string; tutor: string } {
+  const stz = p.studentTz || 'Asia/Seoul';
+  const ttz = p.tutorTz || 'Asia/Seoul';
+  const abroad = stz !== 'Asia/Seoul';
+  const place = p.studentCity || '현지';
+  const student = [
+    '[엣지영어] 수업 날짜가 바뀌었어요',
+    `${koWhen(p.from, stz)} → ${koWhen(p.to, stz)} (${abroad ? `${place} 시각` : '한국 시각'})`,
+    abroad ? `= 한국 ${koWhen(p.to, 'Asia/Seoul')}` : '',
+  ].filter(Boolean).join('\n');
+  const tutor = [
+    `Schedule change - ${p.studentNameEn}`,
+    `${enWhen(p.from, ttz)} → ${enWhen(p.to, ttz)} ${enZoneName(ttz)}`,
+    'Please update your schedule. Thank you!',
+  ].join('\n');
+  return { student, tutor };
 }
