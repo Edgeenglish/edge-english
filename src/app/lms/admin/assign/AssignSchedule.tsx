@@ -370,7 +370,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                 </div>
                 {firstDateWarnings(firstDate, today, info.startWish).map((w) => <p key={w} className="mb-1 text-[13px] text-[#9a5b00]">{w}</p>)}
                 <div className="flex flex-wrap gap-1.5">
-                  {candidates.map((c) => (
+                  {changed.length === 0 && candidates.map((c) => (
                     <button
                       key={c.date}
                       type="button"

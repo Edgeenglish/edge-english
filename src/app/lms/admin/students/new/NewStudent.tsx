@@ -666,7 +666,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           </div>
         ) : (
           <button type="button" disabled={saving || blockers.length > 0} onClick={() => submit()} className="mt-4 min-h-[52px] w-full rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
-            {saving ? '저장 중…' : demo ? '저장 (미리보기 — 실제로 저장 안 됨)' : '등록 저장 (결제 대기)'}
+            {saving ? '저장 중…' : demo ? '저장 (미리보기 — 실제로 저장 안 됨)' : paid ? '등록 저장 (강사 미배정)' : '등록 저장 (결제 대기)'}
           </button>
         ))}
     </Card>
