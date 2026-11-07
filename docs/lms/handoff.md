@@ -40,7 +40,7 @@
 - 대조 방법(세션마다): 운영 DB 학생 13명(가상 STU-0014 제외) 수강현황 시트(드라이브 '학생관리') ↔ enrollments·lessons·makeup_requests·compensations, 강사 4명 Class Record ↔ lessons.class_status·class_records. 차이는 고치지 않고 보고(11/7 오O수 사례: 종료일·11/18 보강·학생 번호). **예약 작업 등록함(11/7)**: `trig_01DYXbuSfHjUehZrZJZwaq5H` '매일 시트 ↔ LMS 대조 보고' 매일 12:47 KST, 이 세션(session_0173hK5dYWb6UxYYPuDGoi7y)으로 들어와 이 세션의 Supabase·Sheets·Drive 연결을 그대로 씀. (새 세션을 띄우는 방식은 조직 설정상 연결을 못 붙임 — 'connectors parameter is not available for this organization'. 기존 세션으로 들어오는 방식은 됨. 10/27 '매일 학생 시트 점검 보고' trig_01FARP3K5pwPP8MS9Gir5c73 도 같은 방식으로 돌고 있음 — 시트끼리만 대조, LMS 는 안 봄 → 겹치므로 대표가 끌지 결정)
 - ✅ 11/7 처리: 오O수 종료일 11/20·11/18 보강 확정(운영), 학생 보강 화면 운영 배포(lms-prod 02b7744), **강사 귀책 연장 규칙 확정 H26(90)** (장기휴무 3일+·노쇼만 연장, 사전·늦은 취소는 기간 끝 무렵 보강 불가 시 운영진 예외, 최대/실제 종료일, 재등록 마감 = 실제 종료일, 기존 학생 포함)
 - ✅ H26(91): 강사 쪽 인터넷·불가항력 별도 항목 없음 — 6시간 전 알림 = 사전 취소, 6시간 이내 = 늦은 취소, 알림 없음 = 노쇼
-- 남은 결정 대기: 예전 예약 작업 '매일 학생 시트 점검 보고'(trig_01FARP3K5pwPP8MS9Gir5c73) 끌지
+- ✅ 11/7 대표 지시: 예전 예약 작업 '매일 학생 시트 점검 보고'(trig_01FARP3K5pwPP8MS9Gir5c73) **끔**(지우지 않고 중지). 시트 대조는 새 작업 trig_01DYXbuSfHjUehZrZJZwaq5H 하나만
 - ⏭ 개발 대기(새 세션, PC·휴대폰 시안부터): H26(90) 자동 연장 — 최대 종료일/실제 종료일 두 칸(지금은 final_end_date 하나), 노쇼 보강도 `lms_leave_sync_extension` 같은 자동 연장, 학생 보강 날짜 고르기에 '기존 기간 / 연장 가능 기간', 재등록 마감 = 실제 종료일(미정 보강 남으면 최대 종료일), 휴무 상한(3일~1주) 문구 정리, 강사 가이드 'Tutor long-term leave(3 days to 1 week)' 문구 → '3 days or more'
 
 ## ✅ 2026-11-07 운영 DB: 체험용 강사 계정 + 가상 학생 (대표 지시·'응 운영DB에 바로해')
