@@ -609,7 +609,6 @@ export default function StudentHome(props: {
           <TabPage title="일정">
             <div className="flex flex-wrap items-center justify-between gap-x-3">
               <p className="text-[13px] text-[#55526a]">{zoneText()} 기준이에요.</p>
-              <KstToggle />
             </div>
             {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p }))]
               .sort((a, b) => a.at.getTime() - b.at.getTime())
@@ -735,7 +734,6 @@ export default function StudentHome(props: {
               <section className={`${card} grid gap-1 px-4 py-3`}>
                 <h2 className="text-[15px] font-bold">시간 표시</h2>
                 <p className="text-[13px] text-[#55526a]">모든 시간은 {zoneText()} 기준으로 보여요.</p>
-                <KstToggle />
               </section>
             )}
             {meetLinks.length > 0 && (
@@ -852,6 +850,7 @@ export default function StudentHome(props: {
                 endDate={endDate}
                 load={actions.makeupOptions}
                 busy={busy}
+                tz={VIEW_TZ}
                 noTime={overlay.right.lessonId && noTime.has(overlay.right.lessonId) ? { requestedAt: noTime.get(overlay.right.lessonId) ?? null } : null}
                 onNoTime={async (lessonId) => { await run(() => actions.noTimeRequest(lessonId), '요청했어요.'); }}
                 onLater={() => setOverlay(null)}
@@ -1075,6 +1074,8 @@ function MakeupPicker(props: {
   onSubmit: (r: Right, slots: Date[]) => void;
   /** 나중에 고르기 = 창 닫기 */
   onLater: () => void;
+  /** 지금 보여 주는 시간대 (운영자 보기 전환 때 달력 날짜를 다시 맞춤) */
+  tz: string;
   /** 종료 5일 이내 강사 취소 보강만 (아니면 null → 링크 없음). requestedAt = 이미 누름 */
   noTime?: { requestedAt: string | null } | null;
   onNoTime?: (lessonId: string) => void;
@@ -1084,7 +1085,17 @@ function MakeupPicker(props: {
   const [day, setDay] = useState<string | null>(null);
   const [month, setMonth] = useState<string | null>(null);
   const [picked, setPicked] = useState<Date[]>([]);
+  // 고른 날짜의 실제 시각 (운영자 보기에서 시간대를 바꾸면 날짜·달을 이 시각 기준으로 다시 맞춤 — QA 11/8)
+  const [anchor, setAnchor] = useState<Date | null>(null);
   const { right, load } = props;
+  useEffect(() => {
+    const a = picked[picked.length - 1] ?? anchor;
+    if (!a) return;
+    const d = kst(a).date;
+    setDay((cur) => (cur ? d : cur));
+    setMonth(d.slice(0, 7));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.tz]);
 
   useEffect(() => {
     if (!right) return;
@@ -1132,7 +1143,7 @@ function MakeupPicker(props: {
               key={d}
               type="button"
               disabled={!byDay.has(d)}
-              onClick={() => setDay(d)}
+              onClick={() => { setDay(d); setAnchor(byDay.get(d)?.[0] ?? null); }}
               aria-pressed={day === d}
               className={`relative flex h-10 items-center justify-center rounded-full text-[14px] ${
                 day === d ? 'bg-[#5b3df0] font-bold text-white' : byDay.has(d) ? 'bg-[#efeaff] font-semibold text-[#3a22b0]' : 'text-[#c4c1d2]'

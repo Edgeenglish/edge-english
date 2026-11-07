@@ -1495,9 +1495,15 @@ select pg_temp.ok(lms_is_leave_postponed((select r.confirmed_lesson_id from make
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select admin_void_makeup((select r.confirmed_lesson_id from makeup_requests r join lmk on lmk.id = r.id), '날짜 다시');
-select pg_temp.ok((select final_end_date = (select d0 + 20 from lv) from enrollments where id = '99999999-1000-0000-0000-000000001800')
-              and (select array_agg(days order by created_at, days) from enrollment_extensions where enrollment_id = '99999999-1000-0000-0000-000000001800') = '{3,-3}',
-  '그 보강을 없애면 연장도 원래대로 (지우지 않고 -3 줄 추가)');
+select pg_temp.ok((select final_end_date = (select d0 + 23 from lv) from enrollments where id = '99999999-1000-0000-0000-000000001800')
+              and (select array_agg(days order by created_at, days) from enrollment_extensions where enrollment_id = '99999999-1000-0000-0000-000000001800') = '{3}',
+  '그 보강을 없애도 늘어난 종료일은 줄이지 않음 (H26(94) 자동 단축 없음, 20261108030000)');
+-- 아래 시험이 원래 종료일(d0+20) 기준이라 운영진 정정 줄로 되돌림 (화면의 '종료일 연장 · 정정'과 같은 기록)
+reset role;
+insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by)
+values ('99999999-1000-0000-0000-000000001800', -3, 'correction', '시험: 아래 시험을 위해 원래 종료일로', 'aaaaaaaa-0000-0000-0000-000000000001');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 -- 7-2) 기존 강사 보강 후보: 강사 복귀 뒤 ~ 종료일 사이 평소 시각(정규 요일 빼고) 먼저, 종료일 뒤 평소 요일·시간은 필요한 수만큼
 select pg_temp.ok((select count(*) from admin_leave_makeup_options(array[pg_temp.li(5)]) where section = 'in_period') = 12
               and (select count(*) from admin_leave_makeup_options(array[pg_temp.li(5)]) where section = 'after_end') = 1
@@ -2804,21 +2810,21 @@ grant select on r18l to authenticated;
 select pg_temp.ok(pg_temp.rend() = (select d0 + 13 from rd) and pg_temp.rext() = '{7}'
               and (select kind = 'makeup_booked' and lesson_id = (select id from r18l) from migrated_items where id = '99999999-4000-0000-0000-000000004520'),
   'R-18: 이관 휴무 보강 d0+13 확정 → 이관권 연결 + 종료일 d0+13 (자동 연장 7일, 같은 트랜잭션) (4520)');
--- 없애면 회수, 다시 확정하면 그 날짜까지
+-- 없애도 늘어난 종료일은 그대로 (H26(94) 자동 단축 없음, 20261108030000). 이관권은 다시 열림
 select admin_void_makeup((select id from r18l), 'QA 되돌림');
-select pg_temp.ok(pg_temp.rend() = (select d0 + 6 from rd) and pg_temp.rext() = '{7,-7}'
+select pg_temp.ok(pg_temp.rend() = (select d0 + 13 from rd) and pg_temp.rext() = '{7}'
               and (select kind = 'makeup_open' and lesson_id is null from migrated_items where id = '99999999-4000-0000-0000-000000004520'),
-  'R-18: 보강 없애기 → 이관권 다시 열림 + 자동 연장 회수(종료일 d0+6) (4520)');
+  'R-18: 보강 없애기 → 이관권 다시 열림, 종료일은 줄이지 않음 d0+13 (4520 · 20261108030000)');
 create temp table r18b as select (admin_makeup_request(null, '99999999-4000-0000-0000-000000004520',
   jsonb_build_array(jsonb_build_object('starts_at', pg_temp.rk(10, '20:00'))), now()) ->> 'makeup_request_id')::uuid as id;
 grant select on r18b to authenticated;
 create temp table r18m as select (admin_makeup_confirm((select id from r18b), pg_temp.rk(10, '20:00')) ->> 'lesson_id')::uuid as id;
 grant select on r18m to authenticated;
-select pg_temp.ok(pg_temp.rend() = (select d0 + 10 from rd) and pg_temp.rext() = '{7,-7,4}', 'R-18: 다른 날짜(d0+10)로 재확정 → 종료일 d0+10 (4520)');
--- 다음 수강권(d0+12 시작)과 겹치는 날짜로는 확정 못 함 (연장이 다음 기간을 침범)
+select pg_temp.ok(pg_temp.rend() = (select d0 + 13 from rd) and pg_temp.rext() = '{7}', 'R-18: 더 이른 날짜(d0+10)로 재확정 → 종료일 그대로 d0+13 (4520 · 20261108030000)');
+-- 다음 수강권(d0+14 시작)과 겹치는 날짜로는 확정 못 함 (연장이 다음 기간을 침범)
 reset role;
 insert into enrollments (id, student_id, seq, previous_enrollment_id, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
-select '99999999-1000-0000-0000-000000004522', '99999999-0000-0000-0000-000000004520', 2, '99999999-1000-0000-0000-000000004520', 4, 2, 40, d0 + 12, d0 + 39, 8, 'confirmed' from rd;
+select '99999999-1000-0000-0000-000000004522', '99999999-0000-0000-0000-000000004520', 2, '99999999-1000-0000-0000-000000004520', 4, 2, 40, d0 + 14, d0 + 41, 8, 'confirmed' from rd;
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select admin_void_makeup((select id from r18m), 'QA 다시');
@@ -2826,7 +2832,7 @@ create temp table r18c as select (admin_makeup_request(null, '99999999-4000-0000
   jsonb_build_array(jsonb_build_object('starts_at', pg_temp.rk(16, '20:00'))), now()) ->> 'makeup_request_id')::uuid as id;
 grant select on r18c to authenticated;
 select pg_temp.expect_error($$select admin_makeup_confirm((select id from r18c), pg_temp.rk(16, '20:00'))$$, '다음 수강권');
-select pg_temp.ok(pg_temp.rend() = (select d0 + 6 from rd) and (select status = 'requested' from makeup_requests where id = (select id from r18c))
+select pg_temp.ok(pg_temp.rend() = (select d0 + 13 from rd) and (select status = 'requested' from makeup_requests where id = (select id from r18c))
               and (select kind = 'makeup_open' from migrated_items where id = '99999999-4000-0000-0000-000000004520'),
   'R-18: 다음 수강권 기간을 침범하는 날짜는 확정 거절, 아무것도 안 바뀜 (4520)');
 select admin_makeup_withdraw((select id from r18c));

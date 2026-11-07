@@ -14502,6 +14502,49 @@ end $$;
 revoke all on function admin_extension_reviews() from public, anon;
 grant execute on function admin_extension_reviews() to authenticated;
 
+-- &gt;&gt;&gt; 20261108030000_lms_leave_extension_no_shrink.sql
+-- =====================================================================
+-- 강사 귀책 자동 연장 보완 (QA 11/8, 정책 원본 H26(94) '종료일 자동 단축 없음')
+--  - 기존(시행 전) 휴무 보강 연장(A20)도 줄이지 않음: 그 보강을 취소·앞당겨도 이미 늘어난 종료일 그대로
+--    (예전: 보강을 없애면 -n 줄을 넣어 종료일이 줄었음 → 이제는 늘리기만)
+-- 표·데이터는 바꾸지 않음. 다시 실행해도 같은 결과
+-- =====================================================================
+
+create or replace function lms_leave_sync_extension(p_enrollment uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  e enrollments;
+  v_actor uuid := coalesce(nullif(current_setting('app.actor_id', true), '')::uuid, auth.uid());
+  v_pre date;
+  v_last date;
+  v_cur integer;
+  v_target integer;
+begin
+  select * into e from enrollments where id = p_enrollment for update;
+  if not found then return; end if;
+  select e.base_end_date + coalesce(sum(days) filter (where auto_source is null), 0)::int,
+         coalesce(sum(days) filter (where auto_source = 'leave_makeup'), 0)::int
+  into v_pre, v_cur from enrollment_extensions where enrollment_id = e.id;
+  select max(x.kst_date) into v_last from lessons x
+  where x.enrollment_id = e.id and x.state &lt;&gt; 'canceled'
+    and ((x.kind = 'makeup' and exists (select 1 from lessons o where o.id = x.makeup_of and o.class_status = 'Tutor long-term leave'
+                                         and lms_fault_event(o.id) is null))
+      or (x.kind = 'migrated_makeup' and exists (select 1 from migrated_items m where m.lesson_id = x.id and m.tutor_leave)));
+  -- 줄이지 않음 (H26(94) 자동 단축 없음, QA 11/8: 기존 휴무 보강을 취소해도 종료일 그대로)
+  v_target := greatest(coalesce(v_last - v_pre, 0), 0, v_cur);
+  if v_target &lt;&gt; v_cur then
+    if v_actor is null then raise exception '처리한 사람을 알 수 없습니다.'; end if;
+    begin
+      insert into enrollment_extensions (enrollment_id, days, reason, note, approved_by, auto_source)
+      values (e.id, v_target - v_cur, 'tutor_long_term_leave', 'LMS 강사 휴무 보강 자동 연장 (A20)', v_actor, 'leave_makeup');
+    exception when exclusion_violation then
+      raise exception '다음 수강권 기간과 겹쳐 종료일을 늘릴 수 없습니다. 보강 날짜를 다시 확인해 주세요.' using hint = 'next_enrollment';
+    end;
+  end if;
+  perform lms_fault_sync_extension(e.id);   -- 기본 종료일이 바뀌었으면 자동 연장도 맞춤
+end $$;
+revoke all on function lms_leave_sync_extension(uuid) from public, anon, authenticated;
+
 -- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)
 insert into lms_backup.project (name) values ('edgeenglish-lms');
 commit;</textarea>
@@ -14512,13 +14555,13 @@ commit;</textarea>
     <button type="button" class="copy" data-target="s5">복사</button>
     <textarea id="s5" readonly rows="3" aria-label="확인 (읽기만) SQL">-- 운영 DB 표 만들기 확인 (읽기만). 결과 8줄이 모두 '통과'면 정상
 select 항목, case when ok then '통과' else '실패' end as 결과 from (
-  select 1 as n, 'LMS 표 53개' as 항목, (select count(*) from pg_tables where schemaname = 'public') = 53 as ok
+  select 1 as n, 'LMS 표 54개' as 항목, (select count(*) from pg_tables where schemaname = 'public') = 54 as ok
   union all select 2, 'RLS 꺼진 표 없음', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity)
   union all select 3, '로그인 안 한 사용자(anon)가 읽을 수 있는 표 없음',
     not exists (select 1 from pg_class c join pg_namespace s on s.oid = c.relnamespace
                 where s.nspname = 'public' and c.relkind in ('r', 'v') and has_table_privilege('anon', c.oid, 'select'))
-  union all select 4, '기준 데이터: 상태값 14 · 판본 16 · 기능 스위치 5 + 첫 수업 To-do 시작일 1',
-    (select count(*) from class_status_rules) = 14 and (select count(*) from terms_versions) = 16 and (select count(*) from feature_flags) = 6
+  union all select 4, '기준 데이터: 상태값 14 · 판본 16 · 기능 스위치 5 + 첫 수업 To-do 시작일 1 + 귀책 연장 시행일 1',
+    (select count(*) from class_status_rules) = 14 and (select count(*) from terms_versions) = 16 and (select count(*) from feature_flags) = 7
   union all select 5, '최신 기능까지 (신규 배정 확정·운영자 TOTP)',
     to_regclass('public.schedule_plans') is not null and exists (select 1 from pg_proc where proname = 'is_owner')
   union all select 6, '서버 키 권한 (학생 표 읽기·쓰기)',
