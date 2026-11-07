@@ -12,7 +12,7 @@
 
 ## ⏭ 다음 세션 할 일 (2026-11-06 밤 정리 — 미완료 목록은 지우지 않고 그대로 넘김. ChatGPT 추천 순서 반영)
 - **시험 DB·lms-test 에서만** 수정·검증. 운영 DB·운영 사이트·실제 카카오톡/WhatsApp 발송 금지. 각 항목은 완료/미검증을 나눠 보고, 실제 PC·모바일 클릭·저장·DB 재조회까지. 항목을 끝낼 때마다 이 목록에서 ✅ 로 바꾸고 남은 것은 그대로 둔다
-- 브랜치: **`claude/kind-planck-bravn6`** (= `claude/gallant-heisenberg-4tdcxc` + 11/7 QA 3단계 커밋). **lms-test = 이 브랜치 최신(11/7 반영)**. 운영(lms-prod)·운영 DB 미적용, **운영 DB 적용 대기 migration: 20261107000000(A-01·A-03) · 20261107010000(4600 첫 수업 후 To-do) · 20261107020000(4601 새 학생만) · 20261107040000(C-04 학생 교재 표시) · 그 뒤 20261107030000 한 번 더(D-03 은 11/7 운영 단독 적용 완료, 새 칸 권한 맞추기)** — 위 것들은 11/7 운영 배포 완료(아래). **지금 운영 적용 대기: 20261108000000 (강사 보강 바로 확정)**
+- 브랜치: **`claude/kind-planck-bravn6`** (= `claude/gallant-heisenberg-4tdcxc` + 11/7 QA 3단계 커밋). **lms-test = 이 브랜치 최신(11/7 반영)**. 운영(lms-prod)·운영 DB 미적용, **운영 DB 적용 대기 migration: 20261107000000(A-01·A-03) · 20261107010000(4600 첫 수업 후 To-do) · 20261107020000(4601 새 학생만) · 20261107040000(C-04 학생 교재 표시) · 그 뒤 20261107030000 한 번 더(D-03 은 11/7 운영 단독 적용 완료, 새 칸 권한 맞추기)** — 위 것들은 11/7 운영 배포 완료(아래). 20261108000000(강사 보강 바로 확정)도 11/7 운영 배포 완료
 - 1단계 (QA 보고서 `docs/lms/requests/2026-11-06-full-qa-ux-audit.md`, H26(70)): ✅ A-01 · ✅ A-03 · ✅ A-02 · ✅ B-02 · ✅ B-01 (아래 ✅ 2026-11-06 밤)
 - 2단계: ✅ 첫 수업 후 강사 To-do + Class Style (아래) · ◐ 강사 화면 한국어 — **운영자 보기 전용**(H26(73) 수정판: 강사는 모두 해외·영어 고정, 전환 버튼 없음). 한국어 라벨은 Home·메뉴·To-do·Students·Student profile·Follow-up 까지 적용됨
 - **후순위 미완료: Class Record·Schedule·Availability 한국어 라벨** (2026-11-06 밤 대표 지시로 **중단** — 기존 기능 안정성 우선, 번역 때문에 기존 코드를 넓게 바꾸지 않음). 작업하던 변경은 적용하지 않고 패치로만 보관: `docs/lms/drafts/2026-11-06-tutor-korean-labels-unapplied.patch` (TutorHome Class Record·요청 카드 + screen.ts·hours.ts 상태 글 한국어판, Schedule·Availability 는 시작 전). 다시 할 때는 이 패치를 바로 적용하지 말고 최신 코드와 대조해 화면 하나씩 + 그 화면 저장 기능 재확인
@@ -52,7 +52,13 @@
 - 문구 1곳 1단계에 맞춰야 함: `lesson-change.ts tutorNotice` change 의 'Please answer on your Home page (Make-up requests). Edge English will confirm.' → 강사가 Home 에서 확정하는 사실로
 - 승인 뒤 순서: 대표 Resend 시험용 키 → 시험 Vault → migration(lesson_notices 칸·트리거·주소 함수·문구 함수·발송 함수·pg_net/pg_cron·예약) 시험 DB → 실제 Blair 계정 취소·보강 신청·확정 → support@ 메일 4종 확인 → test:db·vitest → 대표 승인 → 운영(백업 → migration → 운영 키 → lms-prod) → send_emails 켜기 별도 승인
 
-## ✅ 2026-11-07 저녁: 강사 자율 운영 1단계 — 강사 '가능' 시간 하나로 보강 바로 확정 (브랜치 claude/compassionate-ritchie-57i67i = lms-test, 시험 DB 적용, **운영 미적용 — 대표 승인 대기**) — 정책 원본 H26(81)·**(82) 대표 결정**
+
+## ✅ 2026-11-07 운영 배포: 강사 보강 바로 확정 (대표 '운영 반영해', 정책 원본 H26(84))
+- 운영 DB(mfamixejxydodclhglbc): 백업 **snapshots id 16**(53표, 현재 데이터와 일치) → 적용 전 admin_makeup_confirm 이 저장소 최신과 같음·열린 보강 신청 0 확인 → migration **20261108000000** → 확인: 함수 3개, 강사 실행 가능·내부 함수 lms_makeup_book 앱 실행 불가·비로그인 불가, 새 칸 있음(값 true 0건), 53표 내용 백업 16과 같음(새 칸 제외) · 학생 13·수업 138·보강 신청 10·안내 95 그대로
+- 코드: `lms-prod` c7dcb6e → **c8f3ba6**(빨리 감기), 운영 주소 강사 화면 묶음에 새 코드 들어간 것 확인
+- 운영에서 실제 강사 확정은 아직 없음(열린 보강 신청 0). 첫 실제 건이 생기면 강사 화면·대시보드 '보강 확정 안내 보내기'·학생 화면 '확정'을 한 번 확인
+
+## ✅ 2026-11-07 저녁: 강사 자율 운영 1단계 — 강사 '가능' 시간 하나로 보강 바로 확정 (브랜치 claude/compassionate-ritchie-57i67i = lms-test = lms-prod c8f3ba6, 시험·운영 DB 적용) — 정책 원본 H26(81)·**(82) 대표 결정**
 - 시안: `docs/lms/previews/tutor-makeup-confirm-drafts.html` (https://claude.ai/artifact/1zXF7G7QZehNQc4mkRU7v5). 대표는 핵심(강사가 시간 하나 골라 [Confirm make-up · 날짜] → 바로 보강 수업)만 답함 → 나머지 6개는 시안 권장안대로 진행, H26(82)에 적음
 - migration `20261108000000_lms_tutor_makeup_confirm.sql`: `makeup_requests.confirmed_in_tutor_screen` 칸 · `lms_makeup_book`(예전 admin_makeup_confirm 본문 그대로, 내부용) · `admin_makeup_confirm` = 운영자 확인 + lms_makeup_book(동작 같음) · `tutor_makeup_confirm(p_request, p_candidate)` = 본인 담당·학생이 원한 시간만, 지난 시간·충돌은 영어 사유, 같은 시간 다시 누르면 repeated, 운영자 보기면 기록 'admin_makeup_confirm_as_tutor'. 강사 확정이면 **학생 확정 안내만 pending(운영진 카톡 복사), 강사 WhatsApp 안내는 안 만듦**. 예전 `tutor_makeup_answer`(모두 불가 + 메모)는 그대로
 - 화면: `TutorHome.tsx MakeupCard` 하나 고르기 → [Confirm make-up · Fri, 13 Nov 21:00 Toronto Time] → 초록 '✓ Make-up confirmed · 날짜 시간 현지 + KST'. [None of these times work] → 'Other times you are available' 메모 → [Send to Edge English]. `live.ts confirmMakeup`·TutorLive·TutorDemo. 운영진 `LessonChange.tsx` 보강 카드에 '강사가 확정한 보강'(새 칸 없는 DB면 예전처럼 읽음). 학생 화면·대시보드 코드는 그대로(강사가 확정하면 바로 '확정', 대시보드에는 '보강 확정 안내 보내기' 카드)
