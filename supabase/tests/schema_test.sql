@@ -3160,3 +3160,34 @@ select pg_temp.ok(student_textbook('33333333-3333-3333-3333-333333333333') ->> '
 reset request.jwt.claim.sub;
 reset role;
 update students set textbook = null, tutor_class_style = null, tutor_class_style_mix = null where id = '33333333-3333-3333-3333-333333333333';
+
+-- ---------------------------------------------------------------------
+-- 2026-11-07 admin_makeup_record_past: 이미 진행한 보강 기록 (운영진만, 지난 시각만, 사유 필수, 권리 한 번만)
+-- ---------------------------------------------------------------------
+insert into students (id, name_ko, name_en, timezone) values ('99999999-0000-0000-0000-000000005000', '도과거', 'Past Do', 'Asia/Seoul');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000005000', '99999999-0000-0000-0000-000000005000', 1, 4, 2, 20, (now() at time zone 'Asia/Seoul')::date - 10, (now() at time zone 'Asia/Seoul')::date + 17, 8, 'active');
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, class_status, canceled_at) values
+  ('77777777-5000-0000-0000-000000000001', '99999999-1000-0000-0000-000000005000', '99999999-0000-0000-0000-000000005000', '55555555-0000-0000-0000-000000004600', 'regular', 1,
+   date_trunc('hour', now()) - interval '2 days', date_trunc('hour', now()) - interval '2 days' + interval '20 minutes', 'canceled', 'Student canceled in advance', now() - interval '3 days');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.expect_error($$select admin_makeup_record_past('77777777-5000-0000-0000-000000000001', null, now() - interval '1 day', '더블 수업')$$, '운영자');
+select pg_temp.ok(true, '지난 보강 기록: 운영자가 아니면 거절');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_makeup_record_past('77777777-5000-0000-0000-000000000001', null, now() + interval '1 day', '더블 수업')$$, '이미 지난 시각만');
+select pg_temp.expect_error($$select admin_makeup_record_past('77777777-5000-0000-0000-000000000001', null, now() - interval '1 day', '  ')$$, '사유');
+select pg_temp.ok(true, '지난 보강 기록: 앞으로의 시각·사유 없음 거절');
+select admin_makeup_record_past('77777777-5000-0000-0000-000000000001', null, date_trunc('hour', now()) - interval '1 day', '더블 수업 (시트 기록)');
+select pg_temp.ok(
+  (select count(*) = 1 from lessons where makeup_of = '77777777-5000-0000-0000-000000000001' and state = 'scheduled' and kind = 'makeup'
+     and starts_at = date_trunc('hour', now()) - interval '1 day' and ends_at = starts_at + interval '20 minutes')
+  and (select status = 'confirmed' and confirmed_lesson_id is not null from makeup_requests where source_lesson_id = '77777777-5000-0000-0000-000000000001')
+  and not exists (select 1 from lesson_notices n join makeup_requests r on r.id = n.makeup_request_id where r.source_lesson_id = '77777777-5000-0000-0000-000000000001' and n.status = 'pending')
+  and exists (select 1 from audit_log where actor_via like 'admin_makeup_record_past: 더블 수업%'),
+  '지난 보강 기록: 보강 수업(예정·지난 시각) + 신청 확정 + 안내 할 일 없음 + 변경 기록에 사유');
+select pg_temp.expect_error($$select admin_makeup_record_past('77777777-5000-0000-0000-000000000001', null, now() - interval '3 hours', '또')$$, '이미 보강');
+select pg_temp.ok(not exists (select 1 from jsonb_array_elements(student_screen('99999999-0000-0000-0000-000000005000') -> 'makeup_rights') x),
+  '지난 보강 기록: 같은 권리로 두 번 못 넣음 + 학생 화면 보강 날짜 고르기 사라짐');
+reset request.jwt.claim.sub;
+reset role;
