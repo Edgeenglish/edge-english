@@ -1,0 +1,324 @@
+<title>학생·강사 자동 안내 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위 결정 질문 → 흐름 비교 → 안내 종류 표 → 휴대폰 메일(탭) → PC 운영진 화면 → 조사 결과 → 만들 때 메모. 1단계 시안과 같은 색·글꼴 */
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--accent:#5b3fe0;--q:#efeafe;--sel:#efebff;
+--ok:#e6f6ec;--ok-fg:#1f7a4d;--warn:#fff4d6;--warn-fg:#5c3b00;--bad:#fdecea;--bad-fg:#b3261e;--soft:#f3f1f8;--chip:#ecebf1;--chip-fg:#55526a;
+--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--bad:#3d1d1b;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--bad:#3d1d1b;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+main{max-width:1120px;margin:0 auto;display:grid;gap:30px}
+main>*{min-width:0}
+h1{font-size:22px;margin:0;text-wrap:balance}h2{font-size:18px;margin:0 0 10px}h3{font-size:15px;margin:0 0 6px;color:var(--muted);font-weight:600}
+p{margin:0}ol,ul{margin:4px 0 0;padding-left:20px}li{margin-bottom:5px}
+code{font-size:13px;background:var(--soft);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+.q{background:var(--q);border-radius:14px;padding:14px 16px;display:grid;gap:10px}
+.q b{color:var(--accent)}
+.rec{display:inline-block;background:var(--accent);color:#fff;font-size:11.5px;font-weight:700;border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.num{display:inline-block;background:var(--warn);color:var(--warn-fg);font-size:11.5px;font-weight:700;border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.cap{font-size:13px;color:var(--muted);margin:0 0 6px}
+.row{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.note{font-size:14px;display:grid;gap:6px;max-width:72ch}
+.flow{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.flow>div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.steps{display:grid;gap:6px;margin:8px 0 0;padding:0;list-style:none;counter-reset:s}
+.steps li{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.steps li::before{counter-increment:s;content:counter(s);flex:0 0 22px;height:22px;border-radius:50%;background:var(--chip);color:var(--chip-fg);font-size:12px;font-weight:700;display:grid;place-items:center}
+.steps li.gone{color:var(--muted);text-decoration:line-through}
+.steps li.gone::before{text-decoration:none}
+.steps li.me::before{background:var(--accent);color:#fff}
+.steps li.auto::before{background:var(--ok-fg);color:#fff}
+.who{font-size:12px;color:var(--muted);display:block}
+.hint{font-size:12.5px;color:var(--muted)}
+
+/* 장면 탭 */
+.scenes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.scenes button{min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:14px;padding:0 12px;cursor:pointer}
+.scenes button[aria-selected="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.scenes button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.scene[hidden]{display:none}
+@media (prefers-reduced-motion:no-preference){.scene{animation:in .15s ease-out}@keyframes in{from{opacity:.4}to{opacity:1}}}
+
+/* 메일 (휴대폰 메일 앱에서 본 모양) */
+.mail{background:var(--card);border:1px solid var(--line);border-radius:16px;width:360px;max-width:100%;overflow:hidden}
+.mail .head{padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted);display:grid;gap:2px}
+.mail .head b{color:var(--fg);font-size:14.5px}
+.mail .body{padding:16px 14px;display:grid;gap:12px;font-size:15px}
+.mail .body p{white-space:pre-line}
+.mail .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0;font-size:14.5px}
+.mail .kv dt{color:var(--muted)}.mail .kv dd{margin:0;font-weight:600}
+.mail .btn{display:inline-block;background:var(--accent);color:#fff;border-radius:10px;padding:11px 16px;font-weight:700;text-decoration:none;font-size:15px;justify-self:start}
+.mail .foot{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.mail .test{background:var(--warn);color:var(--warn-fg);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600}
+.mail.en .body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+
+/* 운영진 화면 */
+.pc{flex:1 1 480px;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.acard{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;gap:4px;font-size:14px}
+.acard .t{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.acard .t b{font-size:15px}
+.acard .act{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.acard .act span{border:1px solid var(--line);border-radius:9px;padding:5px 10px;font-size:13px;font-weight:600}
+.acard .act span.p{background:var(--accent);color:#fff;border-color:var(--accent)}
+.acard.bad{border-color:var(--bad-fg);background:var(--bad)}
+.adm{display:grid;gap:8px}
+.tag{display:inline-block;background:var(--chip);color:var(--chip-fg);border-radius:6px;padding:0 6px;font-size:12px;font-weight:600}
+.tag.ok{background:var(--ok);color:var(--ok-fg)}.tag.bad{background:var(--bad);color:var(--bad-fg)}.tag.warn{background:var(--warn);color:var(--warn-fg)}
+.band{border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600}
+.band.ok{background:var(--ok);color:var(--ok-fg)}
+.band.soft{background:var(--soft);color:var(--fg);font-weight:500}
+.vs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.vs>div{min-width:0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-top:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{font-size:13px;color:var(--muted);font-weight:600}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.tw{overflow-x:auto}
+.facts{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.facts>div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px;display:grid;gap:4px}
+.facts b{font-size:14.5px}
+.facts .src{font-size:12px;color:var(--muted)}
+</style>
+
+<main>
+<header>
+<p class="cap">LMS · 강사 자율 운영 2단계 · 2026-11-07 · 정책 원본 H26(81) 권장 순서 2</p>
+<h1>수업 변경·보강 안내가 운영진 손을 거치지 않고 학생·강사에게 바로 가는 구조 · 시안</h1>
+<p class="note" style="margin-top:8px">지금은 보강이 확정되거나 수업이 취소될 때마다 운영진이 대시보드 카드에서 문구를 [복사]해 학생 카톡·강사 WhatsApp에 붙여 보내고 [보냈어요]를 눌러야 끝납니다. 1단계에서 강사가 보강을 바로 확정하게 됐지만, 학생에게 알리는 일은 여전히 운영진 몫입니다. 이 시안은 안내 줄이 생기는 순간 시스템이 메일로 보내고 결과를 기록해, 운영진은 <b>보내지 못한 것만</b> 보게 하는 구조입니다. 새 숫자는 간격 1개(아래 6번)뿐이고 그것은 대표가 정합니다.</p>
+</header>
+
+<section class="q" aria-labelledby="qh">
+<p id="qh"><b>대표 결정 필요 (7개 · 숫자는 6번 1개)</b></p>
+<ol>
+<li><b>자동으로 보내는 길은 이메일 하나</b> — 카카오톡 채널은 자동 발송(알림톡)이 없고(정책 POL-OP-08), 강사 WhatsApp도 자동 발송 수단이 없습니다. 자동으로 보낼 수 있는 유일한 길은 이미 쓰고 있는 메일(Resend, 로그인 코드 메일과 같은 발신자 <code>엣지영어 &lt;support@edgeenglish.kr&gt;</code>)입니다. 운영 학생 13명·강사 4명 모두 로그인 이메일이 있습니다.
+  <br><b>A</b> 이메일 자동 안내로 간다<span class="rec">권장</span> · <b>B</b> 자동 안내를 하지 않고 지금처럼 수동 유지
+  <br><span class="hint">학생이 메일을 카톡만큼 자주 보지 않을 수 있다는 점이 유일한 약점입니다. 그래서 3번에서 카톡을 어떻게 할지 따로 묻습니다.</span></li>
+<li><b>1차 범위</b> — <b>A</b> 수업 변경·보강 안내 5종(변경 안내·보강 가능 확인·보강 확정·보강 정정·정정, 학생·강사 모두)부터<span class="rec">권장</span> · <b>B</b> 휴무 안내 4종·신규 배정 확정·정규 일정 변경·재등록 안내까지 한 번에
+  <br><span class="hint">권장 이유: 5종은 1단계(강사 보강 확정)와 같은 표(<code>lesson_notices</code>)에 기록되어 바로 이어 붙일 수 있고, 강사 자율 운영에 직접 걸리는 안내(학생이 보강을 신청했다는 강사 알림 · 강사가 확정했다는 학생 알림)가 여기 있습니다. 나머지는 같은 발송기로 다음 차례에 붙입니다.</span></li>
+<li><b>메일을 보낸 뒤 운영진 카톡 카드</b> — <b>A</b> 메일을 보냈으면 안내 끝. 대시보드 카드는 사라지고, <u>메일을 못 보낸 경우</u>(이메일 없음·발송 실패)만 지금 카드가 '카톡/WhatsApp으로 직접 보내기'로 남음<span class="rec">권장</span> · <b>B</b> 전환기: 메일은 자동으로 나가고 카톡 카드도 그대로 남아 운영진이 [보냈어요]를 눌러야 끝
+  <br><span class="hint">A가 대표 목표('운영자는 예외만 보기')에 맞습니다. B는 지금과 운영 부담이 같아 자동화 효과가 없습니다. 보낸 메일은 수업 변경 화면 안내 줄에 '자동 메일 보냄 · 시각 · 받은 주소'로 남아 운영진이 언제든 볼 수 있습니다.</span></li>
+<li><b>강사 WhatsApp 안내</b> — 강사는 메일 + 강사 LMS Home(보강 요청·일정)으로 대체하고 운영진의 WhatsApp 수동 안내는 없앰<span class="rec">권장</span> · 또는 WhatsApp 수동 안내 유지(3번 B와 같은 뜻)</li>
+<li><b>메일 글</b> — 지금 운영진이 복사하는 카톡·WhatsApp 문구(대표 확정 문구)를 <u>그대로</u> 메일 본문으로 쓰고, 제목과 [LMS에서 보기] 버튼만 더함<span class="rec">권장</span> · 또는 메일용 새 문구
+  <br><span class="hint">아래 휴대폰 메일 예가 그대로 쓴 모양입니다. 1단계 때문에 강사 문구 한 곳('Edge English will confirm')은 '강사가 Home에서 확정'으로 고쳐야 합니다(만들 때 메모).</span></li>
+<li><b>수업 알림 메일(24시간·2시간 전, 10/29 확정, 아직 미적용)도 같은 발송기로 함께 켤지</b> — 함께 켬<span class="rec">권장</span> · 또는 안내 메일만 먼저. 어느 쪽이든 <b>발송 확인 간격(몇 분마다 보낼 것을 확인할지)</b>은 10/29 시안 Q1 그대로 대표가 정합니다<span class="num">숫자</span>
+  <br><span class="hint">같은 Resend 키·같은 기록 표를 쓰므로 한 번에 켜는 쪽이 설정·검증이 한 번으로 끝납니다. 수업 알림 메일 기능도 학생 이메일 칸이 비어 있으면 못 보내는 문제가 있어(조사 결과 참고) 이번에 같이 고칩니다.</span></li>
+<li><b>메일 맨 아래 문의 줄</b> — '문의: 카카오톡 채널 엣지영어' 한 줄을 넣을지<span class="rec">권장</span> · 넣지 않음
+  <br><span class="hint">학생이 메일에 답장하면 support@ 받은편지함으로 옵니다. 지금 문의 창구가 카톡이라 그쪽으로 안내하는 줄입니다. 강사 메일에는 'Reply to this email or message us on WhatsApp'.</span></li>
+</ol>
+<p class="hint">실제 학생·강사에게 메일이 나가는 것은 <code>send_emails</code> 스위치를 켠 뒤부터이고, 그 전에는 모두 support@edgeenglish.kr로만 갑니다(제목 앞 '[시험 · 학생 번호]'). 스위치 켜기는 운영 배포와 별개로 대표가 따로 승인합니다(정책 POL-OP-18 '그 전에는 실제 학생에게 발송하지 않음').</p>
+</section>
+
+<section>
+<h2>흐름 비교 · 강사가 보강을 확정했을 때</h2>
+<div class="flow">
+<div>
+<h3>지금 (1단계 반영 뒤, 운영진 1번)</h3>
+<ol class="steps">
+<li>강사가 시간 하나를 골라 [Confirm make-up] → 보강 수업 생성<span class="who">강사</span></li>
+<li>대시보드 '보강 확정 안내 보내기' 카드<span class="who">자동</span></li>
+<li class="me">카드에서 문구 [복사] → 학생 카톡에 붙여 보냄 → [보냈어요]<span class="who">운영진</span></li>
+<li>학생이 카톡으로 확인<span class="who">학생</span></li>
+</ol>
+</div>
+<div>
+<h3>바뀐 뒤 (운영진 0번 · 예외만)</h3>
+<ol class="steps">
+<li>강사가 시간 하나를 골라 [Confirm make-up] → 보강 수업 생성<span class="who">강사</span></li>
+<li class="auto">안내 줄이 생기는 순간 학생 메일 발송 · 결과 기록(보냄/실패)<span class="who">자동</span></li>
+<li class="gone">운영진 복사·발송<span class="who">없어짐</span></li>
+<li>학생이 메일 또는 LMS 일정으로 확인<span class="who">학생</span></li>
+</ol>
+<p class="hint" style="margin-top:8px">운영진에게 남는 것: 메일을 못 보낸 학생(이메일 없음·발송 실패) 카드 하나. 그 카드는 지금처럼 [복사]·[보냈어요]로 처리.</p>
+</div>
+</div>
+<p class="hint" style="margin-top:10px">학생이 수업을 취소했을 때도 같습니다. 지금은 운영진이 강사 WhatsApp에 'CANCELED' 문구를 보내지만, 바뀐 뒤에는 강사에게 메일이 바로 가고 강사 Home '보강 요청'에도 함께 뜹니다.</p>
+</section>
+
+<section>
+<h2>지금 운영진이 복사해 보내는 안내 전체</h2>
+<p class="cap">운영 DB 2026-11-07 기준, 수업 변경·보강·휴무 안내 기록 95건: 보냄 72 · 필요 없어짐 15 · 아직 안 보냄 8. 신규 배정·재등록 안내는 다른 표에 기록되어 숫자에 없음</p>
+<div class="tw"><table>
+<thead><tr><th>안내</th><th>받는 사람 · 지금 채널</th><th>생기는 때</th><th>이번(1차)</th></tr></thead>
+<tbody>
+<tr><td>변경 안내</td><td>학생 카톡 · 강사 WhatsApp</td><td>수업 취소(학생·강사 사정)</td><td><span class="tag ok">자동 메일</span></td></tr>
+<tr><td>보강 가능 확인</td><td>강사 WhatsApp</td><td>학생이 보강 시간 신청</td><td><span class="tag ok">자동 메일</span> 강사 자율의 출발점</td></tr>
+<tr><td>보강 확정 안내</td><td>학생 카톡 · 강사 WhatsApp</td><td>보강 확정(1단계 뒤 강사 확정이면 학생만)</td><td><span class="tag ok">자동 메일</span></td></tr>
+<tr><td>보강 정정 안내</td><td>학생 카톡 · 강사 WhatsApp</td><td>잘못 넣은 보강 삭제</td><td><span class="tag ok">자동 메일</span></td></tr>
+<tr><td>정정 안내</td><td>학생 카톡 · 강사 WhatsApp</td><td>취소 되돌리기</td><td><span class="tag ok">자동 메일</span></td></tr>
+<tr><td>휴무 안내 4종 (진행 방법 선택 · 대체강사 가능 여부 · 학생 대체강사 안내 · 확정)</td><td>학생 카톡 · 강사 WhatsApp</td><td>강사 휴무 처리</td><td><span class="tag">다음 차례</span> 같은 표, 같은 발송기</td></tr>
+<tr><td>신규 배정 제안·확정</td><td>강사 WhatsApp · 학생 카톡</td><td>신규 등록 매칭</td><td><span class="tag">다음 차례</span> 표에 자동 채널 칸이 이미 있음</td></tr>
+<tr><td>시작 전 날짜 변경 · 정규 일정 변경</td><td>학생 카톡 · 강사 WhatsApp</td><td>운영진이 일정 수정</td><td><span class="tag">다음 차례</span></td></tr>
+<tr><td>재등록 안내</td><td>학생 문자·카톡</td><td>종료 전</td><td><span class="tag warn">검토</span> 결제 유도 안내라 대표 판단 필요</td></tr>
+<tr><td>수업 알림 메일 (24시간·2시간 전)</td><td>학생 메일 (미적용)</td><td>수업 전</td><td><span class="tag ok">함께 켬(6번)</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section>
+<h2>휴대폰 · 받는 사람이 보는 메일</h2>
+<p class="cap">장면을 눌러 보세요. 예: 학생 김O준(한국) · 강사 Blair(토론토) · 원래 수업 11/11(화) 오전 10:00 한국 = 11/10(월) 20:00 토론토. 본문은 지금 운영진이 복사하는 문구 그대로</p>
+<div class="scenes" role="tablist" aria-label="장면">
+<button type="button" role="tab" aria-selected="true" data-s="s1">학생 · 보강 확정</button>
+<button type="button" role="tab" aria-selected="false" data-s="s2">강사 · 보강 요청</button>
+<button type="button" role="tab" aria-selected="false" data-s="s3">강사 · 수업 취소</button>
+<button type="button" role="tab" aria-selected="false" data-s="s4">학생 · 수업 취소</button>
+<button type="button" role="tab" aria-selected="false" data-s="s5">시험 단계 (support@)</button>
+</div>
+<div class="row">
+
+<div class="mail scene" data-scene="s1">
+<div class="head"><b>[엣지영어] 보강이 확정됐어요 · 11/13(목) 오전 9:00</b><span>엣지영어 &lt;support@edgeenglish.kr&gt;</span></div>
+<div class="body">
+<p>[엣지영어] 김O준님, 보강이 확정됐어요</p>
+<dl class="kv"><dt>원래 수업</dt><dd>11월 11일(화) 오전 10시</dd><dt>보강 수업</dt><dd>11월 13일(목) 오전 9시</dd><dt>강사</dt><dd>Blair</dd></dl>
+<a class="btn" href="#">LMS에서 일정 보기</a>
+<p class="foot">문의: 카카오톡 채널 엣지영어</p>
+</div>
+</div>
+
+<div class="mail en scene" data-scene="s2" hidden>
+<div class="head"><b>Make-up request - Haeun Jang · Wed 12 Nov or Thu 13 Nov</b><span>Edge English &lt;support@edgeenglish.kr&gt;</span></div>
+<div class="body">
+<p>Make-up request - Haeun Jang (40 min), not confirmed yet
+Original class: Mon 10 Nov 20:00 Toronto Time (Tue 11 Nov 10:00 KST)
+Are you available at any of these times?
+1) Wed 12 Nov 19:00 Toronto Time (Thu 13 Nov 09:00 KST)
+2) Thu 13 Nov 20:00 Toronto Time (Fri 14 Nov 10:00 KST)</p>
+<a class="btn" href="#">Confirm in Edge English LMS</a>
+<p class="foot">Pick one time on your Home page (Make-up requests) and the class is booked. Reply to this email or message us on WhatsApp if you have a question.</p>
+</div>
+</div>
+
+<div class="mail en scene" data-scene="s3" hidden>
+<div class="head"><b>CANCELED - Haeun Jang · Mon 10 Nov 20:00</b><span>Edge English &lt;support@edgeenglish.kr&gt;</span></div>
+<div class="body">
+<p>CANCELED - Haeun Jang
+Class: Mon 10 Nov 20:00 Toronto Time (Tue 11 Nov 10:00 KST)
+No class at this time.
+The student asked for a make-up at: Wed 12 Nov 19:00 Toronto Time (Thu 13 Nov 09:00 KST) / Thu 13 Nov 20:00 Toronto Time (Fri 14 Nov 10:00 KST).
+Please pick one on your Home page (Make-up requests).</p>
+<a class="btn" href="#">Open Edge English LMS</a>
+<p class="foot">Reply to this email or message us on WhatsApp if you have a question.</p>
+</div>
+</div>
+
+<div class="mail scene" data-scene="s4" hidden>
+<div class="head"><b>[엣지영어] 요청하신 수업이 취소됐어요 · 11/11(화) 오전 10:00</b><span>엣지영어 &lt;support@edgeenglish.kr&gt;</span></div>
+<div class="body">
+<p>[엣지영어] 김O준님, 요청하신 수업이 취소됐어요
+
+취소된 수업: 11월 11일(화) 오전 10시
+변경권 1개 사용 (잔여 1개)
+
+신청하신 날짜: 11월 13일(목) 오전 9시 / 11월 14일(금) 오전 10시
+강사님 확인 후 확정 안내 드릴게요.
+
+취소된 수업 날짜가 요청하신 날짜와 다르다면 바로 알려주세요.</p>
+<a class="btn" href="#">LMS에서 일정 보기</a>
+<p class="foot">문의: 카카오톡 채널 엣지영어</p>
+</div>
+</div>
+
+<div class="mail scene" data-scene="s5" hidden>
+<div class="head"><b>[시험 · STU-0003] [엣지영어] 보강이 확정됐어요 · 11/13(목) 오전 9:00</b><span>엣지영어 &lt;support@edgeenglish.kr&gt; → support@edgeenglish.kr</span></div>
+<div class="body">
+<p class="test">시험 발송 · 원래 받는 사람: support+stu0003@edgeenglish.kr</p>
+<p>[엣지영어] 강O준님, 보강이 확정됐어요</p>
+<dl class="kv"><dt>원래 수업</dt><dd>11월 11일(화) 오전 10시</dd><dt>보강 수업</dt><dd>11월 13일(목) 오전 9시</dd><dt>강사</dt><dd>Blair</dd></dl>
+<a class="btn" href="#">LMS에서 일정 보기</a>
+<p class="foot">문의: 카카오톡 채널 엣지영어</p>
+</div>
+</div>
+
+<div class="note" style="flex:1 1 300px">
+<p><b>메일 모양 규칙</b></p>
+<ul>
+<li>제목 = 안내 종류 + 날짜·시각(받는 사람 시간대). 받은편지함 목록에서 무슨 일인지 바로 보이게</li>
+<li>본문 = 지금 복사하는 문구 그대로(해외 학생은 현지 시각 + 한국 시각, 강사는 현지 시각 + KST — 지금 문구 규칙과 같음)</li>
+<li>버튼 1개 = LMS 해당 화면(학생: 일정 · 강사: Home 보강 요청). 메일에서 바로 확정·취소는 없음 — 로그인한 LMS 안에서만</li>
+<li>시험 단계에서는 모두 support@로, 제목 앞 '[시험 · 학생 번호]' + 본문 위 '원래 받는 사람'</li>
+<li>화면 설명 문구 없음(CLAUDE.md). 메일 아래 문의 줄만(7번)</li>
+</ul>
+</div>
+</div>
+</section>
+
+<section>
+<h2>PC · 운영진 대시보드 '처리할 일'</h2>
+<div class="row">
+<div class="pc">
+<h3>지금</h3>
+<div class="adm">
+<div class="acard"><div class="t"><b>김O준</b> <span class="tag warn">보강 확정 안내 안 보냄</span> <span class="tag">학생</span></div><div>보강 11/13(목) 오전 9:00 · 강사가 확정 · 안내 대기 2시간째</div><div class="act"><span>문구 복사</span><span class="p">보냈어요</span></div></div>
+<div class="acard"><div class="t"><b>Haeun Jang → Blair</b> <span class="tag warn">보강 가능 확인 안 보냄</span> <span class="tag">강사</span></div><div>학생이 보강 2개 신청 · 강사에게 아직 안 물음</div><div class="act"><span>문구 복사</span><span class="p">보냈어요</span></div></div>
+<div class="acard"><div class="t"><b>이O연</b> <span class="tag warn">변경 안내 안 보냄</span> <span class="tag">학생 · 강사</span></div><div>11/12(수) 수업 취소 · 안내 2건</div><div class="act"><span>문구 복사</span><span class="p">보냈어요</span></div></div>
+</div>
+<p class="hint" style="margin-top:10px">안내가 생길 때마다 카드 1장, 운영진이 복사·발송·[보냈어요] 3번 누름</p>
+</div>
+<div class="pc">
+<h3>바뀐 뒤 (3번 A)</h3>
+<div class="adm">
+<div class="acard bad"><div class="t"><b>이O연</b> <span class="tag bad">메일 못 보냄 · 이메일 없음</span> <span class="tag">학생</span></div><div>11/12(수) 수업 취소 안내 · 카톡으로 직접 보내 주세요</div><div class="act"><span>문구 복사</span><span class="p">보냈어요</span></div></div>
+<p class="band ok">✓ 자동 안내 보냄 오늘 2건 · 김O준 보강 확정(메일) · Blair 보강 요청(메일)</p>
+</div>
+<p class="hint" style="margin-top:10px">카드는 못 보낸 것만. 보낸 것은 초록 줄 한 줄로 요약, 누르면 수업 변경 화면 안내 줄에서 '자동 메일 보냄 · 11/7 21:03 · support+stu0003@…' 확인</p>
+<div class="acard" style="margin-top:12px"><div class="t"><b>수업 변경 화면 · 안내 줄</b></div>
+<div>학생 · 보강 확정 안내 <span class="tag ok">자동 메일 보냄</span> 11/7 21:03 · ○○○@gmail.com</div>
+<div>강사 · 변경 안내 <span class="tag bad">발송 실패</span> 11/7 21:03 · 주소 거부됨 → [문구 복사] [보냈어요]</div>
+<div>학생 · 변경 안내 <span class="tag">직접 보냄</span> 11/5 10:12 · 운영자 [보냈어요]</div>
+</div>
+</div>
+</div>
+</section>
+
+<section>
+<h2>조사 결과 (코드·시험 DB·운영 DB 읽기만)</h2>
+<div class="facts">
+<div><b>메일 보낼 준비는 되어 있음</b><span>Resend 가입·도메인 edgeenglish.kr 인증(DKIM·DMARC) 10/17 완료. 로그인 6자리 코드 메일이 이미 Resend로 나감(시험·운영 모두). 안내 메일은 같은 발신자.</span><span class="src">docs/lms/supabase-test-setup.md · supabase-prod-setup.md</span></div>
+<div><b>학생 이메일 칸이 비어 있음</b><span>운영 학생 13명 모두 로그인 계정(이메일)이 있지만 학생 표의 이메일 칸은 2명만 채워져 있음. 자동 안내는 <u>로그인 이메일</u>을 쓰고, 학생 표 칸이 있으면 그것을 우선. 10/29 수업 알림 메일 기능은 학생 표 칸만 보게 되어 있어 같이 고침.</span><span class="src">운영 DB students·app_users 읽기 2026-11-07</span></div>
+<div><b>강사는 4명 모두 이메일 있음</b><span>강사 표 이메일 = 로그인 이메일. WhatsApp 번호는 DB에 없음(자동 WhatsApp은 수단 자체가 없음).</span><span class="src">운영 DB tutors</span></div>
+<div><b>안내 기록 표는 이미 있음</b><span>수업 변경·보강·휴무 안내는 <code>lesson_notices</code>(받는 사람·상태 대기/보냄/필요 없음·보낸 사람·시각). 신규 배정 안내 표에는 자동 채널(email·system)과 실패 기록 칸이 이미 설계되어 있음 → 같은 칸을 <code>lesson_notices</code>에 더하면 화면 논리(대기만 카드)가 그대로 맞음.</span><span class="src">migration 1000·1700</span></div>
+<div><b>수업 알림 메일(2900)은 어디에도 미적용</b><span>시험·운영 DB 모두 pg_net·pg_cron 꺼짐, 발송 함수 없음, Resend 키 Vault 없음. 10/29 시안 Q1(간격) 대표 답 대기. 이번 발송기와 같은 구조(pg_cron → pg_net → Resend, 기록 표 <code>notifications</code>).</span><span class="src">시험·운영 DB pg_extension·pg_proc 읽기</span></div>
+<div><b>1단계 뒤 문구 1곳 어긋남</b><span>강사 변경 안내의 'Please answer on your Home page (Make-up requests). Edge English will confirm.'는 1단계(강사가 확정) 뒤 사실과 다름 → 'Pick one time on your Home page and the class is booked.'로 고침. 대표 확정 문구가 아닌 설명 줄만 바뀜.</span><span class="src">src/lms/admin/lesson-change.ts tutorNotice</span></div>
+</div>
+</section>
+
+<section>
+<h2>만들 때 메모 (개발 · 대표 결정 아님)</h2>
+<div class="vs">
+<div class="note">
+<p><b>발송기 위치 · 권장: DB 안에서 끝냄</b></p>
+<ul>
+<li><b>A 권장 · DB만</b>: 안내 줄이 생기면 같은 트랜잭션에서 <code>notifications</code> 대기열에 메일(제목·본문 HTML)을 넣고, pg_cron이 정한 간격마다 <code>lms_send_mail_queue()</code>를 불러 pg_net으로 Resend에 보냄. 다음 실행 때 응답을 보고 <code>lesson_notices</code>를 보냄/실패로 기록. 10/29 수업 알림 메일 함수를 일반화한 것 → 키는 Supabase Vault에만, 홈페이지 서버에 새 비밀 없음, 외부에서 부를 주소 없음</li>
+<li><b>B · 홈페이지 서버가 보냄</b>: DB 트리거가 pg_net으로 Vercel 주소를 부르고 서버가 기존 TS 문구로 메일. 문구는 한 벌이지만 Vercel에 서비스 키·호출 비밀 2개가 새로 생기고 공개 주소가 하나 늘어남 → 유지보수가 더 복잡해 권하지 않음</li>
+<li>A의 약점(문구가 SQL과 TS 두 벌)은 <code>test:db</code>에 '같은 사례로 SQL 문구 = TS 문구' 시험을 넣어 어긋나면 바로 실패하게 막음</li>
+</ul>
+</div>
+<div class="note">
+<p><b>바뀌는 것</b></p>
+<ul>
+<li>migration 1개: <code>lesson_notices</code>에 channel(kakao_manual·whatsapp_manual·email)·sent_via(copy·system)·attempts·last_error·상태 failed 추가, 안내 줄 insert 트리거 → 메일 대기열, 받는 주소 함수(학생 표 이메일 → 없으면 로그인 이메일), SQL 문구 함수(한·영), 발송 함수 일반화, pg_net·pg_cron 켜기, 예약 등록(간격 = 대표 숫자)</li>
+<li>화면: 대시보드 카드는 대기(pending)·실패(failed)만 → 실패 카드에 사유('이메일 없음'·'주소 거부') + 지금 [복사]·[보냈어요]. 수업 변경 화면 안내 줄에 '자동 메일 보냄 · 시각 · 주소'. '자동 안내 보냄 오늘 n건' 초록 줄. 운영진 수업 변경 화면 함수 2개 새 칸 읽기(없는 DB면 예전처럼)</li>
+<li>기존 문구 함수(TS)는 그대로 쓰고 강사 설명 줄 1곳만 1단계에 맞춤</li>
+<li><code>send_emails</code> 꺼짐 = support@로만. 켜기는 별도 승인</li>
+</ul>
+<p><b>순서</b>: 시안 승인 → 대표: Resend에서 시험용 키 → 시험 Supabase Vault <code>resend_api_key</code> → Claude: migration 시험 DB 적용·pg_cron 등록 → 실제 Blair 계정으로 취소·보강 신청·확정 → support@ 받은편지함에서 메일 4종 확인 → test:db·vitest → 대표 승인 → 운영(백업 → migration → 운영용 키 → lms-prod) → <code>send_emails</code> 켜기 별도 승인</p>
+</div>
+</div>
+</section>
+</main>
+
+<script>
+(function(){
+  var tabs=document.querySelectorAll('.scenes [role="tab"]');
+  var scenes=document.querySelectorAll('.scene');
+  function show(id){
+    tabs.forEach(function(t){t.setAttribute('aria-selected',String(t.dataset.s===id));});
+    scenes.forEach(function(s){s.hidden=s.dataset.scene!==id;});
+  }
+  tabs.forEach(function(t){t.addEventListener('click',function(){show(t.dataset.s);});});
+})();
+</script>
