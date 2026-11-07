@@ -154,17 +154,31 @@ function kstDateOnly(d: Date) {
   const k = formatInZone(d, 'Asia/Seoul').date;
   return `${fmtDate(k as KstDate)} (${wdOf(k)})${overseas() ? ' 한국 날짜' : ''}`;
 }
-/** 보강할 수업 이름: 날짜·시간 + 강사 (대표 11/2: 어떤 수업인지 분명하게) */
-const rightLabel = (m: { originalAt: Date; timeKnown?: boolean; tutor?: string | null }) => `${rightText(m)}${m.tutor ? ` ${m.tutor} 강사님` : ''} 수업`;
-/** 보강 권리 제목: 원래 수업 보강 / 무료 보상수업 (4100: 같은 노쇼 수업에서 각각 신청) */
-const rightTitle = (m: MakeupRight) => (m.compId ? '무료 보상수업 1회' : `${rightLabel(m)}에 대한 보강`);
-/** 제목 아래 사유 한 줄 */
+/*
+ * 보강 권리 카드 (2026-11-07 대표: 학생에게는 어떤 수업인지·사유 한 줄·신청 기한·날짜 선택만. 노쇼·보상 처리 같은 내부 사유는 안 보임)
+ * 제목: 원래 수업 날짜 (학생 시간대). withTime = 같은 날 수업이 둘일 때만 시각까지
+ */
+const rightTitle = (m: MakeupRight, withTime = false) => {
+  if (m.compId) return '무료 보상수업 1회';
+  if (m.timeKnown === false) return `${kstDateOnly(m.originalAt)} 수업`;
+  const k = kst(m.originalAt);
+  return `${k.md} (${k.wd})${withTime ? ` ${k.time}` : ''} 수업`;
+};
+/** 제목 아래 사유 한 줄 — 무료 보상수업은 원래 수업과 헷갈리지 않게 '추가' 수업으로만 */
 const rightReason = (m: MakeupRight) =>
-  m.compId
-    ? `사유: ${rightLabel(m)} 강사 노쇼${m.useUntil ? ` · ${endText(m.useUntil)}까지` : ''}`
-    : m.tutorNoShow
-      ? '사유: 강사 노쇼 · 보상수업 1회 추가'
-      : null;
+  m.compId ? '추가 비용 없이 신청할 수 있어요' : m.tutorLeave ? '강사 휴무 · 보강 가능' : m.tutorNoShow ? '강사 사정으로 취소 · 보강 가능' : '취소된 수업 · 보강 가능';
+/**
+ * 신청 기한: 보상수업은 사용 기한, 그 밖은 수강 종료일 (보강은 수강 기간 안에, POL). 강사 휴무 보강은 보강 날짜에 따라 종료일이 늘어나므로 기한을 적지 않음.
+ * 국내 학생은 날짜만, 해외 학생은 본인 시간으로 바꾼 시각까지 (종료 기준은 한국 23:59)
+ */
+const rightUntil = (m: MakeupRight, endDate: KstDate | null) => {
+  const d = m.compId ? m.useUntil : m.tutorLeave ? null : endDate;
+  if (!d) return null;
+  return `신청 기한: ${VIEW_TZ === 'Asia/Seoul' ? `${fmtDate(d)} (${wdOf(d)})` : endText(d)}`;
+};
+/** 같은 날 수업이 둘 이상이면 제목에 시각까지 */
+const needsTime = (m: MakeupRight, all: MakeupRight[]) =>
+  !m.compId && all.some((o) => o !== m && !o.compId && kst(o.originalAt).date === kst(m.originalAt).date);
 /**
  * 수업까지 남은 때 (홈 '다음 수업'·수업 변경 창 같은 글, 11/2 점검 ④): 24시간 안이면 'n시간 후', 아니면 한국 날짜 차이로 '내일'·'n일 후'.
  * 판정(6시간 규칙 등) 계산은 그대로 — 화면 글만 하나로
@@ -656,8 +670,8 @@ export default function StudentHome(props: {
                   <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })}
                     className="flex min-h-[56px] w-full items-center justify-between gap-2 border-b border-[#eeecf4] py-2 text-left last:border-0">
                     <span>
-                      <span className="block text-[14px] font-semibold">{rightTitle(m)}</span>
-                      {rightReason(m) && <span className="block text-[12px] text-[#6b6880]">{rightReason(m)}</span>}
+                      <span className="block text-[14px] font-semibold">{rightTitle(m, needsTime(m, openRights))}</span>
+                      <span className="block text-[12px] text-[#6b6880]">{rightReason(m)}{rightUntil(m, endDate) ? ` · ${rightUntil(m, endDate)}` : ''}</span>
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="whitespace-nowrap rounded-full bg-[#fff1d6] px-2.5 py-1 text-[12px] font-semibold text-[#8a5300]">날짜 선택 필요</span>
@@ -831,12 +845,12 @@ export default function StudentHome(props: {
               />
             ) : (
               <div className="grid gap-3">
-                <h2 className="text-[18px] font-bold">보강할 수업</h2>
+                <div>
+                  <h2 className="text-[18px] font-bold">보강할 수업</h2>
+                  <p className="mt-0.5 text-[13.5px] text-[#55526a]">보강할 수업을 고르고 날짜를 신청해 주세요.</p>
+                </div>
                 {openRights.map((m) => (
-                  <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })} className={`${card} flex min-h-[56px] items-center justify-between px-4 py-2 text-left`}>
-                    <span className="grid text-[15px] font-semibold">{rightTitle(m)}{rightReason(m) && <span className="text-[13px] font-semibold text-[#b3261e]">{rightReason(m)}</span>}</span>
-                    <span className="text-[#8b88a0]">›</span>
-                  </button>
+                  <RightCard key={`${m.lessonId}${m.itemId}${m.compId}`} right={m} withTime={needsTime(m, openRights)} endDate={endDate} onPick={() => setOverlay({ kind: 'makeup', right: m })} />
                 ))}
               </div>
             ))}
@@ -860,6 +874,25 @@ export default function StudentHome(props: {
       )}
     </div>
     </KstCtx.Provider>
+  );
+}
+
+/** 보강할 수업 카드: 날짜 · 사유 한 줄 · 신청 기한 · [보강 날짜 선택] (2026-11-07 대표 시안) */
+function RightCard({ right, withTime, endDate, onPick }: { right: MakeupRight; withTime: boolean; endDate: KstDate | null; onPick: () => void }) {
+  const until = rightUntil(right, endDate);
+  const comp = !!right.compId;
+  return (
+    <div className={`${card} grid gap-1 px-4 pb-3 pt-3.5 ${comp ? 'border-[#d9d0ff] bg-[#f8f6ff]' : ''}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[16px] font-bold">{rightTitle(right, withTime)}</p>
+        {comp && <Icon d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" className="mt-0.5 h-5 w-5 shrink-0 text-[#5b3df0]" />}
+      </div>
+      <p className="text-[13.5px] text-[#55526a]">{rightReason(right)}</p>
+      {until && <p className="text-[13.5px] text-[#55526a]">{until}</p>}
+      <button type="button" onClick={onPick} className="mt-1.5 min-h-[44px] rounded-[12px] bg-[#1d1b2b] text-[14.5px] font-bold text-white">
+        {comp ? '보상수업 날짜 선택' : '보강 날짜 선택'}
+      </button>
+    </div>
   );
 }
 
@@ -1091,11 +1124,6 @@ function MakeupPicker(props: {
           ),
         )}
       </div>
-      {right.compId && right.useUntil ? (
-        <p className="text-[12px] text-[#6b6880]">사용 기한 {endText(right.useUntil)}</p>
-      ) : (
-        props.endDate && !right.tutorLeave && <p className="text-[12px] text-[#6b6880]">수강 종료 {endText(props.endDate)}</p>
-      )}
     </section>
   );
 
@@ -1103,13 +1131,13 @@ function MakeupPicker(props: {
     <div className="grid gap-3.5">
       {props.canceled && <p className="rounded-[12px] bg-[#e3f5ea] px-3.5 py-2.5 text-[15px] font-bold text-[#13623a]">✓ {rightText(right)} 수업을 취소했어요</p>}
       <h2 className="text-[18px] font-bold">{right.compId ? '보상수업 날짜 고르기' : '보강 날짜 고르기'}</h2>
-      <div className={`${card} grid gap-1 px-4 py-3`}>
-        <p className="text-[15px] font-bold">{rightTitle(right)}</p>
-        {rightReason(right) && <p className="text-[14px] font-semibold text-[#b3261e]">{rightReason(right)}</p>}
-        {right.tutorLeave && <p className="text-[14px] font-semibold text-[#55526a]">사유: 강사 휴무</p>}
+      <div className={`${card} grid gap-0.5 px-4 py-3`}>
+        <p className="text-[15px] font-bold">{rightTitle(right, true)}</p>
+        <p className="text-[13.5px] text-[#55526a]">{rightReason(right)}</p>
+        {rightUntil(right, props.endDate) && <p className="text-[13.5px] text-[#55526a]">{rightUntil(right, props.endDate)}</p>}
       </div>
       <KstToggle />
-      <p className="text-[14px] leading-relaxed text-[#55526a]">원하시는 일정을 최대 2개 골라 주세요. 강사님 확인 후 운영진이 최종 확정해요.</p>
+      <p className="text-[14px] leading-relaxed text-[#55526a]">원하는 일정을 최대 {MAKEUP_SLOTS_MAX}개 골라 주세요. 강사님이 확인하면 확정돼요.</p>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
       {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
