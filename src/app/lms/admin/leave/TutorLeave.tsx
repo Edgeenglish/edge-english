@@ -10,7 +10,7 @@
 import Link from 'next/link';
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import DateInput from '../DateInput';
-import { instantToKstDate, type KstDate } from '@/lms/rules/dates';
+import { diffDays, instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { dateLabel, enAt, kstLabel, MAKEUP_SLOTS_MAX, tutorLocalLabel } from '@/lms/admin/lesson-change';
 import {
   groupByStudent, groupRenewals, itemStatus, leaveMessages, pendingNoticeKeys, studentPhase, tutorBundles, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork,
@@ -349,6 +349,8 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const ready = !!tutorId && !!from && !!to && to >= from;
+  // 3일 미만 휴무는 휴무로 넣지 않음 (H26(92) ④): 수업 변경에서 강사 취소로 (알린 시각에 따라 사전·늦은 취소)
+  const short = !!from && !!to && to >= from && diffDays(from as KstDate, to as KstDate) + 1 < 3;
 
   useEffect(() => {
     setPreview(null);
@@ -386,6 +388,11 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
             <DateInput value={to} min={from || today} onChange={setTo} className={`${inputCls(false)} min-w-0`} />
           </label>
         </div>
+        {short && (
+          <p className="rounded-[12px] bg-[#fdecea] px-3 py-2.5 text-[14px] text-[#b3261e]">
+            3일 미만은 휴무로 넣지 않아요. <Link href="/lms/admin/change" className="font-semibold underline">수업 변경</Link>에서 강사 취소로 넣어 주세요.
+          </p>
+        )}
         <label className="grid gap-1 text-[13px] text-[#6b6880]">
           사유 (선택)
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="예: 개인 휴가" className={inputCls(false)} />
@@ -410,7 +417,7 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
         {ready && !preview && !err && <p className="text-[13px] text-[#6b6880]">걸리는 수업을 확인하는 중…</p>}
         <div className="grid grid-cols-2 gap-1.5">
           <button type="button" className={btnSub} onClick={onClose}>닫기</button>
-          <button type="button" className={btnMain} disabled={!preview || busy || (preview.overlap?.length ?? 0) > 0} onClick={async () => {
+          <button type="button" className={btnMain} disabled={!preview || busy || short || (preview.overlap?.length ?? 0) > 0} onClick={async () => {
             setBusy(true);
             setErr('');
             try {

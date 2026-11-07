@@ -24,6 +24,8 @@ end $$;
 
 set app.actor_id = 'aaaaaaaa-0000-0000-0000-000000000001';
 set app.actor_via = 'test';
+-- 강사 귀책 자동 연장(20261108020000)은 맨 아래 시험에서만 켬 — 그 위 예전 규칙(A20) 시험은 시행 전으로 둠
+update feature_flags set updated_at = '2099-01-01' where key = 'tutor_fault_extension_since';
 
 -- ---------- 가짜 기본 데이터 ----------
 insert into tutors (id, name, country, timezone, google_calendar_id) values
@@ -3367,5 +3369,80 @@ create temp table dbg85c as select admin_mail_sync() as r;
 select pg_temp.ok((select (r ->> 'tried')::int from dbg85c) = 2
               and (select count(*) = 2 from lesson_notices n join notifications x on x.id = n.email_notification_id where n.makeup_request_id = (select id from mk85c) and x.net_request_id is not null and n.email_error is null),
   '메일: 키를 넣은 뒤 상태 맞추기가 남은 큐를 보냄');
+reset request.jwt.claim.sub;
+reset role;
+
+-- ---------- 강사 귀책 자동 연장 (migration 20261108020000, H26(90)·(92)·(93)) ----------
+-- 가상 학생 '귀책학생' 월·수·금 20:00 4주, 강사 '귀책강사'. 시행일 = 어제
+reset role;
+update feature_flags set updated_at = now() - interval '1 day' where key = 'tutor_fault_extension_since';
+create temp table fx (f0 date);
+insert into fx select current_date + 30 + ((8 - extract(dow from current_date + 30)::int) % 7);   -- 월요일
+grant select on fx to authenticated;
+create or replace function pg_temp.fk(days int) returns timestamptz language sql as $$
+  select ((select f0 from fx) + days + time '20:00') at time zone 'Asia/Seoul' $$;
+create or replace function pg_temp.fend() returns date language sql as $$
+  select final_end_date from enrollments where id = '99999999-1000-0000-0000-000000009200' $$;
+create or replace function pg_temp.fd(days int) returns date language sql as $$ select (select f0 from fx) + days $$;
+insert into tutors (id, name, country, timezone, meet_url) values ('55555555-0000-0000-0000-000000009200', '귀책강사', 'Korea', 'Asia/Seoul', 'https://meet.google.com/fff-gggg-hhh');
+select pg_temp.open_all('55555555-0000-0000-0000-000000009200');
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000009200', '귀책학생', 'Fault S');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+select '99999999-1000-0000-0000-000000009200', '99999999-0000-0000-0000-000000009200', 1, 4, 3, 40, f0, f0 + 27, 12, 'active' from fx;
+insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
+select '99999999-0000-0000-0000-000000009200', '55555555-0000-0000-0000-000000009200', w, '20:00', 40, f0 - 7 from fx, (values (1), (3), (5)) v(w);
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select ('77777777-9200-0000-0000-0000000000' || lpad(n::text, 2, '0'))::uuid, '99999999-1000-0000-0000-000000009200', '99999999-0000-0000-0000-000000009200',
+       '55555555-0000-0000-0000-000000009200', 'regular', n, pg_temp.fk(n), pg_temp.fk(n) + interval '40 minutes'
+from (values (0), (2), (4), (23), (25)) v(n);
+
+select pg_temp.ok(pg_temp.fend() = pg_temp.fd(27), '귀책 연장: 사건 없으면 종료일 그대로 (수강권 기간)');
+update lessons set state = 'done', class_status = 'Tutor no-show' where id = '77777777-9200-0000-0000-000000000000';
+select pg_temp.ok(pg_temp.fend() = pg_temp.fd(28)
+              and (select note like '%휴무 0 · 노쇼 1' from enrollment_extensions where enrollment_id = '99999999-1000-0000-0000-000000009200' and auto_source = 'fault'),
+  '귀책 연장: 노쇼 1회 → 종료일 다음 정규 요일(월)까지 자동 연장, 사유 기록');
+update lessons set state = 'canceled', canceled_at = now(), class_status = 'Tutor long-term leave' where id = '77777777-9200-0000-0000-000000000002';
+select pg_temp.ok(pg_temp.fend() = pg_temp.fd(30), '귀책 연장: 휴무 1회 더 → 정규 요일 2번째(수)까지');
+select pg_temp.ok((select lms_comp_use_until('99999999-1000-0000-0000-000000009200')) = pg_temp.fd(30), '귀책 연장: 무료 보상수업 기한도 같은 종료일 (H26(93))');
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of)
+values ('77777777-9200-0000-0000-000000000100', '99999999-1000-0000-0000-000000009200', '99999999-0000-0000-0000-000000009200', '55555555-0000-0000-0000-000000009200',
+        'makeup', pg_temp.fk(9), pg_temp.fk(9) + interval '40 minutes', '77777777-9200-0000-0000-000000000000');
+select pg_temp.ok(pg_temp.fend() = pg_temp.fd(30), '귀책 연장: 노쇼 보강을 기간 안에 잡아도 종료일 그대로');
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of)
+values ('77777777-9200-0000-0000-000000000101', '99999999-1000-0000-0000-000000009200', '99999999-0000-0000-0000-000000009200', '55555555-0000-0000-0000-000000009200',
+        'makeup', pg_temp.fk(16), pg_temp.fk(16) + interval '40 minutes', '77777777-9200-0000-0000-000000000002');
+update lessons set state = 'canceled', canceled_at = now(), voided_at = now(), voided_by = 'aaaaaaaa-0000-0000-0000-000000000001' where id = '77777777-9200-0000-0000-000000000101';
+select pg_temp.ok(pg_temp.fend() = pg_temp.fd(30)
+              and (select array_agg(days order by created_at) from enrollment_extensions where enrollment_id = '99999999-1000-0000-0000-000000009200') = '{1,2}',
+  '귀책 연장: 보강을 일찍 끝내거나 없애도 종료일을 줄이지 않음 (자동 단축 없음)');
+-- 다음 수강권(재등록)이 있으면 그 시작일 전날을 넘지 않음: 재등록 뒤 노쇼 1회 더
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status, previous_enrollment_id)
+select '99999999-1000-0000-0000-000000009201', '99999999-0000-0000-0000-000000009200', 2, 4, 3, 40, f0 + 31, f0 + 58, 12, 'confirmed', '99999999-1000-0000-0000-000000009200' from fx;
+update lessons set state = 'done', class_status = 'Tutor no-show' where id = '77777777-9200-0000-0000-000000000023';
+select pg_temp.ok(pg_temp.fend() = pg_temp.fd(30), '귀책 연장: 다음 수강권 시작일 전날까지만 (재등록 일정 그대로, 오류 없음)');
+-- 시행 전 사건은 세지 않음
+update feature_flags set updated_at = now() + interval '400 days' where key = 'tutor_fault_extension_since';
+select pg_temp.ok(lms_fault_event('77777777-9200-0000-0000-000000000000') is null, '귀책 연장: 시행일 전 노쇼는 자동 연장 대상 아님 (기존 그대로)');
+update feature_flags set updated_at = now() - interval '1 day' where key = 'tutor_fault_extension_since';
+
+-- 종료 5일 이내 강사 취소 → [맞는 시간이 없어요] (H26(92) ⑤): 알린 날 = 종료일 3일 전 / 7일 전
+update lessons set state = 'canceled', canceled_at = now(), class_status = 'Tutor canceled late' where id = '77777777-9200-0000-0000-000000000025';
+insert into change_requests (lesson_id, student_id, tutor_id, type, status, via, requested_at, requested_by)
+select '77777777-9200-0000-0000-000000000025', '99999999-0000-0000-0000-000000009200', '55555555-0000-0000-0000-000000009200', 'tutor_cancel', 'applied', 'admin_app',
+       ((pg_temp.fend() - 3) + time '10:00') at time zone 'Asia/Seoul', 'aaaaaaaa-0000-0000-0000-000000000001';
+update lessons set state = 'canceled', canceled_at = now(), class_status = 'Tutor canceled in advance' where id = '77777777-9200-0000-0000-000000000004';
+insert into change_requests (lesson_id, student_id, tutor_id, type, status, via, requested_at, requested_by)
+select '77777777-9200-0000-0000-000000000004', '99999999-0000-0000-0000-000000009200', '55555555-0000-0000-0000-000000009200', 'tutor_cancel', 'applied', 'admin_app',
+       ((pg_temp.fend() - 7) + time '10:00') at time zone 'Asia/Seoul', 'aaaaaaaa-0000-0000-0000-000000000001';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';   -- 대표 (aal2, 학생 화면 운영자 보기)
+select pg_temp.ok((select jsonb_agg(x ->> 'lesson_id') from jsonb_array_elements(student_no_time_rights('99999999-0000-0000-0000-000000009200')) x)
+                  = '["77777777-9200-0000-0000-000000000025"]'::jsonb,
+  '맞는 시간이 없어요: 종료 5일 이내 강사 취소만 (7일 전 알린 취소는 안 보임)');
+select pg_temp.expect_error($$select student_no_time_request('99999999-0000-0000-0000-000000009200', '77777777-9200-0000-0000-000000000004')$$, 'not_eligible|요청할 수 있는');
+select student_no_time_request('99999999-0000-0000-0000-000000009200', '77777777-9200-0000-0000-000000000025');
+select pg_temp.ok((student_no_time_request('99999999-0000-0000-0000-000000009200', '77777777-9200-0000-0000-000000000025') ->> 'repeated')::boolean
+              and (select count(*) = 1 from jsonb_array_elements(admin_extension_reviews()) x where x ->> 'lesson_id' = '77777777-9200-0000-0000-000000000025'),
+  '맞는 시간이 없어요: 누르면 운영진 예외 연장 검토 카드 1건 (다시 눌러도 1건)');
 reset request.jwt.claim.sub;
 reset role;

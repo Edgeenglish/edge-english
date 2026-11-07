@@ -169,6 +169,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
   }];
   const set = (v: StudentView) => (view = v);
   let reminders = { regular: true, makeup: true, hasEmail: true };
+  let noTimeAt: string | null = null;
   const actions: StudentActions = {
     reload: async () => view,
     reminders: async (change) => (reminders = { ...reminders, ...change }),
@@ -177,6 +178,15 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       return Array.from({ length: 18 }, (_, i) => back + i)
         .filter((d) => d % 2 === 0)
         .flatMap((d) => [{ startsAt: at(d, '10:00'), afterEnd: false }, ...(d % 4 === 0 ? [{ startsAt: at(d, '20:00'), afterEnd: false }] : [])]);
+    },
+    // 미리보기: 휴무·노쇼·보상이 아닌 첫 보강권을 '종료 5일 이내 강사 취소'로 흉내 (실제는 DB 가 강사 취소 기록으로 판정)
+    noTimeRights: async () => {
+      const m = view.makeupRights.find((x) => x.lessonId && !x.compId && !x.tutorLeave && !x.tutorNoShow);
+      return new Map(m?.lessonId ? [[m.lessonId, noTimeAt]] : []);
+    },
+    noTimeRequest: async () => {
+      noTimeAt = new Date().toISOString();
+      set({ ...view });   // 화면이 다시 읽도록 새 값
     },
     cancel: async (lessonId) => {
       const l = view.lessons.find((x) => x.id === lessonId)!;

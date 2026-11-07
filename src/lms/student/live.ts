@@ -262,6 +262,18 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
       return { regular: r.regular, makeup: r.makeup, hasEmail: r.has_email };
     },
     makeupOptions: (right: RightRef) => loadMakeupOptions(sb, adminStudentId, right),
+    /**
+     * [맞는 시간이 없어요] (H26(92) ⑤, migration 20261108020000): 종료 5일 이내에 강사가 알린 사전·늦은 취소의 보강권만.
+     * 값 = 수업 번호 → 이미 누른 시각(null = 아직 안 누름). 함수가 없는 옛 DB 면 빈 목록 (링크 안 보임)
+     */
+    noTimeRights: async (): Promise<Map<string, string | null>> => {
+      const r = await sb.rpc('student_no_time_rights', { p_student: adminStudentId });
+      if (r.error) return new Map();
+      return new Map(((r.data ?? []) as { lesson_id: string; requested_at: string | null }[]).map((x) => [x.lesson_id, x.requested_at]));
+    },
+    noTimeRequest: async (lessonId: string): Promise<void> => {
+      check(await sb.rpc('student_no_time_request', { p_student: adminStudentId, p_lesson: lessonId }));
+    },
     /** 수업 취소 (판정 시각 = 지금 = 서버 시각. A-01: 브라우저 시각을 보내면 시계가 빠른 기기에서 '요청 받은 시각이 지금보다 늦습니다' 로 거절됨). 결과는 DB 판정 */
     cancel: async (lessonId: string): Promise<{ status: string; uses_credit: boolean; makeup_allowed: boolean }> => {
       const id = crypto.randomUUID();

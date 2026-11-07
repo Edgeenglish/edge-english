@@ -85,11 +85,11 @@ const wdOf = (date: string) => '일월화수목금토'[new Date(`${date.slice(0,
 const fmtDate = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
 /*
- * 시각 표기 원칙 (2026-11-03 대표: '어디 기준 시간인지 빠지면 절대 안 됨'):
- * 학생 화면의 모든 시각 = 학생 시간 + 기준 이름, 해외 학생은 한국 시간도 같이 (학생이 끌 수 있음).
- * 국내 학생은 학생 시간 = 한국 시간이라 '(한국 시간)' 하나.
+ * 시각 표기 원칙 (2026-11-03 대표: '어디 기준 시간인지 빠지면 절대 안 됨', H26(93) 11/7: 학생은 거주지 시간만):
+ * 학생 화면의 모든 날짜·요일·시각·신청 기한 = 학생 거주지 시간 + 기준 이름. 한국 시간 짝은 보이지 않음.
+ * 운영자 보기에서만 '학생 시간 | 한국 시간(KST)' 전환 (이 브라우저에 기억). 국내 학생은 학생 시간 = 한국 시간이라 전환 없음.
  */
-let SHOW_KST = true;
+const SHOW_KST = false;
 const overseas = () => VIEW_TZ !== 'Asia/Seoul';
 /** 한국 시간 짝: '한국 17:00' (학생 날짜와 다르면 '한국 11/3 (화) 23:00'). 국내 학생이거나 꺼 두면 null */
 function kstPair(d: Date): string | null {
@@ -103,16 +103,19 @@ const zoneTag = (d: Date) => {
   const p = kstPair(d);
   return `(${zoneText()}${p ? ` · ${p}` : ''})`;
 };
-/** 한국 시간 같이 보기 (해외 학생만, 기기에 저장) */
-const KstCtx = createContext<{ on: boolean; set: (v: boolean) => void }>({ on: true, set: () => {} });
+/** 운영자 보기 전용 시간대 전환: 학생 시간 | 한국 시간(KST). 고른 쪽은 ✓·굵은 테두리 (색만으로 구별하지 않음) */
+const KstCtx = createContext<{ admin: boolean; studentTz: string; on: boolean; set: (v: boolean) => void }>({ admin: false, studentTz: 'Asia/Seoul', on: false, set: () => {} });
 function KstToggle() {
   const c = useContext(KstCtx);
-  if (!overseas()) return null;
+  if (!c.admin || c.studentTz === 'Asia/Seoul') return null;
+  const city = (c.studentTz.split('/').pop() ?? c.studentTz).replace(/_/g, ' ');
+  const btn = (on: boolean) =>
+    `min-h-[40px] rounded-[10px] border px-3 text-[13.5px] ${on ? 'border-2 border-[#1d1b2b] font-extrabold text-[#1d1b2b]' : 'border-[#d9d5e8] font-semibold text-[#55526a]'}`;
   return (
-    <label className="flex min-h-[40px] w-fit items-center gap-2 text-[13.5px] font-semibold text-[#55526a]">
-      <input type="checkbox" checked={c.on} onChange={(e) => c.set(e.target.checked)} className="h-[18px] w-[18px] accent-[#5b3df0]" />
-      한국 시간 같이 보기
-    </label>
+    <div role="group" aria-label="시간 표시 (운영자 보기)" className="flex w-fit flex-wrap gap-1.5">
+      <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>{!c.on ? '✓ ' : ''}학생 시간 ({city})</button>
+      <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>{c.on ? '✓ ' : ''}한국 시간(KST)</button>
+    </div>
   );
 }
 /**
@@ -168,11 +171,12 @@ const rightTitle = (m: MakeupRight, withTime = false) => {
 const rightReason = (m: MakeupRight) =>
   m.compId ? '추가 비용 없이 신청할 수 있어요' : m.tutorLeave ? '강사 휴무 · 보강 가능' : m.tutorNoShow ? '강사 사정으로 취소 · 보강 가능' : '취소된 수업 · 보강 가능';
 /**
- * 신청 기한: 보상수업은 사용 기한, 그 밖은 수강 종료일 (보강은 수강 기간 안에, POL). 강사 휴무 보강은 보강 날짜에 따라 종료일이 늘어나므로 기한을 적지 않음.
+ * 신청 기한 = 수강 종료일 하나 (H26(93): 정규·학생 취소 보강·강사 귀책 보강·무료 보상수업 모두 같은 종료일. 보상수업 사용 기한도 이 날을 따라감).
+ * 예외: 시행 전 시트에서 넘어온 강사 휴무 보강(이관 보강권)은 예전처럼 보강 날짜에 따라 종료일이 늘어나 기한을 적지 않음.
  * 국내 학생은 날짜만, 해외 학생은 본인 시간으로 바꾼 시각까지 (종료 기준은 한국 23:59)
  */
 const rightUntil = (m: MakeupRight, endDate: KstDate | null) => {
-  const d = m.compId ? m.useUntil : m.tutorLeave ? null : endDate;
+  const d = m.compId ? m.useUntil : m.tutorLeave && m.itemId ? null : endDate;
   if (!d) return null;
   return `신청 기한: ${VIEW_TZ === 'Asia/Seoul' ? `${fmtDate(d)} (${wdOf(d)})` : endText(d)}`;
 };
@@ -203,16 +207,19 @@ export default function StudentHome(props: {
   const { actions, extras, preview } = props;
   const now = useMemo(() => new Date(props.nowIso), [props.nowIso]);
   const [s, setView] = useState<StudentView>(props.initial);
-  VIEW_TZ = s.timezone || props.initial.timezone || 'Asia/Seoul';
-  const [showKst, setShowKstState] = useState(true);
+  const studentTz = s.timezone || props.initial.timezone || 'Asia/Seoul';
+  // 운영자 보기에서만 한국 시간으로 바꿔 볼 수 있음 (H26(93)). 학생 본인 화면은 항상 학생 시간
+  const isAdminView = !!props.adminBar;
+  const [adminKst, setAdminKstState] = useState(false);
   useEffect(() => {
-    try { if (localStorage.getItem('lms_student_kst') === '0') setShowKstState(false); } catch { /* 저장 안 되는 브라우저 */ }
-  }, []);
-  const setShowKst = (v: boolean) => {
-    setShowKstState(v);
-    try { localStorage.setItem('lms_student_kst', v ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
+    if (!isAdminView) return;
+    try { if (localStorage.getItem('lms_admin_student_view_kst') === '1') setAdminKstState(true); } catch { /* 저장 안 되는 브라우저 */ }
+  }, [isAdminView]);
+  const setAdminKst = (v: boolean) => {
+    setAdminKstState(v);
+    try { localStorage.setItem('lms_admin_student_view_kst', v ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
   };
-  SHOW_KST = showKst;
+  VIEW_TZ = isAdminView && adminKst ? 'Asia/Seoul' : studentTz;
   const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
@@ -251,7 +258,7 @@ export default function StudentHome(props: {
   const left = lessonsLeft(lessons, now, makeupsOwed);
   // 결제 확인 전·강사 배정 전(수업이 아직 없음)에는 '수업이 0회 남았어요' 재등록 안내를 띄우지 않음 (QA-05)
   const notStarted = !s.paid || (s.enrollmentStatus != null && s.enrollmentStatus !== 'active' && lessons.length === 0);
-  const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed);
+  const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed, studentTz);
   const endDate = s.finalEndDate;
   const dLeft = endDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, endDate) : 0;
   const points = pointsHistory(s.points);
@@ -302,6 +309,14 @@ export default function StudentHome(props: {
       setBusy(false);
     }
   }
+
+  // [맞는 시간이 없어요] 보일 보강권 (H26(92) ⑤): 수업 번호 → 누른 시각. 화면을 다시 읽을 때마다 같이
+  const [noTime, setNoTime] = useState<Map<string, string | null>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    actions.noTimeRights().then((m) => { if (alive) setNoTime(m); }, () => {});
+    return () => { alive = false; };
+  }, [actions, s]);
 
   async function confirmCancel(lesson: StudentLesson) {
     let allowed = false;
@@ -503,7 +518,7 @@ export default function StudentHome(props: {
   const meetLinks = [...new Map(upcoming.map((l) => [l.tutorName, meetOf(l.id)] as const).filter(([, u]) => u)).entries()];
 
   return (
-    <KstCtx.Provider value={{ on: showKst, set: setShowKst }}>
+    <KstCtx.Provider value={{ admin: isAdminView, studentTz, on: adminKst, set: setAdminKst }}>
     <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
       <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
         {props.adminBar ? (
@@ -536,7 +551,7 @@ export default function StudentHome(props: {
       </nav>
 
       <div className="min-w-0 flex-1 pb-24 lg:pb-0">
-        {props.adminBar && <div className="px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}</div>}
+        {props.adminBar && <div className="grid gap-2 px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}<KstToggle /></div>}
         <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
           {props.adminBar ? (
             <a href="/lms/admin" className="text-[17px] font-bold text-[#09246b]">
@@ -593,7 +608,7 @@ export default function StudentHome(props: {
         {tab === 'schedule' && (
           <TabPage title="일정">
             <div className="flex flex-wrap items-center justify-between gap-x-3">
-              <p className="text-[13px] text-[#55526a]">{zoneText()} 기준이에요.{overseas() && showKst ? ' 한국 시간도 같이 보여요.' : ''}</p>
+              <p className="text-[13px] text-[#55526a]">{zoneText()} 기준이에요.</p>
               <KstToggle />
             </div>
             {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p }))]
@@ -837,6 +852,8 @@ export default function StudentHome(props: {
                 endDate={endDate}
                 load={actions.makeupOptions}
                 busy={busy}
+                noTime={overlay.right.lessonId && noTime.has(overlay.right.lessonId) ? { requestedAt: noTime.get(overlay.right.lessonId) ?? null } : null}
+                onNoTime={async (lessonId) => { await run(() => actions.noTimeRequest(lessonId), '요청했어요.'); }}
                 onLater={() => setOverlay(null)}
                 onSubmit={async (right, slots) => {
                   const v = await run(() => actions.requestMakeup(right, slots), '요청했어요. 강사님 확인 후 최종 확정돼요.');
@@ -1058,6 +1075,9 @@ function MakeupPicker(props: {
   onSubmit: (r: Right, slots: Date[]) => void;
   /** 나중에 고르기 = 창 닫기 */
   onLater: () => void;
+  /** 종료 5일 이내 강사 취소 보강만 (아니면 null → 링크 없음). requestedAt = 이미 누름 */
+  noTime?: { requestedAt: string | null } | null;
+  onNoTime?: (lessonId: string) => void;
 }) {
   const [opts, setOpts] = useState<MakeupOption[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -1192,6 +1212,15 @@ function MakeupPicker(props: {
         </div>
       )}
       {!(opts && opts.length > 0) && <LaterButton onLater={props.onLater} />}
+      {props.noTime && right.lessonId && (
+        props.noTime.requestedAt ? (
+          <button type="button" disabled className="mx-auto min-h-[40px] rounded-[10px] bg-[#ecebf1] px-4 text-[13.5px] font-semibold text-[#6b6880]">요청함 ✓</button>
+        ) : (
+          <button type="button" disabled={props.busy} onClick={() => props.onNoTime?.(right.lessonId!)} className="mx-auto min-h-[40px] px-3 text-[13.5px] text-[#55526a] underline">
+            맞는 시간이 없어요
+          </button>
+        )
+      )}
     </div>
   );
 }

@@ -16,7 +16,7 @@ export const HISTORY_REASON: Record<HistoryRow['source'], string> = { closed: '�
 export const TASK_KIND_TEXT: Record<string, string> = {
   new_student_matching: '신규 매칭', renewal_tutor_notice: '재등록 강사 확인', long_leave_request: '장기 연기', no_show_report: '노쇼 신고',
   ending_soon: '수강기간 종료 임박', makeup_unrequested: '보강 미신청', auto_failure: '자동 처리 오류', import_check: '시트 대조',
-  lesson_change: '수업 변경', tutor_leave: '강사 휴무', class_record_missing: 'Class Record 미기록',
+  lesson_change: '수업 변경', tutor_leave: '강사 휴무', class_record_missing: 'Class Record 미기록', extension_review: '예외 연장 검토',
 };
 
 export async function loadTaskHistory(sb: SupabaseClient): Promise<HistoryRow[]> {

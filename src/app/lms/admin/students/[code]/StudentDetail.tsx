@@ -31,7 +31,7 @@ const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 export const LEVELS = ['Beginner', 'Pre-Intermediate', 'Intermediate', 'Advanced'] as const;
 export const CORRECTION: Record<string, string> = { immediate: '바로바로 교정', major_only: '큰 실수 위주만 교정' };
 export const CLASS_STYLE: Record<string, string> = { textbook: '교재', free_talking: '프리토킹', not_sure: '아직 잘 모르겠음' };
-const EXT_REASON: Record<string, string> = { student_long_term_leave: '학생 장기 사정', tutor_long_term_leave: '강사 휴무 자동', admin_exception: '운영 예외', correction: '정정' };
+const EXT_REASON: Record<string, string> = { student_long_term_leave: '학생 장기 사정', tutor_long_term_leave: '강사 휴무 자동', admin_exception: '운영 예외', correction: '정정', tutor_fault: '강사 귀책 자동' };
 const FIELD_KO: Record<string, string> = {
   name_ko: '한국 이름', name_en: '영문 이름', display_name: 'Preferred Name', country: '국가', city: '도시', timezone: '시간대', gender_age: '성별/연령대', email: '이메일', phone: '휴대폰',
   level: '레벨', level_note: '예전 레벨 표기', class_type: 'Type of class', textbook: '교재', class_note_url: 'Google Docs', admin_memo: '운영 메모', self_intro_en: '기존 자기소개', correction_pref: '교정 선호(시트)',
@@ -60,7 +60,12 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
   const regularAhead = data.upcoming.filter((l) => l.kind === 'regular' && !l.substitute && !l.leaveOpen);
   const prestartOpen = !!e && (e.status === 'confirmed' || e.status === 'active') && regularAhead.length > 0 && regularAhead.length >= e.lessonsPurchased;
   const pendingChanges = data.changes.filter((c) => !c.studentSentAt || !c.tutorSentAt);
-  const autoExt = e ? e.extensions.filter((x) => x.auto).reduce((a, x) => a + x.days, 0) : 0;
+  const autoExt = e ? e.extensions.filter((x) => x.auto === 'leave_makeup').reduce((a, x) => a + x.days, 0) : 0;
+  // 강사 귀책 자동 연장 (H26(92), 20261108020000): 마지막 줄 메모에 '강사 휴무 n · 노쇼 n'
+  const faultRows = e ? e.extensions.filter((x) => x.auto === 'fault') : [];
+  const faultExt = faultRows.reduce((a, x) => a + x.days, 0);
+  const faultWhy = faultRows.at(-1)?.note?.match(/강사 휴무 (\d+) · 노쇼 (\d+)/);
+  const faultText = faultWhy ? [Number(faultWhy[1]) ? `강사 휴무 ${faultWhy[1]}` : '', Number(faultWhy[2]) ? `노쇼 ${faultWhy[2]}` : ''].filter(Boolean).join(' · ') : '';
   const manualExt = e ? e.extensions.filter((x) => !x.auto).reduce((a, x) => a + x.days, 0) : 0;
 
   return (
@@ -135,7 +140,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
                   ? <Row k="수업 · 일정" v={`결제 확인 전 — 확인하면 수업 ${e.lessonsPurchased}회가 만들어져요 (아직 0회)`} />
                   : <Row k="진행 · 남은" v={`진행 ${e.done}회 · 남은 정규 ${e.leftRegular}회 (보강 포함 ${e.leftAll}회)`} />}
                 <Row k={pending ? '희망 기간' : '기간'} v={`${md(e.startDate)} – ${md(e.baseEndDate)} (${diffDays(e.startDate, e.baseEndDate) + 1}일)${pending ? ' · 결제 확인 후 첫 수업일 기준으로 확정' : ''}`} />
-                {e.extensionDays > 0 && <Row k="연장" v={[autoExt ? `+${autoExt}일 (휴무 자동)` : '', manualExt ? `${manualExt > 0 ? '+' : ''}${manualExt}일 (운영진)` : ''].filter(Boolean).join(' · ')} />}
+                {e.extensionDays > 0 && <Row k="연장" v={[faultExt ? `+${faultExt}일 (${faultText ? `${faultText}, ` : ''}자동)` : '', autoExt ? `+${autoExt}일 (휴무 자동)` : '', manualExt ? `${manualExt > 0 ? '+' : ''}${manualExt}일 (운영진)` : ''].filter(Boolean).join(' · ')} />}
                 {!pending && <Row k="최종 종료" v={finalEndText(e.finalEndDate, s.timezone)} strong />}
                 {e.sheet && <Row k="시트 기준" v={`${e.sheet.used ?? 0}/${e.sheet.total ?? '?'}회`} />}
               </>
