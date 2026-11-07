@@ -148,6 +148,9 @@ export type LessonChangeTask = {
   lessonAt: Date | null;
   /** 강사 답을 기다리는 보강 신청 중 가장 오래된 신청 시각 */
   makeupWaitingSince?: Date | null;
+  /** 자동 메일을 못 보낸 보강 확정 안내 (실패·주소 없음, 20261108010000) → 운영진이 카톡·WhatsApp 으로 직접 */
+  emailFailed?: number;
+  emailFailedTo?: ('student' | 'tutor')[];
   createdAt: Date;
 };
 
@@ -475,6 +478,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         kind: t.kind,
         severity: t.lessonAt ? dueSeverity(t.lessonAt, now) : 'open',
         tag: t.pendingNotices > 0 ? `${CHANGE_EVENT_TEXT[t.noticeEvents?.[0] ?? ''] ?? '수업 변경'} 안내 보내기`
+          : (t.emailFailed ?? 0) > 0 ? '보강 확정 자동 메일 못 보냄'
           : (t.declinedMakeups ?? 0) > 0 ? '보강 강사 불가 · 재조율'
           : (t.answeredMakeups ?? 0) > 0 ? '보강 강사 답 옴 · 확정' : '보강 강사 답 대기',
         title: t.studentName,
@@ -487,6 +491,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
           ].filter(Boolean).join(' '),
           t.pendingNotices > 0 && `${noticeWho(t.noticeTo)} ${t.pendingNotices}건`,
           t.pendingNotices === 0 && t.lessonAt && `${kstLabel(t.lessonAt)} 수업`,
+          (t.emailFailed ?? 0) > 0 && `자동 메일 못 보냄 ${noticeWho(t.emailFailedTo)} ${t.emailFailed}건 — 직접 보내기`,
           (t.declinedMakeups ?? 0) > 0 && `강사가 모든 날짜 불가 ${t.declinedMakeups}건 — 학생에게 다른 날짜 받기`,
           t.pendingNotices > 0 && (t.answeredMakeups ?? 0) - (t.declinedMakeups ?? 0) > 0 && `보강 강사 답 옴 ${(t.answeredMakeups ?? 0) - (t.declinedMakeups ?? 0)}건`,
           t.pendingNotices > 0 && t.openMakeups - (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
