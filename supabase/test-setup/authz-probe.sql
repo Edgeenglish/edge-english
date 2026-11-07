@@ -61,7 +61,7 @@ declare
   definer_ok text[] := array['my_student_id', 'my_tutor_id', 'is_admin', 'is_owner', 'my_role', 'tutor_my_students', 'student_my_tutors', 'consent_record',
                           'admin_register_student', 'admin_students_with_email', 'admin_import_existing_student', 'admin_import_mark_checked', 'admin_import_set_origin', 'admin_import_set_end_reason',
                           'admin_propose_schedule', 'admin_confirm_schedule', 'admin_close_plan', 'admin_mark_proposal_sent', 'admin_mark_notice_sent',
-                          'admin_change_lesson', 'student_change_lesson', 'admin_revert_change', 'admin_makeup_request', 'admin_makeup_confirm',
+                          'admin_change_lesson', 'student_change_lesson', 'admin_revert_change', 'admin_makeup_request', 'admin_makeup_confirm', 'admin_makeup_record_past',
                           'admin_makeup_withdraw', 'admin_void_makeup', 'admin_mark_lesson_notice_sent', 'admin_mark_lesson_notices_sent',
                           'admin_leave_create', 'admin_leave_choose', 'admin_leave_sub_ok', 'admin_leave_student_ok', 'admin_leave_sub_options', 'admin_leave_makeup_options', 'admin_leave_back', 'admin_leave_notice_unsend', 'admin_leave_renewal_pending',
                           'admin_renewal_notice_sent', 'admin_enrollment_close', 'admin_set_task_closed', 'admin_task_history',

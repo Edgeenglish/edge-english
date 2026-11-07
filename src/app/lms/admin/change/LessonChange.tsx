@@ -27,6 +27,8 @@ export type ChangeActions = {
   revert: (changeId: string, note: string) => Promise<void>;
   requestMakeup: (source: { lessonId?: string; itemId?: string; compId?: string }, slots: Date[]) => Promise<{ repeated: boolean }>;
   confirmMakeup: (requestId: string, at: Date) => Promise<void>;
+  /** 이미 진행한 보강 기록 (지난 시각만, 사유 필수). 없는 화면(가상 데이터)은 버튼 안 보임 */
+  recordPastMakeup?: (source: { lessonId?: string; itemId?: string }, at: Date, note: string) => Promise<void>;
   withdrawMakeup: (requestId: string) => Promise<void>;
   voidMakeup: (lessonId: string, note: string) => Promise<void>;
   markSent: (noticeId: string) => Promise<void>;
@@ -469,6 +471,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const [other, setOther] = useState({ date: '', time: defTime });
   const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
+  const [past, setPast] = useState<{ date: string; time: string; note: string } | null>(null);
   /** 방금 누른 [신청] 결과 (QA B-04): 새 신청 / 이미 열린 신청 */
   const [sent, setSent] = useState<'new' | 'repeated' | null>(null);
   const open = right.open;
@@ -574,6 +577,27 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
           </div>
         </div>
       )}
+      {/* 이미 진행한 보강 기록 (2026-11-07): 강사가 먼저 진행한 보강(더블 수업 등)을 지난 시각으로 남김 → 강사 '기록할 수업'에 뜸 */}
+      {!comp && actions.recordPastMakeup && (past ? (
+        <div className="mt-2 grid gap-1.5 rounded-[12px] bg-[#f6f5fb] p-3">
+          <b className="text-[14px] text-[#1d1b2b]">이미 진행한 보강 기록</b>
+          <div className="grid grid-cols-[1.4fr_1fr] gap-1.5">
+            <DateInput aria-label="진행한 보강 날짜" value={past.date} onChange={(v) => setPast({ ...past, date: v })} className={inputCls(false)} />
+            <TimeInput aria-label="진행한 보강 시각" value={past.time} onChange={(v) => setPast({ ...past, time: v })} className={inputCls(false)} />
+          </div>
+          <span className="text-[12.5px] text-[#6b6880]">한국 시간{toAt(past) ? ` · 강사 현지 ${tutorLocalLabel(toAt(past)!, tutorTz)}` : ''}</span>
+          <input aria-label="기록 사유" value={past.note} onChange={(e) => setPast({ ...past, note: e.target.value })} placeholder="사유 (예: 11/5 더블 수업으로 진행)" className={inputCls(false)} />
+          <div className="grid grid-cols-2 gap-1.5">
+            <button type="button" className={btnSub} disabled={busy} onClick={() => setPast(null)}>닫기</button>
+            <button type="button" className={btnMain} disabled={busy || !toAt(past) || +toAt(past)! >= Date.now() || !past.note.trim()}
+              onClick={() => run(async () => { await actions.recordPastMakeup!(right.kind === 'lesson' ? { lessonId: right.source.id } : { itemId: (right as { item: { id: string } }).item.id }, toAt(past)!, past.note.trim()); setPast(null); })}>
+              {busy ? '저장 중…' : '기록'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className={`${btnSub} mt-2 w-full`} onClick={() => setPast({ date: '', time: defTime, note: '' })}>이미 진행한 보강 기록</button>
+      ))}
       <Err>{err}</Err>
     </li>
   );

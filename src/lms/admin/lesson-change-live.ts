@@ -150,6 +150,10 @@ export async function requestMakeup(sb: SupabaseClient, source: { lessonId?: str
   })) as { repeated?: boolean } | null;
   return { repeated: !!r?.repeated };
 }
+/** 이미 진행한 보강 기록 (지난 시각, 사유 필수) — 강사 '기록할 수업'에 뜸. migration 20261107050000 */
+export async function recordPastMakeup(sb: SupabaseClient, source: { lessonId?: string; itemId?: string }, at: Date, note: string): Promise<void> {
+  check(await sb.rpc('admin_makeup_record_past', { p_lesson: source.lessonId ?? null, p_item: source.itemId ?? null, p_starts_at: at.toISOString(), p_note: note }));
+}
 export async function confirmMakeup(sb: SupabaseClient, requestId: string, at: Date): Promise<void> {
   check(await sb.rpc('admin_makeup_confirm', { p_makeup_request: requestId, p_starts_at: at.toISOString() }));
 }
