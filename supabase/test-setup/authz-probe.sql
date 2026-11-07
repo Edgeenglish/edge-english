@@ -73,7 +73,7 @@ declare
                           'tutor_students_list', 'tutor_schedule', 'tutor_schedule_save',
                           'admin_credits', 'admin_credit_adjust', 'admin_leave_withdraw',
                           'admin_matching_current', 'admin_matching_notified', 'admin_import_unmark_checked',
-                          'tutor_first_lesson_todos', 'tutor_first_lesson_save'];
+                          'tutor_first_lesson_todos', 'tutor_first_lesson_save', 'tutor_makeup_confirm'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];
   persona_uid uuid[];

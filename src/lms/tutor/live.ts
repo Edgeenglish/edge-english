@@ -33,6 +33,11 @@ export async function answerMakeup(sb: SupabaseClient, requestId: string, yes: s
   check(await sb.rpc('tutor_makeup_answer', { p_request: requestId, p_yes: yes, p_note: note }));
 }
 
+/** 보강 확정 (20261108000000, H26(82)): 학생이 보낸 시간 하나로 바로 보강 수업 */
+export async function confirmMakeup(sb: SupabaseClient, requestId: string, slotId: string): Promise<void> {
+  check(await sb.rpc('tutor_makeup_confirm', { p_request: requestId, p_candidate: slotId }));
+}
+
 /** 대체 수업 요청 답 (2600): items = 이번에 답하는 수업 전체, yes = 그중 가능한 수업 */
 export async function answerCover(sb: SupabaseClient, items: string[], yes: string[]): Promise<void> {
   check(await sb.rpc('tutor_sub_answer', { p_items: items, p_yes: yes }));

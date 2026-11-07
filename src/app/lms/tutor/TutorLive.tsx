@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { answerCover, answerMakeup, createTutorLogin, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
+import { answerCover, answerMakeup, confirmMakeup, createTutorLogin, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
 import { LANGS, type Lang } from '@/lms/tutor/lang';
 import { useSavedValue } from './useSaved';
 import { weekOf, type TutorScreen } from '@/lms/tutor/screen';
@@ -55,6 +55,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
         load: (from, to) => loadTutorScreen(sb, adminTutor, from, to),
         record: (id, r, t, rm, late) => recordClass(sb, id, r, t, rm, late),
         answer: (id, yes, note) => answerMakeup(sb, id, yes, note),
+        confirm: (id, slot) => confirmMakeup(sb, id, slot),
         answerCover: (items, yes) => answerCover(sb, items, yes),
         hours: {
           load: () => loadHours(sb, adminTutor),

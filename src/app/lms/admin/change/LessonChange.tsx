@@ -230,6 +230,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
 
             {lesson && (
               <ChangeCard key={lesson.id} lesson={lesson} now={now} actions={actions} isMakeup={!!data.makeupRequests.find((r) => r.confirmedLessonId === lesson.id)}
+                byTutor={!!data.makeupRequests.find((r) => r.confirmedLessonId === lesson.id && r.confirmedInTutorScreen)}
                 done={async (msg) => { setLessonId(null); if (msg) setCanceled(msg); await reload(); }} />
             )}
             {canceled && <p role="status" className="rounded-[12px] bg-[#e8f5ee] px-3 py-2.5 text-[14.5px] font-bold text-[#1f7a4d]">✓ {canceled}</p>}
@@ -274,7 +275,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   );
 }
 
-function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson; now: Date; actions: ChangeActions; isMakeup: boolean; done: (msg?: string) => Promise<void> }) {
+function ChangeCard({ lesson, now, actions, isMakeup, byTutor, done }: { lesson: ChLesson; now: Date; actions: ChangeActions; isMakeup: boolean; byTutor?: boolean; done: (msg?: string) => Promise<void> }) {
   const [who, setWho] = useState<'student' | 'tutor'>('student');
   const init = kstParts(now);
   const [date, setDate] = useState(init.date);
@@ -318,6 +319,7 @@ function ChangeCard({ lesson, now, actions, isMakeup, done }: { lesson: ChLesson
   return (
     <Card title={`수업 취소 · ${kstLabel(lesson.startsAt)} 한국`}>
       <div className="grid gap-3">
+        {byTutor && <p className="text-[13px] font-semibold text-[#1f7a4d]">강사가 확정한 보강</p>}
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="요청한 사람">
           {(['student', 'tutor'] as const).map((w) => (
             <button key={w} type="button" aria-pressed={who === w} onClick={() => setWho(w)}

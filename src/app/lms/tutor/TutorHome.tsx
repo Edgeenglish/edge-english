@@ -18,13 +18,15 @@ import FirstLessonFollowup, { type FollowupSave } from './FirstLessonFollowup';
 import type { FollowupTodo } from '@/lms/tutor/followup';
 import { LangCtx, useT, type Lang } from '@/lms/tutor/lang';
 import {
-  answerReady, canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstRange, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
+  canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstRange, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   statusText, timeRange, weekOf, whenFull, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
 
 export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
   record: (lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late) => Promise<void>;
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
+  /** 보강 확정 (H26(82)): 학생 시간 하나를 골라 바로 확정. 없으면 [Confirm] 버튼이 잠김 */
+  confirm?: (requestId: string, slotId: string) => Promise<void>;
   /** 대체 수업 요청 답: items = 답하는 수업 전체, yes = 가능한 수업 */
   answerCover: (items: string[], yes: string[]) => Promise<void>;
   /** 매주 가능 시간 [Availability] (migration 3100) */
@@ -919,28 +921,26 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
 }
 
 function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: string; actions: TutorActions; closed: boolean; onSent: () => Promise<void> }) {
-  const [yes, setYes] = useState<Set<string>>(() => new Set(m.slots.filter((s) => s.answer === 'yes' && !s.busy).map((s) => s.id)));
+  // 강사 자율 운영 1단계 (H26(82)): 학생 시간 하나를 골라 [Confirm make-up] → 바로 보강 수업. 모두 안 되면 메모로 운영진에게
+  const declined = !!m.answeredAt && m.slots.every((s) => s.answer !== 'yes');
+  const [pick, setPick] = useState<string | null>(() => m.slots.find((s) => s.answer === 'yes' && !s.busy && !s.past)?.id ?? null);
+  const [none, setNone] = useState(declined);
   const [note, setNote] = useState(m.note ?? '');
-  const [sent, setSent] = useState(!!m.answeredAt);
+  const [sent, setSent] = useState(declined);
+  const [confirmed, setConfirmed] = useState<TutorMakeup['slots'][number] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const minutes = m.slots[0] ? minutesOf(m.slots[0]) : null;
-  const [first] = useState(() => ({ yes: [...yes].sort().join(), note }));
-  useDirty(`makeup-${m.id}`, !closed && !sent && ([...yes].sort().join() !== first.yes || note !== first.note));
+  const [firstNote] = useState(note);
+  useDirty(`makeup-${m.id}`, !closed && !confirmed && !sent && none && note !== firstNote);
+  const picked = m.slots.find((s) => s.id === pick) ?? null;
+  const at = (s: { startsAt: Date }) => `${whenText(s.startsAt, tz)} ${tzTimeLabel(tz)}`;
 
-  function toggle(id: string) {
-    const n = new Set(yes);
-    if (n.has(id)) n.delete(id);
-    else n.add(id);
-    setYes(n);
-    setSent(false);
-  }
-  async function send() {
+  async function run(f: () => Promise<void>) {
     setBusy(true);
     setErr('');
     try {
-      await actions.answer(m.id, [...yes], note);
-      setSent(true);
+      await f();
       await onSent();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not send. Please try again.');
@@ -957,21 +957,27 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
         {minutes && <span className="text-[13px] text-[#6b6880]">{minutes} min</span>}
       </div>
       <p className="text-[13.5px] text-[#55526a]">{m.compensation ? 'Tutor no-show class' : 'Original class'}: {makeupOrigin(m, tz)}</p>
-      {closed ? (
-        <p className="mt-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] font-semibold text-[#1f7a4d]">✓ Closed by Edge English</p>
+      {confirmed ? (
+        <p role="status" className="mt-2 rounded-[10px] bg-[#e6f6ec] px-3 py-2 text-[14.5px] font-bold text-[#1f7a4d]">
+          ✓ Make-up confirmed · {whenText(confirmed.startsAt, tz).replace(/ \d\d:\d\d$/, '')} {timeRange(confirmed, tz)} {tzTimeLabel(tz)}
+          {kstText(confirmed.startsAt, tz) && <span className="block text-[12.5px] font-semibold">{kstText(confirmed.startsAt, tz)}</span>}
+        </p>
+      ) : closed ? (
+        <p className="mt-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] font-semibold text-[#1f7a4d]">{sent ? 'Sent ✓ · Edge English will arrange another time' : '✓ Closed by Edge English'}</p>
       ) : (
         <>
-          <p className="mb-1.5 mt-3 text-[13px] font-semibold text-[#55526a]">Available?</p>
-          <div className="grid gap-1.5">
+          <p className="mb-1.5 mt-3 text-[13px] font-semibold text-[#55526a]">Pick one time to confirm</p>
+          <div className="grid gap-1.5" role="radiogroup" aria-label="Make-up time">
             {m.slots.map((s) => {
-              const on = yes.has(s.id);
+              const on = pick === s.id && !none;
               const kst = kstText(s.startsAt, tz);
               return (
-                <button key={s.id} type="button" role="checkbox" aria-checked={on} disabled={s.past || s.busy || busy} onClick={() => toggle(s.id)}
+                <button key={s.id} type="button" role="radio" aria-checked={on} disabled={s.past || s.busy || busy}
+                  onClick={() => { setPick(s.id); setNone(false); }}
                   className={`flex min-h-[52px] items-center gap-3 rounded-[10px] border px-3 py-2 text-left disabled:opacity-40 ${
                     on ? 'border-[#5b3fe0] bg-[#efebff]' : 'border-[#d9d5e6] bg-white'}`}>
-                  <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border text-[14px] font-bold ${
-                    on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>✓</span>
+                  <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                    on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>●</span>
                   <span className="flex-1">
                     <b className="block text-[15px] text-[#1d1b2b]">{whenText(s.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(s, tz)} {tzTimeLabel(tz)}</b>
                     {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
@@ -981,13 +987,25 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
               );
             })}
           </div>
-          <label className={`${label} mt-3`} htmlFor={`note-${m.id}`}>{yes.size === 0 ? 'Other times you are available' : 'Note'}</label>
-          <textarea id={`note-${m.id}`} rows={2} value={note} onChange={(e) => { setNote(e.target.value); setSent(false); }} className={input} />
           {err && <p className="mt-2 text-[14px] text-[#b3261e]">{err}</p>}
-          <button type="button" disabled={busy || sent || !answerReady(yes, note)} onClick={send}
-            className={`${sent ? btnDone : btnMain} mt-3 w-full`}>
-            {sent ? 'Sent ✓ · Edge English will confirm' : busy ? 'Sending…' : 'Send answer'}
-          </button>
+          {!none ? (
+            <div className="mt-3 grid gap-2">
+              <button type="button" disabled={busy || !picked || !actions.confirm} className={`${btnMain} w-full`}
+                onClick={() => run(async () => { await actions.confirm!(m.id, picked!.id); setConfirmed(picked); })}>
+                {busy ? 'Confirming…' : picked ? `Confirm make-up · ${at(picked)}` : 'Confirm make-up'}
+              </button>
+              <button type="button" disabled={busy} className={`${btnSub} w-full`} onClick={() => { setNone(true); setPick(null); }}>None of these times work</button>
+            </div>
+          ) : (
+            <>
+              <label className={`${label} mt-3`} htmlFor={`note-${m.id}`}>Other times you are available</label>
+              <textarea id={`note-${m.id}`} rows={2} value={note} onChange={(e) => { setNote(e.target.value); setSent(false); }} className={input} />
+              <button type="button" disabled={busy || sent || !note.trim()} className={`${sent ? btnDone : btnMain} mt-2 w-full`}
+                onClick={() => run(async () => { await actions.answer(m.id, [], note); setSent(true); })}>
+                {sent ? 'Sent ✓ · Edge English will arrange another time' : busy ? 'Sending…' : 'Send to Edge English'}
+              </button>
+            </>
+          )}
         </>
       )}
     </div>

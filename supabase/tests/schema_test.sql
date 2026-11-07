@@ -3160,3 +3160,50 @@ select pg_temp.ok(student_textbook('33333333-3333-3333-3333-333333333333') ->> '
 reset request.jwt.claim.sub;
 reset role;
 update students set textbook = null, tutor_class_style = null, tutor_class_style_mix = null where id = '33333333-3333-3333-3333-333333333333';
+
+-- ---------------------------------------------------------------------
+-- 강사 자율 운영 1단계 (20261108000000, H26(82)): 강사가 학생 시간 하나를 골라 확정 → 바로 보강 수업
+-- ---------------------------------------------------------------------
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, class_status, canceled_at)
+select v.id::uuid, '99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', '55555555-0000-0000-0000-00000000200a',
+       'regular', v.seq, t + v.off, t + v.off + interval '40 minutes', 'canceled', 'Student canceled in advance', now()
+from rc, (values ('77777777-2000-0000-0000-0000000000a1', 7, interval '-2 days'), ('77777777-2000-0000-0000-0000000000a2', 8, interval '-1 days')) v(id, seq, off);
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+create temp table mk82 as select (admin_makeup_request('77777777-2000-0000-0000-0000000000a1', null,
+  jsonb_build_array(jsonb_build_object('starts_at', ((current_date + 4) + time '12:00') at time zone 'Australia/Sydney'), jsonb_build_object('starts_at', ((current_date + 5) + time '12:00') at time zone 'Australia/Sydney')), now())
+  ->> 'makeup_request_id')::uuid as id;
+create temp table mk82b as select (admin_makeup_request('77777777-2000-0000-0000-0000000000a2', null,
+  jsonb_build_array(jsonb_build_object('starts_at', ((current_date + 5) + time '12:00') at time zone 'Australia/Sydney'), jsonb_build_object('starts_at', ((current_date + 6) + time '12:00') at time zone 'Australia/Sydney')), now())
+  ->> 'makeup_request_id')::uuid as id;
+create or replace function pg_temp.mkc(p uuid, n int) returns uuid language sql as $$ select c.id from makeup_candidates c where c.request_id = p and c.proposed_by = 'student' order by c.starts_at offset n - 1 limit 1 $$;
+select pg_temp.ok((select confirmed_in_tutor_screen = false from makeup_requests where id = (select id from mk20))
+              and (select count(*) = 1 from lesson_notices n where n.makeup_request_id = (select id from mk20) and n.event = 'makeup_confirmed' and n.recipient_kind = 'tutor'),
+  '운영진 확정은 그대로: 강사 화면 확정 아님, 강사 확정 안내도 만듦');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200b';
+select pg_temp.expect_error($$select tutor_makeup_confirm((select id from mk82), pg_temp.mkc((select id from mk82), 1))$$, '42501');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+select pg_temp.expect_error($$select tutor_makeup_confirm((select id from mk82), pg_temp.mkc((select id from mk82b), 1))$$, 'Unknown time');
+select pg_temp.ok(true, '강사 확정: 다른 강사 신청 거절, 다른 신청의 시간 거절');
+select tutor_makeup_confirm((select id from mk82), pg_temp.mkc((select id from mk82), 2));
+select pg_temp.ok((tutor_makeup_confirm((select id from mk82), pg_temp.mkc((select id from mk82), 2)) ->> 'repeated')::boolean, '같은 시간 다시 누르면 같은 결과(repeated)');
+select pg_temp.expect_error($$select tutor_makeup_confirm((select id from mk82), pg_temp.mkc((select id from mk82), 1))$$, 'already closed');
+select pg_temp.ok(true, '확정 뒤 다른 시간은 거절');
+select pg_temp.expect_error($$select tutor_makeup_confirm((select id from mk82b), pg_temp.mkc((select id from mk82b), 1))$$, 'can''t confirm this time: You have another class');
+select pg_temp.ok((select status = 'requested' and tutor_answered_at is null from makeup_requests where id = (select id from mk82b)),
+  '방금 확정한 보강과 겹치는 시간은 영어 사유로 거절, 신청은 그대로');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select r.status = 'confirmed' and r.confirmed_in_tutor_screen and r.decided_by = 'bbbbbbbb-0000-0000-0000-00000000200a'
+                          and l.starts_at = ((current_date + 5) + time '12:00') at time zone 'Australia/Sydney' and l.kind = 'makeup'
+                          and l.makeup_of = '77777777-2000-0000-0000-0000000000a1' and l.tutor_id = '55555555-0000-0000-0000-00000000200a' and l.state = 'scheduled'
+                   from makeup_requests r join lessons l on l.id = r.confirmed_lesson_id where r.id = (select id from mk82))
+              and (select count(*) = 1 from lesson_notices n where n.makeup_request_id = (select id from mk82) and n.event = 'makeup_confirmed' and n.recipient_kind = 'student' and n.status = 'pending')
+              and (select count(*) = 0 from lesson_notices n where n.makeup_request_id = (select id from mk82) and n.event = 'makeup_confirmed' and n.recipient_kind = 'tutor')
+              and (select count(*) = 0 from lesson_notices n where n.makeup_request_id = (select id from mk82) and n.event = 'makeup_ask' and n.status = 'pending')
+              and (select tutor_answer = 'yes' from makeup_candidates where id = pg_temp.mkc((select id from mk82), 2)),
+  '강사 확정: 고른 시간에 보강 수업 생성, 확정자 = 강사, 학생 안내만 운영진 차례(강사 안내 없음), 묻기 안내 닫힘');
+select tutor_makeup_confirm((select id from mk82b), pg_temp.mkc((select id from mk82b), 2));
+select pg_temp.ok((select status = 'confirmed' and confirmed_in_tutor_screen and decided_by = 'bbbbbbbb-0000-0000-0000-000000000009' from makeup_requests where id = (select id from mk82b)),
+  '운영자 보기에서 대신 확정 = 같은 함수, 확정자 = 운영자');
+reset request.jwt.claim.sub;
+reset role;

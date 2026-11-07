@@ -45,12 +45,15 @@ type MakeupRow = {
   tutor_note?: string | null; tutor_answered_at?: string | null; candidates: { starts_at: string; tutor_answer?: 'yes' | 'no' | null }[];
   compensation_id?: string | null;
   requested_at?: string | null; via?: string | null;
+  confirmed_in_tutor_screen?: boolean;
 };
 /** 새 칸(보상권 4100, 강사 답 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
 async function loadMakeupRequests(sb: SupabaseClient, studentId: string) {
   const q = (cols: string) => sb.from('makeup_requests').select(cols).eq('student_id', studentId).order('created_at');
   const missing = (r: { error: { code?: string } | null }) => r.error?.code === '42703' || r.error?.code === 'PGRST200';
-  let r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, requested_at, via, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
+  // 강사 화면 확정 칸(20261108000000)이 없는 DB면 그 칸 없이
+  let r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, requested_at, via, confirmed_lesson_id, confirmed_in_tutor_screen, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
+  if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, requested_at, via, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
   if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, status, requested_at, via, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
   if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, candidates:makeup_candidates(starts_at)');
   return r;
@@ -117,6 +120,7 @@ export async function loadStudentLessons(sb: SupabaseClient, studentId: string):
     changes: chRows.map((c) => ({ id: c.id, lessonId: c.lesson_id, type: c.type, status: c.status, requestedAt: c.requested_at ? new Date(c.requested_at) : null, decidedAt: new Date(c.decided_at), decision: c.decision })),
     makeupRequests: mkRows.map((m) => ({
       id: m.id, sourceLessonId: m.source_lesson_id, migratedItemId: m.migrated_item_id, status: m.status, confirmedLessonId: m.confirmed_lesson_id,
+      confirmedInTutorScreen: !!m.confirmed_in_tutor_screen,
       candidates: m.candidates.map((c) => new Date(c.starts_at)).sort((a, b) => +a - +b),
       tutorAnswers: Object.fromEntries(m.candidates.filter((c) => c.tutor_answer).map((c) => [+new Date(c.starts_at), c.tutor_answer!])),
       tutorNote: m.tutor_note ?? null,
