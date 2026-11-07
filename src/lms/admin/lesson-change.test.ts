@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { kstToInstant } from '../rules/dates';
-import { changeableLessons, decisionLines, kstLabel, makeupRights, studentNotice, tutorNotice, type ChangeDecision, type ChLesson, type NoticeContext } from './lesson-change';
+import { changeableLessons, decisionLines, emailStatusText, kstLabel, makeupRights, studentNotice, tutorNotice, type ChangeDecision, type ChLesson, type NoticeContext } from './lesson-change';
 import { toLessonChanges } from './live';
 import { buildBoard } from './board';
 
@@ -72,6 +72,24 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     expect(item.detail).toBe('10/27(화) 오전 8시 수업 · 학생·강사 2건 · 보강 강사 답 대기 1건');
     expect(item.severity).toBe('due_soon');
     expect(item.actions[0].href).toBe('/lms/admin/change?student=STU-0001');
+  });
+
+  it('대시보드: 보강 확정 자동 메일을 못 보낸 학생은 카드로 (운영진이 직접 보내기)', () => {
+    const s = { id: 's', name_ko: '이도연', code: 'STU-0008' };
+    const [item] = buildBoard(toLessonChanges([], [], now, [
+      { created_at: '2026-11-07T10:00:00Z', recipient_kind: 'tutor', email_status: 'failed', makeup: { student: s } },
+    ]), now);
+    expect(item.tag).toBe('보강 확정 자동 메일 못 보냄');
+    expect(item.detail).toContain('자동 메일 못 보냄 강사 1건 — 직접 보내기');
+    expect(item.actions[0].href).toBe('/lms/admin/change?student=STU-0008');
+  });
+
+  it('안내 줄 자동 메일 상태 글', () => {
+    const lbl = () => '11/7 21:03';
+    expect(emailStatusText({ status: 'sent', to: 'support@edgeenglish.kr', intended: 'a@b.kr', sentAt: now, error: null, attempts: 1 }, lbl)).toBe('자동 메일 보냄 11/7 21:03 · support@edgeenglish.kr (시험 · 원래 a@b.kr)');
+    expect(emailStatusText({ status: 'failed', to: 'a@b.kr', intended: 'a@b.kr', sentAt: null, error: '422 bad address', attempts: 1 }, lbl)).toBe('자동 메일 실패 · 422 bad address · a@b.kr');
+    expect(emailStatusText({ status: 'no_address', to: null, intended: null, sentAt: null, error: '강사 이메일이 없어요', attempts: 0 }, lbl)).toBe('자동 메일 못 보냄 · 강사 이메일이 없어요');
+    expect(emailStatusText({ status: 'queued', to: 'a@b.kr', intended: 'a@b.kr', sentAt: null, error: null, attempts: 1 }, lbl)).toBe('자동 메일 보내는 중 · a@b.kr');
   });
 
   it('대시보드: 수업이 이미 지났어도 안내 카드에 그 수업 날짜가 보임', () => {

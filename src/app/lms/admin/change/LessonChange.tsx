@@ -13,7 +13,7 @@ import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lm
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
 import {
-  changeableLessons, dateLabel, tutorLocalLabel, decisionLines, EVENT_TEXT, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, STATUS_SHORT, studentNotice, tutorNotice,
+  changeableLessons, dateLabel, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, STATUS_SHORT, studentNotice, tutorNotice,
   type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupRight, type NoticeContext,
 } from '@/lms/admin/lesson-change';
 import type { AdminCredits, StudentLessonData } from '@/lms/admin/lesson-change-live';
@@ -32,6 +32,8 @@ export type ChangeActions = {
   withdrawMakeup: (requestId: string) => Promise<void>;
   voidMakeup: (lessonId: string, note: string) => Promise<void>;
   markSent: (noticeId: string) => Promise<void>;
+  /** 자동 메일 다시 보내기 (20261108010000). 없는 화면(가상 데이터)은 버튼 안 보임 */
+  resendEmail?: (noticeId: string) => Promise<{ status: string; error: string | null; repeated: boolean }>;
   /** 변경권 (4500): 읽기·수동 조정(±1, 사유 필수). 4500 전 DB 면 loadCredits 가 null */
   loadCredits?: (studentId: string) => Promise<AdminCredits | null>;
   adjustCredit?: (studentId: string, delta: 1 | -1, reason: string) => Promise<{ before: number; after: number }>;
@@ -163,8 +165,12 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
     };
   }
 
-  const notices = (data?.notices ?? []).filter((n) => n.status !== 'not_needed');
-  const shownNotices = [...notices.filter((n) => n.status === 'pending'), ...notices.filter((n) => n.status === 'sent').reverse().slice(0, 4)];
+  // 복사 안내가 필요 없어진 줄(not_needed)도 자동 메일이 걸려 있으면 보여 줌 (강사가 직접 확정한 보강의 강사 메일 상태)
+  const notices = (data?.notices ?? []).filter((n) => n.status !== 'not_needed' || n.email);
+  const shownNotices = [
+    ...notices.filter((n) => n.status === 'pending' || (n.email && n.email.status !== 'sent')),
+    ...notices.filter((n) => n.status !== 'pending' && !(n.email && n.email.status !== 'sent')).reverse().slice(0, 4),
+  ];
 
   return (
     <SavingCtx.Provider value={reportSaving}>
@@ -243,7 +249,8 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                   {shownNotices.map((n) => {
                     const c = ctxFor(n);
                     const text = c ? (n.recipient === 'student' ? studentNotice(n.event, c) : tutorNotice(n.event, c)) : '';
-                    return <NoticeRow key={n.id} n={n} text={text} markSent={async () => { await actions.markSent(n.id); await reload(); }} />;
+                    return <NoticeRow key={n.id} n={n} text={text} markSent={async () => { await actions.markSent(n.id); await reload(); }}
+                      resendEmail={actions.resendEmail && n.email && n.email.status !== 'sent' ? async () => { const r = await actions.resendEmail!(n.id); await reload(); return r; } : undefined} />;
                   })}
                 </ul>
               </Card>
@@ -366,23 +373,30 @@ function ChangeCard({ lesson, now, actions, isMakeup, byTutor, done }: { lesson:
   );
 }
 
-function NoticeRow({ n, text, markSent }: { n: ChNotice; text: string; markSent: () => Promise<void> }) {
+function NoticeRow({ n, text, markSent, resendEmail }: { n: ChNotice; text: string; markSent: () => Promise<void>; resendEmail?: () => Promise<{ status: string; error: string | null; repeated: boolean }> }) {
   const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState(false);
   const [manual, setManual] = useState(false);
+  const [mailMsg, setMailMsg] = useState('');
   const sent = n.status === 'sent';
+  const e = n.email;
+  // 자동 메일(보강 확정)은 카톡·WhatsApp 복사와 병행 (대표 2026-11-07): 메일 상태는 아래 한 줄, 실패·주소 없음만 [다시 보내기]
+  const mailCls = !e ? '' : e.status === 'sent' ? 'text-[#1f7a4d]' : e.status === 'queued' ? 'text-[#6b6880]' : 'text-[#b3261e]';
   return (
     <li className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <b className="block text-[14.5px] text-[#1d1b2b]">{n.recipient === 'student' ? '학생' : '강사'} · {EVENT_TEXT[n.event]}</b>
           {sent && n.sentAt && <span className="text-[12.5px] text-[#6b6880]">보냄 {sentLabel(n.sentAt)}</span>}
+          {n.status === 'not_needed' && <span className="text-[12.5px] text-[#6b6880]">{n.recipient === 'tutor' ? '강사가 직접 확정 · WhatsApp 복사 불필요' : '복사 안내 불필요'}</span>}
         </div>
-        <button type="button" disabled={!text} className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>
-          {copied ? '복사함 ✓' : '복사'}
-        </button>
-        {sent ? (
+        {n.status !== 'not_needed' && (
+          <button type="button" disabled={!text} className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>
+            {copied ? '복사함 ✓' : '복사'}
+          </button>
+        )}
+        {n.status === 'not_needed' ? null : sent ? (
           <button type="button" disabled className={btnDone}>보냄 ✓</button>
         ) : (
           <button type="button" disabled={busy} className={btnMain} onClick={async () => {
@@ -394,6 +408,25 @@ function NoticeRow({ n, text, markSent }: { n: ChNotice; text: string; markSent:
           </button>
         )}
       </div>
+      {e && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <span className={`min-w-0 flex-1 text-[12.5px] ${mailCls}`} role="status">{e.status === 'sent' ? '✓ ' : ''}{emailStatusText(e, sentLabel)}{e.attempts > 1 ? ` · ${e.attempts}번째 시도` : ''}</span>
+          {resendEmail && (e.status === 'failed' || e.status === 'no_address' || (e.status === 'queued' && e.error)) && (
+            <button type="button" disabled={busy} className={`${btnSub} min-h-[36px]`} onClick={async () => {
+              setBusy(true);
+              setErr('');
+              setMailMsg('');
+              try {
+                const r = await resendEmail();
+                setMailMsg(r.repeated ? '이미 보낸 메일이에요.' : r.status === 'queued' && !r.error ? '다시 보냈어요. 결과는 잠시 뒤 새로고침하면 보여요.' : r.error ?? '');
+              } catch (err) { setErr(err instanceof Error ? err.message : '다시 보내지 못했어요.'); } finally { setBusy(false); }
+            }}>
+              메일 다시 보내기
+            </button>
+          )}
+          {mailMsg && <span className="text-[12.5px] text-[#1f7a4d]">{mailMsg}</span>}
+        </div>
+      )}
       <pre className="mt-2 whitespace-pre-wrap rounded-[10px] bg-[#f6f5fb] px-3 py-2 font-sans text-[13.5px] text-[#1d1b2b]">{text}</pre>
       {manual && <textarea readOnly value={text} rows={5} onFocus={(e) => e.currentTarget.select()} aria-label="복사할 글" className="mt-2 w-full rounded-[10px] border border-[#e6e3ef] p-2 text-[13.5px]" />}
       <Err>{err}</Err>

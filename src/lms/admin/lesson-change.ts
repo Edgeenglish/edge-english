@@ -84,7 +84,26 @@ export type ChNotice = {
   status: 'pending' | 'sent' | 'not_needed';
   sentAt: Date | null;
   createdAt: Date;
+  /** 자동 메일 (20261108010000, 보강 확정만). 없으면 자동 메일 대상이 아님(또는 기능 전 DB) */
+  email?: ChNoticeEmail | null;
 };
+export type ChNoticeEmail = {
+  status: 'queued' | 'sent' | 'failed' | 'no_address';
+  /** 실제로 보낸 주소 (시험 단계에서는 support@) · 원래 받는 사람 주소 */
+  to: string | null;
+  intended: string | null;
+  sentAt: Date | null;
+  error: string | null;
+  attempts: number;
+};
+/** 안내 줄의 자동 메일 상태 한 줄 (운영진 화면) */
+export function emailStatusText(e: ChNoticeEmail, sentLabel: (d: Date) => string): string {
+  const to = e.to && e.intended && e.to !== e.intended ? `${e.to} (시험 · 원래 ${e.intended})` : (e.to ?? e.intended ?? '');
+  if (e.status === 'sent') return `자동 메일 보냄${e.sentAt ? ` ${sentLabel(e.sentAt)}` : ''} · ${to}`;
+  if (e.status === 'failed') return `자동 메일 실패 · ${e.error ?? '발송 서비스 오류'} · ${to}`;
+  if (e.status === 'no_address') return `자동 메일 못 보냄 · ${e.error ?? '이메일이 없어요'}`;
+  return e.error ? `자동 메일 대기 · ${e.error}` : `자동 메일 보내는 중 · ${to}`;
+}
 
 export type ChStudent = { id: string; code: string; nameKo: string; nameEn: string; timezone: string };
 export type ChEnrollment = { id: string; finalEndDate: KstDate; durationMin: number };

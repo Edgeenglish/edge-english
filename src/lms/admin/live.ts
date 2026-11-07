@@ -201,12 +201,21 @@ type ChangeNoticeRow = {
 type OpenMakeupRow = { created_at: string; tutor_answered_at?: string | null; student: { id: string; name_ko: string; code: string } | null; candidates?: { tutor_answer: string | null; proposed_by: string }[] | null };
 
 /** 수업 변경·보강 (1700): 안 보낸 안내 · 강사 답 대기 보강 → 학생마다 한 줄 */
-export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupRow[], now: Date): TaskSource[] {
+/** 자동 메일을 못 보낸 안내 (20261108010000: 실패·주소 없음) → 운영진이 직접 보내야 함 */
+export type EmailFailRow = { created_at: string; recipient_kind?: 'student' | 'tutor'; email_status?: string; makeup: { student: { id: string; name_ko: string; code: string } | null } | null };
+
+export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupRow[], now: Date, emailFails: EmailFailRow[] = []): TaskSource[] {
   const out = new Map<string, Extract<TaskSource, { kind: 'lesson_change' }>>();
   const row = (s: { id: string; name_ko: string; code: string }, created: string) => {
     if (!out.has(s.id)) out.set(s.id, { kind: 'lesson_change', id: s.id, studentName: s.name_ko, studentCode: s.code, pendingNotices: 0, openMakeups: 0, lessonAt: null, createdAt: new Date(created) });
     return out.get(s.id)!;
   };
+  for (const f of emailFails) {
+    if (!f.makeup?.student) continue;
+    const r = row(f.makeup.student, f.created_at);
+    r.emailFailed = (r.emailFailed ?? 0) + 1;
+    if (f.recipient_kind && !(r.emailFailedTo ??= []).includes(f.recipient_kind)) r.emailFailedTo.push(f.recipient_kind);
+  }
   for (const n of notices) {
     const s = n.change?.student ?? n.makeup?.student;
     if (!s) continue;
@@ -383,7 +392,7 @@ const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01'
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const today = instantToKstDate(now);
   const off = 'off:tutor_time_off(id, starts_at, ends_at, created_at, tutor:tutors(name))';
-  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, ending, leaveOpen, leaveNotices, renewalSent, missing, closures] = await Promise.all([
+  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, emailFails, ending, leaveOpen, leaveNotices, renewalSent, missing, closures] = await Promise.all([
     sb
       .from('admin_tasks')
       .select(
@@ -410,6 +419,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .select('created_at, event, recipient_kind, change:change_requests(type, student:students(id, name_ko, code), lesson:lessons(starts_at, kind)), makeup:makeup_requests(student:students(id, name_ko, code))')
       .eq('status', 'pending'),
     loadOpenMakeups(sb),
+    // 자동 메일 실패·주소 없음 (칸이 없는 DB면 빈 목록)
+    sb.from('lesson_notices').select('created_at, recipient_kind, email_status, makeup:makeup_requests(student:students(id, name_ko, code))').in('email_status', ['failed', 'no_address']),
     sb
       .from('enrollments')
       .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind), comps:compensations(status)')
@@ -435,7 +446,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
         new Map(renewalSent.error ? [] : (renewalSent.data ?? []).map((r) => [r.enrollment_id as string, r.sent_at as string])),
         new Set((closures.data ?? []).filter((c) => c.task_kind === 'ending_soon' && !c.closed).map((c) => c.task_id as string))),
       // 1700 전 DB(표·칸 없음)는 건너뜀
-      ...(changeNotices.error ? [] : toLessonChanges((changeNotices.data ?? []) as unknown as ChangeNoticeRow[], (openMakeups.data ?? []) as unknown as OpenMakeupRow[], now)),
+      ...(changeNotices.error ? [] : toLessonChanges((changeNotices.data ?? []) as unknown as ChangeNoticeRow[], (openMakeups.data ?? []) as unknown as OpenMakeupRow[], now,
+        emailFails.error ? [] : (emailFails.data ?? []) as unknown as EmailFailRow[])),
       // 1800 전 DB는 건너뜀
       ...(leaveOpen.error || leaveNotices.error ? [] : toTutorLeaves((leaveOpen.data ?? []) as unknown as LeaveOpenRow[], (leaveNotices.data ?? []) as unknown as LeaveNoticeRow[], now)),
       // 2000 전 DB는 null

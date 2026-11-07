@@ -35,6 +35,12 @@ export type StudentLessonData = {
   compensations?: ChCompensation[];
 };
 
+type NoticeRow = {
+  id: string; change_request_id: string | null; makeup_request_id: string | null; event: ChNotice['event']; recipient_kind: 'student' | 'tutor';
+  status: ChNotice['status']; sent_at: string | null; created_at: string;
+  email_status?: 'queued' | 'sent' | 'failed' | 'no_address' | null; email_to?: string | null; email_intended?: string | null;
+  email_sent_at?: string | null; email_error?: string | null; email_attempts?: number | null;
+};
 type LessonRow = {
   id: string; kind: ChLesson['kind']; seq: number | null; starts_at: string; state: ChLesson['state']; class_status: ClassStatus | null;
   makeup_of: string | null; voided_at: string | null; tutor_id: string; tutor: { name: string; timezone: string } | null;
@@ -105,13 +111,22 @@ export async function loadStudentLessons(sb: SupabaseClient, studentId: string):
   const changeIds = chRows.map((c) => c.id);
   const mkIds = mkRows.map((m) => m.id);
   const notices: ChNotice[] = [];
+  // 자동 메일 결과 맞추기 (20261108010000): 보낸 요청의 응답을 기록하고 못 보낸 큐를 다시 시도. 기능 전 DB·권한 오류면 그냥 넘어감
+  await sb.rpc('admin_mail_sync').then(() => undefined, () => undefined);
+  const base = 'id, change_request_id, makeup_request_id, event, recipient_kind, status, sent_at, created_at';
+  const mail = ', email_status, email_to, email_intended, email_sent_at, email_error, email_attempts';
   for (const [col, ids] of [['change_request_id', changeIds], ['makeup_request_id', mkIds]] as const) {
     if (ids.length === 0) continue;
-    const rows = check(await sb.from('lesson_notices').select('id, change_request_id, makeup_request_id, event, recipient_kind, status, sent_at, created_at').in(col, ids)) as
-      { id: string; change_request_id: string | null; makeup_request_id: string | null; event: ChNotice['event']; recipient_kind: 'student' | 'tutor'; status: ChNotice['status']; sent_at: string | null; created_at: string }[];
+    let r: { data: unknown; error: { code?: string; message: string } | null } = await sb.from('lesson_notices').select(base + mail).in(col, ids);
+    if (r.error?.code === '42703') r = await sb.from('lesson_notices').select(base).in(col, ids);   // 자동 메일 칸이 없는 DB
+    const rows = check(r) as unknown as NoticeRow[];
     notices.push(...rows.map((n) => ({
       id: n.id, changeRequestId: n.change_request_id, makeupRequestId: n.makeup_request_id, event: n.event, recipient: n.recipient_kind,
       status: n.status, sentAt: n.sent_at ? new Date(n.sent_at) : null, createdAt: new Date(n.created_at),
+      email: n.email_status ? {
+        status: n.email_status, to: n.email_to ?? null, intended: n.email_intended ?? null, sentAt: n.email_sent_at ? new Date(n.email_sent_at) : null,
+        error: n.email_error ?? null, attempts: n.email_attempts ?? 0,
+      } : null,
     })));
   }
   return {
@@ -185,6 +200,11 @@ export async function adjustCredit(sb: SupabaseClient, studentId: string, delta:
 }
 export async function markLessonNoticeSent(sb: SupabaseClient, noticeId: string): Promise<void> {
   check(await sb.rpc('admin_mark_lesson_notice_sent', { p_notice: noticeId }));
+}
+/** 자동 메일 다시 보내기 (실패·주소 없음만 새 요청, 보낸 것은 그대로) — 20261108010000 */
+export async function resendNoticeEmail(sb: SupabaseClient, noticeId: string): Promise<{ status: string; error: string | null; repeated: boolean }> {
+  const r = check(await sb.rpc('admin_resend_notice_email', { p_notice: noticeId })) as { status: string; error?: string | null; repeated: boolean };
+  return { status: r.status, error: r.error ?? null, repeated: r.repeated };
 }
 /** 여러 안내를 한 묶음으로 '보냄' (3300): 보낸 시각이 같아 보낸 글 원문을 그대로 다시 보여 줄 수 있음 */
 export async function markLessonNoticesSent(sb: SupabaseClient, noticeIds: string[]): Promise<void> {

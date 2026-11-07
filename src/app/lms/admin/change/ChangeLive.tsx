@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  adjustCredit, changeLesson, confirmMakeup, recordPastMakeup, loadChangeStudents, loadCredits, loadStudentLessons, markLessonNoticeSent, requestMakeup, revertChange, voidMakeup, withdrawMakeup,
+  adjustCredit, changeLesson, confirmMakeup, recordPastMakeup, loadChangeStudents, loadCredits, loadStudentLessons, markLessonNoticeSent, requestMakeup, resendNoticeEmail, revertChange, voidMakeup, withdrawMakeup,
 } from '@/lms/admin/lesson-change-live';
 import type { ChStudent } from '@/lms/admin/lesson-change';
 import { pendingHref, trackSave } from '@/lms/admin/pending-saves';
@@ -46,6 +46,7 @@ export default function ChangeLive({ code }: { code?: string }) {
         withdrawMakeup: (id) => trackSave({ label: '보강 신청 닫기', href: pendingHref(), verify: { kind: 'withdraw_makeup', requestId: id } }, () => withdrawMakeup(sb, id)),
         voidMakeup: (id, note) => trackSave({ label: '보강 삭제', href: pendingHref(), verify: { kind: 'void_makeup', lessonId: id } }, () => voidMakeup(sb, id, note)),
         markSent: (id) => trackSave({ label: '안내 보냄 기록', href: pendingHref(), verify: { kind: 'mark_sent', noticeId: id } }, () => markLessonNoticeSent(sb, id)),
+        resendEmail: (id) => resendNoticeEmail(sb, id),
         loadCredits: (id) => loadCredits(sb, id),
         adjustCredit: (id, delta, reason) => trackSave({ label: `변경권 ${delta > 0 ? '+1' : '−1'}`, href: pendingHref(), verify: { kind: 'adjust_credit', studentId: id, delta, reason: reason.trim() } }, () => adjustCredit(sb, id, delta, reason)),
       },
