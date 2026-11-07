@@ -1,0 +1,323 @@
+<title>강사 보강 바로 확정 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위 결정 질문 → 흐름 비교 → 휴대폰(탭으로 장면 바꾸기) → PC(강사·운영진) → 만들 때 메모. 강사 화면(영어) 보라·운영진 화면 같은 색 */
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--accent:#5b3fe0;--q:#efeafe;--sel:#efebff;
+--ok:#e6f6ec;--ok-fg:#1f7a4d;--warn:#fff4d6;--warn-fg:#5c3b00;--bad:#fdecea;--bad-fg:#b3261e;--soft:#f3f1f8;--chip:#ecebf1;--chip-fg:#55526a;
+--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--bad:#3d1d1b;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--bad:#3d1d1b;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+main{max-width:1120px;margin:0 auto;display:grid;gap:30px}
+main>*{min-width:0}
+h1{font-size:22px;margin:0;text-wrap:balance}h2{font-size:18px;margin:0 0 10px}h3{font-size:15px;margin:0 0 6px;color:var(--muted);font-weight:600}
+p{margin:0}ol,ul{margin:4px 0 0;padding-left:20px}li{margin-bottom:5px}
+code{font-size:13px;background:var(--soft);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+.q{background:var(--q);border-radius:14px;padding:14px 16px;display:grid;gap:10px}
+.q b{color:var(--accent)}
+.rec{display:inline-block;background:var(--accent);color:#fff;font-size:11.5px;font-weight:700;border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.cap{font-size:13px;color:var(--muted);margin:0 0 6px}
+.row{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.note{font-size:14px;display:grid;gap:6px;max-width:72ch}
+.flow{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.flow>div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.steps{display:grid;gap:6px;margin:8px 0 0;padding:0;list-style:none;counter-reset:s}
+.steps li{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.steps li::before{counter-increment:s;content:counter(s);flex:0 0 22px;height:22px;border-radius:50%;background:var(--chip);color:var(--chip-fg);font-size:12px;font-weight:700;display:grid;place-items:center}
+.steps li.gone{color:var(--muted);text-decoration:line-through}
+.steps li.gone::before{text-decoration:none}
+.steps li.me::before{background:var(--accent);color:#fff}
+.who{font-size:12px;color:var(--muted);display:block}
+
+/* 장면 탭 */
+.scenes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.scenes button{min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:14px;padding:0 12px;cursor:pointer}
+.scenes button[aria-selected="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.scenes button:focus-visible,.x:focus-visible,.slot:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* 강사 화면 */
+.phone{width:360px;max-width:100%;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:14px 12px 16px;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:640px}
+.pc{flex:1 1 560px;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.top strong{font-size:18px}
+.x{min-width:40px;min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:18px}
+.sub{font-size:12.5px;color:var(--muted)}
+.tcard{border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:8px;margin-top:12px}
+.name{font-size:16px;font-weight:700}
+.min{font-size:13px;color:var(--muted);margin-left:6px;font-weight:400}
+.lbl{font-size:13px;font-weight:600;color:var(--muted);margin-top:4px}
+.slot{display:flex;gap:10px;align-items:center;min-height:52px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--card);text-align:left;font:inherit;color:var(--fg)}
+.slot.on{border-color:var(--accent);background:var(--sel)}
+.slot.off{opacity:.45}
+.slot .mk{flex:0 0 24px;height:24px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:700;color:transparent}
+.slot.on .mk{background:var(--accent);border-color:var(--accent);color:#fff}
+.slot.sq .mk{border-radius:6px}
+.slot b{display:block;font-size:15px}
+.slot small{font-size:12.5px;color:var(--muted)}
+.ta{border:1px solid var(--line);border-radius:10px;min-height:56px;padding:8px 10px;font-size:14px;color:var(--muted);background:var(--card)}
+.btn{min-height:48px;border-radius:12px;border:0;font:inherit;font-size:15px;font-weight:700;padding:0 14px;width:100%}
+.btn.main{background:var(--accent);color:#fff}
+.btn.dim{background:var(--chip);color:var(--muted)}
+.btn.ok{background:var(--ok);color:var(--ok-fg)}
+.btn.line{background:var(--card);color:var(--fg);border:1px solid var(--line);font-weight:600}
+.band{border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600}
+.band.ok{background:var(--ok);color:var(--ok-fg)}
+.band.warn{background:var(--warn);color:var(--warn-fg)}
+.band.bad{background:var(--bad);color:var(--bad-fg)}
+.band.soft{background:var(--soft);color:var(--fg);font-weight:500}
+.hint{font-size:12.5px;color:var(--muted)}
+.todo{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--warn);color:var(--warn-fg);border-radius:12px;padding:10px 12px;font-weight:600;font-size:14px}
+.todo .n{background:var(--warn-fg);color:var(--warn);border-radius:999px;min-width:24px;height:24px;display:grid;place-items:center;font-size:12.5px}
+.tag{display:inline-block;background:var(--chip);color:var(--chip-fg);border-radius:6px;padding:0 6px;font-size:12px;font-weight:600}
+.tag.ok{background:var(--ok);color:var(--ok-fg)}.tag.bad{background:var(--bad);color:var(--bad-fg)}.tag.warn{background:var(--warn);color:var(--warn-fg)}
+.scene[hidden]{display:none}
+.pcgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px}
+@media (max-width:760px){.pcgrid{grid-template-columns:1fr}}
+.adm{display:grid;gap:8px}
+.acard{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;gap:4px;font-size:14px}
+.acard .t{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.acard .t b{font-size:15px}
+.acard .act{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.acard .act span{border:1px solid var(--line);border-radius:9px;padding:5px 10px;font-size:13px;font-weight:600}
+.acard .act span.p{background:var(--accent);color:#fff;border-color:var(--accent)}
+.vs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.vs>div{min-width:0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-top:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{font-size:13px;color:var(--muted);font-weight:600}
+.tw{overflow-x:auto}
+@media (prefers-reduced-motion:no-preference){.scene{animation:in .15s ease-out}@keyframes in{from{opacity:.4}to{opacity:1}}}
+</style>
+
+<main>
+<header>
+<p class="cap">LMS · 강사 자율 운영 1단계 · 2026-11-07 · 정책 원본 H26(81) 권장 순서 1</p>
+<h1>강사가 '가능'이라고 답하면 보강이 바로 확정되는 화면 · 시안</h1>
+<p class="note" style="margin-top:8px">지금은 강사가 가능하다고 답한 뒤 운영진이 다시 [확정]을 눌러야 보강 수업이 생깁니다. 이 시안은 그 운영진 단계를 없애고, 강사가 시간을 하나 골라 누르는 순간 보강 수업이 만들어지게 합니다. 변경권·휴식 10분·현지 06:00~22:30·종료일 같은 규칙은 그대로이고, 새 숫자는 없습니다.</p>
+</header>
+
+<section class="q" aria-labelledby="qh">
+<p id="qh"><b>대표 결정 필요 (7개 · 숫자 없음)</b></p>
+<ol>
+<li><b>확정 방법</b> — 학생이 보낸 시간이 2개이고 강사가 둘 다 가능할 때 어느 시간으로 확정할지.
+  <br><b>A</b> 강사가 <u>하나만</u> 골라 [Confirm] (학생 1·2순위 모두 보여 주고 강사가 선택)<span class="rec">권장</span>
+  <br><b>B</b> 지금처럼 가능한 시간을 여러 개 체크 → 시스템이 학생 1순위(먼저 적은 시간)로 자동 확정
+  <br><span class="hint">권장 이유: 강사가 '내가 확정했다'를 알아야 자율 운영이 되고, 두 시간 모두 수업이 생기는 오해가 없음. B는 강사 화면이 거의 안 바뀌지만 어느 시간이 확정됐는지 강사가 한 번 더 확인해야 함.</span></li>
+<li><b>실수 방지</b> — 시간을 고르면 버튼 글이 <code>Confirm make-up · Thu Nov 13, 09:00</code>처럼 날짜·시각으로 바뀌고 이 버튼을 눌러야 확정(두 번 누르기). 별도 확인창은 없음.<span class="rec">권장</span> (확인창을 하나 더 두는 안도 가능)</li>
+<li><b>학생 안내</b> — 확정되면 지금처럼 운영진 대시보드에 '보강 확정 안내 보내기'(카톡 복사) 카드가 뜨고 운영진이 보냄. 2단계(자동 메일)가 되면 이 카드가 사라짐. 1단계에서는 이대로 가는 게 맞는지.</li>
+<li><b>강사 안내 생략</b> — 지금은 확정 뒤 강사 WhatsApp 안내도 운영진이 복사해 보냄. 강사가 직접 확정했으니 강사 안내는 만들지 않음(강사 Home 일정에 바로 보임).<span class="rec">권장</span></li>
+<li><b>운영진 [확정] 버튼 유지</b> — 강사가 아직 답하지 않았는데 운영진이 강사와 따로 확인한 경우, 강사가 모두 불가라고 답하고 메모로 다른 시간을 적은 경우, 휴무 화면의 보강 확정은 지금 그대로 운영진이 확정. 강사가 가능으로 확정한 뒤에는 운영진이 할 일이 '학생 안내'만 남음.<span class="rec">권장</span></li>
+<li><b>잘못 확정했을 때</b> — 1단계에서는 강사가 스스로 취소하지 못하고 운영진에게 알림(화면에 'Wrong time? Message Edge English'). 운영진은 지금 있는 '잘못 넣은 보강 삭제'로 되돌림. 강사 스스로 취소·변경은 3단계(강사 사정 수업 변경·취소, 규칙·숫자 결정 필요)에서.</li>
+<li><b>운영자 보기</b> — 운영진이 강사 화면 보기(<code>?tutor=</code>)에서 대신 [Confirm]을 누르면 똑같이 확정되고 기록에 '운영자 대신 처리'로 남음. (지금 대신 답하기와 같은 방식)</li>
+</ol>
+<p class="hint">정책 D-43(2026-10-18) '학생은 신청만, 강사가 확인·확정'과 이번 시안이 같은 뜻입니다. 지금까지 화면은 '강사 확인 → 운영진 확정'이었고(H26(16)·(18) 'D-43 유지'), 이번에 D-43 원문대로 강사가 확정하게 바꾸는 것이라 정책 원본에 변경 기록이 필요합니다. 학생이 바로 확정하는 길은 여전히 없습니다.</p>
+</section>
+
+<section>
+<h2>흐름 비교</h2>
+<div class="flow">
+<div>
+<h3>지금 (5단계, 운영진 2번)</h3>
+<ol class="steps">
+<li>학생이 보강 시간 1~2개 신청 (LMS 또는 카톡 → 운영진 대신 입력)<span class="who">학생 · 운영진</span></li>
+<li>강사 Home '보강 요청'에서 가능/불가 체크 → Send answer<span class="who">강사</span></li>
+<li class="me">대시보드 '보강 강사 답 옴 · 확정' → 수업 변경 화면에서 [확정]<span class="who">운영진</span></li>
+<li class="me">학생 카톡·강사 WhatsApp 안내 복사·발송<span class="who">운영진</span></li>
+<li>보강 수업이 학생·강사 일정에 표시<span class="who">자동</span></li>
+</ol>
+</div>
+<div>
+<h3>바뀐 뒤 (3단계, 운영진 1번 · 학생 안내만)</h3>
+<ol class="steps">
+<li>학생이 보강 시간 1~2개 신청 (그대로)<span class="who">학생 · 운영진</span></li>
+<li>강사가 시간 하나를 골라 [Confirm make-up] → <b>그 순간 보강 수업 생성</b>, 강사 일정에 바로 표시<span class="who">강사</span></li>
+<li class="gone">운영진 확정<span class="who">없어짐</span></li>
+<li class="me">대시보드 '보강 확정됨 · 학생 안내 보내기'(카톡 복사 1번). 강사 안내는 없음<span class="who">운영진</span></li>
+</ol>
+<p class="hint" style="margin-top:8px">예외만 운영진에게: 강사가 모두 불가(메모) · 학생이 종료일 뒤 시간을 원함 · 강사가 잘못 확정.</p>
+</div>
+</div>
+</section>
+
+<section>
+<h2>휴대폰 · 강사 Home (영어, 실제 강사 화면)</h2>
+<p class="cap">장면을 눌러 보세요. 시험 데이터 예: Haeun Jang · 40분 · 원래 수업 11/11(화) 10:00 한국 · 강사 현지(마닐라) 시각 표시</p>
+<div class="scenes" role="tablist" aria-label="장면">
+<button type="button" role="tab" aria-selected="true" data-s="now">지금</button>
+<button type="button" role="tab" aria-selected="false" data-s="pick">시안 · 고르기</button>
+<button type="button" role="tab" aria-selected="false" data-s="done">시안 · 확정 뒤</button>
+<button type="button" role="tab" aria-selected="false" data-s="none">시안 · 모두 불가</button>
+<button type="button" role="tab" aria-selected="false" data-s="home">시안 · Home 일정</button>
+</div>
+<div class="row">
+
+<div class="phone scene" data-scene="now">
+<div class="top"><div><strong>Make-up requests</strong><span class="sub" style="display:block">1 request</span></div><button type="button" class="x" aria-label="Close">✕</button></div>
+<div class="tcard">
+<div><span class="name">Haeun Jang</span><span class="min">40 min</span></div>
+<p class="sub">Original class: Tue Nov 11 · 09:00 Manila (Korea 10:00)</p>
+<p class="lbl">Available?</p>
+<div class="slot sq on"><span class="mk">✓</span><span><b>Thu Nov 13 · 09:00–09:40 Manila</b><small>Korea 10:00</small></span></div>
+<div class="slot sq on"><span class="mk">✓</span><span><b>Fri Nov 14 · 18:00–18:40 Manila</b><small>Korea 19:00</small></span></div>
+<p class="lbl">Note</p>
+<div class="ta"></div>
+<button type="button" class="btn main">Send answer</button>
+<p class="hint">After sending: "Sent ✓ · Edge English will confirm". The class appears only after Edge English confirms it.</p>
+</div>
+</div>
+
+<div class="phone scene" data-scene="pick" hidden>
+<div class="top"><div><strong>Make-up requests</strong><span class="sub" style="display:block">1 request</span></div><button type="button" class="x" aria-label="Close">✕</button></div>
+<div class="tcard">
+<div><span class="name">Haeun Jang</span><span class="min">40 min</span></div>
+<p class="sub">Original class: Tue Nov 11 · 09:00 Manila (Korea 10:00)</p>
+<p class="lbl">Pick one time to confirm</p>
+<div class="slot on" role="radio" aria-checked="true"><span class="mk">●</span><span><b>Thu Nov 13 · 09:00–09:40 Manila</b><small>Korea 10:00 · student's 1st choice</small></span></div>
+<div class="slot" role="radio" aria-checked="false"><span class="mk">●</span><span><b>Fri Nov 14 · 18:00–18:40 Manila</b><small>Korea 19:00 · 2nd choice</small></span></div>
+<button type="button" class="btn main">Confirm make-up · Thu Nov 13, 09:00</button>
+<p class="hint">This books the class right away. Edge English will tell the student.</p>
+<button type="button" class="btn line">None of these times work</button>
+</div>
+</div>
+
+<div class="phone scene" data-scene="done" hidden>
+<div class="top"><div><strong>Make-up requests</strong><span class="sub" style="display:block">0 open · 1 confirmed today</span></div><button type="button" class="x" aria-label="Close">✕</button></div>
+<div class="tcard">
+<div><span class="name">Haeun Jang</span><span class="min">40 min</span></div>
+<p class="sub">Original class: Tue Nov 11 · 09:00 Manila (Korea 10:00)</p>
+<p class="band ok">✓ Make-up confirmed · Thu Nov 13, 09:00–09:40 Manila</p>
+<p class="hint">Added to your schedule. Edge English will tell the student.<br>Wrong time? Message Edge English and we will fix it.</p>
+</div>
+</div>
+
+<div class="phone scene" data-scene="none" hidden>
+<div class="top"><div><strong>Make-up requests</strong><span class="sub" style="display:block">1 request</span></div><button type="button" class="x" aria-label="Close">✕</button></div>
+<div class="tcard">
+<div><span class="name">Haeun Jang</span><span class="min">40 min</span></div>
+<p class="sub">Original class: Tue Nov 11 · 09:00 Manila (Korea 10:00)</p>
+<p class="lbl">Pick one time to confirm</p>
+<div class="slot off"><span class="mk">●</span><span><b>Thu Nov 13 · 09:00–09:40 Manila</b><small style="color:var(--bad-fg);font-weight:600">You have another class then (incl. 10-min break)</small></span></div>
+<div class="slot"><span class="mk">●</span><span><b>Fri Nov 14 · 18:00–18:40 Manila</b><small>Korea 19:00</small></span></div>
+<button type="button" class="btn dim">Confirm make-up</button>
+<p class="lbl">Other times you are available</p>
+<div class="ta">Fri Nov 14 after 19:00, or Sat Nov 15 09:00–12:00 Manila</div>
+<button type="button" class="btn main">Send to Edge English</button>
+<p class="hint">Not confirmed yet. Edge English will arrange another time with the student.</p>
+</div>
+</div>
+
+<div class="phone scene" data-scene="home" hidden>
+<div class="top"><div><strong>Home</strong><span class="sub" style="display:block">Blair · Manila time</span></div><button type="button" class="x" aria-label="Menu">☰</button></div>
+<div class="tcard" style="gap:6px">
+<p class="lbl" style="margin:0">To do</p>
+<div class="todo"><span>Make-up requests</span><span class="n">0</span></div>
+<div class="todo"><span>Classes to record</span><span class="n">2</span></div>
+</div>
+<div class="tcard" style="gap:6px">
+<p class="lbl" style="margin:0">Thu Nov 13</p>
+<div class="slot on" style="min-height:auto"><span><b>09:00–09:40 · Haeun Jang <span class="tag ok">Make-up</span></b><small>Make-up for Tue Nov 11 09:00 · confirmed by you, Nov 7 14:02</small></span></div>
+<div class="slot" style="min-height:auto"><span><b>10:00–10:40 · Yuna Shin</b><small>Regular</small></span></div>
+</div>
+<p class="hint">확정하면 Home 일정에 바로 보이고 '누가 확정했는지'가 남습니다. 운영진이 확정한 보강은 'confirmed by Edge English'.</p>
+</div>
+
+</div>
+</section>
+
+<section>
+<h2>PC · 강사 Home 보강 요청 패널</h2>
+<p class="cap">PC는 같은 카드가 넓게 보이고, 오른쪽에 그날 내 일정이 같이 보여 겹침을 눈으로도 확인할 수 있습니다 (지금 패널 구조 그대로).</p>
+<div class="pc">
+<div class="pcgrid">
+<div>
+<div class="top"><strong>Make-up requests · 1</strong></div>
+<div class="tcard">
+<div><span class="name">Haeun Jang</span><span class="min">40 min</span> <span class="tag">Student asked Nov 7, 13:40 Korea</span></div>
+<p class="sub">Original class: Tue Nov 11 · 09:00 Manila (Korea 10:00) · Student canceled in advance</p>
+<p class="lbl">Pick one time to confirm</p>
+<div class="slot on" role="radio" aria-checked="true"><span class="mk">●</span><span><b>Thu Nov 13 · 09:00–09:40 Manila</b><small>Korea 10:00 · student's 1st choice</small></span></div>
+<div class="slot" role="radio" aria-checked="false"><span class="mk">●</span><span><b>Fri Nov 14 · 18:00–18:40 Manila</b><small>Korea 19:00 · 2nd choice</small></span></div>
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+<button type="button" class="btn main">Confirm make-up · Thu Nov 13, 09:00</button>
+<button type="button" class="btn line">None work</button>
+</div>
+<p class="hint">This books the class right away. Edge English will tell the student.</p>
+</div>
+</div>
+<div>
+<p class="lbl" style="margin:0 0 6px">Thu Nov 13 · your schedule</p>
+<div class="adm">
+<div class="slot" style="min-height:auto"><span><b>08:00–08:40 · Minsu Kim</b><small>Regular</small></span></div>
+<div class="slot on" style="min-height:auto;border-style:dashed"><span><b>09:00–09:40 · Haeun Jang</b><small>Make-up · if you confirm</small></span></div>
+<div class="slot" style="min-height:auto"><span><b>10:00–10:40 · Yuna Shin</b><small>Regular</small></span></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section>
+<h2>운영진 화면 · 바뀌는 곳 2군데</h2>
+<div class="vs">
+<div class="pc" style="flex:none">
+<h3>대시보드 '처리할 일' 카드</h3>
+<div class="adm">
+<p class="hint">지금</p>
+<div class="acard"><div class="t"><b>장하은 (STU-0002)</b><span class="tag warn">보강 강사 답 옴 · 확정</span></div><span class="hint">보강 신청 후 2시간 · Blair 가능 11/13 10:00·11/14 19:00</span><div class="act"><span class="p">수업 변경 화면에서 확정</span></div></div>
+<p class="hint" style="margin-top:6px">바뀐 뒤</p>
+<div class="acard"><div class="t"><b>장하은 (STU-0002)</b><span class="tag ok">보강 확정됨 · 학생 안내</span></div><span class="hint">Blair 강사가 11/13 (목) 10:00 한국으로 확정 · 11/7 14:02</span><div class="act"><span class="p">보강 확정 안내 복사</span><span>보냄</span></div></div>
+<div class="acard"><div class="t"><b>신유나 (STU-0006)</b><span class="tag bad">보강 강사 불가 · 재조율</span></div><span class="hint">강사 메모: Fri after 19:00 or Sat 09:00–12:00 Manila</span><div class="act"><span class="p">수업 변경 화면</span></div></div>
+<p class="hint">'보강 강사 답 옴 · 확정' 태그는 사라지고, 운영진에게 오는 보강 카드는 '학생 안내'와 '재조율(예외)' 둘만 남습니다.</p>
+</div>
+</div>
+<div class="pc" style="flex:none">
+<h3>수업 변경 화면 · 열린 보강 신청 줄</h3>
+<div class="adm">
+<p class="hint">강사가 확정한 뒤 (이 줄은 '확정된 보강'으로 내려감)</p>
+<div class="acard"><div class="t"><b>11/11 (화) 10:00 · 사전 취소</b><span class="tag ok">보강 확정</span></div><span class="hint">보강 11/13 (목) 10:00 한국 · 강사 현지 09:00 · <b>Blair 강사가 확정</b> 11/7 14:02 · 신청 11/7 13:40 학생이 LMS에서 신청</span><div class="act"><span>잘못 넣은 보강 삭제</span></div></div>
+<p class="hint" style="margin-top:6px">강사가 아직 답하지 않았거나 모두 불가일 때 (지금과 같음)</p>
+<div class="acard"><div class="t"><b>11/11 (화) 10:00 · 사전 취소</b><span class="tag warn">강사 답변 대기 중</span></div><span class="hint">11/13 (목) 10:00 한국 · 11/14 (금) 19:00 한국 · 신청 11/7 13:40</span><div class="act"><span>확정</span><span>다른 날짜·시각 확정</span><span>신청 닫기</span></div></div>
+<p class="hint">운영진 [확정]은 그대로 두되, 강사가 가능으로 확정하면 바로 '보강 확정' 상태로 바뀌어 운영진이 다시 확정할 일이 없습니다. 휴무 화면의 보강 확정도 그대로.</p>
+</div>
+</div>
+</div>
+</section>
+
+<section>
+<h2>학생 화면 · 상태 글</h2>
+<div class="tw"><table>
+<tr><th>상황</th><th>지금</th><th>바뀐 뒤</th></tr>
+<tr><td>신청 직후</td><td>강사 확인 중</td><td>강사 확인 중 (같음)</td></tr>
+<tr><td>강사가 가능으로 답함</td><td>최종 확정 대기 → (운영진 확정 뒤) 확정</td><td><b>확정</b> · 보강 11/13 (목) 10:00 — 바로. '최종 확정 대기' 단계 없음</td></tr>
+<tr><td>강사가 모두 불가</td><td>다른 일정 조율 중</td><td>다른 일정 조율 중 (같음)</td></tr>
+</table></div>
+</section>
+
+<section>
+<h2>만들 때 (참고, 결정 필요 없음)</h2>
+<ul class="note">
+<li>DB: <code>tutor_makeup_answer</code>에 확정 시각 1개를 받는 길을 더함(A안이면 강사가 고른 1개). 지금 운영진 확정 함수 <code>admin_makeup_confirm</code>가 하는 검사(지난 시간·종료일·보상권 기한·휴무·다른 수업·휴식 10분·현지 06:00~22:30·back-to-back 20분 예외)와 수업 생성·보강 신청 confirmed·이관권 연결·휴무 연장 재계산을 <b>같은 코드</b>로 실행. 새 규칙·새 숫자 없음. 확정자(decided_by)는 강사 계정, 운영자 보기면 운영자 + 기록 '운영자 대신 처리'.</li>
+<li>안내: 학생 <code>makeup_confirmed</code> 안내는 지금처럼 pending(운영진 복사). 강사 안내는 만들지 않음(4번 결정). <code>makeup_ask</code> 안내는 not_needed 처리 그대로.</li>
+<li>운영진 대시보드 <code>board.ts</code>: '보강 강사 답 옴 · 확정' 분기 제거, 확정된 보강의 학생 안내 미발송은 지금 있는 안내 카드로. 수업 변경 화면 <code>LessonChange.tsx</code> 확정된 보강 줄에 '강사가 확정' 표시.</li>
+<li>강사 화면 <code>TutorHome.tsx MakeupCard</code>: 체크박스 → 하나 고르기, 버튼 글에 날짜·시각, 확정 뒤 초록 띠, 'None of these times work' → 메모 → Send to Edge English(지금 '모두 불가+메모' 경로 그대로). Home 일정 카드에 'confirmed by you'.</li>
+<li>학생 화면 <code>student/live.ts</code>: tutor_answered 뒤 admin_reviewing 상태가 생기지 않음(강사가 확정하면 바로 confirmed). 라벨 '최종 확정 대기'는 예전 데이터용으로만 남김.</li>
+<li>휴무(기다림) 보강·보상수업 보강도 같은 신청 표를 쓰므로 강사가 가능으로 확정하면 똑같이 확정됨. 휴무 화면 운영진 확정 버튼은 그대로.</li>
+<li>검증: 시험 DB·로컬 앱, 실제 Blair 계정 PC·휴대폰 — 1개 선택 확정 → 수업 생성·학생 화면 '확정'·대시보드 '학생 안내' 카드 → 운영진 '잘못 넣은 보강 삭제'로 원복. 모두 불가 경로·운영자 보기 대신 확정·강사 다른 수업 겹침 거절 확인. test:db에 함수 시험 추가. 운영 반영은 대표 승인 뒤.</li>
+</ul>
+</section>
+</main>
+
+<script>
+(function(){
+  var tabs=document.querySelectorAll('.scenes [role=tab]');
+  var scenes=document.querySelectorAll('.scene[data-scene]');
+  function show(id){
+    tabs.forEach(function(t){t.setAttribute('aria-selected',String(t.dataset.s===id));});
+    scenes.forEach(function(s){s.hidden=s.dataset.scene!==id;});
+  }
+  tabs.forEach(function(t){t.addEventListener('click',function(){show(t.dataset.s);});});
+})();
+</script>
