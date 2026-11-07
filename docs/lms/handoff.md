@@ -37,7 +37,7 @@
 
 ## 📌 2026-11-07 대표 결정: LMS 전체 오픈 + 1주일 시트·LMS 병행 (정책 원본 H26(89))
 - 11/7부로 모든 학생·강사에게 LMS 오픈과 사용법 안내 완료(대표). **11/14까지 1주일만** 학생 수강현황 시트·강사 Class Record 시트와 LMS 를 둘 다 원본으로 둠. 그 사이 Claude 가 **두 곳이 달라지는 부분을 계속 대조**해 보고. 1주 뒤 시트 중단 여부 대표 결정
-- 대조 방법(세션마다): 운영 DB 학생 13명(가상 STU-0014 제외) 수강현황 시트(드라이브 '학생관리') ↔ enrollments·lessons·makeup_requests·compensations, 강사 4명 Class Record ↔ lessons.class_status·class_records. 차이는 고치지 않고 보고(11/7 오O수 사례: 종료일·11/18 보강·학생 번호). 예약 작업에 Supabase 연결을 붙일 수 없어 자동 실행은 안 됨 → 새 세션 첫 메시지 '시트 ↔ LMS 대조해'
+- 대조 방법(세션마다): 운영 DB 학생 13명(가상 STU-0014 제외) 수강현황 시트(드라이브 '학생관리') ↔ enrollments·lessons·makeup_requests·compensations, 강사 4명 Class Record ↔ lessons.class_status·class_records. 차이는 고치지 않고 보고(11/7 오O수 사례: 종료일·11/18 보강·학생 번호). **예약 작업 등록함(11/7)**: `trig_01DYXbuSfHjUehZrZJZwaq5H` '매일 시트 ↔ LMS 대조 보고' 매일 12:47 KST, 이 세션(session_0173hK5dYWb6UxYYPuDGoi7y)으로 들어와 이 세션의 Supabase·Sheets·Drive 연결을 그대로 씀. (새 세션을 띄우는 방식은 조직 설정상 연결을 못 붙임 — 'connectors parameter is not available for this organization'. 기존 세션으로 들어오는 방식은 됨. 10/27 '매일 학생 시트 점검 보고' trig_01FARP3K5pwPP8MS9Gir5c73 도 같은 방식으로 돌고 있음 — 시트끼리만 대조, LMS 는 안 봄 → 겹치므로 대표가 끌지 결정)
 - 남은 결정 대기: 오O수 11/18 보강(종료일 연장 안) · 자동 연장 규칙 D-10(상한 포함) · 조기 완료 시 종료일 앞당길지 · 운영 배포(학생 보강 화면)
 
 ## ✅ 2026-11-07 운영 DB: 체험용 강사 계정 + 가상 학생 (대표 지시·'응 운영DB에 바로해')
