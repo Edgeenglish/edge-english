@@ -20,7 +20,7 @@ import { LangCtx, useT, type Lang } from '@/lms/tutor/lang';
 import { Rich } from '@/app/lms/Rich';
 import { enBoth, stripBold } from '@/lms/admin/time-text';
 import {
-  canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
+  canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   statusText, rangeFull, rangeFullNoDay, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
 
 export type TutorActions = {
@@ -421,7 +421,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
         {tab === 'record' && (
           <section aria-label="Class Record">
             <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">Class Record</h1>
-            <p className="mb-3 text-[13.5px] text-[#6b6880]">Your classes by week · {tzHeader(tz)}. Record each class after it ends; tap a past class to edit.</p>
+            <p className="mb-3 text-[13.5px] text-[#6b6880]">Your classes by week. Record each class within 10 minutes after it ends; tap a past class to edit.</p>
             {toRecord.length > 0 && (
               <section aria-label="Classes to record" className="mb-5 grid gap-3 lg:max-w-[760px]">
                 <h2 className="text-[16px] font-bold text-[#b3261e]">
