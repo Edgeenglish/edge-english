@@ -427,7 +427,7 @@ function ChangeCard({ lesson, now, actions, isMakeup, compensation, byTutor, don
             </label>
             {fixAt && <span className="text-[13.5px] text-[#1d1b2b]">새 시간: <b>{kstLabel(fixAt)}</b> 한국{fixLocal ? ` · 강사 현지 ${fixLocal}` : ''}</span>}
             <ReasonPick name={`fix-${lesson.id}`} options={FIX_REASONS} value={fix.reason} note={fix.note} onChange={(r, n) => setFix({ ...fix, reason: r, note: n })} />
-            <p className="text-[12.5px] text-[#6b6880]">고치면 학생·강사에게 '보강 시간 변경' 안내(메일·카톡·WhatsApp)가 새로 생겨요.</p>
+            <p className="text-[12.5px] text-[#6b6880]">고치면 학생·강사에게 ‘보강 시간 변경’ 안내(메일·카톡·WhatsApp)가 새로 생겨요.</p>
             <div className="grid grid-cols-2 gap-1.5">
               <button type="button" className={btnSub} disabled={busy} onClick={() => setFix(null)}>닫기</button>
               <button type="button" className={btnMain} disabled={busy || !fixAt || +fixAt === +lesson.startsAt || +fixAt <= Date.now() || !reasonOk(fix.reason, fix.note)}
