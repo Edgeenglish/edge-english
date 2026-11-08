@@ -526,10 +526,14 @@ function CreditsCard({ credits, adjust, done }: { credits: AdminCredits; adjust:
   const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
-  const describeUse = (u: AdminCredits['uses'][number]) =>
-    u.reason === 'student_change' ? `${u.lessonAt ? `${kstLabel(u.lessonAt)} 수업 ` : ''}취소 (자동 차감)`
-    : u.reason === 'admin_restore' ? `${u.lessonAt ? `${kstLabel(u.lessonAt)} 수업 ` : ''}취소 되돌림`
-    : `운영진 조정${u.note ? ` · ${u.note}` : ''}`;
+  // 처음 보는 사람도 한 번에 읽히게: '취소된 수업 ○○ (취소 신청한 일자 ○○)' (대표 11/8)
+  const describeUse = (u: AdminCredits['uses'][number]) => {
+    const at = `${sentLabel(u.at)} 한국`;
+    const lesson = u.lessonAt ? ` ${kstLabel(u.lessonAt)} 한국` : '';
+    return u.reason === 'student_change' ? `취소된 수업${lesson} (취소 신청한 일자 ${at})`
+      : u.reason === 'admin_restore' ? `취소 되돌린 수업${lesson} (되돌린 일자 ${at})`
+      : `운영진 조정${u.note ? ` · ${u.note}` : ''} (조정한 일자 ${at})`;
+  };
   async function run() {
     if (!mode) return;
     setBusy(true);
@@ -571,7 +575,7 @@ function CreditsCard({ credits, adjust, done }: { credits: AdminCredits; adjust:
         <ul className="mt-2 grid gap-1 text-[13px] text-[#1d1b2b]">
           {credits.uses.map((u, i) => (
             <li key={i} className="flex justify-between gap-2 border-t border-[#eeecf4] pt-1">
-              <span>{sentLabel(u.at)} · {describeUse(u)}</span>
+              <span>{describeUse(u)}</span>
               <b className={u.delta > 0 ? 'text-[#1f7a4d]' : ''}>{u.delta > 0 ? '+1' : '−1'}</b>
             </li>
           ))}
