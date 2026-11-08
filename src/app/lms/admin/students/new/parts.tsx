@@ -253,7 +253,7 @@ export function TutorPicker({
           ))}
         </select>
         <select aria-label="가능 시간" value={filter.band} onChange={(e) => setFilter({ ...filter, band: e.target.value })} className={sel}>
-          <option value="">가능 시간 (한국)</option>
+          <option value="">가능 시간 (한국 시간)</option>
           {BANDS.map((b) => (
             <option key={b.key} value={b.key}>
               {b.label}
@@ -385,7 +385,7 @@ export function WeekCalendar({
       </p>
       {dst.map(({ z, c }) => (
         <p key={z} className="mt-2 rounded-[10px] bg-[#fff6e6] px-3 py-2 text-[13px] text-[#7a4a00]">
-          {z === tutor.timezone ? `${tutor.name}(${tutor.country})` : `학생(${z})`} {dayLabel(c!.on)} {c!.label} ({c!.from} → {c!.to}). 그날부터 한국 시각 칸이 자동으로 1시간 옮겨져요.
+          {z === tutor.timezone ? `${tutor.name}(${tutor.country})` : `학생(${z})`} {dayLabel(c!.on)} {c!.label} ({c!.from} → {c!.to}). 그날부터 한국 시간 칸이 자동으로 1시간 옮겨져요.
         </p>
       ))}
       <div className="-mx-4 mt-3 overflow-x-auto px-4 lg:mx-0 lg:px-0">

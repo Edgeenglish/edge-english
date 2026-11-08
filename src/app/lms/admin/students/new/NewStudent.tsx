@@ -620,7 +620,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
             <input inputMode="numeric" value={pay.amount ?? ''} onChange={(e) => setPay({ ...pay, amount: e.target.value ? Number(e.target.value.replace(/\D/g, '')) : null })} className={inputCls(false)} />
             {pay.amount ? <span className="mt-1 block text-[12px] text-[#6b6880]">{won(pay.amount)}</span> : null}
           </Field>
-          <Field label="입금·결제 완료 시각 (한국)">
+          <Field label="입금·결제 완료 시각 (한국 시간)">
             <input type="datetime-local" value={pay.paidAt.slice(0, 16)} onChange={(e) => setPay({ ...pay, paidAt: e.target.value ? `${e.target.value}:00+09:00` : '' })} className={inputCls(false)} />
           </Field>
           <Field label="입금자명">

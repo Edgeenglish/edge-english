@@ -4,20 +4,18 @@
 
 import { addDays, ampmEn, ampmKo, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
 import { courseName } from '../rules/period';
+import { bold, enBoth, enClock, enDateOf, enDay, enZoneName, koBoth, koSi, koZoneBracket, koZoneName } from './time-text';
 
 export const WD_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 const WD_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MON_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** 시간대 이름 (한국어 화면): 'Asia/Seoul' → '한국 시간', 'America/Toronto' → 'Toronto 시간' */
+/** 시간대 이름 (한국어 화면): 'Asia/Seoul' → '한국 시간', 'America/Toronto' → '토론토 시간' (time-text.ts 와 같은 이름) */
 export function koZone(tz: string): string {
-  if (!tz || tz === 'Asia/Seoul') return '한국 시간';
-  return `${tz.split('/').at(-1)?.replaceAll('_', ' ') || tz} 시간`;
+  return koZoneName(tz);
 }
-/** 시간대 이름 (영어): 'Korea Time (KST)' / 'Toronto Time' */
+/** 시간대 이름 (영어): 'KST' / 'Toronto Time' (time-text.ts 와 같은 이름) */
 export function enZone(tz: string): string {
-  if (!tz || tz === 'Asia/Seoul') return 'Korea Time (KST)';
-  return `${tz.split('/').at(-1)?.replaceAll('_', ' ') || tz} Time`;
+  return enZoneName(tz);
 }
 
 export const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
@@ -28,12 +26,9 @@ export function zoneLabel(at: Date, tz: string): string {
   const f = formatInZone(at, tz);
   return `${mdw(f.date)} ${ampmKo(f.time)}`;
 }
-/** 영어 'Thu, Nov 5, 8:00 AM' */
+/** 영어 'Thu, 5 Nov 8:00 AM' (기준 이름은 따로 붙임 — time-text.ts) */
 export function enWhen(at: Date, tz: string): string {
-  const f = formatInZone(at, tz);
-  const [h, m] = f.time.split(':').map(Number);
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${WD_EN[weekdayOf(f.date)]}, ${MON_EN[Number(f.date.slice(5, 7)) - 1]} ${Number(f.date.slice(8))}, ${h12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+  return `${enDay(at, tz)} ${enClock(at, tz)}`;
 }
 
 /**
@@ -41,22 +36,22 @@ export function enWhen(at: Date, tz: string): string {
  * 학생·강사가 한국 시간대면 그 부분은 생략 (같은 시각이라 두 번 쓰지 않음)
  */
 export function kstWithZones(at: Date, zones: { label: string; tz: string }[]): string {
-  const parts = [`${zoneLabel(at, 'Asia/Seoul')} (한국 시간)`];
+  const parts = [`${zoneLabel(at, 'Asia/Seoul')} 한국 시간`];
   const seen = new Set<string>(['Asia/Seoul']);
   for (const z of zones) {
     if (!z.tz || seen.has(z.tz)) continue;
     seen.add(z.tz);
-    parts.push(`${z.label} ${koZone(z.tz).replace(' 시간', '')} ${zoneLabel(at, z.tz)}`.trim());
+    parts.push(`${zoneLabel(at, z.tz)} ${koZone(z.tz)}${z.label ? ` (${z.label})` : ''}`);
   }
-  return parts.join(' · ');
+  return parts.join(' / ');
 }
 
-/** 최종 종료 '1/26(화) 오후 11:59 (한국 시간)' + 해외 학생이면 ' = 1/26(화) 오전 9:59 (Toronto 시간)' */
+/** 최종 종료 '1/26(화) 오후 11:59 한국 시간' + 해외 학생이면 ' / 1/26(화) 오전 9:59 토론토 시간' */
 export function finalEndText(finalEnd: KstDate, studentTz: string): string {
   const at = kstToInstant(finalEnd, '23:59');
-  const kst = `${mdw(finalEnd)} ${ampmKo('23:59')} (한국 시간)`;
+  const kst = `${mdw(finalEnd)} ${ampmKo('23:59')} 한국 시간`;
   if (!studentTz || studentTz === 'Asia/Seoul') return kst;
-  return `${kst} = ${zoneLabel(at, studentTz)} (${koZone(studentTz)})`;
+  return `${kst} / ${zoneLabel(at, studentTz)} ${koZone(studentTz)}`;
 }
 
 export type Slot = { weekday: number; time: string };
@@ -257,7 +252,7 @@ export function parsePreview(j: any): RegularPreview {
 /** 검사 결과 글 (운영진이 바로 고칠 수 있게 구체적으로) */
 export function problemText(p: RegularPreview['problems'][number], tutor: { name: string; timezone: string }): string {
   const when = `${mdw(p.date)} ${ampmKo(p.time)}`;
-  const local = tutor.timezone !== 'Asia/Seoul' ? ` (${koZone(tutor.timezone)} ${ampmKo(formatInZone(kstToInstant(p.date, p.time), tutor.timezone).time)})` : '';
+  const local = tutor.timezone !== 'Asia/Seoul' ? ` 한국 시간 / ${ampmKo(formatInZone(kstToInstant(p.date, p.time), tutor.timezone).time)} ${koZone(tutor.timezone)}` : ' 한국 시간';
   switch (p.why) {
     case 'tutor_hours_range': return `${when}${local} — ${tutor.name} 강사 현지 오전 6:00~오후 10:30 밖의 시작 시각이에요.`;
     case 'tutor_unavailable': return `${when}${local} — ${tutor.name} 강사가 열어 둔 시간(My hours)이 아니에요.`;
@@ -284,13 +279,10 @@ export type RegularNoticeCtx = {
 /** ③ 학생용 카카오톡 문구 (한국어, 학생 도시 시간 + 한국 시간) */
 export function regularNoticeKo(c: RegularNoticeCtx): string {
   const abroad = c.studentTz && c.studentTz !== 'Asia/Seoul';
-  const lines = c.moved.map((m) => {
-    const k = `${zoneLabel(m.to, 'Asia/Seoul')}`;
-    return abroad ? `- ${zoneLabel(m.to, c.studentTz)} (${koZone(c.studentTz)}) · 한국 ${k}` : `- ${k}`;
-  });
+  const lines = c.moved.map((m) => `- ${koBoth(m.to, c.studentTz)}`);
   return [
     `[엣지영어] ${c.studentNameKo}님, 정규 수업 시간이 ${mdw(c.effectiveFrom)}부터 바뀌어요.`,
-    `새 정규 수업: ${abroad ? `${slotsInZone(c.newSlots, c.studentTz, c.effectiveFrom)} (${koZone(c.studentTz)}) · 한국 시간 ${slotsText(c.newSlots)}` : `${slotsText(c.newSlots)} (한국 시간)`} · ${c.durationMin}분 · ${c.tutorName} 강사님`,
+    `새 정규 수업: ${abroad ? `${koSi(slotsInZone(c.newSlots, c.studentTz, c.effectiveFrom))} ${koZoneBracket(c.studentTz)} / ${koSi(slotsText(c.newSlots))} ${koZoneBracket('Asia/Seoul')}` : `${koSi(slotsText(c.newSlots))} ${koZoneBracket('Asia/Seoul')}`} · ${c.durationMin}분 · ${c.tutorName} 강사님`,
     `바뀐 수업 ${c.moved.length}회:\n${lines.join('\n')}`,
     '이미 확정된 보강·대체 수업은 그대로예요. 날짜나 시간이 요청하신 것과 다르면 바로 알려주세요.',
   ].join('\n\n');
@@ -299,11 +291,11 @@ export function regularNoticeKo(c: RegularNoticeCtx): string {
 /** ③ 강사용 WhatsApp 문구 (영어, 강사 도시 시간 + KST) */
 export function regularNoticeEn(c: RegularNoticeCtx): string {
   const kst = !c.tutorTz || c.tutorTz === 'Asia/Seoul';
-  const line = (t: Date) => (kst ? `${enWhen(t, 'Asia/Seoul')} ${enZone('Asia/Seoul')}` : `${enWhen(t, c.tutorTz)} ${enZone(c.tutorTz)} (${enWhen(t, 'Asia/Seoul')} KST)`);
+  const line = (t: Date) => enBoth(t, c.tutorTz);
   return [
     // 적용일은 한국 날짜 기준이라 'KST' 를 밝히고, 해외 강사에게는 첫 바뀐 수업의 현지 날짜·시각을 같이 (QA-09)
-    `SCHEDULE CHANGE - ${c.studentNameEn} (${c.durationMin} min), from ${WD_EN[weekdayOf(c.effectiveFrom)]} ${MON_EN[Number(c.effectiveFrom.slice(5, 7)) - 1]} ${Number(c.effectiveFrom.slice(8))} (KST)${!kst && c.moved.length > 0 ? ` — first changed class: ${line(c.moved[0].to)}` : ''}`,
-    `New regular time: ${kst ? `${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} ${enZone('Asia/Seoul')}` : `${slotsInZone(c.newSlots, c.tutorTz, c.effectiveFrom, 'en')} ${enZone(c.tutorTz)} (${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} KST)`}`,
+    `SCHEDULE CHANGE - ${c.studentNameEn} (${c.durationMin} min), from ${enDateOf(c.effectiveFrom)} ${bold('KST')}${!kst && c.moved.length > 0 ? ` — first changed class: ${line(c.moved[0].to)}` : ''}`,
+    `New regular time: ${kst ? `${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} ${bold('KST')}` : `${slotsInZone(c.newSlots, c.tutorTz, c.effectiveFrom, 'en')} ${bold(enZoneName(c.tutorTz))} / ${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} ${bold('KST')}`}`,
     `Changed classes (${c.moved.length}):\n${c.moved.map((m) => `- ${line(m.to)}`).join('\n')}`,
     'Confirmed make-up and cover classes stay as they are. Please update your schedule. Thank you!',
   ].join('\n\n');

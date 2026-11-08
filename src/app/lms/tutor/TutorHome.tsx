@@ -17,9 +17,11 @@ import StudentProfile, { type ProfileActions } from './StudentProfile';
 import FirstLessonFollowup, { type FollowupSave } from './FirstLessonFollowup';
 import type { FollowupTodo } from '@/lms/tutor/followup';
 import { LangCtx, useT, type Lang } from '@/lms/tutor/lang';
+import { Rich } from '@/app/lms/Rich';
+import { enBoth, stripBold } from '@/lms/admin/time-text';
 import {
-  canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstRange, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
-  statusText, timeRange, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
+  canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
+  statusText, rangeFull, rangeFullNoDay, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
 
 export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
@@ -223,8 +225,6 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   const today = localDate(now, tz);
   const todayLessons = screen.lessons.filter((l) => localDate(l.startsAt, tz) === today).sort((a, b) => +a.startsAt - +b.startsAt);
   const nextLesson = screen.lessons.filter((l) => l.state === 'scheduled' && l.startsAt > now && localDate(l.startsAt, tz) !== today).sort((a, b) => +a.startsAt - +b.startsAt)[0];
-  const localNow = ampmEn(formatInZone(now, tz).time);
-  const kstNow = kstText(now, tz);
 
   const logo = (
     <span className="inline-flex items-center gap-1.5">
@@ -358,7 +358,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
           <div className="grid gap-4 lg:max-w-[720px]">
             <header>
               <h1 className="text-[22px] font-bold text-[#1d1b2b]">{t('Hi', '안녕하세요')}, {screen.tutor.name}</h1>
-              <p className="text-[14px] text-[#6b6880]">{dayLabel(today)} · {localNow} {tzTimeLabel(tz)}{kstNow ? ` · ${kstNow}` : ''}</p>
+              <p className="text-[14px] text-[#6b6880]"><Rich text={enBoth(now, tz)} /></p>
               {screen.tutor.meetUrl && (
                 <a href={screen.tutor.meetUrl} target="_blank" rel="noreferrer" className={`${btnMain} mt-3 inline-flex items-center`}>Classroom (Google Meet)</a>
               )}
@@ -385,7 +385,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               <div className="divide-y divide-[#f0eef5]">
                 {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={tz} now={now} onRecord={() => setTab('record')} />)}
               </div>
-              {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">{t('Next class', '다음 수업')}: {whenFull(nextLesson.startsAt, tz)} · {nextLesson.student}</p>}
+              {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">{t('Next class', '다음 수업')}: <Rich text={whenFull(nextLesson.startsAt, tz)} /> · {nextLesson.student}</p>}
               <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">{t('All classes', '전체 수업')} ›</button>
             </section>
           </div>
@@ -478,7 +478,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               {canceled.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ {t('None', '없어요')}</p>}
               {canceled.map((c) => (
                 <div key={c.id} className={`${card} grid gap-0.5`}>
-                  <b className="text-[15.5px] text-[#1d1b2b]">{whenFull(c.startsAt, tz)}</b>
+                  <b className="text-[15.5px] text-[#1d1b2b]"><Rich text={whenFull(c.startsAt, tz)} /></b>
                   <span className="text-[14px] text-[#55526a]">
                     <StudentName id={c.studentId} name={c.student} className="inline font-semibold" /> · {t('Canceled by student', '학생이 취소')}{c.classStatus === 'Student canceled late' ? ` (${t('late', '늦은 취소')})` : ''}
                   </span>
@@ -544,8 +544,7 @@ function TodayRow({ lesson: l, tz, now, onRecord }: { lesson: TutorLesson; tz: s
     <div className={`flex items-center gap-3 py-2 ${phase === 'canceled' ? 'text-[#8a879c]' : ''}`}>
       {/* 시각마다 그 옆에 어느 시간대인지 바로 적음 (현지 + 한국) */}
       <span className="min-w-0 flex-1">
-        <span className="block text-[14.5px] tabular-nums"><b>{timeRange(l, tz)}</b> <span className="text-[12.5px] text-[#55526a]">{tzTimeLabel(tz)}</span></span>
-        {kstRange(l, tz) && <span className="block text-[12.5px] tabular-nums text-[#55526a]">{kstRange(l, tz)}</span>}
+        <span className="block text-[14.5px] tabular-nums"><Rich text={rangeFullNoDay(l, tz)} /></span>
         <StudentName id={l.studentId} name={l.student} className={`mt-0.5 block truncate text-[15px] font-semibold ${phase === 'canceled' ? 'line-through' : ''}`} />
         <span className="block text-[12.5px] text-[#6b6880]">{minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}</span>
       </span>
@@ -616,7 +615,6 @@ function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () =>
 
 function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; now: Date }) {
   const tag = kindTag(l);
-  const kst = kstText(l.startsAt, tz);
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-2">
@@ -625,11 +623,10 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
         {l.count && <span className="text-[13px] text-[#6b6880]">Class {l.count.n}/{l.count.total}</span>}
       </div>
       <p className="text-[14.5px] text-[#1d1b2b]">
-        {whenText(l.startsAt, tz).replace(/ \d{1,2}:\d\d [AP]M$/, '')} · {timeRange(l, tz)} {tzTimeLabel(tz)} · {minutesOf(l)} min
-        {kst && <span className="text-[#6b6880]"> · {kst}</span>}
+        <Rich text={rangeFull(l, tz)} /> · {minutesOf(l)} min
       </p>
-      {l.makeupOf && <p className="text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
-      {l.compensationOf && <p className="text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
+      {l.makeupOf && <p className="text-[13px] text-[#6b6880]">Make-up for <Rich text={whenFull(l.makeupOf, tz)} /></p>}
+      {l.compensationOf && <p className="text-[13px] text-[#6b6880]">Compensation for <Rich text={whenFull(l.compensationOf, tz)} /> (tutor no-show)</p>}
       {phaseOf(l, now) === 'canceled' && <p className="text-[13px] font-semibold text-[#b3261e]">{statusText(l, now)}</p>}
     </div>
   );
@@ -702,7 +699,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
         {/* 휴대폰: 출결 상태는 이름 아래 줄 (QA-02: 긴 상태가 이름 폭을 빼앗지 않게) */}
         <div className="grid grid-cols-[76px_minmax(0,1fr)_28px] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
-            {time}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]">{k}</span>}
+            {time}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]"><Rich text={k} /></span>}
           </span>
           <span className="min-w-0">
             <StudentName id={l.studentId} name={name} className="block max-w-full truncate text-[14.5px] font-semibold" />
@@ -717,7 +714,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
           <span className="font-semibold">{time}</span>
-          {kst && <span className="text-[#6b6880]">{k?.replace(/^KST /, '')}</span>}
+          {kst && <span className="text-[#6b6880]">{k ? stripBold(k).replace(/ KST$/, '') : ''}</span>}
           <span className="font-semibold"><StudentName id={l.studentId} name={name} className="truncate" /></span>
           <span>{count}</span>
           <span>{minutesOf(l)}</span>
@@ -923,7 +920,6 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
       <div className="grid gap-1.5">
         {covers.map((c) => {
           const on = yes.has(c.id);
-          const kst = kstText(c.startsAt, tz);
           return (
             <button key={c.id} type="button" role="checkbox" aria-checked={on} disabled={busy}
               onClick={() => { const n = new Set(yes); if (on) n.delete(c.id); else n.add(c.id); setYes(n); }}
@@ -931,8 +927,7 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
               <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border text-[14px] font-bold ${
                 on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>✓</span>
               <span className="flex-1">
-                <b className="block text-[15px] text-[#1d1b2b]">{whenText(c.startsAt, tz).replace(/ \d{1,2}:\d\d [AP]M$/, '')} · {timeRange(c, tz)} {tzTimeLabel(tz)}</b>
-                {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
+                <b className="block text-[15px] text-[#1d1b2b]"><Rich text={rangeFull(c, tz)} /></b>
                 {c.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(c.why, cityTime(tz))}</span>}
               </span>
             </button>
@@ -986,8 +981,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
       <p className="text-[13.5px] text-[#55526a]">{m.compensation ? 'Tutor no-show class' : 'Original class'}: {makeupOrigin(m, tz)}</p>
       {confirmed ? (
         <p role="status" className="mt-2 rounded-[10px] bg-[#e6f6ec] px-3 py-2 text-[14.5px] font-bold text-[#1f7a4d]">
-          ✓ Make-up confirmed · {whenText(confirmed.startsAt, tz).replace(/ \d{1,2}:\d\d [AP]M$/, '')} {timeRange(confirmed, tz)} {tzTimeLabel(tz)}
-          {kstText(confirmed.startsAt, tz) && <span className="block text-[12.5px] font-semibold">{kstText(confirmed.startsAt, tz)}</span>}
+          ✓ Make-up confirmed · <Rich text={rangeFull(confirmed, tz)} />
         </p>
       ) : closed ? (
         <p className="mt-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] font-semibold text-[#1f7a4d]">{sent ? 'Sent ✓ · Edge English will arrange another time' : '✓ Closed by Edge English'}</p>
@@ -997,7 +991,6 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
           <div className="grid gap-1.5" role="radiogroup" aria-label="Make-up time">
             {m.slots.map((s) => {
               const on = pick === s.id && !none;
-              const kst = kstText(s.startsAt, tz);
               return (
                 <button key={s.id} type="button" role="radio" aria-checked={on} disabled={s.past || s.busy || busy}
                   onClick={() => { setPick(s.id); setNone(false); }}
@@ -1006,8 +999,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
                   <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] ${
                     on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>●</span>
                   <span className="flex-1">
-                    <b className="block text-[15px] text-[#1d1b2b]">{whenText(s.startsAt, tz).replace(/ \d{1,2}:\d\d [AP]M$/, '')} · {timeRange(s, tz)} {tzTimeLabel(tz)}</b>
-                    {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
+                    <b className="block text-[15px] text-[#1d1b2b]"><Rich text={rangeFull(s, tz)} /></b>
                     {s.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(s.why, cityTime(tz))}</span>}
                   </span>
                 </button>

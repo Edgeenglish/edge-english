@@ -103,7 +103,7 @@ export default function Schedule({ nowIso }: { nowIso: string }) {
           <p key={t.id} className="flex items-start gap-2 rounded-[10px] bg-[#fff1d6] px-3 py-2 text-[13px] leading-relaxed text-[#8a5300]">
             <Icon name="clock" className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              <b>{t.name}</b>({t.country}) {dayLabel(c!.on)} {c!.label} → 그날부터 {diffFromKst(new Date(`${c!.on}T12:00:00Z`), t.timezone)}. 시간표의 현지 시각은 자동으로 바뀌어요. 한국 시각 수업이 강사 현지에서 1시간 당겨지거나 늦어지니 강사 확인이 필요할 수 있어요.
+              <b>{t.name}</b>({t.country}) {dayLabel(c!.on)} {c!.label} → 그날부터 {diffFromKst(new Date(`${c!.on}T12:00:00Z`), t.timezone)}. 시간표의 현지 시각은 자동으로 바뀌어요. 한국 시간 수업이 강사 현지에서 1시간 당겨지거나 늦어지니 강사 확인이 필요할 수 있어요.
             </span>
           </p>
         ))}

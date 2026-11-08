@@ -17,8 +17,8 @@ describe('강사 화면 (migration 2000)', () => {
   it('시간은 강사 현지, 한국 시각은 옆에 (날짜가 다르면 요일까지)', () => {
     const l = { ...base, startsAt: new Date('2026-11-02T12:00:00Z'), endsAt: new Date('2026-11-02T12:40:00Z') };
     expect(timeRange(l, 'Australia/Sydney')).toBe('11:00–11:40 PM');
-    expect(kstText(l.startsAt, 'Australia/Sydney')).toBe('KST 9:00 PM');
-    expect(kstText(new Date('2026-11-02T14:00:00Z'), 'Australia/Sydney')).toBe('KST Mon 11:00 PM');
+    expect(kstText(l.startsAt, 'Australia/Sydney')).toBe('9:00 PM *KST*');
+    expect(kstText(new Date('2026-11-02T14:00:00Z'), 'Australia/Sydney')).toBe('Mon, 2 Nov 11:00 PM *KST*');
     expect(kstText(l.startsAt, 'Asia/Seoul')).toBeNull();
   });
   it('날짜별 묶음은 강사 현지 날짜, 그 주 밖은 뺌', () => {

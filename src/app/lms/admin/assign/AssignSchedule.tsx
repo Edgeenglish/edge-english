@@ -302,7 +302,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
 
         {hasCurrent && !showNew && (
           <Card title={currentDone ? '수업 컨펌 완료' : '지금 배정 · 강사·학생에게 확인했나요?'}>
-            <p className="text-[15px] font-bold text-[#1d1b2b]">{current!.tutor!.name} 강사 · {slotsText(current!.slots)} (한국 시간) · {current!.durationMin}분</p>
+            <p className="text-[15px] font-bold text-[#1d1b2b]">{current!.tutor!.name} 강사 · {slotsText(current!.slots)} 한국 시간 · {current!.durationMin}분</p>
             {/* R-22: 앞으로 수업과 지난 미기록 수업을 나눠서 */}
             <p className="mt-1 text-[13.5px] text-[#3d3a52]">
               앞으로 수업 {current!.upcoming}회{current!.nextAt ? ` · 다음 수업 ${dayLabel(instantToKstDate(current!.nextAt))}` : ''}
@@ -392,10 +392,10 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                         특정 수업 날짜 변경{changed.length ? ` · ${changed.length}건` : ''}
                       </button>
                     </div>
-                    {lessonPlan.extraFirst && <p className="mt-2 text-[13px] text-[#1d1b2b]">1회 {dayLabel(lessonPlan.lessons[0].date)} {ampmKo(lessonPlan.lessons[0].time)} (한국 시간) · 첫 수업</p>}
+                    {lessonPlan.extraFirst && <p className="mt-2 text-[13px] text-[#1d1b2b]">1회 {dayLabel(lessonPlan.lessons[0].date)} {ampmKo(lessonPlan.lessons[0].time)} 한국 시간 · 첫 수업</p>}
                     {changed.map((l) => (
                       <p key={l.key} className="mt-1 text-[13px] text-[#1d1b2b]">
-                        {l.n}회 <s className="text-[#9a97a8]">{dayLabel(l.original!.date)} {ampmKo(l.original!.time)}</s> → <b>{dayLabel(l.date)} {ampmKo(l.time)}</b> (한국 시간)
+                        {l.n}회 <s className="text-[#9a97a8]">{dayLabel(l.original!.date)} {ampmKo(l.original!.time)}</s> → <b>{dayLabel(l.date)} {ampmKo(l.time)}</b> 한국 시간
                       </p>
                     ))}
                     {lessonPlan.problems.map((p) => (
@@ -412,7 +412,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                     <ul className="mt-1 space-y-1">
                       {[...new Map(plan.issues.map((i) => [i.kstDate, i])).values()].map((i) => (
                         <li key={i.kstDate} className="text-[#1d1b2b]">
-                          {i.seq}회 {dayLabel(i.kstDate)} {ampmKo(i.kstTime)} (한국 시간) — <span className="text-[#b3261e]">{plan.issues.filter((x) => x.kstDate === i.kstDate).map((x) => issueText(x.reason)).join(' · ')}</span>
+                          {i.seq}회 {dayLabel(i.kstDate)} {ampmKo(i.kstTime)} 한국 시간 — <span className="text-[#b3261e]">{plan.issues.filter((x) => x.kstDate === i.kstDate).map((x) => issueText(x.reason)).join(' · ')}</span>
                         </li>
                       ))}
                     </ul>

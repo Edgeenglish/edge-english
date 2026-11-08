@@ -55,7 +55,7 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
               ? [productText(s.weeklyCount && s.durationMin ? { weeks: s.weeks, legacyLabel: s.legacyLabel, weeklyCount: s.weeklyCount, durationMin: s.durationMin } : null), '강사 배정 전', `결제 확인 후 수업 ${s.weeklyCount && s.weeks ? s.weeklyCount * s.weeks : ''}회 생성`, s.startDate ? `희망 시작 ${md(s.startDate)}` : null].filter(Boolean).join(' · ')
               : [
               s.tutor ?? (s.status === 'active' || s.status === 'upcoming' ? '강사 배정 전' : null),
-              s.slots.length ? `${slotsText(s.slots)} (한국 시간)` : null,
+              s.slots.length ? `${slotsText(s.slots)} 한국 시간` : null,
               s.status === 'none' ? null : productText(s.weeklyCount && s.durationMin ? { weeks: s.weeks, legacyLabel: s.legacyLabel, weeklyCount: s.weeklyCount, durationMin: s.durationMin } : null),
               s.status === 'upcoming' && s.startDate ? `${md(s.startDate)} 시작` : s.status === 'active' && d !== null ? `종료 ${md(s.finalEndDate!)} (D-${d})` : s.status === 'ended' && s.finalEndDate ? `${md(s.finalEndDate)} 종료` : null,
             ].filter(Boolean).join(' · ');

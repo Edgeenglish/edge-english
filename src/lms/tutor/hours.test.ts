@@ -42,17 +42,17 @@ describe('My hours', () => {
     const none = { weeklyOpen: [], weeklyClose: [], onceClose: [], onceOpen: [] };
     // 호치민(UTC+7) 월 15:30–16:00 = KST 월 17:30–18:00
     const a = describeChangesIn({ ...none, weeklyOpen: ['1:15:30'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Seoul');
-    expect(a).toEqual([{ main: 'Every Monday 5:30–6:00 PM Korea Time (KST) → open', sub: 'Every Monday 3:30–4:00 PM Ho Chi Minh Time' }]);
+    expect(a).toEqual([{ main: 'Every Monday 5:30–6:00 PM KST → open', sub: 'Every Monday 3:30–4:00 PM Ho Chi Minh Time' }]);
     const b = describeChangesIn({ ...none, weeklyOpen: ['1:15:30'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Ho_Chi_Minh');
     expect(b[0].main).toBe('Every Monday 3:30–4:00 PM Ho Chi Minh Time → open');
-    expect(b[0].sub).toBe('Every Monday 5:30–6:00 PM Korea Time (KST)');
+    expect(b[0].sub).toBe('Every Monday 5:30–6:00 PM KST');
     // 멜버른 월 01:00(서머타임 UTC+11) = KST 일 23:00 → 요일이 달라짐
     const c = describeChangesIn({ ...none, weeklyClose: ['1:01:00'] }, '2026-11-09', 'Australia/Melbourne', 'Asia/Seoul');
-    expect(c[0].main).toBe('Every Sunday 11:00–11:30 PM Korea Time (KST) → closed');
+    expect(c[0].main).toBe('Every Sunday 11:00–11:30 PM KST → closed');
     expect(c[0].sub).toBe('Every Monday 1:00–1:30 AM Melbourne Time');
     // 그 주만, 자정을 걸치는 칸 묶음
     const d = describeChangesIn({ ...none, onceClose: ['2026-11-10T21:30', '2026-11-10T22:00'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Seoul');
-    expect(d[0].main).toBe('Tue 10 Nov 11:30 PM – Wed 11 Nov 12:30 AM Korea Time (KST) → blocked');
+    expect(d[0].main).toBe('Tue 10 Nov 11:30 PM – Wed 11 Nov 12:30 AM KST → blocked');
     expect(d[0].sub).toBe('Tue 10 Nov 9:30–10:30 PM Ho Chi Minh Time');
     // 강사가 한국이면 보조 줄 없음
     expect(describeChangesIn({ ...none, weeklyOpen: ['1:09:00'] }, '2026-11-09', 'Asia/Seoul', 'Asia/Seoul')[0].sub).toBeNull();

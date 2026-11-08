@@ -349,7 +349,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
               <Chips value={d.durationMin} options={DURATIONS} label={(v) => `${v}분`} onPick={(v) => !saved && set('durationMin', v)} />
             </div>
             <div>
-              <span className="mb-1 block text-[13px] text-[#6b6880]">요일 · 한국 시각 (주 {d.slots.length}회)</span>
+              <span className="mb-1 block text-[13px] text-[#6b6880]">요일 · 한국 시간 (주 {d.slots.length}회)</span>
               <div className="grid gap-2">
                 {d.slots.map((s, i) => (
                   <div key={i}>
@@ -459,7 +459,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                         <Field label="보강 날짜">
                           <DateInput id={`imp-mk-date-${i}`} value={m.date} min={d.fromDate} disabled={saved} onChange={(v) => setMakeup(i, { date: v })} className={inputCls(saved, tried && !m.date)} />
                         </Field>
-                        <Field label="한국 시각">
+                        <Field label="한국 시간">
                           <TimeInput id={`imp-mk-time-${i}`} value={m.time} disabled={saved} onChange={(v) => setMakeup(i, { time: v })} className={inputCls(saved, tried && !m.time)} />
                         </Field>
                       </div>
@@ -550,7 +550,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                   <Field label="날짜">
                     <DateInput id={`imp-ex-date-${i}`} value={x.date} min={d.fromDate} max={d.endDate || undefined} disabled={saved} onChange={(v) => setExtra(i, { date: v })} className={inputCls(saved, tried && !x.date)} />
                   </Field>
-                  <Field label="한국 시각">
+                  <Field label="한국 시간">
                     <TimeInput id={`imp-ex-time-${i}`} value={x.time} disabled={saved} onChange={(v) => setExtra(i, { time: v })} className={inputCls(saved, tried && !x.time)} />
                   </Field>
                 </div>

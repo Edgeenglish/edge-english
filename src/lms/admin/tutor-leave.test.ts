@@ -64,13 +64,13 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(m[0].text).toContain('One of our Edge English tutors is on leave');
     expect(m[0].text).toContain("If you can't do all of them, please reply with the numbers you can do.");
     expect(m[0].text.split('\n').filter((l) => /^\d\)/.test(l))).toHaveLength(2);
-    expect(m[0].text).toContain('Manila Time (Mon 2 Nov 8:00 PM KST)');   // 도시 이름 + 한국 시간 (QA UX: 'your time' 금지)
-    expect(m[1].text).toBe('[엣지영어] 김민수님, 담당 강사님 휴가 기간 수업을 대체강사 Benny 강사님과 평소 시간에 진행하려고 해요. 아래 날짜 괜찮으신지 알려 주세요. 강사님 프로필도 함께 보내 드려요.\n\n- 11월 5일(목) 오후 8시 (한국 시간)');
+    expect(m[0].text).toContain('*Manila Time* / 8:00 PM *KST*');   // 도시 이름 + 한국 시간 (QA UX: 'your time' 금지)
+    expect(m[1].text).toBe('[엣지영어] 김민수님, 담당 강사님 휴가 기간 수업을 대체강사 Benny 강사님과 평소 시간에 진행하려고 해요. 아래 날짜 괜찮으신지 알려 주세요. 강사님 프로필도 함께 보내 드려요.\n\n- 11월 5일(목) 오후 8시 [한국 시간]');
     // 두 가지를 처음부터 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강), 대표 문구 그대로
     expect(m[2].recipient).toBe('student');
     expect(m[2].text).toBe([
       '[엣지영어] 김민수님, 담당 강사님 휴무로 아래 수업의 진행 방법을 골라 주세요.',
-      '- 11월 2일(월) 오후 8시 (한국 시간)\n- 11월 5일(목) 오후 8시 (한국 시간)',
+      '- 11월 2일(월) 오후 8시 [한국 시간]\n- 11월 5일(목) 오후 8시 [한국 시간]',
       '① ⭐추천⭐ 원래 시간에 대체강사와 수업하기\n일정을 바꾸지 않고, 평소 수업 시간 그대로 수업하실 수 있어요.\n다른 강사의 영어와 수업 방식도 경험해 보실 수 있습니다.',
       '② 기존 강사와 보강하기\n기존 강사님이 돌아오신 뒤 수업하실 수 있어요. 가능한 보강 시간을 확인해 주세요.',
     ].join('\n\n'));
@@ -94,7 +94,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     // 2026-10-28 대표 문구: 날짜만, 맨 끝에 학생 LMS 링크 (강사 프로필·답은 LMS에서)
     expect(w2.proposal?.text).toBe([
       '[엣지영어] 안녕하세요, 김민수님! \n다름이 아니라 담당 강사님 휴무로 부득이하게 아래 날짜에는 수업을 진행하기 어렵게 되었어요.🥲',
-      '- 11월 2일(월) 오후 8시 (한국 시간)\n- 11월 4일(수) 오후 8시 (한국 시간)\n- 11월 9일(월) 오후 8시 (한국 시간)',
+      '- 11월 2일(월) 오후 8시 [한국 시간]\n- 11월 4일(수) 오후 8시 [한국 시간]\n- 11월 9일(월) 오후 8시 [한국 시간]',
       '추천드리는 방법은, 원래 시간에 대체강사와 수업하는 거예요!\n일정을 바꾸지 않고, 평소 수업 시간 그대로 수업하실 수 있어요.\n다른 강사의 영어와 수업 방식도 경험해 보실 수 있습니다:)',
       '아래 링크에서 강사님 프로필을 확인하시고, 원하시는 수업 방법을 편하게 선택해 주세요. \n감사합니다🙇‍♀️',
       '/lms/student',
@@ -114,7 +114,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     const m = leaveMessages(items, [{ id: 'o', itemId: 'a', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null }]);
     const w = studentWork(groupByStudent(items)[0], m, now, { from: '2026-11-02', to: '2026-11-10' });
     expect(w.steps).toEqual(['propose']);
-    expect(w.proposal?.text).toBe('[엣지영어] 안녕하세요, 김민수님! \n다름이 아니라 담당 강사님 휴무로 부득이하게 아래 날짜에는 수업을 진행하기 어렵게 되었어요.🥲\n\n- 11월 2일(월) 오후 8시 (한국 시간)\n\n아래 링크에서 보강 날짜를 편하게 골라 주세요. \n감사합니다🙇‍♀️\n\n/lms/student');
+    expect(w.proposal?.text).toBe('[엣지영어] 안녕하세요, 김민수님! \n다름이 아니라 담당 강사님 휴무로 부득이하게 아래 날짜에는 수업을 진행하기 어렵게 되었어요.🥲\n\n- 11월 2일(월) 오후 8시 [한국 시간]\n\n아래 링크에서 보강 날짜를 편하게 골라 주세요. \n감사합니다🙇‍♀️\n\n/lms/student');
     expect(w.confirm.makeup).toEqual([]);
   });
 
@@ -151,7 +151,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(m.map((x) => [x.recipient, x.to])).toEqual([['tutor', 'Benny'], ['student', '김민수']]);
     expect(m[0].text).toContain('CONFIRMED substitute classes');
     // R-23: 회의실 링크가 없으면(또는 홈페이지 주소면) 링크 대신 '수업 전에 보내 드려요'
-    expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 대체강사 Benny 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.\n\n- 11월 2일(월) 오후 8시 (한국 시간)\n\n수업 링크는 수업 전에 보내 드려요.');
+    expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 대체강사 Benny 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.\n\n- 11월 2일(월) 오후 8시 [한국 시간]\n\n수업 링크는 수업 전에 보내 드려요.');
     const bogus = leaveMessages([I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', subTutorMeetUrl: 'https://meet.google.com/' })], notices);
     expect(bogus[1].text).toContain('수업 링크는 수업 전에 보내 드려요.');
     const room = leaveMessages([I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', subTutorMeetUrl: 'https://meet.google.com/abc-defg-hij' })], notices);
@@ -174,7 +174,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
       '참고로 담당 강사님이 11/2~11/10 휴가예요. 이 기간 수업은 ① ⭐추천⭐ 대체강사와 원래 시간에 하시거나 ② 강사님 복귀 뒤 보강으로 하실 수 있고, 수업 횟수는 그대로예요. 어느 쪽이 편하신지 같이 알려 주세요.',
     );
     const t = renewalTutorText({ studentId: 's', studentName: '정유진', studentCode: 'STU-1', endDate: '2026-10-29', dates: [{ startsAt: kstToInstant('2026-11-05', '21:30'), durationMin: 40 }] });
-    expect(t).toMatch(/^- .*KST \(40 min\) \(if the student renews\)$/);
+    expect(t).toMatch(/^- .*\*KST\* \(40 min\) \(if the student renews\)$/);
   });
 
   it('기다림 수업(강사 장기 휴식)도 보강 권리 — 수업 변경·보강 화면에서 보강을 잡음', () => {
@@ -234,8 +234,8 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     const [b] = tutorBundles(items, notices, now);
     expect(b.pending).toBeNull();
     expect(b.sent).toHaveLength(1);
-    expect(b.sent[0].text).toContain('1) Mon 9 Nov 8:00 AM Manila Time (Mon 9 Nov 9:00 AM KST) · En s1');
-    expect(b.sent[0].text).toContain('2) Mon 9 Nov 7:00 PM Manila Time (Mon 9 Nov 8:00 PM KST) · En s2');
+    expect(b.sent[0].text).toContain('1) Mon, 9 Nov 8:00 AM *Manila Time* / 9:00 AM *KST* · En s1');
+    expect(b.sent[0].text).toContain('2) Mon, 9 Nov 7:00 PM *Manila Time* / 8:00 PM *KST* · En s2');
     expect(b.numbers).toEqual({ b: '2번' });
   });
   it('다시 고르기 뒤 같은 강사를 다시 골라도 예전에 보낸 문의 원문·번호는 그대로, 새 문의는 따로 (3400, 대표 10/30)', () => {
@@ -248,8 +248,8 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     ];
     const [b] = tutorBundles(items, notices, now);
     expect(b.sent).toHaveLength(1);
-    expect(b.sent[0].text).toContain('1) Mon 9 Nov 8:00 AM Manila Time (Mon 9 Nov 9:00 AM KST) · En s1');
-    expect(b.sent[0].text).toContain('2) Mon 9 Nov 7:00 PM Manila Time (Mon 9 Nov 8:00 PM KST) · En s2');
+    expect(b.sent[0].text).toContain('1) Mon, 9 Nov 8:00 AM *Manila Time* / 9:00 AM *KST* · En s1');
+    expect(b.sent[0].text).toContain('2) Mon, 9 Nov 7:00 PM *Manila Time* / 8:00 PM *KST* · En s2');
     expect(b.numbers).toEqual({ b: '2번' });
     expect(b.pending!.itemIds).toEqual(['a']);
   });

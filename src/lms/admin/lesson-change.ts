@@ -5,9 +5,7 @@
 import { ampmKo, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { CONFIRMED } from '../rules/policy';
 import { grantsMakeup, type ClassStatus } from '../rules/status';
-import { enWhen } from './confirm';
-import { koZoneCity } from './places';
-import { enZone } from './students';
+import { enBoth, koBoth } from './time-text';
 
 export type ChLesson = {
   id: string;
@@ -229,26 +227,12 @@ export function decisionLines(d: ChangeDecision): string[] {
 // 안내 문구 (학생: 카카오톡 한국어 / 강사: WhatsApp 영어). 해외 학생은 현지 시각을 앞에, 한국 시각을 괄호로
 // ---------------------------------------------------------------------
 
-const KO_WD: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토' };
-/** '11월 5일(목) 오전 10시' / '오후 5시 30분' (학생 안내, 2026-10-26 대표 문구) */
-function koNice(at: Date, tz: string): string {
-  const f = formatInZone(at, tz);
-  const [h, m] = f.time.split(':').map(Number);
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8))}일(${KO_WD[f.weekday]}) ${h < 12 ? '오전' : '오후'} ${h12}시${m ? ` ${m}분` : ''}`;
-}
-/** 학생 안내 시각 — 한 가지 모양, 시간대 이름은 항상 뒤에 한국어로 (대표 2026-11-08)
- *  한국 거주 '11월 5일(목) 오전 10시 (한국 시간)' / 해외 '11월 4일(수) 오후 9시 (토론토 시간) = 11월 5일(목) 오전 10시 (한국 시간)' */
-export function koAt(at: Date, tz: string): string {
-  const kst = `${koNice(at, 'Asia/Seoul')} (한국 시간)`;
-  if (!tz || tz === 'Asia/Seoul') return kst;
-  return `${koNice(at, tz)} (${koZoneCity(tz)} 시간) = ${kst}`;
-}
+/** 학생 안내 시각 (카톡·메일) — 시각 바로 뒤 [기준 이름], 두 시간대는 ' / ' (time-text.ts, 대표 2026-11-08)
+ *  한국 거주 '11월 5일(목) 오전 10시 [한국 시간]' / 해외 '11월 4일(수) 오후 9시 [토론토 시간] / 오전 10시 [한국 시간]' */
+export const koAt = (at: Date, tz: string) => koBoth(at, tz);
 const koDate = (d: KstDate) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일(${['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
-/** 강사 안내 시각: 'Thu 5 Nov 22:00 Toronto Time (Fri 6 Nov 12:00 KST)' — 도시 이름 + 한국 시간 함께 (H26(43), QA UX: 'your time' 금지) */
-export const enAt = (at: Date, tz: string) => (!tz || tz === 'Asia/Seoul'
-  ? `${enWhen(at, 'Asia/Seoul')} KST`
-  : `${enWhen(at, tz)} ${enZone(tz)} (${enWhen(at, 'Asia/Seoul')} KST)`);
+/** 강사 안내 시각 (WhatsApp·메일) — 'Mon, 9 Nov 6:00 PM *Ho Chi Minh Time* / 8:00 PM *KST*' (time-text.ts, 대표 2026-11-08) */
+export const enAt = (at: Date, tz: string) => enBoth(at, tz);
 
 export type NoticeContext = {
   student: ChStudent;
@@ -282,9 +266,8 @@ function originEn(c: NoticeContext): string {
 
 /** 톡으로 보내는 '보강 날짜 고르기' 바로가기 (11/8 대표): 학생 본인 LMS 에서 그 수업 날짜 고르기가 바로 열림 */
 export const makeupLink = (id: string) => `${typeof window === 'undefined' ? '' : window.location.origin}/lms/student?makeup=${id}`;
-/** 신청 기한(수강 종료일 한국 23:59): 한국 거주 '11월 30일(월) 한국 시간까지', 해외 '(토론토 시간) = (한국 시간)' 모양 */
-const untilKo = (until: KstDate, tz: string) =>
-  !tz || tz === 'Asia/Seoul' ? `${koDate(until)} 한국 시간까지` : `${koAt(new Date(`${until}T23:59:00+09:00`), tz)}까지`;
+/** 신청 기한(수강 종료일 한국 23:59): 학생 안내 시각 모양 그대로 + '까지' (time-text.ts) */
+const untilKo = (until: KstDate, tz: string) => `${koAt(new Date(`${until}T23:59:00+09:00`), tz)}까지`;
 /**
  * 보강은 학생이 LMS 에서 직접 신청 → 강사 확정 (11/8 대표: 수업 중에 강사와 정한 시간도 학생이 LMS 로 신청).
  * 링크가 없으면(이관 보강 등) 링크 줄만 빠짐

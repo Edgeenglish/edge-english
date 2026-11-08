@@ -8,8 +8,10 @@
 // - 강사는 영어 고정. 운영자 보기에서만 한국어 라벨 (useT)
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { enZone } from '@/lms/admin/students';
+import { bold, enBoth } from '@/lms/admin/time-text';
+import { Rich } from '@/app/lms/Rich';
 import { formatInZone } from '@/lms/rules/dates';
-import { CLASS_STYLE_EN, CORRECTION_EN, enAt, enDate, nextLesson, RUBRIC, slotsIn, todayKst, type TutorStudentProfile } from '@/lms/tutor/profile';
+import { CLASS_STYLE_EN, CORRECTION_EN, enDate, nextLesson, RUBRIC, slotsIn, todayKst, type TutorStudentProfile } from '@/lms/tutor/profile';
 import { CLASS_STYLE_TEXT, CLASS_STYLES, initialStyleFromWish, MIX_OPTIONS, MIX_TEXT, needsMaterials, needsTextbook, OTHER_TEXTBOOK, TEXTBOOKS, type Followup, type MixOption, type TutorClassStyle } from '@/lms/tutor/followup';
 import { useLang, useT } from '@/lms/tutor/lang';
 import type { ProfileActions } from './StudentProfile';
@@ -172,8 +174,8 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
           <p className="mb-2 text-[13px] text-[#6b6880]">{e ? `${e.durationMin} min` : ''}{p.slots.length ? ` · ${kst.text.split(' ')[0]}` : ''}</p>
           {[
             [t('Lives in', '거주·시간대'), <>{[s.city, s.country].filter(Boolean).join(', ') || '—'} <span className="text-[#6b6880]">· {s.timezone}</span></>],
-            [t('Regular class', '정규 수업'), p.slots.length ? <>{kst.text} KST{tz !== 'Asia/Seoul' ? <span className="block text-[12.5px] text-[#6b6880]">{mine.text} {enZone(tz)}</span> : null}</> : '—'],
-            [t('Next class', '다음 수업'), next ? `${enAt(next.startsAt, tz)} ${enZone(tz)}` : '—'],
+            [t('Regular class', '정규 수업'), p.slots.length ? <>{kst.text} <Rich text={bold('KST')} />{tz !== 'Asia/Seoul' ? <span className="block text-[12.5px] text-[#6b6880]">{mine.text} <Rich text={bold(enZone(tz))} /></span> : null}</> : '—'],
+            [t('Next class', '다음 수업'), next ? <Rich text={enBoth(next.startsAt, tz)} /> : '—'],
             [t('Remaining', '수업 횟수'), e && 'leftAll' in e ? `${e.leftAll + e.leftUnbooked} ${t('classes left', '회 남음')}` : '—'],
           ].map(([k, v], i) => (
             <div key={i} className="grid grid-cols-[105px_1fr] gap-2 border-b border-[#efedf4] py-2 text-[13px] last:border-0">
@@ -322,7 +324,7 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
                   {first ? (
                     <div className="rounded-[13px] border border-[#dcebdc] bg-[#f7fcf8] p-3 text-[13px] leading-relaxed text-[#1d1b2b]">
                       ✓ <b>{t('First lesson recorded', '첫 수업 기록 완료')}</b><br />
-                      {enAt(first.startsAt, tz)} {enZone(tz)} · {first.status ?? 'Held'}<br />
+                      <Rich text={enBoth(first.startsAt, tz)} /> · {first.status ?? 'Held'}<br />
                       {first.topics ? <>{t('Topic', 'Topic')}: {first.topics}</> : <span className="text-[#6b6880]">{t('No covered topics written', 'Covered topics 없음')}</span>}
                     </div>
                   ) : <p className="text-[13px] text-[#6b6880]">{t('The first lesson has not been recorded as held yet.', '첫 수업이 아직 Held 로 기록되지 않았어요.')}</p>}

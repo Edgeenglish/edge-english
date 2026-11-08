@@ -17,11 +17,11 @@ describe('학생 수강·결제 칸 (11/2 점검 ⑥: 내부 문구 노출)', ()
 });
 
 describe('강사 화면 시간대 이름 (11/2 점검 ⑤)', () => {
-  it("'[도시] Time / Korea Time (KST)'", () => {
+  it("'[도시] Time / KST'", () => {
     expect(tzTimeLabel('Asia/Manila')).toBe('Manila Time');
     expect(tzTimeLabel('America/New_York')).toBe('New York Time');
-    expect(tzHeader('Australia/Sydney')).toBe('Sydney Time / Korea Time (KST)');
-    expect(tzHeader('Asia/Seoul')).toBe('Korea Time (KST)');
+    expect(tzHeader('Australia/Sydney')).toBe('Sydney Time / KST');
+    expect(tzHeader('Asia/Seoul')).toBe('KST');
   });
 });
 

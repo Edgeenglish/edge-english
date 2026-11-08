@@ -4,8 +4,10 @@
 // 정규 담당 강사 = 레벨·자기소개·선호 수정, 대체강사 = 열람만(이메일 없음). 권한은 DB 함수가 확인. 닫으면 보던 주로 그대로
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { enZone } from '@/lms/admin/students';
+import { bold, enBoth } from '@/lms/admin/time-text';
+import { Rich } from '@/app/lms/Rich';
 import { formatInZone } from '@/lms/rules/dates';
-import { CLASS_STYLE_EN, CORRECTION_EN, dstNote, enAt, enDate, enDateYear, finalEndLines, nextLesson, RUBRIC, slotsIn, todayKst, type TutorStudentProfile } from '@/lms/tutor/profile';
+import { CLASS_STYLE_EN, CORRECTION_EN, dstNote, enDate, enDateYear, finalEndLines, nextLesson, RUBRIC, slotsIn, todayKst, type TutorStudentProfile } from '@/lms/tutor/profile';
 import { styleText } from '@/lms/tutor/followup';
 import { useLang, useT } from '@/lms/tutor/lang';
 
@@ -154,16 +156,16 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
             <Row k="Class duration" v={e ? `${e.durationMin} min` : NP} />
             {p.slots.length > 0 ? (
               <>
-                <Row k="Korea Time (KST)" v={kst.text} />
+                <Row k="KST" v={kst.text} />
                 {tz !== 'Asia/Seoul' && <Row k={`Your time — ${enZone(tz)}`} v={<>{mine.text}{shift(mine.dayShift, enZone(tz).replace(' Time', ''))}</>} />}
                 {stTz !== 'Asia/Seoul' && stTz !== tz && <Row k={`Student's time — ${enZone(stTz)}`} v={<>{theirs.text}{shift(theirs.dayShift, enZone(stTz).replace(' Time', ''))}</>} />}
                 {p.nextSlots.length > 0 && (() => { const nk = slotsIn(p.nextSlots, 'Asia/Seoul', p.nextSlots[0].from); const nm = slotsIn(p.nextSlots, tz, p.nextSlots[0].from); return (
-                  <Row k={`From ${enDate(p.nextSlots[0].from)}`} v={<b className="text-[#5b3fe0]">{nk.text} KST{tz !== 'Asia/Seoul' ? ` · ${nm.text} ${enZone(tz)}` : ''}</b>} />
+                  <Row k={`From ${enDate(p.nextSlots[0].from)}`} v={<b className="text-[#5b3fe0]">{tz !== 'Asia/Seoul' ? <>{nm.text} <Rich text={bold(enZone(tz))} /> / </> : null}{nk.text} <Rich text={bold('KST')} /></b>} />
                 ); })()}
-                {next && <Row k="Next class" v={<>{enAt(next.startsAt, tz)} {enZone(tz)}{tz !== 'Asia/Seoul' && <span className="text-[#6b6880]"> · {enAt(next.startsAt, 'Asia/Seoul').split(' · ')[1]} KST</span>}{next.substitute ? ' · cover class' : ''}</>} />}
+                {next && <Row k="Next class" v={<><Rich text={enBoth(next.startsAt, tz)} />{next.substitute ? ' · cover class' : ''}</>} />}
                 {notes.map((n) => <p key={n} className="pt-1 text-[12.5px] text-[#a35b00]">{n}</p>)}
               </>
-            ) : <Row k="Class days / time" v={next ? <>{enAt(next.startsAt, tz)} {enZone(tz)} (cover class)</> : NP} />}
+            ) : <Row k="Class days / time" v={next ? <><Rich text={enBoth(next.startsAt, tz)} /> (cover class)</> : NP} />}
             <Row k="Google Docs" v={s.classNoteUrl ? <a href={s.classNoteUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#5b3fe0] underline">Open class notes ↗</a> : NP} />
           </Section>
 
@@ -178,7 +180,7 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
                 <Row k="Start date" v={enDateYear(e.startDate)} />
                 <Row k="End date" v={enDateYear(e.baseEndDate)} />
                 {e.extensionDays > 0 && <Row k="Extended end date" v={`${enDateYear(e.finalEndDate)} (+${e.extensionDays} days)`} />}
-                <Row k="Final end" v={<>{finalEndLines(e.finalEndDate, tz, stTz).map((l) => <span key={l} className="block">{l}</span>)}</>} />
+                <Row k="Final end" v={<>{finalEndLines(e.finalEndDate, tz, stTz).map((l) => <span key={l} className="block"><Rich text={l} /></span>)}</>} />
                 {/* 예약된 수업과 날짜 안 잡은 보강권을 구분해 보여 주고, 합계는 학생 홈 '남은 수업' 과 같음 (QA-05) */}
                 <Row k="Remaining" v={<>{`${e.leftAll + e.leftUnbooked} ${e.leftAll + e.leftUnbooked === 1 ? 'class' : 'classes'} remaining`}<span className="block text-[12.5px] text-[#6b6880]">{e.leftRegular} regular{e.leftAll > e.leftRegular ? ` · ${e.leftAll - e.leftRegular} make-up booked` : ''}{e.leftUnbooked > 0 ? ` · ${e.leftUnbooked} make-up not scheduled yet` : ''}</span></>} />
               </>
