@@ -604,7 +604,7 @@ export default function StudentHome(props: {
       <span className="rounded-[6px] bg-[#27230e] px-[6px] py-[2px] text-[11px] font-extrabold text-[#ffd401]">수강생용</span>
     </span>
   );
-  const brand = props.adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : logo;
+  const brand = props.adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : <button type="button" aria-label="새로고침" onClick={() => window.location.reload()} className="inline-flex">{logo}</button>;
   return (
     <KstCtx.Provider value={{ admin: isAdminView, studentTz, on: adminKst, set: setAdminKst }}>
     <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">

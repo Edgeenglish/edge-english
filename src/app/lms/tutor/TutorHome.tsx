@@ -12,7 +12,7 @@ import { tutorPaidFor } from '@/lms/rules/status';
 import { cityTime } from '@/lms/tutor/hours-view';
 import TutorHours, { type HoursActions } from './TutorHours';
 import TutorSchedule, { type ScheduleActions } from './TutorSchedule';
-import { useSavedToggle, useSavedValue } from './useSaved';
+import { useSavedToggle } from './useSaved';
 import StudentProfile, { type ProfileActions } from './StudentProfile';
 import FirstLessonFollowup, { type FollowupSave } from './FirstLessonFollowup';
 import type { FollowupTodo } from '@/lms/tutor/followup';
@@ -115,7 +115,9 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   const [screen, setScreen] = useState(initial);
   const [now, setNow] = useState(() => new Date(nowIso));
   // 마지막에 연 메뉴를 다음에도 그대로 (이 기기)
-  const [tab, setTab] = useSavedValue<Tab>('lms_tutor_menu', 'home', TABS.map((t) => t.key));
+  // 다시 열면 항상 Home (대표 11/8: 마지막 메뉴를 기억하지 않음). 옛 저장값은 지움
+  const [tab, setTab] = useState<Tab>('home');
+  useEffect(() => { try { localStorage.removeItem('lms_tutor_menu'); } catch { /* 저장 안 되는 브라우저 */ } }, []);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -234,7 +236,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     </span>
   );
   // 운영자 보기: 로고를 누르면 운영자 화면으로 (11/3 대표, 학생 화면과 같게)
-  const brand = adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : logo;
+  const brand = adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : <button type="button" aria-label="Refresh" onClick={() => window.location.reload()} className="inline-flex">{logo}</button>;
   // Availability 에 저장 안 한 변경이 있으면 메뉴를 바꾸기 전에 확인 (QA UX: '1 change not saved' 상태에서 Home 누르면 사라짐)
   const hoursDirty = useRef(false);
   const goTab = (key: Tab) => {
