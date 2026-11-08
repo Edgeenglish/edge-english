@@ -111,11 +111,11 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
   return (
     <Sheet title="정규 일정 수정" onClose={onClose} wide>
       <p className="mb-1 text-[13px] text-[#6b6880]">
-        지금 적용 중: {slotsText(cur)} 한국 시간 · {e.durationMin}분 · {tutor.tutor} 강사. 요일·시작 시간만 바꿔요. 주 {n}회·수업 길이·강사는 그대로예요.
+        지금 적용 중: {slotsText(cur)} <b>한국 시간</b> · {e.durationMin}분 · {tutor.tutor} 강사. 요일·시작 시간만 바꿔요. 주 {n}회·수업 길이·강사는 그대로예요.
       </p>
       {pendingFrom && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[10px] border border-[#d9d2f5] bg-[#f3f0fd] px-3 py-2 text-[13.5px] text-[#1d1b2b]">
-          <span><b>{mdw(pendingFrom)}부터 적용 예정:</b> {slotsText(pending)} 한국 시간</span>
+          <span><b>{mdw(pendingFrom)}부터 적용 예정:</b> {slotsText(pending)} <b>한국 시간</b></span>
           <button type="button" className={`${btnSub} !min-h-[36px] !py-1 text-[13px]`} onClick={cancelPending} disabled={busy}>예정 변경 취소</button>
         </div>
       )}
@@ -205,7 +205,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                   <h3 className="text-[13px] font-extrabold text-[#6b6880]">그대로 두는 수업 {pv.kept.length}회</h3>
                   <ul className="mt-1 grid gap-1 text-[13px] text-[#1d1b2b]">
                     {keptShown.map((k) => (
-                      <li key={k.lessonId}>{zoneLabel(k.startsAt, 'Asia/Seoul')} 한국 시간 · {KIND_KO[k.kind] ?? k.kind}{k.why === 'substitute' ? ` · 대체 ${k.tutor}` : ''} <span className="text-[#6b6880]">— {KEPT_WHY[k.why] ?? k.why}</span></li>
+                      <li key={k.lessonId}>{zoneLabel(k.startsAt, 'Asia/Seoul')} <b>한국 시간</b> · {KIND_KO[k.kind] ?? k.kind}{k.why === 'substitute' ? ` · 대체 ${k.tutor}` : ''} <span className="text-[#6b6880]">— {KEPT_WHY[k.why] ?? k.why}</span></li>
                     ))}
                     {pv.kept.length > keptShown.length && (
                       <li className="text-[12.5px] text-[#6b6880]">… {pv.kept.length - keptShown.length}회 더 <button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setShowAllKept(true)}>전체 {pv.kept.length}회 보기</button></li>

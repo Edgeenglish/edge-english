@@ -14,6 +14,7 @@ import { styleText } from '@/lms/tutor/followup';
 import { Box, btnMain, btnSmall, btnSub, CopyButton, input, label, Row, Sheet, WHO_ROLE } from './parts';
 import RegularChange from './RegularChange';
 import PrestartMove from './PrestartMove';
+import { Rich } from '@/app/lms/Rich';
 
 export type DetailActions = {
   reload: () => Promise<void>;
@@ -214,7 +215,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
 
           <Box title="지난 수업">
             {data.recent.length === 0 && <p className="py-2 text-[13px] text-[#6b6880]">지난 수업이 없어요.</p>}
-            {data.recent.map((l) => <Row key={l.id} k={`${zoneLabel(l.startsAt, 'Asia/Seoul')} 한국 시간`} v={`${KIND_KO[l.kind] ?? l.kind} · ${l.classStatus ?? (l.state === 'scheduled' ? '기록 전' : l.state)}`} />)}
+            {data.recent.map((l) => <Row key={l.id} k={<Rich text={`${zoneLabel(l.startsAt, 'Asia/Seoul')} *한국 시간*`} />} v={`${KIND_KO[l.kind] ?? l.kind} · ${l.classStatus ?? (l.state === 'scheduled' ? '기록 전' : l.state)}`} />)}
             {data.recentTopics.length > 0 && (
               <details className="mt-1 text-[13px]">
                 <summary className="cursor-pointer font-semibold text-[#5b3fe0]">최근 Covered Topics {data.recentTopics.length}건</summary>
@@ -279,8 +280,8 @@ function NoticeSheet({ data, changeId, sent, reload, onClose }: { data: StudentD
         </select>
       )}
       <div className="mb-3 rounded-[12px] bg-white px-3 py-2 text-[13.5px] text-[#1d1b2b]">
-        <p><b>{mdw(c.effectiveFrom)}부터</b> {slotsText(c.oldSlots)} → <b>{slotsText(c.newSlots)}</b> 한국 시간 · 바뀐 수업 {c.moved.length}회 · 그대로 {c.kept.length}회</p>
-        <p className="text-[12.5px] text-[#6b6880]">사유: {c.reason} · 저장 {zoneLabel(c.at, 'Asia/Seoul')} 한국 시간</p>
+        <p><b>{mdw(c.effectiveFrom)}부터</b> {slotsText(c.oldSlots)} → <b>{slotsText(c.newSlots)}</b> <b>한국 시간</b> · 바뀐 수업 {c.moved.length}회 · 그대로 {c.kept.length}회</p>
+        <p className="text-[12.5px] text-[#6b6880]">사유: {c.reason} · 저장 {zoneLabel(c.at, 'Asia/Seoul')} <b>한국 시간</b></p>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
         <NoticeCard title="학생 카카오톡" text={ko} sentAt={c.studentSentAt} busy={busy === 'student'} onSent={() => mark('student', false)} onUndo={() => mark('student', true)} />
@@ -333,7 +334,7 @@ function ExtendSheet({ enrollment: e, studentTz, today, extend, onClose, onSaved
   return (
     <Sheet title="종료일 연장 (운영진만)" onClose={onClose}>
       <div className="grid gap-2 rounded-[12px] bg-white px-3 py-2 text-[13.5px]">
-        <Row k="원래 종료" v={`${mdw(e.baseEndDate)} 오후 11:59 한국 시간`} />
+        <Row k="원래 종료" v={<Rich text={`${mdw(e.baseEndDate)} 오후 11:59 *한국 시간*`} />} />
         {/* 합계 먼저, 기록은 접어 둠 (QA 11/8: 휴대폰에서 입력란까지 스크롤이 길었음) */}
         {e.extensions.length > 0 && <Row k="이미 연장" v={`${e.extensionDays > 0 ? '+' : ''}${e.extensionDays}일 (기록 ${e.extensions.length}건)`} />}
         {e.extensions.length > 0 && (

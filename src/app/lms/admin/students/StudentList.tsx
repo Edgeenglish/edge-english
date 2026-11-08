@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { diffDays, instantToKstDate } from '@/lms/rules/dates';
 import { matchStudent, md, productText, slotsText, STATUS_TEXT, type StudentRow, type StudentStatus } from '@/lms/admin/students';
 import { AdminHeader, BottomNav, Icon } from '../ui';
+import { Rich } from '@/app/lms/Rich';
 
 const STATUS_STYLE: Record<StudentStatus, string> = {
   active: 'bg-[#e3f5ea] text-[#13623a]', upcoming: 'bg-[#efebff] text-[#5b3fe0]', pending: 'bg-[#fff1d6] text-[#8a5300]', ended: 'bg-[#f0eef6] text-[#6b6880]', none: 'bg-[#fff1d6] text-[#8a5300]',
@@ -55,7 +56,7 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
               ? [productText(s.weeklyCount && s.durationMin ? { weeks: s.weeks, legacyLabel: s.legacyLabel, weeklyCount: s.weeklyCount, durationMin: s.durationMin } : null), '강사 배정 전', `결제 확인 후 수업 ${s.weeklyCount && s.weeks ? s.weeklyCount * s.weeks : ''}회 생성`, s.startDate ? `희망 시작 ${md(s.startDate)}` : null].filter(Boolean).join(' · ')
               : [
               s.tutor ?? (s.status === 'active' || s.status === 'upcoming' ? '강사 배정 전' : null),
-              s.slots.length ? `${slotsText(s.slots)} 한국 시간` : null,
+              s.slots.length ? `${slotsText(s.slots)} *한국 시간*` : null,
               s.status === 'none' ? null : productText(s.weeklyCount && s.durationMin ? { weeks: s.weeks, legacyLabel: s.legacyLabel, weeklyCount: s.weeklyCount, durationMin: s.durationMin } : null),
               s.status === 'upcoming' && s.startDate ? `${md(s.startDate)} 시작` : s.status === 'active' && d !== null ? `종료 ${md(s.finalEndDate!)} (D-${d})` : s.status === 'ended' && s.finalEndDate ? `${md(s.finalEndDate)} 종료` : null,
             ].filter(Boolean).join(' · ');
@@ -70,7 +71,7 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
                     <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-bold ${STATUS_STYLE[s.status]}`}>{STATUS_TEXT[s.status]}</span>
                     {s.noticePending && <span className="rounded-full bg-[#fff1d6] px-2 py-0.5 text-[11.5px] font-bold text-[#8a5300]">일정 변경 안내 안 보냄</span>}
                   </span>
-                  <span className="block truncate text-[12.5px] text-[#6b6880]">{line2}</span>
+                  <span className="block truncate text-[12.5px] text-[#6b6880]"><Rich text={line2} /></span>
                 </span>
                 <Icon name="chevron" className="h-4 w-4 text-[#b9b6c8]" />
               </Link>
