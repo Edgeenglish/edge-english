@@ -166,6 +166,15 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   // 담당강사 = 앞으로의 정규 수업 강사. 수업 줄에는 담당강사와 다른 강사(대체·보강 강사)일 때만 이름을 붙임 (대표 11/8: 같은 정보 반복 빼기)
   const regularTutors = [...new Set(choices.filter((l) => l.kind === 'regular').map((l) => l.tutorName))];
   const tutorTag = (l: ChLesson) => (regularTutors.includes(l.tutorName) ? '' : ` · ${l.tutorName}`);
+  const rowsAll = [...choices, ...canceledLessons].sort((a, b) => +a.startsAt - +b.startsAt);
+  // 취소된 수업 줄 글: '학생 미리 취소 · 취소 신청한 일자 11/8 오후 3:31 한국 · 보강 신청 전' (신청 기한·개수는 안 보임)
+  const canceledNote = (l: ChLesson) => {
+    const ch = data?.changes.find((c) => c.lessonId === l.id && c.status === 'applied');
+    const req = data?.makeupRequests.find((r) => r.sourceLessonId === l.id && !['withdrawn', 'voided', 'declined', 'expired'].includes(r.status));
+    const made = req?.confirmedLessonId ? byId.get(req.confirmedLessonId) : undefined;
+    const makeupText = made ? `보강 확정 ${kstLabel(made.startsAt)} 한국` : req ? '보강 신청 중' : ch && !ch.decision.makeup_allowed ? '보강 불가' : '보강 신청 전';
+    return `${l.classStatus ? STATUS_PLAIN[l.classStatus] ?? '취소' : '취소'}${ch ? ` · 취소 신청한 일자 ${sentLabel(ch.requestedAt ?? ch.decidedAt)} 한국` : ''} · ${makeupText}`;
+  };
   const lesson = lessonId ? byId.get(lessonId) ?? null : null;
   const rights = data ? makeupRights(lessons, data.migrated, data.makeupRequests, data.compensations ?? []) : [];
   const lastTutor = [...lessons].reverse().find((l) => !l.voided) ?? null;
@@ -254,11 +263,20 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
               <CreditsCard credits={credits} adjust={(d, r) => actions.adjustCredit!(student.id, d, r)} done={reload} />
             )}
             <Card title="2. 수업">
-              {choices.length === 0 ? (
+              {rowsAll.length === 0 ? (
                 <p className="text-[14px] text-[#6b6880]">예정 수업 없음</p>
               ) : (
                 <ul className="grid max-h-[420px] gap-1.5 overflow-y-auto">
-                  {choices.map((l) => (
+                  {rowsAll.map((l) => l.state === 'canceled' ? (
+                    // 취소된 수업은 같은 목록에 시간순으로, 날짜에 취소선 + 한 줄(누가 · 취소 신청한 일자 · 보강 상태). 누를 수 없음 (대표 11/8)
+                    <li key={l.id} className="rounded-[12px] border border-[#f3c9c4] bg-[#fdf3f2] px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <b className="text-[16px] text-[#6b6880] line-through">{kstLabel(l.startsAt)}</b>
+                        <span className="flex-1 text-right text-[13px] text-[#6b6880]">{tutorTag(l).replace(/^ · /, '')}</span>
+                      </div>
+                      <span className="block text-[13px] text-[#55526a]">{canceledNote(l)}</span>
+                    </li>
+                  ) : (
                     <li key={l.id}>
                       <button
                         type="button"
@@ -272,31 +290,6 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                     </li>
                   ))}
                 </ul>
-              )}
-              {canceledLessons.length > 0 && (
-                <div className="mt-3 border-t border-[#e6e3ef] pt-3">
-                  <p className="mb-1.5 text-[14px] font-bold text-[#1d1b2b]">취소된 수업</p>
-                  <ul className="grid gap-1.5">
-                    {canceledLessons.map((l) => {
-                      const ch = data.changes.find((c) => c.lessonId === l.id && c.status === 'applied');
-                      const req = data.makeupRequests.find((r) => r.sourceLessonId === l.id && !['withdrawn', 'voided', 'declined', 'expired'].includes(r.status));
-                      const made = req?.confirmedLessonId ? byId.get(req.confirmedLessonId) : undefined;
-                      // 보강 상태만 (신청 기한은 안 보임 — 대표 11/8)
-                      const makeupText = made ? `보강 확정 ${kstLabel(made.startsAt)} 한국` : req ? '보강 신청 중' : ch && !ch.decision.makeup_allowed ? '보강 불가' : '보강 신청 전';
-                      return (
-                        <li key={l.id} className="rounded-[12px] border border-[#f3c9c4] bg-[#fdf3f2] px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <b className="text-[16px] text-[#1d1b2b]">{kstLabel(l.startsAt)}</b>
-                            <span className="flex-1 text-right text-[13px] text-[#6b6880]">{tutorTag(l).replace(/^ · /, '')}</span>
-                          </div>
-                          <span className="block text-[13px] text-[#55526a]">
-                            {l.classStatus ? STATUS_PLAIN[l.classStatus] ?? '취소' : '취소'}{ch ? ` · 취소 신청한 일자 ${sentLabel(ch.requestedAt ?? ch.decidedAt)} 한국` : ''} · {makeupText}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
               )}
             </Card>
 
