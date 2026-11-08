@@ -16,6 +16,9 @@
 - ① `npm run test:db` 가 `supabase/tests/schema_test.sql` 1248줄 `malformed array literal: "Late cancel (less than 6 hours before class)"` 에서 멈춤 (11/8 lms-test 2ebc928 에서 재현, Follow-up 변경 전부터). 오류를 건너뛰고 돌리면 추가 실패: 1249 늦은 변경 · 2507 운영진 상세(4300) · 3321·3327·3356 메일 3건
 - ② vitest `policy-register.test.ts` '요약표 합계가 실제 항목 수와 같음' 실패
 - 순서: 원인이 시험 파일이 낡은 건지, 실제 함수가 틀린 건지 먼저 가림 → **실제 함수 문제면 고치기 전에 대표에게 보고**(운영 DB 에도 같은 함수가 있을 수 있음) → 시험 DB·로컬에서만 수정 → 운영 반영은 별도 승인
+- **11/8 밤 원인 확인 결과** (브랜치 claude/gracious-hamilton-v5i9zd):
+  - 고친 것(시험 파일만, 함수 그대로): 2404 A-03 = 시험 기준 주를 UTC 날짜로 잡아 한국 월요일 0~9시에 '다음 주 월'='오늘' → 한국 날짜로 · 2507 = 17f5e63(새 수강권 시작 전엔 지금 수강권이 현재) 반영 안 된 기대값 · 3072 4600 = 한국 0~2시에 '2시간 전' 첫 수업이 기준일 전날 → 시험에서 기준일을 3시간 전으로 · 3323·3326·3356 메일 = 1ccee6d 새 시각 모양 '[도시 시간] / [한국 시간]' 반영 · authz-probe 검토 목록에 새 SECURITY DEFINER 7개 추가(모두 is_admin/lms_screen_tutor 확인) · 02-check 표 56·feature_flags 8 · 정책 기준표 요약 PER 7/1·합계 77/14(f7cc878 반영 누락) → vitest 409/409
+  - **대표 승인 대기 (실제 함수, 운영 DB 에도 있음)**: ① `lms_notice_mail` 119줄 `v_lines || '…'` 가 배열로 해석돼 오류 → **수강생 늦은 취소(6시간 안)가 메일 트리거에서 실패해 취소 자체가 안 됨**(운영 늦은 취소 아직 0건, 시험 DB 도 같은 함수) — 고침: `'…'::text` 한 글자 추가 새 migration ② 새 글자 함수 5개(lms_mail_en_clock·lms_strip_bold·lms_bold_html·lms_mail_ko_hour·lms_is_google_doc_url) 비로그인 실행 권한 회수(revoke, 데이터 안 읽는 함수라 위험 낮음). 두 개를 임시로 넣으면 test:db 전체 통과 확인
 
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 

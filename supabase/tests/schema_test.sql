@@ -2308,7 +2308,7 @@ select pg_temp.ok(lms_makeup_conflict('55555555-0000-0000-0000-000000004200', '9
 reset request.jwt.claim.sub;
 reset role;
 -- 가짜: 한국 거주 강사 R(월~금 06:00~22:30 가능)·대체강사 S, 학생 P 주 2회(월·화 20:00 KST) 40분 4주, 3주 전 화요일 시작 → 마지막 정규 = 다음 주 월요일 = 최종 종료일
-create temp table t4300 as select (date_trunc('week', current_date))::date as mon;
+create temp table t4300 as select (date_trunc('week', (now() at time zone 'Asia/Seoul')::date))::date as mon;   -- 한국 날짜 기준 (UTC 일요일 15시 뒤에는 UTC·한국 주가 달라 A-03 '오늘'과 '다음 주 월'이 겹침)
 grant select on t4300 to authenticated;
 insert into tutors (id, name, country, timezone) values
   ('55555555-0000-0000-0000-000000004300', 'RegTutor', 'Korea', 'Asia/Seoul'),
@@ -2502,7 +2502,7 @@ select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-00
 select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-0000-000000004300', '{"email":"nope"}')$$, 'email');
 select pg_temp.ok((select d -> 'student' ->> 'name_ko' = '김서연' and d -> 'student' ->> 'timezone' = 'America/Toronto' and d -> 'student' ->> 'level_note' = 'A2/B1 (시트)'
                           and jsonb_array_length(d -> 'changes') = 4 and jsonb_array_length(d -> 'enrollments') = 2 and (d -> 'edits' -> 0 ->> 'role') = 'admin'
-                          and (d -> 'enrollment' ->> 'seq')::int = 2 and (d -> 'enrollments' -> 1 ->> 'seq')::int = 1
+                          and (d -> 'enrollment' ->> 'seq')::int = 1 and (d -> 'enrollments' -> 1 ->> 'seq')::int = 1   -- 다음 수강권 시작 전에는 지금 수강권이 현재 (20261108050000)
                    from admin_student_detail('99999999-0000-0000-0000-000000004300') d),
   '운영진 상세: 한국 이름·바뀐 시간대·예전 레벨 참고·정규 변경 기록·수강권·수정 기록·연장 기록 (4300)');
 reset request.jwt.claim.sub;
@@ -3049,6 +3049,8 @@ values ('99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-0000000
 insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
 values ('99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 3, '20:00', 40, (now() at time zone 'Asia/Seoul')::date);
 -- 수업 2회: 1회(조금 전, 아직 기록 전) · 2회(앞으로). 4601: 기준일(기능 시작일 = 오늘) 이후 시작한 새 학생
+-- 기준일 = 3시간 전의 한국 날짜: 한국 0~2시에 돌려도 '2시간 전' 첫 수업이 기준일 전날로 빠지지 않게 (시험만, 함수 그대로)
+update feature_flags set updated_at = now() - interval '3 hours' where key = 'first_lesson_followup_since';
 insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at) values
   ('77777777-4600-0000-0000-000000000001', '99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 'regular', 1, now() - interval '2 hours', now() - interval '2 hours' + interval '40 minutes'),
   ('77777777-4600-0000-0000-000000000002', '99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 'regular', 2, now() + interval '4 days', now() + interval '4 days' + interval '40 minutes');
@@ -3316,15 +3318,15 @@ select pg_temp.ok((select count(*) = 1 from m85s)
               and (select email_status = 'queued' and status = 'pending' and email_to = 'support@edgeenglish.kr' and email_intended = 'mail-s@example.com' and email_attempts = 1 from m85s)
               and (select url = 'https://api.resend.com/emails' and req -> 'to' = '["support@edgeenglish.kr"]'::jsonb from m85s)
               and (select req ->> 'subject' like '[시험 · STU-%] [엣지영어] 보강이 확정됐어요 · %' from m85s)
-              and (select req ->> 'html' like '%보강 수업: % 시간) = % (한국 시간) · %분%' and req ->> 'html' like '%강사: 기록A%' and req ->> 'html' like '%/lms/student%' and req ->> 'html' like '%카카오톡 채널%' and req ->> 'html' like '%원래 수업: %' and req ->> 'html' like '%원래 받는 사람: mail-s@example.com%' from m85s)
+              and (select req ->> 'html' like '%보강 수업: % 시간] / % [한국 시간] · %분%' and req ->> 'html' like '%강사: 기록A%' and req ->> 'html' like '%/lms/student%' and req ->> 'html' like '%카카오톡 채널%' and req ->> 'html' like '%원래 수업: %' and req ->> 'html' like '%원래 받는 사람: mail-s@example.com%' from m85s)
               and (select hdr ->> 'Authorization' = 'Bearer re_test_key' and hdr ->> 'Idempotency-Key' = 'lesson_notice_email:' || id from m85s),
   '메일: 강사 확정 → 학생 메일 큐·Resend 요청(시험이라 support@, [시험 · 번호], 현지+한국 시각·강사·LMS 링크·문의 줄), 카톡 카드는 그대로(pending)');
 select pg_temp.ok((select email_status = 'no_address' and status = 'not_needed' and email_error like '강사 이메일%' from lesson_notices where makeup_request_id = (select id from mk85) and event = 'makeup_confirmed' and recipient_kind = 'tutor'),
   '메일: 강사 직접 확정 → 강사 안내 줄(WhatsApp 복사 불필요) + 이메일 없으면 no_address');
-select pg_temp.ok(lms_mail_ko_at('2026-11-11 02:00Z', 'Asia/Seoul') = '11월 11일(수) 오전 11시 (한국 시간)'
-              and lms_mail_ko_at('2026-11-13 00:00Z', 'America/Toronto') = '11월 12일(목) 오후 7시 (토론토 시간) = 11월 13일(금) 오전 9시 (한국 시간)'
-              and (select req ->> 'subject' like '% (' || lms_mail_ko_zone((select timezone from students where id = m85s.recipient_id)) || ')' from m85s),
-  '메일 시각: 한국 거주 (한국 시간), 해외 (도시 시간) = (한국 시간), 도시 한국어, 제목에도 시간대 이름 (대표 2026-11-08)');
+select pg_temp.ok(lms_mail_ko_at('2026-11-11 02:00Z', 'Asia/Seoul') = '11월 11일(수) 오전 11시 [한국 시간]'
+              and lms_mail_ko_at('2026-11-13 00:00Z', 'America/Toronto') = '11월 12일(목) 오후 7시 [토론토 시간] / 11월 13일(금) 오전 9시 [한국 시간]'
+              and (select req ->> 'subject' like '% [' || lms_mail_ko_zone((select timezone from students where id = m85s.recipient_id)) || ']' from m85s),
+  '메일 시각: 한국 거주 [한국 시간], 해외 [도시 시간] / [한국 시간], 도시 한국어, 제목에도 시간대 이름 (대표 2026-11-08, 20261108150000)');
 -- 중복 방지: 같은 안내를 다시 큐에 넣어도 메일 1통
 select lms_mail_enqueue_notice((select id from m85s));
 select pg_temp.ok((select count(*) = 1 from notifications where dedupe_key = 'lesson_notice_email:' || (select id from m85s)) and (select count(*) = (select n from sent_before) + 1 from net.sent),
@@ -3351,7 +3353,7 @@ create temp table m85t as select n.*, q.body as req, q.headers as hdr
 grant select on m85t to authenticated;
 select pg_temp.ok((select email_status = 'queued' and email_intended = 'tutor-a@example.com' and email_to = 'support@edgeenglish.kr' from m85t)
               and (select req ->> 'subject' like '[시험 · STU-%] CONFIRMED make-up - Record S · % Sydney Time' from m85t)
-              and (select req ->> 'html' like '%Make-up: % Sydney Time (% KST)%' and req ->> 'html' like '%Original class: %' and req ->> 'html' like '%/lms/tutor%' and req ->> 'html' like '%WhatsApp%' from m85t)
+              and (select req ->> 'html' like '%Make-up: % <b>Sydney Time</b> / % <b>KST</b>%' and req ->> 'html' like '%Original class: %' and req ->> 'html' like '%/lms/tutor%' and req ->> 'html' like '%WhatsApp%' from m85t)
               and (select (req ->> 'from') like 'Edge English <%' from m85t),
   '메일: 강사 이메일 채운 뒤 다시 보내기 → 영어 메일(현지 Sydney Time + KST, 강사 LMS 링크)');
 -- 실패 기록 → 다시 보내기 → 새 요청(Idempotency-Key 에 시도 번호)
