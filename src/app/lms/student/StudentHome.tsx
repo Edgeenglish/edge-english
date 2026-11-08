@@ -76,8 +76,6 @@ const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
 let VIEW_TZ = 'Asia/Seoul';
 /** 운영자 보기에서 해외 학생을 한국 시간으로 보는 중 (주황 띠·배지) */
 let ADMIN_KST = false;
-/** 한국 시간으로 보는 중일 때 띠에 적는 학생 도시 이름 ('시드니') */
-let KST_CITY = '';
 /** 기준 이름: '시드니 시간' / '한국 시간' (도시 이름 한국어, 11/8 대표) */
 const zoneCity = () => `${koZoneCity(VIEW_TZ)} 시간`;
 const zoneText = zoneCity;
@@ -111,42 +109,36 @@ const overseas = () => VIEW_TZ !== 'Asia/Seoul';
  * 시간대 기준은 화면·팝업 맨 위 띠(ZoneBar) 한 곳에만 (11/8 대표 시안: 날짜마다 시간대 글을 반복하지 않음).
  * 아래 시각 글에는 시간대 이름을 붙이지 않는다. 예외: 학생 시간대가 아닌 날짜(시트 이관 보강의 '한국 날짜')만 따로 적음
  */
-/** 모든 학생 화면·팝업 맨 위: '🕐 모든 날짜·시간은 토론토 시간 기준'. 운영자가 한국 시간으로 보는 중이면 숨기고 주황 띠(KstBar) 하나만 */
+/**
+ * 시간 기준 배지 (11/8 대표 시안: 큰 띠 대신 작은 배지 하나, 화면·팝업 같은 모양).
+ * 학생 시간 = 보라 '모든 날짜·시간은 시드니 시간 기준', 운영자가 한국 시간으로 보는 중 = 주황 '한국 시간(KST) 기준으로 보는 중'.
+ * 색만이 아니라 글자로 구별. globals.css 의 '* { color }' 때문에 글자에 색 직접 지정
+ */
 function ZoneBar() {
-  // 운영자가 한국 시간으로 보는 중이면 맨 위 주황 띠 하나만 (11/8 대표: 보라 띠와 겹쳐 보기 싫음)
-  if (ADMIN_KST) return null;
+  const tone = ADMIN_KST ? 'bg-[#fff1d6] text-[#8a5300]' : 'bg-[#efeaff] text-[#3a22b0]';
   return (
-    <p role="note" className="flex items-center gap-2 rounded-[12px] bg-[#5b3df0] px-3.5 py-2.5 text-[14.5px] font-extrabold leading-snug text-white">
-      <span aria-hidden>🕐</span>
-      <span className="text-white">모든 날짜·시간은 {zoneText()} 기준</span>
+    <p role="note" className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
+      <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
+      <span className={ADMIN_KST ? 'text-[#8a5300]' : 'text-[#3a22b0]'}>{ADMIN_KST ? '한국 시간(KST) 기준으로 보는 중' : `모든 날짜·시간은 ${zoneText()} 기준`}</span>
     </p>
   );
 }
-/**
- * 운영자가 한국 시간으로 보는 중일 때만: 화면 맨 위·팝업 맨 위 주황 띠 하나 (11/8 대표: 한국 시간 안내는 띠 하나로, 팝업에서도 또렷하게).
- * 색만이 아니라 글자로. globals.css 의 '* { color }' 때문에 글자마다 색 지정
- */
-function KstBar({ sticky }: { sticky?: boolean }) {
-  if (!ADMIN_KST) return null;
-  return (
-    <div role="status" className={`${sticky ? 'sticky top-0 z-10' : ''} flex shrink-0 flex-wrap items-center gap-x-2 bg-[#c2410c] px-4 py-2.5 lg:px-6`}>
-      <span className="text-[15px] font-bold text-white">⚠ 한국 시간 (KST)으로 보는 중</span>
-      <span className="text-[13px] font-semibold text-white">학생에게는 {KST_CITY} 시간으로 보여요</span>
-    </div>
-  );
-}
-/** 운영자 보기 전용 시간대 전환: 학생 시간 | 한국 시간(KST). 고른 쪽은 ✓·굵은 테두리 (색만으로 구별하지 않음) */
+/** 운영자 보기 전용 시간대 전환: 학생 시간 | 한국 시간(KST). 고른 쪽은 굵은 테두리·굵은 글자 (색만으로 구별하지 않음). 오른쪽에 기준 배지 */
 const KstCtx = createContext<{ admin: boolean; studentTz: string; on: boolean; set: (v: boolean) => void }>({ admin: false, studentTz: 'Asia/Seoul', on: false, set: () => {} });
 function KstToggle() {
   const c = useContext(KstCtx);
   if (!c.admin || c.studentTz === 'Asia/Seoul') return null;
   const city = koZoneCity(c.studentTz);
   const btn = (on: boolean) =>
-    `min-h-[40px] rounded-[10px] border px-3 text-[13.5px] ${on ? 'border-2 border-[#1d1b2b] font-extrabold text-[#1d1b2b]' : 'border-[#d9d5e8] font-semibold text-[#55526a]'}`;
+    `min-h-[40px] rounded-full px-4 text-[14px] ${on ? 'border-2 border-[#1d1b2b] bg-white font-extrabold text-[#1d1b2b]' : 'border-2 border-transparent font-semibold text-[#55526a]'}`;
   return (
-    <div role="group" aria-label="시간 표시 (운영자 보기)" className="flex w-fit flex-wrap gap-1.5">
-      <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>{!c.on ? '✓ ' : ''}학생 시간 ({city})</button>
-      <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>{c.on ? '✓ ' : ''}한국 시간 (KST)</button>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span className="text-[14px] font-semibold text-[#55526a]">시간 기준</span>
+      <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-[#d9d5e8] bg-[#f6f5fa]">
+        <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>학생 시간 ({city})</button>
+        <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
+      </div>
+      <ZoneBar />
     </div>
   );
 }
@@ -258,7 +250,6 @@ export default function StudentHome(props: {
   };
   VIEW_TZ = isAdminView && adminKst ? 'Asia/Seoul' : studentTz;
   ADMIN_KST = isAdminView && adminKst && studentTz !== 'Asia/Seoul';
-  KST_CITY = koZoneCity(studentTz);
   const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
@@ -604,7 +595,6 @@ export default function StudentHome(props: {
 
   return (
     <KstCtx.Provider value={{ admin: isAdminView, studentTz, on: adminKst, set: setAdminKst }}>
-    <KstBar sticky />
     <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
       <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
         {props.adminBar ? (
@@ -651,7 +641,7 @@ export default function StudentHome(props: {
           <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
         </header>
         <div className="grid gap-2 px-4 pb-3 lg:px-0 lg:pb-4 lg:pt-1">
-          <ZoneBar />
+          {!(isAdminView && studentTz !== 'Asia/Seoul') && <ZoneBar />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
               <span>{linkNote}</span>
@@ -1579,10 +1569,9 @@ function TabPage({ title, children }: { title: string; children: React.ReactNode
 function Sheet({ onClose, children, wide }: { onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-20 flex flex-col bg-black/40" onClick={onClose}>
-      <KstBar />
       <div className="flex min-h-0 flex-1 items-end justify-center lg:items-center">
       <div role="dialog" aria-modal className={`max-h-[min(90dvh,100%)] w-full ${wide ? 'max-w-[520px] lg:max-w-[860px]' : 'max-w-[520px]'} overflow-y-auto rounded-t-[22px] bg-[#f6f5fa] p-5 lg:rounded-[22px]`} onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-start gap-2">
+        <div className="mb-3 flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <ZoneBar />
           </div>
