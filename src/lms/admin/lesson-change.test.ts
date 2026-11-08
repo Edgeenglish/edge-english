@@ -144,6 +144,18 @@ describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)'
     expect(t).not.toContain('do NOT confirm');
     expect(tutorNotice('change', { ...c, decision: { ...adv, status: 'Student canceled late', makeup_allowed: false, makeup_until: null } })).not.toContain('Make-up');
   });
+  it('강사 WhatsApp: 수강생 취소는 대화체 (대표 11/8 문구)', () => {
+    const lesson = L('k', '2026-11-09', '20:00');
+    const base = { student, durationMin: 50, lesson, tutorName: 'Maria', tutorTz: 'Asia/Ho_Chi_Minh' };
+    expect(tutorNotice('change', { ...base, decision: { ...adv, makeup_until: '2026-11-16' } })).toBe(
+      `Hi Maria,\n\n${student.nameEn} cancelled their class on Mon, 9 Nov 6:00 PM *Ho Chi Minh Time* / 8:00 PM *KST*.\n\n` +
+        "For the make-up, the student can request a time in the LMS, or you can agree on one together during class. Just make sure it's within the student's course period and open in your Availability, then ask the student to request it in the LMS.\n\nThanks!",
+    );
+    expect(tutorNotice('change', { ...base, decision: { ...adv, status: 'Student canceled late', makeup_allowed: false, makeup_until: null } }))
+      .toBe(`Hi Maria,\n\n${student.nameEn} cancelled their class on Mon, 9 Nov 6:00 PM *Ho Chi Minh Time* / 8:00 PM *KST*.\n\nThanks!`);
+    expect(tutorNotice('change', { ...base, decision: { ...adv, makeup_until: '2026-11-16' }, makeup: { state: 'confirmed', at: L('m', '2026-11-12', '20:00').startsAt } }))
+      .toContain('Make-up already confirmed: Thu, 12 Nov 6:00 PM *Ho Chi Minh Time* / 8:00 PM *KST*');
+  });
 });
 
 describe('보강 시간 입력: 강사 현지 날짜·시각 (2026-10-26 대표)', () => {
