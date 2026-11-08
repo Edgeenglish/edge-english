@@ -14776,6 +14776,7 @@ revoke all on function lms_mail_dispatch(uuid) from public, anon, authenticated;
 -- &gt;&gt;&gt; 20261108120000_lms_mail_no_noshow_word.sql
 -- 학생 메일에 '노쇼' 표현 쓰지 않음 (11/8 대표): 무료 보상수업 확정 메일 '강사 노쇼 수업:' → '강사 사정으로 진행하지 못한 수업:'
 -- 운영진·강사 화면·DB 기록(class_status 'Tutor no-show')은 그대로. 이 함수의 다른 부분은 20261108100000 과 같음 (그 줄만 바꿈)
+-- 함께 고침: 보상수업 원래 수업 찾기 줄이 없는 칸(compensations.lesson_id)을 가리키던 것 → source_lesson_id (그 줄까지 가면 메일 만들기 오류)
 create or replace function lms_notice_mail(p_notice uuid)
 returns table (intended_email text, to_email text, subject text, html text, body text)
 language plpgsql stable security definer set search_path = public as $$
@@ -14809,7 +14810,7 @@ begin
   v_minutes := round(extract(epoch from l.ends_at - l.starts_at) / 60)::int;
   if r.source_lesson_id is not null then select * into src from lessons where id = r.source_lesson_id; end if;
   if v_comp and src.id is null then
-    select x.* into src from compensations c join lessons x on x.id = c.lesson_id where c.id = r.compensation_id;
+    select x.* into src from compensations c join lessons x on x.id = c.source_lesson_id where c.id = r.compensation_id;
   end if;
   if src.id is null and r.migrated_item_id is not null then select original_date into v_origin_date from migrated_items where id = r.migrated_item_id; end if;
 
