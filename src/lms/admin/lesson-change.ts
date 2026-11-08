@@ -6,7 +6,7 @@ import { formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { CONFIRMED } from '../rules/policy';
 import { grantsMakeup, type ClassStatus } from '../rules/status';
 import { enWhen } from './confirm';
-import { enZone } from './students';
+import { enZone, koZone } from './students';
 
 export type ChLesson = {
   id: string;
@@ -198,10 +198,12 @@ function koNice(at: Date, tz: string): string {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8))}일(${KO_WD[f.weekday]}) ${h < 12 ? '오전' : '오후'} ${h12}시${m ? ` ${m}분` : ''}`;
 }
+/** 학생 안내 시각: 한국 거주 '11월 5일(목) 오전 10시 (한국 시간)' / 해외 '11월 4일(수) 오후 9시 (Toronto 시간) · 한국 11월 5일(목) 오전 10시'
+ *  기준 시간대 이름을 항상 붙임 (대표 2026-11-08: 한국 거주 학생도 한국 시간 기준이 분명히 보여야 함) */
 export function koAt(at: Date, tz: string): string {
   const kst = koNice(at, 'Asia/Seoul');
-  if (!tz || tz === 'Asia/Seoul') return kst;
-  return `${koNice(at, tz)} (한국 ${kst})`;
+  if (!tz || tz === 'Asia/Seoul') return `${kst} (한국 시간)`;
+  return `${koNice(at, tz)} (${koZone(tz)}) · 한국 ${kst}`;
 }
 const koDate = (d: KstDate) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일(${['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 /** 강사 안내 시각: 'Thu 5 Nov 22:00 Toronto Time (Fri 6 Nov 12:00 KST)' — 도시 이름 + 한국 시간 함께 (H26(43), QA UX: 'your time' 금지) */

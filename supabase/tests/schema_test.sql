@@ -3291,11 +3291,15 @@ select pg_temp.ok((select count(*) = 1 from m85s)
               and (select email_status = 'queued' and status = 'pending' and email_to = 'support@edgeenglish.kr' and email_intended = 'mail-s@example.com' and email_attempts = 1 from m85s)
               and (select url = 'https://api.resend.com/emails' and req -> 'to' = '["support@edgeenglish.kr"]'::jsonb from m85s)
               and (select req ->> 'subject' like '[시험 · STU-%] [엣지영어] 보강이 확정됐어요 · %' from m85s)
-              and (select req ->> 'html' like '%보강 수업: %(한국 %' and req ->> 'html' like '%강사: 기록A%' and req ->> 'html' like '%/lms/student%' and req ->> 'html' like '%카카오톡 채널%' and req ->> 'html' like '%원래 수업: %' and req ->> 'html' like '%원래 받는 사람: mail-s@example.com%' from m85s)
+              and (select req ->> 'html' like '%보강 수업: % 시간) · 한국 %' and req ->> 'html' like '%강사: 기록A%' and req ->> 'html' like '%/lms/student%' and req ->> 'html' like '%카카오톡 채널%' and req ->> 'html' like '%원래 수업: %' and req ->> 'html' like '%원래 받는 사람: mail-s@example.com%' from m85s)
               and (select hdr ->> 'Authorization' = 'Bearer re_test_key' and hdr ->> 'Idempotency-Key' = 'lesson_notice_email:' || id from m85s),
   '메일: 강사 확정 → 학생 메일 큐·Resend 요청(시험이라 support@, [시험 · 번호], 현지+한국 시각·강사·LMS 링크·문의 줄), 카톡 카드는 그대로(pending)');
 select pg_temp.ok((select email_status = 'no_address' and status = 'not_needed' and email_error like '강사 이메일%' from lesson_notices where makeup_request_id = (select id from mk85) and event = 'makeup_confirmed' and recipient_kind = 'tutor'),
   '메일: 강사 직접 확정 → 강사 안내 줄(WhatsApp 복사 불필요) + 이메일 없으면 no_address');
+select pg_temp.ok(lms_mail_ko_at('2026-11-11 02:00Z', 'Asia/Seoul') = '11월 11일(수) 오전 11시 (한국 시간)'
+              and lms_mail_ko_at('2026-11-13 00:00Z', 'America/Toronto') = '11월 12일(목) 오후 7시 (Toronto 시간) · 한국 11월 13일(금) 오전 9시'
+              and (select req ->> 'subject' like '% (' || lms_mail_ko_zone((select timezone from students where id = m85s.recipient_id)) || ')' from m85s),
+  '메일 시각: 한국 거주도 (한국 시간), 해외는 (도시 시간) · 한국 …, 제목에도 시간대 이름 (대표 2026-11-08)');
 -- 중복 방지: 같은 안내를 다시 큐에 넣어도 메일 1통
 select lms_mail_enqueue_notice((select id from m85s));
 select pg_temp.ok((select count(*) = 1 from notifications where dedupe_key = 'lesson_notice_email:' || (select id from m85s)) and (select count(*) = (select n from sent_before) + 1 from net.sent),
