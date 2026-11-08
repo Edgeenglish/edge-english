@@ -188,7 +188,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (학생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
-  const [panel, setPanel] = useState<'cover' | 'makeup' | 'followup' | 'canceled' | null>(null);
+  const [panel, setPanel] = useState<'cover' | 'makeup' | 'followup' | null>(null);
   // 학생 프로필 창 (4300): 열어도 보던 메뉴·주·고른 학생은 그대로, 닫으면 돌아옴
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const openProfile = actions.profile ? setProfileOf : null;
@@ -202,10 +202,11 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   useEffect(() => { void refreshFollowups(); }, [refreshFollowups]);
   // 취소된 수업 (학생이 취소한 앞으로의 수업): 화면을 다시 읽을 때마다 새로 읽음. 그 수업 시간이 지나면 저절로 빠짐
   const [canceled, setCanceled] = useState<TutorCanceled[]>([]);
+  const [showAllCanceled, setShowAllCanceled] = useState(false);
   useEffect(() => {
     if (!actions.canceled) return;
     let live = true;
-    actions.canceled().then((r) => { if (live) setCanceled(r.filter((c) => c.startsAt > now)); }).catch(() => { /* 옛 DB 또는 일시 오류: 이 칸만 비움 */ });
+    actions.canceled().then((r) => { if (live) setCanceled(r.filter((c) => c.startsAt > now).sort((a, b) => +a.startsAt - +b.startsAt)); }).catch(() => { /* 옛 DB 또는 일시 오류: 이 칸만 비움 */ });
     return () => { live = false; };
   }, [actions, screen, now]);
   const followupOfStudent = (id?: string) => (id ? followups.find((f) => f.studentId === id) : undefined);
@@ -382,10 +383,26 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               <h2 className="flex items-center gap-2 bg-[#efecfd] px-4 py-2.5 text-[16px] font-bold text-[#3b2a9a]">
                 {t('Updates', '일정 변경')} <span className="rounded-full bg-[#5b3fe0] px-2 py-0.5 text-[13px] text-white">{canceled.length > 0 ? 1 : 0}</span>
               </h2>
-              <div className="divide-y divide-[#e6e3ef]">
-                {canceled.length === 0 && <p className="px-4 py-3.5 text-[15px] text-[#1f7a4d]">✓ {t('No updates', '변경 사항이 없어요')}</p>}
-                {canceled.length > 0 && <TodoBar n={canceled.length} text={t('Canceled classes', '취소된 수업')} onClick={() => setPanel('canceled')} />}
-              </div>
+              {canceled.length === 0 && <p className="px-4 py-3.5 text-[15px] text-[#1f7a4d]">✓ {t('No updates', '변경 사항이 없어요')}</p>}
+              {canceled.length > 0 && (
+                <div className="px-4 py-3">
+                  <p className="mb-1 text-[15px] font-semibold text-[#1d1b2b]">{t('Canceled classes', '취소된 수업')}</p>
+                  <ul className="divide-y divide-[#f0eef5]">
+                    {(showAllCanceled ? canceled : canceled.slice(0, 3)).map((c) => (
+                      <li key={c.id} className="py-2">
+                        <StudentName id={c.studentId} name={c.student} className="inline text-[15px] font-semibold" />
+                        {c.classStatus === 'Student canceled late' && <span className="ml-1.5 text-[12.5px] font-semibold text-[#b3261e]">{t('late', '늦은 취소')}</span>}
+                        <span className="block text-[14px] text-[#55526a]"><Rich text={whenFull(c.startsAt, tz)} /></span>
+                      </li>
+                    ))}
+                  </ul>
+                  {canceled.length > 3 && (
+                    <button type="button" onClick={() => setShowAllCanceled((v) => !v)} className="mt-1 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">
+                      {showAllCanceled ? t('Show less', '접기') : `+ ${canceled.length - 3} ${t('more', '건 더보기')}`}
+                    </button>
+                  )}
+                </div>
+              )}
             </section>
 
             <section aria-label="Today" className={card}>
@@ -476,23 +493,6 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                 <CoverCard key={g.map((c) => c.id).join()} covers={g} tz={tz} actions={actions} onSent={() => reload()} />
               ))}
               {screen.covers.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ Sent</p>}
-            </div>
-          </Sheet>
-        )}
-
-        {panel === 'canceled' && (
-          <Sheet onClose={() => setPanel(null)}>
-            <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">{t('Canceled classes', '취소된 수업')}</h2>
-            <div className="grid gap-2">
-              {canceled.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ {t('None', '없어요')}</p>}
-              {canceled.map((c) => (
-                <div key={c.id} className={`${card} grid gap-0.5`}>
-                  <b className="text-[15.5px] text-[#1d1b2b]"><Rich text={whenFull(c.startsAt, tz)} /></b>
-                  <span className="text-[14px] text-[#55526a]">
-                    <StudentName id={c.studentId} name={c.student} className="inline font-semibold" /> · {t('Canceled by student', '학생이 취소')}{c.classStatus === 'Student canceled late' ? ` (${t('late', '늦은 취소')})` : ''}
-                  </span>
-                </div>
-              ))}
             </div>
           </Sheet>
         )}

@@ -43,7 +43,12 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
       save: async () => {},
     },
     followups: async () => [{ studentId: 'demo-hajun', student: 'Hajun Kim', firstLessonAt: new Date(+new Date(nowIso) - 86400000 * 2), pending: 3, done: { level: false, improve: false, style: false, record: true } }],
-    canceled: async () => [{ id: 'demo-cx1', startsAt: new Date(+new Date(nowIso) + 86400000 * 1.4), endsAt: new Date(+new Date(nowIso) + 86400000 * 1.4 + 3000000), kind: 'regular' as const, classStatus: 'Student canceled in advance' as const, student: 'Hajun Kim', studentId: 'demo-hajun' }],
+    canceled: async () => [
+      ['demo-cx1', 'Hajun Kim', 'demo-hajun', 1.4, 'Student canceled in advance'],
+      ['demo-cx2', 'Yuna Park', 'demo-yuna', 1.9, 'Student canceled late'],
+      ['demo-cx3', 'Minho Choi', 'demo-minho', 2.3, 'Student canceled in advance'],
+      ['demo-cx4', 'Sora Han', 'demo-sora', 3.1, 'Student canceled in advance'],
+    ].map(([id, student, studentId, d, classStatus]) => ({ id: id as string, startsAt: new Date(+new Date(nowIso) + 86400000 * (d as number)), endsAt: new Date(+new Date(nowIso) + 86400000 * (d as number) + 3000000), kind: 'regular' as const, classStatus: classStatus as 'Student canceled late', student: student as string, studentId: studentId as string })),
     followupSave: async () => ({ firstLesson: { id: 'd1', startsAt: new Date(+new Date(nowIso) - 86400000 * 2), status: 'Normal', topics: 'Travel plans, airports', recordedAt: new Date() }, done: { level: true, improve: true, style: true, record: true }, pending: 0 }),
     students: async () => [
       { id: 'demo-hajun', name: 'Hajun Kim', level: 'Intermediate', classType: 'Free talking', timezone: 'Asia/Seoul', noteUrl: 'https://docs.google.com/' },
