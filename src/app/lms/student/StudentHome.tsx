@@ -598,19 +598,18 @@ export default function StudentHome(props: {
   // 강사마다 수업 링크가 다름 → 앞으로 수업하는 강사별로 (대체강사 포함)
   const meetLinks = [...new Map(upcoming.map((l) => [l.tutorName, meetOf(l.id)] as const).filter(([, u]) => u)).entries()];
 
+  const logo = (
+    <span className="inline-flex items-center gap-1.5">
+      <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
+      <span className="rounded-[6px] bg-[#27230e] px-[6px] py-[2px] text-[11px] font-extrabold text-[#ffd401]">수강생용</span>
+    </span>
+  );
+  const brand = props.adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : logo;
   return (
     <KstCtx.Provider value={{ admin: isAdminView, studentTz, on: adminKst, set: setAdminKst }}>
     <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
       <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
-        {props.adminBar ? (
-          <a href="/lms/admin" className="px-3 pb-4 pt-1 text-[20px] font-bold text-[#09246b]">
-            Edge<span className="text-[#5b3df0]">English</span>
-          </a>
-        ) : (
-          <div className="px-3 pb-4 pt-1 text-[20px] font-bold text-[#09246b]">
-            Edge<span className="text-[#5b3df0]">English</span>
-          </div>
-        )}
+        <div className="px-3 pb-4 pt-1">{brand}</div>
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -634,15 +633,7 @@ export default function StudentHome(props: {
       <div className="min-w-0 flex-1 pb-24 lg:pb-0">
         {props.adminBar && <div className="grid gap-2 px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}<KstToggle /></div>}
         <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
-          {props.adminBar ? (
-            <a href="/lms/admin" className="text-[17px] font-bold text-[#09246b]">
-              Edge<span className="text-[#5b3df0]">English</span>
-            </a>
-          ) : (
-            <span className="text-[17px] font-bold text-[#09246b]">
-              Edge<span className="text-[#5b3df0]">English</span>
-            </span>
-          )}
+          {brand}
           <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
         </header>
         <div className="grid gap-2 px-4 pb-3 lg:px-0 lg:pb-4 lg:pt-1">
