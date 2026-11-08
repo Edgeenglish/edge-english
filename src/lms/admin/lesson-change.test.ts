@@ -50,7 +50,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     const lesson = L('x1', '2026-10-29', '17:00');
     const c: NoticeContext = { student, durationMin: 50, lesson, decision: adv, tutorName: 'Alex', tutorTz: 'Asia/Manila', makeupAt: kstToInstant('2026-10-30', '18:00') };
     expect(studentNotice('change', c)).toContain('취소된 수업: 10월 29일(목) 오후 5시 (한국 시간)\n변경권 1개 사용 (잔여 1개)');
-    expect(studentNotice('change', c)).toContain('보강은 수강기간 종료일인 1월 5일(화)까지 진행하실 수 있어요.');
+    expect(studentNotice('change', c)).toContain('(신청 기한: 1월 5일(화) 한국 시간까지)');
     const conf = studentNotice('makeup_confirmed', c);
     expect(conf).toContain('원래 수업: 10월 29일(목) 오후 5시 (한국 시간)');
     expect(conf).toContain('보강 수업: 10월 30일(금) 오후 6시 (한국 시간)');
@@ -119,21 +119,29 @@ describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)'
     expect(t).toContain('불편을 드려 정말 죄송합니다. 사과의 마음으로 다음 수강 등록 시 사용하실 수 있는 적립금 2,000원을 드렸어요 (유효기간 없음).');
     expect(t).not.toContain('직전');
     expect(t).not.toContain('변경권');
-    expect(t).toContain('강사님과 수업 중에 일정을 정하시거나, 저희에게 말씀해 주세요.');
+    // 11/8 대표: 학생이 LMS 바로가기에서 직접 신청 (수업 중에 강사와 정한 시간도)
+    expect(t).not.toContain('저희에게 말씀해 주세요');
+    expect(t).toContain('아래 링크에서 보강 날짜를 신청해 주세요. 강사님이 확인하면 확정돼요.\n수업 중에 강사님과 정한 시간이 있다면 그 시간을 골라 주세요.\n(신청 기한: 11월 16일(월) 한국 시간까지)\n/lms/student?makeup=x1');
+  });
+  it('해외 학생 신청 기한: (도시 시간) = (한국 시간)', () => {
+    const t = studentNotice('change', { ...c, student: { ...student, timezone: 'America/Toronto' } });
+    expect(t).toContain('(신청 기한: 11월 16일(월) 오전 9시 59분 (토론토 시간) = 11월 16일(월) 오후 11시 59분 (한국 시간)까지)');
   });
   it('학생 본인 취소 안내 = 대표 문구 그대로 (2026-10-26)', () => {
     const lesson = L('k', '2026-11-05', '10:00');
     const d: ChangeDecision = { ...adv, credits_after: 1, makeup_until: '2026-11-16' };
     expect(studentNotice('change', { student: { ...student, nameKo: '가상변경' }, durationMin: 50, lesson, decision: d, tutorName: 'A', tutorTz: 'Asia/Seoul' })).toBe(
       '[엣지영어] 가상변경님, 요청하신 수업이 취소됐어요.\n\n취소된 수업: 11월 5일(목) 오전 10시 (한국 시간)\n변경권 1개 사용 (잔여 1개)\n\n' +
-        '보강은 수강기간 종료일인 11월 16일(월)까지 진행하실 수 있어요. 강사님과 수업 중에 일정을 정하시거나, 저희에게 말씀해 주세요.\n\n' +
+        '아래 링크에서 보강 날짜를 신청해 주세요. 강사님이 확인하면 확정돼요.\n수업 중에 강사님과 정한 시간이 있다면 그 시간을 골라 주세요.\n(신청 기한: 11월 16일(월) 한국 시간까지)\n/lms/student?makeup=k\n\n' +
         '취소된 수업 날짜가 요청하신 날짜와 다르다면 바로 알려주세요.',
     );
   });
-  it('강사: 학생과 이야기해도 되지만 직접 확정 금지, 종료일까지', () => {
+  it('강사: 수업 중에 정해도 되고, 학생이 LMS 로 신청 → Confirm make-up (11/8 대표), 기한은 강사 현지 + KST', () => {
     const t = tutorNotice('change', c);
-    expect(t).toContain('until Mon 16 Nov');
-    expect(t).toContain('do NOT confirm it yourself');
+    expect(t).toContain('(until Mon 16 Nov 10:59 PM Manila Time (Mon 16 Nov 11:59 PM KST))');
+    expect(t).toContain('Availability');
+    expect(t).toContain('tap "Confirm make-up"');
+    expect(t).not.toContain('do NOT confirm');
     expect(tutorNotice('change', { ...c, decision: { ...adv, status: 'Student canceled late', makeup_allowed: false, makeup_until: null } })).not.toContain('Make-up');
   });
 });

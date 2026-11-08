@@ -13,7 +13,10 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; nowIso: string; view: StudentView; admin: { students: StudentAccount[]; studentId: string } | null };
 
-export default function StudentLive({ studentParam }: { studentParam?: string }) {
+/** 로그인 화면으로 — 지금 주소(바로가기 링크 포함)를 넘겨 로그인 뒤 같은 화면으로 돌아옴 */
+const toLogin = () => window.location.replace(`/lms/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+
+export default function StudentLive({ studentParam, makeup }: { studentParam?: string; makeup?: string }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const sb = supabaseBrowser();
   const adminStudent = state.kind === 'ready' && state.admin ? state.admin.studentId : null;
@@ -22,13 +25,13 @@ export default function StudentLive({ studentParam }: { studentParam?: string })
     if (!sb) return setState({ kind: 'error', message: 'Supabase 설정이 없어요.' });
     (async () => {
       const { data: session } = await sb.auth.getSession();
-      if (!session.session) return window.location.replace('/lms/login');
+      if (!session.session) return toLogin();
       const { data: role } = await sb.rpc('my_role');
       try {
         const nowIso = new Date().toISOString();
         if (role === 'student') return setState({ kind: 'ready', nowIso, view: await loadStudentView(sb, null), admin: null });
         const [{ data: aal }, { data: admin }] = await Promise.all([sb.auth.mfa.getAuthenticatorAssuranceLevel(), sb.rpc('is_admin')]);
-        if (role !== 'admin' || aal?.currentLevel !== 'aal2' || admin !== true) return window.location.replace('/lms/login');
+        if (role !== 'admin' || aal?.currentLevel !== 'aal2' || admin !== true) return toLogin();
         const students = await loadStudentAccounts(sb);
         const pick = students.find((x) => x.id === studentParam || x.code === studentParam) ?? students[0];
         if (!pick) return setState({ kind: 'error', message: '등록된 학생이 없어요.' });
@@ -74,6 +77,7 @@ export default function StudentLive({ studentParam }: { studentParam?: string })
       preview={false}
       adminBar={adminBar}
       onLogout={state.admin ? undefined : logout}
+      openMakeup={makeup}
     />
   );
 }

@@ -334,7 +334,18 @@ function ExtendSheet({ enrollment: e, studentTz, today, extend, onClose, onSaved
     <Sheet title="종료일 연장 (운영진만)" onClose={onClose}>
       <div className="grid gap-2 rounded-[12px] bg-white px-3 py-2 text-[13.5px]">
         <Row k="원래 종료" v={`${mdw(e.baseEndDate)} 오후 11:59 (한국 시간)`} />
-        {e.extensions.length > 0 && <Row k="이미 연장" v={e.extensions.map((x) => `${x.days > 0 ? '+' : ''}${x.days}일 · ${EXT_REASON[x.reason] ?? x.reason}${x.note ? ` (${x.note})` : ''}`).join(' / ')} />}
+        {/* 합계 먼저, 기록은 접어 둠 (QA 11/8: 휴대폰에서 입력란까지 스크롤이 길었음) */}
+        {e.extensions.length > 0 && <Row k="이미 연장" v={`${e.extensionDays > 0 ? '+' : ''}${e.extensionDays}일 (기록 ${e.extensions.length}건)`} />}
+        {e.extensions.length > 0 && (
+          <details className="text-[13px] text-[#55526a]">
+            <summary className="cursor-pointer font-semibold text-[#5b3fe0]">연장 기록 보기</summary>
+            <ul className="mt-1 grid gap-0.5">
+              {e.extensions.map((x) => (
+                <li key={x.id}>{`${x.days > 0 ? '+' : ''}${x.days}일 · ${EXT_REASON[x.reason] ?? x.reason}${x.note ? ` (${x.note})` : ''}`}</li>
+              ))}
+            </ul>
+          </details>
+        )}
         <Row k="지금 최종 종료" v={finalEndText(e.finalEndDate, studentTz)} strong />
       </div>
       <div className="mt-3 grid gap-3">

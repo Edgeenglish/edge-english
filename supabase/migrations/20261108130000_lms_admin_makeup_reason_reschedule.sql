@@ -8,6 +8,7 @@
 --  3) 시간을 고치면 학생·강사 양쪽에 '보강 시간 변경' 안내(event makeup_rescheduled) → 카톡·WhatsApp 안내 카드 + 자동 메일
 --     자동 메일은 기존 발송 설정(feature_flags.send_emails, 숨은참조) 그대로. 아직 안 보낸 예전 확정 안내 카드는 '필요 없음'
 --  4) 강사 메일 시각을 12시간 표기로 ('Fri 20 Nov 3:00 PM') — 화면 표기 통일(대표 11/8)
+--  5) 메일 함수는 20261108120000(학생 메일 '노쇼' 표현 없음·source_lesson_id) 위에 '보강 시간 변경'을 더함
 -- 새 숫자 없음. 다시 실행해도 같은 결과
 -- =====================================================================
 
@@ -283,7 +284,7 @@ begin
   v_minutes := round(extract(epoch from l.ends_at - l.starts_at) / 60)::int;
   if r.source_lesson_id is not null then select * into src from lessons where id = r.source_lesson_id; end if;
   if v_comp and src.id is null then
-    select x.* into src from compensations c join lessons x on x.id = c.lesson_id where c.id = r.compensation_id;
+    select x.* into src from compensations c join lessons x on x.id = c.source_lesson_id where c.id = r.compensation_id;
   end if;
   if src.id is null and r.migrated_item_id is not null then select original_date into v_origin_date from migrated_items where id = r.migrated_item_id; end if;
 
@@ -303,7 +304,7 @@ begin
     v_lines := array[
       '[엣지영어] ' || st.name_ko || '님, ' || case when v_fix then case when v_comp then '무료 보상수업 시간이 바뀌었어요' else '보강 시간이 바뀌었어요' end
                                    else case when v_comp then '무료 보상수업이 확정됐어요' else '보강이 확정됐어요' end end,
-      case when v_comp then '강사 노쇼 수업: ' else '원래 수업: ' end || v_origin,
+      case when v_comp then '강사 사정으로 진행하지 못한 수업: ' else '원래 수업: ' end || v_origin,
       case when v_fix then '바뀐 시간: ' when v_comp then '보상수업: ' else '보강 수업: ' end || v_when || ' · ' || v_minutes || '분',
       '강사: ' || tu.name];
     if v_fix and v_old is not null then v_lines := v_lines || ('이전 시간: ' || lms_mail_ko_at(v_old, st.timezone) || ' (취소)'); end if;
