@@ -19,7 +19,7 @@ import type { FollowupTodo } from '@/lms/tutor/followup';
 import { LangCtx, useT, type Lang } from '@/lms/tutor/lang';
 import {
   canRecord, KOREA_TIME, tzHeader, tzTimeLabel, daysOf, dayLabel, kindTag, kstRange, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
-  statusText, timeRange, weekOf, whenFull, whenText, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
+  statusText, timeRange, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
 
 export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
@@ -40,6 +40,8 @@ export type TutorActions = {
   /** 첫 수업 후 To-do (4600): Home 목록 + 저장. 없으면 그 To-do 칸이 안 보임 */
   followups?: () => Promise<FollowupTodo[]>;
   followupSave?: FollowupSave;
+  /** 취소된 수업 To-do: 학생이 취소한 앞으로의 수업 (tutor_canceled_classes). 없으면 그 칸이 안 보임 */
+  canceled?: () => Promise<TutorCanceled[]>;
 };
 
 /** 학생 이름 → 프로필 창 (이 화면 어디서든 같은 창) */
@@ -184,7 +186,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (학생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
-  const [panel, setPanel] = useState<'cover' | 'makeup' | 'followup' | null>(null);
+  const [panel, setPanel] = useState<'cover' | 'makeup' | 'followup' | 'canceled' | null>(null);
   // 학생 프로필 창 (4300): 열어도 보던 메뉴·주·고른 학생은 그대로, 닫으면 돌아옴
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const openProfile = actions.profile ? setProfileOf : null;
@@ -196,8 +198,16 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     try { setFollowups(await actions.followups()); } catch { /* 옛 DB 또는 일시 오류: To-do 칸만 비움 */ }
   }, [actions]);
   useEffect(() => { void refreshFollowups(); }, [refreshFollowups]);
+  // 취소된 수업 (학생이 취소한 앞으로의 수업): 화면을 다시 읽을 때마다 새로 읽음. 그 수업 시간이 지나면 저절로 빠짐
+  const [canceled, setCanceled] = useState<TutorCanceled[]>([]);
+  useEffect(() => {
+    if (!actions.canceled) return;
+    let live = true;
+    actions.canceled().then((r) => { if (live) setCanceled(r.filter((c) => c.startsAt > now)); }).catch(() => { /* 옛 DB 또는 일시 오류: 이 칸만 비움 */ });
+    return () => { live = false; };
+  }, [actions, screen, now]);
   const followupOfStudent = (id?: string) => (id ? followups.find((f) => f.studentId === id) : undefined);
-  const todoCount = [screen.toRecord.length, screen.covers.length, screen.makeups.length, followups.length].filter((n) => n > 0).length;
+  const todoCount = [canceled.length, screen.toRecord.length, screen.covers.length, screen.makeups.length, followups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
     ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), tz, { from: '1900-01-01', to: '2999-12-31' })
@@ -354,20 +364,20 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               )}
             </header>
 
-            {todoCount > 0 && (
-              <section aria-label="To do" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
-                <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
-                  {t('To do', '할 일')} <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
-                </h2>
-                <div className="divide-y divide-[#f3e6c4]">
-                  {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text={t('Classes to record', '기록할 수업')} onClick={() => setTab('record')} />}
+            {/* 할 일 게시판은 0건이어도 늘 보임 (대표 11/8) */}
+            <section aria-label="To do" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
+              <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
+                {t('To do', '할 일')} <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
+              </h2>
+              <div className="divide-y divide-[#f3e6c4]">
+                {todoCount === 0 && <p className="px-4 py-3.5 text-[15px] text-[#1f7a4d]">✓ {t('Nothing to do right now', '지금 할 일이 없어요')}</p>}
+                {canceled.length > 0 && <TodoBar n={canceled.length} text={t('Canceled classes', '취소된 수업')} onClick={() => setPanel('canceled')} />}
+                {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text={t('Classes to record', '기록할 수업')} onClick={() => setTab('record')} />}
                   {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text={t('Cover requests', '대체 수업 요청')} onClick={() => setPanel('cover')} />}
                   {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text={t('Make-up requests', '보강 요청')} onClick={() => setPanel('makeup')} />}
-                  {followups.length > 0 && <TodoBar n={followups.length} text={t('First lesson follow-up (level · goals · class style)', '첫 수업 후 확인 (레벨 · 목표 · 수업 방식)')} onClick={() => setPanel('followup')} />}
-                </div>
-              </section>
-            )}
-            {todoCount === 0 && <p className={`${card} text-[15px] text-[#1f7a4d]`}>✓ {t('Nothing to do right now', '지금 할 일이 없어요')}</p>}
+                {followups.length > 0 && <TodoBar n={followups.length} text={t('First lesson follow-up (level · goals · class style)', '첫 수업 후 확인 (레벨 · 목표 · 수업 방식)')} onClick={() => setPanel('followup')} />}
+              </div>
+            </section>
 
             <section aria-label="Today" className={card}>
               <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{t('Today’s classes', '오늘 수업')} <span className="text-[#6b6880]">{todayLessons.length || ''}</span></h2>
@@ -457,6 +467,23 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                 <CoverCard key={g.map((c) => c.id).join()} covers={g} tz={tz} actions={actions} onSent={() => reload()} />
               ))}
               {screen.covers.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ Sent</p>}
+            </div>
+          </Sheet>
+        )}
+
+        {panel === 'canceled' && (
+          <Sheet onClose={() => setPanel(null)}>
+            <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">{t('Canceled classes', '취소된 수업')}</h2>
+            <div className="grid gap-2">
+              {canceled.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ {t('None', '없어요')}</p>}
+              {canceled.map((c) => (
+                <div key={c.id} className={`${card} grid gap-0.5`}>
+                  <b className="text-[15.5px] text-[#1d1b2b]">{whenFull(c.startsAt, tz)}</b>
+                  <span className="text-[14px] text-[#55526a]">
+                    <StudentName id={c.studentId} name={c.student} className="inline font-semibold" /> · {t('Canceled by student', '학생이 취소')}{c.classStatus === 'Student canceled late' ? ` (${t('late', '늦은 취소')})` : ''}
+                  </span>
+                </div>
+              ))}
             </div>
           </Sheet>
         )}

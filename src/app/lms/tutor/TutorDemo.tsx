@@ -43,6 +43,7 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
       save: async () => {},
     },
     followups: async () => [{ studentId: 'demo-hajun', student: 'Hajun Kim', firstLessonAt: new Date(+new Date(nowIso) - 86400000 * 2), pending: 3, done: { level: false, improve: false, style: false, record: true } }],
+    canceled: async () => [{ id: 'demo-cx1', startsAt: new Date(+new Date(nowIso) + 86400000 * 1.4), endsAt: new Date(+new Date(nowIso) + 86400000 * 1.4 + 3000000), kind: 'regular' as const, classStatus: 'Student canceled in advance' as const, student: 'Hajun Kim', studentId: 'demo-hajun' }],
     followupSave: async () => ({ firstLesson: { id: 'd1', startsAt: new Date(+new Date(nowIso) - 86400000 * 2), status: 'Normal', topics: 'Travel plans, airports', recordedAt: new Date() }, done: { level: true, improve: true, style: true, record: true }, pending: 0 }),
     students: async () => [
       { id: 'demo-hajun', name: 'Hajun Kim', level: 'Intermediate', classType: 'Free talking', timezone: 'Asia/Seoul', noteUrl: 'https://docs.google.com/' },

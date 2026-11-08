@@ -193,6 +193,13 @@ export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   'Student long-term leave': 'Student on leave',
 };
 
+/** 강사 Home To-do '취소된 수업': 학생이 취소한 앞으로의 수업 (tutor_canceled_classes) */
+export type TutorCanceled = { id: string; startsAt: Date; endsAt: Date; kind: LessonKind; classStatus: ClassStatus | null; student: string; studentId?: string };
+/* eslint-disable @typescript-eslint/no-explicit-any -- DB JSON → 화면 모양 */
+export const parseCanceled = (j: any): TutorCanceled[] =>
+  ((j ?? []) as any[]).map((x) => ({ id: x.id, startsAt: new Date(x.starts_at), endsAt: new Date(x.ends_at), kind: x.kind, classStatus: x.class_status ?? null, student: x.student, studentId: x.student_id ?? undefined }));
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export type LessonPhase = 'upcoming' | 'to_record' | 'before_lms' | 'on_leave' | 'recorded' | 'canceled';
 export function phaseOf(l: TutorLesson, now: Date): LessonPhase {
   if (l.state === 'canceled') return 'canceled';

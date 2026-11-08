@@ -3,7 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseHours, type HoursData } from './hours';
 import { parseSchedule, type ScheduleAction, type ScheduleData } from './schedule';
-import { parseScreen, type Late, type TutorResult, type TutorScreen } from './screen';
+import { parseCanceled, parseScreen, type Late, type TutorCanceled, type TutorResult, type TutorScreen } from './screen';
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
 import { parseFollowup, parseFollowupTodos, type Followup, type FollowupTodo } from './followup';
 import type { TutorStudentRow } from '@/app/lms/tutor/TutorHome';
@@ -100,6 +100,12 @@ export async function loadMyStudents(sb: SupabaseClient, tutorId: string | null)
   return rows.map((r) => ({ id: r.student_id, name: r.display_name, level: r.level, classType: r.class_type, timezone: r.timezone, noteUrl: r.class_note_url }));
 }
 
+/** 취소된 수업 To-do (migration 20261108140000): 학생이 취소한 앞으로의 수업. 옛 DB 면 빈 목록 */
+export async function loadCanceledClasses(sb: SupabaseClient, tutorId: string | null): Promise<TutorCanceled[]> {
+  const r = await sb.rpc('tutor_canceled_classes', { p_tutor: tutorId });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') return [];
+  return parseCanceled(check(r));
+}
 /** 첫 수업 후 To-do (4600): Home 목록. tutorId: 운영자가 고른 강사 (강사 본인은 비움). 4600 전 DB 는 빈 목록 */
 export async function loadFollowupTodos(sb: SupabaseClient, tutorId: string | null): Promise<FollowupTodo[]> {
   const r = await sb.rpc('tutor_first_lesson_todos', { p_tutor: tutorId });
