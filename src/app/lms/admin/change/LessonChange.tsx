@@ -13,7 +13,7 @@ import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lm
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
 import {
-  changeableLessons, dateLabel, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, STATUS_SHORT, studentNotice, tutorNotice,
+  changeableLessons, dateLabel, makeupLink, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, STATUS_SHORT, studentNotice, tutorNotice,
   type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupRight, type NoticeContext,
 } from '@/lms/admin/lesson-change';
 import type { AdminCredits, StudentLessonData } from '@/lms/admin/lesson-change-live';
@@ -509,6 +509,9 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const [sent, setSent] = useState<'new' | 'repeated' | null>(null);
   const open = right.open;
   const comp = right.kind === 'compensation' ? right.comp : null;
+  // 톡으로 보낼 '보강 날짜 고르기' 바로가기 (11/8 대표 B안): 학생이 누르면 이 수업 날짜 고르기가 바로 열림
+  const link = makeupLink(comp ? comp.id : right.kind === 'migrated' ? right.item.id : right.source.id);
+  const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
   const title = comp
     ? `무료 보상수업 · ${src ? `${kstLabel(src.startsAt)} 강사 노쇼` : '강사 노쇼'}`
     : src
@@ -544,6 +547,14 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
     <li className="rounded-[12px] border border-[#e6e3ef] p-3">
       <b className="block text-[15px] text-[#1d1b2b]">{title}</b>
       <span className="text-[12.5px] text-[#6b6880]">{until}</span>
+      {!open && (
+        <div className="mt-2 grid gap-1">
+          <button type="button" className={`${btnSub} w-fit`} onClick={async () => setCopied((await copyText(link)) ? 'ok' : 'fail')}>
+            {copied === 'ok' ? '✓ 보강 링크 복사했어요' : '보강 링크 복사'}
+          </button>
+          {copied === 'fail' && <p className="select-all break-all rounded-[8px] bg-[#f6f5fa] px-2 py-1.5 text-[13px] text-[#1d1b2b]">{link}</p>}
+        </div>
+      )}
       {open ? (
         <div className="mt-2 grid gap-1.5">
           {sent && (

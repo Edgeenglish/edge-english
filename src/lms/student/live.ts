@@ -18,9 +18,12 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 /** 보강할 수업 (취소한 수업 또는 시트에서 넘어온 날짜 미정 보강) */
 /** timeKnown=false: 시트에서 옮긴 보강이라 원래 수업 날짜만 앎 (화면은 날짜만, 3700) */
 /** compId: 강사 노쇼 무료 보상수업 (4100, 원래 수업 보강과 따로). useUntil = 사용 기한(수강 종료일, 기한 안 재등록이면 이월) */
+const TUTOR_FAULT = ['Tutor no-show', 'Tutor canceled in advance', 'Tutor canceled late'];
 export type MakeupRight = {
   lessonId: string | null; itemId: string | null; compId?: string | null; useUntil?: KstDate | null;
   originalAt: Date; timeKnown?: boolean; tutorLeave: boolean; requested: boolean; tutor?: string | null; tutorNoShow?: boolean;
+  /** 강사 사전·늦은 취소·노쇼 — 학생 화면 이름 '강사 사정으로 취소된 수업' (학생에게 '노쇼'라고 쓰지 않음, 11/8 대표) */
+  tutorFault?: boolean;
 };
 /** 보강 권리를 가리키는 값 (원래 수업 · 시트 보강 · 보상수업 중 하나) */
 export type RightRef = { lessonId: string | null; itemId: string | null; compId?: string | null };
@@ -181,6 +184,7 @@ export function parseStudentView(r: Raw): StudentView {
       tutorLeave: m.tutor_leave,
       tutor: m.tutor ?? r.lessons.find((l) => l.id === m.lesson_id)?.tutor ?? null,
       tutorNoShow: !!m.comp_id || r.lessons.find((l) => l.id === m.lesson_id)?.class_status === 'Tutor no-show',
+      tutorFault: TUTOR_FAULT.includes(r.lessons.find((l) => l.id === m.lesson_id)?.class_status ?? ''),
       // 원래 수업 보강과 보상수업은 신청이 따로 (4100)
       requested: open.some((q) => (m.comp_id ? q.comp_id === m.comp_id : !q.comp_id && ((m.lesson_id && q.lesson_id === m.lesson_id) || (m.item_id && q.item_id === m.item_id)))),
     })),

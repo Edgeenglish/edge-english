@@ -36,3 +36,17 @@ describe('한·영 문구', () => {
     expect(Object.keys(STRINGS.en).sort()).toEqual(Object.keys(STRINGS.ko).sort());
   });
 });
+
+describe('로그인 뒤 바로가기 링크로 돌아가기 (11/8 보강 바로가기)', () => {
+  it('학생: 학생 화면 주소만, 다른 역할·다른 사이트 주소는 무시', async () => {
+    const { nextAfterLogin, isMakeupLink } = await import('./login-flow');
+    expect(nextAfterLogin('/lms/student?makeup=abc', '/lms/student', 'student')).toBe('/lms/student?makeup=abc');
+    expect(nextAfterLogin('/lms/admin', '/lms/student', 'student')).toBe('/lms/student');
+    expect(nextAfterLogin('https://evil.example/lms/student', '/lms/student', 'student')).toBe('/lms/student');
+    expect(nextAfterLogin('//evil.example', '/lms/student', 'student')).toBe('/lms/student');
+    expect(nextAfterLogin(null, '/lms/tutor', 'tutor')).toBe('/lms/tutor');
+    expect(nextAfterLogin('/lms/student?student=s1&makeup=abc', '/lms/admin', 'admin')).toBe('/lms/student?student=s1&makeup=abc');
+    expect(isMakeupLink('/lms/student?makeup=abc')).toBe(true);
+    expect(isMakeupLink('/lms/student')).toBe(false);
+  });
+});

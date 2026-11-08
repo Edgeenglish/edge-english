@@ -14,8 +14,8 @@ const isZone = (z: string) => {
 };
 
 // 가상 데이터 미리보기 (저장·발송 없음)
-export default function StudentDemo({ nowIso, tz }: { nowIso: string; tz?: string }) {
+export default function StudentDemo({ nowIso, tz, makeup }: { nowIso: string; tz?: string; makeup?: string }) {
   const store = useMemo(() => fakeStore(new Date(nowIso)), [nowIso]);
   const view = tz && isZone(tz) ? { ...store.view, timezone: tz } : store.view;
-  return <StudentHome nowIso={nowIso} initial={view} actions={store.actions} extras={store.extras} preview />;
+  return <StudentHome nowIso={nowIso} initial={view} actions={store.actions} extras={store.extras} preview openMakeup={makeup} />;
 }

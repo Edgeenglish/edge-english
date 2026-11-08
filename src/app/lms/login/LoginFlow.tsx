@@ -6,7 +6,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { afterEmailCode, looksLikeEmail, maskEmail, RESEND_WAIT_SECONDS, STRINGS, type Lang, type Role } from '@/lms/auth/login-flow';
+import { afterEmailCode, isMakeupLink, looksLikeEmail, nextAfterLogin, maskEmail, RESEND_WAIT_SECONDS, STRINGS, type Lang, type Role } from '@/lms/auth/login-flow';
 
 type Step = 'email' | 'code' | 'totp' | 'enroll' | 'not_linked' | 'moving';
 
@@ -36,7 +36,12 @@ export default function LoginFlow() {
   const sb = supabaseBrowser();
   const codeRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => setLang(readLang()), []);
+  // 바로가기 링크로 왔으면 로그인 뒤 그 화면으로 (?next=/lms/student?makeup=…)
+  const [next, setNext] = useState<string | null>(null);
+  useEffect(() => {
+    setLang(readLang());
+    setNext(new URLSearchParams(window.location.search).get('next'));
+  }, []);
   // 같은 고정 주소의 유효한 세션은 이메일 코드를 다시 보내지 않고 이어 쓴다.
   useEffect(() => {
     if (!sb) return;
@@ -103,7 +108,7 @@ export default function LoginFlow() {
     });
     if (next.kind === 'go') {
       setStep('moving');
-      window.location.assign(next.to);
+      window.location.assign(nextAfterLogin(new URLSearchParams(window.location.search).get('next'), next.to, (role as Role | null) ?? null));
     } else if (next.kind === 'totp_verify') {
       setFactorId(verified[0].id);
       setCode('');
@@ -219,6 +224,7 @@ export default function LoginFlow() {
           >
             <h1 className="text-[22px] font-bold text-[#1d1b2b]">{t.loginTitle}</h1>
             <p className="mb-[18px] mt-1.5 text-[13px] leading-relaxed text-[#55526a]">{t.loginLead}</p>
+            {isMakeupLink(next) && <p className="mb-3 rounded-[12px] bg-[#efeaff] px-3.5 py-2.5 text-[13.5px] font-semibold text-[#3a22b0]">{t.makeupNext}</p>}
             <label className="block">
               <span className="sr-only">{t.emailLabel}</span>
               <input
