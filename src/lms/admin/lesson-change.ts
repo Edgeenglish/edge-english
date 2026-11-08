@@ -2,7 +2,7 @@
 // - 날짜는 사람이 타이핑하지 않고 실제 수업 목록에서 고름 ('다음 주 목요일' 오해 방지, 17번 2절)
 // - 안내 문구는 DB에 저장된 원래 수업·바뀐 수업 시각으로 만듦 (원래 날짜와 변경·보강 날짜 모두 표기)
 
-import { formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
+import { ampmKo, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { CONFIRMED } from '../rules/policy';
 import { grantsMakeup, type ClassStatus } from '../rules/status';
 import { enWhen } from './confirm';
@@ -75,7 +75,7 @@ export type ChCompensation = { id: string; sourceLessonId: string; status: 'avai
 
 export type ChMigratedOpen = { id: string; originalDate: KstDate | null; tutorLeave: boolean };
 
-export type NoticeEvent = 'change' | 'makeup_ask' | 'makeup_confirmed' | 'makeup_voided' | 'revert';
+export type NoticeEvent = 'change' | 'makeup_ask' | 'makeup_confirmed' | 'makeup_voided' | 'revert' | 'makeup_rescheduled';
 export type ChNotice = {
   id: string;
   changeRequestId: string | null;
@@ -110,18 +110,39 @@ export type ChStudent = { id: string; code: string; nameKo: string; nameEn: stri
 export type ChEnrollment = { id: string; finalEndDate: KstDate; durationMin: number };
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
-/** '10/29 (목) 17:00' 한국 시각 */
+/** '10/29 (목) 오후 5:00' 한국 시각 (12시간 표기, 대표 2026-11-08) */
 export function kstLabel(at: Date): string {
   const f = formatInZone(at, 'Asia/Seoul');
   const d = instantToKstDate(at);
-  return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]}) ${f.time}`;
+  return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]}) ${ampmKo(f.time)}`;
 }
-/** 강사 현지 '11/6 (금) 09:00' — 한국과 날짜가 달라도 그 나라 날짜로. 강사가 한국 시간대면 null (같은 시각이라 표시 안 함) */
+/** 강사 현지 '11/6 (금) 오전 9:00' — 한국과 날짜가 달라도 그 나라 날짜로. 강사가 한국 시간대면 null (같은 시각이라 표시 안 함) */
 export function tutorLocalLabel(at: Date, tz: string): string | null {
   if (!tz || tz === 'Asia/Seoul') return null;
   const f = formatInZone(at, tz);
-  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))} (${WD[new Date(`${f.date}T00:00:00Z`).getUTCDay()]}) ${f.time}`;
+  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))} (${WD[new Date(`${f.date}T00:00:00Z`).getUTCDay()]}) ${ampmKo(f.time)}`;
 }
+
+/** 운영진 보강 확정 사유 (대표 2026-11-08, 운영진만 보임) */
+export const CONFIRM_REASONS = [
+  { value: 'kakao_agreed', label: '카톡으로 학생·강사와 이미 정함' },
+  { value: 'student_request', label: '학생 요청' },
+  { value: 'tutor_request', label: '강사 요청' },
+  { value: 'other', label: '기타 (직접 적기)' },
+] as const;
+/** 확정된 보강 시간 고치기 사유 */
+export const FIX_REASONS = [
+  { value: 'admin_mistake', label: '운영진 입력 실수 정정' },
+  { value: 'student_request', label: '학생 요청' },
+  { value: 'tutor_request', label: '강사 요청' },
+  { value: 'other', label: '기타 (직접 적기)' },
+] as const;
+export type MakeupReason = (typeof CONFIRM_REASONS)[number]['value'] | (typeof FIX_REASONS)[number]['value'];
+export const REASON_TEXT: Record<MakeupReason, string> = {
+  kakao_agreed: '카톡으로 학생·강사와 이미 정함', admin_mistake: '운영진 입력 실수 정정', student_request: '학생 요청', tutor_request: '강사 요청', other: '기타',
+};
+/** 운영 기록 한 줄 (admin_makeup_logs) */
+export type MakeupLog = { id: string; makeupRequestId: string; lessonId: string | null; action: 'confirm' | 'reschedule'; reason: MakeupReason; note: string | null; oldAt: Date | null; newAt: Date; createdAt: Date };
 export function dateLabel(d: KstDate): string {
   return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 }
@@ -227,6 +248,8 @@ export type NoticeContext = {
   tutorTz: string;
   /** 강사 노쇼 무료 보상수업 안내 (4100) */
   compensation?: boolean;
+  /** 보강 시간 변경 안내: 고치기 전 시각 */
+  oldAt?: Date | null;
   /** 취소 안내를 보내는 시점의 보강 진행 상태 (추가 요청 6: 취소만 / 신청 중 / 강사 확인 끝 / 전부 불가 / 확정) */
   makeup?: { state: 'none' | 'requested' | 'tutor_answered' | 'declined' | 'confirmed'; candidates?: Date[]; at?: Date | null };
 };
@@ -297,6 +320,15 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
     }
     return [`[엣지영어] ${name}님, 보강이 확정됐어요`, `원래 수업: ${originKo(c)}`, `보강 수업: ${koAt(c.makeupAt, c.student.timezone)}`, `강사: ${c.tutorName}`].join('\n');
   }
+  if (event === 'makeup_rescheduled' && c.makeupAt) {
+    return [
+      `[엣지영어] ${name}님, ${c.compensation ? '무료 보상수업' : '보강'} 시간이 바뀌었어요`,
+      `바뀐 시간: ${koAt(c.makeupAt, c.student.timezone)}`,
+      c.oldAt ? `이전 시간: ${koAt(c.oldAt, c.student.timezone)} (취소)` : '',
+      `${c.compensation ? '강사 노쇼 수업' : '원래 수업'}: ${originKo(c)}`,
+      `강사: ${c.tutorName}`,
+    ].filter(Boolean).join('\n');
+  }
   if (event === 'makeup_voided' && c.makeupAt) {
     const w = c.compensation ? '보상수업' : '보강';
     return [`[엣지영어] ${name}님, ${w} 일정 정정 안내`, `${w} ${koAt(c.makeupAt, c.student.timezone)}은 진행하지 않아요`, `원래 수업: ${originKo(c)}`, `${w} 날짜는 다시 잡아 드릴게요`].join('\n');
@@ -342,6 +374,15 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
     const w = c.compensation ? 'Compensation class' : 'Make-up';
     return [`CONFIRMED ${w.toLowerCase()} - ${who} (${c.durationMin} min)`, `Original class: ${originEn(c)}`, `${w}: ${enAt(c.makeupAt, c.tutorTz)}`, 'Please add it to your schedule. Thank you!'].join('\n');
   }
+  if (event === 'makeup_rescheduled' && c.makeupAt) {
+    return [
+      `TIME CHANGED ${c.compensation ? 'compensation class' : 'make-up'} - ${who} (${c.durationMin} min)`,
+      `New time: ${enAt(c.makeupAt, c.tutorTz)}`,
+      c.oldAt ? `Previous time (canceled): ${enAt(c.oldAt, c.tutorTz)}` : '',
+      `Original class: ${originEn(c)}`,
+      'Please update your schedule. Thank you!',
+    ].filter(Boolean).join('\n');
+  }
   if (event === 'makeup_voided' && c.makeupAt) {
     const w = c.compensation ? 'Compensation class' : 'Make-up';
     return [`CANCELED ${w.toLowerCase()} - ${who}`, `${w}: ${enAt(c.makeupAt, c.tutorTz)}`, 'No class at this time.'].join('\n');
@@ -357,5 +398,5 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
 }
 
 export const EVENT_TEXT: Record<NoticeEvent, string> = {
-  change: '변경 안내', makeup_ask: '보강 가능 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 정정 안내', revert: '정정 안내',
+  change: '변경 안내', makeup_ask: '보강 가능 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 정정 안내', revert: '정정 안내', makeup_rescheduled: '보강 시간 변경 안내',
 };

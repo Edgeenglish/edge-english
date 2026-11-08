@@ -102,6 +102,17 @@ export function formatInZone(instant: Date, timeZone: string): { date: string; t
   };
 }
 
+/** 화면 표기 12시간 (대표 2026-11-08): '17:00' → '오후 5:00', '00:30' → '오전 12:30' (날짜는 따로 함께 표시) */
+export function ampmKo(hhmm: string): string {
+  const h = Number(hhmm.slice(0, 2));
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${hhmm.slice(3, 5)}`;
+}
+/** 영어 화면 12시간: '17:00' → '5:00 PM', '00:30' → '12:30 AM' */
+export function ampmEn(hhmm: string): string {
+  const h = Number(hhmm.slice(0, 2));
+  return `${h % 12 === 0 ? 12 : h % 12}:${hhmm.slice(3, 5)} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
 /** 두 시점 사이의 시간(시간 단위, 소수 포함) */
 export function hoursBetween(from: Date, to: Date): number {
   return (to.getTime() - from.getTime()) / (60 * 60 * 1000);

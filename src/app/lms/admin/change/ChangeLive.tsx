@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  adjustCredit, changeLesson, confirmMakeup, recordPastMakeup, loadChangeStudents, loadCredits, loadStudentLessons, markLessonNoticeSent, requestMakeup, resendNoticeEmail, revertChange, voidMakeup, withdrawMakeup,
+  adjustCredit, changeLesson, confirmMakeup, confirmMakeupNow, loadMakeupLogs, recordPastMakeup, rescheduleMakeup, loadChangeStudents, loadCredits, loadStudentLessons, markLessonNoticeSent, requestMakeup, resendNoticeEmail, revertChange, voidMakeup, withdrawMakeup,
 } from '@/lms/admin/lesson-change-live';
 import type { ChStudent } from '@/lms/admin/lesson-change';
 import { pendingHref, trackSave } from '@/lms/admin/pending-saves';
@@ -42,7 +42,10 @@ export default function ChangeLive({ code }: { code?: string }) {
         revert: (id, note) => trackSave({ label: '취소 되돌리기', href: pendingHref(), verify: { kind: 'revert', changeId: id } }, () => revertChange(sb, id, note)),
         requestMakeup: (src, slots) => trackSave({ label: '보강 신청', href: pendingHref(), verify: { kind: 'request_makeup', lessonId: src.lessonId ?? null, itemId: src.itemId ?? null, compId: src.compId ?? null } }, () => requestMakeup(sb, src, slots)),
         recordPastMakeup: (src, at, note) => trackSave({ label: '이미 진행한 보강 기록', href: pendingHref(), verify: { kind: 'request_makeup', lessonId: src.lessonId ?? null, itemId: src.itemId ?? null, compId: null } }, () => recordPastMakeup(sb, src, at, note)),
-        confirmMakeup: (id, at) => trackSave({ label: '보강 확정', href: pendingHref(), verify: { kind: 'confirm_makeup', requestId: id } }, () => confirmMakeup(sb, id, at)),
+        confirmMakeup: (id, at, reason, note) => trackSave({ label: '보강 확정', href: pendingHref(), verify: { kind: 'confirm_makeup', requestId: id } }, () => confirmMakeup(sb, id, at, reason, note)),
+        confirmMakeupNow: (src, at, reason, note) => trackSave({ label: '보강 바로 확정', href: pendingHref(), verify: { kind: 'request_makeup', lessonId: src.lessonId ?? null, itemId: src.itemId ?? null, compId: src.compId ?? null } }, () => confirmMakeupNow(sb, src, at, reason, note)),
+        rescheduleMakeup: (id, at, reason, note) => trackSave({ label: '보강 시간 고치기', href: pendingHref() }, () => rescheduleMakeup(sb, id, at, reason, note)),
+        loadMakeupLogs: (id) => loadMakeupLogs(sb, id),
         withdrawMakeup: (id) => trackSave({ label: '보강 신청 닫기', href: pendingHref(), verify: { kind: 'withdraw_makeup', requestId: id } }, () => withdrawMakeup(sb, id)),
         voidMakeup: (id, note) => trackSave({ label: '보강 삭제', href: pendingHref(), verify: { kind: 'void_makeup', lessonId: id } }, () => voidMakeup(sb, id, note)),
         markSent: (id) => trackSave({ label: '안내 보냄 기록', href: pendingHref(), verify: { kind: 'mark_sent', noticeId: id } }, () => markLessonNoticeSent(sb, id)),

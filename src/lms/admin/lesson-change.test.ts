@@ -22,7 +22,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
       L('c', '2026-10-28', '17:00', { state: 'canceled', classStatus: 'Student canceled in advance' }),
     ], now);
     expect(list.map((l) => l.id)).toEqual(['a', 'b']);
-    expect(kstLabel(list[1].startsAt)).toBe('10/29 (목) 17:00');
+    expect(kstLabel(list[1].startsAt)).toBe('10/29 (목) 오후 5:00');
   });
 
   it('보강 권리: 보강 받는 결과 + 살아 있는 보강 없음 (늦은 변경·되돌려 없앤 보강 제외), 이관 미예약 보강 포함', () => {
@@ -54,8 +54,15 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     const conf = studentNotice('makeup_confirmed', c);
     expect(conf).toContain('원래 수업: 10월 29일(목) 오후 5시 (한국 시간)');
     expect(conf).toContain('보강 수업: 10월 30일(금) 오후 6시 (한국 시간)');
-    expect(tutorNotice('makeup_confirmed', c)).toContain('Make-up: Fri 30 Oct 17:00 Manila Time (Fri 30 Oct 18:00 KST)');
+    expect(tutorNotice('makeup_confirmed', c)).toContain('Make-up: Fri 30 Oct 5:00 PM Manila Time (Fri 30 Oct 6:00 PM KST)');
     expect(tutorNotice('makeup_ask', { ...c, candidates: [kstToInstant('2026-10-30', '18:00')] })).toContain('not confirmed yet');
+    // 운영진이 확정된 보강 시간을 고침 (2026-11-08): 바뀐 시간 + 이전 시간(취소) 둘 다
+    const fixed = { ...c, makeupAt: kstToInstant('2026-10-30', '20:00'), oldAt: kstToInstant('2026-10-30', '18:00') };
+    expect(tutorNotice('makeup_rescheduled', fixed)).toContain('New time: Fri 30 Oct 7:00 PM Manila Time (Fri 30 Oct 8:00 PM KST)');
+    expect(tutorNotice('makeup_rescheduled', fixed)).toContain('Previous time (canceled): Fri 30 Oct 5:00 PM Manila Time');
+    expect(studentNotice('makeup_rescheduled', fixed)).toContain('보강 시간이 바뀌었어요');
+    expect(studentNotice('makeup_rescheduled', fixed)).toContain('바뀐 시간: 10월 30일(금) 오후 8시 (한국 시간)');
+    expect(studentNotice('makeup_rescheduled', fixed)).toContain('이전 시간: 10월 30일(금) 오후 6시 (한국 시간) (취소)');
     const abroad = studentNotice('change', { ...c, student: { ...student, timezone: 'America/Toronto' } });
     expect(abroad).toContain('10월 29일(목) 오전 4시 (토론토 시간) = 10월 29일(목) 오후 5시 (한국 시간)');
   });
@@ -134,8 +141,8 @@ describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)'
 describe('보강 시간 입력: 강사 현지 날짜·시각 (2026-10-26 대표)', () => {
   it('한국 시각을 강사 현지로 바꿔 보여 주고 날짜가 바뀌어도 정확히', async () => {
     const { tutorLocalLabel } = await import('./lesson-change');
-    expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'Asia/Manila')).toBe('11/6 (금) 09:00');
-    expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'America/Toronto')).toBe('11/5 (목) 20:00');
+    expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'Asia/Manila')).toBe('11/6 (금) 오전 9:00');
+    expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'America/Toronto')).toBe('11/5 (목) 오후 8:00');
     expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'Asia/Seoul')).toBeNull();
   });
   it('강사 확인 전 보강 신청은 학생에게 확정처럼 안내하지 않음 (학생 안내 없음)', () => {
