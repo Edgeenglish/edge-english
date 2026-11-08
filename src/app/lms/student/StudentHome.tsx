@@ -1734,6 +1734,11 @@ function Row({ k, v }: { k: string; v: string }) {
 // 6시간 이내 취소 확인 문구 (대표 원문, docs/lms-기획서-원문.md 3-3)
 const LATE_CANCEL_TEXT = '수업 시작까지 6시간이 남지 않았어요. 지금 취소하면 보강 없이 수업 1회가 소진돼요. (변경권은 차감되지 않아요) 그래도 미리 알려주시면 강사님이 기다리지 않아도 돼요. 취소할까요?';
 
+/** 수업 하나를 취소하면 어떻게 되는지 한 줄 (목록 줄 아래 · 여러 수업 요약 공통) */
+const outcomeText = (d: { ok: boolean; consumesLesson?: boolean; timing?: string; usesCredit?: boolean }) =>
+  !d.ok ? '취소 불가' : d.consumesLesson ? (d.timing === 'late' ? '6시간 이내 · 1회 차감 · 보강 없음' : '변경권 없음 · 1회 차감 · 보강 없음')
+    : d.usesCredit ? '변경권 1개 · 보강 가능' : '변경권 그대로 · 보강 가능';
+
 function CancelSheet(props: {
   lessons: StudentLesson[];
   lessonId: string | null;
@@ -1760,6 +1765,8 @@ function CancelSheet(props: {
 }) {
   const [checked, setChecked] = useState(false);
   const [many, setMany] = useState<Set<string>>(() => new Set(props.initialMany ?? []));
+  // 한 번 누르면 그 수업 하나만 취소, 여러 수업은 '여러 수업 한 번에 취소'를 눌러야 체크 칸이 나옴 (대표 11/8)
+  const [multi, setMulti] = useState(() => (props.initialMany?.length ?? 0) > 0);
   const [manyChecked, setManyChecked] = useState(false);
   const lesson = props.lessons.find((l) => l.id === props.lessonId);
   const periods = props.creditPeriods ?? [];
@@ -1776,23 +1783,33 @@ function CancelSheet(props: {
     const toggleMany = (id: string) => setMany((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
     return (
       <div className="grid gap-3">
-        <h2 className="text-[18px] font-bold">어느 수업을 바꿀까요?</h2>
-        <p className="text-[13px] text-[#55526a]">수업을 누르면 하나씩 취소해요. 여러 수업을 한 번에 취소하려면 왼쪽 네모를 체크해 주세요.</p>
+        <h2 className="text-[18px] font-bold">{multi ? '변경할 수업을 모두 골라 주세요' : '변경할 수업을 골라 주세요'}</h2>
         {props.lessons.map((l) => {
-          const h = hoursBetween(props.now, l.startsAt);
           const on = many.has(l.id);
+          const alone = planCancelMany([l], { now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, creditPeriods: periods, holidays: props.holidays }).items[0]?.decision;
+          const showCheck = multi && !!props.onConfirmMany && l.kind !== 'compensation';
           return (
             <div key={l.id} className={`${card} flex min-h-[56px] items-center gap-2 pl-3 pr-4 ${on ? 'border-[#5b3df0] bg-[#f6f3ff]' : ''}`}>
-              {props.onConfirmMany && l.kind !== 'compensation' && (
+              {showCheck && (
                 <input type="checkbox" aria-label={`${whenText(l.startsAt)} 함께 취소`} checked={on} onChange={() => toggleMany(l.id)} className="h-5 w-5 shrink-0 accent-[#5b3df0]" />
               )}
-              <button type="button" onClick={() => props.onPick(l.id)} className="flex min-h-[56px] min-w-0 flex-1 items-center justify-between text-left">
-                <span className="text-[15px] font-semibold">{whenText(l.startsAt)}</span>
-                <span className="shrink-0 pl-2 text-[12.5px] text-[#6b6880]">{h < 6 ? '6시간 이내' : untilText(props.now, l.startsAt)} ›</span>
+              <button type="button" onClick={() => (showCheck ? toggleMany(l.id) : props.onPick(l.id))} className="flex min-h-[56px] min-w-0 flex-1 items-center justify-between gap-2 py-1.5 text-left">
+                <span className="min-w-0">
+                  <span className="block text-[15px] font-semibold">{whenText(l.startsAt)}</span>
+                  {/* 누르면 어떻게 되는지 미리 (설명 문장 대신) */}
+                  {alone && <span className={`block text-[12.5px] ${alone.ok && alone.consumesLesson ? 'font-bold text-[#b3261e]' : 'text-[#55526a]'}`}>{outcomeText(alone)}</span>}
+                </span>
+                {!showCheck && <span className="shrink-0 text-[#6b6880]">›</span>}
               </button>
             </div>
           );
         })}
+        {props.onConfirmMany && props.lessons.some((l) => l.kind !== 'compensation') && (
+          <button type="button" onClick={() => { setMulti(!multi); if (multi) { setMany(new Set()); setManyChecked(false); } }}
+            className="min-h-[44px] text-center text-[14px] font-bold text-[#3a22b0]">
+            {multi ? '한 개씩 변경 ›' : '여러 수업 한 번에 변경 ›'}
+          </button>
+        )}
         {props.notice && <p className="rounded-[12px] border border-[#f3c2bb] bg-[#fff1ef] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#7a1d12]">{props.notice}</p>}
         {picked.length > 0 && props.onConfirmMany && (
           <section className={`${card} sticky bottom-0 z-10 grid gap-2 p-3.5 shadow-[0_-6px_16px_rgba(27,20,66,0.12)]`}>
@@ -1805,10 +1822,7 @@ function CancelSheet(props: {
               {plan.items.map(({ lesson: l, decision: d }) => (
                 <li key={l.id} className="flex justify-between gap-2">
                   <span>{whenText(l.startsAt)}</span>
-                  <b className={d.ok && d.consumesLesson ? 'text-[#b3261e]' : ''}>
-                    {!d.ok ? '취소 불가' : d.consumesLesson ? (d.timing === 'late' ? '6시간 이내 · 1회 차감 · 보강 없음' : '변경권 없음 · 1회 차감 · 보강 없음')
-                      : d.usesCredit ? '변경권 1개 · 보강 가능' : '변경권 그대로 · 보강 가능'}
-                  </b>
+                  <b className={d.ok && d.consumesLesson ? 'text-[#b3261e]' : ''}>{outcomeText(d)}</b>
                 </li>
               ))}
             </ul>
