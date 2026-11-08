@@ -76,6 +76,8 @@ const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
 let VIEW_TZ = 'Asia/Seoul';
 /** 운영자 보기에서 해외 학생을 한국 시간으로 보는 중 (주황 띠·배지) */
 let ADMIN_KST = false;
+/** 한국 시간으로 보는 중일 때 띠에 적는 학생 도시 이름 ('시드니') */
+let KST_CITY = '';
 /** 기준 이름: '시드니 시간' / '한국 시간' (도시 이름 한국어, 11/8 대표) */
 const zoneCity = () => `${koZoneCity(VIEW_TZ)} 시간`;
 const zoneText = zoneCity;
@@ -112,10 +114,23 @@ const overseas = () => VIEW_TZ !== 'Asia/Seoul';
 /** 모든 학생 화면·팝업 맨 위: '🕐 모든 날짜·시간은 토론토 시간 기준'. 운영자 보기에서 KST 로 바꾸면 띠도 같이 바뀜 */
 function ZoneBar() {
   return (
-    <p role="note" className={`flex items-center gap-2 rounded-[12px] px-3.5 py-2.5 text-[14.5px] font-extrabold leading-snug ${ADMIN_KST ? 'border-2 border-[#e08a1e] bg-[#ffe1b8] text-[#6b3a00]' : 'bg-[#5b3df0] text-white'}`}>
+    <p role="note" className="flex items-center gap-2 rounded-[12px] bg-[#5b3df0] px-3.5 py-2.5 text-[14.5px] font-extrabold leading-snug text-white">
       <span aria-hidden>🕐</span>
-      <span>모든 날짜·시간은 {ADMIN_KST ? '한국 시간 (KST)' : zoneText()} 기준{ADMIN_KST ? ' · 운영자 보기' : ''}</span>
+      <span className="text-white">모든 날짜·시간은 {ADMIN_KST ? '한국 시간 (KST)' : zoneText()} 기준</span>
     </p>
+  );
+}
+/**
+ * 운영자가 한국 시간으로 보는 중일 때만: 화면 맨 위·팝업 맨 위 주황 띠 하나 (11/8 대표: 한국 시간 안내는 띠 하나로, 팝업에서도 또렷하게).
+ * 색만이 아니라 글자로. globals.css 의 '* { color }' 때문에 글자마다 색 지정
+ */
+function KstBar({ sticky }: { sticky?: boolean }) {
+  if (!ADMIN_KST) return null;
+  return (
+    <div role="status" className={`${sticky ? 'sticky top-0 z-10' : ''} flex shrink-0 flex-wrap items-center gap-x-2 bg-[#c2410c] px-4 py-2.5 lg:px-6`}>
+      <span className="text-[15px] font-bold text-white">⚠ 한국 시간 (KST)으로 보는 중</span>
+      <span className="text-[13px] font-semibold text-white">학생에게는 {KST_CITY} 시간으로 보여요</span>
+    </div>
   );
 }
 /** 운영자 보기 전용 시간대 전환: 학생 시간 | 한국 시간(KST). 고른 쪽은 ✓·굵은 테두리 (색만으로 구별하지 않음) */
@@ -153,6 +168,14 @@ function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
 // 같은 노쇼 수업이라도 원래 수업 보강과 무료 보상수업은 다른 권리 (4100)
 const sameRight = (a: Right, b: Right) =>
   a.compId || b.compId ? !!a.compId && a.compId === b.compId : (a.lessonId !== null && a.lessonId === b.lessonId) || (a.itemId !== null && a.itemId === b.itemId);
+/** 신청 제목 '보강 · 11/2 수업분': 원래 수업 날짜를 지금 보이는 시간대로 다시 씀 (운영자 한국 시간 전환에도 맞게). 시각 모르는 시트 수업은 한국 날짜 */
+function reqTitle(r: StudentRequest) {
+  if (!r.originalAt || r.kind !== 'makeup') return r.title;
+  const day = r.originalTimeKnown === false
+    ? `${fmtDate(formatInZone(r.originalAt, 'Asia/Seoul').date as KstDate)}${overseas() ? '(한국 날짜)' : ''}`
+    : kst(r.originalAt).md;
+  return `${r.compensation ? '무료 보상수업' : '보강'} · ${day} 수업분`;
+}
 function whenText(d: Date) {
   const k = kst(d);
   return `${k.md}(${k.wd}) ${k.time}`;
@@ -233,6 +256,7 @@ export default function StudentHome(props: {
   };
   VIEW_TZ = isAdminView && adminKst ? 'Asia/Seoul' : studentTz;
   ADMIN_KST = isAdminView && adminKst && studentTz !== 'Asia/Seoul';
+  KST_CITY = koZoneCity(studentTz);
   const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
@@ -578,6 +602,7 @@ export default function StudentHome(props: {
 
   return (
     <KstCtx.Provider value={{ admin: isAdminView, studentTz, on: adminKst, set: setAdminKst }}>
+    <KstBar sticky />
     <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
       <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
         {props.adminBar ? (
@@ -611,12 +636,6 @@ export default function StudentHome(props: {
 
       <div className="min-w-0 flex-1 pb-24 lg:pb-0">
         {props.adminBar && <div className="grid gap-2 px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}<KstToggle /></div>}
-        {ADMIN_KST && (
-          <p role="status" className="sticky top-0 z-10 mx-4 mt-2 rounded-[10px] border-2 border-[#e08a1e] bg-[#ffe1b8] px-3 py-2 text-[14px] font-extrabold leading-snug text-[#6b3a00] lg:mx-0">
-            ⚠ 한국 시간 (KST)으로 보는 중
-            <span className="block text-[12.5px] font-semibold">학생에게는 {koZoneCity(studentTz)} 시간으로 보여요</span>
-          </p>
-        )}
         <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
           {props.adminBar ? (
             <a href="/lms/admin" className="text-[17px] font-bold text-[#09246b]">
@@ -1241,7 +1260,6 @@ function MakeupPicker(props: {
         )}
         {rightUntil(right, props.endDate) && <p className="text-[13.5px] text-[#55526a]">{rightUntil(right, props.endDate)}</p>}
       </div>
-      <KstToggle />
       <p className="text-[14px] leading-relaxed text-[#55526a]">이 수업을 대신할 날짜를 최대 {MAKEUP_SLOTS_MAX}개 골라 주세요. 강사님이 확인하면 확정돼요.</p>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
@@ -1456,7 +1474,7 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
   return (
     <button type="button" onClick={onOpen} className="flex min-h-[56px] w-full items-center justify-between gap-2 border-b border-[#eeecf4] py-2 text-left last:border-0">
       <span>
-        <span className="block text-[14px] font-semibold">{r.title}</span>
+        <span className="block text-[14px] font-semibold">{reqTitle(r)}</span>
         <span className="block text-[12px] text-[#6b6880]">
           {r.kind !== 'makeup' ? r.note
             : r.status === 'confirmed' && r.confirmedAt ? `${whenText(r.confirmedAt)} 확정`
@@ -1558,8 +1576,10 @@ function TabPage({ title, children }: { title: string; children: React.ReactNode
 
 function Sheet({ onClose, children, wide }: { onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
-      <div role="dialog" aria-modal className={`max-h-[90dvh] w-full ${wide ? 'max-w-[520px] lg:max-w-[860px]' : 'max-w-[520px]'} overflow-y-auto rounded-t-[22px] bg-[#f6f5fa] p-5 lg:rounded-[22px]`} onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-20 flex flex-col bg-black/40" onClick={onClose}>
+      <KstBar />
+      <div className="flex min-h-0 flex-1 items-end justify-center lg:items-center">
+      <div role="dialog" aria-modal className={`max-h-[min(90dvh,100%)] w-full ${wide ? 'max-w-[520px] lg:max-w-[860px]' : 'max-w-[520px]'} overflow-y-auto rounded-t-[22px] bg-[#f6f5fa] p-5 lg:rounded-[22px]`} onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <ZoneBar />
@@ -1569,6 +1589,7 @@ function Sheet({ onClose, children, wide }: { onClose: () => void; children: Rea
           </button>
         </div>
         {children}
+      </div>
       </div>
     </div>
   );
@@ -1580,7 +1601,7 @@ function RequestDetail({ r }: { r: StudentRequest }) {
   const at = r.status === 'tutor_reviewing' ? 1 : r.status === 'admin_reviewing' || r.status === 'rescheduling' ? 2 : 3;
   return (
     <div className="grid gap-3.5">
-      <h2 className="text-[18px] font-bold">{r.title}</h2>
+      <h2 className="text-[18px] font-bold">{reqTitle(r)}</h2>
       <section className={`${card} grid gap-3.5 p-4`}>
         <div className="flex items-center justify-between">
           <span className="text-[13px] text-[#55526a]">지금 상태</span>
@@ -1765,7 +1786,6 @@ function CancelSheet(props: {
     return (
       <div className="grid gap-3">
         <h2 className="text-[18px] font-bold">어느 수업을 바꿀까요?</h2>
-        <KstToggle />
         <p className="text-[13px] text-[#55526a]">수업을 누르면 하나씩 취소해요. 여러 수업을 한 번에 취소하려면 왼쪽 네모를 체크해 주세요.</p>
         {props.lessons.map((l) => {
           const h = hoursBetween(props.now, l.startsAt);
