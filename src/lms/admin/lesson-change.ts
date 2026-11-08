@@ -203,12 +203,12 @@ export const STATUS_SHORT: Partial<Record<ClassStatus, string>> = {
 
 /** 취소된 수업 줄·변경 기록의 '누가 취소했는지' (처음 보는 사람도 바로 읽히게, 대표 11/8) */
 export const STATUS_PLAIN: Partial<Record<ClassStatus, string>> = {
-  'Student canceled in advance': '학생이 취소',
+  'Student canceled in advance': '학생 미리 취소',
   'Student canceled in advance (public holiday)': '공휴일 취소',
-  'Student canceled late': '학생이 늦게 취소',
-  'No change credits left': '학생이 취소 (변경권 없음)',
-  'Tutor canceled in advance': '강사가 취소',
-  'Tutor canceled late': '강사가 늦게 취소',
+  'Student canceled late': '학생 늦게 취소',
+  'No change credits left': '학생 취소 (변경권 없음)',
+  'Tutor canceled in advance': '강사 미리 취소',
+  'Tutor canceled late': '강사 늦게 취소',
   'Tutor long-term leave': '강사 휴무',
 };
 

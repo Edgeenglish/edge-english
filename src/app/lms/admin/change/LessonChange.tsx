@@ -163,6 +163,9 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   const byId = useMemo(() => new Map(lessons.map((l) => [l.id, l])), [lessons]);
   const choices = changeableLessons(lessons, now);
   const canceledLessons = canceledUpcoming(lessons, now);
+  // 담당강사 = 앞으로의 정규 수업 강사. 수업 줄에는 담당강사와 다른 강사(대체·보강 강사)일 때만 이름을 붙임 (대표 11/8: 같은 정보 반복 빼기)
+  const regularTutors = [...new Set(choices.filter((l) => l.kind === 'regular').map((l) => l.tutorName))];
+  const tutorTag = (l: ChLesson) => (regularTutors.includes(l.tutorName) ? '' : ` · ${l.tutorName}`);
   const lesson = lessonId ? byId.get(lessonId) ?? null : null;
   const rights = data ? makeupRights(lessons, data.migrated, data.makeupRequests, data.compensations ?? []) : [];
   const lastTutor = [...lessons].reverse().find((l) => !l.voided) ?? null;
@@ -241,6 +244,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
               </ul>
             </>
           )}
+          {student && regularTutors.length > 0 && <p className="mt-1 text-[14px] text-[#1d1b2b]">담당강사 : {regularTutors.join(', ')}</p>}
           <Err>{loadErr}</Err>
         </Card>
 
@@ -250,31 +254,6 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
               <CreditsCard credits={credits} adjust={(d, r) => actions.adjustCredit!(student.id, d, r)} done={reload} />
             )}
             <Card title="2. 수업">
-              {canceledLessons.length > 0 && (
-                <>
-                  <p className="mb-1.5 text-[13px] font-bold text-[#55526a]">취소된 수업 {canceledLessons.length}</p>
-                  <ul className="mb-3 grid gap-1.5">
-                    {canceledLessons.map((l) => {
-                      const ch = data.changes.find((c) => c.lessonId === l.id && c.status === 'applied');
-                      const req = data.makeupRequests.find((r) => r.sourceLessonId === l.id && !['withdrawn', 'voided', 'declined', 'expired'].includes(r.status));
-                      const made = req?.confirmedLessonId ? byId.get(req.confirmedLessonId) : undefined;
-                      const makeupText = made ? `보강 확정 ${kstLabel(made.startsAt)} 한국` : req ? '보강 신청 중'
-                        : ch && !ch.decision.makeup_allowed ? '보강 불가'
-                        : `보강 신청 전${ch?.decision.makeup_until ? ` (기한 ${dateLabel(ch.decision.makeup_until)})` : ''}`;
-                      return (
-                        <li key={l.id} className="rounded-[12px] border border-[#f3c9c4] bg-[#fdf3f2] px-3 py-2">
-                          <b className="block text-[15px] text-[#1d1b2b]"><span className="mr-1.5 rounded-full bg-[#fde3df] px-2 py-0.5 text-[12px] font-extrabold text-[#9b1c10]">취소</span>{kstLabel(l.startsAt)} 한국</b>
-                          <span className="block text-[13px] text-[#55526a]">
-                            {l.classStatus ? STATUS_PLAIN[l.classStatus] ?? '' : ''}{ch ? ` · 취소 신청한 일자 ${sentLabel(ch.requestedAt ?? ch.decidedAt)} 한국` : ''} · {lessonTag(l)} · {l.tutorName}
-                          </span>
-                          <span className="block text-[13px] font-bold text-[#3a22b0]">{makeupText}</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <p className="mb-1.5 text-[13px] font-bold text-[#55526a]">예정 수업 {choices.length}</p>
-                </>
-              )}
               {choices.length === 0 ? (
                 <p className="text-[14px] text-[#6b6880]">예정 수업 없음</p>
               ) : (
@@ -288,11 +267,36 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                         className={`flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border px-3 py-2 text-left ${l.id === lessonId ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}
                       >
                         <b className="text-[16px] text-[#1d1b2b]">{kstLabel(l.startsAt)}</b>
-                        <span className="flex-1 text-right text-[13px] text-[#6b6880]">{lessonTag(l)} · {l.tutorName}</span>
+                        <span className="flex-1 text-right text-[13px] text-[#6b6880]">{lessonTag(l)}{tutorTag(l)}</span>
                       </button>
                     </li>
                   ))}
                 </ul>
+              )}
+              {canceledLessons.length > 0 && (
+                <div className="mt-3 border-t border-[#e6e3ef] pt-3">
+                  <p className="mb-1.5 text-[14px] font-bold text-[#1d1b2b]">취소된 수업</p>
+                  <ul className="grid gap-1.5">
+                    {canceledLessons.map((l) => {
+                      const ch = data.changes.find((c) => c.lessonId === l.id && c.status === 'applied');
+                      const req = data.makeupRequests.find((r) => r.sourceLessonId === l.id && !['withdrawn', 'voided', 'declined', 'expired'].includes(r.status));
+                      const made = req?.confirmedLessonId ? byId.get(req.confirmedLessonId) : undefined;
+                      // 보강 상태만 (신청 기한은 안 보임 — 대표 11/8)
+                      const makeupText = made ? `보강 확정 ${kstLabel(made.startsAt)} 한국` : req ? '보강 신청 중' : ch && !ch.decision.makeup_allowed ? '보강 불가' : '보강 신청 전';
+                      return (
+                        <li key={l.id} className="rounded-[12px] border border-[#f3c9c4] bg-[#fdf3f2] px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <b className="text-[16px] text-[#1d1b2b]">{kstLabel(l.startsAt)}</b>
+                            <span className="flex-1 text-right text-[13px] text-[#6b6880]">{tutorTag(l).replace(/^ · /, '')}</span>
+                          </div>
+                          <span className="block text-[13px] text-[#55526a]">
+                            {l.classStatus ? STATUS_PLAIN[l.classStatus] ?? '취소' : '취소'}{ch ? ` · 취소 신청한 일자 ${sentLabel(ch.requestedAt ?? ch.decidedAt)} 한국` : ''} · {makeupText}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
             </Card>
 
