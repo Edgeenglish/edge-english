@@ -21,9 +21,9 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font); font-
 .wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 18px }
 h1 { font-size: 22px; margin: 0; text-wrap: balance }
 .lead { color: var(--muted); margin: 4px 0 0; max-width: 70ch }
-.tabs { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px }
+.tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg) }
-.tab { min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); padding: 0 14px; font: inherit; font-weight: 700; cursor: pointer }
+.tab { flex-shrink: 0; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); padding: 0 14px; font: inherit; font-weight: 700; cursor: pointer }
 .tab[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: #fff }
 .tab:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px }
 .note { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; display: grid; gap: 4px }
@@ -139,6 +139,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <h2>반영한 결정 (11/8 검토)</h2>
     <ol>
       <li><b>시작일</b>: 지난 종료일 뒤 <b>첫 정규 수업일</b>을 자동으로 넣고, 필요하면 수정 (예시: 종료 11/18(수) → 11/20(금), 정규 수·금 KST)</li>
+      <li><b>재등록하며 요일 변경</b>: 지난 요일·시각을 불러오고, 새 요일을 고르면 첫 수업일 자동 재계산. 운영진은 필요할 때만 직접 수정. 요일 수 검사·강사 일정 겹침 검사는 그대로</li>
+      <li><b>[재등록 넣기] 버튼</b>: 수강기간과 관계없이 운영진에게 항상 표시 (노출 시점 제한 없음). 12·24주 수강 중에는 재등록이 생기지 않음 (수강권 하나 · 4주마다 변경권만)</li>
+      <li><b>재등록 안내 문자</b>: 기존대로 미완료 수업 2회 이하일 때만 표시 (바꾸지 않음)</li>
       <li><b>수강 상품</b>: 지난 수강권과 같은 기간·주 횟수·길이를 미리 골라 둠</li>
       <li><b>금액</b>: 직접 입력, 지난 결제 금액은 참고로만 표시</li>
       <li><b>입금·결제 시각</b>: 기본값 없음. 실제 확인한 시각을 넣어야 저장됨</li>
@@ -163,7 +166,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 const won = (n) => n.toLocaleString('ko-KR') + '원';
 const S = { // 화면 상태 (예시)
   view: 'detail', renewed: false, carried: false,
-  weeks: 12, weekly: 2, dur: 40, method: 'bank', start: '2026-11-20', paid: '',
+  weeks: 12, weekly: 2, dur: 40, method: 'bank', start: '', startManual: false, days: [3, 5], time: '09:00', paid: '',
   carry: [true, true, true, true, true],
   rmode: 'in', ramt: '', rreason: '', balance: 10000,
 };
@@ -174,10 +177,12 @@ const NOTES = {
     '주황 테두리 = 이번에 새로 생기는 곳. 나머지 칸(정규 일정·프로필 등)은 지금 그대로.',
     '아래 ‘재등록 저장 뒤 모습 보기’를 누르면 저장 뒤 상태로 바뀝니다.']],
   renew: ['② 재등록 넣기', [
-    '상품은 지난 수강권 그대로 미리 골라 둠. <b>시작일 = 지난 종료일 뒤 첫 정규 수업일</b>을 자동으로 넣고 수정 가능 (예시: 종료 11/18(수) → 11/20(금)).',
+    '상품·<b>정규 요일·시각</b>은 지난 수강권 그대로 불러옴. 요일을 바꾸면 <b>시작일 = 지난 종료일 뒤 첫 수업일</b>이 바로 다시 계산됨 (예시: 종료 11/18(수) → 수·금이면 11/20(금), 화·목으로 바꾸면 11/19(목)).',
+    '시작일을 직접 고치면 ‘직접 수정함’ 표시 + [자동으로] 버튼. 요일을 다시 바꾸면 자동 계산으로 돌아감.',
+    '고른 요일 수가 주 수업 횟수와 다르거나 강사 일정과 겹치면 그 칸 바로 아래 빨간 글 + 저장 막힘 (예시: 월 09:00 을 고르면 겹침). 겹침 검사는 지금 일정 확정과 같은 검사.',
     '<b>입금·결제 시각은 비어 있음</b> — 실제 확인한 시각을 넣어야 저장 버튼이 눌림. 금액은 직접 입력, 지난 결제 금액은 참고.',
     '종료일·수업 수·변경권은 자동 계산 (DB 함수와 같은 계산).',
-    '저장 완료 화면에서 [보강 이월] → 대시보드 ‘재등록 강사 안내’ 카드(정규 일정 확정)로 이어짐.']],
+    '저장 완료 화면에서 [보강 이월] → 대시보드 ‘재등록 강사 안내’ 카드(정규 일정 확정)로 이어짐. 요일이 같으면 지난 일정을 이어 쓰고, 바뀌었으면 새 요일로 확정 (11/8 함수 규칙 그대로).']],
   carry: ['③ 보강 이월', [
     '맨 위에서 <b>POL-RN-01</b>(지난 종료일 23:59 KST 안에 결제) 통과 여부를 먼저 보여 줌. 통과 못 하면 저장 버튼이 막힘.',
     '이월할 보강을 체크. <b>시트에서 옮겨 온 보강</b>은 날짜를 비워도 됨(학생이 나중에 신청). <b>LMS에서 취소한 수업의 보강</b>은 날짜가 꼭 있어야 함 (DB 규칙).',
@@ -203,7 +208,7 @@ function suGang() {
   let rows = `<div class="row strong"><span class="k">등록 상품</span><span class="v">4주 · 주 2회 · 40분</span></div>
    <div class="row"><span class="k">진행 · 남은</span><span class="v num">진행 6회 · 남은 정규 2회 (보강 포함 5회)</span></div>
    <div class="row strong"><span class="k">최종 종료</span><span class="v num">11/18(수) 23:59 한국</span></div>`;
-  if (S.renewed) rows += `<div class="row strong"><span class="k">다음 수강권 <span class="new-tag">새로</span></span><span class="v num">2차 · ${S.weeks}주 · 주 ${S.weekly}회 · ${S.dur}분<br><small class="hint">11/20 – ${endOf()} · 결제 확인 11/5</small></span></div>
+  if (S.renewed) rows += `<div class="row strong"><span class="k">다음 수강권 <span class="new-tag">새로</span></span><span class="v num">2차 · ${S.weeks}주 · 주 ${S.weekly}회 · ${S.dur}분<br><small class="hint">${md(curStart() || '2026-11-20')} – ${endOf()} · ${daysText(S.days)} ${S.time} KST · 결제 확인 11/5</small></span></div>
    ${S.carried ? `<div class="row"><span class="k">보강 이월</span><span class="v num">${S.carry.filter(Boolean).length}회 이월함 ✓</span></div>`
      : `<div class="row"><span class="k">남은 보강</span><span class="v"><span class="num">5회</span> 이월 가능 <button class="btn-s fill" data-go="carry" style="margin-left:4px">보강 이월</button></span></div>`}`;
   return `<section class="box is-new"><div class="box-h"><h3>수강</h3>${btns}</div>${rows}</section>`;
@@ -233,10 +238,26 @@ function detail() {
 }
 function addDays(iso, n) { const t = new Date(iso + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
 function md(iso) { return iso.slice(5).replace('-', '/'); }
-function endOf() { return md(addDays('2026-11-20', S.weeks / 4 * 28 - 1)); }
+function endOf() { return md(addDays(curStart() || '2026-11-20', S.weeks / 4 * 28 - 1)); }
 function chips(key, vals, unit) { return `<div class="chips">${vals.map(v => `<button class="chip" aria-pressed="${S[key] === v}" data-set="${key}" data-val="${v}">${v}${unit}</button>`).join('')}</div>`; }
+const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const PREV_END = '2026-11-18';
+// 예시: Olivia 는 월 09:00 KST 에 다른 학생 정규 수업이 있음 → 겹침 검사 예시
+const BUSY = { '1 09:00': 'Olivia 다른 학생 정규 수업과 겹쳐요' };
+function wd(iso) { return new Date(iso + 'T00:00:00Z').getUTCDay(); }
+function firstLesson() { if (!S.days.length) return ''; for (let i = 1; i <= 7; i++) { const d = addDays(PREV_END, i); if (S.days.includes(wd(d))) return d; } return ''; }
+function curStart() { return S.startManual ? S.start : firstLesson(); }
+function daysText(ds) { return DAY_ORDER.filter(d => ds.includes(d)).map(d => DAY_KO[d]).join('·'); }
+function torontoText(ds, t) { // 11월 토론토 = KST −14시간
+  const [h, m] = t.split(':').map(Number); let hh = h - 14, shift = 0; if (hh < 0) { hh += 24; shift = -1; }
+  return `${daysText(ds.map(d => (d + shift + 7) % 7))} ${String(hh).padStart(2, '0')}:${String(m).padStart(2, '0')}`; }
+const TIMES = Array.from({ length: 36 }, (_, i) => { const mm = 6 * 60 + i * 30; return `${String(Math.floor(mm / 60)).padStart(2, '0')}:${mm % 60 ? '30' : '00'}`; });
 function renew() {
-  const start = S.start || '';
+  const start = curStart();
+  const changed = daysText(S.days) !== '수·금' || S.time !== '09:00';
+  const conflicts = S.days.map(d => BUSY[`${d} ${S.time}`] && `${DAY_KO[d]} ${S.time} KST — ${BUSY[`${d} ${S.time}`]}`).filter(Boolean);
+  const countBad = S.days.length !== S.weekly;
   const lessons = S.weeks * S.weekly; const periods = S.weeks / 4; const cred = S.weekly === 1 ? 1 : S.weekly === 2 ? 2 : 3;
   const end = start ? md(addDays(start, S.weeks / 4 * 28 - 1)) : '시작일을 고르면 계산';
   const badStart = start && start <= '2026-11-18';
@@ -245,20 +266,26 @@ function renew() {
    <div class="card"><div class="row strong"><span class="k">지난 수강권</span><span class="v">1차 · 4주 · 주 2회 · 40분</span></div><div class="row"><span class="k">기간</span><span class="v num">10/22 – 11/18 23:59 (한국)</span></div><div class="row"><span class="k">남은 수업</span><span class="v num">정규 2 · 보강 5</span></div><div class="row"><span class="k">지난 결제</span><span class="v num">계좌이체 · ${won(290000)} (참고)</span></div></div>
    <div><span class="lab">수강 기간</span>${chips('weeks', [4, 12, 24], '주')}</div>
    <div class="grid2"><div><span class="lab">주 수업 횟수</span>${chips('weekly', [1, 2, 3, 5], '회')}</div><div><span class="lab">수업 길이</span>${chips('dur', [20, 40, 50], '분')}</div></div>
-   <div><label class="lab" for="rs">새 수강권 시작일 <span class="pill opt">첫 정규 수업일 자동 · 수·금</span></label><input class="inp" type="date" id="rs" value="${start}" min="2026-11-19"></div>
+   <div><span class="lab">정규 요일 (한국 시간) ${changed ? '<span class="pill need">바뀜</span>' : '<span class="pill opt">지난 수강권 그대로</span>'}</span>
+     <div class="chips">${DAY_ORDER.map(d => `<button class="chip" aria-pressed="${S.days.includes(d)}" data-day="${d}">${DAY_KO[d]}</button>`).join('')}</div>
+     ${countBad ? `<div class="bad-bar" style="margin-top:6px">주 ${S.weekly}회 — 요일 ${S.weekly}개를 골라 주세요 (지금 ${S.days.length}개)</div>` : ''}</div>
+   <div class="grid2"><div><label class="lab" for="rtime">시각 (한국 시간 KST)</label><select class="inp" id="rtime">${TIMES.map(t => `<option ${t === S.time ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+     <div class="card" style="align-self:end"><div class="row" style="border:0"><span class="k">학생 · 토론토</span><span class="v num">${S.days.length ? torontoText(S.days, S.time) : '—'}</span></div></div></div>
+   ${conflicts.map(c => `<div class="bad-bar">${c}</div>`).join('')}
+   <div><label class="lab" for="rs">새 수강권 시작일 <span class="pill opt">${S.startManual ? '직접 수정함' : `첫 수업일 자동 · ${daysText(S.days) || '요일 선택 전'}`}</span>${S.startManual ? ' <button class="btn-s" data-act="autoStart">자동으로</button>' : ''}</label><input class="inp" type="date" id="rs" value="${start}" min="2026-11-19"></div>
    ${badStart ? '<div class="bad-bar">시작일은 11/18 뒤여야 해요.</div>' : ''}
    <div class="calc"><div class="row strong"><span class="k">종료일 (자동)</span><span class="v num">${end}</span></div><div class="row"><span class="k">수업 수 (자동)</span><span class="v num">${lessons}회</span></div><div class="row"><span class="k">변경권 (자동)</span><span class="v num">28일마다 ${cred}장 × ${periods}기간</span></div></div>
    <div><span class="lab">결제 방법</span><div class="chips"><button class="chip" aria-pressed="${S.method === 'bank'}" data-set="method" data-val="bank">계좌이체</button><button class="chip" aria-pressed="${S.method === 'card'}" data-set="method" data-val="card">아임웹 카드</button></div></div>
    <div class="grid2"><div><label class="lab" for="ra">받은 금액 (원)</label><input class="inp num" id="ra" inputmode="numeric" placeholder="직접 입력"></div><div><label class="lab" for="rt">입금·결제 시각 (한국) · 필수</label><input class="inp" id="rt" type="datetime-local" value="${S.paid}"></div></div>
    <div><label class="lab" for="rp">입금자명 (선택)</label><input class="inp" id="rp" placeholder="통장에 찍힌 이름"></div>
-   <div class="actions"><button class="btn-sub">취소</button><button class="btn-m" data-act="saveRenew" ${start && !badStart && S.paid ? '' : 'disabled'}>${!start || badStart ? '시작일을 골라 주세요' : !S.paid ? '입금·결제 시각을 넣어 주세요' : `2차 수강권 저장 (${md(start)} – ${end})`}</button></div>
+   <div class="actions"><button class="btn-sub">취소</button><button class="btn-m" data-act="saveRenew" ${start && !badStart && S.paid && !countBad && !conflicts.length ? '' : 'disabled'}>${countBad ? `요일 ${S.weekly}개를 골라 주세요` : conflicts.length ? '겹치는 시간을 바꿔 주세요' : !start || badStart ? '시작일을 골라 주세요' : !S.paid ? '입금·결제 시각을 넣어 주세요' : `2차 수강권 저장 (${md(start)} – ${end})`}</button></div>
   </div></div>`;
 }
 function renewDone() {
   return `<div class="overlay"><div class="sheet"><div class="sheet-h"><h3>재등록 넣기 · 가O나</h3><button class="x" aria-label="닫기">✕</button></div>
   <div class="done"><div class="ok-bar">✓ 2차 수강권을 저장했어요 · ${S.weeks}주 · 주 ${S.weekly}회 · ${S.dur}분 · 수업 ${S.weeks * S.weekly}회</div>
   <div class="next-step"><span><b>다음 1</b> · 남은 보강 5회를 새 수강권으로 이월할 수 있어요</span><button class="btn-s fill" data-go="carry">보강 이월</button></div>
-  <div class="next-step"><span><b>다음 2</b> · 대시보드 ‘재등록 강사 안내’ 카드에서 정규 일정 확정</span><button class="btn-s">대시보드로</button></div>
+  <div class="next-step"><span><b>다음 2</b> · 대시보드 ‘재등록 강사 안내’ 카드에서 정규 일정 확정 (${daysText(S.days)} ${S.time} KST${daysText(S.days) !== '수·금' || S.time !== '09:00' ? ' · 바뀐 요일로' : ' · 지난 일정 이어 씀'})</span><button class="btn-s">대시보드로</button></div>
   <button class="btn-sub" data-act="backDetail">학생 상세로 돌아가기</button></div></div></div>`;
 }
 const CO = [
@@ -336,9 +363,11 @@ document.addEventListener('click', (e) => {
   const tab = e.target.closest('.tab'); if (tab) { go(tab.dataset.v); return; }
   const g = e.target.closest('[data-go]'); if (g) { if (g.dataset.go === 'carry') carryStep = 'form'; if (g.dataset.go === 'renew') renewStep = 'form'; go(g.dataset.go, g.dataset.mode); return; }
   const s = e.target.closest('[data-set]'); if (s) { const v = s.dataset.val; S[s.dataset.set] = isNaN(+v) ? v : +v; render(); return; }
+  const dy = e.target.closest('[data-day]'); if (dy) { const d = +dy.dataset.day; S.days = S.days.includes(d) ? S.days.filter(x => x !== d) : [...S.days, d]; S.startManual = false; render(); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   const act = a.dataset.act;
   if (act === 'toggleRenew') { S.renewed = !S.renewed; if (!S.renewed) S.carried = false; render(); }
+  if (act === 'autoStart') { S.startManual = false; render(); }
   if (act === 'saveRenew') { S.renewed = true; renewStep = 'done'; render(); }
   if (act === 'saveCarry') { S.renewed = true; S.carried = true; carryStep = 'done'; render(); }
   if (act === 'backDetail') go('detail');
@@ -346,7 +375,8 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('input', (e) => {
   const id = (e.target.id || '').replace(/-(pc|ph)$/, '');
-  if (id === 'rs') { S.start = e.target.value; render(); }
+  if (id === 'rs') { S.start = e.target.value; S.startManual = true; render(); }
+  if (id === 'rtime') { S.time = e.target.value; render(); }
   if (id === 'rt') { S.paid = e.target.value; render(); }
   if (id === 'ramt') { S.ramt = e.target.value; render(true); }
   if (id === 'rrs') { S.rreason = e.target.value; render(true); }
