@@ -407,6 +407,7 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
   return '';
 }
 
+/** 안내 카드 제목: '학생에게 보내는 ○○' / '강사 Maria에게 보내는 ○○' — 누구에게 무슨 안내인지 한눈에 (대표 11/8) */
 export const EVENT_TEXT: Record<NoticeEvent, string> = {
-  change: '변경 안내', makeup_ask: '보강 가능 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 정정 안내', revert: '정정 안내', makeup_rescheduled: '보강 시간 변경 안내',
+  change: '수업 취소·변경 안내', makeup_ask: '보강 가능 여부 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 취소 안내', revert: '취소 되돌림 안내', makeup_rescheduled: '보강 시간 변경 안내',
 };
