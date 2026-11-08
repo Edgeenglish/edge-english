@@ -1,4 +1,4 @@
-// 신규 학생 등록: 시험용 Supabase 실제 데이터 읽기 · 저장 (운영자 aal2 세션)
+// 신규 수강생 등록: 시험용 Supabase 실제 데이터 읽기 · 저장 (운영자 aal2 세션)
 // - 읽기: 강사·가능 시간·수업·휴무 (운영자 읽기 RLS)
 // - 저장: DB 함수 admin_register_student 하나 (표에 직접 쓰지 않음). 충돌이면 오류 상세(JSON)에 날짜 목록
 // - 신청서(구글폼 응답) 연결은 아직 없음 → 빈 목록 (연결 방식은 대표 승인 후)
@@ -30,7 +30,7 @@ export async function loadRegTutors(sb: SupabaseClient, now: Date): Promise<RegT
     all(() => sb.from('tutor_availability').select('tutor_id, weekday, start_local, end_local, timezone, effective_from, effective_to')),
     all(() => sb.from('lessons').select('id, tutor_id, kind, starts_at, ends_at, student:students(name_ko)').neq('state', 'canceled').gte('kst_date', from).lte('kst_date', until)),
     all(() => sb.from('tutor_time_off').select('id, tutor_id, starts_at, ends_at, reason').gte('ends_at', `${from}T00:00:00+09:00`)),
-    // 재등록 대기 (A22): 고정 시간 + 학생별 결제 확인·수강 중 등록의 마지막 종료일
+    // 재등록 대기 (A22): 고정 시간 + 수강생별 결제 확인·수강 중 등록의 마지막 종료일
     all(() => sb.from('regular_schedules').select('id, tutor_id, student_id, weekday, start_time_kst, duration_min, effective_from, effective_to, student:students(name_ko)')),
     all(() => sb.from('enrollments').select('student_id, final_end_date').in('status', ['confirmed', 'active'])),
   ]);
@@ -46,7 +46,7 @@ export async function loadRegTutors(sb: SupabaseClient, now: Date): Promise<RegT
       .map((r) => ({
         id: String(r.id),
         tutorId: String(r.tutor_id),
-        studentName: (r.student as { name_ko?: string } | null)?.name_ko ?? '학생',
+        studentName: (r.student as { name_ko?: string } | null)?.name_ko ?? '수강생',
         weekday: Number(r.weekday),
         time: String(r.start_time_kst).slice(0, 5),
         durationMin: Number(r.duration_min),

@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { finalEndText, koZone, kstWithZones, matchStudent, nextDateOf, regularNoticeEn, regularNoticeKo, slotsInZone, slotsText, type StudentRow } from './students';
 
-describe('학생 관리 시간 표기 (H26(43): 기준 시간대 이름을 항상 함께)', () => {
+describe('수강생 관리 시간 표기 (H26(43): 기준 시간대 이름을 항상 함께)', () => {
   it('시간대 이름', () => {
     expect(koZone('Asia/Seoul')).toBe('한국 시간');
     expect(koZone('America/Toronto')).toBe('토론토 시간');
     expect(koZone('Asia/Ho_Chi_Minh')).toBe('호찌민 시간');
   });
-  it('한국 시간 + 학생·강사 도시 시간, 한국 시간대는 한 번만', () => {
+  it('한국 시간 + 수강생·강사 도시 시간, 한국 시간대는 한 번만', () => {
     const at = new Date('2026-11-05T13:00:00Z'); // 한국 22:00 목
-    expect(kstWithZones(at, [{ label: '학생', tz: 'America/Toronto' }, { label: '강사 Maria', tz: 'Asia/Ho_Chi_Minh' }]))
-      .toBe('11/5(목) 오후 10:00 한국 시간 / 11/5(목) 오전 8:00 토론토 시간 (학생) / 11/5(목) 오후 8:00 호찌민 시간 (강사 Maria)');
-    expect(kstWithZones(at, [{ label: '학생', tz: 'Asia/Seoul' }])).toBe('11/5(목) 오후 10:00 한국 시간');
+    expect(kstWithZones(at, [{ label: '수강생', tz: 'America/Toronto' }, { label: '강사 Maria', tz: 'Asia/Ho_Chi_Minh' }]))
+      .toBe('11/5(목) 오후 10:00 한국 시간 / 11/5(목) 오전 8:00 토론토 시간 (수강생) / 11/5(목) 오후 8:00 호찌민 시간 (강사 Maria)');
+    expect(kstWithZones(at, [{ label: '수강생', tz: 'Asia/Seoul' }])).toBe('11/5(목) 오후 10:00 한국 시간');
   });
-  it('최종 종료 23:59 한국 시간 = 해외 학생 현지', () => {
+  it('최종 종료 23:59 한국 시간 = 해외 수강생 현지', () => {
     expect(finalEndText('2027-01-26', 'Asia/Seoul')).toBe('1/26(화) 오후 11:59 한국 시간');
     expect(finalEndText('2027-01-26', 'America/Toronto')).toBe('1/26(화) 오후 11:59 한국 시간 / 1/26(화) 오전 9:59 토론토 시간');
   });
@@ -37,13 +37,13 @@ describe('③ 정규 일정 변경 안내 문구', () => {
     effectiveFrom: '2026-11-05', newSlots: [{ weekday: 2, time: '22:30' }, { weekday: 4, time: '22:30' }],
     moved: [{ lessonId: 'a', seq: 3, from: new Date('2026-11-05T13:00:00Z'), fromEnd: new Date('2026-11-05T13:40:00Z'), to: new Date('2026-11-05T13:30:00Z'), toEnd: new Date('2026-11-05T14:10:00Z'), problem: null }],
   };
-  it('학생 카카오톡: 학생 도시 시간 + 한국 시간', () => {
+  it('수강생 카카오톡: 수강생 도시 시간 + 한국 시간', () => {
     const ko = regularNoticeKo(ctx);
     expect(ko).toContain('[엣지영어] 김서연님, 정규 수업 시간이 11/5(목)부터 바뀌어요.');
     expect(ko).toContain('화·목 오전 8시 30분 [토론토 시간] / 화·목 오후 10시 30분 [한국 시간] · 40분 · Maria 강사님');
     expect(ko).toContain('- 11월 5일(목) 오전 8시 30분 [토론토 시간] / 오후 10시 30분 [한국 시간]');
   });
-  it('국내 학생: 한국 시간만', () => {
+  it('국내 수강생: 한국 시간만', () => {
     const ko = regularNoticeKo({ ...ctx, studentTz: 'Asia/Seoul' });
     expect(ko).toContain('새 정규 수업: 화·목 오후 10시 30분 [한국 시간] · 40분');
     expect(ko).toContain('- 11월 5일(목) 오후 10시 30분 [한국 시간]');
@@ -57,7 +57,7 @@ describe('③ 정규 일정 변경 안내 문구', () => {
   });
 });
 
-describe('학생 목록 검색', () => {
+describe('수강생 목록 검색', () => {
   const row = { nameKo: '김서연', nameEn: 'Kim Seoyeon', displayName: 'Sarah', code: 'STU-0013', email: 'sy@example.com', tutor: 'Maria' } as StudentRow;
   it('이름·영문·Preferred·번호·이메일·강사, 띄어쓰기·대소문자 무시', () => {
     expect(matchStudent(row, '서연')).toBe(true);

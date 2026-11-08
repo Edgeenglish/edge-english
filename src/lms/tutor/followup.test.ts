@@ -7,7 +7,7 @@ describe('첫 수업 후 To-do (4600)', () => {
     expect(TEXTBOOKS).toContain('Speak now 2');
     expect(TEXTBOOKS).not.toContain(OTHER_TEXTBOOK);
   });
-  it('교재·학생 자료 칸은 방식에 따라 조건부', () => {
+  it('교재·수강생 자료 칸은 방식에 따라 조건부', () => {
     expect(needsTextbook('textbook', [])).toBe(true);
     expect(needsTextbook('mixed', ['conversation'])).toBe(false);
     expect(needsTextbook('mixed', ['conversation', 'textbook'])).toBe(true);
@@ -16,7 +16,7 @@ describe('첫 수업 후 To-do (4600)', () => {
     expect(needsMaterials('mixed', ['student_materials'])).toBe(true);
     expect(needsMaterials('textbook', [])).toBe(false);
   });
-  it('학생 희망 → 처음 값', () => {
+  it('수강생 희망 → 처음 값', () => {
     expect(initialStyleFromWish('textbook')).toBe('textbook');
     expect(initialStyleFromWish('free_talking')).toBe('conversation');
     expect(initialStyleFromWish('not_sure')).toBe('');

@@ -1,12 +1,12 @@
 // 강사 휴무·대체강사 화면 계산 (2순위 ①, migration 1800) — 처리·검사는 DB 함수가 하고, 여기는 묶기·상태 글·안내 문구만
-// - 학생별로 한 번에 고르고, 필요하면 일부 날짜만 다르게 (2026-10-27 대표 Q1 A)
-// - 대체강사는 강사 가능 → 학생 안내 → 학생 OK 뒤 확정 (Q2 A, 정책 원본 A41)
-// - 학생에게는 처음부터 두 가지를 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강). 거절해야 ②를 알려주는 방식 아님 (2026-10-27 대표)
-// - 안내는 학생·강사마다 한 번에 복사 (같은 학생의 여러 날짜를 한 메시지로), 보낸 뒤 [보냄]
-// - 학생·대체강사에게 가는 글에 휴무 강사 이름을 쓰지 않음 (2026-10-27 대표)
-// - 화면은 학생 한 명씩 단계대로. 2026-10-28 대표 새 순서 (정책 원본 H26(27), migration 2500):
-//   1 대체 강사에게 묻기 → 2 학생에게 휴무 안내 · 대체 강사 제안 (글 하나) → 3 학생 답 입력 → 4 확정 안내 보내기
-//   운영진이 대체강사 가능 여부를 먼저 확인하고, 학생은 한 번만 답함 ([좋아요] / [기존 강사와 보강])
+// - 수강생별로 한 번에 고르고, 필요하면 일부 날짜만 다르게 (2026-10-27 대표 Q1 A)
+// - 대체강사는 강사 가능 → 수강생 안내 → 수강생 OK 뒤 확정 (Q2 A, 정책 원본 A41)
+// - 수강생에게는 처음부터 두 가지를 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강). 거절해야 ②를 알려주는 방식 아님 (2026-10-27 대표)
+// - 안내는 수강생·강사마다 한 번에 복사 (같은 수강생의 여러 날짜를 한 메시지로), 보낸 뒤 [보냄]
+// - 수강생·대체강사에게 가는 글에 휴무 강사 이름을 쓰지 않음 (2026-10-27 대표)
+// - 화면은 수강생 한 명씩 단계대로. 2026-10-28 대표 새 순서 (정책 원본 H26(27), migration 2500):
+//   1 대체 강사에게 묻기 → 2 수강생에게 휴무 안내 · 대체 강사 제안 (글 하나) → 3 수강생 답 입력 → 4 확정 안내 보내기
+//   운영진이 대체강사 가능 여부를 먼저 확인하고, 수강생은 한 번만 답함 ([좋아요] / [기존 강사와 보강])
 
 import { ampmKo, formatInZone, type KstDate } from '../rules/dates';
 import { enAt, koAt, MAKEUP_SLOTS_MAX } from './lesson-change';
@@ -33,7 +33,7 @@ export type LvItem = {
   subTutorId: string | null;
   subTutorName: string | null;
   subTutorTz: string | null;
-  /** 대체강사 Meet 주소: 학생 확정 안내에 같이 (C11 '안내와 링크는 한 번에') */
+  /** 대체강사 Meet 주소: 수강생 확정 안내에 같이 (C11 '안내와 링크는 한 번에') */
   subTutorMeetUrl?: string | null;
   subStage: LvStage | null;
   /** 기존 강사 보강: 보강이 잡혔으면 그 시각 */
@@ -45,7 +45,7 @@ export type LvItem = {
   /** 보강 신청 대상 (수업 또는 시트 휴가 보강) */
   lessonId: string | null;
   migratedItemId: string | null;
-  /** 휴무 처리 밖에서(학생 취소·변경) 수업이 취소됨 (3200, R5) → 처리할 것 없음 */
+  /** 휴무 처리 밖에서(수강생 취소·변경) 수업이 취소됨 (3200, R5) → 처리할 것 없음 */
   lessonGone?: boolean;
 };
 
@@ -63,7 +63,7 @@ export type LvSubOption = { tutorId: string; name: string; timezone: string; fre
 /** 기존 강사 보강 후보: in_period 지금 수강기간 안 / after_end 종료일 뒤 평소 요일·시간 (확정하면 그날까지 자동 연장) */
 export type LvMakeupOption = { section: 'in_period' | 'after_end'; startsAt: Date };
 
-/** 학생 선택 안내의 두 가지 (대표 문구 2026-10-27). 나중에 학생 LMS 선택 화면도 이 글을 그대로 씀 */
+/** 수강생 선택 안내의 두 가지 (대표 문구 2026-10-27). 나중에 수강생 LMS 선택 화면도 이 글을 그대로 씀 */
 export const LEAVE_OPTIONS = {
   substitute: {
     title: '⭐추천⭐ 원래 시간에 대체강사와 수업하기',
@@ -77,7 +77,7 @@ export const LEAVE_OPTIONS = {
 
 export type LvStudentGroup = { studentId: string; studentName: string; studentCode: string; items: LvItem[] };
 
-/** 학생별로 묶기 (첫 수업 빠른 학생부터, 학생 안에서는 날짜순) */
+/** 수강생별로 묶기 (첫 수업 빠른 수강생부터, 수강생 안에서는 날짜순) */
 export function groupByStudent(items: LvItem[]): LvStudentGroup[] {
   const out = new Map<string, LvStudentGroup>();
   for (const i of [...items].sort((a, b) => +a.startsAt - +b.startsAt)) {
@@ -88,7 +88,7 @@ export function groupByStudent(items: LvItem[]): LvStudentGroup[] {
   return [...out.values()];
 }
 
-/** 학생 카드의 고른 방식: 모두 같으면 그 방식, 섞였으면 'mixed' (일부 날짜만 다르게) */
+/** 수강생 카드의 고른 방식: 모두 같으면 그 방식, 섞였으면 'mixed' (일부 날짜만 다르게) */
 export function groupChoice(items: LvItem[]): LvChoice | 'mixed' {
   const kinds = new Set(items.map((i) => (i.choice === 'substitute' ? `substitute:${i.subTutorId}` : i.choice)));
   if (kinds.size !== 1) return 'mixed';
@@ -111,11 +111,11 @@ export function itemStatus(i: LvItem, pending?: ReadonlySet<string>): { text: st
   if (i.choice === 'undecided') return { text: '대체 강사 고르기 필요', tone: 'todo', next: '대체 강사 고르기' };
   if (i.choice === 'wait') {
     if (i.makeupAt) return { text: `기존 강사 보강 · ${koShort(i.makeupAt)}`, tone: 'done' };
-    if (proposalUnsent) return { text: '기존 강사 보강 · 날짜 미정', tone: 'todo', next: '학생에게 휴무 안내 보내기' };
-    if (i.makeupRequested && i.makeupDeclinedAll) return { text: '기존 강사 보강 · 강사님 모든 날짜 불가', tone: 'todo', next: '학생에게 다른 날짜 받기' };
+    if (proposalUnsent) return { text: '기존 강사 보강 · 날짜 미정', tone: 'todo', next: '수강생에게 휴무 안내 보내기' };
+    if (i.makeupRequested && i.makeupDeclinedAll) return { text: '기존 강사 보강 · 강사님 모든 날짜 불가', tone: 'todo', next: '수강생에게 다른 날짜 받기' };
     return i.makeupRequested
       ? { text: '기존 강사 보강 · 날짜 미정', tone: 'wait', wait: '강사님 보강 확인' }
-      : { text: '기존 강사 보강 · 날짜 미정', tone: 'wait', wait: '학생 보강 신청' };
+      : { text: '기존 강사 보강 · 날짜 미정', tone: 'wait', wait: '수강생 보강 신청' };
   }
   const who = i.subTutorName ?? '대체강사';
   if (i.subStage === 'asked') {
@@ -124,10 +124,10 @@ export function itemStatus(i: LvItem, pending?: ReadonlySet<string>): { text: st
       : { text: `${who} 강사님 답변 기다리는 중`, tone: 'wait', wait: `${who} 강사님 답` };
   }
   if (i.subStage === 'tutor_ok') {
-    if (!pending) return { text: `${who} 강사님 가능 · 학생 답 필요`, tone: 'todo' };
+    if (!pending) return { text: `${who} 강사님 가능 · 수강생 답 필요`, tone: 'todo' };
     return proposalUnsent
-      ? { text: `${who} 강사님 가능 · 학생 안내 전`, tone: 'todo', next: '학생에게 휴무 안내 보내기' }
-      : { text: `${who} 강사님 가능 · 학생 답변 기다리는 중`, tone: 'wait', wait: '학생 답', next: '학생 답이 오면 아래에서 기록' };
+      ? { text: `${who} 강사님 가능 · 수강생 안내 전`, tone: 'todo', next: '수강생에게 휴무 안내 보내기' }
+      : { text: `${who} 강사님 가능 · 수강생 답변 기다리는 중`, tone: 'wait', wait: '수강생 답', next: '수강생 답이 오면 아래에서 기록' };
   }
   // 배정 확정과 확정 안내 보냄은 다른 상태: 안내까지 보내야 완료 (R4)
   if (unsent('sub_confirmed')) return { text: `대체강사 ${who} 확정 · 확정 안내 보내기 전`, tone: 'todo', next: '확정 안내 보내기' };
@@ -155,7 +155,7 @@ export function leaveSummary(all: LvItem[], notices: LvNotice[]) {
 }
 
 // ---------------------------------------------------------------------
-// 안내 문구: 학생·강사마다 한 메시지로 (같은 학생·같은 대체강사의 날짜를 모음)
+// 안내 문구: 수강생·강사마다 한 메시지로 (같은 수강생·같은 대체강사의 날짜를 모음)
 // ---------------------------------------------------------------------
 
 export type LvMessage = {
@@ -178,7 +178,7 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[]
     const it = byId.get(n.itemId);
     // 안 보낸 글에서는 취소된 수업을 뺌. 보낸 글은 보낸 그대로
     if (!it || (it.lessonGone && n.status === 'pending')) continue;
-    // 학생에게 가는 대체강사 글은 대체강사마다 따로 (날짜마다 대체강사가 다를 수 있음). 보낸 글은 보낸 묶음(같은 보낸 시각)마다
+    // 수강생에게 가는 대체강사 글은 대체강사마다 따로 (날짜마다 대체강사가 다를 수 있음). 보낸 글은 보낸 묶음(같은 보낸 시각)마다
     const key = `${n.status}|${n.event}|${it.studentId}|${n.recipientId}|${n.event === 'sub_student' || n.event === 'sub_confirmed' ? it.subTutorId ?? '' : ''}|${n.status === 'sent' ? n.sentAt?.toISOString() ?? '' : ''}`;
     const g = groups.get(key) ?? { event: n.event, status: n.status, notices: [], items: [] };
     g.notices.push(n);
@@ -220,7 +220,7 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
     ].join('\n\n');
   }
   if (event === 'sub_student') {
-    // 대체강사 가능 확인 뒤 학생에게 강사·날짜 제안 (프로필은 이어서 따로 보냄) → 학생 OK → 확정 (2026-10-27 대표 최종)
+    // 대체강사 가능 확인 뒤 수강생에게 강사·날짜 제안 (프로필은 이어서 따로 보냄) → 수강생 OK → 확정 (2026-10-27 대표 최종)
     return [`[엣지영어] ${i.studentName}님, 담당 강사님 휴가 기간 수업을 대체강사 ${i.subTutorName} 강사님과 평소 시간에 진행하려고 해요. 아래 날짜 괜찮으신지 알려 주세요. 강사님 프로필도 함께 보내 드려요.`, dates].join('\n\n');
   }
   if (event === 'sub_ask') {
@@ -247,17 +247,17 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
 export const LV_EVENT_TEXT: Record<LvNoticeEvent, string> = {
   leave_options: '진행 방법 선택 안내',
   sub_ask: '대체강사에게 수업 가능 여부 묻기',
-  sub_student: '학생에게 대체강사 안내하고 동의받기 (프로필 함께)',
+  sub_student: '수강생에게 대체강사 안내하고 동의받기 (프로필 함께)',
   sub_confirmed: '확정 안내',
 };
 
-/** 기존 강사 보강: 학생에게 보강 가능한 날짜를 보내고 2개까지 고르게 함 (1개도 됨, 2026-10-27 대표 문구)
+/** 기존 강사 보강: 수강생에게 보강 가능한 날짜를 보내고 2개까지 고르게 함 (1개도 됨, 2026-10-27 대표 문구)
  *  날짜가 먼저 보이게 (2026-10-27 대표): 시간이 모두 같으면 시간은 위에 한 번, 날짜는 한 주(월~일)씩 한 줄
- *  시간이 섞이면 한 줄에 날짜 하나 + 그날 가능한 시간. 해외 학생은 현지 시각 */
+ *  시간이 섞이면 한 줄에 날짜 하나 + 그날 가능한 시간. 해외 수강생은 현지 시각 */
 export function makeupDatesText(studentName: string, studentTz: string, dates: Date[]): string {
   const tz = studentTz || 'Asia/Seoul';
   const head = `[엣지영어] ${studentName}님, 보강 가능한 날짜예요. 편한 날을 ${MAKEUP_SLOTS_MAX}개까지 골라 주세요.(없다면 1개만 고르셔도 괜찮아요)`;
-  // 해외 학생: 어느 도시 시간인지 + 한국 시간을 함께 (R-14: '(현지 시간)' 만으로는 기준이 없음)
+  // 해외 수강생: 어느 도시 시간인지 + 한국 시간을 함께 (R-14: '(현지 시간)' 만으로는 기준이 없음)
   const abroad = tz !== 'Asia/Seoul';
   const city = `${(tz.split('/').pop() ?? tz).replace(/_/g, ' ')} 시간`;
   const days = new Map<string, { label: string; times: string[] }>();
@@ -294,22 +294,22 @@ function mondayOf(date: string): string {
 }
 
 // ---------------------------------------------------------------------
-// 학생 한 명의 단계 (안 1): 지금 할 일이 있는 단계를 앞에서부터
+// 수강생 한 명의 단계 (안 1): 지금 할 일이 있는 단계를 앞에서부터
 // ---------------------------------------------------------------------
 
 export type LvStep = 'tutor' | 'propose' | 'answer' | 'confirm';
 export const LV_STEP_TEXT: Record<LvStep | 'done', string> = {
-  tutor: '수업별 대체 강사 찾기', propose: '학생한테 기존 강사 휴무 안내하기', answer: '학생 답변 기록', confirm: '확정 안내 보내기', done: '완료',
+  tutor: '수업별 대체 강사 찾기', propose: '수강생한테 기존 강사 휴무 안내하기', answer: '수강생 답변 기록', confirm: '확정 안내 보내기', done: '완료',
 };
 
 /** 2단계 글: 휴무 안내 + 대체강사 제안을 한 번에 (2026-10-28 대표 시안 승인). 대체강사 날짜는 강사 이름과 함께, 나머지는 보강 */
 export type LvProposal = { status: 'pending' | 'sent'; noticeIds: string[]; itemIds: string[]; text: string };
 
-/** period: 휴무 기간 — 학생이 그 기간을 피해 보강을 잡을 수 있게 같이 알림 (2026-10-28 대표) */
-/** 학생 LMS 주소 (2단계 글 맨 끝). 운영진 화면과 같은 사이트 */
+/** period: 휴무 기간 — 수강생이 그 기간을 피해 보강을 잡을 수 있게 같이 알림 (2026-10-28 대표) */
+/** 수강생 LMS 주소 (2단계 글 맨 끝). 운영진 화면과 같은 사이트 */
 export const studentLmsLink = () => `${typeof window === 'undefined' ? '' : window.location.origin}/lms/student`;
 
-// 2단계 글 (2026-10-28 대표 문구): 날짜만 알리고, 강사 프로필 확인·답은 학생 LMS에서 (A안 한 번에 답)
+// 2단계 글 (2026-10-28 대표 문구): 날짜만 알리고, 강사 프로필 확인·답은 수강생 LMS에서 (A안 한 번에 답)
 export function proposalText(studentName: string, items: LvItem[], _period?: { from: KstDate; to: KstDate }, link = studentLmsLink()): string {
   const subs = items.some((i) => i.choice === 'substitute');
   const out = [
@@ -322,7 +322,7 @@ export function proposalText(studentName: string, items: LvItem[], _period?: { f
   return out.join('\n\n');
 }
 
-/** 학생 한 명의 할 일 묶음. 단계마다 해당 수업·안내 */
+/** 수강생 한 명의 할 일 묶음. 단계마다 해당 수업·안내 */
 export type LvStudentWork = {
   /** 1단계: 대체강사(또는 '대체 강사 없음 → 보강')를 아직 안 고른 지금 이후 수업 */
   pick: LvItem[];
@@ -332,7 +332,7 @@ export type LvStudentWork = {
   proposal: LvProposal | null;
   /** 보낸 휴무 안내 (보낸 묶음마다 원문 그대로) */
   sentProposals: LvProposal[];
-  /** 3단계: 대체강사 가능 → 학생 답 기다리는 수업 (2단계 글을 보낸 뒤) */
+  /** 3단계: 대체강사 가능 → 수강생 답 기다리는 수업 (2단계 글을 보낸 뒤) */
   answer: LvItem[];
   /** 4단계: 확정 안내 · 기존 강사 보강 날짜 미정 · 보강 신청(강사 확인 중) */
   confirm: { confirmedMsgs: LvMessage[]; makeup: LvItem[]; makeupRequested: LvItem[] };
@@ -400,7 +400,7 @@ export function studentWork(g: LvStudentGroup, messages: LvMessage[], now: Date,
 }
 
 // ---------------------------------------------------------------------
-// 재등록 대기 학생 (2026-10-27 대표): 재등록하면 휴무에 걸리는 날짜. 수업이 아니라 처리 목록에는 안 넣고 보여 주기·글 복사만
+// 재등록 대기 수강생 (2026-10-27 대표): 재등록하면 휴무에 걸리는 날짜. 수업이 아니라 처리 목록에는 안 넣고 보여 주기·글 복사만
 // ---------------------------------------------------------------------
 
 export type LvRenewal = { studentId: string; studentName: string; studentCode: string; endDate: KstDate; startsAt: Date; durationMin: number };
@@ -418,7 +418,7 @@ export function groupRenewals(rows: LvRenewal[]): LvRenewalGroup[] {
 
 const md = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 
-/** 재등록 안내에 덧붙일 글 (대표 확인 2026-10-27: 새 기간이 휴무와 겹치는 학생에게 미리 알림) */
+/** 재등록 안내에 덧붙일 글 (대표 확인 2026-10-27: 새 기간이 휴무와 겹치는 수강생에게 미리 알림) */
 export function renewalLeaveText(from: KstDate, to: KstDate): string {
   return `참고로 담당 강사님이 ${md(from)}~${md(to)} 휴가예요. 이 기간 수업은 ① ⭐추천⭐ 대체강사와 원래 시간에 하시거나 ② 강사님 복귀 뒤 보강으로 하실 수 있고, 수업 횟수는 그대로예요. 어느 쪽이 편하신지 같이 알려 주세요.`;
 }
@@ -429,7 +429,7 @@ export function renewalTutorText(g: LvRenewalGroup): string {
 }
 
 // ---------------------------------------------------------------------
-// 강사별 묶음 문의 (R17, 2026-10-30 시안 승인): 같은 대체강사에게 여러 학생 수업을 한 메시지로. 답은 수업마다 (admin_leave_sub_ok)
+// 강사별 묶음 문의 (R17, 2026-10-30 시안 승인): 같은 대체강사에게 여러 수강생 수업을 한 메시지로. 답은 수업마다 (admin_leave_sub_ok)
 // ---------------------------------------------------------------------
 
 /** pending = 아직 안 보낸 문의(안 보낸 수업만) · sent = 보낸 문의 원문(보낸 묶음마다, 번호 고정) · numbers = 답 기다리는 수업이 보낸 글의 몇 번인지 */
@@ -478,7 +478,7 @@ export function subAskBundleText(items: LvItem[]): string {
   ].join('\n');
 }
 
-/** 학생 목록 묶음: 운영진이 할 것 / 답 기다림 / 끝남 (R15·R29) */
+/** 수강생 목록 묶음: 운영진이 할 것 / 답 기다림 / 끝남 (R15·R29) */
 export function studentPhase(w: LvStudentWork): 'todo' | 'wait' | 'done' {
   if (w.pick.length || w.tutor.some((t) => t.ask) || w.proposal?.status === 'pending' || w.confirm.confirmedMsgs.length || w.confirm.makeup.length
     || w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll)) return 'todo';

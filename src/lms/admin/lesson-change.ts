@@ -63,7 +63,7 @@ export type ChMakeupRequest = {
   tutorAnsweredAt?: Date | null;
   /** 강사 노쇼 무료 보상수업 신청이면 보상권 id (4100). 같은 노쇼 수업의 원래 수업 보강과 따로 */
   compensationId?: string | null;
-  /** 신청 시각·경로 (QA B-04): admin_on_behalf = 운영진 대신, student_app = 학생 LMS */
+  /** 신청 시각·경로 (QA B-04): admin_on_behalf = 운영진 대신, student_app = 수강생 LMS */
   requestedAt?: Date | null;
   via?: string | null;
 };
@@ -123,21 +123,21 @@ export function tutorLocalLabel(at: Date, tz: string): string | null {
 
 /** 운영진 보강 확정 사유 (대표 2026-11-08, 운영진만 보임) */
 export const CONFIRM_REASONS = [
-  { value: 'kakao_agreed', label: '카톡으로 학생·강사와 이미 정함' },
-  { value: 'student_request', label: '학생 요청' },
+  { value: 'kakao_agreed', label: '카톡으로 수강생·강사와 이미 정함' },
+  { value: 'student_request', label: '수강생 요청' },
   { value: 'tutor_request', label: '강사 요청' },
   { value: 'other', label: '기타 (직접 적기)' },
 ] as const;
 /** 확정된 보강 시간 고치기 사유 */
 export const FIX_REASONS = [
   { value: 'admin_mistake', label: '운영진 입력 실수 정정' },
-  { value: 'student_request', label: '학생 요청' },
+  { value: 'student_request', label: '수강생 요청' },
   { value: 'tutor_request', label: '강사 요청' },
   { value: 'other', label: '기타 (직접 적기)' },
 ] as const;
 export type MakeupReason = (typeof CONFIRM_REASONS)[number]['value'] | (typeof FIX_REASONS)[number]['value'];
 export const REASON_TEXT: Record<MakeupReason, string> = {
-  kakao_agreed: '카톡으로 학생·강사와 이미 정함', admin_mistake: '운영진 입력 실수 정정', student_request: '학생 요청', tutor_request: '강사 요청', other: '기타',
+  kakao_agreed: '카톡으로 수강생·강사와 이미 정함', admin_mistake: '운영진 입력 실수 정정', student_request: '수강생 요청', tutor_request: '강사 요청', other: '기타',
 };
 /** 운영 기록 한 줄 (admin_makeup_logs) */
 export type MakeupLog = { id: string; makeupRequestId: string; lessonId: string | null; action: 'confirm' | 'reschedule'; reason: MakeupReason; note: string | null; oldAt: Date | null; newAt: Date; createdAt: Date };
@@ -145,7 +145,7 @@ export function dateLabel(d: KstDate): string {
   return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 }
 
-/** 보강 시간은 한 수업당 강사에게 최대 2개 (2026-10-27 대표: 학생에게 2개 권장, 1개도 허용) */
+/** 보강 시간은 한 수업당 강사에게 최대 2개 (2026-10-27 대표: 수강생에게 2개 권장, 1개도 허용) */
 export const MAKEUP_SLOTS_MAX = 2;
 
 export const KIND_TEXT: Record<ChLesson['kind'], string> = {
@@ -190,9 +190,9 @@ export function makeupRights(lessons: ChLesson[], migrated: ChMigratedOpen[], re
 }
 
 export const STATUS_SHORT: Partial<Record<ClassStatus, string>> = {
-  'Student canceled in advance': '학생 정상 변경',
+  'Student canceled in advance': '수강생 정상 변경',
   'Student canceled in advance (public holiday)': '공휴일 정상 변경',
-  'Student canceled late': '학생 늦은 변경',
+  'Student canceled late': '수강생 늦은 변경',
   'No change credits left': '변경권 없음',
   'Tutor canceled in advance': '강사 정상 취소',
   'Tutor canceled late': '강사 늦은 취소',
@@ -201,10 +201,10 @@ export const STATUS_SHORT: Partial<Record<ClassStatus, string>> = {
 
 /** 취소된 수업 줄·변경 기록의 '누가 취소했는지' (처음 보는 사람도 바로 읽히게, 대표 11/8) */
 export const STATUS_PLAIN: Partial<Record<ClassStatus, string>> = {
-  'Student canceled in advance': '학생 미리 취소',
+  'Student canceled in advance': '수강생 미리 취소',
   'Student canceled in advance (public holiday)': '공휴일 취소',
-  'Student canceled late': '학생 늦게 취소',
-  'No change credits left': '학생 취소 (변경권 없음)',
+  'Student canceled late': '수강생 늦게 취소',
+  'No change credits left': '수강생 취소 (변경권 없음)',
   'Tutor canceled in advance': '강사 미리 취소',
   'Tutor canceled late': '강사 늦게 취소',
   'Tutor long-term leave': '강사 휴무',
@@ -219,15 +219,15 @@ export function decisionLines(d: ChangeDecision): string[] {
   }
   if (d.makeup_allowed && d.makeup_until) lines.push(`보강 ${dateLabel(d.makeup_until)}까지`);
   else lines.push('보강 없음 · 수업 1회 차감');
-  if (d.reward_won > 0) lines.push(`학생 적립금 ${d.reward_won.toLocaleString('ko-KR')}원`);
+  if (d.reward_won > 0) lines.push(`수강생 적립금 ${d.reward_won.toLocaleString('ko-KR')}원`);
   return lines;
 }
 
 // ---------------------------------------------------------------------
-// 안내 문구 (학생: 카카오톡 한국어 / 강사: WhatsApp 영어). 해외 학생은 현지 시각을 앞에, 한국 시각을 괄호로
+// 안내 문구 (수강생: 카카오톡 한국어 / 강사: WhatsApp 영어). 해외 수강생은 현지 시각을 앞에, 한국 시각을 괄호로
 // ---------------------------------------------------------------------
 
-/** 학생 안내 시각 (카톡·메일) — 시각 바로 뒤 [기준 이름], 두 시간대는 ' / ' (time-text.ts, 대표 2026-11-08)
+/** 수강생 안내 시각 (카톡·메일) — 시각 바로 뒤 [기준 이름], 두 시간대는 ' / ' (time-text.ts, 대표 2026-11-08)
  *  한국 거주 '11월 5일(목) 오전 10시 [한국 시간]' / 해외 '11월 4일(수) 오후 9시 [토론토 시간] / 오전 10시 [한국 시간]' */
 export const koAt = (at: Date, tz: string) => koBoth(at, tz);
 const koDate = (d: KstDate) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일(${['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
@@ -264,12 +264,12 @@ function originEn(c: NoticeContext): string {
   return c.originalDate ? c.originalDate : 'earlier class';
 }
 
-/** 톡으로 보내는 '보강 날짜 고르기' 바로가기 (11/8 대표): 학생 본인 LMS 에서 그 수업 날짜 고르기가 바로 열림 */
+/** 톡으로 보내는 '보강 날짜 고르기' 바로가기 (11/8 대표): 수강생 본인 LMS 에서 그 수업 날짜 고르기가 바로 열림 */
 export const makeupLink = (id: string) => `${typeof window === 'undefined' ? '' : window.location.origin}/lms/student?makeup=${id}`;
-/** 신청 기한(수강 종료일 한국 23:59): 학생 안내 시각 모양 그대로 + '까지' (time-text.ts) */
+/** 신청 기한(수강 종료일 한국 23:59): 수강생 안내 시각 모양 그대로 + '까지' (time-text.ts) */
 const untilKo = (until: KstDate, tz: string) => `${koAt(new Date(`${until}T23:59:00+09:00`), tz)}까지`;
 /**
- * 보강은 학생이 LMS 에서 직접 신청 → 강사 확정 (11/8 대표: 수업 중에 강사와 정한 시간도 학생이 LMS 로 신청).
+ * 보강은 수강생이 LMS 에서 직접 신청 → 강사 확정 (11/8 대표: 수업 중에 강사와 정한 시간도 수강생이 LMS 로 신청).
  * 링크가 없으면(이관 보강 등) 링크 줄만 빠짐
  */
 const makeupLineKo = (until: KstDate, tz: string, lessonId?: string) => [
@@ -289,7 +289,7 @@ function makeupStateKo(c: NoticeContext, until: KstDate): string {
   if (m.state === 'tutor_answered') return `${picked}\n강사님 확인이 끝나 곧 확정 안내 드릴게요.`;
   return `${picked}\n강사님이 그 날짜에는 어렵다고 해요. 다른 날짜를 알려 주시면 조율해 드릴게요 (종료일 ${koDate(until)}까지).`;
 }
-/** 강사는 수업 중에 학생과 시간을 정해도 되고, 학생이 LMS 로 신청 → 강사가 Confirm make-up (11/8 대표). 기한 = 수강 종료일 한국 23:59 → 강사 현지 + KST */
+/** 강사는 수업 중에 수강생과 시간을 정해도 되고, 수강생이 LMS 로 신청 → 강사가 Confirm make-up (11/8 대표). 기한 = 수강 종료일 한국 23:59 → 강사 현지 + KST */
 const makeupLinesEn = (until: KstDate, tutorTz: string) => [
   `Make-up: you can agree on a make-up time with your student during class (until ${enAt(new Date(`${until}T23:59:00+09:00`), tutorTz)}). Make sure that time is open in your Availability, then ask the student to request it in the LMS.`,
   'When the request comes in, tap "Confirm make-up". If the student can\'t find the time, let us know.',
@@ -407,7 +407,7 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
   return '';
 }
 
-/** 안내 카드 제목: '학생에게 보내는 ○○' / '강사 Maria에게 보내는 ○○' — 누구에게 무슨 안내인지 한눈에 (대표 11/8) */
+/** 안내 카드 제목: '수강생에게 보내는 ○○' / '강사 Maria에게 보내는 ○○' — 누구에게 무슨 안내인지 한눈에 (대표 11/8) */
 export const EVENT_TEXT: Record<NoticeEvent, string> = {
   change: '수업 취소·변경 안내', makeup_ask: '보강 가능 여부 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 취소 안내', revert: '취소 되돌림 안내', makeup_rescheduled: '보강 시간 변경 안내',
 };

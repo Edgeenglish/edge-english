@@ -1,4 +1,4 @@
-// 기존 학생 입력: 저장은 DB 함수 admin_import_existing_student 하나 (운영자 aal2, migration 1300 → 확대 1500)
+// 기존 수강생 입력: 저장은 DB 함수 admin_import_existing_student 하나 (운영자 aal2, migration 1300 → 확대 1500)
 // 시트 대조 완료·보강 원래 날짜 정리도 DB 함수로만 (admin_import_mark_checked · admin_import_set_origin)
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { importPayload } from './import';
@@ -20,7 +20,7 @@ export type ImportSaved = {
 };
 export type ImportResult = ImportSaved | { kind: 'preview' } | { kind: 'error'; message: string; conflicts?: ImportConflict[] };
 
-const NOT_APPLIED = '기존 학생 입력 확대 기능이 아직 이 DB에 적용되지 않았어요 (migration 1500).';
+const NOT_APPLIED = '기존 수강생 입력 확대 기능이 아직 이 DB에 적용되지 않았어요 (migration 1500).';
 
 function friendly(error: { code?: string; message: string }): string {
   if (error.code === 'PGRST202') return NOT_APPLIED;
@@ -67,7 +67,7 @@ export async function setImportOrigin(sb: SupabaseClient, itemId: string, date: 
   if (error) throw new Error(friendly(error));
 }
 
-/** 종료일 이유 확인 (처리할 일에서): 강사 장기 휴무 연장 / 학생 장기 연기(24주) / 기타(메모) */
+/** 종료일 이유 확인 (처리할 일에서): 강사 장기 휴무 연장 / 수강생 장기 연기(24주) / 기타(메모) */
 export async function setImportEndReason(sb: SupabaseClient, enrollmentId: string, reason: string, note: string): Promise<void> {
   const { error } = await sb.rpc('admin_import_set_end_reason', { p_enrollment: enrollmentId, p_reason: reason, p_note: note });
   if (error) throw new Error(error.code === 'PGRST202' ? '종료일 이유 확인 기능이 아직 이 DB에 적용되지 않았어요 (migration 1600).' : friendly(error));
@@ -79,7 +79,7 @@ export async function markRenewalSent(sb: SupabaseClient, enrollmentId: string):
   if (error) throw new Error(error.code === 'PGRST202' ? '재등록 안내 기록 기능이 아직 이 DB에 적용되지 않았어요 (migration 1900).' : friendly(error));
 }
 
-/** 재등록 안 하는 학생 수강 종료 (3800): 학생·수업 기록은 그대로, 대시보드에서만 빠짐. undo = 되돌리기 */
+/** 재등록 안 하는 수강생 수강 종료 (3800): 수강생·수업 기록은 그대로, 대시보드에서만 빠짐. undo = 되돌리기 */
 export async function closeEnrollment(sb: SupabaseClient, enrollmentId: string, undo = false): Promise<void> {
   const { error } = await sb.rpc('admin_enrollment_close', { p_enrollment: enrollmentId, p_undo: undo });
   if (error) throw new Error(error.message);

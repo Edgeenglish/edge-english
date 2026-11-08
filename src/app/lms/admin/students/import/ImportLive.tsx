@@ -1,6 +1,6 @@
 'use client';
 
-// 실제 데이터로 기존 학생 입력. 화면 검사는 편의이고, 권한·충돌은 DB가 다시 확인 (is_admin = aal2). 저장 뒤 시트 대조 완료 기록
+// 실제 데이터로 기존 수강생 입력. 화면 검사는 편의이고, 권한·충돌은 DB가 다시 확인 (is_admin = aal2). 저장 뒤 시트 대조 완료 기록
 
 import { useEffect, useState } from 'react';
 import { markImportChecked, saveImport } from '@/lms/admin/import-live';

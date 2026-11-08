@@ -173,17 +173,17 @@ export async function recordPastMakeup(sb: SupabaseClient, source: { lessonId?: 
 export async function confirmMakeup(sb: SupabaseClient, requestId: string, at: Date, reason: MakeupReason, note: string): Promise<void> {
   check(await sb.rpc('admin_makeup_confirm', { p_makeup_request: requestId, p_starts_at: at.toISOString(), p_reason: reason, p_note: note || null }));
 }
-/** 신청이 없을 때 신청 + 확정을 한 번에 (학생·강사 화면에 바로 확정) */
+/** 신청이 없을 때 신청 + 확정을 한 번에 (수강생·강사 화면에 바로 확정) */
 export async function confirmMakeupNow(sb: SupabaseClient, source: { lessonId?: string; itemId?: string; compId?: string }, at: Date, reason: MakeupReason, note: string): Promise<void> {
   check(await sb.rpc('admin_makeup_confirm_now', {
     p_lesson: source.lessonId ?? null, p_item: source.itemId ?? null, p_comp: source.compId ?? null, p_starts_at: at.toISOString(), p_reason: reason, p_note: note || null,
   }));
 }
-/** 확정된 보강·보상수업 시간 고치기 — 변경권 차감 없음, 학생·강사 '보강 시간 변경' 안내가 새로 생김 */
+/** 확정된 보강·보상수업 시간 고치기 — 변경권 차감 없음, 수강생·강사 '보강 시간 변경' 안내가 새로 생김 */
 export async function rescheduleMakeup(sb: SupabaseClient, lessonId: string, at: Date, reason: MakeupReason, note: string): Promise<void> {
   check(await sb.rpc('admin_makeup_reschedule', { p_lesson: lessonId, p_starts_at: at.toISOString(), p_reason: reason, p_note: note || null }));
 }
-/** 운영 기록 (학생별, 최근 순). 기능 전 DB 면 빈 목록 */
+/** 운영 기록 (수강생별, 최근 순). 기능 전 DB 면 빈 목록 */
 export async function loadMakeupLogs(sb: SupabaseClient, studentId: string): Promise<MakeupLog[]> {
   const r = await sb.rpc('admin_makeup_logs_for', { p_student: studentId });
   if (r.error?.code === 'PGRST202' || r.error?.code === '42883') return [];

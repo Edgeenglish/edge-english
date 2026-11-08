@@ -1,7 +1,7 @@
 'use client';
 
-// 신규 학생 등록 (2026-10-18 대표 최종 시안 — C안 신청서 불러오기 + A안 상세 입력·스케줄)
-// - PC: 왼쪽 학생 정보·희망 조건·결제, 오른쪽 강사·주간 캘린더(1·2단계) → 수업 정보·결제(3) → 최종 확인(4)
+// 신규 수강생 등록 (2026-10-18 대표 최종 시안 — C안 신청서 불러오기 + A안 상세 입력·스케줄)
+// - PC: 왼쪽 수강생 정보·희망 조건·결제, 오른쪽 강사·주간 캘린더(1·2단계) → 수업 정보·결제(3) → 최종 확인(4)
 // - 휴대폰: 1/4 ~ 4/4 단계. 모든 입력은 이 화면 상태 하나에 있어서 이전 단계로 가도 그대로
 // - 저장은 한 번에 (DB 함수 admin_register_student). 같은 요청 번호라 여러 번 눌러도 1번만 생김
 // - 실제로 저장에 성공했을 때만 '등록 완료'. 미리보기(가상 데이터)는 저장하지 않음
@@ -70,14 +70,14 @@ type Props = {
   planActions?: PlanActions;
 };
 
-const STEPS = ['학생 정보\n(신청서 불러오기)', '강사 매칭', '수업 일정', '최종 확인'];
+const STEPS = ['수강생 정보\n(신청서 불러오기)', '강사 매칭', '수업 일정', '최종 확인'];
 const HINT: Record<PlanIssue['reason'], string> = {
   tutor_makeup: '그날 보강을 옮기거나 첫 수업일을 다음 주로',
   tutor_regular: '다른 시간을 고르세요 (매주 겹치면 이 시간은 불가)',
   tutor_time_off: '휴무 날짜 — 첫 수업일 조정 또는 강사와 확인',
-  tutor_hold: '다른 학생이 종료일 오후 11:59까지 재등록할 수 있는 시간 — 다른 시간을 고르거나 마감 뒤에',
+  tutor_hold: '다른 수강생이 종료일 오후 11:59까지 재등록할 수 있는 시간 — 다른 시간을 고르거나 마감 뒤에',
   break: '앞뒤 수업과 10분 휴식 필요 — 30분 당기거나 늦추기',
-  student: '학생의 다른 수업과 겹침',
+  student: '수강생의 다른 수업과 겹침',
   outside_availability: '강사 가능 시간 밖 — 강사와 확인 (서머타임 변경일 확인)',
 };
 const won = (n: number | null) => (n === null ? '-' : `${n.toLocaleString('ko-KR')}원`);
@@ -139,7 +139,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     return () => clearTimeout(t);
   }, [toast]);
 
-  // 같은 이메일 학생 확인 (알려 주기만 — 자동 연결·병합 안 함, POL-AC-04)
+  // 같은 이메일 수강생 확인 (알려 주기만 — 자동 연결·병합 안 함, POL-AC-04)
   useEffect(() => {
     const email = draft.email.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setDupes([]);
@@ -242,7 +242,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     if (n > 1 && problems.length) {
       setTried(true);
       setStep(1);
-      return setToast('학생 정보에서 빨간 칸을 먼저 채워 주세요.');
+      return setToast('수강생 정보에서 빨간 칸을 먼저 채워 주세요.');
     }
     setStep(n);
     window.scrollTo({ top: 0 });
@@ -363,7 +363,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   // ---------- 화면 조각 ----------
   const studentCard = (
     <Card
-      title="1. 학생 정보"
+      title="1. 수강생 정보"
       badge={app ? <Badge tone="green">신청서 연동 완료</Badge> : source === 'manual' ? <Badge tone="gray">직접 입력</Badge> : <Badge tone="gray">신청서 고르기 전</Badge>}
     >
       <div className="mb-3 grid grid-cols-2 gap-1.5" role="group" aria-label="등록 방법">
@@ -453,7 +453,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       </div>
       {dupes.length > 0 && (
         <p className="mt-3 rounded-[10px] bg-[#fff6e6] px-3 py-2 text-[13px] text-[#7a4a00]">
-          같은 이메일의 기존 학생이 있어요: {dupes.map((x) => `${x.code} ${x.name_ko}`).join(', ')}. 자동으로 연결하지 않아요 — 재등록이면 그 학생 화면에서 처리하세요.
+          같은 이메일의 기존 수강생이 있어요: {dupes.map((x) => `${x.code} ${x.name_ko}`).join(', ')}. 자동으로 연결하지 않아요 — 재등록이면 그 수강생 화면에서 처리하세요.
         </p>
       )}
       <div className="mt-3 grid grid-cols-2 gap-2">
@@ -517,7 +517,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           {row('방법', pay.method === 'card_link' ? '아임웹 카드' : '계좌이체')}
         </>
       ) : (
-        <p className="text-[13.5px] leading-relaxed text-[#6b6880]">결제·입금 확인 전에는 학생 정보와 수강권(결제 대기)만 저장하고 강사·정규 일정은 확정하지 않아요. 확인은 4단계에서 기록해요.</p>
+        <p className="text-[13.5px] leading-relaxed text-[#6b6880]">결제·입금 확인 전에는 수강생 정보와 수강권(결제 대기)만 저장하고 강사·정규 일정은 확정하지 않아요. 확인은 4단계에서 기록해요.</p>
       )}
     </Card>
   );
@@ -636,7 +636,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           ))}
         </div>
       ) : (
-        <p className="mt-3 text-[13.5px] leading-relaxed text-[#6b6880]">확인 전이면 학생·수강권(결제 대기)만 저장해요. 고른 강사·시간은 저장되지 않고, 결제 확인 후 매칭 때 다시 정해요 (POL-OP-13).</p>
+        <p className="mt-3 text-[13.5px] leading-relaxed text-[#6b6880]">확인 전이면 수강생·수강권(결제 대기)만 저장해요. 고른 강사·시간은 저장되지 않고, 결제 확인 후 매칭 때 다시 정해요 (POL-OP-13).</p>
       )}
     </Card>
   );
@@ -645,7 +645,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
     <div className="space-y-4">
     {payCard}
     <Card title="최종 확인">
-      {row('학생', `${draft.nameKo} (${draft.nameEn}) · ${draft.email}`)}
+      {row('수강생', `${draft.nameKo} (${draft.nameEn}) · ${draft.email}`)}
       {row('연락처', draft.phone || '-')}
       {row('사는 곳', `${[draft.country, draft.city].filter(Boolean).join(' ')} · ${draft.timezone} (지금 ${draft.timezone ? nowLocal(draft.timezone, now) : '-'})`)}
       {row('수강 상품', product(draft))}
@@ -656,7 +656,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       {row('수강 기간', summary ? `${dayLabel(summary.startDate)} – ${dayLabel(summary.endDate)}${draft.weeks ? ` · ${termText(draft.weeks)}` : ''}` : '-')}
       {row('만들어질 수업', paid && tutor && summary ? `정규 ${summary.lessons}회` : '없음 (강사 배정 때 생성)')}
       {paid && tutor && lessonPlan && lessonPlan.lessons.length > 0 && <FinalLessons plan={lessonPlan} tutor={tutor} />}
-      {dupes.length > 0 && <p className="mt-2 text-[13px] text-[#9a5b00]">같은 이메일 기존 학생: {dupes.map((x) => x.code).join(', ')} — 새 학생으로 따로 만들어요 (연결 안 함).</p>}
+      {dupes.length > 0 && <p className="mt-2 text-[13px] text-[#9a5b00]">같은 이메일 기존 수강생: {dupes.map((x) => x.code).join(', ')} — 새 수강생으로 따로 만들어요 (연결 안 함).</p>}
       {blockers.length > 0 && (
         <ul className="mt-3 space-y-1 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] text-[#b3261e]">
           {blockers.map((b) => (
@@ -737,16 +737,16 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
               ‹
             </Link>
           )}
-          <b className="text-[17px] text-[#1d1b2b]">신규 학생 등록</b>
+          <b className="text-[17px] text-[#1d1b2b]">신규 수강생 등록</b>
         </div>
         <MobileStepper step={step} />
       </header>
       {demo && <p className="mx-4 mt-3 rounded-[12px] bg-[#fff8d6] px-4 py-2.5 text-[13.5px] text-[#5c4a00] lg:mx-7">가상 데이터 미리보기예요. 신청서·강사·일정은 모두 가상이고, 저장을 눌러도 실제로 저장되지 않아요.</p>}
 
       <p className="mx-4 mt-3 text-[13.5px] text-[#6b6880] lg:mx-7">
-        이미 수업 중인 학생인가요?{' '}
+        이미 수업 중인 수강생인가요?{' '}
         <Link href={demo ? '/lms/admin/students/import?demo=1' : '/lms/admin/students/import'} className="font-semibold text-[#5b3fe0] underline underline-offset-2">
-          기존 학생 간단 입력 →
+          기존 수강생 간단 입력 →
         </Link>
       </p>
 
@@ -806,7 +806,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
                 ×
               </button>
             </div>
-            <p className="mb-2 text-[12.5px] text-[#6b6880]">학생이 제출한 그대로예요. 여기서는 고치지 않고, 등록 화면에서 고친 내용만 LMS에 저장돼요.</p>
+            <p className="mb-2 text-[12.5px] text-[#6b6880]">수강생이 제출한 그대로예요. 여기서는 고치지 않고, 등록 화면에서 고친 내용만 LMS에 저장돼요.</p>
             {app.raw.map(([k, v]) => (
               <div key={k} className="grid grid-cols-[120px_1fr] gap-2 border-b border-[#f0eef6] py-2 text-[14px]">
                 <span className="text-[#6b6880]">{k}</span>
@@ -930,10 +930,10 @@ function ResultBox({ result, onNew, demo }: { result: SaveResult; onNew: () => v
       </p>
       <div className="mt-2 flex gap-2">
         <Link href={`/lms/admin/students/${result.studentCode}${demo ? '?demo=1' : ''}`} className="min-h-[40px] rounded-[10px] bg-white px-3 py-2 text-[13.5px] font-semibold text-[#1d1b2b]">
-          학생 보기
+          수강생 보기
         </Link>
         <button type="button" onClick={onNew} className="min-h-[40px] rounded-[10px] bg-white px-3 text-[13.5px] font-semibold text-[#1d1b2b]">
-          다른 학생 등록
+          다른 수강생 등록
         </button>
       </div>
     </div>

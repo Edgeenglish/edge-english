@@ -1,7 +1,7 @@
 // 시각 글 한 곳 (대표 2026-11-08: '통일, 간단명료'). 화면·메일·WhatsApp·카톡 모든 시각이 이 규칙을 따른다.
 //  - 시각 바로 뒤에 그 시각의 기준 이름. 두 시간대는 ' / ' 로 잇고, 보는 사람 시간대가 먼저, 한국이 뒤
 //  - 영어: 'Mon, 9 Nov 6:00 PM Ho Chi Minh Time / 8:00 PM KST' (날짜가 다르면 'Tue, 10 Nov 1:30 AM KST')
-//  - 한국어(학생 카톡·메일): '11월 9일(월) 오후 6시 [호치민 시간] / 오후 8시 [한국 시간]' (한국 거주: '… [한국 시간]')
+//  - 한국어(수강생 카톡·메일): '11월 9일(월) 오후 6시 [호치민 시간] / 오후 8시 [한국 시간]' (한국 거주: '… [한국 시간]')
 //  - 기준 이름 강조: 굵게 되는 곳(화면·메일 HTML)은 굵게, WhatsApp 은 *별표*, 카톡은 [대괄호]. 영어 글은 *별표* 표시를 넣고,
 //    굵게 안 되는 곳(메일 제목·일반 글)은 stripBold 로 별표를 뺌
 
@@ -56,7 +56,7 @@ export function enRangeBoth(start: Date, end: Date, tz?: string | null): string 
   return `${enDay(start, tz as string)} ${enRange(start, end, tz as string)} ${bold(enZoneName(tz))} / ${same ? '' : `${enDay(start, 'Asia/Seoul')} `}${enRange(start, end, 'Asia/Seoul')} ${bold('KST')}`;
 }
 
-// ---------------------------------------------------------------- 한국어 (학생 카톡·메일)
+// ---------------------------------------------------------------- 한국어 (수강생 카톡·메일)
 /** '[호치민 시간]' / '[한국 시간]' */
 export const koZoneBracket = (tz?: string | null) => `[${isKst(tz) ? '한국 시간' : `${koZoneCity(tz as string)} 시간`}]`;
 /** '11월 9일(월)' */
@@ -69,7 +69,7 @@ export function koHour(at: Date, tz: string): string {
   const [h, m] = formatInZone(at, tz).time.split(':').map(Number);
   return `${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}시${m ? ` ${m}분` : ''}`;
 }
-/** 학생 안내 시각: 한국 거주 '11월 9일(월) 오후 8시 [한국 시간]' / 해외 '11월 9일(월) 오후 6시 [호치민 시간] / 오후 8시 [한국 시간]' */
+/** 수강생 안내 시각: 한국 거주 '11월 9일(월) 오후 8시 [한국 시간]' / 해외 '11월 9일(월) 오후 6시 [호치민 시간] / 오후 8시 [한국 시간]' */
 export function koBoth(at: Date, tz?: string | null): string {
   if (isKst(tz)) return `${koDay(at, 'Asia/Seoul')} ${koHour(at, 'Asia/Seoul')} ${koZoneBracket('Asia/Seoul')}`;
   const same = formatInZone(at, tz as string).date === formatInZone(at, 'Asia/Seoul').date;

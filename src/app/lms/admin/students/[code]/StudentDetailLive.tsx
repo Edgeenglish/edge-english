@@ -1,6 +1,6 @@
 'use client';
 
-// 학생 상세 실제 데이터 (migration 4300). 쓰기는 모두 DB 함수(운영자 aal2 확인·검사·기록은 DB)
+// 수강생 상세 실제 데이터 (migration 4300). 쓰기는 모두 DB 함수(운영자 aal2 확인·검사·기록은 DB)
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   extendEnrollment, findStudentId, loadStudentDetail, markRegularChangeSent, loadPrestartMoved, prestartMove, previewRegularChange, saveRegularChange, updateStudent,
@@ -30,7 +30,7 @@ export default function StudentDetailLive({ code }: { code: string }) {
       if (aal?.currentLevel !== 'aal2' || admin !== true) return window.location.replace('/lms/login');
       try {
         const id = await findStudentId(sb, code);
-        if (!id) return setState({ kind: 'error', message: `${code} 학생을 찾을 수 없어요.` });
+        if (!id) return setState({ kind: 'error', message: `${code} 수강생을 찾을 수 없어요.` });
         await load(id);
       } catch (e) {
         setState({ kind: 'error', message: e instanceof Error ? e.message : '데이터를 읽지 못했어요.' });

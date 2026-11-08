@@ -1,8 +1,8 @@
-// 학생 홈(마이페이지) 화면 판정 — 3차 시안 A-1 최종 (2026-10-17 대표 확정, docs/lms/07-decisions.md D-34·D-35)
+// 수강생 홈(마이페이지) 화면 판정 — 3차 시안 A-1 최종 (2026-10-17 대표 확정, docs/lms/07-decisions.md D-34·D-35)
 // 화면은 이 함수들의 결과만 그린다. 6시간 규칙 판정은 rules/change.ts 를 그대로 쓴다.
 //
-// - 재등록 안내: 남은 수업(정규·보강·보상·이월 + 날짜 미정 보강) 2회 이하일 때부터 마지막 수업이 있는 날(학생 거주지 날짜)까지, 재등록 결제가 확인되면 숨김 (POL-RN-08, H26(92))
-// - 할 일 알림: 학생이 직접 처리해야 할 때만. '강사 확인 중' 같은 기다림은 넣지 않음
+// - 재등록 안내: 남은 수업(정규·보강·보상·이월 + 날짜 미정 보강) 2회 이하일 때부터 마지막 수업이 있는 날(수강생 거주지 날짜)까지, 재등록 결제가 확인되면 숨김 (POL-RN-08, H26(92))
+// - 할 일 알림: 수강생이 직접 처리해야 할 때만. '강사 확인 중' 같은 기다림은 넣지 않음
 // - 결제: 수강권·기간·결제 방법·확인일만. 금액·카드 정보는 다루지 않음 (POL-PAY-11)
 // - 적립금: 본인 지급·사용 날짜, 금액, 사유, 잔액 (POL-PAY-11, POL-PAY-09)
 
@@ -57,13 +57,13 @@ export function nextLesson(lessons: readonly StudentLesson[], now: Date): Studen
 
 /**
  * 재등록 진행 상태 — '신청'과 '결제 확인'을 구분한다.
- * requested: 학생이 재등록을 신청했지만 운영자가 결제를 아직 확인하지 않음 (아임웹·계좌이체는 자동 연동 아님, POL-PAY-11)
+ * requested: 수강생이 재등록을 신청했지만 운영자가 결제를 아직 확인하지 않음 (아임웹·계좌이체는 자동 연동 아님, POL-PAY-11)
  */
 export type RenewalState = 'not_requested' | 'requested' | 'payment_confirmed';
 
 export type RenewalPrompt = null | { mode: 'request'; left: number } | { mode: 'awaiting_payment'; left: number };
 
-/** timeZone: 학생 거주지 시간대 — 남은 수업이 0회면 마지막 수업이 있는 날(그 시간대 날짜)이 지나면 숨김 (2026-11-07 대표) */
+/** timeZone: 수강생 거주지 시간대 — 남은 수업이 0회면 마지막 수업이 있는 날(그 시간대 날짜)이 지나면 숨김 (2026-11-07 대표) */
 export function renewalPrompt(lessons: readonly StudentLesson[], renewal: RenewalState, now: Date, makeupsOwed = 0, timeZone = 'Asia/Seoul'): RenewalPrompt {
   const left = lessonsLeft(lessons, now, makeupsOwed).total;
   if (renewal === 'payment_confirmed') return null;
@@ -76,7 +76,7 @@ export function renewalPrompt(lessons: readonly StudentLesson[], renewal: Renewa
   return renewal === 'requested' ? { mode: 'awaiting_payment', left } : { mode: 'request', left };
 }
 
-/** 신청 진행 상태. 학생이 기다리기만 하면 되는 단계는 할 일이 아님 */
+/** 신청 진행 상태. 수강생이 기다리기만 하면 되는 단계는 할 일이 아님 */
 /** rescheduling = 강사가 고른 날짜 모두 불가 → 운영진이 다른 날짜 조율 (QA-08) · canceled = 확정됐던 보강 수업이 취소됨 (QA-13) */
 export type RequestStatus = 'tutor_reviewing' | 'admin_reviewing' | 'rescheduling' | 'confirmed' | 'canceled' | 'completed';
 
@@ -85,7 +85,7 @@ export type StudentRequest = {
   kind: 'makeup' | 'change';
   title: string;
   status: RequestStatus;
-  /** 보강 신청: 학생이 고른 후보 시각 */
+  /** 보강 신청: 수강생이 고른 후보 시각 */
   candidates: Date[];
   createdAt: Date;
   note: string;
@@ -97,7 +97,7 @@ export type StudentRequest = {
   originalTutor?: string | null;
   tutor?: string | null;
   confirmedAt?: Date | null;
-  /** 강사 메모 (모든 날짜 불가일 때 학생에게는 보이지 않음 — 운영진이 조율) */
+  /** 강사 메모 (모든 날짜 불가일 때 수강생에게는 보이지 않음 — 운영진이 조율) */
   tutorDeclinedAll?: boolean;
   /** 어느 권리(원래 수업·시트 보강·보상권)의 신청인지 — 휴무 안내 화면이 같은 상태를 보여 주기 위해 (R-17) */
   lessonId?: string | null;
@@ -114,7 +114,7 @@ export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
   completed: '처리 완료',
 };
 
-/** 학생이 직접 처리해야 하는 일. 지금은 수업 안내 확인·동의뿐 (POL-OP-12). 규칙이 정해지면 종류를 추가 */
+/** 수강생이 직접 처리해야 하는 일. 지금은 수업 안내 확인·동의뿐 (POL-OP-12). 규칙이 정해지면 종류를 추가 */
 export type StudentTodo = { kind: 'terms_consent'; id: string; label: string };
 
 export function studentTodos(input: { pendingConsents: readonly { id: string; title: string }[] }): StudentTodo[] {

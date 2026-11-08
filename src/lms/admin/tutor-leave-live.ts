@@ -56,7 +56,7 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
   ]);
   const rqRows = check(rq) as { source_lesson_id: string | null; migrated_item_id: string | null; tutor_answered_at?: string | null; candidates?: { tutor_answer: string | null }[] }[];
   const requested = new Set(rqRows.map((r) => r.source_lesson_id ?? r.migrated_item_id));
-  // 강사가 보강 날짜 모두 불가라고 답함 → 운영진이 학생에게 다른 날짜를 받아야 함 (Work QA 11/7: '강사 확인 기다림'으로 남던 오류)
+  // 강사가 보강 날짜 모두 불가라고 답함 → 운영진이 수강생에게 다른 날짜를 받아야 함 (Work QA 11/7: '강사 확인 기다림'으로 남던 오류)
   const declinedAll = new Set(rqRows.filter((r) => r.tutor_answered_at && (r.candidates ?? []).length > 0 && (r.candidates ?? []).every((c) => c.tutor_answer === 'no'))
     .map((r) => r.source_lesson_id ?? r.migrated_item_id));
   const makeupOf = new Map((check(mk) as { makeup_of: string; starts_at: string }[]).map((m) => [m.makeup_of, new Date(m.starts_at)]));
@@ -98,11 +98,11 @@ export async function chooseLeave(sb: SupabaseClient, itemIds: string[], choice:
 export async function subTutorOk(sb: SupabaseClient, itemIds: string[]): Promise<void> {
   check(await sb.rpc('admin_leave_sub_ok', { p_items: itemIds }));
 }
-/** 이전 단계로: tutor_ok 확정 전 / asked 강사 답 전 / undecided 학생 답 전 */
+/** 이전 단계로: tutor_ok 확정 전 / asked 강사 답 전 / undecided 수강생 답 전 */
 export async function leaveBack(sb: SupabaseClient, itemIds: string[], to: 'undecided' | 'asked' | 'tutor_ok'): Promise<void> {
   check(await sb.rpc('admin_leave_back', { p_items: itemIds, p_to: to }));
 }
-/** 휴무 안내 '보냄' 되돌리기 (모든 날짜가 학생 답 전일 때만 — DB가 확인) */
+/** 휴무 안내 '보냄' 되돌리기 (모든 날짜가 수강생 답 전일 때만 — DB가 확인) */
 export async function unsendNotices(sb: SupabaseClient, noticeIds: string[]): Promise<void> {
   check(await sb.rpc('admin_leave_notice_unsend', { p_notices: noticeIds }));
 }
@@ -122,7 +122,7 @@ export async function makeupOptions(sb: SupabaseClient, itemIds: string[]): Prom
   return rows.map((r) => ({ section: r.section, startsAt: new Date(r.starts_at) }));
 }
 
-/** 재등록 대기 학생: 재등록하면 이 휴무에 걸리는 날짜 (고정 시간을 맡아 두는 동안만) */
+/** 재등록 대기 수강생: 재등록하면 이 휴무에 걸리는 날짜 (고정 시간을 맡아 두는 동안만) */
 export async function loadRenewals(sb: SupabaseClient, timeOffId: string): Promise<LvRenewal[]> {
   const rows = check(await sb.rpc('admin_leave_renewal_pending', { p_time_off: timeOffId })) as
     { student_id: string; student_name: string; student_code: string; end_date: string; starts_at: string; duration_min: number }[];

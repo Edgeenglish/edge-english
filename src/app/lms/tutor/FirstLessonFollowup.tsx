@@ -1,10 +1,10 @@
 'use client';
 
 // 첫 수업 후 강사 To-do · First Lesson Follow-up (2026-11-06 대표 시안 PC·휴대폰 v2 그대로, 정책 원본 H26(67)·(68)·(71), migration 4600)
-// - 왼쪽(PC)/아래(휴대폰, 펼쳐 보기): 학생 기본 정보 + ABOUT & PREFERENCES(운영진 사전 입력, 읽기만)
+// - 왼쪽(PC)/아래(휴대폰, 펼쳐 보기): 수강생 기본 정보 + ABOUT & PREFERENCES(운영진 사전 입력, 읽기만)
 // - 오른쪽/위: 1 English Level · 2 Wants to Improve · 3 Class Style(교재는 조건부) · 4 Class Record(첫 수업 기록과 자동 연결)
 // - 완료는 체크박스가 아니라 저장된 값으로 (DB lms_first_lesson_todo). 항목마다 저장 → 바로 상태 갱신, 아래 [Save all] 은 채운 항목을 한 번에
-// - 학생의 원래 답(class_style 등)은 절대 덮어쓰지 않음 — 강사가 확인한 실제 방식은 따로 저장 (tutor_class_style)
+// - 수강생의 원래 답(class_style 등)은 절대 덮어쓰지 않음 — 강사가 확인한 실제 방식은 따로 저장 (tutor_class_style)
 // - 강사는 영어 고정. 운영자 보기에서만 한국어 라벨 (useT)
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { enZone } from '@/lms/admin/students';
@@ -167,7 +167,7 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
       <>
         <section className="rounded-[16px] border border-[#e6e3ef] bg-white p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="text-[15px] font-bold text-[#1d1b2b]">{t('Student', '학생 기본 정보')}</h3>
+            <h3 className="text-[15px] font-bold text-[#1d1b2b]">{t('Student', '수강생 기본 정보')}</h3>
             <span className="text-[12px] text-[#6b6880]">{t('From registration', '등록 정보 · 자동 표시')}</span>
           </div>
           <p className="text-[18px] font-extrabold text-[#1d1b2b]">{s.label}</p>
@@ -189,7 +189,7 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
             <span className="text-[12px] text-[#6b6880]">{t('Entered by Edge English', '운영진 사전 입력')}</span>
           </div>
           <div className="rounded-[13px] border border-[#eeebfe] bg-[#f8f7ff] p-3.5 text-[13px] leading-relaxed text-[#1d1b2b]">
-            <div className="font-bold text-[#5b3fe0]">{t("Student's preferred class style", '학생이 희망한 Class Style')}</div>
+            <div className="font-bold text-[#5b3fe0]">{t("Student's preferred class style", '수강생이 희망한 Class Style')}</div>
             <b>{s.classStyle ? CLASS_STYLE_EN[s.classStyle] : NA}</b>{s.classStyleNote && <span className="block text-[12.5px] text-[#6b6880]">{s.classStyleNote}</span>}
             <hr className="my-3 border-[#e6e5ee]" />
             <div className="font-bold text-[#5b3fe0]">{t('Corrections', '교정 방식')}</div>
@@ -203,7 +203,7 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
             <div className="font-bold text-[#5b3fe0]">{t('Hopes for class', '바라는 점')}</div>
             {s.hopes ?? NA}
           </div>
-          <p className="mt-2 text-[12px] leading-relaxed text-[#6b6880]">{t("The student's original answers are kept as they are. Only the actual class style you confirm on the right is saved separately.", '학생의 원래 답변은 보존됩니다. 강사가 확인한 실제 수업 방식만 별도로 저장됩니다.')}</p>
+          <p className="mt-2 text-[12px] leading-relaxed text-[#6b6880]">{t("The student's original answers are kept as they are. Only the actual class style you confirm on the right is saved separately.", '수강생의 원래 답변은 보존됩니다. 강사가 확인한 실제 수업 방식만 별도로 저장됩니다.')}</p>
         </section>
       </>
     );
@@ -213,16 +213,16 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
         <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="pr-10 text-[20px] font-bold text-[#1d1b2b]">{t('First lesson follow-up', '첫 수업 후 확인')}</h2>
-            <p className="text-[13px] text-[#6b6880]">{t('Students', '학생')} / {s.label}</p>
+            <p className="text-[13px] text-[#6b6880]">{t('Students', '수강생')} / {s.label}</p>
           </div>
           {first && <span className="rounded-full bg-[#e9fbef] px-2.5 py-1 text-[12px] font-bold text-[#167344]">✓ {t('First lesson done', '첫 수업 완료')} · {enDate(formatInZone(first.startsAt, tz).date)}</span>}
         </header>
         <div className="grid gap-4 lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
-          {/* 휴대폰: 번호별 입력이 먼저, 학생 정보는 아래에서 펼쳐 보기. PC: 왼쪽 */}
+          {/* 휴대폰: 번호별 입력이 먼저, 수강생 정보는 아래에서 펼쳐 보기. PC: 왼쪽 */}
           <div className="order-2 hidden gap-4 lg:order-1 lg:grid">{infoCards}</div>
           <details className="order-2 rounded-[16px] border border-[#e6e3ef] bg-white lg:hidden">
             <summary className="flex min-h-[48px] cursor-pointer list-none items-center px-4 text-[14.5px] font-bold text-[#5b3fe0]">
-              {t("Student info & preferences (tap to open)", '학생 정보 · 사전 답변 (눌러서 펼치기)')}<span className="flex-1" /><span aria-hidden className="text-[#6b6880]">⌄</span>
+              {t("Student info & preferences (tap to open)", '수강생 정보 · 사전 답변 (눌러서 펼치기)')}<span className="flex-1" /><span aria-hidden className="text-[#6b6880]">⌄</span>
             </summary>
             <div className="grid gap-3 px-3 pb-3">{infoCards}</div>
           </details>
@@ -254,11 +254,11 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
                   </div>
                 </Step>
 
-                <Step id="fl-improve" n={2} done={done.improve} title="Wants to Improve" sub={t('What the student told you they want to improve', '첫 수업에서 학생에게 직접 물어본 학습 목표')} status={statusOf(done.improve)}>
-                  <label className={label} htmlFor="fl-improve-txt">{t("Student's goal", '학생의 학습 목표')}</label>
+                <Step id="fl-improve" n={2} done={done.improve} title="Wants to Improve" sub={t('What the student told you they want to improve', '첫 수업에서 수강생에게 직접 물어본 학습 목표')} status={statusOf(done.improve)}>
+                  <label className={label} htmlFor="fl-improve-txt">{t("Student's goal", '수강생의 학습 목표')}</label>
                   <textarea id="fl-improve-txt" className={`${field} min-h-[85px]`} value={improve} onChange={(e) => setImprove(e.target.value)} placeholder={t('e.g. Wants to feel more confident speaking at work.', '예: Wants to feel more confident speaking at work.')} />
                   {s.improve && !s.improveTutorAt && (
-                    <p className={hint}>{t('Edge English noted before the first lesson', '운영진 사전 메모')}: “{s.improve}” — {t('please ask the student yourself and write what they said, rather than copying this.', '그대로 복사하지 말고, 학생에게 직접 확인해 기록합니다.')}</p>
+                    <p className={hint}>{t('Edge English noted before the first lesson', '운영진 사전 메모')}: “{s.improve}” — {t('please ask the student yourself and write what they said, rather than copying this.', '그대로 복사하지 말고, 수강생에게 직접 확인해 기록합니다.')}</p>
                   )}
                   {!(s.improve && !s.improveTutorAt) && <p className={hint}>{t('Ask the student directly and write it in your own words.', '운영진의 사전 답변을 그대로 복사하지 말고, 직접 확인해 기록합니다.')}</p>}
                   {stepErr.improve && <p className="mt-1.5 text-[13px] text-[#b3261e]">{stepErr.improve}</p>}
@@ -267,9 +267,9 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
                   </div>
                 </Step>
 
-                <Step id="fl-style" n={3} done={done.style} title="Class Style" sub={t("Decide the actual class style from the student's wish and level", '학생의 희망과 레벨을 보고 실제 수업 방식 결정')} status={statusOf(done.style, true)}>
+                <Step id="fl-style" n={3} done={done.style} title="Class Style" sub={t("Decide the actual class style from the student's wish and level", '수강생의 희망과 레벨을 보고 실제 수업 방식 결정')} status={statusOf(done.style, true)}>
                   <div className="mb-3 rounded-[11px] border border-[#e9e5fd] bg-[#faf9ff] px-3.5 py-3 text-[12.5px] leading-relaxed text-[#1d1b2b]">
-                    <b className="text-[#5b3fe0]">{t("Student's wish", '학생 사전 희망')}</b> · {s.classStyle ? CLASS_STYLE_EN[s.classStyle] : t('No answer yet', '미응답')}{s.classStyleNote ? ` (${s.classStyleNote})` : ''}
+                    <b className="text-[#5b3fe0]">{t("Student's wish", '수강생 사전 희망')}</b> · {s.classStyle ? CLASS_STYLE_EN[s.classStyle] : t('No answer yet', '미응답')}{s.classStyleNote ? ` (${s.classStyleNote})` : ''}
                     <br />{t('The original answer is kept. Below is the class style you confirm.', '원답은 보존됩니다. 아래는 강사가 최종 확인하는 수업 방식입니다.')}
                   </div>
                   <label className={label} htmlFor="fl-style-sel">{t('Actual class style', '실제 Class Style')}</label>
@@ -307,7 +307,7 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
                   )}
                   {withMaterials && (
                     <div className="mt-3">
-                      <label className={label} htmlFor="fl-mat">{t('Student-provided materials (optional)', '학생 제공 자료 (선택)')}</label>
+                      <label className={label} htmlFor="fl-mat">{t('Student-provided materials (optional)', '수강생 제공 자료 (선택)')}</label>
                       <input id="fl-mat" className={field} value={materials} onChange={(e) => setMaterials(e.target.value)} placeholder={t('e.g. Articles, presentation slides', '예: Articles, presentation slides')} />
                     </div>
                   )}

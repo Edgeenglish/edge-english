@@ -1,4 +1,4 @@
-// 강사 화면 미리보기용 가짜 데이터 (?demo=1, 저장 안 함). 실제 학생·강사 이름 아님
+// 강사 화면 미리보기용 가짜 데이터 (?demo=1, 저장 안 함). 실제 수강생·강사 이름 아님
 import { addDays, formatInZone, instantToKstDate } from '../rules/dates';
 import type { TutorStudentProfile } from './profile';
 import { hhmm, lessonAt, plusDays, toMin, type CellCode, type HoursData } from './hours';
@@ -73,7 +73,7 @@ export function fakeHours(now: Date): HoursData {
   };
 }
 
-/** 학생 프로필 미리보기 (?demo=1): 정규 학생 1명(Toronto)·대체수업 학생 1명. 가짜 이름 */
+/** 수강생 프로필 미리보기 (?demo=1): 정규 수강생 1명(Toronto)·대체수업 수강생 1명. 가짜 이름 */
 export function fakeStudentProfile(studentId: string, now: Date): TutorStudentProfile {
   const today = instantToKstDate(now);
   const start = addDays(today, -14);

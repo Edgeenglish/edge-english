@@ -42,11 +42,11 @@ describe('수업 변경 화면 계산 (1순위)', () => {
   });
 
   it('미리 보기 줄: 정상 변경 · 변경권 2→1 · 보강 기한', () => {
-    expect(decisionLines(adv)).toEqual(['학생 정상 변경 · 수업 44시간 전 요청', '변경권 2 → 1', '보강 1/5 (화)까지']);
-    expect(decisionLines({ ...adv, status: 'Tutor canceled late', who: 'tutor', uses_credit: false, reward_won: 2000 })).toContain('학생 적립금 2,000원');
+    expect(decisionLines(adv)).toEqual(['수강생 정상 변경 · 수업 44시간 전 요청', '변경권 2 → 1', '보강 1/5 (화)까지']);
+    expect(decisionLines({ ...adv, status: 'Tutor canceled late', who: 'tutor', uses_credit: false, reward_won: 2000 })).toContain('수강생 적립금 2,000원');
   });
 
-  it('안내 문구: 원래 수업 날짜와 보강 날짜를 모두 실제 날짜로 (학생 한국어, 강사 현지 시각 영어)', () => {
+  it('안내 문구: 원래 수업 날짜와 보강 날짜를 모두 실제 날짜로 (수강생 한국어, 강사 현지 시각 영어)', () => {
     const lesson = L('x1', '2026-10-29', '17:00');
     const c: NoticeContext = { student, durationMin: 50, lesson, decision: adv, tutorName: 'Alex', tutorTz: 'Asia/Manila', makeupAt: kstToInstant('2026-10-30', '18:00') };
     expect(studentNotice('change', c)).toContain('취소된 수업: 10월 29일(목) 오후 5시 [한국 시간]\n변경권 1개 사용 (잔여 1개)');
@@ -67,7 +67,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     expect(abroad).toContain('10월 29일(목) 오전 4시 [토론토 시간] / 오후 5시 [한국 시간]');
   });
 
-  it('대시보드: 안 보낸 안내·강사 답 대기 보강을 학생마다 한 줄로, 수업이 24시간 안이면 급함', () => {
+  it('대시보드: 안 보낸 안내·강사 답 대기 보강을 수강생마다 한 줄로, 수업이 24시간 안이면 급함', () => {
     const s = { id: 's', name_ko: '김민수', code: 'STU-0001' };
     const tasks = toLessonChanges([
       { created_at: '2026-10-26T10:00:00Z', event: 'change', recipient_kind: 'student', change: { student: s, lesson: { starts_at: kstToInstant('2026-10-27', '08:00').toISOString() } }, makeup: null },
@@ -76,12 +76,12 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     const [item] = buildBoard(tasks, now);
     // 무슨 일 · 할 일이 맨 위, 수업 날짜·받는 사람이 아래 (2026-10-28 대표: 스치듯 봐도 알게)
     expect(item.tag).toBe('수업 취소 안내 보내기');
-    expect(item.detail).toBe('10/27(화) 오전 8시 수업 · 학생·강사 2건 · 보강 강사 답 대기 1건');
+    expect(item.detail).toBe('10/27(화) 오전 8시 수업 · 수강생·강사 2건 · 보강 강사 답 대기 1건');
     expect(item.severity).toBe('due_soon');
     expect(item.actions[0].href).toBe('/lms/admin/change?student=STU-0001');
   });
 
-  it('대시보드: 보강 확정 자동 메일을 못 보낸 학생은 카드로 (운영진이 직접 보내기)', () => {
+  it('대시보드: 보강 확정 자동 메일을 못 보낸 수강생은 카드로 (운영진이 직접 보내기)', () => {
     const s = { id: 's', name_ko: '이도연', code: 'STU-0008' };
     const [item] = buildBoard(toLessonChanges([], [], now, [
       { created_at: '2026-11-07T10:00:00Z', recipient_kind: 'tutor', email_status: 'failed', makeup: { student: s } },
@@ -106,7 +106,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
       { created_at: '2026-10-28T10:00:00Z', event: 'change', recipient_kind: 'tutor', change: { type: 'student_cancel', student: s, lesson: { starts_at: kstToInstant('2026-10-20', '09:00').toISOString(), kind: 'regular' } }, makeup: null },
     ], [], now), now);
     expect(item.tag).toBe('수업 취소 안내 보내기');
-    expect(item.detail).toBe('10/20(화) 오전 9시 정규 수업 학생측 취소 · 학생·강사 2건');
+    expect(item.detail).toBe('10/20(화) 오전 9시 정규 수업 수강생측 취소 · 수강생·강사 2건');
   });
 });
 
@@ -114,20 +114,20 @@ describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)'
   const lesson = L('x1', '2026-10-26', '23:30');
   const tutorLate: ChangeDecision = { ...adv, status: 'Tutor canceled late', who: 'tutor', uses_credit: false, reward_won: 2000, makeup_until: '2026-11-16' };
   const c: NoticeContext = { student, durationMin: 50, lesson, decision: tutorLate, tutorName: 'Alex', tutorTz: 'Asia/Manila' };
-  it('학생: 사과 + 적립금 사용처, 당연한 말(변경권 차감 없음) 없음, 보강은 강사와 정해도 됨', () => {
+  it('수강생: 사과 + 적립금 사용처, 당연한 말(변경권 차감 없음) 없음, 보강은 강사와 정해도 됨', () => {
     const t = studentNotice('change', c);
     expect(t).toContain('불편을 드려 정말 죄송합니다. 사과의 마음으로 다음 수강 등록 시 사용하실 수 있는 적립금 2,000원을 드렸어요 (유효기간 없음).');
     expect(t).not.toContain('직전');
     expect(t).not.toContain('변경권');
-    // 11/8 대표: 학생이 LMS 바로가기에서 직접 신청 (수업 중에 강사와 정한 시간도)
+    // 11/8 대표: 수강생이 LMS 바로가기에서 직접 신청 (수업 중에 강사와 정한 시간도)
     expect(t).not.toContain('저희에게 말씀해 주세요');
     expect(t).toContain('아래 링크에서 보강 날짜를 신청해 주세요. 강사님이 확인하면 확정돼요.\n수업 중에 강사님과 정한 시간이 있다면 그 시간을 골라 주세요.\n(신청 기한: 11월 16일(월) 오후 11시 59분 [한국 시간]까지)\n/lms/student?makeup=x1');
   });
-  it('해외 학생 신청 기한: (도시 시간) = [한국 시간]', () => {
+  it('해외 수강생 신청 기한: (도시 시간) = [한국 시간]', () => {
     const t = studentNotice('change', { ...c, student: { ...student, timezone: 'America/Toronto' } });
     expect(t).toContain('(신청 기한: 11월 16일(월) 오전 9시 59분 [토론토 시간] / 오후 11시 59분 [한국 시간]까지)');
   });
-  it('학생 본인 취소 안내 = 대표 문구 그대로 (2026-10-26)', () => {
+  it('수강생 본인 취소 안내 = 대표 문구 그대로 (2026-10-26)', () => {
     const lesson = L('k', '2026-11-05', '10:00');
     const d: ChangeDecision = { ...adv, credits_after: 1, makeup_until: '2026-11-16' };
     expect(studentNotice('change', { student: { ...student, nameKo: '가상변경' }, durationMin: 50, lesson, decision: d, tutorName: 'A', tutorTz: 'Asia/Seoul' })).toBe(
@@ -136,7 +136,7 @@ describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)'
         '취소된 수업 날짜가 요청하신 날짜와 다르다면 바로 알려주세요.',
     );
   });
-  it('강사: 수업 중에 정해도 되고, 학생이 LMS 로 신청 → Confirm make-up (11/8 대표), 기한은 강사 현지 + KST', () => {
+  it('강사: 수업 중에 정해도 되고, 수강생이 LMS 로 신청 → Confirm make-up (11/8 대표), 기한은 강사 현지 + KST', () => {
     const t = tutorNotice('change', c);
     expect(t).toContain('(until Mon, 16 Nov 10:59 PM *Manila Time* / 11:59 PM *KST*)');
     expect(t).toContain('Availability');
@@ -153,7 +153,7 @@ describe('보강 시간 입력: 강사 현지 날짜·시각 (2026-10-26 대표)
     expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'America/Toronto')).toBe('11/5 (목) 오후 8:00');
     expect(tutorLocalLabel(kstToInstant('2026-11-06', '10:00'), 'Asia/Seoul')).toBeNull();
   });
-  it('강사 확인 전 보강 신청은 학생에게 확정처럼 안내하지 않음 (학생 안내 없음)', () => {
+  it('강사 확인 전 보강 신청은 수강생에게 확정처럼 안내하지 않음 (수강생 안내 없음)', () => {
     const c: NoticeContext = { student, durationMin: 50, lesson: L('x', '2026-10-29', '17:00'), candidates: [kstToInstant('2026-11-06', '10:00')], tutorName: 'A', tutorTz: 'Asia/Manila' };
     expect(studentNotice('makeup_ask', c)).toBe('');
     expect(tutorNotice('makeup_ask', c)).toContain('not confirmed yet');

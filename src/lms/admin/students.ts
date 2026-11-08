@@ -1,5 +1,5 @@
-// 운영진 '학생' 메뉴 — 목록·상세·정규 일정 수정·종료일 연장·안내 문구 (H26(44) ①~④, 4300)
-// 시간 표기 원칙 (H26(43)): 모든 시각에 기준 시간대 이름. 운영진 화면 = 한국 시간을 분명히 + 학생·강사 도시 시간.
+// 운영진 '수강생' 메뉴 — 목록·상세·정규 일정 수정·종료일 연장·안내 문구 (H26(44) ①~④, 4300)
+// 시간 표기 원칙 (H26(43)): 모든 시각에 기준 시간대 이름. 운영진 화면 = 한국 시간을 분명히 + 수강생·강사 도시 시간.
 // 서머타임·날짜·요일은 실제 수업 날짜로 계산한다 (IANA 시간대, 고정 시차 없음)
 
 import { addDays, ampmEn, ampmKo, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
@@ -33,7 +33,7 @@ export function enWhen(at: Date, tz: string): string {
 
 /**
  * 운영진 화면 시각: '11/5(목) 오후 10:00 (한국 시간) · Toronto 11/5(목) 오전 8:00 · Ho Chi Minh 11/5(목) 오후 8:00'
- * 학생·강사가 한국 시간대면 그 부분은 생략 (같은 시각이라 두 번 쓰지 않음)
+ * 수강생·강사가 한국 시간대면 그 부분은 생략 (같은 시각이라 두 번 쓰지 않음)
  */
 export function kstWithZones(at: Date, zones: { label: string; tz: string }[]): string {
   const parts = [`${zoneLabel(at, 'Asia/Seoul')} 한국 시간`];
@@ -46,7 +46,7 @@ export function kstWithZones(at: Date, zones: { label: string; tz: string }[]): 
   return parts.join(' / ');
 }
 
-/** 최종 종료 '1/26(화) 오후 11:59 한국 시간' + 해외 학생이면 ' / 1/26(화) 오전 9:59 토론토 시간' */
+/** 최종 종료 '1/26(화) 오후 11:59 한국 시간' + 해외 수강생이면 ' / 1/26(화) 오전 9:59 토론토 시간' */
 export function finalEndText(finalEnd: KstDate, studentTz: string): string {
   const at = kstToInstant(finalEnd, '23:59');
   const kst = `${mdw(finalEnd)} ${ampmKo('23:59')} 한국 시간`;
@@ -136,7 +136,7 @@ export type StudentProfile = {
   classType: string | null; textbook: string | null; classNoteUrl: string | null; correctionPref: string | null; selfIntroEn: string | null;
   job: string | null; hobbies: string | null; interests: string | null; improve: string | null; hopes: string | null;
   correctionStyle: 'immediate' | 'major_only' | null; correctionNote: string | null; classStyle: 'textbook' | 'free_talking' | 'not_sure' | null; classStyleNote: string | null;
-  /** 강사가 첫 수업 후 확인한 실제 수업 방식 (4600) — 학생 희망(classStyle)과 다른 칸 */
+  /** 강사가 첫 수업 후 확인한 실제 수업 방식 (4600) — 수강생 희망(classStyle)과 다른 칸 */
   tutorClassStyle: 'conversation' | 'textbook' | 'student_materials' | 'mixed' | null; tutorClassStyleMix: string[]; tutorMaterialsNote: string | null;
   tutorClassStyleAt: Date | null; tutorClassStyleBy: string | null;
   /** 강사가 첫 수업에서 직접 물어 적은 시각 (improve) */
@@ -148,7 +148,7 @@ export type EnrollmentInfo = {
   id: string; seq: number; status: string; weeks: number | null; legacyLabel: string | null; weeklyCount: number; durationMin: number;
   startDate: KstDate; baseEndDate: KstDate; extensionDays: number; finalEndDate: KstDate; lessonsPurchased: number; lessonsCarriedIn: number;
   sheet: { total: number | null; used: number | null } | null; done: number; leftRegular: number; leftAll: number;
-  /** 날짜 안 잡은 보강권·보상권 (학생 홈 '남은 수업' 과 같은 기준, 4500). 옛 DB 는 0 */
+  /** 날짜 안 잡은 보강권·보상권 (수강생 홈 '남은 수업' 과 같은 기준, 4500). 옛 DB 는 0 */
   leftUnbooked: number; extensions: Extension[];
 };
 export type Upcoming = { id: string; kind: string; seq: number | null; startsAt: Date; endsAt: Date; tutor: string; tutorTz: string; tutorId: string; substitute: boolean; leaveOpen: boolean };
@@ -258,7 +258,7 @@ export function problemText(p: RegularPreview['problems'][number], tutor: { name
     case 'tutor_unavailable': return `${when}${local} — ${tutor.name} 강사가 열어 둔 시간(My hours)이 아니에요.`;
     case 'tutor_time_off': return `${when} — ${tutor.name} 강사 휴무예요.`;
     case 'tutor_busy': return `${when} — ${tutor.name} 강사의 다른 수업과 겹쳐요 (휴식 10분 포함)${p.other ? `: ${p.other}` : ''}.`;
-    case 'tutor_hold': return `${when} — 재등록 대기 중인 ${p.other ?? '다른 학생'}의 고정 시간이에요.`;
+    case 'tutor_hold': return `${when} — 재등록 대기 중인 ${p.other ?? '다른 수강생'}의 고정 시간이에요.`;
     case 'after_end': return `${when} — 최종 종료일을 넘어요. 종료일은 연장하지 않아요 (대표 결정). 다른 요일·시간을 골라 주세요.`;
     default: return `${when} — ${p.why}`;
   }
@@ -276,7 +276,7 @@ export type RegularNoticeCtx = {
   effectiveFrom: KstDate; newSlots: Slot[]; moved: MovedLesson[];
 };
 
-/** ③ 학생용 카카오톡 문구 (한국어, 학생 도시 시간 + 한국 시간) */
+/** ③ 수강생용 카카오톡 문구 (한국어, 수강생 도시 시간 + 한국 시간) */
 export function regularNoticeKo(c: RegularNoticeCtx): string {
   const abroad = c.studentTz && c.studentTz !== 'Asia/Seoul';
   const lines = c.moved.map((m) => `- ${koBoth(m.to, c.studentTz)}`);

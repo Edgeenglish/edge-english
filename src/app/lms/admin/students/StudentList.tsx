@@ -1,6 +1,6 @@
 'use client';
 
-// 운영진 학생 목록: 수강 중 · 수강 예정 · 종료 구분 + 이름 검색 → 학생 상세 (H26(44) ②, 4300). 수강 상태는 등록 기간으로 계산(따로 입력 안 함)
+// 운영진 수강생 목록: 수강 중 · 수강 예정 · 종료 구분 + 이름 검색 → 수강생 상세 (H26(44) ②, 4300). 수강 상태는 등록 기간으로 계산(따로 입력 안 함)
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { diffDays, instantToKstDate } from '@/lms/rules/dates';
@@ -19,7 +19,7 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
   const [q, setQ] = useState(initialQuery);
   const [tab, setTab] = useState<Tab>(TABS.some((t) => t.key === initialTab) ? (initialTab as Tab) : 'active');
   const counts = { active: 0, upcoming: 0, ended: 0, all: rows.length } as Record<Tab, number>;
-  // 결제 확인 전 학생은 '수강 예정' 칸에서 보임 (배지는 '결제 확인 전', B-01)
+  // 결제 확인 전 수강생은 '수강 예정' 칸에서 보임 (배지는 '결제 확인 전', B-01)
   const tabOf = (r: StudentRow): Tab => (r.status === 'pending' ? 'upcoming' : r.status === 'none' ? 'ended' : (r.status as Tab));
   for (const r of rows) counts[tabOf(r)] += 1;
   const searching = q.trim().length > 0;
@@ -31,7 +31,7 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
       <div className="grid gap-3 px-4 pt-3 lg:px-7">
         <label className="flex min-h-[48px] items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3">
           <Icon name="search" className="h-[18px] w-[18px] text-[#6b6880]" />
-          <span className="sr-only">학생 찾기</span>
+          <span className="sr-only">수강생 찾기</span>
           <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름, 영문 이름, STU 번호, 이메일, 강사"
             className="min-w-0 flex-1 bg-transparent text-[16px] text-[#1d1b2b] outline-none" />
         </label>
@@ -47,7 +47,7 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
           <p className="text-[13px] text-[#6b6880]">{searching ? `'${q.trim()}' 검색 ` : ''}{list.length}명</p>
           <Link href="/lms/admin/students/sheet" className="min-h-[36px] rounded-[8px] border border-[#e6e3ef] bg-white px-3 text-[13px] font-semibold leading-[34px] text-[#5b3fe0]">시트 Student Info 비교</Link>
         </div>
-        {list.length === 0 && <p className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-8 text-center text-[14px] text-[#6b6880]">해당하는 학생이 없어요.</p>}
+        {list.length === 0 && <p className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-8 text-center text-[14px] text-[#6b6880]">해당하는 수강생이 없어요.</p>}
         <div className="grid grid-cols-[minmax(0,1fr)] gap-2 lg:grid-cols-2">
           {list.map((s) => {
             const d = s.finalEndDate ? diffDays(today, s.finalEndDate) : null;

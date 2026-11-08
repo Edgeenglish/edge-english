@@ -55,7 +55,7 @@ describe('강사 화면 (migration 2000)', () => {
     expect(resultOf('Student no-show')).toBe('student_no_show');
     expect(resultOf('Student canceled in advance')).toBeNull();
   });
-  it('저장 가능: 진행은 다룬 내용, 지각은 사유까지, 학생 노쇼는 바로', () => {
+  it('저장 가능: 진행은 다룬 내용, 지각은 사유까지, 수강생 노쇼는 바로', () => {
     expect(recordReady(null, 'x', '')).toBe(false);
     expect(recordReady('held', ' ', '')).toBe(false);
     expect(recordReady('held', 'Travel', '')).toBe(true);

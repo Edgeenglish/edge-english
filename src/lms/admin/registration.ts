@@ -1,8 +1,8 @@
-// 신규 학생 등록 (2026-10-18 대표 최종 시안: C안 신청서 불러오기 + A안 직접 입력·스케줄)
+// 신규 수강생 등록 (2026-10-18 대표 최종 시안: C안 신청서 불러오기 + A안 직접 입력·스케줄)
 // - 신청서(구글폼 응답) → 등록 초안 자동 채움. 운영자가 고칠 수 있고, 신청서가 없으면 직접 입력
 // - 신청서 희망 시간은 자유 서술이라 그대로 보여 주고, 요일·시각은 운영자가 캘린더에서 고른다
 // - 시간대는 신청서에 칸이 없어 거주 국가·도시로 '추천'만 하고 운영자가 확인 (모르면 비워 둠, places.ts)
-// - 이메일이 같아도 기존 학생·계정에 자동 연결하지 않는다 (POL-AC-04). 같은 이메일이 있으면 알려 주기만
+// - 이메일이 같아도 기존 수강생·계정에 자동 연결하지 않는다 (POL-AC-04). 같은 이메일이 있으면 알려 주기만
 
 import type { AvailabilityWindow, Busy } from '../rules/booking';
 import { addDays, diffDays, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
@@ -28,7 +28,7 @@ export type FormResponse = {
   weekly: string; // '주 2회'
   term: string; // '12주'
   desiredTime: string; // 예전 신청서: 자유 서술 (그대로 보여 주기만)
-  /** 새 신청서(제안): 요일 × 시간대 체크 → 학생 현지 시각 기준 칸. 예전 응답이면 null */
+  /** 새 신청서(제안): 요일 × 시간대 체크 → 수강생 현지 시각 기준 칸. 예전 응답이면 null */
   wishGrid: WishWindow[] | null;
   startWish: string; // '2026-11-03' 또는 자유 서술
   payerName: string;
@@ -36,7 +36,7 @@ export type FormResponse = {
   raw: [string, string][];
 };
 
-/** 학생 희망 시간 한 칸 (학생 현지 요일·시각). 캘린더에서 날짜마다 한국 시각으로 바꿔 표시 → 서머타임 자동 */
+/** 수강생 희망 시간 한 칸 (수강생 현지 요일·시각). 캘린더에서 날짜마다 한국 시각으로 바꿔 표시 → 서머타임 자동 */
 export type WishWindow = { weekday: number; from: string; to: string; startOnly?: boolean };
 
 export type Draft = {
@@ -111,7 +111,7 @@ export type DraftProblem = { field: keyof Draft; text: string };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** 학생 정보 단계에서 저장 전 확인할 것 */
+/** 수강생 정보 단계에서 저장 전 확인할 것 */
 export function checkDraft(d: Draft): DraftProblem[] {
   const p: DraftProblem[] = [];
   if (!d.nameKo.trim()) p.push({ field: 'nameKo', text: '한글 이름을 넣어 주세요' });
@@ -166,9 +166,9 @@ export function slotProblem(slots: readonly RegularSlot[], weeklyCount: number |
 export function firstDateWarnings(first: KstDate, today: KstDate, wish: KstDate | ''): string[] {
   const w: string[] = [];
   if (diffDays(today, first) < 0) w.push('첫 수업일이 오늘보다 앞이에요');
-  if (diffDays(today, first) === 0) w.push('첫 수업이 오늘이에요 — 강사·학생에게 바로 안내해 주세요');
-  if (wish && diffDays(wish, first) < 0) w.push('학생 희망 시작일보다 빨라요');
-  if (wish && diffDays(wish, first) > 14) w.push(`희망 시작일보다 ${diffDays(wish, first)}일 늦어요 — 학생 안내 필요`);
+  if (diffDays(today, first) === 0) w.push('첫 수업이 오늘이에요 — 강사·수강생에게 바로 안내해 주세요');
+  if (wish && diffDays(wish, first) < 0) w.push('수강생 희망 시작일보다 빨라요');
+  if (wish && diffDays(wish, first) > 14) w.push(`희망 시작일보다 ${diffDays(wish, first)}일 늦어요 — 수강생 안내 필요`);
   return w;
 }
 

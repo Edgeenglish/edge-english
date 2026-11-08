@@ -38,7 +38,7 @@ export default function ChangeLive({ code }: { code?: string }) {
         load: (id) => loadStudentLessons(sb, id),
         // 저장은 '저장 중 기록'으로 감싸서 화면을 떠나도 결과가 남게 (R-20). 미리 보기(dry)는 기록 안 함
         change: (rid, lid, who, at, dry) => dry ? changeLesson(sb, rid, lid, who, at, dry)
-          : trackSave({ label: `수업 취소 저장 (${who === 'student' ? '학생' : '강사'} 사정)`, href: pendingHref(), verify: { kind: 'cancel', lessonId: lid } }, () => changeLesson(sb, rid, lid, who, at, dry)),
+          : trackSave({ label: `수업 취소 저장 (${who === 'student' ? '수강생' : '강사'} 사정)`, href: pendingHref(), verify: { kind: 'cancel', lessonId: lid } }, () => changeLesson(sb, rid, lid, who, at, dry)),
         revert: (id, note) => trackSave({ label: '취소 되돌리기', href: pendingHref(), verify: { kind: 'revert', changeId: id } }, () => revertChange(sb, id, note)),
         requestMakeup: (src, slots) => trackSave({ label: '보강 신청', href: pendingHref(), verify: { kind: 'request_makeup', lessonId: src.lessonId ?? null, itemId: src.itemId ?? null, compId: src.compId ?? null } }, () => requestMakeup(sb, src, slots)),
         recordPastMakeup: (src, at, note) => trackSave({ label: '이미 진행한 보강 기록', href: pendingHref(), verify: { kind: 'request_makeup', lessonId: src.lessonId ?? null, itemId: src.itemId ?? null, compId: null } }, () => recordPastMakeup(sb, src, at, note)),

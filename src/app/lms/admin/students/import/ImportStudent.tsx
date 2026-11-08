@@ -1,12 +1,12 @@
 'use client';
 
-// 기존 학생 입력 (D-52, 정책 원본 H23(3) → 확대판 H26(9) → 시안 2, 2026-10-26 대표 승인)
-// 카드: 1 학생 · 2 현재 수강권(상품·수강 시작일 → 기간 자동, 지금 기간 자동, 변경권, 종료일·차이 이유) · 3 강사·정규(첫 정규 수업일)
+// 기존 수강생 입력 (D-52, 정책 원본 H23(3) → 확대판 H26(9) → 시안 2, 2026-10-26 대표 승인)
+// 카드: 1 수강생 · 2 현재 수강권(상품·수강 시작일 → 기간 자동, 지금 기간 자동, 변경권, 종료일·차이 이유) · 3 강사·정규(첫 정규 수업일)
 //       · 4 미완료 보강(없으면 건너뜀) · 5 남은 수업 대조 · 6 확인·저장. 연장으로 늘어난 날에는 정규 수업을 만들지 않음 (A41 ④)
 // - 미완료 보강: 예약됨/미예약 + 원래 수업 날짜(모르면 '날짜 확인 필요'). 원래 날짜가 첫 정규 수업일 이후면 그날 정규는 안 만듦
 // - 시트 숫자(총 수업 수·진행·차감된 수)와 남은 수업 대조 — 달라도 저장
 // - 저장 뒤 [시트와 같음 · 대조 완료] → 확인 시각·담당자 기록. 안 누르면 대시보드 처리할 일에 남음
-// - LMS 전환일은 비워 둠 (시트로 계속 관리, 학생 상세에서 나중에). 결제·지난 수업 기록은 옮기지 않음. 학생에게 아무것도 보내지 않음
+// - LMS 전환일은 비워 둠 (시트로 계속 관리, 수강생 상세에서 나중에). 결제·지난 수업 기록은 옮기지 않음. 수강생에게 아무것도 보내지 않음
 // - 휴대폰·PC 한 화면: 위에서 아래로 채우고 맨 아래 [저장]. 경고·충돌은 그 입력칸 바로 아래, DB가 다시 확인
 
 import Link from 'next/link';
@@ -31,7 +31,7 @@ type Props = {
   demo: boolean;
   tutors: RegTutor[];
   save: (requestId: string, payload: ReturnType<typeof importPayload>) => Promise<ImportResult>;
-  /** 저장 뒤 강사 일정 다시 읽기 (방금 넣은 학생 수업이 다음 입력의 충돌 검사에 들어가게) */
+  /** 저장 뒤 강사 일정 다시 읽기 (방금 넣은 수강생 수업이 다음 입력의 충돌 검사에 들어가게) */
   reload?: () => Promise<void>;
   /** 시트와 대조 완료 기록 (미리보기에는 없음) */
   markChecked?: (enrollmentId: string) => Promise<void>;
@@ -103,7 +103,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
 
   const problems = importProblems(d);
   const lessons = useMemo(() => importLessons(d), [d]);
-  // 저장 뒤에는 강사 일정을 다시 읽어 방금 넣은 이 학생 수업이 들어오므로, 자기 자신과 충돌로 보이지 않게 검사하지 않음
+  // 저장 뒤에는 강사 일정을 다시 읽어 방금 넣은 이 수강생 수업이 들어오므로, 자기 자신과 충돌로 보이지 않게 검사하지 않음
   const savedNow = result?.kind === 'saved';
   const issues = useMemo(() => (savedNow ? [] : importIssues(lessons, tutors)), [savedNow, lessons, tutors]);
   const regular = lessons.filter((l) => l.kind === 'regular');
@@ -206,7 +206,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
         />
       </div>
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-[#e6e3ef] bg-white px-4 py-3 lg:hidden">
-        <b className="text-[17px] text-[#1d1b2b]">기존 학생 입력</b>
+        <b className="text-[17px] text-[#1d1b2b]">기존 수강생 입력</b>
         <span className="flex-1" />
         <Link href={demo ? '/lms/admin?demo=1' : '/lms/admin'} aria-label="닫기" className="flex h-10 w-10 items-center justify-center text-[22px] text-[#1d1b2b]">
           ×
@@ -216,16 +216,16 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
       {/* 날짜·시각 칸은 PC에서도 휴대폰처럼 칸 아무 곳이나 누르면 고르는 창이 열림 */}
       <main className="mx-auto grid max-w-[760px] gap-4 px-4 pt-4 lg:px-7" onClick={openPicker}>
         <div className="hidden lg:block">
-          <h1 className="text-[22px] font-bold text-[#1d1b2b]">기존 학생 입력</h1>
+          <h1 className="text-[22px] font-bold text-[#1d1b2b]">기존 수강생 입력</h1>
         </div>
         {demo && <p className="rounded-[12px] bg-[#fff8d6] px-4 py-2.5 text-[13.5px] text-[#5c4a00]">가상 데이터 미리보기예요. 저장을 눌러도 실제로 저장되지 않아요.</p>}
         <p className="text-[13.5px]">
           <Link href={demo ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'} className="font-semibold text-[#5b3fe0] underline underline-offset-2">
-            신규 학생 등록 →
+            신규 수강생 등록 →
           </Link>
         </p>
 
-        <Card title="1. 학생">
+        <Card title="1. 수강생">
           <div className="grid grid-cols-2 gap-3">
             <Field label="한글 이름" problem={tried && !d.nameKo.trim() ? '필요해요' : undefined}>
               <input id="imp-name-ko" value={d.nameKo} disabled={saved} onChange={(e) => set('nameKo', e.target.value)} className={inputCls(saved, tried && !d.nameKo.trim())} />
@@ -610,7 +610,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
 
         <Card title="6. 확인 · 저장">
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[14px]">
-            <dt className="text-[#6b6880]">학생</dt>
+            <dt className="text-[#6b6880]">수강생</dt>
             <dd className="min-w-0 text-[#1d1b2b]">{d.nameKo || '-'} {d.nameEn && `(${d.nameEn})`}</dd>
             <dt className="text-[#6b6880]">수강권</dt>
             <dd className="min-w-0 text-[#1d1b2b]">
@@ -717,7 +717,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 {checkError && <Note tone="bad">{checkError}</Note>}
               </div>
               <button type="button" onClick={startNew} className="min-h-[44px] w-full rounded-[10px] border border-[#e6e3ef] bg-white text-[14.5px] font-bold text-[#1d1b2b]">
-                다음 학생 입력
+                다음 수강생 입력
               </button>
             </div>
           ) : (

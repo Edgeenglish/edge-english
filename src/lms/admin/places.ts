@@ -1,7 +1,7 @@
 // 사는 곳(국가·도시) → 시간대 (2026-10-18 대표 확정 A안: 칸 안에서 바로 검색)
 // - 국가·도시는 한국어·영어로 검색해서 고르고, 목록에 없으면 친 그대로 저장
 // - 도시를 고르면 그 도시 시간대, 시간대가 하나뿐인 나라는 국가만으로 추천. 여럿인 나라(미국·캐나다·호주 등)는 도시를 골라야 추천
-// - 학생이 많은 나라·도시만 넣어 둠. 늘릴 때는 COUNTRIES 에 한 줄 추가
+// - 수강생이 많은 나라·도시만 넣어 둠. 늘릴 때는 COUNTRIES 에 한 줄 추가
 
 /** [한국어, 영어, 다른 이름(검색용), 나라 시간대(하나뿐일 때), 도시들 '한국어|영어(다른 이름)|시간대(없으면 나라 시간대)'] */
 const COUNTRIES: [string, string, string, string, string[]][] = [
@@ -93,7 +93,7 @@ export function zoneName(timezone: string): string {
   return r ? `${r.cities.slice(0, 3).join('·')} (${r.countries.join('·')})` : timezone;
 }
 
-/** 학생 안내용 시간대 한국어 이름: 'Australia/Melbourne' → '멜버른', 'Asia/Singapore' → '싱가포르', 'Asia/Seoul' → '한국'.
+/** 수강생 안내용 시간대 한국어 이름: 'Australia/Melbourne' → '멜버른', 'Asia/Singapore' → '싱가포르', 'Asia/Seoul' → '한국'.
  *  시간대 이름과 같은 도시 → 그 시간대 하나뿐인 나라 → 그 시간대를 쓰는 첫 도시 → 목록에 없으면 영어 도시 이름 */
 export function koZoneCity(timezone: string): string {
   if (!timezone || timezone === 'Asia/Seoul') return '한국';

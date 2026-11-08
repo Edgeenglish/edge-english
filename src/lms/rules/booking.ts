@@ -12,18 +12,18 @@ export const MIN_BREAK_MIN: number = CONFIRMED.minBreakMin;
 
 const MIN = 60 * 1000;
 
-/** 강사(또는 학생)의 이미 잡힌 시간 */
+/** 강사(또는 수강생)의 이미 잡힌 시간 */
 export type Busy = {
   id: string;
   startsAt: Date;
   endsAt: Date;
   /** regular = 매주 고정 수업의 회차, makeup = 보강·보상·이월 등 그날만 있는 수업, time_off = 강사 휴무·막은 시간,
-   *  hold = 수업 중인 학생의 고정 시간을 종료일 23:59까지 종료 뒤 날짜에도 맡아 둔 것 (재등록 대기, A22) */
+   *  hold = 수업 중인 수강생의 고정 시간을 종료일 23:59까지 종료 뒤 날짜에도 맡아 둔 것 (재등록 대기, A22) */
   kind: 'regular' | 'makeup' | 'time_off' | 'hold';
   label?: string;
 };
 
-/** 주간 시간 칸 한 행 — 강사(tutor_availability)는 수업 시작 가능 시간(startsWithinAvailability), 학생 희망 시간은 수업 전체가 들어가는 칸(withinAvailability) */
+/** 주간 시간 칸 한 행 — 강사(tutor_availability)는 수업 시작 가능 시간(startsWithinAvailability), 수강생 희망 시간은 수업 전체가 들어가는 칸(withinAvailability) */
 export type AvailabilityWindow = {
   /** Google Forms grid selections specify exact starts, independent of lesson length. */
   startOnly?: boolean;
@@ -85,7 +85,7 @@ export type PlanIssue = {
   seq: number;
   kstDate: KstDate;
   kstTime: KstTime;
-  /** tutor_regular·tutor_makeup·tutor_time_off·break = 강사 쪽, student = 학생 본인 다른 수업, outside_availability = 강사 가능 시간 밖 */
+  /** tutor_regular·tutor_makeup·tutor_time_off·break = 강사 쪽, student = 수강생 본인 다른 수업, outside_availability = 강사 가능 시간 밖 */
   reason: 'tutor_regular' | 'tutor_makeup' | 'tutor_time_off' | 'tutor_hold' | 'break' | 'student' | 'outside_availability';
   detail: string;
 };
@@ -94,9 +94,9 @@ const REASON_TEXT: Record<PlanIssue['reason'], string> = {
   tutor_regular: '강사의 다른 정규 수업과 겹침',
   tutor_makeup: '그날만 있는 보강과 겹침',
   tutor_time_off: '강사 휴무',
-  tutor_hold: '재등록 대기 중인 학생의 고정 시간',
+  tutor_hold: '재등록 대기 중인 수강생의 고정 시간',
   break: '앞뒤 수업과 휴식 10분이 안 됨',
-  student: '학생의 다른 수업과 겹침',
+  student: '수강생의 다른 수업과 겹침',
   outside_availability: '강사 수업 가능 시간 밖',
 };
 
@@ -113,7 +113,7 @@ type PlanCheckInput = {
   breakMin?: number;
 };
 
-/** 수업 1회의 문제: 강사 가능 시간 밖 · 강사 다른 수업·휴무·재등록 대기 · 휴식 10분 · 학생 본인 다른 수업 */
+/** 수업 1회의 문제: 강사 가능 시간 밖 · 강사 다른 수업·휴무·재등록 대기 · 휴식 10분 · 수강생 본인 다른 수업 */
 function lessonIssues(l: PlannedLesson, input: PlanCheckInput): PlanIssue[] {
   const issues: PlanIssue[] = [];
   const base = { seq: l.seq, kstDate: l.kstDate, kstTime: l.kstTime };

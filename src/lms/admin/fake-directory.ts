@@ -1,4 +1,4 @@
-// 운영자 화면 미리보기용 가상 강사·학생·주간 수업 (실제 사람 아님). '지금' 기준으로 만든다
+// 운영자 화면 미리보기용 가상 강사·수강생·주간 수업 (실제 사람 아님). '지금' 기준으로 만든다
 // 강사 시간대: 시드니(10월 초 서머타임 시작) · 토론토(11/1 끝) · 런던(10/25 끝) → 서머타임 표시 확인용
 
 import { addDays, formatInZone, instantToKstDate, kstToInstant, type KstDate } from '../rules/dates';
@@ -60,7 +60,7 @@ export function fakeDirectory(now: Date) {
     { code: 'STU-9006', name: '가상학생육', nameEn: 'Fake Six', email: 'fake6@example.com', phone: '010-0000-0006', timezone: 'Europe/London', status: 'active', product: '40분 · 주2회 · 4주', periodStart: addDays(today, -5), periodEnd: addDays(today, 22), regularLeft: 6, lessonsTotal: 8, creditsLeft: 2, creditsPerPeriod: 2, tutorId: 't-chloe', slots: [{ weekday: 1, time: '18:00' }, { weekday: 3, time: '18:00' }], renewal: '없음', payments: [{ on: addDays(today, -7), product: '40분 주2회 4주', method: '카드(아임웹)', amount: 280000, confirmed: true }], points: 0, consent: '동의 완료', memo: '런던 거주 — 서머타임 바뀌면 현지 시각 달라짐', requests: [] },
     { code: 'STU-9002', name: '가상학생이', nameEn: 'Fake Two', email: 'fake2@example.com', phone: '010-0000-0002', timezone: 'Asia/Seoul', status: 'active', product: '40분 · 주3회 · 24주', periodStart: addDays(today, -40), periodEnd: addDays(today, 128), regularLeft: 52, lessonsTotal: 72, creditsLeft: 1, creditsPerPeriod: 3, tutorId: 't-blair', slots: [{ weekday: 1, time: '21:00' }, { weekday: 3, time: '21:00' }, { weekday: 5, time: '21:00' }], renewal: '없음', payments: [{ on: addDays(today, -42), product: '40분 주3회 24주', method: '계좌이체', amount: 2400000, confirmed: true }], points: 2000, consent: '동의 완료', memo: '', requests: [{ title: '장기 연기 7일 (11/20~11/26)', status: '승인 대기' }] },
     { code: 'STU-9008', name: '가상학생팔', nameEn: 'Fake Eight', email: 'fake8@example.com', phone: '010-0000-0008', timezone: 'Australia/Brisbane', status: 'ending', product: '50분 · 주2회 · 4주', periodStart: addDays(today, -27), periodEnd: today, regularLeft: 1, lessonsTotal: 8, creditsLeft: 0, creditsPerPeriod: 2, tutorId: 't-alex', slots: [{ weekday: 1, time: '19:00' }, { weekday: 3, time: '19:00' }], renewal: '없음', payments: [{ on: addDays(today, -29), product: '50분 주2회 4주', method: '카드(아임웹)', amount: 336000, confirmed: true }], points: 0, consent: '동의 필요', memo: '해외 거주 (브리즈번)', requests: [] },
-    { code: 'STU-9010', name: '가상학생십', nameEn: 'Fake Ten', email: 'fake10@example.com', phone: '010-0000-0010', timezone: 'Asia/Seoul', status: 'active', product: '50분 · 주1회 · 12주', periodStart: addDays(today, -50), periodEnd: addDays(today, 3), regularLeft: 1, lessonsTotal: 12, creditsLeft: 0, creditsPerPeriod: 1, tutorId: 't-chloe', slots: [{ weekday: 6, time: '19:00' }], renewal: '신청함 · 결제 확인 전', payments: [{ on: addDays(today, -52), product: '50분 주1회 12주', method: '계좌이체', amount: 540000, confirmed: true }], points: 0, consent: '동의 완료', memo: '', requests: [{ title: `보강 신청 · ${addDays(today, -6).slice(5).replace('-', '/')} 수업분`, status: '학생 미신청' }] },
+    { code: 'STU-9010', name: '가상학생십', nameEn: 'Fake Ten', email: 'fake10@example.com', phone: '010-0000-0010', timezone: 'Asia/Seoul', status: 'active', product: '50분 · 주1회 · 12주', periodStart: addDays(today, -50), periodEnd: addDays(today, 3), regularLeft: 1, lessonsTotal: 12, creditsLeft: 0, creditsPerPeriod: 1, tutorId: 't-chloe', slots: [{ weekday: 6, time: '19:00' }], renewal: '신청함 · 결제 확인 전', payments: [{ on: addDays(today, -52), product: '50분 주1회 12주', method: '계좌이체', amount: 540000, confirmed: true }], points: 0, consent: '동의 완료', memo: '', requests: [{ title: `보강 신청 · ${addDays(today, -6).slice(5).replace('-', '/')} 수업분`, status: '수강생 미신청' }] },
     { code: 'STU-9003', name: '가상학생삼', nameEn: 'Fake Three', email: 'fake3@example.com', phone: '010-0000-0003', timezone: 'Australia/Brisbane', status: 'waiting_match', product: '50분 · 주1회 · 12주', periodStart: addDays(today, 10), periodEnd: addDays(today, 93), regularLeft: 12, lessonsTotal: 12, creditsLeft: 1, creditsPerPeriod: 1, tutorId: null, slots: [], renewal: '없음', payments: [{ on: today, product: '50분 주1회 12주', method: '카드(아임웹)', amount: 540000, confirmed: true }], points: 0, consent: '동의 필요', memo: '신청서: 수·금 오전 희망', requests: [] },
   ];
   const lessons: DirLesson[] = [];
@@ -77,7 +77,7 @@ export function fakeDirectory(now: Date) {
   // 보강 1건, 취소 1건 (화면 확인용)
   lessons.push({ id: 'mk-1', startsAt: kstToInstant(week[4], '21:00'), minutes: 40, tutorId: 't-blair', studentCode: 'STU-9002', kind: 'makeup', state: kstToInstant(week[4], '21:00') < now ? 'done' : 'scheduled' });
   const cancel = lessons.find((l) => l.studentCode === 'STU-9005');
-  if (cancel) Object.assign(cancel, { state: 'canceled', note: '학생 정상 취소 · 보강 가능' });
+  if (cancel) Object.assign(cancel, { state: 'canceled', note: '수강생 정상 취소 · 보강 가능' });
   // 홈 '오늘 수업'과 같은 상황이 되도록 오늘 수업 추가 (요일과 상관없이 항상 보이게). 노쇼 신고는 fakeTasks 의 ns-1 과 같은 시각
   const nsAt = new Date(now.getTime() - 0.2 * 3600_000);
   lessons.push({ id: 'ns-lesson', startsAt: nsAt, minutes: 50, tutorId: 't-alex', studentCode: 'STU-9005', kind: 'regular', state: 'done', noShow: true });
@@ -102,7 +102,7 @@ export function fakeTodayPanel(now: Date): FakeLesson[] {
     .filter((l) => instantToKstDate(l.startsAt) === today)
     .map((l) => ({
       time: formatInZone(l.startsAt, 'Asia/Seoul').time,
-      student: dir.students.find((s) => s.code === l.studentCode)?.name ?? '(학생)',
+      student: dir.students.find((s) => s.code === l.studentCode)?.name ?? '(수강생)',
       tutor: TUTORS.find((t) => t.id === l.tutorId)?.name ?? '(강사)',
       state: l.noShow ? '노쇼 신고' : l.state === 'canceled' ? '취소' : l.state === 'done' ? '완료' : l.kind === 'makeup' ? '보강' : '예정',
     }));

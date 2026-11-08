@@ -1,7 +1,7 @@
 // 신규 배정 확정 관리 (정책 원본 H22, D-51 2026-10-22 대표: 전부 추천안)
 // - 일정안 = 강사·요일·시각·첫 수업일 한 벌. 강사 '가능' 답 전에는 확정하지 않음 (DB migration 1000)
-// - 확정 → 학생·강사 최종 안내 2건. [보냄]를 누른 시각 = 그쪽 '보냄' ([복사]만으로는 기록 안 함). 둘 다 보내야 매칭 업무가 끝남
-// - 화면에 보이는 시간은 한국 / 강사 현지 / 학생 현지 세 줄. 현지 요일이 다르면 표시 (서머타임은 날짜별로 계산)
+// - 확정 → 수강생·강사 최종 안내 2건. [보냄]를 누른 시각 = 그쪽 '보냄' ([복사]만으로는 기록 안 함). 둘 다 보내야 매칭 업무가 끝남
+// - 화면에 보이는 시간은 한국 / 강사 현지 / 수강생 현지 세 줄. 현지 요일이 다르면 표시 (서머타임은 날짜별로 계산)
 // - 경고 시각 (D-51-3): 확정 후 1시간 지나도 한쪽 안 보냄 = 긴급, 첫 수업 24시간 전 = 맨 위, 제안 후 24시간 무응답 = 답 확인 필요
 // - 강사 확인 회신은 완료 조건이 아님 (D-51-2). 발송 순서 강제 없음, 강사 줄을 위에 (D-51-5)
 
@@ -61,14 +61,14 @@ function joinSlots(list: { wd: string; time: string; order: number }[], lang: 'k
     .join(', ');
 }
 
-export type TimeLine = { who: '한국' | '강사' | '학생'; text: string; otherDay: boolean };
+export type TimeLine = { who: '한국' | '강사' | '수강생'; text: string; otherDay: boolean };
 
-/** 한국 / 강사 / 학생 세 줄. 강사·학생이 한국 시간대면 그 줄은 빼고, 현지 요일이 한국과 다르면 otherDay */
+/** 한국 / 강사 / 수강생 세 줄. 강사·수강생이 한국 시간대면 그 줄은 빼고, 현지 요일이 한국과 다르면 otherDay */
 export function timeLines(v: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'studentTz'>, lang: 'ko' | 'en' = 'ko'): TimeLine[] {
   const slots = [...v.slots].sort((a, b) => monFirst(a.weekday) - monFirst(b.weekday));
   const kst = slots.map((s) => ({ wd: WEEKDAY_KO[s.weekday], time: s.time, order: monFirst(s.weekday) }));
   const out: TimeLine[] = [{ who: '한국', text: joinSlots(kst, lang), otherDay: false }];
-  for (const [who, tz] of [['강사', v.tutorTz], ['학생', v.studentTz]] as const) {
+  for (const [who, tz] of [['강사', v.tutorTz], ['수강생', v.studentTz]] as const) {
     if (!tz || tz === 'Asia/Seoul') continue;
     const loc = slots.map((s, i) => ({ ...slotIn(s, v.startDate, tz), order: i }));
     out.push({ who, text: joinSlots(loc, lang), otherDay: loc.some((l, i) => l.wd !== kst[i].wd) });
@@ -156,7 +156,7 @@ export function tutorConfirmMessage(v: PlanView): string {
     .join('\n');
 }
 
-/** 학생 안내 (한국어): 정규와 다른 날 / 수업 없는 정규 요일 */
+/** 수강생 안내 (한국어): 정규와 다른 날 / 수업 없는 정규 요일 */
 function koOtherLines(v: PlanView, tz: string): string[] {
   const d = otherDates(v);
   return [
@@ -165,11 +165,11 @@ function koOtherLines(v: PlanView, tz: string): string[] {
   ];
 }
 
-/** 학생 최종 확정 (카카오톡, 한국어). 해외 학생은 현지 시각을 먼저, 한국 시각을 아래에 */
+/** 수강생 최종 확정 (카카오톡, 한국어). 해외 수강생은 현지 시각을 먼저, 한국 시각을 아래에 */
 export function studentConfirmMessage(v: PlanView): string {
   const lines = timeLines({ ...v, tutorTz: '' });
   const kst = lines[0].text;
-  const local = lines.find((l) => l.who === '학생');
+  const local = lines.find((l) => l.who === '수강생');
   const first = firstLessonAt(v);
   return [
     '[엣지영어] 수업 일정이 확정됐어요',
@@ -206,7 +206,7 @@ export function sentLabel(at: Date): string {
   return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))} ${ampmKo(f.time)}`;
 }
 
-/** 첫 수업 시작 전 개별 수업 날짜 변경 안내 (H26(62)): 학생 카톡(한국어, 현지 먼저) · 강사 WhatsApp(영어, 강사 현지) */
+/** 첫 수업 시작 전 개별 수업 날짜 변경 안내 (H26(62)): 수강생 카톡(한국어, 현지 먼저) · 강사 WhatsApp(영어, 강사 현지) */
 export function prestartMoveNotices(p: { studentNameEn: string; studentTz: string; studentCity: string | null; tutorTz: string; from: Date; to: Date }): { student: string; tutor: string } {
   const stz = p.studentTz || 'Asia/Seoul';
   const ttz = p.tutorTz || 'Asia/Seoul';

@@ -28,7 +28,7 @@ export function parseFollowupTodos(j: any): FollowupTodo[] {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** 실제 수업 방식 (강사 확인). 학생의 희망(class_style: textbook·free_talking·not_sure)과는 다른 칸 */
+/** 실제 수업 방식 (강사 확인). 수강생의 희망(class_style: textbook·free_talking·not_sure)과는 다른 칸 */
 export const CLASS_STYLES = ['conversation', 'textbook', 'student_materials', 'mixed'] as const;
 export type TutorClassStyle = (typeof CLASS_STYLES)[number];
 export const MIX_OPTIONS = ['conversation', 'textbook', 'student_materials', 'other'] as const;
@@ -36,13 +36,13 @@ export type MixOption = (typeof MIX_OPTIONS)[number];
 export const CLASS_STYLE_TEXT: Record<TutorClassStyle, { en: string; ko: string }> = {
   conversation: { en: 'Conversation', ko: '회화' },
   textbook: { en: 'Textbook-based', ko: '교재 중심' },
-  student_materials: { en: 'Student-provided Materials', ko: '학생 제공 자료' },
+  student_materials: { en: 'Student-provided Materials', ko: '수강생 제공 자료' },
   mixed: { en: 'Mixed', ko: '혼합' },
 };
 export const MIX_TEXT: Record<MixOption, { en: string; ko: string }> = {
   conversation: { en: 'Conversation', ko: '회화' },
   textbook: { en: 'Textbook', ko: '교재' },
-  student_materials: { en: 'Student Materials', ko: '학생 자료' },
+  student_materials: { en: 'Student Materials', ko: '수강생 자료' },
   other: { en: 'Other', ko: '기타' },
 };
 /** 홈페이지 교재 페이지(src/data/books.json)의 실제 교재 목록 그대로 — 임의 목록 금지 */
@@ -52,7 +52,7 @@ export const OTHER_TEXTBOOK = '__other__';
 export const needsTextbook = (style: TutorClassStyle | '', mix: readonly string[]) => style === 'textbook' || (style === 'mixed' && mix.includes('textbook'));
 export const needsMaterials = (style: TutorClassStyle | '', mix: readonly string[]) => style === 'student_materials' || (style === 'mixed' && mix.includes('student_materials'));
 
-/** 학생 희망(class_style)을 실제 방식의 처음 값으로: 교재 → Textbook-based, 프리토킹 → Conversation, 모름 → 비움 */
+/** 수강생 희망(class_style)을 실제 방식의 처음 값으로: 교재 → Textbook-based, 프리토킹 → Conversation, 모름 → 비움 */
 export function initialStyleFromWish(wish: string | null): TutorClassStyle | '' {
   return wish === 'textbook' ? 'textbook' : wish === 'free_talking' ? 'conversation' : '';
 }

@@ -33,7 +33,7 @@ export async function answerMakeup(sb: SupabaseClient, requestId: string, yes: s
   check(await sb.rpc('tutor_makeup_answer', { p_request: requestId, p_yes: yes, p_note: note }));
 }
 
-/** 보강 확정 (20261108000000, H26(82)): 학생이 보낸 시간 하나로 바로 보강 수업 */
+/** 보강 확정 (20261108000000, H26(82)): 수강생이 보낸 시간 하나로 바로 보강 수업 */
 export async function confirmMakeup(sb: SupabaseClient, requestId: string, slotId: string): Promise<void> {
   check(await sb.rpc('tutor_makeup_confirm', { p_request: requestId, p_candidate: slotId }));
 }
@@ -78,7 +78,7 @@ export async function saveHours(sb: SupabaseClient, tutorId: string | null, week
   check(await sb.rpc('tutor_hours_save', { p_tutor: tutorId, p_weekly: weekly, p_close: close, p_open: open }));
 }
 
-/** 학생 프로필 (4300): 담당 정규 강사·대체강사(열람만)·운영자. 자격은 DB 함수가 확인 (담당 아니면 42501) */
+/** 수강생 프로필 (4300): 담당 정규 강사·대체강사(열람만)·운영자. 자격은 DB 함수가 확인 (담당 아니면 42501) */
 export async function loadStudentProfile(sb: SupabaseClient, studentId: string, tutorId: string | null = null): Promise<TutorStudentProfile> {
   // tutorId: 운영자가 고른 강사 (강사 본인은 비움) — 운영자 보기에서 그 강사의 시간대로 보이게 (QA-07, 4500). 4500 전 DB 는 한 인자 판으로
   let r = await sb.rpc('tutor_student_profile', tutorId ? { p_student: studentId, p_tutor: tutorId } : { p_student: studentId });
@@ -94,13 +94,13 @@ export async function updateStudentProfile(sb: SupabaseClient, studentId: string
   check(r);
 }
 
-/** Students 메뉴 (4402 tutor_students_list): 정규 담당 학생 + 확정된 대체수업 학생(수업 끝 24시간까지). 누가 보이는지는 DB 가 정함. tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
+/** Students 메뉴 (4402 tutor_students_list): 정규 담당 수강생 + 확정된 대체수업 수강생(수업 끝 24시간까지). 누가 보이는지는 DB 가 정함. tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
 export async function loadMyStudents(sb: SupabaseClient, tutorId: string | null): Promise<TutorStudentRow[]> {
   const rows = check(await sb.rpc('tutor_students_list', { p_tutor: tutorId })) as { student_id: string; display_name: string; level: string | null; class_type: string | null; timezone: string | null; class_note_url: string | null }[];
   return rows.map((r) => ({ id: r.student_id, name: r.display_name, level: r.level, classType: r.class_type, timezone: r.timezone, noteUrl: r.class_note_url }));
 }
 
-/** 취소된 수업 To-do (migration 20261108140000): 학생이 취소한 앞으로의 수업. 옛 DB 면 빈 목록 */
+/** 취소된 수업 To-do (migration 20261108140000): 수강생이 취소한 앞으로의 수업. 옛 DB 면 빈 목록 */
 export async function loadCanceledClasses(sb: SupabaseClient, tutorId: string | null): Promise<TutorCanceled[]> {
   const r = await sb.rpc('tutor_canceled_classes', { p_tutor: tutorId });
   if (r.error?.code === 'PGRST202' || r.error?.code === '42883') return [];

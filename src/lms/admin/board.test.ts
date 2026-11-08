@@ -83,7 +83,7 @@ describe('재등록 통보의 새 기간 (가상 데이터, 기한 안 재등록
   });
 });
 
-describe('기존 학생 입력 뒤 시트 대조 (D-52 확대판)', () => {
+describe('기존 수강생 입력 뒤 시트 대조 (D-52 확대판)', () => {
   const at = new Date('2026-10-24T03:00:00Z');
   const task = (over: Partial<Extract<TaskSource, { kind: 'import_check' }>> = {}): TaskSource => ({
     kind: 'import_check', id: 'e1', studentName: '가상기존', studentCode: 'STU-0101', counts: { lmsLeft: 13, sheetLeft: 12 }, unknownOrigins: [], createdAt: at, ...over,

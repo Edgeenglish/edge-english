@@ -1,11 +1,11 @@
 'use client';
 
 // 강사 휴무·대체강사 (2순위 ①, migration 1800, 2026-10-27 대표 시안 승인 Q1 A · Q2 A, 화면 흐름 안 1 확정)
-// 위: 휴무 목록 · [+ 강사 휴무 등록] · 할 일 요약. PC: 왼쪽 학생 목록(지금 단계) · 오른쪽 고른 학생. 휴대폰: 학생 카드가 위아래로
-// 학생 카드 = 단계 흐름(1 대체 강사에게 묻기 › 2 학생에게 휴무 안내 · 대체 강사 제안 › 3 학생 답 입력 › 4 확정 안내 보내기, 2026-10-28 대표 새 순서
+// 위: 휴무 목록 · [+ 강사 휴무 등록] · 할 일 요약. PC: 왼쪽 수강생 목록(지금 단계) · 오른쪽 고른 수강생. 휴대폰: 수강생 카드가 위아래로
+// 수강생 카드 = 단계 흐름(1 대체 강사에게 묻기 › 2 수강생에게 휴무 안내 · 대체 강사 제안 › 3 수강생 답 입력 › 4 확정 안내 보내기, 2026-10-28 대표 새 순서
 //   정책 원본 H26(27), migration 2500) + 고른 단계 화면 하나. 앞 단계로는 단계 화면의 [← 뒤로]
-// 대체강사: 운영진이 먼저 강사 가능 확인(가능한 날짜만 골라 저장) → 학생에게 휴무 안내와 함께 제안 → 학생 [좋아요] 뒤 확정 (A41). 안 되는 날짜는 다른 강사·보강으로
-// 기존 강사 보강: 보강 가능한 날짜(지금 수강기간 안 → 종료일 뒤 평소 요일·시간)를 학생에게 보내고 2개까지 골라 신청 → 확정은 수업 변경·보강 화면 (A20)
+// 대체강사: 운영진이 먼저 강사 가능 확인(가능한 날짜만 골라 저장) → 수강생에게 휴무 안내와 함께 제안 → 수강생 [좋아요] 뒤 확정 (A41). 안 되는 날짜는 다른 강사·보강으로
+// 기존 강사 보강: 보강 가능한 날짜(지금 수강기간 안 → 종료일 뒤 평소 요일·시간)를 수강생에게 보내고 2개까지 골라 신청 → 확정은 수업 변경·보강 화면 (A20)
 
 import Link from 'next/link';
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
@@ -32,7 +32,7 @@ export type LeaveActions = {
   makeupOptions: (itemIds: string[]) => Promise<LvMakeupOption[]>;
   requestMakeup: (source: { lessonId?: string; itemId?: string }, slots: Date[]) => Promise<void>;
   back: (itemIds: string[], to: 'undecided' | 'asked' | 'tutor_ok') => Promise<void>;
-  /** 휴무 안내 '보냄'을 안 보냄으로 (모든 날짜가 학생 답 전일 때만) */
+  /** 휴무 안내 '보냄'을 안 보냄으로 (모든 날짜가 수강생 답 전일 때만) */
   unsend: (noticeIds: string[]) => Promise<void>;
   renewals: (timeOffId: string) => Promise<LvRenewal[]>;
   /** 휴무 철회 (4510): dryRun 미리 보기 → 사유 → 철회 */
@@ -130,12 +130,12 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
   const bundles = data ? tutorBundles(data.items, data.notices, now) : [];
   const phases = { todo: [] as LvStudentGroup[], wait: [] as LvStudentGroup[], done: [] as LvStudentGroup[] };
   for (const g of groups) phases[studentPhase(works.get(g.studentId)!)].push(g);
-  // 처음 고른 곳: 처리할 학생 → 보내기 전 강사 문의 → 답 기다리는 학생 → 첫 학생
+  // 처음 고른 곳: 처리할 수강생 → 보내기 전 강사 문의 → 답 기다리는 수강생 → 첫 수강생
   const first = phases.todo[0]?.studentId ?? (bundles.find((b) => b.status === 'pending') && `t:${bundles.find((b) => b.status === 'pending')!.subTutorId}`)
     ?? phases.wait[0]?.studentId ?? groups[0]?.studentId ?? (renewals[0] ? `r:${renewals[0].studentId}` : null);
   const valid = (k: string) => groups.some((g) => g.studentId === k) || k.startsWith('r:') || bundles.some((b) => `t:${b.subTutorId}` === k);
   const selKey = sel && valid(sel) ? sel : first;
-  // 처리해도 보던 학생에 머묾: 처음 자동으로 고른 것도 고정 (다음 학생으로 저절로 넘어가지 않음)
+  // 처리해도 보던 수강생에 머묾: 처음 자동으로 고른 것도 고정 (다음 수강생으로 저절로 넘어가지 않음)
   useEffect(() => { if (selKey && selKey !== sel && (!sel || !valid(sel))) setSel(selKey); });
 
   const pending = useMemo(() => pendingNoticeKeys(data?.notices ?? []), [data]);
@@ -179,7 +179,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
             <p className="rounded-[12px] bg-[#f6f5fb] px-3 py-2.5 text-[14px] text-[#1d1b2b]">
               {data.items.length === 0
                 ? '이 휴무에 걸리는 수업이 없어요.'
-                : `학생 ${groups.length}명 · 수업 ${data.items.length}회 · ${phases.todo.length + bundles.filter((b) => b.status === 'pending').length ? `처리할 것 ${phases.todo.length}명${bundles.some((b) => b.status === 'pending') ? ` · 강사 문의 ${bundles.filter((b) => b.status === 'pending').length}명` : ''}` : '처리할 것 없음'}${phases.wait.length ? ` · 답 기다리는 것 ${phases.wait.length}명` : ''}`}
+                : `수강생 ${groups.length}명 · 수업 ${data.items.length}회 · ${phases.todo.length + bundles.filter((b) => b.status === 'pending').length ? `처리할 것 ${phases.todo.length}명${bundles.some((b) => b.status === 'pending') ? ` · 강사 문의 ${bundles.filter((b) => b.status === 'pending').length}명` : ''}` : '처리할 것 없음'}${phases.wait.length ? ` · 답 기다리는 것 ${phases.wait.length}명` : ''}`}
               {renewals.length > 0 && ` · 재등록 대기 ${renewals.length}명(재등록하면 ${renewals.reduce((n, r) => n + r.dates.length, 0)}회)`}
             </p>
 
@@ -194,7 +194,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
                           <h3 className="mt-1 text-[13px] font-bold text-[#55526a]">강사에게 묻기 {bundles.length}명</h3>
                           {bundles.map((b) => (
                             <ListButton key={b.subTutorId} on={selKey === `t:${b.subTutorId}`} onClick={() => pick(`t:${b.subTutorId}`)}
-                              name={b.subTutorName} sub={`학생 ${new Set(b.items.map((i) => i.studentId)).size}명 ${b.items.length}회 · ${b.status === 'pending' ? '문의 보내기 전' : '답변 기다리는 중'}`} />
+                              name={b.subTutorName} sub={`수강생 ${new Set(b.items.map((i) => i.studentId)).size}명 ${b.items.length}회 · ${b.status === 'pending' ? '문의 보내기 전' : '답변 기다리는 중'}`} />
                           ))}
                         </li>
                       )}
@@ -289,7 +289,7 @@ function WithdrawLeave({ off, withdraw, done }: { off: LvTimeOff; withdraw: (not
                 {pv.ask_clear > 0 && <li>· 대체강사 문의·가능 답 {pv.ask_clear}회 → 비움 (강사에게 취소 알려 주세요)</li>}
                 {pv.wait_back > 0 && <li>· 기존 강사 보강으로 취소된 수업 {pv.wait_back}회 → 다시 예정</li>}
                 {pv.untouched > 0 && <li>· 그대로 두는 수업 {pv.untouched}회 (미정·이미 밖에서 취소)</li>}
-                <li>· 안 보낸 안내 {pv.notices_pending}건은 보낼 필요 없음으로. 이미 보낸 안내는 기록만 남아요 — 학생·강사에게 철회를 따로 알려 주세요</li>
+                <li>· 안 보낸 안내 {pv.notices_pending}건은 보낼 필요 없음으로. 이미 보낸 안내는 기록만 남아요 — 수강생·강사에게 철회를 따로 알려 주세요</li>
                 <li>· 휴무 줄과 처리 기록은 지우지 않고 ‘철회’로 남아요</li>
               </ul>
               {blocked && (
@@ -332,7 +332,7 @@ function nextText(g: LvStudentGroup, w: LvStudentWork): string {
   if (w.confirm.confirmedMsgs.length) return LV_STEP_TEXT.confirm;
   if (w.confirm.makeup.length) return `${md(w.confirm.makeup[0])} 보강 날짜 잡기`;
   if (w.tutor.length) return w.tutor.map((t) => (t.ask ? `${t.subTutorName} 강사님에게 문의 보내기 전` : `${t.subTutorName} 강사님 답`)).join(' · ');
-  if (w.answer.length) return `학생 답 · 첫 수업 ${md(w.answer[0])}`;
+  if (w.answer.length) return `수강생 답 · 첫 수업 ${md(w.answer[0])}`;
   if (w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll)) return '보강 · 강사님 모든 날짜 불가 · 다른 날짜 받기';
   if (w.confirm.makeupRequested.length) return '보강 · 강사님 확인 기다림';
   return `${g.items.length}회 · ✓ 완료`;
@@ -399,7 +399,7 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
         </label>
         {preview && (
           <p className="rounded-[12px] bg-[#fff8d6] px-3 py-2.5 text-[14px] text-[#5c4a00]">
-            걸리는 수업 <b>{preview.items}회 · 학생 {preview.students}명</b>
+            걸리는 수업 <b>{preview.items}회 · 수강생 {preview.students}명</b>
             {preview.items > preview.lessons ? ` (시트 휴가 보강 ${preview.items - preview.lessons}회 포함)` : ''}
             {preview.existing ? ` · 이미 목록 ${preview.existing}회` : ''}
           </p>
@@ -460,7 +460,7 @@ const ordText = (n: number) => (n < ORD.length ? `${ORD[n]} 번째 수업` : `${
 /** 안 보낸 안내 (상태 글 '보내기 전' 구분, R2·R4) */
 const PENDING = createContext<ReadonlySet<string>>(new Set());
 
-// 학생 한 명 (2026-10-30 대표 시안 승인, R11·R15): 수업마다 한 줄 = 지금 상태 + 그 수업에서 지금 누를 버튼. 끝난 수업은 '✓ 끝난 수업 n회'로 접힘(사라지지 않음).
+// 수강생 한 명 (2026-10-30 대표 시안 승인, R11·R15): 수업마다 한 줄 = 지금 상태 + 그 수업에서 지금 누를 버튼. 끝난 수업은 '✓ 끝난 수업 n회'로 접힘(사라지지 않음).
 // 줄 아래에는 지금 할 일이 있는 묶음만: 대체 강사 고르기(목록 하나, R12·R13) · 휴무 안내 글 · 확정 안내 · 보강 날짜. 대체강사 문의는 강사별 묶음(R17)
 // 버튼·처리 함수는 이전과 같음 (새 단계·승인 없음). 처리 무르기는 줄의 [다시 고르기] + 확인창 (R1)
 function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }: {
@@ -469,7 +469,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
   const r = useRun(done);
   const pending = useContext(PENDING);
   const [copied, setCopied] = useState<Set<string>>(new Set());
-  /** 학생이 대체수업 대신 기존 강사 보강을 고른 수업 → 그 대체강사에게 보낼 취소 글 (이 화면에서만) */
+  /** 수강생이 대체수업 대신 기존 강사 보강을 고른 수업 → 그 대체강사에게 보낼 취소 글 (이 화면에서만) */
   const [dropped, setDropped] = useState<LvItem[]>([]);
   // 대체 강사를 고를 날짜: 처음엔 고르기 전 날짜 모두. 목록은 하나 (R12)
   const pickKey = w.pick.map((i) => i.id).join(',');
@@ -493,7 +493,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
   };
   const sm = 'min-h-[38px] text-[13.5px]';
 
-  // 줄마다 지금 누를 것 하나(학생 답은 두 가지 답 중 하나)
+  // 줄마다 지금 누를 것 하나(수강생 답은 두 가지 답 중 하나)
   const rowAction = (i: LvItem): React.ReactNode => {
     if (pickSet.has(i.id)) return <button type="button" disabled={r.busy} className={`${btnSub} ${sm}`} onClick={() => wait([i])}>대체 강사 없음 → 보강</button>;
     if (answerSet.has(i.id)) return (
@@ -585,7 +585,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
         })}
         {w.confirm.makeup.length > 0 && <Block title={`${leaveTutor} 강사님 복귀 뒤 보강 날짜 잡기`}><MakeupPick g={g} items={w.confirm.makeup} actions={actions} done={done} /></Block>}
         {w.confirm.makeupRequested.length > 0 && (
-          <Block title={w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll) ? `${leaveTutor} 강사님 모든 날짜 불가 · 학생에게 다른 날짜 받기` : `${leaveTutor} 강사님 확인 후 보강 확정`}>
+          <Block title={w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll) ? `${leaveTutor} 강사님 모든 날짜 불가 · 수강생에게 다른 날짜 받기` : `${leaveTutor} 강사님 확인 후 보강 확정`}>
             <Link href={`/lms/admin/change?student=${encodeURIComponent(g.studentCode)}`} className="flex min-h-[44px] items-center justify-center rounded-[10px] border border-[#7d5ffb] text-[14px] font-semibold text-[#5b3fe0]">
               {w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll) ? '다른 날짜로 보강 확정' : '보강 확정'}
             </Link>
@@ -598,7 +598,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
   );
 }
 
-// 대체강사 한 명에게 묻기 (R17): 여러 학생 수업을 한 메시지로, [보냄]도 한 번. 답은 수업마다 체크 (처음엔 체크 없음, R3)
+// 대체강사 한 명에게 묻기 (R17): 여러 수강생 수업을 한 메시지로, [보냄]도 한 번. 답은 수업마다 체크 (처음엔 체크 없음, R3)
 function TutorBundlePanel({ b, actions, done }: { b: LvTutorBundle; actions: LeaveActions; done: () => Promise<void> }) {
   const [copied, setCopied] = useState(false);
   const asMsg = (a: LvAskMsg, status: 'pending' | 'sent'): LvMessage => ({ key: `ask-${b.subTutorId}-${a.sentAt?.toISOString() ?? 'new'}`, event: 'sub_ask', recipient: 'tutor', to: b.subTutorName,
@@ -606,7 +606,7 @@ function TutorBundlePanel({ b, actions, done }: { b: LvTutorBundle; actions: Lea
   const students = new Set(b.items.map((i) => i.studentId)).size;
   const when = (d: Date | null) => (d ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hourCycle: 'h12' }).format(d) : '');
   return (
-    <Card title={<>{b.subTutorName} 강사님에게 묻기 <span className="text-[13px] font-normal text-[#6b6880]">학생 {students}명 {b.items.length}회</span></>}>
+    <Card title={<>{b.subTutorName} 강사님에게 묻기 <span className="text-[13px] font-normal text-[#6b6880]">수강생 {students}명 {b.items.length}회</span></>}>
       <div className="grid gap-3">
         {b.pending && (
           <MessageRow m={asMsg(b.pending, 'pending')} copied={copied} onCopied={() => setCopied(true)}
@@ -625,7 +625,7 @@ function TutorBundlePanel({ b, actions, done }: { b: LvTutorBundle; actions: Lea
   );
 }
 
-/** 3단계에서 학생이 기존 강사와 보강을 골랐을 때 대체강사에게 보내는 글 (휴무 강사 이름은 안 씀) */
+/** 3단계에서 수강생이 기존 강사와 보강을 골랐을 때 대체강사에게 보내는 글 (휴무 강사 이름은 안 씀) */
 function subCancelText(items: LvItem[]): string {
   const tz = items[0].subTutorTz ?? 'Asia/Seoul';
   return [
@@ -645,7 +645,7 @@ function ProposalRow({ p, to, onSend }: { p: LvProposal; to: string; onSend: () 
   return (
     <div className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
       <div className="flex items-center gap-2">
-        <b className="min-w-0 flex-1 text-[14.5px] text-[#1d1b2b]">학생 {to}</b>
+        <b className="min-w-0 flex-1 text-[14.5px] text-[#1d1b2b]">수강생 {to}</b>
         <button type="button" className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(p.text)) setCopied(true); else setManual(true); }}>
           {copied ? '복사함 ✓' : '복사'}
         </button>
@@ -665,7 +665,7 @@ function ProposalRow({ p, to, onSend }: { p: LvProposal; to: string; onSend: () 
   );
 }
 
-// 재등록 대기 학생: 재등록하면 휴무에 걸리는 날짜 + 재등록 안내에 덧붙일 글 + 대체강사에게 같이 물어볼 글 (복사만)
+// 재등록 대기 수강생: 재등록하면 휴무에 걸리는 날짜 + 재등록 안내에 덧붙일 글 + 대체강사에게 같이 물어볼 글 (복사만)
 function RenewalPanel({ r, from, to }: { r: LvRenewalGroup; from: KstDate; to: KstDate }) {
   return (
     <Card title={<>{r.studentName} <span className="text-[13px] font-normal text-[#6b6880]">{r.studentCode} · {dateLabel(r.endDate)} 종료 · 재등록 대기</span></>}>
@@ -827,7 +827,7 @@ function TutorCheck({ t, actions, done, numbers }: { t: LvStudentWork['tutor'][n
   );
 }
 
-// 기존 강사 보강: 보강 가능한 날짜(지금 수강기간 안 먼저, 종료일 뒤 평소 요일·시간) → 학생에게 보내기 → 학생이 고른 날짜 2개까지 신청
+// 기존 강사 보강: 보강 가능한 날짜(지금 수강기간 안 먼저, 종료일 뒤 평소 요일·시간) → 수강생에게 보내기 → 수강생이 고른 날짜 2개까지 신청
 function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvItem[]; actions: LeaveActions; done: () => Promise<void> }) {
   const [itemId, setItemId] = useState(items[0].id);
   const [opts, setOpts] = useState<LvMakeupOption[] | null>(null);
@@ -866,7 +866,7 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
                 <label className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 text-[14.5px] text-[#1d1b2b]">
                   <input type="checkbox" className="h-5 w-5" checked={on} disabled={!on && picked.size >= MAKEUP_SLOTS_MAX}
                     onChange={(e) => { const n = new Set(picked); if (e.target.checked) n.add(+o.startsAt); else n.delete(+o.startsAt); setPicked(n); }} />
-                  {/* 어느 기준 시간인지 (R-14): 한국 시간 + 해외 학생은 학생 도시 시간 */}
+                  {/* 어느 기준 시간인지 (R-14): 한국 시간 + 해외 수강생은 수강생 도시 시간 */}
                   <span>{kstLabel(o.startsAt)} KST{tutorLocalLabel(o.startsAt, item.studentTz) ? <span className="text-[#6b6880]"> · {(item.studentTz.split('/').pop() ?? '').replace(/_/g, ' ')} {tutorLocalLabel(o.startsAt, item.studentTz)}</span> : null}</span>
                 </label>
               </li>
@@ -894,7 +894,7 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
         <>
           <div className="grid gap-1.5 rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
             <div className="flex items-center gap-2">
-              <b className="flex-1 text-[14px] text-[#1d1b2b]">학생에게 보낼 글</b>
+              <b className="flex-1 text-[14px] text-[#1d1b2b]">수강생에게 보낼 글</b>
               <button type="button" className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>
                 {copied ? '복사함 ✓' : '복사'}
               </button>
@@ -902,14 +902,14 @@ function MakeupPick({ g, items, actions, done }: { g: LvStudentGroup; items: LvI
             <pre className="whitespace-pre-wrap rounded-[10px] bg-[#f6f5fb] px-3 py-2 font-sans text-[13.5px] text-[#1d1b2b]">{text}</pre>
             {manual && <textarea readOnly value={text} rows={5} onFocus={(e) => e.currentTarget.select()} aria-label="복사할 글" className="w-full rounded-[10px] border border-[#e6e3ef] p-2 text-[13.5px]" />}
           </div>
-          <b className="text-[14px] text-[#1d1b2b]">학생이 고른 날짜 ({picked.size}/{MAKEUP_SLOTS_MAX})</b>
+          <b className="text-[14px] text-[#1d1b2b]">수강생이 고른 날짜 ({picked.size}/{MAKEUP_SLOTS_MAX})</b>
           {section('in_period', '보강 가능한 날짜 · 수강기간 안')}
           {section('after_end', '보강 가능한 날짜 · 종료일 뒤')}
           <button type="button" className={btnMain} disabled={r.busy || picked.size === 0} onClick={() => r.run(
             () => actions.requestMakeup(item.lessonId ? { lessonId: item.lessonId } : { itemId: item.migratedItemId! }, [...picked].sort((a, b) => a - b).map((t) => new Date(t))),
             () => setPicked(new Set()),
           )}>
-            학생이 선택한 날짜로 보강 신청 ({picked.size})
+            수강생이 선택한 날짜로 보강 신청 ({picked.size})
           </button>
         </>
       )}
@@ -932,7 +932,7 @@ function MessageRow({ m, copied, onCopied, onSend }: { m: LvMessage; copied: boo
   return (
     <div className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
       <div className="flex items-center gap-2">
-        <b className="min-w-0 flex-1 text-[14.5px] text-[#1d1b2b]">{m.recipient === 'student' ? '학생' : '강사'} {m.to} · {LV_EVENT_TEXT[m.event]}</b>
+        <b className="min-w-0 flex-1 text-[14.5px] text-[#1d1b2b]">{m.recipient === 'student' ? '수강생' : '강사'} {m.to} · {LV_EVENT_TEXT[m.event]}</b>
         <button type="button" className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(m.text)) onCopied(); else setManual(true); }}>
           {copied ? '복사함 ✓' : '복사'}
         </button>

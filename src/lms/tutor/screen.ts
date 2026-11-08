@@ -1,5 +1,5 @@
 // 강사 화면(영어) 판정·표시 — 데이터는 DB 함수 tutor_screen 하나 (migration 2000)
-// 수업 결과는 lessons.class_status 하나 (POL-ST-02). 강사는 결과(Held / Student no-show)와 지각(학생·강사, 분)을 따로 고르고 정확한 상태 이름은 DB가 정함 (4400)
+// 수업 결과는 lessons.class_status 하나 (POL-ST-02). 강사는 결과(Held / Student no-show)와 지각(수강생·강사, 분)을 따로 고르고 정확한 상태 이름은 DB가 정함 (4400)
 
 import { addDays, ampmEn, formatInZone } from '../rules/dates';
 import { cityTime } from './hours-view';
@@ -9,7 +9,7 @@ import type { ClassStatus } from '../rules/status';
 
 /** 수업 결과 하나. tutor_no_show = 운영자만 (4000). 지각은 결과와 따로 (4400) */
 export type TutorResult = 'held' | 'student_no_show' | 'tutor_no_show';
-/** 지각 (4400): 학생·강사 각각, 분은 모를 수 있음(예전 'I was late' 기록) */
+/** 지각 (4400): 수강생·강사 각각, 분은 모를 수 있음(예전 'I was late' 기록) */
 export type Late = { student: boolean; studentMin: number | null; tutor: boolean; tutorMin: number | null };
 export const NO_LATE: Late = { student: false, studentMin: null, tutor: false, tutorMin: null };
 /** 지각 시간 고르기 칸 — 대표가 정한 값 (2026-11-04). Custom 은 분 직접 입력 */
@@ -24,7 +24,7 @@ export type TutorLesson = {
   state: 'scheduled' | 'canceled' | 'done';
   classStatus: ClassStatus | null;
   student: string;
-  /** 학생 프로필 창 열기용 (4300) */
+  /** 수강생 프로필 창 열기용 (4300) */
   studentId?: string;
   level: string | null;
   noteUrl: string | null;
@@ -33,7 +33,7 @@ export type TutorLesson = {
   count: { n: number; total: number } | null;
   topics: string | null;
   remarks: string | null;
-  /** 학생 지각 표시 (정상 수업, migration 3000) — late.student 와 같음 */
+  /** 수강생 지각 표시 (정상 수업, migration 3000) — late.student 와 같음 */
   studentLate: boolean;
   /** 출결·지각 (4400) */
   late: Late;
@@ -41,7 +41,7 @@ export type TutorLesson = {
   locked: boolean;
   /** 강사 LMS 계정을 만들기 전 수업: LMS 기록 대상이 아님 (DB to_record 와 같은 기준, R7) */
   beforeLms?: boolean;
-  /** 이 강사 휴무로 처리 중인 수업 (미정 · 대체강사 확정 전, 학생 화면 '일정 조율 중'과 같은 판정, migration 3500) */
+  /** 이 강사 휴무로 처리 중인 수업 (미정 · 대체강사 확정 전, 수강생 화면 '일정 조율 중'과 같은 판정, migration 3500) */
   leaveOpen?: boolean;
   /** 강사 노쇼 보상 수업 상태 (4000): available·used·expired·voided */
   compensation?: string | null;
@@ -204,7 +204,7 @@ export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   'Student long-term leave': 'Student on leave',
 };
 
-/** 강사 Home To-do '취소된 수업': 학생이 취소한 앞으로의 수업 (tutor_canceled_classes) */
+/** 강사 Home To-do '취소된 수업': 수강생이 취소한 앞으로의 수업 (tutor_canceled_classes) */
 export type TutorCanceled = { id: string; startsAt: Date; endsAt: Date; kind: LessonKind; classStatus: ClassStatus | null; student: string; studentId?: string };
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB JSON → 화면 모양 */
 export const parseCanceled = (j: any): TutorCanceled[] =>
@@ -256,7 +256,7 @@ export function lateText(late: Late): string {
   const part = (who: string, min: number | null) => ` · ${who} late${min ? ` ${min} min` : ''}`;
   return (late.student ? part('Student', late.studentMin) : '') + (late.tutor ? part('Tutor', late.tutorMin) : '');
 }
-/** 화면에서 저장 버튼을 누를 수 있는지 (DB가 다시 확인) — 다룬 내용 필수, 강사 지각은 분·사유(Remarks) 필수, 학생 지각은 분 필수 (POL-TU-01) */
+/** 화면에서 저장 버튼을 누를 수 있는지 (DB가 다시 확인) — 다룬 내용 필수, 강사 지각은 분·사유(Remarks) 필수, 수강생 지각은 분 필수 (POL-TU-01) */
 export function recordReady(r: TutorResult | null, topics: string, remarks: string, late: Late = NO_LATE): boolean {
   if (!r) return false;
   if (r === 'student_no_show' || r === 'tutor_no_show') return true;

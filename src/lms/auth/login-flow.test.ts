@@ -7,7 +7,7 @@ describe('로그인 다음 단계 (POL-AC-04·05)', () => {
     expect(afterEmailCode({ role: 'admin', aal: 'aal1', verifiedTotp: 0 })).toEqual({ kind: 'totp_enroll' });
     expect(afterEmailCode({ role: 'admin', aal: 'aal2', verifiedTotp: 1 })).toEqual({ kind: 'go', to: '/lms/admin' });
   });
-  it('학생·강사는 메일 코드만으로 각자 화면', () => {
+  it('수강생·강사는 메일 코드만으로 각자 화면', () => {
     expect(afterEmailCode({ role: 'student', aal: 'aal1', verifiedTotp: 0 })).toEqual({ kind: 'go', to: '/lms/student' });
     expect(afterEmailCode({ role: 'tutor', aal: 'aal1', verifiedTotp: 0 })).toEqual({ kind: 'go', to: '/lms/tutor' });
   });
@@ -38,7 +38,7 @@ describe('한·영 문구', () => {
 });
 
 describe('로그인 뒤 바로가기 링크로 돌아가기 (11/8 보강 바로가기)', () => {
-  it('학생: 학생 화면 주소만, 다른 역할·다른 사이트 주소는 무시', async () => {
+  it('수강생: 수강생 화면 주소만, 다른 역할·다른 사이트 주소는 무시', async () => {
     const { nextAfterLogin, isMakeupLink } = await import('./login-flow');
     expect(nextAfterLogin('/lms/student?makeup=abc', '/lms/student', 'student')).toBe('/lms/student?makeup=abc');
     expect(nextAfterLogin('/lms/admin', '/lms/student', 'student')).toBe('/lms/student');

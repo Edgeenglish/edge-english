@@ -38,9 +38,9 @@ describe('정규 시간 · 첫 수업일 · 요약', () => {
     expect(planSummary({ weeks: 12, weeklyCount: 2 }, '2026-11-03')).toEqual({ startDate: '2026-11-03', endDate: '2027-01-25', periods: 3, lessons: 24 });
   });
   it('첫 수업일 경고', () => {
-    expect(firstDateWarnings('2026-11-03', '2026-10-18', '2026-11-05')).toEqual(['학생 희망 시작일보다 빨라요']);
+    expect(firstDateWarnings('2026-11-03', '2026-10-18', '2026-11-05')).toEqual(['수강생 희망 시작일보다 빨라요']);
     expect(firstDateWarnings('2026-10-10', '2026-10-18', '')).toEqual(['첫 수업일이 오늘보다 앞이에요']);
-    expect(firstDateWarnings('2026-10-18', '2026-10-18', '')).toEqual(['첫 수업이 오늘이에요 — 강사·학생에게 바로 안내해 주세요']);
+    expect(firstDateWarnings('2026-10-18', '2026-10-18', '')).toEqual(['첫 수업이 오늘이에요 — 강사·수강생에게 바로 안내해 주세요']);
   });
   it('첫 수업일 후보는 등록 당일부터, 오늘 정규 시각이 지났으면 내일부터 (H26(58))', () => {
     const fri = [{ weekday: 5, time: '13:00' }]; // 2026-11-06 = 금

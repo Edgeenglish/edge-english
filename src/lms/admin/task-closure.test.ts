@@ -22,7 +22,7 @@ describe('운영진 업무 종료', () => {
     const c = [{ task_kind: t.kind, task_id: t.id, signature: taskSignature(t) }];
     expect(filterClosedTasks([{ ...t, lessons: [...t.lessons, { studentName: '박서연', startsAt: now }] }], c)).toHaveLength(1);
   });
-  it('학생·강사 답만 기다리면 제외, 운영 확정·문의·안내는 유지', () => {
+  it('수강생·강사 답만 기다리면 제외, 운영 확정·문의·안내는 유지', () => {
     const t: TaskSource = { kind: 'lesson_change', id: 's1', studentName: '김하준', studentCode: 'STU-001', createdAt: now, lessonAt: null, pendingNotices: 0, openMakeups: 1 };
     expect(filterActionableTasks([t])).toEqual([]);
     expect(filterActionableTasks([{ ...t, answeredMakeups: 1 }])).toHaveLength(1);

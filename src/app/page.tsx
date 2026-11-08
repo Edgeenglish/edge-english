@@ -373,7 +373,7 @@ export default async function Home() {
             <div className="flex gap-2">
               <div className="chat chat-end flex-1">
                 <div className="chat-bubble rounded-3xl bg-edge-yellow px-7 py-4.5 text-xl font-semibold text-[#333] shadow-lg max-md:text-sm">
-                  엣지영어 튜터는 학생의 말하기를 이끌어내도록 훈련된 원어민이에요. <br />{' '}
+                  엣지영어 튜터는 수강생의 말하기를 이끌어내도록 훈련된 원어민이에요. <br />{' '}
                   수업 중 함께 말할 수 있는 교재를 사용하니까, 듣기만 하는 수업과는
                   달라요!
                 </div>

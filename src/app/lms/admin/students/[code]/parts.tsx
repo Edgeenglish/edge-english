@@ -1,6 +1,6 @@
 'use client';
 
-// 학생 상세 공통 조각: 창(Sheet), 줄(Row), 칸(Box), 복사 버튼, 스타일
+// 수강생 상세 공통 조각: 창(Sheet), 줄(Row), 칸(Box), 복사 버튼, 스타일
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 export const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';

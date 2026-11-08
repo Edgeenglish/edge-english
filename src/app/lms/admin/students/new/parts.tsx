@@ -1,6 +1,6 @@
 'use client';
 
-// 신규 학생 등록 화면 조각: 입력 칸, 카드, 강사 고르기, 주간 캘린더 (2026-10-18 대표 최종 시안)
+// 신규 수강생 등록 화면 조각: 입력 칸, 카드, 강사 고르기, 주간 캘린더 (2026-10-18 대표 최종 시안)
 
 import { useMemo, useRef, useState } from 'react';
 import { cellState, clashes, startsWithinAvailability, withinAvailability, type AvailabilityWindow, type CellState } from '@/lms/rules/booking';
@@ -61,7 +61,7 @@ export const inputCls = (locked: boolean, bad = false) =>
     bad ? 'border-[#e8a39e]' : 'border-[#e6e3ef]'
   } ${locked ? 'bg-[#faf9fd]' : 'bg-white'}`;
 
-/** 학생 희망 칸 → 판정용 창 (학생 시간대 기준이라 서머타임 자동) */
+/** 수강생 희망 칸 → 판정용 창 (수강생 시간대 기준이라 서머타임 자동) */
 // 칸 안에서 바로 검색해서 고르기 (사는 곳 A안). 목록에 없으면 onFree 로 친 그대로 저장 (없으면 목록에서만)
 export type PickItem = { key: string; main: string; sub?: string; pick: () => void };
 export function SearchPick({ value, placeholder, locked = false, bad = false, search, onFree }: { value: string; placeholder: string; locked?: boolean; bad?: boolean; search: (q: string) => { label?: string; items: PickItem[] }[]; onFree?: (text: string) => void }) {
@@ -158,7 +158,7 @@ export function canStartAt(t: RegTutor, date: KstDate, time: string, durationMin
   return startsWithinAvailability(s, t.availability) && clashes(s, e, t.busy).length === 0;
 }
 
-/** 이번 주에 학생 희망 시간과 맞는 시작 칸 수 (희망 시간이 없으면 가능한 시작 칸 수) */
+/** 이번 주에 수강생 희망 시간과 맞는 시작 칸 수 (희망 시간이 없으면 가능한 시작 칸 수) */
 export function matchCount(t: RegTutor, week: KstDate[], durationMin: number, wish: AvailabilityWindow[]): number {
   let n = 0;
   for (const d of week)
@@ -264,7 +264,7 @@ export function TutorPicker({
           필터 초기화
         </button>
       </div>
-      <p className="mt-2 text-[12.5px] text-[#6b6880]">{wish.length ? '학생 희망 시간에 이번 주 바로 시작할 수 있는 칸이 많은 강사부터 보여요.' : '희망 시간이 칸으로 들어오지 않아 이번 주 가능한 칸이 많은 순서예요.'}</p>
+      <p className="mt-2 text-[12.5px] text-[#6b6880]">{wish.length ? '수강생 희망 시간에 이번 주 바로 시작할 수 있는 칸이 많은 강사부터 보여요.' : '희망 시간이 칸으로 들어오지 않아 이번 주 가능한 칸이 많은 순서예요.'}</p>
       <div className="-mx-4 mt-3 flex snap-x scroll-px-4 gap-2.5 overflow-x-auto px-4 pb-1 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 xl:grid-cols-4">
         {rows.length === 0 && <p className="py-6 text-[14px] text-[#6b6880]">조건에 맞는 강사가 없어요.</p>}
         {rows.map(({ t, n }) => {
@@ -321,7 +321,7 @@ export function Legend() {
       {item('bg-[#7d5ffb]', '정규 수업 있음')}
       {item('bg-[#e9e8ee]', '휴무')}
       {item('bg-[#f6f5f9] border border-[#e6e3ef]', '불가')}
-      {item('border-2 border-dashed border-[#f0a23a] bg-white', '학생 희망')}
+      {item('border-2 border-dashed border-[#f0a23a] bg-white', '수강생 희망')}
     </div>
   );
 }
@@ -385,7 +385,7 @@ export function WeekCalendar({
       </p>
       {dst.map(({ z, c }) => (
         <p key={z} className="mt-2 rounded-[10px] bg-[#fff6e6] px-3 py-2 text-[13px] text-[#7a4a00]">
-          {z === tutor.timezone ? `${tutor.name}(${tutor.country})` : `학생(${z})`} {dayLabel(c!.on)} {c!.label} ({c!.from} → {c!.to}). 그날부터 한국 시간 칸이 자동으로 1시간 옮겨져요.
+          {z === tutor.timezone ? `${tutor.name}(${tutor.country})` : `수강생(${z})`} {dayLabel(c!.on)} {c!.label} ({c!.from} → {c!.to}). 그날부터 한국 시간 칸이 자동으로 1시간 옮겨져요.
         </p>
       ))}
       <div className="-mx-4 mt-3 overflow-x-auto px-4 lg:mx-0 lg:px-0">
@@ -441,7 +441,7 @@ export function slotText(s: RegularSlot) {
   return `${WEEKDAY_KO[s.weekday]} ${ampmKo(s.time)}`;
 }
 
-/** 고른 정규 시간을 강사·학생 현지 시각으로 (첫 수업 날짜 기준 — 서머타임이면 날짜마다 달라질 수 있음) */
+/** 고른 정규 시간을 강사·수강생 현지 시각으로 (첫 수업 날짜 기준 — 서머타임이면 날짜마다 달라질 수 있음) */
 export function slotLocal(s: RegularSlot, first: KstDate, tz: string) {
   let d = first;
   while (weekdayOf(d) !== s.weekday) d = addDays(d, 1);

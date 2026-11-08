@@ -71,7 +71,7 @@ function product(e: Pick<Enrollment, 'weeks' | 'legacy_label' | 'weekly_count' |
 export function toTaskSources(tasks: TaskRow[], leaves: LeaveRow[], noShows: NoShowRow[], plans: ReadonlyMap<string, PlanView> = new Map()): TaskSource[] {
   const out: TaskSource[] = [];
   for (const t of tasks) {
-    const studentName = t.enrollment?.student?.name_ko ?? '(학생 정보 없음)';
+    const studentName = t.enrollment?.student?.name_ko ?? '(수강생 정보 없음)';
     const studentCode = t.enrollment?.student?.code ?? '';
     if (t.kind === 'new_student_matching') {
       if (!t.due_at) continue; // 매칭 업무는 기한이 항상 있음 (DB 트리거가 넣음)
@@ -110,7 +110,7 @@ export function toTaskSources(tasks: TaskRow[], leaves: LeaveRow[], noShows: NoS
     out.push({
       kind: 'long_leave_request',
       id: l.id,
-      studentName: l.enrollment?.student?.name_ko ?? '(학생 정보 없음)',
+      studentName: l.enrollment?.student?.name_ko ?? '(수강생 정보 없음)',
       studentCode: l.enrollment?.student?.code ?? '',
       from: short(l.leave_start),
       to: short(addDays(l.leave_start, l.days - 1)),
@@ -124,7 +124,7 @@ export function toTaskSources(tasks: TaskRow[], leaves: LeaveRow[], noShows: NoS
     out.push({
       kind: 'no_show_report',
       id: n.id,
-      studentName: n.lesson.student?.name_ko ?? '(학생)',
+      studentName: n.lesson.student?.name_ko ?? '(수강생)',
       tutorName: n.lesson.tutor?.name ?? '(강사)',
       lessonStartsAt: new Date(n.lesson.starts_at),
       reportedAt: new Date(n.reported_at),
@@ -138,14 +138,14 @@ export function toTodayLessons(lessons: LessonRow[], openNoShowLessonIds: Readon
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     .map((l) => ({
       time: formatInZone(new Date(l.starts_at), 'Asia/Seoul').time,
-      student: l.student?.name_ko ?? '(학생)',
+      student: l.student?.name_ko ?? '(수강생)',
       tutor: l.tutor?.name ?? '(강사)',
       state: openNoShowLessonIds.has(l.id)
         ? '노쇼 신고'
         : l.state === 'done'
           ? '완료'
           : l.state === 'canceled'
-            ? l.class_status?.startsWith('Student') ? '학생 변경' : '취소'
+            ? l.class_status?.startsWith('Student') ? '수강생 변경' : '취소'
             : l.kind === 'makeup'
               ? '보강'
               : '예정',
@@ -160,12 +160,12 @@ export type ImportCheckRow = {
 };
 export type UnknownOriginRow = { id: string; kind: 'makeup_booked' | 'makeup_open'; enrollment_id: string; created_at: string; lesson: { starts_at: string } | null; enrollment: { student: { name_ko: string; code: string } | null } | null };
 
-/** 기존 학생 입력 뒤 시트 대조 전 · 보강 원래 날짜 확인 필요 → 학생(수강등록)마다 한 줄 */
+/** 기존 수강생 입력 뒤 시트 대조 전 · 보강 원래 날짜 확인 필요 → 수강생(수강등록)마다 한 줄 */
 export function toImportChecks(checks: ImportCheckRow[], origins: UnknownOriginRow[]): TaskSource[] {
   const out = new Map<string, Extract<TaskSource, { kind: 'import_check' }>>();
   const row = (eid: string, e: ImportCheckRow['enrollment'], created: string) => {
     if (!out.has(eid))
-      out.set(eid, { kind: 'import_check', id: eid, studentName: e?.student?.name_ko ?? '(학생 정보 없음)', studentCode: e?.student?.code ?? '', counts: null, unknownOrigins: [], createdAt: new Date(created) });
+      out.set(eid, { kind: 'import_check', id: eid, studentName: e?.student?.name_ko ?? '(수강생 정보 없음)', studentCode: e?.student?.code ?? '', counts: null, unknownOrigins: [], createdAt: new Date(created) });
     return out.get(eid)!;
   };
   for (const c of checks) {
@@ -200,7 +200,7 @@ type ChangeNoticeRow = {
 };
 type OpenMakeupRow = { created_at: string; tutor_answered_at?: string | null; student: { id: string; name_ko: string; code: string } | null; candidates?: { tutor_answer: string | null; proposed_by: string }[] | null };
 
-/** 수업 변경·보강 (1700): 안 보낸 안내 · 강사 답 대기 보강 → 학생마다 한 줄 */
+/** 수업 변경·보강 (1700): 안 보낸 안내 · 강사 답 대기 보강 → 수강생마다 한 줄 */
 /** 자동 메일을 못 보낸 안내 (20261108010000: 실패·주소 없음) → 운영진이 직접 보내야 함 */
 export type EmailFailRow = { created_at: string; recipient_kind?: 'student' | 'tutor'; email_status?: string; makeup: { student: { id: string; name_ko: string; code: string } | null } | null };
 
@@ -238,7 +238,7 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
     r.openMakeups += 1;
     if (m.tutor_answered_at) {
       r.answeredMakeups = (r.answeredMakeups ?? 0) + 1;
-      // 강사가 학생 후보 모두에 불가 → 운영진이 다른 일정 조율 (QA-08, 4500)
+      // 강사가 수강생 후보 모두에 불가 → 운영진이 다른 일정 조율 (QA-08, 4500)
       const studentCands = (m.candidates ?? []).filter((c) => c.proposed_by === 'student');
       if (studentCands.length > 0 && studentCands.every((c) => c.tutor_answer === 'no')) r.declinedMakeups = (r.declinedMakeups ?? 0) + 1;
     }
@@ -288,7 +288,7 @@ export type LeaveNoticeRow = { event?: string; leave: { student_id?: string; les
 export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], now: Date): TaskSource[] {
   const out = new Map<string, Extract<TaskSource, { kind: 'tutor_leave' }>>();
   const undecided = new Map<string, Set<string>>();
-  // 1단계(대체강사 고르기·강사 답)가 남은 학생은 2단계 글을 아직 보낼 수 없음
+  // 1단계(대체강사 고르기·강사 답)가 남은 수강생은 2단계 글을 아직 보낼 수 없음
   const blocked = new Set<string>();
   const row = (o: NonNullable<LeaveOpenRow['off']>) => {
     if (!out.has(o.id))
@@ -322,11 +322,11 @@ export function toTutorLeaves(rows: LeaveOpenRow[], notices: LeaveNoticeRow[], n
     t.pendingNotices += 1;
     const ns = (t.noticeSteps ??= { notify: 0, tutor: 0, confirm: 0 });
     if (n.event === 'leave_options' || n.event === 'sub_student') {
-      // 2단계 글(휴무 안내 + 대체강사 제안)은 학생마다 하나
+      // 2단계 글(휴무 안내 + 대체강사 제안)은 수강생마다 하나
       ns.notify += 1;
       if (n.event === 'sub_student') ns.proposeLessons = (ns.proposeLessons ?? 0) + 1;
       const sid = n.leave?.student_id;
-      // 정해진 날짜부터 먼저 안내 (대표 10/30): 그 수업 자체가 미정·강사 답 대기면 아직 못 보냄. choice 를 못 읽는 옛 응답은 학생 단위로
+      // 정해진 날짜부터 먼저 안내 (대표 10/30): 그 수업 자체가 미정·강사 답 대기면 아직 못 보냄. choice 를 못 읽는 옛 응답은 수강생 단위로
       const itemReady = n.leave?.choice ? n.leave.choice !== 'undecided' && n.leave.sub_stage !== 'asked' : !blocked.has(`${n.leave!.off!.id}|${sid}`);
       if (sid && itemReady && !(ns.proposeStudents ??= []).includes(sid)) ns.proposeStudents.push(sid);
     } else if (n.event === 'sub_ask') ns.tutor += 1;
@@ -354,7 +354,7 @@ export type EndingRow = {
 };
 
 /**
- * 종료 임박 (POL-RN-08): 학생마다 마지막 수강권(결제 확인·수강 중)만 보고, 지금 이후 예정 정규 수업이 2회 이하면 한 줄.
+ * 종료 임박 (POL-RN-08): 수강생마다 마지막 수강권(결제 확인·수강 중)만 보고, 지금 이후 예정 정규 수업이 2회 이하면 한 줄.
  * Class Record 완료 기록이 없어도 날짜로 셈(지난 예정 수업은 한 것으로 봄). 결제 확인된 재등록 수강권이 있으면 그쪽이 마지막이라 빠짐.
  * 정규 수업이 아직 하나도 없는 수강권(신규 매칭 전)은 신규 매칭 칸에서 다룸
  */
@@ -370,12 +370,12 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
   for (const r of latest.values()) {
     // 종료일로부터 3일 뒤 자동 제외 (한국 날짜, 연장된 최종 종료일 기준).
     if (instantToKstDate(now) >= addDays(r.final_end_date, 3) && !reopened.has(r.id)) continue;
-    // 정규 수업이 아직 없는 수강권(신규 매칭 전)은 제외. 기존 학생 입력으로 넣은 '다 끝난 수강권'(수강 중, 남은 0회)은 재등록 대기로 보여 줌 (migration 2200)
+    // 정규 수업이 아직 없는 수강권(신규 매칭 전)은 제외. 기존 수강생 입력으로 넣은 '다 끝난 수강권'(수강 중, 남은 0회)은 재등록 대기로 보여 줌 (migration 2200)
     if (r.status !== 'active' && !r.lessons.some((l) => l.kind === 'regular')) continue;
     const left = r.lessons.filter((l) => l.state === 'scheduled' && new Date(l.starts_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     // 날짜 미정 보강: 보강 권리가 있는 취소 수업 중 살아 있는 보강이 없는 것 + 시트에서 넘어온 미예약 보강
     const booked = new Set(r.lessons.filter((l) => l.makeup_of && l.state !== 'canceled').map((l) => l.makeup_of));
-    // 강사 노쇼는 '진행됨(done)' 상태라도 보강 권리가 있음 (학생 홈과 같은 수, 4100) + 날짜 안 잡은 무료 보상수업
+    // 강사 노쇼는 '진행됨(done)' 상태라도 보강 권리가 있음 (수강생 홈과 같은 수, 4100) + 날짜 안 잡은 무료 보상수업
     const owed = r.lessons.filter((l) => (l.state === 'canceled' || l.class_status === 'Tutor no-show') && !l.voided_at && l.class_status
       && (grantsMakeup(l.class_status as ClassStatus) || l.class_status === 'Tutor long-term leave') && !booked.has(l.id)).length
       + (r.migrated ?? []).filter((m) => m.kind === 'makeup_open').length
@@ -385,7 +385,7 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
     out.push({
       kind: 'ending_soon',
       id: r.id,
-      studentName: r.student?.name_ko ?? '(학생 정보 없음)',
+      studentName: r.student?.name_ko ?? '(수강생 정보 없음)',
       studentCode: r.student?.code ?? '',
       product: product(r),
       lessonsLeft: left.length + owed,
@@ -472,13 +472,13 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   };
 }
 
-/** 상단 운영 현황 3개: 수강 중 학생 · 이번 주(월~일, KST) 수업 진행/전체 · 이번 달 결제 확인된 등록(신규/재등록) */
+/** 상단 운영 현황 3개: 수강 중 수강생 · 이번 주(월~일, KST) 수업 진행/전체 · 이번 달 결제 확인된 등록(신규/재등록) */
 export async function loadOpsStats(sb: SupabaseClient, now: Date): Promise<OpsStats | null> {
   const today = instantToKstDate(now);
   const dow = new Date(`${today}T00:00:00Z`).getUTCDay();
   const monday = addDays(today, -((dow + 6) % 7));
   const monthStart = `${today.slice(0, 8)}01`;
-  // '수강 중' = 학생 목록(admin_students)과 같은 기준: 끝나지 않은 수강권이 오늘 기간 안 (status 가 confirmed·pending_payment 여도 기간이 시작됐으면 수강 중) (QA-05)
+  // '수강 중' = 수강생 목록(admin_students)과 같은 기준: 끝나지 않은 수강권이 오늘 기간 안 (status 가 confirmed·pending_payment 여도 기간이 시작됐으면 수강 중) (QA-05)
   const [active, week, pays] = await Promise.all([
     sb.from('enrollments').select('student_id').not('status', 'in', '("completed","canceled")').lte('start_date', today).gte('final_end_date', today),
     sb.from('lessons').select('state').gte('kst_date', monday).lte('kst_date', addDays(monday, 6)).neq('state', 'canceled'),

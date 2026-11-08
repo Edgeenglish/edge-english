@@ -1,9 +1,9 @@
 'use client';
 
 // 첫 수업 시작 전 개별 수업 날짜 변경 — 변경권 차감 없음 (2026-11-06 대표 요청, 정책 원본 H26(62))
-// - 학생 상세 '다가오는 수업' 의 [시작 전 날짜 변경] → 이 창
+// - 수강생 상세 '다가오는 수업' 의 [시작 전 날짜 변경] → 이 창
 // - 바꾼 수업을 먼저, 나머지는 [다른 수업 바꾸기]를 눌러 펼침 (바꾼 수업이 없으면 처음부터 펼침)
-// - 저장 뒤: 한 줄 결과 + 학생·강사 안내문 (접힌 칸을 펼치면 문구 전체 + [복사], H26(64))
+// - 저장 뒤: 한 줄 결과 + 수강생·강사 안내문 (접힌 칸을 펼치면 문구 전체 + [복사], H26(64))
 // - 검사·저장은 DB(admin_prestart_move): 수강 기간 안 · 같은 날 수업 없음 · 강사 휴무·다른 수업(휴식 10분)·현지 06:00~22:30·연 시간·재등록 대기
 
 import { useEffect, useState } from 'react';
@@ -144,7 +144,7 @@ export default function PrestartMove(p: {
         <div className="mb-3 rounded-[14px] border border-[#cfe8d8] bg-white p-3">
           <p className="text-[14px] font-bold text-[#13623a]">✓ 저장했어요 · {saved.line}</p>
           {[
-            ['학생 카카오톡 안내', saved.student],
+            ['수강생 카카오톡 안내', saved.student],
             ['강사 WhatsApp 안내', saved.tutor],
           ].map(([who, text]) => (
             <details key={who} className="mt-2 rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px]">

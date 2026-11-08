@@ -2,7 +2,7 @@
 
 // 강사 화면 (영어, 휴대폰 우선, 2026-11-04 개편): 왼쪽(PC)·아래(휴대폰) 고정 메뉴 Home · Schedule · Class Record · Students · Availability
 // Home = 오늘 수업·할 일, Schedule = 월간·주간 일정 + 날짜별 막기·열기 (H26(49)+(50)), Class Record = 주별 기록 작성·조회,
-// Students = 담당 학생 → 프로필, Availability = 매주 가능 시간 (예전 My hours)
+// Students = 담당 수강생 → 프로필, Availability = 매주 가능 시간 (예전 My hours)
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -27,7 +27,7 @@ export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
   record: (lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late) => Promise<void>;
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
-  /** 보강 확정 (H26(82)): 학생 시간 하나를 골라 바로 확정. 없으면 [Confirm] 버튼이 잠김 */
+  /** 보강 확정 (H26(82)): 수강생 시간 하나를 골라 바로 확정. 없으면 [Confirm] 버튼이 잠김 */
   confirm?: (requestId: string, slotId: string) => Promise<void>;
   /** 대체 수업 요청 답: items = 답하는 수업 전체, yes = 가능한 수업 */
   answerCover: (items: string[], yes: string[]) => Promise<void>;
@@ -35,18 +35,18 @@ export type TutorActions = {
   hours: HoursActions;
   /** Schedule 날짜별 막기·열기 (migration 4403) */
   schedule: ScheduleActions;
-  /** 학생 프로필 (4300): 학생 이름을 누르면 열림. 없으면 이름만 글자 */
+  /** 수강생 프로필 (4300): 수강생 이름을 누르면 열림. 없으면 이름만 글자 */
   profile?: ProfileActions;
-  /** Students 메뉴: 담당 학생 목록 (tutor_my_students — 정규 담당·확정 대체만, DB 가 정함) */
+  /** Students 메뉴: 담당 수강생 목록 (tutor_my_students — 정규 담당·확정 대체만, DB 가 정함) */
   students?: () => Promise<TutorStudentRow[]>;
   /** 첫 수업 후 To-do (4600): Home 목록 + 저장. 없으면 그 To-do 칸이 안 보임 */
   followups?: () => Promise<FollowupTodo[]>;
   followupSave?: FollowupSave;
-  /** 취소된 수업 To-do: 학생이 취소한 앞으로의 수업 (tutor_canceled_classes). 없으면 그 칸이 안 보임 */
+  /** 취소된 수업 To-do: 수강생이 취소한 앞으로의 수업 (tutor_canceled_classes). 없으면 그 칸이 안 보임 */
   canceled?: () => Promise<TutorCanceled[]>;
 };
 
-/** 학생 이름 → 프로필 창 (이 화면 어디서든 같은 창) */
+/** 수강생 이름 → 프로필 창 (이 화면 어디서든 같은 창) */
 const ProfileCtx = createContext<((studentId: string) => void) | null>(null);
 function StudentName({ id, name, className }: { id?: string; name: ReactNode; className?: string }) {
   const open = useContext(ProfileCtx);
@@ -76,7 +76,7 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'hours', label: 'Availability', icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
 ];
 // 운영자 보기 한국어 라벨 (강사 본인은 늘 영어)
-const TAB_KO: Record<Tab, string> = { home: '홈', schedule: '일정', record: 'Class Record', students: '학생', hours: '가능 시간' };
+const TAB_KO: Record<Tab, string> = { home: '홈', schedule: '일정', record: 'Class Record', students: '수강생', hours: '가능 시간' };
 function Icon({ d }: { d: string }) {
   return (
     <svg aria-hidden viewBox="0 0 24 24" className="h-[20px] w-[20px] shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -131,7 +131,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   const kstOn = tz === 'Asia/Seoul' ? null : kstPref;
   const kst = kstOn === true;
   const week = weekOf(now, tz, offset);
-  // 학생별로 보기 (대표 10/29): 학생을 고르면 그 학생의 모든 수업을 날짜순으로 (주 단위 대신)
+  // 수강생별로 보기 (대표 10/29): 수강생을 고르면 그 수강생의 모든 수업을 날짜순으로 (주 단위 대신)
   const [student, setStudent] = useState('');
   const [allLessons, setAllLessons] = useState<TutorLesson[] | null>(null);
   const studentNames = [...new Set([...(allLessons ?? []), ...screen.lessons].map((l) => l.student))].sort();
@@ -189,12 +189,12 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     ...screen.toRecord.map((id) => byId.get(id)).filter((l): l is TutorLesson => !!l),
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
-  // 할 일 게시판 (학생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
+  // 할 일 게시판 (수강생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
   const [panel, setPanel] = useState<'cover' | 'makeup' | 'followup' | null>(null);
-  // 학생 프로필 창 (4300): 열어도 보던 메뉴·주·고른 학생은 그대로, 닫으면 돌아옴
+  // 수강생 프로필 창 (4300): 열어도 보던 메뉴·주·고른 수강생은 그대로, 닫으면 돌아옴
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const openProfile = actions.profile ? setProfileOf : null;
-  // 첫 수업 후 To-do (4600): 학생별 First Lesson Follow-up 창. 목록은 DB 가 저장값으로 판정
+  // 첫 수업 후 To-do (4600): 수강생별 First Lesson Follow-up 창. 목록은 DB 가 저장값으로 판정
   const [followupOf, setFollowupOf] = useState<string | null>(null);
   const [followups, setFollowups] = useState<FollowupTodo[]>([]);
   const refreshFollowups = useCallback(async () => {
@@ -202,7 +202,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     try { setFollowups(await actions.followups()); } catch { /* 옛 DB 또는 일시 오류: To-do 칸만 비움 */ }
   }, [actions]);
   useEffect(() => { void refreshFollowups(); }, [refreshFollowups]);
-  // 취소된 수업 (학생이 취소한 앞으로의 수업): 화면을 다시 읽을 때마다 새로 읽음. 그 수업 시간이 지나면 저절로 빠짐
+  // 취소된 수업 (수강생이 취소한 앞으로의 수업): 화면을 다시 읽을 때마다 새로 읽음. 그 수업 시간이 지나면 저절로 빠짐
   const [canceled, setCanceled] = useState<TutorCanceled[]>([]);
   const [showAllCanceled, setShowAllCanceled] = useState(false);
   useEffect(() => {
@@ -217,7 +217,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   const days = student
     ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), tz, { from: '1900-01-01', to: '2999-12-31' })
     : daysOf(screen.lessons, tz, week);
-  // Students 메뉴: 처음 열 때 한 번 읽음 (담당 학생만 — DB 가 정함, 4300)
+  // Students 메뉴: 처음 열 때 한 번 읽음 (담당 수강생만 — DB 가 정함, 4300)
   const [students, setStudents] = useState<TutorStudentRow[] | null>(null);
   const [studentsErr, setStudentsErr] = useState('');
   useEffect(() => {
@@ -235,7 +235,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
       <span className="rounded-[6px] bg-[#27230e] px-[7px] py-[3px] text-[12px] font-extrabold text-[#ffd401]">Tutor</span>
     </span>
   );
-  // 운영자 보기: 로고를 누르면 운영자 화면으로 (11/3 대표, 학생 화면과 같게)
+  // 운영자 보기: 로고를 누르면 운영자 화면으로 (11/3 대표, 수강생 화면과 같게)
   const brand = adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : <button type="button" aria-label="Refresh" onClick={() => window.location.reload()} className="inline-flex">{logo}</button>;
   // Availability 에 저장 안 한 변경이 있으면 메뉴를 바꾸기 전에 확인 (QA UX: '1 change not saved' 상태에서 Home 누르면 사라짐)
   const hoursDirty = useRef(false);
@@ -330,7 +330,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   return (
     <ProfileCtx.Provider value={openProfile}>
     <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
-      {/* PC: 왼쪽 고정 메뉴 (학생 LMS 와 같은 자리·모양) */}
+      {/* PC: 왼쪽 고정 메뉴 (수강생 LMS 와 같은 자리·모양) */}
       <nav aria-label="Menu" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
         <div className="px-3 pb-4 pt-1">{brand}</div>
         {TABS.map((t) => tabBtn(t, false))}
@@ -347,12 +347,12 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
           {onLogout && <button type="button" onClick={onLogout} className="min-h-[36px] text-[13px] text-[#55526a] underline">Sign out</button>}
         </header>
         {profileOf && actions.profile && <StudentProfile studentId={profileOf} actions={actions.profile} now={now} onClose={() => setProfileOf(null)}
-          backLabel={tab === 'students' ? t('Back to students', '학생 목록으로') : tab === 'record' ? t('Back to Class Record', 'Class Record 로') : tab === 'schedule' ? t('Back to schedule', '일정으로') : t('Back', '뒤로')}
+          backLabel={tab === 'students' ? t('Back to students', '수강생 목록으로') : tab === 'record' ? t('Back to Class Record', 'Class Record 로') : tab === 'schedule' ? t('Back to schedule', '일정으로') : t('Back', '뒤로')}
           followupPending={followupOfStudent(profileOf)?.pending ?? null}
           onFollowup={actions.followupSave ? () => { const id = profileOf; setProfileOf(null); setFollowupOf(id); } : undefined} />}
         {followupOf && actions.profile && actions.followupSave && (
           <FirstLessonFollowup studentId={followupOf} actions={actions.profile} save={actions.followupSave} now={now} onClose={() => setFollowupOf(null)} onChanged={() => void refreshFollowups()}
-            backLabel={tab === 'students' ? t('Back to students', '학생 목록으로') : t('Back', '뒤로')} />
+            backLabel={tab === 'students' ? t('Back to students', '수강생 목록으로') : t('Back', '뒤로')} />
         )}
         {err && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
 
@@ -448,12 +448,12 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 
         {tab === 'students' && (
           <section aria-label="Students">
-            <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">{t('Students', '학생')}</h1>
-            <p className="mb-3 text-[13.5px] text-[#6b6880]">{t('Your students. Tap a name to see their profile, preferences and recent topics.', '담당 학생입니다. 이름을 누르면 프로필·선호·최근 수업 내용을 볼 수 있어요.')}</p>
-            {!actions.students && <p className={`${card} text-[14.5px] text-[#6b6880]`}>{t('Student list is not available here.', '여기서는 학생 목록을 볼 수 없어요.')}</p>}
+            <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">{t('Students', '수강생')}</h1>
+            <p className="mb-3 text-[13.5px] text-[#6b6880]">{t('Your students. Tap a name to see their profile, preferences and recent topics.', '담당 수강생입니다. 이름을 누르면 프로필·선호·최근 수업 내용을 볼 수 있어요.')}</p>
+            {!actions.students && <p className={`${card} text-[14.5px] text-[#6b6880]`}>{t('Student list is not available here.', '여기서는 수강생 목록을 볼 수 없어요.')}</p>}
             {studentsErr && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{studentsErr}</p>}
             {actions.students && !students && !studentsErr && <p className="text-[15px] text-[#6b6880]">Loading…</p>}
-            {students && students.length === 0 && <p className={`${card} text-[14.5px] text-[#6b6880]`}>{t('No students assigned to you yet.', '아직 담당 학생이 없어요.')}</p>}
+            {students && students.length === 0 && <p className={`${card} text-[14.5px] text-[#6b6880]`}>{t('No students assigned to you yet.', '아직 담당 수강생이 없어요.')}</p>}
             {students && students.length > 0 && (
               <ul className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
                 {[...students].sort((a, b) => a.name.localeCompare(b.name)).map((st) => (
@@ -502,7 +502,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
         {panel === 'followup' && (
           <Sheet onClose={() => setPanel(null)}>
             <h2 className="mb-1 pr-10 text-[17px] font-bold text-[#1d1b2b]">{t('First lesson follow-up', '첫 수업 후 확인')}</h2>
-            <p className="mb-3 text-[13px] text-[#6b6880]">{t('After the first lesson, confirm each student’s English level, what they want to improve, and the actual class style. Items turn green automatically once saved.', '첫 수업 후 학생별로 영어 레벨 · 개선 목표 · 실제 수업 방식을 확인해 주세요. 저장하면 자동으로 완료 표시됩니다.')}</p>
+            <p className="mb-3 text-[13px] text-[#6b6880]">{t('After the first lesson, confirm each student’s English level, what they want to improve, and the actual class style. Items turn green automatically once saved.', '첫 수업 후 수강생별로 영어 레벨 · 개선 목표 · 실제 수업 방식을 확인해 주세요. 저장하면 자동으로 완료 표시됩니다.')}</p>
             <div className="grid gap-2">
               {followups.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ {t('All done', '모두 완료')}</p>}
               {followups.map((f) => (
@@ -894,14 +894,14 @@ function LateRow({ id, who, hint, on, min, onToggle, onMin }: {
   );
 }
 
-/** 같은 학생 대체 수업은 한 카드로 */
+/** 같은 수강생 대체 수업은 한 카드로 */
 function groupCovers(covers: TutorCover[]): TutorCover[][] {
   const m = new Map<string, TutorCover[]>();
   for (const c of covers) m.set(c.student, [...(m.get(c.student) ?? []), c]);
   return [...m.values()];
 }
 
-// 대체 수업 요청: 가능한 수업만 체크해 보내기 (체크 안 한 수업 = 불가). 확정은 운영진이 학생 답을 받은 뒤
+// 대체 수업 요청: 가능한 수업만 체크해 보내기 (체크 안 한 수업 = 불가). 확정은 운영진이 수강생 답을 받은 뒤
 function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: string; actions: TutorActions; onSent: () => Promise<void> }) {
   const [yes, setYes] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
@@ -954,7 +954,7 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
 }
 
 function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: string; actions: TutorActions; closed: boolean; onSent: () => Promise<void> }) {
-  // 강사 자율 운영 1단계 (H26(82)): 학생 시간 하나를 골라 [Confirm make-up] → 바로 보강 수업. 모두 안 되면 메모로 운영진에게
+  // 강사 자율 운영 1단계 (H26(82)): 수강생 시간 하나를 골라 [Confirm make-up] → 바로 보강 수업. 모두 안 되면 메모로 운영진에게
   const declined = !!m.answeredAt && m.slots.every((s) => s.answer !== 'yes');
   const [pick, setPick] = useState<string | null>(() => m.slots.find((s) => s.answer === 'yes' && !s.busy && !s.past)?.id ?? null);
   const [none, setNone] = useState(declined);

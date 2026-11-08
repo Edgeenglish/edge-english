@@ -1,7 +1,7 @@
 'use client';
 
-// 이미 저장된 학생에게 강사·시간 고르기 (결제만 저장한 학생, 강사가 '안 된대요' 한 뒤 다른 안)
-// 2026-10-22 대표: "너무 복잡하지 않게" → 한 화면: 학생 요약 → 강사 → 주간 칸 → 첫 수업일 → [아직 → 제안 문구 복사] / [가능하대요 → 확정]
+// 이미 저장된 수강생에게 강사·시간 고르기 (결제만 저장한 수강생, 강사가 '안 된대요' 한 뒤 다른 안)
+// 2026-10-22 대표: "너무 복잡하지 않게" → 한 화면: 수강생 요약 → 강사 → 주간 칸 → 첫 수업일 → [아직 → 제안 문구 복사] / [가능하대요 → 확정]
 // 등록 화면의 강사 고르기·캘린더를 그대로 씀. 저장은 DB 함수 admin_propose_schedule (같은 요청 번호면 1번만)
 
 import Link from 'next/link';
@@ -65,7 +65,7 @@ type Props = {
   initialView?: PlanView | null;
   /** 일정안 없이 강사·정규 수업이 이미 있는 등록의 지금 배정 (R-10) */
   current?: MatchingCurrent | null;
-  /** '수업 컨펌 완료' 기록 — 지금 배정을 강사·학생에게 확인했음 → 신규 매칭 업무 완료 */
+  /** '수업 컨펌 완료' 기록 — 지금 배정을 강사·수강생에게 확인했음 → 신규 매칭 업무 완료 */
   confirmCurrent?: () => Promise<{ repeated: boolean }>;
 };
 
@@ -301,7 +301,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
         </Card>
 
         {hasCurrent && !showNew && (
-          <Card title={currentDone ? '수업 컨펌 완료' : '지금 배정 · 강사·학생에게 확인했나요?'}>
+          <Card title={currentDone ? '수업 컨펌 완료' : '지금 배정 · 강사·수강생에게 확인했나요?'}>
             <p className="text-[15px] font-bold text-[#1d1b2b]">{current!.tutor!.name} 강사 · {slotsText(current!.slots)} <b>한국 시간</b> · {current!.durationMin}분</p>
             {/* R-22: 앞으로 수업과 지난 미기록 수업을 나눠서 */}
             <p className="mt-1 text-[13.5px] text-[#3d3a52]">
@@ -313,7 +313,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                 {[current!.doneCount > 0 && `끝난 수업 ${current!.doneCount}회`, current!.pastUnrecorded > 0 && `지난 수업 ${current!.pastUnrecorded}회는 Class Record 기록 전`].filter(Boolean).join(' · ')}
               </p>
             )}
-            <p className="mt-2 text-[13px] text-[#6b6880]">이 등록은 이미 강사와 정규 수업이 있어요. 시간을 바꾸려면 학생 상세의 [정규 일정 수정]을, 강사를 바꾸려면 운영진에게 알려 주세요. 여기서는 확인 완료만 기록해요.</p>
+            <p className="mt-2 text-[13px] text-[#6b6880]">이 등록은 이미 강사와 정규 수업이 있어요. 시간을 바꾸려면 수강생 상세의 [정규 일정 수정]을, 강사를 바꾸려면 운영진에게 알려 주세요. 여기서는 확인 완료만 기록해요.</p>
             {currentDone ? (
               <Link href={home} className="mt-3 flex min-h-[48px] items-center justify-center rounded-[12px] bg-[#e3f6ea] text-[15px] font-bold text-[#1e7a46]">✓ 기록했어요 — 처리할 일로</Link>
             ) : (
@@ -323,7 +323,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                   setSaving(true);
                   try { await confirmCurrent!(); setCurrentDone(true); } catch (e) { setErr(e instanceof Error ? e.message : '기록하지 못했어요.'); } finally { setSaving(false); }
                 }} className="min-h-[52px] rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
-                  {saving ? '기록 중…' : '수업 컨펌 완료 (강사·학생에게 확인함)'}
+                  {saving ? '기록 중…' : '수업 컨펌 완료 (강사·수강생에게 확인함)'}
                 </button>
                 <button type="button" onClick={() => setShowNew(true)} className="min-h-[44px] text-[13.5px] font-semibold text-[#55526a] underline">다른 강사·시간으로 새 일정안을 만들어야 해요</button>
               </div>

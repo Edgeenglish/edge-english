@@ -1,9 +1,9 @@
 // 계약 판본 판별·적용 검사 (docs/lms/policy/contract-version-check.md)
 // - classifyContract: 계약서 본문에 있는 '조항 문구'만 보고 판본을 판별 (이름·연락처는 읽지도 돌려주지도 않음)
 // - assessTerms: 한 사람의 계약 기록(발송·동의·서명)을 보고 지금 적용되는 판본과 확실한 정도를 판정
-// - assessStudentDocs: 학생의 등록별 문서(계약서·필독안내서)를 보고 3가지 유형으로 구분 (POL-OP-09~11)
+// - assessStudentDocs: 수강생의 등록별 문서(계약서·필독안내서)를 보고 3가지 유형으로 구분 (POL-OP-09~11)
 // 판정은 운영자 확인용 참고 자료이며 법률 판단이 아니다.
-// 계약서를 받지 않은 학생에게는 계약 판본을 절대 만들어 넣지 않는다 (contractCode = null).
+// 계약서를 받지 않은 수강생에게는 계약 판본을 절대 만들어 넣지 않는다 (contractCode = null).
 
 import { addDays, diffDays, type KstDate } from './dates';
 
@@ -21,12 +21,12 @@ type TermsMeta = {
 };
 
 export const TERMS: Record<TermsCode, TermsMeta> = {
-  SC0A: { audience: 'student', label: '학생 계약 2024-09 이전 판 (12시간 기준)', continuation: 'none_stated' },
-  SC0B: { audience: 'student', label: '학생 계약 2024-11 판 (6시간·30일, 효력 조항 없음)', continuation: 'none_stated' },
-  SC0C: { audience: 'student', label: '학생 계약 2025-05 판 (30일, 효력 조항 있음)', continuation: 'clause9' },
-  SC1: { audience: 'student', label: '학생 계약 1판 2025-10~12 (30일)', continuation: 'clause9' },
-  SC2: { audience: 'student', label: '학생 계약 2판 2026-01~ (28일)', continuation: 'clause9' },
-  SC3: { audience: 'student', label: '학생 계약 3판 초안 2026-10', continuation: 'clause9' },
+  SC0A: { audience: 'student', label: '수강생 계약 2024-09 이전 판 (12시간 기준)', continuation: 'none_stated' },
+  SC0B: { audience: 'student', label: '수강생 계약 2024-11 판 (6시간·30일, 효력 조항 없음)', continuation: 'none_stated' },
+  SC0C: { audience: 'student', label: '수강생 계약 2025-05 판 (30일, 효력 조항 있음)', continuation: 'clause9' },
+  SC1: { audience: 'student', label: '수강생 계약 1판 2025-10~12 (30일)', continuation: 'clause9' },
+  SC2: { audience: 'student', label: '수강생 계약 2판 2026-01~ (28일)', continuation: 'clause9' },
+  SC3: { audience: 'student', label: '수강생 계약 3판 초안 2026-10', continuation: 'clause9' },
   TC0: { audience: 'tutor', label: '강사 계약 2024-08 국내판 (원화 시급)', continuation: 'fixed_term' },
   TC0B: { audience: 'tutor', label: '강사 계약 2025-11-04 판 ($14 + 최대 $2, 자동 갱신)', continuation: 'auto_renew', termDays: 365 },
   TC1: { audience: 'tutor', label: '강사 계약 1판 2025-11-27 ($14 + 최대 $3, 갱신은 서면 동의)', continuation: 'written_consent', termDays: 365 },
@@ -71,9 +71,9 @@ export type ContractRecord = {
   code: TermsCode;
   /** 계약서 문서에 적힌 날짜 또는 파일 작성일 */
   documentDate: KstDate;
-  /** 학생·강사에게 실제로 보냈다는 기록 (카톡·메일·전자서명 발송) */
+  /** 수강생·강사에게 실제로 보냈다는 기록 (카톡·메일·전자서명 발송) */
   delivered?: { on: KstDate; proof: 'kakao' | 'email' | 'esign' | 'in_person' };
-  /** 동의 기록: 학생은 '발송 후 결제', 강사는 서명 */
+  /** 동의 기록: 수강생은 '발송 후 결제', 강사는 서명 */
   consent?: { on: KstDate; kind: 'payment_after_delivery' | 'signature' | 'esign_completed' };
 };
 
@@ -101,7 +101,7 @@ function consentIsValid(r: ContractRecord): boolean {
 export function assessTerms(records: ContractRecord[], today: KstDate): TermsAssessment {
   if (records.length === 0) return { code: null, level: 'unknown', flags: ['계약서 기록 없음'] };
   const audiences = new Set(records.map((r) => TERMS[r.code].audience));
-  if (audiences.size > 1) throw new Error('학생 계약과 강사 계약을 한 사람 기록에 섞을 수 없습니다.');
+  if (audiences.size > 1) throw new Error('수강생 계약과 강사 계약을 한 사람 기록에 섞을 수 없습니다.');
 
   const byDate = (a: ContractRecord, b: ContractRecord) => diffDays(b.documentDate, a.documentDate);
   const sorted = [...records].sort(byDate);
@@ -148,7 +148,7 @@ export function assessTerms(records: ContractRecord[], today: KstDate): TermsAss
 export type GuideCode = 'GV1' | 'GV2' | 'GV3' | 'GV4' | 'G20260709';
 
 export const GUIDES: Record<GuideCode, { label: string; pages: number; firstSeen: KstDate | null }> = {
-  // 이미지에 날짜·판 표시가 없음. GV1~GV4는 학생 수강현황 시트에서 발견 (guide-versions-in-sheets.md), 날짜 미상
+  // 이미지에 날짜·판 표시가 없음. GV1~GV4는 수강생 수강현황 시트에서 발견 (guide-versions-in-sheets.md), 날짜 미상
   GV1: { label: '필독안내서 옛 판 1 (30일, 4·6·10회, 이월 없음)', pages: 1, firstSeen: null },
   GV2: { label: '필독안내서 옛 판 2 (28일, 4·6·10회, 이월 없음)', pages: 1, firstSeen: null },
   GV3: { label: '필독안내서 옛 판 3 (28일, 월 1·2·3회, 이월 없음)', pages: 1, firstSeen: null },
@@ -160,7 +160,7 @@ export type GuideRecord = {
   code: GuideCode;
   /** 결제와의 선후. 매칭 중 전달은 결제 후에 해당 */
   timing: 'before_payment' | 'after_payment' | 'at_matching' | 'unknown';
-  /** 카카오톡 채널 개별 발송 · 학생 수강현황 시트에 이미지로 게시 */
+  /** 카카오톡 채널 개별 발송 · 수강생 수강현황 시트에 이미지로 게시 */
   exposure: ('kakao' | 'student_sheet')[];
   on?: KstDate;
 };
@@ -173,8 +173,8 @@ export type EnrollmentDocs = {
 };
 
 export type DocCategory =
-  | 'contract' // 1. 계약서를 전달한 학생 (가장 최근 등록까지 계약서 있음)
-  | 'guide_only' // 2. 계약서 없이 안내서만 받은 학생
+  | 'contract' // 1. 계약서를 전달한 수강생 (가장 최근 등록까지 계약서 있음)
+  | 'guide_only' // 2. 계약서 없이 안내서만 받은 수강생
   | 'contract_then_guide' // 3. 예전 등록에는 계약서, 이후 재등록에는 안내서만
   | 'unknown'; // 문서 기록 없음
 
@@ -214,13 +214,13 @@ function guideFlags(e: EnrollmentDocs): string[] {
 }
 
 /**
- * 학생 한 명의 등록별 문서를 보고 유형을 구분한다.
+ * 수강생 한 명의 등록별 문서를 보고 유형을 구분한다.
  * - 안내서만 받은 등록에 계약 판본을 채우지 않는다.
  * - 예전 계약이 이후 등록에 이어지는지, 안내서가 수강조건이 되는지는 판단하지 않고 '미확인(법률)'로 표시한다.
  */
 export function assessStudentDocs(enrollments: EnrollmentDocs[], today: KstDate): StudentDocsAssessment {
   for (const e of enrollments) {
-    if (e.contract && TERMS[e.contract.code].audience !== 'student') throw new Error('학생 등록에 강사 계약을 넣을 수 없습니다.');
+    if (e.contract && TERMS[e.contract.code].audience !== 'student') throw new Error('수강생 등록에 강사 계약을 넣을 수 없습니다.');
   }
   const sorted = [...enrollments].sort((a, b) => a.seq - b.seq);
   const withContract = sorted.filter((e) => e.contract);

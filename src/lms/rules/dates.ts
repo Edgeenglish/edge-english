@@ -1,7 +1,7 @@
 // 날짜·시간 계산 도우미
 // - 운영 규칙(수강기간, 6시간 기준, 공휴일)은 모두 한국 시간(KST) 기준
 // - 한국은 서머타임이 없으므로 KST = UTC+9 고정
-// - 저장은 UTC(timestamptz), 학생·강사 화면은 각자의 IANA 시간대(예: Australia/Sydney)로 변환
+// - 저장은 UTC(timestamptz), 수강생·강사 화면은 각자의 IANA 시간대(예: Australia/Sydney)로 변환
 
 export type KstDate = string; // 'YYYY-MM-DD' (한국 날짜)
 export type KstTime = string; // 'HH:MM' (한국 시각, 24시간)

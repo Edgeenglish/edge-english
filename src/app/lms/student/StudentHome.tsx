@@ -1,8 +1,8 @@
 'use client';
 
-// 학생 마이페이지 A-1 (카드 쌓기형) — 휴대폰: 카드 순서대로 + 아래 탭 / PC: 왼쪽 메뉴 + 가운데 카드 + 오른쪽 현황·결제
+// 수강생 마이페이지 A-1 (카드 쌓기형) — 휴대폰: 카드 순서대로 + 아래 탭 / PC: 왼쪽 메뉴 + 가운데 카드 + 오른쪽 현황·결제
 // 판정은 src/lms/student/home.ts (6시간 규칙은 rules/change.ts), 저장은 DB 함수(migration 2800, StudentActions).
-// ③ 학생 LMS (2026-10-28 대표): 휴무 안내에 한 번에 답(A안) · 보강 날짜는 달력에서 고르기 · 직접 취소
+// ③ 수강생 LMS (2026-10-28 대표): 휴무 안내에 한 번에 답(A안) · 보강 날짜는 달력에서 고르기 · 직접 취소
 // 미리보기(?demo=1)는 같은 화면에 브라우저 안에서만 흉내 내는 동작(fakeStore)을 넣음 — 저장·발송 없음
 
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
@@ -71,10 +71,10 @@ const STATUS_STYLE: Record<RequestStatus, string> = {
 
 const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
 
-// 학생 화면 시각은 학생이 사는 곳 시간대로 (11/3 대표: 해외 학생은 본인 나라 시간으로 캘린더). 국내 학생은 한국 시간 그대로.
-// 화면 하나에 학생 한 명이라 렌더할 때 정해 둠. 판정(6시간 규칙·수강 종료일 23:59 KST)은 그대로
+// 수강생 화면 시각은 수강생이 사는 곳 시간대로 (11/3 대표: 해외 수강생은 본인 나라 시간으로 캘린더). 국내 수강생은 한국 시간 그대로.
+// 화면 하나에 수강생 한 명이라 렌더할 때 정해 둠. 판정(6시간 규칙·수강 종료일 23:59 KST)은 그대로
 let VIEW_TZ = 'Asia/Seoul';
-/** 운영자 보기에서 해외 학생을 한국 시간으로 보는 중 (주황 띠·배지) */
+/** 운영자 보기에서 해외 수강생을 한국 시간으로 보는 중 (주황 띠·배지) */
 let ADMIN_KST = false;
 /** 기준 이름: '시드니 시간' / '한국 시간' (도시 이름 한국어, 11/8 대표) */
 const zoneCity = () => `${koZoneCity(VIEW_TZ)} 시간`;
@@ -99,19 +99,19 @@ const wdOf = (date: string) => '일월화수목금토'[new Date(`${date.slice(0,
 const fmtDate = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
 /*
- * 시각 표기 원칙 (2026-11-03 대표: '어디 기준 시간인지 빠지면 절대 안 됨', H26(93) 11/7: 학생은 거주지 시간만,
- * 11/8 대표 확정: 표기 통일): 학생 화면의 모든 날짜·요일·시각·신청 기한 = 학생 거주지 시간 '11/2(월) 오후 8:00'.
+ * 시각 표기 원칙 (2026-11-03 대표: '어디 기준 시간인지 빠지면 절대 안 됨', H26(93) 11/7: 수강생은 거주지 시간만,
+ * 11/8 대표 확정: 표기 통일): 수강생 화면의 모든 날짜·요일·시각·신청 기한 = 수강생 거주지 시간 '11/2(월) 오후 8:00'.
  * 기준 시간대는 줄마다 붙이지 않고 화면·팝업 맨 위 띠 '모든 날짜·시간은 시드니 시간 기준' (ZoneBar, 11/8 대표 시안).
- * 운영자 보기에서만 '학생 시간 | 한국 시간 (KST)' 전환 (이 브라우저에 기억). 한국 시간이면 주황 띠 '한국 시간 (KST)으로 보는 중'.
+ * 운영자 보기에서만 '수강생 시간 | 한국 시간 (KST)' 전환 (이 브라우저에 기억). 한국 시간이면 주황 띠 '한국 시간 (KST)으로 보는 중'.
  */
 const overseas = () => VIEW_TZ !== 'Asia/Seoul';
 /*
  * 시간대 기준은 화면·팝업 맨 위 띠(ZoneBar) 한 곳에만 (11/8 대표 시안: 날짜마다 시간대 글을 반복하지 않음).
- * 아래 시각 글에는 시간대 이름을 붙이지 않는다. 예외: 학생 시간대가 아닌 날짜(시트 이관 보강의 '한국 날짜')만 따로 적음
+ * 아래 시각 글에는 시간대 이름을 붙이지 않는다. 예외: 수강생 시간대가 아닌 날짜(시트 이관 보강의 '한국 날짜')만 따로 적음
  */
 /**
  * 시간 기준 배지 (11/8 대표 시안: 큰 띠 대신 작은 배지 하나, 화면·팝업 같은 모양).
- * 학생 시간 = 보라 '모든 날짜·시간은 시드니 시간 기준', 운영자가 한국 시간으로 보는 중 = 주황 '한국 시간(KST) 기준으로 보는 중'.
+ * 수강생 시간 = 보라 '모든 날짜·시간은 시드니 시간 기준', 운영자가 한국 시간으로 보는 중 = 주황 '한국 시간(KST) 기준으로 보는 중'.
  * 색만이 아니라 글자로 구별. globals.css 의 '* { color }' 때문에 글자에 색 직접 지정
  */
 function ZoneBar() {
@@ -123,7 +123,7 @@ function ZoneBar() {
     </p>
   );
 }
-/** 운영자 보기 전용 시간대 전환: 학생 시간 | 한국 시간(KST). 고른 쪽은 굵은 테두리·굵은 글자 (색만으로 구별하지 않음). 오른쪽에 기준 배지 */
+/** 운영자 보기 전용 시간대 전환: 수강생 시간 | 한국 시간(KST). 고른 쪽은 굵은 테두리·굵은 글자 (색만으로 구별하지 않음). 오른쪽에 기준 배지 */
 const KstCtx = createContext<{ admin: boolean; studentTz: string; on: boolean; set: (v: boolean) => void }>({ admin: false, studentTz: 'Asia/Seoul', on: false, set: () => {} });
 function KstToggle() {
   const c = useContext(KstCtx);
@@ -135,7 +135,7 @@ function KstToggle() {
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <span className="text-[14px] font-semibold text-[#55526a]">시간 기준</span>
       <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-[#d9d5e8] bg-[#f6f5fa]">
-        <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>학생 시간 ({city})</button>
+        <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
         <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
       </div>
       <ZoneBar />
@@ -184,14 +184,14 @@ const rightText = (m: { originalAt: Date; timeKnown?: boolean }) => {
   if (m.timeKnown !== false) return whenText(m.originalAt);
   return kstDateOnly(m.originalAt);
 };
-/** 시트에서 옮긴 수업(시각 모름): 한국 날짜만 — 해외 학생 날짜로 바꾸면 하루 어긋날 수 있음 */
+/** 시트에서 옮긴 수업(시각 모름): 한국 날짜만 — 해외 수강생 날짜로 바꾸면 하루 어긋날 수 있음 */
 function kstDateOnly(d: Date) {
   const k = formatInZone(d, 'Asia/Seoul').date;
   return `${fmtDate(k as KstDate)}(${wdOf(k)})${overseas() ? ' 한국 날짜' : ''}`;
 }
 /*
- * 보강 권리 카드 (2026-11-07 대표: 학생에게는 어떤 수업인지·사유 한 줄·신청 기한·날짜 선택만. 노쇼·보상 처리 같은 내부 사유는 안 보임)
- * 제목: 원래 수업 날짜 (학생 시간대). withTime = 같은 날 수업이 둘일 때만 시각까지
+ * 보강 권리 카드 (2026-11-07 대표: 수강생에게는 어떤 수업인지·사유 한 줄·신청 기한·날짜 선택만. 노쇼·보상 처리 같은 내부 사유는 안 보임)
+ * 제목: 원래 수업 날짜 (수강생 시간대). withTime = 같은 날 수업이 둘일 때만 시각까지
  */
 const rightTitle = (m: MakeupRight, withTime = false) => {
   if (m.compId) return '무료 보상수업 1회';
@@ -203,7 +203,7 @@ const rightTitle = (m: MakeupRight, withTime = false) => {
 const rightReason = (m: MakeupRight) =>
   m.compId ? '추가 비용 없이 신청할 수 있어요' : m.tutorLeave ? '강사 휴무로 취소된 수업' : m.tutorFault || m.tutorNoShow ? '강사 사정으로 취소된 수업' : '취소된 수업';
 /**
- * 신청 기한 = 수강 종료일 하나 (H26(93): 정규·학생 취소 보강·강사 귀책 보강·무료 보상수업 모두 같은 종료일. 보상수업 사용 기한도 이 날을 따라감).
+ * 신청 기한 = 수강 종료일 하나 (H26(93): 정규·수강생 취소 보강·강사 귀책 보강·무료 보상수업 모두 같은 종료일. 보상수업 사용 기한도 이 날을 따라감).
  * 예외: 시행 전 시트에서 넘어온 강사 휴무 보강(이관 보강권)은 예전처럼 보강 날짜에 따라 종료일이 늘어나 기한을 적지 않음.
  * 보이는 시간대로 바꾼 시각까지 '기한: 11/21(토) 오전 1:59까지' (종료 기준은 한국 23:59)
  */
@@ -242,7 +242,7 @@ export default function StudentHome(props: {
   const now = useMemo(() => new Date(props.nowIso), [props.nowIso]);
   const [s, setView] = useState<StudentView>(props.initial);
   const studentTz = s.timezone || props.initial.timezone || 'Asia/Seoul';
-  // 운영자 보기에서만 한국 시간으로 바꿔 볼 수 있음 (H26(93)). 학생 본인 화면은 항상 학생 시간
+  // 운영자 보기에서만 한국 시간으로 바꿔 볼 수 있음 (H26(93)). 수강생 본인 화면은 항상 수강생 시간
   const isAdminView = !!props.adminBar;
   const [adminKst, setAdminKstState] = useState(false);
   useEffect(() => {
@@ -259,7 +259,7 @@ export default function StudentHome(props: {
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
   const [overlay, setOverlay] = useState<Overlay>(null);
-  // 창이 열리면 history 에 한 칸 → 휴대폰 뒤로가기(제스처 포함)는 창만 닫고 학생 화면에 머묾 (Work QA 11/7: 수업 변경 창에서 뒤로가기 → 화면 이탈)
+  // 창이 열리면 history 에 한 칸 → 휴대폰 뒤로가기(제스처 포함)는 창만 닫고 수강생 화면에 머묾 (Work QA 11/7: 수업 변경 창에서 뒤로가기 → 화면 이탈)
   const overlayOpen = overlay !== null;
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);   // 화면을 떠날 때(다른 페이지)는 아래에서 history 를 건드리지 않게
@@ -283,7 +283,7 @@ export default function StudentHome(props: {
   const [retry, setRetry] = useState<{ ids: string[]; notice: string } | null>(null);
 
   const lessons = s.lessons;
-  // 강사 휴무로 못 들은 수업도 학생 화면에서는 '보강' (2026-10-28 대표). DB 구분(lms_is_leave_postponed)은 그대로
+  // 강사 휴무로 못 들은 수업도 수강생 화면에서는 '보강' (2026-10-28 대표). DB 구분(lms_is_leave_postponed)은 그대로
   const openRights = s.makeupRights.filter((m) => !m.requested);
   // 휴무 처리 중인 시트 휴가 수업(수업 줄 없음)도 남은 수업 — 보강 신청 목록에서만 빠짐 (3700, 대시보드와 같은 수)
   const makeupsOwed = s.makeupRights.length + (s.leavePending?.length ?? 0);
@@ -295,7 +295,7 @@ export default function StudentHome(props: {
   const notStarted = !s.paid || (s.enrollmentStatus != null && s.enrollmentStatus !== 'active' && lessons.length === 0);
   const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed, studentTz);
   const endDate = s.finalEndDate;
-  // 바로가기 링크: 고를 수 있으면 날짜 고르기를 바로 열고, 아니면 학생 홈 맨 위 한 줄로 이유 (신청 중·확정·기한 지남·열 수 없음)
+  // 바로가기 링크: 고를 수 있으면 날짜 고르기를 바로 열고, 아니면 수강생 홈 맨 위 한 줄로 이유 (신청 중·확정·기한 지남·열 수 없음)
   const [linkNote, setLinkNote] = useState<string | null>(null);
   useEffect(() => {
     const id = props.openMakeup;
@@ -369,7 +369,7 @@ export default function StudentHome(props: {
     }
   }
 
-  // 수업 시간 (H26(95) ②): 매주 정규 요일·시각 — 학생 거주지 시간으로 (운영자 보기에서 KST 전환 시 한국 시간)
+  // 수업 시간 (H26(95) ②): 매주 정규 요일·시각 — 수강생 거주지 시간으로 (운영자 보기에서 KST 전환 시 한국 시간)
   const [slots, setSlots] = useState<RegularSlot[]>([]);
   useEffect(() => {
     let alive = true;
@@ -571,7 +571,7 @@ export default function StudentHome(props: {
     </section>
   );
 
-  // 할 일: 학생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
+  // 할 일: 수강생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
   const todoItems = (
     <>
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
@@ -994,7 +994,7 @@ function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () =>
   );
 }
 
-// 강사 휴무 안내 (A안 한 번에 답, 2026-10-28 대표). 학생은 강사를 고르지 않음 — 운영진이 정한 대체강사만 보여 줌
+// 강사 휴무 안내 (A안 한 번에 답, 2026-10-28 대표). 수강생은 강사를 고르지 않음 — 운영진이 정한 대체강사만 보여 줌
 function LeaveSheet(props: {
   rows: LeaveRow[];
   rights: MakeupRight[];
@@ -1334,7 +1334,7 @@ function monthCells(month: string): (string | null)[] {
   return [...Array<null>(first.getUTCDay()).fill(null), ...Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
 }
 
-/** 보강을 캘린더에 더하기 (2026-10-29 대표, 학생·강사 화면 같은 버튼) */
+/** 보강을 캘린더에 더하기 (2026-10-29 대표, 수강생·강사 화면 같은 버튼) */
 export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google: string; file: string }) {
   const cls = 'inline-flex min-h-[36px] items-center rounded-[10px] border border-[#d9d5e8] bg-white px-2.5 text-[13px] font-semibold text-[#1b1442]';
   return (
