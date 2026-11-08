@@ -6,6 +6,7 @@ import { formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { CONFIRMED } from '../rules/policy';
 import { grantsMakeup, type ClassStatus } from '../rules/status';
 import { enWhen } from './confirm';
+import { koZoneCity } from './places';
 import { enZone } from './students';
 
 export type ChLesson = {
@@ -198,10 +199,12 @@ function koNice(at: Date, tz: string): string {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8))}일(${KO_WD[f.weekday]}) ${h < 12 ? '오전' : '오후'} ${h12}시${m ? ` ${m}분` : ''}`;
 }
+/** 학생 안내 시각 — 한 가지 모양, 시간대 이름은 항상 뒤에 한국어로 (대표 2026-11-08)
+ *  한국 거주 '11월 5일(목) 오전 10시 (한국 시간)' / 해외 '11월 4일(수) 오후 9시 (토론토 시간) = 11월 5일(목) 오전 10시 (한국 시간)' */
 export function koAt(at: Date, tz: string): string {
-  const kst = koNice(at, 'Asia/Seoul');
+  const kst = `${koNice(at, 'Asia/Seoul')} (한국 시간)`;
   if (!tz || tz === 'Asia/Seoul') return kst;
-  return `${koNice(at, tz)} (한국 ${kst})`;
+  return `${koNice(at, tz)} (${koZoneCity(tz)} 시간) = ${kst}`;
 }
 const koDate = (d: KstDate) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일(${['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 /** 강사 안내 시각: 'Thu 5 Nov 22:00 Toronto Time (Fri 6 Nov 12:00 KST)' — 도시 이름 + 한국 시간 함께 (H26(43), QA UX: 'your time' 금지) */
@@ -244,7 +247,7 @@ function makeupStateKo(c: NoticeContext, until: KstDate): string {
   const m = c.makeup;
   const tz = c.student.timezone;
   if (!m || m.state === 'none') return makeupLineKo(until);   // 대표 문구 그대로 (2026-10-26)
-  if (m.state === 'confirmed' && m.at) return `보강 수업: ${koAt(m.at, tz)} (확정)`;
+  if (m.state === 'confirmed' && m.at) return `보강 수업(확정): ${koAt(m.at, tz)}`;
   const picked = m.candidates && m.candidates.length > 0 ? `신청하신 날짜: ${m.candidates.map((t) => koAt(t, tz)).join(' / ')}` : '보강 날짜를 신청하셨어요.';
   if (m.state === 'requested') return `${picked}\n강사님 확인 후 확정 안내 드릴게요.`;
   if (m.state === 'tutor_answered') return `${picked}\n강사님 확인이 끝나 곧 확정 안내 드릴게요.`;
