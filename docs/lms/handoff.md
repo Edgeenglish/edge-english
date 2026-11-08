@@ -4,7 +4,7 @@
 
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
-## ✅ 2026-11-08 First Lesson Follow-up 개선 — 시험 환경 구현·검증 완료, **운영 배포 대표 승인 대기** (H26 기록, 시안 v3 https://claude.ai/artifact/VbbTLPge15MRpQjrce6DRx)
+## ✅ 2026-11-08 First Lesson Follow-up 개선 — 시험 환경 구현·검증 완료, **운영 배포 대표 승인 대기** (H26(106), 시안 v3 https://claude.ai/artifact/VbbTLPge15MRpQjrce6DRx)
 - 브랜치 `claude/practical-shannon-1qzp45` → lms-test. 대표 결정: 4칸 한 화면(Level·Wants to Improve·Class Style·Class Notes) + [Save] 하나, Class Record 칸 뺌, A 채운 칸만 저장·4칸 다 저장해야 To-do 빠짐 / B 운영진 Docs 링크 있으면 완료 / C Google Docs 문서 주소만 / D 왼쪽 학생 정보 칸 뺌 / [Level guide] PC 옆 팝오버(넓은 화면 xl)·휴대폰 바텀시트, 본문 15px·레벨 이름 굵게, 글 = Rubric 원본(1PWNaBCciFsldVhD-MVXfZ-JeuVrz9l_gHs6Wd93rLLI) 그대로 `LEVEL_RUBRIC`(원본 고치면 코드도)
 - migration **20261108170000_lms_first_lesson_followup_docs** (시험 DB 적용, 운영 미적용): `first_lesson_followup_exceptions` 표(운영 STU-0013 id 만 넣음 — 시험 DB 에는 그 id 가 없어 0줄) · `lms_is_google_doc_url` · `lms_first_held_lesson`(예외 학생은 시작일 조건 건너뜀) · `lms_first_lesson_todo`(done.docs, pending 4개 기준, 'record' 는 호환용) · `tutor_first_lesson_save`(class_note_url 키, 한 칸이라도 틀리면 전체 저장 안 함). 적용 전 시험·운영 함수 md5 = 저장소와 같음 확인
 - 코드: `FirstLessonFollowup.tsx` 새로 씀, `followup.ts`(docs·isGoogleDocUrl·LEVEL_RUBRIC), `TutorHome.tsx`(To-do 문구 '· class notes', 'of 4 left'), 데모·fake·vitest·test:db·묶음 SQL·prod-setup.html
