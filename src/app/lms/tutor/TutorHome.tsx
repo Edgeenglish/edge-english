@@ -374,7 +374,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                 {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text={t('Classes to record', '기록할 수업')} onClick={() => setTab('record')} />}
                   {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text={t('Cover requests', '대체 수업 요청')} onClick={() => setPanel('cover')} />}
                   {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text={t('Make-up requests', '보강 요청')} onClick={() => setPanel('makeup')} />}
-                {followups.length > 0 && <TodoBar n={followups.length} text={t('First lesson follow-up (level · goals · class style)', '첫 수업 후 확인 (레벨 · 목표 · 수업 방식)')} onClick={() => setPanel('followup')} />}
+                {followups.length > 0 && <TodoBar n={followups.length} text={t('First lesson follow-up (level · goals · class style · class notes)', '첫 수업 후 확인 (레벨 · 목표 · 수업 방식 · 수업 노트)')} onClick={() => setPanel('followup')} />}
               </div>
             </section>
 
@@ -500,7 +500,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
         {panel === 'followup' && (
           <Sheet onClose={() => setPanel(null)}>
             <h2 className="mb-1 pr-10 text-[17px] font-bold text-[#1d1b2b]">{t('First lesson follow-up', '첫 수업 후 확인')}</h2>
-            <p className="mb-3 text-[13px] text-[#6b6880]">{t('After the first lesson, confirm each student’s English level, what they want to improve, and the actual class style. Items turn green automatically once saved.', '첫 수업 후 학생별로 영어 레벨 · 개선 목표 · 실제 수업 방식을 확인해 주세요. 저장하면 자동으로 완료 표시됩니다.')}</p>
+            <p className="mb-3 text-[13px] text-[#6b6880]">{t('English level · Wants to improve · Class style · Class notes (Google Docs)', '영어 레벨 · 개선 목표 · 수업 방식 · 수업 노트 (Google Docs)')}</p>
             <div className="grid gap-2">
               {followups.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ {t('All done', '모두 완료')}</p>}
               {followups.map((f) => (
@@ -508,8 +508,8 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                   <span className="min-w-0 flex-1">
                     <b className="block text-[15.5px] text-[#1d1b2b]">{f.student}</b>
                     <span className="block text-[13px] text-[#6b6880]">
-                      {f.firstLessonAt ? `${t('First lesson', '첫 수업')} ${whenText(f.firstLessonAt, tz)}` : ''} · {f.pending} {t('of 3 left', '/ 3 남음')}
-                      {!f.done.level ? ` · ${t('Level', '레벨')}` : ''}{!f.done.improve ? ` · ${t('Wants to improve', '개선 목표')}` : ''}{!f.done.style ? ` · ${t('Class style', '수업 방식')}` : ''}
+                      {f.firstLessonAt ? `${t('First lesson', '첫 수업')} ${whenText(f.firstLessonAt, tz)}` : ''} · {f.pending} {t('of 4 left', '/ 4 남음')}
+                      {!f.done.level ? ` · ${t('Level', '레벨')}` : ''}{!f.done.improve ? ` · ${t('Wants to improve', '개선 목표')}` : ''}{!f.done.style ? ` · ${t('Class style', '수업 방식')}` : ''}{!f.done.docs ? ` · ${t('Class notes', '수업 노트')}` : ''}
                     </span>
                   </span>
                   <span className="whitespace-nowrap rounded-[10px] bg-[#5b3fe0] px-3 py-1.5 text-[13px] font-bold text-white">{t('Open', '열기')} ›</span>

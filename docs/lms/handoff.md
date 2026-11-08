@@ -4,11 +4,13 @@
 
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
-## ▶ 다음 세션 작업 (대표 11/8 요청, 시작 전): First Lesson Follow-up 개선
-- 강사가 첫 수업 뒤 끝내야 할 5가지를 `First Lesson Follow-up` 화면 한 곳에: ① English Level(강사 평가) ② Wants to Improve(학생에게 물어 기록) ③ Class Style(학생 기존 희망 방식 자동 불러오기, 강사가 확인 후 필요할 때만 변경, 교재 수업이면 교재도 확인) ④ Class Record(첫 수업 출결·내용) ⑤ Google Docs Class Notes(강사가 새 문서 만들고 LMS에 링크 등록)
-- 원칙: 이미 입력된 정보는 자동으로 불러와 중복 입력 없음 · 완료 여부는 실제 저장된 데이터로 자동 판단 · **Docs 링크 등록까지 해야 To-do에서 사라짐** · 강사 화면 영어 · 기존 수업·학생 데이터·정책 보존
-- **예외 1건**: 11/6 첫 수업을 Maria 강사가 진행한 학생 1명(운영 DB에서 찾기, 이름은 기록에 O 처리) — 기능 시행 전이라 To-do가 안 뜸 → 이 건만 Maria To-do에 표시. **다른 기존 학생에게 과거 To-do 만들지 않음.**
-- 순서: 시험 DB·lms-test 에서 구현 → 강사 계정으로 실제 입력·저장·To-do 제거까지 검증 → **운영 배포는 별도 승인**. 화면 변경이라 PC·휴대폰 시안 먼저(시안 규칙). 지금 To-do '첫 수업 후 확인 (레벨 · 목표 · 수업 방식)' 은 이미 있음(`FirstLessonFollowup.tsx`, `src/lms/tutor/profile.ts`) → 어디까지 있는지 먼저 읽고 부족한 것만.
+## ✅ 2026-11-08 First Lesson Follow-up 개선 — 시험 환경 구현·검증 완료, **운영 배포 대표 승인 대기** (H26 기록, 시안 v3 https://claude.ai/artifact/VbbTLPge15MRpQjrce6DRx)
+- 브랜치 `claude/practical-shannon-1qzp45` → lms-test. 대표 결정: 4칸 한 화면(Level·Wants to Improve·Class Style·Class Notes) + [Save] 하나, Class Record 칸 뺌, A 채운 칸만 저장·4칸 다 저장해야 To-do 빠짐 / B 운영진 Docs 링크 있으면 완료 / C Google Docs 문서 주소만 / D 왼쪽 학생 정보 칸 뺌 / [Level guide] PC 옆 팝오버(넓은 화면 xl)·휴대폰 바텀시트, 본문 15px·레벨 이름 굵게, 글 = Rubric 원본(1PWNaBCciFsldVhD-MVXfZ-JeuVrz9l_gHs6Wd93rLLI) 그대로 `LEVEL_RUBRIC`(원본 고치면 코드도)
+- migration **20261108170000_lms_first_lesson_followup_docs** (시험 DB 적용, 운영 미적용): `first_lesson_followup_exceptions` 표(운영 STU-0013 id 만 넣음 — 시험 DB 에는 그 id 가 없어 0줄) · `lms_is_google_doc_url` · `lms_first_held_lesson`(예외 학생은 시작일 조건 건너뜀) · `lms_first_lesson_todo`(done.docs, pending 4개 기준, 'record' 는 호환용) · `tutor_first_lesson_save`(class_note_url 키, 한 칸이라도 틀리면 전체 저장 안 함). 적용 전 시험·운영 함수 md5 = 저장소와 같음 확인
+- 코드: `FirstLessonFollowup.tsx` 새로 씀, `followup.ts`(docs·isGoogleDocUrl·LEVEL_RUBRIC), `TutorHome.tsx`(To-do 문구 '· class notes', 'of 4 left'), 데모·fake·vitest·test:db·묶음 SQL·prod-setup.html
+- 검증: tsc·eslint 깨끗 · vitest 408/409(정책 기준표 합계 1건 기존 실패) · test:db 의 4600/4602 24개 통과(test:db 는 이 작업 전부터 1248줄 'malformed array literal' 에서 멈춤 + 4300·메일 3건 실패 — 별도 확인 필요) · **lms-test 와 같은 코드 로컬 → 시험 DB, 실제 Blair 계정**(임시 비밀번호 → 끝나고 무작위 값): PC STU-0031 3칸 저장 → 'Saved · 1 item left' → 시트 링크 거절 → Docs 링크 저장 → 창 닫힘·To-do 빠짐 / 휴대폰 STU-0030 미리 채움 확인·Level guide 바텀시트·링크만 저장 → To-do 빠짐. DB 재조회 class_note_url·변경 기록 1·pending 0. **시험 데이터 STU-0030·0031 값은 남김**
+- 운영 영향(읽기 확인): 지금 운영 To-do 0건 → 배포 뒤 Maria 에 STU-0013 1건만 생김
+- **운영 배포 순서(승인 뒤)**: 운영 DB 백업 → migration 20261108170000 → 코드(lms-prod, 다른 대기 기능과 묶을지 대표 결정) → Maria To-do 에 STU-0013 보이는지 운영자 보기로 확인
 
 ## 🚫 절대 규칙: 숫자(금액·한도·기간·날짜·횟수·시간값)는 Claude가 정하지 않고 반드시 대표에게 먼저 묻는다 (2026-10-23, CLAUDE.md 맨 위)
 
