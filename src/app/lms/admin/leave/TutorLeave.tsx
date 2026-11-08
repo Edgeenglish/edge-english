@@ -604,7 +604,7 @@ function TutorBundlePanel({ b, actions, done }: { b: LvTutorBundle; actions: Lea
   const asMsg = (a: LvAskMsg, status: 'pending' | 'sent'): LvMessage => ({ key: `ask-${b.subTutorId}-${a.sentAt?.toISOString() ?? 'new'}`, event: 'sub_ask', recipient: 'tutor', to: b.subTutorName,
     studentId: '', recipientId: b.subTutorId, itemIds: a.itemIds, noticeIds: a.noticeIds, status, text: a.text });
   const students = new Set(b.items.map((i) => i.studentId)).size;
-  const when = (d: Date | null) => (d ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d) : '');
+  const when = (d: Date | null) => (d ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hourCycle: 'h12' }).format(d) : '');
   return (
     <Card title={<>{b.subTutorName} 강사님에게 묻기 <span className="text-[13px] font-normal text-[#6b6880]">학생 {students}명 {b.items.length}회</span></>}>
       <div className="grid gap-3">

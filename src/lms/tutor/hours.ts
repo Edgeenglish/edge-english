@@ -1,7 +1,7 @@
 // 강사 가능 시간 고치기 [My hours] (migration 3100) — 판정은 DB 함수 tutor_hours·tutor_hours_save, 여기는 칸 모양·바뀐 내용 글만
 //  - Every week 칸 키 '요일:HH:MM' (요일 0=일 … 6=토, 강사 현지) · One week only 칸 키 'YYYY-MM-DDTHH:MM' (강사 현지)
 
-import { addDays, formatInZone } from '../rules/dates';
+import { addDays, ampmEn, ampmKo, formatInZone } from '../rules/dates';
 import { cityTime, localToInstant } from './hours-view';
 
 /** 그 주만 칸: c 수업·보강 · r 보강 신청/대체 요청 답 대기 · l 휴무 · p 6시간 안·지난 시간 · s 매주 닫힘 · b 그 주만 닫음 · o 열림 */
@@ -55,8 +55,15 @@ const KO = ['일', '월', '화', '수', '목', '금', '토'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export const toMin = (t: string): number => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-/** 9:00 · 21:30 (시안처럼 앞 0 없음) */
-export const timeText = (m: number): string => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+/** 화면 시각 (12시간): 분 → '9:00 AM' · '9:30 PM' / 한국어 '오후 9:30'. 1440(24:00) = 자정 '12:00 AM' */
+export const timeText = (m: number, lang: 'en' | 'ko' = 'en'): string => (lang === 'ko' ? ampmKo : ampmEn)(hhmm(m % 1440));
+/** 'HH:MM' 두 개 → '9:00–9:40 AM' / '오후 6:30–7:10'. AM/PM(오전/오후)이 다르면 양쪽 다: '11:40 AM–12:20 PM' */
+export function rangeText(a: string, b: string, lang: 'en' | 'ko' = 'en'): string {
+  const x = timeText(toMin(a), lang);
+  const y = timeText(toMin(b), lang);
+  if (lang === 'ko') return `${x}–${x.slice(0, 2) === y.slice(0, 2) ? y.slice(3) : y}`;
+  return `${x.slice(-2) === y.slice(-2) ? x.slice(0, -3) : x}–${y}`;
+}
 export const hhmm = (m: number): string => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 const parts = (date: string) => { const d = new Date(`${date}T00:00:00Z`); return { dow: d.getUTCDay(), day: d.getUTCDate(), month: d.getUTCMonth() }; };
@@ -126,7 +133,7 @@ export function describeChanges(ch: Omit<HoursChanges, 'from'> & { from?: string
     for (const d of WEEK_DAYS) {
       const mins = keys.filter((k) => Number(k.split(':')[0]) === d).map((k) => toMin(k.slice(2)));
       for (const [a, b] of runs(mins)) {
-        const span = `${timeText(a)}–${timeText(b + 30)}`;
+        const span = rangeText(hhmm(a), hhmm(b + 30), lang);
         out.push(lang === 'en' ? `Every ${FULL[d]} ${span} → ${open ? 'open' : 'closed'}` : `매주 ${KO[d]} ${span} → ${open ? '열림' : '닫음'}`);
       }
     }
@@ -134,7 +141,7 @@ export function describeChanges(ch: Omit<HoursChanges, 'from'> & { from?: string
   const once = (keys: string[], what: 'close' | 'reopen' | 'dayOpen') => {
     for (const date of [...new Set(keys.map((k) => k.slice(0, 10)))].sort()) {
       for (const [a, b] of runs(keys.filter((k) => k.startsWith(date)).map((k) => toMin(k.slice(11))))) {
-        const span = `${timeText(a)}–${timeText(b + 30)}`;
+        const span = rangeText(hhmm(a), hhmm(b + 30), lang);
         const en = { close: 'blocked', reopen: 'block removed', dayOpen: 'available (this day only)' }[what];
         const ko = { close: '그날만 막음', reopen: '막기 풂', dayOpen: '그날만 엶' }[what];
         out.push(lang === 'en' ? `${dateText(date)} ${span} → ${en}` : `${koDate(date)} ${span} → ${ko}`);
@@ -149,14 +156,14 @@ export function describeChanges(ch: Omit<HoursChanges, 'from'> & { from?: string
   if (ch.note && ch.onceClose.length > 0) out.push(lang === 'en' ? `Note: ${ch.note}` : `메모: ${ch.note}`);
   if (ch.noteOf) {
     const [a] = ch.noteOf.split('/');
-    out.push(lang === 'en' ? `${dateText(a.slice(0, 10))} ${timeText(toMin(a.slice(11)))} block note → ${ch.note ?? '(none)'}` : `${koDate(a.slice(0, 10))} ${timeText(toMin(a.slice(11)))} 막은 시간 메모 → ${ch.note ?? '(없음)'}`);
+    out.push(lang === 'en' ? `${dateText(a.slice(0, 10))} ${timeText(toMin(a.slice(11)))} block note → ${ch.note ?? '(none)'}` : `${koDate(a.slice(0, 10))} ${timeText(toMin(a.slice(11)), 'ko')} 막은 시간 메모 → ${ch.note ?? '(없음)'}`);
   }
   return out;
 }
 /**
  * 바뀐 내용 (표시 시간대 기준 + 다른 시간대 보조). 저장 키는 강사 현지 그대로이고 보여 주는 글만 바꿈 (2026-11-04 대표 8번).
- * main = 고른 시간대 'Every Mon 17:30–18:00 KST → open', sub = 다른 시간대 'Every Mon 15:30–16:00 Ho Chi Minh Time' (강사가 한국이면 없음)
- * 날짜·요일이 시간대 때문에 달라져도 각각 정확히: 걸치면 'Mon 23:30 – Tue 0:30'. 매주 변경은 적용일 주(from) 기준
+ * main = 고른 시간대 'Every Mon 5:30–6:00 PM KST → open', sub = 다른 시간대 'Every Mon 3:30–4:00 PM Ho Chi Minh Time' (강사가 한국이면 없음)
+ * 날짜·요일이 시간대 때문에 달라져도 각각 정확히: 걸치면 'Mon 11:30 PM – Tue 12:30 AM'. 매주 변경은 적용일 주(from) 기준
  */
 export function describeChangesIn(
   ch: Omit<HoursChanges, 'from'>, from: string, tutorZone: string, viewZone: string,
@@ -170,7 +177,7 @@ export function describeChangesIn(
     const day = (d: string) => (weekly ? FULL[parts(d).dow] : dateText(d));
     const head = weekly ? `Every ${day(s.date)}` : day(s.date);
     const span = s.date === e.date || e.time === '00:00' && addDays(s.date, 1) === e.date
-      ? `${timeText(toMin(s.time))}–${e.time === '00:00' ? '24:00' : timeText(toMin(e.time))}`
+      ? rangeText(s.time, e.time)
       : `${timeText(toMin(s.time))} – ${day(e.date)} ${timeText(toMin(e.time))}`;
     return `${head} ${span} ${names(zone)}`;
   };

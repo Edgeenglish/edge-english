@@ -10,6 +10,7 @@ import { computePeriods } from '../rules/period';
 import { parseCountryCity, suggestTimezone } from './places';
 import { CONFIRMED, type CourseWeeks } from '../rules/policy';
 import type { RegularSlot } from '../rules/schedule';
+import { rangeText } from '../tutor/hours';
 
 /** 신청서 응답 1건 (응답 시트 한 줄). raw = 원본 칸 그대로 (원본 보기용) */
 export type FormResponse = {
@@ -189,10 +190,10 @@ export function newRequestId(): string {
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
-/** 희망 시간 요약: '화·목 19:00–22:00' (같은 시간대끼리 요일을 묶음) */
+/** 희망 시간 요약: '화·목 오후 7:00–10:00' (같은 시간대끼리 요일을 묶음) */
 export function wishText(w: readonly WishWindow[]): string {
   const groups = new Map<string, number[]>();
-  for (const x of w) groups.set(`${x.from}–${x.to}`, [...(groups.get(`${x.from}–${x.to}`) ?? []), x.weekday]);
+  for (const x of w) groups.set(rangeText(x.from, x.to, 'ko'), [...(groups.get(rangeText(x.from, x.to, 'ko')) ?? []), x.weekday]);
   return [...groups].map(([range, days]) => `${days.sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => WD[d]).join('·')} ${range}`).join(', ');
 }
 

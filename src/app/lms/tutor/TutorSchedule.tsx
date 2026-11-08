@@ -16,6 +16,7 @@ import {
 } from '@/lms/tutor/schedule';
 import { KOREA_TIME, minutesOf, statusText, type TutorLesson } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
+import { ampmEn } from '@/lms/rules/dates';
 
 export type ScheduleActions = {
   load: (from: string, to: string, cells: boolean) => Promise<ScheduleData>;
@@ -191,7 +192,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     if (k === 'request' || k === 'answered') { const r = lockReason(k)!; return setDialog({ kind: 'info', title: r.title, body: r.body }); }
     if (k === 'locked') return setDialog({ kind: 'info', title: 'Can’t change', body: 'Can’t change: less than 6 hours away.' });
     if (k === 'outside') {
-      return setDialog({ kind: 'info', title: 'Can’t change', body: `Classes can only start ${data.times[0]}–${data.times[data.times.length - 1]} ${cityTime(tz)}.` });
+      return setDialog({ kind: 'info', title: 'Can’t change', body: `Classes can only start ${ampmEn(data.times[0])}–${ampmEn(data.times[data.times.length - 1])} ${cityTime(tz)}.` });
     }
     if (k === 'far') return setDialog({ kind: 'info', title: 'Can’t change yet', body: `You can change times up to 12 weeks ahead (until ${dayText(data.last)}).` });
   }
@@ -228,7 +229,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   function weekCell(date: string, i: number, kinds: CellKind[]) {
     const k = kinds[i];
     const t = slotTime(i);
-    const label = `${dayText(date)} ${t} ${viewLabel}`;
+    const label = `${dayText(date)} ${ampmEn(t)} ${viewLabel}`;
     const sel = drag && drag.date === date && i >= Math.min(drag.a, drag.b) && i <= Math.max(drag.a, drag.b);
     const handlers = {
       onPointerDown: (e: React.PointerEvent) => {
@@ -253,7 +254,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
         <button type="button" {...handlers} aria-label={`${label} class with ${l.student}`}
           className={`${cellBase} truncate px-1 ${makeup ? 'text-[#0f5f56]' : 'text-white'} ${first ? (f.to >= 1 && minutesOf(l) > 30 - (sMin - i * 30) ? 'rounded-b-none' : '') : cont}`}
           style={fillStyle(f, makeup ? '#9fe0d6' : '#5b3fe0', '#ecebf1')}>
-          {first ? <span className="[color:inherit]">{l.student.split(' ')[0]} <span className="hidden font-medium [color:inherit] lg:inline">{s.time}</span></span> : ''}
+          {first ? <span className="[color:inherit]">{l.student.split(' ')[0]} <span className="hidden font-medium [color:inherit] lg:inline">{ampmEn(s.time)}</span></span> : ''}
         </button>
       );
     }
@@ -395,7 +396,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
           ))}
           {ALL_HOURS.map((t, i) => (
             <div key={t} className="contents">
-              <div data-row={i} className="pr-1 text-right text-[11px] leading-[26px] text-[#1d1b2b] lg:leading-[24px]">{t.endsWith('00') ? t : ''}</div>
+              <div data-row={i} className="pr-1 text-right text-[11px] leading-[26px] text-[#1d1b2b] lg:leading-[24px]">{t.endsWith('00') ? ampmEn(t).replace(':00', '') : ''}</div>
               {grid.map((d, c) => <div key={d}>{weekCell(d, i, weekKinds[c])}</div>)}
             </div>
           ))}
@@ -530,7 +531,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
         </div>
         {hit && (
           <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">
-            You have a class at {inZone(hit.startsAt, viewZone).time} {viewLabel}. Classes can’t be blocked.
+            You have a class at {ampmEn(inZone(hit.startsAt, viewZone).time)} {viewLabel}. Classes can’t be blocked.
           </p>
         )}
         {!isOpen && !removeExtra && <NoteField value={d.note} onChange={(v) => setD({ ...d, note: v })} />}
@@ -565,7 +566,7 @@ const tagColor = (tag: string) => (tag === 'Cancel' ? 'bg-[#fdecea] text-[#b3261
   : tag === 'Block' ? 'bg-[#ecebf1] text-[#55526a]' : tag === 'Extra hours' ? 'bg-[#e6f6ec] text-[#1f7a4d]' : tag === 'Last' ? 'bg-[#f3e8ff] text-[#7a2ab0]' : 'bg-[#e3f6f3] text-[#0f5f56]');
 
 function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
-  const time = inZone(item.at, zone).time;
+  const time = ampmEn(inZone(item.at, zone).time);
   if (item.kind === 'lesson') {
     const l = item.lesson;
     const tag = lessonTag(l);

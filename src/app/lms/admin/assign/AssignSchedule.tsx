@@ -9,7 +9,7 @@ import { useMemo, useState } from 'react';
 import DateInput from '../DateInput';
 import { checkLessonList, checkRegularPlan, firstLessonDateOnOrAfter, issueText, type CellState } from '@/lms/rules/booking';
 import { buildLessons, lessonPayload, needsLessonList, type LessonDate } from '@/lms/rules/lessons';
-import { addDays, instantToKstDate, weekdayOf, type KstDate } from '@/lms/rules/dates';
+import { addDays, ampmKo, instantToKstDate, weekdayOf, type KstDate } from '@/lms/rules/dates';
 import { courseName } from '@/lms/rules/period';
 import type { CourseWeeks } from '@/lms/rules/policy';
 import type { RegularSlot } from '@/lms/rules/schedule';
@@ -392,10 +392,10 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                         특정 수업 날짜 변경{changed.length ? ` · ${changed.length}건` : ''}
                       </button>
                     </div>
-                    {lessonPlan.extraFirst && <p className="mt-2 text-[13px] text-[#1d1b2b]">1회 {dayLabel(lessonPlan.lessons[0].date)} {lessonPlan.lessons[0].time} (한국 시간) · 첫 수업</p>}
+                    {lessonPlan.extraFirst && <p className="mt-2 text-[13px] text-[#1d1b2b]">1회 {dayLabel(lessonPlan.lessons[0].date)} {ampmKo(lessonPlan.lessons[0].time)} (한국 시간) · 첫 수업</p>}
                     {changed.map((l) => (
                       <p key={l.key} className="mt-1 text-[13px] text-[#1d1b2b]">
-                        {l.n}회 <s className="text-[#9a97a8]">{dayLabel(l.original!.date)} {l.original!.time}</s> → <b>{dayLabel(l.date)} {l.time}</b> (한국 시간)
+                        {l.n}회 <s className="text-[#9a97a8]">{dayLabel(l.original!.date)} {ampmKo(l.original!.time)}</s> → <b>{dayLabel(l.date)} {ampmKo(l.time)}</b> (한국 시간)
                       </p>
                     ))}
                     {lessonPlan.problems.map((p) => (
@@ -412,7 +412,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                     <ul className="mt-1 space-y-1">
                       {[...new Map(plan.issues.map((i) => [i.kstDate, i])).values()].map((i) => (
                         <li key={i.kstDate} className="text-[#1d1b2b]">
-                          {i.seq}회 {dayLabel(i.kstDate)} {i.kstTime} (한국 시간) — <span className="text-[#b3261e]">{plan.issues.filter((x) => x.kstDate === i.kstDate).map((x) => issueText(x.reason)).join(' · ')}</span>
+                          {i.seq}회 {dayLabel(i.kstDate)} {ampmKo(i.kstTime)} (한국 시간) — <span className="text-[#b3261e]">{plan.issues.filter((x) => x.kstDate === i.kstDate).map((x) => issueText(x.reason)).join(' · ')}</span>
                         </li>
                       ))}
                     </ul>

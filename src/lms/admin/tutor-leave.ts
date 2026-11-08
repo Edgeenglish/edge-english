@@ -8,7 +8,7 @@
 //   1 대체 강사에게 묻기 → 2 학생에게 휴무 안내 · 대체 강사 제안 (글 하나) → 3 학생 답 입력 → 4 확정 안내 보내기
 //   운영진이 대체강사 가능 여부를 먼저 확인하고, 학생은 한 번만 답함 ([좋아요] / [기존 강사와 보강])
 
-import { formatInZone, type KstDate } from '../rules/dates';
+import { ampmKo, formatInZone, type KstDate } from '../rules/dates';
 import { enAt, koAt, MAKEUP_SLOTS_MAX } from './lesson-change';
 import { meetRoomUrl } from '../rules/meet';
 
@@ -137,7 +137,7 @@ export function itemStatus(i: LvItem, pending?: ReadonlySet<string>): { text: st
 function koShort(at: Date): string {
   const f = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at);
   const p = Object.fromEntries(f.map((x) => [x.type, x.value]));
-  return `${Number(p.month)}/${Number(p.day)} ${p.hour}:${p.minute}`;
+  return `${Number(p.month)}/${Number(p.day)} ${ampmKo(`${p.hour}:${p.minute}`)}`;
 }
 
 /** 휴무 한 건의 요약 (대시보드 카드와 같은 기준) */

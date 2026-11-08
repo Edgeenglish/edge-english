@@ -5,7 +5,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { addDays, formatInZone, instantToKstDate } from '@/lms/rules/dates';
+import { addDays, ampmKo, formatInZone, instantToKstDate } from '@/lms/rules/dates';
 import { fakeDirectory } from '@/lms/admin/fake-directory';
 import { dayLabel, diffFromKst, localTime, upcomingOffsetChange, weekOf } from '@/lms/admin/schedule';
 import { AdminHeader, BottomNav, Icon } from '../ui';
@@ -46,7 +46,7 @@ export default function Schedule({ nowIso }: { nowIso: string }) {
         className={`grid gap-0.5 rounded-[10px] border px-2.5 py-2 ${l.state === 'canceled' ? 'border-dashed border-[#e0cf8a] bg-[#fffaf0]' : 'border-[#e6e3ef] bg-white'}`}
       >
         <span className="flex items-center justify-between gap-1">
-          <b className={`text-[14px] tabular-nums ${tutor ? 'text-[#6b6880]' : 'text-[#1d1b2b]'}`}>{k.time}</b>
+          <b className={`text-[14px] tabular-nums ${tutor ? 'text-[#6b6880]' : 'text-[#1d1b2b]'}`}>{ampmKo(k.time)}</b>
           <span className={`rounded-full px-1.5 py-0.5 text-[10.5px] font-bold ${STATE_STYLE[l.state]}`}>{l.kind === 'makeup' ? '보강' : STATE_LABEL[l.state]}</span>
         </span>
         {tutor && (

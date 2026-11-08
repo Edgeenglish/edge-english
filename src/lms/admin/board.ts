@@ -4,12 +4,12 @@
 // 표시 원칙 POL-OP-20: 대표 승인·판단 / 자동 처리 실패 / 일정 조율 실패 / 기한 임박 미해결만 올린다.
 // 자동 처리로 완료가 확인된 업무는 목록에서 빠진다 (사람이 닫지 않아도 됨). 단순 정보는 여기 넣지 않는다.
 
-import { formatInZone, hoursBetween } from '../rules/dates';
+import { ampmKo, formatInZone, hoursBetween } from '../rules/dates';
 import { firstLessonAt, planAlert, type PlanView } from './confirm';
 
 /** 수업 변경 안내 종류 → 카드 맨 위 '무슨 일' (lesson_notices.event, migration 1700) */
 const CHANGE_EVENT_TEXT: Record<string, string> = {
-  change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림',
+  change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림', makeup_rescheduled: '보강 시간 변경',
 };
 const LESSON_KIND_TEXT: Record<string, string> = { regular: '정규 ', makeup: '보강 ', migrated_makeup: '보강 ', migrated_extra: '추가 ', compensation: '보상 ' };
 const CANCEL_BY_TEXT: Record<string, string> = { student_cancel: '학생측 취소', tutor_cancel: '강사측 취소', admin_cancel: '운영진 취소' };
@@ -274,7 +274,7 @@ const WD: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '�
 
 function kstLabel(d: Date): string {
   const f = formatInZone(d, KST);
-  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}(${WD[f.weekday] ?? f.weekday}) ${f.time}`;
+  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}(${WD[f.weekday] ?? f.weekday}) ${ampmKo(f.time)}`;
 }
 
 /** 기한 상태: 초과 / 24시간 안 / 그 밖 (DB 뷰 admin_task_board 와 같은 기준) */
@@ -436,7 +436,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         kind: t.kind,
         severity: 'urgent',
         tag: '노쇼 신고',
-        title: `${t.studentName} · ${kstLabel(t.lessonStartsAt).split(' ')[1]} · ${t.tutorName}`,
+        title: `${t.studentName} · ${kstLabel(t.lessonStartsAt).split(' ').slice(1).join(' ')} · ${t.tutorName}`,
         detail: `학생이 ${Math.max(1, Math.round(hoursBetween(t.reportedAt, now) * 60))}분 전에 '강사가 안 들어왔어요'를 눌렀어요.`,
         due: null,
         steps: [],

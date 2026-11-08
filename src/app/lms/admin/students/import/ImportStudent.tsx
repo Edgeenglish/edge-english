@@ -12,7 +12,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import DateInput from '../../DateInput';
-import { addDays, instantToKstDate, weekdayOf } from '@/lms/rules/dates';
+import { addDays, ampmKo, instantToKstDate, weekdayOf } from '@/lms/rules/dates';
 import {
   DURATIONS, emptyImport, IMPORT_REASON_TEXT, importCount, importIssues, importLessons, importPayload, importPeriods, importProblems, importWarnings,
   activeMakeups, autoFromDate, setSlotTime, currentPeriod, END_REASON_TEXT, newMakeup, regularRows, todayPeriod, withAutoEnd, type EndReason, type ImportDraft, type ImportExtra, type ImportIssue, type ImportMakeup, type ImportWeeks,
@@ -166,7 +166,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
     <ul className="mt-1.5 grid gap-1 text-[13.5px] text-[#1d1b2b]">
       {list.map((c, i) => (
         <li key={i}>
-          • {dayLabel(c.date)} {c.time} {KIND_TEXT[c.kind] ?? c.kind} · {CONFLICT_TEXT[c.reason] ?? c.reason}
+          • {dayLabel(c.date)} {ampmKo(c.time)} {KIND_TEXT[c.kind] ?? c.kind} · {CONFLICT_TEXT[c.reason] ?? c.reason}
           {c.other && c.other !== '이번 입력' ? ` (${c.other})` : ''}
         </li>
       ))}
@@ -455,7 +455,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                   </div>
                   {m.status === 'booked' ? (
                     <>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <Field label="보강 날짜">
                           <DateInput id={`imp-mk-date-${i}`} value={m.date} min={d.fromDate} disabled={saved} onChange={(v) => setMakeup(i, { date: v })} className={inputCls(saved, tried && !m.date)} />
                         </Field>
@@ -546,7 +546,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2 sm:grid-cols-2">
                   <Field label="날짜">
                     <DateInput id={`imp-ex-date-${i}`} value={x.date} min={d.fromDate} max={d.endDate || undefined} disabled={saved} onChange={(v) => setExtra(i, { date: v })} className={inputCls(saved, tried && !x.date)} />
                   </Field>
@@ -579,7 +579,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                       className={`flex min-h-[40px] items-center gap-2 rounded-[9px] border border-[#e6e3ef] px-3 text-[13.5px] ${r.state === 'keep' ? 'text-[#1d1b2b]' : 'bg-[#f6f5fb] text-[#6b6880] line-through'}`}
                     >
                       <span className="tabular-nums">
-                        {dayLabel(r.date)} {r.time}
+                        {dayLabel(r.date)} {ampmKo(r.time)}
                       </span>
                       <span className="flex-1" />
                       {r.state === 'origin' ? (
@@ -633,7 +633,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
             <dd className="text-[#1d1b2b]">지금 기간 {d.creditsLeft ?? '-'}/{granted} · 다음 기간부터 {granted}개씩</dd>
             <dt className="text-[#6b6880]">강사·정규</dt>
             <dd className="min-w-0 text-[#1d1b2b]">
-              {tutorName(d.tutorId) || '-'} · {d.slots.filter((s) => s.time).map((s) => `${WEEKDAY_KO[s.weekday]} ${s.time}`).join(' · ') || '-'}
+              {tutorName(d.tutorId) || '-'} · {d.slots.filter((s) => s.time).map((s) => `${WEEKDAY_KO[s.weekday]} ${ampmKo(s.time)}`).join(' · ') || '-'}
               {d.durationMin ? ` · ${d.durationMin}분` : ''}
             </dd>
             <dt className="text-[#6b6880]">만들 수업</dt>
@@ -694,7 +694,7 @@ export default function ImportStudent({ nowIso, demo, tutors, save, reload, mark
                 <b className="text-[15px] text-[#1d1b2b]">시트와 1회 대조</b>
                 <ul className="mt-2 grid gap-1 text-[13.5px] text-[#1d1b2b]">
                   <li>• 남은 수업 {result.lmsLeft}회 {result.lmsLeft === result.sheetLeft ? `= 시트 ${result.sheetLeft}회` : <b className="text-[#b3261e]">≠ 시트 {result.sheetLeft}회</b>}</li>
-                  <li>• 다음 정규 수업 {regular[0] ? `${dayLabel(regular[0].date)} ${regular[0].time}` : '-'}</li>
+                  <li>• 다음 정규 수업 {regular[0] ? `${dayLabel(regular[0].date)} ${ampmKo(regular[0].time)}` : '-'}</li>
                   <li>• {currentPeriod(d)}기간 변경권 {d.creditsLeft}/{granted} · 종료일 {d.endDate ? dayLabel(d.endDate) : '-'}</li>
                   <li>• 보강 예약 {count.booked} · 미예약 {count.open}</li>
                 </ul>

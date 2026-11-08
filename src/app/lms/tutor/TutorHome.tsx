@@ -7,7 +7,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
-import { formatInZone } from '@/lms/rules/dates';
+import { ampmEn, formatInZone } from '@/lms/rules/dates';
 import { tutorPaidFor } from '@/lms/rules/status';
 import { cityTime } from '@/lms/tutor/hours-view';
 import TutorHours, { type HoursActions } from './TutorHours';
@@ -213,7 +213,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   const today = localDate(now, tz);
   const todayLessons = screen.lessons.filter((l) => localDate(l.startsAt, tz) === today).sort((a, b) => +a.startsAt - +b.startsAt);
   const nextLesson = screen.lessons.filter((l) => l.state === 'scheduled' && l.startsAt > now && localDate(l.startsAt, tz) !== today).sort((a, b) => +a.startsAt - +b.startsAt)[0];
-  const localNow = formatInZone(now, tz).time;
+  const localNow = ampmEn(formatInZone(now, tz).time);
   const kstNow = kstText(now, tz);
 
   const logo = (
@@ -598,7 +598,7 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
         {l.count && <span className="text-[13px] text-[#6b6880]">Class {l.count.n}/{l.count.total}</span>}
       </div>
       <p className="text-[14.5px] text-[#1d1b2b]">
-        {whenText(l.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(l, tz)} {tzTimeLabel(tz)} · {minutesOf(l)} min
+        {whenText(l.startsAt, tz).replace(/ \d{1,2}:\d\d [AP]M$/, '')} · {timeRange(l, tz)} {tzTimeLabel(tz)} · {minutesOf(l)} min
         {kst && <span className="text-[#6b6880]"> · {kst}</span>}
       </p>
       {l.makeupOf && <p className="text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
@@ -628,7 +628,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   const phase = phaseOf(l, now);
   const status = statusText(l, now);
   const k = kst ? kstText(l.startsAt, tz) : null;
-  const time = timeRange(l, tz).split('–')[0];
+  const time = ampmEn(formatInZone(l.startsAt, tz).time);
   const count = l.count ? `${l.count.n}/${l.count.total}` : '—';
   // 펼쳐도 보일 것이 없는 줄은 못 누름 (대표 10/31: 대체수업을 펼쳐도 빈 칸)
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
@@ -904,7 +904,7 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
               <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border text-[14px] font-bold ${
                 on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>✓</span>
               <span className="flex-1">
-                <b className="block text-[15px] text-[#1d1b2b]">{whenText(c.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(c, tz)} {tzTimeLabel(tz)}</b>
+                <b className="block text-[15px] text-[#1d1b2b]">{whenText(c.startsAt, tz).replace(/ \d{1,2}:\d\d [AP]M$/, '')} · {timeRange(c, tz)} {tzTimeLabel(tz)}</b>
                 {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
                 {c.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(c.why, cityTime(tz))}</span>}
               </span>
@@ -959,7 +959,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
       <p className="text-[13.5px] text-[#55526a]">{m.compensation ? 'Tutor no-show class' : 'Original class'}: {makeupOrigin(m, tz)}</p>
       {confirmed ? (
         <p role="status" className="mt-2 rounded-[10px] bg-[#e6f6ec] px-3 py-2 text-[14.5px] font-bold text-[#1f7a4d]">
-          ✓ Make-up confirmed · {whenText(confirmed.startsAt, tz).replace(/ \d\d:\d\d$/, '')} {timeRange(confirmed, tz)} {tzTimeLabel(tz)}
+          ✓ Make-up confirmed · {whenText(confirmed.startsAt, tz).replace(/ \d{1,2}:\d\d [AP]M$/, '')} {timeRange(confirmed, tz)} {tzTimeLabel(tz)}
           {kstText(confirmed.startsAt, tz) && <span className="block text-[12.5px] font-semibold">{kstText(confirmed.startsAt, tz)}</span>}
         </p>
       ) : closed ? (
@@ -979,7 +979,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
                   <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] ${
                     on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>●</span>
                   <span className="flex-1">
-                    <b className="block text-[15px] text-[#1d1b2b]">{whenText(s.startsAt, tz).replace(/ \d\d:\d\d$/, '')} · {timeRange(s, tz)} {tzTimeLabel(tz)}</b>
+                    <b className="block text-[15px] text-[#1d1b2b]">{whenText(s.startsAt, tz).replace(/ \d{1,2}:\d\d [AP]M$/, '')} · {timeRange(s, tz)} {tzTimeLabel(tz)}</b>
                     {kst && <span className="text-[12.5px] text-[#6b6880]">{kst}</span>}
                     {s.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(s.why, cityTime(tz))}</span>}
                   </span>

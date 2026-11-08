@@ -36,11 +36,12 @@ export default function TimeInput({ value, onChange, id, disabled, className, 'a
     onChange(join(n));
   };
   const minutes = p.m && !MINUTES.includes(p.m) ? [...MINUTES, p.m].sort() : MINUTES;
-  const sel = `${className ?? ''} !px-1.5`;
+  // 넘겨받은 칸 모양(테두리·글자)은 쓰되 너비는 이 묶음이 정함 (예전 한 칸짜리 너비 지정이 셋에 똑같이 걸리지 않게)
+  const sel = `${(className ?? '').replace(/(^|\s)(w-\S+|flex-1|min-w-0|text-center)(?=\s|$)/g, ' ')} w-full min-w-0 !px-1.5`;
   const ap = (k: 'am' | 'pm') =>
     `min-h-[44px] flex-1 px-2 text-[14.5px] font-semibold ${p.ap === k ? 'bg-[#7d5ffb] text-white' : 'bg-white text-[#1d1b2b]'} disabled:opacity-60`;
   return (
-    <div id={id} role="group" aria-label={label} className="grid min-w-0 grid-cols-[auto_1fr_1fr] gap-1">
+    <div id={id} role="group" aria-label={label} className={`grid min-w-0 grid-cols-[auto_1fr_1fr] gap-1 ${/(^|\s)flex-1(\s|$)/.test(className ?? '') ? 'flex-1' : ''}`}>
       <div className="flex overflow-hidden rounded-[10px] border border-[#e6e3ef]">
         <button type="button" disabled={disabled} aria-pressed={p.ap === 'am'} className={ap('am')} onClick={() => set({ ap: 'am' })}>오전</button>
         <button type="button" disabled={disabled} aria-pressed={p.ap === 'pm'} className={ap('pm')} onClick={() => set({ ap: 'pm' })}>오후</button>

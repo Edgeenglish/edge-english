@@ -20,12 +20,12 @@ describe('My hours', () => {
     const w = diff(['1:09:00', '1:09:30', '1:10:00', '2:09:00'], ['1:10:00', '2:09:00', '6:10:00']);
     const ch = { weeklyOpen: w.added, weeklyClose: w.removed, onceClose: ['2026-11-02T10:00', '2026-11-02T10:30'], onceOpen: ['2026-11-03T08:00'] };
     expect(describeChanges(ch, 'en')).toEqual([
-      'Every Saturday 10:00–10:30 → open',
-      'Every Monday 9:00–10:00 → closed',
-      'Mon 2 Nov 10:00–11:00 → blocked',
-      'Tue 3 Nov 8:00–8:30 → block removed',
+      'Every Saturday 10:00–10:30 AM → open',
+      'Every Monday 9:00–10:00 AM → closed',
+      'Mon 2 Nov 10:00–11:00 AM → blocked',
+      'Tue 3 Nov 8:00–8:30 AM → block removed',
     ]);
-    expect(describeChanges(ch, 'ko')).toEqual(['매주 토 10:00–10:30 → 열림', '매주 월 9:00–10:00 → 닫음', '11/2(월) 10:00–11:00 → 그날만 막음', '11/3(화) 8:00–8:30 → 막기 풂']);
+    expect(describeChanges(ch, 'ko')).toEqual(['매주 토 오전 10:00–10:30 → 열림', '매주 월 오전 9:00–10:00 → 닫음', '11/2(월) 오전 10:00–11:00 → 그날만 막음', '11/3(화) 오전 8:00–8:30 → 막기 풂']);
   });
   it('주 표시와 DB 값 읽기', () => {
     expect(weekText('2026-11-02')).toBe('2 – 8 Nov');
@@ -42,18 +42,18 @@ describe('My hours', () => {
     const none = { weeklyOpen: [], weeklyClose: [], onceClose: [], onceOpen: [] };
     // 호치민(UTC+7) 월 15:30–16:00 = KST 월 17:30–18:00
     const a = describeChangesIn({ ...none, weeklyOpen: ['1:15:30'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Seoul');
-    expect(a).toEqual([{ main: 'Every Monday 17:30–18:00 Korea Time (KST) → open', sub: 'Every Monday 15:30–16:00 Ho Chi Minh Time' }]);
+    expect(a).toEqual([{ main: 'Every Monday 5:30–6:00 PM Korea Time (KST) → open', sub: 'Every Monday 3:30–4:00 PM Ho Chi Minh Time' }]);
     const b = describeChangesIn({ ...none, weeklyOpen: ['1:15:30'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Ho_Chi_Minh');
-    expect(b[0].main).toBe('Every Monday 15:30–16:00 Ho Chi Minh Time → open');
-    expect(b[0].sub).toBe('Every Monday 17:30–18:00 Korea Time (KST)');
+    expect(b[0].main).toBe('Every Monday 3:30–4:00 PM Ho Chi Minh Time → open');
+    expect(b[0].sub).toBe('Every Monday 5:30–6:00 PM Korea Time (KST)');
     // 멜버른 월 01:00(서머타임 UTC+11) = KST 일 23:00 → 요일이 달라짐
     const c = describeChangesIn({ ...none, weeklyClose: ['1:01:00'] }, '2026-11-09', 'Australia/Melbourne', 'Asia/Seoul');
-    expect(c[0].main).toBe('Every Sunday 23:00–23:30 Korea Time (KST) → closed');
-    expect(c[0].sub).toBe('Every Monday 1:00–1:30 Melbourne Time');
+    expect(c[0].main).toBe('Every Sunday 11:00–11:30 PM Korea Time (KST) → closed');
+    expect(c[0].sub).toBe('Every Monday 1:00–1:30 AM Melbourne Time');
     // 그 주만, 자정을 걸치는 칸 묶음
     const d = describeChangesIn({ ...none, onceClose: ['2026-11-10T21:30', '2026-11-10T22:00'] }, '2026-11-09', 'Asia/Ho_Chi_Minh', 'Asia/Seoul');
-    expect(d[0].main).toBe('Tue 10 Nov 23:30 – Wed 11 Nov 0:30 Korea Time (KST) → blocked');
-    expect(d[0].sub).toBe('Tue 10 Nov 21:30–22:30 Ho Chi Minh Time');
+    expect(d[0].main).toBe('Tue 10 Nov 11:30 PM – Wed 11 Nov 12:30 AM Korea Time (KST) → blocked');
+    expect(d[0].sub).toBe('Tue 10 Nov 9:30–10:30 PM Ho Chi Minh Time');
     // 강사가 한국이면 보조 줄 없음
     expect(describeChangesIn({ ...none, weeklyOpen: ['1:09:00'] }, '2026-11-09', 'Asia/Seoul', 'Asia/Seoul')[0].sub).toBeNull();
   });

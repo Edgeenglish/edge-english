@@ -4,7 +4,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { cellState, clashes, startsWithinAvailability, withinAvailability, type AvailabilityWindow, type CellState } from '@/lms/rules/booking';
-import { addDays, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '@/lms/rules/dates';
+import { addDays, ampmKo, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '@/lms/rules/dates';
 import type { RegularSlot } from '@/lms/rules/schedule';
 import { homepageProfile, type HomepageProfile } from '@/lms/admin/homepage-tutor';
 import type { RegTutor, WishWindow } from '@/lms/admin/registration';
@@ -403,7 +403,7 @@ export function WeekCalendar({
           <tbody>
             {rowIdx.map((i) => (
               <tr key={times[i]}>
-                <td className="sticky left-0 z-[1] bg-white pr-1 text-right text-[12px] text-[#6b6880]">{times[i]}</td>
+                <td className="sticky left-0 z-[1] bg-white pr-1 text-right text-[12px] text-[#6b6880]">{ampmKo(times[i])}</td>
                 {week.map((d, j) => {
                   const c = grid[j][i];
                   const picked = slots.some((s) => s.weekday === weekdayOf(d) && s.time === times[i]);
@@ -423,7 +423,7 @@ export function WeekCalendar({
                         className={`flex h-[38px] w-full flex-col items-center justify-center rounded-[7px] text-[12px] font-semibold leading-tight ${look} ${wished && !picked ? 'outline-dashed outline-2 -outline-offset-2 outline-[#f0a23a]' : ''} ${past ? 'opacity-50' : ''}`}
                       >
                         <span className="text-inherit">{picked ? '✓ 선택' : tight ? '시작 불가' : c.state === 'makeup' ? '보강 1건' : CELL[c.state].text}</span>
-                        {showLocal && c.state !== 'unavailable' && <span className="text-[10.5px] font-normal opacity-80">{formatInZone(s, tutor.timezone).time}</span>}
+                        {showLocal && c.state !== 'unavailable' && <span className="text-[10.5px] font-normal opacity-80">{ampmKo(formatInZone(s, tutor.timezone).time)}</span>}
                       </button>
                     </td>
                   );
@@ -438,7 +438,7 @@ export function WeekCalendar({
 }
 
 export function slotText(s: RegularSlot) {
-  return `${WEEKDAY_KO[s.weekday]} ${s.time}`;
+  return `${WEEKDAY_KO[s.weekday]} ${ampmKo(s.time)}`;
 }
 
 /** 고른 정규 시간을 강사·학생 현지 시각으로 (첫 수업 날짜 기준 — 서머타임이면 날짜마다 달라질 수 있음) */
@@ -456,7 +456,7 @@ export function ProfileSheet({ tutor, onClose }: { tutor: RegTutor; onClose: () 
         <div className="flex items-center gap-2">
           <b className="text-[17px] text-[#1d1b2b]">{tutor.name}</b>
           <span className="text-[13px] text-[#6b6880]">
-            {tutor.country} · {tutor.timezone} · 지금 {formatInZone(new Date(), tutor.timezone).time}
+            {tutor.country} · {tutor.timezone} · 지금 {ampmKo(formatInZone(new Date(), tutor.timezone).time)}
           </span>
           <span className="flex-1" />
           <button type="button" onClick={onClose} aria-label="닫기" className="h-10 w-10 text-[20px] text-[#6b6880]">
@@ -489,4 +489,4 @@ export function ProfileSheet({ tutor, onClose }: { tutor: RegTutor; onClose: () 
   );
 }
 
-export const nowLocal = (tz: string, now: Date) => `${instantToKstDate(now) === formatInZone(now, tz).date ? '' : `${formatInZone(now, tz).date.slice(5).replace('-', '/')} `}${formatInZone(now, tz).time}`;
+export const nowLocal = (tz: string, now: Date) => `${instantToKstDate(now) === formatInZone(now, tz).date ? '' : `${formatInZone(now, tz).date.slice(5).replace('-', '/')} `}${ampmKo(formatInZone(now, tz).time)}`;

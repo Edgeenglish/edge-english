@@ -17,6 +17,7 @@ import RenewalNotice from './RenewalNotice';
 import OriginFix from './OriginFix';
 import EndReasonFix from './EndReasonFix';
 import type { EndReason } from '@/lms/admin/import';
+import { ampmKo } from '@/lms/rules/dates';
 
 /** 기존 학생 입력 뒤 처리 (DB 함수, migration 1500) */
 export type ImportActions = {
@@ -567,7 +568,7 @@ export default function AdminDashboard({
           <ul>
             {today.map((l, i) => (
               <li key={i} className="grid grid-cols-[52px_1fr_auto] items-center gap-2 border-b border-[#e6e3ef] py-2 last:border-0">
-                <span className="text-[13px] tabular-nums text-[#6b6880]">{l.time}</span>
+                <span className="text-[13px] tabular-nums text-[#6b6880]">{ampmKo(l.time)}</span>
                 <span className="text-[14px] text-[#1d1b2b]">
                   {l.student} · {l.tutor}
                 </span>

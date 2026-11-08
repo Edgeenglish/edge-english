@@ -2,9 +2,9 @@
 //  Month = 한 달 수업 + 평소와 다른 날 짧은 글자 / Week = 30분 칸 격자 + 날짜별 막기(Block time)·열기(Make available)
 //  판정은 DB 함수 tutor_schedule·tutor_schedule_save (migration 4403). 여기는 칸 모양·날짜 계산만
 
-import { formatInZone } from '../rules/dates';
+import { ampmEn, formatInZone } from '../rules/dates';
 import { cityTime, localToInstant } from './hours-view';
-import { plusDays, toMin, type CellCode } from './hours';
+import { plusDays, rangeText, toMin, type CellCode } from './hours';
 import { kindTag, type TutorLesson } from './screen';
 
 /** 칸 판정 (4403): My hours 와 같고 x = 매주 닫혔지만 그날만 연 칸 */
@@ -89,14 +89,14 @@ export function sourceKey(date: string, time: string, viewZone: string, tutorZon
   return `${f.date}T${f.time}`;
 }
 
-/** '13:00–15:00 Toronto Time' (같은 날이 아니면 끝 날짜도) */
+/** '1:00–3:00 PM Toronto Time' / '11:00 AM–1:00 PM …' (같은 날이 아니면 끝 날짜도. 다음 날 00:00 끝 = '12:00 AM') */
 export function spanText(a: Date, b: Date, zone: string): string {
   const s = inZone(a, zone);
   const e = inZone(b, zone);
-  const end = e.time === '00:00' && plusDays(s.date, 1) === e.date ? '24:00' : e.date === s.date ? e.time : `${dayText(e.date)} ${e.time}`;
-  return `${s.time}–${end} ${cityTime(zone)}`;
+  const sameDay = e.date === s.date || (e.time === '00:00' && plusDays(s.date, 1) === e.date);
+  return `${sameDay ? rangeText(s.time, e.time) : `${ampmEn(s.time)}–${dayText(e.date)} ${ampmEn(e.time)}`} ${cityTime(zone)}`;
 }
-/** 'Fri, Nov 20 13:00–15:00 Toronto Time' */
+/** 'Fri, Nov 20 1:00–3:00 PM Toronto Time' */
 export const whenSpan = (a: Date, b: Date, zone: string) => `${dayText(inZone(a, zone).date)} ${spanText(a, b, zone)}`;
 /** 보조로 보여 줄 다른 시간대 (강사가 한국이면 없음) */
 export const otherZone = (viewZone: string, tutorZone: string): string | null =>
@@ -200,7 +200,7 @@ export function runFrom(kinds: CellKind[], start: number, want: CellKind): { end
   while (i < kinds.length && kinds[i] === want) { i++; ends.push(i); }
   return { ends, cutBy: i < kinds.length && kinds[i] === 'class' ? i : null };
 }
-/** 칸 번호(30분) → 'HH:MM' (48 = 24:00) */
+/** 칸 번호(30분) → 'HH:MM' (48 = 24:00). slotText 는 화면용 '1:30 PM' (48 = '12:00 AM' 자정) */
 export const slotTime = (i: number) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
-export const slotText = (i: number) => (i === 48 ? '24:00' : slotTime(i));
+export const slotText = (i: number) => (i === 48 ? '12:00 AM' : ampmEn(slotTime(i)));
 export const slotOf = (time: string) => toMin(time) / 30;

@@ -29,7 +29,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' })).tone).toBe('done');
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' }))).toMatchObject({ text: '기존 강사 보강 · 날짜 미정', wait: '학생 보강 신청' });
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupRequested: true }))).toMatchObject({ text: '기존 강사 보강 · 날짜 미정', wait: '강사님 보강 확인' });
-    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') })).text).toBe('기존 강사 보강 · 11/20 20:00');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') })).text).toBe('기존 강사 보강 · 11/20 오후 8:00');
   });
 
   it('상태 글: 문의 보내기 전 ≠ 답변 대기 (R2), 확정 안내 보내기 전 ≠ 완료 (R4), 밖에서 취소된 수업 (R5)', () => {
@@ -64,7 +64,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(m[0].text).toContain('One of our Edge English tutors is on leave');
     expect(m[0].text).toContain("If you can't do all of them, please reply with the numbers you can do.");
     expect(m[0].text.split('\n').filter((l) => /^\d\)/.test(l))).toHaveLength(2);
-    expect(m[0].text).toContain('Manila Time (Mon 2 Nov 20:00 KST)');   // 도시 이름 + 한국 시간 (QA UX: 'your time' 금지)
+    expect(m[0].text).toContain('Manila Time (Mon 2 Nov 8:00 PM KST)');   // 도시 이름 + 한국 시간 (QA UX: 'your time' 금지)
     expect(m[1].text).toBe('[엣지영어] 김민수님, 담당 강사님 휴가 기간 수업을 대체강사 Benny 강사님과 평소 시간에 진행하려고 해요. 아래 날짜 괜찮으신지 알려 주세요. 강사님 프로필도 함께 보내 드려요.\n\n- 11월 5일(목) 오후 8시 (한국 시간)');
     // 두 가지를 처음부터 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강), 대표 문구 그대로
     expect(m[2].recipient).toBe('student');
@@ -234,8 +234,8 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     const [b] = tutorBundles(items, notices, now);
     expect(b.pending).toBeNull();
     expect(b.sent).toHaveLength(1);
-    expect(b.sent[0].text).toContain('1) Mon 9 Nov 08:00 Manila Time (Mon 9 Nov 09:00 KST) · En s1');
-    expect(b.sent[0].text).toContain('2) Mon 9 Nov 19:00 Manila Time (Mon 9 Nov 20:00 KST) · En s2');
+    expect(b.sent[0].text).toContain('1) Mon 9 Nov 8:00 AM Manila Time (Mon 9 Nov 9:00 AM KST) · En s1');
+    expect(b.sent[0].text).toContain('2) Mon 9 Nov 7:00 PM Manila Time (Mon 9 Nov 8:00 PM KST) · En s2');
     expect(b.numbers).toEqual({ b: '2번' });
   });
   it('다시 고르기 뒤 같은 강사를 다시 골라도 예전에 보낸 문의 원문·번호는 그대로, 새 문의는 따로 (3400, 대표 10/30)', () => {
@@ -248,8 +248,8 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     ];
     const [b] = tutorBundles(items, notices, now);
     expect(b.sent).toHaveLength(1);
-    expect(b.sent[0].text).toContain('1) Mon 9 Nov 08:00 Manila Time (Mon 9 Nov 09:00 KST) · En s1');
-    expect(b.sent[0].text).toContain('2) Mon 9 Nov 19:00 Manila Time (Mon 9 Nov 20:00 KST) · En s2');
+    expect(b.sent[0].text).toContain('1) Mon 9 Nov 8:00 AM Manila Time (Mon 9 Nov 9:00 AM KST) · En s1');
+    expect(b.sent[0].text).toContain('2) Mon 9 Nov 7:00 PM Manila Time (Mon 9 Nov 8:00 PM KST) · En s2');
     expect(b.numbers).toEqual({ b: '2번' });
     expect(b.pending!.itemIds).toEqual(['a']);
   });

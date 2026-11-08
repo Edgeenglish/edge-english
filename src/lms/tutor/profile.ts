@@ -3,7 +3,7 @@
 // 'Local'·'Your time' 한 단어만 쓰지 않는다. 실제 다음 수업 날짜로 계산해 서머타임·날짜·요일 변화를 반영한다
 
 import { enZone, nextDateOf, parseEnrollment, parseProfile, parseSlots, parseTopics, parseUpcoming, type EnrollmentInfo, type RecentTopic, type SlotFull, type StudentProfile, type Upcoming } from '../admin/students';
-import { formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
+import { ampmEn, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
 import { parseFollowup, type Followup } from './followup';
 
 export type TutorAccess = 'regular' | 'substitute';
@@ -34,15 +34,11 @@ export const CLASS_STYLE_EN: Record<string, string> = { textbook: 'Textbook', fr
 
 const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const en12 = (hhmm: string) => {
-  const [h, m] = hhmm.split(':').map(Number);
-  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
-};
 export const enDate = (d: KstDate) => `${WD[weekdayOf(d)]}, ${MON[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8))}`;
 export const enDateYear = (d: KstDate) => `${MON[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8))}, ${d.slice(0, 4)}`;
 export function enAt(t: Date, tz: string): string {
   const f = formatInZone(t, tz);
-  return `${enDate(f.date)} · ${en12(f.time)}`;
+  return `${enDate(f.date)} · ${ampmEn(f.time)}`;
 }
 
 /**
@@ -57,7 +53,7 @@ export function slotsIn(slots: { weekday: number; time: string }[], tz: string, 
     const f = formatInZone(kstToInstant(d, s.time), tz);
     if (f.date < d) shift = 'before';
     if (f.date > d) shift = 'after';
-    return { weekday: weekdayOf(f.date), time: en12(f.time) };
+    return { weekday: weekdayOf(f.date), time: ampmEn(f.time) };
   });
   const times = new Set(local.map((x) => x.time));
   const text = times.size === 1 ? `${local.map((x) => WD[x.weekday]).join('/')} ${local[0].time}` : local.map((x) => `${WD[x.weekday]} ${x.time}`).join(' · ');

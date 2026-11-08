@@ -14,8 +14,8 @@ describe('기한 상태 (매칭 3영업일)', () => {
     expect(dueSeverity(null, now)).toBe('open');
   });
   it('문구는 한국 시간 기준', () => {
-    expect(dueText(new Date('2026-10-21T14:59:59.999Z'), now)).toBe('10/21(수) 23:59까지');
-    expect(dueText(new Date(now.getTime() + 9 * H), now)).toBe('9시간 남음 · 10/16(금) 23:00까지');
+    expect(dueText(new Date('2026-10-21T14:59:59.999Z'), now)).toBe('10/21(수) 오후 11:59까지');
+    expect(dueText(new Date(now.getTime() + 9 * H), now)).toBe('9시간 남음 · 10/16(금) 오후 11:00까지');
     expect(dueText(new Date(now.getTime() - 50 * H), now)).toMatch(/^기한 2일 지남/);
   });
 });

@@ -33,7 +33,7 @@ export default function ApplicationPicker({ applications, selected, onSelect }: 
     {day && <div className="grid gap-2" aria-label="해당 날짜 신청서">
       {matches.map(({ a }) => <button key={a.ref} type="button" aria-pressed={selected === a.ref} onClick={() => onSelect(a.ref)}
         className={`${cls} py-2 text-left ${selected === a.ref ? 'border-[#5b3fe0] bg-[#eeeaff]' : ''}`}>
-        <b>{a.nameKo || a.nameEn || '이름 확인 필요'}</b><span className="ml-2 text-[12px] text-[#6b6880]">{new Date(a.submittedAt).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })}</span>
+        <b>{a.nameKo || a.nameEn || '이름 확인 필요'}</b><span className="ml-2 text-[12px] text-[#6b6880]">{new Date(a.submittedAt).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: 'numeric', minute: '2-digit', hourCycle: 'h12' })}</span>
         {selected === a.ref && <span className="ml-2 text-[#5b3fe0]">불러옴 ✓</span>}
       </button>)}
     </div>}

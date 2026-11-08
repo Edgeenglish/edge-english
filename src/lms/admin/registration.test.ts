@@ -65,6 +65,6 @@ describe('희망 시간 (새 신청서 형식)', () => {
   it('요일 × 시간대 체크를 그대로 가져오고 요약', () => {
     const wishes = [{ weekday: 4, from: '19:00', to: '22:00' }, { weekday: 2, from: '19:00', to: '22:00' }, { weekday: 6, from: '09:00', to: '12:00' }];
     expect(draftFromForm({ ...form, wishGrid: wishes }).wishes).toEqual(wishes);
-    expect(wishText(wishes)).toBe('화·목 19:00–22:00, 토 09:00–12:00');
+    expect(wishText(wishes)).toBe('화·목 오후 7:00–10:00, 토 오전 9:00–오후 12:00');
   });
 });

@@ -4,7 +4,7 @@
 // - 새 정규 수업은 첫 수업일부터 등록기간 전체 날짜를 하나씩 검사해, 충돌 날짜와 이유를 돌려준다
 // - 강사 가능 시간은 강사 현지 시각 + IANA 시간대로 저장 → 날짜마다 변환하므로 서머타임이 자동 반영된다
 
-import { addDays, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate, type KstTime } from './dates';
+import { addDays, ampmKo, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate, type KstTime } from './dates';
 import { generateRegularLessons, type PlannedLesson, type RegularSlot } from './schedule';
 import { CONFIRMED, type CourseWeeks } from './policy';
 
@@ -102,7 +102,8 @@ const REASON_TEXT: Record<PlanIssue['reason'], string> = {
 
 export const issueText = (r: PlanIssue['reason']) => REASON_TEXT[r];
 
-const hhmm = (d: Date) => formatInZone(d, 'Asia/Seoul').time;
+/** 화면 문구용 한국 시각 '오후 6:30' */
+const hhmm = (d: Date) => ampmKo(formatInZone(d, 'Asia/Seoul').time);
 
 type PlanCheckInput = {
   durationMin: number;

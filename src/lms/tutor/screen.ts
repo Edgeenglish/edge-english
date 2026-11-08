@@ -1,8 +1,9 @@
 // 강사 화면(영어) 판정·표시 — 데이터는 DB 함수 tutor_screen 하나 (migration 2000)
 // 수업 결과는 lessons.class_status 하나 (POL-ST-02). 강사는 결과(Held / Student no-show)와 지각(학생·강사, 분)을 따로 고르고 정확한 상태 이름은 DB가 정함 (4400)
 
-import { addDays, formatInZone } from '../rules/dates';
+import { addDays, ampmEn, formatInZone } from '../rules/dates';
 import { cityTime } from './hours-view';
+import { rangeText } from './hours';
 import type { ClassStatus } from '../rules/status';
 
 /** 수업 결과 하나. tutor_no_show = 운영자만 (4000). 지각은 결과와 따로 (4400) */
@@ -111,21 +112,21 @@ export function dayLabel(date: string): string {
 export function localDate(t: Date, tz: string): string {
   return formatInZone(t, tz).date;
 }
-/** '09:00–09:40' 강사 현지 */
+/** '9:00–9:40 AM' 강사 현지 */
 export function timeRange(l: { startsAt: Date; endsAt: Date }, tz: string): string {
-  return `${formatInZone(l.startsAt, tz).time}–${formatInZone(l.endsAt, tz).time}`;
+  return rangeText(formatInZone(l.startsAt, tz).time, formatInZone(l.endsAt, tz).time);
 }
-/** 한국 시각 범위 'KST 15:00–15:40' (강사가 한국 시간대면 null). 시차로 날짜가 다르면 요일을 붙임 */
+/** 한국 시각 범위 'KST 3:00–3:40 PM' (강사가 한국 시간대면 null). 시차로 날짜가 다르면 요일을 붙임 */
 export function kstRange(l: { startsAt: Date; endsAt: Date }, tz: string): string | null {
   if (tz === 'Asia/Seoul') return null;
   const a = formatInZone(l.startsAt, 'Asia/Seoul');
   const b = formatInZone(l.endsAt, 'Asia/Seoul');
   const day = localDate(l.startsAt, tz) === a.date ? '' : `${WD[new Date(`${a.date}T00:00:00Z`).getUTCDay()]} `;
-  return `KST ${day}${a.time}–${b.time}`;
+  return `KST ${day}${rangeText(a.time, b.time)}`;
 }
-/** 'Mon 3 Nov 09:00' 강사 현지 */
+/** 'Mon, 3 Nov 9:00 AM' 강사 현지 */
 export function whenText(t: Date, tz: string): string {
-  return `${dayLabel(localDate(t, tz))} ${formatInZone(t, tz).time}`;
+  return `${dayLabel(localDate(t, tz))} ${ampmEn(formatInZone(t, tz).time)}`;
 }
 /**
  * 시간대 이름 (11/2 점검 ⑤): '[도시] Time' — 'Asia/Manila' → 'Manila Time', 한국은 'Korea Time (KST)'.
@@ -136,11 +137,11 @@ export const tzTimeLabel = cityTime;
 export function tzHeader(tz: string): string {
   return tz === 'Asia/Seoul' ? KOREA_TIME : `${tzTimeLabel(tz)} / ${KOREA_TIME}`;
 }
-/** 한국 시각 'KST 08:00' (날짜가 다르면 'KST Tue 08:00'). 강사가 한국 시간대면 null */
+/** 한국 시각 'KST 8:00 AM' (날짜가 다르면 'KST Tue 8:00 AM'). 강사가 한국 시간대면 null */
 export function kstText(t: Date, tz: string): string | null {
   if (tz === 'Asia/Seoul') return null;
   const k = formatInZone(t, 'Asia/Seoul');
-  return localDate(t, tz) === k.date ? `KST ${k.time}` : `KST ${WD[new Date(`${k.date}T00:00:00Z`).getUTCDay()]} ${k.time}`;
+  return localDate(t, tz) === k.date ? `KST ${ampmEn(k.time)}` : `KST ${WD[new Date(`${k.date}T00:00:00Z`).getUTCDay()]} ${ampmEn(k.time)}`;
 }
 /**
  * 기준 이름까지 붙인 시각 (11/3 대표: 시각마다 어디 기준인지 꼭) —

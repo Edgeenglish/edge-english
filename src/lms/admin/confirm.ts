@@ -5,7 +5,7 @@
 // - 경고 시각 (D-51-3): 확정 후 1시간 지나도 한쪽 안 보냄 = 긴급, 첫 수업 24시간 전 = 맨 위, 제안 후 24시간 무응답 = 답 확인 필요
 // - 강사 확인 회신은 완료 조건이 아님 (D-51-2). 발송 순서 강제 없음, 강사 줄을 위에 (D-51-5)
 
-import { addDays, formatInZone, hoursBetween, kstToInstant, weekdayOf, WEEKDAY_KO, type KstDate } from '../rules/dates';
+import { addDays, ampmEn, ampmKo, formatInZone, hoursBetween, kstToInstant, weekdayOf, WEEKDAY_KO, type KstDate } from '../rules/dates';
 import type { RegularSlot } from '../rules/schedule';
 import { regularDiff, type LessonDate } from '../rules/lessons';
 
@@ -51,26 +51,26 @@ function slotIn(s: RegularSlot, start: KstDate, tz: string) {
   return { wd: EN_WD[f.weekday] ?? f.weekday, time: f.time };
 }
 
-/** '수·금 09:00' (같은 시각끼리 요일 묶음, 월요일부터) */
-function joinSlots(list: { wd: string; time: string; order: number }[]): string {
+/** '수·금 오전 9:00' (같은 시각끼리 요일 묶음, 월요일부터). 영어 문구용은 '수·금 9:00 AM' (요일은 enDays 가 바꿈) */
+function joinSlots(list: { wd: string; time: string; order: number }[], lang: 'ko' | 'en'): string {
   const byTime = new Map<string, { wd: string; order: number }[]>();
   for (const x of list) byTime.set(x.time, [...(byTime.get(x.time) ?? []), x]);
   return [...byTime]
-    .map(([time, ds]) => `${ds.sort((a, b) => a.order - b.order).map((x) => x.wd).join('·')} ${time}`)
+    .map(([time, ds]) => `${ds.sort((a, b) => a.order - b.order).map((x) => x.wd).join('·')} ${lang === 'en' ? ampmEn(time) : ampmKo(time)}`)
     .join(', ');
 }
 
 export type TimeLine = { who: '한국' | '강사' | '학생'; text: string; otherDay: boolean };
 
 /** 한국 / 강사 / 학생 세 줄. 강사·학생이 한국 시간대면 그 줄은 빼고, 현지 요일이 한국과 다르면 otherDay */
-export function timeLines(v: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'studentTz'>): TimeLine[] {
+export function timeLines(v: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'studentTz'>, lang: 'ko' | 'en' = 'ko'): TimeLine[] {
   const slots = [...v.slots].sort((a, b) => monFirst(a.weekday) - monFirst(b.weekday));
   const kst = slots.map((s) => ({ wd: WEEKDAY_KO[s.weekday], time: s.time, order: monFirst(s.weekday) }));
-  const out: TimeLine[] = [{ who: '한국', text: joinSlots(kst), otherDay: false }];
+  const out: TimeLine[] = [{ who: '한국', text: joinSlots(kst, lang), otherDay: false }];
   for (const [who, tz] of [['강사', v.tutorTz], ['학생', v.studentTz]] as const) {
     if (!tz || tz === 'Asia/Seoul') continue;
     const loc = slots.map((s, i) => ({ ...slotIn(s, v.startDate, tz), order: i }));
-    out.push({ who, text: joinSlots(loc), otherDay: loc.some((l, i) => l.wd !== kst[i].wd) });
+    out.push({ who, text: joinSlots(loc, lang), otherDay: loc.some((l, i) => l.wd !== kst[i].wd) });
   }
   return out;
 }
@@ -88,14 +88,14 @@ const enDays = (text: string) => text.replace(/[일월화수목금토]/g, (c) =>
 /** 'Toronto Time' / 'Korea Time (KST)' (students.ts enZone 과 같은 규칙) */
 const enZoneName = (tz: string) => (!tz || tz === 'Asia/Seoul' ? 'Korea Time (KST)' : `${tz.split('/').at(-1)?.replaceAll('_', ' ') || tz} Time`);
 
-/** 한 시점을 그 시간대 기준 'Wed 4 Nov 11:00' / '11월 4일(수) 09:00' */
+/** 한 시점을 그 시간대 기준 'Wed 4 Nov 11:00 AM' / '11월 4일(수) 오전 9:00' */
 export function enWhen(at: Date, tz: string) {
   const f = formatInZone(at, tz);
-  return `${f.weekday} ${Number(f.date.slice(8))} ${EN_MON[Number(f.date.slice(5, 7)) - 1]} ${f.time}`;
+  return `${f.weekday} ${Number(f.date.slice(8))} ${EN_MON[Number(f.date.slice(5, 7)) - 1]} ${ampmEn(f.time)}`;
 }
 export function koWhen(at: Date, tz: string) {
   const f = formatInZone(at, tz);
-  return `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8))}일(${EN_WD[f.weekday]}) ${f.time}`;
+  return `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8))}일(${EN_WD[f.weekday]}) ${ampmKo(f.time)}`;
 }
 /** 마지막 정규 수업 시점 (기간 끝에서 거꾸로 첫 정규 요일) */
 function lastLessonAt(v: Pick<PlanView, 'slots' | 'endDate' | 'lessonList'>): Date | null {
@@ -117,7 +117,7 @@ function otherDates(v: PlanView) {
   return { added: d.added.filter((x) => !(x.date === first.date && x.time === first.time)), removed: d.removed };
 }
 const at = (x: LessonDate) => kstToInstant(x.date, x.time);
-const dayOnly = (s: string) => s.replace(/ \d\d:\d\d$/, '');
+const dayOnly = (s: string) => s.replace(/ (?:오[전후] )?\d{1,2}:\d\d(?: [AP]M)?$/, '');
 
 /** 강사 안내 (영어): 정규와 다른 날 / 수업 없는 정규 요일 */
 function enOtherLines(v: PlanView, tz: string): string[] {
@@ -130,9 +130,9 @@ function enOtherLines(v: PlanView, tz: string): string[] {
 
 function tutorLine(v: PlanView) {
   const tz = v.tutorTz || 'Asia/Seoul';
-  const local = timeLines({ ...v, studentTz: '' }).find((l) => l.who === '강사')?.text ?? timeLines(v)[0].text;
+  const local = timeLines({ ...v, studentTz: '' }, 'en').find((l) => l.who === '강사')?.text ?? timeLines(v, 'en')[0].text;
   // 도시 이름으로 (QA UX: 'your time' 만 쓰지 않음). 해외 강사는 한국 시간도 같이
-  const kstLine = timeLines({ ...v, studentTz: '' }).find((l) => l.who === '한국')?.text;
+  const kstLine = timeLines({ ...v, studentTz: '' }, 'en').find((l) => l.who === '한국')?.text;
   return tz === 'Asia/Seoul' ? `Every ${enDays(local)} Korea Time (KST)` : `Every ${enDays(local)} ${enZoneName(tz)}${kstLine ? ` (${enDays(kstLine)} KST)` : ''}`;
 }
 
@@ -160,7 +160,7 @@ export function tutorConfirmMessage(v: PlanView): string {
     'CONFIRMED - new student',
     `${v.studentNameEn}, ${v.durationMin} min, ${v.lessons} classes`,
     tutorLine(v),
-    first ? `First class: ${enWhen(first, tz)}${last ? ` · last ${enWhen(last, tz).replace(/ \d\d:\d\d$/, '')}` : ''}` : '',
+    first ? `First class: ${enWhen(first, tz)}${last ? ` · last ${dayOnly(enWhen(last, tz))}` : ''}` : '',
     ...enOtherLines(v, tz),
     'Please add it to your schedule. Thank you!',
   ]
@@ -213,10 +213,10 @@ export function planAlert(v: PlanView, now: Date): PlanAlert {
   return 'none';
 }
 
-/** 화면 표시용 보낸 시각 '10/21 16:05' (한국) */
+/** 화면 표시용 보낸 시각 '10/21 오후 4:05' (한국) */
 export function sentLabel(at: Date): string {
   const f = formatInZone(at, 'Asia/Seoul');
-  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))} ${f.time}`;
+  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))} ${ampmKo(f.time)}`;
 }
 
 /** 첫 수업 시작 전 개별 수업 날짜 변경 안내 (H26(62)): 학생 카톡(한국어, 현지 먼저) · 강사 WhatsApp(영어, 강사 현지) */

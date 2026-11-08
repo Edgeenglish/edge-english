@@ -7,7 +7,7 @@
 // - 검사·저장은 DB(admin_prestart_move): 수강 기간 안 · 같은 날 수업 없음 · 강사 휴무·다른 수업(휴식 10분)·현지 06:00~22:30·연 시간·재등록 대기
 
 import { useEffect, useState } from 'react';
-import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lms/rules/dates';
+import { ampmKo, formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lms/rules/dates';
 import { dayLabel, localTime } from '@/lms/admin/schedule';
 import { prestartMoveNotices } from '@/lms/admin/confirm';
 import type { Upcoming } from '@/lms/admin/students';
@@ -16,7 +16,7 @@ import DateInput from '../../DateInput';
 
 const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 const kstOf = (d: Date) => ({ date: instantToKstDate(d), time: formatInZone(d, 'Asia/Seoul').time });
-const label = (d: Date) => `${dayLabel(kstOf(d).date)} ${kstOf(d).time}`;
+const label = (d: Date) => `${dayLabel(kstOf(d).date)} ${ampmKo(kstOf(d).time)}`;
 const local = (at: Date, tz: string) => (tz && tz !== 'Asia/Seoul' ? localTime(at, tz) : null);
 const copyCls = 'min-h-[44px] w-full rounded-[10px] border border-[#cfc4ff] bg-white px-3 text-[14px] font-semibold text-[#5b3fe0]';
 
@@ -73,7 +73,7 @@ export default function PrestartMove(p: {
     try {
       await p.move(l.id, to.toISOString());
       const n = prestartMoveNotices({ studentNameEn: p.student.nameEn, studentTz: p.student.timezone, studentCity: p.student.city, tutorTz: l.tutorTz, from: l.startsAt, to });
-      setSaved({ ...n, line: `${label(l.startsAt)} → ${dayLabel(date)} ${time}` });
+      setSaved({ ...n, line: `${label(l.startsAt)} → ${dayLabel(date)} ${ampmKo(time)}` });
       setMoved((m) => ({ ...(m ?? {}), [l.id]: m?.[l.id] ?? l.startsAt.toISOString() }));
       setOpen(null);
       await p.onSaved();
@@ -96,7 +96,7 @@ export default function PrestartMove(p: {
             <span className="mr-2 inline-block w-9">{l.seq ? `${l.seq}회` : ''}</span>
             {first && <s className="mr-1 text-[13px] text-[#9a97a8]">{label(new Date(first))}</s>}
             {first && <span className="mr-1 text-[#9a97a8]">→</span>}
-            <span className={`tabular-nums ${first ? 'font-bold' : ''}`}>{dayLabel(k.date)} {k.time}</span>
+            <span className={`tabular-nums ${first ? 'font-bold' : ''}`}>{dayLabel(k.date)} {ampmKo(k.time)}</span>
             {loc && <span className="ml-1.5 whitespace-nowrap text-[12.5px] text-[#6b6880]">현지 {loc}</span>}
           </div>
           {open !== l.id && (
@@ -111,7 +111,7 @@ export default function PrestartMove(p: {
             <select aria-label={`${l.seq ?? ''}회 새 시간`} value={time} onChange={(e) => setTime(e.target.value)} className="min-h-[42px] w-[110px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14.5px] text-[#1d1b2b]">
               {(TIMES.includes(time) ? TIMES : [time, ...TIMES]).map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {ampmKo(t)}
                 </option>
               ))}
             </select>
@@ -127,7 +127,7 @@ export default function PrestartMove(p: {
               className="min-h-[40px] rounded-[10px] bg-[#7d5ffb] px-4 text-[13.5px] font-bold text-white disabled:bg-[#cfc4ff]"
             >
               {/* 실제로 저장될 날짜를 버튼에 그대로 (QA A-02) */}
-              {busy ? '저장 중…' : !partial && date && time ? `저장 · ${dayLabel(date)} ${time}` : '저장'}
+              {busy ? '저장 중…' : !partial && date && time ? `저장 · ${dayLabel(date)} ${ampmKo(time)}` : '저장'}
             </button>
             {partial && <p className="w-full text-[12.5px] text-[#b3261e]">날짜를 다시 선택해 주세요 (연·월·일을 모두 채워야 저장돼요)</p>}
           </div>

@@ -5,7 +5,7 @@
 // A-03 (20261107): '지금 적용 중' 과 '○○부터 적용 예정'(data.nextSlots) 을 구분. 적용 예정 변경은 적용일 전에 취소([예정 변경 취소] = 원래 일정을
 // 적용 예정일부터 다시 저장)·수정(새 시간 고르기)할 수 있음. '같은 일정' 판정은 고른 적용 시작일에 유효한 일정 기준, 그 뒤 예정 변경이 있으면 같다고 보지 않음
 import { useEffect, useMemo, useState } from 'react';
-import { formatInZone, kstToInstant, type KstDate } from '@/lms/rules/dates';
+import { ampmKo, formatInZone, kstToInstant, type KstDate } from '@/lms/rules/dates';
 import {
   dateOptions, KEPT_WHY, KIND_KO, koZone, kstWithZones, mdw, problemText, slotsInZone, slotsText, WD_KO, zoneLabel,
   type RegularPreview, type Slot, type SlotFull, type StudentDetailData,
@@ -137,7 +137,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
             </div>
           </div>
           {slots.map((s) => (
-            <div key={s.weekday} className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-2">
+            <div key={s.weekday} className="grid items-center gap-1.5 sm:grid-cols-[minmax(0,1fr)_270px]">
               <label htmlFor={`t-${s.weekday}`} className="text-[14px] text-[#1d1b2b]">
                 {WD_KO[s.weekday]}요일 시작 시간 <span className="block text-[12px] text-[#6b6880]">한국 시간 · 30분 단위</span>
               </label>
@@ -197,7 +197,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                   {showAllMoved && pv.moved.length > 6 && <li className="text-[12.5px]"><button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setShowAllMoved(false)}>접기</button></li>}
                 </ul>
                 {pv.skipped.length > 0 && (
-                  <p className="mt-1 text-[12.5px] text-[#6b6880]">건너뛴 날: {pv.skipped.map((s) => `${mdw(s.date)} ${s.time}`).join(', ')} — 그날 학생의 다른 수업(보강·대체 등)이 있어 다음 회차로</p>
+                  <p className="mt-1 text-[12.5px] text-[#6b6880]">건너뛴 날: {pv.skipped.map((s) => `${mdw(s.date)} ${ampmKo(s.time)}`).join(', ')} — 그날 학생의 다른 수업(보강·대체 등)이 있어 다음 회차로</p>
                 )}
               </section>
               {pv.kept.length > 0 && (
@@ -218,7 +218,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                 <h3 className="text-[13px] font-extrabold text-[#6b6880]">검사</h3>
                 <ul className="mt-1 grid gap-1 text-[13.5px]">
                   {([
-                    [['tutor_hours_range'], `강사 시작 시각이 ${koZone(pv.tutor.timezone)} 06:00~22:30 안`],
+                    [['tutor_hours_range'], `강사 시작 시각이 ${koZone(pv.tutor.timezone)} 오전 6:00~오후 10:30 안`],
                     [['tutor_unavailable'], `${pv.tutor.name} 가능 시간(My hours) 안`],
                     [['tutor_busy', 'tutor_time_off', 'tutor_hold'], '다른 수업·휴무·재등록 대기 자리와 겹치지 않음 (휴식 10분 포함)'],
                     [['after_end'], `마지막 수업 ${pv.lastDate ? mdw(pv.lastDate) : '—'} ≤ 최종 종료일 ${mdw(pv.enrollment.finalEndDate)} (종료일은 연장하지 않음)`],

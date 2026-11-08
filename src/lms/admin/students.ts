@@ -2,7 +2,7 @@
 // 시간 표기 원칙 (H26(43)): 모든 시각에 기준 시간대 이름. 운영진 화면 = 한국 시간을 분명히 + 학생·강사 도시 시간.
 // 서머타임·날짜·요일은 실제 수업 날짜로 계산한다 (IANA 시간대, 고정 시차 없음)
 
-import { addDays, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
+import { addDays, ampmEn, ampmKo, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
 import { courseName } from '../rules/period';
 
 export const WD_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
@@ -23,10 +23,10 @@ export function enZone(tz: string): string {
 export const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 /** '11/5(목)' */
 export const mdw = (d: KstDate) => `${md(d)}(${WD_KO[weekdayOf(d)]})`;
-/** 그 시간대의 '11/5(목) 08:00' */
+/** 그 시간대의 '11/5(목) 오전 8:00' */
 export function zoneLabel(at: Date, tz: string): string {
   const f = formatInZone(at, tz);
-  return `${mdw(f.date)} ${f.time}`;
+  return `${mdw(f.date)} ${ampmKo(f.time)}`;
 }
 /** 영어 'Thu, Nov 5, 8:00 AM' */
 export function enWhen(at: Date, tz: string): string {
@@ -37,7 +37,7 @@ export function enWhen(at: Date, tz: string): string {
 }
 
 /**
- * 운영진 화면 시각: '11/5(목) 22:00 (한국 시간) · Toronto 11/5(목) 08:00 · Ho Chi Minh 11/5(목) 20:00'
+ * 운영진 화면 시각: '11/5(목) 오후 10:00 (한국 시간) · Toronto 11/5(목) 오전 8:00 · Ho Chi Minh 11/5(목) 오후 8:00'
  * 학생·강사가 한국 시간대면 그 부분은 생략 (같은 시각이라 두 번 쓰지 않음)
  */
 export function kstWithZones(at: Date, zones: { label: string; tz: string }[]): string {
@@ -51,10 +51,10 @@ export function kstWithZones(at: Date, zones: { label: string; tz: string }[]): 
   return parts.join(' · ');
 }
 
-/** 최종 종료 '1/26(화) 23:59 (한국 시간)' + 해외 학생이면 ' = 1/26(화) 09:59 (Toronto 시간)' */
+/** 최종 종료 '1/26(화) 오후 11:59 (한국 시간)' + 해외 학생이면 ' = 1/26(화) 오전 9:59 (Toronto 시간)' */
 export function finalEndText(finalEnd: KstDate, studentTz: string): string {
   const at = kstToInstant(finalEnd, '23:59');
-  const kst = `${mdw(finalEnd)} 23:59 (한국 시간)`;
+  const kst = `${mdw(finalEnd)} ${ampmKo('23:59')} (한국 시간)`;
   if (!studentTz || studentTz === 'Asia/Seoul') return kst;
   return `${kst} = ${zoneLabel(at, studentTz)} (${koZone(studentTz)})`;
 }
@@ -62,13 +62,13 @@ export function finalEndText(finalEnd: KstDate, studentTz: string): string {
 export type Slot = { weekday: number; time: string };
 export type SlotFull = Slot & { durationMin: number; tutorId: string; tutor: string; tutorTz: string; tutorCountry: string | null; from: KstDate; to: KstDate | null };
 
-/** '화·목 22:00' (시간이 요일마다 다르면 '화 22:00 · 목 21:00') */
+/** '화·목 오후 10:00' (시간이 요일마다 다르면 '화 오후 10:00 · 목 오후 9:00') */
 export function slotsText(slots: Slot[]): string {
   if (slots.length === 0) return '없음';
   const sorted = [...slots].sort((a, b) => a.weekday - b.weekday || a.time.localeCompare(b.time));
   const times = new Set(sorted.map((s) => s.time));
-  if (times.size === 1) return `${sorted.map((s) => WD_KO[s.weekday]).join('·')} ${sorted[0].time}`;
-  return sorted.map((s) => `${WD_KO[s.weekday]} ${s.time}`).join(' · ');
+  if (times.size === 1) return `${sorted.map((s) => WD_KO[s.weekday]).join('·')} ${ampmKo(sorted[0].time)}`;
+  return sorted.map((s) => `${WD_KO[s.weekday]} ${ampmKo(s.time)}`).join(' · ');
 }
 
 /** 다음에 오는 그 요일 날짜 (오늘 포함) */
@@ -79,7 +79,7 @@ export function nextDateOf(weekday: number, from: KstDate): KstDate {
 
 /**
  * 정규 일정을 다른 시간대로: 요일마다 '다음 실제 수업 날짜'로 계산해 서머타임·날짜 넘어감을 반영.
- * 결과 예: '화·목 08:00' / '월·수 20:00' (현지 요일이 다르면 현지 요일로 표시) / 요일마다 시간이 다르면 각각
+ * 결과 예: '화·목 오전 8:00' / '월·수 오후 8:00' (현지 요일이 다르면 현지 요일로 표시) / 요일마다 시간이 다르면 각각
  */
 export function slotsInZone(slots: Slot[], tz: string, from: KstDate, lang: 'ko' | 'en' = 'ko'): string {
   if (slots.length === 0) return lang === 'ko' ? '없음' : '—';
@@ -88,16 +88,11 @@ export function slotsInZone(slots: Slot[], tz: string, from: KstDate, lang: 'ko'
     .sort((a, b) => a.weekday - b.weekday)
     .map((s) => {
       const f = formatInZone(kstToInstant(nextDateOf(s.weekday, from), s.time), tz);
-      return { weekday: weekdayOf(f.date), time: lang === 'en' ? en12(f.time) : f.time };
+      return { weekday: weekdayOf(f.date), time: lang === 'en' ? ampmEn(f.time) : ampmKo(f.time) };
     });
   const times = new Set(local.map((s) => s.time));
   if (times.size === 1) return `${local.map((s) => wd[s.weekday]).join(lang === 'ko' ? '·' : '/')} ${local[0].time}`;
   return local.map((s) => `${wd[s.weekday]} ${s.time}`).join(' · ');
-}
-export function en12(hhmm: string): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
 /** 수강권 표시 '3개월(12주) · 주 2회 · 40분' (옛 상품은 시트 표기 그대로) */
@@ -261,10 +256,10 @@ export function parsePreview(j: any): RegularPreview {
 
 /** 검사 결과 글 (운영진이 바로 고칠 수 있게 구체적으로) */
 export function problemText(p: RegularPreview['problems'][number], tutor: { name: string; timezone: string }): string {
-  const when = `${mdw(p.date)} ${p.time}`;
-  const local = tutor.timezone !== 'Asia/Seoul' ? ` (${koZone(tutor.timezone)} ${formatInZone(kstToInstant(p.date, p.time), tutor.timezone).time})` : '';
+  const when = `${mdw(p.date)} ${ampmKo(p.time)}`;
+  const local = tutor.timezone !== 'Asia/Seoul' ? ` (${koZone(tutor.timezone)} ${ampmKo(formatInZone(kstToInstant(p.date, p.time), tutor.timezone).time)})` : '';
   switch (p.why) {
-    case 'tutor_hours_range': return `${when}${local} — ${tutor.name} 강사 현지 06:00~22:30 밖의 시작 시각이에요.`;
+    case 'tutor_hours_range': return `${when}${local} — ${tutor.name} 강사 현지 오전 6:00~오후 10:30 밖의 시작 시각이에요.`;
     case 'tutor_unavailable': return `${when}${local} — ${tutor.name} 강사가 열어 둔 시간(My hours)이 아니에요.`;
     case 'tutor_time_off': return `${when} — ${tutor.name} 강사 휴무예요.`;
     case 'tutor_busy': return `${when} — ${tutor.name} 강사의 다른 수업과 겹쳐요 (휴식 10분 포함)${p.other ? `: ${p.other}` : ''}.`;

@@ -333,13 +333,13 @@ function ExtendSheet({ enrollment: e, studentTz, today, extend, onClose, onSaved
   return (
     <Sheet title="종료일 연장 (운영진만)" onClose={onClose}>
       <div className="grid gap-2 rounded-[12px] bg-white px-3 py-2 text-[13.5px]">
-        <Row k="원래 종료" v={`${mdw(e.baseEndDate)} 23:59 (한국 시간)`} />
+        <Row k="원래 종료" v={`${mdw(e.baseEndDate)} 오후 11:59 (한국 시간)`} />
         {e.extensions.length > 0 && <Row k="이미 연장" v={e.extensions.map((x) => `${x.days > 0 ? '+' : ''}${x.days}일 · ${EXT_REASON[x.reason] ?? x.reason}${x.note ? ` (${x.note})` : ''}`).join(' / ')} />}
         <Row k="지금 최종 종료" v={finalEndText(e.finalEndDate, studentTz)} strong />
       </div>
       <div className="mt-3 grid gap-3">
         <div>
-          <label htmlFor="ext-date" className={label}>새 최종 종료일 (23:59 한국 시간)</label>
+          <label htmlFor="ext-date" className={label}>새 최종 종료일 (오후 11:59 한국 시간)</label>
           <select id="ext-date" value={newEnd} onChange={(x) => setNewEnd(x.target.value)} className={input}>
             {options.map((d) => <option key={d} value={d}>{mdw(d)}{d === e.finalEndDate ? ' (지금)' : ''}</option>)}
           </select>
