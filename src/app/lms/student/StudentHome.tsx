@@ -147,6 +147,11 @@ function KstToggle() {
  * 국내 '11/30(월) 오후 11:59', 시드니 '12/1(화) 오전 1:59' (11/3 대표·ChatGPT: 종료 시각도 현지로 정확히)
  */
 const endText = (d: KstDate) => whenText(new Date(`${d}T23:59:00+09:00`));
+/** 수강 종료일을 보이는 시간대 날짜만으로 '12/1(화)' (취소 창 보강 마감, 대표 11/8: 시각은 빼고 날짜만) */
+const endDay = (d: KstDate) => {
+  const k = kst(new Date(`${d}T23:59:00+09:00`));
+  return `${k.md}(${k.wd})`;
+};
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
 function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
@@ -1772,7 +1777,6 @@ function CancelSheet(props: {
   const periods = props.creditPeriods ?? [];
   /** 그 수업 날짜가 속한 기간의 변경권 (R-12) */
   const creditsOf = (l: StudentLesson) => creditsForDate(periods, instantToKstDate(l.startsAt), props.creditsLeft);
-  const periodText = (l: StudentLesson) => { const p = creditPeriodFor(periods, instantToKstDate(l.startsAt)); return p ? `${fmtDate(p.start)}~${fmtDate(p.end)} 기간` : null; };
 
   if (!lesson) {
     // 여러 수업 고르기: 시간순으로, 각 수업이 속한 기간의 변경권을 차례로 차감해 미리 계산 (DB 도 같은 순서·같은 기간 규칙, R-12)
@@ -1783,7 +1787,7 @@ function CancelSheet(props: {
     const toggleMany = (id: string) => setMany((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
     return (
       <div className="grid gap-3">
-        <h2 className="text-[18px] font-bold">{multi ? '변경할 수업을 모두 골라 주세요' : '변경할 수업을 골라 주세요'}</h2>
+        <h2 className="text-[18px] font-bold">{multi ? '취소할 수업을 모두 골라 주세요' : '취소할 수업을 골라 주세요'}</h2>
         {props.lessons.map((l) => {
           const on = many.has(l.id);
           const alone = planCancelMany([l], { now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, creditPeriods: periods, holidays: props.holidays }).items[0]?.decision;
@@ -1807,7 +1811,7 @@ function CancelSheet(props: {
         {props.onConfirmMany && props.lessons.some((l) => l.kind !== 'compensation') && (
           <button type="button" onClick={() => { setMulti(!multi); if (multi) { setMany(new Set()); setManyChecked(false); } }}
             className="min-h-[44px] text-center text-[14px] font-bold text-[#3a22b0]">
-            {multi ? '한 개씩 변경 ›' : '여러 수업 한 번에 변경 ›'}
+            {multi ? '한 개씩 취소 ›' : '여러 수업 한 번에 취소 ›'}
           </button>
         )}
         {props.notice && <p className="rounded-[12px] border border-[#f3c2bb] bg-[#fff1ef] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#7a1d12]">{props.notice}</p>}
@@ -1846,7 +1850,6 @@ function CancelSheet(props: {
   }
 
   const creditsNow = creditsOf(lesson);   // 그 수업 날짜가 속한 기간의 변경권 (R-12)
-  const pText = periodText(lesson);
   const d = cancelPreview({ lesson, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: creditsNow, holidays: props.holidays }, null);
   const title = `${whenText(lesson.startsAt)} 수업을 취소할까요?`;
 
@@ -1864,17 +1867,17 @@ function CancelSheet(props: {
   const hours = hoursBetween(props.now, lesson.startsAt);
   const needsCheck = d.consumesLesson; // 수업이 차감되면 한 번 더 확인
   const late = d.timing === 'late';
+  // 정보 줄이기 (대표 11/8): 평소와 다른 것만 보여 줌 — 수업이 차감될 때만 '수업 횟수', 변경권을 쓸 때만 '변경권'
   const rows: [string, string][] = [
-    ['수업 횟수', d.consumesLesson ? `1회 차감 (남은 ${props.totalLeft}회 → ${props.totalLeft - 1}회)` : '차감 안 됨'],
-    ['보강', d.makeupAllowed ? `수강기간(~${endText(props.makeupUntil)}) 안에 보강 가능` : '불가'],
-    ['변경권', `${d.usesCredit ? `1개 사용 (${creditsNow}개 → ${creditsNow - 1}개)` : `사용 안 함 (${creditsNow}개 그대로)`}${pText ? ` · ${pText}` : ''}`],
+    ...(d.consumesLesson ? [['수업 횟수', `1회 차감 (남은 ${props.totalLeft}회 → ${props.totalLeft - 1}회)`] as [string, string]] : []),
+    ...(d.usesCredit ? [['변경권', `1개 사용 (${creditsNow}개 → ${creditsNow - 1}개)`] as [string, string]] : []),
+    ['보강', d.makeupAllowed ? `~${endDay(props.makeupUntil)}까지 가능` : '불가'],
   ];
 
   return (
     <div className="grid gap-3.5">
       <h2 className="text-[19px] font-bold">{d.timing === 'late' ? `수업 시작 ${hours < 1 ? '1시간 이내' : `${Math.floor(hours)}시간 전`}이에요` : title}</h2>
       <section className={`grid gap-2 rounded-[14px] p-3.5 text-[14px] leading-normal ${needsCheck ? 'border border-[#f3c2bb] bg-[#fff1ef] text-[#7a1d12]' : 'bg-[#f1eefc]'}`}>
-        <p className={`font-bold ${needsCheck ? 'text-[#7a1d12]' : ''}`}>지금 취소하면</p>
         {rows.map(([a, b]) => (
           <div key={a} className="flex justify-between gap-3">
             <span className={`shrink-0 ${needsCheck ? 'text-[#7a1d12]' : ''}`}>{a}</span>
@@ -1882,11 +1885,7 @@ function CancelSheet(props: {
           </div>
         ))}
       </section>
-      {late ? (
-        <p className="text-[15px] leading-relaxed">{LATE_CANCEL_TEXT}</p>
-      ) : (
-        <p className="text-[12.5px] leading-relaxed text-[#55526a]">{d.studentMessage}</p>
-      )}
+      {late && <p className="text-[15px] leading-relaxed">{LATE_CANCEL_TEXT}</p>}
       {needsCheck && !late && (
         <label className="flex min-h-[44px] items-start gap-2.5 text-[14px] leading-normal">
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-5 w-5 accent-[#b3261e]" />
