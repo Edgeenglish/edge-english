@@ -143,7 +143,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 
 <div class="wrap">
   <header>
-    <h1>재등록 · 보강 이월 · 적립금 — 운영자 화면 시안 4차</h1>
+    <h1>재등록 · 보강 이월 · 적립금 — 운영자 화면 시안 5차</h1>
     <p class="lead">학생·금액·날짜는 모두 예시입니다. 버튼·칸은 실제처럼 눌러 볼 수 있고, 저장하기 전 입력은 창을 닫거나 다른 화면에 갔다 와도 남습니다. 코드·DB는 바꾸지 않았습니다.</p>
   </header>
 
@@ -163,22 +163,20 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   </div>
 
   <section class="q">
-    <h2>4차에서 바꾼 것</h2>
+    <h2>5차에서 바꾼 것</h2>
     <ol>
-      <li>정규 수업 <b>요일마다 시간</b>을 따로 둠. 지난 수강권의 요일별 시간을 그대로 불러오고, 줄마다 요일·시간을 바꾸거나 지우고 더할 수 있음</li>
-      <li><b>모든 시간 12시간제</b> (오전/오후). 시간 고르기 메뉴도 ‘오전 9:00’ 형식. 입금 시각은 날짜 + 오전/오후 + 시 + 분. DB 저장 형식은 그대로</li>
-      <li>학생 상세의 ‘새로’ 표시·주황 테두리 없앰</li>
-      <li>재등록: 지난 수강권은 한 줄 요약. 상품은 ‘4주 · 주 2회 · 40분 [바꾸기]’로 접어 두고 바꿀 때만 펼침. PC는 왼쪽 수업·일정 / 오른쪽 결제 2열</li>
-      <li>보강 이월: 줄마다 ‘체크 · 수업 날짜 · 보강 날짜 · 시간’만. 설명·표시 없앰. 막히는 이유만 그 줄 아래 빨간 글</li>
-      <li>입력 유지: ✕로 닫거나 다른 화면에 갔다 오면 ‘저장하지 않았던 입력을 되살렸어요 [원래대로]’ (지금 프로필 수정 창과 같은 방식). [취소]는 입력이 있으면 ‘입력한 내용을 지울까요?’를 창 안에서 한 번 더 물음</li>
-      <li>저장 결과: 창 맨 위 초록 줄 한 줄. 저장 실패는 입력을 그대로 두고 막힌 칸 바로 아래 빨간 글</li>
-      <li>그대로 둔 것: 적립금 창(저장 전후 잔액·학생 화면 미리보기), 대시보드 [재등록 넣기] 바로가기, [재등록 넣기] 항상 표시, 재등록 안내 문자는 미완료 수업 2회 이하일 때만</li>
+      <li><b>입금 시각 칸 없앰 → 입금 날짜만</b> (필수). 마감이 ‘종료일 오후 11:59 KST’라 입금 날짜가 종료일과 같거나 앞이면 마감 안 (POL-RN-01). 종료일 뒤 날짜면 그 칸 아래 ‘보강 이월 안 됨’</li>
+      <li><b>시작일 직접 수정 검사</b>: 정규 요일이 아닌 날을 고르면 그 칸 바로 아래 ‘○요일이에요 · 정규 요일은 수·금’ + 저장 막힘. [첫 수업일로]로 되돌림</li>
+      <li><b>날짜·요일</b>: 화면의 모든 날짜 요일을 실제 달력으로 계산 (예: 10/7(수)·10/28(수)·11/5(목)·11/18(수))</li>
+      <li><b>입력 보존 세 창 똑같이</b> (재등록·보강 이월·적립금): ✕·다른 화면 → 입력 남음, 다시 열면 ‘저장하지 않았던 입력을 되살렸어요 [원래대로]’ · [취소] → 입력이 있으면 ‘입력한 내용을 지울까요? [계속 입력] [지우기]’, 없으면 바로 닫힘 · 저장하면 보존 입력 지움</li>
+      <li>그대로: PC 2열 · 요일별 시간 · 접힌 수강 상품 · 12시간제 · 간결한 보강 이월 · 적립금 잔액 미리보기 · 대시보드 [재등록 넣기]</li>
     </ol>
   </section>
 
   <section class="note">
     <h2>개발 메모 (승인 뒤)</h2>
     <ul>
+      <li><b>입금 날짜만 받으려면 DB 규칙 수정 필요</b>: 지금 결제 기록은 입금 시각이 필수(10/16 설계, 11/8 송O나 재등록도 시각 미확인이라 정오로 기록함). 시각을 비워 둘 수 있게 하고 마감 판정을 입금 날짜로 바꾸는 migration 1건. 기존 기록은 그대로. 신규 등록 화면 결제 칸도 같게 할지 대표 결정</li>
       <li>읽기 함수 3개 추가 필요: 이월할 보강 목록 · 운영자용 적립금 내역 · 재등록 일정 겹침 미리 검사(지금 일정 확정과 같은 검사). 모두 읽기만 함</li>
       <li>요일별 시간은 지금 정규 일정 표(요일마다 한 줄)와 일정 확정 함수 그대로 씀. 새 표 없음</li>
       <li>12시간제 표기 함수는 화면 공용 하나로. 강사 화면 영어는 AM/PM</li>
@@ -203,15 +201,22 @@ function wd(iso) { return new Date(iso + 'T00:00:00Z').getUTCDay(); }
 function mdw(iso) { const [, m, d] = iso.split('-'); return `${+m}/${+d}(${DAY[wd(iso)]})`; }
 function shift(slot) { let [h, m] = slot.t.split(':').map(Number); h += TZ_SHIFT; let d = slot.d; if (h < 0) { h += 24; d = (d + 6) % 7; } return { d, t: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}` }; }
 const sortSlots = (ss) => [...ss].sort((a, b) => ORDER.indexOf(a.d) - ORDER.indexOf(b.d));
+const daysOf = (ss) => sortSlots(ss).map(s => DAY[s.d]).join('·');
 const slotsKo = (ss) => sortSlots(ss).map(s => `${DAY[s.d]} ${t12(s.t)}`).join(' · ');
 const slotsTo = (ss) => sortSlots(ss).map(s => { const x = shift(s); return `${DAY[x.d]} ${t12(x.t)}`; }).join(' · ');
 const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 const timeSelect = (id, val, label) => `<select class="inp" id="${id}" aria-label="${label}">${TIMES.map(t => `<option value="${t}" ${t === val ? 'selected' : ''}>${t12(t)}</option>`).join('')}</select>`;
 
 // ── 상태 (예시) ──
-const R0 = () => ({ product: { ...PREV_PRODUCT }, prodOpen: false, slots: PREV_SLOTS.map(s => ({ ...s })), start: '', manual: false, method: 'bank', amount: '', payDate: '', ap: '', hh: '', mi: '', payer: '' });
-const S = { view: 'detail', renewed: false, carried: false, r: R0(), rDirty: false, rRestored: false, rCancel: false, rDone: false,
-  carry: [{ on: true, date: '2026-11-24', t: '10:00' }, { on: true, date: '2026-12-01', t: '10:00' }, { on: true, date: '2026-12-08', t: '10:00' }, { on: true, date: '', t: '10:00' }, { on: true, date: '', t: '10:00' }], cDone: false,
+const R0 = () => ({ product: { ...PREV_PRODUCT }, prodOpen: false, slots: PREV_SLOTS.map(s => ({ ...s })), start: '', manual: false, method: 'bank', amount: '', payDate: '', payer: '' });
+const C0 = () => [{ on: true, date: '2026-11-24', t: '10:00' }, { on: true, date: '2026-12-01', t: '10:00' }, { on: true, date: '2026-12-08', t: '10:00' }, { on: true, date: '', t: '10:00' }, { on: true, date: '', t: '10:00' }];
+// 입력 보존(세 창 공통): d = 저장 전 입력 있음 · rs = 되살림 표시 · c = 취소 확인 중
+const F = { renew: {}, carry: {}, reward: {} };
+const RESET = { renew: () => { S.r = R0(); }, carry: () => { S.carry = C0(); }, reward: () => { S.ramt = ''; S.rreason = ''; } };
+const restoreBar = (k) => F[k].rs ? `<div class="confirm-bar"><span>저장하지 않았던 입력을 되살렸어요</span><button class="btn-s" data-act="reset" data-k="${k}">원래대로</button></div>` : '';
+const cancelBar = (k) => F[k].c ? `<div class="confirm-bar"><span>입력한 내용을 지울까요?</span><button class="btn-s" data-act="cancelNo" data-k="${k}">계속 입력</button><button class="btn-s fill" data-act="cancelYes" data-k="${k}">지우기</button></div>` : '';
+const S = { view: 'detail', renewed: false, carried: false, r: R0(), rDone: false,
+  carry: C0(), cDone: false,
   rmode: 'in', ramt: '', rreason: '', balance: 10000, rwDone: '' };
 const CO = [['2026-10-07', 'lms'], ['2026-10-09', 'lms'], ['2026-10-28', 'lms'], ['2026-11-04', 'sheet'], ['2026-11-06', 'sheet']];
 
@@ -231,7 +236,7 @@ function detail() {
   const suGang = `<section class="box"><div class="box-h"><h3>수강</h3><span style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn-s">종료일 연장</button>${S.renewed ? '' : '<button class="btn-s fill" data-go="renew">재등록 넣기</button>'}</span></div>
    <div class="row strong"><span class="k">등록 상품</span><span class="v">4주 · 주 2회 · 40분</span></div>
    <div class="row"><span class="k">진행 · 남은</span><span class="v num">진행 6회 · 남은 정규 2회 (보강 포함 7회)</span></div>
-   <div class="row strong"><span class="k">최종 종료</span><span class="v num">11/18(수) 오후 11:59 KST</span></div>
+   <div class="row strong"><span class="k">최종 종료</span><span class="v num">${mdw(PREV_END)} 오후 11:59 KST</span></div>
    ${S.renewed ? `<div class="row strong"><span class="k">다음 수강권</span><span class="v num">2차 · ${n.p.weeks}주 · 주 ${n.p.weekly}회 · ${n.p.dur}분<br><small class="hint">${mdw(n.start)} – ${mdw(endOf(n.start, n.p.weeks))} · 결제 확인함</small></span></div>
      <div class="row"><span class="k">보강 이월</span><span class="v">${S.carried ? `${S.carry.filter(c => c.on).length}회 이월함 ✓` : '<span class="num">5회</span> 가능 <button class="btn-s fill" data-go="carry" style="margin-left:4px">보강 이월</button>'}</span></div>` : ''}</section>`;
   const reward = `<section class="box"><div class="box-h"><h3>적립금</h3><span style="display:flex;gap:4px"><button class="btn-s" data-go="reward" data-mode="in">넣기</button><button class="btn-s" data-go="reward" data-mode="out">빼기</button></span></div>
@@ -249,7 +254,7 @@ function detail() {
     ${suGang}${reward}
     <section class="box"><div class="box-h"><h3>프로필</h3><button class="btn-s">수정</button></div><div class="row"><span class="k">거주</span><span class="v">캐나다 · 토론토</span></div><div class="row"><span class="k">레벨</span><span class="v">Intermediate</span></div></section>
     <section class="box"><div class="box-h"><h3>운영진만</h3></div><div class="row"><span class="k">1차</span><span class="v num">10/22 · 계좌이체 · 확인</span></div>${S.renewed ? '<div class="row"><span class="k">2차</span><span class="v num">11/5 · 계좌이체 · 확인</span></div>' : ''}</section>
-    <section class="box"><div class="box-h"><h3>다가오는 수업</h3></div><div class="row"><span class="k num">11/13(금) 오후 10:00 KST</span><span class="v">정규 7회</span></div>${S.carried ? '<div class="row"><span class="k num">11/24(화) 오전 10:00 KST</span><span class="v">이월 보강</span></div>' : ''}</section>
+    <section class="box"><div class="box-h"><h3>다가오는 수업</h3></div><div class="row"><span class="k num">${mdw('2026-11-13')} 오후 10:00 KST</span><span class="v">정규 7회</span></div>${S.carried ? `<div class="row"><span class="k num">${mdw('2026-11-24')} 오전 10:00 KST</span><span class="v">이월 보강</span></div>` : ''}</section>
   </div>
   <button class="btn-sub" data-act="toggleRenew">${S.renewed ? '재등록 전 모습 보기' : '재등록 저장 뒤 모습 보기'}</button></div>`;
 }
@@ -262,9 +267,11 @@ function renew() {
   const countBad = r.slots.length !== p.weekly;
   const conflicts = r.slots.map(s => BUSY[`${s.d} ${s.t}`] || '');
   const badStart = start && start <= PREV_END;
-  const payOk = r.payDate && r.ap && r.hh && r.mi !== '';
+  const offDay = start && !badStart && !r.slots.some(x => x.d === wd(start));
+  const payOk = !!r.payDate;
+  const late = r.payDate && r.payDate > PREV_END;
   const amtOk = (parseInt(r.amount.replace(/[^0-9]/g, ''), 10) || 0) > 0;
-  const block = countBad ? `요일 ${p.weekly}개를 맞춰 주세요` : dupDay ? '같은 요일이 두 번 있어요' : conflicts.some(Boolean) ? '겹치는 시간을 바꿔 주세요' : !start || badStart ? '시작일을 골라 주세요' : !amtOk ? '받은 금액을 넣어 주세요' : !payOk ? '입금 시각을 넣어 주세요' : '';
+  const block = countBad ? `요일 ${p.weekly}개를 맞춰 주세요` : dupDay ? '같은 요일이 두 번 있어요' : conflicts.some(Boolean) ? '겹치는 시간을 바꿔 주세요' : !start || badStart ? '시작일을 골라 주세요' : offDay ? '시작일을 정규 요일로 맞춰 주세요' : !amtOk ? '받은 금액을 넣어 주세요' : !payOk ? '입금 날짜를 넣어 주세요' : '';
   if (S.rDone) {
     const n = NEW();
     return `<div class="overlay"><div class="sheet wide"><div class="sheet-h"><h3>재등록 넣기 · 가O나</h3><button class="x" data-act="close" aria-label="닫기">✕</button></div>
@@ -289,26 +296,22 @@ function renew() {
       </div></div>
     <div><label class="lab" for="rs">시작일 ${r.manual ? '<button class="btn-s" data-act="autoStart" style="margin-left:4px">첫 수업일로</button>' : '<span class="pill opt">첫 수업일</span>'}</label>
       <input class="inp" type="date" id="rs" value="${start}" min="${addDays(PREV_END, 1)}">
-      ${badStart ? `<span class="err">${mdw(PREV_END)} 뒤 날짜를 골라 주세요</span>` : ''}</div>
+      ${badStart ? `<span class="err">${mdw(PREV_END)} 뒤 날짜를 골라 주세요</span>` : offDay ? `<span class="err">${DAY[wd(start)]}요일이에요 · 정규 요일은 ${daysOf(r.slots)}</span>` : ''}</div>
     <div class="calc"><div class="row strong"><span class="k">종료</span><span class="v num">${start ? `${mdw(endOf(start, p.weeks))} 오후 11:59 KST` : '—'}</span></div><div class="row"><span class="k">수업 · 변경권</span><span class="v num">${p.weeks * p.weekly}회 · 28일마다 ${p.weekly === 1 ? 1 : p.weekly === 2 ? 2 : 3}장</span></div></div>
   </div>`;
   const right = `<div class="col">
     <div><span class="lab">결제 방법</span><div class="chips"><button class="chip" aria-pressed="${r.method === 'bank'}" data-r="method" data-val="bank">계좌이체</button><button class="chip" aria-pressed="${r.method === 'card'}" data-r="method" data-val="card">아임웹 카드</button></div></div>
     <div><label class="lab" for="ra">받은 금액 (원) · 지난 결제 ${won(290000)}</label><input class="inp num" id="ra" inputmode="numeric" placeholder="직접 입력" value="${r.amount}"></div>
-    <div><span class="lab">입금 시각 (한국 시간 KST)</span>
-      <div style="display:grid;gap:6px"><input class="inp" type="date" id="pd" aria-label="입금 날짜" value="${r.payDate}">
-      <div class="time3" style="grid-template-columns:1.3fr 1fr 1fr"><select class="inp" id="pap" aria-label="오전 오후"><option value="">오전/오후</option><option ${r.ap === '오전' ? 'selected' : ''}>오전</option><option ${r.ap === '오후' ? 'selected' : ''}>오후</option></select>
-      <select class="inp" id="phh" aria-label="시"><option value="">시</option>${Array.from({ length: 12 }, (_, i) => i + 1).map(h => `<option ${String(h) === r.hh ? 'selected' : ''}>${h}</option>`).join('')}</select>
-      <select class="inp" id="pmi" aria-label="분"><option value="">분</option>${Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => `<option ${m === r.mi ? 'selected' : ''}>${m}</option>`).join('')}</select></div></div></div>
+    <div><label class="lab" for="pd">입금 날짜 (한국 KST)</label><input class="inp" type="date" id="pd" value="${r.payDate}" max="2026-11-08">${late ? `<span class="err">종료일 ${mdw(PREV_END)} 뒤 입금 · 보강 이월 안 됨</span>` : ''}</div>
     <div><label class="lab" for="rp">입금자명 (선택)</label><input class="inp" id="rp" value="${r.payer}"></div>
   </div>`;
   return `<div class="overlay"><div class="sheet wide">
    <div class="sheet-h"><h3>재등록 넣기 · 가O나</h3><button class="x" data-act="close" aria-label="닫기">✕</button></div>
-   ${S.rRestored ? '<div class="confirm-bar"><span>저장하지 않았던 입력을 되살렸어요</span><button class="btn-s" data-act="rReset">원래대로</button></div>' : ''}
+   ${restoreBar('renew')}
    <div class="sum-line"><span>지난 수강권 <b>1차 4주 · 주 2회 · 40분</b></span><span class="num">~ ${mdw(PREV_END)} 오후 11:59 KST</span><span>남은 정규 2 · 보강 5</span></div>
    <div class="cols">${left}${right}</div>
-   ${S.rCancel ? '<div class="confirm-bar"><span>입력한 내용을 지울까요?</span><button class="btn-s" data-act="rCancelNo">계속 입력</button><button class="btn-s fill" data-act="rCancelYes">지우기</button></div>' : ''}
-   <div class="actions"><button class="btn-sub" data-act="rCancel">취소</button><button class="btn-m" data-act="saveRenew" ${block ? 'disabled' : ''}>${block || `2차 수강권 저장 (${mdw(start)} 시작)`}</button></div>
+   ${cancelBar('renew')}
+   <div class="actions"><button class="btn-sub" data-act="cancel" data-k="renew">취소</button><button class="btn-m" data-act="saveRenew" ${block ? 'disabled' : ''}>${block || `2차 수강권 저장 (${mdw(start)} 시작)`}</button></div>
   </div></div>`;
 }
 
@@ -325,14 +328,16 @@ function carry() {
   const n = S.carry.filter(c => c.on).length;
   return `<div class="overlay"><div class="sheet">
    <div class="sheet-h"><h3>보강 이월 · 가O나</h3><button class="x" data-act="close" aria-label="닫기">✕</button></div>
-   <div class="ok-bar">이월 가능 ✓ 2차 결제 11/5(목) 오후 2:23 KST</div>
+   ${restoreBar('carry')}
+   <div class="ok-bar">이월 가능 ✓ 2차 입금 ${mdw('2026-11-05')} · 1차 종료 ${mdw(PREV_END)} 안</div>
    <div class="hint">강사 Olivia · 40분 · 시간은 한국 시간 KST</div>
    <div class="co-list">${CO.map((o, i) => { const c = S.carry[i]; return `<div class="co-row ${c.on ? '' : 'off'}">
      <input type="checkbox" id="co${i}" ${c.on ? 'checked' : ''} aria-label="${mdw(o[0])} 수업분 이월"><label class="lbl" for="co${i}"><b class="num">${mdw(o[0])} 수업분</b></label>
      ${c.on ? `<div class="when"><input class="inp" type="date" id="cd${i}" aria-label="보강 날짜" value="${c.date}" min="${addDays(PREV_END, 1)}">${timeSelect(`ct${i}`, c.t, '보강 시간')}</div>
        ${c.date && !errs[i] ? `<span class="sub">토론토 ${(() => { const x = shift({ d: wd(c.date), t: c.t }); return `${mdw(x.d === wd(c.date) ? c.date : addDays(c.date, -1))} ${t12(x.t)}`; })()}</span>` : ''}
        ${errs[i] ? `<span class="err" style="grid-column:2">${errs[i]}</span>` : ''}` : ''}</div>`; }).join('')}</div>
-   <div class="actions"><button class="btn-sub" data-act="close">취소</button><button class="btn-m" data-act="saveCarry" ${n && !errs.some(Boolean) ? '' : 'disabled'}>${!n ? '이월할 수업을 골라 주세요' : errs.some(Boolean) ? '빨간 줄을 고쳐 주세요' : `${n}회 이월`}</button></div>
+   ${cancelBar('carry')}
+   <div class="actions"><button class="btn-sub" data-act="cancel" data-k="carry">취소</button><button class="btn-m" data-act="saveCarry" ${n && !errs.some(Boolean) ? '' : 'disabled'}>${!n ? '이월할 수업을 골라 주세요' : errs.some(Boolean) ? '빨간 줄을 고쳐 주세요' : `${n}회 이월`}</button></div>
   </div></div>`;
 }
 
@@ -344,19 +349,21 @@ function reward() {
   const ok = amt > 0 && S.rreason.trim() && !over;
   return `<div class="overlay"><div class="sheet">
    <div class="sheet-h"><h3>적립금 · 가O나</h3><button class="x" data-act="close" aria-label="닫기">✕</button></div>
+   ${restoreBar('reward')}
    <div class="seg"><button class="in" aria-pressed="${S.rmode === 'in'}" data-rw="in">+ 넣기</button><button class="out" aria-pressed="${S.rmode === 'out'}" data-rw="out">− 빼기</button></div>
    <div><label class="lab" for="ramt">금액 (원)</label><input class="inp num" id="ramt" inputmode="numeric" placeholder="직접 입력" value="${S.ramt}">${over ? `<span class="err">잔액(${won(S.balance)})보다 많이 뺄 수 없어요</span>` : ''}</div>
    <div><label class="lab" for="rrs">사유 (필수 · 학생 화면에 보임 · 200자까지)</label><input class="inp" id="rrs" maxlength="200" value="${S.rreason.replace(/"/g, '&quot;')}"></div>
    <div class="calc"><div class="row"><span class="k">지금 잔액</span><span class="v num">${won(S.balance)}</span></div><div class="row strong"><span class="k">저장 뒤 잔액</span><span class="v num ${over ? 'minus' : ''}">${amt ? won(after) : '—'}</span></div></div>
    <div class="preview-st"><div class="t">학생 화면에 이렇게 보여요</div><div class="row" style="border:0"><span class="k num">11/8</span><span class="v"><b class="num ${S.rmode === 'in' ? 'plus' : 'minus'}">${S.rmode === 'in' ? '+' : '−'}${amt ? won(amt) : '0원'}</b><br><small class="hint">${S.rreason.trim() || '(사유)'}</small></span></div></div>
-   <div class="actions"><button class="btn-sub" data-act="close">취소</button><button class="btn-m" data-act="saveReward" ${ok ? '' : 'disabled'}>${!amt ? '금액을 넣어 주세요' : !S.rreason.trim() ? '사유를 넣어 주세요' : over ? '잔액보다 많아요' : `${S.rmode === 'in' ? '+' : '−'}${won(amt)} ${S.rmode === 'in' ? '넣기' : '빼기'}`}</button></div>
+   ${cancelBar('reward')}
+   <div class="actions"><button class="btn-sub" data-act="cancel" data-k="reward">취소</button><button class="btn-m" data-act="saveReward" ${ok ? '' : 'disabled'}>${!amt ? '금액을 넣어 주세요' : !S.rreason.trim() ? '사유를 넣어 주세요' : over ? '잔액보다 많아요' : `${S.rmode === 'in' ? '+' : '−'}${won(amt)} ${S.rmode === 'in' ? '넣기' : '빼기'}`}</button></div>
   </div></div>`;
 }
 
 // ── ⑤ 대시보드 ──
 function dash() {
   return `<div class="topbar"><b>엣지영어 LMS</b><span style="color:var(--brand);font-weight:700">대시보드</span><span>학생</span><span>수업 변경</span></div>
-  <div class="scr"><article class="dash-card"><span class="dash-tag">수강기간 종료 임박</span><b>가O나 · 수업 2회 남음</b><span class="hint">STU-0000 · 4주 · 주 2회 · 40분 · Olivia · 종료 11/18(수) 오후 11:59 KST</span>
+  <div class="scr"><article class="dash-card"><span class="dash-tag">수강기간 종료 임박</span><b>가O나 · 수업 2회 남음</b><span class="hint">STU-0000 · 4주 · 주 2회 · 40분 · Olivia · 종료 ${mdw(PREV_END)} 오후 11:59 KST</span>
    <div class="copy-txt">재등록 안내 문자 · <b style="color:var(--ink)">복사함 ✓ · 보냄 ✓</b></div>
    <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-s fill" data-go="renew">재등록 넣기</button><button class="btn-s">수강 종료</button></div></article></div>`;
 }
@@ -381,18 +388,18 @@ function render() {
   document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.v === S.view)));
 }
 function go(v, mode) {
-  if (v === 'renew') { S.rRestored = S.rDirty && !S.rDone; S.rCancel = false; }
+  if (F[v]) { F[v].rs = !!F[v].d && !(v === 'renew' && S.rDone) && !(v === 'carry' && S.cDone); F[v].c = false; }
   if (v === 'reward') { if (mode) S.rmode = mode; }
   if (v !== 'detail') S.flash = '';
   S.view = v; render();
 }
-const touch = () => { S.rDirty = true; };
+const touch = (k = 'renew') => { F[k].d = true; F[k].c = false; };
 document.addEventListener('click', (e) => {
   const tab = e.target.closest('.tab'); if (tab) { go(tab.dataset.v); return; }
   const g = e.target.closest('[data-go]'); if (g) { go(g.dataset.go, g.dataset.mode); return; }
   const pr = e.target.closest('[data-prod]'); if (pr) { S.r.product[pr.dataset.prod] = +pr.dataset.val; touch(); render(); return; }
   const rr = e.target.closest('[data-r]'); if (rr) { S.r[rr.dataset.r] = rr.dataset.val; touch(); render(); return; }
-  const rw = e.target.closest('[data-rw]'); if (rw) { S.rmode = rw.dataset.rw; render(); return; }
+  const rw = e.target.closest('[data-rw]'); if (rw) { S.rmode = rw.dataset.rw; if (S.ramt || S.rreason) touch('reward'); render(); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act, r = S.r;
   if (act === 'close') { S.view = 'detail'; render(); }
@@ -402,15 +409,16 @@ document.addEventListener('click', (e) => {
   if (act === 'slotAdd') { const used = r.slots.map(s => s.d); const d = ORDER.find(x => !used.includes(x)); r.slots.push({ d, t: r.slots.at(-1)?.t || '09:00' }); r.manual = false; touch(); render(); }
   if (act === 'slotDel') { r.slots.splice(+b.dataset.i, 1); r.manual = false; touch(); render(); }
   if (act === 'autoStart') { r.manual = false; render(); }
-  if (act === 'rReset') { S.r = R0(); S.rDirty = false; S.rRestored = false; render(); }
-  if (act === 'rCancel') { if (S.rDirty) { S.rCancel = true; render(); } else { S.view = 'detail'; render(); } }
-  if (act === 'rCancelNo') { S.rCancel = false; render(); }
-  if (act === 'rCancelYes') { S.r = R0(); S.rDirty = false; S.rCancel = false; S.rRestored = false; S.view = 'detail'; render(); }
-  if (act === 'saveRenew') { S.renewed = true; S.rDone = true; S.rDirty = false; S.rRestored = false; render(); }
-  if (act === 'saveCarry') { S.carried = true; S.cDone = true; render(); }
+  const k = b.dataset.k;
+  if (act === 'reset') { RESET[k](); F[k] = {}; render(); }
+  if (act === 'cancel') { if (F[k].d) { F[k].c = true; render(); } else { S.view = 'detail'; render(); } }
+  if (act === 'cancelNo') { F[k].c = false; render(); }
+  if (act === 'cancelYes') { RESET[k](); F[k] = {}; S.view = 'detail'; render(); }
+  if (act === 'saveRenew') { S.renewed = true; S.rDone = true; F.renew = {}; render(); }
+  if (act === 'saveCarry') { S.carried = true; S.cDone = true; F.carry = {}; render(); }
   if (act === 'saveReward') { const amt = parseInt(String(S.ramt).replace(/[^0-9]/g, ''), 10) || 0; S.balance += S.rmode === 'in' ? amt : -amt;
     S.rwDone = `<b class="num ${S.rmode === 'in' ? 'plus' : 'minus'}">${S.rmode === 'in' ? '+' : '−'}${won(amt)}</b><small class="hint" style="display:block">${S.rreason.trim()}</small>`;
-    S.flash = `✓ 적립금 ${S.rmode === 'in' ? '+' : '−'}${won(amt)} 저장했어요 · 잔액 ${won(S.balance)}`; S.ramt = ''; S.rreason = ''; S.view = 'detail'; render(); }
+    S.flash = `✓ 적립금 ${S.rmode === 'in' ? '+' : '−'}${won(amt)} 저장했어요 · 잔액 ${won(S.balance)}`; S.ramt = ''; S.rreason = ''; F.reward = {}; S.view = 'detail'; render(); }
 });
 function onField(e) {
   const el = e.target, id = (el.id || '').replace(/-(pc|ph)$/, ''), r = S.r, v = el.value;
@@ -420,15 +428,12 @@ function onField(e) {
   else if ((m = id.match(/^st(\d)$/))) { r.slots[+m[1]].t = v; touch(); render(); }
   else if (id === 'ra') { r.amount = v; touch(); render(); }
   else if (id === 'pd') { r.payDate = v; touch(); render(); }
-  else if (id === 'pap') { r.ap = v; touch(); render(); }
-  else if (id === 'phh') { r.hh = v; touch(); render(); }
-  else if (id === 'pmi') { r.mi = v; touch(); render(); }
   else if (id === 'rp') { r.payer = v; touch(); }
-  else if ((m = id.match(/^co(\d)$/))) { S.carry[+m[1]].on = el.checked; render(); }
-  else if ((m = id.match(/^cd(\d)$/))) { S.carry[+m[1]].date = v; render(); }
-  else if ((m = id.match(/^ct(\d)$/))) { S.carry[+m[1]].t = v; render(); }
-  else if (id === 'ramt') { S.ramt = v; render(); }
-  else if (id === 'rrs') { S.rreason = v; render(); }
+  else if ((m = id.match(/^co(\d)$/))) { S.carry[+m[1]].on = el.checked; touch('carry'); render(); }
+  else if ((m = id.match(/^cd(\d)$/))) { S.carry[+m[1]].date = v; touch('carry'); render(); }
+  else if ((m = id.match(/^ct(\d)$/))) { S.carry[+m[1]].t = v; touch('carry'); render(); }
+  else if (id === 'ramt') { S.ramt = v; touch('reward'); render(); }
+  else if (id === 'rrs') { S.rreason = v; touch('reward'); render(); }
 }
 document.addEventListener('input', (e) => { if (e.target.tagName === 'INPUT' && e.target.type !== 'checkbox' && e.target.type !== 'date') onField(e); });
 document.addEventListener('change', (e) => { if (e.target.tagName === 'SELECT' || e.target.type === 'checkbox' || e.target.type === 'date') onField(e); });
