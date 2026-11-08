@@ -510,7 +510,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const open = right.open;
   const comp = right.kind === 'compensation' ? right.comp : null;
   // 톡으로 보낼 '보강 날짜 고르기' 바로가기 (11/8 대표 B안): 학생이 누르면 이 수업 날짜 고르기가 바로 열림
-  const link = makeupLink(comp ? comp.id : right.kind === 'migrated' ? right.item.id : right.source.id);
+  const link = makeupLink(right.kind === 'compensation' ? right.comp.id : right.kind === 'migrated' ? right.item.id : right.source.id);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
   const title = comp
     ? `무료 보상수업 · ${src ? `${kstLabel(src.startsAt)} 강사 노쇼` : '강사 노쇼'}`

@@ -74,43 +74,47 @@ const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
 // 학생 화면 시각은 학생이 사는 곳 시간대로 (11/3 대표: 해외 학생은 본인 나라 시간으로 캘린더). 국내 학생은 한국 시간 그대로.
 // 화면 하나에 학생 한 명이라 렌더할 때 정해 둠. 판정(6시간 규칙·수강 종료일 23:59 KST)은 그대로
 let VIEW_TZ = 'Asia/Seoul';
-/** 시각 기준 이름: '한국 시간' / '토론토 시간' (도시 이름 한국어, 11/8 대표) */
-const zoneText = () => `${koZoneCity(VIEW_TZ)} 시간`;
-/** 이름은 예전 그대로(kst) — 보여 주는 시간대는 VIEW_TZ */
+/** 운영자 보기에서 해외 학생을 한국 시간으로 보는 중 (주황 띠·배지) */
+let ADMIN_KST = false;
+/** 기준 이름: '시드니 시간' / '한국 시간' (도시 이름 한국어, 11/8 대표) */
+const zoneCity = () => `${koZoneCity(VIEW_TZ)} 시간`;
+const zoneText = zoneCity;
+/** '20:00' → '오후 8:00', '00:30' → '오전 12:30' */
+const ampm = (hhmm: string) => {
+  const h = Number(hhmm.slice(0, 2));
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${hhmm.slice(3, 5)}`;
+};
+/** '오후 8:30–9:20' (오전·오후가 바뀌면 '오전 11:30–오후 12:20') */
+const ampmRange = (a: string, b: string) => {
+  const x = ampm(a), y = ampm(b);
+  return x.slice(0, 2) === y.slice(0, 2) ? `${x}–${y.slice(3)}` : `${x}–${y}`;
+};
+/** 이름은 예전 그대로(kst) — 보여 주는 시간대는 VIEW_TZ. time = '오후 8:00' */
 function kst(d: Date) {
   const f = formatInZone(d, VIEW_TZ);
-  return { md: `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}`, wd: wdOf(f.date), time: f.time, date: f.date };
+  return { md: `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}`, wd: wdOf(f.date), time: ampm(f.time), date: f.date };
 }
 /** 'YYYY-MM-DD' 의 요일 (그 날짜 글자 그대로 — 시간대 바꿈 없음) */
 const wdOf = (date: string) => '일월화수목금토'[new Date(`${date.slice(0, 10)}T00:00:00Z`).getUTCDay()];
 const fmtDate = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
 /*
- * 시각 표기 원칙 (2026-11-03 대표: '어디 기준 시간인지 빠지면 절대 안 됨', H26(93) 11/7: 학생은 거주지 시간만):
- * 학생 화면의 모든 날짜·요일·시각·신청 기한 = 학생 거주지 시간 + 기준 이름. 한국 시간 짝은 보이지 않음.
- * 운영자 보기에서만 '학생 시간 | 한국 시간(KST)' 전환 (이 브라우저에 기억). 국내 학생은 학생 시간 = 한국 시간이라 전환 없음.
+ * 시각 표기 원칙 (2026-11-03 대표: '어디 기준 시간인지 빠지면 절대 안 됨', H26(93) 11/7: 학생은 거주지 시간만,
+ * 11/8 대표 확정: 표기 통일): 학생 화면의 모든 날짜·요일·시각·신청 기한 = 학생 거주지 시간 '11/2(월) 오후 8:00'.
+ * 기준 시간대는 줄마다 붙이지 않고 화면·팝업 맨 위 띠 '모든 날짜·시간은 시드니 시간 기준' (ZoneBar, 11/8 대표 시안).
+ * 운영자 보기에서만 '학생 시간 | 한국 시간 (KST)' 전환 (이 브라우저에 기억). 한국 시간이면 주황 띠 '한국 시간 (KST)으로 보는 중'.
  */
-const SHOW_KST = false;
 const overseas = () => VIEW_TZ !== 'Asia/Seoul';
-/** 한국 시간 짝: '한국 17:00' (학생 날짜와 다르면 '한국 11/3 (화) 23:00'). 국내 학생이거나 꺼 두면 null */
-function kstPair(d: Date): string | null {
-  if (!overseas() || !SHOW_KST) return null;
-  const v = formatInZone(d, VIEW_TZ);
-  const k = formatInZone(d, 'Asia/Seoul');
-  return `한국 ${v.date === k.date ? '' : `${fmtDate(k.date as KstDate)} (${wdOf(k.date)}) `}${k.time}`;
-}
 /*
  * 시간대 기준은 화면·팝업 맨 위 띠(ZoneBar) 한 곳에만 (11/8 대표 시안: 날짜마다 시간대 글을 반복하지 않음).
  * 아래 시각 글에는 시간대 이름을 붙이지 않는다. 예외: 학생 시간대가 아닌 날짜(시트 이관 보강의 '한국 날짜')만 따로 적음
  */
 /** 모든 학생 화면·팝업 맨 위: '🕐 모든 날짜·시간은 토론토 시간 기준'. 운영자 보기에서 KST 로 바꾸면 띠도 같이 바뀜 */
 function ZoneBar() {
-  const c = useContext(KstCtx);
-  const kstMode = c.admin && c.on && c.studentTz !== 'Asia/Seoul';
   return (
-    <p role="note" className="flex items-center gap-2 rounded-[12px] bg-[#5b3df0] px-3.5 py-2.5 text-[14.5px] font-extrabold leading-snug text-white">
+    <p role="note" className={`flex items-center gap-2 rounded-[12px] px-3.5 py-2.5 text-[14.5px] font-extrabold leading-snug ${ADMIN_KST ? 'border-2 border-[#e08a1e] bg-[#ffe1b8] text-[#6b3a00]' : 'bg-[#5b3df0] text-white'}`}>
       <span aria-hidden>🕐</span>
-      <span>모든 날짜·시간은 {kstMode ? '한국 시간(KST)' : zoneText()} 기준{kstMode ? ' · 운영자 보기' : ''}</span>
+      <span>모든 날짜·시간은 {ADMIN_KST ? '한국 시간 (KST)' : zoneText()} 기준{ADMIN_KST ? ' · 운영자 보기' : ''}</span>
     </p>
   );
 }
@@ -125,19 +129,15 @@ function KstToggle() {
   return (
     <div role="group" aria-label="시간 표시 (운영자 보기)" className="flex w-fit flex-wrap gap-1.5">
       <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>{!c.on ? '✓ ' : ''}학생 시간 ({city})</button>
-      <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>{c.on ? '✓ ' : ''}한국 시간(KST)</button>
+      <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>{c.on ? '✓ ' : ''}한국 시간 (KST)</button>
     </div>
   );
 }
 /**
- * 수강 종료(재등록 마감) 시각: 기준은 한국 종료일 23:59 (POL-RN-01). 국내 학생 '11/30 23:59',
- * 해외 학생은 본인 시간으로 바꿔 '11/30 09:59 (Toronto 시간)' (11/3 대표·ChatGPT: 종료 시각도 현지로 정확히)
+ * 수강 종료(재등록 마감) 시각: 기준은 한국 종료일 23:59 (POL-RN-01). 보이는 시간대로 바꿔
+ * 국내 '11/30(월) 오후 11:59', 시드니 '12/1(화) 오전 1:59' (11/3 대표·ChatGPT: 종료 시각도 현지로 정확히)
  */
-const endText = (d: KstDate) => {
-  if (VIEW_TZ === 'Asia/Seoul') return `${fmtDate(d)} 23:59`;
-  const k = kst(new Date(`${d}T23:59:00+09:00`));
-  return `${k.md} (${k.wd}) ${k.time}`;
-};
+const endText = (d: KstDate) => whenText(new Date(`${d}T23:59:00+09:00`));
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
 function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
@@ -153,10 +153,10 @@ function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
 // 같은 노쇼 수업이라도 원래 수업 보강과 무료 보상수업은 다른 권리 (4100)
 const sameRight = (a: Right, b: Right) =>
   a.compId || b.compId ? !!a.compId && a.compId === b.compId : (a.lessonId !== null && a.lessonId === b.lessonId) || (a.itemId !== null && a.itemId === b.itemId);
-const whenText = (d: Date) => {
+function whenText(d: Date) {
   const k = kst(d);
-  return `${k.md} (${k.wd}) ${k.time}`;
-};
+  return `${k.md}(${k.wd}) ${k.time}`;
+}
 /** 보강 권리의 원래 수업: 시트에서 옮긴 보강은 날짜만 (00:00 으로 보이지 않게, 3700) */
 const rightText = (m: { originalAt: Date; timeKnown?: boolean }) => {
   if (m.timeKnown !== false) return whenText(m.originalAt);
@@ -165,7 +165,7 @@ const rightText = (m: { originalAt: Date; timeKnown?: boolean }) => {
 /** 시트에서 옮긴 수업(시각 모름): 한국 날짜만 — 해외 학생 날짜로 바꾸면 하루 어긋날 수 있음 */
 function kstDateOnly(d: Date) {
   const k = formatInZone(d, 'Asia/Seoul').date;
-  return `${fmtDate(k as KstDate)} (${wdOf(k)})${overseas() ? ' 한국 날짜' : ''}`;
+  return `${fmtDate(k as KstDate)}(${wdOf(k)})${overseas() ? ' 한국 날짜' : ''}`;
 }
 /*
  * 보강 권리 카드 (2026-11-07 대표: 학생에게는 어떤 수업인지·사유 한 줄·신청 기한·날짜 선택만. 노쇼·보상 처리 같은 내부 사유는 안 보임)
@@ -175,7 +175,7 @@ const rightTitle = (m: MakeupRight, withTime = false) => {
   if (m.compId) return '무료 보상수업 1회';
   if (m.timeKnown === false) return `${kstDateOnly(m.originalAt)} 수업`;
   const k = kst(m.originalAt);
-  return `${k.md} (${k.wd})${withTime ? ` ${k.time}` : ''} 수업`;
+  return `${k.md}(${k.wd})${withTime ? ` ${k.time}` : ''} 수업`;
 };
 /** 제목 아래 사유 한 줄 — 무료 보상수업은 원래 수업과 헷갈리지 않게 '추가' 수업으로만 */
 const rightReason = (m: MakeupRight) =>
@@ -183,12 +183,12 @@ const rightReason = (m: MakeupRight) =>
 /**
  * 신청 기한 = 수강 종료일 하나 (H26(93): 정규·학생 취소 보강·강사 귀책 보강·무료 보상수업 모두 같은 종료일. 보상수업 사용 기한도 이 날을 따라감).
  * 예외: 시행 전 시트에서 넘어온 강사 휴무 보강(이관 보강권)은 예전처럼 보강 날짜에 따라 종료일이 늘어나 기한을 적지 않음.
- * 국내 학생은 날짜만, 해외 학생은 본인 시간으로 바꾼 시각까지 (종료 기준은 한국 23:59)
+ * 보이는 시간대로 바꾼 시각까지 '기한: 11/21(토) 오전 1:59까지' (종료 기준은 한국 23:59)
  */
 const rightUntil = (m: MakeupRight, endDate: KstDate | null) => {
   const d = m.compId ? m.useUntil : m.tutorLeave && m.itemId ? null : endDate;
   if (!d) return null;
-  return `신청 기한: ${VIEW_TZ === 'Asia/Seoul' ? `${fmtDate(d)} (${wdOf(d)})` : endText(d)}`;
+  return `기한: ${endText(d)}까지`;
 };
 /** 같은 날 수업이 둘 이상이면 제목에 시각까지 */
 const needsTime = (m: MakeupRight, all: MakeupRight[]) =>
@@ -232,6 +232,7 @@ export default function StudentHome(props: {
     try { localStorage.setItem('lms_admin_student_view_kst', v ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
   };
   VIEW_TZ = isAdminView && adminKst ? 'Asia/Seoul' : studentTz;
+  ADMIN_KST = isAdminView && adminKst && studentTz !== 'Asia/Seoul';
   const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
@@ -475,7 +476,7 @@ export default function StudentHome(props: {
       <Tile
         label="수강 종료"
         value={!endDate ? '-' : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'}
-        sub={!endDate ? '' : VIEW_TZ === 'Asia/Seoul' ? `${fmtDate(endDate)} (${kst(new Date(`${endDate}T12:00:00+09:00`)).wd})` : `${endText(endDate)}까지`}
+        sub={endDate ? `${endText(endDate)}까지` : ''}
       />
     </section>
   );
@@ -610,6 +611,12 @@ export default function StudentHome(props: {
 
       <div className="min-w-0 flex-1 pb-24 lg:pb-0">
         {props.adminBar && <div className="grid gap-2 px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}<KstToggle /></div>}
+        {ADMIN_KST && (
+          <p role="status" className="sticky top-0 z-10 mx-4 mt-2 rounded-[10px] border-2 border-[#e08a1e] bg-[#ffe1b8] px-3 py-2 text-[14px] font-extrabold leading-snug text-[#6b3a00] lg:mx-0">
+            ⚠ 한국 시간 (KST)으로 보는 중
+            <span className="block text-[12.5px] font-semibold">학생에게는 {koZoneCity(studentTz)} 시간으로 보여요</span>
+          </p>
+        )}
         <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
           {props.adminBar ? (
             <a href="/lms/admin" className="text-[17px] font-bold text-[#09246b]">
@@ -1244,7 +1251,7 @@ function MakeupPicker(props: {
           {calendar}
           <div className="grid gap-3">
             <section className={`${card} grid gap-2 p-3`}>
-              <p className="text-[14px] font-bold">{day ? `${fmtDate(day as KstDate)} (${wdOf(day)})` : '날짜를 골라 주세요'}</p>
+              <p className="text-[14px] font-bold">{day ? `${fmtDate(day as KstDate)}(${wdOf(day)})` : '날짜를 골라 주세요'}</p>
               {day && (
                 <div className="grid grid-cols-3 gap-2">
                   {(byDay.get(day) ?? []).map((t) => (
@@ -1258,7 +1265,6 @@ function MakeupPicker(props: {
                     >
                       {kst(t).time}
                       {isPicked(t) ? ' ✓' : ''}
-                      {kstPair(t) && <span className={`block text-[11.5px] font-medium ${isPicked(t) ? 'text-[#e4ddff]' : 'text-[#6b6880]'}`}>{kstPair(t)}</span>}
                     </button>
                   ))}
                 </div>
@@ -1355,12 +1361,11 @@ function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: {
       )}
       <div>
         <p className="text-[26px] font-bold tracking-tight text-white lg:text-[30px]">
-          {Number(k.md.split('/')[0])}월 {Number(k.md.split('/')[1])}일 ({k.wd}) {k.time}
+          {Number(k.md.split('/')[0])}월 {Number(k.md.split('/')[1])}일({k.wd}) {k.time}
         </p>
         <p className="mt-1 text-[14px] text-[#d8d3f5]">
           {lesson.minutes}분{leaveOpen ? '' : ` · ${lesson.tutorName}`}{lesson.kind === 'makeup' ? ' · 보강' : ''}
         </p>
-        {kstPair(lesson.startsAt) && <p className="text-[14px] font-semibold text-[#ffd66b]">{kstPair(lesson.startsAt)}</p>}
       </div>
       <div className="grid gap-2.5 lg:grid-cols-2">
         {textbook && (
@@ -1470,7 +1475,7 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
 
 // 누를 곳이 없으면 버튼 모양(›) 없이 글만 (R8)
 /**
- * '매주 월·목 22:30–23:20 (한국 시간)' + 강사 이름 줄 — 정규 일정(KST 요일·시각)을 다음 실제 날짜로 바꿔 보여 주는 시간대(VIEW_TZ)의 요일·시각으로.
+ * '매주 월·목 오후 10:30–11:20' + 강사 이름 줄 — 정규 일정(KST 요일·시각)을 다음 실제 날짜로 바꿔 보여 주는 시간대(VIEW_TZ)의 요일·시각으로.
  * 같은 시각·강사끼리 요일을 묶고, 다르면 줄을 나눔
  */
 function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor: string }[] | null {
@@ -1485,7 +1490,7 @@ function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor
     const start = new Date(`${ymd}T${x.timeKst}:00+09:00`);
     const end = new Date(start.getTime() + x.minutes * 60_000);
     const a = formatInZone(start, VIEW_TZ);
-    const text = `${a.time}–${formatInZone(end, VIEW_TZ).time}`;
+    const text = ampmRange(a.time, formatInZone(end, VIEW_TZ).time);
     const key = `${text}|${x.tutor}`;
     const day = new Date(`${a.date}T00:00:00Z`).getUTCDay();
     const g = groups.get(key) ?? { days: [], text, tutor: x.tutor };
