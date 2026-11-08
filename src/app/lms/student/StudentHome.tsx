@@ -497,7 +497,14 @@ export default function StudentHome(props: {
       {slotText && (
         <div className="flex min-h-[52px] w-full items-center justify-between gap-3 border-t border-[#eeecf4] py-2 text-[14px]">
           <span className="shrink-0 text-[#55526a]">수업 시간</span>
-          <span className="min-w-0 text-right font-semibold">{slotText}</span>
+          <span className="grid min-w-0 gap-0.5 text-right">
+            {slotText.map((g) => (
+              <span key={g.when + g.tutor} className="grid">
+                <span className="font-semibold">{g.when}</span>
+                <span className="text-[13px] text-[#55526a]">{g.tutor}</span>
+              </span>
+            ))}
+          </span>
         </div>
       )}
       <LinkRow label="결제" value={s.paid ? `결제 완료${s.confirmedOn ? ` (${fmtDate(s.confirmedOn)})` : ''}` : '결제 확인 중'} valueClass={s.paid ? 'text-[#13623a]' : 'text-[#8a5300]'} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
@@ -1418,13 +1425,13 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
 
 // 누를 곳이 없으면 버튼 모양(›) 없이 글만 (R8)
 /**
- * '매주 월·목 22:30–23:20 (한국 시간) · Olivia' — 정규 일정(KST 요일·시각)을 다음 실제 날짜로 바꿔 보여 주는 시간대(VIEW_TZ)의 요일·시각으로.
- * 같은 시각·강사끼리 요일을 묶고, 다르면 ' / '로 나눔
+ * '매주 월·목 22:30–23:20 (한국 시간)' + 강사 이름 줄 — 정규 일정(KST 요일·시각)을 다음 실제 날짜로 바꿔 보여 주는 시간대(VIEW_TZ)의 요일·시각으로.
+ * 같은 시각·강사끼리 요일을 묶고, 다르면 줄을 나눔
  */
-function regularSlotText(slots: RegularSlot[], now: Date): string | null {
+function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor: string }[] | null {
   if (slots.length === 0) return null;
   const today = formatInZone(now, 'Asia/Seoul').date;
-  const groups = new Map<string, { days: number[]; text: string }>();
+  const groups = new Map<string, { days: number[]; text: string; tutor: string }>();
   for (const x of slots) {
     const base = new Date(`${today}T12:00:00+09:00`);
     const add = (x.weekday - base.getUTCDay() + 7) % 7;
@@ -1433,16 +1440,18 @@ function regularSlotText(slots: RegularSlot[], now: Date): string | null {
     const start = new Date(`${ymd}T${x.timeKst}:00+09:00`);
     const end = new Date(start.getTime() + x.minutes * 60_000);
     const a = formatInZone(start, VIEW_TZ);
-    const key = `${a.time}–${formatInZone(end, VIEW_TZ).time} ${zoneTag(start)} · ${x.tutor}`;
+    const text = `${a.time}–${formatInZone(end, VIEW_TZ).time} ${zoneTag(start)}`;
+    const key = `${text}|${x.tutor}`;
     const day = new Date(`${a.date}T00:00:00Z`).getUTCDay();
-    const g = groups.get(key) ?? { days: [], text: key };
+    const g = groups.get(key) ?? { days: [], text, tutor: x.tutor };
     g.days.push(day);
     groups.set(key, g);
   }
   const order = (d: number) => (d + 6) % 7;   // 월요일부터
-  return [...groups.values()]
-    .map((g) => `매주 ${[...new Set(g.days)].sort((p, q) => order(p) - order(q)).map((d) => '일월화수목금토'[d]).join('·')} ${g.text}`)
-    .join(' / ');
+  return [...groups.values()].map((g) => ({
+    when: `매주 ${[...new Set(g.days)].sort((p, q) => order(p) - order(q)).map((d) => '일월화수목금토'[d]).join('·')} ${g.text}`,
+    tutor: g.tutor,
+  }));
 }
 
 function LinkRow({ label, value, valueClass = 'font-semibold', onClick }: { label: string; value: string; valueClass?: string; onClick?: () => void }) {
