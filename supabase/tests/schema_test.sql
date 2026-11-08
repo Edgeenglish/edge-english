@@ -3291,15 +3291,15 @@ select pg_temp.ok((select count(*) = 1 from m85s)
               and (select email_status = 'queued' and status = 'pending' and email_to = 'support@edgeenglish.kr' and email_intended = 'mail-s@example.com' and email_attempts = 1 from m85s)
               and (select url = 'https://api.resend.com/emails' and req -> 'to' = '["support@edgeenglish.kr"]'::jsonb from m85s)
               and (select req ->> 'subject' like '[시험 · STU-%] [엣지영어] 보강이 확정됐어요 · %' from m85s)
-              and (select req ->> 'html' like '%보강 수업: % 시간) · 한국 %' and req ->> 'html' like '%강사: 기록A%' and req ->> 'html' like '%/lms/student%' and req ->> 'html' like '%카카오톡 채널%' and req ->> 'html' like '%원래 수업: %' and req ->> 'html' like '%원래 받는 사람: mail-s@example.com%' from m85s)
+              and (select req ->> 'html' like '%보강 수업: % 시간) = % (한국 시간) · %분%' and req ->> 'html' like '%강사: 기록A%' and req ->> 'html' like '%/lms/student%' and req ->> 'html' like '%카카오톡 채널%' and req ->> 'html' like '%원래 수업: %' and req ->> 'html' like '%원래 받는 사람: mail-s@example.com%' from m85s)
               and (select hdr ->> 'Authorization' = 'Bearer re_test_key' and hdr ->> 'Idempotency-Key' = 'lesson_notice_email:' || id from m85s),
   '메일: 강사 확정 → 학생 메일 큐·Resend 요청(시험이라 support@, [시험 · 번호], 현지+한국 시각·강사·LMS 링크·문의 줄), 카톡 카드는 그대로(pending)');
 select pg_temp.ok((select email_status = 'no_address' and status = 'not_needed' and email_error like '강사 이메일%' from lesson_notices where makeup_request_id = (select id from mk85) and event = 'makeup_confirmed' and recipient_kind = 'tutor'),
   '메일: 강사 직접 확정 → 강사 안내 줄(WhatsApp 복사 불필요) + 이메일 없으면 no_address');
 select pg_temp.ok(lms_mail_ko_at('2026-11-11 02:00Z', 'Asia/Seoul') = '11월 11일(수) 오전 11시 (한국 시간)'
-              and lms_mail_ko_at('2026-11-13 00:00Z', 'America/Toronto') = '11월 12일(목) 오후 7시 (Toronto 시간) · 한국 11월 13일(금) 오전 9시'
+              and lms_mail_ko_at('2026-11-13 00:00Z', 'America/Toronto') = '11월 12일(목) 오후 7시 (토론토 시간) = 11월 13일(금) 오전 9시 (한국 시간)'
               and (select req ->> 'subject' like '% (' || lms_mail_ko_zone((select timezone from students where id = m85s.recipient_id)) || ')' from m85s),
-  '메일 시각: 한국 거주도 (한국 시간), 해외는 (도시 시간) · 한국 …, 제목에도 시간대 이름 (대표 2026-11-08)');
+  '메일 시각: 한국 거주 (한국 시간), 해외 (도시 시간) = (한국 시간), 도시 한국어, 제목에도 시간대 이름 (대표 2026-11-08)');
 -- 중복 방지: 같은 안내를 다시 큐에 넣어도 메일 1통
 select lms_mail_enqueue_notice((select id from m85s));
 select pg_temp.ok((select count(*) = 1 from notifications where dedupe_key = 'lesson_notice_email:' || (select id from m85s)) and (select count(*) = (select n from sent_before) + 1 from net.sent),
@@ -3359,6 +3359,19 @@ update feature_flags set enabled = true where key = 'send_emails';
 select pg_temp.ok((select to_email = 'mail-s@example.com' and subject like '[엣지영어] 보강이 확정됐어요 · %' and html not like '%원래 받는 사람%' from lms_notice_mail((select id from m85s))),
   '메일: send_emails 켜면 학생 주소로, [시험] 표시 없음');
 update feature_flags set enabled = false where key = 'send_emails';
+-- 운영진 숨은참조 (대표 2026-11-08): 실제 주소로 갈 때만 bcc support@, 스위치 끄면 없음, 시험 발송(support@)엔 없음
+insert into notifications (recipient_kind, recipient_id, email, locale, template, payload, dedupe_key)
+values ('student', (select recipient_id from m85s), 'live-s@example.com', 'ko', 'lesson_notice_bcc_test', '{"subject":"s","html":"h","text":"t"}', 'bcc_test:1'),
+       ('student', (select recipient_id from m85s), 'live-s@example.com', 'ko', 'lesson_notice_bcc_test', '{"subject":"s","html":"h","text":"t"}', 'bcc_test:2');
+select lms_mail_dispatch((select id from notifications where dedupe_key = 'bcc_test:1'));
+update feature_flags set enabled = true where key = 'email_bcc_ops_stop';
+select lms_mail_dispatch((select id from notifications where dedupe_key = 'bcc_test:2'));
+update feature_flags set enabled = false where key = 'email_bcc_ops_stop';
+select pg_temp.ok((select q.body -> 'bcc' = '["support@edgeenglish.kr"]'::jsonb from net.sent q where q.id = (select net_request_id from notifications where dedupe_key = 'bcc_test:1'))
+              and (select not (q.body ? 'bcc') from net.sent q where q.id = (select net_request_id from notifications where dedupe_key = 'bcc_test:2'))
+              and (select not (req ? 'bcc') from m85s)
+              and (select not enabled from feature_flags where key = 'email_bcc_ops_stop'),
+  '메일 숨은참조: 실제 주소면 bcc support@ (기본), email_bcc_ops_stop 켜면 없음, 시험 발송엔 없음');
 -- 키가 없으면 큐에 남고 사유 기록, 키를 넣은 뒤 상태 맞추기가 보냄
 delete from vault.decrypted_secrets;
 insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, class_status, canceled_at)
