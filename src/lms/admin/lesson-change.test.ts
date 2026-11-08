@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { kstToInstant } from '../rules/dates';
-import { changeableLessons, decisionLines, emailStatusText, kstLabel, makeupRights, studentNotice, tutorNotice, type ChangeDecision, type ChLesson, type NoticeContext } from './lesson-change';
+import { canceledUpcoming, changeableLessons, decisionLines, emailStatusText, kstLabel, makeupRights, studentNotice, tutorNotice, type ChangeDecision, type ChLesson, type NoticeContext } from './lesson-change';
 import { toLessonChanges } from './live';
 import { buildBoard } from './board';
 
@@ -172,5 +172,19 @@ describe('보강 권리 목록 — 보강이 한 번 잡힌 원래 수업은 권
     expect(makeupRights([orig, canceledMakeup], [], []).map((r) => r.key)).toEqual(['m']);
     expect(makeupRights([orig, { ...canceledMakeup, voided: true }], [], []).map((r) => r.key)).toEqual(['o']);
     expect(makeupRights([orig], [], []).map((r) => r.key)).toEqual(['o']);
+  });
+});
+
+describe('취소된 수업 목록 (대표 11/8)', () => {
+  const now = kstToInstant('2026-11-08', '21:00');
+  it('앞으로의 취소된 수업만, 시간순, 지운 수업은 뺌', () => {
+    const list = [
+      L('a', '2026-11-12', '20:00', { state: 'canceled' }),
+      L('b', '2026-11-09', '20:00', { state: 'canceled' }),
+      L('c', '2026-11-01', '20:00', { state: 'canceled' }),
+      L('d', '2026-11-10', '20:00', { state: 'canceled', voided: true }),
+      L('e', '2026-11-11', '20:00', { state: 'scheduled' }),
+    ];
+    expect(canceledUpcoming(list, now).map((l) => l.id)).toEqual(['b', 'a']);
   });
 });

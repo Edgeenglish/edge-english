@@ -163,6 +163,12 @@ export function changeableLessons(lessons: ChLesson[], now: Date): ChLesson[] {
   return lessons.filter((l) => l.state === 'scheduled' && instantToKstDate(l.startsAt) >= today).sort((a, b) => +a.startsAt - +b.startsAt);
 }
 
+/** 앞으로의 취소된 수업 (오늘 한국 날짜부터, 시간순). 시간 고치기 대상이 아닌 지움(voided) 수업은 뺌 */
+export function canceledUpcoming(lessons: ChLesson[], now: Date): ChLesson[] {
+  const today = instantToKstDate(now);
+  return lessons.filter((l) => l.state === 'canceled' && !l.voided && instantToKstDate(l.startsAt) >= today).sort((a, b) => +a.startsAt - +b.startsAt);
+}
+
 export type MakeupRight =
   | { kind: 'lesson'; key: string; source: ChLesson; open: ChMakeupRequest | null }
   | { kind: 'migrated'; key: string; item: ChMigratedOpen; open: ChMakeupRequest | null }
@@ -192,6 +198,17 @@ export const STATUS_SHORT: Partial<Record<ClassStatus, string>> = {
   'No change credits left': '변경권 없음',
   'Tutor canceled in advance': '강사 정상 취소',
   'Tutor canceled late': '강사 늦은 취소',
+  'Tutor long-term leave': '강사 휴무',
+};
+
+/** 취소된 수업 줄·변경 기록의 '누가 취소했는지' (처음 보는 사람도 바로 읽히게, 대표 11/8) */
+export const STATUS_PLAIN: Partial<Record<ClassStatus, string>> = {
+  'Student canceled in advance': '학생이 취소',
+  'Student canceled in advance (public holiday)': '공휴일 취소',
+  'Student canceled late': '학생이 늦게 취소',
+  'No change credits left': '학생이 취소 (변경권 없음)',
+  'Tutor canceled in advance': '강사가 취소',
+  'Tutor canceled late': '강사가 늦게 취소',
   'Tutor long-term leave': '강사 휴무',
 };
 

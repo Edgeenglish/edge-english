@@ -13,7 +13,7 @@ import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lm
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
 import {
-  changeableLessons, CONFIRM_REASONS, dateLabel, FIX_REASONS, makeupLink, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, REASON_TEXT, STATUS_SHORT, studentNotice, tutorNotice,
+  canceledUpcoming, changeableLessons, CONFIRM_REASONS, dateLabel, FIX_REASONS, makeupLink, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, STATUS_PLAIN, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, REASON_TEXT, STATUS_SHORT, studentNotice, tutorNotice,
   type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupLog, type MakeupReason, type MakeupRight, type NoticeContext,
 } from '@/lms/admin/lesson-change';
 import type { AdminCredits, StudentLessonData } from '@/lms/admin/lesson-change-live';
@@ -162,6 +162,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   const lessons = data?.lessons ?? [];
   const byId = useMemo(() => new Map(lessons.map((l) => [l.id, l])), [lessons]);
   const choices = changeableLessons(lessons, now);
+  const canceledLessons = canceledUpcoming(lessons, now);
   const lesson = lessonId ? byId.get(lessonId) ?? null : null;
   const rights = data ? makeupRights(lessons, data.migrated, data.makeupRequests, data.compensations ?? []) : [];
   const lastTutor = [...lessons].reverse().find((l) => !l.voided) ?? null;
@@ -249,6 +250,31 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
               <CreditsCard credits={credits} adjust={(d, r) => actions.adjustCredit!(student.id, d, r)} done={reload} />
             )}
             <Card title="2. 수업">
+              {canceledLessons.length > 0 && (
+                <>
+                  <p className="mb-1.5 text-[13px] font-bold text-[#55526a]">취소된 수업 {canceledLessons.length}</p>
+                  <ul className="mb-3 grid gap-1.5">
+                    {canceledLessons.map((l) => {
+                      const ch = data.changes.find((c) => c.lessonId === l.id && c.status === 'applied');
+                      const req = data.makeupRequests.find((r) => r.sourceLessonId === l.id && !['withdrawn', 'voided', 'declined', 'expired'].includes(r.status));
+                      const made = req?.confirmedLessonId ? byId.get(req.confirmedLessonId) : undefined;
+                      const makeupText = made ? `보강 확정 ${kstLabel(made.startsAt)} 한국` : req ? '보강 신청 중'
+                        : ch && !ch.decision.makeup_allowed ? '보강 불가'
+                        : `보강 신청 전${ch?.decision.makeup_until ? ` (기한 ${dateLabel(ch.decision.makeup_until)})` : ''}`;
+                      return (
+                        <li key={l.id} className="rounded-[12px] border border-[#f3c9c4] bg-[#fdf3f2] px-3 py-2">
+                          <b className="block text-[15px] text-[#1d1b2b]"><span className="mr-1.5 rounded-full bg-[#fde3df] px-2 py-0.5 text-[12px] font-extrabold text-[#9b1c10]">취소</span>{kstLabel(l.startsAt)} 한국</b>
+                          <span className="block text-[13px] text-[#55526a]">
+                            {l.classStatus ? STATUS_PLAIN[l.classStatus] ?? '' : ''}{ch ? ` · 취소 신청한 일자 ${sentLabel(ch.requestedAt ?? ch.decidedAt)} 한국` : ''} · {lessonTag(l)} · {l.tutorName}
+                          </span>
+                          <span className="block text-[13px] font-bold text-[#3a22b0]">{makeupText}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="mb-1.5 text-[13px] font-bold text-[#55526a]">예정 수업 {choices.length}</p>
+                </>
+              )}
               {choices.length === 0 ? (
                 <p className="text-[14px] text-[#6b6880]">예정 수업 없음</p>
               ) : (
@@ -785,10 +811,10 @@ function HistoryRow({ change, lesson, actions, done }: { change: StudentLessonDa
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <b className={`block text-[14.5px] ${reverted ? 'text-[#6b6880] line-through' : 'text-[#1d1b2b]'}`}>
-            {kstLabel(lesson.startsAt)} · {STATUS_SHORT[change.decision.status] ?? change.decision.status}
+            취소된 수업 {kstLabel(lesson.startsAt)} 한국
           </b>
           <span className="text-[12.5px] text-[#6b6880]">
-            {reverted ? '되돌림 · ' : ''}요청 {change.requestedAt ? sentLabel(change.requestedAt) : '-'} · 처리 {sentLabel(change.decidedAt)}
+            {reverted ? '되돌림 · ' : ''}{STATUS_PLAIN[change.decision.status] ?? change.decision.status} · 취소 신청한 일자 {sentLabel(change.requestedAt ?? change.decidedAt)} 한국
           </span>
         </div>
         {!reverted && !asking && (
