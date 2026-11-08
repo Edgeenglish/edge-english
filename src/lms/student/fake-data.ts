@@ -180,6 +180,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
         .flatMap((d) => [{ startsAt: at(d, '10:00'), afterEnd: false }, ...(d % 4 === 0 ? [{ startsAt: at(d, '20:00'), afterEnd: false }] : [])]);
     },
     // 미리보기: 휴무·노쇼·보상이 아닌 첫 보강권을 '종료 5일 이내 강사 취소'로 흉내 (실제는 DB 가 강사 취소 기록으로 판정)
+    regularSlots: async () => [{ weekday: 1, timeKst: '20:00', minutes: 50, tutor: '가상강사 Alex' }, { weekday: 4, timeKst: '20:00', minutes: 50, tutor: '가상강사 Alex' }],
     noTimeRights: async () => {
       const m = view.makeupRights.find((x) => x.lessonId && !x.compId && !x.tutorLeave && !x.tutorNoShow);
       return new Map(m?.lessonId ? [[m.lessonId, noTimeAt]] : []);

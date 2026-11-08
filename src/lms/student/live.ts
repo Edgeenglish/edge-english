@@ -237,6 +237,7 @@ async function loadTextbook(sb: SupabaseClient, studentId: string | null): Promi
 }
 
 export type MakeupOption = { startsAt: Date; afterEnd: boolean };
+export type RegularSlot = { weekday: number; timeKst: string; minutes: number; tutor: string };
 /** 보상수업이면 p_comp 를 붙임 (4100). 원래 수업 보강은 예전과 같은 인자 → 4100 전 DB에서도 그대로 */
 const compArg = (right: RightRef) => (right.compId ? { p_comp: right.compId } : {});
 export async function loadMakeupOptions(sb: SupabaseClient, studentId: string | null, right: RightRef): Promise<MakeupOption[]> {
@@ -266,6 +267,12 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
      * [맞는 시간이 없어요] (H26(92) ⑤, migration 20261108020000): 종료 5일 이내에 강사가 알린 사전·늦은 취소의 보강권만.
      * 값 = 수업 번호 → 이미 누른 시각(null = 아직 안 누름). 함수가 없는 옛 DB 면 빈 목록 (링크 안 보임)
      */
+    /** 정규 수업 시간 (H26(95) ②, migration 20261108040000): 요일(KST 0=일)·시각(KST)·길이·강사. 함수 없는 옛 DB 면 빈 목록 */
+    regularSlots: async (): Promise<RegularSlot[]> => {
+      const r = await sb.rpc('student_regular_slots', { p_student: adminStudentId });
+      if (r.error) return [];
+      return ((r.data ?? []) as { weekday: number; time: string; minutes: number; tutor: string }[]).map((x) => ({ weekday: x.weekday, timeKst: x.time, minutes: x.minutes, tutor: x.tutor }));
+    },
     noTimeRights: async (): Promise<Map<string, string | null>> => {
       const r = await sb.rpc('student_no_time_rights', { p_student: adminStudentId });
       if (r.error) return new Map();
