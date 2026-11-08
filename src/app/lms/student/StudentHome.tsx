@@ -111,12 +111,14 @@ const overseas = () => VIEW_TZ !== 'Asia/Seoul';
  * 시간대 기준은 화면·팝업 맨 위 띠(ZoneBar) 한 곳에만 (11/8 대표 시안: 날짜마다 시간대 글을 반복하지 않음).
  * 아래 시각 글에는 시간대 이름을 붙이지 않는다. 예외: 학생 시간대가 아닌 날짜(시트 이관 보강의 '한국 날짜')만 따로 적음
  */
-/** 모든 학생 화면·팝업 맨 위: '🕐 모든 날짜·시간은 토론토 시간 기준'. 운영자 보기에서 KST 로 바꾸면 띠도 같이 바뀜 */
+/** 모든 학생 화면·팝업 맨 위: '🕐 모든 날짜·시간은 토론토 시간 기준'. 운영자가 한국 시간으로 보는 중이면 숨기고 주황 띠(KstBar) 하나만 */
 function ZoneBar() {
+  // 운영자가 한국 시간으로 보는 중이면 맨 위 주황 띠 하나만 (11/8 대표: 보라 띠와 겹쳐 보기 싫음)
+  if (ADMIN_KST) return null;
   return (
     <p role="note" className="flex items-center gap-2 rounded-[12px] bg-[#5b3df0] px-3.5 py-2.5 text-[14.5px] font-extrabold leading-snug text-white">
       <span aria-hidden>🕐</span>
-      <span className="text-white">모든 날짜·시간은 {ADMIN_KST ? '한국 시간 (KST)' : zoneText()} 기준</span>
+      <span className="text-white">모든 날짜·시간은 {zoneText()} 기준</span>
     </p>
   );
 }
