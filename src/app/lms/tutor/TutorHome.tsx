@@ -209,7 +209,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     return () => { live = false; };
   }, [actions, screen, now]);
   const followupOfStudent = (id?: string) => (id ? followups.find((f) => f.studentId === id) : undefined);
-  const todoCount = [canceled.length, screen.toRecord.length, screen.covers.length, screen.makeups.length, followups.length].filter((n) => n > 0).length;
+  const todoCount = [screen.toRecord.length, screen.covers.length, screen.makeups.length, followups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
     ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), tz, { from: '1900-01-01', to: '2999-12-31' })
@@ -333,7 +333,6 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
         {TABS.map((t) => tabBtn(t, false))}
         <div className="px-3 pt-5 text-[13px] text-[#55526a]">
           <b className="block text-[14px] text-[#1d1b2b]">{screen.tutor.name}</b>
-          {tzHeader(tz)}
         </div>
         {onLogout && <button type="button" onClick={onLogout} className="mx-3 mt-1 min-h-[36px] text-left text-[13px] text-[#55526a] underline">{t('Sign out', '로그아웃')}</button>}
       </nav>
@@ -371,11 +370,21 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               </h2>
               <div className="divide-y divide-[#f3e6c4]">
                 {todoCount === 0 && <p className="px-4 py-3.5 text-[15px] text-[#1f7a4d]">✓ {t('Nothing to do right now', '지금 할 일이 없어요')}</p>}
-                {canceled.length > 0 && <TodoBar n={canceled.length} text={t('Canceled classes', '취소된 수업')} onClick={() => setPanel('canceled')} />}
                 {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text={t('Classes to record', '기록할 수업')} onClick={() => setTab('record')} />}
                   {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text={t('Cover requests', '대체 수업 요청')} onClick={() => setPanel('cover')} />}
                   {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text={t('Make-up requests', '보강 요청')} onClick={() => setPanel('makeup')} />}
                 {followups.length > 0 && <TodoBar n={followups.length} text={t('First lesson follow-up (level · goals · class style)', '첫 수업 후 확인 (레벨 · 목표 · 수업 방식)')} onClick={() => setPanel('followup')} />}
+              </div>
+            </section>
+
+            {/* 알림 게시판: 할 일 바로 아래, 같은 모양. 0건이어도 늘 보임 (대표 11/8) */}
+            <section aria-label="Updates" className="overflow-hidden rounded-[18px] border-2 border-[#c9c2f2] bg-white">
+              <h2 className="flex items-center gap-2 bg-[#efecfd] px-4 py-2.5 text-[16px] font-bold text-[#3b2a9a]">
+                {t('Updates', '일정 변경')} <span className="rounded-full bg-[#5b3fe0] px-2 py-0.5 text-[13px] text-white">{canceled.length > 0 ? 1 : 0}</span>
+              </h2>
+              <div className="divide-y divide-[#e6e3ef]">
+                {canceled.length === 0 && <p className="px-4 py-3.5 text-[15px] text-[#1f7a4d]">✓ {t('No updates', '변경 사항이 없어요')}</p>}
+                {canceled.length > 0 && <TodoBar n={canceled.length} text={t('Canceled classes', '취소된 수업')} onClick={() => setPanel('canceled')} />}
               </div>
             </section>
 
