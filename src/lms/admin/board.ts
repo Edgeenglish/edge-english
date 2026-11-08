@@ -183,7 +183,24 @@ export type ClassRecordMissingTask = {
   createdAt: Date;
 };
 
-export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask | ClassRecordMissingTask;
+/**
+ * 예외 연장 검토 (H26(92) ⑤, migration 20261108020000): 수강 종료 5일 이내에 강사가 알린 사전·늦은 취소의 보강에서
+ * 학생이 [맞는 시간이 없어요]를 누름. 운영진이 취소 기록(알린 시각·수업 시각·종료일)을 보고 [종료일 연장] 또는 카드 닫기.
+ * 그 수강권에 운영진 예외 연장을 넣으면 사라짐. 수업마다 한 줄
+ */
+export type ExtensionReviewTask = {
+  kind: 'extension_review';
+  id: string; // 강사가 취소한 수업 번호
+  studentName: string;
+  studentCode: string;
+  lessonAt: Date;
+  late: boolean;
+  noticeAt: Date | null;
+  endDate: string; // 수강 종료일 (한국 날짜)
+  createdAt: Date; // 학생이 누른 시각
+};
+
+export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask | ClassRecordMissingTask | ExtensionReviewTask;
 
 /** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
 export type Category = 'matching' | 'tutor_ack' | 'ending' | 'makeup' | 'issue';
@@ -333,6 +350,8 @@ function briefOf(t: TaskSource, now: Date): string {
       return t.firstOpenAt ? `첫 수업 ${kstDay(t.firstOpenAt)}` : `${t.tutorName} 휴무`;
     case 'class_record_missing':
       return `미기록 ${t.lessons.length}회`;
+    case 'extension_review':
+      return `종료 ${Number(t.endDate.slice(5, 7))}/${Number(t.endDate.slice(8, 10))}`;
     case 'auto_failure':
       return `발생 후 ${waitText(t.occurredAt, now)}`;
   }
@@ -541,6 +560,26 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         steps: [],
         actions: [{ key: 'open_tutor', label: '열기', primary: true, href: `/lms/tutor?tutor=${encodeURIComponent(t.id)}` }],
       };
+    case 'extension_review': {
+      const end = `${Number(t.endDate.slice(5, 7))}/${Number(t.endDate.slice(8, 10))}(${WD[formatInZone(new Date(`${t.endDate}T12:00:00+09:00`), KST).weekday] ?? ''})`;
+      const left = t.noticeAt ? Math.round((new Date(`${t.endDate}T00:00:00+09:00`).getTime() - new Date(`${formatInZone(t.noticeAt, KST).date}T00:00:00+09:00`).getTime()) / 86_400_000) : null;
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: 'due_soon',
+        tag: '예외 연장 검토',
+        title: `${t.studentName} · ${kstLabel(t.lessonAt)} 수업 강사 ${t.late ? '늦은' : '사전'} 취소`,
+        detail: [
+          t.noticeAt ? `강사가 알린 시각 ${kstLabel(t.noticeAt)}` : '',
+          `수업 시작 ${kstLabel(t.lessonAt)}`,
+          `수강 종료 ${end}${left !== null ? ` · 알린 날부터 ${left}일 남음` : ''}`,
+          '모두 한국 시간',
+        ].filter(Boolean).join(' · '),
+        due: null,
+        steps: [],
+        actions: [{ key: 'open_student', label: '종료일 연장', primary: true, href: `/lms/admin/students/${encodeURIComponent(t.studentCode)}` }],
+      };
+    }
     case 'auto_failure': {
       const what = { calendar_sync: '캘린더 반영 실패', email_bounce: '메일 반송', payment_mismatch: '결제 금액 불일치' }[t.what];
       const action = {

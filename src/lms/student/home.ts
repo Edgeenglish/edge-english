@@ -1,13 +1,13 @@
 // 학생 홈(마이페이지) 화면 판정 — 3차 시안 A-1 최종 (2026-10-17 대표 확정, docs/lms/07-decisions.md D-34·D-35)
 // 화면은 이 함수들의 결과만 그린다. 6시간 규칙 판정은 rules/change.ts 를 그대로 쓴다.
 //
-// - 재등록 안내: 남은 수업(정규·보강·보상·이월 + 날짜 미정 보강) 2회 이하일 때만, 재등록 결제가 확인되면 숨김 (POL-RN-08)
+// - 재등록 안내: 남은 수업(정규·보강·보상·이월 + 날짜 미정 보강) 2회 이하일 때부터 마지막 수업이 있는 날(학생 거주지 날짜)까지, 재등록 결제가 확인되면 숨김 (POL-RN-08, H26(92))
 // - 할 일 알림: 학생이 직접 처리해야 할 때만. '강사 확인 중' 같은 기다림은 넣지 않음
 // - 결제: 수강권·기간·결제 방법·확인일만. 금액·카드 정보는 다루지 않음 (POL-PAY-11)
 // - 적립금: 본인 지급·사용 날짜, 금액, 사유, 잔액 (POL-PAY-11, POL-PAY-09)
 
 import { evaluateStudentChange, type ChangeDecision, type LessonKind } from '../rules/change';
-import { instantToKstDate, type KstDate } from '../rules/dates';
+import { formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import type { PendingPolicy } from '../rules/policy';
 
 export type StudentLesson = {
@@ -63,10 +63,16 @@ export type RenewalState = 'not_requested' | 'requested' | 'payment_confirmed';
 
 export type RenewalPrompt = null | { mode: 'request'; left: number } | { mode: 'awaiting_payment'; left: number };
 
-export function renewalPrompt(lessons: readonly StudentLesson[], renewal: RenewalState, now: Date, makeupsOwed = 0): RenewalPrompt {
+/** timeZone: 학생 거주지 시간대 — 남은 수업이 0회면 마지막 수업이 있는 날(그 시간대 날짜)이 지나면 숨김 (2026-11-07 대표) */
+export function renewalPrompt(lessons: readonly StudentLesson[], renewal: RenewalState, now: Date, makeupsOwed = 0, timeZone = 'Asia/Seoul'): RenewalPrompt {
   const left = lessonsLeft(lessons, now, makeupsOwed).total;
   if (renewal === 'payment_confirmed') return null;
   if (left > RENEWAL_PROMPT.maxLessonsLeft) return null;
+  if (left === 0) {
+    const held = lessons.filter((l) => l.state !== 'canceled');
+    const last = held.length ? new Date(Math.max(...held.map((l) => l.startsAt.getTime() + l.minutes * 60_000))) : null;
+    if (last && formatInZone(now, timeZone).date > formatInZone(last, timeZone).date) return null;
+  }
   return renewal === 'requested' ? { mode: 'awaiting_payment', left } : { mode: 'request', left };
 }
 

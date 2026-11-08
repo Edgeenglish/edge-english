@@ -53,7 +53,16 @@ describe('재등록 안내 (POL-RN-08)', () => {
   it('시작 시각이 지난 예정 수업은 기록 전이어도 남은 수업이 아님 (대시보드와 같은 기준)', () => {
     const after = new Date(kstToInstant('2026-10-20', '20:00').getTime() + 1);
     expect(lessonsLeft(three, after)).toEqual({ total: 1, regular: 1, other: 0 });
-    expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-23', '09:00'))).toEqual({ mode: 'request', left: 0 });
+    expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-22', '21:30'))).toEqual({ mode: 'request', left: 0 });
+  });
+
+  it('남은 수업 0회: 마지막 수업이 있는 날까지 보이고 다음 날부터 숨김 (학생 거주지 날짜, 2026-11-07 대표)', () => {
+    expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-22', '23:59'))).toEqual({ mode: 'request', left: 0 });
+    expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-23', '09:00'))).toBeNull();
+    // 토론토 학생: 마지막 수업 한국 10/22 20:00 = 토론토 10/22 07:00 → 한국 10/23 09:00 은 토론토 10/22 20:00 (아직 그날)
+    expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-23', '09:00'), 0, 'America/Toronto')).toEqual({ mode: 'request', left: 0 });
+    // 날짜 미정 보강이 남아 있으면 계속 보임
+    expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-30', '09:00'), 1)).toEqual({ mode: 'request', left: 1 });
   });
 
   it('신청했지만 결제 확인 전이면 "결제 확인 중", 결제 확인되면 사라짐', () => {

@@ -264,6 +264,18 @@ export function toMissingRecords(rows: MissingRecord[]): TaskSource[] {
   return [...out.values()];
 }
 
+export type ExtensionReviewRow = {
+  lesson_id: string; student_code: string; student_name: string; lesson_at: string; class_status: string;
+  notice_at: string | null; end_date: string; requested_at: string;
+};
+/** 예외 연장 검토 카드 (H26(92) ⑤) */
+export function toExtensionReviews(rows: ExtensionReviewRow[]): TaskSource[] {
+  return rows.map((r) => ({
+    kind: 'extension_review', id: r.lesson_id, studentName: r.student_name, studentCode: r.student_code, lessonAt: new Date(r.lesson_at),
+    late: r.class_status === 'Tutor canceled late', noticeAt: r.notice_at ? new Date(r.notice_at) : null, endDate: r.end_date, createdAt: new Date(r.requested_at),
+  }));
+}
+
 export type LeaveOpenRow = {
   student_id: string; starts_at: string; choice: 'undecided' | 'substitute' | 'wait'; sub_stage: 'asked' | 'tutor_ok' | 'confirmed' | null;
   /** 휴무 처리 밖에서 취소된 수업 (3200, R5) → 할 일에서 뺌 */
@@ -392,7 +404,7 @@ const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01'
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const today = instantToKstDate(now);
   const off = 'off:tutor_time_off(id, starts_at, ends_at, created_at, tutor:tutors(name))';
-  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, emailFails, ending, leaveOpen, leaveNotices, renewalSent, missing, closures] = await Promise.all([
+  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, emailFails, ending, leaveOpen, leaveNotices, renewalSent, missing, closures, extReviews] = await Promise.all([
     sb
       .from('admin_tasks')
       .select(
@@ -430,6 +442,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     sb.from('renewal_notices').select('enrollment_id, sent_at'),
     loadMissingRecords(sb),
     sb.from('admin_task_closures').select('task_kind, task_id, signature, closed'),
+    // 예외 연장 검토 (20261108020000 전 DB 는 함수가 없어 건너뜀)
+    sb.rpc('admin_extension_reviews'),
   ]);
   const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error) ?? ending.error;
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
@@ -452,6 +466,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       ...(leaveOpen.error || leaveNotices.error ? [] : toTutorLeaves((leaveOpen.data ?? []) as unknown as LeaveOpenRow[], (leaveNotices.data ?? []) as unknown as LeaveNoticeRow[], now)),
       // 2000 전 DB는 null
       ...toMissingRecords(missing ?? []),
+      ...(extReviews.error ? [] : toExtensionReviews((extReviews.data ?? []) as ExtensionReviewRow[])),
     ]), (closures.data ?? []).filter((c) => c.closed)),
     today: toTodayLessons((lessons.data ?? []) as unknown as LessonRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
   };
