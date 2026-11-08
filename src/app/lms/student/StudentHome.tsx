@@ -1736,9 +1736,6 @@ function Row({ k, v }: { k: string; v: string }) {
   );
 }
 
-// 6시간 이내 취소 확인 문구 (대표 원문, docs/lms-기획서-원문.md 3-3)
-const LATE_CANCEL_TEXT = '수업 시작까지 6시간이 남지 않았어요. 지금 취소하면 보강 없이 수업 1회가 소진돼요. (변경권은 차감되지 않아요) 그래도 미리 알려주시면 강사님이 기다리지 않아도 돼요. 취소할까요?';
-
 /** 수업 하나를 취소하면 어떻게 되는지 한 줄 (목록 줄 아래 · 여러 수업 요약 공통) */
 const outcomeText = (d: { ok: boolean; consumesLesson?: boolean; timing?: string; usesCredit?: boolean }) =>
   !d.ok ? '취소 불가' : d.consumesLesson ? (d.timing === 'late' ? '6시간 이내 · 1회 차감 · 보강 없음' : '변경권 없음 · 1회 차감 · 보강 없음')
@@ -1864,19 +1861,19 @@ function CancelSheet(props: {
     );
   }
 
-  const hours = hoursBetween(props.now, lesson.startsAt);
   const needsCheck = d.consumesLesson; // 수업이 차감되면 한 번 더 확인
   const late = d.timing === 'late';
   // 정보 줄이기 (대표 11/8): 평소와 다른 것만 보여 줌 — 수업이 차감될 때만 '수업 횟수', 변경권을 쓸 때만 '변경권'
   const rows: [string, string][] = [
-    ...(d.consumesLesson ? [['수업 횟수', `1회 차감 (남은 ${props.totalLeft}회 → ${props.totalLeft - 1}회)`] as [string, string]] : []),
+    ...(d.consumesLesson ? [['수업 횟수', '1회 차감'] as [string, string]] : []),
     ...(d.usesCredit ? [['변경권', `1개 사용 (${creditsNow}개 → ${creditsNow - 1}개)`] as [string, string]] : []),
     ['보강', d.makeupAllowed ? `~${endDay(props.makeupUntil)}까지 가능` : '불가'],
+    ...(d.consumesLesson ? [['변경권', late ? '그대로 (차감 안 됨)' : '없음'] as [string, string]] : []),
   ];
 
   return (
     <div className="grid gap-3.5">
-      <h2 className="text-[19px] font-bold">{d.timing === 'late' ? `수업 시작 ${hours < 1 ? '1시간 이내' : `${Math.floor(hours)}시간 전`}이에요` : title}</h2>
+      <h2 className="text-[19px] font-bold">{late ? '수업 시작까지 6시간 이내예요. 그래도 취소할까요?' : title}</h2>
       <section className={`grid gap-2 rounded-[14px] p-3.5 text-[14px] leading-normal ${needsCheck ? 'border border-[#f3c2bb] bg-[#fff1ef] text-[#7a1d12]' : 'bg-[#f1eefc]'}`}>
         {rows.map(([a, b]) => (
           <div key={a} className="flex justify-between gap-3">
@@ -1885,7 +1882,7 @@ function CancelSheet(props: {
           </div>
         ))}
       </section>
-      {late && <p className="text-[15px] leading-relaxed">{LATE_CANCEL_TEXT}</p>}
+      {late && <p className="text-[14px] leading-relaxed">그래도 미리 알려주시면 강사님이 기다리지 않아도 돼요.</p>}
       {needsCheck && !late && (
         <label className="flex min-h-[44px] items-start gap-2.5 text-[14px] leading-normal">
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-5 w-5 accent-[#b3261e]" />
