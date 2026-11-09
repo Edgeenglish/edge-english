@@ -1,0 +1,497 @@
+diff --git a/src/app/lms/admin/AdminDashboard.tsx b/src/app/lms/admin/AdminDashboard.tsx
+index a00c47b..ef6d901 100644
+--- a/src/app/lms/admin/AdminDashboard.tsx
++++ b/src/app/lms/admin/AdminDashboard.tsx
+@@ -63,9 +63,7 @@ function applyAction(t: TaskSource, key: string, now: Date): TaskSource | null {
+     case 'renewal_tutor_notice': {
+       const next = { ...t };
+       if (key === 'notify_tutor') next.tutorNotifiedAt = now;
+-      if (key === 'tutor_ack') next.tutorAcknowledgedAt = now;
+-      if (key === 'check_schedule') next.scheduleCheckedAt = now;
+-      return next.tutorNotifiedAt && next.tutorAcknowledgedAt && next.scheduleCheckedAt ? null : next;
++      return next.tutorNotifiedAt && next.scheduleConfirmed ? null : next;
+     }
+     case 'import_check': {
+       const next = { ...t, counts: key === 'import_checked' ? null : t.counts };
+@@ -104,6 +102,7 @@ export default function AdminDashboard({
+   planActions,
+   importActions,
+   renewalSent,
++  renewalNotify,
+   enrollmentClose,
+   onReload,
+   onTaskClose,
+@@ -122,6 +121,8 @@ export default function AdminDashboard({
+   importActions?: ImportActions;
+   /** 실제 데이터: 재등록 안내 [보냄] 기록 (DB 함수, migration 1900) */
+   renewalSent?: (enrollmentId: string) => Promise<void>;
++  /** 실제 데이터: 재등록 [강사에게 통보] → 통보 기록 + 업무 완료 (20261109070000) */
++  renewalNotify?: (taskId: string) => Promise<void>;
+   /** 재등록 안 함 · 수강 종료 (3800) */
+   enrollmentClose?: (enrollmentId: string) => Promise<void>;
+   onReload?: () => Promise<void>;
+@@ -245,6 +246,16 @@ export default function AdminDashboard({
+       }
+       return;
+     }
++    // 재등록 [강사에게 통보]: 기록하면 카드가 빠짐. 성공 안내 없음, 실패만 짧게 (대표 11/9)
++    if (!preview && key === 'notify_tutor' && item.kind === 'renewal_tutor_notice' && renewalNotify) {
++      try {
++        await renewalNotify(item.id);
++        await onReload?.();
++      } catch (e) {
++        setToast(e instanceof Error ? e.message : '기록하지 못했어요.');
++      }
++      return;
++    }
+     if (!preview) {
+       // 실제 데이터: 처리(쓰기)는 서버 기능으로만 (POL-AC-07). 서버 기능을 만들기 전에는 보기만
+       setToast('이 처리는 해당 화면(신규 배정·수업 변경·강사 휴무)에서 저장돼요. 카드의 [열기]·[강사 배정] 버튼으로 이동해 주세요.');
+diff --git a/src/app/lms/admin/AdminLive.tsx b/src/app/lms/admin/AdminLive.tsx
+index f6e8066..b9778f3 100644
+--- a/src/app/lms/admin/AdminLive.tsx
++++ b/src/app/lms/admin/AdminLive.tsx
+@@ -8,7 +8,7 @@ import type { TaskSource } from '@/lms/admin/board';
+ import type { FakeLesson, OpsStats } from '@/lms/admin/fake-data';
+ import { planActions } from '@/lms/admin/confirm-live';
+ import { loadAdminBoard, loadOpsStats } from '@/lms/admin/live';
+-import { closeEnrollment, markImportChecked, markRenewalSent, setImportEndReason, setImportOrigin } from '@/lms/admin/import-live';
++import { closeEnrollment, markImportChecked, markRenewalSent, setImportEndReason, setImportOrigin, notifyRenewalTutor } from '@/lms/admin/import-live';
+ import { supabaseBrowser } from '@/lms/auth/client';
+ import AdminDashboard from './AdminDashboard';
+ import { saveTaskClosure } from '@/lms/admin/task-closure';
+@@ -87,6 +87,7 @@ export default function AdminLive() {
+       planActions={actions}
+       importActions={imports}
+       renewalSent={sb ? (id) => markRenewalSent(sb, id) : undefined}
++      renewalNotify={sb ? (id) => notifyRenewalTutor(sb, id) : undefined}
+       enrollmentClose={sb ? (id) => closeEnrollment(sb, id) : undefined}
+       onTaskClose={sb ? (task, closed) => saveTaskClosure(sb, task, closed) : undefined}
+       history={sb ? { load: () => loadTaskHistory(sb), reopen: (r) => reopenTask(sb, r) } : undefined}
+diff --git a/src/app/lms/student/StudentHome.tsx b/src/app/lms/student/StudentHome.tsx
+index a2dfd83..e310a41 100644
+--- a/src/app/lms/student/StudentHome.tsx
++++ b/src/app/lms/student/StudentHome.tsx
+@@ -11,6 +11,7 @@ import books from '@/data/books.json';
+ import { homepageProfile } from '@/lms/admin/homepage-tutor';
+ import { koZoneCity } from '@/lms/admin/places';
+ import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
++import { CONFIRMED } from '@/lms/rules/policy';
+ import { diffDays, formatInZone, hoursBetween, instantToKstDate, type KstDate } from '@/lms/rules/dates';
+ import { MEET_MISSING_KO, meetRoomUrl } from '@/lms/rules/meet';
+ import type { PreviewExtras } from '@/lms/student/fake-data';
+@@ -67,6 +68,8 @@ const STATUS_STYLE: Record<RequestStatus, string> = {
+   confirmed: 'bg-[#e3f5ea] text-[#13623a]',
+   canceled: 'bg-[#eeecf4] text-[#55526a]',
+   completed: 'bg-[#e3f5ea] text-[#13623a]',
++  expired: 'bg-[#eeecf4] text-[#55526a]',
++  withdrawn: 'bg-[#eeecf4] text-[#55526a]',
+ };
+ 
+ const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
+@@ -858,7 +861,7 @@ export default function StudentHome(props: {
+ 
+       {overlay && (
+         <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
+-          {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} />}
++          {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} busy={busy} onWithdraw={async (id) => { await run(() => actions.withdrawMakeup(id), '신청을 취소했어요.'); }} />}
+           {overlay.kind === 'payments' && extras && <Payments payments={extras.payments} />}
+           {overlay.kind === 'points' && <Points history={points} />}
+           {overlay.kind === 'credits' && <Credits s={s} />}
+@@ -1288,6 +1291,10 @@ function MakeupPicker(props: {
+                   </button>
+                 </div>
+               ))}
++              {/* 시작까지 6시간 미만 시간을 고르면 경고만, 신청은 그대로 (대표 11/9) */}
++              {picked.some((t) => t.getTime() - Date.now() < CONFIRMED.changeNoticeHours * 3600_000) && (
++                <p className="text-[13.5px] leading-relaxed text-[#b3261e]">수업 시작까지 6시간 미만 남았습니다. 강사가 요청을 제때 확인하지 못할 수 있으며, 강사가 확정해야 수업이 진행됩니다.</p>
++              )}
+               <button
+                 type="button"
+                 disabled={picked.length === 0 || props.busy}
+@@ -1582,7 +1589,10 @@ function Sheet({ onClose, children, wide }: { onClose: () => void; children: Rea
+   );
+ }
+ 
+-function RequestDetail({ r }: { r: StudentRequest }) {
++function RequestDetail({ r, busy, onWithdraw }: { r: StudentRequest; busy?: boolean; onWithdraw?: (id: string) => void }) {
++  const [asking, setAsking] = useState(false);
++  // 강사 확정 전에만 신청 취소 (대표 11/9)
++  const open = r.kind === 'makeup' && (r.status === 'tutor_reviewing' || r.status === 'admin_reviewing' || r.status === 'rescheduling');
+   // 신청 → 강사 확인 → 최종 확정(운영진). 지금 단계는 주황, 끝난 단계는 보라 (11/3 점검 ②: 누가 확인 중인지)
+   const steps = r.status === 'rescheduling' ? ['신청', '강사 확인', '일정 조율'] : ['신청', '강사 확인', '최종 확정'];
+   const at = r.status === 'tutor_reviewing' ? 1 : r.status === 'admin_reviewing' || r.status === 'rescheduling' ? 2 : 3;
+@@ -1595,18 +1605,18 @@ function RequestDetail({ r }: { r: StudentRequest }) {
+           <span className={`rounded-full px-3 py-1 text-[13px] font-semibold ${STATUS_STYLE[r.status]}`}>{REQUEST_STATUS_LABEL[r.status]}</span>
+         </div>
+         {/* 상황별 안내 (추가 요청 6): 지금 무엇을 기다리는지, 다음에 누가 연락하는지 */}
+-        {r.status === 'tutor_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님이 고른 날짜를 확인하고 있어요. 확인되면 운영진이 최종 확정해 드려요.</p>}
++        {r.status === 'tutor_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님이 확인하고 확정하면 일정에 바로 들어가요.</p>}
+         {r.status === 'admin_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님 확인이 끝났어요. 운영진이 최종 확정하면 일정에 바로 들어가요.</p>}
+         {r.status === 'rescheduling' && <p className="text-[13.5px] leading-relaxed text-[#7a1d12]">강사님이 고른 날짜에는 어렵다고 했어요. 운영진이 다른 일정을 조율해서 카카오톡으로 알려 드릴게요. 따로 하실 일은 없어요.</p>}
+         {r.status === 'canceled' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">확정됐던 보강 수업이 취소됐어요. 취소 때 안내된 규칙(변경권·보강 가능 여부)에 따라 처리됐어요.</p>}
+-        <ol className="flex gap-1.5">
++        {r.status !== 'expired' && r.status !== 'withdrawn' && <ol className="flex gap-1.5">
+           {steps.map((t, i) => (
+             <li key={t} className="flex-1 text-center">
+               <div className={`h-1.5 rounded ${i < at ? 'bg-[#5b3df0]' : i === at ? 'bg-[#f0a33a]' : 'bg-[#e6e3ef]'}`} />
+               <span className={`mt-1.5 block text-[12px] ${i <= at ? 'font-semibold' : 'text-[#8b88a0]'}`}>{t}</span>
+             </li>
+           ))}
+-        </ol>
++        </ol>}
+       </section>
+       {r.candidates.length > 0 && (
+         <section className={`${card} grid gap-2.5 p-4`}>
+@@ -1652,6 +1662,17 @@ function RequestDetail({ r }: { r: StudentRequest }) {
+           <span className="text-right">{whenText(r.createdAt)}</span>
+         </div>
+       </section>
++      {open && onWithdraw && (
++        asking ? (
++          <section className={`${card} grid gap-2 p-4`}>
++            <p className="text-[15px] font-bold">신청을 취소할까요?</p>
++            <button type="button" disabled={busy} onClick={() => onWithdraw(r.id)} className="min-h-[48px] rounded-[14px] bg-[#5b3df0] text-[15px] font-bold text-white disabled:opacity-50">신청 취소하기</button>
++            <button type="button" disabled={busy} onClick={() => setAsking(false)} className="min-h-[44px] rounded-[14px] border border-[#d9d5e8] text-[14px] font-semibold text-[#55526a]">돌아가기</button>
++          </section>
++        ) : (
++          <button type="button" onClick={() => setAsking(true)} className="mx-auto min-h-[40px] px-3 text-[13.5px] text-[#55526a] underline">신청 취소</button>
++        )
++      )}
+     </div>
+   );
+ }
+diff --git a/src/lms/admin/board.test.ts b/src/lms/admin/board.test.ts
+index 30cfa92..2634ab6 100644
+--- a/src/lms/admin/board.test.ts
++++ b/src/lms/admin/board.test.ts
+@@ -48,11 +48,11 @@ describe('처리할 일 목록', () => {
+     expect(m3.actions[0]).toMatchObject({ key: 'pick_schedule', href: '/lms/admin/assign?e=demo' });
+     expect(m3.actions[1]).toMatchObject({ label: '수업 컨펌 완료', disabled: true });
+   });
+-  it('재등록: 통보만 했으면 강사 확인이 다음 단계, 미확인 시간 표시', () => {
++  it('재등록: 일정 확정됐으면 [강사에게 통보] 하나 (강사 확인 단계 없음, 11/9 A안)', () => {
+     const r = items.find((i) => i.id === 'r-1')!;
+-    expect(r.steps.map((s) => s.done)).toEqual([true, false, false]);
+-    expect(r.actions.map((a) => a.key)).toEqual(['remind_tutor', 'tutor_ack']);
+-    expect(r.due).toBe('통보 후 2일째 미확인');
++    expect(r.steps.map((s) => s.done)).toEqual([true, false]);
++    expect(r.actions.map((a) => a.key)).toEqual(['notify_tutor']);
++    expect(r.due).toBeNull();
+   });
+   it('요약 카드 5칸: 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
+     const c = categoryCounts(items);
+@@ -116,12 +116,30 @@ describe("요약 칸: '여유' 대신 실제 정보 (C7, 대표 10/30)", () => {
+   it('종료 임박 = 잔여 회수 · 종료일, 재등록 통보 = 통보 후 대기 시간', () => {
+     const tasks: TaskSource[] = [
+       { kind: 'ending_soon', id: 'e', studentName: '김하준', studentCode: 'STU-1', product: '50분 주2회', lessonsLeft: 0, endsAt: new Date('2026-10-17T14:59:00Z'), tutorName: null, noticeSentAt: null },
+-      { kind: 'renewal_tutor_notice', id: 'r', studentName: '박서연', studentCode: 'STU-2', product: '50분 주2회', newPeriod: '10/20(화)–11/16(월)', tutorName: 'Emma', tutorChangePlanned: false, tutorNotifiedAt: new Date(now.getTime() - 327 * H), tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: new Date(now.getTime() - 400 * H) },
++      { kind: 'renewal_tutor_notice', id: 'r', studentName: '박서연', studentCode: 'STU-2', product: '50분 주2회', newPeriod: '10/20(화)–11/16(월)', tutorName: 'Emma', tutorChangePlanned: false, scheduleConfirmed: false, enrollmentId: 'en1', tutorNotifiedAt: null, tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: new Date(now.getTime() - 400 * H) },
+     ];
+     const items = buildBoard(tasks, now);
+     expect(items.find((i) => i.id === 'e')!.brief).toBe('잔여 0회 · 10/17(토) 종료');
+-    expect(items.find((i) => i.id === 'r')!.brief).toBe('통보 후 14일째');
+-    expect(items.find((i) => i.id === 'r')!.due).toBe('통보 후 14일째 미확인');
++    expect(items.find((i) => i.id === 'r')!.brief).toBe('일정 확정 전');
++    expect(items.find((i) => i.id === 'r')!.due).toBeNull();
+     expect(items.every((i) => !i.brief.includes('여유'))).toBe(true);
+   });
+ });
++
++describe('재등록 강사 통보 (대표 11/9 A안)', () => {
++  const now = new Date('2026-11-09T10:00:00Z');
++  const r = (over: Partial<Extract<TaskSource, { kind: 'renewal_tutor_notice' }>>): TaskSource => ({
++    kind: 'renewal_tutor_notice', id: 'r', studentName: '송O나', studentCode: 'STU-0004', product: '40분 주2회', newPeriod: '11/18(수)–2/9(화)',
++    tutorName: 'Olivia', tutorChangePlanned: false, scheduleConfirmed: true, enrollmentId: 'en1', tutorNotifiedAt: null, tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: now, ...over,
++  });
++  it('같은 강사·일정(일정 확정됨): [강사에게 통보] 하나만, 강사 확인·일정 조치 단계 없음', () => {
++    const [i] = buildBoard([r({})], now);
++    expect(i.actions.map((a) => a.label)).toEqual(['강사에게 통보']);
++    expect(i.steps.map((x) => x.label)).toEqual(['새 기간 일정 확정', '강사에게 통보']);
++  });
++  it('일정 확정 전(강사 변경·일정 조정): 일정 확정 먼저, 통보는 못 누름', () => {
++    const [i] = buildBoard([r({ scheduleConfirmed: false })], now);
++    expect(i.actions[0]).toMatchObject({ label: '새 기간 일정 확정', href: '/lms/admin/assign?e=en1' });
++    expect(i.actions[1]).toMatchObject({ label: '강사에게 통보', disabled: true });
++  });
++});
+diff --git a/src/lms/admin/board.ts b/src/lms/admin/board.ts
+index cd260bc..c3aac5b 100644
+--- a/src/lms/admin/board.ts
++++ b/src/lms/admin/board.ts
+@@ -9,7 +9,7 @@ import { firstLessonAt, planAlert, type PlanView } from './confirm';
+ 
+ /** 수업 변경 안내 종류 → 카드 맨 위 '무슨 일' (lesson_notices.event, migration 1700) */
+ const CHANGE_EVENT_TEXT: Record<string, string> = {
+-  change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림', makeup_rescheduled: '보강 시간 변경',
++  change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림', makeup_rescheduled: '보강 시간 변경', makeup_expired: '보강 신청 만료',
+ };
+ const LESSON_KIND_TEXT: Record<string, string> = { regular: '정규 ', makeup: '보강 ', migrated_makeup: '보강 ', migrated_extra: '추가 ', compensation: '보상 ' };
+ const CANCEL_BY_TEXT: Record<string, string> = { student_cancel: '수강생측 취소', tutor_cancel: '강사측 취소', admin_cancel: '운영진 취소' };
+@@ -48,6 +48,9 @@ export type RenewalTask = {
+   newPeriod: string; // 예: '10/20(화)–11/16(월)' (기한 안 재등록은 이전 종료 뒤 첫 정규 수업일부터, A25)
+   tutorName: string | null;
+   tutorChangePlanned: boolean;
++  /** 새 수강권 일정 확정됨 (수업 만들어짐) — 확정돼 있으면 [강사에게 통보] 한 번으로 끝 (11/9 A안) */
++  scheduleConfirmed: boolean;
++  enrollmentId?: string;
+   tutorNotifiedAt: Date | null;
+   tutorAcknowledgedAt: Date | null;
+   scheduleCheckedAt: Date | null;
+@@ -330,9 +333,7 @@ function briefOf(t: TaskSource, now: Date): string {
+       if (t.plan) { const first = firstLessonAt(t.plan); return first ? `첫 수업 ${kstDay(first)}` : '안내 전'; }
+       return `기한 ${kstDay(t.dueAt)}`;
+     case 'renewal_tutor_notice':
+-      if (!t.tutorNotifiedAt) return '강사 통보 전';
+-      if (!t.tutorAcknowledgedAt) return `통보 후 ${waitText(t.tutorNotifiedAt, now)}`;
+-      return '일정 조치 전';
++      return t.scheduleConfirmed ? '강사 통보 전' : '일정 확정 전';
+     case 'long_leave_request':
+       return `신청 후 ${waitText(t.createdAt, now)}`;
+     case 'no_show_report':
+@@ -388,21 +389,20 @@ function toItem(t: TaskSource, now: Date): ItemBase {
+       };
+     }
+     case 'renewal_tutor_notice': {
++      // 11/9 A안: 강사 확인·일정 조치 단계 없음. 새 기간 일정이 확정돼 있으면 [강사에게 통보] 한 번으로 끝(카드 빠짐),
++      // 강사 변경·일정 조정이 필요하면 일정 확정까지 카드 유지
+       const steps = [
+-        { key: 'notify_tutor' as const, label: '강사에게 연장·기간·일정 통보', done: !!t.tutorNotifiedAt },
+-        { key: 'tutor_ack' as const, label: '강사 확인', done: !!t.tutorAcknowledgedAt },
+-        { key: 'check_schedule' as const, label: '일정 조치', done: !!t.scheduleCheckedAt },
++        { key: 'check_schedule' as const, label: '새 기간 일정 확정', done: t.scheduleConfirmed },
++        { key: 'notify_tutor' as const, label: '강사에게 통보', done: !!t.tutorNotifiedAt },
+       ];
+-      const next = steps.find((s) => !s.done)?.key;
+-      const actions: BoardItem['actions'] =
+-        next === 'notify_tutor'
+-          ? [{ key: 'notify_tutor', label: '강사에게 통보', primary: true }]
+-          : next === 'tutor_ack'
+-            ? [
+-                { key: 'remind_tutor', label: '강사에게 다시 알림' },
+-                { key: 'tutor_ack', label: '강사 확인 대신 기록', primary: true },
+-              ]
+-            : [{ key: 'check_schedule', label: '일정 조치 완료', primary: true }];
++      const actions: BoardItem['actions'] = t.scheduleConfirmed
++        ? [{ key: 'notify_tutor', label: '강사에게 통보', primary: true }]
++        : [
++            t.enrollmentId
++              ? { key: 'pick_schedule', label: '새 기간 일정 확정', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }
++              : { key: 'pick_schedule', label: '새 기간 일정 확정', primary: true, disabled: true },
++            { key: 'notify_tutor', label: '강사에게 통보', disabled: true },
++          ];
+       return {
+         id: t.id,
+         kind: t.kind,
+@@ -410,7 +410,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
+         tag: t.tutorChangePlanned ? '재등록 · 강사 변경' : '재등록 강사 확인',
+         title: `${t.studentName} · ${t.tutorName ?? '담당 강사 미정'}`,
+         detail: `${t.studentCode} · ${t.product} · 새 기간 ${t.newPeriod}${t.tutorChangePlanned ? ' · 강사 변경 예정이라 새 강사 배정 필요' : ''}`,
+-        due: t.tutorNotifiedAt && !t.tutorAcknowledgedAt ? `통보 후 ${waitText(t.tutorNotifiedAt, now)} 미확인` : null,
++        due: null,
+         steps,
+         actions,
+       };
+diff --git a/src/lms/admin/fake-data.ts b/src/lms/admin/fake-data.ts
+index f5471f4..b9edd69 100644
+--- a/src/lms/admin/fake-data.ts
++++ b/src/lms/admin/fake-data.ts
+@@ -67,8 +67,8 @@ export function fakeTasks(now: Date): TaskSource[] {
+     },
+     {
+       kind: 'renewal_tutor_notice', id: 'r-1', studentName: '가상학생사', studentCode: 'STU-9004', product: '50분 주2회 4주',
+-      newPeriod: renewalPeriod(instantToKstDate(now), [2, 4]), tutorName: '가상강사 Blair', tutorChangePlanned: false,
+-      tutorNotifiedAt: t(-26), tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: t(-26),
++      newPeriod: renewalPeriod(instantToKstDate(now), [2, 4]), tutorName: '가상강사 Blair', tutorChangePlanned: false, scheduleConfirmed: true,
++      tutorNotifiedAt: null, tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: t(-26),
+     },
+     {
+       kind: 'ending_soon', id: 'e-1', studentName: '가상학생팔', studentCode: 'STU-9008', product: '50분 주2회 4주',
+diff --git a/src/lms/admin/import-live.ts b/src/lms/admin/import-live.ts
+index 4bbad24..fee3363 100644
+--- a/src/lms/admin/import-live.ts
++++ b/src/lms/admin/import-live.ts
+@@ -79,6 +79,12 @@ export async function markRenewalSent(sb: SupabaseClient, enrollmentId: string):
+   if (error) throw new Error(error.code === 'PGRST202' ? '재등록 안내 기록 기능이 아직 이 DB에 적용되지 않았어요 (migration 1900).' : friendly(error));
+ }
+ 
++/** 재등록 카드 [강사에게 통보] (20261109070000): 통보 기록 + 업무 완료 → 할 일에서 빠짐. 새 기간 일정이 확정 안 됐으면 거절 */
++export async function notifyRenewalTutor(sb: SupabaseClient, taskId: string): Promise<void> {
++  const { error } = await sb.rpc('admin_renewal_notify_tutor', { p_task: taskId });
++  if (error) throw new Error(error.code === 'PGRST202' ? '강사 통보 기록 기능이 아직 이 DB에 적용되지 않았어요.' : friendly(error));
++}
++
+ /** 재등록 안 하는 수강생 수강 종료 (3800): 수강생·수업 기록은 그대로, 대시보드에서만 빠짐. undo = 되돌리기 */
+ export async function closeEnrollment(sb: SupabaseClient, enrollmentId: string, undo = false): Promise<void> {
+   const { error } = await sb.rpc('admin_enrollment_close', { p_enrollment: enrollmentId, p_undo: undo });
+diff --git a/src/lms/admin/lesson-change.test.ts b/src/lms/admin/lesson-change.test.ts
+index f6e0d9e..41fe021 100644
+--- a/src/lms/admin/lesson-change.test.ts
++++ b/src/lms/admin/lesson-change.test.ts
+@@ -81,6 +81,14 @@ describe('수업 변경 화면 계산 (1순위)', () => {
+     expect(item.actions[0].href).toBe('/lms/admin/change?student=STU-0001');
+   });
+ 
++  it('대시보드: 강사 답만 기다리는 보강 신청은 할 일에 올리지 않음 (대표 11/9)', () => {
++    const s = { id: 's', name_ko: '김민수', code: 'STU-0001' };
++    expect(toLessonChanges([], [{ created_at: '2026-10-26T10:00:00Z', student: s }], now)).toEqual([]);
++    // 강사가 모두 불가라고 답한 신청(예외)은 그대로
++    const [item] = buildBoard(toLessonChanges([], [{ created_at: '2026-10-26T10:00:00Z', tutor_answered_at: '2026-10-27T10:00:00Z', student: s, candidates: [{ tutor_answer: 'no', proposed_by: 'student' }] }], now), now);
++    expect(item.tag).toBe('보강 강사 불가 · 재조율');
++  });
++
+   it('대시보드: 보강 확정 자동 메일을 못 보낸 수강생은 카드로 (운영진이 직접 보내기)', () => {
+     const s = { id: 's', name_ko: '이도연', code: 'STU-0008' };
+     const [item] = buildBoard(toLessonChanges([], [], now, [
+diff --git a/src/lms/admin/lesson-change.ts b/src/lms/admin/lesson-change.ts
+index f3a27a6..14cec10 100644
+--- a/src/lms/admin/lesson-change.ts
++++ b/src/lms/admin/lesson-change.ts
+@@ -73,7 +73,7 @@ export type ChCompensation = { id: string; sourceLessonId: string; status: 'avai
+ 
+ export type ChMigratedOpen = { id: string; originalDate: KstDate | null; tutorLeave: boolean };
+ 
+-export type NoticeEvent = 'change' | 'makeup_ask' | 'makeup_confirmed' | 'makeup_voided' | 'revert' | 'makeup_rescheduled';
++export type NoticeEvent = 'change' | 'makeup_ask' | 'makeup_confirmed' | 'makeup_voided' | 'revert' | 'makeup_rescheduled' | 'makeup_expired';
+ export type ChNotice = {
+   id: string;
+   changeRequestId: string | null;
+@@ -418,5 +418,5 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
+ 
+ /** 안내 카드 제목: '수강생에게 보내는 ○○' / '강사 Maria에게 보내는 ○○' — 누구에게 무슨 안내인지 한눈에 (대표 11/8) */
+ export const EVENT_TEXT: Record<NoticeEvent, string> = {
+-  change: '수업 취소·변경 안내', makeup_ask: '보강 가능 여부 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 취소 안내', revert: '취소 되돌림 안내', makeup_rescheduled: '보강 시간 변경 안내',
++  change: '수업 취소·변경 안내', makeup_ask: '보강 가능 여부 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 취소 안내', revert: '취소 되돌림 안내', makeup_rescheduled: '보강 시간 변경 안내', makeup_expired: '보강 신청 만료 안내',
+ };
+diff --git a/src/lms/admin/live.ts b/src/lms/admin/live.ts
+index 6e9d834..cd0a53f 100644
+--- a/src/lms/admin/live.ts
++++ b/src/lms/admin/live.ts
+@@ -17,7 +17,9 @@ import { loadMissingRecords, type MissingRecord } from '../tutor/live';
+ const WD = ['일', '월', '화', '수', '목', '금', '토'];
+ const short = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}(${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
+ 
+-type Enrollment = { weeks: number | null; legacy_label: string | null; weekly_count: number; duration_min: number; start_date: string; base_end_date: string; student: { name_ko: string; code: string } | null };
++type Enrollment = { weeks: number | null; legacy_label: string | null; weekly_count: number; duration_min: number; start_date: string; base_end_date: string; student: { name_ko: string; code: string } | null;
++  /** 재등록: 새 수강권 일정안 상태 (확정 있으면 일정 확정됨) */
++  plans?: { state: string }[] | null };
+ 
+ export type TaskRow = {
+   id: string;
+@@ -99,6 +101,8 @@ export function toTaskSources(tasks: TaskRow[], leaves: LeaveRow[], noShows: NoS
+         newPeriod: e ? `${short(e.start_date)}–${short(e.base_end_date)}` : '',
+         tutorName: t.tutor?.name ?? null,
+         tutorChangePlanned: t.tutor_change_planned,
++        scheduleConfirmed: (t.enrollment?.plans ?? []).some((p) => p.state === 'confirmed'),
++        enrollmentId: t.enrollment_id,
+         tutorNotifiedAt: d(t.tutor_notified_at),
+         tutorAcknowledgedAt: d(t.tutor_acknowledged_at),
+         scheduleCheckedAt: d(t.schedule_checked_at),
+@@ -245,7 +249,8 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
+     }
+     else if (!r.makeupWaitingSince || new Date(m.created_at) < r.makeupWaitingSince) r.makeupWaitingSince = new Date(m.created_at);
+   }
+-  return [...out.values()];
++  // 강사 답만 기다리는 보강 신청은 운영진 할 일에 올리지 않음 — 재촉 메일·자동 만료가 처리 (대표 11/9, D-38 대체)
++  return [...out.values()].filter((r) => r.pendingNotices > 0 || (r.emailFailed ?? 0) > 0 || (r.answeredMakeups ?? 0) > 0);
+ }
+ 
+ /** 강사 답 칸(tutor_answered_at, migration 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
+@@ -409,7 +414,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
+     sb
+       .from('admin_tasks')
+       .select(
+-        'id, kind, enrollment_id, due_at, created_at, tutor_assigned_at, student_notified_at, tutor_notified_at, tutor_acknowledged_at, schedule_checked_at, tutor_change_planned, tutor:tutors(name), enrollment:enrollments(weeks, legacy_label, weekly_count, duration_min, start_date, base_end_date, student:students(name_ko, code))',
++        'id, kind, enrollment_id, due_at, created_at, tutor_assigned_at, student_notified_at, tutor_notified_at, tutor_acknowledged_at, schedule_checked_at, tutor_change_planned, tutor:tutors(name), enrollment:enrollments(weeks, legacy_label, weekly_count, duration_min, start_date, base_end_date, student:students(name_ko, code), plans:schedule_plans(state))',
+       )
+       .eq('status', 'open'),
+     sb.from('long_leave_requests').select('id, leave_start, days, reason_kind, created_at, enrollment:enrollments(student:students(name_ko, code))').eq('status', 'pending'),
+diff --git a/src/lms/admin/task-closure.ts b/src/lms/admin/task-closure.ts
+index bab0f8f..a832924 100644
+--- a/src/lms/admin/task-closure.ts
++++ b/src/lms/admin/task-closure.ts
+@@ -24,13 +24,14 @@ export function filterClosedTasks(tasks: TaskSource[], closures: TaskClosure[]):
+ /** 운영진의 조치가 있는 카드만. 답을 기다리는 상태는 각 업무 화면에서 확인한다. */
+ export function filterActionableTasks(tasks: TaskSource[]): TaskSource[] {
+   return tasks.filter((t) => {
+-    if (t.kind === 'lesson_change') return t.pendingNotices > 0 || (t.answeredMakeups ?? 0) > 0;
++    // 자동 메일 못 보냄(만료 메일 포함)도 운영진이 직접 보내야 하는 일 (11/9)
++    if (t.kind === 'lesson_change') return t.pendingNotices > 0 || (t.answeredMakeups ?? 0) > 0 || (t.emailFailed ?? 0) > 0;
+     if (t.kind === 'tutor_leave') {
+       const steps = t.noticeSteps;
+       const readyNotices = steps ? steps.tutor + steps.confirm + (steps.proposeStudents?.length ?? 0) : t.pendingNotices;
+       return t.undecidedStudents > 0 || readyNotices > 0;
+     }
+-    if (t.kind === 'renewal_tutor_notice') return !t.tutorNotifiedAt || (!!t.tutorAcknowledgedAt && !t.scheduleCheckedAt);
++    // 재등록: 열린 업무는 늘 운영진 차례(새 기간 일정 확정 또는 강사에게 통보) — 통보하면 업무가 끝나 목록에서 빠짐 (11/9 A안)
+     return true;
+   });
+ }
+diff --git a/src/lms/student/fake-data.ts b/src/lms/student/fake-data.ts
+index fa5ea22..ebc6d84 100644
+--- a/src/lms/student/fake-data.ts
++++ b/src/lms/student/fake-data.ts
+@@ -206,7 +206,15 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
+       set({
+         ...view,
+         makeupRights: view.makeupRights.map((m) => ((m.compId ?? null) === (right.compId ?? null) && m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
+-        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '무료 보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
++        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '무료 보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '', lessonId: right.lessonId, itemId: right.itemId, compId: right.compId ?? null }, ...view.requests],
++      });
++    },
++    withdrawMakeup: async (requestId) => {
++      const q = view.requests.find((x) => x.id === requestId);
++      set({
++        ...view,
++        requests: view.requests.map((x) => (x.id === requestId ? { ...x, status: 'withdrawn' } : x)),
++        makeupRights: view.makeupRights.map((m) => (q && (m.compId ?? null) === (q.compId ?? null) && (m.lessonId ?? null) === (q.lessonId ?? null) && (m.itemId ?? null) === (q.itemId ?? null) ? { ...m, requested: false } : m)),
+       });
+     },
+     answerLeave: async (items, answer) => {
+diff --git a/src/lms/student/home.ts b/src/lms/student/home.ts
+index 67b8386..3566476 100644
+--- a/src/lms/student/home.ts
++++ b/src/lms/student/home.ts
+@@ -78,7 +78,8 @@ export function renewalPrompt(lessons: readonly StudentLesson[], renewal: Renewa
+ 
+ /** 신청 진행 상태. 수강생이 기다리기만 하면 되는 단계는 할 일이 아님 */
+ /** rescheduling = 강사가 고른 날짜 모두 불가 → 운영진이 다른 날짜 조율 (QA-08) · canceled = 확정됐던 보강 수업이 취소됨 (QA-13) */
+-export type RequestStatus = 'tutor_reviewing' | 'admin_reviewing' | 'rescheduling' | 'confirmed' | 'canceled' | 'completed';
++/** expired = 고른 시간이 모두 지나도록 강사가 확정하지 않아 자동 만료 (대표 11/9) — 보강권은 그대로, 다시 신청 */
++export type RequestStatus = 'tutor_reviewing' | 'admin_reviewing' | 'rescheduling' | 'confirmed' | 'canceled' | 'completed' | 'expired' | 'withdrawn';
+ 
+ export type StudentRequest = {
+   id: string;
+@@ -112,6 +113,8 @@ export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
+   confirmed: '확정',
+   canceled: '취소됨',
+   completed: '처리 완료',
++  expired: '만료',
++  withdrawn: '신청 취소',
+ };
+ 
+ /** 수강생이 직접 처리해야 하는 일. 지금은 수업 안내 확인·동의뿐 (POL-OP-12). 규칙이 정해지면 종류를 추가 */
+diff --git a/src/lms/student/live.ts b/src/lms/student/live.ts
+index 9b17092..7dd1f37 100644
+--- a/src/lms/student/live.ts
++++ b/src/lms/student/live.ts
+@@ -200,6 +200,8 @@ export function parseStudentView(r: Raw): StudentView {
+         title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso), (q.original_time_known ?? src?.time_known !== false) ? r.student.timezone || 'Asia/Seoul' : 'Asia/Seoul')} 수업분` : ''}`,
+         status: q.status === 'confirmed'
+           ? (q.confirmed_state === 'canceled' ? 'canceled' : 'confirmed')
++          : q.status === 'expired' ? 'expired'
++          : q.status === 'withdrawn' ? 'withdrawn'
+           : q.tutor_answered_at ? (q.tutor_declined_all ? 'rescheduling' : 'admin_reviewing') : 'tutor_reviewing',
+         tutorDeclinedAll: !!q.tutor_declined_all,
+         lessonId: q.lesson_id,
+@@ -300,6 +302,10 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
+           : await sb.rpc('student_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, ...compArg(right) }),
+       );
+     },
++    /** 강사 확정 전 보강 신청 취소 (대표 11/9). 운영자 보기도 같은 함수 */
++    withdrawMakeup: async (requestId: string): Promise<void> => {
++      check(await sb.rpc('student_makeup_withdraw', { p_student: adminStudentId, p_request: requestId }));
++    },
+     /** 휴무 안내 답 (A안 한 번에): ok = 대체강사와 수업, makeup = 기존 강사님과 보강 */
+     answerLeave: async (items: string[], answer: 'ok' | 'makeup'): Promise<void> => {
+       if (!admin) return void check(await sb.rpc('student_leave_answer', { p_items: items, p_answer: answer }));
