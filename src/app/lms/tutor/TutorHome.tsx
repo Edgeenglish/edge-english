@@ -19,6 +19,7 @@ import type { FollowupTodo } from '@/lms/tutor/followup';
 import { LangCtx, useT, type Lang } from '@/lms/tutor/lang';
 import { Rich } from '@/app/lms/Rich';
 import { enBoth, stripBold } from '@/lms/admin/time-text';
+import { useDetailBack } from './useDetailBack';
 import {
   canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   statusText, rangeFull, rangeFullNoDay, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
@@ -713,10 +714,9 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
   const recordable = canRecord(l, now, due);
   const cancelable = !!actions.cancel && l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation';
   const canOpen = recordable || cancelable || !!(l.remarks || l.topics || l.makeupOf || l.compensationOf || l.locked || (phase === 'upcoming' && isMakeup));
-  const toggle = () => {
-    if (open && dirty.current.size > 0 && !window.confirm('Discard changes?')) return;
-    setOpen(!open);
-  };
+  // 휴대폰 뒤로가기: 펼친 칸만 닫고 이 화면에 남음 (대표 11/9)
+  const closeDetail = useDetailBack(open, () => setOpen(false), () => dirty.current.size === 0 || window.confirm('Discard changes?'));
+  const toggle = () => { if (open) closeDetail(); else setOpen(true); };
   // Schedule 에서 [Class Record ›] 로 온 수업: 펼치고 그 줄로 스크롤
   useEffect(() => {
     if (!focus) return;
@@ -798,7 +798,7 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
             <div className="lg:max-w-[560px]">
               <DirtyCtx.Provider value={mark}>
                 <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} due={due} actions={actions} startEditing extra={links} admin={admin}
-                  onSaved={async () => { setOpen(false); await onSaved(); }} />
+                  onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />
               </DirtyCtx.Provider>
             </div>
           ) : (
@@ -806,7 +806,7 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
               {l.remarks && <p className="text-[14px]"><b className="text-[13px] text-[#55526a]">Remarks</b> {l.remarks}</p>}
               {cancelable && actions.cancel && <CancelClass lessonId={l.id} cancel={actions.cancel}
                 onDirty={(value) => mark(`cancel-${l.id}`, value)}
-                onSaved={async () => { dirty.current.clear(); setOpen(false); await onSaved(); }} />}
+                onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />}
               <div className="flex flex-wrap items-center gap-1.5">
                 {links}
                 {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}
