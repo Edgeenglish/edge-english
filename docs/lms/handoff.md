@@ -132,7 +132,10 @@
   - 미확인: edgeenglish.kr 와 www 중 어느 쪽이 기본 주소인지(이 환경에서 접속 차단) — 로그인 저장이 주소마다 따로라 한쪽으로 모여야 함. 운영 Supabase Site URL·Redirect URLs 현재 값(관리 API 토큰 안 됨). 로그인은 메일 코드 방식이라 링크 주소 영향은 작을 것으로 추정
   - ✅ 11/9 대표 '올려' → **lms-test b91a679** 반영. 시험 주소 확인: 로그인 전 /lms → 로그인 화면(PC·휴대폰), /lms?next=…makeup → 로그인 화면 + '보강 날짜 고르기로 바로 이어져요' 안내 / 시험 학생 STU-0018 실제 코드 로그인(휴대폰) 뒤 /lms → 학생 홈, /lms?next=…makeup=abc → 학생 홈 + '열 수 없는 링크' 한 줄(가짜 수업 id 라 정상)
   - 대표 결정 11/9: 운영 메일 링크는 **11/15 에 새 주소로**(그때 운영 DB 에 20261109020000). 안내 문구 초안은 **아직 안 정함**(발송 금지)
-  - 남은 순서: (✅ lms-test) → lms-prod → main 빨리감기(main 은 lms-prod 보다 뒤에만 있음, 충돌 없음) → 대표 Production 환경변수·배포 승인 → edgeenglish.kr/lms 실제 로그인·딥링크·휴대폰 검증
+  - **✅ 11/9 새 주소 열림 (대표 '올려', 정책 원본 H26(112))**: 대표 Vercel Production 환경변수 4개(Type Config) → lms-prod·main = **0cfe809** (8182af9 + 주소 이전 2커밋만, lms-test 의 다른 미승인 커밋 제외). www.edgeenglish.kr/lms → edgeenglish.kr/lms 모음(코드, Vercel Domains 는 두 주소 모두 Production·Redirect 없음). 확인: edgeenglish.kr/lms·?next=makeup 307 → 로그인 화면(운영 DB 띠), www 넘김, 홈페이지 /·/price 200, PC·휴대폰 화면. 작업 환경 네트워크에 edgeenglish.kr·www 허용 추가(확인용). **미확인: 새 주소 실제 로그인(대표 TOTP)**
+  - **11/15 할 일**: ① 대표 Vercel lms-prod Preview 환경변수 `LMS_MOVED_TO` = `https://edgeenglish.kr` + lms-prod 재배포 ② 운영 DB 백업 → migration 20261109020000 (lms_url, 실행 전 대표 확인) ③ 안내 문구(대표 미정) ④ 06:00 로그인 점검 보고에 이동 시각 표시
+  - **11/15 전까지 운영 배포 규칙**: lms-prod 에 올릴 때 main 도 같은 커밋으로(빨리감기). 지금 lms-prod = main = 0cfe809
+  - 이전 남은 순서: (✅ lms-test) → lms-prod → main 빨리감기(main 은 lms-prod 보다 뒤에만 있음, 충돌 없음) → 대표 Production 환경변수·배포 승인 → edgeenglish.kr/lms 실제 로그인·딥링크·휴대폰 검증
 
 ## 📐 2026-11-09 학생 카카오 로그인 시안 v3 (브랜치 `claude/wizardly-feynman-e7bk4i`, **코드·DB·로그인 설정 변경 없음**, 주소 이전과 따로 · 시험 검증 전 운영 금지)
 - **대표 결정 11/9 (ChatGPT 검수 반영)**: A안 · 카카오 버튼 맨 위 · 공지 없음 · 영어 화면도 · 첫 연결은 로그인한 학생 '내 정보 → [카카오 연결]'에서만(로그인 화면에서 자동 연결 안 함) · 연결 뒤 '카카오 연결됨' · 오류 2개(로그인 못 함 → 이메일로 / 연결 못 함). **남은 질문: 이메일 로그인 학생 홈 맨 위 [카카오 연결] 한 줄 넣을지(추천 넣음)**. H26 미기록
