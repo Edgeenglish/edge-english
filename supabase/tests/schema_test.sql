@@ -412,7 +412,7 @@ select pg_temp.ok((select tutor_id = '11111111-1111-1111-1111-111111111111' from
                   '재등록 결제 확인 → 담당 강사 통보 업무 자동 생성 (현재 고정 스케줄의 강사)');
 update admin_tasks set tutor_notified_at = now() where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004';
 select pg_temp.expect_error($$update admin_tasks set status = 'done', done_at = now() where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004'$$, 'check');
-select pg_temp.ok(true, '통보 발송만으로는 완료 불가 — 강사 확인·일정 조치 필요');
+select pg_temp.ok(true, '통보 기록만으로는 완료 불가 — 새 기간 일정 확정 시각 필요 (11/9 A안)');
 
 -- ---------- 보상 적립금 ----------
 insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, canceled_at, class_status)
@@ -3686,3 +3686,31 @@ select pg_temp.ok((select status = 'withdrawn' from makeup_requests where id = (
               and not exists (select 1 from lesson_notices where makeup_request_id = (select id from mx95b) and status = 'pending'),
   '신청 취소: 강사 To-do(열린 신청)에서 빠짐, 확정된 신청은 취소 못 함');
 update students set email = null where id = '99999999-0000-0000-0000-000000002000';
+
+-- ---------------------------------------------------------------------
+-- 재등록 [강사에게 통보] 한 번으로 끝 (20261109070000, 대표 11/9 A안)
+-- ---------------------------------------------------------------------
+update admin_tasks set tutor_notified_at = null where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_renewal_notify_tutor((select id from admin_tasks where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004'))$$, '일정을 먼저 확정');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select status = 'open' and tutor_notified_at is null from admin_tasks where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004'),
+  '재등록 통보: 새 기간 일정 확정 전(강사 변경·일정 조정)이면 거절, 카드 그대로');
+insert into schedule_plans (id, enrollment_id, version, tutor_id, slots, start_date, state, confirmed_at, confirmed_by)
+values ('99999999-7000-0000-0000-000000000004', '99999999-1000-0000-0000-000000000004', 1, '11111111-1111-1111-1111-111111111111',
+        '[{"weekday":1,"time":"20:00"}]', '2027-04-19', 'confirmed', '2027-04-11 01:00+00', 'bbbbbbbb-0000-0000-0000-000000000009');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.expect_error($$select admin_renewal_notify_tutor((select id from admin_tasks where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004'))$$, '42501|운영자');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((admin_renewal_notify_tutor((select id from admin_tasks where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004')) ->> 'repeated')::boolean = false
+              and (admin_renewal_notify_tutor((select id from admin_tasks where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004')) ->> 'repeated')::boolean,
+  '재등록 통보: 일정 확정돼 있으면 한 번으로 끝, 다시 눌러도 한 번 (학생은 못 함)');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select status = 'done' and tutor_notified_at is not null and schedule_checked_at = '2027-04-11 01:00+00' and tutor_acknowledged_at is null and done_at is not null
+                   from admin_tasks where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004')
+              and not exists (select 1 from admin_task_board where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004'),
+  '재등록 통보: 통보 기록 + 업무 완료(강사 확인 없음) → 할 일 목록에서 빠짐');

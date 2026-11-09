@@ -48,6 +48,9 @@ export type RenewalTask = {
   newPeriod: string; // 예: '10/20(화)–11/16(월)' (기한 안 재등록은 이전 종료 뒤 첫 정규 수업일부터, A25)
   tutorName: string | null;
   tutorChangePlanned: boolean;
+  /** 새 수강권 일정 확정됨 (수업 만들어짐) — 확정돼 있으면 [강사에게 통보] 한 번으로 끝 (11/9 A안) */
+  scheduleConfirmed: boolean;
+  enrollmentId?: string;
   tutorNotifiedAt: Date | null;
   tutorAcknowledgedAt: Date | null;
   scheduleCheckedAt: Date | null;
@@ -330,9 +333,7 @@ function briefOf(t: TaskSource, now: Date): string {
       if (t.plan) { const first = firstLessonAt(t.plan); return first ? `첫 수업 ${kstDay(first)}` : '안내 전'; }
       return `기한 ${kstDay(t.dueAt)}`;
     case 'renewal_tutor_notice':
-      if (!t.tutorNotifiedAt) return '강사 통보 전';
-      if (!t.tutorAcknowledgedAt) return `통보 후 ${waitText(t.tutorNotifiedAt, now)}`;
-      return '일정 조치 전';
+      return t.scheduleConfirmed ? '강사 통보 전' : '일정 확정 전';
     case 'long_leave_request':
       return `신청 후 ${waitText(t.createdAt, now)}`;
     case 'no_show_report':
@@ -388,21 +389,20 @@ function toItem(t: TaskSource, now: Date): ItemBase {
       };
     }
     case 'renewal_tutor_notice': {
+      // 11/9 A안: 강사 확인·일정 조치 단계 없음. 새 기간 일정이 확정돼 있으면 [강사에게 통보] 한 번으로 끝(카드 빠짐),
+      // 강사 변경·일정 조정이 필요하면 일정 확정까지 카드 유지
       const steps = [
-        { key: 'notify_tutor' as const, label: '강사에게 연장·기간·일정 통보', done: !!t.tutorNotifiedAt },
-        { key: 'tutor_ack' as const, label: '강사 확인', done: !!t.tutorAcknowledgedAt },
-        { key: 'check_schedule' as const, label: '일정 조치', done: !!t.scheduleCheckedAt },
+        { key: 'check_schedule' as const, label: '새 기간 일정 확정', done: t.scheduleConfirmed },
+        { key: 'notify_tutor' as const, label: '강사에게 통보', done: !!t.tutorNotifiedAt },
       ];
-      const next = steps.find((s) => !s.done)?.key;
-      const actions: BoardItem['actions'] =
-        next === 'notify_tutor'
-          ? [{ key: 'notify_tutor', label: '강사에게 통보', primary: true }]
-          : next === 'tutor_ack'
-            ? [
-                { key: 'remind_tutor', label: '강사에게 다시 알림' },
-                { key: 'tutor_ack', label: '강사 확인 대신 기록', primary: true },
-              ]
-            : [{ key: 'check_schedule', label: '일정 조치 완료', primary: true }];
+      const actions: BoardItem['actions'] = t.scheduleConfirmed
+        ? [{ key: 'notify_tutor', label: '강사에게 통보', primary: true }]
+        : [
+            t.enrollmentId
+              ? { key: 'pick_schedule', label: '새 기간 일정 확정', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }
+              : { key: 'pick_schedule', label: '새 기간 일정 확정', primary: true, disabled: true },
+            { key: 'notify_tutor', label: '강사에게 통보', disabled: true },
+          ];
       return {
         id: t.id,
         kind: t.kind,
@@ -410,7 +410,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         tag: t.tutorChangePlanned ? '재등록 · 강사 변경' : '재등록 강사 확인',
         title: `${t.studentName} · ${t.tutorName ?? '담당 강사 미정'}`,
         detail: `${t.studentCode} · ${t.product} · 새 기간 ${t.newPeriod}${t.tutorChangePlanned ? ' · 강사 변경 예정이라 새 강사 배정 필요' : ''}`,
-        due: t.tutorNotifiedAt && !t.tutorAcknowledgedAt ? `통보 후 ${waitText(t.tutorNotifiedAt, now)} 미확인` : null,
+        due: null,
         steps,
         actions,
       };

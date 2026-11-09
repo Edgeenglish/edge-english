@@ -63,9 +63,7 @@ function applyAction(t: TaskSource, key: string, now: Date): TaskSource | null {
     case 'renewal_tutor_notice': {
       const next = { ...t };
       if (key === 'notify_tutor') next.tutorNotifiedAt = now;
-      if (key === 'tutor_ack') next.tutorAcknowledgedAt = now;
-      if (key === 'check_schedule') next.scheduleCheckedAt = now;
-      return next.tutorNotifiedAt && next.tutorAcknowledgedAt && next.scheduleCheckedAt ? null : next;
+      return next.tutorNotifiedAt && next.scheduleConfirmed ? null : next;
     }
     case 'import_check': {
       const next = { ...t, counts: key === 'import_checked' ? null : t.counts };
@@ -104,6 +102,7 @@ export default function AdminDashboard({
   planActions,
   importActions,
   renewalSent,
+  renewalNotify,
   enrollmentClose,
   onReload,
   onTaskClose,
@@ -122,6 +121,8 @@ export default function AdminDashboard({
   importActions?: ImportActions;
   /** 실제 데이터: 재등록 안내 [보냄] 기록 (DB 함수, migration 1900) */
   renewalSent?: (enrollmentId: string) => Promise<void>;
+  /** 실제 데이터: 재등록 [강사에게 통보] → 통보 기록 + 업무 완료 (20261109070000) */
+  renewalNotify?: (taskId: string) => Promise<void>;
   /** 재등록 안 함 · 수강 종료 (3800) */
   enrollmentClose?: (enrollmentId: string) => Promise<void>;
   onReload?: () => Promise<void>;
@@ -240,6 +241,16 @@ export default function AdminDashboard({
         await importActions.markChecked(item.id);
         await onReload?.();
         setToast(DONE_MESSAGE[key]);
+      } catch (e) {
+        setToast(e instanceof Error ? e.message : '기록하지 못했어요.');
+      }
+      return;
+    }
+    // 재등록 [강사에게 통보]: 기록하면 카드가 빠짐. 성공 안내 없음, 실패만 짧게 (대표 11/9)
+    if (!preview && key === 'notify_tutor' && item.kind === 'renewal_tutor_notice' && renewalNotify) {
+      try {
+        await renewalNotify(item.id);
+        await onReload?.();
       } catch (e) {
         setToast(e instanceof Error ? e.message : '기록하지 못했어요.');
       }
