@@ -206,7 +206,15 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       set({
         ...view,
         makeupRights: view.makeupRights.map((m) => ((m.compId ?? null) === (right.compId ?? null) && m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
-        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '무료 보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
+        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '무료 보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '', lessonId: right.lessonId, itemId: right.itemId, compId: right.compId ?? null }, ...view.requests],
+      });
+    },
+    withdrawMakeup: async (requestId) => {
+      const q = view.requests.find((x) => x.id === requestId);
+      set({
+        ...view,
+        requests: view.requests.map((x) => (x.id === requestId ? { ...x, status: 'withdrawn' } : x)),
+        makeupRights: view.makeupRights.map((m) => (q && (m.compId ?? null) === (q.compId ?? null) && (m.lessonId ?? null) === (q.lessonId ?? null) && (m.itemId ?? null) === (q.itemId ?? null) ? { ...m, requested: false } : m)),
       });
     },
     answerLeave: async (items, answer) => {

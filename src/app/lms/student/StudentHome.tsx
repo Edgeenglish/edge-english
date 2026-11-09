@@ -69,6 +69,7 @@ const STATUS_STYLE: Record<RequestStatus, string> = {
   canceled: 'bg-[#eeecf4] text-[#55526a]',
   completed: 'bg-[#e3f5ea] text-[#13623a]',
   expired: 'bg-[#eeecf4] text-[#55526a]',
+  withdrawn: 'bg-[#eeecf4] text-[#55526a]',
 };
 
 const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
@@ -860,7 +861,7 @@ export default function StudentHome(props: {
 
       {overlay && (
         <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
-          {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} />}
+          {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} busy={busy} onWithdraw={async (id) => { await run(() => actions.withdrawMakeup(id), '신청을 취소했어요.'); }} />}
           {overlay.kind === 'payments' && extras && <Payments payments={extras.payments} />}
           {overlay.kind === 'points' && <Points history={points} />}
           {overlay.kind === 'credits' && <Credits s={s} />}
@@ -1588,7 +1589,10 @@ function Sheet({ onClose, children, wide }: { onClose: () => void; children: Rea
   );
 }
 
-function RequestDetail({ r }: { r: StudentRequest }) {
+function RequestDetail({ r, busy, onWithdraw }: { r: StudentRequest; busy?: boolean; onWithdraw?: (id: string) => void }) {
+  const [asking, setAsking] = useState(false);
+  // 강사 확정 전에만 신청 취소 (대표 11/9)
+  const open = r.kind === 'makeup' && (r.status === 'tutor_reviewing' || r.status === 'admin_reviewing' || r.status === 'rescheduling');
   // 신청 → 강사 확인 → 최종 확정(운영진). 지금 단계는 주황, 끝난 단계는 보라 (11/3 점검 ②: 누가 확인 중인지)
   const steps = r.status === 'rescheduling' ? ['신청', '강사 확인', '일정 조율'] : ['신청', '강사 확인', '최종 확정'];
   const at = r.status === 'tutor_reviewing' ? 1 : r.status === 'admin_reviewing' || r.status === 'rescheduling' ? 2 : 3;
@@ -1601,11 +1605,11 @@ function RequestDetail({ r }: { r: StudentRequest }) {
           <span className={`rounded-full px-3 py-1 text-[13px] font-semibold ${STATUS_STYLE[r.status]}`}>{REQUEST_STATUS_LABEL[r.status]}</span>
         </div>
         {/* 상황별 안내 (추가 요청 6): 지금 무엇을 기다리는지, 다음에 누가 연락하는지 */}
-        {r.status === 'tutor_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님이 고른 날짜를 확인하고 있어요. 확인되면 운영진이 최종 확정해 드려요.</p>}
+        {r.status === 'tutor_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님이 확인하고 확정하면 일정에 바로 들어가요.</p>}
         {r.status === 'admin_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님 확인이 끝났어요. 운영진이 최종 확정하면 일정에 바로 들어가요.</p>}
         {r.status === 'rescheduling' && <p className="text-[13.5px] leading-relaxed text-[#7a1d12]">강사님이 고른 날짜에는 어렵다고 했어요. 운영진이 다른 일정을 조율해서 카카오톡으로 알려 드릴게요. 따로 하실 일은 없어요.</p>}
         {r.status === 'canceled' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">확정됐던 보강 수업이 취소됐어요. 취소 때 안내된 규칙(변경권·보강 가능 여부)에 따라 처리됐어요.</p>}
-        {r.status !== 'expired' && <ol className="flex gap-1.5">
+        {r.status !== 'expired' && r.status !== 'withdrawn' && <ol className="flex gap-1.5">
           {steps.map((t, i) => (
             <li key={t} className="flex-1 text-center">
               <div className={`h-1.5 rounded ${i < at ? 'bg-[#5b3df0]' : i === at ? 'bg-[#f0a33a]' : 'bg-[#e6e3ef]'}`} />
@@ -1658,6 +1662,17 @@ function RequestDetail({ r }: { r: StudentRequest }) {
           <span className="text-right">{whenText(r.createdAt)}</span>
         </div>
       </section>
+      {open && onWithdraw && (
+        asking ? (
+          <section className={`${card} grid gap-2 p-4`}>
+            <p className="text-[15px] font-bold">신청을 취소할까요?</p>
+            <button type="button" disabled={busy} onClick={() => onWithdraw(r.id)} className="min-h-[48px] rounded-[14px] bg-[#5b3df0] text-[15px] font-bold text-white disabled:opacity-50">신청 취소하기</button>
+            <button type="button" disabled={busy} onClick={() => setAsking(false)} className="min-h-[44px] rounded-[14px] border border-[#d9d5e8] text-[14px] font-semibold text-[#55526a]">돌아가기</button>
+          </section>
+        ) : (
+          <button type="button" onClick={() => setAsking(true)} className="mx-auto min-h-[40px] px-3 text-[13.5px] text-[#55526a] underline">신청 취소</button>
+        )
+      )}
     </div>
   );
 }

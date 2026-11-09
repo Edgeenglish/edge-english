@@ -201,6 +201,7 @@ export function parseStudentView(r: Raw): StudentView {
         status: q.status === 'confirmed'
           ? (q.confirmed_state === 'canceled' ? 'canceled' : 'confirmed')
           : q.status === 'expired' ? 'expired'
+          : q.status === 'withdrawn' ? 'withdrawn'
           : q.tutor_answered_at ? (q.tutor_declined_all ? 'rescheduling' : 'admin_reviewing') : 'tutor_reviewing',
         tutorDeclinedAll: !!q.tutor_declined_all,
         lessonId: q.lesson_id,
@@ -300,6 +301,10 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
           ? await sb.rpc('admin_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, p_requested_at: null, ...compArg(right) })
           : await sb.rpc('student_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, ...compArg(right) }),
       );
+    },
+    /** 강사 확정 전 보강 신청 취소 (대표 11/9). 운영자 보기도 같은 함수 */
+    withdrawMakeup: async (requestId: string): Promise<void> => {
+      check(await sb.rpc('student_makeup_withdraw', { p_student: adminStudentId, p_request: requestId }));
     },
     /** 휴무 안내 답 (A안 한 번에): ok = 대체강사와 수업, makeup = 기존 강사님과 보강 */
     answerLeave: async (items: string[], answer: 'ok' | 'makeup'): Promise<void> => {

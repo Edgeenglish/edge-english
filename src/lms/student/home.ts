@@ -79,7 +79,7 @@ export function renewalPrompt(lessons: readonly StudentLesson[], renewal: Renewa
 /** 신청 진행 상태. 수강생이 기다리기만 하면 되는 단계는 할 일이 아님 */
 /** rescheduling = 강사가 고른 날짜 모두 불가 → 운영진이 다른 날짜 조율 (QA-08) · canceled = 확정됐던 보강 수업이 취소됨 (QA-13) */
 /** expired = 고른 시간이 모두 지나도록 강사가 확정하지 않아 자동 만료 (대표 11/9) — 보강권은 그대로, 다시 신청 */
-export type RequestStatus = 'tutor_reviewing' | 'admin_reviewing' | 'rescheduling' | 'confirmed' | 'canceled' | 'completed' | 'expired';
+export type RequestStatus = 'tutor_reviewing' | 'admin_reviewing' | 'rescheduling' | 'confirmed' | 'canceled' | 'completed' | 'expired' | 'withdrawn';
 
 export type StudentRequest = {
   id: string;
@@ -114,6 +114,7 @@ export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
   canceled: '취소됨',
   completed: '처리 완료',
   expired: '만료',
+  withdrawn: '신청 취소',
 };
 
 /** 수강생이 직접 처리해야 하는 일. 지금은 수업 안내 확인·동의뿐 (POL-OP-12). 규칙이 정해지면 종류를 추가 */
