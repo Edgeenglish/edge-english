@@ -6,7 +6,9 @@
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
+import AddToCalendar from './AddToCalendar';
+import { useDetailBack } from './useDetailBack';
+import CancelClass, { type CancelAction } from './CancelClass';
 import { ampmEn, formatInZone } from '@/lms/rules/dates';
 import { tutorPaidFor } from '@/lms/rules/status';
 import { cityTime } from '@/lms/tutor/hours-view';
@@ -25,6 +27,7 @@ import {
 
 export type TutorActions = {
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
+  cancel?: CancelAction;
   record: (lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late) => Promise<void>;
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
   /** 보강 확정 (H26(82)): 수강생 시간 하나를 골라 바로 확정. 없으면 [Confirm] 버튼이 잠김 */
@@ -278,7 +281,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <span>{tzTimeLabel(tz)}</span><span>Student · Class Status</span><span className="sr-only">Details</span>
           </div>
           <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:grid [&>*]:break-words [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-            <span>{tzTimeLabel(tz)}</span>{kst && <span>{KOREA_TIME}</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
+            <span>{tzTimeLabel(tz)}</span>{kst && <span>{KOREA_TIME}</span>}<span>Student</span><span>Class</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span />
           </div>
           {days.map((d) => (
             <div key={d.date}>
@@ -423,7 +426,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
         {tab === 'record' && (
           <section aria-label="Class Record">
             <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">Class Record</h1>
-            <p className="mb-3 text-[13.5px] text-[#6b6880]">Your classes by week. Record each class within 10 minutes after it ends; tap a past class to edit.</p>
+            <p className="mb-3 text-[13.5px] text-[#6b6880]">Record each class within 10 minutes after it ends.</p>
             {toRecord.length > 0 && (
               <section aria-label="Classes to record" className="mb-5 grid gap-3 lg:max-w-[760px]">
                 <h2 className="text-[16px] font-bold text-[#b3261e]">
@@ -646,10 +649,10 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
 /** PC 표 칸 (KST 칸은 강사가 끌 수 있음) */
 // 시간대 열은 긴 도시 이름('Ho Chi Minh Time')도 두 줄 안에 들어가게 108px + 줄바꿈 (11/3 대표: 열 제목이 Student와 겹침)
 const cols = (kst: boolean, paid: boolean) => kst
-  ? (paid ? 'lg:grid-cols-[108px_108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_56px_minmax(180px,1.8fr)]'
-    : 'lg:grid-cols-[108px_108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_minmax(180px,1.8fr)]')
-  : (paid ? 'lg:grid-cols-[108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_56px_minmax(180px,1.8fr)]'
-    : 'lg:grid-cols-[108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_minmax(180px,1.8fr)]');
+  ? (paid ? 'lg:grid-cols-[108px_108px_minmax(120px,1.3fr)_110px_minmax(150px,1fr)_56px_32px]'
+    : 'lg:grid-cols-[108px_108px_minmax(120px,1.3fr)_110px_minmax(150px,1fr)_32px]')
+  : (paid ? 'lg:grid-cols-[108px_minmax(120px,1.3fr)_110px_minmax(150px,1fr)_56px_32px]'
+    : 'lg:grid-cols-[108px_minmax(120px,1.3fr)_110px_minmax(150px,1fr)_32px]');
 
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
@@ -670,11 +673,10 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
   // 펼쳐도 보일 것이 없는 줄은 못 누름 (대표 10/31: 대체수업을 펼쳐도 빈 칸)
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
   const recordable = canRecord(l, now, due);
-  const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
-  const toggle = () => {
-    if (open && dirty.current.size > 0 && !window.confirm('Discard changes?')) return;
-    setOpen(!open);
-  };
+  const cancelable = !!actions.cancel && l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation';
+  const canOpen = recordable || cancelable || !!(l.remarks || l.topics || l.makeupOf || l.compensationOf || l.locked || (phase === 'upcoming' && isMakeup));
+  const closeDetail = useDetailBack(open, () => setOpen(false), () => dirty.current.size === 0 || window.confirm('Discard changes?'));
+  const toggle = () => { if (open) closeDetail(); else setOpen(true); };
   // Schedule 에서 [Class Record ›] 로 온 수업: 펼치고 그 줄로 스크롤
   useEffect(() => {
     if (!focus) return;
@@ -688,22 +690,8 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
   const paid = paidRule === null ? '' : paidRule ? (l.locked ? 'Y ✓' : 'Y') : 'N';
   const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
   const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
-  const openProfile = useContext(ProfileCtx);
-  const links = (
-    <>
-      {l.studentId && openProfile && <button type="button" onClick={() => openProfile(l.studentId!)} className={`${btnSub} inline-flex items-center text-[14px]`}>Student profile</button>}
-      {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Class notes</a>}
-      {phase === 'upcoming' && (l.kind === 'makeup' || l.kind === 'migrated_makeup') && (() => {
-        const ev = { title: `Edge English make-up · ${l.student}`, start: l.startsAt, end: l.endsAt, details: meetUrl };
-        return (
-          <>
-            <a href={googleCalendarUrl(ev)} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Google Calendar</a>
-            <a href={icsUrl(ev)} className={`${btnSub} inline-flex items-center text-[14px]`}>Apple / Samsung Calendar</a>
-          </>
-        );
-      })()}
-    </>
-  );
+  const calendar = phase === 'upcoming' && isMakeup
+    ? <AddToCalendar event={{ title: `Edge English make-up · ${l.student}`, start: l.startsAt, end: l.endsAt, details: meetUrl }} /> : null;
   return (
     <div ref={rowRef} className={`border-b border-[#e6e3ef] last:border-b-0 ${focus ? 'ring-2 ring-inset ring-[#5b3fe0]' : ''} ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
       {/* 줄 전체(이름 빼고)를 누르면 펼침. 이름은 프로필로 (QA-06: 버튼 안에 버튼 없이 — 바깥은 div, 펼치기 전용 버튼(›)은 키보드용) */}
@@ -720,47 +708,45 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
               {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min{kindTag(l) ? ` · ${kindTag(l)}` : ''}{paidCol && paid ? ` · Paid ${paid}` : ''}
             </span>
             <span className={`block text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip}</span>
-            {l.topics && <span className="block truncate text-[12.5px]">{l.topics}</span>}
           </span>
           {canOpen ? <button type="button" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={(e) => { e.stopPropagation(); toggle(); }}
-            className="flex h-[28px] w-[28px] items-center justify-center rounded-full text-[16px] text-[#6b6880]">{open ? '▴' : '▾'}</button> : <span />}
+            className="flex h-[36px] w-[28px] items-center justify-center rounded-full text-[16px] text-[#6b6880]">{open ? '▴' : '▾'}</button> : <span />}
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
           <span className="font-semibold">{time}</span>
           {kst && <span className="text-[#6b6880]">{k ? stripBold(k).replace(/ KST$/, '') : ''}</span>}
-          <span className="font-semibold"><StudentName id={l.studentId} name={name} className="truncate" /></span>
-          <span>{count}</span>
-          <span>{minutesOf(l)}</span>
-          <span>{kindTag(l) ?? 'Regular'}</span>
+          <span className="flex-col !items-start justify-center font-semibold"><StudentName id={l.studentId} name={name} className="max-w-full truncate" />{kindTag(l) && <span className="text-[12px] font-normal text-[#6b6880]">{kindTag(l)}</span>}</span>
+          <span className="flex-col !items-start justify-center">{count}<span className="text-[12px] text-[#6b6880]">{minutesOf(l)} min</span></span>
           <span className={`font-semibold ${stColor}`}>{stText}</span>
           {paidCol && <span>{paid}</span>}
           <span className="flex-wrap text-[13px]">
-            <span className="min-w-0 flex-1">{l.topics}{remarksChip}</span>
             {canOpen && <button type="button" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={(e) => { e.stopPropagation(); toggle(); }}
               className="ml-1 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[15px] text-[#6b6880] hover:bg-[#e6e3ef]">{open ? '▴' : '▾'}</button>}
           </span>
         </div>
       </div>
       {open && (
-        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
+        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px] [&>details]:mt-2">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
           {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
           {recordable ? (
             <div className="lg:max-w-[560px]">
               <DirtyCtx.Provider value={mark}>
-                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} due={due} actions={actions} startEditing extra={links} admin={admin}
-                  onSaved={async () => { setOpen(false); await onSaved(); }} />
+                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} due={due} actions={actions} startEditing admin={admin}
+                  onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />
               </DirtyCtx.Provider>
             </div>
           ) : (
             <div className="grid gap-2 pt-2">
               {l.remarks && <p className="text-[14px]"><b className="text-[13px] text-[#55526a]">Remarks</b> {l.remarks}</p>}
+              {l.topics && <p className="text-[14px]"><b className="text-[13px] text-[#55526a]">Covered topics</b> {l.topics}</p>}
+              {cancelable && actions.cancel && <CancelClass lessonId={l.id} cancel={actions.cancel} onDirty={(value) => mark(`cancel-${l.id}`, value)} onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />}
               <div className="flex flex-wrap items-center gap-1.5">
-                {links}
                 {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}
               </div>
             </div>
           )}
+          {calendar}
         </div>
       )}
     </div>
