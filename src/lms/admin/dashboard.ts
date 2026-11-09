@@ -34,7 +34,7 @@ export type PaymentRow = {
 };
 export type RegistrationItem = { enrollmentId: string; studentCode: string; studentName: string; fresh: boolean; plan: string; paidOn: KstDate | null; confirmedOn: KstDate };
 
-/** 이번 달(한국 날짜) 결제 확인된 등록. 체험용 계정 뺌. 같은 수강권은 한 번만 */
+/** 이번 달(한국 날짜) 결제 확인된 등록. 테스트용 계정 뺌. 같은 수강권은 한 번만 */
 export function monthRegistrations(rows: PaymentRow[], today: KstDate): RegistrationItem[] {
   const start = `${today.slice(0, 8)}01`;
   const end = monthEnd(today);

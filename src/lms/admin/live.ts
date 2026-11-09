@@ -415,7 +415,7 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
 }
 
 /**
- * 이번 달 종료 예정 명단 (대시보드 숫자 칸): 오늘~이달 말에 끝나는 수강권. 체험용 뺌.
+ * 이번 달 종료 예정 명단 (대시보드 숫자 칸): 오늘~이달 말에 끝나는 수강권. 테스트용 뺌.
  * 결제 확인된 다음 수강권이 있으면 '재등록 완료', 안내 보냈으면 '안내 보냄', 남은 2회 이하인데 안 보냈으면 '재등록 안내 필요'
  */
 export function monthEndings(rows: EndingRow[], now: Date, sent: Map<string, string> = new Map()): EndingItem[] {

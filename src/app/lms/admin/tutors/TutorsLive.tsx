@@ -1,7 +1,7 @@
 'use client';
 
 // 강사 관리 (대시보드 5차): 목록(이름·도시·담당 학생 수, 검색) → 상세(시간대·담당 학생·다가오는 수업·[강사 화면 열기])
-// 담당 학생 = 지금 이어지는 정규 일정 기준. 체험용 강사·학생은 '체험용' 표시
+// 담당 학생 = 지금 이어지는 정규 일정 기준. 테스트용 강사·학생은 '테스트용' 표시
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { loadTutors, loadTutorUpcoming } from '@/lms/admin/dashboard-live';
@@ -12,7 +12,7 @@ import { useAdminSb } from '../useAdmin';
 import { LessonRows } from '../LessonRows';
 
 const box = 'min-w-0 rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-3';
-const trialTag = <span className="ml-1 text-[12px] font-normal text-[#6b6880]">체험용</span>;
+const trialTag = <span className="ml-1 text-[12px] font-normal text-[#6b6880]">테스트용</span>;
 const studentHref = (code: string) => `/lms/admin/students/${encodeURIComponent(code)}`;
 
 export default function TutorsLive({ tutorId }: { tutorId: string | null }) {
