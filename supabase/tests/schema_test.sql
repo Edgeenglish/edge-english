@@ -350,9 +350,10 @@ values ('99999999-1000-0000-0000-000000000001', '99999999-0000-0000-0000-0000000
        ('99999999-1000-0000-0000-000000000002', '99999999-0000-0000-0000-000000000002', 1, 4, 2, 50, '2026-11-02', '2026-11-29', 8, 'confirmed', 'legacy');
 
 -- ---------- 결제 시각 ----------
-select pg_temp.expect_error($$insert into payments (enrollment_id, method, amount_received, received_on, confirmed_by)
-  values ('99999999-1000-0000-0000-000000000001', 'bank_transfer', 100000, '2026-10-20', 'aaaaaaaa-0000-0000-0000-000000000001')$$, 'not-null|23502');
-select pg_temp.ok(true, '실제 결제 완료 시각(paid_at) 없이 결제 기록 불가');
+-- 20261109130000: 결제 시각을 모르면 비워 둠 (결제일 received_on 은 필수). 시각을 지어내지 않음
+select pg_temp.expect_error($$insert into payments (enrollment_id, method, amount_received, confirmed_by)
+  values ('99999999-1000-0000-0000-000000000001', 'bank_transfer', 100000, 'aaaaaaaa-0000-0000-0000-000000000001')$$, 'not-null|23502');
+select pg_temp.ok(true, '결제일(received_on) 없이 결제 기록 불가 (결제 시각 paid_at 은 모르면 비움)');
 select pg_temp.expect_error($$insert into payments (enrollment_id, method, amount_received, received_on, paid_at, confirmed_by)
   values ('99999999-1000-0000-0000-000000000001', 'bank_transfer', 100000, '2026-10-21', '2026-10-20 14:59:00+00', 'aaaaaaaa-0000-0000-0000-000000000001')$$, 'check');
 select pg_temp.ok(true, '입금일(received_on)은 실제 결제 시각의 한국 날짜와 같아야 함 (UTC 14:59 = KST 23:59 → 10/20)');

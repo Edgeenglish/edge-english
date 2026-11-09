@@ -8,9 +8,13 @@ import {
 import type { StudentDetailData } from '@/lms/admin/students';
 import { supabaseBrowser } from '@/lms/auth/client';
 import { addLessonByAdmin, editLessonByAdmin, loadActiveTutors, loadMakeupLogs, loadStudentLessons } from '@/lms/admin/lesson-change-live';
-import StudentDetail, { type DetailActions } from './StudentDetail';
+import StudentDetail, { type DetailActions, type RenewalExtra } from './StudentDetail';
+import type { RenewalContext, Rewards } from '@/lms/admin/renewal';
+import {
+  carryCheck, confirmPlan, loadRenewalContext, loadRewards, newId, renewalConflicts, saveCarry, saveRenewal, saveReward,
+} from '@/lms/admin/renewal-live';
 
-type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; id: string; data: StudentDetailData };
+type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; id: string; data: StudentDetailData; ctx: RenewalContext | null; rewards: Rewards | null };
 
 export default function StudentDetailLive({ code }: { code: string }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -18,8 +22,13 @@ export default function StudentDetailLive({ code }: { code: string }) {
 
   const load = useCallback(async (id: string) => {
     if (!sb) return;
-    const data = await loadStudentDetail(sb, id);
-    setState({ kind: 'ready', nowIso: new Date().toISOString(), id, data });
+    // 재등록·적립금 읽기는 따로: 이 DB 에 아직 없으면(운영 미반영) 그 칸만 안 보이고 나머지는 그대로
+    const [data, ctx, rewards] = await Promise.all([
+      loadStudentDetail(sb, id),
+      loadRenewalContext(sb, id).catch(() => null),
+      loadRewards(sb, id).catch(() => null),
+    ]);
+    setState({ kind: 'ready', nowIso: new Date().toISOString(), id, data, ctx, rewards });
   }, [sb]);
 
   useEffect(() => {
@@ -60,7 +69,19 @@ export default function StudentDetailLive({ code }: { code: string }) {
     },
   } : null, [sb, id, load]);
 
+  const code_ = (state.kind === 'ready' ? state.data.student.code : null) ?? code;
+  const renewalActions = useMemo<RenewalExtra['actions'] | null>(() => sb && id ? {
+    conflicts: (slots, start, weeks, dur) => renewalConflicts(sb, id, slots, start, weeks, dur),
+    renew: (ids, x) => saveRenewal(sb, ids, x),
+    confirmPlan: (planId) => confirmPlan(sb, planId),
+    carryCheck: (items) => carryCheck(sb, id, items),
+    carry: (requestId, items) => saveCarry(sb, requestId, code_, items),
+    reward: (requestId, amount, reason) => saveReward(sb, requestId, id, amount, reason),
+    newId,
+  } : null, [sb, id, code_]);
+
   if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;
   if (state.kind === 'error' || !actions) return <p className="px-6 py-16 text-center text-[15px] text-[#b3261e]">{state.kind === 'error' ? state.message : ''}</p>;
-  return <StudentDetail data={state.data} nowIso={state.nowIso} actions={actions} />;
+  return <StudentDetail data={state.data} nowIso={state.nowIso} actions={actions}
+    extra={renewalActions ? { ctx: state.ctx, rewards: state.rewards, actions: renewalActions } : undefined} />;
 }

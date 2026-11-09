@@ -290,6 +290,8 @@ export default function AdminDashboard({
             <button type="button" disabled={busy} onClick={() => act(item, 'no_extension')} className={SEC}>연장 안 함</button>
           )}
           {fallback && <Link href={item.studentCode ? studentHref(item.studentCode) : '/lms/admin/change'} className={PRI}>열기</Link>}
+          {/* 재등록 넣기 → 학생 상세 재등록 창이 바로 열림 (시안 5차 승인 11/9) */}
+          {item.kind === 'ending_soon' && item.studentCode && <Link href={q(`/lms/admin/students/${encodeURIComponent(item.studentCode)}?renew=1`)} className={PRI}>재등록 넣기</Link>}
           {item.kind === 'ending_soon' && item.studentCode && <Link href={studentHref(item.studentCode)} className={SEC}>학생 상세</Link>}
           {/* 수강기간이 끝난 뒤에만: 재등록 안 하는 수강생 정리 */}
           {item.kind === 'ending_soon' && item.severity === 'overdue' && (

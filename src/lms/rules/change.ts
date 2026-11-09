@@ -148,10 +148,11 @@ export function tutorCancelOutcome(now: Date, startsAt: Date): TutorCancelOutcom
  * 수강 종료일까지. 종료일 23:59 KST까지 결제한 재등록이 있으면 그 수강권 종료일까지 이월(이어서 반복, POL-RN-01).
  * 재등록 결제 기록이 없는 수강권(시트에서 옮긴 재등록)은 운영진 등록을 믿고 이월. DB lms_comp_use_until 과 같은 판정
  */
-export function compensationUseUntil(finalEnd: KstDate, renewals: readonly { finalEnd: KstDate; paidAt: readonly Date[] }[]): KstDate {
+export function compensationUseUntil(finalEnd: KstDate, renewals: readonly { finalEnd: KstDate; paidOn: readonly KstDate[] }[]): KstDate {
   let until = finalEnd;
   for (const r of renewals) {
-    if (r.paidAt.length > 0 && !r.paidAt.some((t) => t.getTime() <= endOfKstDay(until).getTime())) break;
+    // 결제일(한국 날짜) 기준 — 결제 시각은 모를 수 있음 (20261109130000). 종료일 23:59 KST 안 = 결제일 <= 종료일
+    if (r.paidOn.length > 0 && !r.paidOn.some((d) => d <= until)) break;
     until = r.finalEnd;
   }
   return until;

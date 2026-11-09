@@ -16,6 +16,8 @@ import RegularChange from './RegularChange';
 import PrestartMove from './PrestartMove';
 import LessonManage, { type LessonManageActions } from './LessonManage';
 import { Rich } from '@/app/lms/Rich';
+import { CarrySheet, RenewSheet, RewardRows, RewardSheet, type RenewalActions } from './Renewal';
+import type { RenewalContext, Rewards } from '@/lms/admin/renewal';
 
 export type DetailActions = {
   reload: () => Promise<void>;
@@ -45,7 +47,10 @@ const STATUS_STYLE: Record<StudentStatus, string> = { active: 'bg-[#e3f5ea] text
 const NA = <i className="text-[#b9b6c8]">미응답</i>;
 const or = (v: string | null | undefined, fallback: ReactNode = <i className="text-[#b9b6c8]">없음</i>) => (v ? v : fallback);
 
-export default function StudentDetail({ data, nowIso, actions }: { data: StudentDetailData; nowIso: string; actions: DetailActions }) {
+/** 재등록·보강 이월·적립금 (20261109130000). DB 에 아직 없으면 null → 그 칸·버튼을 안 보임 */
+export type RenewalExtra = { ctx: RenewalContext | null; rewards: Rewards | null; actions: RenewalActions };
+
+export default function StudentDetail({ data, nowIso, actions, extra }: { data: StudentDetailData; nowIso: string; actions: DetailActions; extra?: RenewalExtra }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const today = instantToKstDate(now);
   const s = data.student;
@@ -54,11 +59,19 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
   // 결제 확인 전(pending_payment)은 수업·일정이 없으므로 '수강 예정·0/4회'가 아니라 '결제 확인 전 · 강사 배정 전'으로 (QA B-01)
   const status: StudentStatus = !e ? 'none' : e.status === 'completed' || e.status === 'canceled' || e.finalEndDate < today ? 'ended' : e.status === 'pending_payment' ? 'pending' : e.startDate > today ? 'upcoming' : 'active';
   const pending = status === 'pending';
-  const [sheet, setSheet] = useState<null | 'profile' | 'answers' | 'regular' | 'extend' | 'prestart' | { notice: string }>(null);
+  const [sheet, setSheet] = useState<null | 'profile' | 'answers' | 'regular' | 'extend' | 'prestart' | 'renew' | 'carry' | 'reward_in' | 'reward_out' | { notice: string }>(null);
+  const [flash, setFlash] = useState('');
+  const ctx = extra?.ctx ?? null;
+  const nx = ctx?.next ?? null;
+  const who = { id: s.id, code: s.code ?? '', name: s.nameKo ?? s.nameEn, timezone: s.timezone };
+  // 재등록 넣기: 다음 수강권이 아직 없으면 항상 (수강기간과 관계없이). 대시보드 [재등록 넣기]는 ?renew=1 로 바로 열림
+  const canRenew = !!ctx?.prev && !nx && !pending;
   // 입력 중에 화면이 새로고침·재실행되면(휴대폰 앱 전환 뒤 등) 임시 저장한 입력이 있는 창을 다시 열어 줌 (2026-11-06 대표 보고: 프로필 수정 중 창이 닫힘)
   useEffect(() => {
     if (readDraft(s.id, '프로필 수정')) setSheet('profile');
     else if (readDraft(s.id, '자기소개 · 수업 선호 (수강생 답 입력)')) setSheet('answers');
+    else if (new URLSearchParams(window.location.search).get('renew') === '1' && canRenew) setSheet('renew');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.id]);
   // 첫 수업 시작 전: 이 수강권의 정규 수업이 모두 아직 앞으로 남아 있을 때만 (시작 뒤는 수업 변경·변경권 절차)
   const regularAhead = data.upcoming.filter((l) => l.kind === 'regular' && !l.substitute && !l.leaveOpen);
@@ -113,6 +126,8 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
           )}
         </div>
 
+        {flash && <p className="rounded-[10px] bg-[#e3f5ea] px-3 py-2 text-[13.5px] font-semibold text-[#13623a]">{flash}</p>}
+
         {pendingChanges.length > 0 && (
           <button type="button" onClick={() => setSheet({ notice: pendingChanges[0].id })}
             className="flex min-h-[48px] items-center justify-between gap-2 rounded-[12px] border-2 border-[#f0a33a] bg-[#fff4d6] px-4 text-left text-[14px] font-semibold text-[#5c3b00]">
@@ -135,7 +150,12 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             )}
           </Box>
 
-          <Box title="수강" action={e && !pending && e.status !== 'completed' && e.status !== 'canceled' ? <button type="button" className={btnSmall} onClick={() => setSheet('extend')}>종료일 연장</button> : undefined}>
+          <Box title="수강" action={(e && !pending && e.status !== 'completed' && e.status !== 'canceled') || canRenew ? (
+            <span className="flex flex-wrap gap-1.5">
+              {e && !pending && e.status !== 'completed' && e.status !== 'canceled' && <button type="button" className={btnSmall} onClick={() => setSheet('extend')}>종료일 연장</button>}
+              {canRenew && <button type="button" className={`${btnSmall} !border-[#5b3fe0] !bg-[#5b3fe0] !text-white`} onClick={() => setSheet('renew')}>재등록 넣기</button>}
+            </span>
+          ) : undefined}>
             {!e ? <p className="py-2 text-[13px] text-[#6b6880]">수강권이 없어요.</p> : (
               <>
                 <Row k="등록 상품" v={productText(e)} strong />
@@ -147,9 +167,33 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
                 {e.extensionDays > 0 && <Row k="연장" v={[faultExt ? `+${faultExt}일 (${faultText ? `${faultText}, ` : ''}자동)` : '', autoExt ? `+${autoExt}일 (휴무 자동)` : '', manualExt ? `${manualExt > 0 ? '+' : ''}${manualExt}일 (운영진)` : ''].filter(Boolean).join(' · ')} />}
                 {!pending && <Row k="최종 종료" v={finalEndText(e.finalEndDate, s.timezone)} strong />}
                 {e.sheet && <Row k="시트 기준" v={`${e.sheet.used ?? 0}/${e.sheet.total ?? '?'}회`} />}
+                {nx && (
+                  <>
+                    <Row k="다음 수강권" v={<>{nx.seq}차 · {productText({ weeks: nx.weeks, legacyLabel: null, weeklyCount: nx.weeklyCount, durationMin: nx.durationMin })}<span className="block text-[12.5px] font-normal text-[#6b6880]">{mdw(nx.startDate)} – {mdw(nx.finalEndDate)} · 결제 확인함</span></>} strong />
+                    {!nx.planConfirmed && (
+                      <Row k="정규 일정" v={<span className="text-[#b3261e]">확정 전 · 휴무로 미뤄진 수업 날짜 먼저</span>} />
+                    )}
+                    {(nx.carriedIn > 0 || ctx!.carry.length > 0) && (
+                      <Row k="보강 이월" v={
+                        <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                          {nx.carriedIn > 0 && <span>{nx.carriedIn}회 이월함 ✓</span>}
+                          {ctx!.carry.length > 0 && (ctx!.carryOk
+                            ? <><span>{ctx!.carry.length}회 가능</span><button type="button" className={`${btnSmall} !border-[#5b3fe0] !bg-[#5b3fe0] !text-white`} onClick={() => setSheet('carry')}>보강 이월</button></>
+                            : <span className="text-[#b3261e]">{ctx!.carry.length}회 · 종료일 뒤 결제라 이월 안 됨</span>)}
+                        </span>
+                      } />
+                    )}
+                  </>
+                )}
               </>
             )}
           </Box>
+
+          {extra?.rewards && (
+            <Box title="적립금" action={<span className="flex gap-1.5"><button type="button" className={btnSmall} onClick={() => setSheet('reward_in')}>넣기</button><button type="button" className={btnSmall} onClick={() => setSheet('reward_out')}>빼기</button></span>}>
+              <RewardRows rewards={extra.rewards} />
+            </Box>
+          )}
 
           <Box title="프로필" action={<span className="flex gap-1.5"><Link href={`/lms/admin/students/sheet?student=${s.code}`} className={`${btnSmall} inline-flex items-center`}>시트 값 비교</Link><button type="button" className={btnSmall} onClick={() => setSheet('profile')}>수정</button></span>}>
             <Row k="영문 이름 (여권)" v={s.nameEn} strong />
@@ -259,6 +303,16 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
       {sheet === 'extend' && e && <ExtendSheet enrollment={e} studentTz={s.timezone} today={today} extend={actions.extend} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
       {sheet === 'profile' && <ProfileSheet student={s} update={actions.update} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
       {sheet === 'answers' && <AnswersSheet student={s} update={actions.update} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
+      {sheet === 'renew' && extra && ctx?.prev && (
+        <RenewSheet who={who} ctx={ctx} today={today} actions={extra.actions} onClose={() => setSheet(null)} onSaved={actions.reload} onCarry={() => setSheet('carry')} />
+      )}
+      {sheet === 'carry' && extra && ctx?.prev && ctx.next && (
+        <CarrySheet who={who} ctx={ctx} today={today} actions={extra.actions} onClose={() => setSheet(null)} onSaved={actions.reload} />
+      )}
+      {(sheet === 'reward_in' || sheet === 'reward_out') && extra?.rewards && (
+        <RewardSheet who={who} rewards={extra.rewards} mode={sheet === 'reward_in' ? 'in' : 'out'} today={today} actions={extra.actions} onClose={() => setSheet(null)}
+          onSaved={async (msg) => { await actions.reload(); setSheet(null); setFlash(msg); }} />
+      )}
       {sheet && typeof sheet === 'object' && (
         <NoticeSheet data={data} changeId={sheet.notice} sent={actions.sent} reload={actions.reload} onClose={() => setSheet(null)} />
       )}
