@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { answerCover, answerMakeup, cancelClass, confirmMakeup, createTutorLogin, loadCanceledClasses, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
+import { answerCover, answerMakeup, confirmMakeup, createTutorLogin, loadCanceledClasses, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
 import { LANGS, type Lang } from '@/lms/tutor/lang';
 import { useSavedValue } from './useSaved';
 import { weekOf, type TutorScreen } from '@/lms/tutor/screen';
@@ -53,8 +53,12 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
     () =>
       sb && {
         load: (from, to) => loadTutorScreen(sb, adminTutor, from, to),
+        cancel: async (lessonId, requestId, reason, dryRun) => {
+          const { data, error } = await sb.rpc('tutor_cancel_class', { p_lesson: lessonId, p_request_id: requestId, p_reason: reason, p_dry_run: dryRun });
+          if (error) throw new Error(error.message);
+          return data as { status: string };
+        },
         record: (id, r, t, rm, late) => recordClass(sb, id, r, t, rm, late),
-        cancel: (id, requestId, reason, dryRun) => cancelClass(sb, id, requestId, reason, dryRun),
         answer: (id, yes, note) => answerMakeup(sb, id, yes, note),
         confirm: (id, slot) => confirmMakeup(sb, id, slot),
         answerCover: (items, yes) => answerCover(sb, items, yes),

@@ -29,10 +29,6 @@ export async function recordClass(sb: SupabaseClient, lessonId: string, result: 
     p_student_late: late.student, p_student_late_min: late.student ? late.studentMin : null, p_tutor_late: late.tutor, p_tutor_late_min: late.tutor ? late.tutorMin : null,
   }));
 }
-export type TutorCancelDecision = { status: string; timing: 'advance' | 'late'; uses_credit: boolean; makeup_allowed: boolean; reward_won: number; change_request_id?: string };
-export async function cancelClass(sb: SupabaseClient, lessonId: string, requestId: string, reason: string, dryRun: boolean): Promise<TutorCancelDecision> {
-  return check(await sb.rpc('tutor_cancel_class', { p_lesson: lessonId, p_request_id: requestId, p_reason: reason, p_dry_run: dryRun }));
-}
 export async function answerMakeup(sb: SupabaseClient, requestId: string, yes: string[], note: string): Promise<void> {
   check(await sb.rpc('tutor_makeup_answer', { p_request: requestId, p_yes: yes, p_note: note }));
 }
