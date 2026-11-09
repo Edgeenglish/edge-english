@@ -5,6 +5,10 @@
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
 
+## ✅ 11/10 운영자 '저장 기록' 띠: 저장 완료 줄 자동 지움 — 정책 원본 H26(121) · **lms-test 반영, 운영 미반영(다음 운영 배포 때 같이, DB 변경 없음)** (브랜치 claude/busy-bohr-q9w22a)
+- `src/lms/admin/pending-saves.ts` `keepRows`: 저장할 때·읽을 때 status 'ok' 줄을 버림(이미 쌓인 옛 '저장 완료' 줄도 다음 읽기에서 사라짐). '저장 중'·'저장되지 않았어요'·'확인 필요' 줄만 남음. `PendingSavesBanner.tsx` 'ok' 표시 분기 제거
+- 시험: pending-saves.test 6 통과(keepRows 1개 추가), tsc·eslint 통과. 화면 클릭 확인은 안 함
+
 ## ✅ 11/9 학생 시간대 자동 확인 — 정책 원본 H26(119) · **시험 DB·lms-test 개발·검증 끝, 운영 미반영** (브랜치 claude/vibrant-pascal-sr9m94 → lms-test)
 - migration `20261109150000_lms_student_timezone` (시험 DB 적용): `students.tz_kept_device`([그대로] 누른 기기 시간대) 추가, `student_profile_edits.edited_role` 에 'student' 추가, 새 함수 `student_timezone(p_student, p_set, p_keep)` (학생 본인·운영자 같은 함수, 바꾸면 이력에 학생 본인/운영진으로 남김)
 - 화면: `StudentHome.tsx` 맨 위 묻기(운영자 보기·기기 시간대 UTC/Etc 는 안 물음) + '내 정보' 맨 위 '시간대' 칸, `live.ts`·`fake-data.ts` timezone 동작, 운영자 학생 상세 '정보 수정 기록'에 '수강생 본인' 표시

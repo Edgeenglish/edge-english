@@ -2,6 +2,7 @@
 // - 저장을 시작할 때 이 기기(localStorage)에 '저장 중' 한 줄을 남기고, 끝나면 성공·실패로 바꾼다 (화면을 떠나도 요청은 끝까지 가므로 결과가 기록됨)
 // - 20초 안에 답이 없으면 '응답 없음', 화면이 새로 열려 결과를 받을 수 없는 줄은 '확인 필요' → 그 화면을 다시 열어 서버 상태로 판정(reconcile)
 // - 운영자 화면 위쪽 띠(AdminHeader)가 이 줄들을 보여 주고 [확인]으로 지운다. 서버·DB 는 건드리지 않음
+// - '저장 완료'(바로 성공·서버에서 확인 모두)는 기록하자마자 지움 — '저장되지 않았어요'·'확인 필요'만 [확인]까지 남김 (대표 11/10)
 
 export type PendingVerify =
   | { kind: 'revert'; changeId: string }
@@ -42,11 +43,13 @@ export function listPending(): PendingSave[] {
   try {
     const raw = store()?.getItem(KEY);
     const all = raw ? (JSON.parse(raw) as PendingSave[]) : [];
-    return all.filter((p) => Date.now() - p.startedAt < KEEP_MS);
+    return keepRows(all).filter((p) => Date.now() - p.startedAt < KEEP_MS);
   } catch { return []; }
 }
+/** 띠에 남길 줄: '저장 완료' 는 자동으로 지움 (순수 함수 — 시험용) */
+export const keepRows = (list: PendingSave[]) => list.filter((p) => p.status !== 'ok');
 function write(list: PendingSave[]) {
-  try { store()?.setItem(KEY, JSON.stringify(list)); window.dispatchEvent(new Event('lms-pending-saves')); } catch { /* 저장 안 되는 브라우저 */ }
+  try { store()?.setItem(KEY, JSON.stringify(keepRows(list))); window.dispatchEvent(new Event('lms-pending-saves')); } catch { /* 저장 안 되는 브라우저 */ }
 }
 export function updatePending(id: string, patch: Partial<PendingSave>) {
   write(listPending().map((p) => (p.id === id ? { ...p, ...patch } : p)));

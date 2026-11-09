@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reconcile, verifyWith, type PendingSave } from './pending-saves';
+import { keepRows, reconcile, verifyWith, type PendingSave } from './pending-saves';
 
 const base = (over: Partial<PendingSave>): PendingSave => ({ id: 'x', label: 'l', href: '/lms/admin/change', startedAt: 0, status: 'timeout', verify: { kind: 'none' }, ...over });
 
@@ -22,6 +22,10 @@ describe('저장 중 기록 판정 (R-20)', () => {
       base({ id: 'i', verify: { kind: 'revert', changeId: 'c2' }, status: 'saving' }),
     ], data).map((p) => `${p.id}:${p.status}`);
     expect(out).toEqual(['a:ok', 'b:error', 'c:ok', 'd:error', 'e:ok', 'f:error', 'g:ok', 'h:timeout', 'i:saving']);
+  });
+  it('저장 완료 줄은 자동으로 지우고 실패·확인 필요·저장 중 줄만 남김', () => {
+    const rows = (['ok', 'error', 'timeout', 'unknown', 'saving'] as const).map((status) => base({ id: status, status }));
+    expect(keepRows(rows).map((p) => p.id)).toEqual(['error', 'timeout', 'unknown', 'saving']);
   });
   it('자료에 없는 대상은 판정하지 않음', () => {
     expect(reconcile([base({ verify: { kind: 'revert', changeId: 'zzz' } })], data)[0].status).toBe('timeout');
