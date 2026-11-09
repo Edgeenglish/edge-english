@@ -1,0 +1,182 @@
+<title>학생 카카오 로그인 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 결정 질문 → 흐름 한 줄 → 휴대폰 화면 4장(가로 스크롤 없이 줄바꿈) → 대표 준비물 → 확인된 사실·미확인. LMS 로그인 화면 색 그대로 + 카카오 노랑 */
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--accent:#5b3df0;--navy:#1b1442;--q:#efeafe;
+--ok:#e6f6ec;--ok-fg:#1f7a4d;--warn:#fff4d6;--warn-fg:#5c3b00;--soft:#f3f1f8;--kakao:#FEE500;--kakao-fg:#191600;--phone:#fbfaff;
+--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--navy:#c9bfff;--q:#2a2540;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--soft:#2a2935;--phone:#1b1a24;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--navy:#c9bfff;--q:#2a2540;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--soft:#2a2935;--phone:#1b1a24;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;
+padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:28px}
+h1{font-size:24px;margin:0;text-wrap:balance}
+h2{font-size:18px;margin:0 0 10px;text-wrap:balance}
+p{margin:0}
+.lead{color:var(--muted);margin-top:6px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.q{background:var(--q);border:0}
+.qs{display:grid;gap:14px;margin:0;padding-left:20px}
+.qs li{padding-left:2px}
+.qs b{display:block}
+.opt{color:var(--muted);font-size:14px;margin-top:2px}
+.rec{color:var(--accent);font-weight:700}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px}
+.flow span{background:var(--soft);border-radius:999px;padding:4px 10px}
+.flow i{color:var(--muted);font-style:normal}
+.phones{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}
+.ph{display:grid;gap:8px;align-content:start}
+.ph h3{font-size:14px;margin:0}
+.ph .cap{font-size:13px;color:var(--muted)}
+.scr{background:var(--phone);border:1px solid var(--line);border-radius:26px;padding:18px 14px 22px;display:grid;gap:10px;min-height:440px;align-content:start}
+.logo{text-align:center;font-weight:800;font-size:17px;color:var(--navy)}
+.logo small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 14px;display:grid;gap:10px}
+.card h4{margin:0;font-size:18px}
+.sm{font-size:12.5px;color:var(--muted);line-height:1.5}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;border-radius:12px;font-weight:700;font-size:15px;border:0;width:100%;font-family:inherit}
+.k{background:var(--kakao);color:var(--kakao-fg)}
+.p{background:#5b3df0;color:#fff}
+.input{min-height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;display:flex;align-items:center;color:var(--muted);font-size:14px;background:var(--card)}
+.or{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.code{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.code span{height:42px;border:1.5px solid var(--line);border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;background:var(--card)}
+.note{background:var(--warn);color:var(--warn-fg);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600}
+.good{background:var(--ok);color:var(--ok-fg);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600}
+.hl{outline:2px dashed var(--accent);outline-offset:3px}
+.home-h{font-weight:700;font-size:15px}
+.row{display:flex;justify-content:space-between;gap:8px;font-size:13px;border-top:1px solid var(--line);padding-top:8px}
+.row b{font-weight:600}
+ul.plain{margin:0;padding-left:20px;display:grid;gap:6px}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:1px 6px;margin-right:4px}
+.t-ok{background:var(--ok);color:var(--ok-fg)}
+.t-un{background:var(--warn);color:var(--warn-fg)}
+.kicon{width:16px;height:16px}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>학생 카카오 로그인 시안</h1>
+    <p class="lead">학생 로그인 7번 중 6번이 카카오톡 안 브라우저였습니다(11/8 운영 기록). 카카오톡 안에서는 카카오 로그인이 거의 한 번 누르기로 끝나서, 이메일 코드를 기다리고 옮겨 적는 일을 없앨 수 있습니다. 대상은 학생만이고, 강사·운영진 로그인은 그대로입니다.</p>
+  </header>
+
+  <section class="box q">
+    <h2>대표 결정 4가지</h2>
+    <ol class="qs">
+      <li><b>① 카카오 계정을 학생에게 어떻게 연결할까요?</b>
+        <div class="opt"><span class="rec">A (추천)</span> 처음 한 번만 등록 이메일 코드로 본인 확인 → 그때 카카오 계정이 자동 연결. 다음부터 카카오 버튼만.</div>
+        <div class="opt">B 카카오 계정 이메일이 등록 이메일과 같으면 바로 연결. 카카오 '비즈 앱' 전환·이메일 동의항목 신청이 필요하고, 학생이 다른 이메일로 등록했으면 결국 A처럼 해야 함.</div>
+      </li>
+      <li><b>② 로그인 화면 순서</b>
+        <div class="opt"><span class="rec">카카오 버튼 맨 위 (추천)</span> / 이메일 코드를 위, 카카오를 아래</div>
+      </li>
+      <li><b>③ 지금 학생 13명 안내</b>
+        <div class="opt"><span class="rec">다음 로그인 때 자연스럽게 (추천)</span> — 이미 로그인된 학생은 안 바뀜. 화면 4의 홈 '내 정보' 줄에서 언제든 [카카오 연결] 가능 / 따로 톡 안내도 보냄</div>
+      </li>
+      <li><b>④ 영어 화면(해외 학생)에도 카카오 버튼을 보일까요?</b>
+        <div class="opt"><span class="rec">보임 (추천)</span> — 해외 학생도 카카오톡으로 링크를 받음 / 한국어 화면에만</div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="box">
+    <h2>흐름 (A안)</h2>
+    <div class="flow">
+      <span>카카오톡 링크</span><i>→</i><span>[카카오로 로그인]</span><i>→</i>
+      <span>처음이면: 등록 이메일 코드 1번</span><i>→</i><span>카카오 화면 잠깐 → 자동 연결</span><i>→</i>
+      <span>홈 (또는 보강 날짜 고르기 링크)</span>
+    </div>
+    <p class="sm" style="margin-top:10px">두 번째부터: 링크 → [카카오로 로그인] → 바로 홈. 로그인이 유지돼 있으면 버튼도 안 누르고 바로 열림(지금과 같음). 보강 바로가기 링크(?makeup=)도 그대로 이어짐.</p>
+  </section>
+
+  <section>
+    <h2>휴대폰 화면</h2>
+    <div class="phones">
+      <div class="ph">
+        <h3>1. 로그인 화면 (바뀜)</h3>
+        <div class="scr">
+          <div class="logo">엣지영어<small>수업 관리</small></div>
+          <div class="card">
+            <h4>로그인</h4>
+            <button class="btn k hl" type="button"><svg class="kicon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.6c-.1.3.3.6.6.4l4.2-2.8c.5.1 1 .1 1.5.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg>카카오로 로그인</button>
+            <div class="or">또는 이메일 코드로</div>
+            <div class="input">이메일</div>
+            <button class="btn p" type="button">코드 받기</button>
+            <p class="sm">비밀번호는 없어요.<br>문의: 카카오톡 채널 엣지영어</p>
+          </div>
+        </div>
+        <p class="cap">카카오 버튼은 카카오 공식 노랑·말풍선 모양(카카오 디자인 가이드 기준).</p>
+      </div>
+
+      <div class="ph">
+        <h3>2. 처음 쓰는 카카오 계정</h3>
+        <div class="scr">
+          <div class="logo">엣지영어<small>수업 관리</small></div>
+          <div class="card">
+            <div class="note">이 카카오 계정은 아직 연결 전이에요</div>
+            <p class="sm">엣지영어에 등록한 이메일로 한 번만 확인하면, 다음부터는 카카오로 바로 들어와요.</p>
+            <div class="input">이메일</div>
+            <button class="btn p" type="button">코드 받기</button>
+          </div>
+        </div>
+        <p class="cap">등록 안 된 카카오 계정으로는 계정이 새로 생기지 않음(지금처럼 '새 가입 막힘' 설정 유지).</p>
+      </div>
+
+      <div class="ph">
+        <h3>3. 이메일 코드 (지금 화면 + 한 줄)</h3>
+        <div class="scr">
+          <div class="logo">엣지영어<small>수업 관리</small></div>
+          <div class="card">
+            <h4>코드 입력</h4>
+            <p class="sm">s***@naver.com 으로 보낸 6자리</p>
+            <div class="code"><span>4</span><span>8</span><span>1</span><span></span><span></span><span></span></div>
+            <div class="good hl">확인하면 카카오 계정이 연결돼요</div>
+            <button class="btn p" type="button">확인</button>
+          </div>
+        </div>
+        <p class="cap">확인 뒤 카카오 화면이 1초쯤 보였다가 돌아옴(연결 단계). 카카오톡 안에서는 따로 누를 것 없음 — 시험에서 확인 필요.</p>
+      </div>
+
+      <div class="ph">
+        <h3>4. 학생 홈 — 연결 완료</h3>
+        <div class="scr">
+          <div class="good">✓ 카카오 로그인 연결됨. 다음부터 [카카오로 로그인]만 누르세요.</div>
+          <div class="card">
+            <div class="home-h">내 정보</div>
+            <div class="row"><span>이름</span><b>김O수</b></div>
+            <div class="row"><span>로그인 방법</span><b>이메일 코드 · 카카오 ✓</b></div>
+            <div class="row hl"><span>카카오 연결 안 된 학생</span><b style="color:var(--accent)">[카카오 연결]</b></div>
+          </div>
+          <p class="sm">맨 위 초록 한 줄은 연결한 그날 한 번만 보임.</p>
+        </div>
+        <p class="cap">'내 정보'의 한 줄은 이미 로그인된 학생이 스스로 연결할 때 씀.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>대표가 해 주실 일 (A안 승인 뒤)</h2>
+    <ul class="plain">
+      <li><b>카카오 디벨로퍼스</b>(developers.kakao.com)에 엣지영어 카카오 계정으로 로그인 → 앱 만들기 '엣지영어' → REST API 키 · 카카오 로그인 Client Secret 두 값 확인 (값은 채팅에 붙이지 말고 제가 안내하는 Supabase 화면에 직접 입력)</li>
+      <li>Redirect URI 2개 등록: 시험용·운영용 Supabase 주소 — 정확한 값은 승인 뒤 복사용으로 드림</li>
+      <li>동의항목: A안은 <b>닉네임만</b>(필수 최소). B안이면 비즈 앱 전환 + 이메일 동의항목 추가</li>
+    </ul>
+    <p class="sm" style="margin-top:10px">그 뒤 제가: 시험 Supabase에 카카오 켜기 + '직접 연결(manual linking)' 켜기 → 시험 주소(lms-test)에서 실제 휴대폰 카카오톡 안·사파리·PC 확인 → 결과 공유 → 운영 승인. DB 표 변경 없음 예정(로그인 설정·로그인 화면 코드만).</p>
+  </section>
+
+  <section class="box">
+    <h2>확인한 것 / 미확인</h2>
+    <ul class="plain">
+      <li><span class="tag t-ok">확인</span>시험·운영 둘 다 지금 카카오 꺼짐, 이메일만 켜짐, 새 가입 막힘(disable_signup) — 각 프로젝트 공개 설정 조회(11/9)</li>
+      <li><span class="tag t-ok">확인</span>Supabase는 카카오 로그인을 기본 지원하고, 이메일 없이 쓰는 'Allow users without an email' 설정과 로그인한 사용자에 카카오를 붙이는 직접 연결(linkIdentity)을 제공 — Supabase 공식 문서</li>
+      <li><span class="tag t-ok">확인</span>카카오 이메일 동의항목은 비즈 앱 전용 — Supabase 공식 문서·카카오 디벨로퍼스</li>
+      <li><span class="tag t-un">미확인</span>'새 가입 막힘' 상태에서 직접 연결이 되는지 → 시험 환경에서 첫 번째로 확인. 안 되면 대안 시안을 다시 드림</li>
+      <li><span class="tag t-un">미확인</span>이메일 동의항목 없이 Supabase가 카카오에 이메일 권한을 요청해 오류가 나는지 → 시험에서 확인</li>
+      <li><span class="tag t-un">추정</span>'로그인 매번 뜸'의 원인(아이폰이 오래 안 쓴 사이트 저장 정보 삭제 등)은 카카오 로그인으로 사라지지 않음. 다만 다시 로그인할 때 코드 대신 버튼 한 번으로 줄어듦</li>
+    </ul>
+  </section>
+</div>

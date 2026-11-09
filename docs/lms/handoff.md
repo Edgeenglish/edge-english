@@ -52,6 +52,14 @@
   - 검증: tsc · eslint(새 경고 없음) · vitest 401/402(정책 기준표 합계 1건 기존 실패) · 로컬 ?demo=1 휴대폰·PC(한국·토론토, 링크 3종·잘못된 링크) · **lms-test 실제 로그인(시험 학생 STU-0018, 코드 메일 support+stu0018 → support@ 받은편지함)**: 링크 → /lms/login?next=… + 안내 한 줄 → 코드 로그인 → 같은 링크로 돌아와 '이 수업의 보강이 확정됐어요: 11/6(금) 오후 1:00'(확정 건) / 보강 없는 수업 링크 '지금 보강을 신청할 수 없어요' / 같은 브라우저 새 탭은 로그인 없이 바로 열림 / 화면에 '노쇼' 없음. 메일 함수 보상수업 원래 수업 칸 이름 버그(compensations.lesson_id → source_lesson_id)도 같은 migration 에서 고침(시험 DB 적용). 참고: STU-0003 로그인 메일은 이제 support@ 가 아님 / **미검증: 실제 로그인으로 '날짜 고르기 바로 열림'(STU-0018 열린 보강 없음 — ?demo=1 로만 확인), 운영자 TOTP 화면(주황 KST 띠·[보강 링크 복사])** · H26 기록(바로가기 링크·학생이 합의 시간 LMS 신청·학생에게 노쇼 표현 안 씀·시간대 띠) 대표 '반영해' 대기
   - 운영 반영 순서(승인 뒤): 운영 DB 백업 → 20261108120000 → 코드 lms-prod
 
+## 📐 2026-11-09 학생 카카오 로그인 시안 (대표 요청, 브랜치 `claude/wizardly-feynman-e7bk4i` = nice-einstein 위, **코드·DB·로그인 설정 변경 없음, 대표 선택 대기**)
+- 시안: `docs/lms/previews/kakao-login-drafts.html` (https://claude.ai/artifact/TzwkxaWcVbDM4XDCvz1gzD). 이유: 학생 로그인 7번 중 6번이 카톡 안 브라우저(11/8 조사)
+- 추천 A안: 로그인 화면 맨 위 [카카오로 로그인] → 연결 안 된 카카오면 등록 이메일 코드 1번 → `linkIdentity({provider:'kakao'})` 로 자동 연결 → 다음부터 버튼만. 학생 홈 '내 정보'에 [카카오 연결] 줄. 학생만(강사·운영진 그대로). B안: 카카오 이메일 = 등록 이메일 자동 연결(비즈 앱·이메일 동의 필요)
+- 대표 결정 4개: ① A/B ② 카카오 버튼 위치 ③ 기존 학생 안내 방식 ④ 영어 화면에도 카카오 버튼
+- 확인(11/9, 공개 /auth/v1/settings 읽기): 시험·운영 모두 kakao false · email true · **disable_signup true**. Management API(api.supabase.com) 토큰 주입이 'Invalid access token' 으로 안 됨 → 설정 변경은 대표 대시보드 또는 연결 복구 필요
+- 미확인(시험에서 먼저): disable_signup 상태에서 linkIdentity 가능 여부(manual linking 켜야 함), 이메일 동의항목 없이 Supabase 카카오 요청 scope 오류(KOE205 등) 여부, 카톡 안 브라우저에서 연결 단계 추가 터치 여부
+- 승인 뒤 순서: 대표 카카오 디벨로퍼스 앱(REST 키·Client Secret·Redirect URI 시험/운영) → 시험 Supabase 카카오·manual linking 켬 → LoginFlow.tsx 카카오 버튼·연결 단계 + 학생 '내 정보' 줄 → lms-test 실제 휴대폰(카톡 안·사파리)·PC → 대표 승인 → 운영
+
 ## 📌 2026-11-07 대표 결정: LMS 전체 오픈 + 1주일 시트·LMS 병행 (정책 원본 H26(89))
 - 11/7부로 모든 학생·강사에게 LMS 오픈과 사용법 안내 완료(대표). **11/14까지 1주일만** 학생 수강현황 시트·강사 Class Record 시트와 LMS 를 둘 다 원본으로 둠. 그 사이 Claude 가 **두 곳이 달라지는 부분을 계속 대조**해 보고. 1주 뒤 시트 중단 여부 대표 결정
 - 대조 방법(세션마다): 운영 DB 학생 13명(가상 STU-0014 제외) 수강현황 시트(드라이브 '학생관리') ↔ enrollments·lessons·makeup_requests·compensations, 강사 4명 Class Record ↔ lessons.class_status·class_records. 차이는 고치지 않고 보고(11/7 오O수 사례: 종료일·11/18 보강·학생 번호). **예약 작업 등록함(11/7)**: `trig_01DYXbuSfHjUehZrZJZwaq5H` '매일 시트 ↔ LMS 대조 보고' 매일 12:47 KST, 이 세션(session_0173hK5dYWb6UxYYPuDGoi7y)으로 들어와 이 세션의 Supabase·Sheets·Drive 연결을 그대로 씀. (새 세션을 띄우는 방식은 조직 설정상 연결을 못 붙임 — 'connectors parameter is not available for this organization'. 기존 세션으로 들어오는 방식은 됨. 10/27 '매일 학생 시트 점검 보고' trig_01FARP3K5pwPP8MS9Gir5c73 도 같은 방식으로 돌고 있음 — 시트끼리만 대조, LMS 는 안 봄 → 겹치므로 대표가 끌지 결정)
