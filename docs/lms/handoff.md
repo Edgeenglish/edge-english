@@ -4,9 +4,11 @@
 
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
-## ⏭ 11/9 대표 결정 H26(116) — 강사 직접 통보를 강사 LMS(To-do·Updates)로 (개발 대기, 새 세션)
-- 대상·범위는 H26(116). 재등록은 자동 메일 + Updates + 운영진 카드 자동 종료(POL-OP-14 새 문구는 개발 세션에서 대표 확인). Updates 표시 기간(그 수업·새 기간 첫 수업 시각까지 권장) 대표 확인
-- 주의: 대시보드 전면 개편 세션도 운영진 카드를 고침 → 두 세션이 같은 파일(board.ts·AdminDashboard.tsx)을 건드리면 겹침. 하나 끝난 뒤 다른 하나 권장
+## ⏳ 강사 통보를 강사 LMS로 옮기기 (H26(116)) — **대시보드 개편 세션이 끝난 뒤 시작** (대표 11/9 순서: ① 실제 계정 클릭 QA 아무 때나 ② 대시보드 개편 ③ 이 작업)
+- 같은 운영진 안내 카드 파일(`LessonChange.tsx`·`PlanCard.tsx`·`board.ts`·`AdminDashboard.tsx`)을 대시보드 개편도 고치므로 개편이 lms-test 에 올라간 뒤 그 위에서 시작. 시작 전 ChatGPT `TutorHome.tsx`·`live.ts` 작업(11/9 20:57 KST 마지막 커밋)이 끝났는지 확인
+- **운영 DB 읽기 확인 (11/9, 강사에게 간 통보 기록)**: 수업 취소 change 7(학생 취소 6·강사 사정 1, 보냄 4·대기 3) → Updates 이미 있음 · 운영진 확정 보강 makeup_confirmed 12(보냄 8·대기 4) · makeup_ask 11 모두 not_needed(이미 없앰) · 대체 수업 요청 sub_ask 12 → To-do 이미 있음, 복사 카드만 없앰 · 대체 수업 확정 sub_confirmed 9(대기 1) · 신규 수강생 admin_tasks new_student_matching 3·schedule_plans 4(강사 제안 = `confirm.ts proposalMessage`, 확정 = `tutorConfirmMessage`) · 재등록 renewal_tutor_notice 열림 1 · 보강 시간 변경·강사 바뀜·보강 취소·취소 되돌림 0건(문구는 `lesson-change.ts tutorNotice` makeup_rescheduled·makeup_tutor_removed·makeup_voided·revert)
+- **🙋 대표 결정 대기 — 목록에서 빠진 통보 2개 넣을지**: ① 정규 수업 시간 변경(`regular_changes` 운영 1건, `students.ts regularNoticeEn` WhatsApp 문구) ② 첫 수업 전 수업 날짜 변경(`PrestartMove.tsx` 저장 뒤 WhatsApp 문구, 기록 없음). 넣으면 Updates, 보이는 기한 = 새 첫 수업 시각 / 바뀐 수업 시각 (권장안 — 대표 확인 필요)
+- 할 일(대표 확정): To-do = 신규 수강생 일정 문의 / Updates(그 수업·새 기간 첫 수업 시각까지) = 운영진 확정 보강·보강 시간 변경·강사 바뀜·보강 취소·취소 되돌림·대체 수업 확정·신규 배정 확정·재등록 / 운영진 WhatsApp 복사 카드 없앰 / 재등록 = 새 기간 일정 확정 시 강사 자동 메일 + Updates + 운영진 카드 자동 종료(B안, POL-OP-14 새 문구: '재등록하면 새 기간 일정이 확정된 뒤 시스템이 담당 강사에게 재등록 메일을 보내고 강사 화면 Updates에 올린다. 운영진 통보·강사 확인 추적은 하지 않는다. 메일 실패·일정 미확정만 운영진 할 일에 남긴다.') / 강사 메일 문구 초안 먼저 승인 / PC·휴대폰 시안 먼저
 
 ## ✅ 11/9 강사 Class Record Save 수정 운영 반영 (대표 승인) — 정책 원본 H26(114)(115) 기록함
 - 원인: 수업 전에 열어 둔 강사 화면이 시각을 다시 읽지 않아 Save 잠김(Maria 11/9, 본인 확인). 고침: 30초마다 시각 갱신 + 서버 to_record 수업은 기기 시계와 상관없이 기록 가능. 수업 전 기록 막기는 그대로
