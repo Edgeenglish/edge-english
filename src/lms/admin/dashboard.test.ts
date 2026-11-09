@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { monthEnd, monthRegistrations, noticeError, noticeState, rangeDates, sortNotices, toLessonItems, tutorItems, type Notice } from './dashboard';
 
 describe('대시보드 5차 — 숫자 칸·명단', () => {
-  it('이번 달 등록: 결제 확인일(한국 날짜) 이번 달만, 신규/재등록, 체험용 뺌, 같은 수강권 한 번', () => {
+  it('이번 달 등록: 결제 확인일(한국 날짜) 이번 달만, 신규/재등록, 테스트용 뺌, 같은 수강권 한 번', () => {
     const e = (prev: string | null, code: string, trial = false) => ({ previous_enrollment_id: prev, weeks: 12, legacy_label: null, weekly_count: 2, duration_min: 40, student: { code, name_ko: '가상', is_trial_account: trial } });
     const rows = [
       { enrollment_id: 'a', confirmed_at: '2026-11-08T03:00:00Z', paid_at: '2026-11-05T03:00:00Z', received_on: null, enrollment: e('old', 'STU-0004') },
@@ -33,7 +33,7 @@ describe('대시보드 5차 — 숫자 칸·명단', () => {
       ['2026-11-09', '오전 8:00', '보강', '완료'], ['2026-11-09', '오후 8:00', '정규', '수강생 변경'], ['2026-11-09', '오후 9:00', '보상 수업', '노쇼 신고'],
     ]);
   });
-  it('강사 담당 학생: 이어지는 정규 일정 + 수강 중·예정 학생만, 체험용 강사는 아래', () => {
+  it('강사 담당 학생: 이어지는 정규 일정 + 수강 중·예정 학생만, 테스트용 강사는 아래', () => {
     const st = (id: string, code: string) => ({ id, code, name_ko: '가상', is_trial_account: false });
     const t = tutorItems(
       [{ id: 'sk', name: 'Sera Kara', timezone: 'Europe/Berlin', active: true, is_trial_account: true }, { id: 'ol', name: 'Olivia', timezone: 'Asia/Tokyo', active: true }, { id: 'x', name: 'Gone', timezone: 'Asia/Tokyo', active: false }],
