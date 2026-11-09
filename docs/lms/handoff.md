@@ -5,6 +5,12 @@
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
 
+## ✅ 11/10 운영 자동 메일 실제 발송 켬 — 정책 원본 H26(123)
+- 운영 DB `feature_flags.send_emails` = true (대표 지시). 켜기 전 확인: notifications 대기·실패 0, 열린 보강 신청 0(재촉·만료 한꺼번에 없음), 메일 큐는 lesson_notices INSERT 트리거만이라 예전 안내 다시 안 나감, 받는 주소는 큐에 넣을 때 정해짐. 켠 뒤: 최근 안내 4건을 lms_notice_mail 로 미리보기(발송 안 함) → 실제 주소·[시험] 표시 없음 확인, 새 메일 0
+- 이메일 없는 수강생: STU-0014(체험용) → 메일은 'no_address' 로 남음
+- **🙋 개발 필요 (대표 결정 대기: 시작할지)**: 학생 보강 신청(`student_makeup_request`→`lms_makeup_request_core`, lesson_notices·notifications 안 만듦) 때 강사에게 바로 가는 메일 없음. 지금은 24시간 재촉(`lms_makeup_nudge_run`)만. 강사 역제안(countered)일 때 학생 메일도 없음
+- 되돌리기: `update feature_flags set enabled = false where key = 'send_emails'`
+
 ## ✅ 11/10 운영자 '저장 기록' 띠: 저장 완료 줄 자동 지움 — 정책 원본 H26(121) · **lms-test 반영, 운영 미반영(다음 운영 배포 때 같이, DB 변경 없음)** (브랜치 claude/busy-bohr-q9w22a)
 - `src/lms/admin/pending-saves.ts` `keepRows`: 저장할 때·읽을 때 status 'ok' 줄을 버림(이미 쌓인 옛 '저장 완료' 줄도 다음 읽기에서 사라짐). '저장 중'·'저장되지 않았어요'·'확인 필요' 줄만 남음. `PendingSavesBanner.tsx` 'ok' 표시 분기 제거
 - 시험: pending-saves.test 6 통과(keepRows 1개 추가), tsc·eslint 통과. 화면 클릭 확인은 안 함
@@ -118,7 +124,7 @@
 
 ## 🔔 11/14(병행 1주 끝) 뒤에 꼭 해야 할 것 — 대표 11/8 '누락하지 마' (정책 원본 H26(102), CLAUDE.md 에도 적음, 11/15 09:00 KST 알림 예약 trig_01Aky7XBSmAiRboC3q8fgzPZ)
 1. 학생이 LMS 에서 직접 한 취소는 '학생 안내 카드'(카톡 복사→복사함→보냄)를 만들지 않음 (개발 전 시안·카드 만드는 곳 전부 확인)
-2. 강사 자동 메일: 병행 중 '운영진 메일로만' → 강사에게 직접 + 숨은참조 전환, 운영 Resend 키 확인
+2. ~~강사 자동 메일 직접 발송 전환~~ → **11/10 앞당겨 완료 (H26(123))**: 운영 send_emails 켬(대기 0·열린 신청 0 확인 뒤), 숨은참조 support@ 유지
 3. 예약 작업 3개(매일 로그인 점검·3자 대조·예전 학생 시트 점검) 끌지 대표에게 묻기
 
 ## ⏭ 다음 세션 할 일 (2026-11-06 밤 정리 — 미완료 목록은 지우지 않고 그대로 넘김. ChatGPT 추천 순서 반영)
