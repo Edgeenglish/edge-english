@@ -6,9 +6,7 @@
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import AddToCalendar from './AddToCalendar';
-import { useDetailBack } from './useDetailBack';
-import CancelClass, { type CancelAction } from './CancelClass';
+import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { ampmEn, formatInZone } from '@/lms/rules/dates';
 import { tutorPaidFor } from '@/lms/rules/status';
 import { cityTime } from '@/lms/tutor/hours-view';
@@ -22,13 +20,17 @@ import { LangCtx, useT, type Lang } from '@/lms/tutor/lang';
 import { Rich } from '@/app/lms/Rich';
 import HomeNotices from '@/app/lms/HomeNotices';
 import { enBoth, stripBold } from '@/lms/admin/time-text';
+import { useDetailBack } from './useDetailBack';
 import {
   canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   statusText, rangeFull, rangeFullNoDay, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
 
+type CancelDecision = { status: string };
+type CancelAction = (lessonId: string, requestId: string, reason: string, dryRun: boolean) => Promise<CancelDecision>;
+
 export type TutorActions = {
-  load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
   cancel?: CancelAction;
+  load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
   record: (lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late) => Promise<void>;
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
   /** 보강 확정 (H26(82)): 수강생 시간 하나를 골라 바로 확정. 없으면 [Confirm] 버튼이 잠김 */
@@ -50,6 +52,42 @@ export type TutorActions = {
   canceled?: () => Promise<TutorCanceled[]>;
 };
 
+function CancelClass({ lessonId, cancel, onSaved, onDirty }: {
+  lessonId: string; cancel: CancelAction; onSaved: () => Promise<void>; onDirty: (dirty: boolean) => void;
+}) {
+  const request = useRef<string | null>(null);
+  const [decision, setDecision] = useState<CancelDecision | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(dryRun: boolean) {
+    setBusy(true);
+    setError('');
+    try {
+      request.current ??= crypto.randomUUID();
+      const result = await cancel(lessonId, request.current, reason, dryRun);
+      if (dryRun) setDecision(result);
+      else { onDirty(false); await onSaved(); }
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not cancel. Please try again.'); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="grid gap-3">
+      {!decision ? <button type="button" disabled={busy} onClick={() => void submit(true)} className="min-h-[44px] w-fit rounded-[10px] border border-[#d9d5e6] bg-white px-4 text-[14px] font-semibold disabled:opacity-40">{busy ? 'Loading…' : 'Cancel class'}</button> : <>
+        <p className="text-[14px] font-semibold">{decision.status}</p>
+        <label className="grid gap-1 text-[13px] font-semibold text-[#55526a]">Reason
+          <textarea aria-label="Cancellation reason" rows={2} maxLength={500} value={reason} onChange={(e) => { setReason(e.target.value); onDirty(!!e.target.value.trim()); }} className="w-full rounded-[10px] border border-[#d9d5e6] bg-white px-3 py-2.5 text-[16px] font-normal text-[#1d1b2b]" />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={busy || !reason.trim()} onClick={() => void submit(false)} className="min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[14px] font-semibold text-white disabled:opacity-40">{busy ? 'Saving…' : 'Confirm cancellation'}</button>
+          <button type="button" disabled={busy} onClick={() => { setDecision(null); setReason(''); onDirty(false); }} className="min-h-[44px] rounded-[10px] border border-[#d9d5e6] bg-white px-4 text-[14px] font-semibold">Back</button>
+        </div>
+      </>}
+      {error && <p role="alert" className="text-[14px] text-[#b3261e]">{error}</p>}
+    </div>
+  );
+}
+
 /** 수강생 이름 → 프로필 창 (이 화면 어디서든 같은 창) */
 const ProfileCtx = createContext<((studentId: string) => void) | null>(null);
 function StudentName({ id, name, className }: { id?: string; name: ReactNode; className?: string }) {
@@ -57,8 +95,9 @@ function StudentName({ id, name, className }: { id?: string; name: ReactNode; cl
   if (!id || !open) return <span className={className}>{name}</span>;
   return (
     <button type="button" onClick={(e) => { e.stopPropagation(); open(id); }} title="Student profile"
-      className={`${className ?? ''} cursor-pointer text-left underline decoration-[#c9c0ff] decoration-2 underline-offset-2 hover:text-[#5b3fe0]`}>
-      {name}
+      className={`${className ?? ''} !inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-[9px] bg-[#f3f1fa] px-2.5 py-1.5 text-left no-underline hover:bg-[#eae5fa] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5b3fe0]`}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px] shrink-0 text-[#5b3fe0]"><circle cx="12" cy="7" r="4" /><path d="M4 22v-3a8 8 0 0 1 16 0v3" /></svg>
+      <span className="min-w-0 truncate">{name}</span>
     </button>
   );
 }
@@ -282,7 +321,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <span>{tzTimeLabel(tz)}</span><span>Student · Class Status</span><span className="sr-only">Details</span>
           </div>
           <div className={`hidden ${cols(kst, paidCol)} border-b-2 border-[#5b3fe0] bg-[#efebff] px-1 text-[13px] font-bold leading-tight text-[#2b1c7a] lg:grid [&>*]:break-words [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-            <span>{tzTimeLabel(tz)}</span>{kst && <span>{KOREA_TIME}</span>}<span>Student</span><span>Class</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span />
+            <span>{tzTimeLabel(tz)}</span>{kst && <span>{KOREA_TIME}</span>}<span>Student</span><span>Class Count</span><span>Min</span><span>Class Type</span><span>Class Status</span>{paidCol && <span>Paid</span>}<span>Covered Topics</span>
           </div>
           {days.map((d) => (
             <div key={d.date}>
@@ -430,7 +469,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
         {tab === 'record' && (
           <section aria-label="Class Record">
             <h1 className="mb-1 text-[20px] font-bold text-[#1d1b2b]">Class Record</h1>
-            <p className="mb-3 text-[13.5px] text-[#6b6880]">Record each class within 10 minutes after it ends.</p>
+            <p className="mb-3 text-[13.5px] text-[#6b6880]">Your classes by week. Record each class within 10 minutes after it ends; tap a past class to edit.</p>
             {toRecord.length > 0 && (
               <section aria-label="Classes to record" className="mb-5 grid gap-3 lg:max-w-[760px]">
                 <h2 className="text-[16px] font-bold text-[#b3261e]">
@@ -653,10 +692,10 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
 /** PC 표 칸 (KST 칸은 강사가 끌 수 있음) */
 // 시간대 열은 긴 도시 이름('Ho Chi Minh Time')도 두 줄 안에 들어가게 108px + 줄바꿈 (11/3 대표: 열 제목이 Student와 겹침)
 const cols = (kst: boolean, paid: boolean) => kst
-  ? (paid ? 'lg:grid-cols-[108px_108px_minmax(120px,1.3fr)_110px_minmax(150px,1fr)_56px_32px]'
-    : 'lg:grid-cols-[108px_108px_minmax(120px,1.3fr)_110px_minmax(150px,1fr)_32px]')
-  : (paid ? 'lg:grid-cols-[108px_minmax(120px,1.3fr)_110px_minmax(150px,1fr)_56px_32px]'
-    : 'lg:grid-cols-[108px_minmax(120px,1.3fr)_110px_minmax(150px,1fr)_32px]');
+  ? (paid ? 'lg:grid-cols-[108px_108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_56px_minmax(180px,1.8fr)]'
+    : 'lg:grid-cols-[108px_108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_minmax(180px,1.8fr)]')
+  : (paid ? 'lg:grid-cols-[108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_56px_minmax(180px,1.8fr)]'
+    : 'lg:grid-cols-[108px_minmax(120px,1.1fr)_96px_48px_104px_minmax(120px,1fr)_minmax(180px,1.8fr)]');
 
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
@@ -679,6 +718,7 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
   const recordable = canRecord(l, now, due);
   const cancelable = !!actions.cancel && l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation';
   const canOpen = recordable || cancelable || !!(l.remarks || l.topics || l.makeupOf || l.compensationOf || l.locked || (phase === 'upcoming' && isMakeup));
+  // 휴대폰 뒤로가기: 펼친 칸만 닫고 이 화면에 남음 (대표 11/9)
   const closeDetail = useDetailBack(open, () => setOpen(false), () => dirty.current.size === 0 || window.confirm('Discard changes?'));
   const toggle = () => { if (open) closeDetail(); else setOpen(true); };
   // Schedule 에서 [Class Record ›] 로 온 수업: 펼치고 그 줄로 스크롤
@@ -693,16 +733,39 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
   const paidRule = tutorPaidFor(l.kind, l.classStatus);
   const paid = paidRule === null ? '' : paidRule ? (l.locked ? 'Y ✓' : 'Y') : 'N';
   const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
+  const statusControl = canOpen ? (
+    <button type="button" aria-expanded={open} aria-label={`${stText} · ${l.student}`}
+      onClick={(e) => { e.stopPropagation(); toggle(); }}
+      className="inline-flex min-h-[36px] w-full items-center justify-between gap-2 rounded-[9px] bg-[#f3f1fa] px-2.5 py-1.5 text-left text-[13px] font-semibold hover:bg-[#eae5fa] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5b3fe0]">
+      <span className="min-w-0 break-words">{stText}</span>
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"
+        className={`h-4 w-4 shrink-0 text-[#5b3fe0] ${open ? 'rotate-180' : ''}`}><path d="m5 7.5 5 5 5-5" /></svg>
+    </button>
+  ) : <span className="text-[13px] font-semibold">{stText}</span>;
   const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
-  const calendar = phase === 'upcoming' && isMakeup
-    ? <AddToCalendar event={{ title: `Edge English make-up · ${l.student}`, start: l.startsAt, end: l.endsAt, details: meetUrl }} /> : null;
+  const links = (
+    <>
+      {phase === 'upcoming' && (l.kind === 'makeup' || l.kind === 'migrated_makeup') && (() => {
+        const ev = { title: `Edge English make-up · ${l.student}`, start: l.startsAt, end: l.endsAt, details: meetUrl };
+        return (
+          <details className="text-[13px] text-[#6b6880]">
+            <summary className="w-fit cursor-pointer py-2 font-semibold">Add to calendar</summary>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 pb-2">
+              <a href={googleCalendarUrl(ev)} target="_blank" rel="noreferrer" className="inline-flex min-h-[36px] items-center underline">Google Calendar</a>
+              <a href={icsUrl(ev)} className="inline-flex min-h-[36px] items-center underline">Apple / Samsung Calendar</a>
+            </div>
+          </details>
+        );
+      })()}
+    </>
+  );
   return (
     <div ref={rowRef} className={`border-b border-[#e6e3ef] last:border-b-0 ${focus ? 'ring-2 ring-inset ring-[#5b3fe0]' : ''} ${phase === 'canceled' ? 'text-[#8a879c]' : 'text-[#1d1b2b]'}`}>
       {/* 줄 전체(이름 빼고)를 누르면 펼침. 이름은 프로필로 (QA-06: 버튼 안에 버튼 없이 — 바깥은 div, 펼치기 전용 버튼(›)은 키보드용) */}
       <div onClick={canOpen ? toggle : undefined}
         className={`w-full px-3 py-2 text-left lg:px-1 ${canOpen ? 'cursor-pointer' : ''} ${open ? 'bg-[#f3f1f8]' : canOpen ? 'hover:bg-[#f7f6fb]' : ''}`}>
         {/* 휴대폰: 출결 상태는 이름 아래 줄 (QA-02: 긴 상태가 이름 폭을 빼앗지 않게) */}
-        <div className="grid grid-cols-[76px_minmax(0,1fr)_28px] items-start gap-2 lg:hidden">
+        <div className="grid grid-cols-[76px_minmax(0,1fr)] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
             {time}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]"><Rich text={k} /></span>}
           </span>
@@ -711,46 +774,49 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
             <span className="block text-[12.5px] text-[#6b6880]">
               {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min{kindTag(l) ? ` · ${kindTag(l)}` : ''}{paidCol && paid ? ` · Paid ${paid}` : ''}
             </span>
-            <span className={`block text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip}</span>
+            <span className={`mt-1 block w-fit max-w-full ${stColor}`}>{statusControl}{remarksChip}</span>
+            {l.topics && <span className="block truncate text-[12.5px]">{l.topics}</span>}
           </span>
-          {canOpen ? <button type="button" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={(e) => { e.stopPropagation(); toggle(); }}
-            className="flex h-[36px] w-[28px] items-center justify-center rounded-full text-[16px] text-[#6b6880]">{open ? '▴' : '▾'}</button> : <span />}
+
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
           <span className="font-semibold">{time}</span>
           {kst && <span className="text-[#6b6880]">{k ? stripBold(k).replace(/ KST$/, '') : ''}</span>}
-          <span className="flex-col !items-start justify-center font-semibold"><StudentName id={l.studentId} name={name} className="max-w-full truncate" />{kindTag(l) && <span className="text-[12px] font-normal text-[#6b6880]">{kindTag(l)}</span>}</span>
-          <span className="flex-col !items-start justify-center">{count}<span className="text-[12px] text-[#6b6880]">{minutesOf(l)} min</span></span>
-          <span className={`font-semibold ${stColor}`}>{stText}</span>
+          <span className="font-semibold"><StudentName id={l.studentId} name={name} className="truncate" /></span>
+          <span>{count}</span>
+          <span>{minutesOf(l)}</span>
+          <span>{kindTag(l) ?? 'Regular'}</span>
+          <span className={`font-semibold ${stColor}`}>{statusControl}</span>
           {paidCol && <span>{paid}</span>}
           <span className="flex-wrap text-[13px]">
-            {canOpen && <button type="button" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={(e) => { e.stopPropagation(); toggle(); }}
-              className="ml-1 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[15px] text-[#6b6880] hover:bg-[#e6e3ef]">{open ? '▴' : '▾'}</button>}
+            <span className="min-w-0 flex-1">{l.topics}{remarksChip}</span>
+
           </span>
         </div>
       </div>
       {open && (
-        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px] [&>details]:mt-2">
+        <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
           {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
           {recordable ? (
             <div className="lg:max-w-[560px]">
               <DirtyCtx.Provider value={mark}>
-                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} due={due} actions={actions} startEditing admin={admin}
+                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} due={due} actions={actions} startEditing extra={links} admin={admin}
                   onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />
               </DirtyCtx.Provider>
             </div>
           ) : (
             <div className="grid gap-2 pt-2">
               {l.remarks && <p className="text-[14px]"><b className="text-[13px] text-[#55526a]">Remarks</b> {l.remarks}</p>}
-              {l.topics && <p className="text-[14px]"><b className="text-[13px] text-[#55526a]">Covered topics</b> {l.topics}</p>}
-              {cancelable && actions.cancel && <CancelClass lessonId={l.id} cancel={actions.cancel} onDirty={(value) => mark(`cancel-${l.id}`, value)} onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />}
+              {cancelable && actions.cancel && <CancelClass lessonId={l.id} cancel={actions.cancel}
+                onDirty={(value) => mark(`cancel-${l.id}`, value)}
+                onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />}
               <div className="flex flex-wrap items-center gap-1.5">
+                {links}
                 {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}
               </div>
             </div>
           )}
-          {calendar}
         </div>
       )}
     </div>

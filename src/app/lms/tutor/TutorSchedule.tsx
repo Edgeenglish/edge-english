@@ -73,6 +73,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  // 휴대폰 뒤로가기: 열린 창만 닫고 Schedule 에 남음 (대표 11/9)
   const closeDialog = useDetailBack(!!dialog, () => setDialog(null));
   const [busy, setBusy] = useState(false);
   const [saveErr, setSaveErr] = useState('');
@@ -462,14 +463,15 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
               const tag = lessonTag(l);
               return (
                 <>
-                  {l.studentId && openProfile ? <button type="button" onClick={() => { closeDialog(() => openProfile(l.studentId!)); }} className="w-fit text-left text-[17px] font-bold text-[#5b3fe0] underline decoration-[#c9c0ff] underline-offset-2">{l.student}</button> : <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>}
+                  {l.studentId && openProfile ? <button type="button" onClick={() => closeDialog(() => openProfile(l.studentId!))} className="w-fit rounded-[9px] bg-[#f3f1fa] px-3 py-2 text-[17px] font-semibold text-[#1d1b2b]">{l.student}</button> : <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>}
                   <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(inZone(l.startsAt, tz).date)} {spanText(l.startsAt, l.endsAt, tz)}</b></p>
                   {tz !== 'Asia/Seoul' && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(l.startsAt, l.endsAt, 'Asia/Seoul')}</p>}
                   <p className="text-[14px] text-[#55526a]">
                     {minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''} · {statusText(l, now)}
                   </p>
-                  <button type="button" onClick={() => { closeDialog(() => onRecord(l)); }} className={btnMain}>Class Record ›</button>
-                  {l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation' && <button type="button" onClick={() => { closeDialog(() => onRecord(l)); }} className={btnSub}>Cancel class</button>}
+                  <button type="button" onClick={() => closeDialog(() => onRecord(l))} className={btnMain}>Class Record ›</button>
+                  {l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation' &&
+                    <button type="button" onClick={() => closeDialog(() => onRecord(l))} className={btnSub}>Cancel class</button>}
                   <button type="button" onClick={() => closeDialog()} className={btnSub}>Close</button>
                 </>
               );
