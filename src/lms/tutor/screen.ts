@@ -189,7 +189,7 @@ export function daysOf(lessons: TutorLesson[], tz: string, week: { from: string;
 /** 강사가 보는 결과 문구 (14개 상태 전부) */
 export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   Normal: 'Held',
-  'Make-up completed': 'Held · make-up',
+  'Make-up completed': 'Held',
   'Covered by another tutor': 'Held · substitute',
   'Tutor Late - Student Present': 'Held',   // 지각은 lateText 로 따로 붙임 (4400)
   'Student no-show': 'Student no-show',
