@@ -460,17 +460,15 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
               const tag = lessonTag(l);
               return (
                 <>
-                  <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>
+                  {l.studentId && openProfile ? <button type="button" onClick={() => { setDialog(null); openProfile(l.studentId!); }} className="w-fit rounded-[9px] bg-[#f3f1fa] px-3 py-2 text-[17px] font-semibold text-[#1d1b2b]">{l.student}</button> : <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>}
                   <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(inZone(l.startsAt, tz).date)} {spanText(l.startsAt, l.endsAt, tz)}</b></p>
                   {tz !== 'Asia/Seoul' && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(l.startsAt, l.endsAt, 'Asia/Seoul')}</p>}
                   <p className="text-[14px] text-[#55526a]">
                     {minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''} · {statusText(l, now)}
                   </p>
                   <button type="button" onClick={() => { setDialog(null); onRecord(l); }} className={btnMain}>Class Record ›</button>
-                  <div className="flex flex-wrap gap-2">
-                    {l.studentId && openProfile && <button type="button" onClick={() => { setDialog(null); openProfile(l.studentId!); }} className={`${btnSub} flex-1`}>Student profile</button>}
-                    {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex flex-1 items-center justify-center`}>Class notes</a>}
-                  </div>
+                  {l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation' &&
+                    <button type="button" onClick={() => { setDialog(null); onRecord(l); }} className={btnSub}>Cancel class</button>}
                   <button type="button" onClick={() => setDialog(null)} className={btnSub}>Close</button>
                 </>
               );
