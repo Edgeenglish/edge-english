@@ -52,6 +52,13 @@
   - 검증: tsc · eslint(새 경고 없음) · vitest 401/402(정책 기준표 합계 1건 기존 실패) · 로컬 ?demo=1 휴대폰·PC(한국·토론토, 링크 3종·잘못된 링크) · **lms-test 실제 로그인(시험 학생 STU-0018, 코드 메일 support+stu0018 → support@ 받은편지함)**: 링크 → /lms/login?next=… + 안내 한 줄 → 코드 로그인 → 같은 링크로 돌아와 '이 수업의 보강이 확정됐어요: 11/6(금) 오후 1:00'(확정 건) / 보강 없는 수업 링크 '지금 보강을 신청할 수 없어요' / 같은 브라우저 새 탭은 로그인 없이 바로 열림 / 화면에 '노쇼' 없음. 메일 함수 보상수업 원래 수업 칸 이름 버그(compensations.lesson_id → source_lesson_id)도 같은 migration 에서 고침(시험 DB 적용). 참고: STU-0003 로그인 메일은 이제 support@ 가 아님 / **미검증: 실제 로그인으로 '날짜 고르기 바로 열림'(STU-0018 열린 보강 없음 — ?demo=1 로만 확인), 운영자 TOTP 화면(주황 KST 띠·[보강 링크 복사])** · H26 기록(바로가기 링크·학생이 합의 시간 LMS 신청·학생에게 노쇼 표현 안 씀·시간대 띠) 대표 '반영해' 대기
   - 운영 반영 순서(승인 뒤): 운영 DB 백업 → 20261108120000 → 코드 lms-prod
 
+## 🚚 2026-11-14 LMS 주소 이동 확정 (대표 11/9: '11/14에 다 옮기자') — Vercel 임시 주소 → `edgeenglish.kr/lms`
+- 배경: 10/22 계획(`18-prod-screen-options.md`)은 '학생·강사 화면을 열 때 ①로 옮김'이었으나 11/7 오픈 때 빠짐(Claude 놓침). 정책 원본 H26 기록은 대표 '반영해' 뒤
+- 11/14 전 Claude(시험 환경만): ① 메일 LMS 링크 주소 수정 migration(`20261108010000_lms_notice_email.sql:87` 의 lms-prod vercel 주소) 시험 DB 먼저 ② 옛 주소(lms-prod vercel)로 오면 같은 경로로 edgeenglish.kr/lms 로 넘기기 ③ lms-prod → main 합치기 준비 + 홈페이지 빌드·화면 확인 ④ 안내문 '임시 배포 주소'(R10) 점검 ⑤ 학생·강사 새 주소 안내 톡/WhatsApp 문구 초안
+- 11/14 대표: Vercel Production 환경변수 3개(`NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_ANON_KEY` 운영값 + `LMS_PREVIEW=1` — 없으면 /lms 404) · 운영 Supabase Site URL·Redirect URLs · 배포 승인. 운영자는 새 주소에서 인증 앱 다시 로그인
+- 이동 뒤 학생·강사 전원 재로그인 1번(주소별 로그인 저장). 06:00 로그인 점검 보고에 이동 시각 표시
+- 따로 확인: Vercel 요금제(Hobby 상업 사용 불가, 18번 문서 정정) — 현재 요금제 미확인
+
 ## 📐 2026-11-09 학생 카카오 로그인 시안 (대표 요청, 브랜치 `claude/wizardly-feynman-e7bk4i` = nice-einstein 위, **코드·DB·로그인 설정 변경 없음, 대표 선택 대기**)
 - 시안: `docs/lms/previews/kakao-login-drafts.html` (https://claude.ai/artifact/TzwkxaWcVbDM4XDCvz1gzD). 이유: 학생 로그인 7번 중 6번이 카톡 안 브라우저(11/8 조사)
 - 추천 A안: 로그인 화면 맨 위 [카카오로 로그인] → 연결 안 된 카카오면 등록 이메일 코드 1번 → `linkIdentity({provider:'kakao'})` 로 자동 연결 → 다음부터 버튼만. 학생 홈 '내 정보'에 [카카오 연결] 줄. 학생만(강사·운영진 그대로). B안: 카카오 이메일 = 등록 이메일 자동 연결(비즈 앱·이메일 동의 필요)
