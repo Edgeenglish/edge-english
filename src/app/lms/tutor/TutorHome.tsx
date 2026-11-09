@@ -53,8 +53,9 @@ function StudentName({ id, name, className }: { id?: string; name: ReactNode; cl
   if (!id || !open) return <span className={className}>{name}</span>;
   return (
     <button type="button" onClick={(e) => { e.stopPropagation(); open(id); }} title="Student profile"
-      className={`${className ?? ''} cursor-pointer text-left underline decoration-[#c9c0ff] decoration-2 underline-offset-2 hover:text-[#5b3fe0]`}>
-      {name}
+      className={`${className ?? ''} !inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-[9px] bg-[#f3f1fa] px-2.5 py-1.5 text-left no-underline hover:bg-[#eae5fa] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5b3fe0]`}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px] shrink-0 text-[#5b3fe0]"><circle cx="12" cy="7" r="4" /><path d="M4 22v-3a8 8 0 0 1 16 0v3" /></svg>
+      <span className="min-w-0 truncate">{name}</span>
     </button>
   );
 }
@@ -687,6 +688,15 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
   const paidRule = tutorPaidFor(l.kind, l.classStatus);
   const paid = paidRule === null ? '' : paidRule ? (l.locked ? 'Y ✓' : 'Y') : 'N';
   const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
+  const statusControl = canOpen ? (
+    <button type="button" aria-expanded={open} aria-label={`${stText} · ${l.student}`}
+      onClick={(e) => { e.stopPropagation(); toggle(); }}
+      className="inline-flex min-h-[36px] w-full items-center justify-between gap-2 rounded-[9px] bg-[#f3f1fa] px-2.5 py-1.5 text-left text-[13px] font-semibold hover:bg-[#eae5fa] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5b3fe0]">
+      <span className="min-w-0 break-words">{stText}</span>
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"
+        className={`h-4 w-4 shrink-0 text-[#5b3fe0] ${open ? 'rotate-180' : ''}`}><path d="m5 7.5 5 5 5-5" /></svg>
+    </button>
+  ) : <span className="text-[13px] font-semibold">{stText}</span>;
   const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
   const openProfile = useContext(ProfileCtx);
   const links = (
@@ -710,7 +720,7 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
       <div onClick={canOpen ? toggle : undefined}
         className={`w-full px-3 py-2 text-left lg:px-1 ${canOpen ? 'cursor-pointer' : ''} ${open ? 'bg-[#f3f1f8]' : canOpen ? 'hover:bg-[#f7f6fb]' : ''}`}>
         {/* 휴대폰: 출결 상태는 이름 아래 줄 (QA-02: 긴 상태가 이름 폭을 빼앗지 않게) */}
-        <div className="grid grid-cols-[76px_minmax(0,1fr)_28px] items-start gap-2 lg:hidden">
+        <div className="grid grid-cols-[76px_minmax(0,1fr)] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
             {time}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]"><Rich text={k} /></span>}
           </span>
@@ -719,11 +729,10 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
             <span className="block text-[12.5px] text-[#6b6880]">
               {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min{kindTag(l) ? ` · ${kindTag(l)}` : ''}{paidCol && paid ? ` · Paid ${paid}` : ''}
             </span>
-            <span className={`block text-[13px] font-semibold ${stColor}`}>{stText}{remarksChip}</span>
+            <span className={`mt-1 block w-fit max-w-full ${stColor}`}>{statusControl}{remarksChip}</span>
             {l.topics && <span className="block truncate text-[12.5px]">{l.topics}</span>}
           </span>
-          {canOpen ? <button type="button" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={(e) => { e.stopPropagation(); toggle(); }}
-            className="flex h-[28px] w-[28px] items-center justify-center rounded-full text-[16px] text-[#6b6880]">{open ? '▴' : '▾'}</button> : <span />}
+
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
           <span className="font-semibold">{time}</span>
@@ -732,12 +741,11 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
           <span>{count}</span>
           <span>{minutesOf(l)}</span>
           <span>{kindTag(l) ?? 'Regular'}</span>
-          <span className={`font-semibold ${stColor}`}>{stText}</span>
+          <span className={`font-semibold ${stColor}`}>{statusControl}</span>
           {paidCol && <span>{paid}</span>}
           <span className="flex-wrap text-[13px]">
             <span className="min-w-0 flex-1">{l.topics}{remarksChip}</span>
-            {canOpen && <button type="button" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={(e) => { e.stopPropagation(); toggle(); }}
-              className="ml-1 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[15px] text-[#6b6880] hover:bg-[#e6e3ef]">{open ? '▴' : '▾'}</button>}
+
           </span>
         </div>
       </div>
