@@ -3757,3 +3757,21 @@ select pg_temp.ok((select count(*) from lms_announcements_live('tutor')) = 1, '�
 reset request.jwt.claim.sub;
 reset role;
 select pg_temp.ok((select count(*) from announcements) = 3 and (select ended_at is null from announcements where title = 'Tutor notice'), '공지: 지우지 않고 기록 보존');
+
+-- ---------- 학생 시간대 자동 확인 (H26(119), migration 20261109150000) ----------
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000002900';
+select pg_temp.ok(student_timezone(null, null, 'Australia/Sydney') ->> 'kept' = 'Australia/Sydney', '시간대: [그대로] 누른 기기 시간대 기억');
+select pg_temp.ok(student_timezone(null) ->> 'kept' = 'Australia/Sydney', '시간대: 읽기만 하면 그대로');
+select pg_temp.ok(student_timezone(null, 'Australia/Sydney') ->> 'timezone' = 'Australia/Sydney', '시간대: 학생이 시드니 시간으로 바꿈');
+select pg_temp.expect_error($$select student_timezone(null, 'Mars/Base')$$, '알 수 없는 시간대');
+select pg_temp.ok(true, '시간대: 없는 시간대는 거절');
+select pg_temp.expect_error($$select student_timezone('99999999-0000-0000-0000-000000001800', 'Asia/Tokyo')$$, '42501');
+select pg_temp.ok(true, '시간대: 다른 학생 것은 못 바꿈');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok(student_timezone('99999999-0000-0000-0000-000000002900', 'Europe/London') ->> 'timezone' = 'Europe/London', '시간대: 운영자가 대신 바꿈');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select array_agg(edited_role || ':' || new_value order by created_at) from student_profile_edits
+                   where student_id = '99999999-0000-0000-0000-000000002900' and field = 'timezone') = array['student:Australia/Sydney', 'admin:Europe/London'],
+  '시간대: 바뀐 내역은 학생 변경 이력에 (학생 본인·운영자 구분)');

@@ -283,7 +283,7 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
             <ul className="mt-2 grid gap-1">
               {data.edits.map((x, i) => (
                 <li key={i} className="text-[#1d1b2b]">
-                  <span className="text-[#6b6880]">{zoneLabel(x.at, 'Asia/Seoul')} · {WHO_ROLE[x.role] ?? x.role} {x.by}</span> · {FIELD_KO[x.field] ?? x.field}: <s className="text-[#b9b6c8]">{x.old ?? '(빈 값)'}</s> → {x.new ?? '(빈 값)'}
+                  <span className="text-[#6b6880]">{zoneLabel(x.at, 'Asia/Seoul')} · {WHO_ROLE[x.role] ?? x.role}{x.role === 'student' ? '' : ` ${x.by}`}</span> · {FIELD_KO[x.field] ?? x.field}: <s className="text-[#b9b6c8]">{x.old ?? '(빈 값)'}</s> → {x.new ?? '(빈 값)'}
                 </li>
               ))}
             </ul>

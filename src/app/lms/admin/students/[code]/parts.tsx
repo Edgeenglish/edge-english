@@ -108,4 +108,4 @@ export function CopyButton({ text, children = '복사', className = btnSmall }: 
   );
 }
 
-export const WHO_ROLE: Record<string, string> = { admin: '운영진', tutor: '강사' };
+export const WHO_ROLE: Record<string, string> = { admin: '운영진', tutor: '강사', student: '수강생 본인' };
