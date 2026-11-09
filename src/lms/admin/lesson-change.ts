@@ -73,7 +73,7 @@ export type ChCompensation = { id: string; sourceLessonId: string; status: 'avai
 
 export type ChMigratedOpen = { id: string; originalDate: KstDate | null; tutorLeave: boolean };
 
-export type NoticeEvent = 'change' | 'makeup_ask' | 'makeup_confirmed' | 'makeup_voided' | 'revert' | 'makeup_rescheduled';
+export type NoticeEvent = 'change' | 'makeup_ask' | 'makeup_confirmed' | 'makeup_voided' | 'revert' | 'makeup_rescheduled' | 'makeup_tutor_removed';
 export type ChNotice = {
   id: string;
   changeRequestId: string | null;
@@ -140,7 +140,11 @@ export const REASON_TEXT: Record<MakeupReason, string> = {
   kakao_agreed: '카톡으로 수강생·강사와 이미 정함', admin_mistake: '운영진 입력 실수 정정', student_request: '수강생 요청', tutor_request: '강사 요청', other: '기타',
 };
 /** 운영 기록 한 줄 (admin_makeup_logs) */
-export type MakeupLog = { id: string; makeupRequestId: string; lessonId: string | null; action: 'confirm' | 'reschedule'; reason: MakeupReason; note: string | null; oldAt: Date | null; newAt: Date; createdAt: Date };
+/** reason 은 학생 상세 수업 추가·수정(20261109040000)에선 없음(선택 메모만). oldTutor·newTutor 는 그 기능에서만 */
+export type MakeupLog = {
+  id: string; makeupRequestId: string; lessonId: string | null; action: 'confirm' | 'reschedule'; reason: MakeupReason | null; note: string | null; oldAt: Date | null; newAt: Date; createdAt: Date;
+  oldTutor?: string | null; oldTutorTz?: string | null; newTutor?: string | null;
+};
 export function dateLabel(d: KstDate): string {
   return `${Number(d.slice(5, 7))}/${Number(d.slice(8))} (${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 }
@@ -251,6 +255,8 @@ export type NoticeContext = {
   compensation?: boolean;
   /** 보강 시간 변경 안내: 고치기 전 시각 */
   oldAt?: Date | null;
+  /** 운영진 수업 수정에서 강사가 바뀌었으면 이전 강사 이름 (20261109040000) */
+  oldTutorName?: string | null;
   /** 취소 안내를 보내는 시점의 보강 진행 상태 (추가 요청 6: 취소만 / 신청 중 / 강사 확인 끝 / 전부 불가 / 확정) */
   makeup?: { state: 'none' | 'requested' | 'tutor_answered' | 'declined' | 'confirmed'; candidates?: Date[]; at?: Date | null };
 };
@@ -331,10 +337,16 @@ export function studentNotice(event: NoticeEvent, c: NoticeContext): string {
     return [`[엣지영어] ${name}님, 보강이 확정됐어요`, `원래 수업: ${originKo(c)}`, `보강 수업: ${koAt(c.makeupAt, c.student.timezone)}`, `강사: ${c.tutorName}`].join('\n');
   }
   if (event === 'makeup_rescheduled' && c.makeupAt) {
+    // 운영진 수업 수정: 강사만 / 시간·강사 둘 다 바뀐 경우 (메일 lms_notice_mail 과 같은 글)
+    const timeChanged = !c.oldAt || +c.oldAt !== +c.makeupAt;
+    const tutorChanged = !!c.oldTutorName && c.oldTutorName !== c.tutorName;
+    const what = tutorChanged && timeChanged ? '시간·강사가' : tutorChanged ? '강사가' : '시간이';
     return [
-      `[엣지영어] ${name}님, ${c.compensation ? '무료 보상수업' : '보강'} 시간이 바뀌었어요`,
-      `바뀐 시간: ${koAt(c.makeupAt, c.student.timezone)}`,
-      c.oldAt ? `이전 시간: ${koAt(c.oldAt, c.student.timezone)} (취소)` : '',
+      `[엣지영어] ${name}님, ${c.compensation ? '무료 보상수업' : '보강'} ${what} 바뀌었어요`,
+      `${timeChanged ? '바뀐 시간' : c.compensation ? '보상수업' : '보강 수업'}: ${koAt(c.makeupAt, c.student.timezone)}`,
+      tutorChanged && timeChanged && c.oldAt ? `이전: ${koAt(c.oldAt, c.student.timezone)} · ${c.oldTutorName} (취소)`
+        : tutorChanged ? `이전 강사: ${c.oldTutorName}`
+        : c.oldAt ? `이전 시간: ${koAt(c.oldAt, c.student.timezone)} (취소)` : '',
       `${c.compensation ? '강사 사정으로 진행하지 못한 수업' : '원래 수업'}: ${originKo(c)}`,
       `강사: ${c.tutorName}`,
     ].filter(Boolean).join('\n');
@@ -402,6 +414,11 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
       'Please update your schedule. Thank you!',
     ].filter(Boolean).join('\n');
   }
+  if (event === 'makeup_tutor_removed' && (c.oldAt ?? c.makeupAt)) {
+    // 운영진이 강사를 바꿈 → 이전 강사에게 취소 (메일 lms_notice_mail 과 같은 글)
+    const w = c.compensation ? 'Compensation class' : 'Make-up';
+    return [`CANCELED ${w.toLowerCase()} - ${who} (${c.durationMin} min)`, `${w}: ${enAt((c.oldAt ?? c.makeupAt)!, c.tutorTz)}`, 'No class at this time. Please remove it from your schedule. Thank you!'].join('\n');
+  }
   if (event === 'makeup_voided' && c.makeupAt) {
     const w = c.compensation ? 'Compensation class' : 'Make-up';
     return [`CANCELED ${w.toLowerCase()} - ${who}`, `${w}: ${enAt(c.makeupAt, c.tutorTz)}`, 'No class at this time.'].join('\n');
@@ -418,5 +435,5 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
 
 /** 안내 카드 제목: '수강생에게 보내는 ○○' / '강사 Maria에게 보내는 ○○' — 누구에게 무슨 안내인지 한눈에 (대표 11/8) */
 export const EVENT_TEXT: Record<NoticeEvent, string> = {
-  change: '수업 취소·변경 안내', makeup_ask: '보강 가능 여부 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 취소 안내', revert: '취소 되돌림 안내', makeup_rescheduled: '보강 시간 변경 안내',
+  change: '수업 취소·변경 안내', makeup_ask: '보강 가능 여부 확인', makeup_confirmed: '보강 확정 안내', makeup_voided: '보강 취소 안내', revert: '취소 되돌림 안내', makeup_rescheduled: '보강 시간 변경 안내', makeup_tutor_removed: '보강 취소 안내 (강사 바뀜)',
 };

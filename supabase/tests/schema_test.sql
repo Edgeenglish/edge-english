@@ -3546,3 +3546,72 @@ select pg_temp.ok((select count(*) = 1 from tc93 where lesson_id = '77777777-930
 select pg_temp.ok((select count(*) = 0 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000003' and recipient_kind = 'student' and email_status is not null)
               and (select count(*) = 1 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000003' and recipient_kind = 'tutor' and email_status = 'queued'),
   '수강생 취소: 수강생 메일 없음(그대로), 강사 메일만');
+
+-- ---------------------------------------------------------------------
+-- 운영진 수업 관리 2차 (20261109040000, 대표 11/9): 학생 상세 [+ 수업 추가]·[수정]
+-- ---------------------------------------------------------------------
+reset role;
+insert into tutors (id, name, country, timezone, meet_url, email) values ('55555555-0000-0000-0000-000000009400', '관리강사', 'Korea', 'Asia/Seoul', 'https://meet.google.com/kkk-llll-mmm', 'tutor-m@example.com');
+select pg_temp.open_all('55555555-0000-0000-0000-000000009400');
+create temp table lm94 (k text primary key, v timestamptz);
+insert into lm94 values ('a', ((current_date + 6) + time '21:00') at time zone 'Asia/Seoul'), ('b', ((current_date + 7) + time '21:00') at time zone 'Asia/Seoul'),
+                        ('ledger', null);
+update lm94 set v = now() - make_interval(secs => (select count(*) from credit_ledger)) where k = 'ledger';   -- 수만 담아 둠
+grant select on lm94 to authenticated;
+set role authenticated;
+select pg_temp.expect_error($$select admin_lesson_add('77777777-9300-0000-0000-000000000001', null, null, '55555555-0000-0000-0000-000000009400', (select v from lm94 where k = 'a'))$$, '42501|운영자');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_lesson_add('77777777-9300-0000-0000-000000000001', null, null, null, (select v from lm94 where k = 'a'))$$, '강사를 골라');
+select admin_lesson_add('77777777-9300-0000-0000-000000000001', null, null, '55555555-0000-0000-0000-000000009400', (select v from lm94 where k = 'a'), '  카톡으로 정함 ');
+select pg_temp.expect_error($$select admin_lesson_add('77777777-9300-0000-0000-000000000001', null, null, '55555555-0000-0000-0000-000000009400', (select v from lm94 where k = 'b'))$$, '보강');
+reset request.jwt.claim.sub;
+reset role;
+create temp table lm94l as select id from lessons where makeup_of = '77777777-9300-0000-0000-000000000001' and voided_at is null;
+grant select on lm94l to authenticated;
+select pg_temp.ok((select count(*) = 1 from lm94l)
+              and (select tutor_id = '55555555-0000-0000-0000-000000009400' and starts_at = (select v from lm94 where k = 'a') and ends_at - starts_at = interval '40 minutes' and state = 'scheduled'
+                   from lessons where id = (select id from lm94l))
+              and (select tutor_id = '55555555-0000-0000-0000-000000009400' and status = 'confirmed' from makeup_requests where confirmed_lesson_id = (select id from lm94l))
+              and (select count(*) = 1 from admin_makeup_logs where lesson_id = (select id from lm94l) and action = 'confirm' and reason is null and note = '카톡으로 정함'
+                     and new_tutor_id = '55555555-0000-0000-0000-000000009400'),
+  '수업 추가: 고른 강사로 40분 보강 확정 · 신청도 그 강사 · 기록(사유 없음·메모) 1줄 · 같은 수업분 두 번째 추가는 막힘');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((admin_lesson_edit((select id from lm94l), '55555555-0000-0000-0000-000000009400', (select v from lm94 where k = 'a')) ->> 'repeated')::boolean,
+  '수업 수정: 바뀐 것 없으면 아무것도 안 함');
+select admin_lesson_edit((select id from lm94l), '55555555-0000-0000-0000-000000009400', (select v from lm94 where k = 'b'));
+select admin_lesson_edit((select id from lm94l), '55555555-0000-0000-0000-00000000200a', (select v from lm94 where k = 'b'), '강사 사정');
+reset request.jwt.claim.sub;
+reset role;
+create temp table lm94n as
+  select n.event, n.recipient_kind, n.recipient_id, n.status, n.email_status, q.body as req
+  from lesson_notices n join makeup_requests r on r.id = n.makeup_request_id
+  left join notifications x on x.id = n.email_notification_id left join net.sent q on q.id = x.net_request_id
+  where r.confirmed_lesson_id = (select id from lm94l);
+select pg_temp.ok((select count(*) = 1 from lm94l l join lessons x on x.id = l.id where x.tutor_id = '55555555-0000-0000-0000-00000000200a' and x.starts_at = (select v from lm94 where k = 'b'))
+              and (select tutor_id = '55555555-0000-0000-0000-00000000200a' from makeup_requests where confirmed_lesson_id = (select id from lm94l))
+              and (select count(*) = 1 from lessons where makeup_of = '77777777-9300-0000-0000-000000000001')
+              and (select count(*) = 2 from admin_makeup_logs where lesson_id = (select id from lm94l) and action = 'reschedule'),
+  '수업 수정: 같은 수업 id 그대로 시간·강사 바뀜, 신청 강사도 맞춤, 수정 기록 2줄');
+select pg_temp.ok((select count(*) = 1 from lm94n where event = 'makeup_tutor_removed' and recipient_id = '55555555-0000-0000-0000-000000009400' and status = 'pending'
+                     and email_status = 'queued' and req ->> 'subject' like '[시험 · STU-%] CANCELED make-up - % · % KST'
+                     and req ->> 'html' like '%No class at this time.%')
+              and (select count(*) = 1 from lm94n where event = 'makeup_confirmed' and recipient_id = '55555555-0000-0000-0000-00000000200a' and status = 'pending')
+              and (select count(*) = 0 from lm94n where event = 'makeup_rescheduled' and recipient_kind = 'tutor' and status = 'pending')
+              and (select count(*) = 1 from lm94n where event = 'makeup_rescheduled' and recipient_kind = 'student' and status = 'pending'
+                     and req ->> 'subject' like '%[엣지영어] 보강 강사가 바뀌었어요 · %' and req ->> 'html' like '%이전 강사: 관리강사%'),
+  '수업 수정 안내: 강사 바뀜 → 이전 강사 취소 메일·카드, 새 강사 확정, 학생 1건(강사가 바뀌었어요), 앞 안내는 최신 1건만');
+select pg_temp.ok((select count(*) = 1 from lm94n where event = 'makeup_rescheduled' and recipient_kind = 'student' and status = 'not_needed'
+                     and req ->> 'subject' like '%보강 시간이 바뀌었어요%' and req ->> 'html' like '%이전 시간: %(취소)%'),
+  '수업 수정 안내: 시간만 바꾼 학생 메일은 예전 그대로(시간이 바뀌었어요·이전 시간)');
+select pg_temp.ok((select count(*) from credit_ledger) = (select extract(epoch from now() - v)::int from lm94 where k = 'ledger'),
+  '수업 추가·수정: 변경권 기록 변화 없음');
+insert into lessons (enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
+select '99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', '55555555-0000-0000-0000-000000009400', 'regular', 940, v, v + interval '40 minutes' from lm94 where k = 'a';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_lesson_edit((select id from lm94l), null, (select v from lm94 where k = 'a') + interval '20 minutes')$$, '다른 수업|schedule_conflict');
+select pg_temp.expect_error($$select admin_lesson_edit((select id from lm94l), null, (select v from lm94 where k = 'b') + interval '400 days')$$, '수강 종료일');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select starts_at = (select v from lm94 where k = 'b') from lessons where id = (select id from lm94l)), '수업 수정: 학생 다른 수업과 겹치거나 종료일 뒤면 막히고 수업은 그대로');

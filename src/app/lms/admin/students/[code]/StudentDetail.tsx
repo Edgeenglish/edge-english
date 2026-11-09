@@ -14,6 +14,7 @@ import { styleText } from '@/lms/tutor/followup';
 import { Box, btnMain, btnSmall, btnSub, CopyButton, input, label, Row, Sheet, WHO_ROLE } from './parts';
 import RegularChange from './RegularChange';
 import PrestartMove from './PrestartMove';
+import LessonManage, { type LessonManageActions } from './LessonManage';
 import { Rich } from '@/app/lms/Rich';
 
 export type DetailActions = {
@@ -26,6 +27,8 @@ export type DetailActions = {
   /** 첫 수업 시작 전 개별 수업 날짜 변경 (변경권 차감 없음, H26(62)) */
   prestart: (lessonId: string, startsAt: string) => Promise<unknown>;
   prestartMoved: () => Promise<Record<string, string>>;
+  /** 보강·보상수업 추가·수정 (20261109040000) */
+  lessonManage: LessonManageActions;
 };
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
@@ -197,6 +200,11 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             <Row k="운영 메모" v={or(s.adminMemo)} />
             {s.lmsSince && <Row k="LMS 시작" v={s.lmsSince} />}
           </Box>
+
+          {e && !pending && (
+            <LessonManage student={{ timezone: s.timezone }} regularTutorId={slot?.tutorId ?? null} finalEnd={e.finalEndDate}
+              actions={actions.lessonManage} />
+          )}
 
           <Box title="다가오는 수업" action={prestartOpen ? (
             <button type="button" onClick={() => setSheet('prestart')} className="min-h-[36px] rounded-[10px] border border-[#cfc4ff] bg-white px-3 text-[13px] font-semibold text-[#5b3fe0]">
