@@ -7,6 +7,7 @@ import {
 } from '@/lms/admin/students-live';
 import type { StudentDetailData } from '@/lms/admin/students';
 import { supabaseBrowser } from '@/lms/auth/client';
+import { addLessonByAdmin, editLessonByAdmin, loadActiveTutors, loadMakeupLogs, loadStudentLessons } from '@/lms/admin/lesson-change-live';
 import StudentDetail, { type DetailActions } from './StudentDetail';
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; id: string; data: StudentDetailData };
@@ -48,6 +49,15 @@ export default function StudentDetailLive({ code }: { code: string }) {
     extend: (enrollmentId, newEnd, kind, note) => extendEnrollment(sb, enrollmentId, newEnd, kind, note),
     prestart: (lessonId, startsAt) => prestartMove(sb, lessonId, startsAt),
     prestartMoved: () => loadPrestartMoved(sb, id),
+    lessonManage: {
+      load: async () => {
+        const [lessons, logs, tutors] = await Promise.all([loadStudentLessons(sb, id), loadMakeupLogs(sb, id), loadActiveTutors(sb)]);
+        return { lessons, logs, tutors };
+      },
+      // 수업이 바뀌면 '다가오는 수업' 칸도 같이 새로
+      add: async (source, tutorId, at, note) => { await addLessonByAdmin(sb, source, tutorId, at, note); await load(id); },
+      edit: async (lessonId, tutorId, at, note) => { await editLessonByAdmin(sb, lessonId, tutorId, at, note); await load(id); },
+    },
   } : null, [sb, id, load]);
 
   if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;

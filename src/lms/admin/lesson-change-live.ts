@@ -187,10 +187,11 @@ export async function rescheduleMakeup(sb: SupabaseClient, lessonId: string, at:
 export async function loadMakeupLogs(sb: SupabaseClient, studentId: string): Promise<MakeupLog[]> {
   const r = await sb.rpc('admin_makeup_logs_for', { p_student: studentId });
   if (r.error?.code === 'PGRST202' || r.error?.code === '42883') return [];
-  const rows = (check(r) ?? []) as { id: string; makeup_request_id: string; lesson_id: string | null; action: MakeupLog['action']; reason: MakeupLog['reason']; note: string | null; old_starts_at: string | null; new_starts_at: string; created_at: string }[];
+  const rows = (check(r) ?? []) as { id: string; makeup_request_id: string; lesson_id: string | null; action: MakeupLog['action']; reason: MakeupLog['reason']; note: string | null; old_starts_at: string | null; new_starts_at: string; created_at: string; old_tutor?: string | null; old_tutor_tz?: string | null; new_tutor?: string | null }[];
   return rows.map((g) => ({
     id: g.id, makeupRequestId: g.makeup_request_id, lessonId: g.lesson_id, action: g.action, reason: g.reason, note: g.note,
     oldAt: g.old_starts_at ? new Date(g.old_starts_at) : null, newAt: new Date(g.new_starts_at), createdAt: new Date(g.created_at),
+    oldTutor: g.old_tutor ?? null, oldTutorTz: g.old_tutor_tz ?? null, newTutor: g.new_tutor ?? null,
   }));
 }
 export async function withdrawMakeup(sb: SupabaseClient, requestId: string): Promise<void> {
@@ -240,4 +241,19 @@ export async function loadChangeTasks(sb: SupabaseClient): Promise<{ pendingNoti
   ]);
   if (n.error) return null;   // 1700 적용 전 DB
   return { pendingNotices: n.count ?? 0, openMakeups: m.count ?? 0 };
+}
+
+/** 학생 상세 수업 관리 (20261109040000): 보강권·보상권 하나로 고른 강사·시간에 바로 확정. 메모는 선택 */
+export async function addLessonByAdmin(sb: SupabaseClient, source: { lessonId?: string; itemId?: string; compId?: string }, tutorId: string, at: Date, note: string): Promise<void> {
+  check(await sb.rpc('admin_lesson_add', {
+    p_lesson: source.lessonId ?? null, p_item: source.itemId ?? null, p_comp: source.compId ?? null, p_tutor: tutorId, p_starts_at: at.toISOString(), p_note: note || null,
+  }));
+}
+/** 확정된 보강·보상수업의 날짜·시간·강사 고치기 (같은 수업, 변경권·보강권 그대로) */
+export async function editLessonByAdmin(sb: SupabaseClient, lessonId: string, tutorId: string, at: Date, note: string): Promise<void> {
+  check(await sb.rpc('admin_lesson_edit', { p_lesson: lessonId, p_tutor: tutorId, p_starts_at: at.toISOString(), p_note: note || null }));
+}
+export type TutorPick = { id: string; name: string; timezone: string };
+export async function loadActiveTutors(sb: SupabaseClient): Promise<TutorPick[]> {
+  return (check(await sb.from('tutors').select('id, name, timezone').eq('active', true).order('name')) as TutorPick[]);
 }

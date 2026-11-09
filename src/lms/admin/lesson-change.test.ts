@@ -63,6 +63,15 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     expect(studentNotice('makeup_rescheduled', fixed)).toContain('보강 시간이 바뀌었어요');
     expect(studentNotice('makeup_rescheduled', fixed)).toContain('바뀐 시간: 10월 30일(금) 오후 8시 [한국 시간]');
     expect(studentNotice('makeup_rescheduled', fixed)).toContain('이전 시간: 10월 30일(금) 오후 6시 [한국 시간] (취소)');
+    // 운영진 수업 수정에서 강사만 / 시간·강사 둘 다 바꿈 (20261109040000): 학생 1건, 이전 강사에게 취소
+    const tutorOnly = { ...c, oldAt: c.makeupAt, oldTutorName: 'Benny' };
+    expect(studentNotice('makeup_rescheduled', tutorOnly)).toContain('보강 강사가 바뀌었어요');
+    expect(studentNotice('makeup_rescheduled', tutorOnly)).toContain('보강 수업: 10월 30일(금) 오후 6시 [한국 시간]\n이전 강사: Benny');
+    const both = { ...fixed, oldTutorName: 'Benny' };
+    expect(studentNotice('makeup_rescheduled', both)).toContain('보강 시간·강사가 바뀌었어요');
+    expect(studentNotice('makeup_rescheduled', both)).toContain('이전: 10월 30일(금) 오후 6시 [한국 시간] · Benny (취소)');
+    expect(tutorNotice('makeup_tutor_removed', { ...fixed, tutorName: 'Benny' })).toBe(
+      'CANCELED make-up - Minsu Kim (50 min)\nMake-up: Fri, 30 Oct 5:00 PM *Manila Time* / 6:00 PM *KST*\nNo class at this time. Please remove it from your schedule. Thank you!');
     const abroad = studentNotice('change', { ...c, student: { ...student, timezone: 'America/Toronto' } });
     expect(abroad).toContain('10월 29일(목) 오전 4시 [토론토 시간] / 오후 5시 [한국 시간]');
   });

@@ -204,12 +204,15 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
     const item = r.migratedItemId ? data.migrated.find((m) => m.id === r.migratedItemId) : undefined;
     const made = r.confirmedLessonId ? byId.get(r.confirmedLessonId) : undefined;
     const t = made ?? src ?? lastTutor;
-    const fix = n.event === 'makeup_rescheduled'
+    const fix = n.event === 'makeup_rescheduled' || n.event === 'makeup_tutor_removed'
       ? logs.filter((g) => g.makeupRequestId === r.id && g.action === 'reschedule' && +g.createdAt <= +n.createdAt + 5000).sort((a, b) => +b.createdAt - +a.createdAt)[0]
       : undefined;
+    const oldTutorName = fix?.oldTutor && fix.newTutor && fix.oldTutor !== fix.newTutor ? fix.oldTutor : null;
+    // 이전 강사에게 가는 취소 안내는 이전 강사 이름·시간대로
+    const removed = n.event === 'makeup_tutor_removed' && fix?.oldTutor;
     return {
-      ...base, lesson: src, originalDate: item?.originalDate ?? null, candidates: r.candidates, makeupAt: made?.startsAt, oldAt: fix?.oldAt ?? null,
-      tutorName: t?.tutorName ?? '', tutorTz: t?.tutorTz ?? 'Asia/Seoul', compensation: !!r.compensationId,
+      ...base, lesson: src, originalDate: item?.originalDate ?? null, candidates: r.candidates, makeupAt: made?.startsAt, oldAt: fix?.oldAt ?? null, oldTutorName,
+      tutorName: removed ? fix.oldTutor! : t?.tutorName ?? '', tutorTz: removed ? fix.oldTutorTz ?? 'Asia/Seoul' : t?.tutorTz ?? 'Asia/Seoul', compensation: !!r.compensationId,
     };
   }
 
@@ -333,10 +336,13 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                       <b className="text-[13.5px]">{kstLabel(g.createdAt)} <b>한국 시간</b> · 운영진</b>
                       <span>
                         {g.action === 'reschedule'
-                          ? <>보강 시간 고침: {g.oldAt ? kstLabel(g.oldAt) : ''} → <b>{kstLabel(g.newAt)}</b> <b>한국 시간</b></>
+                          ? <>
+                              {(!g.oldAt || +g.oldAt !== +g.newAt) && <>보강 시간 고침: {g.oldAt ? kstLabel(g.oldAt) : ''} → <b>{kstLabel(g.newAt)}</b> <b>한국 시간</b></>}
+                              {g.oldTutor && g.newTutor && g.oldTutor !== g.newTutor && <>{g.oldAt && +g.oldAt !== +g.newAt ? ' · ' : ''}보강 강사 바꿈: {g.oldTutor} → <b>{g.newTutor}</b></>}
+                            </>
                           : <>보강 확정: <b>{kstLabel(g.newAt)}</b> <b>한국 시간</b></>}
                       </span>
-                      <span className="text-[13px] text-[#6b6880]">사유: {REASON_TEXT[g.reason]}{g.note ? ` · ${g.note}` : ''}</span>
+                      {(g.reason || g.note) && <span className="text-[13px] text-[#6b6880]">{g.reason ? `사유: ${REASON_TEXT[g.reason]}${g.note ? ` · ${g.note}` : ''}` : `메모: ${g.note}`}</span>}
                     </li>
                   ))}
                 </ul>
