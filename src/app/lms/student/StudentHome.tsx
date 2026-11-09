@@ -118,12 +118,26 @@ const overseas = () => VIEW_TZ !== 'Asia/Seoul';
  * 수강생 시간 = 보라 '모든 날짜·시간은 시드니 시간 기준', 운영자가 한국 시간으로 보는 중 = 주황 '한국 시간(KST) 기준으로 보는 중'.
  * 색만이 아니라 글자로 구별. globals.css 의 '* { color }' 때문에 글자에 색 직접 지정
  */
-function ZoneBar() {
+function ZoneBar({ change }: { change?: { value: string; options: string[]; disabled: boolean; onChange: (tz: string) => void } }) {
   const tone = ADMIN_KST ? 'bg-[#fff1d6] text-[#8a5300]' : 'bg-[#efeaff] text-[#3a22b0]';
+  const text = ADMIN_KST ? '한국 시간(KST) 기준으로 보는 중' : `모든 날짜·시간은 ${zoneText()} 기준`;
+  // 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(121) A안 — 배지 위에 투명한 고르기 칸을 겹침)
+  if (change && !ADMIN_KST)
+    return (
+      <label className={`relative inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
+        <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
+        <span className="text-[#3a22b0]">{text} · <span className="text-[#3a22b0] underline">변경</span></span>
+        <select aria-label="시간대 변경" value={change.value} disabled={change.disabled}
+          onChange={(e) => e.target.value !== change.value && change.onChange(e.target.value)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
+          {change.options.map((z) => <option key={z} value={z}>{tzLabel(z)}</option>)}
+        </select>
+      </label>
+    );
   return (
     <p role="note" className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
       <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
-      <span className={ADMIN_KST ? 'text-[#8a5300]' : 'text-[#3a22b0]'}>{ADMIN_KST ? '한국 시간(KST) 기준으로 보는 중' : `모든 날짜·시간은 ${zoneText()} 기준`}</span>
+      <span className={ADMIN_KST ? 'text-[#8a5300]' : 'text-[#3a22b0]'}>{text}</span>
     </p>
   );
 }
@@ -686,7 +700,9 @@ export default function StudentHome(props: {
               </div>
             </section>
           )}
-          {!(isAdminView && studentTz !== 'Asia/Seoul') && <ZoneBar />}
+          {!(isAdminView && studentTz !== 'Asia/Seoul') && (
+            <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
+          )}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
               <span>{linkNote}</span>
