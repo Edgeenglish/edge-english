@@ -159,7 +159,7 @@ describe('강사 사유 취소 안내·보강 잡는 방법 (2026-10-26 대표)'
     const base = { student, durationMin: 50, lesson, tutorName: 'Maria', tutorTz: 'Asia/Ho_Chi_Minh' };
     expect(tutorNotice('change', { ...base, decision: { ...adv, makeup_until: '2026-11-16' } })).toBe(
       `Hi Maria,\n\n${student.nameEn} cancelled their class on Mon, 9 Nov 6:00 PM *Ho Chi Minh Time* / 8:00 PM *KST*.\n\n` +
-        "For the make-up, the student can request a time in the LMS, or you can agree on one together during class. Just make sure it's within the student's course period and open in your Availability, then ask the student to request it in the LMS.\n\nThanks!",
+        `For the make-up, ${student.nameEn.split(' ')[0]} can request a time in the LMS. If you agree on a time during class, just make sure it's open in your Availability and ask ${student.nameEn.split(' ')[0]} to request it in the LMS.\n\nThanks!`,
     );
     expect(tutorNotice('change', { ...base, decision: { ...adv, status: 'Student canceled late', makeup_allowed: false, makeup_until: null } }))
       .toBe(`Hi Maria,\n\n${student.nameEn} cancelled their class on Mon, 9 Nov 6:00 PM *Ho Chi Minh Time* / 8:00 PM *KST*.\n\nThanks!`);

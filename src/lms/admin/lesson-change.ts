@@ -367,9 +367,10 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
       : makeupLinesEn(d.makeup_until, c.tutorTz);
     if (d.who !== 'tutor') {
       // 수강생 취소: WhatsApp 대화체 (대표 11/8 문구). 보강 신청 전이면 보강 안내 한 단락, 신청·확정 뒤면 그 상태 줄
+      const first = who.trim().split(/\s+/)[0] || who;
       const before = d.makeup_allowed && d.makeup_until && (!m || m.state === 'none' || (m.state === 'requested' && !m.candidates?.length));
       const makeupPara = !d.makeup_allowed || !d.makeup_until ? []
-        : before ? ['For the make-up, the student can request a time in the LMS, or you can agree on one together during class. Just make sure it\'s within the student\'s course period and open in your Availability, then ask the student to request it in the LMS.']
+        : before ? [`For the make-up, ${first} can request a time in the LMS. If you agree on a time during class, just make sure it's open in your Availability and ask ${first} to request it in the LMS.`]
         : [makeupEn.join('\n')];
       return [`Hi ${c.tutorName},`, `${who} cancelled their class on ${enAt(c.lesson.startsAt, c.tutorTz)}.`, ...makeupPara, 'Thanks!'].join('\n\n');
     }
