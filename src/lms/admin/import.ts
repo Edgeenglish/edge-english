@@ -1,7 +1,7 @@
-// 기존 학생 입력 (D-52, 정책 원본 H23(3) → 확대판 H26(9) → 시안 2, 2026-10-26 대표 승인)
-// 카드 순서: 학생 → 현재 수강권 → 강사·정규 수업 → 미완료 보강 → 남은 수업 대조 → 확인·저장
+// 기존 수강생 입력 (D-52, 정책 원본 H23(3) → 확대판 H26(9) → 시안 2, 2026-10-26 대표 승인)
+// 카드 순서: 수강생 → 현재 수강권 → 강사·정규 수업 → 미완료 보강 → 남은 수업 대조 → 확인·저장
 // - 수강권: 상품 + 수강 시작일(시트 '첫번째 수강 기간' 시작일) → 28일 기간 자동, 지금 기간은 오늘 날짜로 자동(다르면 고침)
-//   종료일은 마지막 기간 끝으로 자동. 시트 종료일과 다르면 차이·이유(강사 장기 휴무 연장 / 학생 장기 연기(24주) / 기타) — 저장은 막지 않음
+//   종료일은 마지막 기간 끝으로 자동. 시트 종료일과 다르면 차이·이유(강사 장기 휴무 연장 / 수강생 장기 연기(24주) / 기타) — 저장은 막지 않음
 // - 정규 수업은 첫 정규 수업일 ~ 28일 기간 계산 끝까지만. 연장으로 늘어난 날에는 정규를 만들지 않음 (A41 ④: 연장 = 기간 확대, 새 수업 아님)
 // - 미완료 보강: 없으면 건너뜀. 예약됨/미예약 + 원래 수업 날짜(모르면 '날짜 확인 필요'). 원래 날짜가 첫 정규 수업일 이후면 그날 정규는 안 만듦
 // - 수업 날짜 추가: 실제로 받아야 하는 수업 (근거 필수, 그날 하나만)
@@ -34,7 +34,7 @@ export type ImportWeeks = 4 | 12 | 24;
 export type EndReason = 'tutor_long_term_leave' | 'student_long_term_leave' | 'admin_exception';
 export const END_REASON_TEXT: Record<EndReason, string> = {
   tutor_long_term_leave: '강사 장기 휴무 연장',
-  student_long_term_leave: '학생 장기 연기(24주)',
+  student_long_term_leave: '수강생 장기 연기(24주)',
   admin_exception: '기타(메모)',
 };
 
@@ -157,14 +157,14 @@ export function importProblems(d: ImportDraft): string[] {
   const mks = activeMakeups(d);
   if (!d.nameKo.trim()) out.push('한글 이름을 넣어 주세요.');
   if (!d.nameEn.trim()) out.push('영문 이름을 넣어 주세요.');
-  if (!d.timezone) out.push('학생 시간대를 골라 주세요.');
+  if (!d.timezone) out.push('수강생 시간대를 골라 주세요.');
   if (!d.weeks) out.push('상품(1·3·6개월)을 골라 주세요.');
   if (!d.courseStart) out.push('수강 시작일을 넣어 주세요.');
   else if (d.weeks && currentPeriod(d) === null) out.push('오늘이 수강기간 밖이에요. 수강 시작일·상품을 확인하거나 지금 기간을 골라 주세요.');
   if (d.creditsLeft === null) out.push('지금 기간에 남은 변경권을 골라 주세요.');
   if (!d.endDate) out.push('현재 수강 종료일을 넣어 주세요.');
   else if (d.endDate < d.fromDate) out.push('수강 종료일이 첫 정규 수업일보다 빨라요.');
-  if (d.endReason === 'student_long_term_leave' && d.weeks !== 24) out.push('학생 장기 연기는 6개월(24주) 상품만 가능해요.');
+  if (d.endReason === 'student_long_term_leave' && d.weeks !== 24) out.push('수강생 장기 연기는 6개월(24주) 상품만 가능해요.');
   if (!d.tutorId) out.push('담당 강사를 골라 주세요.');
   if (!d.durationMin) out.push('수업 길이를 골라 주세요.');
   if (!(WEEKLY_ALLOWED as readonly number[]).includes(d.slots.length)) out.push(`주 수업 횟수는 1·2·3·5회만 가능해요 (지금 ${d.slots.length}회).`);
@@ -243,7 +243,7 @@ export function importWarnings(d: ImportDraft): { courseDay?: string; end?: { da
   return {
     courseDay:
       d.courseStart && days.length > 0 && !days.includes(weekdayOf(d.courseStart))
-        ? `${dayLabel(d.courseStart)}이 지금 수업 요일(${days.map((w) => WEEKDAY_KO[w]).join('·')})과 달라요 (고정 요일을 바꾼 학생이면 정상)`
+        ? `${dayLabel(d.courseStart)}이 지금 수업 요일(${days.map((w) => WEEKDAY_KO[w]).join('·')})과 달라요 (고정 요일을 바꾼 수강생이면 정상)`
         : undefined,
     end: calc && d.endDate && d.endDate !== calc ? { days: diffDays(calc, d.endDate), calc } : undefined,
     origins,
@@ -272,16 +272,16 @@ export function importLessons(d: ImportDraft): ImportLesson[] {
 export type ImportIssue = {
   lesson: ImportLesson;
   reason: 'tutor_regular' | 'tutor_makeup' | 'tutor_time_off' | 'tutor_hold' | 'break' | 'self';
-  other?: string; // 상대 학생 이름·휴무 사유
+  other?: string; // 상대 수강생 이름·휴무 사유
 };
 
 export const IMPORT_REASON_TEXT: Record<ImportIssue['reason'], string> = {
-  tutor_regular: '강사의 다른 학생 정규 수업과 겹침',
+  tutor_regular: '강사의 다른 수강생 정규 수업과 겹침',
   tutor_makeup: '강사의 그날 보강과 겹침',
   tutor_time_off: '강사 휴무',
-  tutor_hold: '재등록 대기 중인 학생의 고정 시간',
+  tutor_hold: '재등록 대기 중인 수강생의 고정 시간',
   break: '앞뒤 수업과 휴식 10분이 안 됨',
-  self: '이 학생의 다른 수업과 겹침',
+  self: '이 수강생의 다른 수업과 겹침',
 };
 
 /** 화면 미리 검사: 강사 기존 일정(수업·휴무, 휴식 10분 포함) + 이번 입력끼리 */

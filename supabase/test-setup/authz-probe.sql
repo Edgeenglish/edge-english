@@ -73,6 +73,8 @@ declare
                           'tutor_students_list', 'tutor_schedule', 'tutor_schedule_save',
                           'admin_credits', 'admin_credit_adjust', 'admin_leave_withdraw',
                           'admin_matching_current', 'admin_matching_notified', 'admin_import_unmark_checked',
+                          -- 2026-11-08 검토: 첫 줄에서 is_admin()(운영자 TOTP) 또는 lms_screen_tutor(강사 본인·운영자) 확인
+                          'admin_makeup_confirm_now', 'admin_makeup_reschedule', 'admin_makeup_logs_for', 'tutor_canceled_classes', 'admin_register_renewal', 'admin_carry_over_makeups', 'admin_reward_adjust',
                           'tutor_first_lesson_todos', 'tutor_first_lesson_save', 'tutor_makeup_confirm', 'admin_mail_sync', 'admin_resend_notice_email'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];

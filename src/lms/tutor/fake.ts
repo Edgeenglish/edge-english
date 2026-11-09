@@ -1,4 +1,4 @@
-// 강사 화면 미리보기용 가짜 데이터 (?demo=1, 저장 안 함). 실제 학생·강사 이름 아님
+// 강사 화면 미리보기용 가짜 데이터 (?demo=1, 저장 안 함). 실제 수강생·강사 이름 아님
 import { addDays, formatInZone, instantToKstDate } from '../rules/dates';
 import type { TutorStudentProfile } from './profile';
 import { hhmm, lessonAt, plusDays, toMin, type CellCode, type HoursData } from './hours';
@@ -73,7 +73,7 @@ export function fakeHours(now: Date): HoursData {
   };
 }
 
-/** 학생 프로필 미리보기 (?demo=1): 정규 학생 1명(Toronto)·대체수업 학생 1명. 가짜 이름 */
+/** 수강생 프로필 미리보기 (?demo=1): 정규 수강생 1명(Toronto)·대체수업 수강생 1명. 가짜 이름 */
 export function fakeStudentProfile(studentId: string, now: Date): TutorStudentProfile {
   const today = instantToKstDate(now);
   const start = addDays(today, -14);
@@ -83,7 +83,7 @@ export function fakeStudentProfile(studentId: string, now: Date): TutorStudentPr
     id: studentId, code: null, nameKo: null, nameEn: regular ? 'Hajun Kim' : 'Seoyeon Park', displayName: regular ? null : 'Sarah', label: regular ? 'Hajun Kim' : 'Seoyeon Park (Sarah)',
     country: regular ? 'Korea' : 'Canada', city: regular ? 'Seoul' : 'Toronto', timezone: regular ? 'Asia/Seoul' : 'America/Toronto', genderAge: 'F / 30s',
     email: regular ? 'hajun@example.com' : null, phone: null, adminMemo: null, level: 'Intermediate', levelNote: 'B1 (sheet)', levelAt: new Date(+now - 86400000 * 3), levelBy: 'Emma',
-    classType: 'Free conversation', textbook: null, classNoteUrl: 'https://docs.google.com/', correctionPref: 'active immediate corrections',
+    classType: 'Free conversation', textbook: null, classNoteUrl: null, correctionPref: 'active immediate corrections',
     selfIntroEn: '✅ Job: Software engineer\n✅ Hobbies: Hiking, cooking', job: 'Software engineer', hobbies: 'Hiking, cooking', interests: null, improve: 'Speaking in meetings',
     hopes: 'Relaxed, lots of talking', correctionStyle: 'major_only' as const, correctionNote: null, classStyle: 'free_talking' as const, classStyleNote: null, answersAt: now, lmsSince: null,
     tutorClassStyle: null, tutorClassStyleMix: [], tutorMaterialsNote: null, tutorClassStyleAt: null, tutorClassStyleBy: null, improveTutorAt: null,
@@ -99,7 +99,7 @@ export function fakeStudentProfile(studentId: string, now: Date): TutorStudentPr
       lessonsPurchased: 24, lessonsCarriedIn: 1, sheet: null, done: 4, leftRegular: 20, leftAll: 21, leftUnbooked: 0, extensions: [] },
     slots: regular ? slots : [], nextSlots: [], upcoming: regular ? up : up.slice(0, 1), recentTopics: [{ startsAt: new Date(+now - 86400000 * 2), tutor: 'Emma', topics: 'Travel plans, airports', kind: 'regular', substitute: false }],
     access: regular ? 'regular' : 'substitute', me: { id: 'demo', timezone: 'Australia/Sydney' },
-    followup: regular ? { firstLesson: { id: 'd1', startsAt: new Date(+now - 86400000 * 2), status: 'Normal', topics: 'Travel plans, airports', recordedAt: new Date(+now - 86400000 * 2) }, done: { level: false, improve: false, style: false, record: true }, pending: 3 } : null,
+    followup: regular ? { firstLesson: { id: 'd1', startsAt: new Date(+now - 86400000 * 2), status: 'Normal', topics: 'Travel plans, airports', recordedAt: new Date(+now - 86400000 * 2) }, done: { level: false, improve: false, style: false, docs: false }, pending: 4 } : null,
   };
 }
 

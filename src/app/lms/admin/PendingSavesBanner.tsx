@@ -8,7 +8,7 @@ import { listPending, markOrphans, PENDING_STATUS_TEXT, removePending, type Pend
 import { verifyPending } from '@/lms/admin/pending-saves-live';
 import { supabaseBrowser } from '@/lms/auth/client';
 
-const when = (t: number) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(t));
+const when = (t: number) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: 'numeric', minute: '2-digit', hourCycle: 'h12' }).format(new Date(t));
 
 export default function PendingSavesBanner() {
   const [rows, setRows] = useState<PendingSave[]>([]);

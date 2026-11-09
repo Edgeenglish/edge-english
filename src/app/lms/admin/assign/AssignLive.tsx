@@ -26,7 +26,7 @@ export default function AssignLive({ enrollmentId }: { enrollmentId: string }) {
     if (!enrollmentId)
       return setState({
         kind: 'error',
-        message: '어느 학생인지 모르겠어요. 처리할 일에서 다시 눌러 주세요.',
+        message: '어느 수강생인지 모르겠어요. 처리할 일에서 다시 눌러 주세요.',
       });
     (async () => {
       const { data: session } = await sb.auth.getSession();

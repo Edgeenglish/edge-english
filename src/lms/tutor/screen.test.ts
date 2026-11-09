@@ -16,9 +16,9 @@ describe('강사 화면 (migration 2000)', () => {
   });
   it('시간은 강사 현지, 한국 시각은 옆에 (날짜가 다르면 요일까지)', () => {
     const l = { ...base, startsAt: new Date('2026-11-02T12:00:00Z'), endsAt: new Date('2026-11-02T12:40:00Z') };
-    expect(timeRange(l, 'Australia/Sydney')).toBe('23:00–23:40');
-    expect(kstText(l.startsAt, 'Australia/Sydney')).toBe('KST 21:00');
-    expect(kstText(new Date('2026-11-02T14:00:00Z'), 'Australia/Sydney')).toBe('KST Mon 23:00');
+    expect(timeRange(l, 'Australia/Sydney')).toBe('11:00–11:40 PM');
+    expect(kstText(l.startsAt, 'Australia/Sydney')).toBe('9:00 PM *KST*');
+    expect(kstText(new Date('2026-11-02T14:00:00Z'), 'Australia/Sydney')).toBe('Mon, 2 Nov 11:00 PM *KST*');
     expect(kstText(l.startsAt, 'Asia/Seoul')).toBeNull();
   });
   it('날짜별 묶음은 강사 현지 날짜, 그 주 밖은 뺌', () => {
@@ -55,7 +55,7 @@ describe('강사 화면 (migration 2000)', () => {
     expect(resultOf('Student no-show')).toBe('student_no_show');
     expect(resultOf('Student canceled in advance')).toBeNull();
   });
-  it('저장 가능: 진행은 다룬 내용, 지각은 사유까지, 학생 노쇼는 바로', () => {
+  it('저장 가능: 진행은 다룬 내용, 지각은 사유까지, 수강생 노쇼는 바로', () => {
     expect(recordReady(null, 'x', '')).toBe(false);
     expect(recordReady('held', ' ', '')).toBe(false);
     expect(recordReady('held', 'Travel', '')).toBe(true);

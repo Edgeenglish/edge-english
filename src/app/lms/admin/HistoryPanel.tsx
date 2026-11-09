@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { HISTORY_REASON, HISTORY_STATUS, TASK_KIND_TEXT, type HistoryRow } from '@/lms/admin/task-history';
 
 const when = (d: Date | null) =>
-  d ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d) : '';
+  d ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hourCycle: 'h12' }).format(d) : '';
 
 export default function HistoryPanel({ load, reopen, onClose, onReopened }: {
   load: () => Promise<HistoryRow[]>;

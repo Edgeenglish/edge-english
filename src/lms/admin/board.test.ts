@@ -14,8 +14,8 @@ describe('기한 상태 (매칭 3영업일)', () => {
     expect(dueSeverity(null, now)).toBe('open');
   });
   it('문구는 한국 시간 기준', () => {
-    expect(dueText(new Date('2026-10-21T14:59:59.999Z'), now)).toBe('10/21(수) 23:59까지');
-    expect(dueText(new Date(now.getTime() + 9 * H), now)).toBe('9시간 남음 · 10/16(금) 23:00까지');
+    expect(dueText(new Date('2026-10-21T14:59:59.999Z'), now)).toBe('10/21(수) 오후 11:59까지');
+    expect(dueText(new Date(now.getTime() + 9 * H), now)).toBe('9시간 남음 · 10/16(금) 오후 11:00까지');
     expect(dueText(new Date(now.getTime() - 50 * H), now)).toMatch(/^기한 2일 지남/);
   });
 });
@@ -83,7 +83,7 @@ describe('재등록 통보의 새 기간 (가상 데이터, 기한 안 재등록
   });
 });
 
-describe('기존 학생 입력 뒤 시트 대조 (D-52 확대판)', () => {
+describe('기존 수강생 입력 뒤 시트 대조 (D-52 확대판)', () => {
   const at = new Date('2026-10-24T03:00:00Z');
   const task = (over: Partial<Extract<TaskSource, { kind: 'import_check' }>> = {}): TaskSource => ({
     kind: 'import_check', id: 'e1', studentName: '가상기존', studentCode: 'STU-0101', counts: { lmsLeft: 13, sheetLeft: 12 }, unknownOrigins: [], createdAt: at, ...over,

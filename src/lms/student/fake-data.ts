@@ -1,4 +1,4 @@
-// 학생 홈 미리보기용 가상 데이터 (실제 학생·강사 아님). 시각은 '지금' 기준으로 만들어
+// 수강생 홈 미리보기용 가상 데이터 (실제 수강생·강사 아님). 시각은 '지금' 기준으로 만들어
 // 오늘 수업(6시간 이내 취소 확인)과 며칠 뒤 수업(6시간 전 취소 확인)을 모두 눌러 볼 수 있게 함
 
 import { addDays, instantToKstDate, kstToInstant, type KstDate, type KstTime } from '../rules/dates';

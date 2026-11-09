@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { compensationUseUntil } from '../rules/change';
 import type { KstDate } from '../rules/dates';
 import type { ClassStatus } from '../rules/status';
-import type { ChangeDecision, ChChange, ChCompensation, ChEnrollment, ChLesson, ChMakeupRequest, ChMigratedOpen, ChNotice, ChStudent } from './lesson-change';
+import type { ChangeDecision, ChChange, ChCompensation, ChEnrollment, ChLesson, ChMakeupRequest, ChMigratedOpen, ChNotice, ChStudent, MakeupLog, MakeupReason } from './lesson-change';
 
 const NOT_APPLIED = '수업 변경 기능이 아직 이 DB에 적용되지 않았어요 (migration 1700).';
 
@@ -169,8 +169,29 @@ export async function requestMakeup(sb: SupabaseClient, source: { lessonId?: str
 export async function recordPastMakeup(sb: SupabaseClient, source: { lessonId?: string; itemId?: string }, at: Date, note: string): Promise<void> {
   check(await sb.rpc('admin_makeup_record_past', { p_lesson: source.lessonId ?? null, p_item: source.itemId ?? null, p_starts_at: at.toISOString(), p_note: note }));
 }
-export async function confirmMakeup(sb: SupabaseClient, requestId: string, at: Date): Promise<void> {
-  check(await sb.rpc('admin_makeup_confirm', { p_makeup_request: requestId, p_starts_at: at.toISOString() }));
+/** 운영진 확정 — 사유 필수(운영 기록, 운영진만 보임). migration 20261108120000 */
+export async function confirmMakeup(sb: SupabaseClient, requestId: string, at: Date, reason: MakeupReason, note: string): Promise<void> {
+  check(await sb.rpc('admin_makeup_confirm', { p_makeup_request: requestId, p_starts_at: at.toISOString(), p_reason: reason, p_note: note || null }));
+}
+/** 신청이 없을 때 신청 + 확정을 한 번에 (수강생·강사 화면에 바로 확정) */
+export async function confirmMakeupNow(sb: SupabaseClient, source: { lessonId?: string; itemId?: string; compId?: string }, at: Date, reason: MakeupReason, note: string): Promise<void> {
+  check(await sb.rpc('admin_makeup_confirm_now', {
+    p_lesson: source.lessonId ?? null, p_item: source.itemId ?? null, p_comp: source.compId ?? null, p_starts_at: at.toISOString(), p_reason: reason, p_note: note || null,
+  }));
+}
+/** 확정된 보강·보상수업 시간 고치기 — 변경권 차감 없음, 수강생·강사 '보강 시간 변경' 안내가 새로 생김 */
+export async function rescheduleMakeup(sb: SupabaseClient, lessonId: string, at: Date, reason: MakeupReason, note: string): Promise<void> {
+  check(await sb.rpc('admin_makeup_reschedule', { p_lesson: lessonId, p_starts_at: at.toISOString(), p_reason: reason, p_note: note || null }));
+}
+/** 운영 기록 (수강생별, 최근 순). 기능 전 DB 면 빈 목록 */
+export async function loadMakeupLogs(sb: SupabaseClient, studentId: string): Promise<MakeupLog[]> {
+  const r = await sb.rpc('admin_makeup_logs_for', { p_student: studentId });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') return [];
+  const rows = (check(r) ?? []) as { id: string; makeup_request_id: string; lesson_id: string | null; action: MakeupLog['action']; reason: MakeupLog['reason']; note: string | null; old_starts_at: string | null; new_starts_at: string; created_at: string }[];
+  return rows.map((g) => ({
+    id: g.id, makeupRequestId: g.makeup_request_id, lessonId: g.lesson_id, action: g.action, reason: g.reason, note: g.note,
+    oldAt: g.old_starts_at ? new Date(g.old_starts_at) : null, newAt: new Date(g.new_starts_at), createdAt: new Date(g.created_at),
+  }));
 }
 export async function withdrawMakeup(sb: SupabaseClient, requestId: string): Promise<void> {
   check(await sb.rpc('admin_makeup_withdraw', { p_makeup_request: requestId }));

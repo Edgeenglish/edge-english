@@ -1,10 +1,11 @@
 // 강사용 Student profile (H26(44) ③·④·⑥, migration 4300) — 데이터는 DB 함수 tutor_student_profile 하나
-// 시간은 'Korea Time (KST) / Your time — [도시] Time / Student's time — [도시] Time' 처럼 누구 시간인지 항상 함께 (H26(43)).
+// 시간은 'KST / Your time — [도시] Time / Student's time — [도시] Time' 처럼 누구 시간인지 항상 함께 (H26(43), 형식은 admin/time-text.ts 와 같게).
 // 'Local'·'Your time' 한 단어만 쓰지 않는다. 실제 다음 수업 날짜로 계산해 서머타임·날짜·요일 변화를 반영한다
 
 import { enZone, nextDateOf, parseEnrollment, parseProfile, parseSlots, parseTopics, parseUpcoming, type EnrollmentInfo, type RecentTopic, type SlotFull, type StudentProfile, type Upcoming } from '../admin/students';
-import { formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
+import { ampmEn, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
 import { parseFollowup, type Followup } from './followup';
+import { enDateOf, enZoned } from '../admin/time-text';
 
 export type TutorAccess = 'regular' | 'substitute';
 export type TutorStudentProfile = {
@@ -34,15 +35,13 @@ export const CLASS_STYLE_EN: Record<string, string> = { textbook: 'Textbook', fr
 
 const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const en12 = (hhmm: string) => {
-  const [h, m] = hhmm.split(':').map(Number);
-  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
-};
-export const enDate = (d: KstDate) => `${WD[weekdayOf(d)]}, ${MON[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8))}`;
+/** 'Wed, 4 Nov' (time-text.ts 와 같은 모양: 일 먼저) */
+export const enDate = (d: KstDate) => enDateOf(d);
 export const enDateYear = (d: KstDate) => `${MON[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8))}, ${d.slice(0, 4)}`;
+/** 'Wed, 4 Nov 5:00 PM' (기준 이름은 따로 — 쓸 때는 time-text.ts enBoth 가 이름까지 붙여 줌) */
 export function enAt(t: Date, tz: string): string {
   const f = formatInZone(t, tz);
-  return `${enDate(f.date)} · ${en12(f.time)}`;
+  return `${enDate(f.date)} ${ampmEn(f.time)}`;
 }
 
 /**
@@ -57,7 +56,7 @@ export function slotsIn(slots: { weekday: number; time: string }[], tz: string, 
     const f = formatInZone(kstToInstant(d, s.time), tz);
     if (f.date < d) shift = 'before';
     if (f.date > d) shift = 'after';
-    return { weekday: weekdayOf(f.date), time: en12(f.time) };
+    return { weekday: weekdayOf(f.date), time: ampmEn(f.time) };
   });
   const times = new Set(local.map((x) => x.time));
   const text = times.size === 1 ? `${local.map((x) => WD[x.weekday]).join('/')} ${local[0].time}` : local.map((x) => `${WD[x.weekday]} ${x.time}`).join(' · ');
@@ -88,10 +87,10 @@ export function nextLesson(p: TutorStudentProfile, now: Date): Upcoming | null {
   return p.upcoming.find((l) => l.startsAt > now && (!p.me.id || l.tutorId === p.me.id)) ?? p.upcoming.find((l) => l.startsAt > now) ?? null;
 }
 
-/** 최종 종료 'Jan 26, 11:59 PM Korea Time (KST) = Jan 27, 1:59 AM Melbourne Time = Jan 26, 9:59 AM Toronto Time (student)' */
+/** 최종 종료: 'Mon, 26 Jan 11:59 PM *KST*' + 강사·학생 시간대 줄 (*…* = 굵게, 화면은 <Rich>) */
 export function finalEndLines(finalEnd: KstDate, tutorTz: string, studentTz: string): string[] {
   const at = kstToInstant(finalEnd, '23:59');
-  const line = (tz: string, who: string) => `${enAt(at, tz).replace(' · ', ', ')} ${enZone(tz)}${who}`;
+  const line = (tz: string, who: string) => `${enZoned(at, tz)}${who}`;
   const out = [line('Asia/Seoul', '')];
   if (tutorTz !== 'Asia/Seoul') out.push(line(tutorTz, ' (your time)'));
   if (studentTz !== 'Asia/Seoul' && studentTz !== tutorTz) out.push(line(studentTz, " (student's time)"));

@@ -42,7 +42,7 @@ describe('저장 종류별 서버 대조 (R-20 보강)', () => {
     expect(verifyWith(p({ kind: 'mark_sent', noticeId: 'n1' }), { changes: [], lessons: [], requests: [], notices: [{ id: 'n1', status: 'pending' }] })).toBe(false);
     expect(verifyWith(p({ kind: 'mark_sent', noticeId: 'n1' }), { changes: [], lessons: [], requests: [] })).toBeNull();
   });
-  it('변경권 조정: 같은 사유·방향의 조정 기록이 시작 뒤에 있으면 반영 (다른 학생 자료로는 판정 안 함)', () => {
+  it('변경권 조정: 같은 사유·방향의 조정 기록이 시작 뒤에 있으면 반영 (다른 수강생 자료로는 판정 안 함)', () => {
     const d = { changes: [], lessons: [], requests: [], studentId: 's1', creditUses: [{ reason: 'admin_adjust', note: '사전 안내', at: new Date(5000), delta: 1 }] };
     expect(verifyWith(p({ kind: 'adjust_credit', studentId: 's1', delta: 1, reason: '사전 안내' }), d)).toBe(true);
     expect(verifyWith(p({ kind: 'adjust_credit', studentId: 's1', delta: -1, reason: '사전 안내' }), d)).toBe(false);

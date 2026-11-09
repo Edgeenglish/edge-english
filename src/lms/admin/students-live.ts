@@ -1,9 +1,9 @@
-// 운영진 '학생' 메뉴 실제 데이터 (migration 4300). 읽기·쓰기 모두 DB 함수 — 권한(운영자 aal2)·검사·기록은 DB
+// 운영진 '수강생' 메뉴 실제 데이터 (migration 4300). 읽기·쓰기 모두 DB 함수 — 권한(운영자 aal2)·검사·기록은 DB
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
 import { parseDetail, parsePreview, parseStudentRows, type RegularPreview, type Slot, type StudentDetailData, type StudentRow } from './students';
 
-const NOT_APPLIED = '학생 관리 기능이 아직 이 DB에 적용되지 않았어요 (migration 4300).';
+const NOT_APPLIED = '수강생 관리 기능이 아직 이 DB에 적용되지 않았어요 (migration 4300).';
 function check<T>(r: { data: T | null; error: { code?: string; message: string; hint?: string; details?: string } | null }): T {
   if (r.error) {
     if (r.error.code === 'PGRST202' || r.error.code === '42883' || r.error.code === '42703' || r.error.code === '42P01') throw new Error(NOT_APPLIED);
@@ -21,7 +21,7 @@ export async function loadStudents(sb: SupabaseClient): Promise<StudentRow[]> {
 export async function loadStudentDetail(sb: SupabaseClient, studentId: string): Promise<StudentDetailData> {
   return parseDetail(check(await sb.rpc('admin_student_detail', { p_student: studentId })));
 }
-/** 학생 번호(STU-0001)로 id 찾기 — 상세 주소가 번호라서 */
+/** 수강생 번호(STU-0001)로 id 찾기 — 상세 주소가 번호라서 */
 export async function findStudentId(sb: SupabaseClient, code: string): Promise<string | null> {
   const r = await sb.from('students').select('id').eq('code', code).maybeSingle();
   if (r.error) throw new Error(r.error.message);

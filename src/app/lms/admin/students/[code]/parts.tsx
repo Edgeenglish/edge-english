@@ -1,6 +1,6 @@
 'use client';
 
-// 학생 상세 공통 조각: 창(Sheet), 줄(Row), 칸(Box), 복사 버튼, 스타일
+// 수강생 상세 공통 조각: 창(Sheet), 줄(Row), 칸(Box), 복사 버튼, 스타일
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 export const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
@@ -9,7 +9,7 @@ export const btnSmall = 'min-h-[36px] rounded-[8px] border border-[#e6e3ef] bg-w
 export const input = 'w-full rounded-[10px] border border-[#d9d5e6] bg-white px-3 py-2.5 text-[16px] text-[#1d1b2b] disabled:bg-[#f3f1f8]';
 export const label = 'mb-1 block text-[13px] font-semibold text-[#55526a]';
 
-export function Row({ k, v, strong }: { k: string; v: ReactNode; strong?: boolean }) {
+export function Row({ k, v, strong }: { k: ReactNode; v: ReactNode; strong?: boolean }) {
   return (
     <div className="flex justify-between gap-3 border-b border-[#f0eef6] py-2 text-[14px] last:border-0">
       <span className="shrink-0 text-[#6b6880]">{k}</span>

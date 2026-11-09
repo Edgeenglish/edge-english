@@ -30,7 +30,7 @@ export type PendingSave = {
 };
 
 const KEY = 'lms_admin_pending_saves';
-/** 다시 열 화면 주소 — 수업 변경 화면이 학생을 고를 때 갱신 */
+/** 다시 열 화면 주소 — 수업 변경 화면이 수강생을 고를 때 갱신 */
 let currentHref = '/lms/admin/change';
 export const setPendingHref = (h: string) => { currentHref = h; };
 export const pendingHref = () => currentHref;
@@ -95,7 +95,7 @@ export type ReconcileData = {
   notices?: { id: string; status: string }[];
   /** 변경권 조정 기록 (admin_credits 의 uses) */
   creditUses?: { reason: string; note?: string | null; at: Date; delta: number }[];
-  /** 이 자료가 어느 학생 것인지 (변경권 조정 판정에만) */
+  /** 이 자료가 어느 수강생 것인지 (변경권 조정 판정에만) */
   studentId?: string | null;
 };
 export const APPLIED_TEXT = '저장 완료 (서버에서 확인)';

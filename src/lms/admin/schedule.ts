@@ -1,7 +1,7 @@
 // 운영자 시간표 계산 — 한국 시간(KST) 기준 주간 시간표 + 강사·학생 현지 시간
 // 현지 시간은 IANA 시간대(예: Australia/Sydney)로 계산하므로 서머타임 시작·끝이 자동 반영된다 (고정 시차 저장 안 함)
 
-import { addDays, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
+import { addDays, ampmKo, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 
 export const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -29,12 +29,12 @@ export function diffFromKst(instant: Date, timeZone: string): string {
   return `한국보다 ${Number.isInteger(h) ? h : h.toFixed(1)}시간 ${d > 0 ? '빠름' : '느림'}`;
 }
 
-/** 수업 시각을 현지 시각으로: '22:00' 또는 날짜가 달라지면 '07:00 (전날)' / '(다음 날)' */
+/** 수업 시각을 현지 시각으로: '오후 10:00' 또는 날짜가 달라지면 '오전 7:00 (전날)' / '(다음 날)' */
 export function localTime(instant: Date, timeZone: string): string {
   const kst = instantToKstDate(instant);
   const f = formatInZone(instant, timeZone);
-  if (f.date === kst) return f.time;
-  return `${f.time} (${f.date < kst ? '전날' : '다음 날'})`;
+  if (f.date === kst) return ampmKo(f.time);
+  return `${ampmKo(f.time)} (${f.date < kst ? '전날' : '다음 날'})`;
 }
 
 export type OffsetChange = { on: KstDate; from: string; to: string; label: string };

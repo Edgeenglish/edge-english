@@ -4,8 +4,10 @@
 // 정규 담당 강사 = 레벨·자기소개·선호 수정, 대체강사 = 열람만(이메일 없음). 권한은 DB 함수가 확인. 닫으면 보던 주로 그대로
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { enZone } from '@/lms/admin/students';
+import { bold, enBoth } from '@/lms/admin/time-text';
+import { Rich } from '@/app/lms/Rich';
 import { formatInZone } from '@/lms/rules/dates';
-import { CLASS_STYLE_EN, CORRECTION_EN, dstNote, enAt, enDate, enDateYear, finalEndLines, nextLesson, RUBRIC, slotsIn, todayKst, type TutorStudentProfile } from '@/lms/tutor/profile';
+import { CLASS_STYLE_EN, CORRECTION_EN, dstNote, enDate, enDateYear, finalEndLines, nextLesson, RUBRIC, slotsIn, todayKst, type TutorStudentProfile } from '@/lms/tutor/profile';
 import { styleText } from '@/lms/tutor/followup';
 import { useLang, useT } from '@/lms/tutor/lang';
 
@@ -92,10 +94,10 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
         <header className="mb-3">
           <h2 className="pr-10 text-[20px] font-bold text-[#1d1b2b]">{s.nameEn}{s.displayName && s.displayName.toLowerCase() !== s.nameEn.toLowerCase() ? <span className="text-[#5b3fe0]"> “{s.displayName}”</span> : null}</h2>
           <p className="text-[13.5px] text-[#6b6880]">
-            {regular ? t('Your regular student', '담당 학생') : t('Cover class — view only', '대체 수업 — 열람만')}{p.slots.length ? ` · ${kst.text.split(' ').slice(0, 1)[0]}` : ''}{e ? ` · ${e.durationMin} min` : ''}
+            {regular ? t('Your regular student', '담당 수강생') : t('Cover class — view only', '대체 수업 — 열람만')}{p.slots.length ? ` · ${kst.text.split(' ').slice(0, 1)[0]}` : ''}{e ? ` · ${e.durationMin} min` : ''}
             {!regular && ` · ${t('Email and payment details are not shared with cover tutors.', '이메일·결제 정보는 대체강사에게 보이지 않아요.')}`}
           </p>
-          {/* 첫 수업 후 To-do (4600): 첫 Held 수업이 있는 담당 학생만. 남은 게 있으면 노란 버튼, 다 했으면 작은 링크 */}
+          {/* 첫 수업 후 To-do (4600): 첫 Held 수업이 있는 담당 수강생만. 남은 게 있으면 노란 버튼, 다 했으면 작은 링크 */}
           {regular && onFollowup && p.followup && (() => { const left = followupPending ?? p.followup.pending; return (
             <button type="button" onClick={onFollowup}
               className={`mt-2 inline-flex min-h-[40px] items-center gap-2 rounded-[10px] px-3 text-[13.5px] font-bold ${left > 0 ? 'border-2 border-[#f0a33a] bg-[#fff4d6] text-[#5c3b00]' : 'border border-[#cfead9] bg-[#f5fcf7] text-[#167344]'}`}>
@@ -143,27 +145,27 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
           </Section>
 
           <Section title="CLASS">
-            {/* 'Type of class' → 'Class style' 로 통일 (H26(67)). 강사가 확인한 실제 방식(4600)이 있으면 그것, 없으면 학생 희망을 참고로. 시트의 예전 값은 참고로만 (QA-15) */}
+            {/* 'Type of class' → 'Class style' 로 통일 (H26(67)). 강사가 확인한 실제 방식(4600)이 있으면 그것, 없으면 수강생 희망을 참고로. 시트의 예전 값은 참고로만 (QA-15) */}
             <Row k={t('Class style', '수업 방식')} v={s.tutorClassStyle ? (
               <>{styleText(s, lang)}<span className="block text-[12.5px] text-[#6b6880]">{t('Confirmed by', '확인')} {s.tutorClassStyleBy ?? t('tutor', '강사')}{s.tutorClassStyleAt ? ` · ${enDate(formatInZone(s.tutorClassStyleAt, tz).date)}` : ''}</span></>
             ) : (
-              <>{s.classStyle ? <>{CLASS_STYLE_EN[s.classStyle]} <span className="text-[#6b6880]">({t("student's wish — not confirmed yet", '학생 희망 — 아직 확인 전')})</span></> : (s.classType ?? NP)}{s.classType && s.classStyle && <span className="block text-[12.5px] text-[#6b6880]">{t('Earlier note (sheet)', '예전 시트 메모')}: {s.classType}</span>}</>
+              <>{s.classStyle ? <>{CLASS_STYLE_EN[s.classStyle]} <span className="text-[#6b6880]">({t("student's wish — not confirmed yet", '수강생 희망 — 아직 확인 전')})</span></> : (s.classType ?? NP)}{s.classType && s.classStyle && <span className="block text-[12.5px] text-[#6b6880]">{t('Earlier note (sheet)', '예전 시트 메모')}: {s.classType}</span>}</>
             )} />
             {s.textbook && !(s.tutorClassStyle && styleText(s, lang)?.includes(s.textbook)) && <Row k={t('Textbook', '교재')} v={s.textbook} />}
             <Row k="Corrections / feedback" v={s.correctionStyle ? CORRECTION_EN[s.correctionStyle] : (s.correctionPref ?? NA)} />
             <Row k="Class duration" v={e ? `${e.durationMin} min` : NP} />
             {p.slots.length > 0 ? (
               <>
-                <Row k="Korea Time (KST)" v={kst.text} />
+                <Row k="KST" v={kst.text} />
                 {tz !== 'Asia/Seoul' && <Row k={`Your time — ${enZone(tz)}`} v={<>{mine.text}{shift(mine.dayShift, enZone(tz).replace(' Time', ''))}</>} />}
                 {stTz !== 'Asia/Seoul' && stTz !== tz && <Row k={`Student's time — ${enZone(stTz)}`} v={<>{theirs.text}{shift(theirs.dayShift, enZone(stTz).replace(' Time', ''))}</>} />}
                 {p.nextSlots.length > 0 && (() => { const nk = slotsIn(p.nextSlots, 'Asia/Seoul', p.nextSlots[0].from); const nm = slotsIn(p.nextSlots, tz, p.nextSlots[0].from); return (
-                  <Row k={`From ${enDate(p.nextSlots[0].from)}`} v={<b className="text-[#5b3fe0]">{nk.text} KST{tz !== 'Asia/Seoul' ? ` · ${nm.text} ${enZone(tz)}` : ''}</b>} />
+                  <Row k={`From ${enDate(p.nextSlots[0].from)}`} v={<b className="text-[#5b3fe0]">{tz !== 'Asia/Seoul' ? <>{nm.text} <Rich text={bold(enZone(tz))} /> / </> : null}{nk.text} <Rich text={bold('KST')} /></b>} />
                 ); })()}
-                {next && <Row k="Next class" v={<>{enAt(next.startsAt, tz)} {enZone(tz)}{tz !== 'Asia/Seoul' && <span className="text-[#6b6880]"> · {enAt(next.startsAt, 'Asia/Seoul').split(' · ')[1]} KST</span>}{next.substitute ? ' · cover class' : ''}</>} />}
+                {next && <Row k="Next class" v={<><Rich text={enBoth(next.startsAt, tz)} />{next.substitute ? ' · cover class' : ''}</>} />}
                 {notes.map((n) => <p key={n} className="pt-1 text-[12.5px] text-[#a35b00]">{n}</p>)}
               </>
-            ) : <Row k="Class days / time" v={next ? <>{enAt(next.startsAt, tz)} {enZone(tz)} (cover class)</> : NP} />}
+            ) : <Row k="Class days / time" v={next ? <><Rich text={enBoth(next.startsAt, tz)} /> (cover class)</> : NP} />}
             <Row k="Google Docs" v={s.classNoteUrl ? <a href={s.classNoteUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#5b3fe0] underline">Open class notes ↗</a> : NP} />
           </Section>
 
@@ -178,8 +180,8 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
                 <Row k="Start date" v={enDateYear(e.startDate)} />
                 <Row k="End date" v={enDateYear(e.baseEndDate)} />
                 {e.extensionDays > 0 && <Row k="Extended end date" v={`${enDateYear(e.finalEndDate)} (+${e.extensionDays} days)`} />}
-                <Row k="Final end" v={<>{finalEndLines(e.finalEndDate, tz, stTz).map((l) => <span key={l} className="block">{l}</span>)}</>} />
-                {/* 예약된 수업과 날짜 안 잡은 보강권을 구분해 보여 주고, 합계는 학생 홈 '남은 수업' 과 같음 (QA-05) */}
+                <Row k="Final end" v={<>{finalEndLines(e.finalEndDate, tz, stTz).map((l) => <span key={l} className="block"><Rich text={l} /></span>)}</>} />
+                {/* 예약된 수업과 날짜 안 잡은 보강권을 구분해 보여 주고, 합계는 수강생 홈 '남은 수업' 과 같음 (QA-05) */}
                 <Row k="Remaining" v={<>{`${e.leftAll + e.leftUnbooked} ${e.leftAll + e.leftUnbooked === 1 ? 'class' : 'classes'} remaining`}<span className="block text-[12.5px] text-[#6b6880]">{e.leftRegular} regular{e.leftAll > e.leftRegular ? ` · ${e.leftAll - e.leftRegular} make-up booked` : ''}{e.leftUnbooked > 0 ? ` · ${e.leftUnbooked} make-up not scheduled yet` : ''}</span></>} />
               </>
             ) : (

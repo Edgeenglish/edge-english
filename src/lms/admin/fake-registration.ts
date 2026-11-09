@@ -1,4 +1,4 @@
-// 신규 학생 등록 미리보기용 가상 신청서·강사 일정 (실제 사람·실제 일정 아님). '지금' 기준으로 만든다
+// 신규 수강생 등록 미리보기용 가상 신청서·강사 일정 (실제 사람·실제 일정 아님). '지금' 기준으로 만든다
 // - 신청서 2건은 새 형식(요일 × 시간대 체크), 1건은 예전 형식(희망 시간 자유 서술)
 // - 강사 가능 시간은 강사 현지 시각 → 서머타임이 바뀌면 한국 시각 칸이 저절로 옮겨짐 (토론토 11/1, 런던 10/25)
 // - 다음다음 주 화요일 20:00 에 Alex 보강 1건 (그날만 막히고 다음 주 화 20:00 은 가능해야 함)
@@ -72,7 +72,7 @@ export function fakeRegTutors(now: Date): RegTutor[] {
   const from = addDays(weekOf(today)[0], -7);
   const until = addDays(today, 200);
   const busy = new Map<string, Busy[]>(dir.tutors.map((t) => [t.id, []]));
-  // 수강 중 학생의 정규 수업: 기간 끝까지 매주 (가상 학생 기간이 짧아도 등록 기간 전체 검사를 보이려고 넉넉히)
+  // 수강 중 수강생의 정규 수업: 기간 끝까지 매주 (가상 수강생 기간이 짧아도 등록 기간 전체 검사를 보이려고 넉넉히)
   for (const s of dir.students) {
     if (!s.tutorId) continue;
     const end = s.status === 'ending' ? s.periodEnd : until;

@@ -35,7 +35,7 @@ export type AdminTab = 'home' | 'schedule' | 'students';
 const TABS: { key: AdminTab; label: string; href: string; icon: IconName; demoOnly?: boolean }[] = [
   { key: 'home', label: '홈', href: '/lms/admin', icon: 'home' },
   { key: 'schedule', label: '일정', href: '/lms/admin/schedule', icon: 'calendar', demoOnly: true },
-  { key: 'students', label: '학생', href: '/lms/admin/students', icon: 'users' },
+  { key: 'students', label: '수강생', href: '/lms/admin/students', icon: 'users' },
 ];
 
 const withDemo = (href: string, demo: boolean) => (demo ? `${href}?demo=1` : href);

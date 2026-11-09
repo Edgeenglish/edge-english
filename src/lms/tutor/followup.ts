@@ -2,7 +2,7 @@
 // 완료 판정은 DB(lms_first_lesson_todo)가 저장된 값으로 함 — 화면은 받은 상태를 그대로 보여 주고, 저장하면 DB 가 준 새 상태로 바꿈
 import books from '../../data/books.json';
 
-export type FollowupDone = { level: boolean; improve: boolean; style: boolean; record: boolean };
+export type FollowupDone = { level: boolean; improve: boolean; style: boolean; docs: boolean };
 export type Followup = {
   firstLesson: { id: string; startsAt: Date; status: string | null; topics: string | null; recordedAt: Date | null } | null;
   done: FollowupDone;
@@ -11,7 +11,7 @@ export type Followup = {
 export type FollowupTodo = { studentId: string; student: string; firstLessonAt: Date | null; pending: number; done: FollowupDone };
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB JSON → 화면 모양 */
-const doneOf = (d: any): FollowupDone => ({ level: !!d?.level, improve: !!d?.improve, style: !!d?.style, record: !!d?.record });
+const doneOf = (d: any): FollowupDone => ({ level: !!d?.level, improve: !!d?.improve, style: !!d?.style, docs: !!d?.docs });
 export function parseFollowup(j: any): Followup | null {
   if (!j || !j.first_lesson) return null;
   const f = j.first_lesson;
@@ -28,7 +28,7 @@ export function parseFollowupTodos(j: any): FollowupTodo[] {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** 실제 수업 방식 (강사 확인). 학생의 희망(class_style: textbook·free_talking·not_sure)과는 다른 칸 */
+/** 실제 수업 방식 (강사 확인). 수강생의 희망(class_style: textbook·free_talking·not_sure)과는 다른 칸 */
 export const CLASS_STYLES = ['conversation', 'textbook', 'student_materials', 'mixed'] as const;
 export type TutorClassStyle = (typeof CLASS_STYLES)[number];
 export const MIX_OPTIONS = ['conversation', 'textbook', 'student_materials', 'other'] as const;
@@ -36,13 +36,13 @@ export type MixOption = (typeof MIX_OPTIONS)[number];
 export const CLASS_STYLE_TEXT: Record<TutorClassStyle, { en: string; ko: string }> = {
   conversation: { en: 'Conversation', ko: '회화' },
   textbook: { en: 'Textbook-based', ko: '교재 중심' },
-  student_materials: { en: 'Student-provided Materials', ko: '학생 제공 자료' },
+  student_materials: { en: 'Student-provided Materials', ko: '수강생 제공 자료' },
   mixed: { en: 'Mixed', ko: '혼합' },
 };
 export const MIX_TEXT: Record<MixOption, { en: string; ko: string }> = {
   conversation: { en: 'Conversation', ko: '회화' },
   textbook: { en: 'Textbook', ko: '교재' },
-  student_materials: { en: 'Student Materials', ko: '학생 자료' },
+  student_materials: { en: 'Student Materials', ko: '수강생 자료' },
   other: { en: 'Other', ko: '기타' },
 };
 /** 홈페이지 교재 페이지(src/data/books.json)의 실제 교재 목록 그대로 — 임의 목록 금지 */
@@ -52,7 +52,7 @@ export const OTHER_TEXTBOOK = '__other__';
 export const needsTextbook = (style: TutorClassStyle | '', mix: readonly string[]) => style === 'textbook' || (style === 'mixed' && mix.includes('textbook'));
 export const needsMaterials = (style: TutorClassStyle | '', mix: readonly string[]) => style === 'student_materials' || (style === 'mixed' && mix.includes('student_materials'));
 
-/** 학생 희망(class_style)을 실제 방식의 처음 값으로: 교재 → Textbook-based, 프리토킹 → Conversation, 모름 → 비움 */
+/** 수강생 희망(class_style)을 실제 방식의 처음 값으로: 교재 → Textbook-based, 프리토킹 → Conversation, 모름 → 비움 */
 export function initialStyleFromWish(wish: string | null): TutorClassStyle | '' {
   return wish === 'textbook' ? 'textbook' : wish === 'free_talking' ? 'conversation' : '';
 }
@@ -69,3 +69,14 @@ export function styleText(p: { tutorClassStyle: string | null; tutorClassStyleMi
   const parts = (p.tutorClassStyleMix as MixOption[]).filter((m) => MIX_TEXT[m]).map((m) => `${MIX_TEXT[m][lang]}${m === 'textbook' ? book : m === 'student_materials' ? mat : ''}`);
   return `${CLASS_STYLE_TEXT.mixed[lang]}: ${parts.join(' + ')}`;
 }
+
+/** Class Notes 칸: Google Docs 문서 주소만 (DB lms_is_google_doc_url 과 같은 규칙, migration 4602) */
+export const isGoogleDocUrl = (u: string) => /^https:\/\/docs\.google\.com\/document\/(u\/[0-9]+\/)?d\/[A-Za-z0-9_-]{10,}/.test(u.trim());
+
+/** English Speaking Level Rubric — 대표 원본 Google Docs(1PWNaBCciFsldVhD-MVXfZ-JeuVrz9l_gHs6Wd93rLLI) 글 그대로. 원본을 고치면 여기도 같이 */
+export const LEVEL_RUBRIC: readonly { level: string; lines: readonly string[] }[] = [
+  { level: 'Beginner', lines: ['Can only communicate using single words or very short phrases.', 'Often struggles to form complete sentences and needs continuous support.'] },
+  { level: 'Pre-Intermediate', lines: ['Can speak in simple sentences and participate in basic conversations.', 'Can usually respond appropriately to questions, but still makes frequent grammar mistakes and often uses unnatural phrasing.'] },
+  { level: 'Intermediate', lines: ['Can comfortably hold conversations on everyday topics and express opinions.', 'Produces mostly accurate sentences and occasionally uses natural, native-like expressions.', 'Can explain ideas in detail and maintains conversations with relatively few communication breakdowns.'] },
+  { level: 'Advanced', lines: ['Can communicate fluently and naturally on most topics.', 'Makes only occasional errors.'] },
+];

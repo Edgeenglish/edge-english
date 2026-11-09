@@ -17,8 +17,9 @@ import RenewalNotice from './RenewalNotice';
 import OriginFix from './OriginFix';
 import EndReasonFix from './EndReasonFix';
 import type { EndReason } from '@/lms/admin/import';
+import { ampmKo } from '@/lms/rules/dates';
 
-/** 기존 학생 입력 뒤 처리 (DB 함수, migration 1500) */
+/** 기존 수강생 입력 뒤 처리 (DB 함수, migration 1500) */
 export type ImportActions = {
   markChecked: (enrollmentId: string) => Promise<void>;
   setOrigin: (itemId: string, date: string | null) => Promise<void>;
@@ -45,7 +46,7 @@ const LESSON_STYLE: Record<FakeLesson['state'], string> = {
   예정: 'bg-[#efebff] text-[#5b3fe0]',
   보강: 'bg-[#efebff] text-[#5b3fe0]',
   '노쇼 신고': 'bg-[#fde6e6] text-[#c62b2b]',
-  '학생 변경': 'bg-[#fff1d6] text-[#a35b00]',
+  '수강생 변경': 'bg-[#fff1d6] text-[#a35b00]',
   취소: 'bg-[#eeedf3] text-[#6b6880]',
 };
 
@@ -76,8 +77,8 @@ function applyAction(t: TaskSource, key: string, now: Date): TaskSource | null {
 }
 
 const DONE_MESSAGE: Record<string, string> = {
-  assign_tutor: '강사를 배정했어요. 학생 안내가 남았어요.',
-  notify_student: '학생 안내까지 끝나서 매칭 업무를 마쳤어요.',
+  assign_tutor: '강사를 배정했어요. 수강생 안내가 남았어요.',
+  notify_student: '수강생 안내까지 끝나서 매칭 업무를 마쳤어요.',
   notify_tutor: '강사에게 통보했어요. 강사 확인을 기다려요.',
   remind_tutor: '강사에게 다시 알렸어요.',
   tutor_ack: '강사 확인을 기록했어요. 일정 조치가 남았어요.',
@@ -87,7 +88,7 @@ const DONE_MESSAGE: Record<string, string> = {
   retry_calendar: '캘린더에 다시 반영했어요.',
   fix_email: '이메일을 확인했어요.',
   check_payment: '결제를 확인했어요.',
-  reject_leave: '장기 연기를 거절했어요. 학생에게 사유를 안내해 주세요.',
+  reject_leave: '장기 연기를 거절했어요. 수강생에게 사유를 안내해 주세요.',
   tutor_arrived: '강사 지각으로 처리했어요.',
   confirm_no_show: '노쇼로 확정했어요. 보강 1회 + 보상 수업 1회가 생겨요.',
   import_checked: '대조 완료',
@@ -201,12 +202,12 @@ export default function AdminDashboard({
     const now = () => new Date();
     if (!preview && planActions)
       return {
-        confirm: () => live((a) => a.confirm(p.planId), '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.'),
+        confirm: () => live((a) => a.confirm(p.planId), '확정했어요. 강사·수강생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.'),
         decline: () => live((a) => a.decline(p.planId), '이 안을 닫았어요. 다른 강사·시간으로 다시 제안해 주세요.'),
         proposalSent: () => live((a) => a.proposalSent(p.planId), '강사에게 제안을 보낸 것으로 기록했어요. 답이 오면 [가능하대요 → 확정]을 눌러 주세요.'),
         noticeSent: (who) => {
           const n = who === 'tutor' ? p.tutorNotice : p.studentNotice;
-          return n ? live((a) => a.noticeSent(n.id), `${who === 'tutor' ? '강사' : '학생'} 안내를 보냄으로 기록했어요.`) : Promise.resolve();
+          return n ? live((a) => a.noticeSent(n.id), `${who === 'tutor' ? '강사' : '수강생'} 안내를 보냄으로 기록했어요.`) : Promise.resolve();
         },
       };
     const preview_ = async (f: (p: PlanView) => PlanView | null, msg: string) => {
@@ -217,7 +218,7 @@ export default function AdminDashboard({
       confirm: () =>
         preview_(
           (x) => ({ ...x, state: 'confirmed', confirmedAt: now(), tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null }, studentNotice: { id: 'pv-s', status: 'pending', sentAt: null } }),
-          '확정했어요. 강사·학생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.',
+          '확정했어요. 강사·수강생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.',
         ),
       decline: () => preview_(() => null, '이 안을 닫았어요.'),
       proposalSent: () => preview_((x) => ({ ...x, proposalSentAt: x.proposalSentAt ?? now() }), '강사에게 제안을 보낸 것으로 기록했어요.'),
@@ -228,7 +229,7 @@ export default function AdminDashboard({
           setTasks((prev) => prev.filter((t) => t.id !== item.id));
           setDoneCount((c) => c + 1);
           setToast('양쪽 안내를 마쳐서 매칭 업무가 끝났어요. (미리보기: 실제 저장·발송 없음)');
-        } else await preview_(() => next, `${who === 'tutor' ? '강사' : '학생'} 안내를 보냄으로 기록했어요.`);
+        } else await preview_(() => next, `${who === 'tutor' ? '강사' : '수강생'} 안내를 보냄으로 기록했어요.`);
       },
     };
   }
@@ -276,7 +277,7 @@ export default function AdminDashboard({
     setToast(`재등록 안내를 보냄으로 기록했어요${preview ? ' (미리보기)' : ''}`);
   }
 
-  // 수강 종료 (대표 11/2: 재등록 안 하는 학생을 할 일에서 직접 빼기). 학생·수업 기록은 그대로
+  // 수강 종료 (대표 11/2: 재등록 안 하는 수강생을 할 일에서 직접 빼기). 수강생·수업 기록은 그대로
   async function closeEnrollmentItem(item: BoardItem) {
     if (!window.confirm(`${item.title.split(' · ')[0]} 님 수강을 종료할까요?`)) return;
     if (!preview && enrollmentClose) {
@@ -351,13 +352,13 @@ export default function AdminDashboard({
                 href={preview ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'}
                 className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5ffb] px-3 text-[13px] font-semibold text-white"
               >
-                + 신규 학생 등록
+                + 신규 수강생 등록
               </Link>
             </div>
             {!preview && (
               <div className="flex flex-wrap items-center gap-2 lg:border-l lg:border-[#e6e3ef] lg:pl-3">
                 <Link href="/lms/student" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                  학생 화면
+                  수강생 화면
                 </Link>
                 <Link href="/lms/tutor" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
                   강사 화면
@@ -370,14 +371,14 @@ export default function AdminDashboard({
 
       {preview && (
         <p className="mx-4 mt-3 rounded-[10px] bg-[#fff8d6] px-3 py-2 text-[13px] text-[#5c4a00] lg:mx-7">
-          가상 데이터 미리보기예요. 버튼을 눌러도 실제로 저장되거나 학생·강사에게 발송되지 않아요. (실제 데이터: 로그인 후 /lms/admin)
+          가상 데이터 미리보기예요. 버튼을 눌러도 실제로 저장되거나 수강생·강사에게 발송되지 않아요. (실제 데이터: 로그인 후 /lms/admin)
         </p>
       )}
 
       <div className="grid gap-4 px-4 pt-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-5 lg:px-7 lg:pt-5">
         <section aria-label="운영 현황" className="grid grid-cols-3 gap-2 lg:col-span-2">
           {([
-            ['수강 중 학생', stats ? `${stats.activeStudents}명` : '—', '', 'users'],
+            ['수강 중 수강생', stats ? `${stats.activeStudents}명` : '—', '', 'users'],
             ['이번 주 수업', stats ? `${stats.weekLessons.done} / ${stats.weekLessons.total}` : '—', '진행 / 전체', 'calendar'],
             ['이번 달 등록', stats ? `${stats.monthEnrollments.fresh + stats.monthEnrollments.renewal}건` : '—', stats ? `신규 ${stats.monthEnrollments.fresh} · 재등록 ${stats.monthEnrollments.renewal}` : '', 'chart'],
           ] as const).map(([label, v, sub, icon]) => (
@@ -458,13 +459,13 @@ export default function AdminDashboard({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="학생 이름·번호, 강사 이름으로 찾기"
+              placeholder="수강생 이름·번호, 강사 이름으로 찾기"
               className="min-w-0 flex-1 bg-transparent text-[14px] text-[#1d1b2b] outline-none"
             />
           </label>
           {query.trim() && preview && (
             <Link href={`/lms/admin/students?${preview ? 'demo=1&' : ''}q=${encodeURIComponent(query.trim())}`} className="-mt-1 w-fit text-[12.5px] font-semibold text-[#5b3fe0]">
-              처리할 일이 아니라 학생 정보를 찾으려면 → 학생 목록에서 &lsquo;{query.trim()}&rsquo; 찾기
+              처리할 일이 아니라 수강생 정보를 찾으려면 → 수강생 목록에서 &lsquo;{query.trim()}&rsquo; 찾기
             </Link>
           )}
           {items.length > 0 && shown.length === 0 && (
@@ -485,13 +486,13 @@ export default function AdminDashboard({
                 </span>
                 <h3 className="text-[15px] font-bold text-[#1d1b2b]">{item.title}</h3>
                 <button type="button" disabled={!!closing} onClick={() => closeTask(item)} aria-label={`${item.title} 카드 닫기`} className="ml-auto min-h-[40px] rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#6b6880] disabled:opacity-50">{closing === `${item.kind}:${item.id}` ? '저장 중…' : '카드 닫기'}</button>
-                {/* 학생 상세·일정·학생 목록은 실제 데이터 연결 전까지 미리보기에서만 (대표 11/2) */}
+                {/* 수강생 상세·일정·수강생 목록은 실제 데이터 연결 전까지 미리보기에서만 (대표 11/2) */}
                 {item.studentCode && preview && (
                   <Link
                     href={`/lms/admin/students/${item.studentCode}${preview ? '?demo=1' : ''}`}
                     className="ml-auto flex min-h-[32px] items-center gap-0.5 text-[12.5px] font-semibold text-[#5b3fe0]"
                   >
-                    학생 보기 <Icon name="chevron" className="h-4 w-4" />
+                    수강생 보기 <Icon name="chevron" className="h-4 w-4" />
                   </Link>
                 )}
               </div>
@@ -513,7 +514,7 @@ export default function AdminDashboard({
               {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
               {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}
               {item.renewal && <RenewalNotice text={item.renewal.text} sentAt={item.renewal.sentAt} onSent={() => markRenewalSent(item)} />}
-              {/* 수강기간이 끝난 뒤에만: 재등록 안 하는 학생 정리 */}
+              {/* 수강기간이 끝난 뒤에만: 재등록 안 하는 수강생 정리 */}
               {item.kind === 'ending_soon' && item.severity === 'overdue' && (
                 <button type="button" onClick={() => void closeEnrollmentItem(item).catch((e) => setToast(e instanceof Error ? e.message : '처리하지 못했어요.'))}
                   className="min-h-[44px] justify-self-start rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] font-semibold text-[#1d1b2b]">
@@ -567,7 +568,7 @@ export default function AdminDashboard({
           <ul>
             {today.map((l, i) => (
               <li key={i} className="grid grid-cols-[52px_1fr_auto] items-center gap-2 border-b border-[#e6e3ef] py-2 last:border-0">
-                <span className="text-[13px] tabular-nums text-[#6b6880]">{l.time}</span>
+                <span className="text-[13px] tabular-nums text-[#6b6880]">{ampmKo(l.time)}</span>
                 <span className="text-[14px] text-[#1d1b2b]">
                   {l.student} · {l.tutor}
                 </span>

@@ -1,8 +1,8 @@
 'use client';
 
 // 수업 변경·보강 (1순위, migration 1700) — 카톡·WhatsApp 요청을 운영진이 대신 처리
-// 카드: 1 학생 · 2 수업(실제 예정 수업 목록에서 고름) · 3 변경(요청한 사람·요청 받은 시각 → DB 미리 보기 → [변경])
-//       · 4 안내(학생·강사 각각 [복사] → 보낸 뒤 [보냄], 누른 버튼은 회색으로 남음) · 5 보강(신청 → 강사 확인 → [확정]) · 6 변경 기록([되돌리기])
+// 카드: 1 수강생 · 2 수업(실제 예정 수업 목록에서 고름) · 3 변경(요청한 사람·요청 받은 시각 → DB 미리 보기 → [변경])
+//       · 4 안내(수강생·강사 각각 [복사] → 보낸 뒤 [보냄], 누른 버튼은 회색으로 남음) · 5 보강(신청 → 강사 확인 → [확정]) · 6 변경 기록([되돌리기])
 // 판정(6시간·변경권·공휴일·보강 기한)과 중복 방지는 DB 함수 하나 — 화면 미리 보기와 저장 결과가 같음
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,20 +13,28 @@ import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lm
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
 import {
-  changeableLessons, dateLabel, makeupLink, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, STATUS_SHORT, studentNotice, tutorNotice,
-  type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupRight, type NoticeContext,
+  canceledUpcoming, changeableLessons, CONFIRM_REASONS, dateLabel, FIX_REASONS, makeupLink, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, STATUS_PLAIN, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, REASON_TEXT, STATUS_SHORT, studentNotice, tutorNotice,
+  type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupLog, type MakeupReason, type MakeupRight, type NoticeContext,
 } from '@/lms/admin/lesson-change';
 import type { AdminCredits, StudentLessonData } from '@/lms/admin/lesson-change-live';
 import { AdminHeader } from '../ui';
 import TimeInput from '../TimeInput';
 import { Card, inputCls } from '../students/new/parts';
+import { Rich } from '@/app/lms/Rich';
 
 export type ChangeActions = {
   load: (studentId: string) => Promise<StudentLessonData>;
   change: (requestId: string, lessonId: string, who: 'student' | 'tutor', requestedAt: Date, dryRun: boolean) => Promise<ChangeDecision>;
   revert: (changeId: string, note: string) => Promise<void>;
   requestMakeup: (source: { lessonId?: string; itemId?: string; compId?: string }, slots: Date[]) => Promise<{ repeated: boolean }>;
-  confirmMakeup: (requestId: string, at: Date) => Promise<void>;
+  /** 운영진 확정 — 사유 필수 (운영 기록, 운영진만 보임) */
+  confirmMakeup: (requestId: string, at: Date, reason: MakeupReason, note: string) => Promise<void>;
+  /** 신청 없이 바로 확정 (신청 + 확정 한 번에). 없는 화면(가상 데이터)은 버튼 안 보임 */
+  confirmMakeupNow?: (source: { lessonId?: string; itemId?: string; compId?: string }, at: Date, reason: MakeupReason, note: string) => Promise<void>;
+  /** 확정된 보강 시간 고치기 (변경권 차감 없음, 사유 필수) */
+  rescheduleMakeup?: (lessonId: string, at: Date, reason: MakeupReason, note: string) => Promise<void>;
+  /** 운영 기록 (확정 사유·시간 고침) */
+  loadMakeupLogs?: (studentId: string) => Promise<MakeupLog[]>;
   /** 이미 진행한 보강 기록 (지난 시각만, 사유 필수). 없는 화면(가상 데이터)은 버튼 안 보임 */
   recordPastMakeup?: (source: { lessonId?: string; itemId?: string }, at: Date, note: string) => Promise<void>;
   withdrawMakeup: (requestId: string) => Promise<void>;
@@ -64,6 +72,27 @@ function safeInstant(date: string, time: string): Date | null {
 }
 
 /** 저장 중인 카드 수 (R-20): 하나라도 저장 중이면 화면을 떠나기 전에 확인 */
+/** 사유 고르기 (운영진만 보임, 필수). '기타'면 직접 적기 */
+function ReasonPick({ name, options, value, note, onChange }: {
+  name: string; options: readonly { value: MakeupReason; label: string }[]; value: MakeupReason | ''; note: string; onChange: (v: MakeupReason, note: string) => void;
+}) {
+  return (
+    <fieldset className="grid gap-1.5">
+      <legend className="mb-1 text-[13px] font-semibold text-[#6b6880]">사유 (필수 · 운영진만 보임)</legend>
+      {options.map((o) => (
+        <label key={o.value} className={`flex min-h-[44px] items-center gap-2 rounded-[10px] border px-3 text-[14.5px] ${value === o.value ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'} text-[#1d1b2b]`}>
+          <input type="radio" name={name} checked={value === o.value} onChange={() => onChange(o.value, note)} />
+          {o.label}
+        </label>
+      ))}
+      {value === 'other' && (
+        <input aria-label="기타 사유" value={note} onChange={(e) => onChange('other', e.target.value)} placeholder="사유를 적어 주세요" className={inputCls(false)} />
+      )}
+    </fieldset>
+  );
+}
+const reasonOk = (r: MakeupReason | '', note: string) => !!r && (r !== 'other' || !!note.trim());
+
 const SavingCtx = createContext<(d: 1 | -1) => void>(() => {});
 /** useState(false) 대신 — 바뀔 때 저장 중 수를 위에 알림 */
 function useBusyState(): [boolean, (b: boolean) => void] {
@@ -85,6 +114,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   const [loadErr, setLoadErr] = useState('');
   const [lessonId, setLessonId] = useState<string | null>(null);
   const [credits, setCredits] = useState<AdminCredits | null>(null);
+  const [logs, setLogs] = useState<MakeupLog[]>([]);
   /** 방금 저장한 수업 취소 결과 (QA B-03): 카드가 닫혀도 무엇이 저장됐는지 보이게 */
   const [canceled, setCanceled] = useState<string | null>(null);
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -104,6 +134,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
         studentId: student.id,
       };
       reconcileStored(base);
+      if (actions.loadMakeupLogs) setLogs(await actions.loadMakeupLogs(student.id).catch(() => []));
       if (actions.loadCredits) {
         const cr = await actions.loadCredits(student.id).catch(() => null);
         setCredits(cr);
@@ -115,6 +146,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   }, [student, actions]);
   useEffect(() => {
     setData(null);
+    setLogs([]);
     setLessonId(null);
     setCanceled(null);
     markOrphans();
@@ -131,6 +163,19 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   const lessons = data?.lessons ?? [];
   const byId = useMemo(() => new Map(lessons.map((l) => [l.id, l])), [lessons]);
   const choices = changeableLessons(lessons, now);
+  const canceledLessons = canceledUpcoming(lessons, now);
+  // 담당강사 = 앞으로의 정규 수업 강사. 수업 줄에는 담당강사와 다른 강사(대체·보강 강사)일 때만 이름을 붙임 (대표 11/8: 같은 정보 반복 빼기)
+  const regularTutors = [...new Set(choices.filter((l) => l.kind === 'regular').map((l) => l.tutorName))];
+  const tutorTag = (l: ChLesson) => (regularTutors.includes(l.tutorName) ? '' : ` · ${l.tutorName}`);
+  const rowsAll = [...choices, ...canceledLessons].sort((a, b) => +a.startsAt - +b.startsAt);
+  // 취소된 수업 줄 글: '수강생 미리 취소 · 취소 신청한 일자 11/8 오후 3:31 한국 · 보강 신청 전' (신청 기한·개수는 안 보임)
+  const canceledNote = (l: ChLesson) => {
+    const ch = data?.changes.find((c) => c.lessonId === l.id && c.status === 'applied');
+    const req = data?.makeupRequests.find((r) => r.sourceLessonId === l.id && !['withdrawn', 'voided', 'declined', 'expired'].includes(r.status));
+    const made = req?.confirmedLessonId ? byId.get(req.confirmedLessonId) : undefined;
+    const makeupText = made ? `보강 확정 ${kstLabel(made.startsAt)} *한국 시간*` : req ? '보강 신청 중' : ch && !ch.decision.makeup_allowed ? '보강 불가' : '보강 신청 전';
+    return `${l.classStatus ? STATUS_PLAIN[l.classStatus] ?? '취소' : '취소'}${ch ? ` · 취소 신청한 일자 ${sentLabel(ch.requestedAt ?? ch.decidedAt)} *한국 시간*` : ''} · ${makeupText}`;
+  };
   const lesson = lessonId ? byId.get(lessonId) ?? null : null;
   const rights = data ? makeupRights(lessons, data.migrated, data.makeupRequests, data.compensations ?? []) : [];
   const lastTutor = [...lessons].reverse().find((l) => !l.voided) ?? null;
@@ -159,8 +204,11 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
     const item = r.migratedItemId ? data.migrated.find((m) => m.id === r.migratedItemId) : undefined;
     const made = r.confirmedLessonId ? byId.get(r.confirmedLessonId) : undefined;
     const t = made ?? src ?? lastTutor;
+    const fix = n.event === 'makeup_rescheduled'
+      ? logs.filter((g) => g.makeupRequestId === r.id && g.action === 'reschedule' && +g.createdAt <= +n.createdAt + 5000).sort((a, b) => +b.createdAt - +a.createdAt)[0]
+      : undefined;
     return {
-      ...base, lesson: src, originalDate: item?.originalDate ?? null, candidates: r.candidates, makeupAt: made?.startsAt,
+      ...base, lesson: src, originalDate: item?.originalDate ?? null, candidates: r.candidates, makeupAt: made?.startsAt, oldAt: fix?.oldAt ?? null,
       tutorName: t?.tutorName ?? '', tutorTz: t?.tutorTz ?? 'Asia/Seoul', compensation: !!r.compensationId,
     };
   }
@@ -181,19 +229,19 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
       <main className="mx-auto grid max-w-[720px] gap-3 px-4 py-4">
         <h1 className="text-[20px] font-extrabold text-[#1d1b2b]">수업 변경·보강</h1>
 
-        <Card title="1. 학생">
+        <Card title="1. 수강생">
           {student ? (
             <div className="flex items-center gap-2">
               <b className="flex-1 text-[16px] text-[#1d1b2b]">
                 {student.nameKo} <span className="text-[13px] font-normal text-[#6b6880]">{student.code} · {student.nameEn}</span>
               </b>
               <button type="button" className={btnSub} onClick={() => setStudent(null)}>
-                다른 학생
+                다른 수강생
               </button>
             </div>
           ) : (
             <>
-              <input aria-label="학생 검색" value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름·영문 이름·학생 번호" className={inputCls(false)} />
+              <input aria-label="수강생 검색" value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름·영문 이름·수강생 번호" className={inputCls(false)} />
               <ul className="mt-1.5 grid gap-1">
                 {found.map((s) => (
                   <li key={s.id}>
@@ -206,6 +254,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
               </ul>
             </>
           )}
+          {student && regularTutors.length > 0 && <p className="mt-1 text-[14px] text-[#1d1b2b]">담당강사 : {regularTutors.join(', ')}</p>}
           <Err>{loadErr}</Err>
         </Card>
 
@@ -215,11 +264,20 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
               <CreditsCard credits={credits} adjust={(d, r) => actions.adjustCredit!(student.id, d, r)} done={reload} />
             )}
             <Card title="2. 수업">
-              {choices.length === 0 ? (
+              {rowsAll.length === 0 ? (
                 <p className="text-[14px] text-[#6b6880]">예정 수업 없음</p>
               ) : (
                 <ul className="grid max-h-[420px] gap-1.5 overflow-y-auto">
-                  {choices.map((l) => (
+                  {rowsAll.map((l) => l.state === 'canceled' ? (
+                    // 취소된 수업은 같은 목록에 시간순으로, 날짜에 취소선 + 한 줄(누가 · 취소 신청한 일자 · 보강 상태). 누를 수 없음 (대표 11/8)
+                    <li key={l.id} className="rounded-[12px] border border-[#f3c9c4] bg-[#fdf3f2] px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <b className="text-[16px] text-[#6b6880] line-through">{kstLabel(l.startsAt)}</b>
+                        <span className="flex-1 text-right text-[13px] text-[#6b6880]">{tutorTag(l).replace(/^ · /, '')}</span>
+                      </div>
+                      <span className="block text-[13px] text-[#55526a]"><Rich text={canceledNote(l)} /></span>
+                    </li>
+                  ) : (
                     <li key={l.id}>
                       <button
                         type="button"
@@ -228,7 +286,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                         className={`flex min-h-[48px] w-full items-center gap-2 rounded-[12px] border px-3 py-2 text-left ${l.id === lessonId ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}
                       >
                         <b className="text-[16px] text-[#1d1b2b]">{kstLabel(l.startsAt)}</b>
-                        <span className="flex-1 text-right text-[13px] text-[#6b6880]">{lessonTag(l)} · {l.tutorName}</span>
+                        <span className="flex-1 text-right text-[13px] text-[#6b6880]">{lessonTag(l)}{tutorTag(l)}</span>
                       </button>
                     </li>
                   ))}
@@ -238,6 +296,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
 
             {lesson && (
               <ChangeCard key={lesson.id} lesson={lesson} now={now} actions={actions} isMakeup={!!data.makeupRequests.find((r) => r.confirmedLessonId === lesson.id)}
+                compensation={!!data.makeupRequests.find((r) => r.confirmedLessonId === lesson.id && r.compensationId)}
                 byTutor={!!data.makeupRequests.find((r) => r.confirmedLessonId === lesson.id && r.confirmedInTutorScreen)}
                 done={async (msg) => { setLessonId(null); if (msg) setCanceled(msg); await reload(); }} />
             )}
@@ -249,7 +308,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                   {shownNotices.map((n) => {
                     const c = ctxFor(n);
                     const text = c ? (n.recipient === 'student' ? studentNotice(n.event, c) : tutorNotice(n.event, c)) : '';
-                    return <NoticeRow key={n.id} n={n} text={text} markSent={async () => { await actions.markSent(n.id); await reload(); }}
+                    return <NoticeRow key={n.id} n={n} text={text} tutorName={c?.tutorName} markSent={async () => { await actions.markSent(n.id); await reload(); }}
                       resendEmail={actions.resendEmail && n.email && n.email.status !== 'sent' ? async () => { const r = await actions.resendEmail!(n.id); await reload(); return r; } : undefined} />;
                   })}
                 </ul>
@@ -261,6 +320,24 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                 <ul className="grid gap-2.5">
                   {rights.map((r) => (
                     <MakeupRow key={r.key} right={r} finalEnd={data.enrollment?.finalEndDate ?? null} tutorTz={(r.kind === 'migrated' ? lastTutor : r.source ?? lastTutor)?.tutorTz ?? 'Asia/Seoul'} actions={actions} done={reload} />
+                  ))}
+                </ul>
+              </Card>
+            )}
+
+            {logs.length > 0 && (
+              <Card title="운영 기록 (운영진만 보임)">
+                <ul className="grid gap-2">
+                  {logs.slice(0, 10).map((g) => (
+                    <li key={g.id} className="grid gap-0.5 border-b border-[#efedf5] pb-2 text-[14px] text-[#1d1b2b] last:border-0">
+                      <b className="text-[13.5px]">{kstLabel(g.createdAt)} <b>한국 시간</b> · 운영진</b>
+                      <span>
+                        {g.action === 'reschedule'
+                          ? <>보강 시간 고침: {g.oldAt ? kstLabel(g.oldAt) : ''} → <b>{kstLabel(g.newAt)}</b> <b>한국 시간</b></>
+                          : <>보강 확정: <b>{kstLabel(g.newAt)}</b> <b>한국 시간</b></>}
+                      </span>
+                      <span className="text-[13px] text-[#6b6880]">사유: {REASON_TEXT[g.reason]}{g.note ? ` · ${g.note}` : ''}</span>
+                    </li>
                   ))}
                 </ul>
               </Card>
@@ -284,7 +361,10 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
   );
 }
 
-function ChangeCard({ lesson, now, actions, isMakeup, byTutor, done }: { lesson: ChLesson; now: Date; actions: ChangeActions; isMakeup: boolean; byTutor?: boolean; done: (msg?: string) => Promise<void> }) {
+function ChangeCard({ lesson, now, actions, isMakeup, compensation, byTutor, done }: { lesson: ChLesson; now: Date; actions: ChangeActions; isMakeup: boolean; compensation?: boolean; byTutor?: boolean; done: (msg?: string) => Promise<void> }) {
+  const [fix, setFix] = useState<{ date: string; time: string; reason: MakeupReason | ''; note: string } | null>(null);
+  const fixAt = fix && /^20\d\d-\d\d-\d\d$/.test(fix.date) && /^\d\d:\d\d$/.test(fix.time) ? safeInstant(fix.date, fix.time) : null;
+  const fixLocal = fixAt && tutorLocalLabel(fixAt, lesson.tutorTz);
   const [who, setWho] = useState<'student' | 'tutor'>('student');
   const init = kstParts(now);
   const [date, setDate] = useState(init.date);
@@ -326,20 +406,20 @@ function ChangeCard({ lesson, now, actions, isMakeup, byTutor, done }: { lesson:
 
   // 이 화면의 저장은 늘 '수업 취소' (날짜를 옮기는 것은 아래 '보강' 에서) — 버튼·제목이 실제 저장 내용을 말하게 (QA B-03)
   return (
-    <Card title={`수업 취소 · ${kstLabel(lesson.startsAt)} 한국`}>
+    <Card title={<Rich text={`수업 취소 · ${kstLabel(lesson.startsAt)} *한국 시간*`} />}>
       <div className="grid gap-3">
         {byTutor && <p className="text-[13px] font-semibold text-[#1f7a4d]">강사가 확정한 보강</p>}
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="요청한 사람">
           {(['student', 'tutor'] as const).map((w) => (
             <button key={w} type="button" aria-pressed={who === w} onClick={() => setWho(w)}
               className={`min-h-[44px] rounded-[10px] border text-[14.5px] font-semibold ${who === w ? 'border-[#7d5ffb] bg-[#efebff] text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
-              {w === 'student' ? '학생 요청' : '강사 요청'}
+              {w === 'student' ? '수강생 요청' : '강사 요청'}
             </button>
           ))}
         </div>
         <label className="grid gap-1 text-[13px] text-[#6b6880]">
-          요청 받은 시각 (한국)
-          <div className="grid grid-cols-[1.4fr_1fr] gap-1.5">
+          요청 받은 시각 (한국 시간)
+          <div className="grid gap-1.5 sm:grid-cols-[1fr_1.3fr]">
             <DateInput aria-label="요청 받은 날짜" value={date} max={init.date} onChange={setDate} className={inputCls(false)} />
             <TimeInput aria-label="요청 받은 시각" value={time} onChange={setTime} className={inputCls(false)} />
           </div>
@@ -354,10 +434,38 @@ function ChangeCard({ lesson, now, actions, isMakeup, byTutor, done }: { lesson:
         <Err>{err}</Err>
         <button type="button" className={btnMain} disabled={!preview || busy} onClick={() => run(async () => {
           const d = await actions.change(requestId, lesson.id, who, requestedAt!, false);
-          return `${kstLabel(lesson.startsAt)} 한국 수업 취소 저장 · ${decisionLines(d).join(' · ')}`;
+          return `${kstLabel(lesson.startsAt)} *한국 시간* 수업 취소 저장 · ${decisionLines(d).join(' · ')}`;
         })}>
           {busy ? '저장 중…' : '수업 취소 저장'}
         </button>
+        {isMakeup && actions.rescheduleMakeup && +lesson.startsAt > +now && (fix ? (
+          <div className="grid gap-2 rounded-[12px] bg-[#f6f5fb] p-3">
+            <b className="text-[14.5px] text-[#1d1b2b]">{compensation ? '보상수업' : '보강'} 시간 고치기</b>
+            <span className="text-[13px] text-[#6b6880]">지금: <b className="text-[#1d1b2b]">{kstLabel(lesson.startsAt)}</b> <b>한국 시간</b> · 변경권 차감 없음</span>
+            <label className="grid gap-1 text-[13px] text-[#6b6880]">
+              새 시간 (한국 시간)
+              <div className="grid gap-1.5 sm:grid-cols-[1fr_1.3fr]">
+                <DateInput aria-label="새 날짜" value={fix.date} onChange={(v) => setFix({ ...fix, date: v })} className={inputCls(false)} />
+                <TimeInput aria-label="새 시각" value={fix.time} onChange={(v) => setFix({ ...fix, time: v })} className={inputCls(false)} />
+              </div>
+            </label>
+            {fixAt && <span className="text-[13.5px] text-[#1d1b2b]">새 시간: <b>{kstLabel(fixAt)}</b> <b>한국 시간</b>{fixLocal ? ` · 강사 현지 ${fixLocal}` : ''}</span>}
+            <ReasonPick name={`fix-${lesson.id}`} options={FIX_REASONS} value={fix.reason} note={fix.note} onChange={(r, n) => setFix({ ...fix, reason: r, note: n })} />
+            <p className="text-[12.5px] text-[#6b6880]">고치면 수강생·강사에게 ‘보강 시간 변경’ 안내(메일·카톡·WhatsApp)가 새로 생겨요.</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button type="button" className={btnSub} disabled={busy} onClick={() => setFix(null)}>닫기</button>
+              <button type="button" className={btnMain} disabled={busy || !fixAt || +fixAt === +lesson.startsAt || +fixAt <= Date.now() || !reasonOk(fix.reason, fix.note)}
+                onClick={() => run(async () => {
+                  await actions.rescheduleMakeup!(lesson.id, fixAt!, fix.reason as MakeupReason, fix.note.trim());
+                  return `${compensation ? '보상수업' : '보강'} 시간 고침: ${kstLabel(lesson.startsAt)} → ${kstLabel(fixAt!)} *한국 시간* (변경권 차감 없음)`;
+                })}>
+                {busy ? '저장 중…' : '새 시간으로 고치기'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" className={btnSub} onClick={() => setFix({ ...kstParts(lesson.startsAt), reason: '', note: '' })}>{compensation ? '보상수업' : '보강'} 시간 고치기</button>
+        ))}
         {isMakeup && (
           voiding ? (
             <div className="grid grid-cols-2 gap-1.5">
@@ -373,7 +481,7 @@ function ChangeCard({ lesson, now, actions, isMakeup, byTutor, done }: { lesson:
   );
 }
 
-function NoticeRow({ n, text, markSent, resendEmail }: { n: ChNotice; text: string; markSent: () => Promise<void>; resendEmail?: () => Promise<{ status: string; error: string | null; repeated: boolean }> }) {
+function NoticeRow({ n, text, tutorName, markSent, resendEmail }: { n: ChNotice; text: string; tutorName?: string; markSent: () => Promise<void>; resendEmail?: () => Promise<{ status: string; error: string | null; repeated: boolean }> }) {
   const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState(false);
@@ -387,7 +495,8 @@ function NoticeRow({ n, text, markSent, resendEmail }: { n: ChNotice; text: stri
     <li className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <b className="block text-[14.5px] text-[#1d1b2b]">{n.recipient === 'student' ? '학생' : '강사'} · {EVENT_TEXT[n.event]}</b>
+          {/* 강사 안내는 누구에게 보낼지 바로 보이게 강사 이름까지 (대표 11/8) */}
+          <b className="block text-[14.5px] text-[#1d1b2b]">{n.recipient === 'student' ? '수강생' : `강사${tutorName ? ` ${tutorName}` : ''}`}에게 보내는 {EVENT_TEXT[n.event]}</b>
           {sent && n.sentAt && <span className="text-[12.5px] text-[#6b6880]">보냄 {sentLabel(n.sentAt)}</span>}
           {n.status === 'not_needed' && <span className="text-[12.5px] text-[#6b6880]">{n.recipient === 'tutor' ? '강사가 직접 확정 · WhatsApp 복사 불필요' : '복사 안내 불필요'}</span>}
         </div>
@@ -441,17 +550,21 @@ function CreditsCard({ credits, adjust, done }: { credits: AdminCredits; adjust:
   const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
-  const describeUse = (u: AdminCredits['uses'][number]) =>
-    u.reason === 'student_change' ? `${u.lessonAt ? `${kstLabel(u.lessonAt)} 수업 ` : ''}취소 (자동 차감)`
-    : u.reason === 'admin_restore' ? `${u.lessonAt ? `${kstLabel(u.lessonAt)} 수업 ` : ''}취소 되돌림`
-    : `운영진 조정${u.note ? ` · ${u.note}` : ''}`;
+  // 처음 보는 사람도 한 번에 읽히게: '취소된 수업 ○○ (취소 신청한 일자 ○○)' (대표 11/8)
+  const describeUse = (u: AdminCredits['uses'][number]) => {
+    const at = `${sentLabel(u.at)} *한국 시간*`;
+    const lesson = u.lessonAt ? ` ${kstLabel(u.lessonAt)} *한국 시간*` : '';
+    return u.reason === 'student_change' ? `취소된 수업${lesson} (취소 신청한 일자 ${at})`
+      : u.reason === 'admin_restore' ? `취소 되돌린 수업${lesson} (되돌린 일자 ${at})`
+      : `운영진 조정${u.note ? ` · ${u.note}` : ''} (조정한 일자 ${at})`;
+  };
   async function run() {
     if (!mode) return;
     setBusy(true);
     setErr('');
     try {
       const r = await adjust(mode, reason.trim());
-      setMsg(`변경권 ${r.before}개 → ${r.after}개. 학생 화면에도 바로 반영돼요.`);
+      setMsg(`변경권 ${r.before}개 → ${r.after}개. 수강생 화면에도 바로 반영돼요.`);
       setMode(null);
       setReason('');
       await done();
@@ -480,13 +593,13 @@ function CreditsCard({ credits, adjust, done }: { credits: AdminCredits; adjust:
           </div>
         </div>
       )}
-      {msg && <p className="mt-1.5 text-[13px] text-[#1f7a4d]">{msg}</p>}
+      {msg && <p className="mt-1.5 text-[13px] text-[#1f7a4d]"><Rich text={msg} /></p>}
       <Err>{err}</Err>
       {credits.uses.length > 0 && (
         <ul className="mt-2 grid gap-1 text-[13px] text-[#1d1b2b]">
           {credits.uses.map((u, i) => (
             <li key={i} className="flex justify-between gap-2 border-t border-[#eeecf4] pt-1">
-              <span>{sentLabel(u.at)} · {describeUse(u)}</span>
+              <span><Rich text={describeUse(u)} /></span>
               <b className={u.delta > 0 ? 'text-[#1f7a4d]' : ''}>{u.delta > 0 ? '+1' : '−1'}</b>
             </li>
           ))}
@@ -505,11 +618,16 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const [busy, setBusy] = useBusyState();
   const [err, setErr] = useState('');
   const [past, setPast] = useState<{ date: string; time: string; note: string } | null>(null);
+  /** 확정 사유 (열린 신청 확정 · 바로 확정 공통) */
+  const [why, setWhy] = useState<{ reason: MakeupReason | ''; note: string }>({ reason: '', note: '' });
+  /** 신청 없이 바로 확정 (수강생·강사 화면에 바로) */
+  const [now1, setNow1] = useState<{ date: string; time: string } | null>(null);
+  const whyOk = reasonOk(why.reason, why.note);
   /** 방금 누른 [신청] 결과 (QA B-04): 새 신청 / 이미 열린 신청 */
   const [sent, setSent] = useState<'new' | 'repeated' | null>(null);
   const open = right.open;
   const comp = right.kind === 'compensation' ? right.comp : null;
-  // 톡으로 보낼 '보강 날짜 고르기' 바로가기 (11/8 대표 B안): 학생이 누르면 이 수업 날짜 고르기가 바로 열림
+  // 톡으로 보낼 '보강 날짜 고르기' 바로가기 (11/8 대표 B안): 수강생이 누르면 이 수업 날짜 고르기가 바로 열림
   const link = makeupLink(right.kind === 'compensation' ? right.comp.id : right.kind === 'migrated' ? right.item.id : right.source.id);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
   const title = comp
@@ -563,14 +681,14 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
             </p>
           )}
           <p className="text-[13px] text-[#6b6880]">
-            {open.tutorAnsweredAt ? `강사 답변 ${sentLabel(open.tutorAnsweredAt)} (한국)` : '강사 답변 대기 중'}
-            {open.requestedAt ? ` · 신청 ${sentLabel(open.requestedAt)} (한국)` : ''}
-            {open.via === 'student_app' ? ' · 학생이 LMS에서 신청' : open.via === 'admin_on_behalf' ? ' · 운영진 대신 신청' : ''}
+            {open.tutorAnsweredAt ? <Rich text={`강사 답변 ${sentLabel(open.tutorAnsweredAt)} *한국 시간*`} /> : '강사 답변 대기 중'}
+            {open.requestedAt ? <Rich text={` · 신청 ${sentLabel(open.requestedAt)} *한국 시간*`} /> : ''}
+            {open.via === 'student_app' ? ' · 수강생이 LMS에서 신청' : open.via === 'admin_on_behalf' ? ' · 운영진 대신 신청' : ''}
           </p>
           {open.candidates.map((t) => (
             <div key={+t} className="flex items-center gap-2">
               <span className="flex-1 text-[15px] text-[#1d1b2b]">
-                {kstLabel(t)} 한국
+                {kstLabel(t)} <b>한국 시간</b>
                 {open.tutorAnswers?.[+t] && (
                   <b className={`ml-1.5 text-[13px] ${open.tutorAnswers[+t] === 'yes' ? 'text-[#1f7a4d]' : 'text-[#b3261e]'}`}>
                     {open.tutorAnswers[+t] === 'yes' ? '강사 가능' : '강사 불가'}
@@ -579,27 +697,31 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
                 <span className="block"><Local at={t} /></span>
               </span>
               {/* 강사가 불가라고 답한 시간은 확정 못 함 (QA-01 D, DB 도 거절) */}
-              <button type="button" disabled={busy || open.tutorAnswers?.[+t] === 'no'} className={btnMain} title={open.tutorAnswers?.[+t] === 'no' ? '강사가 불가라고 답한 시간이에요' : undefined}
-                onClick={() => run(() => actions.confirmMakeup(open.id, t))}>확정</button>
+              <button type="button" disabled={busy || open.tutorAnswers?.[+t] === 'no' || !whyOk} className={btnMain} title={open.tutorAnswers?.[+t] === 'no' ? '강사가 불가라고 답한 시간이에요' : !whyOk ? '아래에서 사유를 먼저 골라 주세요' : undefined}
+                onClick={() => run(() => actions.confirmMakeup(open.id, t, why.reason as MakeupReason, why.note.trim()))}>확정</button>
             </div>
           ))}
           {open.tutorAnsweredAt && open.candidates.length > 0 && open.candidates.every((t) => open.tutorAnswers?.[+t] === 'no') && (
-            <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[13.5px] text-[#b3261e]">강사가 모든 날짜에 불가라고 답했어요. 강사 메모를 참고해 학생에게 다른 날짜를 받거나(카톡), 강사에게 다시 확인한 시간이 있으면 아래에 넣어 확정해 주세요. 그 시간은 강사가 Schedule에서 연 시간이어야 해요.</p>
+            <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[13.5px] text-[#b3261e]">강사가 모든 날짜에 불가라고 답했어요. 강사 메모를 참고해 수강생에게 다른 날짜를 받거나(카톡), 강사에게 다시 확인한 시간이 있으면 아래에 넣어 확정해 주세요. 그 시간은 강사가 Schedule에서 연 시간이어야 해요.</p>
           )}
           {open.tutorNote && <p className="rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] text-[#1d1b2b]">강사 메모: {open.tutorNote}</p>}
-          <div className="grid grid-cols-[1.4fr_1fr_auto] gap-1.5">
+          <span className="text-[13px] font-semibold text-[#6b6880]">다른 시간으로 확정 (한국 시간)</span>
+          <div className="grid gap-1.5 sm:grid-cols-[1fr_1.3fr_auto]">
             <DateInput aria-label="다른 보강 날짜" value={other.date} onChange={(v) => setOther({ ...other, date: v })} className={inputCls(false)} />
             <TimeInput aria-label="다른 보강 시각" value={other.time} onChange={(v) => setOther({ ...other, time: v })} className={inputCls(false)} />
-            <button type="button" disabled={busy || !toAt(other)} className={btnMain} onClick={() => run(() => actions.confirmMakeup(open.id, toAt(other)!))}>확정</button>
+            <button type="button" disabled={busy || !toAt(other) || !whyOk} className={btnMain} onClick={() => run(() => actions.confirmMakeup(open.id, toAt(other)!, why.reason as MakeupReason, why.note.trim()))}>확정</button>
           </div>
+          {toAt(other) && <span className="text-[13.5px] text-[#1d1b2b]"><b>{kstLabel(toAt(other)!)}</b> <b>한국 시간</b></span>}
           <Local at={toAt(other)} />
+          <ReasonPick name={`why-${right.key}`} options={CONFIRM_REASONS} value={why.reason} note={why.note} onChange={(r, n) => setWhy({ reason: r, note: n })} />
+          {!whyOk && <p className="text-[12.5px] text-[#6b6880]">사유를 고르면 [확정]을 누를 수 있어요. 확정하면 수강생·강사 화면에 바로 확정돼요.</p>}
           <button type="button" disabled={busy} className={btnSub} onClick={() => run(() => actions.withdrawMakeup(open.id))}>신청 닫기</button>
         </div>
       ) : (
         <div className="mt-2 grid gap-1.5">
           {slots.map((s, i) => (
             <div key={i} className="grid gap-1">
-            <div className="grid grid-cols-[1.4fr_1fr] gap-1.5">
+            <div className="grid gap-1.5 sm:grid-cols-[1fr_1.3fr]">
               <DateInput aria-label={`보강 희망 날짜 ${i + 1}`} value={s.date} max={leave ? undefined : lastDay ?? undefined}
                 onChange={(v) => setSlots(slots.map((x, j) => (j === i ? { ...x, date: v } : x)))} className={inputCls(false)} />
               <TimeInput aria-label={`보강 희망 시각 ${i + 1}`} value={s.time}
@@ -619,13 +741,42 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
               {busy ? '신청 중…' : '신청'}
             </button>
           </div>
+          {/* 운영진 바로 확정 (2026-11-08 대표): 카톡으로 이미 정했으면 신청·강사 확인 없이 수강생·강사 화면에 바로 확정 */}
+          {actions.confirmMakeupNow && (now1 ? (
+            <div className="mt-1 grid gap-2 rounded-[12px] bg-[#f6f5fb] p-3">
+              <b className="text-[14.5px] text-[#1d1b2b]">바로 확정 (강사 확인 없이)</b>
+              <label className="grid gap-1 text-[13px] text-[#6b6880]">
+                보강 시간 (한국 시간)
+                <div className="grid gap-1.5 sm:grid-cols-[1fr_1.3fr]">
+                  <DateInput aria-label="바로 확정 날짜" value={now1.date} max={leave ? undefined : lastDay ?? undefined} onChange={(v) => setNow1({ ...now1, date: v })} className={inputCls(false)} />
+                  <TimeInput aria-label="바로 확정 시각" value={now1.time} onChange={(v) => setNow1({ ...now1, time: v })} className={inputCls(false)} />
+                </div>
+              </label>
+              {toAt(now1) && <span className="text-[13.5px] text-[#1d1b2b]"><b>{kstLabel(toAt(now1)!)}</b> <b>한국 시간</b></span>}
+              <Local at={toAt(now1)} />
+              <ReasonPick name={`now-${right.key}`} options={CONFIRM_REASONS} value={why.reason} note={why.note} onChange={(r, n) => setWhy({ reason: r, note: n })} />
+              <p className="text-[12.5px] text-[#6b6880]">{comp ? '보상권' : '보강권'}으로 확정해요. 변경권은 쓰지 않아요. 수강생·강사 확정 안내(메일·카톡·WhatsApp)가 생겨요.</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button type="button" className={btnSub} disabled={busy} onClick={() => setNow1(null)}>닫기</button>
+                <button type="button" className={btnMain} disabled={busy || !toAt(now1) || +toAt(now1)! <= Date.now() || !whyOk}
+                  onClick={() => run(async () => {
+                    await actions.confirmMakeupNow!(right.kind === 'lesson' ? { lessonId: right.source.id } : right.kind === 'compensation' ? { compId: right.comp.id } : { itemId: right.item.id }, toAt(now1)!, why.reason as MakeupReason, why.note.trim());
+                    setNow1(null);
+                  })}>
+                  {busy ? '확정 중…' : '확정'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" className={`${btnSub} w-full`} onClick={() => setNow1({ date: '', time: defTime })}>바로 확정 (카톡으로 이미 정한 시간)</button>
+          ))}
         </div>
       )}
       {/* 이미 진행한 보강 기록 (2026-11-07): 강사가 먼저 진행한 보강(더블 수업 등)을 지난 시각으로 남김 → 강사 '기록할 수업'에 뜸 */}
       {!comp && actions.recordPastMakeup && (past ? (
         <div className="mt-2 grid gap-1.5 rounded-[12px] bg-[#f6f5fb] p-3">
           <b className="text-[14px] text-[#1d1b2b]">이미 진행한 보강 기록</b>
-          <div className="grid grid-cols-[1.4fr_1fr] gap-1.5">
+          <div className="grid gap-1.5 sm:grid-cols-[1fr_1.3fr]">
             <DateInput aria-label="진행한 보강 날짜" value={past.date} onChange={(v) => setPast({ ...past, date: v })} className={inputCls(false)} />
             <TimeInput aria-label="진행한 보강 시각" value={past.time} onChange={(v) => setPast({ ...past, time: v })} className={inputCls(false)} />
           </div>
@@ -658,10 +809,10 @@ function HistoryRow({ change, lesson, actions, done }: { change: StudentLessonDa
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <b className={`block text-[14.5px] ${reverted ? 'text-[#6b6880] line-through' : 'text-[#1d1b2b]'}`}>
-            {kstLabel(lesson.startsAt)} · {STATUS_SHORT[change.decision.status] ?? change.decision.status}
+            취소된 수업 {kstLabel(lesson.startsAt)} <b>한국 시간</b>
           </b>
           <span className="text-[12.5px] text-[#6b6880]">
-            {reverted ? '되돌림 · ' : ''}요청 {change.requestedAt ? sentLabel(change.requestedAt) : '-'} · 처리 {sentLabel(change.decidedAt)}
+            {reverted ? '되돌림 · ' : ''}{STATUS_PLAIN[change.decision.status] ?? change.decision.status} · 취소 신청한 일자 {sentLabel(change.requestedAt ?? change.decidedAt)} <b>한국 시간</b>
           </span>
         </div>
         {!reverted && !asking && (

@@ -1,11 +1,11 @@
 'use client';
 
 // 신규 배정 일정안 카드 (시안 2차, D-51 2026-10-22 대표 승인)
-// - 시간: 한국 / 강사 / 학생 세 줄, 현지 요일이 다르면 노란 표시
+// - 시간: 한국 / 강사 / 수강생 세 줄, 현지 요일이 다르면 노란 표시
 // - 답 대기: [가능하대요 → 확정] [안 된대요] [제안 문구 복사] + [강사에게 보냈어요]
 //   제안 문구 [복사]는 복사만('문구 복사됨 · 아직 발송 안 함'), 실제로 보낸 뒤 [강사에게 보냈어요]를 눌러야 보낸 시각 기록
 //   (2026-11-06 대표 지시 H26(70), QA B-02 — 예전 A39(1) '복사 = 제안 보냄 기록'을 바꿈. 복사만 하고 안 보냈는데 보낸 것으로 남던 문제)
-// - 확정: 강사·학생 안내 두 줄 (강사 줄 위). [복사]는 문구만 복사(기록 없음), 보낸 뒤 [보냄]를 눌러야 그쪽 '보냄'
+// - 확정: 강사·수강생 안내 두 줄 (강사 줄 위). [복사]는 문구만 복사(기록 없음), 보낸 뒤 [보냄]를 눌러야 그쪽 '보냄'
 //   (2026-10-22 대표 승인, A39(2) 갱신 — 복사만 하고 안 보내는 실수 방지). 양쪽 다 '보냄'이어야 매칭 업무 완료
 // 복사가 막힌 기기에서는 문구를 보여 주고 길게 눌러 직접 복사
 
@@ -72,7 +72,7 @@ export default function PlanCard({ view, handlers, showTimes = true, proposalCop
 
   const rows: { who: 'tutor' | 'student'; label: string; n: Notice | null; text: string }[] = [
     { who: 'tutor', label: '강사 · WhatsApp', n: view.tutorNotice, text: tutorConfirmMessage(view) },
-    { who: 'student', label: '학생 · 카톡', n: view.studentNotice, text: studentConfirmMessage(view) },
+    { who: 'student', label: '수강생 · 카톡', n: view.studentNotice, text: studentConfirmMessage(view) },
   ];
 
   return (

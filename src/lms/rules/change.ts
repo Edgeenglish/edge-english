@@ -62,7 +62,7 @@ export function evaluateStudentChange(input: StudentChangeInput, policy: Pending
   }
 
   // 이미 보강·보상으로 잡힌 수업을 다시 바꾸는 경우
-  // - 보강: 정규와 같은 규칙 (A03, 변경권이 남아 있는 한 반복 가능) — 학생에게 유리해 기존 학생 포함 전원 (POL-OP-17)
+  // - 보강: 정규와 같은 규칙 (A03, 변경권이 남아 있는 한 반복 가능) — 수강생에게 유리해 기존 수강생 포함 전원 (POL-OP-17)
   // - 보상 수업: 미확정(POL-TU-10) → 운영자가 정한 값
   if (lesson.kind !== 'regular') {
     const rule = lesson.kind === 'compensation' ? policy.compensationRecancel : FAVORABLE_FOR_ALL.makeupRecancel;
@@ -118,7 +118,7 @@ export function evaluateStudentChange(input: StudentChangeInput, policy: Pending
   };
 }
 
-/** 강사 사유 취소: 6시간 전까지 = 정상 취소, 미만 = 늦은 취소(인센티브 영향). 학생 변경권은 절대 차감하지 않음 */
+/** 강사 사유 취소: 6시간 전까지 = 정상 취소, 미만 = 늦은 취소(인센티브 영향). 수강생 변경권은 절대 차감하지 않음 */
 export function evaluateTutorCancel(now: Date, startsAt: Date): ClassStatus {
   return hoursBetween(now, startsAt) >= CONFIRMED.changeNoticeHours ? 'Tutor canceled in advance' : 'Tutor canceled late';
 }
@@ -127,11 +127,11 @@ export type TutorCancelOutcome = {
   status: ClassStatus;
   makeupRequired: true; // 원래 수업은 항상 보강 (A15·A16)
   usesCredit: false;
-  /** 학생 적립금 지급액(원). 기존 학생 포함 전원 (POL-OP-17) */
+  /** 수강생 적립금 지급액(원). 기존 수강생 포함 전원 (POL-OP-17) */
   rewardWon: number;
 };
 
-/** 강사 사유 취소의 학생 쪽 결과 — 6시간 이상 전: 보강만(A15) / 6시간 미만: 보강 + 2,000원 적립금(A16) */
+/** 강사 사유 취소의 수강생 쪽 결과 — 6시간 이상 전: 보강만(A15) / 6시간 미만: 보강 + 2,000원 적립금(A16) */
 export function tutorCancelOutcome(now: Date, startsAt: Date): TutorCancelOutcome {
   const status = evaluateTutorCancel(now, startsAt);
   const late = status === 'Tutor canceled late';

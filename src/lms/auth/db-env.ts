@@ -17,6 +17,6 @@ export function dbEnv(url: string | undefined): DbEnv {
 }
 
 export const DB_ENV_LABEL = {
-  prod: { title: '운영 DB · 실제 데이터', note: '실제 학생 등록·수업 일정이 저장되는 환경' },
+  prod: { title: '운영 DB · 실제 데이터', note: '실제 수강생 등록·수업 일정이 저장되는 환경' },
   test: { title: '시험용 DB · 가상 데이터', note: '기능 테스트 전용 환경' },
 } as const;

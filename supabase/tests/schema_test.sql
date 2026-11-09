@@ -2308,7 +2308,7 @@ select pg_temp.ok(lms_makeup_conflict('55555555-0000-0000-0000-000000004200', '9
 reset request.jwt.claim.sub;
 reset role;
 -- 가짜: 한국 거주 강사 R(월~금 06:00~22:30 가능)·대체강사 S, 학생 P 주 2회(월·화 20:00 KST) 40분 4주, 3주 전 화요일 시작 → 마지막 정규 = 다음 주 월요일 = 최종 종료일
-create temp table t4300 as select (date_trunc('week', current_date))::date as mon;
+create temp table t4300 as select (date_trunc('week', (now() at time zone 'Asia/Seoul')::date))::date as mon;   -- 한국 날짜 기준 (UTC 일요일 15시 뒤에는 UTC·한국 주가 달라 A-03 '오늘'과 '다음 주 월'이 겹침)
 grant select on t4300 to authenticated;
 insert into tutors (id, name, country, timezone) values
   ('55555555-0000-0000-0000-000000004300', 'RegTutor', 'Korea', 'Asia/Seoul'),
@@ -2502,7 +2502,7 @@ select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-00
 select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-0000-000000004300', '{"email":"nope"}')$$, 'email');
 select pg_temp.ok((select d -> 'student' ->> 'name_ko' = '김서연' and d -> 'student' ->> 'timezone' = 'America/Toronto' and d -> 'student' ->> 'level_note' = 'A2/B1 (시트)'
                           and jsonb_array_length(d -> 'changes') = 4 and jsonb_array_length(d -> 'enrollments') = 2 and (d -> 'edits' -> 0 ->> 'role') = 'admin'
-                          and (d -> 'enrollment' ->> 'seq')::int = 2 and (d -> 'enrollments' -> 1 ->> 'seq')::int = 1
+                          and (d -> 'enrollment' ->> 'seq')::int = 1 and (d -> 'enrollments' -> 1 ->> 'seq')::int = 1   -- 다음 수강권 시작 전에는 지금 수강권이 현재 (20261108050000)
                    from admin_student_detail('99999999-0000-0000-0000-000000004300') d),
   '운영진 상세: 한국 이름·바뀐 시간대·예전 레벨 참고·정규 변경 기록·수강권·수정 기록·연장 기록 (4300)');
 reset request.jwt.claim.sub;
@@ -3049,6 +3049,8 @@ values ('99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-0000000
 insert into regular_schedules (student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from)
 values ('99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 3, '20:00', 40, (now() at time zone 'Asia/Seoul')::date);
 -- 수업 2회: 1회(조금 전, 아직 기록 전) · 2회(앞으로). 4601: 기준일(기능 시작일 = 오늘) 이후 시작한 새 학생
+-- 기준일 = 3시간 전의 한국 날짜: 한국 0~2시에 돌려도 '2시간 전' 첫 수업이 기준일 전날로 빠지지 않게 (시험만, 함수 그대로)
+update feature_flags set updated_at = now() - interval '3 hours' where key = 'first_lesson_followup_since';
 insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at) values
   ('77777777-4600-0000-0000-000000000001', '99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 'regular', 1, now() - interval '2 hours', now() - interval '2 hours' + interval '40 minutes'),
   ('77777777-4600-0000-0000-000000000002', '99999999-1000-0000-0000-000000004600', '99999999-0000-0000-0000-000000004600', '55555555-0000-0000-0000-000000004600', 'regular', 2, now() + interval '4 days', now() + interval '4 days' + interval '40 minutes');
@@ -3067,10 +3069,10 @@ select pg_temp.ok(tutor_first_lesson_todos(null) = '[]'::jsonb
   '첫 수업이 Held 로 기록되기 전에는 To-do 없음 (4600)');
 -- 1회를 Held 로 기록 (출결 함수 그대로)
 select tutor_record_class('77777777-4600-0000-0000-000000000001', 'held', 'First class: intro', '', false, null, false, null);
-select pg_temp.ok((select count(*) = 1 and (jsonb_agg(x) -> 0 ->> 'pending')::int = 3 and (jsonb_agg(x) -> 0 ->> 'student') = 'Lee Cheotsu'
+select pg_temp.ok((select count(*) = 1 and (jsonb_agg(x) -> 0 ->> 'pending')::int = 4 and (jsonb_agg(x) -> 0 ->> 'student') = 'Lee Cheotsu'
                    from jsonb_array_elements(tutor_first_lesson_todos(null)) x),
-  '첫 수업 Held 기록 → To-do 1명, 덜 한 항목 3 (Level · Wants to improve · Class Style) (4600)');
-select pg_temp.ok((select p -> 'followup' -> 'done' = '{"level": false, "improve": false, "style": false, "record": true}'::jsonb
+  '첫 수업 Held 기록 → To-do 1명, 덜 한 항목 4 (Level · Wants to improve · Class Style · Class Notes) (4600/4602)');
+select pg_temp.ok((select p -> 'followup' -> 'done' = '{"level": false, "improve": false, "style": false, "docs": false, "record": true}'::jsonb
                    and p -> 'followup' -> 'first_lesson' ->> 'topics' = 'First class: intro'
                    from tutor_student_profile('99999999-0000-0000-0000-000000004600', null) p),
   'Student profile 의 followup: Class Record 는 첫 수업 기록으로 자동 완료, 나머지 셋은 미완료 (4600)');
@@ -3078,7 +3080,7 @@ select pg_temp.ok((select p -> 'followup' -> 'done' = '{"level": false, "improve
 select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Expert"}')$$, 'rubric');
 create temp table f4600 as select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Intermediate"}') as r;
 grant select on f4600 to authenticated;
-select pg_temp.ok((select (r -> 'done' ->> 'level')::boolean and (r ->> 'pending')::int = 2 from f4600)
+select pg_temp.ok((select (r -> 'done' ->> 'level')::boolean and (r ->> 'pending')::int = 3 from f4600)
               and (select (x).level = 'Intermediate' and (x).level_by = 'bbbbbbbb-0000-0000-0000-000000004600' and (x).level_at is not null from pg_temp.s4600() x),
   '1 English Level 저장 → 완료, 평가자·시각 기록 (4600)');
 -- 같은 레벨을 다시 골라도 '확인함' (평가 시각 갱신) — 변경 기록은 안 늘어남
@@ -3089,7 +3091,7 @@ select pg_temp.ok((select (r -> 'done' ->> 'level')::boolean from f4600)
 -- 2 Wants to improve
 select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"improve":"  "}')$$, 'wants to improve');
 delete from f4600; insert into f4600 select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"improve":"Speaking confidence at work"}');
-select pg_temp.ok((select (r -> 'done' ->> 'improve')::boolean and (r ->> 'pending')::int = 1 from f4600)
+select pg_temp.ok((select (r -> 'done' ->> 'improve')::boolean and (r ->> 'pending')::int = 2 from f4600)
               and (select (x).improve = 'Speaking confidence at work' and (x).improve_tutor_at is not null from pg_temp.s4600() x),
   '2 Wants to improve: 강사가 적으면 완료 (4600)');
 -- 3 Class Style: 교재 방식인데 교재 없음 → 거절 / Mixed 구성 없음 → 거절 / 모르는 구성 → 거절
@@ -3099,16 +3101,29 @@ select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000
 select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"mixed","class_style_mix":["conversation","textbook"]}')$$, 'textbook');
 select pg_temp.ok(true, '3 Class Style: 교재 없는 Textbook/Mixed+Textbook · 구성 없는 Mixed · 모르는 구성은 거절 (4600)');
 delete from f4600; insert into f4600 select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"mixed","class_style_mix":["textbook","conversation","student_materials"],"textbook":"Speak now 2","materials_note":"work emails"}');
-select pg_temp.ok((select (r -> 'done' ->> 'style')::boolean and (r ->> 'pending')::int = 0 from f4600)
+select pg_temp.ok((select (r -> 'done' ->> 'style')::boolean and (r ->> 'pending')::int = 1 from f4600)
               and (select (x).tutor_class_style = 'mixed' and (x).tutor_class_style_mix = '{conversation,student_materials,textbook}' and (x).textbook = 'Speak now 2'
                           and (x).tutor_materials_note = 'work emails' and (x).tutor_class_style_at is not null
                           and (x).class_style = 'free_talking' and (x).class_style_note = 'wants to talk a lot'
                    from pg_temp.s4600() x),
   '3 Mixed + 교재 + 학생 자료 저장 → 완료. 학생의 원래 답(class_style·note)은 그대로 (4600)');
+-- 4602: Class Notes (Google Docs) — 링크 전에는 To-do 남음, Docs 문서 주소만 받음, 한 칸이 틀리면 아무것도 저장 안 함
+select pg_temp.ok((select count(*) = 1 and (jsonb_agg(x) -> 0 ->> 'pending')::int = 1 from jsonb_array_elements(tutor_first_lesson_todos(null)) x),
+  '4602: 셋을 다 해도 Docs 링크 전에는 To-do 남음 (덜 한 항목 1)');
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_note_url":"https://drive.google.com/drive/folders/abcdefghijkl"}')$$, 'Google Docs link');
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_note_url":"https://docs.google.com/spreadsheets/d/abcdefghijklmnop/edit"}')$$, 'Google Docs link');
+select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Beginner","class_note_url":"not a link"}')$$, 'Google Docs link');
+select pg_temp.ok((select (x).level = 'Intermediate' and (x).class_note_url is null from pg_temp.s4600() x),
+  '4602: 폴더·시트·글 링크 거절, 같이 보낸 레벨도 저장 안 됨');
+delete from f4600; insert into f4600 select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_note_url":"  https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit  "}');
+select pg_temp.ok((select (r -> 'done' ->> 'docs')::boolean and (r ->> 'pending')::int = 0 from f4600)
+              and (select (x).class_note_url = 'https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit' from pg_temp.s4600() x)
+              and pg_temp.e4600('class_note_url') = 1,
+  '4602: Docs 링크 저장(앞뒤 빈칸 정리) → 완료, 변경 기록 1');
 select pg_temp.ok(tutor_first_lesson_todos(null) = '[]'::jsonb
               and (select (p -> 'followup' ->> 'pending')::int = 0 and p -> 'student' ->> 'tutor_class_style' = 'mixed' and p -> 'student' ->> 'tutor_class_style_by' = 'FollowTutor'
                    from tutor_student_profile('99999999-0000-0000-0000-000000004600', null) p),
-  '넷 다 끝나면 Home To-do 에서 사라짐, 프로필에 강사 확인 값·확인한 강사 이름 (4600)');
+  '넷(레벨·목표·수업 방식·Docs) 다 끝나면 Home To-do 에서 사라짐, 프로필에 강사 확인 값·확인한 강사 이름 (4600/4602)');
 -- Conversation 으로 바꿔도 교재 칸은 지우지 않음 (나중에 다시 쓸 수 있음)
 select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"class_style":"conversation"}');
 select pg_temp.ok((select (x).tutor_class_style = 'conversation' and (x).tutor_class_style_mix is null and (x).textbook = 'Speak now 2' from pg_temp.s4600() x),
@@ -3128,6 +3143,18 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004600';
 select pg_temp.ok(tutor_first_lesson_todos(null) = '[]'::jsonb
               and (select p -> 'followup' = 'null'::jsonb or p -> 'followup' is null from tutor_student_profile('99999999-0000-0000-0000-000000004601', null) p),
   '4601: 기준일 전에 수업한 기존 학생은 새 수강권을 시작해도 To-do 가 생기지 않음');
+reset role;
+insert into first_lesson_followup_exceptions (student_id, note) values ('99999999-0000-0000-0000-000000004601', 'test');
+set role authenticated;
+select pg_temp.ok((select count(*) = 1 and (jsonb_agg(x) -> 0 ->> 'student') = 'Park Orae' and (jsonb_agg(x) -> 0 ->> 'pending')::int = 4
+                   from jsonb_array_elements(tutor_first_lesson_todos(null)) x),
+  '4602: 예외 학생은 기준일 전 학생이어도 To-do 표시 (첫 Held 수업 기준)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004601';
+select pg_temp.ok(tutor_first_lesson_todos(null) = '[]'::jsonb, '4602: 예외 학생도 담당 아닌 강사에게는 안 보임');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004600';
+reset role;
+delete from first_lesson_followup_exceptions where student_id = '99999999-0000-0000-0000-000000004601';
+set role authenticated;
 -- 권한: 담당 아닌 강사(대체 아님) 거절 · 모르는 칸 거절
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004601';
 select pg_temp.expect_error($$select tutor_first_lesson_save('99999999-0000-0000-0000-000000004600', '{"level":"Beginner"}')$$, 'regular tutor|42501');
@@ -3291,15 +3318,15 @@ select pg_temp.ok((select count(*) = 1 from m85s)
               and (select email_status = 'queued' and status = 'pending' and email_to = 'support@edgeenglish.kr' and email_intended = 'mail-s@example.com' and email_attempts = 1 from m85s)
               and (select url = 'https://api.resend.com/emails' and req -> 'to' = '["support@edgeenglish.kr"]'::jsonb from m85s)
               and (select req ->> 'subject' like '[시험 · STU-%] [엣지영어] 보강이 확정됐어요 · %' from m85s)
-              and (select req ->> 'html' like '%보강 수업: % 시간) = % (한국 시간) · %분%' and req ->> 'html' like '%강사: 기록A%' and req ->> 'html' like '%/lms/student%' and req ->> 'html' like '%카카오톡 채널%' and req ->> 'html' like '%원래 수업: %' and req ->> 'html' like '%원래 받는 사람: mail-s@example.com%' from m85s)
+              and (select req ->> 'html' like '%보강 수업: % 시간] / % [한국 시간] · %분%' and req ->> 'html' like '%강사: 기록A%' and req ->> 'html' like '%/lms/student%' and req ->> 'html' like '%카카오톡 채널%' and req ->> 'html' like '%원래 수업: %' and req ->> 'html' like '%원래 받는 사람: mail-s@example.com%' from m85s)
               and (select hdr ->> 'Authorization' = 'Bearer re_test_key' and hdr ->> 'Idempotency-Key' = 'lesson_notice_email:' || id from m85s),
   '메일: 강사 확정 → 학생 메일 큐·Resend 요청(시험이라 support@, [시험 · 번호], 현지+한국 시각·강사·LMS 링크·문의 줄), 카톡 카드는 그대로(pending)');
 select pg_temp.ok((select email_status = 'no_address' and status = 'not_needed' and email_error like '강사 이메일%' from lesson_notices where makeup_request_id = (select id from mk85) and event = 'makeup_confirmed' and recipient_kind = 'tutor'),
   '메일: 강사 직접 확정 → 강사 안내 줄(WhatsApp 복사 불필요) + 이메일 없으면 no_address');
-select pg_temp.ok(lms_mail_ko_at('2026-11-11 02:00Z', 'Asia/Seoul') = '11월 11일(수) 오전 11시 (한국 시간)'
-              and lms_mail_ko_at('2026-11-13 00:00Z', 'America/Toronto') = '11월 12일(목) 오후 7시 (토론토 시간) = 11월 13일(금) 오전 9시 (한국 시간)'
-              and (select req ->> 'subject' like '% (' || lms_mail_ko_zone((select timezone from students where id = m85s.recipient_id)) || ')' from m85s),
-  '메일 시각: 한국 거주 (한국 시간), 해외 (도시 시간) = (한국 시간), 도시 한국어, 제목에도 시간대 이름 (대표 2026-11-08)');
+select pg_temp.ok(lms_mail_ko_at('2026-11-11 02:00Z', 'Asia/Seoul') = '11월 11일(수) 오전 11시 [한국 시간]'
+              and lms_mail_ko_at('2026-11-13 00:00Z', 'America/Toronto') = '11월 12일(목) 오후 7시 [토론토 시간] / 11월 13일(금) 오전 9시 [한국 시간]'
+              and (select req ->> 'subject' like '% [' || lms_mail_ko_zone((select timezone from students where id = m85s.recipient_id)) || ']' from m85s),
+  '메일 시각: 한국 거주 [한국 시간], 해외 [도시 시간] / [한국 시간], 도시 한국어, 제목에도 시간대 이름 (대표 2026-11-08, 20261108150000)');
 -- 중복 방지: 같은 안내를 다시 큐에 넣어도 메일 1통
 select lms_mail_enqueue_notice((select id from m85s));
 select pg_temp.ok((select count(*) = 1 from notifications where dedupe_key = 'lesson_notice_email:' || (select id from m85s)) and (select count(*) = (select n from sent_before) + 1 from net.sent),
@@ -3326,7 +3353,7 @@ create temp table m85t as select n.*, q.body as req, q.headers as hdr
 grant select on m85t to authenticated;
 select pg_temp.ok((select email_status = 'queued' and email_intended = 'tutor-a@example.com' and email_to = 'support@edgeenglish.kr' from m85t)
               and (select req ->> 'subject' like '[시험 · STU-%] CONFIRMED make-up - Record S · % Sydney Time' from m85t)
-              and (select req ->> 'html' like '%Make-up: % Sydney Time (% KST)%' and req ->> 'html' like '%Original class: %' and req ->> 'html' like '%/lms/tutor%' and req ->> 'html' like '%WhatsApp%' from m85t)
+              and (select req ->> 'html' like '%Make-up: % <b>Sydney Time</b> / % <b>KST</b>%' and req ->> 'html' like '%Original class: %' and req ->> 'html' like '%/lms/tutor%' and req ->> 'html' like '%WhatsApp%' from m85t)
               and (select (req ->> 'from') like 'Edge English <%' from m85t),
   '메일: 강사 이메일 채운 뒤 다시 보내기 → 영어 메일(현지 Sydney Time + KST, 강사 LMS 링크)');
 -- 실패 기록 → 다시 보내기 → 새 요청(Idempotency-Key 에 시도 번호)
