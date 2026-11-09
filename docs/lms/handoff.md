@@ -4,6 +4,13 @@
 
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
+
+## ✅ 11/9 밤 (First Lesson Follow-up 세션): 운영↔시험 강사 화면 맞춤 + 휴대폰 뒤로가기 운영 반영
+- 대표가 lms-prod 에 직접 올린 강사 화면 6건(수업 취소 화면 연결·프로필·Held 표시 등)을 lms-test 에 합침(0922823). 강사 화면 4파일은 운영판 기준, 안 쓰게 된 AddToCalendar.tsx·CancelClass.tsx(강사용)·중복 migration 20261109113754 지움
+- 휴대폰 뒤로가기: Class Record 펼친 칸·Schedule 창만 닫힘(`useDetailBack.ts`) — lms-test 1d887de → **운영 lms-prod 83d43af** (대표 승인, 파일 3개만, DB 변경 없음). 운영 주소 ?demo=1 휴대폰에서 Schedule 창 뒤로가기 확인. 되돌리기: lms-prod 를 b09b2a6 으로
+- 강사 WhatsApp 수강생 취소 문구(대화체) 운영 반영 lms-prod 4cd31e9
+- ⚠ 운영에 GitHub 웹으로 직접 올리면 lms-test 와 어긋남 → 다음부터는 lms-test 에도 같이 올리거나 Claude 에게 합치기 요청
+
 ## ⏳ 강사 통보를 강사 LMS로 옮기기 (H26(116)) — **대시보드 개편 세션이 끝난 뒤 시작** (대표 11/9 순서: ① 실제 계정 클릭 QA 아무 때나 ② 대시보드 개편 ③ 이 작업)
 - 같은 운영진 안내 카드 파일(`LessonChange.tsx`·`PlanCard.tsx`·`board.ts`·`AdminDashboard.tsx`)을 대시보드 개편도 고치므로 개편이 lms-test 에 올라간 뒤 그 위에서 시작. 시작 전 ChatGPT `TutorHome.tsx`·`live.ts` 작업(11/9 20:57 KST 마지막 커밋)이 끝났는지 확인
 - **운영 DB 읽기 확인 (11/9, 강사에게 간 통보 기록)**: 수업 취소 change 7(학생 취소 6·강사 사정 1, 보냄 4·대기 3) → Updates 이미 있음 · 운영진 확정 보강 makeup_confirmed 12(보냄 8·대기 4) · makeup_ask 11 모두 not_needed(이미 없앰) · 대체 수업 요청 sub_ask 12 → To-do 이미 있음, 복사 카드만 없앰 · 대체 수업 확정 sub_confirmed 9(대기 1) · 신규 수강생 admin_tasks new_student_matching 3·schedule_plans 4(강사 제안 = `confirm.ts proposalMessage`, 확정 = `tutorConfirmMessage`) · 재등록 renewal_tutor_notice 열림 1 · 보강 시간 변경·강사 바뀜·보강 취소·취소 되돌림 0건(문구는 `lesson-change.ts tutorNotice` makeup_rescheduled·makeup_tutor_removed·makeup_voided·revert)
