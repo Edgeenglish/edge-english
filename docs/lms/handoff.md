@@ -4,6 +4,12 @@
 
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
+## ✅ 11/9 강사 Class Record Save 수정 운영 반영 (대표 승인)
+- 원인: 수업 전에 열어 둔 강사 화면이 시각을 다시 읽지 않아 Save 잠김(Maria 11/9, 본인 확인). 고침: 30초마다 시각 갱신 + 서버 to_record 수업은 기기 시계와 상관없이 기록 가능. 수업 전 기록 막기는 그대로
+- lms-prod **a33982c → 891e714** (TutorHome.tsx·screen.ts·screen.test.ts 만). 운영 주소 데모에서 시계 돌려 확인: 수업 20시간 전 'Upcoming'·기록 칸 안 열림 → 새로고침 없이 20시간 10분 뒤 'Not recorded'·기록 칸 열림·Held+내용 입력 뒤 Save 누를 수 있음. 되돌리기: lms-prod 를 a33982c 로
+- 같이: ChatGPT 가 시험 DB 에만 넣은 강사 수업 취소 입구 `tutor_cancel_class` → 저장소 migration **20261109080000_lms_tutor_cancel_entry**(운영 미적용) · 시험 DB 자동 메일 트리거(ChatGPT 시험 때 끔) 다시 켬
+- 다음: 실제 계정 클릭 QA(학생 보강 신청 → 강사 확정 → 신청 취소) 새 세션
+
 ## ✅ 11/9 운영 배포 A안 완료 (대표 최종 승인) — 보강·재등록 변경만
 - 운영 DB(mfamixejxydodclhglbc): 백업 **snapshots id 31**(56표·1,932행·`_functions_before` 8개, md5 = 적용 전 함수와 같음 확인) → `docs/lms/deploy/20261109-a-makeup-renewal-prod.sql`(migration 이름 lms_deploy_a_makeup_renewal) 적용. 확인: 강사에게 묻기 안 만듦·만료 메일 갈래·보강 시간 변경 메일 갈래 그대로·학생 화면 만료/신청 취소·오늘 보강·새 함수 권한(학생 취소·재등록 통보만 로그인 사용자, 만료 실행은 없음)·예약 실행에 만료 추가·제약 교체. 개수 전후 같음(학생 14·수업 188·변경권 12·보상권 1(사용 가능 0)·안내 107·보강 신청 13·열린 업무 2·적립금 3·수강권 15·메일 5), send_emails 꺼짐 그대로
 - 코드: lms-prod **4cd31e9 → a33982c** (`docs/lms/deploy/20261109-a-prod-code.patch`, 14개 파일). 운영 코드 vitest 1건 실패(정책 기준표 요약 합계)는 패치 전에도 같음 = 이번 변경과 무관
