@@ -24,13 +24,14 @@ export function filterClosedTasks(tasks: TaskSource[], closures: TaskClosure[]):
 /** 운영진의 조치가 있는 카드만. 답을 기다리는 상태는 각 업무 화면에서 확인한다. */
 export function filterActionableTasks(tasks: TaskSource[]): TaskSource[] {
   return tasks.filter((t) => {
-    if (t.kind === 'lesson_change') return t.pendingNotices > 0 || (t.answeredMakeups ?? 0) > 0;
+    // 자동 메일 못 보냄(만료 메일 포함)도 운영진이 직접 보내야 하는 일 (11/9)
+    if (t.kind === 'lesson_change') return t.pendingNotices > 0 || (t.answeredMakeups ?? 0) > 0 || (t.emailFailed ?? 0) > 0;
     if (t.kind === 'tutor_leave') {
       const steps = t.noticeSteps;
       const readyNotices = steps ? steps.tutor + steps.confirm + (steps.proposeStudents?.length ?? 0) : t.pendingNotices;
       return t.undecidedStudents > 0 || readyNotices > 0;
     }
-    if (t.kind === 'renewal_tutor_notice') return !t.tutorNotifiedAt || (!!t.tutorAcknowledgedAt && !t.scheduleCheckedAt);
+    // 재등록: 열린 업무는 늘 운영진 차례(새 기간 일정 확정 또는 강사에게 통보) — 통보하면 업무가 끝나 목록에서 빠짐 (11/9 A안)
     return true;
   });
 }

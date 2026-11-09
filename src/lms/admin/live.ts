@@ -17,7 +17,9 @@ import { loadMissingRecords, type MissingRecord } from '../tutor/live';
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const short = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}(${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 
-type Enrollment = { weeks: number | null; legacy_label: string | null; weekly_count: number; duration_min: number; start_date: string; base_end_date: string; student: { name_ko: string; code: string } | null };
+type Enrollment = { weeks: number | null; legacy_label: string | null; weekly_count: number; duration_min: number; start_date: string; base_end_date: string; student: { name_ko: string; code: string } | null;
+  /** 재등록: 새 수강권 일정안 상태 (확정 있으면 일정 확정됨) */
+  plans?: { state: string }[] | null };
 
 export type TaskRow = {
   id: string;
@@ -99,6 +101,8 @@ export function toTaskSources(tasks: TaskRow[], leaves: LeaveRow[], noShows: NoS
         newPeriod: e ? `${short(e.start_date)}–${short(e.base_end_date)}` : '',
         tutorName: t.tutor?.name ?? null,
         tutorChangePlanned: t.tutor_change_planned,
+        scheduleConfirmed: (t.enrollment?.plans ?? []).some((p) => p.state === 'confirmed'),
+        enrollmentId: t.enrollment_id,
         tutorNotifiedAt: d(t.tutor_notified_at),
         tutorAcknowledgedAt: d(t.tutor_acknowledged_at),
         scheduleCheckedAt: d(t.schedule_checked_at),
@@ -245,7 +249,8 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
     }
     else if (!r.makeupWaitingSince || new Date(m.created_at) < r.makeupWaitingSince) r.makeupWaitingSince = new Date(m.created_at);
   }
-  return [...out.values()];
+  // 강사 답만 기다리는 보강 신청은 운영진 할 일에 올리지 않음 — 재촉 메일·자동 만료가 처리 (대표 11/9, D-38 대체)
+  return [...out.values()].filter((r) => r.pendingNotices > 0 || (r.emailFailed ?? 0) > 0 || (r.answeredMakeups ?? 0) > 0);
 }
 
 /** 강사 답 칸(tutor_answered_at, migration 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
@@ -409,7 +414,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     sb
       .from('admin_tasks')
       .select(
-        'id, kind, enrollment_id, due_at, created_at, tutor_assigned_at, student_notified_at, tutor_notified_at, tutor_acknowledged_at, schedule_checked_at, tutor_change_planned, tutor:tutors(name), enrollment:enrollments(weeks, legacy_label, weekly_count, duration_min, start_date, base_end_date, student:students(name_ko, code))',
+        'id, kind, enrollment_id, due_at, created_at, tutor_assigned_at, student_notified_at, tutor_notified_at, tutor_acknowledged_at, schedule_checked_at, tutor_change_planned, tutor:tutors(name), enrollment:enrollments(weeks, legacy_label, weekly_count, duration_min, start_date, base_end_date, student:students(name_ko, code), plans:schedule_plans(state))',
       )
       .eq('status', 'open'),
     sb.from('long_leave_requests').select('id, leave_start, days, reason_kind, created_at, enrollment:enrollments(student:students(name_ko, code))').eq('status', 'pending'),
