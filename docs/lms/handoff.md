@@ -4,7 +4,7 @@
 
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
-## ✅ 11/9 강사 Class Record Save 수정 운영 반영 (대표 승인)
+## ✅ 11/9 강사 Class Record Save 수정 운영 반영 (대표 승인) — 정책 원본 H26(114)(115) 기록함
 - 원인: 수업 전에 열어 둔 강사 화면이 시각을 다시 읽지 않아 Save 잠김(Maria 11/9, 본인 확인). 고침: 30초마다 시각 갱신 + 서버 to_record 수업은 기기 시계와 상관없이 기록 가능. 수업 전 기록 막기는 그대로
 - lms-prod **a33982c → 891e714** (TutorHome.tsx·screen.ts·screen.test.ts 만). 운영 주소 데모에서 시계 돌려 확인: 수업 20시간 전 'Upcoming'·기록 칸 안 열림 → 새로고침 없이 20시간 10분 뒤 'Not recorded'·기록 칸 열림·Held+내용 입력 뒤 Save 누를 수 있음. 되돌리기: lms-prod 를 a33982c 로
 - 같이: ChatGPT 가 시험 DB 에만 넣은 강사 수업 취소 입구 `tutor_cancel_class` → 저장소 migration **20261109080000_lms_tutor_cancel_entry**(운영 미적용) · 시험 DB 자동 메일 트리거(ChatGPT 시험 때 끔) 다시 켬
