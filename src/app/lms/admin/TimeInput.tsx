@@ -1,7 +1,7 @@
 'use client';
 
 // 시각 입력칸: [오전|오후] + 시 + 분 (대표 2026-11-08 — 24시간 숫자 입력은 오전·오후를 헷갈려 사고가 남)
-// 값은 예전과 같은 'HH:MM'(24시간) 또는 ''(아직 다 안 고름). 오전·오후·시·분을 모두 골라야 값이 생김
+// 값은 예전과 같은 'HH:MM'(24시간) 또는 ''(아직 다 안 고름). 오전·오후·시를 고르면 값이 생김(분은 처음에 00)
 // 분은 5분 단위. 기존 값이 5분 단위가 아니면 그 분도 목록에 넣어 그대로 보이게
 
 import { useEffect, useState } from 'react';
@@ -32,6 +32,8 @@ export default function TimeInput({ value, onChange, id, disabled, className, 'a
   }, [value]);
   const set = (q: Partial<Parts>) => {
     const n = { ...p, ...q };
+    // 시만 골라도 바로 값이 생기게 분은 00으로 (대표 11/9: 분을 꼭 골라야 해서 불편·멈춘 줄 앎). 다른 분은 그다음에 고름
+    if (q.h && !n.m) n.m = '00';
     setP(n);
     onChange(join(n));
   };
