@@ -284,7 +284,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <div key={d.date}>
               <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}{d.date === today ? ' · Today' : ''}</h3>
               {d.lessons.map((l) => (
-                <ListRow key={l.id} focus={focus === l.id} lesson={l} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
+                <ListRow key={l.id} focus={focus === l.id} lesson={l} due={screen.toRecord.includes(l.id)} tz={tz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
                   onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
               ))}
             </div>
@@ -432,7 +432,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                 {toRecord.map((l) => (
                   <div key={l.id} className={`${card} border-[#f0a33a]`}>
                     <LessonHead lesson={l} tz={tz} now={now} />
-                    <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing={screen.toRecord.includes(l.id)} admin={!!adminBar}
+                    <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} due={screen.toRecord.includes(l.id)} actions={actions} startEditing={screen.toRecord.includes(l.id)} admin={!!adminBar}
                       onSaved={async (saved) => {
                         setRecordedHere((x) => [...x.filter((y) => y.id !== saved.id), saved]);
                         await reload();
@@ -653,10 +653,12 @@ const cols = (kst: boolean, paid: boolean) => kst
 
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
-function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, admin, focus = false }: {
+function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, meetUrl, actions, onSaved, admin, focus = false }: {
   focus?: boolean;
+  due?: boolean;
   lesson: TutorLesson; tz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
 }) {
+  const now = useLiveNow(loadedNow);
   const [open, setOpen] = useState(false);
   const [dirty, mark] = useDirtyList();
   const rowRef = useRef<HTMLDivElement>(null);
@@ -667,7 +669,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   const count = l.count ? `${l.count.n}/${l.count.total}` : '—';
   // 펼쳐도 보일 것이 없는 줄은 못 누름 (대표 10/31: 대체수업을 펼쳐도 빈 칸)
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
-  const recordable = canRecord(l, now);
+  const recordable = canRecord(l, now, due);
   const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
   const toggle = () => {
     if (open && dirty.current.size > 0 && !window.confirm('Discard changes?')) return;
@@ -746,7 +748,7 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
           {recordable ? (
             <div className="lg:max-w-[560px]">
               <DirtyCtx.Provider value={mark}>
-                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} actions={actions} startEditing extra={links} admin={admin}
+                <RecordForm key={`${l.id}-${l.state}`} lesson={l} now={now} due={due} actions={actions} startEditing extra={links} admin={admin}
                   onSaved={async () => { setOpen(false); await onSaved(); }} />
               </DirtyCtx.Provider>
             </div>
@@ -765,9 +767,20 @@ function ListRow({ lesson: l, tz, now, kst, paidCol, meetUrl, actions, onSaved, 
   );
 }
 
-function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
-  lesson: TutorLesson; now: Date; actions: TutorActions; startEditing: boolean; onSaved: (saved: TutorLesson) => Promise<void>; extra?: ReactNode; admin?: boolean;
+/** 열어 둔 화면도 시각이 흐르게 (30초마다). 화면을 연 시각보다 앞으로 가지 않음 (11/9 Maria) */
+function useLiveNow(loaded: Date): Date {
+  const [t, setT] = useState(() => new Date());
+  useEffect(() => {
+    const i = setInterval(() => setT(new Date()), 30_000);
+    return () => clearInterval(i);
+  }, []);
+  return t > loaded ? t : loaded;
+}
+
+function RecordForm({ lesson: l, now: loadedNow, due = false, actions, startEditing, onSaved, extra }: {
+  lesson: TutorLesson; now: Date; due?: boolean; actions: TutorActions; startEditing: boolean; onSaved: (saved: TutorLesson) => Promise<void>; extra?: ReactNode; admin?: boolean;
 }) {
+  const now = useLiveNow(loadedNow);
   const [editing, setEditing] = useState(startEditing);
   const [result, setResult] = useState<TutorResult | null>(resultOf(l.classStatus));
   const [topics, setTopics] = useState(l.topics ?? '');
@@ -778,7 +791,7 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
   const [remarksOpen, setRemarksOpen] = useState(!!l.remarks);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const ready = recordReady(result, topics, remarks, late) && canRecord(l, now);
+  const ready = recordReady(result, topics, remarks, late) && canRecord(l, now, due);
   const sameLate = (a: Late, b: Late) => a.student === b.student && a.studentMin === b.studentMin && a.tutor === b.tutor && a.tutorMin === b.tutorMin;
   useDirty(`record-${l.id}`, editing && (result !== resultOf(l.classStatus) || topics !== (l.topics ?? '') || remarks !== (l.remarks ?? '') || !sameLate(late, l.late)));
 
@@ -786,7 +799,7 @@ function RecordForm({ lesson: l, now, actions, startEditing, onSaved, extra }: {
     return (
       <div className="mt-2 flex items-center justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2">
         <span className="text-[14px] font-semibold text-[#1f7a4d]">✓ {statusText(l, now)}{lateText(l.late)}{l.topics ? ` · ${l.topics}` : ''}</span>
-        {canRecord(l, now) && <button type="button" onClick={() => setEditing(true)} className={`${btnSub} min-h-[36px] text-[13.5px]`}>Edit</button>}
+        {canRecord(l, now, due) && <button type="button" onClick={() => setEditing(true)} className={`${btnSub} min-h-[36px] text-[13.5px]`}>Edit</button>}
       </div>
     );
   }

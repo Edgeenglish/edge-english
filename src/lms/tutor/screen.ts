@@ -265,8 +265,12 @@ export function recordReady(r: TutorResult | null, topics: string, remarks: stri
   if (late.tutor && !(late.tutorMin && late.tutorMin > 0)) return false;
   return !late.tutor || !!remarks.trim();
 }
-export function canRecord(l: TutorLesson, now: Date): boolean {
-  return l.state !== 'canceled' && !l.leaveOpen && l.startsAt <= now && !l.locked;
+/**
+ * 기록할 수 있는 수업. due = 서버가 '기록할 수업'(to_record, 서버 시각으로 시작 지남)으로 준 수업 —
+ * 강사 기기 시계가 늦어도 열림 (11/9 Maria: 수업 전에 열어 둔 화면에서 Save 가 계속 잠김)
+ */
+export function canRecord(l: TutorLesson, now: Date, due = false): boolean {
+  return l.state !== 'canceled' && !l.leaveOpen && (due || l.startsAt <= now) && !l.locked;
 }
 
 // 대체 수업이 먼저: 시트 보강을 대체강사가 맡아도 그 강사에게는 대체 수업 (R6)

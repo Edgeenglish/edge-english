@@ -36,6 +36,8 @@ describe('강사 화면 (migration 2000)', () => {
     expect(canRecord({ ...base, state: 'canceled', classStatus: 'Tutor long-term leave' }, now)).toBe(false);
     expect(canRecord({ ...base, locked: true, state: 'done', classStatus: 'Normal' }, now)).toBe(false);
     expect(canRecord({ ...base, startsAt: new Date('2026-11-02T09:00:00Z') }, now)).toBe(false);
+    // 서버가 '기록할 수업'으로 준 수업은 강사 기기 시계가 늦어도 기록 가능 (11/9 Maria)
+    expect(canRecord({ ...base, startsAt: new Date('2026-11-02T09:00:00Z') }, now, true)).toBe(true);
     // 강사 계정 만들기 전 수업은 'Not recorded'가 아님 (R7)
     expect(statusText({ ...base, beforeLms: true }, now)).toBe('Before LMS');
     expect(kindTag({ ...base, kind: 'migrated_makeup', covering: true })).toBe('Substitute');
