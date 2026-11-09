@@ -4,6 +4,12 @@
 
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
+## ✅ 11/9 운영 배포 A안 완료 (대표 최종 승인) — 보강·재등록 변경만
+- 운영 DB(mfamixejxydodclhglbc): 백업 **snapshots id 31**(56표·1,932행·`_functions_before` 8개, md5 = 적용 전 함수와 같음 확인) → `docs/lms/deploy/20261109-a-makeup-renewal-prod.sql`(migration 이름 lms_deploy_a_makeup_renewal) 적용. 확인: 강사에게 묻기 안 만듦·만료 메일 갈래·보강 시간 변경 메일 갈래 그대로·학생 화면 만료/신청 취소·오늘 보강·새 함수 권한(학생 취소·재등록 통보만 로그인 사용자, 만료 실행은 없음)·예약 실행에 만료 추가·제약 교체. 개수 전후 같음(학생 14·수업 188·변경권 12·보상권 1(사용 가능 0)·안내 107·보강 신청 13·열린 업무 2·적립금 3·수강권 15·메일 5), send_emails 꺼짐 그대로
+- 코드: lms-prod **4cd31e9 → a33982c** (`docs/lms/deploy/20261109-a-prod-code.patch`, 14개 파일). 운영 코드 vitest 1건 실패(정책 기준표 요약 합계)는 패치 전에도 같음 = 이번 변경과 무관
+- 되돌리기: DB = snapshots 31 의 `_functions_before`(함수 5개 본문·제약 2개·예약 명령) 다시 실행 + 새 함수 3개 권한 회수 / 코드 = lms-prod 를 4cd31e9 로
+- 뺀 것: 수업 관리 2차·주소 이전·대시보드 개편·Class Record Save 수정(lms-test 에만, 별도 승인 대기)
+
 ## ✅ 11/9 오늘 보강 허용 · 6시간 미만 경고 · 신청 자동 만료 — **시험 DB·lms-test 개발·검증 끝, 운영 미반영** (브랜치 claude/brave-edison-bjtbwm → lms-test)
 - migration **20261109050000_lms_makeup_today_expire** (시험 DB 적용, 운영 미적용): ① `lms_makeup_options` v_today+1 → v_today(일반 보강·보상·휴무 뒤 모두, 지금 이후·기존 검사 그대로) ② 새 `lms_makeup_expire_run(p_now)`: requested·countered 중 학생 희망 시간이 **모두** 지난 신청만 'expired'(원래 허용값, 표 구조 변경 없음) → 안 보낸 안내 not_needed, 학생 메일 1통(notifications dedupe `makeup_expired:신청`, 템플릿 lesson_notice_makeup_expired, send_emails 꺼짐이면 support@ 로만), 주소 없으면 메일 없이 만료만 ③ 예약 실행 `lms-makeup-nudge` = 재촉 → 만료 → lms_mail_run ④ `student_screen` 신청 목록에 'expired'
 - 화면: 학생 보강 날짜 고르기 — 고른 시간 중 시작까지 6시간 미만이 있으면 '고른 날짜' 아래 빨간 글 대표 문구 그대로(신청 막지 않음) · 신청 내역 상태 '만료'(회색, 상세 단계 줄 숨김) · 운영진 대시보드: 강사 답만 기다리는 보강 신청 카드 안 올림(`toLessonChanges` 필터, 강사 불가 답·안내 안 보냄·메일 실패는 그대로)
