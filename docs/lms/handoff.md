@@ -6,6 +6,7 @@
 
 ## ✅ 11/9 강사 사정 취소 자동 메일 — **운영 반영 완료** (H26(110), 브랜치 claude/gracious-archimedes-o3lxay → lms-test)
 - ✅ 운영 DB(mfamixejxydodclhglbc): 적용 전 lms_notice_mail md5 = 시험 DB 적용 전과 같음 → 백업 **snapshots id 30**(56표·1,888행·`_functions_before` 2개) → migration 20261109030000 → 두 함수 md5 = 시험 DB, 앱 사용자 실행 불가, 학생 14·수업 188·안내 107 그대로, send_emails=false. 코드 배포 없음(lms-prod 그대로). 되돌리기: snapshots 30 의 `_functions_before` 본문 실행
+- ✅ 11/9 대시보드 '자동 메일 못 보냄' 카드가 수업 취소 메일(학생 취소·강사 사정 취소) 실패도 잡게 고침(카드 제목 '자동 메일 못 보냄') — lms-test 2cceb7f, **운영 lms-prod 0cfe809 → 5873e3a**(이 커밋만 cherry-pick, 운영 화면 코드에 새 글자 반영 확인). 되돌리기: lms-prod 를 0cfe809 로. 운영 코드 vitest 정책 기준표 합계 1건 실패는 예전부터(lms-test 에선 고쳐짐)
 - 대표 11/9: 운영진 보강 입력 기능은 없애지 않음, 다만 앞으로 운영진이 최대한 안 쓰게 설계(CLAUDE.md 에 원칙 추가)
 - 대표 결정 11/9: 운영진이 '강사 취소'로 기록하면 **수강생(한국어)·강사(영어) 둘 다** 자동 메일. 문구 = 기존 카톡·WhatsApp 안내 그대로, 수강생 메일 버튼 = 그 수업 보강 날짜 고르기(/student?makeup=수업). **보강 취소·취소 되돌림 메일은 만들지 않음**(대표: 운영진이 보강을 직접 입력하지 않고 강사·수강생이 시스템에서 하게 하는 방향 — 운영진 입력 경로가 예외를 늘림). 보류 기록: 보강 취소 메일을 만든다면 '확정 메일이 나갔으면 취소 메일도'(대표 답)
 - migration **20261109030000_lms_tutor_cancel_mail**: lms_notice_mail(20261109010000 판 + tutor_cancel 갈래) · 트리거 lesson_notices_email 이 'change' 안내를 받는 사람 상관없이 큐에 넣어 봄(해당 없으면 아무것도 안 함). 시험 DB 적용 전 함수 md5 = 저장소 20261109010000 확인
