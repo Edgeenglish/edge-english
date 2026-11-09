@@ -86,9 +86,19 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     const [item] = buildBoard(toLessonChanges([], [], now, [
       { created_at: '2026-11-07T10:00:00Z', recipient_kind: 'tutor', email_status: 'failed', makeup: { student: s } },
     ]), now);
-    expect(item.tag).toBe('보강 확정 자동 메일 못 보냄');
+    expect(item.tag).toBe('자동 메일 못 보냄');
     expect(item.detail).toContain('자동 메일 못 보냄 강사 1건 — 직접 보내기');
     expect(item.actions[0].href).toBe('/lms/admin/change?student=STU-0008');
+  });
+
+  it('대시보드: 수업 취소 자동 메일(강사 사정 취소 등)을 못 보내도 카드로 (11/9)', () => {
+    const s = { id: 's2', name_ko: '김하준', code: 'STU-0009' };
+    const [item] = buildBoard(toLessonChanges([], [], now, [
+      { created_at: '2026-11-09T10:00:00Z', recipient_kind: 'student', email_status: 'no_address', makeup: null, change: { student: s } },
+    ]), now);
+    expect(item.tag).toBe('자동 메일 못 보냄');
+    expect(item.detail).toContain('자동 메일 못 보냄 수강생 1건 — 직접 보내기');
+    expect(item.actions[0].href).toBe('/lms/admin/change?student=STU-0009');
   });
 
   it('안내 줄 자동 메일 상태 글', () => {

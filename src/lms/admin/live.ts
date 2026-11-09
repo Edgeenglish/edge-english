@@ -202,7 +202,7 @@ type OpenMakeupRow = { created_at: string; tutor_answered_at?: string | null; st
 
 /** 수업 변경·보강 (1700): 안 보낸 안내 · 강사 답 대기 보강 → 수강생마다 한 줄 */
 /** 자동 메일을 못 보낸 안내 (20261108010000: 실패·주소 없음) → 운영진이 직접 보내야 함 */
-export type EmailFailRow = { created_at: string; recipient_kind?: 'student' | 'tutor'; email_status?: string; makeup: { student: { id: string; name_ko: string; code: string } | null } | null };
+export type EmailFailRow = { created_at: string; recipient_kind?: 'student' | 'tutor'; email_status?: string; makeup: { student: { id: string; name_ko: string; code: string } | null } | null; change?: { student: { id: string; name_ko: string; code: string } | null } | null };
 
 export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupRow[], now: Date, emailFails: EmailFailRow[] = []): TaskSource[] {
   const out = new Map<string, Extract<TaskSource, { kind: 'lesson_change' }>>();
@@ -211,8 +211,9 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
     return out.get(s.id)!;
   };
   for (const f of emailFails) {
-    if (!f.makeup?.student) continue;
-    const r = row(f.makeup.student, f.created_at);
+    const st = f.change?.student ?? f.makeup?.student;   // 수업 취소 메일(학생 취소·강사 사정 취소)도 (11/9)
+    if (!st) continue;
+    const r = row(st, f.created_at);
     r.emailFailed = (r.emailFailed ?? 0) + 1;
     if (f.recipient_kind && !(r.emailFailedTo ??= []).includes(f.recipient_kind)) r.emailFailedTo.push(f.recipient_kind);
   }
@@ -432,7 +433,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .eq('status', 'pending'),
     loadOpenMakeups(sb),
     // 자동 메일 실패·주소 없음 (칸이 없는 DB면 빈 목록)
-    sb.from('lesson_notices').select('created_at, recipient_kind, email_status, makeup:makeup_requests(student:students(id, name_ko, code))').in('email_status', ['failed', 'no_address']),
+    sb.from('lesson_notices').select('created_at, recipient_kind, email_status, makeup:makeup_requests(student:students(id, name_ko, code)), change:change_requests(student:students(id, name_ko, code))').in('email_status', ['failed', 'no_address']),
     sb
       .from('enrollments')
       .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind), comps:compensations(status)')
