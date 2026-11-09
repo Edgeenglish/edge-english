@@ -47,6 +47,8 @@
 - 남은 차이: 대체 수업 4건 LMS '보강 완료' 표기(의미 같음, 그대로)
 - ⏭ 남은 개발: ① 재등록·보강 이월·적립금 넣기/빼기 운영자 화면 버튼(PC·휴대폰 시안부터) ② 강사 자율 운영 3단계에 H26(98)③ 늦은 취소 흐름 ③ 매일 대조 예약 작업(trig_01DYXbuSfHjUehZrZJZwaq5H) 기준을 H26(97)대로 — LMS 단독 학생 제외, 변경권은 LMS 기준·기간 바뀌는 날(김O민 11/11·이O나 11/16·송O나 11/18) 시트 확인 ④ Maria Class Record 11/6 이O민 STU-0013 회차 칸 '1/8'이 날짜로 보임(대표 미확인)
 
+- (11/9 이어서, H26(111)) 운영: 이O옥 STU-0003 11/9 Benny 수업 학생 사전 취소(admin_change_lesson, 알린 시각 03:28 KST) + 학생 시트 I3·Benny 시트 Class Status·Remarks · 이O민 STU-0001 11/3 Leslie 학생 지각(분 비움) · Leslie 11/3·11/4 Remarks. 예약 작업: 보고 모두 13:00 KST, '매일 학생 시트 점검'(trig_01FARP3K5pwPP8MS9Gir5c73) 끔, 대시보드 개편 알림 trig_01UQ294ysxjbqubkHyKSiwDJ(11/15 13:00, 이 세션). 3자 대조 예약 작업 문구(H26(97) 기준)는 그 보고 대화창에서만 바꿀 수 있음 — 대표에게 안내함. ⏭ 다음 세션: 대시보드 '이번 달 등록 명단·재등록 대기 명단' + 통계 STU-0014 제외(시안부터)
+
 ## 📌 2026-11-07 대표 결정: LMS 전체 오픈 + 1주일 시트·LMS 병행 (정책 원본 H26(89))
 - 11/7부로 모든 학생·강사에게 LMS 오픈과 사용법 안내 완료(대표). **11/14까지 1주일만** 학생 수강현황 시트·강사 Class Record 시트와 LMS 를 둘 다 원본으로 둠. 그 사이 Claude 가 **두 곳이 달라지는 부분을 계속 대조**해 보고. 1주 뒤 시트 중단 여부 대표 결정
 - 대조 방법(세션마다): 운영 DB 학생 13명(가상 STU-0014 제외) 수강현황 시트(드라이브 '학생관리') ↔ enrollments·lessons·makeup_requests·compensations, 강사 4명 Class Record ↔ lessons.class_status·class_records. 차이는 고치지 않고 보고(11/7 오O수 사례: 종료일·11/18 보강·학생 번호). **예약 작업 등록함(11/7)**: `trig_01DYXbuSfHjUehZrZJZwaq5H` '매일 시트 ↔ LMS 대조 보고' 매일 12:47 KST, 이 세션(session_0173hK5dYWb6UxYYPuDGoi7y)으로 들어와 이 세션의 Supabase·Sheets·Drive 연결을 그대로 씀. (새 세션을 띄우는 방식은 조직 설정상 연결을 못 붙임 — 'connectors parameter is not available for this organization'. 기존 세션으로 들어오는 방식은 됨. 10/27 '매일 학생 시트 점검 보고' trig_01FARP3K5pwPP8MS9Gir5c73 도 같은 방식으로 돌고 있음 — 시트끼리만 대조, LMS 는 안 봄 → 겹치므로 대표가 끌지 결정)
