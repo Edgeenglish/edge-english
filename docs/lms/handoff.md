@@ -4,6 +4,13 @@
 
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
+## ✅ 11/9 강사 사정 취소 자동 메일 — 시험 DB 적용·실제 수신 확인 (운영 미적용, 브랜치 claude/gracious-archimedes-o3lxay)
+- 대표 결정 11/9: 운영진이 '강사 취소'로 기록하면 **수강생(한국어)·강사(영어) 둘 다** 자동 메일. 문구 = 기존 카톡·WhatsApp 안내 그대로, 수강생 메일 버튼 = 그 수업 보강 날짜 고르기(/student?makeup=수업). **보강 취소·취소 되돌림 메일은 만들지 않음**(대표: 운영진이 보강을 직접 입력하지 않고 강사·수강생이 시스템에서 하게 하는 방향 — 운영진 입력 경로가 예외를 늘림). 보류 기록: 보강 취소 메일을 만든다면 '확정 메일이 나갔으면 취소 메일도'(대표 답)
+- migration **20261109030000_lms_tutor_cancel_mail**: lms_notice_mail(20261109010000 판 + tutor_cancel 갈래) · 트리거 lesson_notices_email 이 'change' 안내를 받는 사람 상관없이 큐에 넣어 봄(해당 없으면 아무것도 안 함). 시험 DB 적용 전 함수 md5 = 저장소 20261109010000 확인
+- 검증: test:db 566 통과(새 4개: 수강생 메일·강사 메일·6시간 안 적립금 줄·수강생 취소는 수강생 메일 없음) · vitest 410 통과(proxy.test.ts 는 이 환경에 next 패키지가 없어 못 돌림 — 다른 세션 파일) · 묶음 SQL·prod-setup.html 재생성 · 시험 DB 실제: STU-0004 11/19 수업 강사 취소 → lms_mail_run → 2통 sent → support@ 받은편지함 도착(제목·본문·버튼 확인) → admin_revert_change 로 원복(수업 scheduled, 남은 할 일 0)
+- **다음 큰 결정(대표 11/9)**: 운영진 보강 입력 기능(바로 확정·지난 보강 기록·시간 고치기) 중 무엇을 남길지 — 시안 먼저
+- 운영 반영 순서(대표 승인 뒤): 운영 백업 → 운영 lms_notice_mail md5 가 20261109010000 판과 같은지 확인 → 20261109030000 적용 → 함수 md5 = 시험 DB 확인. 코드 배포 없음
+
 ## ✅ 2026-11-08 First Lesson Follow-up 개선 — **운영 배포 #7 완료** (대표 '반영해'): 운영 DB 백업 snapshots id 28 → migration 20261108170000(함수 4개 md5 = 시험 DB) → lms-prod bf2a47b → 8182af9, 운영 To-do = Maria STU-0013 1건. 되돌리기: lms-prod 를 bf2a47b 로 · 미확인: Maria 실제 로그인 화면. (이하 시험 단계 기록) (H26(106), 시안 v3 https://claude.ai/artifact/VbbTLPge15MRpQjrce6DRx)
 - 브랜치 `claude/practical-shannon-1qzp45` → lms-test. 대표 결정: 4칸 한 화면(Level·Wants to Improve·Class Style·Class Notes) + [Save] 하나, Class Record 칸 뺌, A 채운 칸만 저장·4칸 다 저장해야 To-do 빠짐 / B 운영진 Docs 링크 있으면 완료 / C Google Docs 문서 주소만 / D 왼쪽 학생 정보 칸 뺌 / [Level guide] PC 옆 팝오버(넓은 화면 xl)·휴대폰 바텀시트, 본문 15px·레벨 이름 굵게, 글 = Rubric 원본(1PWNaBCciFsldVhD-MVXfZ-JeuVrz9l_gHs6Wd93rLLI) 그대로 `LEVEL_RUBRIC`(원본 고치면 코드도)
 - migration **20261108170000_lms_first_lesson_followup_docs** (시험 DB 적용, 운영 미적용): `first_lesson_followup_exceptions` 표(운영 STU-0013 id 만 넣음 — 시험 DB 에는 그 id 가 없어 0줄) · `lms_is_google_doc_url` · `lms_first_held_lesson`(예외 학생은 시작일 조건 건너뜀) · `lms_first_lesson_todo`(done.docs, pending 4개 기준, 'record' 는 호환용) · `tutor_first_lesson_save`(class_note_url 키, 한 칸이라도 틀리면 전체 저장 안 함). 적용 전 시험·운영 함수 md5 = 저장소와 같음 확인
