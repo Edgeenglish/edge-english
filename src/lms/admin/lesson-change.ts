@@ -142,7 +142,7 @@ export const REASON_TEXT: Record<MakeupReason, string> = {
 /** 운영 기록 한 줄 (admin_makeup_logs) */
 /** reason 은 학생 상세 수업 추가·수정(20261109040000)에선 없음(선택 메모만). oldTutor·newTutor 는 그 기능에서만 */
 export type MakeupLog = {
-  id: string; makeupRequestId: string; lessonId: string | null; action: 'confirm' | 'reschedule'; reason: MakeupReason | null; note: string | null; oldAt: Date | null; newAt: Date; createdAt: Date;
+  id: string; makeupRequestId: string; lessonId: string | null; action: 'confirm' | 'reschedule' | 'note'; reason: MakeupReason | null; note: string | null; oldAt: Date | null; newAt: Date; createdAt: Date;
   oldTutor?: string | null; oldTutorTz?: string | null; newTutor?: string | null;
 };
 export function dateLabel(d: KstDate): string {

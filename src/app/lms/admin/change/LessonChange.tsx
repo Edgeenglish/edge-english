@@ -335,7 +335,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                     <li key={g.id} className="grid gap-0.5 border-b border-[#efedf5] pb-2 text-[14px] text-[#1d1b2b] last:border-0">
                       <b className="text-[13.5px]">{kstLabel(g.createdAt)} <b>한국 시간</b> · 운영진</b>
                       <span>
-                        {g.action === 'reschedule'
+                        {g.action === 'note' ? <>메모</> : g.action === 'reschedule'
                           ? <>
                               {(!g.oldAt || +g.oldAt !== +g.newAt) && <>보강 시간 고침: {g.oldAt ? kstLabel(g.oldAt) : ''} → <b>{kstLabel(g.newAt)}</b> <b>한국 시간</b></>}
                               {g.oldTutor && g.newTutor && g.oldTutor !== g.newTutor && <>{g.oldAt && +g.oldAt !== +g.newAt ? ' · ' : ''}보강 강사 바꿈: {g.oldTutor} → <b>{g.newTutor}</b></>}
