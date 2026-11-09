@@ -1,0 +1,322 @@
+<title>강사 통보 LMS 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위 결정 질문 → 강사 화면 PC(가로 스크롤 틀) → 휴대폰 2개 → 운영진 화면 변화 → 강사 메일 초안. 색은 실제 강사 화면 토큰 그대로 */
+:root{
+  --bg:#f6f5fa; --paper:#ffffff; --ink:#1d1b2b; --muted:#6b6880; --line:#e6e3ef;
+  --accent:#5b3fe0; --accent-soft:#efecfd; --accent-line:#c9c2f2; --accent-ink:#3b2a9a;
+  --todo-line:#f0a33a; --todo-soft:#fff4d6; --todo-ink:#5c3b00; --todo-num:#8a5300;
+  --ok:#1f7a4d; --warn:#b3261e; --chip:#f1f0f6; --chip-ink:#3d3a52; --frame:#d9d6e3;
+  --mail-bg:#fbfbfd; --q-bg:#fff8e8; --q-line:#f0d38f;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#15141c; --paper:#1f1e29; --ink:#ecebf3; --muted:#a3a0b8; --line:#34324a;
+  --accent:#8f7bff; --accent-soft:#2a2547; --accent-line:#4a4178; --accent-ink:#cfc6ff;
+  --todo-line:#c98a2c; --todo-soft:#3a2d12; --todo-ink:#f3d79c; --todo-num:#f0c069;
+  --ok:#6fd3a0; --warn:#ff8a80; --chip:#2c2a3b; --chip-ink:#d6d3e6; --frame:#3a384f;
+  --mail-bg:#1a1923; --q-bg:#2e2716; --q-line:#6b5a2a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15141c; --paper:#1f1e29; --ink:#ecebf3; --muted:#a3a0b8; --line:#34324a;
+  --accent:#8f7bff; --accent-soft:#2a2547; --accent-line:#4a4178; --accent-ink:#cfc6ff;
+  --todo-line:#c98a2c; --todo-soft:#3a2d12; --todo-ink:#f3d79c; --todo-num:#f0c069;
+  --ok:#6fd3a0; --warn:#ff8a80; --chip:#2c2a3b; --chip-ink:#d6d3e6; --frame:#3a384f;
+  --mail-bg:#1a1923; --q-bg:#2e2716; --q-line:#6b5a2a; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:"Pretendard",-apple-system,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:36px}
+h1{font-size:24px;margin:0;text-wrap:balance}
+h2.sec{font-size:19px;margin:0 0 12px;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0}
+.q{background:var(--q-bg);border:1px solid var(--q-line);border-radius:14px;padding:16px 18px}
+.q ol{margin:8px 0 0;padding-left:20px;display:grid;gap:8px}
+.q b.rec{color:var(--ok)}
+.scroll{overflow-x:auto;padding-bottom:6px}
+/* PC 틀 */
+.pc{width:1060px;border:1px solid var(--frame);border-radius:14px;background:var(--bg);padding:22px;display:flex;gap:24px}
+.pc nav{width:200px;flex-shrink:0;display:grid;gap:4px;align-content:start}
+.pc nav span{padding:9px 12px;border-radius:10px;font-weight:600;color:var(--muted)}
+.pc nav span.on{background:var(--accent-soft);color:var(--accent-ink)}
+.pc .main{flex:1;min-width:0;max-width:720px;display:grid;gap:16px;align-content:start}
+/* 휴대폰 틀 */
+.phones{display:flex;flex-wrap:wrap;gap:24px}
+.phone{width:360px;max-width:100%;border:10px solid var(--frame);border-radius:34px;background:var(--bg);padding:14px 14px 70px;position:relative;display:grid;gap:14px;align-content:start}
+.phone .tabbar{position:absolute;left:0;right:0;bottom:0;border-top:1px solid var(--line);background:var(--paper);display:grid;grid-template-columns:repeat(5,1fr);font-size:11px;text-align:center;padding:8px 0 10px;border-radius:0 0 24px 24px;color:var(--muted)}
+.phone .tabbar .on{color:var(--accent);font-weight:700}
+.cap{font-size:13px;color:var(--muted);margin:0 0 8px;font-weight:600}
+/* 강사 화면 부품 */
+.hi h3{font-size:22px;margin:0}
+.hi p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.board{border-radius:18px;border:2px solid;overflow:hidden;background:var(--paper)}
+.board>h4{margin:0;padding:10px 16px;font-size:16px;display:flex;align-items:center;gap:8px}
+.board .n{border-radius:999px;padding:1px 8px;font-size:13px;color:#fff}
+.todo{border-color:var(--todo-line)} .todo>h4{background:var(--todo-soft);color:var(--todo-ink)} .todo .n{background:var(--todo-line)}
+.upd{border-color:var(--accent-line)} .upd>h4{background:var(--accent-soft);color:var(--accent-ink)} .upd .n{background:var(--accent)}
+.bar{display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:1px solid var(--line)}
+.bar:first-of-type{border-top:0}
+.bar .t{flex:1;font-weight:600}
+.bar .c{font-size:13px;color:var(--todo-num)}
+.open{background:var(--accent);color:#fff;border-radius:10px;padding:6px 12px;font-size:13px;font-weight:700;white-space:nowrap}
+.new{font-size:11.5px;font-weight:700;color:var(--warn);margin-left:4px}
+ul.ups{list-style:none;margin:0;padding:4px 16px 8px}
+ul.ups li{padding:10px 0;border-top:1px solid var(--line);display:grid;gap:2px}
+ul.ups li:first-child{border-top:0}
+.row1{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.chip{background:var(--chip);color:var(--chip-ink);border-radius:6px;padding:1px 7px;font-size:12.5px;font-weight:700}
+.who{font-weight:700;color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.when{font-size:14px;color:var(--ink)}
+.when b{font-weight:700}
+.note{font-size:13.5px;color:var(--muted)}
+.was{text-decoration:line-through}
+.more{padding:0 16px 12px;font-size:13.5px;font-weight:600;color:var(--accent);text-decoration:underline}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:16px}
+.card h5{margin:0 0 6px;font-size:16px}
+.muted{color:var(--muted)}
+/* 신규 수강생 문의 창 */
+.panel{background:var(--paper);border-radius:18px;border:1px solid var(--line);padding:18px;display:grid;gap:12px}
+.panel h5{margin:0;font-size:17px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14.5px}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{min-height:48px;border-radius:12px;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.btn.main{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.done{background:#d9d6e3;color:#4a4760;border-color:#c9c6d6}
+.status{font-size:13.5px;color:var(--ok);font-weight:600}
+/* 운영진 표 */
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:640px;background:var(--paper);border-radius:12px;overflow:hidden}
+th,td{border-bottom:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top;font-size:14px}
+th{background:var(--accent-soft);color:var(--accent-ink);font-size:13px}
+/* 메일 */
+.mails{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,500px),1fr));gap:18px}
+.mail{background:var(--mail-bg);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:10px;min-width:0}
+.mail .ko{font-size:13.5px;color:var(--muted);margin:0}
+.mail .subj{font-size:13px;color:var(--muted)}
+.mail .subj b{color:var(--ink);font-size:14.5px;display:block;overflow-wrap:anywhere}
+.mail .body{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;font-size:14.5px;line-height:1.6;overflow-wrap:anywhere}
+.mail .body p{margin:0 0 10px}
+.mail .body p:last-child{margin:0}
+.mbtn{display:inline-block;background:var(--accent);color:#fff;border-radius:10px;padding:8px 14px;font-weight:700;font-size:14px}
+.foot{font-size:13px;color:var(--muted)}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:1px 7px;background:var(--chip);color:var(--chip-ink)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>강사 통보를 강사 LMS로 — 시안</h1>
+    <p class="sub">정책 원본 H26(116)·H26(122). 강사 화면은 Ho Chi Minh 강사 기준 예시(가짜 이름), 오늘 = 11/10(화) 한국 시간.</p>
+  </header>
+
+  <section class="q" aria-label="대표 결정">
+    <b>대표 확인할 것</b>
+    <ol>
+      <li><b>강사 메일을 보낼 통보</b>: ① 신규 수강생 일정 문의 ② 신규 배정 확정 ③ 대체 수업 확정 ④ 정규 수업 시간 변경 ⑤ 재등록 — <b class="rec">권장: 다섯 다 메일 + 화면</b>. 이미 메일이 가는 것(학생 취소·강사 사정 취소·보강 확정·보강 시간 변경·보강에서 빠진 강사)은 그대로, 보강 취소·취소 되돌림은 11/9 결정대로 메일 없이 화면(Updates)만.</li>
+      <li><b>정규 수업 시간 변경</b>이 Updates에 보이는 기한 — <b class="rec">권장: 바뀐 첫 수업 시각까지</b></li>
+      <li><b>첫 수업 전 수업 날짜 변경</b>도 넣을지 — <b class="rec">권장: 넣음</b>, 새 첫 수업 시각까지 보임, 메일도 같이</li>
+      <li><b>신규 수강생 문의</b>에 강사가 [I can take it]을 누른 뒤 — <b class="rec">권장: 지금처럼 운영진 [확정] 한 번</b>(H22: 강사 '가능' ≠ 확정, 학생 카톡도 그때 보냄) / 다른 안: 강사 답으로 바로 확정</li>
+      <li><b>재등록 때 강사가 바뀌면</b> — <b class="rec">권장: 새 강사에게는 '신규 배정 확정' 메일·Updates, 이전 강사에게는 보내지 않음</b>(그 학생 수업이 일정에서 끝날 뿐 할 일 없음)</li>
+      <li>아래 <b>강사 메일 문구 5개</b> 승인</li>
+    </ol>
+  </section>
+
+  <!-- ===== PC ===== -->
+  <section aria-label="강사 화면 PC">
+    <h2 class="sec">강사 Home — PC</h2>
+    <div class="scroll">
+      <div class="pc">
+        <nav aria-label="강사 메뉴"><span class="on">Home</span><span>Schedule</span><span>Class Record</span><span>Students</span><span>Availability</span></nav>
+        <div class="main">
+          <div class="hi"><h3>Hi, Emma</h3><p>Tue, 10 Nov 10:52 PM <b>Ho Chi Minh Time</b> / Wed, 11 Nov 12:52 AM <b>KST</b></p></div>
+
+          <div class="board todo">
+            <h4>To do <span class="n">2</span></h4>
+            <div class="bar"><span class="t">New student request <span class="new">NEW</span></span><span class="c">1</span><span class="open">Open ›</span></div>
+            <div class="bar"><span class="t">Classes to record</span><span class="c">1</span><span class="open">Open ›</span></div>
+          </div>
+
+          <div class="board upd">
+            <h4>Updates <span class="n">7</span></h4>
+            <ul class="ups">
+              <li><div class="row1"><span class="chip">New make-up</span><span class="who">Minji Lee</span></div>
+                <span class="when">Thu, 12 Nov 5:00 PM <b>Ho Chi Minh Time</b> / 7:00 PM <b>KST</b></span>
+                <span class="note">Original class: Mon, 9 Nov</span></li>
+              <li><div class="row1"><span class="chip">Canceled</span><span class="who">Hajun Kim</span></div>
+                <span class="when">Thu, 12 Nov 7:00 PM <b>Ho Chi Minh Time</b> / 9:00 PM <b>KST</b></span></li>
+              <li><div class="row1"><span class="chip">Make-up time changed</span><span class="who">Jiwoo Choi</span></div>
+                <span class="when">Fri, 13 Nov 8:00 AM <b>Ho Chi Minh Time</b> / 10:00 AM <b>KST</b></span>
+                <span class="note">Was: <span class="was">Thu, 12 Nov 8:00 AM</span></span></li>
+              <li><div class="row1"><span class="chip">New student</span><span class="who">Doyun Han</span></div>
+                <span class="when">Every Mon, Wed 6:00 PM <b>Ho Chi Minh Time</b> / 8:00 PM <b>KST</b></span>
+                <span class="note">First class: Mon, 16 Nov · 50 min · 8 classes</span></li>
+              <li><div class="row1"><span class="chip">Cover classes</span><span class="who">Yuna Jung</span></div>
+                <span class="when">Mon, 16 Nov 5:30 PM <b>Ho Chi Minh Time</b> / 7:30 PM <b>KST</b></span>
+                <span class="when">Wed, 18 Nov 5:30 PM <b>Ho Chi Minh Time</b> / 7:30 PM <b>KST</b></span></li>
+              <li><div class="row1"><span class="chip">Renewed</span><span class="who">Hajun Kim</span></div>
+                <span class="when">Every Tue, Thu 7:00 PM <b>Ho Chi Minh Time</b> / 9:00 PM <b>KST</b></span>
+                <span class="note">Next period: Tue, 17 Nov – Thu, 10 Dec · same schedule</span></li>
+              <li><div class="row1"><span class="chip">Schedule change</span><span class="who">Minji Lee</span></div>
+                <span class="when">Every Mon, Fri 5:00 PM <b>Ho Chi Minh Time</b> / 7:00 PM <b>KST</b></span>
+                <span class="note">From Mon, 23 Nov</span></li>
+            </ul>
+          </div>
+
+          <div class="card"><h5>Today’s classes</h5><span class="muted">No classes today.</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="sub">PC는 Updates를 모두 펼친 상태. 줄 순서 = 가까운 수업부터. 각 줄은 그 수업(대체 수업은 마지막 수업, 신규·재등록은 첫 수업) 시각이 지나면 저절로 빠짐. 강사가 누를 버튼 없음(확인 추적 안 함). 학생 이름 누르면 기존 학생 정보 창.</p>
+  </section>
+
+  <!-- ===== 휴대폰 ===== -->
+  <section aria-label="강사 화면 휴대폰">
+    <h2 class="sec">강사 Home — 휴대폰</h2>
+    <div class="phones">
+      <div>
+        <p class="cap">① Home (Updates 3줄 + 더보기)</p>
+        <div class="phone">
+          <div class="hi"><h3>Hi, Emma</h3><p>Tue, 10 Nov 10:52 PM <b>Ho Chi Minh Time</b> / Wed, 11 Nov 12:52 AM <b>KST</b></p></div>
+          <div class="board todo">
+            <h4>To do <span class="n">2</span></h4>
+            <div class="bar"><span class="t">New student request <span class="new">NEW</span></span><span class="c">1</span><span class="open">Open ›</span></div>
+            <div class="bar"><span class="t">Classes to record</span><span class="c">1</span><span class="open">Open ›</span></div>
+          </div>
+          <div class="board upd">
+            <h4>Updates <span class="n">7</span></h4>
+            <ul class="ups">
+              <li><div class="row1"><span class="chip">New make-up</span><span class="who">Minji Lee</span></div>
+                <span class="when">Thu, 12 Nov 5:00 PM <b>Ho Chi Minh Time</b> / 7:00 PM <b>KST</b></span>
+                <span class="note">Original class: Mon, 9 Nov</span></li>
+              <li><div class="row1"><span class="chip">Canceled</span><span class="who">Hajun Kim</span></div>
+                <span class="when">Thu, 12 Nov 7:00 PM <b>Ho Chi Minh Time</b> / 9:00 PM <b>KST</b></span></li>
+              <li><div class="row1"><span class="chip">Make-up time changed</span><span class="who">Jiwoo Choi</span></div>
+                <span class="when">Fri, 13 Nov 8:00 AM <b>Ho Chi Minh Time</b> / 10:00 AM <b>KST</b></span>
+                <span class="note">Was: <span class="was">Thu, 12 Nov 8:00 AM</span></span></li>
+            </ul>
+            <div class="more">+ 4 more</div>
+          </div>
+          <div class="tabbar"><span class="on">Home</span><span>Schedule</span><span>Record</span><span>Students</span><span>Availability</span></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="cap">② New student request 창 (To do › Open)</p>
+        <div class="phone">
+          <div class="panel">
+            <h5>New student request</h5>
+            <dl class="kv">
+              <dt>Student</dt><dd><span class="who">Sua Yoon</span></dd>
+              <dt>Class</dt><dd>50 min · 8 classes</dd>
+              <dt>Time</dt><dd>Every Tue, Thu 6:00 PM <b>Ho Chi Minh Time</b> / 8:00 PM <b>KST</b></dd>
+              <dt>First class</dt><dd>Tue, 17 Nov 6:00 PM <b>Ho Chi Minh Time</b> / 8:00 PM <b>KST</b></dd>
+            </dl>
+            <div class="btns"><span class="btn main">I can take it</span><span class="btn">I can’t</span></div>
+          </div>
+          <p class="cap" style="margin:4px 0 0">누른 뒤 (같은 창에 그대로)</p>
+          <div class="panel">
+            <h5>New student request</h5>
+            <dl class="kv">
+              <dt>Student</dt><dd><span class="who">Sua Yoon</span></dd>
+              <dt>Time</dt><dd>Every Tue, Thu 6:00 PM <b>Ho Chi Minh Time</b> / 8:00 PM <b>KST</b></dd>
+            </dl>
+            <div class="btns"><span class="btn done">I can take it ✓</span><span class="btn">I can’t</span></div>
+            <span class="status">Sent to Edge English</span>
+          </div>
+          <div class="tabbar"><span class="on">Home</span><span>Schedule</span><span>Record</span><span>Students</span><span>Availability</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="sub">답을 보낸 문의는 To do 개수에서 빠지고 창에는 회색 ✓로 남음. 운영진이 확정하기 전까지는 다른 버튼을 눌러 답을 바꿀 수 있음. 운영진이 확정하면 Updates의 'New student' 줄로 바뀜.</p>
+  </section>
+
+  <!-- ===== 운영진 ===== -->
+  <section aria-label="운영진 화면 변화">
+    <h2 class="sec">운영진 화면에서 바뀌는 것</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>통보</th><th>지금</th><th>바뀐 뒤</th></tr></thead>
+        <tbody>
+          <tr><td>신규 수강생 일정 문의</td><td>[제안 문구 복사] → WhatsApp → [강사에게 보냈어요] → [가능하대요 → 확정]</td><td>강사·시간을 고르면 강사 To do + 메일 자동. 카드에 '강사 답 대기' → '강사 가능' + [확정]('안 된대요'는 '강사 불가'로 자동 표시)</td></tr>
+          <tr><td>신규 배정 확정</td><td>강사 WhatsApp 복사·[보냄] + 학생 카톡 복사·[보냄]</td><td>강사 쪽 줄 없앰(Updates + 메일 자동). 학생 카톡만 남음</td></tr>
+          <tr><td>대체 수업 확정</td><td>4단계 '확정 안내 보내기'에 강사 WhatsApp 복사</td><td>강사 쪽 복사 없앰(자동). 학생 쪽만 남음</td></tr>
+          <tr><td>정규 수업 시간 변경</td><td>저장 뒤 강사 WhatsApp 문구 복사</td><td>강사 문구 없앰(자동). 학생 카톡 문구만</td></tr>
+          <tr><td>재등록</td><td>[강사에게 통보] 누르기</td><td>새 기간 일정이 확정되면 메일·Updates 자동 + 카드 자동 종료. 메일 실패·일정 미확정만 카드에 남음</td></tr>
+          <tr><td>보강 확정·시간 변경·강사 바뀜·보강 취소·취소 되돌림</td><td>강사 WhatsApp 복사 카드(보강 쪽은 메일도 이미 감)</td><td>강사 복사 카드 없앰. Updates 자동(보강 취소·취소 되돌림은 메일 없음)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sub">강사 메일이 실패하면 기존 '자동 메일 못 보냄' 카드에 올라감(다시 보내기 공용).</p>
+  </section>
+
+  <!-- ===== 메일 ===== -->
+  <section aria-label="강사 메일 초안">
+    <h2 class="sec">강사 메일 문구 초안 (기존 강사 메일과 같은 모양·같은 버튼·같은 끝 줄)</h2>
+    <div class="mails">
+
+      <article class="mail">
+        <span class="tag">① 신규 수강생 일정 문의</span>
+        <p class="ko">새 학생 이 시간 가능한지 LMS에서 답해 달라는 메일 (아직 확정 아님)</p>
+        <div class="subj">제목<b>[Edge English] New student request - Sua Yoon · please answer in the LMS</b></div>
+        <div class="body">
+          <p>NEW STUDENT REQUEST - Sua Yoon (50 min, 8 classes)<br>Not confirmed yet.</p>
+          <p>Time: Every Tue, Thu 6:00 PM <b>Ho Chi Minh Time</b> / 8:00 PM <b>KST</b><br>First class: Tue, 17 Nov 6:00 PM <b>Ho Chi Minh Time</b> / 8:00 PM <b>KST</b></p>
+          <p>Can you take this student? Please answer on your LMS Home (To do).</p>
+          <p><span class="mbtn">Open Edge English LMS</span></p>
+          <p class="foot">Reply to this email or message us on WhatsApp if you have a question.</p>
+        </div>
+      </article>
+
+      <article class="mail">
+        <span class="tag">② 신규 배정 확정</span>
+        <p class="ko">운영진이 확정한 순간 발송. 기존 WhatsApp 확정 문구 그대로</p>
+        <div class="subj">제목<b>[Edge English] CONFIRMED new student - Doyun Han · first class Mon, 16 Nov</b></div>
+        <div class="body">
+          <p>CONFIRMED new student - Doyun Han (50 min, 8 classes)</p>
+          <p>Time: Every Mon, Wed 6:00 PM <b>Ho Chi Minh Time</b> / 8:00 PM <b>KST</b><br>First class: Mon, 16 Nov 6:00 PM <b>Ho Chi Minh Time</b> / 8:00 PM <b>KST</b> · last Wed, 9 Dec</p>
+          <p>Please add it to your schedule. Thank you!</p>
+          <p><span class="mbtn">Open Edge English LMS</span></p>
+          <p class="foot">Reply to this email or message us on WhatsApp if you have a question.</p>
+        </div>
+      </article>
+
+      <article class="mail">
+        <span class="tag">③ 대체 수업 확정</span>
+        <p class="ko">대체강사에게. 휴무 강사 이름은 쓰지 않음</p>
+        <div class="subj">제목<b>[Edge English] CONFIRMED cover classes - Yuna Jung · from Mon, 16 Nov</b></div>
+        <div class="body">
+          <p>CONFIRMED cover classes - Yuna Jung (50 min)</p>
+          <p>1) Mon, 16 Nov 5:30 PM <b>Ho Chi Minh Time</b> / 7:30 PM <b>KST</b><br>2) Wed, 18 Nov 5:30 PM <b>Ho Chi Minh Time</b> / 7:30 PM <b>KST</b></p>
+          <p>Please add them to your schedule. Thank you!</p>
+          <p><span class="mbtn">Open Edge English LMS</span></p>
+          <p class="foot">Reply to this email or message us on WhatsApp if you have a question.</p>
+        </div>
+      </article>
+
+      <article class="mail">
+        <span class="tag">④ 정규 수업 시간 변경</span>
+        <p class="ko">기존 WhatsApp 문구 그대로, 바뀐 수업 목록 포함</p>
+        <div class="subj">제목<b>[Edge English] SCHEDULE CHANGE - Minji Lee · from Mon, 23 Nov</b></div>
+        <div class="body">
+          <p>SCHEDULE CHANGE - Minji Lee (50 min), from Mon, 23 Nov</p>
+          <p>New regular time: Every Mon, Fri 5:00 PM <b>Ho Chi Minh Time</b> / 7:00 PM <b>KST</b></p>
+          <p>Changed classes (3):<br>- Mon, 23 Nov 5:00 PM <b>Ho Chi Minh Time</b> / 7:00 PM <b>KST</b><br>- Fri, 27 Nov 5:00 PM <b>Ho Chi Minh Time</b> / 7:00 PM <b>KST</b><br>- Mon, 30 Nov 5:00 PM <b>Ho Chi Minh Time</b> / 7:00 PM <b>KST</b></p>
+          <p>Confirmed make-up and cover classes stay as they are. Please update your schedule. Thank you!</p>
+          <p><span class="mbtn">Open Edge English LMS</span></p>
+          <p class="foot">Reply to this email or message us on WhatsApp if you have a question.</p>
+        </div>
+      </article>
+
+      <article class="mail">
+        <span class="tag">⑤ 재등록</span>
+        <p class="ko">새 기간 일정이 확정된 순간 발송. 일정이 같으면 'same schedule', 바뀌면 'New schedule'</p>
+        <div class="subj">제목<b>[Edge English] RENEWED - Hajun Kim · next period from Tue, 17 Nov</b></div>
+        <div class="body">
+          <p>RENEWED - Hajun Kim (50 min, 8 classes)</p>
+          <p>Next period: Tue, 17 Nov – Thu, 10 Dec<br>Time: Every Tue, Thu 7:00 PM <b>Ho Chi Minh Time</b> / 9:00 PM <b>KST</b> (same schedule)</p>
+          <p>Thank you for teaching Hajun!</p>
+          <p><span class="mbtn">Open Edge English LMS</span></p>
+          <p class="foot">Reply to this email or message us on WhatsApp if you have a question.</p>
+        </div>
+      </article>
+
+    </div>
+    <p class="sub">한국 시간 강사는 시간대가 하나만(예: 8:00 PM <b>KST</b>). 메일은 지금처럼 support@ 숨은참조. 날짜·이름은 모두 예시.</p>
+  </section>
+</div>
