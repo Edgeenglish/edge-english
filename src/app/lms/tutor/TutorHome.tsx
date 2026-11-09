@@ -23,7 +23,11 @@ import {
   canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   statusText, rangeFull, rangeFullNoDay, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
 
+type CancelDecision = { status: string };
+type CancelAction = (lessonId: string, requestId: string, reason: string, dryRun: boolean) => Promise<CancelDecision>;
+
 export type TutorActions = {
+  cancel?: CancelAction;
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
   record: (lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late) => Promise<void>;
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
@@ -45,6 +49,42 @@ export type TutorActions = {
   /** 취소된 수업 To-do: 수강생이 취소한 앞으로의 수업 (tutor_canceled_classes). 없으면 그 칸이 안 보임 */
   canceled?: () => Promise<TutorCanceled[]>;
 };
+
+function CancelClass({ lessonId, cancel, onSaved, onDirty }: {
+  lessonId: string; cancel: CancelAction; onSaved: () => Promise<void>; onDirty: (dirty: boolean) => void;
+}) {
+  const request = useRef<string | null>(null);
+  const [decision, setDecision] = useState<CancelDecision | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(dryRun: boolean) {
+    setBusy(true);
+    setError('');
+    try {
+      request.current ??= crypto.randomUUID();
+      const result = await cancel(lessonId, request.current, reason, dryRun);
+      if (dryRun) setDecision(result);
+      else { onDirty(false); await onSaved(); }
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not cancel. Please try again.'); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="grid gap-3">
+      {!decision ? <button type="button" disabled={busy} onClick={() => void submit(true)} className="min-h-[44px] w-fit rounded-[10px] border border-[#d9d5e6] bg-white px-4 text-[14px] font-semibold disabled:opacity-40">{busy ? 'Loading…' : 'Cancel class'}</button> : <>
+        <p className="text-[14px] font-semibold">{decision.status}</p>
+        <label className="grid gap-1 text-[13px] font-semibold text-[#55526a]">Reason
+          <textarea aria-label="Cancellation reason" rows={2} maxLength={500} value={reason} onChange={(e) => { setReason(e.target.value); onDirty(!!e.target.value.trim()); }} className="w-full rounded-[10px] border border-[#d9d5e6] bg-white px-3 py-2.5 text-[16px] font-normal text-[#1d1b2b]" />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={busy || !reason.trim()} onClick={() => void submit(false)} className="min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[14px] font-semibold text-white disabled:opacity-40">{busy ? 'Saving…' : 'Confirm cancellation'}</button>
+          <button type="button" disabled={busy} onClick={() => { setDecision(null); setReason(''); onDirty(false); }} className="min-h-[44px] rounded-[10px] border border-[#d9d5e6] bg-white px-4 text-[14px] font-semibold">Back</button>
+        </div>
+      </>}
+      {error && <p role="alert" className="text-[14px] text-[#b3261e]">{error}</p>}
+    </div>
+  );
+}
 
 /** 수강생 이름 → 프로필 창 (이 화면 어디서든 같은 창) */
 const ProfileCtx = createContext<((studentId: string) => void) | null>(null);
@@ -671,7 +711,8 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
   // 펼쳐도 보일 것이 없는 줄은 못 누름 (대표 10/31: 대체수업을 펼쳐도 빈 칸)
   const isMakeup = l.kind === 'makeup' || l.kind === 'migrated_makeup';
   const recordable = canRecord(l, now, due);
-  const canOpen = (phase !== 'canceled' || recordable) && !!(l.noteUrl || recordable || l.remarks || l.makeupOf || l.locked || (phase === 'upcoming' && isMakeup) || l.studentId);
+  const cancelable = !!actions.cancel && l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation';
+  const canOpen = recordable || cancelable || !!(l.remarks || l.topics || l.makeupOf || l.compensationOf || l.locked || (phase === 'upcoming' && isMakeup));
   const toggle = () => {
     if (open && dirty.current.size > 0 && !window.confirm('Discard changes?')) return;
     setOpen(!open);
@@ -698,18 +739,18 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
     </button>
   ) : <span className="text-[13px] font-semibold">{stText}</span>;
   const remarksChip = l.remarks ? <span className="ml-1 inline-block rounded-[6px] border border-[#e6e3ef] px-1 text-[11.5px] font-semibold text-[#6b6880]">Remarks</span> : null;
-  const openProfile = useContext(ProfileCtx);
   const links = (
     <>
-      {l.studentId && openProfile && <button type="button" onClick={() => openProfile(l.studentId!)} className={`${btnSub} inline-flex items-center text-[14px]`}>Student profile</button>}
-      {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Class notes</a>}
       {phase === 'upcoming' && (l.kind === 'makeup' || l.kind === 'migrated_makeup') && (() => {
         const ev = { title: `Edge English make-up · ${l.student}`, start: l.startsAt, end: l.endsAt, details: meetUrl };
         return (
-          <>
-            <a href={googleCalendarUrl(ev)} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex items-center text-[14px]`}>Google Calendar</a>
-            <a href={icsUrl(ev)} className={`${btnSub} inline-flex items-center text-[14px]`}>Apple / Samsung Calendar</a>
-          </>
+          <details className="text-[13px] text-[#6b6880]">
+            <summary className="w-fit cursor-pointer py-2 font-semibold">Add to calendar</summary>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 pb-2">
+              <a href={googleCalendarUrl(ev)} target="_blank" rel="noreferrer" className="inline-flex min-h-[36px] items-center underline">Google Calendar</a>
+              <a href={icsUrl(ev)} className="inline-flex min-h-[36px] items-center underline">Apple / Samsung Calendar</a>
+            </div>
+          </details>
         );
       })()}
     </>
@@ -763,6 +804,9 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
           ) : (
             <div className="grid gap-2 pt-2">
               {l.remarks && <p className="text-[14px]"><b className="text-[13px] text-[#55526a]">Remarks</b> {l.remarks}</p>}
+              {cancelable && actions.cancel && <CancelClass lessonId={l.id} cancel={actions.cancel}
+                onDirty={(value) => mark(`cancel-${l.id}`, value)}
+                onSaved={async () => { dirty.current.clear(); setOpen(false); await onSaved(); }} />}
               <div className="flex flex-wrap items-center gap-1.5">
                 {links}
                 {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}
