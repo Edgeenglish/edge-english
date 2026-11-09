@@ -159,7 +159,7 @@ export type RegularChangeRec = {
 };
 export type MovedLesson = { lessonId: string; seq: number | null; from: Date; fromEnd: Date; to: Date; toEnd: Date; problem: string | null };
 export type KeptLesson = { lessonId: string; kind: string; seq: number | null; startsAt: Date; endsAt: Date; tutor: string; tutorTz: string; why: string };
-export type ProfileEdit = { field: string; old: string | null; new: string | null; role: 'admin' | 'tutor'; at: Date; by: string };
+export type ProfileEdit = { field: string; old: string | null; new: string | null; role: 'admin' | 'tutor' | 'student'; at: Date; by: string };
 export type RecentLesson = { id: string; kind: string; startsAt: Date; state: string; classStatus: string | null; tutor: string; tutorTz: string };
 export type EnrollmentShort = {
   id: string; seq: number; status: string; weeks: number | null; legacyLabel: string | null; weeklyCount: number; durationMin: number; startDate: KstDate; finalEndDate: KstDate;

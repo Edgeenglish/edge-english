@@ -9,14 +9,14 @@ import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/ad
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
-import { koZoneCity } from '@/lms/admin/places';
+import { koZoneCity, ZONE_ROWS, zoneName } from '@/lms/admin/places';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
 import { CONFIRMED } from '@/lms/rules/policy';
 import { diffDays, formatInZone, hoursBetween, instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { MEET_MISSING_KO, meetRoomUrl } from '@/lms/rules/meet';
 import type { PreviewExtras } from '@/lms/student/fake-data';
 import HomeNotices from '@/app/lms/HomeNotices';
-import type { LeaveRow, MakeupOption, MakeupRight, RegularSlot, Reminders, StudentActions, StudentView } from '@/lms/student/live';
+import type { LeaveRow, MakeupOption, MakeupRight, RegularSlot, Reminders, StudentActions, StudentView, TimezoneState } from '@/lms/student/live';
 import {
   cancelManySummary,
   cancelPreview,
@@ -340,6 +340,34 @@ export default function StudentHome(props: {
     actions.reminders().then(setReminders, () => setReminders(null));
   }, [actions]);
 
+  // 시간대 자동 확인 (H26(119)): 기기 시간대가 프로필과 다르고, 그 기기 시간대에 [그대로]를 누른 적이 없으면 맨 위에서 물음. 운영자 보기에서는 안 물음
+  const [tzState, setTzState] = useState<TimezoneState | null>(null);
+  const [deviceTz, setDeviceTz] = useState<string | null>(null);
+  useEffect(() => {
+    actions.timezone().then(setTzState, () => setTzState(null));
+    try {
+      const d = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // 'UTC'·'Etc/…' 는 기기 설정이 없는 경우라 묻지 않음
+      if (d && d.includes('/') && !d.startsWith('Etc/')) setDeviceTz(d);
+    } catch { /* 시간대를 못 읽는 브라우저 */ }
+  }, [actions]);
+  const askTz = !isAdminView && tzState && deviceTz && deviceTz !== studentTz && deviceTz !== tzState.kept ? deviceTz : null;
+
+  async function saveTimezone(change: { set?: string; keep?: string }) {
+    setBusy(true);
+    try {
+      setTzState(await actions.timezone(change));
+      if (change.set) {
+        setView(await actions.reload());
+        say('저장했어요.');
+      }
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '저장하지 못했어요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveReminder(change: { regular?: boolean; makeup?: boolean }) {
     setBusy(true);
     try {
@@ -641,6 +669,23 @@ export default function StudentHome(props: {
           <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
         </header>
         <div className="grid gap-2 px-4 pb-3 lg:px-0 lg:pb-4 lg:pt-1">
+          {askTz && (
+            <section aria-label="시간대 확인" className="grid gap-2.5 rounded-[14px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-3">
+              <p className="text-[15px] font-semibold leading-relaxed text-[#1d1b2b]">
+                지금 계신 곳이 {withRo(koZoneCity(askTz))} 보여요. {koZoneCity(askTz)} 시간으로 볼까요?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={busy} onClick={() => saveTimezone({ set: askTz })}
+                  className="min-h-[44px] rounded-[10px] bg-[#5b3df0] px-4 text-[14px] font-semibold text-white disabled:opacity-50">
+                  {koZoneCity(askTz)} 시간으로 보기
+                </button>
+                <button type="button" disabled={busy} onClick={() => saveTimezone({ keep: askTz })}
+                  className="min-h-[44px] rounded-[10px] border border-[#d9d5e8] bg-white px-4 text-[14px] font-semibold text-[#1d1b2b] disabled:opacity-50">
+                  {koZoneCity(studentTz)} 시간 그대로
+                </button>
+              </div>
+            </section>
+          )}
           {!(isAdminView && studentTz !== 'Asia/Seoul') && <ZoneBar />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
@@ -814,6 +859,16 @@ export default function StudentHome(props: {
 
         {tab === 'me' && (
           <TabPage title="내 정보">
+            {tzState && (
+              <section className={`${card} grid gap-2 px-4 py-3`}>
+                <label htmlFor="my-timezone" className="text-[15px] font-bold">시간대</label>
+                <select id="my-timezone" value={studentTz} disabled={busy}
+                  onChange={(e) => e.target.value !== studentTz && saveTimezone({ set: e.target.value })}
+                  className="min-h-[48px] w-full rounded-[10px] border border-[#d9d5e8] bg-white px-3 text-[16px] text-[#1d1b2b] disabled:opacity-50">
+                  {tzOptions(studentTz, deviceTz).map((z) => <option key={z} value={z}>{tzLabel(z)}</option>)}
+                </select>
+              </section>
+            )}
             {meetLinks.length > 0 && (
               <section className={`${card} grid gap-1 px-4 py-3`}>
                 <h2 className="text-[15px] font-bold">수업 링크</h2>
@@ -1519,6 +1574,21 @@ function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor
     tutor: g.tutor,
   }));
 }
+
+/** '시드니로' / '런던으로' (받침 있으면 '으로', ㄹ 받침은 '로') */
+function withRo(w: string) {
+  const c = w.charCodeAt(w.length - 1) - 0xac00;
+  if (c < 0 || c > 11171) return `${w}로`;
+  const jong = c % 28;
+  return `${w}${jong === 0 || jong === 8 ? '로' : '으로'}`;
+}
+/** '내 정보' 시간대 목록: 지금 시간대 · 기기 시간대 · 수강생이 많은 곳 시간대 (중복 없이) */
+const tzOptions = (cur: string, device: string | null) => [...new Set([cur, ...(device ? [device] : []), ...ZONE_ROWS.map((r) => r.timezone)])];
+/** 'Australia/Sydney' → '시드니·캔버라 (호주)', 목록에 없으면 '리스본 (Europe/Lisbon)' */
+const tzLabel = (tz: string) => {
+  const n = zoneName(tz);
+  return n === tz ? `${koZoneCity(tz)} (${tz})` : n;
+};
 
 function LinkRow({ label, value, valueClass = 'font-semibold', onClick }: { label: string; value: string; valueClass?: string; onClick?: () => void }) {
   if (!onClick) return (

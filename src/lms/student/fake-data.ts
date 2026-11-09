@@ -169,10 +169,16 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
   }];
   const set = (v: StudentView) => (view = v);
   let reminders = { regular: true, makeup: true, hasEmail: true };
+  let tz = { timezone: 'Asia/Seoul', kept: null as string | null };
   let noTimeAt: string | null = null;
   const actions: StudentActions = {
-    reload: async () => view,
+    reload: async () => ({ ...view, timezone: tz.timezone }),
     reminders: async (change) => (reminders = { ...reminders, ...change }),
+    timezone: async (change) => {
+      if (change?.set) { tz = { ...tz, timezone: change.set }; view = { ...view, timezone: change.set }; }
+      else if (change?.keep) tz = { ...tz, kept: change.keep };
+      return tz;
+    },
     makeupOptions: async (right) => {
       const back = view.makeupRights.find((m) => m.lessonId === right.lessonId)?.tutorLeave ? 14 : 1;
       return Array.from({ length: 18 }, (_, i) => back + i)

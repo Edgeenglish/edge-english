@@ -254,6 +254,9 @@ export async function loadMakeupOptions(sb: SupabaseClient, studentId: string | 
 /** 수업 알림 메일 켬/끔 (정규 = 정규 수업, 보강 = 그 밖의 수업). hasEmail = 받을 이메일이 있는지 */
 export type Reminders = { regular: boolean; makeup: boolean; hasEmail: boolean };
 
+/** 시간대 (하나뿐: 화면·메일·카톡 모두). kept = 학생이 [그대로]를 누른 기기 시간대 */
+export type TimezoneState = { timezone: string; kept: string | null };
+
 /** 수강생 화면 동작. admin = 운영자 보기(대신 입력)면 운영진 함수 */
 export function studentActions(sb: SupabaseClient, adminStudentId: string | null) {
   const admin = adminStudentId !== null;
@@ -267,6 +270,16 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
         has_email: boolean;
       };
       return { regular: r.regular, makeup: r.makeup, hasEmail: r.has_email };
+    },
+    /** 시간대 읽기(인자 없음) · 바꾸기(set) · [그대로] 기억(keep = 그때 기기 시간대) (H26(119), migration 20261109150000). 함수 없는 옛 DB 면 null */
+    timezone: async (change?: { set?: string; keep?: string }): Promise<TimezoneState | null> => {
+      const r = await sb.rpc('student_timezone', { p_student: adminStudentId, p_set: change?.set ?? null, p_keep: change?.keep ?? null });
+      if (r.error) {
+        if (change) throw new Error(r.error.message);
+        return null;
+      }
+      const d = r.data as { timezone: string; kept: string | null };
+      return { timezone: d.timezone, kept: d.kept };
     },
     makeupOptions: (right: RightRef) => loadMakeupOptions(sb, adminStudentId, right),
     /**
