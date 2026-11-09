@@ -17,6 +17,7 @@ import {
 import { KOREA_TIME, minutesOf, statusText, type TutorLesson } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
 import { ampmEn } from '@/lms/rules/dates';
+import { useDetailBack } from './useDetailBack';
 
 export type ScheduleActions = {
   load: (from: string, to: string, cells: boolean) => Promise<ScheduleData>;
@@ -72,6 +73,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const closeDialog = useDetailBack(!!dialog, () => setDialog(null));
   const [busy, setBusy] = useState(false);
   const [saveErr, setSaveErr] = useState('');
   const [toast, setToast] = useState('');
@@ -420,13 +422,13 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       )}
 
       {dialog && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 lg:items-center" onClick={(e) => { if (e.target === e.currentTarget && !busy) setDialog(null); }}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 lg:items-center" onClick={(e) => { if (e.target === e.currentTarget && !busy) closeDialog(); }}>
           <div role="dialog" aria-modal="true" className="grid max-h-[90vh] w-full gap-2.5 overflow-y-auto rounded-t-[18px] bg-white p-4 pb-6 lg:max-w-[440px] lg:rounded-[16px]">
             {dialog.kind === 'info' && (
               <>
                 <strong className="text-[16px] text-[#1d1b2b]">{dialog.title}</strong>
                 <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14.5px] text-[#b3261e]">{dialog.body}</p>
-                <button type="button" onClick={() => setDialog(null)} className={btnSub}>Close</button>
+                <button type="button" onClick={() => closeDialog()} className={btnSub}>Close</button>
               </>
             )}
             {dialog.kind === 'pick' && pickBody(dialog)}
@@ -451,7 +453,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
                     </>
                   )}
                   {over && b.note && <p className="text-[14.5px] text-[#1d1b2b]">{b.note}</p>}
-                  <button type="button" disabled={busy} onClick={() => setDialog(null)} className={btnSub}>Close</button>
+                  <button type="button" disabled={busy} onClick={() => closeDialog()} className={btnSub}>Close</button>
                 </>
               );
             })()}
@@ -460,18 +462,15 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
               const tag = lessonTag(l);
               return (
                 <>
-                  <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>
+                  {l.studentId && openProfile ? <button type="button" onClick={() => { closeDialog(() => openProfile(l.studentId!)); }} className="w-fit text-left text-[17px] font-bold text-[#5b3fe0] underline decoration-[#c9c0ff] underline-offset-2">{l.student}</button> : <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>}
                   <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(inZone(l.startsAt, tz).date)} {spanText(l.startsAt, l.endsAt, tz)}</b></p>
                   {tz !== 'Asia/Seoul' && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(l.startsAt, l.endsAt, 'Asia/Seoul')}</p>}
                   <p className="text-[14px] text-[#55526a]">
                     {minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''} · {statusText(l, now)}
                   </p>
-                  <button type="button" onClick={() => { setDialog(null); onRecord(l); }} className={btnMain}>Class Record ›</button>
-                  <div className="flex flex-wrap gap-2">
-                    {l.studentId && openProfile && <button type="button" onClick={() => { setDialog(null); openProfile(l.studentId!); }} className={`${btnSub} flex-1`}>Student profile</button>}
-                    {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex flex-1 items-center justify-center`}>Class notes</a>}
-                  </div>
-                  <button type="button" onClick={() => setDialog(null)} className={btnSub}>Close</button>
+                  <button type="button" onClick={() => { closeDialog(() => onRecord(l)); }} className={btnMain}>Class Record ›</button>
+                  {l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation' && <button type="button" onClick={() => { closeDialog(() => onRecord(l)); }} className={btnSub}>Cancel class</button>}
+                  <button type="button" onClick={() => closeDialog()} className={btnSub}>Close</button>
                 </>
               );
             })()}
@@ -542,7 +541,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
             onClick={() => save(d.mode, keysOf(d.date, d.start, d.end), isOpen || removeExtra ? null : d.note, null, isOpen ? 'Made available ✓' : removeExtra ? 'Extra hours removed ✓' : 'Blocked ✓')}>
             {busy ? 'Saving…' : isOpen ? 'Make available' : removeExtra ? 'Remove' : 'Block'}
           </button>
-          <button type="button" disabled={busy} onClick={() => setDialog(null)} className={btnSub}>Cancel</button>
+          <button type="button" disabled={busy} onClick={() => closeDialog()} className={btnSub}>Cancel</button>
         </div>
       </>
     );
