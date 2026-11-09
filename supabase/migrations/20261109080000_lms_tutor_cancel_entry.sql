@@ -1,3 +1,7 @@
+-- =====================================================================
+-- 강사 화면 수업 취소 입구 (ChatGPT 작업, 시험 DB 에 11/9 lms_tutor_cancel_entry 로 먼저 적용됨 — 저장소에 파일이 없어 시험 DB 기록 그대로 옮김)
+--  운영 DB 미적용. 취소 규칙·변경권·적립금·보강·안내는 기존 lms_change_core·트리거 그대로
+-- =====================================================================
 -- Entry point only: cancellation policy, credits, rewards, make-up and notices
 -- remain in the existing lms_change_core and its triggers.
 -- Rollback: drop function public.tutor_cancel_class(uuid, uuid, text, boolean);
@@ -39,4 +43,3 @@ begin
 end $$;
 revoke all on function public.tutor_cancel_class(uuid, uuid, text, boolean) from public, anon;
 grant execute on function public.tutor_cancel_class(uuid, uuid, text, boolean) to authenticated;
-

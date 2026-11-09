@@ -5,21 +5,23 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { TaskSource } from '@/lms/admin/board';
-import type { FakeLesson, OpsStats } from '@/lms/admin/fake-data';
+import type { LessonItem } from '@/lms/admin/dashboard';
 import { planActions } from '@/lms/admin/confirm-live';
-import { loadAdminBoard, loadOpsStats } from '@/lms/admin/live';
+import { loadAdminBoard, type DashboardStats } from '@/lms/admin/live';
+import { endNotice, loadNotices, saveNotice } from '@/lms/admin/dashboard-live';
 import { closeEnrollment, markImportChecked, markRenewalSent, setImportEndReason, setImportOrigin, notifyRenewalTutor } from '@/lms/admin/import-live';
 import { supabaseBrowser } from '@/lms/auth/client';
 import AdminDashboard from './AdminDashboard';
 import { saveTaskClosure } from '@/lms/admin/task-closure';
 import { loadTaskHistory, reopenTask } from '@/lms/admin/task-history';
 
-type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tasks: TaskSource[]; today: FakeLesson[]; stats: OpsStats | null };
+type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tasks: TaskSource[]; today: LessonItem[]; stats: DashboardStats | null };
 
 export default function AdminLive() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const sb = supabaseBrowser();
   const actions = useMemo(() => (sb ? planActions(sb) : undefined), [sb]);
+  const notices = useMemo(() => (sb ? { load: () => loadNotices(sb), save: (n: Parameters<typeof saveNotice>[1]) => saveNotice(sb, n), end: (id: string, end: boolean) => endNotice(sb, id, end) } : undefined), [sb]);
   const imports = useMemo(
     () =>
       sb
@@ -53,8 +55,8 @@ export default function AdminLive() {
       if (aal?.currentLevel !== 'aal2' || admin !== true) return window.location.replace('/lms/login');
       const now = new Date();
       try {
-        const [board, stats] = await Promise.all([loadAdminBoard(sb, now), loadOpsStats(sb, now)]);
-        setState({ kind: 'ready', nowIso: now.toISOString(), ...board, stats });
+        const board = await loadAdminBoard(sb, now);
+        setState({ kind: 'ready', nowIso: now.toISOString(), ...board });
       } catch (e) {
         setState({ kind: 'error', message: e instanceof Error ? e.message : '데이터를 읽지 못했어요.' });
       }
@@ -89,7 +91,8 @@ export default function AdminLive() {
       renewalSent={sb ? (id) => markRenewalSent(sb, id) : undefined}
       renewalNotify={sb ? (id) => notifyRenewalTutor(sb, id) : undefined}
       enrollmentClose={sb ? (id) => closeEnrollment(sb, id) : undefined}
-      onTaskClose={sb ? (task, closed) => saveTaskClosure(sb, task, closed) : undefined}
+      noExtension={sb ? (task) => saveTaskClosure(sb, task, true) : undefined}
+      notices={notices}
       history={sb ? { load: () => loadTaskHistory(sb), reopen: (r) => reopenTask(sb, r) } : undefined}
       onReload={reload}
     />

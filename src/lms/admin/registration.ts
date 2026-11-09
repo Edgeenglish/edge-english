@@ -128,21 +128,26 @@ export type Payment = {
   status: 'unconfirmed' | 'confirmed';
   method: 'bank_transfer' | 'card_link' | null;
   amount: number | null;
-  /** 실제 입금·결제 완료 시각 (ISO, 은행 거래내역·아임웹 주문 시각) */
-  paidAt: string;
+  /** 실제 결제일 (한국 날짜 YYYY-MM-DD). 결제 시각은 받지 않음 — 모르는 시각을 지어내지 않게 (대표 11/9, migration 20261109130000) */
+  paidOn: string;
   /** 아임웹 주문번호·은행 거래 식별값 (같은 결제 두 번 기록 방지, 없으면 빈칸) */
   externalRef: string;
   payerName: string;
 };
 
-export const EMPTY_PAYMENT: Payment = { status: 'unconfirmed', method: null, amount: null, paidAt: '', externalRef: '', payerName: '' };
+export const EMPTY_PAYMENT: Payment = { status: 'unconfirmed', method: null, amount: null, paidOn: '', externalRef: '', payerName: '' };
+
+/** 결제 방법에 따른 칸 이름 (대표 11/9): 카드 = 결제일·결제자명, 계좌이체 = 입금 날짜·입금자명 */
+export function payLabels(method: Payment['method']): { date: string; payer: string } {
+  return method === 'card_link' ? { date: '결제일', payer: '결제자명' } : { date: '입금 날짜', payer: '입금자명' };
+}
 
 export function checkPayment(p: Payment): string[] {
   if (p.status !== 'confirmed') return [];
   const out: string[] = [];
   if (!p.method) out.push('결제 방법(계좌이체·아임웹 카드)을 골라 주세요');
   if (!p.amount || p.amount <= 0) out.push('받은 금액을 넣어 주세요');
-  if (!p.paidAt) out.push('입금·결제 시각을 넣어 주세요');
+  if (!p.paidOn) out.push(`${payLabels(p.method).date}를 넣어 주세요`);
   return out;
 }
 
@@ -221,6 +226,6 @@ export function savePayload(d: Draft, slots: readonly RegularSlot[], tutorId: st
     slots: paid && tutorId ? slots.map((s) => ({ weekday: s.weekday, time: s.time })) : [],
     tutor_answer: paid && tutorId && tutorAccepted ? ('accepted' as const) : null,
     lessons: paid && tutorId && lessons?.length ? lessons.map((l) => ({ date: l.date, time: l.time })) : null,
-    payment: paid ? { method: pay.method, amount: pay.amount, paid_at: pay.paidAt, external_ref: pay.externalRef, payer_name: pay.payerName } : null,
+    payment: paid ? { method: pay.method, amount: pay.amount, paid_on: pay.paidOn, external_ref: pay.externalRef, payer_name: pay.payerName } : null,
   };
 }

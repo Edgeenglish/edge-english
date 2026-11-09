@@ -69,18 +69,18 @@ async function loadMakeupRequests(sb: SupabaseClient, studentId: string) {
 async function loadCompensations(sb: SupabaseClient, studentId: string): Promise<ChCompensation[]> {
   const [c, en] = await Promise.all([
     sb.from('compensations').select('id, status, source_lesson_id, enrollment_id').eq('student_id', studentId),
-    sb.from('enrollments').select('id, previous_enrollment_id, final_end_date, status, payments(paid_at)').eq('student_id', studentId),
+    sb.from('enrollments').select('id, previous_enrollment_id, final_end_date, status, payments(received_on)').eq('student_id', studentId),
   ]);
   if (c.error || en.error) return [];
-  const rows = en.data as unknown as { id: string; previous_enrollment_id: string | null; final_end_date: KstDate; status: string; payments: { paid_at: string }[] | null }[];
+  const rows = en.data as unknown as { id: string; previous_enrollment_id: string | null; final_end_date: KstDate; status: string; payments: { received_on: KstDate }[] | null }[];
   const until = (enrollmentId: string): KstDate => {
     const start = rows.find((e) => e.id === enrollmentId);
     if (!start) return '' as KstDate;
-    const chain: { finalEnd: KstDate; paidAt: Date[] }[] = [];
+    const chain: { finalEnd: KstDate; paidOn: KstDate[] }[] = [];
     for (let cur = start, i = 0; i < 50; i++) {
       const next = rows.find((e) => e.previous_enrollment_id === cur.id && ['confirmed', 'active', 'completed'].includes(e.status));
       if (!next) break;
-      chain.push({ finalEnd: next.final_end_date, paidAt: (next.payments ?? []).map((p) => new Date(p.paid_at)) });
+      chain.push({ finalEnd: next.final_end_date, paidOn: (next.payments ?? []).map((p) => p.received_on) });
       cur = next;
     }
     return compensationUseUntil(start.final_end_date, chain);

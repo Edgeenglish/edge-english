@@ -49,9 +49,9 @@ export default function HistoryPanel({ load, reopen, onClose, onReopened }: {
               <div className="flex flex-wrap items-center gap-2">
                 <b className="text-[15px] text-[#1d1b2b]">{r.name ?? '—'}</b>
                 <span className="text-[13px] text-[#55526a]">{TASK_KIND_TEXT[r.kind] ?? r.kind}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${r.source === 'auto' ? 'bg-[#fff1d6] text-[#8a5300]' : r.source === 'checked' ? 'bg-[#e3f5ea] text-[#13623a]' : 'bg-[#efebff] text-[#2b1c7a]'}`}>{HISTORY_STATUS[r.source]}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${r.source === 'auto' ? 'bg-[#fff1d6] text-[#8a5300]' : r.source === 'checked' ? 'bg-[#e3f5ea] text-[#13623a]' : 'bg-[#efebff] text-[#2b1c7a]'}`}>{r.source === 'closed' && r.kind === 'extension_review' ? '검토 종료' : HISTORY_STATUS[r.source]}</span>
               </div>
-              <p className="text-[12.5px] text-[#6b6880]">{[when(r.at), r.by ?? (r.source === 'auto' ? '자동' : ''), HISTORY_REASON[r.source]].filter(Boolean).join(' · ')}</p>
+              <p className="text-[12.5px] text-[#6b6880]">{[when(r.at), r.by ?? (r.source === 'auto' ? '자동' : ''), r.source === 'closed' && r.kind === 'extension_review' ? '' : HISTORY_REASON[r.source]].filter(Boolean).join(' · ')}</p>
               <button type="button" disabled={!!busy} onClick={() => void open(r)}
                 className="min-h-[40px] justify-self-start rounded-[10px] border border-[#e6e3ef] px-3 text-[13.5px] font-semibold text-[#1d1b2b] disabled:opacity-50">
                 {busy === `${r.source}:${r.taskId}` ? '여는 중…' : '다시 열기'}

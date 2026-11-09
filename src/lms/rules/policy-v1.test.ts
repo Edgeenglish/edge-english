@@ -55,11 +55,11 @@ describe('강사 노쇼 무료 보상 수업 기한 (POL-TU-03, 11/2: 7일 폐�
     expect(isCompensationSlotAllowed({ startsAt: kstToInstant('2026-12-01', '00:00') }, '2026-11-30', now)).toBe(false);
   });
   it('종료일 23:59까지 결제한 재등록이면 다음 수강권 종료일까지, 다음 날 결제면 이월 안 함', () => {
-    expect(compensationUseUntil('2026-11-30', [{ finalEnd: '2026-12-28', paidAt: [kstToInstant('2026-11-30', '23:59')] }])).toBe('2026-12-28');
-    expect(compensationUseUntil('2026-11-30', [{ finalEnd: '2026-12-28', paidAt: [kstToInstant('2026-12-01', '00:00')] }])).toBe('2026-11-30');
+    expect(compensationUseUntil('2026-11-30', [{ finalEnd: '2026-12-28', paidOn: ['2026-11-30'] }])).toBe('2026-12-28');
+    expect(compensationUseUntil('2026-11-30', [{ finalEnd: '2026-12-28', paidOn: ['2026-12-01'] }])).toBe('2026-11-30');
   });
   it('결제 기록 없는 재등록(시트 관리)은 이월, 이어서 반복', () => {
-    expect(compensationUseUntil('2026-11-30', [{ finalEnd: '2026-12-28', paidAt: [] }, { finalEnd: '2027-01-25', paidAt: [kstToInstant('2026-12-28', '12:00')] }])).toBe('2027-01-25');
+    expect(compensationUseUntil('2026-11-30', [{ finalEnd: '2026-12-28', paidOn: [] }, { finalEnd: '2027-01-25', paidOn: ['2026-12-28'] }])).toBe('2027-01-25');
   });
 });
 

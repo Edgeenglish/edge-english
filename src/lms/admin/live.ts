@@ -11,8 +11,9 @@ import type { TaskSource } from './board';
 import { filterActionableTasks, filterClosedTasks } from './task-closure';
 import type { PlanView } from './confirm';
 import { loadPlans } from './confirm-live';
-import type { FakeLesson, OpsStats } from './fake-data';
-import { loadMissingRecords, type MissingRecord } from '../tutor/live';
+import type { FakeLesson } from './fake-data';
+import { monthEnd, monthRegistrations, toLessonItems, type EndingItem, type LessonItem, type LessonListRow, type PaymentRow, type RegistrationItem } from './dashboard';
+import type { MissingRecord } from '../tutor/live';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const short = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}(${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
@@ -350,7 +351,9 @@ export type EndingRow = {
   weekly_count: number;
   duration_min: number;
   final_end_date: string;
-  student: { name_ko: string; code: string } | null;
+  start_date?: string;
+  previous_enrollment_id?: string | null;
+  student: { name_ko: string; code: string; is_trial_account?: boolean | null } | null;
   /** 이 수강권의 모든 수업 (POL-RN-08: 정규·보강·보상·이월 다 셈, 2026-10-27 대표) */
   lessons: { id: string; kind: string; state: 'scheduled' | 'canceled' | 'done'; starts_at: string; class_status: string | null; makeup_of: string | null; voided_at: string | null; tutor: { name: string } | null }[];
   /** 시트에서 넘어온 날짜 미정 보강 (makeup_open) */
@@ -366,6 +369,18 @@ export type EndingRow = {
  */
 /** sent: 수강권 id → 재등록 안내 [보냄] 시각 (migration 1900, 없으면 빈 목록) */
 /** reopened: 처리 내역에서 다시 연 수강권 id (자동 제외하지 않음, 3900) */
+/** 남은 수업 (POL-RN-08): 지금 이후 예정 수업 + 날짜 미정 보강(취소 수업 보강권·시트 미예약 보강·날짜 안 잡은 보상수업) */
+export function remainingOf(r: EndingRow, now: Date): { left: EndingRow['lessons']; owed: number } {
+  const left = r.lessons.filter((l) => l.state === 'scheduled' && new Date(l.starts_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const booked = new Set(r.lessons.filter((l) => l.makeup_of && l.state !== 'canceled').map((l) => l.makeup_of));
+  // 강사 노쇼는 '진행됨(done)' 상태라도 보강 권리가 있음 (수강생 홈과 같은 수, 4100) + 날짜 안 잡은 무료 보상수업
+  const owed = r.lessons.filter((l) => (l.state === 'canceled' || l.class_status === 'Tutor no-show') && !l.voided_at && l.class_status
+    && (grantsMakeup(l.class_status as ClassStatus) || l.class_status === 'Tutor long-term leave') && !booked.has(l.id)).length
+    + (r.migrated ?? []).filter((m) => m.kind === 'makeup_open').length
+    + (r.comps ?? []).filter((c) => c.status === 'available').length;
+  return { left, owed };
+}
+
 export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, string> = new Map(), reopened: Set<string> = new Set()): TaskSource[] {
   const latest = new Map<string, EndingRow>();
   for (const r of rows) {
@@ -374,18 +389,14 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
   }
   const out: TaskSource[] = [];
   for (const r of latest.values()) {
+    if (r.student?.is_trial_account) continue;
+    // 운영진 할 일 = 재등록 안내 보내기. [보냄] 하면 끝 (대표 11/9: 마지막 필수 처리 뒤 자동으로 사라짐). 이후는 '이번 달 종료 예정' 명단에서 봄
+    if (sent.has(r.id)) continue;
     // 종료일로부터 3일 뒤 자동 제외 (한국 날짜, 연장된 최종 종료일 기준).
     if (instantToKstDate(now) >= addDays(r.final_end_date, 3) && !reopened.has(r.id)) continue;
     // 정규 수업이 아직 없는 수강권(신규 매칭 전)은 제외. 기존 수강생 입력으로 넣은 '다 끝난 수강권'(수강 중, 남은 0회)은 재등록 대기로 보여 줌 (migration 2200)
     if (r.status !== 'active' && !r.lessons.some((l) => l.kind === 'regular')) continue;
-    const left = r.lessons.filter((l) => l.state === 'scheduled' && new Date(l.starts_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    // 날짜 미정 보강: 보강 권리가 있는 취소 수업 중 살아 있는 보강이 없는 것 + 시트에서 넘어온 미예약 보강
-    const booked = new Set(r.lessons.filter((l) => l.makeup_of && l.state !== 'canceled').map((l) => l.makeup_of));
-    // 강사 노쇼는 '진행됨(done)' 상태라도 보강 권리가 있음 (수강생 홈과 같은 수, 4100) + 날짜 안 잡은 무료 보상수업
-    const owed = r.lessons.filter((l) => (l.state === 'canceled' || l.class_status === 'Tutor no-show') && !l.voided_at && l.class_status
-      && (grantsMakeup(l.class_status as ClassStatus) || l.class_status === 'Tutor long-term leave') && !booked.has(l.id)).length
-      + (r.migrated ?? []).filter((m) => m.kind === 'makeup_open').length
-      + (r.comps ?? []).filter((c) => c.status === 'available').length;
+    const { left, owed } = remainingOf(r, now);
     if (left.length + owed > RENEWAL_PROMPT.maxLessonsLeft) continue;
     const last = [...r.lessons].sort((a, b) => b.starts_at.localeCompare(a.starts_at))[0];
     out.push({
@@ -397,20 +408,47 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
       lessonsLeft: left.length + owed,
       endsAt: endOfKstDay(r.final_end_date),
       tutorName: (left[0] ?? last)?.tutor?.name ?? null,
-      noticeSentAt: sent.has(r.id) ? new Date(sent.get(r.id)!) : null,
+      noticeSentAt: null,
     });
   }
   return out;
 }
 
+/**
+ * 이번 달 종료 예정 명단 (대시보드 숫자 칸): 오늘~이달 말에 끝나는 수강권. 체험용 뺌.
+ * 결제 확인된 다음 수강권이 있으면 '재등록 완료', 안내 보냈으면 '안내 보냄', 남은 2회 이하인데 안 보냈으면 '재등록 안내 필요'
+ */
+export function monthEndings(rows: EndingRow[], now: Date, sent: Map<string, string> = new Map()): EndingItem[] {
+  const today = instantToKstDate(now);
+  const end = monthEnd(today);
+  const out: EndingItem[] = [];
+  for (const r of rows) {
+    if (r.student?.is_trial_account || r.final_end_date < today || r.final_end_date > end) continue;
+    if (r.status !== 'active' && !r.lessons.some((l) => l.kind === 'regular')) continue;
+    const next = rows.find((x) => x.previous_enrollment_id === r.id);
+    const { left, owed } = remainingOf(r, now);
+    const sentAt = sent.get(r.id);
+    const lessonsLeft = left.length + owed;
+    out.push({
+      enrollmentId: r.id, studentCode: r.student?.code ?? '', studentName: r.student?.name_ko ?? '(수강생)', endDate: r.final_end_date as KstDate,
+      lessonsLeft, undated: owed, renewedStart: next ? (next.start_date as KstDate) : null,
+      noticeSentOn: sentAt ? instantToKstDate(new Date(sentAt)) : null,
+      state: next ? 'renewed' : sentAt ? 'sent' : lessonsLeft <= RENEWAL_PROMPT.maxLessonsLeft ? 'need' : 'none',
+    });
+  }
+  return out.sort((a, b) => a.endDate.localeCompare(b.endDate) || a.studentCode.localeCompare(b.studentCode));
+}
+
 // migration 1500 전 DB에는 표가 없음 → 대시보드는 그대로 보이게 빈 목록
 const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01' || e.code === 'PGRST205');
 
-/** 시험용 DB에서 운영자 대시보드 데이터 읽기 (운영자 aal2 세션 필요 — 아니면 RLS 때문에 0건) */
+const LESSON_COLS = 'id, starts_at, kind, state, class_status, student:students(code, name_ko), tutor:tutors!lessons_tutor_id_fkey(name)';
+
+/** 운영자 대시보드 데이터 읽기 (운영자 aal2 세션 필요 — 아니면 RLS 때문에 0건) */
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const today = instantToKstDate(now);
   const off = 'off:tutor_time_off(id, starts_at, ends_at, created_at, tutor:tutors(name))';
-  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, emailFails, ending, leaveOpen, leaveNotices, renewalSent, missing, closures, extReviews] = await Promise.all([
+  const [tasks, leaves, noShows, lessons, checks, origins, changeNotices, openMakeups, emailFails, ending, leaveOpen, leaveNotices, renewalSent, closures, extReviews, active, unpaid, pays] = await Promise.all([
     sb
       .from('admin_tasks')
       .select(
@@ -422,10 +460,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .from('no_show_reports')
       .select('id, reported_at, lesson:lessons(id, starts_at, student:students(name_ko), tutor:tutors!lessons_tutor_id_fkey(name))')
       .eq('status', 'open'),
-    sb
-      .from('lessons')
-      .select('id, starts_at, kind, state, class_status, student:students(name_ko), tutor:tutors!lessons_tutor_id_fkey(name)')
-      .eq('kst_date', today),
+    sb.from('lessons').select(LESSON_COLS).eq('kst_date', today),
     loadImportChecks(sb),
     sb
       .from('migrated_items')
@@ -437,64 +472,72 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .select('created_at, event, recipient_kind, change:change_requests(type, student:students(id, name_ko, code), lesson:lessons(starts_at, kind)), makeup:makeup_requests(student:students(id, name_ko, code))')
       .eq('status', 'pending'),
     loadOpenMakeups(sb),
-    // 자동 메일 실패·주소 없음 (칸이 없는 DB면 빈 목록)
-    sb.from('lesson_notices').select('created_at, recipient_kind, email_status, makeup:makeup_requests(student:students(id, name_ko, code)), change:change_requests(student:students(id, name_ko, code))').in('email_status', ['failed', 'no_address']),
+    // 자동 메일 실패·주소 없음 — 운영진이 직접 보내고 [보냄] 했거나 다시 보내기로 발송되면 끝 (칸이 없는 DB면 빈 목록)
+    sb.from('lesson_notices').select('created_at, recipient_kind, email_status, makeup:makeup_requests(student:students(id, name_ko, code)), change:change_requests(student:students(id, name_ko, code))')
+      .in('email_status', ['failed', 'no_address']).neq('status', 'sent'),
     sb
       .from('enrollments')
-      .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, final_end_date, student:students(name_ko, code), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind), comps:compensations(status)')
+      .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, start_date, final_end_date, previous_enrollment_id, student:students(name_ko, code, is_trial_account), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind), comps:compensations(status)')
       .in('status', ['confirmed', 'active']),
     sb.from('leave_items').select(`student_id, starts_at, choice, sub_stage, lesson_gone_at, ${off}`).or('choice.eq.undecided,sub_stage.in.(asked,tutor_ok)'),
     sb.from('lesson_notices').select(`event, leave:leave_items(student_id, lesson_gone_at, choice, sub_stage, ${off})`).eq('status', 'pending').not('leave_item_id', 'is', null),
     sb.from('renewal_notices').select('enrollment_id, sent_at'),
-    loadMissingRecords(sb),
     sb.from('admin_task_closures').select('task_kind, task_id, signature, closed'),
     // 예외 연장 검토 (20261108020000 전 DB 는 함수가 없어 건너뜀)
     sb.rpc('admin_extension_reviews'),
+    // 숫자 칸: '수강 중' = 수강생 목록(admin_students)과 같은 기준 — 끝나지 않은 수강권이 오늘 기간 안 (QA-05)
+    sb.from('enrollments').select('student_id, student:students(is_trial_account)').not('status', 'in', '("completed","canceled")').lte('start_date', today).gte('final_end_date', today),
+    sb.from('enrollments').select('id, student:students(is_trial_account)').eq('status', 'pending_payment'),
+    sb.from('payments').select('enrollment_id, confirmed_at, paid_at, received_on, enrollment:enrollments(previous_enrollment_id, weeks, legacy_label, weekly_count, duration_min, student:students(code, name_ko, is_trial_account))')
+      .gte('confirmed_at', `${today.slice(0, 8)}01T00:00:00+09:00`),
   ]);
-  const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error) ?? ending.error;
+  const error = tasks.error ?? leaves.error ?? noShows.error ?? lessons.error ?? (missingTable(checks.error) ? null : checks.error) ?? (missingTable(origins.error) ? null : origins.error) ?? ending.error
+    ?? active.error ?? unpaid.error ?? pays.error;
   if (error) throw new Error(`데이터를 읽지 못했어요 (${error.code ?? error.message})`);
-  if (closures.error) throw new Error('종료한 할 일 기록을 읽지 못했어요. 새로고침해 주세요.');
   const ns = (noShows.data ?? []) as unknown as (NoShowRow & { lesson: { id: string } | null })[];
   const taskRows = (tasks.data ?? []) as unknown as TaskRow[];
   const plans = await loadPlans(sb, taskRows.filter((t) => t.kind === 'new_student_matching' && t.enrollment_id).map((t) => t.enrollment_id!));
+  const sent = new Map(renewalSent.error ? [] : (renewalSent.data ?? []).map((r) => [r.enrollment_id as string, r.sent_at as string]));
+  const endingRows = (ending.data ?? []) as unknown as EndingRow[];
+  const trial = (r: { student?: { is_trial_account?: boolean | null } | { is_trial_account?: boolean | null }[] | null }) => {
+    const st = Array.isArray(r.student) ? r.student[0] : r.student;
+    return !!st?.is_trial_account;
+  };
+  // [카드 닫기] 없앰 (대표 11/9) — 새로 닫는 길은 예외 연장 검토 [검토 종료]뿐. 개편 전에 대표가 닫은 카드는 그대로 둠:
+  // 같은 상태로 남아 있을 때만 숨고, 새 안내·변경이 생기면(내용이 바뀌면) 다시 보임 (운영 4건이 다시 떠 중복·불필요 카드가 되지 않게)
+  const decided = (closures.data ?? []).filter((c) => c.closed);
   return {
     tasks: filterClosedTasks(filterActionableTasks([
       ...toTaskSources(taskRows, (leaves.data ?? []) as unknown as LeaveRow[], ns, plans),
       ...toImportChecks((checks.data ?? []) as unknown as ImportCheckRow[], (origins.data ?? []) as unknown as UnknownOriginRow[]),
-      ...toEndingSoon((ending.data ?? []) as unknown as EndingRow[], now,
-        // 1900 전 DB는 표가 없음 → 보냄 기록 없이
-        new Map(renewalSent.error ? [] : (renewalSent.data ?? []).map((r) => [r.enrollment_id as string, r.sent_at as string])),
+      ...toEndingSoon(endingRows, now, sent,
         new Set((closures.data ?? []).filter((c) => c.task_kind === 'ending_soon' && !c.closed).map((c) => c.task_id as string))),
       // 1700 전 DB(표·칸 없음)는 건너뜀
       ...(changeNotices.error ? [] : toLessonChanges((changeNotices.data ?? []) as unknown as ChangeNoticeRow[], (openMakeups.data ?? []) as unknown as OpenMakeupRow[], now,
         emailFails.error ? [] : (emailFails.data ?? []) as unknown as EmailFailRow[])),
       // 1800 전 DB는 건너뜀
       ...(leaveOpen.error || leaveNotices.error ? [] : toTutorLeaves((leaveOpen.data ?? []) as unknown as LeaveOpenRow[], (leaveNotices.data ?? []) as unknown as LeaveNoticeRow[], now)),
-      // 2000 전 DB는 null
-      ...toMissingRecords(missing ?? []),
+      // Class Record 미기록은 강사 Home 'Classes to record' 에만 (대표 11/9: 운영진 할 일에서 뺌)
       ...(extReviews.error ? [] : toExtensionReviews((extReviews.data ?? []) as ExtensionReviewRow[])),
-    ]), (closures.data ?? []).filter((c) => c.closed)),
-    today: toTodayLessons((lessons.data ?? []) as unknown as LessonRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
+    ]), decided),
+    today: toLessonItems((lessons.data ?? []) as unknown as LessonListRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
+    stats: {
+      activeStudents: new Set(((active.data ?? []) as unknown as { student_id: string; student: { is_trial_account?: boolean } | null }[]).filter((r) => !trial(r)).map((r) => r.student_id)).size,
+      unpaid: ((unpaid.data ?? []) as unknown as { student: { is_trial_account?: boolean } | null }[]).filter((r) => !trial(r)).length,
+      registrations: monthRegistrations((pays.data ?? []) as unknown as PaymentRow[], today),
+      endings: monthEndings(endingRows, now, sent),
+    } satisfies DashboardStats,
   };
 }
 
-/** 상단 운영 현황 3개: 수강 중 수강생 · 이번 주(월~일, KST) 수업 진행/전체 · 이번 달 결제 확인된 등록(신규/재등록) */
-export async function loadOpsStats(sb: SupabaseClient, now: Date): Promise<OpsStats | null> {
-  const today = instantToKstDate(now);
-  const dow = new Date(`${today}T00:00:00Z`).getUTCDay();
-  const monday = addDays(today, -((dow + 6) % 7));
-  const monthStart = `${today.slice(0, 8)}01`;
-  // '수강 중' = 수강생 목록(admin_students)과 같은 기준: 끝나지 않은 수강권이 오늘 기간 안 (status 가 confirmed·pending_payment 여도 기간이 시작됐으면 수강 중) (QA-05)
-  const [active, week, pays] = await Promise.all([
-    sb.from('enrollments').select('student_id').not('status', 'in', '("completed","canceled")').lte('start_date', today).gte('final_end_date', today),
-    sb.from('lessons').select('state').gte('kst_date', monday).lte('kst_date', addDays(monday, 6)).neq('state', 'canceled'),
-    sb.from('payments').select('enrollment:enrollments(previous_enrollment_id)').gte('confirmed_at', `${monthStart}T00:00:00+09:00`),
+export type DashboardStats = { activeStudents: number; unpaid: number; registrations: RegistrationItem[]; endings: EndingItem[] };
+
+/** 기간별 수업 목록 (한국 날짜 from~to) */
+export async function loadLessonRange(sb: SupabaseClient, from: string, to: string): Promise<LessonItem[]> {
+  const [l, ns] = await Promise.all([
+    sb.from('lessons').select(LESSON_COLS).gte('kst_date', from).lte('kst_date', to).order('starts_at'),
+    sb.from('no_show_reports').select('lesson_id').eq('status', 'open'),
   ]);
-  if (active.error || week.error || pays.error) return null;
-  const p = (pays.data ?? []) as unknown as { enrollment: { previous_enrollment_id: string | null } | null }[];
-  return {
-    activeStudents: new Set((active.data ?? []).map((r) => r.student_id)).size,
-    weekLessons: { done: (week.data ?? []).filter((r) => r.state === 'done').length, total: (week.data ?? []).length },
-    monthEnrollments: { fresh: p.filter((r) => !r.enrollment?.previous_enrollment_id).length, renewal: p.filter((r) => !!r.enrollment?.previous_enrollment_id).length },
-  };
+  if (l.error) throw new Error('수업을 읽지 못했어요.');
+  return toLessonItems((l.data ?? []) as unknown as LessonListRow[], new Set((ns.data ?? []).map((r) => r.lesson_id as string)));
 }

@@ -9,7 +9,7 @@ import { firstLessonAt, planAlert, type PlanView } from './confirm';
 
 /** 수업 변경 안내 종류 → 카드 맨 위 '무슨 일' (lesson_notices.event, migration 1700) */
 const CHANGE_EVENT_TEXT: Record<string, string> = {
-  change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림', makeup_rescheduled: '보강 시간 변경', makeup_expired: '보강 신청 만료', makeup_tutor_removed: '보강 강사 바뀜',
+  change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림', makeup_rescheduled: '보강 시간 변경', makeup_tutor_removed: '보강 강사 바뀜', makeup_expired: '보강 신청 만료',
 };
 const LESSON_KIND_TEXT: Record<string, string> = { regular: '정규 ', makeup: '보강 ', migrated_makeup: '보강 ', migrated_extra: '추가 ', compensation: '보상 ' };
 const CANCEL_BY_TEXT: Record<string, string> = { student_cancel: '수강생측 취소', tutor_cancel: '강사측 취소', admin_cancel: '운영진 취소' };
@@ -206,13 +206,13 @@ export type ExtensionReviewTask = {
 export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask | ClassRecordMissingTask | ExtensionReviewTask;
 
 /** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
-export type Category = 'matching' | 'tutor_ack' | 'ending' | 'makeup' | 'issue';
+export type Category = 'matching' | 'tutor_ack' | 'ending' | 'issue';
 
+/** 대시보드 5차 (대표 11/9): 보강 미신청 칸 없앰 — 운영진이 직접 풀 일만 */
 export const CATEGORY_LABEL: Record<Category, string> = {
   matching: '신규 수강생 매칭',
   tutor_ack: '강사 확인 대기',
   ending: '수강기간 종료 임박',
-  makeup: '보강 미신청',
   issue: '오류·조치 필요',
 };
 
@@ -224,8 +224,6 @@ export function categoryOf(kind: TaskSource['kind']): Category {
       return 'tutor_ack';
     case 'ending_soon':
       return 'ending';
-    case 'makeup_unrequested':
-      return 'makeup';
     default:
       return 'issue'; // 노쇼 신고·자동 처리 실패·장기 연기 승인
   }
@@ -657,8 +655,8 @@ export function buildBoard(tasks: TaskSource[], now: Date): BoardItem[] {
     .map((x) => x.item);
 }
 
-/** 필터: 전체 / 긴급(노쇼·기한 초과·24시간 안) / 오류만 / 요약 카드 한 칸 */
-export type BoardFilter = 'all' | 'urgent' | 'error' | Category;
+/** 필터: 전체 / 칸 하나 (긴급만·오류만 필터 없앰, 대표 11/9) */
+export type BoardFilter = 'all' | Category;
 
 export function isUrgent(i: BoardItem): boolean {
   return i.severity !== 'open';
@@ -673,12 +671,10 @@ export function searchBoard(items: BoardItem[], q: string): BoardItem[] {
 
 export function filterBoard(items: BoardItem[], f: BoardFilter): BoardItem[] {
   if (f === 'all') return items;
-  if (f === 'urgent') return items.filter(isUrgent);
-  if (f === 'error') return items.filter((i) => i.error);
   return items.filter((i) => i.category === f);
 }
 
-/** 요약 카드 5개의 숫자 (칸별 개수 + 그중 긴급 개수). 합계 = 전체 개수 */
+/** 칸별 숫자 (칸별 개수 + 그중 긴급 개수). 합계 = 전체 개수 */
 export function categoryCounts(items: BoardItem[]): Record<Category, { n: number; urgent: number }> {
   const out = Object.fromEntries((Object.keys(CATEGORY_LABEL) as Category[]).map((c) => [c, { n: 0, urgent: 0 }])) as Record<Category, { n: number; urgent: number }>;
   for (const i of items) {

@@ -25,6 +25,7 @@ import {
   firstDateBase,
   firstDateWarnings,
   newRequestId,
+  payLabels,
   planSummary,
   savePayload,
   slotProblem,
@@ -34,6 +35,7 @@ import {
   type Payment,
   type RegTutor,
 } from '@/lms/admin/registration';
+import { mdw } from '@/lms/admin/students';
 import { dayLabel, diffFromKst, weekOf } from '@/lms/admin/schedule';
 import { eunNeun, findCity, findCountry, manyZones, searchCities, searchCountries, searchZones, suggestTimezone, zoneName } from '@/lms/admin/places';
 import { AdminHeader } from '../../ui';
@@ -513,7 +515,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
       {paid ? (
         <>
           {row('결제 금액', won(pay.amount))}
-          {row('결제 시각', pay.paidAt ? pay.paidAt.replace('T', ' ').slice(0, 16) : '-')}
+          {row(payLabels(pay.method).date, pay.paidOn ? mdw(pay.paidOn) : '-')}
           {row('방법', pay.method === 'card_link' ? '아임웹 카드' : '계좌이체')}
         </>
       ) : (
@@ -620,10 +622,10 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
             <input inputMode="numeric" value={pay.amount ?? ''} onChange={(e) => setPay({ ...pay, amount: e.target.value ? Number(e.target.value.replace(/\D/g, '')) : null })} className={inputCls(false)} />
             {pay.amount ? <span className="mt-1 block text-[12px] text-[#6b6880]">{won(pay.amount)}</span> : null}
           </Field>
-          <Field label="입금·결제 완료 시각 (한국 시간)">
-            <input type="datetime-local" value={pay.paidAt.slice(0, 16)} onChange={(e) => setPay({ ...pay, paidAt: e.target.value ? `${e.target.value}:00+09:00` : '' })} className={inputCls(false)} />
+          <Field label={`${payLabels(pay.method).date} (한국 날짜)`}>
+            <DateInput value={pay.paidOn} onChange={(v) => setPay({ ...pay, paidOn: v })} aria-label={payLabels(pay.method).date} className={inputCls(false)} />
           </Field>
-          <Field label="입금자명">
+          <Field label={payLabels(pay.method).payer}>
             <input value={pay.payerName} onChange={(e) => setPay({ ...pay, payerName: e.target.value })} className={inputCls(false)} />
           </Field>
           <Field label="아임웹 주문번호 · 거래 식별값 (있으면)" wide>

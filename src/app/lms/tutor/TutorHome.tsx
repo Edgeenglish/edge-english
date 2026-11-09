@@ -18,6 +18,7 @@ import FirstLessonFollowup, { type FollowupSave } from './FirstLessonFollowup';
 import type { FollowupTodo } from '@/lms/tutor/followup';
 import { LangCtx, useT, type Lang } from '@/lms/tutor/lang';
 import { Rich } from '@/app/lms/Rich';
+import HomeNotices from '@/app/lms/HomeNotices';
 import { enBoth, stripBold } from '@/lms/admin/time-text';
 import { useDetailBack } from './useDetailBack';
 import {
@@ -448,6 +449,9 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                 </div>
               )}
             </section>
+
+            {/* 운영진 공지 (대시보드에서 게시, 게시 중일 때만) */}
+            <HomeNotices who="tutor" title={t('Notice', '공지')} />
 
             <section aria-label="Today" className={card}>
               <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{t('Today’s classes', '오늘 수업')} <span className="text-[#6b6880]">{todayLessons.length || ''}</span></h2>
