@@ -68,40 +68,34 @@ ul.plain{margin:0;padding-left:20px;display:grid;gap:6px}
 <div class="wrap">
   <header>
     <h1>학생 카카오 로그인 시안</h1>
-    <p class="lead">학생 로그인 7번 중 6번이 카카오톡 안 브라우저였습니다(11/8 운영 기록). 카카오 로그인으로 이메일 코드를 기다리고 옮겨 적는 일을 줄이려는 시안입니다(몇 번 누르는지는 시험에서 확인). 대상은 학생만이고, 강사·운영진 로그인은 그대로입니다.</p>
+    <p class="lead">학생 로그인 7번 중 6번이 카카오톡 안 브라우저였습니다(11/8 운영 기록). 카카오 로그인으로 이메일 코드를 기다리고 옮겨 적는 일을 줄이려는 시안입니다. v3: 대표 결정(11/9) 반영. 대상은 학생만이고, 강사·운영진 로그인은 그대로입니다.</p>
   </header>
 
   <section class="box q">
-    <h2>대표 결정 4가지</h2>
-    <ol class="qs">
-      <li><b>① 카카오 계정을 학생에게 어떻게 연결할까요?</b>
-        <div class="opt"><span class="rec">A (추천)</span> 처음 한 번만 등록 이메일 코드로 본인 확인 → 그때 카카오 계정이 자동 연결. 다음부터 카카오 버튼만.</div>
-        <div class="opt">B 카카오 계정 이메일이 등록 이메일과 같으면 바로 연결. 카카오 '비즈 앱' 전환·이메일 동의항목 신청이 필요하고, 학생이 다른 이메일로 등록했으면 결국 A처럼 해야 함.</div>
-      </li>
-      <li><b>② 로그인 화면 순서</b>
-        <div class="opt"><span class="rec">카카오 버튼 맨 위 (추천)</span> / 이메일 코드를 위, 카카오를 아래</div>
-      </li>
-      <li><b>③ 지금 학생 13명 안내</b>
-        <div class="opt"><span class="rec">다음 로그인 때 자연스럽게 (추천)</span> — 이미 로그인된 학생은 안 바뀜. 화면 4의 홈 '내 정보' 줄에서 언제든 [카카오 연결] 가능 / 따로 톡 안내도 보냄</div>
-      </li>
-      <li><b>④ 영어 화면(해외 학생)에도 카카오 버튼을 보일까요?</b>
-        <div class="opt"><span class="rec">보임 (추천)</span> — 해외 학생도 카카오톡으로 링크를 받음 / 한국어 화면에만</div>
-      </li>
-    </ol>
+    <h2>대표 결정 (11/9) · 남은 질문 1개</h2>
+    <ul class="plain">
+      <li>✓ A안 — 이메일로 로그인한 기존 계정에 카카오 연결 · ✓ 카카오 버튼 맨 위 · ✓ 따로 공지 없음 · ✓ 영어 화면에도 카카오 버튼</li>
+      <li>✓ 첫 연결은 로그인한 학생의 <b>내 정보 → [카카오 연결]</b>에서만 시작. 연결 뒤엔 버튼 대신 '카카오 연결됨'</li>
+      <li>✓ 오류는 학생에게 짧게, 이메일 로그인으로 바로 이어지게 (오류 화면 2개로 줄임)</li>
+      <li>✓ 시험 환경에서만. 검증 전 운영 적용 안 함. 11/15 주소 이전과 따로 진행</li>
+    </ul>
+    <p style="margin-top:12px"><b>남은 질문:</b> 연결 버튼이 '내 정보' 안에만 있으면 학생 대부분이 못 찾아 연결이 거의 안 될 수 있습니다(추정). 이메일로 로그인한 학생 홈 맨 위에 <b>[카카오 연결]</b> 한 줄(화면 3)을 넣을까요?</p>
+    <div class="opt"><span class="rec">넣음 (추천)</span> — 연결하면 사라짐, ✕로 닫으면 다시 안 보임 / 안 넣음 — 내 정보에서만</div>
   </section>
 
   <section class="box">
-    <h2>흐름 (A안) — 계정은 이메일 확인으로만 찾고, 카카오는 그 계정에 붙이기만</h2>
+    <h2>흐름</h2>
     <div class="flow">
-      <span>[카카오로 로그인]</span><i>→</i><span>연결 안 된 카카오: 계정 안 생김 (새 가입 막힘)</span><i>→</i>
-      <span>등록 이메일 코드로 <b>기존 계정</b> 로그인</span><i>→</i><span>그 계정에 카카오 붙이기 (linkIdentity)</span><i>→</i>
-      <span>홈 (또는 보강 날짜 고르기 링크)</span>
+      <span>처음: 이메일 코드 로그인 (지금과 같음)</span><i>→</i><span>내 정보(또는 홈 한 줄) [카카오 연결]</span><i>→</i>
+      <span>카카오 화면</span><i>→</i><span>'카카오 연결됨'</span>
+    </div>
+    <div class="flow" style="margin-top:8px">
+      <span>다음부터: [카카오로 로그인]</span><i>→</i><span>홈 (또는 보강 날짜 고르기 링크)</span>
     </div>
     <ul class="plain" style="margin-top:10px;font-size:14px">
-      <li>카카오 버튼을 먼저 눌러도 새 계정은 만들어지지 않음 — 시험·운영 모두 '새 가입 막힘' 켜져 있음(11/9 확인). 연결은 항상 <b>이메일로 로그인된 기존 계정</b>에만 붙음 (ChatGPT 검수 1번과 같은 순서)</li>
-      <li>학생 번호·수강권·수업·보강·변경권은 기존 로그인 계정에 그대로 연결돼 있고, 카카오는 같은 계정의 로그인 방법만 하나 늘림 → 시험에서 연결 전·후 학생 번호와 화면 내용이 같은지 확인</li>
-      <li>두 번째부터: [카카오로 로그인] → 바로 홈. 보강 바로가기 링크(?makeup=)는 카카오를 거쳐도 같은 화면으로 돌아옴</li>
-      <li>이메일 로그인은 그대로 둠 — 카카오 없는 해외 학생은 지금처럼 이메일 코드</li>
+      <li>연결 안 된 카카오로 [카카오로 로그인]을 누르면 계정은 생기지 않고(시험·운영 모두 새 가입 막힘, 11/9 확인) 화면 5로 — 이메일 칸에 바로 입력</li>
+      <li>카카오는 기존 계정에 로그인 방법만 하나 더함 → 학생 번호·수강권·수업·보강·변경권 그대로. 시험에서 연결 전·후 대조</li>
+      <li>카카오톡 안·사파리·PC에서 몇 번 눌러야 하는지는 시험 전에는 단정하지 않음</li>
     </ul>
   </section>
 
@@ -109,7 +103,7 @@ ul.plain{margin:0;padding-left:20px;display:grid;gap:6px}
     <h2>휴대폰 화면</h2>
     <div class="phones">
       <div class="ph">
-        <h3>1. 로그인 화면 (바뀜)</h3>
+        <h3>1. 로그인 화면</h3>
         <div class="scr">
           <div class="logo">엣지영어<small>수업 관리</small></div>
           <div class="card">
@@ -121,97 +115,77 @@ ul.plain{margin:0;padding-left:20px;display:grid;gap:6px}
             <p class="sm">비밀번호는 없어요.<br>문의: 카카오톡 채널 엣지영어</p>
           </div>
         </div>
-        <p class="cap">카카오 버튼은 카카오 공식 노랑·말풍선 모양(카카오 디자인 가이드 기준).</p>
+        <p class="cap">영어 화면도 같은 배치('Log in with Kakao').</p>
       </div>
 
       <div class="ph">
-        <h3>2. 처음 쓰는 카카오 계정</h3>
+        <h3>2. 내 정보 — 연결 전</h3>
         <div class="scr">
-          <div class="logo">엣지영어<small>수업 관리</small></div>
-          <div class="card">
-            <div class="note">이 카카오 계정은 아직 연결 전이에요</div>
-            <p class="sm">엣지영어에 등록한 이메일로 한 번만 확인하면, 다음부터는 카카오로 바로 들어와요.</p>
-            <div class="input">이메일</div>
-            <button class="btn p" type="button">코드 받기</button>
-          </div>
-        </div>
-        <p class="cap">등록 안 된 카카오 계정으로는 계정이 새로 생기지 않음(지금처럼 '새 가입 막힘' 설정 유지).</p>
-      </div>
-
-      <div class="ph">
-        <h3>3. 이메일 코드 (지금 화면 + 한 줄)</h3>
-        <div class="scr">
-          <div class="logo">엣지영어<small>수업 관리</small></div>
-          <div class="card">
-            <h4>코드 입력</h4>
-            <p class="sm">s***@naver.com 으로 보낸 6자리</p>
-            <div class="code"><span>4</span><span>8</span><span>1</span><span></span><span></span><span></span></div>
-            <div class="good hl">확인하면 카카오 계정이 연결돼요</div>
-            <button class="btn p" type="button">확인</button>
-          </div>
-        </div>
-        <p class="cap">확인 뒤 카카오 화면이 1초쯤 보였다가 돌아옴(연결 단계). 몇 번 누르는지는 시험에서 확인.</p>
-      </div>
-
-      <div class="ph">
-        <h3>4. 학생 홈 — 연결 완료</h3>
-        <div class="scr">
-          <div class="good">✓ 카카오 로그인 연결됨. 다음부터 [카카오로 로그인]만 누르세요.</div>
           <div class="card">
             <div class="home-h">내 정보</div>
             <div class="row"><span>이름</span><b>김O수</b></div>
-            <div class="row"><span>로그인 방법</span><b>이메일 코드 · 카카오 ✓</b></div>
-            <div class="row hl"><span>카카오 연결 안 된 학생</span><b style="color:var(--accent)">[카카오 연결]</b></div>
+            <div class="row"><span>로그인</span><b>이메일 코드</b></div>
+            <button class="btn k hl" type="button"><svg class="kicon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.6c-.1.3.3.6.6.4l4.2-2.8c.5.1 1 .1 1.5.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg>카카오 연결</button>
           </div>
-          <p class="sm">맨 위 초록 한 줄은 연결한 그날 한 번만 보임.</p>
         </div>
-        <p class="cap">'내 정보'의 한 줄은 이미 로그인된 학생이 스스로 연결할 때 씀.</p>
+        <p class="cap">누르면 카카오 화면 → 돌아와서 화면 4.</p>
+      </div>
+
+      <div class="ph">
+        <h3>3. 홈 맨 위 한 줄 (남은 질문)</h3>
+        <div class="scr">
+          <div class="card" style="grid-template-columns:1fr auto;align-items:center">
+            <span style="font-size:13.5px;font-weight:600">다음부터 카카오로 로그인</span>
+            <span style="font-size:13px;color:var(--muted)">✕</span>
+            <button class="btn k" type="button" style="grid-column:1/-1"><svg class="kicon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.6c-.1.3.3.6.6.4l4.2-2.8c.5.1 1 .1 1.5.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg>카카오 연결</button>
+          </div>
+          <div class="card"><div class="home-h">다음 수업</div><p class="sm">11/12(목) 오후 8:00 (한국 시간)</p></div>
+        </div>
+        <p class="cap">이메일 코드로 로그인한, 카카오 연결 안 된 학생에게만.</p>
+      </div>
+
+      <div class="ph">
+        <h3>4. 내 정보 — 연결 뒤</h3>
+        <div class="scr">
+          <div class="good">카카오 연결됨</div>
+          <div class="card">
+            <div class="home-h">내 정보</div>
+            <div class="row"><span>이름</span><b>김O수</b></div>
+            <div class="row"><span>로그인</span><b>이메일 코드 · 카카오 연결됨</b></div>
+          </div>
+        </div>
+        <p class="cap">[카카오 연결] 버튼 없음. 초록 줄은 연결한 그때 한 번.</p>
       </div>
     </div>
   </section>
 
   <section>
-    <h2>오류 화면 (휴대폰)</h2>
+    <h2>오류 화면 (2개)</h2>
     <div class="phones">
       <div class="ph">
-        <h3>5. 카카오에서 취소·실패</h3>
+        <h3>5. 카카오로 로그인 못 함</h3>
         <div class="scr">
           <div class="logo">엣지영어<small>수업 관리</small></div>
           <div class="card">
-            <div class="note">카카오 로그인을 마치지 못했어요</div>
-            <button class="btn k" type="button">카카오로 다시 로그인</button>
-            <div class="or">또는 이메일 코드로</div>
-            <div class="input">이메일</div>
+            <div class="note">카카오로 로그인하지 못했어요. 이메일 코드로 로그인해 주세요.</div>
+            <div class="input hl">이메일</div>
             <button class="btn p" type="button">코드 받기</button>
+            <button class="btn k" type="button"><svg class="kicon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.6c-.1.3.3.6.6.4l4.2-2.8c.5.1 1 .1 1.5.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg>카카오로 로그인</button>
           </div>
         </div>
-        <p class="cap">로그인 화면 맨 위 한 줄만 더함. 보강 링크로 왔으면 그 안내 줄도 그대로.</p>
+        <p class="cap">연결 안 된 카카오 · 취소 · 실패 모두 이 화면. 이메일 칸이 위로 옴. 보강 링크로 왔으면 로그인 뒤 그 화면으로.</p>
       </div>
       <div class="ph">
-        <h3>6. 다른 학생에 연결된 카카오</h3>
+        <h3>6. 연결 못 함</h3>
         <div class="scr">
-          <div class="logo">엣지영어<small>수업 관리</small></div>
           <div class="card">
-            <div class="note">이 카카오 계정은 다른 학생 계정에 연결돼 있어요</div>
-            <p class="sm">이메일 코드로 로그인돼 있어요. 카카오 연결은 하지 않았어요.</p>
-            <button class="btn p" type="button">홈으로</button>
-            <p class="sm">문의: 카카오톡 채널 엣지영어</p>
+            <div class="home-h">내 정보</div>
+            <div class="note">이 카카오 계정은 연결할 수 없어요. 문의: 카카오톡 채널 엣지영어</div>
+            <div class="row"><span>로그인</span><b>이메일 코드</b></div>
+            <button class="btn k" type="button"><svg class="kicon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.6c-.1.3.3.6.6.4l4.2-2.8c.5.1 1 .1 1.5.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg>카카오 연결</button>
           </div>
         </div>
-        <p class="cap">예: 가족이 같은 휴대폰 카카오로 시도. 연결 거부(identity_already_exists) — 다른 학생 기록에 붙지 않음.</p>
-      </div>
-      <div class="ph">
-        <h3>7. 이미 다른 카카오가 연결됨</h3>
-        <div class="scr">
-          <div class="logo">엣지영어<small>수업 관리</small></div>
-          <div class="card">
-            <div class="note">이 계정에는 다른 카카오 계정이 연결돼 있어요</div>
-            <p class="sm">처음 연결한 카카오 계정으로 로그인해 주세요.</p>
-            <button class="btn p" type="button">홈으로</button>
-            <p class="sm">문의: 카카오톡 채널 엣지영어</p>
-          </div>
-        </div>
-        <p class="cap">카카오 계정을 바꾸고 싶으면 운영진이 처리(연결 해제). 학생 화면엔 해제 버튼 없음.</p>
+        <p class="cap">다른 학생에 이미 연결된 카카오 등. 다른 학생 기록에는 붙지 않음. 취소면 아무 글 없이 그대로.</p>
       </div>
     </div>
   </section>
@@ -233,15 +207,15 @@ ul.plain{margin:0;padding-left:20px;display:grid;gap:6px}
         </div>
       </div>
     </div>
-    <p class="sm" style="margin-top:8px">지금 로그인 화면처럼 가운데 카드 하나(폭 400px). PC에서 [카카오로 로그인]을 누르면 카카오 로그인 창(QR 또는 카카오 계정 입력)이 열림. 2~7번 화면도 같은 카드 안에서 바뀜.</p>
+    <p class="sm" style="margin-top:8px">지금 로그인 화면처럼 가운데 카드 하나(폭 400px). PC에서 [카카오로 로그인]을 누르면 카카오 로그인 창(QR 또는 카카오 계정 입력)이 열림. 5번 화면도 같은 카드 안에서 바뀜. 내 정보·홈 한 줄은 학생 홈 PC 화면 오른쪽 칸 안에 같은 모양.</p>
   </section>
 
   <section class="box">
-    <h2>대표가 해 주실 일 (A안 승인 뒤)</h2>
+    <h2>대표가 해 주실 일 (시험 시작 때)</h2>
     <ul class="plain">
       <li><b>카카오 디벨로퍼스</b>(developers.kakao.com)에 엣지영어 카카오 계정으로 로그인 → 앱 만들기 '엣지영어' → REST API 키 · 카카오 로그인 Client Secret 두 값 확인 (값은 채팅에 붙이지 말고 제가 안내하는 Supabase 화면에 직접 입력)</li>
       <li>Redirect URI 2개 등록: 시험용·운영용 Supabase 주소 — 정확한 값은 승인 뒤 복사용으로 드림</li>
-      <li>동의항목: A안은 <b>닉네임만</b>(필수 최소). B안이면 비즈 앱 전환 + 이메일 동의항목 추가</li>
+      <li>동의항목: <b>닉네임만</b>(필수 최소, 비즈 앱 전환 불필요)</li>
     </ul>
     <p class="sm" style="margin-top:10px">그 뒤 제가: 시험 Supabase에 카카오 켜기 + '직접 연결(manual linking)' 켜기 → 시험 주소(lms-test)에서 실제 휴대폰 카카오톡 안·사파리·PC 확인 → 결과 공유 → 운영 승인. DB 표 변경 없음 예정(로그인 설정·로그인 화면 코드만).</p>
   </section>
