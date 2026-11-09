@@ -14,6 +14,9 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onC
   onPartial?: (partial: boolean) => void;
 };
 
+/** '0026-11-12' → '2026-11-12' (두 자리 연도 10~99만) */
+const short = (v: string) => (/^00[1-9]\d-/.test(v) ? `20${v.slice(2)}` : v);
+
 export default function DateInput({ value, onChange, onPartial, ...rest }: Props) {
   const [raw, setRaw] = useState<string>(value);
   const last = useRef<string>(value);
@@ -31,13 +34,20 @@ export default function DateInput({ value, onChange, onPartial, ...rest }: Props
       type="date"
       value={raw}
       onChange={(e) => {
-        const v = e.target.value;
-        setRaw(v);
+        const raw2 = e.target.value;
+        setRaw(raw2);
+        // 연도를 두 자리만 쳐도(26 → 0026) 2026으로 (대표 11/9). 칸 글자는 치는 중이면 그대로 두고 칸을 떠날 때 바꿈
+        const v = short(raw2);
         if (v === '' || isKstDate(v)) {
           last.current = v;
           onPartial?.(false);
           onChange(v);
         } else onPartial?.(true);
+      }}
+      onBlur={(e) => {
+        const v = short(raw);
+        if (v !== raw && isKstDate(v)) setRaw(v);
+        rest.onBlur?.(e);
       }}
     />
   );
