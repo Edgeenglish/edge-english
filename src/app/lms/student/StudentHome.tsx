@@ -121,7 +121,7 @@ const overseas = () => VIEW_TZ !== 'Asia/Seoul';
 function ZoneBar({ change }: { change?: { value: string; options: string[]; disabled: boolean; onChange: (tz: string) => void } }) {
   const tone = ADMIN_KST ? 'bg-[#fff1d6] text-[#8a5300]' : 'bg-[#efeaff] text-[#3a22b0]';
   const text = ADMIN_KST ? '한국 시간(KST) 기준으로 보는 중' : `모든 날짜·시간은 ${zoneText()} 기준`;
-  // 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(121) A안 — 배지 위에 투명한 고르기 칸을 겹침)
+  // 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(122) A안 — 배지 위에 투명한 고르기 칸을 겹침)
   if (change && !ADMIN_KST)
     return (
       <label className={`relative inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
