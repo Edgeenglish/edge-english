@@ -90,6 +90,14 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     expect(item.actions[0].href).toBe('/lms/admin/change?student=STU-0001');
   });
 
+  it('대시보드: 강사 답만 기다리는 보강 신청은 할 일에 올리지 않음 (대표 11/9)', () => {
+    const s = { id: 's', name_ko: '김민수', code: 'STU-0001' };
+    expect(toLessonChanges([], [{ created_at: '2026-10-26T10:00:00Z', student: s }], now)).toEqual([]);
+    // 강사가 모두 불가라고 답한 신청(예외)은 그대로
+    const [item] = buildBoard(toLessonChanges([], [{ created_at: '2026-10-26T10:00:00Z', tutor_answered_at: '2026-10-27T10:00:00Z', student: s, candidates: [{ tutor_answer: 'no', proposed_by: 'student' }] }], now), now);
+    expect(item.tag).toBe('보강 강사 불가 · 재조율');
+  });
+
   it('대시보드: 보강 확정 자동 메일을 못 보낸 수강생은 카드로 (운영진이 직접 보내기)', () => {
     const s = { id: 's', name_ko: '이도연', code: 'STU-0008' };
     const [item] = buildBoard(toLessonChanges([], [], now, [

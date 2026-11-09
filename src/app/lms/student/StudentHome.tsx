@@ -11,6 +11,7 @@ import books from '@/data/books.json';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
 import { koZoneCity } from '@/lms/admin/places';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
+import { CONFIRMED } from '@/lms/rules/policy';
 import { diffDays, formatInZone, hoursBetween, instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { MEET_MISSING_KO, meetRoomUrl } from '@/lms/rules/meet';
 import type { PreviewExtras } from '@/lms/student/fake-data';
@@ -67,6 +68,7 @@ const STATUS_STYLE: Record<RequestStatus, string> = {
   confirmed: 'bg-[#e3f5ea] text-[#13623a]',
   canceled: 'bg-[#eeecf4] text-[#55526a]',
   completed: 'bg-[#e3f5ea] text-[#13623a]',
+  expired: 'bg-[#eeecf4] text-[#55526a]',
 };
 
 const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
@@ -1288,6 +1290,10 @@ function MakeupPicker(props: {
                   </button>
                 </div>
               ))}
+              {/* 시작까지 6시간 미만 시간을 고르면 경고만, 신청은 그대로 (대표 11/9) */}
+              {picked.some((t) => t.getTime() - Date.now() < CONFIRMED.changeNoticeHours * 3600_000) && (
+                <p className="text-[13.5px] leading-relaxed text-[#b3261e]">수업 시작까지 6시간 미만 남았습니다. 강사가 요청을 제때 확인하지 못할 수 있으며, 강사가 확정해야 수업이 진행됩니다.</p>
+              )}
               <button
                 type="button"
                 disabled={picked.length === 0 || props.busy}
@@ -1599,14 +1605,14 @@ function RequestDetail({ r }: { r: StudentRequest }) {
         {r.status === 'admin_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님 확인이 끝났어요. 운영진이 최종 확정하면 일정에 바로 들어가요.</p>}
         {r.status === 'rescheduling' && <p className="text-[13.5px] leading-relaxed text-[#7a1d12]">강사님이 고른 날짜에는 어렵다고 했어요. 운영진이 다른 일정을 조율해서 카카오톡으로 알려 드릴게요. 따로 하실 일은 없어요.</p>}
         {r.status === 'canceled' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">확정됐던 보강 수업이 취소됐어요. 취소 때 안내된 규칙(변경권·보강 가능 여부)에 따라 처리됐어요.</p>}
-        <ol className="flex gap-1.5">
+        {r.status !== 'expired' && <ol className="flex gap-1.5">
           {steps.map((t, i) => (
             <li key={t} className="flex-1 text-center">
               <div className={`h-1.5 rounded ${i < at ? 'bg-[#5b3df0]' : i === at ? 'bg-[#f0a33a]' : 'bg-[#e6e3ef]'}`} />
               <span className={`mt-1.5 block text-[12px] ${i <= at ? 'font-semibold' : 'text-[#8b88a0]'}`}>{t}</span>
             </li>
           ))}
-        </ol>
+        </ol>}
       </section>
       {r.candidates.length > 0 && (
         <section className={`${card} grid gap-2.5 p-4`}>

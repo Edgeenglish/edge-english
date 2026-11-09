@@ -3615,3 +3615,57 @@ select pg_temp.expect_error($$select admin_lesson_edit((select id from lm94l), n
 reset request.jwt.claim.sub;
 reset role;
 select pg_temp.ok((select starts_at = (select v from lm94 where k = 'b') from lessons where id = (select id from lm94l)), '수업 수정: 학생 다른 수업과 겹치거나 종료일 뒤면 막히고 수업은 그대로');
+
+-- ---------------------------------------------------------------------
+-- 오늘 보강 허용 · 보강 신청 자동 만료 (20261109050000, 대표 11/9)
+-- ---------------------------------------------------------------------
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, class_status, canceled_at)
+select v.id::uuid, '99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', '55555555-0000-0000-0000-00000000200a',
+       'regular', v.seq, t + v.off, t + v.off + interval '40 minutes', 'canceled', 'Student canceled in advance', now()
+from rc, (values ('77777777-9500-0000-0000-000000000001', 951, interval '-3 days'), ('77777777-9500-0000-0000-000000000002', 952, interval '-4 days')) v(id, seq, off);
+select pg_temp.ok((select bool_and(o.starts_at > now()) from lms_makeup_options('77777777-9500-0000-0000-000000000001', null, null) o)
+              and (extract(hour from now() at time zone 'Asia/Seoul') >= 20
+                   or exists (select 1 from lms_makeup_options('77777777-9500-0000-0000-000000000001', null, null) o
+                              where (o.starts_at at time zone 'Asia/Seoul')::date = (now() at time zone 'Asia/Seoul')::date)
+                   or not exists (select 1 from generate_series(0, 47) n
+                                  cross join lateral (select (((now() at time zone 'Asia/Seoul')::date)::timestamp + make_interval(mins => n * 30)) at time zone 'Asia/Seoul' as x) y
+                                  where y.x > now() and lms_tutor_available((select tutor_id from lessons where id = '77777777-9500-0000-0000-000000000001'), y.x))),
+  '오늘 보강: 보강 가능한 날짜에 오늘 남은 시간도 (지난 시간은 없음)');
+update students set email = 'stu2000@example.com' where id = '99999999-0000-0000-0000-000000002000';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+create temp table mx95 as select (admin_makeup_request('77777777-9500-0000-0000-000000000001', null,
+  jsonb_build_array(jsonb_build_object('starts_at', now() + interval '1 day'), jsonb_build_object('starts_at', now() + interval '2 days')), now()) ->> 'makeup_request_id')::uuid as id;
+create temp table mx95b as select (admin_makeup_request('77777777-9500-0000-0000-000000000002', null,
+  jsonb_build_array(jsonb_build_object('starts_at', now() + interval '1 day'), jsonb_build_object('starts_at', now() + interval '5 days')), now()) ->> 'makeup_request_id')::uuid as id;
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((lms_makeup_expire_run(now() + interval '1 day 1 hour') ->> 'expired')::int = 0
+              and (select count(*) = 2 from makeup_requests where id in ((select id from mx95), (select id from mx95b)) and status = 'requested'),
+  '자동 만료: 고른 시간 중 일부만 지났으면 그대로');
+select lms_makeup_expire_run(now() + interval '3 days');
+select pg_temp.ok((select status = 'expired' from makeup_requests where id = (select id from mx95))
+              and (select status = 'expired' and confirmed_lesson_id is null from makeup_requests where id = (select id from mx95))
+              and (select status = 'requested' from makeup_requests where id = (select id from mx95b))
+              and not exists (select 1 from lesson_notices where makeup_request_id = (select id from mx95) and status = 'pending')
+              and not exists (select 1 from lessons where makeup_of = '77777777-9500-0000-0000-000000000001'),
+  '자동 만료: 고른 시간이 모두 지나면 만료, 안 보낸 강사 안내는 필요 없음, 수업은 안 생김');
+select pg_temp.ok((select count(*) = 1 from notifications where dedupe_key = 'makeup_expired:' || (select id from mx95)
+                     and template = 'lesson_notice_makeup_expired' and email = 'support@edgeenglish.kr' and locale = 'ko'
+                     and payload ->> 'subject' = '[시험 · ' || (select code from students where id = '99999999-0000-0000-0000-000000002000') || '] [엣지영어] 보강 신청이 만료됐어요'
+                     and payload ->> 'text' like '%다시 신청해 주세요.%보강 날짜 고르기: %/student?makeup=77777777-9500-0000-0000-000000000001%'
+                     and payload ->> 'intended_email' = 'stu2000@example.com'),
+  '자동 만료 메일: 학생에게 1통(시험 중엔 운영진 메일로), 다시 신청 링크');
+select lms_makeup_expire_run(now() + interval '3 days');
+select pg_temp.ok((select count(*) = 1 from notifications where dedupe_key = 'makeup_expired:' || (select id from mx95)),
+  '자동 만료: 다시 실행해도 메일 한 번만');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok(exists (select 1 from jsonb_array_elements(student_screen('99999999-0000-0000-0000-000000002000') -> 'makeup_rights') x where x ->> 'lesson_id' = '77777777-9500-0000-0000-000000000001')
+              and exists (select 1 from jsonb_array_elements(student_screen('99999999-0000-0000-0000-000000002000') -> 'makeup_requests') x where (x ->> 'id')::uuid = (select id from mx95) and x ->> 'status' = 'expired'),
+  '자동 만료: 보강권은 그대로(다시 신청 가능), 학생 화면 신청 내역에 만료로');
+select pg_temp.ok((admin_makeup_request('77777777-9500-0000-0000-000000000001', null, jsonb_build_array(jsonb_build_object('starts_at', now() + interval '6 days')), now()) ->> 'repeated')::boolean = false,
+  '자동 만료 뒤 같은 수업 다시 신청됨');
+reset request.jwt.claim.sub;
+reset role;
+update students set email = null where id = '99999999-0000-0000-0000-000000002000';

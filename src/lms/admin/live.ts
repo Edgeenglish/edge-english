@@ -245,7 +245,8 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
     }
     else if (!r.makeupWaitingSince || new Date(m.created_at) < r.makeupWaitingSince) r.makeupWaitingSince = new Date(m.created_at);
   }
-  return [...out.values()];
+  // 강사 답만 기다리는 보강 신청은 운영진 할 일에 올리지 않음 — 재촉 메일·자동 만료가 처리 (대표 11/9, D-38 대체)
+  return [...out.values()].filter((r) => r.pendingNotices > 0 || (r.emailFailed ?? 0) > 0 || (r.answeredMakeups ?? 0) > 0);
 }
 
 /** 강사 답 칸(tutor_answered_at, migration 2000)이 없는 DB면 그 칸 없이 다시 읽음 */

@@ -200,6 +200,7 @@ export function parseStudentView(r: Raw): StudentView {
         title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso), (q.original_time_known ?? src?.time_known !== false) ? r.student.timezone || 'Asia/Seoul' : 'Asia/Seoul')} 수업분` : ''}`,
         status: q.status === 'confirmed'
           ? (q.confirmed_state === 'canceled' ? 'canceled' : 'confirmed')
+          : q.status === 'expired' ? 'expired'
           : q.tutor_answered_at ? (q.tutor_declined_all ? 'rescheduling' : 'admin_reviewing') : 'tutor_reviewing',
         tutorDeclinedAll: !!q.tutor_declined_all,
         lessonId: q.lesson_id,
