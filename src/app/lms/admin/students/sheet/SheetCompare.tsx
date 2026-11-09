@@ -1,6 +1,6 @@
 'use client';
 
-// ⑤ 시트 Student Info 비교·승인 (H26(44) ⑤ B안): 시트 줄마다 LMS 학생을 짝지어 시트 값 ↔ LMS 값을 나란히 → 체크한 칸만 반영.
+// ⑤ 시트 Student Info 비교·승인 (H26(44) ⑤ B안): 시트 줄마다 LMS 수강생을 짝지어 시트 값 ↔ LMS 값을 나란히 → 체크한 칸만 반영.
 // 시트는 Claude 가 읽어 넣은 사본(sheet_student_info). LMS 에 값이 있는 칸은 기본 체크 안 함(덮어쓰기 방지). 일정·회차·기간은 참고만
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -26,7 +26,7 @@ export default function SheetCompare({ rows, students, actions, studentFilter }:
   const byId = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
   // 이 화면에서 끝낸 줄은 '할 일'에서 바로 사라지지 않고 ✓ 로 남음 (대표 10/28: 처리한 것은 사라지지 않게)
   const [todoAtStart] = useState(() => new Set(rows.filter((r) => !r.doneAt).map((r) => r.id)));
-  // 학생 한 명 보기(?student=)는 끝난 줄도 모두
+  // 수강생 한 명 보기(?student=)는 끝난 줄도 모두
   const list = studentFilter ? filterRows(rows, 'all', '', studentFilter) : tab === 'todo' ? filterRows(rows, 'all', q).filter((r) => !r.doneAt || todoAtStart.has(r.id)) : filterRows(rows, tab, q);
   const counts = { todo: rows.filter((r) => !r.doneAt).length, done: rows.filter((r) => !!r.doneAt).length, all: rows.length };
   const sheets = [...new Set(list.map((r) => r.sheet))];
@@ -37,7 +37,7 @@ export default function SheetCompare({ rows, students, actions, studentFilter }:
       <AdminHeader active="students" demo={false} />
       <div className="grid gap-3 px-4 pt-3 lg:px-7">
         <Link href={student ? `/lms/admin/students/${student.code}` : '/lms/admin/students'} className="flex min-h-[36px] w-fit items-center gap-1 text-[13px] font-semibold text-[#5b3fe0]">
-          <Icon name="chevron" className="h-4 w-4 rotate-180" /> {student ? `${student.nameKo} 상세` : '학생 목록'}
+          <Icon name="chevron" className="h-4 w-4 rotate-180" /> {student ? `${student.nameKo} 상세` : '수강생 목록'}
         </Link>
         <div>
           <h1 className="text-[18px] font-bold text-[#1d1b2b]">시트 Student Info 비교{student ? ` · ${student.nameKo}` : ''}</h1>
@@ -56,7 +56,7 @@ export default function SheetCompare({ rows, students, actions, studentFilter }:
             <label className="flex min-h-[48px] items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3">
               <Icon name="search" className="h-[18px] w-[18px] text-[#6b6880]" />
               <span className="sr-only">찾기</span>
-              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="시트 이름, 학생 이름, 이메일" className="min-w-0 flex-1 bg-transparent text-[16px] text-[#1d1b2b] outline-none" />
+              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="시트 이름, 수강생 이름, 이메일" className="min-w-0 flex-1 bg-transparent text-[16px] text-[#1d1b2b] outline-none" />
             </label>
           </>
         )}
@@ -97,7 +97,7 @@ function RowCard({ r, students, byId, actions, open, onToggle }: { r: SheetRow; 
           {r.doneAt ? <span className="rounded-full bg-[#e3f5ea] px-2 py-0.5 text-[11.5px] font-bold text-[#13623a]">✓ {r.doneNote ?? '끝'}</span>
             : matched ? <span className="rounded-full bg-[#efebff] px-2 py-0.5 text-[11.5px] font-bold text-[#5b3fe0]">짝: {matched.nameKo} ({matched.code})</span>
             : suggested ? <span className="rounded-full bg-[#fff1d6] px-2 py-0.5 text-[11.5px] font-bold text-[#8a5300]">짝 확인 필요: {suggested.nameKo} ({suggested.code})?</span>
-            : <span className="rounded-full bg-[#f0eef6] px-2 py-0.5 text-[11.5px] font-bold text-[#6b6880]">LMS 학생 고르기</span>}
+            : <span className="rounded-full bg-[#f0eef6] px-2 py-0.5 text-[11.5px] font-bold text-[#6b6880]">LMS 수강생 고르기</span>}
         </span>
         <span className="block truncate text-[12.5px] text-[#6b6880]">{[r.residence, r.email, r.level ? `레벨 ${r.level}` : null, r.classType].filter(Boolean).join(' · ')}</span>
       </span>
@@ -113,24 +113,24 @@ function RowCard({ r, students, byId, actions, open, onToggle }: { r: SheetRow; 
             <div className="grid gap-2">
               {suggested && (
                 <div className="flex flex-wrap items-center gap-2 rounded-[10px] bg-[#fff8e6] px-3 py-2 text-[13.5px]">
-                  <span>{r.suggest?.how === 'name_ko' ? '한국 이름이 같은' : '영문 이름이 같은'} LMS 학생: <b>{suggested.nameKo} ({suggested.nameEn} · {suggested.code})</b></span>
-                  <button type="button" className={btnSmall} disabled={!!busy} onClick={() => run('match', () => actions.match(r.id, suggested.id))}>이 학생 맞음</button>
+                  <span>{r.suggest?.how === 'name_ko' ? '한국 이름이 같은' : '영문 이름이 같은'} LMS 수강생: <b>{suggested.nameKo} ({suggested.nameEn} · {suggested.code})</b></span>
+                  <button type="button" className={btnSmall} disabled={!!busy} onClick={() => run('match', () => actions.match(r.id, suggested.id))}>이 수강생 맞음</button>
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <select value={pickId} onChange={(e) => setPickId(e.target.value)} className={`${input} max-w-[360px]`} aria-label="LMS 학생 고르기">
-                  <option value="">LMS 학생 고르기…</option>
+                <select value={pickId} onChange={(e) => setPickId(e.target.value)} className={`${input} max-w-[360px]`} aria-label="LMS 수강생 고르기">
+                  <option value="">LMS 수강생 고르기…</option>
                   {students.map((s) => <option key={s.id} value={s.id}>{s.nameKo} ({s.nameEn} · {s.code})</option>)}
                 </select>
                 <button type="button" className={btnSub} disabled={!pickId || !!busy} onClick={() => {
-                  // 시트 이름과 다른 학생을 고르면 한 번 더 확인 (QA UX: 오연결 경고)
+                  // 시트 이름과 다른 수강생을 고르면 한 번 더 확인 (QA UX: 오연결 경고)
                   const p = students.find((x) => x.id === pickId);
                   const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.replace(/\s/g, '').toLowerCase() === b.replace(/\s/g, '').toLowerCase();
                   if (p && !same(r.studentName, p.nameKo) && !same(r.studentName, p.nameEn) && !same(r.preferredName, p.nameEn)
-                      && !window.confirm(`시트: ${r.studentName}${r.preferredName ? ` (${r.preferredName})` : ''} / 연결할 LMS 학생: ${p.nameKo} (${p.nameEn} · ${p.code})\n이름이 다릅니다. 동일인인지 확인해 주세요. 연결할까요?`)) return;
+                      && !window.confirm(`시트: ${r.studentName}${r.preferredName ? ` (${r.preferredName})` : ''} / 연결할 LMS 수강생: ${p.nameKo} (${p.nameEn} · ${p.code})\n이름이 다릅니다. 동일인인지 확인해 주세요. 연결할까요?`)) return;
                   run('match', () => actions.match(r.id, pickId));
                 }}>짝 정하기</button>
-                {!r.doneAt && <button type="button" className={btnSub} disabled={!!busy} onClick={() => run('done', () => actions.done(r.id, 'LMS 학생 없음 · 반영 안 함'))}>LMS에 없는 학생 (반영 안 함)</button>}
+                {!r.doneAt && <button type="button" className={btnSub} disabled={!!busy} onClick={() => run('done', () => actions.done(r.id, 'LMS 수강생 없음 · 반영 안 함'))}>LMS에 없는 수강생 (반영 안 함)</button>}
               </div>
             </div>
           )}
@@ -189,7 +189,7 @@ function Compare({ r, student, actions, busy, run }: { r: SheetRow; student: Stu
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-[#13623a]">
           ✓ {r.doneNote ?? '끝'} · {md(kstDay(r.doneAt))}
           <button type="button" className={btnSmall} disabled={!!busy} onClick={() => run('undo', () => actions.done(r.id, '', true))}>다시 열기</button>
-          <Link href={`/lms/admin/students/${student.code}`} className={btnSmall}>학생 상세 ›</Link>
+          <Link href={`/lms/admin/students/${student.code}`} className={btnSmall}>수강생 상세 ›</Link>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">

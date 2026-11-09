@@ -129,7 +129,7 @@ describe('상태매핑표 14개: TypeScript ↔ DB 기준값', () => {
 
   it('DB에도 14개', () => expect(rows.map((r) => r[1]).sort()).toEqual([...CLASS_STATUSES].sort()));
 
-  it('학생 문구·수강권·변경권·급여·인센티브가 같음', () => {
+  it('수강생 문구·수강권·변경권·급여·인센티브가 같음', () => {
     for (const [, status, label, consumes, credit, paid, incentive] of rows) {
       const r = STATUS_RULES[status as keyof typeof STATUS_RULES];
       expect({ status, label, consumes, credit, paid, incentive }).toEqual({

@@ -1,4 +1,4 @@
-// 학생 홈 미리보기용 가상 데이터 (실제 학생·강사 아님). 시각은 '지금' 기준으로 만들어
+// 수강생 홈 미리보기용 가상 데이터 (실제 수강생·강사 아님). 시각은 '지금' 기준으로 만들어
 // 오늘 수업(6시간 이내 취소 확인)과 며칠 뒤 수업(6시간 전 취소 확인)을 모두 눌러 볼 수 있게 함
 
 import { addDays, instantToKstDate, kstToInstant, type KstDate, type KstTime } from '../rules/dates';
@@ -206,7 +206,15 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       set({
         ...view,
         makeupRights: view.makeupRights.map((m) => ((m.compId ?? null) === (right.compId ?? null) && m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
-        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '무료 보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '' }, ...view.requests],
+        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '무료 보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '', lessonId: right.lessonId, itemId: right.itemId, compId: right.compId ?? null }, ...view.requests],
+      });
+    },
+    withdrawMakeup: async (requestId) => {
+      const q = view.requests.find((x) => x.id === requestId);
+      set({
+        ...view,
+        requests: view.requests.map((x) => (x.id === requestId ? { ...x, status: 'withdrawn' } : x)),
+        makeupRights: view.makeupRights.map((m) => (q && (m.compId ?? null) === (q.compId ?? null) && (m.lessonId ?? null) === (q.lessonId ?? null) && (m.itemId ?? null) === (q.itemId ?? null) ? { ...m, requested: false } : m)),
       });
     },
     answerLeave: async (items, answer) => {

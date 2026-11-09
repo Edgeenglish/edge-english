@@ -50,7 +50,7 @@ describe('일회성 보강은 그날만 막는다', () => {
 });
 
 describe('등록기간 전체 검사', () => {
-  it('기간 중간의 휴무·다른 학생 정규 수업 날짜를 모두 찾는다', () => {
+  it('기간 중간의 휴무·다른 수강생 정규 수업 날짜를 모두 찾는다', () => {
     const busy = [lesson('off', '2026-11-19', '00:00', 24 * 60, 'time_off'), lesson('r', '2026-11-24', '20:30', 40)];
     const r = checkRegularPlan({ startDate: '2026-11-03', weeks: 4, slots: [{ weekday: 2, time: '20:00' }, { weekday: 4, time: '20:00' }], durationMin: 50, tutorBusy: busy, availability: seoul });
     expect(r.issues.map((i) => [i.kstDate, i.reason])).toEqual([['2026-11-19', 'tutor_time_off'], ['2026-11-24', 'tutor_regular']]);
@@ -60,7 +60,7 @@ describe('등록기간 전체 검사', () => {
     expect(r.issues).toHaveLength(4);
     expect(r.issues.every((i) => i.reason === 'outside_availability')).toBe(true);
   });
-  it('학생 본인 다른 수업도 검사', () => {
+  it('수강생 본인 다른 수업도 검사', () => {
     const r = checkRegularPlan({ startDate: '2026-11-03', weeks: 4, slots: [{ weekday: 2, time: '20:00' }], durationMin: 50, tutorBusy: [], studentBusy: [lesson('s', '2026-11-10', '19:00', 55)], availability: seoul });
     expect(r.issues.map((i) => [i.kstDate, i.reason])).toEqual([['2026-11-10', 'student']]);
   });

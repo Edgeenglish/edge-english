@@ -16,7 +16,7 @@ const mk = (date: string, time: string, durationMin: number, tutorId: string, mo
 const tutor = (busy: RegTutor['busy']): RegTutor => ({ id: 'T', name: 'Tutor', country: 'Korea', timezone: 'Asia/Seoul', availability: [], busy });
 const at = (d: string, t: string, min: number) => ({ startsAt: kstToInstant(d, t), endsAt: new Date(kstToInstant(d, t).getTime() + min * 60_000) });
 
-describe('기존 학생 간단 입력 (D-52)', () => {
+describe('기존 수강생 간단 입력 (D-52)', () => {
   it('시작일~종료일 사이 정규 수업 + 보강, 시간순', () => {
     const ls = importLessons(base({ makeups: [mk('2027-08-12', '21:00', 40, 'T')] }));
     expect(ls.filter((l) => l.kind === 'regular').map((l) => l.date)).toEqual(['2027-08-03', '2027-08-10', '2027-08-17', '2027-08-24']);
@@ -30,7 +30,7 @@ describe('기존 학생 간단 입력 (D-52)', () => {
     expect(importProblems(base({ makeups: [mk('2027-07-30', '10:00', 20, 'T')] })).join()).toMatch('지난 보강은 시트에');
   });
 
-  it('기존 학생 정규 수업과 겹치거나 휴식 10분이 안 되면 날짜마다', () => {
+  it('기존 수강생 정규 수업과 겹치거나 휴식 10분이 안 되면 날짜마다', () => {
     const t = tutor([{ id: 'a', kind: 'regular', label: '기존A', ...at('2027-08-10', '18:00', 50) }]);
     const same = importIssues(importLessons(base({ slots: [{ weekday: 2, time: '18:30' }] })), [t]);
     expect(same).toHaveLength(1);
@@ -57,7 +57,7 @@ describe('기존 학생 간단 입력 (D-52)', () => {
   });
 });
 
-describe('기존 학생 입력 확대판 (D-52 · H26, 2026-10-24 대표 결정)', () => {
+describe('기존 수강생 입력 확대판 (D-52 · H26, 2026-10-24 대표 결정)', () => {
   // 화 19:00 정규 4회 (8/3·10·17·24)
   it('남은 수업 = 정규 + 예약 보강 + 미예약 보강 + 추가, 보강의 원래 수업 날짜는 정규에서 빠짐 (두 번 세지 않음)', () => {
     const d = base({
@@ -115,7 +115,7 @@ describe('종료일 자동 · 연장된 날 정규 없음 · 보강 없으면 �
     expect(importLessons(ext).filter((l) => l.kind === 'regular').every((l) => l.date <= '2027-01-18')).toBe(true);
     expect(importPayload(ext).extension).toEqual({ reason: 'tutor_long_term_leave', note: '' });
   });
-  it('보강 날짜가 종료일 뒤면 막고, 학생 장기 연기는 24주만', () => {
+  it('보강 날짜가 종료일 뒤면 막고, 수강생 장기 연기는 24주만', () => {
     const e = { ...d, endDate: '2027-01-18' };
     expect(importProblems({ ...e, makeups: [mk('2027-01-26', '19:00', 50, 'T')] }).join()).toMatch('종료일 뒤');
     expect(importProblems({ ...e, endDate: '2027-01-25', endReason: 'student_long_term_leave' }).join()).toMatch('24주');
@@ -128,7 +128,7 @@ describe('종료일 자동 · 연장된 날 정규 없음 · 보강 없으면 �
   });
   it('첫 정규 수업일은 오늘 이후 첫 수업 요일, 수강 시작일이 수업 요일과 다르면 안내만', () => {
     expect(autoFromDate({ ...d, today: '2026-10-28' })).toBe('2026-11-03');
-    expect(importWarnings({ ...d, courseStart: '2026-10-26' }).courseDay).toMatch('고정 요일을 바꾼 학생이면 정상');
+    expect(importWarnings({ ...d, courseStart: '2026-10-26' }).courseDay).toMatch('고정 요일을 바꾼 수강생이면 정상');
   });
 });
 

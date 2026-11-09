@@ -87,7 +87,7 @@ export const planActions = (sb: SupabaseClient) => ({
 });
 export type PlanActions = ReturnType<typeof planActions>;
 
-/** 강사·시간 고르기 화면: 등록 하나의 학생·상품 정보 */
+/** 강사·시간 고르기 화면: 등록 하나의 수강생·상품 정보 */
 export async function loadAssignInfo(sb: SupabaseClient, enrollmentId: string) {
   const { data, error } = await sb
     .from('enrollments')
@@ -110,7 +110,7 @@ export async function loadAssignInfo(sb: SupabaseClient, enrollmentId: string) {
   return {
     enrollmentId: r.id,
     studentCode: r.student?.code ?? '',
-    studentName: r.student?.name_ko ?? '(학생)',
+    studentName: r.student?.name_ko ?? '(수강생)',
     nameEn: r.student?.name_en ?? '',
     place: [r.student?.country, r.student?.city].filter(Boolean).join(' '),
     timezone: r.student?.timezone ?? 'Asia/Seoul',
@@ -181,6 +181,6 @@ export async function loadMatchingCurrent(sb: SupabaseClient, enrollmentId: stri
     startDate: r.start_date, finalEndDate: r.final_end_date, durationMin: r.duration_min, weeklyCount: r.weekly_count, lessonsTotal: r.lessons_total,
   };
 }
-/** '수업 컨펌 완료' 기록 (R-10): 지금 배정을 강사·학생에게 확인했음 → 신규 매칭 업무 완료 */
+/** '수업 컨펌 완료' 기록 (R-10): 지금 배정을 강사·수강생에게 확인했음 → 신규 매칭 업무 완료 */
 export const markMatchingNotified = (sb: SupabaseClient, enrollmentId: string) =>
   call<{ task_id: string; repeated: boolean; student_notified_at: string }>(sb, 'admin_matching_notified', { p_enrollment: enrollmentId });

@@ -1,7 +1,7 @@
 'use client';
 
-// 운영진 학생 상세 (H26(44) ①~⑤, migration 4300): 정규 일정 · 수강 · 프로필 · 자기소개/선호 7항목 · 운영진만(결제·메모) · 수업 · 변경 기록·안내
-// 시간은 모두 '한국 시간 · 학생 도시 시간 · 강사 도시 시간' 이름과 같이, 실제 수업 날짜로 계산 (H26(43))
+// 운영진 수강생 상세 (H26(44) ①~⑤, migration 4300): 정규 일정 · 수강 · 프로필 · 자기소개/선호 7항목 · 운영진만(결제·메모) · 수업 · 변경 기록·안내
+// 시간은 모두 '한국 시간 · 수강생 도시 시간 · 강사 도시 시간' 이름과 같이, 실제 수업 날짜로 계산 (H26(43))
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { diffDays, instantToKstDate, type KstDate } from '@/lms/rules/dates';
@@ -14,6 +14,8 @@ import { styleText } from '@/lms/tutor/followup';
 import { Box, btnMain, btnSmall, btnSub, CopyButton, input, label, Row, Sheet, WHO_ROLE } from './parts';
 import RegularChange from './RegularChange';
 import PrestartMove from './PrestartMove';
+import LessonManage, { type LessonManageActions } from './LessonManage';
+import { Rich } from '@/app/lms/Rich';
 
 export type DetailActions = {
   reload: () => Promise<void>;
@@ -25,13 +27,15 @@ export type DetailActions = {
   /** 첫 수업 시작 전 개별 수업 날짜 변경 (변경권 차감 없음, H26(62)) */
   prestart: (lessonId: string, startsAt: string) => Promise<unknown>;
   prestartMoved: () => Promise<Record<string, string>>;
+  /** 보강·보상수업 추가·수정 (20261109040000) */
+  lessonManage: LessonManageActions;
 };
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 export const LEVELS = ['Beginner', 'Pre-Intermediate', 'Intermediate', 'Advanced'] as const;
 export const CORRECTION: Record<string, string> = { immediate: '바로바로 교정', major_only: '큰 실수 위주만 교정' };
 export const CLASS_STYLE: Record<string, string> = { textbook: '교재', free_talking: '프리토킹', not_sure: '아직 잘 모르겠음' };
-const EXT_REASON: Record<string, string> = { student_long_term_leave: '학생 장기 사정', tutor_long_term_leave: '강사 휴무 자동', admin_exception: '운영 예외', correction: '정정', tutor_fault: '강사 귀책 자동' };
+const EXT_REASON: Record<string, string> = { student_long_term_leave: '수강생 장기 사정', tutor_long_term_leave: '강사 휴무 자동', admin_exception: '운영 예외', correction: '정정', tutor_fault: '강사 귀책 자동' };
 const FIELD_KO: Record<string, string> = {
   name_ko: '한국 이름', name_en: '영문 이름', display_name: 'Preferred Name', country: '국가', city: '도시', timezone: '시간대', gender_age: '성별/연령대', email: '이메일', phone: '휴대폰',
   level: '레벨', level_note: '예전 레벨 표기', class_type: 'Type of class', textbook: '교재', class_note_url: 'Google Docs', admin_memo: '운영 메모', self_intro_en: '기존 자기소개', correction_pref: '교정 선호(시트)',
@@ -54,7 +58,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
   // 입력 중에 화면이 새로고침·재실행되면(휴대폰 앱 전환 뒤 등) 임시 저장한 입력이 있는 창을 다시 열어 줌 (2026-11-06 대표 보고: 프로필 수정 중 창이 닫힘)
   useEffect(() => {
     if (readDraft(s.id, '프로필 수정')) setSheet('profile');
-    else if (readDraft(s.id, '자기소개 · 수업 선호 (학생 답 입력)')) setSheet('answers');
+    else if (readDraft(s.id, '자기소개 · 수업 선호 (수강생 답 입력)')) setSheet('answers');
   }, [s.id]);
   // 첫 수업 시작 전: 이 수강권의 정규 수업이 모두 아직 앞으로 남아 있을 때만 (시작 뒤는 수업 변경·변경권 절차)
   const regularAhead = data.upcoming.filter((l) => l.kind === 'regular' && !l.substitute && !l.leaveOpen);
@@ -73,7 +77,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
       <AdminHeader active="students" demo={false} />
       <div className="grid gap-3 px-4 pt-3 lg:px-7">
         <Link href="/lms/admin/students" className="flex min-h-[36px] w-fit items-center gap-1 text-[13px] font-semibold text-[#5b3fe0]">
-          <Icon name="chevron" className="h-4 w-4 rotate-180" /> 학생 목록
+          <Icon name="chevron" className="h-4 w-4 rotate-180" /> 수강생 목록
         </Link>
 
         <div className="flex flex-wrap items-center gap-3 rounded-[16px] bg-[#1b1442] px-4 py-4 text-white">
@@ -122,10 +126,10 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             {data.slots.length === 0 ? <p className="py-2 text-[13px] text-[#6b6880]">정규 일정이 없어요{pending ? ' (결제 확인 전 — 확인한 뒤 강사 배정·일정 확정)' : e ? ' (강사 배정·일정 확정 전)' : ''}.</p> : (
               <>
                 <Row k="한국 시간" v={<>{slotsText(data.slots)} · {slot!.durationMin}분</>} strong />
-                {s.timezone !== 'Asia/Seoul' && <Row k={`학생 · ${koZone(s.timezone)}`} v={slotsInZone(data.slots, s.timezone, today)} />}
+                {s.timezone !== 'Asia/Seoul' && <Row k={`수강생 · ${koZone(s.timezone)}`} v={slotsInZone(data.slots, s.timezone, today)} />}
                 {slot!.tutorTz !== 'Asia/Seoul' && <Row k={`강사 ${slot!.tutor} · ${koZone(slot!.tutorTz)}`} v={slotsInZone(data.slots, slot!.tutorTz, today)} />}
                 <Row k="적용" v={`${md(slot!.from)}부터`} />
-                {data.nextSlots.length > 0 && <Row k={`${mdw(data.nextSlots[0].from)}부터 적용 예정`} v={<b className="text-[#5b3fe0]">{slotsText(data.nextSlots)} (한국 시간)</b>} />}
+                {data.nextSlots.length > 0 && <Row k={`${mdw(data.nextSlots[0].from)}부터 적용 예정`} v={<b className="text-[#5b3fe0]">{slotsText(data.nextSlots)} 한국 시간</b>} />}
                 <Row k="바뀐 기록" v={data.changes.length === 0 ? '없음' : <button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setSheet({ notice: data.changes[0].id })}>{data.changes.length}건 보기</button>} />
               </>
             )}
@@ -158,13 +162,13 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             <Row k="레벨 (강사 평가)" v={s.level ? <>{s.level}{s.levelBy || s.levelAt ? <span className="block text-[12px] text-[#6b6880]">{[s.levelBy, s.levelAt ? md(instantToKstDate(s.levelAt)) : ''].filter(Boolean).join(' · ')}</span> : null}</> : <i className="text-[#b9b6c8]">평가 전</i>} />
             {s.levelNote && <Row k="예전 레벨 표기" v={s.levelNote} />}
             <Row k="Type of class" v={or(s.classType)} />
-            {/* 강사가 첫 수업 후 확인한 실제 수업 방식 (4600) — 학생 희망(7번)과 다른 칸 */}
+            {/* 강사가 첫 수업 후 확인한 실제 수업 방식 (4600) — 수강생 희망(7번)과 다른 칸 */}
             <Row k="수업 방식 (강사 확인)" v={s.tutorClassStyle ? <>{styleText(s, 'ko')}<span className="block text-[12.5px] text-[#6b6880]">{s.tutorClassStyleBy ?? '강사'} 확인{s.tutorClassStyleAt ? ` · ${md(instantToKstDate(s.tutorClassStyleAt))}` : ''}</span></> : <i className="text-[#b9b6c8]">첫 수업 후 강사 확인 전</i>} />
             <Row k="교재" v={or(s.textbook)} />
             <Row k="Google Docs" v={s.classNoteUrl ? <a href={s.classNoteUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#5b3fe0] underline">수업 노트 열기 ↗</a> : or(null)} />
           </Box>
 
-          <Box title="자기소개 · 수업 선호 (학생 답)" action={<button type="button" className={btnSmall} onClick={() => setSheet('answers')}>수정</button>}>
+          <Box title="자기소개 · 수업 선호 (수강생 답)" action={<button type="button" className={btnSmall} onClick={() => setSheet('answers')}>수정</button>}>
             <Row k="1 직업" v={or(s.job, NA)} />
             <Row k="2 취미" v={or(s.hobbies, NA)} />
             <Row k="3 관심사" v={or(s.interests, NA)} />
@@ -197,6 +201,11 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             {s.lmsSince && <Row k="LMS 시작" v={s.lmsSince} />}
           </Box>
 
+          {e && !pending && (
+            <LessonManage student={{ timezone: s.timezone }} regularTutorId={slot?.tutorId ?? null} finalEnd={e.finalEndDate}
+              actions={actions.lessonManage} />
+          )}
+
           <Box title="다가오는 수업" action={prestartOpen ? (
             <button type="button" onClick={() => setSheet('prestart')} className="min-h-[36px] rounded-[10px] border border-[#cfc4ff] bg-white px-3 text-[13px] font-semibold text-[#5b3fe0]">
               시작 전 날짜 변경
@@ -205,7 +214,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
             {data.upcoming.length === 0 && <p className="py-2 text-[13px] text-[#6b6880]">예정된 수업이 없어요.</p>}
             {data.upcoming.slice(0, 8).map((l) => (
               <div key={l.id} className="border-b border-[#f0eef6] py-2 text-[13.5px] last:border-0">
-                <p className="text-[#1d1b2b]">{kstWithZones(l.startsAt, [{ label: '학생', tz: s.timezone }, { label: `강사 ${l.tutor}`, tz: l.tutorTz }])}</p>
+                <p className="text-[#1d1b2b]">{kstWithZones(l.startsAt, [{ label: '수강생', tz: s.timezone }, { label: `강사 ${l.tutor}`, tz: l.tutorTz }])}</p>
                 <p className="text-[12.5px] text-[#6b6880]">{l.kind === 'regular' && l.seq ? `정규 ${l.seq}회` : KIND_KO[l.kind] ?? l.kind}{l.substitute ? ` · 대체강사 ${l.tutor}` : ''}{l.leaveOpen ? ' · 강사 휴무 처리 중' : ''}</p>
               </div>
             ))}
@@ -214,7 +223,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
 
           <Box title="지난 수업">
             {data.recent.length === 0 && <p className="py-2 text-[13px] text-[#6b6880]">지난 수업이 없어요.</p>}
-            {data.recent.map((l) => <Row key={l.id} k={`${zoneLabel(l.startsAt, 'Asia/Seoul')} (한국)`} v={`${KIND_KO[l.kind] ?? l.kind} · ${l.classStatus ?? (l.state === 'scheduled' ? '기록 전' : l.state)}`} />)}
+            {data.recent.map((l) => <Row key={l.id} k={<Rich text={`${zoneLabel(l.startsAt, 'Asia/Seoul')} *한국 시간*`} />} v={`${KIND_KO[l.kind] ?? l.kind} · ${l.classStatus ?? (l.state === 'scheduled' ? '기록 전' : l.state)}`} />)}
             {data.recentTopics.length > 0 && (
               <details className="mt-1 text-[13px]">
                 <summary className="cursor-pointer font-semibold text-[#5b3fe0]">최근 Covered Topics {data.recentTopics.length}건</summary>
@@ -257,7 +266,7 @@ export default function StudentDetail({ data, nowIso, actions }: { data: Student
   );
 }
 
-/** ③ 저장 뒤 안내: 학생 카카오톡·강사 WhatsApp 문구 복사 → 각각 [발송 완료] (학생·강사 따로 기록) */
+/** ③ 저장 뒤 안내: 수강생 카카오톡·강사 WhatsApp 문구 복사 → 각각 [발송 완료] (수강생·강사 따로 기록) */
 function NoticeSheet({ data, changeId, sent, reload, onClose }: { data: StudentDetailData; changeId: string; sent: DetailActions['sent']; reload: () => Promise<void>; onClose: () => void }) {
   const [cur, setCur] = useState(changeId);
   const [busy, setBusy] = useState('');
@@ -279,14 +288,14 @@ function NoticeSheet({ data, changeId, sent, reload, onClose }: { data: StudentD
         </select>
       )}
       <div className="mb-3 rounded-[12px] bg-white px-3 py-2 text-[13.5px] text-[#1d1b2b]">
-        <p><b>{mdw(c.effectiveFrom)}부터</b> {slotsText(c.oldSlots)} → <b>{slotsText(c.newSlots)}</b> (한국 시간) · 바뀐 수업 {c.moved.length}회 · 그대로 {c.kept.length}회</p>
-        <p className="text-[12.5px] text-[#6b6880]">사유: {c.reason} · 저장 {zoneLabel(c.at, 'Asia/Seoul')} (한국 시간)</p>
+        <p><b>{mdw(c.effectiveFrom)}부터</b> {slotsText(c.oldSlots)} → <b>{slotsText(c.newSlots)}</b> <b>한국 시간</b> · 바뀐 수업 {c.moved.length}회 · 그대로 {c.kept.length}회</p>
+        <p className="text-[12.5px] text-[#6b6880]">사유: {c.reason} · 저장 {zoneLabel(c.at, 'Asia/Seoul')} <b>한국 시간</b></p>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
-        <NoticeCard title="학생 카카오톡" text={ko} sentAt={c.studentSentAt} busy={busy === 'student'} onSent={() => mark('student', false)} onUndo={() => mark('student', true)} />
+        <NoticeCard title="수강생 카카오톡" text={ko} sentAt={c.studentSentAt} busy={busy === 'student'} onSent={() => mark('student', false)} onUndo={() => mark('student', true)} />
         <NoticeCard title={`강사 WhatsApp (${c.tutor})`} text={en} sentAt={c.tutorSentAt} busy={busy === 'tutor'} onSent={() => mark('tutor', false)} onUndo={() => mark('tutor', true)} />
       </div>
-      <p className="mt-3 text-[12px] text-[#6b6880]">학생·강사 화면에는 저장 즉시 반영돼 있어요. 안내는 운영진이 복사해 직접 보내고, 보낸 뒤 [발송 완료]를 눌러 기록해요 (자동 이메일 없음).</p>
+      <p className="mt-3 text-[12px] text-[#6b6880]">수강생·강사 화면에는 저장 즉시 반영돼 있어요. 안내는 운영진이 복사해 직접 보내고, 보낸 뒤 [발송 완료]를 눌러 기록해요 (자동 이메일 없음).</p>
     </Sheet>
   );
 }
@@ -333,13 +342,24 @@ function ExtendSheet({ enrollment: e, studentTz, today, extend, onClose, onSaved
   return (
     <Sheet title="종료일 연장 (운영진만)" onClose={onClose}>
       <div className="grid gap-2 rounded-[12px] bg-white px-3 py-2 text-[13.5px]">
-        <Row k="원래 종료" v={`${mdw(e.baseEndDate)} 23:59 (한국 시간)`} />
-        {e.extensions.length > 0 && <Row k="이미 연장" v={e.extensions.map((x) => `${x.days > 0 ? '+' : ''}${x.days}일 · ${EXT_REASON[x.reason] ?? x.reason}${x.note ? ` (${x.note})` : ''}`).join(' / ')} />}
+        <Row k="원래 종료" v={<Rich text={`${mdw(e.baseEndDate)} 오후 11:59 *한국 시간*`} />} />
+        {/* 합계 먼저, 기록은 접어 둠 (QA 11/8: 휴대폰에서 입력란까지 스크롤이 길었음) */}
+        {e.extensions.length > 0 && <Row k="이미 연장" v={`${e.extensionDays > 0 ? '+' : ''}${e.extensionDays}일 (기록 ${e.extensions.length}건)`} />}
+        {e.extensions.length > 0 && (
+          <details className="text-[13px] text-[#55526a]">
+            <summary className="cursor-pointer font-semibold text-[#5b3fe0]">연장 기록 보기</summary>
+            <ul className="mt-1 grid gap-0.5">
+              {e.extensions.map((x) => (
+                <li key={x.id}>{`${x.days > 0 ? '+' : ''}${x.days}일 · ${EXT_REASON[x.reason] ?? x.reason}${x.note ? ` (${x.note})` : ''}`}</li>
+              ))}
+            </ul>
+          </details>
+        )}
         <Row k="지금 최종 종료" v={finalEndText(e.finalEndDate, studentTz)} strong />
       </div>
       <div className="mt-3 grid gap-3">
         <div>
-          <label htmlFor="ext-date" className={label}>새 최종 종료일 (23:59 한국 시간)</label>
+          <label htmlFor="ext-date" className={label}>새 최종 종료일 (오후 11:59 한국 시간)</label>
           <select id="ext-date" value={newEnd} onChange={(x) => setNewEnd(x.target.value)} className={input}>
             {options.map((d) => <option key={d} value={d}>{mdw(d)}{d === e.finalEndDate ? ' (지금)' : ''}</option>)}
           </select>
@@ -356,12 +376,12 @@ function ExtendSheet({ enrollment: e, studentTz, today, extend, onClose, onSaved
         </div>
         <div>
           <label htmlFor="ext-note" className={label}>사유 (필수)</label>
-          <input id="ext-note" value={note} onChange={(x) => setNote(x.target.value)} placeholder="예: 학생 입원으로 2주 수업 못 함 — 대표 승인 11/3" className={input} />
+          <input id="ext-note" value={note} onChange={(x) => setNote(x.target.value)} placeholder="예: 수강생 입원으로 2주 수업 못 함 — 대표 승인 11/3" className={input} />
         </div>
         <div className="rounded-[12px] bg-white px-3 py-2 text-[13px] text-[#1d1b2b]">
           <p className="font-bold text-[#6b6880]">같이 바뀌는 곳</p>
           <ul className="mt-1 list-disc pl-5">
-            <li>학생 화면 수강 종료일{studentTz !== 'Asia/Seoul' ? ` (${koZone(studentTz)}으로도 표시)` : ''} · 보강·무료 보상수업 사용 기한 · 재등록 안내 마감 · 대시보드 종료 임박 · 강사 화면 Enrollment</li>
+            <li>수강생 화면 수강 종료일{studentTz !== 'Asia/Seoul' ? ` (${koZone(studentTz)}으로도 표시)` : ''} · 보강·무료 보상수업 사용 기한 · 재등록 안내 마감 · 대시보드 종료 임박 · 강사 화면 Enrollment</li>
             <li>수업 회차는 그대로 ({e.lessonsPurchased}회{e.lessonsCarriedIn ? ` + 이월 ${e.lessonsCarriedIn}회` : ''}) — 연장만으로 회차가 늘지 않아요</li>
             {auto.length > 0 && <li>강사 휴무 자동 연장(+{auto.reduce((a, x) => a + x.days, 0)}일)은 그대로 두고 합계로 계산해요 (중복 없음)</li>}
             <li>기록: {md(e.finalEndDate)} → {days === 0 ? '새 종료일' : md(newEnd)}, 사유, 운영진, 저장 시각. 지우거나 고칠 수 없고 잘못 넣으면 ‘정정’ 줄을 하나 더해요</li>
@@ -417,7 +437,7 @@ function valueOf(s: StudentProfile, key: string): string {
   return m[key] ?? '';
 }
 
-// 입력 중 임시 저장 (이 기기, 학생·창마다): 창이 닫히거나 화면이 새로고침돼도 입력이 사라지지 않게. 저장하거나 '닫을까요?'에 확인하면 지움
+// 입력 중 임시 저장 (이 기기, 수강생·창마다): 창이 닫히거나 화면이 새로고침돼도 입력이 사라지지 않게. 저장하거나 '닫을까요?'에 확인하면 지움
 const draftKey = (studentId: string, title: string) => `lms_admin_draft_${studentId}_${title}`;
 function readDraft(studentId: string, title: string): Record<string, string> | null {
   try { const s = localStorage.getItem(draftKey(studentId, title)); return s ? (JSON.parse(s) as Record<string, string>) : null; } catch { return null; }
@@ -493,6 +513,6 @@ function ProfileSheet(p: { student: StudentProfile; update: DetailActions['updat
     foot={<p className="mt-3 text-[12px] text-[#6b6880]">영어 이름 칸은 따로 없어요 — 영문 이름(여권) 하나만 씁니다. 강사 화면에는 ‘{p.student.nameEn}{p.student.displayName ? ` (${p.student.displayName})` : ''}’로 보여요. 누가 언제 무엇을 바꿨는지 기록돼요.</p>} />;
 }
 function AnswersSheet(p: { student: StudentProfile; update: DetailActions['update']; onClose: () => void; onSaved: () => Promise<void> }) {
-  return <FieldsSheet title="자기소개 · 수업 선호 (학생 답 입력)" fields={ANSWER_FIELDS} {...p}
+  return <FieldsSheet title="자기소개 · 수업 선호 (수강생 답 입력)" fields={ANSWER_FIELDS} {...p}
     foot={<p className="mt-3 text-[12px] text-[#6b6880]">첫 수업 전 카톡으로 받은 답을 그대로 적어요. 받지 않은 항목은 비워 두면 ‘미응답’으로 저장돼요 (추측해서 적지 않기). 기존 시트 자기소개는 원문 그대로 따로 보관돼요.</p>} />;
 }

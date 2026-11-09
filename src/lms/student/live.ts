@@ -1,11 +1,11 @@
-// 학생 화면 실제 데이터 (migration 2800). 읽기·쓰기 모두 DB 함수 — 본인 확인·검사·이력은 DB
-// 학생 본인은 student_ 함수, 운영자(TOTP 완료)가 ?student= 로 열면 운영진 화면과 같은 admin_ 함수(이력에 운영자로 남음)
+// 수강생 화면 실제 데이터 (migration 2800). 읽기·쓰기 모두 DB 함수 — 본인 확인·검사·이력은 DB
+// 수강생 본인은 student_ 함수, 운영자(TOTP 완료)가 ?student= 로 열면 운영진 화면과 같은 admin_ 함수(이력에 운영자로 남음)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
 import type { CreditPeriod, PointsEvent, StudentLesson, StudentRequest } from './home';
 
-const NOT_APPLIED = '학생 화면이 이 DB에 아직 없어요 (migration 2800).';
+const NOT_APPLIED = '수강생 화면이 이 DB에 아직 없어요 (migration 2800).';
 
 function check<T>(r: { data: T | null; error: { code?: string; message: string } | null }): T {
   if (r.error) {
@@ -18,13 +18,16 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 /** 보강할 수업 (취소한 수업 또는 시트에서 넘어온 날짜 미정 보강) */
 /** timeKnown=false: 시트에서 옮긴 보강이라 원래 수업 날짜만 앎 (화면은 날짜만, 3700) */
 /** compId: 강사 노쇼 무료 보상수업 (4100, 원래 수업 보강과 따로). useUntil = 사용 기한(수강 종료일, 기한 안 재등록이면 이월) */
+const TUTOR_FAULT = ['Tutor no-show', 'Tutor canceled in advance', 'Tutor canceled late'];
 export type MakeupRight = {
   lessonId: string | null; itemId: string | null; compId?: string | null; useUntil?: KstDate | null;
   originalAt: Date; timeKnown?: boolean; tutorLeave: boolean; requested: boolean; tutor?: string | null; tutorNoShow?: boolean;
+  /** 강사 사전·늦은 취소·노쇼 — 수강생 화면 이름 '강사 사정으로 취소된 수업' (수강생에게 '노쇼'라고 쓰지 않음, 11/8 대표) */
+  tutorFault?: boolean;
 };
 /** 보강 권리를 가리키는 값 (원래 수업 · 시트 보강 · 보상수업 중 하나) */
 export type RightRef = { lessonId: string | null; itemId: string | null; compId?: string | null };
-/** 강사 휴무 안내 한 줄. stage tutor_ok = 학생 답 기다림, confirmed = 대체 수업 확정, choice wait = 기존 강사님과 보강 */
+/** 강사 휴무 안내 한 줄. stage tutor_ok = 수강생 답 기다림, confirmed = 대체 수업 확정, choice wait = 기존 강사님과 보강 */
 export type LeaveRow = {
   id: string;
   startsAt: Date;
@@ -41,7 +44,7 @@ export type LeaveRow = {
 
 export type StudentView = {
   studentId: string;
-  /** 학생이 사는 곳 시간대 — 학생 화면 시각은 이 시간대로 (11/3 대표: 해외 학생은 본인 나라 시간으로) */
+  /** 수강생이 사는 곳 시간대 — 수강생 화면 시각은 이 시간대로 (11/3 대표: 해외 수강생은 본인 나라 시간으로) */
   timezone?: string;
   name: string;
   product: string;
@@ -60,7 +63,7 @@ export type StudentView = {
   enrollmentStatus: string | null;
   /** 강사가 정한 교재 이름 (QA C-04). 없거나 수업 방식에 교재가 없으면 null */
   textbook?: string | null;
-  /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 학생 화면 표시는 '보강'으로 같음) */
+  /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 수강생 화면 표시는 '보강'으로 같음) */
   lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
@@ -106,7 +109,7 @@ type Raw = {
   points: { id: string; on: KstDate; kind: string; amount: number; note: string | null }[];
 };
 
-/** 날짜 'M/D' — 학생 시간대 날짜 (시각 모르는 시트 수업은 한국 날짜) */
+/** 날짜 'M/D' — 수강생 시간대 날짜 (시각 모르는 시트 수업은 한국 날짜) */
 const md = (d: Date, tz = 'Asia/Seoul') => new Intl.DateTimeFormat('ko-KR', { timeZone: tz, month: 'numeric', day: 'numeric' }).format(d).replace(/\.\s?/g, '/').replace(/\/$/, '');
 
 /** 확정된 보강 수업 시각 (옛 DB: confirmed_at 이 없으면 수업 목록에서) */
@@ -116,8 +119,8 @@ function lessonStart(r: Raw, q: { status: string } & { confirmed_lesson_id?: str
 }
 
 /**
- * 수강권 이름: '50분 · 주 2회 · 4주'. 시트에서 옮긴 수강권은 운영 메모('기존 학생 이관 · 4주 (결제는 시트)')가 이름 칸에 있어
- * 학생에게는 주 수만 보여 줌 (11/2 점검 ⑥: 내부 문구 노출)
+ * 수강권 이름: '50분 · 주 2회 · 4주'. 시트에서 옮긴 수강권은 운영 메모('기존 수강생 이관 · 4주 (결제는 시트)')가 이름 칸에 있어
+ * 수강생에게는 주 수만 보여 줌 (11/2 점검 ⑥: 내부 문구 노출)
  */
 export function productLabel(e: { duration_min: number; weekly_count: number; weeks: number | null; legacy_label: string | null }): string {
   const weeks = e.weeks ?? Number(/(\d+)\s*주/.exec(e.legacy_label ?? '')?.[1] ?? 0);
@@ -181,6 +184,7 @@ export function parseStudentView(r: Raw): StudentView {
       tutorLeave: m.tutor_leave,
       tutor: m.tutor ?? r.lessons.find((l) => l.id === m.lesson_id)?.tutor ?? null,
       tutorNoShow: !!m.comp_id || r.lessons.find((l) => l.id === m.lesson_id)?.class_status === 'Tutor no-show',
+      tutorFault: TUTOR_FAULT.includes(r.lessons.find((l) => l.id === m.lesson_id)?.class_status ?? ''),
       // 원래 수업 보강과 보상수업은 신청이 따로 (4100)
       requested: open.some((q) => (m.comp_id ? q.comp_id === m.comp_id : !q.comp_id && ((m.lesson_id && q.lesson_id === m.lesson_id) || (m.item_id && q.item_id === m.item_id)))),
     })),
@@ -196,6 +200,8 @@ export function parseStudentView(r: Raw): StudentView {
         title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso), (q.original_time_known ?? src?.time_known !== false) ? r.student.timezone || 'Asia/Seoul' : 'Asia/Seoul')} 수업분` : ''}`,
         status: q.status === 'confirmed'
           ? (q.confirmed_state === 'canceled' ? 'canceled' : 'confirmed')
+          : q.status === 'expired' ? 'expired'
+          : q.status === 'withdrawn' ? 'withdrawn'
           : q.tutor_answered_at ? (q.tutor_declined_all ? 'rescheduling' : 'admin_reviewing') : 'tutor_reviewing',
         tutorDeclinedAll: !!q.tutor_declined_all,
         lessonId: q.lesson_id,
@@ -224,7 +230,7 @@ export function parseStudentView(r: Raw): StudentView {
   };
 }
 
-/** studentId: 운영자가 고른 학생 (학생 본인은 비움) */
+/** studentId: 운영자가 고른 수강생 (수강생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
   const [screen, book] = await Promise.all([sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId)]);
   return { ...parseStudentView(check(screen)), textbook: book };
@@ -248,12 +254,12 @@ export async function loadMakeupOptions(sb: SupabaseClient, studentId: string | 
 /** 수업 알림 메일 켬/끔 (정규 = 정규 수업, 보강 = 그 밖의 수업). hasEmail = 받을 이메일이 있는지 */
 export type Reminders = { regular: boolean; makeup: boolean; hasEmail: boolean };
 
-/** 학생 화면 동작. admin = 운영자 보기(대신 입력)면 운영진 함수 */
+/** 수강생 화면 동작. admin = 운영자 보기(대신 입력)면 운영진 함수 */
 export function studentActions(sb: SupabaseClient, adminStudentId: string | null) {
   const admin = adminStudentId !== null;
   return {
     reload: () => loadStudentView(sb, adminStudentId),
-    /** 알림 설정 읽기(인자 없음)·바꾸기 — 학생·운영자 같은 함수 */
+    /** 알림 설정 읽기(인자 없음)·바꾸기 — 수강생·운영자 같은 함수 */
     reminders: async (change?: { regular?: boolean; makeup?: boolean }): Promise<Reminders> => {
       const r = check(await sb.rpc('student_reminders', { p_student: adminStudentId, p_regular: change?.regular ?? null, p_makeup: change?.makeup ?? null })) as {
         regular: boolean;
@@ -296,6 +302,10 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
           : await sb.rpc('student_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, ...compArg(right) }),
       );
     },
+    /** 강사 확정 전 보강 신청 취소 (대표 11/9). 운영자 보기도 같은 함수 */
+    withdrawMakeup: async (requestId: string): Promise<void> => {
+      check(await sb.rpc('student_makeup_withdraw', { p_student: adminStudentId, p_request: requestId }));
+    },
     /** 휴무 안내 답 (A안 한 번에): ok = 대체강사와 수업, makeup = 기존 강사님과 보강 */
     answerLeave: async (items: string[], answer: 'ok' | 'makeup'): Promise<void> => {
       if (!admin) return void check(await sb.rpc('student_leave_answer', { p_items: items, p_answer: answer }));
@@ -311,7 +321,7 @@ export async function loadStudentAccounts(sb: SupabaseClient): Promise<StudentAc
   return rows.map((r) => ({ id: r.id, code: r.code, name: r.name_ko, nameEn: r.name_en, tutors: r.tutors ?? '', hasLogin: r.has_login }));
 }
 
-/** 운영자 보기 학생 검색: 한글·영문 이름, 학생 번호, 강사 이름 (공백 무시) */
+/** 운영자 보기 수강생 검색: 한글·영문 이름, 수강생 번호, 강사 이름 (공백 무시) */
 export function searchStudents(list: StudentAccount[], q: string): StudentAccount[] {
   const k = q.replace(/\s/g, '').toLowerCase();
   if (!k) return list;

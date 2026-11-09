@@ -213,7 +213,7 @@ describe('변경권 개수', () => {
   });
 });
 
-describe('학생 수업 변경 판정', () => {
+describe('수강생 수업 변경 판정', () => {
   const startsAt = kstToInstant('2026-11-10', '22:00'); // 화요일 밤 10시
   const base = {
     lesson: { kind: 'regular' as const, kstDate: '2026-11-10', startsAt },
@@ -232,7 +232,7 @@ describe('학생 수업 변경 판정', () => {
     expect(d).toMatchObject({ ok: true, timing: 'late', status: 'Student canceled late', usesCredit: false, consumesLesson: true, makeupAllowed: false });
   });
 
-  it('해외 학생도 현지 시간과 관계없이 같은 기준 (판정은 실제 시점 차이로만)', () => {
+  it('해외 수강생도 현지 시간과 관계없이 같은 기준 (판정은 실제 시점 차이로만)', () => {
     const now = new Date(startsAt.getTime() - 7 * H);
     expect(evaluateStudentChange({ ...base, now }, POLICY_A)).toMatchObject({ timing: 'advance' });
   });
@@ -271,7 +271,7 @@ describe('학생 수업 변경 판정', () => {
     expect(isMakeupSlotAllowed(new Date(now.getTime() - H), '2026-11-26', now)).toBe(false);
   });
 
-  describe('예약한 보강을 다시 변경 (정책 원본 A03 · POL-CHG-08, 기존 학생 포함 전원 — POL-OP-17)', () => {
+  describe('예약한 보강을 다시 변경 (정책 원본 A03 · POL-CHG-08, 기존 수강생 포함 전원 — POL-OP-17)', () => {
     const makeup = { ...base, lesson: { ...base.lesson, kind: 'makeup' as const }, now: new Date(startsAt.getTime() - 24 * H) };
 
     it('정규와 같음 — 변경권 1개 사용 후 다시 보강 가능 (운영자 값과 관계없음)', () => {
@@ -302,7 +302,7 @@ describe('강사 사유 취소', () => {
     expect(evaluateTutorCancel(new Date(startsAt.getTime() - 6 * H), startsAt)).toBe('Tutor canceled in advance');
     expect(evaluateTutorCancel(new Date(startsAt.getTime() - 2 * H), startsAt)).toBe('Tutor canceled late');
   });
-  it('강사 사유 취소는 학생 변경권을 쓰지 않고 보강 가능', () => {
+  it('강사 사유 취소는 수강생 변경권을 쓰지 않고 보강 가능', () => {
     for (const s of ['Tutor canceled in advance', 'Tutor canceled late', 'Tutor no-show'] as const) {
       expect(STATUS_RULES[s].usesCredit).toBe(false);
       expect(STATUS_RULES[s].consumesLesson).toBe(false);
@@ -351,7 +351,7 @@ describe('강사 휴무 일괄 처리 미리보기 (예: 11/2~11/10)', () => {
     { id: 'd1', tutorId: 'T2', studentId: 'S4', kstDate: '2026-11-04', state: 'scheduled' as const },
   ];
 
-  it('시작일·종료일 포함, 해당 강사의 예정 수업만, 학생별로 묶음', () => {
+  it('시작일·종료일 포함, 해당 강사의 예정 수업만, 수강생별로 묶음', () => {
     expect(previewTutorLeave(lessons, 'T1', '2026-11-02', '2026-11-10')).toEqual([
       { studentId: 'S1', lessonIds: ['a2', 'a3'], dates: ['2026-11-02', '2026-11-05'] },
       { studentId: 'S2', lessonIds: ['b1'], dates: ['2026-11-10'] },

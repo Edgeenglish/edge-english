@@ -3,10 +3,10 @@ import { paidStatus, productLabel } from './live';
 import { tzHeader, tzTimeLabel } from '../tutor/screen';
 import { makeupRights, type ChLesson } from '../admin/lesson-change';
 
-describe('학생 수강·결제 칸 (11/2 점검 ⑥: 내부 문구 노출)', () => {
+describe('수강생 수강·결제 칸 (11/2 점검 ⑥: 내부 문구 노출)', () => {
   it('시트에서 옮긴 수강권은 운영 메모 대신 주 수만', () => {
-    expect(productLabel({ duration_min: 40, weekly_count: 2, weeks: null, legacy_label: '기존 학생 이관 · 4주 (결제는 시트)' })).toBe('40분 · 주 2회 · 4주');
-    expect(productLabel({ duration_min: 20, weekly_count: 3, weeks: null, legacy_label: '기존 학생 이관 (남은 기간만, 결제·변경권은 시트)' })).toBe('20분 · 주 3회');
+    expect(productLabel({ duration_min: 40, weekly_count: 2, weeks: null, legacy_label: '기존 수강생 이관 · 4주 (결제는 시트)' })).toBe('40분 · 주 2회 · 4주');
+    expect(productLabel({ duration_min: 20, weekly_count: 3, weeks: null, legacy_label: '기존 수강생 이관 (남은 기간만, 결제·변경권은 시트)' })).toBe('20분 · 주 3회');
     expect(productLabel({ duration_min: 50, weekly_count: 1, weeks: 12, legacy_label: null })).toBe('50분 · 주 1회 · 12주');
   });
   it('결제 확인 기록이 있거나 수강 중·확정 수강권이면 결제 완료, 결제 대기만 확인 중', () => {
@@ -17,11 +17,11 @@ describe('학생 수강·결제 칸 (11/2 점검 ⑥: 내부 문구 노출)', ()
 });
 
 describe('강사 화면 시간대 이름 (11/2 점검 ⑤)', () => {
-  it("'[도시] Time / Korea Time (KST)'", () => {
+  it("'[도시] Time / KST'", () => {
     expect(tzTimeLabel('Asia/Manila')).toBe('Manila Time');
     expect(tzTimeLabel('America/New_York')).toBe('New York Time');
-    expect(tzHeader('Australia/Sydney')).toBe('Sydney Time / Korea Time (KST)');
-    expect(tzHeader('Asia/Seoul')).toBe('Korea Time (KST)');
+    expect(tzHeader('Australia/Sydney')).toBe('Sydney Time / KST');
+    expect(tzHeader('Asia/Seoul')).toBe('KST');
   });
 });
 

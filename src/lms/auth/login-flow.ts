@@ -21,7 +21,7 @@ export type AfterCode =
   | { kind: 'go'; to: '/lms/student' | '/lms/tutor' | '/lms/admin' }
   | { kind: 'totp_verify' } // 운영자: 이미 등록한 인증 앱 코드 입력
   | { kind: 'totp_enroll' } // 운영자: 처음 한 번 인증 앱 등록
-  | { kind: 'not_linked' }; // 로그인 계정은 있지만 학생·강사·운영자로 연결 안 됨 (POL-AC-04)
+  | { kind: 'not_linked' }; // 로그인 계정은 있지만 수강생·강사·운영자로 연결 안 됨 (POL-AC-04)
 
 /**
  * 메일 코드 로그인 직후 다음 단계.
@@ -37,6 +37,18 @@ export function afterEmailCode(input: { role: Role | null; aal: 'aal1' | 'aal2';
   if (role === 'tutor') return { kind: 'go', to: '/lms/tutor' };
   return { kind: 'not_linked' };
 }
+
+/**
+ * 로그인 뒤 갈 곳: 바로가기 링크로 왔으면(next) 그 주소로 (11/8 보강 바로가기). 다른 사이트·다른 역할 화면으로는 보내지 않음.
+ * 운영자는 수강생 보기(/lms/student?student=…)도 가능하므로 /lms/ 아래 어디든
+ */
+export function nextAfterLogin(next: string | null | undefined, to: string, role: Role | null): string {
+  if (!next || !next.startsWith('/lms/') || next.startsWith('//') || next.includes('\\') || /[\r\n]/.test(next)) return to;
+  if (role === 'admin') return next;
+  return next === to || next.startsWith(`${to}?`) || next.startsWith(`${to}/`) ? next : to;
+}
+/** 바로가기 링크로 들어와 로그인하는 중인지 (로그인 화면 안내 한 줄) */
+export const isMakeupLink = (next: string | null | undefined) => !!next && next.startsWith('/lms/student') && /[?&]makeup=/.test(next);
 
 /** 코드 다시 보내기 대기 시간(초) — Supabase 이메일 최소 발송 간격과 같게 */
 export const RESEND_WAIT_SECONDS = 60;
@@ -80,6 +92,7 @@ export const STRINGS = {
     logout: '로그아웃',
     moving: '이동하는 중…',
     backHome: '← 홈페이지로',
+    makeupNext: '로그인하면 링크의 보강 날짜 고르기로 바로 이어져요.',
   },
   en: {
     portal: 'Class portal',
@@ -118,6 +131,7 @@ export const STRINGS = {
     notLinkedLead: 'You can use it once Edge English finishes your registration. Please contact us.',
     logout: 'Log out',
     moving: 'Redirecting…',
+    makeupNext: 'After you log in, the make-up date page from your link opens.',
     backHome: '← Home page',
   },
 } as const;

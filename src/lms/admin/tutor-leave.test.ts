@@ -14,7 +14,7 @@ const sub = { choice: 'substitute' as const, subTutorId: 'b', subTutorName: 'Ben
 const now = kstToInstant('2026-10-27', '12:00');
 
 describe('강사 휴무 화면 계산 (2순위 ①)', () => {
-  it('학생별로 묶고(첫 수업 빠른 학생부터), 날짜마다 다르게 고르면 mixed', () => {
+  it('수강생별로 묶고(첫 수업 빠른 수강생부터), 날짜마다 다르게 고르면 mixed', () => {
     const items = [I('c', 's2', '2026-11-04'), I('a', 's1', '2026-11-02', sub), I('b', 's1', '2026-11-03', { choice: 'wait' })];
     const g = groupByStudent(items);
     expect(g.map((x) => [x.studentId, x.items.map((i) => i.id)])).toEqual([['s1', ['a', 'b']], ['s2', ['c']]]);
@@ -22,14 +22,14 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(groupChoice(g[1].items)).toBe('undecided');
   });
 
-  it('상태 글: 미정 → 강사 답 대기 → 학생 OK 대기 → 확정 / 기다림 보강 미정·보강 날짜', () => {
+  it('상태 글: 미정 → 강사 답 대기 → 수강생 OK 대기 → 확정 / 기다림 보강 미정·보강 날짜', () => {
     expect(itemStatus(I('a', 's1', '2026-11-02')).text).toBe('대체 강사 고르기 필요');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' })).text).toBe('Benny 강사님 답변 기다리는 중');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' })).text).toBe('Benny 강사님 가능 · 학생 답 필요');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' })).text).toBe('Benny 강사님 가능 · 수강생 답 필요');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' })).tone).toBe('done');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' }))).toMatchObject({ text: '기존 강사 보강 · 날짜 미정', wait: '학생 보강 신청' });
+    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' }))).toMatchObject({ text: '기존 강사 보강 · 날짜 미정', wait: '수강생 보강 신청' });
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupRequested: true }))).toMatchObject({ text: '기존 강사 보강 · 날짜 미정', wait: '강사님 보강 확인' });
-    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') })).text).toBe('기존 강사 보강 · 11/20 20:00');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') })).text).toBe('기존 강사 보강 · 11/20 오후 8:00');
   });
 
   it('상태 글: 문의 보내기 전 ≠ 답변 대기 (R2), 확정 안내 보내기 전 ≠ 완료 (R4), 밖에서 취소된 수업 (R5)', () => {
@@ -37,16 +37,16 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' }), pending).text).toBe('Benny 강사님에게 문의 보내기 전');
     expect(itemStatus(I('b', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending)).toEqual({ text: '대체강사 Benny 확정 · 확정 안내 보내기 전', tone: 'todo', next: '확정 안내 보내기' });
     expect(itemStatus(I('c', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending).text).toBe('대체강사 Benny 확정 · 안내 보냄');
-    // 학생 답 대기는 운영자 할 일이 아님 (대표 11/2): 안내를 보냈으면 '학생 답변 기다리는 중', 안 보냈으면 '학생 안내 전'
-    expect(itemStatus(I('d', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), pending)).toMatchObject({ text: 'Benny 강사님 가능 · 학생 답변 기다리는 중', tone: 'wait', wait: '학생 답' });
-    expect(itemStatus(I('d', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), new Set(['d|sub_student']))).toMatchObject({ tone: 'todo', next: '학생에게 휴무 안내 보내기' });
+    // 수강생 답 대기는 운영자 할 일이 아님 (대표 11/2): 안내를 보냈으면 '수강생 답변 기다리는 중', 안 보냈으면 '수강생 안내 전'
+    expect(itemStatus(I('d', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), pending)).toMatchObject({ text: 'Benny 강사님 가능 · 수강생 답변 기다리는 중', tone: 'wait', wait: '수강생 답' });
+    expect(itemStatus(I('d', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), new Set(['d|sub_student']))).toMatchObject({ tone: 'todo', next: '수강생에게 휴무 안내 보내기' });
     expect(itemStatus(I('c', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending).tone).toBe('done');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', lessonGone: true }), pending)).toEqual({ text: '수업 취소·변경됨', tone: 'done' });
     const g = groupByStudent([I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked', lessonGone: true })])[0];
     expect(studentWork(g, [], new Date('2026-10-30T00:00:00Z')).steps).toEqual([]);
   });
 
-  it('안내: 같은 학생·같은 대체강사 날짜를 한 메시지로, 강사는 현지 시각, 학생은 한국어', () => {
+  it('안내: 같은 수강생·같은 대체강사 날짜를 한 메시지로, 강사는 현지 시각, 수강생은 한국어', () => {
     const items = [I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' }), I('b', 's1', '2026-11-05', { ...sub, subStage: 'tutor_ok' })];
     const notices: LvNotice[] = [
       { id: 'n1', itemId: 'a', event: 'sub_ask', recipientKind: 'tutor', recipientId: 'b', status: 'pending', sentAt: null },
@@ -59,18 +59,18 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     const m = leaveMessages(items, notices);
     expect(m.map((x) => [x.event, x.noticeIds])).toEqual([['sub_ask', ['n1', 'n2']], ['sub_student', ['n3']], ['leave_options', ['n5', 'n6']]]);
     expect(m[0].text).toContain('Substitute request - Minsu Kim (40 min)');
-    // 휴무 강사 이름은 대체강사·학생 글에 쓰지 않음, 일부만 가능하면 번호로 답하게 (2026-10-27 대표)
+    // 휴무 강사 이름은 대체강사·수강생 글에 쓰지 않음, 일부만 가능하면 번호로 답하게 (2026-10-27 대표)
     expect(m.every((x) => !x.text.includes('Olivia'))).toBe(true);
     expect(m[0].text).toContain('One of our Edge English tutors is on leave');
     expect(m[0].text).toContain("If you can't do all of them, please reply with the numbers you can do.");
     expect(m[0].text.split('\n').filter((l) => /^\d\)/.test(l))).toHaveLength(2);
-    expect(m[0].text).toContain('Manila Time (Mon 2 Nov 20:00 KST)');   // 도시 이름 + 한국 시간 (QA UX: 'your time' 금지)
-    expect(m[1].text).toBe('[엣지영어] 김민수님, 담당 강사님 휴가 기간 수업을 대체강사 Benny 강사님과 평소 시간에 진행하려고 해요. 아래 날짜 괜찮으신지 알려 주세요. 강사님 프로필도 함께 보내 드려요.\n\n- 11월 5일(목) 오후 8시');
+    expect(m[0].text).toContain('*Manila Time* / 8:00 PM *KST*');   // 도시 이름 + 한국 시간 (QA UX: 'your time' 금지)
+    expect(m[1].text).toBe('[엣지영어] 김민수님, 담당 강사님 휴가 기간 수업을 대체강사 Benny 강사님과 평소 시간에 진행하려고 해요. 아래 날짜 괜찮으신지 알려 주세요. 강사님 프로필도 함께 보내 드려요.\n\n- 11월 5일(목) 오후 8시 [한국 시간]');
     // 두 가지를 처음부터 함께 안내 (① 대체강사 · 추천 / ② 기존 강사와 보강), 대표 문구 그대로
     expect(m[2].recipient).toBe('student');
     expect(m[2].text).toBe([
       '[엣지영어] 김민수님, 담당 강사님 휴무로 아래 수업의 진행 방법을 골라 주세요.',
-      '- 11월 2일(월) 오후 8시\n- 11월 5일(목) 오후 8시',
+      '- 11월 2일(월) 오후 8시 [한국 시간]\n- 11월 5일(목) 오후 8시 [한국 시간]',
       '① ⭐추천⭐ 원래 시간에 대체강사와 수업하기\n일정을 바꾸지 않고, 평소 수업 시간 그대로 수업하실 수 있어요.\n다른 강사의 영어와 수업 방식도 경험해 보실 수 있습니다.',
       '② 기존 강사와 보강하기\n기존 강사님이 돌아오신 뒤 수업하실 수 있어요. 가능한 보강 시간을 확인해 주세요.',
     ].join('\n\n'));
@@ -81,7 +81,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(w.proposal?.itemIds ?? []).not.toContain('a');
   });
 
-  it('새 순서: 1 대체 강사에게 묻기 → 2 학생에게 휴무 안내 · 대체 강사 제안(글 하나) → 3 학생 답 입력 → 4 확정 안내 보내기', () => {
+  it('새 순서: 1 대체 강사에게 묻기 → 2 수강생에게 휴무 안내 · 대체 강사 제안(글 하나) → 3 수강생 답 입력 → 4 확정 안내 보내기', () => {
     const N = (id: string, itemId: string, event: LvNotice['event'], status: LvNotice['status'] = 'pending'): LvNotice =>
       ({ id, itemId, event, recipientKind: 'student', recipientId: 's1', status, sentAt: null });
     const items = [I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), I('b', 's1', '2026-11-04', { ...sub, subStage: 'tutor_ok' }), I('c', 's1', '2026-11-09', { choice: 'wait' })];
@@ -91,15 +91,15 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(w2.steps).toEqual(['propose']);
     expect(w2.proposal?.status).toBe('pending');
     expect([...w2.proposal!.noticeIds].sort()).toEqual(['o1', 'o2', 'o3', 's1', 's2']);
-    // 2026-10-28 대표 문구: 날짜만, 맨 끝에 학생 LMS 링크 (강사 프로필·답은 LMS에서)
+    // 2026-10-28 대표 문구: 날짜만, 맨 끝에 수강생 LMS 링크 (강사 프로필·답은 LMS에서)
     expect(w2.proposal?.text).toBe([
       '[엣지영어] 안녕하세요, 김민수님! \n다름이 아니라 담당 강사님 휴무로 부득이하게 아래 날짜에는 수업을 진행하기 어렵게 되었어요.🥲',
-      '- 11월 2일(월) 오후 8시\n- 11월 4일(수) 오후 8시\n- 11월 9일(월) 오후 8시',
+      '- 11월 2일(월) 오후 8시 [한국 시간]\n- 11월 4일(수) 오후 8시 [한국 시간]\n- 11월 9일(월) 오후 8시 [한국 시간]',
       '추천드리는 방법은, 원래 시간에 대체강사와 수업하는 거예요!\n일정을 바꾸지 않고, 평소 수업 시간 그대로 수업하실 수 있어요.\n다른 강사의 영어와 수업 방식도 경험해 보실 수 있습니다:)',
       '아래 링크에서 강사님 프로필을 확인하시고, 원하시는 수업 방법을 편하게 선택해 주세요. \n감사합니다🙇‍♀️',
       '/lms/student',
     ].join('\n\n'));
-    // 보낸 뒤 → 3단계(학생 답) + 4단계(보강 날짜). 보낸 글은 그대로 남음
+    // 보낸 뒤 → 3단계(수강생 답) + 4단계(보강 날짜). 보낸 글은 그대로 남음
     const sent = before.map((n) => ({ ...n, status: 'sent' as const }));
     const w3 = studentWork(groupByStudent(items)[0], leaveMessages(items, sent), now);
     expect(w3.steps).toEqual(['answer', 'confirm']);
@@ -114,11 +114,11 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     const m = leaveMessages(items, [{ id: 'o', itemId: 'a', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null }]);
     const w = studentWork(groupByStudent(items)[0], m, now, { from: '2026-11-02', to: '2026-11-10' });
     expect(w.steps).toEqual(['propose']);
-    expect(w.proposal?.text).toBe('[엣지영어] 안녕하세요, 김민수님! \n다름이 아니라 담당 강사님 휴무로 부득이하게 아래 날짜에는 수업을 진행하기 어렵게 되었어요.🥲\n\n- 11월 2일(월) 오후 8시\n\n아래 링크에서 보강 날짜를 편하게 골라 주세요. \n감사합니다🙇‍♀️\n\n/lms/student');
+    expect(w.proposal?.text).toBe('[엣지영어] 안녕하세요, 김민수님! \n다름이 아니라 담당 강사님 휴무로 부득이하게 아래 날짜에는 수업을 진행하기 어렵게 되었어요.🥲\n\n- 11월 2일(월) 오후 8시 [한국 시간]\n\n아래 링크에서 보강 날짜를 편하게 골라 주세요. \n감사합니다🙇‍♀️\n\n/lms/student');
     expect(w.confirm.makeup).toEqual([]);
   });
 
-  it('학생 할 일: 미정 → 1단계, 보강 날짜 미정·신청함 → 4단계(수업 변경 화면), 지난 미정 수업은 제외', () => {
+  it('수강생 할 일: 미정 → 1단계, 보강 날짜 미정·신청함 → 4단계(수업 변경 화면), 지난 미정 수업은 제외', () => {
     const items = [
       I('p', 's1', '2026-10-20'), I('a', 's1', '2026-11-02'), I('b', 's1', '2026-11-03', { choice: 'wait' }),
       I('c', 's1', '2026-11-04', { choice: 'wait', makeupRequested: true }), I('d', 's1', '2026-11-05', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') }),
@@ -141,7 +141,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(makeupDatesText('박서연', 'Asia/Seoul', mixed)).toBe(`${head}\n\n- 11/14(토) 오후 9시 · 오후 10시\n- 11/17(화) 오후 10시`);
   });
 
-  it('학생 OK 뒤 최종 확정 안내는 학생(한국어)·대체강사(영어) 모두에게', () => {
+  it('수강생 OK 뒤 최종 확정 안내는 수강생(한국어)·대체강사(영어) 모두에게', () => {
     const items = [I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' })];
     const notices: LvNotice[] = [
       { id: 'c1', itemId: 'a', event: 'sub_confirmed', recipientKind: 'tutor', recipientId: 'b', status: 'pending', sentAt: null },
@@ -151,7 +151,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(m.map((x) => [x.recipient, x.to])).toEqual([['tutor', 'Benny'], ['student', '김민수']]);
     expect(m[0].text).toContain('CONFIRMED substitute classes');
     // R-23: 회의실 링크가 없으면(또는 홈페이지 주소면) 링크 대신 '수업 전에 보내 드려요'
-    expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 대체강사 Benny 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.\n\n- 11월 2일(월) 오후 8시\n\n수업 링크는 수업 전에 보내 드려요.');
+    expect(m[1].text).toBe('[엣지영어] 김민수님, 아래 수업은 대체강사 Benny 강사님과 평소 시간에 진행하는 것으로 확정됐어요. 이해해 주셔서 감사합니다.\n\n- 11월 2일(월) 오후 8시 [한국 시간]\n\n수업 링크는 수업 전에 보내 드려요.');
     const bogus = leaveMessages([I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', subTutorMeetUrl: 'https://meet.google.com/' })], notices);
     expect(bogus[1].text).toContain('수업 링크는 수업 전에 보내 드려요.');
     const room = leaveMessages([I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', subTutorMeetUrl: 'https://meet.google.com/abc-defg-hij' })], notices);
@@ -159,7 +159,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(studentWork(groupByStudent(items)[0], m, now).confirm.confirmedMsgs).toHaveLength(2);
   });
 
-  it('학생에게 가는 대체강사 글은 대체강사마다 따로 묶음', () => {
+  it('수강생에게 가는 대체강사 글은 대체강사마다 따로 묶음', () => {
     const items = [I('a', 's1', '2026-11-09', { ...sub, subStage: 'tutor_ok' }), I('b', 's1', '2026-11-11', { choice: 'substitute', subTutorId: 'j', subTutorName: 'James', subTutorTz: 'Asia/Manila', subStage: 'tutor_ok' })];
     const notices: LvNotice[] = [
       { id: 'x1', itemId: 'a', event: 'sub_student', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
@@ -174,7 +174,7 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
       '참고로 담당 강사님이 11/2~11/10 휴가예요. 이 기간 수업은 ① ⭐추천⭐ 대체강사와 원래 시간에 하시거나 ② 강사님 복귀 뒤 보강으로 하실 수 있고, 수업 횟수는 그대로예요. 어느 쪽이 편하신지 같이 알려 주세요.',
     );
     const t = renewalTutorText({ studentId: 's', studentName: '정유진', studentCode: 'STU-1', endDate: '2026-10-29', dates: [{ startsAt: kstToInstant('2026-11-05', '21:30'), durationMin: 40 }] });
-    expect(t).toMatch(/^- .*KST \(40 min\) \(if the student renews\)$/);
+    expect(t).toMatch(/^- .*\*KST\* \(40 min\) \(if the student renews\)$/);
   });
 
   it('기다림 수업(강사 장기 휴식)도 보강 권리 — 수업 변경·보강 화면에서 보강을 잡음', () => {
@@ -203,12 +203,12 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
     expect(item.title).toBe('Olivia 휴무 11/2~11/10');
     // 휴무 화면 단계 이름 그대로 (2026-10-28 대표)
     expect(item.tag).toBe('강사 휴무 · 수업별 대체 강사 찾기 3회');
-    expect(item.detail).toBe('수업별 대체 강사 찾기 3회 · 학생한테 기존 강사 휴무 안내하기 1명 · 학생 답변 기록 1회 · 확정 안내 보내기 1건');
+    expect(item.detail).toBe('수업별 대체 강사 찾기 3회 · 수강생한테 기존 강사 휴무 안내하기 1명 · 수강생 답변 기록 1회 · 확정 안내 보내기 1건');
     expect(item.actions[0].href).toBe('/lms/admin/leave?off=off1');
   });
 });
 
-describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승인)', () => {
+describe('강사별 묶음 문의 · 수강생 목록 묶음 (2026-10-30 시안 승인)', () => {
   const sub = { choice: 'substitute' as const, subTutorId: 'm', subTutorName: 'Maria', subTutorTz: 'Asia/Manila', subStage: 'asked' as const };
   const base = (id: string, sid: string, at: string, o: Partial<LvItem> = {}): LvItem => ({
     id, timeOffId: 'o', studentId: sid, studentName: sid, studentNameEn: `En ${sid}`, studentCode: sid, studentTz: 'Asia/Seoul', durationMin: 40, isLesson: true,
@@ -216,7 +216,7 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     lessonId: id, migratedItemId: null, ...o,
   });
   const now = new Date('2026-11-01T00:00:00Z');
-  it('같은 대체강사의 여러 학생 수업을 한 묶음으로, 안 보낸 문의가 있으면 pending · 취소된 수업은 뺌', () => {
+  it('같은 대체강사의 여러 수강생 수업을 한 묶음으로, 안 보낸 문의가 있으면 pending · 취소된 수업은 뺌', () => {
     const items = [base('a', 's1', '2026-11-09T11:00:00Z', sub), base('b', 's2', '2026-11-09T00:00:00Z', sub), base('c', 's2', '2026-11-10T00:00:00Z', { ...sub, lessonGone: true })];
     const notices: LvNotice[] = [{ id: 'n1', itemId: 'a', event: 'sub_ask', recipientKind: 'tutor', recipientId: 'm', status: 'pending', sentAt: null }];
     const [b] = tutorBundles(items, notices, now);
@@ -234,8 +234,8 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     const [b] = tutorBundles(items, notices, now);
     expect(b.pending).toBeNull();
     expect(b.sent).toHaveLength(1);
-    expect(b.sent[0].text).toContain('1) Mon 9 Nov 08:00 Manila Time (Mon 9 Nov 09:00 KST) · En s1');
-    expect(b.sent[0].text).toContain('2) Mon 9 Nov 19:00 Manila Time (Mon 9 Nov 20:00 KST) · En s2');
+    expect(b.sent[0].text).toContain('1) Mon, 9 Nov 8:00 AM *Manila Time* / 9:00 AM *KST* · En s1');
+    expect(b.sent[0].text).toContain('2) Mon, 9 Nov 7:00 PM *Manila Time* / 8:00 PM *KST* · En s2');
     expect(b.numbers).toEqual({ b: '2번' });
   });
   it('다시 고르기 뒤 같은 강사를 다시 골라도 예전에 보낸 문의 원문·번호는 그대로, 새 문의는 따로 (3400, 대표 10/30)', () => {
@@ -248,12 +248,12 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     ];
     const [b] = tutorBundles(items, notices, now);
     expect(b.sent).toHaveLength(1);
-    expect(b.sent[0].text).toContain('1) Mon 9 Nov 08:00 Manila Time (Mon 9 Nov 09:00 KST) · En s1');
-    expect(b.sent[0].text).toContain('2) Mon 9 Nov 19:00 Manila Time (Mon 9 Nov 20:00 KST) · En s2');
+    expect(b.sent[0].text).toContain('1) Mon, 9 Nov 8:00 AM *Manila Time* / 9:00 AM *KST* · En s1');
+    expect(b.sent[0].text).toContain('2) Mon, 9 Nov 7:00 PM *Manila Time* / 8:00 PM *KST* · En s2');
     expect(b.numbers).toEqual({ b: '2번' });
     expect(b.pending!.itemIds).toEqual(['a']);
   });
-  it('일부 날짜만 정해져도 그 날짜부터 휴무 안내·학생 답 진행 (대표 10/30)', () => {
+  it('일부 날짜만 정해져도 그 날짜부터 휴무 안내·수강생 답 진행 (대표 10/30)', () => {
     const items = [base('a', 's1', '2026-11-02T11:00:00Z', { ...sub, subStage: 'tutor_ok' }), base('b', 's1', '2026-11-03T11:00:00Z', sub)];
     const notices: LvNotice[] = [
       { id: 'lo-a', itemId: 'a', event: 'leave_options', recipientKind: 'student', recipientId: 's1', status: 'pending', sentAt: null },
@@ -272,7 +272,7 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
     expect(w2.answer.map((i) => i.id)).toEqual(['a']);
     expect(w2.sentProposals.map((p) => p.itemIds)).toEqual([['a']]);
   });
-  it('학생 묶음: 고르기 전 수업 → 처리할 것, 강사 답만 남음 → 답 기다리는 것', () => {
+  it('수강생 묶음: 고르기 전 수업 → 처리할 것, 강사 답만 남음 → 답 기다리는 것', () => {
     const w1 = studentWork(groupByStudent([base('a', 's1', '2026-11-09T11:00:00Z')])[0], [], now);
     expect(studentPhase(w1)).toBe('todo');
     const w2 = studentWork(groupByStudent([base('a', 's1', '2026-11-09T11:00:00Z', sub)])[0], [], now);
@@ -280,7 +280,7 @@ describe('강사별 묶음 문의 · 학생 목록 묶음 (2026-10-30 시안 승
   });
 });
 
-describe('휴무 보강 날짜 안내 — 해외 학생 시간 기준 (R-14)', async () => {
+describe('휴무 보강 날짜 안내 — 해외 수강생 시간 기준 (R-14)', async () => {
   const { makeupDatesText: text } = await import('./tutor-leave');
   const { kstToInstant } = await import('../rules/dates');
   it('도시 시간 + 한국 시간을 함께 (모두 같은 시간이면 위에 한 번)', () => {
@@ -294,7 +294,7 @@ describe('휴무 보강 날짜 안내 — 해외 학생 시간 기준 (R-14)', a
     expect(out).toContain('- 11/16(월) 오후 7시 30분 (Toronto 시간) · 한국 오전 9시 30분');
     expect(out).toContain('- 11/18(수) 오전 8시 (Toronto 시간) · 한국 오후 10시');
   });
-  it('국내 학생은 전처럼 한국 시간만', () => {
+  it('국내 수강생은 전처럼 한국 시간만', () => {
     expect(text('홍길동', 'Asia/Seoul', [kstToInstant('2026-11-17', '09:30')])).toContain('⏰ 모두 평소 시간 오전 9시 30분\n- 11/17(화)');
   });
 });

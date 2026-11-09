@@ -4,9 +4,9 @@
 //   → 기본값을 두지 않는다. 운영자가 정한 값을 넘겨주지 않으면 계산 자체가 되지 않게 해서
 //     정해지지 않은 규칙이 몰래 적용되는 일을 막는다.
 // - 정책 원본(Google Docs, SRC-POLICY-V1) 규칙은 둘로 나눔 (POL-OP-16·17)
-//   FAVORABLE_FOR_ALL: 학생에게 유리 → 기존 학생 포함 전원
+//   FAVORABLE_FOR_ALL: 수강생에게 유리 → 기존 수강생 포함 전원
 //   POLICY_V1: 기존 계약보다 불리할 수 있음 → '정책 원본 적용' 등록(enrollments.policy_basis = 'policy_v1')만. 소급 금지
-// - 아래 CONFIRMED 값은 수강계약서 2판(SC2) 이후 기준. 1판(SC1) 학생 규칙은 D-16 결정 후 판본별로 추가
+// - 아래 CONFIRMED 값은 수강계약서 2판(SC2) 이후 기준. 1판(SC1) 수강생 규칙은 D-16 결정 후 판본별로 추가
 
 export const CONFIRMED = {
   /** 1기간 = 28일 (시작일 포함) */
@@ -19,9 +19,9 @@ export const CONFIRMED = {
   weeklyCounts: [1, 2, 3, 5] as const,
   /** 수업 길이(분) */
   durations: [20, 40, 50] as const,
-  /** 같은 강사·학생의 수업 사이 최소 휴식(분) */
+  /** 같은 강사·수강생의 수업 사이 최소 휴식(분) */
   minBreakMin: 10,
-  /** 휴식 예외(back to back): 같은 학생이 원한 보강이면 이 길이 수업끼리는 휴식 없이 붙일 수 있음 — 40·50분은 10분 그대로 */
+  /** 휴식 예외(back to back): 같은 수강생이 원한 보강이면 이 길이 수업끼리는 휴식 없이 붙일 수 있음 — 40·50분은 10분 그대로 */
   backToBackNoBreakDurationMin: 20,
   /** 휴식 없이 이어 붙이는 수업은 이 개수까지 (20분 × 2 = 연속 40분) */
   backToBackNoBreakMaxLessons: 2,
@@ -49,13 +49,13 @@ export const CONFIRMED_REFS = {
 export type RuleBasis = 'policy_v1' | 'legacy';
 
 /**
- * 학생에게 유리한 정책 원본 규칙 — 기존 학생을 포함해 **모든 등록**에 적용 (POL-OP-17, 2026-10-16 대표 결정)
+ * 수강생에게 유리한 정책 원본 규칙 — 기존 수강생을 포함해 **모든 등록**에 적용 (POL-OP-17, 2026-10-16 대표 결정)
  * 기존 계약에 이보다 유리한 조건이 있으면 그 조건을 유지한다(현재 확인된 판본 중 해당 없음). 시행일은 배포·안내 전에 별도 확정.
  */
 export const FAVORABLE_FOR_ALL = {
   /** 이미 예약한 보강도 정규 수업과 같은 규칙으로 반복 변경 가능 (A03) */
   makeupRecancel: 'same_as_regular',
-  /** 강사가 6시간 미만에 취소하면 학생 적립금 2,000원 (A16·A17), 유효기간 없음 (A18) */
+  /** 강사가 6시간 미만에 취소하면 수강생 적립금 2,000원 (A16·A17), 유효기간 없음 (A18) */
   tutorLateCancelRewardWon: 2000,
 } as const;
 
@@ -112,7 +112,7 @@ export function isOfferedPlan(durationMin: number, weeklyCount: number): boolean
  * 각 항목의 선택지와 추천안은 docs/lms/07-decisions.md 참고.
  */
 export type PendingPolicy = {
-  /** 강사 노쇼 보상 수업을 학생이 다시 취소할 때 (POL-TU-10, 정책 원본 C03 — 원본 A03은 '보강'만 언급) */
+  /** 강사 노쇼 보상 수업을 수강생이 다시 취소할 때 (POL-TU-10, 정책 원본 C03 — 원본 A03은 '보강'만 언급) */
   compensationRecancel: 'no_rebook' | 'same_as_regular';
 };
 

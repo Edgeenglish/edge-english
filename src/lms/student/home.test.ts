@@ -56,10 +56,10 @@ describe('재등록 안내 (POL-RN-08)', () => {
     expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-22', '21:30'))).toEqual({ mode: 'request', left: 0 });
   });
 
-  it('남은 수업 0회: 마지막 수업이 있는 날까지 보이고 다음 날부터 숨김 (학생 거주지 날짜, 2026-11-07 대표)', () => {
+  it('남은 수업 0회: 마지막 수업이 있는 날까지 보이고 다음 날부터 숨김 (수강생 거주지 날짜, 2026-11-07 대표)', () => {
     expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-22', '23:59'))).toEqual({ mode: 'request', left: 0 });
     expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-23', '09:00'))).toBeNull();
-    // 토론토 학생: 마지막 수업 한국 10/22 20:00 = 토론토 10/22 07:00 → 한국 10/23 09:00 은 토론토 10/22 20:00 (아직 그날)
+    // 토론토 수강생: 마지막 수업 한국 10/22 20:00 = 토론토 10/22 07:00 → 한국 10/23 09:00 은 토론토 10/22 20:00 (아직 그날)
     expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-23', '09:00'), 0, 'America/Toronto')).toEqual({ mode: 'request', left: 0 });
     // 날짜 미정 보강이 남아 있으면 계속 보임
     expect(renewalPrompt([three[2]], 'not_requested', kstToInstant('2026-10-30', '09:00'), 1)).toEqual({ mode: 'request', left: 1 });
@@ -92,7 +92,7 @@ describe('다음 수업', () => {
 });
 
 describe('할 일 알림', () => {
-  it('학생이 처리할 일이 없으면 비어 있음 (강사 확인 중은 입력에 없음)', () => {
+  it('수강생이 처리할 일이 없으면 비어 있음 (강사 확인 중은 입력에 없음)', () => {
     expect(studentTodos({ pendingConsents: [] })).toEqual([]);
   });
   it('수업 안내 동의가 필요하면 표시', () => {

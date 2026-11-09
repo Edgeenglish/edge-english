@@ -16,6 +16,8 @@ import {
 } from '@/lms/tutor/schedule';
 import { KOREA_TIME, minutesOf, statusText, type TutorLesson } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
+import { ampmEn } from '@/lms/rules/dates';
+import { useDetailBack } from './useDetailBack';
 
 export type ScheduleActions = {
   load: (from: string, to: string, cells: boolean) => Promise<ScheduleData>;
@@ -71,6 +73,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  // 휴대폰 뒤로가기: 열린 창만 닫고 Schedule 에 남음 (대표 11/9)
+  const closeDialog = useDetailBack(!!dialog, () => setDialog(null));
   const [busy, setBusy] = useState(false);
   const [saveErr, setSaveErr] = useState('');
   const [toast, setToast] = useState('');
@@ -191,7 +195,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     if (k === 'request' || k === 'answered') { const r = lockReason(k)!; return setDialog({ kind: 'info', title: r.title, body: r.body }); }
     if (k === 'locked') return setDialog({ kind: 'info', title: 'Can’t change', body: 'Can’t change: less than 6 hours away.' });
     if (k === 'outside') {
-      return setDialog({ kind: 'info', title: 'Can’t change', body: `Classes can only start ${data.times[0]}–${data.times[data.times.length - 1]} ${cityTime(tz)}.` });
+      return setDialog({ kind: 'info', title: 'Can’t change', body: `Classes can only start ${ampmEn(data.times[0])}–${ampmEn(data.times[data.times.length - 1])} ${cityTime(tz)}.` });
     }
     if (k === 'far') return setDialog({ kind: 'info', title: 'Can’t change yet', body: `You can change times up to 12 weeks ahead (until ${dayText(data.last)}).` });
   }
@@ -228,7 +232,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   function weekCell(date: string, i: number, kinds: CellKind[]) {
     const k = kinds[i];
     const t = slotTime(i);
-    const label = `${dayText(date)} ${t} ${viewLabel}`;
+    const label = `${dayText(date)} ${ampmEn(t)} ${viewLabel}`;
     const sel = drag && drag.date === date && i >= Math.min(drag.a, drag.b) && i <= Math.max(drag.a, drag.b);
     const handlers = {
       onPointerDown: (e: React.PointerEvent) => {
@@ -253,7 +257,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
         <button type="button" {...handlers} aria-label={`${label} class with ${l.student}`}
           className={`${cellBase} truncate px-1 ${makeup ? 'text-[#0f5f56]' : 'text-white'} ${first ? (f.to >= 1 && minutesOf(l) > 30 - (sMin - i * 30) ? 'rounded-b-none' : '') : cont}`}
           style={fillStyle(f, makeup ? '#9fe0d6' : '#5b3fe0', '#ecebf1')}>
-          {first ? <span className="[color:inherit]">{l.student.split(' ')[0]} <span className="hidden font-medium [color:inherit] lg:inline">{s.time}</span></span> : ''}
+          {first ? <span className="[color:inherit]">{l.student.split(' ')[0]} <span className="hidden font-medium [color:inherit] lg:inline">{ampmEn(s.time)}</span></span> : ''}
         </button>
       );
     }
@@ -395,7 +399,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
           ))}
           {ALL_HOURS.map((t, i) => (
             <div key={t} className="contents">
-              <div data-row={i} className="pr-1 text-right text-[11px] leading-[26px] text-[#1d1b2b] lg:leading-[24px]">{t.endsWith('00') ? t : ''}</div>
+              <div data-row={i} className="pr-1 text-right text-[11px] leading-[26px] text-[#1d1b2b] lg:leading-[24px]">{t.endsWith('00') ? ampmEn(t).replace(':00', '') : ''}</div>
               {grid.map((d, c) => <div key={d}>{weekCell(d, i, weekKinds[c])}</div>)}
             </div>
           ))}
@@ -419,13 +423,13 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       )}
 
       {dialog && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 lg:items-center" onClick={(e) => { if (e.target === e.currentTarget && !busy) setDialog(null); }}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 lg:items-center" onClick={(e) => { if (e.target === e.currentTarget && !busy) closeDialog(); }}>
           <div role="dialog" aria-modal="true" className="grid max-h-[90vh] w-full gap-2.5 overflow-y-auto rounded-t-[18px] bg-white p-4 pb-6 lg:max-w-[440px] lg:rounded-[16px]">
             {dialog.kind === 'info' && (
               <>
                 <strong className="text-[16px] text-[#1d1b2b]">{dialog.title}</strong>
                 <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14.5px] text-[#b3261e]">{dialog.body}</p>
-                <button type="button" onClick={() => setDialog(null)} className={btnSub}>Close</button>
+                <button type="button" onClick={() => closeDialog()} className={btnSub}>Close</button>
               </>
             )}
             {dialog.kind === 'pick' && pickBody(dialog)}
@@ -450,7 +454,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
                     </>
                   )}
                   {over && b.note && <p className="text-[14.5px] text-[#1d1b2b]">{b.note}</p>}
-                  <button type="button" disabled={busy} onClick={() => setDialog(null)} className={btnSub}>Close</button>
+                  <button type="button" disabled={busy} onClick={() => closeDialog()} className={btnSub}>Close</button>
                 </>
               );
             })()}
@@ -459,18 +463,16 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
               const tag = lessonTag(l);
               return (
                 <>
-                  <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>
+                  {l.studentId && openProfile ? <button type="button" onClick={() => closeDialog(() => openProfile(l.studentId!))} className="w-fit rounded-[9px] bg-[#f3f1fa] px-3 py-2 text-[17px] font-semibold text-[#1d1b2b]">{l.student}</button> : <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>}
                   <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(inZone(l.startsAt, tz).date)} {spanText(l.startsAt, l.endsAt, tz)}</b></p>
                   {tz !== 'Asia/Seoul' && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(l.startsAt, l.endsAt, 'Asia/Seoul')}</p>}
                   <p className="text-[14px] text-[#55526a]">
                     {minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''} · {statusText(l, now)}
                   </p>
-                  <button type="button" onClick={() => { setDialog(null); onRecord(l); }} className={btnMain}>Class Record ›</button>
-                  <div className="flex flex-wrap gap-2">
-                    {l.studentId && openProfile && <button type="button" onClick={() => { setDialog(null); openProfile(l.studentId!); }} className={`${btnSub} flex-1`}>Student profile</button>}
-                    {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className={`${btnSub} inline-flex flex-1 items-center justify-center`}>Class notes</a>}
-                  </div>
-                  <button type="button" onClick={() => setDialog(null)} className={btnSub}>Close</button>
+                  <button type="button" onClick={() => closeDialog(() => onRecord(l))} className={btnMain}>Class Record ›</button>
+                  {l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation' &&
+                    <button type="button" onClick={() => closeDialog(() => onRecord(l))} className={btnSub}>Cancel class</button>}
+                  <button type="button" onClick={() => closeDialog()} className={btnSub}>Close</button>
                 </>
               );
             })()}
@@ -530,7 +532,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
         </div>
         {hit && (
           <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">
-            You have a class at {inZone(hit.startsAt, viewZone).time} {viewLabel}. Classes can’t be blocked.
+            You have a class at {ampmEn(inZone(hit.startsAt, viewZone).time)} {viewLabel}. Classes can’t be blocked.
           </p>
         )}
         {!isOpen && !removeExtra && <NoteField value={d.note} onChange={(v) => setD({ ...d, note: v })} />}
@@ -541,7 +543,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
             onClick={() => save(d.mode, keysOf(d.date, d.start, d.end), isOpen || removeExtra ? null : d.note, null, isOpen ? 'Made available ✓' : removeExtra ? 'Extra hours removed ✓' : 'Blocked ✓')}>
             {busy ? 'Saving…' : isOpen ? 'Make available' : removeExtra ? 'Remove' : 'Block'}
           </button>
-          <button type="button" disabled={busy} onClick={() => setDialog(null)} className={btnSub}>Cancel</button>
+          <button type="button" disabled={busy} onClick={() => closeDialog()} className={btnSub}>Cancel</button>
         </div>
       </>
     );
@@ -565,7 +567,7 @@ const tagColor = (tag: string) => (tag === 'Cancel' ? 'bg-[#fdecea] text-[#b3261
   : tag === 'Block' ? 'bg-[#ecebf1] text-[#55526a]' : tag === 'Extra hours' ? 'bg-[#e6f6ec] text-[#1f7a4d]' : tag === 'Last' ? 'bg-[#f3e8ff] text-[#7a2ab0]' : 'bg-[#e3f6f3] text-[#0f5f56]');
 
 function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
-  const time = inZone(item.at, zone).time;
+  const time = ampmEn(inZone(item.at, zone).time);
   if (item.kind === 'lesson') {
     const l = item.lesson;
     const tag = lessonTag(l);

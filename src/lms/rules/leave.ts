@@ -1,9 +1,9 @@
 // 휴무·장기 연기
 // - 강사 휴무 일괄 처리 (POL-LV-02, 정책 원본 A19·A20 → A41, 2026-10-26 대표 확정):
-//   1순위 대체강사가 원래 날짜·시간에 (강사 수락 + 학생 안내·확인 뒤 확정) / 2순위 학생이 원하면 기존 강사를 기다렸다가 보강
-//   연장은 학생이 따로 신청하지 않음 — 기존 강사를 기다린 보강이 종료일 뒤로 잡힐 때만 실제 마지막 보강일까지 LMS가 처리
+//   1순위 대체강사가 원래 날짜·시간에 (강사 수락 + 수강생 안내·확인 뒤 확정) / 2순위 수강생이 원하면 기존 강사를 기다렸다가 보강
+//   연장은 수강생이 따로 신청하지 않음 — 기존 강사를 기다린 보강이 종료일 뒤로 잡힐 때만 실제 마지막 보강일까지 LMS가 처리
 //   연장된 날에는 정규 수업을 만들지 않음 (연장 = 미완료 수업을 끝낼 기간 확대, 새 수업 권리 아님)
-// - 학생 장기 연기 신청 검사 (POL-LV-01, 정책 원본 A09~A12 — 'policy_v1' 등록만 자동 판정)
+// - 수강생 장기 연기 신청 검사 (POL-LV-01, 정책 원본 A09~A12 — 'policy_v1' 등록만 자동 판정)
 
 import { addDays, diffDays, instantToKstDate, weekdayOf, type KstDate } from './dates';
 import { POLICY_V1, type CourseWeeks, type RuleBasis } from './policy';
@@ -18,7 +18,7 @@ export type LessonForLeave = {
 
 export type LeaveImpact = { studentId: string; lessonIds: string[]; dates: KstDate[] };
 
-/** from~to (KST 날짜, 양 끝 포함) 사이 해당 강사의 예정 수업을 학생별로 묶음 */
+/** from~to (KST 날짜, 양 끝 포함) 사이 해당 강사의 예정 수업을 수강생별로 묶음 */
 export function previewTutorLeave(lessons: LessonForLeave[], tutorId: string, from: KstDate, to: KstDate): LeaveImpact[] {
   if (diffDays(from, to) < 0) throw new Error('휴무 종료일이 시작일보다 빠릅니다.');
   const byStudent = new Map<string, LeaveImpact>();
@@ -34,8 +34,8 @@ export function previewTutorLeave(lessons: LessonForLeave[], tutorId: string, fr
 }
 
 /**
- * 종료일 뒤 학생의 정규 요일에 맞춘 보강 후보 날짜 n개 (A20 예: 화·목 학생 → 종료일 뒤 화·목).
- * blocked: 강사가 못 하는 날 등 제외할 날짜. 실제 보강 시각은 운영자가 학생·강사와 정함.
+ * 종료일 뒤 수강생의 정규 요일에 맞춘 보강 후보 날짜 n개 (A20 예: 화·목 수강생 → 종료일 뒤 화·목).
+ * blocked: 강사가 못 하는 날 등 제외할 날짜. 실제 보강 시각은 운영자가 수강생·강사와 정함.
  */
 export function suggestDatesAfterEnd(finalEnd: KstDate, weekdays: number[], n: number, blocked: ReadonlySet<KstDate> = new Set()): KstDate[] {
   if (weekdays.length === 0 || weekdays.some((w) => !Number.isInteger(w) || w < 0 || w > 6)) throw new Error('정규 요일이 올바르지 않습니다.');
@@ -81,7 +81,7 @@ export type LongLeaveDecision =
     };
 
 /**
- * 학생 장기 연기 신청 검사 — 기한·대상·남은 일수는 시스템이 막고, 증빙은 운영자가 확인 후 승인 (A11·A12)
+ * 수강생 장기 연기 신청 검사 — 기한·대상·남은 일수는 시스템이 막고, 증빙은 운영자가 확인 후 승인 (A11·A12)
  * - 24주 상품만, 총 14일, 7일 단위로 최대 2회 (A09·A12)
  * - 증빙 가능한 특별 사유만, 임의 개인 사정 불가 (A10)
  * - 연기 시작일 4일 전 날(KST)까지 신청 (A11). 예: 11/20 시작 → 11/16 23:59까지

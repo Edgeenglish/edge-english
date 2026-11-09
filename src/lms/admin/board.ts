@@ -4,15 +4,15 @@
 // 표시 원칙 POL-OP-20: 대표 승인·판단 / 자동 처리 실패 / 일정 조율 실패 / 기한 임박 미해결만 올린다.
 // 자동 처리로 완료가 확인된 업무는 목록에서 빠진다 (사람이 닫지 않아도 됨). 단순 정보는 여기 넣지 않는다.
 
-import { formatInZone, hoursBetween } from '../rules/dates';
+import { ampmKo, formatInZone, hoursBetween } from '../rules/dates';
 import { firstLessonAt, planAlert, type PlanView } from './confirm';
 
 /** 수업 변경 안내 종류 → 카드 맨 위 '무슨 일' (lesson_notices.event, migration 1700) */
 const CHANGE_EVENT_TEXT: Record<string, string> = {
-  change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림',
+  change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림', makeup_rescheduled: '보강 시간 변경', makeup_tutor_removed: '보강 강사 바뀜', makeup_expired: '보강 신청 만료',
 };
 const LESSON_KIND_TEXT: Record<string, string> = { regular: '정규 ', makeup: '보강 ', migrated_makeup: '보강 ', migrated_extra: '추가 ', compensation: '보상 ' };
-const CANCEL_BY_TEXT: Record<string, string> = { student_cancel: '학생측 취소', tutor_cancel: '강사측 취소', admin_cancel: '운영진 취소' };
+const CANCEL_BY_TEXT: Record<string, string> = { student_cancel: '수강생측 취소', tutor_cancel: '강사측 취소', admin_cancel: '운영진 취소' };
 /** '10/28(수) 오전 9시' · '11/2(월) 오후 8시 30분' 한국 시각 */
 function koShort(at: Date): string {
   const f = formatInZone(at, 'Asia/Seoul');
@@ -21,7 +21,7 @@ function koShort(at: Date): string {
   return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))}(${wd}) ${h < 12 ? '오전' : '오후'} ${h % 12 || 12}시${m ? ` ${m}분` : ''}`;
 }
 const noticeWho = (to: ('student' | 'tutor')[] = []) =>
-  to.includes('student') && to.includes('tutor') ? '학생·강사' : to.includes('tutor') ? '강사' : to.includes('student') ? '학생' : '안내';
+  to.includes('student') && to.includes('tutor') ? '수강생·강사' : to.includes('tutor') ? '강사' : to.includes('student') ? '수강생' : '안내';
 
 export type MatchingTask = {
   kind: 'new_student_matching';
@@ -48,6 +48,9 @@ export type RenewalTask = {
   newPeriod: string; // 예: '10/20(화)–11/16(월)' (기한 안 재등록은 이전 종료 뒤 첫 정규 수업일부터, A25)
   tutorName: string | null;
   tutorChangePlanned: boolean;
+  /** 새 수강권 일정 확정됨 (수업 만들어짐) — 확정돼 있으면 [강사에게 통보] 한 번으로 끝 (11/9 A안) */
+  scheduleConfirmed: boolean;
+  enrollmentId?: string;
   tutorNotifiedAt: Date | null;
   tutorAcknowledgedAt: Date | null;
   scheduleCheckedAt: Date | null;
@@ -75,7 +78,7 @@ export type NoShowTask = {
   reportedAt: Date;
 };
 
-/** 종료 임박: 남은 정규 수업 2회 이하인데 재등록 결제 확인 전 (학생 화면 재등록 안내와 같은 기준, POL-RN-08) */
+/** 종료 임박: 남은 정규 수업 2회 이하인데 재등록 결제 확인 전 (수강생 화면 재등록 안내와 같은 기준, POL-RN-08) */
 export type EndingSoonTask = {
   kind: 'ending_soon';
   id: string;
@@ -89,7 +92,7 @@ export type EndingSoonTask = {
   noticeSentAt: Date | null;
 };
 
-/** 보강 미신청: 보강을 받을 수 있는 취소 수업이 있는데 학생이 아직 보강을 신청하지 않음. 기한 = 최종 종료일 (POL-PER-06) */
+/** 보강 미신청: 보강을 받을 수 있는 취소 수업이 있는데 수강생이 아직 보강을 신청하지 않음. 기한 = 최종 종료일 (POL-PER-06) */
 export type MakeupUnrequestedTask = {
   kind: 'makeup_unrequested';
   id: string;
@@ -110,7 +113,7 @@ export type AutoFailureTask = {
   occurredAt: Date;
 };
 
-/** 기존 학생 입력 뒤 시트 대조 전 · 보강 원래 날짜 확인 필요 (D-52 확대판, 2026-10-24 대표 결정 ②④⑤). 확인하면 사라짐 */
+/** 기존 수강생 입력 뒤 시트 대조 전 · 보강 원래 날짜 확인 필요 (D-52 확대판, 2026-10-24 대표 결정 ②④⑤). 확인하면 사라짐 */
 export type ImportCheckTask = {
   kind: 'import_check';
   id: string; // 수강등록 번호
@@ -125,10 +128,10 @@ export type ImportCheckTask = {
   createdAt: Date;
 };
 
-/** 수업 변경·보강: 안 보낸 안내 · 강사 답을 기다리는 보강 신청 (migration 1700). 학생마다 한 줄, [보냄]·확정하면 사라짐 */
+/** 수업 변경·보강: 안 보낸 안내 · 강사 답을 기다리는 보강 신청 (migration 1700). 수강생마다 한 줄, [보냄]·확정하면 사라짐 */
 export type LessonChangeTask = {
   kind: 'lesson_change';
-  id: string; // 학생 번호(id)
+  id: string; // 수강생 번호(id)
   studentName: string;
   studentCode: string;
   pendingNotices: number;
@@ -142,19 +145,19 @@ export type LessonChangeTask = {
   openMakeups: number;
   /** 그중 강사가 강사 LMS에서 가능 여부를 답한 보강 신청 (운영진 확정 차례, migration 2000) */
   answeredMakeups?: number;
-  /** 답한 것 중 모든 후보 불가 → 재조율 (학생에게 다른 날짜 받기 또는 강사 메모 시간으로 확정, QA-08) */
+  /** 답한 것 중 모든 후보 불가 → 재조율 (수강생에게 다른 날짜 받기 또는 강사 메모 시간으로 확정, QA-08) */
   declinedMakeups?: number;
   /** 안 보낸 변경 안내가 있는 가장 가까운 수업 (지나기 전에 보내야 함) */
   lessonAt: Date | null;
   /** 강사 답을 기다리는 보강 신청 중 가장 오래된 신청 시각 */
   makeupWaitingSince?: Date | null;
-  /** 자동 메일을 못 보낸 보강 확정 안내 (실패·주소 없음, 20261108010000) → 운영진이 카톡·WhatsApp 으로 직접 */
+  /** 자동 메일을 못 보낸 안내(보강 확정·수업 취소) (실패·주소 없음, 20261108010000) → 운영진이 카톡·WhatsApp 으로 직접 */
   emailFailed?: number;
   emailFailedTo?: ('student' | 'tutor')[];
   createdAt: Date;
 };
 
-/** 강사 휴무 처리 (migration 1800·2500): 휴무 화면 단계(1 대체 강사에게 묻기 · 2 학생에게 휴무 안내 · 대체 강사 제안 · 3 학생 답 입력 · 4 확정 안내 보내기). 휴무 1건당 한 줄, 다 처리하면 사라짐 */
+/** 강사 휴무 처리 (migration 1800·2500): 휴무 화면 단계(1 대체 강사에게 묻기 · 2 수강생에게 휴무 안내 · 대체 강사 제안 · 3 수강생 답 입력 · 4 확정 안내 보내기). 휴무 1건당 한 줄, 다 처리하면 사라짐 */
 export type TutorLeaveTask = {
   kind: 'tutor_leave';
   id: string; // 휴무 번호
@@ -167,7 +170,7 @@ export type TutorLeaveTask = {
   tutorReply: number;
   studentReply: number;
   pendingNotices: number;
-  /** 안 보낸 안내를 휴무 화면 단계별로: 1 대체강사 묻기(sub_ask) · 2 학생 글(leave_options·sub_student, 학생 수) · 4 확정 안내(sub_confirmed) */
+  /** 안 보낸 안내를 휴무 화면 단계별로: 1 대체강사 묻기(sub_ask) · 2 수강생 글(leave_options·sub_student, 수강생 수) · 4 확정 안내(sub_confirmed) */
   noticeSteps?: { notify: number; tutor: number; confirm: number; proposeStudents?: string[]; proposeLessons?: number };
   /** 아직 처리 안 된 가장 가까운 수업 (지나기 전에 정해야 함) */
   firstOpenAt: Date | null;
@@ -185,7 +188,7 @@ export type ClassRecordMissingTask = {
 
 /**
  * 예외 연장 검토 (H26(92) ⑤, migration 20261108020000): 수강 종료 5일 이내에 강사가 알린 사전·늦은 취소의 보강에서
- * 학생이 [맞는 시간이 없어요]를 누름. 운영진이 취소 기록(알린 시각·수업 시각·종료일)을 보고 [종료일 연장] 또는 카드 닫기.
+ * 수강생이 [맞는 시간이 없어요]를 누름. 운영진이 취소 기록(알린 시각·수업 시각·종료일)을 보고 [종료일 연장] 또는 카드 닫기.
  * 그 수강권에 운영진 예외 연장을 넣으면 사라짐. 수업마다 한 줄
  */
 export type ExtensionReviewTask = {
@@ -197,19 +200,19 @@ export type ExtensionReviewTask = {
   late: boolean;
   noticeAt: Date | null;
   endDate: string; // 수강 종료일 (한국 날짜)
-  createdAt: Date; // 학생이 누른 시각
+  createdAt: Date; // 수강생이 누른 시각
 };
 
 export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask | ClassRecordMissingTask | ExtensionReviewTask;
 
 /** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
-export type Category = 'matching' | 'tutor_ack' | 'ending' | 'makeup' | 'issue';
+export type Category = 'matching' | 'tutor_ack' | 'ending' | 'issue';
 
+/** 대시보드 5차 (대표 11/9): 보강 미신청 칸 없앰 — 운영진이 직접 풀 일만 */
 export const CATEGORY_LABEL: Record<Category, string> = {
-  matching: '신규 학생 매칭',
+  matching: '신규 수강생 매칭',
   tutor_ack: '강사 확인 대기',
   ending: '수강기간 종료 임박',
-  makeup: '보강 미신청',
   issue: '오류·조치 필요',
 };
 
@@ -221,8 +224,6 @@ export function categoryOf(kind: TaskSource['kind']): Category {
       return 'tutor_ack';
     case 'ending_soon':
       return 'ending';
-    case 'makeup_unrequested':
-      return 'makeup';
     default:
       return 'issue'; // 노쇼 신고·자동 처리 실패·장기 연기 승인
   }
@@ -241,9 +242,9 @@ export type BoardItem = {
   kind: TaskSource['kind'];
   category: Category;
   error: boolean;
-  /** 학생 상세로 가는 연결 (학생과 관계된 업무만) */
+  /** 수강생 상세로 가는 연결 (수강생과 관계된 업무만) */
   studentCode: string | null;
-  /** 검색용 글자 (학생·강사 이름, 번호, 내용) */
+  /** 검색용 글자 (수강생·강사 이름, 번호, 내용) */
   searchText: string;
   severity: Severity;
   tag: string;
@@ -257,9 +258,9 @@ export type BoardItem = {
   plan?: PlanView;
   /** 첫 수업 24시간 안인데 안내 미완료 → 목록 맨 위 (D-51-3) */
   top?: boolean;
-  /** 기존 학생 입력: 원래 날짜 확인 필요 보강 — 화면이 날짜 입력칸으로 그림 */
+  /** 기존 수강생 입력: 원래 날짜 확인 필요 보강 — 화면이 날짜 입력칸으로 그림 */
   unknownOrigins?: { id: string; label: string }[];
-  /** 기존 학생 입력: 종료일 이유 확인 — 화면이 이유 고르기로 그림 */
+  /** 기존 수강생 입력: 종료일 이유 확인 — 화면이 이유 고르기로 그림 */
   endReason?: { days: number; weeks: number | null } | null;
   /** 종료 임박: 재등록 안내 문자 (복사) + [보냄] 기록 — 화면이 RenewalNotice로 그림 */
   renewal?: { text: string; sentAt: Date | null };
@@ -274,7 +275,7 @@ const WD: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '�
 
 function kstLabel(d: Date): string {
   const f = formatInZone(d, KST);
-  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}(${WD[f.weekday] ?? f.weekday}) ${f.time}`;
+  return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8, 10))}(${WD[f.weekday] ?? f.weekday}) ${ampmKo(f.time)}`;
 }
 
 /** 기한 상태: 초과 / 24시간 안 / 그 밖 (DB 뷰 admin_task_board 와 같은 기준) */
@@ -330,9 +331,7 @@ function briefOf(t: TaskSource, now: Date): string {
       if (t.plan) { const first = firstLessonAt(t.plan); return first ? `첫 수업 ${kstDay(first)}` : '안내 전'; }
       return `기한 ${kstDay(t.dueAt)}`;
     case 'renewal_tutor_notice':
-      if (!t.tutorNotifiedAt) return '강사 통보 전';
-      if (!t.tutorAcknowledgedAt) return `통보 후 ${waitText(t.tutorNotifiedAt, now)}`;
-      return '일정 조치 전';
+      return t.scheduleConfirmed ? '강사 통보 전' : '일정 확정 전';
     case 'long_leave_request':
       return `신청 후 ${waitText(t.createdAt, now)}`;
     case 'no_show_report':
@@ -361,7 +360,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
   switch (t.kind) {
     case 'new_student_matching': {
       if (t.plan) return planItem(t, t.plan, now);
-      // 할 일 목록(○ 강사 배정 · ○ 학생 안내)은 버튼과 같은 말이라 안 보임 — 지금 할 일은 버튼 하나로 (2026-10-28 대표)
+      // 할 일 목록(○ 강사 배정 · ○ 수강생 안내)은 버튼과 같은 말이라 안 보임 — 지금 할 일은 버튼 하나로 (2026-10-28 대표)
       return {
         id: t.id,
         kind: t.kind,
@@ -388,21 +387,20 @@ function toItem(t: TaskSource, now: Date): ItemBase {
       };
     }
     case 'renewal_tutor_notice': {
+      // 11/9 A안: 강사 확인·일정 조치 단계 없음. 새 기간 일정이 확정돼 있으면 [강사에게 통보] 한 번으로 끝(카드 빠짐),
+      // 강사 변경·일정 조정이 필요하면 일정 확정까지 카드 유지
       const steps = [
-        { key: 'notify_tutor' as const, label: '강사에게 연장·기간·일정 통보', done: !!t.tutorNotifiedAt },
-        { key: 'tutor_ack' as const, label: '강사 확인', done: !!t.tutorAcknowledgedAt },
-        { key: 'check_schedule' as const, label: '일정 조치', done: !!t.scheduleCheckedAt },
+        { key: 'check_schedule' as const, label: '새 기간 일정 확정', done: t.scheduleConfirmed },
+        { key: 'notify_tutor' as const, label: '강사에게 통보', done: !!t.tutorNotifiedAt },
       ];
-      const next = steps.find((s) => !s.done)?.key;
-      const actions: BoardItem['actions'] =
-        next === 'notify_tutor'
-          ? [{ key: 'notify_tutor', label: '강사에게 통보', primary: true }]
-          : next === 'tutor_ack'
-            ? [
-                { key: 'remind_tutor', label: '강사에게 다시 알림' },
-                { key: 'tutor_ack', label: '강사 확인 대신 기록', primary: true },
-              ]
-            : [{ key: 'check_schedule', label: '일정 조치 완료', primary: true }];
+      const actions: BoardItem['actions'] = t.scheduleConfirmed
+        ? [{ key: 'notify_tutor', label: '강사에게 통보', primary: true }]
+        : [
+            t.enrollmentId
+              ? { key: 'pick_schedule', label: '새 기간 일정 확정', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }
+              : { key: 'pick_schedule', label: '새 기간 일정 확정', primary: true, disabled: true },
+            { key: 'notify_tutor', label: '강사에게 통보', disabled: true },
+          ];
       return {
         id: t.id,
         kind: t.kind,
@@ -410,7 +408,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         tag: t.tutorChangePlanned ? '재등록 · 강사 변경' : '재등록 강사 확인',
         title: `${t.studentName} · ${t.tutorName ?? '담당 강사 미정'}`,
         detail: `${t.studentCode} · ${t.product} · 새 기간 ${t.newPeriod}${t.tutorChangePlanned ? ' · 강사 변경 예정이라 새 강사 배정 필요' : ''}`,
-        due: t.tutorNotifiedAt && !t.tutorAcknowledgedAt ? `통보 후 ${waitText(t.tutorNotifiedAt, now)} 미확인` : null,
+        due: null,
         steps,
         actions,
       };
@@ -436,8 +434,8 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         kind: t.kind,
         severity: 'urgent',
         tag: '노쇼 신고',
-        title: `${t.studentName} · ${kstLabel(t.lessonStartsAt).split(' ')[1]} · ${t.tutorName}`,
-        detail: `학생이 ${Math.max(1, Math.round(hoursBetween(t.reportedAt, now) * 60))}분 전에 '강사가 안 들어왔어요'를 눌렀어요.`,
+        title: `${t.studentName} · ${kstLabel(t.lessonStartsAt).split(' ').slice(1).join(' ')} · ${t.tutorName}`,
+        detail: `수강생이 ${Math.max(1, Math.round(hoursBetween(t.reportedAt, now) * 60))}분 전에 '강사가 안 들어왔어요'를 눌렀어요.`,
         due: null,
         steps: [],
         actions: [
@@ -468,7 +466,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         detail: `${t.studentCode}${t.tutorName ? ` · ${t.tutorName}` : ''}`,
         due: `보강 기한 ${dueText(t.deadline, now)}`,
         steps: [],
-        actions: [{ key: 'makeup_nudged', label: '학생에게 보강 신청 안내함', primary: true }],
+        actions: [{ key: 'makeup_nudged', label: '수강생에게 보강 신청 안내함', primary: true }],
       };
     case 'import_check': {
       const diff = t.counts ? t.counts.lmsLeft - t.counts.sheetLeft : 0;
@@ -497,12 +495,12 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         kind: t.kind,
         severity: t.lessonAt ? dueSeverity(t.lessonAt, now) : 'open',
         tag: t.pendingNotices > 0 ? `${CHANGE_EVENT_TEXT[t.noticeEvents?.[0] ?? ''] ?? '수업 변경'} 안내 보내기`
-          : (t.emailFailed ?? 0) > 0 ? '보강 확정 자동 메일 못 보냄'
+          : (t.emailFailed ?? 0) > 0 ? '자동 메일 못 보냄'
           : (t.declinedMakeups ?? 0) > 0 ? '보강 강사 불가 · 재조율'
           : (t.answeredMakeups ?? 0) > 0 ? '보강 강사 답 옴 · 확정' : '보강 강사 답 대기',
         title: t.studentName,
         detail: [
-          // 예: '10/28(수) 오전 9시 정규 수업 학생측 취소' (2026-10-28 대표 안)
+          // 예: '10/28(수) 오전 9시 정규 수업 수강생측 취소' (2026-10-28 대표 안)
           t.pendingNotices > 0 && (t.noticeLessonAt ?? t.lessonAt) && [
             koShort((t.noticeLessonAt ?? t.lessonAt)!),
             `${LESSON_KIND_TEXT[t.noticeLessonKind ?? ''] ?? ''}수업`,
@@ -511,7 +509,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
           t.pendingNotices > 0 && `${noticeWho(t.noticeTo)} ${t.pendingNotices}건`,
           t.pendingNotices === 0 && t.lessonAt && `${kstLabel(t.lessonAt)} 수업`,
           (t.emailFailed ?? 0) > 0 && `자동 메일 못 보냄 ${noticeWho(t.emailFailedTo)} ${t.emailFailed}건 — 직접 보내기`,
-          (t.declinedMakeups ?? 0) > 0 && `강사가 모든 날짜 불가 ${t.declinedMakeups}건 — 학생에게 다른 날짜 받기`,
+          (t.declinedMakeups ?? 0) > 0 && `강사가 모든 날짜 불가 ${t.declinedMakeups}건 — 수강생에게 다른 날짜 받기`,
           t.pendingNotices > 0 && (t.answeredMakeups ?? 0) - (t.declinedMakeups ?? 0) > 0 && `보강 강사 답 옴 ${(t.answeredMakeups ?? 0) - (t.declinedMakeups ?? 0)}건`,
           t.pendingNotices > 0 && t.openMakeups - (t.answeredMakeups ?? 0) > 0 && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
           t.pendingNotices === 0 && (t.answeredMakeups ?? 0) > 0 && t.openMakeups > (t.answeredMakeups ?? 0) && `보강 강사 답 대기 ${t.openMakeups - (t.answeredMakeups ?? 0)}건`,
@@ -524,14 +522,14 @@ function toItem(t: TaskSource, now: Date): ItemBase {
       // 휴무 화면 단계 이름 그대로 (같은 것은 어디서나 같은 이름 — 2026-10-28 대표)
       const ns = t.noticeSteps ?? { notify: 0, tutor: 0, confirm: 0 };
       const other = t.pendingNotices - ns.notify - ns.tutor - ns.confirm;
-      // 1 = 대체강사 안 고른 수업 + 강사 답 대기 · 2 = 학생 글 안 보낸 학생(대체강사를 다 고른 학생만) · 3 = 글 보낸 뒤 학생 답 대기 · 4 = 확정 안내
+      // 1 = 대체강사 안 고른 수업 + 강사 답 대기 · 2 = 수강생 글 안 보낸 수강생(대체강사를 다 고른 수강생만) · 3 = 글 보낸 뒤 수강생 답 대기 · 4 = 확정 안내
       const step1 = (t.undecidedLessons ?? 0) + t.tutorReply;
       const proposeStudents = ns.proposeStudents?.length ?? 0;
       const answer = Math.max(0, t.studentReply - (ns.proposeLessons ?? 0));
       const parts = [
         step1 > 0 && `수업별 대체 강사 찾기 ${step1}회`,
-        proposeStudents > 0 && `학생한테 기존 강사 휴무 안내하기 ${proposeStudents}명`,
-        answer > 0 && `학생 답변 기록 ${answer}회`,
+        proposeStudents > 0 && `수강생한테 기존 강사 휴무 안내하기 ${proposeStudents}명`,
+        answer > 0 && `수강생 답변 기록 ${answer}회`,
         ns.confirm > 0 && `확정 안내 보내기 ${ns.confirm}건`,
         other > 0 && `안내 보내기 ${other}건`,
       ].filter(Boolean) as string[];
@@ -610,7 +608,7 @@ function planItem(t: MatchingTask, p: PlanView, now: Date): ItemBase {
   const tag =
     p.state === 'proposed'
       ? !p.proposalSentAt ? '강사에게 제안 안 보냄' : alert === 'no_reply' ? '강사 답 확인 필요' : '강사 답 대기'
-      : tutorUnsent && studentUnsent ? '양쪽 안내 안 함' : tutorUnsent ? '강사 안내 안 함' : '학생 안내 안 함';
+      : tutorUnsent && studentUnsent ? '양쪽 안내 안 함' : tutorUnsent ? '강사 안내 안 함' : '수강생 안내 안 함';
   const first = firstLessonAt(p);
   return {
     id: t.id,
@@ -657,14 +655,14 @@ export function buildBoard(tasks: TaskSource[], now: Date): BoardItem[] {
     .map((x) => x.item);
 }
 
-/** 필터: 전체 / 긴급(노쇼·기한 초과·24시간 안) / 오류만 / 요약 카드 한 칸 */
-export type BoardFilter = 'all' | 'urgent' | 'error' | Category;
+/** 필터: 전체 / 칸 하나 (긴급만·오류만 필터 없앰, 대표 11/9) */
+export type BoardFilter = 'all' | Category;
 
 export function isUrgent(i: BoardItem): boolean {
   return i.severity !== 'open';
 }
 
-/** 검색: 학생·강사 이름, 학생 번호, 내용 (띄어쓰기 무시) */
+/** 검색: 수강생·강사 이름, 수강생 번호, 내용 (띄어쓰기 무시) */
 export function searchBoard(items: BoardItem[], q: string): BoardItem[] {
   const k = q.trim().toLowerCase().replace(/\s+/g, '');
   if (!k) return items;
@@ -673,12 +671,10 @@ export function searchBoard(items: BoardItem[], q: string): BoardItem[] {
 
 export function filterBoard(items: BoardItem[], f: BoardFilter): BoardItem[] {
   if (f === 'all') return items;
-  if (f === 'urgent') return items.filter(isUrgent);
-  if (f === 'error') return items.filter((i) => i.error);
   return items.filter((i) => i.category === f);
 }
 
-/** 요약 카드 5개의 숫자 (칸별 개수 + 그중 긴급 개수). 합계 = 전체 개수 */
+/** 칸별 숫자 (칸별 개수 + 그중 긴급 개수). 합계 = 전체 개수 */
 export function categoryCounts(items: BoardItem[]): Record<Category, { n: number; urgent: number }> {
   const out = Object.fromEntries((Object.keys(CATEGORY_LABEL) as Category[]).map((c) => [c, { n: 0, urgent: 0 }])) as Record<Category, { n: number; urgent: number }>;
   for (const i of items) {

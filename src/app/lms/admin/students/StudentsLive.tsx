@@ -1,6 +1,6 @@
 'use client';
 
-// 운영진 학생 목록 실제 데이터 (migration 4300). 운영자(TOTP까지, aal2)만 — 화면은 편의이고 DB 함수가 다시 확인
+// 운영진 수강생 목록 실제 데이터 (migration 4300). 운영자(TOTP까지, aal2)만 — 화면은 편의이고 DB 함수가 다시 확인
 import { useEffect, useState } from 'react';
 import { loadStudents } from '@/lms/admin/students-live';
 import type { StudentRow } from '@/lms/admin/students';

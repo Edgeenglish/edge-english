@@ -1,12 +1,12 @@
 // 사는 곳(국가·도시) → 시간대 (2026-10-18 대표 확정 A안: 칸 안에서 바로 검색)
 // - 국가·도시는 한국어·영어로 검색해서 고르고, 목록에 없으면 친 그대로 저장
 // - 도시를 고르면 그 도시 시간대, 시간대가 하나뿐인 나라는 국가만으로 추천. 여럿인 나라(미국·캐나다·호주 등)는 도시를 골라야 추천
-// - 학생이 많은 나라·도시만 넣어 둠. 늘릴 때는 COUNTRIES 에 한 줄 추가
+// - 수강생이 많은 나라·도시만 넣어 둠. 늘릴 때는 COUNTRIES 에 한 줄 추가
 
 /** [한국어, 영어, 다른 이름(검색용), 나라 시간대(하나뿐일 때), 도시들 '한국어|영어(다른 이름)|시간대(없으면 나라 시간대)'] */
 const COUNTRIES: [string, string, string, string, string[]][] = [
   ['한국', 'South Korea', '대한민국 korea', 'Asia/Seoul', ['서울|Seoul', '부산|Busan', '인천|Incheon', '대구|Daegu', '대전|Daejeon', '광주|Gwangju', '제주|Jeju']],
-  ['미국', 'United States', 'usa us america 미합중국', '', ['뉴욕|New York|America/New_York', '보스턴|Boston|America/New_York', '워싱턴 D.C.|Washington DC|America/New_York', '애틀랜타|Atlanta|America/New_York', '마이애미|Miami|America/New_York', '필라델피아|Philadelphia|America/New_York', '뉴저지|New Jersey|America/New_York', '시카고|Chicago|America/Chicago', '댈러스|Dallas|America/Chicago', '휴스턴|Houston|America/Chicago', '오스틴|Austin|America/Chicago', '덴버|Denver|America/Denver', '피닉스|Phoenix|America/Phoenix', '로스앤젤레스|Los Angeles LA 엘에이|America/Los_Angeles', '어바인|Irvine|America/Los_Angeles', '샌디에이고|San Diego|America/Los_Angeles', '샌프란시스코|San Francisco|America/Los_Angeles', '산호세|San Jose|America/Los_Angeles', '시애틀|Seattle|America/Los_Angeles', '포틀랜드|Portland|America/Los_Angeles', '라스베이거스|Las Vegas|America/Los_Angeles', '호놀룰루|Honolulu Hawaii 하와이|Pacific/Honolulu', '앵커리지|Anchorage Alaska 알래스카|America/Anchorage']],
+  ['미국', 'United States', 'usa us america 미합중국', '', ['뉴욕|New York|America/New_York', '보스턴|Boston|America/New_York', '워싱턴 D.C.|Washington DC|America/New_York', '애틀랜타|Atlanta|America/New_York', '마이애미|Miami|America/New_York', '필라델피아|Philadelphia|America/New_York', '뉴저지|New Jersey|America/New_York', '디트로이트|Detroit|America/Detroit', '시카고|Chicago|America/Chicago', '댈러스|Dallas|America/Chicago', '휴스턴|Houston|America/Chicago', '오스틴|Austin|America/Chicago', '덴버|Denver|America/Denver', '피닉스|Phoenix|America/Phoenix', '로스앤젤레스|Los Angeles LA 엘에이|America/Los_Angeles', '어바인|Irvine|America/Los_Angeles', '샌디에이고|San Diego|America/Los_Angeles', '샌프란시스코|San Francisco|America/Los_Angeles', '산호세|San Jose|America/Los_Angeles', '시애틀|Seattle|America/Los_Angeles', '포틀랜드|Portland|America/Los_Angeles', '라스베이거스|Las Vegas|America/Los_Angeles', '호놀룰루|Honolulu Hawaii 하와이|Pacific/Honolulu', '앵커리지|Anchorage Alaska 알래스카|America/Anchorage']],
   ['캐나다', 'Canada', '', '', ['토론토|Toronto|America/Toronto', '오타와|Ottawa|America/Toronto', '몬트리올|Montreal|America/Toronto', '밴쿠버|Vancouver 벤쿠버|America/Vancouver', '빅토리아|Victoria|America/Vancouver', '캘거리|Calgary|America/Edmonton', '에드먼턴|Edmonton|America/Edmonton', '위니펙|Winnipeg|America/Winnipeg', '리자이나|Regina|America/Regina', '핼리팩스|Halifax|America/Halifax']],
   ['호주', 'Australia', '오스트레일리아', '', ['시드니|Sydney|Australia/Sydney', '캔버라|Canberra|Australia/Sydney', '멜버른|Melbourne 멜번|Australia/Melbourne', '브리즈번|Brisbane|Australia/Brisbane', '골드코스트|Gold Coast|Australia/Brisbane', '퍼스|Perth|Australia/Perth', '애들레이드|Adelaide|Australia/Adelaide', '호바트|Hobart|Australia/Hobart', '다윈|Darwin|Australia/Darwin', '케언즈|Cairns|Australia/Brisbane', '투움바|Toowoomba|Australia/Brisbane', '타운즈빌|Townsville|Australia/Brisbane']],
   ['뉴질랜드', 'New Zealand', 'nz', 'Pacific/Auckland', ['오클랜드|Auckland', '웰링턴|Wellington', '크라이스트처치|Christchurch']],
@@ -91,6 +91,18 @@ export function searchZones(q: string): { rows: ZoneRow[]; more: string[] } {
 export function zoneName(timezone: string): string {
   const r = ZONE_ROWS.find((x) => x.timezone === timezone);
   return r ? `${r.cities.slice(0, 3).join('·')} (${r.countries.join('·')})` : timezone;
+}
+
+/** 수강생 안내용 시간대 한국어 이름: 'Australia/Melbourne' → '멜버른', 'Asia/Singapore' → '싱가포르', 'Asia/Seoul' → '한국'.
+ *  시간대 이름과 같은 도시 → 그 시간대 하나뿐인 나라 → 그 시간대를 쓰는 첫 도시 → 목록에 없으면 영어 도시 이름 */
+export function koZoneCity(timezone: string): string {
+  if (!timezone || timezone === 'Asia/Seoul') return '한국';
+  const last = (timezone.split('/').at(-1) ?? timezone).replaceAll('_', ' ');
+  const same = CITY_LIST.find((c) => c.timezone === timezone && norm(c.en.split(' ')[0]) === norm(last.split(' ')[0]));
+  if (same) return same.ko;
+  const country = COUNTRY_LIST.find((c) => c.timezone === timezone);
+  if (country) return country.ko;
+  return CITY_LIST.find((c) => c.timezone === timezone)?.ko ?? last;
 }
 
 /** 국가·도시로 시간대 추천. 모르면 '' (운영자가 고름) */

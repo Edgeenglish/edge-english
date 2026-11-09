@@ -1,5 +1,5 @@
-import { FAKE_STATS } from '@/lms/admin/fake-data';
 import { fakeTodayPanel } from '@/lms/admin/fake-directory';
+import { ampmKo } from '@/lms/rules/dates';
 import AdminDashboard from './AdminDashboard';
 import AdminLive from './AdminLive';
 
@@ -11,6 +11,9 @@ export const dynamic = 'force-dynamic';
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ demo?: string }> }) {
   const { demo } = await searchParams;
   const now = new Date();
-  if (demo === '1') return <AdminDashboard today={fakeTodayPanel(now)} stats={FAKE_STATS} nowIso={now.toISOString()} preview />;
+  if (demo === '1') {
+    const today = fakeTodayPanel(now).map((l, i) => ({ id: `pv-${i}`, date: '', time: ampmKo(l.time), studentName: l.student, studentCode: '', tutorName: l.tutor, kind: l.state === '보강' ? '보강' : '정규', state: l.state === '보강' ? '예정' : l.state, muted: l.state === '완료' || l.state === '취소' || l.state === '수강생 변경' }));
+    return <AdminDashboard today={today} stats={null} nowIso={now.toISOString()} preview />;
+  }
   return <AdminLive />;
 }

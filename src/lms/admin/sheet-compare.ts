@@ -1,5 +1,5 @@
 // ⑤ 기존 Google Sheets 'Student Info' → LMS 이전 (H26(44) ⑤ B안, migration 4310)
-// 시트 줄(sheet_student_info 표, Claude 가 시트를 읽어 넣음)과 LMS 학생 값을 칸마다 나란히 놓고, 대표가 체크한 칸만 반영한다.
+// 시트 줄(sheet_student_info 표, Claude 가 시트를 읽어 넣음)과 LMS 수강생 값을 칸마다 나란히 놓고, 대표가 체크한 칸만 반영한다.
 // 자기소개는 원문 그대로, 예전 레벨은 참고 칸(level_note), 일정·회차·기간은 LMS 가 원본이라 참고로만
 
 import type { KstDate } from '../rules/dates';
@@ -46,7 +46,7 @@ export type CompareItem = {
 };
 const norm = (v: string | null | undefined) => (v ?? '').replace(/\s+/g, ' ').trim();
 
-/** 시트 줄 ↔ LMS 학생: 반영할 수 있는 칸만. LMS 값이 비어 있으면 기본 체크(덮어쓰기 아님), 값이 있으면 운영진이 직접 골라야 함 */
+/** 시트 줄 ↔ LMS 수강생: 반영할 수 있는 칸만. LMS 값이 비어 있으면 기본 체크(덮어쓰기 아님), 값이 있으면 운영진이 직접 골라야 함 */
 export function compareRow(r: SheetRow, s: StudentProfile): CompareItem[] {
   const lmsRes = [s.city, s.country].filter(Boolean).join(', ');
   const docsIsUrl = /^https?:\/\//.test(norm(r.docsLink));

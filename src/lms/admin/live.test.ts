@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildBoard } from './board';
-import { toEndingSoon, toImportChecks, toTaskSources, toTodayLessons, type EndingRow, type TaskRow } from './live';
+import { monthEndings, toEndingSoon, toImportChecks, toTaskSources, toTodayLessons, type EndingRow, type TaskRow } from './live';
 
 const base: Omit<TaskRow, 'id' | 'kind'> = {
   due_at: null,
@@ -58,15 +58,15 @@ describe('오늘 수업', () => {
       new Set(['c']),
     );
     expect(rows.map((r) => [r.time, r.state])).toEqual([
-      ['19:00', '학생 변경'],
+      ['19:00', '수강생 변경'],
       ['20:00', '보강'],
       ['21:00', '노쇼 신고'],
     ]);
   });
 });
 
-describe('기존 학생 입력 뒤 처리할 일 (import_checks · migrated_items)', () => {
-  it('대조 전과 원래 날짜 확인 필요를 학생마다 한 줄로 합침', () => {
+describe('기존 수강생 입력 뒤 처리할 일 (import_checks · migrated_items)', () => {
+  it('대조 전과 원래 날짜 확인 필요를 수강생마다 한 줄로 합침', () => {
     const e = { student: { name_ko: '가상기존', code: 'STU-0101' } };
     const out = toImportChecks(
       [{ enrollment_id: 'e1', sheet_total: 24, sheet_used: 12, lms_left: 13, created_at: '2026-10-24T00:00:00Z', enrollment: e }],
@@ -83,7 +83,7 @@ describe('기존 학생 입력 뒤 처리할 일 (import_checks · migrated_item
 });
 
 describe('종료일 이유 미확인은 대조 완료와 따로 (migration 1600)', () => {
-  it('대조 완료한 학생도 종료일 이유가 없으면 그 항목만 남음', () => {
+  it('대조 완료한 수강생도 종료일 이유가 없으면 그 항목만 남음', () => {
     const e = { student: { name_ko: '가상', code: 'STU-0102' } };
     const [t] = toImportChecks([{ enrollment_id: 'e3', sheet_total: 24, sheet_used: 3, lms_left: 21, created_at: '2026-10-26T00:00:00Z', checked_at: '2026-10-26T01:00:00Z', end_days: 6, end_reason: null, weeks: 12, enrollment: e }], []);
     expect(t).toMatchObject({ counts: null, endReason: { days: 6, weeks: 12 } });
@@ -108,11 +108,17 @@ describe('종료 임박 (POL-RN-08)', () => {
     expect(buildBoard(src, now)[0]).toMatchObject({ category: 'ending', title: '가상학생일 · 수업 2회 남음' });
   });
 
-  it('재등록 안내 문자: 남은 횟수·종료일 23:59 마감, [보냄] 기록이 있으면 보냄 시각', () => {
+  it('재등록 안내 문자: 남은 횟수·종료일 23:59 마감, [보냄] 하면 할 일에서 빠지고 종료 예정 명단에 \'안내 보냄\' (대표 11/9)', () => {
     const lessons = [reg('2026-10-28T10:00:00Z'), reg('2026-10-30T10:00:00Z')];
-    const item = buildBoard(toEndingSoon([row({ lessons })], now, new Map([['e1', '2026-10-27T05:00:00Z']])), now)[0];
+    const sent = new Map([['e1', '2026-10-27T05:00:00Z']]);
+    expect(toEndingSoon([row({ lessons })], now, sent)).toEqual([]);
+    expect(monthEndings([row({ lessons })], now, sent)).toEqual([expect.objectContaining({ state: 'sent', noticeSentOn: '2026-10-27', lessonsLeft: 2 })]);
+    expect(monthEndings([row({ lessons })], now)[0].state).toBe('need');
+    expect(monthEndings([row({ lessons }), row({ id: 'e2', previous_enrollment_id: 'e1', start_date: '2026-11-02', final_end_date: '2026-11-29', lessons: [] })], now)[0])
+      .toMatchObject({ state: 'renewed', renewedStart: '2026-11-02' });
+    expect(monthEndings([row({ lessons, student: { name_ko: '체험', code: 'STU-0999', is_trial_account: true } })], now)).toEqual([]);
+    const item = buildBoard(toEndingSoon([row({ lessons })], now), now)[0];
     expect(item.actions).toEqual([]);
-    expect(item.renewal?.sentAt?.toISOString()).toBe('2026-10-27T05:00:00.000Z');
     expect(item.renewal?.text).toBe(
       '[엣지영어] 가상학생일님, 수업이 2회 남았어요. (종료일 10월 30일(금))\n\n' +
         '종료일 10월 30일(금) 밤 11시 59분까지 재등록 결제를 마치시면 남은 수업은 다음 수강기간으로 이어지고, 지금 수업 요일·시간도 그대로 유지돼요.\n\n' +
@@ -138,7 +144,7 @@ describe('종료 임박 (POL-RN-08)', () => {
     expect(buildBoard(src, now)[0]).toMatchObject({ severity: 'overdue', title: '가상학생일 · 수업 0회 남음' });
   });
 
-  it('결제 확인된 재등록 수강권이 있으면 빠짐 (학생마다 마지막 수강권만 봄)', () => {
+  it('결제 확인된 재등록 수강권이 있으면 빠짐 (수강생마다 마지막 수강권만 봄)', () => {
     const old = row({ lessons: [reg('2026-10-28T10:00:00Z')] });
     const next = row({ id: 'e2', final_end_date: '2026-11-27', lessons: [reg('2026-11-02T10:00:00Z'), reg('2026-11-04T10:00:00Z'), reg('2026-11-06T10:00:00Z')] });
     expect(toEndingSoon([old, next], now)).toEqual([]);
@@ -149,7 +155,7 @@ describe('종료 임박 (POL-RN-08)', () => {
     expect(toEndingSoon([row({ status: 'confirmed', lessons: [] })], now)).toEqual([]);
   });
 
-  it('기존 학생 입력으로 넣은 다 끝난 수강권(수강 중, 수업 0회)은 재등록 대기로 나옴 (migration 2200)', () => {
+  it('기존 수강생 입력으로 넣은 다 끝난 수강권(수강 중, 수업 0회)은 재등록 대기로 나옴 (migration 2200)', () => {
     const [t] = toEndingSoon([row({ status: 'active', lessons: [] })], now);
     expect(t).toMatchObject({ kind: 'ending_soon', lessonsLeft: 0, tutorName: null });
   });

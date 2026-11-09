@@ -77,7 +77,7 @@ export function renewalStartDate(input: {
 
 /**
  * 기존 고정 요일·시간 유지 (POL-RN-02, 2026-10-16 대표 확정: 종료일 23:59 KST까지)
- * 재등록 결제가 종료일 23:59(KST)까지 실제로 완료되면 강사의 그 시간을 다른 학생에게 주지 않고 유지한다.
+ * 재등록 결제가 종료일 23:59(KST)까지 실제로 완료되면 강사의 그 시간을 다른 수강생에게 주지 않고 유지한다.
  * 이월 마감(canCarryOver)과 지금은 같은 시각이지만 다른 정책이라 따로 둔다.
  */
 export function isFixedSlotHeld(renewalPaidAt: Date | null, previousFinalEnd: KstDate): boolean {

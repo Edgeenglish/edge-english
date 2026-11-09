@@ -1,6 +1,6 @@
 'use client';
 
-// 학생 화면 실제 데이터: 학생 본인(이메일 코드 로그인) 또는 운영자(TOTP 완료)가 학생을 골라 그대로 보기·대신 입력
+// 수강생 화면 실제 데이터: 수강생 본인(이메일 코드 로그인) 또는 운영자(TOTP 완료)가 수강생을 골라 그대로 보기·대신 입력
 // 화면에서 막는 것은 편의일 뿐, 실제로는 DB 함수가 막는다 (migration 2800)
 
 import { useEffect, useMemo, useState } from 'react';
@@ -13,7 +13,10 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; nowIso: string; view: StudentView; admin: { students: StudentAccount[]; studentId: string } | null };
 
-export default function StudentLive({ studentParam }: { studentParam?: string }) {
+/** 로그인 화면으로 — 지금 주소(바로가기 링크 포함)를 넘겨 로그인 뒤 같은 화면으로 돌아옴 */
+const toLogin = () => window.location.replace(`/lms/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+
+export default function StudentLive({ studentParam, makeup }: { studentParam?: string; makeup?: string }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const sb = supabaseBrowser();
   const adminStudent = state.kind === 'ready' && state.admin ? state.admin.studentId : null;
@@ -22,16 +25,16 @@ export default function StudentLive({ studentParam }: { studentParam?: string })
     if (!sb) return setState({ kind: 'error', message: 'Supabase 설정이 없어요.' });
     (async () => {
       const { data: session } = await sb.auth.getSession();
-      if (!session.session) return window.location.replace('/lms/login');
+      if (!session.session) return toLogin();
       const { data: role } = await sb.rpc('my_role');
       try {
         const nowIso = new Date().toISOString();
         if (role === 'student') return setState({ kind: 'ready', nowIso, view: await loadStudentView(sb, null), admin: null });
         const [{ data: aal }, { data: admin }] = await Promise.all([sb.auth.mfa.getAuthenticatorAssuranceLevel(), sb.rpc('is_admin')]);
-        if (role !== 'admin' || aal?.currentLevel !== 'aal2' || admin !== true) return window.location.replace('/lms/login');
+        if (role !== 'admin' || aal?.currentLevel !== 'aal2' || admin !== true) return toLogin();
         const students = await loadStudentAccounts(sb);
         const pick = students.find((x) => x.id === studentParam || x.code === studentParam) ?? students[0];
-        if (!pick) return setState({ kind: 'error', message: '등록된 학생이 없어요.' });
+        if (!pick) return setState({ kind: 'error', message: '등록된 수강생이 없어요.' });
         setState({ kind: 'ready', nowIso, view: await loadStudentView(sb, pick.id), admin: { students, studentId: pick.id } });
       } catch (e) {
         setState({ kind: 'error', message: e instanceof Error ? e.message : '불러오지 못했어요.' });
@@ -74,11 +77,12 @@ export default function StudentLive({ studentParam }: { studentParam?: string })
       preview={false}
       adminBar={adminBar}
       onLogout={state.admin ? undefined : logout}
+      openMakeup={makeup}
     />
   );
 }
 
-// 대표: 이 학생의 로그인 계정 만들기 (이메일만 넣으면 계정 + 학생 연결, 비밀번호 없음 — 학생은 이메일 코드로 로그인)
+// 대표: 이 수강생의 로그인 계정 만들기 (이메일만 넣으면 계정 + 수강생 연결, 비밀번호 없음 — 수강생은 이메일 코드로 로그인)
 function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{ created: boolean }> }) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -88,7 +92,7 @@ function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{
     setMsg(null);
     try {
       await onCreate(email);
-      setMsg({ ok: true, text: '학생 로그인 계정을 만들었어요.' });
+      setMsg({ ok: true, text: '수강생 로그인 계정을 만들었어요.' });
       setTimeout(() => window.location.reload(), 1500);
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : '만들지 못했어요.' });
@@ -98,8 +102,8 @@ function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{
   }
   return (
     <div className="flex w-full flex-wrap items-center gap-2">
-      <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="학생 로그인 이메일"
-        aria-label="학생 로그인 이메일" className="min-h-[38px] min-w-0 flex-1 rounded-[8px] bg-white px-2 text-[15px] text-[#1d1b2b]" />
+      <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="수강생 로그인 이메일"
+        aria-label="수강생 로그인 이메일" className="min-h-[38px] min-w-0 flex-1 rounded-[8px] bg-white px-2 text-[15px] text-[#1d1b2b]" />
       <button type="button" disabled={busy || !email.trim()} onClick={submit}
         className="min-h-[38px] rounded-[8px] bg-[#6d4aff] px-3 text-[13px] font-semibold text-white disabled:opacity-50">
         {busy ? '만드는 중…' : '로그인 만들기'}
@@ -109,7 +113,7 @@ function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{
   );
 }
 
-// 운영자 보기: 학생 검색 (이름·영문 이름·학생 번호·강사). 이름이 같아도 번호·영문 이름·강사로 구별
+// 운영자 보기: 수강생 검색 (이름·영문 이름·수강생 번호·강사). 이름이 같아도 번호·영문 이름·강사로 구별
 function StudentPicker({ students, current }: { students: StudentAccount[]; current: string }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -119,7 +123,7 @@ function StudentPicker({ students, current }: { students: StudentAccount[]; curr
   return (
     <div className="relative min-w-0 flex-1">
       <input
-        aria-label="학생 검색"
+        aria-label="수강생 검색"
         value={open ? q : cur ? label(cur) : ''}
         onFocus={() => { setOpen(true); setQ(''); }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
@@ -134,7 +138,7 @@ function StudentPicker({ students, current }: { students: StudentAccount[]; curr
             <li key={x.id}>
               <button type="button" onMouseDown={() => window.location.assign(`/lms/student?student=${x.id}`)}
                 className={`flex min-h-[44px] w-full items-center px-3 text-left text-[14px] ${x.id === current ? 'bg-[#efeaff] font-bold' : ''}`}>
-                {label(x)}{x.hasLogin ? '' : ' · 학생 계정 없음'}
+                {label(x)}{x.hasLogin ? '' : ' · 수강생 계정 없음'}
               </button>
             </li>
           ))}

@@ -1,12 +1,12 @@
 -- 운영 DB 표 만들기 확인 (읽기만). 결과 8줄이 모두 '통과'면 정상
 select 항목, case when ok then '통과' else '실패' end as 결과 from (
-  select 1 as n, 'LMS 표 54개' as 항목, (select count(*) from pg_tables where schemaname = 'public') = 54 as ok
+  select 1 as n, 'LMS 표 57개' as 항목, (select count(*) from pg_tables where schemaname = 'public') = 57 as ok
   union all select 2, 'RLS 꺼진 표 없음', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity)
   union all select 3, '로그인 안 한 사용자(anon)가 읽을 수 있는 표 없음',
     not exists (select 1 from pg_class c join pg_namespace s on s.oid = c.relnamespace
                 where s.nspname = 'public' and c.relkind in ('r', 'v') and has_table_privilege('anon', c.oid, 'select'))
-  union all select 4, '기준 데이터: 상태값 14 · 판본 16 · 기능 스위치 5 + 첫 수업 To-do 시작일 1 + 귀책 연장 시행일 1',
-    (select count(*) from class_status_rules) = 14 and (select count(*) from terms_versions) = 16 and (select count(*) from feature_flags) = 7
+  union all select 4, '기준 데이터: 상태값 14 · 판본 16 · 기능 스위치 6(운영진 숨은참조 멈춤 포함) + 첫 수업 To-do 시작일 1 + 귀책 연장 시행일 1',
+    (select count(*) from class_status_rules) = 14 and (select count(*) from terms_versions) = 16 and (select count(*) from feature_flags) = 8
   union all select 5, '최신 기능까지 (신규 배정 확정·운영자 TOTP)',
     to_regclass('public.schedule_plans') is not null and exists (select 1 from pg_proc where proname = 'is_owner')
   union all select 6, '서버 키 권한 (학생 표 읽기·쓰기)',

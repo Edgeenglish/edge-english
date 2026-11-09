@@ -14,8 +14,8 @@ describe('기한 상태 (매칭 3영업일)', () => {
     expect(dueSeverity(null, now)).toBe('open');
   });
   it('문구는 한국 시간 기준', () => {
-    expect(dueText(new Date('2026-10-21T14:59:59.999Z'), now)).toBe('10/21(수) 23:59까지');
-    expect(dueText(new Date(now.getTime() + 9 * H), now)).toBe('9시간 남음 · 10/16(금) 23:00까지');
+    expect(dueText(new Date('2026-10-21T14:59:59.999Z'), now)).toBe('10/21(수) 오후 11:59까지');
+    expect(dueText(new Date(now.getTime() + 9 * H), now)).toBe('9시간 남음 · 10/16(금) 오후 11:00까지');
     expect(dueText(new Date(now.getTime() - 50 * H), now)).toMatch(/^기한 2일 지남/);
   });
 });
@@ -48,20 +48,19 @@ describe('처리할 일 목록', () => {
     expect(m3.actions[0]).toMatchObject({ key: 'pick_schedule', href: '/lms/admin/assign?e=demo' });
     expect(m3.actions[1]).toMatchObject({ label: '수업 컨펌 완료', disabled: true });
   });
-  it('재등록: 통보만 했으면 강사 확인이 다음 단계, 미확인 시간 표시', () => {
+  it('재등록: 일정 확정됐으면 [강사에게 통보] 하나 (강사 확인 단계 없음, 11/9 A안)', () => {
     const r = items.find((i) => i.id === 'r-1')!;
-    expect(r.steps.map((s) => s.done)).toEqual([true, false, false]);
-    expect(r.actions.map((a) => a.key)).toEqual(['remind_tutor', 'tutor_ack']);
-    expect(r.due).toBe('통보 후 2일째 미확인');
+    expect(r.steps.map((s) => s.done)).toEqual([true, false]);
+    expect(r.actions.map((a) => a.key)).toEqual(['notify_tutor']);
+    expect(r.due).toBeNull();
   });
-  it('요약 카드 5칸: 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
+  it('칸 4개(보강 미신청 칸 없음, 대표 11/9): 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
     const c = categoryCounts(items);
     expect(Object.values(c).reduce((s, x) => s + x.n, 0)).toBe(items.length);
-    expect(c).toMatchObject({ matching: { n: 3 }, tutor_ack: { n: 1 }, ending: { n: 2 }, makeup: { n: 1 }, issue: { n: 4 } });
+    expect(c).toMatchObject({ matching: { n: 3 }, tutor_ack: { n: 1 }, ending: { n: 2 }, issue: { n: 4 } });
+    expect(Object.keys(c)).toEqual(['matching', 'tutor_ack', 'ending', 'issue']);
   });
-  it('필터: 긴급 = 노쇼·기한 초과·24시간 안, 오류만 = 노쇼 신고·자동 처리 실패 (승인 대기는 제외)', () => {
-    expect(filterBoard(items, 'urgent').every((i) => i.severity !== 'open')).toBe(true);
-    expect(filterBoard(items, 'error').map((i) => i.kind).sort()).toEqual(['auto_failure', 'no_show_report']);
+  it('필터: 전체 · 칸 하나 (긴급만·오류만 필터 없음)', () => {
     expect(filterBoard(items, 'ending').map((i) => i.id)).toEqual(['e-1', 'e-2']);
     expect(filterBoard(items, 'all')).toHaveLength(items.length);
   });
@@ -83,7 +82,7 @@ describe('재등록 통보의 새 기간 (가상 데이터, 기한 안 재등록
   });
 });
 
-describe('기존 학생 입력 뒤 시트 대조 (D-52 확대판)', () => {
+describe('기존 수강생 입력 뒤 시트 대조 (D-52 확대판)', () => {
   const at = new Date('2026-10-24T03:00:00Z');
   const task = (over: Partial<Extract<TaskSource, { kind: 'import_check' }>> = {}): TaskSource => ({
     kind: 'import_check', id: 'e1', studentName: '가상기존', studentCode: 'STU-0101', counts: { lmsLeft: 13, sheetLeft: 12 }, unknownOrigins: [], createdAt: at, ...over,
@@ -116,12 +115,30 @@ describe("요약 칸: '여유' 대신 실제 정보 (C7, 대표 10/30)", () => {
   it('종료 임박 = 잔여 회수 · 종료일, 재등록 통보 = 통보 후 대기 시간', () => {
     const tasks: TaskSource[] = [
       { kind: 'ending_soon', id: 'e', studentName: '김하준', studentCode: 'STU-1', product: '50분 주2회', lessonsLeft: 0, endsAt: new Date('2026-10-17T14:59:00Z'), tutorName: null, noticeSentAt: null },
-      { kind: 'renewal_tutor_notice', id: 'r', studentName: '박서연', studentCode: 'STU-2', product: '50분 주2회', newPeriod: '10/20(화)–11/16(월)', tutorName: 'Emma', tutorChangePlanned: false, tutorNotifiedAt: new Date(now.getTime() - 327 * H), tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: new Date(now.getTime() - 400 * H) },
+      { kind: 'renewal_tutor_notice', id: 'r', studentName: '박서연', studentCode: 'STU-2', product: '50분 주2회', newPeriod: '10/20(화)–11/16(월)', tutorName: 'Emma', tutorChangePlanned: false, scheduleConfirmed: false, enrollmentId: 'en1', tutorNotifiedAt: null, tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: new Date(now.getTime() - 400 * H) },
     ];
     const items = buildBoard(tasks, now);
     expect(items.find((i) => i.id === 'e')!.brief).toBe('잔여 0회 · 10/17(토) 종료');
-    expect(items.find((i) => i.id === 'r')!.brief).toBe('통보 후 14일째');
-    expect(items.find((i) => i.id === 'r')!.due).toBe('통보 후 14일째 미확인');
+    expect(items.find((i) => i.id === 'r')!.brief).toBe('일정 확정 전');
+    expect(items.find((i) => i.id === 'r')!.due).toBeNull();
     expect(items.every((i) => !i.brief.includes('여유'))).toBe(true);
+  });
+});
+
+describe('재등록 강사 통보 (대표 11/9 A안)', () => {
+  const now = new Date('2026-11-09T10:00:00Z');
+  const r = (over: Partial<Extract<TaskSource, { kind: 'renewal_tutor_notice' }>>): TaskSource => ({
+    kind: 'renewal_tutor_notice', id: 'r', studentName: '송O나', studentCode: 'STU-0004', product: '40분 주2회', newPeriod: '11/18(수)–2/9(화)',
+    tutorName: 'Olivia', tutorChangePlanned: false, scheduleConfirmed: true, enrollmentId: 'en1', tutorNotifiedAt: null, tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: now, ...over,
+  });
+  it('같은 강사·일정(일정 확정됨): [강사에게 통보] 하나만, 강사 확인·일정 조치 단계 없음', () => {
+    const [i] = buildBoard([r({})], now);
+    expect(i.actions.map((a) => a.label)).toEqual(['강사에게 통보']);
+    expect(i.steps.map((x) => x.label)).toEqual(['새 기간 일정 확정', '강사에게 통보']);
+  });
+  it('일정 확정 전(강사 변경·일정 조정): 일정 확정 먼저, 통보는 못 누름', () => {
+    const [i] = buildBoard([r({ scheduleConfirmed: false })], now);
+    expect(i.actions[0]).toMatchObject({ label: '새 기간 일정 확정', href: '/lms/admin/assign?e=en1' });
+    expect(i.actions[1]).toMatchObject({ label: '강사에게 통보', disabled: true });
   });
 });

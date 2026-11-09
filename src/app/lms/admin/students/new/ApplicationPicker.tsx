@@ -18,7 +18,7 @@ export default function ApplicationPicker({ applications, selected, onSelect }: 
   const cls = 'min-h-[44px] min-w-0 rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] text-[#1d1b2b] disabled:opacity-40';
   return <section aria-label="구글폼 신청서" className="mb-3 grid gap-2">
     <strong className="text-[14px]">구글폼 신청서</strong>
-    <p className="text-[12.5px] text-[#6b6880]">제출일을 고른 뒤 학생 이름을 누르세요. (한국 시간)</p>
+    <p className="text-[12.5px] text-[#6b6880]">제출일을 고른 뒤 수강생 이름을 누르세요. 한국 시간</p>
     <div className="grid grid-cols-3 gap-2">
       <select aria-label="신청 연도" value={year} onChange={e => { setYear(e.target.value); setMonth(''); setDay(''); }} className={cls}>
         <option value="">연도</option>{years.map(y => <option key={y} value={y}>{y}년</option>)}
@@ -33,7 +33,7 @@ export default function ApplicationPicker({ applications, selected, onSelect }: 
     {day && <div className="grid gap-2" aria-label="해당 날짜 신청서">
       {matches.map(({ a }) => <button key={a.ref} type="button" aria-pressed={selected === a.ref} onClick={() => onSelect(a.ref)}
         className={`${cls} py-2 text-left ${selected === a.ref ? 'border-[#5b3fe0] bg-[#eeeaff]' : ''}`}>
-        <b>{a.nameKo || a.nameEn || '이름 확인 필요'}</b><span className="ml-2 text-[12px] text-[#6b6880]">{new Date(a.submittedAt).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })}</span>
+        <b>{a.nameKo || a.nameEn || '이름 확인 필요'}</b><span className="ml-2 text-[12px] text-[#6b6880]">{new Date(a.submittedAt).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: 'numeric', minute: '2-digit', hourCycle: 'h12' })}</span>
         {selected === a.ref && <span className="ml-2 text-[#5b3fe0]">불러옴 ✓</span>}
       </button>)}
     </div>}

@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  classFill, describeChanges, describeChangesIn, diff, applyFromText, fromText, plusDays, timeText, toMin, WEEK_DAYS, weeklyClassAt, type HoursData,
+  classFill, describeChanges, describeChangesIn, diff, applyFromText, fromText, hhmm, plusDays, rangeText, timeText, toMin, WEEK_DAYS, weeklyClassAt, type HoursData,
 } from '@/lms/tutor/hours';
 import { KOREA_TIME } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
@@ -23,8 +23,8 @@ const FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-4 text-[15px] font-semibold text-[#1d1b2b] disabled:opacity-40';
 const cellBase = 'block h-[26px] w-full overflow-hidden whitespace-nowrap rounded-[5px] p-0 text-[10.5px] font-semibold lg:h-[24px] lg:text-[11.5px]';
-const span = (start: string, min: number) => `${timeText(toMin(start))}–${timeText(toMin(start) + min)}`;
-/** 수업 시작 칸 글 (대표 10/29): 휴대폰 = 학생 이름(칸이 좁아 이름 앞부분), PC = 이름 + 길이. 정확한 시각은 누르면 창에 */
+const span = (start: string, min: number) => rangeText(start, hhmm(toMin(start) + min));
+/** 수업 시작 칸 글 (대표 10/29): 휴대폰 = 수강생 이름(칸이 좁아 이름 앞부분), PC = 이름 + 길이. 정확한 시각은 누르면 창에 */
 const lessonLabel = (student: string, min: number) => (
   <><span className="[color:inherit] lg:hidden">{student.split(' ')[0]}</span><span className="hidden [color:inherit] lg:inline">{student} · {min}m</span></>
 );
@@ -195,7 +195,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
       <ul className="grid gap-2">
         {d.history.map((h) => (
           <li key={h.at.toISOString()} className="text-[13px] text-[#1d1b2b]">
-            <b>{h.at.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</b>
+            <b>{h.at.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hourCycle: 'h12' })}</b>
             <span className="text-[#6b6880]"> · {h.byAdmin ? '운영자' : '강사 본인'}</span>
             {(h.changes.weeklyOpen.length + h.changes.weeklyClose.length > 0) && <span className="text-[#6b6880]"> · 매주 변경 {fromText(h.changes.from, 'ko')}</span>}
             <ul className="list-disc pl-5">{describeChanges(h.changes, 'ko').map((x) => <li key={x}>{x}</li>)}</ul>
@@ -237,7 +237,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
               {WEEK_DAYS.map((_, i) => <div key={i} className="contents">{dayHead(i)}</div>)}
               {ALL_HOURS.map((t) => (
                 <div key={t} className="contents">
-                  <div data-row={toMin(t)} className="pr-1 text-right text-[11px] leading-[26px] lg:leading-[24px] text-[#1d1b2b]">{t.endsWith('00') ? timeText(toMin(t)) : ''}</div>
+                  <div data-row={toMin(t)} className="pr-1 text-right text-[11px] leading-[26px] lg:leading-[24px] text-[#1d1b2b]">{t.endsWith('00') ? timeText(toMin(t)).replace(':00', '') : ''}</div>
                   {WEEK_DAYS.map((dow, i) => <div key={dow}>{displayCell(i, t)}</div>)}
                 </div>
               ))}

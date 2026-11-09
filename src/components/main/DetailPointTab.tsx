@@ -73,7 +73,7 @@ const EDGE_DETAILS = [
     contents: (
       <>
         <p className="text-2xl font-medium max-md:text-base">
-          엣지영어의 모든 수업은 학생이 직접 녹화할 수 있어요.{' '}
+          엣지영어의 모든 수업은 수강생이 직접 녹화할 수 있어요.{' '}
           <span className="md:hidden">
             <br />
           </span>

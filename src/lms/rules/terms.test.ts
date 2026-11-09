@@ -89,23 +89,23 @@ describe('지금 적용되는 판본 판정 (서명·발송·동의 구분)', ()
     expect(assessTerms([], today)).toMatchObject({ code: null, level: 'unknown' });
   });
 
-  it('학생 계약과 강사 계약을 섞으면 오류', () => {
+  it('수강생 계약과 강사 계약을 섞으면 오류', () => {
     expect(() => assessTerms([{ code: 'SC2', documentDate: '2026-01-01' }, { code: 'TC2', documentDate: '2026-01-01' }], today)).toThrow();
   });
 });
 
-describe('학생 문서 유형 3가지 (계약서 / 안내서만 / 계약 후 안내서만)', () => {
+describe('수강생 문서 유형 3가지 (계약서 / 안내서만 / 계약 후 안내서만)', () => {
   const today = '2026-10-16';
   const sc1 = { code: 'SC1', documentDate: '2025-11-28', delivered: { on: '2025-11-28', proof: 'kakao' }, consent: { on: '2025-11-29', kind: 'payment_after_delivery' } } as const;
   const guide = (timing: 'before_payment' | 'after_payment' | 'at_matching' | 'unknown', exposure: ('kakao' | 'student_sheet')[] = ['kakao', 'student_sheet']) =>
     ({ code: 'G20260709', timing, exposure }) as const;
 
-  it('1. 계약서를 받은 학생', () => {
+  it('1. 계약서를 받은 수강생', () => {
     const r = assessStudentDocs([{ seq: 1, contract: sc1 }], today);
     expect(r).toMatchObject({ category: 'contract', contractCode: 'SC1', contractLevel: 'confirmed' });
   });
 
-  it('2. 안내서만 받은 학생에게는 계약 판본을 만들어 넣지 않음', () => {
+  it('2. 안내서만 받은 수강생에게는 계약 판본을 만들어 넣지 않음', () => {
     const r = assessStudentDocs([{ seq: 1, guides: [guide('before_payment')] }], today);
     expect(r).toMatchObject({ category: 'guide_only', contractCode: null, contractLevel: null, guideCodes: ['G20260709'] });
     expect(r.flags.join()).toContain('계약 판본을 정하지 않음');
@@ -148,7 +148,7 @@ describe('학생 문서 유형 3가지 (계약서 / 안내서만 / 계약 후 �
     expect(r.flags.join()).toContain('2회차: 계약서·안내서 전달 기록 없음');
   });
 
-  it('옛 안내서(GV4)만 받은 학생도 계약 판본 없음', () => {
+  it('옛 안내서(GV4)만 받은 수강생도 계약 판본 없음', () => {
     const r = assessStudentDocs([{ seq: 1, guides: [{ code: 'GV4', timing: 'unknown', exposure: ['student_sheet'] }] }], today);
     expect(r).toMatchObject({ category: 'guide_only', contractCode: null, guideCodes: ['GV4'] });
   });
@@ -157,7 +157,7 @@ describe('학생 문서 유형 3가지 (계약서 / 안내서만 / 계약 후 �
     expect(assessStudentDocs([{ seq: 1 }], today)).toMatchObject({ category: 'unknown', contractCode: null });
   });
 
-  it('학생 등록에 강사 계약을 넣으면 오류', () => {
+  it('수강생 등록에 강사 계약을 넣으면 오류', () => {
     expect(() => assessStudentDocs([{ seq: 1, contract: { code: 'TC2', documentDate: '2026-01-01' } }], today)).toThrow();
   });
 });

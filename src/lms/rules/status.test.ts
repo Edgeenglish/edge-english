@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { STATUS_RULES, tutorPaidFor } from './status';
 
 describe('강사 급여 대상 (R-19)', () => {
-  it('정규·보강은 상태 규칙 그대로 (Normal 유급, 학생 정상 취소 무급)', () => {
+  it('정규·보강은 상태 규칙 그대로 (Normal 유급, 수강생 정상 취소 무급)', () => {
     expect(tutorPaidFor('regular', 'Normal')).toBe(true);
     expect(tutorPaidFor('makeup', 'Make-up completed')).toBe(true);
     expect(tutorPaidFor('regular', 'Student canceled in advance')).toBe(false);

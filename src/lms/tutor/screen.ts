@@ -1,13 +1,15 @@
 // 강사 화면(영어) 판정·표시 — 데이터는 DB 함수 tutor_screen 하나 (migration 2000)
-// 수업 결과는 lessons.class_status 하나 (POL-ST-02). 강사는 결과(Held / Student no-show)와 지각(학생·강사, 분)을 따로 고르고 정확한 상태 이름은 DB가 정함 (4400)
+// 수업 결과는 lessons.class_status 하나 (POL-ST-02). 강사는 결과(Held / Student no-show)와 지각(수강생·강사, 분)을 따로 고르고 정확한 상태 이름은 DB가 정함 (4400)
 
-import { addDays, formatInZone } from '../rules/dates';
+import { addDays, ampmEn, formatInZone } from '../rules/dates';
 import { cityTime } from './hours-view';
+import { rangeText } from './hours';
+import { bold } from '../admin/time-text';
 import type { ClassStatus } from '../rules/status';
 
 /** 수업 결과 하나. tutor_no_show = 운영자만 (4000). 지각은 결과와 따로 (4400) */
 export type TutorResult = 'held' | 'student_no_show' | 'tutor_no_show';
-/** 지각 (4400): 학생·강사 각각, 분은 모를 수 있음(예전 'I was late' 기록) */
+/** 지각 (4400): 수강생·강사 각각, 분은 모를 수 있음(예전 'I was late' 기록) */
 export type Late = { student: boolean; studentMin: number | null; tutor: boolean; tutorMin: number | null };
 export const NO_LATE: Late = { student: false, studentMin: null, tutor: false, tutorMin: null };
 /** 지각 시간 고르기 칸 — 대표가 정한 값 (2026-11-04). Custom 은 분 직접 입력 */
@@ -22,7 +24,7 @@ export type TutorLesson = {
   state: 'scheduled' | 'canceled' | 'done';
   classStatus: ClassStatus | null;
   student: string;
-  /** 학생 프로필 창 열기용 (4300) */
+  /** 수강생 프로필 창 열기용 (4300) */
   studentId?: string;
   level: string | null;
   noteUrl: string | null;
@@ -31,7 +33,7 @@ export type TutorLesson = {
   count: { n: number; total: number } | null;
   topics: string | null;
   remarks: string | null;
-  /** 학생 지각 표시 (정상 수업, migration 3000) — late.student 와 같음 */
+  /** 수강생 지각 표시 (정상 수업, migration 3000) — late.student 와 같음 */
   studentLate: boolean;
   /** 출결·지각 (4400) */
   late: Late;
@@ -39,7 +41,7 @@ export type TutorLesson = {
   locked: boolean;
   /** 강사 LMS 계정을 만들기 전 수업: LMS 기록 대상이 아님 (DB to_record 와 같은 기준, R7) */
   beforeLms?: boolean;
-  /** 이 강사 휴무로 처리 중인 수업 (미정 · 대체강사 확정 전, 학생 화면 '일정 조율 중'과 같은 판정, migration 3500) */
+  /** 이 강사 휴무로 처리 중인 수업 (미정 · 대체강사 확정 전, 수강생 화면 '일정 조율 중'과 같은 판정, migration 3500) */
   leaveOpen?: boolean;
   /** 강사 노쇼 보상 수업 상태 (4000): available·used·expired·voided */
   compensation?: string | null;
@@ -111,44 +113,54 @@ export function dayLabel(date: string): string {
 export function localDate(t: Date, tz: string): string {
   return formatInZone(t, tz).date;
 }
-/** '09:00–09:40' 강사 현지 */
+/** '9:00–9:40 AM' 강사 현지 */
 export function timeRange(l: { startsAt: Date; endsAt: Date }, tz: string): string {
-  return `${formatInZone(l.startsAt, tz).time}–${formatInZone(l.endsAt, tz).time}`;
+  return rangeText(formatInZone(l.startsAt, tz).time, formatInZone(l.endsAt, tz).time);
 }
-/** 한국 시각 범위 'KST 15:00–15:40' (강사가 한국 시간대면 null). 시차로 날짜가 다르면 요일을 붙임 */
+/** 한국 시각 범위 '3:00–3:40 PM *KST*' (강사가 한국 시간대면 null). 시차로 날짜가 다르면 'Tue, 4 Nov 1:00–1:40 AM *KST*' */
 export function kstRange(l: { startsAt: Date; endsAt: Date }, tz: string): string | null {
   if (tz === 'Asia/Seoul') return null;
   const a = formatInZone(l.startsAt, 'Asia/Seoul');
   const b = formatInZone(l.endsAt, 'Asia/Seoul');
-  const day = localDate(l.startsAt, tz) === a.date ? '' : `${WD[new Date(`${a.date}T00:00:00Z`).getUTCDay()]} `;
-  return `KST ${day}${a.time}–${b.time}`;
+  const day = localDate(l.startsAt, tz) === a.date ? '' : `${dayLabel(a.date)} `;
+  return `${day}${rangeText(a.time, b.time)} ${bold('KST')}`;
 }
-/** 'Mon 3 Nov 09:00' 강사 현지 */
+/** 'Mon, 3 Nov 9:00 AM' 강사 현지 */
 export function whenText(t: Date, tz: string): string {
-  return `${dayLabel(localDate(t, tz))} ${formatInZone(t, tz).time}`;
+  return `${dayLabel(localDate(t, tz))} ${ampmEn(formatInZone(t, tz).time)}`;
 }
 /**
- * 시간대 이름 (11/2 점검 ⑤): '[도시] Time' — 'Asia/Manila' → 'Manila Time', 한국은 'Korea Time (KST)'.
- * 강사 화면 머리글은 '[도시] Time / Korea Time (KST)' 로 통일
+ * 시간대 이름 (11/2 점검 ⑤): '[도시] Time' — 'Asia/Manila' → 'Manila Time', 한국은 'KST'.
+ * 강사 화면 머리글은 '[도시] Time / KST' 로 통일
  */
-export const KOREA_TIME = 'Korea Time (KST)';
+export const KOREA_TIME = 'KST';
 export const tzTimeLabel = cityTime;
 export function tzHeader(tz: string): string {
   return tz === 'Asia/Seoul' ? KOREA_TIME : `${tzTimeLabel(tz)} / ${KOREA_TIME}`;
 }
-/** 한국 시각 'KST 08:00' (날짜가 다르면 'KST Tue 08:00'). 강사가 한국 시간대면 null */
+/** 한국 쪽 시각 '8:00 AM *KST*' (날짜가 다르면 'Tue, 10 Nov 1:30 AM *KST*'). 강사가 한국 시간대면 null */
 export function kstText(t: Date, tz: string): string | null {
   if (tz === 'Asia/Seoul') return null;
   const k = formatInZone(t, 'Asia/Seoul');
-  return localDate(t, tz) === k.date ? `KST ${k.time}` : `KST ${WD[new Date(`${k.date}T00:00:00Z`).getUTCDay()]} ${k.time}`;
+  return `${localDate(t, tz) === k.date ? '' : `${dayLabel(k.date)} `}${ampmEn(k.time)} ${bold('KST')}`;
 }
 /**
- * 기준 이름까지 붙인 시각 (11/3 대표: 시각마다 어디 기준인지 꼭) —
- * 'Mon, 3 Nov 09:00 Melbourne Time · KST 07:00' (한국 강사면 'Korea Time (KST)' 하나)
+ * 기준 이름까지 붙인 시각 (11/3 대표: 시각마다 어디 기준인지 꼭, 11/8 대표: 통일) —
+ * 'Mon, 3 Nov 9:00 AM *Melbourne Time* / 7:00 AM *KST*' (한국 강사면 'Mon, 3 Nov 9:00 AM *KST*'). *…* = 굵게 (화면은 <Rich>)
  */
 export function whenFull(t: Date, tz: string): string {
   const k = kstText(t, tz);
-  return `${whenText(t, tz)} ${tzTimeLabel(tz)}${k ? ` · ${k}` : ''}`;
+  return `${whenText(t, tz)} ${bold(tzTimeLabel(tz))}${k ? ` / ${k}` : ''}`;
+}
+/** 수업 시각 범위 + 기준: 'Mon, 9 Nov 4:00–4:50 PM *Sydney Time* / 2:00–2:50 PM *KST*' (한국 강사는 '… *KST*' 하나). *…* = 굵게 (화면은 <Rich>) */
+export function rangeFull(l: { startsAt: Date; endsAt: Date }, tz: string): string {
+  const k = kstRange(l, tz);
+  return `${dayLabel(localDate(l.startsAt, tz))} ${timeRange(l, tz)} ${bold(tzTimeLabel(tz))}${k ? ` / ${k}` : ''}`;
+}
+/** 같은 글, 날짜 없이 (오늘 목록처럼 날짜가 이미 보일 때) */
+export function rangeFullNoDay(l: { startsAt: Date; endsAt: Date }, tz: string): string {
+  const k = kstRange(l, tz);
+  return `${timeRange(l, tz)} ${bold(tzTimeLabel(tz))}${k ? ` / ${k}` : ''}`;
 }
 export const minutesOf = (l: { startsAt: Date; endsAt: Date }) => Math.round((+l.endsAt - +l.startsAt) / 60000);
 
@@ -177,7 +189,7 @@ export function daysOf(lessons: TutorLesson[], tz: string, week: { from: string;
 /** 강사가 보는 결과 문구 (14개 상태 전부) */
 export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   Normal: 'Held',
-  'Make-up completed': 'Held · make-up',
+  'Make-up completed': 'Held',
   'Covered by another tutor': 'Held · substitute',
   'Tutor Late - Student Present': 'Held',   // 지각은 lateText 로 따로 붙임 (4400)
   'Student no-show': 'Student no-show',
@@ -191,6 +203,13 @@ export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   'Tutor long-term leave': 'Tutor on leave',
   'Student long-term leave': 'Student on leave',
 };
+
+/** 강사 Home To-do '취소된 수업': 수강생이 취소한 앞으로의 수업 (tutor_canceled_classes) */
+export type TutorCanceled = { id: string; startsAt: Date; endsAt: Date; kind: LessonKind; classStatus: ClassStatus | null; student: string; studentId?: string };
+/* eslint-disable @typescript-eslint/no-explicit-any -- DB JSON → 화면 모양 */
+export const parseCanceled = (j: any): TutorCanceled[] =>
+  ((j ?? []) as any[]).map((x) => ({ id: x.id, startsAt: new Date(x.starts_at), endsAt: new Date(x.ends_at), kind: x.kind, classStatus: x.class_status ?? null, student: x.student, studentId: x.student_id ?? undefined }));
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type LessonPhase = 'upcoming' | 'to_record' | 'before_lms' | 'on_leave' | 'recorded' | 'canceled';
 export function phaseOf(l: TutorLesson, now: Date): LessonPhase {
@@ -237,7 +256,7 @@ export function lateText(late: Late): string {
   const part = (who: string, min: number | null) => ` · ${who} late${min ? ` ${min} min` : ''}`;
   return (late.student ? part('Student', late.studentMin) : '') + (late.tutor ? part('Tutor', late.tutorMin) : '');
 }
-/** 화면에서 저장 버튼을 누를 수 있는지 (DB가 다시 확인) — 다룬 내용 필수, 강사 지각은 분·사유(Remarks) 필수, 학생 지각은 분 필수 (POL-TU-01) */
+/** 화면에서 저장 버튼을 누를 수 있는지 (DB가 다시 확인) — 다룬 내용 필수, 강사 지각은 분·사유(Remarks) 필수, 수강생 지각은 분 필수 (POL-TU-01) */
 export function recordReady(r: TutorResult | null, topics: string, remarks: string, late: Late = NO_LATE): boolean {
   if (!r) return false;
   if (r === 'student_no_show' || r === 'tutor_no_show') return true;
@@ -246,8 +265,12 @@ export function recordReady(r: TutorResult | null, topics: string, remarks: stri
   if (late.tutor && !(late.tutorMin && late.tutorMin > 0)) return false;
   return !late.tutor || !!remarks.trim();
 }
-export function canRecord(l: TutorLesson, now: Date): boolean {
-  return l.state !== 'canceled' && !l.leaveOpen && l.startsAt <= now && !l.locked;
+/**
+ * 기록할 수 있는 수업. due = 서버가 '기록할 수업'(to_record, 서버 시각으로 시작 지남)으로 준 수업 —
+ * 강사 기기 시계가 늦어도 열림 (11/9 Maria: 수업 전에 열어 둔 화면에서 Save 가 계속 잠김)
+ */
+export function canRecord(l: TutorLesson, now: Date, due = false): boolean {
+  return l.state !== 'canceled' && !l.leaveOpen && (due || l.startsAt <= now) && !l.locked;
 }
 
 // 대체 수업이 먼저: 시트 보강을 대체강사가 맡아도 그 강사에게는 대체 수업 (R6)

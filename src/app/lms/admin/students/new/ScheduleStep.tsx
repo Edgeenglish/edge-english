@@ -6,7 +6,7 @@
 // - 특정 수업 날짜 변경: 회차 목록 창에서 날짜·시각을 바꿈 (변경권 차감 없음). 검사는 기존 규칙 그대로(checkLessonList)
 
 import { useState } from 'react';
-import { kstToInstant, type KstDate } from '@/lms/rules/dates';
+import { ampmKo, kstToInstant, type KstDate } from '@/lms/rules/dates';
 import type { PlanIssue } from '@/lms/rules/booking';
 import type { LessonDate, LessonPlan, PlanLesson } from '@/lms/rules/lessons';
 import type { RegularSlot } from '@/lms/rules/schedule';
@@ -97,7 +97,7 @@ function TimeSelect({ value, onChange, label, small }: { value: string; onChange
       <option value="">시간 선택</option>
       {opts.map((t) => (
         <option key={t} value={t}>
-          {t}
+          {ampmKo(t)}
         </option>
       ))}
     </select>
@@ -154,7 +154,7 @@ function Tags({ l }: { l: PlanLesson }) {
     <>
       {l.n === 1 && <span className="rounded-full bg-[#efebff] px-2 py-0.5 text-[12.5px] font-semibold text-[#5b3fe0]">첫 수업</span>}
       {l.original && <span className="rounded-full bg-[#fff1dc] px-2 py-0.5 text-[12.5px] font-semibold text-[#9a5b00]">변경</span>}
-      {l.original && <span className="text-[12.5px] text-[#6b6880]">(원래 {dayLabel(l.original.date)}{l.original.time !== l.time ? ` ${l.original.time}` : ''})</span>}
+      {l.original && <span className="text-[12.5px] text-[#6b6880]">(원래 {dayLabel(l.original.date)}{l.original.time !== l.time ? ` ${ampmKo(l.original.time)}` : ''})</span>}
     </>
   );
 }
@@ -178,7 +178,7 @@ function PreviewRows({ plan, issues, tutor, all }: { plan: LessonPlan; issues: P
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[15px] text-[#1d1b2b]">
           <span className="w-9 shrink-0">{l.n}회</span>
           <span className="tabular-nums">{dayLabel(l.date)}</span>
-          <span className="tabular-nums">{l.time}</span>
+          <span className="tabular-nums">{ampmKo(l.time)}</span>
           {showLocal && <span className="text-[13px] tabular-nums text-[#6b6880]">현지 {localOf(tutor, l.date, l.time)}</span>}
           <Tags l={l} />
         </div>
@@ -213,7 +213,7 @@ function PeriodBox({ plan, slots, weeks }: { plan: LessonPlan; slots: RegularSlo
       </p>
       <p className="flex flex-wrap gap-x-4">
         <span className="text-[#6b6880]">정규 일정</span>
-        <span className="text-[#1d1b2b]">{slots.map((s) => `${WEEKDAY_KO[s.weekday]} ${s.time}`).join(' / ')} (KST)</span>
+        <span className="text-[#1d1b2b]">{slots.map((s) => `${WEEKDAY_KO[s.weekday]} ${ampmKo(s.time)}`).join(' / ')} (KST)</span>
       </p>
     </div>
   );
@@ -243,10 +243,10 @@ export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: Le
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1 text-[14.5px] text-[#1d1b2b]">
             <span className="mr-2 inline-block w-9">{l.n}회</span>
-            {l.original && <s className="mr-1 text-[13px] text-[#9a97a8]">{dayLabel(l.original.date)}{l.original.time !== l.time ? ` ${l.original.time}` : ''}</s>}
+            {l.original && <s className="mr-1 text-[13px] text-[#9a97a8]">{dayLabel(l.original.date)}{l.original.time !== l.time ? ` ${ampmKo(l.original.time)}` : ''}</s>}
             {l.original && <span className="mr-1 text-[#9a97a8]">→</span>}
             <span className={`tabular-nums ${l.original ? 'font-bold' : ''}`}>
-              {dayLabel(l.date)} {l.time}
+              {dayLabel(l.date)} {ampmKo(l.time)}
             </span>
             {loc && <span className="ml-1.5 whitespace-nowrap text-[12.5px] text-[#6b6880]">현지 {loc}</span>}
             {l.n === 1 && <span className="ml-1.5 rounded-full bg-[#efebff] px-2 py-0.5 text-[12px] font-semibold text-[#5b3fe0]">첫 수업</span>}
@@ -287,7 +287,7 @@ export function ChangeSheet({ plan, issues, tutor, onEdit, onClose }: { plan: Le
               className="min-h-[40px] rounded-[10px] bg-[#7d5ffb] px-4 text-[13.5px] font-bold text-white disabled:bg-[#cfc4ff]"
             >
               {/* 실제로 적용될 날짜를 버튼에 그대로 (QA A-02: 입력값과 저장값이 다른 일이 없게) */}
-              {!partial && date && time ? `적용 · ${dayLabel(date)} ${time}` : '적용'}
+              {!partial && date && time ? `적용 · ${dayLabel(date)} ${ampmKo(time)}` : '적용'}
             </button>
             {partial && <p className="w-full text-[12.5px] text-[#b3261e]">날짜를 다시 선택해 주세요 (연·월·일을 모두 채워야 적용돼요)</p>}
           </div>

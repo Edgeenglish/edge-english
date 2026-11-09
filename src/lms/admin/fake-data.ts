@@ -1,4 +1,4 @@
-// 대시보드 미리보기용 가상 데이터 (실제 학생·강사 아님). 시험용 Supabase의 seed_fake.sql 과 같은 상황
+// 대시보드 미리보기용 가상 데이터 (실제 수강생·강사 아님). 시험용 Supabase의 seed_fake.sql 과 같은 상황
 // 시각은 '지금' 기준으로 만들어 기한 초과·임박·여유가 모두 보이게 함
 
 import { addBusinessDays, addDays, endOfKstDay, instantToKstDate, weekdayOf, type KstDate } from '../rules/dates';
@@ -7,7 +7,7 @@ import type { PlanView } from './confirm';
 
 const H = 60 * 60 * 1000;
 
-export type FakeLesson = { time: string; student: string; tutor: string; state: '완료' | '예정' | '보강' | '노쇼 신고' | '학생 변경' | '취소' };
+export type FakeLesson = { time: string; student: string; tutor: string; state: '완료' | '예정' | '보강' | '노쇼 신고' | '수강생 변경' | '취소' };
 
 const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 const shortDate = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}(${WEEKDAY_KO[weekdayOf(d)]})`;
@@ -19,7 +19,7 @@ function renewalPeriod(previousEnd: KstDate, lessonWeekdays: number[]): string {
   return `${shortDate(start)}–${shortDate(addDays(start, 27))}`;
 }
 
-// 가상 일정안 (H22): 가상학생일 = 뉴욕 학생·시드니 강사, 강사 답 대기 / 가상학생이 = 확정, 학생에게만 보냄 (사고 상황)
+// 가상 일정안 (H22): 가상학생일 = 뉴욕 수강생·시드니 강사, 강사 답 대기 / 가상학생이 = 확정, 수강생에게만 보냄 (사고 상황)
 function nextWeekday(from: KstDate, wd: number): KstDate {
   let d = addDays(from, 3);
   while (weekdayOf(d) !== wd) d = addDays(d, 1);
@@ -67,8 +67,8 @@ export function fakeTasks(now: Date): TaskSource[] {
     },
     {
       kind: 'renewal_tutor_notice', id: 'r-1', studentName: '가상학생사', studentCode: 'STU-9004', product: '50분 주2회 4주',
-      newPeriod: renewalPeriod(instantToKstDate(now), [2, 4]), tutorName: '가상강사 Blair', tutorChangePlanned: false,
-      tutorNotifiedAt: t(-26), tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: t(-26),
+      newPeriod: renewalPeriod(instantToKstDate(now), [2, 4]), tutorName: '가상강사 Blair', tutorChangePlanned: false, scheduleConfirmed: true,
+      tutorNotifiedAt: null, tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: t(-26),
     },
     {
       kind: 'ending_soon', id: 'e-1', studentName: '가상학생팔', studentCode: 'STU-9008', product: '50분 주2회 4주',
@@ -77,10 +77,6 @@ export function fakeTasks(now: Date): TaskSource[] {
     {
       kind: 'ending_soon', id: 'e-2', studentName: '가상학생구', studentCode: 'STU-9009', product: '40분 주3회 12주',
       lessonsLeft: 2, endsAt: endOfKstDay(addDays(instantToKstDate(now), 5)), tutorName: '가상강사 Blair', noticeSentAt: null,
-    },
-    {
-      kind: 'makeup_unrequested', id: 'mk-1', studentName: '가상학생십', studentCode: 'STU-9010',
-      canceledLesson: shortDate(addDays(instantToKstDate(now), -6)) + ' 20:00', deadline: endOfKstDay(addDays(instantToKstDate(now), 3)), tutorName: '가상강사 Alex',
     },
     {
       kind: 'auto_failure', id: 'f-1', what: 'calendar_sync', studentName: '가상학생이',

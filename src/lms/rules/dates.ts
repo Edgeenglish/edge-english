@@ -1,7 +1,7 @@
 // 날짜·시간 계산 도우미
 // - 운영 규칙(수강기간, 6시간 기준, 공휴일)은 모두 한국 시간(KST) 기준
 // - 한국은 서머타임이 없으므로 KST = UTC+9 고정
-// - 저장은 UTC(timestamptz), 학생·강사 화면은 각자의 IANA 시간대(예: Australia/Sydney)로 변환
+// - 저장은 UTC(timestamptz), 수강생·강사 화면은 각자의 IANA 시간대(예: Australia/Sydney)로 변환
 
 export type KstDate = string; // 'YYYY-MM-DD' (한국 날짜)
 export type KstTime = string; // 'HH:MM' (한국 시각, 24시간)
@@ -100,6 +100,17 @@ export function formatInZone(instant: Date, timeZone: string): { date: string; t
     time: `${get('hour')}:${get('minute')}`,
     weekday: get('weekday'),
   };
+}
+
+/** 화면 표기 12시간 (대표 2026-11-08): '17:00' → '오후 5:00', '00:30' → '오전 12:30' (날짜는 따로 함께 표시) */
+export function ampmKo(hhmm: string): string {
+  const h = Number(hhmm.slice(0, 2));
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${hhmm.slice(3, 5)}`;
+}
+/** 영어 화면 12시간: '17:00' → '5:00 PM', '00:30' → '12:30 AM' */
+export function ampmEn(hhmm: string): string {
+  const h = Number(hhmm.slice(0, 2));
+  return `${h % 12 === 0 ? 12 : h % 12}:${hhmm.slice(3, 5)} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
 /** 두 시점 사이의 시간(시간 단위, 소수 포함) */

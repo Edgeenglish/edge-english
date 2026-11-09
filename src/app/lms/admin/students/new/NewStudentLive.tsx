@@ -1,6 +1,6 @@
 'use client';
 
-// 실제 데이터(시험용 Supabase)로 신규 학생 등록. 화면에서 막는 것은 편의이고, 권한은 DB가 확인 (is_admin = aal2)
+// 실제 데이터(시험용 Supabase)로 신규 수강생 등록. 화면에서 막는 것은 편의이고, 권한은 DB가 확인 (is_admin = aal2)
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { planActions } from '@/lms/admin/confirm-live';

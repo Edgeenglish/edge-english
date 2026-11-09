@@ -45,7 +45,7 @@ describe('⑤ 시트 Student Info ↔ LMS 비교', () => {
     expect(items.map((i) => i.field)).not.toContain('display_name');
     expect(items.map((i) => i.field)).not.toContain('email');
   });
-  it('걸러 보기: 할 일 / 끝남 / 학생별', () => {
+  it('걸러 보기: 할 일 / 끝남 / 수강생별', () => {
     const rows = [row({ id: 'a' }), row({ id: 'b', doneAt: new Date(), studentId: 's1' }), row({ id: 'c', studentName: '박민준', suggest: { studentId: 's9', how: 'name_ko' } })];
     expect(filterRows(rows, 'todo', '').map((r) => r.id)).toEqual(['a', 'c']);
     expect(filterRows(rows, 'done', '').map((r) => r.id)).toEqual(['b']);

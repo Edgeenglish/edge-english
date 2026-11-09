@@ -65,7 +65,7 @@ declare
                           'admin_makeup_withdraw', 'admin_void_makeup', 'admin_mark_lesson_notice_sent', 'admin_mark_lesson_notices_sent',
                           'admin_leave_create', 'admin_leave_choose', 'admin_leave_sub_ok', 'admin_leave_student_ok', 'admin_leave_sub_options', 'admin_leave_makeup_options', 'admin_leave_back', 'admin_leave_notice_unsend', 'admin_leave_renewal_pending',
                           'admin_renewal_notice_sent', 'admin_enrollment_close', 'admin_set_task_closed', 'admin_task_history',
-                          'tutor_screen', 'tutor_hours', 'tutor_hours_save', 'tutor_record_class', 'tutor_makeup_answer', 'tutor_sub_answer', 'student_screen', 'student_textbook', 'student_makeup_options', 'student_no_time_rights', 'student_regular_slots', 'student_no_time_request', 'admin_extension_reviews', 'student_makeup_request', 'student_leave_answer', 'student_reminders', 'admin_student_accounts', 'admin_student_login', 'admin_leave_sub_off_hours', 'admin_tutor_accounts', 'admin_class_record_missing',
+                          'tutor_screen', 'tutor_hours', 'tutor_hours_save', 'tutor_record_class', 'tutor_makeup_answer', 'tutor_sub_answer', 'student_screen', 'student_textbook', 'student_makeup_options', 'student_no_time_rights', 'student_regular_slots', 'student_no_time_request', 'student_makeup_withdraw', 'admin_renewal_notify_tutor', 'tutor_cancel_class', 'admin_announcements', 'admin_announcement_save', 'admin_announcement_end', 'lms_announcements_live', 'admin_extension_reviews', 'student_makeup_request', 'student_leave_answer', 'student_reminders', 'admin_student_accounts', 'admin_student_login', 'admin_leave_sub_off_hours', 'admin_tutor_accounts', 'admin_class_record_missing',
                           'admin_tutor_login',
                           'admin_students', 'admin_student_detail', 'admin_student_update', 'tutor_student_profile', 'tutor_student_update',
                           'admin_regular_change', 'admin_regular_change_sent', 'admin_extend_enrollment', 'admin_prestart_move',
@@ -73,6 +73,8 @@ declare
                           'tutor_students_list', 'tutor_schedule', 'tutor_schedule_save',
                           'admin_credits', 'admin_credit_adjust', 'admin_leave_withdraw',
                           'admin_matching_current', 'admin_matching_notified', 'admin_import_unmark_checked',
+                          -- 2026-11-08 검토: 첫 줄에서 is_admin()(운영자 TOTP) 또는 lms_screen_tutor(강사 본인·운영자) 확인
+                          'admin_makeup_confirm_now', 'admin_makeup_reschedule', 'admin_lesson_add', 'admin_lesson_edit', 'admin_makeup_logs_for', 'tutor_canceled_classes', 'admin_register_renewal', 'admin_carry_over_makeups', 'admin_reward_adjust',
                           'tutor_first_lesson_todos', 'tutor_first_lesson_save', 'tutor_makeup_confirm', 'admin_mail_sync', 'admin_resend_notice_email'];
 
   personas text[] := array['미등록', '학생A', '학생B', '강사X', '강사Y', '운영자', '운영자(TOTP 전)', '운영직원'];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initialStyleFromWish, needsMaterials, needsTextbook, OTHER_TEXTBOOK, parseFollowup, parseFollowupTodos, styleText, TEXTBOOKS } from './followup';
+import { initialStyleFromWish, isGoogleDocUrl, LEVEL_RUBRIC, needsMaterials, needsTextbook, OTHER_TEXTBOOK, parseFollowup, parseFollowupTodos, styleText, TEXTBOOKS } from './followup';
 
 describe('첫 수업 후 To-do (4600)', () => {
   it('교재 목록은 홈페이지 교재 데이터 그대로', () => {
@@ -7,7 +7,7 @@ describe('첫 수업 후 To-do (4600)', () => {
     expect(TEXTBOOKS).toContain('Speak now 2');
     expect(TEXTBOOKS).not.toContain(OTHER_TEXTBOOK);
   });
-  it('교재·학생 자료 칸은 방식에 따라 조건부', () => {
+  it('교재·수강생 자료 칸은 방식에 따라 조건부', () => {
     expect(needsTextbook('textbook', [])).toBe(true);
     expect(needsTextbook('mixed', ['conversation'])).toBe(false);
     expect(needsTextbook('mixed', ['conversation', 'textbook'])).toBe(true);
@@ -16,7 +16,7 @@ describe('첫 수업 후 To-do (4600)', () => {
     expect(needsMaterials('mixed', ['student_materials'])).toBe(true);
     expect(needsMaterials('textbook', [])).toBe(false);
   });
-  it('학생 희망 → 처음 값', () => {
+  it('수강생 희망 → 처음 값', () => {
     expect(initialStyleFromWish('textbook')).toBe('textbook');
     expect(initialStyleFromWish('free_talking')).toBe('conversation');
     expect(initialStyleFromWish('not_sure')).toBe('');
@@ -32,12 +32,22 @@ describe('첫 수업 후 To-do (4600)', () => {
   it('DB JSON 읽기', () => {
     expect(parseFollowup(null)).toBeNull();
     expect(parseFollowup({ first_lesson: null })).toBeNull();
-    const f = parseFollowup({ first_lesson: { id: 'l1', starts_at: '2026-11-04T00:30:00Z', status: 'Normal', topics: 'Intro', recorded_at: '2026-11-04T01:20:00Z' }, done: { level: true, improve: false, style: false, record: true }, pending: 2 });
-    expect(f?.pending).toBe(2);
-    expect(f?.done).toEqual({ level: true, improve: false, style: false, record: true });
+    const f = parseFollowup({ first_lesson: { id: 'l1', starts_at: '2026-11-04T00:30:00Z', status: 'Normal', topics: 'Intro', recorded_at: '2026-11-04T01:20:00Z' }, done: { level: true, improve: false, style: false, docs: false, record: true }, pending: 3 });
+    expect(f?.pending).toBe(3);
+    expect(f?.done).toEqual({ level: true, improve: false, style: false, docs: false });
     expect(f?.firstLesson?.topics).toBe('Intro');
     const todos = parseFollowupTodos([{ student_id: 's1', student: 'Haeun Jang', first_lesson_at: '2026-11-04T00:30:00Z', pending: 3, done: { level: false } }]);
     expect(todos[0]).toMatchObject({ studentId: 's1', student: 'Haeun Jang', pending: 3 });
-    expect(todos[0].done.record).toBe(false);
+    expect(todos[0].done.docs).toBe(false);
+  });
+  it('Class Notes 는 Google Docs 문서 주소만 (4602)', () => {
+    expect(isGoogleDocUrl(' https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit ')).toBe(true);
+    expect(isGoogleDocUrl('https://docs.google.com/document/u/0/d/1AbCdEfGhIjKlMnOp/edit')).toBe(true);
+    expect(isGoogleDocUrl('https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOp/edit')).toBe(false);
+    expect(isGoogleDocUrl('https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOp')).toBe(false);
+    expect(isGoogleDocUrl('Minjun class notes')).toBe(false);
+  });
+  it('레벨 기준은 LMS 레벨 4개와 같은 이름·순서', () => {
+    expect(LEVEL_RUBRIC.map((r) => r.level)).toEqual(['Beginner', 'Pre-Intermediate', 'Intermediate', 'Advanced']);
   });
 });

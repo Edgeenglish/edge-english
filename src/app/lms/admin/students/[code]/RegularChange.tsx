@@ -5,7 +5,7 @@
 // A-03 (20261107): '지금 적용 중' 과 '○○부터 적용 예정'(data.nextSlots) 을 구분. 적용 예정 변경은 적용일 전에 취소([예정 변경 취소] = 원래 일정을
 // 적용 예정일부터 다시 저장)·수정(새 시간 고르기)할 수 있음. '같은 일정' 판정은 고른 적용 시작일에 유효한 일정 기준, 그 뒤 예정 변경이 있으면 같다고 보지 않음
 import { useEffect, useMemo, useState } from 'react';
-import { formatInZone, kstToInstant, type KstDate } from '@/lms/rules/dates';
+import { ampmKo, formatInZone, kstToInstant, type KstDate } from '@/lms/rules/dates';
 import {
   dateOptions, KEPT_WHY, KIND_KO, koZone, kstWithZones, mdw, problemText, slotsInZone, slotsText, WD_KO, zoneLabel,
   type RegularPreview, type Slot, type SlotFull, type StudentDetailData,
@@ -98,11 +98,11 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
   if (!e || n === 0) {
     return (
       <Sheet title="정규 일정 수정" onClose={onClose}>
-        <p className="text-[14px] text-[#6b6880]">{!e ? '수강 중이거나 시작 예정인 수강권이 없어요.' : '이 학생의 정규 일정이 없어요 (등록·이관 때 정규 일정이 만들어져요).'}</p>
+        <p className="text-[14px] text-[#6b6880]">{!e ? '수강 중이거나 시작 예정인 수강권이 없어요.' : '이 수강생의 정규 일정이 없어요 (등록·이관 때 정규 일정이 만들어져요).'}</p>
       </Sheet>
     );
   }
-  const zones = [{ label: '학생', tz: stTz }, { label: '강사', tz: tutor.tutorTz }];
+  const zones = [{ label: '수강생', tz: stTz }, { label: '강사', tz: tutor.tutorTz }];
   const shown = pv ? (showAllMoved ? pv.moved : pv.moved.slice(0, 6)) : [];
   const keptShown = pv ? (showAllKept ? pv.kept : pv.kept.slice(0, 8)) : [];
   // 강사 현지 예시: 첫 수업의 실제 시점을 날짜·요일·시각 함께 변환 (QA-09: 한국 날짜 + 현지 시각을 붙이면 틀림)
@@ -111,11 +111,11 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
   return (
     <Sheet title="정규 일정 수정" onClose={onClose} wide>
       <p className="mb-1 text-[13px] text-[#6b6880]">
-        지금 적용 중: {slotsText(cur)} (한국 시간) · {e.durationMin}분 · {tutor.tutor} 강사. 요일·시작 시간만 바꿔요. 주 {n}회·수업 길이·강사는 그대로예요.
+        지금 적용 중: {slotsText(cur)} <b>한국 시간</b> · {e.durationMin}분 · {tutor.tutor} 강사. 요일·시작 시간만 바꿔요. 주 {n}회·수업 길이·강사는 그대로예요.
       </p>
       {pendingFrom && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[10px] border border-[#d9d2f5] bg-[#f3f0fd] px-3 py-2 text-[13.5px] text-[#1d1b2b]">
-          <span><b>{mdw(pendingFrom)}부터 적용 예정:</b> {slotsText(pending)} (한국 시간)</span>
+          <span><b>{mdw(pendingFrom)}부터 적용 예정:</b> {slotsText(pending)} <b>한국 시간</b></span>
           <button type="button" className={`${btnSub} !min-h-[36px] !py-1 text-[13px]`} onClick={cancelPending} disabled={busy}>예정 변경 취소</button>
         </div>
       )}
@@ -137,7 +137,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
             </div>
           </div>
           {slots.map((s) => (
-            <div key={s.weekday} className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-2">
+            <div key={s.weekday} className="grid items-center gap-1.5 sm:grid-cols-[minmax(0,1fr)_270px]">
               <label htmlFor={`t-${s.weekday}`} className="text-[14px] text-[#1d1b2b]">
                 {WD_KO[s.weekday]}요일 시작 시간 <span className="block text-[12px] text-[#6b6880]">한국 시간 · 30분 단위</span>
               </label>
@@ -153,13 +153,13 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
           {complete && (
             <div className="rounded-[10px] bg-white px-3 py-2 text-[13.5px] text-[#1d1b2b]">
               <p><b>한국 시간</b> {slotsText(slots)} · {e.durationMin}분</p>
-              {stTz !== 'Asia/Seoul' && <p><b>학생 — {koZone(stTz)}</b> {slotsInZone(slots, stTz, from)} <span className="text-[#6b6880]">({mdw(from)} 수업 기준)</span></p>}
+              {stTz !== 'Asia/Seoul' && <p><b>수강생 — {koZone(stTz)}</b> {slotsInZone(slots, stTz, from)} <span className="text-[#6b6880]">({mdw(from)} 수업 기준)</span></p>}
               {tutor.tutorTz !== 'Asia/Seoul' && <p><b>강사 {tutor.tutor} — {koZone(tutor.tutorTz)}</b> {tutorLocalNew}</p>}
             </div>
           )}
           <div>
             <label htmlFor="rc-reason" className={label}>사유 (필수)</label>
-            <input id="rc-reason" value={reason} onChange={(e2) => setReason(e2.target.value)} placeholder="예: 학생 요청 (11/3 카톡)" className={input} />
+            <input id="rc-reason" value={reason} onChange={(e2) => setReason(e2.target.value)} placeholder="예: 수강생 요청 (11/3 카톡)" className={input} />
           </div>
         </div>
 
@@ -197,7 +197,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                   {showAllMoved && pv.moved.length > 6 && <li className="text-[12.5px]"><button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setShowAllMoved(false)}>접기</button></li>}
                 </ul>
                 {pv.skipped.length > 0 && (
-                  <p className="mt-1 text-[12.5px] text-[#6b6880]">건너뛴 날: {pv.skipped.map((s) => `${mdw(s.date)} ${s.time}`).join(', ')} — 그날 학생의 다른 수업(보강·대체 등)이 있어 다음 회차로</p>
+                  <p className="mt-1 text-[12.5px] text-[#6b6880]">건너뛴 날: {pv.skipped.map((s) => `${mdw(s.date)} ${ampmKo(s.time)}`).join(', ')} — 그날 수강생의 다른 수업(보강·대체 등)이 있어 다음 회차로</p>
                 )}
               </section>
               {pv.kept.length > 0 && (
@@ -205,7 +205,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                   <h3 className="text-[13px] font-extrabold text-[#6b6880]">그대로 두는 수업 {pv.kept.length}회</h3>
                   <ul className="mt-1 grid gap-1 text-[13px] text-[#1d1b2b]">
                     {keptShown.map((k) => (
-                      <li key={k.lessonId}>{zoneLabel(k.startsAt, 'Asia/Seoul')} (한국 시간) · {KIND_KO[k.kind] ?? k.kind}{k.why === 'substitute' ? ` · 대체 ${k.tutor}` : ''} <span className="text-[#6b6880]">— {KEPT_WHY[k.why] ?? k.why}</span></li>
+                      <li key={k.lessonId}>{zoneLabel(k.startsAt, 'Asia/Seoul')} <b>한국 시간</b> · {KIND_KO[k.kind] ?? k.kind}{k.why === 'substitute' ? ` · 대체 ${k.tutor}` : ''} <span className="text-[#6b6880]">— {KEPT_WHY[k.why] ?? k.why}</span></li>
                     ))}
                     {pv.kept.length > keptShown.length && (
                       <li className="text-[12.5px] text-[#6b6880]">… {pv.kept.length - keptShown.length}회 더 <button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setShowAllKept(true)}>전체 {pv.kept.length}회 보기</button></li>
@@ -218,7 +218,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                 <h3 className="text-[13px] font-extrabold text-[#6b6880]">검사</h3>
                 <ul className="mt-1 grid gap-1 text-[13.5px]">
                   {([
-                    [['tutor_hours_range'], `강사 시작 시각이 ${koZone(pv.tutor.timezone)} 06:00~22:30 안`],
+                    [['tutor_hours_range'], `강사 시작 시각이 ${koZone(pv.tutor.timezone)} 오전 6:00~오후 10:30 안`],
                     [['tutor_unavailable'], `${pv.tutor.name} 가능 시간(My hours) 안`],
                     [['tutor_busy', 'tutor_time_off', 'tutor_hold'], '다른 수업·휴무·재등록 대기 자리와 겹치지 않음 (휴식 10분 포함)'],
                     [['after_end'], `마지막 수업 ${pv.lastDate ? mdw(pv.lastDate) : '—'} ≤ 최종 종료일 ${mdw(pv.enrollment.finalEndDate)} (종료일은 연장하지 않음)`],
@@ -247,7 +247,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
         </button>
       </div>
       <p className="mt-2 text-[12px] text-[#6b6880]">
-        저장하면 학생·강사·운영진 화면에 바로 반영돼요. 저장 뒤 학생(카카오톡)·강사(WhatsApp) 안내 문구를 복사해 보내고 [발송 완료]를 눌러 주세요. 지난 수업과 이미 확정된 보강·대체 수업은 바뀌지 않아요.
+        저장하면 수강생·강사·운영진 화면에 바로 반영돼요. 저장 뒤 수강생(카카오톡)·강사(WhatsApp) 안내 문구를 복사해 보내고 [발송 완료]를 눌러 주세요. 지난 수업과 이미 확정된 보강·대체 수업은 바뀌지 않아요.
         {tutor.tutorTz !== 'Asia/Seoul' && firstMovedTo && ` 강사 현지 시각은 수업 날짜마다 다시 계산해요 (예: 한국 ${zoneLabel(firstMovedTo, 'Asia/Seoul')} = ${koZone(tutor.tutorTz)} ${zoneLabel(firstMovedTo, tutor.tutorTz)}).`}
       </p>
     </Sheet>

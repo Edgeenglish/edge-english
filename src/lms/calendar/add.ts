@@ -1,4 +1,4 @@
-// 보강을 각자 캘린더에 더하는 버튼 (2026-10-29 대표: 학생·강사 화면 둘 다, 보강만)
+// 보강을 각자 캘린더에 더하는 버튼 (2026-10-29 대표: 수강생·강사 화면 둘 다, 보강만)
 // 구글은 일정 추가 화면 링크, 애플·삼성은 .ics 파일(/lms/ics). 나중에 수업이 바뀌어도 캘린더는 저절로 안 바뀜
 
 export type CalendarEvent = { title: string; start: Date; end: Date; details?: string | null };

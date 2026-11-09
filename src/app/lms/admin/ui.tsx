@@ -30,12 +30,13 @@ export function Icon({ name, className = 'h-5 w-5' }: { name: IconName; classNam
   );
 }
 
-export type AdminTab = 'home' | 'schedule' | 'students';
+export type AdminTab = 'home' | 'schedule' | 'students' | 'stats';
 
+// 대시보드 5차 (대표 11/9): 홈 · 수강생 · 통계
 const TABS: { key: AdminTab; label: string; href: string; icon: IconName; demoOnly?: boolean }[] = [
   { key: 'home', label: '홈', href: '/lms/admin', icon: 'home' },
-  { key: 'schedule', label: '일정', href: '/lms/admin/schedule', icon: 'calendar', demoOnly: true },
-  { key: 'students', label: '학생', href: '/lms/admin/students', icon: 'users' },
+  { key: 'students', label: '수강생', href: '/lms/admin/students', icon: 'users' },
+  { key: 'stats', label: '통계', href: '/lms/admin/stats', icon: 'chart' },
 ];
 
 const withDemo = (href: string, demo: boolean) => (demo ? `${href}?demo=1` : href);
@@ -87,19 +88,27 @@ export function BottomNav({ active, demo }: { active: AdminTab; demo: boolean })
 }
 
 /** 운영자 화면 위쪽 막대 */
-export function AdminHeader({ active, demo, right }: { active: AdminTab; demo: boolean; right?: React.ReactNode }) {
+export function AdminHeader({ active, demo, right, rightInline }: { active: AdminTab; demo: boolean; right?: React.ReactNode; rightInline?: boolean }) {
   return (
     <>
-    <header className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b-[3px] border-[#ffd401] bg-white px-4 py-3 lg:flex-nowrap lg:px-7">
+    <header className="sticky top-0 z-10 flex flex-wrap items-center gap-2 lg:gap-3 border-b-[3px] border-[#ffd401] bg-white px-4 py-3 lg:flex-nowrap lg:px-7">
       {/* 로고 = 대시보드 새로고침. Link 는 같은 주소면 다시 불러오지 않아서 일반 a 로 페이지 전체를 다시 연다 */}
       <a href={withDemo('/lms/admin', demo)} title="대시보드 새로고침" className="flex shrink-0 items-center gap-1.5">
         <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
         <span className="rounded-[6px] bg-[#27230e] px-[7px] py-[3px] text-[12px] font-extrabold text-[#ffd401]">운영</span>
       </a>
+      {/* 화면 보기 2개는 로고 옆 (대시보드 5차) */}
+      {!demo && (
+        <div className="flex items-center gap-1 lg:gap-1.5">
+          <Link href="/lms/tutor" className="flex min-h-[36px] items-center rounded-[10px] border border-[#7d5ffb] px-2 text-[12px] font-semibold text-[#5b3fe0] lg:px-3 lg:text-[13px]">강사 화면</Link>
+          <Link href="/lms/student" className="flex min-h-[36px] items-center rounded-[10px] border border-[#7d5ffb] px-2 text-[12px] font-semibold text-[#5b3fe0] lg:px-3 lg:text-[13px]">수강생 화면</Link>
+          <span className="mx-1 hidden h-6 w-px bg-[#e6e3ef] lg:block" />
+        </div>
+      )}
       <TopNav active={active} demo={demo} />
       <span className="flex-1" />
       {/* 휴대폰: 버튼이 많으면 다음 줄로 (글자가 세로로 깨지지 않게) */}
-      {right && <div className="flex w-full flex-wrap items-center justify-end gap-2 whitespace-nowrap lg:w-auto lg:flex-nowrap">{right}</div>}
+      {right && <div className={`flex flex-wrap items-center justify-end gap-2 whitespace-nowrap lg:w-auto lg:flex-nowrap ${rightInline ? 'ml-auto' : 'w-full'}`}>{right}</div>}
     </header>
     {/* 저장 중에 화면을 떠난 저장의 결과 (R-20) — 운영자 화면 어디서나, 막대 바로 아래 */}
     <PendingSavesBanner />
