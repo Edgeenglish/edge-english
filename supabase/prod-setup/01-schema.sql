@@ -16410,6 +16410,9 @@ revoke all on function lesson_notices_email() from public, anon, authenticated;
 alter table admin_makeup_logs alter column reason drop not null;
 alter table admin_makeup_logs add column if not exists old_tutor_id uuid references tutors(id);
 alter table admin_makeup_logs add column if not exists new_tutor_id uuid references tutors(id);
+-- 수정 창에서 시간·강사는 그대로 두고 메모만 적은 경우 = 'note' 기록 (ChatGPT 검토 11/9)
+alter table admin_makeup_logs drop constraint if exists admin_makeup_logs_action_check;
+alter table admin_makeup_logs add constraint admin_makeup_logs_action_check check (action in ('confirm', 'reschedule', 'note'));
 
 -- 2. 안내 종류: 이전 강사 취소 ------------------------------------------------
 alter table lesson_notices drop constraint if exists lesson_notices_event_check;
@@ -16489,6 +16492,12 @@ begin
   if not exists (select 1 from tutors where id = v_tutor and active) then raise exception '강사를 골라 주세요.'; end if;
   v_tchg := v_tutor <> l.tutor_id;
   if p_starts_at = l.starts_at and not v_tchg then
+    -- 메모만 적었으면 기록만 남김 (안내·메일 없음)
+    if nullif(btrim(p_note), '') is not null then
+      insert into admin_makeup_logs (makeup_request_id, lesson_id, student_id, action, reason, note, old_starts_at, new_starts_at, old_tutor_id, new_tutor_id, actor)
+      values (r.id, l.id, l.student_id, 'note', null, btrim(p_note), l.starts_at, l.starts_at, l.tutor_id, l.tutor_id, me);
+      return jsonb_build_object('lesson_id', l.id, 'note_only', true, 'repeated', false);
+    end if;
     return jsonb_build_object('lesson_id', l.id, 'repeated', true);
   end if;
   if p_starts_at <= now() then raise exception '지난 시간으로는 고칠 수 없어요.'; end if;

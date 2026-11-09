@@ -31,15 +31,20 @@ function otherZones(at: Date, studentTz: string, tutorTz: string): string {
   return parts.join(' / ');
 }
 const isComp = (l: ChLesson) => l.kind === 'compensation';
-const KIND = (comp: boolean) => (comp ? '무료 보상수업' : '정규수업 보강');
+const KIND = (comp: boolean) => (comp ? '무료 보상수업' : '보강');
+
+/** 보강 이유 중 STATUS_PLAIN 에 없는 진행 결과 */
+const WHY: Record<string, string> = { 'Tutor no-show': '강사 노쇼', 'Student no-show': '수강생 노쇼' };
 
 function rightLabel(r: MakeupRight): string {
-  if (r.kind === 'lesson') return `${kst(r.source.startsAt)} 수업${r.source.classStatus ? ` · ${STATUS_PLAIN[r.source.classStatus] ?? r.source.classStatus}` : ''}`;
-  if (r.kind === 'migrated') return `시트 이관 보강${r.item.originalDate ? ` (원래 ${mdw(r.item.originalDate)})` : ''}`;
-  return r.source ? `${kst(r.source.startsAt)} 수업 · 강사 노쇼` : '무료 보상수업';
+  // '11/4(수) 수업분 · 강사 미리 취소' (한국 날짜)
+  if (r.kind === 'lesson') return `${kstDay(r.source.startsAt)} 수업분${r.source.classStatus ? ` · ${WHY[r.source.classStatus] ?? STATUS_PLAIN[r.source.classStatus] ?? r.source.classStatus}` : ''}`;
+  if (r.kind === 'migrated') return `시트 이관분${r.item.originalDate ? ` (원래 ${mdw(r.item.originalDate)})` : ''}`;
+  return r.source ? `${kstDay(r.source.startsAt)} 수업분 · 강사 노쇼` : '무료 보상수업';
 }
 const sourceOf = (r: MakeupRight) => (r.kind === 'lesson' ? { lessonId: r.source.id } : r.kind === 'compensation' ? { compId: r.comp.id } : { itemId: r.item.id });
 
+type Err = { at: 'date' | 'time'; msg: string };
 type Form = { mode: 'add' } | { mode: 'edit'; lesson: ChLesson };
 
 export default function LessonManage({ student, regularTutorId, finalEnd, actions }: {
@@ -78,13 +83,14 @@ export default function LessonManage({ student, regularTutorId, finalEnd, action
     const req = confirmedReq(l);
     const comp = req?.compensationId ? d?.compensations?.find((c) => c.id === req.compensationId) : undefined;
     const src = l.makeupOf ? byId.get(l.makeupOf) : comp ? byId.get(comp.sourceLessonId) : undefined;
-    if (src) return `${kstDay(src.startsAt)} 수업분 ${isComp(l) ? '무료 보상수업' : '보강'}`;
-    return l.kind === 'migrated_makeup' ? '시트 이관 보강' : KIND(isComp(l));
+    if (src) return `${kstDay(src.startsAt)} 수업분`;
+    return l.kind === 'migrated_makeup' ? '시트 이관분' : '';
   };
   const logsFor = (l: ChLesson) => (data?.logs ?? []).filter((g) => g.lessonId === l.id);
   const logText = (g: MakeupLog) => {
     const parts: string[] = [];
     if (g.action === 'confirm') parts.push(`추가${g.newTutor ? ` (${g.newTutor})` : ''}`);
+    else if (g.action === 'note') parts.push('메모');
     else {
       if (!g.oldAt || +g.oldAt !== +g.newAt) parts.push(`시간 ${g.oldAt ? zoneLabel(g.oldAt, 'Asia/Seoul') : ''} → ${zoneLabel(g.newAt, 'Asia/Seoul')} 한국 시간`);
       if (g.oldTutor && g.newTutor && g.oldTutor !== g.newTutor) parts.push(`강사 ${g.oldTutor} → ${g.newTutor}`);
@@ -112,7 +118,6 @@ export default function LessonManage({ student, regularTutorId, finalEnd, action
             </div>
             <p className="text-[17px] font-extrabold text-[#1d1b2b]">{zoneLabel(l.startsAt, 'Asia/Seoul')} <span className="text-[13px] font-semibold text-[#6b6880]">한국 시간</span></p>
             <p className="text-[13.5px] font-semibold text-[#1d1b2b]">{l.tutorName} · {d?.enrollment?.durationMin ?? 40}분</p>
-            {otherZones(l.startsAt, student.timezone, l.tutorTz) && <p className="text-[12.5px] text-[#6b6880]">{otherZones(l.startsAt, student.timezone, l.tutorTz)}</p>}
             <div className="mt-1 flex flex-wrap items-center justify-between gap-2 border-t border-[#f0eef6] pt-2">
               <span className="text-[12.5px] text-[#6b6880]">{fromText(l)}</span>
               {editable && <button type="button" className={btnSmall} onClick={() => setForm({ mode: 'edit', lesson: l })}>수정</button>}
@@ -161,10 +166,13 @@ function LessonForm({ form, data, rights, studentTz, regularTutorId, finalEnd, a
   const duration = data.lessons.enrollment?.durationMin ?? 40;
   const unchanged = !!edit && !!at && +at === +edit.startsAt && tutorId === edit.tutorId;
   // 화면에서 바로 알 수 있는 것만 미리 막음. 강사 휴무·다른 수업·열린 시간·사용 기한은 저장할 때 DB 가 확인
-  const pre = !at ? '' : +at <= Date.now() ? '지난 시간이에요.'
-    : !comp && right?.kind === 'lesson' && right.source.classStatus !== 'Tutor long-term leave' && !edit && finalEnd && instantToKstDate(at) > finalEnd ? `수강 종료일(${mdw(finalEnd)}) 뒤의 날짜예요.`
-    : studentClash(data, at, duration, edit?.id);
-  const ok = !!at && !!tutor && !pre && !unchanged && (edit ? true : !!right);
+  // 오류는 그 칸 바로 아래에 (ChatGPT 검토 11/9): 날짜 = 종료일, 시간 = 지난 시간·겹침·강사 사정
+  const pre: Err | null = !at ? null : +at <= Date.now() ? { at: 'time', msg: '이미 지난 시간이에요.' }
+    : !comp && right?.kind === 'lesson' && right.source.classStatus !== 'Tutor long-term leave' && !edit && finalEnd && instantToKstDate(at) > finalEnd ? { at: 'date', msg: `수강 종료일(${mdw(finalEnd)}) 이후예요.` }
+    : studentClash(data, at, duration, edit?.id) ? { at: 'time', msg: studentClash(data, at, duration, edit?.id) } : null;
+  const shown: Err | null = pre ?? (err ? { at: /종료일|사용 기한/.test(err) ? 'date' : 'time', msg: err } : null);
+  // 수정: 바뀐 것이 없어도 메모를 적었으면 저장 (메모만 기록)
+  const ok = !!at && !!tutor && !pre && (!unchanged || !!note.trim()) && (edit ? true : !!right);
   const dirty = !!(date || time || note) && !edit || (!!edit && (!unchanged || !!note));
 
   async function save() {
@@ -224,11 +232,12 @@ function LessonForm({ form, data, rights, studentTz, regularTutorId, finalEnd, a
         <label className="grid">
           <span className={label}>날짜 (한국 시간)</span>
           <DateInput aria-label="날짜 (한국 시간)" value={date} onChange={(v) => { setDate(v); setErr(''); }} className={input} />
+          {shown?.at === 'date' && <p role="alert" className="mt-1 text-[13px] text-[#b3261e]">{shown.msg}</p>}
         </label>
         <div>
           <span className={label}>시간 (한국 시간)</span>
           <TimeInput aria-label="시간 (한국 시간)" value={time} onChange={(v) => { setTime(v); setErr(''); }} className={input} />
-          {(pre || err) && <p role="alert" className="mt-1 text-[13px] text-[#b3261e]">{pre || err}</p>}
+          {shown?.at === 'time' && <p role="alert" className="mt-1 text-[13px] text-[#b3261e]">{shown.msg}</p>}
         </div>
         {at && tutor && (
           <div className="grid gap-0.5 rounded-[10px] bg-[#f6f3ff] px-3 py-2.5 text-[13px] text-[#1d1b2b]">
@@ -241,11 +250,6 @@ function LessonForm({ form, data, rights, studentTz, regularTutorId, finalEnd, a
           <span className={label}>운영 메모 <small className="font-normal text-[#6b6880]">선택 · 운영진만 보임</small></span>
           <input className={input} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
         </label>
-        {ok && (
-          <p className="text-[13px] font-semibold text-[#1f7a4d]">
-            {edit ? '변경권·보강권·수업 횟수 그대로' : `${comp ? '보상권' : '보강권'} 1개 사용 · 변경권 차감 없음`}
-          </p>
-        )}
         <div className="grid grid-cols-2 gap-2">
           <button type="button" className={btnSub} onClick={onClose}>닫기</button>
           <button type="button" className={btnMain} disabled={!ok || busy} onClick={save}>

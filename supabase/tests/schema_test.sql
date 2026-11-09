@@ -3715,6 +3715,15 @@ select pg_temp.ok((select status = 'done' and tutor_notified_at is not null and 
                    from admin_tasks where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004')
               and not exists (select 1 from admin_task_board where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004'),
   '재등록 통보: 통보 기록 + 업무 완료(강사 확인 없음) → 할 일 목록에서 빠짐');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((admin_lesson_edit((select id from lm94l), null, (select v from lm94 where k = 'b'), '메모만') ->> 'note_only')::boolean, '수업 수정: 시간·강사 그대로 메모만 적어도 저장');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select count(*) = 1 from admin_makeup_logs where lesson_id = (select id from lm94l) and action = 'note' and note = '메모만')
+              and (select count(*) = 0 from lesson_notices n join makeup_requests r on r.id = n.makeup_request_id
+                   where r.confirmed_lesson_id = (select id from lm94l) and n.created_at > now() - interval '0 seconds' and n.event = 'makeup_rescheduled' and n.status = 'pending' and n.recipient_kind = 'tutor'),
+  '수업 수정: 메모만은 기록 1줄, 안내 없음');
 
 -- ---------------------------------------------------------------------
 -- 공지 (20261109120000, 대시보드 5차): 운영진만 쓰기, 학생·강사는 본인 대상 게시 중 공지만, 표 직접 접근 없음
