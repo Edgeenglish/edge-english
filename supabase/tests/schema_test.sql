@@ -3714,3 +3714,36 @@ select pg_temp.ok((select status = 'done' and tutor_notified_at is not null and 
                    from admin_tasks where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004')
               and not exists (select 1 from admin_task_board where kind = 'renewal_tutor_notice' and enrollment_id = '99999999-1000-0000-0000-000000000004'),
   '재등록 통보: 통보 기록 + 업무 완료(강사 확인 없음) → 할 일 목록에서 빠짐');
+
+-- ---------------------------------------------------------------------
+-- 공지 (20261109120000, 대시보드 5차): 운영진만 쓰기, 학생·강사는 본인 대상 게시 중 공지만, 표 직접 접근 없음
+-- ---------------------------------------------------------------------
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.expect_error($$select admin_announcement_save(null, 'both', '학생이 씀', '내용', current_date, current_date)$$, '42501|운영자');
+select pg_temp.expect_error($$select * from announcements$$, 'permission denied');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select admin_announcement_save(null, 'both', ' ', '내용', current_date, current_date)$$, '제목과 내용');
+select pg_temp.expect_error($$select admin_announcement_save(null, 'both', '제목', '내용', current_date, current_date - 1)$$, '종료일이 게시일보다');
+select pg_temp.expect_error($$select admin_announcement_save(null, 'both', repeat('가', 61), '내용', current_date, current_date)$$, '60자');
+select admin_announcement_save(null, 'student', '학생 공지', '내용', (now() at time zone 'Asia/Seoul')::date, (now() at time zone 'Asia/Seoul')::date + 3);
+select admin_announcement_save(null, 'tutor', 'Tutor notice', 'Body', (now() at time zone 'Asia/Seoul')::date, (now() at time zone 'Asia/Seoul')::date + 3);
+select admin_announcement_save(null, 'both', '예정 공지', '내용', (now() at time zone 'Asia/Seoul')::date + 1, (now() at time zone 'Asia/Seoul')::date + 3);
+select pg_temp.ok((select count(*) from admin_announcements()) = 3 and (select count(*) from lms_announcements_live('tutor')) = 1, '공지: 운영진은 전부 보고, 대신 보기로 강사 홈 공지도 읽음');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.ok((select array_agg(title) from lms_announcements_live('student')) = array['학생 공지'], '공지: 학생은 학생 대상 게시 중 공지만 (예정·강사 공지 안 보임)');
+select pg_temp.expect_error($$select * from lms_announcements_live('tutor')$$, '42501|볼 수 없');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000003';
+select pg_temp.ok((select array_agg(title) from lms_announcements_live('tutor')) = array['Tutor notice'], '공지: 강사는 강사 대상 게시 중 공지만');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_announcement_end((select id from admin_announcements() where title = 'Tutor notice'));
+select pg_temp.expect_error($$select admin_announcement_save((select id from admin_announcements() where title = 'Tutor notice'), 'tutor', 'x', 'y', current_date, current_date)$$, '게시 종료한 공지');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000003';
+select pg_temp.ok(not exists (select 1 from lms_announcements_live('tutor')), '공지: 게시 종료하면 강사 홈에서 사라짐');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_announcement_end((select id from admin_announcements() where title = 'Tutor notice'), false);
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000003';
+select pg_temp.ok((select count(*) from lms_announcements_live('tutor')) = 1, '공지: 게시 종료 되돌리기');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select count(*) from announcements) = 3 and (select ended_at is null from announcements where title = 'Tutor notice'), '공지: 지우지 않고 기록 보존');

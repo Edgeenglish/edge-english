@@ -23,6 +23,8 @@ export async function loadTaskHistory(sb: SupabaseClient): Promise<HistoryRow[]>
   const { data, error } = await sb.rpc('admin_task_history');
   if (error) throw new Error('처리 내역을 읽지 못했어요.');
   return ((data ?? []) as { source: HistoryRow['source']; kind: string; task_id: string; signature: string; at: string | null; by: string | null; name: string | null }[])
+    // [카드 닫기] 없앰 (대표 11/9): 예전에 닫은 카드는 이제 숨기지 않으므로 내역에서도 뺌. 예외 연장 검토 [연장 안 함]만 남김
+    .filter((r) => r.source !== 'closed' || r.kind === 'extension_review')
     .map((r) => ({ source: r.source, kind: r.kind, taskId: r.task_id, signature: r.signature, at: r.at ? new Date(r.at) : null, by: r.by, name: r.name }));
 }
 

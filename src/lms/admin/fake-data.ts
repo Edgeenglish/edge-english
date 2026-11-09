@@ -79,10 +79,6 @@ export function fakeTasks(now: Date): TaskSource[] {
       lessonsLeft: 2, endsAt: endOfKstDay(addDays(instantToKstDate(now), 5)), tutorName: '가상강사 Blair', noticeSentAt: null,
     },
     {
-      kind: 'makeup_unrequested', id: 'mk-1', studentName: '가상학생십', studentCode: 'STU-9010',
-      canceledLesson: shortDate(addDays(instantToKstDate(now), -6)) + ' 20:00', deadline: endOfKstDay(addDays(instantToKstDate(now), 3)), tutorName: '가상강사 Alex',
-    },
-    {
       kind: 'auto_failure', id: 'f-1', what: 'calendar_sync', studentName: '가상학생이',
       detail: '보강 10/22(목) 21:00 이 가상강사 Blair 캘린더에 반영되지 않음 (3번 다시 시도 실패)', occurredAt: t(-2),
     },

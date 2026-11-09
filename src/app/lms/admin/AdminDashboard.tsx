@@ -1,23 +1,30 @@
 'use client';
 
-// 운영자 대시보드 A안 — 처리할 일 중심. 휴대폰: 운영 현황 → 요약 카드 → 급한 순서 목록 → 아래 탭 / PC: 왼쪽 목록 + 오른쪽 오늘 수업
-// 2026-10-18 대표 반영: 운영 현황 3 + 처리할 일 요약 5(누르면 필터) + 필터(전체·긴급·오류만). 한 업무는 요약 한 칸·목록 한 줄에만 (중복 없음)
-// 미리보기(preview)에서는 버튼을 눌러도 화면 안에서만 바뀌고 저장·발송하지 않는다.
+// 운영진 대시보드 5차 (대표 2026-11-09, 시안 https://claude.ai/artifact/VEzLG1nzfnfNzT73ac4wYY + H26(114))
+//  PC: 숫자 칸 4개 → (펼친 명단) → 왼쪽 운영진 할 일 / 오른쪽 오늘 수업 · 빠른 메뉴 · 공지
+//  휴대폰: 숫자 칸 → 운영진 할 일 → 오늘 수업 → 빠른 메뉴 → 공지
+//  운영진 할 일 = 운영진이 직접 풀 일만. 마지막 필수 처리가 끝나면 다시 읽을 때 저절로 빠짐 ([카드 닫기] 없음). 성공 안내 없음, 실패만 짧게
+// 미리보기(?demo=1)에서는 버튼을 눌러도 화면 안에서만 바뀌고 저장·발송하지 않는다.
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, searchBoard, type BoardFilter, type BoardItem, type Category, type Severity, type TaskSource } from '@/lms/admin/board';
-import { fakeTasks, type FakeLesson, type OpsStats } from '@/lms/admin/fake-data';
+import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, searchBoard, type BoardFilter, type BoardItem, type Category, type TaskSource } from '@/lms/admin/board';
+import { fakeTasks } from '@/lms/admin/fake-data';
 import type { PlanView } from '@/lms/admin/confirm';
 import type { PlanActions } from '@/lms/admin/confirm-live';
+import type { DashboardStats } from '@/lms/admin/live';
+import { ENDING_STATE_TEXT, mdw, type LessonItem } from '@/lms/admin/dashboard';
+import { instantToKstDate } from '@/lms/rules/dates';
 import PlanCard, { type PlanHandlers } from './PlanCard';
 import HistoryPanel from './HistoryPanel';
 import type { HistoryRow } from '@/lms/admin/task-history';
 import RenewalNotice from './RenewalNotice';
 import OriginFix from './OriginFix';
 import EndReasonFix from './EndReasonFix';
+import NoticeBox, { type NoticeApi } from './NoticeBox';
+import { LessonRows } from './LessonRows';
 import type { EndReason } from '@/lms/admin/import';
-import { ampmKo } from '@/lms/rules/dates';
+import { AdminHeader, BottomNav, Icon } from './ui';
 
 /** 기존 수강생 입력 뒤 처리 (DB 함수, migration 1500) */
 export type ImportActions = {
@@ -25,577 +32,404 @@ export type ImportActions = {
   setOrigin: (itemId: string, date: string | null) => Promise<void>;
   setEndReason: (enrollmentId: string, reason: EndReason, note: string) => Promise<void>;
 };
-import { AdminHeader, BottomNav, Icon, type IconName } from './ui';
-
-const CATEGORY_ICON: Record<Category, IconName> = { matching: 'userPlus', tutor_ack: 'clock', ending: 'hourglass', makeup: 'repeat', issue: 'alert' };
-
-const TAG_STYLE: Record<Severity, string> = {
-  urgent: 'bg-[#fde6e6] text-[#c62b2b]',
-  overdue: 'bg-[#fde6e6] text-[#c62b2b]',
-  due_soon: 'bg-[#fff1d6] text-[#a35b00]',
-  open: 'bg-[#efebff] text-[#5b3fe0]',
-};
-const DUE_STYLE: Record<Severity, string> = {
-  urgent: 'text-[#c62b2b]',
-  overdue: 'text-[#c62b2b] font-bold',
-  due_soon: 'text-[#a35b00] font-bold',
-  open: 'text-[#6b6880]',
-};
-const LESSON_STYLE: Record<FakeLesson['state'], string> = {
-  완료: 'bg-[#eeedf3] text-[#6b6880]',
-  예정: 'bg-[#efebff] text-[#5b3fe0]',
-  보강: 'bg-[#efebff] text-[#5b3fe0]',
-  '노쇼 신고': 'bg-[#fde6e6] text-[#c62b2b]',
-  '수강생 변경': 'bg-[#fff1d6] text-[#a35b00]',
-  취소: 'bg-[#eeedf3] text-[#6b6880]',
-};
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
-
-function applyAction(t: TaskSource, key: string, now: Date): TaskSource | null {
-  switch (t.kind) {
-    case 'new_student_matching': {
-      const next = { ...t };
-      if (key === 'assign_tutor') Object.assign(next, { tutorName: t.tutorName ?? '가상강사 Alex', tutorAssignedAt: now });
-      if (key === 'notify_student') next.studentNotifiedAt = now;
-      return next.tutorAssignedAt && next.studentNotifiedAt ? null : next;
-    }
-    case 'renewal_tutor_notice': {
-      const next = { ...t };
-      if (key === 'notify_tutor') next.tutorNotifiedAt = now;
-      return next.tutorNotifiedAt && next.scheduleConfirmed ? null : next;
-    }
-    case 'import_check': {
-      const next = { ...t, counts: key === 'import_checked' ? null : t.counts };
-      return next.counts || next.unknownOrigins.length > 0 || next.endReason ? next : null;
-    }
-    default:
-      return null; // 장기 연기 승인·거절, 노쇼 확정·지각 처리 → 목록에서 빠짐
-  }
-}
-
-const DONE_MESSAGE: Record<string, string> = {
-  assign_tutor: '강사를 배정했어요. 수강생 안내가 남았어요.',
-  notify_student: '수강생 안내까지 끝나서 매칭 업무를 마쳤어요.',
-  notify_tutor: '강사에게 통보했어요. 강사 확인을 기다려요.',
-  remind_tutor: '강사에게 다시 알렸어요.',
-  tutor_ack: '강사 확인을 기록했어요. 일정 조치가 남았어요.',
-  check_schedule: '재등록 강사 확인 업무를 마쳤어요.',
-  approve_leave: '장기 연기를 승인했어요. 종료일이 늘어나요.',
-  makeup_nudged: '보강 신청 안내를 기록했어요.',
-  retry_calendar: '캘린더에 다시 반영했어요.',
-  fix_email: '이메일을 확인했어요.',
-  check_payment: '결제를 확인했어요.',
-  reject_leave: '장기 연기를 거절했어요. 수강생에게 사유를 안내해 주세요.',
-  tutor_arrived: '강사 지각으로 처리했어요.',
-  confirm_no_show: '노쇼로 확정했어요. 보강 1회 + 보상 수업 1회가 생겨요.',
-  import_checked: '대조 완료',
-};
+const box = 'min-w-0 rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-3';
+const chip = (on: boolean) => `inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-3 text-[13px] font-semibold disabled:opacity-45 ${on ? 'border-[#1d1b2b] bg-[#1d1b2b] text-white' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`;
+const btn = 'inline-flex min-h-[40px] items-center rounded-[10px] border px-3 text-[13.5px] font-semibold';
+const PRI = `${btn} border-[#7d5ffb] bg-[#7d5ffb] text-white disabled:border-[#e6e3ef] disabled:bg-white disabled:text-[#b9b6c8]`;
+const SEC = `${btn} border-[#e6e3ef] bg-white text-[#1d1b2b] disabled:text-[#b9b6c8]`;
+const DONE = `${btn} border-[#c9c6d6] bg-[#d9d6e3] font-bold text-[#4a4760]`;
+/** 실제 데이터에서 서버 저장이 있는 버튼 (나머지는 그 업무 화면으로 이동) */
+const LIVE_KEYS = new Set(['import_checked', 'notify_tutor', 'no_extension']);
 
 export default function AdminDashboard({
-  nowIso,
-  today,
-  preview,
-  tasks: liveTasks,
-  stats,
-  onLogout,
-  planActions,
-  importActions,
-  renewalSent,
-  renewalNotify,
-  enrollmentClose,
-  onReload,
-  onTaskClose,
-  history,
+  nowIso, today, preview, tasks: liveTasks, stats, onLogout, planActions, importActions, renewalSent, renewalNotify, enrollmentClose, onReload,
+  history, notices, noExtension,
 }: {
   nowIso: string;
-  today: FakeLesson[];
+  today: LessonItem[];
   preview: boolean;
   /** 실제 데이터 (없으면 가상 데이터 미리보기) */
   tasks?: TaskSource[];
-  /** 운영 현황 3개 (없으면 '—') */
-  stats?: OpsStats | null;
+  stats?: DashboardStats | null;
   onLogout?: () => void;
-  /** 실제 데이터: 일정안 확정·안내 기록 (DB 함수). 처리 뒤 onReload 로 다시 읽음 */
   planActions?: PlanActions;
   importActions?: ImportActions;
-  /** 실제 데이터: 재등록 안내 [보냄] 기록 (DB 함수, migration 1900) */
+  /** 재등록 안내 [보냄] 기록 (migration 1900) — 보내면 할 일에서 빠지고 '종료 예정' 명단에 '안내 보냄' */
   renewalSent?: (enrollmentId: string) => Promise<void>;
-  /** 실제 데이터: 재등록 [강사에게 통보] → 통보 기록 + 업무 완료 (20261109070000) */
+  /** 재등록 [강사에게 통보] → 통보 기록 + 업무 완료 (20261109070000) */
   renewalNotify?: (taskId: string) => Promise<void>;
   /** 재등록 안 함 · 수강 종료 (3800) */
   enrollmentClose?: (enrollmentId: string) => Promise<void>;
   onReload?: () => Promise<void>;
-  onTaskClose?: (task: TaskSource, closed: boolean) => Promise<void>;
   /** 처리 내역 보기·다시 열기 (3900) */
   history?: { load: () => Promise<HistoryRow[]>; reopen: (r: HistoryRow) => Promise<void> };
+  notices?: NoticeApi;
+  /** 예외 연장 검토 [연장 안 함] 결정 기록 */
+  noExtension?: (task: TaskSource) => Promise<void>;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
+  const todayKst = instantToKstDate(now);
   const [tasks, setTasks] = useState<TaskSource[]>(() => liveTasks ?? fakeTasks(now));
-  // 실제 데이터: 처리 뒤 다시 읽은 목록으로 바꿈
   useEffect(() => {
     if (liveTasks) setTasks(liveTasks);
   }, [liveTasks]);
-  const [toast, setToast] = useState<string | null>(null);
-  const [closing, setClosing] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [lastClosed, setLastClosed] = useState<TaskSource | null>(null);
-  const [doneCount, setDoneCount] = useState(0);
+  const [roster, setRoster] = useState<'reg' | 'end' | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const items = useMemo(() => buildBoard(tasks, now), [tasks, now]);
   const [filter, setFilter] = useState<BoardFilter>('all');
   const byCat = categoryCounts(items);
   const [query, setQuery] = useState('');
+  // 긴급 먼저 (buildBoard 가 이미 급한 순서)
   const shown = searchBoard(filterBoard(items, filter), query);
-  const urgentCount = items.filter(isUrgent).length;
-  const errorCount = items.filter((i) => i.error).length;
-  const dateLabel = `${now.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' })} (${WD[new Date(now.getTime() + 9 * 3600e3).getUTCDay()]})`;
+  const dateLabel = `${Number(todayKst.slice(5, 7))}월 ${Number(todayKst.slice(8, 10))}일 (${WD[new Date(`${todayKst}T00:00:00Z`).getUTCDay()]})`;
+  const q = (href: string) => (preview ? `${href}${href.includes('?') ? '&' : '?'}demo=1` : href);
 
-  async function closeTask(item: BoardItem) {
-    const task = tasks.find((t) => t.id === item.id && t.kind === item.kind);
-    if (!task || closing) return;
-    setClosing(`${task.kind}:${task.id}`);
+  useEffect(() => {
+    if (!err) return;
+    const id = setTimeout(() => setErr(null), 6000);
+    return () => clearTimeout(id);
+  }, [err]);
+
+  // 저장 → 다시 읽기. 끝난 업무는 다시 읽은 목록에 없어 저절로 빠짐. 실패만 짧게
+  async function run(f: () => Promise<unknown>) {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
     try {
-      if (!preview) {
-        if (!onTaskClose) throw new Error('저장 기능을 불러오지 못했어요.');
-        await onTaskClose(task, true);
-      }
-      setTasks((prev) => prev.filter((t) => t !== task));
-      setLastClosed(task);
-      setDoneCount((n) => n + 1);
-      setToast('카드를 닫았어요.');
-    } catch (e) {
-      setToast(e instanceof Error ? e.message : '카드를 닫지 못했어요.');
-    } finally { setClosing(null); }
-  }
-
-  async function undoClose() {
-    if (!lastClosed || closing) return;
-    setClosing('undo');
-    try {
-      if (!preview) {
-        if (!onTaskClose) throw new Error('저장 기능을 불러오지 못했어요.');
-        await onTaskClose(lastClosed, false);
-        await onReload?.();
-      } else setTasks((prev) => [...prev, lastClosed]);
-      setLastClosed(null);
-      setDoneCount((n) => Math.max(0, n - 1));
-      setToast('카드를 다시 열었어요.');
-    } catch (e) { setToast(e instanceof Error ? e.message : '되돌리지 못했어요.'); }
-    finally { setClosing(null); }
-  }
-
-  // 일정안 카드 처리: 미리보기는 화면 안에서만, 실제는 DB 함수 → 다시 읽기
-  function planHandlers(item: BoardItem, p: PlanView): PlanHandlers {
-    const patch = (f: (p: PlanView) => PlanView | null) =>
-      setTasks((prev) =>
-        prev.flatMap((t) => {
-          if (t.id !== item.id || t.kind !== 'new_student_matching' || !t.plan) return [t];
-          const next = f(t.plan);
-          return next ? [{ ...t, plan: next }] : [];
-        }),
-      );
-    const live = async (f: (a: PlanActions) => Promise<unknown>, msg: string) => {
-      if (!planActions) return;
-      await f(planActions);
+      await f();
       await onReload?.();
-      setToast(msg);
-    };
-    const now = () => new Date();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '저장하지 못했어요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  const drop = (item: BoardItem) => setTasks((prev) => prev.filter((t) => !(t.id === item.id && t.kind === item.kind)));
+
+  function planHandlers(item: BoardItem, p: PlanView): PlanHandlers {
     if (!preview && planActions)
       return {
-        confirm: () => live((a) => a.confirm(p.planId), '확정했어요. 강사·수강생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.'),
-        decline: () => live((a) => a.decline(p.planId), '이 안을 닫았어요. 다른 강사·시간으로 다시 제안해 주세요.'),
-        proposalSent: () => live((a) => a.proposalSent(p.planId), '강사에게 제안을 보낸 것으로 기록했어요. 답이 오면 [가능하대요 → 확정]을 눌러 주세요.'),
+        confirm: () => run(() => planActions.confirm(p.planId)),
+        decline: () => run(() => planActions.decline(p.planId)),
+        proposalSent: () => run(() => planActions.proposalSent(p.planId)),
         noticeSent: (who) => {
           const n = who === 'tutor' ? p.tutorNotice : p.studentNotice;
-          return n ? live((a) => a.noticeSent(n.id), `${who === 'tutor' ? '강사' : '수강생'} 안내를 보냄으로 기록했어요.`) : Promise.resolve();
+          return n ? run(() => planActions.noticeSent(n.id)) : Promise.resolve();
         },
       };
-    const preview_ = async (f: (p: PlanView) => PlanView | null, msg: string) => {
-      patch(f);
-      setToast(`${msg} (미리보기: 실제 저장·발송 없음)`);
-    };
+    const patch = (f: (x: PlanView) => PlanView | null) =>
+      setTasks((prev) => prev.flatMap((t) => {
+        if (t.id !== item.id || t.kind !== 'new_student_matching' || !t.plan) return [t];
+        const next = f(t.plan);
+        return next ? [{ ...t, plan: next }] : [];
+      }));
+    const at = () => new Date();
     return {
-      confirm: () =>
-        preview_(
-          (x) => ({ ...x, state: 'confirmed', confirmedAt: now(), tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null }, studentNotice: { id: 'pv-s', status: 'pending', sentAt: null } }),
-          '확정했어요. 강사·수강생에게 안내를 보내고 각각 [보냄]를 눌러 주세요.',
-        ),
-      decline: () => preview_(() => null, '이 안을 닫았어요.'),
-      proposalSent: () => preview_((x) => ({ ...x, proposalSentAt: x.proposalSentAt ?? now() }), '강사에게 제안을 보낸 것으로 기록했어요.'),
-      noticeSent: async (who) => {
-        const sent = (n: PlanView['tutorNotice']) => (n && n.status !== 'sent' ? { ...n, status: 'sent' as const, sentAt: now() } : n);
-        const next = who === 'tutor' ? { ...p, tutorNotice: sent(p.tutorNotice) } : { ...p, studentNotice: sent(p.studentNotice) };
-        if (next.tutorNotice?.status === 'sent' && next.studentNotice?.status === 'sent') {
-          setTasks((prev) => prev.filter((t) => t.id !== item.id));
-          setDoneCount((c) => c + 1);
-          setToast('양쪽 안내를 마쳐서 매칭 업무가 끝났어요. (미리보기: 실제 저장·발송 없음)');
-        } else await preview_(() => next, `${who === 'tutor' ? '강사' : '수강생'} 안내를 보냄으로 기록했어요.`);
-      },
+      confirm: async () => patch((x) => ({ ...x, state: 'confirmed', confirmedAt: at(), tutorNotice: { id: 'pv-t', status: 'pending', sentAt: null }, studentNotice: { id: 'pv-s', status: 'pending', sentAt: null } })),
+      decline: async () => patch(() => null),
+      proposalSent: async () => patch((x) => ({ ...x, proposalSentAt: x.proposalSentAt ?? at() })),
+      noticeSent: async (who) => patch((x) => {
+        const sent = (n: PlanView['tutorNotice']) => (n && n.status !== 'sent' ? { ...n, status: 'sent' as const, sentAt: at() } : n);
+        const next = who === 'tutor' ? { ...x, tutorNotice: sent(x.tutorNotice) } : { ...x, studentNotice: sent(x.studentNotice) };
+        return next.tutorNotice?.status === 'sent' && next.studentNotice?.status === 'sent' ? null : next;
+      }),
     };
   }
 
-  async function act(item: BoardItem, key: string) {
-    if (!preview && key === 'import_checked' && importActions) {
-      try {
-        await importActions.markChecked(item.id);
-        await onReload?.();
-        setToast(DONE_MESSAGE[key]);
-      } catch (e) {
-        setToast(e instanceof Error ? e.message : '기록하지 못했어요.');
-      }
+  function act(item: BoardItem, key: string) {
+    const task = tasks.find((t) => t.id === item.id && t.kind === item.kind);
+    if (preview) {
+      if (key !== 'assign_tutor') drop(item);
       return;
     }
-    // 재등록 [강사에게 통보]: 기록하면 카드가 빠짐. 성공 안내 없음, 실패만 짧게 (대표 11/9)
-    if (!preview && key === 'notify_tutor' && item.kind === 'renewal_tutor_notice' && renewalNotify) {
-      try {
-        await renewalNotify(item.id);
-        await onReload?.();
-      } catch (e) {
-        setToast(e instanceof Error ? e.message : '기록하지 못했어요.');
-      }
-      return;
-    }
-    if (!preview) {
-      // 실제 데이터: 처리(쓰기)는 서버 기능으로만 (POL-AC-07). 서버 기능을 만들기 전에는 보기만
-      setToast('이 처리는 해당 화면(신규 배정·수업 변경·강사 휴무)에서 저장돼요. 카드의 [열기]·[강사 배정] 버튼으로 이동해 주세요.');
-      return;
-    }
-    setTasks((prev) => {
-      const out: TaskSource[] = [];
-      for (const t of prev) {
-        if (t.id !== item.id) out.push(t);
-        else if (key === 'remind_tutor') out.push(t);
-        else {
-          const next = applyAction(t, key, new Date());
-          if (next) out.push(next);
-          else setDoneCount((c) => c + 1);
-        }
-      }
-      return out;
-    });
-    setToast(`${DONE_MESSAGE[key] ?? '처리했어요.'}${preview ? ' (미리보기: 실제 저장·발송 없음)' : ''}`);
+    if (key === 'import_checked' && importActions) return run(() => importActions.markChecked(item.id));
+    if (key === 'notify_tutor' && item.kind === 'renewal_tutor_notice' && renewalNotify) return run(() => renewalNotify(item.id));
+    if (key === 'no_extension' && task && noExtension) return run(() => noExtension(task));
   }
 
-  // 재등록 안내 [보냄]: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기 (카드는 재등록 결제 확인 전까지 남음)
   async function markRenewalSent(item: BoardItem) {
-    if (!preview && renewalSent) {
-      await renewalSent(item.id);
-      await onReload?.();
-    } else {
-      setTasks((prev) => prev.map((t) => (t.id === item.id && t.kind === 'ending_soon' ? { ...t, noticeSentAt: new Date() } : t)));
-    }
-    setToast(`재등록 안내를 보냄으로 기록했어요${preview ? ' (미리보기)' : ''}`);
+    if (preview || !renewalSent) return drop(item);
+    await renewalSent(item.id);
+    await onReload?.();
   }
 
-  // 수강 종료 (대표 11/2: 재등록 안 하는 수강생을 할 일에서 직접 빼기). 수강생·수업 기록은 그대로
-  async function closeEnrollmentItem(item: BoardItem) {
+  function closeEnrollmentItem(item: BoardItem) {
     if (!window.confirm(`${item.title.split(' · ')[0]} 님 수강을 종료할까요?`)) return;
-    if (!preview && enrollmentClose) {
-      await enrollmentClose(item.id);
-      await onReload?.();
-    } else {
-      setTasks((prev) => prev.filter((t) => t.id !== item.id));
-    }
-    setToast(`수강 종료했어요${preview ? ' (미리보기)' : ''}`);
+    if (preview || !enrollmentClose) return drop(item);
+    void run(() => enrollmentClose(item.id));
   }
 
-  // 보강 원래 날짜 정리: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기
   async function fixOrigin(item: BoardItem, itemId: string, date: string | null) {
-    if (!preview && importActions) {
-      await importActions.setOrigin(itemId, date);
-      await onReload?.();
-    } else {
-      setTasks((prev) =>
-        prev.flatMap((t) => {
-          if (t.id !== item.id || t.kind !== 'import_check') return [t];
-          const next = { ...t, unknownOrigins: t.unknownOrigins.filter((o) => o.id !== itemId) };
-          return next.counts || next.unknownOrigins.length > 0 || next.endReason ? [next] : [];
-        }),
-      );
+    if (preview || !importActions) {
+      setTasks((prev) => prev.flatMap((t) => {
+        if (t.id !== item.id || t.kind !== 'import_check') return [t];
+        const next = { ...t, unknownOrigins: t.unknownOrigins.filter((o) => o.id !== itemId) };
+        return next.counts || next.unknownOrigins.length > 0 || next.endReason ? [next] : [];
+      }));
+      return;
     }
-    setToast(`저장했어요${preview ? ' (미리보기)' : ''}`);
+    await importActions.setOrigin(itemId, date);
+    await onReload?.();
   }
 
-  // 종료일 이유 확인: 미리보기는 화면에서만, 실제는 DB 함수 → 다시 읽기
   async function fixEndReason(item: BoardItem, reason: EndReason, note: string) {
-    if (!preview && importActions) {
-      await importActions.setEndReason(item.id, reason, note);
-      await onReload?.();
-    } else {
-      setTasks((prev) =>
-        prev.flatMap((t) => {
-          if (t.id !== item.id || t.kind !== 'import_check') return [t];
-          const next = { ...t, endReason: null };
-          return next.counts || next.unknownOrigins.length > 0 ? [next] : [];
-        }),
-      );
+    if (preview || !importActions) {
+      setTasks((prev) => prev.flatMap((t) => (t.id !== item.id || t.kind !== 'import_check' ? [t] : t.counts || t.unknownOrigins.length ? [{ ...t, endReason: null }] : [])));
+      return;
     }
-    setToast(`저장했어요${preview ? ' (미리보기)' : ''}`);
+    await importActions.setEndReason(item.id, reason, note);
+    await onReload?.();
   }
+
+  const reg = stats?.registrations ?? [];
+  const ends = stats?.endings ?? [];
+  const needNotice = ends.filter((e) => e.state === 'need').length;
+  const studentHref = (code: string) => q(`/lms/admin/students/${encodeURIComponent(code)}`);
+
+  const tile = 'grid min-w-0 gap-px rounded-[14px] border border-[#e6e3ef] bg-white px-3.5 py-2.5 text-left';
+  const tiles = (
+    <section aria-label="운영 현황" className="grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-2.5">
+      <div className={tile}>
+        <span className="text-[12.5px] text-[#6b6880]">수강 중 학생</span>
+        <b className="text-[19px] tabular-nums text-[#1d1b2b] lg:text-[21px]">{stats ? `${stats.activeStudents}명` : '—'}</b>
+      </div>
+      <button type="button" aria-expanded={roster === 'reg'} onClick={() => setRoster(roster === 'reg' ? null : 'reg')} className={`${tile} hover:bg-[#f4f2fa]`}>
+        <span className="flex justify-between text-[12.5px] text-[#6b6880]">이번 달 등록 <span aria-hidden className="font-bold">{roster === 'reg' ? '⌃' : '›'}</span></span>
+        <b className="text-[19px] tabular-nums text-[#1d1b2b] lg:text-[21px]">{stats ? `${reg.length}건` : '—'}</b>
+        <small className="text-[11.5px] text-[#6b6880]">신규 {reg.filter((r) => r.fresh).length} · 재등록 {reg.filter((r) => !r.fresh).length}</small>
+      </button>
+      <button type="button" aria-expanded={roster === 'end'} onClick={() => setRoster(roster === 'end' ? null : 'end')} className={`${tile} hover:bg-[#f4f2fa]`}>
+        <span className="flex justify-between text-[12.5px] text-[#6b6880]">이번 달 종료 예정 <span aria-hidden className="font-bold">{roster === 'end' ? '⌃' : '›'}</span></span>
+        <b className="text-[19px] tabular-nums text-[#1d1b2b] lg:text-[21px]">{stats ? `${ends.length}명` : '—'}</b>
+        <small className="text-[11.5px] text-[#6b6880]">재등록 안내 필요 {needNotice}</small>
+      </button>
+      <div className={tile}>
+        <span className="text-[12.5px] text-[#6b6880]">미결제</span>
+        <b className="text-[19px] tabular-nums text-[#1d1b2b] lg:text-[21px]">{stats ? `${stats.unpaid}건` : '—'}</b>
+      </div>
+    </section>
+  );
+
+  const rosterBox = roster && (
+    <section aria-label={roster === 'reg' ? '이번 달 등록' : '이번 달 종료 예정'} className={box}>
+      <div className="mb-1 flex items-center gap-2">
+        <h2 className="text-[15px] font-bold text-[#1d1b2b]">{Number(todayKst.slice(5, 7))}월 {roster === 'reg' ? '등록' : '수강 종료 예정'}</h2>
+        <span className="text-[13px] font-semibold text-[#6b6880]">{roster === 'reg' ? '결제 확인일 기준' : `${ends.length}명`}</span>
+        <button type="button" onClick={() => setRoster(null)} className={`${SEC} ml-auto min-h-[32px] px-2.5 text-[12.5px]`}>접기</button>
+      </div>
+      {(roster === 'reg' ? reg.length : ends.length) === 0 && <p className="py-4 text-center text-[13px] text-[#6b6880]">없어요.</p>}
+      <ul className="lg:columns-2 lg:gap-8">
+        {roster === 'reg'
+          ? reg.map((r) => (
+              <li key={r.enrollmentId} className="break-inside-avoid border-b border-[#e6e3ef] last:border-0">
+                <Link href={studentHref(r.studentCode)} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 py-2 hover:bg-[#f4f2fa]">
+                  <span className="font-semibold text-[#1d1b2b]">{r.studentName}<span className="ml-1 text-[12px] font-normal text-[#6b6880]">{r.studentCode}</span></span>
+                  <span className="row-span-2 text-[12.5px] text-[#6b6880]">{r.fresh ? '신규' : '재등록'} ›</span>
+                  <span className="text-[12.5px] tabular-nums text-[#6b6880]">{r.plan}{r.paidOn ? ` · 결제 ${mdw(r.paidOn)}` : ''} · 결제 확인 {mdw(r.confirmedOn)}</span>
+                </Link>
+              </li>
+            ))
+          : ends.map((e) => (
+              <li key={e.enrollmentId} className="break-inside-avoid border-b border-[#e6e3ef] last:border-0">
+                <Link href={studentHref(e.studentCode)} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 py-2 hover:bg-[#f4f2fa]">
+                  <span className="font-semibold text-[#1d1b2b]">{e.studentName}<span className="ml-1 text-[12px] font-normal text-[#6b6880]">{e.studentCode}</span></span>
+                  <span className={`row-span-2 text-right text-[12.5px] font-semibold ${e.state === 'need' ? 'text-[#c62b2b]' : e.state === 'renewed' ? 'text-[#13804b]' : 'font-normal text-[#6b6880]'}`}>{ENDING_STATE_TEXT(e)} ›</span>
+                  <span className="text-[12.5px] tabular-nums text-[#6b6880]">
+                    수강 종료 {mdw(e.endDate)} · 남은 {e.lessonsLeft}회{e.undated ? ` (날짜 미정 보강 ${e.undated} 포함)` : ''}
+                    <br />
+                    {e.renewedStart ? `새 수강권 ${mdw(e.renewedStart)} 시작` : `결제 마감 ${mdw(e.endDate)} 오후 11:59 한국 시간`}
+                  </span>
+                </Link>
+              </li>
+            ))}
+      </ul>
+    </section>
+  );
+
+  function detail(item: BoardItem) {
+    const task = tasks.find((t) => t.id === item.id && t.kind === item.kind);
+    const actions = item.actions.filter((a) => preview || a.href || a.done || a.disabled || LIVE_KEYS.has(a.key));
+    // 서버 저장이 없는 버튼(장기 연기·노쇼·자동 처리 오류)은 실제 데이터에서 그 업무 화면으로
+    const fallback = !preview && item.actions.some((a) => !a.href && !a.done && !a.disabled && !LIVE_KEYS.has(a.key));
+    return (
+      <div className="grid gap-2 px-0.5 pb-3">
+        {item.detail && <p className="text-[12.5px] text-[#6b6880]">{item.detail}</p>}
+        {item.due && <p className={`text-[13px] ${item.severity === 'open' ? 'text-[#6b6880]' : 'font-bold text-[#c62b2b]'}`}>{item.due}</p>}
+        {item.steps.length > 0 && (
+          <ul className="flex flex-wrap gap-x-3 gap-y-1">
+            {item.steps.map((s) => (
+              <li key={s.key} className={`text-[13px] ${s.done ? 'text-[#13804b]' : 'text-[#6b6880]'}`}>
+                <span aria-hidden className={s.done ? 'text-[#13804b]' : 'text-[#b9b6c8]'}>{s.done ? '✓' : '○'}</span> {s.label}
+                <span className="sr-only">{s.done ? ' (완료)' : ' (남음)'}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
+        {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}
+        {item.renewal && <RenewalNotice text={item.renewal.text} sentAt={item.renewal.sentAt} onSent={() => markRenewalSent(item)} />}
+        {item.endReason && <EndReasonFix weeks={item.endReason.weeks} onSave={(r, n) => fixEndReason(item, r, n)} />}
+        <div className="flex flex-wrap gap-1.5">
+          {actions.map((a) =>
+            a.done ? (
+              <button key={a.key} type="button" disabled className={DONE}>{a.label} ✓</button>
+            ) : a.href && !a.disabled ? (
+              <Link key={a.key} href={q(a.href)} className={a.primary ? PRI : SEC}>{a.label}</Link>
+            ) : (
+              <button key={a.key} type="button" disabled={a.disabled || busy} onClick={() => act(item, a.key)} className={a.danger ? `${btn} border-[#c62b2b] bg-[#c62b2b] text-white` : a.primary ? PRI : SEC}>
+                {a.label}
+              </button>
+            ),
+          )}
+          {item.kind === 'extension_review' && (
+            <button type="button" disabled={busy} onClick={() => act(item, 'no_extension')} className={SEC}>연장 안 함</button>
+          )}
+          {fallback && <Link href={item.studentCode ? studentHref(item.studentCode) : '/lms/admin/change'} className={PRI}>열기</Link>}
+          {item.kind === 'ending_soon' && item.studentCode && <Link href={studentHref(item.studentCode)} className={SEC}>학생 상세</Link>}
+          {/* 수강기간이 끝난 뒤에만: 재등록 안 하는 수강생 정리 */}
+          {item.kind === 'ending_soon' && item.severity === 'overdue' && (
+            <button type="button" disabled={busy} onClick={() => closeEnrollmentItem(item)} className={SEC}>수강 종료</button>
+          )}
+          {task?.kind === 'lesson_change' && item.studentCode && !item.actions.some((a) => a.href?.includes(item.studentCode!)) && (
+            <Link href={studentHref(item.studentCode)} className={SEC}>학생 상세</Link>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const tasksBox = (
+    <section aria-label="운영진 할 일" className={box}>
+      <div className="mb-2 flex items-center gap-2">
+        <h2 className="text-[15px] font-bold text-[#1d1b2b]">운영진 할 일</h2>
+        <span className="text-[13px] font-semibold text-[#6b6880]">{items.length}건</span>
+      </div>
+      <div role="group" aria-label="칸" className="flex flex-wrap gap-1.5">
+        <button type="button" aria-pressed={filter === 'all'} onClick={() => { setFilter('all'); setOpen(null); }} className={chip(filter === 'all')}>
+          전체 <em className={`not-italic tabular-nums ${filter === 'all' ? 'text-[#c9c6d6]' : 'text-[#6b6880]'}`}>{items.length}</em>
+        </button>
+        {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => (
+          <button key={c} type="button" aria-pressed={filter === c} disabled={byCat[c].n === 0} onClick={() => { setFilter(c); setOpen(null); }} className={chip(filter === c)}>
+            {CATEGORY_LABEL[c]} <em className={`not-italic tabular-nums ${filter === c ? 'text-[#c9c6d6]' : 'text-[#6b6880]'}`}>{byCat[c].n}</em>
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <label className="flex min-h-[38px] min-w-[180px] flex-1 items-center gap-2 rounded-[10px] border border-[#e6e3ef] bg-white px-2.5">
+          <Icon name="search" className="h-4 w-4 text-[#6b6880]" />
+          <span className="sr-only">할 일 찾기</span>
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="학생·강사 이름, 학생 번호" className="min-w-0 flex-1 bg-transparent text-[14px] text-[#1d1b2b] outline-none" />
+        </label>
+        {history && (
+          <button type="button" aria-pressed={historyOpen} onClick={() => setHistoryOpen(!historyOpen)} className={`min-h-[34px] rounded-full border px-3 text-[12.5px] font-semibold ${historyOpen ? 'border-[#1d1b2b] bg-[#1d1b2b] text-white' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
+            처리 내역
+          </button>
+        )}
+      </div>
+      {historyOpen && history && (
+        <div className="mt-2">
+          <HistoryPanel load={history.load} reopen={history.reopen} onClose={() => setHistoryOpen(false)} onReopened={async () => { await onReload?.(); }} />
+        </div>
+      )}
+      <ul className="mt-2">
+        {shown.length === 0 && <li className="py-5 text-center text-[13px] text-[#6b6880]">{items.length ? '찾는 일이 없어요.' : '처리할 일이 없어요.'}</li>}
+        {shown.map((item) => {
+          const key = `${item.kind}:${item.id}`;
+          const on = open === key;
+          return (
+            <li key={key} className="border-t border-[#e6e3ef]">
+              <button type="button" aria-expanded={on} onClick={() => setOpen(on ? null : key)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 px-0.5 py-2.5 text-left hover:bg-[#f4f2fa]">
+                <span className="text-[12px] text-[#6b6880]">
+                  {item.tag}
+                  {isUrgent(item) && <span className="ml-1.5 rounded-[6px] border border-[#c62b2b] px-1.5 text-[11px] font-bold text-[#c62b2b]">긴급</span>}
+                </span>
+                <span aria-hidden className="row-span-3 font-bold text-[#6b6880]">{on ? '⌃' : '›'}</span>
+                <span className="text-[14.5px] font-bold text-[#1d1b2b]">{item.title}</span>
+                <span className="truncate text-[12.5px] text-[#6b6880]">{item.brief}</span>
+              </button>
+              {on && detail(item)}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+
+  const todayBox = (
+    <section aria-label="오늘 수업" className={box}>
+      <div className="mb-1 flex items-center gap-2">
+        <Link href={q('/lms/admin/lessons')} className="inline-flex min-h-[32px] items-center gap-1 text-[15px] font-extrabold text-[#1d1b2b]">
+          오늘 수업 <span aria-hidden className="text-[#6b6880]">›</span>
+        </Link>
+        <span className="text-[12px] text-[#6b6880]">한국 시간</span>
+      </div>
+      {today.length === 0 ? <p className="py-3 text-[13px] text-[#6b6880]">오늘 수업이 없어요.</p> : <LessonRows rows={today} studentHref={studentHref} />}
+    </section>
+  );
+
+  const QUICK: [string, string][] = [
+    ['수강생 관리', '/lms/admin/students'], ['강사 관리', '/lms/admin/tutors'], ['신규 수강생 등록', '/lms/admin/students/new'],
+    ['수업 변경·취소', '/lms/admin/change'], ['강사 휴무', '/lms/admin/leave'],
+  ];
+  const quick = (
+    <section aria-label="빠른 메뉴" className={box}>
+      <h2 className="mb-2 text-[15px] font-bold text-[#1d1b2b]">빠른 메뉴</h2>
+      <div className="grid grid-cols-2 gap-2">
+        {QUICK.map(([label, href]) => (
+          <Link key={href} href={q(href)} className="flex min-h-[44px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13.5px] font-semibold text-[#5b3fe0] last:odd:col-span-2">
+            {label}
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 
   return (
-    <div className="mx-auto min-h-dvh max-w-[1280px] pb-20 lg:pb-8">
+    <div className="mx-auto min-h-dvh max-w-[1280px] pb-24 lg:pb-8">
       <AdminHeader
         active="home"
         demo={preview}
+        rightInline
         right={
           <>
-            <span className="text-[13px] text-[#6b6880]">{dateLabel}</span>
+            <span className="hidden text-[13px] text-[#6b6880] lg:inline">{dateLabel}</span>
             {onLogout && (
-              <button type="button" onClick={onLogout} className="min-h-[40px] rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#1d1b2b]">
-                로그아웃
-              </button>
+              <button type="button" onClick={onLogout} className="min-h-[36px] px-1 text-[12.5px] font-semibold text-[#1d1b2b] lg:px-2 lg:text-[13px]">로그아웃</button>
             )}
-            {/* 입력 3개는 나란히, 화면 보기 2개는 따로 (대표 10/29) */}
-            <div className="flex flex-wrap items-center gap-2">
-              {!preview && (
-                <Link href="/lms/admin/change" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                  + 수업 변경 입력
-                </Link>
-              )}
-              {!preview && (
-                <Link href="/lms/admin/leave" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                  강사 휴무
-                </Link>
-              )}
-              <Link
-                href={preview ? '/lms/admin/students/new?demo=1' : '/lms/admin/students/new'}
-                className="flex min-h-[40px] items-center rounded-[10px] bg-[#7d5ffb] px-3 text-[13px] font-semibold text-white"
-              >
-                + 신규 수강생 등록
-              </Link>
-            </div>
-            {!preview && (
-              <div className="flex flex-wrap items-center gap-2 lg:border-l lg:border-[#e6e3ef] lg:pl-3">
-                <Link href="/lms/student" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                  수강생 화면
-                </Link>
-                <Link href="/lms/tutor" className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13px] font-semibold text-[#5b3fe0]">
-                  강사 화면
-                </Link>
-              </div>
-            )}
+            {/* PC 최상단 오른쪽 버튼은 이것 하나 (대표 11/9). 휴대폰은 빠른 메뉴에 */}
+            <Link href={q('/lms/admin/students/new')} className="hidden min-h-[40px] items-center rounded-[10px] bg-[#7d5ffb] px-3 text-[13px] font-semibold text-white lg:flex">
+              + 신규 수강생 등록
+            </Link>
           </>
         }
       />
 
       {preview && (
-        <p className="mx-4 mt-3 rounded-[10px] bg-[#fff8d6] px-3 py-2 text-[13px] text-[#5c4a00] lg:mx-7">
-          가상 데이터 미리보기예요. 버튼을 눌러도 실제로 저장되거나 수강생·강사에게 발송되지 않아요. (실제 데이터: 로그인 후 /lms/admin)
-        </p>
+        <p className="mx-4 mt-3 rounded-[10px] bg-[#fff8d6] px-3 py-2 text-[13px] text-[#5c4a00] lg:mx-7">가상 데이터 미리보기예요. 눌러도 저장·발송되지 않아요.</p>
       )}
 
-      <div className="grid gap-4 px-4 pt-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-5 lg:px-7 lg:pt-5">
-        <section aria-label="운영 현황" className="grid grid-cols-3 gap-2 lg:col-span-2">
-          {([
-            ['수강 중 수강생', stats ? `${stats.activeStudents}명` : '—', '', 'users'],
-            ['이번 주 수업', stats ? `${stats.weekLessons.done} / ${stats.weekLessons.total}` : '—', '진행 / 전체', 'calendar'],
-            ['이번 달 등록', stats ? `${stats.monthEnrollments.fresh + stats.monthEnrollments.renewal}건` : '—', stats ? `신규 ${stats.monthEnrollments.fresh} · 재등록 ${stats.monthEnrollments.renewal}` : '', 'chart'],
-          ] as const).map(([label, v, sub, icon]) => (
-            <div key={label} className="rounded-[14px] bg-[#f1eefc] px-3 py-2.5">
-              <span className="flex items-center gap-1.5 text-[12px] text-[#6b6880]">
-                <Icon name={icon} className="hidden h-4 w-4 text-[#7d5ffb] sm:block" />
-                {label}
-              </span>
-              <b className="block text-[18px] tabular-nums text-[#1d1b2b] lg:text-[20px]">{v}</b>
-              {sub && <span className="block text-[11.5px] text-[#6b6880]">{sub}</span>}
-            </div>
-          ))}
-        </section>
-
-        {/* 휴대폰: 2열로 모두 보이게 (가로 밀기·잘린 카드 없음, QA C-03), PC: 5칸 한 줄 */}
-        <section aria-label="처리할 일 요약" className="grid grid-cols-2 gap-2 lg:col-span-2 lg:grid-cols-5">
-          {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => {
-            const { n, urgent } = byCat[c];
-            const on = filter === c;
-            return (
-              <button
-                key={c}
-                type="button"
-                aria-pressed={on}
-                onClick={() => setFilter(on ? 'all' : c)}
-                className={`min-w-0 rounded-[14px] border bg-white px-3 py-2.5 text-left last:odd:col-span-2 lg:last:odd:col-span-1 ${on ? 'border-[#7d5ffb] shadow-[0_0_0_2px_#e4ddff]' : 'border-[#e6e3ef]'}`}
-              >
-                <span className="flex items-center gap-1.5 text-[12.5px] text-[#6b6880]">
-                  <Icon name={CATEGORY_ICON[c]} className={`h-4 w-4 ${urgent ? 'text-[#c62b2b]' : 'text-[#7d5ffb]'}`} />
-                  {CATEGORY_LABEL[c]}
-                </span>
-                <b className={`block text-[22px] tabular-nums ${n === 0 ? 'text-[#b9b6c8]' : urgent ? 'text-[#c62b2b]' : 'text-[#1d1b2b]'}`}>{n}</b>
-                {urgent > 0 && <span className="block text-[11.5px] font-semibold text-[#c62b2b]">긴급 {urgent}</span>}
-                {/* '여유' 대신 가장 급한 일의 실제 정보 (C7, 대표 10/30) */}
-                <span className={`block truncate text-[11.5px] ${n ? 'text-[#55526a]' : 'text-[#b9b6c8]'}`}>{n ? items.find((i) => i.category === c)?.brief : '없음'}</span>
-              </button>
-            );
-          })}
-        </section>
-
-        <section aria-label="처리할 일" className="grid min-w-0 gap-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-[12px] font-extrabold tracking-wider text-[#6b6880]">
-              {filter === 'all' || filter === 'urgent' || filter === 'error' ? '지금 처리할 일 · 급한 순서' : `${CATEGORY_LABEL[filter]} · 급한 순서`}
-            </h2>
-            <div role="group" aria-label="필터" className="flex gap-1.5">
-              {([
-                ['all', `전체 ${items.length}`],
-                ['urgent', `긴급 ${urgentCount}`],
-                ['error', `오류만 ${errorCount}`],
-              ] as const).map(([f, label]) => (
-                <button
-                  key={f}
-                  type="button"
-                  aria-pressed={filter === f}
-                  onClick={() => setFilter(f)}
-                  className={`min-h-[34px] rounded-full border px-3 text-[12.5px] font-semibold ${
-                    filter === f ? 'border-[#1d1b2b] bg-[#1d1b2b] text-white' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-              {history && (
-                <button type="button" onClick={() => setHistoryOpen(true)} className="min-h-[34px] rounded-full border border-[#e6e3ef] bg-white px-3 text-[12.5px] font-semibold text-[#1d1b2b]">
-                  처리 내역
-                </button>
-              )}
-            </div>
+      <div className="grid gap-3 px-4 pt-3 lg:gap-4 lg:px-7 lg:pt-5">
+        {tiles}
+        {rosterBox}
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_370px] lg:items-start lg:gap-4">
+          <div className="grid min-w-0 gap-3">{tasksBox}</div>
+          <div className="grid min-w-0 gap-3">
+            {todayBox}
+            {quick}
+            <NoticeBox api={notices} today={todayKst} />
           </div>
-          {historyOpen && history && (
-            <HistoryPanel load={history.load} reopen={history.reopen} onClose={() => setHistoryOpen(false)} onReopened={async () => { await onReload?.(); }} />
-          )}
-          <label className="flex min-h-[44px] items-center gap-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3">
-            <Icon name="search" className="h-[18px] w-[18px] text-[#6b6880]" />
-            <span className="sr-only">검색</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="수강생 이름·번호, 강사 이름으로 찾기"
-              className="min-w-0 flex-1 bg-transparent text-[14px] text-[#1d1b2b] outline-none"
-            />
-          </label>
-          {query.trim() && preview && (
-            <Link href={`/lms/admin/students?${preview ? 'demo=1&' : ''}q=${encodeURIComponent(query.trim())}`} className="-mt-1 w-fit text-[12.5px] font-semibold text-[#5b3fe0]">
-              처리할 일이 아니라 수강생 정보를 찾으려면 → 수강생 목록에서 &lsquo;{query.trim()}&rsquo; 찾기
-            </Link>
-          )}
-          {items.length > 0 && shown.length === 0 && (
-            <p className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-6 text-center text-[13px] text-[#6b6880]">이 조건에 맞는 일이 없어요.</p>
-          )}
-          {items.length === 0 && (
-            <div className="rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-8 text-center">
-              <p className="text-[15px] font-bold text-[#13804b]">처리할 일이 없어요</p>
-              <p className="mt-1 text-[13px] text-[#6b6880]">오늘 {doneCount}건을 마쳤어요.</p>
-            </div>
-          )}
-          {lastClosed && <button type="button" disabled={!!closing} onClick={undoClose} className="min-h-[40px] text-left text-[13px] font-semibold text-[#5b3fe0]">방금 닫은 카드 다시 열기</button>}
-          {shown.map((item) => (
-            <article key={`${item.kind}:${item.id}`} className="grid gap-2 rounded-[14px] border border-[#e6e3ef] bg-white px-3.5 py-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${TAG_STYLE[item.severity]}`}>
-                  {item.severity === 'overdue' && !item.error ? `${item.tag} · 기한 초과` : item.tag}
-                </span>
-                <h3 className="text-[15px] font-bold text-[#1d1b2b]">{item.title}</h3>
-                <button type="button" disabled={!!closing} onClick={() => closeTask(item)} aria-label={`${item.title} 카드 닫기`} className="ml-auto min-h-[40px] rounded-[10px] border border-[#e6e3ef] px-3 text-[13px] font-semibold text-[#6b6880] disabled:opacity-50">{closing === `${item.kind}:${item.id}` ? '저장 중…' : '카드 닫기'}</button>
-                {/* 수강생 상세·일정·수강생 목록은 실제 데이터 연결 전까지 미리보기에서만 (대표 11/2) */}
-                {item.studentCode && preview && (
-                  <Link
-                    href={`/lms/admin/students/${item.studentCode}${preview ? '?demo=1' : ''}`}
-                    className="ml-auto flex min-h-[32px] items-center gap-0.5 text-[12.5px] font-semibold text-[#5b3fe0]"
-                  >
-                    수강생 보기 <Icon name="chevron" className="h-4 w-4" />
-                  </Link>
-                )}
-              </div>
-              <p className="text-[12.5px] text-[#6b6880]">{item.detail}</p>
-              {item.due && <p className={`text-[13px] ${DUE_STYLE[item.severity]}`}>{item.due}</p>}
-              {item.steps.length > 0 && (
-                <ul className="flex flex-wrap gap-x-3 gap-y-1">
-                  {item.steps.map((s) => (
-                    <li key={s.key} className={`text-[13px] ${s.done ? 'text-[#13804b]' : 'text-[#6b6880]'}`}>
-                      <span aria-hidden className={s.done ? 'text-[#13804b]' : 'text-[#b9b6c8]'}>
-                        {s.done ? '✓' : '○'}
-                      </span>{' '}
-                      {s.label}
-                      <span className="sr-only">{s.done ? ' (완료)' : ' (남음)'}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
-              {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}
-              {item.renewal && <RenewalNotice text={item.renewal.text} sentAt={item.renewal.sentAt} onSent={() => markRenewalSent(item)} />}
-              {/* 수강기간이 끝난 뒤에만: 재등록 안 하는 수강생 정리 */}
-              {item.kind === 'ending_soon' && item.severity === 'overdue' && (
-                <button type="button" onClick={() => void closeEnrollmentItem(item).catch((e) => setToast(e instanceof Error ? e.message : '처리하지 못했어요.'))}
-                  className="min-h-[44px] justify-self-start rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] font-semibold text-[#1d1b2b]">
-                  수강 종료
-                </button>
-              )}
-              {item.endReason && <EndReasonFix weeks={item.endReason.weeks} onSave={(r, n) => fixEndReason(item, r, n)} />}
-              <div className="flex flex-wrap gap-1.5">
-                {item.actions.map((a) =>
-                  a.done ? (
-                    <button key={a.key} type="button" disabled className="min-h-[40px] rounded-[10px] border border-[#c9c6d6] bg-[#d9d6e3] px-3 text-[13.5px] font-bold text-[#4a4760]">
-                      {a.label} ✓
-                    </button>
-                  ) : a.href ? (
-                    <Link key={a.key} href={preview ? a.href.replace('?', '?demo=1&') : a.href} className="flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] bg-[#7d5ffb] px-3 text-[13.5px] font-semibold text-white">
-                      {a.label}
-                    </Link>
-                  ) : (
-                    <button
-                      key={a.key}
-                      type="button"
-                      disabled={a.disabled}
-                      onClick={() => act(item, a.key)}
-                      className={`min-h-[40px] rounded-[10px] border px-3 text-[13.5px] font-semibold disabled:border-[#e6e3ef] disabled:bg-white disabled:text-[#b9b6c8] ${
-                        a.danger
-                          ? 'border-[#c62b2b] bg-[#c62b2b] text-white'
-                          : a.primary
-                            ? 'border-[#7d5ffb] bg-[#7d5ffb] text-white'
-                            : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'
-                      }`}
-                    >
-                      {a.label}
-                    </button>
-                  ),
-                )}
-              </div>
-            </article>
-          ))}
-        </section>
-
-        <aside aria-label="오늘 수업" className="hidden rounded-[14px] border border-[#e6e3ef] bg-white px-4 py-3.5 lg:block">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[12px] font-extrabold tracking-wider text-[#6b6880]">오늘 수업</h2>
-            {preview && (
-              <Link href="/lms/admin/schedule?demo=1" className="flex min-h-[32px] items-center text-[12.5px] font-semibold text-[#5b3fe0]">
-                이번 주 전체 <Icon name="chevron" className="h-4 w-4" />
-              </Link>
-            )}
-          </div>
-          {today.length === 0 && <p className="py-3 text-[13px] text-[#6b6880]">오늘 수업이 없어요.</p>}
-          <ul>
-            {today.map((l, i) => (
-              <li key={i} className="grid grid-cols-[52px_1fr_auto] items-center gap-2 border-b border-[#e6e3ef] py-2 last:border-0">
-                <span className="text-[13px] tabular-nums text-[#6b6880]">{ampmKo(l.time)}</span>
-                <span className="text-[14px] text-[#1d1b2b]">
-                  {l.student} · {l.tutor}
-                </span>
-                <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${LESSON_STYLE[l.state]}`}>{l.state}</span>
-              </li>
-            ))}
-          </ul>
-        </aside>
+        </div>
       </div>
 
-      {toast && (
-        <div role="status" className="fixed inset-x-4 bottom-20 z-20 mx-auto max-w-md rounded-[12px] bg-[#1d1b2b] px-4 py-3 shadow-lg lg:bottom-6">
-          <p className="text-[13.5px] text-white">{toast}</p>
-          <button type="button" onClick={() => setToast(null)} className="mt-1 text-[12.5px] font-semibold text-[#c9bcff] underline">
-            닫기
-          </button>
+      {err && (
+        <div role="alert" className="fixed inset-x-4 bottom-20 z-20 mx-auto flex max-w-md items-center gap-3 rounded-[12px] bg-[#1d1b2b] px-4 py-2.5 shadow-lg lg:bottom-6">
+          <p className="flex-1 text-[13.5px] text-white">{err}</p>
+          <button type="button" aria-label="닫기" onClick={() => setErr(null)} className="text-[15px] text-[#c9bcff]">✕</button>
         </div>
       )}
 

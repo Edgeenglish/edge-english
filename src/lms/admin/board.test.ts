@@ -54,14 +54,13 @@ describe('처리할 일 목록', () => {
     expect(r.actions.map((a) => a.key)).toEqual(['notify_tutor']);
     expect(r.due).toBeNull();
   });
-  it('요약 카드 5칸: 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
+  it('칸 4개(보강 미신청 칸 없음, 대표 11/9): 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
     const c = categoryCounts(items);
     expect(Object.values(c).reduce((s, x) => s + x.n, 0)).toBe(items.length);
-    expect(c).toMatchObject({ matching: { n: 3 }, tutor_ack: { n: 1 }, ending: { n: 2 }, makeup: { n: 1 }, issue: { n: 4 } });
+    expect(c).toMatchObject({ matching: { n: 3 }, tutor_ack: { n: 1 }, ending: { n: 2 }, issue: { n: 4 } });
+    expect(Object.keys(c)).toEqual(['matching', 'tutor_ack', 'ending', 'issue']);
   });
-  it('필터: 긴급 = 노쇼·기한 초과·24시간 안, 오류만 = 노쇼 신고·자동 처리 실패 (승인 대기는 제외)', () => {
-    expect(filterBoard(items, 'urgent').every((i) => i.severity !== 'open')).toBe(true);
-    expect(filterBoard(items, 'error').map((i) => i.kind).sort()).toEqual(['auto_failure', 'no_show_report']);
+  it('필터: 전체 · 칸 하나 (긴급만·오류만 필터 없음)', () => {
     expect(filterBoard(items, 'ending').map((i) => i.id)).toEqual(['e-1', 'e-2']);
     expect(filterBoard(items, 'all')).toHaveLength(items.length);
   });

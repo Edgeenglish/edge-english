@@ -4,6 +4,14 @@
 
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
+## ✅ 11/9 운영진 대시보드 전면 개편 (5차 시안 + H26(114)) — **시험 DB·lms-test 개발·검증 끝, 운영 미반영** (브랜치 claude/funny-brahmagupta-72qu76 → lms-test)
+- 화면: 위 막대(로고 옆 [강사 화면]·[수강생 화면], 메뉴 홈·수강생·통계, PC 오른쪽은 날짜·로그아웃·[+ 신규 수강생 등록] 하나) · 숫자 칸 4개(수강 중 학생·이번 달 등록·이번 달 종료 예정·미결제, 등록/종료 예정은 눌러서 명단) · 운영진 할 일(칸 4개 전체·신규 수강생 매칭·강사 확인 대기·수강기간 종료 임박·오류·조치 필요, 검색, 처리 내역, 줄을 누르면 펼침) · 오늘 수업(→ `/lms/admin/lessons` 오늘·내일·이번 주·다음 주·기간 선택) · 빠른 메뉴 5개 · 공지(새 공지·수정·게시 종료/되돌리기·홈에 보이는 공지) · `/lms/admin/tutors`(목록·상세·[강사 화면 열기]) · `/lms/admin/stats`(준비 중) · 학생 홈·강사 홈에 게시 중 공지
+- 뺀 것: 긴급만·오류만 필터 · [카드 닫기]·성공 안내 팝업(실패만 짧게) · Class Record 미기록 카드 · 보강 미신청 칸 · 예전에 닫은 카드 숨김(미완료는 다시 보임). 재등록 안내 카드는 [보냄] 하면 빠지고 '종료 예정' 명단에 '안내 보냄'. 예외 연장 검토는 [종료일 연장] 또는 [연장 안 함](결정 기록, 처리 내역에서 다시 열기)
+- migration **20261109120000_lms_admin_dashboard_notices** (시험 DB 적용): announcements 표 + admin_announcements·admin_announcement_save·admin_announcement_end·lms_announcements_live · students·tutors.is_trial_account(숫자·명단에서 뺌, '체험용' 표시) · admin_set_task_closed 가 extension_review 받게(예전 [카드 닫기]도 저장 안 되던 것) · 02-check 표 57개
+- 검증: vitest 424 · test:db 593 · tsc · eslint(기존 경고 3) · 로컬 앱 → 시험 DB, e2e-admin(TOTP, 임시 비밀번호 → 끝나고 무작위 값) PC 1280·iPhone 13: 숫자 칸·명단·칸 필터·검색·재등록 펼침, 종료 임박 STU-0011 [보냄] → 카드 빠짐·명단 '안내 보냄 11/9(월)'·DB renewal_notices 기록, 예외 연장 [연장 안 함] → 빠짐 → 처리 내역 '연장 안 함' → 다시 열기 → 복귀, 공지 빈칸 오류 → 게시 → 수정(대상 변경) → DB 확인 → 학생 홈(STU-0011 운영자 보기)·강사 홈(Alex) 표시, 수업 목록 5가지 기간(종료일 앞이면 오류), 강사 목록·상세, 통계, 가로 밀림 없음. **시험 데이터 남김**: STU-0011 재등록 안내 보냄 기록 · 공지 '11월 휴무 일정 안내'(학생·강사 모두, 11/9~11/30)
+- **운영 반영 때 주의**: 운영 admin_task_closures 에 닫힌 카드 4개(수업 변경 3·신규 매칭 1) → 아직 안 끝났으면 다시 보임 · 체험용 표시(STU-0014·Sera Kara is_trial_account=true)는 운영 DB 데이터 변경이라 대표 '응' 뒤 · 순서: 백업 → migration → 체험용 표시 → lms-prod
+- 남은 결정: 5차 시안 '정해 주실 것' ②(POL-OP-22 ③ 종료 7일 전 카드)는 그대로 둠(대시보드엔 원래 그 카드 없음)
+
 ## ⏳ 강사 통보를 강사 LMS로 옮기기 (H26(116)) — **대시보드 개편 세션이 끝난 뒤 시작** (대표 11/9 순서: ① 실제 계정 클릭 QA 아무 때나 ② 대시보드 개편 ③ 이 작업)
 - 같은 운영진 안내 카드 파일(`LessonChange.tsx`·`PlanCard.tsx`·`board.ts`·`AdminDashboard.tsx`)을 대시보드 개편도 고치므로 개편이 lms-test 에 올라간 뒤 그 위에서 시작. 시작 전 ChatGPT `TutorHome.tsx`·`live.ts` 작업(11/9 20:57 KST 마지막 커밋)이 끝났는지 확인
 - **운영 DB 읽기 확인 (11/9, 강사에게 간 통보 기록)**: 수업 취소 change 7(학생 취소 6·강사 사정 1, 보냄 4·대기 3) → Updates 이미 있음 · 운영진 확정 보강 makeup_confirmed 12(보냄 8·대기 4) · makeup_ask 11 모두 not_needed(이미 없앰) · 대체 수업 요청 sub_ask 12 → To-do 이미 있음, 복사 카드만 없앰 · 대체 수업 확정 sub_confirmed 9(대기 1) · 신규 수강생 admin_tasks new_student_matching 3·schedule_plans 4(강사 제안 = `confirm.ts proposalMessage`, 확정 = `tutorConfirmMessage`) · 재등록 renewal_tutor_notice 열림 1 · 보강 시간 변경·강사 바뀜·보강 취소·취소 되돌림 0건(문구는 `lesson-change.ts tutorNotice` makeup_rescheduled·makeup_tutor_removed·makeup_voided·revert)

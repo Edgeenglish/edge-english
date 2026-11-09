@@ -15,6 +15,7 @@ import { CONFIRMED } from '@/lms/rules/policy';
 import { diffDays, formatInZone, hoursBetween, instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { MEET_MISSING_KO, meetRoomUrl } from '@/lms/rules/meet';
 import type { PreviewExtras } from '@/lms/student/fake-data';
+import HomeNotices from '@/app/lms/HomeNotices';
 import type { LeaveRow, MakeupOption, MakeupRight, RegularSlot, Reminders, StudentActions, StudentView } from '@/lms/student/live';
 import {
   cancelManySummary,
@@ -648,6 +649,8 @@ export default function StudentHome(props: {
             </p>
           )}
         </div>
+        {/* 운영진 공지 (대시보드에서 게시, 게시 중일 때만) */}
+        {!preview && tab === 'home' && <HomeNotices who="student" title="공지" className="mx-4 mb-3 lg:mx-0 lg:mb-4" />}
 
         {preview && (
           <div className="mx-4 mb-3 grid gap-2 rounded-[12px] bg-[#fff8d6] px-3 py-2.5 text-[12.5px] text-[#5c4a00] lg:mx-0">
