@@ -3496,3 +3496,53 @@ select pg_temp.ok((student_no_time_request('99999999-0000-0000-0000-000000009200
   '맞는 시간이 없어요: 누르면 운영진 예외 연장 검토 카드 1건 (다시 눌러도 1건)');
 reset request.jwt.claim.sub;
 reset role;
+
+-- ---------------------------------------------------------------------
+-- 강사 사정 취소 자동 메일 (20261109030000, 대표 11/9): 운영진이 '강사 취소' 기록 → 수강생(한국어)·강사(영어) 메일
+-- ---------------------------------------------------------------------
+reset role;
+update feature_flags set enabled = false where key = 'send_emails';
+update tutors set email = 'tutor-tc@example.com', timezone = 'America/Toronto' where id = '55555555-0000-0000-0000-00000000200a';
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state)
+values ('77777777-9300-0000-0000-000000000001', '99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', '55555555-0000-0000-0000-00000000200a',
+        'regular', 931, date_trunc('hour', now()) + interval '3 days', date_trunc('hour', now()) + interval '3 days 40 minutes', 'scheduled'),
+       ('77777777-9300-0000-0000-000000000002', '99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', '55555555-0000-0000-0000-00000000200a',
+        'regular', 932, date_trunc('hour', now()) + interval '3 hours', date_trunc('hour', now()) + interval '3 hours 40 minutes', 'scheduled'),
+       ('77777777-9300-0000-0000-000000000003', '99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', '55555555-0000-0000-0000-00000000200a',
+        'regular', 933, date_trunc('hour', now()) + interval '4 days', date_trunc('hour', now()) + interval '4 days 40 minutes', 'scheduled');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select admin_change_lesson('c9300000-0000-0000-0000-000000000001', '77777777-9300-0000-0000-000000000001', 'tutor', now(), false);   -- 미리 취소
+select admin_change_lesson('c9300000-0000-0000-0000-000000000002', '77777777-9300-0000-0000-000000000002', 'tutor', now(), false);   -- 6시간 안 = 적립금
+select admin_change_lesson('c9300000-0000-0000-0000-000000000003', '77777777-9300-0000-0000-000000000003', 'student', now(), false); -- 수강생 취소: 수강생 메일 없음
+reset request.jwt.claim.sub;
+reset role;
+create temp table tc93 as
+  select n.lesson_id, n.recipient_kind, n.email_status, n.email_to, n.email_intended, n.status, q.body as req
+  from (select ln.*, cr.lesson_id from lesson_notices ln join change_requests cr on cr.id = ln.change_request_id
+        where cr.lesson_id::text like '77777777-9300-%' and ln.event = 'change') n
+  left join notifications x on x.id = n.email_notification_id left join net.sent q on q.id = x.net_request_id;
+select pg_temp.ok((select count(*) = 1 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000001' and recipient_kind = 'student'
+                     and email_status = 'queued' and status = 'pending' and email_to = 'support@edgeenglish.kr' and email_intended = 'mail-s@example.com'
+                     and req ->> 'subject' like '[시험 · STU-%] [엣지영어] 강사 사정으로 수업이 취소됐어요 · % [토론토 시간]'
+                     and req ->> 'html' like '%강사 사정으로 수업이 취소됐어요.%'
+                     and req ->> 'html' like '%취소된 수업: % [토론토 시간] / % [한국 시간] · 40분%'
+                     and req ->> 'html' like '%불편을 드려 정말 죄송합니다.</p>%'
+                     and req ->> 'html' not like '%적립금%'
+                     and req ->> 'html' like '%신청 기한: %까지%'
+                     and req ->> 'html' like '%/lms/student?makeup=77777777-9300-0000-0000-000000000001%'
+                     and req ->> 'html' like '%보강 날짜 고르기%' and req ->> 'html' like '%카카오톡 채널%'),
+  '강사 사정 취소 메일: 수강생 한국어(현지+한국 시각·40분·사과·보강 신청 기한·보강 날짜 고르기 바로가기·문의), 시험이라 support@, 카톡 카드 그대로');
+select pg_temp.ok((select count(*) = 1 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000001' and recipient_kind = 'tutor'
+                     and email_status = 'queued' and email_intended = 'tutor-tc@example.com'
+                     and req ->> 'subject' like '[시험 · STU-%] [Edge English] Class canceled (tutor) - % · % Toronto%'
+                     and req ->> 'html' like '%CANCELED (tutor) - %(40 min)%' and req ->> 'html' like '%No class at this time.%'
+                     and req ->> 'html' like '%Make-up: you can agree on a make-up time%' and req ->> 'html' like '%Confirm make-up%'
+                     and req ->> 'html' like '%/lms/tutor%'),
+  '강사 사정 취소 메일: 강사 영어(CANCELED (tutor)·시각·보강 진행 방법·LMS 링크)');
+select pg_temp.ok((select count(*) = 1 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000002' and recipient_kind = 'student'
+                     and req ->> 'html' like '%적립금 2,000원을 드렸어요 (유효기간 없음).%'),
+  '강사 사정 취소 메일: 6시간 안 취소는 수강생 메일에 적립금 줄');
+select pg_temp.ok((select count(*) = 0 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000003' and recipient_kind = 'student' and email_status is not null)
+              and (select count(*) = 1 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000003' and recipient_kind = 'tutor' and email_status = 'queued'),
+  '수강생 취소: 수강생 메일 없음(그대로), 강사 메일만');
