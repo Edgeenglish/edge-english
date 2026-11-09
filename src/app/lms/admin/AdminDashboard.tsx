@@ -66,7 +66,7 @@ export default function AdminDashboard({
   /** 처리 내역 보기·다시 열기 (3900) */
   history?: { load: () => Promise<HistoryRow[]>; reopen: (r: HistoryRow) => Promise<void> };
   notices?: NoticeApi;
-  /** 예외 연장 검토 [연장 안 함] 결정 기록 */
+  /** 예외 연장 검토 [검토 종료] 결정 기록 */
   noExtension?: (task: TaskSource) => Promise<void>;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -287,7 +287,7 @@ export default function AdminDashboard({
             ),
           )}
           {item.kind === 'extension_review' && (
-            <button type="button" disabled={busy} onClick={() => act(item, 'no_extension')} className={SEC}>연장 안 함</button>
+            <button type="button" disabled={busy} onClick={() => act(item, 'no_extension')} className={SEC}>검토 종료</button>
           )}
           {fallback && <Link href={item.studentCode ? studentHref(item.studentCode) : '/lms/admin/change'} className={PRI}>열기</Link>}
           {/* 재등록 넣기 → 학생 상세 재등록 창이 바로 열림 (시안 5차 승인 11/9) */}

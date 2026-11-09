@@ -503,7 +503,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     const st = Array.isArray(r.student) ? r.student[0] : r.student;
     return !!st?.is_trial_account;
   };
-  // [카드 닫기] 없앰 (대표 11/9) — 새로 닫는 길은 예외 연장 검토 [연장 안 함]뿐. 개편 전에 대표가 닫은 카드는 그대로 둠:
+  // [카드 닫기] 없앰 (대표 11/9) — 새로 닫는 길은 예외 연장 검토 [검토 종료]뿐. 개편 전에 대표가 닫은 카드는 그대로 둠:
   // 같은 상태로 남아 있을 때만 숨고, 새 안내·변경이 생기면(내용이 바뀌면) 다시 보임 (운영 4건이 다시 떠 중복·불필요 카드가 되지 않게)
   const decided = (closures.data ?? []).filter((c) => c.closed);
   return {

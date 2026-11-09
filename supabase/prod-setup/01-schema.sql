@@ -17843,7 +17843,7 @@ grant execute on function admin_announcement_save(uuid, text, text, text, date, 
 grant execute on function admin_announcement_end(uuid, boolean) to authenticated;
 grant execute on function lms_announcements_live(text) to authenticated;
 
--- 3) 예외 연장 검토 [연장 안 함] (카드 닫기 대신 결정 기록): admin_set_task_closed 가 extension_review 를 받게
+-- 3) 예외 연장 검토 [검토 종료] (카드 닫기 대신 결정 기록): admin_set_task_closed 가 extension_review 를 받게
 --    (이전 목록에 없어 예외 연장 검토 [카드 닫기]가 저장되지 않던 것도 같이 고침). 처리 내역에서 다시 열 수 있음
 create or replace function public.admin_set_task_closed(p_kind text, p_id text, p_signature text, p_closed boolean)
 returns void language plpgsql security definer set search_path = public as $$
