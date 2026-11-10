@@ -593,7 +593,7 @@ function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
     <span className="flex min-w-0 items-center gap-1 text-[12px] leading-[16px] text-[#1f7a4d]">
       <i className="block h-[6px] w-[6px] shrink-0 rounded-full border border-[#1f7a4d]" />
       <span className="shrink-0 tabular-nums">{time}</span>
-      <span className="truncate">Extra availability</span>
+      <span className="truncate">Extra hours</span>
     </span>
   );
 }
@@ -623,7 +623,7 @@ function DayRow({ item, zone, onOpen }: { item: DayItem; zone: string; onOpen: (
         className="flex min-h-[48px] w-full items-center gap-2 rounded-[10px] border border-[#e6e3ef] bg-[#faf9fd] px-3 py-1.5 text-left enabled:hover:bg-[#f3f1f8]">
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14.5px] font-semibold text-[#1d1b2b]">
-            {block ? (item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Blocked') : 'Extra availability (this day only)'}
+            {block ? (item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Blocked') : 'Extra hours (this day only)'}
           </span>
           <span className="block text-[12.5px] text-[#6b6880]">
             {spanText(item.at, item.end, zone)}
