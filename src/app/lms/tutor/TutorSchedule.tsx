@@ -46,8 +46,9 @@ type Dialog =
   | { kind: 'lesson'; lesson: TutorLesson }
   | { kind: 'info'; title: string; body: string };
 
-export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile, onSaved }: {
+export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile, onSaved, onHours }: {
   actions: ScheduleActions;
+  onHours?: () => void;
   /** 막기·열기 저장 성공 뒤 — Home 의 보강 요청 가능 여부 등을 다시 읽게 (R-13) */
   onSaved?: () => void | Promise<void>;
   /** 수업 (tutor_screen, 한국 날짜 범위) */
@@ -293,7 +294,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const header = (
     <div className="mb-2 grid gap-2 lg:flex lg:flex-wrap lg:items-center">
       <div className="flex items-center justify-between gap-2 lg:mr-auto">
-        <h1 className="text-[20px] font-bold text-[#1d1b2b] lg:mr-3">Schedule</h1>
+        <h1 className="text-[20px] font-bold text-[#1d1b2b] lg:mr-3">Calendar &amp; One-Time Changes</h1>
         <Seg value={view} onChange={(v) => setView(v)} options={[['month', 'Month'], ['week', 'Week']]} className="lg:hidden" />
       </div>
       <div className="flex items-center gap-2">
@@ -409,8 +410,11 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   );
 
   return (
-    <section aria-label="Schedule" className="relative">
+    <section aria-label="Calendar & One-Time Changes" className="relative">
       {header}
+      <p className="mb-3 text-[13.5px] text-[#55526a]">
+        View your classes and make one-time changes here. To update your regular hours, go to {onHours ? <button type="button" onClick={onHours} className="font-semibold text-[#5b3fe0] underline">Regular Working Hours</button> : <>Regular Working Hours</>}.
+      </p>
       {err && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
       {!data && !err && <p className="py-6 text-[15px] text-[#6b6880]">Loading…</p>}
       {data && view === 'month' && monthView}

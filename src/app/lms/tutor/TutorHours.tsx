@@ -88,7 +88,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
 
   if (!data) {
     return (
-      <Panel onClose={onClose} inline={inline}>
+      <Panel onClose={onClose} inline={inline} onSchedule={onSchedule}>
         {err ? <p className="p-4 text-[14px] text-[#b3261e]">{err}</p> : <p className="p-4 text-[15px] text-[#6b6880]">Loading…</p>}
       </Panel>
     );
@@ -207,7 +207,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
   );
 
   return (
-    <Panel onClose={close} sub={viewLabel} inline={inline}>
+    <Panel onClose={close} sub={viewLabel} inline={inline} onSchedule={onSchedule}>
       <div className="flex min-h-0 flex-1 gap-5 lg:p-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {d.tutor.timezone !== 'Asia/Seoul' && (
@@ -244,11 +244,6 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
             </div>
             <div className="lg:hidden">{history}</div>
           </div>
-          {onSchedule && (
-            <p className="mt-2 text-[13px] text-[#6b6880]">
-              Need to change your hours for just one day? Go to <button type="button" onClick={onSchedule} className="font-semibold text-[#5b3fe0] underline">Schedule</button>.
-            </p>
-          )}
         </div>
         <aside className="hidden w-[280px] shrink-0 content-start gap-3 lg:grid">
           {changesBox}
@@ -296,12 +291,12 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
   );
 }
 
-function Panel({ onClose, sub, inline, children }: { onClose: () => void; sub?: string; inline?: boolean; children: ReactNode }) {
+function Panel({ onClose, onSchedule, sub, inline, children }: { onClose: () => void; onSchedule?: () => void; sub?: string; inline?: boolean; children: ReactNode }) {
   const head = (
     <div className="mb-2 flex items-start justify-between gap-2">
       <div>
-        <h2 className={`${inline ? 'text-[20px]' : 'text-[18px]'} font-bold text-[#1d1b2b]`}>Weekly Availability</h2>
-        <p className="text-[13.5px] text-[#55526a]">Set the hours you’re available to teach each week.</p>
+        <h2 className={`${inline ? 'text-[20px]' : 'text-[18px]'} font-bold text-[#1d1b2b]`}>Regular Working Hours</h2>
+        <p className="text-[13.5px] text-[#55526a]">Set your regular weekly teaching hours here. For one-time changes, go to {onSchedule ? <button type="button" onClick={onSchedule} className="font-semibold text-[#5b3fe0] underline">Calendar &amp; One-Time Changes</button> : <>Calendar &amp; One-Time Changes</>}.</p>
         {sub && <p className="text-[12.5px] text-[#6b6880]">{sub}</p>}
       </div>
       {!inline && (
@@ -312,7 +307,7 @@ function Panel({ onClose, sub, inline, children }: { onClose: () => void; sub?: 
   );
   if (inline) {
     return (
-      <section aria-label="Weekly Availability" className="relative flex min-h-[70vh] flex-col rounded-[16px] bg-white p-3 lg:p-4">
+      <section aria-label="Regular Working Hours" className="relative flex min-h-[70vh] flex-col rounded-[16px] bg-white p-3 lg:p-4">
         {head}
         {children}
       </section>
@@ -320,7 +315,7 @@ function Panel({ onClose, sub, inline, children }: { onClose: () => void; sub?: 
   }
   return (
     <div className="fixed inset-0 z-40 flex justify-center bg-black/40 lg:items-center">
-      <div role="dialog" aria-modal="true" aria-label="Weekly Availability"
+      <div role="dialog" aria-modal="true" aria-label="Regular Working Hours"
         className="relative flex h-full w-full flex-col bg-white px-3 pt-3 lg:h-auto lg:max-h-[94vh] lg:max-w-[1080px] lg:rounded-[20px] lg:p-5">
         {head}
         {children}
