@@ -114,7 +114,7 @@ describe("요약 칸: '여유' 대신 실제 정보 (C7, 대표 10/30)", () => {
   });
   it('종료 임박 = 잔여 회수 · 종료일, 재등록 통보 = 통보 후 대기 시간', () => {
     const tasks: TaskSource[] = [
-      { kind: 'ending_soon', id: 'e', studentName: '김하준', studentCode: 'STU-1', product: '50분 주2회', lessonsLeft: 0, endsAt: new Date('2026-10-17T14:59:00Z'), tutorName: null, noticeSentAt: null },
+      { kind: 'ending_soon', id: 'e', studentName: '김하준', studentCode: 'STU-1', product: '50분 주2회', lessonsLeft: 0, endsAt: new Date('2026-10-17T14:59:00Z'), tutorName: null, durationMin: 50, weeklyCount: 2, noticeSentAt: null },
       { kind: 'renewal_tutor_notice', id: 'r', studentName: '박서연', studentCode: 'STU-2', product: '50분 주2회', newPeriod: '10/20(화)–11/16(월)', tutorName: 'Emma', tutorChangePlanned: false, scheduleConfirmed: false, enrollmentId: 'en1', tutorNotifiedAt: null, tutorAcknowledgedAt: null, scheduleCheckedAt: null, createdAt: new Date(now.getTime() - 400 * H) },
     ];
     const items = buildBoard(tasks, now);

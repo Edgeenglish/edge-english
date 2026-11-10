@@ -408,6 +408,8 @@ export function toEndingSoon(rows: EndingRow[], now: Date, sent: Map<string, str
       lessonsLeft: left.length + owed,
       endsAt: endOfKstDay(r.final_end_date),
       tutorName: (left[0] ?? last)?.tutor?.name ?? null,
+      durationMin: r.duration_min,
+      weeklyCount: r.weekly_count,
       noticeSentAt: null,
     });
   }

@@ -5,6 +5,7 @@
 // 자동 처리로 완료가 확인된 업무는 목록에서 빠진다 (사람이 닫지 않아도 됨). 단순 정보는 여기 넣지 않는다.
 
 import { ampmKo, formatInZone, hoursBetween } from '../rules/dates';
+import { renewalPlans } from './renewal-price';
 import { firstLessonAt, planAlert, type PlanView } from './confirm';
 
 /** 수업 변경 안내 종류 → 카드 맨 위 '무슨 일' (lesson_notices.event, migration 1700) */
@@ -88,6 +89,8 @@ export type EndingSoonTask = {
   lessonsLeft: number;
   endsAt: Date; // 최종 종료일 23:59 KST (이월·고정 시간 마감, POL-RN-01·02)
   tutorName: string | null;
+  durationMin: number;
+  weeklyCount: number;
   /** 재등록 안내 문자 [보냄] 기록 (migration 1900). 없으면 안 보냄 */
   noticeSentAt: Date | null;
 };
@@ -290,13 +293,26 @@ export function dueSeverity(dueAt: Date | null, now: Date): Severity {
  * 재등록 안내 문자 (2026-10-28 대표: 당분간 문자로 안내 → 복사해서 보냄). 마감 = 종료일 23:59 KST (POL-RN-01 이월 · POL-RN-02 고정 시간)
  * 남은 수업이 없으면 이월 문장은 뺌
  */
-export function renewalMessage(name: string, lessonsLeft: number, endsAt: Date): string {
+export function renewalMessage(name: string, lessonsLeft: number, endsAt: Date, course?: { durationMin: number; weeklyCount: number }): string {
   const f = formatInZone(endsAt, KST);
   const day = `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8, 10))}일(${WD[f.weekday] ?? f.weekday})`;
+  const won = (n: number) => `${n.toLocaleString('en-US')}원`;
+  const plans = course ? renewalPlans(course.durationMin, course.weeklyCount) : null;
+  // 가격표에 없는 코스는 코스·가격 부분을 빼고 보냄 (가격을 짐작하지 않음)
+  const priceBlocks = course && plans
+    ? [
+        `**현재 수강 코스: ${course.durationMin}분 주 ${course.weeklyCount}회 (월 ${course.weeklyCount * 4}회)**`,
+        `📍 1개월 (4주): ${won(plans.monthly)}`,
+        `💜 **3개월 (12주) | 5% 할인**\n${won(plans.three.total)} (월 ${won(plans.three.perMonth)})\n→ ${won(plans.three.save)} 절약!`,
+        `🔥 **6개월 (24주) | 최대 혜택**\n${won(plans.six.total)} (월 약 ${won(plans.six.perMonth)})\n→ ${won(plans.six.save)} 절약 + Ebook 패키지 무료!`,
+      ]
+    : [];
   return [
-    `[엣지영어] ${name}님, ${lessonsLeft > 0 ? `수업이 ${lessonsLeft}회 남았어요.` : '이번 수강기간 수업이 모두 끝나 가요.'} (종료일 ${day})`,
-    `종료일 ${day} 내에 재등록 결제를 마치시면 ${lessonsLeft > 0 ? '남은 수업은 다음 수강기간으로 이어지고, ' : ''}지금 수업 요일·시간도 그대로 유지돼요.`,
-    '재등록을 원하시면 편하게 답장 주세요. 😊',
+    `안녕하세요 ${name}님☺️\n엣지영어 ${lessonsLeft > 0 ? `수업이 ${lessonsLeft}회 남았어요!` : '수강기간 수업이 모두 끝나 가요!'} (종료일: ${day})`,
+    '지금 재등록하시면\n잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.',
+    ...priceBlocks,
+    '💳 결제 안내\n계좌이체\n카카오뱅크 3333-27-7626253\n이진솔(탠저린 영어)\n\n카드결제\nhttps://tangerineenglish.imweb.me/?idx=11',
+    '문의사항 있으시면 편하게 답장 주세요! ☺️',
   ].join('\n\n');
 }
 
@@ -454,7 +470,7 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         due: `종료 ${dueText(t.endsAt, now)}`,
         steps: [],
         actions: [],
-        renewal: { text: renewalMessage(t.studentName, t.lessonsLeft, t.endsAt), sentAt: t.noticeSentAt },
+        renewal: { text: renewalMessage(t.studentName, t.lessonsLeft, t.endsAt, { durationMin: t.durationMin, weeklyCount: t.weeklyCount }), sentAt: t.noticeSentAt },
       };
     case 'makeup_unrequested':
       return {
