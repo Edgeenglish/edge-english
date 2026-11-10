@@ -295,7 +295,7 @@ export function renewalMessage(name: string, lessonsLeft: number, endsAt: Date):
   const day = `${Number(f.date.slice(5, 7))}월 ${Number(f.date.slice(8, 10))}일(${WD[f.weekday] ?? f.weekday})`;
   return [
     `[엣지영어] ${name}님, ${lessonsLeft > 0 ? `수업이 ${lessonsLeft}회 남았어요.` : '이번 수강기간 수업이 모두 끝나 가요.'} (종료일 ${day})`,
-    `종료일 ${day} 밤 11시 59분까지 재등록 결제를 마치시면 ${lessonsLeft > 0 ? '남은 수업은 다음 수강기간으로 이어지고, ' : ''}지금 수업 요일·시간도 그대로 유지돼요.`,
+    `종료일 ${day} 내에 재등록 결제를 마치시면 ${lessonsLeft > 0 ? '남은 수업은 다음 수강기간으로 이어지고, ' : ''}지금 수업 요일·시간도 그대로 유지돼요.`,
     '재등록을 원하시면 편하게 답장 주세요. 😊',
   ].join('\n\n');
 }

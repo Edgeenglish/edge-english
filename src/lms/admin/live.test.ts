@@ -121,7 +121,7 @@ describe('종료 임박 (POL-RN-08)', () => {
     expect(item.actions).toEqual([]);
     expect(item.renewal?.text).toBe(
       '[엣지영어] 가상학생일님, 수업이 2회 남았어요. (종료일 10월 30일(금))\n\n' +
-        '종료일 10월 30일(금) 밤 11시 59분까지 재등록 결제를 마치시면 남은 수업은 다음 수강기간으로 이어지고, 지금 수업 요일·시간도 그대로 유지돼요.\n\n' +
+        '종료일 10월 30일(금) 내에 재등록 결제를 마치시면 남은 수업은 다음 수강기간으로 이어지고, 지금 수업 요일·시간도 그대로 유지돼요.\n\n' +
         '재등록을 원하시면 편하게 답장 주세요. 😊',
     );
     expect(buildBoard(toEndingSoon([row({ lessons })], now), now)[0].renewal?.sentAt).toBeNull();
