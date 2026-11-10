@@ -113,10 +113,10 @@ type Tab = 'home' | 'schedule' | 'record' | 'students' | 'hours';
 // 메뉴 이름은 대표가 정한 영문 그대로 (2026-11-04, H26(50): My hours → Availability. 저장 키 'hours' 는 그대로)
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
-  { key: 'schedule', label: 'Calendar & One-Time Changes', icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
   { key: 'record', label: 'Class Record', icon: 'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z' },
   { key: 'students', label: 'Students', icon: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' },
   { key: 'hours', label: 'Regular Working Hours', icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+  { key: 'schedule', label: 'Calendar & One-Time Changes', icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
 ];
 // 운영자 보기 한국어 라벨 (강사 본인은 늘 영어)
 const TAB_KO: Record<Tab, string> = { home: '홈', schedule: '일정', record: 'Class Record', students: '수강생', hours: '가능 시간' };
