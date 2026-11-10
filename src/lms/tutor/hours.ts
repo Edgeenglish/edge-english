@@ -204,6 +204,6 @@ export function describeChangesIn(
   return out;
 }
 /** 매주 변경 적용일 안내 (2026-11-04 대표: 저장하면 바로 바뀌는 줄 오해, 문구는 시안 2 표 2번) — 'Changes apply from Mon, Nov 23.' 강사 현지 날짜 */
-export const applyFromText = (from: string): string => { const p = parts(from); return `Changes apply from ${SHORT[p.dow]}, ${MONTHS[p.month]} ${p.day}.`; };
+export const applyFromText = (from: string): string => { const p = parts(from); return `Changes apply from next Monday (${SHORT[p.dow]}, ${MONTHS[p.month]} ${p.day}).`; };
 /** 매주 변경 시작일 문구 */
 export const fromText = (from: string, lang: 'en' | 'ko'): string => (lang === 'en' ? `Every week changes start ${dateText(from)}.` : `${koDate(from)}부터`);

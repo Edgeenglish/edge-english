@@ -36,7 +36,7 @@ describe('My hours', () => {
     expect(parseHours({ tutor: { id: 't', name: 'T', timezone: 'Asia/Tokyo' }, history: null }).history).toBeNull();
   });
   it('Every week 적용일 안내: 강사 현지 월요일 날짜 그대로', () => {
-    expect(applyFromText('2026-11-09')).toBe('Changes apply from Mon, Nov 9.');
+    expect(applyFromText('2026-11-09')).toBe('Changes apply from next Monday (Mon, Nov 9).');
   });
   it('바뀐 내용: 고른 시간대 먼저, 다른 시간대 보조 (날짜·요일 달라짐, 서머타임)', () => {
     const none = { weeklyOpen: [], weeklyClose: [], onceClose: [], onceOpen: [] };
