@@ -4,6 +4,7 @@
 //  매주 수업 시작 가능 칸 (다음 주 월요일부터). 2026-11-04 H26(50): 'One week only' 탭 없앰 → 날짜별 막기·열기는 Schedule 에서
 //  화면 잠금은 편의일 뿐, 고정 수업 칸 검사는 DB 함수 tutor_hours_save 가 다시 함 (migration 3100)
 
+import { TUTOR_MENU } from '@/lms/tutor/navigation';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   classFill, describeChanges, describeChangesIn, diff, applyFromText, fromText, hhmm, plusDays, rangeText, timeText, toMin, WEEK_DAYS, weeklyClassAt, type HoursData,
@@ -295,8 +296,8 @@ function Panel({ onClose, onSchedule, sub, inline, children }: { onClose: () => 
   const head = (
     <div className="mb-2 flex items-start justify-between gap-2">
       <div>
-        <h2 className={`${inline ? 'text-[20px]' : 'text-[18px]'} font-bold text-[#1d1b2b]`}>Regular Working Hours</h2>
-        <p className="text-[13.5px] text-[#55526a]">Set your regular weekly teaching hours here. For one-time changes, go to {onSchedule ? <button type="button" onClick={onSchedule} className="font-semibold text-[#5b3fe0] underline">Calendar &amp; One-Time Changes</button> : <>Calendar &amp; One-Time Changes</>}.</p>
+        <h2 className={`${inline ? 'text-[20px]' : 'text-[18px]'} font-bold text-[#1d1b2b]`}>{TUTOR_MENU.hours}</h2>
+        <p className="text-[13.5px] text-[#55526a]">Set your regular weekly teaching hours here. For one-time changes, go to {onSchedule ? <button type="button" onClick={onSchedule} className="font-semibold text-[#5b3fe0] underline">{TUTOR_MENU.schedule}</button> : <>{TUTOR_MENU.schedule}</>}.</p>
         {sub && <p className="text-[12.5px] text-[#6b6880]">{sub}</p>}
       </div>
       {!inline && (
@@ -307,7 +308,7 @@ function Panel({ onClose, onSchedule, sub, inline, children }: { onClose: () => 
   );
   if (inline) {
     return (
-      <section aria-label="Regular Working Hours" className="relative flex min-h-[70vh] flex-col rounded-[16px] bg-white p-3 lg:p-4">
+      <section aria-label={TUTOR_MENU.hours} className="relative flex min-h-[70vh] flex-col rounded-[16px] bg-white p-3 lg:p-4">
         {head}
         {children}
       </section>
@@ -315,7 +316,7 @@ function Panel({ onClose, onSchedule, sub, inline, children }: { onClose: () => 
   }
   return (
     <div className="fixed inset-0 z-40 flex justify-center bg-black/40 lg:items-center">
-      <div role="dialog" aria-modal="true" aria-label="Regular Working Hours"
+      <div role="dialog" aria-modal="true" aria-label={TUTOR_MENU.hours}
         className="relative flex h-full w-full flex-col bg-white px-3 pt-3 lg:h-auto lg:max-h-[94vh] lg:max-w-[1080px] lg:rounded-[20px] lg:p-5">
         {head}
         {children}

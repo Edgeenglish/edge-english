@@ -5,6 +5,7 @@
 // Students = 담당 수강생 → 프로필, Availability = 매주 가능 시간 (예전 My hours)
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
+import { TUTOR_MENU } from '@/lms/tutor/navigation';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { ampmEn, formatInZone } from '@/lms/rules/dates';
@@ -115,8 +116,8 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
   { key: 'record', label: 'Class Record', icon: 'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z' },
   { key: 'students', label: 'Students', icon: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' },
-  { key: 'hours', label: 'Regular Working Hours', icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
-  { key: 'schedule', label: 'Calendar & One-Time Changes', icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
+  { key: 'hours', label: TUTOR_MENU.hours, icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+  { key: 'schedule', label: TUTOR_MENU.schedule, icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
 ];
 // 운영자 보기 한국어 라벨 (강사 본인은 늘 영어)
 const TAB_KO: Record<Tab, string> = { home: '홈', schedule: '일정', record: 'Class Record', students: '수강생', hours: '가능 시간' };

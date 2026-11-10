@@ -3,10 +3,11 @@
 // 강사 Schedule (2026-11-04 대표 결정 H26(49)+(50), 시안 docs/lms/previews/tutor-schedule-drafts.html 시안 2 승인본)
 //  Month = 한 달 수업(칸마다 수업 시각·학생, 다른 날 짧은 글자) / Week = 30분 칸 격자
 //  수업은 보기만(옮기기·추가·삭제 없음, 누르면 창 → Class Record). 강사 본인 가능 시간만 날짜별로:
-//  초록 칸 Block time · 회색 칸 Make available(그날만) · 막은 칸 Save note / Remove block
+//  빈 가능 칸 Block time · 닫힌 칸 Make available(그날만) · 막은 칸 Save note / Remove block
 //  PC = 드래그 또는 클릭, 휴대폰 = 빈 칸 누름 → 끝 시간 → 메모(선택) → Block
 //  화면 판정은 편의, 수업·6시간·12주·100자 검사는 DB 함수 tutor_schedule_save 가 다시 함 (migration 4403)
 
+import { TUTOR_MENU } from '@/lms/tutor/navigation';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ALL_HOURS, cityTime, localToInstant } from '@/lms/tutor/hours-view';
 import { classFill, plusDays, toMin } from '@/lms/tutor/hours';
@@ -27,11 +28,11 @@ export type ScheduleActions = {
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-4 text-[15px] font-semibold text-[#1d1b2b] disabled:opacity-40';
 const cellBase = 'block h-[26px] w-full overflow-hidden whitespace-nowrap rounded-[5px] p-0 text-left text-[10.5px] font-semibold leading-[12px] lg:h-[24px] lg:text-[11px]';
-const cont = '-mt-[2px] h-[28px] rounded-t-none lg:h-[26px]';
-/** 바꿀 수 없는 칸 (지난 시간·6시간 안·시작 가능 시간 밖·12주 밖) — My hours 와 같은 흰 빗금 */
-const cantChange: CSSProperties = { background: 'repeating-linear-gradient(-45deg,#e3e1ea,#e3e1ea 2px,#fafafd 2px,#fafafd 7px)' };
-/** 막은 시간: 진한 빗금 + 테두리 */
-const blockedStyle: CSSProperties = { background: 'repeating-linear-gradient(-45deg,#d6d2e4,#d6d2e4 3px,#f1eff7 3px,#f1eff7 7px)', boxShadow: 'inset 0 0 0 1px #a9a4bd' };
+const cont = 'rounded-t-none';
+/** 제한은 유지하고 빗금 대신 차분한 비활성 배경. */
+const cantChange: CSSProperties = { background: '#eef0f3' };
+/** 실제 차단 구간만 회색 블록으로 강조. */
+const blockedStyle: CSSProperties = { background: '#d9dde3', boxShadow: 'inset 3px 0 0 #8b929e' };
 const fillStyle = (f: { from: number; to: number }, dark: string, pale: string): CSSProperties => (f.from <= 0 && f.to >= 1
   ? { background: dark }
   : { background: `linear-gradient(to bottom, ${pale} ${f.from * 100}%, ${dark} ${f.from * 100}%, ${dark} ${f.to * 100}%, ${pale} ${f.to * 100}%)` });
@@ -253,18 +254,17 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       const sMin = s.date === date ? toMin(s.time) : -1440;
       const first = sMin >= i * 30;
       const f = classFill(sMin, minutesOf(l), i * 30);
-      const makeup = l.kind !== 'regular' || l.covering;
       return (
         <button type="button" {...handlers} aria-label={`${label} class with ${l.student}`}
-          className={`${cellBase} truncate px-1 ${makeup ? 'text-[#0f5f56]' : 'text-white'} ${first ? (f.to >= 1 && minutesOf(l) > 30 - (sMin - i * 30) ? 'rounded-b-none' : '') : cont}`}
-          style={fillStyle(f, makeup ? '#9fe0d6' : '#5b3fe0', '#ecebf1')}>
+          className={`${cellBase} truncate px-1 text-white ${first ? (f.to >= 1 && minutesOf(l) > 30 - (sMin - i * 30) ? 'rounded-b-none' : '') : cont}`}
+          style={fillStyle(f, '#5b3fe0', '#f5f6f8')}>
           {first ? <span className="[color:inherit]">{l.student.split(' ')[0]} <span className="hidden font-medium [color:inherit] lg:inline">{ampmEn(s.time)}</span></span> : ''}
         </button>
       );
     }
     if (k === 'past' || k === 'outside' || k === 'far' || k === 'locked') {
-      if (k === 'past') return <span aria-hidden className={cellBase} style={cantChange} />;
-      return <button type="button" {...handlers} aria-label={`${label} can’t change`} className={cellBase} style={cantChange} />;
+      if (k === 'past') return <span aria-hidden className={`${cellBase} rounded-none border-b border-white/40`} style={cantChange} />;
+      return <button type="button" {...handlers} aria-label={`${label} can’t change`} className={`${cellBase} rounded-none border-b border-white/40`} style={cantChange} />;
     }
     if (k === 'blocked') {
       const b = data ? blockAt(data.blocks.filter((x) => x.kind === 'block'), at(date, i), tz) : null;
@@ -287,14 +287,15 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     const free = k === 'free';
     return (
       <button type="button" {...handlers} aria-label={`${label} ${free ? 'available' : 'not available'}`}
-        className={`${cellBase} ${sel ? 'bg-[#c9bfff]' : free ? 'bg-[#e6f6ec] hover:bg-[#cdeedb]' : 'bg-[#ecebf1] hover:bg-[#e0dee8]'}`} />
+        title={free ? 'Block time' : 'Make available'}
+        className={`${cellBase} rounded-none border-b border-[#eceef2] ${sel ? 'bg-[#ded7ff]' : free ? 'bg-white hover:bg-[#efebff]' : 'bg-[#f5f6f8] hover:bg-[#efebff]'}`} />
     );
   }
 
   const header = (
     <div className="mb-2 grid gap-2 lg:flex lg:flex-wrap lg:items-center">
-      <div className="flex items-center justify-between gap-2 lg:mr-auto">
-        <h1 className="text-[20px] font-bold text-[#1d1b2b] lg:mr-3">Calendar &amp; One-Time Changes</h1>
+      <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between lg:mr-auto">
+        <h1 className="text-[20px] font-bold text-[#1d1b2b] lg:mr-3">{TUTOR_MENU.schedule}</h1>
         <Seg value={view} onChange={(v) => setView(v)} options={[['month', 'Month'], ['week', 'Week']]} className="lg:hidden" />
       </div>
       <div className="flex items-center gap-2">
@@ -316,8 +317,6 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
 
   const legend = (
     <div className="mb-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-[#6b6880]">
-      <Legend color="bg-[#e6f6ec]">Available</Legend>
-      <Legend color="bg-[#ecebf1]">Not available</Legend>
       <Legend color="bg-[#5b3fe0]">Class</Legend>
       <Legend style={blockedStyle}>Blocked</Legend>
       <Legend style={cantChange}>Can’t change</Legend>
@@ -386,14 +385,14 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     <div>
       {legend}
       <p className="mb-1.5 text-[12.5px] text-[#6b6880]">
-        <span className="hidden lg:inline">Drag or click a green time to block it. Click a grey time to open it for that day only.</span>
-        <span className="lg:hidden">Tap a green time to block it, or a grey time to open it for that day only.</span>
+        <span className="hidden lg:inline">Click or drag an empty time to make a one-time change.</span>
+        <span className="lg:hidden">Tap an empty time to make a one-time change.</span>
       </p>
       <div ref={scroller} className="max-h-[62vh] overflow-y-auto rounded-[12px] border border-[#e6e3ef] bg-white lg:max-h-[600px]">
-        <div className="grid select-none grid-cols-[42px_repeat(7,minmax(0,1fr))] gap-[2px] px-0.5 pb-2 tabular-nums lg:grid-cols-[52px_repeat(7,minmax(0,1fr))]">
+        <div className="grid select-none grid-cols-[42px_repeat(7,minmax(0,1fr))] gap-x-px pb-2 tabular-nums lg:grid-cols-[52px_repeat(7,minmax(0,1fr))]">
           <div className="sticky top-0 z-[2] bg-white pr-1 pt-1 text-right text-[10px] font-bold leading-tight text-[#2b1c7a]">{korea ? 'KST' : ''}</div>
           {grid.map((d, i) => (
-            <div key={d} className={`sticky top-0 z-[2] py-1 text-center text-[12px] font-bold leading-tight ${d === todayView ? 'rounded-b-[6px] bg-[#5b3fe0] text-white' : 'bg-[#efebff] text-[#2b1c7a]'}`}>
+            <div key={d} className={`sticky top-0 z-[2] py-1 text-center text-[12px] font-bold leading-tight ${d === todayView ? 'rounded-b-[6px] bg-[#5b3fe0] text-white' : 'bg-white text-[#55526a]'}`}>
               {WEEK_HEAD[i]}<small className="block text-[11px] font-semibold">{Number(d.slice(8))}</small>
             </div>
           ))}
@@ -409,10 +408,10 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   );
 
   return (
-    <section aria-label="Calendar & One-Time Changes" className="relative">
+    <section aria-label={TUTOR_MENU.schedule} className="relative">
       {header}
       <p className="mb-3 text-[13.5px] text-[#55526a]">
-        View your classes and make one-time changes here. To update your regular hours, go to {onHours ? <button type="button" onClick={onHours} className="font-semibold text-[#5b3fe0] underline">Regular Working Hours</button> : <>Regular Working Hours</>}.
+        View your classes and make one-time changes here. To update your regular hours, go to {onHours ? <button type="button" onClick={onHours} className="font-semibold text-[#5b3fe0] underline">{TUTOR_MENU.hours}</button> : <>{TUTOR_MENU.hours}</>}.
       </p>
       {err && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
       {!data && !err && <p className="py-6 text-[15px] text-[#6b6880]">Loading…</p>}
@@ -431,7 +430,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
             {dialog.kind === 'info' && (
               <>
                 <strong className="text-[16px] text-[#1d1b2b]">{dialog.title}</strong>
-                <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14.5px] text-[#b3261e]">{dialog.body}</p>
+                <p className="rounded-[10px] bg-[#f5f6f8] px-3 py-2 text-[14.5px] text-[#55526a]">{dialog.body}</p>
                 <button type="button" onClick={() => closeDialog()} className={btnSub}>Close</button>
               </>
             )}
@@ -493,7 +492,6 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     const run = runFrom(d.kinds, d.start, want);
     const a = at(d.date, d.start);
     const b = d.end === 48 ? localToInstant(plusDays(d.date, 1), '00:00', viewZone) : at(d.date, d.end);
-    const hit = d.mode === 'block' && run.cutBy !== null && d.end === run.ends[run.ends.length - 1] ? lessonIn(d.date, slotTime(run.cutBy)) : null;
     const isOpen = d.mode === 'open';
     // 고른 칸이 모두 '그날만 연 칸'이면 막기가 아니라 추가 개방 철회 — 메모를 받지 않음 (DB 가 그 열기만 거둠, QA-03)
     const removeExtra = !isOpen && d.end > d.start && d.xs.slice(d.start, d.end).every(Boolean);
@@ -533,11 +531,6 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
             ))}
           </div>
         </div>
-        {hit && (
-          <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">
-            You have a class at {ampmEn(inZone(hit.startsAt, viewZone).time)} {viewLabel}. Classes can’t be blocked.
-          </p>
-        )}
         {!isOpen && !removeExtra && <NoteField value={d.note} onChange={(v) => setD({ ...d, note: v })} />}
         {mixedExtra && <p className="text-[13px] text-[#6b6880]">Part of this time is extra hours for this day only. That part just goes back to closed (no note is kept for it).</p>}
         {saveErr && <p role="alert" className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{saveErr}</p>}
@@ -576,8 +569,8 @@ function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
     const tag = lessonTag(l);
     const off = l.state === 'canceled';
     return (
-      <span className={`flex min-w-0 items-center gap-1 text-[12px] leading-[16px] ${off ? 'text-[#a3a0b3] line-through' : 'text-[#1d1b2b]'}`}>
-        <i className={`block h-[6px] w-[6px] shrink-0 rounded-full ${off ? 'bg-[#c4c1d1]' : 'bg-[#5b3fe0]'}`} />
+      <span className={`flex min-w-0 items-center gap-1 text-[12px] leading-[16px] ${off ? 'text-[#a3a0b3] line-through' : 'rounded-[4px] bg-[#5b3fe0] px-1 py-0.5 text-white'}`}>
+        <i className={`block h-[6px] w-[6px] shrink-0 rounded-full ${off ? 'bg-[#c4c1d1]' : 'bg-white/70'}`} />
         <span className="shrink-0 tabular-nums">{time}</span>
         <span className="truncate">{l.student}{tag && !off ? ` · ${tag}` : ''}</span>
       </span>
@@ -585,7 +578,7 @@ function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
   }
   if (item.kind === 'block') {
     return (
-      <span className="flex min-w-0 items-center gap-1 text-[12px] leading-[16px] text-[#55526a]">
+      <span className="flex min-w-0 items-center gap-1 rounded-[4px] bg-[#d9dde3] px-1 py-0.5 text-[12px] leading-[16px] text-[#55526a]">
         <i className="block h-[6px] w-[6px] shrink-0 rounded-[1px] bg-[#55526a]" />
         <span className="shrink-0 tabular-nums">{time}</span>
         <span className="truncate">{item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Blocked'}</span>
@@ -646,7 +639,7 @@ function Seg<T extends string>({ value, onChange, options, className = '', check
   value: T; onChange: (v: T) => void; options: [T, string][]; className?: string; check?: boolean;
 }) {
   return (
-    <div role="group" className={`inline-flex overflow-hidden rounded-[10px] border border-[#e6e3ef] bg-white ${className}`}>
+    <div role="group" className={`inline-flex shrink-0 overflow-hidden rounded-[10px] border border-[#e6e3ef] bg-white ${className}`}>
       {options.map(([v, label]) => (
         <button key={v} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
           className={`min-h-[42px] px-3 text-[14px] font-semibold ${value === v ? 'bg-[#5b3fe0] text-white' : 'text-[#1d1b2b]'}`}>
