@@ -277,11 +277,11 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       );
     }
     if (k === 'request') {
-      return <button type="button" {...handlers} aria-label={`${label} request waiting`} className={`${cellBase} border border-dashed border-[#5b3fe0] bg-white px-1 text-[#5b3fe0]`}>Request</button>;
+      return <button type="button" {...handlers} aria-label={`${label} request waiting`} className={`${cellBase} border border-dashed border-[#5b3fe0] bg-white px-0 text-center text-[9px] text-[#5b3fe0] lg:px-1 lg:text-left lg:text-[11px]`}>Request</button>;
     }
     if (k === 'answered') {
       // 가능 답을 보냈고 운영진 확정 대기 (R-16): 답 대기와 구분
-      return <button type="button" {...handlers} aria-label={`${label} Waiting for confirmation`} className={`${cellBase} border border-[#5b3fe0] bg-[#efebff] px-1 text-[#5b3fe0]`}>Pending</button>;
+      return <button type="button" {...handlers} aria-label={`${label} Waiting for confirmation`} className={`${cellBase} border border-[#5b3fe0] bg-[#efebff] px-0 text-center text-[9px] text-[#5b3fe0] lg:px-1 lg:text-left lg:text-[11px]`}>Pending</button>;
     }
     if (k === 'leave') return <button type="button" {...handlers} aria-label={`${label} leave`} className={`${cellBase} bg-[#ecebf1] px-1 text-[#8a879c]`}>Leave</button>;
     const free = k === 'free';
