@@ -6,6 +6,13 @@
 
 
 
+
+## ✅ 11/10 첫 수업 Follow-up 4칸 완료 → 수강생(한국어) 안내 메일 1번 — **운영 반영 완료** (대표 '운영에 반영해', 문구 대표 확정)
+- migration **20261110110000_lms_first_lesson_done_mail**: `lms_followup_done_mail`(4칸 모두 저장된 순간, 수강생당 1번 `followup_done:수강생`) + `tutor_first_lesson_save` 끝에 호출 한 줄(메일이 실패해도 저장은 그대로)
+- 문구: 제목 `[엣지영어] 강사님이 첫 수업 학습 정보를 등록했어요` / 영어 레벨·학습 목표·수업 방식(혼합이면 구성)·수업 노트 [노트 열기] + '(매 수업 내용이 이 노트에 계속 쌓여요.)' / [LMS 열기] / 문의 카카오톡 채널 엣지영어
+- 시험 DB: 적용 + 수강생 1명 메일 support@ 로 보냄 확인. **운영 DB: 백업 snapshots id 37 → 적용**, 앱 사용자는 메일 함수 실행 불가, 운영 메일 0통(아직 4칸 완료 건 없음). 운영 자동 메일 켜져 있어 Sienna(STU-0013, 메일 주소 있음)를 Maria 가 4칸 완료하면 **실제 수강생에게 감**. 되돌리기: `tutor_first_lesson_save` 를 20261108170000 판으로 되돌리기(snapshots 37 `_functions_before`)
+- ⚠ 이 작업 중 대표 '넣어' 전에 시험 환경에 먼저 만든 실수 → 메일 문구는 '넣어' 전에 DB·코드·시험 발송 금지
+
 ## ✅ 11/10 첫 수업 Follow-up 재촉 메일 — **운영 반영 완료** (대표 '바로 운영에 넣어', 문구 대표 확정)
 - migration **20261110100000_lms_first_lesson_followup_nudge**: `lms_followup_nudge_run` + pg_cron `lms-followup-nudge` 15분마다. 첫 수업 끝(또는 Class Record 첫 저장 중 늦은 쪽) 1시간 뒤 Follow-up 미완료 → 담당 강사에게 1번(`notifications.dedupe_key = followup_nudge:강사:수강생`). 시작 시각 = feature_flags `first_lesson_followup_nudge_since` updated_at(그 전에 밀린 건 안 보냄 → STU-0013 은 안 감)
 - 문구: 제목 `[Edge English] Reminder: first lesson follow-up - 이름` / 'Please complete the First Lesson Follow-up for 이름.' / **Still to complete:** 남은 칸 / [Open Edge English LMS] / 기존 강사 메일 끝 문구
