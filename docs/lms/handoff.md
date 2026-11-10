@@ -5,6 +5,12 @@
 새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
 
+
+## ✅ 11/10 첫 수업 Follow-up 재촉 메일 — **운영 반영 완료** (대표 '바로 운영에 넣어', 문구 대표 확정)
+- migration **20261110100000_lms_first_lesson_followup_nudge**: `lms_followup_nudge_run` + pg_cron `lms-followup-nudge` 15분마다. 첫 수업 끝(또는 Class Record 첫 저장 중 늦은 쪽) 1시간 뒤 Follow-up 미완료 → 담당 강사에게 1번(`notifications.dedupe_key = followup_nudge:강사:수강생`). 시작 시각 = feature_flags `first_lesson_followup_nudge_since` updated_at(그 전에 밀린 건 안 보냄 → STU-0013 은 안 감)
+- 문구: 제목 `[Edge English] Reminder: first lesson follow-up - 이름` / 'Please complete the First Lesson Follow-up for 이름.' / **Still to complete:** 남은 칸 / [Open Edge English LMS] / 기존 강사 메일 끝 문구
+- 운영 DB: 백업 **snapshots id 36** → 적용(11/10 04:48 UTC), 예약 active, 지금 보낼 대상 0, 앱 사용자 실행 불가. 되돌리기: `select cron.unschedule('lms-followup-nudge')`. 시험 DB: 적용 + 시험 수강생 2명 메일 support@ 수신 확인(이전 문구)
+
 ## ✅ 11/10 운영 자동 메일 실제 발송 켬 — 정책 원본 H26(123)
 - 운영 DB `feature_flags.send_emails` = true (대표 지시). 켜기 전 확인: notifications 대기·실패 0, 열린 보강 신청 0(재촉·만료 한꺼번에 없음), 메일 큐는 lesson_notices INSERT 트리거만이라 예전 안내 다시 안 나감, 받는 주소는 큐에 넣을 때 정해짐. 켠 뒤: 최근 안내 4건을 lms_notice_mail 로 미리보기(발송 안 함) → 실제 주소·[시험] 표시 없음 확인, 새 메일 0
 - 이메일 없는 수강생: STU-0014(체험용) → 메일은 'no_address' 로 남음

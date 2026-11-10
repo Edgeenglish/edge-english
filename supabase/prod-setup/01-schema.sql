@@ -18455,7 +18455,7 @@ grant execute on function student_timezone(uuid, text, text) to authenticated;
 
 -- >>> 20261110100000_lms_first_lesson_followup_nudge.sql
 -- =====================================================================
--- 첫 수업 Follow-up 재촉 메일 (대표 2026-11-10, 문구 대표 확정)
+-- 첫 수업 Follow-up 재촉 메일 (대표 2026-11-10, 문구 대표 확정: 'Please complete the First Lesson Follow-up for …' / 'Still to complete:')
 --  첫 수업 뒤 1시간이 지났는데 First Lesson Follow-up(Level · Wants to Improve · Class Style · Class Notes)이
 --  다 저장되지 않았으면 담당 강사에게 영어 메일 1번 (같은 강사·수강생에게 다시 보내지 않음)
 --   - 1시간 기준 = 첫 수업 끝난 시각과 Class Record 처음 저장 시각 중 늦은 쪽 (Follow-up 은 기록을 저장해야 생김)
@@ -18483,7 +18483,6 @@ declare
   v_intended text;
   v_to text;
   v_name text;
-  v_first text;
   v_todo text[];
   v_lines text[];
   v_subject text;
@@ -18512,7 +18511,6 @@ begin
     if v_intended is null then continue; end if;
     v_to := case when v_live then v_intended else 'support@edgeenglish.kr' end;
     v_name := coalesce(nullif(st.name_en, ''), st.name_ko);
-    v_first := split_part(trim(v_name), ' ', 1);
     v_todo := array_remove(array[
       case when not (j -> 'done' ->> 'level')::boolean then 'Level' end,
       case when not (j -> 'done' ->> 'improve')::boolean then 'Wants to Improve' end,
@@ -18521,16 +18519,14 @@ begin
     v_subject := case when v_live then '' else '[시험 · ' || st.code || '] ' end
                  || '[Edge English] Reminder: first lesson follow-up - ' || v_name;
     v_lines := array[
-      'REMINDER - First lesson follow-up - ' || v_name,
-      'There are a few things to fill in about ' || v_first || ' after the first lesson.',
-      'Still to do: ' || array_to_string(v_todo, ' · '),
-      'Please complete them on your LMS Home (To do).'];
+      'Please complete the First Lesson Follow-up for ' || v_name || '.',
+      'Still to complete: ' || array_to_string(v_todo, ' · ')];
     v_body := array_to_string(v_lines, E'\n') || E'\n\n' || v_btn || ': ' || v_url || E'\n' || v_foot
               || case when v_live then '' else E'\n\n(시험 발송 · 원래 받는 사람: ' || v_intended || ')' end;
     v_html := '<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1d1b2a;max-width:480px">'
               || case when v_live then '' else '<p style="background:#fff4d6;color:#5c3b00;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600">시험 발송 · 원래 받는 사람: ' || lms_html(v_intended) || '</p>' end
-              || '<p style="font-weight:700">' || lms_html(v_lines[1]) || '</p>'
-              || '<p>' || lms_html(v_lines[2]) || '<br>' || lms_html(v_lines[3]) || '<br>' || lms_html(v_lines[4]) || '</p>'
+              || '<p>' || lms_html(v_lines[1]) || '</p>'
+              || '<p><b>Still to complete:</b> ' || lms_html(array_to_string(v_todo, ' · ')) || '</p>'
               || '<p><a href="' || lms_html(v_url) || '" style="display:inline-block;background:#5b3df0;color:#fff;border-radius:10px;padding:11px 18px;font-weight:700;text-decoration:none">' || lms_html(v_btn) || '</a></p>'
               || '<p style="font-size:12.5px;color:#55526a;border-top:1px solid #e6e3ef;padding-top:10px">' || lms_html(v_foot) || '</p></div>';
     insert into notifications (recipient_kind, recipient_id, email, locale, template, payload, dedupe_key)
