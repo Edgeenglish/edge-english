@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayTag, monthGrid, runFrom, type DayItem } from './schedule';
+import { blockAt, dayTag, monthGrid, runFrom, sourceKey, type DayItem } from './schedule';
 import { NO_LATE, type TutorLesson } from './screen';
 
 const lesson = (extra: Partial<TutorLesson>): TutorLesson => ({
@@ -66,5 +66,25 @@ describe('Schedule — 재검증 수정 (R-03·R-16)', async () => {
       expect(nov5[0].end.toISOString()).toBe(new Date('2026-11-05T09:00:00+11:00').toISOString());
       expect(nov5[0].spans?.at.toISOString()).toBe(new Date('2026-11-04T02:00:00+11:00').toISOString());
     }
+  });
+});
+
+// Calendar QA: block intervals are [start, end); the booking break rule is separate.
+describe('Calendar boundary and timezone regression', () => {
+  it('12:00–12:30 remains selectable immediately before a 12:30 class', () => {
+    const kinds = Array.from({ length: 48 }, () => 'closed' as const) as import('./schedule').CellKind[];
+    kinds[24] = 'free';
+    kinds[25] = 'class';
+    expect(runFrom(kinds, 24, 'free').ends).toEqual([25]);
+  });
+  it('KST noon maps to the previous Toronto date, with DST respected', () => {
+    expect(sourceKey('2026-11-12', '12:00', 'Asia/Seoul', 'America/Toronto')).toBe('2026-11-11T22:00');
+    expect(sourceKey('2026-11-12', '12:30', 'Asia/Seoul', 'America/Toronto')).toBe('2026-11-11T22:30');
+    expect(sourceKey('2026-10-29', '12:00', 'Asia/Seoul', 'America/Toronto')).toBe('2026-10-28T23:00');
+  });
+  it('a block ending at class start does not occupy the class cell', () => {
+    const block = { id: 'boundary', kind: 'block' as const, start: '2026-11-11T22:00', end: '2026-11-11T22:30', note: null };
+    expect(blockAt([block], new Date('2026-11-12T03:00:00Z'), 'America/Toronto')).toEqual(block);
+    expect(blockAt([block], new Date('2026-11-12T03:30:00Z'), 'America/Toronto')).toBeNull();
   });
 });

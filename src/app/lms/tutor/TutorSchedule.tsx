@@ -3,11 +3,14 @@
 // 강사 Schedule (2026-11-04 대표 결정 H26(49)+(50), 시안 docs/lms/previews/tutor-schedule-drafts.html 시안 2 승인본)
 //  Month = 한 달 수업(칸마다 수업 시각·학생, 다른 날 짧은 글자) / Week = 30분 칸 격자
 //  수업은 보기만(옮기기·추가·삭제 없음, 누르면 창 → Class Record). 강사 본인 가능 시간만 날짜별로:
-//  초록 칸 Block time · 회색 칸 Make available(그날만) · 막은 칸 Save note / Remove block
+//  빈 가능 칸 Block time · 닫힌 칸 Make available(그날만) · 막은 칸 Save note / Remove block
 //  PC = 드래그 또는 클릭, 휴대폰 = 빈 칸 누름 → 끝 시간 → 메모(선택) → Block
 //  화면 판정은 편의, 수업·6시간·12주·100자 검사는 DB 함수 tutor_schedule_save 가 다시 함 (migration 4403)
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { CANT_OPEN_BACKGROUND, TIME_COLORS, cantOpenHelp } from '@/lms/tutor/time-status';
+import TimeStatusLegend from './TimeStatusLegend';
+import { TUTOR_MENU } from '@/lms/tutor/navigation';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ALL_HOURS, cityTime, localToInstant } from '@/lms/tutor/hours-view';
 import { classFill, plusDays, toMin } from '@/lms/tutor/hours';
 import {
@@ -27,11 +30,11 @@ export type ScheduleActions = {
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-4 text-[15px] font-semibold text-[#1d1b2b] disabled:opacity-40';
 const cellBase = 'block h-[26px] w-full overflow-hidden whitespace-nowrap rounded-[5px] p-0 text-left text-[10.5px] font-semibold leading-[12px] lg:h-[24px] lg:text-[11px]';
-const cont = '-mt-[2px] h-[28px] rounded-t-none lg:h-[26px]';
-/** 바꿀 수 없는 칸 (지난 시간·6시간 안·시작 가능 시간 밖·12주 밖) — My hours 와 같은 흰 빗금 */
-const cantChange: CSSProperties = { background: 'repeating-linear-gradient(-45deg,#e3e1ea,#e3e1ea 2px,#fafafd 2px,#fafafd 7px)' };
-/** 막은 시간: 진한 빗금 + 테두리 */
-const blockedStyle: CSSProperties = { background: 'repeating-linear-gradient(-45deg,#d6d2e4,#d6d2e4 3px,#f1eff7 3px,#f1eff7 7px)', boxShadow: 'inset 0 0 0 1px #a9a4bd' };
+const cont = 'rounded-t-none';
+/** 지난 시간·6시간·12주 제한은 조용하게, 개방 불가 정책만 빗금으로. */
+const cantChange: CSSProperties = { background: '#eef0f3' };
+/** 실제 차단 구간만 회색 블록으로 강조. */
+const blockedStyle: CSSProperties = { background: TIME_COLORS.closed };
 const fillStyle = (f: { from: number; to: number }, dark: string, pale: string): CSSProperties => (f.from <= 0 && f.to >= 1
   ? { background: dark }
   : { background: `linear-gradient(to bottom, ${pale} ${f.from * 100}%, ${dark} ${f.from * 100}%, ${dark} ${f.to * 100}%, ${pale} ${f.to * 100}%)` });
@@ -46,8 +49,9 @@ type Dialog =
   | { kind: 'lesson'; lesson: TutorLesson }
   | { kind: 'info'; title: string; body: string };
 
-export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile, onSaved }: {
+export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile, onSaved, onHours }: {
   actions: ScheduleActions;
+  onHours?: () => void;
   /** 막기·열기 저장 성공 뒤 — Home 의 보강 요청 가능 여부 등을 다시 읽게 (R-13) */
   onSaved?: () => void | Promise<void>;
   /** 수업 (tutor_screen, 한국 날짜 범위) */
@@ -195,7 +199,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     if (k === 'request' || k === 'answered') { const r = lockReason(k)!; return setDialog({ kind: 'info', title: r.title, body: r.body }); }
     if (k === 'locked') return setDialog({ kind: 'info', title: 'Can’t change', body: 'Can’t change: less than 6 hours away.' });
     if (k === 'outside') {
-      return setDialog({ kind: 'info', title: 'Can’t change', body: `Classes can only start ${ampmEn(data.times[0])}–${ampmEn(data.times[data.times.length - 1])} ${cityTime(tz)}.` });
+      return setDialog({ kind: 'info', title: "Can't open", body: cantOpenHelp(data.times, tz) });
     }
     if (k === 'far') return setDialog({ kind: 'info', title: 'Can’t change yet', body: `You can change times up to 12 weeks ahead (until ${dayText(data.last)}).` });
   }
@@ -252,48 +256,49 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       const sMin = s.date === date ? toMin(s.time) : -1440;
       const first = sMin >= i * 30;
       const f = classFill(sMin, minutesOf(l), i * 30);
-      const makeup = l.kind !== 'regular' || l.covering;
       return (
         <button type="button" {...handlers} aria-label={`${label} class with ${l.student}`}
-          className={`${cellBase} truncate px-1 ${makeup ? 'text-[#0f5f56]' : 'text-white'} ${first ? (f.to >= 1 && minutesOf(l) > 30 - (sMin - i * 30) ? 'rounded-b-none' : '') : cont}`}
-          style={fillStyle(f, makeup ? '#9fe0d6' : '#5b3fe0', '#ecebf1')}>
+          className={`${cellBase} truncate px-1 text-white ${first ? (f.to >= 1 && minutesOf(l) > 30 - (sMin - i * 30) ? 'rounded-b-none' : '') : cont}`}
+          style={fillStyle(f, TIME_COLORS.class, TIME_COLORS.closed)}>
           {first ? <span className="[color:inherit]">{l.student.split(' ')[0]} <span className="hidden font-medium [color:inherit] lg:inline">{ampmEn(s.time)}</span></span> : ''}
         </button>
       );
     }
     if (k === 'past' || k === 'outside' || k === 'far' || k === 'locked') {
-      if (k === 'past') return <span aria-hidden className={cellBase} style={cantChange} />;
-      return <button type="button" {...handlers} aria-label={`${label} can’t change`} className={cellBase} style={cantChange} />;
+      if (k === 'past') return <span aria-hidden className={`${cellBase} rounded-none border-b border-white/40`} style={cantChange} />;
+      return <button type="button" {...handlers} aria-label={`${label} ${k === 'outside' ? "can't open" : 'can’t change'}`} className={`${cellBase} rounded-none border-b border-white/40`} style={k === 'outside' ? { background: CANT_OPEN_BACKGROUND } : cantChange} />;
     }
     if (k === 'blocked') {
       const b = data ? blockAt(data.blocks.filter((x) => x.kind === 'block'), at(date, i), tz) : null;
       const firstOf = !b || i === 0 || kinds[i - 1] !== 'blocked' || blockAt(data!.blocks.filter((x) => x.kind === 'block'), at(date, i - 1), tz)?.id !== b.id;
       return (
-        <button type="button" {...handlers} aria-label={`${label} blocked${b?.note ? `: ${b.note}` : ''}`}
+        <button type="button" {...handlers} aria-label={`${label} closed${b?.note ? `: ${b.note}` : ''}`}
           className={`${cellBase} truncate px-1 text-[#3d3a52] ${firstOf ? '' : cont}`} style={blockedStyle}>
-          {firstOf ? (b?.note || 'Blocked') : ''}
+          {firstOf ? (b?.note || 'Closed') : ''}
         </button>
       );
     }
     if (k === 'request') {
-      return <button type="button" {...handlers} aria-label={`${label} request waiting`} className={`${cellBase} border border-dashed border-[#5b3fe0] bg-white px-1 text-[#5b3fe0]`}>Request</button>;
+      return <button type="button" {...handlers} aria-label={`${label} request waiting`} className={`${cellBase} border border-dashed border-[#5b3fe0] bg-white px-0 text-center text-[9px] text-[#5b3fe0] lg:px-1 lg:text-left lg:text-[11px]`}>Request</button>;
     }
     if (k === 'answered') {
       // 가능 답을 보냈고 운영진 확정 대기 (R-16): 답 대기와 구분
-      return <button type="button" {...handlers} aria-label={`${label} answer sent, waiting for Edge English`} className={`${cellBase} border border-[#5b3fe0] bg-[#efebff] px-1 text-[#5b3fe0]`}>Sent ✓</button>;
+      return <button type="button" {...handlers} aria-label={`${label} Waiting for confirmation`} className={`${cellBase} border border-[#5b3fe0] bg-[#efebff] px-0 text-center text-[9px] text-[#5b3fe0] lg:px-1 lg:text-left lg:text-[11px]`}>Pending</button>;
     }
-    if (k === 'leave') return <button type="button" {...handlers} aria-label={`${label} leave`} className={`${cellBase} bg-[#ecebf1] px-1 text-[#8a879c]`}>Leave</button>;
+    if (k === 'leave') return <button type="button" {...handlers} aria-label={`${label} leave`} className={`${cellBase} bg-[#E9E8EF] px-1 text-[#8a879c]`}>Leave</button>;
     const free = k === 'free';
     return (
-      <button type="button" {...handlers} aria-label={`${label} ${free ? 'available' : 'not available'}`}
-        className={`${cellBase} ${sel ? 'bg-[#c9bfff]' : free ? 'bg-[#e6f6ec] hover:bg-[#cdeedb]' : 'bg-[#ecebf1] hover:bg-[#e0dee8]'}`} />
+      <button type="button" {...handlers} aria-label={`${label} ${free ? 'open' : 'closed'}`}
+        title={free ? 'Block time' : 'Make available'}
+        style={{ background: sel ? '#ded7ff' : free ? TIME_COLORS.open : TIME_COLORS.closed }}
+        className={`${cellBase} rounded-none border-b border-white/40 hover:brightness-95`} />
     );
   }
 
   const header = (
     <div className="mb-2 grid gap-2 lg:flex lg:flex-wrap lg:items-center">
-      <div className="flex items-center justify-between gap-2 lg:mr-auto">
-        <h1 className="text-[20px] font-bold text-[#1d1b2b] lg:mr-3">Schedule</h1>
+      <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between lg:mr-auto">
+        <h1 className="text-[20px] font-bold text-[#1d1b2b] lg:mr-3">{TUTOR_MENU.schedule}</h1>
         <Seg value={view} onChange={(v) => setView(v)} options={[['month', 'Month'], ['week', 'Week']]} className="lg:hidden" />
       </div>
       <div className="flex items-center gap-2">
@@ -310,17 +315,6 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
           <Seg value={korea ? 'kst' : 'local'} onChange={(v) => setZone(v)} options={[['local', cityTime(tz)], ['kst', KOREA_TIME]]} check />
         )}
       </div>
-    </div>
-  );
-
-  const legend = (
-    <div className="mb-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-[#6b6880]">
-      <Legend color="bg-[#e6f6ec]">Available</Legend>
-      <Legend color="bg-[#ecebf1]">Not available</Legend>
-      <Legend color="bg-[#5b3fe0]">Class</Legend>
-      <Legend style={blockedStyle}>Blocked</Legend>
-      <Legend style={cantChange}>Can’t change</Legend>
-      <Legend color="bg-[#efebff] border border-[#5b3fe0]">Sent ✓ (waiting for Edge English)</Legend>
     </div>
   );
 
@@ -368,7 +362,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
                 <span className="mt-0.5 flex justify-center gap-[3px] lg:hidden">
                   {ls.slice(0, 3).map((x) => <i key={+x.at} className={`block h-[5px] w-[5px] rounded-full ${x.kind === 'lesson' && x.lesson.state === 'canceled' ? 'bg-[#c4c1d1]' : 'bg-[#5b3fe0]'}`} />)}
                 </span>
-                {tag && <span className={`mt-0.5 block overflow-hidden rounded-[4px] py-px text-center text-[9px] font-bold leading-[10px] tracking-[-0.02em] lg:hidden ${tagColor(tag)}`}>{tag}</span>}
+                {tag && <span className={`mt-0.5 block overflow-hidden rounded-[4px] py-px text-center text-[9px] font-bold leading-[10px] tracking-[-0.02em] lg:hidden ${tagColor(tag)}`}>{tag === 'Block' ? 'Closed' : tag}</span>}
                 {/* PC: 칸마다 수업 시각·학생 (H26(50) ⑥ A안) */}
                 <span className="mt-1 hidden gap-0.5 lg:grid">
                   {its.map((x) => <MonthLine key={`${x.kind}-${+x.at}-${x.kind === 'lesson' ? x.lesson.id : ''}`} item={x} zone={viewZone} />)}
@@ -384,16 +378,15 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
 
   const weekView = data && weekKinds && (
     <div>
-      {legend}
       <p className="mb-1.5 text-[12.5px] text-[#6b6880]">
-        <span className="hidden lg:inline">Drag or click a green time to block it. Click a grey time to open it for that day only.</span>
-        <span className="lg:hidden">Tap a green time to block it, or a grey time to open it for that day only.</span>
+        <span className="hidden lg:inline">Click or drag an empty time to make a one-time change.</span>
+        <span className="lg:hidden">Tap an empty time to make a one-time change.</span>
       </p>
       <div ref={scroller} className="max-h-[62vh] overflow-y-auto rounded-[12px] border border-[#e6e3ef] bg-white lg:max-h-[600px]">
-        <div className="grid select-none grid-cols-[42px_repeat(7,minmax(0,1fr))] gap-[2px] px-0.5 pb-2 tabular-nums lg:grid-cols-[52px_repeat(7,minmax(0,1fr))]">
+        <div className="grid select-none grid-cols-[42px_repeat(7,minmax(0,1fr))] gap-x-px pb-2 tabular-nums lg:grid-cols-[52px_repeat(7,minmax(0,1fr))]">
           <div className="sticky top-0 z-[2] bg-white pr-1 pt-1 text-right text-[10px] font-bold leading-tight text-[#2b1c7a]">{korea ? 'KST' : ''}</div>
           {grid.map((d, i) => (
-            <div key={d} className={`sticky top-0 z-[2] py-1 text-center text-[12px] font-bold leading-tight ${d === todayView ? 'rounded-b-[6px] bg-[#5b3fe0] text-white' : 'bg-[#efebff] text-[#2b1c7a]'}`}>
+            <div key={d} className={`sticky top-0 z-[2] py-1 text-center text-[12px] font-bold leading-tight ${d === todayView ? 'rounded-b-[6px] bg-[#5b3fe0] text-white' : 'bg-white text-[#55526a]'}`}>
               {WEEK_HEAD[i]}<small className="block text-[11px] font-semibold">{Number(d.slice(8))}</small>
             </div>
           ))}
@@ -409,8 +402,12 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   );
 
   return (
-    <section aria-label="Schedule" className="relative">
+    <section aria-label={TUTOR_MENU.schedule} className="relative">
       {header}
+      <p className="mb-3 text-[13.5px] text-[#55526a]">
+        View your classes and make one-time changes here. To update your regular hours, go to {onHours ? <button type="button" onClick={onHours} className="font-semibold text-[#5b3fe0] underline">{TUTOR_MENU.hours}</button> : <>{TUTOR_MENU.hours}</>}.
+      </p>
+      {data && <TimeStatusLegend onHelp={() => setDialog({ kind: 'info', title: "Can't open", body: cantOpenHelp(data.times, tz) })} />}
       {err && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
       {!data && !err && <p className="py-6 text-[15px] text-[#6b6880]">Loading…</p>}
       {data && view === 'month' && monthView}
@@ -428,7 +425,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
             {dialog.kind === 'info' && (
               <>
                 <strong className="text-[16px] text-[#1d1b2b]">{dialog.title}</strong>
-                <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14.5px] text-[#b3261e]">{dialog.body}</p>
+                <p className="rounded-[10px] bg-[#f5f6f8] px-3 py-2 text-[14.5px] text-[#55526a]">{dialog.body}</p>
                 <button type="button" onClick={() => closeDialog()} className={btnSub}>Close</button>
               </>
             )}
@@ -440,7 +437,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
               const over = +e <= +now;
               return (
                 <>
-                  <span className="w-fit rounded-[6px] bg-[#ecebf1] px-1.5 py-0.5 text-[12px] font-bold text-[#55526a]">Blocked</span>
+                  <span className="w-fit rounded-[6px] bg-[#E9E8EF] px-1.5 py-0.5 text-[12px] font-bold text-[#55526a]">Closed</span>
                   <p className="text-[15px] font-semibold text-[#1d1b2b]">{whenSpan(a, e, viewZone)}</p>
                   {other && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(a, e, other)}</p>}
                   {!over && (
@@ -490,7 +487,6 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     const run = runFrom(d.kinds, d.start, want);
     const a = at(d.date, d.start);
     const b = d.end === 48 ? localToInstant(plusDays(d.date, 1), '00:00', viewZone) : at(d.date, d.end);
-    const hit = d.mode === 'block' && run.cutBy !== null && d.end === run.ends[run.ends.length - 1] ? lessonIn(d.date, slotTime(run.cutBy)) : null;
     const isOpen = d.mode === 'open';
     // 고른 칸이 모두 '그날만 연 칸'이면 막기가 아니라 추가 개방 철회 — 메모를 받지 않음 (DB 가 그 열기만 거둠, QA-03)
     const removeExtra = !isOpen && d.end > d.start && d.xs.slice(d.start, d.end).every(Boolean);
@@ -530,17 +526,12 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
             ))}
           </div>
         </div>
-        {hit && (
-          <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">
-            You have a class at {ampmEn(inZone(hit.startsAt, viewZone).time)} {viewLabel}. Classes can’t be blocked.
-          </p>
-        )}
         {!isOpen && !removeExtra && <NoteField value={d.note} onChange={(v) => setD({ ...d, note: v })} />}
         {mixedExtra && <p className="text-[13px] text-[#6b6880]">Part of this time is extra hours for this day only. That part just goes back to closed (no note is kept for it).</p>}
         {saveErr && <p role="alert" className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{saveErr}</p>}
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <button type="button" disabled={busy || d.end <= d.start} className={btnMain}
-            onClick={() => save(d.mode, keysOf(d.date, d.start, d.end), isOpen || removeExtra ? null : d.note, null, isOpen ? 'Made available ✓' : removeExtra ? 'Extra hours removed ✓' : 'Blocked ✓')}>
+            onClick={() => save(d.mode, keysOf(d.date, d.start, d.end), isOpen || removeExtra ? null : d.note, null, isOpen ? 'Made available ✓' : removeExtra ? 'Extra hours removed ✓' : 'Closed ✓')}>
             {busy ? 'Saving…' : isOpen ? 'Make available' : removeExtra ? 'Remove' : 'Block'}
           </button>
           <button type="button" disabled={busy} onClick={() => closeDialog()} className={btnSub}>Cancel</button>
@@ -564,7 +555,7 @@ function NoteField({ value, onChange }: { value: string; onChange: (v: string) =
 }
 
 const tagColor = (tag: string) => (tag === 'Cancel' ? 'bg-[#fdecea] text-[#b3261e]' : tag === 'Leave' ? 'bg-[#fff4d6] text-[#8a5300]'
-  : tag === 'Block' ? 'bg-[#ecebf1] text-[#55526a]' : tag === 'Extra hours' ? 'bg-[#e6f6ec] text-[#1f7a4d]' : tag === 'Last' ? 'bg-[#f3e8ff] text-[#7a2ab0]' : 'bg-[#e3f6f3] text-[#0f5f56]');
+  : tag === 'Block' ? 'bg-[#E9E8EF] text-[#55526a]' : tag === 'Extra hours' ? 'bg-[#dff3e9] text-[#1f7a4d]' : tag === 'Last' ? 'bg-[#f3e8ff] text-[#7a2ab0]' : 'bg-[#e3f6f3] text-[#0f5f56]');
 
 function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
   const time = ampmEn(inZone(item.at, zone).time);
@@ -573,8 +564,8 @@ function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
     const tag = lessonTag(l);
     const off = l.state === 'canceled';
     return (
-      <span className={`flex min-w-0 items-center gap-1 text-[12px] leading-[16px] ${off ? 'text-[#a3a0b3] line-through' : 'text-[#1d1b2b]'}`}>
-        <i className={`block h-[6px] w-[6px] shrink-0 rounded-full ${off ? 'bg-[#c4c1d1]' : 'bg-[#5b3fe0]'}`} />
+      <span className={`flex min-w-0 items-center gap-1 text-[12px] leading-[16px] ${off ? 'text-[#a3a0b3] line-through' : 'rounded-[4px] bg-[#5b3fe0] px-1 py-0.5 text-white'}`}>
+        <i className={`block h-[6px] w-[6px] shrink-0 rounded-full ${off ? 'bg-[#c4c1d1]' : 'bg-white/70'}`} />
         <span className="shrink-0 tabular-nums">{time}</span>
         <span className="truncate">{l.student}{tag && !off ? ` · ${tag}` : ''}</span>
       </span>
@@ -582,10 +573,10 @@ function MonthLine({ item, zone }: { item: DayItem; zone: string }) {
   }
   if (item.kind === 'block') {
     return (
-      <span className="flex min-w-0 items-center gap-1 text-[12px] leading-[16px] text-[#55526a]">
+      <span className="flex min-w-0 items-center gap-1 rounded-[4px] bg-[#E9E8EF] px-1 py-0.5 text-[12px] leading-[16px] text-[#55526a]">
         <i className="block h-[6px] w-[6px] shrink-0 rounded-[1px] bg-[#55526a]" />
         <span className="shrink-0 tabular-nums">{time}</span>
-        <span className="truncate">{item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Blocked'}</span>
+        <span className="truncate">{item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Closed'}</span>
       </span>
     );
   }
@@ -623,7 +614,7 @@ function DayRow({ item, zone, onOpen }: { item: DayItem; zone: string; onOpen: (
         className="flex min-h-[48px] w-full items-center gap-2 rounded-[10px] border border-[#e6e3ef] bg-[#faf9fd] px-3 py-1.5 text-left enabled:hover:bg-[#f3f1f8]">
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14.5px] font-semibold text-[#1d1b2b]">
-            {block ? (item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Blocked') : 'Extra hours (this day only)'}
+            {block ? (item.block.kind === 'leave' ? 'Leave' : item.block.note || 'Closed') : 'Extra hours (this day only)'}
           </span>
           <span className="block text-[12.5px] text-[#6b6880]">
             {spanText(item.at, item.end, zone)}
@@ -631,8 +622,8 @@ function DayRow({ item, zone, onOpen }: { item: DayItem; zone: string; onOpen: (
             {item.spans && ` · ${whenSpan(item.spans.at, item.spans.end, zone)}`}
           </span>
         </span>
-        <span className={`shrink-0 rounded-[6px] px-1.5 text-[12px] font-bold ${block ? 'bg-[#ecebf1] text-[#55526a]' : 'bg-[#e6f6ec] text-[#1f7a4d]'}`}>
-          {block ? (item.block.kind === 'leave' ? 'Leave' : 'Blocked') : 'Extra'}
+        <span className={`shrink-0 rounded-[6px] px-1.5 text-[12px] font-bold ${block ? 'bg-[#E9E8EF] text-[#55526a]' : 'bg-[#dff3e9] text-[#1f7a4d]'}`}>
+          {block ? (item.block.kind === 'leave' ? 'Leave' : 'Closed') : 'Extra'}
         </span>
       </button>
     </li>
@@ -643,7 +634,7 @@ function Seg<T extends string>({ value, onChange, options, className = '', check
   value: T; onChange: (v: T) => void; options: [T, string][]; className?: string; check?: boolean;
 }) {
   return (
-    <div role="group" className={`inline-flex overflow-hidden rounded-[10px] border border-[#e6e3ef] bg-white ${className}`}>
+    <div role="group" className={`inline-flex shrink-0 overflow-hidden rounded-[10px] border border-[#e6e3ef] bg-white ${className}`}>
       {options.map(([v, label]) => (
         <button key={v} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
           className={`min-h-[42px] px-3 text-[14px] font-semibold ${value === v ? 'bg-[#5b3fe0] text-white' : 'text-[#1d1b2b]'}`}>
@@ -654,20 +645,11 @@ function Seg<T extends string>({ value, onChange, options, className = '', check
   );
 }
 
-function Legend({ color = '', style, children }: { color?: string; style?: CSSProperties; children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <i aria-hidden className={`inline-block h-[12px] w-[14px] rounded-[3px] ${color}`} style={style} />
-      {children}
-    </span>
-  );
-}
-
 /** 못 바꾸는 칸의 이유 (R-16: 답 전 요청과 답 보낸 뒤 확정 대기를 구분, 추가 개방 줄에서도 같은 안내) */
 function lockReason(k: CellKind | undefined): { title: string; body: string } | null {
   switch (k) {
     case 'request': return { title: 'Request waiting', body: 'A make-up or cover request is waiting for this time. Answer it on Home first.' };
-    case 'answered': return { title: 'Answer sent', body: 'Your answer has been sent for this time. Waiting for Edge English to confirm. To change this time, contact Edge English.' };
+    case 'answered': return { title: 'Waiting for confirmation', body: 'Your answer has been sent for this time. Waiting for Edge English to confirm. To change this time, contact Edge English.' };
     case 'class': return { title: 'Class', body: 'You have a class at this time. Classes can’t be blocked.' };
     case 'locked': return { title: 'Can’t change', body: 'Can’t change: less than 6 hours away.' };
     case 'leave': return { title: 'Leave', body: 'This time is in your leave.' };

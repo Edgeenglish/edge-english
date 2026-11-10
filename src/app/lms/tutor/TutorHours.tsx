@@ -4,6 +4,9 @@
 //  매주 수업 시작 가능 칸 (다음 주 월요일부터). 2026-11-04 H26(50): 'One week only' 탭 없앰 → 날짜별 막기·열기는 Schedule 에서
 //  화면 잠금은 편의일 뿐, 고정 수업 칸 검사는 DB 함수 tutor_hours_save 가 다시 함 (migration 3100)
 
+import { CANT_OPEN_BACKGROUND, TIME_COLORS, cantOpenHelp } from '@/lms/tutor/time-status';
+import TimeStatusLegend from './TimeStatusLegend';
+import { TUTOR_MENU } from '@/lms/tutor/navigation';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   classFill, describeChanges, describeChangesIn, diff, applyFromText, fromText, hhmm, plusDays, rangeText, timeText, toMin, WEEK_DAYS, weeklyClassAt, type HoursData,
@@ -35,7 +38,7 @@ const fillStyle = (f: { from: number; to: number }, dark: string, pale: string):
   ? { background: dark }
   : { background: `linear-gradient(to bottom, ${pale} ${f.from * 100}%, ${dark} ${f.from * 100}%, ${dark} ${f.to * 100}%, ${pale} ${f.to * 100}%)` });
 /** 바꿀 수 없는 칸: 닫힘(회색)과 헷갈리지 않게 빗금 (대표 11/4) */
-const cantChange: CSSProperties = { background: 'repeating-linear-gradient(-45deg,#e3e1ea,#e3e1ea 2px,#fafafd 2px,#fafafd 7px)' };
+const cantChange: CSSProperties = { background: CANT_OPEN_BACKGROUND };
 
 type Dialog =
   | { kind: 'info'; title: string; body: string[] }
@@ -88,7 +91,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
 
   if (!data) {
     return (
-      <Panel onClose={onClose} inline={inline}>
+      <Panel onClose={onClose} inline={inline} onSchedule={onSchedule}>
         {err ? <p className="p-4 text-[14px] text-[#b3261e]">{err}</p> : <p className="p-4 text-[15px] text-[#6b6880]">Loading…</p>}
       </Panel>
     );
@@ -114,7 +117,8 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
   );
   const weeklyChanged = w.added.length + w.removed.length > 0;
   const source = (date: string, t: string) => sourceCell(date, t, viewZone, d.tutor.timezone);
-  const unavailable = <span title="Outside editable booking hours" className={`${cellBase} block`} style={cantChange} />;
+  const showPolicy = () => setDialog({ kind: 'info', title: "Can't open", body: [cantOpenHelp(d.times, d.tutor.timezone)] });
+  const unavailable = <button type="button" aria-label="Can't open" aria-haspopup="dialog" onClick={showPolicy} className={cellBase} style={cantChange} />;
   function displayCell(i: number, t: string) {
     const c = source(plusDays(d.from, i), t);
     if (!d.times.includes(c.time) && !weekly.has(`${c.dow}:${c.time}`) && !weeklyClassAt(d.weeklyClasses, c.dow, c.time)) return unavailable;
@@ -152,7 +156,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
     if (cl) {
       return (
         <button type="button" className={`${cellBase} truncate px-0.5 text-white ${cl.first ? (cl.c.min > 30 ? 'rounded-b-none' : '') : cont}`} aria-label={`${when} class with ${cl.c.student}`}
-          style={fillStyle(classFill(toMin(cl.c.time), cl.c.min, toMin(t)), '#5b3fe0', '#ecebf1')}
+          style={fillStyle(classFill(toMin(cl.c.time), cl.c.min, toMin(t)), TIME_COLORS.class, TIME_COLORS.closed)}
           onClick={() => setDialog({ kind: 'info', title: `Weekly class · ${cl.c.student}`, body: [
             `Every ${FULL[dow]} ${span(cl.c.time, cl.c.min)} ${localLabel} (${cl.c.min} min). You can’t close this time while the class is here.`,
             'To stop teaching this slot, please tell the Edge English team. We’ll move the class with the student first.'] })}>
@@ -166,7 +170,8 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
     return (
       <button type="button" aria-label={`${when} ${isOpen ? 'open' : 'closed'}`} aria-pressed={isOpen}
         onClick={() => toggle(weekly, k, setWeekly)}
-        className={`${cellBase} ${isOpen ? 'bg-[#e6f6ec] text-[#1f7a4d]' : 'bg-[#ecebf1] text-[#8a879c]'} ${changed ? 'ring-2 ring-inset ring-[#5b3fe0]' : ''}`} />
+        style={{ background: isOpen ? TIME_COLORS.open : TIME_COLORS.closed }}
+        className={`${cellBase} ${changed ? 'ring-2 ring-inset ring-[#5b3fe0]' : ''}`} />
     );
   }
 
@@ -207,9 +212,12 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
   );
 
   return (
-    <Panel onClose={close} sub={viewLabel} inline={inline}>
+    <Panel onClose={close} inline={inline} onSchedule={onSchedule}>
       <div className="flex min-h-0 flex-1 gap-5 lg:p-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <p className="mb-1.5 text-[13.5px] font-semibold text-[#1d1b2b]">{applyFromText(d.from)}</p>
+          <TimeStatusLegend onHelp={showPolicy} />
+          <p className="mb-1.5 text-[12.5px] text-[#6b6880]">Click a time to change your weekly hours.</p>
           {d.tutor.timezone !== 'Asia/Seoul' && (
             <div role="group" aria-label="Timetable time zone" className="mb-2 flex flex-wrap gap-2">
               {[false, true].map((korea) => <button key={String(korea)} type="button" aria-pressed={koreaTime === korea}
@@ -219,18 +227,6 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
               </button>)}
             </div>
           )}
-          <p className="mb-1.5 text-[13.5px] font-semibold text-[#1d1b2b]">{applyFromText(d.from)}</p>
-          <p className="mb-1.5 text-[12.5px] text-[#6b6880]">Tap a time to open or close it every week. Green = students can book a class starting then.</p>
-          {/* 왜 못 여는지 한 줄 (대표 11/4): 범위는 DB 가 준 시작 시각 목록(강사 현지 06:00~22:30, 2026-11-03 대표 결정)에서 읽음 */}
-          <p className="mb-1.5 text-[12.5px] text-[#6b6880]">
-            Striped = can’t open: outside {timeText(toMin(d.times[0]))}–{timeText(toMin(d.times[d.times.length - 1]))} {localLabel} (classes can only start in these hours).
-          </p>
-          <div className="mb-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-[#6b6880]">
-            <Legend color="bg-[#e6f6ec]">Open</Legend>
-            <Legend color="bg-[#ecebf1]">Closed</Legend>
-            <Legend style={cantChange}>Can’t open</Legend>
-            <Legend color="bg-[#5b3fe0]">Class</Legend>
-          </div>
           <div ref={scroller} className={`min-h-0 flex-1 overflow-y-auto border-t border-[#e6e3ef] lg:max-h-[560px] lg:flex-none ${inline ? 'max-h-[58vh]' : ''}`}>
             <div className="grid grid-cols-[46px_repeat(7,minmax(0,1fr))] gap-[2px] pb-2 pt-1 tabular-nums">
               <div className="sticky top-0 z-[1] bg-white pr-1 text-right text-[10px] font-bold leading-tight text-[#2b1c7a]">{koreaTime ? 'KST' : localLabel}</div>
@@ -244,11 +240,6 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
             </div>
             <div className="lg:hidden">{history}</div>
           </div>
-          {onSchedule && (
-            <p className="mt-2 text-[13px] text-[#6b6880]">
-              Need to change your hours for just one day? Go to <button type="button" onClick={onSchedule} className="font-semibold text-[#5b3fe0] underline">Schedule</button>.
-            </p>
-          )}
         </div>
         <aside className="hidden w-[280px] shrink-0 content-start gap-3 lg:grid">
           {changesBox}
@@ -296,13 +287,12 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
   );
 }
 
-function Panel({ onClose, sub, inline, children }: { onClose: () => void; sub?: string; inline?: boolean; children: ReactNode }) {
+function Panel({ onClose, onSchedule, inline, children }: { onClose: () => void; onSchedule?: () => void; inline?: boolean; children: ReactNode }) {
   const head = (
     <div className="mb-2 flex items-start justify-between gap-2">
       <div>
-        <h2 className={`${inline ? 'text-[20px]' : 'text-[18px]'} font-bold text-[#1d1b2b]`}>Weekly Availability</h2>
-        <p className="text-[13.5px] text-[#55526a]">Set the hours you’re available to teach each week.</p>
-        {sub && <p className="text-[12.5px] text-[#6b6880]">{sub}</p>}
+        <h2 className={`${inline ? 'text-[20px]' : 'text-[18px]'} font-bold text-[#1d1b2b]`}>{TUTOR_MENU.hours}</h2>
+        <p className="text-[13.5px] text-[#55526a]">Set your regular weekly teaching hours here. For one-time changes, go to {onSchedule ? <button type="button" onClick={onSchedule} className="font-semibold text-[#5b3fe0] underline">{TUTOR_MENU.schedule}</button> : <>{TUTOR_MENU.schedule}</>}.</p>
       </div>
       {!inline && (
         <button type="button" aria-label="Close" onClick={onClose}
@@ -312,7 +302,7 @@ function Panel({ onClose, sub, inline, children }: { onClose: () => void; sub?: 
   );
   if (inline) {
     return (
-      <section aria-label="Weekly Availability" className="relative flex min-h-[70vh] flex-col rounded-[16px] bg-white p-3 lg:p-4">
+      <section aria-label={TUTOR_MENU.hours} className="relative flex min-h-[70vh] flex-col rounded-[16px] bg-white p-3 lg:p-4">
         {head}
         {children}
       </section>
@@ -320,20 +310,11 @@ function Panel({ onClose, sub, inline, children }: { onClose: () => void; sub?: 
   }
   return (
     <div className="fixed inset-0 z-40 flex justify-center bg-black/40 lg:items-center">
-      <div role="dialog" aria-modal="true" aria-label="Weekly Availability"
+      <div role="dialog" aria-modal="true" aria-label={TUTOR_MENU.hours}
         className="relative flex h-full w-full flex-col bg-white px-3 pt-3 lg:h-auto lg:max-h-[94vh] lg:max-w-[1080px] lg:rounded-[20px] lg:p-5">
         {head}
         {children}
       </div>
     </div>
-  );
-}
-
-function Legend({ color = '', style, children }: { color?: string; style?: CSSProperties; children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <i aria-hidden className={`inline-block h-[12px] w-[14px] rounded-[3px] ${color}`} style={style} />
-      {children}
-    </span>
   );
 }

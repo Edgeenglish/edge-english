@@ -5,6 +5,7 @@
 // Students = 담당 수강생 → 프로필, Availability = 매주 가능 시간 (예전 My hours)
 // 화면 검사는 편의일 뿐, 본인 수업인지·시작했는지·정산 잠김은 DB 함수가 다시 확인 (migration 2000)
 
+import { TUTOR_MENU } from '@/lms/tutor/navigation';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { googleCalendarUrl, icsUrl } from '@/lms/calendar/add';
 import { ampmEn, formatInZone } from '@/lms/rules/dates';
@@ -113,10 +114,10 @@ type Tab = 'home' | 'schedule' | 'record' | 'students' | 'hours';
 // 메뉴 이름은 대표가 정한 영문 그대로 (2026-11-04, H26(50): My hours → Availability. 저장 키 'hours' 는 그대로)
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
-  { key: 'schedule', label: 'Schedule', icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
   { key: 'record', label: 'Class Record', icon: 'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z' },
   { key: 'students', label: 'Students', icon: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' },
-  { key: 'hours', label: 'Availability', icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+  { key: 'hours', label: TUTOR_MENU.hours, icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+  { key: 'schedule', label: TUTOR_MENU.schedule, icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
 ];
 // 운영자 보기 한국어 라벨 (강사 본인은 늘 영어)
 const TAB_KO: Record<Tab, string> = { home: '홈', schedule: '일정', record: 'Class Record', students: '수강생', hours: '가능 시간' };
@@ -283,7 +284,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   // Availability 에 저장 안 한 변경이 있으면 메뉴를 바꾸기 전에 확인 (QA UX: '1 change not saved' 상태에서 Home 누르면 사라짐)
   const hoursDirty = useRef(false);
   const goTab = (key: Tab) => {
-    if (tab === 'hours' && key !== 'hours' && hoursDirty.current && !window.confirm('You have unsaved changes in Availability. Leave without saving?')) return;
+    if (tab === 'hours' && key !== 'hours' && hoursDirty.current && !window.confirm('You have unsaved changes in Regular Working Hours. Leave without saving?')) return;
     setTab(key);
   };
   const tr = t;
@@ -528,7 +529,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 
         {tab === 'schedule' && (
           <TutorSchedule actions={actions.schedule} tz={tz} now={now} openProfile={openProfile} onRecord={openInRecord}
-            loadLessons={loadLessons} onSaved={() => reload()} />
+            loadLessons={loadLessons} onSaved={() => reload()} onHours={() => goTab('hours')} />
         )}
 
         {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} inline onDirty={(d) => { hoursDirty.current = d; }} onSaved={() => reload()} />}

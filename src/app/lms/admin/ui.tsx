@@ -35,7 +35,7 @@ export type AdminTab = 'home' | 'schedule' | 'students' | 'stats';
 // 대시보드 5차 (대표 11/9): 홈 · 수강생 · 통계
 const TABS: { key: AdminTab; label: string; href: string; icon: IconName; demoOnly?: boolean }[] = [
   { key: 'home', label: '홈', href: '/lms/admin', icon: 'home' },
-  { key: 'students', label: '수강생', href: '/lms/admin/students', icon: 'users' },
+  { key: 'students', label: '수강생 관리', href: '/lms/admin/students', icon: 'users' },
   { key: 'stats', label: '통계', href: '/lms/admin/stats', icon: 'chart' },
 ];
 
@@ -100,8 +100,8 @@ export function AdminHeader({ active, demo, right, rightInline }: { active: Admi
       {/* 화면 보기 2개는 로고 옆 (대시보드 5차) */}
       {!demo && (
         <div className="flex items-center gap-1 lg:gap-1.5">
-          <Link href="/lms/tutor" className="flex min-h-[36px] items-center rounded-[10px] border border-[#7d5ffb] px-2 text-[12px] font-semibold text-[#5b3fe0] lg:px-3 lg:text-[13px]">강사 화면</Link>
-          <Link href="/lms/student" className="flex min-h-[36px] items-center rounded-[10px] border border-[#7d5ffb] px-2 text-[12px] font-semibold text-[#5b3fe0] lg:px-3 lg:text-[13px]">수강생 화면</Link>
+          <Link href="/lms/tutor" className="flex min-h-[36px] items-center rounded-[10px] border border-[#7d5ffb] px-2 text-[12px] font-semibold text-[#5b3fe0] lg:px-3 lg:text-[13px]">튜터 화면 보러가기</Link>
+          <Link href="/lms/student" className="flex min-h-[36px] items-center rounded-[10px] border border-[#7d5ffb] px-2 text-[12px] font-semibold text-[#5b3fe0] lg:px-3 lg:text-[13px]">수강생 화면 보러가기</Link>
           <span className="mx-1 hidden h-6 w-px bg-[#e6e3ef] lg:block" />
         </div>
       )}
