@@ -281,7 +281,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     }
     if (k === 'answered') {
       // 가능 답을 보냈고 운영진 확정 대기 (R-16): 답 대기와 구분
-      return <button type="button" {...handlers} aria-label={`${label} answer sent, waiting for Edge English`} className={`${cellBase} border border-[#5b3fe0] bg-[#efebff] px-1 text-[#5b3fe0]`}>Sent ✓</button>;
+      return <button type="button" {...handlers} aria-label={`${label} Waiting for confirmation`} className={`${cellBase} border border-[#5b3fe0] bg-[#efebff] px-1 text-[#5b3fe0]`}>Pending</button>;
     }
     if (k === 'leave') return <button type="button" {...handlers} aria-label={`${label} leave`} className={`${cellBase} bg-[#ecebf1] px-1 text-[#8a879c]`}>Leave</button>;
     const free = k === 'free';
@@ -321,7 +321,6 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       <Legend color="bg-[#5b3fe0]">Class</Legend>
       <Legend style={blockedStyle}>Blocked</Legend>
       <Legend style={cantChange}>Can’t change</Legend>
-      <Legend color="bg-[#efebff] border border-[#5b3fe0]">Sent ✓ (waiting for Edge English)</Legend>
     </div>
   );
 
@@ -671,7 +670,7 @@ function Legend({ color = '', style, children }: { color?: string; style?: CSSPr
 function lockReason(k: CellKind | undefined): { title: string; body: string } | null {
   switch (k) {
     case 'request': return { title: 'Request waiting', body: 'A make-up or cover request is waiting for this time. Answer it on Home first.' };
-    case 'answered': return { title: 'Answer sent', body: 'Your answer has been sent for this time. Waiting for Edge English to confirm. To change this time, contact Edge English.' };
+    case 'answered': return { title: 'Waiting for confirmation', body: 'Your answer has been sent for this time. Waiting for Edge English to confirm. To change this time, contact Edge English.' };
     case 'class': return { title: 'Class', body: 'You have a class at this time. Classes can’t be blocked.' };
     case 'locked': return { title: 'Can’t change', body: 'Can’t change: less than 6 hours away.' };
     case 'leave': return { title: 'Leave', body: 'This time is in your leave.' };
