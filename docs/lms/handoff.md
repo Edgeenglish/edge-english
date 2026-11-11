@@ -109,6 +109,7 @@
 - **운영 배포 11/11 f4efd3a** (lms-prod·main): lms-prod 위에 StudentHome.tsx·fake-data.ts 만 (DB 변경 없음). 로그인 계정 만들기 이동(StudentLive·StudentDetail)은 대표 계정 화면 QA 뒤 따로 배포 — 운영은 아직 운영자 띠에 예전 입력칸
 - lms-test cadc6fe·63f27af (운영 미배포): 내 정보 알림 설정 '수업 알림은 수업 24시간 전과 2시간 전에…' 문구, 누적 학습 시간 띠 문장 400 통일, 변경권 28일 안내 → ? 툴팁(HelpTip: 마우스 올리기·클릭·터치·포커스, Esc·바깥 누르면 닫힘)
 - lms-test 54bfd5b (운영 미배포): 학생 홈 '내 수강 정보' 요약 칸 (다음 수업 아래·빠른 신청 위). 담당 강사 = student_regular_slots 강사만, 수업 시간 = 정규 일정을 학생 시간대로, 남은 수업 = lessonsLeft.total(재등록 기준과 같음), 종료일 = final_end_date 23:59 KST 의 학생 현지 날짜. 자세히 보기 › → 내 정보 #my-pass. QA: STU-0012(담당 Emma·다음 수업 James)·0002(멜버른·연장)·0041(시드니)·0004(연장 5회·12주)·0018 본인, PC·390·360 통과
+- **운영 배포 11/11 42d84e7** (lms-prod·main): cadc6fe·63f27af·54bfd5b 의 StudentHome.tsx 만 (처리 내역 01982ef·로그인 계정 이동 제외, DB 변경 없음). 되돌리기: lms-prod 에서 42d84e7 revert 후 push
 - 대표 확인(11/11): 휴대폰 카드 세로 한 장씩 유지 · 운영자 띠 검색칸 유지. **남은 것: 대표 계정으로 시험 사이트 수강생 상세 [로그인 만들기] 화면 QA (STU-0002, example.com 이메일) — 끝나면 Claude 가 시험 DB 로 연결·기존 기록 확인**
 
 ## ⚠ 11/11 운영 학생 홈 '학생마다 다르게 보임' 원인·수정 — **lms-test 51b9589, 운영 미배포(대표 승인 대기)**
