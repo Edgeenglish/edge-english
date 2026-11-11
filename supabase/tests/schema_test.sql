@@ -1966,7 +1966,7 @@ insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, makeup_
    '55555555-0000-0000-0000-000000002900', 'regular', 1, null, '2031-03-03 11:00Z', '2031-03-03 11:50Z'),
   ('77777777-2900-0000-0000-000000000002', '99999999-1000-0000-0000-000000002900', '99999999-0000-0000-0000-000000002900',
    '55555555-0000-0000-0000-000000002900', 'makeup', null, '77777777-2900-0000-0000-000000000001', '2031-03-03 14:00Z', '2031-03-03 14:50Z');
--- (11/11 migration 20261111170000: 대기열 구조로 바꿈 — 24시간 전·2시간 전, 알림 시점부터 1시간 안에만)
+-- (11/11 migration 20261111170500: 대기열 구조로 바꿈 — 24시간 전·2시간 전, 알림 시점부터 1시간 안에만)
 select pg_temp.ok(lms_lesson_reminder_run('2031-03-02 11:30Z') = '{"sent": 0}', '리마인더: 시작 표시(lesson_reminder_since)가 없으면 안 보냄');
 insert into feature_flags (key, enabled, note) values ('lesson_reminder_since', true, '시험') on conflict (key) do nothing;
 select pg_temp.ok((select array_agg(which) from lms_lesson_reminders_due('2031-03-02 11:30Z') d join lessons l on l.id = d.lesson_id where l.student_id = '99999999-0000-0000-0000-000000002900') = '{24h}'
