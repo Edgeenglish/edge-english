@@ -1685,7 +1685,7 @@ function LearnedBand({ minutes }: { minutes: number }) {
   // 11/11 대표: 한 줄로, 시간은 문장 바로 뒤에 (오른쪽 끝으로 떨어뜨리지 않음)
   return (
     <p aria-label="나의 학습 누적 시간" className="w-fit rounded-[14px] bg-[#f4f1ff] px-3.5 py-2 text-[13px] leading-snug text-[#5c4b95]">
-      <b className="font-extrabold text-[#1d1b2b]">나의 학습 누적 시간</b> 영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 쌓였어요🔥 <b className="whitespace-nowrap text-[14px] font-extrabold text-[#4d34bc]">{text}</b>
+      <b className="font-extrabold text-[#1d1b2b]">나의 학습 누적 시간</b> <b className="whitespace-nowrap text-[14px] font-extrabold text-[#4d34bc]">{text}</b> 영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 쌓였어요🔥
     </p>
   );
 }
