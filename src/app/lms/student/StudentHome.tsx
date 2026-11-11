@@ -593,7 +593,7 @@ export default function StudentHome(props: {
   const quickTop = 'flex min-h-[48px] w-full items-center justify-between gap-2 rounded-t-[16px] border-b border-[#eeecf4] px-4 text-left transition-colors hover:bg-[#f7f5fd] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#5b3df0]';
   const quickGo = <span className="shrink-0 text-[12.5px] font-semibold text-[#5b3df0]">신청하기 ›</span>;
   const quick = (
-    <section aria-label="빠른 신청" className="grid grid-cols-2 gap-2">
+    <section aria-label="빠른 신청" className="grid auto-rows-fr grid-cols-1 gap-2 sm:grid-cols-2">
       <div className={`${card} flex flex-col`}>
         <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: null })} className={quickTop}>
           <span className="text-[15px] font-bold text-[#1d1b2b]">수업 변경·취소</span>{quickGo}
