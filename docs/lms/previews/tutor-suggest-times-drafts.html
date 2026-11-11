@@ -1,0 +1,292 @@
+<title>강사 보강 시간 제안 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위 결정 질문 → 흐름 → 강사 화면(휴대폰 3장면 + PC) → 학생 화면(휴대폰 3장면 + PC) → 만들 때 메모. 색은 LMS 실제 화면 색 그대로 */
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--accent:#5b3fe0;--q:#efeafe;--sel:#efebff;
+--ok:#e6f6ec;--ok-fg:#1f7a4d;--warn:#fff4d6;--warn-fg:#5c3b00;--warn-line:#f0a33a;--bad-fg:#b3261e;--soft:#f3f1f8;--chip:#ecebf1;--chip-fg:#55526a;--frame:#d9d5e6;
+--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--warn-line:#b07a22;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;--frame:#3b3948;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--warn-line:#b07a22;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;--frame:#3b3948;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 60px}
+main{max-width:1180px;margin:0 auto;display:grid;gap:34px}
+main>*{min-width:0}
+h1{font-size:22px;margin:0;text-wrap:balance}h2{font-size:19px;margin:0 0 10px}h3{font-size:14px;margin:0 0 8px;color:var(--muted);font-weight:600}
+p{margin:0}ol,ul{margin:4px 0 0;padding-left:20px}li{margin-bottom:5px}
+.q{background:var(--q);border-radius:14px;padding:14px 16px;display:grid;gap:12px}
+.q>div{display:grid;gap:4px}
+.q b.n{color:var(--accent)}
+.rec{display:inline-block;background:var(--accent);color:#fff;font-size:11.5px;font-weight:700;border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.flow{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));list-style:none;padding:0;margin:0;counter-reset:s}
+.flow li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px;margin:0}
+.flow li::before{counter-increment:s;content:counter(s);display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;margin-right:6px}
+.flow .who{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.new{display:inline-block;font-size:11px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:0 4px;margin-left:4px}
+.cap{font-size:13px;color:var(--muted);margin:0 0 6px}
+.phones{display:flex;gap:18px;overflow-x:auto;padding-bottom:6px}
+.phone{flex:0 0 340px;width:340px;border:8px solid var(--frame);border-radius:30px;background:var(--bg);overflow:hidden}
+.phone .scr{padding:12px;display:grid;gap:10px;min-height:560px;align-content:start}
+.pc-wrap{overflow-x:auto;padding-bottom:6px}
+.pc{width:1060px;border:1px solid var(--frame);border-radius:12px;background:var(--bg);overflow:hidden}
+.pc .bar{height:26px;background:var(--frame);display:flex;align-items:center;gap:6px;padding-left:10px}
+.pc .bar i{width:9px;height:9px;border-radius:50%;background:var(--card);opacity:.7}
+.pc .body{display:flex;gap:20px;padding:18px}
+.side{width:200px;flex:0 0 200px;display:grid;gap:4px;align-content:start}
+.side span{padding:9px 12px;border-radius:10px;font-size:14px;color:var(--muted)}
+.side span.on{background:var(--sel);color:var(--accent);font-weight:700}
+.pc .main{flex:1;min-width:0;display:grid;gap:14px;align-content:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:8px}
+.todo{border:2px solid var(--warn-line);border-radius:16px;overflow:hidden;background:var(--card)}
+.todo h4{margin:0;background:var(--warn);color:var(--warn-fg);padding:8px 12px;font-size:15px;display:flex;gap:8px;align-items:center}
+.todo .pill{background:var(--warn-line);color:#fff;border-radius:99px;font-size:12px;padding:0 8px}
+.todo .item{display:flex;justify-content:space-between;align-items:center;padding:11px 12px;font-size:14.5px;font-weight:600}
+.name{font-size:16px;font-weight:700}.sub{font-size:13px;color:var(--muted)}
+.lbl{font-size:13px;font-weight:600;color:var(--chip-fg);margin-top:4px}
+.slot{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:14px;background:var(--card)}
+.slot .dot{width:20px;height:20px;flex:0 0 20px;border-radius:50%;border:1.5px solid var(--frame);display:grid;place-items:center;font-size:10px;color:transparent}
+.slot.on{border-color:var(--accent);background:var(--sel)}
+.slot.on .dot{background:var(--accent);border-color:var(--accent);color:#fff}
+.slot.off{opacity:.45}
+.slot b{display:block}
+.chk .dot{border-radius:5px}
+.btn{min-height:44px;border-radius:12px;border:0;background:var(--accent);color:#fff;font:inherit;font-weight:700;font-size:14.5px;display:flex;align-items:center;justify-content:center;padding:0 12px;text-align:center}
+.btn.sub{background:var(--card);color:var(--fg);border:1px solid var(--frame);font-weight:600}
+.btn.done{background:var(--chip);color:var(--chip-fg)}
+.link{font-size:13px;color:var(--muted);text-decoration:underline;text-align:center}
+.okbox{background:var(--ok);color:var(--ok-fg);border-radius:10px;padding:9px 11px;font-weight:700;font-size:14px}
+.days{display:flex;gap:6px;overflow-x:auto}
+.day{flex:0 0 auto;border:1px solid var(--line);border-radius:10px;padding:5px 9px;text-align:center;font-size:12.5px;background:var(--card);line-height:1.3}
+.day.on{border-color:var(--accent);background:var(--sel);color:var(--accent);font-weight:700}
+.day.x{opacity:.4}
+.times{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.t{border:1px solid var(--line);border-radius:10px;padding:7px 4px;text-align:center;font-size:13.5px;background:var(--card)}
+.t.on{border-color:var(--accent);background:var(--accent);color:#fff;font-weight:700}
+.badge{background:var(--soft);border-radius:10px;padding:7px 10px;font-size:12.5px;color:var(--chip-fg)}
+.status{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12.5px;font-weight:700;background:var(--warn);color:var(--warn-fg)}
+.status.ok{background:var(--ok);color:var(--ok-fg)}
+.steps{display:flex;gap:6px;list-style:none;padding:0;margin:0}
+.steps li{flex:1;text-align:center;font-size:12px;margin:0}
+.steps li::before{content:"";display:block;height:6px;border-radius:4px;background:var(--line);margin-bottom:5px}
+.steps li.d::before{background:var(--accent)}.steps li.c::before{background:var(--warn-line)}
+.steps li.d,.steps li.c{font-weight:700}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}.kv span:first-child{color:var(--muted)}
+.cal{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cal span{border:1px solid var(--frame);border-radius:10px;padding:8px 4px;text-align:center;font-size:12.5px;font-weight:600}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.scene{font-size:12.5px;font-weight:700;color:var(--accent);margin:0 0 6px}
+.memo{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:14px;display:grid;gap:6px;max-width:80ch}
+</style>
+
+<main>
+<header style="display:grid;gap:6px">
+  <h1>강사 보강 시간 제안 → 학생이 골라 바로 확정</h1>
+  <p class="sub">H26(134) · 시험 화면 아님(시안). 예시: 학생 김하준(Sydney) · 강사 Emma(Toronto) · 오늘 11/11(수)</p>
+</header>
+
+<section class="q" aria-label="대표 결정">
+  <h2 style="margin:0">대표님이 정해 주실 것 4가지</h2>
+  <div><b class="n">① 강사가 제안할 수 있는 시간 개수</b>
+    <span>가) 최대 2개 <span class="rec">권장</span> — 학생→강사도 최대 2개라 같은 규칙 · 나) 최대 3개 · 다) 1개만</span>
+    <span class="sub">숫자라 대표님이 정해 주세요. 최소는 1개.</span></div>
+  <div><b class="n">② 학생이 제안 시간이 모두 안 될 때</b>
+    <span>가) 학생 화면 맨 아래 작은 글 [제안한 시간이 모두 안 돼요] → 지금처럼 '다른 일정 조율 중'(운영진 카톡) <span class="rec">권장</span> · 나) 버튼 없음, 학생이 카톡으로 말함</span></div>
+  <div><b class="n">③ 학생에게 '강사님이 시간을 제안했어요' 메일 보내기</b>
+    <span>가) 보냄(학생 + 운영진 숨은참조) <span class="rec">권장</span> — 안 보내면 학생이 LMS를 열기 전까지 모름 · 나) 안 보냄(확정 메일만)</span>
+    <span class="sub">문구는 대화창에 따로 드렸어요. '넣어' 전에는 시스템에 넣지 않아요.</span></div>
+  <div><b class="n">④ 학생이 안 고르고 제안 시간이 다 지나면</b>
+    <span>가) 운영진 대시보드 '보강 조율 필요'에 뜸(새 숫자 없음) <span class="rec">권장</span> · 나) 학생에게 재촉 메일도 보냄(보낼 시각 숫자 필요)</span></div>
+</section>
+
+<section aria-label="흐름">
+  <h2>흐름</h2>
+  <ol class="flow">
+    <li>학생이 보강 희망 시간 1~2개 신청<span class="who">지금과 같음</span></li>
+    <li>강사가 [None of these times work] → <b>내 가능 시간에서 골라 [Suggest to student]</b> <span class="new">새로</span><span class="who">학생 신청 화면과 같은 검사(휴무·다른 수업·06:00~22:30·종료일)</span></li>
+    <li>학생에게 메일 '강사님이 보강 시간을 제안했어요' <span class="new">새로 · ③</span><span class="who">운영진 숨은참조. 지금 support@ 로 가는 'None of these' 메일은 이걸로 대신</span></li>
+    <li>학생이 하나 골라 [이 시간으로 확정] → <b>바로 확정</b> <span class="new">새로</span><span class="who">누르는 순간 다시 검사. D-43 예외(강사가 먼저 고른 시간)</span></li>
+    <li>보강 확정 메일 학생·강사 + 운영진 숨은참조<span class="who">지금 쓰는 보강 확정 메일 그대로(캘린더 버튼 2개) — 새 문구 없음</span></li>
+  </ol>
+</section>
+
+<!-- ============ 강사 ============ -->
+<section aria-label="강사 화면">
+  <h2>강사 화면 (영어 · 강사 현지 시간 + KST)</h2>
+  <h3>휴대폰</h3>
+  <div class="phones">
+    <div>
+      <p class="scene">장면 1 · 학생 시간이 모두 안 됨</p>
+      <div class="phone"><div class="scr">
+        <div class="card">
+          <div><span class="name">Kim Hajun</span> <span class="sub">40 min</span></div>
+          <p class="sub">Original class: Mon, 9 Nov 7:00 PM <b>Toronto Time</b> / Tue, 10 Nov 9:00 AM <b>KST</b></p>
+          <p class="lbl">Pick one time to confirm</p>
+          <div class="slot"><span class="dot">●</span><span><b>Thu, 12 Nov 7:00–7:40 PM Toronto Time</b><span class="sub">Fri, 13 Nov 9:00 AM KST</span></span></div>
+          <div class="slot"><span class="dot">●</span><span><b>Fri, 13 Nov 8:00–8:40 PM Toronto Time</b><span class="sub">Sat, 14 Nov 10:00 AM KST</span></span></div>
+          <button class="btn" disabled style="opacity:.45">Confirm make-up</button>
+          <button class="btn sub" style="border-color:var(--accent)">None of these times work</button>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <p class="scene">장면 2 · 내 가능 시간에서 고르기 (새로)</p>
+      <div class="phone"><div class="scr">
+        <div class="card">
+          <div><span class="name">Kim Hajun</span> <span class="sub">40 min</span></div>
+          <p class="sub">Original class: Mon, 9 Nov 7:00 PM <b>Toronto Time</b> / Tue, 10 Nov 9:00 AM <b>KST</b></p>
+          <p class="lbl">Suggest up to 2 times</p>
+          <div class="days">
+            <span class="day">Sat<br>14</span><span class="day on">Sun<br>15</span><span class="day on">Mon<br>16</span><span class="day">Tue<br>17</span><span class="day x">Wed<br>18</span><span class="day">Thu<br>19</span>
+          </div>
+          <p class="sub" style="font-weight:600;color:var(--fg)">Mon, 16 Nov · <b>Toronto Time</b></p>
+          <div class="times"><span class="t">6:00 PM</span><span class="t">7:00 PM</span><span class="t on">8:00 PM</span><span class="t">8:30 PM</span><span class="t">9:00 PM</span><span class="t">9:30 PM</span></div>
+          <p class="lbl">Your picks</p>
+          <div class="slot on"><span class="dot">✓</span><span><b>Sun, 15 Nov 7:00–7:40 PM Toronto Time</b><span class="sub">Mon, 16 Nov 9:00 AM KST</span></span><span class="sub">✕</span></div>
+          <div class="slot on"><span class="dot">✓</span><span><b>Mon, 16 Nov 8:00–8:40 PM Toronto Time</b><span class="sub">Tue, 17 Nov 10:00 AM KST</span></span><span class="sub">✕</span></div>
+          <button class="btn">Suggest to student · 2 times</button>
+          <button class="btn sub">Back</button>
+          <span class="link">No time works before Thu, 3 Dec? Tell Edge English</span>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <p class="scene">장면 3 · 보낸 뒤 (학생 답 기다림)</p>
+      <div class="phone"><div class="scr">
+        <div class="card">
+          <div><span class="name">Kim Hajun</span> <span class="sub">40 min</span></div>
+          <p class="sub">Original class: Mon, 9 Nov 7:00 PM <b>Toronto Time</b> / Tue, 10 Nov 9:00 AM <b>KST</b></p>
+          <button class="btn done">Suggested ✓ · Waiting for the student</button>
+          <div class="slot"><span><b>Sun, 15 Nov 7:00–7:40 PM Toronto Time</b><span class="sub">Mon, 16 Nov 9:00 AM KST</span></span></div>
+          <div class="slot"><span><b>Mon, 16 Nov 8:00–8:40 PM Toronto Time</b><span class="sub">Tue, 17 Nov 10:00 AM KST</span></span></div>
+        </div>
+        <p class="scene" style="margin-top:6px">학생이 고른 뒤</p>
+        <div class="card">
+          <div><span class="name">Kim Hajun</span> <span class="sub">40 min</span></div>
+          <div class="okbox">✓ Make-up confirmed · Mon, 16 Nov 8:00–8:40 PM Toronto Time / Tue, 17 Nov 10:00 AM KST</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:14px">PC (장면 2)</h3>
+  <div class="pc-wrap"><div class="pc"><div class="bar"><i></i><i></i><i></i></div><div class="body">
+    <nav class="side"><span class="on">Home</span><span>Schedule</span><span>Class Record</span><span>Students</span><span>Availability</span></nav>
+    <div class="main">
+      <h4 style="margin:0;font-size:18px">Make-up requests</h4>
+      <div class="card" style="max-width:640px">
+        <div><span class="name">Kim Hajun</span> <span class="sub">40 min</span></div>
+        <p class="sub">Original class: Mon, 9 Nov 7:00 PM <b>Toronto Time</b> / Tue, 10 Nov 9:00 AM <b>KST</b></p>
+        <p class="lbl">Suggest up to 2 times</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div style="display:grid;gap:8px;align-content:start">
+            <div class="days"><span class="day">Sat<br>14</span><span class="day on">Sun<br>15</span><span class="day on">Mon<br>16</span><span class="day">Tue<br>17</span><span class="day x">Wed<br>18</span><span class="day">Thu<br>19</span><span class="day">Fri<br>20</span></div>
+            <p class="sub" style="font-weight:600;color:var(--fg)">Mon, 16 Nov · <b>Toronto Time</b></p>
+            <div class="times"><span class="t">6:00 PM</span><span class="t">7:00 PM</span><span class="t on">8:00 PM</span><span class="t">8:30 PM</span><span class="t">9:00 PM</span><span class="t">9:30 PM</span></div>
+          </div>
+          <div style="display:grid;gap:8px;align-content:start">
+            <p class="lbl" style="margin:0">Your picks</p>
+            <div class="slot on"><span class="dot">✓</span><span><b>Sun, 15 Nov 7:00–7:40 PM Toronto Time</b><span class="sub">Mon, 16 Nov 9:00 AM KST</span></span></div>
+            <div class="slot on"><span class="dot">✓</span><span><b>Mon, 16 Nov 8:00–8:40 PM Toronto Time</b><span class="sub">Tue, 17 Nov 10:00 AM KST</span></span></div>
+            <button class="btn">Suggest to student · 2 times</button>
+            <button class="btn sub">Back</button>
+          </div>
+        </div>
+        <span class="link">No time works before Thu, 3 Dec? Tell Edge English</span>
+      </div>
+    </div>
+  </div></div></div>
+</section>
+
+<!-- ============ 학생 ============ -->
+<section aria-label="학생 화면">
+  <h2>학생 화면 (한국어 · 학생 거주지 시간만)</h2>
+  <h3>휴대폰</h3>
+  <div class="phones">
+    <div>
+      <p class="scene">장면 1 · 홈 할 일</p>
+      <div class="phone"><div class="scr">
+        <div class="badge">모든 날짜·시간은 Sydney 기준 · 변경</div>
+        <div class="todo"><h4>할 일 <span class="pill">1</span></h4>
+          <div class="item"><span>보강 시간 고르기</span><span class="sub">›</span></div></div>
+        <div class="card"><p class="sub">다음 수업</p><b>11/12(목) 오전 11:00</b><p class="sub">40분 · Emma 강사님 · 정규 수업</p></div>
+      </div></div>
+    </div>
+    <div>
+      <p class="scene">장면 2 · 고르기 (새로)</p>
+      <div class="phone"><div class="scr">
+        <div class="badge">Sydney 시간 기준</div>
+        <b style="font-size:17px">보강 신청</b>
+        <div class="card">
+          <div class="kv"><span>지금 상태</span><span class="status">시간 골라 주세요</span></div>
+          <ol class="steps"><li class="d">신청</li><li class="c">강사 제안</li><li>확정</li></ol>
+        </div>
+        <div class="card">
+          <b>강사님이 제안한 시간</b>
+          <div class="slot"><span class="dot">●</span><b>11/16(월) 오전 11:00</b></div>
+          <div class="slot on"><span class="dot">●</span><b>11/17(화) 오후 12:00</b></div>
+          <button class="btn">이 시간으로 확정 · 11/17(화) 오후 12:00</button>
+          <span class="link">제안한 시간이 모두 안 돼요</span>
+        </div>
+        <div class="card">
+          <div class="kv"><span>원래 수업</span><span>11/10(화) 오전 11:00</span></div>
+          <div class="kv"><span>담당 강사</span><span>Emma</span></div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <p class="scene">장면 3 · 확정</p>
+      <div class="phone"><div class="scr">
+        <div class="badge">Sydney 시간 기준</div>
+        <b style="font-size:17px">보강 신청</b>
+        <div class="card">
+          <div class="kv"><span>지금 상태</span><span class="status ok">확정</span></div>
+          <ol class="steps"><li class="d">신청</li><li class="d">강사 제안</li><li class="d">확정</li></ol>
+          <div class="okbox">✓ 보강 확정 · 11/17(화) 오후 12:00</div>
+          <div class="cal"><span>구글 캘린더에 추가</span><span>애플·삼성 캘린더에 추가</span></div>
+        </div>
+        <div class="card">
+          <div class="kv"><span>원래 수업</span><span>11/10(화) 오전 11:00</span></div>
+          <div class="kv"><span>담당 강사</span><span>Emma</span></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:14px">PC (장면 2)</h3>
+  <div class="pc-wrap"><div class="pc"><div class="bar"><i></i><i></i><i></i></div><div class="body">
+    <nav class="side"><span class="on">홈</span><span>일정</span><span>신청 내역</span><span>학습자료</span><span>내 정보</span></nav>
+    <div class="main">
+      <div class="badge" style="justify-self:start">모든 날짜·시간은 Sydney 기준 · 변경</div>
+      <div class="grid2">
+        <div style="display:grid;gap:12px">
+          <div class="todo"><h4>할 일 <span class="pill">1</span></h4><div class="item"><span>보강 시간 고르기</span><span class="sub">›</span></div></div>
+          <div class="card"><p class="sub">다음 수업</p><b>11/12(목) 오전 11:00</b><p class="sub">40분 · Emma 강사님 · 정규 수업</p></div>
+        </div>
+        <div class="card" style="box-shadow:0 10px 30px rgba(0,0,0,.12)">
+          <p class="sub">Sydney 시간 기준</p>
+          <b style="font-size:17px">보강 신청</b>
+          <div class="kv"><span>지금 상태</span><span class="status">시간 골라 주세요</span></div>
+          <ol class="steps"><li class="d">신청</li><li class="c">강사 제안</li><li>확정</li></ol>
+          <b style="margin-top:6px">강사님이 제안한 시간</b>
+          <div class="slot"><span class="dot">●</span><b>11/16(월) 오전 11:00</b></div>
+          <div class="slot on"><span class="dot">●</span><b>11/17(화) 오후 12:00</b></div>
+          <button class="btn">이 시간으로 확정 · 11/17(화) 오후 12:00</button>
+          <span class="link">제안한 시간이 모두 안 돼요</span>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+</section>
+
+<section class="memo" aria-label="만들 때 메모">
+  <h2 style="margin:0">만들 때 메모</h2>
+  <ul>
+    <li>강사가 고를 수 있는 시간 = 학생 보강 달력과 같은 함수(휴무·다른 수업·휴식 10분·현지 06:00~22:30·Availability·종료일). 새 숫자 없음.</li>
+    <li>제안한 시간은 잡아 두지 않음. 학생이 누르는 순간 다시 검사하고, 그 사이 막혔으면 '이 시간은 이제 안 돼요'로 못 고르게 함.</li>
+    <li>강사가 고를 시간이 하나도 없으면 지금처럼 글로 운영진에게(작은 글 'Tell Edge English').</li>
+    <li>운영자 보기(?tutor=·?student=)에서 대신 제안·대신 확정 가능, 이력에 '운영자 대신'.</li>
+    <li>운영진 보강 카드: '강사 제안 · 학생 답 대기' 표시 + 기존 [확정] 버튼 그대로(예외용).</li>
+  </ul>
+</section>
+</main>

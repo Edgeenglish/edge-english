@@ -25,6 +25,7 @@
 - 검증: test:db 전부 통과(기존 시험 고침: 강사 안내 'not_needed', 7f6d690 이후 깨져 있던 4곳) · vitest 429 · tsc · eslint(기존 1건) · next build · 로컬 DB 시나리오(신규 문의→답→확정→첫 수업 24h 안내→발송 뒤 변경 안내→같은 값 재저장 안 보냄, 재등록 같은 일정·공백 없음=첫 수업 안내 없음, 정규 변경 메일) · 시험 DB 되돌리기 시나리오(신규 문의 메일·확정 메일·강사 안내 sent) · ?demo=1 PC·iPhone 13 화면
 - 미확인: 실제 support@ 수신(시험 DB 커밋 발송 안 함), 대체 수업 확정 묶음 메일·보강 none-work 메일 실제 흐름(로컬 DB 시험 장면 없음), Gmail 앱에서 '애플·삼성 캘린더' 버튼
 - **⏭ 다음 (새 세션)**: 강사가 [None of these times work] 때 글 대신 Availability 에서 시간 골라 학생에게 제안 → 학생이 하나 고르면 바로 확정 + 확정 메일 학생·강사·운영진 (대표 11/11 결정, D-43 예외 — H26(134)). 시안부터
+  - 11/11 시안 `docs/lms/previews/tutor-suggest-times-drafts.html` (https://claude.ai/artifact/4hsTbCHmowSofdKk3XPVEk, 브랜치 claude/dreamy-curie-yyxifa) — **대표 결정 대기 4개**: ① 강사 제안 개수(권장 최대 2) ② 학생 '모두 안 돼요' 버튼(권장: 지금 '다른 일정 조율 중'으로) ③ 학생 '시간 제안' 메일 보낼지(권장 보냄, 문구는 '넣어' 전 시스템에 넣지 않음) ④ 학생 미응답 처리(권장: 운영진 대시보드만)
 - **운영 배포 전**: `git log origin/lms-test..origin/lms-prod` 에 운영에만 있는 커밋 있음(172cc4f·06aa38c 강사 Hours 등) → lms-test 에 먼저 합치기. 운영 DB 백업 → migration 2개 → first_class_mail_since 시각 확인
 
 ## ✅ 11/11 학생 홈·내 정보 최신 시안 반영 — **lms-test 반영, 운영 미반영** (브랜치 claude/jolly-turing-bfiwh0, H26(95) 내 정보 누락 금지 항목 포함)
