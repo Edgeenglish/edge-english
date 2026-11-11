@@ -595,7 +595,8 @@ export default function StudentHome(props: {
     </section>
   );
 
-  const requestList = s.requests.length > 0 && (
+  // 신청 진행 상태도 신청이 없어도 늘 보임 (11/11 대표: 학생마다 같은 화면)
+  const requestList = (
     <section aria-label="신청 진행 상태" className={`${card} grid gap-1 p-4`}>
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-bold">신청 진행 상태</h2>
@@ -603,6 +604,7 @@ export default function StudentHome(props: {
           전체 ›
         </button>
       </div>
+      {s.requests.length === 0 && <p className="py-2 text-[14px] text-[#6b6880]">아직 신청한 내용이 없어요.</p>}
       {s.requests.slice(0, 3).map((r) => (
         <RequestRow key={r.id} r={r} onOpen={() => setOverlay({ kind: 'request', id: r.id })} />
       ))}
@@ -746,7 +748,10 @@ export default function StudentHome(props: {
           </div>
         )}
 
-        {/* 홈: 운영 화면 배치 유지 (11/11 대표) + 시안 변경점(누적 학습 시간 띠·할 일/다음 수업 칸 항상·다음 수업 교재 링크 없음·공지 맨 아래) */}
+        {/* 운영진 공지 (대시보드에서 게시, 게시 중일 때만) — 운영 화면과 같은 자리 */}
+        {!preview && tab === 'home' && <HomeNotices who="student" title="공지" className="mx-4 mb-3 lg:mx-0 lg:mb-4" />}
+
+        {/* 홈: 운영 화면 배치 유지 (11/11 대표) + 시안 변경점(누적 학습 시간 띠·할 일/다음 수업 칸 항상·다음 수업 교재 링크 없음) */}
         {tab === 'home' && (
           <div className="grid gap-3.5 px-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5 lg:px-0">
             <div className="grid min-w-0 gap-3.5">
@@ -763,8 +768,6 @@ export default function StudentHome(props: {
               )}
               {requestList}
               <div className="lg:hidden">{payBox}</div>
-              {/* 운영진 공지 (대시보드에서 게시, 게시 중일 때만) */}
-              {!preview && <HomeNotices who="student" title="공지" />}
             </div>
             <aside className="hidden gap-4 lg:grid">
               {statusTiles}
