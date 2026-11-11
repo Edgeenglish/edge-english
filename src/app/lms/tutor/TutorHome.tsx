@@ -41,6 +41,10 @@ export type TutorActions = {
   answer: (requestId: string, yes: string[], note: string) => Promise<void>;
   /** 보강 확정 (H26(82)): 수강생 시간 하나를 골라 바로 확정. 없으면 [Confirm] 버튼이 잠김 */
   confirm?: (requestId: string, slotId: string) => Promise<void>;
+  /** 학생 시간이 모두 안 될 때 강사 가능 시간 (H26(134)). 없으면 예전처럼 글로 운영진에게 */
+  suggestOptions?: (requestId: string) => Promise<{ startsAt: Date; endsAt: Date }[]>;
+  /** 시간 1~2개를 학생에게 제안 */
+  suggest?: (requestId: string, times: Date[]) => Promise<void>;
   /** 대체 수업 요청 답: items = 답하는 수업 전체, yes = 가능한 수업 */
   answerCover: (items: string[], yes: string[]) => Promise<void>;
   /** 매주 가능 시간 [Availability] (migration 3100) */
@@ -286,7 +290,9 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   useEffect(() => { void refreshRequests(); }, [refreshRequests, screen]);
   const openRequests = requests.filter((r) => !r.answer).length;
   const followupOfStudent = (id?: string) => (id ? followups.find((f) => f.studentId === id) : undefined);
-  const todoCount = [openRequests, screen.toRecord.length, screen.covers.length, screen.makeups.length, followups.length].filter((n) => n > 0).length;
+  // 학생에게 시간을 제안하고 기다리는 보강(H26(134))은 강사 할 일이 아님 — 카드는 그대로 열어 볼 수 있음
+  const makeupTodo = screen.makeups.filter((m) => !m.stage).length;
+  const todoCount = [openRequests, screen.toRecord.length, screen.covers.length, makeupTodo, followups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
     ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), tz, { from: '1900-01-01', to: '2999-12-31' })
@@ -450,7 +456,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                 {openRequests > 0 && <TodoBar n={openRequests} text={t('New student request', '신규 수강생 문의')} onClick={() => setPanel('request')} />}
                 {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text={t('Classes to record', '기록할 수업')} onClick={() => setTab('record')} />}
                   {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text={t('Cover requests', '대체 수업 요청')} onClick={() => setPanel('cover')} />}
-                  {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text={t('Make-up requests', '보강 요청')} onClick={() => setPanel('makeup')} />}
+                  {screen.makeups.length > 0 && <TodoBar n={makeupTodo > 0 ? makeupTodo : screen.makeups.length} text={makeupTodo > 0 ? t('Make-up requests', '보강 요청') : (screen.makeups.some((m) => m.stage === 'student') ? t('Make-up requests · Waiting for the student', '보강 요청 · 학생 답 대기') : t('Make-up requests · Edge English will arrange', '보강 요청 · 운영진 조율'))} onClick={() => setPanel('makeup')} />}
                 {followups.length > 0 && <TodoBar n={followups.length} text={t('First lesson follow-up', '첫 수업 후 확인')} onClick={() => setPanel('followup')} />}
               </div>
             </section>
@@ -1181,10 +1187,11 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
 }
 
 function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: string; actions: TutorActions; closed: boolean; onSent: () => Promise<void> }) {
-  // 강사 자율 운영 1단계 (H26(82)): 수강생 시간 하나를 골라 [Confirm make-up] → 바로 보강 수업. 모두 안 되면 메모로 운영진에게
-  const declined = !!m.answeredAt && m.slots.every((s) => s.answer !== 'yes');
+  // 강사 자율 운영 1단계 (H26(82)): 수강생 시간 하나를 골라 [Confirm make-up] → 바로 보강 수업.
+  // 모두 안 되면 (H26(134)) 내 가능 시간에서 1~2개 골라 학생에게 제안 → 학생이 고르면 바로 확정. 고를 시간이 없으면 글로 운영진에게
+  const declined = !!m.answeredAt && !m.stage && m.slots.every((s) => s.answer !== 'yes');
   const [pick, setPick] = useState<string | null>(() => m.slots.find((s) => s.answer === 'yes' && !s.busy && !s.past)?.id ?? null);
-  const [none, setNone] = useState(declined);
+  const [mode, setMode] = useState<'pick' | 'suggest' | 'note'>(declined ? 'note' : 'pick');
   const [note, setNote] = useState(m.note ?? '');
   const [sent, setSent] = useState(declined);
   const [confirmed, setConfirmed] = useState<TutorMakeup['slots'][number] | null>(null);
@@ -1192,9 +1199,10 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
   const [err, setErr] = useState('');
   const minutes = m.slots[0] ? minutesOf(m.slots[0]) : null;
   const [firstNote] = useState(note);
-  useDirty(`makeup-${m.id}`, !closed && !confirmed && !sent && none && note !== firstNote);
+  useDirty(`makeup-${m.id}`, !closed && !confirmed && !sent && mode === 'note' && note !== firstNote);
   const picked = m.slots.find((s) => s.id === pick) ?? null;
   const at = (s: { startsAt: Date }) => `${whenText(s.startsAt, tz)} ${tzTimeLabel(tz)}`;
+  const waiting = m.stage === 'student' || m.stage === 'admin';
 
   async function run(f: () => Promise<void>) {
     setBusy(true);
@@ -1221,17 +1229,35 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
         <p role="status" className="mt-2 rounded-[10px] bg-[#e6f6ec] px-3 py-2 text-[14.5px] font-bold text-[#1f7a4d]">
           ✓ Make-up confirmed · <Rich text={rangeFull(confirmed, tz)} />
         </p>
+      ) : waiting ? (
+        <div className="mt-2 grid gap-1.5">
+          {/* 학생 답을 기다리는 동안: 확정된 것처럼 보이지 않게 상태 글 + 제안 시간만 */}
+          <p role="status" className="w-fit rounded-full border border-[#d9d5e6] bg-[#f3f1f8] px-3 py-1 text-[13.5px] font-semibold text-[#3b2a9a]">
+            {m.stage === 'student' ? 'Suggested · Waiting for the student' : 'Edge English will arrange another time'}
+          </p>
+          <p className="text-[13px] font-semibold text-[#55526a]">Times you suggested</p>
+          {(m.suggested ?? []).map((s) => (
+            <div key={+s.startsAt} className="rounded-[10px] border border-dashed border-[#d9d5e6] bg-white px-3 py-2 text-[14.5px] text-[#1d1b2b]">
+              <Rich text={rangeFull(s, tz)} />
+              {!s.ok && <span className="block text-[12.5px] font-semibold text-[#b3261e]">No longer open</span>}
+            </div>
+          ))}
+        </div>
       ) : closed ? (
         <p className="mt-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] font-semibold text-[#1f7a4d]">{sent ? 'Sent ✓ · Edge English will arrange another time' : '✓ Closed by Edge English'}</p>
+      ) : mode === 'suggest' ? (
+        <SuggestTimes m={m} tz={tz} actions={actions} busy={busy}
+          onBack={() => setMode('pick')} onNone={() => setMode('note')}
+          onSend={(times) => run(async () => { await actions.suggest!(m.id, times); })} err={err} />
       ) : (
         <>
           <p className="mb-1.5 mt-3 text-[13px] font-semibold text-[#55526a]">Pick one time to confirm</p>
           <div className="grid gap-1.5" role="radiogroup" aria-label="Make-up time">
             {m.slots.map((s) => {
-              const on = pick === s.id && !none;
+              const on = pick === s.id && mode === 'pick';
               return (
                 <button key={s.id} type="button" role="radio" aria-checked={on} disabled={s.past || s.busy || busy}
-                  onClick={() => { setPick(s.id); setNone(false); }}
+                  onClick={() => { setPick(s.id); setMode('pick'); }}
                   className={`flex min-h-[52px] items-center gap-3 rounded-[10px] border px-3 py-2 text-left disabled:opacity-40 ${
                     on ? 'border-[#5b3fe0] bg-[#efebff]' : 'border-[#d9d5e6] bg-white'}`}>
                   <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] ${
@@ -1245,13 +1271,14 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
             })}
           </div>
           {err && <p className="mt-2 text-[14px] text-[#b3261e]">{err}</p>}
-          {!none ? (
+          {mode === 'pick' ? (
             <div className="mt-3 grid gap-2">
               <button type="button" disabled={busy || !picked || !actions.confirm} className={`${btnMain} w-full`}
                 onClick={() => run(async () => { await actions.confirm!(m.id, picked!.id); setConfirmed(picked); })}>
                 {busy ? 'Confirming…' : picked ? `Confirm make-up · ${at(picked)}` : 'Confirm make-up'}
               </button>
-              <button type="button" disabled={busy} className={`${btnSub} w-full`} onClick={() => { setNone(true); setPick(null); }}>None of these times work</button>
+              <button type="button" disabled={busy} className={`${btnSub} w-full`}
+                onClick={() => { setPick(null); setErr(''); setMode(actions.suggest && actions.suggestOptions ? 'suggest' : 'note'); }}>None of these times work</button>
             </div>
           ) : (
             <>
@@ -1261,10 +1288,103 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
                 onClick={() => run(async () => { await actions.answer(m.id, [], note); setSent(true); })}>
                 {sent ? 'Sent ✓ · Edge English will arrange another time' : busy ? 'Sending…' : 'Send to Edge English'}
               </button>
+              {!sent && actions.suggest && actions.suggestOptions && (
+                <button type="button" disabled={busy} className={`${btnSub} mt-2 w-full`} onClick={() => setMode('suggest')}>Back</button>
+              )}
             </>
           )}
         </>
       )}
+    </div>
+  );
+}
+
+const SUGGEST_MAX = 2;   // 대표 11/11 확정: 강사 제안은 최대 2개
+
+/** 강사 가능 시간에서 1~2개 고르기 (H26(134)). 휴대폰: 날짜 → 시간 → 고른 시간 → 보내기, PC(넓은 창): 왼쪽 날짜·시간 / 오른쪽 고른 시간 */
+function SuggestTimes({ m, tz, actions, busy, err, onBack, onNone, onSend }: {
+  m: TutorMakeup; tz: string; actions: TutorActions; busy: boolean; err: string;
+  onBack: () => void; onNone: () => void; onSend: (times: Date[]) => void;
+}) {
+  const [opts, setOpts] = useState<{ startsAt: Date; endsAt: Date }[] | null>(null);
+  const [loadErr, setLoadErr] = useState('');
+  const [day, setDay] = useState<string | null>(null);
+  const [picks, setPicks] = useState<{ startsAt: Date; endsAt: Date }[]>([]);
+  useDirty(`suggest-${m.id}`, picks.length > 0);
+  useEffect(() => {
+    let live = true;
+    actions.suggestOptions!(m.id)
+      .then((o) => { if (live) { setOpts(o); setDay(o[0] ? localDate(o[0].startsAt, tz) : null); } })
+      .catch((e) => { if (live) setLoadErr(e instanceof Error ? e.message : 'Could not load your open times.'); });
+    return () => { live = false; };
+  }, [actions, m.id, tz]);
+  const days = opts ? [...new Set(opts.map((o) => localDate(o.startsAt, tz)))] : [];
+  const times = opts ? opts.filter((o) => localDate(o.startsAt, tz) === day) : [];
+  const full = picks.length >= SUGGEST_MAX;
+  const isPicked = (o: { startsAt: Date }) => picks.some((p) => +p.startsAt === +o.startsAt);
+  const toggle = (o: { startsAt: Date; endsAt: Date }) =>
+    setPicks((x) => (x.some((p) => +p.startsAt === +o.startsAt) ? x.filter((p) => +p.startsAt !== +o.startsAt)
+      : x.length >= SUGGEST_MAX ? x : [...x, o].sort((a, b) => +a.startsAt - +b.startsAt)));
+
+  if (loadErr) return <p className="mt-3 text-[14px] text-[#b3261e]">{loadErr}</p>;
+  if (!opts) return <p className="mt-3 text-[14px] text-[#6b6880]">Loading your open times…</p>;
+  if (opts.length === 0) {
+    return (
+      <div className="mt-3 grid gap-2">
+        <p className="text-[14px] font-semibold text-[#1d1b2b]">You have no open times before the course ends.</p>
+        <button type="button" className={`${btnMain} w-full`} onClick={onNone}>Tell Edge English</button>
+        <button type="button" className={`${btnSub} w-full`} onClick={onBack}>Back</button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 grid gap-3 sm:grid-cols-2 sm:items-start">
+      <div className="grid min-w-0 gap-2">
+        <p className="text-[13px] font-semibold text-[#55526a]">Suggest up to {SUGGEST_MAX} times</p>
+        <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Day">
+          {days.map((d) => {
+            const on = d === day;
+            const [wd, rest] = dayLabel(d).split(', ');
+            return (
+              <button key={d} type="button" role="tab" aria-selected={on} onClick={() => setDay(d)}
+                className={`min-w-[58px] shrink-0 rounded-[10px] border px-2 py-1.5 text-center text-[12.5px] leading-tight ${
+                  on ? 'border-[#5b3fe0] bg-[#efebff] font-bold text-[#3b2a9a]' : 'border-[#d9d5e6] bg-white text-[#1d1b2b]'}`}>
+                {wd}<span className="block">{rest}</span>
+              </button>
+            );
+          })}
+        </div>
+        {day && <p className="text-[13.5px] font-semibold text-[#1d1b2b]">{dayLabel(day)} · <b>{tzTimeLabel(tz)}</b></p>}
+        <div className="grid grid-cols-3 gap-1.5">
+          {times.map((o) => {
+            const on = isPicked(o);
+            return (
+              <button key={+o.startsAt} type="button" aria-pressed={on} disabled={busy || (full && !on)} onClick={() => toggle(o)}
+                className={`min-h-[42px] rounded-[10px] border px-1 text-[13.5px] tabular-nums disabled:opacity-40 ${
+                  on ? 'border-[#5b3fe0] bg-[#5b3fe0] font-bold text-white' : 'border-[#d9d5e6] bg-white text-[#1d1b2b]'}`}>
+                {on ? '✓ ' : ''}{ampmEn(formatInZone(o.startsAt, tz).time)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="grid min-w-0 gap-2">
+        <p className="text-[13px] font-semibold text-[#55526a]">Your picks <span className="tabular-nums">{picks.length}/{SUGGEST_MAX}</span></p>
+        {picks.length === 0 && <p className="rounded-[10px] border border-dashed border-[#d9d5e6] px-3 py-2.5 text-[13.5px] text-[#8a879c]">No time picked yet</p>}
+        {picks.map((p) => (
+          <div key={+p.startsAt} className="flex items-center gap-2 rounded-[10px] border border-[#5b3fe0] bg-[#efebff] px-3 py-2">
+            <span className="min-w-0 flex-1 text-[14px] text-[#1d1b2b]"><Rich text={rangeFull(p, tz)} /></span>
+            <button type="button" disabled={busy} aria-label={`Remove ${whenText(p.startsAt, tz)}`} onClick={() => toggle(p)}
+              className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full bg-white text-[15px] text-[#55526a] disabled:opacity-40">✕</button>
+          </div>
+        ))}
+        {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
+        <button type="button" disabled={busy || picks.length === 0} className={`${btnMain} w-full`} onClick={() => onSend(picks.map((p) => p.startsAt))}>
+          {busy ? 'Sending…' : picks.length === 0 ? 'Suggest to student' : `Suggest to student · ${picks.length} ${picks.length === 1 ? 'time' : 'times'}`}
+        </button>
+        <button type="button" disabled={busy} className={`${btnSub} w-full`} onClick={onBack}>Back</button>
+        <button type="button" disabled={busy} className="min-h-[40px] text-[13px] text-[#55526a] underline" onClick={onNone}>No time works? Tell Edge English</button>
+      </div>
     </div>
   );
 }

@@ -232,10 +232,27 @@ export function parseStudentView(r: Raw): StudentView {
   };
 }
 
+type SuggestionRow = { id: string; stage: string; suggested: { id: string; starts_at: string; ok: boolean }[] };
+/** 강사가 시간을 제안한 신청: DB 상태(makeup_stage) 'student' = 고르기, 그 밖('admin') = 운영진 조율 */
+export function withSuggestions(v: StudentView, rows: SuggestionRow[]): StudentView {
+  const by = new Map(rows.map((r) => [r.id, r]));
+  return {
+    ...v,
+    requests: v.requests.map((q) => {
+      const r = by.get(q.id);
+      if (!r) return q;
+      return { ...q, status: r.stage === 'student' ? 'choosing' : r.stage === 'admin' ? 'rescheduling' : q.status, suggested: r.suggested.map((x) => ({ id: x.id, startsAt: new Date(x.starts_at), ok: !!x.ok })) };
+    }),
+  };
+}
+
 /** studentId: 운영자가 고른 수강생 (수강생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
-  const [screen, book] = await Promise.all([sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId)]);
-  return { ...parseStudentView(check(screen)), textbook: book };
+  const [screen, book, sug] = await Promise.all([
+    sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId), sb.rpc('student_makeup_suggestions', { p_student: studentId })]);
+  const v = parseStudentView(check(screen));
+  // 강사가 제안한 시간 (H26(134), 20261111160000). 함수 없는 옛 DB 면 예전 그대로
+  return { ...(sug.error ? v : withSuggestions(v, (sug.data as SuggestionRow[]) ?? [])), textbook: book };
 }
 /** 강사가 정한 교재 (QA C-04, migration 20261107040000). 함수가 없는 옛 DB 면 null — 학습자료에 교재만 안 보임 */
 async function loadTextbook(sb: SupabaseClient, studentId: string | null): Promise<string | null> {
@@ -330,7 +347,15 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     withdrawMakeup: async (requestId: string): Promise<void> => {
       check(await sb.rpc('student_makeup_withdraw', { p_student: adminStudentId, p_request: requestId }));
     },
-    /** 휴무 안내 답 (A안 한 번에): ok = 대체강사와 수업, makeup = 기존 강사님과 보강 */
+    /** 강사가 제안한 시간 하나로 바로 확정 (H26(134)). 누르는 순간 DB 가 다시 검사. 운영자 보기도 같은 함수 */
+    pickSuggestion: async (requestId: string, candidateId: string): Promise<void> => {
+      check(await sb.rpc('student_makeup_pick', { p_student: adminStudentId, p_request: requestId, p_candidate: candidateId }));
+    },
+    /** [제안한 시간이 모두 안 돼요] → 운영진 조율 */
+    declineSuggestion: async (requestId: string): Promise<void> => {
+      check(await sb.rpc('student_makeup_decline_suggestion', { p_student: adminStudentId, p_request: requestId }));
+    },
+        /** 휴무 안내 답 (A안 한 번에): ok = 대체강사와 수업, makeup = 기존 강사님과 보강 */
     answerLeave: async (items: string[], answer: 'ok' | 'makeup'): Promise<void> => {
       if (!admin) return void check(await sb.rpc('student_leave_answer', { p_items: items, p_answer: answer }));
       check(answer === 'ok' ? await sb.rpc('admin_leave_student_ok', { p_items: items }) : await sb.rpc('admin_leave_choose', { p_items: items, p_choice: 'wait', p_sub_tutor: null }));

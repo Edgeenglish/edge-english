@@ -82,7 +82,8 @@ export function renewalPrompt(lessons: readonly StudentLesson[], renewal: Renewa
 /** 신청 진행 상태. 수강생이 기다리기만 하면 되는 단계는 할 일이 아님 */
 /** rescheduling = 강사가 고른 날짜 모두 불가 → 운영진이 다른 날짜 조율 (QA-08) · canceled = 확정됐던 보강 수업이 취소됨 (QA-13) */
 /** expired = 고른 시간이 모두 지나도록 강사가 확정하지 않아 자동 만료 (대표 11/9) — 보강권은 그대로, 다시 신청 */
-export type RequestStatus = 'tutor_reviewing' | 'admin_reviewing' | 'rescheduling' | 'confirmed' | 'canceled' | 'completed' | 'expired' | 'withdrawn';
+/** choosing = 강사가 다른 시간을 제안 → 수강생이 하나 고르면 바로 확정 (H26(134)) */
+export type RequestStatus = 'tutor_reviewing' | 'admin_reviewing' | 'choosing' | 'rescheduling' | 'confirmed' | 'canceled' | 'completed' | 'expired' | 'withdrawn';
 
 export type StudentRequest = {
   id: string;
@@ -103,6 +104,8 @@ export type StudentRequest = {
   confirmedAt?: Date | null;
   /** 강사 메모 (모든 날짜 불가일 때 수강생에게는 보이지 않음 — 운영진이 조율) */
   tutorDeclinedAll?: boolean;
+  /** 강사가 제안한 시간 (H26(134)). ok = 지금도 고를 수 있음 */
+  suggested?: { id: string; startsAt: Date; ok: boolean }[];
   /** 어느 권리(원래 수업·시트 보강·보상권)의 신청인지 — 휴무 안내 화면이 같은 상태를 보여 주기 위해 (R-17) */
   lessonId?: string | null;
   itemId?: string | null;
@@ -112,6 +115,7 @@ export type StudentRequest = {
 export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
   tutor_reviewing: '강사 확인 중',
   admin_reviewing: '최종 확정 대기',
+  choosing: '시간 골라 주세요',
   rescheduling: '다른 일정 조율 중',
   confirmed: '확정',
   canceled: '취소됨',

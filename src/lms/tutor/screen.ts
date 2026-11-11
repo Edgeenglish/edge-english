@@ -68,6 +68,10 @@ export type TutorMakeup = {
   slots: MakeupSlot[];
   /** 강사 노쇼 무료 보상수업 신청 (4100) */
   compensation?: boolean;
+  /** H26(134) DB makeup_stage: 'tutor' 강사 답 필요 · 'student' 학생 선택 대기 · 'admin' 운영진 조율. 강사가 시간을 제안한 신청에만 있음 */
+  stage?: string;
+  /** 강사가 학생에게 제안한 시간 (ok = 지금도 그 시간이 열려 있음) */
+  suggested?: { startsAt: Date; endsAt: Date; ok: boolean }[];
 };
 
 /** 대체 수업 요청 (2600): 운영진이 이 강사를 대체강사로 골라 답을 기다리는 수업 */
@@ -105,6 +109,18 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
       slots: (m.slots ?? []).map((s: any) => ({ id: s.id, startsAt: new Date(s.starts_at), endsAt: new Date(s.ends_at), answer: s.answer ?? null, busy: !!s.busy, why: s.why ?? null, past: !!s.past })),
     })),
     covers: (j.covers ?? []).map((c: any) => ({ id: c.id, student: c.student, studentId: c.student_id ?? undefined, startsAt: new Date(c.starts_at), endsAt: new Date(c.ends_at), busy: !!c.busy, why: c.why ?? null })),
+  };
+}
+/** tutor_makeup_suggestions (20261111160000) 결과를 보강 요청 카드에 붙임 */
+export function withSuggestions(s: TutorScreen, rows: any[]): TutorScreen {
+  const by = new Map(rows.map((r) => [r.id as string, r]));
+  return {
+    ...s,
+    makeups: s.makeups.map((m) => {
+      const r = by.get(m.id);
+      if (!r) return m;
+      return { ...m, stage: r.stage, suggested: (r.suggested ?? []).map((x: any) => ({ startsAt: new Date(x.starts_at), endsAt: new Date(x.ends_at), ok: !!x.ok })) };
+    }),
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

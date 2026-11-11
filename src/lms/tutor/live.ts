@@ -3,7 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseHours, type HoursData } from './hours';
 import { parseSchedule, type ScheduleAction, type ScheduleData } from './schedule';
-import { parseCanceled, parseScreen, type Late, type TutorCanceled, type TutorResult, type TutorScreen } from './screen';
+import { parseCanceled, parseScreen, withSuggestions, type Late, type TutorCanceled, type TutorResult, type TutorScreen } from './screen';
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
 import { parseFollowup, parseFollowupTodos, type Followup, type FollowupTodo } from './followup';
 import { parseRequests, parseUpdates, type NewStudentRequest, type TutorUpdate } from './updates';
@@ -21,7 +21,13 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 
 /** tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
 export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null, kstFrom: string, kstTo: string): Promise<TutorScreen> {
-  return parseScreen(check(await sb.rpc('tutor_screen', { p_tutor: tutorId, p_from: kstFrom, p_to: kstTo })));
+  const [screen, sug] = await Promise.all([
+    sb.rpc('tutor_screen', { p_tutor: tutorId, p_from: kstFrom, p_to: kstTo }),
+    sb.rpc('tutor_makeup_suggestions', { p_tutor: tutorId }),
+  ]);
+  const s = parseScreen(check(screen));
+  // 강사 시간 제안 (H26(134), 20261111160000). 함수 없는 옛 DB 면 제안 표시만 없음
+  return sug.error ? s : withSuggestions(s, (sug.data as unknown[]) ?? []);
 }
 /** 결과 + 지각 (4400). 인자 8개를 모두 보내야 DB 함수가 하나로 정해짐 */
 export async function recordClass(sb: SupabaseClient, lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late): Promise<void> {
@@ -37,6 +43,16 @@ export async function answerMakeup(sb: SupabaseClient, requestId: string, yes: s
 /** 보강 확정 (20261108000000, H26(82)): 수강생이 보낸 시간 하나로 바로 보강 수업 */
 export async function confirmMakeup(sb: SupabaseClient, requestId: string, slotId: string): Promise<void> {
   check(await sb.rpc('tutor_makeup_confirm', { p_request: requestId, p_candidate: slotId }));
+}
+
+/** 강사가 학생에게 제안할 수 있는 시간 (H26(134)): 학생 보강 달력과 같은 검사 */
+export async function loadSuggestOptions(sb: SupabaseClient, requestId: string): Promise<{ startsAt: Date; endsAt: Date }[]> {
+  const rows = check(await sb.rpc('tutor_makeup_suggest_options', { p_request: requestId })) as { starts_at: string; ends_at: string }[];
+  return rows.map((r) => ({ startsAt: new Date(r.starts_at), endsAt: new Date(r.ends_at) }));
+}
+/** 시간 1~2개 제안 → 학생에게 메일, 학생이 고르면 바로 확정 */
+export async function suggestMakeup(sb: SupabaseClient, requestId: string, times: Date[]): Promise<void> {
+  check(await sb.rpc('tutor_makeup_suggest', { p_request: requestId, p_times: times.map((t) => t.toISOString()) }));
 }
 
 /** 대체 수업 요청 답 (2600): items = 이번에 답하는 수업 전체, yes = 그중 가능한 수업 */

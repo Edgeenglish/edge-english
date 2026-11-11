@@ -3799,3 +3799,101 @@ reset role;
 select pg_temp.ok((select array_agg(edited_role || ':' || new_value order by created_at) from student_profile_edits
                    where student_id = '99999999-0000-0000-0000-000000002900' and field = 'timezone') = array['student:Australia/Sydney', 'admin:Europe/London'],
   '시간대: 바뀐 내역은 학생 변경 이력에 (학생 본인·운영자 구분)');
+
+-- ---------------------------------------------------------------------
+-- H26(134) 강사 보강 시간 제안 → 학생이 하나 골라 바로 확정 (20261111160000)
+-- ---------------------------------------------------------------------
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, class_status, canceled_at)
+select v.id::uuid, '99999999-1000-0000-0000-000000002000', '99999999-0000-0000-0000-000000002000', '55555555-0000-0000-0000-00000000200a',
+       'regular', v.seq, t + v.off, t + v.off + interval '40 minutes', 'canceled', 'Student canceled in advance', now()
+from rc, (values ('77777777-2000-0000-0000-0000000134a1', 31, interval '-5 days'), ('77777777-2000-0000-0000-0000000134a2', 32, interval '-6 days'),
+                 ('77777777-2000-0000-0000-0000000134a3', 33, interval '-7 days')) v(id, seq, off);
+update students set email = 'record.student@example.com' where id = '99999999-0000-0000-0000-000000002000';
+update tutors set email = 'tutor.a@example.com' where id = '55555555-0000-0000-0000-00000000200a';
+create or replace function pg_temp.syd(d int, h text) returns timestamptz language sql as $$ select ((current_date + d) + h::time) at time zone 'Australia/Sydney' $$;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+create temp table mk134 as select k, (admin_makeup_request(l::uuid, null, jsonb_build_array(jsonb_build_object('starts_at', pg_temp.syd(d, '09:00'))), now()) ->> 'makeup_request_id')::uuid as id
+from (values ('a', '77777777-2000-0000-0000-0000000134a1', 7), ('b', '77777777-2000-0000-0000-0000000134a2', 8), ('c', '77777777-2000-0000-0000-0000000134a3', 9)) v(k, l, d);
+grant select on mk134 to authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200b';
+select pg_temp.expect_error($$select * from tutor_makeup_suggest_options((select id from mk134 where k = 'a'))$$, '42501');
+select pg_temp.expect_error($$select tutor_makeup_suggest((select id from mk134 where k = 'a'), array[pg_temp.syd(10, '15:00')])$$, '42501');
+select pg_temp.ok(true, 'H26(134): 다른 강사는 제안 시간 보기·제안 못 함');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200a';
+create temp table mk134o as
+  (select 1 as n, starts_at from tutor_makeup_suggest_options((select id from mk134 where k = 'a')) where starts_at >= pg_temp.syd(10, '00:00') order by starts_at limit 1)
+  union all (select 2, starts_at from tutor_makeup_suggest_options((select id from mk134 where k = 'a')) where starts_at >= pg_temp.syd(10, '00:00') order by starts_at offset 2 limit 1)
+  union all (select 3, starts_at from tutor_makeup_suggest_options((select id from mk134 where k = 'a')) where starts_at >= pg_temp.syd(10, '00:00') order by starts_at offset 4 limit 1)
+  union all (select 4, starts_at from tutor_makeup_suggest_options((select id from mk134 where k = 'a')) where starts_at >= pg_temp.syd(11, '00:00') order by starts_at limit 1);
+create or replace function pg_temp.o(k int) returns timestamptz language sql as $$ select starts_at from mk134o where n = k $$;
+select pg_temp.ok((select count(*) > 10 from tutor_makeup_suggest_options((select id from mk134 where k = 'a')))
+              and exists (select 1 from tutor_makeup_suggest_options((select id from mk134 where k = 'a')) where starts_at = pg_temp.o(1))
+              and not exists (select 1 from tutor_makeup_suggest_options((select id from mk134 where k = 'a')) where starts_at = pg_temp.syd(7, '09:00')),
+  'H26(134): 강사 제안 시간 = 학생 보강 달력과 같은 시간, 학생이 이미 고른 시간은 빠짐');
+select pg_temp.expect_error($$select tutor_makeup_suggest((select id from mk134 where k = 'a'), array[pg_temp.o(1), pg_temp.o(2), pg_temp.o(3)])$$, 'Please pick 1 or 2');
+select pg_temp.expect_error($$select tutor_makeup_suggest((select id from mk134 where k = 'a'), '{}')$$, 'Please pick 1 or 2');
+select pg_temp.expect_error($$select tutor_makeup_suggest((select id from mk134 where k = 'a'), array[pg_temp.syd(40, '15:00')])$$, 'no longer open');
+select pg_temp.expect_error($$select tutor_makeup_suggest((select id from mk134 where k = 'a'), array[now() - interval '1 hour'])$$, 'already passed');
+select pg_temp.ok((select status = 'requested' from makeup_requests where id = (select id from mk134 where k = 'a')), 'H26(134): 3개·0개·종료일 뒤·지난 시간 제안은 거절, 신청 그대로');
+select tutor_makeup_suggest((select id from mk134 where k = 'a'), array[pg_temp.o(2), pg_temp.o(1)]);
+select pg_temp.ok((tutor_makeup_suggest((select id from mk134 where k = 'a'), array[pg_temp.o(1), pg_temp.o(2)]) ->> 'repeated')::boolean,
+  'H26(134): 같은 시간 다시 보내면 같은 결과(repeated)');
+select pg_temp.expect_error($$select tutor_makeup_suggest((select id from mk134 where k = 'a'), array[pg_temp.o(4)])$$, 'already suggested');
+select tutor_makeup_suggest((select id from mk134 where k = 'b'), array[pg_temp.o(1)]);
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select tutor_makeup_suggest((select id from mk134 where k = 'c'), array[pg_temp.o(4)]);
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select r.status = 'countered' and r.tutor_note is null and r.tutor_answered_at is not null and makeup_stage(r) = 'student'
+                   from makeup_requests r where r.id = (select id from mk134 where k = 'a'))
+              and (select count(*) = 2 from makeup_candidates where request_id = (select id from mk134 where k = 'a') and proposed_by = 'tutor')
+              and (select bool_and(tutor_answer = 'no') from makeup_candidates where request_id = (select id from mk134 where k = 'a') and proposed_by = 'student')
+              and (select count(*) = 1 from notifications where dedupe_key = 'makeup_suggested:' || (select id from mk134 where k = 'a')
+                   and template = 'lesson_notice_makeup_suggested' and email = 'support@edgeenglish.kr'
+                   and payload ->> 'subject' like '%[엣지영어] 강사님이 보강 시간을 제안했어요'
+                   and payload ->> 'text' like '%제안 시간:%' and payload ->> 'text' like '%/student?makeup=%')
+              and not exists (select 1 from notifications where dedupe_key = 'makeup_none_work:' || (select id from mk134 where k = 'a'))
+              and (select count(*) = 0 from lesson_notices where makeup_request_id = (select id from mk134 where k = 'a') and status = 'pending'),
+  'H26(134): 제안 → countered·학생 선택 대기, 학생 시간 불가 표시, 학생 메일 1통(시험은 support@), 운영진 none-work 메일 없음, 운영진 카드 없음');
+select pg_temp.ok((select (string_agg(a.actor_via, ',') like '%admin_makeup_suggest_as_tutor%') from audit_log a where a.table_name = 'makeup_requests' and a.row_id = (select id from mk134 where k = 'c')::text),
+  'H26(134): 운영자 대신 제안은 이력에 운영자 대신');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+select pg_temp.expect_error($$select student_makeup_pick('99999999-0000-0000-0000-000000002000', (select id from mk134 where k = 'a'), (select id from makeup_candidates where request_id = (select id from mk134 where k = 'a') and proposed_by = 'tutor' limit 1))$$, '42501|학생 계정|본인');
+select pg_temp.ok(true, 'H26(134): 다른 학생은 고르지 못함');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select jsonb_array_length(x -> 'suggested') = 2 and x ->> 'stage' = 'student' and (x -> 'suggested' -> 0 ->> 'ok')::boolean
+                   from jsonb_array_elements(student_makeup_suggestions('99999999-0000-0000-0000-000000002000')) x where (x ->> 'id')::uuid = (select id from mk134 where k = 'a')),
+  'H26(134): 학생 화면 읽기에 제안 시간 2개·선택 가능');
+-- 학생(운영자 대신)이 a 의 15:00 확정 → b 의 같은 15:00 은 이제 못 고름
+select student_makeup_pick('99999999-0000-0000-0000-000000002000', (select id from mk134 where k = 'a'),
+  (select id from makeup_candidates where request_id = (select id from mk134 where k = 'a') and proposed_by = 'tutor' and starts_at = pg_temp.o(1)));
+select pg_temp.ok((student_makeup_pick('99999999-0000-0000-0000-000000002000', (select id from mk134 where k = 'a'),
+  (select id from makeup_candidates where request_id = (select id from mk134 where k = 'a') and proposed_by = 'tutor' and starts_at = pg_temp.o(1))) ->> 'repeated')::boolean,
+  'H26(134): 두 번 눌러도 같은 결과(repeated)');
+select pg_temp.expect_error($$select student_makeup_pick('99999999-0000-0000-0000-000000002000', (select id from mk134 where k = 'a'),
+  (select id from makeup_candidates where request_id = (select id from mk134 where k = 'a') and proposed_by = 'tutor' and starts_at = pg_temp.o(2)))$$, '이미 다른 시간으로');
+select pg_temp.expect_error($$select student_makeup_pick('99999999-0000-0000-0000-000000002000', (select id from mk134 where k = 'b'),
+  (select id from makeup_candidates where request_id = (select id from mk134 where k = 'b') and proposed_by = 'tutor'))$$, '이 시간은 이제 선택할 수 없어요');
+select pg_temp.ok(true, 'H26(134): 확정 뒤 다른 시간 거절, 다른 예약으로 막힌 제안 시간은 확정 안 함');
+select student_makeup_decline_suggestion('99999999-0000-0000-0000-000000002000', (select id from mk134 where k = 'c'));
+select pg_temp.ok((student_makeup_decline_suggestion('99999999-0000-0000-0000-000000002000', (select id from mk134 where k = 'c')) ->> 'repeated')::boolean, 'H26(134): 모두 안 돼요 두 번 = 같은 결과');
+select pg_temp.expect_error($$select student_makeup_pick('99999999-0000-0000-0000-000000002000', (select id from mk134 where k = 'c'),
+  (select id from makeup_candidates where request_id = (select id from mk134 where k = 'c') and proposed_by = 'tutor'))$$, '이미 끝난 신청');
+select pg_temp.ok(true, 'H26(134): 모두 안 돼요 뒤에는 제안 시간 확정 못 함');
+reset request.jwt.claim.sub;
+reset role;
+select pg_temp.ok((select r.status = 'confirmed' and not r.confirmed_in_tutor_screen and l.starts_at = pg_temp.o(1) and l.kind = 'makeup'
+                          and l.makeup_of = '77777777-2000-0000-0000-0000000134a1' and l.state = 'scheduled'
+                   from makeup_requests r join lessons l on l.id = r.confirmed_lesson_id where r.id = (select id from mk134 where k = 'a'))
+              and (select count(*) = 1 from lesson_notices n where n.makeup_request_id = (select id from mk134 where k = 'a') and n.event = 'makeup_confirmed' and n.recipient_kind = 'student' and n.status = 'not_needed' and n.email_notification_id is not null)
+              and (select count(*) = 1 from lesson_notices n where n.makeup_request_id = (select id from mk134 where k = 'a') and n.event = 'makeup_confirmed' and n.recipient_kind = 'tutor' and n.email_notification_id is not null)
+              and (select count(*) = 1 from lessons where makeup_of = '77777777-2000-0000-0000-0000000134a1'),
+  'H26(134): 학생 확정 → 보강 수업 1개, 확정 메일 학생·강사 1통씩, 학생 카톡 복사 카드 없음');
+select pg_temp.ok((select makeup_stage(r) = 'admin' from makeup_requests r where r.id = (select id from mk134 where k = 'b'))
+              and (select makeup_stage(r) = 'admin' and status = 'countered' from makeup_requests r where r.id = (select id from mk134 where k = 'c')),
+  'H26(134): 제안 시간이 막힘·학생 모두 안 돼요 → 운영진 조율 필요(같은 상태 값)');
+select lms_makeup_expire_run(now() + interval '60 days');
+select pg_temp.ok((select count(*) = 2 from makeup_requests where id in (select id from mk134 where k in ('b', 'c')) and status = 'countered'),
+  'H26(134): 강사가 제안한 신청은 자동 만료하지 않음 (운영진 조율)');

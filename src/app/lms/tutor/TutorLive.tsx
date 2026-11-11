@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { answerCover, answerMakeup, confirmMakeup, createTutorLogin, loadCanceledClasses, loadNewRequests, loadTutorUpdates, answerNewRequest, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
+import { answerCover, answerMakeup, confirmMakeup, loadSuggestOptions, suggestMakeup, createTutorLogin, loadCanceledClasses, loadNewRequests, loadTutorUpdates, answerNewRequest, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
 import { LANGS, type Lang } from '@/lms/tutor/lang';
 import { useSavedValue } from './useSaved';
 import { weekOf, type StudentCancelDecision, type TutorScreen } from '@/lms/tutor/screen';
@@ -66,6 +66,8 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
         record: (id, r, t, rm, late) => recordClass(sb, id, r, t, rm, late),
         answer: (id, yes, note) => answerMakeup(sb, id, yes, note),
         confirm: (id, slot) => confirmMakeup(sb, id, slot),
+        suggestOptions: (id) => loadSuggestOptions(sb, id),
+        suggest: (id, times) => suggestMakeup(sb, id, times),
         answerCover: (items, yes) => answerCover(sb, items, yes),
         hours: {
           load: () => loadHours(sb, adminTutor),

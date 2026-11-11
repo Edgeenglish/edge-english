@@ -203,7 +203,7 @@ type ChangeNoticeRow = {
   change: { type?: string; student: { id: string; name_ko: string; code: string } | null; lesson: { starts_at: string; kind?: string } | null } | null;
   makeup: { student: { id: string; name_ko: string; code: string } | null } | null;
 };
-type OpenMakeupRow = { created_at: string; tutor_answered_at?: string | null; student: { id: string; name_ko: string; code: string } | null; candidates?: { tutor_answer: string | null; proposed_by: string }[] | null };
+type OpenMakeupRow = { status?: string; makeup_stage?: string | null; created_at: string; tutor_answered_at?: string | null; student: { id: string; name_ko: string; code: string } | null; candidates?: { tutor_answer: string | null; proposed_by: string }[] | null };
 
 /** 수업 변경·보강 (1700): 안 보낸 안내 · 강사 답 대기 보강 → 수강생마다 한 줄 */
 /** 자동 메일을 못 보낸 안내 (20261108010000: 실패·주소 없음) → 운영진이 직접 보내야 함 */
@@ -256,6 +256,15 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
   }
   for (const m of makeups) {
     if (!m.student) continue;
+    // 강사가 시간을 제안하고 수강생 선택을 기다리는 신청은 운영진 할 일 아님 (H26(134)). 수강생 '모두 안 돼요'·제안 시간 지남 → 보강 조율 필요
+    if (m.status === 'countered') {
+      if (m.makeup_stage !== 'admin') continue;
+      const r = row(m.student, m.created_at);
+      r.openMakeups += 1;
+      r.answeredMakeups = (r.answeredMakeups ?? 0) + 1;
+      r.suggestFailed = (r.suggestFailed ?? 0) + 1;
+      continue;
+    }
     const r = row(m.student, m.created_at);
     r.openMakeups += 1;
     if (m.tutor_answered_at) {
@@ -273,7 +282,9 @@ export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupR
 /** 강사 답 칸(tutor_answered_at, migration 2000)이 없는 DB면 그 칸 없이 다시 읽음 */
 async function loadOpenMakeups(sb: SupabaseClient) {
   const q = (cols: string) => sb.from('makeup_requests').select(cols).in('status', ['requested', 'countered']);
-  const r = await q('created_at, tutor_answered_at, student:students(id, name_ko, code), candidates:makeup_candidates(tutor_answer, proposed_by)');
+  // makeup_stage = DB 상태 계산 칸 (20261111160000). 없는 옛 DB 면 그 칸 없이
+  let r = await q('status, makeup_stage, created_at, tutor_answered_at, student:students(id, name_ko, code), candidates:makeup_candidates(tutor_answer, proposed_by)');
+  if (r.error) r = await q('status, created_at, tutor_answered_at, student:students(id, name_ko, code), candidates:makeup_candidates(tutor_answer, proposed_by)');
   return r.error?.code === '42703' ? q('created_at, student:students(id, name_ko, code)') : r;
 }
 
