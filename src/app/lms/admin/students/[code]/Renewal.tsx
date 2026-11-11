@@ -3,7 +3,6 @@
 // 재등록 넣기 · 보강 이월 · 적립금 넣기/빼기 (시안 5차 승인 2026-11-09 + 대표 수정 4가지, migration 20261109130000)
 // 세 창 입력 보존 같게: ✕·바깥·다른 화면 → 입력 남음(이 기기), 다시 열면 '저장하지 않았던 입력을 되살렸어요 [원래대로]'
 // [취소] → 입력이 있으면 '입력한 내용을 지울까요? [계속 입력] [지우기]', 없으면 바로 닫힘. 저장하면 남긴 입력 지움
-import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { addDays, ampmKo, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '@/lms/rules/dates';
 import { courseName } from '@/lms/rules/period';
@@ -170,7 +169,6 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
             <span className="text-[14px]">
               {done.planState === 'confirmed' ? `정규 일정 확정 · ${slotsText(d.slots)} 한국 시간` : '정규 일정 확정 전 · 휴무로 미뤄진 수업 날짜를 먼저 잡아 주세요'}
             </span>
-            {done.planState === 'confirmed' && <Link href="/lms/admin" className={`${btnSmall} inline-flex items-center`}>대시보드 ‘재등록 강사 안내’</Link>}
           </div>
           <button type="button" className={btnSub} onClick={onClose}>학생 상세로</button>
         </div>
