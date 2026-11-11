@@ -14,7 +14,8 @@
 - ⚠ **운영 배포 순서**: 운영 DB migration 먼저(운영자 화면이 lessons 의 class_type 칸을 읽음 — 없으면 대시보드·수업 변경 목록 오류) → lms-prod. 운영 미반영 앞 작업(강사 통보 LMS 이전 등)과 같이 나갈 수 있으니 배포 전 `git log origin/lms-prod..origin/lms-test` 확인
 - ✅ 11/11 대표 PC 시험 사이트 B1~B4 통과(H26(139)). 공휴일 줄은 시험 DB 공휴일 0건이라 시험 안 함
 - ✅ 11/11 공휴일 시험(시험 DB, H26(140)): STU-0003 11/30 수업에 임시 공휴일 → 학생 화면 팝업 '변경권 | 차감 안 됨 (공휴일 취소)', 실제 취소 'Student canceled in advance (public holiday)'·변경권 0 그대로·보강 가능. 원복 끝(holidays 0건·수업 scheduled·변경 기록·안내·메일 줄·audit 줄·임시 비밀번호·로그인 세션). 학생 취소 메일 1통은 원복 전에 support@로 나감
-- ⚠ 발견(기존 동작): 재등록한 다음 수강권 수업(STU-0003 12/14)은 학생 화면에서 '수강기간이 지난 수업이에요'로 취소 불가 — 학생 화면 finalEndDate 가 지금 수강권 기준. 대표 보고 대기
+- ✅ 11/11 고침(대표 지시, 시험 DB·lms-test): 다음 수강권 수업 학생 취소 — migration 20261111170000 student_screen 수업마다 lesson_final_end_date + credit_periods 열린 수강권 전부, 화면 cancelPreview·보강 기한이 그 수업 수강권 기준. 확인: STU-0003 12/14 팝업 '변경권 1개 사용 (1개 → 0개)·보강 ~1/10(일)', 저장 뒤 다음 수강권 기간 변경권 1→0·지금 수강권 0 그대로·보강 기한 2027-01-10. 시험 뒤 원복. 02-check 표 59개(다른 세션 student_notice_reads 표 반영)
+- ⏳ 운영 배포 보류(대표 11/11) — 배포 승인 다시 요청 필요. 운영 공휴일 등록 = 대표 승인(데이터만), 목록 확인 뒤 실행
 - ⏳ 대표 결정 대기 (H26(140)): ① 운영 반영(보류 중, 배포 예정 목록 보고함) ② 운영 DB 공휴일 목록 등록(보류, 영향 보고함)
 - 운영에 안 나간 DB migration (11/11 기준): 20261111010000_student_my_info · 20261111073809_student_makeup_mail_and_original_slot · 20261111120000_tutor_updates_mail · 20261111120100_notice_mail_wording · 20261111140000(이 작업) · 20261111150000_student_notice_reads_history · 20261111150100_student_reminder_settings. lms-prod 에만 있는 커밋 5개는 내용이 lms-test 에 모두 있음(확인함)
 - 안 넣은 것: Student canceled 의 Remarks 칸(저장할 곳이 없어 뺌, 시안 휴대폰도 없음)
