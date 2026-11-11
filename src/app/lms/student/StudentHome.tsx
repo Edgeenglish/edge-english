@@ -594,6 +594,32 @@ export default function StudentHome(props: {
   const makeupWaiting = s.requests.filter((r) => r.kind === 'makeup' && r.status === 'tutor_reviewing').length;
   const quickTop = 'flex min-h-[48px] w-full items-center justify-between gap-2 rounded-t-[16px] border-b border-[#eeecf4] px-4 text-left transition-colors hover:bg-[#f7f5fd] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#5b3df0]';
   const quickGo = <span className="shrink-0 text-[12.5px] font-semibold text-[#5b3df0]">신청하기 ›</span>;
+  // 내 수강 정보 (11/11 대표 시안): 담당 강사 = 정규 일정 강사만 (다음 수업 강사·대체강사로 채우지 않음), 남은 수업 = 재등록 기준과 같은 lessonsLeft.total
+  const regularTutors = [...new Set(slots.map((x) => x.tutor))].join(' · ');
+  const summaryItems: [string, string][] = [
+    ['이름', s.name],
+    ['담당 강사', regularTutors || '-'],
+    ['현재 코스', s.product],
+    ['수업 시간', slotText ? [...new Set(slotText.map((g) => g.short))].join(' / ') : '-'],
+    ['남은 수업', notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : `${left.total}회`],
+    ['종료일', endDate ? endDay(endDate) : '-'],
+  ];
+  const summary = (
+    <section aria-label="내 수강 정보" className={`${card} px-4 py-3`}>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[14px] font-bold">내 수강 정보</h2>
+        <button type="button" onClick={() => { setTab('me'); setTimeout(() => document.getElementById('my-pass')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 80); }}
+          className="-my-1.5 min-h-[32px] shrink-0 rounded-[8px] px-1.5 text-[12.5px] font-semibold text-[#5b3df0] hover:bg-[#f7f5fd] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0]">
+          자세히 보기 ›
+        </button>
+      </div>
+      <p className="mt-1.5 flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] leading-snug">
+        {summaryItems.map(([k, v]) => (
+          <span key={k} className="max-w-full break-keep"><span className="whitespace-nowrap text-[#8b88a0]">{k}</span> <b className="font-semibold text-[#1d1b2b]">{v}</b></span>
+        ))}
+      </p>
+    </section>
+  );
   const quick = (
     <section aria-label="빠른 신청" className="grid auto-rows-fr grid-cols-1 gap-2 sm:grid-cols-2">
       <div className={`${card} flex flex-col`}>
@@ -759,6 +785,7 @@ export default function StudentHome(props: {
             {renewalCard}
             {todoBars}
             {nextCard}
+            {summary}
             {quick}
             {leaveVisible && leaveAsk.length === 0 && (
               <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
@@ -935,7 +962,7 @@ export default function StudentHome(props: {
                     </div>
                   </section>
                 )}
-                <section className={`${card} px-4 pb-1.5 pt-4`}>
+                <section id="my-pass" className={`${card} scroll-mt-4 px-4 pb-1.5 pt-4`}>
                   <h2 className="mb-1 text-[15px] font-bold">내 수강권</h2>
                   <LinkRow label="현재 코스" value={s.product} />
                   {slotText && (
@@ -1585,10 +1612,10 @@ function Credits({ s }: { s: StudentView }) {
  * '매주 월·목 오후 10:30–11:20' + 강사 이름 줄 — 정규 일정(KST 요일·시각)을 다음 실제 날짜로 바꿔 보여 주는 시간대(VIEW_TZ)의 요일·시각으로.
  * 같은 시각·강사끼리 요일을 묶고, 다르면 줄을 나눔
  */
-function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor: string }[] | null {
+function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor: string; short: string }[] | null {
   if (slots.length === 0) return null;
   const today = formatInZone(now, 'Asia/Seoul').date;
-  const groups = new Map<string, { days: number[]; text: string; tutor: string }>();
+  const groups = new Map<string, { days: number[]; text: string; tutor: string; start: string }>();
   for (const x of slots) {
     const base = new Date(`${today}T12:00:00+09:00`);
     const add = (x.weekday - base.getUTCDay() + 7) % 7;
@@ -1600,15 +1627,15 @@ function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor
     const text = ampmRange(a.time, formatInZone(end, VIEW_TZ).time);
     const key = `${text}|${x.tutor}`;
     const day = new Date(`${a.date}T00:00:00Z`).getUTCDay();
-    const g = groups.get(key) ?? { days: [], text, tutor: x.tutor };
+    const g = groups.get(key) ?? { days: [], text, tutor: x.tutor, start: ampm(a.time) };
     g.days.push(day);
     groups.set(key, g);
   }
   const order = (d: number) => (d + 6) % 7;   // 월요일부터
-  return [...groups.values()].map((g) => ({
-    when: `매주 ${[...new Set(g.days)].sort((p, q) => order(p) - order(q)).map((d) => '일월화수목금토'[d]).join('·')} ${g.text}`,
-    tutor: g.tutor,
-  }));
+  return [...groups.values()].map((g) => {
+    const days = [...new Set(g.days)].sort((p, q) => order(p) - order(q)).map((d) => '일월화수목금토'[d]).join('·');
+    return { when: `매주 ${days} ${g.text}`, tutor: g.tutor, short: `${days} ${g.start}` };
+  });
 }
 
 /** '시드니로' / '런던으로' (받침 있으면 '으로', ㄹ 받침은 '로') */
