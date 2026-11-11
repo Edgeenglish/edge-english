@@ -36,6 +36,7 @@ import {
   type RegTutor,
 } from '@/lms/admin/registration';
 import { mdw } from '@/lms/admin/students';
+import { parseWon, WON_ERROR } from '@/lms/admin/renewal';
 import { dayLabel, diffFromKst, weekOf } from '@/lms/admin/schedule';
 import { eunNeun, findCity, findCountry, manyZones, searchCities, searchCountries, searchZones, suggestTimezone, zoneName } from '@/lms/admin/places';
 import { AdminHeader } from '../../ui';
@@ -103,6 +104,8 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
   const [slots, setSlots] = useState<RegularSlot[]>([]);
   const [firstPick, setFirstPick] = useState<KstDate | ''>('');
   const [pay, setPay] = useState<Payment>(EMPTY_PAYMENT);
+  // 받은 금액 칸 글 그대로 (소수점·− 를 지워서 다른 금액으로 저장하지 않게, 대표 시험 11/11)
+  const [amtText, setAmtText] = useState<string | null>(null);
   const [requestId, setRequestId] = useState(newRequestId);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<SaveResult | null>(null);
@@ -619,8 +622,9 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
             </select>
           </Field>
           <Field label="받은 금액 (원)">
-            <input inputMode="numeric" value={pay.amount ?? ''} onChange={(e) => setPay({ ...pay, amount: e.target.value ? Number(e.target.value.replace(/\D/g, '')) : null })} className={inputCls(false)} />
-            {pay.amount ? <span className="mt-1 block text-[12px] text-[#6b6880]">{won(pay.amount)}</span> : null}
+            <input inputMode="numeric" value={amtText ?? (pay.amount ?? '')} onChange={(e) => { const n = parseWon(e.target.value); setAmtText(e.target.value); setPay({ ...pay, amount: n ? n : null }); }} className={inputCls(false)} />
+            {amtText !== null && parseWon(amtText) === null ? <span className="mt-1 block text-[13px] font-semibold text-[#b3261e]">{WON_ERROR}</span>
+              : pay.amount ? <span className="mt-1 block text-[12px] text-[#6b6880]">{won(pay.amount)}</span> : null}
           </Field>
           <Field label={`${payLabels(pay.method).date} (한국 날짜)`}>
             <DateInput value={pay.paidOn} onChange={(v) => setPay({ ...pay, paidOn: v })} aria-label={payLabels(pay.method).date} className={inputCls(false)} />
