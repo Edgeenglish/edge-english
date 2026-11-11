@@ -107,6 +107,7 @@
 - 로그인 계정 만들기: 학생 화면 운영자 띠에서 빼고 운영자 수강생 상세 '운영진만' 칸 '로그인 이메일' 줄로 옮김 (`StudentDetail.tsx` LoginRow, `StudentDetailLive.tsx` createLogin — DB 함수 admin_student_login 그대로, 대표(owner) 계정만 가능). 계정 있으면 '이메일 · 연결됨'만
 - 카드: 위 줄 '제목 · 신청하기 ›'(누르는 곳, hover·포커스 테두리), 아래 정보. 휴대폰(640px 미만)은 한 줄에 한 카드, PC 두 칸. 보강 카드 '강사 확정 대기 중 N회' = 보강 신청 중 tutor_reviewing 개수
 - 시험 DB: STU-0001 에 시험 로그인 qa-login-stu0001@example.com 연결(SQL 로 owner 권한 흉내, 메일 발송 없음). 다른 이메일로 다시 연결 → DB 가 막음 확인
+- **운영 배포 11/11 f4efd3a** (lms-prod·main): lms-prod 위에 StudentHome.tsx·fake-data.ts 만 (DB 변경 없음). 로그인 계정 만들기 이동(StudentLive·StudentDetail)은 대표 계정 화면 QA 뒤 따로 배포 — 운영은 아직 운영자 띠에 예전 입력칸
 - 대표 확인(11/11): 휴대폰 카드 세로 한 장씩 유지 · 운영자 띠 검색칸 유지. **남은 것: 대표 계정으로 시험 사이트 수강생 상세 [로그인 만들기] 화면 QA (STU-0002, example.com 이메일) — 끝나면 Claude 가 시험 DB 로 연결·기존 기록 확인**
 
 ## ⚠ 11/11 운영 학생 홈 '학생마다 다르게 보임' 원인·수정 — **lms-test 51b9589, 운영 미배포(대표 승인 대기)**
