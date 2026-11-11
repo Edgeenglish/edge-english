@@ -62,6 +62,8 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
   const pending = status === 'pending';
   const [sheet, setSheet] = useState<null | 'profile' | 'answers' | 'regular' | 'extend' | 'prestart' | 'renew' | 'carry' | 'reward_in' | 'reward_out' | { notice: string }>(null);
   const [flash, setFlash] = useState('');
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planErr, setPlanErr] = useState('');
   const ctx = extra?.ctx ?? null;
   const nx = ctx?.next ?? null;
   const who = { id: s.id, code: s.code ?? '', name: s.nameKo ?? s.nameEn, timezone: s.timezone };
@@ -172,7 +174,22 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
                   <>
                     <Row k="다음 수강권" v={<>{nx.seq}차 · {productText({ weeks: nx.weeks, legacyLabel: null, weeklyCount: nx.weeklyCount, durationMin: nx.durationMin })}<span className="block text-[12.5px] font-normal text-[#6b6880]">{mdw(nx.startDate)} – {mdw(nx.finalEndDate)} · 결제 확인함</span></>} strong />
                     {!nx.planConfirmed && (
-                      <Row k="정규 일정" v={<span className="text-[#b3261e]">확정 전 · 휴무로 미뤄진 수업 날짜 먼저</span>} />
+                      <Row k="정규 일정" v={
+                        <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                          <span className="text-[#b3261e]">확정 전 · 휴무로 미뤄진 수업 날짜 먼저</span>
+                          {/* 휴무 보강 날짜를 잡은 뒤 여기서 확정 (재등록 때 일정안만 저장된 경우, 20261109130000) */}
+                          {nx.planProposed && extra && (
+                            <button type="button" className={`${btnSmall} !border-[#5b3fe0] !bg-[#5b3fe0] !text-white`} disabled={planBusy}
+                              onClick={async () => {
+                                setPlanBusy(true); setPlanErr('');
+                                try { await extra.actions.confirmPlan(nx.planProposed!); await actions.reload(); }
+                                catch (x) { setPlanErr(x instanceof Error ? x.message : '확정하지 못했어요.'); }
+                                finally { setPlanBusy(false); }
+                              }}>{planBusy ? '확정 중…' : '정규 일정 확정'}</button>
+                          )}
+                          {planErr && <span className="block w-full text-[13px] font-semibold text-[#b3261e]">{planErr}</span>}
+                        </span>
+                      } />
                     )}
                     {(nx.carriedIn > 0 || ctx!.carry.length > 0) && (
                       <Row k="보강 이월" v={
