@@ -139,7 +139,7 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
   );
   const icon = <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />;
   return (
-    <p role="note" className={`inline-flex w-fit flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-1.5 text-[13.5px] font-bold leading-snug ${kst ? 'rounded-[14px] lg:flex lg:w-full lg:justify-between lg:rounded-full' : 'rounded-full'} ${tone}`}>
+    <p role="note" className={`inline-flex w-fit flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-1.5 text-[13.5px] font-bold leading-snug ${kst ? 'rounded-[14px] lg:flex lg:w-full lg:max-w-[760px] lg:justify-between lg:rounded-full' : 'rounded-full'} ${tone}`}>
       {/* 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(122) A안 — 배지 글자 위에 투명한 고르기 칸을 겹침) */}
       {change ? (
         <label className="relative inline-flex items-center gap-1.5">
