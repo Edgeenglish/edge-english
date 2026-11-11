@@ -2197,7 +2197,8 @@ function HelpTip({ text }: { text: string }) {
     return () => document.removeEventListener('pointerdown', close);
   }, [open]);
   return (
-    <span ref={box} className="static inline-flex" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <span ref={box} className="static inline-flex"
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') setOpen(true); }} onPointerLeave={(e) => { if (e.pointerType === 'mouse') setOpen(false); }}>
       <button type="button" aria-label="변경권 안내" aria-describedby={open ? id : undefined} aria-expanded={open}
         onClick={() => setOpen(true)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}
         onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
