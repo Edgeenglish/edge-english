@@ -13,7 +13,10 @@
 - 검증: tsc · vitest 430 · test:db 통과(새 시험 4개 + 기존 2곳 고침: 원래 강사 회색 줄, 대체 Held = Normal) · ?demo=1 PC·휴대폰 화면 · 시험 DB Blair 계정으로 실제 저장(사전 취소·변경권 2→1·같은 요청 다시 보내도 1번·학생/강사 안내 2건)
 - ⚠ **운영 배포 순서**: 운영 DB migration 먼저(운영자 화면이 lessons 의 class_type 칸을 읽음 — 없으면 대시보드·수업 변경 목록 오류) → lms-prod. 운영 미반영 앞 작업(강사 통보 LMS 이전 등)과 같이 나갈 수 있으니 배포 전 `git log origin/lms-prod..origin/lms-test` 확인
 - ✅ 11/11 대표 PC 시험 사이트 B1~B4 통과(H26(139)). 공휴일 줄은 시험 DB 공휴일 0건이라 시험 안 함
-- ⏳ 대표 결정 대기: ① 운영 반영 승인 ② 시험 DB에 공휴일 하루 넣고 공휴일 줄 시험할지 ③ 운영 DB 공휴일 목록 넣기
+- ✅ 11/11 공휴일 시험(시험 DB, H26(140)): STU-0003 11/30 수업에 임시 공휴일 → 학생 화면 팝업 '변경권 | 차감 안 됨 (공휴일 취소)', 실제 취소 'Student canceled in advance (public holiday)'·변경권 0 그대로·보강 가능. 원복 끝(holidays 0건·수업 scheduled·변경 기록·안내·메일 줄·audit 줄·임시 비밀번호·로그인 세션). 학생 취소 메일 1통은 원복 전에 support@로 나감
+- ⚠ 발견(기존 동작): 재등록한 다음 수강권 수업(STU-0003 12/14)은 학생 화면에서 '수강기간이 지난 수업이에요'로 취소 불가 — 학생 화면 finalEndDate 가 지금 수강권 기준. 대표 보고 대기
+- ⏳ 대표 결정 대기 (H26(140)): ① 운영 반영(보류 중, 배포 예정 목록 보고함) ② 운영 DB 공휴일 목록 등록(보류, 영향 보고함)
+- 운영에 안 나간 DB migration (11/11 기준): 20261111010000_student_my_info · 20261111073809_student_makeup_mail_and_original_slot · 20261111120000_tutor_updates_mail · 20261111120100_notice_mail_wording · 20261111140000(이 작업) · 20261111150000_student_notice_reads_history · 20261111150100_student_reminder_settings. lms-prod 에만 있는 커밋 5개는 내용이 lms-test 에 모두 있음(확인함)
 - 안 넣은 것: Student canceled 의 Remarks 칸(저장할 곳이 없어 뺌, 시안 휴대폰도 없음)
 
 ## ✅ 11/11 강사 통보 LMS 이전 + 첫 수업 안내 메일 + 보강 메일 정리 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/brave-pascal-guazck, 정책 원본 H26(134)(135) 참고)
