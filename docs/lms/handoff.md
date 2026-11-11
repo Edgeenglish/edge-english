@@ -32,7 +32,9 @@
 
 ## ⏭ 다음 (새 세션): 통합 운영 배포 — 대표 11/11 '가) 묶어서 한 번에' 결정
 - 순서: ① 운영 전용 커밋 5개(172cc4f·06aa38c·3e5f508·7371e24·b4c9837)를 lms-test 에 병합 ② lms-test 에만 있는 커밋(11/11 기준 102개)·migration 12개를 기능별로 정리 — 특히 실제 학생·강사에게 가는 자동 메일(강사 통보 메일·첫 수업 안내·학생 취소/보강 메일·수업 알림 메일·재등록 안내 등)을 하나씩 확인 ③ 승인 안 된 자동 메일은 끄거나 빼서 위험 제거 ④ 병합으로 영향받은 부분만 통합 QA(이미 끝난 QA 반복 안 함) ⑤ 운영 DB 백업·복구 가능 확인 → migration → lms-prod·main → 배포 후 핵심 기능 재검증. 위험을 못 없애거나 필수 검증이 실패하면 배포하지 말고 그 문제만 보고
-- 시작 전 확인: 같은 시간 lms-test 를 고치는 세션(11/11 '학생 대시보드·내 정보 메뉴 수정' 작업 중, '학생 재등록 안내 자동 메일' 대표 답 대기)이 끝났는지 — 진행 중이면 배포 범위가 계속 바뀜
+- 11/11 확인: '학생 대시보드·내 정보 메뉴 수정' 세션 끝(712ec37), '학생 재등록 안내 자동 메일' 세션은 시험 반영 끝·운영 배포만 대기(5f1f3e8) → 둘 다 이 통합 배포에 포함
+- 대표 11/11 추천(통합 배포 때 같이 처리): ① **Olivia 10/20~10/30 일부 수업 시간·길이 없음 → 누적 학습 시간에 안 들어감**: 강사 시트(Class Record) 원본 확인해 따로 보완(배포를 막지 않음, 시트 고치면 Remarks 에 '[Edge 날짜] …') ② **학생 수업 리마인더(migration 20261111170500)**: 운영은 feature_flags 'lesson_reminder_since' 행을 넣는 순간 실제 학생에게 감 → 배포는 하되 스위치는 끈 채로, 첫 수업 안내 메일·다른 자동 메일과 중복·충돌을 확인한 뒤 켜기
+- 시작 전 확인: 새로 lms-test 를 고치는 세션이 없는지(list_sessions)
 
 ## ✅ 11/11 강사 보강 시간 제안 → 학생이 골라 바로 확정 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/dreamy-curie-yyxifa, H26(134)·(141))
 - migration **20261111160000_lms_tutor_makeup_suggest** (시험 DB 적용, 함수 11개 md5 = 저장소): makeup_requests.student_declined_at·suggested_at · `makeup_stage(r)`(학생·강사·운영진 같은 상태: tutor/student/admin) · `lms_makeup_slot_ok`(확정과 같은 검사) · `tutor_makeup_suggest_options`(= lms_makeup_options, 학생 고른 시간 제외) · `tutor_makeup_suggest`(1~2개, 같은 시간 다시 = repeated, status countered) · `lms_makeup_suggested_mail`(학생 메일 '[엣지영어] 강사님이 보강 시간을 제안했어요', 바로가기 ?makeup=신청id, dedupe makeup_suggested:id, 운영진은 dispatch 숨은참조) · `student_makeup_pick`(잠금+재검사 → lms_makeup_book, 막히면 '이 시간은 이제 선택할 수 없어요') · `student_makeup_decline_suggestion` · `lms_makeup_book` 2곳(제안 시간은 학생이 원한 시간으로 검사, 학생 직접 확정은 학생 카톡 복사 카드 not_needed — 메일은 그대로) · `lms_makeup_expire_run` countered 제외 · 읽기 `student_makeup_suggestions`·`tutor_makeup_suggestions`(tutor_screen·student_screen 은 안 건드림)
