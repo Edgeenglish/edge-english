@@ -81,8 +81,6 @@ const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
 // 수강생 화면 시각은 수강생이 사는 곳 시간대로 (11/3 대표: 해외 수강생은 본인 나라 시간으로 캘린더). 국내 수강생은 한국 시간 그대로.
 // 화면 하나에 수강생 한 명이라 렌더할 때 정해 둠. 판정(6시간 규칙·수강 종료일 23:59 KST)은 그대로
 let VIEW_TZ = 'Asia/Seoul';
-/** 운영자 보기에서 해외 수강생을 한국 시간으로 보는 중 (주황 띠·배지) */
-let ADMIN_KST = false;
 /** 기준 이름: '시드니 시간' / '한국 시간' (도시 이름 한국어, 11/8 대표) */
 const zoneCity = () => `${koZoneCity(VIEW_TZ)} 시간`;
 const zoneText = zoneCity;
@@ -121,46 +119,42 @@ const overseas = () => VIEW_TZ !== 'Asia/Seoul';
  * 수강생 시간 = 보라 '모든 날짜·시간은 시드니 시간 기준', 운영자가 한국 시간으로 보는 중 = 주황 '한국 시간(KST) 기준으로 보는 중'.
  * 색만이 아니라 글자로 구별. globals.css 의 '* { color }' 때문에 글자에 색 직접 지정
  */
-function ZoneBar({ change }: { change?: { value: string; options: string[]; disabled: boolean; onChange: (tz: string) => void } }) {
-  const tone = ADMIN_KST ? 'bg-[#fff1d6] text-[#8a5300]' : 'bg-[#efeaff] text-[#3a22b0]';
-  const text = ADMIN_KST ? '한국 시간(KST) 기준으로 보는 중' : `모든 날짜·시간은 ${zoneText()} 기준`;
-  // 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(122) A안 — 배지 위에 투명한 고르기 칸을 겹침)
-  if (change && !ADMIN_KST)
-    return (
-      <label className={`relative inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
-        <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
-        <span className="text-[#3a22b0]">{text} · <span className="text-[#3a22b0]"><span className="underline">변경</span> ›</span></span>
-        <select aria-label="시간대 변경" value={change.value} disabled={change.disabled}
-          onChange={(e) => e.target.value !== change.value && change.onChange(e.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
-          {change.options.map((z) => <option key={z} value={z}>{tzLabel(z)}</option>)}
-        </select>
-      </label>
-    );
-  return (
-    <p role="note" className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
-      <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
-      <span className={ADMIN_KST ? 'text-[#8a5300]' : 'text-[#3a22b0]'}>{text}</span>
-    </p>
-  );
-}
-/** 운영자 보기 전용 시간대 전환: 수강생 시간 | 한국 시간(KST). 고른 쪽은 굵은 테두리·굵은 글자 (색만으로 구별하지 않음). 오른쪽에 기준 배지 */
+/**
+ * 시간대 띠 하나 (모든 학생 같은 자리·같은 모양). 학생: '모든 날짜·시간은 ○○ 시간 기준 · 변경 ›'(누르면 시간대 목록, 학생 저장값).
+ * 운영자 보기 + 해외 학생만 같은 띠 안 끝에 '· 한국 시간으로 보기' 글자 버튼 — 화면 표시만 바뀌고 학생 시간대 저장값은 그대로 (11/11 대표: 따로 줄 금지)
+ */
 const KstCtx = createContext<{ admin: boolean; studentTz: string; on: boolean; set: (v: boolean) => void }>({ admin: false, studentTz: 'Asia/Seoul', on: false, set: () => {} });
-function KstToggle() {
+function ZoneBar({ change }: { change?: { value: string; options: string[]; disabled: boolean; onChange: (tz: string) => void } }) {
   const c = useContext(KstCtx);
-  if (!c.admin || c.studentTz === 'Asia/Seoul') return null;
-  const city = koZoneCity(c.studentTz);
-  const btn = (on: boolean) =>
-    `min-h-[36px] rounded-full px-3.5 text-[13px] ${on ? 'border-2 border-white bg-white font-extrabold text-[#1d1b2b]' : 'border-2 border-transparent font-semibold text-white'}`;
-  // 운영자만 보는 칸이라 운영자 검은 칸 안에 (11/11 대표: 학생 화면 부분은 모든 학생이 같게)
+  // 색·모양은 늘 같은 보라색 띠 하나 (11/11 대표: 운영자 한국 시간 보기여도 노란색 금지). 글자만 지금 보이는 기준 시간
+  const tone = 'bg-[#efeaff] text-[#3a22b0]';
+  const ink = 'text-[#3a22b0]';
+  const text = `모든 날짜·시간은 ${zoneText()} 기준`;
+  const kst = c.admin && c.studentTz !== 'Asia/Seoul' && (
+    <button type="button" onClick={() => c.set(!c.on)} className={`whitespace-nowrap font-bold underline ${ink}`}>
+      {c.on ? `${koZoneCity(c.studentTz)} 시간으로 보기` : '한국 시간으로 보기'}
+    </button>
+  );
+  const icon = <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />;
   return (
-    <div className="-mt-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-b-[12px] bg-[#1d1b2b] px-3 pb-2">
-      <span className="text-[13px] font-semibold text-white">시간 기준</span>
-      <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-white/30 bg-white/10">
-        <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
-        <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
-      </div>
-    </div>
+    <p role="note" className={`inline-flex w-fit flex-wrap items-center gap-x-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
+      {/* 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(122) A안 — 배지 글자 위에 투명한 고르기 칸을 겹침) */}
+      {change ? (
+        <label className="relative inline-flex items-center gap-1.5">
+          {icon}
+          <span className={ink}>{text} · <span className={ink}><span className="underline">변경</span> ›</span></span>
+          <select aria-label="시간대 변경" value={change.value} disabled={change.disabled}
+            onChange={(e) => e.target.value !== change.value && change.onChange(e.target.value)}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
+            {change.options.map((z) => <option key={z} value={z}>{tzLabel(z)}</option>)}
+          </select>
+        </label>
+      ) : (
+        <span className="inline-flex items-center gap-1.5">{icon}<span className={ink}>{text}</span></span>
+      )}
+      {kst && <span className={ink}>·</span>}
+      {kst}
+    </p>
   );
 }
 /**
@@ -275,7 +269,6 @@ export default function StudentHome(props: {
     try { localStorage.setItem('lms_admin_student_view_kst', v ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
   };
   VIEW_TZ = isAdminView && adminKst ? 'Asia/Seoul' : studentTz;
-  ADMIN_KST = isAdminView && adminKst && studentTz !== 'Asia/Seoul';
   const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
@@ -691,7 +684,7 @@ export default function StudentHome(props: {
       </nav>
 
       <div className="min-w-0 flex-1 pb-24 lg:pb-0">
-        {props.adminBar && <div className="grid px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}<KstToggle /></div>}
+        {props.adminBar && <div className="grid px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}</div>}
         <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
           {brand}
           <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
