@@ -76,6 +76,11 @@
   - 11/11 시안 `docs/lms/previews/tutor-suggest-times-drafts.html` → **대표 결정 4개 확정(최대 2개 · '모두 안 돼요' 버튼 · 제안 메일 보냄+운영진 숨은참조 · 미응답은 대시보드만) → 아래 '11/11 강사 보강 시간 제안' 으로 개발 끝**
 - **운영 배포 전**: `git log origin/lms-test..origin/lms-prod` 에 운영에만 있는 커밋 있음(172cc4f·06aa38c 강사 Hours 등) → lms-test 에 먼저 합치기. 운영 DB 백업 → migration 2개 → first_class_mail_since 시각 확인
 
+## ⚠ 11/11 운영 학생 홈 '학생마다 다르게 보임' 원인·수정 — **lms-test 51b9589, 운영 미배포(대표 승인 대기)**
+- 원인: 운영자 보기 '시간 기준 [수강생 시간 | 한국 시간]' 줄이 해외 거주 학생에게만 나옴(KstToggle 이 한국 학생이면 아무것도 안 그림). 운영 해외 학생 = 이O옥 STU-0003(싱가포르)·송O나 STU-0004(디트로이트)·오O수 STU-0010(시드니) 3명 = 대표가 다르다고 한 3명과 같음. 학생 화면 카드 구성·순서는 같음(운영 화면 파일에 새 화면 글자만 있고 예전 화면 글자 없음 확인)
+- 수정: 한국 학생도 같은 자리에 '시간 기준 · 수강생 시간 = 한국 시간 (KST)'(글자만, 버튼 아님). 시험 사이트 운영자 보기 PC·iPhone 13: 해외(멜버른)·한국 학생 카드 순서 같음, 한국 시간 버튼 누르면 띠가 한국 시간으로 바뀜 → 되돌림, 가로 밀림 0. 남는 차이는 운영자 칸의 '수강생 로그인 이메일' 줄(로그인 없는 학생만)
+- 운영 리마인더: 통합 운영 배포 세션이 11/11 21:31 KST 운영에 'lesson_reminder_since' 줄을 넣음(enabled=false 로 적혔지만 줄이 있으면 발송) — 계속 둘지 대표 답 대기
+
 ## ✅ 11/11 학생 수업 리마인더 메일 + 누적 학습 시간 시트 시절 포함 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/jolly-turing-bfiwh0, 대표 결정 11/11 · 확인 간격 10분 H26(117)) — 정책 원본 **H26(145)** 기록 · **시험 DB 리마인더 시작 스위치 11/11 끔**(feature_flags 'lesson_reminder_since' 행 지움 → 메일 안 감, 기능·예약 실행·학생 설정은 그대로. 다시 켜려면 그 행만 넣기)
 - migration **20261111170500_lms_student_lesson_reminder_mail**: 2900 직접 발송 함수는 없애고 지금 자동 메일 대기열 재사용 — `lms_lesson_reminders_due`(24h·2h, 알림 시점부터 1시간 안만, 취소·무효·휴무 처리 확정 전 제외, 시간 바뀌면 바뀐 시각 기준(dedupe_key 에 시작 시각), 알림 시점 뒤에 정한 수업 건너뜀(lessons.time_set_at 트리거), 정규=remind_regular/그 밖=remind_makeup, 첫 수업 안내 메일 받은 첫 수업은 24h 생략) → `lms_lesson_reminder_mail`(notifications 'lesson_reminder_24h/2h' → lms_mail_dispatch, 받는 주소 lms_notice_recipient_email, send_emails 꺼짐=support@+[시험 · 번호], 시각 lms_mail_ko_at '오후 8시 [한국 시간]' 모양, 대체강사면 대체강사·링크) → pg_cron 'lms-lesson-reminders' */10 + lms_mail_run. 시작 스위치 feature_flags 'lesson_reminder_since'(**시험 DB 에만 있음** → 운영은 행이 없으면 안 나감). 실패는 기존처럼 failed·운영진 [다시 보내기], 자동 재시도 없음. 강사 알림 변경 없음
 - 시험 DB 실제 발송: STU-9001(시드니) 24h·2h 리마인더 support@ 수신(Gmail 확인, status sent), 메일 없는 학생(STU-0010)은 건너뜀, STU-0015 정규 끔 → 대상 빠짐 → 다시 켬. 시험 DB 는 이제 10분마다 실제로 support@ 로 리마인더가 감(하루 약 10~20통)

@@ -148,24 +148,15 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
 const KstCtx = createContext<{ admin: boolean; studentTz: string; on: boolean; set: (v: boolean) => void }>({ admin: false, studentTz: 'Asia/Seoul', on: false, set: () => {} });
 function KstToggle() {
   const c = useContext(KstCtx);
-  if (!c.admin) return null;
+  // 운영자 보기 + 해외 학생만: 시간대 띠 바로 옆에 작게 (11/11 대표: 따로 줄을 만들면 학생마다 화면 모양이 달라 보임)
+  if (!c.admin || c.studentTz === 'Asia/Seoul') return null;
   const city = koZoneCity(c.studentTz);
-  const korea = c.studentTz === 'Asia/Seoul';
   const btn = (on: boolean) =>
-    `min-h-[36px] rounded-full px-3.5 text-[13px] ${on ? 'border-2 border-white bg-white font-extrabold text-[#1d1b2b]' : 'border-2 border-transparent font-semibold text-white'}`;
-  // 운영자만 보는 칸이라 운영자 검은 칸 안에 (11/11 대표: 학생 화면 부분은 모든 학생이 같게)
+    `min-h-[32px] rounded-full px-3 text-[12.5px] ${on ? 'border-2 border-[#1d1b2b] bg-white font-extrabold text-[#1d1b2b]' : 'border-2 border-transparent font-semibold text-[#55526a]'}`;
   return (
-    <div className="-mt-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-b-[12px] bg-[#1d1b2b] px-3 pb-2">
-      <span className="text-[13px] font-semibold text-white">시간 기준</span>
-      {/* 한국 거주 학생은 바꿀 게 없어 글자만 — 줄 높이·자리는 해외 학생과 같게 (11/11 대표: 학생마다 화면이 달라 보이지 않게) */}
-      {korea ? (
-        <span className="flex min-h-[40px] items-center text-[13px] font-semibold text-white">수강생 시간 = 한국 시간 (KST)</span>
-      ) : (
-        <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-white/30 bg-white/10">
-          <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
-          <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
-        </div>
-      )}
+    <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-[#d9d5e8] bg-[#f6f5fa]">
+      <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
+      <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
     </div>
   );
 }
@@ -697,7 +688,7 @@ export default function StudentHome(props: {
       </nav>
 
       <div className="min-w-0 flex-1 pb-24 lg:pb-0">
-        {props.adminBar && <div className="grid px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}<KstToggle /></div>}
+        {props.adminBar && <div className="grid px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}</div>}
         <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
           {brand}
           <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
@@ -721,7 +712,10 @@ export default function StudentHome(props: {
             </section>
           )}
           {/* 시간대 띠는 모든 학생·운영자 보기에서 같은 자리·같은 모양 (11/11 대표: 학생마다 화면이 달라 보이지 않게) */}
-          <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
+          <div className="flex flex-wrap items-center gap-2">
+  <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
+            <KstToggle />
+          </div>
           {tab === 'home' && info && <LearnedBand minutes={info.learnedMin} />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
