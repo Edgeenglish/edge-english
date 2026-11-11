@@ -1440,7 +1440,7 @@ function MakeupPicker(props: {
               <p className="text-[14px] font-bold">
                 고른 날짜 {picked.length}/{MAKEUP_SLOTS_MAX}
               </p>
-              <p className="text-[13px] leading-relaxed text-[#55526a]">이 수업을 대신할 날짜를 최대 {MAKEUP_SLOTS_MAX}개 골라 주세요.</p>
+              <p className="text-[13px] leading-relaxed text-[#55526a]">최대 {MAKEUP_SLOTS_MAX}개 옵션을 고를 수 있어요.</p>
               {picked.map((t) => (
                 <div key={t.getTime()} className="flex items-center justify-between rounded-[10px] border border-[#e6e3ef] px-3 py-2 text-[14px]">
                   <span className="font-semibold">{whenText(t)}</span>
