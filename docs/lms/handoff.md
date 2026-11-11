@@ -51,6 +51,13 @@
   - 11/11 시안 `docs/lms/previews/tutor-suggest-times-drafts.html` → **대표 결정 4개 확정(최대 2개 · '모두 안 돼요' 버튼 · 제안 메일 보냄+운영진 숨은참조 · 미응답은 대시보드만) → 아래 '11/11 강사 보강 시간 제안' 으로 개발 끝**
 - **운영 배포 전**: `git log origin/lms-test..origin/lms-prod` 에 운영에만 있는 커밋 있음(172cc4f·06aa38c 강사 Hours 등) → lms-test 에 먼저 합치기. 운영 DB 백업 → migration 2개 → first_class_mail_since 시각 확인
 
+## ✅ 11/11 학생 수업 리마인더 메일 + 누적 학습 시간 시트 시절 포함 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/jolly-turing-bfiwh0, 대표 결정 11/11 · 확인 간격 10분 H26(117))
+- migration **20261111170500_lms_student_lesson_reminder_mail**: 2900 직접 발송 함수는 없애고 지금 자동 메일 대기열 재사용 — `lms_lesson_reminders_due`(24h·2h, 알림 시점부터 1시간 안만, 취소·무효·휴무 처리 확정 전 제외, 시간 바뀌면 바뀐 시각 기준(dedupe_key 에 시작 시각), 알림 시점 뒤에 정한 수업 건너뜀(lessons.time_set_at 트리거), 정규=remind_regular/그 밖=remind_makeup, 첫 수업 안내 메일 받은 첫 수업은 24h 생략) → `lms_lesson_reminder_mail`(notifications 'lesson_reminder_24h/2h' → lms_mail_dispatch, 받는 주소 lms_notice_recipient_email, send_emails 꺼짐=support@+[시험 · 번호], 시각 lms_mail_ko_at '오후 8시 [한국 시간]' 모양, 대체강사면 대체강사·링크) → pg_cron 'lms-lesson-reminders' */10 + lms_mail_run. 시작 스위치 feature_flags 'lesson_reminder_since'(**시험 DB 에만 있음** → 운영은 행이 없으면 안 나감). 실패는 기존처럼 failed·운영진 [다시 보내기], 자동 재시도 없음. 강사 알림 변경 없음
+- 시험 DB 실제 발송: STU-9001(시드니) 24h·2h 리마인더 support@ 수신(Gmail 확인, status sent), 메일 없는 학생(STU-0010)은 건너뜀, STU-0015 정규 끔 → 대상 빠짐 → 다시 켬. 시험 DB 는 이제 10분마다 실제로 support@ 로 리마인더가 감(하루 약 10~20통)
+- migration **20261111180000_lms_legacy_learned_minutes**: 표 legacy_learned_minutes(학생당 한 줄: 시트 합계 분·횟수·through_date) + student_my_info 누적 = 시트 합계 + through_date 이후 LMS 진행 수업. 데이터 파일 `supabase/data/legacy_learned_minutes_20261111.sql`(운영 학생 번호 기준, 넣기만) — **시험 DB 에만 넣음(학생 번호만 같은 가상 학생), 운영 미적용**
+- 시트 집계(강사 Class Record 18개 읽기만): 시트 기록 있는 학생 11명, 207회 7,440분(124시간). 0001 240·0002 540·0004 1120·0005 560·0006 1720·0007 480·0008 700·0009 160·0010 200·0011 1700·0013 20, 0003·0012·0014 0. **Olivia 시트 10/20~10/30 줄은 시각·길이가 비어 안 넣음**(0001~0004 각 2회, 0005 6회, 0006 4회 — 길이 채우면 +560분)
+- 운영 배포 전: 운영 DB 백업 → 두 migration → 데이터 파일 → 'lesson_reminder_since' 행은 운영 send_emails 켜져 있어 넣는 순간 실제 학생에게 감 → 별도 승인
+
 ## ✅ 11/11 학생 홈·내 정보 최신 통합 시안 (대표 최종 지시서) — **lms-test 반영, 운영 미반영** (브랜치 claude/jolly-turing-bfiwh0)
 - 홈 순서(모든 학생 같은 컴포넌트): 시간대 띠('모든 날짜·시간은 ○○ 시간 기준 · 변경 ›') → 나의 누적 학습 시간(진행된 수업만, 0분도 표시) → 재등록 안내(대상만) → 할 일(있을 때만, 제목 옆 숫자 없음, 줄마다 '수업 n건') → 다음 수업(없으면 '예정된 수업이 없어요', 교재 링크 없음, '40분 · ○○ 강사님 · 정규 수업', [수업 입장]) → 수업 변경·취소/보강 신청(보강 0건이면 신청 내역으로) → 공지사항(최신 2건, 새 공지 빨간 N·미확인/확인함, 3건 이상 [전체보기], 없으면 빈 상태). 수강·결제·적립금 칸은 홈에서 빼고 내 정보에만
 - 운영자 보기: 시간 기준 전환은 운영자 검은 칸 안, 시간대 띠는 모든 학생 같은 자리
