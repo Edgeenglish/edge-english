@@ -10,6 +10,7 @@ import { firstLessonAt, planAlert, type PlanView } from './confirm';
 
 /** 수업 변경 안내 종류 → 카드 맨 위 '무슨 일' (lesson_notices.event, migration 1700) */
 const CHANGE_EVENT_TEXT: Record<string, string> = {
+  makeup_requested: '보강 신청 접수',
   change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림', makeup_rescheduled: '보강 시간 변경', makeup_tutor_removed: '보강 강사 바뀜', makeup_expired: '보강 신청 만료',
 };
 const LESSON_KIND_TEXT: Record<string, string> = { regular: '정규 ', makeup: '보강 ', migrated_makeup: '보강 ', migrated_extra: '추가 ', compensation: '보상 ' };

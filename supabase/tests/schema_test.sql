@@ -3515,7 +3515,7 @@ set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select admin_change_lesson('c9300000-0000-0000-0000-000000000001', '77777777-9300-0000-0000-000000000001', 'tutor', now(), false);   -- 미리 취소
 select admin_change_lesson('c9300000-0000-0000-0000-000000000002', '77777777-9300-0000-0000-000000000002', 'tutor', now(), false);   -- 6시간 안 = 적립금
-select admin_change_lesson('c9300000-0000-0000-0000-000000000003', '77777777-9300-0000-0000-000000000003', 'student', now(), false); -- 수강생 취소: 수강생 메일 없음
+select admin_change_lesson('c9300000-0000-0000-0000-000000000003', '77777777-9300-0000-0000-000000000003', 'student', now(), false); -- 수강생 취소: 수강생·강사 메일
 reset request.jwt.claim.sub;
 reset role;
 create temp table tc93 as
@@ -3544,9 +3544,9 @@ select pg_temp.ok((select count(*) = 1 from tc93 where lesson_id = '77777777-930
 select pg_temp.ok((select count(*) = 1 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000002' and recipient_kind = 'student'
                      and req ->> 'html' like '%적립금 2,000원을 드렸어요 (유효기간 없음).%'),
   '강사 사정 취소 메일: 6시간 안 취소는 수강생 메일에 적립금 줄');
-select pg_temp.ok((select count(*) = 0 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000003' and recipient_kind = 'student' and email_status is not null)
+select pg_temp.ok((select count(*) = 1 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000003' and recipient_kind = 'student' and email_status = 'queued')
               and (select count(*) = 1 from tc93 where lesson_id = '77777777-9300-0000-0000-000000000003' and recipient_kind = 'tutor' and email_status = 'queued'),
-  '수강생 취소: 수강생 메일 없음(그대로), 강사 메일만');
+  '운영진 대신 수강생 취소: 수강생·강사 모두 메일');
 
 -- ---------------------------------------------------------------------
 -- 운영진 수업 관리 2차 (20261109040000, 대표 11/9): 학생 상세 [+ 수업 추가]·[수정]
