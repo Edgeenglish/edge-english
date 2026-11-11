@@ -137,6 +137,12 @@ describe('변경·취소 최종 확인 (POL-CHG-01·02)', () => {
     expect(d).toMatchObject({ ok: true, timing: 'advance', usesCredit: true, consumesLesson: false, makeupAllowed: true });
   });
 
+  it('다음 수강권 수업: 그 수업 수강권 종료일로 판정 (지금 수강권 종료일 뒤라도 취소 가능)', () => {
+    const next = { ...lesson('n', 'regular', '2026-11-01'), finalEndDate: '2026-11-28' as const };
+    const d = cancelPreview({ ...base, lesson: next, now: new Date(next.startsAt.getTime() - 24 * H) }, null);
+    expect(d).toMatchObject({ ok: true, timing: 'advance', usesCredit: true });
+  });
+
   it('6시간 이내: 수업 1회 차감, 보강 불가, 변경권 유지', () => {
     const d = cancelPreview({ ...base, lesson: l, now: new Date(l.startsAt.getTime() - 6 * H + 60_000) }, null);
     expect(d).toMatchObject({ ok: true, timing: 'late', usesCredit: false, consumesLesson: true, makeupAllowed: false });

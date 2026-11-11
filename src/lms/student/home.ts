@@ -16,6 +16,8 @@ export type StudentLesson = {
   kind: LessonKind;
   /** 수업 종류 이름용 (H26(138), DB class_type) */
   type?: ClassType;
+  /** 이 수업이 속한 수강권 종료일 — 다음 수강권(재등록) 수업은 그 수강권 기준으로 취소 판정 (11/11) */
+  finalEndDate?: KstDate;
   startsAt: Date;
   minutes: number;
   tutorName: string;
@@ -203,7 +205,7 @@ export function cancelPreview(
     {
       lesson: { kind: lesson.kind, kstDate: instantToKstDate(lesson.startsAt), startsAt: lesson.startsAt },
       now: input.now,
-      finalEndDate: input.finalEndDate,
+      finalEndDate: lesson.finalEndDate ?? input.finalEndDate,
       creditsLeft: input.creditsLeft,
       isKoreanPublicHoliday: input.holidays.has(instantToKstDate(lesson.startsAt)),
     },

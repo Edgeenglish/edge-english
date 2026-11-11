@@ -13,7 +13,11 @@
 - 검증: tsc · vitest 430 · test:db 통과(새 시험 4개 + 기존 2곳 고침: 원래 강사 회색 줄, 대체 Held = Normal) · ?demo=1 PC·휴대폰 화면 · 시험 DB Blair 계정으로 실제 저장(사전 취소·변경권 2→1·같은 요청 다시 보내도 1번·학생/강사 안내 2건)
 - ⚠ **운영 배포 순서**: 운영 DB migration 먼저(운영자 화면이 lessons 의 class_type 칸을 읽음 — 없으면 대시보드·수업 변경 목록 오류) → lms-prod. 운영 미반영 앞 작업(강사 통보 LMS 이전 등)과 같이 나갈 수 있으니 배포 전 `git log origin/lms-prod..origin/lms-test` 확인
 - ✅ 11/11 대표 PC 시험 사이트 B1~B4 통과(H26(139)). 공휴일 줄은 시험 DB 공휴일 0건이라 시험 안 함
-- ⏳ 대표 결정 대기: ① 운영 반영 승인 ② 시험 DB에 공휴일 하루 넣고 공휴일 줄 시험할지 ③ 운영 DB 공휴일 목록 넣기
+- ✅ 11/11 공휴일 시험(시험 DB, H26(140)): STU-0003 11/30 수업에 임시 공휴일 → 학생 화면 팝업 '변경권 | 차감 안 됨 (공휴일 취소)', 실제 취소 'Student canceled in advance (public holiday)'·변경권 0 그대로·보강 가능. 원복 끝(holidays 0건·수업 scheduled·변경 기록·안내·메일 줄·audit 줄·임시 비밀번호·로그인 세션). 학생 취소 메일 1통은 원복 전에 support@로 나감
+- ✅ 11/11 고침(대표 지시, 시험 DB·lms-test): 다음 수강권 수업 학생 취소 — migration 20261111170000 student_screen 수업마다 lesson_final_end_date + credit_periods 열린 수강권 전부, 화면 cancelPreview·보강 기한이 그 수업 수강권 기준. 확인: STU-0003 12/14 팝업 '변경권 1개 사용 (1개 → 0개)·보강 ~1/10(일)', 저장 뒤 다음 수강권 기간 변경권 1→0·지금 수강권 0 그대로·보강 기한 2027-01-10. 시험 뒤 원복. 02-check 표 59개(다른 세션 student_notice_reads 표 반영)
+- ⏳ 운영 배포 보류(대표 11/11) — 배포 승인 다시 요청 필요. 운영 공휴일 등록 = 대표 승인(데이터만), 목록 확인 뒤 실행
+- ⏳ 대표 결정 대기 (H26(140)): ① 운영 반영(보류 중, 배포 예정 목록 보고함) ② 운영 DB 공휴일 목록 등록(보류, 영향 보고함)
+- 운영에 안 나간 DB migration (11/11 기준): 20261111010000_student_my_info · 20261111073809_student_makeup_mail_and_original_slot · 20261111120000_tutor_updates_mail · 20261111120100_notice_mail_wording · 20261111140000(이 작업) · 20261111150000_student_notice_reads_history · 20261111150100_student_reminder_settings. lms-prod 에만 있는 커밋 5개는 내용이 lms-test 에 모두 있음(확인함)
 - 안 넣은 것: Student canceled 의 Remarks 칸(저장할 곳이 없어 뺌, 시안 휴대폰도 없음)
 
 ## ✅ 11/11 강사 보강 시간 제안 → 학생이 골라 바로 확정 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/dreamy-curie-yyxifa, H26(134))
@@ -44,6 +48,8 @@
 - 운영자 보기: 시간 기준 전환은 운영자 검은 칸 안, 시간대 띠는 모든 학생 같은 자리
 - 내 정보: 프로필(담당 강사·수강 상태·시간대 [변경 ›]·수업 링크) · 나의 학습 정보(강사 작성 4칸, 없으면 '아직 작성 전이에요') · 이메일 알림 설정(정규/보강 각각) · 내 수강권(현재 코스·수업 시간·남은 정규 수업·변경권·종료일·[현재·지난 수강권 / 결제 내역 ›] 실제 기록) · 적립금·보강권
 - migration **20261111010000_lms_student_my_info**(학습 정보·누적 시간) · **20261111150000_lms_student_notice_reads_history**(공지 확인 표 announcement_reads + student_notices/student_notice_read(운영자 보기는 기록 안 함)/student_enrollment_history) — **시험 DB 적용 · 운영 미적용**
+- migration **20261111150100_lms_student_reminder_settings**: 2900 중 알림 켬/끔 저장만(students.remind_regular/makeup + student_reminders, 메일 주소 확인 = lms_notice_recipient_email). **시험 DB 적용, 발송 함수·예약 실행 없음 → 수업 알림 메일은 아직 안 나감**(H26(86) ⑥ 대표 결정 대기). 시험·운영 모두 그동안 2900 미적용이라 '이메일 알림 설정' 칸이 화면에 안 보였음
+- QA(11/11, 시험 사이트 실제 배포): 운영자 보기 34명 PC·iPhone 13 — 홈 칸 순서 모두 같음(차이는 데이터 조건뿐: 재등록 안내 5명·할 일 4명), 내 정보 4칸 34명 같음, 가로 밀림 0. 학생 본인 STU-0018(임시 비밀번호 → 끝나고 무작위) PC·휴대폰: 공지 미확인 → 열기 → 확인함(새로고침 유지, DB announcement_reads 1건, 운영자 보기는 기록 안 됨)·전체보기 3건·수업 변경·취소 열기/닫기·보강 신청·정규/보강 알림 각각 OFF → DB·새로고침 유지 → ON 복구·시간대 시드니 → 홈 띠·새로고침 유지 → 서울 복구·결제 내역·적립금·보강권 확인 모두 통과. **시험 데이터 남김**: 학생 공지 2건('크리스마스 시즌 수업 안내'·'12월 정기 점검 안내')
 - '강사 제안 시간 선택' 할 일: 학생 쪽 기능이 아직 없음(H26(134) 결정 대기) → 만들지 않음
 - ⚠ 운영 수업 기록은 10/27부터라 기존 학생 누적 시간이 작게 나옴(시트 시절 포함 여부 대표 결정 대기)
 
@@ -61,7 +67,7 @@
 ## ✅ 11/10 운영 자동 메일 실제 발송 켬 — 정책 원본 H26(123)
 - 운영 DB `feature_flags.send_emails` = true (대표 지시). 켜기 전 확인: notifications 대기·실패 0, 열린 보강 신청 0(재촉·만료 한꺼번에 없음), 메일 큐는 lesson_notices INSERT 트리거만이라 예전 안내 다시 안 나감, 받는 주소는 큐에 넣을 때 정해짐. 켠 뒤: 최근 안내 4건을 lms_notice_mail 로 미리보기(발송 안 함) → 실제 주소·[시험] 표시 없음 확인, 새 메일 0
 - 이메일 없는 수강생: STU-0014(체험용) → 메일은 'no_address' 로 남음
-- **⏭ 개발 대기 — 대표 확정 H26(124) A안** (새 세션): ① 새 보강·보상수업 신청(`lms_makeup_request_core` 새로 만든 경우만, repeated 제외 — 학생 본인·`admin_makeup_request` 대신 모두) → 담당 강사 즉시 영어 메일(강사 시간대: 원래 수업 · 고른 시간 1~2개 · 'Please confirm one time in the LMS.' · LMS 버튼). `admin_makeup_record_past`·`admin_makeup_confirm_now` 는 제외 ② 강사 [None of these times work] + 가능 시간 글(`tutor_makeup_answer`, `makeup_requests.tutor_note`) → support@ 즉시 메일(가능 시간 글 포함), 학생에게 안 보냄. 재촉·확정 메일 그대로, 신청 1건에 같은 메일 1통(dedupe_key). 지금 운영에는 강사 제안 상태 `countered` 를 만드는 함수 없음(TutorHome 은 운영진에게 글만 보냄)
+- **✅ H26(124) A안 → 11/11 개발됨 (시험 DB·lms-test, 운영 미반영)**: ① 보강 신청→강사 메일 = migration 20261111073809 · ② [None of these times work]→support@ 메일 = 강사 통보 LMS 이전 세션(위 11/11 항목). 운영은 lms-test 전체 배포 때 같이 (H26(140))
 - 되돌리기: `update feature_flags set enabled = false where key = 'send_emails'`
 
 ## ✅ 11/10 운영자 '저장 기록' 띠: 저장 완료 줄 자동 지움 — 정책 원본 H26(121) · **lms-test 반영, 운영 미반영(다음 운영 배포 때 같이, DB 변경 없음)** (브랜치 claude/busy-bohr-q9w22a)

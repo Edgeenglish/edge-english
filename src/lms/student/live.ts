@@ -88,7 +88,7 @@ type Raw = {
     lessons_total: number; credits_left: number; credits_granted: number; confirmed_on: KstDate | null; renewal_paid: boolean;
     next_regular_from: KstDate | null;
   };
-  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null; type?: string }[];
+  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null; type?: string; lesson_final_end_date?: KstDate | null }[];
   makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean }[];
   leave_pending?: { id: string; starts_at: string; ends_at: string }[];
   makeup_requests: {
@@ -166,6 +166,7 @@ export function parseStudentView(r: Raw): StudentView {
       id: l.id,
       kind: lessonKind(l.kind),
       type: asClassType(l.type, l.kind, l.substitute),
+      finalEndDate: l.lesson_final_end_date ?? undefined,
       startsAt: new Date(l.starts_at),
       minutes: Math.round((new Date(l.ends_at).getTime() - new Date(l.starts_at).getTime()) / 60_000),
       tutorName: l.tutor,

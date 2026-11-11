@@ -2136,7 +2136,7 @@ function CancelSheet(props: {
     ...(d.usesCredit ? [['변경권', `1개 사용 (${creditsNow}개 → ${creditsNow - 1}개)`] as [string, string]] : []),
     // 한국 공휴일 수업 (H26(138)): 변경권 줄이 아예 안 보이던 것 → 차감 안 된다는 한 줄
     ...(d.status === 'Student canceled in advance (public holiday)' ? [['변경권', '차감 안 됨 (공휴일 취소)'] as [string, string]] : []),
-    ['보강', d.makeupAllowed ? `~${endDay(props.makeupUntil)}까지 가능` : '불가'],
+    ['보강', d.makeupAllowed ? `~${endDay(lesson.finalEndDate ?? props.makeupUntil)}까지 가능` : '불가'],
     ...(d.consumesLesson ? [['변경권', late ? '그대로 (차감 안 됨)' : '없음'] as [string, string]] : []),
   ];
 
