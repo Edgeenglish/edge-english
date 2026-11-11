@@ -81,8 +81,6 @@ const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
 // 수강생 화면 시각은 수강생이 사는 곳 시간대로 (11/3 대표: 해외 수강생은 본인 나라 시간으로 캘린더). 국내 수강생은 한국 시간 그대로.
 // 화면 하나에 수강생 한 명이라 렌더할 때 정해 둠. 판정(6시간 규칙·수강 종료일 23:59 KST)은 그대로
 let VIEW_TZ = 'Asia/Seoul';
-/** 운영자 보기에서 해외 수강생을 한국 시간으로 보는 중 (주황 띠·배지) */
-let ADMIN_KST = false;
 /** 기준 이름: '시드니 시간' / '한국 시간' (도시 이름 한국어, 11/8 대표) */
 const zoneCity = () => `${koZoneCity(VIEW_TZ)} 시간`;
 const zoneText = zoneCity;
@@ -128,9 +126,10 @@ const overseas = () => VIEW_TZ !== 'Asia/Seoul';
 const KstCtx = createContext<{ admin: boolean; studentTz: string; on: boolean; set: (v: boolean) => void }>({ admin: false, studentTz: 'Asia/Seoul', on: false, set: () => {} });
 function ZoneBar({ change }: { change?: { value: string; options: string[]; disabled: boolean; onChange: (tz: string) => void } }) {
   const c = useContext(KstCtx);
-  const tone = ADMIN_KST ? 'bg-[#fff1d6] text-[#8a5300]' : 'bg-[#efeaff] text-[#3a22b0]';
-  const ink = ADMIN_KST ? 'text-[#8a5300]' : 'text-[#3a22b0]';
-  const text = ADMIN_KST ? '한국 시간(KST) 기준으로 보는 중' : `모든 날짜·시간은 ${zoneText()} 기준`;
+  // 색·모양은 늘 같은 보라색 띠 하나 (11/11 대표: 운영자 한국 시간 보기여도 노란색 금지). 글자만 지금 보이는 기준 시간
+  const tone = 'bg-[#efeaff] text-[#3a22b0]';
+  const ink = 'text-[#3a22b0]';
+  const text = `모든 날짜·시간은 ${zoneText()} 기준`;
   const kst = c.admin && c.studentTz !== 'Asia/Seoul' && (
     <button type="button" onClick={() => c.set(!c.on)} className={`whitespace-nowrap font-bold underline ${ink}`}>
       {c.on ? `${koZoneCity(c.studentTz)} 시간으로 보기` : '한국 시간으로 보기'}
@@ -140,7 +139,7 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
   return (
     <p role="note" className={`inline-flex w-fit flex-wrap items-center gap-x-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
       {/* 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(122) A안 — 배지 글자 위에 투명한 고르기 칸을 겹침) */}
-      {change && !ADMIN_KST ? (
+      {change ? (
         <label className="relative inline-flex items-center gap-1.5">
           {icon}
           <span className={ink}>{text} · <span className={ink}><span className="underline">변경</span> ›</span></span>
@@ -270,7 +269,6 @@ export default function StudentHome(props: {
     try { localStorage.setItem('lms_admin_student_view_kst', v ? '1' : '0'); } catch { /* 저장 안 되는 브라우저 */ }
   };
   VIEW_TZ = isAdminView && adminKst ? 'Asia/Seoul' : studentTz;
-  ADMIN_KST = isAdminView && adminKst && studentTz !== 'Asia/Seoul';
   const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>('home');
