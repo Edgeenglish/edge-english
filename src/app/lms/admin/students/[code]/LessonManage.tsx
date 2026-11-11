@@ -1,7 +1,7 @@
 'use client';
 
 // 학생 상세 '보강·보상수업' 카드 (H26(103), 대표 승인 11/9 2차 시안, migration 20261109040000)
-// [+ 수업 추가]: 보강권(취소·노쇼·휴무 수업, 시트 이관) 또는 무료 보상권 하나로 고른 강사·시간에 바로 확정. 기본값 없음(강사만 담당 강사)
+// [+ 수업 추가]: 보강권(취소·노쇼·휴무 수업, 시트에서 옮긴 보강) 또는 무료 보상권 하나로 고른 강사·시간에 바로 확정. 기본값 없음(강사만 담당 강사)
 // [수정]: 확정된 보강·보상수업의 날짜·시간·강사만 바꿈(같은 수업, 변경권·보강권 그대로). 시간 입력은 TimeInput(오전·오후+시+분)
 // 검사(강사 휴무·다른 수업·열린 시간·종료일·중복)는 DB 함수가 하고, 걸리면 시간 칸 바로 아래 빨간 글
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -39,7 +39,7 @@ const WHY: Record<string, string> = { 'Tutor no-show': '강사 노쇼', 'Student
 function rightLabel(r: MakeupRight): string {
   // '11/4(수) 수업분 · 강사 미리 취소' (한국 날짜)
   if (r.kind === 'lesson') return `${kstDay(r.source.startsAt)} 수업분${r.source.classStatus ? ` · ${WHY[r.source.classStatus] ?? STATUS_PLAIN[r.source.classStatus] ?? r.source.classStatus}` : ''}`;
-  if (r.kind === 'migrated') return `시트 이관분${r.item.originalDate ? ` (원래 ${mdw(r.item.originalDate)})` : ''}`;
+  if (r.kind === 'migrated') return r.item.originalDate ? `${mdw(r.item.originalDate)} 수업분 · 보강 수업` : '보강 수업';
   return r.source ? `${kstDay(r.source.startsAt)} 수업분 · 강사 노쇼` : '무료 보상수업';
 }
 const sourceOf = (r: MakeupRight) => (r.kind === 'lesson' ? { lessonId: r.source.id } : r.kind === 'compensation' ? { compId: r.comp.id } : { itemId: r.item.id });
@@ -84,7 +84,7 @@ export default function LessonManage({ student, regularTutorId, finalEnd, action
     const comp = req?.compensationId ? d?.compensations?.find((c) => c.id === req.compensationId) : undefined;
     const src = l.makeupOf ? byId.get(l.makeupOf) : comp ? byId.get(comp.sourceLessonId) : undefined;
     if (src) return `${kstDay(src.startsAt)} 수업분`;
-    return l.kind === 'migrated_makeup' ? '시트 이관분' : '';
+    return l.kind === 'migrated_makeup' ? '보강 수업' : '';
   };
   const logsFor = (l: ChLesson) => (data?.logs ?? []).filter((g) => g.lessonId === l.id);
   const logText = (g: MakeupLog) => {
