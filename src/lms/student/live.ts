@@ -4,7 +4,7 @@ import { asClassType } from '../class-type';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
-import type { CreditPeriod, PointsEvent, StudentLesson, StudentRequest } from './home';
+import type { CreditPeriod, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
 
 const NOT_APPLIED = '수강생 화면이 이 DB에 아직 없어요 (migration 2800).';
 
@@ -246,6 +246,8 @@ async function loadTextbook(sb: SupabaseClient, studentId: string | null): Promi
 
 export type MakeupOption = { startsAt: Date; afterEnd: boolean };
 /** '내 정보' 학습 정보(강사 작성)·홈 누적 학습 시간 (migration 20261111010000). 값이 없으면 null */
+/** 학생 홈 공지 (migration 20261111150000): 게시 중인 공지 + 이 학생이 열어 봤는지 */
+export type StudentNotice = { id: string; title: string; body: string; startsOn: KstDate; read: boolean };
 export type MyInfo = { level: string | null; goal: string | null; style: string | null; noteUrl: string | null; learnedMin: number };
 export type RegularSlot = { weekday: number; timeKst: string; minutes: number; tutor: string };
 /** 보상수업이면 p_comp 를 붙임 (4100). 원래 수업 보강은 예전과 같은 인자 → 4100 전 DB에서도 그대로 */
@@ -291,6 +293,25 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
      * 값 = 수업 번호 → 이미 누른 시각(null = 아직 안 누름). 함수가 없는 옛 DB 면 빈 목록 (링크 안 보임)
      */
     /** 정규 수업 시간 (H26(95) ②, migration 20261108040000): 요일(KST 0=일)·시각(KST)·길이·강사. 함수 없는 옛 DB 면 빈 목록 */
+    notices: async (): Promise<StudentNotice[]> => {
+      const r = await sb.rpc('student_notices', { p_student: adminStudentId });
+      if (r.error) return [];
+      return ((r.data ?? []) as { id: string; title: string; body: string; starts_on: KstDate; read: boolean }[]).map((x) => ({ id: x.id, title: x.title, body: x.body, startsOn: x.starts_on, read: x.read }));
+    },
+    /** 학생이 공지를 열면 확인함 (운영자 보기는 DB 에서 기록 안 함) */
+    noticeRead: async (id: string): Promise<void> => {
+      await sb.rpc('student_notice_read', { p_student: adminStudentId, p_announcement: id });
+    },
+    /** 현재·지난 수강권 / 결제 내역 — 실제 등록·결제 기록만 (금액·카드 정보 없음, POL-PAY-11) */
+    history: async (): Promise<PaymentSummary[]> => {
+      const r = await sb.rpc('student_enrollment_history', { p_student: adminStudentId });
+      if (r.error) return [];
+      return ((r.data ?? []) as { id: string; current: boolean; status: string; duration_min: number; weekly_count: number; weeks: number | null; legacy_label: string | null; start_date: KstDate; final_end_date: KstDate; method: string | null; confirmed_on: KstDate | null }[]).map((e) => ({
+        id: e.id, product: productLabel(e), periodStart: e.start_date, periodEnd: e.final_end_date,
+        method: e.method === 'bank_transfer' ? 'bank_transfer' : e.method === 'card_link' ? 'card_imweb' : null,
+        confirmedOn: e.confirmed_on, current: e.current, paid: paidStatus({ status: e.status, confirmed_on: e.confirmed_on }),
+      }));
+    },
     /** 함수 없는 옛 DB 면 null (화면에서 해당 칸 숨김) */
     myInfo: async (): Promise<MyInfo | null> => {
       const r = await sb.rpc('student_my_info', { p_student: adminStudentId });

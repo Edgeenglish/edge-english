@@ -133,13 +133,16 @@ export type PaymentSummary = {
   product: string;
   periodStart: KstDate;
   periodEnd: KstDate;
-  method: 'card_imweb' | 'bank_transfer';
+  /** null = LMS 결제 기록 없음 (시트에서 옮긴 수강권) */
+  method: 'card_imweb' | 'bank_transfer' | null;
   /** 운영자가 결제를 확인한 날. null = 확인 전 */
   confirmedOn: KstDate | null;
   current: boolean;
+  /** 결제 완료 (결제 확인 기록, 또는 시트에서 옮긴 수강 중·끝난 수강권) */
+  paid?: boolean;
 };
 
-export const PAYMENT_METHOD_LABEL: Record<PaymentSummary['method'], string> = {
+export const PAYMENT_METHOD_LABEL: Record<NonNullable<PaymentSummary['method']>, string> = {
   card_imweb: '카드 (아임웹)',
   bank_transfer: '계좌이체',
 };
