@@ -511,7 +511,13 @@ export default function StudentHome(props: {
   }
 
   const nextFull = next && s.lessons.find((l) => l.id === next.id);
-  const nextCard = next && <NextLesson lesson={next} now={now} meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
+  // 다음 수업 칸은 수업이 없어도 늘 같은 자리에 (11/11 대표: 학생마다 화면 모양이 달라 보이지 않게)
+  const nextCard = !next ? (
+    <section aria-label="다음 수업" className="grid gap-2 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
+      <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
+      <p className="text-[16px] font-bold text-white">예정된 수업이 없어요</p>
+    </section>
+  ) : <NextLesson lesson={next} now={now} meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -585,12 +591,13 @@ export default function StudentHome(props: {
     </>
   );
   const todoCount = (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
-  const todoBars = todoCount > 0 && (
+  // 할 일 칸은 0개여도 늘 보임 (11/11 대표)
+  const todoBars = (
     <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
       <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
         할 일 <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
       </h2>
-      <div className="divide-y divide-[#f3e6c4]">{todoItems}</div>
+      {todoCount > 0 ? <div className="divide-y divide-[#f3e6c4]">{todoItems}</div> : <p className="px-4 py-3.5 text-[14px] text-[#6b6880]">할 일이 없어요</p>}
     </section>
   );
 
