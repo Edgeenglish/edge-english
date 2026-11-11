@@ -54,6 +54,7 @@
   - 11/10 대표 답 반영: Olivia 219행 황O영 10/29 Regular→Makeup, Leslie 63행 이O민 11/10 Cover class·강사 사전 취소 추가, 학생 시트 A1 학생 번호(황O영 STU-0002·서O정 STU-0005·이O나 STU-0011, 운영 DB와 일치 확인). 강사 시트 고친 줄 Remarks 기록
   - 11/10 추가(대표 지시·질문 창 승인): 이O나 학생 시트 11/9 진행 여부 '정상 진행'+비고, **운영 DB** 서O정 STU-0005 11/9 08:00 KST 수업(lesson 02f53398…) original_tutor_id 빈칸 → Olivia (직접 SQL update 1줄, 빈칸만 채움, actor_via admin_sql_set_original_tutor — 화면 함수 없음, 덮어쓰기 금지 원칙의 대표 승인 예외). 가르친 강사 Benny 그대로
 - **대조 기록** 11/11: 불일치 8건 · 기록 누락 4건 · 세 곳 일치 6/12명. 11/10 대비 6건+누락 1건 해결. 남은 결정: 이O연 STU-0008 11/10 실제(정상 진행 vs 학생 취소+15:00 보강). 새로: 이O옥 11/11 학생 늦은 취소(LMS 학생 노쇼), 김O민 11/13 보강 취소·11/11 LMS 빈칸, 홍O길 11/12 보강 취소 Benny 시트 없음, 변경권 차이(김O민·홍O길·이O연)
+  - 11/11 대표 지시 반영(운영 DB, admin_change_lesson 학생 대신 취소): 김O민 STU-0007 11/11 11:00 KST 학생 사전 취소(연락 시각 11/11 05:00 KST = 6시간 전, 변경권 2→1), 11/13 10:00 KST 보강 학생 사전 취소(연락 시각 지금, 변경권 1→0). 이O연 STU-0008 11/10 = LMS 가 맞음(09:00 학생 취소 + 15:00 KST 보강, 대표 확인) — Benny·학생 시트 정정은 대표 답 대기. 강사 Class Record 에 'Student canceled in advance' 선택지 추가는 새 세션 개발(대표 지시)
 
 ## ✅ 2026-11-07 운영 DB: 체험용 강사 계정 + 가상 학생 (대표 지시·'응 운영DB에 바로해')
 - 강사 **Sera Kara**(대표 지인, 독일 슈투트가르트, Europe/Berlin, 활성) 추가 + 로그인 계정(이메일은 운영 DB tutors.email) `admin_tutor_login`. 시험 DB에도 같은 이메일을 James 에 연결해 둠
