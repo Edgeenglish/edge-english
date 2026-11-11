@@ -76,7 +76,13 @@
   - 11/11 시안 `docs/lms/previews/tutor-suggest-times-drafts.html` → **대표 결정 4개 확정(최대 2개 · '모두 안 돼요' 버튼 · 제안 메일 보냄+운영진 숨은참조 · 미응답은 대시보드만) → 아래 '11/11 강사 보강 시간 제안' 으로 개발 끝**
 - **운영 배포 전**: `git log origin/lms-test..origin/lms-prod` 에 운영에만 있는 커밋 있음(172cc4f·06aa38c 강사 Hours 등) → lms-test 에 먼저 합치기. 운영 DB 백업 → migration 2개 → first_class_mail_since 시각 확인
 
-## ⏭ 새 세션 대기: 운영진 대시보드 '안내 보내기' 카드 정리 (대표 11/11)
+## ✅ 11/11 운영진 대시보드 '안내 보내기' 카드 정리 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/intelligent-bell-o33pr9)
+- migration **20261111210000_lms_notice_mail_sent_closes_card** (시험 DB 적용): lesson_notices 의 email_status 가 'sent' 로 바뀌면 같은 줄 pending → sent(sent_at = 메일 보낸 시각, sent_by 없음) 트리거 `lesson_notices_mail_sent_done` + 지금 떠 있던 'pending 인데 메일 sent' 18건 정리. 코드 변경 없음(카드는 pending 만 셈)
+- 시험(시험 DB, 되돌림 포함): 메일 성공 → sent / 실패(failed) → pending 유지 / 정리 대상 0건. 남은 pending = 주소 없음 no_address 6건 + 메일 기능 전 옛 줄(email_status 없음) — 카드 유지가 맞음
+- ⏳ **운영 반영은 대표 '응' 뒤**: 운영 DB 백업(snapshots) → migration 적용 (운영 정리 대상은 홍O길 보강 확정 1건·이O민 3건·김O민 4건 등, 적용 직전 읽기로 건수 확인). 이전 항목의 원문 요청은 이 줄로 대체
+- ⚠ 의도: 학생 취소·보강 확정 등 메일 나간 안내는 카톡 [보냄] 단계 없이 카드가 사라짐
+
+## (이전) 운영진 대시보드 '안내 보내기' 카드 정리 요청 원문 (대표 11/11)
 - 요청: 안내 메일(취소·보강·재등록 등)이 학생·강사에게 정상 발송된 기록(notifications/lesson_notices 메일 sent)이 있으면 대시보드 카드('보강 확정 안내 보내기'·'수업 취소 안내 보내기'·'안내 안 보냄 n건' 등)에 안 뜨게 + 지금 떠 있는 것도 정리. 대표 캡처: 홍O길 '보강 확정 안내 보내기 1건', 이O민 '수업 취소 안내 보내기 3건', 김O민 '수업 취소 안내 보내기 4건' (운영)
 - 관련 코드: src/lms/admin/board.ts·live.ts·AdminDashboard.tsx, lesson_notices(email_status·email_notification_id), 카드 닫기 admin_task_closures. 주의: '지금 떠 있는 것 정리'가 운영 DB 변경(lesson_notices sent 처리 등)이면 운영 DB 실행 조건(대표 '응')·백업 규칙 지킴. 시험 먼저 → 대표 승인 → 운영
 
