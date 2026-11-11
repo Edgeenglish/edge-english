@@ -76,10 +76,11 @@
   - 11/11 시안 `docs/lms/previews/tutor-suggest-times-drafts.html` → **대표 결정 4개 확정(최대 2개 · '모두 안 돼요' 버튼 · 제안 메일 보냄+운영진 숨은참조 · 미응답은 대시보드만) → 아래 '11/11 강사 보강 시간 제안' 으로 개발 끝**
 - **운영 배포 전**: `git log origin/lms-test..origin/lms-prod` 에 운영에만 있는 커밋 있음(172cc4f·06aa38c 강사 Hours 등) → lms-test 에 먼저 합치기. 운영 DB 백업 → migration 2개 → first_class_mail_since 시각 확인
 
-## ✅ 11/11 운영진 대시보드 '안내 보내기' 카드 정리 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/intelligent-bell-o33pr9)
+## ✅ 11/11 운영진 대시보드 '안내 보내기' 카드 정리 — **시험 DB·lms-test·운영 DB 반영 완료** (브랜치 claude/intelligent-bell-o33pr9, 대표 '메일 정상 발송이면 카드 자동 제거' 선택 + 바로 반영 지시)
 - migration **20261111210000_lms_notice_mail_sent_closes_card** (시험 DB 적용): lesson_notices 의 email_status 가 'sent' 로 바뀌면 같은 줄 pending → sent(sent_at = 메일 보낸 시각, sent_by 없음) 트리거 `lesson_notices_mail_sent_done` + 지금 떠 있던 'pending 인데 메일 sent' 18건 정리. 코드 변경 없음(카드는 pending 만 셈)
 - 시험(시험 DB, 되돌림 포함): 메일 성공 → sent / 실패(failed) → pending 유지 / 정리 대상 0건. 남은 pending = 주소 없음 no_address 6건 + 메일 기능 전 옛 줄(email_status 없음) — 카드 유지가 맞음
-- ⏳ **운영 반영은 대표 '응' 뒤**: 운영 DB 백업(snapshots) → migration 적용 (운영 정리 대상은 홍O길 보강 확정 1건·이O민 3건·김O민 4건 등, 적용 직전 읽기로 건수 확인). 이전 항목의 원문 요청은 이 줄로 대체
+- ✅ **운영 DB 반영(대표 11/11)**: 백업 **snapshots id 41**(lesson_notices 125줄 전체, 이 표만 바뀌므로 부분 백업) → migration 적용. 전: 안내 125·pending 24(그중 메일 sent 10) → 후: pending 14·pending인데 메일 sent 0·트리거 1·앱 사용자 실행 불가·백업 대비 바뀐 줄 10(전부 pending→sent). 남은 pending 14는 모두 email_status 없음(메일 자동 발송 켜지기 전 옛 안내 등) = 카드 유지가 맞음. 코드(lms-prod) 변경 없음. 되돌리기: 바뀐 10줄을 snapshots 41 값(pending·sent_at null)으로 + `drop trigger lesson_notices_mail_sent_done`
+- 정책 원본 H26 기록은 아직 안 씀(대표 결정: 메일 정상 발송 = 안내 완료, 카톡 별도 확인 없음)
 - ⚠ 의도: 학생 취소·보강 확정 등 메일 나간 안내는 카톡 [보냄] 단계 없이 카드가 사라짐
 
 ## (이전) 운영진 대시보드 '안내 보내기' 카드 정리 요청 원문 (대표 11/11)
