@@ -231,6 +231,15 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
         makeupRights: view.makeupRights.map((m) => (q && (m.compId ?? null) === (q.compId ?? null) && (m.lessonId ?? null) === (q.lessonId ?? null) && (m.itemId ?? null) === (q.itemId ?? null) ? { ...m, requested: false } : m)),
       });
     },
+    pickSuggestion: async (requestId, candidateId) => {
+      const q = view.requests.find((x) => x.id === requestId);
+      const c = q?.suggested?.find((x) => x.id === candidateId);
+      if (!q || !c) return;
+      set({ ...view, requests: view.requests.map((x) => (x.id === requestId ? { ...x, status: 'confirmed', confirmedAt: c.startsAt } : x)) });
+    },
+    declineSuggestion: async (requestId) => {
+      set({ ...view, requests: view.requests.map((x) => (x.id === requestId ? { ...x, status: 'rescheduling' } : x)) });
+    },
     answerLeave: async (items, answer) => {
       const rows = view.leave.filter((x) => items.includes(x.id));
       set({

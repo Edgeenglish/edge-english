@@ -48,7 +48,8 @@ type LessonRow = {
 
 type MakeupRow = {
   id: string; source_lesson_id: string | null; migrated_item_id: string | null; status: ChMakeupRequest['status']; confirmed_lesson_id: string | null;
-  tutor_note?: string | null; tutor_answered_at?: string | null; candidates: { starts_at: string; tutor_answer?: 'yes' | 'no' | null }[];
+  tutor_note?: string | null; tutor_answered_at?: string | null; candidates: { starts_at: string; tutor_answer?: 'yes' | 'no' | null; proposed_by?: string }[];
+  makeup_stage?: string | null; student_declined_at?: string | null;
   compensation_id?: string | null;
   requested_at?: string | null; via?: string | null;
   confirmed_in_tutor_screen?: boolean;
@@ -57,8 +58,10 @@ type MakeupRow = {
 async function loadMakeupRequests(sb: SupabaseClient, studentId: string) {
   const q = (cols: string) => sb.from('makeup_requests').select(cols).eq('student_id', studentId).order('created_at');
   const missing = (r: { error: { code?: string } | null }) => r.error?.code === '42703' || r.error?.code === 'PGRST200';
+  // 강사 시간 제안(20261111160000): 상태 계산 칸·제안 시간. 없는 DB면 아래 예전 칸으로
+  let r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, requested_at, via, confirmed_lesson_id, confirmed_in_tutor_screen, tutor_note, tutor_answered_at, makeup_stage, student_declined_at, candidates:makeup_candidates(starts_at, tutor_answer, proposed_by)');
   // 강사 화면 확정 칸(20261108000000)이 없는 DB면 그 칸 없이
-  let r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, requested_at, via, confirmed_lesson_id, confirmed_in_tutor_screen, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
+  if (r.error) r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, requested_at, via, confirmed_lesson_id, confirmed_in_tutor_screen, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
   if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, compensation_id, status, requested_at, via, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
   if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, status, requested_at, via, confirmed_lesson_id, tutor_note, tutor_answered_at, candidates:makeup_candidates(starts_at, tutor_answer)');
   if (missing(r)) r = await q('id, source_lesson_id, migrated_item_id, status, confirmed_lesson_id, candidates:makeup_candidates(starts_at)');
@@ -136,7 +139,11 @@ export async function loadStudentLessons(sb: SupabaseClient, studentId: string):
     makeupRequests: mkRows.map((m) => ({
       id: m.id, sourceLessonId: m.source_lesson_id, migratedItemId: m.migrated_item_id, status: m.status, confirmedLessonId: m.confirmed_lesson_id,
       confirmedInTutorScreen: !!m.confirmed_in_tutor_screen,
-      candidates: m.candidates.map((c) => new Date(c.starts_at)).sort((a, b) => +a - +b),
+      // 강사가 시간을 제안한 신청(countered)은 수강생 시간과 강사 제안 시간을 나눔 (H26(134))
+      candidates: m.candidates.filter((c) => m.status !== 'countered' || c.proposed_by !== 'tutor').map((c) => new Date(c.starts_at)).sort((a, b) => +a - +b),
+      suggested: m.status === 'countered' ? m.candidates.filter((c) => c.proposed_by === 'tutor').map((c) => new Date(c.starts_at)).sort((a, b) => +a - +b) : undefined,
+      stage: m.makeup_stage ?? null,
+      studentDeclined: !!m.student_declined_at,
       tutorAnswers: Object.fromEntries(m.candidates.filter((c) => c.tutor_answer).map((c) => [+new Date(c.starts_at), c.tutor_answer!])),
       tutorNote: m.tutor_note ?? null,
       tutorAnsweredAt: m.tutor_answered_at ? new Date(m.tutor_answered_at) : null,

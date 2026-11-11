@@ -69,6 +69,10 @@ export type ChMakeupRequest = {
   /** 신청 시각·경로 (QA B-04): admin_on_behalf = 운영진 대신, student_app = 수강생 LMS */
   requestedAt?: Date | null;
   via?: string | null;
+  /** H26(134) 강사가 수강생에게 제안한 시간 · DB 상태(makeup_stage: student = 학생 선택 대기, admin = 보강 조율 필요) · 학생 '모두 안 돼요' */
+  suggested?: Date[];
+  stage?: string | null;
+  studentDeclined?: boolean;
 };
 
 /** 강사 노쇼 무료 보상수업 (4100). useUntil = 사용 기한(수강 종료일, 기한 안 재등록이면 이월) */

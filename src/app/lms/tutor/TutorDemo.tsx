@@ -40,6 +40,17 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
     confirm: async (id) => {
       data.s.makeups = data.s.makeups.filter((m) => m.id !== id);
     },
+    suggestOptions: async (id) => {
+      const m = data.s.makeups.find((x) => x.id === id)!;
+      const len = m.slots[0] ? +m.slots[0].endsAt - +m.slots[0].startsAt : 20 * 60000;
+      const base = new Date(Math.ceil(Date.now() / 3600000) * 3600000 + 48 * 3600000);
+      return Array.from({ length: 30 }, (_, i) => new Date(+base + Math.floor(i / 6) * 86400000 + (i % 6) * 1800000))
+        .map((t) => ({ startsAt: t, endsAt: new Date(+t + len) }));
+    },
+    suggest: async (id, times) => {
+      data.s.makeups = data.s.makeups.map((m) => (m.id === id
+        ? { ...m, stage: 'student', suggested: times.map((t) => ({ startsAt: t, endsAt: new Date(+t + (m.slots[0] ? +m.slots[0].endsAt - +m.slots[0].startsAt : 20 * 60000)), ok: true })) } : m));
+    },
     answerCover: async (items) => {
       data.s.covers = data.s.covers.filter((c) => !items.includes(c.id));
     },

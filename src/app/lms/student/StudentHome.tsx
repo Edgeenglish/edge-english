@@ -67,6 +67,7 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
 const STATUS_STYLE: Record<RequestStatus, string> = {
   tutor_reviewing: 'bg-[#fff1d6] text-[#8a5300]',
   admin_reviewing: 'bg-[#fff1d6] text-[#8a5300]',
+  choosing: 'bg-[#fff1d6] text-[#8a5300]',
   rescheduling: 'bg-[#fdecea] text-[#7a1d12]',
   confirmed: 'bg-[#e3f5ea] text-[#13623a]',
   canceled: 'bg-[#eeecf4] text-[#55526a]',
@@ -326,6 +327,8 @@ export default function StudentHome(props: {
       u.searchParams.delete('makeup');
       window.history.replaceState(window.history.state, '', u.pathname + u.search);
     } catch { /* 주소를 못 바꿔도 화면은 그대로 */ }
+    // 메일 바로가기 ?makeup=신청id (강사 시간 제안 메일, H26(134)) → 그 신청 화면
+    if (s.requests.some((q) => q.id === id)) return setOverlay({ kind: 'request', id });
     const hit = (x: { lessonId?: string | null; itemId?: string | null; compId?: string | null }) => x.lessonId === id || x.itemId === id || x.compId === id;
     const right = s.makeupRights.find((m) => !m.requested && hit(m));
     if (right) return setOverlay({ kind: 'makeup', right });
@@ -411,6 +414,22 @@ export default function StudentHome(props: {
     } catch (e) {
       setToast(e instanceof Error ? e.message : '저장하지 못했어요.');
       return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 강사 제안 시간 확정 (H26(134)): 실패해도(그 사이 막힘) 화면을 다시 읽어 고를 수 없는 시간을 바로 보여 줌. 오류는 버튼 아래
+  async function pickSuggestion(requestId: string, candidateId: string): Promise<string | null> {
+    setBusy(true);
+    try {
+      await actions.pickSuggestion(requestId, candidateId);
+      setView(await actions.reload());
+      say('보강이 확정됐어요.');
+      return null;
+    } catch (e) {
+      try { setView(await actions.reload()); } catch { /* 다시 읽기 실패: 오류 글만 */ }
+      return e instanceof Error ? e.message : '확정하지 못했어요.';
     } finally {
       setBusy(false);
     }
@@ -599,15 +618,24 @@ export default function StudentHome(props: {
     </section>
   );
 
+  // 강사가 다른 보강 시간을 제안한 신청 (H26(134)) — 할 일 '보강 시간 고르기'
+  const choosing = s.requests.filter((r) => r.status === 'choosing');
+  // 확정된 보강을 캘린더에 (확정 화면, H26(134))
+  const calendarOf = (r: StudentRequest): CalendarEvent | null => {
+    const l = r.confirmedAt ? s.lessons.find((x) => x.startsAt.getTime() === r.confirmedAt!.getTime() && x.state !== 'canceled') : undefined;
+    if (!l || l.startsAt <= now) return null;
+    return { title: '엣지영어 보강 수업', start: l.startsAt, end: new Date(l.startsAt.getTime() + l.minutes * 60000), details: meetOf(l.id) };
+  };
   // 할 일: 수강생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
   const todoItems = (
     <>
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
       {openRights.length > 0 && <TodoBar n={openRights.length} text="보강 날짜 고르기" onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
+      {choosing.length > 0 && <TodoBar n={choosing.length} text="보강 시간 고르기" onClick={() => (choosing.length === 1 ? setOverlay({ kind: 'request', id: choosing[0].id }) : setTab('requests'))} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
     </>
   );
-  const todoCount = (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
+  const todoCount = (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (choosing.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
   // 할 일: 처리할 일이 있을 때만 (11/11 대표 최신 지시), 제목 옆 전체 숫자 없음
   const todoBars = todoCount > 0 && (
     <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
@@ -973,7 +1001,9 @@ export default function StudentHome(props: {
 
       {overlay && (
         <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
-          {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} busy={busy} onWithdraw={async (id) => { await run(() => actions.withdrawMakeup(id), '신청을 취소했어요.'); }} />}
+          {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} busy={busy} calendar={calendarOf(s.requests.find((r) => r.id === overlay.id)!)}
+            onWithdraw={async (id) => { await run(() => actions.withdrawMakeup(id), '신청을 취소했어요.'); }}
+            onPick={pickSuggestion} onDecline={async (id) => { await run(() => actions.declineSuggestion(id), '운영진에게 다른 일정을 요청했어요.'); }} />}
           {overlay.kind === 'payments' && <Payments payments={history ?? []} />}
           {overlay.kind === 'notices' && <NoticeList notices={notices} onOpen={openNotice} />}
           {overlay.kind === 'notice' && notices.find((n) => n.id === overlay.id) && <NoticeDetail n={notices.find((n) => n.id === overlay.id)!} />}
@@ -1197,7 +1227,7 @@ function LeaveSheet(props: {
                   <span className="rounded-full bg-[#e3f5ea] px-2.5 py-1 text-[12px] font-semibold text-[#13623a]">보강 확정 ✓</span>
                 ) : r.requested ? (() => {
                   // 신청 내역의 같은 신청과 같은 상태로 (R-17: 전부 불가 → '다른 일정 조율 중', 강사 답 뒤 → '최종 확정 대기')
-                  const q = (props.requests ?? []).find((x) => x.kind === 'makeup' && !x.compId && ((r.lessonId && x.lessonId === r.lessonId) || (r.itemId && x.itemId === r.itemId)) && (x.status === 'tutor_reviewing' || x.status === 'admin_reviewing' || x.status === 'rescheduling'));
+                  const q = (props.requests ?? []).find((x) => x.kind === 'makeup' && !x.compId && ((r.lessonId && x.lessonId === r.lessonId) || (r.itemId && x.itemId === r.itemId)) && (x.status === 'tutor_reviewing' || x.status === 'admin_reviewing' || x.status === 'choosing' || x.status === 'rescheduling'));
                   const st: RequestStatus = q?.status ?? 'tutor_reviewing';
                   return <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${STATUS_STYLE[st]}`}>신청함 · {REQUEST_STATUS_LABEL[st]}</span>;
                 })() : (
@@ -1560,7 +1590,8 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
           {r.kind !== 'makeup' ? r.note
             : r.status === 'confirmed' && r.confirmedAt ? `${whenText(r.confirmedAt)} 확정`
             : r.status === 'canceled' && r.confirmedAt ? `${whenText(r.confirmedAt)} 보강 수업 취소됨`
-            : r.status === 'rescheduling' ? '강사님이 신청한 시간에는 어렵다고 답했어요'
+            : r.status === 'choosing' ? '강사님이 다른 시간을 제안했어요'
+            : r.status === 'rescheduling' ? (r.suggested ? '운영진이 다른 일정을 조율해요' : '강사님이 신청한 시간에는 어렵다고 답했어요')
             : `고른 날짜 ${r.candidates.length}개`}
         </span>
       </span>
@@ -1716,13 +1747,26 @@ function Sheet({ onClose, children, wide }: { onClose: () => void; children: Rea
   );
 }
 
-function RequestDetail({ r, busy, onWithdraw }: { r: StudentRequest; busy?: boolean; onWithdraw?: (id: string) => void }) {
+function RequestDetail({ r, busy, onWithdraw, onPick, onDecline, calendar }: {
+  r: StudentRequest; busy?: boolean; onWithdraw?: (id: string) => void;
+  /** 강사 제안 시간 확정 (H26(134)). 실패하면 오류 글 */
+  onPick?: (requestId: string, candidateId: string) => Promise<string | null>;
+  onDecline?: (requestId: string) => void;
+  calendar?: CalendarEvent | null;
+}) {
   const [asking, setAsking] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const [sel, setSel] = useState<string | null>(null);
+  const [pickErr, setPickErr] = useState<string | null>(null);
   // 강사 확정 전에만 신청 취소 (대표 11/9)
-  const open = r.kind === 'makeup' && (r.status === 'tutor_reviewing' || r.status === 'admin_reviewing' || r.status === 'rescheduling');
+  const open = r.kind === 'makeup' && (r.status === 'tutor_reviewing' || r.status === 'admin_reviewing' || r.status === 'choosing' || r.status === 'rescheduling');
+  const choosing = r.status === 'choosing';
+  const picked = choosing ? r.suggested?.find((x) => x.id === sel && x.ok) ?? null : null;
   // 신청 → 강사 확인 → 최종 확정(운영진). 지금 단계는 주황, 끝난 단계는 보라 (11/3 점검 ②: 누가 확인 중인지)
-  const steps = r.status === 'rescheduling' ? ['신청', '강사 확인', '일정 조율'] : ['신청', '강사 확인', '최종 확정'];
-  const at = r.status === 'tutor_reviewing' ? 1 : r.status === 'admin_reviewing' || r.status === 'rescheduling' ? 2 : 3;
+  // 강사가 시간을 제안했으면 신청 → 강사 제안 → 확정 (H26(134))
+  const steps = r.suggested ? ['신청', '강사 제안', r.status === 'rescheduling' ? '일정 조율' : '확정']
+    : r.status === 'rescheduling' ? ['신청', '강사 확인', '일정 조율'] : ['신청', '강사 확인', '최종 확정'];
+  const at = r.status === 'tutor_reviewing' ? 1 : r.status === 'admin_reviewing' || r.status === 'rescheduling' || r.status === 'choosing' ? 2 : 3;
   return (
     <div className="grid gap-3.5">
       <h2 className="text-[18px] font-bold">{reqTitle(r)}</h2>
@@ -1734,7 +1778,15 @@ function RequestDetail({ r, busy, onWithdraw }: { r: StudentRequest; busy?: bool
         {/* 상황별 안내 (추가 요청 6): 지금 무엇을 기다리는지, 다음에 누가 연락하는지 */}
         {r.status === 'tutor_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님이 확인하고 확정하면 일정에 바로 들어가요.</p>}
         {r.status === 'admin_reviewing' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">강사님 확인이 끝났어요. 운영진이 최종 확정하면 일정에 바로 들어가요.</p>}
-        {r.status === 'rescheduling' && <p className="text-[13.5px] leading-relaxed text-[#7a1d12]">강사님이 고른 날짜에는 어렵다고 했어요. 운영진이 다른 일정을 조율해서 카카오톡으로 알려 드릴게요. 따로 하실 일은 없어요.</p>}
+        {r.status === 'rescheduling' && (r.suggested
+          ? <p className="text-[13.5px] leading-relaxed text-[#7a1d12]">운영진이 다른 일정을 조율해서 카카오톡으로 알려 드릴게요.</p>
+          : <p className="text-[13.5px] leading-relaxed text-[#7a1d12]">강사님이 고른 날짜에는 어렵다고 했어요. 운영진이 다른 일정을 조율해서 카카오톡으로 알려 드릴게요. 따로 하실 일은 없어요.</p>)}
+        {r.status === 'confirmed' && r.confirmedAt && r.suggested && (
+          <div className="grid gap-1">
+            <p role="status" className="rounded-[12px] bg-[#e3f5ea] px-3.5 py-3 text-[16px] font-bold text-[#13623a]">✓ 보강 확정 · {whenText(r.confirmedAt)}</p>
+            {calendar && <AddToCalendar ev={calendar} google="구글 캘린더에 추가" file="애플·삼성 캘린더에 추가" />}
+          </div>
+        )}
         {r.status === 'canceled' && <p className="text-[13.5px] leading-relaxed text-[#55526a]">확정됐던 보강 수업이 취소됐어요. 취소 때 안내된 규칙(변경권·보강 가능 여부)에 따라 처리됐어요.</p>}
         {r.status !== 'expired' && r.status !== 'withdrawn' && <ol className="flex gap-1.5">
           {steps.map((t, i) => (
@@ -1745,7 +1797,45 @@ function RequestDetail({ r, busy, onWithdraw }: { r: StudentRequest; busy?: bool
           ))}
         </ol>}
       </section>
-      {r.candidates.length > 0 && (
+      {choosing && r.suggested && (
+        <section className={`${card} grid gap-2.5 p-4`}>
+          <h3 className="text-[15px] font-bold">강사님이 제안한 시간</h3>
+          <div role="radiogroup" aria-label="강사님이 제안한 시간" className="grid gap-2">
+            {r.suggested.map((x) => {
+              const on = sel === x.id && x.ok;
+              return (
+                <button key={x.id} type="button" role="radio" aria-checked={on} disabled={busy || !x.ok}
+                  onClick={() => { setSel(x.id); setPickErr(null); }}
+                  className={`flex min-h-[56px] items-center gap-3 rounded-[12px] border px-3.5 py-2.5 text-left disabled:opacity-50 ${on ? 'border-[#5b3df0] bg-[#efeaff]' : 'border-[#e6e3ef] bg-white'}`}>
+                  <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] ${on ? 'border-[#5b3df0] bg-[#5b3df0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>●</span>
+                  <span className="flex-1">
+                    <span className="block text-[16px] font-bold">{whenText(x.startsAt)}</span>
+                    {!x.ok && <span className="block text-[12.5px] font-semibold text-[#b3261e]">이 시간은 이제 선택할 수 없어요</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {pickErr && <p role="alert" className="text-[13.5px] font-semibold text-[#b3261e]">{pickErr}</p>}
+          <button type="button" disabled={busy || !picked || !onPick}
+            onClick={async () => { if (picked && onPick) setPickErr(await onPick(r.id, picked.id)); }}
+            className="min-h-[50px] rounded-[14px] bg-[#5b3df0] px-3 text-[15px] font-bold text-white disabled:opacity-40">
+            {busy ? '확정하는 중…' : picked ? `이 시간으로 확정 · ${whenText(picked.startsAt)}` : '이 시간으로 확정'}
+          </button>
+          {onDecline && (declining ? (
+            <div className="grid gap-2 rounded-[12px] bg-[#f6f5fa] p-3">
+              <p className="text-[14px] font-bold">운영진에게 다른 일정을 요청할까요?</p>
+              <button type="button" disabled={busy} onClick={() => onDecline(r.id)} className="min-h-[46px] rounded-[12px] bg-[#5b3df0] text-[14.5px] font-bold text-white disabled:opacity-50">요청하기</button>
+              <button type="button" disabled={busy} onClick={() => setDeclining(false)} className="min-h-[42px] rounded-[12px] border border-[#d9d5e8] bg-white text-[14px] font-semibold text-[#55526a]">돌아가기</button>
+            </div>
+          ) : (
+            <button type="button" disabled={busy} onClick={() => setDeclining(true)} className="min-h-[46px] rounded-[14px] border border-[#d9d5e8] bg-white text-[14.5px] font-semibold text-[#1d1b2b] disabled:opacity-50">
+              제안한 시간이 모두 안 돼요
+            </button>
+          ))}
+        </section>
+      )}
+      {r.candidates.length > 0 && !r.suggested && (
         <section className={`${card} grid gap-2.5 p-4`}>
           <h3 className="text-[15px] font-bold">내가 고른 날짜</h3>
           {r.candidates.map((d, i) => (
@@ -1772,7 +1862,7 @@ function RequestDetail({ r, busy, onWithdraw }: { r: StudentRequest; busy?: bool
             <span className="text-right">{r.tutor ?? r.originalTutor}</span>
           </div>
         )}
-        {r.status === 'confirmed' && r.confirmedAt && (
+        {r.status === 'confirmed' && r.confirmedAt && !r.suggested && (
           <div className="flex justify-between gap-3">
             <span className="shrink-0 text-[#55526a]">확정 날짜</span>
             <b className="text-right">{whenText(r.confirmedAt)}</b>

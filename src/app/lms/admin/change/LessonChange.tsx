@@ -691,6 +691,25 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
             {open.requestedAt ? <Rich text={` · 신청 ${sentLabel(open.requestedAt)} *한국 시간*`} /> : ''}
             {open.via === 'student_app' ? ' · 수강생이 LMS에서 신청' : open.via === 'admin_on_behalf' ? ' · 운영진 대신 신청' : ''}
           </p>
+          {open.status === 'countered' && (
+            <div className="grid gap-1.5 rounded-[10px] border border-[#e6e3ef] bg-[#f6f5fa] p-2.5">
+              <b className={`text-[14px] ${open.stage === 'student' ? 'text-[#3b2a9a]' : 'text-[#b3261e]'}`}>
+                {open.stage === 'student' ? '강사 제안 · 학생 선택 대기' : `보강 조율 필요 · ${open.studentDeclined ? '수강생이 제안 시간 모두 불가' : '제안 시간이 지났거나 막힘'}`}
+              </b>
+              <span className="text-[12.5px] font-semibold text-[#6b6880]">강사가 제안한 시간</span>
+              {(open.suggested ?? []).map((t) => (
+                <div key={+t} className="flex items-center gap-2">
+                  <span className="flex-1 text-[15px] text-[#1d1b2b]">
+                    {kstLabel(t)} <b>한국 시간</b>
+                    <span className="block"><Local at={t} /></span>
+                  </span>
+                  <button type="button" disabled={busy || !whyOk} className={btnMain} title={!whyOk ? '아래에서 사유를 먼저 골라 주세요' : undefined}
+                    onClick={() => run(() => actions.confirmMakeup(open.id, t, why.reason as MakeupReason, why.note.trim()))}>확정</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {open.status === 'countered' && <span className="text-[12.5px] font-semibold text-[#6b6880]">수강생이 고른 시간</span>}
           {open.candidates.map((t) => (
             <div key={+t} className="flex items-center gap-2">
               <span className="flex-1 text-[15px] text-[#1d1b2b]">
@@ -707,7 +726,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
                 onClick={() => run(() => actions.confirmMakeup(open.id, t, why.reason as MakeupReason, why.note.trim()))}>확정</button>
             </div>
           ))}
-          {open.tutorAnsweredAt && open.candidates.length > 0 && open.candidates.every((t) => open.tutorAnswers?.[+t] === 'no') && (
+          {open.status !== 'countered' && open.tutorAnsweredAt && open.candidates.length > 0 && open.candidates.every((t) => open.tutorAnswers?.[+t] === 'no') && (
             <p className="rounded-[10px] bg-[#fdecea] px-3 py-2 text-[13.5px] text-[#b3261e]">강사가 모든 날짜에 불가라고 답했어요. 강사 메모를 참고해 수강생에게 다른 날짜를 받거나(카톡), 강사에게 다시 확인한 시간이 있으면 아래에 넣어 확정해 주세요. 그 시간은 강사가 Schedule에서 연 시간이어야 해요.</p>
           )}
           {open.tutorNote && <p className="rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] text-[#1d1b2b]">강사 메모: {open.tutorNote}</p>}
