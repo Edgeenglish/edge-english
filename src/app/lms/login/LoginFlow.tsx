@@ -33,6 +33,7 @@ type Step = 'login' | 'signup' | 'signup_code' | 'pw_email' | 'pw_new' | 'totp' 
 
 const LANG_KEY = 'lms-lang';
 const LINK_KEY = 'lms-link-provider'; // '이미 회원이에요' 뒤 기존 계정 로그인이 끝나면 연결할 카카오·네이버
+const LAST_KEY = 'lms-last-provider'; // 방금 누른 간편 로그인 (돌아왔을 때 어느 쪽인지)
 const APPLY_URL = 'https://forms.gle/arWZ6uzK3BFgaxM39';
 
 function readLang(): Lang {
@@ -45,6 +46,14 @@ function readLang(): Lang {
 function readPendingLink(): SocialProvider | null {
   try {
     const v = sessionStorage.getItem(LINK_KEY);
+    return v === 'kakao' || v === 'naver' ? v : null;
+  } catch {
+    return null;
+  }
+}
+function readLast(): SocialProvider | null {
+  try {
+    const v = sessionStorage.getItem(LAST_KEY);
     return v === 'kakao' || v === 'naver' ? v : null;
   } catch {
     return null;
@@ -99,10 +108,13 @@ export default function LoginFlow() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !key) return;
-    fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } })
+    const settings = fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } })
       .then((r) => (r.ok ? r.json() : null))
-      .then((s) => setSocial(enabledSocial(s?.external)))
-      .catch(() => setSocial([]));
+      .catch(() => null);
+    const naver = fetch(`${url}/auth/v1/authorize?provider=${encodeURIComponent(PROVIDER_ID.naver)}`, { redirect: 'manual' })
+      .then((r) => r.type === 'opaqueredirect' || r.status === 302)
+      .catch(() => false);
+    void Promise.all([settings, naver]).then(([s, n]) => setSocial(enabledSocial(s?.external, n)));
   }, []);
 
   // 카카오·네이버에서 돌아왔으면(?code=) 세션으로 바꾸고, 아니면 같은 주소의 유효한 세션을 이어 씀
@@ -112,11 +124,21 @@ export default function LoginFlow() {
     const params = new URLSearchParams(window.location.search);
     const oauthCode = params.get('code');
     const oauthError = params.get('error_description') || params.get('error');
+    const oauthErrorCode = params.get('error_code');
     (async () => {
       if (oauthError) {
-        setPendingLink(null);
-        setLinkFor(null);
-        setError(t.socialFail);
+        for (const k of ['error', 'error_code', 'error_description']) params.delete(k);
+        window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`);
+        const last = readLast();
+        // 카카오·네이버 이메일이 기존 계정과 같지만 인증되지 않음 → 자동 연결하지 않고, 기존 계정으로 로그인한 뒤 연결 (H26(150))
+        if (oauthErrorCode === 'provider_email_needs_verification' && last) {
+          setPendingLink(last);
+          setLinkFor(last);
+        } else {
+          setPendingLink(null);
+          setLinkFor(null);
+          setError(t.socialFail);
+        }
       }
       if (oauthCode) {
         const { error: e } = await sb.auth.exchangeCodeForSession(oauthCode);
@@ -191,6 +213,8 @@ export default function LoginFlow() {
       if (pending) {
         setPendingLink(null);
         setStep('moving');
+        // 미인증 이메일로 시도했을 때 Supabase 가 만든 빈 계정(본인 이메일, 그 공급자만)이 있으면 지워야 연결됨
+        await sb.rpc('lms_discard_unverified_social_orphan', { p_provider: PROVIDER_ID[pending] });
         const { error: e } = await sb.auth.linkIdentity({
           provider: PROVIDER_ID[pending] as Provider,
           options: { redirectTo: `${window.location.origin}/lms/login` },
@@ -238,6 +262,11 @@ export default function LoginFlow() {
   async function socialLogin(p: SocialProvider) {
     if (!sb) return setError(t.network);
     setBusy(true);
+    try {
+      sessionStorage.setItem(LAST_KEY, p);
+    } catch {
+      /* 저장 안 되면 미인증 이메일 때 연결 안내만 빠짐 */
+    }
     const { error: e } = await sb.auth.signInWithOAuth({
       provider: PROVIDER_ID[p] as Provider,
       options: { redirectTo: `${window.location.origin}/lms/login${next ? `?next=${encodeURIComponent(next)}` : ''}` },

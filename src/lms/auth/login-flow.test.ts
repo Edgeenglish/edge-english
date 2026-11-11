@@ -61,7 +61,8 @@ describe('회원가입·간편 로그인 (H26(146)(150))', () => {
   });
   it('켜진 간편 로그인만 버튼', () => {
     expect(enabledSocial({ kakao: false, email: true })).toEqual([]);
-    expect(enabledSocial({ kakao: true, 'custom:naver': true })).toEqual(['kakao', 'naver']);
+    expect(enabledSocial({ kakao: true }, true)).toEqual(['kakao', 'naver']);
+    expect(enabledSocial({ kakao: false }, true)).toEqual(['naver']);
     expect(enabledSocial(undefined)).toEqual([]);
   });
   it('처음이에요 / 이미 회원이에요 는 회원 연결 없는 카카오·네이버 전용 계정만', () => {

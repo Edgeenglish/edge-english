@@ -70,12 +70,15 @@ export function signupProblems(v: SignupInput): SignupProblem[] {
 export type SocialProvider = 'kakao' | 'naver';
 /** Supabase 공급자 이름. 네이버는 기본 지원이 없어 직접 연결(custom OAuth) 이름 */
 export const PROVIDER_ID: Record<SocialProvider, string> = { kakao: 'kakao', naver: 'custom:naver' };
-/** /auth/v1/settings 의 external 에서 켜진 간편 로그인만 (꺼진 버튼은 보이지 않게) */
-export function enabledSocial(external: Record<string, boolean> | null | undefined): SocialProvider[] {
-  if (!external) return [];
+/**
+ * 켜진 간편 로그인만 버튼으로 (꺼진 버튼은 보이지 않게).
+ * 카카오 = /auth/v1/settings 의 external.kakao. 네이버(직접 연결)는 settings 에 안 나와서
+ * /auth/v1/authorize?provider=custom:naver 가 넘겨 주면(302) 켜진 것으로 본다 (없으면 400 'not found').
+ */
+export function enabledSocial(external: Record<string, boolean> | null | undefined, naverOn = false): SocialProvider[] {
   const out: SocialProvider[] = [];
-  if (external.kakao) out.push('kakao');
-  if (Object.entries(external).some(([k, on]) => on && k.toLowerCase().includes('naver'))) out.push('naver');
+  if (external?.kakao) out.push('kakao');
+  if (naverOn) out.push('naver');
   return out;
 }
 
