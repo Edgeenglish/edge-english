@@ -101,7 +101,7 @@ revoke all on function lms_renewal_mail(uuid, text, int) from public, anon, auth
 --  week  = 수강기간 1주일 남음 (종료일 7일 전 한국 날짜부터, 남은 수업이 1개 이상)
 --  two   = 수업 2회 남음 (남은 1~2회, 한 번만)
 --  ended = 수업 0회 (끝나지 않은 수업이 없을 때)
---  같은 날 week·two 가 겹쳐도 각각 보냄. ended 가 나간 뒤에는 week·two 안 보냄. 같은 단계는 한 번만.
+--  같은 날 week·two 가 겹쳐도 각각 보냄. two 나 ended 가 이미 나갔으면 week 안 보냄(대표 11/11: 이미 재등록 안내 받았으니 됐어), ended 뒤에는 two 도 안 보냄. 같은 단계는 한 번만.
 --  문자 [보냄]은 그 시각에 이미 해당된 단계만 막음 (뒤 단계 메일은 그대로)
 create or replace function lms_renewal_mail_due(p_now timestamptz default now())
 returns table (enrollment_id uuid, stage text, lessons_left int)
@@ -131,7 +131,7 @@ language sql stable security definer set search_path = public as $$
   from st
   where not exists (select 1 from notifications x where x.dedupe_key = 'renewal_mail:' || st.id || ':' || st.stage)
     and not (st.stage = 'two' and exists (select 1 from notifications x where x.dedupe_key in ('renewal_mail:' || st.id || ':one', 'renewal_mail:' || st.id || ':ended')))
-    and not (st.stage = 'week' and exists (select 1 from notifications x where x.dedupe_key = 'renewal_mail:' || st.id || ':ended'))
+    and not (st.stage = 'week' and exists (select 1 from notifications x where x.dedupe_key in ('renewal_mail:' || st.id || ':two', 'renewal_mail:' || st.id || ':one', 'renewal_mail:' || st.id || ':ended')))
     and not exists (
       select 1 from renewal_notices rn where rn.enrollment_id = st.id and (
            (st.stage = 'week' and ((rn.sent_at at time zone 'Asia/Seoul')::date) >= st.final_end_date - 7)
