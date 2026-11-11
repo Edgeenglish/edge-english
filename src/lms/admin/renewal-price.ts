@@ -5,7 +5,7 @@
  */
 
 /** 1개월(4주) 정가: 수업 분 → 주 횟수 → 원 */
-const MONTHLY: Record<number, Record<number, number>> = {
+export const MONTHLY: Record<number, Record<number, number>> = {
   20: { 2: 178000, 3: 249000, 5: 370000 },
   40: { 2: 290000, 3: 420000, 5: 695000 },
   50: { 1: 195000, 2: 355000, 3: 520000 },

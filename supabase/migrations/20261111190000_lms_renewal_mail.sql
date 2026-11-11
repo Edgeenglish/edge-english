@@ -12,6 +12,19 @@
 -- 기존 표·데이터를 지우지 않음. 다시 실행해도 같은 결과
 -- =====================================================================
 
+-- 날짜·시각 글 (20261111120000 과 똑같은 본문 — 운영 DB 에 그 migration 이 나가기 전에도 이 메일이 쓰도록 여기서도 만듦. 다시 만들어도 같은 결과)
+-- '11월 11일(수)' · '오전 9:00' (학생 화면과 같은 모양, 학생 거주지 시간만)
+create or replace function lms_mail_ko_date(p_at timestamptz, p_tz text) returns text
+language sql stable as $$
+  select extract(month from x)::int || '월 ' || extract(day from x)::int || '일(' || (array['일', '월', '화', '수', '목', '금', '토'])[extract(dow from x)::int + 1] || ')'
+  from (select p_at at time zone coalesce(nullif(p_tz, ''), 'Asia/Seoul') as x) q
+$$;
+create or replace function lms_mail_ko_clock(p_at timestamptz, p_tz text) returns text
+language sql stable as $$
+  select case when extract(hour from x) < 12 then '오전 ' else '오후 ' end
+         || (case when extract(hour from x)::int % 12 = 0 then 12 else extract(hour from x)::int % 12 end) || ':' || to_char(x, 'MI')
+  from (select p_at at time zone coalesce(nullif(p_tz, ''), 'Asia/Seoul') as x) q
+$$;
 -- 수강 코스 가격표 (renewal-price.ts MONTHLY 와 같은 값). 표에 없는 코스는 null
 create or replace function lms_renewal_plans(p_min int, p_weekly int) returns jsonb
 language plpgsql immutable as $$
