@@ -7,6 +7,14 @@
 
 
 
+## ✅ 11/11 학생 재등록 안내 자동 메일 3통 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/nice-einstein-x201yx, H26(117) ① · 대표 11/11 결정 1~5 + 마지막 수업 종료 기준)
+- migration **20261111190000_lms_renewal_mail** (시험 DB 적용): `lms_renewal_plans`(가격표, renewal-price.ts 와 같은 값 — 가격 바뀌면 두 곳) · `lms_renewal_remaining`(대시보드 remainingOf 와 같은 남은 수업) · `lms_renewal_mail`(문구·대기열, dedupe `renewal_mail:수강권:단계`) · `lms_renewal_mail_due` · `lms_renewal_mail_run` · pg_cron `lms-renewal-mail` 10분(`lms_renewal_mail_run(); lms_mail_run();`). 시작 스위치 = feature_flags `renewal_mail_since` 줄이 있을 때만 (시험 DB 에만 넣음, 운영은 줄 없음 = 안 보냄)
+- 규칙: ① 남은 2회 ② 남은 1회 ③ 남은 0 + 끝나지 않은(진행 중 포함) 수업 없음 → Class Record 기록 무관(마지막 수업 종료 시각 지나면, 날짜 미정 보강·보상이 남으면 안 보냄) · 제외: 문자 [보냄](renewal_notices)·재등록(다음 수강권) 있음·체험용 계정·종료일 +3일 지남 · 뒤 단계가 나갔으면 앞 단계 안 보냄 · 수업 알림 끄기와 무관 · 해외 학생은 종료일을 거주지 시간으로 '11월 17일(화) 오전 1:59까지'+'모든 시간은 ○○ 시간대 기준이에요.' 줄(시안에서 한국 학생과 다른 유일한 점)
+- 검증: test:db 통과(새 `supabase/tests/renewal-mail.sql` 가짜 데이터 30여 항목, run.sh 에 연결) · 시험 DB 실제 수신: ③ 2통(STU-0018 한국·STU-0002 멜버른) + ① ② 각 1통 → support@ 받은편지함에 도착, 본문 가격 천 단위 쉼표 확인
+- **시험 데이터 남김**: 시험 DB `notifications` 의 renewal_mail 4건, feature_flags `renewal_mail_since`(시험 DB cron 이 10분마다 대상 확인 → 이메일 없는 시험 학생은 건너뜀, 있는 학생만 support@ 로 감)
+- ⏳ 운영 배포(대표 QA 확인 뒤): 운영 DB 백업 → migration 20261111190000 → (대표 시점) `renewal_mail_since` 줄 넣기. 줄 넣는 순간 이미 종료 3일 안·남은 2회 이하인 학생에게 바로 나감 → 넣기 전 `lms_renewal_mail_due(now())` 목록을 대표에게 보고. 코드(화면) 변경 없음
+- 안 한 것: 문자 [보냄]과 별개로 대시보드 카드에 '자동 메일 보냄' 표시 · 수업 알림 24시간·2시간 전(다른 세션 ecc4538)
+
 ## ✅ 11/11 강사 Class Record ①②③ — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/wonderful-cerf-zsfv6f, 정책 원본 H26(136)(138)(139) 참고)
 - migration **20261111140000_lms_class_type_student_cancel_cover** (시험 DB 적용): `class_type(lessons)`(PostgREST 계산 칸, 판정 `lms_class_type(l, p_cover)`: regular·makeup·compensation·cover·carry_in·carry_out) · `tutor_screen` type + 원래 강사 회색 줄(`covered_by_other`, 기록 내용·class_status 안 보냄, to_record 그대로) · `tutor_record_class` 대체 Held = Normal · 새 `tutor_student_cancel(request, lesson, told_at, dry_run)` → `lms_change_core(학생 사유, via tutor_app / 운영자 admin_on_behalf)` · student_screen·lms_student_profile_json·admin_student_detail 에 `type` (DO 블록으로 칸만 끼움)
 - 화면: `src/lms/class-type.ts`(이름 하나) · 강사 `screen.ts`·`TutorHome.tsx`(Student canceled 칸 `StudentCanceledFields`, CoverNote, 회색 줄 opacity) · Schedule 달력은 회색 줄 빼고 지금 그대로 · 운영진 대시보드·수강생 상세·수업 변경 목록(select 에 class_type) · 학생 홈 종류 이름 · 학생 취소 팝업 공휴일 줄

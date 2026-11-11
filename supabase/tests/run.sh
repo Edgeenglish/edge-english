@@ -23,6 +23,11 @@ PSQL=("${RUN_AS[@]}" psql -h "$WORK" -U postgres -d postgres -v ON_ERROR_STOP=1 
 for f in "$ROOT"/supabase/migrations/*.sql; do "${PSQL[@]}" -o /dev/null -f "$f"; done
 "${PSQL[@]}" -o /dev/null -f "$HERE/schema_test.sql" 2>&1 | sed -n -e "s/.*NOTICE:  //p" -e "/ERROR/p"
 echo "✅ LMS 스키마 검증 통과"
+# 재등록 안내 자동 메일 3통 (H26(117) ①): 가짜 데이터로 대상·문구·중복·제외 확인, 끝에 되돌림
+RM_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/renewal-mail.sql" 2>&1 || true)"
+echo "$RM_OUT" | sed -n -e "s/.*NOTICE:  //p" -e "/ERROR/p" | grep -v '^통과' && { echo "❌ 재등록 메일 시험 실패"; exit 1; }
+[ "$(echo "$RM_OUT" | grep -c '통과: ')" -ge 20 ] || { echo "❌ 재등록 메일 시험 통과 줄 부족"; exit 1; }
+echo "✅ 재등록 안내 메일 시험 통과"
 
 # 로그인 사용자 권한 점검: 시험용 Supabase 상태(가상 데이터 적용 후)와 같게 만든 뒤 실물용 파일을 그대로 실행
 "${PSQL[@]}" -o /dev/null -f "$ROOT/supabase/test-setup/seed_fake.sql"
