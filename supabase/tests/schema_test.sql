@@ -3891,6 +3891,13 @@ select pg_temp.ok((select r.status = 'confirmed' and not r.confirmed_in_tutor_sc
               and (select count(*) = 1 from lesson_notices n where n.makeup_request_id = (select id from mk134 where k = 'a') and n.event = 'makeup_confirmed' and n.recipient_kind = 'tutor' and n.email_notification_id is not null)
               and (select count(*) = 1 from lessons where makeup_of = '77777777-2000-0000-0000-0000000134a1'),
   'H26(134): 학생 확정 → 보강 수업 1개, 확정 메일 학생·강사 1통씩, 학생 카톡 복사 카드 없음');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((select x ->> 'stage' = 'confirmed' from jsonb_array_elements(student_makeup_suggestions('99999999-0000-0000-0000-000000002000')) x
+                   where (x ->> 'id')::uuid = (select id from mk134 where k = 'a')),
+  'H26(134): 확정된 제안 신청도 학생 화면 읽기에서 오류 없이 확정으로 (QA 11/11 고침)');
+reset request.jwt.claim.sub;
+reset role;
 select pg_temp.ok((select makeup_stage(r) = 'admin' from makeup_requests r where r.id = (select id from mk134 where k = 'b'))
               and (select makeup_stage(r) = 'admin' and status = 'countered' from makeup_requests r where r.id = (select id from mk134 where k = 'c')),
   'H26(134): 제안 시간이 막힘·학생 모두 안 돼요 → 운영진 조율 필요(같은 상태 값)');

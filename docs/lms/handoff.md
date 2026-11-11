@@ -21,6 +21,15 @@
 - 운영에 안 나간 DB migration (11/11 기준): 20261111010000_student_my_info · 20261111073809_student_makeup_mail_and_original_slot · 20261111120000_tutor_updates_mail · 20261111120100_notice_mail_wording · 20261111140000(이 작업) · 20261111150000_student_notice_reads_history · 20261111150100_student_reminder_settings. lms-prod 에만 있는 커밋 5개는 내용이 lms-test 에 모두 있음(확인함)
 - 안 넣은 것: Student canceled 의 Remarks 칸(저장할 곳이 없어 뺌, 시안 휴대폰도 없음)
 
+## ✅ 11/11 강사 보강 시간 제안 → 학생이 골라 바로 확정 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/dreamy-curie-yyxifa, H26(134)·(141))
+- migration **20261111160000_lms_tutor_makeup_suggest** (시험 DB 적용, 함수 11개 md5 = 저장소): makeup_requests.student_declined_at·suggested_at · `makeup_stage(r)`(학생·강사·운영진 같은 상태: tutor/student/admin) · `lms_makeup_slot_ok`(확정과 같은 검사) · `tutor_makeup_suggest_options`(= lms_makeup_options, 학생 고른 시간 제외) · `tutor_makeup_suggest`(1~2개, 같은 시간 다시 = repeated, status countered) · `lms_makeup_suggested_mail`(학생 메일 '[엣지영어] 강사님이 보강 시간을 제안했어요', 바로가기 ?makeup=신청id, dedupe makeup_suggested:id, 운영진은 dispatch 숨은참조) · `student_makeup_pick`(잠금+재검사 → lms_makeup_book, 막히면 '이 시간은 이제 선택할 수 없어요') · `student_makeup_decline_suggestion` · `lms_makeup_book` 2곳(제안 시간은 학생이 원한 시간으로 검사, 학생 직접 확정은 학생 카톡 복사 카드 not_needed — 메일은 그대로) · `lms_makeup_expire_run` countered 제외 · 읽기 `student_makeup_suggestions`·`tutor_makeup_suggestions`(tutor_screen·student_screen 은 안 건드림)
+- 화면: 강사 `TutorHome.tsx MakeupCard`+`SuggestTimes`(카드 안에서 날짜→시간→고른 시간 1/2·2/2·✕ → Suggest to student, PC 좌우·휴대폰 세로, 보낸 뒤 'Suggested · Waiting for the student' 배지+점선 제안 시간, 시간 없으면 Tell Edge English) · 할 일 수는 강사 답 필요만 · 학생 `StudentHome.tsx` 할 일 '보강 시간 고르기' → `RequestDetail` 라디오·[이 시간으로 확정 · 날짜]·[제안한 시간이 모두 안 돼요](한 번 더 확인)·확정 화면+캘린더 · 운영진 `LessonChange.tsx` '강사 제안 · 학생 선택 대기'/'보강 조율 필요 · 사유'+제안 시간 [확정] · 대시보드 기존 보강 카드에 '강사 제안 시간 수강생 불가·지남 n건'(`live.ts`·`board.ts`). 강사 카드 'Original class' 별표(*) 그대로 보이던 것 Rich 로 고침
+- 검증: test:db 621 통과(새 H26(134) 17개) — '운영 DB 확인 실패(LMS 표 58개)' 1건은 다른 세션 merge(학생 홈·알림) 뒤 생긴 것, 이 작업과 무관 · vitest 430 · tsc · eslint(기존 경고 1)
+- **시험 사이트 실제 클릭(11/11, 가상 학생 STU-9001·가상 강사 Blair(토론토), 학생은 운영자 보기)**: 강사 PC 1개 제안·3번째 막힘·✕ 뒤 다시 고르기 / 강사 휴대폰 2개 제안 / 운영자 대신 제안(이력 admin_makeup_suggest_as_tutor) / 학생 PC 메일 바로가기 → 첫 시간 확정(두 번 눌러도 보강 1개·메일 1쌍) / 학생 휴대폰 둘째 시간 확정(첫 시간 '이 시간은 이제 선택할 수 없어요') / 학생 휴대폰 '모두 안 돼요' → 다른 일정 조율 중 / 같은 시간을 다른 신청이 먼저 확정 → 막힘·운영진 조율 / 제안 시간 지남(시각을 과거로 바꿔 흉내) → 조율 / 강사 확인 화면 동기화 / 운영진 수업 변경·대시보드 표시 / 기존 강사 확정 회귀 / 휴무·막은 시간 넣으면 제안 시간 무효(롤백 시험) / support@ 수신 5통 확인. 시드니(+11 서머타임)·토론토(-5)·KST 날짜 차이 표시 맞음
+- 미확인: 학생 본인 로그인 화면(운영자 보기로만 확인, 같은 함수·같은 화면), 수강생 해외 시간대의 제안 메일 본문(학생 시간대를 시드니로 바꾸기 전에 보낸 메일이라 한국 시간만), 실제 Gmail 앱 캘린더 버튼
+- **시험 데이터 남김**: STU-9001 11/17·19·24·26·12/1·12/3 수업 강사 사정 취소 + 보강 신청 6건(확정 3, 조율 필요 3). **정리 대기(대표 확인 필요)**: STU-9001 시간대 시드니 → 서울 되돌리기 · e2e-admin·e2e Blair 임시 비밀번호 무작위로 바꾸기 (Supabase 커넥터 확인 요청이 시간 초과로 실행 안 됨)
+- 운영 배포 전: 운영 DB 백업 → migration 20261111160000 → lms-prod (대표 승인 뒤)
+
 ## ✅ 11/11 강사 통보 LMS 이전 + 첫 수업 안내 메일 + 보강 메일 정리 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/brave-pascal-guazck, 정책 원본 H26(134)(135) 참고)
 - 범위: H26(116)(122)(125)(127) 강사 Updates·To do·강사 메일 6종 · H26(129) 첫 수업 안내 · H26(124)② 강사 [None of these times work] → support@ 메일 · H26(133) 재촉 생략 · H26(131)(132) 학생 메일 문구(대표 11/11 '넣어': 해요체·'보강 희망 시간'·'(아직 강사 확인 중)') · 보강 확정·시간 변경 메일 캘린더 버튼 2개(대표 11/11)
 - 이미 7f6d690(대표 계정, 11/11)이 만든 것 재사용: 학생 취소→학생 메일, 보강 신청→학생·강사 메일 (migration 20261111073809)
@@ -32,7 +41,7 @@
 - 검증: test:db 전부 통과(기존 시험 고침: 강사 안내 'not_needed', 7f6d690 이후 깨져 있던 4곳) · vitest 429 · tsc · eslint(기존 1건) · next build · 로컬 DB 시나리오(신규 문의→답→확정→첫 수업 24h 안내→발송 뒤 변경 안내→같은 값 재저장 안 보냄, 재등록 같은 일정·공백 없음=첫 수업 안내 없음, 정규 변경 메일) · 시험 DB 되돌리기 시나리오(신규 문의 메일·확정 메일·강사 안내 sent) · ?demo=1 PC·iPhone 13 화면
 - 미확인: 실제 support@ 수신(시험 DB 커밋 발송 안 함), 대체 수업 확정 묶음 메일·보강 none-work 메일 실제 흐름(로컬 DB 시험 장면 없음), Gmail 앱에서 '애플·삼성 캘린더' 버튼
 - **⏭ 다음 (새 세션)**: 강사가 [None of these times work] 때 글 대신 Availability 에서 시간 골라 학생에게 제안 → 학생이 하나 고르면 바로 확정 + 확정 메일 학생·강사·운영진 (대표 11/11 결정, D-43 예외 — H26(134)). 시안부터
-  - 11/11 시안 `docs/lms/previews/tutor-suggest-times-drafts.html` (https://claude.ai/artifact/4hsTbCHmowSofdKk3XPVEk, 브랜치 claude/dreamy-curie-yyxifa) — **대표 결정 대기 4개**: ① 강사 제안 개수(권장 최대 2) ② 학생 '모두 안 돼요' 버튼(권장: 지금 '다른 일정 조율 중'으로) ③ 학생 '시간 제안' 메일 보낼지(권장 보냄, 문구는 '넣어' 전 시스템에 넣지 않음) ④ 학생 미응답 처리(권장: 운영진 대시보드만)
+  - 11/11 시안 `docs/lms/previews/tutor-suggest-times-drafts.html` → **대표 결정 4개 확정(최대 2개 · '모두 안 돼요' 버튼 · 제안 메일 보냄+운영진 숨은참조 · 미응답은 대시보드만) → 아래 '11/11 강사 보강 시간 제안' 으로 개발 끝**
 - **운영 배포 전**: `git log origin/lms-test..origin/lms-prod` 에 운영에만 있는 커밋 있음(172cc4f·06aa38c 강사 Hours 등) → lms-test 에 먼저 합치기. 운영 DB 백업 → migration 2개 → first_class_mail_since 시각 확인
 
 ## ✅ 11/11 학생 홈·내 정보 최신 통합 시안 (대표 최종 지시서) — **lms-test 반영, 운영 미반영** (브랜치 claude/jolly-turing-bfiwh0)

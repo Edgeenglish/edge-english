@@ -21064,7 +21064,8 @@ declare
   v_end timestamptz;
 begin
   select * into r from makeup_requests where id = p_request;
-  if not found or p_start <= now() then return false; end if;
+  -- 열린 신청만 (확정된 신청은 원래 수업에 이미 보강이 있어 lms_makeup_source 가 오류를 냄 — QA 11/11)
+  if not found or p_start <= now() or r.status not in ('requested', 'countered') then return false; end if;
   if r.compensation_id is not null then
     select * into c from lms_comp_source(r.compensation_id);
     select * into e from enrollments where id = c.enrollment_id;

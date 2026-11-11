@@ -1224,7 +1224,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
         {m.compensation && <span className="rounded-[6px] bg-[#efebff] px-1.5 text-[12.5px] font-semibold text-[#5b3fe0]">Compensation</span>}
         {minutes && <span className="text-[13px] text-[#6b6880]">{minutes} min</span>}
       </div>
-      <p className="text-[13.5px] text-[#55526a]">{m.compensation ? 'Tutor no-show class' : 'Original class'}: {makeupOrigin(m, tz)}</p>
+      <p className="text-[13.5px] text-[#55526a]">{m.compensation ? 'Tutor no-show class' : 'Original class'}: <Rich text={makeupOrigin(m, tz)} /></p>
       {confirmed ? (
         <p role="status" className="mt-2 rounded-[10px] bg-[#e6f6ec] px-3 py-2 text-[14.5px] font-bold text-[#1f7a4d]">
           ✓ Make-up confirmed · <Rich text={rangeFull(confirmed, tz)} />
