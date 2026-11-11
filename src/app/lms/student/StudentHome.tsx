@@ -154,7 +154,7 @@ function KstToggle() {
     <div className="-mt-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-b-[12px] bg-[#1d1b2b] px-3 pb-2">
       <span className="text-[13px] font-semibold text-white">시간 기준</span>
       {c.studentTz === 'Asia/Seoul' ? (
-        <span className="inline-flex min-h-[36px] items-center rounded-full border-2 border-white bg-white px-3.5 text-[13px] font-extrabold text-[#1d1b2b]">한국 시간 (KST)</span>
+        <span className="inline-flex min-h-[38px] items-center rounded-full border-2 border-white bg-white px-3.5 text-[13px] font-extrabold text-[#1d1b2b]">한국 시간 (KST)</span>
       ) : <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-white/30 bg-white/10">
         <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
         <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
@@ -1506,7 +1506,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
 }
 
 function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson | null; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
-  const shell = 'grid min-h-[206px] content-start gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:min-h-[222px] lg:rounded-[22px] lg:p-6';
+  const shell = 'grid min-h-[208px] content-start gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:min-h-[222px] lg:rounded-[22px] lg:p-6';
   if (!lesson) return (
     <section aria-label="다음 수업" className={shell}>
       <div className="flex min-h-[28px] items-center">
