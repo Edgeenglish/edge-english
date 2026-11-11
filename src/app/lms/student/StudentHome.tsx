@@ -131,13 +131,15 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
   const ink = 'text-[#3a22b0]';
   const text = `모든 날짜·시간은 ${zoneText()} 기준`;
   const kst = c.admin && c.studentTz !== 'Asia/Seoul' && (
-    <button type="button" onClick={() => c.set(!c.on)} className={`whitespace-nowrap font-bold underline ${ink}`}>
-      {c.on ? `${koZoneCity(c.studentTz)} 시간으로 보기` : '한국 시간으로 보기'}
+    // 11/11 대표 시안: PC = 같은 줄 오른쪽 끝 작은 글자 + 얇은 구분선, 휴대폰 = 같은 보라색 영역 둘째 줄
+    <button type="button" onClick={() => c.set(!c.on)}
+      className="basis-full whitespace-nowrap pl-[22px] text-left text-[12.5px] font-semibold text-[#55526a] lg:basis-auto lg:border-l lg:border-[#d9d0ff] lg:pl-3">
+      {c.on ? `${koZoneCity(c.studentTz)} 시간으로 보기 ›` : '한국 시간으로 보기 ›'}
     </button>
   );
   const icon = <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />;
   return (
-    <p role="note" className={`inline-flex w-fit flex-wrap items-center gap-x-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
+    <p role="note" className={`inline-flex w-fit flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-1.5 text-[13.5px] font-bold leading-snug ${kst ? 'rounded-[14px] lg:flex lg:w-full lg:justify-between lg:rounded-full' : 'rounded-full'} ${tone}`}>
       {/* 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(122) A안 — 배지 글자 위에 투명한 고르기 칸을 겹침) */}
       {change ? (
         <label className="relative inline-flex items-center gap-1.5">
@@ -152,7 +154,6 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
       ) : (
         <span className="inline-flex items-center gap-1.5">{icon}<span className={ink}>{text}</span></span>
       )}
-      {kst && <span className={ink}>·</span>}
       {kst}
     </p>
   );
