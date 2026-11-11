@@ -168,7 +168,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     createdAt: at(-25, '09:00'), note: '', originalAt: at(-26, '20:00'), originalTutor: '가상강사 Alex', tutor: '가상강사 Alex', confirmedAt: at(2, '10:00'),
   }];
   const set = (v: StudentView) => (view = v);
-  let reminders = { regular: true, makeup: true, hasEmail: true };
+  let reminders = { regular: false, makeup: true, hasEmail: true };
   let tz = { timezone: 'Asia/Seoul', kept: null as string | null };
   let noTimeAt: string | null = null;
   const notices = [
