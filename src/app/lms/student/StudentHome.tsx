@@ -121,43 +121,41 @@ const overseas = () => VIEW_TZ !== 'Asia/Seoul';
  * 수강생 시간 = 보라 '모든 날짜·시간은 시드니 시간 기준', 운영자가 한국 시간으로 보는 중 = 주황 '한국 시간(KST) 기준으로 보는 중'.
  * 색만이 아니라 글자로 구별. globals.css 의 '* { color }' 때문에 글자에 색 직접 지정
  */
-function ZoneBar({ change }: { change?: { value: string; options: string[]; disabled: boolean; onChange: (tz: string) => void } }) {
-  const tone = ADMIN_KST ? 'bg-[#fff1d6] text-[#8a5300]' : 'bg-[#efeaff] text-[#3a22b0]';
-  const text = ADMIN_KST ? '한국 시간(KST) 기준으로 보는 중' : `모든 날짜·시간은 ${zoneText()} 기준`;
-  // 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(122) A안 — 배지 위에 투명한 고르기 칸을 겹침)
-  if (change && !ADMIN_KST)
-    return (
-      <label className={`relative inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
-        <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
-        <span className="text-[#3a22b0]">{text} · <span className="text-[#3a22b0]"><span className="underline">변경</span> ›</span></span>
-        <select aria-label="시간대 변경" value={change.value} disabled={change.disabled}
-          onChange={(e) => e.target.value !== change.value && change.onChange(e.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
-          {change.options.map((z) => <option key={z} value={z}>{tzLabel(z)}</option>)}
-        </select>
-      </label>
-    );
-  return (
-    <p role="note" className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
-      <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
-      <span className={ADMIN_KST ? 'text-[#8a5300]' : 'text-[#3a22b0]'}>{text}</span>
-    </p>
-  );
-}
-/** 운영자 보기 전용 시간대 전환: 수강생 시간 | 한국 시간(KST). 고른 쪽은 굵은 테두리·굵은 글자 (색만으로 구별하지 않음). 오른쪽에 기준 배지 */
+/**
+ * 시간대 띠 하나 (모든 학생 같은 자리·같은 모양). 학생: '모든 날짜·시간은 ○○ 시간 기준 · 변경 ›'(누르면 시간대 목록, 학생 저장값).
+ * 운영자 보기 + 해외 학생만 같은 띠 안 끝에 '· 한국 시간으로 보기' 글자 버튼 — 화면 표시만 바뀌고 학생 시간대 저장값은 그대로 (11/11 대표: 따로 줄 금지)
+ */
 const KstCtx = createContext<{ admin: boolean; studentTz: string; on: boolean; set: (v: boolean) => void }>({ admin: false, studentTz: 'Asia/Seoul', on: false, set: () => {} });
-function KstToggle() {
+function ZoneBar({ change }: { change?: { value: string; options: string[]; disabled: boolean; onChange: (tz: string) => void } }) {
   const c = useContext(KstCtx);
-  // 운영자 보기 + 해외 학생만: 시간대 띠 바로 옆에 작게 (11/11 대표: 따로 줄을 만들면 학생마다 화면 모양이 달라 보임)
-  if (!c.admin || c.studentTz === 'Asia/Seoul') return null;
-  const city = koZoneCity(c.studentTz);
-  const btn = (on: boolean) =>
-    `min-h-[32px] rounded-full px-3 text-[12.5px] ${on ? 'border-2 border-[#1d1b2b] bg-white font-extrabold text-[#1d1b2b]' : 'border-2 border-transparent font-semibold text-[#55526a]'}`;
+  const tone = ADMIN_KST ? 'bg-[#fff1d6] text-[#8a5300]' : 'bg-[#efeaff] text-[#3a22b0]';
+  const ink = ADMIN_KST ? 'text-[#8a5300]' : 'text-[#3a22b0]';
+  const text = ADMIN_KST ? '한국 시간(KST) 기준으로 보는 중' : `모든 날짜·시간은 ${zoneText()} 기준`;
+  const kst = c.admin && c.studentTz !== 'Asia/Seoul' && (
+    <button type="button" onClick={() => c.set(!c.on)} className={`whitespace-nowrap font-bold underline ${ink}`}>
+      {c.on ? `${koZoneCity(c.studentTz)} 시간으로 보기` : '한국 시간으로 보기'}
+    </button>
+  );
+  const icon = <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />;
   return (
-    <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-[#d9d5e8] bg-[#f6f5fa]">
-      <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
-      <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
-    </div>
+    <p role="note" className={`inline-flex w-fit flex-wrap items-center gap-x-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
+      {/* 화면 맨 위 배지만: 누르면 바로 시간대 목록 (H26(122) A안 — 배지 글자 위에 투명한 고르기 칸을 겹침) */}
+      {change && !ADMIN_KST ? (
+        <label className="relative inline-flex items-center gap-1.5">
+          {icon}
+          <span className={ink}>{text} · <span className={ink}><span className="underline">변경</span> ›</span></span>
+          <select aria-label="시간대 변경" value={change.value} disabled={change.disabled}
+            onChange={(e) => e.target.value !== change.value && change.onChange(e.target.value)}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
+            {change.options.map((z) => <option key={z} value={z}>{tzLabel(z)}</option>)}
+          </select>
+        </label>
+      ) : (
+        <span className="inline-flex items-center gap-1.5">{icon}<span className={ink}>{text}</span></span>
+      )}
+      {kst && <span className={ink}>·</span>}
+      {kst}
+    </p>
   );
 }
 /**
@@ -712,10 +710,7 @@ export default function StudentHome(props: {
             </section>
           )}
           {/* 시간대 띠는 모든 학생·운영자 보기에서 같은 자리·같은 모양 (11/11 대표: 학생마다 화면이 달라 보이지 않게) */}
-          <div className="flex flex-wrap items-center gap-2">
-  <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
-            <KstToggle />
-          </div>
+          <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
           {tab === 'home' && info && <LearnedBand minutes={info.learnedMin} />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
