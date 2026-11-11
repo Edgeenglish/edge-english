@@ -12,6 +12,8 @@
 - 화면: `src/lms/class-type.ts`(이름 하나) · 강사 `screen.ts`·`TutorHome.tsx`(Student canceled 칸 `StudentCanceledFields`, CoverNote, 회색 줄 opacity) · Schedule 달력은 회색 줄 빼고 지금 그대로 · 운영진 대시보드·수강생 상세·수업 변경 목록(select 에 class_type) · 학생 홈 종류 이름 · 학생 취소 팝업 공휴일 줄
 - 검증: tsc · vitest 430 · test:db 통과(새 시험 4개 + 기존 2곳 고침: 원래 강사 회색 줄, 대체 Held = Normal) · ?demo=1 PC·휴대폰 화면 · 시험 DB Blair 계정으로 실제 저장(사전 취소·변경권 2→1·같은 요청 다시 보내도 1번·학생/강사 안내 2건)
 - ⚠ **운영 배포 순서**: 운영 DB migration 먼저(운영자 화면이 lessons 의 class_type 칸을 읽음 — 없으면 대시보드·수업 변경 목록 오류) → lms-prod. 운영 미반영 앞 작업(강사 통보 LMS 이전 등)과 같이 나갈 수 있으니 배포 전 `git log origin/lms-prod..origin/lms-test` 확인
+- ✅ 11/11 대표 PC 시험 사이트 B1~B4 통과(H26(139)). 공휴일 줄은 시험 DB 공휴일 0건이라 시험 안 함
+- ⏳ 대표 결정 대기: ① 운영 반영 승인 ② 시험 DB에 공휴일 하루 넣고 공휴일 줄 시험할지 ③ 운영 DB 공휴일 목록 넣기
 - 안 넣은 것: Student canceled 의 Remarks 칸(저장할 곳이 없어 뺌, 시안 휴대폰도 없음)
 
 ## ✅ 11/11 강사 통보 LMS 이전 + 첫 수업 안내 메일 + 보강 메일 정리 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/brave-pascal-guazck, 정책 원본 H26(134)(135) 참고)
