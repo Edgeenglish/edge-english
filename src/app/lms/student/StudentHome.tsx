@@ -588,35 +588,41 @@ export default function StudentHome(props: {
 
   // 11/11 대표 콤팩트 시안 + '아이콘 빼고 제목 진하게(운영 화면대로)'
   // 11/11 대표 최종 시안: 두 카드 맨 아래 줄 = 같은 높이·같은 보라색 행동 글자
+  // 이미 신청해 강사 확정을 기다리는 보강 (그 보강권은 openRights 에서 빠져 있어 겹쳐 세지 않음)
+  const makeupWaiting = s.requests.filter((r) => r.kind === 'makeup' && r.status === 'tutor_reviewing').length;
+  const quickTop = 'flex min-h-[48px] w-full items-center justify-between gap-2 rounded-t-[16px] border-b border-[#eeecf4] px-4 text-left transition-colors hover:bg-[#f7f5fd] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#5b3df0]';
+  const quickGo = <span className="shrink-0 text-[12.5px] font-semibold text-[#5b3df0]">신청하기 ›</span>;
   const quick = (
     <section aria-label="빠른 신청" className="grid grid-cols-2 gap-2">
-      <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: null })} className={`${card} flex flex-col gap-2 p-4 text-left`}>
-        <span className="text-[15px] font-bold">수업 변경·취소</span>
-        <span className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11px] leading-[1.5] text-[#55526a]">
-          <b className="font-bold text-[#3d3a52]">6시간 전</b><span>변경권 1개 사용 · 보강 가능</span>
-          <b className="font-bold text-[#3d3a52]">6시간 이내</b><span>변경권 유지 · 보강 불가 (수업 1회 차감)</span>
-        </span>
-        <span className="mt-auto flex items-end justify-between border-t border-[#eeecf4] pt-2">
-          <span className="grid leading-tight">
-            <span className="text-[11px] text-[#6b6880]">남은 변경권</span>
-            <span className="text-[10.5px] text-[#8b88a0]">이번 기간 총 {s.creditsPerPeriod}개 중</span>
-          </span>
-          <span className="text-[22px] font-extrabold leading-none text-[#1d1b2b]">{s.creditsLeft}개</span>
-        </span>
-        <span className="flex min-h-[18px] items-center justify-end text-[12px] font-semibold text-[#5b3df0]">변경·취소하기 ›</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => (openRights.length === 0 ? setTab('requests') : setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null }))}
-        className={`${card} flex flex-col gap-2 p-4 text-left`}
-      >
-        <span className="text-[15px] font-bold">보강 일정 잡기</span>
-        <span className="text-[27px] font-extrabold leading-tight text-[#1d1b2b]">{openRights.length}회</span>
-        <span className="mt-auto flex min-h-[18px] items-center justify-between">
-          <span className="text-[11px] text-[#6b6880]">잡을 수 있는 보강</span>
-          {openRights.length > 0 && <span className="text-[12px] font-semibold text-[#5b3df0]">신청 가능 ›</span>}
-        </span>
-      </button>
+      <div className={`${card} flex flex-col`}>
+        <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: null })} className={quickTop}>
+          <span className="text-[15px] font-bold text-[#1d1b2b]">수업 변경·취소</span>{quickGo}
+        </button>
+        <div className="flex flex-1 flex-col gap-1.5 px-4 pb-3.5 pt-2.5">
+          <p className="text-[12.5px] text-[#55526a]">
+            남은 변경권 <b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.creditsLeft}개</b> / 총 {s.creditsPerPeriod}개
+          </p>
+          <p className="text-[11.5px] leading-[1.45] text-[#6b6880]">변경권은 28일마다 새로 제공돼요.</p>
+          <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
+            <b className="font-bold text-[#3d3a52]">6시간 전</b><span>변경권 1개 사용 · 보강 가능</span>
+            <b className="font-bold text-[#3d3a52]">6시간 이내</b><span>변경권 유지 · 보강 불가 (수업 1회 차감)</span>
+          </p>
+        </div>
+      </div>
+      <div className={`${card} flex flex-col`}>
+        <button
+          type="button"
+          onClick={() => (openRights.length === 0 ? setTab('requests') : setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null }))}
+          className={quickTop}
+        >
+          <span className="text-[15px] font-bold text-[#1d1b2b]">보강 일정 잡기</span>{quickGo}
+        </button>
+        <div className="flex flex-1 flex-col gap-1 px-4 pb-3.5 pt-2.5">
+          <p className="text-[12.5px] text-[#55526a]">신청 가능한 보강</p>
+          <p className="text-[27px] font-extrabold leading-tight text-[#1d1b2b]">{openRights.length}회</p>
+          <p className="text-[11.5px] text-[#6b6880]">강사 확정 대기 중 {makeupWaiting}회</p>
+        </div>
+      </div>
     </section>
   );
 
