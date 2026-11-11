@@ -3900,3 +3900,28 @@ select pg_temp.ok((select makeup_stage(r) = 'admin' from makeup_requests r where
 select lms_makeup_expire_run(now() + interval '60 days');
 select pg_temp.ok((select count(*) = 2 from makeup_requests where id in (select id from mk134 where k in ('b', 'c')) and status = 'countered'),
   'H26(134): 강사가 제안한 신청은 자동 만료하지 않음 (운영진 조율)');
+
+-- ---------- 누적 학습 시간: 시트 시절 합계 + LMS 진행 수업 (migration 20261111180000) ----------
+reset role;
+reset request.jwt.claim.sub;
+insert into tutors (id, name, country, timezone) values ('55555555-0000-0000-0000-000000018110', '누적T', 'Australia', 'Australia/Sydney');
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000018110', '누적학생', 'Legacy S');
+insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
+values ('99999999-1000-0000-0000-000000018110', '99999999-0000-0000-0000-000000018110', 1, 4, 2, 40, '2026-10-01', '2026-10-28', 8, 'active');
+insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at, state, class_status) values
+  ('77777777-1811-0000-0000-0000000000a1', '99999999-1000-0000-0000-000000018110', '99999999-0000-0000-0000-000000018110', '55555555-0000-0000-0000-000000018110', 'regular', 1, '2026-10-06 11:00Z', '2026-10-06 11:40Z', 'done', 'Normal'),
+  ('77777777-1811-0000-0000-0000000000a2', '99999999-1000-0000-0000-000000018110', '99999999-0000-0000-0000-000000018110', '55555555-0000-0000-0000-000000018110', 'regular', 2, '2026-10-13 11:00Z', '2026-10-13 11:40Z', 'done', 'Normal'),
+  ('77777777-1811-0000-0000-0000000000a3', '99999999-1000-0000-0000-000000018110', '99999999-0000-0000-0000-000000018110', '55555555-0000-0000-0000-000000018110', 'regular', 3, '2026-10-20 11:00Z', '2026-10-20 11:40Z', 'done', 'Student no-show');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((student_my_info('99999999-0000-0000-0000-000000018110') ->> 'learned_min')::int = 80, '누적 학습 시간: 시트 합계 없으면 LMS 진행 수업만 (노쇼 빼고 40+40)');
+reset request.jwt.claim.sub;
+reset role;
+insert into legacy_learned_minutes (student_id, lessons, minutes, through_date, source)
+values ('99999999-0000-0000-0000-000000018110', 10, 450, '2026-10-10', '시험');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
+select pg_temp.ok((student_my_info('99999999-0000-0000-0000-000000018110') ->> 'learned_min')::int = 490,
+  '누적 학습 시간: 시트 합계 450 + 시트 기준일(10/10) 뒤 LMS 진행 수업 40 (기준일 전 LMS 수업은 시트와 겹쳐 안 셈)');
+reset request.jwt.claim.sub;
+reset role;
