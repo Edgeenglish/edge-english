@@ -1,5 +1,7 @@
 // 로그인 흐름 판정과 화면 문구 (POL-OP-15·POL-AC-02~05, 로그인 시안 A안 + 한·영 전환, D-39)
-// 순서: 이메일 → 메일 6자리 코드 → (운영자만) 인증 앱 코드. 비밀번호 없음, 공개 가입 없음.
+// H26(146)(150) 홈페이지 회원가입·로그인: 이메일(아이디) + 비밀번호 → (운영자만) 인증 앱 코드.
+// 회원가입 = 이름·이메일·비밀번호·필수 동의 2개 + 메일 6자리 코드. 기존 학생·강사는 '비밀번호 만들기·찾기'(메일 코드 → 새 비밀번호).
+// 카카오·네이버: 같은 인증 이메일이면 Supabase 가 기존 계정에 자동 연결, 아니면 '처음이에요 / 이미 회원이에요'.
 // 화면은 이 함수 결과만 따른다. 실제 권한은 DB(RLS·is_admin 의 aal2 확인)가 막는다.
 
 export type Lang = 'ko' | 'en';
@@ -50,6 +52,43 @@ export function nextAfterLogin(next: string | null | undefined, to: string, role
 /** 바로가기 링크로 들어와 로그인하는 중인지 (로그인 화면 안내 한 줄) */
 export const isMakeupLink = (next: string | null | undefined) => !!next && next.startsWith('/lms/student') && /[?&]makeup=/.test(next);
 
+/** 비밀번호 최소 글자 수 (대표 결정 H26(150) ③) */
+export const PASSWORD_MIN = 8;
+
+export type SignupInput = { name: string; email: string; password: string; terms: boolean; privacy: boolean };
+export type SignupProblem = 'name' | 'email' | 'password' | 'agree';
+/** 회원가입 입력 검사 — 칸마다 첫 문제 하나 (입력칸 바로 아래에 보여 줌) */
+export function signupProblems(v: SignupInput): SignupProblem[] {
+  const out: SignupProblem[] = [];
+  if (!v.name.trim()) out.push('name');
+  if (!looksLikeEmail(v.email)) out.push('email');
+  if (v.password.length < PASSWORD_MIN) out.push('password');
+  if (!v.terms || !v.privacy) out.push('agree');
+  return out;
+}
+
+export type SocialProvider = 'kakao' | 'naver';
+/** Supabase 공급자 이름. 네이버는 기본 지원이 없어 직접 연결(custom OAuth) 이름 */
+export const PROVIDER_ID: Record<SocialProvider, string> = { kakao: 'kakao', naver: 'custom:naver' };
+/** /auth/v1/settings 의 external 에서 켜진 간편 로그인만 (꺼진 버튼은 보이지 않게) */
+export function enabledSocial(external: Record<string, boolean> | null | undefined): SocialProvider[] {
+  if (!external) return [];
+  const out: SocialProvider[] = [];
+  if (external.kakao) out.push('kakao');
+  if (Object.entries(external).some(([k, on]) => on && k.toLowerCase().includes('naver'))) out.push('naver');
+  return out;
+}
+
+/**
+ * 카카오·네이버로 로그인했는데 엣지영어 회원(학생·강사·운영자)과 연결이 없을 때 '처음이에요 / 이미 회원이에요'를 물을지.
+ * 이메일·비밀번호 계정이 함께 있으면(같은 인증 이메일로 자동 연결됐거나 직접 가입) 묻지 않음. 한 번 '처음이에요'를 고르면 다시 묻지 않음.
+ */
+export function needsSocialChoice(input: { role: Role | null; providers: string[]; choseNew: boolean }): boolean {
+  if (input.role || input.choseNew) return false;
+  const social = input.providers.filter((p) => p !== 'email');
+  return social.length > 0 && !input.providers.includes('email');
+}
+
 /** 코드 다시 보내기 대기 시간(초) — Supabase 이메일 최소 발송 간격과 같게 */
 export const RESEND_WAIT_SECONDS = 60;
 
@@ -57,22 +96,51 @@ export const STRINGS = {
   ko: {
     portal: '수업 관리',
     loginTitle: '로그인',
-    loginLead: '등록하신 이메일로 6자리 코드를 보내 드려요.',
-    emailLabel: '이메일 주소',
-    sendCode: '코드 받기',
-    noPassword: '비밀번호는 없어요. 엣지영어에 등록한 이메일을 넣어 주세요.',
-    contact: '문의: 카카오톡 채널 엣지영어',
-    badEmail: '이메일 주소를 다시 확인해 주세요.',
-    codeTitle: '코드 입력',
-    codeSent: (masked: string) => `${masked} 으로 보냈어요.`,
-    codeLead: '등록된 이메일이면 1분 안에 도착해요. (10분 동안 유효)',
-    codeLabel: '6자리 코드',
+    emailLabel: '이메일',
+    passwordLabel: '비밀번호',
+    show: '보기',
+    hide: '숨기기',
     login: '로그인',
-    changeEmail: '이메일 바꾸기',
-    resend: '다시 보내기',
-    resendIn: (s: number) => `다시 보내기 (${s}초)`,
+    badLogin: '이메일 또는 비밀번호가 맞지 않아요',
+    pwLink: '비밀번호 만들기·찾기',
+    signupLink: '회원가입',
+    social: { kakao: '카카오로 로그인', naver: '네이버로 로그인' },
+    socialName: { kakao: '카카오', naver: '네이버' },
+    or: '또는',
+    signupTitle: '회원가입',
+    nameLabel: '이름',
+    emailIdLabel: '이메일 (아이디)',
+    pwHint: (n: number) => `${n}자 이상`,
+    agreeTerms: '이용약관 동의 (필수)',
+    agreePrivacy: '개인정보 수집·이용 동의 (필수)',
+    next: '다음',
+    haveAccount: '이미 회원이에요',
+    stepInfo: '정보 입력',
+    stepMail: '메일 확인',
+    nameRequired: '이름을 넣어 주세요',
+    badEmail: '이메일 주소를 다시 확인해 주세요',
+    pwTooShort: (n: number) => `비밀번호는 ${n}자 이상이에요`,
+    agreeRequired: '필수 동의를 체크해 주세요',
+    emailTaken: '이미 가입된 이메일이에요',
+    makePwWithThis: '이 이메일로 비밀번호 만들기 ›',
+    signupCodeTitle: '메일로 받은 코드',
+    join: '가입하기',
+    fixEmail: '‹ 이메일 고치기',
+    pwTitle: '비밀번호 만들기·찾기',
+    stepEmail: '이메일',
+    stepNewPw: '새 비밀번호',
+    getCode: '코드 받기',
+    newPwTitle: '새 비밀번호',
+    codeLabel: '메일로 받은 코드',
+    newPwLabel: '새 비밀번호',
+    savePw: '저장하고 로그인',
+    backLogin: '‹ 로그인',
+    codeSent: (masked: string) => `${masked} 으로 보냈어요.`,
+    codeLead: '1분 안에 도착해요. (10분 동안 유효)',
+    resend: '코드 다시 받기',
+    resendIn: (s: number) => `코드 다시 받기 (${s}초)`,
     resent: '코드를 다시 보냈어요.',
-    spam: '메일이 안 보이면 스팸함도 확인해 주세요. 제목: 엣지영어 로그인 코드',
+    spam: '메일이 안 보이면 스팸함도 확인해 주세요.',
     badCode: '코드가 맞지 않거나 시간이 지났어요. 다시 확인하거나 새 코드를 받아 주세요.',
     tooMany: '요청이 많아요. 잠시 뒤에 다시 해 주세요.',
     network: '연결이 불안정해요. 잠시 뒤에 다시 해 주세요.',
@@ -87,8 +155,15 @@ export const STRINGS = {
     enrollManual: 'QR이 안 되면 이 코드를 앱에 직접 입력',
     enrollDone: '등록 완료',
     enrollTip: '복구 코드가 없어요. 휴대폰·태블릿 2대에 함께 등록해 두는 것을 권해요.',
-    notLinkedTitle: '아직 연결되지 않은 계정이에요',
-    notLinkedLead: '엣지영어 운영자가 등록을 마치면 이용할 수 있어요. 카카오톡 채널로 문의해 주세요.',
+    joined: '가입했어요',
+    memberTitle: '아직 수강 중인 수업이 없어요',
+    apply: '수강신청',
+    socialTitle: '엣지영어가 처음이세요?',
+    socialNew: '처음이에요',
+    socialExisting: '이미 회원이에요',
+    linkNotice: (p: string) => `기존 계정으로 로그인하면 ${p}가 연결돼요.`,
+    linkFail: '연결하지 못했어요. 이메일로 로그인해 주세요.',
+    socialFail: '로그인하지 못했어요. 이메일로 로그인해 주세요.',
     logout: '로그아웃',
     moving: '이동하는 중…',
     backHome: '← 홈페이지로',
@@ -97,22 +172,51 @@ export const STRINGS = {
   en: {
     portal: 'Class portal',
     loginTitle: 'Log in',
-    loginLead: "We'll email a 6-digit code to your registered address.",
-    emailLabel: 'Email address',
-    sendCode: 'Send code',
-    noPassword: 'No password needed. Use the email registered with Edge English.',
-    contact: 'Questions: WhatsApp Edge English',
-    badEmail: 'Please check the email address.',
-    codeTitle: 'Enter code',
-    codeSent: (masked: string) => `Sent to ${masked}.`,
-    codeLead: 'If the email is registered, it arrives within a minute. (Valid for 10 minutes)',
-    codeLabel: '6-digit code',
+    emailLabel: 'Email',
+    passwordLabel: 'Password',
+    show: 'Show',
+    hide: 'Hide',
     login: 'Log in',
-    changeEmail: 'Change email',
-    resend: 'Resend',
-    resendIn: (s: number) => `Resend (${s}s)`,
+    badLogin: 'Email or password is incorrect',
+    pwLink: 'Set or reset password',
+    signupLink: 'Sign up',
+    social: { kakao: 'Continue with Kakao', naver: 'Continue with Naver' },
+    socialName: { kakao: 'Kakao', naver: 'Naver' },
+    or: 'or',
+    signupTitle: 'Sign up',
+    nameLabel: 'Name',
+    emailIdLabel: 'Email (your ID)',
+    pwHint: (n: number) => `At least ${n} characters`,
+    agreeTerms: 'I agree to the Terms of Use (required)',
+    agreePrivacy: 'I agree to the collection and use of personal data (required)',
+    next: 'Next',
+    haveAccount: 'Already a member?',
+    stepInfo: 'Your details',
+    stepMail: 'Email check',
+    nameRequired: 'Please enter your name',
+    badEmail: 'Please check the email address',
+    pwTooShort: (n: number) => `Use at least ${n} characters`,
+    agreeRequired: 'Please tick the required boxes',
+    emailTaken: 'This email is already registered',
+    makePwWithThis: 'Set a password for this email ›',
+    signupCodeTitle: 'Code from your email',
+    join: 'Sign up',
+    fixEmail: '‹ Change email',
+    pwTitle: 'Set or reset password',
+    stepEmail: 'Email',
+    stepNewPw: 'New password',
+    getCode: 'Send code',
+    newPwTitle: 'New password',
+    codeLabel: 'Code from your email',
+    newPwLabel: 'New password',
+    savePw: 'Save and log in',
+    backLogin: '‹ Log in',
+    codeSent: (masked: string) => `Sent to ${masked}.`,
+    codeLead: 'It arrives within a minute. (Valid for 10 minutes)',
+    resend: 'Send a new code',
+    resendIn: (s: number) => `Send a new code (${s}s)`,
     resent: 'We sent a new code.',
-    spam: "Can't find it? Check your spam folder. Subject: 엣지영어 로그인 코드",
+    spam: "Can't find it? Check your spam folder.",
     badCode: 'The code is wrong or has expired. Check it or get a new code.',
     tooMany: 'Too many requests. Please try again shortly.',
     network: 'Connection problem. Please try again shortly.',
@@ -127,11 +231,18 @@ export const STRINGS = {
     enrollManual: "If the QR doesn't work, enter this key in the app",
     enrollDone: 'Finish setup',
     enrollTip: 'There are no recovery codes. Register it on two devices (phone + tablet).',
-    notLinkedTitle: 'This account is not linked yet',
-    notLinkedLead: 'You can use it once Edge English finishes your registration. Please contact us.',
+    joined: "You're signed up",
+    memberTitle: 'No classes yet',
+    apply: 'Apply for classes',
+    socialTitle: 'New to Edge English?',
+    socialNew: "Yes, I'm new",
+    socialExisting: 'I already have an account',
+    linkNotice: (p: string) => `Log in with your account to connect ${p}.`,
+    linkFail: "Couldn't connect. Please log in with your email.",
+    socialFail: "Couldn't log in. Please log in with your email.",
     logout: 'Log out',
     moving: 'Redirecting…',
-    makeupNext: 'After you log in, the make-up date page from your link opens.',
     backHome: '← Home page',
+    makeupNext: 'After you log in, the make-up date page from your link opens.',
   },
 } as const;

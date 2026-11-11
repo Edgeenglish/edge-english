@@ -2,16 +2,16 @@
 
 # 다음 세션 시작 메모
 
-## 📐 11/11 홈페이지 회원가입·로그인 시안 1단계 (H26(146), 목표 11/14 = H26(128)) — **코드·DB·로그인 설정 변경 없음, 대표 결정 대기**
-- 시안: `docs/lms/previews/home-signup-login-drafts.html` (https://claude.ai/artifact/RPg5vNWjBvo2vC1JD53Qsn) — 로그인·오류·회원가입·이미 있는 이메일·메일 코드·가입 직후·비밀번호 만들기·찾기 2단계, PC·휴대폰
-- **대표 결정 대기 7개**: ① 아이디=이메일(추천) ② 가입 칸 이름·이메일·비밀번호+약관 2개(추천) ③ 비밀번호 최소 길이(숫자 — 6/8 추천/10) ④ 가입 때 메일 코드 확인(추천 넣음) ⑤ 기존 학생·강사 첫 비밀번호 = '비밀번호 만들기·찾기' 한 화면, 메일 코드 로그인은 로그인 화면에서 뺌(추천) ⑥ 카카오 이번엔 빼고 같은 화면 맨 위에 나중에(추천) ⑦ 헤더 말풍선 '회원가입 없이 간편 신청하기' 없앰(추천)
-- 결정 뒤 순서: 시험 Supabase 공개 가입 켬 + 가입 확인 메일 코드 → 화면 개발(LoginFlow.tsx 확장, /lms/signup·/lms/password, 헤더 [로그인]/[내 수업]) → 가입만 한 계정 권한 시험 → 실제 메일·PC·휴대폰 시험 → 대표 승인 → 운영(로그인 설정 스위치는 관리 API 토큰 안 되면 대표 화면)
-- 이번에 안 함: 로그인한 채 수강신청 → 계정 자동 연결(신청서 이전 단계), 카드결제(결제 업체 비교안 먼저)
-
-새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
-
-
-
+## 🔐 11/11 홈페이지 회원가입·로그인 — 정책 원본 H26(146)(150) 참고 · **시험 사이트 개발, 운영 미반영** (브랜치 claude/clever-curie-hzaqbi → lms-test)
+- 시안 v2: `docs/lms/previews/home-signup-login-drafts.html` (https://claude.ai/artifact/RPg5vNWjBvo2vC1JD53Qsn)
+- 코드: `src/app/lms/login/LoginFlow.tsx`(단계: login·signup·signup_code·pw_email·pw_new·social_choice·member + 기존 totp/enroll) · `src/lms/auth/login-flow.ts`(PASSWORD_MIN 8·signupProblems·enabledSocial·needsSocialChoice·PROVIDER_ID 네이버=`custom:naver`, 문구 한·영) · `src/lms/auth/client.ts` flowType pkce(카카오·네이버 돌아올 때 ?code= → exchangeCodeForSession) · `src/components/Header.tsx` [로그인]/[내 수업](세션 있으면) + 말풍선 삭제
+- migration **20261112000000_lms_discard_new_social_account** (시험 DB 적용): '이미 회원이에요' 때 방금 생긴 카카오·네이버 전용 빈 계정만 본인이 지움(app_users 연결·email 로그인 방법 있으면 false). authz-probe 검토 목록에 추가
+- 동작: 카카오·네이버 버튼은 /auth/v1/settings external 에 켜진 것만 보임 · 가입 = signUp(이름·동의 시각 user_metadata) → verifyOtp type signup · 이미 있는 이메일(identities 0) → '이미 가입된 이메일이에요' + 비밀번호 만들기 · 비밀번호 만들기·찾기 = 메일 코드 로그인(shouldCreateUser false) + updateUser(password) · 회원 연결 없는 계정 = '아직 수강 중인 수업이 없어요' + [수강신청](구글폼)
+- 검증(11/11): tsc · eslint(새 오류 없음, TimeStatusLegend 기존 오류 1) · vitest 436 · test:db 전체 통과(묶음 SQL 재생성) · 시험 DB: 삭제 함수 4경우(카카오만→지움 / 이메일+카카오·연결된 학생·비로그인→안 지움, anon 실행 불가, rollback) · 연결 없는 로그인 사용자 학생·수업·수강권·결제·강사·보강·안내 0건 · 로컬(시험 DB) PC·휴대폰: 틀린 비밀번호 오류 칸 아래, 가입 빈칸 오류 4개, **STU-0018 실제 메일 코드로 비밀번호 만들기 → 학생 홈 → 다시 비밀번호 로그인 → 학생 홈, 헤더 '내 수업'**(비밀번호는 무작위 값, 기록 안 함), 가로 밀림 없음
+- **미검증(설정 필요)**: 회원가입(시험 Supabase 공개 가입 꺼짐 → 지금 누르면 '연결이 불안정해요') · 카카오·네이버 연결 3경우(같은 이메일·다른 이메일·이메일 없음) 연결 전후 기록 대조 · 네이버 custom provider 가 사용자 정보(response 안에 들어 있음)·이메일 인증 여부를 읽는지
+- **대표 할 일(대표 계정만 가능)**: ① 시험용 Supabase Authentication: 새 가입 허용 켬 · 비밀번호 최소 8 · 'Confirm signup' 메일에 6자리 코드({{ .Token }}) · Manual linking 켬 (관리 API 토큰 안 됨 11/11 다시 확인) ② 카카오 개발자 앱(비즈 앱 전환·이메일 동의) ③ 네이버 개발자센터 앱(서비스 적용 검수)
+- 남은 개발: 이용약관·개인정보 동의 원문(대표 원문 필요 — 지금은 체크만, [보기] 없음) · 운영 반영 순서(대표 승인 뒤): 운영 DB migration → 운영 Supabase 설정 → lms-prod·main 같은 커밋(헤더는 main 홈페이지에 나감)
+- H26(128)·11/15 할 일: H26(150) 으로 **공개·주소 이전 보류**(로그인 완성·QA 뒤). 11/9 카카오 시안의 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
 ## ✅ 11/11 학생 재등록 안내 자동 메일 3통 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/nice-einstein-x201yx, H26(117) ① · 대표 11/11 결정 1~5 + 마지막 수업 종료 기준)
 - migration **20261111190000_lms_renewal_mail** (시험 DB 적용): `lms_renewal_plans`(가격표, renewal-price.ts 와 같은 값 — 가격 바뀌면 두 곳) · `lms_renewal_remaining`(대시보드 remainingOf 와 같은 남은 수업) · `lms_renewal_mail`(문구·대기열, dedupe `renewal_mail:수강권:단계`) · `lms_renewal_mail_due` · `lms_renewal_mail_run` · pg_cron `lms-renewal-mail` 10분(`lms_renewal_mail_run(); lms_mail_run();`). 시작 스위치 = feature_flags `renewal_mail_since` 줄이 있을 때만 (시험 DB 에만 넣음, 운영은 줄 없음 = 안 보냄)
