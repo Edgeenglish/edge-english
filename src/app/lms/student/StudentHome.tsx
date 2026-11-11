@@ -1652,7 +1652,7 @@ function LearnedBand({ minutes }: { minutes: number }) {
     <p aria-label="나의 누적 학습 시간" className="flex w-fit flex-wrap items-baseline gap-x-2.5 gap-y-0.5 rounded-[18px] bg-[#f5f1e9] px-3 py-[7px] leading-snug">
       <span className="text-[11px] font-semibold text-[#7a6d5a]">나의 누적 학습 시간</span>
       <b className="whitespace-nowrap text-[12.5px] font-extrabold text-[#4a3726]">{text}</b>
-      <span className="text-[11px] text-[#9a8e7c]">영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 쌓였어요🔥</span>
+      <span className="text-[11px] text-[#9a8e7c]">영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 <span className="whitespace-nowrap">쌓였어요🔥</span></span>
     </p>
   );
 }
