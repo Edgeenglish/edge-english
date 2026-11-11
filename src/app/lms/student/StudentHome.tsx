@@ -16,7 +16,7 @@ import { diffDays, formatInZone, hoursBetween, instantToKstDate, type KstDate } 
 import { MEET_MISSING_KO, meetRoomUrl } from '@/lms/rules/meet';
 import type { PreviewExtras } from '@/lms/student/fake-data';
 import HomeNotices from '@/app/lms/HomeNotices';
-import type { LeaveRow, MakeupOption, MakeupRight, RegularSlot, Reminders, StudentActions, StudentView, TimezoneState } from '@/lms/student/live';
+import type { LeaveRow, MakeupOption, MakeupRight, MyInfo, RegularSlot, Reminders, StudentActions, StudentView, TimezoneState } from '@/lms/student/live';
 import {
   cancelManySummary,
   cancelPreview,
@@ -126,7 +126,7 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
     return (
       <label className={`relative inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
         <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
-        <span className="text-[#3a22b0]">{text} · <span className="text-[#3a22b0] underline">변경</span></span>
+        <span className="text-[#3a22b0]">{text} · <span className="text-[#3a22b0]">변경 ›</span></span>
         <select aria-label="시간대 변경" value={change.value} disabled={change.disabled}
           onChange={(e) => e.target.value !== change.value && change.onChange(e.target.value)}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
@@ -337,7 +337,6 @@ export default function StudentHome(props: {
         : '이 수업은 지금 보강을 신청할 수 없어요. 카카오톡으로 문의해 주세요.');
     else setLinkNote('열 수 없는 링크예요. 카카오톡으로 문의해 주세요.');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const dLeft = endDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, endDate) : 0;
   const points = pointsHistory(s.points);
   // 가상 화면은 extras(지난 Unit 포함), 실제 화면은 강사가 정한 교재 이름만 (QA C-04)
   const textbook: { title: string; lastUnit?: number | null } | null = extras?.textbook ?? (s.textbook ? { title: s.textbook, lastUnit: null } : null);
@@ -424,6 +423,14 @@ export default function StudentHome(props: {
   }, [actions, s]);
   const slotText = regularSlotText(slots, now);
 
+  // 나의 학습 정보(강사 작성)·누적 학습 시간 (11/11 대표 시안, migration 20261111010000)
+  const [info, setInfo] = useState<MyInfo | null>(null);
+  useEffect(() => {
+    let alive = true;
+    actions.myInfo().then((x) => { if (alive) setInfo(x); }, () => {});
+    return () => { alive = false; };
+  }, [actions, s]);
+
   // [맞는 시간이 없어요] 보일 보강권 (H26(92) ⑤): 수업 번호 → 누른 시각. 화면을 다시 읽을 때마다 같이
   const [noTime, setNoTime] = useState<Map<string, string | null>>(new Map());
   useEffect(() => {
@@ -504,7 +511,7 @@ export default function StudentHome(props: {
   }
 
   const nextFull = next && s.lessons.find((l) => l.id === next.id);
-  const nextCard = next && <NextLesson lesson={next} now={now} textbook={textbook} meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
+  const nextCard = next && <NextLesson lesson={next} now={now} meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -534,18 +541,6 @@ export default function StudentHome(props: {
         </button>
       )}
       {prompt.mode === 'awaiting_payment' && <span className="justify-self-start rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#8a5300]">결제 확인 대기</span>}
-    </section>
-  );
-
-  const statusTiles = (
-    <section aria-label="수강 현황" className="grid grid-cols-3 gap-2">
-      <Tile label="남은 수업" value={notStarted ? '—' : `${left.total}`} unit={notStarted ? '' : '회'} sub={notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
-      <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중 ›`} onClick={() => setOverlay({ kind: 'credits' })} />
-      <Tile
-        label="수강 종료"
-        value={!endDate ? '-' : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'}
-        sub={endDate ? `${endText(endDate)}까지` : ''}
-      />
     </section>
   );
 
@@ -581,42 +576,6 @@ export default function StudentHome(props: {
     </section>
   );
 
-  const requestList = s.requests.length > 0 && (
-    <section aria-label="신청 진행 상태" className={`${card} grid gap-1 p-4`}>
-      <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-bold">신청 진행 상태</h2>
-        <button type="button" onClick={() => setTab('requests')} className="min-h-[36px] text-[13px] text-[#4b2fd6] underline">
-          전체 ›
-        </button>
-      </div>
-      {s.requests.slice(0, 3).map((r) => (
-        <RequestRow key={r.id} r={r} onOpen={() => setOverlay({ kind: 'request', id: r.id })} />
-      ))}
-    </section>
-  );
-
-  const payBox = (
-    <section aria-label="수강과 결제" className={`${card} px-4 pb-1.5 pt-4`}>
-      <h2 className="mb-2 text-[15px] font-bold">수강·결제·적립금</h2>
-      <LinkRow label="수강권" value={s.product} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
-      {slotText && (
-        <div className="flex min-h-[52px] w-full items-center justify-between gap-3 border-t border-[#eeecf4] py-2 text-[14px]">
-          <span className="shrink-0 text-[#55526a]">수업 시간</span>
-          <span className="grid min-w-0 gap-0.5 text-right">
-            {slotText.map((g) => (
-              <span key={g.when + g.tutor} className="grid">
-                <span className="font-semibold">{g.when}</span>
-                <span className="text-[13px] text-[#55526a]">{g.tutor}</span>
-              </span>
-            ))}
-          </span>
-        </div>
-      )}
-      <LinkRow label="결제" value={s.paid ? `결제 완료${s.confirmedOn ? ` (${fmtDate(s.confirmedOn)})` : ''}` : '결제 확인 중'} valueClass={s.paid ? 'text-[#13623a]' : 'text-[#8a5300]'} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
-      <LinkRow label="적립금 내역" value={won(points.balance)} valueClass="font-bold" onClick={() => setOverlay({ kind: 'points' })} />
-    </section>
-  );
-
   // 할 일: 수강생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
   const todoItems = (
     <>
@@ -643,6 +602,9 @@ export default function StudentHome(props: {
   const meetOf = (id: string) => { const x = s.lessons.find((l) => l.id === id); return x && !x.leaveOpen ? meetRoomUrl(x.meetUrl) : null; };
   // 강사마다 수업 링크가 다름 → 앞으로 수업하는 강사별로 (대체강사 포함)
   const meetLinks = [...new Map(upcoming.map((l) => [l.tutorName, meetOf(l.id)] as const).filter(([, u]) => u)).entries()];
+  // 내 정보 '담당 강사' = 정규 수업 강사 (없으면 다음 수업 강사)
+  const myTutors = [...new Set(slots.map((x) => x.tutor))].join(' · ') || upcoming[0]?.tutorName || '';
+  const enrollText = s.enrollmentStatus === 'active' || s.enrollmentStatus === 'confirmed' ? '수강 중' : s.enrollmentStatus === 'completed' ? '수강 종료' : s.enrollmentStatus === 'pending_payment' ? '결제 확인 중' : null;
 
   const logo = (
     <span className="inline-flex items-center gap-1.5">
@@ -703,6 +665,7 @@ export default function StudentHome(props: {
           {!(isAdminView && studentTz !== 'Asia/Seoul') && (
             <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
           )}
+          {tab === 'home' && info && info.learnedMin > 0 && <LearnedBand minutes={info.learnedMin} />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
               <span>{linkNote}</span>
@@ -710,8 +673,6 @@ export default function StudentHome(props: {
             </p>
           )}
         </div>
-        {/* 운영진 공지 (대시보드에서 게시, 게시 중일 때만) */}
-        {!preview && tab === 'home' && <HomeNotices who="student" title="공지" className="mx-4 mb-3 lg:mx-0 lg:mb-4" />}
 
         {preview && (
           <div className="mx-4 mb-3 grid gap-2 rounded-[12px] bg-[#fff8d6] px-3 py-2.5 text-[12.5px] text-[#5c4a00] lg:mx-0">
@@ -729,27 +690,21 @@ export default function StudentHome(props: {
           </div>
         )}
 
+        {/* 홈 (11/11 대표 시안): 할 일 → 다음 수업 → 수업 변경·취소/보강 신청 → 공지. 수강권·결제·적립금은 '내 정보'로 */}
         {tab === 'home' && (
-          <div className="grid gap-3.5 px-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5 lg:px-0">
-            <div className="grid min-w-0 gap-3.5">
-              {todoBars}
-              {nextCard}
-              {renewalCard}
-              <div className="lg:hidden">{statusTiles}</div>
-              {quick}
-              {leaveVisible && leaveAsk.length === 0 && (
-                <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
-                  <span className="font-semibold">담당 강사님 휴무 안내</span>
-                  <span className="text-[#8b88a0]">›</span>
-                </button>
-              )}
-              {requestList}
-              <div className="lg:hidden">{payBox}</div>
-            </div>
-            <aside className="hidden gap-4 lg:grid">
-              {statusTiles}
-              {payBox}
-            </aside>
+          <div className="grid gap-3.5 px-4 lg:max-w-[760px] lg:px-0">
+            {todoBars}
+            {nextCard}
+            {renewalCard}
+            {quick}
+            {leaveVisible && leaveAsk.length === 0 && (
+              <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
+                <span className="font-semibold">담당 강사님 휴무 안내</span>
+                <span className="text-[#8b88a0]">›</span>
+              </button>
+            )}
+            {/* 운영진 공지 (대시보드에서 게시, 게시 중일 때만) */}
+            {!preview && <HomeNotices who="student" title="공지" />}
           </div>
         )}
 
@@ -873,48 +828,107 @@ export default function StudentHome(props: {
           </TabPage>
         )}
 
+        {/* 내 정보 (11/11 대표 시안 + H26(95) 누락 금지: 알림 메일 켬/끔 · 담당 강사·수업 링크 · 적립금 내역) */}
         {tab === 'me' && (
-          <TabPage title="내 정보">
-            {tzState && (
-              <section className={`${card} grid gap-2 px-4 py-3`}>
-                <label htmlFor="my-timezone" className="text-[15px] font-bold">시간대</label>
-                <select id="my-timezone" value={studentTz} disabled={busy}
-                  onChange={(e) => e.target.value !== studentTz && saveTimezone({ set: e.target.value })}
-                  className="min-h-[48px] w-full rounded-[10px] border border-[#d9d5e8] bg-white px-3 text-[16px] text-[#1d1b2b] disabled:opacity-50">
-                  {tzOptions(studentTz, deviceTz).map((z) => <option key={z} value={z}>{tzLabel(z)}</option>)}
-                </select>
-              </section>
-            )}
-            {meetLinks.length > 0 && (
-              <section className={`${card} grid gap-1 px-4 py-3`}>
-                <h2 className="text-[15px] font-bold">수업 링크</h2>
-                {meetLinks.map(([name, url]) => (
-                  <a key={name} href={url!} target="_blank" rel="noreferrer" className="flex min-h-[48px] items-center justify-between border-t border-[#eeecf4] text-[14px] first-of-type:border-0">
-                    <span>{name} 강사님</span>
-                    <span className="font-semibold text-[#4b2fd6]">Google Meet ›</span>
-                  </a>
-                ))}
-              </section>
-            )}
-            {reminders && (
-              <section className={`${card} grid px-4 pb-1.5 pt-3`}>
-                <h2 className="text-[15px] font-bold">수업 알림 메일</h2>
-                <p className="text-[13px] text-[#55526a]">수업 24시간 전 · 2시간 전</p>
-                {!reminders.hasEmail && <p className="mt-1 text-[13px] font-semibold text-[#c0392b]">등록된 이메일이 없어 메일을 받을 수 없어요.</p>}
-                <Switch label="정규 수업" on={reminders.regular} disabled={busy} onChange={(v) => saveReminder({ regular: v })} />
-                <Switch label="보강 수업" on={reminders.makeup} disabled={busy} onChange={(v) => saveReminder({ makeup: v })} />
-              </section>
-            )}
-            <section className={`${card} px-4 pb-1.5 pt-2`}>
-              {extras && <LinkRow label="결제 내역" value="" onClick={() => setOverlay({ kind: 'payments' })} />}
-              <LinkRow label="적립금 내역" value={won(points.balance)} onClick={() => setOverlay({ kind: 'points' })} />
-            </section>
+          <div className="grid gap-3 px-4 lg:px-0">
+            <div>
+              <h1 className="text-[22px] font-bold">내 정보</h1>
+              <p className="mt-0.5 text-[13px] text-[#6b6880]">수강 정보와 강사님이 작성한 학습 정보</p>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+              <div className="grid content-start gap-3">
+                <section className={`${card} px-4 pb-1.5 pt-4`}>
+                  <div className="flex items-center gap-2.5 pb-2">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#efecfd] text-[16px] font-extrabold text-[#5034b8]">{s.name.slice(0, 1)}</span>
+                    <span className="min-w-0">
+                      <span className="block text-[17px] font-extrabold">{s.name}님</span>
+                      {myTutors && <span className="block text-[13px] text-[#69667c]">담당 강사 · {myTutors}</span>}
+                    </span>
+                    {enrollText && <span className="ml-auto shrink-0 rounded-full bg-[#e5f5ed] px-2.5 py-1 text-[12px] font-bold text-[#176c45]">{enrollText}</span>}
+                  </div>
+                  {tzState && (
+                    <div className="flex min-h-[52px] items-center justify-between gap-3 border-t border-[#eeecf4] text-[14px]">
+                      <span className="text-[#55526a]">시간대</span>
+                      <label className="relative inline-flex items-center gap-2 font-semibold">
+                        {tzLabel(studentTz)}
+                        <span className="rounded-[8px] border border-[#d7d1ef] bg-white px-2 py-1 text-[12px] font-extrabold text-[#4b30b5]">변경 ›</span>
+                        <select aria-label="시간대 변경" value={studentTz} disabled={busy}
+                          onChange={(e) => e.target.value !== studentTz && saveTimezone({ set: e.target.value })}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
+                          {tzOptions(studentTz, deviceTz).map((z) => <option key={z} value={z}>{tzLabel(z)}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                  {meetLinks.map(([name, url]) => (
+                    <a key={name} href={url!} target="_blank" rel="noreferrer" className="flex min-h-[52px] items-center justify-between gap-3 border-t border-[#eeecf4] text-[14px]">
+                      <span className="text-[#55526a]">수업 링크{meetLinks.length > 1 ? ` · ${name} 강사님` : ''}</span>
+                      <span className="font-semibold text-[#4b2fd6]">Google Meet ›</span>
+                    </a>
+                  ))}
+                </section>
+                {info && (info.level || info.goal || info.style || info.noteUrl) && (
+                  <section className={`${card} grid p-4`}>
+                    <h2 className="mb-1 text-[15px] font-bold">나의 학습 정보 <span className="text-[12px] font-normal text-[#69667c]">· 강사님 작성</span></h2>
+                    {info.level && <InfoBlock label="영어 레벨"><span className="text-[17px] font-extrabold">{info.level}</span></InfoBlock>}
+                    {info.goal && <InfoBlock label="학습 목표">{info.goal}</InfoBlock>}
+                    {info.style && <InfoBlock label="수업 방식 · 교재">{info.style}</InfoBlock>}
+                    {info.noteUrl && (
+                      <InfoBlock label="수업 노트">
+                        매 수업 내용이 이 노트에 계속 쌓여요.
+                        <a href={info.noteUrl} target="_blank" rel="noreferrer" className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                          수업 노트 열기 ↗
+                        </a>
+                      </InfoBlock>
+                    )}
+                  </section>
+                )}
+              </div>
+              <div className="grid content-start gap-3">
+                {reminders && (
+                  <section className={`${card} grid px-4 pb-3 pt-4`}>
+                    <h2 className="mb-1 text-[15px] font-bold">이메일 알림 설정</h2>
+                    {!reminders.hasEmail && <p className="text-[13px] font-semibold text-[#c0392b]">등록된 이메일이 없어 메일을 받을 수 없어요.</p>}
+                    <Switch label="정규 수업" sub="일반 수업 리마인더" on={reminders.regular} disabled={busy} onChange={(v) => saveReminder({ regular: v })} />
+                    <Switch label="보강 수업" sub="보강 수업 리마인더" on={reminders.makeup} disabled={busy} onChange={(v) => saveReminder({ makeup: v })} />
+                    <p className="mt-1.5 rounded-[9px] bg-[#f7f6fa] px-3 py-2.5 text-[12.5px] text-[#69667c]">수업 취소·확정·시간 변경 등 필수 일정 안내는 알림 설정과 관계없이 발송됩니다.</p>
+                  </section>
+                )}
+                <section className={`${card} px-4 pb-1.5 pt-4`}>
+                  <h2 className="mb-1 text-[15px] font-bold">내 수강권</h2>
+                  <LinkRow label="현재 코스" value={s.product} />
+                  {slotText && (
+                    <div className="flex min-h-[52px] w-full items-center justify-between gap-3 border-t border-[#eeecf4] py-2 text-[14px]">
+                      <span className="shrink-0 text-[#55526a]">수업 시간</span>
+                      <span className="grid min-w-0 gap-0.5 text-right">
+                        {slotText.map((g) => (
+                          <span key={g.when + g.tutor} className="grid">
+                            <span className="font-semibold">{g.when}</span>
+                            <span className="text-[13px] text-[#55526a]">{g.tutor}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                  )}
+                  <LinkRow label="남은 정규 수업" value={notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : `${left.regular}회`} />
+                  {!notStarted && left.other > 0 && <LinkRow label="남은 보강 수업" value={`${left.other}회`} />}
+                  <LinkRow label="변경권" value={`${s.creditsLeft}개`} onClick={() => setOverlay({ kind: 'credits' })} />
+                  {endDate && <LinkRow label="종료일" value={endDay(endDate)} />}
+                  <LinkRow label="결제" value={s.paid ? `결제 완료${s.confirmedOn ? ` (${fmtDate(s.confirmedOn)})` : ''}` : '결제 확인 중'} valueClass={s.paid ? 'font-semibold text-[#13623a]' : 'font-semibold text-[#8a5300]'} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
+                </section>
+                <section className={`${card} px-4 pb-1.5 pt-4`}>
+                  <h2 className="mb-1 text-[15px] font-bold">적립금 · 보강권</h2>
+                  <LinkRow label="적립금 내역" value={won(points.balance)} valueClass="font-bold" onClick={() => setOverlay({ kind: 'points' })} />
+                  <LinkRow label="보강권 확인" value={`${openRights.length}개`} onClick={() => setTab('requests')} />
+                </section>
+              </div>
+            </div>
             {props.onLogout && (
               <button type="button" onClick={props.onLogout} className="min-h-[44px] text-left text-[14px] text-[#55526a] underline">
                 로그아웃
               </button>
             )}
-          </TabPage>
+          </div>
         )}
       </div>
 
@@ -1426,10 +1440,12 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson; now: Date; textbook: { title: string; lastUnit?: number | null } | null; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
+function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
   const k = kst(lesson.startsAt);
   const started = now.getTime() >= lesson.startsAt.getTime();
   const badge = started ? '진행 중' : untilText(now, lesson.startsAt);
+  // 11/11 대표 시안: 교재 링크 없음 · '40분 · Maria 강사님 · 정규 수업' 같은 글씨 크기·두께 · '수업 입장' 버튼만
+  const kindText = lesson.kind === 'regular' ? '정규 수업' : lesson.kind === 'makeup' ? '보강 수업' : '보상수업';
   return (
     <section aria-label="다음 수업" className="grid gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
       <div className="flex items-center justify-between">
@@ -1450,51 +1466,17 @@ function NextLesson({ lesson, now, textbook, meetUrl, substitute, leaveOpen }: {
         <p className="text-[26px] font-bold tracking-tight text-white lg:text-[30px]">
           {Number(k.md.split('/')[0])}월 {Number(k.md.split('/')[1])}일({k.wd}) {k.time}
         </p>
-        <p className="mt-1 text-[14px] text-[#d8d3f5]">
-          {lesson.minutes}분{leaveOpen ? '' : ` · ${lesson.tutorName}`}{lesson.kind === 'makeup' ? ' · 보강' : ''}
+        <p className="mt-1 text-[14px] font-normal text-[#d8d3f5]">
+          {lesson.minutes}분{leaveOpen ? '' : ` · ${lesson.tutorName} 강사님`} · {kindText}
         </p>
       </div>
-      <div className="grid gap-2.5 lg:grid-cols-2">
-        {textbook && (
-        <a href="/books" className="flex min-h-[44px] items-center justify-between gap-2.5 rounded-[12px] bg-[#2c2263] px-3.5 py-3 text-[14px] lg:order-2">
-          <span className="flex items-center gap-2.5">
-            <Icon d={TABS[3].icon} className="h-[18px] w-[18px] text-[#c9c0ff]" />
-            <span className="text-white">
-              교재 <b className="text-white">{textbook.title}</b>{textbook.lastUnit ? ` · Unit ${textbook.lastUnit}` : ''}
-            </span>
-          </span>
-          <span className="whitespace-nowrap text-[13px] text-[#c9c0ff]">보기 ›</span>
+      {meetUrl && (
+        <a href={meetUrl} target="_blank" rel="noreferrer" className="flex min-h-[50px] items-center justify-center gap-2 rounded-[14px] bg-white text-[16px] font-bold text-[#1b1442]">
+          <Icon d="M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM16 10l6-3v10l-6-3z" />
+          수업 입장
         </a>
-        )}
-        {meetUrl ? (
-          <a href={meetUrl} target="_blank" rel="noreferrer" className="flex min-h-[50px] items-center justify-center gap-2 rounded-[14px] bg-white text-[16px] font-bold text-[#1b1442] lg:order-1">
-            <Icon d="M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM16 10l6-3v10l-6-3z" />
-            수업 입장 (Google Meet)
-          </a>
-        ) : null}
-      </div>
-
+      )}
     </section>
-  );
-}
-
-function Tile({ label, value, unit, sub, onClick }: { label: string; value: string; unit?: string; sub: string; onClick?: () => void }) {
-  const body = (
-    <>
-      <p className="text-[12px] text-[#55526a]">{label}</p>
-      <p className="mt-1 text-[22px] font-bold">
-        {value}
-        {unit && <span className="text-[13px] font-medium">{unit}</span>}
-      </p>
-      <p className="text-[11px] text-[#6b6880]">{sub}</p>
-    </>
-  );
-  return onClick ? (
-    <button type="button" onClick={onClick} className={`${card} p-3 text-left lg:p-4`}>
-      {body}
-    </button>
-  ) : (
-    <div className={`${card} p-3 lg:p-4`}>{body}</div>
   );
 }
 
@@ -1606,6 +1588,30 @@ const tzLabel = (tz: string) => {
   return n === tz ? `${koZoneCity(tz)} (${tz})` : n;
 };
 
+/** 홈 '나의 누적 학습 시간' (11/11 대표: 시간대 띠처럼 가볍게, 숫자는 작게) */
+function LearnedBand({ minutes }: { minutes: number }) {
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  const text = h && m ? `${h}시간 ${m}분` : h ? `${h}시간` : `${m}분`;
+  return (
+    <section aria-label="나의 누적 학습 시간" className="flex w-full items-center justify-between gap-3 rounded-[14px] bg-[#f4f1ff] px-3.5 py-2 lg:max-w-[760px]">
+      <span className="grid min-w-0 gap-0.5">
+        <span className="text-[13px] font-bold text-[#1d1b2b]">나의 누적 학습 시간 <span className="text-[11.5px] font-normal text-[#77728c]">· 진행 완료된 수업 기준</span></span>
+        <span className="text-[12px] leading-[1.45] text-[#5c4b95]">영어, 결국 오래 하는 사람이 이겨요<br />벌써 이만큼이나 꾸준히 쌓았어요😊</span>
+      </span>
+      <span className="shrink-0 whitespace-nowrap text-[14px] font-extrabold text-[#4d34bc]">{text}</span>
+    </section>
+  );
+}
+
+function InfoBlock({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid border-t border-[#eeecf4] py-2.5 first-of-type:border-0">
+      <span className="mb-0.5 text-[12px] font-bold text-[#69667c]">{label}</span>
+      <span className="text-[14px]">{children}</span>
+    </div>
+  );
+}
+
 function LinkRow({ label, value, valueClass = 'font-semibold', onClick }: { label: string; value: string; valueClass?: string; onClick?: () => void }) {
   if (!onClick) return (
     <div className="flex min-h-[52px] w-full items-center justify-between border-t border-[#eeecf4] text-[14px] first:border-0">
@@ -1623,7 +1629,7 @@ function LinkRow({ label, value, valueClass = 'font-semibold', onClick }: { labe
   );
 }
 
-function Switch({ label, on, disabled, onChange }: { label: string; on: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
+function Switch({ label, sub, on, disabled, onChange }: { label: string; sub?: string; on: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
       type="button"
@@ -1631,9 +1637,12 @@ function Switch({ label, on, disabled, onChange }: { label: string; on: boolean;
       aria-checked={on}
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className="flex min-h-[48px] items-center justify-between border-t border-[#eeecf4] text-left text-[15px] first-of-type:border-0"
+      className="flex min-h-[56px] items-center justify-between border-t border-[#eeecf4] py-2 text-left text-[15px] first-of-type:border-0"
     >
-      <span>{label}</span>
+      <span className="grid">
+        <span className="text-[14px] font-bold">{label}</span>
+        {sub && <span className="text-[12.5px] text-[#69667c]">{sub}</span>}
+      </span>
       <span className={`relative h-7 w-[46px] flex-none rounded-full transition-colors ${on ? 'bg-[#5b3df0]' : 'bg-[#dcd8e8]'}`}>
         <span className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white transition-all ${on ? 'right-[3px]' : 'left-[3px]'}`} />
       </span>

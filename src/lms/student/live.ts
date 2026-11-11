@@ -243,6 +243,8 @@ async function loadTextbook(sb: SupabaseClient, studentId: string | null): Promi
 }
 
 export type MakeupOption = { startsAt: Date; afterEnd: boolean };
+/** '내 정보' 학습 정보(강사 작성)·홈 누적 학습 시간 (migration 20261111010000). 값이 없으면 null */
+export type MyInfo = { level: string | null; goal: string | null; style: string | null; noteUrl: string | null; learnedMin: number };
 export type RegularSlot = { weekday: number; timeKst: string; minutes: number; tutor: string };
 /** 보상수업이면 p_comp 를 붙임 (4100). 원래 수업 보강은 예전과 같은 인자 → 4100 전 DB에서도 그대로 */
 const compArg = (right: RightRef) => (right.compId ? { p_comp: right.compId } : {});
@@ -287,6 +289,13 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
      * 값 = 수업 번호 → 이미 누른 시각(null = 아직 안 누름). 함수가 없는 옛 DB 면 빈 목록 (링크 안 보임)
      */
     /** 정규 수업 시간 (H26(95) ②, migration 20261108040000): 요일(KST 0=일)·시각(KST)·길이·강사. 함수 없는 옛 DB 면 빈 목록 */
+    /** 함수 없는 옛 DB 면 null (화면에서 해당 칸 숨김) */
+    myInfo: async (): Promise<MyInfo | null> => {
+      const r = await sb.rpc('student_my_info', { p_student: adminStudentId });
+      if (r.error || !r.data) return null;
+      const d = r.data as { level: string | null; goal: string | null; style: string | null; note_url: string | null; learned_min: number };
+      return { level: d.level, goal: d.goal, style: d.style, noteUrl: d.note_url, learnedMin: d.learned_min ?? 0 };
+    },
     regularSlots: async (): Promise<RegularSlot[]> => {
       const r = await sb.rpc('student_regular_slots', { p_student: adminStudentId });
       if (r.error) return [];
