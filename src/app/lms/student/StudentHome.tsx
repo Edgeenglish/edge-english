@@ -16,8 +16,7 @@ import { CONFIRMED } from '@/lms/rules/policy';
 import { diffDays, formatInZone, hoursBetween, instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { MEET_MISSING_KO, meetRoomUrl } from '@/lms/rules/meet';
 import type { PreviewExtras } from '@/lms/student/fake-data';
-import HomeNotices from '@/app/lms/HomeNotices';
-import type { LeaveRow, MakeupOption, MakeupRight, MyInfo, RegularSlot, Reminders, StudentActions, StudentView, TimezoneState } from '@/lms/student/live';
+import type { LeaveRow, MakeupOption, MakeupRight, MyInfo, RegularSlot, StudentNotice, Reminders, StudentActions, StudentView, TimezoneState } from '@/lms/student/live';
 import {
   cancelManySummary,
   cancelPreview,
@@ -47,6 +46,8 @@ type Overlay =
   | null
   | { kind: 'request'; id: string }
   | { kind: 'payments' }
+  | { kind: 'notices' }
+  | { kind: 'notice'; id: string }
   | { kind: 'points' }
   | { kind: 'consent' }
   | { kind: 'cancel'; lessonId: string | null }
@@ -127,7 +128,7 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
     return (
       <label className={`relative inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
         <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
-        <span className="text-[#3a22b0]">{text} · <span className="text-[#3a22b0] underline">변경</span></span>
+        <span className="text-[#3a22b0]">{text} · <span className="text-[#3a22b0]"><span className="underline">변경</span> ›</span></span>
         <select aria-label="시간대 변경" value={change.value} disabled={change.disabled}
           onChange={(e) => e.target.value !== change.value && change.onChange(e.target.value)}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
@@ -338,7 +339,6 @@ export default function StudentHome(props: {
         : '이 수업은 지금 보강을 신청할 수 없어요. 카카오톡으로 문의해 주세요.');
     else setLinkNote('열 수 없는 링크예요. 카카오톡으로 문의해 주세요.');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const dLeft = endDate ? diffDays(formatInZone(now, 'Asia/Seoul').date, endDate) : 0;
   const points = pointsHistory(s.points);
   // 가상 화면은 extras(지난 Unit 포함), 실제 화면은 강사가 정한 교재 이름만 (QA C-04)
   const textbook: { title: string; lastUnit?: number | null } | null = extras?.textbook ?? (s.textbook ? { title: s.textbook, lastUnit: null } : null);
@@ -432,6 +432,22 @@ export default function StudentHome(props: {
     actions.myInfo().then((x) => { if (alive) setInfo(x); }, () => {});
     return () => { alive = false; };
   }, [actions, s]);
+
+  // 공지 (최신 2건 + 전체보기, 학생이 열면 확인함 — 11/11 대표) · 현재·지난 수강권 / 결제 내역
+  const [notices, setNotices] = useState<StudentNotice[]>([]);
+  const [history, setHistory] = useState<PaymentSummary[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    actions.notices().then((x) => { if (alive) setNotices(x); }, () => {});
+    actions.history().then((x) => { if (alive) setHistory(x); }, () => {});
+    return () => { alive = false; };
+  }, [actions]);
+  function openNotice(id: string) {
+    setOverlay({ kind: 'notice', id });
+    if (isAdminView) return; // 운영자 보기로 연 것은 학생 확인이 아님
+    setNotices((l) => l.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    void actions.noticeRead(id).catch(() => {});
+  }
 
   // [맞는 시간이 없어요] 보일 보강권 (H26(92) ⑤): 수업 번호 → 누른 시각. 화면을 다시 읽을 때마다 같이
   const [noTime, setNoTime] = useState<Map<string, string | null>>(new Map());
@@ -552,18 +568,6 @@ export default function StudentHome(props: {
     </section>
   );
 
-  const statusTiles = (
-    <section aria-label="수강 현황" className="grid grid-cols-3 gap-2">
-      <Tile label="남은 수업" value={notStarted ? '—' : `${left.total}`} unit={notStarted ? '' : '회'} sub={notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : left.other ? `정규 ${left.regular} · 보강 ${left.other}` : `${s.totalLessons}회 중`} />
-      <Tile label="변경권" value={`${s.creditsLeft}`} unit="개" sub={`이번 기간 ${s.creditsPerPeriod}개 중 ›`} onClick={() => setOverlay({ kind: 'credits' })} />
-      <Tile
-        label="수강 종료"
-        value={!endDate ? '-' : dLeft > 0 ? `D-${dLeft}` : dLeft === 0 ? 'D-day' : '종료'}
-        sub={endDate ? `${endText(endDate)}까지` : ''}
-      />
-    </section>
-  );
-
   const quick = (
     <section aria-label="빠른 신청" className="grid grid-cols-2 gap-2">
       <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: null })} className={`${card} grid content-start gap-1.5 p-4 text-left`}>
@@ -577,9 +581,8 @@ export default function StudentHome(props: {
       </button>
       <button
         type="button"
-        disabled={openRights.length === 0}
-        onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })}
-        className={`${card} grid content-start gap-1.5 p-4 text-left disabled:opacity-50`}
+        onClick={() => (openRights.length === 0 ? setTab('requests') : setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null }))}
+        className={`${card} grid content-start gap-1.5 p-4 text-left`}
       >
         <Icon d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" className="h-[22px] w-[22px] text-[#5b3df0]" />
         <span className="text-[15px] font-bold">보강 신청</span>
@@ -596,44 +599,6 @@ export default function StudentHome(props: {
     </section>
   );
 
-  // 신청 진행 상태도 신청이 없어도 늘 보임 (11/11 대표: 학생마다 같은 화면)
-  const requestList = (
-    <section aria-label="신청 진행 상태" className={`${card} grid gap-1 p-4`}>
-      <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-bold">신청 진행 상태</h2>
-        <button type="button" onClick={() => setTab('requests')} className="min-h-[36px] text-[13px] text-[#4b2fd6] underline">
-          전체 ›
-        </button>
-      </div>
-      {s.requests.length === 0 && <p className="py-2 text-[14px] text-[#6b6880]">아직 신청한 내용이 없어요.</p>}
-      {s.requests.slice(0, 3).map((r) => (
-        <RequestRow key={r.id} r={r} onOpen={() => setOverlay({ kind: 'request', id: r.id })} />
-      ))}
-    </section>
-  );
-
-  const payBox = (
-    <section aria-label="수강과 결제" className={`${card} px-4 pb-1.5 pt-4`}>
-      <h2 className="mb-2 text-[15px] font-bold">수강·결제·적립금</h2>
-      <LinkRow label="수강권" value={s.product} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
-      {slotText && (
-        <div className="flex min-h-[52px] w-full items-center justify-between gap-3 border-t border-[#eeecf4] py-2 text-[14px]">
-          <span className="shrink-0 text-[#55526a]">수업 시간</span>
-          <span className="grid min-w-0 gap-0.5 text-right">
-            {slotText.map((g) => (
-              <span key={g.when + g.tutor} className="grid">
-                <span className="font-semibold">{g.when}</span>
-                <span className="text-[13px] text-[#55526a]">{g.tutor}</span>
-              </span>
-            ))}
-          </span>
-        </div>
-      )}
-      <LinkRow label="결제" value={s.paid ? `결제 완료${s.confirmedOn ? ` (${fmtDate(s.confirmedOn)})` : ''}` : '결제 확인 중'} valueClass={s.paid ? 'text-[#13623a]' : 'text-[#8a5300]'} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
-      <LinkRow label="적립금 내역" value={won(points.balance)} valueClass="font-bold" onClick={() => setOverlay({ kind: 'points' })} />
-    </section>
-  );
-
   // 할 일: 수강생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
   const todoItems = (
     <>
@@ -643,13 +608,13 @@ export default function StudentHome(props: {
     </>
   );
   const todoCount = (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
-  // 할 일 칸은 0개여도 늘 보임 (11/11 대표)
-  const todoBars = (
+  // 할 일: 처리할 일이 있을 때만 (11/11 대표 최신 지시), 제목 옆 전체 숫자 없음
+  const todoBars = todoCount > 0 && (
     <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
       <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
         할 일
       </h2>
-      {todoCount > 0 ? <div className="divide-y divide-[#f3e6c4]">{todoItems}</div> : <p className="px-4 py-3.5 text-[14px] text-[#6b6880]">할 일이 없어요</p>}
+      <div className="divide-y divide-[#f3e6c4]">{todoItems}</div>
     </section>
   );
 
@@ -723,7 +688,7 @@ export default function StudentHome(props: {
           )}
           {/* 시간대 띠는 모든 학생·운영자 보기에서 같은 자리·같은 모양 (11/11 대표: 학생마다 화면이 달라 보이지 않게) */}
           <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
-          {tab === 'home' && <LearnedBand minutes={info?.learnedMin ?? 0} />}
+          {tab === 'home' && info && <LearnedBand minutes={info.learnedMin} />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
               <span>{linkNote}</span>
@@ -748,31 +713,22 @@ export default function StudentHome(props: {
           </div>
         )}
 
-        {/* 운영진 공지 (대시보드에서 게시, 게시 중일 때만) — 운영 화면과 같은 자리 */}
-        {!preview && tab === 'home' && <HomeNotices who="student" title="공지" className="mx-4 mb-3 lg:mx-0 lg:mb-4" />}
 
-        {/* 홈: 운영 화면 배치 유지 (11/11 대표) + 시안 변경점(누적 학습 시간 띠·할 일/다음 수업 칸 항상·다음 수업 교재 링크 없음) */}
+        {/* 홈 (11/11 대표 최신 시안, 모든 학생 같은 순서): (시간대·누적 학습 시간은 위) → 재등록 안내 → 할 일 → 다음 수업 → 수업 변경·취소/보강 신청 → 공지.
+            수강·결제·적립금은 '내 정보'에만 */}
         {tab === 'home' && (
-          <div className="grid gap-3.5 px-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5 lg:px-0">
-            <div className="grid min-w-0 gap-3.5">
-              {todoBars}
-              {nextCard}
-              {renewalCard}
-              <div className="lg:hidden">{statusTiles}</div>
-              {quick}
-              {leaveVisible && leaveAsk.length === 0 && (
-                <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
-                  <span className="font-semibold">담당 강사님 휴무 안내</span>
-                  <span className="text-[#8b88a0]">›</span>
-                </button>
-              )}
-              {requestList}
-              <div className="lg:hidden">{payBox}</div>
-            </div>
-            <aside className="hidden gap-4 lg:grid">
-              {statusTiles}
-              {payBox}
-            </aside>
+          <div className="grid gap-3.5 px-4 lg:max-w-[760px] lg:px-0">
+            {renewalCard}
+            {todoBars}
+            {nextCard}
+            {quick}
+            {leaveVisible && leaveAsk.length === 0 && (
+              <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
+                <span className="font-semibold">담당 강사님 휴무 안내</span>
+                <span className="text-[#8b88a0]">›</span>
+              </button>
+            )}
+            <NoticeBox notices={notices} onOpen={openNotice} onAll={() => setOverlay({ kind: 'notices' })} />
           </div>
         )}
 
@@ -935,12 +891,13 @@ export default function StudentHome(props: {
                     </a>
                   ))}
                 </section>
-                {info && (info.level || info.goal || info.style || info.noteUrl) && (
+                {info && (
                   <section className={`${card} grid p-4`}>
                     <h2 className="mb-1 text-[15px] font-bold">나의 학습 정보 <span className="text-[12px] font-normal text-[#69667c]">· 강사님 작성</span></h2>
-                    {info.level && <InfoBlock label="영어 레벨"><span className="text-[17px] font-extrabold">{info.level}</span></InfoBlock>}
-                    {info.goal && <InfoBlock label="학습 목표">{info.goal}</InfoBlock>}
-                    {info.style && <InfoBlock label="수업 방식 · 교재">{info.style}</InfoBlock>}
+                    <InfoBlock label="영어 레벨">{info.level ? <span className="text-[17px] font-extrabold">{info.level}</span> : <NotYet />}</InfoBlock>
+                    <InfoBlock label="학습 목표">{info.goal ?? <NotYet />}</InfoBlock>
+                    <InfoBlock label="수업 방식 · 교재">{info.style ?? <NotYet />}</InfoBlock>
+                    {!info.noteUrl && <InfoBlock label="수업 노트"><NotYet /></InfoBlock>}
                     {info.noteUrl && (
                       <InfoBlock label="수업 노트">
                         매 수업 내용이 이 노트에 계속 쌓여요.
@@ -979,10 +936,9 @@ export default function StudentHome(props: {
                     </div>
                   )}
                   <LinkRow label="남은 정규 수업" value={notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : `${left.regular}회`} />
-                  {!notStarted && left.other > 0 && <LinkRow label="남은 보강 수업" value={`${left.other}회`} />}
                   <LinkRow label="변경권" value={`${s.creditsLeft}개`} onClick={() => setOverlay({ kind: 'credits' })} />
                   {endDate && <LinkRow label="종료일" value={endDay(endDate)} />}
-                  <LinkRow label="결제" value={s.paid ? `결제 완료${s.confirmedOn ? ` (${fmtDate(s.confirmedOn)})` : ''}` : '결제 확인 중'} valueClass={s.paid ? 'font-semibold text-[#13623a]' : 'font-semibold text-[#8a5300]'} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
+                  <LinkRow label="현재·지난 수강권 / 결제 내역" value="" onClick={() => setOverlay({ kind: 'payments' })} />
                 </section>
                 <section className={`${card} px-4 pb-1.5 pt-4`}>
                   <h2 className="mb-1 text-[15px] font-bold">적립금 · 보강권</h2>
@@ -1018,7 +974,9 @@ export default function StudentHome(props: {
       {overlay && (
         <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
           {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} busy={busy} onWithdraw={async (id) => { await run(() => actions.withdrawMakeup(id), '신청을 취소했어요.'); }} />}
-          {overlay.kind === 'payments' && extras && <Payments payments={extras.payments} />}
+          {overlay.kind === 'payments' && <Payments payments={history ?? []} />}
+          {overlay.kind === 'notices' && <NoticeList notices={notices} onOpen={openNotice} />}
+          {overlay.kind === 'notice' && notices.find((n) => n.id === overlay.id) && <NoticeDetail n={notices.find((n) => n.id === overlay.id)!} />}
           {overlay.kind === 'points' && <Points history={points} />}
           {overlay.kind === 'credits' && <Credits s={s} />}
           {overlay.kind === 'consent' && (
@@ -1147,7 +1105,7 @@ function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () =>
   return (
     <button type="button" onClick={onClick} className="flex min-h-[54px] w-full items-center gap-3 px-4 py-3 text-left">
       <span className="flex-1 text-[15px] font-semibold leading-snug">{text}</span>
-      {n > 1 && <span className="text-[13px] text-[#8a5300]">{n}건</span>}
+      {n > 0 && <span className="whitespace-nowrap text-[13px] text-[#8a5300]">수업 {n}건</span>}
       <span className="whitespace-nowrap rounded-[10px] bg-[#5b3df0] px-3 py-1.5 text-[13px] font-bold text-white">확인 ›</span>
     </button>
   );
@@ -1552,26 +1510,6 @@ function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen }: { lesson: S
 }
 
 // 변경권: 지금 기간과 언제 썼는지 (대표 10/29)
-function Tile({ label, value, unit, sub, onClick }: { label: string; value: string; unit?: string; sub: string; onClick?: () => void }) {
-  const body = (
-    <>
-      <p className="text-[12px] text-[#55526a]">{label}</p>
-      <p className="mt-1 text-[22px] font-bold">
-        {value}
-        {unit && <span className="text-[13px] font-medium">{unit}</span>}
-      </p>
-      <p className="text-[11px] text-[#6b6880]">{sub}</p>
-    </>
-  );
-  return onClick ? (
-    <button type="button" onClick={onClick} className={`${card} p-3 text-left lg:p-4`}>
-      {body}
-    </button>
-  ) : (
-    <div className={`${card} p-3 lg:p-4`}>{body}</div>
-  );
-}
-
 // 변경권: 지금 기간과 언제 썼는지 (대표 10/29)
 function Credits({ s }: { s: StudentView }) {
   const text = (c: StudentView['creditUses'][number]) =>
@@ -1686,11 +1624,13 @@ function LearnedBand({ minutes }: { minutes: number }) {
   const text = h && m ? `${h}시간 ${m}분` : h ? `${h}시간` : `${m}분`;
   // 11/11 대표: 한 줄로, 시간은 문장 바로 뒤에 (오른쪽 끝으로 떨어뜨리지 않음)
   return (
-    <p aria-label="나의 학습 누적 시간" className="w-fit rounded-[14px] bg-[#f4f1ff] px-3.5 py-2 text-[13px] leading-snug text-[#5c4b95]">
-      <b className="font-extrabold text-[#1d1b2b]">나의 학습 누적 시간</b> <b className="whitespace-nowrap text-[14px] font-extrabold text-[#4d34bc]">{text}</b> 영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 쌓였어요🔥
+    <p aria-label="나의 누적 학습 시간" className="w-fit rounded-[14px] bg-[#f4f1ff] px-3.5 py-2 text-[13px] leading-snug text-[#5c4b95]">
+      <b className="font-extrabold text-[#1d1b2b]">나의 누적 학습 시간</b> <b className="whitespace-nowrap text-[14px] font-extrabold text-[#4d34bc]">{text}</b> 영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 쌓였어요🔥
     </p>
   );
 }
+
+const NotYet = () => <span className="text-[#8b88a0]">아직 작성 전이에요</span>;
 
 function InfoBlock({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -1864,31 +1804,69 @@ function RequestDetail({ r, busy, onWithdraw }: { r: StudentRequest; busy?: bool
   );
 }
 
+/** 공지 한 줄: 제목 · 날짜 · 미확인/확인함 (새 공지 = 작은 빨간 N) */
+function NoticeRow({ n, onOpen }: { n: StudentNotice; onOpen: (id: string) => void }) {
+  return (
+    <button type="button" onClick={() => onOpen(n.id)} className="flex min-h-[52px] w-full items-center gap-2 border-t border-[#eeecf4] py-2.5 text-left first:border-0">
+      {!n.read && <span aria-label="새 공지" className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full bg-[#d93025] text-[11px] font-extrabold text-white">N</span>}
+      <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{n.title}</span>
+      <span className="shrink-0 text-[12px] text-[#6b6880]">{fmtDate(n.startsOn)}</span>
+      <span className={`shrink-0 text-[12px] font-semibold ${n.read ? 'text-[#6b6880]' : 'text-[#d93025]'}`}>{n.read ? '확인함' : '미확인'}</span>
+    </button>
+  );
+}
+function NoticeBox({ notices, onOpen, onAll }: { notices: StudentNotice[]; onOpen: (id: string) => void; onAll: () => void }) {
+  return (
+    <section aria-label="공지사항" className={`${card} px-4 pb-1.5 pt-3.5`}>
+      <div className="flex items-center justify-between">
+        <h2 className="text-[15px] font-bold">공지사항</h2>
+        {notices.length > 2 && (
+          <button type="button" onClick={onAll} className="min-h-[36px] text-[13px] font-semibold text-[#4b2fd6]">전체보기 ›</button>
+        )}
+      </div>
+      {notices.length === 0 && <p className="py-3 text-[14px] text-[#6b6880]">게시된 공지가 없어요.</p>}
+      {notices.slice(0, 2).map((n) => <NoticeRow key={n.id} n={n} onOpen={onOpen} />)}
+    </section>
+  );
+}
+function NoticeList({ notices, onOpen }: { notices: StudentNotice[]; onOpen: (id: string) => void }) {
+  return (
+    <div className="grid gap-2">
+      <h2 className="text-[18px] font-bold">공지사항</h2>
+      <div>{notices.map((n) => <NoticeRow key={n.id} n={n} onOpen={onOpen} />)}</div>
+    </div>
+  );
+}
+function NoticeDetail({ n }: { n: StudentNotice }) {
+  return (
+    <div className="grid gap-2">
+      <p className="text-[12px] text-[#6b6880]">{fmtDate(n.startsOn)}</p>
+      <h2 className="text-[18px] font-bold">{n.title}</h2>
+      <p className="whitespace-pre-line text-[14px] leading-relaxed text-[#3d3a52]">{n.body}</p>
+    </div>
+  );
+}
+
 function Payments({ payments }: { payments: PaymentSummary[] }) {
   // 금액·카드 정보는 보여 주지 않음 (POL-PAY-11). 카드 영수증은 아임웹 주문조회로
   return (
     <div className="grid gap-3.5">
-      <h2 className="text-[18px] font-bold">결제 내역</h2>
+      <h2 className="text-[18px] font-bold">현재·지난 수강권 / 결제 내역</h2>
+      {payments.length === 0 && <p className={`${card} px-4 py-5 text-center text-[14px] text-[#6b6880]`}>수강권 기록이 없어요.</p>}
       {payments.map((p) => (
         <section key={p.id} className={`${card} grid gap-2.5 p-4 text-[14px]`}>
           <div className="flex items-center justify-between">
-            <h3 className="text-[15px] font-bold">{p.current ? '지금 수강권' : '지난 수강권'}</h3>
-            <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${p.confirmedOn ? 'bg-[#e3f5ea] text-[#13623a]' : 'bg-[#fff1d6] text-[#8a5300]'}`}>
-              {p.confirmedOn ? '결제 확인 완료' : '결제 확인 중'}
+            <h3 className="text-[15px] font-bold">{p.current ? '현재 수강권' : '지난 수강권'}</h3>
+            <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${p.paid ?? p.confirmedOn ? 'bg-[#e3f5ea] text-[#13623a]' : 'bg-[#fff1d6] text-[#8a5300]'}`}>
+              {p.paid ?? p.confirmedOn ? '결제 완료' : '결제 확인 중'}
             </span>
           </div>
           <Row k="수강권" v={p.product} />
           <Row k="수강 기간" v={`${fmtDate(p.periodStart)} ~ ${fmtDate(p.periodEnd)}`} />
-          <Row k="결제 방법" v={PAYMENT_METHOD_LABEL[p.method]} />
-          <Row k="확인한 날" v={p.confirmedOn ? `${fmtDate(p.confirmedOn)} · 운영자 확인` : '-'} />
-          {p.method === 'card_imweb' && (
-            <span aria-disabled title="아임웹 주문조회 주소 확인 후 연결" className="mt-1 flex min-h-[46px] items-center justify-center rounded-[12px] border border-[#d9d5e8] text-[14px] font-semibold text-[#55526a]">
-              카드 영수증 · 주문 보기 (아임웹) ↗
-            </span>
-          )}
+          {p.method && <Row k="결제 방법" v={PAYMENT_METHOD_LABEL[p.method]} />}
+          {p.confirmedOn && <Row k="결제 확인일" v={fmtDate(p.confirmedOn)} />}
         </section>
       ))}
-      <p className="text-[12px] leading-relaxed text-[#55526a]">결제 금액·카드 정보는 이 화면에 따로 표시하지 않아요 (아임웹 주문조회에서 확인). 결제는 운영자가 직접 확인해요.</p>
     </div>
   );
 }
