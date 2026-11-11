@@ -1228,7 +1228,10 @@ select pg_temp.ok((select r ->> 'status' = 'Student canceled in advance' and (r 
 select pg_temp.chg('c0000000-0000-0000-0000-000000000001', 1, 'student', now() - interval '1 hour', false);
 select pg_temp.ok(pg_temp.st(1) = 'canceled:Student canceled in advance' and pg_temp.bal() = 1
               and (select count(*) from lesson_notices n join change_requests c on c.id = n.change_request_id
-                   where c.lesson_id = '77777777-1700-0000-0000-000000000001' and n.status = 'pending') = 2
+                   where c.lesson_id = '77777777-1700-0000-0000-000000000001' and n.status = 'pending' and n.recipient_kind = 'student') = 1
+              -- 강사 안내는 운영진 복사 없음 (메일·Updates, H26(127))
+              and (select count(*) from lesson_notices n join change_requests c on c.id = n.change_request_id
+                   where c.lesson_id = '77777777-1700-0000-0000-000000000001' and n.status = 'not_needed' and n.recipient_kind = 'tutor') = 1
               and (select requested_at < created_at and via = 'admin_on_behalf' and decided_by = 'bbbbbbbb-0000-0000-0000-000000000009'
                    from change_requests where lesson_id = '77777777-1700-0000-0000-000000000001'),
   '확정: 수업 취소 + 변경권 1개 차감 + 학생·강사 안내 각각 + 카톡 받은 시각·처리자 기록');
@@ -1324,9 +1327,9 @@ select pg_temp.ok((select bool_or(r ->> 'status' = 'confirmed') from jsonb_array
   '보강 확정 뒤에도 학생 화면이 열리고 신청 내역에 확정으로 보임 (3600)');
 select pg_temp.ok((select l.kind = 'makeup' and l.state = 'scheduled' and l.starts_at = (select t from cx) + interval '7 days 2 hours'
                    from lessons l where l.makeup_of = '77777777-1700-0000-0000-000000000004')
-              and (select array_agg(n.event || ':' || n.status order by n.event, n.recipient_kind) from lesson_notices n join mk on mk.id = n.makeup_request_id)
-                  = '{makeup_confirmed:pending,makeup_confirmed:pending}',
-  '강사 가능 → 확정: 보강 수업 생김(원래 수업과 연결), 학생·강사 확정 안내');
+              and (select array_agg(n.event || ':' || n.status order by n.event, n.recipient_kind) from lesson_notices n join mk on mk.id = n.makeup_request_id where n.event = 'makeup_confirmed')
+                  = '{makeup_confirmed:pending,makeup_confirmed:not_needed}',
+  '강사 가능 → 확정: 보강 수업 생김(원래 수업과 연결), 학생·강사 확정 안내 (강사는 복사 카드 없음, H26(127))');
 -- 11) 확정 보강도 정규와 같이 변경 가능 (A03) → 새 보강 권리
 select admin_change_lesson('c0000000-0000-0000-0000-000000000051', (select id from lessons where makeup_of = '77777777-1700-0000-0000-000000000004'), 'tutor', now(), false);
 select pg_temp.ok((select class_status = 'Tutor canceled in advance' from lessons where makeup_of = '77777777-1700-0000-0000-000000000004'),
@@ -1454,8 +1457,8 @@ select pg_temp.ok(pg_temp.lst(1) = 'substitute:confirmed:scheduled:-:휴무B'
               and pg_temp.lst(2) = 'substitute:confirmed:scheduled:-:휴무B'
               and (select kind = 'makeup_booked' from migrated_items where id = '99999999-4000-0000-0000-000000001800')
               and (select count(*) from lessons where student_id = '99999999-0000-0000-0000-000000001800' and state = 'scheduled') = 4
-              and (select array_agg(event || ':' || status order by event) from lesson_notices where leave_item_id = pg_temp.li(1))
-                  = '{leave_options:sent,sub_ask:sent,sub_confirmed:pending,sub_confirmed:pending,sub_student:sent}',
+              and (select array_agg(event || ':' || status order by event, status) from lesson_notices where leave_item_id = pg_temp.li(1))
+                  = '{leave_options:sent,sub_ask:sent,sub_confirmed:not_needed,sub_confirmed:pending,sub_student:sent}',
   '학생 OK → 확정: 그 수업 강사가 대체강사(원래 강사 기록), 시트 휴가 보강은 원래 시각 대체 수업으로 예약됨, 최종 확정 안내는 학생·강사 둘, 두 번 눌러도 한 번');
 -- 7) 기다림: 수업 결과 '강사 장기 휴식', 변경권 차감 없음, 보강은 종료일 뒤도 가능 → 마지막 보강일까지만 연장
 select admin_leave_choose(array[pg_temp.li(3), pg_temp.li(5)], 'wait', null);
@@ -3282,9 +3285,9 @@ reset role;
 -- ---------------------------------------------------------------------
 reset role;
 -- 가짜 전: 이메일도 pg_net 도 없던 때 만들어진 안내(mk82 학생) = 주소 없음으로 기록
-select pg_temp.ok((select email_status = 'no_address' and email_error like '학생 이메일%' from lesson_notices where makeup_request_id = (select id from mk82) and recipient_kind = 'student'),
+select pg_temp.ok((select email_status = 'no_address' and email_error like '학생 이메일%' from lesson_notices where makeup_request_id = (select id from mk82) and recipient_kind = 'student' and event = 'makeup_confirmed'),
   '메일: 학생 이메일이 없으면 no_address + 사유 (보내지 않음)');
-select pg_temp.ok((select email_notification_id is null from lesson_notices where makeup_request_id = (select id from mk82) and recipient_kind = 'student'), '메일: 주소 없는 안내는 큐에 넣지 않음');
+select pg_temp.ok((select email_notification_id is null from lesson_notices where makeup_request_id = (select id from mk82) and recipient_kind = 'student' and event = 'makeup_confirmed'), '메일: 주소 없는 안내는 큐에 넣지 않음');
 create temp table sent_before as select count(*) as n from net.sent;
 grant select on sent_before to authenticated;
 update students set email = 'Mail-S@Example.com', timezone = 'America/Toronto' where id = '99999999-0000-0000-0000-000000002000';   -- 해외 학생: 현지 + 한국
@@ -3329,8 +3332,9 @@ select pg_temp.ok(lms_mail_ko_at('2026-11-11 02:00Z', 'Asia/Seoul') = '11월 11�
               and (select req ->> 'subject' like '% [' || lms_mail_ko_zone((select timezone from students where id = m85s.recipient_id)) || ']' from m85s),
   '메일 시각: 한국 거주 [한국 시간], 해외 [도시 시간] / [한국 시간], 도시 한국어, 제목에도 시간대 이름 (대표 2026-11-08, 20261108150000)');
 -- 중복 방지: 같은 안내를 다시 큐에 넣어도 메일 1통
+create temp table sent_mid as select count(*) as n from net.sent;
 select lms_mail_enqueue_notice((select id from m85s));
-select pg_temp.ok((select count(*) = 1 from notifications where dedupe_key = 'lesson_notice_email:' || (select id from m85s)) and (select count(*) = (select n from sent_before) + 1 from net.sent),
+select pg_temp.ok((select count(*) = 1 from notifications where dedupe_key = 'lesson_notice_email:' || (select id from m85s)) and (select count(*) = (select n from sent_mid) from net.sent),
   '메일: 같은 안내는 한 번만 (dedupe_key, 요청 1건)');
 -- 응답 처리: 200 → 보냄 (운영진 화면이 부름)
 insert into net._http_response (id, status_code, content) values ((select net_request_id from notifications where dedupe_key = 'lesson_notice_email:' || (select id from m85s)), 200, '{"id":"re_1"}');
@@ -3379,8 +3383,9 @@ select pg_temp.ok((select email_status = 'queued' and email_attempts = 2 and ema
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select admin_makeup_confirm((select id from mk85b), ((current_date + 8) + time '12:00') at time zone 'Australia/Sydney');
-select pg_temp.ok((select count(*) = 2 from lesson_notices where makeup_request_id = (select id from mk85b) and event = 'makeup_confirmed' and status = 'pending' and email_status = 'queued' and email_attempts = 1),
-  '메일: 운영진 확정 → 학생·강사 안내 줄 모두 카드(pending) + 메일 큐');
+select pg_temp.ok((select count(*) = 2 from lesson_notices where makeup_request_id = (select id from mk85b) and event = 'makeup_confirmed' and email_status = 'queued' and email_attempts = 1)
+              and (select count(*) = 1 from lesson_notices where makeup_request_id = (select id from mk85b) and event = 'makeup_confirmed' and status = 'pending' and recipient_kind = 'student'),
+  '메일: 운영진 확정 → 학생·강사 메일 큐, 카드(pending)는 학생만 (강사 복사 카드 없음, H26(127))');
 -- 실제 발송 스위치를 켜면 원래 주소로, 제목에 [시험] 없음 (내용만 확인, 스위치는 다시 끔)
 reset role;
 update feature_flags set enabled = true where key = 'send_emails';
@@ -3411,14 +3416,14 @@ create temp table mk85c as select (admin_makeup_request('77777777-2000-0000-0000
 grant select on mk85c to authenticated;
 select admin_makeup_confirm((select id from mk85c), ((current_date + 9) + time '12:00') at time zone 'Australia/Sydney');
 select pg_temp.ok((select count(*) = 2 from lesson_notices n join notifications x on x.id = n.email_notification_id
-                   where n.makeup_request_id = (select id from mk85c) and n.email_status = 'queued' and x.net_request_id is null and n.email_error like '메일 키%'),
+                   where n.makeup_request_id = (select id from mk85c) and n.event = 'makeup_confirmed' and n.email_status = 'queued' and x.net_request_id is null and n.email_error like '메일 키%'),
   '메일: Resend 키가 없으면 큐에 남고 사유 기록 (오류로 확정이 막히지 않음)');
 reset role;
 insert into vault.decrypted_secrets values ('resend_api_key', 're_test_key');
 set role authenticated;
 create temp table dbg85c as select admin_mail_sync() as r;
-select pg_temp.ok((select (r ->> 'tried')::int from dbg85c) = 2
-              and (select count(*) = 2 from lesson_notices n join notifications x on x.id = n.email_notification_id where n.makeup_request_id = (select id from mk85c) and x.net_request_id is not null and n.email_error is null),
+select pg_temp.ok((select (r ->> 'tried')::int from dbg85c) >= 2
+              and (select count(*) = 2 from lesson_notices n join notifications x on x.id = n.email_notification_id where n.makeup_request_id = (select id from mk85c) and n.event = 'makeup_confirmed' and x.net_request_id is not null and n.email_error is null),
   '메일: 키를 넣은 뒤 상태 맞추기가 남은 큐를 보냄');
 reset request.jwt.claim.sub;
 reset role;
@@ -3594,10 +3599,10 @@ select pg_temp.ok((select count(*) = 1 from lm94l l join lessons x on x.id = l.i
               and (select count(*) = 1 from lessons where makeup_of = '77777777-9300-0000-0000-000000000001')
               and (select count(*) = 2 from admin_makeup_logs where lesson_id = (select id from lm94l) and action = 'reschedule'),
   '수업 수정: 같은 수업 id 그대로 시간·강사 바뀜, 신청 강사도 맞춤, 수정 기록 2줄');
-select pg_temp.ok((select count(*) = 1 from lm94n where event = 'makeup_tutor_removed' and recipient_id = '55555555-0000-0000-0000-000000009400' and status = 'pending'
+select pg_temp.ok((select count(*) = 1 from lm94n where event = 'makeup_tutor_removed' and recipient_id = '55555555-0000-0000-0000-000000009400' and status = 'not_needed'
                      and email_status = 'queued' and req ->> 'subject' like '[시험 · STU-%] CANCELED make-up - % · % KST'
                      and req ->> 'html' like '%No class at this time.%')
-              and (select count(*) = 1 from lm94n where event = 'makeup_confirmed' and recipient_id = '55555555-0000-0000-0000-00000000200a' and status = 'pending')
+              and (select count(*) = 1 from lm94n where event = 'makeup_confirmed' and recipient_id = '55555555-0000-0000-0000-00000000200a' and status = 'not_needed')
               and (select count(*) = 0 from lm94n where event = 'makeup_rescheduled' and recipient_kind = 'tutor' and status = 'pending')
               and (select count(*) = 1 from lm94n where event = 'makeup_rescheduled' and recipient_kind = 'student' and status = 'pending'
                      and req ->> 'subject' like '%[엣지영어] 보강 강사가 바뀌었어요 · %' and req ->> 'html' like '%이전 강사: 관리강사%'),
