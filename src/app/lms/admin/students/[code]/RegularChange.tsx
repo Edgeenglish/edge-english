@@ -98,7 +98,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
   if (!e || n === 0) {
     return (
       <Sheet title="정규 일정 수정" onClose={onClose}>
-        <p className="text-[14px] text-[#6b6880]">{!e ? '수강 중이거나 시작 예정인 수강권이 없어요.' : '이 수강생의 정규 일정이 없어요 (등록·이관 때 정규 일정이 만들어져요).'}</p>
+        <p className="text-[14px] text-[#6b6880]">{!e ? '수강 중이거나 시작 예정인 수강권이 없어요.' : '이 수강생의 정규 일정이 없어요 (수강생 등록 때 정규 일정이 만들어져요).'}</p>
       </Sheet>
     );
   }

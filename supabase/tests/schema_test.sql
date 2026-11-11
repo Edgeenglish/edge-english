@@ -3363,9 +3363,9 @@ set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 create temp table dbg85 as select admin_mail_sync() as r;
 select pg_temp.ok((select (r ->> 'sent')::int from dbg85) >= 1
-              and (select email_status = 'sent' and email_sent_at is not null and email_error is null and status = 'pending' from lesson_notices where id = (select id from m85s))
+              and (select email_status = 'sent' and email_sent_at is not null and email_error is null and status = 'sent' and sent_at is not null and sent_by is null from lesson_notices where id = (select id from m85s))
               and (select status = 'sent' from notifications where dedupe_key = 'lesson_notice_email:' || (select id from m85s)),
-  '메일: 응답 200 → 학생 메일 보냄 기록, 카톡 카드는 여전히 운영진 차례');
+  '메일: 응답 200 → 학생 메일 보냄 기록 + 안내 줄도 보냄(시스템, 대시보드 카드 안 뜸 — 20261111210000)');
 select pg_temp.ok((admin_resend_notice_email((select id from m85s)) ->> 'repeated')::boolean, '메일: 이미 보낸 안내 다시 보내기 → 그대로(두 번 안 보냄)');
 -- 강사 이메일을 채운 뒤 다시 보내기 → 주소 다시 찾아 큐·요청
 reset role;
