@@ -118,7 +118,7 @@
 - migration **20261109120000_lms_admin_dashboard_notices** (시험 DB 적용): announcements 표 + admin_announcements·admin_announcement_save·admin_announcement_end·lms_announcements_live · students·tutors.is_trial_account(숫자·명단에서 뺌, '체험용' 표시) · admin_set_task_closed 가 extension_review 받게(예전 [카드 닫기]도 저장 안 되던 것) · 02-check 표 57개
 - 검증: vitest 424 · test:db 593 · tsc · eslint(기존 경고 3) · 로컬 앱 → 시험 DB, e2e-admin(TOTP, 임시 비밀번호 → 끝나고 무작위 값) PC 1280·iPhone 13: 숫자 칸·명단·칸 필터·검색·재등록 펼침, 종료 임박 STU-0011 [보냄] → 카드 빠짐·명단 '안내 보냄 11/9(월)'·DB renewal_notices 기록, 예외 연장 [검토 종료] → 빠짐 → 처리 내역 '검토 종료' → 다시 열기 → 복귀, 공지 빈칸 오류 → 게시 → 수정(대상 변경) → DB 확인 → 학생 홈(STU-0011 운영자 보기)·강사 홈(Alex) 표시, 수업 목록 5가지 기간(종료일 앞이면 오류), 강사 목록·상세, 통계, 가로 밀림 없음. **시험 데이터 남김**: STU-0011 재등록 안내 보냄 기록 · 공지 '11월 휴무 일정 안내'(학생·강사 모두, 11/9~11/30)
 - **운영 반영 때 주의**: 체험용 표시(STU-0014·Sera Kara is_trial_account=true)는 운영 DB 데이터 변경이라 대표 '응' 뒤 · 순서: 백업 → migration → 체험용 표시 → lms-prod
-- 남은 결정: 5차 시안 '정해 주실 것' ②(POL-OP-22 ③ 종료 7일 전 카드)는 그대로 둠(대시보드엔 원래 그 카드 없음)
+- ✅ 5차 시안 '정해 주실 것' ②(POL-OP-22 ③ 종료 7일 전 운영진 카드): 대표 11/11 '빼기' 확정(H26(142)) — 카드 안 만듦(원래 없음), register.md POL-OP-22 고침
 
 
 ## ✅ 11/9 밤 (First Lesson Follow-up 세션): 운영↔시험 강사 화면 맞춤 + 휴대폰 뒤로가기 운영 반영
