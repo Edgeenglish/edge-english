@@ -145,7 +145,7 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
 const KstCtx = createContext<{ admin: boolean; studentTz: string; on: boolean; set: (v: boolean) => void }>({ admin: false, studentTz: 'Asia/Seoul', on: false, set: () => {} });
 function KstToggle() {
   const c = useContext(KstCtx);
-  if (!c.admin || c.studentTz === 'Asia/Seoul') return null;
+  if (!c.admin) return null;
   const city = koZoneCity(c.studentTz);
   const btn = (on: boolean) =>
     `min-h-[36px] rounded-full px-3.5 text-[13px] ${on ? 'border-2 border-white bg-white font-extrabold text-[#1d1b2b]' : 'border-2 border-transparent font-semibold text-white'}`;
@@ -153,10 +153,12 @@ function KstToggle() {
   return (
     <div className="-mt-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-b-[12px] bg-[#1d1b2b] px-3 pb-2">
       <span className="text-[13px] font-semibold text-white">시간 기준</span>
-      <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-white/30 bg-white/10">
+      {c.studentTz === 'Asia/Seoul' ? (
+        <span className="inline-flex min-h-[36px] items-center rounded-full border-2 border-white bg-white px-3.5 text-[13px] font-extrabold text-[#1d1b2b]">한국 시간 (KST)</span>
+      ) : <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-white/30 bg-white/10">
         <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
         <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -513,12 +515,7 @@ export default function StudentHome(props: {
 
   const nextFull = next && s.lessons.find((l) => l.id === next.id);
   // 다음 수업 칸은 수업이 없어도 늘 같은 자리에 (11/11 대표: 학생마다 화면 모양이 달라 보이지 않게)
-  const nextCard = !next ? (
-    <section aria-label="다음 수업" className="grid gap-2 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
-      <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
-      <p className="text-[16px] font-bold text-white">예정된 수업이 없어요</p>
-    </section>
-  ) : <NextLesson lesson={next} now={now} meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
+  const nextCard = <NextLesson lesson={next} now={now} meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -615,19 +612,17 @@ export default function StudentHome(props: {
     <section aria-label="수강과 결제" className={`${card} px-4 pb-1.5 pt-4`}>
       <h2 className="mb-2 text-[15px] font-bold">수강·결제·적립금</h2>
       <LinkRow label="수강권" value={s.product} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
-      {slotText && (
-        <div className="flex min-h-[52px] w-full items-center justify-between gap-3 border-t border-[#eeecf4] py-2 text-[14px]">
-          <span className="shrink-0 text-[#55526a]">수업 시간</span>
-          <span className="grid min-w-0 gap-0.5 text-right">
-            {slotText.map((g) => (
-              <span key={g.when + g.tutor} className="grid">
-                <span className="font-semibold">{g.when}</span>
-                <span className="text-[13px] text-[#55526a]">{g.tutor}</span>
-              </span>
-            ))}
-          </span>
-        </div>
-      )}
+      <div className="flex min-h-[60px] w-full items-center justify-between gap-3 border-t border-[#eeecf4] py-2 text-[14px]">
+        <span className="shrink-0 text-[#55526a]">수업 시간</span>
+        <span className="grid min-w-0 gap-0.5 text-right">
+          {slotText ? slotText.map((g) => (
+            <span key={g.when + g.tutor} className="grid">
+              <span className="font-semibold">{g.when}</span>
+              <span className="text-[13px] text-[#55526a]">{g.tutor}</span>
+            </span>
+          )) : <span className="text-[#6b6880]">등록된 정규 시간이 없어요</span>}
+        </span>
+      </div>
       <LinkRow label="결제" value={s.paid ? `결제 완료${s.confirmedOn ? ` (${fmtDate(s.confirmedOn)})` : ''}` : '결제 확인 중'} valueClass={s.paid ? 'text-[#13623a]' : 'text-[#8a5300]'} onClick={extras && (() => setOverlay({ kind: 'payments' }))} />
       <LinkRow label="적립금 내역" value={won(points.balance)} valueClass="font-bold" onClick={() => setOverlay({ kind: 'points' })} />
     </section>
@@ -1510,14 +1505,23 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
+function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson | null; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
+  const shell = 'grid min-h-[206px] content-start gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:min-h-[222px] lg:rounded-[22px] lg:p-6';
+  if (!lesson) return (
+    <section aria-label="다음 수업" className={shell}>
+      <div className="flex min-h-[28px] items-center">
+        <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
+      </div>
+      <p className="text-[26px] font-bold tracking-tight text-white lg:text-[30px]">예정된 수업이 없어요</p>
+    </section>
+  );
   const k = kst(lesson.startsAt);
   const started = now.getTime() >= lesson.startsAt.getTime();
   const badge = started ? '진행 중' : untilText(now, lesson.startsAt);
   // 11/11 대표 시안: 교재 링크 없음 · '40분 · Maria 강사님 · 정규 수업' 같은 글씨 크기·두께 · '수업 입장' 버튼만
   const kindText = lesson.kind === 'regular' ? '정규 수업' : lesson.kind === 'makeup' ? '보강 수업' : '보상수업';
   return (
-    <section aria-label="다음 수업" className="grid gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
+    <section aria-label="다음 수업" className={shell}>
       <div className="flex items-center justify-between">
         <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
         <span className="rounded-full bg-[#ffd66b] px-2.5 py-1 text-[12px] font-semibold text-[#1b1442]">{badge}</span>
