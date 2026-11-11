@@ -168,6 +168,11 @@ const endDay = (d: KstDate) => {
   const k = kst(new Date(`${d}T23:59:00+09:00`));
   return `${k.md}(${k.wd})`;
 };
+/** 재등록 마감 날짜만 '11월 17일' (11/11 대표 콤팩트 시안: 학생 화면엔 마감 시각을 쓰지 않음, 실제 마감 기준은 그대로) */
+const endDateKo = (d: KstDate) => {
+  const [m, day] = kst(new Date(`${d}T23:59:00+09:00`)).md.split('/');
+  return `${Number(m)}월 ${Number(day)}일`;
+};
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
 function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
@@ -556,11 +561,11 @@ export default function StudentHome(props: {
         <h2 className="text-[15px] font-bold text-[#5c3b00]">수업이 {prompt.left}회 남았어요</h2>
         {prompt.mode === 'request' ? (
           <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            종료일 {endText(endDate)}까지 재등록 결제하면 남은 수업을 다음 등록으로 옮길 수 있고, 지금 고정 시간도 유지돼요.
+            {endDateKo(endDate)}까지 재등록 결제하면 남은 수업을 다음 등록으로 이월할 수 있어요.
           </p>
         ) : (
           <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {endText(endDate)}예요.
+            <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {endDateKo(endDate)}예요.
           </p>
         )}
       </div>
@@ -581,33 +586,29 @@ export default function StudentHome(props: {
     </section>
   );
 
+  // 11/11 대표 콤팩트 시안 + '아이콘 빼고 제목 진하게(운영 화면대로)'
   const quick = (
     <section aria-label="빠른 신청" className="grid grid-cols-2 gap-2">
-      <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: null })} className={`${card} grid content-start gap-1.5 p-4 text-left`}>
-        <Icon d={TABS[1].icon} className="h-[22px] w-[22px] text-[#5b3df0]" />
+      <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: null })} className={`${card} flex flex-col gap-1.5 p-4 text-left`}>
         <span className="text-[15px] font-bold">수업 변경·취소</span>
-        <span className="text-[12px] leading-[1.55] text-[#55526a]">
+        <span className="text-[11px] leading-[1.6] text-[#55526a]">
           6시간 전: 변경권 1개 사용 · 보강 가능
           <br />
           6시간 이내: 수업 1회 차감 · 보강 불가 · 변경권 유지
+        </span>
+        <span className="mt-auto flex items-center justify-between border-t border-[#eeecf4] pt-2">
+          <span className="text-[11px] text-[#6b6880]">남은 변경권</span>
+          <span className="text-[16.5px] font-extrabold text-[#1d1b2b]">{s.creditsLeft}개</span>
         </span>
       </button>
       <button
         type="button"
         onClick={() => (openRights.length === 0 ? setTab('requests') : setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null }))}
-        className={`${card} grid content-start gap-1.5 p-4 text-left`}
+        className={`${card} flex flex-col gap-1.5 p-4 text-left`}
       >
-        <Icon d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" className="h-[22px] w-[22px] text-[#5b3df0]" />
-        <span className="text-[15px] font-bold">보강 신청</span>
-        <span className="text-[12px] leading-[1.55] text-[#55526a]">
-          보강할 수업 {openRights.filter((m) => !m.compId).length}회
-          {openRights.some((m) => m.compId) && (
-            <>
-              <br />
-              무료 보상수업 {openRights.filter((m) => m.compId).length}회
-            </>
-          )}
-        </span>
+        <span className="text-[15px] font-bold">보강 일정 잡기</span>
+        <span className="text-[27px] font-extrabold leading-tight text-[#1d1b2b]">{openRights.length}회</span>
+        {openRights.length > 0 && <span className="text-[11px] font-semibold text-[#5b3df0]">신청 가능 ›</span>}
       </button>
     </section>
   );
@@ -1645,12 +1646,13 @@ const tzLabel = (tz: string) => {
 
 /** 홈 '나의 누적 학습 시간' (11/11 대표: 시간대 띠처럼 가볍게, 숫자는 작게) */
 function LearnedBand({ minutes }: { minutes: number }) {
-  const h = Math.floor(minutes / 60), m = minutes % 60;
-  const text = h && m ? `${h}시간 ${m}분` : h ? `${h}시간` : `${m}분`;
-  // 11/11 대표: 한 줄로, 시간은 문장 바로 뒤에 (오른쪽 끝으로 떨어뜨리지 않음)
+  // 11/11 대표 콤팩트 시안: 얇은 베이지 띠, 늘 '○시간 ○분', 제목·숫자·문구 사이 간격
+  const text = `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
   return (
-    <p aria-label="나의 누적 학습 시간" className="w-fit rounded-[14px] bg-[#f4f1ff] px-3.5 py-2 text-[13px] leading-snug text-[#5c4b95]">
-      <b className="font-extrabold text-[#1d1b2b]">나의 누적 학습 시간</b> <b className="whitespace-nowrap text-[14px] font-extrabold text-[#4d34bc]">{text}</b> 영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 쌓였어요🔥
+    <p aria-label="나의 누적 학습 시간" className="flex w-fit flex-wrap items-baseline gap-x-2.5 gap-y-0.5 rounded-[18px] bg-[#f5f1e9] px-3 py-[7px] leading-snug">
+      <span className="text-[11px] font-semibold text-[#7a6d5a]">나의 누적 학습 시간</span>
+      <b className="whitespace-nowrap text-[12.5px] font-extrabold text-[#4a3726]">{text}</b>
+      <span className="text-[11px] text-[#9a8e7c]">영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 쌓였어요🔥</span>
     </p>
   );
 }
@@ -1892,9 +1894,9 @@ function RequestDetail({ r, busy, onWithdraw, onPick, onDecline, calendar }: {
 function NoticeRow({ n, onOpen }: { n: StudentNotice; onOpen: (id: string) => void }) {
   return (
     <button type="button" onClick={() => onOpen(n.id)} className="flex min-h-[52px] w-full items-center gap-2 border-t border-[#eeecf4] py-2.5 text-left first:border-0">
-      {!n.read && <span aria-label="새 공지" className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full bg-[#d93025] text-[11px] font-extrabold text-white">N</span>}
+      {!n.read && <span aria-label="새 공지" className="shrink-0 text-[11px] font-extrabold text-[#d93025]">N</span>}
       <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{n.title}</span>
-      <span className="shrink-0 text-[12px] text-[#6b6880]">{fmtDate(n.startsOn)}</span>
+      <span className="shrink-0 text-[12px] text-[#6b6880]">{n.startsOn.replaceAll('-', '.')}</span>
       <span className={`shrink-0 text-[12px] font-semibold ${n.read ? 'text-[#6b6880]' : 'text-[#d93025]'}`}>{n.read ? '확인함' : '미확인'}</span>
     </button>
   );
