@@ -12,7 +12,9 @@
 - 규칙: ① 남은 2회 ② 남은 1회 ③ 남은 0 + 끝나지 않은(진행 중 포함) 수업 없음 → Class Record 기록 무관(마지막 수업 종료 시각 지나면, 날짜 미정 보강·보상이 남으면 안 보냄) · 제외: 문자 [보냄](renewal_notices)·재등록(다음 수강권) 있음·체험용 계정·종료일 +3일 지남 · 뒤 단계가 나갔으면 앞 단계 안 보냄 · 수업 알림 끄기와 무관 · 해외 학생은 종료일을 거주지 시간으로 '11월 17일(화) 오전 1:59까지'+'모든 시간은 ○○ 시간대 기준이에요.' 줄(시안에서 한국 학생과 다른 유일한 점)
 - 검증: test:db 통과(새 `supabase/tests/renewal-mail.sql` 가짜 데이터 30여 항목, run.sh 에 연결) · 시험 DB 실제 수신: ③ 2통(STU-0018 한국·STU-0002 멜버른) + ① ② 각 1통 → support@ 받은편지함에 도착, 본문 가격 천 단위 쉼표 확인
 - **시험 데이터 남김**: 시험 DB `notifications` 의 renewal_mail 4건, feature_flags `renewal_mail_since`(시험 DB cron 이 10분마다 대상 확인 → 이메일 없는 시험 학생은 건너뜀, 있는 학생만 support@ 로 감)
-- ⏳ 운영 배포(대표 QA 확인 뒤): 운영 DB 백업 → migration 20261111190000 → (대표 시점) `renewal_mail_since` 줄 넣기. 줄 넣는 순간 이미 종료 3일 안·남은 2회 이하인 학생에게 바로 나감 → 넣기 전 `lms_renewal_mail_due(now())` 목록을 대표에게 보고. 코드(화면) 변경 없음
+- ✅ **운영 DB 반영 완료 (대표 11/11 QA 통과 + 배포 지시, H26(143))**: 운영(mfamixejxydodclhglbc, 이름표 edgeenglish-lms) 백업 **snapshots id 39**(표 57개+_meta, 학생 14·수업 191·수강권 15) → migration 20261111190000 (날짜 글 함수 lms_mail_ko_date·clock 도 같이 만듦 — 운영에 20261111120000 이 아직 안 나가서) 적용. 확인: 함수 7개·cron `lms-renewal-mail` */10, 앱 사용자(anon·authenticated) 실행 불가, 데이터 건수 백업과 같음, 재등록 메일 notifications 0건. **`renewal_mail_since` 줄은 안 넣음 = 자동 발송 꺼짐.** 코드(lms-prod)는 이 기능에 바뀐 것 없어 안 올림(lms-test 전체를 올리면 다른 세션의 운영 미반영 migration 이 필요)
+- ⏳ **최초 자동 발송 켜기는 대표 확인 뒤**: 지금 켜면 나가는 대상 = STU-0003(남은 2회·종료 11/17, 싱가포르 시간)·STU-0008(남은 2회·종료 11/18, 한국) ① 2통. 이후 STU-0010(남은 5회) 등은 수업이 진행되며 순서대로 대상이 됨. 제외 확인: STU-0009 문자 [보냄]·STU-0004 첫 수강권 재등록 있음·STU-0014 체험용. 켜는 방법: 운영 DB `insert into feature_flags (key, enabled, note) values ('renewal_mail_since', false, '…')` (대표 '켜' 뒤)
+- 가격표 일치 자동 시험: `src/lms/admin/renewal-price.test.ts`(TS MONTHLY 와 migration 의 jsonb 가격표·할인식 비교, 한쪽만 바꾸면 실패 확인함)
 - 안 한 것: 문자 [보냄]과 별개로 대시보드 카드에 '자동 메일 보냄' 표시 · 수업 알림 24시간·2시간 전(다른 세션 ecc4538)
 
 ## ✅ 11/11 강사 Class Record ①②③ — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/wonderful-cerf-zsfv6f, 정책 원본 H26(136)(138)(139) 참고)
