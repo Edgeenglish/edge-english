@@ -23,7 +23,8 @@
 - ✅ 11/11 대표 PC 시험 사이트 B1~B4 통과(H26(139)). 공휴일 줄은 시험 DB 공휴일 0건이라 시험 안 함
 - ✅ 11/11 공휴일 시험(시험 DB, H26(140)): STU-0003 11/30 수업에 임시 공휴일 → 학생 화면 팝업 '변경권 | 차감 안 됨 (공휴일 취소)', 실제 취소 'Student canceled in advance (public holiday)'·변경권 0 그대로·보강 가능. 원복 끝(holidays 0건·수업 scheduled·변경 기록·안내·메일 줄·audit 줄·임시 비밀번호·로그인 세션). 학생 취소 메일 1통은 원복 전에 support@로 나감
 - ✅ 11/11 고침(대표 지시, 시험 DB·lms-test): 다음 수강권 수업 학생 취소 — migration 20261111170000 student_screen 수업마다 lesson_final_end_date + credit_periods 열린 수강권 전부, 화면 cancelPreview·보강 기한이 그 수업 수강권 기준. 확인: STU-0003 12/14 팝업 '변경권 1개 사용 (1개 → 0개)·보강 ~1/10(일)', 저장 뒤 다음 수강권 기간 변경권 1→0·지금 수강권 0 그대로·보강 기한 2027-01-10. 시험 뒤 원복. 02-check 표 59개(다른 세션 student_notice_reads 표 반영)
-- ⏳ 운영 배포 보류(대표 11/11) — DB 구조 변경·화면 배포 모두 별도 승인 전까지 보류. 다음 수강권 취소 수정은 대표가 확인 완료 처리
+- ✅ 공휴일 등록·다음 수강권 취소 수정 완료 처리(대표 11/11)
+- ⛔ 11/11 대표 배포 지시 → 배포 안 함(차단): ① '학생 대시보드·내 정보 메뉴 수정'·'학생 재등록 안내 자동 메일' 두 세션이 lms-test 를 지금 고치는 중(미완성 포함) ② lms-test 에 대표 승인 확인 안 된 자동 메일(수업 리마인더 24시간·2시간 전 등)이 운영 send_emails 켜진 상태로 실제 학생·강사에게 나갈 수 있음. 위 '통합 운영 배포' 새 세션 계획(두 세션 끝난 뒤)으로 진행
 - ✅ 11/11 운영 DB holidays 25건 등록(대표 승인, 데이터만): 2026-12-25 ~ 2027-12-27, 대체공휴일 7건 포함, 2027년 월력요항(우주항공청 2026-06-29) 기준. 2027 임시공휴일은 발표되면 추가
 - ⏳ 대표 결정 대기 (H26(140)): ① 운영 반영(보류 중, 배포 예정 목록 보고함) ② 운영 DB 공휴일 목록 등록(보류, 영향 보고함)
 - 운영에 안 나간 DB migration (11/11 기준): 20261111010000_student_my_info · 20261111073809_student_makeup_mail_and_original_slot · 20261111120000_tutor_updates_mail · 20261111120100_notice_mail_wording · 20261111140000(이 작업) · 20261111150000_student_notice_reads_history · 20261111150100_student_reminder_settings. lms-prod 에만 있는 커밋 5개는 내용이 lms-test 에 모두 있음(확인함)
@@ -57,6 +58,13 @@
 - **⏭ 다음 (새 세션)**: 강사가 [None of these times work] 때 글 대신 Availability 에서 시간 골라 학생에게 제안 → 학생이 하나 고르면 바로 확정 + 확정 메일 학생·강사·운영진 (대표 11/11 결정, D-43 예외 — H26(134)). 시안부터
   - 11/11 시안 `docs/lms/previews/tutor-suggest-times-drafts.html` → **대표 결정 4개 확정(최대 2개 · '모두 안 돼요' 버튼 · 제안 메일 보냄+운영진 숨은참조 · 미응답은 대시보드만) → 아래 '11/11 강사 보강 시간 제안' 으로 개발 끝**
 - **운영 배포 전**: `git log origin/lms-test..origin/lms-prod` 에 운영에만 있는 커밋 있음(172cc4f·06aa38c 강사 Hours 등) → lms-test 에 먼저 합치기. 운영 DB 백업 → migration 2개 → first_class_mail_since 시각 확인
+
+## ✅ 11/11 학생 수업 리마인더 메일 + 누적 학습 시간 시트 시절 포함 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/jolly-turing-bfiwh0, 대표 결정 11/11 · 확인 간격 10분 H26(117))
+- migration **20261111170500_lms_student_lesson_reminder_mail**: 2900 직접 발송 함수는 없애고 지금 자동 메일 대기열 재사용 — `lms_lesson_reminders_due`(24h·2h, 알림 시점부터 1시간 안만, 취소·무효·휴무 처리 확정 전 제외, 시간 바뀌면 바뀐 시각 기준(dedupe_key 에 시작 시각), 알림 시점 뒤에 정한 수업 건너뜀(lessons.time_set_at 트리거), 정규=remind_regular/그 밖=remind_makeup, 첫 수업 안내 메일 받은 첫 수업은 24h 생략) → `lms_lesson_reminder_mail`(notifications 'lesson_reminder_24h/2h' → lms_mail_dispatch, 받는 주소 lms_notice_recipient_email, send_emails 꺼짐=support@+[시험 · 번호], 시각 lms_mail_ko_at '오후 8시 [한국 시간]' 모양, 대체강사면 대체강사·링크) → pg_cron 'lms-lesson-reminders' */10 + lms_mail_run. 시작 스위치 feature_flags 'lesson_reminder_since'(**시험 DB 에만 있음** → 운영은 행이 없으면 안 나감). 실패는 기존처럼 failed·운영진 [다시 보내기], 자동 재시도 없음. 강사 알림 변경 없음
+- 시험 DB 실제 발송: STU-9001(시드니) 24h·2h 리마인더 support@ 수신(Gmail 확인, status sent), 메일 없는 학생(STU-0010)은 건너뜀, STU-0015 정규 끔 → 대상 빠짐 → 다시 켬. 시험 DB 는 이제 10분마다 실제로 support@ 로 리마인더가 감(하루 약 10~20통)
+- migration **20261111180000_lms_legacy_learned_minutes**: 표 legacy_learned_minutes(학생당 한 줄: 시트 합계 분·횟수·through_date) + student_my_info 누적 = 시트 합계 + through_date 이후 LMS 진행 수업. 데이터 파일 `supabase/data/legacy_learned_minutes_20261111.sql`(운영 학생 번호 기준, 넣기만) — **시험 DB 에만 넣음(학생 번호만 같은 가상 학생), 운영 미적용**
+- 시트 집계(강사 Class Record 18개 읽기만): 시트 기록 있는 학생 11명, 207회 7,440분(124시간). 0001 240·0002 540·0004 1120·0005 560·0006 1720·0007 480·0008 700·0009 160·0010 200·0011 1700·0013 20, 0003·0012·0014 0. **Olivia 시트 10/20~10/30 줄은 시각·길이가 비어 안 넣음**(0001~0004 각 2회, 0005 6회, 0006 4회 — 길이 채우면 +560분)
+- 운영 배포 전: 운영 DB 백업 → 두 migration → 데이터 파일 → 'lesson_reminder_since' 행은 운영 send_emails 켜져 있어 넣는 순간 실제 학생에게 감 → 별도 승인
 
 ## ✅ 11/11 학생 홈·내 정보 최신 통합 시안 (대표 최종 지시서) — **lms-test 반영, 운영 미반영** (브랜치 claude/jolly-turing-bfiwh0)
 - 홈 순서(모든 학생 같은 컴포넌트): 시간대 띠('모든 날짜·시간은 ○○ 시간 기준 · 변경 ›') → 나의 누적 학습 시간(진행된 수업만, 0분도 표시) → 재등록 안내(대상만) → 할 일(있을 때만, 제목 옆 숫자 없음, 줄마다 '수업 n건') → 다음 수업(없으면 '예정된 수업이 없어요', 교재 링크 없음, '40분 · ○○ 강사님 · 정규 수업', [수업 입장]) → 수업 변경·취소/보강 신청(보강 0건이면 신청 내역으로) → 공지사항(최신 2건, 새 공지 빨간 N·미확인/확인함, 3건 이상 [전체보기], 없으면 빈 상태). 수강·결제·적립금 칸은 홈에서 빼고 내 정보에만
@@ -118,7 +126,7 @@
 - migration **20261109120000_lms_admin_dashboard_notices** (시험 DB 적용): announcements 표 + admin_announcements·admin_announcement_save·admin_announcement_end·lms_announcements_live · students·tutors.is_trial_account(숫자·명단에서 뺌, '체험용' 표시) · admin_set_task_closed 가 extension_review 받게(예전 [카드 닫기]도 저장 안 되던 것) · 02-check 표 57개
 - 검증: vitest 424 · test:db 593 · tsc · eslint(기존 경고 3) · 로컬 앱 → 시험 DB, e2e-admin(TOTP, 임시 비밀번호 → 끝나고 무작위 값) PC 1280·iPhone 13: 숫자 칸·명단·칸 필터·검색·재등록 펼침, 종료 임박 STU-0011 [보냄] → 카드 빠짐·명단 '안내 보냄 11/9(월)'·DB renewal_notices 기록, 예외 연장 [검토 종료] → 빠짐 → 처리 내역 '검토 종료' → 다시 열기 → 복귀, 공지 빈칸 오류 → 게시 → 수정(대상 변경) → DB 확인 → 학생 홈(STU-0011 운영자 보기)·강사 홈(Alex) 표시, 수업 목록 5가지 기간(종료일 앞이면 오류), 강사 목록·상세, 통계, 가로 밀림 없음. **시험 데이터 남김**: STU-0011 재등록 안내 보냄 기록 · 공지 '11월 휴무 일정 안내'(학생·강사 모두, 11/9~11/30)
 - **운영 반영 때 주의**: 체험용 표시(STU-0014·Sera Kara is_trial_account=true)는 운영 DB 데이터 변경이라 대표 '응' 뒤 · 순서: 백업 → migration → 체험용 표시 → lms-prod
-- 남은 결정: 5차 시안 '정해 주실 것' ②(POL-OP-22 ③ 종료 7일 전 카드)는 그대로 둠(대시보드엔 원래 그 카드 없음)
+- ✅ 5차 시안 '정해 주실 것' ②(POL-OP-22 ③ 종료 7일 전 운영진 카드): 대표 11/11 '빼기' 확정(H26(142)) — 카드 안 만듦(원래 없음), register.md POL-OP-22 고침
 
 
 ## ✅ 11/9 밤 (First Lesson Follow-up 세션): 운영↔시험 강사 화면 맞춤 + 휴대폰 뒤로가기 운영 반영

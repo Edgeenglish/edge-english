@@ -21585,6 +21585,10 @@ language sql stable security definer set search_path = public as $$
     and case when l.kind = 'regular' then s.remind_regular else s.remind_makeup end
     and not exists (select 1 from leave_items li where li.lesson_id = l.id and li.lesson_gone_at is null
                     and (li.choice = 'undecided' or (li.choice = 'substitute' and li.sub_stage <> 'confirmed')))
+    -- 첫 수업 안내 메일(lesson_notice_first_class)을 받은 첫 수업은 24시간 전 알림을 보내지 않음 (같은 때 두 통 방지)
+    and not (w.which = '24h'
+             and exists (select 1 from notifications f where f.template = 'lesson_notice_first_class' and f.payload ->> 'enrollment_id' = l.enrollment_id::text)
+             and not exists (select 1 from lessons p where p.enrollment_id = l.enrollment_id and p.voided_at is null and p.state <> 'canceled' and p.starts_at < l.starts_at))
     and not exists (select 1 from notifications n
                     where n.dedupe_key = 'lesson_reminder:' || l.id || ':' || to_char(l.starts_at at time zone 'UTC', 'YYYYMMDD"T"HH24MI') || ':' || w.which)
 $$;
@@ -21608,11 +21612,11 @@ revoke all on function lms_lesson_reminder_mail(lessons, text) from public, anon
 revoke all on function lms_lesson_reminders_due(timestamptz) from public, anon, authenticated;
 revoke all on function lms_lesson_reminder_run(timestamptz) from public, anon, authenticated;
 
--- 15분마다 (pg_cron 이 있는 Supabase 에서만)
+-- 10분마다 (대표 확정 H26(117), pg_cron 이 있는 Supabase 에서만)
 do $$
 begin
   if to_regnamespace('cron') is not null then
-    perform cron.schedule('lms-lesson-reminders', '*/15 * * * *', 'select lms_lesson_reminder_run(); select lms_mail_run();');
+    perform cron.schedule('lms-lesson-reminders', '*/10 * * * *', 'select lms_lesson_reminder_run(); select lms_mail_run();');
   end if;
 end $$;
 
