@@ -148,11 +148,12 @@ function KstToggle() {
   if (!c.admin || c.studentTz === 'Asia/Seoul') return null;
   const city = koZoneCity(c.studentTz);
   const btn = (on: boolean) =>
-    `min-h-[40px] rounded-full px-4 text-[14px] ${on ? 'border-2 border-[#1d1b2b] bg-white font-extrabold text-[#1d1b2b]' : 'border-2 border-transparent font-semibold text-[#55526a]'}`;
+    `min-h-[36px] rounded-full px-3.5 text-[13px] ${on ? 'border-2 border-white bg-white font-extrabold text-[#1d1b2b]' : 'border-2 border-transparent font-semibold text-white'}`;
+  // 운영자만 보는 칸이라 운영자 검은 칸 안에 (11/11 대표: 학생 화면 부분은 모든 학생이 같게)
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span className="text-[14px] font-semibold text-[#55526a]">시간 기준</span>
-      <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-[#d9d5e8] bg-[#f6f5fa]">
+    <div className="-mt-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-b-[12px] bg-[#1d1b2b] px-3 pb-2">
+      <span className="text-[13px] font-semibold text-white">시간 기준</span>
+      <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-white/30 bg-white/10">
         <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
         <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
       </div>
@@ -696,7 +697,7 @@ export default function StudentHome(props: {
       </nav>
 
       <div className="min-w-0 flex-1 pb-24 lg:pb-0">
-        {props.adminBar && <div className="grid gap-2 px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}<KstToggle /></div>}
+        {props.adminBar && <div className="grid px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}<KstToggle /></div>}
         <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
           {brand}
           <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
