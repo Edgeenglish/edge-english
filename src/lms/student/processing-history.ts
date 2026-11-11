@@ -1,3 +1,5 @@
+import { ampmKo, formatInZone } from '../rules/dates';
+
 export const HISTORY_LABELS = {
   lesson_canceled: ['수업 취소', '취소 처리 완료'],
   lesson_restored: ['수업 취소 되돌림', '수업 일정 복구 완료'],
@@ -35,8 +37,28 @@ export function historyLabel(e: ProcessingEvent) {
 }
 
 export function historyTime(at: string, timezone: string): string {
-  return new Intl.DateTimeFormat('ko-KR', {
-    timeZone: timezone, year: 'numeric', month: 'numeric', day: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true,
-  }).format(new Date(at));
+  const local = formatInZone(new Date(at), timezone);
+  return `${historyDay(at, timezone)} ${ampmKo(local.time)}`;
+}
+
+export function historyDay(at: string, timezone: string): string {
+  const { date, weekday } = formatInZone(new Date(at), timezone);
+  const [, month, day] = date.split('-');
+  const weekdays: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토' };
+  return `${Number(month)}/${Number(day)}(${weekdays[weekday]})`;
+}
+
+/** Date-only legacy records have no instant to convert. Keep their recorded Korean date. */
+export function historyOriginalDay(e: ProcessingEvent, timezone: string): string | null {
+  if (e.lesson_at) return historyDay(e.lesson_at, timezone);
+  if (e.original_date) return `${historyDay(`${e.original_date}T12:00:00+09:00`, 'Asia/Seoul')}${timezone === 'Asia/Seoul' ? '' : ' (한국 날짜)'}`;
+  return null;
+}
+
+export function historySummary(e: ProcessingEvent, timezone: string): string {
+  const original = historyOriginalDay(e, timezone);
+  const label = historyLabel(e);
+  const result = e.kind === 'makeup_confirmed' && e.booked_at
+    ? `${historyDay(e.booked_at, timezone)} ${label.title}` : label.result;
+  return `${original ? `${original} 수업분` : '원래 수업 날짜 미기록'} → ${result}`;
 }

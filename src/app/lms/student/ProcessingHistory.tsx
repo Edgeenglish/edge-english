@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { historyLabel, historyTime, type ProcessingEvent } from '@/lms/student/processing-history';
+import { historyLabel, historySummary, historyTime, type ProcessingEvent } from '@/lms/student/processing-history';
 
 export default function ProcessingHistory({ events, error, timezone, requestIds, onRequest }: {
   events: ProcessingEvent[]; error?: boolean; timezone: string;
@@ -17,20 +17,17 @@ export default function ProcessingHistory({ events, error, timezone, requestIds,
         const label = historyLabel(e);
         return (
           <details key={e.id} className="group border-b border-[#eeecf4] last:border-0">
-            <summary className="flex min-h-[84px] cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0] [&::-webkit-details-marker]:hidden">
-              <span className="min-w-0">
-                <span className="block text-[16px] font-bold text-[#1d1b2b]">{label.title}</span>
-                <time dateTime={e.at} className="mt-1 block text-[12px] text-[#6b6880]">{when(e.at)}</time>
-                <span className="mt-0.5 block text-[13px] text-[#55526a]">{label.result}</span>
+            <summary className="grid min-h-[64px] cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 px-3 py-2.5 sm:px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0] [&::-webkit-details-marker]:hidden">
+              <span className="text-[14px] font-bold leading-5 text-[#1d1b2b]">{label.title}</span>
+              <time dateTime={e.at} className="whitespace-nowrap text-right text-[11px] leading-5 text-[#6b6880]">{when(e.at)}</time>
+              <span className="col-span-2 flex items-start justify-between gap-2 text-[12px] leading-[18px] text-[#55526a]">
+                <span>{historySummary(e, timezone)}</span>
+                <span aria-hidden="true" className="shrink-0 text-[#8b88a0] group-open:rotate-90">›</span>
               </span>
-              <span aria-hidden="true" className="shrink-0 text-[#8b88a0] group-open:rotate-90">›</span>
             </summary>
-            <div className="grid gap-3 bg-[#faf9fc] px-4 py-4 text-[14px]">
-              <dl className="grid gap-3">
-                <div><dt className="text-[12px] text-[#6b6880]">처리 일시</dt><dd>{when(e.at)}</dd></div>
-                <div><dt className="text-[12px] text-[#6b6880]">처리 결과</dt><dd>{label.result}</dd></div>
+            <div className="grid gap-2 bg-[#faf9fc] px-3 py-2.5 text-[13px] sm:px-4">
+              <dl className="grid gap-1.5 [&>div]:grid [&>div]:grid-cols-[76px_minmax(0,1fr)] [&>div]:gap-x-2">
                 {e.lesson_at && <div><dt className="text-[12px] text-[#6b6880]">{e.request_id ? '원래 수업' : '해당 수업'}</dt><dd>{when(e.lesson_at)}</dd></div>}
-                {!e.lesson_at && e.original_date && <div><dt className="text-[12px] text-[#6b6880]">원래 수업 날짜 · 한국 날짜</dt><dd>{e.original_date}</dd></div>}
                 {e.tutor && <div><dt className="text-[12px] text-[#6b6880]">담당 강사</dt><dd>{e.tutor}</dd></div>}
                 {e.booked_at && <div><dt className="text-[12px] text-[#6b6880]">확정된 수업</dt><dd className="font-semibold">{when(e.booked_at)}</dd></div>}
                 {e.slots.length > 0 && <div><dt className="text-[12px] text-[#6b6880]">{e.kind === 'tutor_suggested' ? '제안한 시간' : '신청한 시간'}</dt>
