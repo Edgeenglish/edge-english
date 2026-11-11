@@ -57,7 +57,7 @@
 ## ✅ 11/10 운영 자동 메일 실제 발송 켬 — 정책 원본 H26(123)
 - 운영 DB `feature_flags.send_emails` = true (대표 지시). 켜기 전 확인: notifications 대기·실패 0, 열린 보강 신청 0(재촉·만료 한꺼번에 없음), 메일 큐는 lesson_notices INSERT 트리거만이라 예전 안내 다시 안 나감, 받는 주소는 큐에 넣을 때 정해짐. 켠 뒤: 최근 안내 4건을 lms_notice_mail 로 미리보기(발송 안 함) → 실제 주소·[시험] 표시 없음 확인, 새 메일 0
 - 이메일 없는 수강생: STU-0014(체험용) → 메일은 'no_address' 로 남음
-- **⏭ 개발 대기 — 대표 확정 H26(124) A안** (새 세션): ① 새 보강·보상수업 신청(`lms_makeup_request_core` 새로 만든 경우만, repeated 제외 — 학생 본인·`admin_makeup_request` 대신 모두) → 담당 강사 즉시 영어 메일(강사 시간대: 원래 수업 · 고른 시간 1~2개 · 'Please confirm one time in the LMS.' · LMS 버튼). `admin_makeup_record_past`·`admin_makeup_confirm_now` 는 제외 ② 강사 [None of these times work] + 가능 시간 글(`tutor_makeup_answer`, `makeup_requests.tutor_note`) → support@ 즉시 메일(가능 시간 글 포함), 학생에게 안 보냄. 재촉·확정 메일 그대로, 신청 1건에 같은 메일 1통(dedupe_key). 지금 운영에는 강사 제안 상태 `countered` 를 만드는 함수 없음(TutorHome 은 운영진에게 글만 보냄)
+- **✅ H26(124) A안 → 11/11 개발됨 (시험 DB·lms-test, 운영 미반영)**: ① 보강 신청→강사 메일 = migration 20261111073809 · ② [None of these times work]→support@ 메일 = 강사 통보 LMS 이전 세션(위 11/11 항목). 운영은 lms-test 전체 배포 때 같이 (H26(140))
 - 되돌리기: `update feature_flags set enabled = false where key = 'send_emails'`
 
 ## ✅ 11/10 운영자 '저장 기록' 띠: 저장 완료 줄 자동 지움 — 정책 원본 H26(121) · **lms-test 반영, 운영 미반영(다음 운영 배포 때 같이, DB 변경 없음)** (브랜치 claude/busy-bohr-q9w22a)
