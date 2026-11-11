@@ -504,7 +504,7 @@ function NoticeRow({ n, text, tutorName, markSent, resendEmail }: { n: ChNotice;
           {/* 강사 안내는 누구에게 보낼지 바로 보이게 강사 이름까지 (대표 11/8) */}
           <b className="block text-[14.5px] text-[#1d1b2b]">{n.recipient === 'student' ? '수강생' : `강사${tutorName ? ` ${tutorName}` : ''}`}에게 보내는 {EVENT_TEXT[n.event]}</b>
           {sent && n.sentAt && <span className="text-[12.5px] text-[#6b6880]">보냄 {sentLabel(n.sentAt)}</span>}
-          {n.status === 'not_needed' && <span className="text-[12.5px] text-[#6b6880]">{n.event === 'makeup_requested' ? '자동 메일 안내' : n.recipient === 'tutor' ? '강사가 직접 확정 · WhatsApp 복사 불필요' : '복사 안내 불필요'}</span>}
+          {n.status === 'not_needed' && <span className="text-[12.5px] text-[#6b6880]">{n.event === 'makeup_requested' || n.recipient === 'tutor' ? '자동 메일 안내' : '복사 안내 불필요'}</span>}
         </div>
         {n.status !== 'not_needed' && (
           <button type="button" disabled={!text} className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>

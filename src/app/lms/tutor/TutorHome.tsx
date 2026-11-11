@@ -17,10 +17,11 @@ import { useSavedToggle } from './useSaved';
 import StudentProfile, { type ProfileActions } from './StudentProfile';
 import FirstLessonFollowup, { type FollowupSave } from './FirstLessonFollowup';
 import type { FollowupTodo } from '@/lms/tutor/followup';
-import { LangCtx, useT, type Lang } from '@/lms/tutor/lang';
+import { updateLines, updateTitle, type NewStudentRequest, type TutorUpdate } from '@/lms/tutor/updates';
+import { LangCtx, useLang, useT, type Lang } from '@/lms/tutor/lang';
 import { Rich } from '@/app/lms/Rich';
 import HomeNotices from '@/app/lms/HomeNotices';
-import { enBoth, stripBold } from '@/lms/admin/time-text';
+import { enBoth, enEvery, stripBold } from '@/lms/admin/time-text';
 import { useDetailBack } from './useDetailBack';
 import {
   canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
@@ -51,6 +52,11 @@ export type TutorActions = {
   followupSave?: FollowupSave;
   /** 취소된 수업 To-do: 수강생이 취소한 앞으로의 수업 (tutor_canceled_classes). 없으면 그 칸이 안 보임 */
   canceled?: () => Promise<TutorCanceled[]>;
+  /** Updates (H26(127)): 강사가 알기만 하면 되는 통보 전부. null = 옛 DB (취소된 수업만 보임) */
+  updates?: () => Promise<TutorUpdate[] | null>;
+  /** To do '신규 수강생 문의' + 답 */
+  requests?: () => Promise<NewStudentRequest[]>;
+  answerRequest?: (planId: string, yes: boolean) => Promise<void>;
 };
 
 function CancelClass({ lessonId, cancel, onSaved, onDirty }: {
@@ -156,6 +162,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   onLogout?: () => void;
 }) {
   const t = useT();
+  const lang = useLang();
   const [screen, setScreen] = useState(initial);
   const [now, setNow] = useState(() => new Date(nowIso));
   // 마지막에 연 메뉴를 다음에도 그대로 (이 기기)
@@ -234,7 +241,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (수강생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
-  const [panel, setPanel] = useState<'cover' | 'makeup' | 'followup' | null>(null);
+  const [panel, setPanel] = useState<'request' | 'cover' | 'makeup' | 'followup' | null>(null);
   // 수강생 프로필 창 (4300): 열어도 보던 메뉴·주·고른 수강생은 그대로, 닫으면 돌아옴
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const openProfile = actions.profile ? setProfileOf : null;
@@ -255,8 +262,25 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     actions.canceled().then((r) => { if (live) setCanceled(r.filter((c) => c.startsAt > now).sort((a, b) => +a.startsAt - +b.startsAt)); }).catch(() => { /* 옛 DB 또는 일시 오류: 이 칸만 비움 */ });
     return () => { live = false; };
   }, [actions, screen, now]);
+  // Updates (H26(127)): 가까운 수업부터, 그 수업이 끝나면 DB 가 뺌. 옛 DB 면 취소된 수업만
+  const [updates, setUpdates] = useState<TutorUpdate[] | null>(null);
+  useEffect(() => {
+    if (!actions.updates) return;
+    let live = true;
+    actions.updates().then((r) => { if (live) setUpdates(r); }).catch(() => { /* 일시 오류: 이 칸만 비움 */ });
+    return () => { live = false; };
+  }, [actions, screen]);
+  const updateRows: TutorUpdate[] = updates ?? canceled.map((c) => ({ id: c.id, kind: 'canceled', student: c.student, studentId: c.studentId, at: c.startsAt, info: { late: c.classStatus === 'Student canceled late' } }));
+  // To do '신규 수강생 문의': 답 안 한 것만 셈. 답한 것은 창에 회색 ✓ 로 남고, 운영진 확정 전까지 바꿀 수 있음
+  const [requests, setRequests] = useState<NewStudentRequest[]>([]);
+  const refreshRequests = useCallback(async () => {
+    if (!actions.requests) return;
+    try { setRequests(await actions.requests()); } catch { /* 일시 오류: 이 칸만 비움 */ }
+  }, [actions]);
+  useEffect(() => { void refreshRequests(); }, [refreshRequests, screen]);
+  const openRequests = requests.filter((r) => !r.answer).length;
   const followupOfStudent = (id?: string) => (id ? followups.find((f) => f.studentId === id) : undefined);
-  const todoCount = [screen.toRecord.length, screen.covers.length, screen.makeups.length, followups.length].filter((n) => n > 0).length;
+  const todoCount = [openRequests, screen.toRecord.length, screen.covers.length, screen.makeups.length, followups.length].filter((n) => n > 0).length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
     ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), tz, { from: '1900-01-01', to: '2999-12-31' })
@@ -417,6 +441,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               </h2>
               <div className="divide-y divide-[#f3e6c4]">
                 {todoCount === 0 && <p className="px-4 py-3.5 text-[15px] text-[#1f7a4d]">✓ {t('Nothing to do right now', '지금 할 일이 없어요')}</p>}
+                {openRequests > 0 && <TodoBar n={openRequests} text={t('New student request', '신규 수강생 문의')} onClick={() => setPanel('request')} />}
                 {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text={t('Classes to record', '기록할 수업')} onClick={() => setTab('record')} />}
                   {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text={t('Cover requests', '대체 수업 요청')} onClick={() => setPanel('cover')} />}
                   {screen.makeups.length > 0 && <TodoBar n={screen.makeups.length} text={t('Make-up requests', '보강 요청')} onClick={() => setPanel('makeup')} />}
@@ -424,27 +449,31 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               </div>
             </section>
 
-            {/* 알림 게시판: 할 일 바로 아래, 같은 모양. 0건이어도 늘 보임 (대표 11/8) */}
+            {/* 알림 게시판 (H26(127)): 할 일 바로 아래, 같은 모양. 0건이어도 늘 보임 (대표 11/8). 3건 + 더보기, 가까운 수업부터 */}
             <section aria-label="Updates" className="overflow-hidden rounded-[18px] border-2 border-[#c9c2f2] bg-white">
               <h2 className="flex items-center gap-2 bg-[#efecfd] px-4 py-2.5 text-[16px] font-bold text-[#3b2a9a]">
-                {t('Updates', '일정 변경')} <span className="rounded-full bg-[#5b3fe0] px-2 py-0.5 text-[13px] text-white">{canceled.length > 0 ? 1 : 0}</span>
+                {t('Updates', '일정 변경')} <span className="rounded-full bg-[#5b3fe0] px-2 py-0.5 text-[13px] text-white">{updateRows.length}</span>
               </h2>
-              {canceled.length === 0 && <p className="px-4 py-3.5 text-[15px] text-[#1f7a4d]">✓ {t('No updates', '변경 사항이 없어요')}</p>}
-              {canceled.length > 0 && (
-                <div className="px-4 py-3">
-                  <p className="mb-1 text-[15px] font-semibold text-[#1d1b2b]">{t('Canceled classes', '취소된 수업')}</p>
+              {updateRows.length === 0 && <p className="px-4 py-3.5 text-[15px] text-[#1f7a4d]">✓ {t('No updates', '변경 사항이 없어요')}</p>}
+              {updateRows.length > 0 && (
+                <div className="px-4 py-2">
                   <ul className="divide-y divide-[#f0eef5]">
-                    {(showAllCanceled ? canceled : canceled.slice(0, 3)).map((c) => (
-                      <li key={c.id} className="py-2">
-                        <StudentName id={c.studentId} name={c.student} className="inline text-[15px] font-semibold" />
-                        {c.classStatus === 'Student canceled late' && <span className="ml-1.5 text-[12.5px] font-semibold text-[#b3261e]">{t('late', '늦은 취소')}</span>}
-                        <span className="block text-[14px] text-[#55526a]"><Rich text={whenFull(c.startsAt, tz)} /></span>
+                    {(showAllCanceled ? updateRows : updateRows.slice(0, 3)).map((u) => (
+                      <li key={`${u.kind}:${u.id}`} className="py-2.5">
+                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="rounded-[6px] bg-[#efecfd] px-1.5 py-0.5 text-[12.5px] font-bold text-[#3b2a9a]">{updateTitle(u, lang === 'ko')}</span>
+                          <StudentName id={u.studentId} name={u.student} className="inline text-[15px] font-semibold" />
+                          {u.kind === 'canceled' && u.info.late === true && <span className="text-[12.5px] font-semibold text-[#b3261e]">{t('late', '늦은 취소')}</span>}
+                        </p>
+                        {updateLines(u, tz).map((line, i) => (
+                          <span key={i} className={`block text-[14px] ${i === 0 ? 'text-[#1d1b2b]' : 'text-[#55526a]'}`}><Rich text={line} /></span>
+                        ))}
                       </li>
                     ))}
                   </ul>
-                  {canceled.length > 3 && (
+                  {updateRows.length > 3 && (
                     <button type="button" onClick={() => setShowAllCanceled((v) => !v)} className="mt-1 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">
-                      {showAllCanceled ? t('Show less', '접기') : `+ ${canceled.length - 3} ${t('more', '건 더보기')}`}
+                      {showAllCanceled ? t('Show less', '접기') : `+ ${updateRows.length - 3} ${t('more', '건 더보기')}`}
                     </button>
                   )}
                 </div>
@@ -533,6 +562,18 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
         )}
 
         {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} inline onDirty={(d) => { hoursDirty.current = d; }} onSaved={() => reload()} />}
+
+        {panel === 'request' && (
+          <Sheet onClose={() => setPanel(null)}>
+            <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">{t('New student request', '신규 수강생 문의')}</h2>
+            <div className="grid gap-3">
+              {requests.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ {t('Nothing to answer', '답할 문의가 없어요')}</p>}
+              {requests.map((r) => (
+                <RequestCard key={r.planId} r={r} tz={tz} answer={actions.answerRequest} onDone={refreshRequests} />
+              ))}
+            </div>
+          </Sheet>
+        )}
 
         {panel === 'cover' && (
           <Sheet onClose={() => setPanel(null)}>
@@ -655,6 +696,38 @@ function Sheet({ onClose, children }: { onClose: () => void; children: ReactNode
           className="absolute right-3 top-3 flex h-[40px] w-[40px] items-center justify-center rounded-full bg-white text-[18px] text-[#1d1b2b]">✕</button>
         <DirtyCtx.Provider value={mark}>{children}</DirtyCtx.Provider>
       </div>
+    </div>
+  );
+}
+
+/** 신규 수강생 문의 한 건 (시안 H26(127)): 답하면 고른 버튼이 회색 ✓, 다른 버튼으로 바꿀 수 있음 (운영진 확정 전까지) */
+function RequestCard({ r, tz, answer, onDone }: { r: NewStudentRequest; tz: string; answer?: (planId: string, yes: boolean) => Promise<void>; onDone: () => Promise<void> }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function send(yes: boolean) {
+    if (!answer) return;
+    setBusy(true);
+    setErr('');
+    try { await answer(r.planId, yes); await onDone(); } catch (e) { setErr(e instanceof Error ? e.message : 'Could not send. Please try again.'); } finally { setBusy(false); }
+  }
+  const pick = (yes: boolean) => (r.answer === 'yes') === yes && r.answer !== null;
+  const btn = (yes: boolean, label: string) => pick(yes)
+    ? <button type="button" disabled className={btnDone}>{label} ✓</button>
+    : <button type="button" disabled={busy || !answer} onClick={() => void send(yes)} className={yes ? btnMain : btnSub}>{label}</button>;
+  return (
+    <div className={card}>
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[14.5px]">
+        <dt className="text-[#6b6880]">{t('Student', '수강생')}</dt><dd className="font-semibold text-[#1d1b2b]">{r.student}</dd>
+        <dt className="text-[#6b6880]">{t('Class', '수업')}</dt><dd className="text-[#1d1b2b]">{r.minutes} min · {r.classes} classes</dd>
+        <dt className="text-[#6b6880]">{t('Time', '시간')}</dt><dd className="text-[#1d1b2b]"><Rich text={enEvery(r.every, tz)} /></dd>
+        <dt className="text-[#6b6880]">{t('First class', '첫 수업')}</dt><dd className="text-[#1d1b2b]"><Rich text={enBoth(r.first, tz)} /></dd>
+      </dl>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {btn(true, 'I can take it')}
+        {btn(false, 'I can’t')}
+      </div>
+      {err && <p role="alert" className="mt-2 text-[14px] text-[#b3261e]">{err}</p>}
     </div>
   );
 }

@@ -36,6 +36,8 @@ export type PlanView = {
   lessonList?: LessonDate[] | null;
   durationMin: number;
   proposalSentAt: Date | null;
+  /** 강사가 LMS To do 에서 답함 (H26(127)): yes = I can take it, no = I can't */
+  tutorAnswer?: 'yes' | 'no' | null;
   confirmedAt: Date | null;
   tutorNotice: Notice | null;
   studentNotice: Notice | null;

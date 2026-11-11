@@ -209,6 +209,22 @@ type OpenMakeupRow = { created_at: string; tutor_answered_at?: string | null; st
 /** 자동 메일을 못 보낸 안내 (20261108010000: 실패·주소 없음) → 운영진이 직접 보내야 함 */
 export type EmailFailRow = { created_at: string; recipient_kind?: 'student' | 'tutor'; email_status?: string; makeup: { student: { id: string; name_ko: string; code: string } | null } | null; change?: { student: { id: string; name_ko: string; code: string } | null } | null };
 
+/** 자동 메일 못 보냄: 수업 안내(lesson_notices) + 강사 통보 메일(tutor_updates, H26(127) — 그 수업이 끝날 때까지만) */
+async function loadEmailFails(sb: SupabaseClient): Promise<{ data: EmailFailRow[] | null; error: unknown }> {
+  const [a, b] = await Promise.all([
+    sb.from('lesson_notices').select('created_at, recipient_kind, email_status, makeup:makeup_requests(student:students(id, name_ko, code)), change:change_requests(student:students(id, name_ko, code))')
+      .in('email_status', ['failed', 'no_address']).neq('status', 'sent'),
+    sb.from('tutor_updates').select('created_at, email_error, student:students(id, name_ko, code), mail:notifications(status)')
+      .gt('visible_until', new Date().toISOString()),
+  ]);
+  if (a.error) return { data: null, error: a.error };
+  type Tu = { created_at: string; email_error: string | null; student: { id: string; name_ko: string; code: string } | null; mail: { status: string } | null };
+  const tu = b.error ? [] : ((b.data ?? []) as unknown as Tu[])
+    .filter((x) => x.email_error || x.mail?.status === 'failed')
+    .map((x): EmailFailRow => ({ created_at: x.created_at, recipient_kind: 'tutor', email_status: x.email_error ? 'no_address' : 'failed', makeup: null, change: { student: x.student } }));
+  return { data: [...((a.data ?? []) as unknown as EmailFailRow[]), ...tu], error: null };
+}
+
 export function toLessonChanges(notices: ChangeNoticeRow[], makeups: OpenMakeupRow[], now: Date, emailFails: EmailFailRow[] = []): TaskSource[] {
   const out = new Map<string, Extract<TaskSource, { kind: 'lesson_change' }>>();
   const row = (s: { id: string; name_ko: string; code: string }, created: string) => {
@@ -475,8 +491,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .eq('status', 'pending'),
     loadOpenMakeups(sb),
     // 자동 메일 실패·주소 없음 — 운영진이 직접 보내고 [보냄] 했거나 다시 보내기로 발송되면 끝 (칸이 없는 DB면 빈 목록)
-    sb.from('lesson_notices').select('created_at, recipient_kind, email_status, makeup:makeup_requests(student:students(id, name_ko, code)), change:change_requests(student:students(id, name_ko, code))')
-      .in('email_status', ['failed', 'no_address']).neq('status', 'sent'),
+    loadEmailFails(sb),
     sb
       .from('enrollments')
       .select('id, student_id, status, weeks, legacy_label, weekly_count, duration_min, start_date, final_end_date, previous_enrollment_id, student:students(name_ko, code, is_trial_account), lessons!lessons_enrollment_id_fkey(id, kind, state, starts_at, class_status, makeup_of, voided_at, tutor:tutors!lessons_tutor_id_fkey(name)), migrated:migrated_items(kind), comps:compensations(status)')

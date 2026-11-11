@@ -413,10 +413,11 @@ function toItem(t: TaskSource, now: Date): ItemBase {
       const actions: BoardItem['actions'] = t.scheduleConfirmed
         ? [{ key: 'notify_tutor', label: '강사에게 통보', primary: true }]
         : [
+            // 새 기간 일정을 확정하면 강사 메일·Updates 가 자동으로 가고 카드가 저절로 끝남 (H26(116)(127)).
+            // 확정 뒤에도 남아 있으면(강사 메일 주소 없음·강사 변경 예정) [강사에게 통보]로 직접 알린 것을 기록
             t.enrollmentId
               ? { key: 'pick_schedule', label: '새 기간 일정 확정', primary: true, href: `/lms/admin/assign?e=${t.enrollmentId}` }
               : { key: 'pick_schedule', label: '새 기간 일정 확정', primary: true, disabled: true },
-            { key: 'notify_tutor', label: '강사에게 통보', disabled: true },
           ];
       return {
         id: t.id,
@@ -624,7 +625,7 @@ function planItem(t: MatchingTask, p: PlanView, now: Date): ItemBase {
   const studentUnsent = p.studentNotice?.status !== 'sent';
   const tag =
     p.state === 'proposed'
-      ? !p.proposalSentAt ? '강사에게 제안 안 보냄' : alert === 'no_reply' ? '강사 답 확인 필요' : '강사 답 대기'
+      ? p.tutorAnswer === 'yes' ? '강사 가능' : p.tutorAnswer === 'no' ? '강사 불가' : !p.proposalSentAt ? '강사에게 제안 안 보냄' : alert === 'no_reply' ? '강사 답 확인 필요' : '강사 답 대기'
       : tutorUnsent && studentUnsent ? '양쪽 안내 안 함' : tutorUnsent ? '강사 안내 안 함' : '수강생 안내 안 함';
   const first = firstLessonAt(p);
   return {

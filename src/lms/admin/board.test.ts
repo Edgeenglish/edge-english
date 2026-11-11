@@ -136,9 +136,9 @@ describe('재등록 강사 통보 (대표 11/9 A안)', () => {
     expect(i.actions.map((a) => a.label)).toEqual(['강사에게 통보']);
     expect(i.steps.map((x) => x.label)).toEqual(['새 기간 일정 확정', '강사에게 통보']);
   });
-  it('일정 확정 전(강사 변경·일정 조정): 일정 확정 먼저, 통보는 못 누름', () => {
+  it('일정 확정 전: 일정 확정 버튼만 (확정하면 강사 메일·Updates 가 자동, H26(127))', () => {
     const [i] = buildBoard([r({ scheduleConfirmed: false })], now);
     expect(i.actions[0]).toMatchObject({ label: '새 기간 일정 확정', href: '/lms/admin/assign?e=en1' });
-    expect(i.actions[1]).toMatchObject({ label: '강사에게 통보', disabled: true });
+    expect(i.actions).toHaveLength(1);
   });
 });

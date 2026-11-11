@@ -2,9 +2,8 @@
 
 // 신규 배정 일정안 카드 (시안 2차, D-51 2026-10-22 대표 승인)
 // - 시간: 한국 / 강사 / 수강생 세 줄, 현지 요일이 다르면 노란 표시
-// - 답 대기: [가능하대요 → 확정] [안 된대요] [제안 문구 복사] + [강사에게 보냈어요]
-//   제안 문구 [복사]는 복사만('문구 복사됨 · 아직 발송 안 함'), 실제로 보낸 뒤 [강사에게 보냈어요]를 눌러야 보낸 시각 기록
-//   (2026-11-06 대표 지시 H26(70), QA B-02 — 예전 A39(1) '복사 = 제안 보냄 기록'을 바꿈. 복사만 하고 안 보냈는데 보낸 것으로 남던 문제)
+// - 답 대기 (H26(127)): 강사 문의는 시스템이 강사 To do + 메일로 보냄. 카드에는 강사 답(답 대기·가능·불가) + [확정] [안 된대요]
+//   [제안 문구 복사]는 강사 메일이 안 갈 때(주소 없음) 쓰는 예비. 보낸 기록 버튼은 없앰
 // - 확정: 강사·수강생 안내 두 줄 (강사 줄 위). [복사]는 문구만 복사(기록 없음), 보낸 뒤 [보냄]를 눌러야 그쪽 '보냄'
 //   (2026-10-22 대표 승인, A39(2) 갱신 — 복사만 하고 안 보내는 실수 방지). 양쪽 다 '보냄'이어야 매칭 업무 완료
 // 복사가 막힌 기기에서는 문구를 보여 주고 길게 눌러 직접 복사
@@ -70,8 +69,9 @@ export default function PlanCard({ view, handlers, showTimes = true, proposalCop
     else setManual({ text });
   }
 
+  // 강사 확정 안내는 시스템 메일 + 강사 Updates (H26(127)). 강사 줄은 자동으로 못 보냈을 때(메일 주소 없음)만 남김
   const rows: { who: 'tutor' | 'student'; label: string; n: Notice | null; text: string }[] = [
-    { who: 'tutor', label: '강사 · WhatsApp', n: view.tutorNotice, text: tutorConfirmMessage(view) },
+    ...(view.tutorNotice?.status === 'sent' ? [] : [{ who: 'tutor' as const, label: '강사 · WhatsApp', n: view.tutorNotice, text: tutorConfirmMessage(view) }]),
     { who: 'student', label: '수강생 · 카톡', n: view.studentNotice, text: studentConfirmMessage(view) },
   ];
 
@@ -80,19 +80,14 @@ export default function PlanCard({ view, handlers, showTimes = true, proposalCop
       {showTimes && <TimeRows view={view} />}
       {view.state === 'proposed' ? (
         <>
-          <p className={`text-[13px] ${view.proposalSentAt ? 'text-[#1f6b44]' : 'text-[#8a2a1b]'}`}>
-            {view.proposalSentAt ? `강사에게 보냄 ${sentLabel(view.proposalSentAt)}` : copied.includes('proposal') ? '문구 복사됨 · 아직 발송 안 함 — WhatsApp 으로 보낸 뒤 [강사에게 보냈어요]' : '강사에게 아직 제안 안 보냄'}
+          {/* 강사 문의는 시스템이 강사 To do + 메일로 보냄, 강사가 LMS 에서 답함 (H26(127)). 확정은 운영진 (H22) */}
+          <p className={`text-[13.5px] font-semibold ${view.tutorAnswer === 'yes' ? 'text-[#1f6b44]' : view.tutorAnswer === 'no' ? 'text-[#b3261e]' : 'text-[#6b6880]'}`}>
+            {view.tutorAnswer === 'yes' ? '강사 가능' : view.tutorAnswer === 'no' ? '강사 불가' : '강사 답 대기'}
           </p>
           <TextPeek title="강사 제안 문구 보기" text={proposalMessage(view)} />
           <div className="grid grid-cols-2 gap-2">
-            {!view.proposalSentAt && (
-              <button type="button" disabled={busy} onClick={() => run(handlers.proposalSent)}
-                className={`col-span-2 min-h-[46px] rounded-[12px] text-[14.5px] font-bold ${copied.includes('proposal') ? 'bg-[#7d5ffb] text-white disabled:bg-[#cfc4ff]' : 'border border-[#cfc4ff] bg-white text-[#4b33c4] disabled:opacity-50'}`}>
-                강사에게 보냈어요 (보낸 시각 기록)
-              </button>
-            )}
             <button type="button" disabled={busy} onClick={() => run(handlers.confirm)} className="col-span-2 min-h-[50px] rounded-[12px] bg-[#7d5ffb] text-[15.5px] font-bold text-white disabled:bg-[#cfc4ff]">
-              가능하대요 → 확정
+              확정
             </button>
             {asking ? (
               <div className="col-span-2 rounded-[12px] bg-[#fff5f3] px-3 py-2.5">
@@ -113,7 +108,7 @@ export default function PlanCard({ view, handlers, showTimes = true, proposalCop
                 </button>
                 <button type="button" disabled={busy} onClick={() => copyOnly('proposal', proposalMessage(view))}
                   className={`min-h-[46px] rounded-[12px] border text-[14px] ${copied.includes('proposal') ? 'border-[#c9c6d6] bg-[#d9d6e3] font-bold text-[#4a4760]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
-                  {copied.includes('proposal') ? '복사함 ✓ (다시 복사)' : view.proposalSentAt ? '문구 다시 복사' : '제안 문구 복사'}
+                  {copied.includes('proposal') ? '복사함 ✓' : '제안 문구 복사'}
                 </button>
               </>
             )}

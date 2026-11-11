@@ -576,6 +576,8 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
           const ids = new Set(confirmedSubs.filter((i) => i.subTutorId === tid).map((i) => i.id));
           if (ids.size === 0) return null;
           const mine = msgs.filter((m) => m.event === 'sub_confirmed' && m.itemIds.some((id) => ids.has(id)));
+          // 대체강사 확정 안내는 자동 메일 + 강사 Updates (H26(127)) — 복사할 것이 없으면 칸을 안 그림
+          if (mine.length === 0) return null;
           const body = <>{mine.map((m) => msg(m))}</>;
           // 제목 횟수 = 본문(안내 글)에 든 수업 수 (취소된 수업은 둘 다에서 빠짐)
           const n = new Set(mine.flatMap((m) => m.itemIds).filter((id) => ids.has(id))).size || ids.size;

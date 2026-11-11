@@ -347,9 +347,10 @@ function NoticeSheet({ data, changeId, sent, reload, onClose }: { data: StudentD
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
         <NoticeCard title="수강생 카카오톡" text={ko} sentAt={c.studentSentAt} busy={busy === 'student'} onSent={() => mark('student', false)} onUndo={() => mark('student', true)} />
-        <NoticeCard title={`강사 WhatsApp (${c.tutor})`} text={en} sentAt={c.tutorSentAt} busy={busy === 'tutor'} onSent={() => mark('tutor', false)} onUndo={() => mark('tutor', true)} />
+        {/* 강사는 자동 메일 + 강사 화면 Updates (H26(122)(127)). 자동으로 못 보냈을 때(메일 주소 없음)만 복사 카드 */}
+        {!c.tutorSentAt && <NoticeCard title={`강사 WhatsApp (${c.tutor})`} text={en} sentAt={c.tutorSentAt} busy={busy === 'tutor'} onSent={() => mark('tutor', false)} onUndo={() => mark('tutor', true)} />}
       </div>
-      <p className="mt-3 text-[12px] text-[#6b6880]">수강생·강사 화면에는 저장 즉시 반영돼 있어요. 안내는 운영진이 복사해 직접 보내고, 보낸 뒤 [발송 완료]를 눌러 기록해요 (자동 이메일 없음).</p>
+      <p className="mt-3 text-[12px] text-[#6b6880]">수강생·강사 화면에는 저장 즉시 반영돼 있어요. 강사에게는 자동 메일이 가요. 수강생 안내는 복사해 직접 보내고, 보낸 뒤 [발송 완료]를 눌러 기록해요.</p>
     </Sheet>
   );
 }

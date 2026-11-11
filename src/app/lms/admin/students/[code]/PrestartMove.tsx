@@ -144,8 +144,8 @@ export default function PrestartMove(p: {
         <div className="mb-3 rounded-[14px] border border-[#cfe8d8] bg-white p-3">
           <p className="text-[14px] font-bold text-[#13623a]">✓ 저장했어요 · {saved.line}</p>
           {[
+            // 강사는 강사 화면 Updates (+ 첫 수업이 바뀌면 자동 메일, H26(125)(129)) — 강사 WhatsApp 복사 없앰
             ['수강생 카카오톡 안내', saved.student],
-            ['강사 WhatsApp 안내', saved.tutor],
           ].map(([who, text]) => (
             <details key={who} className="mt-2 rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[13px]">
               <summary className="flex min-h-[44px] cursor-pointer list-none items-center font-semibold text-[#4b33c4]">

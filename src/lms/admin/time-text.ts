@@ -84,3 +84,30 @@ export function enDateOf(d: string): string {
 export const koSi = (text: string) => text.replace(/(\d{1,2}):00/g, '$1시').replace(/(\d{1,2}):(\d\d)/g, '$1시 $2분');
 /** 운영자 화면 한국어 시간대 이름: '한국 시간' / '토론토 시간' */
 export const koZoneName = (tz?: string | null) => (isKst(tz) ? '한국 시간' : `${koZoneCity(tz as string)} 시간`);
+
+/** 정규 요일·시각 (요일마다 한 번씩 고른 실제 시각들로): 'Every Mon, Wed 6:00 PM *Ho Chi Minh Time* / 8:00 PM *KST*'
+ *  시각이 요일마다 다르면 '; ' 로 나눔. 메일(DB lms_mail_en_every)과 같은 모양 */
+export function enEvery(times: Date[], tz?: string | null): string {
+  const z = isKst(tz) ? 'Asia/Seoul' : (tz as string);
+  const byDay = new Map<number, Date>();
+  for (const t of [...times].sort((a, b) => +a - +b)) {
+    const d = wdOf(formatInZone(t, z).date);
+    if (!byDay.has(d)) byDay.set(d, t);
+  }
+  const groups = new Map<string, { o: number; days: number[]; kdays: number[]; lc: string; kc: string; shift: boolean }>();
+  for (const [d, t] of [...byDay].sort((a, b) => a[0] - b[0])) {
+    const kd = wdOf(formatInZone(t, 'Asia/Seoul').date);
+    const lc = enClock(t, z);
+    const kc = enClock(t, 'Asia/Seoul');
+    const key = `${lc}|${kc}|${(kd - d + 7) % 7}`;
+    const g = groups.get(key) ?? { o: d, days: [], kdays: [], lc, kc, shift: kd !== d };
+    g.days.push(d);
+    g.kdays.push(kd);
+    groups.set(key, g);
+  }
+  const parts = [...groups.values()].sort((a, b) => a.o - b.o).map((g) =>
+    z === 'Asia/Seoul'
+      ? `${g.days.map((d) => EN_WD[d]).join(', ')} ${g.lc} ${bold('KST')}`
+      : `${g.days.map((d) => EN_WD[d]).join(', ')} ${g.lc} ${bold(enZoneName(z))} / ${g.shift ? `${g.kdays.map((d) => EN_WD[d]).join(', ')} ` : ''}${g.kc} ${bold('KST')}`);
+  return parts.length ? `Every ${parts.join('; ')}` : '';
+}

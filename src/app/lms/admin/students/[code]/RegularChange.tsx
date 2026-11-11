@@ -247,7 +247,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
         </button>
       </div>
       <p className="mt-2 text-[12px] text-[#6b6880]">
-        저장하면 수강생·강사·운영진 화면에 바로 반영돼요. 저장 뒤 수강생(카카오톡)·강사(WhatsApp) 안내 문구를 복사해 보내고 [발송 완료]를 눌러 주세요. 지난 수업과 이미 확정된 보강·대체 수업은 바뀌지 않아요.
+        저장하면 수강생·강사·운영진 화면에 바로 반영돼요. 저장 뒤 수강생(카카오톡) 안내 문구를 복사해 보내고 [발송 완료]를 눌러 주세요. 지난 수업과 이미 확정된 보강·대체 수업은 바뀌지 않아요.
         {tutor.tutorTz !== 'Asia/Seoul' && firstMovedTo && ` 강사 현지 시각은 수업 날짜마다 다시 계산해요 (예: 한국 ${zoneLabel(firstMovedTo, 'Asia/Seoul')} = ${koZone(tutor.tutorTz)} ${zoneLabel(firstMovedTo, tutor.tutorTz)}).`}
       </p>
     </Sheet>

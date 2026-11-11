@@ -6,6 +6,7 @@ import { parseSchedule, type ScheduleAction, type ScheduleData } from './schedul
 import { parseCanceled, parseScreen, type Late, type TutorCanceled, type TutorResult, type TutorScreen } from './screen';
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
 import { parseFollowup, parseFollowupTodos, type Followup, type FollowupTodo } from './followup';
+import { parseRequests, parseUpdates, type NewStudentRequest, type TutorUpdate } from './updates';
 import type { TutorStudentRow } from '@/app/lms/tutor/TutorHome';
 
 const NOT_APPLIED = 'The tutor page is not ready on this database yet (migration 2000).';
@@ -129,4 +130,21 @@ export async function loadSchedule(sb: SupabaseClient, tutorId: string | null, f
 /** 막기·그날만 열기(cells = 강사 현지 칸 키) · 메모 고치기·막기 풀기(blockId). 검사는 DB */
 export async function saveSchedule(sb: SupabaseClient, tutorId: string | null, action: ScheduleAction, cells: string[] | null, note: string | null, blockId: string | null): Promise<void> {
   check(await sb.rpc('tutor_schedule_save', { p_tutor: tutorId, p_action: action, p_cells: cells, p_note: note, p_block: blockId }));
+}
+
+/** 강사 Home Updates (H26(127)): 이 마이그레이션 전 DB 는 빈 목록 */
+export async function loadTutorUpdates(sb: SupabaseClient, tutorId: string | null): Promise<TutorUpdate[] | null> {
+  const r = await sb.rpc('tutor_updates_feed', { p_tutor: tutorId });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') return null;
+  return parseUpdates(check(r));
+}
+/** To do '신규 수강생 문의' */
+export async function loadNewRequests(sb: SupabaseClient, tutorId: string | null): Promise<NewStudentRequest[]> {
+  const r = await sb.rpc('tutor_new_requests', { p_tutor: tutorId });
+  if (r.error?.code === 'PGRST202' || r.error?.code === '42883') return [];
+  return parseRequests(check(r));
+}
+/** [I can take it] / [I can't] (운영자 대신도 같은 함수) */
+export async function answerNewRequest(sb: SupabaseClient, planId: string, yes: boolean, tutorId: string | null): Promise<void> {
+  check(await sb.rpc('tutor_plan_answer', { p_plan: planId, p_yes: yes, p_tutor: tutorId }));
 }
