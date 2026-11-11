@@ -9,6 +9,7 @@ import { typeKo, typeKoLong } from '@/lms/class-type';
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
+import ProcessingHistory from './ProcessingHistory';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
 import { koZoneCity, ZONE_ROWS, zoneName } from '@/lms/admin/places';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
@@ -54,12 +55,13 @@ type Overlay =
   | { kind: 'leave' }
   | { kind: 'profile'; name: string }
   | { kind: 'makeup'; right: Right | null; canceled?: boolean }
-  | { kind: 'credits' };
+  | { kind: 'credits' }
+  | { kind: 'rights' };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
   { key: 'schedule', label: '일정', icon: 'M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8 2v4M16 2v4M3 10h18' },
-  { key: 'requests', label: '신청 내역', icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' },
+  { key: 'requests', label: '처리 내역', icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' },
   { key: 'materials', label: '학습자료', icon: 'M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z' },
   { key: 'me', label: '내 정보', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1.5-4 4.5-6 8-6s6.5 2 8 6' },
 ];
@@ -334,7 +336,7 @@ export default function StudentHome(props: {
     const req = s.requests.filter((q) => q.kind === 'makeup' && q.status !== 'canceled' && hit(q)).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
     if (req && (req.status === 'confirmed' || req.status === 'completed'))
       setLinkNote(`이 수업의 보강이 확정됐어요${req.confirmedAt ? `: ${whenText(req.confirmedAt)}` : '.'}`);
-    else if (req) setLinkNote('이 수업은 보강을 이미 신청했어요. 강사님 확인을 기다리는 중이에요. 신청 내역에서 확인할 수 있어요.');
+    else if (req) setLinkNote('이 수업은 보강을 이미 신청했어요. 강사님 확인을 기다리는 중이에요. 처리 내역에서 확인할 수 있어요.');
     else if (s.lessons.some((l) => l.id === id))
       setLinkNote(endDate && now.getTime() > new Date(`${endDate}T23:59:59+09:00`).getTime()
         ? `이 수업은 보강 신청 기한(${endText(endDate)})이 지났어요. 카카오톡으로 문의해 주세요.`
@@ -826,35 +828,10 @@ export default function StudentHome(props: {
         )}
 
         {tab === 'requests' && (
-          <TabPage title="신청 내역">
-            {/* 빈 상태 (QA C-04): 오류인지 비어 있는지 알 수 있게 — 상태만, 사용법 안내는 넣지 않음 */}
-            {s.requests.length === 0 && openRights.length === 0 && (
-              <p className={`${card} px-4 py-5 text-center text-[14px] text-[#6b6880]`}>아직 신청한 내용이 없어요.</p>
-            )}
-            {s.requests.length > 0 && (
-              <section className={`${card} grid gap-1 p-4`}>
-                {s.requests.map((r) => (
-                  <RequestRow key={r.id} r={r} onOpen={() => setOverlay({ kind: 'request', id: r.id })} />
-                ))}
-              </section>
-            )}
-            {openRights.length > 0 && (
-              <section className={`${card} grid gap-1 p-4`}>
-                {openRights.map((m) => (
-                  <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })}
-                    className="flex min-h-[56px] w-full items-center justify-between gap-2 border-b border-[#eeecf4] py-2 text-left last:border-0">
-                    <span>
-                      <span className="block text-[14px] font-semibold">{rightTitle(m, needsTime(m, openRights))}</span>
-                      <span className="block text-[12px] text-[#6b6880]">{rightReason(m)}{rightUntil(m, endDate) ? ` · ${rightUntil(m, endDate)}` : ''}</span>
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="whitespace-nowrap rounded-full bg-[#fff1d6] px-2.5 py-1 text-[12px] font-semibold text-[#8a5300]">날짜 선택 필요</span>
-                      <span className="text-[#8b88a0]">›</span>
-                    </span>
-                  </button>
-                ))}
-              </section>
-            )}
+          <TabPage title="처리 내역">
+            {openRights.length > 0 && <button type="button" onClick={() => setOverlay({ kind: 'rights' })} className="min-h-[44px] text-left text-[14px] font-semibold text-[#5b3df0]">보강권 확인 · {openRights.length}개 ›</button>}
+            <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
+              requestIds={s.requests.map((r) => r.id)} onRequest={(id) => setOverlay({ kind: 'request', id })} />
           </TabPage>
         )}
 
@@ -982,7 +959,7 @@ export default function StudentHome(props: {
                 <section className={`${card} px-4 pb-1.5 pt-4`}>
                   <h2 className="mb-1 text-[15px] font-bold">적립금 · 보강권</h2>
                   <LinkRow label="적립금 내역" value={won(points.balance)} valueClass="font-bold" onClick={() => setOverlay({ kind: 'points' })} />
-                  <LinkRow label="보강권 확인" value={`${openRights.length}개`} onClick={() => setTab('requests')} />
+                  <LinkRow label="보강권 확인" value={`${openRights.length}개`} onClick={() => setOverlay({ kind: 'rights' })} />
                 </section>
               </div>
             </div>
@@ -1020,6 +997,17 @@ export default function StudentHome(props: {
           {overlay.kind === 'notice' && notices.find((n) => n.id === overlay.id) && <NoticeDetail n={notices.find((n) => n.id === overlay.id)!} />}
           {overlay.kind === 'points' && <Points history={points} />}
           {overlay.kind === 'credits' && <Credits s={s} />}
+          {overlay.kind === 'rights' && <div className="grid gap-3">
+            <h2 className="text-[18px] font-bold">보강권 확인</h2>
+            {openRights.length === 0 && <p className="text-[14px] text-[#6b6880]">신청 가능한 보강이 없어요.</p>}
+            {openRights.map((m) => <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })}
+              className={`${card} min-h-[64px] p-4 text-left`}>
+              <span className="block text-[14px] font-bold">{rightTitle(m, needsTime(m, openRights))}</span>
+              <span className="mt-1 block text-[13px] text-[#6b6880]">{rightReason(m)}</span>
+              <span className="mt-2 block text-[14px] font-semibold text-[#5b3df0]">보강 날짜 선택 ›</span>
+            </button>)}
+          </div>}
+
           {overlay.kind === 'consent' && (
             <div className="grid gap-3">
               <h2 className="text-[18px] font-bold">새 수업 안내 확인</h2>
@@ -1589,28 +1577,6 @@ function Credits({ s }: { s: StudentView }) {
         ))}
       </section>
     </div>
-  );
-}
-
-function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
-  return (
-    <button type="button" onClick={onOpen} className="flex min-h-[56px] w-full items-center justify-between gap-2 border-b border-[#eeecf4] py-2 text-left last:border-0">
-      <span>
-        <span className="block text-[14px] font-semibold">{reqTitle(r)}</span>
-        <span className="block text-[12px] text-[#6b6880]">
-          {r.kind !== 'makeup' ? r.note
-            : r.status === 'confirmed' && r.confirmedAt ? `${whenText(r.confirmedAt)} 확정`
-            : r.status === 'canceled' && r.confirmedAt ? `${whenText(r.confirmedAt)} 보강 수업 취소됨`
-            : r.status === 'choosing' ? '강사님이 다른 시간을 제안했어요'
-            : r.status === 'rescheduling' ? (r.suggested ? '운영진이 다른 일정을 조율해요' : '강사님이 신청한 시간에는 어렵다고 답했어요')
-            : `고른 날짜 ${r.candidates.length}개`}
-        </span>
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold ${STATUS_STYLE[r.status]}`}>{REQUEST_STATUS_LABEL[r.status]}</span>
-        <span className="text-[#8b88a0]">›</span>
-      </span>
-    </button>
   );
 }
 
