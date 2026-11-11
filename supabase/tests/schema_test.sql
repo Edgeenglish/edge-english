@@ -2492,7 +2492,7 @@ set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004300';   -- 정규 
 select pg_temp.ok((select p ->> 'access' = 'regular' from tutor_student_profile('99999999-0000-0000-0000-000000004300') p), '⑥ 정규 담당 강사 권한은 대체수업과 무관하게 유지 (4300)');
 reset role;
 -- 대체수업이 끝나고 24시간 지나면 차단 (시각을 과거로 옮겨 흉내)
-update lessons set starts_at = now() - interval '26 hours', ends_at = now() - interval '25 hours' where enrollment_id = '99999999-1000-0000-0000-000000004300' and seq = 8;
+update lessons set starts_at = now() - interval '26 hours' - interval '1 day' * 9, ends_at = now() - interval '25 hours' - interval '1 day' * 9 where enrollment_id = '99999999-1000-0000-0000-000000004300' and seq = 8;
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004301';
 select pg_temp.expect_error($$select tutor_student_profile('99999999-0000-0000-0000-000000004300')$$, 'not assigned|42501');
