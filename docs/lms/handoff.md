@@ -302,7 +302,8 @@
 - ✅ 대표 결정 (11/6 밤, H26(75) 기록 필요): ① To-do 는 **앞으로 새로 시작하는 학생만** — migration 4601(`20261107020000`): feature_flags 줄 `first_lesson_followup_since`(스위치 아님, enabled=false)의 updated_at 한국 날짜 = 기능 시작일. 그 날짜 이후 시작한 수강권 + 그 전에 진행한 수업이 없는 학생만 (시험 DB 시작일 11/6 → 기존 Blair 학생 To-do 는 사라짐, 이미 저장한 STU-0002·0006 값은 그대로). 운영 DB 에 적용하는 날이 운영 시작일 ② Other textbook 직접 입력 유지 ③ Wants to Improve 는 강사가 직접 적어야 완료(지금 그대로) ④ 한국어는 위 '후순위 미완료'
 
 ## ✅ 2026-11-09 재등록·보강 이월·적립금 넣기/빼기 운영자 화면 — 운영 반영 완료 H26(120), 후속 수정 3건 운영 배포 대기 H26(154) (브랜치 `claude/admiring-pasteur-wbwsie`)
-- **⏭ 운영 배포 대기 (대표 승인 필요, 화면 코드만·DB 변경 없음)**: 금액 칸 소수점·마이너스 오류(4e6372e — 운영에는 아직 1.5 → 15원 저장 가능) · 학생 상세 [정규 일정 확정](c26e8d9) · 재등록 완료 화면 대시보드 버튼 뺌. 시험 사이트 운영자 클릭 검증 통과 11/11~12. 운영 배포 전 `git log origin/lms-test..origin/lms-prod` 확인
+- **11/12 운영 배포**: lms-prod f4efd3a → **695f14b** (= 운영 + 4e6372e·f0ff27e 만, 운영에만 있던 2커밋은 lms-test 에 먼저 합침). 운영 브랜치 주소에 새 코드 확인. **edgeenglish.kr 은 main 을 따라감 → main(f4efd3a) push 는 권한 확인 거절로 대기**. 되돌리기: lms-prod 를 f4efd3a 로. 시험 DB STU-0044 이름 '서지안'으로(운영 메모에 시험용 표시)
+- (예전) 운영 배포 대기 (대표 승인 필요, 화면 코드만·DB 변경 없음): 금액 칸 소수점·마이너스 오류(4e6372e — 운영에는 아직 1.5 → 15원 저장 가능) · 학생 상세 [정규 일정 확정](c26e8d9) · 재등록 완료 화면 대시보드 버튼 뺌. 시험 사이트 운영자 클릭 검증 통과 11/11~12. 운영 배포 전 `git log origin/lms-test..origin/lms-prod` 확인
 - 시험 DB 남은 검증용 학생 'QA 일정확정 차단 1112'(Work 생성 — 이름 규칙 어긋남, 정리 여부 대표 결정)
 - migration **20261109130000_lms_renewal_screen** (시험 DB 적용, 운영 미반영): payments.paid_at null 허용(결제 시각 모르면 비움)·received_on=결제일·confirmed_at=기록 시각, 마감 판정 결제일 기준(`lms_comp_chain`·`admin_carry_over_makeups`), 신규 등록·재등록 결제는 `payment.paid_on`(예전 paid_at 도 받음), `admin_renew`(재등록+정규 일정 확정 한 번에), 읽기 `admin_renewal_context`·`admin_renewal_conflicts`(자기 재등록 대기 자리 제외)·`admin_carry_check`·`admin_student_rewards`. 기존 결제 기록 그대로
 - 지난 수강권에 날짜 안 잡은 휴무 보강이 있으면(기존 규칙 2750) 재등록 저장 때 일정안만 저장 → [보강 이월] 저장 뒤 자동 확정(`admin_confirm_schedule`). 학생 상세 '정규 일정 · 확정 전' 줄로 보임
