@@ -126,7 +126,7 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
     return (
       <label className={`relative inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] font-bold leading-snug ${tone}`}>
         <Icon d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2" className="h-4 w-4 shrink-0" />
-        <span className="text-[#3a22b0]">{text} · <span className="text-[#3a22b0]">변경 ›</span></span>
+        <span className="text-[#3a22b0]">{text} · <span className="text-[#3a22b0] underline">변경</span></span>
         <select aria-label="시간대 변경" value={change.value} disabled={change.disabled}
           onChange={(e) => e.target.value !== change.value && change.onChange(e.target.value)}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
@@ -1602,7 +1602,7 @@ function LearnedBand({ minutes }: { minutes: number }) {
   return (
     <section aria-label="나의 누적 학습 시간" className="flex w-full items-center justify-between gap-3 rounded-[14px] bg-[#f4f1ff] px-3.5 py-2 lg:max-w-[760px]">
       <span className="grid min-w-0 gap-0.5">
-        <span className="text-[13px] font-bold text-[#1d1b2b]">나의 누적 학습 시간 <span className="text-[11.5px] font-normal text-[#77728c]">· 진행 완료된 수업 기준</span></span>
+        <span className="text-[13px] font-bold text-[#1d1b2b]">나의 누적 학습 시간</span>
         <span className="text-[12px] leading-[1.45] text-[#5c4b95]">영어, 결국 오래 하는 사람이 이겨요<br />벌써 이만큼이나 꾸준히 쌓았어요😊</span>
       </span>
       <span className="shrink-0 whitespace-nowrap text-[14px] font-extrabold text-[#4d34bc]">{text}</span>
