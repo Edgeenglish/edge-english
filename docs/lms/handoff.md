@@ -32,7 +32,18 @@
 - 운영에 안 나간 DB migration (11/11 기준): 20261111010000_student_my_info · 20261111073809_student_makeup_mail_and_original_slot · 20261111120000_tutor_updates_mail · 20261111120100_notice_mail_wording · 20261111140000(이 작업) · 20261111150000_student_notice_reads_history · 20261111150100_student_reminder_settings. lms-prod 에만 있는 커밋 5개는 내용이 lms-test 에 모두 있음(확인함)
 - 안 넣은 것: Student canceled 의 Remarks 칸(저장할 곳이 없어 뺌, 시안 휴대폰도 없음)
 
-## ⏭ 다음 (새 세션): 통합 운영 배포 — 대표 11/11 '가) 묶어서 한 번에' 결정
+## ✅ 11/11 통합 운영 배포 완료 — 정책 원본 H26(147) (브랜치 claude/hopeful-heisenberg-f94wcr = lms-test = lms-prod·main 8af05d9)
+- 운영 전용 커밋 5개 병합(eb21855, lms-test 쪽 유지) · 자동 시험 시각 의존 실패 1건 고침(71d6b8b: schema_test 대체수업 24시간 차단 시험이 수요일 낮 UTC 에 같은 학생 화요일 수업과 겹침 → 9일 더 과거로) · vitest 433·test:db 전부·tsc·next build 통과
+- 운영 DB: 백업 **snapshots 40**(표 57개 행 수 일치 + `_functions_before` 함수 253개·`_triggers`·`_cron`) → migration 11개(20261111010000·073809·120000·120100·140000·150000·150100·160000·170000·170500·180000) + `supabase/data/legacy_learned_minutes_20261111.sql`(14명 225회 8,000분). 적용 전 tutor_screen·tutor_record_class·lms_makeup_book 이 운영에만 있는 변경 없는지 확인. 적용 뒤 새 함수 63개 md5 = 시험 DB(4개는 주석만 다름) · 앱 사용자 내부 함수 실행 불가 · 예약 실행 5개(lms-first-class-mail·lms-lesson-reminders 추가) 정상 · first_class_mail_since = 12:19 UTC(이 뒤 만든 수강권만 첫 수업 안내)
+- 120000 은 하위 에이전트로 적용하다 Supabase 확인 질문이 화면에 안 떠 시간 초과(적용 안 됨 확인) → 본 세션에서 다시 적용. 운영 DB migration 은 본 세션에서만
+- 코드: lms-prod·main 172cc4f → 8af05d9, edgeenglish.kr·git-lms-prod 주소 새 코드 확인
+- 배포 뒤: 운영자 권한으로 학생 14명·강사 5명 화면 함수 오류 없음(롤백 트랜잭션), 강사 실제 Class Record 저장 1건 정상, 잘못 나간 메일 0
+- **학생 수업 리마인더 켬(11/11 21:31 KST)**: 켜기 전 운영 미리보기(롤백) 정상·첫 수업 안내와 겹침 방지·켤 때 밀린 메일 0 확인. 멈춤 = 운영 DB `feature_flags` 'lesson_reminder_since' 줄 삭제
+- Olivia 10/20~ 시각·길이: 아래 학생 리마인더 항목대로 다른 세션이 시트 보완·재합산 끝 → 이번 데이터에 포함
+- 되돌리기: DB = snapshots 40 `_functions_before` · 코드 = lms-prod 172cc4f
+- 남은 미확인: 운영 실제 로그인 화면 클릭(학생·강사·운영자) — 대표가 평소 쓰면서 이상하면 알려 주기
+
+## (지난 계획) 통합 운영 배포 — 대표 11/11 '가) 묶어서 한 번에' 결정
 - 순서: ① 운영 전용 커밋 5개(172cc4f·06aa38c·3e5f508·7371e24·b4c9837)를 lms-test 에 병합 ② lms-test 에만 있는 커밋(11/11 기준 102개)·migration 12개를 기능별로 정리 — 특히 실제 학생·강사에게 가는 자동 메일(강사 통보 메일·첫 수업 안내·학생 취소/보강 메일·수업 알림 메일·재등록 안내 등)을 하나씩 확인 ③ 승인 안 된 자동 메일은 끄거나 빼서 위험 제거 ④ 병합으로 영향받은 부분만 통합 QA(이미 끝난 QA 반복 안 함) ⑤ 운영 DB 백업·복구 가능 확인 → migration → lms-prod·main → 배포 후 핵심 기능 재검증. 위험을 못 없애거나 필수 검증이 실패하면 배포하지 말고 그 문제만 보고
 - 11/11 확인: '학생 대시보드·내 정보 메뉴 수정' 세션 끝(712ec37), '학생 재등록 안내 자동 메일' 세션은 시험 반영 끝·운영 배포만 대기(5f1f3e8) → 둘 다 이 통합 배포에 포함
 - 대표 11/11 추천(통합 배포 때 같이 처리): ① **Olivia 10/20~10/30 일부 수업 시간·길이 없음 → 누적 학습 시간에 안 들어감**: 강사 시트(Class Record) 원본 확인해 따로 보완(배포를 막지 않음, 시트 고치면 Remarks 에 '[Edge 날짜] …') ② **학생 수업 리마인더(migration 20261111170500)**: 운영은 feature_flags 'lesson_reminder_since' 행을 넣는 순간 실제 학생에게 감 → 배포는 하되 스위치는 끈 채로, 첫 수업 안내 메일·다른 자동 메일과 중복·충돌을 확인한 뒤 켜기
