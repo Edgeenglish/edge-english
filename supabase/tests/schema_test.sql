@@ -1972,6 +1972,12 @@ insert into feature_flags (key, enabled, note) values ('lesson_reminder_since', 
 select pg_temp.ok((select array_agg(which) from lms_lesson_reminders_due('2031-03-02 11:30Z') d join lessons l on l.id = d.lesson_id where l.student_id = '99999999-0000-0000-0000-000000002900') = '{24h}'
               and not exists (select 1 from lms_lesson_reminders_due('2031-03-02 12:00Z') d join lessons l on l.id = d.lesson_id where l.student_id = '99999999-0000-0000-0000-000000002900'),
   '리마인더: 24시간 전부터 1시간 안에만 (늦은 알림 안 보냄)');
+insert into notifications (recipient_kind, recipient_id, email, locale, template, payload, dedupe_key)
+values ('student', '99999999-0000-0000-0000-000000002900', 'support@edgeenglish.kr', 'ko', 'lesson_notice_first_class',
+        jsonb_build_object('enrollment_id', '99999999-1000-0000-0000-000000002900'), 'test-first-class-2900');
+select pg_temp.ok(not exists (select 1 from lms_lesson_reminders_due('2031-03-02 11:30Z') where lesson_id = '77777777-2900-0000-0000-000000000001'),
+  '리마인더: 첫 수업 안내 메일을 받은 첫 수업은 24시간 전 알림 안 보냄 (두 통 방지)');
+delete from notifications where dedupe_key = 'test-first-class-2900';
 select lms_lesson_reminder_run('2031-03-02 11:30Z');
 select pg_temp.ok((select count(*) = 1 and bool_and(n.template = 'lesson_reminder_24h' and n.email = 'support@edgeenglish.kr' and n.payload ->> 'intended_email' = 'remind-s@example.com'
                           and n.payload ->> 'subject' = '[시험 · ' || (select code from students where id = '99999999-0000-0000-0000-000000002900') || '] [엣지영어] 수업 안내 · 3월 3일(월) 오후 8시 [한국 시간]'
