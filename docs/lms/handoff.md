@@ -106,10 +106,11 @@
 - 로그인 계정 만들기: 학생 화면 운영자 띠에서 빼고 운영자 수강생 상세 '운영진만' 칸 '로그인 이메일' 줄로 옮김 (`StudentDetail.tsx` LoginRow, `StudentDetailLive.tsx` createLogin — DB 함수 admin_student_login 그대로, 대표(owner) 계정만 가능). 계정 있으면 '이메일 · 연결됨'만
 - 카드: 위 줄 '제목 · 신청하기 ›'(누르는 곳, hover·포커스 테두리), 아래 정보. 휴대폰(640px 미만)은 한 줄에 한 카드, PC 두 칸. 보강 카드 '강사 확정 대기 중 N회' = 보강 신청 중 tutor_reviewing 개수
 - 시험 DB: STU-0001 에 시험 로그인 qa-login-stu0001@example.com 연결(SQL 로 owner 권한 흉내, 메일 발송 없음). 다른 이메일로 다시 연결 → DB 가 막음 확인
-- **운영 배포 11/11 f4efd3a** (lms-prod·main): lms-prod 위에 StudentHome.tsx·fake-data.ts 만 (DB 변경 없음). 로그인 계정 만들기 이동(StudentLive·StudentDetail)은 대표 계정 화면 QA 뒤 따로 배포 — 운영은 아직 운영자 띠에 예전 입력칸
+- **운영 배포 11/11 f4efd3a** (lms-prod·main): (H26(157) 참고) lms-prod 위에 StudentHome.tsx·fake-data.ts 만 (DB 변경 없음). 로그인 계정 만들기 이동(StudentLive·StudentDetail)은 대표 계정 화면 QA 뒤 따로 배포 — 운영은 아직 운영자 띠에 예전 입력칸
 - lms-test cadc6fe·63f27af (운영 미배포): 내 정보 알림 설정 '수업 알림은 수업 24시간 전과 2시간 전에…' 문구, 누적 학습 시간 띠 문장 400 통일, 변경권 28일 안내 → ? 툴팁(HelpTip: 마우스 올리기·클릭·터치·포커스, Esc·바깥 누르면 닫힘)
 - lms-test 54bfd5b (운영 미배포): 학생 홈 '내 수강 정보' 요약 칸 (다음 수업 아래·빠른 신청 위). 담당 강사 = student_regular_slots 강사만, 수업 시간 = 정규 일정을 학생 시간대로, 남은 수업 = lessonsLeft.total(재등록 기준과 같음), 종료일 = final_end_date 23:59 KST 의 학생 현지 날짜. 자세히 보기 › → 내 정보 #my-pass. QA: STU-0012(담당 Emma·다음 수업 James)·0002(멜버른·연장)·0041(시드니)·0004(연장 5회·12주)·0018 본인, PC·390·360 통과
-- **운영 배포 11/11 42d84e7** (lms-prod·main): cadc6fe·63f27af·54bfd5b 의 StudentHome.tsx 만 (처리 내역 01982ef·로그인 계정 이동 제외, DB 변경 없음). 되돌리기: lms-prod 에서 42d84e7 revert 후 push
+- **운영 배포 11/11 42d84e7** (lms-prod·main): (H26(158) 참고) cadc6fe·63f27af·54bfd5b 의 StudentHome.tsx 만 (처리 내역 01982ef·로그인 계정 이동 제외, DB 변경 없음). 되돌리기: lms-prod 에서 42d84e7 revert 후 push
+- **운영 배포 11/12 d66683b** (lms-prod·main): 학생 '처리 내역' (H26(156) 참고) — 대표 운영 화면 확인 이상 없음(11/12) (01982ef·3a78fb6, ChatGPT Work 개발·Claude 독립 QA). 운영 DB: 백업 snapshots id 47(전체 표) 뒤 migration 20261111162429 student_processing_history 추가(읽기 전용 새 함수). 권한: 학생 본인만·다른 학생/로그인 없음 거절 확인. 되돌리기: drop function public.student_processing_history(uuid) + lms-prod 에서 d66683b revert. 로그인 계정 이동은 여전히 제외
 - **미완료 (11/12 검토, 대표 지시 11/11)**: 학생 홈 재등록 안내·할 일이 둘 다 노란색이라 단조롭고 강조가 겹침 → 역할에 맞게 색을 나눈 시안(PC·휴대폰)을 먼저 대표에게 제안. 기존 LMS 디자인에 어울리는 차분한 색, 새 카드·기능 추가 금지. **대표가 시안 확인 전에는 코드·운영 수정 금지**
 - 대표 확인(11/11): 휴대폰 카드 세로 한 장씩 유지 · 운영자 띠 검색칸 유지. **남은 것: 대표 계정으로 시험 사이트 수강생 상세 [로그인 만들기] 화면 QA (STU-0002, example.com 이메일) — 끝나면 Claude 가 시험 DB 로 연결·기존 기록 확인**
 
@@ -202,7 +203,7 @@
 - 강사 WhatsApp 수강생 취소 문구(대화체) 운영 반영 lms-prod 4cd31e9
 - ⚠ 운영에 GitHub 웹으로 직접 올리면 lms-test 와 어긋남 → 다음부터는 lms-test 에도 같이 올리거나 Claude 에게 합치기 요청
 
-## ⏳ 강사 통보를 강사 LMS로 옮기기 (H26(116)) — **대시보드 개편 세션이 끝난 뒤 시작** (대표 11/9 순서: ① 실제 계정 클릭 QA 아무 때나 ② 대시보드 개편 ③ 이 작업)
+## ✅ 강사 통보를 강사 LMS로 옮기기 (H26(116)) — **끝남: 위 '11/11 강사 통보 LMS 이전' 항목 참고** (아래는 11/9 조사 기록)
 - 같은 운영진 안내 카드 파일(`LessonChange.tsx`·`PlanCard.tsx`·`board.ts`·`AdminDashboard.tsx`)을 대시보드 개편도 고치므로 개편이 lms-test 에 올라간 뒤 그 위에서 시작. 시작 전 ChatGPT `TutorHome.tsx`·`live.ts` 작업(11/9 20:57 KST 마지막 커밋)이 끝났는지 확인
 - **운영 DB 읽기 확인 (11/9, 강사에게 간 통보 기록)**: 수업 취소 change 7(학생 취소 6·강사 사정 1, 보냄 4·대기 3) → Updates 이미 있음 · 운영진 확정 보강 makeup_confirmed 12(보냄 8·대기 4) · makeup_ask 11 모두 not_needed(이미 없앰) · 대체 수업 요청 sub_ask 12 → To-do 이미 있음, 복사 카드만 없앰 · 대체 수업 확정 sub_confirmed 9(대기 1) · 신규 수강생 admin_tasks new_student_matching 3·schedule_plans 4(강사 제안 = `confirm.ts proposalMessage`, 확정 = `tutorConfirmMessage`) · 재등록 renewal_tutor_notice 열림 1 · 보강 시간 변경·강사 바뀜·보강 취소·취소 되돌림 0건(문구는 `lesson-change.ts tutorNotice` makeup_rescheduled·makeup_tutor_removed·makeup_voided·revert)
 - **✅ 대표 확정 11/10 H26(122)(125) — 둘 다 Updates 에 넣음 (보이는 기한 = 바뀐 뒤 첫 수업 시각 / 새 첫 수업 시각, H26(116) 원칙 그대로)** — 대상 통보: ① 정규 수업 시간 변경(`regular_changes` 운영 1건, `students.ts regularNoticeEn` WhatsApp 문구) ② 첫 수업 전 수업 날짜 변경(`PrestartMove.tsx` 저장 뒤 WhatsApp 문구, 기록 없음). 넣으면 Updates, 보이는 기한 = 새 첫 수업 시각 / 바뀐 수업 시각 (권장안 — 대표 확인 필요)
