@@ -526,6 +526,9 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const taskRows = (tasks.data ?? []) as unknown as TaskRow[];
   const plans = await loadPlans(sb, taskRows.filter((t) => t.kind === 'new_student_matching' && t.enrollment_id).map((t) => t.enrollment_id!));
   const sent = new Map(renewalSent.error ? [] : (renewalSent.data ?? []).map((r) => [r.enrollment_id as string, r.sent_at as string]));
+  // 재등록 안내 자동 메일이 정상 발송된 수강권도 '보냄' (함수가 없는 DB면 건너뜀)
+  const mailSent = await sb.rpc('admin_renewal_mail_sent');
+  if (!mailSent.error) for (const r of (mailSent.data ?? []) as { enrollment_id: string; sent_at: string }[]) if (!sent.has(r.enrollment_id)) sent.set(r.enrollment_id, r.sent_at);
   const endingRows = (ending.data ?? []) as unknown as EndingRow[];
   const trial = (r: { student?: { is_trial_account?: boolean | null } | { is_trial_account?: boolean | null }[] | null }) => {
     const st = Array.isArray(r.student) ? r.student[0] : r.student;
