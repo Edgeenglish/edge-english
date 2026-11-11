@@ -298,7 +298,9 @@
 - 4단계 **마지막: 처음 쓰는 운영진 기준 업무 흐름 독립 재검증** (2026-11-06 대표) — 설명 없이 휴대폰·PC 로 처음부터 끝까지: 신규 등록(결제 대기 → 결제 확인) → 강사 매칭·제안·확정 → 양쪽 안내 → 시작 전 날짜 변경 → 수업 취소·보강 → 강사 휴무·대체. 단계마다 막히는 곳·다음 행동이 안 보이는 곳·누르는 횟수를 적고 개선안은 시안으로 먼저. 그 뒤 Work 에서 학생·강사·운영진 정상 흐름 독립 재검증 → 운영 배포(대표 승인)
 - ✅ 대표 결정 (11/6 밤, H26(75) 기록 필요): ① To-do 는 **앞으로 새로 시작하는 학생만** — migration 4601(`20261107020000`): feature_flags 줄 `first_lesson_followup_since`(스위치 아님, enabled=false)의 updated_at 한국 날짜 = 기능 시작일. 그 날짜 이후 시작한 수강권 + 그 전에 진행한 수업이 없는 학생만 (시험 DB 시작일 11/6 → 기존 Blair 학생 To-do 는 사라짐, 이미 저장한 STU-0002·0006 값은 그대로). 운영 DB 에 적용하는 날이 운영 시작일 ② Other textbook 직접 입력 유지 ③ Wants to Improve 는 강사가 직접 적어야 완료(지금 그대로) ④ 한국어는 위 '후순위 미완료'
 
-## ✅ 2026-11-09 재등록·보강 이월·적립금 넣기/빼기 운영자 화면 — 시험 환경 개발 완료, 대표 화면 시험 대기 (브랜치 `claude/admiring-pasteur-wbwsie` = lms-test 반영)
+## ✅ 2026-11-09 재등록·보강 이월·적립금 넣기/빼기 운영자 화면 — 운영 반영 완료 H26(120), 후속 수정 3건 운영 배포 대기 H26(154) (브랜치 `claude/admiring-pasteur-wbwsie`)
+- **⏭ 운영 배포 대기 (대표 승인 필요, 화면 코드만·DB 변경 없음)**: 금액 칸 소수점·마이너스 오류(4e6372e — 운영에는 아직 1.5 → 15원 저장 가능) · 학생 상세 [정규 일정 확정](c26e8d9) · 재등록 완료 화면 대시보드 버튼 뺌. 시험 사이트 운영자 클릭 검증 통과 11/11~12. 운영 배포 전 `git log origin/lms-test..origin/lms-prod` 확인
+- 시험 DB 남은 검증용 학생 'QA 일정확정 차단 1112'(Work 생성 — 이름 규칙 어긋남, 정리 여부 대표 결정)
 - migration **20261109130000_lms_renewal_screen** (시험 DB 적용, 운영 미반영): payments.paid_at null 허용(결제 시각 모르면 비움)·received_on=결제일·confirmed_at=기록 시각, 마감 판정 결제일 기준(`lms_comp_chain`·`admin_carry_over_makeups`), 신규 등록·재등록 결제는 `payment.paid_on`(예전 paid_at 도 받음), `admin_renew`(재등록+정규 일정 확정 한 번에), 읽기 `admin_renewal_context`·`admin_renewal_conflicts`(자기 재등록 대기 자리 제외)·`admin_carry_check`·`admin_student_rewards`. 기존 결제 기록 그대로
 - 지난 수강권에 날짜 안 잡은 휴무 보강이 있으면(기존 규칙 2750) 재등록 저장 때 일정안만 저장 → [보강 이월] 저장 뒤 자동 확정(`admin_confirm_schedule`). 학생 상세 '정규 일정 · 확정 전' 줄로 보임
 - 화면: `src/app/lms/admin/students/[code]/Renewal.tsx`(세 창)·`StudentDetail.tsx`(수강·적립금 칸)·`AdminDashboard.tsx`(종료 임박 카드 [재등록 넣기] → `?renew=1`)·`NewStudent.tsx`(결제 날짜만), 계산 `src/lms/admin/renewal.ts`, DB 호출 `renewal-live.ts`
