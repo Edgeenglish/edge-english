@@ -20281,6 +20281,16 @@ revoke all on function lms_makeup_none_work_mail() from public, anon, authentica
 -- >>> 20261111120100_lms_notice_mail_wording.sql
 -- 학생 취소·보강 신청 메일 문구 (대표 11/11 확정 '넣어': 해요체, '보강 희망 시간', '(아직 강사 확인 중)')
 -- + 보강 신청 강사 메일 H26(124) 문구 + 강사 메일 끝 문구 통일 (H26(127))
+-- + 보강 확정·시간 변경 메일에 캘린더 추가 버튼 2개 (대표 11/11 '버튼 2개')
+-- URL 한 칸 인코딩 (메일 속 캘린더 링크용)
+create or replace function lms_urlenc(p text) returns text language sql immutable as $$
+  select coalesce(string_agg(case when (c between 48 and 57) or (c between 65 and 90) or (c between 97 and 122) or c in (45, 46, 95, 126)
+                                  then chr(c) else '%' || lpad(upper(to_hex(c)), 2, '0') end, '' order by i), '')
+  from (select convert_to(coalesce(p, ''), 'UTF8') as bin) x, generate_series(0, length(convert_to(coalesce(p, ''), 'UTF8')) - 1) i,
+       lateral get_byte(x.bin, i) c
+$$;
+revoke all on function lms_urlenc(text) from public, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.lms_notice_mail(p_notice uuid)
  RETURNS TABLE(intended_email text, to_email text, subject text, html text, body text)
  LANGUAGE plpgsql
@@ -20316,6 +20326,10 @@ declare
   v_tmchg boolean := true;
   v_otu tutors;
   v_what text;
+  v_ctitle text;
+  v_meet text;
+  v_gcal text;
+  v_ics text;
 begin
   select * into n from lesson_notices where id = p_notice;
   if not found then return; end if;
@@ -20606,7 +20620,21 @@ begin
     v_url := v_url || '/tutor';
   end if;
 
-  body := lms_strip_bold(array_to_string(v_lines, E'\n')) || E'\n\n' || v_btn || ': ' || v_url || E'\n' || v_foot
+  -- 캘린더에 추가 버튼 2개 (대표 11/11: 화면과 같은 이름 — 구글 링크 / 애플·삼성은 .ics 파일 /lms/ics)
+  v_meet := nullif(trim(tu.meet_url), '');
+  v_ctitle := case when n.recipient_kind = 'student' then case when v_comp then '엣지영어 보상수업' else '엣지영어 보강 수업' end
+                   else 'Edge English ' || case when v_comp then 'compensation class' else 'make-up' end || ' · ' || coalesce(nullif(st.name_en, ''), st.name_ko) end;
+  v_gcal := 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' || lms_urlenc(v_ctitle)
+            || '&dates=' || to_char(l.starts_at at time zone 'UTC', 'YYYYMMDD"T"HH24MISS"Z"') || '/' || to_char(l.ends_at at time zone 'UTC', 'YYYYMMDD"T"HH24MISS"Z"')
+            || coalesce('&details=' || lms_urlenc(v_meet), '');
+  v_ics := lms_url() || '/ics?t=' || lms_urlenc(v_ctitle)
+           || '&s=' || lms_urlenc(to_char(l.starts_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+           || '&e=' || lms_urlenc(to_char(l.ends_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+           || coalesce('&d=' || lms_urlenc(v_meet), '');
+  body := lms_strip_bold(array_to_string(v_lines, E'\n')) || E'\n\n' || v_btn || ': ' || v_url
+          || E'\n' || case when n.recipient_kind = 'student' then '구글 캘린더에 추가: ' else 'Google Calendar: ' end || v_gcal
+          || E'\n' || case when n.recipient_kind = 'student' then '애플·삼성 캘린더에 추가: ' else 'Apple / Samsung Calendar: ' end || v_ics
+          || E'\n' || v_foot
           || case when v_live then '' else E'\n\n(시험 발송 · 원래 받는 사람: ' || coalesce(intended_email, '없음') || ')' end;
   html := '<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1d1b2a;max-width:480px">'
           || case when v_live then '' else '<p style="background:#fff4d6;color:#5c3b00;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600">시험 발송 · 원래 받는 사람: ' || lms_html(coalesce(intended_email, '없음')) || '</p>' end
@@ -20615,6 +20643,10 @@ begin
           || case when cardinality(v_lines) >= 5 then '<span style="color:#55526a;text-decoration:line-through">' || lms_bold_html(v_lines[5]) || '</span><br>' else '' end
           || lms_bold_html(v_lines[4]) || '</p>'
           || '<p><a href="' || lms_html(v_url) || '" style="display:inline-block;background:#5b3df0;color:#fff;border-radius:10px;padding:11px 18px;font-weight:700;text-decoration:none">' || lms_html(v_btn) || '</a></p>'
+          || '<p><a href="' || lms_html(v_gcal) || '" style="display:inline-block;margin:0 6px 6px 0;border:1px solid #d9d5e8;color:#1b1442;border-radius:10px;padding:8px 12px;font-size:13.5px;font-weight:600;text-decoration:none">'
+          || case when n.recipient_kind = 'student' then '구글 캘린더에 추가' else 'Google Calendar' end || '</a>'
+          || '<a href="' || lms_html(v_ics) || '" style="display:inline-block;margin:0 6px 6px 0;border:1px solid #d9d5e8;color:#1b1442;border-radius:10px;padding:8px 12px;font-size:13.5px;font-weight:600;text-decoration:none">'
+          || case when n.recipient_kind = 'student' then '애플·삼성 캘린더에 추가' else 'Apple / Samsung Calendar' end || '</a></p>'
           || '<p style="font-size:12.5px;color:#55526a;border-top:1px solid #e6e3ef;padding-top:10px">' || lms_html(v_foot) || '</p></div>';
   return next;
 end $function$
