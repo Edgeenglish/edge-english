@@ -110,7 +110,7 @@
 - lms-test cadc6fe·63f27af (운영 미배포): 내 정보 알림 설정 '수업 알림은 수업 24시간 전과 2시간 전에…' 문구, 누적 학습 시간 띠 문장 400 통일, 변경권 28일 안내 → ? 툴팁(HelpTip: 마우스 올리기·클릭·터치·포커스, Esc·바깥 누르면 닫힘)
 - lms-test 54bfd5b (운영 미배포): 학생 홈 '내 수강 정보' 요약 칸 (다음 수업 아래·빠른 신청 위). 담당 강사 = student_regular_slots 강사만, 수업 시간 = 정규 일정을 학생 시간대로, 남은 수업 = lessonsLeft.total(재등록 기준과 같음), 종료일 = final_end_date 23:59 KST 의 학생 현지 날짜. 자세히 보기 › → 내 정보 #my-pass. QA: STU-0012(담당 Emma·다음 수업 James)·0002(멜버른·연장)·0041(시드니)·0004(연장 5회·12주)·0018 본인, PC·390·360 통과
 - **운영 배포 11/11 42d84e7** (lms-prod·main): cadc6fe·63f27af·54bfd5b 의 StudentHome.tsx 만 (처리 내역 01982ef·로그인 계정 이동 제외, DB 변경 없음). 되돌리기: lms-prod 에서 42d84e7 revert 후 push
-- **운영 배포 11/12 d66683b** (lms-prod·main): 학생 '처리 내역' (01982ef·3a78fb6, ChatGPT Work 개발·Claude 독립 QA). 운영 DB: 백업 snapshots id 47(전체 표) 뒤 migration 20261111162429 student_processing_history 추가(읽기 전용 새 함수). 권한: 학생 본인만·다른 학생/로그인 없음 거절 확인. 되돌리기: drop function public.student_processing_history(uuid) + lms-prod 에서 d66683b revert. 로그인 계정 이동은 여전히 제외
+- **운영 배포 11/12 d66683b** (lms-prod·main): 학생 '처리 내역' (H26(156) 참고) (01982ef·3a78fb6, ChatGPT Work 개발·Claude 독립 QA). 운영 DB: 백업 snapshots id 47(전체 표) 뒤 migration 20261111162429 student_processing_history 추가(읽기 전용 새 함수). 권한: 학생 본인만·다른 학생/로그인 없음 거절 확인. 되돌리기: drop function public.student_processing_history(uuid) + lms-prod 에서 d66683b revert. 로그인 계정 이동은 여전히 제외
 - **미완료 (11/12 검토, 대표 지시 11/11)**: 학생 홈 재등록 안내·할 일이 둘 다 노란색이라 단조롭고 강조가 겹침 → 역할에 맞게 색을 나눈 시안(PC·휴대폰)을 먼저 대표에게 제안. 기존 LMS 디자인에 어울리는 차분한 색, 새 카드·기능 추가 금지. **대표가 시안 확인 전에는 코드·운영 수정 금지**
 - 대표 확인(11/11): 휴대폰 카드 세로 한 장씩 유지 · 운영자 띠 검색칸 유지. **남은 것: 대표 계정으로 시험 사이트 수강생 상세 [로그인 만들기] 화면 QA (STU-0002, example.com 이메일) — 끝나면 Claude 가 시험 DB 로 연결·기존 기록 확인**
 
