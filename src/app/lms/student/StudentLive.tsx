@@ -87,8 +87,6 @@ function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // 평소에는 운영자 칸 첫 줄의 작은 버튼만 — 눌렀을 때만 입력칸이 열림 (11/11 대표: 운영자 칸이 학생 화면 모양을 바꾸지 않게)
-  const [open, setOpen] = useState(false);
   async function submit() {
     setBusy(true);
     setMsg(null);
@@ -102,12 +100,6 @@ function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{
       setBusy(false);
     }
   }
-  if (!open)
-    return (
-      <button type="button" onClick={() => setOpen(true)} className="min-h-[38px] rounded-[8px] bg-white/15 px-3 text-[13px] font-semibold text-white">
-        로그인 만들기
-      </button>
-    );
   return (
     <div className="flex w-full flex-wrap items-center gap-2">
       <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="수강생 로그인 이메일"
@@ -115,9 +107,6 @@ function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{
       <button type="button" disabled={busy || !email.trim()} onClick={submit}
         className="min-h-[38px] rounded-[8px] bg-[#6d4aff] px-3 text-[13px] font-semibold text-white disabled:opacity-50">
         {busy ? '만드는 중…' : '로그인 만들기'}
-      </button>
-      <button type="button" onClick={() => { setOpen(false); setEmail(''); setMsg(null); }} className="min-h-[38px] rounded-[8px] px-2 text-[13px] text-white underline">
-        닫기
       </button>
       {msg && <p role={msg.ok ? 'status' : 'alert'} className={`w-full text-[13px] ${msg.ok ? 'text-[#b9f5cf]' : 'text-[#ffb4ab]'}`}>{msg.text}</p>}
     </div>
