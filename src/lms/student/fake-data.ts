@@ -171,6 +171,10 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
   let reminders = { regular: true, makeup: true, hasEmail: true };
   let tz = { timezone: 'Asia/Seoul', kept: null as string | null };
   let noTimeAt: string | null = null;
+  const notices = [
+    { id: 'n1', title: '크리스마스 시즌 수업 안내', body: '연말 수업 일정과 휴무 안내를 확인해 주세요.', startsOn: '2026-11-10' as KstDate, read: false },
+    { id: 'n2', title: '11월 휴무 일정 안내', body: '11월 휴무 일정을 확인해 주세요.', startsOn: '2026-11-03' as KstDate, read: true },
+  ];
   const actions: StudentActions = {
     reload: async () => ({ ...view, timezone: tz.timezone }),
     reminders: async (change) => (reminders = { ...reminders, ...change }),
@@ -186,6 +190,9 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
         .flatMap((d) => [{ startsAt: at(d, '10:00'), afterEnd: false }, ...(d % 4 === 0 ? [{ startsAt: at(d, '20:00'), afterEnd: false }] : [])]);
     },
     // 미리보기: 휴무·노쇼·보상이 아닌 첫 보강권을 '종료 5일 이내 강사 취소'로 흉내 (실제는 DB 가 강사 취소 기록으로 판정)
+    notices: async () => notices.map((n) => ({ ...n })),
+    noticeRead: async (id: string) => { const n = notices.find((x) => x.id === id); if (n) n.read = true; },
+    history: async () => s.payments.map((p) => ({ ...p, paid: !!p.confirmedOn })),
     myInfo: async () => ({ level: 'Intermediate', goal: 'Speak more confidently at work and improve fluency.', style: '교재 중심 · Speak Now 2', noteUrl: 'https://docs.google.com/document/d/example-preview-doc', learnedMin: 2540 }),
     regularSlots: async () => [{ weekday: 1, timeKst: '20:00', minutes: 50, tutor: '가상강사 Alex' }, { weekday: 4, timeKst: '20:00', minutes: 50, tutor: '가상강사 Alex' }],
     noTimeRights: async () => {

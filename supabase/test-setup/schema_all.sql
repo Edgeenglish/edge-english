@@ -20936,6 +20936,93 @@ begin
   end if;
 end $$;
 
+-- >>> 20261111150000_lms_student_notice_reads_history.sql
+-- 학생 홈·내 정보 (11/11 대표 지시: 최신 통합 시안)
+--  ① 공지 확인 여부: 학생이 공지를 열면 '확인함' (공지별 저장). 운영자 보기로 열어도 학생 확인으로 남기지 않음
+--  ② 내 수강권 '현재·지난 수강권 / 결제 내역': 실제 등록·결제 기록만 (금액·카드 정보는 안 보냄, POL-PAY-11)
+create table if not exists announcement_reads (
+  announcement_id uuid not null references announcements(id),
+  student_id uuid not null references students(id),
+  read_at timestamptz not null default now(),
+  primary key (announcement_id, student_id)
+);
+alter table announcement_reads enable row level security;
+
+create or replace function student_notices(p_student uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', a.id, 'title', a.title, 'body', a.body, 'starts_on', a.starts_on,
+             'read', exists (select 1 from announcement_reads r where r.announcement_id = a.id and r.student_id = v_student))
+           order by a.starts_on desc, a.created_at desc)
+    from announcements a
+    where a.ended_at is null and a.starts_on <= v_today and a.ends_on >= v_today and a.audience in ('student', 'both')), '[]'::jsonb);
+end $$;
+
+create or replace function student_notice_read(p_student uuid, p_announcement uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_student uuid := lms_screen_student(p_student);
+begin
+  if is_admin() then return; end if;  -- 운영자 보기로 연 것은 학생 확인이 아님
+  if not exists (select 1 from announcements a where a.id = p_announcement and a.audience in ('student', 'both')) then
+    raise exception '공지를 찾을 수 없어요.' using errcode = '22023';
+  end if;
+  insert into announcement_reads(announcement_id, student_id) values (p_announcement, v_student)
+  on conflict do nothing;
+end $$;
+
+create or replace function student_enrollment_history(p_student uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  v_current uuid := lms_student_enrollment(v_student);
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'id', e.id, 'current', e.id = v_current, 'status', e.status,
+             'duration_min', e.duration_min, 'weekly_count', e.weekly_count, 'weeks', e.weeks, 'legacy_label', e.legacy_label,
+             'start_date', e.start_date, 'final_end_date', e.final_end_date,
+             'method', (select p.method from payments p where p.enrollment_id = e.id order by p.confirmed_at desc limit 1),
+             'confirmed_on', (select min((p.confirmed_at at time zone 'Asia/Seoul')::date) from payments p where p.enrollment_id = e.id))
+           order by e.seq desc)
+    from enrollments e where e.student_id = v_student and e.status <> 'canceled'), '[]'::jsonb);
+end $$;
+
+revoke all on function student_notices(uuid) from public, anon;
+revoke all on function student_notice_read(uuid, uuid) from public, anon;
+revoke all on function student_enrollment_history(uuid) from public, anon;
+grant execute on function student_notices(uuid) to authenticated;
+grant execute on function student_notice_read(uuid, uuid) to authenticated;
+grant execute on function student_enrollment_history(uuid) to authenticated;
+
+-- >>> 20261111150100_lms_student_reminder_settings.sql
+-- 학생 '내 정보' 이메일 알림 설정(정규/보강 켬·끔) 저장만 — 2900 중 설정 부분 (11/11, 시험 DB 적용)
+-- 수업 알림 메일 발송(2900 lms_send_lesson_reminders·예약 실행)은 넣지 않음: 대표 결정 대기(H26(86) ⑥). 이 파일로 메일은 나가지 않음
+-- 메일 받는 주소 확인은 자동 안내와 같은 기준(students.email 없으면 로그인 이메일, lms_notice_recipient_email)
+alter table students add column if not exists remind_regular boolean not null default true;
+alter table students add column if not exists remind_makeup boolean not null default true;
+create or replace function student_reminders(p_student uuid, p_regular boolean default null, p_makeup boolean default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  st students;
+begin
+  if p_regular is not null or p_makeup is not null then
+    perform set_config('app.actor_id', auth.uid()::text, true);
+    perform set_config('app.actor_via', case when is_admin() then 'admin_for_student' else 'student' end, true);
+    update students set remind_regular = coalesce(p_regular, remind_regular), remind_makeup = coalesce(p_makeup, remind_makeup)
+    where id = v_student;
+  end if;
+  select * into st from students where id = v_student;
+  return jsonb_build_object('regular', st.remind_regular, 'makeup', st.remind_makeup, 'has_email', lms_notice_recipient_email('student', v_student) is not null);
+end $$;
+revoke all on function student_reminders(uuid, boolean, boolean) from public, anon;
+grant execute on function student_reminders(uuid, boolean, boolean) to authenticated;
+
 -- >>> 20261111160000_lms_tutor_makeup_suggest.sql
 -- H26(134) 강사가 학생이 고른 보강 시간이 모두 안 될 때: 강사가 가능 시간에서 1~2개 골라 제안 → 학생이 하나 고르면 바로 확정.
 -- 강사가 먼저 고른 시간이라 D-43('학생 선택만으로 확정 금지')의 예외 (대표 11/11 확정). 재승인 단계 없음.
