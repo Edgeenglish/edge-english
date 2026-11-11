@@ -672,7 +672,7 @@ export default function StudentHome(props: {
           {!(isAdminView && studentTz !== 'Asia/Seoul') && (
             <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
           )}
-          {tab === 'home' && info && info.learnedMin > 0 && <LearnedBand minutes={info.learnedMin} />}
+          {tab === 'home' && <LearnedBand minutes={info?.learnedMin ?? 0} />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
               <span>{linkNote}</span>
