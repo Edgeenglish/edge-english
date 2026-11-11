@@ -7,7 +7,7 @@
 
 import { typeKo, typeKoLong } from '@/lms/class-type';
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
 import { koZoneCity, ZONE_ROWS, zoneName } from '@/lms/admin/places';
@@ -592,6 +592,32 @@ export default function StudentHome(props: {
   const makeupWaiting = s.requests.filter((r) => r.kind === 'makeup' && r.status === 'tutor_reviewing').length;
   const quickTop = 'flex min-h-[48px] w-full items-center justify-between gap-2 rounded-t-[16px] border-b border-[#eeecf4] px-4 text-left transition-colors hover:bg-[#f7f5fd] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#5b3df0]';
   const quickGo = <span className="shrink-0 text-[12.5px] font-semibold text-[#5b3df0]">신청하기 ›</span>;
+  // 내 수강 정보 (11/11 대표 시안): 담당 강사 = 정규 일정 강사만 (다음 수업 강사·대체강사로 채우지 않음), 남은 수업 = 재등록 기준과 같은 lessonsLeft.total
+  const regularTutors = [...new Set(slots.map((x) => x.tutor))].join(' · ');
+  const summaryItems: [string, string][] = [
+    ['이름', s.name],
+    ['담당 강사', regularTutors || '-'],
+    ['현재 코스', s.product],
+    ['수업 시간', slotText ? [...new Set(slotText.map((g) => g.short))].join(' / ') : '-'],
+    ['남은 수업', notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : `${left.total}회`],
+    ['종료일', endDate ? endDay(endDate) : '-'],
+  ];
+  const summary = (
+    <section aria-label="내 수강 정보" className={`${card} px-4 py-3`}>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[14px] font-bold">내 수강 정보</h2>
+        <button type="button" onClick={() => { setTab('me'); setTimeout(() => document.getElementById('my-pass')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 80); }}
+          className="-my-1.5 min-h-[32px] shrink-0 rounded-[8px] px-1.5 text-[12.5px] font-semibold text-[#5b3df0] hover:bg-[#f7f5fd] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0]">
+          자세히 보기 ›
+        </button>
+      </div>
+      <p className="mt-1.5 flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] leading-snug">
+        {summaryItems.map(([k, v]) => (
+          <span key={k} className="max-w-full break-keep"><span className="whitespace-nowrap text-[#8b88a0]">{k}</span> <b className="font-semibold text-[#1d1b2b]">{v}</b></span>
+        ))}
+      </p>
+    </section>
+  );
   const quick = (
     <section aria-label="빠른 신청" className="grid auto-rows-fr grid-cols-1 gap-2 sm:grid-cols-2">
       <div className={`${card} flex flex-col`}>
@@ -599,10 +625,10 @@ export default function StudentHome(props: {
           <span className="text-[15px] font-bold text-[#1d1b2b]">수업 변경·취소</span>{quickGo}
         </button>
         <div className="flex flex-1 flex-col gap-1.5 px-4 pb-3.5 pt-2.5">
-          <p className="text-[12.5px] text-[#55526a]">
-            남은 변경권 <b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.creditsLeft}개</b> / 총 {s.creditsPerPeriod}개
+          <p className="relative flex flex-wrap items-center gap-x-1 text-[12.5px] text-[#55526a]">
+            <span>남은 변경권 <b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.creditsLeft}개</b> / 총 {s.creditsPerPeriod}개</span>
+            <HelpTip text="변경권은 28일마다 새로 제공돼요." />
           </p>
-          <p className="text-[11.5px] leading-[1.45] text-[#6b6880]">변경권은 28일마다 새로 제공돼요.</p>
           <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
             <b className="font-bold text-[#3d3a52]">6시간 전</b><span>변경권 1개 사용 · 보강 가능</span>
             <b className="font-bold text-[#3d3a52]">6시간 이내</b><span>변경권 유지 · 보강 불가 (수업 1회 차감)</span>
@@ -757,6 +783,7 @@ export default function StudentHome(props: {
             {renewalCard}
             {todoBars}
             {nextCard}
+            {summary}
             {quick}
             {leaveVisible && leaveAsk.length === 0 && (
               <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
@@ -952,10 +979,13 @@ export default function StudentHome(props: {
                     {!reminders.hasEmail && <p className="text-[13px] font-semibold text-[#c0392b]">등록된 이메일이 없어 메일을 받을 수 없어요.</p>}
                     <Switch label="정규 수업" sub="일반 수업 리마인더" on={reminders.regular} disabled={busy} onChange={(v) => saveReminder({ regular: v })} />
                     <Switch label="보강 수업" sub="보강 수업 리마인더" on={reminders.makeup} disabled={busy} onChange={(v) => saveReminder({ makeup: v })} />
-                    <p className="mt-1.5 rounded-[9px] bg-[#f7f6fa] px-3 py-2.5 text-[12.5px] text-[#69667c]">수업 취소·확정·시간 변경 등 필수 일정 안내는 알림 설정과 관계없이 발송됩니다.</p>
+                    <div className="mt-1.5 grid gap-1 rounded-[9px] bg-[#f7f6fa] px-3 py-2.5 text-[12.5px] leading-snug">
+                      <p className="text-[#3d3a52]">수업 알림은 수업 24시간 전과 2시간 전에 이메일로 발송돼요.</p>
+                      <p className="text-[#69667c]">수업 취소·확정·시간 변경 등 필수 일정 안내는 알림 설정과 관계없이 발송됩니다.</p>
+                    </div>
                   </section>
                 )}
-                <section className={`${card} px-4 pb-1.5 pt-4`}>
+                <section id="my-pass" className={`${card} scroll-mt-4 px-4 pb-1.5 pt-4`}>
                   <h2 className="mb-1 text-[15px] font-bold">내 수강권</h2>
                   <LinkRow label="현재 코스" value={s.product} />
                   {slotText && (
@@ -1616,10 +1646,10 @@ function RequestRow({ r, onOpen }: { r: StudentRequest; onOpen: () => void }) {
  * '매주 월·목 오후 10:30–11:20' + 강사 이름 줄 — 정규 일정(KST 요일·시각)을 다음 실제 날짜로 바꿔 보여 주는 시간대(VIEW_TZ)의 요일·시각으로.
  * 같은 시각·강사끼리 요일을 묶고, 다르면 줄을 나눔
  */
-function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor: string }[] | null {
+function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor: string; short: string }[] | null {
   if (slots.length === 0) return null;
   const today = formatInZone(now, 'Asia/Seoul').date;
-  const groups = new Map<string, { days: number[]; text: string; tutor: string }>();
+  const groups = new Map<string, { days: number[]; text: string; tutor: string; start: string }>();
   for (const x of slots) {
     const base = new Date(`${today}T12:00:00+09:00`);
     const add = (x.weekday - base.getUTCDay() + 7) % 7;
@@ -1631,15 +1661,15 @@ function regularSlotText(slots: RegularSlot[], now: Date): { when: string; tutor
     const text = ampmRange(a.time, formatInZone(end, VIEW_TZ).time);
     const key = `${text}|${x.tutor}`;
     const day = new Date(`${a.date}T00:00:00Z`).getUTCDay();
-    const g = groups.get(key) ?? { days: [], text, tutor: x.tutor };
+    const g = groups.get(key) ?? { days: [], text, tutor: x.tutor, start: ampm(a.time) };
     g.days.push(day);
     groups.set(key, g);
   }
   const order = (d: number) => (d + 6) % 7;   // 월요일부터
-  return [...groups.values()].map((g) => ({
-    when: `매주 ${[...new Set(g.days)].sort((p, q) => order(p) - order(q)).map((d) => '일월화수목금토'[d]).join('·')} ${g.text}`,
-    tutor: g.tutor,
-  }));
+  return [...groups.values()].map((g) => {
+    const days = [...new Set(g.days)].sort((p, q) => order(p) - order(q)).map((d) => '일월화수목금토'[d]).join('·');
+    return { when: `매주 ${days} ${g.text}`, tutor: g.tutor, short: `${days} ${g.start}` };
+  });
 }
 
 /** '시드니로' / '런던으로' (받침 있으면 '으로', ㄹ 받침은 '로') */
@@ -1665,7 +1695,7 @@ function LearnedBand({ minutes }: { minutes: number }) {
     <p aria-label="나의 누적 학습 시간" className="flex w-fit flex-wrap items-baseline gap-x-2.5 gap-y-0.5 rounded-[18px] bg-[#f5f1e9] px-3 py-[7px] leading-snug">
       <span className="text-[11px] font-semibold text-[#7a6d5a]">나의 누적 학습 시간</span>
       <b className="whitespace-nowrap text-[12.5px] font-extrabold text-[#4a3726]">{text}</b>
-      <span className="text-[11px] text-[#9a8e7c]">영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 <span className="whitespace-nowrap">쌓였어요🔥</span></span>
+      <span className="text-[11px] font-normal text-[#9a8e7c]">영어 공부에는 비법이 없고 꾸준히 접할수록 늘어요. 벌써 이만큼이나 <span className="whitespace-nowrap font-normal text-[#9a8e7c]">쌓였어요🔥</span></span>
     </p>
   );
 }
@@ -2179,5 +2209,34 @@ function CancelSheet(props: {
         {late ? '돌아가기' : '취소 안 함'}
       </button>
     </div>
+  );
+}
+
+// 작은 회색 ? — 마우스 올리기·클릭·터치·키보드 포커스로 열림, 카드 왼쪽 기준으로 아래에 떠서 카드 밖으로 잘리지 않음
+function HelpTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const box = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [open]);
+  return (
+    <span ref={box} className="static inline-flex"
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') setOpen(true); }} onPointerLeave={(e) => { if (e.pointerType === 'mouse') setOpen(false); }}>
+      <button type="button" aria-label="변경권 안내" aria-describedby={open ? id : undefined} aria-expanded={open}
+        onClick={() => setOpen(true)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}
+        onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
+        className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#c9c6d6] text-[11px] font-bold leading-none text-[#8b88a0] hover:border-[#8b88a0] hover:text-[#55526a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0]">
+        ?
+      </button>
+      {open && (
+        <span role="tooltip" id={id} className="absolute left-0 top-full z-10 mt-1 max-w-full rounded-[8px] bg-[#1d1b2b] px-2.5 py-1.5 text-[12px] font-normal leading-snug text-white shadow-md">
+          {text}
+        </span>
+      )}
+    </span>
   );
 }
