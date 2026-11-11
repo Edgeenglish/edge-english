@@ -148,18 +148,24 @@ function ZoneBar({ change }: { change?: { value: string; options: string[]; disa
 const KstCtx = createContext<{ admin: boolean; studentTz: string; on: boolean; set: (v: boolean) => void }>({ admin: false, studentTz: 'Asia/Seoul', on: false, set: () => {} });
 function KstToggle() {
   const c = useContext(KstCtx);
-  if (!c.admin || c.studentTz === 'Asia/Seoul') return null;
+  if (!c.admin) return null;
   const city = koZoneCity(c.studentTz);
+  const korea = c.studentTz === 'Asia/Seoul';
   const btn = (on: boolean) =>
     `min-h-[36px] rounded-full px-3.5 text-[13px] ${on ? 'border-2 border-white bg-white font-extrabold text-[#1d1b2b]' : 'border-2 border-transparent font-semibold text-white'}`;
   // 운영자만 보는 칸이라 운영자 검은 칸 안에 (11/11 대표: 학생 화면 부분은 모든 학생이 같게)
   return (
     <div className="-mt-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-b-[12px] bg-[#1d1b2b] px-3 pb-2">
       <span className="text-[13px] font-semibold text-white">시간 기준</span>
-      <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-white/30 bg-white/10">
-        <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
-        <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
-      </div>
+      {/* 한국 거주 학생은 바꿀 게 없어 글자만 — 줄 높이·자리는 해외 학생과 같게 (11/11 대표: 학생마다 화면이 달라 보이지 않게) */}
+      {korea ? (
+        <span className="flex min-h-[40px] items-center text-[13px] font-semibold text-white">수강생 시간 = 한국 시간 (KST)</span>
+      ) : (
+        <div role="group" aria-label="시간 기준 (운영자 보기)" className="flex w-fit rounded-full border border-white/30 bg-white/10">
+          <button type="button" aria-pressed={!c.on} className={btn(!c.on)} onClick={() => c.set(false)}>수강생 시간 ({city})</button>
+          <button type="button" aria-pressed={c.on} className={btn(c.on)} onClick={() => c.set(true)}>한국 시간 (KST)</button>
+        </div>
+      )}
     </div>
   );
 }
