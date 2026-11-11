@@ -7,6 +7,19 @@
 
 
 
+## ✅ 11/11 강사 통보 LMS 이전 + 첫 수업 안내 메일 + 보강 메일 정리 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/brave-pascal-guazck, 정책 원본 H26(134)(135) 참고)
+- 범위: H26(116)(122)(125)(127) 강사 Updates·To do·강사 메일 6종 · H26(129) 첫 수업 안내 · H26(124)② 강사 [None of these times work] → support@ 메일 · H26(133) 재촉 생략 · H26(131)(132) 학생 메일 문구(대표 11/11 '넣어': 해요체·'보강 희망 시간'·'(아직 강사 확인 중)') · 보강 확정·시간 변경 메일 캘린더 버튼 2개(대표 11/11)
+- 이미 7f6d690(대표 계정, 11/11)이 만든 것 재사용: 학생 취소→학생 메일, 보강 신청→학생·강사 메일 (migration 20261111073809)
+- migration **20261111120000_lms_tutor_updates_mail** (표 tutor_updates, schedule_plans.tutor_answer, 트리거: 일정안 제안(지연)·확정·정규 변경·시작 전 날짜 변경·대체 확정 메일(지연, 묶음)·강사 lesson_notices 'not_needed'·수업 바뀜 첫 수업 재확인(지연)·보강 none-work, 함수 tutor_updates_feed·tutor_new_requests·tutor_plan_answer·lms_first_class_check/run, pg_cron 'lms-first-class-mail' 15분, feature_flags 'first_class_mail_since') + **20261111120100_lms_notice_mail_wording** (lms_notice_mail 문구·캘린더, lms_urlenc). 시험 DB 적용 · 함수 md5 = 저장소 파일
+- 화면: 강사 Home To do 'New student request'(I can take it / I can't, 운영자 대신 가능) · Updates 11종 3건+더보기 · 운영진 일정안 카드 '강사 답 대기·가능·불가'+[확정] · 강사 WhatsApp 복사 카드 없앰(정규 변경·시작 전 변경·대체 확정·보강·취소) · 재등록 카드 잠긴 [강사에게 통보] 없앰 · 강사 통보 메일 실패도 '자동 메일 못 보냄' 카드(그 수업 끝날 때까지)
+- 해석해서 만든 것(대표 확인 필요하면 바꿈): ① 첫 수업 날짜를 옮기면 강사에게는 24시간 전이 아니어도 바로 'First Class Schedule Updated' 메일(H26(127) '메일도'), 학생은 H26(129)대로 첫 안내를 보낸 뒤에만 변경 안내 ② 첫 수업 아닌 수업의 시작 전 날짜 변경은 Updates 만(메일 문구 승인 없음) ③ 강사 첫 수업 메일 시각은 time-text 통일 모양('Wed, 18 Nov 8:00 PM *Sydney Time* / 6:00 PM *KST*'), 끝 줄은 기존 강사 메일과 같게 'if you have a question.'
+- 기존 학생 수강권에는 첫 수업 안내 안 감(flag updated_at 뒤에 만든 수강권만). 운영 배포 때 flag 시각 = 배포 시각
+- 일반 24시간·2시간 전 수업 알림(H26(117)②)은 아직 없음 → 생기면 첫 수업과 겹칠 때 첫 수업 안내만 보내는 처리를 그때 넣기
+- 검증: test:db 전부 통과(기존 시험 고침: 강사 안내 'not_needed', 7f6d690 이후 깨져 있던 4곳) · vitest 429 · tsc · eslint(기존 1건) · next build · 로컬 DB 시나리오(신규 문의→답→확정→첫 수업 24h 안내→발송 뒤 변경 안내→같은 값 재저장 안 보냄, 재등록 같은 일정·공백 없음=첫 수업 안내 없음, 정규 변경 메일) · 시험 DB 되돌리기 시나리오(신규 문의 메일·확정 메일·강사 안내 sent) · ?demo=1 PC·iPhone 13 화면
+- 미확인: 실제 support@ 수신(시험 DB 커밋 발송 안 함), 대체 수업 확정 묶음 메일·보강 none-work 메일 실제 흐름(로컬 DB 시험 장면 없음), Gmail 앱에서 '애플·삼성 캘린더' 버튼
+- **⏭ 다음 (새 세션)**: 강사가 [None of these times work] 때 글 대신 Availability 에서 시간 골라 학생에게 제안 → 학생이 하나 고르면 바로 확정 + 확정 메일 학생·강사·운영진 (대표 11/11 결정, D-43 예외 — H26(134)). 시안부터
+- **운영 배포 전**: `git log origin/lms-test..origin/lms-prod` 에 운영에만 있는 커밋 있음(172cc4f·06aa38c 강사 Hours 등) → lms-test 에 먼저 합치기. 운영 DB 백업 → migration 2개 → first_class_mail_since 시각 확인
+
 ## ✅ 11/11 학생 홈·내 정보 최신 시안 반영 — **lms-test 반영, 운영 미반영** (브랜치 claude/jolly-turing-bfiwh0, H26(95) 내 정보 누락 금지 항목 포함)
 - 누적 학습 시간 띠도 0분이어도 늘 보임 (대표 11/11 '모든 학생 똑같이')
 - 할 일 칸(0개면 '할 일이 없어요')·다음 수업 칸(없으면 '예정된 수업이 없어요')은 늘 보임 (대표 11/11)
