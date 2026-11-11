@@ -5,6 +5,7 @@
 // ③ 수강생 LMS (2026-10-28 대표): 휴무 안내에 한 번에 답(A안) · 보강 날짜는 달력에서 고르기 · 직접 취소
 // 미리보기(?demo=1)는 같은 화면에 브라우저 안에서만 흉내 내는 동작(fakeStore)을 넣음 — 저장·발송 없음
 
+import { typeKo, typeKoLong } from '@/lms/class-type';
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
@@ -791,7 +792,7 @@ export default function StudentHome(props: {
                 <div className="min-w-0">
                   <p className="text-[15px] font-semibold">{whenText(l.startsAt)}</p>
                   <p className="text-[12.5px] text-[#6b6880]">
-                    {l.minutes}분{s.lessons.find((x) => x.id === l.id)?.leaveOpen ? '' : ` · ${l.tutorName}`} · {l.kind === 'regular' ? '정규' : l.kind === 'makeup' ? '보강' : '보상'}
+                    {l.minutes}분{s.lessons.find((x) => x.id === l.id)?.leaveOpen ? '' : ` · ${l.tutorName}`} · {typeKo(l.type, l.kind)}
                   </p>
                   {s.lessons.find((x) => x.id === l.id)?.substitute && (
                     <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 대체강사 수업</p>
@@ -1515,7 +1516,7 @@ function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen }: { lesson: S
   const started = now.getTime() >= lesson.startsAt.getTime();
   const badge = started ? '진행 중' : untilText(now, lesson.startsAt);
   // 11/11 대표 시안: 교재 링크 없음 · '40분 · Maria 강사님 · 정규 수업' 같은 글씨 크기·두께 · '수업 입장' 버튼만
-  const kindText = lesson.kind === 'regular' ? '정규 수업' : lesson.kind === 'makeup' ? '보강 수업' : '보상수업';
+  const kindText = typeKoLong(lesson.type, lesson.kind, substitute);
   return (
     <section aria-label="다음 수업" className="grid gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
       <div className="flex items-center justify-between">
@@ -2065,6 +2066,8 @@ function CancelSheet(props: {
   const rows: [string, string][] = [
     ...(d.consumesLesson ? [['수업 횟수', '1회 차감'] as [string, string]] : []),
     ...(d.usesCredit ? [['변경권', `1개 사용 (${creditsNow}개 → ${creditsNow - 1}개)`] as [string, string]] : []),
+    // 한국 공휴일 수업 (H26(138)): 변경권 줄이 아예 안 보이던 것 → 차감 안 된다는 한 줄
+    ...(d.status === 'Student canceled in advance (public holiday)' ? [['변경권', '차감 안 됨 (공휴일 취소)'] as [string, string]] : []),
     ['보강', d.makeupAllowed ? `~${endDay(props.makeupUntil)}까지 가능` : '불가'],
     ...(d.consumesLesson ? [['변경권', late ? '그대로 (차감 안 됨)' : '없음'] as [string, string]] : []),
   ];

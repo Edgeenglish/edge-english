@@ -151,7 +151,7 @@ export type EnrollmentInfo = {
   /** 날짜 안 잡은 보강권·보상권 (수강생 홈 '남은 수업' 과 같은 기준, 4500). 옛 DB 는 0 */
   leftUnbooked: number; extensions: Extension[];
 };
-export type Upcoming = { id: string; kind: string; seq: number | null; startsAt: Date; endsAt: Date; tutor: string; tutorTz: string; tutorId: string; substitute: boolean; leaveOpen: boolean };
+export type Upcoming = { id: string; kind: string; type?: string; seq: number | null; startsAt: Date; endsAt: Date; tutor: string; tutorTz: string; tutorId: string; substitute: boolean; leaveOpen: boolean };
 export type RecentTopic = { startsAt: Date; tutor: string; topics: string; kind: string; substitute: boolean };
 export type RegularChangeRec = {
   id: string; effectiveFrom: KstDate; oldSlots: Slot[]; newSlots: Slot[]; moved: MovedLesson[]; kept: KeptLesson[]; reason: string; at: Date;
@@ -160,7 +160,7 @@ export type RegularChangeRec = {
 export type MovedLesson = { lessonId: string; seq: number | null; from: Date; fromEnd: Date; to: Date; toEnd: Date; problem: string | null };
 export type KeptLesson = { lessonId: string; kind: string; seq: number | null; startsAt: Date; endsAt: Date; tutor: string; tutorTz: string; why: string };
 export type ProfileEdit = { field: string; old: string | null; new: string | null; role: 'admin' | 'tutor' | 'student'; at: Date; by: string };
-export type RecentLesson = { id: string; kind: string; startsAt: Date; state: string; classStatus: string | null; tutor: string; tutorTz: string };
+export type RecentLesson = { id: string; kind: string; type?: string; startsAt: Date; state: string; classStatus: string | null; tutor: string; tutorTz: string };
 export type EnrollmentShort = {
   id: string; seq: number; status: string; weeks: number | null; legacyLabel: string | null; weeklyCount: number; durationMin: number; startDate: KstDate; finalEndDate: KstDate;
   lessonsPurchased: number; lessonsCarriedIn: number; amountDue: number; payments: { on: KstDate | null; method: string; amount: number; confirmed: boolean }[];
@@ -199,7 +199,7 @@ export const parseSlots = (j: any): SlotFull[] => ((j ?? []) as any[]).map((s) =
   weekday: s.weekday, time: s.time, durationMin: s.duration_min, tutorId: s.tutor_id, tutor: s.tutor, tutorTz: s.tutor_tz, tutorCountry: s.tutor_country ?? null, from: s.from, to: s.to ?? null,
 }));
 export const parseUpcoming = (j: any): Upcoming[] => ((j ?? []) as any[]).map((l) => ({
-  id: l.id, kind: l.kind, seq: l.seq ?? null, startsAt: new Date(l.starts_at), endsAt: new Date(l.ends_at), tutor: l.tutor, tutorTz: l.tutor_tz, tutorId: l.tutor_id,
+  id: l.id, kind: l.kind, type: l.type, seq: l.seq ?? null, startsAt: new Date(l.starts_at), endsAt: new Date(l.ends_at), tutor: l.tutor, tutorTz: l.tutor_tz, tutorId: l.tutor_id,
   substitute: !!l.substitute, leaveOpen: !!l.leave_open,
 }));
 export const parseTopics = (j: any): RecentTopic[] => ((j ?? []) as any[]).map((t) => ({ startsAt: new Date(t.starts_at), tutor: t.tutor, topics: t.topics, kind: t.kind, substitute: !!t.substitute }));
@@ -224,7 +224,7 @@ export function parseDetail(j: any): StudentDetailData {
       at: new Date(c.at), tutor: c.tutor, tutorTz: c.tutor_tz, studentSentAt: at(c.student_sent_at), tutorSentAt: at(c.tutor_sent_at),
     })),
     edits: ((j.edits ?? []) as any[]).map((x) => ({ field: x.field, old: x.old ?? null, new: x.new ?? null, role: x.role, at: new Date(x.at), by: x.by })),
-    recent: ((j.recent ?? []) as any[]).map((l) => ({ id: l.id, kind: l.kind, startsAt: new Date(l.starts_at), state: l.state, classStatus: l.class_status ?? null, tutor: l.tutor, tutorTz: l.tutor_tz })),
+    recent: ((j.recent ?? []) as any[]).map((l) => ({ id: l.id, kind: l.kind, type: l.type, startsAt: new Date(l.starts_at), state: l.state, classStatus: l.class_status ?? null, tutor: l.tutor, tutorTz: l.tutor_tz })),
     loginEmail: j.login?.email ?? null,
   };
 }
@@ -269,7 +269,8 @@ export const KEPT_WHY: Record<string, string> = {
 };
 
 /** 수업 종류 한국어 */
-export const KIND_KO: Record<string, string> = { regular: '정규', makeup: '보강', migrated_makeup: '보강', compensation: '보상', carryover: '이월', migrated_extra: '추가' };
+// 수업 종류 한국어 (H26(138)): DB type 이 없을 때 kind 로 — 이름은 class-type.ts 하나
+export const KIND_KO: Record<string, string> = { regular: '정규', makeup: '보강', migrated_makeup: '보강', compensation: '무료 보상수업', carryover: '지난 수강기간에서 이월된 수업', migrated_extra: '정규' };
 
 export type RegularNoticeCtx = {
   studentNameKo: string; studentNameEn: string; studentTz: string; tutorName: string; tutorTz: string; durationMin: number;

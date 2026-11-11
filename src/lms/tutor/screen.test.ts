@@ -32,7 +32,7 @@ describe('강사 화면 (migration 2000)', () => {
     expect(phaseOf(base, now)).toBe('to_record');
     expect(statusText(base, now)).toBe('Not recorded');
     expect(phaseOf({ ...base, state: 'done', classStatus: 'Normal' }, now)).toBe('recorded');
-    expect(statusText({ ...base, state: 'canceled', classStatus: 'Student canceled in advance' }, now)).toBe('Canceled by student');
+    expect(statusText({ ...base, state: 'canceled', classStatus: 'Student canceled in advance' }, now)).toBe('Student canceled in advance');
     expect(canRecord({ ...base, state: 'canceled', classStatus: 'Tutor long-term leave' }, now)).toBe(false);
     expect(canRecord({ ...base, locked: true, state: 'done', classStatus: 'Normal' }, now)).toBe(false);
     expect(canRecord({ ...base, startsAt: new Date('2026-11-02T09:00:00Z') }, now)).toBe(false);
@@ -40,15 +40,24 @@ describe('강사 화면 (migration 2000)', () => {
     expect(canRecord({ ...base, startsAt: new Date('2026-11-02T09:00:00Z') }, now, true)).toBe(true);
     // 강사 계정 만들기 전 수업은 'Not recorded'가 아님 (R7)
     expect(statusText({ ...base, beforeLms: true }, now)).toBe('Before LMS');
-    expect(kindTag({ ...base, kind: 'migrated_makeup', covering: true })).toBe('Substitute');
+    // 수업 종류 = 강사 시트 Class Type (H26(138)): 대체가 먼저
+    expect(kindTag({ ...base, kind: 'migrated_makeup', covering: true })).toBe('Cover class');
+    expect(kindTag({ ...base, kind: 'makeup' })).toBe('Makeup');
+    expect(kindTag(base)).toBe('Regular');
+    expect(kindTag({ ...base, type: 'carry_in' })).toBe('Carryover from previous period');
+    // 원래 강사 화면의 대체된 수업: 회색 'Covered by another tutor', 기록 못 함
+    expect(phaseOf({ ...base, coveredByOther: true }, now)).toBe('covered');
+    expect(statusText({ ...base, coveredByOther: true }, now)).toBe('Covered by another tutor');
+    expect(canRecord({ ...base, coveredByOther: true }, now, true)).toBe(false);
   });
   it('14개 상태 모두 강사 문구가 있음', () => {
     for (const s of CLASS_STATUSES) expect(TUTOR_STATUS_TEXT[s]).toBeTruthy();
   });
-  it('결과 이름은 DB와 같은 규칙: 보강은 Make-up completed, 대체 진행은 Covered by another tutor', () => {
+  it('결과 이름은 DB와 같은 규칙: 보강은 Make-up completed, 대체 진행은 Normal (H26(138))', () => {
     expect(savedStatus(base, 'held')).toBe('Normal');
     expect(savedStatus({ ...base, kind: 'migrated_makeup' }, 'held')).toBe('Make-up completed');
-    expect(savedStatus({ ...base, covering: true }, 'held')).toBe('Covered by another tutor');
+    expect(savedStatus({ ...base, covering: true }, 'held')).toBe('Normal');
+    expect(savedStatus({ ...base, kind: 'migrated_makeup', covering: true }, 'held')).toBe('Normal');
     expect(savedStatus({ ...base, kind: 'makeup' }, 'held', true)).toBe('Tutor Late - Student Present');
     expect(resultOf('Tutor Late - Student Present')).toBe('held');
     expect(lateText({ student: true, studentMin: 10, tutor: true, tutorMin: null })).toBe(' · Student late 10 min · Tutor late');
@@ -83,5 +92,16 @@ describe('강사 화면 (migration 2000)', () => {
     expect(s.lessons[0].count).toEqual({ n: 3, total: 8 });
     expect(s.lessons[0].makeupOf?.toISOString()).toBe('2026-10-30T08:00:00.000Z');
     expect(s.makeups[0].slots[0].answer).toBe('yes');
+  });
+});
+
+describe('수업 종류 한국어 (H26(138))', () => {
+  it('운영진·학생 화면 이름', async () => {
+    const { typeKo, typeKoLong } = await import('../class-type');
+    expect(typeKo('carry_out')).toBe('다음 수강기간으로 이월되는 수업');
+    expect(typeKo(undefined, 'migrated_extra')).toBe('정규');
+    expect(typeKo(undefined, 'compensation')).toBe('무료 보상수업');
+    expect(typeKoLong('cover')).toBe('대체 수업');
+    expect(typeKoLong('compensation')).toBe('무료 보상수업');
   });
 });

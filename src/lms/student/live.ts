@@ -1,4 +1,5 @@
 // 수강생 화면 실제 데이터 (migration 2800). 읽기·쓰기 모두 DB 함수 — 본인 확인·검사·이력은 DB
+import { asClassType } from '../class-type';
 // 수강생 본인은 student_ 함수, 운영자(TOTP 완료)가 ?student= 로 열면 운영진 화면과 같은 admin_ 함수(이력에 운영자로 남음)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -87,7 +88,7 @@ type Raw = {
     lessons_total: number; credits_left: number; credits_granted: number; confirmed_on: KstDate | null; renewal_paid: boolean;
     next_regular_from: KstDate | null;
   };
-  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null }[];
+  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null; type?: string }[];
   makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean }[];
   leave_pending?: { id: string; starts_at: string; ends_at: string }[];
   makeup_requests: {
@@ -164,6 +165,7 @@ export function parseStudentView(r: Raw): StudentView {
     lessons: r.lessons.map((l) => ({
       id: l.id,
       kind: lessonKind(l.kind),
+      type: asClassType(l.type, l.kind, l.substitute),
       startsAt: new Date(l.starts_at),
       minutes: Math.round((new Date(l.ends_at).getTime() - new Date(l.starts_at).getTime()) / 60_000),
       tutorName: l.tutor,

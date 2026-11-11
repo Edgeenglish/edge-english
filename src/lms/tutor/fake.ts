@@ -23,6 +23,8 @@ export function fakeTutorScreen(now: Date): TutorScreen {
       lesson('d5', 22, 20, { student: 'Doyun Lee', state: 'canceled', classStatus: 'Student canceled in advance' }),
       lesson('d6', 46, 40, { student: 'Seoyeon Park (Sarah)', studentId: 'demo-seoyeon', covering: true, count: { n: 6, total: 8 } }),
       lesson('d7', 70, 40, { student: 'Minsu Kim', kind: 'compensation' }),
+      // 원래 이 강사 수업, 다른 강사가 대체 (H26(138) 회색 줄)
+      lesson('d8', 23, 40, { student: 'Jiwoo Han', studentId: 'demo-jiwoo', coveredByOther: true, count: { n: 2, total: 8 } }),
     ],
     toRecord: ['d2', 'd3'],
     makeups: [{

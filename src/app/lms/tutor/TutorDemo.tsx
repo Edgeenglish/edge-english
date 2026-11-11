@@ -23,6 +23,16 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
       s.lessons = s.lessons.map((l) => (l.id === id ? { ...l, state: 'done', classStatus: savedStatus(l, r, lt.tutor), topics: topics || null, remarks: remarks || null, studentLate: lt.student, late: lt } : l));
       s.toRecord = s.toRecord.filter((x) => x !== id);
     },
+    studentCancel: async (id, _req, toldAt, dryRun) => {
+      const l = data.s.lessons.find((x) => x.id === id)!;
+      const late = +l.startsAt - +toldAt < 6 * 3600000;
+      const d = { status: late ? 'Student canceled late' as const : 'Student canceled in advance' as const, timing: late ? 'late' as const : 'advance' as const };
+      if (!dryRun) {
+        data.s.lessons = data.s.lessons.map((x) => (x.id === id ? { ...x, state: 'canceled', classStatus: d.status } : x));
+        data.s.toRecord = data.s.toRecord.filter((x) => x !== id);
+      }
+      return d;
+    },
     answer: async (id, yes, note) => {
       data.s.makeups = data.s.makeups.map((m) => (m.id === id
         ? { ...m, note: note || null, answeredAt: new Date(), slots: m.slots.map((x) => ({ ...x, answer: yes.includes(x.id) ? 'yes' as const : 'no' as const })) } : m));

@@ -2,11 +2,12 @@
 
 // 운영진 수강생 상세 (H26(44) ①~⑤, migration 4300): 정규 일정 · 수강 · 프로필 · 자기소개/선호 7항목 · 운영진만(결제·메모) · 수업 · 변경 기록·안내
 // 시간은 모두 '한국 시간 · 수강생 도시 시간 · 강사 도시 시간' 이름과 같이, 실제 수업 날짜로 계산 (H26(43))
+import { typeKo } from '@/lms/class-type';
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { diffDays, instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import {
-  dateOptions, finalEndText, KIND_KO, koZone, kstWithZones, md, mdw, productText, regularNoticeEn, regularNoticeKo, slotsInZone, slotsText, STATUS_TEXT, zoneLabel,
+  dateOptions, finalEndText, koZone, kstWithZones, md, mdw, productText, regularNoticeEn, regularNoticeKo, slotsInZone, slotsText, STATUS_TEXT, zoneLabel,
   type RegularPreview, type Slot, type StudentDetailData, type StudentProfile, type StudentStatus,
 } from '@/lms/admin/students';
 import { AdminHeader, BottomNav, Icon } from '../../ui';
@@ -259,7 +260,7 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
             {data.upcoming.slice(0, 8).map((l) => (
               <div key={l.id} className="border-b border-[#f0eef6] py-2 text-[13.5px] last:border-0">
                 <p className="text-[#1d1b2b]">{kstWithZones(l.startsAt, [{ label: '수강생', tz: s.timezone }, { label: `강사 ${l.tutor}`, tz: l.tutorTz }])}</p>
-                <p className="text-[12.5px] text-[#6b6880]">{l.kind === 'regular' && l.seq ? `정규 ${l.seq}회` : KIND_KO[l.kind] ?? l.kind}{l.substitute ? ` · 대체강사 ${l.tutor}` : ''}{l.leaveOpen ? ' · 강사 휴무 처리 중' : ''}</p>
+                <p className="text-[12.5px] text-[#6b6880]">{l.kind === 'regular' && l.seq ? `정규 ${l.seq}회` : typeKo(l.type === 'cover' ? null : l.type, l.kind)}{l.substitute ? ` · 대체 ${l.tutor}` : ''}{l.leaveOpen ? ' · 강사 휴무 처리 중' : ''}</p>
               </div>
             ))}
             {data.upcoming.length > 8 && <p className="pt-1 text-[12.5px] text-[#6b6880]">… {data.upcoming.length - 8}회 더 · 수업 변경은 <Link href={`/lms/admin/change?student=${s.code}`} className="font-semibold text-[#5b3fe0] underline">수업 변경·보강</Link>에서</p>}
@@ -267,7 +268,7 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
 
           <Box title="지난 수업">
             {data.recent.length === 0 && <p className="py-2 text-[13px] text-[#6b6880]">지난 수업이 없어요.</p>}
-            {data.recent.map((l) => <Row key={l.id} k={<Rich text={`${zoneLabel(l.startsAt, 'Asia/Seoul')} *한국 시간*`} />} v={`${KIND_KO[l.kind] ?? l.kind} · ${l.classStatus ?? (l.state === 'scheduled' ? '기록 전' : l.state)}`} />)}
+            {data.recent.map((l) => <Row key={l.id} k={<Rich text={`${zoneLabel(l.startsAt, 'Asia/Seoul')} *한국 시간*`} />} v={`${typeKo(l.type, l.kind)} · ${l.classStatus ?? (l.state === 'scheduled' ? '기록 전' : l.state)}`} />)}
             {data.recentTopics.length > 0 && (
               <details className="mt-1 text-[13px]">
                 <summary className="cursor-pointer font-semibold text-[#5b3fe0]">최근 Covered Topics {data.recentTopics.length}건</summary>

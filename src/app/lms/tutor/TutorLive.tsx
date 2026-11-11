@@ -8,7 +8,7 @@ import { supabaseBrowser } from '@/lms/auth/client';
 import { answerCover, answerMakeup, confirmMakeup, createTutorLogin, loadCanceledClasses, loadNewRequests, loadTutorUpdates, answerNewRequest, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
 import { LANGS, type Lang } from '@/lms/tutor/lang';
 import { useSavedValue } from './useSaved';
-import { weekOf, type TutorScreen } from '@/lms/tutor/screen';
+import { weekOf, type StudentCancelDecision, type TutorScreen } from '@/lms/tutor/screen';
 import TutorHome, { type TutorActions } from './TutorHome';
 
 type State =
@@ -57,6 +57,11 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
           const { data, error } = await sb.rpc('tutor_cancel_class', { p_lesson: lessonId, p_request_id: requestId, p_reason: reason, p_dry_run: dryRun });
           if (error) throw new Error(error.message);
           return data as { status: string };
+        },
+        studentCancel: async (lessonId, requestId, toldAt, dryRun) => {
+          const { data, error } = await sb.rpc('tutor_student_cancel', { p_lesson: lessonId, p_request_id: requestId, p_told_at: toldAt.toISOString(), p_dry_run: dryRun });
+          if (error) throw new Error(error.message);
+          return data as StudentCancelDecision;
         },
         record: (id, r, t, rm, late) => recordClass(sb, id, r, t, rm, late),
         answer: (id, yes, note) => answerMakeup(sb, id, yes, note),

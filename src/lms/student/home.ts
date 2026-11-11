@@ -6,6 +6,7 @@
 // - 결제: 수강권·기간·결제 방법·확인일만. 금액·카드 정보는 다루지 않음 (POL-PAY-11)
 // - 적립금: 본인 지급·사용 날짜, 금액, 사유, 잔액 (POL-PAY-11, POL-PAY-09)
 
+import type { ClassType } from '../class-type';
 import { evaluateStudentChange, type ChangeDecision, type LessonKind } from '../rules/change';
 import { formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import type { PendingPolicy } from '../rules/policy';
@@ -13,6 +14,8 @@ import type { PendingPolicy } from '../rules/policy';
 export type StudentLesson = {
   id: string;
   kind: LessonKind;
+  /** 수업 종류 이름용 (H26(138), DB class_type) */
+  type?: ClassType;
   startsAt: Date;
   minutes: number;
   tutorName: string;

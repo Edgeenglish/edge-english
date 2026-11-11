@@ -460,7 +460,7 @@ export function monthEndings(rows: EndingRow[], now: Date, sent: Map<string, str
 // migration 1500 전 DB에는 표가 없음 → 대시보드는 그대로 보이게 빈 목록
 const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01' || e.code === 'PGRST205');
 
-const LESSON_COLS = 'id, starts_at, kind, state, class_status, student:students(code, name_ko), tutor:tutors!lessons_tutor_id_fkey(name)';
+const LESSON_COLS = 'id, starts_at, kind, class_type, state, class_status, student:students(code, name_ko), tutor:tutors!lessons_tutor_id_fkey(name)';
 
 /** 운영자 대시보드 데이터 읽기 (운영자 aal2 세션 필요 — 아니면 RLS 때문에 0건) */
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {

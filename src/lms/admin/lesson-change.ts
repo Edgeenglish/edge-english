@@ -2,6 +2,7 @@
 // - 날짜는 사람이 타이핑하지 않고 실제 수업 목록에서 고름 ('다음 주 목요일' 오해 방지, 17번 2절)
 // - 안내 문구는 DB에 저장된 원래 수업·바뀐 수업 시각으로 만듦 (원래 날짜와 변경·보강 날짜 모두 표기)
 
+import { typeKo } from '../class-type';
 import { ampmKo, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { CONFIRMED } from '../rules/policy';
 import { grantsMakeup, type ClassStatus } from '../rules/status';
@@ -10,6 +11,8 @@ import { enBoth, koBoth } from './time-text';
 export type ChLesson = {
   id: string;
   kind: 'regular' | 'makeup' | 'compensation' | 'carryover' | 'migrated_makeup' | 'migrated_extra';
+  /** 수업 종류 (H26(138), DB class_type) */
+  type?: string | null;
   seq: number | null;
   startsAt: Date;
   state: 'scheduled' | 'canceled' | 'done';
@@ -152,11 +155,9 @@ export function dateLabel(d: KstDate): string {
 /** 보강 시간은 한 수업당 강사에게 최대 2개 (2026-10-27 대표: 수강생에게 2개 권장, 1개도 허용) */
 export const MAKEUP_SLOTS_MAX = 2;
 
-export const KIND_TEXT: Record<ChLesson['kind'], string> = {
-  regular: '정규', makeup: '보강', migrated_makeup: '보강', compensation: '보상', carryover: '이월', migrated_extra: '추가',
-};
+// 수업 종류 이름은 class-type.ts 하나 (H26(138)). 정규는 회차까지
 export function lessonTag(l: ChLesson): string {
-  return l.kind === 'regular' && l.seq ? `정규 ${l.seq}회` : KIND_TEXT[l.kind];
+  return l.kind === 'regular' && l.seq && (!l.type || l.type === 'regular') ? `정규 ${l.seq}회` : typeKo(l.type, l.kind);
 }
 
 /** 고를 수 있는 수업: 아직 진행 전(예정)인 수업, 오늘(한국)부터. 시간순 */

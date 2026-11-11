@@ -42,7 +42,7 @@ type NoticeRow = {
   email_sent_at?: string | null; email_error?: string | null; email_attempts?: number | null;
 };
 type LessonRow = {
-  id: string; kind: ChLesson['kind']; seq: number | null; starts_at: string; state: ChLesson['state']; class_status: ClassStatus | null;
+  id: string; kind: ChLesson['kind']; class_type?: string | null; seq: number | null; starts_at: string; state: ChLesson['state']; class_status: ClassStatus | null;
   makeup_of: string | null; voided_at: string | null; tutor_id: string; tutor: { name: string; timezone: string } | null;
 };
 
@@ -94,10 +94,10 @@ export async function loadStudentLessons(sb: SupabaseClient, studentId: string):
     .neq('status', 'canceled').order('start_date', { ascending: false }).limit(1)) as { id: string; final_end_date: string; duration_min: number }[];
   const e = enrolls[0];
   const lessonRows = check(await sb.from('lessons')
-    .select('id, kind, seq, starts_at, state, class_status, makeup_of, voided_at, tutor_id, tutor:tutors!lessons_tutor_id_fkey(name, timezone)')
+    .select('id, kind, class_type, seq, starts_at, state, class_status, makeup_of, voided_at, tutor_id, tutor:tutors!lessons_tutor_id_fkey(name, timezone)')
     .eq('student_id', studentId).order('starts_at')) as unknown as LessonRow[];
   const lessons: ChLesson[] = lessonRows.map((l) => ({
-    id: l.id, kind: l.kind, seq: l.seq, startsAt: new Date(l.starts_at), state: l.state, classStatus: l.class_status, makeupOf: l.makeup_of,
+    id: l.id, kind: l.kind, type: l.class_type ?? null, seq: l.seq, startsAt: new Date(l.starts_at), state: l.state, classStatus: l.class_status, makeupOf: l.makeup_of,
     voided: !!l.voided_at, tutorId: l.tutor_id, tutorName: l.tutor?.name ?? '', tutorTz: l.tutor?.timezone ?? 'Asia/Seoul',
   }));
   const [changes, reqs, migrated] = await Promise.all([

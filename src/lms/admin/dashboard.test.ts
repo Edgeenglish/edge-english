@@ -30,7 +30,7 @@ describe('대시보드 5차 — 숫자 칸·명단', () => {
     const l = (id: string, at: string, kind: string, state: 'scheduled' | 'canceled' | 'done', cs: string | null = null) => ({ id, starts_at: at, kind, state, class_status: cs, student: { code: 'STU-0001', name_ko: '가상' }, tutor: { name: 'Olivia' } });
     const items = toLessonItems([l('2', '2026-11-09T11:00:00Z', 'regular', 'canceled', 'Student canceled'), l('1', '2026-11-08T23:00:00Z', 'makeup', 'done'), l('3', '2026-11-09T12:00:00Z', 'compensation', 'scheduled')], new Set(['3']));
     expect(items.map((i) => [i.date, i.time, i.kind, i.state])).toEqual([
-      ['2026-11-09', '오전 8:00', '보강', '완료'], ['2026-11-09', '오후 8:00', '정규', '수강생 변경'], ['2026-11-09', '오후 9:00', '보상 수업', '노쇼 신고'],
+      ['2026-11-09', '오전 8:00', '보강', '완료'], ['2026-11-09', '오후 8:00', '정규', '수강생 변경'], ['2026-11-09', '오후 9:00', '무료 보상수업', '노쇼 신고'],
     ]);
   });
   it('강사 담당 학생: 이어지는 정규 일정 + 수강 중·예정 학생만, 테스트용 강사는 아래', () => {

@@ -174,7 +174,7 @@ export function dayTag(items: DayItem[]): string | null {
   if (ls.some((l) => l.state === 'canceled')) return 'Cancel';
   if (items.some((i) => i.kind === 'block' && i.block.kind === 'leave') || ls.some((l) => l.leaveOpen)) return 'Leave';
   if (ls.some((l) => l.covering)) return 'Cover';
-  if (ls.some((l) => l.kind === 'makeup' || l.kind === 'migrated_makeup')) return 'Make-up';
+  if (ls.some((l) => l.kind === 'makeup' || l.kind === 'migrated_makeup')) return 'Makeup';
   if (ls.some((l) => l.kind === 'compensation')) return 'Extra class';   // 보상수업 (전체 이름 Compensation 은 날짜 누르면)
   if (items.some((i) => i.kind === 'block')) return 'Block';
   if (items.some((i) => i.kind === 'open')) return 'Extra hours';   // 그날만 연 시간 (전체 이름 Extra availability 는 날짜 누르면)
@@ -186,7 +186,7 @@ export function lessonTag(l: TutorLesson): string | null {
   if (l.state === 'canceled') return 'Canceled';
   if (l.leaveOpen) return 'Leave';
   const k = kindTag(l);
-  if (k) return k;
+  if (k !== 'Regular') return k;
   return l.count && l.count.n === l.count.total ? 'Last class' : null;
 }
 

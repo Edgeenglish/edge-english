@@ -6,6 +6,7 @@ import { cityTime } from './hours-view';
 import { rangeText } from './hours';
 import { bold } from '../admin/time-text';
 import type { ClassStatus } from '../rules/status';
+import { asClassType, CLASS_TYPE_EN, typeFromKind, type ClassType } from '../class-type';
 
 /** 수업 결과 하나. tutor_no_show = 운영자만 (4000). 지각은 결과와 따로 (4400) */
 export type TutorResult = 'held' | 'student_no_show' | 'tutor_no_show';
@@ -29,6 +30,10 @@ export type TutorLesson = {
   level: string | null;
   noteUrl: string | null;
   covering: boolean;
+  /** 수업 종류 (H26(138), DB class_type). 없으면 kind·covering 으로 */
+  type?: ClassType;
+  /** 원래 이 강사 수업인데 다른 강사가 대체 (H26(138)): 회색 줄, 기록·급여 대상 아님 */
+  coveredByOther?: boolean;
   makeupOf: Date | null;
   count: { n: number; total: number } | null;
   topics: string | null;
@@ -85,6 +90,7 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
     lessons: (j.lessons ?? []).map((l: any) => ({
       id: l.id, startsAt: new Date(l.starts_at), endsAt: new Date(l.ends_at), kind: l.kind, state: l.state, classStatus: l.class_status ?? null,
       student: l.student, studentId: l.student_id ?? undefined, level: l.level ?? null, noteUrl: l.note_url ?? null, covering: !!l.covering, makeupOf: at(l.makeup_of),
+      type: asClassType(l.type, l.kind, !!l.covering), coveredByOther: !!l.covered_by_other,
       count: l.count ? { n: Number(l.count.n), total: Number(l.count.total) } : null,
       topics: l.topics ?? null, remarks: l.remarks ?? null, studentLate: !!l.student_late,
       late: { student: !!l.student_late, studentMin: l.student_late_min ?? null, tutor: !!l.tutor_late, tutorMin: l.tutor_late_min ?? null }, recordedAt: at(l.recorded_at), locked: !!l.locked,
@@ -193,12 +199,13 @@ export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   'Covered by another tutor': 'Held · substitute',
   'Tutor Late - Student Present': 'Held',   // 지각은 lateText 로 따로 붙임 (4400)
   'Student no-show': 'Student no-show',
-  'Student canceled in advance': 'Canceled by student',
-  'Student canceled in advance (public holiday)': 'Canceled · public holiday',
+  // 취소 상태는 강사 시트 Status 이름 그대로 (H26(138))
+  'Student canceled in advance': 'Student canceled in advance',
+  'Student canceled in advance (public holiday)': 'Student canceled in advance (public holiday)',
   'Student canceled late': 'Student canceled late',
-  'No change credits left': 'Canceled by student',
-  'Tutor canceled in advance': 'Canceled by tutor',
-  'Tutor canceled late': 'Canceled by tutor (late)',
+  'No change credits left': 'No change credits left',
+  'Tutor canceled in advance': 'Tutor canceled in advance',
+  'Tutor canceled late': 'Tutor canceled late',
   'Tutor no-show': 'Tutor no-show',
   'Tutor long-term leave': 'Tutor on leave',
   'Student long-term leave': 'Student on leave',
@@ -211,8 +218,9 @@ export const parseCanceled = (j: any): TutorCanceled[] =>
   ((j ?? []) as any[]).map((x) => ({ id: x.id, startsAt: new Date(x.starts_at), endsAt: new Date(x.ends_at), kind: x.kind, classStatus: x.class_status ?? null, student: x.student, studentId: x.student_id ?? undefined }));
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export type LessonPhase = 'upcoming' | 'to_record' | 'before_lms' | 'on_leave' | 'recorded' | 'canceled';
+export type LessonPhase = 'upcoming' | 'to_record' | 'before_lms' | 'on_leave' | 'recorded' | 'canceled' | 'covered';
 export function phaseOf(l: TutorLesson, now: Date): LessonPhase {
+  if (l.coveredByOther) return 'covered';
   if (l.state === 'canceled') return 'canceled';
   if (l.state === 'done') return 'recorded';
   if (l.leaveOpen) return 'on_leave';
@@ -225,9 +233,15 @@ export function statusText(l: TutorLesson, now: Date): string {
   if (p === 'to_record') return 'Not recorded';
   if (p === 'before_lms') return 'Before LMS';
   if (p === 'on_leave') return TUTOR_STATUS_TEXT['Tutor long-term leave'];
+  if (p === 'covered') return COVERED_TEXT;
   if (l.classStatus === 'Tutor no-show' && l.compensation && l.compensation !== 'voided') return 'Tutor no-show · +1 Compensation';
   return l.classStatus ? TUTOR_STATUS_TEXT[l.classStatus] : '';
 }
+
+/** 원래 강사 화면의 대체된 수업 (H26(138)) */
+export const COVERED_TEXT = 'Covered by another tutor';
+export const COVERED_NOTE = 'Another tutor is covering this class';
+export const COVERING_NOTE = "You're covering for another tutor";
 
 /** 저장된 결과 → 강사가 고른 버튼 (고칠 때 처음 선택). 예전 'Tutor Late - Student Present' 는 Held + 강사 지각 (4400) */
 export function resultOf(s: ClassStatus | null): TutorResult | null {
@@ -236,13 +250,14 @@ export function resultOf(s: ClassStatus | null): TutorResult | null {
   if (s === 'Normal' || s === 'Make-up completed' || s === 'Covered by another tutor' || s === 'Tutor Late - Student Present') return 'held';
   return null;
 }
-/** 저장 뒤 결과 이름 — DB tutor_record_class 와 같은 규칙 (강사 지각 → 'Tutor Late - Student Present', 그 외 수업 종류·대체 진행으로 정함) */
+/** 저장 뒤 결과 이름 — DB tutor_record_class 와 같은 규칙 (강사 지각 → 'Tutor Late - Student Present', 대체 수업 → Normal(H26(138) 시트 규칙), 보강 → Make-up completed) */
 export function savedStatus(l: Pick<TutorLesson, 'kind' | 'covering'>, r: TutorResult, tutorLate = false): ClassStatus {
   if (r === 'student_no_show') return 'Student no-show';
   if (r === 'tutor_no_show') return 'Tutor no-show';
   if (tutorLate) return 'Tutor Late - Student Present';
+  if (l.covering) return 'Normal';
   if (l.kind === 'makeup' || l.kind === 'migrated_makeup' || l.kind === 'compensation') return 'Make-up completed';
-  return l.covering ? 'Covered by another tutor' : 'Normal';
+  return 'Normal';
 }
 export const RESULT_TEXT: Record<TutorResult, string> = { held: 'Held', student_no_show: 'Student no-show', tutor_no_show: 'Tutor no-show' };
 
@@ -270,16 +285,20 @@ export function recordReady(r: TutorResult | null, topics: string, remarks: stri
  * 강사 기기 시계가 늦어도 열림 (11/9 Maria: 수업 전에 열어 둔 화면에서 Save 가 계속 잠김)
  */
 export function canRecord(l: TutorLesson, now: Date, due = false): boolean {
-  return l.state !== 'canceled' && !l.leaveOpen && (due || l.startsAt <= now) && !l.locked;
+  return l.state !== 'canceled' && !l.coveredByOther && !l.leaveOpen && (due || l.startsAt <= now) && !l.locked;
 }
 
-// 대체 수업이 먼저: 시트 보강을 대체강사가 맡아도 그 강사에게는 대체 수업 (R6)
-export function kindTag(l: TutorLesson): string | null {
-  if (l.covering) return 'Substitute';
-  if (l.kind === 'makeup' || l.kind === 'migrated_makeup') return 'Make-up';
-  if (l.kind === 'compensation') return 'Compensation';
-  return null;
+// 수업 종류 = 강사 시트 Class Type 이름 (H26(138)). 대체 수업이 먼저: 시트 보강을 대체강사가 맡아도 그 강사에게는 Cover class (R6)
+export function kindTag(l: Pick<TutorLesson, 'kind' | 'covering' | 'type'>): string {
+  return CLASS_TYPE_EN[l.type ?? typeFromKind(l.kind, l.covering)];
 }
+
+/** Class Record 'Student canceled' (H26(138)): 학생 취소로 기록할 수 있는 수업 — 기록 전·보상 수업 아님 (DB tutor_student_cancel 이 다시 확인) */
+export function canStudentCancel(l: TutorLesson): boolean {
+  return l.state === 'scheduled' && l.kind !== 'compensation' && !l.coveredByOther && !l.leaveOpen && !l.locked;
+}
+/** 학생 취소 미리 판정 결과 (lms_change_core) */
+export type StudentCancelDecision = { status: ClassStatus; timing: 'advance' | 'late' };
 
 /** 보강 신청의 원래 수업 ('Mon 3 Nov 09:00', 시트에서 옮겨 온 보강은 날짜만) */
 export function makeupOrigin(m: TutorMakeup, tz: string): string {

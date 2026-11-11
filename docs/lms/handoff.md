@@ -7,6 +7,13 @@
 
 
 
+## ✅ 11/11 강사 Class Record ①②③ — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/wonderful-cerf-zsfv6f, 정책 원본 H26(136)(138)(139) 참고)
+- migration **20261111140000_lms_class_type_student_cancel_cover** (시험 DB 적용): `class_type(lessons)`(PostgREST 계산 칸, 판정 `lms_class_type(l, p_cover)`: regular·makeup·compensation·cover·carry_in·carry_out) · `tutor_screen` type + 원래 강사 회색 줄(`covered_by_other`, 기록 내용·class_status 안 보냄, to_record 그대로) · `tutor_record_class` 대체 Held = Normal · 새 `tutor_student_cancel(request, lesson, told_at, dry_run)` → `lms_change_core(학생 사유, via tutor_app / 운영자 admin_on_behalf)` · student_screen·lms_student_profile_json·admin_student_detail 에 `type` (DO 블록으로 칸만 끼움)
+- 화면: `src/lms/class-type.ts`(이름 하나) · 강사 `screen.ts`·`TutorHome.tsx`(Student canceled 칸 `StudentCanceledFields`, CoverNote, 회색 줄 opacity) · Schedule 달력은 회색 줄 빼고 지금 그대로 · 운영진 대시보드·수강생 상세·수업 변경 목록(select 에 class_type) · 학생 홈 종류 이름 · 학생 취소 팝업 공휴일 줄
+- 검증: tsc · vitest 430 · test:db 통과(새 시험 4개 + 기존 2곳 고침: 원래 강사 회색 줄, 대체 Held = Normal) · ?demo=1 PC·휴대폰 화면 · 시험 DB Blair 계정으로 실제 저장(사전 취소·변경권 2→1·같은 요청 다시 보내도 1번·학생/강사 안내 2건)
+- ⚠ **운영 배포 순서**: 운영 DB migration 먼저(운영자 화면이 lessons 의 class_type 칸을 읽음 — 없으면 대시보드·수업 변경 목록 오류) → lms-prod. 운영 미반영 앞 작업(강사 통보 LMS 이전 등)과 같이 나갈 수 있으니 배포 전 `git log origin/lms-prod..origin/lms-test` 확인
+- 안 넣은 것: Student canceled 의 Remarks 칸(저장할 곳이 없어 뺌, 시안 휴대폰도 없음)
+
 ## ✅ 11/11 강사 통보 LMS 이전 + 첫 수업 안내 메일 + 보강 메일 정리 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/brave-pascal-guazck, 정책 원본 H26(134)(135) 참고)
 - 범위: H26(116)(122)(125)(127) 강사 Updates·To do·강사 메일 6종 · H26(129) 첫 수업 안내 · H26(124)② 강사 [None of these times work] → support@ 메일 · H26(133) 재촉 생략 · H26(131)(132) 학생 메일 문구(대표 11/11 '넣어': 해요체·'보강 희망 시간'·'(아직 강사 확인 중)') · 보강 확정·시간 변경 메일 캘린더 버튼 2개(대표 11/11)
 - 이미 7f6d690(대표 계정, 11/11)이 만든 것 재사용: 학생 취소→학생 메일, 보강 신청→학생·강사 메일 (migration 20261111073809)
@@ -359,7 +366,7 @@
   - 11/11 대표 지시 반영(운영 DB, admin_change_lesson 학생 대신 취소): 김O민 STU-0007 11/11 11:00 KST 학생 사전 취소(연락 시각 11/11 05:00 KST = 6시간 전, 변경권 2→1), 11/13 10:00 KST 보강 학생 사전 취소(연락 시각 지금, 변경권 1→0). 이O연 STU-0008 11/10 = LMS 가 맞음(09:00 학생 취소 + 15:00 KST 보강, 대표 확인) — Benny·학생 시트 정정은 대표 답 대기. 강사 Class Record 에 'Student canceled in advance' 선택지 추가는 새 세션 개발(대표 지시)
   - ⏭ **새 세션 개발 대기 (대표 11/11)**: ① 강사 Class Record 'Student canceled in advance' 선택지(카톡 취소, 기존 학생 취소 함수 재사용) ② 수업 종류를 강사 시트 Class Type 과 같게 강사·운영진·학생 화면에 표시 — Regular·Makeup·Compensation·Cover class(지금 LMS 강사 화면 'Substitute' → 이름 통일)·Carryover from previous period·Carryover to next period·free trial. ③ 대체 수업 양쪽 표시(대표 11/11): 맡은 강사 화면 = Class Type 'Cover class' + 꼬리표 "You're covering for another tutor"(원래 강사 실명 안 씀), 원래 강사 화면 = 그 수업이 사라지지 않고 회색 줄 + 상태 'Covered by another tutor' + "Another tutor is covering this class", '기록할 수업'에는 안 들어감(확인: 지금 원래 강사 화면에 안 보임 — tutor_screen 이 tutor_id 만 읽음). 시안(PC·휴대폰)부터
      - 11/11 시안 https://claude.ai/artifact/YVLwWKyTMm3MQe32TmuDtW (브랜치 claude/adoring-hamilton-xgum09). 대표 결정 대기 2건: 결정1 학생이 알린 시각 강사 입력 여부, 결정2 운영진·학생 화면 수업 종류 이름(영어/한국어). 확인: 이관 추가 수업(migrated_extra, 송O나 11/11·11/13) = Olivia 시트 Regular. 시안에 포함: 대체강사 Held 저장 → 'Normal'(기존 기록 그대로)
-     - ✅ **11/11 결정 끝 (H26(136)(138))** — 개발 시작 가능. 남은 대표 결정: 운영 DB 공휴일 목록 넣기(0건)
+     - ✅ **11/11 결정 끝 (H26(136)(138))** → ✅ 11/11 시험 환경 개발 끝 (맨 위 항목, H26(139)). 남은 대표 결정: 운영 DB 공휴일 목록 넣기(0건)
      - 11/11 대표 추가: 결정3 = A 운영진만 (H26(136) — 대표가 다시 물으면 그 이유를 꼭 다시 말할 것). 학생 취소 팝업 — 한국 공휴일 수업이면 '변경권 | 차감 안 됨 (공휴일 취소)' 한 줄(지금 공휴일이면 변경권 줄이 아예 안 보임), 공휴일 미리 표시 기능은 안 만듦. ⚠ 운영 DB holidays 표 0건 → 공휴일 취소 판정이 지금 한 번도 안 됨, 공휴일 목록 넣기 대표 승인 대기. 강사 장기휴무 직접 신청(Schedule) = 지금 없음(휴무는 운영진 휴무 화면만, 강사는 수업 없는 칸만 막기) → 별도 세션·시안
    - ⏭ **새 세션 개발 대기: 강사 휴무 '신청' 란 (H26(137))** — 강사 신청(날짜·사유) → 운영진 대시보드 → 누르면 휴무 화면 그 날짜로. Regular working hours·One time changes 페이지에 한 줄(3일 이상은 Home 신청 란으로, 바로 가기 버튼). **신청 기한 숫자는 시안에서 대표에게 꼭 물을 것**(기존 POL-TU-05: 14일·4일·급한 일 최대한 빨리+증빙을 기본안으로 보여 주고 확인). Home 신청 란 이름도 시안에서 정함. PC·휴대폰 시안부터
 

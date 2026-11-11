@@ -1,6 +1,7 @@
 // 운영진 대시보드 5차 (대표 2026-11-09): 숫자 칸 · 이번 달 등록/종료 예정 명단 · 기간별 수업 목록 · 강사 관리 · 공지
 // DB 행 → 화면 값. 화면 글은 여기서 만든다. 시각은 모두 한국 시간(운영진 화면)
 
+import { typeKo } from '../class-type';
 import { addDays, ampmKo, formatInZone, instantToKstDate, weekdayOf, type KstDate } from '../rules/dates';
 import { courseName } from '../rules/period';
 
@@ -69,12 +70,11 @@ export const ENDING_STATE_TEXT = (e: EndingItem) =>
 
 // ---------------------------------------------------------------- 수업 목록
 export type LessonListRow = {
-  id: string; starts_at: string; kind: string; state: 'scheduled' | 'canceled' | 'done'; class_status: string | null;
+  id: string; starts_at: string; kind: string; class_type?: string | null; state: 'scheduled' | 'canceled' | 'done'; class_status: string | null;
   student: { code: string; name_ko: string } | null; tutor: { name: string } | null;
 };
 export type LessonItem = { id: string; date: KstDate; time: string; studentName: string; studentCode: string; tutorName: string; kind: string; state: string; muted: boolean };
 
-export const LESSON_KIND_TEXT: Record<string, string> = { regular: '정규', makeup: '보강', migrated_makeup: '보강', compensation: '보상 수업', carryover: '이월', migrated_extra: '추가' };
 
 /** 상태: 완료 · 예정 · 취소 · 수강생 변경(수강생 사정 취소) · 노쇼 신고 */
 export function lessonState(l: Pick<LessonListRow, 'state' | 'class_status'>, noShow = false): { text: string; muted: boolean } {
@@ -92,7 +92,7 @@ export function toLessonItems(rows: LessonListRow[], noShowIds: ReadonlySet<stri
       const st = lessonState(l, noShowIds.has(l.id));
       return {
         id: l.id, date: f.date as KstDate, time: ampmKo(f.time), studentName: l.student?.name_ko ?? '(수강생)', studentCode: l.student?.code ?? '',
-        tutorName: l.tutor?.name ?? '(강사)', kind: LESSON_KIND_TEXT[l.kind] ?? '수업', state: st.text, muted: st.muted,
+        tutorName: l.tutor?.name ?? '(강사)', kind: typeKo(l.class_type, l.kind), state: st.text, muted: st.muted,
       };
     });
 }

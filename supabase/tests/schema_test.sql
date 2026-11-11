@@ -1736,10 +1736,16 @@ select pg_temp.ok((select jsonb_array_length(j -> 'lessons') = 7 and j #>> '{tut
   '강사 일정: 본인 수업 7개, 학생은 이름만(연락처 없음), 회차는 소진되는 수업만 n/총');
 select pg_temp.expect_error($$select tutor_screen('55555555-0000-0000-0000-00000000200b', current_date, current_date)$$, '42501');
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-00000000200b';
-select pg_temp.ok((select jsonb_array_length(tutor_screen(null, current_date - 7, current_date + 7) -> 'lessons') = 0),
-  '다른 강사 화면은 못 열고, 다른 강사에게는 이 수업이 안 보임');
+-- H26(138): 200b 는 0004 의 원래 강사 → 그 수업만 회색 줄(covered_by_other)로 보이고, 기록·상태·기록할 수업은 없음
+select pg_temp.ok((select jsonb_array_length(j -> 'lessons') = 1 and jsonb_array_length(j -> 'to_record') = 0
+                     and j #>> '{lessons,0,id}' = '77777777-2000-0000-0000-000000000004'
+                     and (j #>> '{lessons,0,covered_by_other}')::boolean and j #> '{lessons,0,class_status}' = 'null'::jsonb
+                     and j #>> '{lessons,0,type}' = 'regular' and not (j -> 'lessons' -> 0 ? 'topics')
+                   from (select tutor_screen(null, current_date - 7, current_date + 7) as j) x),
+  '다른 강사 화면은 못 열고, 원래 강사에게는 대체된 수업만 회색 줄(기록 내용 없음)');
 select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'x', null)$$, '42501');
-select pg_temp.ok(true, '다른 강사는 이 수업을 기록 못 함');
+select pg_temp.expect_error($$select tutor_student_cancel(gen_random_uuid(), '77777777-2000-0000-0000-000000000004', now() - interval '3 days', true)$$, '42501');
+select pg_temp.ok(true, '다른 강사는 이 수업을 기록 못 함 (원래 강사도 대체된 수업에 학생 취소 못 넣음)');
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';   -- 학생
 select pg_temp.expect_error($$select tutor_screen(null, current_date, current_date)$$, '42501');
 select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'x', null)$$, '42501');
@@ -1753,15 +1759,28 @@ select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000
 select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000004', 'late', 'x', null)$$, 'why you were late');
 select pg_temp.expect_error($$select tutor_record_class('77777777-2000-0000-0000-000000000006', 'held', 'x', null)$$, 'payroll');
 select pg_temp.ok(true, '시작 전·다룬 내용 없음·취소된 수업·지각 사유 없음·정산 들어간 수업은 기록 거절');
+-- H26(138) ① 강사 Class Record 'Student canceled': 학생이 알린 시각으로 기존 학생 취소 규칙 판정 (미리 보기만)
+select pg_temp.ok((select tutor_student_cancel(gen_random_uuid(), '77777777-2000-0000-0000-000000000001', t - interval '5 hours', true) ->> 'status' from rc)
+                  = 'Student canceled late'
+              and (select class_status is null and state = 'scheduled' from lessons where id = '77777777-2000-0000-0000-000000000001'),
+  '강사 학생 취소 미리 보기: 수업 2시간 전에 알림 → Student canceled late, 저장 안 됨');
+select pg_temp.expect_error($$select tutor_student_cancel(gen_random_uuid(), '77777777-2000-0000-0000-000000000001', now() - interval '1 minute', true)$$, 'after the class started');
+select pg_temp.expect_error($$select tutor_student_cancel(gen_random_uuid(), '77777777-2000-0000-0000-000000000001', now() + interval '1 hour', true)$$, 'future');
+select pg_temp.expect_error($$select tutor_student_cancel(gen_random_uuid(), '77777777-2000-0000-0000-000000000005', now() - interval '9 days', true)$$, 'already recorded');
+select pg_temp.expect_error($$select tutor_student_cancel(gen_random_uuid(), '77777777-2000-0000-0000-000000000006', now() - interval '9 days', true)$$, 'payroll');
+select pg_temp.ok(true, '강사 학생 취소: 시작 뒤 알림·미래 시각·이미 처리된 수업·정산 수업은 거절');
+select pg_temp.ok((select jsonb_object_agg(x ->> 'id', x ->> 'type') from (select tutor_screen(null, current_date - 7, current_date + 7) as j) q, jsonb_array_elements(j -> 'lessons') x)
+                  @> '{"77777777-2000-0000-0000-000000000001": "regular", "77777777-2000-0000-0000-000000000003": "makeup", "77777777-2000-0000-0000-000000000004": "cover"}',
+  '수업 종류(type): 정규 regular · 보강 makeup · 대체 cover');
 select tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'Free talk, hobbies', null);
 select tutor_record_class('77777777-2000-0000-0000-000000000003', 'held', 'Unit 5', null);
 select tutor_record_class('77777777-2000-0000-0000-000000000004', 'held', 'Airports', null);
 select pg_temp.ok((select array_agg(class_status::text order by id) from lessons where id in
                    ('77777777-2000-0000-0000-000000000001', '77777777-2000-0000-0000-000000000003', '77777777-2000-0000-0000-000000000004'))
-                  = '{Normal,"Make-up completed","Covered by another tutor"}'
+                  = '{Normal,"Make-up completed",Normal}'
               and (select bool_and(state = 'done') from lessons where id in ('77777777-2000-0000-0000-000000000001', '77777777-2000-0000-0000-000000000003'))
               and (select covered_topics = 'Free talk, hobbies' and submitted_by = 'bbbbbbbb-0000-0000-0000-00000000200a' from class_records where lesson_id = '77777777-2000-0000-0000-000000000001'),
-  '진행 → 정규 Normal · 보강 Make-up completed · 대체 진행 Covered by another tutor, 수업 진행 완료 + 다룬 내용 저장');
+  '진행 → 정규 Normal · 보강 Make-up completed · 대체 진행 Normal(H26(138)), 수업 진행 완료 + 다룬 내용 저장');
 select pg_temp.ok((select (tutor_record_class('77777777-2000-0000-0000-000000000001', 'held', 'Free talk, hobbies', null) ->> 'repeated')::boolean),
   '같은 기록을 다시 저장하면 바뀌는 것 없음');
 -- 3000 학생 지각: 정상 수업 그대로 + 표시만. Held 아니면 저장 안 함
