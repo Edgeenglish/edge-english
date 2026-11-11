@@ -21667,6 +21667,12 @@ end $$;
 revoke all on function student_my_info(uuid) from public, anon;
 grant execute on function student_my_info(uuid) to authenticated;
 
+-- >>> 20261111190000_lms_remind_regular_default_off.sql
+-- 정규 수업 이메일 알림(24시간·2시간 전) 신규 학생 기본값 OFF (11/11 대표 정책 변경)
+-- 기존 학생 값은 ChatGPT 가 운영·시험 DB 에서 이미 OFF 로 바꿈 → 여기서는 데이터를 건드리지 않고 기본값만 바꿈
+-- 보강 알림(remind_makeup) 기본 ON·학생이 '내 정보'에서 직접 켜기(student_reminders)는 그대로
+alter table students alter column remind_regular set default false;
+
 -- >>> 20261111190000_lms_renewal_mail.sql
 -- =====================================================================
 -- 학생 재등록 안내 자동 메일 3통 (정책 원본 H26(117) ①, 대표 11/11 결정 1~5 + 마지막 수업 종료 기준)

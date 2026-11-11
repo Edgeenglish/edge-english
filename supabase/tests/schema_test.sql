@@ -1958,6 +1958,7 @@ insert into tutors (id, name, country, timezone, meet_url) values
   ('55555555-0000-0000-0000-000000002900', '알림T', 'Australia', 'Australia/Sydney', 'https://meet.google.com/aaa-bbbb-ccc'),
   ('55555555-0000-0000-0000-000000002901', '대체T', 'Australia', 'Australia/Sydney', 'https://meet.google.com/sub-link-xyz');
 insert into students (id, name_ko, name_en, email) values ('99999999-0000-0000-0000-000000002900', '알림학생', 'Remind S', 'remind-s@example.com');
+update students set remind_regular = true where id = '99999999-0000-0000-0000-000000002900';  -- 정규 알림 켠 학생 (11/11 뒤 신규 기본은 OFF)
 insert into enrollments (id, student_id, seq, weeks, weekly_count, duration_min, start_date, base_end_date, lessons_purchased, status)
 values ('99999999-1000-0000-0000-000000002900', '99999999-0000-0000-0000-000000002900', 1, 4, 2, 50, '2031-02-20', '2031-03-19', 8, 'active');
 -- T0 = 2031-03-03(월) 20:00 KST 정규, T0+3시간 보강
@@ -3929,5 +3930,19 @@ set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select pg_temp.ok((student_my_info('99999999-0000-0000-0000-000000018110') ->> 'learned_min')::int = 490,
   '누적 학습 시간: 시트 합계 450 + 시트 기준일(10/10) 뒤 LMS 진행 수업 40 (기준일 전 LMS 수업은 시트와 겹쳐 안 셈)');
+reset request.jwt.claim.sub;
+reset role;
+
+-- ---------- 정규 수업 알림 신규 학생 기본 OFF (migration 20261111190000) ----------
+reset role;
+reset request.jwt.claim.sub;
+insert into students (id, name_ko, name_en) values ('99999999-0000-0000-0000-000000019000', '알림기본', 'Remind Default');
+select pg_temp.ok((select not remind_regular and remind_makeup from students where id = '99999999-0000-0000-0000-000000019000'),
+  '알림 기본값: 신규 학생 정규 OFF · 보강 ON');
+insert into app_users (auth_user_id, role, student_id) values ('bbbbbbbb-0000-0000-0000-000000019000', 'student', '99999999-0000-0000-0000-000000019000');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000019000';
+select student_reminders(null, true, null);
+select pg_temp.ok((student_reminders(null) ->> 'regular')::boolean, '알림 기본값: 학생이 내 정보에서 정규를 켜면 켠 채로 유지');
 reset request.jwt.claim.sub;
 reset role;
