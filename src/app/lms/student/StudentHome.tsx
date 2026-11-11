@@ -595,7 +595,7 @@ export default function StudentHome(props: {
   const todoBars = (
     <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
       <h2 className="flex items-center gap-2 bg-[#fff4d6] px-4 py-2.5 text-[16px] font-bold text-[#5c3b00]">
-        할 일 <span className="rounded-full bg-[#f0a33a] px-2 py-0.5 text-[13px] text-white">{todoCount}</span>
+        할 일
       </h2>
       {todoCount > 0 ? <div className="divide-y divide-[#f3e6c4]">{todoItems}</div> : <p className="px-4 py-3.5 text-[14px] text-[#6b6880]">할 일이 없어요</p>}
     </section>
@@ -1271,8 +1271,9 @@ function MakeupPicker(props: {
     if (!right) return;
     load(right)
       .then((o) => {
-        setOpts(o);
-        if (o[0]) setMonth(kst(o[0].startsAt).date.slice(0, 7));
+        const available = right.timeKnown === false ? o : o.filter((slot) => slot.startsAt.getTime() !== right.originalAt.getTime());
+        setOpts(available);
+        if (available[0]) setMonth(kst(available[0].startsAt).date.slice(0, 7));
       })
       .catch((e) => setErr(e instanceof Error ? e.message : '불러오지 못했어요.'));
   }, [right, load]);
@@ -1347,6 +1348,7 @@ function MakeupPicker(props: {
         {rightUntil(right, props.endDate) && <p className="text-[13.5px] text-[#55526a]">{rightUntil(right, props.endDate)}</p>}
       </div>
       <p className="text-[14px] leading-relaxed text-[#55526a]">이 수업을 대신할 날짜를 최대 {MAKEUP_SLOTS_MAX}개 골라 주세요. 강사님이 확인하면 확정돼요.</p>
+      <p className="text-[14px] font-semibold">{right.tutor ? `${right.tutor} 강사님의 가능한 시간입니다.` : '담당 강사님의 가능한 시간입니다.'}</p>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
       {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
       {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
@@ -1378,6 +1380,7 @@ function MakeupPicker(props: {
               <p className="text-[14px] font-bold">
                 고른 날짜 {picked.length}/{MAKEUP_SLOTS_MAX}
               </p>
+              <p className="text-[13px] leading-relaxed text-[#55526a]">이 수업을 대신할 날짜를 최대 {MAKEUP_SLOTS_MAX}개 골라 주세요.</p>
               {picked.map((t) => (
                 <div key={t.getTime()} className="flex items-center justify-between rounded-[10px] border border-[#e6e3ef] px-3 py-2 text-[14px]">
                   <span className="font-semibold">{whenText(t)}</span>
@@ -1424,7 +1427,7 @@ function LaterButton({ onLater }: { onLater: () => void }) {
       <button type="button" onClick={onLater} className="min-h-[46px] rounded-[14px] border border-[#d9d5e8] bg-white text-[15px] font-semibold text-[#1d1b2b]">
         나중에 고르기
       </button>
-      <p className="text-center text-[12px] text-[#6b6880]">홈 &lsquo;할 일&rsquo;에서 언제든 다시 고를 수 있어요.</p>
+      <p className="text-center text-[12px] text-[#6b6880]">나중에 홈 → 보강 날짜 고르기</p>
     </>
   );
 }
