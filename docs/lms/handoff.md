@@ -2,10 +2,16 @@
 
 # 다음 세션 시작 메모
 
-새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
-
-
-
+## 🔐 11/11 홈페이지 회원가입·로그인 — 정책 원본 H26(146)(150) 참고 · **시험 사이트 개발, 운영 미반영** (브랜치 claude/clever-curie-hzaqbi → lms-test)
+- 시안 v2: `docs/lms/previews/home-signup-login-drafts.html` (https://claude.ai/artifact/RPg5vNWjBvo2vC1JD53Qsn)
+- 코드: `src/app/lms/login/LoginFlow.tsx`(단계: login·signup·signup_code·pw_email·pw_new·social_choice·member + 기존 totp/enroll) · `src/lms/auth/login-flow.ts`(PASSWORD_MIN 8·signupProblems·enabledSocial·needsSocialChoice·PROVIDER_ID 네이버=`custom:naver`, 문구 한·영) · `src/lms/auth/client.ts` flowType pkce(카카오·네이버 돌아올 때 ?code= → exchangeCodeForSession) · `src/components/Header.tsx` [로그인]/[내 수업](세션 있으면) + 말풍선 삭제
+- migration **20261112000000_lms_discard_new_social_account** (시험 DB 적용): '이미 회원이에요' 때 방금 생긴 카카오·네이버 전용 빈 계정만 본인이 지움(app_users 연결·email 로그인 방법 있으면 false). authz-probe 검토 목록에 추가
+- 동작: 카카오·네이버 버튼은 /auth/v1/settings external 에 켜진 것만 보임 · 가입 = signUp(이름·동의 시각 user_metadata) → verifyOtp type signup · 이미 있는 이메일(identities 0) → '이미 가입된 이메일이에요' + 비밀번호 만들기 · 비밀번호 만들기·찾기 = 메일 코드 로그인(shouldCreateUser false) + updateUser(password) · 회원 연결 없는 계정 = '아직 수강 중인 수업이 없어요' + [수강신청](구글폼)
+- 검증(11/11): tsc · eslint(새 오류 없음, TimeStatusLegend 기존 오류 1) · vitest 436 · test:db 전체 통과(묶음 SQL 재생성) · 시험 DB: 삭제 함수 4경우(카카오만→지움 / 이메일+카카오·연결된 학생·비로그인→안 지움, anon 실행 불가, rollback) · 연결 없는 로그인 사용자 학생·수업·수강권·결제·강사·보강·안내 0건 · 로컬(시험 DB) PC·휴대폰: 틀린 비밀번호 오류 칸 아래, 가입 빈칸 오류 4개, **STU-0018 실제 메일 코드로 비밀번호 만들기 → 학생 홈 → 다시 비밀번호 로그인 → 학생 홈, 헤더 '내 수업'**(비밀번호는 무작위 값, 기록 안 함), 가로 밀림 없음
+- **미검증(설정 필요)**: 회원가입(시험 Supabase 공개 가입 꺼짐 → 지금 누르면 '연결이 불안정해요') · 카카오·네이버 연결 3경우(같은 이메일·다른 이메일·이메일 없음) 연결 전후 기록 대조 · 네이버 custom provider 가 사용자 정보(response 안에 들어 있음)·이메일 인증 여부를 읽는지
+- **대표 할 일(대표 계정만 가능)**: ① 시험용 Supabase Authentication: 새 가입 허용 켬 · 비밀번호 최소 8 · 'Confirm signup' 메일에 6자리 코드({{ .Token }}) · Manual linking 켬 (관리 API 토큰 안 됨 11/11 다시 확인) ② 카카오 개발자 앱(비즈 앱 전환·이메일 동의) ③ 네이버 개발자센터 앱(서비스 적용 검수)
+- 남은 개발: 이용약관·개인정보 동의 원문(대표 원문 필요 — 지금은 체크만, [보기] 없음) · 운영 반영 순서(대표 승인 뒤): 운영 DB migration → 운영 Supabase 설정 → lms-prod·main 같은 커밋(헤더는 main 홈페이지에 나감)
+- H26(128)·11/15 할 일: H26(150) 으로 **공개·주소 이전 보류**(로그인 완성·QA 뒤). 11/9 카카오 시안의 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
 ## ✅ 11/11 학생 재등록 안내 자동 메일 3통 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/nice-einstein-x201yx, H26(117) ① · 대표 11/11 결정 1~5 + 마지막 수업 종료 기준)
 - migration **20261111190000_lms_renewal_mail** (시험 DB 적용): `lms_renewal_plans`(가격표, renewal-price.ts 와 같은 값 — 가격 바뀌면 두 곳) · `lms_renewal_remaining`(대시보드 remainingOf 와 같은 남은 수업) · `lms_renewal_mail`(문구·대기열, dedupe `renewal_mail:수강권:단계`) · `lms_renewal_mail_due` · `lms_renewal_mail_run` · pg_cron `lms-renewal-mail` 10분(`lms_renewal_mail_run(); lms_mail_run();`). 시작 스위치 = feature_flags `renewal_mail_since` 줄이 있을 때만 (시험 DB 에만 넣음, 운영은 줄 없음 = 안 보냄)
@@ -99,7 +105,8 @@
 - 수정(최종 e4e9ba5, 대표 지시로 51b9589·1721526·e688390 방식 되돌림): 검은 '시간 기준' 줄 없앰. 해외 학생 운영자 보기의 한국 시간 보기는 보라색 시간대 띠 안 끝 글자 버튼 '· 한국 시간으로 보기'(누르면 띠 '한국 시간(KST) 기준으로 보는 중 · ○○ 시간으로 보기', 학생 저장 시간대는 안 바뀜). 운영자 '수강생 로그인 이메일' 입력은 원래대로. 시험 7명(해외·한국, 로그인 있음·없음) PC·iPhone 13: 띠 1개, 공통 순서 같음, 조건부만 다름(재등록 STU-0002, 할 일 STU-0010), 가로 밀림 0
 - 11/11 추가(6018f2a): 운영자 한국 시간 보기여도 띠 색을 노란색으로 바꾸지 않음(원인: 운영자 브라우저에 한국 시간 보기 켬이 기억돼 해외 학생만 노란 띠). 띠는 늘 보라색 하나, 글자만 '한국 시간 기준'. 시험 38명 PC·휴대폰 QA 통과(띠 1개·보라색·순서 같음·가로 밀림 0, 해외 5명 켬/끔·새로고침 유지·저장 시간대 그대로, STU-0028 시간대 바꿈→되돌림)
 - **11/11 운영 배포 완료(대표 승인)**: lms-prod·main 8af05d9 → **c171d0f** (StudentHome.tsx 한 파일만 = lms-test 51b9589~6018f2a 시간대 띠 통일, DB 변경 없음). edgeenglish.kr/lms·lms-prod 주소 새 화면 파일 확인(노란 띠 글자 없음). 되돌리기: lms-prod·main 을 8af05d9 로. 운영 학생별 화면 확인은 운영자 로그인 필요(대표 PC 인증 대기)
-- 11/11 정규 수업 알림 신규 기본 OFF: migration **20261111190000_lms_remind_regular_default_off**(students.remind_regular default false, 데이터 안 바꿈) — **시험 DB 적용, 운영 미적용**(운영 기본값 아직 true, 기존 13명은 ChatGPT 가 OFF 처리). 보강 기본 ON 그대로. 학생 등록 코드에 remind_regular 를 넣는 곳 없음(기본값만 씀). 데모 데이터 정규 OFF
+- 11/11 정규 수업 알림 신규 기본 OFF: migration **20261111190000_lms_remind_regular_default_off**(students.remind_regular default false, 데이터 안 바꿈) — **시험 DB·운영 DB 적용**(11/11 대표 승인, 운영 백업 snapshots 45 → 적용, 적용 뒤 기본값 정규 false·보강 true, 학생 13명 정규 ON 0·보강 ON 13 그대로. 되돌리기: alter column remind_regular set default true). 보강 기본 ON 그대로. 학생 등록 코드에 remind_regular 를 넣는 곳 없음(기본값만 씀). 데모 데이터 정규 OFF
+- 11/11 두 카드 대표 최종 시안(8f5da16, lms-test 만): 수업 변경·취소 = 6시간 규칙 2줄(6시간 이내: 변경권 유지 · 보강 불가 (수업 1회 차감)) + 남은 변경권/이번 기간 총 N개 중/N개 + '변경·취소하기 ›', 보강 일정 잡기 = N회 + '잡을 수 있는 보강' + '신청 가능 ›'(있을 때만). QA STU-0012·0010·0003 PC·iPhone 13: 높이 같음, 행동 글자 아래끝 같음, 변경권 = DB, 클릭 이동 정상
 - 11/11 콤팩트 시안(580aa4b~, **lms-test 만, 운영 미배포 — 시간대 띠 수정과 함께 배포 예정**): 누적 학습 시간 베이지 얇은 띠(#F5F1E9, 늘 '○시간 ○분'), 재등록 안내 마감 날짜만('11월 18일까지 … 이월할 수 있어요.', 마감 기준은 그대로), 수업 변경·취소 카드 6시간 규칙 + '남은 변경권 n개', 보강 카드 '보강 일정 잡기 n회'(0이면 '신청 가능' 없음, 기존 클릭 동작), 두 카드 아이콘 없앰·제목 진하게(대표), 공지 N 빨간 글자만·날짜 2026.11.11. QA 5명(재등록·할 일·휴무·해외·수업 없음) PC·iPhone 13: 변경권 = DB, 보강 n = 신청 내역 '날짜 선택 필요' 수, 카드 클릭·공지 열기 확인, 가로 밀림 0
 - 11/11 대표 시안 반영(de11aec·d8fec73, **lms-test 만, 운영 미배포**): 운영자·해외 학생일 때만 '한국 시간으로 보기 ›'를 PC는 시간대 띠 같은 줄 오른쪽 끝(작은 회색 글자+얇은 구분선, 띠 너비 = 홈 카드 너비), 휴대폰은 같은 띠 둘째 줄. 켜면 '○○ 시간으로 보기 ›'. QA: 해외 2명·한국 2명 운영자 보기 + 학생 본인 1명, PC·iPhone 13, 켬/끔·새로고침 유지·저장 시간대 그대로·가로 밀림 0
 - 운영 리마인더: 통합 운영 배포 세션이 11/11 21:31 KST 운영에 'lesson_reminder_since' 줄을 넣음(enabled=false 로 적혔지만 줄이 있으면 발송) — 계속 둘지 대표 답 대기

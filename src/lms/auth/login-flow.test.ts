@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { afterEmailCode, looksLikeEmail, maskEmail, STRINGS } from './login-flow';
+import { afterEmailCode, enabledSocial, looksLikeEmail, maskEmail, needsSocialChoice, PASSWORD_MIN, signupProblems, STRINGS } from './login-flow';
 
 describe('로그인 다음 단계 (POL-AC-04·05)', () => {
   it('운영자는 TOTP까지 마쳐야 관리자 화면', () => {
@@ -48,5 +48,30 @@ describe('로그인 뒤 바로가기 링크로 돌아가기 (11/8 보강 바로�
     expect(nextAfterLogin('/lms/student?student=s1&makeup=abc', '/lms/admin', 'admin')).toBe('/lms/student?student=s1&makeup=abc');
     expect(isMakeupLink('/lms/student?makeup=abc')).toBe(true);
     expect(isMakeupLink('/lms/student')).toBe(false);
+  });
+});
+
+describe('회원가입·간편 로그인 (H26(146)(150))', () => {
+  it('가입 칸 검사: 이름·이메일·비밀번호 8자·필수 동의 2개', () => {
+    const ok = { name: '김하준', email: 'a@b.co', password: '12345678', terms: true, privacy: true };
+    expect(signupProblems(ok)).toEqual([]);
+    expect(signupProblems({ ...ok, password: '1234567' })).toEqual(['password']);
+    expect(signupProblems({ ...ok, name: ' ', email: 'x', privacy: false })).toEqual(['name', 'email', 'agree']);
+    expect(PASSWORD_MIN).toBe(8);
+  });
+  it('켜진 간편 로그인만 버튼', () => {
+    expect(enabledSocial({ kakao: false, email: true })).toEqual([]);
+    expect(enabledSocial({ kakao: true, 'custom:naver': true })).toEqual(['kakao', 'naver']);
+    expect(enabledSocial(undefined)).toEqual([]);
+  });
+  it('처음이에요 / 이미 회원이에요 는 회원 연결 없는 카카오·네이버 전용 계정만', () => {
+    expect(needsSocialChoice({ role: null, providers: ['kakao'], choseNew: false })).toBe(true);
+    expect(needsSocialChoice({ role: null, providers: ['custom:naver'], choseNew: false })).toBe(true);
+    // 같은 인증 이메일로 기존 계정에 자동 연결됨 → 묻지 않음
+    expect(needsSocialChoice({ role: 'student', providers: ['email', 'kakao'], choseNew: false })).toBe(false);
+    // 이메일로 가입한 회원(수강 전)이 카카오를 붙인 경우도 묻지 않음
+    expect(needsSocialChoice({ role: null, providers: ['email', 'kakao'], choseNew: false })).toBe(false);
+    expect(needsSocialChoice({ role: null, providers: ['kakao'], choseNew: true })).toBe(false);
+    expect(needsSocialChoice({ role: null, providers: ['email'], choseNew: false })).toBe(false);
   });
 });

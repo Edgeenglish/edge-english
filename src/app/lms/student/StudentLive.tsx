@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { createStudentLogin, loadStudentAccounts, loadStudentView, searchStudents, studentActions, type StudentAccount, type StudentView } from '@/lms/student/live';
+import { loadStudentAccounts, loadStudentView, searchStudents, studentActions, type StudentAccount, type StudentView } from '@/lms/student/live';
 import StudentHome from './StudentHome';
 
 type State =
@@ -59,13 +59,11 @@ export default function StudentLive({ studentParam, makeup }: { studentParam?: s
         </button>
       </div>
     );
-  const current = state.admin?.students.find((x) => x.id === state.admin?.studentId);
   const adminBar = state.admin && (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[12px] bg-[#1d1b2b] px-3 py-2">
       <span className="text-[13px] font-semibold text-white">운영자 보기</span>
       <StudentPicker students={state.admin.students} current={state.admin.studentId} />
       <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">← 운영자 화면</a>
-      {sb && current && !current.hasLogin && <StudentLoginForm onCreate={(email) => createStudentLogin(sb, current.id, email)} />}
     </div>
   );
   return (
@@ -79,37 +77,6 @@ export default function StudentLive({ studentParam, makeup }: { studentParam?: s
       onLogout={state.admin ? undefined : logout}
       openMakeup={makeup}
     />
-  );
-}
-
-// 대표: 이 수강생의 로그인 계정 만들기 (이메일만 넣으면 계정 + 수강생 연결, 비밀번호 없음 — 수강생은 이메일 코드로 로그인)
-function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{ created: boolean }> }) {
-  const [email, setEmail] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  async function submit() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      await onCreate(email);
-      setMsg({ ok: true, text: '수강생 로그인 계정을 만들었어요.' });
-      setTimeout(() => window.location.reload(), 1500);
-    } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : '만들지 못했어요.' });
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="flex w-full flex-wrap items-center gap-2">
-      <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="수강생 로그인 이메일"
-        aria-label="수강생 로그인 이메일" className="min-h-[38px] min-w-0 flex-1 rounded-[8px] bg-white px-2 text-[15px] text-[#1d1b2b]" />
-      <button type="button" disabled={busy || !email.trim()} onClick={submit}
-        className="min-h-[38px] rounded-[8px] bg-[#6d4aff] px-3 text-[13px] font-semibold text-white disabled:opacity-50">
-        {busy ? '만드는 중…' : '로그인 만들기'}
-      </button>
-      {msg && <p role={msg.ok ? 'status' : 'alert'} className={`w-full text-[13px] ${msg.ok ? 'text-[#b9f5cf]' : 'text-[#ffb4ab]'}`}>{msg.text}</p>}
-    </div>
   );
 }
 

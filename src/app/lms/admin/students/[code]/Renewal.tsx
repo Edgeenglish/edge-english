@@ -9,7 +9,7 @@ import { addDays, ampmKo, formatInZone, instantToKstDate, kstToInstant, weekdayO
 import { courseName } from '@/lms/rules/period';
 import { koZone, md, mdw, productText, slotsInZone, slotsText, WD_KO, type Slot } from '@/lms/admin/students';
 import {
-  creditsPerPeriod, endOfCourse, firstLessonAfter, paidInTime, renewBlock, rewardReason,
+  creditsPerPeriod, endOfCourse, firstLessonAfter, paidInTime, parseWon, renewBlock, rewardReason, WON_ERROR,
   type CarryItem, type RenewalContext, type RenewDraft, type Rewards,
 } from '@/lms/admin/renewal';
 import type { RenewInput, RenewResult } from '@/lms/admin/renewal-live';
@@ -143,7 +143,7 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
     try {
       const r = await actions.renew(ids, {
         studentCode: who.code, weeks: d.weeks, weekly: d.weekly, dur: d.dur, start, slots: [...d.slots].sort((a, b) => a.weekday - b.weekday),
-        method: d.method, amount: Number(d.amount.replace(/\D/g, '')), paidOn: d.paidOn as KstDate, payer: d.payer,
+        method: d.method, amount: parseWon(d.amount) ?? 0, paidOn: d.paidOn as KstDate, payer: d.payer,
       });
       kept.clear();
       setDone(r);
@@ -252,7 +252,8 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
       </div>
       <div>
         <label htmlFor="rn-amt" className={label}>받은 금액 (원){p.lastAmount ? ` · 지난 결제 ${won(p.lastAmount)}` : ''}</label>
-        <input id="rn-amt" inputMode="numeric" placeholder="직접 입력" value={d.amount} onChange={(e) => set({ amount: e.target.value.replace(/[^\d,]/g, '') })} className={input} />
+        <input id="rn-amt" inputMode="numeric" placeholder="직접 입력" value={d.amount} onChange={(e) => set({ amount: e.target.value })} className={input} />
+        {parseWon(d.amount) === null && <span className={err}>{WON_ERROR}</span>}
       </div>
       <div>
         <label htmlFor="rn-paid" className={label}>{lab.date} (한국 날짜)</label>
@@ -431,10 +432,11 @@ export function RewardSheet({ who, rewards, mode, today, actions, onClose, onSav
   const [requestId] = useState(actions.newId);
   const [busy, setBusy] = useState(false);
   const [saveErr, setSaveErr] = useState('');
-  const amt = Number(d.amount.replace(/\D/g, '')) || 0;
+  const parsed = parseWon(d.amount);
+  const amt = parsed ?? 0;
   const signed = d.mode === 'in' ? amt : -amt;
   const over = d.mode === 'out' && amt > rewards.balance;
-  const ok = amt > 0 && !!d.reason.trim() && !over;
+  const ok = parsed !== null && amt > 0 && !!d.reason.trim() && !over;
   const sign = d.mode === 'in' ? '+' : '−';
 
   async function save() {
@@ -460,7 +462,8 @@ export function RewardSheet({ who, rewards, mode, today, actions, onClose, onSav
         </div>
         <div>
           <label htmlFor="rw-amt" className={label}>금액 (원)</label>
-          <input id="rw-amt" inputMode="numeric" placeholder="직접 입력" value={d.amount} onChange={(e) => set({ amount: e.target.value.replace(/[^\d,]/g, '') })} className={input} />
+          <input id="rw-amt" inputMode="numeric" placeholder="직접 입력" value={d.amount} onChange={(e) => set({ amount: e.target.value })} className={input} />
+          {parsed === null && <span className={err}>{WON_ERROR}</span>}
           {over && <span className={err}>잔액({won(rewards.balance)})보다 많이 뺄 수 없어요</span>}
         </div>
         <div>
@@ -484,7 +487,7 @@ export function RewardSheet({ who, rewards, mode, today, actions, onClose, onSav
       <CancelBar show={kept.asking} onKeep={() => kept.setAsking(false)} onDrop={() => { kept.reset(); onClose(); }} />
       <Actions kept={kept} onClose={onClose}>
         <button type="button" className={`${btnMain} flex-1`} disabled={!ok || busy} onClick={save}>
-          {busy ? '저장 중…' : !amt ? '금액을 넣어 주세요' : !d.reason.trim() ? '사유를 넣어 주세요' : over ? '잔액보다 많아요' : `${sign}${won(amt)} ${d.mode === 'in' ? '넣기' : '빼기'}`}
+          {busy ? '저장 중…' : parsed === null ? WON_ERROR : !amt ? '금액을 넣어 주세요' : !d.reason.trim() ? '사유를 넣어 주세요' : over ? '잔액보다 많아요' : `${sign}${won(amt)} ${d.mode === 'in' ? '넣기' : '빼기'}`}
         </button>
       </Actions>
     </Sheet>

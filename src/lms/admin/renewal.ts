@@ -60,6 +60,15 @@ const REWARD_KIND: Record<string, string> = {
 };
 export const rewardReason = (r: Pick<RewardRow, 'kind' | 'note'>) => r.note || REWARD_KIND[r.kind] || '적립금';
 
+/** 금액 칸 글 → 원 (숫자·쉼표만). 빈칸 = 0, 소수점·마이너스·글자가 섞이면 null (지우고 저장하지 않음 — 1.5 가 15원이 되던 오류, 대표 시험 11/11) */
+export function parseWon(text: string): number | null {
+  const t = text.trim();
+  if (t === '') return 0;
+  if (!/^[\d,]+$/.test(t)) return null;
+  return Number(t.replace(/,/g, ''));
+}
+export const WON_ERROR = '숫자만 넣어 주세요 (소수점·− 안 됨)';
+
 /** 수강 기간 끝 (28일 × 4주 단위) */
 export const endOfCourse = (start: KstDate, weeks: number): KstDate => addDays(start, (weeks / 4) * 28 - 1);
 
@@ -88,7 +97,7 @@ export type RenewDraft = {
 /** 저장 막는 까닭 (화면 버튼 글). 없으면 '' — 순서는 화면 위에서 아래 */
 export function renewBlock(d: RenewDraft, prevEnd: KstDate, conflictCount: number, today: KstDate): string {
   const dup = d.slots.some((s, i) => d.slots.findIndex((x) => x.weekday === s.weekday) !== i);
-  const amt = Number(d.amount.replace(/\D/g, '')) || 0;
+  const amt = parseWon(d.amount);
   if (d.slots.length !== d.weekly) return `요일 ${d.weekly}개를 맞춰 주세요`;
   if (dup) return '같은 요일이 두 번 있어요';
   if (d.slots.some((s) => !/^\d\d:\d\d$/.test(s.time))) return '시간을 골라 주세요';
@@ -96,6 +105,7 @@ export function renewBlock(d: RenewDraft, prevEnd: KstDate, conflictCount: numbe
   const start = d.start;
   if (!start || start <= prevEnd) return '시작일을 골라 주세요';
   if (!d.slots.some((s) => s.weekday === weekdayOf(start))) return '시작일을 정규 요일로 맞춰 주세요';
+  if (amt === null) return WON_ERROR;
   if (amt <= 0) return '받은 금액을 넣어 주세요';
   if (!d.paidOn) return `${d.method === 'card_link' ? '결제일' : '입금 날짜'}를 넣어 주세요`;
   if (d.paidOn > today) return '오늘 뒤 날짜는 넣을 수 없어요';
