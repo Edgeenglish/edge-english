@@ -5,6 +5,7 @@ import { asClassType } from '../class-type';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
 import type { CreditPeriod, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
+import { processingEvents, type ProcessingEvent } from './processing-history';
 
 const NOT_APPLIED = '수강생 화면이 이 DB에 아직 없어요 (migration 2800).';
 
@@ -68,6 +69,8 @@ export type StudentView = {
   lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
+  processingHistory?: ProcessingEvent[];
+  processingHistoryError?: boolean;
   leave: LeaveRow[];
   /** 휴무 처리 중인데 수업 줄이 아직 없는 수업 → 일정에 '일정 조율 중' (3700) */
   leavePending?: { id: string; startsAt: Date; endsAt: Date }[];
@@ -249,11 +252,14 @@ export function withSuggestions(v: StudentView, rows: SuggestionRow[]): StudentV
 
 /** studentId: 운영자가 고른 수강생 (수강생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
-  const [screen, book, sug] = await Promise.all([
-    sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId), sb.rpc('student_makeup_suggestions', { p_student: studentId })]);
+  const [screen, book, sug, history] = await Promise.all([
+    sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId), sb.rpc('student_makeup_suggestions', { p_student: studentId }),
+    sb.rpc('student_processing_history', { p_student: studentId })]);
   const v = parseStudentView(check(screen));
   // 강사가 제안한 시간 (H26(134), 20261111160000). 함수 없는 옛 DB 면 예전 그대로
-  return { ...(sug.error ? v : withSuggestions(v, (sug.data as SuggestionRow[]) ?? [])), textbook: book };
+  return { ...(sug.error ? v : withSuggestions(v, (sug.data as SuggestionRow[]) ?? [])), textbook: book,
+    processingHistory: history.error ? [] : processingEvents((history.data as ProcessingEvent[]) ?? []),
+    processingHistoryError: !!history.error };
 }
 /** 강사가 정한 교재 (QA C-04, migration 20261107040000). 함수가 없는 옛 DB 면 null — 학습자료에 교재만 안 보임 */
 async function loadTextbook(sb: SupabaseClient, studentId: string | null): Promise<string | null> {
