@@ -26,6 +26,10 @@ export type MakeupRight = {
   originalAt: Date; timeKnown?: boolean; tutorLeave: boolean; requested: boolean; tutor?: string | null; tutorNoShow?: boolean;
   /** 강사 사전·늦은 취소·노쇼 — 수강생 화면 이름 '강사 사정으로 취소된 수업' (수강생에게 '노쇼'라고 쓰지 않음, 11/8 대표) */
   tutorFault?: boolean;
+  /** 강사 사전·늦은 취소 (노쇼 아님) — 사유 '강사가 취소' (11/12 대표) */
+  tutorCanceled?: boolean;
+  /** 지난 수강 기간에서 이월된 권리 (원래 수업이 지금 수강권이 아닌 앞 수강권 것) — 카드 '이월된 수업' (11/12 대표) */
+  carryIn?: boolean;
 };
 /** 보강 권리를 가리키는 값 (원래 수업 · 시트 보강 · 보상수업 중 하나) */
 export type RightRef = { lessonId: string | null; itemId: string | null; compId?: string | null };
@@ -92,7 +96,7 @@ type Raw = {
     next_regular_from: KstDate | null;
   };
   lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null; type?: string; lesson_final_end_date?: KstDate | null }[];
-  makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean }[];
+  makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean; carry_in?: boolean }[];
   leave_pending?: { id: string; starts_at: string; ends_at: string }[];
   makeup_requests: {
     confirmed_lesson_id?: string | null;
@@ -191,6 +195,8 @@ export function parseStudentView(r: Raw): StudentView {
       tutor: m.tutor ?? r.lessons.find((l) => l.id === m.lesson_id)?.tutor ?? null,
       tutorNoShow: !!m.comp_id || r.lessons.find((l) => l.id === m.lesson_id)?.class_status === 'Tutor no-show',
       tutorFault: TUTOR_FAULT.includes(r.lessons.find((l) => l.id === m.lesson_id)?.class_status ?? ''),
+      tutorCanceled: ['Tutor canceled in advance', 'Tutor canceled late'].includes(r.lessons.find((l) => l.id === m.lesson_id)?.class_status ?? ''),
+      carryIn: !!m.carry_in,
       // 원래 수업 보강과 보상수업은 신청이 따로 (4100)
       requested: open.some((q) => (m.comp_id ? q.comp_id === m.comp_id : !q.comp_id && ((m.lesson_id && q.lesson_id === m.lesson_id) || (m.item_id && q.item_id === m.item_id)))),
     })),

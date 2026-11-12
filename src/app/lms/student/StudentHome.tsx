@@ -216,15 +216,23 @@ function kstDateOnly(d: Date) {
  * 보강 권리 카드 (2026-11-07 대표: 수강생에게는 어떤 수업인지·사유 한 줄·신청 기한·날짜 선택만. 노쇼·보상 처리 같은 내부 사유는 안 보임)
  * 제목: 원래 수업 날짜 (수강생 시간대). withTime = 같은 날 수업이 둘일 때만 시각까지
  */
-const rightTitle = (m: MakeupRight, withTime = false) => {
-  if (m.compId) return '무료 보상수업 1회';
-  if (m.timeKnown === false) return `${kstDateOnly(m.originalAt)} 수업`;
+// 11/12 대표 확정: 제목 '보강 수업'·'이월된 수업', 날짜는 '원래 수업 날짜: 11/9(월)' 한 줄, 사유는 '사유: …'
+const rightTitle = (m: MakeupRight) => (m.compId ? '무료 보상수업 1회' : m.carryIn ? '이월된 수업' : '보강 수업');
+/** 원래 수업 날짜 줄 (이월·보상수업은 없음). withTime = 같은 날 수업이 둘일 때만 시각까지 */
+const rightDate = (m: MakeupRight, withTime = false) => {
+  if (m.compId || m.carryIn) return null;
+  if (m.timeKnown === false) return `원래 수업 날짜: ${kstDateOnly(m.originalAt)}`;
   const k = kst(m.originalAt);
-  return `${k.md}(${k.wd})${withTime ? ` ${k.time}` : ''} 수업`;
+  return `원래 수업 날짜: ${k.md}(${k.wd})${withTime ? ` ${k.time}` : ''}`;
 };
 /** 제목 아래 사유 한 줄 — 무료 보상수업은 원래 수업과 헷갈리지 않게 '추가' 수업으로만 */
 const rightReason = (m: MakeupRight) =>
-  m.compId ? '추가 비용 없이 신청할 수 있어요' : m.tutorLeave ? '강사 휴무로 취소된 수업' : m.tutorFault || m.tutorNoShow ? '강사 사정으로 취소된 수업' : '취소된 수업';
+  m.compId ? '추가 비용 없이 신청할 수 있어요'
+    : m.carryIn ? '지난 수강 기간에서 이월된 수업'
+    : m.tutorLeave ? '사유: 강사 휴무로 취소'
+    : m.tutorCanceled ? '사유: 강사가 취소'
+    : m.tutorFault || m.tutorNoShow ? '사유: 강사 사정으로 취소'
+    : '사유: 내가 취소';
 /**
  * 신청 기한 = 수강 종료일 하나 (H26(93): 정규·수강생 취소 보강·강사 귀책 보강·무료 보상수업 모두 같은 종료일. 보상수업 사용 기한도 이 날을 따라감).
  * 예외: 시행 전 시트에서 넘어온 강사 휴무 보강(이관 보강권)은 예전처럼 보강 날짜에 따라 종료일이 늘어나 기한을 적지 않음.
@@ -643,10 +651,10 @@ export default function StudentHome(props: {
           onClick={() => (openRights.length === 0 ? setTab('requests') : setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null }))}
           className={quickTop}
         >
-          <span className="text-[15px] font-bold text-[#1d1b2b]">보강 일정 잡기</span>{quickGo}
+          <span className="text-[15px] font-bold text-[#1d1b2b]">수업 날짜 고르기</span>{quickGo}
         </button>
         <div className="flex flex-1 flex-col gap-1 px-4 pb-3.5 pt-2.5">
-          <p className="text-[12.5px] text-[#55526a]">신청 가능한 보강</p>
+          <p className="text-[12.5px] text-[#55526a]">날짜를 골라야 할 수업</p>
           <p className="text-[27px] font-extrabold leading-tight text-[#1d1b2b]">{openRights.length}회</p>
           <p className="text-[11.5px] text-[#6b6880]">강사 확정 대기 중 {makeupWaiting}회</p>
         </div>
@@ -666,7 +674,7 @@ export default function StudentHome(props: {
   const todoItems = (
     <>
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
-      {openRights.length > 0 && <TodoBar n={openRights.length} text="보강 날짜 고르기" onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
+      {openRights.length > 0 && <TodoBar n={openRights.length} text={openRights.some((m) => m.carryIn) ? '수업 날짜 고르기' : '보강 날짜 고르기'} onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {choosing.length > 0 && <TodoBar n={choosing.length} text="보강 시간 고르기" onClick={() => (choosing.length === 1 ? setOverlay({ kind: 'request', id: choosing[0].id }) : setTab('requests'))} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
     </>
@@ -1029,9 +1037,10 @@ export default function StudentHome(props: {
             {openRights.length === 0 && <p className="text-[14px] text-[#6b6880]">신청 가능한 보강이 없어요.</p>}
             {openRights.map((m) => <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })}
               className={`${card} min-h-[64px] p-4 text-left`}>
-              <span className="block text-[14px] font-bold">{rightTitle(m, needsTime(m, openRights))}</span>
+              <span className="block text-[14px] font-bold">{rightTitle(m)}</span>
+              {rightDate(m, needsTime(m, openRights)) && <span className="mt-1 block text-[13px] text-[#6b6880]">{rightDate(m, needsTime(m, openRights))}</span>}
               <span className="mt-1 block text-[13px] text-[#6b6880]">{rightReason(m)}</span>
-              <span className="mt-2 block text-[14px] font-semibold text-[#5b3df0]">보강 날짜 선택 ›</span>
+              <span className="mt-2 block text-[14px] font-semibold text-[#5b3df0]">날짜 고르기 ›</span>
             </button>)}
           </div>}
 
@@ -1138,20 +1147,21 @@ export default function StudentHome(props: {
   );
 }
 
-/** 보강할 수업 카드: 날짜 · 사유 한 줄 · 신청 기한 · [보강 날짜 선택] (2026-11-07 대표 시안) */
+/** 보강할 수업 카드: 제목 · 원래 수업 날짜 · 사유 · 신청 기한 · [날짜 고르기] (2026-11-07 시안, 11/12 문구 확정) */
 function RightCard({ right, withTime, endDate, onPick }: { right: MakeupRight; withTime: boolean; endDate: KstDate | null; onPick: () => void }) {
   const until = rightUntil(right, endDate);
   const comp = !!right.compId;
   return (
     <div className={`${card} grid gap-1 px-4 pb-3 pt-3.5 ${comp ? 'border-[#d9d0ff] bg-[#f8f6ff]' : ''}`}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[16px] font-bold">{rightTitle(right, withTime)}</p>
+        <p className="text-[16px] font-bold">{rightTitle(right)}</p>
         {comp && <Icon d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" className="mt-0.5 h-5 w-5 shrink-0 text-[#5b3df0]" />}
       </div>
+      {rightDate(right, withTime) && <p className="text-[13.5px] text-[#55526a]">{rightDate(right, withTime)}</p>}
       <p className="text-[13.5px] text-[#55526a]">{rightReason(right)}</p>
       {until && <p className="text-[13.5px] text-[#55526a]">{until}</p>}
       <button type="button" onClick={onPick} className="mt-1.5 min-h-[44px] rounded-[12px] bg-[#1d1b2b] text-[14.5px] font-bold text-white">
-        {comp ? '보상수업 날짜 선택' : '보강 날짜 선택'}
+        날짜 고르기
       </button>
     </div>
   );
@@ -1258,7 +1268,7 @@ function LeaveSheet(props: {
                   return <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${STATUS_STYLE[st]}`}>신청함 · {REQUEST_STATUS_LABEL[st]}</span>;
                 })() : (
                   <button type="button" onClick={() => props.onMakeup(r)} className="min-h-[40px] rounded-[10px] bg-[#5b3df0] px-3 text-[13px] font-bold text-white">
-                    보강 날짜 고르기
+                    날짜 고르기
                   </button>
                 )}
               </div>
@@ -1407,11 +1417,11 @@ function MakeupPicker(props: {
   return (
     <div className="grid gap-3.5">
       {props.canceled && <p className="rounded-[12px] bg-[#e3f5ea] px-3.5 py-2.5 text-[15px] font-bold text-[#13623a]">✓ {rightText(right)} 수업을 취소했어요</p>}
-      <h2 className="text-[18px] font-bold">{right.compId ? '보상수업 날짜 고르기' : '보강 날짜 고르기'}</h2>
+      <h2 className="text-[18px] font-bold">날짜 고르기</h2>
       <div className={`${card} grid gap-0.5 px-4 py-3`}>
         {right.compId ? (
           <>
-            <p className="text-[15px] font-bold">{rightTitle(right, true)}</p>
+            <p className="text-[15px] font-bold">{rightTitle(right)}</p>
             <p className="text-[13.5px] text-[#55526a]">{rightReason(right)}</p>
           </>
         ) : (
@@ -1502,7 +1512,7 @@ function LaterButton({ onLater }: { onLater: () => void }) {
       <button type="button" onClick={onLater} className="min-h-[46px] rounded-[14px] border border-[#d9d5e8] bg-white text-[15px] font-semibold text-[#1d1b2b]">
         나중에 고르기
       </button>
-      <p className="text-center text-[12px] text-[#6b6880]">나중에 홈 → 보강 날짜 고르기</p>
+      <p className="text-center text-[12px] text-[#6b6880]">나중에 홈 → 수업 날짜 고르기</p>
     </>
   );
 }
