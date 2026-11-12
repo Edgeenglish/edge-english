@@ -758,10 +758,21 @@ function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () =>
 }
 
 /** 대체 수업 꼬리표 (H26(138)): 맡은 강사 "You're covering for another tutor" · 원래 강사 "Another tutor is covering this class" (상대 강사 이름 없음) */
+// 11/12 대표: 줄이 길어져서 문구는 숨기고 작은 ? 를 눌러야 보임 (마우스 올리기 없이 클릭·터치만, 줄 전체를 누르는 펼침과 따로 동작)
 function CoverNote({ lesson: l }: { lesson: TutorLesson }) {
-  if (l.coveredByOther) return <span className="block text-[12.5px] text-[#8a879c]">{COVERED_NOTE}</span>;
-  if (l.covering) return <span className="block text-[12.5px] font-semibold text-[#5b3fe0]">{COVERING_NOTE}</span>;
-  return null;
+  const [open, setOpen] = useState(false);
+  const text = l.coveredByOther ? COVERED_NOTE : l.covering ? COVERING_NOTE : null;
+  if (!text) return null;
+  return (
+    <span className="block">
+      <button type="button" aria-label="Cover class info" aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className={`relative inline-grid h-[18px] w-[18px] place-items-center rounded-full border text-[11px] font-bold leading-none before:absolute before:-inset-3 before:content-[''] ${open ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#5b3fe0] bg-white text-[#5b3fe0]'}`}>
+        ?
+      </button>
+      {open && <span className={`ml-1.5 text-[12.5px] ${l.coveredByOther ? 'text-[#6b6880]' : 'text-[#1d1b2b]'}`}>{text}</span>}
+    </span>
+  );
 }
 
 function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; now: Date }) {
