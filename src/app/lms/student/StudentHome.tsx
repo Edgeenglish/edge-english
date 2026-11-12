@@ -239,7 +239,7 @@ const rightReason = (m: MakeupRight) =>
  * 보이는 시간대로 바꾼 시각까지 '기한: 11/21(토) 오전 1:59까지' (종료 기준은 한국 23:59)
  */
 const rightUntil = (m: MakeupRight, endDate: KstDate | null) => {
-  const d = m.compId ? m.useUntil : m.tutorLeave && m.itemId ? null : endDate;
+  const d = m.compId ? m.useUntil : m.tutorLeave && m.itemId && !m.carryIn ? null : endDate; // 이월된 수업은 지금 수강권 종료일까지 (11/12 대표)
   if (!d) return null;
   return `기한: ${endText(d)}까지`;
 };
@@ -1117,7 +1117,6 @@ export default function StudentHome(props: {
               <div className="grid gap-3">
                 <div>
                   <h2 className="text-[18px] font-bold">수업 날짜 고르기</h2>
-                  <p className="mt-0.5 text-[13.5px] text-[#55526a]">수업을 고르고 날짜를 신청해 주세요.</p>
                 </div>
                 {openRights.map((m) => (
                   <RightCard key={`${m.lessonId}${m.itemId}${m.compId}`} right={m} withTime={needsTime(m, openRights)} endDate={endDate} onPick={() => setOverlay({ kind: 'makeup', right: m })} />
