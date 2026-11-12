@@ -91,6 +91,9 @@ export default function LoginFlow() {
   const [factorId, setFactorId] = useState<string | null>(null);
   const [social, setSocial] = useState<SocialProvider[]>([]);
   const [linkFor, setLinkFor] = useState<SocialProvider | null>(null);
+  // 비밀번호 만들기·찾기: 메일 코드는 한 번만 쓸 수 있음 → 확인되면 다시 보내지 않음. 운영자(인증 앱 켬)는 인증 앱 코드 뒤에 저장
+  const [otpDone, setOtpDone] = useState(false);
+  const [pendingPw, setPendingPw] = useState<string | null>(null);
   const t = STRINGS[lang];
   const sb = supabaseBrowser();
   const codeRef = useRef<HTMLInputElement>(null);
@@ -347,30 +350,53 @@ export default function LoginFlow() {
     if (e && !(e.status && e.status >= 400 && e.status < 500)) return setError(t.network);
     setCode('');
     setPassword('');
+    setOtpDone(false);
     setWait(RESEND_WAIT_SECONDS);
     setStep('pw_new');
     setNotice(resend ? t.resent : null);
   }
 
   async function saveNewPassword() {
-    if (!sb || code.length !== 6) return;
+    if (!sb || (!otpDone && code.length !== 6)) return;
     setProblems([]);
     if (password.length < PASSWORD_MIN) return setProblems(['password']);
     setBusy(true);
     setError(null);
-    const { error: e } = await sb.auth.verifyOtp({ email: email.trim(), token: code, type: 'email' });
-    if (e) {
-      setBusy(false);
-      return setError(failMessage(e));
+    if (!otpDone) {
+      const { error: e } = await sb.auth.verifyOtp({ email: email.trim(), token: code, type: 'email' });
+      if (e) {
+        setBusy(false);
+        return setError(failMessage(e));
+      }
+      setOtpDone(true);
     }
-    const { error: e2 } = await sb.auth.updateUser({ password });
-    if (e2) {
+    // 인증 앱이 켜진 계정(운영자)은 Supabase 가 인증 앱 코드 뒤에만 비밀번호 변경을 허락함 → 인증 앱 코드 단계 뒤에 저장
+    const [{ data: aal }, { data: factors }] = await Promise.all([sb.auth.mfa.getAuthenticatorAssuranceLevel(), sb.auth.mfa.listFactors()]);
+    const verified = factors?.totp ?? [];
+    if (verified.length > 0 && aal?.currentLevel !== 'aal2') {
+      setPendingPw(password);
+      setFactorId(verified[0].id);
+      setCode('');
       setBusy(false);
-      if (e2.code === 'weak_password') return setProblems(['password']);
-      if (e2.code !== 'same_password') return setError(t.network);
+      return setStep('totp');
     }
-    await routeAfterLogin();
+    const ok = await storePassword(password);
+    if (ok) await routeAfterLogin();
     setBusy(false);
+  }
+
+  /** 새 비밀번호 저장. 실패하면 칸 아래·맨 아래에 이유 */
+  async function storePassword(pw: string): Promise<boolean> {
+    if (!sb) return false;
+    const { error: e } = await sb.auth.updateUser({ password: pw });
+    if (!e || e.code === 'same_password') return true;
+    if (e.code === 'weak_password') {
+      setStep('pw_new');
+      setProblems(['password']);
+      return false;
+    }
+    setError(e.status === 429 ? t.tooMany : t.network);
+    return false;
   }
 
   // ── 카카오·네이버 첫 로그인
@@ -708,16 +734,18 @@ export default function LoginFlow() {
                 {t.codeLead}
               </p>
             </div>
-            <div>
-              <span className={fieldLabel}>{t.codeLabel}</span>
-              {codeBoxes(() => undefined, t.codeLabel)}
-            </div>
+            {!otpDone && (
+              <div>
+                <span className={fieldLabel}>{t.codeLabel}</span>
+                {codeBoxes(() => undefined, t.codeLabel)}
+              </div>
+            )}
             <input type="email" autoComplete="username" value={email} readOnly hidden />
             <div>
               {passwordInput('new-password', t.newPwLabel, 'new-password', saveNewPassword, has('password'), t.pwHint(PASSWORD_MIN))}
               {has('password') && <span className={errText}>{t.pwTooShort(PASSWORD_MIN)}</span>}
             </div>
-            <button type="submit" disabled={busy || code.length !== 6} className={`${primary} bg-[#5b3df0]`}>
+            <button type="submit" disabled={busy || (!otpDone && code.length !== 6)} className={`${primary} bg-[#5b3df0]`}>
               {t.savePw}
             </button>
             <div className="flex justify-between">
@@ -818,6 +846,11 @@ export default function LoginFlow() {
     if (e) {
       setBusy(false);
       return setError(failMessage(e));
+    }
+    if (pendingPw) {
+      const pw = pendingPw;
+      setPendingPw(null);
+      if (!(await storePassword(pw))) return setBusy(false);
     }
     await routeAfterLogin();
     setBusy(false);

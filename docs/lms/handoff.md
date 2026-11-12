@@ -13,6 +13,7 @@
 - **미검증 (앱 등록 전이라 못 함)**: 실제 카카오·네이버 서버와의 로그인(가짜 서버로만 확인) · 카카오 is_email_verified 실제 값 · 네이버 실제 응답 · 휴대폰 카톡 안 브라우저에서 간편 로그인
 - **대표 할 일(대표 계정만)**: ① 시험용 Supabase: 새 가입 허용 · 비밀번호 최소 8 · 'Confirm signup' 메일 코드 문구 · Manual linking 켬 ② 카카오 개발자 앱(비즈 앱·이메일 필수 동의) → 시험 Supabase Kakao 켬 ③ 네이버 개발자센터 앱 → 시험 Supabase 'custom:naver'(OAuth2, authorize https://nid.naver.com/oauth2.0/authorize · token https://nid.naver.com/oauth2.0/token · userinfo **https://edge-english-git-lms-test-support-2126.vercel.app/api/auth/naver-userinfo** · Allow users without email 켬)
 - 남은 개발: 약관·개인정보 동의 원문(대표 원문) · 운영 반영 순서(대표 승인 뒤): 운영 DB migration 2개 → 운영 Supabase 설정 → lms-prod·main 같은 커밋(헤더는 main 홈페이지)
+- ✅ 11/12 고침: **운영자(인증 앱 켬) 비밀번호 만들기·찾기** — Supabase 가 인증 앱 코드 전에는 비밀번호 변경을 막음(insufficient_aal, 대표 support@ 시험에서 '연결이 불안정해요' → 다시 누르면 이미 쓴 메일 코드라 '코드가 맞지 않거나'). 이제 메일 코드 확인 뒤 인증 앱 코드 단계 → 저장, 메일 코드는 한 번 확인되면 다시 묻지 않음. 로컬: 운영자 6/6(인증 앱 단계·틀린 코드·저장 뒤 운영자 화면·옛 비밀번호 거절·새 비밀번호+인증 앱 PC·학생은 단계 없음) + 전체 회귀 33/33
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
