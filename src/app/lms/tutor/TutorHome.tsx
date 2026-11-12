@@ -657,12 +657,11 @@ function TodayRow({ lesson: l, tz, now, onRecord }: { lesson: TutorLesson; tz: s
       <span className="min-w-0 flex-1">
         <span className="block text-[14.5px] tabular-nums"><Rich text={rangeFullNoDay(l, tz)} /></span>
         <StudentName id={l.studentId} name={l.student} className={`mt-0.5 block truncate text-[15px] font-semibold ${phase === 'canceled' ? 'line-through' : ''}`} />
-        <span className="block text-[12.5px] text-[#6b6880]">{minutesOf(l)} min · {tag}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}</span>
-        <CoverNote lesson={l} />
+        <span className="block text-[12.5px] text-[#6b6880]">{minutesOf(l)} min · {tag}<CoverNote lesson={l} where="type" />{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}</span>
       </span>
       {phase === 'to_record'
         ? <button type="button" onClick={onRecord} className="min-h-[36px] rounded-[10px] bg-[#5b3fe0] px-3 text-[13px] font-bold text-white">Record</button>
-        : <span className={`text-[13px] font-semibold ${phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]'}`}>{phase === 'recorded' ? `✓ ${st}${lateText(l.late)}` : st}</span>}
+        : <span className={`text-[13px] font-semibold ${phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]'}`}>{phase === 'recorded' ? `✓ ${st}${lateText(l.late)}` : st}<CoverNote lesson={l} where="status" /></span>}
     </div>
   );
 }
@@ -757,20 +756,24 @@ function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () =>
   );
 }
 
-/** 대체 수업 꼬리표 (H26(138)): 맡은 강사 "You're covering for another tutor" · 원래 강사 "Another tutor is covering this class" (상대 강사 이름 없음) */
-// 11/12 대표: 줄이 길어져서 문구는 숨기고 작은 ? 를 눌러야 보임 (마우스 올리기 없이 클릭·터치만, 줄 전체를 누르는 펼침과 따로 동작)
-function CoverNote({ lesson: l }: { lesson: TutorLesson }) {
+/** 대체 수업 안내 (H26(138)): 맡은 강사 "You're covering for another tutor" · 원래 강사 "Another tutor is covering this class" (상대 강사 이름 없음) */
+// 11/12 대표 확정: 문구는 숨기고 작은 ⓘ 를 누를 때만 보임 (클릭·터치만). 설명하는 글자 바로 옆 — 맡은 강사는 종류('Cover class') 옆, 원래 강사는 상태('Covered by another tutor') 옆
+function CoverNote({ lesson: l, where }: { lesson: TutorLesson; where: 'type' | 'status' | 'any' }) {
   const [open, setOpen] = useState(false);
-  const text = l.coveredByOther ? COVERED_NOTE : l.covering ? COVERING_NOTE : null;
+  const text = l.coveredByOther && where !== 'type' ? COVERED_NOTE : l.covering && where !== 'status' ? COVERING_NOTE : null;
   if (!text) return null;
   return (
-    <span className="block">
-      <button type="button" aria-label="Cover class info" aria-expanded={open}
+    <span className="ml-1 inline-flex flex-col items-start align-middle">
+      <button type="button" aria-label="Info" aria-expanded={open}
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
-        className={`relative inline-grid h-[18px] w-[18px] place-items-center rounded-full border text-[11px] font-bold leading-none before:absolute before:-inset-3 before:content-[''] ${open ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#5b3fe0] bg-white text-[#5b3fe0]'}`}>
-        ?
+        className="relative inline-grid h-[18px] w-[18px] place-items-center before:absolute before:-inset-3 before:content-['']">
+        <svg viewBox="0 0 20 20" className={`h-[18px] w-[18px] ${open ? 'text-[#5b3fe0]' : 'text-[#8a879c]'}`} fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+          <circle cx="10" cy="10" r="8.2" fill={open ? 'currentColor' : 'none'} />
+          <path d="M10 9v5" stroke={open ? '#fff' : 'currentColor'} strokeLinecap="round" />
+          <circle cx="10" cy="6.3" r="0.4" stroke={open ? '#fff' : 'currentColor'} strokeWidth="1.4" />
+        </svg>
       </button>
-      {open && <span className={`ml-1.5 text-[12.5px] ${l.coveredByOther ? 'text-[#6b6880]' : 'text-[#1d1b2b]'}`}>{text}</span>}
+      {open && <span className={`mt-0.5 text-[12.5px] font-normal ${l.coveredByOther ? 'text-[#6b6880]' : 'text-[#1d1b2b]'}`}>{text}</span>}
     </span>
   );
 }
@@ -782,12 +785,12 @@ function LessonHead({ lesson: l, tz, now }: { lesson: TutorLesson; tz: string; n
       <div className="flex flex-wrap items-baseline gap-x-2">
         <StudentName id={l.studentId} name={l.student} className="text-[16px] font-bold text-[#1d1b2b]" />
         <span className="rounded-[6px] bg-[#efebff] px-1.5 text-[12.5px] font-semibold text-[#5b3fe0]">{tag}</span>
+        <CoverNote lesson={l} where="any" />
         {l.count && <span className="text-[13px] text-[#6b6880]">Class {l.count.n}/{l.count.total}</span>}
       </div>
       <p className="text-[14.5px] text-[#1d1b2b]">
         <Rich text={rangeFull(l, tz)} /> · {minutesOf(l)} min
       </p>
-      <CoverNote lesson={l} />
       {l.makeupOf && <p className="text-[13px] text-[#6b6880]">Make-up for <Rich text={whenFull(l.makeupOf, tz)} /></p>}
       {l.compensationOf && <p className="text-[13px] text-[#6b6880]">Compensation for <Rich text={whenFull(l.compensationOf, tz)} /> (tutor no-show)</p>}
       {phaseOf(l, now) === 'canceled' && <p className="text-[13px] font-semibold text-[#b3261e]">{statusText(l, now)}</p>}
@@ -879,10 +882,9 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
           <span className="min-w-0">
             <StudentName id={l.studentId} name={name} className="block max-w-full truncate text-[14.5px] font-semibold" />
             <span className="block text-[12.5px] text-[#6b6880]">
-              {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min · {kindTag(l)}{paidCol && paid ? ` · Paid ${paid}` : ''}
+              {l.count ? `Class ${count} · ` : ''}{minutesOf(l)} min · {kindTag(l)}<CoverNote lesson={l} where="type" />{paidCol && paid ? ` · Paid ${paid}` : ''}
             </span>
-            <CoverNote lesson={l} />
-            <span className={`mt-1 block w-fit max-w-full ${stColor}`}>{statusControl}{remarksChip}</span>
+            <span className={`mt-1 block w-fit max-w-full ${stColor}`}>{statusControl}<CoverNote lesson={l} where="status" />{remarksChip}</span>
             {l.topics && <span className="block truncate text-[12.5px]">{l.topics}</span>}
           </span>
 
@@ -890,11 +892,11 @@ function ListRow({ lesson: l, due = false, tz, now: loadedNow, kst, paidCol, mee
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
           <span className="font-semibold">{time}</span>
           {kst && <span className="text-[#6b6880]">{k ? stripBold(k).replace(/ KST$/, '') : ''}</span>}
-          <span className="flex-col !items-start justify-center font-semibold"><StudentName id={l.studentId} name={name} className="max-w-full truncate" /><CoverNote lesson={l} /></span>
+          <span className="flex-col !items-start justify-center font-semibold"><StudentName id={l.studentId} name={name} className="max-w-full truncate" /></span>
           <span>{count}</span>
           <span>{minutesOf(l)}</span>
-          <span>{kindTag(l)}</span>
-          <span className={`font-semibold ${stColor}`}>{statusControl}</span>
+          <span>{kindTag(l)}<CoverNote lesson={l} where="type" /></span>
+          <span className={`font-semibold ${stColor}`}>{statusControl}<CoverNote lesson={l} where="status" /></span>
           {paidCol && <span>{paid}</span>}
           <span className="flex-wrap text-[13px]">
             <span className="min-w-0 flex-1">{l.topics}{remarksChip}</span>
