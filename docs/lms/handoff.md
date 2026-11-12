@@ -26,11 +26,12 @@
 - 가격표 일치 자동 시험: `src/lms/admin/renewal-price.test.ts`(TS MONTHLY 와 migration 의 jsonb 가격표·할인식 비교, 한쪽만 바꾸면 실패 확인함)
 - 안 한 것: 문자 [보냄]과 별개로 대시보드 카드에 '자동 메일 보냄' 표시 · 수업 알림 24시간·2시간 전(다른 세션 ecc4538)
 
-## ✅ 11/11 강사 Class Record ①②③ — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/wonderful-cerf-zsfv6f, 정책 원본 H26(136)(138)(139) 참고)
+## ✅ 11/11 강사 Class Record ①②③ — **운영 DB·운영 코드 반영 확인(11/12 운영 migration 목록에 20261111122214 있음)** (브랜치 claude/wonderful-cerf-zsfv6f, 정책 원본 H26(136)(138)(139) 참고)
 - migration **20261111140000_lms_class_type_student_cancel_cover** (시험 DB 적용): `class_type(lessons)`(PostgREST 계산 칸, 판정 `lms_class_type(l, p_cover)`: regular·makeup·compensation·cover·carry_in·carry_out) · `tutor_screen` type + 원래 강사 회색 줄(`covered_by_other`, 기록 내용·class_status 안 보냄, to_record 그대로) · `tutor_record_class` 대체 Held = Normal · 새 `tutor_student_cancel(request, lesson, told_at, dry_run)` → `lms_change_core(학생 사유, via tutor_app / 운영자 admin_on_behalf)` · student_screen·lms_student_profile_json·admin_student_detail 에 `type` (DO 블록으로 칸만 끼움)
 - 화면: `src/lms/class-type.ts`(이름 하나) · 강사 `screen.ts`·`TutorHome.tsx`(Student canceled 칸 `StudentCanceledFields`, CoverNote, 회색 줄 opacity) · Schedule 달력은 회색 줄 빼고 지금 그대로 · 운영진 대시보드·수강생 상세·수업 변경 목록(select 에 class_type) · 학생 홈 종류 이름 · 학생 취소 팝업 공휴일 줄
 - 검증: tsc · vitest 430 · test:db 통과(새 시험 4개 + 기존 2곳 고침: 원래 강사 회색 줄, 대체 Held = Normal) · ?demo=1 PC·휴대폰 화면 · 시험 DB Blair 계정으로 실제 저장(사전 취소·변경권 2→1·같은 요청 다시 보내도 1번·학생/강사 안내 2건)
-- ⚠ **운영 배포 순서**: 운영 DB migration 먼저(운영자 화면이 lessons 의 class_type 칸을 읽음 — 없으면 대시보드·수업 변경 목록 오류) → lms-prod. 운영 미반영 앞 작업(강사 통보 LMS 이전 등)과 같이 나갈 수 있으니 배포 전 `git log origin/lms-prod..origin/lms-test` 확인
+- (11/12 확인: 아래 배포 순서는 이미 끝남. 강사 화면 Cover class 안내 ? 클릭 팝업만 시험 사이트(lms-test)에 있고 운영 미반영)
+- ⚠ **운영 배포 순서(끝남)**: 운영 DB migration 먼저(운영자 화면이 lessons 의 class_type 칸을 읽음 — 없으면 대시보드·수업 변경 목록 오류) → lms-prod. 운영 미반영 앞 작업(강사 통보 LMS 이전 등)과 같이 나갈 수 있으니 배포 전 `git log origin/lms-prod..origin/lms-test` 확인
 - ✅ 11/11 대표 PC 시험 사이트 B1~B4 통과(H26(139)). 공휴일 줄은 시험 DB 공휴일 0건이라 시험 안 함
 - ✅ 11/11 공휴일 시험(시험 DB, H26(140)): STU-0003 11/30 수업에 임시 공휴일 → 학생 화면 팝업 '변경권 | 차감 안 됨 (공휴일 취소)', 실제 취소 'Student canceled in advance (public holiday)'·변경권 0 그대로·보강 가능. 원복 끝(holidays 0건·수업 scheduled·변경 기록·안내·메일 줄·audit 줄·임시 비밀번호·로그인 세션). 학생 취소 메일 1통은 원복 전에 support@로 나감
 - ✅ 11/11 고침(대표 지시, 시험 DB·lms-test): 다음 수강권 수업 학생 취소 — migration 20261111170000 student_screen 수업마다 lesson_final_end_date + credit_periods 열린 수강권 전부, 화면 cancelPreview·보강 기한이 그 수업 수강권 기준. 확인: STU-0003 12/14 팝업 '변경권 1개 사용 (1개 → 0개)·보강 ~1/10(일)', 저장 뒤 다음 수강권 기간 변경권 1→0·지금 수강권 0 그대로·보강 기한 2027-01-10. 시험 뒤 원복. 02-check 표 59개(다른 세션 student_notice_reads 표 반영)
