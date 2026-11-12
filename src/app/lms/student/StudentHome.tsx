@@ -1116,8 +1116,8 @@ export default function StudentHome(props: {
             ) : (
               <div className="grid gap-3">
                 <div>
-                  <h2 className="text-[18px] font-bold">보강할 수업</h2>
-                  <p className="mt-0.5 text-[13.5px] text-[#55526a]">보강할 수업을 고르고 날짜를 신청해 주세요.</p>
+                  <h2 className="text-[18px] font-bold">수업 날짜 고르기</h2>
+                  <p className="mt-0.5 text-[13.5px] text-[#55526a]">수업을 고르고 날짜를 신청해 주세요.</p>
                 </div>
                 {openRights.map((m) => (
                   <RightCard key={`${m.lessonId}${m.itemId}${m.compId}`} right={m} withTime={needsTime(m, openRights)} endDate={endDate} onPick={() => setOverlay({ kind: 'makeup', right: m })} />
