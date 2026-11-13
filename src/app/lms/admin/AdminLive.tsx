@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { TaskSource } from '@/lms/admin/board';
 import type { LessonItem } from '@/lms/admin/dashboard';
 import { planActions } from '@/lms/admin/confirm-live';
-import { loadAdminBoard, type DashboardStats } from '@/lms/admin/live';
+import { loadAdminBoard, rejectTimeOff, type DashboardStats } from '@/lms/admin/live';
 import { endNotice, loadNotices, saveNotice } from '@/lms/admin/dashboard-live';
 import { closeEnrollment, markImportChecked, markRenewalSent, setImportEndReason, setImportOrigin, notifyRenewalTutor } from '@/lms/admin/import-live';
 import { supabaseBrowser } from '@/lms/auth/client';
@@ -92,6 +92,7 @@ export default function AdminLive() {
       renewalNotify={sb ? (id) => notifyRenewalTutor(sb, id) : undefined}
       enrollmentClose={sb ? (id) => closeEnrollment(sb, id) : undefined}
       noExtension={sb ? (task) => saveTaskClosure(sb, task, true) : undefined}
+      timeOffReject={sb ? (id, reason) => rejectTimeOff(sb, id, reason) : undefined}
       notices={notices}
       history={sb ? { load: () => loadTaskHistory(sb), reopen: (r) => reopenTask(sb, r) } : undefined}
       onReload={reload}

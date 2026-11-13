@@ -310,6 +310,18 @@ export function toExtensionReviews(rows: ExtensionReviewRow[]): TaskSource[] {
   }));
 }
 
+export type TimeOffRequestRow = {
+  id: string; tutor_id: string; tutor_name: string; tutor_timezone: string; first_day: string; last_day: string; kst_from: string; kst_to: string;
+  kind: 'planned' | 'urgent'; reason: string; late: boolean; classes: number; created_at: string;
+};
+/** 강사 휴무 신청 (H26(137)) */
+export function toTimeOffRequests(rows: TimeOffRequestRow[]): TaskSource[] {
+  return rows.map((r) => ({
+    kind: 'time_off_request', id: r.id, tutorName: r.tutor_name, tutorTimezone: r.tutor_timezone, first: r.first_day, last: r.last_day,
+    kstFrom: r.kst_from, kstTo: r.kst_to, planned: r.kind === 'planned', reason: r.reason, late: r.late, classes: r.classes, createdAt: new Date(r.created_at),
+  }));
+}
+
 export type LeaveOpenRow = {
   student_id: string; starts_at: string; choice: 'undecided' | 'substitute' | 'wait'; sub_stage: 'asked' | 'tutor_ok' | 'confirmed' | null;
   /** 휴무 처리 밖에서 취소된 수업 (3200, R5) → 할 일에서 뺌 */
@@ -526,6 +538,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const taskRows = (tasks.data ?? []) as unknown as TaskRow[];
   const plans = await loadPlans(sb, taskRows.filter((t) => t.kind === 'new_student_matching' && t.enrollment_id).map((t) => t.enrollment_id!));
   const sent = new Map(renewalSent.error ? [] : (renewalSent.data ?? []).map((r) => [r.enrollment_id as string, r.sent_at as string]));
+  // 강사 휴무 신청 (20261113150000 전 DB 는 함수가 없어 건너뜀)
+  const timeOffReqs = await sb.rpc('admin_time_off_requests');
   const endingRows = (ending.data ?? []) as unknown as EndingRow[];
   const trial = (r: { student?: { is_trial_account?: boolean | null } | { is_trial_account?: boolean | null }[] | null }) => {
     const st = Array.isArray(r.student) ? r.student[0] : r.student;
@@ -547,6 +561,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       ...(leaveOpen.error || leaveNotices.error ? [] : toTutorLeaves((leaveOpen.data ?? []) as unknown as LeaveOpenRow[], (leaveNotices.data ?? []) as unknown as LeaveNoticeRow[], now)),
       // Class Record 미기록은 강사 Home 'Classes to record' 에만 (대표 11/9: 운영진 할 일에서 뺌)
       ...(extReviews.error ? [] : toExtensionReviews((extReviews.data ?? []) as ExtensionReviewRow[])),
+      ...(timeOffReqs.error ? [] : toTimeOffRequests((timeOffReqs.data ?? []) as TimeOffRequestRow[])),
     ]), decided),
     today: toLessonItems((lessons.data ?? []) as unknown as LessonListRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
     stats: {
@@ -568,4 +583,10 @@ export async function loadLessonRange(sb: SupabaseClient, from: string, to: stri
   ]);
   if (l.error) throw new Error('수업을 읽지 못했어요.');
   return toLessonItems((l.data ?? []) as unknown as LessonListRow[], new Set((ns.data ?? []).map((r) => r.lesson_id as string)));
+}
+
+/** 강사 휴무 신청 반려 (사유 필수, 강사 Home 에 보임) */
+export async function rejectTimeOff(sb: SupabaseClient, id: string, reason: string): Promise<void> {
+  const r = await sb.rpc('admin_time_off_reject', { p_request: id, p_reason: reason });
+  if (r.error) throw new Error(r.error.message);
 }
