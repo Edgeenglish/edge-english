@@ -29,7 +29,8 @@
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
-## ⏳ 11/13 학생 지각 알림 — **시험 DB·lms-test 완료 · 운영 DB 완료 · 운영 코드 배포 확인 안 됨(운영 화면에 아직 안 나옴)** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
+## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test·운영 DB·운영 화면 모두 반영 완료** (운영 주소 복구 23:27~23:28 한국, 정책 원본 H26(162)~(165))
+- **운영 최종 확인 (11/13 밤)**: edgeenglish.kr·www.edgeenglish.kr 모두 dpl_FDCP3w…(lms-prod 69db1c0) 를 주고, 운영 JS 에 '늦게 참여해요'·'강사님께 알렸어요' 있음. 홈 · /lms/tutor · /lms/admin 응답 200. 원인: 두 운영 주소가 Production 연결로 바뀌어 lms-prod 푸시를 못 따라감 → ChatGPT(work)가 대표 승인으로 'Preview · lms-prod 브랜치'로 복구(Vercel Domains, DNS·환경변수·재배포 없음). 언제 왜 바뀌었는지는 미확인 — 다시 안 따라오면 Vercel Settings → Domains 에서 두 주소 연결 대상부터 확인 (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
 - **운영 반영 (대표 11/13 '운영에도 배포해')**: 운영 DB 백업 snapshots **49**(tutor_updates 표 + kind 제약 정의) → migration 20261113120000 적용(표 60→61, RLS·anon 실행 막힘·트리거 2개 확인, 학생 알림 0건) → 코드 lms-prod **69db1c0**(lms-test 의 지각 알림 3커밋만 골라 얹음). 되돌리기: 코드 lms-prod 0932ca9 · DB 표·함수 2개 제거 + kind 제약을 snapshots 49 정의로. **11/13 22:25(한국) 확인: lms-prod 69db1c0 push 35분 뒤에도 운영 사이트(edgeenglish.kr)가 예전 배포(dpl_7qCc61…)를 그대로 줌 — 운영 JS 에 '늦게 참여해요' 없음. 69db1c0 로컬 `next build` 는 성공하고 버튼 문구도 들어감 → 코드 문제 아님, Vercel 쪽(배포 안 됨·실패·대기)을 대표가 Vercel Deployments 에서 확인해야 함. 운영 DB 변경은 옛 화면이 쓰지 않아 영향 없음**
 - **시험 DB 시험용 수업 복구 미완료**: STU-9001 수업 0ee7b8bc… 1개가 12/2 14:00(한국)에 있음 → 11/14 10:00~10:50(한국, = 11/14 01:00~01:50 UTC)로 되돌려야 함(다른 1개 e263168d… 는 11/14 11:00 한국으로 복구됨). Supabase 커넥터 연결 실패로 못 함. 알림 기록(student_late_notices 1줄)은 지울 수 없어 그대로 둠
 - migration **20261113120000_lms_student_late_notice** (시험 DB 적용): 표 student_late_notices(수업당 1줄) · tutor_updates 종류 'student_late' · 함수 student_late_notice(보내기, 시작 2시간 전~끝나기 전만) · student_late_notices(읽기). 운영 표 수 60 → 61 (prod-setup 02-check 고침)
