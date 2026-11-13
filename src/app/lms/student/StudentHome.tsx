@@ -5,7 +5,7 @@
 // ③ 수강생 LMS (2026-10-28 대표): 휴무 안내에 한 번에 답(A안) · 보강 날짜는 달력에서 고르기 · 직접 취소
 // 미리보기(?demo=1)는 같은 화면에 브라우저 안에서만 흉내 내는 동작(fakeStore)을 넣음 — 저장·발송 없음
 
-import { typeKo, typeKoLong } from '@/lms/class-type';
+import { asClassType, typeKo, typeKoLong } from '@/lms/class-type';
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
@@ -861,7 +861,13 @@ export default function StudentHome(props: {
                   {s.lessons.find((x) => x.id === l.id)?.leaveOpen && (
                     <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
                   )}
-                  {l.kind === 'makeup' && <AddToCalendar ev={{ title: '엣지영어 보강 수업', start: l.startsAt, end: new Date(l.startsAt.getTime() + l.minutes * 60000), details: meetOf(l.id) }} google="구글 캘린더에 추가" file="애플·삼성 캘린더에 추가" />}
+                  {/* 정규 시간이 아닌, 따로 잡은 수업(보강·무료 보상수업·이월)은 모두 캘린더 추가 (대표 11/13) */}
+                  {(() => {
+                    const t = asClassType(l.type, l.kind);
+                    if (t !== 'makeup' && t !== 'compensation' && t !== 'carry_in' && t !== 'carry_out') return null;
+                    const name = t === 'makeup' ? '보강 수업' : t === 'compensation' ? '무료 보상수업' : '이월 수업';
+                    return <AddToCalendar ev={{ title: `엣지영어 ${name}`, start: l.startsAt, end: new Date(l.startsAt.getTime() + l.minutes * 60000), details: meetOf(l.id) }} google="구글 캘린더에 추가" file="애플·삼성 캘린더에 추가" />;
+                  })()}
                 </div>
                 <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: l.id })} className="min-h-[44px] rounded-[12px] border border-[#d9d5e8] px-3 text-[14px] font-semibold">
                   변경·취소
