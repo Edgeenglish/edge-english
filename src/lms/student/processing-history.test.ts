@@ -12,9 +12,9 @@ describe('student processing history', () => {
     expect(processingEvents(rows).map((e) => e.id)).toEqual(['confirm', 'suggest', 'request']);
     expect(rows[0].id).toBe('request');
   });
-  it('does not invent processing times and preserves the database tie order', () => {
+  it('does not invent processing times and hides the duplicate waiting row', () => {
     const at = '2026-11-11T01:00:00Z';
-    expect(processingEvents([event('waiting', at, 'tutor_waiting'), event('request', at, 'makeup_requested'), event('missing', '', 'makeup_confirmed')]).map((e) => e.id)).toEqual(['waiting', 'request']);
+    expect(processingEvents([event('waiting', at, 'tutor_waiting'), event('request', at, 'makeup_requested'), event('missing', '', 'makeup_confirmed')]).map((e) => e.id)).toEqual(['request']); // 강사 확인 대기 줄은 화면에서 뺌
   });
   it('does not describe historical waiting as the current state', () => {
     expect(historyLabel(event('waiting', '2026-11-11T01:00:00Z', 'tutor_waiting')).result).toBe('강사님께 확인 요청됨');

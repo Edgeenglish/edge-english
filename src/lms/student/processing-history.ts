@@ -24,9 +24,12 @@ export type ProcessingEvent = {
   slots: { at: string; answer: string | null }[];
 };
 
-/** Unknown kinds / missing processing times are never replaced by lesson times or now. */
+/**
+ * Unknown kinds / missing processing times are never replaced by lesson times or now.
+ * 'tutor_waiting' (강사 확인 대기)는 보강 신청 줄의 '상태 : 강사 확인 중'과 같은 정보라 화면에서 뺀다 (대표 11/13) — DB 기록은 그대로.
+ */
 export function processingEvents(rows: ProcessingEvent[]): ProcessingEvent[] {
-  return rows.filter((e) => Object.hasOwn(HISTORY_LABELS, e.kind) && Number.isFinite(Date.parse(e.at)))
+  return rows.filter((e) => e.kind !== 'tutor_waiting' && Object.hasOwn(HISTORY_LABELS, e.kind) && Number.isFinite(Date.parse(e.at)))
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }
 
