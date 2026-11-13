@@ -30,12 +30,13 @@
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
-## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)** 참고)
+## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test·운영 반영 완료** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
+- **운영 반영 (대표 11/13 '운영에도 배포해')**: 운영 DB 백업 snapshots **49**(tutor_updates 표 + kind 제약 정의) → migration 20261113120000 적용(표 60→61, RLS·anon 실행 막힘·트리거 2개 확인, 학생 알림 0건) → 코드 lms-prod **69db1c0**(lms-test 의 지각 알림 3커밋만 골라 얹음). 되돌리기: 코드 lms-prod 0932ca9 · DB 표·함수 2개 제거 + kind 제약을 snapshots 49 정의로. **미확인: Vercel 운영 배포 성공·운영 화면 실제 버튼(실제 수업이 시작 2시간 안일 때만 보임)**
+- 시험 DB 시험용 수업 시각은 원래대로 되돌림(STU-9001 11/14 10:00·11:00 한국, 이미 알림 보낸 수업 1개는 12/2로 옮겨 둠 — 알림 기록은 지울 수 없어서)
 - migration **20261113120000_lms_student_late_notice** (시험 DB 적용): 표 student_late_notices(수업당 1줄) · tutor_updates 종류 'student_late' · 함수 student_late_notice(보내기, 시작 2시간 전~끝나기 전만) · student_late_notices(읽기). 운영 표 수 60 → 61 (prod-setup 02-check 고침)
 - 화면: 학생 홈 '다음 수업' 카드 [늦게 참여해요] (StudentHome.tsx NextLesson·LateNotice), 강사 Home Updates 'Running late' 줄 (tutor/updates.ts), 운영자 보기는 같은 함수로 대신 입력
 - 검증: vitest 456 · tsc · test:db 새 시험(supabase/tests/student-late-notice.sql 22개) 통과 · 시험 DB 실제 함수 실행(수업 시간을 되돌림 트랜잭션 안에서 앞당겨 실행 → 알림·메일 문구·중복 확인 → 롤백, 데이터 안 남음). **미확인: support@ 실제 도착**(실제 저장 없이 롤백했음 — 강사 메일 경로는 기존 tutor_updates 메일과 같음)
 - 이 작업 전부터 실패하던 것(내 변경과 무관): test:db schema_test.sql:2495 겹침 오류(날짜에 따라 달라지는 시험) · authz-probe '검토 안 된 SECURITY DEFINER 함수 lms_screen_pref_set·lms_screen_prefs'(11/13 보기 설정 migration 이 목록에 안 넣음) · eslint TimeStatusLegend.tsx 1건
-- 남은 것: 운영 배포 때 migration 1개 적용(운영 DB 구조 변경 → 직전 백업 필요) + 정책 문구 '학생 안내'는 화면에 그대로 반영됨
 
 ## ✅ 11/11 학생 재등록 안내 자동 메일 3통 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/nice-einstein-x201yx, H26(117) ① · 대표 11/11 결정 1~5 + 마지막 수업 종료 기준)
 - migration **20261111190000_lms_renewal_mail** (시험 DB 적용): `lms_renewal_plans`(가격표, renewal-price.ts 와 같은 값 — 가격 바뀌면 두 곳) · `lms_renewal_remaining`(대시보드 remainingOf 와 같은 남은 수업) · `lms_renewal_mail`(문구·대기열, dedupe `renewal_mail:수강권:단계`) · `lms_renewal_mail_due` · `lms_renewal_mail_run` · pg_cron `lms-renewal-mail` 10분(`lms_renewal_mail_run(); lms_mail_run();`). 시작 스위치 = feature_flags `renewal_mail_since` 줄이 있을 때만 (시험 DB 에만 넣음, 운영은 줄 없음 = 안 보냄)
