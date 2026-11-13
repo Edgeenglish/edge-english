@@ -6,11 +6,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { markLessonNoticesSent, requestMakeup } from '@/lms/admin/lesson-change-live';
 import { chooseLeave, createLeave, leaveBack, loadRenewals, unsendNotices, loadLeaveItems, loadLeaves, loadTutors, makeupOptions, studentOk, subOptions, subTutorOk, withdrawLeave, type LvTutor } from '@/lms/admin/tutor-leave-live';
 import { supabaseBrowser } from '@/lms/auth/client';
-import TutorLeave, { type LeaveActions } from './TutorLeave';
+import TutorLeave, { type LeaveActions, type LeavePrefill } from './TutorLeave';
+import type { TimeOffRequestRow } from '@/lms/admin/live';
+import { formatInZone, type KstDate } from '@/lms/rules/dates';
 
-type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tutors: LvTutor[] };
+type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tutors: LvTutor[]; prefill: LeavePrefill | null };
 
-export default function LeaveLive({ offId, startNew }: { offId?: string; startNew?: boolean }) {
+export default function LeaveLive({ offId, startNew, requestId }: { offId?: string; startNew?: boolean; requestId?: string }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const sb = supabaseBrowser();
 
@@ -22,19 +24,32 @@ export default function LeaveLive({ offId, startNew }: { offId?: string; startNe
       const [{ data: aal }, { data: admin }] = await Promise.all([sb.auth.mfa.getAuthenticatorAssuranceLevel(), sb.rpc('is_admin')]);
       if (aal?.currentLevel !== 'aal2' || admin !== true) return window.location.replace('/lms/login');
       try {
-        setState({ kind: 'ready', nowIso: new Date().toISOString(), tutors: await loadTutors(sb) });
+        // 강사 휴무 신청에서 열면(대시보드 [휴무 화면 열기], H26(137)) 신청대로 칸을 채움. 이미 처리된 신청이면 빈 칸
+        let prefill: LeavePrefill | null = null;
+        if (requestId) {
+          const r = await sb.rpc('admin_time_off_requests');
+          const row = ((r.data ?? []) as TimeOffRequestRow[]).find((x) => x.id === requestId);
+          if (row) {
+            const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+            prefill = {
+              requestId: row.id, tutorId: row.tutor_id, from: row.kst_from as KstDate, to: row.kst_to as KstDate, reason: row.reason,
+              note: `${row.tutor_name} 휴무 신청(${md(formatInZone(new Date(row.created_at), 'Asia/Seoul').date)})에서 채움 · ${row.kind === 'planned' ? '계획된 휴무' : '급한 일'}${row.late ? ' · 기한 지남' : ''} · 강사 현지 날짜 ${md(row.first_day)}~${md(row.last_day)}`,
+            };
+          }
+        }
+        setState({ kind: 'ready', nowIso: new Date().toISOString(), tutors: await loadTutors(sb), prefill });
       } catch (e) {
         setState({ kind: 'error', message: e instanceof Error ? e.message : '데이터를 읽지 못했어요.' });
       }
     })();
-  }, [sb]);
+  }, [sb, requestId]);
 
   const actions = useMemo<LeaveActions | null>(
     () =>
       sb && {
         leaves: (now) => loadLeaves(sb, now),
         items: (id) => loadLeaveItems(sb, id),
-        create: (t, f, to, r, dry) => createLeave(sb, t, f, to, r, dry),
+        create: (t, f, to, r, dry, req) => createLeave(sb, t, f, to, r, dry, req),
         choose: (ids, c, sub) => chooseLeave(sb, ids, c, sub),
         subOk: (ids) => subTutorOk(sb, ids),
         studentOk: (ids) => studentOk(sb, ids),
@@ -52,5 +67,5 @@ export default function LeaveLive({ offId, startNew }: { offId?: string; startNe
 
   if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;
   if (state.kind === 'error' || !actions) return <p className="px-6 py-16 text-center text-[15px] text-[#b3261e]">{state.kind === 'error' ? state.message : ''}</p>;
-  return <TutorLeave tutors={state.tutors} actions={actions} nowIso={state.nowIso} initialOff={offId} startNew={startNew} />;
+  return <TutorLeave tutors={state.tutors} actions={actions} nowIso={state.nowIso} initialOff={offId} startNew={startNew} prefill={state.prefill} />;
 }

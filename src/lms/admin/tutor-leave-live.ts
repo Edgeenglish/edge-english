@@ -82,8 +82,9 @@ export type LeaveCreateResult = {
   overlap?: { id: string; from: KstDate; to: KstDate; reason: string | null }[];
 };
 
-export async function createLeave(sb: SupabaseClient, tutorId: string, from: KstDate, to: KstDate, reason: string, dryRun: boolean): Promise<LeaveCreateResult> {
-  return check(await sb.rpc('admin_leave_create', { p_tutor: tutorId, p_from: from, p_to: to, p_reason: reason, p_dry_run: dryRun }));
+export async function createLeave(sb: SupabaseClient, tutorId: string, from: KstDate, to: KstDate, reason: string, dryRun: boolean, requestId?: string | null): Promise<LeaveCreateResult> {
+  const args = { p_tutor: tutorId, p_from: from, p_to: to, p_reason: reason, p_dry_run: dryRun };
+  return check(await sb.rpc('admin_leave_create', requestId ? { ...args, p_request: requestId } : args));
 }
 /** 휴무 철회 (4510, QA-17): dryRun = 영향 미리 보기. 철회는 사유 필수. blockers 가 있으면 철회 못 함 */
 export type LeaveWithdrawPreview = { dry_run: boolean; repeated?: boolean; items: number; sub_back: number; ask_clear: number; wait_back: number; untouched: number; notices_pending: number; blockers?: string[]; from?: KstDate; to?: KstDate };

@@ -2,6 +2,13 @@
 
 # 다음 세션 시작 메모
 
+## 🧪 11/13 강사 휴무 신청 (H26(137)) — 코드 lms-test 반영, **시험 DB migration 적용 대기** (브랜치 claude/pensive-goodall-m2ndw0, 시안 https://claude.ai/artifact/VijcTWhC9DY52i9FqjHT3A)
+- 대표 확정 11/13 ('권장한걸로 다' + 질문 창): 계획된 휴무 14일 전(늦으면 빨간 경고, 신청은 받음) · 급한 일 기한 없음(요청 시 증빙) · **Home 신청은 3일 이상만**(1~2일은 Calendar Cancel class — 운영진 휴무 화면도 3일 미만 안 받음) · 확인 창 본인 기록 = 올해(현지 1/1~) · 란 이름 'Time off' · 반려 사유 필수(강사에게 보임) · 승인 전 철회 · 휴무 화면 저장 = 자동 승인 · 끝난 휴무는 다음 날 Home 에서 빠짐 · 현지 날짜는 실제 시각(현지 첫날 0:00~마지막 날 24:00)으로 휴무를 잡음. **정책 원본 H26 기록 못 함(Google Docs 커넥터 연결 실패) → 다음에 H26 에 위 내용 적기**
+- migration **20261113150000_lms_tutor_time_off_requests**: 표 `tutor_time_off_requests`(RLS, 직접 읽기 없음) · `tutor_time_off_preview/list/request/withdraw`(운영자 보기 p_tutor) · `admin_time_off_requests/reject` · `lms_leave_candidates_at`(실제 시각) + `lms_leave_candidates` 는 이걸 부르는 판 · `admin_leave_create` 6인자판(p_request: 날짜 그대로면 신청 실제 시각, 저장하면 승인, notice_given_on 기록) + 5인자판은 감싸기. 표 61→62 (02-check)
+- 코드: `src/app/lms/tutor/TimeOff.tsx`(Home 란·신청 창·확인 창·근무시간/달력 한 줄) · `src/lms/tutor/time-off.ts` · TutorHome/Hours/Schedule/Live · 대시보드 칸 '강사 휴무 신청'(`board.ts` time_off_request, [휴무 화면 열기]=/lms/admin/leave?new=1&req=…, [반려] 사유 입력) · 휴무 화면 `?req=` 칸 채움 + 안내 띠. 옛 DB(함수 없음)면 Home 란·대시보드 칸이 안 보임 → migration 전에 배포돼도 안전
+- 시험: `npm test` 465 · `npm run test:db` 전부 통과(새 `supabase/tests/tutor-time-off-request.sql` 25줄: 3일·기한·경계 수업(Manila 23:30=한국 다음 날)·승인·반려·철회·권한) · tsc 0. authz-probe 에 새 함수 + 다른 세션의 `lms_screen_prefs/pref_set` 검토 목록 추가(빠져 있어 실패하던 것)
+- **남은 일**: ① 시험 DB(kyeimjozkcqbgkepwrnv)에 migration 적용 — 이 세션은 Supabase 커넥터가 끊기고 api.supabase.com 토큰이 'Invalid access token' ② 시험 데이터: 시험 강사(Emma 등)로 대기 신청 1건 + 늦은 신청 1건 만들어 대시보드·강사 Home 에 바로 보이게 ③ 시험 사이트 화면 확인(PC·휴대폰) ④ H26 기록 ⑤ 운영 반영은 대표 승인 후
+
 ## 🧪 11/13 수업 줄 상태·용어 통일 — 시험 사이트(lms-test) 반영, 운영 DB 대조 미완료 (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
 - 코드만(DB 변경 없음): `src/lms/admin/dashboard.ts` `lessonState`(예정·진행 중·기록 전은 state=scheduled 일 때만 시각으로 / 완료·취소·수강생 노쇼·강사 노쇼(done+Tutor no-show)는 시각으로 안 덮음)·`lessonNote`(취소 사유 STATUS_PLAIN · 연결된 보강 · 'Emma → James' · '시간 변경 · 8:30 → 9:30')
 - `live.ts` `loadLessonExtras`: 보강 = makeup_requests confirmed(source→confirmed_lesson) 최신, 그 보강도 취소면 다음 연결을 따라감(최대 4번) / 시간 변경 = admin_makeup_logs reschedule 첫 old_starts_at 이 있을 때만. 읽기 실패면 표시만 생략
@@ -35,13 +42,24 @@
 - ✅ 11/12 고침: **운영자(인증 앱 켬) 비밀번호 만들기·찾기** — Supabase 가 인증 앱 코드 전에는 비밀번호 변경을 막음(insufficient_aal, 대표 support@ 시험에서 '연결이 불안정해요' → 다시 누르면 이미 쓴 메일 코드라 '코드가 맞지 않거나'). 이제 메일 코드 확인 뒤 인증 앱 코드 단계 → 저장, 메일 코드는 한 번 확인되면 다시 묻지 않음. 로컬: 운영자 6/6(인증 앱 단계·틀린 코드·저장 뒤 운영자 화면·옛 비밀번호 거절·새 비밀번호+인증 앱 PC·학생은 단계 없음) + 전체 회귀 33/33
 - ✅ 11/13 대표 '넣어': 카카오·네이버로만 만든 빈 회원 화면('아직 수강 중인 수업이 없어요')에 **[이미 수강 중이에요]** — '처음이에요'를 잘못 누른 기존 학생이 스스로 빈 계정을 지우고 기존 계정 로그인 → 연결(이메일 가입 회원에게는 안 보임). 로컬 6/6 통과(기록 전후 같음)
 - 11/13 Work(ChatGPT)가 시험 Supabase 카카오·네이버 켬(authorize 302 확인), 대표가 시험 사이트 support@ 에 카톡·네이버 연결. **시험 DB 대조 미완료**(Supabase 커넥터 접속 실패) — 기준값 11/13 12:51Z: 사용자 12·연결 12·app_users md5 3d645a88…·수강권 9c67f463…·결제 d9c3706b…
+- ✅ 11/13 약관·개인정보 (대표 '권장안대로', 시행일 = 운영 공개일): 원문 `src/lms/auth/legal.ts` · 페이지 /terms · /privacy · 홈페이지 바닥글 링크 · 가입 동의 칸 [보기](같은 화면 안에서 펼침). 결정: 환불은 약관에 '수강 안내·FAQ 따름' · 탈퇴는 메일 요청 · 약관 변경 공지 7일/불리 30일 · 탈퇴 시 바로 삭제(법정 기록만 보관). 시험 사이트 반영, 운영 미반영. **H26 미기록(Google Docs 커넥터 접속 실패) — 다음 세션에서 적기**
+  - **운영 공개 전 채울 것**: `LEGAL_EFFECTIVE_DATE`(운영 공개일) · 결제대행사(PG) 이름(지금 '아임웹 및 결제대행사') · Supabase 운영 서버 국가(국외 이전 표에 아직 없음, 시험은 Seoul) · 전자상거래법 시행령 제6조 보존 기간 5년/3년 조문 확인(이 환경에서 law.go.kr 막힘)과 신고 면제 사업자 적용 여부 · 개인정보위 '처리방침 작성지침' 대조
 - 운영 반영 때 추가: 카카오 앱 Redirect URI 에 운영 Supabase callback · 운영 Supabase 카카오·custom:naver(Userinfo = https://edgeenglish.kr/api/auth/naver-userinfo) · 대표 운영 계정 연결은 반드시 [이미 회원이에요]
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
-## ⏳ 11/13 학생 지각 알림 — **시험 DB·lms-test 완료 · 운영 DB 완료 · 운영 코드 배포 확인 안 됨(운영 화면에 아직 안 나옴)** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
+## ⏭ 강사 지각 알림 — **대표 결정 4가지 완료(11/13) · 개발은 새 세션에서 시작** (정책 원본 H26 기록은 Google Docs 연결·'반영해' 지시 뒤)
+- **결정(대표 11/13, 추천안 전부)**: ① POL-TU-01 '늦은 만큼 연장' 그대로 ② **미리 알려도 실제 시작에 늦으면 무조건 지각** — 월 정시 수업률 90% 계산에 반영, 연장 의무 유지, 연장 수업을 해도 지각 기록 유지, 사전 알림은 면제 사유 아님 ③ 지각 시간 선택지 5·10·15·20분 이상 ④ 학생 + 운영진(support@) 모두 메일
+- **추가 원칙(대표 11/13)**: 학생은 수업을 떠날 권리가 있고 강사가 늦을 때 기다릴 의무가 없음. 강사 지각 수업의 결과는 2가지 — ⓐ 학생이 아직 있으면 **강사 지각**(늦은 만큼 연장 + 정시 90% 반영) ⓑ 학생이 이미 떠났으면 **강사 노쇼**(기존 POL-TU-03: 보강 1 + 무료 보상 1). 사전 지각 알림은 어느 쪽도 면제 아님. **학생 알림에 '기다려 주세요' 같은 표현 금지**
+- ⚠ 위 ⓑ의 '언제 학생이 떠난 것으로 보나'(노쇼 판정 기준, POL-TU-02 · 07-decisions D-9 ⬜ 미결정: 5분 뒤 학생 신고 버튼·확정은 운영자 vs 옛 메모 10분)가 아직 안 정해짐 → 개발 시작 전 대표 결정(숫자라 권장안만 제시)
+- **개발 시작 전 대표에게 먼저 물을 것(숫자·문구라 Claude 가 정하지 않음)**: 강사 [지각 알림] 버튼을 수업 시작 몇 분(시간) 전부터 보일지 · 학생에게 가는 한국어 메일·LMS 알림 문구(거주지 시간만, 연장 안내 포함 여부, 20분 이상 늦을 때 보강·취소 문구 여부) — 문구는 대화창에서 확정 뒤 '시스템에 넣어' 이후에만 코드·DB 에 넣음
+- 구조는 학생 지각 알림(migration 20261113120000)과 같게: 강사 Home 버튼 → 담당 학생 메일 + 학생 LMS 알림, 운영자 보기에서도 대신 입력. 시험 사이트에 만들 때 대표가 열자마자 보이게 시험 데이터를 미리 만들고 볼 페이지를 같이 안내(CLAUDE.md 11/13)
+- ChatGPT 안 중 쓰지 않는 것: 학생 메일 영어 문구(학생 메일은 한국어)
+
+## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test·운영 DB·운영 화면 모두 반영 완료** (운영 주소 복구 23:27~23:28 한국, 정책 원본 H26(162)~(165))
+- **운영 최종 확인 (11/13 밤)**: edgeenglish.kr·www.edgeenglish.kr 모두 dpl_FDCP3w…(lms-prod 69db1c0) 를 주고, 운영 JS 에 '늦게 참여해요'·'강사님께 알렸어요' 있음. 홈 · /lms/tutor · /lms/admin 응답 200. 원인: 두 운영 주소가 Production 연결로 바뀌어 lms-prod 푸시를 못 따라감 → ChatGPT(work)가 대표 승인으로 'Preview · lms-prod 브랜치'로 복구(Vercel Domains, DNS·환경변수·재배포 없음). 언제 왜 바뀌었는지는 미확인 — 다시 안 따라오면 Vercel Settings → Domains 에서 두 주소 연결 대상부터 확인 (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
 - **운영 반영 (대표 11/13 '운영에도 배포해')**: 운영 DB 백업 snapshots **49**(tutor_updates 표 + kind 제약 정의) → migration 20261113120000 적용(표 60→61, RLS·anon 실행 막힘·트리거 2개 확인, 학생 알림 0건) → 코드 lms-prod **69db1c0**(lms-test 의 지각 알림 3커밋만 골라 얹음). 되돌리기: 코드 lms-prod 0932ca9 · DB 표·함수 2개 제거 + kind 제약을 snapshots 49 정의로. **11/13 22:25(한국) 확인: lms-prod 69db1c0 push 35분 뒤에도 운영 사이트(edgeenglish.kr)가 예전 배포(dpl_7qCc61…)를 그대로 줌 — 운영 JS 에 '늦게 참여해요' 없음. 69db1c0 로컬 `next build` 는 성공하고 버튼 문구도 들어감 → 코드 문제 아님, Vercel 쪽(배포 안 됨·실패·대기)을 대표가 Vercel Deployments 에서 확인해야 함. 운영 DB 변경은 옛 화면이 쓰지 않아 영향 없음**
-- **시험 DB 시험용 수업 복구 미완료**: STU-9001 수업 0ee7b8bc… 1개가 12/2 14:00(한국)에 있음 → 11/14 10:00~10:50(한국, = 11/14 01:00~01:50 UTC)로 되돌려야 함(다른 1개 e263168d… 는 11/14 11:00 한국으로 복구됨). Supabase 커넥터 연결 실패로 못 함. 알림 기록(student_late_notices 1줄)은 지울 수 없어 그대로 둠
+- **시험 DB 시험용 수업 복구 완료·확인(11/13 밤, ChatGPT 읽기 조회)**: STU-9001 수업 0ee7b8bc… 11/14 10:00~10:50(한국) · e263168d… 11/14 11:00~11:50(한국). 알림 기록(student_late_notices 1줄)은 지울 수 없어 남아 있음(이미 알린 수업 하나에 붙어 있어 이후 시험은 다른 수업으로)
 - migration **20261113120000_lms_student_late_notice** (시험 DB 적용): 표 student_late_notices(수업당 1줄) · tutor_updates 종류 'student_late' · 함수 student_late_notice(보내기, 시작 2시간 전~끝나기 전만) · student_late_notices(읽기). 운영 표 수 60 → 61 (prod-setup 02-check 고침)
 - 화면: 학생 홈 '다음 수업' 카드 [늦게 참여해요] (StudentHome.tsx NextLesson·LateNotice), 강사 Home Updates 'Running late' 줄 (tutor/updates.ts), 운영자 보기는 같은 함수로 대신 입력
 - 검증: vitest 456 · tsc · test:db 새 시험(supabase/tests/student-late-notice.sql 22개) 통과 · 시험 DB 실제 함수 실행(수업 시간을 되돌림 트랜잭션 안에서 앞당겨 실행 → 알림·메일 문구·중복 확인 → 롤백, 데이터 안 남음). **미확인: support@ 실제 도착**(실제 저장 없이 롤백했음 — 강사 메일 경로는 기존 tutor_updates 메일과 같음)
@@ -517,7 +535,7 @@
      - 11/11 시안 https://claude.ai/artifact/YVLwWKyTMm3MQe32TmuDtW (브랜치 claude/adoring-hamilton-xgum09). 대표 결정 대기 2건: 결정1 학생이 알린 시각 강사 입력 여부, 결정2 운영진·학생 화면 수업 종류 이름(영어/한국어). 확인: 이관 추가 수업(migrated_extra, 송O나 11/11·11/13) = Olivia 시트 Regular. 시안에 포함: 대체강사 Held 저장 → 'Normal'(기존 기록 그대로)
      - ✅ **11/11 결정 끝 (H26(136)(138))** → ✅ 11/11 시험 환경 개발 끝 (맨 위 항목, H26(139)). 남은 대표 결정: 운영 DB 공휴일 목록 넣기(0건)
      - 11/11 대표 추가: 결정3 = A 운영진만 (H26(136) — 대표가 다시 물으면 그 이유를 꼭 다시 말할 것). 학생 취소 팝업 — 한국 공휴일 수업이면 '변경권 | 차감 안 됨 (공휴일 취소)' 한 줄(지금 공휴일이면 변경권 줄이 아예 안 보임), 공휴일 미리 표시 기능은 안 만듦. ⚠ 운영 DB holidays 표 0건 → 공휴일 취소 판정이 지금 한 번도 안 됨, 공휴일 목록 넣기 대표 승인 대기. 강사 장기휴무 직접 신청(Schedule) = 지금 없음(휴무는 운영진 휴무 화면만, 강사는 수업 없는 칸만 막기) → 별도 세션·시안
-   - ⏭ **새 세션 개발 대기: 강사 휴무 '신청' 란 (H26(137))** — 강사 신청(날짜·사유) → 운영진 대시보드 → 누르면 휴무 화면 그 날짜로. Regular working hours·One time changes 페이지에 한 줄(3일 이상은 Home 신청 란으로, 바로 가기 버튼). **신청 기한 숫자는 시안에서 대표에게 꼭 물을 것**(기존 POL-TU-05: 14일·4일·급한 일 최대한 빨리+증빙을 기본안으로 보여 주고 확인). Home 신청 란 이름도 시안에서 정함. PC·휴대폰 시안부터
+   - 🧪 (11/13 개발됨 — 맨 위 '강사 휴무 신청' 항목) **강사 휴무 '신청' 란 (H26(137))** — 강사 신청(날짜·사유) → 운영진 대시보드 → 누르면 휴무 화면 그 날짜로. Regular working hours·One time changes 페이지에 한 줄(3일 이상은 Home 신청 란으로, 바로 가기 버튼). **신청 기한 숫자는 시안에서 대표에게 꼭 물을 것**(기존 POL-TU-05: 14일·4일·급한 일 최대한 빨리+증빙을 기본안으로 보여 주고 확인). Home 신청 란 이름도 시안에서 정함. PC·휴대폰 시안부터
 
 ## ✅ 2026-11-07 운영 DB: 체험용 강사 계정 + 가상 학생 (대표 지시·'응 운영DB에 바로해')
 - 강사 **Sera Kara**(대표 지인, 독일 슈투트가르트, Europe/Berlin, 활성) 추가 + 로그인 계정(이메일은 운영 DB tutors.email) `admin_tutor_login`. 시험 DB에도 같은 이메일을 James 에 연결해 둠

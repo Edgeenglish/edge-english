@@ -6,6 +6,7 @@
 
 import { CANT_OPEN_BACKGROUND, TIME_COLORS, cantOpenHelp } from '@/lms/tutor/time-status';
 import TimeStatusLegend from './TimeStatusLegend';
+import { TimeOffLine } from './TimeOff';
 import { TUTOR_MENU } from '@/lms/tutor/navigation';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
@@ -46,7 +47,7 @@ type Dialog =
   | { kind: 'saved'; weekly: boolean; from: string };
 
 /** inline = 메뉴 안에 그대로 (2026-11-04 사이드바), 아니면 창 */
-export default function TutorHours({ actions, onClose, onSchedule, inline = false, onDirty, onSaved }: { actions: HoursActions; onClose: () => void; onSchedule?: () => void; inline?: boolean; /** 저장 안 한 변경이 있는지 알림 — 메뉴를 바꿀 때 확인 (QA UX) */ onDirty?: (dirty: boolean) => void; /** 저장 성공 뒤 — Home 의 보강 요청·충돌 자료를 다시 읽게 (R-13) */ onSaved?: () => void | Promise<void> }) {
+export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, inline = false, onDirty, onSaved }: { actions: HoursActions; onClose: () => void; onSchedule?: () => void; /** 맨 위 한 줄 [Request time off ›] (H26(137)) */ onTimeOff?: () => void; inline?: boolean; /** 저장 안 한 변경이 있는지 알림 — 메뉴를 바꿀 때 확인 (QA UX) */ onDirty?: (dirty: boolean) => void; /** 저장 성공 뒤 — Home 의 보강 요청·충돌 자료를 다시 읽게 (R-13) */ onSaved?: () => void | Promise<void> }) {
   const [data, setData] = useState<HoursData | null>(null);
   const [err, setErr] = useState('');
   // 예전 탭 기억(Every week / One week only)은 탭이 없어져 지움
@@ -91,7 +92,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
 
   if (!data) {
     return (
-      <Panel onClose={onClose} inline={inline} onSchedule={onSchedule}>
+      <Panel onClose={onClose} inline={inline} onSchedule={onSchedule} onTimeOff={onTimeOff}>
         {err ? <p className="p-4 text-[14px] text-[#b3261e]">{err}</p> : <p className="p-4 text-[15px] text-[#6b6880]">Loading…</p>}
       </Panel>
     );
@@ -212,7 +213,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
   );
 
   return (
-    <Panel onClose={close} inline={inline} onSchedule={onSchedule}>
+    <Panel onClose={close} inline={inline} onSchedule={onSchedule} onTimeOff={onTimeOff}>
       <div className="flex min-h-0 flex-1 gap-5 lg:p-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <p className="mb-1.5 text-[13.5px] font-semibold text-[#1d1b2b]">{applyFromText(d.from)}</p>
@@ -287,7 +288,7 @@ export default function TutorHours({ actions, onClose, onSchedule, inline = fals
   );
 }
 
-function Panel({ onClose, onSchedule, inline, children }: { onClose: () => void; onSchedule?: () => void; inline?: boolean; children: ReactNode }) {
+function Panel({ onClose, onSchedule, onTimeOff, inline, children }: { onClose: () => void; onSchedule?: () => void; onTimeOff?: () => void; inline?: boolean; children: ReactNode }) {
   const head = (
     <div className="mb-2 flex items-start justify-between gap-2">
       <div>
@@ -304,6 +305,7 @@ function Panel({ onClose, onSchedule, inline, children }: { onClose: () => void;
     return (
       <section aria-label={TUTOR_MENU.hours} className="relative flex min-h-[70vh] flex-col rounded-[16px] bg-white p-3 lg:p-4">
         {head}
+        {onTimeOff && <TimeOffLine onClick={onTimeOff} />}
         {children}
       </section>
     );

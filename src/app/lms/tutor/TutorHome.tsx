@@ -24,6 +24,8 @@ import { Rich } from '@/app/lms/Rich';
 import HomeNotices from '@/app/lms/HomeNotices';
 import { enBoth, enEvery, stripBold } from '@/lms/admin/time-text';
 import { useDetailBack } from './useDetailBack';
+import { TimeOffCard, TimeOffForm } from './TimeOff';
+import type { TimeOffActions, TimeOffList } from '@/lms/tutor/time-off';
 import {
   canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   canStudentCancel, COVERED_NOTE, COVERING_NOTE, type StudentCancelDecision,
@@ -69,6 +71,8 @@ export type TutorActions = {
   /** To do '신규 수강생 문의' + 답 */
   requests?: () => Promise<NewStudentRequest[]>;
   answerRequest?: (planId: string, yes: boolean) => Promise<void>;
+  /** Home 'Time off' 휴무 신청 (H26(137)). 없거나 옛 DB 면 그 란이 안 보임 */
+  timeOff?: TimeOffActions;
 };
 
 function CancelClass({ lessonId, cancel, onSaved, onDirty }: {
@@ -256,7 +260,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (수강생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
-  const [panel, setPanel] = useState<'request' | 'cover' | 'makeup' | 'followup' | null>(null);
+  const [panel, setPanel] = useState<'request' | 'cover' | 'makeup' | 'followup' | 'timeoff' | null>(null);
   // 수강생 프로필 창 (4300): 열어도 보던 메뉴·주·고른 수강생은 그대로, 닫으면 돌아옴
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const openProfile = actions.profile ? setProfileOf : null;
@@ -294,6 +298,13 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   }, [actions]);
   useEffect(() => { void refreshRequests(); }, [refreshRequests, screen]);
   const openRequests = requests.filter((r) => !r.answer).length;
+  // Time off (H26(137)): 신청 내역 + 올해 기록. null = 옛 DB(란 숨김)
+  const [timeOff, setTimeOff] = useState<TimeOffList | null>(null);
+  const refreshTimeOff = useCallback(async () => {
+    if (!actions.timeOff) return;
+    try { setTimeOff(await actions.timeOff.list()); } catch { /* 일시 오류: 이 칸만 비움 */ }
+  }, [actions]);
+  useEffect(() => { void refreshTimeOff(); }, [refreshTimeOff, screen]);
   const followupOfStudent = (id?: string) => (id ? followups.find((f) => f.studentId === id) : undefined);
   // 학생에게 시간을 제안하고 기다리는 보강(H26(134))은 강사 할 일이 아님 — 카드는 그대로 열어 볼 수 있음
   const makeupTodo = screen.makeups.filter((m) => !m.stage).length;
@@ -327,6 +338,12 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   const goTab = (key: Tab) => {
     if (tab === 'hours' && key !== 'hours' && hoursDirty.current && !window.confirm('You have unsaved changes in Regular Working Hours. Leave without saving?')) return;
     setTab(key);
+  };
+  /** Regular Working Hours · Calendar 의 [Request time off ›] → Home 으로 가서 신청 창 */
+  const goTimeOff = () => {
+    if (tab === 'hours' && hoursDirty.current && !window.confirm('You have unsaved changes in Regular Working Hours. Leave without saving?')) return;
+    setTab('home');
+    setPanel('timeoff');
   };
   const tr = t;
   const tabBtn = (t: (typeof TABS)[number], mobile: boolean) => (
@@ -509,6 +526,11 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">{t('Next class', '다음 수업')}: <Rich text={whenFull(nextLesson.startsAt, tz)} /> · {nextLesson.student}</p>}
               <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">{t('All classes', '전체 수업')} ›</button>
             </section>
+
+            {timeOff && actions.timeOff && (
+              <TimeOffCard data={timeOff} onRequest={() => setPanel('timeoff')}
+                onWithdraw={async (id) => { await actions.timeOff!.withdraw(id); await refreshTimeOff(); }} />
+            )}
           </div>
         )}
 
@@ -575,10 +597,17 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 
         {tab === 'schedule' && (
           <TutorSchedule actions={actions.schedule} tz={tz} now={now} openProfile={openProfile} onRecord={openInRecord}
-            loadLessons={loadLessons} onSaved={() => reload()} onHours={() => goTab('hours')} />
+            loadLessons={loadLessons} onSaved={() => reload()} onHours={() => goTab('hours')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} />
         )}
 
-        {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} inline onDirty={(d) => { hoursDirty.current = d; }} onSaved={() => reload()} />}
+        {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} inline onDirty={(d) => { hoursDirty.current = d; }} onSaved={() => reload()} />}
+
+        {panel === 'timeoff' && timeOff && actions.timeOff && (
+          <Sheet onClose={() => setPanel(null)}>
+            <TimeOffSheetBody actions={actions.timeOff} data={timeOff} onCalendar={() => { setPanel(null); goTab('schedule'); }}
+              onSent={async () => { setPanel(null); await refreshTimeOff(); }} />
+          </Sheet>
+        )}
 
         {panel === 'request' && (
           <Sheet onClose={() => setPanel(null)}>
@@ -674,6 +703,13 @@ function TodayRow({ lesson: l, tz, now, onRecord }: { lesson: TutorLesson; tz: s
 // 할 일은 화면에 펼쳐 두지 않고 누르면 창으로 (대표 10/29: 할 일이 많아도 Class Record 표가 아래로 밀리지 않게)
 // 보내지 않은 답·저장 안 한 기록 보호 (대표 10/30): 창을 닫거나 페이지를 떠날 때 확인 (My hours와 같은 'Discard changes?')
 const DirtyCtx = createContext<((id: string, dirty: boolean) => void) | null>(null);
+
+/** 휴무 신청 창: 입력 중이면 닫기 전 확인 (Sheet 의 고치는 중 목록) */
+function TimeOffSheetBody(props: { actions: TimeOffActions; data: TimeOffList; onCalendar: () => void; onSent: () => Promise<void> }) {
+  const [dirty, setDirty] = useState(false);
+  useDirty('timeoff', dirty);
+  return <TimeOffForm {...props} onDirty={setDirty} />;
+}
 
 function useDirty(id: string, dirty: boolean) {
   const mark = useContext(DirtyCtx);

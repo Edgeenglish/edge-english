@@ -35,12 +35,18 @@ echo "$LN_OUT" | grep -E 'ERROR|실패' && { echo "❌ 지각 알림 시험 실�
 [ "$(echo "$LN_OUT" | grep -c '통과: ')" -ge 20 ] || { echo "❌ 지각 알림 시험 통과 줄 부족"; exit 1; }
 echo "✅ 학생 지각 알림 시험 통과"
 
+# 강사 휴무 신청 (H26(137), 대표 11/13): 가짜 데이터로 3일·기한·현지 날짜 경계·승인·반려·철회 확인, 끝에 되돌림
+TO_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/tutor-time-off-request.sql" 2>&1 || true)"
+echo "$TO_OUT" | grep -E 'ERROR|실패' && { echo "❌ 강사 휴무 신청 시험 실패"; exit 1; }
+[ "$(echo "$TO_OUT" | grep -c '통과: ')" -ge 25 ] || { echo "❌ 강사 휴무 신청 시험 통과 줄 부족"; echo "$TO_OUT" | tail -5; exit 1; }
+echo "✅ 강사 휴무 신청 시험 통과"
+
 # 로그인 사용자 권한 점검: 시험용 Supabase 상태(가상 데이터 적용 후)와 같게 만든 뒤 실물용 파일을 그대로 실행
 "${PSQL[@]}" -o /dev/null -f "$ROOT/supabase/test-setup/seed_fake.sql"
 "${PSQL[@]}" -o /dev/null -f "$HERE/stub_supabase_platform.sql"   # 실물 Supabase 플랫폼 함수 흉내
 OUT="$("${RUN_AS[@]}" psql -h "$WORK" -U postgres -d postgres -q -f "$ROOT/supabase/test-setup/authz-probe.sql" 2>&1 || true)"
 echo "$OUT" | sed -n 's/^.*ERROR:  //p; /^[-(참실]/p; /^$/d'
-echo "$OUT" | grep -q 'AUTHZ-PROBE 결과: 모두 통과' || { echo "❌ 로그인 사용자 권한 점검 실패"; exit 1; }
+echo "$OUT" | grep -q "AUTHZ-PROBE 결과: 모두 통과" || { echo "❌ 로그인 사용자 권한 점검 실패"; echo "$OUT" | grep -E "실패|ERROR" | head; exit 1; }
 echo "✅ 로그인 사용자 권한 점검 통과"
 
 # 운영 DB 표 만들기 파일(supabase/prod-setup) 점검: 빈 DB에 한 묶음으로 실행 → 확인 모두 통과, 두 번째 실행은 안전장치로 멈춤

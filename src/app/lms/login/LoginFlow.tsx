@@ -10,6 +10,8 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { Provider } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lms/auth/client';
+import { PRIVACY_CONSENT, TERMS } from '@/lms/auth/legal';
+import { LegalSections } from '@/components/legal/LegalDoc';
 import {
   afterEmailCode,
   enabledSocial,
@@ -77,6 +79,7 @@ export default function LoginFlow() {
   const [showPw, setShowPw] = useState(false);
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
+  const [legalOpen, setLegalOpen] = useState<'agree-terms' | 'agree-privacy' | null>(null);
   const [problems, setProblems] = useState<SignupProblem[]>([]);
   const [emailTaken, setEmailTaken] = useState(false);
   const [badLogin, setBadLogin] = useState(false);
@@ -657,10 +660,37 @@ export default function LoginFlow() {
                   [privacy, setPrivacy, t.agreePrivacy, 'agree-privacy'],
                 ] as const
               ).map(([v, set, label, id]) => (
-                <label key={id} htmlFor={id} className="flex min-h-[40px] items-center gap-2.5 text-[14px] text-[#1d1b2b]">
-                  <input id={id} type="checkbox" checked={v} onChange={(e) => set(e.target.checked)} className="h-[20px] w-[20px] accent-[#5b3df0]" />
-                  {label}
-                </label>
+                <div key={id}>
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor={id} className="flex min-h-[40px] items-center gap-2.5 text-[14px] text-[#1d1b2b]">
+                      <input id={id} type="checkbox" checked={v} onChange={(e) => set(e.target.checked)} className="h-[20px] w-[20px] accent-[#5b3df0]" />
+                      {label}
+                    </label>
+                    <button
+                      type="button"
+                      aria-expanded={legalOpen === id}
+                      className="min-h-[40px] shrink-0 px-1 text-[13px] text-[#55526a] underline"
+                      onClick={() => setLegalOpen(legalOpen === id ? null : id)}
+                    >
+                      {t.viewLegal}
+                    </button>
+                  </div>
+                  {legalOpen === id && (
+                    <div className="max-h-[240px] overflow-y-auto rounded-[10px] border border-[#e4e1ee] bg-[#faf9fd] p-3">
+                      {id === 'agree-terms' ? (
+                        <LegalSections sections={TERMS} compact />
+                      ) : (
+                        <ul className="grid gap-1.5">
+                          {PRIVACY_CONSENT.map((line) => (
+                            <li key={line} className="text-[13px] leading-relaxed text-[#55526a]">
+                              {line}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
               {has('agree') && <span className={errText}>{t.agreeRequired}</span>}
             </div>
