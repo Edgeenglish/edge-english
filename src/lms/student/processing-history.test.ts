@@ -27,28 +27,28 @@ describe('student processing history', () => {
   });
   it('identifies the original and confirmed classes before opening details', () => {
     const e = { ...event('confirm', '2026-11-11T01:00:00Z', 'makeup_confirmed'), lesson_at: '2026-11-10T23:30:00Z', booked_at: '2026-11-17T23:30:00Z' };
-    expect(historyLines(e, 'Asia/Seoul')).toEqual({ head: '11/11(수) 수업분 보강 확정', status: '11/18(수) 보강 확정' });
-    expect(historyLines(e, 'America/Toronto')).toEqual({ head: '11/10(화) 수업분 보강 확정', status: '11/17(화) 보강 확정' });
+    expect(historyLines(e, 'Asia/Seoul')).toEqual({ title: '보강 확정', detail: '원래 수업 : 11/11(수)', status: '11/18(수) 보강 확정' });
+    expect(historyLines(e, 'America/Toronto')).toEqual({ title: '보강 확정', detail: '원래 수업 : 11/10(화)', status: '11/17(화) 보강 확정' });
     expect(historyLines({ ...e, compensation: true }, 'America/Toronto').status).toContain('보상수업 확정');
   });
   it('keeps date-only records in Korea and never substitutes processing dates for missing class dates', () => {
     const e = { ...event('request', '2026-11-11T01:00:00Z', 'makeup_requested'), lesson_at: null, original_date: '2026-11-10' };
     expect(historyOriginalDay(e, 'America/Toronto')).toBe('11/10(화) (한국 날짜)');
     expect(historyOriginalDay(e, 'Asia/Seoul')).toBe('11/10(화)');
-    expect(historyLines({ ...e, original_date: null }, 'Asia/Seoul')).toEqual({ head: '원래 수업 날짜 미기록 보강 신청', status: '신청 접수 완료' });
-    expect(historyLines({ ...e, kind: 'makeup_confirmed' }, 'Asia/Seoul')).toEqual({ head: '11/10(화) 수업분 보강 확정', status: '수업 일정에 반영 완료' });
+    expect(historyLines({ ...e, original_date: null }, 'Asia/Seoul')).toEqual({ title: '보강 신청', detail: '원래 수업 : 날짜 미기록', status: '신청 접수 완료' });
+    expect(historyLines({ ...e, kind: 'makeup_confirmed' }, 'Asia/Seoul')).toEqual({ title: '보강 확정', detail: '원래 수업 : 11/10(화)', status: '수업 일정에 반영 완료' });
   });
   it('labels compensation and tutor cancellations without exposing internal status names', () => {
     expect(historyLabel({ ...event('comp', '2026-11-11T01:00:00Z', 'makeup_confirmed'), compensation: true }).title).toBe('보상수업 확정');
-    expect(historyLines({ ...event('cancel', '2026-11-11T01:00:00Z', 'lesson_canceled'), tutor_fault: true, lesson_at: '2026-11-10T01:00:00Z' }, 'Asia/Seoul')).toEqual({ head: '11/10(화) 수업분 강사 사정으로 취소', status: '취소 처리 완료' });
+    expect(historyLines({ ...event('cancel', '2026-11-11T01:00:00Z', 'lesson_canceled'), tutor_fault: true, lesson_at: '2026-11-10T01:00:00Z' }, 'Asia/Seoul')).toEqual({ title: '수업 취소', detail: '취소한 수업 : 11/10(화) · 강사 사정으로 취소', status: '취소 처리 완료' });
   });
   it('uses the same cancel reasons as the make-up right cards, without 내가', () => {
     const c = (reason: ProcessingEvent['cancel_reason']) => historyLines({ ...event('c', '2026-11-11T01:00:00Z', 'lesson_canceled'), cancel_reason: reason, lesson_at: '2026-11-09T01:00:00Z' }, 'Asia/Seoul');
-    expect(c('student')).toEqual({ head: '11/9(월) 수업분 수강생 취소', status: '취소 처리 완료' });
-    expect(c('tutor_canceled').head).toBe('11/9(월) 수업분 강사가 취소');
-    expect(c('tutor_leave').head).toBe('11/9(월) 수업분 강사 휴무로 취소');
-    expect(c('tutor_fault').head).toBe('11/9(월) 수업분 강사 사정으로 취소');
-    expect(historyLines({ ...event('c', '2026-11-11T01:00:00Z', 'lesson_canceled'), lesson_at: '2026-11-09T01:00:00Z' }, 'Asia/Seoul').head).toBe('11/9(월) 수업분 수업 취소'); // 옛 응답
+    expect(c('student')).toEqual({ title: '수업 취소', detail: '취소한 수업 : 11/9(월) · 수강생 취소', status: '취소 처리 완료' });
+    expect(c('tutor_canceled').detail).toBe('취소한 수업 : 11/9(월) · 강사가 취소');
+    expect(c('tutor_leave').detail).toBe('취소한 수업 : 11/9(월) · 강사 휴무로 취소');
+    expect(c('tutor_fault').detail).toBe('취소한 수업 : 11/9(월) · 강사 사정으로 취소');
+    expect(historyLines({ ...event('c', '2026-11-11T01:00:00Z', 'lesson_canceled'), lesson_at: '2026-11-09T01:00:00Z' }, 'Asia/Seoul').detail).toBe('취소한 수업 : 11/9(월)'); // 옛 응답
   });
   it('shows waiting for tutor only while the same request has no later step', () => {
     const req = { ...event('r', '2026-11-11T01:00:00Z', 'makeup_requested'), request_id: 'q1' };
@@ -56,6 +56,6 @@ describe('student processing history', () => {
     expect(isWaitingForTutor(req, [req, wait])).toBe(true);
     expect(isWaitingForTutor(req, [req, wait, { ...event('k', '2026-11-12T01:00:00Z', 'makeup_confirmed'), request_id: 'q1' }])).toBe(false);
     expect(isWaitingForTutor(req, [req, { ...event('o', '2026-11-12T01:00:00Z', 'makeup_confirmed'), request_id: 'other' }])).toBe(true);
-    expect(historyLines({ ...req, lesson_at: '2026-11-09T01:00:00Z' }, 'Asia/Seoul', true)).toEqual({ head: '11/9(월) 수업분 보강 신청', status: '강사 확인 중' });
+    expect(historyLines({ ...req, lesson_at: '2026-11-09T01:00:00Z' }, 'Asia/Seoul', true)).toEqual({ title: '보강 신청', detail: '원래 수업 : 11/9(월)', status: '강사 확인 중' });
   });
 });

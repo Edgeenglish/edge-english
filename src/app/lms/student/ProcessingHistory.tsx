@@ -28,10 +28,10 @@ export default function ProcessingHistory({ events, error, timezone, requestIds,
         return (
           <details key={e.id} className="group border-b border-[#eeecf4] last:border-0">
             <summary className="grid min-h-[64px] cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 px-3 py-2.5 sm:px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0] [&::-webkit-details-marker]:hidden">
-              <span className="text-[14px] font-bold leading-5 text-[#1d1b2b]">{lines.head}</span>
+              <span className="text-[14px] font-bold leading-5 text-[#1d1b2b]">{lines.title}</span>
               <time dateTime={e.at} className="whitespace-nowrap text-right text-[11px] leading-5 text-[#6b6880]">{when(e.at)}</time>
               <span className="col-span-2 flex items-start justify-between gap-2 text-[12px] leading-[18px] text-[#55526a]">
-                <span>상태 : {lines.status}</span>
+                <span>{lines.detail}<br />상태 : {lines.status}</span>
                 <span aria-hidden="true" className="shrink-0 text-[#8b88a0] group-open:rotate-90">›</span>
               </span>
             </summary>

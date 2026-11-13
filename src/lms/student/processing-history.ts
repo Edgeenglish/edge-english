@@ -70,12 +70,13 @@ export function historyOriginalDay(e: ProcessingEvent, timezone: string): string
   return null;
 }
 
-/** 처리 내역 두 줄: '11/9(월) 수업분 수강생 취소' / '상태 : 취소 처리 완료' (대표 11/13) */
-export function historyLines(e: ProcessingEvent, timezone: string, waiting = false): { head: string; status: string } {
-  const original = historyOriginalDay(e, timezone);
+/** 처리 내역 세 줄 (대표 11/13): 큰 글씨 종류 / '원래 수업 : 11/9(월)'(취소는 '취소한 수업 : 11/9(월) · 수강생 취소') / '상태 : …' */
+export function historyLines(e: ProcessingEvent, timezone: string, waiting = false): { title: string; detail: string; status: string } {
+  const original = historyOriginalDay(e, timezone) ?? '날짜 미기록';
   const label = historyLabel(e);
-  const subject = e.kind === 'lesson_canceled' ? (cancelSubject(e) ?? label.title) : label.title;
+  const cancel = e.kind === 'lesson_canceled';
+  const reason = cancel ? cancelSubject(e) : null;
   const status = e.kind === 'makeup_confirmed' && e.booked_at ? `${historyDay(e.booked_at, timezone)} ${label.title}`
     : waiting ? '강사 확인 중' : label.result;
-  return { head: `${original ? `${original} 수업분` : '원래 수업 날짜 미기록'} ${subject}`, status };
+  return { title: label.title, detail: `${cancel ? '취소한 수업' : '원래 수업'} : ${original}${reason ? ` · ${reason}` : ''}`, status };
 }
