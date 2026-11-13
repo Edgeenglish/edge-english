@@ -1,0 +1,135 @@
+<title>다음 수강권 표시 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 시안마다 PC 틀 + 휴대폰 틀 나란히(좁으면 위아래) */
+:root{--bg:#f4f3f8;--fg:#1d1b2b;--sub:#55526a;--mute:#8b88a0;--card:#fff;--line:#eeecf4;--accent:#5b3df0;--okbg:#e3f5ea;--ok:#13623a;--waitbg:#fff1d6;--wait:#8a5300;--frame:#d9d6e6;--note:#ece8ff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15131f;--fg:#ecebf3;--sub:#b3b0c6;--mute:#8d8aa3;--card:#211e2e;--line:#322e44;--accent:#9b87ff;--okbg:#1d3a2a;--ok:#8fe0b0;--waitbg:#3d2f12;--wait:#f3c77a;--frame:#3a3650;--note:#2a2445;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15131f;--fg:#ecebf3;--sub:#b3b0c6;--mute:#8d8aa3;--card:#211e2e;--line:#322e44;--accent:#9b87ff;--okbg:#1d3a2a;--ok:#8fe0b0;--waitbg:#3d2f12;--wait:#f3c77a;--frame:#3a3650;--note:#2a2445;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:Pretendard,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:36px}
+h1{font-size:22px;margin:0}
+h2{font-size:18px;margin:0 0 4px}
+.lead{color:var(--sub);font-size:14px;margin:4px 0 0;line-height:1.6}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:20px;align-items:start}
+@media (max-width:900px){.pair{grid-template-columns:minmax(0,1fr)}}
+.lbl{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--mute);margin-bottom:6px}
+.frame{border:1px solid var(--frame);border-radius:14px;background:var(--bg);padding:16px;min-width:0}
+.phone{max-width:380px;border-radius:26px;padding:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px}
+.sum{padding:12px 16px}
+.sum .top{display:flex;justify-content:space-between;align-items:center}
+.sum h3{font-size:14px;margin:0}
+.go{font-size:12.5px;font-weight:600;color:var(--accent)}
+.items{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:12.5px;line-height:1.4}
+.items span{break-inside:avoid}
+.k{color:var(--mute);white-space:nowrap}
+.v{font-weight:600}
+.new{background:var(--note);border-radius:6px;padding:1px 5px;outline:1px dashed var(--accent)}
+.pay{display:grid;gap:14px}
+.pay h3{font-size:18px;margin:0}
+.pc{padding:16px;display:grid;gap:10px;font-size:14px}
+.pc .hd{display:flex;justify-content:space-between;align-items:center}
+.pc h4{font-size:15px;margin:0}
+.badge{border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;background:var(--okbg);color:var(--ok)}
+.row{display:flex;justify-content:space-between;gap:12px}
+.row .k{color:var(--sub);font-size:14px}
+.pcgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:700px){.pcgrid{grid-template-columns:minmax(0,1fr)}}
+.q{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:14px;line-height:1.7}
+.q b{color:var(--accent)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>학생 화면 '다음 수강권' 표시 시안</h1>
+    <p class="lead">예시 학생 김하준 · 지금 수강권 9/21~12/13 · 미리 재등록한 다음 수강권 12/14~3/7. 점선 표시가 바뀌는 곳입니다.</p>
+  </header>
+
+  <section>
+    <h2>1. 홈 '내 수강 정보'</h2>
+    <p class="lead">종료일 바로 옆에 다음 수강권 기간. 다음 수강권이 없으면 지금 그대로.</p>
+    <div class="pair" style="margin-top:12px">
+      <div><div class="lbl">PC</div>
+        <div class="frame"><div class="card sum">
+          <div class="top"><h3>내 수강 정보</h3><span class="go">자세히 보기 ›</span></div>
+          <p class="items">
+            <span><span class="k">이름</span> <b class="v">김하준</b></span>
+            <span><span class="k">담당 강사</span> <b class="v">Emma</b></span>
+            <span><span class="k">현재 코스</span> <b class="v">12주 · 주 1회 50분</b></span>
+            <span><span class="k">수업 시간</span> <b class="v">월 오후 7:00</b></span>
+            <span><span class="k">남은 수업</span> <b class="v">5회</b></span>
+            <span><span class="k">종료일</span> <b class="v">12/13(일)</b></span>
+            <span class="new"><span class="k">다음 수강권</span> <b class="v">12/14~3/7</b></span>
+          </p>
+        </div></div>
+      </div>
+      <div><div class="lbl">휴대폰</div>
+        <div class="frame phone"><div class="card sum">
+          <div class="top"><h3>내 수강 정보</h3><span class="go">자세히 보기 ›</span></div>
+          <p class="items">
+            <span><span class="k">이름</span> <b class="v">김하준</b></span>
+            <span><span class="k">담당 강사</span> <b class="v">Emma</b></span>
+            <span><span class="k">현재 코스</span> <b class="v">12주 · 주 1회 50분</b></span>
+            <span><span class="k">수업 시간</span> <b class="v">월 오후 7:00</b></span>
+            <span><span class="k">남은 수업</span> <b class="v">5회</b></span>
+            <span><span class="k">종료일</span> <b class="v">12/13(일)</b></span>
+            <span class="new"><span class="k">다음 수강권</span> <b class="v">12/14~3/7</b></span>
+          </p>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. 내 정보 → 수강권 / 결제 내역</h2>
+    <p class="lead">지금은 시작 전 수강권이 '지난 수강권'으로 잘못 보임 → '다음 수강권'. 순서: 다음 → 현재 → 지난.</p>
+    <div class="pair" style="margin-top:12px">
+      <div><div class="lbl">PC</div>
+        <div class="frame"><div class="pay">
+          <h3><span class="new">수강권 / 결제 내역</span></h3>
+          <div class="pcgrid">
+            <div class="card pc">
+              <div class="hd"><h4 class="new">다음 수강권</h4><span class="badge">결제 완료</span></div>
+              <div class="row"><span class="k">수강권</span><span>12주 · 주 1회 50분</span></div>
+              <div class="row"><span class="k">수강 기간</span><span>12/14 ~ 3/7</span></div>
+              <div class="row"><span class="k">결제 방법</span><span>카드 (아임웹)</span></div>
+              <div class="row"><span class="k">결제 확인일</span><span>11/12</span></div>
+            </div>
+            <div class="card pc">
+              <div class="hd"><h4>현재 수강권</h4><span class="badge">결제 완료</span></div>
+              <div class="row"><span class="k">수강권</span><span>12주 · 주 1회 50분</span></div>
+              <div class="row"><span class="k">수강 기간</span><span>9/21 ~ 12/13</span></div>
+              <div class="row"><span class="k">결제 방법</span><span>계좌이체</span></div>
+              <div class="row"><span class="k">결제 확인일</span><span>9/18</span></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <div><div class="lbl">휴대폰</div>
+        <div class="frame phone"><div class="pay">
+          <h3><span class="new">수강권 / 결제 내역</span></h3>
+          <div class="card pc">
+            <div class="hd"><h4 class="new">다음 수강권</h4><span class="badge">결제 완료</span></div>
+            <div class="row"><span class="k">수강권</span><span>12주 · 주 1회 50분</span></div>
+            <div class="row"><span class="k">수강 기간</span><span>12/14 ~ 3/7</span></div>
+            <div class="row"><span class="k">결제 방법</span><span>카드 (아임웹)</span></div>
+            <div class="row"><span class="k">결제 확인일</span><span>11/12</span></div>
+          </div>
+          <div class="card pc">
+            <div class="hd"><h4>현재 수강권</h4><span class="badge">결제 완료</span></div>
+            <div class="row"><span class="k">수강권</span><span>12주 · 주 1회 50분</span></div>
+            <div class="row"><span class="k">수강 기간</span><span>9/21 ~ 12/13</span></div>
+            <div class="row"><span class="k">결제 방법</span><span>계좌이체</span></div>
+            <div class="row"><span class="k">결제 확인일</span><span>9/18</span></div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="q">
+    <b>정할 것</b><br>
+    ① 창 제목·메뉴 이름 '현재·지난 수강권 / 결제 내역' → <b>'수강권 / 결제 내역'</b>(시안)으로 줄일지, 그대로 둘지<br>
+    ② 내 정보 '내 수강권' 칸의 '종료일' 줄 아래에도 '다음 수강권 12/14~3/7' 줄을 넣을지 (요청엔 없음)
+  </section>
+</div>
