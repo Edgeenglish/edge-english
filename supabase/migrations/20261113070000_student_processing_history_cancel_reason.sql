@@ -1,4 +1,4 @@
--- 학생 처리 내역: 취소 사유(cancel_reason) 한 칸 추가 — 내가 취소 / 강사가 취소 / 강사 휴무로 취소 / 강사 사정으로 취소 (대표 11/13).
+-- 학생 처리 내역: 취소 사유(cancel_reason) 한 칸 추가 — 수강생 취소 / 강사가 취소 / 강사 휴무로 취소 / 강사 사정으로 취소 (대표 11/13).
 -- 읽기 전용 함수 교체만. 표·데이터·트리거 변경 없음. 다시 실행해도 같은 결과. 화면은 이 칸이 없는 옛 응답에서도 그대로 동작.
 -- Read-only student processing history. No backfill, data writes, new triggers or mail.
 -- audit_log remains admin-only; return an allowlisted projection after the existing
