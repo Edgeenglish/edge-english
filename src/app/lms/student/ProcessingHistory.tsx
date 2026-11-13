@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { historyLines, historyTime, isWaitingForTutor, type ProcessingEvent } from '@/lms/student/processing-history';
+import { historyLines, historySlots, historyTime, isWaitingForTutor, type ProcessingEvent } from '@/lms/student/processing-history';
 
-export default function ProcessingHistory({ events, error, timezone, requestIds, onRequest }: {
+export default function ProcessingHistory({ events, error, timezone }: {
   events: ProcessingEvent[]; error?: boolean; timezone: string;
-  requestIds: string[]; onRequest: (id: string) => void;
+  requestIds?: string[]; onRequest?: (id: string) => void;
 }) {
   const [limit, setLimit] = useState(30);
   const [oldestFirst, setOldestFirst] = useState(false);
@@ -25,26 +25,45 @@ export default function ProcessingHistory({ events, error, timezone, requestIds,
     <section aria-label="처리 기록" className="overflow-hidden rounded-[16px] border border-[#e6e3ef] bg-white">
       {shown.map((e) => {
         const lines = historyLines(e, timezone, isWaitingForTutor(e, events));
+        const sl = historySlots(e, events);
+        const head = (
+          <>
+            <span className="text-[14px] font-bold leading-5 text-[#1d1b2b]">{lines.title}</span>
+            <time dateTime={e.at} className="whitespace-nowrap text-right text-[11px] leading-5 text-[#6b6880]">{when(e.at)}</time>
+          </>
+        );
+        const text = <span>{lines.detail}{lines.status && <><br />상태 : {lines.status}</>}</span>;
+        if (sl.requested.length === 0 && sl.suggested.length === 0 && !sl.confirmedExtra) {
+          return (
+            <div key={e.id} className="grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 border-b border-[#eeecf4] px-3 py-2.5 last:border-0 sm:px-4">
+              {head}
+              <span className="col-span-2 text-[12px] leading-[18px] text-[#55526a]">{text}</span>
+            </div>
+          );
+        }
+        const list = (items: { at: string; ok: boolean }[]) => (
+          <ol className="grid gap-1">
+            {items.map((x, i) => (
+              <li key={i} className={`flex items-baseline gap-1.5 ${x.ok ? 'font-bold' : ''}`}>
+                <span aria-hidden="true">{'①②③'[i] ?? i + 1}</span><span>{when(x.at)}</span>
+                {x.ok && <span className="text-[12px] font-bold text-[#1f7a4d]">✓ 확정</span>}
+              </li>
+            ))}
+          </ol>
+        );
         return (
           <details key={e.id} className="group border-b border-[#eeecf4] last:border-0">
             <summary className="grid min-h-[64px] cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 px-3 py-2.5 sm:px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0] [&::-webkit-details-marker]:hidden">
-              <span className="text-[14px] font-bold leading-5 text-[#1d1b2b]">{lines.title}</span>
-              <time dateTime={e.at} className="whitespace-nowrap text-right text-[11px] leading-5 text-[#6b6880]">{when(e.at)}</time>
+              {head}
               <span className="col-span-2 flex items-start justify-between gap-2 text-[12px] leading-[18px] text-[#55526a]">
-                <span>{lines.detail}<br />상태 : {lines.status}</span>
+                {text}
                 <span aria-hidden="true" className="shrink-0 text-[#8b88a0] group-open:rotate-90">›</span>
               </span>
             </summary>
             <div className="grid gap-2 bg-[#faf9fc] px-3 py-2.5 text-[13px] sm:px-4">
-              <dl className="grid gap-1.5 [&>div]:grid [&>div]:grid-cols-[76px_minmax(0,1fr)] [&>div]:gap-x-2">
-                {e.lesson_at && <div><dt className="text-[12px] text-[#6b6880]">{e.request_id ? '원래 수업' : '해당 수업'}</dt><dd>{when(e.lesson_at)}</dd></div>}
-                {e.tutor && <div><dt className="text-[12px] text-[#6b6880]">담당 강사</dt><dd>{e.tutor}</dd></div>}
-                {e.booked_at && <div><dt className="text-[12px] text-[#6b6880]">확정된 수업</dt><dd className="font-semibold">{when(e.booked_at)}</dd></div>}
-                {e.slots.length > 0 && <div><dt className="text-[12px] text-[#6b6880]">{e.kind === 'tutor_suggested' ? '제안한 시간' : '신청한 시간'}</dt>
-                  <dd className="grid gap-1">{e.slots.map((slot, i) => <span key={i}>{when(slot.at)}{e.kind === 'tutor_answered' && slot.answer ? ` · ${slot.answer === 'yes' ? '가능' : slot.answer === 'no' ? '불가' : '답변 대기'}` : ''}</span>)}</dd>
-                </div>}
-              </dl>
-              {e.request_id && requestIds.includes(e.request_id) && <button type="button" onClick={() => onRequest(e.request_id!)} className="min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-left font-semibold text-[#5b3df0]">현재 신청 상태 보기 ›</button>}
+              {sl.requested.length > 0 && <div className="grid gap-1"><p className="text-[12px] text-[#6b6880]">신청한 보강 시간</p>{list(sl.requested)}</div>}
+              {sl.suggested.length > 0 && <div className="grid gap-1"><p className="text-[12px] text-[#6b6880]">강사가 제안한 시간</p>{list(sl.suggested.map((at) => ({ at, ok: false })))}</div>}
+              {sl.confirmedExtra && <div className="grid gap-1"><p className="text-[12px] text-[#6b6880]">확정된 보강 시간</p><p className="font-bold">{when(sl.confirmedExtra)} <span className="text-[12px] text-[#1f7a4d]">✓ 확정</span></p></div>}
             </div>
           </details>
         );

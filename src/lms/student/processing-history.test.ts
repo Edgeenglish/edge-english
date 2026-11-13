@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { historyLabel, historyOriginalDay, historyLines, historyTime, isWaitingForTutor, processingEvents, type ProcessingEvent } from './processing-history';
+import { historyLabel, historyOriginalDay, historyLines, historySlots, historyTime, isWaitingForTutor, processingEvents, type ProcessingEvent } from './processing-history';
 
 const event = (id: string, at: string, kind: ProcessingEvent['kind']): ProcessingEvent => ({
   id, at, kind, request_id: 'same-request', lesson_at: '2027-01-01T12:00:00Z',
@@ -35,7 +35,7 @@ describe('student processing history', () => {
     const e = { ...event('request', '2026-11-11T01:00:00Z', 'makeup_requested'), lesson_at: null, original_date: '2026-11-10' };
     expect(historyOriginalDay(e, 'America/Toronto')).toBe('11/10(화) (한국 날짜)');
     expect(historyOriginalDay(e, 'Asia/Seoul')).toBe('11/10(화)');
-    expect(historyLines({ ...e, original_date: null }, 'Asia/Seoul')).toEqual({ title: '보강 신청', detail: '원래 수업 : 날짜 미기록', status: '신청 접수 완료' });
+    expect(historyLines({ ...e, original_date: null }, 'Asia/Seoul')).toEqual({ title: '보강 신청', detail: '원래 수업 : 날짜 미기록', status: null });
     expect(historyLines({ ...e, kind: 'makeup_confirmed' }, 'Asia/Seoul')).toEqual({ title: '보강 확정', detail: '원래 수업 : 11/10(화)', status: '수업 일정에 반영 완료' });
   });
   it('labels compensation and tutor cancellations without exposing internal status names', () => {
@@ -57,5 +57,21 @@ describe('student processing history', () => {
     expect(isWaitingForTutor(req, [req, wait, { ...event('k', '2026-11-12T01:00:00Z', 'makeup_confirmed'), request_id: 'q1' }])).toBe(false);
     expect(isWaitingForTutor(req, [req, { ...event('o', '2026-11-12T01:00:00Z', 'makeup_confirmed'), request_id: 'other' }])).toBe(true);
     expect(historyLines({ ...req, lesson_at: '2026-11-09T01:00:00Z' }, 'Asia/Seoul', true)).toEqual({ title: '보강 신청', detail: '원래 수업 : 11/9(월)', status: '강사 확인 중' });
+  });
+  it('shows requested slots on tap, marks only the confirmed one, and keeps cancel rows static', () => {
+    const slot = (at: string) => ({ at, answer: null });
+    const req = { ...event('r', '2026-11-08T06:08:00Z', 'makeup_requested'), request_id: 'q', slots: [slot('2026-11-14T11:00:00+00:00'), slot('2026-11-15T12:00:00+00:00')] };
+    const conf = { ...event('k', '2026-11-08T11:58:00Z', 'makeup_confirmed'), request_id: 'q', booked_at: '2026-11-15T12:00:00+00:00' };
+    const all = [conf, req];
+    expect(historySlots(req, all).requested.map((x) => x.ok)).toEqual([false, false]);
+    expect(historySlots(conf, all).requested.map((x) => x.ok)).toEqual([false, true]);
+    expect(historySlots({ ...conf, booked_at: '2026-11-20T12:00:00+00:00' }, all).confirmedExtra).toBe('2026-11-20T12:00:00+00:00');
+    const exp = { ...event('x', '2026-11-09T10:00:00Z', 'makeup_expired'), request_id: 'q' };
+    expect(historySlots(exp, [exp, req]).requested).toHaveLength(2);
+    const sug = { ...event('s', '2026-11-09T10:00:00Z', 'tutor_suggested'), request_id: 'q', slots: [slot('2026-11-16T11:00:00+00:00')] };
+    expect(historySlots(sug, [sug, req])).toEqual({ requested: [], suggested: ['2026-11-16T11:00:00+00:00'], confirmedExtra: null });
+    expect(historySlots(event('c', '2026-11-11T01:00:00Z', 'lesson_canceled'), all)).toEqual({ requested: [], suggested: [], confirmedExtra: null });
+    expect(historyLabel(event('a', '2026-11-11T01:00:00Z', 'tutor_answered')).title).toBe('강사 답변');
+    expect(historyLines(req, 'Asia/Seoul', false).status).toBeNull();
   });
 });

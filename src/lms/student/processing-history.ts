@@ -5,7 +5,7 @@ export const HISTORY_LABELS = {
   lesson_restored: ['수업 취소 되돌림', '수업 일정 복구 완료'],
   makeup_requested: ['보강 신청', '신청 접수 완료'],
   tutor_waiting: ['강사 확인 대기', '강사님께 확인 요청됨'],
-  tutor_answered: ['강사 확인', '강사님 답변 접수 완료'],
+  tutor_answered: ['강사 답변', '강사님 답변 접수 완료'],
   tutor_suggested: ['강사 제안', '새 보강 시간 제안'],
   suggestion_declined: ['다른 일정 요청', '일정 조율 요청 접수'],
   makeup_confirmed: ['보강 확정', '수업 일정에 반영 완료'],
@@ -73,13 +73,33 @@ export function historyOriginalDay(e: ProcessingEvent, timezone: string): string
   return null;
 }
 
-/** 처리 내역 세 줄 (대표 11/13): 큰 글씨 종류 / '원래 수업 : 11/9(월)'(취소는 '취소한 수업 : 11/9(월) · 수강생 취소') / '상태 : …' */
-export function historyLines(e: ProcessingEvent, timezone: string, waiting = false): { title: string; detail: string; status: string } {
+/**
+ * 처리 내역 줄 (대표 11/13 확정): 제목 / '원래 수업 : 11/9(월)'(취소는 '취소한 수업 : 11/9(월) · 수강생 취소') / '상태 : …'
+ * 보강 신청 줄은 강사 답이 없을 때만 '상태 : 강사 확인 중', 뒤 단계가 생기면 상태 줄 없이 두 줄만 (status = null)
+ */
+export function historyLines(e: ProcessingEvent, timezone: string, waiting = false): { title: string; detail: string; status: string | null } {
   const original = historyOriginalDay(e, timezone) ?? '날짜 미기록';
   const label = historyLabel(e);
   const cancel = e.kind === 'lesson_canceled';
   const reason = cancel ? cancelSubject(e) : null;
   const status = e.kind === 'makeup_confirmed' && e.booked_at ? `${historyDay(e.booked_at, timezone)} ${label.title}`
-    : waiting ? '강사 확인 중' : label.result;
+    : e.kind === 'makeup_requested' ? (waiting ? '강사 확인 중' : null) : label.result;
   return { title: label.title, detail: `${cancel ? '취소한 수업' : '원래 수업'} : ${original}${reason ? ` · ${reason}` : ''}`, status };
+}
+
+/**
+ * 줄을 눌렀을 때 보여 줄 시간: 신청한 보강 시간(확정된 시간에만 ok) · 강사가 제안한 시간.
+ * 신청한 시간은 같은 신청의 '보강 신청' 기록에서 가져온다. 시간이 없으면 눌리지 않는 줄.
+ */
+export type HistorySlots = { requested: { at: string; ok: boolean }[]; suggested: string[]; confirmedExtra: string | null };
+export function historySlots(e: ProcessingEvent, all: ProcessingEvent[]): HistorySlots {
+  const none: HistorySlots = { requested: [], suggested: [], confirmedExtra: null };
+  if (!e.request_id) return none;
+  if (e.kind === 'tutor_suggested') return { ...none, suggested: e.slots.map((x) => x.at) };
+  const req = all.find((x) => x.request_id === e.request_id && x.kind === 'makeup_requested');
+  const base = (e.kind === 'makeup_requested' || e.kind === 'tutor_answered') && e.slots.length ? e.slots : req?.slots ?? [];
+  const booked = e.kind === 'makeup_confirmed' && e.booked_at ? Date.parse(e.booked_at) : null;
+  const requested = base.map((x) => ({ at: x.at, ok: booked !== null && Date.parse(x.at) === booked }));
+  const matched = requested.some((x) => x.ok);
+  return { requested, suggested: [], confirmedExtra: booked !== null && !matched && e.booked_at ? e.booked_at : null };
 }
