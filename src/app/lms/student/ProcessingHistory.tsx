@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { historyLines, historySlots, historyTime, isWaitingForTutor, type ProcessingEvent } from '@/lms/student/processing-history';
+import { historyLines, historySlots, historyTime, requestStatus, visibleEvents, type ProcessingEvent } from '@/lms/student/processing-history';
 
 export default function ProcessingHistory({ events, error, timezone }: {
   events: ProcessingEvent[]; error?: boolean; timezone: string;
@@ -10,10 +10,11 @@ export default function ProcessingHistory({ events, error, timezone }: {
   const [limit, setLimit] = useState(30);
   const [oldestFirst, setOldestFirst] = useState(false);
   if (error) return <p role="alert" className="rounded-[16px] border border-[#e6e3ef] bg-white p-5 text-[14px] text-[#b3261e]">처리 내역을 불러오지 못했어요. 새로고침해 주세요.</p>;
-  if (!events.length) return <p className="rounded-[16px] border border-[#e6e3ef] bg-white p-5 text-center text-[14px] text-[#6b6880]">아직 처리 내역이 없어요.</p>;
+  const rows = visibleEvents(events);
+  if (!rows.length) return <p className="rounded-[16px] border border-[#e6e3ef] bg-white p-5 text-center text-[14px] text-[#6b6880]">아직 처리 내역이 없어요.</p>;
   const when = (at: string) => historyTime(at, timezone);
   // 같은 시각 기록은 순서를 뒤집어 '신청 → 확인 대기 → 확정' 순으로 (오래된 순)
-  const ordered = oldestFirst ? [...events].reverse() : events;
+  const ordered = oldestFirst ? [...rows].reverse() : rows;
   const shown = oldestFirst ? ordered : ordered.slice(0, limit);
   const sortBtn = (asc: boolean, text: string) => (
     <button type="button" aria-pressed={oldestFirst === asc} onClick={() => setOldestFirst(asc)}
@@ -24,7 +25,7 @@ export default function ProcessingHistory({ events, error, timezone }: {
     <div className="flex justify-end gap-1.5 pb-2">{sortBtn(false, '최신순')}{sortBtn(true, '오래된순')}</div>
     <section aria-label="처리 기록" className="overflow-hidden rounded-[16px] border border-[#e6e3ef] bg-white">
       {shown.map((e) => {
-        const lines = historyLines(e, timezone, isWaitingForTutor(e, events));
+        const lines = historyLines(e, timezone, requestStatus(e, events));
         const sl = historySlots(e, events);
         const head = (
           <>
@@ -68,7 +69,7 @@ export default function ProcessingHistory({ events, error, timezone }: {
           </details>
         );
       })}
-      {!oldestFirst && events.length > limit && <button type="button" onClick={() => setLimit((n) => n + 30)} className="min-h-[48px] w-full text-[14px] font-semibold text-[#5b3df0]">더 보기</button>}
+      {!oldestFirst && rows.length > limit && <button type="button" onClick={() => setLimit((n) => n + 30)} className="min-h-[48px] w-full text-[14px] font-semibold text-[#5b3df0]">더 보기</button>}
     </section>
     </>
   );
