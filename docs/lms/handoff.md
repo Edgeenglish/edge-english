@@ -2,7 +2,15 @@
 
 # 다음 세션 시작 메모
 
-## 🧪 11/13 강사 휴무 신청 (H26(137)) — **시험 DB 적용·실제 화면 QA 통과, 운영 반영 대표 승인 대기** (브랜치 claude/pensive-goodall-m2ndw0, 시안 https://claude.ai/artifact/VijcTWhC9DY52i9FqjHT3A)
+## ✅ 11/13 강사 휴무 신청 (H26(137)) — **운영 반영 완료** (lms-prod 6c052b9, 운영 DB 백업 snapshots 50)
+- 운영 반영(대표 11/13 승인): 운영 DB(mfamixejxydodclhglbc) 백업 **snapshots id 50**(표 61 전체 + 바뀌는 함수 admin_leave_create·lms_leave_candidates 원래 정의 `_functions_before` + 새 객체 목록) → migration 20261113150000(커넥터 이름 lms_tutor_time_off_requests) → 표 62, 휴무 2·휴무 줄 18·수업 183·보강 신청 16·수강등록 15·기간 연장 4 그대로, 신청 0건(운영에서 시험 신청 안 만듦). 적용 전 운영 admin_leave_create·lms_leave_candidates 본문 = 저장소 0200·0100 판과 같음(주석만 다름)
+- 코드: origin/lms-prod(69db1c0)에서 브랜치 → a0b7848·56d7651 의 이 기능 파일만 적용(다른 세션 미반영 작업 안 섞음, live.ts 의 재등록 메일 '보냄' 코드는 운영판 그대로) → tsc 0 · vitest 458 · test:db 전부 통과 → lms-prod 6c052b9. main 은 손대지 않음(지각 알림 배포 때부터 main 0932ca9 그대로)
+- 운영 화면 확인(읽기만, PC·휴대폰): 운영자 대시보드 칸 '강사 휴무 신청 0'·불러오기 오류 없음 · 강사 화면 운영자 보기 Home 'Time off' 란 · 가능 시간·일정 페이지 한 줄 · 휴무 화면 기존 휴무(Olivia) 목록 정상 · 가로 넘침 없음
+- **되돌리기**: 코드 = lms-prod 를 69db1c0 로 되돌려 push. DB = `drop function tutor_time_off_preview, tutor_time_off_list, tutor_time_off_request, tutor_time_off_withdraw, admin_time_off_requests, admin_time_off_reject, admin_leave_create(uuid,date,date,text,boolean,uuid), lms_time_off_min_days, lms_time_off_notice_days` 후 snapshots 50 `_functions_before` 의 admin_leave_create(5인자)·lms_leave_candidates 정의를 그대로 실행 → lms_leave_candidates_at·표 tutor_time_off_requests 삭제(신청 0건일 때만). 데이터 변경 없는 migration 이라 데이터 복구는 필요 없음
+- 미검증: 실제 강사 휴대폰 기기 · 운영에서 실제 신청 흐름(시험 신청을 만들지 않기로 함 — 첫 실제 신청 때 대시보드 확인)
+- 정책 원본: 문서 끝 'H26(137) 보충' 줄에 운영 반영·1~2일 기준(POL-TU-05) 그대로임을 적음
+
+### (이전 기록) 시험 DB 적용·실제 화면 QA (브랜치 claude/pensive-goodall-m2ndw0, 시안 https://claude.ai/artifact/VijcTWhC9DY52i9FqjHT3A)
 - 대표 확정 11/13 ('권장한걸로 다' + 질문 창): 계획된 휴무 14일 전(늦으면 빨간 경고, 신청은 받음) · 급한 일 기한 없음(요청 시 증빙) · **Home 신청은 3일 이상만**(1~2일은 Calendar Cancel class — 운영진 휴무 화면도 3일 미만 안 받음) · 확인 창 본인 기록 = 올해(현지 1/1~) · 란 이름 'Time off' · 반려 사유 필수(강사에게 보임) · 승인 전 철회 · 휴무 화면 저장 = 자동 승인 · 끝난 휴무는 다음 날 Home 에서 빠짐 · 현지 날짜는 실제 시각(현지 첫날 0:00~마지막 날 24:00)으로 휴무를 잡음. **정책 원본 H26 기록 못 함(Google Docs 커넥터 연결 실패) → 다음에 H26 에 위 내용 적기**
 - migration **20261113150000_lms_tutor_time_off_requests**: 표 `tutor_time_off_requests`(RLS, 직접 읽기 없음) · `tutor_time_off_preview/list/request/withdraw`(운영자 보기 p_tutor) · `admin_time_off_requests/reject` · `lms_leave_candidates_at`(실제 시각) + `lms_leave_candidates` 는 이걸 부르는 판 · `admin_leave_create` 6인자판(p_request: 날짜 그대로면 신청 실제 시각, 저장하면 승인, notice_given_on 기록) + 5인자판은 감싸기. 표 61→62 (02-check)
 - 코드: `src/app/lms/tutor/TimeOff.tsx`(Home 란·신청 창·확인 창·근무시간/달력 한 줄) · `src/lms/tutor/time-off.ts` · TutorHome/Hours/Schedule/Live · 대시보드 칸 '강사 휴무 신청'(`board.ts` time_off_request, [휴무 화면 열기]=/lms/admin/leave?new=1&req=…, [반려] 사유 입력) · 휴무 화면 `?req=` 칸 채움 + 안내 띠. 옛 DB(함수 없음)면 Home 란·대시보드 칸이 안 보임 → migration 전에 배포돼도 안전
@@ -13,7 +21,6 @@
 - QA 뒤 고침: 확인 창 '올해 기록'을 '3 · …' 한 줄 → 기간마다 한 줄(현지 날짜)
 - 정책 원본: H26(137) '보충' 줄을 문서 맨 끝에 적음(11/13) — 새 번호 아님, 필요하면 H26 자리로 옮기기
 - 미검증: 실제 강사 휴대폰 기기 · 1~2일 Cancel class 화면 자체(코드 안 바꿈) · 운영 DB
-- **남은 일**: 운영 반영(대표 승인 뒤): 운영 DB 백업 → migration 20261113150000 → lms-prod 배포(먼저 `git log origin/lms-test..origin/lms-prod` 확인, lms-test 에는 다른 세션 작업도 있으니 필요하면 골라 담기)
 
 ## 🧪 11/13 수업 줄 상태·용어 통일 — 시험 사이트(lms-test) 반영·QA 통과, 운영 반영 대표 승인 대기 (H26(168) 참고) (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
 - 코드만(DB 변경 없음): `src/lms/admin/dashboard.ts` `lessonState`(예정·진행 중·기록 전은 state=scheduled 일 때만 시각으로 / 완료·취소·수강생 노쇼·강사 노쇼(done+Tutor no-show)는 시각으로 안 덮음)·`lessonNote`(취소 사유 STATUS_PLAIN · 연결된 보강 · 'Emma → James' · '시간 변경 · 8:30 → 9:30')
