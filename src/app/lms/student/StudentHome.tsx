@@ -885,7 +885,6 @@ export default function StudentHome(props: {
 
         {tab === 'requests' && (
           <TabPage title="처리 내역">
-            {openRights.length > 0 && <button type="button" onClick={() => setOverlay({ kind: 'rights' })} className="min-h-[44px] text-left text-[14px] font-semibold text-[#5b3df0]">보강권 확인 · {openRights.length}개 ›</button>}
             <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
               requestIds={s.requests.map((r) => r.id)} onRequest={(id) => setOverlay({ kind: 'request', id })} />
           </TabPage>
