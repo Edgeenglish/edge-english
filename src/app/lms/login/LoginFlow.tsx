@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { Provider } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { PRIVACY_CONSENT, TERMS } from '@/lms/auth/legal';
+import { PRIVACY_POLICY, TERMS } from '@/lms/auth/legal';
 import { LegalSections } from '@/components/legal/LegalDoc';
 import {
   afterEmailCode,
@@ -78,8 +78,7 @@ export default function LoginFlow() {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [terms, setTerms] = useState(false);
-  const [privacy, setPrivacy] = useState(false);
-  const [legalOpen, setLegalOpen] = useState<'agree-terms' | 'agree-privacy' | null>(null);
+  const [legalOpen, setLegalOpen] = useState<'terms' | 'privacy' | null>(null);
   const [problems, setProblems] = useState<SignupProblem[]>([]);
   const [emailTaken, setEmailTaken] = useState(false);
   const [badLogin, setBadLogin] = useState(false);
@@ -299,7 +298,7 @@ export default function LoginFlow() {
     if (!sb) return setError(t.network);
     setError(null);
     setEmailTaken(false);
-    const p = signupProblems({ name, email, password, terms, privacy });
+    const p = signupProblems({ name, email, password, terms });
     setProblems(p);
     if (p.length) return;
     setBusy(true);
@@ -307,7 +306,7 @@ export default function LoginFlow() {
     const { data, error: e } = await sb.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { name: name.trim(), terms_agreed_at: agreedAt, privacy_agreed_at: agreedAt } },
+      options: { data: { name: name.trim(), terms_agreed_at: agreedAt } },
     });
     setBusy(false);
     if (e) {
@@ -413,11 +412,48 @@ export default function LoginFlow() {
     return false;
   }
 
+  // 이용약관 동의(필수) + 개인정보 처리방침 보기 — 이메일 가입·카카오·네이버 '처음이에요' 같은 줄 (대표 11/14)
+  function legalRows() {
+    const view = (key: 'terms' | 'privacy') => (
+      <button
+        type="button"
+        aria-expanded={legalOpen === key}
+        className="min-h-[40px] shrink-0 px-1 text-[13px] text-[#55526a] underline"
+        onClick={() => setLegalOpen(legalOpen === key ? null : key)}
+      >
+        {t.viewLegal}
+      </button>
+    );
+    const box = (key: 'terms' | 'privacy') =>
+      legalOpen === key && (
+        <div className="max-h-[240px] overflow-y-auto rounded-[10px] border border-[#e4e1ee] bg-[#faf9fd] p-3">
+          <LegalSections sections={key === 'terms' ? TERMS : PRIVACY_POLICY} compact />
+        </div>
+      );
+    return (
+      <>
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="agree-terms" className="flex min-h-[40px] items-center gap-2.5 text-[14px] text-[#1d1b2b]">
+            <input id="agree-terms" type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} className="h-[20px] w-[20px] accent-[#5b3df0]" />
+            {t.agreeTerms}
+          </label>
+          {view('terms')}
+        </div>
+        {box('terms')}
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-h-[40px] pl-[30px] text-[14px] leading-[40px] text-[#1d1b2b]">{t.privacyPolicy}</span>
+          {view('privacy')}
+        </div>
+        {box('privacy')}
+      </>
+    );
+  }
+
   // ── 카카오·네이버 첫 로그인
   async function chooseNew() {
     if (!sb) return;
     setBusy(true);
-    await sb.auth.updateUser({ data: { edge_new_member: true } });
+    await sb.auth.updateUser({ data: { edge_new_member: true, terms_agreed_at: new Date().toISOString() } });
     setBusy(false);
     await routeAfterLogin();
   }
@@ -654,44 +690,7 @@ export default function LoginFlow() {
               {has('password') && <span className={errText}>{t.pwTooShort(PASSWORD_MIN)}</span>}
             </div>
             <div className="grid gap-1">
-              {(
-                [
-                  [terms, setTerms, t.agreeTerms, 'agree-terms'],
-                  [privacy, setPrivacy, t.agreePrivacy, 'agree-privacy'],
-                ] as const
-              ).map(([v, set, label, id]) => (
-                <div key={id}>
-                  <div className="flex items-center justify-between gap-2">
-                    <label htmlFor={id} className="flex min-h-[40px] items-center gap-2.5 text-[14px] text-[#1d1b2b]">
-                      <input id={id} type="checkbox" checked={v} onChange={(e) => set(e.target.checked)} className="h-[20px] w-[20px] accent-[#5b3df0]" />
-                      {label}
-                    </label>
-                    <button
-                      type="button"
-                      aria-expanded={legalOpen === id}
-                      className="min-h-[40px] shrink-0 px-1 text-[13px] text-[#55526a] underline"
-                      onClick={() => setLegalOpen(legalOpen === id ? null : id)}
-                    >
-                      {t.viewLegal}
-                    </button>
-                  </div>
-                  {legalOpen === id && (
-                    <div className="max-h-[240px] overflow-y-auto rounded-[10px] border border-[#e4e1ee] bg-[#faf9fd] p-3">
-                      {id === 'agree-terms' ? (
-                        <LegalSections sections={TERMS} compact />
-                      ) : (
-                        <ul className="grid gap-1.5">
-                          {PRIVACY_CONSENT.map((line) => (
-                            <li key={line} className="text-[13px] leading-relaxed text-[#55526a]">
-                              {line}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+              {legalRows()}
               {has('agree') && <span className={errText}>{t.agreeRequired}</span>}
             </div>
             <button type="submit" disabled={busy} className={`${primary} bg-[#5b3df0]`}>
@@ -836,7 +835,8 @@ export default function LoginFlow() {
         {step === 'social_choice' && (
           <div className="grid gap-3">
             <h1 className={h1}>{t.socialTitle}</h1>
-            <button type="button" disabled={busy} onClick={chooseNew} className={`${primary} bg-[#5b3df0]`}>
+            <div className="grid gap-1">{legalRows()}</div>
+            <button type="button" disabled={busy || !terms} onClick={chooseNew} className={`${primary} bg-[#5b3df0]`}>
               {t.socialNew}
             </button>
             <button type="button" disabled={busy} onClick={chooseExisting} className="flex min-h-[52px] w-full items-center justify-center rounded-[14px] border-[1.5px] border-[#5b3df0] text-[16px] font-bold text-[#5b3df0] disabled:opacity-40">

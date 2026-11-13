@@ -19,6 +19,10 @@ export default function Footer() {
             문의 이메일 :{' '}
             <span className="font-montserrat text-edge-gray">support@edgeenglish.kr</span>
           </p>
+          <TextDivider />
+          <p className="text-edge-gray">
+            전화 : <span className="font-montserrat text-edge-gray">010-5012-1553</span>
+          </p>
         </div>
 
         <div className="mt-2 flex items-center text-sm text-edge-gray max-md:mt-1 max-md:hidden">
@@ -49,6 +53,9 @@ export default function Footer() {
           <p className="mt-1 text-edge-gray">
             문의 이메일 :{' '}
             <span className="font-montserrat text-edge-gray">support@edgeenglish.kr</span>
+          </p>
+          <p className="mt-1 text-edge-gray">
+            전화 : <span className="font-montserrat text-edge-gray">010-5012-1553</span>
           </p>
           <p className="mt-1 text-edge-gray">
             주소 : [21345] 인천광역시 부평구 길주남로 143, 103동{' '}

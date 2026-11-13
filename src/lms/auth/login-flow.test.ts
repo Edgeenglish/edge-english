@@ -52,11 +52,11 @@ describe('로그인 뒤 바로가기 링크로 돌아가기 (11/8 보강 바로�
 });
 
 describe('회원가입·간편 로그인 (H26(146)(150))', () => {
-  it('가입 칸 검사: 이름·이메일·비밀번호 8자·필수 동의 2개', () => {
-    const ok = { name: '김하준', email: 'a@b.co', password: '12345678', terms: true, privacy: true };
+  it('가입 칸 검사: 이름·이메일·비밀번호 8자·이용약관 동의', () => {
+    const ok = { name: '김하준', email: 'a@b.co', password: '12345678', terms: true };
     expect(signupProblems(ok)).toEqual([]);
     expect(signupProblems({ ...ok, password: '1234567' })).toEqual(['password']);
-    expect(signupProblems({ ...ok, name: ' ', email: 'x', privacy: false })).toEqual(['name', 'email', 'agree']);
+    expect(signupProblems({ ...ok, name: ' ', email: 'x', terms: false })).toEqual(['name', 'email', 'agree']);
     expect(PASSWORD_MIN).toBe(8);
   });
   it('켜진 간편 로그인만 버튼', () => {

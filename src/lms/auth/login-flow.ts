@@ -55,7 +55,7 @@ export const isMakeupLink = (next: string | null | undefined) => !!next && next.
 /** 비밀번호 최소 글자 수 (대표 결정 H26(150) ③) */
 export const PASSWORD_MIN = 8;
 
-export type SignupInput = { name: string; email: string; password: string; terms: boolean; privacy: boolean };
+export type SignupInput = { name: string; email: string; password: string; terms: boolean };
 export type SignupProblem = 'name' | 'email' | 'password' | 'agree';
 /** 회원가입 입력 검사 — 칸마다 첫 문제 하나 (입력칸 바로 아래에 보여 줌) */
 export function signupProblems(v: SignupInput): SignupProblem[] {
@@ -63,7 +63,7 @@ export function signupProblems(v: SignupInput): SignupProblem[] {
   if (!v.name.trim()) out.push('name');
   if (!looksLikeEmail(v.email)) out.push('email');
   if (v.password.length < PASSWORD_MIN) out.push('password');
-  if (!v.terms || !v.privacy) out.push('agree');
+  if (!v.terms) out.push('agree');
   return out;
 }
 
@@ -115,7 +115,7 @@ export const STRINGS = {
     emailIdLabel: '이메일 (아이디)',
     pwHint: (n: number) => `${n}자 이상`,
     agreeTerms: '이용약관 동의 (필수)',
-    agreePrivacy: '개인정보 수집·이용 동의 (필수)',
+    privacyPolicy: '개인정보 처리방침',
     viewLegal: '보기',
     next: '다음',
     haveAccount: '이미 회원이에요',
@@ -124,7 +124,7 @@ export const STRINGS = {
     nameRequired: '이름을 넣어 주세요',
     badEmail: '이메일 주소를 다시 확인해 주세요',
     pwTooShort: (n: number) => `비밀번호는 ${n}자 이상이에요`,
-    agreeRequired: '필수 동의를 체크해 주세요',
+    agreeRequired: '이용약관 동의를 체크해 주세요',
     emailTaken: '이미 가입된 이메일이에요',
     makePwWithThis: '이 이메일로 비밀번호 만들기 ›',
     signupCodeTitle: '메일로 받은 코드',
@@ -193,7 +193,7 @@ export const STRINGS = {
     emailIdLabel: 'Email (your ID)',
     pwHint: (n: number) => `At least ${n} characters`,
     agreeTerms: 'I agree to the Terms of Use (required)',
-    agreePrivacy: 'I agree to the collection and use of personal data (required)',
+    privacyPolicy: 'Privacy Policy',
     viewLegal: 'View',
     next: 'Next',
     haveAccount: 'Already a member?',
@@ -202,7 +202,7 @@ export const STRINGS = {
     nameRequired: 'Please enter your name',
     badEmail: 'Please check the email address',
     pwTooShort: (n: number) => `Use at least ${n} characters`,
-    agreeRequired: 'Please tick the required boxes',
+    agreeRequired: 'Please agree to the Terms of Use',
     emailTaken: 'This email is already registered',
     makePwWithThis: 'Set a password for this email ›',
     signupCodeTitle: 'Code from your email',
