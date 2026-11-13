@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { historyLabel, historyOriginalDay, historySummary, historyTime, processingEvents, type ProcessingEvent } from './processing-history';
+import { historyLabel, historyOriginalDay, historySummary, historyTime, isWaitingForTutor, processingEvents, type ProcessingEvent } from './processing-history';
 
 const event = (id: string, at: string, kind: ProcessingEvent['kind']): ProcessingEvent => ({
   id, at, kind, request_id: 'same-request', lesson_at: '2027-01-01T12:00:00Z',
@@ -41,5 +41,21 @@ describe('student processing history', () => {
   it('labels compensation and tutor cancellations without exposing internal status names', () => {
     expect(historyLabel({ ...event('comp', '2026-11-11T01:00:00Z', 'makeup_confirmed'), compensation: true }).title).toBe('보상수업 확정');
     expect(historyLabel({ ...event('cancel', '2026-11-11T01:00:00Z', 'lesson_canceled'), tutor_fault: true }).result).toBe('강사 사정으로 취소 처리 완료');
+  });
+  it('uses the same cancel reasons as the make-up right cards', () => {
+    const c = (reason: ProcessingEvent['cancel_reason']) => historyLabel({ ...event('c', '2026-11-11T01:00:00Z', 'lesson_canceled'), cancel_reason: reason }).result;
+    expect(c('student')).toBe('내가 취소 처리 완료');
+    expect(c('tutor_canceled')).toBe('강사가 취소 처리 완료');
+    expect(c('tutor_leave')).toBe('강사 휴무로 취소 처리 완료');
+    expect(c('tutor_fault')).toBe('강사 사정으로 취소 처리 완료');
+    expect(historyLabel(event('c', '2026-11-11T01:00:00Z', 'lesson_canceled')).result).toBe('취소 처리 완료'); // 옛 응답
+  });
+  it('shows waiting for tutor only while the same request has no later step', () => {
+    const req = { ...event('r', '2026-11-11T01:00:00Z', 'makeup_requested'), request_id: 'q1' };
+    const wait = { ...event('w', '2026-11-11T01:00:00Z', 'tutor_waiting'), request_id: 'q1' };
+    expect(isWaitingForTutor(req, [req, wait])).toBe(true);
+    expect(isWaitingForTutor(req, [req, wait, { ...event('k', '2026-11-12T01:00:00Z', 'makeup_confirmed'), request_id: 'q1' }])).toBe(false);
+    expect(isWaitingForTutor(req, [req, { ...event('o', '2026-11-12T01:00:00Z', 'makeup_confirmed'), request_id: 'other' }])).toBe(true);
+    expect(historySummary({ ...req, lesson_at: '2026-11-10T01:00:00Z' }, 'Asia/Seoul', true)).toContain('신청 접수 완료 (강사 확인 대기 중)');
   });
 });

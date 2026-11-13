@@ -19,6 +19,8 @@ export type ProcessingEvent = {
   id: string; at: string; kind: HistoryKind; request_id: string | null;
   lesson_at: string | null; original_date: string | null; tutor: string | null;
   compensation: boolean; tutor_fault: boolean | null; booked_at: string | null;
+  /** 취소 사유 (옛 응답에는 없음): 학생 취소 · 강사 취소 · 강사 휴무 · 강사 사정(노쇼) */
+  cancel_reason?: 'student' | 'tutor_canceled' | 'tutor_leave' | 'tutor_fault' | null;
   slots: { at: string; answer: string | null }[];
 };
 
@@ -32,8 +34,21 @@ export function historyLabel(e: ProcessingEvent) {
   const [title, result] = HISTORY_LABELS[e.kind];
   return {
     title: e.compensation ? title.replace('보강', '보상수업') : title,
-    result: e.kind === 'lesson_canceled' && e.tutor_fault ? '강사 사정으로 취소 처리 완료' : result,
+    result: e.kind === 'lesson_canceled' ? cancelResult(e, result) : result,
   };
+}
+
+/** 학생 '지난 보강권' 줄과 같은 사유 말: 내가 취소 · 강사가 취소 · 강사 휴무로 취소 · 강사 사정으로 취소 */
+const CANCEL_REASON_KO = { student: '내가 취소', tutor_canceled: '강사가 취소', tutor_leave: '강사 휴무로 취소', tutor_fault: '강사 사정으로 취소' } as const;
+function cancelResult(e: ProcessingEvent, fallback: string): string {
+  if (e.cancel_reason && e.cancel_reason in CANCEL_REASON_KO) return `${CANCEL_REASON_KO[e.cancel_reason]} 처리 완료`;
+  return e.tutor_fault ? '강사 사정으로 취소 처리 완료' : fallback;
+}
+
+/** 보강 신청이 아직 강사 답·확정·취소 없이 대기 중인지 (같은 신청의 뒤 단계 기록이 없으면 대기) */
+const AFTER_REQUEST: HistoryKind[] = ['tutor_answered', 'tutor_suggested', 'suggestion_declined', 'makeup_confirmed', 'makeup_withdrawn', 'makeup_expired', 'makeup_voided'];
+export function isWaitingForTutor(e: ProcessingEvent, all: ProcessingEvent[]): boolean {
+  return e.kind === 'makeup_requested' && !!e.request_id && !all.some((x) => x.request_id === e.request_id && AFTER_REQUEST.includes(x.kind));
 }
 
 export function historyTime(at: string, timezone: string): string {
@@ -55,10 +70,10 @@ export function historyOriginalDay(e: ProcessingEvent, timezone: string): string
   return null;
 }
 
-export function historySummary(e: ProcessingEvent, timezone: string): string {
+export function historySummary(e: ProcessingEvent, timezone: string, waiting = false): string {
   const original = historyOriginalDay(e, timezone);
   const label = historyLabel(e);
   const result = e.kind === 'makeup_confirmed' && e.booked_at
-    ? `${historyDay(e.booked_at, timezone)} ${label.title}` : label.result;
+    ? `${historyDay(e.booked_at, timezone)} ${label.title}` : waiting ? `${label.result} (강사 확인 대기 중)` : label.result;
   return `${original ? `${original} 수업분` : '원래 수업 날짜 미기록'} → ${result}`;
 }

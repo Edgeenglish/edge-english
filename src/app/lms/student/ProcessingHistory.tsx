@@ -1,19 +1,29 @@
 'use client';
 
 import { useState } from 'react';
-import { historyLabel, historySummary, historyTime, type ProcessingEvent } from '@/lms/student/processing-history';
+import { historyLabel, historySummary, historyTime, isWaitingForTutor, type ProcessingEvent } from '@/lms/student/processing-history';
 
 export default function ProcessingHistory({ events, error, timezone, requestIds, onRequest }: {
   events: ProcessingEvent[]; error?: boolean; timezone: string;
   requestIds: string[]; onRequest: (id: string) => void;
 }) {
   const [limit, setLimit] = useState(30);
+  const [oldestFirst, setOldestFirst] = useState(false);
   if (error) return <p role="alert" className="rounded-[16px] border border-[#e6e3ef] bg-white p-5 text-[14px] text-[#b3261e]">처리 내역을 불러오지 못했어요. 새로고침해 주세요.</p>;
   if (!events.length) return <p className="rounded-[16px] border border-[#e6e3ef] bg-white p-5 text-center text-[14px] text-[#6b6880]">아직 처리 내역이 없어요.</p>;
   const when = (at: string) => historyTime(at, timezone);
+  // 같은 시각 기록은 순서를 뒤집어 '신청 → 확인 대기 → 확정' 순으로 (오래된 순)
+  const ordered = oldestFirst ? [...events].reverse() : events;
+  const shown = oldestFirst ? ordered : ordered.slice(0, limit);
+  const sortBtn = (asc: boolean, text: string) => (
+    <button type="button" aria-pressed={oldestFirst === asc} onClick={() => setOldestFirst(asc)}
+      className={`min-h-[32px] rounded-full px-3 text-[12px] font-semibold ${oldestFirst === asc ? 'bg-[#5b3df0] text-white' : 'border border-[#d9d5e8] text-[#55526a]'}`}>{text}</button>
+  );
   return (
+    <>
+    <div className="flex justify-end gap-1.5 pb-2">{sortBtn(false, '최신순')}{sortBtn(true, '오래된순')}</div>
     <section aria-label="처리 기록" className="overflow-hidden rounded-[16px] border border-[#e6e3ef] bg-white">
-      {events.slice(0, limit).map((e) => {
+      {shown.map((e) => {
         const label = historyLabel(e);
         return (
           <details key={e.id} className="group border-b border-[#eeecf4] last:border-0">
@@ -21,7 +31,7 @@ export default function ProcessingHistory({ events, error, timezone, requestIds,
               <span className="text-[14px] font-bold leading-5 text-[#1d1b2b]">{label.title}</span>
               <time dateTime={e.at} className="whitespace-nowrap text-right text-[11px] leading-5 text-[#6b6880]">{when(e.at)}</time>
               <span className="col-span-2 flex items-start justify-between gap-2 text-[12px] leading-[18px] text-[#55526a]">
-                <span>{historySummary(e, timezone)}</span>
+                <span>{historySummary(e, timezone, isWaitingForTutor(e, events))}</span>
                 <span aria-hidden="true" className="shrink-0 text-[#8b88a0] group-open:rotate-90">›</span>
               </span>
             </summary>
@@ -39,7 +49,8 @@ export default function ProcessingHistory({ events, error, timezone, requestIds,
           </details>
         );
       })}
-      {events.length > limit && <button type="button" onClick={() => setLimit((n) => n + 30)} className="min-h-[48px] w-full text-[14px] font-semibold text-[#5b3df0]">더 보기</button>}
+      {!oldestFirst && events.length > limit && <button type="button" onClick={() => setLimit((n) => n + 30)} className="min-h-[48px] w-full text-[14px] font-semibold text-[#5b3df0]">더 보기</button>}
     </section>
+    </>
   );
 }
