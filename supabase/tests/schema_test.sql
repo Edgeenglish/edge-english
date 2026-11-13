@@ -254,8 +254,27 @@ select pg_temp.ok((select count(*) from lessons) = 0, '다른 강사(B)는 강�
 select pg_temp.ok((select count(*) from tutor_my_students()) = 0, '강사 B에게는 담당 아닌 학생 정보가 안 보임');
 select pg_temp.ok((select count(*) from students) = 0, '강사는 학생 원본 표(휴대폰·실명)를 직접 못 봄');
 
+-- 강사 접근은 '지금 담당'(끝나지 않은 정규 일정·앞으로 수업·끝난 지 24시간 안) 기준 (20261114100000). 위 가짜 수업 날짜는 고정이라 정규 일정으로 담당을 만든 뒤 확인하고 지움
+reset role;
+insert into regular_schedules (id, student_id, tutor_id, weekday, start_time_kst, duration_min, effective_from) values
+  ('a2400000-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 0, '03:00', 50, '2026-11-01'),
+  ('a2400000-0000-0000-0000-000000000002', '44444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 0, '04:00', 50, '2026-11-01');
+set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000004';
 select pg_temp.ok((select count(*) from tutor_my_students()) = 2, '강사 A는 담당 학생 2명의 필요한 정보만 봄');
+reset role;
+update regular_schedules set effective_to = current_date - 2 where id in ('a2400000-0000-0000-0000-000000000001', 'a2400000-0000-0000-0000-000000000002');
+set role authenticated;
+select pg_temp.ok((select count(*) from tutor_my_students()) = 0, '배정이 끝나고 24시간 지난 학생은 강사에게 안 보임 (11/14)');
+reset role;
+update regular_schedules set effective_to = null where id in ('a2400000-0000-0000-0000-000000000001', 'a2400000-0000-0000-0000-000000000002');
+update tutors set active = false where id = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select pg_temp.ok((select count(*) from tutor_my_students()) = 0 and my_tutor_id() is null, '비활성 강사는 학생 정보를 하나도 못 봄 (11/14)');
+reset role;
+update tutors set active = true where id = '11111111-1111-1111-1111-111111111111';
+delete from regular_schedules where id in ('a2400000-0000-0000-0000-000000000001', 'a2400000-0000-0000-0000-000000000002');
+set role authenticated;
 
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000009';
 select pg_temp.ok((select count(*) from students) = 3 and (select count(*) from audit_log) > 0, '운영자는 전체를 봄');
