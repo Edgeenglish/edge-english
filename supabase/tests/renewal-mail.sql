@@ -35,21 +35,25 @@ select pg_temp.ok(lms_renewal_remaining('cccccccc-0000-4000-8000-000000000001', 
 
 -- 11/18 0시: 3회 남음 → 대상 없음
 select pg_temp.ok(not exists (select 1 from lms_renewal_mail_due('2026-11-18 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001'), '3회 남음: 안 보냄');
--- 11/19: 2회 → ① (서연은 11/16 수업 뒤 1회 남음 → ②)
-select pg_temp.ok((select stage from lms_renewal_mail_due('2026-11-19 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001') = 'two', '2회 남음: ① two');
-select pg_temp.ok((select stage from lms_renewal_mail_due('2026-11-19 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000002') = 'one', '1회 남음: ② one');
+-- 11/19: 하준 2회 → two (종료 11/29 의 7일 전은 11/22 → week 아직), 서연은 11/16 수업 뒤 1회 남음 → two (1~2회 한 번)
+select pg_temp.ok((select stage from lms_renewal_mail_due('2026-11-19 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001') = 'two', '2회 남음: two');
+select pg_temp.ok((select stage from lms_renewal_mail_due('2026-11-19 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000002') = 'two', '1회 남음: two (1~2회 한 번만)');
+select pg_temp.ok((select count(*) from lms_renewal_mail_due('2026-11-19 00:00+00') where stage = 'week') = 0, '종료일 7일 전 전: week 안 보냄');
 select lms_renewal_mail_run('2026-11-19 00:00+00');
 select pg_temp.ok((select count(*) from notifications where dedupe_key like 'renewal_mail:cccccccc-%') = 2, '메일 2통 만들어짐');
 select lms_renewal_mail_run('2026-11-19 00:10+00');
 select pg_temp.ok((select count(*) from notifications where dedupe_key like 'renewal_mail:cccccccc-%') = 2, '10분 뒤 다시 돌려도 중복 없음');
 
 -- 문구
-select pg_temp.ok((select payload ->> 'subject' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') = '[시험 · ' || (select code from students where id = 'bbbbbbbb-0000-4000-8000-000000000001') || '] [엣지영어] 수업이 2회 남았어요', '① 제목 (스위치 꺼짐 = 시험 발송)');
+select pg_temp.ok((select payload ->> 'subject' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') = '[시험 · ' || (select code from students where id = 'bbbbbbbb-0000-4000-8000-000000000001') || '] [엣지영어] 수업이 2회 남았어요', 'two 제목 (스위치 꺼짐 = 시험 발송)');
 select pg_temp.ok((select email from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') = 'support@edgeenglish.kr', '스위치 꺼짐: support@ 로만');
-select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') like '안녕하세요 김하준님☺️' || E'\n' || '엣지영어 수업이 2회 남았어요! (종료일: 11월 29일(일))%', '① 첫 줄·종료일(한국)');
-select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') like '%현재 수강 코스: 40분 주 3회 (월 12회)%1,197,000원 (월 399,000원)%63,000원 절약!%2,344,000원 (월 약 390,667원)%176,000원 절약 + Ebook 패키지 무료!%카카오뱅크 3333-27-7626253%', '① 가격표 자동 입력');
-select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000002:one') like '%수업이 1회 남았어요! (종료일: 11월 30일(월) 오전 1:59까지)%' and (select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000002:one') like '%모든 시간은 시드니 시간대 기준이에요.%', '② 첫 줄·해외 학생은 거주지 시간');
-select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000002:one') not like '%현재 수강 코스%', '가격표에 없는 코스는 코스·가격 줄 없음');
+select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') like '안녕하세요 김하준님☺️' || E'\n' || '엣지영어 수업이 2회 남았어요! (종료일: 11월 29일(일))%', 'two 첫 줄·종료일(한국)');
+select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') like '%현재 수강 코스: 40분 주 3회 (월 12회)%💜 1개월 (4주)' || E'\n' || '420,000원%💜 3개월 (12주) | 5% 할인' || E'\n' || '1,197,000원 (월 399,000원)%63,000원 절약!%💜 6개월 (24주) | 최대 혜택' || E'\n' || '2,344,000원 (월 약 390,667원)%176,000원 절약 + Ebook 패키지 무료!%카카오뱅크 3333-27-7626253%', 'two 가격표 자동 입력 · 세 코스 모두 💜');
+select pg_temp.ok((select payload ->> 'html' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') like '%<b>💜 **%' is false and (select payload ->> 'html' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') like '%💜 <b>1개월 (4주)</b>%💜 <b>3개월 (12주) | 5% 할인</b>%💜 <b>6개월 (24주) | 최대 혜택</b>%', '1·3·6개월 모두 굵게');
+select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') not like '%📍%' and (select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') not like '%🔥%', '📍·🔥 없음');
+select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two') like '%문의사항 있으시면 편하게 답장 주세요! ☺️' || E'\n\n' || '※수업은 결제 완료 순서대로 확정되며, 결제 지연 시 강사 스케줄이 변동될 수 있습니다. 원하시는 강사님과 시간으로 진행을 원하시면 종료일 내에 등록해주세요. 감사합니다.%', '맨 아래 ※ 안내');
+select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000002:two') like '%수업이 2회 남았어요! (종료일: 11월 30일(월) 오전 1:59까지)%' and (select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000002:two') like '%모든 시간은 시드니 시간대 기준이에요.%', '서연 two 첫 줄·해외 학생은 거주지 시간');
+select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000002:two') not like '%현재 수강 코스%', '가격표에 없는 코스는 코스·가격 줄 없음');
 
 -- 11/23 (마지막 수업 중): 하준 아직 안 끝남 → 보내지 않음
 select pg_temp.ok(not exists (select 1 from lms_renewal_mail_due('2026-11-23 12:20+00') where stage = 'ended' and enrollment_id::text like 'cccccccc-%'), '마지막 수업 진행 중: ③ 안 보냄');
@@ -67,11 +71,34 @@ update lessons set class_status = 'Tutor no-show', state = 'done' where enrollme
 select pg_temp.ok(lms_renewal_remaining('cccccccc-0000-4000-8000-000000000002', '2026-11-24 00:00+00') = 1, '날짜 미정 보강(노쇼) 1회를 남은 수업으로 셈');
 select pg_temp.ok(not exists (select 1 from lms_renewal_mail_due('2026-11-24 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000002' and stage = 'ended'), '날짜 미정 보강이 남으면 ③ 안 보냄');
 
+-- week: 종료일 7일 전(11/22)부터, 같은 날 two 와 겹치면 둘 다
+delete from notifications where dedupe_key like 'renewal_mail:cccccccc-%';
+select pg_temp.ok((select count(*) from lms_renewal_mail_due('2026-11-22 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001' and stage = 'week') = 1, '종료일 7일 전: week 대상');
+select pg_temp.ok((select count(*) from lms_renewal_mail_due('2026-11-22 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001' and stage = 'two') = 1, '같은 날 two 도 대상 (겹쳐도 각각)');
+select lms_renewal_mail_run('2026-11-22 00:00+00');
+select pg_temp.ok((select payload ->> 'subject' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:week') like '%[엣지영어] 수강기간이 1주일 남았어요', 'week 제목');
+select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:week') like '안녕하세요 김하준님, 벌써 수강기간이 거의 끝나가서 연락드려요☺️ (종료일: 11월 23일(월))' || E'\n\n' || '지금 재등록하시면%', 'week 첫 줄·종료일 = 실제 마지막 수업일(11/23), 기간 종료일(11/29) 아님');
+select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'renewal_mail:cccccccc-0000-4000-8000-000000000001:week') like '%※수업은 결제 완료 순서대로%', 'week 에도 맨 아래 ※ 안내');
+-- two 가 이미 나갔으면 week 는 안 보냄 (이미 재등록 안내를 받은 학생)
+delete from notifications where dedupe_key like 'renewal_mail:cccccccc-%';
+insert into notifications (recipient_kind, recipient_id, email, locale, template, payload, dedupe_key, status)
+values ('student', 'bbbbbbbb-0000-4000-8000-000000000001', 'support@edgeenglish.kr', 'ko', 'renewal_two', '{}', 'renewal_mail:cccccccc-0000-4000-8000-000000000001:two', 'sent');
+select pg_temp.ok(not exists (select 1 from lms_renewal_mail_due('2026-11-22 12:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001' and stage = 'week'), 'two 가 이미 나갔으면 week 안 보냄');
+delete from notifications where dedupe_key like 'renewal_mail:cccccccc-%';
+-- ended 가 나간 뒤에는 week·two 안 보냄
+delete from notifications where dedupe_key like 'renewal_mail:cccccccc-%';
+insert into notifications (recipient_kind, recipient_id, email, locale, template, payload, dedupe_key, status)
+values ('student', 'bbbbbbbb-0000-4000-8000-000000000001', 'support@edgeenglish.kr', 'ko', 'renewal_ended', '{}', 'renewal_mail:cccccccc-0000-4000-8000-000000000001:ended', 'sent');
+select pg_temp.ok(not exists (select 1 from lms_renewal_mail_due('2026-11-23 13:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001' and stage in ('week', 'two')), 'ended 뒤에는 week·two 안 보냄');
+delete from notifications where dedupe_key like 'renewal_mail:cccccccc-%';
+
 -- 제외 대상: 문자 [보냄] · 재등록 결제 · 체험용 · 종료일 +3일 뒤
 delete from notifications where dedupe_key like 'renewal_mail:cccccccc-%';
 select pg_temp.ok(exists (select 1 from lms_renewal_mail_due('2026-11-19 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001'), '제외 전: 대상');
-insert into renewal_notices (enrollment_id) values ('cccccccc-0000-4000-8000-000000000001');
-select pg_temp.ok(not exists (select 1 from lms_renewal_mail_due('2026-11-19 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001'), '문자 [보냄] 한 수강권 제외');
+insert into renewal_notices (enrollment_id, sent_at) values ('cccccccc-0000-4000-8000-000000000001', '2026-11-19 00:00+00');
+select pg_temp.ok(not exists (select 1 from lms_renewal_mail_due('2026-11-19 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001' and stage = 'two'), '문자 [보냄] 한 시점에 해당된 단계(two)는 안 보냄');
+select pg_temp.ok(exists (select 1 from lms_renewal_mail_due('2026-11-22 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001' and stage = 'week'), '문자 [보냄] 뒤에 해당된 단계(week)는 나감');
+select pg_temp.ok(exists (select 1 from lms_renewal_mail_due('2026-11-23 12:41+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000001' and stage = 'ended'), '문자 [보냄] 뒤 ended 도 나감');
 update students set is_trial_account = true where id = 'bbbbbbbb-0000-4000-8000-000000000002';
 select pg_temp.ok(not exists (select 1 from lms_renewal_mail_due('2026-11-19 00:00+00') where enrollment_id = 'cccccccc-0000-4000-8000-000000000002'), '체험용 계정 제외');
 update students set is_trial_account = false where id = 'bbbbbbbb-0000-4000-8000-000000000002';

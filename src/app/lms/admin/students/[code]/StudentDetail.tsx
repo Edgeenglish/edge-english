@@ -32,6 +32,8 @@ export type DetailActions = {
   prestartMoved: () => Promise<Record<string, string>>;
   /** 보강·보상수업 추가·수정 (20261109040000) */
   lessonManage: LessonManageActions;
+  /** 수강생 로그인 계정 만들기 (admin_student_login — 이미 연결돼 있으면 DB 가 막음) */
+  createLogin: (email: string) => Promise<void>;
 };
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
@@ -258,7 +260,7 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
                 ))}
               </div>
             ))}
-            <Row k="로그인 이메일" v={or(data.loginEmail, <i className="text-[#b9b6c8]">계정 없음</i>)} />
+            <LoginRow email={data.loginEmail} create={actions.createLogin} />
             <Row k="운영 메모" v={or(s.adminMemo)} />
             {s.lmsSince && <Row k="LMS 시작" v={s.lmsSince} />}
           </Box>
@@ -588,4 +590,46 @@ function ProfileSheet(p: { student: StudentProfile; update: DetailActions['updat
 function AnswersSheet(p: { student: StudentProfile; update: DetailActions['update']; onClose: () => void; onSaved: () => Promise<void> }) {
   return <FieldsSheet title="자기소개 · 수업 선호 (수강생 답 입력)" fields={ANSWER_FIELDS} {...p}
     foot={<p className="mt-3 text-[12px] text-[#6b6880]">첫 수업 전 카톡으로 받은 답을 그대로 적어요. 받지 않은 항목은 비워 두면 ‘미응답’으로 저장돼요 (추측해서 적지 않기). 기존 시트 자기소개는 원문 그대로 따로 보관돼요.</p>} />;
+}
+
+// 수강생 로그인 계정 (전에는 수강생 화면 운영자 띠에 있던 것 — 같은 DB 함수). 이미 연결돼 있으면 입력칸 없이 '연결됨'만
+function LoginRow({ email: linked, create }: { email: string | null; create: (email: string) => Promise<void> }) {
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  async function submit() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await create(email);
+      setMsg({ ok: true, text: '로그인 계정을 만들었어요.' });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : '만들지 못했어요.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+  const note = msg && <p role={msg.ok ? 'status' : 'alert'} className={`mt-1 text-[13px] ${msg.ok ? 'text-[#13623a]' : 'text-[#b3261e]'}`}>{msg.text}</p>;
+  if (linked) return (
+    <div className="border-b border-[#f0eef6] py-2 last:border-0">
+      <div className="flex justify-between gap-3 text-[14px]">
+        <span className="shrink-0 text-[#6b6880]">로그인 이메일</span>
+        <span className="min-w-0 text-right break-words text-[#1d1b2b]">{linked} <span className="text-[12px] font-semibold text-[#13623a]">연결됨</span></span>
+      </div>
+      {note}
+    </div>
+  );
+  return (
+    <div className="border-b border-[#f0eef6] py-2 text-[14px] last:border-0">
+      <p className="text-[#6b6880]">로그인 이메일 <i className="text-[#b9b6c8]">계정 없음</i></p>
+      <div className="mt-1.5 flex gap-2">
+        <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)}
+          placeholder="수강생 로그인 이메일" aria-label="수강생 로그인 이메일" className={`${input} min-w-0 flex-1`} />
+        <button type="button" disabled={busy || !email.trim()} onClick={submit} className={`${btnMain} shrink-0`}>
+          {busy ? '만드는 중…' : '로그인 만들기'}
+        </button>
+      </div>
+      {note}
+    </div>
+  );
 }
