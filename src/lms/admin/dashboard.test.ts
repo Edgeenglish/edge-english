@@ -57,6 +57,8 @@ describe('대시보드 5차 — 숫자 칸·명단', () => {
     const c = { ...base, state: 'canceled' as const, class_status: 'Student canceled in advance' };
     expect(lessonNote(c)).toBe('수강생 미리 취소');
     expect(lessonNote(c, { makeups: new Map([['a', '2026-11-20T11:00:00Z']]) })).toBe('수강생 미리 취소 · 보강 11/20(금) 오후 8:00');
+    const tn = { ...base, state: 'done' as const, class_status: 'Tutor no-show', original_tutor: { name: 'Emma' } };
+    expect(lessonNote(tn, { makeups: new Map([['a', '2026-11-20T11:00:00Z']]) })).toBe('보강 11/20(금) 오후 8:00');
   });
   it('강사 담당 학생: 이어지는 정규 일정 + 수강 중·예정 학생만, 테스트용 강사는 아래', () => {
     const st = (id: string, code: string) => ({ id, code, name_ko: '가상', is_trial_account: false });

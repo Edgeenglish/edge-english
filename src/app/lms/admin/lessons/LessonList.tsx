@@ -9,7 +9,7 @@ import { instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { AdminHeader, BottomNav } from '../ui';
 import { useAdminSb } from '../useAdmin';
 import DateInput from '../DateInput';
-import { lessonStateClass, STRIKE } from '../LessonRows';
+import { LessonRows, lessonStateClass, STRIKE } from '../LessonRows';
 
 export default function LessonList() {
   const { sb, error } = useAdminSb();
@@ -110,16 +110,7 @@ export default function LessonList() {
                     return (
                       <div key={d}>
                         <div className="sticky top-0 flex justify-between bg-[#f6f5fa] px-1 py-1.5 text-[12.5px] font-extrabold text-[#6b6880]"><span>{mdw(d)}</span><span>{r.length}건</span></div>
-                        <ul className="px-1">
-                          {r.map((l) => (
-                            <li key={l.id} className="grid grid-cols-[72px_minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 border-b border-[#e6e3ef] py-2 text-[13.5px] last:border-0">
-                              <span className={`tabular-nums text-[13px] text-[#6b6880] ${l.struck ? STRIKE : ''}`}>{l.time}</span>
-                              <span className="truncate">{l.studentCode ? <Link href={studentHref(l.studentCode)} className={l.struck ? STRIKE : ''}>{l.studentName}</Link> : <span className={l.struck ? STRIKE : ''}>{l.studentName}</span>}</span>
-                              <span className={`whitespace-nowrap text-right text-[12.5px] ${lessonStateClass(l)}`}>{l.state}</span>
-                              <span className="col-span-2 col-start-2 text-[12px] text-[#6b6880]">{l.tutorName} · {l.kind}{l.note ? <span className="block">{l.note}</span> : null}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="px-1"><LessonRows rows={r} studentHref={studentHref} /></div>
                       </div>
                     );
                   })}
