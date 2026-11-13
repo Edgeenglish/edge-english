@@ -118,15 +118,18 @@ const kstWhen = (iso: string) => { const f = formatInZone(new Date(iso), 'Asia/S
 /** 이름 아래 작은 줄 */
 export function lessonNote(l: LessonListRow, extras: LessonExtras = {}): string | null {
   const parts: string[] = [];
+  // 강사 변경(대체)은 취소 사유와 다른 정보 — 취소·노쇼 줄에도 함께 (대표 11/13)
+  const orig = l.original_tutor?.name;
+  const cover = orig && l.tutor?.name && orig !== l.tutor.name ? `${orig} → ${l.tutor.name}` : null;
   if (l.state === 'canceled' || l.class_status === 'Tutor no-show') {
     // 강사 노쇼는 상태 글자가 이미 사유 — 연결된 보강만 붙임
     const why = l.state === 'canceled' && l.class_status ? STATUS_PLAIN[l.class_status as ClassStatus] : undefined;
     if (why) parts.push(why);
+    if (cover) parts.push(cover);
     const mk = extras.makeups?.get(l.id);
     if (mk) parts.push(`보강 ${kstWhen(mk)}`);
   } else {
-    const orig = l.original_tutor?.name;
-    if (orig && l.tutor?.name && orig !== l.tutor.name) parts.push(`${orig} → ${l.tutor.name}`);
+    if (cover) parts.push(cover);
     const old = extras.moves?.get(l.id);
     if (old && new Date(old).getTime() !== new Date(l.starts_at).getTime()) {
       const a = formatInZone(new Date(old), 'Asia/Seoul'); const b = formatInZone(new Date(l.starts_at), 'Asia/Seoul');
