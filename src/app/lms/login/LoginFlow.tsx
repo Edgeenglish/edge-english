@@ -94,6 +94,8 @@ export default function LoginFlow() {
   // 비밀번호 만들기·찾기: 메일 코드는 한 번만 쓸 수 있음 → 확인되면 다시 보내지 않음. 운영자(인증 앱 켬)는 인증 앱 코드 뒤에 저장
   const [otpDone, setOtpDone] = useState(false);
   const [pendingPw, setPendingPw] = useState<string | null>(null);
+  // 카카오·네이버로만 만든 빈 계정(수강 기록 없음) — '처음이에요'를 잘못 누른 기존 학생이 스스로 바로잡는 버튼용
+  const [socialOnly, setSocialOnly] = useState(false);
   const t = STRINGS[lang];
   const sb = supabaseBrowser();
   const codeRef = useRef<HTMLInputElement>(null);
@@ -205,6 +207,7 @@ export default function LoginFlow() {
     const myRole = (role as Role | null) ?? null;
     const user = userData?.user;
     const providers = (user?.identities ?? []).map((i) => i.provider);
+    setSocialOnly(providers.length > 0 && !providers.includes('email'));
     if (needsSocialChoice({ role: myRole, providers, choseNew: user?.user_metadata?.edge_new_member === true })) {
       return setStep('social_choice');
     }
@@ -811,6 +814,11 @@ export default function LoginFlow() {
             <a href={APPLY_URL} target="_blank" rel="noreferrer" className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] bg-[#FFD401] text-[15px] font-bold text-[#333]">
               {t.apply}
             </a>
+            {socialOnly && (
+              <button type="button" disabled={busy} onClick={chooseExisting} className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40">
+                {t.alreadyStudent}
+              </button>
+            )}
             <button type="button" className={`${ghost} w-full`} onClick={logout}>
               {t.logout}
             </button>

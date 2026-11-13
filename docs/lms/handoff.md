@@ -14,6 +14,9 @@
 - **대표 할 일(대표 계정만)**: ① 시험용 Supabase: 새 가입 허용 · 비밀번호 최소 8 · 'Confirm signup' 메일 코드 문구 · Manual linking 켬 ② 카카오 개발자 앱(비즈 앱·이메일 필수 동의) → 시험 Supabase Kakao 켬 ③ 네이버 개발자센터 앱 → 시험 Supabase 'custom:naver'(OAuth2, authorize https://nid.naver.com/oauth2.0/authorize · token https://nid.naver.com/oauth2.0/token · userinfo **https://edge-english-git-lms-test-support-2126.vercel.app/api/auth/naver-userinfo** · Allow users without email 켬)
 - 남은 개발: 약관·개인정보 동의 원문(대표 원문) · 운영 반영 순서(대표 승인 뒤): 운영 DB migration 2개 → 운영 Supabase 설정 → lms-prod·main 같은 커밋(헤더는 main 홈페이지)
 - ✅ 11/12 고침: **운영자(인증 앱 켬) 비밀번호 만들기·찾기** — Supabase 가 인증 앱 코드 전에는 비밀번호 변경을 막음(insufficient_aal, 대표 support@ 시험에서 '연결이 불안정해요' → 다시 누르면 이미 쓴 메일 코드라 '코드가 맞지 않거나'). 이제 메일 코드 확인 뒤 인증 앱 코드 단계 → 저장, 메일 코드는 한 번 확인되면 다시 묻지 않음. 로컬: 운영자 6/6(인증 앱 단계·틀린 코드·저장 뒤 운영자 화면·옛 비밀번호 거절·새 비밀번호+인증 앱 PC·학생은 단계 없음) + 전체 회귀 33/33
+- ✅ 11/13 대표 '넣어': 카카오·네이버로만 만든 빈 회원 화면('아직 수강 중인 수업이 없어요')에 **[이미 수강 중이에요]** — '처음이에요'를 잘못 누른 기존 학생이 스스로 빈 계정을 지우고 기존 계정 로그인 → 연결(이메일 가입 회원에게는 안 보임). 로컬 6/6 통과(기록 전후 같음)
+- 11/13 Work(ChatGPT)가 시험 Supabase 카카오·네이버 켬(authorize 302 확인), 대표가 시험 사이트 support@ 에 카톡·네이버 연결. **시험 DB 대조 미완료**(Supabase 커넥터 접속 실패) — 기준값 11/13 12:51Z: 사용자 12·연결 12·app_users md5 3d645a88…·수강권 9c67f463…·결제 d9c3706b…
+- 운영 반영 때 추가: 카카오 앱 Redirect URI 에 운영 Supabase callback · 운영 Supabase 카카오·custom:naver(Userinfo = https://edgeenglish.kr/api/auth/naver-userinfo) · 대표 운영 계정 연결은 반드시 [이미 회원이에요]
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
