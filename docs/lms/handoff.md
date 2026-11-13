@@ -22,7 +22,7 @@
 - 정책 원본: H26(137) '보충' 줄을 문서 맨 끝에 적음(11/13) — 새 번호 아님, 필요하면 H26 자리로 옮기기
 - 미검증: 실제 강사 휴대폰 기기 · 1~2일 Cancel class 화면 자체(코드 안 바꿈) · 운영 DB
 
-## ✅ 11/13 수업 줄 상태·용어 통일 — 운영 반영 완료 (lms-prod f724592 + 494abc9 취소·노쇼 줄에도 강사 변경, 코드만) (H26(168)~(170) 참고) (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
+## ✅ 11/13 수업 줄 상태·용어 통일 — 운영 반영 완료 (lms-prod f724592 + 494abc9 취소·노쇼 줄에도 강사 변경, 코드만) (H26(168)·(170)·(171) 참고) (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
 - 코드만(DB 변경 없음): `src/lms/admin/dashboard.ts` `lessonState`(예정·진행 중·기록 전은 state=scheduled 일 때만 시각으로 / 완료·취소·수강생 노쇼·강사 노쇼(done+Tutor no-show)는 시각으로 안 덮음)·`lessonNote`(취소 사유 STATUS_PLAIN · 연결된 보강 · 'Emma → James' · '시간 변경 · 8:30 → 9:30')
 - `live.ts` `loadLessonExtras`: 보강 = makeup_requests confirmed(source→confirmed_lesson) 최신, 그 보강도 취소면 다음 연결을 따라감(최대 4번) / 시간 변경 = admin_makeup_logs reschedule 첫 old_starts_at 이 있을 때만. 읽기 실패면 표시만 생략
 - 화면: `LessonRows.tsx`(홈 오늘 수업·강사 상세)·`lessons/LessonList.tsx`(PC 표·휴대폰) 취소선은 시각·학생 이름만, 상태는 오른쪽 그대로. 학생 일정 '진행'→'완료', 수강생 노쇼 '결석'. 용어: '수강생 변경'·'수강생 정상 변경'·'수강생측 취소'·'추가 '·'보상 ' 없앰(STATUS_SHORT 삭제 → STATUS_PLAIN 하나)
