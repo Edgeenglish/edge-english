@@ -853,11 +853,9 @@ export default function StudentHome(props: {
                 <div className="min-w-0">
                   <p className="text-[15px] font-semibold">{whenText(l.startsAt)}</p>
                   <p className="text-[12.5px] text-[#6b6880]">
-                    {l.minutes}분{s.lessons.find((x) => x.id === l.id)?.leaveOpen ? '' : ` · ${l.tutorName}`} · {typeKo(l.type, l.kind)}
+                    {l.minutes}분{s.lessons.find((x) => x.id === l.id)?.leaveOpen ? '' : ` · ${l.tutorName}`} · {s.lessons.find((x) => x.id === l.id)?.substitute
+                      ? <span className="font-bold text-[#b3261e]">대체강사 수업</span> : typeKo(l.type, l.kind)}
                   </p>
-                  {s.lessons.find((x) => x.id === l.id)?.substitute && (
-                    <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 대체강사 수업</p>
-                  )}
                   {s.lessons.find((x) => x.id === l.id)?.leaveOpen && (
                     <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
                   )}
