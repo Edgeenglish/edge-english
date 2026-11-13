@@ -22,12 +22,12 @@
 - 정책 원본: H26(137) '보충' 줄을 문서 맨 끝에 적음(11/13) — 새 번호 아님, 필요하면 H26 자리로 옮기기
 - 미검증: 실제 강사 휴대폰 기기 · 1~2일 Cancel class 화면 자체(코드 안 바꿈) · 운영 DB
 
-## 🧪 11/13 수업 줄 상태·용어 통일 — 시험 사이트(lms-test) 반영·QA 통과, 운영 반영 대표 승인 대기 (H26(168) 참고) (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
+## ✅ 11/13 수업 줄 상태·용어 통일 — 운영 반영 완료 (lms-prod f724592, 코드만) (H26(168) 참고) (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
 - 코드만(DB 변경 없음): `src/lms/admin/dashboard.ts` `lessonState`(예정·진행 중·기록 전은 state=scheduled 일 때만 시각으로 / 완료·취소·수강생 노쇼·강사 노쇼(done+Tutor no-show)는 시각으로 안 덮음)·`lessonNote`(취소 사유 STATUS_PLAIN · 연결된 보강 · 'Emma → James' · '시간 변경 · 8:30 → 9:30')
 - `live.ts` `loadLessonExtras`: 보강 = makeup_requests confirmed(source→confirmed_lesson) 최신, 그 보강도 취소면 다음 연결을 따라감(최대 4번) / 시간 변경 = admin_makeup_logs reschedule 첫 old_starts_at 이 있을 때만. 읽기 실패면 표시만 생략
 - 화면: `LessonRows.tsx`(홈 오늘 수업·강사 상세)·`lessons/LessonList.tsx`(PC 표·휴대폰) 취소선은 시각·학생 이름만, 상태는 오른쪽 그대로. 학생 일정 '진행'→'완료', 수강생 노쇼 '결석'. 용어: '수강생 변경'·'수강생 정상 변경'·'수강생측 취소'·'추가 '·'보상 ' 없앰(STATUS_SHORT 삭제 → STATUS_PLAIN 하나)
 - 검증: tsc 0 · npm test 465 · 로컬 ?demo=1 PC·휴대폰 · ChatGPT QA(시험·운영 DB 읽기 대조, 시험 화면 PC·휴대폰 61줄) 통과. QA 지적 3건 고침: 강사 노쇼 줄 연결 보강 날짜 / 되돌린 수업(voided_at) 목록에서 뺌(student_screen·tutor_screen 과 같게) / 수업 목록 휴대폰 줄 = LessonRows. 이번 주 시험 DB 에 사례 없어 실물 미확인: 취소된 보강 연쇄 추적·같은 날 시간 변경·늦은/공휴일 취소
-- 운영 배포 = 대표 승인 뒤 (`git log origin/lms-test..origin/lms-prod` 먼저 확인, 코드만)
+- 운영 배포: lms-prod f724592 = 이 기능 커밋(d02e0ed·0cfbcfa)만 골라 담음(handoff 제외). 배포 전 확인: 숨기는 기준 = voided_at(되돌림 함수 5개만 씀, 제약 voided_by 필수), 시험 DB 이번 주 되돌린 10건만 빠지고 정상 취소 14건 모두 사유와 함께 남음. 실제 로그인 화면 PC 1440·휴대폰 390: 시험 51줄·운영 30줄 DB 와 일치, 취소선 시험 14·운영 8, STU-0003 강사 노쇼 줄 '보강 11/9(월) 오후 2:00', 이름·상태 겹침 0, 가로 넘침 없음. 운영 DB 직접 확인: 이번 주 되돌린 수업 0·연결 보강 3·대체 4(1건 완료 'Olivia → Benny', 3건 취소라 사유만)·보강 시간 고침 기록 0(시간 변경 표시는 운영에서 아직 실물 없음)
 
 ## ✅ 11/13 학생 화면 '다음 수강권' 표시 — 운영 반영 완료 (lms-prod·main 5e7bfa7, 코드만) (H26(161) 참고, 브랜치 claude/nifty-fermat-bkdcsc)
 - 코드만(DB 변경 없음): `src/lms/student/home.ts` `passKind`·`nextPass`(지금 수강권 아님 + 시작일 > 오늘 한국 날짜 = 다음) · `StudentHome.tsx` 홈 '내 수강 정보' 종료일 옆·내 정보 '내 수강권' 종료일 아래 '다음 수강권 M/D~M/D', 결제 내역 카드 '다음 수강권', 이름 '수강권 / 결제 내역' · 시안 `docs/lms/previews/next-pass-drafts.html`
