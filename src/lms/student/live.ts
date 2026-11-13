@@ -1,10 +1,11 @@
 // 수강생 화면 실제 데이터 (migration 2800). 읽기·쓰기 모두 DB 함수 — 본인 확인·검사·이력은 DB
 import { asClassType } from '../class-type';
+import { loadScreenPrefs, saveScreenPref, type PrefKey } from '../screen-prefs';
 // 수강생 본인은 student_ 함수, 운영자(TOTP 완료)가 ?student= 로 열면 운영진 화면과 같은 admin_ 함수(이력에 운영자로 남음)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
-import type { CreditPeriod, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
+import type { CreditPeriod, LateReason, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
 import { processingEvents, type ProcessingEvent } from './processing-history';
 
 const NOT_APPLIED = '수강생 화면이 이 DB에 아직 없어요 (migration 2800).';
@@ -73,6 +74,8 @@ export type StudentView = {
   lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
+  /** 지각을 알린 수업 (migration 20261113120000). 옛 DB 면 빈 배열 */
+  lateNotices?: { lessonId: string; minutes: number; reason: LateReason | null }[];
   processingHistory?: ProcessingEvent[];
   processingHistoryError?: boolean;
   leave: LeaveRow[];
@@ -209,7 +212,7 @@ export function parseStudentView(r: Raw): StudentView {
         id: q.id,
         kind: 'makeup',
         compensation: comp,
-        title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso), (q.original_time_known ?? src?.time_known !== false) ? r.student.timezone || 'Asia/Seoul' : 'Asia/Seoul')} 수업분` : ''}`,
+        title: `${comp ? '보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso), (q.original_time_known ?? src?.time_known !== false) ? r.student.timezone || 'Asia/Seoul' : 'Asia/Seoul')} 수업분` : ''}`,
         status: q.status === 'confirmed'
           ? (q.confirmed_state === 'canceled' ? 'canceled' : 'confirmed')
           : q.status === 'expired' ? 'expired'
@@ -258,14 +261,15 @@ export function withSuggestions(v: StudentView, rows: SuggestionRow[]): StudentV
 
 /** studentId: 운영자가 고른 수강생 (수강생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
-  const [screen, book, sug, history] = await Promise.all([
+  const [screen, book, sug, history, late] = await Promise.all([
     sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId), sb.rpc('student_makeup_suggestions', { p_student: studentId }),
-    sb.rpc('student_processing_history', { p_student: studentId })]);
+    sb.rpc('student_processing_history', { p_student: studentId }), sb.rpc('student_late_notices', { p_student: studentId })]);
   const v = parseStudentView(check(screen));
   // 강사가 제안한 시간 (H26(134), 20261111160000). 함수 없는 옛 DB 면 예전 그대로
   return { ...(sug.error ? v : withSuggestions(v, (sug.data as SuggestionRow[]) ?? [])), textbook: book,
     processingHistory: history.error ? [] : processingEvents((history.data as ProcessingEvent[]) ?? []),
-    processingHistoryError: !!history.error };
+    processingHistoryError: !!history.error,
+    lateNotices: late.error ? [] : ((late.data ?? []) as { lesson_id: string; minutes: number; reason: LateReason | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })) };
 }
 /** 강사가 정한 교재 (QA C-04, migration 20261107040000). 함수가 없는 옛 DB 면 null — 학습자료에 교재만 안 보임 */
 async function loadTextbook(sb: SupabaseClient, studentId: string | null): Promise<string | null> {
@@ -297,6 +301,9 @@ export type TimezoneState = { timezone: string; kept: string | null };
 export function studentActions(sb: SupabaseClient, adminStudentId: string | null) {
   const admin = adminStudentId !== null;
   return {
+    /** 화면 보기 설정: 학생이 저장한 값 읽기 · 저장은 학생 본인일 때만 (운영자 보기는 저장 안 함, 대표 11/13 A안) */
+    prefs: () => loadScreenPrefs(sb, { student: adminStudentId }),
+    savePref: admin ? null : (key: PrefKey, value: string) => saveScreenPref(sb, key, value),
     reload: () => loadStudentView(sb, adminStudentId),
     /** 알림 설정 읽기(인자 없음)·바꾸기 — 수강생·운영자 같은 함수 */
     reminders: async (change?: { regular?: boolean; makeup?: boolean }): Promise<Reminders> => {
@@ -332,7 +339,7 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     noticeRead: async (id: string): Promise<void> => {
       await sb.rpc('student_notice_read', { p_student: adminStudentId, p_announcement: id });
     },
-    /** 현재·지난 수강권 / 결제 내역 — 실제 등록·결제 기록만 (금액·카드 정보 없음, POL-PAY-11) */
+    /** 수강권 / 결제 내역 — 실제 등록·결제 기록만 (금액·카드 정보 없음, POL-PAY-11) */
     history: async (): Promise<PaymentSummary[]> => {
       const r = await sb.rpc('student_enrollment_history', { p_student: adminStudentId });
       if (r.error) return [];
@@ -358,6 +365,10 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
       const r = await sb.rpc('student_no_time_rights', { p_student: adminStudentId });
       if (r.error) return new Map();
       return new Map(((r.data ?? []) as { lesson_id: string; requested_at: string | null }[]).map((x) => [x.lesson_id, x.requested_at]));
+    },
+    /** 지각 알림 (대표 11/13): 담당 강사 Updates + 이메일. 한 수업에 한 번만 */
+    lateNotice: async (lessonId: string, minutes: number, reason: LateReason | null): Promise<void> => {
+      check(await sb.rpc('student_late_notice', { p_student: adminStudentId, p_lesson: lessonId, p_minutes: minutes, p_reason: reason }));
     },
     noTimeRequest: async (lessonId: string): Promise<void> => {
       check(await sb.rpc('student_no_time_request', { p_student: adminStudentId, p_lesson: lessonId }));

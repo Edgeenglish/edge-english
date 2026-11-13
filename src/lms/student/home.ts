@@ -51,6 +51,11 @@ export function lessonsLeft(lessons: readonly StudentLesson[], now: Date, makeup
   return { total: scheduled.length + makeupsOwed, regular: regularLessonsLeft(lessons, now), other };
 }
 
+/** 지금 수강권 수업만 (대표 11/13: '남은 수업'에 미리 재등록한 다음 수강권 수업을 더하지 않음). 수강권 종료일을 모르는 수업은 그대로 둠 */
+export function currentPassLessons<T extends Pick<StudentLesson, 'finalEndDate'>>(lessons: readonly T[], currentEnd: KstDate | '' | null | undefined): T[] {
+  return currentEnd ? lessons.filter((l) => !l.finalEndDate || l.finalEndDate <= currentEnd) : [...lessons];
+}
+
 /** 지금 들어갈 수 있거나 다음에 올 수업 (끝나기 전까지는 '다음 수업'에 남김 — 수업 입장 버튼) */
 export function nextLesson(lessons: readonly StudentLesson[], now: Date): StudentLesson | null {
   return (
@@ -58,6 +63,31 @@ export function nextLesson(lessons: readonly StudentLesson[], now: Date): Studen
       .filter((l) => l.state === 'scheduled' && l.startsAt.getTime() + l.minutes * 60_000 > now.getTime())
       .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0] ?? null
   );
+}
+
+/**
+ * 지각 알림 (대표 2026-11-13, H26 기록): 홈 '다음 수업'에서 [늦게 참여해요].
+ * 수업 시작 2시간 전부터 그 수업이 끝나기 전까지만. 수업 시간·상태는 바꾸지 않는 통보 (DB student_late_notice 가 같은 기준으로 막음)
+ */
+export const LATE_NOTICE = {
+  openHoursBefore: 2,
+  /** 값 20 = '20분 이상' */
+  minutes: [5, 10, 15, 20] as const,
+  reasons: [
+    { code: 'work_late', label: '회사 업무가 늦게 끝나요' },
+    { code: 'traffic', label: '길이 막혀요' },
+    { code: 'transit', label: '대중교통이 지연됐어요' },
+    { code: 'unexpected', label: '갑자기 일이 생겼어요' },
+  ] as const,
+};
+export type LateMinutes = (typeof LATE_NOTICE.minutes)[number];
+export type LateReason = (typeof LATE_NOTICE.reasons)[number]['code'];
+export const lateMinutesLabel = (m: number) => (m >= 20 ? '20분 이상' : `${m}분`);
+
+export function lateNoticeOpen(lesson: Pick<StudentLesson, 'startsAt' | 'minutes' | 'state'>, now: Date): boolean {
+  if (lesson.state !== 'scheduled') return false;
+  const start = lesson.startsAt.getTime();
+  return now.getTime() >= start - LATE_NOTICE.openHoursBefore * 3_600_000 && now.getTime() < start + lesson.minutes * 60_000;
 }
 
 /**
@@ -147,6 +177,16 @@ export type PaymentSummary = {
   /** 결제 완료 (결제 확인 기록, 또는 시트에서 옮긴 수강 중·끝난 수강권) */
   paid?: boolean;
 };
+
+/** 수강권 구분 (대표 11/13): 지금 수강권이 아니고 시작일이 오늘(한국 날짜) 뒤면 '다음 수강권'(미리 재등록), 그 밖은 '지난 수강권' */
+export function passKind(p: Pick<PaymentSummary, 'current' | 'periodStart'>, todayKst: KstDate): 'current' | 'next' | 'past' {
+  return p.current ? 'current' : p.periodStart > todayKst ? 'next' : 'past';
+}
+
+/** 가장 먼저 시작하는 다음 수강권. 없으면 null (화면 그대로) */
+export function nextPass<T extends Pick<PaymentSummary, 'current' | 'periodStart'>>(ps: readonly T[], todayKst: KstDate): T | null {
+  return [...ps].filter((p) => passKind(p, todayKst) === 'next').sort((a, b) => (a.periodStart < b.periodStart ? -1 : 1))[0] ?? null;
+}
 
 export const PAYMENT_METHOD_LABEL: Record<NonNullable<PaymentSummary['method']>, string> = {
   card_imweb: '카드 (아임웹)',

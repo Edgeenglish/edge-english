@@ -177,6 +177,8 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
   ];
   const actions: StudentActions = {
     reload: async () => ({ ...view, timezone: tz.timezone }),
+    prefs: async () => ({}),
+    savePref: null,
     reminders: async (change) => (reminders = { ...reminders, ...change }),
     timezone: async (change) => {
       if (change?.set) { tz = { ...tz, timezone: change.set }; view = { ...view, timezone: change.set }; }
@@ -199,6 +201,9 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       const m = view.makeupRights.find((x) => x.lessonId && !x.compId && !x.tutorLeave && !x.tutorNoShow);
       return new Map(m?.lessonId ? [[m.lessonId, noTimeAt]] : []);
     },
+    lateNotice: async (lessonId, minutes, reason) => {
+      set({ ...view, lateNotices: [...(view.lateNotices ?? []), { lessonId, minutes, reason }] });
+    },
     noTimeRequest: async () => {
       noTimeAt = new Date().toISOString();
       set({ ...view });   // 화면이 다시 읽도록 새 값
@@ -220,7 +225,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       set({
         ...view,
         makeupRights: view.makeupRights.map((m) => ((m.compId ?? null) === (right.compId ?? null) && m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
-        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '무료 보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '', lessonId: right.lessonId, itemId: right.itemId, compId: right.compId ?? null }, ...view.requests],
+        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '', lessonId: right.lessonId, itemId: right.itemId, compId: right.compId ?? null }, ...view.requests],
       });
     },
     withdrawMakeup: async (requestId) => {

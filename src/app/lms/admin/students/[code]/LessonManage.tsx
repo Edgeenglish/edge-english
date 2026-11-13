@@ -31,7 +31,7 @@ function otherZones(at: Date, studentTz: string, tutorTz: string): string {
   return parts.join(' / ');
 }
 const isComp = (l: ChLesson) => l.kind === 'compensation';
-const KIND = (comp: boolean) => (comp ? '무료 보상수업' : '보강');
+const KIND = (comp: boolean) => (comp ? '보상수업' : '보강');
 
 /** 보강 이유 중 STATUS_PLAIN 에 없는 진행 결과 */
 const WHY: Record<string, string> = { 'Tutor no-show': '강사 노쇼', 'Student no-show': '수강생 노쇼' };
@@ -40,7 +40,7 @@ function rightLabel(r: MakeupRight): string {
   // '11/4(수) 수업분 · 강사 미리 취소' (한국 날짜)
   if (r.kind === 'lesson') return `${kstDay(r.source.startsAt)} 수업분${r.source.classStatus ? ` · ${WHY[r.source.classStatus] ?? STATUS_PLAIN[r.source.classStatus] ?? r.source.classStatus}` : ''}`;
   if (r.kind === 'migrated') return r.item.originalDate ? `${mdw(r.item.originalDate)} 수업분 · 보강 수업` : '보강 수업';
-  return r.source ? `${kstDay(r.source.startsAt)} 수업분 · 강사 노쇼` : '무료 보상수업';
+  return r.source ? `${kstDay(r.source.startsAt)} 수업분 · 강사 노쇼` : '보상수업';
 }
 const sourceOf = (r: MakeupRight) => (r.kind === 'lesson' ? { lessonId: r.source.id } : r.kind === 'compensation' ? { compId: r.comp.id } : { itemId: r.item.id });
 
@@ -104,7 +104,7 @@ export default function LessonManage({ student, regularTutorId, finalEnd, action
     }>
       {loadErr && <p className="py-2 text-[13px] text-[#b3261e]">{loadErr}</p>}
       {data && (
-        <p className="pb-1 text-[12.5px] text-[#6b6880]">남은 보강 {makeupRightsList.length}개 · 남은 무료 보상수업 {compRights.length}개</p>
+        <p className="pb-1 text-[12.5px] text-[#6b6880]">남은 보강 {makeupRightsList.length}개 · 남은 보상수업 {compRights.length}개</p>
       )}
       {data && list.length === 0 && <p className="py-2 text-[13px] text-[#6b6880]">예정된 보강·보상수업이 없어요.</p>}
       {list.map((l) => {

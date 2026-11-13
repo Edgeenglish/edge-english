@@ -2,6 +2,19 @@
 
 # 다음 세션 시작 메모
 
+## ✅ 11/13 학생 화면 '다음 수강권' 표시 — 운영 반영 완료 (lms-prod·main 5e7bfa7, 코드만) (H26(161) 참고, 브랜치 claude/nifty-fermat-bkdcsc)
+- 코드만(DB 변경 없음): `src/lms/student/home.ts` `passKind`·`nextPass`(지금 수강권 아님 + 시작일 > 오늘 한국 날짜 = 다음) · `StudentHome.tsx` 홈 '내 수강 정보' 종료일 옆·내 정보 '내 수강권' 종료일 아래 '다음 수강권 M/D~M/D', 결제 내역 카드 '다음 수강권', 이름 '수강권 / 결제 내역' · 시안 `docs/lms/previews/next-pass-drafts.html`
+- 검증: tsc 0 · vitest src/lms 449 · 로컬 ?demo=1 PC 1280·iPhone 13 — 다음 수강권 없음(화면 그대로)/있음(3곳 표시) 둘 다, 가로 넘침 없음. 시험 DB: STU-0003·0027·0042·0044 다음 수강권 있음, STU-0022(시작 전 첫 수강권)는 '현재'로 남음 확인
+- 운영 배포: 11/13 대표 승인 → lms-prod·main 5e7bfa7 (이 커밋만 골라 담음, Vercel 성공). 첫 실제 대상 STU-0011(12/14 시작)
+- 11/13 추가 고침(대표 '고쳐', H26(161)): 학생 '남은 수업'·'남은 정규 수업' = 지금 수강권 수업만(`currentPassLessons`, 수업의 finalEndDate ≤ 지금 수강권 종료일). 운영 확인 중 STU-0011 이 16회(4+12)로 보임. 시험 사이트 반영 · vitest 458 · ?demo=1 PC·휴대폰(다음 수강권 수업 2개 넣어도 8회·4회 그대로) · **운영 반영 lms-prod·main 0932ca9** · 운영 화면 확인(운영자 보기 STU-0011 PC·휴대폰): 남은 수업 4회·남은 정규 수업 4회·다음 수강권 12/14~3/7
+- 참고: 11/11 ①②③·11/12 ④(이월된 수업, 운영 DB lms_student_makeup_carry_in 적용)는 운영 반영 끝 — 아래 '⏭ 새 세션 개발 대기 (대표 11/11)' 항목은 ⑤까지 모두 개발 끝
+
+## ✅ 11/13 학생 일정·처리 내역·보기 설정 계정 저장·용어 '보상수업' — 운영 반영 완료 (정책 원본 H26(159) 참고)
+- 운영 DB(mfamixejxydodclhglbc): 백업 `lms_backup.snapshots` **id 48**(표 60·학생 13·수업 171, 처리 내역 함수 이전 정의 `_functions_before`) → migration 적용(커넥터 이름 `student_processing_history_cancel_reason` = 저장소 20261113070000, `lms_screen_prefs` = 20261113080000) → 확인: 함수에 cancel_reason · students/tutors.screen_prefs 칸 · 함수 2개 · STU-0013 계정으로 처리 내역 5건 모두 cancel_reason 키(되돌림 처리)
+- 코드: lms-prod·main = 3a459ef (lms-test 커밋 12건만 골라 담음: 0647a4a 1e769fa b0f8b20 a7d31b3 6b4c9f4 ed6cce6 56d8053 63f716e 401b773 8a25bbc 3650d45 eea655d). 그 상태로 tsc 0 · vitest src/lms 442 통과. 다른 세션의 시험 전용 작업은 섞지 않음
+- 시험 DB: STU-0003 강민준에 경우 6개 추가(학생 늦은 취소 10/23 · 학생 노쇼 10/27 · 강사 사전 취소 10/30 · 강사 휴무 11/4 · 공휴일 취소 11/6 · 12/2 취소→되돌림), 처리 기록 시각은 11/13 16:10(audit 수정 불가)
+- 남은 확인: 운영 화면 실제 클릭(대표) · 강사가 '맞는 시간 없음'을 글로만 남긴 경우 학생 다음 행동 QA · 학생 메일·카톡의 '무료 보상수업이 확정됐어요'는 예외로 유지
+
 ## 🔐 11/11~12 홈페이지 회원가입·로그인 — 정책 원본 H26(146)(150) 참고 · **시험 사이트(lms-test) 반영, 운영 미반영** (브랜치 claude/clever-curie-hzaqbi)
 - 시안 v2: `docs/lms/previews/home-signup-login-drafts.html` (https://claude.ai/artifact/RPg5vNWjBvo2vC1JD53Qsn)
 - 코드: `src/app/lms/login/LoginFlow.tsx`(login·signup·signup_code·pw_email·pw_new·social_choice·member + totp/enroll) · `src/lms/auth/login-flow.ts`(PASSWORD_MIN 8·signupProblems·enabledSocial·needsSocialChoice·PROVIDER_ID, 한·영 문구) · `src/lms/auth/client.ts` pkce · `src/lms/auth/naver.ts` + `src/app/api/auth/naver-userinfo/route.ts` · `src/components/Header.tsx` [로그인]/[내 수업], 말풍선 삭제
@@ -19,6 +32,14 @@
 - 운영 반영 때 추가: 카카오 앱 Redirect URI 에 운영 Supabase callback · 운영 Supabase 카카오·custom:naver(Userinfo = https://edgeenglish.kr/api/auth/naver-userinfo) · 대표 운영 계정 연결은 반드시 [이미 회원이에요]
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
+
+## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test·운영 반영 완료** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
+- **운영 반영 (대표 11/13 '운영에도 배포해')**: 운영 DB 백업 snapshots **49**(tutor_updates 표 + kind 제약 정의) → migration 20261113120000 적용(표 60→61, RLS·anon 실행 막힘·트리거 2개 확인, 학생 알림 0건) → 코드 lms-prod **69db1c0**(lms-test 의 지각 알림 3커밋만 골라 얹음). 되돌리기: 코드 lms-prod 0932ca9 · DB 표·함수 2개 제거 + kind 제약을 snapshots 49 정의로. **미확인: Vercel 운영 배포 성공·운영 화면 실제 버튼(실제 수업이 시작 2시간 안일 때만 보임)**
+- 시험 DB 시험용 수업 시각은 원래대로 되돌림(STU-9001 11/14 10:00·11:00 한국, 이미 알림 보낸 수업 1개는 12/2로 옮겨 둠 — 알림 기록은 지울 수 없어서)
+- migration **20261113120000_lms_student_late_notice** (시험 DB 적용): 표 student_late_notices(수업당 1줄) · tutor_updates 종류 'student_late' · 함수 student_late_notice(보내기, 시작 2시간 전~끝나기 전만) · student_late_notices(읽기). 운영 표 수 60 → 61 (prod-setup 02-check 고침)
+- 화면: 학생 홈 '다음 수업' 카드 [늦게 참여해요] (StudentHome.tsx NextLesson·LateNotice), 강사 Home Updates 'Running late' 줄 (tutor/updates.ts), 운영자 보기는 같은 함수로 대신 입력
+- 검증: vitest 456 · tsc · test:db 새 시험(supabase/tests/student-late-notice.sql 22개) 통과 · 시험 DB 실제 함수 실행(수업 시간을 되돌림 트랜잭션 안에서 앞당겨 실행 → 알림·메일 문구·중복 확인 → 롤백, 데이터 안 남음). **미확인: support@ 실제 도착**(실제 저장 없이 롤백했음 — 강사 메일 경로는 기존 tutor_updates 메일과 같음)
+- 이 작업 전부터 실패하던 것(내 변경과 무관): test:db schema_test.sql:2495 겹침 오류(날짜에 따라 달라지는 시험) · authz-probe '검토 안 된 SECURITY DEFINER 함수 lms_screen_pref_set·lms_screen_prefs'(11/13 보기 설정 migration 이 목록에 안 넣음) · eslint TimeStatusLegend.tsx 1건
 
 ## ✅ 11/11 학생 재등록 안내 자동 메일 3통 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/nice-einstein-x201yx, H26(117) ① · 대표 11/11 결정 1~5 + 마지막 수업 종료 기준)
 - migration **20261111190000_lms_renewal_mail** (시험 DB 적용): `lms_renewal_plans`(가격표, renewal-price.ts 와 같은 값 — 가격 바뀌면 두 곳) · `lms_renewal_remaining`(대시보드 remainingOf 와 같은 남은 수업) · `lms_renewal_mail`(문구·대기열, dedupe `renewal_mail:수강권:단계`) · `lms_renewal_mail_due` · `lms_renewal_mail_run` · pg_cron `lms-renewal-mail` 10분(`lms_renewal_mail_run(); lms_mail_run();`). 시작 스위치 = feature_flags `renewal_mail_since` 줄이 있을 때만 (시험 DB 에만 넣음, 운영은 줄 없음 = 안 보냄)
@@ -1306,4 +1327,4 @@
 - (반영 전) LessonManage '시트 이관분' → '보강 수업' 문구 + migration 20261111200000(admin_void_makeup 오류 문구). 운영자 화면에만 보임
 - 시험 사이트 STU-0003 [+ 수업 추가] 목록: 첫 줄은 11/23(월) 수업분 · 수강생 미리 취소(보강 수업을 학생이 취소해 생긴 보강권), 12/7(월) 수업분 · 보강 수업은 목록 아래쪽 → 대표 시험 사이트 확인 통과(11/11)
 
-- 11/12 학생 화면 문구·이월 표시 개발(lms-test): 카드 '보강 수업'/'이월된 수업'·'원래 수업 날짜'·'사유'·버튼 '날짜 고르기'·홈 카드 '수업 날짜 고르기'·강사 Cover class ? 클릭 팝업. migration 20261112100000(student_screen carry_in) 시험 DB 적용, 운영 미적용. 결정 내용은 정책 원본 H26 참고.
+- 11/12 학생 화면 문구·이월 표시 개발(lms-test): 카드 '보강 수업'/'이월된 수업'·'원래 수업 날짜'·'사유'·버튼 '날짜 고르기'·홈 카드 '수업 날짜 고르기'·강사 Cover class ? 클릭 팝업. migration 20261112100000(student_screen carry_in) 시험 DB 적용, 운영 적용(11/12 lms_student_makeup_carry_in) · 코드 운영 반영. 결정 내용은 정책 원본 H26 참고.

@@ -4,7 +4,7 @@ import { enBoth, enDay, enEvery, enZoned } from '../admin/time-text';
 
 export type TutorUpdateKind =
   | 'new_student' | 'renewal' | 'schedule_change' | 'class_moved' | 'cover'
-  | 'makeup_new' | 'makeup_moved' | 'makeup_removed' | 'makeup_canceled' | 'cancel_undone' | 'canceled';
+  | 'makeup_new' | 'makeup_moved' | 'makeup_removed' | 'makeup_canceled' | 'cancel_undone' | 'canceled' | 'student_late';
 
 export type TutorUpdate = { id: string; kind: TutorUpdateKind; student: string; studentId?: string; at: Date; info: Record<string, unknown> };
 export type NewStudentRequest = { planId: string; student: string; minutes: number; classes: number; first: Date; every: Date[]; answer: 'yes' | 'no' | null };
@@ -35,6 +35,15 @@ export const UPDATE_TITLE: Record<TutorUpdateKind, [string, string]> = {
   makeup_canceled: ['Make-up canceled', '보강 취소'],
   cancel_undone: ['Cancellation undone', '취소 되돌림'],
   canceled: ['Canceled', '취소'],
+  student_late: ['Running late', '지각 알림'],
+};
+
+/** 학생이 고른 지각 이유 (H26 기록 11/13, 학생 화면 버튼 4개 ↔ 강사에게 가는 영어 문장) */
+export const LATE_REASON_EN: Record<string, string> = {
+  work_late: 'Work is running late.',
+  traffic: "I'm stuck in traffic.",
+  transit: 'Public transportation is delayed.',
+  unexpected: 'Something unexpected came up.',
 };
 
 /** Updates 한 줄의 아래 글 (시안 H26(127)): 시각 줄은 강사 현지 / KST */
@@ -60,6 +69,16 @@ export function updateLines(u: TutorUpdate, tz: string): string[] {
     case 'makeup_moved': {
       const was = d(i.was);
       return [enBoth(u.at, tz), ...(was ? [`Was: ${enZoned(was, tz)}`] : [])];
+    }
+    case 'student_late': {
+      const m = Number(i.minutes);
+      const reason = typeof i.reason === 'string' ? LATE_REASON_EN[i.reason] : null;
+      return [
+        enBoth(u.at, tz),
+        `The student may be approximately ${m >= 20 ? '20 or more' : m} minutes late.`,
+        ...(reason ? [`Reason: ${reason}`] : []),
+        'Please join the class on time and stay until the scheduled end time, as the student may arrive earlier than expected.',
+      ];
     }
     default:
       return [enBoth(u.at, tz)];

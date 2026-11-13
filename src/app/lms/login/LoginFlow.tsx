@@ -223,7 +223,11 @@ export default function LoginFlow() {
         await sb.rpc('lms_discard_unverified_social_orphan', { p_provider: PROVIDER_ID[pending] });
         const { error: e } = await sb.auth.linkIdentity({
           provider: PROVIDER_ID[pending] as Provider,
-          options: { redirectTo: `${window.location.origin}/lms/login` },
+          options: {
+            redirectTo: `${window.location.origin}/lms/login`,
+            // Supabase 기본 카카오 범위(profile_image 포함)를 필요한 두 항목으로 대체한다.
+            queryParams: pending === 'kakao' ? { scope: 'profile_nickname,account_email' } : undefined,
+          },
         });
         if (!e) return;
         setLinkFor(null);
@@ -275,7 +279,11 @@ export default function LoginFlow() {
     }
     const { error: e } = await sb.auth.signInWithOAuth({
       provider: PROVIDER_ID[p] as Provider,
-      options: { redirectTo: `${window.location.origin}/lms/login${next ? `?next=${encodeURIComponent(next)}` : ''}` },
+      options: {
+        redirectTo: `${window.location.origin}/lms/login${next ? `?next=${encodeURIComponent(next)}` : ''}`,
+        // scopes 옵션은 기본 범위에 추가되므로, scope 쿼리로 사진 요청을 제외한다.
+        queryParams: p === 'kakao' ? { scope: 'profile_nickname,account_email' } : undefined,
+      },
     });
     if (e) {
       setBusy(false);
