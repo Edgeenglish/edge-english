@@ -66,6 +66,16 @@ export default function Footer() {
           </p>
         </div>
 
+        <div className="mt-6 flex items-center text-sm max-md:mt-4">
+          <Link href="/terms" className="text-edge-gray">
+            이용약관
+          </Link>
+          <TextDivider />
+          <Link href="/privacy" className="font-bold text-edge-gray">
+            개인정보 처리방침
+          </Link>
+        </div>
+
         <div className="mt-8 max-md:mt-6">
           <p className="font-montserrat text-[13px] text-edge-gray">
             copyright © 탠저린 영어 all rights reserved.
