@@ -23114,6 +23114,65 @@ end $$;
 revoke all on function admin_time_off_reject(uuid, text) from public, anon;
 grant execute on function admin_time_off_reject(uuid, text) to authenticated;
 
+-- &gt;&gt;&gt; 20261114100000_lms_tutor_access_24h.sql
+-- 강사 학생 정보 접근 (대표 11/14 결정, 개인정보 처리방침·강사 부속합의서 제8조와 같게)
+-- ① 비활성 강사(tutors.active = false)는 모든 학생 정보 접근 즉시 차단 — my_tutor_id() 가 null
+-- ② 배정이 끝난 학생은 마지막 수업 종료 24시간 뒤 차단 (전에는 60일). 정규 일정은 끝난 날 다음 날 하루까지
+--    지금 담당 학생(끝나지 않은 정규 일정·앞으로 수업)은 그대로. 대체강사 24시간 규칙은 그대로
+-- 수업 기록 입력(tutor_record_class)은 이 접근 권한과 따로라서 지난 수업 기록은 계속 쓸 수 있음(비활성 강사 제외)
+
+create or replace function public.my_tutor_id()
+ returns uuid
+ language sql
+ stable security definer
+ set search_path to 'public'
+as $function$
+  select a.tutor_id from app_users a join tutors t on t.id = a.tutor_id
+  where a.auth_user_id = auth.uid() and t.active
+$function$;
+
+create or replace function public.lms_tutor_student_access(p_tutor uuid, p_student uuid)
+ returns text
+ language sql
+ stable security definer
+ set search_path to 'public'
+as $function$
+  select case
+    when p_tutor is null or p_student is null then null
+    when not exists (select 1 from tutors t where t.id = p_tutor and t.active) then null
+    when exists (select 1 from regular_schedules rs where rs.student_id = p_student and rs.tutor_id = p_tutor
+                 and (rs.effective_to is null or rs.effective_to &gt;= ((now() - interval '24 hours') at time zone 'Asia/Seoul')::date))
+      or exists (select 1 from lessons l where l.student_id = p_student and l.state &lt;&gt; 'canceled' and l.voided_at is null
+                 and coalesce(l.original_tutor_id, l.tutor_id) = p_tutor
+                 and l.ends_at &gt; now() - interval '24 hours')
+      then 'regular'
+    when exists (select 1 from lessons l where l.student_id = p_student and l.tutor_id = p_tutor
+                 and l.original_tutor_id is not null and l.original_tutor_id &lt;&gt; p_tutor
+                 and l.state &lt;&gt; 'canceled' and l.voided_at is null
+                 and now() &lt;= l.ends_at + interval '24 hours')
+      then 'substitute'
+    else null end
+$function$;
+
+-- &gt;&gt;&gt; 20261114110000_lms_tutor_screen_hide_past_student_info.sql
+-- 강사 Home 수업 줄: 학생 정보 접근이 끝난 학생(배정 끝나고 마지막 수업 24시간 지남·비활성 강사)은 수준·노트 링크를 안 보냄 (대표 11/14 C)
+-- 이름·수업 기록 칸은 그대로 → Class Record 입력 유지. 접근 판단은 lms_tutor_student_access (20261114100000) 하나
+-- 지금 함수 본문에서 두 곳만 바꿔 다시 만듦 (본문이 바뀌어 있으면 멈춤)
+do $migration$
+declare
+  d text := pg_get_functiondef('public.tutor_screen(uuid,date,date)'::regprocedure);
+  a text := $r$'level', s.level, 'note_url', s.class_note_url,$r$;
+  b text := $r$'level', s.level, 'note_url', null,$r$;
+begin
+  if position(a in d) = 0 or position(b in d) = 0 then
+    raise exception 'tutor_screen 본문이 예상과 달라 멈춤';
+  end if;
+  d := replace(d, a, $r$'level', case when lms_tutor_student_access(v_tutor, s.id) is not null then s.level end, 'note_url', case when lms_tutor_student_access(v_tutor, s.id) is not null then s.class_note_url end,$r$);
+  d := replace(d, b, $r$'level', case when lms_tutor_student_access(v_tutor, s.id) is not null then s.level end, 'note_url', null,$r$);
+  execute d;
+end
+$migration$;
+
 -- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)
 insert into lms_backup.project (name) values ('edgeenglish-lms');
 commit;</textarea>
