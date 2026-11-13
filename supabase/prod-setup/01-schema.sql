@@ -22229,12 +22229,12 @@ begin
   v_reason := case p_reason when 'work_late' then 'Work is running late.' when 'traffic' then 'I''m stuck in traffic.'
                             when 'transit' then 'Public transportation is delayed.' when 'unexpected' then 'Something unexpected came up.' end;
   v_x := case when p_minutes = 20 then '20 or more' else p_minutes::text end;
-  -- 굵게는 *…* (대표 11/13): 지각 분, 마지막 안내 문장 통째로. 마지막 문장은 한 줄 띄움(문단 따로)
+  -- 굵게는 *…* (대표 11/13): 지각 분, 'Please join… end time' 까지만. 마지막 문장은 한 줄 띄움(문단 따로)
   v_paras := array[
     'Student Running Late – ' || lms_student_en(st),
     lms_student_en(st) || ' has reported that they may be approximately *' || v_x || '* minutes late.'
       || case when v_reason is null then '' else E'\nReason: ' || v_reason end,
-    '*Please join the class on time and stay until the scheduled end time, as the student may arrive earlier than expected.*'];
+    '*Please join the class on time and stay until the scheduled end time*, as the student may arrive earlier than expected.'];
   perform lms_tutor_update_add(l.tutor_id, v_student, 'student_late',
     jsonb_build_object('to', l.starts_at, 'minutes', p_minutes, 'reason', p_reason),
     l.ends_at, 'student_late:' || p_lesson,
