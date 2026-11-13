@@ -807,6 +807,38 @@ export default function StudentHome(props: {
 
         {tab === 'schedule' && (
           <TabPage title="일정">
+            {(() => {
+              const past = lessons.filter((l) => l.startsAt.getTime() <= now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+              if (past.length === 0) return null;
+              const row = (l: (typeof past)[number]) => (
+                <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">
+                  <span>{whenText(l.startsAt)}</span>
+                  <span className="text-[#6b6880]">{l.state === 'done' ? (s.lessons.find((x) => x.id === l.id)?.tutorNoShow ? '강사 사정으로 취소' : '진행') : l.state === 'canceled' ? '취소' : l.startsAt.getTime() + l.minutes * 60_000 > now.getTime() ? '진행 중' : '기록 전'}</span>
+                </div>
+              );
+              const byMonth = new Map<string, typeof past>();
+              for (const l of past) {
+                const k = new Intl.DateTimeFormat('en-CA', { timeZone: VIEW_TZ, year: 'numeric', month: '2-digit' }).format(l.startsAt);
+                byMonth.set(k, [...(byMonth.get(k) ?? []), l]);
+              }
+              const months = [...byMonth.entries()];
+              const years = new Set(months.map(([k]) => k.slice(0, 4)));
+              return (
+                <details className="rounded-[14px] border border-[#e6e3ef] bg-white px-4">
+                  <summary className="min-h-[44px] cursor-pointer py-3 text-[14px] font-bold text-[#55526a]">지난 수업</summary>
+                  <div className="pb-2">
+                    {months.length > 1
+                      ? months.map(([k, rows]) => (
+                          <details key={k} className="border-t border-[#eeecf4]">
+                            <summary className="min-h-[44px] cursor-pointer py-3 text-[14px] font-semibold text-[#55526a]">{years.size > 1 ? `${k.slice(0, 4)}년 ` : ''}{Number(k.slice(5))}월</summary>
+                            {rows.map(row)}
+                          </details>
+                        ))
+                      : past.map(row)}
+                  </div>
+                </details>
+              );
+            })()}
             {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p }))]
               .sort((a, b) => a.at.getTime() - b.at.getTime())
               .map(({ l, p }) => p ? (
@@ -829,11 +861,6 @@ export default function StudentHome(props: {
                   {s.lessons.find((x) => x.id === l.id)?.leaveOpen && (
                     <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
                   )}
-                  {meetOf(l.id) && (
-                    <a href={meetOf(l.id)!} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold text-[#4b2fd6] underline">
-                      수업 링크 (Google Meet)
-                    </a>
-                  )}
                   {l.kind === 'makeup' && <AddToCalendar ev={{ title: '엣지영어 보강 수업', start: l.startsAt, end: new Date(l.startsAt.getTime() + l.minutes * 60000), details: meetOf(l.id) }} google="구글 캘린더에 추가" file="애플·삼성 캘린더에 추가" />}
                 </div>
                 <button type="button" onClick={() => setOverlay({ kind: 'cancel', lessonId: l.id })} className="min-h-[44px] rounded-[12px] border border-[#d9d5e8] px-3 text-[14px] font-semibold">
@@ -849,16 +876,6 @@ export default function StudentHome(props: {
                 <span className="text-[#6b6880]">취소</span>
               </div>
             ))}
-            <h2 className="pt-2 text-[14px] font-bold text-[#55526a]">지난 수업</h2>
-            {lessons
-              .filter((l) => l.startsAt.getTime() <= now.getTime())
-              .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
-              .map((l) => (
-                <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">
-                  <span>{whenText(l.startsAt)}</span>
-                  <span className="text-[#6b6880]">{l.state === 'done' ? (s.lessons.find((x) => x.id === l.id)?.tutorNoShow ? '강사 사정으로 취소' : '진행') : l.state === 'canceled' ? '취소' : l.startsAt.getTime() + l.minutes * 60_000 > now.getTime() ? '진행 중' : '기록 전'}</span>
-                </div>
-              ))}
           </TabPage>
         )}
 
