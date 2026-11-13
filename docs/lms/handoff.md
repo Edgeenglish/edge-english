@@ -2,6 +2,12 @@
 
 # 다음 세션 시작 메모
 
+## ✅ 11/13 학생 일정·처리 내역·보기 설정 계정 저장·용어 '보상수업' — 운영 반영 완료 (정책 원본 H26(159) 참고)
+- 운영 DB(mfamixejxydodclhglbc): 백업 `lms_backup.snapshots` **id 48**(표 60·학생 13·수업 171, 처리 내역 함수 이전 정의 `_functions_before`) → migration 적용(커넥터 이름 `student_processing_history_cancel_reason` = 저장소 20261113070000, `lms_screen_prefs` = 20261113080000) → 확인: 함수에 cancel_reason · students/tutors.screen_prefs 칸 · 함수 2개 · STU-0013 계정으로 처리 내역 5건 모두 cancel_reason 키(되돌림 처리)
+- 코드: lms-prod·main = 3a459ef (lms-test 커밋 12건만 골라 담음: 0647a4a 1e769fa b0f8b20 a7d31b3 6b4c9f4 ed6cce6 56d8053 63f716e 401b773 8a25bbc 3650d45 eea655d). 그 상태로 tsc 0 · vitest src/lms 442 통과. 다른 세션의 시험 전용 작업은 섞지 않음
+- 시험 DB: STU-0003 강민준에 경우 6개 추가(학생 늦은 취소 10/23 · 학생 노쇼 10/27 · 강사 사전 취소 10/30 · 강사 휴무 11/4 · 공휴일 취소 11/6 · 12/2 취소→되돌림), 처리 기록 시각은 11/13 16:10(audit 수정 불가)
+- 남은 확인: 운영 화면 실제 클릭(대표) · 강사가 '맞는 시간 없음'을 글로만 남긴 경우 학생 다음 행동 QA · 학생 메일·카톡의 '무료 보상수업이 확정됐어요'는 예외로 유지
+
 ## 🔐 11/11~12 홈페이지 회원가입·로그인 — 정책 원본 H26(146)(150) 참고 · **시험 사이트(lms-test) 반영, 운영 미반영** (브랜치 claude/clever-curie-hzaqbi)
 - 시안 v2: `docs/lms/previews/home-signup-login-drafts.html` (https://claude.ai/artifact/RPg5vNWjBvo2vC1JD53Qsn)
 - 코드: `src/app/lms/login/LoginFlow.tsx`(login·signup·signup_code·pw_email·pw_new·social_choice·member + totp/enroll) · `src/lms/auth/login-flow.ts`(PASSWORD_MIN 8·signupProblems·enabledSocial·needsSocialChoice·PROVIDER_ID, 한·영 문구) · `src/lms/auth/client.ts` pkce · `src/lms/auth/naver.ts` + `src/app/api/auth/naver-userinfo/route.ts` · `src/components/Header.tsx` [로그인]/[내 수업], 말풍선 삭제
