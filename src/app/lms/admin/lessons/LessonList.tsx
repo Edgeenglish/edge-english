@@ -9,6 +9,7 @@ import { instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { AdminHeader, BottomNav } from '../ui';
 import { useAdminSb } from '../useAdmin';
 import DateInput from '../DateInput';
+import { lessonStateClass, STRIKE } from '../LessonRows';
 
 export default function LessonList() {
   const { sb, error } = useAdminSb();
@@ -87,11 +88,14 @@ export default function LessonList() {
                           <tr key={d}><td colSpan={5} className="bg-[#f6f5fa] px-2 py-1.5 text-[12.5px] font-extrabold text-[#6b6880]">{mdw(d)} · {r.length}건</td></tr>,
                           ...r.map((l) => (
                             <tr key={l.id} className="border-b border-[#e6e3ef]">
-                              <td className="px-2 py-1.5 tabular-nums text-[#6b6880]">{l.time}</td>
-                              <td className="px-2 py-1.5">{l.studentCode ? <Link href={studentHref(l.studentCode)} className="hover:underline">{l.studentName}</Link> : l.studentName}</td>
-                              <td className="px-2 py-1.5">{l.tutorName}</td>
-                              <td className="px-2 py-1.5">{l.kind}</td>
-                              <td className={`px-2 py-1.5 ${l.muted ? 'text-[#6b6880]' : 'font-semibold'}`}>{l.state}</td>
+                              <td className={`px-2 py-1.5 align-top tabular-nums text-[#6b6880] ${l.struck ? STRIKE : ''}`}>{l.time}</td>
+                              <td className="px-2 py-1.5 align-top">
+                                {l.studentCode ? <Link href={studentHref(l.studentCode)} className={`hover:underline ${l.struck ? STRIKE : ''}`}>{l.studentName}</Link> : <span className={l.struck ? STRIKE : ''}>{l.studentName}</span>}
+                                {l.note && <span className="block text-[12px] text-[#6b6880]">{l.note}</span>}
+                              </td>
+                              <td className="px-2 py-1.5 align-top">{l.tutorName}</td>
+                              <td className="px-2 py-1.5 align-top">{l.kind}</td>
+                              <td className={`px-2 py-1.5 align-top ${lessonStateClass(l)}`}>{l.state}</td>
                             </tr>
                           )),
                         ];
@@ -109,10 +113,10 @@ export default function LessonList() {
                         <ul className="px-1">
                           {r.map((l) => (
                             <li key={l.id} className="grid grid-cols-[72px_minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 border-b border-[#e6e3ef] py-2 text-[13.5px] last:border-0">
-                              <span className="tabular-nums text-[13px] text-[#6b6880]">{l.time}</span>
-                              <span className="truncate">{l.studentCode ? <Link href={studentHref(l.studentCode)}>{l.studentName}</Link> : l.studentName}</span>
-                              <span className={`text-[12.5px] ${l.muted ? 'text-[#6b6880]' : 'font-semibold'}`}>{l.state}</span>
-                              <span className="col-span-2 col-start-2 text-[12px] text-[#6b6880]">{l.tutorName} · {l.kind}</span>
+                              <span className={`tabular-nums text-[13px] text-[#6b6880] ${l.struck ? STRIKE : ''}`}>{l.time}</span>
+                              <span className="truncate">{l.studentCode ? <Link href={studentHref(l.studentCode)} className={l.struck ? STRIKE : ''}>{l.studentName}</Link> : <span className={l.struck ? STRIKE : ''}>{l.studentName}</span>}</span>
+                              <span className={`whitespace-nowrap text-right text-[12.5px] ${lessonStateClass(l)}`}>{l.state}</span>
+                              <span className="col-span-2 col-start-2 text-[12px] text-[#6b6880]">{l.tutorName} · {l.kind}{l.note ? <span className="block">{l.note}</span> : null}</span>
                             </li>
                           ))}
                         </ul>

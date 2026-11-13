@@ -198,17 +198,7 @@ export function makeupRights(lessons: ChLesson[], migrated: ChMigratedOpen[], re
   return [...fromLessons, ...fromSheet, ...fromComps];
 }
 
-export const STATUS_SHORT: Partial<Record<ClassStatus, string>> = {
-  'Student canceled in advance': '수강생 정상 변경',
-  'Student canceled in advance (public holiday)': '공휴일 정상 변경',
-  'Student canceled late': '수강생 늦은 변경',
-  'No change credits left': '변경권 없음',
-  'Tutor canceled in advance': '강사 정상 취소',
-  'Tutor canceled late': '강사 늦은 취소',
-  'Tutor long-term leave': '강사 휴무',
-};
-
-/** 취소된 수업 줄·변경 기록의 '누가 취소했는지' (처음 보는 사람도 바로 읽히게, 대표 11/8) */
+/** 취소 사유 — 운영진 화면 모든 곳에서 이 표현 하나만 (대표 11/8, 11/13 용어 통일) */
 export const STATUS_PLAIN: Partial<Record<ClassStatus, string>> = {
   'Student canceled in advance': '수강생 미리 취소',
   'Student canceled in advance (public holiday)': '공휴일 취소',
@@ -221,7 +211,7 @@ export const STATUS_PLAIN: Partial<Record<ClassStatus, string>> = {
 
 /** 미리 보기 결과 줄 (화면 표시용, 짧게) */
 export function decisionLines(d: ChangeDecision): string[] {
-  const lines = [`${STATUS_SHORT[d.status] ?? d.status} · 수업 ${d.hours_before}시간 전 요청`];
+  const lines = [`${STATUS_PLAIN[d.status] ?? d.status} · 수업 ${d.hours_before}시간 전 요청`];
   if (d.who === 'student') {
     if (d.uses_credit) lines.push(`변경권 ${d.credits_left} → ${d.credits_after}`);
     else lines.push(`변경권 ${d.credits_left} (차감 없음)`);

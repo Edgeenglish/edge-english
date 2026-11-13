@@ -13,8 +13,8 @@ const CHANGE_EVENT_TEXT: Record<string, string> = {
   makeup_requested: '보강 신청 접수',
   change: '수업 취소', makeup_ask: '보강 강사에게 묻기', makeup_confirmed: '보강 확정', makeup_voided: '보강 취소', revert: '취소 되돌림', makeup_rescheduled: '보강 시간 변경', makeup_tutor_removed: '보강 강사 바뀜', makeup_expired: '보강 신청 만료',
 };
-const LESSON_KIND_TEXT: Record<string, string> = { regular: '정규 ', makeup: '보강 ', migrated_makeup: '보강 ', migrated_extra: '추가 ', compensation: '보상 ' };
-const CANCEL_BY_TEXT: Record<string, string> = { student_cancel: '수강생측 취소', tutor_cancel: '강사측 취소', admin_cancel: '운영진 취소' };
+const LESSON_KIND_TEXT: Record<string, string> = { regular: '정규 ', makeup: '보강 ', migrated_makeup: '보강 ', migrated_extra: '정규 ', compensation: '보상' };
+const CANCEL_BY_TEXT: Record<string, string> = { student_cancel: '수강생 취소', tutor_cancel: '강사 취소', admin_cancel: '운영진 취소' };
 /** '10/28(수) 오전 9시' · '11/2(월) 오후 8시 30분' 한국 시각 */
 function koShort(at: Date): string {
   const f = formatInZone(at, 'Asia/Seoul');
