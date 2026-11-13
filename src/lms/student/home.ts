@@ -148,6 +148,16 @@ export type PaymentSummary = {
   paid?: boolean;
 };
 
+/** 수강권 구분 (대표 11/13): 지금 수강권이 아니고 시작일이 오늘(한국 날짜) 뒤면 '다음 수강권'(미리 재등록), 그 밖은 '지난 수강권' */
+export function passKind(p: Pick<PaymentSummary, 'current' | 'periodStart'>, todayKst: KstDate): 'current' | 'next' | 'past' {
+  return p.current ? 'current' : p.periodStart > todayKst ? 'next' : 'past';
+}
+
+/** 가장 먼저 시작하는 다음 수강권. 없으면 null (화면 그대로) */
+export function nextPass<T extends Pick<PaymentSummary, 'current' | 'periodStart'>>(ps: readonly T[], todayKst: KstDate): T | null {
+  return [...ps].filter((p) => passKind(p, todayKst) === 'next').sort((a, b) => (a.periodStart < b.periodStart ? -1 : 1))[0] ?? null;
+}
+
 export const PAYMENT_METHOD_LABEL: Record<NonNullable<PaymentSummary['method']>, string> = {
   card_imweb: '카드 (아임웹)',
   bank_transfer: '계좌이체',

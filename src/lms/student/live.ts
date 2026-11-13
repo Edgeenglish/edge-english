@@ -336,7 +336,7 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     noticeRead: async (id: string): Promise<void> => {
       await sb.rpc('student_notice_read', { p_student: adminStudentId, p_announcement: id });
     },
-    /** 현재·지난 수강권 / 결제 내역 — 실제 등록·결제 기록만 (금액·카드 정보 없음, POL-PAY-11) */
+    /** 수강권 / 결제 내역 — 실제 등록·결제 기록만 (금액·카드 정보 없음, POL-PAY-11) */
     history: async (): Promise<PaymentSummary[]> => {
       const r = await sb.rpc('student_enrollment_history', { p_student: adminStudentId });
       if (r.error) return [];

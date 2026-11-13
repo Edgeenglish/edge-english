@@ -2,6 +2,12 @@
 
 # 다음 세션 시작 메모
 
+## ✅ 11/13 학생 화면 '다음 수강권' 표시 — 시험 사이트(lms-test) 반영, 운영 미반영 (H26(161) 참고, 브랜치 claude/nifty-fermat-bkdcsc)
+- 코드만(DB 변경 없음): `src/lms/student/home.ts` `passKind`·`nextPass`(지금 수강권 아님 + 시작일 > 오늘 한국 날짜 = 다음) · `StudentHome.tsx` 홈 '내 수강 정보' 종료일 옆·내 정보 '내 수강권' 종료일 아래 '다음 수강권 M/D~M/D', 결제 내역 카드 '다음 수강권', 이름 '수강권 / 결제 내역' · 시안 `docs/lms/previews/next-pass-drafts.html`
+- 검증: tsc 0 · vitest src/lms 449 · 로컬 ?demo=1 PC 1280·iPhone 13 — 다음 수강권 없음(화면 그대로)/있음(3곳 표시) 둘 다, 가로 넘침 없음. 시험 DB: STU-0003·0027·0042·0044 다음 수강권 있음, STU-0022(시작 전 첫 수강권)는 '현재'로 남음 확인
+- 운영 배포: 코드만(lms-prod). 첫 실제 대상 STU-0011(12/14 시작)
+- 참고: 11/11 ①②③·11/12 ④(이월된 수업, 운영 DB lms_student_makeup_carry_in 적용)는 운영 반영 끝 — 아래 '⏭ 새 세션 개발 대기 (대표 11/11)' 항목은 ⑤까지 모두 개발 끝
+
 ## ✅ 11/13 학생 일정·처리 내역·보기 설정 계정 저장·용어 '보상수업' — 운영 반영 완료 (정책 원본 H26(159) 참고)
 - 운영 DB(mfamixejxydodclhglbc): 백업 `lms_backup.snapshots` **id 48**(표 60·학생 13·수업 171, 처리 내역 함수 이전 정의 `_functions_before`) → migration 적용(커넥터 이름 `student_processing_history_cancel_reason` = 저장소 20261113070000, `lms_screen_prefs` = 20261113080000) → 확인: 함수에 cancel_reason · students/tutors.screen_prefs 칸 · 함수 2개 · STU-0013 계정으로 처리 내역 5건 모두 cancel_reason 키(되돌림 처리)
 - 코드: lms-prod·main = 3a459ef (lms-test 커밋 12건만 골라 담음: 0647a4a 1e769fa b0f8b20 a7d31b3 6b4c9f4 ed6cce6 56d8053 63f716e 401b773 8a25bbc 3650d45 eea655d). 그 상태로 tsc 0 · vitest src/lms 442 통과. 다른 세션의 시험 전용 작업은 섞지 않음
@@ -1309,4 +1315,4 @@
 - (반영 전) LessonManage '시트 이관분' → '보강 수업' 문구 + migration 20261111200000(admin_void_makeup 오류 문구). 운영자 화면에만 보임
 - 시험 사이트 STU-0003 [+ 수업 추가] 목록: 첫 줄은 11/23(월) 수업분 · 수강생 미리 취소(보강 수업을 학생이 취소해 생긴 보강권), 12/7(월) 수업분 · 보강 수업은 목록 아래쪽 → 대표 시험 사이트 확인 통과(11/11)
 
-- 11/12 학생 화면 문구·이월 표시 개발(lms-test): 카드 '보강 수업'/'이월된 수업'·'원래 수업 날짜'·'사유'·버튼 '날짜 고르기'·홈 카드 '수업 날짜 고르기'·강사 Cover class ? 클릭 팝업. migration 20261112100000(student_screen carry_in) 시험 DB 적용, 운영 미적용. 결정 내용은 정책 원본 H26 참고.
+- 11/12 학생 화면 문구·이월 표시 개발(lms-test): 카드 '보강 수업'/'이월된 수업'·'원래 수업 날짜'·'사유'·버튼 '날짜 고르기'·홈 카드 '수업 날짜 고르기'·강사 Cover class ? 클릭 팝업. migration 20261112100000(student_screen carry_in) 시험 DB 적용, 운영 적용(11/12 lms_student_makeup_carry_in) · 코드 운영 반영. 결정 내용은 정책 원본 H26 참고.
