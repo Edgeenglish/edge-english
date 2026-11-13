@@ -81,4 +81,10 @@ describe('student processing history', () => {
     expect(historyLabel(event('a', '2026-11-11T01:00:00Z', 'tutor_answered')).title).toBe('강사 답변');
     expect(historyLines(req, 'Asia/Seoul').status).toBeNull();
   });
+  it('labels compensation rows by the tutor-fault class, and drops the line when no class is linked', () => {
+    const c = { ...event('c', '2026-11-03T13:38:00Z', 'makeup_requested'), request_id: 'q', compensation: true, lesson_at: '2026-11-02T09:30:00Z' };
+    expect(historyLines(c, 'Asia/Seoul', '강사 확인 중')).toEqual({ title: '보상수업 신청', detail: '강사 사정으로 취소된 수업 : 11/2(월)', status: '강사 확인 중' });
+    expect(historyLines({ ...c, lesson_at: null, original_date: null }, 'Asia/Seoul').detail).toBeNull();
+    expect(historyLines({ ...c, compensation: false }, 'Asia/Seoul').detail).toBe('원래 수업 : 11/2(월)');
+  });
 });

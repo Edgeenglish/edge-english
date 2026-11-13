@@ -100,8 +100,8 @@ describe('수업 종류 한국어 (H26(138))', () => {
     const { typeKo, typeKoLong } = await import('../class-type');
     expect(typeKo('carry_out')).toBe('다음 수강기간으로 이월되는 수업');
     expect(typeKo(undefined, 'migrated_extra')).toBe('정규');
-    expect(typeKo(undefined, 'compensation')).toBe('무료 보상수업');
+    expect(typeKo(undefined, 'compensation')).toBe('보상수업');
     expect(typeKoLong('cover')).toBe('대체 수업');
-    expect(typeKoLong('compensation')).toBe('무료 보상수업');
+    expect(typeKoLong('compensation')).toBe('보상수업');
   });
 });

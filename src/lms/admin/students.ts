@@ -270,7 +270,7 @@ export const KEPT_WHY: Record<string, string> = {
 
 /** 수업 종류 한국어 */
 // 수업 종류 한국어 (H26(138)): DB type 이 없을 때 kind 로 — 이름은 class-type.ts 하나
-export const KIND_KO: Record<string, string> = { regular: '정규', makeup: '보강', migrated_makeup: '보강', compensation: '무료 보상수업', carryover: '지난 수강기간에서 이월된 수업', migrated_extra: '정규' };
+export const KIND_KO: Record<string, string> = { regular: '정규', makeup: '보강', migrated_makeup: '보강', compensation: '보상수업', carryover: '지난 수강기간에서 이월된 수업', migrated_extra: '정규' };
 
 export type RegularNoticeCtx = {
   studentNameKo: string; studentNameEn: string; studentTz: string; tutorName: string; tutorTz: string; durationMin: number;

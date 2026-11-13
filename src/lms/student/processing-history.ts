@@ -90,13 +90,16 @@ export function historyOriginalDay(e: ProcessingEvent, timezone: string): string
  * 처리 내역 줄 (대표 11/13 확정): 제목 / '원래 수업 : 11/9(월)'(취소는 '취소한 수업 : 11/9(월) · 수강생 취소') / '상태 : …'
  * 보강 신청 줄 상태는 requestStatus() 결과 (없으면 상태 줄 없이 두 줄만)
  */
-export function historyLines(e: ProcessingEvent, timezone: string, reqStatus: string | null = null): { title: string; detail: string; status: string | null } {
-  const original = historyOriginalDay(e, timezone) ?? '날짜 미기록';
+export function historyLines(e: ProcessingEvent, timezone: string, reqStatus: string | null = null): { title: string; detail: string | null; status: string | null } {
+  const day = historyOriginalDay(e, timezone);
+  const original = day ?? '날짜 미기록';
   const label = historyLabel(e);
   const cancel = e.kind === 'lesson_canceled';
   const reason = cancel ? cancelSubject(e) : null;
   const status = e.kind === 'makeup_confirmed' && e.booked_at ? `${historyDay(e.booked_at, timezone)} ${label.title}`
     : e.kind === 'makeup_requested' ? reqStatus : label.result;
+  // 보상수업은 강사 노쇼로 생긴 추가 수업 — 그 노쇼 수업을 '강사 사정으로 취소된 수업'으로, 연결된 수업이 없으면 줄을 뺌 (대표 11/13)
+  if (e.compensation && !cancel) return { title: label.title, detail: day ? `강사 사정으로 취소된 수업 : ${day}` : null, status };
   return { title: label.title, detail: `${cancel ? '취소한 수업' : '원래 수업'} : ${original}${reason ? ` · ${reason}` : ''}`, status };
 }
 

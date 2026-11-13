@@ -222,7 +222,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       set({
         ...view,
         makeupRights: view.makeupRights.map((m) => ((m.compId ?? null) === (right.compId ?? null) && m.lessonId === right.lessonId && m.itemId === right.itemId ? { ...m, requested: true } : m)),
-        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '무료 보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '', lessonId: right.lessonId, itemId: right.itemId, compId: right.compId ?? null }, ...view.requests],
+        requests: [{ id: `q${Date.now()}`, kind: 'makeup', title: right.compId ? '보상수업' : '보강', compensation: !!right.compId, status: 'tutor_reviewing', candidates: slots, createdAt: new Date(), note: '', lessonId: right.lessonId, itemId: right.itemId, compId: right.compId ?? null }, ...view.requests],
       });
     },
     withdrawMakeup: async (requestId) => {

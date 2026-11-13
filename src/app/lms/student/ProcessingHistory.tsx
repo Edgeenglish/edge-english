@@ -44,7 +44,7 @@ export default function ProcessingHistory({ events, error, timezone, loadPrefs, 
             <time dateTime={e.at} className="whitespace-nowrap text-right text-[11px] leading-5 text-[#6b6880]">{when(e.at)}</time>
           </>
         );
-        const text = <span>{lines.detail}{lines.status && <><br />상태 : {lines.status}</>}</span>;
+        const text = <span>{lines.detail}{lines.detail && lines.status && <br />}{lines.status && <>상태 : {lines.status}</>}</span>;
         if (sl.requested.length === 0 && sl.suggested.length === 0 && !sl.confirmedExtra) {
           return (
             <div key={e.id} className="grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 border-b border-[#eeecf4] px-3 py-2.5 last:border-0 sm:px-4">
@@ -73,7 +73,7 @@ export default function ProcessingHistory({ events, error, timezone, loadPrefs, 
               </span>
             </summary>
             <div className="grid gap-2 bg-[#faf9fc] px-3 py-2.5 text-[13px] sm:px-4">
-              {sl.requested.length > 0 && <div className="grid gap-1"><p className="text-[12px] text-[#6b6880]">신청한 보강 시간</p>{list(sl.requested)}</div>}
+              {sl.requested.length > 0 && <div className="grid gap-1"><p className="text-[12px] text-[#6b6880]">{e.compensation ? '신청한 보상수업 시간' : '신청한 보강 시간'}</p>{list(sl.requested)}</div>}
               {sl.suggested.length > 0 && <div className="grid gap-1"><p className="text-[12px] text-[#6b6880]">강사가 제안한 시간</p>{list(sl.suggested.map((at) => ({ at, ok: false })))}</div>}
               {sl.confirmedExtra && <div className="grid gap-1"><p className="text-[12px] text-[#6b6880]">확정된 보강 시간</p><p className="font-bold">{when(sl.confirmedExtra)} <span className="text-[12px] text-[#1f7a4d]">✓ 확정</span></p></div>}
             </div>
