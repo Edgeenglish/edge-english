@@ -41,6 +41,7 @@ import {
   type LateReason,
   type PaymentSummary,
   nextPass,
+  currentPassLessons,
   passKind,
   type RenewalState,
   type RequestStatus,
@@ -327,7 +328,8 @@ export default function StudentHome(props: {
   const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
-  const left = lessonsLeft(lessons, now, makeupsOwed);
+  // 남은 수업 = 지금 수강권만 (다음 수강권 수업은 '다음 수강권' 줄로, 대표 11/13)
+  const left = lessonsLeft(currentPassLessons(lessons, s.finalEndDate), now, makeupsOwed);
   // 결제 확인 전·강사 배정 전(수업이 아직 없음)에는 '수업이 0회 남았어요' 재등록 안내를 띄우지 않음 (QA-05)
   const notStarted = !s.paid || (s.enrollmentStatus != null && s.enrollmentStatus !== 'active' && lessons.length === 0);
   const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed, studentTz);
