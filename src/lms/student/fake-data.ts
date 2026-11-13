@@ -177,6 +177,8 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
   ];
   const actions: StudentActions = {
     reload: async () => ({ ...view, timezone: tz.timezone }),
+    prefs: async () => ({}),
+    savePref: null,
     reminders: async (change) => (reminders = { ...reminders, ...change }),
     timezone: async (change) => {
       if (change?.set) { tz = { ...tz, timezone: change.set }; view = { ...view, timezone: change.set }; }

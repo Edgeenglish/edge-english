@@ -1,14 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { prefOf, type PrefKey, type ScreenPrefs } from '@/lms/screen-prefs';
 import { historyLines, historySlots, historyTime, requestStatus, visibleEvents, type ProcessingEvent } from '@/lms/student/processing-history';
 
-export default function ProcessingHistory({ events, error, timezone }: {
+export default function ProcessingHistory({ events, error, timezone, loadPrefs, savePref }: {
   events: ProcessingEvent[]; error?: boolean; timezone: string;
-  requestIds?: string[]; onRequest?: (id: string) => void;
+  /** 학생이 저장한 정렬 읽기 · 저장(학생 본인만, 운영자 보기는 null → 이 화면에서만 바뀜) — 대표 11/13 A안 */
+  loadPrefs?: () => Promise<ScreenPrefs>; savePref?: ((key: PrefKey, value: string) => Promise<void>) | null;
 }) {
   const [limit, setLimit] = useState(30);
-  const [oldestFirst, setOldestFirst] = useState(false);
+  const [oldestFirst, setOldestFirstState] = useState(false);
+  useEffect(() => {
+    let live = true;
+    loadPrefs?.().then((p) => { if (live) setOldestFirstState(prefOf(p, 'history_order', ['asc', 'desc'] as const, 'desc') === 'asc'); }).catch(() => { /* 기본: 최신순 */ });
+    return () => { live = false; };
+  }, [loadPrefs]);
+  const setOldestFirst = (asc: boolean) => {
+    setOldestFirstState(asc);
+    void savePref?.('history_order', asc ? 'asc' : 'desc').catch(() => { /* 저장 실패해도 화면은 그대로 */ });
+  };
   if (error) return <p role="alert" className="rounded-[16px] border border-[#e6e3ef] bg-white p-5 text-[14px] text-[#b3261e]">처리 내역을 불러오지 못했어요. 새로고침해 주세요.</p>;
   const rows = visibleEvents(events);
   if (!rows.length) return <p className="rounded-[16px] border border-[#e6e3ef] bg-white p-5 text-center text-[14px] text-[#6b6880]">아직 처리 내역이 없어요.</p>;

@@ -22144,6 +22144,143 @@ begin
   execute d2;
 end $$;
 
+-- &gt;&gt;&gt; 20261113070000_student_processing_history_cancel_reason.sql
+-- 학생 처리 내역: 취소 사유(cancel_reason) 한 칸 추가 — 수강생 취소 / 강사가 취소 / 강사 휴무로 취소 / 강사 사정으로 취소 (대표 11/13).
+-- 읽기 전용 함수 교체만. 표·데이터·트리거 변경 없음. 다시 실행해도 같은 결과. 화면은 이 칸이 없는 옛 응답에서도 그대로 동작.
+-- Read-only student processing history. No backfill, data writes, new triggers or mail.
+-- audit_log remains admin-only; return an allowlisted projection after the existing
+-- student / AAL2 admin ownership guard. audit.at is processing time, not lesson time.
+create or replace function public.student_processing_history(p_student uuid default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_student uuid;
+begin
+  if auth.uid() is null then
+    raise exception '학생 계정으로 로그인해 주세요.' using errcode = '42501';
+  end if;
+  v_student := public.lms_screen_student(p_student);
+  return (
+    with owned as (
+      select a.* from public.lessons l
+      join public.audit_log a on a.table_name = 'lessons' and a.row_id = l.id::text
+      where l.student_id = v_student and a.new_row-&gt;&gt;'student_id' = v_student::text
+      union all
+      select a.* from public.makeup_requests r
+      join public.audit_log a on a.table_name = 'makeup_requests' and a.row_id = r.id::text
+      where r.student_id = v_student and a.new_row-&gt;&gt;'student_id' = v_student::text
+    ), events as (
+      select a.*, e.kind, e.step from owned a
+      cross join lateral (values
+        ('lesson_canceled', 1, a.table_name = 'lessons'
+          and (a.new_row-&gt;&gt;'state' = 'canceled' or a.new_row-&gt;&gt;'class_status' = 'Tutor no-show')
+          and not (coalesce(a.old_row-&gt;&gt;'state' = 'canceled', false) or coalesce(a.old_row-&gt;&gt;'class_status' = 'Tutor no-show', false))),
+        ('lesson_restored', 1, a.table_name = 'lessons' and a.new_row-&gt;&gt;'state' = 'scheduled'
+          and (a.old_row-&gt;&gt;'state' = 'canceled' or a.old_row-&gt;&gt;'class_status' = 'Tutor no-show')),
+        ('makeup_requested', 1, a.table_name = 'makeup_requests' and a.action = 'INSERT'),
+        ('tutor_waiting', 2, a.table_name = 'makeup_requests' and a.new_row-&gt;&gt;'status' = 'requested'
+          and a.new_row-&gt;&gt;'status' is distinct from a.old_row-&gt;&gt;'status'),
+        ('tutor_answered', 3, a.table_name = 'makeup_requests' and a.new_row-&gt;&gt;'tutor_answered_at' is not null
+          and a.new_row-&gt;&gt;'tutor_answered_at' is distinct from a.old_row-&gt;&gt;'tutor_answered_at'
+          and a.new_row-&gt;&gt;'status' &lt;&gt; 'countered'),
+        ('tutor_suggested', 3, a.table_name = 'makeup_requests' and a.new_row-&gt;&gt;'suggested_at' is not null
+          and a.new_row-&gt;&gt;'suggested_at' is distinct from a.old_row-&gt;&gt;'suggested_at'),
+        ('suggestion_declined', 4, a.table_name = 'makeup_requests' and a.new_row-&gt;&gt;'student_declined_at' is not null
+          and a.new_row-&gt;&gt;'student_declined_at' is distinct from a.old_row-&gt;&gt;'student_declined_at'),
+        ('makeup_confirmed', 5, a.table_name = 'makeup_requests' and a.new_row-&gt;&gt;'status' = 'confirmed'
+          and a.new_row-&gt;&gt;'status' is distinct from a.old_row-&gt;&gt;'status'),
+        ('makeup_withdrawn', 5, a.table_name = 'makeup_requests' and a.new_row-&gt;&gt;'status' = 'withdrawn'
+          and a.new_row-&gt;&gt;'status' is distinct from a.old_row-&gt;&gt;'status'),
+        ('makeup_expired', 5, a.table_name = 'makeup_requests' and a.new_row-&gt;&gt;'status' = 'expired'
+          and a.new_row-&gt;&gt;'status' is distinct from a.old_row-&gt;&gt;'status'),
+        ('makeup_voided', 5, a.table_name = 'makeup_requests' and a.new_row-&gt;&gt;'status' = 'voided'
+          and a.new_row-&gt;&gt;'status' is distinct from a.old_row-&gt;&gt;'status')
+      ) e(kind, step, include) where e.include
+    )
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'id', e.id::text || ':' || e.kind, 'at', e.at, 'kind', e.kind,
+      'request_id', case when e.table_name = 'makeup_requests' then e.row_id end,
+      'lesson_at', case when e.table_name = 'lessons' then e.new_row-&gt;&gt;'starts_at' else src.starts_at::text end,
+      'original_date', mi.original_date,
+      'tutor', t.name,
+      'compensation', e.new_row-&gt;&gt;'compensation_id' is not null,
+      'tutor_fault', e.new_row-&gt;&gt;'class_status' in ('Tutor no-show', 'Tutor canceled in advance', 'Tutor canceled late', 'Tutor on leave'),
+      'cancel_reason', case when e.kind = 'lesson_canceled' then
+        case when e.new_row-&gt;&gt;'class_status' in ('Tutor long-term leave', 'Tutor on leave') then 'tutor_leave'
+             when e.new_row-&gt;&gt;'class_status' in ('Tutor canceled in advance', 'Tutor canceled late') then 'tutor_canceled'
+             when e.new_row-&gt;&gt;'class_status' = 'Tutor no-show' then 'tutor_fault'
+             else 'student' end end,
+      'booked_at', case when e.kind = 'makeup_confirmed' then booked.new_row-&gt;&gt;'starts_at' end,
+      'slots', coalesce(slots.items, '[]'::jsonb)
+    ) order by e.at desc, e.id desc, e.step desc), '[]'::jsonb)
+    from events e
+    left join public.lessons src on src.id::text = e.new_row-&gt;&gt;'source_lesson_id' and src.student_id = v_student
+    left join public.migrated_items mi on mi.id::text = e.new_row-&gt;&gt;'migrated_item_id'
+      and exists (select 1 from public.enrollments en where en.id = mi.enrollment_id and en.student_id = v_student)
+    left join public.tutors t on t.id::text = e.new_row-&gt;&gt;'tutor_id'
+    left join lateral (
+      select a.new_row from public.audit_log a
+      where a.table_name = 'lessons' and a.row_id = e.new_row-&gt;&gt;'confirmed_lesson_id'
+        and a.new_row-&gt;&gt;'student_id' = v_student::text and a.at &lt;= e.at
+      order by a.at desc, a.id desc limit 1
+    ) booked on true
+    left join lateral (
+      select jsonb_agg(jsonb_build_object('at', x.new_row-&gt;&gt;'starts_at', 'answer', x.new_row-&gt;&gt;'tutor_answer')
+        order by x.new_row-&gt;&gt;'starts_at') items
+      from (
+        select distinct on (a.row_id) a.new_row, a.action
+        from public.audit_log a
+        where a.table_name = 'makeup_candidates' and coalesce(a.new_row, a.old_row)-&gt;&gt;'request_id' = e.row_id and a.at &lt;= e.at
+        order by a.row_id, a.at desc, a.id desc
+      ) x
+      where x.action &lt;&gt; 'DELETE'
+        and (case when e.kind = 'tutor_suggested' then x.new_row-&gt;&gt;'proposed_by' = 'tutor'
+          else x.new_row-&gt;&gt;'proposed_by' &lt;&gt; 'tutor' end)
+        and e.kind in ('makeup_requested', 'tutor_answered', 'tutor_suggested')
+    ) slots on e.table_name = 'makeup_requests'
+  );
+end $$;
+revoke all on function public.student_processing_history(uuid) from public, anon, authenticated;
+grant execute on function public.student_processing_history(uuid) to authenticated;
+
+-- &gt;&gt;&gt; 20261113080000_lms_screen_prefs.sql
+-- 화면 보기 설정을 학생·강사 계정에 저장 (대표 2026-11-13, A안):
+--  - 학생·강사 본인이 누른 보기 설정(처리 내역 정렬 · 강사 KST 칸 · Paid 칸)을 계정에 저장 → 기기가 달라도 같게
+--  - 운영자 보기는 그 학생·강사가 저장한 값을 읽기만 함. 운영자가 누른 것은 그 화면에서만 잠깐 바뀌고 저장하지 않음
+-- 칸 1개씩 추가 + 함수 2개. 기존 데이터·표를 바꾸지 않음. 다시 실행해도 같은 결과
+alter table students add column if not exists screen_prefs jsonb not null default '{}'::jsonb;
+alter table tutors add column if not exists screen_prefs jsonb not null default '{}'::jsonb;
+
+-- 읽기: 학생 본인 / 강사 본인 / 운영자(대상 지정, lms_screen_* 와 같은 검사)
+create or replace function lms_screen_prefs(p_student uuid default null, p_tutor uuid default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v jsonb;
+begin
+  if auth.uid() is null then raise exception '로그인해 주세요.' using errcode = '42501'; end if;
+  if p_tutor is not null or (p_student is null and my_tutor_id() is not null) then
+    select t.screen_prefs into v from tutors t where t.id = lms_screen_tutor(p_tutor);
+  else
+    select s.screen_prefs into v from students s where s.id = lms_screen_student(p_student);
+  end if;
+  return coalesce(v, '{}'::jsonb);
+end $$;
+revoke all on function lms_screen_prefs(uuid, uuid) from public, anon;
+grant execute on function lms_screen_prefs(uuid, uuid) to authenticated;
+
+-- 저장: 로그인한 학생·강사 본인 것만. 운영자는 저장하지 않음(A안) — 아무것도 바꾸지 않고 끝
+create or replace function lms_screen_pref_set(p_key text, p_value text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception '로그인해 주세요.' using errcode = '42501'; end if;
+  if p_key not in ('history_order', 'tutor_kst', 'tutor_paid') then raise exception 'Unknown setting.'; end if;
+  if p_value not in ('asc', 'desc', '1', '0') then raise exception 'Unknown value.'; end if;
+  if my_tutor_id() is not null then
+    update tutors set screen_prefs = screen_prefs || jsonb_build_object(p_key, p_value) where id = my_tutor_id();
+  elsif my_student_id() is not null then
+    update students set screen_prefs = screen_prefs || jsonb_build_object(p_key, p_value) where id = my_student_id();
+  end if;
+end $$;
+revoke all on function lms_screen_pref_set(text, text) from public, anon;
+grant execute on function lms_screen_pref_set(text, text) to authenticated;
+
 -- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)
 insert into lms_backup.project (name) values ('edgeenglish-lms');
 commit;</textarea>

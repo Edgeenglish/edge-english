@@ -1,5 +1,6 @@
 // 수강생 화면 실제 데이터 (migration 2800). 읽기·쓰기 모두 DB 함수 — 본인 확인·검사·이력은 DB
 import { asClassType } from '../class-type';
+import { loadScreenPrefs, saveScreenPref, type PrefKey } from '../screen-prefs';
 // 수강생 본인은 student_ 함수, 운영자(TOTP 완료)가 ?student= 로 열면 운영진 화면과 같은 admin_ 함수(이력에 운영자로 남음)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -297,6 +298,9 @@ export type TimezoneState = { timezone: string; kept: string | null };
 export function studentActions(sb: SupabaseClient, adminStudentId: string | null) {
   const admin = adminStudentId !== null;
   return {
+    /** 화면 보기 설정: 학생이 저장한 값 읽기 · 저장은 학생 본인일 때만 (운영자 보기는 저장 안 함, 대표 11/13 A안) */
+    prefs: () => loadScreenPrefs(sb, { student: adminStudentId }),
+    savePref: admin ? null : (key: PrefKey, value: string) => saveScreenPref(sb, key, value),
     reload: () => loadStudentView(sb, adminStudentId),
     /** 알림 설정 읽기(인자 없음)·바꾸기 — 수강생·운영자 같은 함수 */
     reminders: async (change?: { regular?: boolean; makeup?: boolean }): Promise<Reminders> => {

@@ -886,7 +886,7 @@ export default function StudentHome(props: {
         {tab === 'requests' && (
           <TabPage title="처리 내역">
             <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
-              requestIds={s.requests.map((r) => r.id)} onRequest={(id) => setOverlay({ kind: 'request', id })} />
+              loadPrefs={actions.prefs} savePref={actions.savePref} />
           </TabPage>
         )}
 
