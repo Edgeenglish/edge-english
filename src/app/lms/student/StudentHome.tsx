@@ -23,6 +23,9 @@ import {
   cancelPreview,
   creditPeriodFor,
   creditsForDate,
+  LATE_NOTICE,
+  lateMinutesLabel,
+  lateNoticeOpen,
   lessonsLeft,
   nextLesson,
   PAYMENT_METHOD_LABEL,
@@ -34,6 +37,8 @@ import {
   studentTodos,
   type CancelResult,
   type CreditPeriod,
+  type LateMinutes,
+  type LateReason,
   type PaymentSummary,
   nextPass,
   passKind,
@@ -565,7 +570,17 @@ export default function StudentHome(props: {
       <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
       <p className="text-[16px] font-bold text-white">예정된 수업이 없어요</p>
     </section>
-  ) : <NextLesson lesson={next} now={now} meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)} substitute={nextFull?.substitute ?? false} leaveOpen={!!nextFull?.leaveOpen} />;
+  ) : (
+    <NextLesson
+      lesson={next}
+      now={now}
+      meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)}
+      substitute={nextFull?.substitute ?? false}
+      leaveOpen={!!nextFull?.leaveOpen}
+      lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === next.id)}
+      onLate={async (minutes, reason) => { await run(() => actions.lateNotice(next.id, minutes, reason), '강사님께 알렸어요.'); }}
+    />
+  );
 
   const renewalCard = prompt && (
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
@@ -1560,7 +1575,14 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen }: { lesson: StudentLesson; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean }) {
+function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen, lateSent, onLate }: { lesson: StudentLesson; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
+  // 지각 알림 버튼은 수업 시작 2시간 전부터 끝나기 전까지 (페이지를 열어 둔 채로도 때가 되면 나타나게)
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setClock(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const lateOpen = !leaveOpen && (lateSent || lateNoticeOpen(lesson, new Date(Math.max(now.getTime(), clock))));
   const k = kst(lesson.startsAt);
   const started = now.getTime() >= lesson.startsAt.getTime();
   const badge = started ? '진행 중' : untilText(now, lesson.startsAt);
@@ -1596,7 +1618,56 @@ function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen }: { lesson: S
           수업 입장
         </a>
       )}
+      {lateOpen && <LateNotice sent={lateSent} onSend={onLate} />}
     </section>
+  );
+}
+
+// 지각 알림 (대표 11/13): 지각 시간 + 이유(선택) → [강사님께 알리기]. 보낸 뒤에는 회색 '알렸어요 ✓'
+function LateNotice({ sent, onSend }: { sent: boolean; onSend: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [minutes, setMinutes] = useState<LateMinutes | null>(null);
+  const [reason, setReason] = useState<LateReason | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (sent) return <p className="flex min-h-[46px] items-center justify-center rounded-[14px] bg-white/15 text-[15px] font-semibold text-[#d8d3f5]">강사님께 알렸어요 ✓</p>;
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className="min-h-[46px] rounded-[14px] border border-white/35 text-[15px] font-semibold text-white">늦게 참여해요</button>;
+  const chip = (on: boolean) => `min-h-[44px] rounded-[12px] px-3.5 text-[14.5px] font-semibold ${on ? 'bg-[#ffd66b] text-[#1b1442]' : 'border border-white/35 text-white'}`;
+  return (
+    <div className="grid gap-3.5 rounded-[16px] bg-white/10 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[16px] font-bold text-white">늦게 참여하시나요?</p>
+        <button type="button" onClick={() => setOpen(false)} className="min-h-[36px] px-1 text-[14px] font-semibold text-[#c9c0ff]">닫기</button>
+      </div>
+      <div className="grid gap-2">
+        <p className="text-[13px] font-semibold text-[#c9c0ff]">얼마나 늦나요?</p>
+        <div className="flex flex-wrap gap-2">
+          {LATE_NOTICE.minutes.map((m) => (
+            <button key={m} type="button" aria-pressed={minutes === m} onClick={() => setMinutes(m)} className={chip(minutes === m)}>{lateMinutesLabel(m)}</button>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <p className="text-[13px] font-semibold text-[#c9c0ff]">이유 (선택)</p>
+        <div className="flex flex-wrap gap-2">
+          {LATE_NOTICE.reasons.map((r) => (
+            <button key={r.code} type="button" aria-pressed={reason === r.code} onClick={() => setReason(reason === r.code ? null : r.code)} className={chip(reason === r.code)}>{r.label}</button>
+          ))}
+        </div>
+      </div>
+      <p className="text-[13.5px] text-[#d8d3f5]">수업은 예정된 시간에 끝나요. 늦은 만큼 연장되지 않아요.</p>
+      <button
+        type="button"
+        disabled={minutes === null || busy}
+        onClick={async () => {
+          if (minutes === null) return;
+          setBusy(true);
+          try { await onSend(minutes, reason); } finally { setBusy(false); }
+        }}
+        className="min-h-[50px] rounded-[14px] bg-white text-[16px] font-bold text-[#1b1442] disabled:opacity-50"
+      >
+        강사님께 알리기
+      </button>
+    </div>
   );
 }
 

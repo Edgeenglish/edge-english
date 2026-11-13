@@ -3,6 +3,9 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { kstToInstant } from '../rules/dates';
 import {
+  LATE_NOTICE,
+  lateMinutesLabel,
+  lateNoticeOpen,
   nextPass,
   passKind,
   cancelPreview,
@@ -221,5 +224,27 @@ describe('다음 수강권 (대표 11/13)', () => {
   it('가장 먼저 시작하는 다음 수강권, 없으면 null', () => {
     expect(nextPass([p('x', false, '2027-03-08'), p('y', false, '2026-12-14'), p('z', true, '2026-09-21')], '2026-11-13' as never)?.id).toBe('y');
     expect(nextPass([p('z', true, '2026-09-21'), p('o', false, '2026-06-01')], '2026-11-13' as never)).toBeNull();
+  });
+});
+
+describe('지각 알림 (대표 11/13): 수업 시작 2시간 전부터 끝나기 전까지', () => {
+  const lesson = { startsAt: new Date('2026-11-16T12:00:00Z'), minutes: 40, state: 'scheduled' as const };
+  it('2시간보다 일찍은 아님, 2시간 전부터 열림', () => {
+    expect(lateNoticeOpen(lesson, new Date('2026-11-16T09:59:59Z'))).toBe(false);
+    expect(lateNoticeOpen(lesson, new Date('2026-11-16T10:00:00Z'))).toBe(true);
+  });
+  it('수업 중에도 열려 있고, 끝나면 닫힘', () => {
+    expect(lateNoticeOpen(lesson, new Date('2026-11-16T12:20:00Z'))).toBe(true);
+    expect(lateNoticeOpen(lesson, new Date('2026-11-16T12:40:00Z'))).toBe(false);
+  });
+  it('취소·끝난 수업은 안 열림', () => {
+    expect(lateNoticeOpen({ ...lesson, state: 'canceled' }, new Date('2026-11-16T11:00:00Z'))).toBe(false);
+    expect(lateNoticeOpen({ ...lesson, state: 'done' }, new Date('2026-11-16T11:00:00Z'))).toBe(false);
+  });
+  it('선택지: 5·10·15·20분 이상, 이유 4개', () => {
+    expect(LATE_NOTICE.minutes).toEqual([5, 10, 15, 20]);
+    expect(lateMinutesLabel(20)).toBe('20분 이상');
+    expect(lateMinutesLabel(10)).toBe('10분');
+    expect(LATE_NOTICE.reasons.map((r) => r.label)).toEqual(['회사 업무가 늦게 끝나요', '길이 막혀요', '대중교통이 지연됐어요', '갑자기 일이 생겼어요']);
   });
 });

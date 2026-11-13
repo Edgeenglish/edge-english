@@ -61,6 +61,31 @@ export function nextLesson(lessons: readonly StudentLesson[], now: Date): Studen
 }
 
 /**
+ * 지각 알림 (대표 2026-11-13, H26 기록): 홈 '다음 수업'에서 [늦게 참여해요].
+ * 수업 시작 2시간 전부터 그 수업이 끝나기 전까지만. 수업 시간·상태는 바꾸지 않는 통보 (DB student_late_notice 가 같은 기준으로 막음)
+ */
+export const LATE_NOTICE = {
+  openHoursBefore: 2,
+  /** 값 20 = '20분 이상' */
+  minutes: [5, 10, 15, 20] as const,
+  reasons: [
+    { code: 'work_late', label: '회사 업무가 늦게 끝나요' },
+    { code: 'traffic', label: '길이 막혀요' },
+    { code: 'transit', label: '대중교통이 지연됐어요' },
+    { code: 'unexpected', label: '갑자기 일이 생겼어요' },
+  ] as const,
+};
+export type LateMinutes = (typeof LATE_NOTICE.minutes)[number];
+export type LateReason = (typeof LATE_NOTICE.reasons)[number]['code'];
+export const lateMinutesLabel = (m: number) => (m >= 20 ? '20분 이상' : `${m}분`);
+
+export function lateNoticeOpen(lesson: Pick<StudentLesson, 'startsAt' | 'minutes' | 'state'>, now: Date): boolean {
+  if (lesson.state !== 'scheduled') return false;
+  const start = lesson.startsAt.getTime();
+  return now.getTime() >= start - LATE_NOTICE.openHoursBefore * 3_600_000 && now.getTime() < start + lesson.minutes * 60_000;
+}
+
+/**
  * 재등록 진행 상태 — '신청'과 '결제 확인'을 구분한다.
  * requested: 수강생이 재등록을 신청했지만 운영자가 결제를 아직 확인하지 않음 (아임웹·계좌이체는 자동 연동 아님, POL-PAY-11)
  */

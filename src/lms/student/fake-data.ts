@@ -201,6 +201,9 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       const m = view.makeupRights.find((x) => x.lessonId && !x.compId && !x.tutorLeave && !x.tutorNoShow);
       return new Map(m?.lessonId ? [[m.lessonId, noTimeAt]] : []);
     },
+    lateNotice: async (lessonId, minutes, reason) => {
+      set({ ...view, lateNotices: [...(view.lateNotices ?? []), { lessonId, minutes, reason }] });
+    },
     noTimeRequest: async () => {
       noTimeAt = new Date().toISOString();
       set({ ...view });   // 화면이 다시 읽도록 새 값

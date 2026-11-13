@@ -29,6 +29,12 @@ echo "$RM_OUT" | sed -n -e "s/.*NOTICE:  //p" -e "/ERROR/p" | grep -v '^통과' 
 [ "$(echo "$RM_OUT" | grep -c '통과: ')" -ge 20 ] || { echo "❌ 재등록 메일 시험 통과 줄 부족"; exit 1; }
 echo "✅ 재등록 안내 메일 시험 통과"
 
+# 학생 지각 알림 (2026-11-13 대표 확정): 가짜 데이터로 시간 창·이유·중복·강사 메일 문구 확인, 끝에 되돌림
+LN_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/student-late-notice.sql" 2>&1 || true)"
+echo "$LN_OUT" | grep -E 'ERROR|실패' && { echo "❌ 지각 알림 시험 실패"; exit 1; }
+[ "$(echo "$LN_OUT" | grep -c '통과: ')" -ge 20 ] || { echo "❌ 지각 알림 시험 통과 줄 부족"; exit 1; }
+echo "✅ 학생 지각 알림 시험 통과"
+
 # 로그인 사용자 권한 점검: 시험용 Supabase 상태(가상 데이터 적용 후)와 같게 만든 뒤 실물용 파일을 그대로 실행
 "${PSQL[@]}" -o /dev/null -f "$ROOT/supabase/test-setup/seed_fake.sql"
 "${PSQL[@]}" -o /dev/null -f "$HERE/stub_supabase_platform.sql"   # 실물 Supabase 플랫폼 함수 흉내

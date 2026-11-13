@@ -5,7 +5,7 @@ import { loadScreenPrefs, saveScreenPref, type PrefKey } from '../screen-prefs';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
-import type { CreditPeriod, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
+import type { CreditPeriod, LateReason, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
 import { processingEvents, type ProcessingEvent } from './processing-history';
 
 const NOT_APPLIED = '수강생 화면이 이 DB에 아직 없어요 (migration 2800).';
@@ -74,6 +74,8 @@ export type StudentView = {
   lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
+  /** 지각을 알린 수업 (migration 20261113120000). 옛 DB 면 빈 배열 */
+  lateNotices?: { lessonId: string; minutes: number; reason: LateReason | null }[];
   processingHistory?: ProcessingEvent[];
   processingHistoryError?: boolean;
   leave: LeaveRow[];
@@ -259,14 +261,15 @@ export function withSuggestions(v: StudentView, rows: SuggestionRow[]): StudentV
 
 /** studentId: 운영자가 고른 수강생 (수강생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
-  const [screen, book, sug, history] = await Promise.all([
+  const [screen, book, sug, history, late] = await Promise.all([
     sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId), sb.rpc('student_makeup_suggestions', { p_student: studentId }),
-    sb.rpc('student_processing_history', { p_student: studentId })]);
+    sb.rpc('student_processing_history', { p_student: studentId }), sb.rpc('student_late_notices', { p_student: studentId })]);
   const v = parseStudentView(check(screen));
   // 강사가 제안한 시간 (H26(134), 20261111160000). 함수 없는 옛 DB 면 예전 그대로
   return { ...(sug.error ? v : withSuggestions(v, (sug.data as SuggestionRow[]) ?? [])), textbook: book,
     processingHistory: history.error ? [] : processingEvents((history.data as ProcessingEvent[]) ?? []),
-    processingHistoryError: !!history.error };
+    processingHistoryError: !!history.error,
+    lateNotices: late.error ? [] : ((late.data ?? []) as { lesson_id: string; minutes: number; reason: LateReason | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })) };
 }
 /** 강사가 정한 교재 (QA C-04, migration 20261107040000). 함수가 없는 옛 DB 면 null — 학습자료에 교재만 안 보임 */
 async function loadTextbook(sb: SupabaseClient, studentId: string | null): Promise<string | null> {
@@ -362,6 +365,10 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
       const r = await sb.rpc('student_no_time_rights', { p_student: adminStudentId });
       if (r.error) return new Map();
       return new Map(((r.data ?? []) as { lesson_id: string; requested_at: string | null }[]).map((x) => [x.lesson_id, x.requested_at]));
+    },
+    /** 지각 알림 (대표 11/13): 담당 강사 Updates + 이메일. 한 수업에 한 번만 */
+    lateNotice: async (lessonId: string, minutes: number, reason: LateReason | null): Promise<void> => {
+      check(await sb.rpc('student_late_notice', { p_student: adminStudentId, p_lesson: lessonId, p_minutes: minutes, p_reason: reason }));
     },
     noTimeRequest: async (lessonId: string): Promise<void> => {
       check(await sb.rpc('student_no_time_request', { p_student: adminStudentId, p_lesson: lessonId }));
