@@ -2,6 +2,13 @@
 
 # 다음 세션 시작 메모
 
+## 🧪 11/13 강사 휴무 신청 (H26(137)) — 코드 lms-test 반영, **시험 DB migration 적용 대기** (브랜치 claude/pensive-goodall-m2ndw0, 시안 https://claude.ai/artifact/VijcTWhC9DY52i9FqjHT3A)
+- 대표 확정 11/13 ('권장한걸로 다' + 질문 창): 계획된 휴무 14일 전(늦으면 빨간 경고, 신청은 받음) · 급한 일 기한 없음(요청 시 증빙) · **Home 신청은 3일 이상만**(1~2일은 Calendar Cancel class — 운영진 휴무 화면도 3일 미만 안 받음) · 확인 창 본인 기록 = 올해(현지 1/1~) · 란 이름 'Time off' · 반려 사유 필수(강사에게 보임) · 승인 전 철회 · 휴무 화면 저장 = 자동 승인 · 끝난 휴무는 다음 날 Home 에서 빠짐 · 현지 날짜는 실제 시각(현지 첫날 0:00~마지막 날 24:00)으로 휴무를 잡음. **정책 원본 H26 기록 못 함(Google Docs 커넥터 연결 실패) → 다음에 H26 에 위 내용 적기**
+- migration **20261113150000_lms_tutor_time_off_requests**: 표 `tutor_time_off_requests`(RLS, 직접 읽기 없음) · `tutor_time_off_preview/list/request/withdraw`(운영자 보기 p_tutor) · `admin_time_off_requests/reject` · `lms_leave_candidates_at`(실제 시각) + `lms_leave_candidates` 는 이걸 부르는 판 · `admin_leave_create` 6인자판(p_request: 날짜 그대로면 신청 실제 시각, 저장하면 승인, notice_given_on 기록) + 5인자판은 감싸기. 표 61→62 (02-check)
+- 코드: `src/app/lms/tutor/TimeOff.tsx`(Home 란·신청 창·확인 창·근무시간/달력 한 줄) · `src/lms/tutor/time-off.ts` · TutorHome/Hours/Schedule/Live · 대시보드 칸 '강사 휴무 신청'(`board.ts` time_off_request, [휴무 화면 열기]=/lms/admin/leave?new=1&req=…, [반려] 사유 입력) · 휴무 화면 `?req=` 칸 채움 + 안내 띠. 옛 DB(함수 없음)면 Home 란·대시보드 칸이 안 보임 → migration 전에 배포돼도 안전
+- 시험: `npm test` 465 · `npm run test:db` 전부 통과(새 `supabase/tests/tutor-time-off-request.sql` 25줄: 3일·기한·경계 수업(Manila 23:30=한국 다음 날)·승인·반려·철회·권한) · tsc 0. authz-probe 에 새 함수 + 다른 세션의 `lms_screen_prefs/pref_set` 검토 목록 추가(빠져 있어 실패하던 것)
+- **남은 일**: ① 시험 DB(kyeimjozkcqbgkepwrnv)에 migration 적용 — 이 세션은 Supabase 커넥터가 끊기고 api.supabase.com 토큰이 'Invalid access token' ② 시험 데이터: 시험 강사(Emma 등)로 대기 신청 1건 + 늦은 신청 1건 만들어 대시보드·강사 Home 에 바로 보이게 ③ 시험 사이트 화면 확인(PC·휴대폰) ④ H26 기록 ⑤ 운영 반영은 대표 승인 후
+
 ## 🧪 11/13 수업 줄 상태·용어 통일 — 시험 사이트(lms-test) 반영, 운영 DB 대조 미완료 (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
 - 코드만(DB 변경 없음): `src/lms/admin/dashboard.ts` `lessonState`(예정·진행 중·기록 전은 state=scheduled 일 때만 시각으로 / 완료·취소·수강생 노쇼·강사 노쇼(done+Tutor no-show)는 시각으로 안 덮음)·`lessonNote`(취소 사유 STATUS_PLAIN · 연결된 보강 · 'Emma → James' · '시간 변경 · 8:30 → 9:30')
 - `live.ts` `loadLessonExtras`: 보강 = makeup_requests confirmed(source→confirmed_lesson) 최신, 그 보강도 취소면 다음 연결을 따라감(최대 4번) / 시간 변경 = admin_makeup_logs reschedule 첫 old_starts_at 이 있을 때만. 읽기 실패면 표시만 생략
@@ -519,7 +526,7 @@
      - 11/11 시안 https://claude.ai/artifact/YVLwWKyTMm3MQe32TmuDtW (브랜치 claude/adoring-hamilton-xgum09). 대표 결정 대기 2건: 결정1 학생이 알린 시각 강사 입력 여부, 결정2 운영진·학생 화면 수업 종류 이름(영어/한국어). 확인: 이관 추가 수업(migrated_extra, 송O나 11/11·11/13) = Olivia 시트 Regular. 시안에 포함: 대체강사 Held 저장 → 'Normal'(기존 기록 그대로)
      - ✅ **11/11 결정 끝 (H26(136)(138))** → ✅ 11/11 시험 환경 개발 끝 (맨 위 항목, H26(139)). 남은 대표 결정: 운영 DB 공휴일 목록 넣기(0건)
      - 11/11 대표 추가: 결정3 = A 운영진만 (H26(136) — 대표가 다시 물으면 그 이유를 꼭 다시 말할 것). 학생 취소 팝업 — 한국 공휴일 수업이면 '변경권 | 차감 안 됨 (공휴일 취소)' 한 줄(지금 공휴일이면 변경권 줄이 아예 안 보임), 공휴일 미리 표시 기능은 안 만듦. ⚠ 운영 DB holidays 표 0건 → 공휴일 취소 판정이 지금 한 번도 안 됨, 공휴일 목록 넣기 대표 승인 대기. 강사 장기휴무 직접 신청(Schedule) = 지금 없음(휴무는 운영진 휴무 화면만, 강사는 수업 없는 칸만 막기) → 별도 세션·시안
-   - ⏭ **새 세션 개발 대기: 강사 휴무 '신청' 란 (H26(137))** — 강사 신청(날짜·사유) → 운영진 대시보드 → 누르면 휴무 화면 그 날짜로. Regular working hours·One time changes 페이지에 한 줄(3일 이상은 Home 신청 란으로, 바로 가기 버튼). **신청 기한 숫자는 시안에서 대표에게 꼭 물을 것**(기존 POL-TU-05: 14일·4일·급한 일 최대한 빨리+증빙을 기본안으로 보여 주고 확인). Home 신청 란 이름도 시안에서 정함. PC·휴대폰 시안부터
+   - 🧪 (11/13 개발됨 — 맨 위 '강사 휴무 신청' 항목) **강사 휴무 '신청' 란 (H26(137))** — 강사 신청(날짜·사유) → 운영진 대시보드 → 누르면 휴무 화면 그 날짜로. Regular working hours·One time changes 페이지에 한 줄(3일 이상은 Home 신청 란으로, 바로 가기 버튼). **신청 기한 숫자는 시안에서 대표에게 꼭 물을 것**(기존 POL-TU-05: 14일·4일·급한 일 최대한 빨리+증빙을 기본안으로 보여 주고 확인). Home 신청 란 이름도 시안에서 정함. PC·휴대폰 시안부터
 
 ## ✅ 2026-11-07 운영 DB: 체험용 강사 계정 + 가상 학생 (대표 지시·'응 운영DB에 바로해')
 - 강사 **Sera Kara**(대표 지인, 독일 슈투트가르트, Europe/Berlin, 활성) 추가 + 로그인 계정(이메일은 운영 DB tutors.email) `admin_tutor_login`. 시험 DB에도 같은 이메일을 James 에 연결해 둠

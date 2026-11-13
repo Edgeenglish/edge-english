@@ -41,11 +41,11 @@ const PRI = `${btn} border-[#7d5ffb] bg-[#7d5ffb] text-white disabled:border-[#e
 const SEC = `${btn} border-[#e6e3ef] bg-white text-[#1d1b2b] disabled:text-[#b9b6c8]`;
 const DONE = `${btn} border-[#c9c6d6] bg-[#d9d6e3] font-bold text-[#4a4760]`;
 /** 실제 데이터에서 서버 저장이 있는 버튼 (나머지는 그 업무 화면으로 이동) */
-const LIVE_KEYS = new Set(['import_checked', 'notify_tutor', 'no_extension']);
+const LIVE_KEYS = new Set(['import_checked', 'notify_tutor', 'no_extension', 'reject_time_off']);
 
 export default function AdminDashboard({
   nowIso, today, preview, tasks: liveTasks, stats, onLogout, planActions, importActions, renewalSent, renewalNotify, enrollmentClose, onReload,
-  history, notices, noExtension,
+  history, notices, noExtension, timeOffReject,
 }: {
   nowIso: string;
   today: LessonItem[];
@@ -68,7 +68,11 @@ export default function AdminDashboard({
   notices?: NoticeApi;
   /** 예외 연장 검토 [검토 종료] 결정 기록 */
   noExtension?: (task: TaskSource) => Promise<void>;
+  /** 강사 휴무 신청 [반려] (사유 필수, 강사 Home 에 보임) */
+  timeOffReject?: (id: string, reason: string) => Promise<void>;
 }) {
+  const [rejecting, setRejecting] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const todayKst = instantToKstDate(now);
   const [tasks, setTasks] = useState<TaskSource[]>(() => liveTasks ?? fakeTasks(now));
@@ -150,6 +154,7 @@ export default function AdminDashboard({
     if (key === 'import_checked' && importActions) return run(() => importActions.markChecked(item.id));
     if (key === 'notify_tutor' && item.kind === 'renewal_tutor_notice' && renewalNotify) return run(() => renewalNotify(item.id));
     if (key === 'no_extension' && task && noExtension) return run(() => noExtension(task));
+    if (key === 'reject_time_off') { setRejecting(item.id); setRejectNote(''); return; }
   }
 
   async function markRenewalSent(item: BoardItem) {
@@ -301,6 +306,19 @@ export default function AdminDashboard({
             <Link href={studentHref(item.studentCode)} className={SEC}>학생 상세</Link>
           )}
         </div>
+        {item.kind === 'time_off_request' && rejecting === item.id && (
+          <div className="mt-2 grid gap-1.5">
+            <input aria-label="반려 사유" value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder="반려 사유 (필수, 강사에게 보임)"
+              className="min-h-[40px] w-full rounded-[10px] border border-[#e6e3ef] bg-white px-2.5 text-[14px] text-[#1d1b2b]" />
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" disabled={busy || !rejectNote.trim()} onClick={() => {
+                if (preview || !timeOffReject) { drop(item); setRejecting(null); return; }
+                void run(async () => { await timeOffReject(item.id, rejectNote.trim()); setRejecting(null); });
+              }} className={PRI}>반려 확정</button>
+              <button type="button" disabled={busy} onClick={() => setRejecting(null)} className={SEC}>취소</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

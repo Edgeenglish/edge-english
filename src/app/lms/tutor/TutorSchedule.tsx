@@ -9,6 +9,7 @@
 
 import { CANT_OPEN_BACKGROUND, TIME_COLORS, cantOpenHelp } from '@/lms/tutor/time-status';
 import TimeStatusLegend from './TimeStatusLegend';
+import { TimeOffLine } from './TimeOff';
 import { TUTOR_MENU } from '@/lms/tutor/navigation';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ALL_HOURS, cityTime, localToInstant } from '@/lms/tutor/hours-view';
@@ -49,9 +50,11 @@ type Dialog =
   | { kind: 'lesson'; lesson: TutorLesson }
   | { kind: 'info'; title: string; body: string };
 
-export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile, onSaved, onHours }: {
+export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile, onSaved, onHours, onTimeOff }: {
   actions: ScheduleActions;
   onHours?: () => void;
+  /** 맨 위 한 줄 [Request time off ›] (H26(137)) */
+  onTimeOff?: () => void;
   /** 막기·열기 저장 성공 뒤 — Home 의 보강 요청 가능 여부 등을 다시 읽게 (R-13) */
   onSaved?: () => void | Promise<void>;
   /** 수업 (tutor_screen, 한국 날짜 범위) */
@@ -404,6 +407,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   return (
     <section aria-label={TUTOR_MENU.schedule} className="relative">
       {header}
+      {onTimeOff && <TimeOffLine onClick={onTimeOff} />}
       <p className="mb-3 text-[13.5px] text-[#55526a]">
         View your classes and make one-time changes here. To update your regular hours, go to {onHours ? <button type="button" onClick={onHours} className="font-semibold text-[#5b3fe0] underline">{TUTOR_MENU.hours}</button> : <>{TUTOR_MENU.hours}</>}.
       </p>

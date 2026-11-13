@@ -23,7 +23,8 @@ import { Card, inputCls } from '../students/new/parts';
 export type LeaveActions = {
   leaves: (now: Date) => Promise<LvTimeOff[]>;
   items: (timeOffId: string) => Promise<{ items: LvItem[]; notices: LvNotice[] }>;
-  create: (tutorId: string, from: KstDate, to: KstDate, reason: string, dryRun: boolean) => Promise<LeaveCreateResult>;
+  /** requestId = 강사 휴무 신청에서 열었을 때 (H26(137)): 날짜를 그대로 두면 신청의 실제 시각으로, 저장하면 신청 승인 */
+  create: (tutorId: string, from: KstDate, to: KstDate, reason: string, dryRun: boolean, requestId?: string | null) => Promise<LeaveCreateResult>;
   choose: (itemIds: string[], choice: 'substitute' | 'wait', subTutorId: string | null) => Promise<void>;
   subOk: (itemIds: string[]) => Promise<void>;
   studentOk: (itemIds: string[]) => Promise<void>;
@@ -79,7 +80,10 @@ function useRun(done: () => Promise<void>) {
   return { busy, err, setErr, run };
 }
 
-export default function TutorLeave({ tutors, actions, nowIso, initialOff, startNew }: { tutors: LvTutor[]; actions: LeaveActions; nowIso: string; initialOff?: string; startNew?: boolean }) {
+/** 강사 휴무 신청에서 채울 값 (대시보드 [휴무 화면 열기]) */
+export type LeavePrefill = { requestId: string; tutorId: string; from: KstDate; to: KstDate; reason: string; note: string };
+
+export default function TutorLeave({ tutors, actions, nowIso, initialOff, startNew, prefill }: { tutors: LvTutor[]; actions: LeaveActions; nowIso: string; initialOff?: string; startNew?: boolean; prefill?: LeavePrefill | null }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [leaves, setLeaves] = useState<LvTimeOff[]>([]);
   const [offId, setOffId] = useState<string | null>(initialOff ?? null);
@@ -156,7 +160,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
           ))}
         </div>
         {tab === 'new' && (
-          <NewLeave tutors={tutors} actions={actions} today={instantToKstDate(now)} onClose={() => setTab('list')}
+          <NewLeave tutors={tutors} actions={actions} today={instantToKstDate(now)} prefill={prefill} onClose={() => setTab('list')}
             saved={async (id) => { await reloadLeaves(); setOffId(id); setTab('list'); }} />
         )}
         {tab === 'list' && leaves.length === 0 && <p className="text-[14px] text-[#6b6880]">등록된 휴무가 없어요.</p>}
@@ -338,13 +342,14 @@ function nextText(g: LvStudentGroup, w: LvStudentWork): string {
   return `${g.items.length}회 · ✓ 완료`;
 }
 
-function NewLeave({ tutors, actions, today, saved, onClose }: {
-  tutors: LvTutor[]; actions: LeaveActions; today: KstDate; saved: (id: string) => Promise<void>; onClose: () => void;
+function NewLeave({ tutors, actions, today, saved, onClose, prefill }: {
+  tutors: LvTutor[]; actions: LeaveActions; today: KstDate; saved: (id: string) => Promise<void>; onClose: () => void; prefill?: LeavePrefill | null;
 }) {
-  const [tutorId, setTutorId] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [reason, setReason] = useState('');
+  const [tutorId, setTutorId] = useState(prefill?.tutorId ?? '');
+  const [from, setFrom] = useState<string>(prefill?.from ?? '');
+  const [to, setTo] = useState<string>(prefill?.to ?? '');
+  const [reason, setReason] = useState(prefill?.reason ?? '');
+  const req = prefill?.requestId ?? null;
   const [preview, setPreview] = useState<LeaveCreateResult | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -357,7 +362,7 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
     setErr('');
     if (!ready) return;
     let live = true;
-    actions.create(tutorId, from, to, reason, true).then(
+    actions.create(tutorId, from, to, reason, true, req).then(
       (r) => live && setPreview(r),
       (e) => live && setErr(e instanceof Error ? e.message : '확인하지 못했어요.'),
     );
@@ -370,6 +375,7 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
   return (
     <Card title="새 휴무 입력">
       <div className="grid gap-2.5">
+        {prefill && <p className="rounded-[10px] bg-[#efecfd] px-3 py-2 text-[13.5px] text-[#3b2a9a]">{prefill.note}</p>}
         <label className="grid gap-1 text-[13px] text-[#6b6880]">
           강사
           <select value={tutorId} onChange={(e) => setTutorId(e.target.value)} className={inputCls(false)}>
@@ -421,7 +427,7 @@ function NewLeave({ tutors, actions, today, saved, onClose }: {
             setBusy(true);
             setErr('');
             try {
-              const r = await actions.create(tutorId, from, to, reason, false);
+              const r = await actions.create(tutorId, from, to, reason, false, req);
               await saved(r.time_off_id!);
             } catch (e) {
               setErr(e instanceof Error ? e.message : '저장하지 못했어요.');

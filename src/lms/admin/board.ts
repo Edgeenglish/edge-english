@@ -209,15 +209,33 @@ export type ExtensionReviewTask = {
   createdAt: Date; // 수강생이 누른 시각
 };
 
-export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask | ClassRecordMissingTask | ExtensionReviewTask;
+/** 강사 휴무 신청 (H26(137)): 강사가 Home 'Time off' 에서 신청, 대기 중만. [휴무 화면 열기]로 저장하면 자동 승인 · [반려] 사유 필수 */
+export type TimeOffRequestTask = {
+  kind: 'time_off_request';
+  id: string; // 신청 번호
+  tutorName: string;
+  tutorTimezone: string;
+  first: string; // 강사 현지 날짜
+  last: string;
+  kstFrom: string; // 휴무 화면에 채울 한국 날짜
+  kstTo: string;
+  planned: boolean;
+  reason: string;
+  late: boolean;
+  classes: number;
+  createdAt: Date;
+};
+
+export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask | ClassRecordMissingTask | ExtensionReviewTask | TimeOffRequestTask;
 
 /** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
-export type Category = 'matching' | 'tutor_ack' | 'ending' | 'issue';
+export type Category = 'matching' | 'tutor_ack' | 'time_off' | 'ending' | 'issue';
 
 /** 대시보드 5차 (대표 11/9): 보강 미신청 칸 없앰 — 운영진이 직접 풀 일만 */
 export const CATEGORY_LABEL: Record<Category, string> = {
   matching: '신규 수강생 매칭',
   tutor_ack: '강사 확인 대기',
+  time_off: '강사 휴무 신청',
   ending: '수강기간 종료 임박',
   issue: '오류·조치 필요',
 };
@@ -228,6 +246,8 @@ export function categoryOf(kind: TaskSource['kind']): Category {
       return 'matching';
     case 'renewal_tutor_notice':
       return 'tutor_ack';
+    case 'time_off_request':
+      return 'time_off';
     case 'ending_soon':
       return 'ending';
     default:
@@ -370,6 +390,8 @@ function briefOf(t: TaskSource, now: Date): string {
       return `미기록 ${t.lessons.length}회`;
     case 'extension_review':
       return `종료 ${Number(t.endDate.slice(5, 7))}/${Number(t.endDate.slice(8, 10))}`;
+    case 'time_off_request':
+      return `수업 ${t.classes}회`;
     case 'auto_failure':
       return `발생 후 ${waitText(t.occurredAt, now)}`;
   }
@@ -598,6 +620,30 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         due: null,
         steps: [],
         actions: [{ key: 'open_student', label: '종료일 연장', primary: true, href: `/lms/admin/students/${encodeURIComponent(t.studentCode)}` }],
+      };
+    }
+    case 'time_off_request': {
+      const day = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}(${WD[formatInZone(new Date(`${d}T12:00:00Z`), 'UTC').weekday] ?? ''})`;
+      const sameDates = t.kstFrom === t.first && t.kstTo === t.last;
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: 'open',
+        tag: t.late ? '강사 휴무 신청 · 기한 지남' : '강사 휴무 신청',
+        title: `${t.tutorName} · ${day(t.first)}~${day(t.last)} 휴무`,
+        detail: [
+          t.planned ? '계획된 휴무' : '급한 일',
+          `수업 ${t.classes}회`,
+          `사유: ${t.reason}`,
+          `신청 ${kstLabel(t.createdAt)} 한국 시간`,
+          sameDates ? null : `날짜는 ${t.tutorName} 현지(${t.tutorTimezone.split('/').at(-1)?.replaceAll('_', ' ')}) 날짜 · 한국 날짜 ${day(t.kstFrom)}~${day(t.kstTo)}`,
+        ].filter(Boolean).join(' · '),
+        due: null,
+        steps: [],
+        actions: [
+          { key: 'open_leave', label: '휴무 화면 열기', primary: true, href: `/lms/admin/leave?new=1&req=${encodeURIComponent(t.id)}` },
+          { key: 'reject_time_off', label: '반려' },
+        ],
       };
     }
     case 'auto_failure': {

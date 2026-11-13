@@ -54,11 +54,24 @@ describe('처리할 일 목록', () => {
     expect(r.actions.map((a) => a.key)).toEqual(['notify_tutor']);
     expect(r.due).toBeNull();
   });
-  it('칸 4개(보강 미신청 칸 없음, 대표 11/9): 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
+  it('칸 5개(보강 미신청 칸 없음 11/9, 강사 휴무 신청 칸 11/13): 한 업무는 한 칸에만 (합계 = 전체, 중복 없음)', () => {
     const c = categoryCounts(items);
     expect(Object.values(c).reduce((s, x) => s + x.n, 0)).toBe(items.length);
-    expect(c).toMatchObject({ matching: { n: 3 }, tutor_ack: { n: 1 }, ending: { n: 2 }, issue: { n: 4 } });
-    expect(Object.keys(c)).toEqual(['matching', 'tutor_ack', 'ending', 'issue']);
+    expect(c).toMatchObject({ matching: { n: 3 }, tutor_ack: { n: 1 }, time_off: { n: 0 }, ending: { n: 2 }, issue: { n: 4 } });
+    expect(Object.keys(c)).toEqual(['matching', 'tutor_ack', 'time_off', 'ending', 'issue']);
+  });
+  it('강사 휴무 신청 (H26(137)): 강사 현지 날짜 제목 · 기한 지남 · 한국 날짜가 다르면 한 줄 · [휴무 화면 열기]·[반려]', () => {
+    const [it] = buildBoard([{
+      kind: 'time_off_request', id: 'req-1', tutorName: 'Emma', tutorTimezone: 'Asia/Manila', first: '2026-11-20', last: '2026-11-24', kstFrom: '2026-11-20', kstTo: '2026-11-25',
+      planned: true, reason: 'Family wedding', late: true, classes: 4, createdAt: new Date('2026-11-13T13:35:00Z'),
+    }], new Date('2026-11-13T14:00:00Z'));
+    expect(it.category).toBe('time_off');
+    expect(it.tag).toBe('강사 휴무 신청 · 기한 지남');
+    expect(it.title).toBe('Emma · 11/20(금)~11/24(화) 휴무');
+    expect(it.detail).toContain('계획된 휴무 · 수업 4회 · 사유: Family wedding · 신청 11/13(금) 오후 10:35 한국 시간');
+    expect(it.detail).toContain('한국 날짜 11/20(금)~11/25(수)');
+    expect(it.actions.map((a) => a.key)).toEqual(['open_leave', 'reject_time_off']);
+    expect(it.actions[0].href).toBe('/lms/admin/leave?new=1&req=req-1');
   });
   it('필터: 전체 · 칸 하나 (긴급만·오류만 필터 없음)', () => {
     expect(filterBoard(items, 'ending').map((i) => i.id)).toEqual(['e-1', 'e-2']);
