@@ -48,10 +48,23 @@ function cancelSubject(e: ProcessingEvent): string | null {
   return e.tutor_fault ? CANCEL_REASON_KO.tutor_fault : null;
 }
 
-/** 보강 신청이 아직 강사 답·확정·취소 없이 대기 중인지 (같은 신청의 뒤 단계 기록이 없으면 대기) */
-const AFTER_REQUEST: HistoryKind[] = ['tutor_answered', 'tutor_suggested', 'suggestion_declined', 'makeup_confirmed', 'makeup_withdrawn', 'makeup_expired', 'makeup_voided'];
-export function isWaitingForTutor(e: ProcessingEvent, all: ProcessingEvent[]): boolean {
-  return e.kind === 'makeup_requested' && !!e.request_id && !all.some((x) => x.request_id === e.request_id && AFTER_REQUEST.includes(x.kind));
+/**
+ * 보강 신청 줄의 상태 (대표 11/13 확정):
+ *  - 같은 신청에 확정·강사 제안·다른 일정 요청·철회·만료·되돌림 줄이 있으면 null (상태 줄 없음, 그 줄이 따로 보임)
+ *  - 강사가 '맞는 시간 없음'으로 글만 남김(강사 답변 기록만 있음) → '보강 일정 조율 중'
+ *  - 강사가 아직 아무 것도 안 함 → '강사 확인 중'
+ */
+const AFTER_REQUEST: HistoryKind[] = ['tutor_suggested', 'suggestion_declined', 'makeup_confirmed', 'makeup_withdrawn', 'makeup_expired', 'makeup_voided'];
+export function requestStatus(e: ProcessingEvent, all: ProcessingEvent[]): string | null {
+  if (e.kind !== 'makeup_requested' || !e.request_id) return null;
+  const same = all.filter((x) => x.request_id === e.request_id);
+  if (same.some((x) => AFTER_REQUEST.includes(x.kind))) return null;
+  return same.some((x) => x.kind === 'tutor_answered') ? '보강 일정 조율 중' : '강사 확인 중';
+}
+
+/** 학생 처리 내역에 보이는 줄: '강사 답변'은 화면에서만 숨김 (답 내용을 보여 주지 않아 혼란, 대표 11/13) — DB 기록은 그대로 */
+export function visibleEvents(all: ProcessingEvent[]): ProcessingEvent[] {
+  return all.filter((e) => e.kind !== 'tutor_answered');
 }
 
 export function historyTime(at: string, timezone: string): string {
@@ -75,15 +88,15 @@ export function historyOriginalDay(e: ProcessingEvent, timezone: string): string
 
 /**
  * 처리 내역 줄 (대표 11/13 확정): 제목 / '원래 수업 : 11/9(월)'(취소는 '취소한 수업 : 11/9(월) · 수강생 취소') / '상태 : …'
- * 보강 신청 줄은 강사 답이 없을 때만 '상태 : 강사 확인 중', 뒤 단계가 생기면 상태 줄 없이 두 줄만 (status = null)
+ * 보강 신청 줄 상태는 requestStatus() 결과 (없으면 상태 줄 없이 두 줄만)
  */
-export function historyLines(e: ProcessingEvent, timezone: string, waiting = false): { title: string; detail: string; status: string | null } {
+export function historyLines(e: ProcessingEvent, timezone: string, reqStatus: string | null = null): { title: string; detail: string; status: string | null } {
   const original = historyOriginalDay(e, timezone) ?? '날짜 미기록';
   const label = historyLabel(e);
   const cancel = e.kind === 'lesson_canceled';
   const reason = cancel ? cancelSubject(e) : null;
   const status = e.kind === 'makeup_confirmed' && e.booked_at ? `${historyDay(e.booked_at, timezone)} ${label.title}`
-    : e.kind === 'makeup_requested' ? (waiting ? '강사 확인 중' : null) : label.result;
+    : e.kind === 'makeup_requested' ? reqStatus : label.result;
   return { title: label.title, detail: `${cancel ? '취소한 수업' : '원래 수업'} : ${original}${reason ? ` · ${reason}` : ''}`, status };
 }
 
