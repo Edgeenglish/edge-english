@@ -51,6 +51,11 @@ export function lessonsLeft(lessons: readonly StudentLesson[], now: Date, makeup
   return { total: scheduled.length + makeupsOwed, regular: regularLessonsLeft(lessons, now), other };
 }
 
+/** 지금 수강권 수업만 (대표 11/13: '남은 수업'에 미리 재등록한 다음 수강권 수업을 더하지 않음). 수강권 종료일을 모르는 수업은 그대로 둠 */
+export function currentPassLessons<T extends Pick<StudentLesson, 'finalEndDate'>>(lessons: readonly T[], currentEnd: KstDate | '' | null | undefined): T[] {
+  return currentEnd ? lessons.filter((l) => !l.finalEndDate || l.finalEndDate <= currentEnd) : [...lessons];
+}
+
 /** 지금 들어갈 수 있거나 다음에 올 수업 (끝나기 전까지는 '다음 수업'에 남김 — 수업 입장 버튼) */
 export function nextLesson(lessons: readonly StudentLesson[], now: Date): StudentLesson | null {
   return (

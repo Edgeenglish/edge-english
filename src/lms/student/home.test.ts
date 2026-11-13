@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { kstToInstant } from '../rules/dates';
 import {
+  currentPassLessons,
   nextPass,
   passKind,
   cancelPreview,
@@ -221,5 +222,13 @@ describe('다음 수강권 (대표 11/13)', () => {
   it('가장 먼저 시작하는 다음 수강권, 없으면 null', () => {
     expect(nextPass([p('x', false, '2027-03-08'), p('y', false, '2026-12-14'), p('z', true, '2026-09-21')], '2026-11-13' as never)?.id).toBe('y');
     expect(nextPass([p('z', true, '2026-09-21'), p('o', false, '2026-06-01')], '2026-11-13' as never)).toBeNull();
+  });
+});
+
+describe('남은 수업 = 지금 수강권만 (대표 11/13)', () => {
+  it('다음 수강권 수업은 빼고, 수강권 종료일 모르는 수업은 둠', () => {
+    const ls = [{ id: 'a', finalEndDate: '2026-12-13' }, { id: 'b', finalEndDate: '2027-03-07' }, { id: 'c', finalEndDate: undefined }] as never[];
+    expect(currentPassLessons(ls, '2026-12-13' as never).map((l: { id: string }) => l.id)).toEqual(['a', 'c']);
+    expect(currentPassLessons(ls, '').length).toBe(3);
   });
 });
