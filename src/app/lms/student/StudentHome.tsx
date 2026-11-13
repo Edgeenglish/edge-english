@@ -835,7 +835,7 @@ export default function StudentHome(props: {
               const row = (l: (typeof past)[number]) => (
                 <div key={l.id} className="flex justify-between border-b border-[#eeecf4] px-1 py-2.5 text-[14px]">
                   <span>{whenText(l.startsAt)}</span>
-                  <span className="text-[#6b6880]">{l.state === 'done' ? (s.lessons.find((x) => x.id === l.id)?.tutorNoShow ? '강사 사정으로 취소' : '진행') : l.state === 'canceled' ? '취소' : l.startsAt.getTime() + l.minutes * 60_000 > now.getTime() ? '진행 중' : '기록 전'}</span>
+                  <span className="text-[#6b6880]">{l.state === 'done' ? (s.lessons.find((x) => x.id === l.id)?.tutorNoShow ? '강사 사정으로 취소' : s.lessons.find((x) => x.id === l.id)?.studentNoShow ? '결석' : '완료') : l.state === 'canceled' ? '취소' : l.startsAt.getTime() + l.minutes * 60_000 > now.getTime() ? '진행 중' : '기록 전'}</span>
                 </div>
               );
               const byMonth = new Map<string, typeof past>();

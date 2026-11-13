@@ -13,7 +13,7 @@ import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lm
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
 import {
-  canceledUpcoming, changeableLessons, CONFIRM_REASONS, dateLabel, FIX_REASONS, makeupLink, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, STATUS_PLAIN, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, REASON_TEXT, STATUS_SHORT, studentNotice, tutorNotice,
+  canceledUpcoming, changeableLessons, CONFIRM_REASONS, dateLabel, FIX_REASONS, makeupLink, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, STATUS_PLAIN, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, REASON_TEXT, studentNotice, tutorNotice,
   type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupLog, type MakeupReason, type MakeupRight, type NoticeContext,
 } from '@/lms/admin/lesson-change';
 import type { AdminCredits, StudentLessonData } from '@/lms/admin/lesson-change-live';
@@ -639,7 +639,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const title = comp
     ? `보상수업 · ${src ? `${kstLabel(src.startsAt)} 강사 노쇼` : '강사 노쇼'}`
     : src
-      ? `${kstLabel(src.startsAt)} · ${src.classStatus ? STATUS_SHORT[src.classStatus] ?? src.classStatus : ''}`
+      ? `${kstLabel(src.startsAt)} · ${src.classStatus ? STATUS_PLAIN[src.classStatus] ?? src.classStatus : ''}`
       : `보강 · 원래 ${right.kind === 'migrated' && right.item.originalDate ? dateLabel(right.item.originalDate) : '날짜 확인 필요'}`;
   // 강사 휴무 보강은 종료일 제한 없음 — 종료일 뒤로 확정되면 그 날까지 자동 연장 (A20, migration 1800)
   const leave = (right.kind === 'migrated' && right.item.tutorLeave) || src?.classStatus === 'Tutor long-term leave';

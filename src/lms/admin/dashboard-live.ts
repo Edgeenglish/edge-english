@@ -25,10 +25,10 @@ export async function loadTutors(sb: SupabaseClient, now: Date): Promise<TutorIt
 export async function loadTutorUpcoming(sb: SupabaseClient, tutorId: string, now: Date, n = 8): Promise<LessonItem[]> {
   const { data, error } = await sb
     .from('lessons')
-    .select('id, starts_at, kind, state, class_status, student:students(code, name_ko), tutor:tutors!lessons_tutor_id_fkey(name)')
-    .eq('tutor_id', tutorId).eq('state', 'scheduled').gte('starts_at', now.toISOString()).order('starts_at').limit(n);
+    .select('id, starts_at, ends_at, kind, class_type, state, class_status, student:students(code, name_ko), tutor:tutors!lessons_tutor_id_fkey(name), original_tutor:tutors!lessons_original_tutor_id_fkey(name)')
+    .eq('tutor_id', tutorId).eq('state', 'scheduled').is('voided_at', null).gte('starts_at', now.toISOString()).order('starts_at').limit(n);
   if (error) throw new Error('수업을 읽지 못했어요.');
-  return toLessonItems((data ?? []) as unknown as LessonListRow[]);
+  return toLessonItems((data ?? []) as unknown as LessonListRow[], new Set(), { now });
 }
 
 type NoticeRow = { id: string; audience: Audience; title: string; body: string; starts_on: string; ends_on: string; ended_at: string | null };
