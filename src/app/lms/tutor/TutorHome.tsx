@@ -13,7 +13,8 @@ import { tutorPaidFor } from '@/lms/rules/status';
 import { cityTime, localToInstant } from '@/lms/tutor/hours-view';
 import TutorHours, { type HoursActions } from './TutorHours';
 import TutorSchedule, { type ScheduleActions } from './TutorSchedule';
-import { useSavedToggle } from './useSaved';
+import { useAccountToggle } from './useSaved';
+import type { PrefKey, ScreenPrefs } from '@/lms/screen-prefs';
 import StudentProfile, { type ProfileActions } from './StudentProfile';
 import FirstLessonFollowup, { type FollowupSave } from './FirstLessonFollowup';
 import type { FollowupTodo } from '@/lms/tutor/followup';
@@ -34,6 +35,9 @@ type CancelAction = (lessonId: string, requestId: string, reason: string, dryRun
 type StudentCancelAction = (lessonId: string, requestId: string, toldAt: Date, dryRun: boolean) => Promise<StudentCancelDecision>;
 
 export type TutorActions = {
+  /** 화면 보기 설정 읽기 · 저장(강사 본인만, 운영자 보기는 null) — 대표 11/13 A안 */
+  prefs?: () => Promise<ScreenPrefs>;
+  savePref?: ((key: PrefKey, value: string) => Promise<void>) | null;
   cancel?: CancelAction;
   studentCancel?: StudentCancelAction;
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
@@ -186,8 +190,9 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   const [answeredHere, setAnsweredHere] = useState<TutorMakeup[]>([]);
   const tz = screen.tutor.timezone;
   // KST·Paid 칸: 강사가 끌 수 있음, 이 기기에 기억 (대표 10/29). 한국 시간대 강사는 KST 칸 없음
-  const [kstPref, setKst] = useSavedToggle('lms_tutor_kst');
-  const [paidCol, setPaidCol] = useSavedToggle('lms_tutor_paid');
+  // 강사 계정에 저장 (대표 11/13 A안): 운영자 보기는 강사가 저장한 대로 보이고, 운영자가 누른 것은 저장하지 않음
+  const [kstPref, setKst] = useAccountToggle('tutor_kst', actions?.prefs, actions?.savePref, 'lms_tutor_kst');
+  const [paidCol, setPaidCol] = useAccountToggle('tutor_paid', actions?.prefs, actions?.savePref, 'lms_tutor_paid');
   const kstOn = tz === 'Asia/Seoul' ? null : kstPref;
   const kst = kstOn === true;
   const week = weekOf(now, tz, offset);

@@ -9,6 +9,7 @@ import { answerCover, answerMakeup, confirmMakeup, loadSuggestOptions, suggestMa
 import { LANGS, type Lang } from '@/lms/tutor/lang';
 import { useSavedValue } from './useSaved';
 import { weekOf, type StudentCancelDecision, type TutorScreen } from '@/lms/tutor/screen';
+import { loadScreenPrefs, saveScreenPref } from '@/lms/screen-prefs';
 import TutorHome, { type TutorActions } from './TutorHome';
 
 type State =
@@ -53,6 +54,9 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
     () =>
       sb && {
         load: (from, to) => loadTutorScreen(sb, adminTutor, from, to),
+        // 보기 설정: 강사가 저장한 값 읽기 · 저장은 강사 본인만 (운영자 보기는 저장 안 함, 대표 11/13 A안)
+        prefs: () => loadScreenPrefs(sb, { tutor: adminTutor }),
+        savePref: adminTutor ? null : (key, value) => saveScreenPref(sb, key, value),
         cancel: async (lessonId, requestId, reason, dryRun) => {
           const { data, error } = await sb.rpc('tutor_cancel_class', { p_lesson: lessonId, p_request_id: requestId, p_reason: reason, p_dry_run: dryRun });
           if (error) throw new Error(error.message);
