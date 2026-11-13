@@ -210,7 +210,7 @@ export function parseStudentView(r: Raw): StudentView {
         id: q.id,
         kind: 'makeup',
         compensation: comp,
-        title: `${comp ? '무료 보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso), (q.original_time_known ?? src?.time_known !== false) ? r.student.timezone || 'Asia/Seoul' : 'Asia/Seoul')} 수업분` : ''}`,
+        title: `${comp ? '보상수업' : '보강'}${originalIso ? ` · ${md(new Date(originalIso), (q.original_time_known ?? src?.time_known !== false) ? r.student.timezone || 'Asia/Seoul' : 'Asia/Seoul')} 수업분` : ''}`,
         status: q.status === 'confirmed'
           ? (q.confirmed_state === 'canceled' ? 'canceled' : 'confirmed')
           : q.status === 'expired' ? 'expired'

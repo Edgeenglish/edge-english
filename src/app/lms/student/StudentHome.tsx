@@ -196,7 +196,7 @@ function reqTitle(r: StudentRequest) {
   const day = r.originalTimeKnown === false
     ? `${fmtDate(formatInZone(r.originalAt, 'Asia/Seoul').date as KstDate)}${overseas() ? '(한국 날짜)' : ''}`
     : kst(r.originalAt).md;
-  return `${r.compensation ? '무료 보상수업' : '보강'} · ${day} 수업분`;
+  return `${r.compensation ? '보상수업' : '보강'} · ${day} 수업분`;
 }
 function whenText(d: Date) {
   const k = kst(d);
@@ -217,7 +217,7 @@ function kstDateOnly(d: Date) {
  * 제목: 원래 수업 날짜 (수강생 시간대). withTime = 같은 날 수업이 둘일 때만 시각까지
  */
 // 11/12 대표 확정: 제목 '보강 수업'·'이월된 수업', 날짜는 '원래 수업 날짜: 11/9(월)' 한 줄, 사유는 '사유: …'
-const rightTitle = (m: MakeupRight) => (m.compId ? '무료 보상수업 1회' : m.carryIn ? '이월된 수업' : '보강 수업');
+const rightTitle = (m: MakeupRight) => (m.compId ? '보상수업 1회' : m.carryIn ? '이월된 수업' : '보강 수업');
 /** 원래 수업 날짜 줄 (이월·보상수업은 없음). withTime = 같은 날 수업이 둘일 때만 시각까지 */
 const rightDate = (m: MakeupRight, withTime = false) => {
   if (m.compId || m.carryIn) return null;
@@ -863,7 +863,7 @@ export default function StudentHome(props: {
                   {(() => {
                     const t = asClassType(l.type, l.kind);
                     if (t !== 'makeup' && t !== 'compensation' && t !== 'carry_in' && t !== 'carry_out') return null;
-                    const name = t === 'makeup' ? '보강 수업' : t === 'compensation' ? '무료 보상수업' : '이월 수업';
+                    const name = t === 'makeup' ? '보강 수업' : t === 'compensation' ? '보상수업' : '이월 수업';
                     return <AddToCalendar ev={{ title: `엣지영어 ${name}`, start: l.startsAt, end: new Date(l.startsAt.getTime() + l.minutes * 60000), details: meetOf(l.id) }} google="구글 캘린더에 추가" file="애플·삼성 캘린더에 추가" />;
                   })()}
                 </div>

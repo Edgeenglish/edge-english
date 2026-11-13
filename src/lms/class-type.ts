@@ -15,7 +15,7 @@ export const CLASS_TYPE_EN: Record<ClassType, string> = {
 export const CLASS_TYPE_KO: Record<ClassType, string> = {
   regular: '정규',
   makeup: '보강',
-  compensation: '무료 보상수업',
+  compensation: '보상수업',
   cover: '대체',
   carry_in: '지난 수강기간에서 이월된 수업',
   carry_out: '다음 수강기간으로 이월되는 수업',
@@ -33,7 +33,7 @@ export function typeFromKind(kind: string | null | undefined, cover = false): Cl
 export const asClassType = (v: unknown, kind?: string | null, cover = false): ClassType =>
   typeof v === 'string' && v in CLASS_TYPE_EN ? (v as ClassType) : typeFromKind(kind, cover);
 
-/** 한국어 이름 + '수업' (문장 속: '정규 수업'·'무료 보상수업'·'지난 수강기간에서 이월된 수업') */
+/** 한국어 이름 + '수업' (문장 속: '정규 수업'·'보상수업'·'지난 수강기간에서 이월된 수업') */
 export const typeKoLong = (type: unknown, kind?: string | null, cover = false): string => {
   const t = typeKo(type, kind, cover);
   return t.endsWith('수업') ? t : `${t} 수업`;
