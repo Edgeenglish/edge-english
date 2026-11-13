@@ -4,6 +4,8 @@
 import { typeKo } from '../class-type';
 import { addDays, ampmKo, formatInZone, instantToKstDate, weekdayOf, type KstDate } from '../rules/dates';
 import { courseName } from '../rules/period';
+import type { ClassStatus } from '../rules/status';
+import { STATUS_PLAIN } from './lesson-change';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 /** '11/9(월)' */
@@ -70,29 +72,79 @@ export const ENDING_STATE_TEXT = (e: EndingItem) =>
 
 // ---------------------------------------------------------------- 수업 목록
 export type LessonListRow = {
-  id: string; starts_at: string; kind: string; class_type?: string | null; state: 'scheduled' | 'canceled' | 'done'; class_status: string | null;
+  id: string; starts_at: string; ends_at?: string | null; kind: string; class_type?: string | null; state: 'scheduled' | 'canceled' | 'done'; class_status: string | null;
   student: { code: string; name_ko: string } | null; tutor: { name: string } | null;
+  /** 대체 강사 배정 전 원래 담당 (lessons.original_tutor_id) */
+  original_tutor?: { name: string } | null;
 };
-export type LessonItem = { id: string; date: KstDate; time: string; studentName: string; studentCode: string; tutorName: string; kind: string; state: string; muted: boolean };
+/** tone: muted 흐린 글씨(완료) · alert 빨강(노쇼) · normal 굵게 */
+export type LessonItem = {
+  id: string; date: KstDate; time: string; studentName: string; studentCode: string; tutorName: string; kind: string; state: string; muted: boolean;
+  tone: 'muted' | 'alert' | 'normal';
+  /** 취소된 수업: 시각·학생 이름에 취소선 (상태 글자는 그대로) */
+  struck: boolean;
+  /** 이름 아래 작은 줄: 취소 사유 · 연결된 보강 · 대체 전 강사 · 시간 변경 */
+  note: string | null;
+};
+/** 수업 줄에 붙일 기록 (실제 기록이 있을 때만) */
+export type LessonExtras = {
+  /** 취소된 수업 id → 실제로 연결된 보강의 최신 시작 시각 */
+  makeups?: ReadonlyMap<string, string>;
+  /** 수업 id → 운영진이 시간을 고치기 전 처음 시각 (admin_makeup_logs reschedule) */
+  moves?: ReadonlyMap<string, string>;
+  /** 지금 시각 — 예정 수업만 '진행 중'·'기록 전'으로 (확정된 완료·취소·노쇼는 시각으로 바꾸지 않음) */
+  now?: Date;
+};
 
-
-/** 상태: 완료 · 예정 · 취소 · 수강생 변경(수강생 사정 취소) · 노쇼 신고 */
-export function lessonState(l: Pick<LessonListRow, 'state' | 'class_status'>, noShow = false): { text: string; muted: boolean } {
-  if (noShow) return { text: '노쇼 신고', muted: false };
-  if (l.state === 'done') return { text: '완료', muted: true };
-  if (l.state === 'canceled') return { text: l.class_status?.startsWith('Student') ? '수강생 변경' : '취소', muted: true };
-  return { text: '예정', muted: false };
+/** 진행 상태: 예정 · 진행 중 · 기록 전 · 완료 · 취소 · 수강생 노쇼 · 강사 노쇼 · 노쇼 신고(열린 신고) */
+export function lessonState(l: Pick<LessonListRow, 'state' | 'class_status' | 'starts_at' | 'ends_at'>, noShow = false, now?: Date): { text: string; tone: LessonItem['tone']; struck: boolean } {
+  if (noShow) return { text: '노쇼 신고', tone: 'alert', struck: false };
+  // 강사 노쇼는 DB 에서 state = done + class_status 'Tutor no-show' (수업 횟수 안 씀)
+  if (l.class_status === 'Tutor no-show') return { text: '강사 노쇼', tone: 'alert', struck: false };
+  if (l.class_status === 'Student no-show') return { text: '수강생 노쇼', tone: 'alert', struck: false };
+  if (l.state === 'done') return { text: '완료', tone: 'muted', struck: false };
+  if (l.state === 'canceled') return { text: '취소', tone: 'normal', struck: true };
+  if (now) {
+    const t = now.getTime();
+    if (l.ends_at && t >= new Date(l.ends_at).getTime()) return { text: '기록 전', tone: 'normal', struck: false };
+    if (t >= new Date(l.starts_at).getTime()) return { text: '진행 중', tone: 'normal', struck: false };
+  }
+  return { text: '예정', tone: 'normal', struck: false };
 }
 
-export function toLessonItems(rows: LessonListRow[], noShowIds: ReadonlySet<string> = new Set()): LessonItem[] {
+/** '11/20(금) 오후 8:00' (한국 시간) */
+const kstWhen = (iso: string) => { const f = formatInZone(new Date(iso), 'Asia/Seoul'); return `${mdw(f.date as KstDate)} ${ampmKo(f.time)}`; };
+
+/** 이름 아래 작은 줄 */
+export function lessonNote(l: LessonListRow, extras: LessonExtras = {}): string | null {
+  const parts: string[] = [];
+  if (l.state === 'canceled') {
+    const why = l.class_status ? STATUS_PLAIN[l.class_status as ClassStatus] : undefined;
+    if (why) parts.push(why);
+    const mk = extras.makeups?.get(l.id);
+    if (mk) parts.push(`보강 ${kstWhen(mk)}`);
+  } else {
+    const orig = l.original_tutor?.name;
+    if (orig && l.tutor?.name && orig !== l.tutor.name) parts.push(`${orig} → ${l.tutor.name}`);
+    const old = extras.moves?.get(l.id);
+    if (old && new Date(old).getTime() !== new Date(l.starts_at).getTime()) {
+      const a = formatInZone(new Date(old), 'Asia/Seoul'); const b = formatInZone(new Date(l.starts_at), 'Asia/Seoul');
+      parts.push(a.date === b.date ? `시간 변경 · ${ampmKo(a.time)} → ${ampmKo(b.time)}` : `시간 변경 · ${kstWhen(old)} → ${kstWhen(l.starts_at)}`);
+    }
+  }
+  return parts.length ? parts.join(' · ') : null;
+}
+
+export function toLessonItems(rows: LessonListRow[], noShowIds: ReadonlySet<string> = new Set(), extras: LessonExtras = {}): LessonItem[] {
   return [...rows]
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     .map((l) => {
       const f = formatInZone(new Date(l.starts_at), 'Asia/Seoul');
-      const st = lessonState(l, noShowIds.has(l.id));
+      const st = lessonState(l, noShowIds.has(l.id), extras.now);
       return {
         id: l.id, date: f.date as KstDate, time: ampmKo(f.time), studentName: l.student?.name_ko ?? '(수강생)', studentCode: l.student?.code ?? '',
-        tutorName: l.tutor?.name ?? '(강사)', kind: typeKo(l.class_type, l.kind), state: st.text, muted: st.muted,
+        tutorName: l.tutor?.name ?? '(강사)', kind: typeKo(l.class_type, l.kind), state: st.text, muted: st.tone === 'muted', tone: st.tone, struck: st.struck,
+        note: lessonNote(l, extras),
       };
     });
 }

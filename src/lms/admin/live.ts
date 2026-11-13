@@ -471,7 +471,47 @@ export function monthEndings(rows: EndingRow[], now: Date, sent: Map<string, str
 // migration 1500 전 DB에는 표가 없음 → 대시보드는 그대로 보이게 빈 목록
 const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01' || e.code === 'PGRST205');
 
-const LESSON_COLS = 'id, starts_at, kind, class_type, state, class_status, student:students(code, name_ko), tutor:tutors!lessons_tutor_id_fkey(name)';
+const LESSON_COLS = 'id, starts_at, ends_at, kind, class_type, state, class_status, student:students(code, name_ko), tutor:tutors!lessons_tutor_id_fkey(name), original_tutor:tutors!lessons_original_tutor_id_fkey(name)';
+
+/**
+ * 수업 줄에 붙일 실제 기록 (11/13 대표 시안):
+ *  - 취소된 수업 → 그 수업에 확정으로 연결된 보강(makeup_requests.source_lesson_id → confirmed_lesson_id)의 최신 시각.
+ *    그 보강도 취소됐으면 그 보강에 연결된 다음 보강을 따라감(최대 4번). 끝까지 살아 있는 보강이 없으면 표시 안 함
+ *  - 시간 변경 → 운영진이 확정된 보강 시간을 고친 기록(admin_makeup_logs reschedule)의 처음 시각. 기록이 없으면 표시 안 함
+ * 읽지 못하면(옛 DB·권한) 빈 표시 — 수업 줄은 그대로 보임
+ */
+export async function loadLessonExtras(sb: SupabaseClient, rows: LessonListRow[]): Promise<{ makeups: Map<string, string>; moves: Map<string, string> }> {
+  const makeups = new Map<string, string>();
+  const moves = new Map<string, string>();
+  const canceled = rows.filter((r) => r.state === 'canceled').map((r) => r.id);
+  // origin: 지금 따라가는 수업 id → 처음 취소된 수업 id
+  let origin = new Map(canceled.map((id) => [id, id]));
+  for (let hop = 0; hop < 4 && origin.size > 0; hop++) {
+    const req = await sb.from('makeup_requests').select('source_lesson_id, confirmed_lesson_id').eq('status', 'confirmed').in('source_lesson_id', [...origin.keys()]);
+    if (req.error) break;
+    const reqs = (req.data ?? []) as { source_lesson_id: string; confirmed_lesson_id: string }[];
+    if (reqs.length === 0) break;
+    const ls = await sb.from('lessons').select('id, starts_at, state').in('id', reqs.map((r) => r.confirmed_lesson_id));
+    if (ls.error) break;
+    const byId = new Map(((ls.data ?? []) as { id: string; starts_at: string; state: string }[]).map((l) => [l.id, l]));
+    const next = new Map<string, string>();
+    for (const [cur, first] of origin) {
+      const linked = reqs.filter((r) => r.source_lesson_id === cur).map((r) => byId.get(r.confirmed_lesson_id)).filter((l): l is NonNullable<typeof l> => !!l);
+      const live = linked.filter((l) => l.state !== 'canceled').sort((a, b) => b.starts_at.localeCompare(a.starts_at))[0];
+      if (live) makeups.set(first, live.starts_at);
+      else for (const l of linked) next.set(l.id, first);
+    }
+    origin = next;
+  }
+  const kept = rows.filter((r) => r.state !== 'canceled').map((r) => r.id);
+  if (kept.length > 0) {
+    const logs = await sb.from('admin_makeup_logs').select('lesson_id, old_starts_at, created_at').eq('action', 'reschedule').in('lesson_id', kept).order('created_at');
+    if (!logs.error) for (const g of (logs.data ?? []) as { lesson_id: string; old_starts_at: string | null }[]) {
+      if (g.old_starts_at && !moves.has(g.lesson_id)) moves.set(g.lesson_id, g.old_starts_at);
+    }
+  }
+  return { makeups, moves };
+}
 
 /** 운영자 대시보드 데이터 읽기 (운영자 aal2 세션 필요 — 아니면 RLS 때문에 0건) */
 export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
@@ -537,6 +577,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   // [카드 닫기] 없앰 (대표 11/9) — 새로 닫는 길은 예외 연장 검토 [검토 종료]뿐. 개편 전에 대표가 닫은 카드는 그대로 둠:
   // 같은 상태로 남아 있을 때만 숨고, 새 안내·변경이 생기면(내용이 바뀌면) 다시 보임 (운영 4건이 다시 떠 중복·불필요 카드가 되지 않게)
   const decided = (closures.data ?? []).filter((c) => c.closed);
+  const todayRows = (lessons.data ?? []) as unknown as LessonListRow[];
+  const todayExtras = await loadLessonExtras(sb, todayRows);
   return {
     tasks: filterClosedTasks(filterActionableTasks([
       ...toTaskSources(taskRows, (leaves.data ?? []) as unknown as LeaveRow[], ns, plans),
@@ -551,7 +593,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       // Class Record 미기록은 강사 Home 'Classes to record' 에만 (대표 11/9: 운영진 할 일에서 뺌)
       ...(extReviews.error ? [] : toExtensionReviews((extReviews.data ?? []) as ExtensionReviewRow[])),
     ]), decided),
-    today: toLessonItems((lessons.data ?? []) as unknown as LessonListRow[], new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x))),
+    today: toLessonItems(todayRows, new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x)), { ...todayExtras, now }),
     stats: {
       activeStudents: new Set(((active.data ?? []) as unknown as { student_id: string; student: { is_trial_account?: boolean } | null }[]).filter((r) => !trial(r)).map((r) => r.student_id)).size,
       unpaid: ((unpaid.data ?? []) as unknown as { student: { is_trial_account?: boolean } | null }[]).filter((r) => !trial(r)).length,
@@ -570,5 +612,7 @@ export async function loadLessonRange(sb: SupabaseClient, from: string, to: stri
     sb.from('no_show_reports').select('lesson_id').eq('status', 'open'),
   ]);
   if (l.error) throw new Error('수업을 읽지 못했어요.');
-  return toLessonItems((l.data ?? []) as unknown as LessonListRow[], new Set((ns.data ?? []).map((r) => r.lesson_id as string)));
+  const rows = (l.data ?? []) as unknown as LessonListRow[];
+  const extras = await loadLessonExtras(sb, rows);
+  return toLessonItems(rows, new Set((ns.data ?? []).map((r) => r.lesson_id as string)), { ...extras, now: new Date() });
 }

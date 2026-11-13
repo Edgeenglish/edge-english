@@ -2,6 +2,12 @@
 
 # 다음 세션 시작 메모
 
+## 🧪 11/13 수업 줄 상태·용어 통일 — 시험 사이트(lms-test) 반영, 운영 DB 대조 미완료 (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
+- 코드만(DB 변경 없음): `src/lms/admin/dashboard.ts` `lessonState`(예정·진행 중·기록 전은 state=scheduled 일 때만 시각으로 / 완료·취소·수강생 노쇼·강사 노쇼(done+Tutor no-show)는 시각으로 안 덮음)·`lessonNote`(취소 사유 STATUS_PLAIN · 연결된 보강 · 'Emma → James' · '시간 변경 · 8:30 → 9:30')
+- `live.ts` `loadLessonExtras`: 보강 = makeup_requests confirmed(source→confirmed_lesson) 최신, 그 보강도 취소면 다음 연결을 따라감(최대 4번) / 시간 변경 = admin_makeup_logs reschedule 첫 old_starts_at 이 있을 때만. 읽기 실패면 표시만 생략
+- 화면: `LessonRows.tsx`(홈 오늘 수업·강사 상세)·`lessons/LessonList.tsx`(PC 표·휴대폰) 취소선은 시각·학생 이름만, 상태는 오른쪽 그대로. 학생 일정 '진행'→'완료', 수강생 노쇼 '결석'. 용어: '수강생 변경'·'수강생 정상 변경'·'수강생측 취소'·'추가 '·'보상 ' 없앰(STATUS_SHORT 삭제 → STATUS_PLAIN 하나)
+- 검증: tsc 0 · npm test 464 · 로컬 ?demo=1 PC 1280·휴대폰 390 오늘 수업(취소선·보강 날짜·대체·시간 변경·기록 전) 확인. **남음: 운영 DB 읽기 대조(Supabase 커넥터 만료로 못 함), 시험 사이트 로그인 화면 확인, 정책 원본 H26 기록(Google Docs 커넥터 연결 실패)**
+
 ## ✅ 11/13 학생 화면 '다음 수강권' 표시 — 운영 반영 완료 (lms-prod·main 5e7bfa7, 코드만) (H26(161) 참고, 브랜치 claude/nifty-fermat-bkdcsc)
 - 코드만(DB 변경 없음): `src/lms/student/home.ts` `passKind`·`nextPass`(지금 수강권 아님 + 시작일 > 오늘 한국 날짜 = 다음) · `StudentHome.tsx` 홈 '내 수강 정보' 종료일 옆·내 정보 '내 수강권' 종료일 아래 '다음 수강권 M/D~M/D', 결제 내역 카드 '다음 수강권', 이름 '수강권 / 결제 내역' · 시안 `docs/lms/previews/next-pass-drafts.html`
 - 검증: tsc 0 · vitest src/lms 449 · 로컬 ?demo=1 PC 1280·iPhone 13 — 다음 수강권 없음(화면 그대로)/있음(3곳 표시) 둘 다, 가로 넘침 없음. 시험 DB: STU-0003·0027·0042·0044 다음 수강권 있음, STU-0022(시작 전 첫 수강권)는 '현재'로 남음 확인
@@ -35,9 +41,9 @@
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
-## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test·운영 반영 완료** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
-- **운영 반영 (대표 11/13 '운영에도 배포해')**: 운영 DB 백업 snapshots **49**(tutor_updates 표 + kind 제약 정의) → migration 20261113120000 적용(표 60→61, RLS·anon 실행 막힘·트리거 2개 확인, 학생 알림 0건) → 코드 lms-prod **69db1c0**(lms-test 의 지각 알림 3커밋만 골라 얹음). 되돌리기: 코드 lms-prod 0932ca9 · DB 표·함수 2개 제거 + kind 제약을 snapshots 49 정의로. **미확인: Vercel 운영 배포 성공·운영 화면 실제 버튼(실제 수업이 시작 2시간 안일 때만 보임)**
-- 시험 DB 시험용 수업 시각은 원래대로 되돌림(STU-9001 11/14 10:00·11:00 한국, 이미 알림 보낸 수업 1개는 12/2로 옮겨 둠 — 알림 기록은 지울 수 없어서)
+## ⏳ 11/13 학생 지각 알림 — **시험 DB·lms-test 완료 · 운영 DB 완료 · 운영 코드 배포 확인 안 됨(운영 화면에 아직 안 나옴)** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
+- **운영 반영 (대표 11/13 '운영에도 배포해')**: 운영 DB 백업 snapshots **49**(tutor_updates 표 + kind 제약 정의) → migration 20261113120000 적용(표 60→61, RLS·anon 실행 막힘·트리거 2개 확인, 학생 알림 0건) → 코드 lms-prod **69db1c0**(lms-test 의 지각 알림 3커밋만 골라 얹음). 되돌리기: 코드 lms-prod 0932ca9 · DB 표·함수 2개 제거 + kind 제약을 snapshots 49 정의로. **11/13 22:25(한국) 확인: lms-prod 69db1c0 push 35분 뒤에도 운영 사이트(edgeenglish.kr)가 예전 배포(dpl_7qCc61…)를 그대로 줌 — 운영 JS 에 '늦게 참여해요' 없음. 69db1c0 로컬 `next build` 는 성공하고 버튼 문구도 들어감 → 코드 문제 아님, Vercel 쪽(배포 안 됨·실패·대기)을 대표가 Vercel Deployments 에서 확인해야 함. 운영 DB 변경은 옛 화면이 쓰지 않아 영향 없음**
+- **시험 DB 시험용 수업 복구 미완료**: STU-9001 수업 0ee7b8bc… 1개가 12/2 14:00(한국)에 있음 → 11/14 10:00~10:50(한국, = 11/14 01:00~01:50 UTC)로 되돌려야 함(다른 1개 e263168d… 는 11/14 11:00 한국으로 복구됨). Supabase 커넥터 연결 실패로 못 함. 알림 기록(student_late_notices 1줄)은 지울 수 없어 그대로 둠
 - migration **20261113120000_lms_student_late_notice** (시험 DB 적용): 표 student_late_notices(수업당 1줄) · tutor_updates 종류 'student_late' · 함수 student_late_notice(보내기, 시작 2시간 전~끝나기 전만) · student_late_notices(읽기). 운영 표 수 60 → 61 (prod-setup 02-check 고침)
 - 화면: 학생 홈 '다음 수업' 카드 [늦게 참여해요] (StudentHome.tsx NextLesson·LateNotice), 강사 Home Updates 'Running late' 줄 (tutor/updates.ts), 운영자 보기는 같은 함수로 대신 입력
 - 검증: vitest 456 · tsc · test:db 새 시험(supabase/tests/student-late-notice.sql 22개) 통과 · 시험 DB 실제 함수 실행(수업 시간을 되돌림 트랜잭션 안에서 앞당겨 실행 → 알림·메일 문구·중복 확인 → 롤백, 데이터 안 남음). **미확인: support@ 실제 도착**(실제 저장 없이 롤백했음 — 강사 메일 경로는 기존 tutor_updates 메일과 같음)

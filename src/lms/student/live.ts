@@ -71,7 +71,7 @@ export type StudentView = {
   /** 강사가 정한 교재 이름 (QA C-04). 없거나 수업 방식에 교재가 없으면 null */
   textbook?: string | null;
   /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 수강생 화면 표시는 '보강'으로 같음) */
-  lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean })[];
+  lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean; /** 수강생 노쇼 — 학생 화면 '결석' */ studentNoShow?: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
   /** 지각을 알린 수업 (migration 20261113120000). 옛 DB 면 빈 배열 */
@@ -186,6 +186,7 @@ export function parseStudentView(r: Raw): StudentView {
       substitute: l.substitute,
       leaveOpen: !!l.leave_open,
       tutorNoShow: l.class_status === 'Tutor no-show',
+      studentNoShow: l.class_status === 'Student no-show',
     })),
     makeupRights: r.makeup_rights.map((m) => ({
       lessonId: m.lesson_id,

@@ -42,7 +42,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
   });
 
   it('미리 보기 줄: 정상 변경 · 변경권 2→1 · 보강 기한', () => {
-    expect(decisionLines(adv)).toEqual(['수강생 정상 변경 · 수업 44시간 전 요청', '변경권 2 → 1', '보강 1/5 (화)까지']);
+    expect(decisionLines(adv)).toEqual(['수강생 미리 취소 · 수업 44시간 전 요청', '변경권 2 → 1', '보강 1/5 (화)까지']);
     expect(decisionLines({ ...adv, status: 'Tutor canceled late', who: 'tutor', uses_credit: false, reward_won: 2000 })).toContain('수강생 적립금 2,000원');
   });
 
@@ -133,7 +133,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
       { created_at: '2026-10-28T10:00:00Z', event: 'change', recipient_kind: 'tutor', change: { type: 'student_cancel', student: s, lesson: { starts_at: kstToInstant('2026-10-20', '09:00').toISOString(), kind: 'regular' } }, makeup: null },
     ], [], now), now);
     expect(item.tag).toBe('수업 취소 안내 보내기');
-    expect(item.detail).toBe('10/20(화) 오전 9시 정규 수업 수강생측 취소 · 수강생·강사 2건');
+    expect(item.detail).toBe('10/20(화) 오전 9시 정규 수업 수강생 취소 · 수강생·강사 2건');
   });
 });
 
