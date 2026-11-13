@@ -52,7 +52,8 @@ select pg_temp.ok((select visible_until from tutor_updates where kind = 'student
 select pg_temp.ok((select count(*) from notifications where dedupe_key = 'tutor_update:student_late:dddddddd-0000-4000-8000-0000000000a1') = 1, '강사 메일 1통');
 select pg_temp.ok((select payload ->> 'subject' from notifications where dedupe_key like 'tutor_update:student_late:%') like '%Student Running Late – Hajun', '제목');
 select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key like 'tutor_update:student_late:%') like
-  E'Student Running Late – Hajun\n\nHajun has reported that they may be approximately 20 or more minutes late.\nPlease join the class on time and stay until the scheduled end time, as the student may arrive earlier than expected.%', '본문 (이유 없으면 Reason 줄 없음)');
+  E'Student Running Late – Hajun\n\nHajun has reported that they may be approximately 20 or more minutes late.\n\nPlease join the class on time and stay until the scheduled end time, as the student may arrive earlier than expected.%', '본문 (이유 없으면 Reason 줄 없음, 마지막 문장은 한 줄 띄움)');
+select pg_temp.ok((select payload ->> 'html' from notifications where dedupe_key = 'tutor_update:student_late:dddddddd-0000-4000-8000-0000000000a1') like '%approximately <b>20 or more</b> minutes late.</p><p><b>Please join the class on time and stay until the scheduled end time, as the student may arrive earlier than expected.</b></p>%', 'HTML: 분은 굵게, 마지막 문장은 따로 문단 + 통째로 굵게');
 select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key like 'tutor_update:student_late:%') not like '%remaining%' and (select payload ->> 'text' from notifications where dedupe_key like 'tutor_update:student_late:%') not like '%extend%', '남은 시간·연장 말 없음');
 
 -- 이유 고르고 보내기 (진행 중인 수업 ③ — 끝나기 전까지 가능)
@@ -61,7 +62,7 @@ set local role authenticated;
 select student_late_notice(null, 'dddddddd-0000-4000-8000-0000000000a3', 10, 'transit');
 reset role;
 select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'tutor_update:student_late:dddddddd-0000-4000-8000-0000000000a3') like
-  E'%approximately 10 minutes late.\nReason: Public transportation is delayed.\nPlease join the class on time%', '본문 (이유 줄)');
+  E'%approximately 10 minutes late.\nReason: Public transportation is delayed.\n\nPlease join the class on time%', '본문 (이유 줄, 마지막 문장과 한 줄 띄움)');
 
 -- 읽기: 본인이 알린 것만
 select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-0000000000a1","aal":"aal1"}', true);
