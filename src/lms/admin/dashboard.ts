@@ -118,8 +118,9 @@ const kstWhen = (iso: string) => { const f = formatInZone(new Date(iso), 'Asia/S
 /** 이름 아래 작은 줄 */
 export function lessonNote(l: LessonListRow, extras: LessonExtras = {}): string | null {
   const parts: string[] = [];
-  if (l.state === 'canceled') {
-    const why = l.class_status ? STATUS_PLAIN[l.class_status as ClassStatus] : undefined;
+  if (l.state === 'canceled' || l.class_status === 'Tutor no-show') {
+    // 강사 노쇼는 상태 글자가 이미 사유 — 연결된 보강만 붙임
+    const why = l.state === 'canceled' && l.class_status ? STATUS_PLAIN[l.class_status as ClassStatus] : undefined;
     if (why) parts.push(why);
     const mk = extras.makeups?.get(l.id);
     if (mk) parts.push(`보강 ${kstWhen(mk)}`);

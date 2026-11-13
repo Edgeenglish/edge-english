@@ -483,11 +483,12 @@ export function monthEndings(rows: EndingRow[], now: Date, sent: Map<string, str
 // migration 1500 전 DB에는 표가 없음 → 대시보드는 그대로 보이게 빈 목록
 const missingTable = (e: { code?: string } | null) => !!e && (e.code === '42P01' || e.code === 'PGRST205');
 
+// 되돌린 수업(voided_at: 확정 되돌림·운영진 정정)은 학생·강사 화면(student_screen·tutor_screen)처럼 목록에서 뺀다 (11/13 QA)
 const LESSON_COLS = 'id, starts_at, ends_at, kind, class_type, state, class_status, student:students(code, name_ko), tutor:tutors!lessons_tutor_id_fkey(name), original_tutor:tutors!lessons_original_tutor_id_fkey(name)';
 
 /**
  * 수업 줄에 붙일 실제 기록 (11/13 대표 시안):
- *  - 취소된 수업 → 그 수업에 확정으로 연결된 보강(makeup_requests.source_lesson_id → confirmed_lesson_id)의 최신 시각.
+ *  - 취소된 수업·강사 노쇼 → 그 수업에 확정으로 연결된 보강(makeup_requests.source_lesson_id → confirmed_lesson_id)의 최신 시각.
  *    그 보강도 취소됐으면 그 보강에 연결된 다음 보강을 따라감(최대 4번). 끝까지 살아 있는 보강이 없으면 표시 안 함
  *  - 시간 변경 → 운영진이 확정된 보강 시간을 고친 기록(admin_makeup_logs reschedule)의 처음 시각. 기록이 없으면 표시 안 함
  * 읽지 못하면(옛 DB·권한) 빈 표시 — 수업 줄은 그대로 보임
@@ -495,7 +496,7 @@ const LESSON_COLS = 'id, starts_at, ends_at, kind, class_type, state, class_stat
 export async function loadLessonExtras(sb: SupabaseClient, rows: LessonListRow[]): Promise<{ makeups: Map<string, string>; moves: Map<string, string> }> {
   const makeups = new Map<string, string>();
   const moves = new Map<string, string>();
-  const canceled = rows.filter((r) => r.state === 'canceled').map((r) => r.id);
+  const canceled = rows.filter((r) => r.state === 'canceled' || r.class_status === 'Tutor no-show').map((r) => r.id);
   // origin: 지금 따라가는 수업 id → 처음 취소된 수업 id
   let origin = new Map(canceled.map((id) => [id, id]));
   for (let hop = 0; hop < 4 && origin.size > 0; hop++) {
@@ -515,7 +516,7 @@ export async function loadLessonExtras(sb: SupabaseClient, rows: LessonListRow[]
     }
     origin = next;
   }
-  const kept = rows.filter((r) => r.state !== 'canceled').map((r) => r.id);
+  const kept = rows.filter((r) => r.state !== 'canceled' && r.class_status !== 'Tutor no-show').map((r) => r.id);
   if (kept.length > 0) {
     const logs = await sb.from('admin_makeup_logs').select('lesson_id, old_starts_at, created_at').eq('action', 'reschedule').in('lesson_id', kept).order('created_at');
     if (!logs.error) for (const g of (logs.data ?? []) as { lesson_id: string; old_starts_at: string | null }[]) {
@@ -541,7 +542,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       .from('no_show_reports')
       .select('id, reported_at, lesson:lessons(id, starts_at, student:students(name_ko), tutor:tutors!lessons_tutor_id_fkey(name))')
       .eq('status', 'open'),
-    sb.from('lessons').select(LESSON_COLS).eq('kst_date', today),
+    sb.from('lessons').select(LESSON_COLS).is('voided_at', null).eq('kst_date', today),
     loadImportChecks(sb),
     sb
       .from('migrated_items')
@@ -623,7 +624,7 @@ export type DashboardStats = { activeStudents: number; unpaid: number; registrat
 /** 기간별 수업 목록 (한국 날짜 from~to) */
 export async function loadLessonRange(sb: SupabaseClient, from: string, to: string): Promise<LessonItem[]> {
   const [l, ns] = await Promise.all([
-    sb.from('lessons').select(LESSON_COLS).gte('kst_date', from).lte('kst_date', to).order('starts_at'),
+    sb.from('lessons').select(LESSON_COLS).is('voided_at', null).gte('kst_date', from).lte('kst_date', to).order('starts_at'),
     sb.from('no_show_reports').select('lesson_id').eq('status', 'open'),
   ]);
   if (l.error) throw new Error('수업을 읽지 못했어요.');

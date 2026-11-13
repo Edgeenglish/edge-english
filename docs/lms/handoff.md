@@ -15,11 +15,12 @@
 - 미검증: 실제 강사 휴대폰 기기 · 1~2일 Cancel class 화면 자체(코드 안 바꿈) · 운영 DB
 - **남은 일**: 운영 반영(대표 승인 뒤): 운영 DB 백업 → migration 20261113150000 → lms-prod 배포(먼저 `git log origin/lms-test..origin/lms-prod` 확인, lms-test 에는 다른 세션 작업도 있으니 필요하면 골라 담기)
 
-## 🧪 11/13 수업 줄 상태·용어 통일 — 시험 사이트(lms-test) 반영, 운영 DB 대조 미완료 (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
+## 🧪 11/13 수업 줄 상태·용어 통일 — 시험 사이트(lms-test) 반영·QA 통과, 운영 반영 대표 승인 대기 (H26(168) 참고) (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
 - 코드만(DB 변경 없음): `src/lms/admin/dashboard.ts` `lessonState`(예정·진행 중·기록 전은 state=scheduled 일 때만 시각으로 / 완료·취소·수강생 노쇼·강사 노쇼(done+Tutor no-show)는 시각으로 안 덮음)·`lessonNote`(취소 사유 STATUS_PLAIN · 연결된 보강 · 'Emma → James' · '시간 변경 · 8:30 → 9:30')
 - `live.ts` `loadLessonExtras`: 보강 = makeup_requests confirmed(source→confirmed_lesson) 최신, 그 보강도 취소면 다음 연결을 따라감(최대 4번) / 시간 변경 = admin_makeup_logs reschedule 첫 old_starts_at 이 있을 때만. 읽기 실패면 표시만 생략
 - 화면: `LessonRows.tsx`(홈 오늘 수업·강사 상세)·`lessons/LessonList.tsx`(PC 표·휴대폰) 취소선은 시각·학생 이름만, 상태는 오른쪽 그대로. 학생 일정 '진행'→'완료', 수강생 노쇼 '결석'. 용어: '수강생 변경'·'수강생 정상 변경'·'수강생측 취소'·'추가 '·'보상 ' 없앰(STATUS_SHORT 삭제 → STATUS_PLAIN 하나)
-- 검증: tsc 0 · npm test 464 · 로컬 ?demo=1 PC 1280·휴대폰 390 오늘 수업(취소선·보강 날짜·대체·시간 변경·기록 전) 확인. **남음: 운영 DB 읽기 대조(Supabase 커넥터 만료로 못 함), 시험 사이트 로그인 화면 확인, 정책 원본 H26 기록(Google Docs 커넥터 연결 실패)**
+- 검증: tsc 0 · npm test 465 · 로컬 ?demo=1 PC·휴대폰 · ChatGPT QA(시험·운영 DB 읽기 대조, 시험 화면 PC·휴대폰 61줄) 통과. QA 지적 3건 고침: 강사 노쇼 줄 연결 보강 날짜 / 되돌린 수업(voided_at) 목록에서 뺌(student_screen·tutor_screen 과 같게) / 수업 목록 휴대폰 줄 = LessonRows. 이번 주 시험 DB 에 사례 없어 실물 미확인: 취소된 보강 연쇄 추적·같은 날 시간 변경·늦은/공휴일 취소
+- 운영 배포 = 대표 승인 뒤 (`git log origin/lms-test..origin/lms-prod` 먼저 확인, 코드만)
 
 ## ✅ 11/13 학생 화면 '다음 수강권' 표시 — 운영 반영 완료 (lms-prod·main 5e7bfa7, 코드만) (H26(161) 참고, 브랜치 claude/nifty-fermat-bkdcsc)
 - 코드만(DB 변경 없음): `src/lms/student/home.ts` `passKind`·`nextPass`(지금 수강권 아님 + 시작일 > 오늘 한국 날짜 = 다음) · `StudentHome.tsx` 홈 '내 수강 정보' 종료일 옆·내 정보 '내 수강권' 종료일 아래 '다음 수강권 M/D~M/D', 결제 내역 카드 '다음 수강권', 이름 '수강권 / 결제 내역' · 시안 `docs/lms/previews/next-pass-drafts.html`
@@ -54,9 +55,19 @@
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
-## ⏳ 11/13 학생 지각 알림 — **시험 DB·lms-test 완료 · 운영 DB 완료 · 운영 코드 배포 확인 안 됨(운영 화면에 아직 안 나옴)** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
+## ⏭ 강사 지각 알림 — **대표 결정·범위 확정(11/13) · 개발(시안부터)은 새 세션에서 시작** (정책 원본 H26 기록은 Google Docs 연결·'반영해' 지시 뒤)
+- **결정(대표 11/13, 추천안 전부)**: ① POL-TU-01 '늦은 만큼 연장' 그대로 ② **미리 알려도 실제 시작에 늦으면 무조건 지각** — 월 정시 수업률 90% 계산에 반영, 연장 의무 유지, 연장 수업을 해도 지각 기록 유지, 사전 알림은 면제 사유 아님 ③ 지각 시간 선택지 5·10·15·20분 이상 ④ 학생 + 운영진(support@) 모두 메일
+- **추가 원칙(대표 11/13)**: 학생은 수업을 떠날 권리가 있고 강사가 늦을 때 기다릴 의무가 없음. 강사 지각 수업의 결과는 2가지 — ⓐ 학생이 아직 있으면 **강사 지각**(늦은 만큼 연장 + 정시 90% 반영) ⓑ 학생이 이미 떠났으면 **강사 노쇼**(기존 POL-TU-03: 보강 1 + 무료 보상 1). 사전 지각 알림은 어느 쪽도 면제 아님. **학생 알림에 '기다려 주세요' 같은 표현 금지**
+- **범위 확정(대표 11/13)**: 이번에는 **강사 '늦어요' 알림만 개발**. 강사 노쇼 신고는 기존처럼 학생이 공식톡으로 연락 → 운영진이 확인·처리(학생 [강사가 안 들어왔어요] 신고 버튼은 지금 코드에 없음 → 실제 필요성 본 뒤 별도 검토, D-9 5분 신고 정책은 아직 구현 안 됨). 노쇼 판정 때 운영진이 볼 것: 강사 사전 알림 여부·알린 시각·예상 분, 학생의 실제 이탈, 수업 진행 여부(사전 알림 기록은 강사 Updates·운영자 보기에 남음)
+- **설계 확정(대표 11/13, ChatGPT 추천 4가지 동의)**: ⓐ '늦어요' 버튼은 **수업 시작 직전까지**(시작 후 자동 비활성, 시작 후엔 운영진에게 직접 연락) ⓑ 버튼은 **수업 시작 2시간 전부터** 보임 ⓒ 지각 사유는 **미리 정해진 이유 버튼 4개 정도, 선택 사항**(강사가 고르면 학생에겐 미리 쓴 한국어로) ⓓ **'수업에 참석할 수 없어요' 버튼은 새로 만들지 않음** — 기존 강사 일정 수업 창의 'Cancel class'(시작 전 수업만, 누른 시각으로 강사 취소 자동 판정) 재사용, '늦어요'는 그 옆에 추가 ⓔ **? 안내 팝업**은 기존 'Cover class 안내' 팝업과 같은 방식(클릭·탭): 'Please report any expected delays at least 10 minutes before class starts. It's important to let your student know as early as possible so they aren't left waiting. This button will remain available until class starts.' (영어 확정 문구는 개발 때 대표 확인 후)
+- **개발 시작 전에 대표와 먼저 정할 것(Claude 가 정하지 않음)**: 이유 버튼 4개의 영어 이름과 학생용 한국어 문구, 학생 메일·LMS 알림·운영진 메일 문구(거주지 시간만, 기다리라는 표현 금지, 20분 이상 때 문구), PC·휴대폰 시안(강사 일정 수업 창에서 Cancel class 옆 배치). 문구는 대화창에서 확정 뒤 '시스템에 넣어' 이후에만 코드·DB 에 넣음
+- 구조는 학생 지각 알림(migration 20261113120000)과 같게: 강사 Home 버튼 → 담당 학생 메일 + 학생 LMS 알림, 운영자 보기에서도 대신 입력. 시험 사이트에 만들 때 대표가 열자마자 보이게 시험 데이터를 미리 만들고 볼 페이지를 같이 안내(CLAUDE.md 11/13)
+- ChatGPT 안 중 쓰지 않는 것: 학생 메일 영어 문구(학생 메일은 한국어)
+
+## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test·운영 DB·운영 화면 모두 반영 완료** (운영 주소 복구 23:27~23:28 한국, 정책 원본 H26(162)~(165))
+- **운영 최종 확인 (11/13 밤)**: edgeenglish.kr·www.edgeenglish.kr 모두 dpl_FDCP3w…(lms-prod 69db1c0) 를 주고, 운영 JS 에 '늦게 참여해요'·'강사님께 알렸어요' 있음. 홈 · /lms/tutor · /lms/admin 응답 200. 원인: 두 운영 주소가 Production 연결로 바뀌어 lms-prod 푸시를 못 따라감 → ChatGPT(work)가 대표 승인으로 'Preview · lms-prod 브랜치'로 복구(Vercel Domains, DNS·환경변수·재배포 없음). 언제 왜 바뀌었는지는 미확인 — 다시 안 따라오면 Vercel Settings → Domains 에서 두 주소 연결 대상부터 확인 (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
 - **운영 반영 (대표 11/13 '운영에도 배포해')**: 운영 DB 백업 snapshots **49**(tutor_updates 표 + kind 제약 정의) → migration 20261113120000 적용(표 60→61, RLS·anon 실행 막힘·트리거 2개 확인, 학생 알림 0건) → 코드 lms-prod **69db1c0**(lms-test 의 지각 알림 3커밋만 골라 얹음). 되돌리기: 코드 lms-prod 0932ca9 · DB 표·함수 2개 제거 + kind 제약을 snapshots 49 정의로. **11/13 22:25(한국) 확인: lms-prod 69db1c0 push 35분 뒤에도 운영 사이트(edgeenglish.kr)가 예전 배포(dpl_7qCc61…)를 그대로 줌 — 운영 JS 에 '늦게 참여해요' 없음. 69db1c0 로컬 `next build` 는 성공하고 버튼 문구도 들어감 → 코드 문제 아님, Vercel 쪽(배포 안 됨·실패·대기)을 대표가 Vercel Deployments 에서 확인해야 함. 운영 DB 변경은 옛 화면이 쓰지 않아 영향 없음**
-- **시험 DB 시험용 수업 복구 미완료**: STU-9001 수업 0ee7b8bc… 1개가 12/2 14:00(한국)에 있음 → 11/14 10:00~10:50(한국, = 11/14 01:00~01:50 UTC)로 되돌려야 함(다른 1개 e263168d… 는 11/14 11:00 한국으로 복구됨). Supabase 커넥터 연결 실패로 못 함. 알림 기록(student_late_notices 1줄)은 지울 수 없어 그대로 둠
+- **시험 DB 시험용 수업 복구 완료·확인(11/13 밤, ChatGPT 읽기 조회)**: STU-9001 수업 0ee7b8bc… 11/14 10:00~10:50(한국) · e263168d… 11/14 11:00~11:50(한국). 알림 기록(student_late_notices 1줄)은 지울 수 없어 남아 있음(이미 알린 수업 하나에 붙어 있어 이후 시험은 다른 수업으로)
 - migration **20261113120000_lms_student_late_notice** (시험 DB 적용): 표 student_late_notices(수업당 1줄) · tutor_updates 종류 'student_late' · 함수 student_late_notice(보내기, 시작 2시간 전~끝나기 전만) · student_late_notices(읽기). 운영 표 수 60 → 61 (prod-setup 02-check 고침)
 - 화면: 학생 홈 '다음 수업' 카드 [늦게 참여해요] (StudentHome.tsx NextLesson·LateNotice), 강사 Home Updates 'Running late' 줄 (tutor/updates.ts), 운영자 보기는 같은 함수로 대신 입력
 - 검증: vitest 456 · tsc · test:db 새 시험(supabase/tests/student-late-notice.sql 22개) 통과 · 시험 DB 실제 함수 실행(수업 시간을 되돌림 트랜잭션 안에서 앞당겨 실행 → 알림·메일 문구·중복 확인 → 롤백, 데이터 안 남음). **미확인: support@ 실제 도착**(실제 저장 없이 롤백했음 — 강사 메일 경로는 기존 tutor_updates 메일과 같음)
