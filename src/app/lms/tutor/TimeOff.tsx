@@ -140,9 +140,11 @@ export function TimeOffForm({ actions, data, onCalendar, onSent, onDirty }: {
         </div>
         <div className="border-t border-[#e6e3ef] pt-2.5">
           <span className={label}>Your time off this year</span>
-          <p className="text-[14.5px] text-[#1d1b2b]">
-            {data.year.length === 0 ? 'None' : `${data.year.length} · ${data.year.map((y) => range(y.first, y.last)).join(' · ')}`}
-          </p>
+          {data.year.length === 0 ? <p className="text-[14.5px] text-[#1d1b2b]">None</p> : (
+            <ul className="grid gap-0.5 text-[14.5px] text-[#1d1b2b]">
+              {data.year.map((y) => <li key={y.first}>{range(y.first, y.last)} <span className="text-[13px] text-[#6b6880]">{city(tz)} dates</span></li>)}
+            </ul>
+          )}
         </div>
         <p className="rounded-[12px] border border-[#f0d58a] bg-[#fff8e6] px-3 py-2.5 text-[14px] text-[#1d1b2b]">
           Time off breaks your students’ weekly routine and pushes their course end date back. Please keep time off to a minimum.
