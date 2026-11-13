@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { kstToInstant } from '../rules/dates';
 import {
+  nextPass,
+  passKind,
   cancelPreview,
   lessonsLeft,
   nextLesson,
@@ -206,5 +208,18 @@ describe('여러 수업 취소 미리 보기 — 기간별 변경권 (R-12·R-01
     expect(cancelManySummary([{ uses_credit: false, makeup_allowed: false }], [{ start: null, left: 0 }])).toBe('수업 1회를 취소했어요 · 변경권 0개 사용 · 남은 변경권 0개');
     expect(cancelManySummary([{ uses_credit: true, makeup_allowed: true }, { uses_credit: true, makeup_allowed: true }], [{ start: '2026-10-14', left: 0 }, { start: '2026-11-11', left: 1 }]))
       .toContain('남은 변경권 10/14~ 0개, 11/11~ 1개');
+  });
+});
+
+describe('다음 수강권 (대표 11/13)', () => {
+  const p = (id: string, current: boolean, periodStart: string) => ({ id, current, periodStart: periodStart as never });
+  it('지금 수강권이 아니고 시작일이 오늘 뒤면 다음, 아니면 지난', () => {
+    expect(passKind(p('a', true, '2026-12-20'), '2026-11-13' as never)).toBe('current');
+    expect(passKind(p('b', false, '2026-12-14'), '2026-11-13' as never)).toBe('next');
+    expect(passKind(p('c', false, '2026-11-13'), '2026-11-13' as never)).toBe('past');
+  });
+  it('가장 먼저 시작하는 다음 수강권, 없으면 null', () => {
+    expect(nextPass([p('x', false, '2027-03-08'), p('y', false, '2026-12-14'), p('z', true, '2026-09-21')], '2026-11-13' as never)?.id).toBe('y');
+    expect(nextPass([p('z', true, '2026-09-21'), p('o', false, '2026-06-01')], '2026-11-13' as never)).toBeNull();
   });
 });

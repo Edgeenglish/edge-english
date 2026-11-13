@@ -35,6 +35,8 @@ import {
   type CancelResult,
   type CreditPeriod,
   type PaymentSummary,
+  nextPass,
+  passKind,
   type RenewalState,
   type RequestStatus,
   type StudentLesson,
@@ -461,7 +463,7 @@ export default function StudentHome(props: {
     return () => { alive = false; };
   }, [actions, s]);
 
-  // 공지 (최신 2건 + 전체보기, 학생이 열면 확인함 — 11/11 대표) · 현재·지난 수강권 / 결제 내역
+  // 공지 (최신 2건 + 전체보기, 학생이 열면 확인함 — 11/11 대표) · 수강권 / 결제 내역
   const [notices, setNotices] = useState<StudentNotice[]>([]);
   const [history, setHistory] = useState<PaymentSummary[] | null>(null);
   useEffect(() => {
@@ -603,6 +605,8 @@ export default function StudentHome(props: {
   const quickTop = 'flex min-h-[48px] w-full items-center justify-between gap-2 rounded-t-[16px] border-b border-[#eeecf4] px-4 text-left transition-colors hover:bg-[#f7f5fd] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#5b3df0]';
   const quickGo = <span className="shrink-0 text-[12.5px] font-semibold text-[#5b3df0]">신청하기 ›</span>;
   // 내 수강 정보 (11/11 대표 시안): 담당 강사 = 정규 일정 강사만 (다음 수업 강사·대체강사로 채우지 않음), 남은 수업 = 재등록 기준과 같은 lessonsLeft.total
+  // 미리 재등록한 다음 수강권 (대표 11/13) — 없으면 줄 없음
+  const nextP = nextPass(history ?? [], formatInZone(now, 'Asia/Seoul').date as KstDate);
   const regularTutors = [...new Set(slots.map((x) => x.tutor))].join(' · ');
   const summaryItems: [string, string][] = [
     ['이름', s.name],
@@ -611,6 +615,7 @@ export default function StudentHome(props: {
     ['수업 시간', slotText ? [...new Set(slotText.map((g) => g.short))].join(' / ') : '-'],
     ['남은 수업', notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : `${left.total}회`],
     ['종료일', endDate ? endDay(endDate) : '-'],
+    ...(nextP ? [['다음 수강권', `${fmtDate(nextP.periodStart)}~${fmtDate(nextP.periodEnd)}`] as [string, string]] : []),
   ];
   const summary = (
     <section aria-label="내 수강 정보" className={`${card} px-4 py-3`}>
@@ -1009,7 +1014,8 @@ export default function StudentHome(props: {
                   <LinkRow label="남은 정규 수업" value={notStarted ? (s.paid ? '수업 일정 준비 중' : '결제 확인 후 시작') : `${left.regular}회`} />
                   <LinkRow label="변경권" value={`${s.creditsLeft}개`} onClick={() => setOverlay({ kind: 'credits' })} />
                   {endDate && <LinkRow label="종료일" value={endDay(endDate)} />}
-                  <LinkRow label="현재·지난 수강권 / 결제 내역" value="" onClick={() => setOverlay({ kind: 'payments' })} />
+                  {nextP && <LinkRow label="다음 수강권" value={`${fmtDate(nextP.periodStart)}~${fmtDate(nextP.periodEnd)}`} />}
+                  <LinkRow label="수강권 / 결제 내역" value="" onClick={() => setOverlay({ kind: 'payments' })} />
                 </section>
                 <section className={`${card} px-4 pb-1.5 pt-4`}>
                   <h2 className="mb-1 text-[15px] font-bold">적립금 · 보강권</h2>
@@ -1047,7 +1053,7 @@ export default function StudentHome(props: {
           {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} busy={busy} calendar={calendarOf(s.requests.find((r) => r.id === overlay.id)!)}
             onWithdraw={async (id) => { await run(() => actions.withdrawMakeup(id), '신청을 취소했어요.'); }}
             onPick={pickSuggestion} onDecline={async (id) => { await run(() => actions.declineSuggestion(id), '운영진에게 다른 일정을 요청했어요.'); }} />}
-          {overlay.kind === 'payments' && <Payments payments={history ?? []} />}
+          {overlay.kind === 'payments' && <Payments payments={history ?? []} todayKst={formatInZone(now, 'Asia/Seoul').date as KstDate} />}
           {overlay.kind === 'notices' && <NoticeList notices={notices} onOpen={openNotice} />}
           {overlay.kind === 'notice' && notices.find((n) => n.id === overlay.id) && <NoticeDetail n={notices.find((n) => n.id === overlay.id)!} />}
           {overlay.kind === 'points' && <Points history={points} />}
@@ -1971,16 +1977,16 @@ function NoticeDetail({ n }: { n: StudentNotice }) {
   );
 }
 
-function Payments({ payments }: { payments: PaymentSummary[] }) {
+function Payments({ payments, todayKst }: { payments: PaymentSummary[]; todayKst: KstDate }) {
   // 금액·카드 정보는 보여 주지 않음 (POL-PAY-11). 카드 영수증은 아임웹 주문조회로
   return (
     <div className="grid gap-3.5">
-      <h2 className="text-[18px] font-bold">현재·지난 수강권 / 결제 내역</h2>
+      <h2 className="text-[18px] font-bold">수강권 / 결제 내역</h2>
       {payments.length === 0 && <p className={`${card} px-4 py-5 text-center text-[14px] text-[#6b6880]`}>수강권 기록이 없어요.</p>}
       {payments.map((p) => (
         <section key={p.id} className={`${card} grid gap-2.5 p-4 text-[14px]`}>
           <div className="flex items-center justify-between">
-            <h3 className="text-[15px] font-bold">{p.current ? '현재 수강권' : '지난 수강권'}</h3>
+            <h3 className="text-[15px] font-bold">{{ current: '현재 수강권', next: '다음 수강권', past: '지난 수강권' }[passKind(p, todayKst)]}</h3>
             <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${p.paid ?? p.confirmedOn ? 'bg-[#e3f5ea] text-[#13623a]' : 'bg-[#fff1d6] text-[#8a5300]'}`}>
               {p.paid ?? p.confirmedOn ? '결제 완료' : '결제 확인 중'}
             </span>
