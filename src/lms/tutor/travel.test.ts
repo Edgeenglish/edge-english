@@ -40,25 +40,24 @@ describe('강사 해외 이동 기간 (H26(173))', () => {
     expect(searchCity('los angeles')[0]?.city).toBe('Los Angeles');
     expect(searchCity('zzzz')).toEqual([]);
   });
-  it('Calendar 칸: 키 = 그 날짜 지역 현지. DB 의 n·경계(!)·06~22:30 밖 = 시작 못 함 (QA 11/14)', () => {
+  it('Calendar 칸: 키 = 실제 시각(UTC). DB 가 준 칸만 시작 가능, 없는 키·n = 시작 못 함 (재검증 11/14)', () => {
     const d: ScheduleData = { tutor: { id: 't', name: 'Ben', timezone: 'Australia/Sydney', country: 'Australia' }, locations: [ba], today: '2027-01-01', last: '2027-03-26',
-      times: ['06:00', '09:00', '22:30'], cells: { '2027-01-10T06:00': 'n' }, blocks: [], opens: [] };
-    expect(cellKind('2027-01-10T06:00', d, false)).toBe('outside');
-    expect(cellKind('2027-01-10T09:00', d, false)).toBe('free');
-    expect(cellKind('2027-01-10T23:00', d, false)).toBe('outside');
-    expect(cellKind('2027-01-10T09:00!', d, false)).toBe('outside');
+      times: ['06:00', '22:30'], cells: { '2027-01-10T12:00Z': 'o', '2027-01-10T13:00Z': 's', '2027-01-10T14:00Z': 'n' }, blocks: [], opens: [] };
+    expect(cellKind('2027-01-10T12:00Z', d, false, '2027-01-10')).toBe('free');
+    expect(cellKind('2027-01-10T13:00Z', d, false, '2027-01-10')).toBe('closed');
+    expect(cellKind('2027-01-10T14:00Z', d, false, '2027-01-10')).toBe('outside');
+    expect(cellKind('2027-01-10T15:00Z', d, false, '2027-01-10')).toBe('outside');
+    expect(cellKind('2027-01-10T12:00Z', d, false, '2026-12-31')).toBe('past');
   });
-  it('QA①: Sydney 서머타임 끝나는 날에도 이동 지역 키는 한 시각에 하나 (BA 12:30·13:30 → 서로 다른 키)', () => {
-    const p = { ...ba, to: '2027-05-01' };
-    expect(keyOf('2027-04-03', '12:30', 'America/Argentina/Buenos_Aires', [p], 'Australia/Sydney')).toBe('2027-04-03T12:30');
-    expect(keyOf('2027-04-03', '13:30', 'America/Argentina/Buenos_Aires', [p], 'Australia/Sydney')).toBe('2027-04-03T13:30');
-    // 한국 시간 보기: 4/4 01:30 KST = BA 4/3 13:30
-    expect(keyOf('2027-04-04', '01:30', 'Asia/Seoul', [p], 'Australia/Sydney')).toBe('2027-04-03T13:30');
+  it('QA①: Sydney 서머타임 끝나는 날에도 BA 12:30·13:30 은 서로 다른 키 (현지·한국 시간 보기 같은 키)', () => {
+    const a = keyOf('2027-04-03', '12:30', 'America/Argentina/Buenos_Aires');
+    const b = keyOf('2027-04-03', '13:30', 'America/Argentina/Buenos_Aires');
+    expect(a).toBe('2027-04-03T15:30Z');
+    expect(b).toBe('2027-04-03T16:30Z');
+    expect(keyOf('2027-04-04', '01:30', 'Asia/Seoul')).toBe(b);
   });
-  it('QA②: 복귀 다음 날 Sydney 오전 9시 = BA 전날 저녁(이동 기간) → 경계 키(!)', () => {
-    expect(keyOf('2027-03-24', '09:00', 'Asia/Seoul', [ba], 'Australia/Sydney').endsWith('!')).toBe(false);   // KST 09:00 = BA 3/23 21:00 → BA 키
-    // Sydney 보기 3/24 09:00 → 그 날짜는 Sydney 지역이지만 그 시각은 BA 3/23 19:00 → keyOf 는 날짜 기준 키, DB 가 n 으로 막음
-    expect(keyOf('2027-03-24', '09:00', 'Australia/Sydney', [ba], 'Australia/Sydney')).toBe('2027-03-24T09:00');
+  it('재검증①: 출발일 경계 — 한국 12/4 07:00 = Sydney 12/4 09:00 은 Sydney 보기와 같은 키', () => {
+    expect(keyOf('2026-12-04', '07:00', 'Asia/Seoul')).toBe(keyOf('2026-12-04', '09:00', 'Australia/Sydney'));
   });
   it('강사 Home: 수업 날짜에 설정된 지역 시간으로 (지금 있는 곳 아님, H26(176))', () => {
     // BA 1/6 오후 4시 수업 = UTC 19:00. Sydney 로는 1/7 오전 6시
