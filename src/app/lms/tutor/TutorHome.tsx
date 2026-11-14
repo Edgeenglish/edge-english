@@ -858,7 +858,7 @@ const cols = (kst: boolean, paid: boolean) => kst
 function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paidCol, meetUrl, actions, onSaved, admin, focus = false }: {
   focus?: boolean;
   due?: boolean;
-  lesson: TutorLesson; tz: string; /** 표 머리글 시간대 — 다르면 줄에 시간대 이름 (이동 기간, H26(175)) */ headTz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
+  lesson: TutorLesson; tz: string; /** 표 머리글 시간대 — 다르면 줄에 시간대 이름 (이동 기간, H26(176)) */ headTz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
 }) {
   const now = useLiveNow(loadedNow);
   const [open, setOpen] = useState(false);

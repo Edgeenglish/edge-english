@@ -2,7 +2,7 @@
 
 # 다음 세션 시작 메모
 
-## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(174))
+## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(175) — 같은 날 강사 해외 이동 기록과 번호가 겹쳐 175 로 정정)
 - migration `20261114130000_student_reminder_default_regular_off`(students.remind_regular 기본값 false, 기존 학생 변경 없음) · `20261114140000_first_class_mail_reminder_setting_line`(lms_first_class_mail_student: 일정 변경 재안내 메일 제외, 첫 안내에만 '수업 알림 메일은 … 내 정보 › 이메일 알림 설정에서 켜고 끌 수 있어요.' 한 줄).
 - 운영 DB 백업 `lms_backup.snapshots` **54**(표 62 전체) · **55**(lms_first_class_mail_student 이전 정의, 되돌리기 = 그 정의로 create or replace). 기본값 되돌리기 = `alter table students alter column remind_regular set default true`.
 - 확인: 운영 기본값 remind_regular=false·remind_makeup=true, 학생 13명 중 정규 켬 1명(STU-0012, 운영자 대신 켬 기록 있음 — 대표 확인 대기). 시험 DB 문구 확인은 롤백 안에서 본문 출력으로 함(메일 안 나감).
@@ -253,12 +253,14 @@
 - 시험: pending-saves.test 6 통과(keepRows 1개 추가), tsc·eslint 통과. 화면 클릭 확인은 안 함
 
 ## ✅ 11/14 강사 해외 이동 기간 기능 — **시험 사이트·시험 DB 개발·검증 끝, 운영 미반영** · 정책 원본 H26(173)(174) (브랜치 claude/modest-fermi-ord1q5 → lms-test 3354e38)
-- 이름: H26(174) 참고 (평소 지역 줄 = Home location, 나머지 시안 그대로)
+- 이름: H26(174) 참고 (평소 지역 줄 = Home location, 나머지 시안 그대로) · 시각 기준: H26(176)
 - migration **20261114120000_lms_tutor_travel_locations** (시험 DB 적용, 함수 16개 본문 = 저장소 파일 md5 같음 확인): `tutor_locations` 표(표 63개) · `tutor_availability.location_id`(null = Regular) · `lms_tutor_tz_on(날짜)`/`lms_tutor_location_at`/`lms_tutor_tz_at(시각)` · `lms_tutor_start_ok`(그 시각 지역 06:00~22:30) · `lms_tutor_weekly_ok`(이동 중엔 그 기간 줄만) · `lms_weekly_open`·`tutor_hours_save`(Regular 줄만) · `tutor_hours` + locations · 새 `tutor_location_save`(추가/종료일) · `tutor_location_hours_save` · `tutor_schedule`(칸 48개, 시작 못 하는 칸 'n', locations) · `tutor_schedule_save`(칸 검사 = start_ok) · 새 `tutor_schedule_multi`(Set Multiple Days 미리보기/적용, 두 지역이면 오류) · `lms_mail_ko_zone` 에 아르헨티나 2개
 - 화면: `TutorHours.tsx`(Home location 줄·탭·Add Temporary Location·Set end date·이력 '이동 기간'), 새 `TravelSheet.tsx`·`SetMultipleDays.tsx`·`src/lms/tutor/travel.ts`, `TutorSchedule.tsx`(보는 현지 시간 = 보고 있는 날짜의 지역, Set Multiple Days 버튼, Home location 줄), `places.ts` 아르헨티나, `registration-live.ts` 신규 매칭은 Regular 줄만
 - 시험: test:db 새 '강사 해외 이동 기간 시험' 36줄(`supabase/tests/tutor-travel-location.sql`) · vitest 471 · tsc · 시험 DB 실제 23줄(가짜 강사 Ben, 되돌림) · 데모 PC·iPhone 13 · **시험 사이트 실제 강사 Blair 계정**(임시 비밀번호 → 끝나고 무작위·세션 지움) PC: 이동 기간 추가(Buenos Aires 12/24~1/23) → 경고 → 월 16:00 저장 → Set Multiple Days 12/22~26 Split(Toronto 2일·BA 3일) → 적용, 휴대폰: 같은 범위 '이미 열림' 5일. DB 대조 맞음, 가로 밀림 0. **시험 데이터 남김**(Blair 위 내용)
 - 경계 규칙: 이동 첫날·마지막 날은 그 지역 현지 날짜. 서쪽으로 가면 하루 중 일부 시각이 어느 날짜에도 안 들어가고, 동쪽이면 겹침(칸 판정은 시각 기준이라 저장 오류는 없음)
-- ⏳ 대표 결정 대기: 강사 Home 수업 시각·강사 메일 시각은 이동 중에도 평소 시간대(예: Sydney Time)로 표시 — 이동 지역 시간으로 바꿀지
+- ✅ 11/14 후속 H26(176): 강사 Home·강사 메일 수업 시각 = 그 수업 날짜에 설정된 지역. migration **20261114150000_lms_tutor_travel_lesson_zone**(시험 DB 적용, 처음 130000 으로 만들었다가 다른 세션 130000 과 겹쳐 이름만 바꿈): `tutor_travel_periods` + 강사 메일 함수 9개 본문의 `lms_mail_en_*(시각, tu.timezone)` → `lms_tutor_tz_at(tu.id, 시각)`(DO 블록이 서버 본문을 고쳐 다시 만듦, 함수 10개 md5 = 로컬). 화면: `TutorHome.tsx`(수업마다 zAt, 표 머리글과 다르면 줄에 시간대 이름)·`StudentProfile.tsx` 다음 수업·`screen.ts daysOf`. 시험 DB 실제 강사 메일 미리보기(되돌림): 이동 기간 넣으면 제목·Class 줄이 Buenos Aires Time, 기간 밖 시각(취소한 시각)은 그대로
+- ✅ 운영자 대리 등록 실제 화면(시험 사이트, e2e-admin TOTP → ?tutor=Blair, PC·iPhone 13): New York 2/2~2/8 추가 → 화 10:00 저장 → Set Multiple Days 2/3~5 적용, 이력 '운영자'. Blair 12/21 주 Class Record 에서 12/24부터 Buenos Aires 시각·줄에 시간대 이름(PC 칸 밀림 → 고침). 임시 비밀번호 끝나고 무작위·세션 지움. **시험 데이터 남김**: Blair New York 2/2~2/8
+- 운영 배포 전: ChatGPT Work 독립 QA → 대표 승인 → 운영 DB 백업 → migration 120000·150000 → lms-prod
 - 남은 것: 운영자 보기(`?tutor=`) 실제 운영자 계정 클릭은 안 함(같은 화면·같은 함수, 이력 '운영자'는 로컬 DB 시험으로 확인) · 이동 기간 삭제 기능 없음(시안에 없음) · 운영 반영(대표 승인 → 운영 DB 백업 → migration → lms-prod)
 
 ## ✅ 11/9 학생 시간대 자동 확인 — 정책 원본 H26(119) · **시험 DB·lms-test 개발·검증 끝, 운영 미반영** (브랜치 claude/vibrant-pascal-sr9m94 → lms-test)

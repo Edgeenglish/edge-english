@@ -205,7 +205,7 @@ export type Day = { date: string; lessons: TutorLesson[] };
 export function daysOf(lessons: TutorLesson[], tz: string | ((t: Date) => string), week: { from: string; to: string }): Day[] {
   const days = new Map<string, TutorLesson[]>();
   for (const l of [...lessons].sort((a, b) => +a.startsAt - +b.startsAt)) {
-    // 이동 기간이면 그 수업 날짜에 있는 지역 날짜 (H26(175))
+    // 이동 기간이면 그 수업 날짜에 있는 지역 날짜 (H26(176))
     const d = localDate(l.startsAt, typeof tz === 'string' ? tz : tz(l.startsAt));
     if (d < week.from || d > week.to) continue;
     days.set(d, [...(days.get(d) ?? []), l]);
