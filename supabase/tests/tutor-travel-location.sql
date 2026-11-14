@@ -7,6 +7,9 @@ begin
   begin execute sql; exception when others then raise notice '통과: % (%)', msg, sqlerrm; return; end;
   raise exception '실패(막혀야 함): %', msg;
 end $$;
+-- Calendar 칸 키 = 실제 시각(UTC 'YYYY-MM-DDTHH:MI') (재검증 11/14)
+create or replace function pg_temp.k(p_day date, p_t time, p_tz text) returns text language sql as $$
+  select to_char((p_day + p_t) at time zone p_tz at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI') || 'Z' $$;
 
 -- Ben(평소 Sydney) · Olivia(다른 강사). 날짜 D = Buenos Aires 오늘 + 20일 (이동 기간 D ~ D+30)
 insert into tutors (id, name, country, timezone, email) values
@@ -75,12 +78,12 @@ select pg_temp.ok((select count(*) from tutor_availability where location_id = (
 
 -- Calendar 칸: 키 = 그 날짜에 있는 지역(BA) 현지 (QA 11/14). BA 16:00 열림(빠짐) · BA 09:00 닫힘(s)
 set local role authenticated;
-select pg_temp.ok((tutor_schedule(null, (select d + 5 from d), (select d + 6 from d), true) -> 'cells' ->> ((select d + 5 from d)::text || 'T16:00')) is null
-  and (tutor_schedule(null, (select d + 5 from d), (select d + 6 from d), true) -> 'cells' ->> ((select d + 5 from d)::text || 'T09:00')) = 's'
-  and jsonb_array_length(tutor_schedule(null, (select d from d), (select d + 1 from d), false) -> 'locations') = 1, 'Calendar 칸(BA 현지 키): 오후 4시 열림 · 오전 9시 닫힘 · 이동 기간 목록');
-select pg_temp.fails($$select tutor_schedule_save(null, 'open', array[(select d + 6 from d)::text || 'T23:00'], null, null)$$, 'Calendar: 현지 23:00 은 못 엶');
+select pg_temp.ok((tutor_schedule(null, (select d + 5 from d), (select d + 6 from d), true) -> 'slots' ->> pg_temp.k((select d + 5 from d), '16:00', 'America/Argentina/Buenos_Aires')) = 'o'
+  and (tutor_schedule(null, (select d + 5 from d), (select d + 6 from d), true) -> 'slots' ->> pg_temp.k((select d + 5 from d), '09:00', 'America/Argentina/Buenos_Aires')) = 's'
+  and jsonb_array_length(tutor_schedule(null, (select d from d), (select d + 1 from d), false) -> 'locations') = 1, 'Calendar 칸(실제 시각 키): BA 오후 4시 열림 · 오전 9시 닫힘 · 이동 기간 목록');
+select pg_temp.fails($$select tutor_schedule_save(null, 'open', array[pg_temp.k((select d + 6 from d), '23:00', 'America/Argentina/Buenos_Aires')], null, null)$$, 'Calendar: 현지 23:00 은 못 엶');
 -- Calendar 하루 열기: BA 09:00 키
-select tutor_schedule_save(null, 'open', array[(select d + 6 from d)::text || 'T09:00'], null, null);
+select tutor_schedule_save(null, 'open', array[pg_temp.k((select d + 6 from d), '09:00', 'America/Argentina/Buenos_Aires')], null, null);
 reset role;
 select pg_temp.ok(lms_tutor_available('aaaaaaaa-0000-4000-8000-0000000000f1', ((select d + 6 from d) + time '09:00') at time zone 'America/Argentina/Buenos_Aires'), 'Calendar 하루 열기: BA 오전 9시 열림');
 -- QA ①: 평소 지역(Sydney) 서머타임 끝나는 날(2027-04-04)에도 이동 지역 키 두 개가 한 시간 차이 그대로
@@ -116,26 +119,46 @@ reset role;
 select pg_temp.ok(lms_tutor_available('aaaaaaaa-0000-4000-8000-0000000000f1', ((select d + 33 from d) + time '09:30') at time zone 'Australia/Sydney')
   and not lms_tutor_available('aaaaaaaa-0000-4000-8000-0000000000f1', ((select d + 33 from d) + time '16:00') at time zone 'America/Argentina/Buenos_Aires'), '종료일 다음부터 Regular 자동 복귀');
 select pg_temp.ok((select count(*) from tutor_hours_changes where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000f1' and changes ? 'location' and not by_admin) = 3, '이력: 추가·시간·종료일 3건 (강사 본인)');
--- QA ②: 복귀 다음 날 Sydney 오전 9시 = BA 전날 저녁(아직 이동 기간) → 칸 n · 여러 날 등록 이유 zone (실제 판정과 같음)
-set local role authenticated;
-select pg_temp.ok((tutor_schedule(null, (select d + 31 from d), (select d + 31 from d), true) -> 'cells' ->> ((select d + 31 from d)::text || 'T09:00')) = 'n'
-  and (select r -> 'days' -> 0 ->> 'why' = 'zone' from (select tutor_schedule_multi(null, (select d + 31 from d), (select d + 31 from d), '09:00', '10:00', false) r) x),
-  'QA②: 복귀일 경계 시각은 칸 n · 여러 날 등록에서 빠짐(zone)');
-select pg_temp.fails($$select tutor_schedule_save(null, 'open', array[(select d + 31 from d)::text || 'T09:00'], null, null)$$, 'QA②: 복귀일 경계 시각은 하루 열기도 못 함');
+-- QA ②·재검증 ①: 경계 시각은 그 시각에 실제로 있는 지역 칸으로 나오고 판정이 예약 판정과 같음
+--  복귀 다음 날 Sydney 09:00 = BA 전날 저녁(아직 이동 중) → BA 칸 / 출발 첫날 Sydney 09:00 = BA 전날 저녁(아직 평소 지역) → Sydney 칸
 reset role;
--- QA ⑤: 닫힌 시간에 대기 중인 보강 요청 → 여러 날 등록에서 빠짐(r), 강사 '가능' 답 뒤 운영진 대기 → a
+select pg_temp.ok((tutor_schedule(null, (select d + 31 from d), (select d + 31 from d), true) -> 'slots' ->> pg_temp.k((select d + 31 from d), '09:00', 'Australia/Sydney'))
+                    is not distinct from (select lms_hours_cell('aaaaaaaa-0000-4000-8000-0000000000f1', ((select d + 31 from d) + time '09:00') at time zone 'Australia/Sydney'))
+  and (tutor_schedule(null, (select d + 31 from d), (select d + 31 from d), true) -> 'slots' ->> pg_temp.k((select d + 31 from d), '09:00', 'Australia/Sydney')) is not null
+  and (select r -> 'days' -> 0 ->> 'why' = 'zone' from (select tutor_schedule_multi(null, (select d + 31 from d), (select d + 31 from d), '09:00', '10:00', false) r) x),
+  'QA②: 복귀 다음 날 Sydney 오전 9시(= BA 이동 중) 칸이 있고 판정 같음 · 여러 날 등록(Sydney 날짜)에서는 빠짐(zone)');
+select pg_temp.ok((tutor_schedule(null, (select d from d), (select d from d), true) -> 'slots' ->> pg_temp.k((select d from d), '09:00', 'Australia/Sydney')) is not null,
+  '재검증①: 출발 첫날 Sydney 오전 9시(= BA 출발 전) 칸이 있음 (한국 시간 보기에서도 같은 키)');
+-- 재검증①: 출발·복귀 앞뒤 36일 30분 격자 전부 — 예약 가능(lms_tutor_available)·막기·수업·요청 없는 시각 = 열린 칸('o'·'x'), 빠짐·남음 0
+create temp table qa_cells as select tutor_schedule(null, (select d - 2 from d), (select d + 33 from d), true) -> 'slots' cs;
+create temp table qa_grid as
+  select g.a, q.cs ->> (to_char(g.a at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI') || 'Z') slot,
+         lms_tutor_start_ok('aaaaaaaa-0000-4000-8000-0000000000f1', g.a) ok, lms_hours_cell('aaaaaaaa-0000-4000-8000-0000000000f1', g.a) cell,
+         lms_tutor_available('aaaaaaaa-0000-4000-8000-0000000000f1', g.a) av
+  from (select generate_series(((select d - 2 from d))::timestamp at time zone 'UTC', ((select d + 33 from d))::timestamp at time zone 'UTC', interval '30 minutes') a) g, qa_cells q
+  where g.a > now() + interval '6 hours';
+select pg_temp.ok(not exists (select 1 from qa_grid where ok is distinct from (slot is not null) or slot is distinct from case when ok then cell end)
+  and (select count(*) from qa_grid where av and slot = 'o') > 0 and not exists (select 1 from qa_grid where av and slot is null),
+  '재검증①: 출발·복귀 경계 포함 36일 격자 — 시작 가능한 시각 = 칸(빠짐·남음 0), 칸 판정 = 실제 판정, 예약 가능한데 칸 없는 시각 0');
+reset role;
+-- QA⑤·재검증②: 닫힌 시간의 보강 후보 — '열기'는 하루 열기·여러 날 등록 모두 막지 않음 (기존 정책 QA-01·4500: 강사가 그날만 열고 '가능' 답).
+--  연 뒤 강사 '가능' 답·운영진 확정 대기(a) 시간은 여러 날 등록에서 빠지고 막기도 못 함
 insert into makeup_requests (id, source_lesson_id, student_id, tutor_id) values
   ('ffffffff-0000-4000-8000-0000000000f1', 'dddddddd-0000-4000-8000-0000000000f1', 'bbbbbbbb-0000-4000-8000-0000000000f1', 'aaaaaaaa-0000-4000-8000-0000000000f1');
 insert into makeup_candidates (id, request_id, starts_at, ends_at, proposed_by)
 select 'ffffffff-0000-4000-8000-0000000000c1', 'ffffffff-0000-4000-8000-0000000000f1', ((d + 5) + time '11:00') at time zone 'America/Argentina/Buenos_Aires', ((d + 5) + time '11:40') at time zone 'America/Argentina/Buenos_Aires', 'student' from d;
 set local role authenticated;
-select pg_temp.ok((select r -> 'days' -> 0 ->> 'why' = 'r' from (select tutor_schedule_multi(null, (select d + 5 from d), (select d + 5 from d), '11:00', '12:00', false) r) x), 'QA⑤: 대기 중인 보강 요청 시간 → 여러 날 등록에서 빠짐(r)');
+select pg_temp.ok((select (r ->> 'ok')::int = 1 from (select tutor_schedule_multi(null, (select d + 5 from d), (select d + 5 from d), '11:00', '12:00', false) r) x)
+  and (select r -> 'days' -> 0 ->> 'why' = 'r' from (select tutor_schedule_multi(null, (select d + 6 from d), (select d + 6 from d), '09:00', '10:00', false) r) x) is not true,
+  'QA⑤: 닫힌 시간의 대기 보강 후보 → 여러 날 등록 열기 가능 (하루 열기와 같음)');
+select tutor_schedule_save(null, 'open', array[pg_temp.k((select d + 5 from d), '11:00', 'America/Argentina/Buenos_Aires'), pg_temp.k((select d + 5 from d), '11:30', 'America/Argentina/Buenos_Aires')], null, null);
 reset role;
+select pg_temp.ok(lms_tutor_available('aaaaaaaa-0000-4000-8000-0000000000f1', ((select d + 5 from d) + time '11:00') at time zone 'America/Argentina/Buenos_Aires'), '재검증②: 하루 열기로 보강 후보 시간을 열 수 있음 (기존 QA-01)');
 update makeup_candidates set tutor_answer = 'yes', answered_at = now() where id = 'ffffffff-0000-4000-8000-0000000000c1';
 set local role authenticated;
-select pg_temp.ok((select r -> 'days' -> 0 ->> 'why' = 'a' from (select tutor_schedule_multi(null, (select d + 5 from d), (select d + 5 from d), '11:00', '12:00', false) r) x), 'QA⑤: 강사 가능 답·운영진 대기 → 빠짐(a)');
+select pg_temp.ok((select r -> 'days' -> 0 ->> 'why' = 'a' from (select tutor_schedule_multi(null, (select d + 5 from d), (select d + 5 from d), '11:00', '12:00', false) r) x), 'QA⑤: 강사 가능 답·운영진 대기 → 여러 날 등록에서 빠짐(a)');
+select pg_temp.fails($$select tutor_schedule_save(null, 'block', array[pg_temp.k((select d + 5 from d), '11:00', 'America/Argentina/Buenos_Aires')], null, null)$$, '재검증②: 운영진 확정 대기 시간은 막기 못 함');
 reset role;
-
 -- ── 다른 강사 Olivia: Ben 의 기간 못 건드림 ──
 select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-0000000000f2","aal":"aal1"}', true);
 set local role authenticated;

@@ -135,9 +135,9 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     return live.find((l) => +l.startsAt < a + 30 * 60000 && a < +l.endsAt) ?? null;
   };
   const kindsOf = (date: string, src: ScheduleData): CellKind[] =>
-    ALL_HOURS.map((t) => cellKind(keyOf(date, t, vz(date), src.locations, tz), src, !!lessonIn(date, t)));
-  const xsOf = (date: string, src: ScheduleData): boolean[] => ALL_HOURS.map((t) => isExtraCell(keyOf(date, t, vz(date), src.locations, tz), src));
-  const keysOf = (date: string, a: number, b: number) => Array.from({ length: b - a }, (_, i) => keyOf(date, slotTime(a + i), vz(date), locs, tz));
+    ALL_HOURS.map((t) => cellKind(keyOf(date, t, vz(date)), src, !!lessonIn(date, t), date));
+  const xsOf = (date: string, src: ScheduleData): boolean[] => ALL_HOURS.map((t) => isExtraCell(keyOf(date, t, vz(date)), src));
+  const keysOf = (date: string, a: number, b: number) => Array.from({ length: b - a }, (_, i) => keyOf(date, slotTime(a + i), vz(date)));
   const at = (date: string, i: number) => localToInstant(date, slotTime(i), vz(date));
   const lastLocal = data?.last ?? to;
 

@@ -35,8 +35,8 @@ describe('Schedule — 재검증 수정 (R-03·R-16)', async () => {
     tutor: { id: 't', name: 'Alex', timezone: 'Australia/Sydney', country: 'Australia' }, locations: [], today: '2026-11-01', last: '2027-01-24', times, cells,
     blocks: blocks.map((b, i) => ({ id: `b${i}`, kind: 'leave' as const, note: null, ...b })), opens: [],
   });
-  it('가능 답을 보낸 칸(a)은 답 대기(r)와 구분 (R-16)', () => {
-    const d = data({ '2026-11-13T16:00': 'a', '2026-11-13T16:30': 'r' });
+  it('가능 답을 보낸 칸(a)은 답 대기(r)와 구분 (R-16) · 열린 칸도 키로 옴 (재검증 11/14)', () => {
+    const d = data({ '2026-11-13T16:00': 'a', '2026-11-13T16:30': 'r', '2026-11-13T17:00': 'o' });
     expect(cellKind('2026-11-13T16:00', d, false)).toBe('answered');
     expect(cellKind('2026-11-13T16:30', d, false)).toBe('request');
     expect(cellKind('2026-11-13T17:00', d, false)).toBe('free');

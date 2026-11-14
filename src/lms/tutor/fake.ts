@@ -132,17 +132,15 @@ export function fakeScheduleStore(now: Date, hours: HoursData, lessons: TutorScr
       const cells: Record<string, ScheduleCode> = {};
       if (withCells) {
         for (let d = from < today ? today : from; d <= to && d <= last; d = plusDays(d, 1)) {
-          for (let i = 0; i < 48; i++) {
-            const t = hhmm(i * 30);
-            const c = times.includes(t) ? code(`${d}T${t}`) : 'n';
-            if (c !== 'o') cells[`${d}T${t}`] = c;
-          }
+          // 칸 키 = 실제 시각(UTC) — 운영과 같게, 열린 칸 'o' 포함 (재검증 11/14)
+          for (const t of times) cells[`${localToInstant(d, t, tz).toISOString().slice(0, 16)}Z`] = code(`${d}T${t}`);
         }
       }
       return { tutor: hours.tutor, today, last, times, cells: withCells ? cells : null, blocks: blocks.map((b) => ({ ...b })), opens: opens.map((o) => ({ ...o })), locations: hours.locations.map(({ id, city, country, timezone, from, to }) => ({ id, city, country, timezone, from, to })) };
     },
     save: async (action: ScheduleAction, keys: string[] | null, note: string | null, id: string | null) => {
-      const ks = [...(keys ?? [])].sort();
+      // 화면 키(UTC) → 이 미리보기 안의 강사 현지 키
+      const ks = (keys ?? []).map((k) => { const f = formatInZone(new Date(`${k.replace(/Z$/, '')}:00Z`), tz); return `${f.date}T${f.time}`; }).sort();
       if (action === 'block') {
         if (ks.some((k) => code(k) === 'x')) { for (let i = opens.length - 1; i >= 0; i--) if (ks.some((k) => covers([opens[i]], k))) opens.splice(i, 1); }
         else blocks.push({ id: `b${Date.now()}`, kind: 'block', start: ks[0], end: end(ks[ks.length - 1]), note: note?.trim() || null });
