@@ -9,7 +9,7 @@
 //   운영진이 대체강사 가능 여부를 먼저 확인하고, 수강생은 한 번만 답함 ([좋아요] / [기존 강사와 보강])
 
 import { ampmKo, formatInZone, type KstDate } from '../rules/dates';
-import { enAt, koAt, MAKEUP_SLOTS_MAX } from './lesson-change';
+import { enAt, koAt, MAKEUP_SLOTS_MAX, type ChNoticeEmail } from './lesson-change';
 import { meetRoomUrl } from '../rules/meet';
 
 export type LvChoice = 'undecided' | 'substitute' | 'wait';
@@ -54,6 +54,8 @@ export type LvNotice = {
   id: string; itemId: string; event: LvNoticeEvent; recipientKind: 'student' | 'tutor'; recipientId: string; status: 'pending' | 'sent' | 'not_needed'; sentAt: Date | null;
   /** 보냈다가 다시 고르기 등으로 '보낼 필요 없음'이 된 안내의 보낸 시각 (3400): 보낸 원문·번호는 그대로 보여 줌 */
   wasSentAt?: Date | null;
+  /** 대체강사 문의 자동 메일 상태 (20261114000000): 없으면 자동 메일 대상 아님·기능 전 DB */
+  email?: ChNoticeEmail | null;
 };
 /** 보낸 적 있는 안내의 보낸 시각 (지금 보냄 상태 또는 보냈던 기록) */
 const sentTime = (n: LvNotice): Date | null => (n.status === 'sent' ? n.sentAt : n.status === 'not_needed' ? n.wasSentAt ?? null : null);
@@ -434,7 +436,7 @@ export function renewalTutorText(g: LvRenewalGroup): string {
 
 /** pending = 아직 안 보낸 문의(안 보낸 수업만) · sent = 보낸 문의 원문(보낸 묶음마다, 번호 고정) · numbers = 답 기다리는 수업이 보낸 글의 몇 번인지 */
 export type LvAskMsg = { noticeIds: string[]; itemIds: string[]; text: string; sentAt: Date | null };
-export type LvTutorBundle = { subTutorId: string; subTutorName: string; items: LvItem[]; pending: LvAskMsg | null; sent: LvAskMsg[]; numbers: Record<string, string>; status: 'pending' | 'sent' };
+export type LvTutorBundle = { subTutorId: string; subTutorName: string; items: LvItem[]; pending: LvAskMsg | null; sent: LvAskMsg[]; numbers: Record<string, string>; status: 'pending' | 'sent'; mail: ChNoticeEmail | null };
 
 export function tutorBundles(items: LvItem[], notices: LvNotice[], now: Date): LvTutorBundle[] {
   const byId = new Map(items.map((i) => [i.id, i]));
@@ -461,6 +463,8 @@ export function tutorBundles(items: LvItem[], notices: LvNotice[], now: Date): L
     for (const m of sent) m.itemIds.forEach((x, n) => { if (m.noticeIds.some((id) => live.has(id) && mineAsk.find((y) => y.id === id)?.itemId === x)) numbers[x] = `${n + 1}번`; });
     return {
       subTutorId: id, subTutorName: its[0].subTutorName ?? '', items: its, sent, numbers,
+      // 자동 메일 상태: 지금 묻는 중인 수업의 문의 중 안 보낸·실패를 먼저(운영진이 알아야 함), 없으면 가장 최근
+      mail: (() => { const ms = mineAsk.filter((n) => n.email && asked.has(n.itemId)).map((n) => n.email!); return ms.find((m) => m.status === 'no_address' || m.status === 'failed') ?? ms.find((m) => m.status === 'queued') ?? ms[0] ?? null; })(),
       pending: pendIts.length ? { noticeIds: pend.map((n) => n.id), itemIds: pendIts.map((i) => i.id), text: subAskBundleText(pendIts), sentAt: null } : null,
       status: pendIts.length ? 'pending' : 'sent',
     };

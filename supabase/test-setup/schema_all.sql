@@ -23010,7 +23010,7 @@ grant execute on function admin_time_off_reject(uuid, text) to authenticated;
 --  메일 글: 대체강사 문의는 기존 WhatsApp 문구 그대로(휴무 강사 이름 안 씀), 재촉은 대표 확정 초안 그대로
 --  켜기 전 쌓인 것에는 보내지 않음: feature_flags 'tutor_todo_mail_since' 의 updated_at 뒤에 생긴 것만 (스위치 아님)
 --  예약 실행(pg_cron) 15분마다. 발송은 기존 자동 메일과 같음(send_emails 꺼져 있으면 운영진 메일로만, '[시험 · 학생 번호]')
--- 칸 3개 추가 + 함수 3개. 표·기존 데이터를 바꾸지 않음. 다시 실행해도 같은 결과
+-- 칸 3개 추가 + 함수 3개. 첫 메일은 문의 안내 줄(lesson_notices)에 자동 메일 상태를 기록해 운영진 화면(휴무 화면 '강사님에게 묻기')에 보임. 표·기존 데이터를 바꾸지 않음. 다시 실행해도 같은 결과
 -- =====================================================================
 
 alter table leave_items add column if not exists ask_mailed_at timestamptz;
@@ -23020,6 +23020,20 @@ alter table schedule_plans add column if not exists nudged_at timestamptz;
 insert into feature_flags (key, enabled, note)
 values ('tutor_todo_mail_since', false, '강사 To do 새 항목 메일 시작 시각 — 이 줄의 updated_at 뒤에 생긴 것만 보냄 (스위치 아님)')
 on conflict (key) do nothing;
+
+-- 같은 수업(leave_items 한 줄)에 대체강사를 다시 골랐을 때(다른 강사로 바꾸기·휴무 철회 뒤 다시 만들기) 메일 기록을 비워서 새로 첫 메일이 가게 함
+create or replace function leave_items_ask_mail_reset() returns trigger
+language plpgsql as $$
+begin
+  if new.sub_stage = 'asked' and (old.sub_stage is distinct from 'asked' or old.sub_tutor_id is distinct from new.sub_tutor_id or old.decided_at is distinct from new.decided_at) then
+    new.ask_mailed_at := null;
+    new.ask_nudged_at := null;
+  end if;
+  return new;
+end $$;
+revoke all on function leave_items_ask_mail_reset() from public, anon, authenticated;
+drop trigger if exists leave_items_ask_mail_reset on leave_items;
+create trigger leave_items_ask_mail_reset before update on leave_items for each row execute function leave_items_ask_mail_reset();
 
 -- ① 대체 수업 요청: 첫 메일(강사별 한 통) + 재촉(강사별 한 통). p_dry = true 이면 보내지 않고 글만 돌려줌 (검증용)
 create or replace function lms_cover_mail_run(p_now timestamptz default now(), p_since timestamptz default null, p_dry boolean default false)
@@ -23063,7 +23077,7 @@ begin
     v_paras := array[
       'Substitute request - not confirmed yet',
       'One of our Edge English tutors is on leave. Are you available to teach these classes?' || E'\n' || v_list,
-      'Please open To do on your LMS Home and mark the classes you can teach (leave the others unchecked).'];
+      'Please open To do on your LMS Home and tick only the classes you can teach. Leave the others unchecked.'];
     if p_dry then
       v_out := v_out || jsonb_build_object('kind', 'first', 'tutor', tu.name, 'subject', v_subject, 'paras', to_jsonb(v_paras));
     else
@@ -23071,7 +23085,17 @@ begin
       v_id := lms_tutor_mail(g.tutor_id, v_first_student, 'lesson_notice_tutor_cover_ask', v_key, v_subject, v_paras, true);
       if v_id is not null then
         update leave_items set ask_mailed_at = p_now where id = any(v_ids);
+        -- 운영진 휴무 화면 '강사님에게 묻기' 위에 자동 메일 상태가 보이게 문의 안내 줄에 기록 (이후 lms_mail_run 이 보냄/실패로 바꿈)
+        update lesson_notices ln set email_status = 'queued', email_to = n.email, email_intended = n.payload->>'intended_email', email_queued_at = p_now,
+               email_error = null, email_notification_id = v_id, email_attempts = 1
+        from notifications n
+        where n.id = v_id and ln.leave_item_id = any(v_ids) and ln.event = 'sub_ask' and ln.recipient_id = g.tutor_id;
         v_first := v_first + 1;
+      else
+        -- 받는 주소가 없으면 조용히 넘기지 않고 '못 보냄 · 이메일이 없어요'로 기록 (운영진이 알고 WhatsApp 복사 카드로 알릴 수 있게)
+        update lesson_notices set email_status = 'no_address', email_error = '강사 이메일이 없어요', email_queued_at = p_now
+        where leave_item_id = any(v_ids) and event = 'sub_ask' and recipient_id = g.tutor_id and email_notification_id is null
+          and email_status is distinct from 'no_address';
       end if;
     end if;
   end loop;
@@ -23099,7 +23123,7 @@ begin
     v_subject := '[Edge English] Reminder: cover request - please reply';
     v_paras := array[
       'Hi ' || tu.name || ',',
-      'We haven''t heard back about the cover request we sent. Please open To do in LMS and mark the classes you can teach (leave the others unchecked).',
+      'We haven''t heard back about the cover request we sent. Please open To do in LMS and tick only the classes you can teach (leave the others unchecked).',
       v_list];
     if p_dry then
       v_out := v_out || jsonb_build_object('kind', 'nudge', 'tutor', tu.name, 'subject', v_subject, 'paras', to_jsonb(v_paras));

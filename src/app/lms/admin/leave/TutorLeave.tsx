@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import DateInput from '../DateInput';
 import { diffDays, instantToKstDate, type KstDate } from '@/lms/rules/dates';
-import { dateLabel, enAt, kstLabel, MAKEUP_SLOTS_MAX, tutorLocalLabel } from '@/lms/admin/lesson-change';
+import { dateLabel, emailStatusText, enAt, kstLabel, MAKEUP_SLOTS_MAX, tutorLocalLabel } from '@/lms/admin/lesson-change';
 import {
   groupByStudent, groupRenewals, itemStatus, leaveMessages, pendingNoticeKeys, studentPhase, tutorBundles, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork,
   type LvAskMsg, type LvItem, type LvProposal, type LvTutorBundle, type LvRenewal, type LvRenewalGroup, type LvMakeupOption, type LvMessage, type LvNotice, type LvStep, type LvStudentGroup, type LvStudentWork, type LvSubOption, type LvTimeOff,
@@ -616,6 +616,11 @@ function TutorBundlePanel({ b, actions, done }: { b: LvTutorBundle; actions: Lea
   return (
     <Card title={<>{b.subTutorName} 강사님에게 묻기 <span className="text-[13px] font-normal text-[#6b6880]">수강생 {students}명 {b.items.length}회</span></>}>
       <div className="grid gap-3">
+        {b.mail && (
+          <p role="status" className={`text-[12.5px] ${b.mail.status === 'sent' ? 'text-[#1f7a4d]' : b.mail.status === 'queued' ? 'text-[#6b6880]' : 'text-[#b3261e]'}`}>
+            {b.mail.status === 'sent' ? '✓ ' : ''}{emailStatusText(b.mail, (d) => when(d))}
+          </p>
+        )}
         {b.pending && (
           <MessageRow m={asMsg(b.pending, 'pending')} copied={copied} onCopied={() => setCopied(true)}
             onSend={async () => { await actions.markSent(b.pending!.noticeIds); await done(); }} />
