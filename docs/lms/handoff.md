@@ -89,6 +89,7 @@
 - 화면: `RunningLate.tsx` → TutorSchedule 수업 창(Cancel class 아래) · TutorHome 오늘 수업 줄 아래 · Class Record 줄 펼침(Cancel class 다음). Home 오늘 수업에는 원래 Cancel class 가 없어 Running late 만 줄 아래(시안과 다른 점). 학생 StudentHome NextLesson 노란 띠
 - 시험: vitest 477 · test:db 전부(새 tutor-late-notice.sql 28줄) · authz-probe 통과 · 시험 DB 실제 함수(James 흉내): 메일 2통·두 번째 repeated
 - 시험 데이터: James(Manila) ↔ 최O STU-9002 40분 수업 20개, 11/15 01:30 ~ 11/16 15:30 한국 시간 2시간마다. 첫 수업(01:30)은 Claude 가 보내 봄
+- 독립 QA(11/14) 중간 2건 고침: ① 열어 둔 화면에서 시간이 흘러도 버튼이 나타나고·사라지게(RunningLate 30초 시계) ② 다른 창에서 먼저 보냈으면 Sent 에 DB 에 저장된 값 표시(sendTutorLate 가 저장 기록을 다시 읽어 돌려줌). 남은 QA: PC·휴대폰 실제 화면·학생 노란 띠·해외 시간대 메일(운영자 로그인 필요)
 - 남은 일: 대표 화면 확인 → 운영 반영(운영 DB 백업 → migration → lms-prod, 먼저 `git log origin/lms-test..origin/lms-prod`) · 정책 원본 H26 에 11/14 문구 확정 기록
 
 ## (참고) 강사 지각 알림 11/13 결정
