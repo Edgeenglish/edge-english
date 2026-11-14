@@ -43,9 +43,15 @@ export async function recordClass(sb: SupabaseClient, lessonId: string, result: 
     p_student_late: late.student, p_student_late_min: late.student ? late.studentMin : null, p_tutor_late: late.tutor, p_tutor_late_min: late.tutor ? late.tutorMin : null,
   }));
 }
-/** 강사 '늦어요' 알림 (20261114200000): 학생 메일 + 운영진 메일, 한 수업에 한 번 */
-export async function sendTutorLate(sb: SupabaseClient, tutorId: string | null, lessonId: string, minutes: number, reason: string | null): Promise<void> {
+export type SavedTutorLate = { minutes: number; reason: string | null; at: Date };
+/** 강사 '늦어요' 알림 (20261114200000): 학생 메일 + 운영진 메일, 한 수업에 한 번.
+ *  돌려주는 값 = DB 에 저장된 기록 (다른 창에서 먼저 보냈으면(repeated) 그때 값 — QA 11/14 ②) */
+export async function sendTutorLate(sb: SupabaseClient, tutorId: string | null, lessonId: string, minutes: number, reason: string | null): Promise<SavedTutorLate> {
   check(await sb.rpc('tutor_late_notice', { p_lesson: lessonId, p_minutes: minutes, p_reason: reason, p_tutor: tutorId }));
+  const rows = check(await sb.rpc('tutor_late_notices', { p_tutor: tutorId })) as { lesson_id: string; minutes: number; reason: string | null; at: string }[];
+  const x = (rows ?? []).find((r) => r.lesson_id === lessonId);
+  if (!x) throw new Error('Could not confirm. Please reload the page.');
+  return { minutes: x.minutes, reason: x.reason, at: new Date(x.at) };
 }
 export async function answerMakeup(sb: SupabaseClient, requestId: string, yes: string[], note: string): Promise<void> {
   check(await sb.rpc('tutor_makeup_answer', { p_request: requestId, p_yes: yes, p_note: note }));

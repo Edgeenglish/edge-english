@@ -2,13 +2,14 @@
 
 // 강사 '늦어요' 알림 (대표 11/14 시안 확정): [Running late] + ⓘ → 지각 시간 + 이유(선택) → Send → 회색 'Sent ✓ · about 10 min late'
 // 쓰는 곳: Schedule 수업 창(Cancel class 아래) · Home 오늘 수업 줄 · Class Record 줄 펼침(Cancel class 옆)
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Rich } from '@/app/lms/Rich';
 import { enBoth } from '@/lms/admin/time-text';
 import type { TutorLesson } from '@/lms/tutor/screen';
 import { TUTOR_LATE, tutorLateChip, tutorLateOpen, tutorLateReasonEn, tutorLateSent, type TutorLateMinutes, type TutorLateReason } from '@/lms/tutor/late';
 
-export type LateSend = (lessonId: string, minutes: number, reason: string | null) => Promise<void>;
+/** 돌려주는 값 = DB 에 저장된 기록 (다른 창에서 먼저 보냈으면 그 값) */
+export type LateSend = (lessonId: string, minutes: number, reason: string | null) => Promise<{ minutes: number; reason: string | null; at: Date }>;
 
 const sub = 'min-h-[44px] rounded-[10px] border border-[#d9d5e6] bg-white px-4 text-[14px] font-semibold text-[#1d1b2b] disabled:opacity-40';
 const main = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[14px] font-semibold text-white disabled:opacity-40';
@@ -27,6 +28,13 @@ export default function RunningLate({ lesson: l, now, tz, send, onSent, full = f
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const sent = sentNow ?? l.lateNotice ?? null;
+  // 열어 둔 화면도 시각이 흐르게 (30초마다): 2시간 전이 되면 버튼이 나타나고, 시작하면 사라짐 (QA 11/14 ①)
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setClock(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const at = new Date(Math.max(now.getTime(), clock));
 
   if (sent) {
     const why = tutorLateReasonEn(sent.reason);
@@ -37,15 +45,14 @@ export default function RunningLate({ lesson: l, now, tz, send, onSent, full = f
       </div>
     );
   }
-  if (!send || !tutorLateOpen(l, now)) return null;
+  if (!send || !tutorLateOpen(l, at)) return null;
 
   async function submit() {
     if (!minutes || !send) return;
     setBusy(true);
     setError('');
     try {
-      await send(l.id, minutes, reason);
-      setSentNow({ minutes, reason, at: new Date() });
+      setSentNow(await send(l.id, minutes, reason));
       setOpen(false);
       await onSent?.();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not send. Please try again.'); }
