@@ -16,7 +16,7 @@ type State =
 /** 로그인 화면으로 — 지금 주소(바로가기 링크 포함)를 넘겨 로그인 뒤 같은 화면으로 돌아옴 */
 const toLogin = () => window.location.replace(`/lms/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
 
-export default function StudentLive({ studentParam, makeup }: { studentParam?: string; makeup?: string }) {
+export default function StudentLive({ studentParam, makeup, tab }: { studentParam?: string; makeup?: string; tab?: string }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const sb = supabaseBrowser();
   const adminStudent = state.kind === 'ready' && state.admin ? state.admin.studentId : null;
@@ -78,6 +78,7 @@ export default function StudentLive({ studentParam, makeup }: { studentParam?: s
       adminBar={adminBar}
       onLogout={state.admin ? undefined : logout}
       openMakeup={makeup}
+      openTab={tab}
     />
   );
 }
