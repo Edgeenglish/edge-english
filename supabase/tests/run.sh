@@ -44,7 +44,7 @@ echo "✅ 강사 휴무 신청 시험 통과"
 # 강사 해외 이동 기간 (H26(173), 시안 8차): 가짜 데이터로 날짜별 시간대·Regular 미적용·종료일 복귀·여러 날 열기·권한 확인, 끝에 되돌림
 TL_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/tutor-travel-location.sql" 2>&1 || true)"
 echo "$TL_OUT" | grep -E 'ERROR|실패' && { echo "❌ 강사 해외 이동 기간 시험 실패"; exit 1; }
-[ "$(echo "$TL_OUT" | grep -c '통과: ')" -ge 40 ] || { echo "❌ 강사 해외 이동 기간 시험 통과 줄 부족"; echo "$TL_OUT" | tail -5; exit 1; }
+[ "$(echo "$TL_OUT" | grep -c '통과: ')" -ge 46 ] || { echo "❌ 강사 해외 이동 기간 시험 통과 줄 부족"; echo "$TL_OUT" | tail -5; exit 1; }
 echo "✅ 강사 해외 이동 기간 시험 통과"
 
 # 로그인 사용자 권한 점검: 시험용 Supabase 상태(가상 데이터 적용 후)와 같게 만든 뒤 실물용 파일을 그대로 실행

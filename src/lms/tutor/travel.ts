@@ -106,6 +106,7 @@ export function whyText(d: MultiDay, zoneLabel: string, ampm: (t: string) => str
     case 'far': return 'More than 12 weeks ahead';
     case 'past': return 'This time has passed';
     case 'open': return 'Already available';
+    case 'zone': return 'You are in another location at this time';
     default: return 'Not available';
   }
 }

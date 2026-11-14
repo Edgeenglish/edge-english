@@ -632,7 +632,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Cover requests</h2>
             <div className="grid gap-3">
               {groupCovers(screen.covers).map((g) => (
-                <CoverCard key={g.map((c) => c.id).join()} covers={g} tz={zAt(g[0].startsAt)} actions={actions} onSent={() => reload()} />
+                <CoverCard key={g.map((c) => c.id).join()} covers={g} zAt={zAt} actions={actions} onSent={() => reload()} />
               ))}
               {screen.covers.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ Sent</p>}
             </div>
@@ -666,7 +666,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Make-up requests</h2>
             <div className="grid gap-3">
               {makeups.map((m) => (
-                <MakeupCard key={m.id} m={m} tz={zAt(m.slots[0]?.startsAt ?? now)} actions={actions} closed={!screen.makeups.some((x) => x.id === m.id)}
+                <MakeupCard key={m.id} m={m} zAt={zAt} actions={actions} closed={!screen.makeups.some((x) => x.id === m.id)}
                   onSent={async () => {
                     setAnsweredHere((x) => [...x.filter((y) => y.id !== m.id), m]);
                     await reload();
@@ -1195,7 +1195,7 @@ function groupCovers(covers: TutorCover[]): TutorCover[][] {
 }
 
 // 대체 수업 요청: 가능한 수업만 체크해 보내기 (체크 안 한 수업 = 불가). 확정은 운영진이 수강생 답을 받은 뒤
-function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: string; actions: TutorActions; onSent: () => Promise<void> }) {
+function CoverCard({ covers, zAt, actions, onSent }: { covers: TutorCover[]; /** 후보마다 그 날짜 지역 (H26(176)) */ zAt: (t: Date) => string; actions: TutorActions; onSent: () => Promise<void> }) {
   const [yes, setYes] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -1231,8 +1231,8 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
               <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border text-[14px] font-bold ${
                 on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>✓</span>
               <span className="flex-1">
-                <b className="block text-[15px] text-[#1d1b2b]"><Rich text={rangeFull(c, tz)} /></b>
-                {c.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(c.why, cityTime(tz))}</span>}
+                <b className="block text-[15px] text-[#1d1b2b]"><Rich text={rangeFull(c, zAt(c.startsAt))} /></b>
+                {c.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(c.why, cityTime(zAt(c.startsAt)))}</span>}
               </span>
             </button>
           );
@@ -1246,7 +1246,7 @@ function CoverCard({ covers, tz, actions, onSent }: { covers: TutorCover[]; tz: 
   );
 }
 
-function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: string; actions: TutorActions; closed: boolean; onSent: () => Promise<void> }) {
+function MakeupCard({ m, zAt, actions, closed, onSent }: { m: TutorMakeup; /** 후보마다 그 날짜 지역 (H26(176)) */ zAt: (t: Date) => string; actions: TutorActions; closed: boolean; onSent: () => Promise<void> }) {
   // 강사 자율 운영 1단계 (H26(82)): 수강생 시간 하나를 골라 [Confirm make-up] → 바로 보강 수업.
   // 모두 안 되면 (H26(134)) 내 가능 시간에서 1~2개 골라 학생에게 제안 → 학생이 고르면 바로 확정. 고를 시간이 없으면 글로 운영진에게
   const declined = !!m.answeredAt && !m.stage && m.slots.every((s) => s.answer !== 'yes');
@@ -1261,7 +1261,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
   const [firstNote] = useState(note);
   useDirty(`makeup-${m.id}`, !closed && !confirmed && !sent && mode === 'note' && note !== firstNote);
   const picked = m.slots.find((s) => s.id === pick) ?? null;
-  const at = (s: { startsAt: Date }) => `${whenText(s.startsAt, tz)} ${tzTimeLabel(tz)}`;
+  const at = (s: { startsAt: Date }) => `${whenText(s.startsAt, zAt(s.startsAt))} ${tzTimeLabel(zAt(s.startsAt))}`;
   const waiting = m.stage === 'student' || m.stage === 'admin';
 
   async function run(f: () => Promise<void>) {
@@ -1284,10 +1284,10 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
         {m.compensation && <span className="rounded-[6px] bg-[#efebff] px-1.5 text-[12.5px] font-semibold text-[#5b3fe0]">Compensation</span>}
         {minutes && <span className="text-[13px] text-[#6b6880]">{minutes} min</span>}
       </div>
-      <p className="text-[13.5px] text-[#55526a]">{m.compensation ? 'Tutor no-show class' : 'Original class'}: <Rich text={makeupOrigin(m, tz)} /></p>
+      <p className="text-[13.5px] text-[#55526a]">{m.compensation ? 'Tutor no-show class' : 'Original class'}: <Rich text={makeupOrigin(m, m.originalAt ? zAt(m.originalAt) : zAt(new Date()))} /></p>
       {confirmed ? (
         <p role="status" className="mt-2 rounded-[10px] bg-[#e6f6ec] px-3 py-2 text-[14.5px] font-bold text-[#1f7a4d]">
-          ✓ Make-up confirmed · <Rich text={rangeFull(confirmed, tz)} />
+          ✓ Make-up confirmed · <Rich text={rangeFull(confirmed, zAt(confirmed.startsAt))} />
         </p>
       ) : waiting ? (
         <div className="mt-2 grid gap-1.5">
@@ -1298,7 +1298,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
           <p className="text-[13px] font-semibold text-[#55526a]">Times you suggested</p>
           {(m.suggested ?? []).map((s) => (
             <div key={+s.startsAt} className="rounded-[10px] border border-dashed border-[#d9d5e6] bg-white px-3 py-2 text-[14.5px] text-[#1d1b2b]">
-              <Rich text={rangeFull(s, tz)} />
+              <Rich text={rangeFull(s, zAt(s.startsAt))} />
               {!s.ok && <span className="block text-[12.5px] font-semibold text-[#b3261e]">No longer open</span>}
             </div>
           ))}
@@ -1306,7 +1306,7 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
       ) : closed ? (
         <p className="mt-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2 text-[14px] font-semibold text-[#1f7a4d]">{sent ? 'Sent ✓ · Edge English will arrange another time' : '✓ Closed by Edge English'}</p>
       ) : mode === 'suggest' ? (
-        <SuggestTimes m={m} tz={tz} actions={actions} busy={busy}
+        <SuggestTimes m={m} zAt={zAt} actions={actions} busy={busy}
           onBack={() => setMode('pick')} onNone={() => setMode('note')}
           onSend={(times) => run(async () => { await actions.suggest!(m.id, times); })} err={err} />
       ) : (
@@ -1323,8 +1323,8 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
                   <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] ${
                     on ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#b9b4cc] text-transparent'}`}>●</span>
                   <span className="flex-1">
-                    <b className="block text-[15px] text-[#1d1b2b]"><Rich text={rangeFull(s, tz)} /></b>
-                    {s.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(s.why, cityTime(tz))}</span>}
+                    <b className="block text-[15px] text-[#1d1b2b]"><Rich text={rangeFull(s, zAt(s.startsAt))} /></b>
+                    {s.busy && <span className="block text-[12.5px] font-semibold text-[#b3261e]">{busyText(s.why, cityTime(zAt(s.startsAt)))}</span>}
                   </span>
                 </button>
               );
@@ -1362,8 +1362,8 @@ function MakeupCard({ m, tz, actions, closed, onSent }: { m: TutorMakeup; tz: st
 const SUGGEST_MAX = 2;   // 대표 11/11 확정: 강사 제안은 최대 2개
 
 /** 강사 가능 시간에서 1~2개 고르기 (H26(134)). 휴대폰: 날짜 → 시간 → 고른 시간 → 보내기, PC(넓은 창): 왼쪽 날짜·시간 / 오른쪽 고른 시간 */
-function SuggestTimes({ m, tz, actions, busy, err, onBack, onNone, onSend }: {
-  m: TutorMakeup; tz: string; actions: TutorActions; busy: boolean; err: string;
+function SuggestTimes({ m, zAt, actions, busy, err, onBack, onNone, onSend }: {
+  m: TutorMakeup; zAt: (t: Date) => string; actions: TutorActions; busy: boolean; err: string;
   onBack: () => void; onNone: () => void; onSend: (times: Date[]) => void;
 }) {
   const [opts, setOpts] = useState<{ startsAt: Date; endsAt: Date }[] | null>(null);
@@ -1374,12 +1374,12 @@ function SuggestTimes({ m, tz, actions, busy, err, onBack, onNone, onSend }: {
   useEffect(() => {
     let live = true;
     actions.suggestOptions!(m.id)
-      .then((o) => { if (live) { setOpts(o); setDay(o[0] ? localDate(o[0].startsAt, tz) : null); } })
+      .then((o) => { if (live) { setOpts(o); setDay(o[0] ? localDate(o[0].startsAt, zAt(o[0].startsAt)) : null); } })
       .catch((e) => { if (live) setLoadErr(e instanceof Error ? e.message : 'Could not load your open times.'); });
     return () => { live = false; };
-  }, [actions, m.id, tz]);
-  const days = opts ? [...new Set(opts.map((o) => localDate(o.startsAt, tz)))] : [];
-  const times = opts ? opts.filter((o) => localDate(o.startsAt, tz) === day) : [];
+  }, [actions, m.id]); // eslint-disable-line react-hooks/exhaustive-deps -- zAt 는 첫 날짜 고르기에만 씀, 바뀔 때마다 다시 읽지 않음
+  const days = opts ? [...new Set(opts.map((o) => localDate(o.startsAt, zAt(o.startsAt))))] : [];
+  const times = opts ? opts.filter((o) => localDate(o.startsAt, zAt(o.startsAt)) === day) : [];
   const full = picks.length >= SUGGEST_MAX;
   const isPicked = (o: { startsAt: Date }) => picks.some((p) => +p.startsAt === +o.startsAt);
   const toggle = (o: { startsAt: Date; endsAt: Date }) =>
@@ -1414,7 +1414,7 @@ function SuggestTimes({ m, tz, actions, busy, err, onBack, onNone, onSend }: {
             );
           })}
         </div>
-        {day && <p className="text-[13.5px] font-semibold text-[#1d1b2b]">{dayLabel(day)} · <b>{tzTimeLabel(tz)}</b></p>}
+        {day && <p className="text-[13.5px] font-semibold text-[#1d1b2b]">{dayLabel(day)} · <b>{tzTimeLabel(times[0] ? zAt(times[0].startsAt) : zAt(new Date(`${day}T12:00:00Z`)))}</b></p>}
         <div className="grid grid-cols-3 gap-1.5">
           {times.map((o) => {
             const on = isPicked(o);
@@ -1422,7 +1422,7 @@ function SuggestTimes({ m, tz, actions, busy, err, onBack, onNone, onSend }: {
               <button key={+o.startsAt} type="button" aria-pressed={on} disabled={busy || (full && !on)} onClick={() => toggle(o)}
                 className={`min-h-[42px] rounded-[10px] border px-1 text-[13.5px] tabular-nums disabled:opacity-40 ${
                   on ? 'border-[#5b3fe0] bg-[#5b3fe0] font-bold text-white' : 'border-[#d9d5e6] bg-white text-[#1d1b2b]'}`}>
-                {on ? '✓ ' : ''}{ampmEn(formatInZone(o.startsAt, tz).time)}
+                {on ? '✓ ' : ''}{ampmEn(formatInZone(o.startsAt, zAt(o.startsAt)).time)}
               </button>
             );
           })}
@@ -1433,8 +1433,8 @@ function SuggestTimes({ m, tz, actions, busy, err, onBack, onNone, onSend }: {
         {picks.length === 0 && <p className="rounded-[10px] border border-dashed border-[#d9d5e6] px-3 py-2.5 text-[13.5px] text-[#8a879c]">No time picked yet</p>}
         {picks.map((p) => (
           <div key={+p.startsAt} className="flex items-center gap-2 rounded-[10px] border border-[#5b3fe0] bg-[#efebff] px-3 py-2">
-            <span className="min-w-0 flex-1 text-[14px] text-[#1d1b2b]"><Rich text={rangeFull(p, tz)} /></span>
-            <button type="button" disabled={busy} aria-label={`Remove ${whenText(p.startsAt, tz)}`} onClick={() => toggle(p)}
+            <span className="min-w-0 flex-1 text-[14px] text-[#1d1b2b]"><Rich text={rangeFull(p, zAt(p.startsAt))} /></span>
+            <button type="button" disabled={busy} aria-label={`Remove ${whenText(p.startsAt, zAt(p.startsAt))}`} onClick={() => toggle(p)}
               className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full bg-white text-[15px] text-[#55526a] disabled:opacity-40">✕</button>
           </div>
         ))}
