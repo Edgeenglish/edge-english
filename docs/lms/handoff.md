@@ -1382,7 +1382,8 @@
 
 - 11/12 학생 화면 문구·이월 표시 개발(lms-test): 카드 '보강 수업'/'이월된 수업'·'원래 수업 날짜'·'사유'·버튼 '날짜 고르기'·홈 카드 '수업 날짜 고르기'·강사 Cover class ? 클릭 팝업. migration 20261112100000(student_screen carry_in) 시험 DB 적용, 운영 적용(11/12 lms_student_makeup_carry_in) · 코드 운영 반영. 결정 내용은 정책 원본 H26 참고.
 
-## 🆕 11/14 강사 To do 새 항목 메일 (대표 11/14 확정, 정책 원본 H26 기록 필요) — 시험 DB 적용·시험 완료, 운영 미적용
-- migration **20261114000000_lms_tutor_todo_mails** (시험 DB 적용): ① 대체 수업 요청 = 고른 뒤 첫 메일 1통(강사별 한 통에 모음, 기존 WhatsApp 문구) + 재촉 1통(대표 확정 초안: 'Reminder: cover request - please reply') ② 신규 수강생 문의 = 첫 메일은 기존, 재촉 1통 추가. 재촉 기준 = 보강 요청과 같음(첫 메일 24시간 뒤 또는 수업 24시간 전 중 먼저, 고를 때 이미 24시간 이내면 재촉 없음, 지난 수업·답한 것 제외). 예약 15분마다 `lms-tutor-todo-mail`, 시작 기준 feature_flags `tutor_todo_mail_since`(updated_at 뒤 것만). 시험: `lms_tutor_todo_mail_run(p_now, p_since, p_dry=true)` 로 글만 확인.
-- 유지(바꾸지 않음): 보강 요청(즉시 메일 + 재촉 H26(133)) · 첫 수업 후 확인(1시간 뒤 1통). **미개발**: 기록할 수업 하루 한 번 묶음 메일(기준 시각·쌓인 기준 숫자 대표 결정 대기), 재촉 뒤에도 무응답이면 운영진 화면 알림(대표 결정 대기).
-- 운영 반영 = 대표 승인 후: 백업 → migration → (코드 변경 없음, DB만)
+## ✅ 11/14 강사 To do 새 항목 메일 — 운영 반영 완료 (정책 원본 H26(172) 참고)
+- 운영 DB(mfamixejxydodclhglbc): 백업 `lms_backup.snapshots` **id 53**(표 62·학생 13) → migration `lms_tutor_todo_mails`(= 저장소 20261114000000: leave_items 칸 2개·schedule_plans 칸 1개·함수 3개·트리거 `leave_items_ask_mail_reset`·예약 `lms-tutor-todo-mail` 15분) → 코드 lms-prod·main **4f45b0b**(휴무 화면 '강사님에게 묻기' 위 자동 메일 상태 한 줄). 시작 기준 flag `tutor_todo_mail_since`(11/14 13:12 한국) 뒤에 새로 고른 대체강사부터 첫 메일+재촉 자동
+- 이번 한 번: 쌓여 있던 Olivia 대체 수업 요청 4건(12/23·12/28·12/30·1/4)에 시스템으로 첫 메일 1통 직접 실행(11/14 13:13 한국, 발송 sent, 문의 안내 줄 email_status sent·WhatsApp 카드 자동 보냄, 재촉은 생략 표시 `ask_nudged_at`)
+- 시험(시험 DB): 실제 함수로 첫 메일·재촉 26시간·답한 뒤 재촉 없음·이메일 없음 기록·다시 고르면 기록 초기화 통과. 신규 수강생 문의 재촉은 실제 신규 등록이 없어 글만 확인
+- 남음: 기록할 수업 하루 한 번 묶음 메일(기준 숫자 대표 결정 대기) · 재촉 뒤 무응답 운영진 알림(대표 결정 대기) · 운영에만 있는 커밋 4개(학생 지각 알림·강사 휴무 신청·수업 줄 용어 통일 등)가 lms-test 에 없음 — 다음 lms-test 배포 전에 합칠 것
