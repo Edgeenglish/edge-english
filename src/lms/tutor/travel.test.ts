@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { groupDays, homeText, returnText, searchCity, tabLabel, zoneAt, zoneBadge, zoneOn, type TravelPeriod } from './travel';
 import { cellKind, type ScheduleData } from './schedule';
+import { daysOf, rangeFull, type TutorLesson } from './screen';
 
 const ba: TravelPeriod = { id: 'l1', city: 'Buenos Aires', country: 'Argentina', timezone: 'America/Argentina/Buenos_Aires', from: '2027-01-05', to: '2027-03-23' };
 
@@ -44,5 +45,13 @@ describe('강사 해외 이동 기간 (H26(173))', () => {
       times: ['06:00', '22:30'], cells: { '2027-01-10T06:00': 'n' }, blocks: [], opens: [] };
     expect(cellKind('2027-01-10T06:00', d, false)).toBe('outside');
     expect(cellKind('2027-01-10T23:00', d, false)).toBe('free');   // Sydney 23:00 = BA 09:00 → 열림
+  });
+  it('강사 Home: 수업 날짜에 설정된 지역 시간으로 (지금 있는 곳 아님, H26(175))', () => {
+    // BA 1/6 오후 4시 수업 = UTC 19:00. Sydney 로는 1/7 오전 6시
+    const l = { id: 'x', startsAt: new Date('2027-01-06T19:00:00Z'), endsAt: new Date('2027-01-06T19:40:00Z') } as TutorLesson;
+    const z = (t: Date) => zoneAt([ba], t, 'Australia/Sydney');
+    expect(rangeFull(l, z(l.startsAt))).toContain('Wed, 6 Jan 4:00–4:40 PM *Buenos Aires Time*');
+    expect(daysOf([l], z, { from: '2027-01-04', to: '2027-01-10' }).map((d) => d.date)).toEqual(['2027-01-06']);
+    expect(daysOf([l], 'Australia/Sydney', { from: '2027-01-04', to: '2027-01-10' }).map((d) => d.date)).toEqual(['2027-01-07']);
   });
 });

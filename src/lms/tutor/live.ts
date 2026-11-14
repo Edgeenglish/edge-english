@@ -3,7 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseHours, type HoursData } from './hours';
 import { parseSchedule, type ScheduleAction, type ScheduleData } from './schedule';
-import { parseLocation, parseMulti, type MultiResult, type TravelLocation } from './travel';
+import { parseLocation, parseMulti, parsePeriod, type MultiResult, type TravelLocation } from './travel';
 import { parseCanceled, parseScreen, withSuggestions, type Late, type TutorCanceled, type TutorResult, type TutorScreen } from './screen';
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
 import { parseFollowup, parseFollowupTodos, type Followup, type FollowupTodo } from './followup';
@@ -22,11 +22,14 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 
 /** tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
 export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null, kstFrom: string, kstTo: string): Promise<TutorScreen> {
-  const [screen, sug] = await Promise.all([
+  const [screen, sug, travel] = await Promise.all([
     sb.rpc('tutor_screen', { p_tutor: tutorId, p_from: kstFrom, p_to: kstTo }),
     sb.rpc('tutor_makeup_suggestions', { p_tutor: tutorId }),
+    sb.rpc('tutor_travel_periods', { p_tutor: tutorId }),
   ]);
   const s = parseScreen(check(screen));
+  // 이동 기간 (H26(175)): 수업 시각을 그 수업 날짜의 지역 시간으로. 함수 없는 옛 DB 면 평소 시간대 그대로
+  if (!travel.error) s.locations = ((travel.data as unknown[]) ?? []).map(parsePeriod);
   // 강사 시간 제안 (H26(134), 20261111160000). 함수 없는 옛 DB 면 제안 표시만 없음
   return sug.error ? s : withSuggestions(s, (sug.data as unknown[]) ?? []);
 }

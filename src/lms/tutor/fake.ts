@@ -16,6 +16,7 @@ export function fakeTutorScreen(now: Date): TutorScreen {
   });
   return {
     tutor: { id: 'demo', name: 'Emma', timezone: 'Australia/Sydney', meetUrl: 'https://meet.google.com/' },
+    locations: [],
     lessons: [
       lesson('d1', -26, 40, { student: 'Seoyeon Park (Sarah)', studentId: 'demo-seoyeon', state: 'done', classStatus: 'Normal', topics: 'Travel plans, airports', count: { n: 5, total: 8 } }),
       lesson('d2', -3, 40, { count: { n: 6, total: 8 } }),

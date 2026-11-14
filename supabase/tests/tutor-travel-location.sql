@@ -127,4 +127,18 @@ select tutor_location_save('aaaaaaaa-0000-4000-8000-0000000000f1', null, 'New Yo
 reset role;
 select pg_temp.ok((select by_admin from tutor_hours_changes where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000f1' and changes -> 'location' ->> 'city' = 'New York'), '운영자 대신 추가 → 이력 운영자');
 select pg_temp.ok(lms_tutor_tz_on('aaaaaaaa-0000-4000-8000-0000000000f1', (select d + 45 from d)) = 'America/New_York', '두 번째 이동 기간 시간대');
+-- ── 강사 메일 시각 (H26(175)): 수업 날짜에 설정된 지역 시간대. 이동 기간 없는 날짜는 평소 시간대 ──
+select pg_temp.ok(lms_mail_en_at(((select d + 3 from d) + time '16:00') at time zone 'America/Argentina/Buenos_Aires',
+                                 lms_tutor_tz_at('aaaaaaaa-0000-4000-8000-0000000000f1', ((select d + 3 from d) + time '16:00') at time zone 'America/Argentina/Buenos_Aires')) like '% 4:00 PM *Buenos Aires Time* / %'
+  and lms_mail_en_at(((select d - 3 from d) + time '10:00') at time zone 'Australia/Sydney',
+                     lms_tutor_tz_at('aaaaaaaa-0000-4000-8000-0000000000f1', ((select d - 3 from d) + time '10:00') at time zone 'Australia/Sydney')) like '% 10:00 AM *Sydney Time* / %',
+  '메일 시각: 이동 기간 수업 = Buenos Aires Time, 그 전 수업 = Sydney Time');
+select pg_temp.ok(not exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace
+                              where s.nspname = 'public' and p.prosrc ~ 'lms_mail_en_[a-z]+\([^;]*tu\.timezone'),
+  '강사 메일 함수에 강사 평소 시간대(tu.timezone)를 바로 쓰는 곳 없음');
+select pg_temp.ok((select count(*) from pg_proc where prosrc ~ 'lms_tutor_tz_at\(tu\.id') = 9, '강사 메일 함수 9개 모두 수업 날짜 지역 기준');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-0000000000f1","aal":"aal1"}', true);
+select pg_temp.ok(jsonb_array_length(tutor_travel_periods(null)) = 2, '강사 Home 용 이동 기간 목록 (지난 것 포함)');
+reset role;
 rollback;
