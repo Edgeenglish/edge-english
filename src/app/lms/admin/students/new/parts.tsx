@@ -360,6 +360,8 @@ export function WeekCalendar({
   // 이 주의 강사 지역 (해외 이동 기간이면 그 지역)
   const weekTz = tutorTzAt(tutor, kstToInstant(week[3], '12:00'));
   const away = weekTz !== tutor.timezone;
+  // 이 주 안에 출발·복귀가 있으면 지역마다 따로 (첫 날 → 마지막 날)
+  const weekZones = [...new Set(week.map((d) => tutorTzAt(tutor, kstToInstant(d, '12:00'))))];
   const dst = [weekTz, studentTz]
     .filter((z, i, a) => z && z !== 'Asia/Seoul' && a.indexOf(z) === i)
     .map((z) => ({ z, c: upcomingOffsetChange(kstToInstant(week[0], '00:00'), z, 21) }))
@@ -386,7 +388,9 @@ export function WeekCalendar({
         </label>
       </div>
       <p className="mt-1 text-[12.5px] text-[#6b6880]">
-        한국 시간(KST) 기준 · {tutor.name}({away ? koZoneName(weekTz) : tutor.country}) {diffFromKst(kstToInstant(week[3], '12:00'), weekTz)} · 칸은 30분 단위 표시이고, 실제 가능 여부는 수업 길이 + 휴식 10분으로 따로 판정해요.
+        한국 시간(KST) 기준 · {weekZones.length > 1
+          ? `${tutor.name} ${weekZones.map((z) => `${koZoneName(z)} ${diffFromKst(kstToInstant(week[week.findIndex((d) => tutorTzAt(tutor, kstToInstant(d, '12:00')) === z)], '12:00'), z)}`).join(' → ')}`
+          : `${tutor.name}(${away ? koZoneName(weekTz) : tutor.country}) ${diffFromKst(kstToInstant(week[3], '12:00'), weekTz)}`} · 칸은 30분 단위 표시이고, 실제 가능 여부는 수업 길이 + 휴식 10분으로 따로 판정해요.
       </p>
       {dst.map(({ z, c }) => (
         <p key={z} className="mt-2 rounded-[10px] bg-[#fff6e6] px-3 py-2 text-[13px] text-[#7a4a00]">
