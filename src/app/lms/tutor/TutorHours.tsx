@@ -10,16 +10,22 @@ import { TimeOffLine } from './TimeOff';
 import { TUTOR_MENU } from '@/lms/tutor/navigation';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  classFill, describeChanges, describeChangesIn, diff, applyFromText, fromText, hhmm, plusDays, rangeText, timeText, toMin, WEEK_DAYS, weeklyClassAt, type HoursData,
+  classFill, describeChanges, describeChangesIn, diff, applyFromText, fromText, hhmm, plusDays, rangeText, timeText, toMin, WEEK_DAYS, weeklyClassAt, type HoursData, type HoursHistory,
 } from '@/lms/tutor/hours';
 import { KOREA_TIME } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
+import { TravelSheet, type Sheet } from './TravelSheet';
+import { homeText, NO_END_TEXT, returnText, tabLabel, zoneBadge, type TravelLocation } from '@/lms/tutor/travel';
 
 import { ALL_HOURS, cityTime, sourceCell } from '@/lms/tutor/hours-view';
 
 export type HoursActions = {
   load: () => Promise<HoursData>;
   save: (weekly: string[] | null, close: string[], open: string[]) => Promise<void>;
+  /** 이동 기간 추가(id null) · 종료일 넣기(id) — H26(173) */
+  saveLocation: (id: string | null, city: string | null, country: string | null, timezone: string | null, from: string | null, to: string | null) => Promise<TravelLocation>;
+  /** 이동 기간 매주 시간 ('요일:HH:MM', 그 지역 현지) */
+  saveLocationHours: (id: string, weekly: string[]) => Promise<void>;
 };
 
 const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -44,7 +50,15 @@ const cantChange: CSSProperties = { background: CANT_OPEN_BACKGROUND };
 type Dialog =
   | { kind: 'info'; title: string; body: string[] }
   | { kind: 'save' }
-  | { kind: 'saved'; weekly: boolean; from: string };
+  | { kind: 'saved'; weekly: boolean; from: string | null };
+/** 지금 탭의 격자 자료: Regular = 강사 시간대·다음 주 월요일부터, 이동 기간 = 그 지역 시간대·그 기간 (H26(173)) */
+type Grid = { tz: string; from: string; weeklyOpen: string[]; weeklyClasses: HoursData['weeklyClasses']; loc: TravelLocation | null };
+const gridOf = (d: HoursData, tab: string): Grid => {
+  const loc = d.locations.find((l) => l.id === tab) ?? null;
+  return loc
+    ? { tz: loc.timezone, from: loc.monday, weeklyOpen: loc.weeklyOpen, weeklyClasses: loc.weeklyClasses, loc }
+    : { tz: d.tutor.timezone, from: d.from, weeklyOpen: d.weeklyOpen, weeklyClasses: d.weeklyClasses, loc: null };
+};
 
 /** inline = 메뉴 안에 그대로 (2026-11-04 사이드바), 아니면 창 */
 export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, inline = false, onDirty, onSaved }: { actions: HoursActions; onClose: () => void; onSchedule?: () => void; /** 맨 위 한 줄 [Request time off ›] (H26(137)) */ onTimeOff?: () => void; inline?: boolean; /** 저장 안 한 변경이 있는지 알림 — 메뉴를 바꿀 때 확인 (QA UX) */ onDirty?: (dirty: boolean) => void; /** 저장 성공 뒤 — Home 의 보강 요청·충돌 자료를 다시 읽게 (R-13) */ onSaved?: () => void | Promise<void> }) {
@@ -59,13 +73,19 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
   const [busy, setBusy] = useState(false);
   const [saveErr, setSaveErr] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
+  // 탭: 'regular' 또는 이동 기간 id (H26(173))
+  const [tab, setTab] = useState('regular');
+  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [notice, setNotice] = useState('');
 
-  async function load() {
+  async function load(nextTab = tab) {
     setErr('');
     try {
       const d = await actions.load();
+      const t = nextTab === 'regular' || d.locations.some((l) => l.id === nextTab) ? nextTab : 'regular';
       setData(d);
-      setWeekly(new Set(d.weeklyOpen));
+      setTab(t);
+      setWeekly(new Set(gridOf(d, t).weeklyOpen));
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not load. Please try again.');
     }
@@ -73,15 +93,16 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
   useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 처음 열 때 가장 이른 열린 시각으로 스크롤 (이른 새벽 칸은 위로)
-  const firstOpen = data ? Math.min(...data.weeklyOpen.map((k) => toMin(k.slice(2))), 24 * 60) : null;
+  const base = data ? gridOf(data, tab).weeklyOpen : [];
+  const firstOpen = data ? Math.min(...base.map((k) => toMin(k.slice(2))), 24 * 60) : null;
   useEffect(() => {
     if (!data || !scroller.current || firstOpen === null) return;
     const row = scroller.current.querySelector<HTMLElement>(`[data-row="${firstOpen}"]`);
     if (row) scroller.current.scrollTop = Math.max(0, row.offsetTop - 40);
-  }, [data, firstOpen]);
+  }, [data, firstOpen, tab]);
 
   // 저장 안 한 변경 → 바깥(메뉴 바꾸기)에 알리고, 창을 닫거나 떠날 때 브라우저 확인 (QA UX: 미저장 이동 손실)
-  const dirtyCount = data ? (() => { const x = diff(data.weeklyOpen, weekly); return x.added.length + x.removed.length; })() : 0;
+  const dirtyCount = data ? (() => { const x = diff(base, weekly); return x.added.length + x.removed.length; })() : 0;
   useEffect(() => {
     onDirty?.(dirtyCount > 0);
     if (dirtyCount === 0) return;
@@ -92,20 +113,21 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
 
   if (!data) {
     return (
-      <Panel onClose={onClose} inline={inline} onSchedule={onSchedule} onTimeOff={onTimeOff}>
+      <Panel onClose={onClose} inline={inline} onSchedule={onSchedule} onTimeOff={onTimeOff} onAdd={null}>
         {err ? <p className="p-4 text-[14px] text-[#b3261e]">{err}</p> : <p className="p-4 text-[15px] text-[#6b6880]">Loading…</p>}
       </Panel>
     );
   }
 
   const d = data;
-  const localLabel = cityTime(d.tutor.timezone);
-  const koreaTime = zone === 'kst' && d.tutor.timezone !== 'Asia/Seoul';
-  const viewZone = koreaTime ? 'Asia/Seoul' : d.tutor.timezone;
+  const g = gridOf(d, tab);
+  const localLabel = cityTime(g.tz);
+  const koreaTime = zone === 'kst' && g.tz !== 'Asia/Seoul';
+  const viewZone = koreaTime ? 'Asia/Seoul' : g.tz;
   const viewLabel = koreaTime ? KOREA_TIME : localLabel;
-  const w = diff(d.weeklyOpen, weekly);
+  const w = diff(g.weeklyOpen, weekly);
   // 바뀐 내용은 고른 시간대 기준 + 다른 시간대 보조 (2026-11-04 대표 8번). 저장 키는 강사 현지 그대로
-  const lines = describeChangesIn({ weeklyOpen: w.added, weeklyClose: w.removed, onceClose: [], onceOpen: [] }, d.from, d.tutor.timezone, viewZone);
+  const lines = describeChangesIn({ weeklyOpen: w.added, weeklyClose: w.removed, onceClose: [], onceOpen: [] }, g.from, g.tz, viewZone);
   const lineList = (cls: string) => (
     <ul className={`grid gap-1.5 ${cls}`}>
       {lines.map((x) => (
@@ -117,12 +139,12 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
     </ul>
   );
   const weeklyChanged = w.added.length + w.removed.length > 0;
-  const source = (date: string, t: string) => sourceCell(date, t, viewZone, d.tutor.timezone);
-  const showPolicy = () => setDialog({ kind: 'info', title: "Can't open", body: [cantOpenHelp(d.times, d.tutor.timezone)] });
+  const source = (date: string, t: string) => sourceCell(date, t, viewZone, g.tz);
+  const showPolicy = () => setDialog({ kind: 'info', title: "Can't open", body: [cantOpenHelp(d.times, g.tz)] });
   const unavailable = <button type="button" aria-label="Can't open" aria-haspopup="dialog" onClick={showPolicy} className={cellBase} style={cantChange} />;
   function displayCell(i: number, t: string) {
-    const c = source(plusDays(d.from, i), t);
-    if (!d.times.includes(c.time) && !weekly.has(`${c.dow}:${c.time}`) && !weeklyClassAt(d.weeklyClasses, c.dow, c.time)) return unavailable;
+    const c = source(plusDays(g.from, i), t);
+    if (!d.times.includes(c.time) && !weekly.has(`${c.dow}:${c.time}`) && !weeklyClassAt(g.weeklyClasses, c.dow, c.time)) return unavailable;
     return weekCell(c.dow, c.time, `Every ${FULL[WEEK_DAYS[i]]} ${timeText(toMin(t))} · ${viewLabel}`);
   }
   const toggle = (set: Set<string>, k: string, setter: (s: Set<string>) => void) => {
@@ -136,12 +158,20 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
     if (lines.length > 0 && !window.confirm('Discard changes?')) return;
     onClose();
   }
+  function pickTab(t: string) {
+    if (t === tab) return;
+    if (lines.length > 0 && !window.confirm('Discard changes?')) return;
+    setTab(t);
+    setNotice('');
+    setWeekly(new Set(gridOf(d, t).weeklyOpen));
+  }
   async function save() {
     setBusy(true);
     setSaveErr('');
     try {
-      const saved = { weekly: weeklyChanged, from: d.from };
-      await actions.save(weeklyChanged ? [...weekly] : null, [], []);
+      const saved = { weekly: weeklyChanged, from: g.loc ? null : d.from };
+      if (g.loc) await actions.saveLocationHours(g.loc.id, [...weekly]);
+      else await actions.save(weeklyChanged ? [...weekly] : null, [], []);
       await load();
       setDialog({ kind: 'saved', ...saved });
       void onSaved?.();
@@ -153,7 +183,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
   }
 
   function weekCell(dow: number, t: string, when: string) {
-    const cl = weeklyClassAt(d.weeklyClasses, dow, t);
+    const cl = weeklyClassAt(g.weeklyClasses, dow, t);
     if (cl) {
       return (
         <button type="button" className={`${cellBase} truncate px-0.5 text-white ${cl.first ? (cl.c.min > 30 ? 'rounded-b-none' : '') : cont}`} aria-label={`${when} class with ${cl.c.student}`}
@@ -167,7 +197,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
     }
     const k = `${dow}:${t}`;
     const isOpen = weekly.has(k);
-    const changed = isOpen !== d.weeklyOpen.includes(k);
+    const changed = isOpen !== g.weeklyOpen.includes(k);
     return (
       <button type="button" aria-label={`${when} ${isOpen ? 'open' : 'closed'}`} aria-pressed={isOpen}
         onClick={() => toggle(weekly, k, setWeekly)}
@@ -203,7 +233,8 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
           <li key={h.at.toISOString()} className="text-[13px] text-[#1d1b2b]">
             <b>{h.at.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hourCycle: 'h12' })}</b>
             <span className="text-[#6b6880]"> · {h.byAdmin ? '운영자' : '강사 본인'}</span>
-            {(h.changes.weeklyOpen.length + h.changes.weeklyClose.length > 0) && <span className="text-[#6b6880]"> · 매주 변경 {fromText(h.changes.from, 'ko')}</span>}
+            {h.changes.location && <span className="text-[#6b6880]"> · {locationLine(h.changes.location)}</span>}
+            {!h.changes.location && (h.changes.weeklyOpen.length + h.changes.weeklyClose.length > 0) && <span className="text-[#6b6880]"> · 매주 변경 {fromText(h.changes.from, 'ko')}</span>}
             <ul className="list-disc pl-5">{describeChanges(h.changes, 'ko').map((x) => <li key={x}>{x}</li>)}</ul>
           </li>
         ))}
@@ -213,13 +244,43 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
   );
 
   return (
-    <Panel onClose={close} inline={inline} onSchedule={onSchedule} onTimeOff={onTimeOff}>
+    <Panel onClose={close} inline={inline} onSchedule={onSchedule} onTimeOff={onTimeOff} onAdd={() => { if (lines.length > 0 && !window.confirm('Discard changes?')) return; setSheet({ kind: 'add' }); }}>
+      {/* 평소 지역 · 이동 기간 탭 (H26(173), 시안 8차 장면 1·2) */}
+      <div className="mb-2 flex items-center justify-between gap-2 rounded-[12px] bg-[#f6f4fb] px-3 py-2 text-[13.5px] text-[#1d1b2b]">
+        <span>Home location <b>{homeText(d.tutor.country, d.tutor.timezone)}</b></span>
+        <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[12px] font-semibold text-[#2b1c7a]">{zoneBadge(d.tutor.timezone, d.from)}</span>
+      </div>
+      {notice && <p role="status" className="mb-2 text-[13.5px] font-semibold text-[#1f7a4d]">{notice}</p>}
+      {d.locations.length > 0 && (
+        <div role="tablist" aria-label="Location" className="mb-2 flex flex-wrap gap-2">
+          {[{ id: 'regular', label: 'Regular' }, ...d.locations.map((l) => ({ id: l.id, label: tabLabel(l) }))].map((x) => (
+            <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => pickTab(x.id)}
+              className={`min-h-[40px] rounded-full border px-3.5 text-[14px] font-semibold ${tab === x.id ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>{x.label}</button>
+          ))}
+        </div>
+      )}
       <div className="flex min-h-0 flex-1 gap-5 lg:p-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <p className="mb-1.5 text-[13.5px] font-semibold text-[#1d1b2b]">{applyFromText(d.from)}</p>
+          {g.loc ? (
+            <div className="mb-1.5 grid gap-1.5">
+              <div className="flex items-center justify-between gap-2 text-[13.5px] text-[#1d1b2b]">
+                <span><b>{localLabel}</b> · 6:00 AM – 10:30 PM</span>
+                <span className="shrink-0 rounded-full bg-[#f6f4fb] px-2 py-0.5 text-[12px] font-semibold text-[#2b1c7a]">{zoneBadge(g.tz, g.loc.from)}</span>
+              </div>
+              {g.loc.weeklyOpen.length === 0 && <p role="alert" className="text-[13.5px] font-semibold text-[#b3261e]">No hours set for this period</p>}
+              {g.loc.to
+                ? <p className="text-[13.5px] font-semibold text-[#1f7a4d]">{returnText(g.loc.to)}</p>
+                : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="flex-1 text-[13.5px] font-semibold text-[#b3261e]">{NO_END_TEXT}</p>
+                    <button type="button" onClick={() => setSheet({ kind: 'end', loc: g.loc! })} className={`${btnSub} min-h-[40px] text-[14px]`}>Set end date</button>
+                  </div>
+                )}
+            </div>
+          ) : <p className="mb-1.5 text-[13.5px] font-semibold text-[#1d1b2b]">{applyFromText(d.from)}</p>}
           <TimeStatusLegend onHelp={showPolicy} />
           <p className="mb-1.5 text-[12.5px] text-[#6b6880]">Click a time to change your weekly hours.</p>
-          {d.tutor.timezone !== 'Asia/Seoul' && (
+          {g.tz !== 'Asia/Seoul' && (
             <div role="group" aria-label="Timetable time zone" className="mb-2 flex flex-wrap gap-2">
               {[false, true].map((korea) => <button key={String(korea)} type="button" aria-pressed={koreaTime === korea}
                 onClick={() => { setZone(korea ? 'kst' : 'local'); if (scroller.current) scroller.current.scrollTop = 0; }}
@@ -267,7 +328,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
                 <strong className="text-[16px] text-[#1d1b2b]">Save these changes?</strong>
                 <p className="text-[12px] text-[#6b6880]">Times shown in {viewLabel}</p>
                 {lineList('text-[14px] text-[#1d1b2b]')}
-                {weeklyChanged && <p className="text-[13px] font-semibold text-[#3a22b0]">{applyFromText(d.from)}</p>}
+                {weeklyChanged && <p className="text-[13px] font-semibold text-[#3a22b0]">{g.loc ? tabLabel(g.loc) : applyFromText(d.from)}</p>}
                 <p className="text-[13px] text-[#6b6880]">Students can no longer pick closed times for make-ups. Your classes don’t change.</p>
                 {saveErr && <p role="alert" className="text-[14px] text-[#b3261e]">{saveErr}</p>}
                 <button type="button" disabled={busy} onClick={save} className={btnMain}>{busy ? 'Saving…' : 'Save'}</button>
@@ -277,22 +338,45 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
             {dialog.kind === 'saved' && (
               <>
                 <strong className="text-[16px] text-[#1f7a4d]">Saved ✓</strong>
-                {dialog.weekly && <p className="text-[14px] text-[#1d1b2b]">{applyFromText(dialog.from)} Until then your current hours stay the same.</p>}
+                {dialog.weekly && dialog.from && <p className="text-[14px] text-[#1d1b2b]">{applyFromText(dialog.from)} Until then your current hours stay the same.</p>}
                 <button type="button" onClick={() => setDialog(null)} className={btnSub}>Close</button>
               </>
             )}
           </div>
         </div>
       )}
+
+      {sheet && (
+        <TravelSheet sheet={sheet} inline={inline} actions={actions} onClose={() => setSheet(null)}
+          onSaved={async (l) => {
+            setSheet(null);
+            await load(l.id);
+            setNotice(`Saved · ${tabLabel(l)}`);
+            void onSaved?.();
+          }} />
+      )}
     </Panel>
   );
 }
 
-function Panel({ onClose, onSchedule, onTimeOff, inline, children }: { onClose: () => void; onSchedule?: () => void; onTimeOff?: () => void; inline?: boolean; children: ReactNode }) {
+/** 운영자 보기 이력: 이동 기간 기록 한 줄 (H26(173)) */
+function locationLine(l: NonNullable<HoursHistory['changes']['location']>): string {
+  const ko = (x: string) => `${Number(x.slice(5, 7))}/${Number(x.slice(8, 10))}`;
+  const span = `${ko(l.from)}~${l.to ? ko(l.to) : '종료일 없음'}`;
+  const where = `${l.city}${l.country ? ` (${l.country})` : ''}`;
+  if (l.action === 'add') return `이동 기간 추가: ${where} ${span}`;
+  if (l.action === 'end') return `이동 기간 종료일: ${where} ${span}`;
+  return `이동 기간 매주 시간: ${where} ${span}`;
+}
+
+function Panel({ onClose, onSchedule, onTimeOff, onAdd, inline, children }: { onClose: () => void; onSchedule?: () => void; onTimeOff?: () => void; /** [Add Temporary Location] (H26(173)) */ onAdd: (() => void) | null; inline?: boolean; children: ReactNode }) {
   const head = (
     <div className="mb-2 flex items-start justify-between gap-2">
-      <div>
-        <h2 className={`${inline ? 'text-[20px]' : 'text-[18px]'} font-bold text-[#1d1b2b]`}>{TUTOR_MENU.hours}</h2>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className={`${inline ? 'text-[20px]' : 'text-[18px]'} font-bold text-[#1d1b2b]`}>{TUTOR_MENU.hours}</h2>
+          {onAdd && <button type="button" onClick={onAdd} className={`${btnSub} min-h-[40px] px-3 text-[14px]`}>Add Temporary Location</button>}
+        </div>
         <p className="text-[13.5px] text-[#55526a]">Set your regular weekly teaching hours here. For one-time changes, go to {onSchedule ? <button type="button" onClick={onSchedule} className="font-semibold text-[#5b3fe0] underline">{TUTOR_MENU.schedule}</button> : <>{TUTOR_MENU.schedule}</>}.</p>
       </div>
       {!inline && (

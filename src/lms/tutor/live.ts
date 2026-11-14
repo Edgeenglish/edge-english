@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseHours, type HoursData } from './hours';
 import { parseSchedule, type ScheduleAction, type ScheduleData } from './schedule';
+import { parseLocation, parseMulti, type MultiResult, type TravelLocation } from './travel';
 import { parseCanceled, parseScreen, withSuggestions, type Late, type TutorCanceled, type TutorResult, type TutorScreen } from './screen';
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
 import { parseFollowup, parseFollowupTodos, type Followup, type FollowupTodo } from './followup';
@@ -93,6 +94,19 @@ export async function loadHours(sb: SupabaseClient, tutorId: string | null): Pro
 /** weekly = 바꾼 뒤 매주 열린 칸 전체 (안 바꾸면 null), close·open = 그 주만 닫을·다시 열 칸 */
 export async function saveHours(sb: SupabaseClient, tutorId: string | null, weekly: string[] | null, close: string[], open: string[]): Promise<void> {
   check(await sb.rpc('tutor_hours_save', { p_tutor: tutorId, p_weekly: weekly, p_close: close, p_open: open }));
+}
+
+/** 이동 기간 추가(id 없음) · 종료일 넣기(id) — H26(173), migration 20261114120000 */
+export async function saveLocation(sb: SupabaseClient, tutorId: string | null, id: string | null, city: string | null, country: string | null, timezone: string | null, from: string | null, to: string | null): Promise<TravelLocation> {
+  return parseLocation(check(await sb.rpc('tutor_location_save', { p_tutor: tutorId, p_location: id, p_city: city, p_country: country, p_timezone: timezone, p_from: from, p_to: to })));
+}
+/** 이동 기간 매주 시간 저장 ('요일:HH:MM', 그 지역 현지) */
+export async function saveLocationHours(sb: SupabaseClient, tutorId: string | null, id: string, weekly: string[]): Promise<void> {
+  check(await sb.rpc('tutor_location_hours_save', { p_tutor: tutorId, p_location: id, p_weekly: weekly }));
+}
+/** [Set Multiple Days] 미리보기(apply=false)·적용 — 날짜·시각은 그 날짜에 있는 지역 현지 */
+export async function scheduleMulti(sb: SupabaseClient, tutorId: string | null, from: string, to: string, start: string, end: string, apply: boolean): Promise<MultiResult> {
+  return parseMulti(check(await sb.rpc('tutor_schedule_multi', { p_tutor: tutorId, p_from: from, p_to: to, p_start: start, p_end: end, p_apply: apply })));
 }
 
 /** 수강생 프로필 (4300): 담당 정규 강사·대체강사(열람만)·운영자. 자격은 DB 함수가 확인 (담당 아니면 42501) */

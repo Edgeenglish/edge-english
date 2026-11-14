@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { answerCover, answerMakeup, confirmMakeup, loadSuggestOptions, suggestMakeup, createTutorLogin, loadCanceledClasses, loadNewRequests, loadTutorUpdates, answerNewRequest, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
+import { saveLocation, saveLocationHours, scheduleMulti, answerCover, answerMakeup, confirmMakeup, loadSuggestOptions, suggestMakeup, createTutorLogin, loadCanceledClasses, loadNewRequests, loadTutorUpdates, answerNewRequest, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
 import { LANGS, type Lang } from '@/lms/tutor/lang';
 import { useSavedValue } from './useSaved';
 import { weekOf, type StudentCancelDecision, type TutorScreen } from '@/lms/tutor/screen';
@@ -77,10 +77,13 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
         hours: {
           load: () => loadHours(sb, adminTutor),
           save: (weekly, close, open) => saveHours(sb, adminTutor, weekly, close, open),
+          saveLocation: (id, city, country, timezone, from, to) => saveLocation(sb, adminTutor, id, city, country, timezone, from, to),
+          saveLocationHours: (id, weekly) => saveLocationHours(sb, adminTutor, id, weekly),
         },
         schedule: {
           load: (from, to, cells) => loadSchedule(sb, adminTutor, from, to, cells),
           save: (action, cells, note, blockId) => saveSchedule(sb, adminTutor, action, cells, note, blockId),
+          multi: (from, to, start, end, apply) => scheduleMulti(sb, adminTutor, from, to, start, end, apply),
         },
         profile: {
           load: (studentId) => loadStudentProfile(sb, studentId, adminTutor),
