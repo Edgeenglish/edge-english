@@ -46,7 +46,7 @@ async function copy(text: string): Promise<boolean> {
 
 export default function StudentProfile({ studentId, actions, onClose, now, backLabel, followupPending = null, onFollowup, zoneOf }: {
   studentId: string; actions: ProfileActions; onClose: () => void; now: Date;
-  /** 수업 시각의 강사 지역 (이동 기간, H26(175)). 없으면 강사 시간대 */ zoneOf?: (t: Date, home: string) => string;
+  /** 수업 시각의 강사 지역 (이동 기간, H26(176)). 없으면 강사 시간대 */ zoneOf?: (t: Date, home: string) => string;
   /** 어디서 열었는지에 맞춘 뒤로 가기 글자 (QA UX: Students 에서 열면 'Back to students') */ backLabel?: string;
   /** 첫 수업 후 To-do 남은 수 (4600, Home 목록 기준). null = 모름 → 프로필의 followup 으로 판단 */ followupPending?: number | null;
   /** [First lesson follow-up] 버튼 → 그 창으로 */ onFollowup?: () => void;

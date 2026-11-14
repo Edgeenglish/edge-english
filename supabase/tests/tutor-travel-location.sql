@@ -127,7 +127,7 @@ select tutor_location_save('aaaaaaaa-0000-4000-8000-0000000000f1', null, 'New Yo
 reset role;
 select pg_temp.ok((select by_admin from tutor_hours_changes where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000f1' and changes -> 'location' ->> 'city' = 'New York'), '운영자 대신 추가 → 이력 운영자');
 select pg_temp.ok(lms_tutor_tz_on('aaaaaaaa-0000-4000-8000-0000000000f1', (select d + 45 from d)) = 'America/New_York', '두 번째 이동 기간 시간대');
--- ── 강사 메일 시각 (H26(175)): 수업 날짜에 설정된 지역 시간대. 이동 기간 없는 날짜는 평소 시간대 ──
+-- ── 강사 메일 시각 (H26(176)): 수업 날짜에 설정된 지역 시간대. 이동 기간 없는 날짜는 평소 시간대 ──
 select pg_temp.ok(lms_mail_en_at(((select d + 3 from d) + time '16:00') at time zone 'America/Argentina/Buenos_Aires',
                                  lms_tutor_tz_at('aaaaaaaa-0000-4000-8000-0000000000f1', ((select d + 3 from d) + time '16:00') at time zone 'America/Argentina/Buenos_Aires')) like '% 4:00 PM *Buenos Aires Time* / %'
   and lms_mail_en_at(((select d - 3 from d) + time '10:00') at time zone 'Australia/Sydney',

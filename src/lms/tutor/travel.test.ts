@@ -46,7 +46,7 @@ describe('강사 해외 이동 기간 (H26(173))', () => {
     expect(cellKind('2027-01-10T06:00', d, false)).toBe('outside');
     expect(cellKind('2027-01-10T23:00', d, false)).toBe('free');   // Sydney 23:00 = BA 09:00 → 열림
   });
-  it('강사 Home: 수업 날짜에 설정된 지역 시간으로 (지금 있는 곳 아님, H26(175))', () => {
+  it('강사 Home: 수업 날짜에 설정된 지역 시간으로 (지금 있는 곳 아님, H26(176))', () => {
     // BA 1/6 오후 4시 수업 = UTC 19:00. Sydney 로는 1/7 오전 6시
     const l = { id: 'x', startsAt: new Date('2027-01-06T19:00:00Z'), endsAt: new Date('2027-01-06T19:40:00Z') } as TutorLesson;
     const z = (t: Date) => zoneAt([ba], t, 'Australia/Sydney');
