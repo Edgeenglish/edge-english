@@ -475,6 +475,23 @@ export default function StudentHome(props: {
 
   // 공지 (최신 2건 + 전체보기, 학생이 열면 확인함 — 11/11 대표) · 수강권 / 결제 내역
   const [notices, setNotices] = useState<StudentNotice[]>([]);
+  // 강사 '늦어요' 알림 (QA 11/14): 다음 수업 2시간 전~끝날 때까지 열어 둔 홈도 새로고침 없이 노란 띠가 나오게 30초마다(+ 화면으로 돌아올 때) 다시 읽음
+  const [liveTutorLate, setLiveTutorLate] = useState<{ lessonId: string; minutes: number; reason: string | null }[] | null>(null);
+  const watchStart = next?.startsAt.getTime() ?? null;
+  const watchEnd = next ? next.startsAt.getTime() + next.minutes * 60_000 : null;
+  useEffect(() => {
+    if (watchStart === null || watchEnd === null) return;
+    let alive = true;
+    const tick = () => {
+      const t = Date.now();
+      if (t < watchStart - 2 * 3_600_000 || t >= watchEnd) return;
+      actions.tutorLateNotices().then((x) => { if (alive) setLiveTutorLate(x); }, () => {});
+    };
+    const id = setInterval(tick, 30_000);
+    const onShow = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', onShow); };
+  }, [actions, watchStart, watchEnd]);
   const [history, setHistory] = useState<PaymentSummary[] | null>(null);
   useEffect(() => {
     let alive = true;
@@ -583,7 +600,7 @@ export default function StudentHome(props: {
       substitute={nextFull?.substitute ?? false}
       leaveOpen={!!nextFull?.leaveOpen}
       lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === next.id)}
-      tutorLate={(s.tutorLateNotices ?? []).find((n) => n.lessonId === next.id) ?? null}
+      tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === next.id) ?? null}
       onLate={async (minutes, reason) => { await run(() => actions.lateNotice(next.id, minutes, reason), '강사님께 알렸어요.'); }}
     />
   );
