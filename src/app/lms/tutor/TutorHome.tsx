@@ -937,7 +937,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
 
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-          <span className="font-semibold">{time}</span>{tz !== headTz && <span className="text-[11.5px] font-semibold text-[#2b1c7a]"> {tzTimeLabel(tz)}</span>}
+          <span className="flex-col !items-start justify-center font-semibold">{time}{tz !== headTz && <span className="text-[11.5px] font-semibold leading-tight text-[#2b1c7a]">{tzTimeLabel(tz)}</span>}</span>
           {kst && <span className="text-[#6b6880]">{k ? stripBold(k).replace(/ KST$/, '') : ''}</span>}
           <span className="flex-col !items-start justify-center font-semibold"><StudentName id={l.studentId} name={name} className="max-w-full truncate" /></span>
           <span>{count}</span>
