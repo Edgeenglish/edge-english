@@ -136,6 +136,22 @@ function tutorLine(v: PlanView) {
   return tz === 'Asia/Seoul' ? `Every ${enDays(local)} ${bold('KST')}` : `Every ${enDays(local)} ${bold(enZoneName(tz))}${kstLine ? ` / ${enDays(kstLine)} ${bold('KST')}` : ''}`;
 }
 
+/** 기간 중에 강사 지역이 바뀌면 (해외 이동 출발·복귀) 바뀌는 날부터의 매주 시간 줄 — 'From Mon, 11 Jan: Every Mon 9:00 PM Sydney Time / Mon 7:00 PM KST' */
+function zoneChangeLines(v: PlanView): string[] {
+  if (!v.tutorZoneAt || v.lessonList?.length) return [];
+  const out: string[] = [];
+  let cur: string | null = null;
+  for (let d = v.startDate; d <= v.endDate; d = addDays(d, 1)) {
+    const s = v.slots.find((x) => x.weekday === weekdayOf(d));
+    if (!s) continue;
+    const t = kstToInstant(d, s.time);
+    const z = tutorTzAt(v, t);
+    if (cur !== null && z !== cur) out.push(`From ${enDay(t, z)}: ${tutorLine({ ...v, startDate: d, tutorZoneAt: () => z })}`);
+    cur = z;
+  }
+  return out;
+}
+
 /** 강사 제안 (WhatsApp, 영어). 확정이 아님을 분명히 */
 export function proposalMessage(v: PlanView): string {
   const first = firstLessonAt(v);
@@ -143,6 +159,7 @@ export function proposalMessage(v: PlanView): string {
     `Hi ${v.tutorName}, new student request (not confirmed yet):`,
     `${v.studentNameEn}, ${v.durationMin} min, ${v.lessons} classes`,
     tutorLine(v),
+    ...zoneChangeLines(v),
     first ? `First class: ${enBoth(first, tutorTzAt(v, first))}` : '',
     ...enOtherLines(v),
     'Can you take this?',
@@ -159,6 +176,7 @@ export function tutorConfirmMessage(v: PlanView): string {
     'CONFIRMED - new student',
     `${v.studentNameEn}, ${v.durationMin} min, ${v.lessons} classes`,
     tutorLine(v),
+    ...zoneChangeLines(v),
     first ? `First class: ${enBoth(first, tutorTzAt(v, first))}${last ? ` · last ${enDay(last, tutorTzAt(v, last))}` : ''}` : '',
     ...enOtherLines(v),
     'Please add it to your schedule. Thank you!',

@@ -137,12 +137,16 @@ describe('강사 해외 이동 기간 (H26(173)(176)): 강사 문구 시각 = �
     expect(p).toContain('First class: Mon, 28 Dec 6:00 AM *Buenos Aires Time*');
     const c = tutorConfirmMessage(v);
     expect(c).toContain('First class: Mon, 28 Dec 6:00 AM *Buenos Aires Time*');
-    expect(c).not.toContain('8:00 PM *Sydney Time* / Mon 6:00 PM');
+    // 1/11 부터 시드니로 돌아감 → 그날부터의 매주 시간 줄
+    expect(c).toContain('From Mon, 11 Jan: Every Mon 8:00 PM *Sydney Time* / Mon 6:00 PM *KST*');
+    expect(p).toContain('From Mon, 11 Jan: Every Mon 8:00 PM *Sydney Time*');
   });
   it('운영자 화면 강사 줄 시간대 = 첫 수업 지역', () => {
     expect(timeLines(v).find((l) => l.who === '강사')).toMatchObject({ text: '월 오전 6:00', tz: ba });
   });
   it('이동 기간이 없으면 전과 같음', () => {
-    expect(proposalMessage({ ...v, tutorZoneAt: undefined })).toContain('First class: Mon, 28 Dec 8:00 PM *Sydney Time*');
+    const plain = proposalMessage({ ...v, tutorZoneAt: undefined });
+    expect(plain).toContain('First class: Mon, 28 Dec 8:00 PM *Sydney Time*');
+    expect(plain).not.toContain('From ');
   });
 });
