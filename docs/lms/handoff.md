@@ -2,6 +2,11 @@
 
 # 다음 세션 시작 메모
 
+## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(174))
+- migration `20261114130000_student_reminder_default_regular_off`(students.remind_regular 기본값 false, 기존 학생 변경 없음) · `20261114140000_first_class_mail_reminder_setting_line`(lms_first_class_mail_student: 일정 변경 재안내 메일 제외, 첫 안내에만 '수업 알림 메일은 … 내 정보 › 이메일 알림 설정에서 켜고 끌 수 있어요.' 한 줄).
+- 운영 DB 백업 `lms_backup.snapshots` **54**(표 62 전체) · **55**(lms_first_class_mail_student 이전 정의, 되돌리기 = 그 정의로 create or replace). 기본값 되돌리기 = `alter table students alter column remind_regular set default true`.
+- 확인: 운영 기본값 remind_regular=false·remind_makeup=true, 학생 13명 중 정규 켬 1명(STU-0012, 운영자 대신 켬 기록 있음 — 대표 확인 대기). 시험 DB 문구 확인은 롤백 안에서 본문 출력으로 함(메일 안 나감).
+
 ## ✅ 11/13 강사 휴무 신청 (H26(137)) — **운영 반영 완료** (lms-prod 6c052b9, 운영 DB 백업 snapshots 50)
 - 운영 반영(대표 11/13 승인): 운영 DB(mfamixejxydodclhglbc) 백업 **snapshots id 50**(표 61 전체 + 바뀌는 함수 admin_leave_create·lms_leave_candidates 원래 정의 `_functions_before` + 새 객체 목록) → migration 20261113150000(커넥터 이름 lms_tutor_time_off_requests) → 표 62, 휴무 2·휴무 줄 18·수업 183·보강 신청 16·수강등록 15·기간 연장 4 그대로, 신청 0건(운영에서 시험 신청 안 만듦). 적용 전 운영 admin_leave_create·lms_leave_candidates 본문 = 저장소 0200·0100 판과 같음(주석만 다름)
 - 코드: origin/lms-prod(69db1c0)에서 브랜치 → a0b7848·56d7651 의 이 기능 파일만 적용(다른 세션 미반영 작업 안 섞음, live.ts 의 재등록 메일 '보냄' 코드는 운영판 그대로) → tsc 0 · vitest 458 · test:db 전부 통과 → lms-prod 6c052b9. main 은 손대지 않음(지각 알림 배포 때부터 main 0932ca9 그대로)
