@@ -247,6 +247,14 @@
 - `src/lms/admin/pending-saves.ts` `keepRows`: 저장할 때·읽을 때 status 'ok' 줄을 버림(이미 쌓인 옛 '저장 완료' 줄도 다음 읽기에서 사라짐). '저장 중'·'저장되지 않았어요'·'확인 필요' 줄만 남음. `PendingSavesBanner.tsx` 'ok' 표시 분기 제거
 - 시험: pending-saves.test 6 통과(keepRows 1개 추가), tsc·eslint 통과. 화면 클릭 확인은 안 함
 
+## ⏳ 11/14 강사 해외 이동 기간 기능 — **시안 8차 확정(대표 승인), 시험 개발은 새 세션에서 시작** · 결정 전문은 정책 원본 H26(173)
+- 시안 파일: `docs/lms/previews/tutor-travel-location.html` (장면 1~5 · PC/휴대폰, 열면 바로 동작). 클릭 확인용이며 실제 화면은 아님.
+- 개발 범위: 시험 사이트(lms-test)·시험 DB(kyeimjozkcqbgkepwrnv)만. 운영 반영은 시험 QA 뒤 대표 별도 승인(백업 snapshots 먼저).
+- 개발 전에 읽을 것: `tutor_availability`(weekday·start_local·end_local·timezone·effective_from/to — 시간대·시작일 이미 있음), `lms_hours_times`(현지 06:00~22:30 30분 칸, 20261103095424), `lms_tutor_start_ok`(현지 06:00~22:30), `tutor_schedule_save`(20261105020000, 12주·칸 검사 — 첫 잘못된 칸에서 전체 실패라 화면에서 되는 날만 골라 보내야 함), `TutorHours.tsx`·`TutorSchedule.tsx`·`src/lms/admin/places.ts`(도시 검색, 아르헨티나 없음 → 주요 도시 한 줄 추가), 강사 시간대를 쓰는 곳 전부(메일 시간 표기·수업 변경·첫 수업 안내 — 날짜별 시간대를 지원하는지 **미확인**).
+- 개발 순서 제안: ① 이동 기간 테이블·함수(날짜로 강사 시간대 결정, 종료일 선택) ② Regular Working Hours 탭(Regular / 이동 기간) + 기존 격자 재사용 ③ Add Temporary Location(도시 검색) ④ Set Multiple Days 3단계(+ Split by location) ⑤ 운영자 보기(`?tutor=`)·이력 '운영자 대신' ⑥ QA: 아르헨티나·미국 날짜 변환·서머타임, 기존 수업 충돌, 모바일 격자, 저장 뒤 재접속 유지.
+- 이름(합의됨): 메뉴 Regular Working Hours · Calendar & One-Time Changes / 버튼 Set Multiple Days · Add Temporary Location / 탭 Regular · `도시 · 5 Jan – 23 Mar`(종료일 없으면 `from 5 Jan`). **합의 안 된 이름(Current location, Split by location, Set end date, With/No end date, Days·Time·Review, No hours set for this period)은 개발 전에 대표에게 확인.**
+- 정정 기록: 이동 기간에도 시작은 현지 06:00~22:30(1-나 철회), KST 직접 입력 없음. 베니(호주→아르헨티나 12월말~3/23)·마리아(미국 1월부터 7개월)가 첫 대상.
+
 ## ✅ 11/9 학생 시간대 자동 확인 — 정책 원본 H26(119) · **시험 DB·lms-test 개발·검증 끝, 운영 미반영** (브랜치 claude/vibrant-pascal-sr9m94 → lms-test)
 - migration `20261109150000_lms_student_timezone` (시험 DB 적용): `students.tz_kept_device`([그대로] 누른 기기 시간대) 추가, `student_profile_edits.edited_role` 에 'student' 추가, 새 함수 `student_timezone(p_student, p_set, p_keep)` (학생 본인·운영자 같은 함수, 바꾸면 이력에 학생 본인/운영진으로 남김)
 - 화면: `StudentHome.tsx` 맨 위 묻기(운영자 보기·기기 시간대 UTC/Etc 는 안 물음) + '내 정보' 맨 위 '시간대' 칸, `live.ts`·`fake-data.ts` timezone 동작, 운영자 학생 상세 '정보 수정 기록'에 '수강생 본인' 표시
