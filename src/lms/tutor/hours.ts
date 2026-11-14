@@ -3,17 +3,20 @@
 
 import { addDays, ampmEn, ampmKo, formatInZone } from '../rules/dates';
 import { cityTime, localToInstant } from './hours-view';
+import { parseLocation, type TravelLocation } from './travel';
 
 /** 그 주만 칸: c 수업·보강 · r 보강 신청/대체 요청 답 대기 · l 휴무 · p 6시간 안·지난 시간 · s 매주 닫힘 · b 그 주만 닫음 · o 열림 */
 export type CellCode = 'c' | 'r' | 'l' | 'p' | 's' | 'b' | 'o';
 export type WeeklyClass = { d: number; time: string; min: number; student: string };
 export type HoursLesson = { start: string; min: number; student: string; makeup: boolean };
 /** onceClose·onceOpen = 그날만 막기·풀기, dayOpen = 그날만 열기, note = 막을 때·고친 메모 (Schedule, 4403) */
-export type HoursChanges = { from: string; weeklyOpen: string[]; weeklyClose: string[]; onceClose: string[]; onceOpen: string[]; dayOpen?: string[]; note?: string | null; noteOf?: string | null };
+export type HoursChanges = { from: string; weeklyOpen: string[]; weeklyClose: string[]; onceClose: string[]; onceOpen: string[]; dayOpen?: string[]; note?: string | null; noteOf?: string | null;
+  /** 이동 기간 기록 (H26(173)): add 추가 · end 종료일 · hours 그 기간 매주 시간 */
+  location?: { action: 'add' | 'end' | 'hours'; city: string; country: string; timezone: string; from: string; to: string | null } | null };
 export type HoursHistory = { at: Date; byAdmin: boolean; changes: HoursChanges };
 
 export type HoursData = {
-  tutor: { id: string; name: string; timezone: string };
+  tutor: { id: string; name: string; timezone: string; country: string };
   /** 매주 변경이 시작되는 날 (다음 주 월요일) */
   from: string;
   /** 그 주만 탭 첫 주 월요일 (강사 현지) */
@@ -23,6 +26,8 @@ export type HoursData = {
   weeklyClasses: WeeklyClass[];
   cells: Record<string, CellCode>;
   lessons: HoursLesson[];
+  /** 아직 안 끝난 이동 기간 (H26(173)) */
+  locations: TravelLocation[];
   /** 운영자 보기에서만 (강사 본인은 null) */
   history: HoursHistory[] | null;
 };
@@ -30,11 +35,11 @@ export type HoursData = {
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB 함수가 돌려주는 JSON 을 화면 모양으로 바꾸는 곳 */
 const changesOf = (c: any): HoursChanges => ({
   from: c.from, weeklyOpen: c.weekly_open ?? [], weeklyClose: c.weekly_close ?? [], onceClose: c.once_close ?? [], onceOpen: c.once_open ?? [],
-  dayOpen: c.day_open ?? [], note: c.note ?? null, noteOf: c.note_of ?? null,
+  dayOpen: c.day_open ?? [], note: c.note ?? null, noteOf: c.note_of ?? null, location: c.location ?? null,
 });
 export function parseHours(j: any): HoursData {
   return {
-    tutor: { id: j.tutor.id, name: j.tutor.name, timezone: j.tutor.timezone },
+    tutor: { id: j.tutor.id, name: j.tutor.name, timezone: j.tutor.timezone, country: j.tutor.country ?? '' },
     from: j.from,
     monday: j.monday,
     times: j.times ?? [],
@@ -42,6 +47,7 @@ export function parseHours(j: any): HoursData {
     weeklyClasses: j.weekly_classes ?? [],
     cells: j.cells ?? {},
     lessons: j.lessons ?? [],
+    locations: (j.locations ?? []).map(parseLocation),
     history: j.history == null ? null : j.history.map((h: any) => ({ at: new Date(h.at), byAdmin: !!h.by_admin, changes: changesOf(h.changes) })),
   };
 }

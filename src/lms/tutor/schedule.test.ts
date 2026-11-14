@@ -32,7 +32,7 @@ describe('Schedule — 재검증 수정 (R-03·R-16)', async () => {
   const { cellKind, dayItems } = await import('./schedule');
   const times = Array.from({ length: 34 }, (_, i) => `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);   // 06:00~22:30
   const data = (cells: Record<string, 'c' | 'r' | 'a' | 'l' | 'p' | 's' | 'b' | 'o' | 'x'>, blocks: { start: string; end: string }[] = []) => ({
-    tutor: { id: 't', name: 'Alex', timezone: 'Australia/Sydney' }, today: '2026-11-01', last: '2027-01-24', times, cells,
+    tutor: { id: 't', name: 'Alex', timezone: 'Australia/Sydney', country: 'Australia' }, locations: [], today: '2026-11-01', last: '2027-01-24', times, cells,
     blocks: blocks.map((b, i) => ({ id: `b${i}`, kind: 'leave' as const, note: null, ...b })), opens: [],
   });
   it('가능 답을 보낸 칸(a)은 답 대기(r)와 구분 (R-16)', () => {

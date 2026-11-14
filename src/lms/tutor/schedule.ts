@@ -6,13 +6,16 @@ import { ampmEn, formatInZone } from '../rules/dates';
 import { cityTime, localToInstant } from './hours-view';
 import { plusDays, rangeText, toMin, type CellCode } from './hours';
 import { kindTag, type TutorLesson } from './screen';
+import { parsePeriod, type TravelPeriod } from './travel';
 
 /** 칸 판정 (4403): My hours 와 같고 x = 매주 닫혔지만 그날만 연 칸 */
-export type ScheduleCode = CellCode | 'x' | 'a';   // a = 가능 답 보냄·운영진 확정 대기 (R-16, 4520)
+export type ScheduleCode = CellCode | 'x' | 'a' | 'n';   // a = 가능 답 보냄·운영진 확정 대기 (R-16, 4520) · n = 그 시각에 있는 지역 06:00~22:30 밖 (H26(173))
 export type ScheduleBlock = { id: string; kind: 'block' | 'leave'; start: string; end: string; note: string | null };
 export type ScheduleOpen = { start: string; end: string };
 export type ScheduleData = {
-  tutor: { id: string; name: string; timezone: string };
+  tutor: { id: string; name: string; timezone: string; country: string };
+  /** 이동 기간 (H26(173)) — 그 날짜에 보는 시간대 */
+  locations: TravelPeriod[];
   /** 강사 현지 오늘 · 막기·열기 마지막 날 (오늘 + 12주) */
   today: string;
   last: string;
@@ -28,7 +31,8 @@ export type ScheduleAction = 'block' | 'open' | 'note' | 'unblock';
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB 함수가 돌려주는 JSON 을 화면 모양으로 바꾸는 곳 */
 export function parseSchedule(j: any): ScheduleData {
   return {
-    tutor: { id: j.tutor.id, name: j.tutor.name, timezone: j.tutor.timezone },
+    tutor: { id: j.tutor.id, name: j.tutor.name, timezone: j.tutor.timezone, country: j.tutor.country ?? '' },
+    locations: (j.locations ?? []).map(parsePeriod),
     today: j.today,
     last: j.last,
     times: j.times ?? [],
@@ -110,9 +114,10 @@ export function cellKind(key: string, d: ScheduleData, hasLesson: boolean): Cell
   if (hasLesson) return 'class';
   const date = key.slice(0, 10);
   if (date < d.today) return 'past';
-  if (!d.times.includes(key.slice(11, 16))) return 'outside';
-  if (date > d.last) return 'far';
+  // 칸 판정이 있으면 DB 가 그 시각에 있는 지역 기준으로 'n'(시작 못 함)을 줌 — 이동 기간은 강사 시간대 06:00~22:30 과 다름 (H26(173))
   const c = d.cells?.[key] ?? 'o';
+  if (d.cells && date <= d.last ? c === 'n' : !d.times.includes(key.slice(11, 16))) return 'outside';
+  if (date > d.last) return 'far';
   if (c === 'c') return 'class';
   if (c === 'r') return 'request';
   if (c === 'a') return 'answered';   // 가능 답 보냄 · 운영진 확정 대기 (R-16, 4520)

@@ -70,7 +70,7 @@ declare
                           'admin_students', 'admin_student_detail', 'admin_student_update', 'tutor_student_profile', 'tutor_student_update',
                           'admin_regular_change', 'admin_regular_change_sent', 'admin_extend_enrollment', 'admin_prestart_move',
                           'admin_sheet_rows', 'admin_sheet_row_match', 'admin_sheet_row_done',
-                          'tutor_students_list', 'tutor_schedule', 'tutor_schedule_save',
+                          'tutor_students_list', 'tutor_schedule', 'tutor_schedule_save', 'tutor_schedule_multi', 'tutor_location_save', 'tutor_location_hours_save',
                           'admin_credits', 'admin_credit_adjust', 'admin_leave_withdraw',
                           'admin_matching_current', 'admin_matching_notified', 'admin_import_unmark_checked',
                           -- 2026-11-08 검토: 첫 줄에서 is_admin()(운영자 TOTP) 또는 lms_screen_tutor(강사 본인·운영자) 확인

@@ -1,6 +1,7 @@
 'use client';
 
 // 강사 화면 미리보기 (?demo=1): 가짜 데이터, 저장은 이 화면 안에서만
+import { mondayOf } from '@/lms/tutor/schedule';
 import { useMemo, useState } from 'react';
 import type { NewStudentRequest } from '@/lms/tutor/updates';
 import { fakeHours, fakeScheduleStore, fakeStudentProfile, fakeTutorScreen } from '@/lms/tutor/fake';
@@ -62,8 +63,24 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
         close.forEach((k) => { h.cells[k] = 'b'; });
         open.forEach((k) => { delete h.cells[k]; });
       },
+      // 이동 기간 (H26(173)) — 이 화면 안에서만
+      saveLocation: async (id, city, country, timezone, from, to) => {
+        const h = data.h;
+        if (id) {
+          const l = h.locations.find((x) => x.id === id)!;
+          l.to = to;
+          return { ...l };
+        }
+        const l = { id: `loc${Date.now()}`, city: city ?? '', country: country ?? '', timezone: timezone ?? 'UTC', from: from ?? '', to, monday: mondayOf(from ?? ''), weeklyOpen: [], weeklyClasses: [] };
+        h.locations = [...h.locations, l].sort((a, b) => (a.from < b.from ? -1 : 1));
+        return { ...l };
+      },
+      saveLocationHours: async (id, weekly) => {
+        const l = data.h.locations.find((x) => x.id === id);
+        if (l) l.weeklyOpen = weekly;
+      },
     },
-    schedule: { load: sched.load, save: sched.save },
+    schedule: { load: sched.load, save: sched.save, multi: sched.multi },
     profile: {
       load: async (id) => fakeStudentProfile(id, new Date(nowIso)),
       save: async () => {},

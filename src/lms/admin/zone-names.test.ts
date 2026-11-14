@@ -12,8 +12,9 @@ describe('수강생 안내 시각 모양', () => {
     expect(koAt(at, 'America/Detroit')).toBe('11월 12일(목) 오후 7시 [디트로이트 시간] / 11월 13일(금) 오전 9시 [한국 시간]');
     expect(koZoneCity('Asia/Singapore')).toBe('싱가포르');
   });
-  it('DB 메일 표(20261108100000 lms_mail_ko_zone)가 화면 표와 같음', () => {
-    const sql = readFileSync('supabase/migrations/20261108100000_lms_mail_time_zone_label.sql', 'utf8');
+  it('DB 메일 표(lms_mail_ko_zone, 마지막 판 20261114120000)가 화면 표와 같음', () => {
+    // 표를 다시 만든 마지막 migration 기준 (20261114120000 아르헨티나 추가)
+    const sql = readFileSync('supabase/migrations/20261114120000_lms_tutor_travel_locations.sql', 'utf8').split('create or replace function lms_mail_ko_zone')[1];
     const map = new Map([...sql.matchAll(/when '([^']+)' then '([^']+)'/g)].map((m) => [m[1], m[2]]));
     for (const r of ZONE_ROWS.filter((x) => x.timezone !== 'Asia/Seoul')) expect([r.timezone, map.get(r.timezone)]).toEqual([r.timezone, koZoneCity(r.timezone)]);
     expect(map.size).toBe(ZONE_ROWS.length - 1);
