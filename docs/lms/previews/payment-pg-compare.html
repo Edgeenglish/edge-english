@@ -1,0 +1,305 @@
+<title>홈페이지 결제 연동 비교안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 결정 질문 → 흐름 → 화면별 [PC 브라우저 | 휴대폰] 한 쌍 → 개발·대표 할 일. 색은 홈페이지(노랑 수강신청)·LMS 로그인(보라) 그대로 */
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--accent:#5b3df0;--navy:#1b1442;--q:#efeafe;
+--ok:#e6f6ec;--ok-fg:#1f7a4d;--warn:#fff4d6;--warn-fg:#5c3b00;--err:#c4302b;--soft:#f3f1f8;--yellow:#FFD401;--yellow-fg:#333;--kakao:#FEE500;--kakao-fg:#191600;--phone:#fbfaff;--nav:#9a98a6;
+--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--navy:#c9bfff;--q:#2a2540;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--err:#ff8a80;--soft:#2a2935;--phone:#1b1a24;--nav:#8a8799;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--navy:#c9bfff;--q:#2a2540;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--err:#ff8a80;--soft:#2a2935;--phone:#1b1a24;--nav:#8a8799;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;
+padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:1080px;margin:0 auto;display:grid;gap:28px}
+h1{font-size:24px;margin:0;text-wrap:balance}
+h2{font-size:19px;margin:0;text-wrap:balance}
+p{margin:0}
+.lead{color:var(--muted);margin-top:6px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.q{background:var(--q);border:0}
+.qs{display:grid;gap:14px;margin:12px 0 0;padding-left:22px}
+.qs b{display:block}
+.opt{color:var(--muted);font-size:14px;margin-top:2px}
+.rec{color:var(--accent);font-weight:700}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px;margin-top:10px}
+.flow span{background:var(--soft);border-radius:999px;padding:4px 10px}
+.flow i{color:var(--muted);font-style:normal}
+.scene{display:grid;gap:10px}
+.scene .cap{font-size:14px;color:var(--muted)}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+@media (max-width:820px){.pair{grid-template-columns:minmax(0,1fr)}}
+.lbl{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.04em;margin-bottom:6px}
+/* PC 브라우저 */
+.pc{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg)}
+.pc-bar{display:flex;gap:6px;align-items:center;padding:8px 12px;background:var(--soft);border-bottom:1px solid var(--line)}
+.pc-bar span{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.pc-bar em{font-style:normal;font-size:12px;color:var(--muted);margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hdr{display:flex;align-items:center;gap:22px;padding:12px 18px;background:var(--card);border-bottom:1px solid var(--line);min-width:0}
+.logo{font-weight:800;font-size:16px;color:var(--fg);white-space:nowrap}
+.nav{display:flex;gap:16px;font-size:13px;color:var(--nav);flex:1;min-width:0;overflow:hidden;white-space:nowrap}
+.acts{display:flex;gap:8px;align-items:center;white-space:nowrap}
+.lnk{font-size:13px;font-weight:600;color:var(--fg);padding:6px 4px}
+.ybtn{background:var(--yellow);color:var(--yellow-fg);font-weight:700;font-size:13px;border-radius:8px;padding:7px 12px}
+.pc-body{padding:28px 16px 40px;display:grid;justify-items:center}
+.pc-body .card{width:100%;max-width:400px}
+/* 휴대폰 */
+.ph{background:var(--phone);border:1px solid var(--line);border-radius:28px;overflow:hidden;min-height:520px}
+.ph .hdr{gap:10px;padding:12px 14px}
+.burger{width:22px;display:grid;gap:4px}.burger i{height:2px;background:var(--fg);border-radius:2px;display:block}
+.ph-body{padding:18px 14px 26px}
+/* 카드 안 */
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 16px;display:grid;gap:10px}
+.card h4{margin:0 0 2px;font-size:20px}
+.sm{font-size:12.5px;color:var(--muted);line-height:1.5}
+.field{display:grid;gap:4px}
+.field label{font-size:13px;font-weight:600}
+.input{min-height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:14px;background:var(--card)}
+.input.filled{color:var(--fg)}
+.input.bad{border-color:var(--err)}
+.input small{font-size:12px;color:var(--muted)}
+.errt{color:var(--err);font-size:12.5px;font-weight:600}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;border-radius:12px;font-weight:700;font-size:15px;width:100%}
+.p{background:#5b3df0;color:#fff}
+.k{background:var(--kakao);color:var(--kakao-fg)}
+.ghost{background:transparent;color:var(--muted);font-weight:600;font-size:13.5px;min-height:36px}
+.links{display:flex;justify-content:center;gap:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.links b{color:var(--fg)}
+.or{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.chk{display:flex;gap:8px;align-items:center;font-size:13.5px}
+.chk i{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--accent);background:var(--accent);flex:none;position:relative}
+.chk i::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.chk span{flex:1}
+.chk u{color:var(--muted);font-size:12.5px}
+.code{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.code span{height:44px;border:1.5px solid var(--line);border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;background:var(--card)}
+.steps{font-size:12px;color:var(--muted);font-weight:600}
+.steps b{color:var(--accent)}
+.good{background:var(--ok);color:var(--ok-fg);border-radius:12px;padding:10px 12px;font-size:13.5px;font-weight:600}
+.empty{display:grid;gap:8px;justify-items:center;text-align:center;padding:8px 0}
+.empty .big{font-weight:700;font-size:16px}
+.hl{outline:2px dashed var(--accent);outline-offset:3px;border-radius:8px}
+.qtag{display:inline-block;background:var(--accent);color:#fff;border-radius:999px;font-size:11px;font-weight:700;padding:0 7px;margin-left:4px;vertical-align:1px}
+ul.plain{margin:8px 0 0;padding-left:20px;display:grid;gap:6px}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:1px 6px;margin-right:4px}
+.t-ok{background:var(--ok);color:var(--ok-fg)}
+.t-no{background:var(--soft);color:var(--muted)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:13.5px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+thead th{background:var(--soft);font-size:13px}
+tbody th{font-weight:700;white-space:nowrap;color:var(--muted);font-size:13px}
+tr:last-child td,tr:last-child th{border-bottom:0}
+td.best{background:var(--q)}
+.un{color:var(--warn-fg);background:var(--warn);border-radius:5px;padding:0 5px;font-size:12px;font-weight:700;white-space:nowrap}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+.sum .box{padding:14px}
+.sum h3{margin:0 0 4px;font-size:16px}
+.row{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.row b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.total{border-top:1px solid var(--line);padding-top:8px;font-size:16px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg span{border:1.5px solid var(--line);border-radius:10px;padding:9px 8px;text-align:center;font-size:13.5px;font-weight:600}
+.seg span.on{border-color:var(--accent);color:var(--accent);background:var(--q)}
+.pc-body.two{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;justify-items:stretch;align-items:start;padding:22px 18px 30px}
+.pc-body.two .card{max-width:none}
+.flowv{display:grid;gap:8px;margin-top:10px;font-size:14px}
+.flowv div{display:flex;gap:10px;align-items:flex-start}
+.flowv em{font-style:normal;flex:none;background:var(--soft);border-radius:6px;padding:1px 8px;font-size:12px;font-weight:700;color:var(--muted);min-width:64px;text-align:center}
+.flowv .auto em{background:var(--ok);color:var(--ok-fg)}
+.flowv .man em{background:var(--warn);color:var(--warn-fg)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+</style>
+<div class="wrap">
+
+<header>
+  <h1>홈페이지 결제 연동 비교안</h1>
+  <p class="lead">정책 원본 H26(179) 첫 단계 · 2026-11-14 · 개발은 대표 승인 뒤. <span class="un">미확인</span> 표시는 나이스페이·업체 확인 전 값입니다.</p>
+</header>
+
+<section class="box q">
+  <h2>대표 결정 4가지</h2>
+  <ol class="qs">
+    <li><b>결제 방식</b><div class="opt"><span class="rec">B. 나이스페이 직접 연동 (권장)</span> / C. 토스페이먼츠 새 계약 / D. 포트원 + 나이스페이</div></li>
+    <li><b>계좌이체</b><div class="opt"><span class="rec">대표 계좌 직접 입금 유지 (권장)</span> — 운영진이 입금 확인 버튼 1번 / 가상계좌 — 입금 자동 확인, 건당 수수료 <span class="un">미확인</span></div></li>
+    <li><b>결제 전 로그인</b><div class="opt"><span class="rec">필수 (권장)</span> — 결제가 학생 계정에 바로 붙어 자동 등록 가능, 카카오 버튼 1번 / 비회원 결제 — 결제 뒤 운영진이 학생과 연결</div></li>
+    <li><b>나이스페이 확인 메일</b><div class="opt">아래 '먼저 확인할 것' 7가지를 Claude가 support@ 메일로 나이스페이에 문의 — 대표 '보내' 뒤 발송</div></li>
+  </ol>
+</section>
+
+<section class="box">
+  <h2>지금 사실 (support@ 메일·운영 DB 확인)</h2>
+  <ul class="plain">
+    <li>나이스페이 계약: 2026-01 <b>아임웹 연동형</b> OK전자계약 · 상호 '탠저린 영어' · 등록 주소 <b>tangerineenglish.imweb.me</b> · 업종 <b>'영어 전자책'</b> · 디지털 상품이라 보증보험 필수(월 정산한도 = 보험 가입금액)</li>
+    <li>지금 결제 순서(POL-PAY-02): 아임웹 카드 링크 또는 계좌이체 → 구글폼 신청서 → 카카오톡 채널 → 운영진이 LMS에 결제 직접 입력</li>
+    <li>운영 DB 결제 기록 4건: 카드 1 · 계좌이체 3 (11/7 LMS 오픈 뒤 기록분만이라 비율 판단엔 부족) · 학생 13명 중 해외 시간대 3명</li>
+    <li>정책 기준표 POL-PAY-07 '새 PG·결제 시스템을 만들지 않음'은 H26(179)와 다름 → 승인되면 기준표를 고칩니다</li>
+  </ul>
+</section>
+
+<section>
+  <h2>바뀌는 흐름 (B 기준)</h2>
+  <div class="cols" style="margin-top:12px">
+    <div class="box">
+      <div class="lbl">지금</div>
+      <div class="flowv">
+        <div class="man"><em>학생</em><span>아임웹 결제 페이지로 이동해 카드 결제 (또는 계좌이체)</span></div>
+        <div class="man"><em>학생</em><span>구글폼 신청서 작성 (입금자명 등)</span></div>
+        <div class="man"><em>학생</em><span>카카오톡 채널로 알림</span></div>
+        <div class="man"><em>운영진</em><span>아임웹 관리자·통장 확인 → LMS에 결제·수강권 직접 입력</span></div>
+        <div class="man"><em>운영진</em><span>적립금 쓰려면 금액 따로 조정 (카드 연계 방법 미정, POL-PAY-10)</span></div>
+      </div>
+    </div>
+    <div class="box">
+      <div class="lbl">B 이후</div>
+      <div class="flowv">
+        <div class="auto"><em>학생</em><span>홈페이지 로그인 → 수강신청(코스·기간·희망 시간) → 같은 화면에서 결제</span></div>
+        <div class="auto"><em>자동</em><span>나이스페이 승인 → LMS에 결제·수강권 기록, 적립금 차감, 학생·운영진 메일</span></div>
+        <div class="man"><em>운영진</em><span>강사·시간 배정만 (지금과 같음)</span></div>
+        <div class="auto"><em>운영진</em><span>환불은 LMS 결제 줄에서 [취소] → 나이스페이 부분취소까지 한 번에</span></div>
+        <div class="man"><em>운영진</em><span>계좌이체 학생만 [입금 확인] 1번 (결정 2에서 직접 입금 유지 시)</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>비교</h2>
+  <p class="lead">A는 지금 방식(비교 기준). 권장 칸은 보라 바탕.</p>
+  <div class="tw" style="margin-top:10px">
+  <table>
+    <thead><tr><th></th><th>A. 아임웹 유지</th><th>B. 나이스페이 직접 연동</th><th>C. 토스페이먼츠 새 계약</th><th>D. 포트원 + 나이스페이</th></tr></thead>
+    <tbody>
+      <tr><th>계약·심사</th><td>그대로</td><td class="best">기존 계약 활용. 등록 주소·업종 변경 또는 새 상점 아이디 필요한지 <span class="un">미확인</span>. 카드사 심사 최대 10영업일(나이스페이 1월 안내)</td><td>새 계약 + 카드사 심사 + 보증보험 새로</td><td>포트원 가입 + 나이스페이 쪽은 B와 같은 확인</td></tr>
+      <tr><th>카드 수수료</th><td>지금 계약 요율</td><td class="best">지금 계약 요율 그대로 (요율 <span class="un">미확인</span>)</td><td>매출 등급별, 신규 사업자 평균 3%대(업체 블로그 기준) <span class="un">미확인</span></td><td>B와 같음 + 포트원 이용료 <span class="un">미확인</span></td></tr>
+      <tr><th>추가 고정비</th><td>아임웹 요금 계속</td><td class="best">없음 (전환 뒤 아임웹 요금 해지 가능, 금액 <span class="un">미확인</span>)</td><td>가입비·연 관리비 있을 수 있음(업체 블로그: 가입비 약 22만·연 11만) <span class="un">미확인</span></td><td>포트원 요금제 <span class="un">미확인</span></td></tr>
+      <tr><th>개발량 (추정)</th><td>없음</td><td class="best">중간: 수강신청·주문 표, 결제창 호출, 서버 승인, 웹훅, 자동 수강권, 취소 API</td><td>B와 비슷 (문서가 쉬워 약간 적음)</td><td>B보다 약간 적음, 대신 포트원 설정·연결 한 겹 더</td></tr>
+      <tr><th>학생 불편</th><td>아임웹으로 나갔다 오기 + 구글폼 + 카톡 3곳</td><td class="best">홈페이지 한 곳. 결제창만 나이스페이 창(PC는 겹쳐 뜨는 창, 휴대폰은 전체 화면 뒤 복귀)</td><td>B와 같음 (토스 결제창)</td><td>B와 같음</td></tr>
+      <tr><th>운영진 업무</th><td>결제마다 확인·입력</td><td class="best">카드 결제는 입력 0. 강사 배정만</td><td>B와 같음</td><td>B와 같음</td></tr>
+      <tr><th>적립금 사용 (POL-PAY-10)</th><td>미해결</td><td class="best">결제 금액에서 바로 차감 → 해결</td><td>해결</td><td>해결</td></tr>
+      <tr><th>위험</th><td>H26(179)와 반대 방향</td><td class="best">아임웹 연동형 계약을 직접 연동에 못 쓰면 새 상점 아이디·심사 필요</td><td>계약을 처음부터 다시</td><td>업체 하나 더 의존. PG를 여러 개 쓸 계획이 없으면 이점 작음</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="lead" style="margin-top:8px">권장 이유: 이미 계약·심사를 거친 나이스페이를 쓰면 새 계약 비용·기간이 가장 적고, 중간 업체(D) 없이 Vercel 서버 + Supabase로 바로 연결됩니다. 나이스페이 확인 결과 새 계약이 필요하면 그때 C와 다시 비교합니다.</p>
+</section>
+
+<section class="box">
+  <h2>먼저 확인할 것 (나이스페이, 개발 전)</h2>
+  <ol class="qs" style="gap:8px">
+    <li>아임웹 연동으로 받은 상점 아이디를 자체 홈페이지(edgeenglish.kr) API 결제에 그대로 쓸 수 있는지, 새 상점 아이디가 필요한지</li>
+    <li>등록 주소 변경(아임웹 → edgeenglish.kr) 절차·심사 기간</li>
+    <li>업종 '영어 전자책' → '화상영어 수업'·상호 '탠저린 영어' → 엣지영어 변경 필요 여부</li>
+    <li>지금 계약 카드 수수료율·정산 주기</li>
+    <li>보증보험 가입 상태와 월 정산한도 (넘으면 정산 보류)</li>
+    <li>카카오페이·네이버페이가 결제창에 포함되는지</li>
+    <li>해외 발급 카드 결제 가능 여부 (해외 거주 학생용)</li>
+  </ol>
+</section>
+
+<section class="scene">
+  <h2>결제 화면 시안 ① 수강신청 마지막 단계</h2>
+  <p class="cap">가격은 지금 홈페이지 가격표 값. 적립금 2,000원·희망 시간은 예시. 기간 할인(3개월·6개월)도 지금 가격표 계산 그대로.</p>
+  <div class="pair">
+    <div>
+      <div class="lbl">PC</div>
+      <div class="pc">
+        <div class="pc-bar"><span></span><span></span><span></span><em>edgeenglish.kr/apply</em></div>
+        <div class="hdr"><div class="logo">EDGE ENGLISH</div><div class="nav"><span>수강료</span><span>강사</span><span>후기</span><span>FAQ</span></div><div class="acts"><span class="lnk">내 수업</span></div></div>
+        <div class="pc-body two">
+          <div class="card">
+            <div class="steps">1 코스 › 2 희망 시간 › <b>3 결제</b></div>
+            <h4>결제</h4>
+            <div class="field"><label>수강 기간</label><div class="seg"><span>1개월 290,000원</span><span class="on">3개월 826,500원</span></div></div>
+            <div class="field"><label>적립금</label><div class="input filled">2,000원 사용 <small>보유 2,000원</small></div></div>
+            <div class="field"><label>결제 수단</label><div class="seg"><span class="on">카드·간편결제</span><span>계좌이체</span></div></div>
+            <div class="chk"><i></i><span>환불 규정·이용약관 동의 <u>[보기]</u></span></div>
+          </div>
+          <div class="card">
+            <div class="lbl" style="margin:0">주문 내용</div>
+            <div class="row"><span>40분 · 주 2회</span><b>3개월</b></div>
+            <div class="row"><span>희망 시간</span><b>화·목 오후 8:00 한국 시간</b></div>
+            <div class="row"><span>수강료</span><b>826,500원</b></div>
+            <div class="row"><span>적립금</span><b>−2,000원</b></div>
+            <div class="row total"><span>결제 금액</span><b>824,500원</b></div>
+            <div class="btn p">824,500원 결제하기</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="lbl">휴대폰</div>
+      <div class="ph">
+        <div class="hdr"><div class="burger"><i></i><i></i><i></i></div><div class="logo">EDGE ENGLISH</div></div>
+        <div class="ph-body">
+          <div class="card">
+            <div class="steps">1 코스 › 2 희망 시간 › <b>3 결제</b></div>
+            <h4>결제</h4>
+            <div class="row"><span>40분 · 주 2회</span><b>화·목 오후 8:00 한국 시간</b></div>
+            <div class="field"><label>수강 기간</label><div class="seg"><span>1개월<br>290,000원</span><span class="on">3개월<br>826,500원</span></div></div>
+            <div class="field"><label>적립금</label><div class="input filled">2,000원 사용 <small>보유 2,000원</small></div></div>
+            <div class="field"><label>결제 수단</label><div class="seg"><span class="on">카드·간편결제</span><span>계좌이체</span></div></div>
+            <div class="chk"><i></i><span>환불 규정·이용약관 동의 <u>[보기]</u></span></div>
+            <div class="row total"><span>결제 금액</span><b>824,500원</b></div>
+            <div class="btn p">824,500원 결제하기</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="scene">
+  <h2>결제 화면 시안 ② 결제 완료</h2>
+  <p class="cap">[결제하기] → 나이스페이 결제창(카드사 선택·인증) → 이 화면. 결제창 모양은 나이스페이 것이라 그리지 않았습니다.</p>
+  <div class="pair">
+    <div>
+      <div class="lbl">PC</div>
+      <div class="pc">
+        <div class="pc-bar"><span></span><span></span><span></span><em>edgeenglish.kr/apply/done</em></div>
+        <div class="hdr"><div class="logo">EDGE ENGLISH</div><div class="nav"><span>수강료</span><span>강사</span><span>후기</span><span>FAQ</span></div><div class="acts"><span class="lnk">내 수업</span></div></div>
+        <div class="pc-body">
+          <div class="card">
+            <div class="good">결제했어요</div>
+            <div class="row"><span>40분 · 주 2회 · 3개월</span><b>824,500원</b></div>
+            <div class="row"><span>결제</span><b>11/14(토) 오후 11:40 한국 시간</b></div>
+            <div class="row"><span>다음 단계</span><b>강사·시간 확정 안내 메일</b></div>
+            <div class="btn p">내 수업으로</div>
+            <div class="links"><span>영수증</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="lbl">휴대폰</div>
+      <div class="ph" style="min-height:0">
+        <div class="hdr"><div class="burger"><i></i><i></i><i></i></div><div class="logo">EDGE ENGLISH</div></div>
+        <div class="ph-body">
+          <div class="card">
+            <div class="good">결제했어요</div>
+            <div class="row"><span>40분 · 주 2회 · 3개월</span><b>824,500원</b></div>
+            <div class="row"><span>결제</span><b>11/14(토) 오후 11:40 한국 시간</b></div>
+            <div class="row"><span>다음 단계</span><b>강사·시간 확정 안내 메일</b></div>
+            <div class="btn p">내 수업으로</div>
+            <div class="links"><span>영수증</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="box">
+  <h2>승인 뒤 개발 순서 (B 기준)</h2>
+  <ol class="qs" style="gap:8px">
+    <li>나이스페이 시험 상점(샌드박스) 키로 시험 사이트에서 결제·취소 전체 시험 — 실제 돈 안 나감, 계약 확인과 동시에 시작 가능</li>
+    <li>수강신청·주문 표(시험 DB) → 결제 승인 → 결제·수강권 자동 기록 → 메일</li>
+    <li>운영자 보기: 주문 목록·[취소]·계좌이체 [입금 확인]</li>
+    <li>나이스페이 운영 키·주소 변경 끝나면 운영 반영. 그동안 아임웹 결제는 그대로 둠</li>
+  </ol>
+  <p class="lead" style="margin-top:8px">할부 개월·결제 대기 시간 같은 숫자는 개발 때 대표께 여쭙니다.</p>
+</section>
+
+</div>
