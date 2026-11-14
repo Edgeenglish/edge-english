@@ -28,6 +28,7 @@ const COUNTRIES: [string, string, string, string, string[]][] = [
   ['스페인', 'Spain', '', 'Europe/Madrid', ['마드리드|Madrid', '바르셀로나|Barcelona']],
   ['아일랜드', 'Ireland', '', 'Europe/Dublin', ['더블린|Dublin']],
   ['폴란드', 'Poland', '', 'Europe/Warsaw', ['바르샤바|Warsaw', '크라쿠프|Krakow']],
+  ['아르헨티나', 'Argentina', '', 'America/Argentina/Buenos_Aires', ['부에노스아이레스|Buenos Aires', '코르도바|Córdoba', '로사리오|Rosario', '멘도사|Mendoza|America/Argentina/Mendoza']],
 ];
 const POPULAR = ['한국', '미국', '캐나다', '호주', '뉴질랜드', '영국', '일본', '싱가포르'];
 

@@ -44,8 +44,9 @@ async function copy(text: string): Promise<boolean> {
   try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
 }
 
-export default function StudentProfile({ studentId, actions, onClose, now, backLabel, followupPending = null, onFollowup }: {
+export default function StudentProfile({ studentId, actions, onClose, now, backLabel, followupPending = null, onFollowup, zoneOf }: {
   studentId: string; actions: ProfileActions; onClose: () => void; now: Date;
+  /** 수업 시각의 강사 지역 (이동 기간, H26(176)). 없으면 강사 시간대 */ zoneOf?: (t: Date, home: string) => string;
   /** 어디서 열었는지에 맞춘 뒤로 가기 글자 (QA UX: Students 에서 열면 'Back to students') */ backLabel?: string;
   /** 첫 수업 후 To-do 남은 수 (4600, Home 목록 기준). null = 모름 → 프로필의 followup 으로 판단 */ followupPending?: number | null;
   /** [First lesson follow-up] 버튼 → 그 창으로 */ onFollowup?: () => void;
@@ -162,10 +163,10 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
                 {p.nextSlots.length > 0 && (() => { const nk = slotsIn(p.nextSlots, 'Asia/Seoul', p.nextSlots[0].from); const nm = slotsIn(p.nextSlots, tz, p.nextSlots[0].from); return (
                   <Row k={`From ${enDate(p.nextSlots[0].from)}`} v={<b className="text-[#5b3fe0]">{tz !== 'Asia/Seoul' ? <>{nm.text} <Rich text={bold(enZone(tz))} /> / </> : null}{nk.text} <Rich text={bold('KST')} /></b>} />
                 ); })()}
-                {next && <Row k="Next class" v={<><Rich text={enBoth(next.startsAt, tz)} />{next.substitute ? ' · cover class' : ''}</>} />}
+                {next && <Row k="Next class" v={<><Rich text={enBoth(next.startsAt, zoneOf ? zoneOf(next.startsAt, tz) : tz)} />{next.substitute ? ' · cover class' : ''}</>} />}
                 {notes.map((n) => <p key={n} className="pt-1 text-[12.5px] text-[#a35b00]">{n}</p>)}
               </>
-            ) : <Row k="Class days / time" v={next ? <><Rich text={enBoth(next.startsAt, tz)} /> (cover class)</> : NP} />}
+            ) : <Row k="Class days / time" v={next ? <><Rich text={enBoth(next.startsAt, zoneOf ? zoneOf(next.startsAt, tz) : tz)} /> (cover class)</> : NP} />}
             <Row k="Google Docs" v={s.classNoteUrl ? <a href={s.classNoteUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#5b3fe0] underline">Open class notes ↗</a> : NP} />
           </Section>
 

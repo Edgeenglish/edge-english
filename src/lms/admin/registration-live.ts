@@ -27,7 +27,7 @@ export async function loadRegTutors(sb: SupabaseClient, now: Date): Promise<RegT
   const until = addDays(today, 200); // 24주 등록 + 여유
   const [tutors, avail, lessons, off, schedules, ends] = await Promise.all([
     all(() => sb.from('tutors').select('id, name, country, timezone').eq('active', true).order('name')),
-    all(() => sb.from('tutor_availability').select('tutor_id, weekday, start_local, end_local, timezone, effective_from, effective_to')),
+    all(() => sb.from('tutor_availability').select('tutor_id, weekday, start_local, end_local, timezone, effective_from, effective_to').is('location_id', null)),   // 이동 기간 시간표 제외 = Regular 만 (H26(173))
     all(() => sb.from('lessons').select('id, tutor_id, kind, starts_at, ends_at, student:students(name_ko)').neq('state', 'canceled').gte('kst_date', from).lte('kst_date', until)),
     all(() => sb.from('tutor_time_off').select('id, tutor_id, starts_at, ends_at, reason').gte('ends_at', `${from}T00:00:00+09:00`)),
     // 재등록 대기 (A22): 고정 시간 + 수강생별 결제 확인·수강 중 등록의 마지막 종료일

@@ -16,16 +16,21 @@ import { ALL_HOURS, cityTime, localToInstant } from '@/lms/tutor/hours-view';
 import { classFill, plusDays, toMin } from '@/lms/tutor/hours';
 import {
   addMonth, blockAt, cellKind, dayItems, dayTag, dayText, inZone, lessonTag, localInstant, mondayOf, monthGrid, monthTitle, NOTE_HELP, NOTE_MAX, otherZone,
-  runFrom, slotText, slotTime, sourceKey, spanText, weekTitle, whenSpan, type CellKind, type DayItem, type ScheduleAction, type ScheduleBlock, type ScheduleData, isExtraCell,
+  runFrom, slotText, slotTime, spanText, weekTitle, whenSpan, type CellKind, type DayItem, type ScheduleAction, type ScheduleBlock, type ScheduleData, isExtraCell,
 } from '@/lms/tutor/schedule';
 import { KOREA_TIME, minutesOf, statusText, type TutorLesson } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
 import { ampmEn } from '@/lms/rules/dates';
 import { useDetailBack } from './useDetailBack';
+import SetMultipleDays, { type MultiAction } from './SetMultipleDays';
+import { homeText, zoneAt, zoneBadge, zoneOn } from '@/lms/tutor/travel';
+import { keyOf } from '@/lms/tutor/schedule';
 
 export type ScheduleActions = {
   load: (from: string, to: string, cells: boolean) => Promise<ScheduleData>;
   save: (action: ScheduleAction, cells: string[] | null, note: string | null, blockId: string | null) => Promise<void>;
+  /** [Set Multiple Days] (H26(173)) */
+  multi: MultiAction;
 };
 
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
@@ -68,14 +73,19 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   // 마지막 보기·시간대를 이 기기에 기억 (H26(49) ④). 시간대는 Availability 와 같은 선택
   const [view, setView] = useSavedValue<'month' | 'week'>('lms_tutor_schedule_view', 'month', ['month', 'week']);
   const [zonePref, setZone] = useSavedValue<'local' | 'kst'>('lms_tutor_hours_zone', 'local', ['local', 'kst']);
-  const korea = zonePref === 'kst' && tz !== 'Asia/Seoul';
-  const viewZone = korea ? 'Asia/Seoul' : tz;
-  const viewLabel = korea ? KOREA_TIME : cityTime(tz);
-  const other = otherZone(viewZone, tz);
-  const todayView = inZone(now, viewZone).date;
-  const [anchor, setAnchor] = useState(todayView);
-  const [selected, setSelected] = useState(todayView);
   const [data, setData] = useState<ScheduleData | null>(null);
+  const locs = data?.locations ?? [];
+  const [anchor, setAnchor] = useState(() => inZone(now, zonePref === 'kst' ? 'Asia/Seoul' : tz).date);
+  const [selected, setSelected] = useState(anchor);
+  // 보는 현지 시간 = 그 날짜에 있는 지역 (이동 기간이면 그 지역, H26(173), QA 11/14: 고른 날짜·열마다). 칸 키도 그 날짜 지역 현지 (keyOf)
+  const zoneOfDate = (date: string) => zoneOn(locs, date, tz);
+  const korea = zonePref === 'kst' && !(tz === 'Asia/Seoul' && locs.length === 0);
+  /** 그 날짜를 보는 시간대 */
+  const vz = (date: string) => (korea ? 'Asia/Seoul' : zoneOfDate(date));
+  const vlabel = (date: string) => (korea ? KOREA_TIME : cityTime(zoneOfDate(date)));
+  const otherOf = (date: string) => otherZone(vz(date), zoneOfDate(date));
+  const todayView = inZone(now, korea ? 'Asia/Seoul' : zoneAt(locs, now, tz)).date;
+  const [multiOpen, setMultiOpen] = useState(false);
   const [lessons, setLessons] = useState<TutorLesson[]>([]);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
@@ -92,6 +102,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const month = anchor.slice(0, 7);
   const monday = mondayOf(anchor);
   const grid = view === 'month' ? monthGrid(month) : Array.from({ length: 7 }, (_, i) => plusDays(monday, i));
+  // 주 보기 머리글: 그 주 날짜들의 지역 (두 지역이면 'Toronto Time / Buenos Aires Time')
+  const weekZones = [...new Set((view === 'week' ? grid : [selected]).map((d) => cityTime(zoneOfDate(d))))].join(' / ');
   const from = grid[0];
   const to = grid[grid.length - 1];
 
@@ -119,14 +131,14 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const live = lessons.filter((l) => l.state !== 'canceled');
   /** 그 칸(보는 시간대 date·time 부터 30분)에 걸친 수업 */
   const lessonIn = (date: string, time: string) => {
-    const a = +localToInstant(date, time, viewZone);
+    const a = +localToInstant(date, time, vz(date));
     return live.find((l) => +l.startsAt < a + 30 * 60000 && a < +l.endsAt) ?? null;
   };
   const kindsOf = (date: string, src: ScheduleData): CellKind[] =>
-    ALL_HOURS.map((t) => cellKind(sourceKey(date, t, viewZone, tz), src, !!lessonIn(date, t)));
-  const xsOf = (date: string, src: ScheduleData): boolean[] => ALL_HOURS.map((t) => isExtraCell(sourceKey(date, t, viewZone, tz), src));
-  const keysOf = (date: string, a: number, b: number) => Array.from({ length: b - a }, (_, i) => sourceKey(date, slotTime(a + i), viewZone, tz));
-  const at = (date: string, i: number) => localToInstant(date, slotTime(i), viewZone);
+    ALL_HOURS.map((t) => cellKind(keyOf(date, t, vz(date), src.locations, tz), src, !!lessonIn(date, t)));
+  const xsOf = (date: string, src: ScheduleData): boolean[] => ALL_HOURS.map((t) => isExtraCell(keyOf(date, t, vz(date), src.locations, tz), src));
+  const keysOf = (date: string, a: number, b: number) => Array.from({ length: b - a }, (_, i) => keyOf(date, slotTime(a + i), vz(date), locs, tz));
+  const at = (date: string, i: number) => localToInstant(date, slotTime(i), vz(date));
   const lastLocal = data?.last ?? to;
 
   function move(n: number) {
@@ -150,7 +162,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       const src = await actions.load(plusDays(date, -1), plusDays(date, 1), true);
       const kinds = kindsOf(date, src);
       const want = mode === 'block' ? 'free' : 'closed';
-      const first = span ? Math.max(0, Math.round((toMin(inZone(span.at, viewZone).time) - toMin(ALL_HOURS[0])) / 30)) : kinds.indexOf(want);
+      const first = span ? Math.max(0, Math.round((toMin(inZone(span.at, vz(date)).time) - toMin(ALL_HOURS[0])) / 30)) : kinds.indexOf(want);
       const last = span ? first + Math.max(1, Math.round((+span.end - +span.at) / 1800000)) : first + 1;
       if (kinds.every((k) => k === 'far' || k === 'outside')) {
         // 12주 밖 날짜 (R-21): '닫힌 시간 없음' 이 아니라 기간 제한 안내 (저장 함수도 같은 이유로 거절)
@@ -202,7 +214,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     if (k === 'request' || k === 'answered') { const r = lockReason(k)!; return setDialog({ kind: 'info', title: r.title, body: r.body }); }
     if (k === 'locked') return setDialog({ kind: 'info', title: 'Can’t change', body: 'Can’t change: less than 6 hours away.' });
     if (k === 'outside') {
-      return setDialog({ kind: 'info', title: "Can't open", body: cantOpenHelp(data.times, tz) });
+      return setDialog({ kind: 'info', title: "Can't open", body: cantOpenHelp(data.times, zoneOfDate(selected)) });
     }
     if (k === 'far') return setDialog({ kind: 'info', title: 'Can’t change yet', body: `You can change times up to 12 weeks ahead (until ${dayText(data.last)}).` });
   }
@@ -234,12 +246,12 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     if (view !== 'week' || !scroller.current || firstRow >= 48) return;
     const row = scroller.current.querySelector<HTMLElement>(`[data-row="${firstRow}"]`);
     if (row) scroller.current.scrollTop = Math.max(0, row.offsetTop - 36);
-  }, [view, monday, viewZone, firstRow]);
+  }, [view, monday, korea, firstRow]);
 
   function weekCell(date: string, i: number, kinds: CellKind[]) {
     const k = kinds[i];
     const t = slotTime(i);
-    const label = `${dayText(date)} ${ampmEn(t)} ${viewLabel}`;
+    const label = `${dayText(date)} ${ampmEn(t)} ${vlabel(date)}`;
     const sel = drag && drag.date === date && i >= Math.min(drag.a, drag.b) && i <= Math.max(drag.a, drag.b);
     const handlers = {
       onPointerDown: (e: React.PointerEvent) => {
@@ -255,7 +267,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     if (k === 'class') {
       const l = lessonIn(date, t);
       if (!l) return <span className={cellBase} style={{ background: '#5b3fe0' }} />;
-      const s = inZone(l.startsAt, viewZone);
+      const s = inZone(l.startsAt, vz(date));
       const sMin = s.date === date ? toMin(s.time) : -1440;
       const first = sMin >= i * 30;
       const f = classFill(sMin, minutesOf(l), i * 30);
@@ -301,35 +313,39 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const header = (
     <div className="mb-2 grid gap-2 lg:flex lg:flex-wrap lg:items-center">
       <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between lg:mr-auto">
-        <h1 className="text-[20px] font-bold text-[#1d1b2b] lg:mr-3">{TUTOR_MENU.schedule}</h1>
+        <div className="flex w-full items-center justify-between gap-2 lg:w-auto">
+          <h1 className="text-[20px] font-bold text-[#1d1b2b] lg:mr-3">{TUTOR_MENU.schedule}</h1>
+          <button type="button" disabled={!data} onClick={() => setMultiOpen(true)} className={`${btnMain} shrink-0 px-3 text-[14px] lg:hidden`}>Set Multiple Days</button>
+        </div>
         <Seg value={view} onChange={(v) => setView(v)} options={[['month', 'Month'], ['week', 'Week']]} className="lg:hidden" />
       </div>
       <div className="flex items-center gap-2">
         <button type="button" aria-label={view === 'month' ? 'Previous month' : 'Previous week'} disabled={loading} onClick={() => move(-1)} className={`${btnSub} shrink-0 px-3`}>‹</button>
         <p aria-live="polite" className="min-w-0 flex-1 text-center text-[15px] font-semibold text-[#1d1b2b] lg:min-w-[150px]">
-          {view === 'month' ? monthTitle(month) : <>{weekTitle(monday)}<span className="font-normal text-[#6b6880] lg:hidden"> · {korea ? 'KST' : cityTime(tz)}</span></>}
+          {view === 'month' ? monthTitle(month) : <>{weekTitle(monday)}<span className="font-normal text-[#6b6880] lg:hidden"> · {korea ? 'KST' : weekZones}</span></>}
         </p>
         <button type="button" aria-label={view === 'month' ? 'Next month' : 'Next week'} disabled={loading} onClick={() => move(1)} className={`${btnSub} shrink-0 px-3`}>›</button>
         <button type="button" onClick={goToday} className={`${btnSub} shrink-0 px-3 text-[14px]`}>Today</button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Seg value={view} onChange={(v) => setView(v)} options={[['month', 'Month'], ['week', 'Week']]} className="hidden lg:inline-flex" />
-        {tz !== 'Asia/Seoul' && (
-          <Seg value={korea ? 'kst' : 'local'} onChange={(v) => setZone(v)} options={[['local', cityTime(tz)], ['kst', KOREA_TIME]]} check />
+        <button type="button" disabled={!data} onClick={() => setMultiOpen(true)} className={`${btnMain} hidden shrink-0 lg:inline-block`}>Set Multiple Days</button>
+        {!(tz === 'Asia/Seoul' && locs.length === 0) && (
+          <Seg value={korea ? 'kst' : 'local'} onChange={(v) => setZone(v)} options={[['local', view === 'week' ? weekZones : cityTime(zoneOfDate(selected))], ['kst', KOREA_TIME]]} check />
         )}
       </div>
     </div>
   );
 
   // 그날 목록 (Month 에서 날짜 누름)
-  const items = dayItems(selected, viewZone, lessons, data);
+  const items = dayItems(selected, vz(selected), lessons, data);
   const inRange = data ? selected >= todayView && selected <= plusDays(lastLocal, korea ? 1 : 0) : false;
   const dayPanel = (
     <section ref={dayRef} aria-label={`${dayText(selected)} schedule`} className="scroll-mb-[90px] rounded-[14px] border border-[#e6e3ef] bg-white p-3">
       <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{dayText(selected)}{selected === todayView ? ' · Today' : ''}</h2>
       {items.length === 0 && <p className="mb-2 text-[14px] text-[#6b6880]">No classes</p>}
       <ul className="mb-3 grid gap-1.5">
-        {items.map((it) => <DayRow key={`${it.kind}-${+it.at}-${it.kind === 'lesson' ? it.lesson.id : ''}`} item={it} zone={viewZone} onOpen={() => {
+        {items.map((it) => <DayRow key={`${it.kind}-${+it.at}-${it.kind === 'lesson' ? it.lesson.id : ''}`} item={it} zone={vz(selected)} onOpen={() => {
           if (it.kind === 'lesson') setDialog({ kind: 'lesson', lesson: it.lesson });
           else if (it.kind === 'block' && it.block.kind === 'block') { setSaveErr(''); setDialog({ kind: 'blocked', block: it.block, note: it.block.note ?? '' }); }
           else if (it.kind === 'block') setDialog({ kind: 'info', title: 'Leave', body: 'This time is in your leave.' });
@@ -352,7 +368,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
         </div>
         <div className="grid grid-cols-7">
           {grid.map((date) => {
-            const its = dayItems(date, viewZone, lessons, data);
+            const its = dayItems(date, vz(date), lessons, data);
             const tag = dayTag(its);
             const out = date.slice(0, 7) !== month;
             const ls = its.filter((x) => x.kind === 'lesson');
@@ -368,7 +384,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
                 {tag && <span className={`mt-0.5 block overflow-hidden rounded-[4px] py-px text-center text-[9px] font-bold leading-[10px] tracking-[-0.02em] lg:hidden ${tagColor(tag)}`}>{tag === 'Block' ? 'Closed' : tag}</span>}
                 {/* PC: 칸마다 수업 시각·학생 (H26(50) ⑥ A안) */}
                 <span className="mt-1 hidden gap-0.5 lg:grid">
-                  {its.map((x) => <MonthLine key={`${x.kind}-${+x.at}-${x.kind === 'lesson' ? x.lesson.id : ''}`} item={x} zone={viewZone} />)}
+                  {its.map((x) => <MonthLine key={`${x.kind}-${+x.at}-${x.kind === 'lesson' ? x.lesson.id : ''}`} item={x} zone={vz(date)} />)}
                 </span>
               </button>
             );
@@ -391,6 +407,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
           {grid.map((d, i) => (
             <div key={d} className={`sticky top-0 z-[2] py-1 text-center text-[12px] font-bold leading-tight ${d === todayView ? 'rounded-b-[6px] bg-[#5b3fe0] text-white' : 'bg-white text-[#55526a]'}`}>
               {WEEK_HEAD[i]}<small className="block text-[11px] font-semibold">{Number(d.slice(8))}</small>
+              {!korea && weekZones.includes(' / ') && <small className="block truncate text-[9.5px] font-semibold">{cityTime(zoneOfDate(d)).replace(/ Time$/, '')}</small>}
             </div>
           ))}
           {ALL_HOURS.map((t, i) => (
@@ -411,11 +428,22 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       <p className="mb-3 text-[13.5px] text-[#55526a]">
         View your classes and make one-time changes here. To update your regular hours, go to {onHours ? <button type="button" onClick={onHours} className="font-semibold text-[#5b3fe0] underline">{TUTOR_MENU.hours}</button> : <>{TUTOR_MENU.hours}</>}.
       </p>
-      {data && <TimeStatusLegend onHelp={() => setDialog({ kind: 'info', title: "Can't open", body: cantOpenHelp(data.times, tz) })} />}
+      {data && (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-[12px] bg-[#f6f4fb] px-3 py-2 text-[13.5px] text-[#1d1b2b]">
+          <span>Home location <b>{homeText(data.tutor.country, tz)}</b></span>
+          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[12px] font-semibold text-[#2b1c7a]">{zoneBadge(tz, data.today)}</span>
+        </div>
+      )}
+      {data && <TimeStatusLegend onHelp={() => setDialog({ kind: 'info', title: "Can't open", body: cantOpenHelp(data.times, zoneOfDate(selected)) })} />}
       {err && <p className="mb-3 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[14px] text-[#b3261e]">{err}</p>}
       {!data && !err && <p className="py-6 text-[15px] text-[#6b6880]">Loading…</p>}
       {data && view === 'month' && monthView}
       {data && view === 'week' && weekView}
+
+      {multiOpen && data && (
+        <SetMultipleDays home={tz} homeCountry={data.tutor.country} periods={data.locations} today={data.today} last={data.last}
+          multi={actions.multi} onClose={() => setMultiOpen(false)} onSaved={() => { void load(); void onSaved?.(); }} />
+      )}
 
       {toast && (
         <div role="status" className="fixed inset-x-0 bottom-[84px] z-50 flex justify-center lg:bottom-8">
@@ -442,8 +470,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
               return (
                 <>
                   <span className="w-fit rounded-[6px] bg-[#E9E8EF] px-1.5 py-0.5 text-[12px] font-bold text-[#55526a]">Closed</span>
-                  <p className="text-[15px] font-semibold text-[#1d1b2b]">{whenSpan(a, e, viewZone)}</p>
-                  {other && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(a, e, other)}</p>}
+                  <p className="text-[15px] font-semibold text-[#1d1b2b]">{whenSpan(a, e, korea ? 'Asia/Seoul' : zoneAt(locs, a, tz))}</p>
+                  {otherZone(korea ? 'Asia/Seoul' : zoneAt(locs, a, tz), zoneAt(locs, a, tz)) && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(a, e, otherZone(korea ? 'Asia/Seoul' : zoneAt(locs, a, tz), zoneAt(locs, a, tz))!)}</p>}
                   {!over && (
                     <>
                       <NoteField value={dialog.note} onChange={(v) => setDialog({ ...dialog, note: v })} />
@@ -465,8 +493,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
               return (
                 <>
                   {l.studentId && openProfile ? <button type="button" onClick={() => closeDialog(() => openProfile(l.studentId!))} className="w-fit rounded-[9px] bg-[#f3f1fa] px-3 py-2 text-[17px] font-semibold text-[#1d1b2b]">{l.student}</button> : <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>}
-                  <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(inZone(l.startsAt, tz).date)} {spanText(l.startsAt, l.endsAt, tz)}</b></p>
-                  {tz !== 'Asia/Seoul' && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(l.startsAt, l.endsAt, 'Asia/Seoul')}</p>}
+                  <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(inZone(l.startsAt, zoneAt(locs, l.startsAt, tz)).date)} {spanText(l.startsAt, l.endsAt, zoneAt(locs, l.startsAt, tz))}</b></p>
+                  {zoneAt(locs, l.startsAt, tz) !== 'Asia/Seoul' && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(l.startsAt, l.endsAt, 'Asia/Seoul')}</p>}
                   <p className="text-[14px] text-[#55526a]">
                     {minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''} · {statusText(l, now)}
                   </p>
@@ -490,7 +518,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     const starts = d.kinds.flatMap((k, i) => (k === want ? [i] : []));
     const run = runFrom(d.kinds, d.start, want);
     const a = at(d.date, d.start);
-    const b = d.end === 48 ? localToInstant(plusDays(d.date, 1), '00:00', viewZone) : at(d.date, d.end);
+    const b = d.end === 48 ? localToInstant(plusDays(d.date, 1), '00:00', vz(d.date)) : at(d.date, d.end);
     const isOpen = d.mode === 'open';
     // 고른 칸이 모두 '그날만 연 칸'이면 막기가 아니라 추가 개방 철회 — 메모를 받지 않음 (DB 가 그 열기만 거둠, QA-03)
     const removeExtra = !isOpen && d.end > d.start && d.xs.slice(d.start, d.end).every(Boolean);
@@ -499,8 +527,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       <>
         <strong className="text-[17px] text-[#1d1b2b]">{isOpen ? 'Make available' : removeExtra ? 'Remove extra hours' : 'Block time'}</strong>
         <div>
-          <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(d.date)}</b> · {isOpen ? 'This day only' : removeExtra ? 'Back to your usual weekly hours (closed)' : viewLabel}</p>
-          <p className="text-[13px] text-[#6b6880]">{spanText(a, b, viewZone)}{other ? ` · ${whenSpan(a, b, other)}` : ''}</p>
+          <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(d.date)}</b> · {isOpen ? 'This day only' : removeExtra ? 'Back to your usual weekly hours (closed)' : vlabel(d.date)}</p>
+          <p className="text-[13px] text-[#6b6880]">{spanText(a, b, vz(d.date))}{otherOf(d.date) ? ` · ${whenSpan(a, b, otherOf(d.date)!)}` : ''}</p>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <label className="block">

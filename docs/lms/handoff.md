@@ -2,6 +2,11 @@
 
 # 다음 세션 시작 메모
 
+## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(175) — 같은 날 강사 해외 이동 기록과 번호가 겹쳐 175 로 정정)
+- migration `20261114130000_student_reminder_default_regular_off`(students.remind_regular 기본값 false, 기존 학생 변경 없음) · `20261114140000_first_class_mail_reminder_setting_line`(lms_first_class_mail_student: 일정 변경 재안내 메일 제외, 첫 안내에만 '수업 알림 메일은 … 내 정보 › 이메일 알림 설정에서 켜고 끌 수 있어요.' 한 줄).
+- 운영 DB 백업 `lms_backup.snapshots` **54**(표 62 전체) · **55**(lms_first_class_mail_student 이전 정의, 되돌리기 = 그 정의로 create or replace). 기본값 되돌리기 = `alter table students alter column remind_regular set default true`.
+- 확인: 운영 기본값 remind_regular=false·remind_makeup=true, 학생 13명 중 정규 켬 1명(STU-0012, 운영자 대신 켬 기록 있음 — 대표 확인 대기). 시험 DB 문구 확인은 롤백 안에서 본문 출력으로 함(메일 안 나감).
+
 ## ✅ 11/13 강사 휴무 신청 (H26(137)) — **운영 반영 완료** (lms-prod 6c052b9, 운영 DB 백업 snapshots 50)
 - 운영 반영(대표 11/13 승인): 운영 DB(mfamixejxydodclhglbc) 백업 **snapshots id 50**(표 61 전체 + 바뀌는 함수 admin_leave_create·lms_leave_candidates 원래 정의 `_functions_before` + 새 객체 목록) → migration 20261113150000(커넥터 이름 lms_tutor_time_off_requests) → 표 62, 휴무 2·휴무 줄 18·수업 183·보강 신청 16·수강등록 15·기간 연장 4 그대로, 신청 0건(운영에서 시험 신청 안 만듦). 적용 전 운영 admin_leave_create·lms_leave_candidates 본문 = 저장소 0200·0100 판과 같음(주석만 다름)
 - 코드: origin/lms-prod(69db1c0)에서 브랜치 → a0b7848·56d7651 의 이 기능 파일만 적용(다른 세션 미반영 작업 안 섞음, live.ts 의 재등록 메일 '보냄' 코드는 운영판 그대로) → tsc 0 · vitest 458 · test:db 전부 통과 → lms-prod 6c052b9. main 은 손대지 않음(지각 알림 배포 때부터 main 0932ca9 그대로)
@@ -246,6 +251,18 @@
 ## ✅ 11/10 운영자 '저장 기록' 띠: 저장 완료 줄 자동 지움 — 정책 원본 H26(121) · **lms-test 반영, 운영 미반영(다음 운영 배포 때 같이, DB 변경 없음)** (브랜치 claude/busy-bohr-q9w22a)
 - `src/lms/admin/pending-saves.ts` `keepRows`: 저장할 때·읽을 때 status 'ok' 줄을 버림(이미 쌓인 옛 '저장 완료' 줄도 다음 읽기에서 사라짐). '저장 중'·'저장되지 않았어요'·'확인 필요' 줄만 남음. `PendingSavesBanner.tsx` 'ok' 표시 분기 제거
 - 시험: pending-saves.test 6 통과(keepRows 1개 추가), tsc·eslint 통과. 화면 클릭 확인은 안 함
+
+## ✅ 11/14 강사 해외 이동 기간 기능 — **시험 사이트·시험 DB 개발·검증 끝, 운영 미반영** · 정책 원본 H26(173)(174) (브랜치 claude/modest-fermi-ord1q5 → lms-test 3354e38)
+- 이름: H26(174) 참고 (평소 지역 줄 = Home location, 나머지 시안 그대로) · 시각 기준: H26(176)
+- migration **20261114120000_lms_tutor_travel_locations** (시험 DB 적용, 함수 16개 본문 = 저장소 파일 md5 같음 확인): `tutor_locations` 표(표 63개) · `tutor_availability.location_id`(null = Regular) · `lms_tutor_tz_on(날짜)`/`lms_tutor_location_at`/`lms_tutor_tz_at(시각)` · `lms_tutor_start_ok`(그 시각 지역 06:00~22:30) · `lms_tutor_weekly_ok`(이동 중엔 그 기간 줄만) · `lms_weekly_open`·`tutor_hours_save`(Regular 줄만) · `tutor_hours` + locations · 새 `tutor_location_save`(추가/종료일) · `tutor_location_hours_save` · `tutor_schedule`(칸 48개, 시작 못 하는 칸 'n', locations) · `tutor_schedule_save`(칸 검사 = start_ok) · 새 `tutor_schedule_multi`(Set Multiple Days 미리보기/적용, 두 지역이면 오류) · `lms_mail_ko_zone` 에 아르헨티나 2개
+- 화면: `TutorHours.tsx`(Home location 줄·탭·Add Temporary Location·Set end date·이력 '이동 기간'), 새 `TravelSheet.tsx`·`SetMultipleDays.tsx`·`src/lms/tutor/travel.ts`, `TutorSchedule.tsx`(보는 현지 시간 = 보고 있는 날짜의 지역, Set Multiple Days 버튼, Home location 줄), `places.ts` 아르헨티나, `registration-live.ts` 신규 매칭은 Regular 줄만
+- 시험: test:db 새 '강사 해외 이동 기간 시험' 36줄(`supabase/tests/tutor-travel-location.sql`) · vitest 471 · tsc · 시험 DB 실제 23줄(가짜 강사 Ben, 되돌림) · 데모 PC·iPhone 13 · **시험 사이트 실제 강사 Blair 계정**(임시 비밀번호 → 끝나고 무작위·세션 지움) PC: 이동 기간 추가(Buenos Aires 12/24~1/23) → 경고 → 월 16:00 저장 → Set Multiple Days 12/22~26 Split(Toronto 2일·BA 3일) → 적용, 휴대폰: 같은 범위 '이미 열림' 5일. DB 대조 맞음, 가로 밀림 0. **시험 데이터 남김**(Blair 위 내용)
+- 경계 규칙: 이동 첫날·마지막 날은 그 지역 현지 날짜. 서쪽으로 가면 하루 중 일부 시각이 어느 날짜에도 안 들어가고, 동쪽이면 겹침(칸 판정은 시각 기준이라 저장 오류는 없음)
+- ✅ 11/14 후속 H26(176): 강사 Home·강사 메일 수업 시각 = 그 수업 날짜에 설정된 지역. migration **20261114170000_lms_tutor_travel_lesson_zone**(시험 DB 적용, 처음 130000 으로 만들었다가 다른 세션 migration 번호와 두 번 겹쳐 170000 으로 바꿈): `tutor_travel_periods` + 강사 메일 함수 9개 본문의 `lms_mail_en_*(시각, tu.timezone)` → `lms_tutor_tz_at(tu.id, 시각)`(DO 블록이 서버 본문을 고쳐 다시 만듦, 함수 10개 md5 = 로컬). 화면: `TutorHome.tsx`(수업마다 zAt, 표 머리글과 다르면 줄에 시간대 이름)·`StudentProfile.tsx` 다음 수업·`screen.ts daysOf`. 시험 DB 실제 강사 메일 미리보기(되돌림): 이동 기간 넣으면 제목·Class 줄이 Buenos Aires Time, 기간 밖 시각(취소한 시각)은 그대로
+- ✅ 운영자 대리 등록 실제 화면(시험 사이트, e2e-admin TOTP → ?tutor=Blair, PC·iPhone 13): New York 2/2~2/8 추가 → 화 10:00 저장 → Set Multiple Days 2/3~5 적용, 이력 '운영자'. Blair 12/21 주 Class Record 에서 12/24부터 Buenos Aires 시각·줄에 시간대 이름(PC 칸 밀림 → 고침). 임시 비밀번호 끝나고 무작위·세션 지움. **시험 데이터 남김**: Blair New York 2/2~2/8
+- ✅ 11/14 독립 QA(ChatGPT Work) 5건 고침 H26(177): migration **20261114180000_lms_tutor_travel_qa_fixes**(시험 DB 적용, 함수 3개 md5 = 저장소) — Calendar 칸 키 = 그 날짜 지역 현지(`keyOf`, 경계 시각 '!')·경계 'n'·여러 날 등록 이유 zone·대기 요청 r/a. 화면: `TutorSchedule.tsx`(날짜·열마다 지역, 두 지역 주는 열 머리에 도시)·`TutorHome.tsx` CoverCard/MakeupCard/SuggestTimes 후보마다 zAt. 시험: test:db 해외 이동 46줄·vitest 474. 시험 사이트(운영진 시험 계정 ?tutor=Blair) 12/24 고르면 Buenos Aires Time·12/22 Toronto Time, 12/21 주 열 머리 Toronto/Buenos Aires, 칸 판정 DB 와 같음(PC·휴대폰)
+- 운영 배포 전: ChatGPT Work 재검증 → 대표 승인 → 운영 DB 백업 → migration 120000·170000·180000 → lms-prod
+- 남은 것: 운영자 보기(`?tutor=`) 실제 운영자 계정 클릭은 안 함(같은 화면·같은 함수, 이력 '운영자'는 로컬 DB 시험으로 확인) · 이동 기간 삭제 기능 없음(시안에 없음) · 운영 반영(대표 승인 → 운영 DB 백업 → migration → lms-prod)
 
 ## ✅ 11/9 학생 시간대 자동 확인 — 정책 원본 H26(119) · **시험 DB·lms-test 개발·검증 끝, 운영 미반영** (브랜치 claude/vibrant-pascal-sr9m94 → lms-test)
 - migration `20261109150000_lms_student_timezone` (시험 DB 적용): `students.tz_kept_device`([그대로] 누른 기기 시간대) 추가, `student_profile_edits.edited_role` 에 'student' 추가, 새 함수 `student_timezone(p_student, p_set, p_keep)` (학생 본인·운영자 같은 함수, 바꾸면 이력에 학생 본인/운영진으로 남김)
@@ -1381,3 +1398,9 @@
 - 시험 사이트 STU-0003 [+ 수업 추가] 목록: 첫 줄은 11/23(월) 수업분 · 수강생 미리 취소(보강 수업을 학생이 취소해 생긴 보강권), 12/7(월) 수업분 · 보강 수업은 목록 아래쪽 → 대표 시험 사이트 확인 통과(11/11)
 
 - 11/12 학생 화면 문구·이월 표시 개발(lms-test): 카드 '보강 수업'/'이월된 수업'·'원래 수업 날짜'·'사유'·버튼 '날짜 고르기'·홈 카드 '수업 날짜 고르기'·강사 Cover class ? 클릭 팝업. migration 20261112100000(student_screen carry_in) 시험 DB 적용, 운영 적용(11/12 lms_student_makeup_carry_in) · 코드 운영 반영. 결정 내용은 정책 원본 H26 참고.
+
+## ✅ 11/14 강사 To do 새 항목 메일 — 운영 반영 완료 (정책 원본 H26(172) 참고)
+- 운영 DB(mfamixejxydodclhglbc): 백업 `lms_backup.snapshots` **id 53**(표 62·학생 13) → migration `lms_tutor_todo_mails`(= 저장소 20261114000000: leave_items 칸 2개·schedule_plans 칸 1개·함수 3개·트리거 `leave_items_ask_mail_reset`·예약 `lms-tutor-todo-mail` 15분) → 코드 lms-prod·main **4f45b0b**(휴무 화면 '강사님에게 묻기' 위 자동 메일 상태 한 줄). 시작 기준 flag `tutor_todo_mail_since`(11/14 13:12 한국) 뒤에 새로 고른 대체강사부터 첫 메일+재촉 자동
+- 이번 한 번: 쌓여 있던 Olivia 대체 수업 요청 4건(12/23·12/28·12/30·1/4)에 시스템으로 첫 메일 1통 직접 실행(11/14 13:13 한국, 발송 sent, 문의 안내 줄 email_status sent·WhatsApp 카드 자동 보냄, 재촉은 생략 표시 `ask_nudged_at`)
+- 시험(시험 DB): 실제 함수로 첫 메일·재촉 26시간·답한 뒤 재촉 없음·이메일 없음 기록·다시 고르면 기록 초기화 통과. 신규 수강생 문의 재촉은 실제 신규 등록이 없어 글만 확인
+- 남음: 기록할 수업 하루 한 번 묶음 메일(기준 숫자 대표 결정 대기) · 재촉 뒤 무응답 운영진 알림(대표 결정 대기) · 운영에만 있는 커밋 4개(학생 지각 알림·강사 휴무 신청·수업 줄 용어 통일 등)가 lms-test 에 없음 — 다음 lms-test 배포 전에 합칠 것

@@ -5,6 +5,7 @@ import { addDays, ampmEn, formatInZone } from '../rules/dates';
 import { cityTime } from './hours-view';
 import { rangeText } from './hours';
 import { bold } from '../admin/time-text';
+import { parsePeriod, type TravelPeriod } from './travel';
 import type { ClassStatus } from '../rules/status';
 import { asClassType, CLASS_TYPE_EN, typeFromKind, type ClassType } from '../class-type';
 
@@ -79,6 +80,8 @@ export type TutorCover = { id: string; student: string; studentId?: string; star
 
 export type TutorScreen = {
   tutor: { id: string; name: string; timezone: string; meetUrl: string | null };
+  /** 이동 기간 (H26(173)(175)) — 수업 시각은 그 수업 날짜에 있는 지역 시간으로 */
+  locations: TravelPeriod[];
   lessons: TutorLesson[];
   toRecord: string[];
   makeups: TutorMakeup[];
@@ -91,6 +94,7 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
   const toRecord = new Set<string>(j.to_record ?? []);
   return {
     tutor: { id: j.tutor.id, name: j.tutor.name, timezone: j.tutor.timezone, meetUrl: j.tutor.meet_url ?? null },
+    locations: (j.locations ?? []).map(parsePeriod),
     lessons: (j.lessons ?? []).map((l: any) => ({
       id: l.id, startsAt: new Date(l.starts_at), endsAt: new Date(l.ends_at), kind: l.kind, state: l.state, classStatus: l.class_status ?? null,
       student: l.student, studentId: l.student_id ?? undefined, level: l.level ?? null, noteUrl: l.note_url ?? null, covering: !!l.covering, makeupOf: at(l.makeup_of),
@@ -198,10 +202,11 @@ export function weekOf(now: Date, tz: string, offset: number): { from: string; t
 
 export type Day = { date: string; lessons: TutorLesson[] };
 /** 그 주의 날짜별 수업 (수업 없는 날은 빼고) */
-export function daysOf(lessons: TutorLesson[], tz: string, week: { from: string; to: string }): Day[] {
+export function daysOf(lessons: TutorLesson[], tz: string | ((t: Date) => string), week: { from: string; to: string }): Day[] {
   const days = new Map<string, TutorLesson[]>();
   for (const l of [...lessons].sort((a, b) => +a.startsAt - +b.startsAt)) {
-    const d = localDate(l.startsAt, tz);
+    // 이동 기간이면 그 수업 날짜에 있는 지역 날짜 (H26(176))
+    const d = localDate(l.startsAt, typeof tz === 'string' ? tz : tz(l.startsAt));
     if (d < week.from || d > week.to) continue;
     days.set(d, [...(days.get(d) ?? []), l]);
   }

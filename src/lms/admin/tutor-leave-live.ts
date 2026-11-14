@@ -51,7 +51,7 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
   const [mk, mig, nt, rq] = await Promise.all([
     lessonIds.length ? sb.from('lessons').select('makeup_of, starts_at').in('makeup_of', lessonIds).neq('state', 'canceled') : Promise.resolve({ data: [], error: null }),
     migIds.length ? sb.from('migrated_items').select('id, lesson:lessons(starts_at)').in('id', migIds) : Promise.resolve({ data: [], error: null }),
-    ids.length ? sb.from('lesson_notices').select('id, leave_item_id, event, recipient_kind, recipient_id, status, sent_at, was_sent_at').in('leave_item_id', ids) : Promise.resolve({ data: [], error: null }),
+    ids.length ? sb.from('lesson_notices').select('id, leave_item_id, event, recipient_kind, recipient_id, status, sent_at, was_sent_at, email_status, email_to, email_intended, email_sent_at, email_error, email_attempts').in('leave_item_id', ids) : Promise.resolve({ data: [], error: null }),
     ids.length ? sb.from('makeup_requests').select('source_lesson_id, migrated_item_id, tutor_answered_at, candidates:makeup_candidates(tutor_answer)').in('status', ['requested', 'countered']) : Promise.resolve({ data: [], error: null }),
   ]);
   const rqRows = check(rq) as { source_lesson_id: string | null; migrated_item_id: string | null; tutor_answered_at?: string | null; candidates?: { tutor_answer: string | null }[] }[];
@@ -71,8 +71,10 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
     makeupDeclinedAll: declinedAll.has(r.lesson_id ?? r.migrated_item_id),
     lessonId: r.lesson_id, migratedItemId: r.migrated_item_id, lessonGone: !!r.lesson_gone_at,
   }));
-  const notices = (check(nt) as { id: string; leave_item_id: string; event: LvNotice['event']; recipient_kind: 'student' | 'tutor'; recipient_id: string; status: LvNotice['status']; sent_at: string | null; was_sent_at?: string | null }[])
-    .map((n) => ({ id: n.id, itemId: n.leave_item_id, event: n.event, recipientKind: n.recipient_kind, recipientId: n.recipient_id, status: n.status, sentAt: n.sent_at ? new Date(n.sent_at) : null, wasSentAt: n.was_sent_at ? new Date(n.was_sent_at) : null }));
+  const notices = (check(nt) as { id: string; leave_item_id: string; event: LvNotice['event']; recipient_kind: 'student' | 'tutor'; recipient_id: string; status: LvNotice['status']; sent_at: string | null; was_sent_at?: string | null;
+    email_status?: 'queued' | 'sent' | 'failed' | 'no_address' | null; email_to?: string | null; email_intended?: string | null; email_sent_at?: string | null; email_error?: string | null; email_attempts?: number | null }[])
+    .map((n) => ({ id: n.id, itemId: n.leave_item_id, event: n.event, recipientKind: n.recipient_kind, recipientId: n.recipient_id, status: n.status, sentAt: n.sent_at ? new Date(n.sent_at) : null, wasSentAt: n.was_sent_at ? new Date(n.was_sent_at) : null,
+      email: n.email_status ? { status: n.email_status, to: n.email_to ?? null, intended: n.email_intended ?? null, sentAt: n.email_sent_at ? new Date(n.email_sent_at) : null, error: n.email_error ?? null, attempts: n.email_attempts ?? 0 } : null }));
   return { items, notices };
 }
 

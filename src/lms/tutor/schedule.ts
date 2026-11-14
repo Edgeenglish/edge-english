@@ -6,13 +6,16 @@ import { ampmEn, formatInZone } from '../rules/dates';
 import { cityTime, localToInstant } from './hours-view';
 import { plusDays, rangeText, toMin, type CellCode } from './hours';
 import { kindTag, type TutorLesson } from './screen';
+import { parsePeriod, zoneAt, zoneOn, type TravelPeriod } from './travel';
 
 /** 칸 판정 (4403): My hours 와 같고 x = 매주 닫혔지만 그날만 연 칸 */
-export type ScheduleCode = CellCode | 'x' | 'a';   // a = 가능 답 보냄·운영진 확정 대기 (R-16, 4520)
+export type ScheduleCode = CellCode | 'x' | 'a' | 'n';   // a = 가능 답 보냄·운영진 확정 대기 (R-16, 4520) · n = 그 시각에 있는 지역 06:00~22:30 밖 (H26(173))
 export type ScheduleBlock = { id: string; kind: 'block' | 'leave'; start: string; end: string; note: string | null };
 export type ScheduleOpen = { start: string; end: string };
 export type ScheduleData = {
-  tutor: { id: string; name: string; timezone: string };
+  tutor: { id: string; name: string; timezone: string; country: string };
+  /** 이동 기간 (H26(173)) — 그 날짜에 보는 시간대 */
+  locations: TravelPeriod[];
   /** 강사 현지 오늘 · 막기·열기 마지막 날 (오늘 + 12주) */
   today: string;
   last: string;
@@ -28,7 +31,8 @@ export type ScheduleAction = 'block' | 'open' | 'note' | 'unblock';
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB 함수가 돌려주는 JSON 을 화면 모양으로 바꾸는 곳 */
 export function parseSchedule(j: any): ScheduleData {
   return {
-    tutor: { id: j.tutor.id, name: j.tutor.name, timezone: j.tutor.timezone },
+    tutor: { id: j.tutor.id, name: j.tutor.name, timezone: j.tutor.timezone, country: j.tutor.country ?? '' },
+    locations: (j.locations ?? []).map(parsePeriod),
     today: j.today,
     last: j.last,
     times: j.times ?? [],
@@ -102,6 +106,18 @@ export const whenSpan = (a: Date, b: Date, zone: string) => `${dayText(inZone(a,
 export const otherZone = (viewZone: string, tutorZone: string): string | null =>
   tutorZone === 'Asia/Seoul' ? null : viewZone === tutorZone ? 'Asia/Seoul' : tutorZone;
 
+/**
+ * 보는 날짜·시각 → DB 칸 키 (H26(173), QA 11/14). 칸 키는 '그 날짜에 있는 지역' 현지 날짜·시각.
+ * 현지 보기면 그대로, 한국 시간 보기면 그 시각에 있는 지역으로 바꿈. 그 지역 날짜가 이동 기간과 어긋나면 '!' 를 붙여 못 고르게
+ */
+export function keyOf(date: string, time: string, viewZone: string, periods: TravelPeriod[], home: string): string {
+  if (viewZone === zoneOn(periods, date, home)) return `${date}T${time}`;
+  const at = localToInstant(date, time, viewZone);
+  const z = zoneAt(periods, at, home);
+  const f = formatInZone(at, z);
+  return `${f.date}T${f.time}${zoneOn(periods, f.date, home) === z ? '' : '!'}`;
+}
+
 /** Week 칸 모양 (화면 판정은 편의, 저장 때 DB 가 다시 검사) */
 export type CellKind = 'free' | 'closed' | 'blocked' | 'class' | 'request' | 'answered' | 'leave' | 'locked' | 'outside' | 'past' | 'far';
 /** 그날만 연 칸(x)인지 — Block 창에서 '추가 개방 철회(Remove extra hours)' 로 구분 (QA-03) */
@@ -110,9 +126,11 @@ export function cellKind(key: string, d: ScheduleData, hasLesson: boolean): Cell
   if (hasLesson) return 'class';
   const date = key.slice(0, 10);
   if (date < d.today) return 'past';
-  if (!d.times.includes(key.slice(11, 16))) return 'outside';
+  // 칸 키 = 그 날짜에 있는 지역 현지 (H26(173), QA 11/14). '!' 로 끝나는 키 = 이동 경계라 어느 지역 날짜에도 속하지 않는 시각 (keyOf)
+  if (key.endsWith('!') || !d.times.includes(key.slice(11, 16))) return 'outside';
   if (date > d.last) return 'far';
   const c = d.cells?.[key] ?? 'o';
+  if (c === 'n') return 'outside';
   if (c === 'c') return 'class';
   if (c === 'r') return 'request';
   if (c === 'a') return 'answered';   // 가능 답 보냄 · 운영진 확정 대기 (R-16, 4520)

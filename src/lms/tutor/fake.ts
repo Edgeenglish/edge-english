@@ -5,6 +5,7 @@ import { hhmm, lessonAt, plusDays, toMin, type CellCode, type HoursData } from '
 import { NO_LATE, type TutorScreen } from './screen';
 import { localToInstant } from './hours-view';
 import type { ScheduleAction, ScheduleCode, ScheduleData } from './schedule';
+import type { MultiResult } from './travel';
 
 export function fakeTutorScreen(now: Date): TutorScreen {
   const h = (hours: number) => new Date(Math.floor(+now / 3600000) * 3600000 + hours * 3600000);
@@ -15,6 +16,7 @@ export function fakeTutorScreen(now: Date): TutorScreen {
   });
   return {
     tutor: { id: 'demo', name: 'Emma', timezone: 'Australia/Sydney', meetUrl: 'https://meet.google.com/' },
+    locations: [],
     lessons: [
       lesson('d1', -26, 40, { student: 'Seoyeon Park (Sarah)', studentId: 'demo-seoyeon', state: 'done', classStatus: 'Normal', topics: 'Travel plans, airports', count: { n: 5, total: 8 } }),
       lesson('d2', -3, 40, { count: { n: 6, total: 8 } }),
@@ -69,9 +71,9 @@ export function fakeHours(now: Date): HoursData {
   cells[`${plusDays(monday, 8)}T10:00`] = 'b';
   cells[`${plusDays(monday, 8)}T10:30`] = 'b';
   return {
-    tutor: { id: 'demo', name: 'Emma', timezone: tz }, from: plusDays(monday, 7), monday, times, weeklyOpen,
+    tutor: { id: 'demo', name: 'Emma', timezone: tz, country: 'Australia' }, from: plusDays(monday, 7), monday, times, weeklyOpen,
     weeklyClasses: [{ d: 1, time: '12:00', min: 50, student: 'Minjun Kim' }, { d: 3, time: '20:00', min: 50, student: 'Seoyeon Lee' }, { d: 4, time: '10:00', min: 25, student: 'Jiho Yoon' }],
-    cells, lessons, history: null,
+    cells, lessons, locations: [], history: null,
   };
 }
 
@@ -130,10 +132,14 @@ export function fakeScheduleStore(now: Date, hours: HoursData, lessons: TutorScr
       const cells: Record<string, ScheduleCode> = {};
       if (withCells) {
         for (let d = from < today ? today : from; d <= to && d <= last; d = plusDays(d, 1)) {
-          for (const t of times) { const c = code(`${d}T${t}`); if (c !== 'o') cells[`${d}T${t}`] = c; }
+          for (let i = 0; i < 48; i++) {
+            const t = hhmm(i * 30);
+            const c = times.includes(t) ? code(`${d}T${t}`) : 'n';
+            if (c !== 'o') cells[`${d}T${t}`] = c;
+          }
         }
       }
-      return { tutor: hours.tutor, today, last, times, cells: withCells ? cells : null, blocks: blocks.map((b) => ({ ...b })), opens: opens.map((o) => ({ ...o })) };
+      return { tutor: hours.tutor, today, last, times, cells: withCells ? cells : null, blocks: blocks.map((b) => ({ ...b })), opens: opens.map((o) => ({ ...o })), locations: hours.locations.map(({ id, city, country, timezone, from, to }) => ({ id, city, country, timezone, from, to })) };
     },
     save: async (action: ScheduleAction, keys: string[] | null, note: string | null, id: string | null) => {
       const ks = [...(keys ?? [])].sort();
@@ -145,6 +151,20 @@ export function fakeScheduleStore(now: Date, hours: HoursData, lessons: TutorScr
       const b = blocks.find((x) => x.id === id);
       if (action === 'note' && b) b.note = note?.trim() || null;
       if (action === 'unblock' && b) blocks.splice(blocks.indexOf(b), 1);
+    },
+    /** 여러 날 등록 미리보기: 평소 시간대 날짜만 칸 판정, 이동 기간 날짜는 모두 가능으로 */
+    multi: async (from: string, to: string, start: string, endT: string, apply: boolean): Promise<MultiResult> => {
+      const days: MultiResult['days'] = [];
+      for (let d = from; d <= to; d = plusDays(d, 1)) {
+        const ks: string[] = [];
+        for (let m = toMin(start); m < toMin(endT); m += 30) ks.push(`${d}T${hhmm(m)}`);
+        const cs = ks.map((k) => (d > last ? 'far' : code(k)));
+        const bad = cs.find((c) => ['c', 'p', 'far'].includes(c));
+        const ok = !bad && cs.some((c) => c === 's');
+        days.push({ date: d, ok, why: bad ?? (ok ? null : 'open'), classAt: bad === 'c' ? start : null });
+        if (ok && apply) opens.push({ start: ks[0], end: end(ks[ks.length - 1]) });
+      }
+      return { timezone: tz, days, ok: days.filter((x) => x.ok).length };
     },
   };
 }
