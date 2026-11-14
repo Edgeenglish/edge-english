@@ -2,11 +2,10 @@
 
 # 다음 세션 시작 메모
 
-## ⏳ 11/14 홈페이지 결제 연동 비교안 — **대표 결정 대기** (H26(179) 첫 단계, 코드·DB 변경 없음)
-- 시안: `docs/lms/previews/payment-pg-compare.html` (https://claude.ai/artifact/RQtE1sFcgQ1FbtvkP4uQo6)
-- 권장: B 나이스페이 직접 연동(서버 승인 + 웹훅, Vercel + Supabase). 대표 결정 4: ① 방식 B/C(토스)/D(포트원) ② 계좌이체 직접 입금 유지/가상계좌 ③ 결제 전 로그인 필수/비회원 ④ 나이스페이 확인 메일 발송('보내' 뒤)
-- 확인된 사실: 나이스페이 계약은 2026-01 아임웹 연동형 OK전자계약, 등록 주소 tangerineenglish.imweb.me, 업종 '영어 전자책', 보증보험 필수(support@ 메일). 직접 연동에 기존 상점 아이디 사용 가능 여부 미확인 → 나이스페이 확인 7가지(시안 '먼저 확인할 것')
-- 승인되면: 정책 원본 H26 기록 · 기준표 POL-PAY-07('새 PG 만들지 않음') 고침 · 샌드박스 키로 시험 사이트 개발 시작
+## ⏳ 11/14 홈페이지 결제 연동 — **나이스페이 답장 대기** (H26(179)(180), 코드·DB 변경 없음)
+- 시안: `docs/lms/previews/payment-pg-compare.html` (https://claude.ai/artifact/RQtE1sFcgQ1FbtvkP4uQo6). 대표 결정은 H26(180) 참고
+- 11/14 support@ → pghelp@nicepay.co.kr 문의 메일(8가지) 발송. **답장 오면** Gmail 에서 읽어 정리 → B 최종 확정 여부 대표 보고 → 확정 시 기준표 POL-PAY-07 고침 · 나이스페이 샌드박스 키로 시험 사이트 개발 시작
+- 나이스페이가 상호 변경을 안내하면: 상호는 '탠저린 영어' 그대로, 엣지영어는 홈페이지 브랜드명(바닥글 상호 이미 탠저린 영어)
 
 ## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(175) — 같은 날 강사 해외 이동 기록과 번호가 겹쳐 175 로 정정)
 - migration `20261114130000_student_reminder_default_regular_off`(students.remind_regular 기본값 false, 기존 학생 변경 없음) · `20261114140000_first_class_mail_reminder_setting_line`(lms_first_class_mail_student: 일정 변경 재안내 메일 제외, 첫 안내에만 '수업 알림 메일은 … 내 정보 › 이메일 알림 설정에서 켜고 끌 수 있어요.' 한 줄).
