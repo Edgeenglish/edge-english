@@ -17,7 +17,7 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
   });
   const [sched] = useState(() => fakeScheduleStore(new Date(nowIso), data.h, data.s.lessons));
   const actions = useMemo<TutorActions>(() => ({
-    load: async () => ({ ...data.s }),
+    load: async () => ({ ...data.s, locations: data.h.locations.map(({ id, city, country, timezone, from, to }) => ({ id, city, country, timezone, from, to })) }),
     record: async (id, r, topics, remarks, late) => {
       const s = data.s;
       const lt = lateToSave(r, late);
