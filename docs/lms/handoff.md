@@ -260,7 +260,8 @@
 - 경계 규칙: 이동 첫날·마지막 날은 그 지역 현지 날짜. 서쪽으로 가면 하루 중 일부 시각이 어느 날짜에도 안 들어가고, 동쪽이면 겹침(칸 판정은 시각 기준이라 저장 오류는 없음)
 - ✅ 11/14 후속 H26(176): 강사 Home·강사 메일 수업 시각 = 그 수업 날짜에 설정된 지역. migration **20261114170000_lms_tutor_travel_lesson_zone**(시험 DB 적용, 처음 130000 으로 만들었다가 다른 세션 migration 번호와 두 번 겹쳐 170000 으로 바꿈): `tutor_travel_periods` + 강사 메일 함수 9개 본문의 `lms_mail_en_*(시각, tu.timezone)` → `lms_tutor_tz_at(tu.id, 시각)`(DO 블록이 서버 본문을 고쳐 다시 만듦, 함수 10개 md5 = 로컬). 화면: `TutorHome.tsx`(수업마다 zAt, 표 머리글과 다르면 줄에 시간대 이름)·`StudentProfile.tsx` 다음 수업·`screen.ts daysOf`. 시험 DB 실제 강사 메일 미리보기(되돌림): 이동 기간 넣으면 제목·Class 줄이 Buenos Aires Time, 기간 밖 시각(취소한 시각)은 그대로
 - ✅ 운영자 대리 등록 실제 화면(시험 사이트, e2e-admin TOTP → ?tutor=Blair, PC·iPhone 13): New York 2/2~2/8 추가 → 화 10:00 저장 → Set Multiple Days 2/3~5 적용, 이력 '운영자'. Blair 12/21 주 Class Record 에서 12/24부터 Buenos Aires 시각·줄에 시간대 이름(PC 칸 밀림 → 고침). 임시 비밀번호 끝나고 무작위·세션 지움. **시험 데이터 남김**: Blair New York 2/2~2/8
-- 운영 배포 전: ChatGPT Work 독립 QA → 대표 승인 → 운영 DB 백업 → migration 120000·150000 → lms-prod
+- ✅ 11/14 독립 QA(ChatGPT Work) 5건 고침 H26(177): migration **20261114180000_lms_tutor_travel_qa_fixes**(시험 DB 적용, 함수 3개 md5 = 저장소) — Calendar 칸 키 = 그 날짜 지역 현지(`keyOf`, 경계 시각 '!')·경계 'n'·여러 날 등록 이유 zone·대기 요청 r/a. 화면: `TutorSchedule.tsx`(날짜·열마다 지역, 두 지역 주는 열 머리에 도시)·`TutorHome.tsx` CoverCard/MakeupCard/SuggestTimes 후보마다 zAt. 시험: test:db 해외 이동 46줄·vitest 474. 시험 사이트(운영진 시험 계정 ?tutor=Blair) 12/24 고르면 Buenos Aires Time·12/22 Toronto Time, 12/21 주 열 머리 Toronto/Buenos Aires, 칸 판정 DB 와 같음(PC·휴대폰)
+- 운영 배포 전: ChatGPT Work 재검증 → 대표 승인 → 운영 DB 백업 → migration 120000·170000·180000 → lms-prod
 - 남은 것: 운영자 보기(`?tutor=`) 실제 운영자 계정 클릭은 안 함(같은 화면·같은 함수, 이력 '운영자'는 로컬 DB 시험으로 확인) · 이동 기간 삭제 기능 없음(시안에 없음) · 운영 반영(대표 승인 → 운영 DB 백업 → migration → lms-prod)
 
 ## ✅ 11/9 학생 시간대 자동 확인 — 정책 원본 H26(119) · **시험 DB·lms-test 개발·검증 끝, 운영 미반영** (브랜치 claude/vibrant-pascal-sr9m94 → lms-test)
