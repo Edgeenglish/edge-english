@@ -83,7 +83,8 @@
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
-## 🧪 11/14 강사 '늦어요' 알림 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/fervent-goodall-826p9q, 시안 https://claude.ai/artifact/7YmptmNwBiGWEjWjNGReDM, 대표 11/14 문구 확정·'시스템에 넣어', 결정은 H26(169) + 11/14 문구는 H26 기록 대기)
+## ✅ 11/14 강사 '늦어요' 알림 — **운영 반영 완료** (대표 11/14 승인, 운영 DB 백업 snapshots 57, migration 20261114200000, lms-prod 032224c = 이 기능 커밋 3개만 lms-prod 0a7159e 위에 골라 얹음, 시안 https://claude.ai/artifact/7YmptmNwBiGWEjWjNGReDM)
+- 되돌리기: 코드 = lms-prod 를 0a7159e 로. DB = 함수 tutor_late_notice·tutor_late_notices·student_tutor_late_notices·lms_kst_short 만 drop, **tutor_late_notices 표는 기록이 있으면 보존**(대표 11/14)
 - 확정 문구 원본 = `src/lms/tutor/late.ts` + migration. 'LMS 알림' 대신 학생 홈 '다음 수업' 카드 노란 띠, 운영진은 별도 메일, 한 수업 1번, Schedule+Home 두 곳
 - migration **20261114200000_lms_tutor_late_notice** (시험 DB 적용): 표 tutor_late_notices(수업당 1줄, RLS·삭제 금지) · tutor_late_notice(강사 본인/운영자 p_tutor, 시작 2시간 전~시작 전, 학생 메일 + 운영진 메일) · tutor_late_notices · student_tutor_late_notices · lms_kst_short. 표 63→64 (02-check)
 - 화면: `RunningLate.tsx` → TutorSchedule 수업 창(Cancel class 아래) · TutorHome 오늘 수업 줄 아래 · Class Record 줄 펼침(Cancel class 다음). Home 오늘 수업에는 원래 Cancel class 가 없어 Running late 만 줄 아래(시안과 다른 점). 학생 StudentHome NextLesson 노란 띠
