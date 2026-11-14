@@ -6,6 +6,7 @@
 // - 저장은 한 번에 (DB 함수 admin_register_student). 같은 요청 번호라 여러 번 눌러도 1번만 생김
 // - 실제로 저장에 성공했을 때만 '등록 완료'. 미리보기(가상 데이터)는 저장하지 않음
 
+import { tutorZoneFn } from '@/lms/admin/tutor-zone';
 import Link from 'next/link';
 import ApplicationPicker from './ApplicationPicker';
 import { useEffect, useMemo, useState } from 'react';
@@ -44,7 +45,7 @@ import { proposalMessage, type PlanView } from '@/lms/admin/confirm';
 import type { PlanActions } from '@/lms/admin/confirm-live';
 import PlanCard, { TimeRows, type PlanHandlers } from '../../PlanCard';
 import { FinalLessons, ScheduleStepMobile, ScheduleStepPc } from './ScheduleStep';
-import { Badge, Card, EMPTY_FILTER, Field, inputCls, Legend, nowLocal, ProfileSheet, SearchPick, slotLocal, slotText, TutorPicker, WeekCalendar, wishWindows, type TutorFilter } from './parts';
+import { Badge, Card, EMPTY_FILTER, Field, inputCls, Legend, nowLocal, ProfileSheet, SearchPick, slotLocal, slotText, tutorTzAt, TutorPicker, WeekCalendar, wishWindows, type TutorFilter } from './parts';
 
 export type SaveResult =
   | {
@@ -265,6 +266,7 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
           tutorName: tutor.name,
           tutorPlace: tutor.country,
           tutorTz: tutor.timezone,
+          tutorZoneAt: tutorZoneFn(tutor.travel, tutor.timezone),
           slots,
           startDate: summary.startDate,
           endDate: summary.endDate,
@@ -556,13 +558,13 @@ export default function NewStudent({ nowIso, demo, applications, applicationsNot
         <div className="text-[14px] text-[#1d1b2b]">
           <b>{tutor.name}</b> · {tutor.country}
           <p className="text-[13px] text-[#6b6880]">
-            {tutor.timezone} · 지금 {nowLocal(tutor.timezone, now)} · {diffFromKst(now, tutor.timezone)}
+            {tutorTzAt(tutor, now)} · 지금 {nowLocal(tutorTzAt(tutor, now), now)} · {diffFromKst(now, tutorTzAt(tutor, now))}
           </p>
         </div>
       </div>
       {slots.length > 0 && firstDate && (
         <p className="mt-2 text-[13px] text-[#6b6880]">
-          강사 현지: {slots.filter((s) => s.time).map((s) => `${slotText(s)} → ${slotLocal(s, firstDate, tutor.timezone)}`).join(' · ')}
+          강사 현지: {slots.filter((s) => s.time).map((s) => `${slotText(s)} → ${slotLocal(s, firstDate, tutor)}`).join(' · ')}
         </p>
       )}
     </Card>

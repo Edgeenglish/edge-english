@@ -96,3 +96,23 @@ describe('첫 수업일', () => {
     expect(firstLessonDateOnOrAfter('2026-11-04', [])).toBeNull();
   });
 });
+
+describe('강사 해외 이동 기간 (H26(173)): 가능 판정 = 그 시각 지역의 시간표 (DB lms_tutor_weekly_ok 와 같은 규칙)', () => {
+  const travel = [{ id: 'ba', timezone: 'America/Argentina/Buenos_Aires', from: '2026-12-24', to: '2027-01-10' }];
+  const w = [
+    { weekday: 1, startLocal: '16:00', endLocal: '21:00', timezone: 'Australia/Sydney', effectiveFrom: '2026-11-16', effectiveTo: null, travel, periodId: null },
+    { weekday: 1, startLocal: '07:00', endLocal: '07:30', timezone: 'America/Argentina/Buenos_Aires', effectiveFrom: '2026-12-24', effectiveTo: null, travel, periodId: 'ba' },
+  ];
+  it('이동 기간 안: 평소(시드니) 시간은 막고, 그 기간 시간만 가능', () => {
+    expect(startsWithinAvailability(kstToInstant('2026-12-28', '18:00'), w)).toBe(false);   // 시드니 20:00 이지만 BA 06:00
+    expect(startsWithinAvailability(kstToInstant('2026-12-28', '19:00'), w)).toBe(true);    // BA 07:00
+  });
+  it('기간 밖(복귀 뒤)은 다시 평소 시간표', () => {
+    expect(startsWithinAvailability(kstToInstant('2027-01-11', '18:00'), w)).toBe(true);
+    expect(startsWithinAvailability(kstToInstant('2027-01-11', '19:00'), w)).toBe(true);    // 시드니 21:00 (끝 시각 포함)
+    expect(startsWithinAvailability(kstToInstant('2027-01-18', '19:30'), w)).toBe(false);
+  });
+  it('출발 날: 그 지역 현지 날짜로 판정 (BA 12/24 07:00 = 한국 12/24 19:00 → 이미 BA)', () => {
+    expect(startsWithinAvailability(kstToInstant('2026-12-21', '18:00'), w)).toBe(true);    // 출발 전 월요일은 시드니
+  });
+});

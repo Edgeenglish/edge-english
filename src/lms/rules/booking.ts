@@ -33,7 +33,32 @@ export type AvailabilityWindow = {
   timezone: string;
   effectiveFrom: KstDate;
   effectiveTo: KstDate | null;
+  /** 강사 해외 이동 기간 (H26(173)): 있으면 이 줄은 '그 시각에 있는 지역'이 맞을 때만 씀.
+   *  periodId 없음 = Regular 줄(이동 기간 밖에서만), 있음 = 그 이동 기간 시간표(그 기간 안에서만, 적용일은 기간이 정함). DB lms_tutor_weekly_ok 와 같은 규칙 */
+  travel?: readonly TravelSpan[];
+  periodId?: string | null;
 };
+/** 이동 기간 (날짜는 그 지역 현지, to = 마지막 날 포함, null = 끝 없음) */
+export type TravelSpan = { id: string; timezone: string; from: string; to: string | null };
+
+/** 그 시각이 든 이동 기간 id (그 지역 현지 날짜가 기간 안, 겹치면 늦게 시작한 것) → 없으면 null. DB lms_tutor_location_at 과 같은 규칙 */
+export function travelIdAt(spans: readonly TravelSpan[], at: Date): string | null {
+  let hit: TravelSpan | null = null;
+  for (const l of spans) {
+    const d = formatInZone(at, l.timezone).date;
+    if (l.from <= d && (!l.to || l.to >= d) && (!hit || l.from > hit.from)) hit = l;
+  }
+  return hit?.id ?? null;
+}
+/** 이 줄이 그 시각에 적용되는지 (적용일·이동 기간) */
+function windowOn(w: AvailabilityWindow, start: Date, kstDay: KstDate): boolean {
+  if (w.travel) {
+    const pid = travelIdAt(w.travel, start);
+    if (pid !== (w.periodId ?? null)) return false;
+    if (w.periodId) return true;   // 이동 기간 시간표는 기간이 적용일
+  }
+  return !(kstDay < w.effectiveFrom || (w.effectiveTo !== null && kstDay > w.effectiveTo));
+}
 
 const toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 
@@ -42,7 +67,7 @@ export function withinAvailability(start: Date, end: Date, windows: readonly Ava
   const kstDay = instantToKstDate(start);
   return windows.some((w) => {
     if (w.startOnly) return startsWithinAvailability(start, [w]);
-    if (kstDay < w.effectiveFrom || (w.effectiveTo !== null && kstDay > w.effectiveTo)) return false;
+    if (!windowOn(w, start, kstDay)) return false;
     const s = formatInZone(start, w.timezone);
     const e = formatInZone(new Date(end.getTime() - 1), w.timezone); // 끝 시각 직전이 같은 현지 날짜인지
     if (s.date !== e.date || weekdayOf(s.date) !== w.weekday) return false;
@@ -56,7 +81,7 @@ export function withinAvailability(start: Date, end: Date, windows: readonly Ava
 export function startsWithinAvailability(start: Date, windows: readonly AvailabilityWindow[]): boolean {
   const kstDay = instantToKstDate(start);
   return windows.some((w) => {
-    if (kstDay < w.effectiveFrom || (w.effectiveTo !== null && kstDay > w.effectiveTo)) return false;
+    if (!windowOn(w, start, kstDay)) return false;
     const s = formatInZone(start, w.timezone);
     if (weekdayOf(s.date) !== w.weekday) return false;
     const sm = toMin(s.time);

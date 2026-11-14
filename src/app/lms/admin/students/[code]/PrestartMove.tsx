@@ -6,6 +6,7 @@
 // - 저장 뒤: 한 줄 결과 + 수강생·강사 안내문 (접힌 칸을 펼치면 문구 전체 + [복사], H26(64))
 // - 검사·저장은 DB(admin_prestart_move): 수강 기간 안 · 같은 날 수업 없음 · 강사 휴무·다른 수업(휴식 10분)·현지 06:00~22:30·연 시간·재등록 대기
 
+import { koZoneName } from '@/lms/admin/time-text';
 import { useEffect, useState } from 'react';
 import { ampmKo, formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lms/rules/dates';
 import { dayLabel, localTime } from '@/lms/admin/schedule';
@@ -17,7 +18,8 @@ import DateInput from '../../DateInput';
 const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 const kstOf = (d: Date) => ({ date: instantToKstDate(d), time: formatInZone(d, 'Asia/Seoul').time });
 const label = (d: Date) => `${dayLabel(kstOf(d).date)} ${ampmKo(kstOf(d).time)}`;
-const local = (at: Date, tz: string) => (tz && tz !== 'Asia/Seoul' ? localTime(at, tz) : null);
+// 강사 현지 시각 + 시간대 이름 (해외 이동 기간이면 그 지역, H26(176))
+const local = (at: Date, tz: string) => (tz && tz !== 'Asia/Seoul' ? `${localTime(at, tz)} ${koZoneName(tz)}` : null);
 const copyCls = 'min-h-[44px] w-full rounded-[10px] border border-[#cfc4ff] bg-white px-3 text-[14px] font-semibold text-[#5b3fe0]';
 
 type Saved = { student: string; tutor: string; line: string };
@@ -26,6 +28,8 @@ export default function PrestartMove(p: {
   lessons: Upcoming[];
   period: { start: KstDate; end: KstDate };
   student: { nameEn: string; timezone: string; city: string | null };
+  /** 강사 이름 → 그 시각의 강사 시간대 (이동 기간이 있는 강사만) */
+  tutorZoneByName?: Record<string, (t: Date) => string>;
   move: (lessonId: string, startsAt: string) => Promise<unknown>;
   /** 이미 옮긴 수업: 수업 id → 처음 날짜(ISO) */
   loadMoved: () => Promise<Record<string, string>>;
@@ -72,7 +76,7 @@ export default function PrestartMove(p: {
     const to = kstToInstant(date, time);
     try {
       await p.move(l.id, to.toISOString());
-      const n = prestartMoveNotices({ studentNameEn: p.student.nameEn, studentTz: p.student.timezone, studentCity: p.student.city, tutorTz: l.tutorTz, from: l.startsAt, to });
+      const n = prestartMoveNotices({ studentNameEn: p.student.nameEn, studentTz: p.student.timezone, studentCity: p.student.city, tutorTz: l.tutorTz, tutorZoneAt: p.tutorZoneByName?.[l.tutor], from: l.startsAt, to });
       setSaved({ ...n, line: `${label(l.startsAt)} → ${dayLabel(date)} ${ampmKo(time)}` });
       setMoved((m) => ({ ...(m ?? {}), [l.id]: m?.[l.id] ?? l.startsAt.toISOString() }));
       setOpen(null);
@@ -88,7 +92,8 @@ export default function PrestartMove(p: {
     const k = kstOf(l.startsAt);
     const loc = local(l.startsAt, l.tutorTz);
     const first = firstOf(l);
-    const newLoc = !partial && date && time ? local(kstToInstant(date, time), l.tutorTz) : null;
+    const newAt = !partial && date && time ? kstToInstant(date, time) : null;
+    const newLoc = newAt ? local(newAt, p.tutorZoneByName?.[l.tutor]?.(newAt) ?? l.tutorTz) : null;
     return (
       <div key={l.id} className="border-b border-[#f0eef6] py-2.5 last:border-0">
         <div className="flex items-center gap-2">

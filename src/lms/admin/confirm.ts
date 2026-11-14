@@ -28,6 +28,8 @@ export type PlanView = {
   tutorName: string;
   tutorPlace: string; // '호주 시드니'
   tutorTz: string;
+  /** 그 시각의 강사 시간대 (해외 이동 기간, H26(173)(176)). 없으면 tutorTz */
+  tutorZoneAt?: (t: Date) => string;
   slots: RegularSlot[];
   startDate: KstDate;
   endDate: KstDate;
@@ -43,15 +45,20 @@ export type PlanView = {
   studentNotice: Notice | null;
 };
 
+/** 그 시각의 강사 시간대 (이동 기간이면 그 지역) */
+export const tutorTzAt = (v: Pick<PlanView, 'tutorTz' | 'tutorZoneAt'>, t: Date) => v.tutorZoneAt?.(t) ?? (v.tutorTz || 'Asia/Seoul');
+
 const EN_WD: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토' };
 const monFirst = (wd: number) => (wd + 6) % 7;
 
 /** 정규 시간 하나를 그 요일 첫 수업 날짜 기준으로 어느 시간대의 요일·시각으로 */
-function slotIn(s: RegularSlot, start: KstDate, tz: string) {
+function slotIn(s: RegularSlot, start: KstDate, tz: string | ((t: Date) => string)) {
   let d = start;
   while (weekdayOf(d) !== s.weekday) d = addDays(d, 1);
-  const f = formatInZone(kstToInstant(d, s.time), tz);
-  return { wd: EN_WD[f.weekday] ?? f.weekday, time: f.time };
+  const at = kstToInstant(d, s.time);
+  const z = typeof tz === 'string' ? tz : tz(at);
+  const f = formatInZone(at, z);
+  return { wd: EN_WD[f.weekday] ?? f.weekday, time: f.time, tz: z };
 }
 
 /** '수·금 오전 9:00' (같은 시각끼리 요일 묶음, 월요일부터). 영어 문구용은 '수·금 9:00 AM' (요일은 enDays 가 바꿈) */
@@ -63,17 +70,19 @@ function joinSlots(list: { wd: string; time: string; order: number }[], lang: 'k
     .join(', ');
 }
 
-export type TimeLine = { who: '한국' | '강사' | '수강생'; text: string; otherDay: boolean };
+/** tz = 그 줄의 시간대 (강사는 첫 수업 날짜 지역 — 이동 기간이면 그 지역) */
+export type TimeLine = { who: '한국' | '강사' | '수강생'; text: string; otherDay: boolean; tz: string };
 
 /** 한국 / 강사 / 수강생 세 줄. 강사·수강생이 한국 시간대면 그 줄은 빼고, 현지 요일이 한국과 다르면 otherDay */
-export function timeLines(v: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'studentTz'>, lang: 'ko' | 'en' = 'ko'): TimeLine[] {
+export function timeLines(v: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'studentTz' | 'tutorZoneAt'>, lang: 'ko' | 'en' = 'ko'): TimeLine[] {
   const slots = [...v.slots].sort((a, b) => monFirst(a.weekday) - monFirst(b.weekday));
   const kst = slots.map((s) => ({ wd: WEEKDAY_KO[s.weekday], time: s.time, order: monFirst(s.weekday) }));
-  const out: TimeLine[] = [{ who: '한국', text: joinSlots(kst, lang), otherDay: false }];
-  for (const [who, tz] of [['강사', v.tutorTz], ['수강생', v.studentTz]] as const) {
-    if (!tz || tz === 'Asia/Seoul') continue;
+  const out: TimeLine[] = [{ who: '한국', text: joinSlots(kst, lang), otherDay: false, tz: 'Asia/Seoul' }];
+  for (const [who, tz] of [['강사', v.tutorTz && v.tutorZoneAt ? v.tutorZoneAt : v.tutorTz], ['수강생', v.studentTz]] as const) {
+    if (!tz) continue;
     const loc = slots.map((s, i) => ({ ...slotIn(s, v.startDate, tz), order: i }));
-    out.push({ who, text: joinSlots(loc, lang), otherDay: loc.some((l, i) => l.wd !== kst[i].wd) });
+    if (!loc.length ? tz === 'Asia/Seoul' : loc.every((l) => l.tz === 'Asia/Seoul')) continue;
+    out.push({ who, text: joinSlots(loc, lang), otherDay: loc.some((l, i) => l.wd !== kst[i].wd), tz: loc[0]?.tz ?? (typeof tz === 'string' ? tz : 'Asia/Seoul') });
   }
   return out;
 }
@@ -110,16 +119,17 @@ function otherDates(v: PlanView) {
 const at = (x: LessonDate) => kstToInstant(x.date, x.time);
 
 /** 강사 안내 (영어): 정규와 다른 날 / 수업 없는 정규 요일 */
-function enOtherLines(v: PlanView, tz: string): string[] {
+function enOtherLines(v: PlanView): string[] {
   const d = otherDates(v);
   return [
-    d.added.length ? `Other days: ${d.added.map((x) => enBoth(at(x), tz)).join('; ')}` : '',
-    d.removed.length ? `No class (regular day): ${d.removed.map((x) => enDay(at(x), tz)).join('; ')}` : '',
+    d.added.length ? `Other days: ${d.added.map((x) => enBoth(at(x), tutorTzAt(v, at(x)))).join('; ')}` : '',
+    d.removed.length ? `No class (regular day): ${d.removed.map((x) => enDay(at(x), tutorTzAt(v, at(x)))).join('; ')}` : '',
   ];
 }
 
 function tutorLine(v: PlanView) {
-  const tz = v.tutorTz || 'Asia/Seoul';
+  const first = firstLessonAt(v);
+  const tz = first ? tutorTzAt(v, first) : v.tutorTz || 'Asia/Seoul';
   const local = timeLines({ ...v, studentTz: '' }, 'en').find((l) => l.who === '강사')?.text ?? timeLines(v, 'en')[0].text;
   // 도시 이름으로 (QA UX: 'your time' 만 쓰지 않음). 해외 강사는 한국 시간도 같이
   const kstLine = timeLines({ ...v, studentTz: '' }, 'en').find((l) => l.who === '한국')?.text;
@@ -133,8 +143,8 @@ export function proposalMessage(v: PlanView): string {
     `Hi ${v.tutorName}, new student request (not confirmed yet):`,
     `${v.studentNameEn}, ${v.durationMin} min, ${v.lessons} classes`,
     tutorLine(v),
-    first ? `First class: ${enBoth(first, v.tutorTz || 'Asia/Seoul')}` : '',
-    ...enOtherLines(v, v.tutorTz || 'Asia/Seoul'),
+    first ? `First class: ${enBoth(first, tutorTzAt(v, first))}` : '',
+    ...enOtherLines(v),
     'Can you take this?',
   ]
     .filter(Boolean)
@@ -143,15 +153,14 @@ export function proposalMessage(v: PlanView): string {
 
 /** 강사 최종 확정 (WhatsApp, 영어) */
 export function tutorConfirmMessage(v: PlanView): string {
-  const tz = v.tutorTz || 'Asia/Seoul';
   const first = firstLessonAt(v);
   const last = lastLessonAt(v);
   return [
     'CONFIRMED - new student',
     `${v.studentNameEn}, ${v.durationMin} min, ${v.lessons} classes`,
     tutorLine(v),
-    first ? `First class: ${enBoth(first, tz)}${last ? ` · last ${enDay(last, tz)}` : ''}` : '',
-    ...enOtherLines(v, tz),
+    first ? `First class: ${enBoth(first, tutorTzAt(v, first))}${last ? ` · last ${enDay(last, tutorTzAt(v, last))}` : ''}` : '',
+    ...enOtherLines(v),
     'Please add it to your schedule. Thank you!',
   ]
     .filter(Boolean)
@@ -169,7 +178,7 @@ function koOtherLines(v: PlanView, tz: string): string[] {
 
 /** 수강생 최종 확정 (카카오톡, 한국어). 해외 수강생은 현지 시각을 먼저, 한국 시각을 아래에 */
 export function studentConfirmMessage(v: PlanView): string {
-  const lines = timeLines({ ...v, tutorTz: '' });
+  const lines = timeLines({ ...v, tutorTz: '', tutorZoneAt: undefined });
   const kst = lines[0].text;
   const local = lines.find((l) => l.who === '수강생');
   const first = firstLessonAt(v);
@@ -209,9 +218,9 @@ export function sentLabel(at: Date): string {
 }
 
 /** 첫 수업 시작 전 개별 수업 날짜 변경 안내 (H26(62)): 수강생 카톡(한국어, 현지 먼저) · 강사 WhatsApp(영어, 강사 현지) */
-export function prestartMoveNotices(p: { studentNameEn: string; studentTz: string; studentCity: string | null; tutorTz: string; from: Date; to: Date }): { student: string; tutor: string } {
+export function prestartMoveNotices(p: { studentNameEn: string; studentTz: string; studentCity: string | null; tutorTz: string; tutorZoneAt?: (t: Date) => string; from: Date; to: Date }): { student: string; tutor: string } {
   const stz = p.studentTz || 'Asia/Seoul';
-  const ttz = p.tutorTz || 'Asia/Seoul';
+  const ttz = (t: Date) => p.tutorZoneAt?.(t) ?? (p.tutorTz || 'Asia/Seoul');
   const student = [
     '[엣지영어] 수업 날짜가 바뀌었어요',
     `이전: ${koBoth(p.from, stz)}`,
@@ -219,8 +228,8 @@ export function prestartMoveNotices(p: { studentNameEn: string; studentTz: strin
   ].join('\n');
   const tutor = [
     `Schedule change - ${p.studentNameEn}`,
-    `Previous: ${enBoth(p.from, ttz)}`,
-    `New: ${enBoth(p.to, ttz)}`,
+    `Previous: ${enBoth(p.from, ttz(p.from))}`,
+    `New: ${enBoth(p.to, ttz(p.to))}`,
     'Please update your schedule. Thank you!',
   ].join('\n');
   return { student, tutor };

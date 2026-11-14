@@ -59,6 +59,8 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
   const s = data.student;
   const e = data.enrollment;
   const slot = data.slots[0] ?? null;
+  // 강사 현지 매주 시간 = 다음 정규 수업 시각의 지역 (해외 이동 기간, H26(176))
+  const slotTz = slot ? (slot.tutorZoneAt?.(data.upcoming.find((u) => u.tutorId === slot.tutorId)?.startsAt ?? new Date()) ?? slot.tutorTz) : 'Asia/Seoul';
   // 결제 확인 전(pending_payment)은 수업·일정이 없으므로 '수강 예정·0/4회'가 아니라 '결제 확인 전 · 강사 배정 전'으로 (QA B-01)
   const status: StudentStatus = !e ? 'none' : e.status === 'completed' || e.status === 'canceled' || e.finalEndDate < today ? 'ended' : e.status === 'pending_payment' ? 'pending' : e.startDate > today ? 'upcoming' : 'active';
   const pending = status === 'pending';
@@ -147,7 +149,7 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
               <>
                 <Row k="한국 시간" v={<>{slotsText(data.slots)} · {slot!.durationMin}분</>} strong />
                 {s.timezone !== 'Asia/Seoul' && <Row k={`수강생 · ${koZone(s.timezone)}`} v={slotsInZone(data.slots, s.timezone, today)} />}
-                {slot!.tutorTz !== 'Asia/Seoul' && <Row k={`강사 ${slot!.tutor} · ${koZone(slot!.tutorTz)}`} v={slotsInZone(data.slots, slot!.tutorTz, today)} />}
+                {slotTz !== 'Asia/Seoul' && <Row k={`강사 ${slot!.tutor} · ${koZone(slotTz)}`} v={slotsInZone(data.slots, slotTz, today)} />}
                 <Row k="적용" v={`${md(slot!.from)}부터`} />
                 {data.nextSlots.length > 0 && <Row k={`${mdw(data.nextSlots[0].from)}부터 적용 예정`} v={<b className="text-[#5b3fe0]">{slotsText(data.nextSlots)} 한국 시간</b>} />}
                 <Row k="바뀐 기록" v={data.changes.length === 0 ? '없음' : <button type="button" className="font-semibold text-[#5b3fe0] underline" onClick={() => setSheet({ notice: data.changes[0].id })}>{data.changes.length}건 보기</button>} />
@@ -317,7 +319,7 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
           onSaved={async (changeId) => { await actions.reload(); setSheet({ notice: changeId }); }} />
       )}
       {sheet === 'prestart' && e && (
-        <PrestartMove lessons={regularAhead} period={{ start: e.startDate, end: e.finalEndDate }} student={{ nameEn: s.nameEn, timezone: s.timezone, city: s.city }}
+        <PrestartMove tutorZoneByName={data.tutorZoneByName} lessons={regularAhead} period={{ start: e.startDate, end: e.finalEndDate }} student={{ nameEn: s.nameEn, timezone: s.timezone, city: s.city }}
           move={actions.prestart} loadMoved={actions.prestartMoved} onSaved={actions.reload} onClose={() => setSheet(null)} />
       )}
       {sheet === 'extend' && e && <ExtendSheet enrollment={e} studentTz={s.timezone} today={today} extend={actions.extend} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
@@ -347,7 +349,7 @@ function NoticeSheet({ data, changeId, sent, reload, onClose }: { data: StudentD
   const c = data.changes.find((x) => x.id === cur) ?? data.changes[0];
   const s = data.student;
   if (!c) return null;
-  const ctx = { studentNameKo: s.nameKo ?? s.nameEn, studentNameEn: s.nameEn, studentTz: s.timezone, tutorName: c.tutor, tutorTz: c.tutorTz, durationMin: data.enrollment?.durationMin ?? data.slots[0]?.durationMin ?? 0, effectiveFrom: c.effectiveFrom, newSlots: c.newSlots, moved: c.moved };
+  const ctx = { studentNameKo: s.nameKo ?? s.nameEn, studentNameEn: s.nameEn, studentTz: s.timezone, tutorName: c.tutor, tutorTz: c.tutorTz, tutorZoneAt: data.tutorZoneByName?.[c.tutor], durationMin: data.enrollment?.durationMin ?? data.slots[0]?.durationMin ?? 0, effectiveFrom: c.effectiveFrom, newSlots: c.newSlots, moved: c.moved };
   const ko = regularNoticeKo(ctx);
   const en = regularNoticeEn(ctx);
   async function mark(who: 'student' | 'tutor', undo: boolean) {

@@ -4,6 +4,7 @@
 // 2026-10-22 대표: "너무 복잡하지 않게" → 한 화면: 수강생 요약 → 강사 → 주간 칸 → 첫 수업일 → [아직 → 제안 문구 복사] / [가능하대요 → 확정]
 // 등록 화면의 강사 고르기·캘린더를 그대로 씀. 저장은 DB 함수 admin_propose_schedule (같은 요청 번호면 1번만)
 
+import { tutorZoneFn } from '@/lms/admin/tutor-zone';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import DateInput from '../DateInput';
@@ -167,6 +168,7 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
           tutorName: tutor.name,
           tutorPlace: tutor.country,
           tutorTz: tutor.timezone,
+          tutorZoneAt: tutorZoneFn(tutor.travel, tutor.timezone),
           slots,
           startDate: lessonPlan?.startDate ?? firstDate,
           endDate: lessonPlan?.endDate ?? addDays(firstDate, (info.weeks / 4) * 28 - 1),

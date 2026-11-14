@@ -229,7 +229,7 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
     return [
       `Substitute request - ${i.studentNameEn} (${i.durationMin} min), not confirmed yet`,
       'One of our Edge English tutors is on leave. Are you available to teach these classes?',
-      ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, tz)}`),
+      ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, x.subTutorTz ?? tz)}`),
       "If you can't do all of them, please reply with the numbers you can do. Thank you!",
     ].join('\n');
   }
@@ -241,7 +241,7 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
   }
   return [
     `CONFIRMED substitute classes - ${i.studentNameEn} (${i.durationMin} min)`,
-    ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, tz)}`),
+    ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, x.subTutorTz ?? tz)}`),
     'Please add them to your schedule. Thank you!',
   ].join('\n');
 }
@@ -477,7 +477,7 @@ export function subAskBundleText(items: LvItem[]): string {
   return [
     'Substitute request - not confirmed yet',
     'One of our Edge English tutors is on leave. Are you available to teach these classes?',
-    ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, tz)} · ${x.studentNameEn} · ${x.durationMin} min`),
+    ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, x.subTutorTz ?? tz)} · ${x.studentNameEn} · ${x.durationMin} min`),
     "If you can't do all of them, please reply with the numbers you can do. Thank you!",
   ].join('\n');
 }

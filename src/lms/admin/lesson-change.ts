@@ -6,7 +6,7 @@ import { typeKo } from '../class-type';
 import { ampmKo, formatInZone, instantToKstDate, type KstDate } from '../rules/dates';
 import { CONFIRMED } from '../rules/policy';
 import { grantsMakeup, type ClassStatus } from '../rules/status';
-import { enBoth, koBoth } from './time-text';
+import { enBoth, koBoth, koZoneName } from './time-text';
 
 export type ChLesson = {
   id: string;
@@ -22,6 +22,8 @@ export type ChLesson = {
   tutorId: string;
   tutorName: string;
   tutorTz: string;
+  /** 그 시각의 강사 시간대 (해외 이동 기간) */
+  tutorZoneAt?: (t: Date) => string;
 };
 
 export type ChChange = {
@@ -126,6 +128,12 @@ export function tutorLocalLabel(at: Date, tz: string): string | null {
   if (!tz || tz === 'Asia/Seoul') return null;
   const f = formatInZone(at, tz);
   return `${Number(f.date.slice(5, 7))}/${Number(f.date.slice(8))} (${WD[new Date(`${f.date}T00:00:00Z`).getUTCDay()]}) ${ampmKo(f.time)}`;
+}
+/** 강사 현지 시각 + 시간대 이름 — 그 시각에 강사가 있는 지역 (해외 이동 기간, H26(176)). 한국이면 null */
+export function tutorLocalAt(at: Date, tz: string, zoneAt?: (t: Date) => string): string | null {
+  const z = zoneAt?.(at) ?? tz;
+  const l = tutorLocalLabel(at, z);
+  return l ? `${l} ${koZoneName(z)}` : null;
 }
 
 /** 운영진 보강 확정 사유 (대표 2026-11-08, 운영진만 보임) */
@@ -246,6 +254,8 @@ export type NoticeContext = {
   originalDate?: KstDate | null;
   tutorName: string;
   tutorTz: string;
+  /** 그 시각의 강사 시간대 (해외 이동 기간, H26(173)(176)). 없으면 tutorTz */
+  tutorZoneAt?: (t: Date) => string;
   /** 강사 노쇼 무료 보상수업 안내 (4100) */
   compensation?: boolean;
   /** 보강 시간 변경 안내: 고치기 전 시각 */
@@ -260,8 +270,10 @@ function originKo(c: NoticeContext): string {
   if (c.lesson) return koAt(c.lesson.startsAt, c.student.timezone);
   return c.originalDate ? `${Number(c.originalDate.slice(5, 7))}월 ${Number(c.originalDate.slice(8))}일` : '시트 기록 보강';
 }
+/** 그 시각의 강사 시간대 */
+const ttz = (c: NoticeContext, t: Date) => c.tutorZoneAt?.(t) ?? c.tutorTz;
 function originEn(c: NoticeContext): string {
-  if (c.lesson) return enAt(c.lesson.startsAt, c.tutorTz);
+  if (c.lesson) return enAt(c.lesson.startsAt, ttz(c, c.lesson.startsAt));
   return c.originalDate ? c.originalDate : 'earlier class';
 }
 
@@ -291,8 +303,8 @@ function makeupStateKo(c: NoticeContext, until: KstDate): string {
   return `${picked}\n강사님이 그 날짜에는 어렵다고 해요. 다른 날짜를 알려 주시면 조율해 드릴게요 (종료일 ${koDate(until)}까지).`;
 }
 /** 강사는 수업 중에 수강생과 시간을 정해도 되고, 수강생이 LMS 로 신청 → 강사가 Confirm make-up (11/8 대표). 기한 = 수강 종료일 한국 23:59 → 강사 현지 + KST */
-const makeupLinesEn = (until: KstDate, tutorTz: string) => [
-  `Make-up: you can agree on a make-up time with your student during class (until ${enAt(new Date(`${until}T23:59:00+09:00`), tutorTz)}). Make sure that time is open in your Availability, then ask the student to request it in the LMS.`,
+const makeupLinesEn = (until: KstDate, c: NoticeContext) => [
+  `Make-up: you can agree on a make-up time with your student during class (until ${enAt(new Date(`${until}T23:59:00+09:00`), ttz(c, new Date(`${until}T23:59:00+09:00`)))}). Make sure that time is open in your Availability, then ask the student to request it in the LMS.`,
   'When the request comes in, tap "Confirm make-up". If the student can\'t find the time, let us know.',
 ];
 
@@ -367,11 +379,11 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
     const d = c.decision;
     const m = c.makeup;
     const makeupEn = !d.makeup_allowed || !d.makeup_until ? []
-      : m?.state === 'confirmed' && m.at ? [`Make-up already confirmed: ${enAt(m.at, c.tutorTz)}. Please add it to your schedule.`]
-      : m?.state === 'requested' && m.candidates?.length ? [`The student asked for a make-up at: ${m.candidates.map((t) => enAt(t, c.tutorTz)).join(' / ')}.`, 'Please confirm it on your Home page (Make-up requests): tap "Confirm make-up".']
+      : m?.state === 'confirmed' && m.at ? [`Make-up already confirmed: ${enAt(m.at, ttz(c, m.at))}. Please add it to your schedule.`]
+      : m?.state === 'requested' && m.candidates?.length ? [`The student asked for a make-up at: ${m.candidates.map((t) => enAt(t, ttz(c, t))).join(' / ')}.`, 'Please confirm it on your Home page (Make-up requests): tap "Confirm make-up".']
       : m?.state === 'tutor_answered' ? ['You already answered the make-up request. Edge English will confirm and let you know.']
       : m?.state === 'declined' ? ['You said the requested make-up times do not work. Edge English will arrange another time with the student.']
-      : makeupLinesEn(d.makeup_until, c.tutorTz);
+      : makeupLinesEn(d.makeup_until, c);
     if (d.who !== 'tutor') {
       // 수강생 취소: WhatsApp 대화체 (대표 11/8 문구). 보강 신청 전이면 보강 안내 한 단락, 신청·확정 뒤면 그 상태 줄
       const first = who.trim().split(/\s+/)[0] || who;
@@ -379,11 +391,11 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
       const makeupPara = !d.makeup_allowed || !d.makeup_until ? []
         : before ? [`For the make-up, ${first} can request a time in the LMS. If you agree on a time during class, just make sure it's open in your Availability and ask ${first} to request it in the LMS.`]
         : [makeupEn.join('\n')];
-      return [`Hi ${c.tutorName},`, `${who} cancelled their class on ${enAt(c.lesson.startsAt, c.tutorTz)}.`, ...makeupPara, 'Thanks!'].join('\n\n');
+      return [`Hi ${c.tutorName},`, `${who} cancelled their class on ${enAt(c.lesson.startsAt, ttz(c, c.lesson.startsAt))}.`, ...makeupPara, 'Thanks!'].join('\n\n');
     }
     return [
       `CANCELED (tutor) - ${who}`,
-      `Class: ${enAt(c.lesson.startsAt, c.tutorTz)}`,
+      `Class: ${enAt(c.lesson.startsAt, ttz(c, c.lesson.startsAt))}`,
       'No class at this time.',
       ...makeupEn,
     ].join('\n');
@@ -393,18 +405,18 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
       `${c.compensation ? 'Compensation class request' : 'Make-up request'} - ${who} (${c.durationMin} min), not confirmed yet`,
       `Original class: ${originEn(c)}`,
       'Are you available at any of these times?',
-      ...c.candidates.map((t, i) => `${i + 1}) ${enAt(t, c.tutorTz)}`),
+      ...c.candidates.map((t, i) => `${i + 1}) ${enAt(t, ttz(c, t))}`),
     ].join('\n');
   }
   if (event === 'makeup_confirmed' && c.makeupAt) {
     const w = c.compensation ? 'Compensation class' : 'Make-up';
-    return [`CONFIRMED ${w.toLowerCase()} - ${who} (${c.durationMin} min)`, `Original class: ${originEn(c)}`, `${w}: ${enAt(c.makeupAt, c.tutorTz)}`, 'Please add it to your schedule. Thank you!'].join('\n');
+    return [`CONFIRMED ${w.toLowerCase()} - ${who} (${c.durationMin} min)`, `Original class: ${originEn(c)}`, `${w}: ${enAt(c.makeupAt, ttz(c, c.makeupAt))}`, 'Please add it to your schedule. Thank you!'].join('\n');
   }
   if (event === 'makeup_rescheduled' && c.makeupAt) {
     return [
       `TIME CHANGED ${c.compensation ? 'compensation class' : 'make-up'} - ${who} (${c.durationMin} min)`,
-      `New time: ${enAt(c.makeupAt, c.tutorTz)}`,
-      c.oldAt ? `Previous time (canceled): ${enAt(c.oldAt, c.tutorTz)}` : '',
+      `New time: ${enAt(c.makeupAt, ttz(c, c.makeupAt))}`,
+      c.oldAt ? `Previous time (canceled): ${enAt(c.oldAt, ttz(c, c.oldAt))}` : '',
       `Original class: ${originEn(c)}`,
       'Please update your schedule. Thank you!',
     ].filter(Boolean).join('\n');
@@ -412,17 +424,17 @@ export function tutorNotice(event: NoticeEvent, c: NoticeContext): string {
   if (event === 'makeup_tutor_removed' && (c.oldAt ?? c.makeupAt)) {
     // 운영진이 강사를 바꿈 → 이전 강사에게 취소 (메일 lms_notice_mail 과 같은 글)
     const w = c.compensation ? 'Compensation class' : 'Make-up';
-    return [`CANCELED ${w.toLowerCase()} - ${who} (${c.durationMin} min)`, `${w}: ${enAt((c.oldAt ?? c.makeupAt)!, c.tutorTz)}`, 'No class at this time. Please remove it from your schedule. Thank you!'].join('\n');
+    return [`CANCELED ${w.toLowerCase()} - ${who} (${c.durationMin} min)`, `${w}: ${enAt((c.oldAt ?? c.makeupAt)!, ttz(c, (c.oldAt ?? c.makeupAt)!))}`, 'No class at this time. Please remove it from your schedule. Thank you!'].join('\n');
   }
   if (event === 'makeup_voided' && c.makeupAt) {
     const w = c.compensation ? 'Compensation class' : 'Make-up';
-    return [`CANCELED ${w.toLowerCase()} - ${who}`, `${w}: ${enAt(c.makeupAt, c.tutorTz)}`, 'No class at this time.'].join('\n');
+    return [`CANCELED ${w.toLowerCase()} - ${who}`, `${w}: ${enAt(c.makeupAt, ttz(c, c.makeupAt))}`, 'No class at this time.'].join('\n');
   }
   if (event === 'revert' && c.lesson) {
     return [
       `CORRECTION - ${who}`,
-      `Class ${enAt(c.lesson.startsAt, c.tutorTz)} will go ahead as scheduled.`,
-      c.makeupAt ? `Make-up ${enAt(c.makeupAt, c.tutorTz)} is canceled.` : '',
+      `Class ${enAt(c.lesson.startsAt, ttz(c, c.lesson.startsAt))} will go ahead as scheduled.`,
+      c.makeupAt ? `Make-up ${enAt(c.makeupAt, ttz(c, c.makeupAt))} is canceled.` : '',
     ].filter(Boolean).join('\n');
   }
   return '';

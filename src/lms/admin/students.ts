@@ -55,7 +55,8 @@ export function finalEndText(finalEnd: KstDate, studentTz: string): string {
 }
 
 export type Slot = { weekday: number; time: string };
-export type SlotFull = Slot & { durationMin: number; tutorId: string; tutor: string; tutorTz: string; tutorCountry: string | null; from: KstDate; to: KstDate | null };
+export type SlotFull = Slot & { durationMin: number; tutorId: string; tutor: string; tutorTz: string; tutorCountry: string | null; from: KstDate; to: KstDate | null;
+  /** 그 시각의 강사 시간대 (해외 이동 기간, H26(176)) */ tutorZoneAt?: (t: Date) => string };
 
 /** '화·목 오후 10:00' (시간이 요일마다 다르면 '화 오후 10:00 · 목 오후 9:00') */
 export function slotsText(slots: Slot[]): string {
@@ -168,6 +169,8 @@ export type EnrollmentShort = {
 export type StudentDetailData = {
   student: StudentProfile; enrollment: EnrollmentInfo | null; slots: SlotFull[]; nextSlots: (Slot & { from: KstDate })[]; upcoming: Upcoming[]; recentTopics: RecentTopic[]; holidays: KstDate[];
   enrollments: EnrollmentShort[]; changes: RegularChangeRec[]; edits: ProfileEdit[]; recent: RecentLesson[]; loginEmail: string | null;
+  /** 강사 이름 → 그 시각의 강사 시간대 (해외 이동 기간이 있는 강사만, H26(176)) */
+  tutorZoneByName?: Record<string, (t: Date) => string>;
 };
 
 const at = (v: any): Date | null => (v ? new Date(v) : null);
@@ -230,7 +233,7 @@ export function parseDetail(j: any): StudentDetailData {
 }
 
 export type RegularPreview = {
-  ok: boolean; tutor: { id: string; name: string; timezone: string }; studentTimezone: string;
+  ok: boolean; tutor: { id: string; name: string; timezone: string; zoneAt?: (t: Date) => string }; studentTimezone: string;
   enrollment: { id: string; finalEndDate: KstDate; durationMin: number }; oldSlots: Slot[]; newSlots: Slot[]; effectiveFrom: KstDate;
   moved: MovedLesson[]; kept: KeptLesson[]; skipped: { date: KstDate; time: string; why: string }[];
   problems: { lessonId: string; seq: number | null; date: KstDate; time: string; why: string; other: string | null }[]; lastDate: KstDate | null;
@@ -273,7 +276,7 @@ export const KEPT_WHY: Record<string, string> = {
 export const KIND_KO: Record<string, string> = { regular: '정규', makeup: '보강', migrated_makeup: '보강', compensation: '보상수업', carryover: '지난 수강기간에서 이월된 수업', migrated_extra: '정규' };
 
 export type RegularNoticeCtx = {
-  studentNameKo: string; studentNameEn: string; studentTz: string; tutorName: string; tutorTz: string; durationMin: number;
+  studentNameKo: string; studentNameEn: string; studentTz: string; tutorName: string; tutorTz: string; tutorZoneAt?: (t: Date) => string; durationMin: number;
   effectiveFrom: KstDate; newSlots: Slot[]; moved: MovedLesson[];
 };
 
@@ -291,12 +294,15 @@ export function regularNoticeKo(c: RegularNoticeCtx): string {
 
 /** ③ 강사용 WhatsApp 문구 (영어, 강사 도시 시간 + KST) */
 export function regularNoticeEn(c: RegularNoticeCtx): string {
-  const kst = !c.tutorTz || c.tutorTz === 'Asia/Seoul';
-  const line = (t: Date) => enBoth(t, c.tutorTz);
+  // 강사 시간대 = 그 시각의 지역 (해외 이동 기간). 매주 시간은 첫 바뀐 수업(없으면 적용일) 지역
+  const z = (t: Date) => c.tutorZoneAt?.(t) ?? c.tutorTz;
+  const wtz = z(c.moved[0]?.to ?? new Date(`${c.effectiveFrom}T12:00:00+09:00`));
+  const kst = !wtz || wtz === 'Asia/Seoul';
+  const line = (t: Date) => enBoth(t, z(t));
   return [
     // 적용일은 한국 날짜 기준이라 'KST' 를 밝히고, 해외 강사에게는 첫 바뀐 수업의 현지 날짜·시각을 같이 (QA-09)
     `SCHEDULE CHANGE - ${c.studentNameEn} (${c.durationMin} min), from ${enDateOf(c.effectiveFrom)} ${bold('KST')}${!kst && c.moved.length > 0 ? ` — first changed class: ${line(c.moved[0].to)}` : ''}`,
-    `New regular time: ${kst ? `${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} ${bold('KST')}` : `${slotsInZone(c.newSlots, c.tutorTz, c.effectiveFrom, 'en')} ${bold(enZoneName(c.tutorTz))} / ${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} ${bold('KST')}`}`,
+    `New regular time: ${kst ? `${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} ${bold('KST')}` : `${slotsInZone(c.newSlots, wtz, c.effectiveFrom, 'en')} ${bold(enZoneName(wtz))} / ${slotsInZone(c.newSlots, 'Asia/Seoul', c.effectiveFrom, 'en')} ${bold('KST')}`}`,
     `Changed classes (${c.moved.length}):\n${c.moved.map((m) => `- ${line(m.to)}`).join('\n')}`,
     'Confirmed make-up and cover classes stay as they are. Please update your schedule. Thank you!',
   ].join('\n\n');

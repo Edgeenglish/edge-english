@@ -13,7 +13,7 @@ import { formatInZone, instantToKstDate, kstToInstant, type KstDate } from '@/lm
 import { newRequestId } from '@/lms/admin/registration';
 import { sentLabel } from '@/lms/admin/confirm';
 import {
-  canceledUpcoming, changeableLessons, CONFIRM_REASONS, dateLabel, FIX_REASONS, makeupLink, tutorLocalLabel, decisionLines, emailStatusText, EVENT_TEXT, STATUS_PLAIN, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, REASON_TEXT, studentNotice, tutorNotice,
+  canceledUpcoming, changeableLessons, CONFIRM_REASONS, dateLabel, FIX_REASONS, makeupLink, tutorLocalAt, decisionLines, emailStatusText, EVENT_TEXT, STATUS_PLAIN, kstLabel, lessonTag, makeupRights, MAKEUP_SLOTS_MAX, REASON_TEXT, studentNotice, tutorNotice,
   type ChangeDecision, type ChLesson, type ChNotice, type ChStudent, type MakeupLog, type MakeupReason, type MakeupRight, type NoticeContext,
 } from '@/lms/admin/lesson-change';
 import type { AdminCredits, StudentLessonData } from '@/lms/admin/lesson-change-live';
@@ -196,7 +196,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
         : !req.tutorAnsweredAt ? { state: 'requested', candidates: req.candidates }
         : req.candidates.every((t) => req.tutorAnswers?.[+t] === 'no') ? { state: 'declined', candidates: req.candidates }
         : { state: 'tutor_answered', candidates: req.candidates };
-      return { ...base, lesson: l, decision: c.decision, makeupAt: voided?.startsAt, tutorName: l.tutorName, tutorTz: l.tutorTz, makeup };
+      return { ...base, lesson: l, decision: c.decision, makeupAt: voided?.startsAt, tutorName: l.tutorName, tutorTz: l.tutorTz, tutorZoneAt: l.tutorZoneAt, makeup };
     }
     const r = data.makeupRequests.find((x) => x.id === n.makeupRequestId);
     if (!r) return null;
@@ -212,7 +212,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
     const removed = n.event === 'makeup_tutor_removed' && fix?.oldTutor;
     return {
       ...base, lesson: src, originalDate: item?.originalDate ?? null, candidates: r.candidates, makeupAt: made?.startsAt, oldAt: fix?.oldAt ?? null, oldTutorName,
-      tutorName: removed ? fix.oldTutor! : t?.tutorName ?? '', tutorTz: removed ? fix.oldTutorTz ?? 'Asia/Seoul' : t?.tutorTz ?? 'Asia/Seoul', compensation: !!r.compensationId,
+      tutorName: removed ? fix.oldTutor! : t?.tutorName ?? '', tutorTz: removed ? fix.oldTutorTz ?? 'Asia/Seoul' : t?.tutorTz ?? 'Asia/Seoul', tutorZoneAt: removed ? undefined : t?.tutorZoneAt, compensation: !!r.compensationId,
     };
   }
 
@@ -322,7 +322,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
               <Card title="보강">
                 <ul className="grid gap-2.5">
                   {rights.map((r) => (
-                    <MakeupRow key={r.key} right={r} finalEnd={data.enrollment?.finalEndDate ?? null} tutorTz={(r.kind === 'migrated' ? lastTutor : r.source ?? lastTutor)?.tutorTz ?? 'Asia/Seoul'} actions={actions} done={reload} />
+                    <MakeupRow key={r.key} right={r} finalEnd={data.enrollment?.finalEndDate ?? null} tutorTz={(r.kind === 'migrated' ? lastTutor : r.source ?? lastTutor)?.tutorTz ?? 'Asia/Seoul'} tutorZoneAt={(r.kind === 'migrated' ? lastTutor : r.source ?? lastTutor)?.tutorZoneAt} actions={actions} done={reload} />
                   ))}
                 </ul>
               </Card>
@@ -370,7 +370,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
 function ChangeCard({ lesson, now, actions, isMakeup, compensation, byTutor, done }: { lesson: ChLesson; now: Date; actions: ChangeActions; isMakeup: boolean; compensation?: boolean; byTutor?: boolean; done: (msg?: string) => Promise<void> }) {
   const [fix, setFix] = useState<{ date: string; time: string; reason: MakeupReason | ''; note: string } | null>(null);
   const fixAt = fix && /^20\d\d-\d\d-\d\d$/.test(fix.date) && /^\d\d:\d\d$/.test(fix.time) ? safeInstant(fix.date, fix.time) : null;
-  const fixLocal = fixAt && tutorLocalLabel(fixAt, lesson.tutorTz);
+  const fixLocal = fixAt && tutorLocalAt(fixAt, lesson.tutorTz, lesson.tutorZoneAt);
   const [who, setWho] = useState<'student' | 'tutor'>('student');
   const init = kstParts(now);
   const [date, setDate] = useState(init.date);
@@ -616,7 +616,7 @@ function CreditsCard({ credits, adjust, done }: { credits: AdminCredits; adjust:
   );
 }
 
-function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupRight; finalEnd: string | null; tutorTz: string; actions: ChangeActions; done: () => Promise<void> }) {
+function MakeupRow({ right, finalEnd, tutorTz, tutorZoneAt, actions, done }: { right: MakeupRight; finalEnd: string | null; tutorTz: string; tutorZoneAt?: (t: Date) => string; actions: ChangeActions; done: () => Promise<void> }) {
   const src = right.kind === 'migrated' ? null : right.source;
   const defTime = src ? kstParts(src.startsAt).time : '';
   const [slots, setSlots] = useState<{ date: string; time: string }[]>([{ date: '', time: defTime }]);
@@ -650,7 +650,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
   const toAt = (s: { date: string; time: string }) => (/^20\d\d-\d\d-\d\d$/.test(s.date) && /^\d\d:\d\d$/.test(s.time) ? safeInstant(s.date, s.time) : null);
   // 한국 시각으로 넣고, 강사 현지 날짜·시각은 바로 아래 자동 표시 (2026-10-26 대표)
   const Local = ({ at }: { at: Date | null }) => {
-    const t = at && tutorLocalLabel(at, tutorTz);
+    const t = at && tutorLocalAt(at, tutorTz, tutorZoneAt);
     return t ? <span className="text-[12.5px] text-[#6b6880]">강사 현지 {t}</span> : null;
   };
 
@@ -805,7 +805,7 @@ function MakeupRow({ right, finalEnd, tutorTz, actions, done }: { right: MakeupR
             <DateInput aria-label="진행한 보강 날짜" value={past.date} onChange={(v) => setPast({ ...past, date: v })} className={inputCls(false)} />
             <TimeInput aria-label="진행한 보강 시각" value={past.time} onChange={(v) => setPast({ ...past, time: v })} className={inputCls(false)} />
           </div>
-          <span className="text-[12.5px] text-[#6b6880]">한국 시간{toAt(past) ? ` · 강사 현지 ${tutorLocalLabel(toAt(past)!, tutorTz)}` : ''}</span>
+          <span className="text-[12.5px] text-[#6b6880]">한국 시간{toAt(past) ? ` · 강사 현지 ${tutorLocalAt(toAt(past)!, tutorTz, tutorZoneAt)}` : ''}</span>
           <input aria-label="기록 사유" value={past.note} onChange={(e) => setPast({ ...past, note: e.target.value })} placeholder="사유 (예: 11/5 더블 수업으로 진행)" className={inputCls(false)} />
           <div className="grid grid-cols-2 gap-1.5">
             <button type="button" className={btnSub} disabled={busy} onClick={() => setPast(null)}>닫기</button>

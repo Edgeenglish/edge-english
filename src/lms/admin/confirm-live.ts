@@ -1,5 +1,6 @@
 // 신규 배정 확정: 시험용 Supabase 읽기·쓰기 (운영자 aal2 세션). 쓰기는 DB 함수로만 (POL-AC-07, migration 1000)
 
+import { loadTutorTravel, tutorZoneFn } from './tutor-zone';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { RegularSlot } from '../rules/schedule';
 import type { Notice, NoticeStatus, PlanView } from './confirm';
@@ -14,6 +15,7 @@ type PlanRow = {
   proposal_sent_at: string | null;
   tutor_answer?: 'yes' | 'no' | null;
   confirmed_at: string | null;
+  tutor_id?: string | null;
   tutor: { name: string; country: string | null; timezone: string } | null;
   enrollment: {
     base_end_date: string;
@@ -61,13 +63,20 @@ export async function loadPlans(sb: SupabaseClient, enrollmentIds: string[]): Pr
   const { data, error } = await sb
     .from('schedule_plans')
     .select(
-      'id, enrollment_id, state, slots, start_date, lesson_dates, proposal_sent_at, tutor_answer, confirmed_at, tutor:tutors(name, country, timezone), enrollment:enrollments(base_end_date, lessons_purchased, duration_min, student:students(name_en, country, city, timezone)), notices:schedule_notices(id, recipient_kind, status, sent_at)',
+      'id, enrollment_id, state, slots, start_date, lesson_dates, proposal_sent_at, tutor_answer, confirmed_at, tutor_id, tutor:tutors(name, country, timezone), enrollment:enrollments(base_end_date, lessons_purchased, duration_min, student:students(name_en, country, city, timezone)), notices:schedule_notices(id, recipient_kind, status, sent_at)',
     )
     .in('enrollment_id', enrollmentIds)
     .in('state', ['proposed', 'confirmed']);
   // 시험용 DB에 migration 1000 적용 전이면 표가 없음 → 일정안 없이 보여 줌
   if (error) return out;
-  for (const r of (data ?? []) as unknown as PlanRow[]) out.set(r.enrollment_id, toPlanView(r));
+  const rows = (data ?? []) as unknown as PlanRow[];
+  // 강사 현지 시각 = 그 수업 시각의 지역 (해외 이동 기간, H26(173)(176))
+  const travel = await loadTutorTravel(sb, rows.map((r) => r.tutor_id ?? ''));
+  for (const r of rows) {
+    const v = toPlanView(r);
+    if (r.tutor_id && travel.has(r.tutor_id)) v.tutorZoneAt = tutorZoneFn(travel.get(r.tutor_id), v.tutorTz);
+    out.set(r.enrollment_id, v);
+  }
   return out;
 }
 
