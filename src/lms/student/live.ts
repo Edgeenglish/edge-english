@@ -375,6 +375,12 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     lateNotice: async (lessonId: string, minutes: number, reason: LateReason | null): Promise<void> => {
       check(await sb.rpc('student_late_notice', { p_student: adminStudentId, p_lesson: lessonId, p_minutes: minutes, p_reason: reason }));
     },
+    /** 강사 '늦어요' 알림 다시 읽기 (QA 11/14: 열어 둔 홈에도 반영). 옛 DB 면 빈 배열 */
+    tutorLateNotices: async (): Promise<{ lessonId: string; minutes: number; reason: string | null }[]> => {
+      const r = await sb.rpc('student_tutor_late_notices', { p_student: adminStudentId });
+      if (r.error) return [];
+      return ((r.data ?? []) as { lesson_id: string; minutes: number; reason: string | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason }));
+    },
     noTimeRequest: async (lessonId: string): Promise<void> => {
       check(await sb.rpc('student_no_time_request', { p_student: adminStudentId, p_lesson: lessonId }));
     },
