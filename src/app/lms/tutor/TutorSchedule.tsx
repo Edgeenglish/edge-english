@@ -81,9 +81,12 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const zoneOfDate = (date: string) => zoneOn(locs, date, tz);
   const korea = zonePref === 'kst' && !(tz === 'Asia/Seoul' && locs.length === 0);
   /** 그 날짜를 보는 시간대 */
-  const vz = (date: string) => (korea ? 'Asia/Seoul' : zoneOfDate(date));
-  const vlabel = (date: string) => (korea ? KOREA_TIME : cityTime(zoneOfDate(date)));
-  const otherOf = (date: string) => otherZone(vz(date), zoneOfDate(date));
+  /** 그 열을 보는 시간대. 열 = 날짜 또는 '날짜@시간대'(이동 출발·복귀 날 한 날짜에 두 지역 열, 재검증 11/14) */
+  const vz = (col: string) => (col.includes('@') ? col.slice(11) : korea ? 'Asia/Seoul' : zoneOfDate(col));
+  /** 열 → 날짜 */
+  const dd = (col: string) => col.slice(0, 10);
+  const vlabel = (col: string) => (korea ? KOREA_TIME : cityTime(vz(col)));
+  const otherOf = (col: string) => otherZone(vz(col), korea ? zoneOfDate(dd(col)) : vz(col));
   const todayView = inZone(now, korea ? 'Asia/Seoul' : zoneAt(locs, now, tz)).date;
   const [multiOpen, setMultiOpen] = useState(false);
   const [lessons, setLessons] = useState<TutorLesson[]>([]);
@@ -102,8 +105,6 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const month = anchor.slice(0, 7);
   const monday = mondayOf(anchor);
   const grid = view === 'month' ? monthGrid(month) : Array.from({ length: 7 }, (_, i) => plusDays(monday, i));
-  // 주 보기 머리글: 그 주 날짜들의 지역 (두 지역이면 'Toronto Time / Buenos Aires Time')
-  const weekZones = [...new Set((view === 'week' ? grid : [selected]).map((d) => cityTime(zoneOfDate(d))))].join(' / ');
   const from = grid[0];
   const to = grid[grid.length - 1];
 
@@ -131,14 +132,16 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const live = lessons.filter((l) => l.state !== 'canceled');
   /** 그 칸(보는 시간대 date·time 부터 30분)에 걸친 수업 */
   const lessonIn = (date: string, time: string) => {
-    const a = +localToInstant(date, time, vz(date));
+    const a = +localToInstant(dd(date), time, vz(date));
     return live.find((l) => +l.startsAt < a + 30 * 60000 && a < +l.endsAt) ?? null;
   };
   const kindsOf = (date: string, src: ScheduleData): CellKind[] =>
-    ALL_HOURS.map((t) => cellKind(keyOf(date, t, vz(date)), src, !!lessonIn(date, t), date));
-  const xsOf = (date: string, src: ScheduleData): boolean[] => ALL_HOURS.map((t) => isExtraCell(keyOf(date, t, vz(date)), src));
-  const keysOf = (date: string, a: number, b: number) => Array.from({ length: b - a }, (_, i) => keyOf(date, slotTime(a + i), vz(date)));
-  const at = (date: string, i: number) => localToInstant(date, slotTime(i), vz(date));
+    // 현지 보기: 그 열 지역에 실제로 있는 시각만 (다른 지역 시각은 그 지역 열에 — 경계 날 같은 시각이 두 번 나오지 않게, 재검증 11/14)
+    ALL_HOURS.map((t) => (!korea && locs.length > 0 && zoneAt(locs, localToInstant(dd(date), t, vz(date)), tz) !== vz(date)
+      ? 'outside' : cellKind(keyOf(dd(date), t, vz(date)), src, !!lessonIn(date, t), dd(date))));
+  const xsOf = (date: string, src: ScheduleData): boolean[] => ALL_HOURS.map((t) => isExtraCell(keyOf(dd(date), t, vz(date)), src));
+  const keysOf = (date: string, a: number, b: number) => Array.from({ length: b - a }, (_, i) => keyOf(dd(date), slotTime(a + i), vz(date)));
+  const at = (date: string, i: number) => localToInstant(dd(date), slotTime(i), vz(date));
   const lastLocal = data?.last ?? to;
 
   function move(n: number) {
@@ -159,7 +162,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     // Month 에서는 칸 판정을 그날만 따로 읽음
     setBusy(true);
     try {
-      const src = await actions.load(plusDays(date, -1), plusDays(date, 1), true);
+      const src = await actions.load(plusDays(dd(date), -1), plusDays(dd(date), 1), true);
       const kinds = kindsOf(date, src);
       const want = mode === 'block' ? 'free' : 'closed';
       const first = span ? Math.max(0, Math.round((toMin(inZone(span.at, vz(date)).time) - toMin(ALL_HOURS[0])) / 30)) : kinds.indexOf(want);
@@ -168,17 +171,17 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
         // 12주 밖 날짜 (R-21): '닫힌 시간 없음' 이 아니라 기간 제한 안내 (저장 함수도 같은 이유로 거절)
         setDialog({ kind: 'info', title: 'Can’t change yet', body: `You can change times up to 12 weeks ahead (until ${dayText(src.last)}).` });
       } else if (kinds.every((k) => k === 'past' || k === 'outside')) {
-        setDialog({ kind: 'info', title: dayText(date), body: 'This day has passed.' });
+        setDialog({ kind: 'info', title: dayText(dd(date)), body: 'This day has passed.' });
       } else if (first < 0 || (span && kinds[first] !== want)) {
         // 추가 개방 줄에서 왔는데 그 칸이 비어 있지 않음 → 왜 못 거두는지 (R-16: 답 보낸 요청 등)
         const why = span ? lockReason(kinds[first]) : null;
-        setDialog({ kind: 'info', title: why ? why.title : dayText(date), body: why ? why.body : mode === 'block' ? 'No available time to block on this day.' : 'No closed time to open on this day.' });
+        setDialog({ kind: 'info', title: why ? why.title : dayText(dd(date)), body: why ? why.body : mode === 'block' ? 'No available time to block on this day.' : 'No closed time to open on this day.' });
       } else {
         setSaveErr('');
         setDialog({ kind: 'pick', mode, date, kinds, xs: xsOf(date, src), start: first, end: Math.min(last, kinds.length), note: '' });
       }
     } catch (e) {
-      setDialog({ kind: 'info', title: dayText(date), body: e instanceof Error ? e.message : 'Could not load. Please try again.' });
+      setDialog({ kind: 'info', title: dayText(dd(date)), body: e instanceof Error ? e.message : 'Could not load. Please try again.' });
     } finally {
       setBusy(false);
     }
@@ -240,7 +243,21 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   }
 
   // Week: 처음·주를 바꿀 때 첫 시작 가능 시각으로 스크롤
-  const weekKinds = view === 'week' && data ? grid.map((d) => kindsOf(d, data)) : null;
+  // 주 보기 열: 날짜마다 그 날짜 지역. 이동 출발·복귀 날 앞뒤 지역 시각이 그 날짜에 실제로 남아 있으면 열을 하나 더 (재검증 11/14: 경계 시각·수업 누락 방지)
+  const colsOf = (date: string): string[] => {
+    if (korea || !data) return [date];
+    const main = zoneOfDate(date);
+    const extra = [zoneOfDate(plusDays(date, -1)), zoneOfDate(plusDays(date, 1))]
+      .filter((z, i, a) => z !== main && a.indexOf(z) === i)
+      .filter((z) => data.times.some((t) => zoneAt(locs, localToInstant(date, t, z), tz) === z));
+    if (extra.length === 0) return [date];
+    return [main, ...extra].sort((a, b) => +localToInstant(date, '00:00', a) - +localToInstant(date, '00:00', b))
+      .map((z) => (z === main ? date : `${date}@${z}`));
+  };
+  const wcols = view === 'week' ? grid.flatMap(colsOf) : [];
+  const weekKinds = view === 'week' && data ? wcols.map((c) => kindsOf(c, data)) : null;
+  // 주 보기 머리글: 그 주 열들의 지역 (두 지역이면 'Toronto Time / Buenos Aires Time')
+  const weekZones = [...new Set((view === 'week' ? (wcols.length ? wcols : grid) : [selected]).map((c) => cityTime(korea ? zoneOfDate(dd(c)) : vz(c))))].join(' / ');
   const firstRow = weekKinds ? Math.min(...weekKinds.map((ks) => ks.findIndex((k) => k !== 'outside' && k !== 'past')).filter((x) => x >= 0), 48) : 48;
   useEffect(() => {
     if (view !== 'week' || !scroller.current || firstRow >= 48) return;
@@ -251,7 +268,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   function weekCell(date: string, i: number, kinds: CellKind[]) {
     const k = kinds[i];
     const t = slotTime(i);
-    const label = `${dayText(date)} ${ampmEn(t)} ${vlabel(date)}`;
+    const label = `${dayText(dd(date))} ${ampmEn(t)} ${vlabel(date)}`;
     const sel = drag && drag.date === date && i >= Math.min(drag.a, drag.b) && i <= Math.max(drag.a, drag.b);
     const handlers = {
       onPointerDown: (e: React.PointerEvent) => {
@@ -268,7 +285,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       const l = lessonIn(date, t);
       if (!l) return <span className={cellBase} style={{ background: '#5b3fe0' }} />;
       const s = inZone(l.startsAt, vz(date));
-      const sMin = s.date === date ? toMin(s.time) : -1440;
+      const sMin = s.date === dd(date) ? toMin(s.time) : -1440;
       const first = sMin >= i * 30;
       const f = classFill(sMin, minutesOf(l), i * 30);
       return (
@@ -338,24 +355,38 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   );
 
   // 그날 목록 (Month 에서 날짜 누름)
-  const items = dayItems(selected, vz(selected), lessons, data);
+  /** 그날 일정 — 이동 출발·복귀 날은 두 지역 열 모두 (재검증 11/14). 줄마다 그 지역 시간 */
+  const dayAll = (date: string) => {
+    const seen = new Set<string>();
+    return colsOf(date).flatMap((c) => dayItems(dd(c), vz(c), lessons, data).map((it) => ({ it, zone: vz(c) })))
+      // 수업은 그 시각에 실제로 있는 지역 열에서만 (현지 보기)
+      .filter(({ it, zone }) => korea || locs.length === 0 || it.kind !== 'lesson' || zoneAt(locs, it.at, tz) === zone || colsOf(date).length === 1)
+      .filter(({ it }) => { const k = `${it.kind}-${+it.at}-${it.kind === 'lesson' ? it.lesson.id : ''}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .sort((a, b) => +a.it.at - +b.it.at);
+  };
+  const itemsZ = dayAll(selected);
+  const items = itemsZ.map((x) => x.it);
   const inRange = data ? selected >= todayView && selected <= plusDays(lastLocal, korea ? 1 : 0) : false;
   const dayPanel = (
     <section ref={dayRef} aria-label={`${dayText(selected)} schedule`} className="scroll-mb-[90px] rounded-[14px] border border-[#e6e3ef] bg-white p-3">
       <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{dayText(selected)}{selected === todayView ? ' · Today' : ''}</h2>
       {items.length === 0 && <p className="mb-2 text-[14px] text-[#6b6880]">No classes</p>}
       <ul className="mb-3 grid gap-1.5">
-        {items.map((it) => <DayRow key={`${it.kind}-${+it.at}-${it.kind === 'lesson' ? it.lesson.id : ''}`} item={it} zone={vz(selected)} onOpen={() => {
+        {itemsZ.map(({ it, zone }) => <DayRow key={`${it.kind}-${+it.at}-${it.kind === 'lesson' ? it.lesson.id : ''}`} item={it} zone={zone} onOpen={() => {
           if (it.kind === 'lesson') setDialog({ kind: 'lesson', lesson: it.lesson });
           else if (it.kind === 'block' && it.block.kind === 'block') { setSaveErr(''); setDialog({ kind: 'blocked', block: it.block, note: it.block.note ?? '' }); }
           else if (it.kind === 'block') setDialog({ kind: 'info', title: 'Leave', body: 'This time is in your leave.' });
-          else if (it.kind === 'open') void pickFromMonth('block', selected, { at: it.at, end: it.end });
+          else if (it.kind === 'open') void pickFromMonth('block', zone === vz(selected) ? selected : `${selected}@${zone}`, { at: it.at, end: it.end });
         }} />)}
       </ul>
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" disabled={!inRange || busy} onClick={() => pickFromMonth('block', selected)} className={`${btnMain} whitespace-nowrap px-2 text-[14px]`}>+ Block time</button>
-        <button type="button" disabled={!inRange || busy} onClick={() => pickFromMonth('open', selected)} className={`${btnSub} whitespace-nowrap px-2 text-[14px]`}>+ Make available</button>
-      </div>
+      {/* 이동 출발·복귀 날은 지역마다 버튼 (재검증 11/14) */}
+      {colsOf(selected).map((c, i, all) => (
+        <div key={c} className={`grid grid-cols-2 gap-2 ${i > 0 ? 'mt-2' : ''}`}>
+          {all.length > 1 && <p className="col-span-2 text-[12.5px] font-semibold text-[#2b1c7a]">{cityTime(vz(c))}</p>}
+          <button type="button" disabled={!inRange || busy} onClick={() => pickFromMonth('block', c)} className={`${btnMain} whitespace-nowrap px-2 text-[14px]`}>+ Block time</button>
+          <button type="button" disabled={!inRange || busy} onClick={() => pickFromMonth('open', c)} className={`${btnSub} whitespace-nowrap px-2 text-[14px]`}>+ Make available</button>
+        </div>
+      ))}
       {!inRange && data && selected > todayView && <p className="mt-2 text-[12.5px] text-[#6b6880]">You can change times up to 12 weeks ahead (until {dayText(data.last)}).</p>}
     </section>
   );
@@ -368,7 +399,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
         </div>
         <div className="grid grid-cols-7">
           {grid.map((date) => {
-            const its = dayItems(date, vz(date), lessons, data);
+            const itsZ = dayAll(date);
+            const its = itsZ.map((x) => x.it);
             const tag = dayTag(its);
             const out = date.slice(0, 7) !== month;
             const ls = its.filter((x) => x.kind === 'lesson');
@@ -384,7 +416,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
                 {tag && <span className={`mt-0.5 block overflow-hidden rounded-[4px] py-px text-center text-[9px] font-bold leading-[10px] tracking-[-0.02em] lg:hidden ${tagColor(tag)}`}>{tag === 'Block' ? 'Closed' : tag}</span>}
                 {/* PC: 칸마다 수업 시각·학생 (H26(50) ⑥ A안) */}
                 <span className="mt-1 hidden gap-0.5 lg:grid">
-                  {its.map((x) => <MonthLine key={`${x.kind}-${+x.at}-${x.kind === 'lesson' ? x.lesson.id : ''}`} item={x} zone={vz(date)} />)}
+                  {itsZ.map(({ it: x, zone }) => <MonthLine key={`${x.kind}-${+x.at}-${x.kind === 'lesson' ? x.lesson.id : ''}`} item={x} zone={zone} />)}
                 </span>
               </button>
             );
@@ -402,18 +434,18 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
         <span className="lg:hidden">Tap an empty time to make a one-time change.</span>
       </p>
       <div ref={scroller} className="max-h-[62vh] overflow-y-auto rounded-[12px] border border-[#e6e3ef] bg-white lg:max-h-[600px]">
-        <div className="grid select-none grid-cols-[42px_repeat(7,minmax(0,1fr))] gap-x-px pb-2 tabular-nums lg:grid-cols-[52px_repeat(7,minmax(0,1fr))]">
+        <div className="grid select-none grid-cols-[42px_repeat(var(--cols),minmax(0,1fr))] gap-x-px pb-2 tabular-nums lg:grid-cols-[52px_repeat(var(--cols),minmax(0,1fr))]" style={{ '--cols': wcols.length } as CSSProperties}>
           <div className="sticky top-0 z-[2] bg-white pr-1 pt-1 text-right text-[10px] font-bold leading-tight text-[#2b1c7a]">{korea ? 'KST' : ''}</div>
-          {grid.map((d, i) => (
-            <div key={d} className={`sticky top-0 z-[2] py-1 text-center text-[12px] font-bold leading-tight ${d === todayView ? 'rounded-b-[6px] bg-[#5b3fe0] text-white' : 'bg-white text-[#55526a]'}`}>
-              {WEEK_HEAD[i]}<small className="block text-[11px] font-semibold">{Number(d.slice(8))}</small>
-              {!korea && weekZones.includes(' / ') && <small className="block truncate text-[9.5px] font-semibold">{cityTime(zoneOfDate(d)).replace(/ Time$/, '')}</small>}
+          {wcols.map((c) => (
+            <div key={c} className={`sticky top-0 z-[2] py-1 text-center text-[12px] font-bold leading-tight ${dd(c) === todayView ? 'rounded-b-[6px] bg-[#5b3fe0] text-white' : 'bg-white text-[#55526a]'}`}>
+              {WEEK_HEAD[(new Date(`${dd(c)}T00:00:00Z`).getUTCDay() + 6) % 7]}<small className="block text-[11px] font-semibold">{Number(c.slice(8, 10))}</small>
+              {!korea && weekZones.includes(' / ') && <small className="block truncate text-[9.5px] font-semibold">{cityTime(vz(c)).replace(/ Time$/, '')}</small>}
             </div>
           ))}
           {ALL_HOURS.map((t, i) => (
             <div key={t} className="contents">
               <div data-row={i} className="pr-1 text-right text-[11px] leading-[26px] text-[#1d1b2b] lg:leading-[24px]">{t.endsWith('00') ? ampmEn(t).replace(':00', '') : ''}</div>
-              {grid.map((d, c) => <div key={d}>{weekCell(d, i, weekKinds[c])}</div>)}
+              {wcols.map((c, n) => <div key={c}>{weekCell(c, i, weekKinds[n])}</div>)}
             </div>
           ))}
         </div>
@@ -518,7 +550,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     const starts = d.kinds.flatMap((k, i) => (k === want ? [i] : []));
     const run = runFrom(d.kinds, d.start, want);
     const a = at(d.date, d.start);
-    const b = d.end === 48 ? localToInstant(plusDays(d.date, 1), '00:00', vz(d.date)) : at(d.date, d.end);
+    const b = d.end === 48 ? localToInstant(plusDays(dd(d.date), 1), '00:00', vz(d.date)) : at(d.date, d.end);
     const isOpen = d.mode === 'open';
     // 고른 칸이 모두 '그날만 연 칸'이면 막기가 아니라 추가 개방 철회 — 메모를 받지 않음 (DB 가 그 열기만 거둠, QA-03)
     const removeExtra = !isOpen && d.end > d.start && d.xs.slice(d.start, d.end).every(Boolean);
@@ -527,7 +559,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
       <>
         <strong className="text-[17px] text-[#1d1b2b]">{isOpen ? 'Make available' : removeExtra ? 'Remove extra hours' : 'Block time'}</strong>
         <div>
-          <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(d.date)}</b> · {isOpen ? 'This day only' : removeExtra ? 'Back to your usual weekly hours (closed)' : vlabel(d.date)}</p>
+          <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(dd(d.date))}</b> · {isOpen ? 'This day only' : removeExtra ? 'Back to your usual weekly hours (closed)' : vlabel(d.date)}</p>
           <p className="text-[13px] text-[#6b6880]">{spanText(a, b, vz(d.date))}{otherOf(d.date) ? ` · ${whenSpan(a, b, otherOf(d.date)!)}` : ''}</p>
         </div>
         <div className="grid grid-cols-2 gap-2">
