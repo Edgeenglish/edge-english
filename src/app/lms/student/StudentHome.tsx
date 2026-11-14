@@ -48,6 +48,7 @@ import {
   type StudentLesson,
   type StudentRequest,
 } from '@/lms/student/home';
+import { tutorLateBand } from '@/lms/tutor/late';
 
 type Tab = 'home' | 'schedule' | 'requests' | 'materials' | 'me';
 type Right = Pick<MakeupRight, 'lessonId' | 'itemId' | 'compId'>;
@@ -582,6 +583,7 @@ export default function StudentHome(props: {
       substitute={nextFull?.substitute ?? false}
       leaveOpen={!!nextFull?.leaveOpen}
       lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === next.id)}
+      tutorLate={(s.tutorLateNotices ?? []).find((n) => n.lessonId === next.id) ?? null}
       onLate={async (minutes, reason) => { await run(() => actions.lateNotice(next.id, minutes, reason), '강사님께 알렸어요.'); }}
     />
   );
@@ -1579,7 +1581,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen, lateSent, onLate }: { lesson: StudentLesson; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
+function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen, lateSent, tutorLate, onLate }: { lesson: StudentLesson; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
   // 지각 알림 버튼은 수업 시작 2시간 전부터 끝나기 전까지 (페이지를 열어 둔 채로도 때가 되면 나타나게)
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -1607,6 +1609,10 @@ function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen, lateSent, onL
         <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">
           ⚠️ 대체강사 {lesson.tutorName} 강사님 수업이에요. 아래 &lsquo;수업 입장&rsquo; 링크에서 진행됩니다.
         </p>
+      )}
+      {/* 강사 '늦어요' 알림 (대표 11/14): 메일을 안 봐도 홈에서 바로 보이게 — 대체강사 띠와 같은 모양 */}
+      {tutorLate && !leaveOpen && (
+        <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">{tutorLateBand(tutorLate.minutes, tutorLate.reason)}</p>
       )}
       <div>
         <p className="text-[26px] font-bold tracking-tight text-white lg:text-[30px]">

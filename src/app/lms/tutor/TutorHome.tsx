@@ -26,6 +26,7 @@ import { enBoth, enEvery, stripBold } from '@/lms/admin/time-text';
 import { useDetailBack } from './useDetailBack';
 import { zoneAt } from '@/lms/tutor/travel';
 import { TimeOffCard, TimeOffForm } from './TimeOff';
+import RunningLate, { type LateSend } from './RunningLate';
 import type { TimeOffActions, TimeOffList } from '@/lms/tutor/time-off';
 import {
   canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
@@ -42,6 +43,8 @@ export type TutorActions = {
   prefs?: () => Promise<ScreenPrefs>;
   savePref?: ((key: PrefKey, value: string) => Promise<void>) | null;
   cancel?: CancelAction;
+  /** 강사 '늦어요' 알림 (20261114200000). 없으면 버튼이 안 보임 */
+  lateNotice?: LateSend;
   studentCancel?: StudentCancelAction;
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
   record: (lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late) => Promise<void>;
@@ -527,7 +530,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{t('Today’s classes', '오늘 수업')} <span className="text-[#6b6880]">{todayLessons.length || ''}</span></h2>
               {todayLessons.length === 0 && <p className="text-[14.5px] text-[#6b6880]">{t('No classes today.', '오늘은 수업이 없어요.')}</p>}
               <div className="divide-y divide-[#f0eef5]">
-                {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={zAt(l.startsAt)} now={now} onRecord={() => setTab('record')} />)}
+                {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={zAt(l.startsAt)} now={now} onRecord={() => setTab('record')} sendLate={actions.lateNotice} onLateSent={() => reload()} />)}
               </div>
               {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">{t('Next class', '다음 수업')}: <Rich text={whenFull(nextLesson.startsAt, zAt(nextLesson.startsAt))} /> · {nextLesson.student}</p>}
               <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">{t('All classes', '전체 수업')} ›</button>
@@ -603,7 +606,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 
         {tab === 'schedule' && (
           <TutorSchedule actions={actions.schedule} tz={tz} now={now} openProfile={openProfile} onRecord={openInRecord}
-            loadLessons={loadLessons} onSaved={() => reload()} onHours={() => goTab('hours')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} />
+            loadLessons={loadLessons} onSaved={() => reload()} sendLate={actions.lateNotice} onHours={() => goTab('hours')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} />
         )}
 
         {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} inline onDirty={(d) => { hoursDirty.current = d; }} onSaved={() => reload()} />}
@@ -687,12 +690,13 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 }
 
 /** Home 의 오늘 수업 한 줄 */
-function TodayRow({ lesson: l, tz, now, onRecord }: { lesson: TutorLesson; tz: string; now: Date; onRecord: () => void }) {
+function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent }: { lesson: TutorLesson; tz: string; now: Date; onRecord: () => void; sendLate?: LateSend; onLateSent?: () => void | Promise<void> }) {
   const phase = phaseOf(l, now);
   const tag = kindTag(l);
   const st = statusText(l, now);
   return (
-    <div className={`flex items-center gap-3 py-2 ${phase === 'canceled' || phase === 'covered' ? 'text-[#8a879c]' : ''} ${phase === 'covered' ? 'opacity-60' : ''}`}>
+    <div className="py-2">
+    <div className={`flex items-center gap-3 ${phase === 'canceled' || phase === 'covered' ? 'text-[#8a879c]' : ''} ${phase === 'covered' ? 'opacity-60' : ''}`}>
       {/* 시각마다 그 옆에 어느 시간대인지 바로 적음 (현지 + 한국) */}
       <span className="min-w-0 flex-1">
         <span className="block text-[14.5px] tabular-nums"><Rich text={rangeFullNoDay(l, tz)} /></span>
@@ -702,6 +706,9 @@ function TodayRow({ lesson: l, tz, now, onRecord }: { lesson: TutorLesson; tz: s
       {phase === 'to_record'
         ? <button type="button" onClick={onRecord} className="min-h-[36px] rounded-[10px] bg-[#5b3fe0] px-3 text-[13px] font-bold text-white">Record</button>
         : <span className={`text-[13px] font-semibold ${phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]'}`}>{phase === 'recorded' ? `✓ ${st}${lateText(l.late)}` : st}<CoverNote lesson={l} where="status" /></span>}
+    </div>
+    {/* 강사 '늦어요' 알림: 시작 2시간 전~시작 전, 보냈으면 회색 Sent ✓ */}
+    <div className="mt-1.5 empty:hidden"><RunningLate lesson={l} now={now} tz={tz} send={sendLate} onSent={onLateSent} /></div>
     </div>
   );
 }
@@ -968,6 +975,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
               {cancelable && actions.cancel && <CancelClass lessonId={l.id} cancel={actions.cancel}
                 onDirty={(value) => mark(`cancel-${l.id}`, value)}
                 onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />}
+              <RunningLate lesson={l} now={now} tz={tz} send={actions.lateNotice} onSent={onSaved} />
               <div className="flex flex-wrap items-center gap-1.5">
                 {links}
                 {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}

@@ -53,6 +53,8 @@ export type TutorLesson = {
   compensation?: string | null;
   /** 보상 수업이면 강사 노쇼였던 원래 수업 시각 (4100) */
   compensationOf?: Date | null;
+  /** 강사 '늦어요' 알림을 보낸 수업 (20261114200000). 없으면 안 보냄 */
+  lateNotice?: { minutes: number; reason: string | null; at: Date } | null;
 };
 
 /** why: 왜 못 고르는지 (4530) — closed 강사가 열지 않은 시간 · busy 다른 수업 · leave 휴무 · hours 06:00~22:30 밖 · b2b 연속 수업 규칙 */

@@ -76,6 +76,8 @@ export type StudentView = {
   requests: StudentRequest[];
   /** 지각을 알린 수업 (migration 20261113120000). 옛 DB 면 빈 배열 */
   lateNotices?: { lessonId: string; minutes: number; reason: LateReason | null }[];
+  /** 강사가 늦는다고 알린 수업 (migration 20261114200000). 옛 DB 면 빈 배열 */
+  tutorLateNotices?: { lessonId: string; minutes: number; reason: string | null }[];
   processingHistory?: ProcessingEvent[];
   processingHistoryError?: boolean;
   leave: LeaveRow[];
@@ -262,15 +264,17 @@ export function withSuggestions(v: StudentView, rows: SuggestionRow[]): StudentV
 
 /** studentId: 운영자가 고른 수강생 (수강생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
-  const [screen, book, sug, history, late] = await Promise.all([
+  const [screen, book, sug, history, late, tutorLate] = await Promise.all([
     sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId), sb.rpc('student_makeup_suggestions', { p_student: studentId }),
-    sb.rpc('student_processing_history', { p_student: studentId }), sb.rpc('student_late_notices', { p_student: studentId })]);
+    sb.rpc('student_processing_history', { p_student: studentId }), sb.rpc('student_late_notices', { p_student: studentId }),
+    sb.rpc('student_tutor_late_notices', { p_student: studentId })]);
   const v = parseStudentView(check(screen));
   // 강사가 제안한 시간 (H26(134), 20261111160000). 함수 없는 옛 DB 면 예전 그대로
   return { ...(sug.error ? v : withSuggestions(v, (sug.data as SuggestionRow[]) ?? [])), textbook: book,
     processingHistory: history.error ? [] : processingEvents((history.data as ProcessingEvent[]) ?? []),
     processingHistoryError: !!history.error,
-    lateNotices: late.error ? [] : ((late.data ?? []) as { lesson_id: string; minutes: number; reason: LateReason | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })) };
+    lateNotices: late.error ? [] : ((late.data ?? []) as { lesson_id: string; minutes: number; reason: LateReason | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })),
+    tutorLateNotices: tutorLate.error ? [] : ((tutorLate.data ?? []) as { lesson_id: string; minutes: number; reason: string | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })) };
 }
 /** 강사가 정한 교재 (QA C-04, migration 20261107040000). 함수가 없는 옛 DB 면 null — 학습자료에 교재만 안 보임 */
 async function loadTextbook(sb: SupabaseClient, studentId: string | null): Promise<string | null> {
