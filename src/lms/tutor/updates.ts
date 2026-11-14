@@ -47,41 +47,44 @@ export const LATE_REASON_EN: Record<string, string> = {
 };
 
 /** Updates 한 줄의 아래 글 (시안 H26(127)): 시각 줄은 강사 현지 / KST */
-export function updateLines(u: TutorUpdate, tz: string): string[] {
+export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)): string[] {
   const i = u.info;
+  // 시각마다 그 시각의 지역 (이동 기간, H26(176)) — 매주 시간은 첫 시각의 지역
+  const z = (t: Date) => (typeof zone === 'string' ? zone : zone(t));
+  const zs = (ts: Date[]) => z(ts.length ? ts.reduce((a, b) => (a < b ? a : b)) : u.at);
   switch (u.kind) {
     case 'new_student':
-      return [enEvery(ds(i.every), tz), `First class: ${enDay(d(i.first) ?? u.at, tz)} · ${i.minutes} min · ${i.classes} classes`];
+      return [enEvery(ds(i.every), zs(ds(i.every))), `First class: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} · ${i.minutes} min · ${i.classes} classes`];
     case 'renewal':
-      return [enEvery(ds(i.every), tz), `Next period: ${enDay(d(i.first) ?? u.at, tz)} – ${enDay(d(i.last) ?? u.at, tz)} · ${i.same ? 'same schedule' : 'new schedule'}`];
+      return [enEvery(ds(i.every), zs(ds(i.every))), `Next period: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} – ${enDay(d(i.last) ?? u.at, z(d(i.last) ?? u.at))} · ${i.same ? 'same schedule' : 'new schedule'}`];
     case 'schedule_change':
-      return [enEvery(ds(i.every), tz), `From ${enDay(d(i.from) ?? u.at, tz)}`];
+      return [enEvery(ds(i.every), zs(ds(i.every))), `From ${enDay(d(i.from) ?? u.at, z(d(i.from) ?? u.at))}`];
     case 'class_moved': {
       const was = d(i.was);
-      return [enBoth(d(i.to) ?? u.at, tz), ...(was ? [`Was: ${enZoned(was, tz)}`] : [])];
+      return [enBoth(d(i.to) ?? u.at, z(d(i.to) ?? u.at)), ...(was ? [`Was: ${enZoned(was, z(was))}`] : [])];
     }
     case 'cover':
-      return ds(i.times).map((t) => enBoth(t, tz));
+      return ds(i.times).map((t) => enBoth(t, z(t)));
     case 'makeup_new': {
       const o = d(i.origin);
-      return [enBoth(u.at, tz), ...(o ? [`Original class: ${enDay(o, tz)}`] : [])];
+      return [enBoth(u.at, z(u.at)), ...(o ? [`Original class: ${enDay(o, z(o))}`] : [])];
     }
     case 'makeup_moved': {
       const was = d(i.was);
-      return [enBoth(u.at, tz), ...(was ? [`Was: ${enZoned(was, tz)}`] : [])];
+      return [enBoth(u.at, z(u.at)), ...(was ? [`Was: ${enZoned(was, z(was))}`] : [])];
     }
     case 'student_late': {
       const m = Number(i.minutes);
       const reason = typeof i.reason === 'string' ? LATE_REASON_EN[i.reason] : null;
       return [
-        enBoth(u.at, tz),
+        enBoth(u.at, z(u.at)),
         `The student may be approximately ${m >= 20 ? '20 or more' : m} minutes late.`,
         ...(reason ? [`Reason: ${reason}`] : []),
         'Please join the class on time and stay until the scheduled end time, as the student may arrive earlier than expected.',
       ];
     }
     default:
-      return [enBoth(u.at, tz)];
+      return [enBoth(u.at, z(u.at))];
   }
 }
 

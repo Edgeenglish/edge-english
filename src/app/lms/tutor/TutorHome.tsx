@@ -508,7 +508,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                           <StudentName id={u.studentId} name={u.student} className="inline text-[15px] font-semibold" />
                           {u.kind === 'canceled' && u.info.late === true && <span className="text-[12.5px] font-semibold text-[#b3261e]">{t('late', '늦은 취소')}</span>}
                         </p>
-                        {updateLines(u, curTz).map((line, i) => (
+                        {updateLines(u, zAt).map((line, i) => (
                           <span key={i} className={`block text-[14px] ${i === 0 ? 'text-[#1d1b2b]' : 'text-[#55526a]'}`}><Rich text={line} /></span>
                         ))}
                       </li>

@@ -25,3 +25,12 @@ describe('강사 Updates · 학생 지각 알림 (대표 11/13 확정 문구)', 
     expect(updateTitle({ ...base, info: {} }, true)).toBe('지각 알림');
   });
 });
+
+describe('Updates 시각 = 그 시각의 지역 (이동 기간, H26(176))', () => {
+  it('대체 수업 시각마다 지역 함수로 고름', () => {
+    const at = new Date('2026-12-28T10:00:00Z');
+    const lines = updateLines({ id: 'c', kind: 'cover', student: 'S', at, info: { times: [at.toISOString()] } }, (t) => (t >= new Date('2026-12-24T03:00:00Z') ? 'America/Argentina/Buenos_Aires' : 'Australia/Sydney'));
+    expect(lines[0]).toContain('7:00 AM');
+    expect(lines[0]).toContain('Buenos Aires Time');
+  });
+});
