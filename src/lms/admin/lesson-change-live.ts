@@ -1,5 +1,6 @@
 // 수업 변경·보강 실제 데이터 (migration 1700). 읽기는 운영자 RLS, 쓰기는 DB 함수만 (판정·중복 방지·이력은 DB)
 
+import { loadTutorTravel, tutorZoneFn } from './tutor-zone';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { compensationUseUntil } from '../rules/change';
 import type { KstDate } from '../rules/dates';
@@ -103,6 +104,9 @@ export async function loadStudentLessons(sb: SupabaseClient, studentId: string):
     id: l.id, kind: l.kind, type: l.class_type ?? null, seq: l.seq, startsAt: new Date(l.starts_at), state: l.state, classStatus: l.class_status, makeupOf: l.makeup_of,
     voided: !!l.voided_at, tutorId: l.tutor_id, tutorName: l.tutor?.name ?? '', tutorTz: l.tutor?.timezone ?? 'Asia/Seoul',
   }));
+  // 강사 현지 시각 = 그 시각의 지역 (해외 이동 기간, H26(176))
+  const travel = await loadTutorTravel(sb, lessons.map((l) => l.tutorId));
+  for (const l of lessons) if (travel.has(l.tutorId)) l.tutorZoneAt = tutorZoneFn(travel.get(l.tutorId), l.tutorTz);
   const [changes, reqs, migrated] = await Promise.all([
     sb.from('change_requests').select('id, lesson_id, type, status, requested_at, decided_at, decision')
       .eq('student_id', studentId).in('type', ['student_cancel', 'tutor_cancel']).in('status', ['applied', 'reverted']).order('decided_at', { ascending: false }),
@@ -260,7 +264,11 @@ export async function addLessonByAdmin(sb: SupabaseClient, source: { lessonId?: 
 export async function editLessonByAdmin(sb: SupabaseClient, lessonId: string, tutorId: string, at: Date, note: string): Promise<void> {
   check(await sb.rpc('admin_lesson_edit', { p_lesson: lessonId, p_tutor: tutorId, p_starts_at: at.toISOString(), p_note: note || null }));
 }
-export type TutorPick = { id: string; name: string; timezone: string };
+/** zoneAt = 그 시각의 강사 시간대 (해외 이동 기간이 있는 강사만, H26(176)) */
+export type TutorPick = { id: string; name: string; timezone: string; zoneAt?: (t: Date) => string };
 export async function loadActiveTutors(sb: SupabaseClient): Promise<TutorPick[]> {
-  return (check(await sb.from('tutors').select('id, name, timezone').eq('active', true).order('name')) as TutorPick[]);
+  const list = check(await sb.from('tutors').select('id, name, timezone').eq('active', true).order('name')) as TutorPick[];
+  const travel = await loadTutorTravel(sb, list.map((t) => t.id));
+  for (const t of list) if (travel.has(t.id)) t.zoneAt = tutorZoneFn(travel.get(t.id), t.timezone);
+  return list;
 }

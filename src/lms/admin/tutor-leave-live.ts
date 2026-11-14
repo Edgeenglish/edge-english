@@ -1,5 +1,6 @@
 // 강사 휴무·대체강사 실제 데이터 (migration 1800). 읽기는 운영자 RLS, 쓰기는 DB 함수만 (검사·중복 방지·이력은 DB)
 
+import { loadTutorTravel, tutorZoneFn } from './tutor-zone';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, instantToKstDate, type KstDate } from '../rules/dates';
 import type { LvChoice, LvItem, LvMakeupOption, LvNotice, LvRenewal, LvStage, LvSubOption, LvTimeOff } from './tutor-leave';
@@ -71,6 +72,9 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
     makeupDeclinedAll: declinedAll.has(r.lesson_id ?? r.migrated_item_id),
     lessonId: r.lesson_id, migratedItemId: r.migrated_item_id, lessonGone: !!r.lesson_gone_at,
   }));
+  // 대체강사 현지 시각 = 그 수업 시각의 지역 (해외 이동 기간, H26(176)): 수업마다 시간대를 다시 정함
+  const travel = await loadTutorTravel(sb, items.map((i) => i.subTutorId ?? ''));
+  for (const i of items) if (i.subTutorId && i.subTutorTz && travel.has(i.subTutorId)) i.subTutorTz = tutorZoneFn(travel.get(i.subTutorId), i.subTutorTz)(i.startsAt);
   const notices = (check(nt) as { id: string; leave_item_id: string; event: LvNotice['event']; recipient_kind: 'student' | 'tutor'; recipient_id: string; status: LvNotice['status']; sent_at: string | null; was_sent_at?: string | null;
     email_status?: 'queued' | 'sent' | 'failed' | 'no_address' | null; email_to?: string | null; email_intended?: string | null; email_sent_at?: string | null; email_error?: string | null; email_attempts?: number | null }[])
     .map((n) => ({ id: n.id, itemId: n.leave_item_id, event: n.event, recipientKind: n.recipient_kind, recipientId: n.recipient_id, status: n.status, sentAt: n.sent_at ? new Date(n.sent_at) : null, wasSentAt: n.was_sent_at ? new Date(n.was_sent_at) : null,

@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, instantToKstDate } from '../rules/dates';
 import type { Busy } from '../rules/booking';
 import { holdBusy } from './holds';
+import { loadTutorTravel } from './tutor-zone';
 import type { RegTutor, savePayload } from './registration';
 
 type Row = Record<string, unknown>;
@@ -27,13 +28,15 @@ export async function loadRegTutors(sb: SupabaseClient, now: Date): Promise<RegT
   const until = addDays(today, 200); // 24주 등록 + 여유
   const [tutors, avail, lessons, off, schedules, ends] = await Promise.all([
     all(() => sb.from('tutors').select('id, name, country, timezone').eq('active', true).order('name')),
-    all(() => sb.from('tutor_availability').select('tutor_id, weekday, start_local, end_local, timezone, effective_from, effective_to').is('location_id', null)),   // 이동 기간 시간표 제외 = Regular 만 (H26(173))
+    // Regular 줄 + 이동 기간 시간표 줄 (H26(173)): 시각마다 그때 있는 지역의 줄만 씀 (booking.ts windowOn = DB lms_tutor_weekly_ok)
+    all(() => sb.from('tutor_availability').select('tutor_id, weekday, start_local, end_local, timezone, effective_from, effective_to, location_id')),
     all(() => sb.from('lessons').select('id, tutor_id, kind, starts_at, ends_at, student:students(name_ko)').neq('state', 'canceled').gte('kst_date', from).lte('kst_date', until)),
     all(() => sb.from('tutor_time_off').select('id, tutor_id, starts_at, ends_at, reason').gte('ends_at', `${from}T00:00:00+09:00`)),
     // 재등록 대기 (A22): 고정 시간 + 수강생별 결제 확인·수강 중 등록의 마지막 종료일
     all(() => sb.from('regular_schedules').select('id, tutor_id, student_id, weekday, start_time_kst, duration_min, effective_from, effective_to, student:students(name_ko)')),
     all(() => sb.from('enrollments').select('student_id, final_end_date').in('status', ['confirmed', 'active'])),
   ]);
+  const travel = await loadTutorTravel(sb, tutors.map((t) => String(t.id)));
   const lastEnd = new Map<string, string>();
   for (const e of ends) {
     const k = String(e.student_id);
@@ -62,9 +65,12 @@ export async function loadRegTutors(sb: SupabaseClient, now: Date): Promise<RegT
     name: String(t.name),
     country: String(t.country),
     timezone: String(t.timezone),
+    travel: travel.get(String(t.id)) ?? [],
+    // 이동 기간 시간표 줄은 그 기간이 있을 때만 (기간이 없어진 줄은 쓰지 않음)
     availability: avail
-      .filter((a) => a.tutor_id === t.id)
-      .map((a) => ({ weekday: Number(a.weekday), startLocal: String(a.start_local).slice(0, 5), endLocal: String(a.end_local).slice(0, 5), timezone: String(a.timezone), effectiveFrom: String(a.effective_from), effectiveTo: (a.effective_to as string | null) ?? null })),
+      .filter((a) => a.tutor_id === t.id && (a.location_id == null || (travel.get(String(t.id)) ?? []).some((l) => l.id === a.location_id)))
+      .map((a) => ({ weekday: Number(a.weekday), startLocal: String(a.start_local).slice(0, 5), endLocal: String(a.end_local).slice(0, 5), timezone: String(a.timezone), effectiveFrom: String(a.effective_from), effectiveTo: (a.effective_to as string | null) ?? null,
+        travel: travel.get(String(t.id)) ?? [], periodId: (a.location_id as string | null) ?? null })),
     busy: [
       ...lessons
         .filter((l) => l.tutor_id === t.id)

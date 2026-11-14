@@ -4,6 +4,7 @@
 // - 시간대는 신청서에 칸이 없어 거주 국가·도시로 '추천'만 하고 운영자가 확인 (모르면 비워 둠, places.ts)
 // - 이메일이 같아도 기존 수강생·계정에 자동 연결하지 않는다 (POL-AC-04). 같은 이메일이 있으면 알려 주기만
 
+import type { TravelPeriod } from '../tutor/travel';
 import type { AvailabilityWindow, Busy } from '../rules/booking';
 import { addDays, diffDays, kstToInstant, weekdayOf, type KstDate } from '../rules/dates';
 import { computePeriods } from '../rules/period';
@@ -208,6 +209,8 @@ export type RegTutor = {
   name: string;
   country: string;
   timezone: string;
+  /** 해외 이동 기간 (H26(173)) — 칸의 강사 현지 시각·안내 문구 시각을 그 시각 지역으로 */
+  travel?: TravelPeriod[];
   availability: AvailabilityWindow[];
   busy: Busy[];
 };

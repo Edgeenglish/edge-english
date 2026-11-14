@@ -243,7 +243,7 @@ function LessonForm({ form, data, rights, studentTz, regularTutorId, finalEnd, a
           <div className="grid gap-0.5 rounded-[10px] bg-[#f6f3ff] px-3 py-2.5 text-[13px] text-[#1d1b2b]">
             <b className="text-[15.5px]">{kst(at)}</b>
             <span>{tutor.name} · {duration}분</span>
-            {otherZones(at, studentTz, tutor.timezone) && <span className="text-[#6b6880]">{otherZones(at, studentTz, tutor.timezone)}</span>}
+            {otherZones(at, studentTz, tutor.zoneAt?.(at) ?? tutor.timezone) && <span className="text-[#6b6880]">{otherZones(at, studentTz, tutor.zoneAt?.(at) ?? tutor.timezone)}</span>}
           </div>
         )}
         <label className="grid">

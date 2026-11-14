@@ -12,7 +12,8 @@ import type { LessonDate, LessonPlan, PlanLesson } from '@/lms/rules/lessons';
 import type { RegularSlot } from '@/lms/rules/schedule';
 import type { RegTutor } from '@/lms/admin/registration';
 import { dayLabel, localTime, WEEKDAY_KO } from '@/lms/admin/schedule';
-import { slotLocal } from './parts';
+import { slotLocal, tutorTzAt } from './parts';
+import { koZoneName } from '@/lms/admin/time-text';
 import DateInput from '../../DateInput';
 
 const ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -39,8 +40,11 @@ export type ScheduleProps = {
 
 /** 강사 현지 시각 (한국과 같은 시간대면 없음) */
 function localOf(tutor: RegTutor | null, date: KstDate, time: string) {
-  if (!tutor || !tutor.timezone || tutor.timezone === 'Asia/Seoul' || !time) return null;
-  return localTime(kstToInstant(date, time), tutor.timezone);
+  if (!tutor || !time) return null;
+  const at = kstToInstant(date, time);
+  const z = tutorTzAt(tutor, at);
+  if (z === 'Asia/Seoul') return null;
+  return `${localTime(at, z)} ${koZoneName(z)}`;
 }
 
 function Num({ n }: { n: number }) {
@@ -109,8 +113,8 @@ function zoneLine(tutor: RegTutor | null, slots: RegularSlot[], firstDate: KstDa
   const set = slots.filter((s) => s.time);
   if (!set.length) return null;
   const kst = '한국 시간(KST)';
-  if (!tutor || tutor.timezone === 'Asia/Seoul' || !firstDate) return kst;
-  return `${kst} · ${tutor.name} 현지 ${set.map((s) => `${WEEKDAY_KO[s.weekday]} ${slotLocal(s, firstDate, tutor.timezone)}`).join(' / ')}`;
+  if (!tutor || !firstDate || (tutor.timezone === 'Asia/Seoul' && !tutor.travel?.length)) return kst;
+  return `${kst} · ${tutor.name} 현지 ${set.map((s) => `${WEEKDAY_KO[s.weekday]} ${slotLocal(s, firstDate, tutor)}`).join(' / ')}`;
 }
 
 function FirstDateInput({ firstDate, onFirstDate, small }: Pick<ScheduleProps, 'firstDate' | 'onFirstDate'> & { small?: boolean }) {
@@ -163,7 +167,7 @@ function Tags({ l }: { l: PlanLesson }) {
 function PreviewRows({ plan, issues, tutor, all }: { plan: LessonPlan; issues: PlanIssue[]; tutor: RegTutor | null; all?: boolean }) {
   const last = plan.lessons.length;
   const shown = plan.lessons.filter((l) => all || l.n <= 5 || l.n === last || l.original || issues.some((i) => i.kstDate === l.date));
-  const showLocal = !!tutor && tutor.timezone !== 'Asia/Seoul';
+  const showLocal = !!tutor && (tutor.timezone !== 'Asia/Seoul' || !!tutor.travel?.length);
   const rows: React.ReactNode[] = [];
   shown.forEach((l, i) => {
     if (i > 0 && l.n - shown[i - 1].n > 1)

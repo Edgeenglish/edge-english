@@ -102,12 +102,14 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
       </Sheet>
     );
   }
-  const zones = [{ label: '수강생', tz: stTz }, { label: '강사', tz: tutor.tutorTz }];
   const shown = pv ? (showAllMoved ? pv.moved : pv.moved.slice(0, 6)) : [];
   const keptShown = pv ? (showAllKept ? pv.kept : pv.kept.slice(0, 8)) : [];
   // 강사 현지 예시: 첫 수업의 실제 시점을 날짜·요일·시각 함께 변환 (QA-09: 한국 날짜 + 현지 시각을 붙이면 틀림)
   const firstMovedTo = pv && pv.moved.length > 0 ? pv.moved[0].to : complete ? kstToInstant(from, slots[0]?.time || cur[0].time) : null;
-  const tutorLocalNew = slotsInZone(slots.length === n && complete ? slots : [], tutor.tutorTz, from);
+  // 강사 시간대 = 첫 바뀐 수업(없으면 적용일) 시각의 지역 (해외 이동 기간, H26(176))
+  const ttz = (pv?.tutor.zoneAt ?? tutor.tutorZoneAt)?.(firstMovedTo ?? kstToInstant(from, '12:00')) ?? tutor.tutorTz;
+  const zonesAt = (t: Date) => [{ label: '수강생', tz: stTz }, { label: '강사', tz: (pv?.tutor.zoneAt ?? tutor.tutorZoneAt)?.(t) ?? tutor.tutorTz }];
+  const tutorLocalNew = slotsInZone(slots.length === n && complete ? slots : [], ttz, from);
   return (
     <Sheet title="정규 일정 수정" onClose={onClose} wide>
       <p className="mb-1 text-[13px] text-[#6b6880]">
@@ -154,7 +156,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
             <div className="rounded-[10px] bg-white px-3 py-2 text-[13.5px] text-[#1d1b2b]">
               <p><b>한국 시간</b> {slotsText(slots)} · {e.durationMin}분</p>
               {stTz !== 'Asia/Seoul' && <p><b>수강생 — {koZone(stTz)}</b> {slotsInZone(slots, stTz, from)} <span className="text-[#6b6880]">({mdw(from)} 수업 기준)</span></p>}
-              {tutor.tutorTz !== 'Asia/Seoul' && <p><b>강사 {tutor.tutor} — {koZone(tutor.tutorTz)}</b> {tutorLocalNew}</p>}
+              {ttz !== 'Asia/Seoul' && <p><b>강사 {tutor.tutor} — {koZone(ttz)}</b> {tutorLocalNew}</p>}
             </div>
           )}
           <div>
@@ -183,7 +185,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                     return (
                       <li key={m.lessonId} className={`rounded-[8px] px-2 py-1 ${p ? 'bg-[#fdecea]' : 'bg-[#f7f6fb]'}`}>
                         <span className="text-[#6b6880]">{m.seq ? `정규 ${m.seq}회 · ` : ''}{zoneLabel(m.from, 'Asia/Seoul')} →</span>{' '}
-                        <b>{kstWithZones(m.to, zones)}</b>
+                        <b>{kstWithZones(m.to, zonesAt(m.to))}</b>
                         {p && <span className="block text-[12.5px] font-semibold text-[#b3261e]">✕ {problemText(p, pv.tutor)}</span>}
                       </li>
                     );
@@ -218,7 +220,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
                 <h3 className="text-[13px] font-extrabold text-[#6b6880]">검사</h3>
                 <ul className="mt-1 grid gap-1 text-[13.5px]">
                   {([
-                    [['tutor_hours_range'], `강사 시작 시각이 ${koZone(pv.tutor.timezone)} 오전 6:00~오후 10:30 안`],
+                    [['tutor_hours_range'], `강사 시작 시각이 ${koZone(ttz)} 오전 6:00~오후 10:30 안`],
                     [['tutor_unavailable'], `${pv.tutor.name} 가능 시간(My hours) 안`],
                     [['tutor_busy', 'tutor_time_off', 'tutor_hold'], '다른 수업·휴무·재등록 대기 자리와 겹치지 않음 (휴식 10분 포함)'],
                     [['after_end'], `마지막 수업 ${pv.lastDate ? mdw(pv.lastDate) : '—'} ≤ 최종 종료일 ${mdw(pv.enrollment.finalEndDate)} (종료일은 연장하지 않음)`],
@@ -248,7 +250,7 @@ export default function RegularChange({ data, today, preview, save, onClose, onS
       </div>
       <p className="mt-2 text-[12px] text-[#6b6880]">
         저장하면 수강생·강사·운영진 화면에 바로 반영돼요. 저장 뒤 수강생(카카오톡) 안내 문구를 복사해 보내고 [발송 완료]를 눌러 주세요. 지난 수업과 이미 확정된 보강·대체 수업은 바뀌지 않아요.
-        {tutor.tutorTz !== 'Asia/Seoul' && firstMovedTo && ` 강사 현지 시각은 수업 날짜마다 다시 계산해요 (예: 한국 ${zoneLabel(firstMovedTo, 'Asia/Seoul')} = ${koZone(tutor.tutorTz)} ${zoneLabel(firstMovedTo, tutor.tutorTz)}).`}
+        {ttz !== 'Asia/Seoul' && firstMovedTo && ` 강사 현지 시각은 수업 날짜마다 다시 계산해요 (예: 한국 ${zoneLabel(firstMovedTo, 'Asia/Seoul')} = ${koZone(ttz)} ${zoneLabel(firstMovedTo, ttz)}).`}
       </p>
     </Sheet>
   );

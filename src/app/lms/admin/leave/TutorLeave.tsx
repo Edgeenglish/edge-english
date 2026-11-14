@@ -644,7 +644,7 @@ function subCancelText(items: LvItem[]): string {
   return [
     `Cancelled - ${items[0].studentNameEn} (${items[0].durationMin} min)`,
     'The student will wait for their regular tutor, so these classes are no longer needed:',
-    ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, tz)}`),
+    ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, x.subTutorTz ?? tz)}`),
     'Thank you for making time!',
   ].join('\n');
 }

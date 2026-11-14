@@ -9,6 +9,7 @@
 // 복사가 막힌 기기에서는 문구를 보여 주고 길게 눌러 직접 복사
 
 import { useState } from 'react';
+import { koZoneName } from '@/lms/admin/time-text';
 import { proposalMessage, sentLabel, studentConfirmMessage, timeLines, tutorConfirmMessage, type Notice, type PlanView } from '@/lms/admin/confirm';
 
 export type PlanHandlers = {
@@ -29,14 +30,14 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function TimeRows({ view }: { view: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'studentTz'> }) {
+export function TimeRows({ view }: { view: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'studentTz' | 'tutorZoneAt'> }) {
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[14.5px]">
       {timeLines(view).map((l) => (
         <div key={l.who} className="contents">
           <dt className="text-[#6b6880]">{l.who}</dt>
           <dd className={l.who === '한국' ? 'font-bold text-[#1d1b2b]' : 'text-[#1d1b2b]'}>
-            {l.otherDay ? <span className="rounded-[6px] bg-[#fff1c2] px-1.5 font-bold text-[#6a4a00]">{l.text}</span> : l.text}
+            {l.otherDay ? <span className="rounded-[6px] bg-[#fff1c2] px-1.5 font-bold text-[#6a4a00]">{l.text}</span> : l.text} {koZoneName(l.tz)}
           </dd>
         </div>
       ))}

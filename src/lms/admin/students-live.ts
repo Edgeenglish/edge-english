@@ -1,4 +1,5 @@
 // 운영진 '수강생' 메뉴 실제 데이터 (migration 4300). 읽기·쓰기 모두 DB 함수 — 권한(운영자 aal2)·검사·기록은 DB
+import { loadTutorTravel, tutorZoneFn } from './tutor-zone';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
 import { parseDetail, parsePreview, parseStudentRows, type RegularPreview, type Slot, type StudentDetailData, type StudentRow } from './students';
@@ -19,7 +20,19 @@ export async function loadStudents(sb: SupabaseClient): Promise<StudentRow[]> {
   return parseStudentRows(j);
 }
 export async function loadStudentDetail(sb: SupabaseClient, studentId: string): Promise<StudentDetailData> {
-  return parseDetail(check(await sb.rpc('admin_student_detail', { p_student: studentId })));
+  const d = parseDetail(check(await sb.rpc('admin_student_detail', { p_student: studentId })));
+  // 강사 현지 시각 = 그 시각의 지역 (해외 이동 기간, H26(176)): 수업마다 시간대를 다시 정함
+  const names = new Map<string, { id: string; home: string }>();
+  for (const x of [...d.slots, ...d.upcoming]) names.set(x.tutor, { id: x.tutorId, home: x.tutorTz });
+  const travel = await loadTutorTravel(sb, [...names.values()].map((x) => x.id));
+  if (travel.size === 0) return d;
+  const byName: Record<string, (t: Date) => string> = {};
+  for (const [name, x] of names) if (travel.has(x.id)) byName[name] = tutorZoneFn(travel.get(x.id), x.home);
+  for (const sl of d.slots) if (byName[sl.tutor]) sl.tutorZoneAt = byName[sl.tutor];
+  for (const u of d.upcoming) if (byName[u.tutor]) u.tutorTz = byName[u.tutor](u.startsAt);
+  for (const k of d.changes.flatMap((c) => c.kept)) if (byName[k.tutor]) k.tutorTz = byName[k.tutor](k.startsAt);
+  for (const r of d.recent) if (byName[r.tutor]) r.tutorTz = byName[r.tutor](r.startsAt);
+  return { ...d, tutorZoneByName: byName };
 }
 /** 수강생 번호(STU-0001)로 id 찾기 — 상세 주소가 번호라서 */
 export async function findStudentId(sb: SupabaseClient, code: string): Promise<string | null> {
@@ -32,7 +45,10 @@ export async function updateStudent(sb: SupabaseClient, studentId: string, field
   return r.changed;
 }
 export async function previewRegularChange(sb: SupabaseClient, studentId: string, slots: Slot[], from: KstDate): Promise<RegularPreview> {
-  return parsePreview(check(await sb.rpc('admin_regular_change', { p_student: studentId, p_slots: slots, p_from: from, p_reason: null, p_dry_run: true })));
+  const pv = parsePreview(check(await sb.rpc('admin_regular_change', { p_student: studentId, p_slots: slots, p_from: from, p_reason: null, p_dry_run: true })));
+  const travel = await loadTutorTravel(sb, [pv.tutor.id]);
+  if (travel.has(pv.tutor.id)) pv.tutor.zoneAt = tutorZoneFn(travel.get(pv.tutor.id), pv.tutor.timezone);
+  return pv;
 }
 export async function saveRegularChange(sb: SupabaseClient, studentId: string, slots: Slot[], from: KstDate, reason: string): Promise<{ changeId: string; moved: number }> {
   const r = check(await sb.rpc('admin_regular_change', { p_student: studentId, p_slots: slots, p_from: from, p_reason: reason, p_dry_run: false })) as { change_id: string; moved: number };

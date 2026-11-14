@@ -2,6 +2,8 @@
 
 // 신규 수강생 등록 화면 조각: 입력 칸, 카드, 강사 고르기, 주간 캘린더 (2026-10-18 대표 최종 시안)
 
+import { tutorZoneFn } from '@/lms/admin/tutor-zone';
+import { koZoneName } from '@/lms/admin/time-text';
 import { useMemo, useRef, useState } from 'react';
 import { cellState, clashes, startsWithinAvailability, withinAvailability, type AvailabilityWindow, type CellState } from '@/lms/rules/booking';
 import { addDays, ampmKo, formatInZone, instantToKstDate, kstToInstant, weekdayOf, type KstDate } from '@/lms/rules/dates';
@@ -355,7 +357,10 @@ export function WeekCalendar({
   let last = used.lastIndexOf(true);
   if (first < 0) [first, last] = [36, 43];
   const rowIdx = Array.from({ length: last - first + 1 }, (_, i) => first + i);
-  const dst = [tutor.timezone, studentTz]
+  // 이 주의 강사 지역 (해외 이동 기간이면 그 지역)
+  const weekTz = tutorTzAt(tutor, kstToInstant(week[3], '12:00'));
+  const away = weekTz !== tutor.timezone;
+  const dst = [weekTz, studentTz]
     .filter((z, i, a) => z && z !== 'Asia/Seoul' && a.indexOf(z) === i)
     .map((z) => ({ z, c: upcomingOffsetChange(kstToInstant(week[0], '00:00'), z, 21) }))
     .filter((x) => x.c);
@@ -381,11 +386,11 @@ export function WeekCalendar({
         </label>
       </div>
       <p className="mt-1 text-[12.5px] text-[#6b6880]">
-        한국 시간(KST) 기준 · {tutor.name}({tutor.country}) {diffFromKst(kstToInstant(week[3], '12:00'), tutor.timezone)} · 칸은 30분 단위 표시이고, 실제 가능 여부는 수업 길이 + 휴식 10분으로 따로 판정해요.
+        한국 시간(KST) 기준 · {tutor.name}({away ? koZoneName(weekTz) : tutor.country}) {diffFromKst(kstToInstant(week[3], '12:00'), weekTz)} · 칸은 30분 단위 표시이고, 실제 가능 여부는 수업 길이 + 휴식 10분으로 따로 판정해요.
       </p>
       {dst.map(({ z, c }) => (
         <p key={z} className="mt-2 rounded-[10px] bg-[#fff6e6] px-3 py-2 text-[13px] text-[#7a4a00]">
-          {z === tutor.timezone ? `${tutor.name}(${tutor.country})` : `수강생(${z})`} {dayLabel(c!.on)} {c!.label} ({c!.from} → {c!.to}). 그날부터 한국 시간 칸이 자동으로 1시간 옮겨져요.
+          {z === weekTz ? `${tutor.name}(${away ? koZoneName(weekTz) : tutor.country})` : `수강생(${z})`} {dayLabel(c!.on)} {c!.label} ({c!.from} → {c!.to}). 그날부터 한국 시간 칸이 자동으로 1시간 옮겨져요.
         </p>
       ))}
       <div className="-mx-4 mt-3 overflow-x-auto px-4 lg:mx-0 lg:px-0">
@@ -423,7 +428,7 @@ export function WeekCalendar({
                         className={`flex h-[38px] w-full flex-col items-center justify-center rounded-[7px] text-[12px] font-semibold leading-tight ${look} ${wished && !picked ? 'outline-dashed outline-2 -outline-offset-2 outline-[#f0a23a]' : ''} ${past ? 'opacity-50' : ''}`}
                       >
                         <span className="text-inherit">{picked ? '✓ 선택' : tight ? '시작 불가' : c.state === 'makeup' ? '보강 1건' : CELL[c.state].text}</span>
-                        {showLocal && c.state !== 'unavailable' && <span className="text-[10.5px] font-normal opacity-80">{ampmKo(formatInZone(s, tutor.timezone).time)}</span>}
+                        {showLocal && c.state !== 'unavailable' && <span className="text-[10.5px] font-normal opacity-80">{ampmKo(formatInZone(s, tutorTzAt(tutor, s)).time)}</span>}
                       </button>
                     </td>
                   );
@@ -442,10 +447,16 @@ export function slotText(s: RegularSlot) {
 }
 
 /** 고른 정규 시간을 강사·수강생 현지 시각으로 (첫 수업 날짜 기준 — 서머타임이면 날짜마다 달라질 수 있음) */
-export function slotLocal(s: RegularSlot, first: KstDate, tz: string) {
+/** 그 시각의 강사 시간대 (해외 이동 기간이면 그 지역, H26(173)(176)) */
+export const tutorTzAt = (t: RegTutor, at: Date) => tutorZoneFn(t.travel, t.timezone)(at);
+
+/** 정규 시간 하나의 강사 현지 시각 + 시간대 이름 (첫 수업 날짜의 지역) */
+export function slotLocal(s: RegularSlot, first: KstDate, tutor: RegTutor) {
   let d = first;
   while (weekdayOf(d) !== s.weekday) d = addDays(d, 1);
-  return localTime(kstToInstant(d, s.time), tz);
+  const at = kstToInstant(d, s.time);
+  const z = tutorTzAt(tutor, at);
+  return `${localTime(at, z)} ${koZoneName(z)}`;
 }
 
 export function ProfileSheet({ tutor, onClose }: { tutor: RegTutor; onClose: () => void }) {
@@ -456,7 +467,7 @@ export function ProfileSheet({ tutor, onClose }: { tutor: RegTutor; onClose: () 
         <div className="flex items-center gap-2">
           <b className="text-[17px] text-[#1d1b2b]">{tutor.name}</b>
           <span className="text-[13px] text-[#6b6880]">
-            {tutor.country} · {tutor.timezone} · 지금 {ampmKo(formatInZone(new Date(), tutor.timezone).time)}
+            {tutor.country} · {tutorTzAt(tutor, new Date())} · 지금 {ampmKo(formatInZone(new Date(), tutorTzAt(tutor, new Date())).time)}
           </span>
           <span className="flex-1" />
           <button type="button" onClick={onClose} aria-label="닫기" className="h-10 w-10 text-[20px] text-[#6b6880]">

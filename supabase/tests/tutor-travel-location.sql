@@ -187,4 +187,15 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-0000000000f1","aal":"aal1"}', true);
 select pg_temp.ok(jsonb_array_length(tutor_travel_periods(null)) = 2, '강사 Home 용 이동 기간 목록 (지난 것 포함)');
 reset role;
+-- ── 신규 배정 저장·확정 검사 (대표 11/14 '3 가'): 이동 기간 안 수업은 그 기간 시간표에 맞아야 함 ──
+create temp table pc as select ((select d + 3 from d) + time '03:00') at time zone 'America/Argentina/Buenos_Aires' as t_in,
+                               ((select d - 3 from d) + time '03:00') at time zone 'America/Argentina/Buenos_Aires' as t_out;
+select pg_temp.ok((select lms_plan_conflicts('aaaaaaaa-0000-4000-8000-0000000000f1',
+    jsonb_build_array(jsonb_build_object('weekday', extract(dow from (t_in at time zone 'Asia/Seoul'))::int, 'time', to_char(t_in at time zone 'Asia/Seoul', 'HH24:MI'))),
+    (t_in at time zone 'Asia/Seoul')::date, (t_in at time zone 'Asia/Seoul')::date, 40::smallint) @> '[{"reason":"tutor_travel_hours"}]' from pc),
+  '배정 검사: 이동 기간 안인데 그 기간 시간표 밖 → 충돌(tutor_travel_hours)');
+select pg_temp.ok((select not (lms_plan_conflicts('aaaaaaaa-0000-4000-8000-0000000000f1',
+    jsonb_build_array(jsonb_build_object('weekday', extract(dow from (t_out at time zone 'Asia/Seoul'))::int, 'time', to_char(t_out at time zone 'Asia/Seoul', 'HH24:MI'))),
+    (t_out at time zone 'Asia/Seoul')::date, (t_out at time zone 'Asia/Seoul')::date, 40::smallint) @> '[{"reason":"tutor_travel_hours"}]') from pc),
+  '배정 검사: 이동 기간 밖은 이동 기간 검사 안 함 (전과 같음)');
 rollback;
