@@ -276,6 +276,8 @@ export default function StudentHome(props: {
   onLogout?: () => void;
   /** 톡 바로가기 ?makeup=수업(시트 보강·보상권)id → 그 '보강 날짜 고르기'를 바로 엶 (11/8 대표 시안) */
   openMakeup?: string;
+  /** 메일 바로가기 ?tab=me → '내 정보' 탭으로 바로 엶 (첫 학습 정보 등록 메일) */
+  openTab?: string;
 }) {
   const { actions, extras, preview } = props;
   const now = useMemo(() => new Date(props.nowIso), [props.nowIso]);
@@ -295,7 +297,7 @@ export default function StudentHome(props: {
   VIEW_TZ = isAdminView && adminKst ? 'Asia/Seoul' : studentTz;
   const [renewal, setRenewal] = useState<RenewalState>(props.initial.renewalPaid ? 'payment_confirmed' : 'not_requested');
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
-  const [tab, setTab] = useState<Tab>('home');
+  const [tab, setTab] = useState<Tab>(props.openTab === 'me' ? 'me' : 'home');
   const [overlay, setOverlay] = useState<Overlay>(null);
   // 창이 열리면 history 에 한 칸 → 휴대폰 뒤로가기(제스처 포함)는 창만 닫고 수강생 화면에 머묾 (Work QA 11/7: 수업 변경 창에서 뒤로가기 → 화면 이탈)
   const overlayOpen = overlay !== null;
