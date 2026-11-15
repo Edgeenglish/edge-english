@@ -2479,11 +2479,11 @@ select pg_temp.expect_error($$select admin_student_update('99999999-0000-0000-00
 select pg_temp.expect_error($$select admin_student_detail('99999999-0000-0000-0000-000000004300')$$, '운영자|42501');
 select pg_temp.ok(admin_students() is null, '강사는 운영진 학생 목록·상세·정보 수정 함수 사용 불가 (4300)');
 
--- ⑥ 강사 접근: 정규 담당 R = 전체(이메일 포함)·수정 가능 / 미배정 S = 차단 / 대체수업 확정 뒤 S = 열람만, 이메일 없음, 끝나고 24시간 뒤 차단
-select pg_temp.ok((select p ->> 'access' = 'regular' and p -> 'student' ->> 'email' = 'p4300@example.com' and p -> 'student' ->> 'label' = 'Kim Seoyeon (Sarah)'
+-- ⑥ 강사 접근: 정규 담당 R = 전체(이메일은 11/15부터 안 보임)·수정 가능 / 미배정 S = 차단 / 대체수업 확정 뒤 S = 열람만, 이메일 없음, 끝나고 24시간 뒤 차단
+select pg_temp.ok((select p ->> 'access' = 'regular' and p -> 'student' ->> 'email' is null and p -> 'student' ->> 'label' = 'Kim Seoyeon (Sarah)'
                           and p -> 'student' ->> 'name_ko' is null and jsonb_array_length(p -> 'slots') = 2 and p -> 'enrollment' ->> 'final_end_date' is not null
                    from tutor_student_profile('99999999-0000-0000-0000-000000004300') p),
-  '⑥ 정규 담당 강사: 프로필·이메일·정규 일정·수강 정보 보임, 한국 이름은 안 보임 (4300)');
+  '⑥ 정규 담당 강사: 프로필·정규 일정·수강 정보 보임, 이메일·한국 이름은 안 보임 (4300, 11/15)');
 select tutor_student_update('99999999-0000-0000-0000-000000004300', '{"level":"Intermediate","job":"Software engineer","interests":"  ","correction_style":"major_only"}');
 select pg_temp.expect_error($$select tutor_student_update('99999999-0000-0000-0000-000000004300', '{"level":"B2"}')$$, 'rubric');
 select pg_temp.expect_error($$select tutor_student_update('99999999-0000-0000-0000-000000004300', '{"email":"x@y.z"}')$$, 'cannot be changed|42501');
@@ -2508,6 +2508,10 @@ select pg_temp.ok((select p ->> 'access' = 'substitute' and p -> 'student' ->> '
   '⑥ 대체강사: 대체수업 확정 뒤 프로필·레벨·선호 열람, 이메일·연장 기록은 안 보임, 자기 대체수업만 (4300)');
 select pg_temp.expect_error($$select tutor_student_update('99999999-0000-0000-0000-000000004300', '{"level":"Advanced"}')$$, 'regular tutor|42501');
 select pg_temp.ok((select count(*) from tutor_my_students() where email is null) = 1, '⑥ 대체강사는 수정 불가, 목록에도 이메일 없이 (4300)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004300';
+select pg_temp.ok((select p -> 'student' ->> 'email' is null from tutor_student_profile('99999999-0000-0000-0000-000000004300') p)
+                  and (select count(*) from tutor_my_students() where email is not null) = 0, '정규 담당 강사도 학생 이메일 안 보임 (대표 11/15)');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004301';
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000004300';   -- 정규 강사 R 은 대체 뒤에도 그대로
 select pg_temp.ok((select p ->> 'access' = 'regular' from tutor_student_profile('99999999-0000-0000-0000-000000004300') p), '⑥ 정규 담당 강사 권한은 대체수업과 무관하게 유지 (4300)');
 reset role;
