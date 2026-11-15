@@ -53,6 +53,12 @@ echo "$TLN_OUT" | grep -E 'ERROR|실패' && { echo "❌ 강사 늦어요 알림 
 [ "$(echo "$TLN_OUT" | grep -c '통과: ')" -ge 27 ] || { echo "❌ 강사 늦어요 알림 시험 통과 줄 부족"; echo "$TLN_OUT" | tail -5; exit 1; }
 echo "✅ 강사 늦어요 알림 시험 통과"
 
+# 강사 LMS 전자서명 (H26(188), 대표 11/15): 가짜 데이터로 초안·게시(회사 서명)·요청·코드(10분·5회)·서명·PDF·메일 첨부·권한 확인, 끝에 되돌림
+ES_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/tutor-esign.sql" 2>&1 || true)"
+echo "$ES_OUT" | grep -E 'ERROR|실패' && { echo "❌ 강사 전자서명 시험 실패"; exit 1; }
+[ "$(echo "$ES_OUT" | grep -c '통과: ')" -ge 54 ] || { echo "❌ 강사 전자서명 시험 통과 줄 부족"; echo "$ES_OUT" | tail -5; exit 1; }
+echo "✅ 강사 전자서명 시험 통과"
+
 # 로그인 사용자 권한 점검: 시험용 Supabase 상태(가상 데이터 적용 후)와 같게 만든 뒤 실물용 파일을 그대로 실행
 "${PSQL[@]}" -o /dev/null -f "$ROOT/supabase/test-setup/seed_fake.sql"
 "${PSQL[@]}" -o /dev/null -f "$HERE/stub_supabase_platform.sql"   # 실물 Supabase 플랫폼 함수 흉내

@@ -2,6 +2,32 @@
 
 # 다음 세션 시작 메모
 
+## 🖊 11/15 강사 LMS 전자서명 — **운영 반영 끝(코드·DB), 회사 서명·서명 요청·강사 메일은 대표 승인 대기** (정책 원본 H26(188)(189)(190) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
+- ✅ 운영 반영(대표 11/15): 운영 DB 백업 **snapshots 60**(표 64 전체 + 바뀌는 함수 3개 이전 정의 `_functions_before`: lms_mail_dispatch·lms_student_profile_json·tutor_my_students) → migration 커넥터 이름 lms_tutor_hide_student_email(040000) · lms_tutor_esign(050000) · lms_tutor_sign_request_mail(070000) → 표 67, 학생 13·수업 183 그대로, RLS 꺼진 표 0 · 코드 lms-prod 743536d(+ca384bd·c9bb5d7 묶음 SQL) = 전자서명·이메일 숨김 파일만 골라 담음(처리방침 legal.ts·060000 수업 안내 카드 등 다른 미배포 변경 안 넣음). edgeenglish.kr JS 에 반영 확인
+- 운영 데이터: 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판 **초안**만 넣음(전문 해시 313082ba… = 시험과 같음). 회사 서명(게시)·Benny·Maria·Olivia 요청·강사 메일 **안 함** — 대표가 메일 문구 3개 검토 후 '보내' 할 때. 운영 send_emails 켜져 있으므로 [요청 보내기] 누르면 실제 메일이 감(메일 없이 요청만 = rpc admin_sign_request(…, false))
+- 되돌리기: 코드 = lms-prod 를 30204e5 로 · DB = snapshots 60 `_functions_before` 3개 정의 실행 + 새 함수·표 3개 drop(서명 0건일 때만)
+- 11/15 대표 확정(H26(192)): 부속합의서 서명 요청 메일 = 제목 'Edge English – Student Data Protection Addendum (please sign)' + 확정 본문(기한 = 강사 현지 날짜), 다른 문서 요청은 일반 문구 → migration 20261115090000 시험·운영 DB 적용(운영 백업 snapshots 62). 시험 메일 support@ 도착 확인(Emma). 운영 요청 0·메일 0·문서 초안 그대로
+- 11/15 대표 메일 3개 최종 승인(H26(191)): 서명본 메일 맺음말만 'Edge English Team' 으로 통일 → migration 20261115080000 시험·운영 DB 적용(운영 백업 snapshots 61 = tutor_sign 이전 정의). 회사 서명·요청·발송은 여전히 대표 '보내' 대기
+- 11/15 추가: 서명 요청 알림 메일 1회(재촉 없음, migration 070000) · 운영자 화면 요청 메일 상태·[요청 메일 보내기]
+- ✅ 시험 사이트 운영자 화면 QA(대표 시험용 인증 앱 코드): 빠른 메뉴 '강사 서명 문서' → 1판·회사 서명 시각·Alex 서명함/PDF·Emma·James 서명 대기·요청 메일 안 보냄·[요청 메일 보내기] · 강사 추가 목록 · 새 판 → 초안 → [회사 서명하고 올리기] 확인 단계(올리지 않음, 시험 DB 에 2판 초안 남음) · 휴대폰 가로 넘침 없음 · 운영자 보기 James: 입력칸·코드·서명 버튼 못 누름 + '강사 본인만 서명할 수 있어요' · Alex My info PDF
+- 시안: `docs/lms/previews/tutor-esign-drafts.html` (https://claude.ai/artifact/9VKQxqr6Kqg8EpMmzyY7B9)
+- migration **20261115050000_lms_tutor_esign** (시험 DB 적용, 커넥터 이름 lms_tutor_esign · 주석만 뺀 같은 내용): 표 3개 `tutor_sign_requests`(기한 = 요청+7일) · `tutor_sign_codes`(코드 해시, 10분·5회, 직접 읽기 없음) · `tutor_signatures`(쌓기만, PDF bytea·해시) / 문서 원본은 기존 `terms_versions`+`terms_documents` 재사용(서명 문구 = required_items[0], 게시 = 회사 서명) / 함수 `tutor_sign_list·tutor_sign_doc·tutor_sign_send_code·tutor_sign·tutor_signed_pdf·admin_sign_docs·admin_sign_doc_save·admin_sign_doc_publish·admin_sign_request` + PDF(`lms_pdf_*`, 글자만 Helvetica) / `lms_mail_dispatch` 에 첨부(payload.attachments)만 더함. 표 64→67 (02-check)
+- 코드: `src/lms/tutor/esign.ts` · `src/app/lms/tutor/SignDoc.tsx` · TutorHome(To do 'Sign: …'+기한 줄, 'My info' 탭 = PC 왼쪽 메뉴·휴대폰 맨 위 머리글) · TutorLive · 운영자 `/lms/admin/sign`(SignAdmin.tsx, 빠른 메뉴 '강사 서명 문서')
+- 시험: DB `supabase/tests/tutor-esign.sql` 48줄 통과 · `npm run test:db` 전부 · vitest 491 · tsc 0
+- 실제 화면 QA(시험 사이트, Alex = support+alex@ 메일 코드 로그인): To do 'Please sign by Mon, 23 Nov' → 창(전문·Party A 줄·두 칸 비면 버튼 못 누름) → Email me a code → support@ 에 '[시험 · Alex] Edge English – Your signing code' → 틀린 코드 1회(DB wrong_tries 1) → 서명 → '✓ Signed'·서명 시각 Sydney/KST → 서명본 메일 PDF 첨부 도착 · PDF 2쪽 pypdf strict 통과 · To do 에서 빠짐 · My info › Documents 보기·PDF · 휴대폰 390 가로 넘침 없음
+- 시험 데이터(그대로 둠): 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판(최종 전문, 서명란 빈칸 줄은 전자서명 칸으로 대체) — 회사 서명은 Claude 가 시험 DB 에서 대표 운영자 계정 id 로 게시(시험만) · 요청 Alex(서명함)·Emma·James(서명 대기)
+- **대표 대기**: 강사 메일 문구 3개(요청·코드·서명본) 검토 → '보내' 뒤 운영 운영자 화면에서 대표가 [회사 서명하고 올리기] → Benny·Maria·Olivia [요청 보내기]
+- 남은 순서: ④ 운영자 화면 '강사 서명 문서' → 1판 초안 → **대표가 [회사 서명하고 올리기]** → Benny·Maria·Olivia 요청(세 강사 모두 계정·이메일 있음 확인) ⑤ 운영 send_emails 켜져 있으므로 요청·코드·서명본 메일이 실제 강사에게 감
+
+## ▶ 다음 세션 작업 (대표 11/15 확정, 시작 전): 수강생이 직접 한 취소 → '수강생 안내 카드' 만들지 않기
+- 대표 11/15 '어': 수강생이 LMS에서 직접 한 취소는 '수강생 안내 카드'(카톡 복사 → 복사함 → 보냄)를 아예 만들지 않게 개발 (정책 원본 H26(102)). 운영진·강사가 대신 한 취소 등 다른 경로의 카드는 그대로.
+- 먼저: 안내 카드(`lesson_notices`)가 만들어지는 곳을 모두 찾고(DB 함수·화면), 영향 범위와 PC·휴대폰 시안 보고 → 승인 뒤 시험 DB·lms-test 구현 → 운영은 별도 승인. 기존 안내 카드 데이터는 지우지 않음.
+- **강사 WhatsApp 복사 카드 (대표 11/15)**: 강사에게 WhatsApp으로 보내는 기능은 그대로 둠(대표가 필요할 때만 씀). 하지만 **'보냄'을 눌러 없애는 일은 하지 않게** — 강사 안내는 메일이 자동으로 나가므로 카드가 '할 일/대기'로 남지 않고(대시보드 대기 숫자에 안 잡힘), 복사 버튼만 필요할 때 쓸 수 있게. 위 수강생 카드 작업과 같은 세션에서 같이 시안·영향 범위 확인(기존 not_needed 처리 방식 H26(82) 참고).
+- 숨은참조: 운영 발송 함수에 이미 있음(`lms_mail_dispatch`, 끄는 스위치 `email_bcc_ops_stop` 꺼짐) — 대표 11/15 확인, 추가 작업 없음.
+- 11/15 영향 범위 조사 끝·시안 https://claude.ai/artifact/62xt4QgVEeaZh4A6qEGsqC (`docs/lms/previews/student-cancel-no-card-drafts.html`), 대표 승인 대기. 요점: 카드 줄은 `lms_change_core` 한 곳(via='student_app' 일 때 수강생 'change' 줄)에서 생김. 이 줄이 수강생 취소 메일의 원본(`lesson_notices_email`→`lms_notice_mail`)이라 **줄은 계속 만들고 넣을 때 status='not_needed'**(강사 줄 `lesson_notices_tutor_no_copy` 와 같은 방식, before insert 트리거 하나 추가). 메일 실패는 지금처럼 '자동 메일 못 보냄' 카드(live.ts emailFails 가 status≠sent 를 봄). 화면(강사 WhatsApp 결정과 통일): 자동 메일이 걸린 not_needed 줄(수강생·강사)은 '자동 메일 안내' + [복사] + 글 상자, [보냄] 없음 — 지금은 not_needed 줄에 [복사]가 숨겨져 있어 강사 줄도 복사 못 함(`LessonChange.tsx` NoticeRow). 강사 줄은 11/11부터 이미 전부 not_needed(시험 DB 확인)라 대시보드 대기 숫자엔 원래 안 잡힘. 휴무 화면(`tutor-leave`) 강사 줄 표시도 구현 때 확인. 되돌리기(admin_revert_change)는 원래 줄을 복사해 'revert' 카드를 만드므로 그대로 뜸
+- ✅ 11/15 대표 '다 반영해'(1~4 + UI 개선) → **시험 사이트 반영(코드만, DB 변경 없음)**: 규칙 = 자동 메일이 걸린 안내(email_status 있음)는 할 일 아님 / 메일 실패·주소 없음·대기 중 오류 = '자동 메일 못 보냄' 카드 + [메일 다시 보내기]·[보냄] / 메일 없는 안내(휴무·되돌리기·보강 무효 등) = 지금처럼 [복사]+[보냄]. 수강생 직접 취소·운영진 대신 취소·강사 기록 취소·보강 확정·보강 시간 변경 모두 같은 규칙(운영진 대신 취소도 메일이 실제로 나갈 때만 카드 없음). 파일: `src/lms/admin/live.ts`(대기 안내 = email_status null 만, 메일 실패에 queued+오류 추가) · `lesson-change-live.ts` loadChangeTasks · `lesson-change.ts` '자동 메일 발송 완료' · `LessonChange.tsx` NoticeRow([복사] 항상, [보냄]은 메일 없거나 실패 때만, 강사 줄도 [복사]). tsc 0 · vitest src/lms/admin 190. 시험 DB: STU-0005 11/18 수업 수강생 직접 취소 1건 만듦(change_request faa056a4…) → 수강생 줄 메일 sent→status sent, 강사 줄 not_needed·sent, support@ 로만 감. 남은 것: 강사 줄(not_needed) 메일 실패 때 [보냄]으로 닫을 수 없음(admin_mark_lesson_notice_sent 가 not_needed 거절, 예전부터) · 운영 반영은 대표 승인 뒤(코드만)
+- 같은 날 대표 결정: 3자 대조 보고 예약 작업 끔(trig_01DYXbuSfHjUehZrZJZwaq5H), 로그인 점검 보고는 계속. 강사 메일 숨은참조·강사 WhatsApp 복사 카드 유지 여부는 대표 답 대기.
+
 ## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(175) — 같은 날 강사 해외 이동 기록과 번호가 겹쳐 175 로 정정)
 - migration `20261114130000_student_reminder_default_regular_off`(students.remind_regular 기본값 false, 기존 학생 변경 없음) · `20261114140000_first_class_mail_reminder_setting_line`(lms_first_class_mail_student: 일정 변경 재안내 메일 제외, 첫 안내에만 '수업 알림 메일은 … 내 정보 › 이메일 알림 설정에서 켜고 끌 수 있어요.' 한 줄).
 - 운영 DB 백업 `lms_backup.snapshots` **54**(표 62 전체) · **55**(lms_first_class_mail_student 이전 정의, 되돌리기 = 그 정의로 create or replace). 기본값 되돌리기 = `alter table students alter column remind_regular set default true`.
@@ -1436,6 +1462,7 @@
 
 ## 📎 강사 학생 정보 보호 부속합의서·발송 메일 최종 문구 (11/14 확정, 미발송 — H26(178)(181) 참고)
 - 발송 조건: 11/15 Class Record 운영진 전용 전환을 Claude 가 시트 권한으로 확인한 뒤, 대표 "보내" → support@ 임시 보관함에 강사 3명(Benny·Maria·Olivia, Leslie 는 아래 11/15 줄 참고) 초안, 대표가 [보내기]. 기한 = 보낸 날 + 7일. 강사 서명 먼저 → 대표 서명 → 양쪽 서명본 강사에게 1부
+- **H26(188) 참고 (11/15 대표 확정)**: LMS 전자서명 개발 확정(법령 검토 끝) · 1조·처리방침 항목 = 실제 강사 화면(이메일은 빼고 Meet 문장, 도시 추가) · 회사 서명은 판 올릴 때 한 번 · PDF 메일 발송 대신 LMS 서명. 다음 = 새 세션에서 시안(PC·휴대폰)
 - 11/15 대표: **강사 서명을 LMS 전자서명(To do)으로 받는 쪽 검토** — 범용(부속합의서·신규 강사·프리랜서 계약서 재사용)으로 만들 것, **ChatGPT 법령 검토(클릭 동의가 개인정보 처리위탁 문서·계약 서명으로 유효한지) 결과 확인 전 개발 시작 금지**(대표). 기존 consent_requests·consent_events(학생 동의, document_sha256)·tutor_contracts 표 재사용 검토
 - 11/15 대표: 1조에 이메일·성별나이대·국가시간대·학습 선호·수업 노트 추가(실제 강사 화면과 맞춤), 강사 화면에서 학생 이메일 숨김(migration 20261115040000, 시험 DB 적용·운영 미적용), 처리방침 목록도 같게(시험 사이트). 11/15 23:30 일괄 발송은 대표 보류
 - 11/15 진행(이 세션): 운영 DB 확인 — 11/7 뒤 끝난 수업 Benny 10·Maria 3·Olivia 8 모두 강사가 LMS 에 기록(빈 기록 0, 수업 내용 빈 칸 Olivia 1). LMS 기록 시작 전(10/27~11/4 이전) 기록은 시트에만 있음 → 필요하면 운영진에게 요청. 대표 결정: **Class Record 4개 11/15 오후 11:00 한국 시간에 강사 권한 빼기**(공유 해제 = 대표 또는 Work, 커넥터 불가) · 미리 WhatsApp 알림은 Benny·Maria·Olivia 만(현지 시간 / KST 문구, 대표가 보냄) · **Leslie 는 알림 없음**(예정 수업 0, LMS 계정 연결돼 있으나 로그인 안내 안 함 — 다음 대체 수업 맡길 때 안내) · **부속합의서는 Benny·Maria·Olivia 3명만 이번에 발송, Leslie 는 다음 대체 수업 맡길 때 LMS 로그인 안내와 함께 보내 서명 받기**(대표 11/15, 계약은 유지). 11/15 23:10 KST 에 Claude 가 시트 권한 확인 예약
@@ -1460,7 +1487,7 @@ Addendum: Student Data Protection
 This Addendum is part of the Freelance Instructor Contract between Tangerine English (Edge English, "Party A") and the Instructor ("Party B"). All other terms of the Freelance Instructor Contract remain unchanged.
 
 1. Purpose and scope
-Party A entrusts Party B with student information (name, email address, English level, self-introduction, gender and age range, country and time zone, learning preferences such as textbook and correction style, class notes, class schedule and class records) only to teach the classes Party A assigns.
+Party A entrusts Party B with student information (name, English level, self-introduction, gender and age range, city, country and time zone, learning preferences such as textbook and correction style, class notes, class schedule and class records) only to teach the classes Party A assigns. If Party B sees any other student information during class (for example, an email address shown in Google Meet), the same rules in this Addendum apply.
 
 2. Use
 Party B uses student information only for those classes, and for no other purpose.
