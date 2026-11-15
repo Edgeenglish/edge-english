@@ -1,0 +1,254 @@
+<title>강사 전자서명 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 시안 단계별 구역, 구역마다 PC 틀 + 휴대폰 틀 나란히(좁으면 아래로) */
+:root{
+  --bg:#f6f5fb; --fg:#1d1b2b; --muted:#6b6880; --line:#e4e1ef; --card:#ffffff;
+  --accent:#5b3fe0; --accent-soft:#efecfd; --todo:#f0a33a; --todo-soft:#fff4d6; --todo-ink:#5c3b00;
+  --ok:#1f7a4d; --err:#b3261e; --doc:#fbfaf6; --frame:#2a2738;
+  --sans:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#15131d; --fg:#ece9f7; --muted:#a6a2bb; --line:#353046; --card:#1f1c2a;
+  --accent:#9d8bff; --accent-soft:#2c2647; --todo:#f0a33a; --todo-soft:#3a2d12; --todo-ink:#f6d394;
+  --ok:#6fd3a0; --err:#ff8a80; --doc:#24212f; --frame:#0b0a10; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15131d; --fg:#ece9f7; --muted:#a6a2bb; --line:#353046; --card:#1f1c2a;
+  --accent:#9d8bff; --accent-soft:#2c2647; --todo:#f0a33a; --todo-soft:#3a2d12; --todo-ink:#f6d394;
+  --ok:#6fd3a0; --err:#ff8a80; --doc:#24212f; --frame:#0b0a10; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:40px}
+h1{font-size:24px;margin:0}
+.lead{color:var(--muted);margin:4px 0 0;font-size:14px}
+.step{display:grid;gap:14px}
+.step>h2{font-size:19px;margin:0;display:flex;gap:10px;align-items:center;text-wrap:balance}
+.step>h2 b{background:var(--accent);color:#fff;border-radius:8px;padding:2px 10px;font-size:15px}
+.note{font-size:13.5px;color:var(--muted);margin:0}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+@media (max-width:860px){.pair{grid-template-columns:minmax(0,1fr)}}
+.lbl{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--muted);margin:0 0 6px}
+.pc{border:6px solid var(--frame);border-radius:12px;background:var(--bg);overflow:hidden;min-width:0}
+.pc .bar{display:flex;gap:18px;align-items:center;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;font-size:14px;flex-wrap:wrap}
+.pc .bar strong{color:var(--accent)}
+.pc .bar span.on{font-weight:700;border-bottom:2px solid var(--accent)}
+.pc .in{padding:18px;display:grid;gap:14px;max-width:720px}
+.ph{border:6px solid var(--frame);border-radius:30px;background:var(--bg);overflow:hidden;width:100%;max-width:340px}
+.ph .bar{background:var(--card);border-bottom:1px solid var(--line);padding:10px 14px;font-size:13px;display:flex;justify-content:space-between}
+.ph .in{padding:14px;display:grid;gap:12px}
+.adminband{background:#2b2343;color:#fff;font-size:12.5px;padding:6px 14px}
+.todo{border:2px solid var(--todo);border-radius:18px;background:var(--card);overflow:hidden}
+.todo h3{margin:0;background:var(--todo-soft);color:var(--todo-ink);font-size:16px;padding:9px 14px;display:flex;gap:8px;align-items:center}
+.pill{background:var(--todo);color:#fff;border-radius:999px;padding:1px 8px;font-size:13px}
+.tbar{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-top:1px solid var(--line);font-size:15px;gap:8px}
+.tbar:first-of-type{border-top:0}
+.tbar .go{color:var(--accent);font-weight:700;white-space:nowrap}
+.tbar.hl{background:var(--accent-soft)}
+.sub{display:block;font-size:13px;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.doc{background:var(--doc);border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:13.5px;max-height:330px;overflow:auto}
+.doc h4{margin:0 0 8px;font-size:16px}
+.doc p{margin:0 0 9px}
+.doc .n{font-weight:700}
+.ph .doc{max-height:260px;font-size:13px}
+.partya{font-size:13.5px;border-top:1px dashed var(--line);padding-top:10px;margin-top:4px}
+.field{display:grid;gap:4px;font-size:14px}
+.field label{font-weight:600}
+.field .box{border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:var(--card);min-height:40px;color:var(--fg)}
+.field .box.empty{color:var(--muted)}
+.intent{font-size:13.5px;background:var(--accent-soft);border-radius:10px;padding:10px 12px;margin:0}
+.btn{display:inline-flex;justify-content:center;align-items:center;min-height:44px;border-radius:12px;padding:0 18px;font-weight:700;font-size:15px;border:0;background:var(--accent);color:#fff;width:fit-content}
+.btn.full{width:100%}
+.btn.off{background:#c9c6d6;color:#fff}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.ok{color:var(--ok);font-weight:700}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12.5px;color:var(--muted);font-weight:600}
+.tbl{overflow-x:auto}
+.q{background:var(--card);border:2px solid var(--accent);border-radius:16px;padding:16px 18px}
+.q h2{margin:0 0 8px;font-size:18px}
+.q ol{margin:0;padding-left:20px;display:grid;gap:8px;font-size:14.5px}
+.db{font-size:14px} .db ul{margin:6px 0 0;padding-left:20px;display:grid;gap:4px}
+code{font-size:12.5px;background:var(--accent-soft);padding:1px 5px;border-radius:5px}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>강사 LMS 전자서명 — 시안 (PC·휴대폰)</h1>
+  <p class="lead">첫 문서: Student Data Protection Addendum (Benny·Maria·Olivia). 화면 예시 강사는 가짜 이름 Emma(Manila 거주).</p>
+</header>
+
+<!-- 1 -->
+<section class="step">
+  <h2><b>1</b> 강사 Home — To do 에 'Sign addendum'</h2>
+  <div class="pair">
+    <div><p class="lbl">PC</p>
+      <div class="pc">
+        <div class="bar"><strong>Edge English</strong><span class="on">Home</span><span>Schedule</span><span>Class Record</span><span>My hours</span><span>My info</span></div>
+        <div class="in">
+          <div><div style="font-size:22px;font-weight:700">Hi, Emma</div><div class="sub">Mon, 16 Nov 6:00 PM <b>Manila Time</b> / 7:00 PM <b>KST</b></div></div>
+          <div class="todo"><h3>To do <span class="pill">2</span></h3>
+            <div class="tbar hl"><span>Sign: Student Data Protection Addendum<span class="sub">Please sign by Mon, 23 Nov</span></span><span class="go">Sign ›</span></div>
+            <div class="tbar"><span>Classes to record <span class="pill">1</span></span><span class="go">›</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div><p class="lbl">휴대폰</p>
+      <div class="ph"><div class="bar"><b>Edge English</b><span>☰</span></div>
+        <div class="in">
+          <div><div style="font-size:20px;font-weight:700">Hi, Emma</div><div class="sub">Mon, 16 Nov 6:00 PM <b>Manila Time</b> / 7:00 PM <b>KST</b></div></div>
+          <div class="todo"><h3>To do <span class="pill">2</span></h3>
+            <div class="tbar hl"><span>Sign: Student Data Protection Addendum<span class="sub">Please sign by Mon, 23 Nov</span></span><span class="go">›</span></div>
+            <div class="tbar"><span>Classes to record <span class="pill">1</span></span><span class="go">›</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">기한 줄('Please sign by …')은 질문 ①에 따라 넣거나 뺌.</p>
+</section>
+
+<!-- 2 -->
+<section class="step">
+  <h2><b>2</b> 서명 화면 — 전문 → 거주 국가·이름 → [I agree and sign]</h2>
+  <div class="pair">
+    <div><p class="lbl">PC (오른쪽 창)</p>
+      <div class="pc">
+        <div class="bar"><span>‹ Back</span><strong>Sign: Student Data Protection Addendum</strong><span class="sub" style="margin-left:auto">Version 1</span></div>
+        <div class="in">
+          <div class="doc" tabindex="0">
+            <h4>Addendum: Student Data Protection</h4>
+            <p>This Addendum is part of the Freelance Instructor Contract between Tangerine English (Edge English, "Party A") and the Instructor ("Party B"). All other terms of the Freelance Instructor Contract remain unchanged.</p>
+            <p><span class="n">1. Purpose and scope</span><br>Party A entrusts Party B with student information (name, English level, self-introduction, gender and age range, city, country and time zone, learning preferences such as textbook and correction style, class notes, class schedule and class records) only to teach the classes Party A assigns. If Party B sees any other student information during class (for example, an email address shown in Google Meet), the same rules in this Addendum apply.</p>
+            <p><span class="n">2. Use</span><br>Party B uses student information only for those classes, and for no other purpose.</p>
+            <p><span class="n">3. Access and storage</span><br>Party B uses student information only through the tools Party A provides (LMS and Google Meet). Party B does not copy, download, screenshot or keep it anywhere else, and only accesses information about students assigned to them.</p>
+            <p><span class="n">4. Security</span><br>Party B keeps their login details private, does not share their account, protects the devices used for classes, and takes reasonable security measures to prevent unauthorized access, loss, or disclosure of student information.</p>
+            <p><span class="n">5. No sharing</span><br>Party B does not share student information with anyone, and does not hand this work to another person.</p>
+            <p><span class="n">6. Incidents</span><br>If student information is lost, leaked or accessed by someone else, Party B tells Party A right away and follows Party A's instructions.</p>
+            <p><span class="n">7. Checks</span><br>Party B cooperates with Party A's reasonable security checks and instructions concerning student information, including measures to protect student rights and address privacy complaints or disputes.</p>
+            <p><span class="n">8. End of assignment</span><br>Party B can access a student's information only while the student is assigned to them and for 24 hours after their last class with that student. After that, Party B stops accessing that student's information and permanently deletes any copies still in their possession or control, unless retention is required by applicable law. When this contract ends, access to all student information stops immediately.</p>
+            <p><span class="n">9. Responsibility</span><br>Party B is responsible for any damage caused by breaking this Addendum. This Addendum is governed by Article 9 of the contract.</p>
+            <p class="partya">Party A: Tangerine English (Edge English)<br>Signed electronically by the Representative · Sun, 15 Nov 11:40 PM <b>KST</b></p>
+          </div>
+          <div class="field"><label>Country of residence</label><div class="box empty">e.g. Philippines</div></div>
+          <div class="field"><label>Full name</label><div class="box empty">Type your full name</div></div>
+          <p class="intent">By selecting “I agree and sign”, I sign this Addendum electronically. My electronic signature has the same effect as my handwritten signature.</p>
+          <span class="btn off">I agree and sign</span>
+        </div>
+      </div>
+    </div>
+    <div><p class="lbl">휴대폰 (전체 화면)</p>
+      <div class="ph"><div class="bar"><span>‹ Back</span><span>Version 1</span></div>
+        <div class="in">
+          <div style="font-weight:700;font-size:16px">Sign: Student Data Protection Addendum</div>
+          <div class="doc" tabindex="0">
+            <h4>Addendum: Student Data Protection</h4>
+            <p>This Addendum is part of the Freelance Instructor Contract between Tangerine English (Edge English, "Party A") and the Instructor ("Party B")…</p>
+            <p><span class="n">1. Purpose and scope</span><br>Party A entrusts Party B with student information …</p>
+            <p class="sub">(전문 9조 전체 — 이 칸 안에서 스크롤)</p>
+            <p class="partya">Party A: Tangerine English (Edge English)<br>Signed electronically by the Representative · Sun, 15 Nov 11:40 PM <b>KST</b></p>
+          </div>
+          <div class="field"><label>Country of residence</label><div class="box">Philippines</div></div>
+          <div class="field"><label>Full name</label><div class="box">Emma Cruz</div></div>
+          <p class="intent">By selecting “I agree and sign”, I sign this Addendum electronically. My electronic signature has the same effect as my handwritten signature.</p>
+          <span class="btn full">I agree and sign</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">두 칸이 비면 버튼을 못 누름(PC 그림), 다 채우면 보라색(휴대폰 그림). 서명 시각은 서버 시각, 강사 기기 시각은 안 씀. IP 저장 안 함.</p>
+</section>
+
+<!-- 3 -->
+<section class="step">
+  <h2><b>3</b> 서명 뒤 — 같은 화면에 서명 결과, To do 에서 빠짐, My info 에서 언제든 다시 보기</h2>
+  <div class="pair">
+    <div><p class="lbl">PC — My info › Documents</p>
+      <div class="pc">
+        <div class="bar"><strong>Edge English</strong><span>Home</span><span>Schedule</span><span>Class Record</span><span>My hours</span><span class="on">My info</span></div>
+        <div class="in">
+          <div class="card"><div style="font-weight:700;margin-bottom:8px">Documents</div>
+            <div class="tbl"><table>
+              <tr><th>Document</th><th>Signed</th><th></th></tr>
+              <tr><td>Student Data Protection Addendum<span class="sub">Version 1</span></td><td>Mon, 16 Nov 6:12 PM <b>Manila Time</b> / 7:12 PM <b>KST</b></td><td><span class="go" style="color:var(--accent);font-weight:700">View ›</span></td></tr>
+            </table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div><p class="lbl">휴대폰 — 누른 직후</p>
+      <div class="ph"><div class="bar"><span>‹ Back</span><span>Version 1</span></div>
+        <div class="in">
+          <div style="font-weight:700;font-size:16px">Sign: Student Data Protection Addendum</div>
+          <p class="ok" style="margin:0">✓ Signed</p>
+          <dl class="kv">
+            <dt>Name</dt><dd>Emma Cruz</dd>
+            <dt>Country</dt><dd>Philippines</dd>
+            <dt>Signed</dt><dd>Mon, 16 Nov 6:12 PM <b>Manila Time</b> / 7:12 PM <b>KST</b></dd>
+          </dl>
+          <div class="doc" tabindex="0" style="max-height:120px"><h4>Addendum: Student Data Protection</h4><p class="sub">(서명한 판 전문 + 맨 아래 양쪽 서명 줄)</p></div>
+          <span class="btn ghost full">Back to Home</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="step">
+  <h2><b>4</b> 운영자 — 문서 판 올리기(회사 서명 1번) · 서명 요청 · 서명 현황</h2>
+  <div class="pair">
+    <div><p class="lbl">PC — 운영자 › 강사 서명 문서</p>
+      <div class="pc">
+        <div class="bar"><strong>엣지영어 운영</strong><span>홈</span><span>강사</span><span>학생</span><span class="on">강사 서명 문서</span></div>
+        <div class="in">
+          <div class="card" style="display:grid;gap:10px">
+            <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>Student Data Protection Addendum · 1판</b><span class="ok">회사 서명함 11/15(일) 오후 11:40 한국 시간</span></div>
+            <div class="sub">판 올린 뒤에는 전문을 고칠 수 없음 → 고치면 '새 판 만들기'</div>
+            <div class="tbl"><table>
+              <tr><th>강사</th><th>상태</th><th>거주 국가</th><th>서명 시각</th></tr>
+              <tr><td>Emma</td><td class="ok">서명함 ✓</td><td>Philippines</td><td>11/16(월) 오후 7:12 한국 시간</td></tr>
+              <tr><td>James</td><td>서명 대기</td><td></td><td></td></tr>
+              <tr><td>Alex</td><td>서명 대기</td><td></td><td></td></tr>
+            </table></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="btn">서명 요청 보낼 강사 추가</span><span class="btn ghost">새 판 만들기</span></div>
+          </div>
+          <div class="card" style="display:grid;gap:10px">
+            <b>새 판 올리기 (대표만)</b>
+            <div class="field"><label>문서 이름</label><div class="box">Student Data Protection Addendum</div></div>
+            <div class="field"><label>전문 (영어)</label><div class="box" style="min-height:70px">Addendum: Student Data Protection …</div></div>
+            <p class="intent">[회사 서명하고 올리기]를 누르면 대표 계정·시각·전문 해시가 회사 서명으로 저장되고, 전문은 고칠 수 없게 돼요.</p>
+            <span class="btn">회사 서명하고 올리기</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div><p class="lbl">휴대폰 — 운영자 보기 (?tutor=James)</p>
+      <div class="ph"><div class="adminband">운영자 보기 · James</div><div class="bar"><span>‹ Back</span><span>Version 1</span></div>
+        <div class="in">
+          <div style="font-weight:700;font-size:16px">Sign: Student Data Protection Addendum</div>
+          <div class="doc" style="max-height:120px"><h4>Addendum: Student Data Protection</h4><p class="sub">(전문)</p></div>
+          <p class="sub" style="margin:0">강사 본인만 서명할 수 있어요</p>
+          <span class="btn off full">I agree and sign</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">운영자 보기: 강사 화면은 그대로 열리고 서명 기록도 보이지만, 서명 버튼만 못 누름(질문 ②).</p>
+</section>
+
+<!-- DB -->
+<section class="step db">
+  <h2><b>DB</b> 기존 표 재사용 검토 결과</h2>
+  <div class="card">
+    <b>재사용:</b> <code>terms_versions</code>(문서 종류·대상 강사) + <code>terms_documents</code>(판별 전문 원본, 게시 뒤 수정 불가 트리거, DB가 SHA-256 자동 계산) — 그대로 씀. 회사 서명 칸(대표 계정·시각)만 추가해 '게시 = 회사 서명'으로 묶음.
+    <br><br><b>새로 만듦:</b> 강사 서명 요청 표 + 강사 서명 기록 표(쌓기만, 수정·삭제 금지) — 계정·입력 이름·거주 국가·판·전문 해시·서버 시각. <code>consent_requests·consent_events</code>는 학생·수강등록이 필수이고 '동의는 학생만' 제약이 걸려 있어, 강사용으로 쓰려면 학생 동의 표의 안전장치를 풀어야 해서 따로 만드는 게 안전함. 같은 표로 신규 강사 본계약도 받음.
+    <br><br>운영 DB 확인(읽기만): <code>terms_documents·consent_requests·consent_events·tutor_contracts</code> 모두 0건 — 기존 데이터 영향 없음.
+  </div>
+</section>
+</div>

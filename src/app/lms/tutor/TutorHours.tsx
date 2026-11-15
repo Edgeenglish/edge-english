@@ -14,8 +14,8 @@ import {
 } from '@/lms/tutor/hours';
 import { KOREA_TIME } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
-import { TravelSheet, type Sheet } from './TravelSheet';
-import { homeText, NO_END_TEXT, returnText, tabLabel, zoneBadge, type TravelLocation } from '@/lms/tutor/travel';
+import { Lines, TravelSheet, type Sheet } from './TravelSheet';
+import { homeText, periodLines, tabLabel, zoneBadge, type TravelLocation } from '@/lms/tutor/travel';
 
 import { ALL_HOURS, cityTime, sourceCell } from '@/lms/tutor/hours-view';
 
@@ -269,10 +269,10 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
               </div>
               {g.loc.weeklyOpen.length === 0 && <p role="alert" className="text-[13.5px] font-semibold text-[#b3261e]">No hours set for this period</p>}
               {g.loc.to
-                ? <p className="text-[13.5px] font-semibold text-[#1f7a4d]">{returnText(g.loc.to)}</p>
+                ? <Lines lines={periodLines(g.loc.from, g.loc.to, g.loc.timezone, d.tutor.timezone)} />
                 : (
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="flex-1 text-[13.5px] font-semibold text-[#b3261e]">{NO_END_TEXT}</p>
+                    <div className="flex-1"><Lines lines={periodLines(g.loc.from, null, g.loc.timezone, d.tutor.timezone)} /></div>
                     <button type="button" onClick={() => setSheet({ kind: 'end', loc: g.loc! })} className={`${btnSub} min-h-[40px] text-[14px]`}>Set end date</button>
                   </div>
                 )}
@@ -347,7 +347,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
       )}
 
       {sheet && (
-        <TravelSheet sheet={sheet} inline={inline} actions={actions} onClose={() => setSheet(null)}
+        <TravelSheet sheet={sheet} home={d.tutor.timezone} inline={inline} actions={actions} onClose={() => setSheet(null)}
           onSaved={async (l) => {
             setSheet(null);
             await load(l.id);

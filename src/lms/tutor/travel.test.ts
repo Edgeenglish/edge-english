@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupDays, homeText, returnText, searchCity, tabLabel, zoneAt, zoneBadge, zoneOn, type TravelPeriod } from './travel';
+import { groupDays, homeText, periodLines, searchCity, tabLabel, zoneAt, zoneBadge, zoneOn, type TravelPeriod } from './travel';
 import { cellKind, keyOf, type ScheduleData } from './schedule';
 import { daysOf, rangeFull, type TutorLesson } from './screen';
 
@@ -9,7 +9,10 @@ describe('강사 해외 이동 기간 (H26(173))', () => {
   it('탭 이름·복귀 문구 (대표 확정)', () => {
     expect(tabLabel(ba)).toBe('Buenos Aires · 5 Jan – 23 Mar');
     expect(tabLabel({ ...ba, to: null })).toBe('Buenos Aires · from 5 Jan');
-    expect(returnText('2027-03-23')).toBe('Regular hours apply again from Wed, 24 Mar');
+    expect(periodLines('2026-12-01', '2026-12-20', 'America/Argentina/Buenos_Aires', 'Australia/Sydney')).toEqual([
+      '1 Dec – 20 Dec: Your schedule will use Buenos Aires Time.', 'From 21 Dec: Your schedule will return to Sydney Time.']);
+    expect(periodLines('2026-12-01', null, 'America/Argentina/Buenos_Aires', 'Australia/Sydney')).toEqual([
+      'From 1 Dec: Your schedule will use Buenos Aires Time until you set an end date.']);
     expect(homeText('Australia', 'Australia/Sydney')).toBe('Australia · Sydney');
   });
   it('시간대 약자는 그날 서머타임 반영, 약자 없으면 UTC', () => {
