@@ -15,7 +15,7 @@ import {
 import { KOREA_TIME } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
 import { Lines, TravelSheet, type Sheet } from './TravelSheet';
-import { homeTabLabel, homeText, periodLines, tabLabel, zoneBadge, type TravelLocation } from '@/lms/tutor/travel';
+import { homeTabLabel, homeText, tabLabel, tabPeriodLine, zoneBadge, type TravelLocation } from '@/lms/tutor/travel';
 
 import { ALL_HOURS, cityTime, sourceCell } from '@/lms/tutor/hours-view';
 
@@ -279,10 +279,10 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
               </div>
               {g.loc.weeklyOpen.length === 0 && <p role="alert" className="text-[13.5px] font-semibold text-[#b3261e]">No hours set for this period</p>}
               {g.loc.to
-                ? <Lines lines={periodLines(g.loc.from, g.loc.to, g.loc.timezone, d.tutor.timezone)} />
+                ? <Lines lines={[tabPeriodLine(g.loc.to, g.loc.timezone, d.tutor.timezone)]} />
                 : (
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex-1"><Lines lines={periodLines(g.loc.from, null, g.loc.timezone, d.tutor.timezone)} /></div>
+                    <div className="flex-1"><Lines lines={[tabPeriodLine(null, g.loc.timezone, d.tutor.timezone)]} /></div>
                     <button type="button" onClick={() => setSheet({ kind: 'end', loc: g.loc! })} className={`${btnSub} min-h-[40px] text-[14px]`}>Set end date</button>
                   </div>
                 )}

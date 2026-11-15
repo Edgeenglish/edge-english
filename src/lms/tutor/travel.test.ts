@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupDays, homeText, periodLines, searchCity, tabLabel, zoneAt, zoneBadge, zoneOn, type TravelPeriod } from './travel';
+import { groupDays, homeText, periodLines, searchCity, tabPeriodLine, tabLabel, zoneAt, zoneBadge, zoneOn, type TravelPeriod } from './travel';
 import { cellKind, keyOf, type ScheduleData } from './schedule';
 import { daysOf, rangeFull, type TutorLesson } from './screen';
 
@@ -69,5 +69,12 @@ describe('강사 해외 이동 기간 (H26(173))', () => {
     expect(rangeFull(l, z(l.startsAt))).toContain('Wed, 6 Jan 4:00–4:40 PM *Buenos Aires Time*');
     expect(daysOf([l], z, { from: '2027-01-04', to: '2027-01-10' }).map((d) => d.date)).toEqual(['2027-01-06']);
     expect(daysOf([l], 'Australia/Sydney', { from: '2027-01-04', to: '2027-01-10' }).map((d) => d.date)).toEqual(['2027-01-07']);
+  });
+});
+
+describe('이동 기간 탭 아래 안내 (시안 3)', () => {
+  it('날짜 줄 없이 복귀·종료일 안내만', () => {
+    expect(tabPeriodLine('2026-12-20', 'America/Argentina/Buenos_Aires', 'Australia/Sydney')).toBe('From 21 Dec: Your schedule will return to Sydney Time.');
+    expect(tabPeriodLine(null, 'America/Argentina/Buenos_Aires', 'Australia/Sydney')).toBe('Your schedule will use Buenos Aires Time until you set an end date.');
   });
 });
