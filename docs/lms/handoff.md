@@ -7,6 +7,7 @@
 - 먼저: 안내 카드(`lesson_notices`)가 만들어지는 곳을 모두 찾고(DB 함수·화면), 영향 범위와 PC·휴대폰 시안 보고 → 승인 뒤 시험 DB·lms-test 구현 → 운영은 별도 승인. 기존 안내 카드 데이터는 지우지 않음.
 - **강사 WhatsApp 복사 카드 (대표 11/15)**: 강사에게 WhatsApp으로 보내는 기능은 그대로 둠(대표가 필요할 때만 씀). 하지만 **'보냄'을 눌러 없애는 일은 하지 않게** — 강사 안내는 메일이 자동으로 나가므로 카드가 '할 일/대기'로 남지 않고(대시보드 대기 숫자에 안 잡힘), 복사 버튼만 필요할 때 쓸 수 있게. 위 수강생 카드 작업과 같은 세션에서 같이 시안·영향 범위 확인(기존 not_needed 처리 방식 H26(82) 참고).
 - 숨은참조: 운영 발송 함수에 이미 있음(`lms_mail_dispatch`, 끄는 스위치 `email_bcc_ops_stop` 꺼짐) — 대표 11/15 확인, 추가 작업 없음.
+- 11/15 영향 범위 조사 끝·시안 https://claude.ai/artifact/62xt4QgVEeaZh4A6qEGsqC (`docs/lms/previews/student-cancel-no-card-drafts.html`), 대표 승인 대기. 요점: 카드 줄은 `lms_change_core` 한 곳(via='student_app' 일 때 수강생 'change' 줄)에서 생김. 이 줄이 수강생 취소 메일의 원본(`lesson_notices_email`→`lms_notice_mail`)이라 **줄은 계속 만들고 넣을 때 status='not_needed'**(강사 줄 `lesson_notices_tutor_no_copy` 와 같은 방식, before insert 트리거 하나 추가). 메일 실패는 지금처럼 '자동 메일 못 보냄' 카드(live.ts emailFails 가 status≠sent 를 봄). 화면(강사 WhatsApp 결정과 통일): 자동 메일이 걸린 not_needed 줄(수강생·강사)은 '자동 메일 안내' + [복사] + 글 상자, [보냄] 없음 — 지금은 not_needed 줄에 [복사]가 숨겨져 있어 강사 줄도 복사 못 함(`LessonChange.tsx` NoticeRow). 강사 줄은 11/11부터 이미 전부 not_needed(시험 DB 확인)라 대시보드 대기 숫자엔 원래 안 잡힘. 휴무 화면(`tutor-leave`) 강사 줄 표시도 구현 때 확인. 되돌리기(admin_revert_change)는 원래 줄을 복사해 'revert' 카드를 만드므로 그대로 뜸
 - 같은 날 대표 결정: 3자 대조 보고 예약 작업 끔(trig_01DYXbuSfHjUehZrZJZwaq5H), 로그인 점검 보고는 계속. 강사 메일 숨은참조·강사 WhatsApp 복사 카드 유지 여부는 대표 답 대기.
 
 ## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(175) — 같은 날 강사 해외 이동 기록과 번호가 겹쳐 175 로 정정)
