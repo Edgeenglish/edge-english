@@ -115,6 +115,7 @@
     - 지금 임시 상태(결과 나온 뒤 정리): ① 시험 Supabase custom:naver = 운영용 앱 키(원래 시험용 앱 Client ID 5YSqQAzLupVPqn0D8pVX, Secret 은 Work 보관) → 검수 결과 뒤 시험용 앱으로 되돌리기 ② 운영용 앱 서비스 URL(PC·모바일) = 시험 사이트 주소 → **운영 공개 직전 https://edgeenglish.kr 로**(바꾸면 재검수인지 미확인) ③ 운영용 앱 Callback 에 시험 Supabase callback 포함 → 정리 때 빼기 ④ 시험 Supabase custom:naver 에 Work 가 JWKS URI 넣음(로그인 영향 없음)
     - ✅ 11/15 회원가입 화면에도 카카오·네이버 버튼(로그인 화면과 같은 버튼·이름 '○○로 로그인' 유지, 대표 확정) — 커밋 008fd6e, lms-test, 운영 미반영(운영 공개 때 같이)
     - 계정 정리(대표 11/15): 운영용 앱 주인 = 탠저린(네이버 edgeclass·카카오 탠저린 카카오, 만들 예정) + 시에나 팀원 · 운영 support@ 로그인 연결 = 카카오 시에나·네이버 edgeclass · 운영자 화면은 인증 앱 코드 필요(탠저린 휴대폰 인증 앱 확인 필요) · 1인 1계정 원칙상 탠저린 전용 운영자 계정은 나중에 권장
+    - ✅ 11/16 **운영용 카카오 앱 '엣지영어' 등록**(앱 ID 1651871, 주인 = 탠저린 카카오, 시에나 멤버 초대 — 수락 확인 필요) · 비즈 앱 전환(사업자 정보, 대표 직접) · 동의항목: 닉네임 필수('회원 이름 표시') · 카카오계정(이메일) 필수('회원 식별 및 수업·계정 안내', 값 없으면 입력 요청 체크) · REST API 키 '엣지영어 운영' 카카오 로그인 리다이렉트 URI = 운영 Supabase callback · 사이트 도메인(JS 키)은 안 넣음(우리는 REST 만). 운영 공개 때: REST API 키 + Client Secret(플랫폼 키 > REST API 키에서 확인)을 운영 Supabase Kakao 에 넣기(대표 계정)
     - 시험 DB: edgeclass 네이버 빈 회원 2개(11/14 시험용 앱, 11/15 운영용 앱 — 네이버 식별자는 앱마다 다름 확인)
   - **운영 공개 전 채울 것**: `LEGAL_EFFECTIVE_DATE`(운영 공개일) · 결제대행사(PG) 이름(지금 '아임웹 및 결제대행사') · Supabase 운영 서버 국가(국외 이전 표에 아직 없음, 시험은 Seoul) · 전자상거래법 시행령 제6조 보존 기간 5년/3년 조문 확인(이 환경에서 law.go.kr 막힘)과 신고 면제 사업자 적용 여부 · 개인정보위 '처리방침 작성지침' 대조
 - 운영 반영 때 추가: 카카오 앱 Redirect URI 에 운영 Supabase callback · 운영 Supabase 카카오·custom:naver(Userinfo = https://edgeenglish.kr/api/auth/naver-userinfo) · 대표 운영 계정 연결은 반드시 [이미 회원이에요]
