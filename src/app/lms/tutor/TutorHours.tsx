@@ -181,7 +181,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
     setSaveErr('');
     try {
       const willApply = g.loc ? applyLine(g.loc) : applyFromText(d.from);
-      const later = !(g.loc && g.loc.first);
+      const later = !g.loc || (!!g.loc.applyFrom && g.loc.applyFrom > g.loc.from);   // 기간 안에 고치기 전 벌이 쓰이는 날이 있을 때만
       const saved = { weekly: weeklyChanged, text: willApply ? `${willApply}${later ? ' Until then your current hours stay the same.' : ''}` : null };
       if (g.loc) await actions.saveLocationHours(g.loc.id, [...weekly]);
       else await actions.save(weeklyChanged ? [...weekly] : null, [], []);
