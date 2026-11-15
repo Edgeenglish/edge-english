@@ -68,6 +68,14 @@ export const homeText = (country: string, timezone: string) => {
   return country ? `${country} · ${city}` : city;
 };
 
+/** 이동 기간 탭 아래 안내 (대표 11/15 시안 3): 탭 이름에 기간이 있어 날짜 줄은 빼고 복귀·종료일 안내만 */
+export const tabPeriodLine = (to: string | null, timezone: string, home: string): string => (to
+  ? `From ${dayMonth(plusDays(to, 1))}: Your schedule will return to ${enZoneName(home)}.`
+  : `Your schedule will use ${enZoneName(timezone)} until you set an end date.`);
+
+/** 평소 지역 탭 이름 'Sydney (Home)' (대표 11/15) */
+export const homeTabLabel = (timezone: string) => `${cityTime(timezone).replace(/ Time$/, '')} (Home)`;
+
 /** 그 날짜(현지)에 있는 이동 기간 → 없으면 null (평소 지역) */
 export const periodOn = (periods: TravelPeriod[], date: string): TravelPeriod | null =>
   periods.filter((l) => l.from <= date && (!l.to || l.to >= date)).sort((a, b) => (a.from < b.from ? 1 : -1))[0] ?? null;

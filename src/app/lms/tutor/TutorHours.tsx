@@ -15,7 +15,7 @@ import {
 import { KOREA_TIME } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
 import { Lines, TravelSheet, type Sheet } from './TravelSheet';
-import { homeText, periodLines, tabLabel, zoneBadge, type TravelLocation } from '@/lms/tutor/travel';
+import { homeTabLabel, homeText, tabLabel, tabPeriodLine, zoneBadge, type TravelLocation } from '@/lms/tutor/travel';
 
 import { ALL_HOURS, cityTime, sourceCell } from '@/lms/tutor/hours-view';
 
@@ -32,14 +32,14 @@ const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-4 text-[15px] font-semibold text-[#1d1b2b] disabled:opacity-40';
-const cellBase = 'block h-[26px] w-full overflow-hidden whitespace-nowrap rounded-[5px] p-0 text-[10.5px] font-semibold lg:h-[24px] lg:text-[11.5px]';
+const cellBase = 'block h-[32px] w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-[6px] p-0 text-[10.5px] font-semibold lg:h-[30px] lg:text-[12.5px]';
 const span = (start: string, min: number) => rangeText(start, hhmm(toMin(start) + min));
 /** 수업 시작 칸 글 (대표 10/29): 휴대폰 = 수강생 이름(칸이 좁아 이름 앞부분), PC = 이름 + 길이. 정확한 시각은 누르면 창에 */
 const lessonLabel = (student: string, min: number) => (
   <><span className="[color:inherit] lg:hidden">{student.split(' ')[0]}</span><span className="hidden [color:inherit] lg:inline">{student} · {min}m</span></>
 );
 /** 같은 수업의 다음 칸은 위 칸과 붙여 한 덩어리로 */
-const cont = '-mt-[2px] h-[28px] rounded-t-none lg:h-[26px]';
+const cont = '-mt-[3px] h-[35px] rounded-t-none lg:h-[33px]';
 /** 수업 칸 색: 실제 수업 분만큼만 보라, 같은 칸의 나머지는 닫힘 회색 (40분 수업 → 둘째 칸 위 10분만 보라). 투명이면 칸이 빈 것처럼 보임 (대표 11/4) */
 const fillStyle = (f: { from: number; to: number }, dark: string, pale: string): CSSProperties => (f.from <= 0 && f.to >= 1
   ? { background: dark }
@@ -92,14 +92,20 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
   }
   useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 처음 열 때 가장 이른 열린 시각으로 스크롤 (이른 새벽 칸은 위로)
+  // 처음 열 때 가장 이른 열린 시각으로 스크롤. 열린 시각이 없으면(새 이동 기간 등) 오전 6시가 맨 위 — 그 전 새벽 수업은 위로 올리면 보임 (대표 11/15)
   const base = data ? gridOf(data, tab).weeklyOpen : [];
   const firstOpen = data ? Math.min(...base.map((k) => toMin(k.slice(2))), 24 * 60) : null;
+  const scrollTo = (min: number) => {
+    const row = scroller.current?.querySelector<HTMLElement>(`[data-row="${min}"]`);
+    if (scroller.current && row) scroller.current.scrollTop = Math.max(0, row.offsetTop - 40);
+  };
   useEffect(() => {
-    if (!data || !scroller.current || firstOpen === null) return;
-    const row = scroller.current.querySelector<HTMLElement>(`[data-row="${firstOpen}"]`);
-    if (row) scroller.current.scrollTop = Math.max(0, row.offsetTop - 40);
+    if (!data || firstOpen === null) return;
+    scrollTo(firstOpen < 24 * 60 ? firstOpen : 6 * 60);
   }, [data, firstOpen, tab]);
+  // 이름 탭: 고른 탭이 화면 안에 보이게 (휴대폰 가로 스크롤)
+  const tabBar = useRef<HTMLDivElement>(null);
+  useEffect(() => { tabBar.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [tab]);
 
   // 저장 안 한 변경 → 바깥(메뉴 바꾸기)에 알리고, 창을 닫거나 떠날 때 브라우저 확인 (QA UX: 미저장 이동 손실)
   const dirtyCount = data ? (() => { const x = diff(base, weekly); return x.added.length + x.removed.length; })() : 0;
@@ -207,7 +213,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
   }
 
   function dayHead(i: number) {
-    return <div className="sticky top-0 z-[1] bg-white py-1 text-center text-[12px] font-bold text-[#1d1b2b]">{SHORT[WEEK_DAYS[i]]}</div>;
+    return <div className="sticky top-0 z-[1] bg-white py-1.5 text-center text-[12px] font-bold lg:text-[13px] text-[#1d1b2b]">{SHORT[WEEK_DAYS[i]]}</div>;
   }
 
   const changesBox = (
@@ -246,56 +252,66 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
   return (
     <Panel onClose={close} inline={inline} onSchedule={onSchedule} onTimeOff={onTimeOff} onAdd={() => { if (lines.length > 0 && !window.confirm('Discard changes?')) return; setSheet({ kind: 'add' }); }}>
       {/* 평소 지역 · 이동 기간 탭 (H26(173), 시안 8차 장면 1·2) */}
-      <div className="mb-2 flex items-center justify-between gap-2 rounded-[12px] bg-[#f6f4fb] px-3 py-2 text-[13.5px] text-[#1d1b2b]">
+      <div className="mb-4 flex items-center justify-between gap-2 rounded-[12px] bg-[#f6f4fb] px-3 py-2.5 text-[14px] text-[#1d1b2b]">
         <span>Home location <b>{homeText(d.tutor.country, d.tutor.timezone)}</b></span>
         <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[12px] font-semibold text-[#2b1c7a]">{zoneBadge(d.tutor.timezone, d.from)}</span>
       </div>
-      {notice && <p role="status" className="mb-2 text-[13.5px] font-semibold text-[#1f7a4d]">{notice}</p>}
+      {notice && <p role="status" className="mb-3 text-[13.5px] font-semibold text-[#1f7a4d]">{notice}</p>}
       {d.locations.length > 0 && (
-        <div role="tablist" aria-label="Location" className="mb-2 flex flex-wrap gap-2">
-          {[{ id: 'regular', label: 'Regular' }, ...d.locations.map((l) => ({ id: l.id, label: tabLabel(l) }))].map((x) => (
-            <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => pickTab(x.id)}
-              className={`min-h-[40px] rounded-full border px-3.5 text-[14px] font-semibold ${tab === x.id ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>{x.label}</button>
-          ))}
+        // 어느 기간의 시간표를 고칠지 = 밑줄 탭 (대표 11/15 시안 2). 휴대폰은 가로로 밀어 봄
+        <div className="mb-4">
+          <p className="mb-1 text-[12.5px] font-bold text-[#6b6880]">Hours for</p>
+          <div ref={tabBar} role="tablist" aria-label="Hours for" className="flex gap-1 overflow-x-auto border-b-2 border-[#e6e3ef]">
+            {[{ id: 'regular', label: homeTabLabel(d.tutor.timezone) }, ...d.locations.map((l) => ({ id: l.id, label: tabLabel(l) }))].map((x) => (
+              <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => pickTab(x.id)}
+                className={`-mb-[2px] min-h-[44px] shrink-0 whitespace-nowrap border-b-[3px] px-3.5 text-[14.5px] font-semibold ${tab === x.id ? 'border-[#5b3fe0] text-[#1d1b2b]' : 'border-transparent text-[#55526a]'}`}>{x.label}</button>
+            ))}
+          </div>
         </div>
       )}
       <div className="flex min-h-0 flex-1 gap-5 lg:p-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {g.loc ? (
-            <div className="mb-1.5 grid gap-1.5">
+            <div className="mb-3 grid gap-2">
               <div className="flex items-center justify-between gap-2 text-[13.5px] text-[#1d1b2b]">
                 <span><b>{localLabel}</b> · 6:00 AM – 10:30 PM</span>
                 <span className="shrink-0 rounded-full bg-[#f6f4fb] px-2 py-0.5 text-[12px] font-semibold text-[#2b1c7a]">{zoneBadge(g.tz, g.loc.from)}</span>
               </div>
               {g.loc.weeklyOpen.length === 0 && <p role="alert" className="text-[13.5px] font-semibold text-[#b3261e]">No hours set for this period</p>}
               {g.loc.to
-                ? <Lines lines={periodLines(g.loc.from, g.loc.to, g.loc.timezone, d.tutor.timezone)} />
+                ? <Lines lines={[tabPeriodLine(g.loc.to, g.loc.timezone, d.tutor.timezone)]} />
                 : (
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex-1"><Lines lines={periodLines(g.loc.from, null, g.loc.timezone, d.tutor.timezone)} /></div>
+                    <div className="flex-1"><Lines lines={[tabPeriodLine(null, g.loc.timezone, d.tutor.timezone)]} /></div>
                     <button type="button" onClick={() => setSheet({ kind: 'end', loc: g.loc! })} className={`${btnSub} min-h-[40px] text-[14px]`}>Set end date</button>
                   </div>
                 )}
             </div>
-          ) : <p className="mb-1.5 text-[13.5px] font-semibold text-[#1d1b2b]">{applyFromText(d.from)}</p>}
+          ) : <p className="mb-3 text-[13.5px] font-semibold text-[#1d1b2b]">{applyFromText(d.from)}</p>}
           <TimeStatusLegend onHelp={showPolicy} />
-          <p className="mb-1.5 text-[12.5px] text-[#6b6880]">Click a time to change your weekly hours.</p>
-          {g.tz !== 'Asia/Seoul' && (
-            <div role="group" aria-label="Timetable time zone" className="mb-2 flex flex-wrap gap-2">
-              {[false, true].map((korea) => <button key={String(korea)} type="button" aria-pressed={koreaTime === korea}
-                onClick={() => { setZone(korea ? 'kst' : 'local'); if (scroller.current) scroller.current.scrollTop = 0; }}
-                className={`min-h-[44px] rounded-[10px] border px-4 text-[15px] font-semibold ${koreaTime === korea ? 'border-[#5b3fe0] bg-[#5b3fe0] text-white' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
-                {koreaTime === korea ? '✓ ' : ''}{korea ? KOREA_TIME : localLabel}
-              </button>)}
-            </div>
-          )}
-          <div ref={scroller} className={`min-h-0 flex-1 overflow-y-auto border-t border-[#e6e3ef] lg:max-h-[560px] lg:flex-none ${inline ? 'max-h-[58vh]' : ''}`}>
-            <div className="grid grid-cols-[46px_repeat(7,minmax(0,1fr))] gap-[2px] pb-2 pt-1 tabular-nums">
+          {/* 같은 표를 어느 시간으로 볼지 = 표 바로 위 작은 스위치 (대표 11/15 시안 2) */}
+          <div className="mb-2 mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="text-[13px] text-[#6b6880]">Click a time to change your weekly hours.</p>
+            {g.tz !== 'Asia/Seoul' && (
+              <div className="flex items-center gap-2">
+                <span className="text-[12.5px] font-bold text-[#6b6880]">Show times in</span>
+                <div role="group" aria-label="Show times in" className="inline-flex overflow-hidden rounded-[8px] border border-[#e6e3ef]">
+                  {[false, true].map((korea) => <button key={String(korea)} type="button" aria-pressed={koreaTime === korea}
+                    onClick={() => { setZone(korea ? 'kst' : 'local'); requestAnimationFrame(() => scrollTo(6 * 60)); }}
+                    className={`min-h-[36px] px-3 text-[13px] font-semibold ${koreaTime === korea ? 'bg-[#1d1b2b] text-white' : 'bg-white text-[#55526a]'}`}>
+                    {korea ? KOREA_TIME : localLabel}
+                  </button>)}
+                </div>
+              </div>
+            )}
+          </div>
+          <div ref={scroller} className={`min-h-0 flex-1 overflow-y-auto border-t border-[#e6e3ef] lg:max-h-[600px] lg:flex-none ${inline ? 'max-h-[58vh]' : ''}`}>
+            <div className="grid grid-cols-[46px_repeat(7,minmax(0,1fr))] gap-[3px] pb-2 pt-1 tabular-nums lg:grid-cols-[56px_repeat(7,minmax(0,1fr))]">
               <div className="sticky top-0 z-[1] bg-white pr-1 text-right text-[10px] font-bold leading-tight text-[#2b1c7a]">{koreaTime ? 'KST' : localLabel}</div>
               {WEEK_DAYS.map((_, i) => <div key={i} className="contents">{dayHead(i)}</div>)}
               {ALL_HOURS.map((t) => (
                 <div key={t} className="contents">
-                  <div data-row={toMin(t)} className="pr-1 text-right text-[11px] leading-[26px] lg:leading-[24px] text-[#1d1b2b]">{t.endsWith('00') ? timeText(toMin(t)).replace(':00', '') : ''}</div>
+                  <div data-row={toMin(t)} className="pr-1 text-right text-[11px] leading-[32px] lg:text-[12px] lg:leading-[30px] text-[#1d1b2b]">{t.endsWith('00') ? timeText(toMin(t)).replace(':00', '') : ''}</div>
                   {WEEK_DAYS.map((dow, i) => <div key={dow}>{displayCell(i, t)}</div>)}
                 </div>
               ))}
@@ -303,7 +319,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
             <div className="lg:hidden">{history}</div>
           </div>
         </div>
-        <aside className="hidden w-[280px] shrink-0 content-start gap-3 lg:grid">
+        <aside className="hidden w-[240px] shrink-0 content-start gap-3 lg:grid">
           {changesBox}
           {history}
         </aside>
@@ -397,7 +413,7 @@ function Panel({ onClose, onSchedule, onTimeOff, onAdd, inline, children }: { on
   return (
     <div className="fixed inset-0 z-40 flex justify-center bg-black/40 lg:items-center">
       <div role="dialog" aria-modal="true" aria-label={TUTOR_MENU.hours}
-        className="relative flex h-full w-full flex-col bg-white px-3 pt-3 lg:h-auto lg:max-h-[94vh] lg:max-w-[1080px] lg:rounded-[20px] lg:p-5">
+        className="relative flex h-full w-full flex-col bg-white px-3 pt-3 lg:h-auto lg:max-h-[94vh] lg:max-w-[1280px] lg:rounded-[20px] lg:p-6">
         {head}
         {children}
       </div>
