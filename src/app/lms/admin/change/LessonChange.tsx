@@ -497,7 +497,8 @@ function NoticeRow({ n, text, tutorName, markSent, resendEmail }: { n: ChNotice;
   const e = n.email;
   // 자동 메일이 가는 안내는 [복사]만 (필요할 때 카톡·WhatsApp 로 직접 알릴 때). [보냄]은 메일이 없거나 못 보냈을 때만 — 운영진이 직접 보내야 하는 안내 (대표 11/15)
   const mailFailed = !!e && (e.status === 'failed' || e.status === 'no_address' || (e.status === 'queued' && !!e.error));
-  const needsSend = n.status !== 'not_needed' && (!e || mailFailed);
+  // 메일을 못 보냈으면 강사 줄(not_needed)이어도 직접 보낸 뒤 [보냄]으로 닫음 (20261115060000) — 실패 기록은 그대로 남음
+  const needsSend = mailFailed || (n.status !== 'not_needed' && !e);
   const mailCls = !e ? '' : e.status === 'sent' ? 'text-[#1f7a4d]' : e.status === 'queued' && !e.error ? 'text-[#6b6880]' : 'text-[#b3261e]';
   return (
     <li className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
