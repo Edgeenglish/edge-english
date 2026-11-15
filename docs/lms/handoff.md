@@ -2,7 +2,7 @@
 
 # 다음 세션 시작 메모
 
-## 🖊 11/15 강사 LMS 전자서명 — **운영 반영 끝(코드·DB), 회사 서명·서명 요청·강사 메일은 대표 승인 대기** (정책 원본 H26(188)(189)(190) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
+## 🖊 11/15 강사 LMS 전자서명 — **운영 반영·발송 끝: 대표 회사 서명 11/16 01:14 KST · Benny·Maria·Olivia 요청+메일 11/16 06:01 KST (H26(194)), 기한 11/19 강사 현지 날짜** (정책 원본 H26(188)(189)(190) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
 - ✅ 운영 반영(대표 11/15): 운영 DB 백업 **snapshots 60**(표 64 전체 + 바뀌는 함수 3개 이전 정의 `_functions_before`: lms_mail_dispatch·lms_student_profile_json·tutor_my_students) → migration 커넥터 이름 lms_tutor_hide_student_email(040000) · lms_tutor_esign(050000) · lms_tutor_sign_request_mail(070000) → 표 67, 학생 13·수업 183 그대로, RLS 꺼진 표 0 · 코드 lms-prod 743536d(+ca384bd·c9bb5d7 묶음 SQL) = 전자서명·이메일 숨김 파일만 골라 담음(처리방침 legal.ts·060000 수업 안내 카드 등 다른 미배포 변경 안 넣음). edgeenglish.kr JS 에 반영 확인
 - 운영 데이터: 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판 **초안**만 넣음(전문 해시 313082ba… = 시험과 같음). 회사 서명(게시)·Benny·Maria·Olivia 요청·강사 메일 **안 함** — 대표가 메일 문구 3개 검토 후 '보내' 할 때. 운영 send_emails 켜져 있으므로 [요청 보내기] 누르면 실제 메일이 감(메일 없이 요청만 = rpc admin_sign_request(…, false))
 - 되돌리기: 코드 = lms-prod 를 30204e5 로 · DB = snapshots 60 `_functions_before` 3개 정의 실행 + 새 함수·표 3개 drop(서명 0건일 때만)
@@ -17,7 +17,7 @@
 - 시험: DB `supabase/tests/tutor-esign.sql` 48줄 통과 · `npm run test:db` 전부 · vitest 491 · tsc 0
 - 실제 화면 QA(시험 사이트, Alex = support+alex@ 메일 코드 로그인): To do 'Please sign by Mon, 23 Nov' → 창(전문·Party A 줄·두 칸 비면 버튼 못 누름) → Email me a code → support@ 에 '[시험 · Alex] Edge English – Your signing code' → 틀린 코드 1회(DB wrong_tries 1) → 서명 → '✓ Signed'·서명 시각 Sydney/KST → 서명본 메일 PDF 첨부 도착 · PDF 2쪽 pypdf strict 통과 · To do 에서 빠짐 · My info › Documents 보기·PDF · 휴대폰 390 가로 넘침 없음
 - 시험 데이터(그대로 둠): 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판(최종 전문, 서명란 빈칸 줄은 전자서명 칸으로 대체) — 회사 서명은 Claude 가 시험 DB 에서 대표 운영자 계정 id 로 게시(시험만) · 요청 Alex(서명함)·Emma·James(서명 대기)
-- **대표 대기**: 강사 메일 문구 3개(요청·코드·서명본) 검토 → '보내' 뒤 운영 운영자 화면에서 대표가 [회사 서명하고 올리기] → Benny·Maria·Olivia [요청 보내기]
+- 다음 확인: 11/19 기한까지 세 강사 서명 현황(운영자 화면 '강사 서명 문서') · 서명하면 서명본 메일(PDF) 자동 · Leslie 는 다음 대체 수업 맡길 때 요청
 - 남은 순서: ④ 운영자 화면 '강사 서명 문서' → 1판 초안 → **대표가 [회사 서명하고 올리기]** → Benny·Maria·Olivia 요청(세 강사 모두 계정·이메일 있음 확인) ⑤ 운영 send_emails 켜져 있으므로 요청·코드·서명본 메일이 실제 강사에게 감
 
 ## ✅ 11/15 수강생 직접 취소 등 자동 메일이 가는 안내 → 할 일 카드 없음 — **운영 반영 완료** (lms-prod a521c6b, 운영 DB migration 20261115060000, 백업 snapshots 64 = 두 함수 이전 정의, 되돌리기 = 그 정의 실행 + lms-prod 를 앞 커밋으로) (H26(102) 보충·보충 2)
