@@ -247,7 +247,7 @@ export async function markLessonNoticesSent(sb: SupabaseClient, noticeIds: strin
 /** 대시보드: 안 보낸 수업 변경·보강 안내, 강사 답을 기다리는 보강 신청 */
 export async function loadChangeTasks(sb: SupabaseClient): Promise<{ pendingNotices: number; openMakeups: number } | null> {
   const [n, m] = await Promise.all([
-    sb.from('lesson_notices').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    sb.from('lesson_notices').select('id', { count: 'exact', head: true }).eq('status', 'pending').is('email_status', null),
     sb.from('makeup_requests').select('id', { count: 'exact', head: true }).in('status', ['requested', 'countered']),
   ]);
   if (n.error) return null;   // 1700 적용 전 DB

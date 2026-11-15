@@ -495,25 +495,25 @@ function NoticeRow({ n, text, tutorName, markSent, resendEmail }: { n: ChNotice;
   const [mailMsg, setMailMsg] = useState('');
   const sent = n.status === 'sent';
   const e = n.email;
-  // 자동 메일(보강 확정)은 카톡·WhatsApp 복사와 병행 (대표 2026-11-07): 메일 상태는 아래 한 줄, 실패·주소 없음만 [다시 보내기]
-  const mailCls = !e ? '' : e.status === 'sent' ? 'text-[#1f7a4d]' : e.status === 'queued' ? 'text-[#6b6880]' : 'text-[#b3261e]';
+  // 자동 메일이 가는 안내는 [복사]만 (필요할 때 카톡·WhatsApp 로 직접 알릴 때). [보냄]은 메일이 없거나 못 보냈을 때만 — 운영진이 직접 보내야 하는 안내 (대표 11/15)
+  const mailFailed = !!e && (e.status === 'failed' || e.status === 'no_address' || (e.status === 'queued' && !!e.error));
+  const needsSend = n.status !== 'not_needed' && (!e || mailFailed);
+  const mailCls = !e ? '' : e.status === 'sent' ? 'text-[#1f7a4d]' : e.status === 'queued' && !e.error ? 'text-[#6b6880]' : 'text-[#b3261e]';
   return (
     <li className="rounded-[12px] border border-[#e6e3ef] px-3 py-2.5">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           {/* 강사 안내는 누구에게 보낼지 바로 보이게 강사 이름까지 (대표 11/8) */}
           <b className="block text-[14.5px] text-[#1d1b2b]">{n.recipient === 'student' ? '수강생' : `강사${tutorName ? ` ${tutorName}` : ''}`}에게 보내는 {EVENT_TEXT[n.event]}</b>
-          {sent && n.sentAt && <span className="text-[12.5px] text-[#6b6880]">보냄 {sentLabel(n.sentAt)}</span>}
-          {n.status === 'not_needed' && <span className="text-[12.5px] text-[#6b6880]">{n.event === 'makeup_requested' || n.recipient === 'tutor' ? '자동 메일 안내' : '복사 안내 불필요'}</span>}
+          {sent && n.sentAt && (!e || mailFailed) && <span className="text-[12.5px] text-[#6b6880]">보냄 {sentLabel(n.sentAt)}</span>}
+          {n.status === 'not_needed' && !e && <span className="text-[12.5px] text-[#6b6880]">복사 안내 불필요</span>}
         </div>
-        {n.status !== 'not_needed' && (
-          <button type="button" disabled={!text} className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>
-            {copied ? '복사함 ✓' : '복사'}
-          </button>
-        )}
-        {n.status === 'not_needed' ? null : sent ? (
+        <button type="button" disabled={!text} className={copied ? btnDone : btnSub} onClick={async () => { if (await copyText(text)) setCopied(true); else setManual(true); }}>
+          {copied ? '복사함 ✓' : '복사'}
+        </button>
+        {sent && (!e || mailFailed) ? (
           <button type="button" disabled className={btnDone}>보냄 ✓</button>
-        ) : (
+        ) : needsSend && !sent ? (
           <button type="button" disabled={busy} className={btnMain} onClick={async () => {
             setBusy(true);
             setErr('');
@@ -521,7 +521,7 @@ function NoticeRow({ n, text, tutorName, markSent, resendEmail }: { n: ChNotice;
           }}>
             보냄
           </button>
-        )}
+        ) : null}
       </div>
       {e && (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
