@@ -2,6 +2,17 @@
 
 # 다음 세션 시작 메모
 
+## 🖊 11/15 강사 LMS 전자서명 — **시험 사이트(lms-test)·시험 DB 반영, 운영 미반영** (정책 원본 H26(188)(189) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
+- 시안: `docs/lms/previews/tutor-esign-drafts.html` (https://claude.ai/artifact/9VKQxqr6Kqg8EpMmzyY7B9)
+- migration **20261115050000_lms_tutor_esign** (시험 DB 적용, 커넥터 이름 lms_tutor_esign · 주석만 뺀 같은 내용): 표 3개 `tutor_sign_requests`(기한 = 요청+7일) · `tutor_sign_codes`(코드 해시, 10분·5회, 직접 읽기 없음) · `tutor_signatures`(쌓기만, PDF bytea·해시) / 문서 원본은 기존 `terms_versions`+`terms_documents` 재사용(서명 문구 = required_items[0], 게시 = 회사 서명) / 함수 `tutor_sign_list·tutor_sign_doc·tutor_sign_send_code·tutor_sign·tutor_signed_pdf·admin_sign_docs·admin_sign_doc_save·admin_sign_doc_publish·admin_sign_request` + PDF(`lms_pdf_*`, 글자만 Helvetica) / `lms_mail_dispatch` 에 첨부(payload.attachments)만 더함. 표 64→67 (02-check)
+- 코드: `src/lms/tutor/esign.ts` · `src/app/lms/tutor/SignDoc.tsx` · TutorHome(To do 'Sign: …'+기한 줄, 'My info' 탭 = PC 왼쪽 메뉴·휴대폰 맨 위 머리글) · TutorLive · 운영자 `/lms/admin/sign`(SignAdmin.tsx, 빠른 메뉴 '강사 서명 문서')
+- 시험: DB `supabase/tests/tutor-esign.sql` 48줄 통과 · `npm run test:db` 전부 · vitest 491 · tsc 0
+- 실제 화면 QA(시험 사이트, Alex = support+alex@ 메일 코드 로그인): To do 'Please sign by Mon, 23 Nov' → 창(전문·Party A 줄·두 칸 비면 버튼 못 누름) → Email me a code → support@ 에 '[시험 · Alex] Edge English – Your signing code' → 틀린 코드 1회(DB wrong_tries 1) → 서명 → '✓ Signed'·서명 시각 Sydney/KST → 서명본 메일 PDF 첨부 도착 · PDF 2쪽 pypdf strict 통과 · To do 에서 빠짐 · My info › Documents 보기·PDF · 휴대폰 390 가로 넘침 없음
+- 시험 데이터(그대로 둠): 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판(최종 전문, 서명란 빈칸 줄은 전자서명 칸으로 대체) — 회사 서명은 Claude 가 시험 DB 에서 대표 운영자 계정 id 로 게시(시험만) · 요청 Alex(서명함)·Emma·James(서명 대기)
+- **미검증**: 운영자 화면(`/lms/admin/sign`·운영자 보기 `?tutor=`) 실제 클릭 — 시험 프로젝트 인증 앱 코드 2번 거절(Invalid TOTP: 대표 인증 앱의 '시험용' 항목 코드가 아닐 수 있음). 운영자 함수는 DB 시험으로만 확인
+- **결정 대기**: 서명 요청 시 강사 알림 메일 보낼지(H26(172) 종류별 규칙) — 지금은 메일 없음, LMS To do 에만 생김
+- **운영 반영 순서(대표 승인 뒤)**: ① 운영 백업 ② migration 20261115040000(학생 이메일 숨김) + 20261115050000 ③ `git log origin/lms-test..origin/lms-prod` 확인 뒤 lms-prod 반영 ④ 운영자 화면 '강사 서명 문서' → 새 문서(전문·서명 문구) → **대표가 [회사 서명하고 올리기]** → Benny·Maria·Olivia 요청(강사 계정·tutors.email 있는지 먼저 확인) ⑤ 운영 send_emails 켜져 있으므로 코드·서명본 메일이 실제 강사에게 감
+
 ## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(175) — 같은 날 강사 해외 이동 기록과 번호가 겹쳐 175 로 정정)
 - migration `20261114130000_student_reminder_default_regular_off`(students.remind_regular 기본값 false, 기존 학생 변경 없음) · `20261114140000_first_class_mail_reminder_setting_line`(lms_first_class_mail_student: 일정 변경 재안내 메일 제외, 첫 안내에만 '수업 알림 메일은 … 내 정보 › 이메일 알림 설정에서 켜고 끌 수 있어요.' 한 줄).
 - 운영 DB 백업 `lms_backup.snapshots` **54**(표 62 전체) · **55**(lms_first_class_mail_student 이전 정의, 되돌리기 = 그 정의로 create or replace). 기본값 되돌리기 = `alter table students alter column remind_regular set default true`.
