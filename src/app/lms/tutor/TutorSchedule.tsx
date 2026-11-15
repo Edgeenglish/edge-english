@@ -36,8 +36,9 @@ export type ScheduleActions = {
 
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#5b3fe0] px-4 text-[15px] font-semibold text-white disabled:opacity-40';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-4 text-[15px] font-semibold text-[#1d1b2b] disabled:opacity-40';
-const cellBase = 'block h-[26px] w-full overflow-hidden whitespace-nowrap rounded-[5px] p-0 text-left text-[10.5px] font-semibold leading-[12px] lg:h-[24px] lg:text-[11px]';
-const cont = 'rounded-t-none';
+// 칸 크기·글자 = Regular Working Hours 와 같게 (대표 11/15 ②)
+const cellBase = 'block h-[32px] w-full overflow-hidden whitespace-nowrap rounded-[6px] p-0 text-left text-[10.5px] font-semibold lg:h-[30px] lg:text-[12.5px]';
+const cont = '-mt-[3px] h-[35px] rounded-t-none lg:h-[33px]';
 /** 지난 시간·6시간·12주 제한은 조용하게, 개방 불가 정책만 빗금으로. */
 const cantChange: CSSProperties = { background: '#eef0f3' };
 /** 실제 차단 구간만 회색 블록으로 강조. */
@@ -261,12 +262,14 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const weekKinds = view === 'week' && data ? wcols.map((c) => kindsOf(c, data)) : null;
   // 주 보기 머리글: 그 주 열들의 지역 (두 지역이면 'Toronto Time / Buenos Aires Time')
   const weekZones = [...new Set((view === 'week' ? (wcols.length ? wcols : grid) : [selected]).map((c) => cityTime(korea ? zoneOfDate(dd(c)) : vz(c))))].join(' / ');
-  const firstRow = weekKinds ? Math.min(...weekKinds.map((ks) => ks.findIndex((k) => k !== 'outside' && k !== 'past')).filter((x) => x >= 0), 48) : 48;
+  const firstRow = weekKinds ? Math.min(...weekKinds.map((ks) => ks.indexOf('free')).filter((x) => x >= 0), 48) : 48;
+  // 처음 보이는 줄 = 가장 이른 열린 칸(Regular Working Hours 와 같음), 없으면 오전 6시 (6시 전 수업은 위로 올리면 보임, 대표 11/15 ①)
   useEffect(() => {
-    if (view !== 'week' || !scroller.current || firstRow >= 48) return;
-    const row = scroller.current.querySelector<HTMLElement>(`[data-row="${firstRow}"]`);
-    if (row) scroller.current.scrollTop = Math.max(0, row.offsetTop - 36);
-  }, [view, monday, korea, firstRow]);
+    if (view !== 'week' || !scroller.current) return;
+    const row = scroller.current.querySelector<HTMLElement>(`[data-row="${firstRow < 48 ? firstRow : 12}"]`);
+    const sc = scroller.current;
+    if (row) sc.scrollTop = Math.max(0, sc.scrollTop + row.getBoundingClientRect().top - sc.getBoundingClientRect().top - 40);   // 머리글(요일·날짜) 아래에 오게
+  }, [view, monday, korea, firstRow, data]);
 
   function weekCell(date: string, i: number, kinds: CellKind[]) {
     const k = kinds[i];
@@ -437,17 +440,17 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
         <span className="lg:hidden">Tap an empty time to make a one-time change.</span>
       </p>
       <div ref={scroller} className="max-h-[62vh] overflow-y-auto rounded-[12px] border border-[#e6e3ef] bg-white lg:max-h-[600px]">
-        <div className="grid select-none grid-cols-[42px_repeat(var(--cols),minmax(0,1fr))] gap-x-px pb-2 tabular-nums lg:grid-cols-[52px_repeat(var(--cols),minmax(0,1fr))]" style={{ '--cols': wcols.length } as CSSProperties}>
+        <div className="grid select-none grid-cols-[46px_repeat(var(--cols),minmax(0,1fr))] gap-[3px] pb-2 tabular-nums lg:grid-cols-[56px_repeat(var(--cols),minmax(0,1fr))]" style={{ '--cols': wcols.length } as CSSProperties}>
           <div className="sticky top-0 z-[2] bg-white pr-1 pt-1 text-right text-[10px] font-bold leading-tight text-[#2b1c7a]">{korea ? 'KST' : ''}</div>
           {wcols.map((c) => (
-            <div key={c} className={`sticky top-0 z-[2] py-1 text-center text-[12px] font-bold leading-tight ${dd(c) === todayView ? 'rounded-b-[6px] bg-[#5b3fe0] text-white' : 'bg-white text-[#55526a]'}`}>
+            <div key={c} className={`sticky top-0 z-[2] py-1 text-center text-[12px] font-bold leading-tight lg:text-[13px] ${dd(c) === todayView ? 'rounded-b-[6px] bg-[#5b3fe0] text-white' : 'bg-white text-[#55526a]'}`}>
               {WEEK_HEAD[(new Date(`${dd(c)}T00:00:00Z`).getUTCDay() + 6) % 7]}<small className="block text-[11px] font-semibold">{Number(c.slice(8, 10))}</small>
               {!korea && weekZones.includes(' / ') && <small className="block truncate text-[9.5px] font-semibold">{cityTime(vz(c)).replace(/ Time$/, '')}</small>}
             </div>
           ))}
           {ALL_HOURS.map((t, i) => (
             <div key={t} className="contents">
-              <div data-row={i} className="pr-1 text-right text-[11px] leading-[26px] text-[#1d1b2b] lg:leading-[24px]">{t.endsWith('00') ? ampmEn(t).replace(':00', '') : ''}</div>
+              <div data-row={i} className="pr-1 text-right text-[11px] leading-[32px] text-[#1d1b2b] lg:text-[12px] lg:leading-[30px]">{t.endsWith('00') ? ampmEn(t).replace(':00', '') : ''}</div>
               {wcols.map((c, n) => <div key={c}>{weekCell(c, i, weekKinds[n])}</div>)}
             </div>
           ))}
