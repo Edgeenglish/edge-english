@@ -182,7 +182,7 @@ function LiveDoc({ sb, doc, tutors, onChanged }: { sb: SupabaseClient; doc: Doc;
             <label key={t.id} className="flex min-h-[40px] items-center gap-2 text-[14.5px]">
               <input type="checkbox" className="h-[18px] w-[18px] accent-[#5b3fe0]" checked={pick.includes(t.id)}
                 onChange={(e) => setPick(e.target.checked ? [...pick, t.id] : pick.filter((x) => x !== t.id))} />
-              {t.name}{t.hasLogin ? '' : <span className="text-[12.5px] text-[#b3261e]">강사 계정 없음</span>}
+              {t.name}{t.hasLogin ? '' : <span className="text-[12.5px] text-[#b3261e]"> · 강사 계정 없음</span>}
             </label>
           ))}
           <div className="flex gap-2">
