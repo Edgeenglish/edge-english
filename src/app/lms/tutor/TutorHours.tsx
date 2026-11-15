@@ -99,7 +99,8 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
   const firstOpen = data ? Math.min(...base.map((k) => toMin(k.slice(2))), 24 * 60) : null;
   const scrollTo = (min: number) => {
     const row = scroller.current?.querySelector<HTMLElement>(`[data-row="${min}"]`);
-    if (scroller.current && row) scroller.current.scrollTop = Math.max(0, row.offsetTop - 40);
+    const sc = scroller.current;
+    if (sc && row) sc.scrollTop = Math.max(0, sc.scrollTop + row.getBoundingClientRect().top - sc.getBoundingClientRect().top - 40);   // 칸 실제 위치로 (머리글 아래)
   };
   useEffect(() => {
     if (!data || firstOpen === null) return;

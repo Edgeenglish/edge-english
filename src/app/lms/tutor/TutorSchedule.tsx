@@ -269,7 +269,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
     const row = scroller.current.querySelector<HTMLElement>(`[data-row="${firstRow < 48 ? firstRow : 12}"]`);
     const sc = scroller.current;
     if (row) sc.scrollTop = Math.max(0, sc.scrollTop + row.getBoundingClientRect().top - sc.getBoundingClientRect().top - 40);   // 머리글(요일·날짜) 아래에 오게
-  }, [view, monday, korea, firstRow]);
+  }, [view, monday, korea, firstRow, data]);
 
   function weekCell(date: string, i: number, kinds: CellKind[]) {
     const k = kinds[i];
