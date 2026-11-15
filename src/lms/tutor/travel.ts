@@ -68,6 +68,9 @@ export const homeText = (country: string, timezone: string) => {
   return country ? `${country} · ${city}` : city;
 };
 
+/** 평소 지역 탭 이름 'Sydney (Home)' (대표 11/15) */
+export const homeTabLabel = (timezone: string) => `${cityTime(timezone).replace(/ Time$/, '')} (Home)`;
+
 /** 그 날짜(현지)에 있는 이동 기간 → 없으면 null (평소 지역) */
 export const periodOn = (periods: TravelPeriod[], date: string): TravelPeriod | null =>
   periods.filter((l) => l.from <= date && (!l.to || l.to >= date)).sort((a, b) => (a.from < b.from ? 1 : -1))[0] ?? null;
