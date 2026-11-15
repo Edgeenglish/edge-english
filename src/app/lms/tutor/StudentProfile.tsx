@@ -226,6 +226,7 @@ function daysBetween(a: string, b: string): number {
 }
 
 const FIELDS: { key: string; title: string; kind?: 'select' | 'textarea'; options?: [string, string][] }[] = [
+  { key: 'display_name', title: 'Preferred name' },
   { key: 'level', title: 'English level (English Speaking Level Rubric) — your assessment', kind: 'select', options: [['', 'Not assessed yet'], ...RUBRIC.map((l) => [l, l] as [string, string])] },
   { key: 'job', title: 'Job' }, { key: 'hobbies', title: 'Hobbies' }, { key: 'interests', title: 'Interests' },
   { key: 'improve', title: 'What they want to improve', kind: 'textarea' }, { key: 'hopes', title: 'What they hope for in class / atmosphere', kind: 'textarea' },
@@ -237,7 +238,7 @@ const FIELDS: { key: string; title: string; kind?: 'select' | 'textarea'; option
 function EditSheet({ p, save, onClose, onSaved }: { p: TutorStudentProfile; save: (f: Record<string, string | null>) => Promise<void>; onClose: () => void; onSaved: () => Promise<void> }) {
   const s = p.student;
   const init: Record<string, string> = {
-    level: s.level ?? '', job: s.job ?? '', hobbies: s.hobbies ?? '', interests: s.interests ?? '', improve: s.improve ?? '', hopes: s.hopes ?? '',
+    display_name: s.displayName ?? '', level: s.level ?? '', job: s.job ?? '', hobbies: s.hobbies ?? '', interests: s.interests ?? '', improve: s.improve ?? '', hopes: s.hopes ?? '',
     correction_style: s.correctionStyle ?? '', correction_note: s.correctionNote ?? '', class_style: s.classStyle ?? '', class_style_note: s.classStyleNote ?? '',
   };
   const [v, setV] = useState(init);
