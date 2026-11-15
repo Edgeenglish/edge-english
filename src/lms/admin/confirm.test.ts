@@ -150,3 +150,25 @@ describe('강사 해외 이동 기간 (H26(173)(176)): 강사 문구 시각 = �
     expect(plain).not.toContain('From ');
   });
 });
+
+describe('이동 기간 4차 QA (H26(182))', () => {
+  const ba = 'America/Argentina/Buenos_Aires';
+  // 시드니 강사, 12/24부터 Buenos Aires. 첫 수업 12/21, 월·목 한국 19:00
+  const zoneAt = (t: Date) => (t >= new Date('2026-12-24T03:00:00Z') ? ba : 'Australia/Sydney');
+  const v: PlanView = { ...base, tutorName: 'Mia', slots: [{ weekday: 1, time: '19:00' }, { weekday: 4, time: '19:00' }], startDate: '2026-12-21', endDate: '2027-01-17', lessons: 8, tutorZoneAt: zoneAt };
+  it('③ 지역마다 그 지역 요일만, 도시 이름도 그 지역', () => {
+    const p = proposalMessage(v);
+    expect(p).toContain('Every Mon 9:00 PM *Sydney Time* / Mon 7:00 PM *KST*');
+    expect(p).toContain('From Thu, 24 Dec: Every Mon & Thu 7:00 AM *Buenos Aires Time* / Mon & Thu 7:00 PM *KST*');
+    expect(p).not.toContain('7:00 AM *Sydney Time*');
+    const rows = timeLines(v).filter((l) => l.who === '강사');
+    expect(rows).toMatchObject([{ text: '월 오후 9:00', tz: 'Australia/Sydney' }, { text: '12/24부터 월·목 오전 7:00', tz: ba }]);
+  });
+  it('② 회차별 일정안이어도 복귀 안내가 남음', () => {
+    const z2 = (t: Date) => (t >= new Date('2026-12-24T03:00:00Z') && t < new Date('2027-01-11T03:00:00Z') ? ba : 'Australia/Sydney');
+    const w: PlanView = { ...base, slots: [{ weekday: 1, time: '19:00' }], startDate: '2026-12-28', endDate: '2027-01-24', lessons: 4, tutorZoneAt: z2,
+      lessonList: [{ date: '2026-12-28', time: '21:00' }, { date: '2027-01-04', time: '19:00' }, { date: '2027-01-11', time: '19:00' }, { date: '2027-01-18', time: '19:00' }] };
+    expect(proposalMessage(w)).toContain('From Mon, 11 Jan: Every Mon 9:00 PM *Sydney Time*');
+    expect(tutorConfirmMessage(w)).toContain('From Mon, 11 Jan: Every Mon 9:00 PM *Sydney Time*');
+  });
+});

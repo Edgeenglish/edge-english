@@ -22,7 +22,7 @@ import { updateLines, updateTitle, type NewStudentRequest, type TutorUpdate } fr
 import { LangCtx, useLang, useT, type Lang } from '@/lms/tutor/lang';
 import { Rich } from '@/app/lms/Rich';
 import HomeNotices from '@/app/lms/HomeNotices';
-import { enBoth, enEvery, stripBold } from '@/lms/admin/time-text';
+import { enBoth, enEveryLines, stripBold } from '@/lms/admin/time-text';
 import { useDetailBack } from './useDetailBack';
 import { zoneAt } from '@/lms/tutor/travel';
 import { TimeOffCard, TimeOffForm } from './TimeOff';
@@ -625,7 +625,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <div className="grid gap-3">
               {requests.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ {t('Nothing to answer', '답할 문의가 없어요')}</p>}
               {requests.map((r) => (
-                <RequestCard key={r.planId} r={r} tz={zAt(r.first)} answer={actions.answerRequest} onDone={refreshRequests} />
+                <RequestCard key={r.planId} r={r} tz={zAt(r.first)} zAt={zAt} answer={actions.answerRequest} onDone={refreshRequests} />
               ))}
             </div>
           </Sheet>
@@ -768,7 +768,7 @@ function Sheet({ onClose, children }: { onClose: () => void; children: ReactNode
 }
 
 /** 신규 수강생 문의 한 건 (시안 H26(127)): 답하면 고른 버튼이 회색 ✓, 다른 버튼으로 바꿀 수 있음 (운영진 확정 전까지) */
-function RequestCard({ r, tz, answer, onDone }: { r: NewStudentRequest; tz: string; answer?: (planId: string, yes: boolean) => Promise<void>; onDone: () => Promise<void> }) {
+function RequestCard({ r, tz, zAt, answer, onDone }: { r: NewStudentRequest; tz: string; /** 수업마다 지역 (이동 기간, H26(182)) */ zAt: (t: Date) => string; answer?: (planId: string, yes: boolean) => Promise<void>; onDone: () => Promise<void> }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -787,7 +787,7 @@ function RequestCard({ r, tz, answer, onDone }: { r: NewStudentRequest; tz: stri
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[14.5px]">
         <dt className="text-[#6b6880]">{t('Student', '수강생')}</dt><dd className="font-semibold text-[#1d1b2b]">{r.student}</dd>
         <dt className="text-[#6b6880]">{t('Class', '수업')}</dt><dd className="text-[#1d1b2b]">{r.minutes} min · {r.classes} classes</dd>
-        <dt className="text-[#6b6880]">{t('Time', '시간')}</dt><dd className="text-[#1d1b2b]"><Rich text={enEvery(r.every, tz)} /></dd>
+        <dt className="text-[#6b6880]">{t('Time', '시간')}</dt><dd className="text-[#1d1b2b]">{enEveryLines(r.every, zAt, { classes: r.classes }).map((l) => <span key={l} className="block"><Rich text={l} /></span>)}</dd>
         <dt className="text-[#6b6880]">{t('First class', '첫 수업')}</dt><dd className="text-[#1d1b2b]"><Rich text={enBoth(r.first, tz)} /></dd>
       </dl>
       <div className="mt-3 flex flex-wrap gap-2">

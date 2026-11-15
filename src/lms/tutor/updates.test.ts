@@ -34,3 +34,16 @@ describe('Updates 시각 = 그 시각의 지역 (이동 기간, H26(176))', () =
     expect(lines[0]).toContain('Buenos Aires Time');
   });
 });
+
+describe('① 신규 배정 Updates 매주 시간: 지역이 바뀌면 줄을 나눔 (H26(182))', () => {
+  it('12/21 Sydney 21:00, 12/24부터 Buenos Aires 07:00', () => {
+    const ba = 'America/Argentina/Buenos_Aires';
+    const zoneAt = (t: Date) => (t >= new Date('2026-12-24T03:00:00Z') ? ba : 'Australia/Sydney');
+    const first = new Date('2026-12-21T10:00:00Z');
+    const lines = updateLines({ id: 'n', kind: 'new_student', student: 'S', at: first, info: { every: ['2026-12-21T10:00:00Z', '2026-12-24T10:00:00Z'], first: first.toISOString(), last: '2027-01-14T10:00:00Z', classes: 8, minutes: 40 } }, zoneAt);
+    expect(lines[0]).toContain('Mon 9:00 PM *Sydney Time*');
+    expect(lines[0]).not.toContain('Thu');
+    expect(lines[1]).toContain('From Thu, 24 Dec: Every Mon, Thu 7:00 AM *Buenos Aires Time*');
+    expect(lines[2]).toContain('First class: Mon, 21 Dec');
+  });
+});

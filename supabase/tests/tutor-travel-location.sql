@@ -198,4 +198,9 @@ select pg_temp.ok((select not (lms_plan_conflicts('aaaaaaaa-0000-4000-8000-00000
     jsonb_build_array(jsonb_build_object('weekday', extract(dow from (t_out at time zone 'Asia/Seoul'))::int, 'time', to_char(t_out at time zone 'Asia/Seoul', 'HH24:MI'))),
     (t_out at time zone 'Asia/Seoul')::date, (t_out at time zone 'Asia/Seoul')::date, 40::smallint) @> '[{"reason":"tutor_travel_hours"}]') from pc),
   '배정 검사: 이동 기간 밖은 이동 기간 검사 안 함 (전과 같음)');
+select pg_temp.ok((select r like 'Every % *Sydney Time* / %' || E'\n' || 'From %: Every % *Buenos Aires Time* / %'
+  from (select lms_tutor_every('aaaaaaaa-0000-4000-8000-0000000000f1', array[((select d - 3 from d) + time '10:00') at time zone 'Australia/Sydney'], null, 2) r) q),
+  '강사 메일 매주 시간: 기간 중 지역이 바뀌면 From 줄로 나눔 (QA ①)');
+select pg_temp.ok(lms_tutor_every('aaaaaaaa-0000-4000-8000-0000000000f1', array[((select d + 3 from d) + time '16:00') at time zone 'America/Argentina/Buenos_Aires'], null, 1) not like '%From%',
+  '강사 메일 매주 시간: 한 지역뿐이면 한 줄');
 rollback;
