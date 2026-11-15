@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Regular Working Hours 시안 2</title>
+<title>Regular Working Hours 시안 3</title>
 <style>
   :root{--ink:#1d1b2b;--sub:#55526a;--mute:#6b6880;--line:#e6e3ef;--soft:#f6f4fb;--pur:#5b3fe0;--bg:#f3f2f8;--open:#e3f6ea;--closed:#eeedf3}
   *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
@@ -12,7 +12,8 @@
   .title{display:flex;justify-content:space-between;align-items:center;gap:12px} .title b{font-size:20px}
   .btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 14px;font-weight:600;font-size:14px;white-space:nowrap}
   .desc{color:var(--sub);font-size:13.5px;margin:6px 0 0}
-  .home{margin-top:18px;display:flex;justify-content:space-between;align-items:center;background:var(--soft);border-radius:12px;padding:10px 14px;font-size:14px}
+  .toff{margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13.5px;color:var(--sub)}
+  .home{margin-top:16px;display:flex;justify-content:space-between;align-items:center;background:var(--soft);border-radius:12px;padding:10px 14px;font-size:14px}
   .badge{background:#fff;border-radius:99px;padding:2px 9px;font-size:12px;font-weight:700;color:#2b1c7a}
   .lab{font-size:12.5px;font-weight:700;color:var(--mute);margin:20px 0 6px}
   .tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);overflow-x:auto}
@@ -47,9 +48,9 @@
   .cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;font-size:13.5px}
   .cmp div{background:#fff;border-radius:12px;padding:12px 14px;line-height:1.6}
 </style></head><body><div class="wrap">
-<h1>Regular Working Hours — 시안 2 (시간표 넓히기)</h1>
+<h1>Regular Working Hours — 시안 3</h1>
 <p class="note">합의 유지: 'Sydney (Home)' 탭 · 처음 열면 6 AM 부터 · 'Hours for' 탭 / 'Show times in' 스위치 두 줄 구분 · 간격 넓힘.<br>
-이번 변경: <b>PC 시간표를 넓고 크게</b>, Changes 는 오른쪽 그대로(조금 좁게). 노란 상자는 설명용(실제 화면에 없음).</p>
+시안 3 추가: ① 'Request time off' 줄 그대로(시안 2에서 빠뜨림) ② 탭 아래 날짜 줄 빼기(탭 이름과 중복) ③ Save 는 하나만(바꾼 게 있을 때만 진하게) ④ 휴대폰 탭은 가로로 밀고, 고른 탭이 화면 안에 보이게.<br>노란 상자는 설명용(실제 화면에 없음).</p>
 
 <div class="cmp">
   <div><b>지금</b><br>창 최대 너비 1080px · 오른쪽 Changes 280px<br>칸 높이 24px · 수업 이름 11.5px · 요일 머리 작음</div>
@@ -61,13 +62,15 @@
 <div class="pc">
   <div class="title"><b>Regular Working Hours</b><span class="btn">Add Temporary Location</span></div>
   <p class="desc">Set your regular weekly teaching hours here. For one-time changes, go to Calendar &amp; One-Time Changes.</p>
+  <div class="toff"><span>Taking 3 or more days off? Request it as time off.</span><span class="btn">Request time off ›</span></div>
   <div class="home"><span>Home location <b>Australia · Sydney</b></span><span class="badge">AEDT</span></div>
   <div class="lab">Hours for</div>
   <div class="tabs"><span class="tab">Sydney (Home)</span><span class="tab on">Buenos Aires · 1 Dec – 20 Dec</span></div>
   <div class="body">
     <div class="main">
       <div class="zone"><span><b>Buenos Aires Time</b> · 6:00 AM – 10:30 PM</span><span class="badge" style="background:var(--soft)">UTC-3</span></div>
-      <div class="msg"><span>1 Dec – 20 Dec: Your schedule will use Buenos Aires Time.</span><span>From 21 Dec: Your schedule will return to Sydney Time.</span></div>
+      <div class="msg"><span>From 21 Dec: Your schedule will return to Sydney Time.</span></div>
+      <div class="ann">↑ 탭 이름에 '1 Dec – 20 Dec'가 있어 날짜 줄은 뺌. 종료일이 없는 기간이면 이 자리에: "Your schedule will use Buenos Aires Time until you set an end date." + [Set end date]</div>
       <div class="legend"><span><i class="sw" style="background:var(--open)"></i>Open</span><span><i class="sw" style="background:var(--closed)"></i>Closed</span><span><i class="sw" style="background:var(--pur)"></i>Class</span><span><i class="sw" style="background:repeating-linear-gradient(45deg,#ddd 0 2px,#fff 2px 4px)"></i>Can't open</span></div>
       <div class="bar"><span>Click a time to change your weekly hours.</span><span class="seg">Show times in <span class="opts"><span class="o on">Buenos Aires Time</span><span class="o">KST</span></span></span></div>
       <div class="scrollhint">▲ 위로 올리면 12 AM ~ 5 AM (새벽 수업도 그대로 보임)</div>
@@ -82,20 +85,22 @@
       </table>
     </div>
     <div class="side"><b>Changes · Buenos Aires Time</b><span class="s">+ Every Monday 7:00 AM – 7:30 AM</span><span class="save">Save (1)</span>
-      <span class="s" style="border-top:1px solid var(--line);padding-top:8px">바뀐 것이 없으면 ↓</span><span class="save off">Save</span></div>
+      <span class="ann">Save 는 하나. 바꾼 게 없으면 연한 색(못 누름)</span></div>
   </div>
 </div>
 
-<div class="cap">휴대폰 — 배치 그대로, 간격·칸 크기만 키움</div>
+<div class="cap">휴대폰 — Buenos Aires 탭을 고른 상태 (배치 그대로, 간격·칸 크기만 키움)</div>
 <div class="phone">
   <b style="font-size:18px">Regular Working Hours</b>
   <span class="btn" style="display:block;text-align:center;margin-top:12px">Add Temporary Location</span>
+  <div class="toff" style="flex-direction:column;align-items:stretch"><span>Taking 3 or more days off? Request it as time off.</span><span class="btn" style="text-align:center">Request time off ›</span></div>
   <div class="home"><span>Home location <b>Australia · Sydney</b></span><span class="badge">AEDT</span></div>
   <div class="lab">Hours for</div>
-  <div class="tabs"><span class="tab on">Sydney (Home)</span><span class="tab">Buenos Aires · 1 Dec – 20 Dec</span></div>
-  <div class="msg" style="margin-top:14px"><span>Changes apply from next Monday (Mon, Nov 23).</span></div>
+  <div class="tabs" style="justify-content:flex-end"><span class="tab" style="opacity:.6">…ey (Home)</span><span class="tab on">Buenos Aires · 1 Dec – 20 Dec</span></div>
+  <div class="ann">↑ 가로로 밀 수 있고, 고른 탭이 자동으로 화면 안에 들어옴</div>
+  <div class="msg" style="margin-top:12px"><span><b>Buenos Aires Time</b> · 6:00 AM – 10:30 PM</span><span>From 21 Dec: Your schedule will return to Sydney Time.</span></div>
   <div class="legend"><span><i class="sw" style="background:var(--open)"></i>Open</span><span><i class="sw" style="background:var(--closed)"></i>Closed</span><span><i class="sw" style="background:var(--pur)"></i>Class</span><span><i class="sw" style="background:repeating-linear-gradient(45deg,#ddd 0 2px,#fff 2px 4px)"></i>Can't open</span></div>
-  <div class="bar" style="flex-direction:column;align-items:flex-start;gap:8px"><span>Click a time to change your weekly hours.</span><span class="seg">Show times in <span class="opts"><span class="o on">Sydney Time</span><span class="o">KST</span></span></span></div>
+  <div class="bar" style="flex-direction:column;align-items:flex-start;gap:8px"><span>Click a time to change your weekly hours.</span><span class="seg">Show times in <span class="opts"><span class="o on">Buenos Aires Time</span><span class="o">KST</span></span></span></div>
   <table>
     <tr><th></th><th>M</th><th>T</th><th>W</th><th>T</th><th>F</th><th>S</th><th>S</th></tr>
     <tr><td class="t">6 AM</td><td class="c op"></td><td class="c op"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
