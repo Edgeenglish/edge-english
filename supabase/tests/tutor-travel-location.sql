@@ -207,4 +207,42 @@ select pg_temp.ok(lms_tutor_every('aaaaaaaa-0000-4000-8000-0000000000f1', array[
                                    ((select d - 3 from d) + time '10:00') at time zone 'Australia/Sydney', null) not like '%From%'
   and lms_tutor_every('aaaaaaaa-0000-4000-8000-0000000000f1', array[((select d - 10 from d) + time '10:00') at time zone 'Australia/Sydney'], null, null) not like '%From%',
   '강사 메일 매주 시간: 수강권이 이동 전에 끝나거나 끝을 모르면 From 줄 없음 (재QA)');
+-- ── 적용 시점 (대표 11/15): 처음 = 시작일/즉시, 고치기 = 다음 월요일과 시작일 중 늦은 날, 종료일보다 늦으면 못 고침. 이전 시간표 보존 ──
+reset role;
+select pg_temp.ok((select min(effective_from) from tutor_availability where location_id = (select u from v where k = 'loc')) = (select d from d),
+  '적용 시점: 시작 전 처음 넣은 시간표는 기간 시작일부터');
+insert into tutors (id, name, country, timezone, email) values
+  ('aaaaaaaa-0000-4000-8000-0000000000f3', 'Noah', 'Australia', 'Australia/Sydney', 'f3@example.invalid'),
+  ('aaaaaaaa-0000-4000-8000-0000000000f4', 'Grace', 'Australia', 'Australia/Sydney', 'f4@example.invalid');
+create temp table t0 as select (now() at time zone 'America/Argentina/Buenos_Aires')::date as t,
+  (now() at time zone 'America/Argentina/Buenos_Aires')::date + (8 - extract(isodow from (now() at time zone 'America/Argentina/Buenos_Aires')::date)::int) as nm;
+grant select on t0 to authenticated;
+insert into tutor_locations (id, tutor_id, city, country, timezone, starts_on, ends_on) values
+  ('dddddddd-0000-4000-8000-0000000000f3', 'aaaaaaaa-0000-4000-8000-0000000000f3', 'Buenos Aires', 'Argentina', 'America/Argentina/Buenos_Aires', (select t - 5 from t0), (select t + 30 from t0)),
+  ('dddddddd-0000-4000-8000-0000000000f4', 'aaaaaaaa-0000-4000-8000-0000000000f4', 'Buenos Aires', 'Argentina', 'America/Argentina/Buenos_Aires', (select t - 5 from t0), (select t from t0));
+select pg_temp.ok((select (lms_tutor_location_json(l) ->> 'apply_from')::date = (select t from t0) and (lms_tutor_location_json(l) ->> 'first')::boolean
+  from tutor_locations l where id = 'dddddddd-0000-4000-8000-0000000000f3'), '적용 시점: 기간 중 처음 넣기 = 오늘부터(즉시)');
+select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-0000000000f9","aal":"aal2"}', true);
+set local role authenticated;
+select tutor_location_hours_save('aaaaaaaa-0000-4000-8000-0000000000f3', 'dddddddd-0000-4000-8000-0000000000f3', array['1:10:00']);
+select tutor_location_hours_save('aaaaaaaa-0000-4000-8000-0000000000f3', 'dddddddd-0000-4000-8000-0000000000f3', array['1:11:00']);
+reset role;
+select pg_temp.ok(
+  (select count(*) from tutor_availability where location_id = 'dddddddd-0000-4000-8000-0000000000f3' and start_local = '10:00' and effective_from = (select t from t0) and effective_to = (select nm - 1 from t0)) = 1
+  and (select count(*) from tutor_availability where location_id = 'dddddddd-0000-4000-8000-0000000000f3' and start_local = '11:00' and effective_from = (select nm from t0) and effective_to is null) = 1,
+  '적용 시점: 고치면 다음 월요일부터 새 시간표, 그 전날까지 이전 시간표 보존');
+select pg_temp.ok(not lms_tutor_weekly_ok('aaaaaaaa-0000-4000-8000-0000000000f3', ((select nm from t0) + time '10:00') at time zone 'America/Argentina/Buenos_Aires')
+  and lms_tutor_weekly_ok('aaaaaaaa-0000-4000-8000-0000000000f3', ((select nm from t0) + time '11:00') at time zone 'America/Argentina/Buenos_Aires')
+  and lms_tutor_weekly_ok('aaaaaaaa-0000-4000-8000-0000000000f3', ((select nm + 7 from t0) + time '11:00') at time zone 'America/Argentina/Buenos_Aires'),
+  '적용 시점: 다음 월요일부터 판정도 새 시간표');
+select pg_temp.ok((select (lms_tutor_location_json(l) -> 'weekly_open') = '["1:11:00"]'::jsonb and (lms_tutor_location_json(l) ->> 'apply_from')::date = (select nm from t0)
+  from tutor_locations l where id = 'dddddddd-0000-4000-8000-0000000000f3'), '적용 시점: 화면은 새 시간표 + 고치면 다음 월요일');
+insert into tutor_availability (tutor_id, weekday, start_local, end_local, timezone, effective_from, location_id)
+values ('aaaaaaaa-0000-4000-8000-0000000000f4', 1, '10:00', '10:00', 'America/Argentina/Buenos_Aires', (select t - 5 from t0), 'dddddddd-0000-4000-8000-0000000000f4');
+select pg_temp.ok((select lms_tutor_location_json(l) ->> 'apply_from' is null from tutor_locations l where id = 'dddddddd-0000-4000-8000-0000000000f4'),
+  '적용 시점: 다음 월요일이 종료일보다 늦으면 고칠 날 없음');
+set local role authenticated;
+select pg_temp.fails($$select tutor_location_hours_save('aaaaaaaa-0000-4000-8000-0000000000f4', 'dddddddd-0000-4000-8000-0000000000f4', array['1:11:00'])$$,
+  '적용 시점: 종료일 전 적용할 날이 없으면 저장 막음');
+reset role;
 rollback;

@@ -11,12 +11,14 @@ import { plusDays, type WeeklyClass } from './hours';
 /** 이동 기간 (날짜는 그 지역 현지, to = 마지막 날 포함, null = 종료일 없음) */
 export type TravelPeriod = { id: string; city: string; country: string; timezone: string; from: string; to: string | null };
 /** Regular Working Hours 탭 하나 = 이동 기간 + 그 기간 매주 시간 ('요일:HH:MM', 그 지역 현지) */
-export type TravelLocation = TravelPeriod & { monday: string; weeklyOpen: string[]; weeklyClasses: WeeklyClass[] };
+/** applyFrom = 지금 고치면 적용되는 날 (null = 적용할 날 없음 → 고칠 수 없음), first = 처음 넣는지, today = 그 지역 오늘 (대표 11/15) */
+export type TravelLocation = TravelPeriod & { monday: string; weeklyOpen: string[]; weeklyClasses: WeeklyClass[]; applyFrom: string | null; first: boolean; today: string };
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB 함수가 돌려주는 JSON 을 화면 모양으로 바꾸는 곳 */
 export const parsePeriod = (j: any): TravelPeriod => ({ id: j.id, city: j.city, country: j.country ?? '', timezone: j.timezone, from: j.from, to: j.to ?? null });
 export const parseLocation = (j: any): TravelLocation => ({
   ...parsePeriod(j), monday: j.monday, weeklyOpen: j.weekly_open ?? [], weeklyClasses: j.weekly_classes ?? [],
+  applyFrom: 'apply_from' in j ? j.apply_from ?? null : j.from, first: j.first ?? false, today: j.today ?? '',
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -67,6 +69,22 @@ export const homeText = (country: string, timezone: string) => {
   const city = cityTime(timezone).replace(/ Time$/, '');
   return country ? `${country} · ${city}` : city;
 };
+
+/** 이동 기간 탭 아래 안내 (대표 11/15 시안 3): 탭 이름에 기간이 있어 날짜 줄은 빼고 복귀·종료일 안내만 */
+export const tabPeriodLine = (to: string | null, timezone: string, home: string): string => (to
+  ? `From ${dayMonth(plusDays(to, 1))}: Your schedule will return to ${enZoneName(home)}.`
+  : `Your schedule will use ${enZoneName(timezone)} until you set an end date.`);
+
+/** Temporary location 시간표를 고치면 언제부터 적용되는지 (대표 11/15): null = 고칠 수 없음 */
+export const applyLine = (l: Pick<TravelLocation, 'applyFrom' | 'first' | 'today'>): string | null => {
+  if (!l.applyFrom) return null;
+  if (l.first && l.today && l.applyFrom <= l.today) return 'Changes apply right away.';
+  return `Changes apply from ${dowDayMonth(l.applyFrom)}.`;
+};
+export const LOCKED_TEXT = 'This period ends before weekly changes can apply. For one-time changes, use Calendar & One-Time Changes.';
+
+/** 평소 지역 탭 이름 'Sydney (Home)' (대표 11/15) */
+export const homeTabLabel = (timezone: string) => `${cityTime(timezone).replace(/ Time$/, '')} (Home)`;
 
 /** 그 날짜(현지)에 있는 이동 기간 → 없으면 null (평소 지역) */
 export const periodOn = (periods: TravelPeriod[], date: string): TravelPeriod | null =>

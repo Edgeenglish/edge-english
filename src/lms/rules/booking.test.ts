@@ -115,4 +115,14 @@ describe('강사 해외 이동 기간 (H26(173)): 가능 판정 = 그 시각 지
   it('출발 날: 그 지역 현지 날짜로 판정 (BA 12/24 07:00 = 한국 12/24 19:00 → 이미 BA)', () => {
     expect(startsWithinAvailability(kstToInstant('2026-12-21', '18:00'), w)).toBe(true);    // 출발 전 월요일은 시드니
   });
+  it('Temporary location 시간표를 고치면 적용일 전은 옛 벌, 적용일부터 새 벌 (대표 11/15, 그 지역 현지 날짜)', () => {
+    const v = [
+      { weekday: 1, startLocal: '07:00', endLocal: '07:30', timezone: 'America/Argentina/Buenos_Aires', effectiveFrom: '2026-12-24', effectiveTo: '2027-01-03', travel, periodId: 'ba' },
+      { weekday: 1, startLocal: '08:00', endLocal: '08:30', timezone: 'America/Argentina/Buenos_Aires', effectiveFrom: '2027-01-04', effectiveTo: null, travel, periodId: 'ba' },
+    ];
+    expect(startsWithinAvailability(kstToInstant('2026-12-28', '19:00'), v)).toBe(true);    // BA 12/28 07:00 = 옛 벌
+    expect(startsWithinAvailability(kstToInstant('2026-12-28', '20:00'), v)).toBe(false);
+    expect(startsWithinAvailability(kstToInstant('2027-01-04', '19:00'), v)).toBe(false);   // BA 1/4 07:00 = 새 벌엔 없음
+    expect(startsWithinAvailability(kstToInstant('2027-01-04', '20:00'), v)).toBe(true);
+  });
 });

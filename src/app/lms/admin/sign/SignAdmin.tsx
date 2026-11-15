@@ -18,7 +18,7 @@ const btn = 'inline-flex min-h-[40px] items-center rounded-[10px] bg-[#7d5ffb] p
 const btnLine = 'inline-flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13.5px] font-semibold text-[#5b3fe0] disabled:opacity-40';
 const field = 'w-full rounded-[10px] border border-[#d9d5e6] px-3 py-2 text-[16px] lg:text-[14px]';
 
-type Req = { requestId: string; tutorId: string; tutor: string; requestedAt: Date; dueAt: Date; signatureId: string | null; signedAt: Date | null; country: string | null; mailStatus: string | null; mailError: string | null };
+type Req = { requestId: string; tutorId: string; tutor: string; requestedAt: Date; dueAt: Date; dueLocal: string; signatureId: string | null; signedAt: Date | null; country: string | null; hasEmail: boolean; requestMail: string | null; mailStatus: string | null; mailError: string | null };
 type Doc = { id: string; title: string; revision: number; status: 'draft' | 'published' | 'retired'; body: string; statement: string; publishedAt: Date | null; requests: Req[] };
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
@@ -34,11 +34,18 @@ function parseDocs(rows: Record<string, unknown>[]): Doc[] {
     id: String(d.id), title: String(d.title), revision: Number(d.revision), status: d.status as Doc['status'],
     body: String(d.body ?? ''), statement: String(d.statement ?? ''), publishedAt: d.published_at ? new Date(String(d.published_at)) : null,
     requests: ((d.requests ?? []) as Record<string, unknown>[]).map((r) => ({
-      requestId: String(r.request_id), tutorId: String(r.tutor_id), tutor: String(r.tutor), requestedAt: new Date(String(r.requested_at)), dueAt: new Date(String(r.due_at)),
+      requestId: String(r.request_id), tutorId: String(r.tutor_id), tutor: String(r.tutor), requestedAt: new Date(String(r.requested_at)), dueAt: new Date(String(r.due_at)), dueLocal: String(r.due_local ?? ''),
       signatureId: (r.signature_id as string | null) ?? null, signedAt: r.signed_at ? new Date(String(r.signed_at)) : null, country: (r.country as string | null) ?? null,
+      hasEmail: r.has_email !== false, requestMail: (r.request_mail_status as string | null) ?? null,
       mailStatus: (r.mail_status as string | null) ?? null, mailError: (r.mail_error as string | null) ?? null,
     })),
   }));
+}
+
+/** '2026-11-19' → '11/19(목)' */
+function md(d: string): string {
+  if (!d) return '';
+  return `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}(${WD[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 }
 
 const MAIL: Record<string, string> = { queued: '보내는 중', sent: '보냄', failed: '못 보냄', canceled: '취소' };
@@ -111,6 +118,7 @@ function DocGroup({ sb, docs, tutors, onChanged }: { sb: SupabaseClient; docs: D
 function LiveDoc({ sb, doc, tutors, onChanged }: { sb: SupabaseClient; doc: Doc; tutors: TutorAccount[]; onChanged: () => Promise<void> }) {
   const [adding, setAdding] = useState(false);
   const [pick, setPick] = useState<string[]>([]);
+  const [due, setDue] = useState(() => { const d = new Date(Date.now() + 9 * 3600_000 + 7 * 86400_000); return d.toISOString().slice(0, 10); });   // 기본 = 오늘(한국 날짜) + 7일
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [showText, setShowText] = useState(false);
@@ -118,10 +126,17 @@ function LiveDoc({ sb, doc, tutors, onChanged }: { sb: SupabaseClient; doc: Doc;
   const canAsk = tutors.filter((t) => t.active && !asked.has(t.id));
   async function send() {
     setBusy(true); setErr('');
-    const r = await sb.rpc('admin_sign_request', { p_document: doc.id, p_tutors: pick });
+    const r = await sb.rpc('admin_sign_request', { p_document: doc.id, p_tutors: pick, p_mail: true, p_due_date: due });
     setBusy(false);
     if (r.error) return setErr(r.error.message);
     setPick([]); setAdding(false); await onChanged();
+  }
+  async function mail(requestId: string) {
+    setBusy(true); setErr('');
+    const r = await sb.rpc('admin_sign_request_mail', { p_request: requestId });
+    setBusy(false);
+    if (r.error) return setErr(r.error.message);
+    await onChanged();
   }
   async function pdf(id: string) {
     const tutor = doc.requests.find((r) => r.signatureId === id)?.tutorId;
@@ -147,7 +162,12 @@ function LiveDoc({ sb, doc, tutors, onChanged }: { sb: SupabaseClient; doc: Doc;
                 <b className="text-[14px] text-[#1d1b2b]">{r.tutor}</b>{' '}
                 {r.signedAt
                   ? <span className="font-semibold text-[#1f7a4d]">서명함 ✓</span>
-                  : <span className={Date.now() > r.dueAt.getTime() ? 'font-semibold text-[#b3261e]' : 'text-[#6b6880]'}>서명 대기 · 기한 {kst(r.dueAt)}</span>}
+                  : <span className={Date.now() > r.dueAt.getTime() ? 'font-semibold text-[#b3261e]' : 'text-[#6b6880]'}>서명 대기 · 기한 {md(r.dueLocal)} 강사 현지 날짜</span>}
+                {!r.signedAt && (
+                  <span className="block text-[12.5px] text-[#55526a]">
+                    {r.requestMail ? `요청 메일 ${MAIL[r.requestMail] ?? r.requestMail}` : r.hasEmail ? '요청 메일 안 보냄' : <span className="text-[#b3261e]">강사 이메일 없음</span>}
+                  </span>
+                )}
                 {r.signedAt && (
                   <span className="block text-[12.5px] text-[#55526a]">
                     {r.country} · {kst(r.signedAt)} · 서명본 메일 {MAIL[r.mailStatus ?? ''] ?? '없음'}{r.mailError ? ` (${r.mailError})` : ''}
@@ -155,6 +175,9 @@ function LiveDoc({ sb, doc, tutors, onChanged }: { sb: SupabaseClient; doc: Doc;
                 )}
               </span>
               {r.signatureId && <button type="button" onClick={() => void pdf(r.signatureId!)} className={btnLine}>PDF</button>}
+              {!r.signatureId && !r.requestMail && r.hasEmail && doc.status === 'published' && (
+                <button type="button" disabled={busy} onClick={() => void mail(r.requestId)} className={btnLine}>요청 메일 보내기</button>
+              )}
             </li>
           ))}
         </ul>
@@ -166,11 +189,14 @@ function LiveDoc({ sb, doc, tutors, onChanged }: { sb: SupabaseClient; doc: Doc;
             <label key={t.id} className="flex min-h-[40px] items-center gap-2 text-[14.5px]">
               <input type="checkbox" className="h-[18px] w-[18px] accent-[#5b3fe0]" checked={pick.includes(t.id)}
                 onChange={(e) => setPick(e.target.checked ? [...pick, t.id] : pick.filter((x) => x !== t.id))} />
-              {t.name}{t.hasLogin ? '' : <span className="text-[12.5px] text-[#b3261e]">강사 계정 없음</span>}
+              {t.name}{t.hasLogin ? '' : <span className="text-[12.5px] text-[#b3261e]"> · 강사 계정 없음</span>}
             </label>
           ))}
+          <label className="mt-1 grid gap-1 text-[13px] font-semibold text-[#55526a]">기한 (강사 현지 날짜)
+            <input type="date" value={due} min={new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10)} onChange={(e) => setDue(e.target.value)} className={`${field} max-w-[200px]`} />
+          </label>
           <div className="flex gap-2">
-            <button type="button" disabled={busy || pick.length === 0} onClick={() => void send()} className={btn}>요청 보내기</button>
+            <button type="button" disabled={busy || pick.length === 0 || !due} onClick={() => void send()} className={btn}>요청 보내기</button>
             <button type="button" onClick={() => { setAdding(false); setPick([]); }} className={btnLine}>닫기</button>
           </div>
         </div>

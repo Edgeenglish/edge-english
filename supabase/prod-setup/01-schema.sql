@@ -25260,6 +25260,124 @@ begin
 end
 $mig$;
 
+-- >>> 20261115040000_lms_tutor_location_hours_dated.sql
+-- Temporary location 매주 시간표 적용 시점 (대표 11/15 '반영해', 정책 POL-TU-11 '매주 변경은 다음 주 월요일부터'와 통일)
+--  · 처음 시간 넣기: Temporary location period 시작 전이면 시작일부터, 시작 뒤면 저장 즉시(오늘부터)
+--  · 이미 넣은 시간표 고치기: 다음 월요일과 시작일 중 늦은 날부터. 그날이 종료일보다 늦으면 고칠 수 없음 (이번 주만 = Calendar & One-Time Changes)
+--  · 날짜·다음 월요일 = 그 Temporary location 현지 날짜 기준
+--  · 시간표를 여러 벌 보관 (tutor_availability.effective_from·effective_to, 평소 지역과 같은 방식): 적용일 전에는 고치기 전 시간표 그대로
+--  · 확정 수업·대기 중인 보강·대체·신규 배정 요청은 건드리지 않음 (시간표와 따로 저장, 확정할 때 충돌 검사 그대로)
+
+-- 그 Temporary location 시간표를 지금 고치면 언제부터 적용되는지 (null = 적용할 날이 없음 → 고칠 수 없음)
+create or replace function lms_location_apply_from(l tutor_locations) returns date
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_today date := (now() at time zone l.timezone)::date;
+  v_from date;
+begin
+  if not exists (select 1 from tutor_availability a where a.location_id = l.id) then
+    v_from := greatest(l.starts_on, v_today);                                   -- 처음: 시작일 또는 오늘
+  else
+    v_from := greatest(v_today + (8 - extract(isodow from v_today)::int), l.starts_on);   -- 고치기: 다음 월요일과 시작일 중 늦은 날
+  end if;
+  if l.ends_on is not null and v_from > l.ends_on then return null; end if;
+  return v_from;
+end $$;
+revoke all on function lms_tutor_location_json(tutor_locations) from public, anon, authenticated;
+revoke all on function lms_location_apply_from(tutor_locations) from public, anon, authenticated;
+
+-- 매주 시간: Temporary location 이면 그 기간 시간표 중 그 날짜(그 지역 현지)에 적용되는 벌만
+create or replace function public.lms_tutor_weekly_ok(p_tutor uuid, p_start timestamptz)
+ returns boolean language sql stable security definer set search_path to 'public' as $function$
+  select lms_tutor_start_ok(p_tutor, p_start)
+     and case when x.loc is null then
+           exists (select 1 from tutor_availability a
+                   where a.tutor_id = p_tutor and a.location_id is null
+                     and a.effective_from <= (p_start at time zone 'Asia/Seoul')::date
+                     and (a.effective_to is null or a.effective_to >= (p_start at time zone 'Asia/Seoul')::date)
+                     and extract(dow from (p_start at time zone a.timezone)) = a.weekday
+                     and (p_start at time zone a.timezone)::time between a.start_local and a.end_local)
+         else
+           exists (select 1 from tutor_availability a
+                   where a.tutor_id = p_tutor and a.location_id = x.loc
+                     and a.effective_from <= (p_start at time zone a.timezone)::date
+                     and (a.effective_to is null or a.effective_to >= (p_start at time zone a.timezone)::date)
+                     and extract(dow from (p_start at time zone a.timezone)) = a.weekday
+                     and (p_start at time zone a.timezone)::time between a.start_local and a.end_local)
+         end
+  from (select lms_tutor_location_at(p_tutor, p_start) loc) x
+$function$;
+
+-- 화면용 한 줄: weekly_open = 앞으로 적용될(가장 새) 시간표, apply_from = 지금 고치면 적용되는 날(null = 고칠 수 없음), first = 처음 넣는지
+create or replace function lms_tutor_location_json(l tutor_locations) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', l.id, 'city', l.city, 'country', l.country, 'timezone', l.timezone,
+    'from', l.starts_on, 'to', l.ends_on,
+    'monday', m.mon,
+    'weekly_open', to_jsonb(array(
+      select distinct a.weekday || ':' || to_char(tm, 'HH24:MI')
+      from tutor_availability a cross join unnest(array(select lms_hours_times(l.timezone, m.mon))) tm
+      where a.location_id = l.id and a.effective_to is null and tm between a.start_local and a.end_local order by 1)),
+    'weekly_classes', coalesce((select jsonb_agg(jsonb_build_object('d', w.d, 'time', to_char(w.start_local, 'HH24:MI'), 'min', w.minutes, 'student', w.student))
+                                from lms_weekly_classes(l.tutor_id, l.timezone, m.mon) w), '[]'::jsonb),
+    'apply_from', lms_location_apply_from(l),
+    'first', not exists (select 1 from tutor_availability a where a.location_id = l.id),
+    'today', (now() at time zone l.timezone)::date)
+  from (select d - (extract(isodow from d)::int - 1) mon
+        from (select greatest(l.starts_on, (now() at time zone l.timezone)::date) d) z) m
+$$;
+revoke all on function lms_tutor_location_json(tutor_locations) from public, anon, authenticated;
+
+-- 매주 시간 저장: 적용일(lms_location_apply_from)부터 새 벌, 그 전은 고치기 전 벌 그대로
+create or replace function tutor_location_hours_save(p_tutor uuid, p_location uuid, p_weekly text[])
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_tutor uuid := lms_screen_tutor(p_tutor);
+  l tutor_locations;
+  v_times time[];
+  v_old text[];
+  v_new text[];
+  v_add text[];
+  v_del text[];
+  v_from date;
+  k text;
+  v_changes jsonb;
+begin
+  perform set_config('app.actor_id', coalesce(auth.uid()::text, ''), true);
+  perform set_config('app.actor_via', case when is_admin() then 'admin_tutor_hours' else 'tutor_hours' end, true);
+  select * into l from tutor_locations where id = p_location and tutor_id = v_tutor for update;
+  if not found then raise exception 'This temporary location is gone. Please refresh.'; end if;
+  if l.ends_on is not null and l.ends_on < (now() at time zone l.timezone)::date then raise exception 'This temporary location has ended.'; end if;
+  v_times := array(select lms_hours_times(l.timezone, l.starts_on));
+  foreach k in array coalesce(p_weekly, '{}') loop
+    if k !~ '^[0-6]:\d\d:\d\d$' or not (substr(k, 3)::time = any (v_times)) then raise exception 'Invalid time: %', k; end if;
+  end loop;
+  v_old := array(select jsonb_array_elements_text(lms_tutor_location_json(l) -> 'weekly_open'));
+  v_new := array(select distinct x from unnest(coalesce(p_weekly, '{}')) x);
+  v_add := array(select x from unnest(v_new) x where not (x = any (v_old)) order by 1);
+  v_del := array(select x from unnest(v_old) x where not (x = any (v_new)) order by 1);
+  if cardinality(v_add) + cardinality(v_del) > 0 then
+    v_from := lms_location_apply_from(l);
+    if v_from is null then
+      raise exception 'This period ends before weekly changes can apply. For one-time changes, use Calendar & One-Time Changes.';
+    end if;
+    delete from tutor_availability where location_id = l.id and effective_from >= v_from;
+    update tutor_availability set effective_to = v_from - 1
+    where location_id = l.id and effective_from < v_from and (effective_to is null or effective_to >= v_from);
+    insert into tutor_availability (tutor_id, weekday, start_local, end_local, timezone, effective_from, location_id)
+    select v_tutor, d, min(tm), max(tm), l.timezone, v_from, l.id
+    from (select d, tm, (extract(epoch from tm)::int / 1800) - row_number() over (partition by d order by tm) grp
+          from (select split_part(x, ':', 1)::int d, substr(x, 3)::time tm from unnest(v_new) x) a) b
+    group by d, grp;
+    v_changes := jsonb_build_object('from', v_from, 'weekly_open', to_jsonb(v_add), 'weekly_close', to_jsonb(v_del), 'once_close', '[]'::jsonb, 'once_open', '[]'::jsonb,
+      'location', jsonb_build_object('action', 'hours', 'city', l.city, 'country', l.country, 'timezone', l.timezone, 'from', l.starts_on, 'to', l.ends_on));
+    insert into tutor_hours_changes (tutor_id, actor, by_admin, changes) values (v_tutor, auth.uid(), is_admin(), v_changes);
+  end if;
+  return lms_tutor_location_json(l);
+end $$;
+revoke all on function tutor_location_hours_save(uuid, uuid, text[]) from public, anon;
+grant execute on function tutor_location_hours_save(uuid, uuid, text[]) to authenticated;
+
 -- >>> 20261115050000_lms_tutor_esign.sql
 -- =====================================================================
 -- 강사 LMS 전자서명 (정책 원본 H26(188), 대표 11/15 확정 — 시안 docs/lms/previews/tutor-esign-drafts.html)
@@ -25835,6 +25953,331 @@ revoke all on function lms_pdf_text(jsonb) from public, anon, authenticated;
 revoke all on function lms_pdf_wrap(text, numeric, numeric, boolean) from public, anon, authenticated;
 revoke all on function lms_pdf_width(text, boolean) from public, anon, authenticated;
 revoke all on function lms_pdf_safe(text) from public, anon, authenticated;
+
+-- >>> 20261115060000_lms_notice_mail_failed_mark_sent.sql
+-- =====================================================================
+-- 자동 메일을 못 보낸 안내는 '할 일 아님(not_needed)' 줄이어도 운영진이 직접 보낸 뒤 [보냄]으로 닫을 수 있게 (대표 11/15, H26(102) 보충)
+--  - 강사 줄은 넣을 때부터 not_needed(20261111120000) → 메일이 실패·주소 없음이면 '자동 메일 못 보냄' 카드가 떠도 [보냄]이 거절됐음
+--  - 기준: [메일 다시 보내기] 성공 → 메일 상태 sent 로 카드 자동 종료 / WhatsApp·카톡으로 직접 안내 → [보냄] / 아무것도 안 함 → 실패 카드 유지
+--  - [보냄]은 안내 줄 status 만 sent(sent_by = 운영자)로 바꾸고 email_status 는 그대로(실패 기록 유지 — 메일을 보낸 것처럼 보이지 않게)
+--  - 허용: not_needed 이면서 메일 실패(failed)·주소 없음(no_address)·대기 중 오류(queued + email_error), 강사 휴무 줄(leave_item_id) 제외
+--  - 그 밖의 not_needed 는 지금처럼 거절. 넣기만, 다시 실행해도 같은 결과
+-- 되돌리기: 20261026001700 · 20261030003300 의 두 함수 정의를 그대로 다시 실행
+-- =====================================================================
+create or replace function lms_notice_mail_failed(n lesson_notices) returns boolean
+language sql stable as $$
+  select n.leave_item_id is null
+     and (n.email_status in ('failed', 'no_address') or (n.email_status = 'queued' and n.email_error is not null))
+$$;
+revoke all on function lms_notice_mail_failed(lesson_notices) from public, anon, authenticated;
+
+create or replace function admin_mark_lesson_notice_sent(p_notice uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  n lesson_notices;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  select * into n from lesson_notices where id = p_notice for update;
+  if not found then raise exception '안내가 없습니다.'; end if;
+  if n.status = 'not_needed' and not lms_notice_mail_failed(n) then raise exception '보낼 필요가 없어진 안내입니다.'; end if;
+  if n.status <> 'sent' then
+    perform set_config('app.actor_id', me::text, true);
+    perform set_config('app.actor_via', 'admin_mark_lesson_notice_sent', true);
+    update lesson_notices set status = 'sent', sent_at = now(), sent_by = me where id = p_notice;
+  end if;
+  return jsonb_build_object('notice_id', p_notice, 'repeated', n.status = 'sent');
+end $$;
+revoke all on function admin_mark_lesson_notice_sent(uuid) from public, anon;
+grant execute on function admin_mark_lesson_notice_sent(uuid) to authenticated;
+
+create or replace function admin_mark_lesson_notices_sent(p_notices uuid[])
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  n lesson_notices;
+  v_changed integer := 0;
+begin
+  if not is_admin() then raise exception '운영자(추가 인증 완료)만 기록할 수 있습니다.' using errcode = '42501'; end if;
+  perform set_config('app.actor_id', me::text, true);
+  perform set_config('app.actor_via', 'admin_mark_lesson_notices_sent', true);
+  for n in select * from lesson_notices where id = any(p_notices) order by id for update loop
+    if n.status = 'not_needed' and not lms_notice_mail_failed(n) then raise exception '보낼 필요가 없어진 안내가 있습니다. 화면을 새로 고쳐 주세요.'; end if;
+    if n.status <> 'sent' then
+      update lesson_notices set status = 'sent', sent_at = now(), sent_by = me where id = n.id;
+      v_changed := v_changed + 1;
+    end if;
+  end loop;
+  return jsonb_build_object('changed', v_changed);
+end $$;
+revoke all on function admin_mark_lesson_notices_sent(uuid[]) from public, anon;
+grant execute on function admin_mark_lesson_notices_sent(uuid[]) to authenticated;
+
+-- >>> 20261115070000_lms_tutor_sign_request_mail.sql
+-- 강사 서명 요청 알림 메일 (대표 11/15 확정, H26(190)): 요청할 때 강사에게 1회만. 자동 재촉 메일 없음
+--  - admin_sign_request(문서, 강사들, p_mail 기본 true): 새로 요청한 강사에게만 메일
+--  - admin_sign_request_mail(요청): 아직 안 보낸 요청에 1회 보내기 (운영자 화면 [요청 메일 보내기]). 이미 보냈으면 그대로
+--  - 받는 사람 = 강사 등록 이메일, send_emails 꺼져 있으면 support@ 로 (시험 발송)
+-- 되돌리기: drop function admin_sign_request(uuid, uuid[], boolean), admin_sign_request_mail(uuid), lms_sign_request_mail(uuid);
+--   20261115050000 의 admin_sign_request(uuid, uuid[]) · admin_sign_docs() 를 다시 실행
+
+create or replace function lms_sign_request_mail(p_request uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  v_live boolean := coalesce((select f.enabled from feature_flags f where f.key = 'send_emails'), false);
+  r tutor_sign_requests;
+  tu tutors;
+  v_title text;
+  v_intended text;
+  v_to text;
+  v_subject text;
+  v_text text;
+  v_html text;
+  v_nid uuid;
+begin
+  select * into r from tutor_sign_requests where id = p_request;
+  if not found then return false; end if;
+  if exists (select 1 from notifications where dedupe_key = 'tutor_sign_request:' || r.id) then return false; end if;
+  if exists (select 1 from tutor_signatures where request_id = r.id) then return false; end if;
+  select * into tu from tutors where id = r.tutor_id;
+  v_intended := lms_notice_recipient_email('tutor', tu.id);
+  if v_intended is null then return false; end if;
+  v_title := lms_sign_doc_title(r.document_id);
+  v_to := case when v_live then v_intended else 'support@edgeenglish.kr' end;
+  -- 대표 11/15 확정 문구
+  v_subject := case when v_live then '' else '[시험 · ' || tu.name || '] ' end || '[Edge English] Document ready for your signature';
+  v_text := 'Hi ' || tu.name || ',' || E'\n\n' || 'Please log in to the LMS and sign the ' || v_title || ' within 7 days.' || E'\n'
+    || 'You can find it under To do on your Home page.' || E'\n\n' || 'Thank you!' || E'\n' || 'Edge English Team'
+    || case when v_live then '' else E'\n\n(시험 발송 · 원래 받는 사람: ' || v_intended || ')' end;
+  v_html := '<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1d1b2a;max-width:480px">'
+    || case when v_live then '' else '<p style="background:#fff4d6;color:#5c3b00;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600">시험 발송 · 원래 받는 사람: ' || lms_html(v_intended) || '</p>' end
+    || '<p>Hi ' || lms_html(tu.name) || ',</p>'
+    || '<p>Please log in to the LMS and sign the ' || lms_html(v_title) || ' within 7 days.<br>You can find it under To do on your Home page.</p>'
+    || '<p>Thank you!<br>Edge English Team</p></div>';
+  insert into notifications (recipient_kind, recipient_id, email, locale, template, payload, dedupe_key)
+  values ('tutor', tu.id, v_to, 'en', 'tutor_sign_request',
+          jsonb_build_object('intended_email', v_intended, 'subject', v_subject, 'html', v_html, 'text', v_text, 'request_id', r.id),
+          'tutor_sign_request:' || r.id)
+  on conflict (dedupe_key) do nothing
+  returning id into v_nid;
+  if v_nid is null then return false; end if;
+  perform lms_mail_dispatch(v_nid);
+  return true;
+end $$;
+revoke all on function lms_sign_request_mail(uuid) from public, anon, authenticated;
+
+drop function if exists admin_sign_request(uuid, uuid[]);
+create or replace function admin_sign_request(p_document uuid, p_tutors uuid[], p_mail boolean default true) returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  n int := 0;
+  v_id uuid;
+  v_tutor uuid;
+begin
+  if not is_admin() then raise exception '운영자만 할 수 있어요.' using errcode = '42501'; end if;
+  if not exists (select 1 from terms_documents where id = p_document and status = 'published') then raise exception '게시한 판만 요청할 수 있어요.'; end if;
+  perform set_config('app.actor_id', coalesce(auth.uid()::text, ''), true);
+  foreach v_tutor in array coalesce(p_tutors, '{}') loop
+    v_id := null;
+    insert into tutor_sign_requests (tutor_id, document_id, due_at, created_by)
+    select t.id, p_document, now() + interval '7 days', auth.uid() from tutors t where t.id = v_tutor   -- 대표 11/15: 7일
+    on conflict (tutor_id, document_id) do nothing
+    returning id into v_id;
+    if v_id is not null then
+      n := n + 1;
+      if p_mail then perform lms_sign_request_mail(v_id); end if;
+    end if;
+  end loop;
+  return n;
+end $$;
+revoke all on function admin_sign_request(uuid, uuid[], boolean) from public, anon;
+grant execute on function admin_sign_request(uuid, uuid[], boolean) to authenticated;
+
+create or replace function admin_sign_request_mail(p_request uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자만 할 수 있어요.' using errcode = '42501'; end if;
+  return lms_sign_request_mail(p_request);
+end $$;
+revoke all on function admin_sign_request_mail(uuid) from public, anon;
+grant execute on function admin_sign_request_mail(uuid) to authenticated;
+
+-- 운영자 현황에 요청 메일 상태 더함 (request_mail_status: null = 안 보냄)
+create or replace function admin_sign_docs() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자만 볼 수 있어요.' using errcode = '42501'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object(
+      'id', d.id, 'code', d.terms_code, 'title', v.title, 'revision', d.revision, 'status', d.status,
+      'body', d.body_md, 'statement', d.required_items -> 0 ->> 'text', 'sha256', d.content_sha256,
+      'published_at', d.published_at, 'created_at', d.created_at,
+      'requests', coalesce((select jsonb_agg(jsonb_build_object('request_id', r.id, 'tutor_id', t.id, 'tutor', t.name, 'requested_at', r.created_at, 'due_at', r.due_at,
+                   'signature_id', s.id, 'signed_at', s.signed_at, 'country', s.country,
+                   'has_email', lms_notice_recipient_email('tutor', t.id) is not null,
+                   'request_mail_status', (select n.status from notifications n where n.dedupe_key = 'tutor_sign_request:' || r.id),
+                   'mail_status', (select n.status from notifications n where n.dedupe_key = 'tutor_signed_copy:' || s.id),
+                   'mail_error', (select n.last_error from notifications n where n.dedupe_key = 'tutor_signed_copy:' || s.id)) order by t.name)
+                 from tutor_sign_requests r join tutors t on t.id = r.tutor_id left join tutor_signatures s on s.request_id = r.id
+                 where r.document_id = d.id), '[]'::jsonb))
+      order by v.title, d.revision desc)
+    from terms_documents d join terms_versions v on v.code = d.terms_code
+    where v.audience = 'tutor' and d.format = 'text' and jsonb_array_length(d.required_items) > 0), '[]'::jsonb);
+end $$;
+revoke all on function admin_sign_docs() from public, anon;
+grant execute on function admin_sign_docs() to authenticated;
+
+-- >>> 20261115080000_lms_tutor_signed_copy_closing.sql
+-- 강사 서명본 메일 맺음말 'Edge English' → 'Edge English Team' (대표 11/15: 메일 3개 맺음말 통일, H26(191))
+-- tutor_sign 본문에서 해당 두 곳만 바꿈. 본문이 예상과 다르면 멈춤. 다시 실행해도 같은 결과
+do $mig$
+declare d text; n text;
+begin
+  d := pg_get_functiondef('public.tutor_sign(uuid, text, text, text)'::regprocedure);
+  if position($x$<p>Edge English Team</p></div>$x$ in d) > 0 then return; end if;
+  n := replace(d, $x$lms_strip_bold(v_when) || E'\n\n' || 'Edge English'$x$, $x$lms_strip_bold(v_when) || E'\n\n' || 'Edge English Team'$x$);
+  n := replace(n, $x$<p>Edge English</p></div>$x$, $x$<p>Edge English Team</p></div>$x$);
+  if n = d or position($x$<p>Edge English Team</p></div>$x$ in n) = 0 or position($x$|| 'Edge English Team'$x$ in n) = 0 then
+    raise exception 'tutor_sign: 예상한 맺음말 줄이 없음 — 멈춤';
+  end if;
+  execute n;
+end
+$mig$;
+
+-- >>> 20261115090000_lms_tutor_sign_request_mail_addendum.sql
+-- 강사 서명 요청 메일: 학생 정보 보호 부속합의서 요청에는 대표 11/15 확정 제목·본문 (H26(192)), 다른 문서는 기존 일반 문구 그대로
+--  - [date] = 기한(요청 + 7일)의 강사 현지 날짜 'Sun, 22 Nov' (To do 'Please sign by …' 와 같은 날짜)
+-- 되돌리기: 20261115070000 의 lms_sign_request_mail 정의를 다시 실행
+create or replace function lms_sign_request_mail(p_request uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  v_live boolean := coalesce((select f.enabled from feature_flags f where f.key = 'send_emails'), false);
+  r tutor_sign_requests;
+  tu tutors;
+  v_title text;
+  v_code text;
+  v_due text;
+  v_paras text[];
+  v_intended text;
+  v_to text;
+  v_subject text;
+  v_text text;
+  v_html text;
+  v_nid uuid;
+  p text;
+begin
+  select * into r from tutor_sign_requests where id = p_request;
+  if not found then return false; end if;
+  if exists (select 1 from notifications where dedupe_key = 'tutor_sign_request:' || r.id) then return false; end if;
+  if exists (select 1 from tutor_signatures where request_id = r.id) then return false; end if;
+  select * into tu from tutors where id = r.tutor_id;
+  v_intended := lms_notice_recipient_email('tutor', tu.id);
+  if v_intended is null then return false; end if;
+  v_title := lms_sign_doc_title(r.document_id);
+  select terms_code into v_code from terms_documents where id = r.document_id;
+  v_to := case when v_live then v_intended else 'support@edgeenglish.kr' end;
+  if v_code = 'TS_STUDENT_DATA_PROTECTION_ADDENDUM' then
+    -- 대표 11/15 확정 (부속합의서 전용)
+    v_due := lms_mail_en_date(r.due_at, lms_tutor_tz_at(r.tutor_id, r.due_at));   -- 이동 기간이면 그 지역, 아니면 평소 시간대
+    v_subject := 'Edge English – Student Data Protection Addendum (please sign)';
+    v_paras := array[
+      'Hi ' || tu.name || ',',
+      'We''ve added a short Student Data Protection Addendum to your Freelance Instructor Contract. Your current contract stays the same — this only covers how student information is handled.',
+      'We''d really appreciate it if you could review and sign the addendum through your LMS Home → To do by ' || v_due || '.',
+      'You''ll also be asked to enter your country of residence. Once signed, you''ll receive a copy by email.',
+      'Thank you!',
+      'Edge English Team'];
+  else
+    -- 대표 11/15 승인 일반 문구 (다른 계약서·문서)
+    v_subject := '[Edge English] Document ready for your signature';
+    v_paras := array[
+      'Hi ' || tu.name || ',',
+      'Please log in to the LMS and sign the ' || v_title || ' within 7 days.' || E'\n' || 'You can find it under To do on your Home page.',
+      'Thank you!' || E'\n' || 'Edge English Team'];
+  end if;
+  v_subject := case when v_live then '' else '[시험 · ' || tu.name || '] ' end || v_subject;
+  v_text := array_to_string(v_paras, E'\n\n')
+    || case when v_live then '' else E'\n\n(시험 발송 · 원래 받는 사람: ' || v_intended || ')' end;
+  v_html := '<div style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#1d1b2a;max-width:480px">'
+    || case when v_live then '' else '<p style="background:#fff4d6;color:#5c3b00;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600">시험 발송 · 원래 받는 사람: ' || lms_html(v_intended) || '</p>' end;
+  foreach p in array v_paras loop
+    v_html := v_html || '<p>' || replace(lms_html(p), E'\n', '<br>') || '</p>';
+  end loop;
+  v_html := v_html || '</div>';
+  insert into notifications (recipient_kind, recipient_id, email, locale, template, payload, dedupe_key)
+  values ('tutor', tu.id, v_to, 'en', 'tutor_sign_request',
+          jsonb_build_object('intended_email', v_intended, 'subject', v_subject, 'html', v_html, 'text', v_text, 'request_id', r.id),
+          'tutor_sign_request:' || r.id)
+  on conflict (dedupe_key) do nothing
+  returning id into v_nid;
+  if v_nid is null then return false; end if;
+  perform lms_mail_dispatch(v_nid);
+  return true;
+end $$;
+revoke all on function lms_sign_request_mail(uuid) from public, anon, authenticated;
+
+-- >>> 20261115100000_lms_tutor_sign_due_date.sql
+-- 강사 서명 요청 기한을 날짜로 고르기 (대표 11/15 확정, H26(193)): 기한 = 강사마다 현지 시간 그 날짜 끝(23:59)
+--  - admin_sign_request(…, p_due_date): 날짜를 주면 강사별 현지 그 날 23:59 까지, 안 주면 지금처럼 요청 + 7일
+--  - 이번 부속합의서: 11/19(목) — 강사 화면·메일에 'Thu, 19 Nov' (시간 없이 날짜만)
+--  - 운영자 현황: due_local = 강사 현지 기한 날짜
+-- 되돌리기: drop function admin_sign_request(uuid, uuid[], boolean, date); 20261115070000 의 admin_sign_request(3인자)·admin_sign_docs 다시 실행
+drop function if exists admin_sign_request(uuid, uuid[], boolean);
+create or replace function admin_sign_request(p_document uuid, p_tutors uuid[], p_mail boolean default true, p_due_date date default null) returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  n int := 0;
+  v_id uuid;
+  v_tutor uuid;
+begin
+  if not is_admin() then raise exception '운영자만 할 수 있어요.' using errcode = '42501'; end if;
+  if not exists (select 1 from terms_documents where id = p_document and status = 'published') then raise exception '게시한 판만 요청할 수 있어요.'; end if;
+  if p_due_date is not null and p_due_date < (now() at time zone 'Asia/Seoul')::date then raise exception '기한은 오늘 이후 날짜로 골라 주세요.'; end if;
+  perform set_config('app.actor_id', coalesce(auth.uid()::text, ''), true);
+  foreach v_tutor in array coalesce(p_tutors, '{}') loop
+    v_id := null;
+    insert into tutor_sign_requests (tutor_id, document_id, due_at, created_by)
+    select t.id, p_document,
+           case when p_due_date is null then now() + interval '7 days'   -- 대표 11/15: 기본 7일
+                else ((p_due_date + 1)::timestamp at time zone lms_tutor_tz_on(t.id, p_due_date)) - interval '1 minute' end,
+           auth.uid()
+    from tutors t where t.id = v_tutor
+    on conflict (tutor_id, document_id) do nothing
+    returning id into v_id;
+    if v_id is not null then
+      n := n + 1;
+      if p_mail then perform lms_sign_request_mail(v_id); end if;
+    end if;
+  end loop;
+  return n;
+end $$;
+revoke all on function admin_sign_request(uuid, uuid[], boolean, date) from public, anon;
+grant execute on function admin_sign_request(uuid, uuid[], boolean, date) to authenticated;
+
+create or replace function admin_sign_docs() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception '운영자만 볼 수 있어요.' using errcode = '42501'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object(
+      'id', d.id, 'code', d.terms_code, 'title', v.title, 'revision', d.revision, 'status', d.status,
+      'body', d.body_md, 'statement', d.required_items -> 0 ->> 'text', 'sha256', d.content_sha256,
+      'published_at', d.published_at, 'created_at', d.created_at,
+      'requests', coalesce((select jsonb_agg(jsonb_build_object('request_id', r.id, 'tutor_id', t.id, 'tutor', t.name, 'requested_at', r.created_at, 'due_at', r.due_at,
+                   'due_local', (r.due_at at time zone lms_tutor_tz_at(t.id, r.due_at))::date,
+                   'signature_id', s.id, 'signed_at', s.signed_at, 'country', s.country,
+                   'has_email', lms_notice_recipient_email('tutor', t.id) is not null,
+                   'request_mail_status', (select n.status from notifications n where n.dedupe_key = 'tutor_sign_request:' || r.id),
+                   'mail_status', (select n.status from notifications n where n.dedupe_key = 'tutor_signed_copy:' || s.id),
+                   'mail_error', (select n.last_error from notifications n where n.dedupe_key = 'tutor_signed_copy:' || s.id)) order by t.name)
+                 from tutor_sign_requests r join tutors t on t.id = r.tutor_id left join tutor_signatures s on s.request_id = r.id
+                 where r.document_id = d.id), '[]'::jsonb))
+      order by v.title, d.revision desc)
+    from terms_documents d join terms_versions v on v.code = d.terms_code
+    where v.audience = 'tutor' and d.format = 'text' and jsonb_array_length(d.required_items) > 0), '[]'::jsonb);
+end $$;
+revoke all on function admin_sign_docs() from public, anon;
+grant execute on function admin_sign_docs() to authenticated;
 
 -- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)
 insert into lms_backup.project (name) values ('edgeenglish-lms');
