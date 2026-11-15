@@ -267,7 +267,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   useEffect(() => {
     if (view !== 'week' || !scroller.current) return;
     const row = scroller.current.querySelector<HTMLElement>(`[data-row="${firstRow < 48 ? firstRow : 12}"]`);
-    if (row) scroller.current.scrollTop = Math.max(0, row.offsetTop - 36);
+    const sc = scroller.current;
+    if (row) sc.scrollTop = Math.max(0, sc.scrollTop + row.getBoundingClientRect().top - sc.getBoundingClientRect().top - 40);   // 머리글(요일·날짜) 아래에 오게
   }, [view, monday, korea, firstRow]);
 
   function weekCell(date: string, i: number, kinds: CellKind[]) {
