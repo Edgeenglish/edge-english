@@ -55,7 +55,10 @@ function windowOn(w: AvailabilityWindow, start: Date, kstDay: KstDate): boolean 
   if (w.travel) {
     const pid = travelIdAt(w.travel, start);
     if (pid !== (w.periodId ?? null)) return false;
-    if (w.periodId) return true;   // 이동 기간 시간표는 기간이 적용일
+    if (w.periodId) {   // Temporary location 시간표: 그 지역 현지 날짜로 적용 벌 판단 (대표 11/15, DB lms_tutor_weekly_ok 와 같음)
+      const day = formatInZone(start, w.timezone).date;
+      return !(day < w.effectiveFrom || (w.effectiveTo !== null && day > w.effectiveTo));
+    }
   }
   return !(kstDay < w.effectiveFrom || (w.effectiveTo !== null && kstDay > w.effectiveTo));
 }
