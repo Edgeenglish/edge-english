@@ -213,7 +213,7 @@ export type EmailFailRow = { created_at: string; recipient_kind?: 'student' | 't
 async function loadEmailFails(sb: SupabaseClient): Promise<{ data: EmailFailRow[] | null; error: unknown }> {
   const [a, b] = await Promise.all([
     sb.from('lesson_notices').select('created_at, recipient_kind, email_status, makeup:makeup_requests(student:students(id, name_ko, code)), change:change_requests(student:students(id, name_ko, code))')
-      .in('email_status', ['failed', 'no_address']).neq('status', 'sent'),
+      .or('email_status.in.(failed,no_address),and(email_status.eq.queued,email_error.not.is.null)').neq('status', 'sent'),
     sb.from('tutor_updates').select('created_at, email_error, student:students(id, name_ko, code), mail:notifications(status)')
       .gt('visible_until', new Date().toISOString()),
   ]);
@@ -552,7 +552,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
     sb
       .from('lesson_notices')
       .select('created_at, event, recipient_kind, change:change_requests(type, student:students(id, name_ko, code), lesson:lessons(starts_at, kind)), makeup:makeup_requests(student:students(id, name_ko, code))')
-      .eq('status', 'pending'),
+      // 자동 메일이 걸린 안내는 할 일 아님 — 보내는 중이면 기다리고, 실패·주소 없음은 '자동 메일 못 보냄'으로 (대표 11/15)
+      .eq('status', 'pending').is('email_status', null),
     loadOpenMakeups(sb),
     // 자동 메일 실패·주소 없음 — 운영진이 직접 보내고 [보냄] 했거나 다시 보내기로 발송되면 끝 (칸이 없는 DB면 빈 목록)
     loadEmailFails(sb),

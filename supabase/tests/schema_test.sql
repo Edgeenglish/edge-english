@@ -1343,8 +1343,23 @@ select pg_temp.ok(pg_temp.st(4) = 'scheduled:-' and reward_balance('99999999-000
               and (select status = 'voided' from makeup_requests r join mk on mk.id = r.id),
   '원래 수업 되돌리기: 그 취소로 잡은 보강은 없앰(voided, 결과 상태 없음), 적립금 회수');
 -- 12) [보냈어요]: 보낼 필요 없어진 안내는 기록 불가, 두 번 눌러도 처음 시각
-select pg_temp.expect_error($$select admin_mark_lesson_notice_sent((select n.id from lesson_notices n where n.status = 'not_needed' order by n.created_at limit 1))$$, '보낼 필요');
-select pg_temp.ok(true, '보낼 필요 없어진 안내에는 [보냈어요] 불가');
+reset role;
+create temp table qa_nn as select n.id, n.email_status, n.email_error, n.email_sent_at from lesson_notices n where n.status = 'not_needed' and n.leave_item_id is null order by n.created_at limit 1;
+create temp table qa_tf as select n.id from lesson_notices n where n.status = 'not_needed' and n.recipient_kind = 'tutor' and n.leave_item_id is null and n.id not in (select id from qa_nn) order by n.created_at limit 1;
+grant select on qa_nn, qa_tf to authenticated;
+update lesson_notices set email_status = 'sent', email_error = null, email_sent_at = now() where id = (select id from qa_nn);   -- 메일이 잘 나간 줄
+update lesson_notices set email_status = 'failed', email_error = '시험 실패' where id = (select id from qa_tf);              -- 메일 실패한 강사 줄
+set role authenticated;
+select pg_temp.expect_error($$select admin_mark_lesson_notice_sent((select id from qa_nn))$$, '보낼 필요');
+select pg_temp.ok(true, '보낼 필요 없어진 안내(메일 발송됨)에는 [보냄] 불가');
+-- 12-1) 자동 메일을 못 보낸 강사 줄(not_needed)은 직접 보낸 뒤 [보냄]으로 닫음, 메일 실패 기록은 그대로 (대표 11/15)
+select admin_mark_lesson_notice_sent((select id from qa_tf));
+select admin_mark_lesson_notice_sent((select id from qa_tf));
+reset role;
+select pg_temp.ok((select status = 'sent' and sent_at is not null and email_status = 'failed' from lesson_notices where id = (select id from qa_tf)),
+  '메일 실패 강사 줄은 [보냄]으로 닫히고 메일 실패 기록은 남음');
+update lesson_notices n set email_status = q.email_status, email_error = q.email_error, email_sent_at = q.email_sent_at from qa_nn q where n.id = q.id;
+set role authenticated;
 
 -- 13) 이관한 미예약 보강도 같은 흐름 (예약되면 예약됨, 잘못 넣은 보강을 없애면 다시 미예약)
 reset role;

@@ -107,7 +107,7 @@ export type ChNoticeEmail = {
 /** 안내 줄의 자동 메일 상태 한 줄 (운영진 화면) */
 export function emailStatusText(e: ChNoticeEmail, sentLabel: (d: Date) => string): string {
   const to = e.to && e.intended && e.to !== e.intended ? `${e.to} (시험 · 원래 ${e.intended})` : (e.to ?? e.intended ?? '');
-  if (e.status === 'sent') return `자동 메일 보냄${e.sentAt ? ` ${sentLabel(e.sentAt)}` : ''} · ${to}`;
+  if (e.status === 'sent') return `자동 메일 발송 완료${e.sentAt ? ` ${sentLabel(e.sentAt)} 한국 시간` : ''} · ${to}`;
   if (e.status === 'failed') return `자동 메일 실패 · ${e.error ?? '발송 서비스 오류'} · ${to}`;
   if (e.status === 'no_address') return `자동 메일 못 보냄 · ${e.error ?? '이메일이 없어요'}`;
   return e.error ? `자동 메일 대기 · ${e.error}` : `자동 메일 보내는 중 · ${to}`;
