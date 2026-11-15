@@ -2110,19 +2110,19 @@ values ('99999999-1000-0000-0000-000000003100', '99999999-0000-0000-0000-0000000
 -- 고정 수업: 다음 주 다음 월요일 현지 09:00 (40분) · 3주째 화요일 현지 10:00 보강
 insert into lessons (id, enrollment_id, student_id, tutor_id, kind, seq, starts_at, ends_at)
 select '77777777-3100-0000-0000-000000000001', '99999999-1000-0000-0000-000000003100', '99999999-0000-0000-0000-000000003100', '55555555-0000-0000-0000-000000003100',
-       'regular', 1, ((lms_next_monday() + 7) + time '09:00') at time zone 'Asia/Ho_Chi_Minh', ((lms_next_monday() + 7) + time '09:40') at time zone 'Asia/Ho_Chi_Minh';
+       'regular', 1, ((lms_local_monday('Asia/Ho_Chi_Minh') + 14) + time '09:00') at time zone 'Asia/Ho_Chi_Minh', ((lms_local_monday('Asia/Ho_Chi_Minh') + 14) + time '09:40') at time zone 'Asia/Ho_Chi_Minh';
 insert into lessons (id, enrollment_id, student_id, tutor_id, kind, starts_at, ends_at, makeup_of)
 select '77777777-3100-0000-0000-000000000002', '99999999-1000-0000-0000-000000003100', '99999999-0000-0000-0000-000000003100', '55555555-0000-0000-0000-000000003100',
        'makeup', ((lms_local_monday('Asia/Ho_Chi_Minh') + 15) + time '10:00') at time zone 'Asia/Ho_Chi_Minh',
        ((lms_local_monday('Asia/Ho_Chi_Minh') + 15) + time '10:40') at time zone 'Asia/Ho_Chi_Minh', '77777777-3100-0000-0000-000000000001';
 create temp table hm (mon date, nxt date);
-insert into hm select lms_local_monday('Asia/Ho_Chi_Minh'), lms_next_monday();
+insert into hm select lms_local_monday('Asia/Ho_Chi_Minh'), lms_local_monday('Asia/Ho_Chi_Minh') + 7;   -- 강사 현지 다음 월요일 (한국 월요일 0~2시에 한국 기준과 하루 어긋나던 것 고침)
 grant select on hm to authenticated;
 
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000003100';
 create temp table hr as select tutor_hours(null) as j;
-select pg_temp.ok((select j -> 'times' ->> 0 = '06:00' and j -> 'times' ->> -1 = '22:30' and j ->> 'from' = (select nxt::text from hm) from hr),
+select pg_temp.ok((select j -> 'times' ->> 0 = '06:00' and j -> 'times' ->> -1 = '22:30' and j ->> 'from' = (select (mon + 7)::text from hm) from hr),
   'My hours: 강사 현지 06:00~22:30 시작, 한국 시간대와 무관, 매주 변경은 다음 주 월요일부터');
 select pg_temp.ok((select j -> 'weekly_open' ? '1:08:00' and j -> 'weekly_open' ? '5:15:00' and not j -> 'weekly_open' ? '1:15:30' and not j -> 'weekly_open' ? '0:08:00' from hr),
   'My hours: 한국 시간대로 넣은 가능 시간을 강사 현지 칸으로 (월 08:00~15:00)');
