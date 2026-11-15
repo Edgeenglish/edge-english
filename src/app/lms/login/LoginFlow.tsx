@@ -452,6 +452,29 @@ export default function LoginFlow() {
     );
   }
 
+  // 카카오·네이버 버튼 — 로그인·회원가입 화면 같은 모양 (대표 11/15: 회원가입 화면에도)
+  function socialButtons() {
+    if (social.length === 0 || linkFor) return null;
+    return (
+      <>
+        {social.map((p) => (
+          <button
+            key={p}
+            type="button"
+            disabled={busy}
+            onClick={() => socialLogin(p)}
+            className={`flex min-h-[52px] w-full items-center justify-center rounded-[14px] text-[16px] font-bold disabled:opacity-40 ${
+              p === 'kakao' ? 'bg-[#FEE500] text-[#191600]' : 'bg-[#03C75A] text-white'
+            }`}
+          >
+            {t.social[p]}
+          </button>
+        ))}
+        <p className="flex items-center gap-2 text-[12px] text-[#8a87a0] before:h-px before:flex-1 before:bg-[#e6e3ef] after:h-px after:flex-1 after:bg-[#e6e3ef]">{t.or}</p>
+      </>
+    );
+  }
+
   // ── 카카오·네이버 첫 로그인
   async function chooseNew() {
     if (!sb) return;
@@ -597,24 +620,7 @@ export default function LoginFlow() {
             <h1 className={h1}>{t.loginTitle}</h1>
             {isMakeupLink(next) && <p className="rounded-[12px] bg-[#efeaff] px-3.5 py-2.5 text-[13.5px] font-semibold text-[#3a22b0]">{t.makeupNext}</p>}
             {linkFor && <p className="rounded-[12px] bg-[#efeaff] px-3.5 py-2.5 text-[13.5px] font-semibold text-[#3a22b0]">{t.linkNotice(t.socialName[linkFor])}</p>}
-            {social.length > 0 && !linkFor && (
-              <>
-                {social.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => socialLogin(p)}
-                    className={`flex min-h-[52px] w-full items-center justify-center rounded-[14px] text-[16px] font-bold disabled:opacity-40 ${
-                      p === 'kakao' ? 'bg-[#FEE500] text-[#191600]' : 'bg-[#03C75A] text-white'
-                    }`}
-                  >
-                    {t.social[p]}
-                  </button>
-                ))}
-                <p className="flex items-center gap-2 text-[12px] text-[#8a87a0] before:h-px before:flex-1 before:bg-[#e6e3ef] after:h-px after:flex-1 after:bg-[#e6e3ef]">{t.or}</p>
-              </>
-            )}
+            {socialButtons()}
             <label className="block" htmlFor="login-email">
               <span className={fieldLabel}>{t.emailLabel}</span>
               <input
@@ -659,6 +665,7 @@ export default function LoginFlow() {
               {steps([t.stepInfo, t.stepMail], 0)}
               <h1 className={h1}>{t.signupTitle}</h1>
             </div>
+            {socialButtons()}
             <label className="block" htmlFor="signup-name">
               <span className={fieldLabel}>{t.nameLabel}</span>
               <input id="signup-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls(has('name'))} />
