@@ -12,6 +12,7 @@ import { weekOf, type StudentCancelDecision, type TutorScreen } from '@/lms/tuto
 import { loadScreenPrefs, saveScreenPref } from '@/lms/screen-prefs';
 import TutorHome, { type TutorActions } from './TutorHome';
 import { timeOffActions } from '@/lms/tutor/time-off';
+import { signActions } from '@/lms/tutor/esign';
 
 type State =
   | { kind: 'loading' }
@@ -98,6 +99,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
         answerRequest: (planId, yes) => answerNewRequest(sb, planId, yes, adminTutor),
         followupSave: (studentId, fields) => saveFollowup(sb, studentId, fields, adminTutor),
         timeOff: timeOffActions(sb, adminTutor),
+        sign: signActions(sb, adminTutor),
       },
     [sb, adminTutor],
   );
