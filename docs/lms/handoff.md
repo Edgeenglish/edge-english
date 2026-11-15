@@ -1431,3 +1431,67 @@
 - 이번 한 번: 쌓여 있던 Olivia 대체 수업 요청 4건(12/23·12/28·12/30·1/4)에 시스템으로 첫 메일 1통 직접 실행(11/14 13:13 한국, 발송 sent, 문의 안내 줄 email_status sent·WhatsApp 카드 자동 보냄, 재촉은 생략 표시 `ask_nudged_at`)
 - 시험(시험 DB): 실제 함수로 첫 메일·재촉 26시간·답한 뒤 재촉 없음·이메일 없음 기록·다시 고르면 기록 초기화 통과. 신규 수강생 문의 재촉은 실제 신규 등록이 없어 글만 확인
 - 남음: 기록할 수업 하루 한 번 묶음 메일(기준 숫자 대표 결정 대기) · 재촉 뒤 무응답 운영진 알림(대표 결정 대기) · 운영에만 있는 커밋 4개(학생 지각 알림·강사 휴무 신청·수업 줄 용어 통일 등)가 lms-test 에 없음 — 다음 lms-test 배포 전에 합칠 것
+
+## 📎 강사 학생 정보 보호 부속합의서·발송 메일 최종 문구 (11/14 확정, 미발송 — H26(178)(181) 참고)
+- 발송 조건: 11/15 Class Record 운영진 전용 전환을 Claude 가 시트 권한으로 확인한 뒤, 대표 "보내" → support@ 임시 보관함에 강사 4명(Benny·Leslie·Maria·Olivia) 초안, 대표가 [보내기]. 기한 = 보낸 날 + 7일. 강사 서명 먼저 → 대표 서명 → 양쪽 서명본 강사에게 1부
+- 메일 제목: `Edge English – Student Data Protection Addendum (please sign)`
+- 메일 본문:
+```
+Hi [Name],
+
+We've added a short Student Data Protection Addendum to your Freelance Instructor Contract. Your current contract stays the same — this only covers how student information is handled.
+
+Please read the attached PDF, fill in your country of residence, sign, and send it back to us (a signed PDF or a clear photo is fine).
+
+We'd really appreciate it if you could send it back by [date].
+
+Thank you!
+Edge English
+```
+- 첨부 PDF 전문:
+```
+Addendum: Student Data Protection
+
+This Addendum is part of the Freelance Instructor Contract between Tangerine English (Edge English, "Party A") and the Instructor ("Party B"). All other terms of the Freelance Instructor Contract remain unchanged.
+
+1. Purpose and scope
+Party A entrusts Party B with student information (name, English level, self-introduction, class schedule and class records) only to teach the classes Party A assigns.
+
+2. Use
+Party B uses student information only for those classes, and for no other purpose.
+
+3. Access and storage
+Party B uses student information only through the tools Party A provides (LMS and Google Meet). Party B does not copy, download, screenshot or keep it anywhere else, and only accesses information about students assigned to them.
+
+4. Security
+Party B keeps their login details private, does not share their account, protects the devices used for classes, and takes reasonable security measures to prevent unauthorized access, loss, or disclosure of student information.
+
+5. No sharing
+Party B does not share student information with anyone, and does not hand this work to another person.
+
+6. Incidents
+If student information is lost, leaked or accessed by someone else, Party B tells Party A right away and follows Party A's instructions.
+
+7. Checks
+Party B cooperates with Party A's reasonable security checks and instructions concerning student information, including measures to protect student rights and address privacy complaints or disputes.
+
+8. End of assignment
+Party B can access a student's information only while the student is assigned to them and for 24 hours after their last class with that student. After that, Party B stops accessing that student's information and permanently deletes any copies still in their possession or control, unless retention is required by applicable law. When this contract ends, access to all student information stops immediately.
+
+9. Responsibility
+Party B is responsible for any damage caused by breaking this Addendum. This Addendum is governed by Article 9 of the contract.
+
+Country of residence: ____________
+Name: ____________
+Signature: ____________
+Date: ____________
+
+Party A: Tangerine English (Edge English)
+Representative Signature: ____________
+Date: ____________
+```
+
+## 📎 카카오·네이버 운영용 앱 (H26(181)) — Work 에 보낸 프롬프트 요점 (11/14)
+- 1단계(진행): 카카오 새 앱 '엣지영어'(회사명 탠저린 영어·교육·로고) · Web 도메인 https://edgeenglish.kr , https://www.edgeenglish.kr · 카카오 로그인 켬 · Redirect URI = https://mfamixejxydodclhglbc.supabase.co/auth/v1/callback 1개 · 동의항목 닉네임(필수)·이메일(필수)만(코드 3cba682 와 같음) · Client Secret 발급·사용. 네이버 새 앱 '엣지영어'(네이버 로그인, 제공 정보 = 시험용 앱과 같게, PC·모바일 웹, 서비스 URL https://edgeenglish.kr, Callback = 위 운영 callback, 로고)
+- 2단계(제출 버튼 누르지 말고 보고): 카카오 비즈 앱 전환(탠저린 영어·897-75-00421), 네이버 검수 요청. 키 값은 보고에 쓰지 않음
+- Claude 할 일: Work 1단계 보고를 위 값·코드와 대조 → 대표에게 '제출해' 여부. 네이버 검수가 실제 서비스 화면 로그인 버튼을 요구하면 공개 순서와 맞춰 제출 시점 다시 정함. 운영 Supabase 키 넣기·켜기는 공개 당일
