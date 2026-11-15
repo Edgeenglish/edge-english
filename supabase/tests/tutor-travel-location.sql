@@ -203,4 +203,8 @@ select pg_temp.ok((select r like 'Every % *Sydney Time* / %' || E'\n' || 'From %
   '강사 메일 매주 시간: 기간 중 지역이 바뀌면 From 줄로 나눔 (QA ①)');
 select pg_temp.ok(lms_tutor_every('aaaaaaaa-0000-4000-8000-0000000000f1', array[((select d + 3 from d) + time '16:00') at time zone 'America/Argentina/Buenos_Aires'], null, 1) not like '%From%',
   '강사 메일 매주 시간: 한 지역뿐이면 한 줄');
+select pg_temp.ok(lms_tutor_every('aaaaaaaa-0000-4000-8000-0000000000f1', array[((select d - 10 from d) + time '10:00') at time zone 'Australia/Sydney'],
+                                   ((select d - 3 from d) + time '10:00') at time zone 'Australia/Sydney', null) not like '%From%'
+  and lms_tutor_every('aaaaaaaa-0000-4000-8000-0000000000f1', array[((select d - 10 from d) + time '10:00') at time zone 'Australia/Sydney'], null, null) not like '%From%',
+  '강사 메일 매주 시간: 수강권이 이동 전에 끝나거나 끝을 모르면 From 줄 없음 (재QA)');
 rollback;

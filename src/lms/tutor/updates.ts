@@ -60,7 +60,7 @@ export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)
     case 'renewal':
       return [...every(ds(i.every), { last: d(i.last) }), `Next period: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} – ${enDay(d(i.last) ?? u.at, z(d(i.last) ?? u.at))} · ${i.same ? 'same schedule' : 'new schedule'}`];
     case 'schedule_change':
-      return [...every(ds(i.every), {}), `From ${enDay(d(i.from) ?? u.at, z(d(i.from) ?? u.at))}`];
+      return [...every(ds(i.every), { last: d(i.last) }), `From ${enDay(d(i.from) ?? u.at, z(d(i.from) ?? u.at))}`];
     case 'class_moved': {
       const was = d(i.was);
       return [enBoth(d(i.to) ?? u.at, z(d(i.to) ?? u.at)), ...(was ? [`Was: ${enZoned(was, z(was))}`] : [])];

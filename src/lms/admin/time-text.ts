@@ -115,12 +115,14 @@ export function enEvery(times: Date[], tz?: string | null): string {
 /**
  * 매주 시간 줄 — 기간 중에 강사 지역이 바뀌면(해외 이동 출발·복귀, H26(176)(182)) 지역마다 따로:
  *  ['Every Mon 9:00 PM *Sydney Time* / 7:00 PM *KST*', 'From Thu, 24 Dec: Every Mon, Thu 7:00 AM *Buenos Aires Time* / 7:00 PM *KST*']
- *  every = 요일마다 첫 수업 시각, 끝 = last(마지막 수업) 또는 classes(횟수), 둘 다 없으면 26주. 한국 시간 정규 수업이라 7일씩 더함
+ *  every = 요일마다 첫 수업 시각, 끝 = last(마지막 수업) 또는 classes(횟수). 끝을 모르면 나누지 않고 첫 수업 지역 한 줄 (DB lms_tutor_every 와 같은 규칙)
+ *  한국 시간 정규 수업이라 7일씩 더함
  */
 export function enEveryLines(every: Date[], zoneAt: (t: Date) => string, end: { last?: Date | null; classes?: number | null } = {}): string[] {
   if (!every.length) return [];
   const base = [...every].sort((a, b) => +a - +b);
-  const cap = end.last ? +end.last : end.classes ? Infinity : +base[0] + 26 * 7 * 86400000;
+  if (!end.last && !end.classes) return [enEvery(every, zoneAt(base[0]))];
+  const cap = end.last ? +end.last : Infinity;
   let occ: Date[] = [];
   for (let k = 0; k < 120; k++) {
     const week = base.map((e) => new Date(+e + k * 7 * 86400000)).filter((t) => +t <= cap);

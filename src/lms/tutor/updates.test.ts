@@ -47,3 +47,18 @@ describe('① 신규 배정 Updates 매주 시간: 지역이 바뀌면 줄을 �
     expect(lines[2]).toContain('First class: Mon, 21 Dec');
   });
 });
+
+describe('정규 시간 변경 Updates: 그 수강권 마지막 수업까지만 지역 나눔 (재QA)', () => {
+  const ba = 'America/Argentina/Buenos_Aires';
+  const zoneAt = (t: Date) => (t >= new Date('2026-12-24T03:00:00Z') ? ba : 'Australia/Sydney');
+  const u = (info: Record<string, unknown>) => updateLines({ id: 'r', kind: 'schedule_change', student: 'S', at: new Date('2026-11-30T10:00:00Z'), info: { every: ['2026-11-30T10:00:00Z'], from: '2026-11-30T10:00:00Z', ...info } }, zoneAt);
+  it('마지막 수업이 이동 전이면 From 줄 없음', () => {
+    expect(u({ last: '2026-12-21T10:00:00Z' }).join('\n')).not.toContain('From Mon, 28 Dec');
+  });
+  it('끝을 모르면(옛 기록) 나누지 않음', () => {
+    expect(u({}).join('\n')).not.toContain('Buenos Aires');
+  });
+  it('마지막 수업이 이동 뒤면 From 줄', () => {
+    expect(u({ last: '2027-01-04T10:00:00Z' })[1]).toContain('From Mon, 28 Dec: Every Mon 7:00 AM *Buenos Aires Time*');
+  });
+});
