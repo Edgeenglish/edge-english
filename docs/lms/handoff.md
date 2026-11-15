@@ -1436,6 +1436,7 @@
 
 ## 📎 강사 학생 정보 보호 부속합의서·발송 메일 최종 문구 (11/14 확정, 미발송 — H26(178)(181) 참고)
 - 발송 조건: 11/15 Class Record 운영진 전용 전환을 Claude 가 시트 권한으로 확인한 뒤, 대표 "보내" → support@ 임시 보관함에 강사 3명(Benny·Maria·Olivia, Leslie 는 아래 11/15 줄 참고) 초안, 대표가 [보내기]. 기한 = 보낸 날 + 7일. 강사 서명 먼저 → 대표 서명 → 양쪽 서명본 강사에게 1부
+- **H26(188) 참고 (11/15 대표 확정)**: LMS 전자서명 개발 확정(법령 검토 끝) · 1조·처리방침 항목 = 실제 강사 화면(이메일은 빼고 Meet 문장, 도시 추가) · 회사 서명은 판 올릴 때 한 번 · PDF 메일 발송 대신 LMS 서명. 다음 = 새 세션에서 시안(PC·휴대폰)
 - 11/15 대표: **강사 서명을 LMS 전자서명(To do)으로 받는 쪽 검토** — 범용(부속합의서·신규 강사·프리랜서 계약서 재사용)으로 만들 것, **ChatGPT 법령 검토(클릭 동의가 개인정보 처리위탁 문서·계약 서명으로 유효한지) 결과 확인 전 개발 시작 금지**(대표). 기존 consent_requests·consent_events(학생 동의, document_sha256)·tutor_contracts 표 재사용 검토
 - 11/15 대표: 1조에 이메일·성별나이대·국가시간대·학습 선호·수업 노트 추가(실제 강사 화면과 맞춤), 강사 화면에서 학생 이메일 숨김(migration 20261115040000, 시험 DB 적용·운영 미적용), 처리방침 목록도 같게(시험 사이트). 11/15 23:30 일괄 발송은 대표 보류
 - 11/15 진행(이 세션): 운영 DB 확인 — 11/7 뒤 끝난 수업 Benny 10·Maria 3·Olivia 8 모두 강사가 LMS 에 기록(빈 기록 0, 수업 내용 빈 칸 Olivia 1). LMS 기록 시작 전(10/27~11/4 이전) 기록은 시트에만 있음 → 필요하면 운영진에게 요청. 대표 결정: **Class Record 4개 11/15 오후 11:00 한국 시간에 강사 권한 빼기**(공유 해제 = 대표 또는 Work, 커넥터 불가) · 미리 WhatsApp 알림은 Benny·Maria·Olivia 만(현지 시간 / KST 문구, 대표가 보냄) · **Leslie 는 알림 없음**(예정 수업 0, LMS 계정 연결돼 있으나 로그인 안내 안 함 — 다음 대체 수업 맡길 때 안내) · **부속합의서는 Benny·Maria·Olivia 3명만 이번에 발송, Leslie 는 다음 대체 수업 맡길 때 LMS 로그인 안내와 함께 보내 서명 받기**(대표 11/15, 계약은 유지). 11/15 23:10 KST 에 Claude 가 시트 권한 확인 예약
@@ -1460,7 +1461,7 @@ Addendum: Student Data Protection
 This Addendum is part of the Freelance Instructor Contract between Tangerine English (Edge English, "Party A") and the Instructor ("Party B"). All other terms of the Freelance Instructor Contract remain unchanged.
 
 1. Purpose and scope
-Party A entrusts Party B with student information (name, email address, English level, self-introduction, gender and age range, country and time zone, learning preferences such as textbook and correction style, class notes, class schedule and class records) only to teach the classes Party A assigns.
+Party A entrusts Party B with student information (name, English level, self-introduction, gender and age range, city, country and time zone, learning preferences such as textbook and correction style, class notes, class schedule and class records) only to teach the classes Party A assigns. If Party B sees any other student information during class (for example, an email address shown in Google Meet), the same rules in this Addendum apply.
 
 2. Use
 Party B uses student information only for those classes, and for no other purpose.
