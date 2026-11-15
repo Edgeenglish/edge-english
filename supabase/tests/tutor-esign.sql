@@ -62,6 +62,21 @@ reset role;
 select pg_temp.ok((select payload ->> 'subject' = '[시험 · Olivia] [Edge English] Document ready for your signature'
   and payload ->> 'text' like 'Hi Olivia,' || E'\n\n' || 'Please log in to the LMS and sign the Freelance Instructor Contract within 7 days.' || E'\n' || 'You can find it under To do on your Home page.' || E'\n\n' || 'Thank you!' || E'\n' || 'Edge English Team%'
   from notifications n join tutor_sign_requests r on n.dedupe_key = 'tutor_sign_request:' || r.id where r.document_id = (select val::uuid from v where k = 'gen')), '다른 계약서 요청 메일 = 일반 문구');
+-- 기한 날짜 고르기 (대표 11/15: 강사별 현지 그 날 끝까지, 날짜만 표시)
+insert into tutors (id, name, country, timezone, email) values
+  ('aaaaaaaa-0000-4000-8000-0000000000e4', 'Lily', 'Australia', 'Australia/Sydney', 'lily@example.invalid'),
+  ('aaaaaaaa-0000-4000-8000-0000000000e5', 'Noah', 'Philippines', 'Asia/Manila', 'noah@example.invalid');
+set local role authenticated;
+select pg_temp.fails($$select admin_sign_request((select val::uuid from v where k = 'doc'), array['aaaaaaaa-0000-4000-8000-0000000000e4'::uuid], false, current_date - 3)$$, '지난 날짜 기한은 안 됨');
+select pg_temp.ok(admin_sign_request((select val::uuid from v where k = 'doc'), array['aaaaaaaa-0000-4000-8000-0000000000e4'::uuid, 'aaaaaaaa-0000-4000-8000-0000000000e5'::uuid], true, current_date + 4) = 2, '기한 날짜로 2명 요청');
+reset role;
+select pg_temp.ok((select bool_and((r.due_at at time zone t.timezone)::date = current_date + 4 and to_char(r.due_at at time zone t.timezone, 'HH24:MI') = '23:59')
+  from tutor_sign_requests r join tutors t on t.id = r.tutor_id where t.id in ('aaaaaaaa-0000-4000-8000-0000000000e4', 'aaaaaaaa-0000-4000-8000-0000000000e5')), '기한 = 강사마다 현지 그 날 23:59 (Sydney·Manila)');
+select pg_temp.ok((select bool_and(n.payload ->> 'text' like '%through your LMS Home → To do by ' || lms_mail_en_date(((current_date + 4)::timestamp + time '12:00') at time zone 'UTC', 'UTC') || '.%')
+  from notifications n join tutor_sign_requests r on n.dedupe_key = 'tutor_sign_request:' || r.id where r.tutor_id in ('aaaaaaaa-0000-4000-8000-0000000000e4', 'aaaaaaaa-0000-4000-8000-0000000000e5')), '메일 기한 = 두 강사 모두 같은 날짜');
+set local role authenticated;
+select pg_temp.ok((select bool_and((r ->> 'due_local')::date = current_date + 4) from jsonb_array_elements((select d -> 'requests' from jsonb_array_elements(admin_sign_docs()) d where d ->> 'title' = 'Student Data Protection Addendum' limit 1)) r
+  where r ->> 'tutor' in ('Lily', 'Noah')), '운영자 현황: 강사 현지 기한 날짜');
 set local role authenticated;
 
 insert into v select 'req2', id::text from tutor_sign_requests where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000e2';
