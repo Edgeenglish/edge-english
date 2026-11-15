@@ -2,6 +2,11 @@
 
 # 다음 세션 시작 메모
 
+## ▶ 다음 세션 작업 (대표 11/15 확정, 시작 전): 수강생이 직접 한 취소 → '수강생 안내 카드' 만들지 않기
+- 대표 11/15 '어': 수강생이 LMS에서 직접 한 취소는 '수강생 안내 카드'(카톡 복사 → 복사함 → 보냄)를 아예 만들지 않게 개발 (정책 원본 H26(102)). 운영진·강사가 대신 한 취소 등 다른 경로의 카드는 그대로.
+- 먼저: 안내 카드(`lesson_notices`)가 만들어지는 곳을 모두 찾고(DB 함수·화면), 영향 범위와 PC·휴대폰 시안 보고 → 승인 뒤 시험 DB·lms-test 구현 → 운영은 별도 승인. 기존 안내 카드 데이터는 지우지 않음.
+- 같은 날 대표 결정: 3자 대조 보고 예약 작업 끔(trig_01DYXbuSfHjUehZrZJZwaq5H), 로그인 점검 보고는 계속. 강사 메일 숨은참조·강사 WhatsApp 복사 카드 유지 여부는 대표 답 대기.
+
 ## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(175) — 같은 날 강사 해외 이동 기록과 번호가 겹쳐 175 로 정정)
 - migration `20261114130000_student_reminder_default_regular_off`(students.remind_regular 기본값 false, 기존 학생 변경 없음) · `20261114140000_first_class_mail_reminder_setting_line`(lms_first_class_mail_student: 일정 변경 재안내 메일 제외, 첫 안내에만 '수업 알림 메일은 … 내 정보 › 이메일 알림 설정에서 켜고 끌 수 있어요.' 한 줄).
 - 운영 DB 백업 `lms_backup.snapshots` **54**(표 62 전체) · **55**(lms_first_class_mail_student 이전 정의, 되돌리기 = 그 정의로 create or replace). 기본값 되돌리기 = `alter table students alter column remind_regular set default true`.
