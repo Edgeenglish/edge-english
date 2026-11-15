@@ -394,7 +394,7 @@ export default function AdminDashboard({
 
   const QUICK: [string, string][] = [
     ['수강생 관리', '/lms/admin/students'], ['강사 관리', '/lms/admin/tutors'], ['신규 수강생 등록', '/lms/admin/students/new'],
-    ['수업 변경·취소', '/lms/admin/change'], ['강사 휴무', '/lms/admin/leave'],
+    ['수업 변경·취소', '/lms/admin/change'], ['강사 휴무', '/lms/admin/leave'], ['강사 서명 문서', '/lms/admin/sign'],
   ];
   const quick = (
     <section aria-label="빠른 메뉴" className={box}>
