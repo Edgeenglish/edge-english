@@ -226,7 +226,7 @@ function daysBetween(a: string, b: string): number {
 }
 
 const FIELDS: { key: string; title: string; kind?: 'select' | 'textarea'; options?: [string, string][] }[] = [
-  { key: 'display_name', title: 'Preferred name' },
+  { key: 'display_name', title: 'Preferred name (optional)' },
   { key: 'level', title: 'English level (English Speaking Level Rubric) — your assessment', kind: 'select', options: [['', 'Not assessed yet'], ...RUBRIC.map((l) => [l, l] as [string, string])] },
   { key: 'job', title: 'Job' }, { key: 'hobbies', title: 'Hobbies' }, { key: 'interests', title: 'Interests' },
   { key: 'improve', title: 'What they want to improve', kind: 'textarea' }, { key: 'hopes', title: 'What they hope for in class / atmosphere', kind: 'textarea' },
