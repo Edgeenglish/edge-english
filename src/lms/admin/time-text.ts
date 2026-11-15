@@ -111,3 +111,31 @@ export function enEvery(times: Date[], tz?: string | null): string {
       : `${g.days.map((d) => EN_WD[d]).join(', ')} ${g.lc} ${bold(enZoneName(z))} / ${g.shift ? `${g.kdays.map((d) => EN_WD[d]).join(', ')} ` : ''}${g.kc} ${bold('KST')}`);
   return parts.length ? `Every ${parts.join('; ')}` : '';
 }
+
+/**
+ * 매주 시간 줄 — 기간 중에 강사 지역이 바뀌면(해외 이동 출발·복귀, H26(176)(182)) 지역마다 따로:
+ *  ['Every Mon 9:00 PM *Sydney Time* / 7:00 PM *KST*', 'From Thu, 24 Dec: Every Mon, Thu 7:00 AM *Buenos Aires Time* / 7:00 PM *KST*']
+ *  every = 요일마다 첫 수업 시각, 끝 = last(마지막 수업) 또는 classes(횟수), 둘 다 없으면 26주. 한국 시간 정규 수업이라 7일씩 더함
+ */
+export function enEveryLines(every: Date[], zoneAt: (t: Date) => string, end: { last?: Date | null; classes?: number | null } = {}): string[] {
+  if (!every.length) return [];
+  const base = [...every].sort((a, b) => +a - +b);
+  const cap = end.last ? +end.last : end.classes ? Infinity : +base[0] + 26 * 7 * 86400000;
+  let occ: Date[] = [];
+  for (let k = 0; k < 120; k++) {
+    const week = base.map((e) => new Date(+e + k * 7 * 86400000)).filter((t) => +t <= cap);
+    if (!week.length) break;
+    occ.push(...week);
+    if (end.classes && occ.length >= end.classes) break;
+  }
+  occ.sort((a, b) => +a - +b);
+  if (end.classes) occ = occ.slice(0, end.classes);
+  const segs: { z: string; times: Date[] }[] = [];
+  for (const t of occ) {
+    const z = zoneAt(t);
+    const last = segs[segs.length - 1];
+    if (last && last.z === z) last.times.push(t);
+    else segs.push({ z, times: [t] });
+  }
+  return segs.map((s, i) => (i === 0 ? enEvery(s.times, s.z) : `From ${enDay(s.times[0], s.z)}: ${enEvery(s.times, s.z)}`));
+}

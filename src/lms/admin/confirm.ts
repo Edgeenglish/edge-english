@@ -74,17 +74,44 @@ function joinSlots(list: { wd: string; time: string; order: number }[], lang: 'k
 export type TimeLine = { who: '한국' | '강사' | '수강생'; text: string; otherDay: boolean; tz: string };
 
 /** 한국 / 강사 / 수강생 세 줄. 강사·수강생이 한국 시간대면 그 줄은 빼고, 현지 요일이 한국과 다르면 otherDay */
-export function timeLines(v: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'studentTz' | 'tutorZoneAt'>, lang: 'ko' | 'en' = 'ko'): TimeLine[] {
+export function timeLines(v: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'studentTz' | 'tutorZoneAt'> & { endDate?: KstDate }, lang: 'ko' | 'en' = 'ko'): TimeLine[] {
   const slots = [...v.slots].sort((a, b) => monFirst(a.weekday) - monFirst(b.weekday));
   const kst = slots.map((s) => ({ wd: WEEKDAY_KO[s.weekday], time: s.time, order: monFirst(s.weekday) }));
   const out: TimeLine[] = [{ who: '한국', text: joinSlots(kst, lang), otherDay: false, tz: 'Asia/Seoul' }];
-  for (const [who, tz] of [['강사', v.tutorTz && v.tutorZoneAt ? v.tutorZoneAt : v.tutorTz], ['수강생', v.studentTz]] as const) {
-    if (!tz) continue;
-    const loc = slots.map((s, i) => ({ ...slotIn(s, v.startDate, tz), order: i }));
-    if (!loc.length ? tz === 'Asia/Seoul' : loc.every((l) => l.tz === 'Asia/Seoul')) continue;
-    out.push({ who, text: joinSlots(loc, lang), otherDay: loc.some((l, i) => l.wd !== kst[i].wd), tz: loc[0]?.tz ?? (typeof tz === 'string' ? tz : 'Asia/Seoul') });
+  // 강사: 기간 중에 지역이 바뀌면(해외 이동) 지역마다 한 줄 — 그 지역에서 실제로 있는 요일만, 두 번째부터 'M/D부터' (H26(182))
+  const tutorSegs = v.tutorTz ? zoneSegs(v) : [];
+  for (const [i, g] of tutorSegs.entries()) {
+    const ss = [...g.slots].sort((a, b) => monFirst(a.weekday) - monFirst(b.weekday));
+    const loc = ss.map((s, j) => ({ ...slotIn(s, g.start, g.z), order: j }));
+    if (g.z === 'Asia/Seoul' && tutorSegs.length === 1) break;
+    const text = joinSlots(loc, lang);
+    out.push({ who: '강사', text: i === 0 ? text : `${Number(g.start.slice(5, 7))}/${Number(g.start.slice(8))}부터 ${text}`, otherDay: loc.some((l, j) => l.wd !== WEEKDAY_KO[ss[j].weekday]), tz: g.z });
+  }
+  if (v.studentTz && v.studentTz !== 'Asia/Seoul') {
+    const loc = slots.map((s, i) => ({ ...slotIn(s, v.startDate, v.studentTz), order: i }));
+    out.push({ who: '수강생', text: joinSlots(loc, lang), otherDay: loc.some((l, i) => l.wd !== kst[i].wd), tz: v.studentTz });
   }
   return out;
+}
+
+/** 강사 지역 구간: 정규 수업 날짜를 처음부터 끝까지 보며 지역이 바뀌는 곳에서 나눔 (이동 기간이 없거나 끝 날짜를 모르면 한 구간) */
+function zoneSegs(v: Pick<PlanView, 'slots' | 'startDate' | 'tutorTz' | 'tutorZoneAt'> & { endDate?: KstDate }): { z: string; start: KstDate; slots: RegularSlot[] }[] {
+  const home = v.tutorTz || 'Asia/Seoul';
+  if (!v.tutorZoneAt || !v.endDate) {
+    let d = v.startDate;
+    for (let i = 0; i < 7 && !v.slots.some((s) => s.weekday === weekdayOf(d)); i++) d = addDays(d, 1);
+    const s0 = v.slots.find((s) => s.weekday === weekdayOf(d));
+    return [{ z: v.tutorZoneAt && s0 ? v.tutorZoneAt(kstToInstant(d, s0.time)) : home, start: v.startDate, slots: v.slots }];
+  }
+  const out: { z: string; start: KstDate; slots: RegularSlot[] }[] = [];
+  for (let d = v.startDate; d <= v.endDate; d = addDays(d, 1)) {
+    const s = v.slots.find((x) => x.weekday === weekdayOf(d));
+    if (!s) continue;
+    const z = v.tutorZoneAt(kstToInstant(d, s.time));
+    const last = out[out.length - 1];
+    if (last && last.z === z) { if (!last.slots.includes(s)) last.slots.push(s); } else out.push({ z, start: d, slots: [s] });
+  }
+  return out.length ? out : [{ z: home, start: v.startDate, slots: v.slots }];
 }
 
 /** 첫 수업 시점 (첫 수업일의 정규 시간) */
@@ -127,29 +154,24 @@ function enOtherLines(v: PlanView): string[] {
   ];
 }
 
-function tutorLine(v: PlanView) {
-  const first = firstLessonAt(v);
-  const tz = first ? tutorTzAt(v, first) : v.tutorTz || 'Asia/Seoul';
-  const local = timeLines({ ...v, studentTz: '' }, 'en').find((l) => l.who === '강사')?.text ?? timeLines(v, 'en')[0].text;
+/** 한 지역 구간의 매주 시간 줄 'Every Mon 7:00 AM *Buenos Aires Time* / Mon 7:00 PM *KST*' (그 구간에 실제로 있는 요일만) */
+function segLine(g: { z: string; start: KstDate; slots: RegularSlot[] }): string {
+  const ss = [...g.slots].sort((a, b) => monFirst(a.weekday) - monFirst(b.weekday));
+  const local = joinSlots(ss.map((s, i) => ({ ...slotIn(s, g.start, g.z), order: i })), 'en');
+  const kstLine = joinSlots(ss.map((s) => ({ wd: WEEKDAY_KO[s.weekday], time: s.time, order: monFirst(s.weekday) })), 'en');
   // 도시 이름으로 (QA UX: 'your time' 만 쓰지 않음). 해외 강사는 한국 시간도 같이
-  const kstLine = timeLines({ ...v, studentTz: '' }, 'en').find((l) => l.who === '한국')?.text;
-  return tz === 'Asia/Seoul' ? `Every ${enDays(local)} ${bold('KST')}` : `Every ${enDays(local)} ${bold(enZoneName(tz))}${kstLine ? ` / ${enDays(kstLine)} ${bold('KST')}` : ''}`;
+  return g.z === 'Asia/Seoul' ? `Every ${enDays(kstLine)} ${bold('KST')}` : `Every ${enDays(local)} ${bold(enZoneName(g.z))} / ${enDays(kstLine)} ${bold('KST')}`;
 }
-
-/** 기간 중에 강사 지역이 바뀌면 (해외 이동 출발·복귀) 바뀌는 날부터의 매주 시간 줄 — 'From Mon, 11 Jan: Every Mon 9:00 PM Sydney Time / Mon 7:00 PM KST' */
+/** 첫 구간 줄 */
+function tutorLine(v: PlanView) {
+  return segLine(zoneSegs(v)[0]);
+}
+/** 기간 중에 강사 지역이 바뀌면 (해외 이동 출발·복귀) 바뀌는 날부터의 매주 시간 줄 — 'From Mon, 11 Jan: Every Mon 9:00 PM Sydney Time / Mon 7:00 PM KST'. 회차별 일정안이어도 정규 요일 기준으로 (QA ②) */
 function zoneChangeLines(v: PlanView): string[] {
-  if (!v.tutorZoneAt || v.lessonList?.length) return [];
-  const out: string[] = [];
-  let cur: string | null = null;
-  for (let d = v.startDate; d <= v.endDate; d = addDays(d, 1)) {
-    const s = v.slots.find((x) => x.weekday === weekdayOf(d));
-    if (!s) continue;
-    const t = kstToInstant(d, s.time);
-    const z = tutorTzAt(v, t);
-    if (cur !== null && z !== cur) out.push(`From ${enDay(t, z)}: ${tutorLine({ ...v, startDate: d, tutorZoneAt: () => z })}`);
-    cur = z;
-  }
-  return out;
+  return zoneSegs(v).slice(1).map((g) => {
+    const s = g.slots.find((x) => x.weekday === weekdayOf(g.start))!;
+    return `From ${enDay(kstToInstant(g.start, s.time), g.z)}: ${segLine(g)}`;
+  });
 }
 
 /** 강사 제안 (WhatsApp, 영어). 확정이 아님을 분명히 */

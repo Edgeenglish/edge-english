@@ -1,6 +1,6 @@
 // 강사 Home Updates · To do '신규 수강생 문의' (H26(116)(127)): DB tutor_updates_feed · tutor_new_requests 결과를 화면 글로
 // 시각은 time-text.ts 하나만 씀 (강사 현지 / KST, 기준 이름 굵게)
-import { enBoth, enDay, enEvery, enZoned } from '../admin/time-text';
+import { enBoth, enDay, enEvery, enEveryLines, enZoned } from '../admin/time-text';
 
 export type TutorUpdateKind =
   | 'new_student' | 'renewal' | 'schedule_change' | 'class_moved' | 'cover'
@@ -51,14 +51,16 @@ export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)
   const i = u.info;
   // 시각마다 그 시각의 지역 (이동 기간, H26(176)) — 매주 시간은 첫 시각의 지역
   const z = (t: Date) => (typeof zone === 'string' ? zone : zone(t));
-  const zs = (ts: Date[]) => z(ts.length ? ts.reduce((a, b) => (a < b ? a : b)) : u.at);
+  // 매주 시간: 기간 중에 지역이 바뀌면 지역마다 줄을 나눔 (이동 기간 출발·복귀, H26(182))
+  const every = (ts: Date[], end: { last?: Date | null; classes?: number | null }) =>
+    (typeof zone === 'string' ? [enEvery(ts, zone)] : enEveryLines(ts, zone, end));
   switch (u.kind) {
     case 'new_student':
-      return [enEvery(ds(i.every), zs(ds(i.every))), `First class: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} · ${i.minutes} min · ${i.classes} classes`];
+      return [...every(ds(i.every), { last: d(i.last), classes: Number(i.classes) || null }), `First class: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} · ${i.minutes} min · ${i.classes} classes`];
     case 'renewal':
-      return [enEvery(ds(i.every), zs(ds(i.every))), `Next period: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} – ${enDay(d(i.last) ?? u.at, z(d(i.last) ?? u.at))} · ${i.same ? 'same schedule' : 'new schedule'}`];
+      return [...every(ds(i.every), { last: d(i.last) }), `Next period: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} – ${enDay(d(i.last) ?? u.at, z(d(i.last) ?? u.at))} · ${i.same ? 'same schedule' : 'new schedule'}`];
     case 'schedule_change':
-      return [enEvery(ds(i.every), zs(ds(i.every))), `From ${enDay(d(i.from) ?? u.at, z(d(i.from) ?? u.at))}`];
+      return [...every(ds(i.every), {}), `From ${enDay(d(i.from) ?? u.at, z(d(i.from) ?? u.at))}`];
     case 'class_moved': {
       const was = d(i.was);
       return [enBoth(d(i.to) ?? u.at, z(d(i.to) ?? u.at)), ...(was ? [`Was: ${enZoned(was, z(was))}`] : [])];
