@@ -98,6 +98,7 @@ export default function LoginFlow() {
   const [pendingPw, setPendingPw] = useState<string | null>(null);
   // 카카오·네이버로만 만든 빈 계정(수강 기록 없음) — '처음이에요'를 잘못 누른 기존 학생이 스스로 바로잡는 버튼용
   const [socialOnly, setSocialOnly] = useState(false);
+  const [memberName, setMemberName] = useState(''); // 가입 때 받은 이름(이메일 가입 입력값·카카오·네이버 이름) — 빈 회원 화면 제목
   const t = STRINGS[lang];
   const sb = supabaseBrowser();
   const codeRef = useRef<HTMLInputElement>(null);
@@ -210,6 +211,8 @@ export default function LoginFlow() {
     const user = userData?.user;
     const providers = (user?.identities ?? []).map((i) => i.provider);
     setSocialOnly(providers.length > 0 && !providers.includes('email'));
+    const metaName = user?.user_metadata?.name;
+    setMemberName(typeof metaName === 'string' ? metaName.trim() : '');
     if (needsSocialChoice({ role: myRole, providers, choseNew: user?.user_metadata?.edge_new_member === true })) {
       return setStep('social_choice');
     }
@@ -848,7 +851,7 @@ export default function LoginFlow() {
         {step === 'member' && (
           <div className="grid gap-4">
             {joined && <p className="rounded-[12px] bg-[#e6f6ec] px-3.5 py-2.5 text-[14px] font-semibold text-[#1f7a4d]">{t.joined}</p>}
-            <h1 className="text-center text-[18px] font-bold text-[#1d1b2b]">{t.memberTitle}</h1>
+            <h1 className="text-center text-[18px] font-bold text-[#1d1b2b]">{memberName ? t.memberTitleNamed(memberName) : t.memberTitle}</h1>
             <a href={APPLY_URL} target="_blank" rel="noreferrer" className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] bg-[#FFD401] text-[15px] font-bold text-[#333]">
               {t.apply}
             </a>
