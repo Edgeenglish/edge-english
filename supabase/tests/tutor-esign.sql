@@ -39,9 +39,13 @@ select pg_temp.ok(admin_sign_request((select val::uuid from v where k = 'doc'), 
 select pg_temp.ok((select bool_and(abs(extract(epoch from due_at - created_at) - 7 * 86400) < 1) from tutor_sign_requests), '기한 = 요청 + 7일');
 insert into v select 'req1', id::text from tutor_sign_requests where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000e1';
 reset role;
-select pg_temp.ok((select count(*) = 2 and bool_and(payload ->> 'subject' like '%[Edge English] Document ready for your signature')
-  and bool_and(payload ->> 'text' like 'Hi %,' || E'\n\n' || 'Please log in to the LMS and sign the Student Data Protection Addendum within 7 days.' || E'\n' || 'You can find it under To do on your Home page.' || E'\n\n' || 'Thank you!' || E'\n' || 'Edge English Team%')
-  from notifications where template = 'tutor_sign_request'), '요청 알림 메일: 새 요청 2명에게 1통씩·확정 문구');
+select pg_temp.ok((select count(*) = 2 and bool_and(payload ->> 'subject' = '[시험 · ' || t.name || '] Edge English – Student Data Protection Addendum (please sign)')
+  and bool_and(payload ->> 'text' like 'Hi ' || t.name || ',' || E'\n\n' || 'We''ve added a short Student Data Protection Addendum to your Freelance Instructor Contract. Your current contract stays the same — this only covers how student information is handled.' || E'\n\n'
+    || 'We''d really appreciate it if you could review and sign the addendum through your LMS Home → To do by ' || lms_mail_en_date(r.due_at, 'Asia/Manila') || '.' || E'\n\n'
+    || 'You''ll also be asked to enter your country of residence. Once signed, you''ll receive a copy by email.' || E'\n\n' || 'Thank you!' || E'\n\n' || 'Edge English Team%')
+  from notifications n join tutor_sign_requests r on n.dedupe_key = 'tutor_sign_request:' || r.id join tutors t on t.id = r.tutor_id
+  where n.template = 'tutor_sign_request'), '부속합의서 요청 메일: 새 요청 2명에게 1통씩·확정 제목·본문·기한 강사 현지 날짜');
+select pg_temp.ok(lms_mail_en_date('2026-11-22T15:30:00Z', 'Asia/Manila') = 'Sun, 22 Nov' and lms_mail_en_date('2026-11-22T16:30:00Z', 'Asia/Manila') = 'Mon, 23 Nov', '기한 날짜 = 강사 현지 날짜');
 insert into tutors (id, name, country, timezone, email) values ('aaaaaaaa-0000-4000-8000-0000000000e3', 'Olivia', 'Japan', 'Asia/Tokyo', 'olivia@example.invalid');
 set local role authenticated;
 select pg_temp.ok(admin_sign_request((select val::uuid from v where k = 'doc'), array['aaaaaaaa-0000-4000-8000-0000000000e3'::uuid], false) = 1, '메일 없이 요청만');
@@ -50,7 +54,15 @@ select pg_temp.ok((select count(*) = 2 from notifications where template = 'tuto
 set local role authenticated;
 select pg_temp.ok(admin_sign_request_mail((select id from tutor_sign_requests where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000e3')), '나중에 요청 메일 보내기');
 select pg_temp.ok(not admin_sign_request_mail((select id from tutor_sign_requests where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000e3')), '요청 메일은 한 번만');
-select pg_temp.ok((select (r ->> 'request_mail_status') = 'queued' from jsonb_array_elements(admin_sign_docs() -> 0 -> 'requests') r where r ->> 'tutor' = 'Olivia'), '운영자 현황: 요청 메일 상태');
+select pg_temp.ok((select (r ->> 'request_mail_status') = 'queued' from jsonb_array_elements((select d -> 'requests' from jsonb_array_elements(admin_sign_docs()) d where d ->> 'title' = 'Student Data Protection Addendum' limit 1)) r where r ->> 'tutor' = 'Olivia'), '운영자 현황: 요청 메일 상태');
+insert into v values ('gen', admin_sign_doc_save(null, 'Freelance Instructor Contract', E'Contract\n\nText.', 'I agree.')::text);
+select admin_sign_doc_publish((select val::uuid from v where k = 'gen'));
+select admin_sign_request((select val::uuid from v where k = 'gen'), array['aaaaaaaa-0000-4000-8000-0000000000e3'::uuid]);
+reset role;
+select pg_temp.ok((select payload ->> 'subject' = '[시험 · Olivia] [Edge English] Document ready for your signature'
+  and payload ->> 'text' like 'Hi Olivia,' || E'\n\n' || 'Please log in to the LMS and sign the Freelance Instructor Contract within 7 days.' || E'\n' || 'You can find it under To do on your Home page.' || E'\n\n' || 'Thank you!' || E'\n' || 'Edge English Team%'
+  from notifications n join tutor_sign_requests r on n.dedupe_key = 'tutor_sign_request:' || r.id where r.document_id = (select val::uuid from v where k = 'gen')), '다른 계약서 요청 메일 = 일반 문구');
+set local role authenticated;
 
 insert into v select 'req2', id::text from tutor_sign_requests where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000e2';
 -- 운영자 보기: 열람은 되고 서명·코드는 안 됨
@@ -130,8 +142,8 @@ select pg_temp.fails($$select tutor_signed_pdf((select id from tutor_signatures 
 select pg_temp.ok((select count(*) from tutor_signatures) = 0, '강사는 서명 표 직접 못 읽음(0줄)');
 select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-0000000000e9","aal":"aal2"}', true);
 select pg_temp.ok((select (r ->> 'signed_at') is not null and r ->> 'country' = 'Philippines' and r ->> 'mail_status' = 'queued'
-  from jsonb_array_elements(admin_sign_docs() -> 0 -> 'requests') r where r ->> 'tutor' = 'Emma'), '운영자 현황: 서명 시각·국가·메일 상태');
-select pg_temp.ok((tutor_signed_pdf((select (r ->> 'signature_id')::uuid from jsonb_array_elements(admin_sign_docs() -> 0 -> 'requests') r where r ->> 'tutor' = 'Emma'),
+  from jsonb_array_elements((select d -> 'requests' from jsonb_array_elements(admin_sign_docs()) d where d ->> 'title' = 'Student Data Protection Addendum' limit 1)) r where r ->> 'tutor' = 'Emma'), '운영자 현황: 서명 시각·국가·메일 상태');
+select pg_temp.ok((tutor_signed_pdf((select (r ->> 'signature_id')::uuid from jsonb_array_elements((select d -> 'requests' from jsonb_array_elements(admin_sign_docs()) d where d ->> 'title' = 'Student Data Protection Addendum' limit 1)) r where r ->> 'tutor' = 'Emma'),
   'aaaaaaaa-0000-4000-8000-0000000000e1') ->> 'base64') is not null, '운영자 PDF 받기');
 -- 새 판 게시 → 이전 판 retired, 서명 안 한 James 요청은 To do 에서 빠짐
 insert into v values ('doc2', admin_sign_doc_save(null, 'Student Data Protection Addendum', E'Addendum v2\n\nText.', 'I agree.')::text);
