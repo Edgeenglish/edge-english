@@ -597,6 +597,7 @@ export default function StudentHome(props: {
       lesson={next}
       now={now}
       meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)}
+      noteUrl={info?.noteUrl ?? null}
       substitute={nextFull?.substitute ?? false}
       leaveOpen={!!nextFull?.leaveOpen}
       lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === next.id)}
@@ -1598,7 +1599,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen, lateSent, tutorLate, onLate }: { lesson: StudentLesson; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
+function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
   // 지각 알림 버튼은 수업 시작 2시간 전부터 끝나기 전까지 (페이지를 열어 둔 채로도 때가 되면 나타나게)
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -1643,6 +1644,12 @@ function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen, lateSent, tut
         <a href={meetUrl} target="_blank" rel="noreferrer" className="flex min-h-[50px] items-center justify-center gap-2 rounded-[14px] bg-white text-[16px] font-bold text-[#1b1442]">
           <Icon d="M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM16 10l6-3v10l-6-3z" />
           수업 입장
+        </a>
+      )}
+      {/* 수업 노트 열기 (대표 11/16): 노트 링크가 있는 학생만. 내 정보의 같은 이름 버튼은 그대로 */}
+      {noteUrl && (
+        <a href={noteUrl} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center rounded-[14px] bg-[#2c2263] text-[15px] font-bold text-white">
+          수업 노트 열기 ↗
         </a>
       )}
       {lateOpen && <LateNotice sent={lateSent} onSend={onLate} />}
