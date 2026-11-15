@@ -114,7 +114,7 @@ select pg_temp.ok((select convert_from(pdf, 'LATIN1') like '%Party B: Emma Cruz%
   and convert_from(pdf, 'LATIN1') like '%\\("Party A"\\) - test%' and right(convert_from(pdf, 'LATIN1'), 6) = E'%%EOF\n'
   from tutor_signatures), 'PDF: 양측 서명·현지/한국 시간·해시·따옴표 바꿈·끝 표시');
 select pg_temp.ok((select payload ->> 'subject' = '[시험 · Emma] Edge English – Your signed copy: Student Data Protection Addendum'
-  and payload ->> 'text' like 'Hi Emma,%Thank you for signing the Student Data Protection Addendum.%Your signed copy is attached. You can also find it anytime in the LMS under My info › Documents.%Signed: %Manila Time / %KST%Edge English%'
+  and payload ->> 'text' like 'Hi Emma,%Thank you for signing the Student Data Protection Addendum.%Your signed copy is attached. You can also find it anytime in the LMS under My info › Documents.%Signed: %Manila Time / %KST' || E'\n\n' || 'Edge English Team%' and payload ->> 'html' like '%<p>Edge English Team</p></div>'
   and payload -> 'attachments' -> 0 ->> 'filename' = 'Student-Data-Protection-Addendum-v1-signed.pdf'
   and decode(payload -> 'attachments' -> 0 ->> 'content', 'base64') = (select pdf from tutor_signatures)
   from notifications where template = 'tutor_signed_copy'), '서명본 메일: 승인 문구·PDF 첨부');
