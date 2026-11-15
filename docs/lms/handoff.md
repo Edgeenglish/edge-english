@@ -2,16 +2,20 @@
 
 # 다음 세션 시작 메모
 
-## 🖊 11/15 강사 LMS 전자서명 — **시험 사이트(lms-test)·시험 DB 반영, 운영 미반영** (정책 원본 H26(188)(189) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
+## 🖊 11/15 강사 LMS 전자서명 — **운영 반영 끝(코드·DB), 회사 서명·서명 요청·강사 메일은 대표 승인 대기** (정책 원본 H26(188)(189)(190) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
+- ✅ 운영 반영(대표 11/15): 운영 DB 백업 **snapshots 60**(표 64 전체 + 바뀌는 함수 3개 이전 정의 `_functions_before`: lms_mail_dispatch·lms_student_profile_json·tutor_my_students) → migration 커넥터 이름 lms_tutor_hide_student_email(040000) · lms_tutor_esign(050000) · lms_tutor_sign_request_mail(070000) → 표 67, 학생 13·수업 183 그대로, RLS 꺼진 표 0 · 코드 lms-prod 743536d(+ca384bd·c9bb5d7 묶음 SQL) = 전자서명·이메일 숨김 파일만 골라 담음(처리방침 legal.ts·060000 수업 안내 카드 등 다른 미배포 변경 안 넣음). edgeenglish.kr JS 에 반영 확인
+- 운영 데이터: 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판 **초안**만 넣음(전문 해시 313082ba… = 시험과 같음). 회사 서명(게시)·Benny·Maria·Olivia 요청·강사 메일 **안 함** — 대표가 메일 문구 3개 검토 후 '보내' 할 때. 운영 send_emails 켜져 있으므로 [요청 보내기] 누르면 실제 메일이 감(메일 없이 요청만 = rpc admin_sign_request(…, false))
+- 되돌리기: 코드 = lms-prod 를 30204e5 로 · DB = snapshots 60 `_functions_before` 3개 정의 실행 + 새 함수·표 3개 drop(서명 0건일 때만)
+- 11/15 추가: 서명 요청 알림 메일 1회(재촉 없음, migration 070000) · 운영자 화면 요청 메일 상태·[요청 메일 보내기]
+- ✅ 시험 사이트 운영자 화면 QA(대표 시험용 인증 앱 코드): 빠른 메뉴 '강사 서명 문서' → 1판·회사 서명 시각·Alex 서명함/PDF·Emma·James 서명 대기·요청 메일 안 보냄·[요청 메일 보내기] · 강사 추가 목록 · 새 판 → 초안 → [회사 서명하고 올리기] 확인 단계(올리지 않음, 시험 DB 에 2판 초안 남음) · 휴대폰 가로 넘침 없음 · 운영자 보기 James: 입력칸·코드·서명 버튼 못 누름 + '강사 본인만 서명할 수 있어요' · Alex My info PDF
 - 시안: `docs/lms/previews/tutor-esign-drafts.html` (https://claude.ai/artifact/9VKQxqr6Kqg8EpMmzyY7B9)
 - migration **20261115050000_lms_tutor_esign** (시험 DB 적용, 커넥터 이름 lms_tutor_esign · 주석만 뺀 같은 내용): 표 3개 `tutor_sign_requests`(기한 = 요청+7일) · `tutor_sign_codes`(코드 해시, 10분·5회, 직접 읽기 없음) · `tutor_signatures`(쌓기만, PDF bytea·해시) / 문서 원본은 기존 `terms_versions`+`terms_documents` 재사용(서명 문구 = required_items[0], 게시 = 회사 서명) / 함수 `tutor_sign_list·tutor_sign_doc·tutor_sign_send_code·tutor_sign·tutor_signed_pdf·admin_sign_docs·admin_sign_doc_save·admin_sign_doc_publish·admin_sign_request` + PDF(`lms_pdf_*`, 글자만 Helvetica) / `lms_mail_dispatch` 에 첨부(payload.attachments)만 더함. 표 64→67 (02-check)
 - 코드: `src/lms/tutor/esign.ts` · `src/app/lms/tutor/SignDoc.tsx` · TutorHome(To do 'Sign: …'+기한 줄, 'My info' 탭 = PC 왼쪽 메뉴·휴대폰 맨 위 머리글) · TutorLive · 운영자 `/lms/admin/sign`(SignAdmin.tsx, 빠른 메뉴 '강사 서명 문서')
 - 시험: DB `supabase/tests/tutor-esign.sql` 48줄 통과 · `npm run test:db` 전부 · vitest 491 · tsc 0
 - 실제 화면 QA(시험 사이트, Alex = support+alex@ 메일 코드 로그인): To do 'Please sign by Mon, 23 Nov' → 창(전문·Party A 줄·두 칸 비면 버튼 못 누름) → Email me a code → support@ 에 '[시험 · Alex] Edge English – Your signing code' → 틀린 코드 1회(DB wrong_tries 1) → 서명 → '✓ Signed'·서명 시각 Sydney/KST → 서명본 메일 PDF 첨부 도착 · PDF 2쪽 pypdf strict 통과 · To do 에서 빠짐 · My info › Documents 보기·PDF · 휴대폰 390 가로 넘침 없음
 - 시험 데이터(그대로 둠): 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판(최종 전문, 서명란 빈칸 줄은 전자서명 칸으로 대체) — 회사 서명은 Claude 가 시험 DB 에서 대표 운영자 계정 id 로 게시(시험만) · 요청 Alex(서명함)·Emma·James(서명 대기)
-- **미검증**: 운영자 화면(`/lms/admin/sign`·운영자 보기 `?tutor=`) 실제 클릭 — 시험 프로젝트 인증 앱 코드 2번 거절(Invalid TOTP: 대표 인증 앱의 '시험용' 항목 코드가 아닐 수 있음). 운영자 함수는 DB 시험으로만 확인
-- **결정 대기**: 서명 요청 시 강사 알림 메일 보낼지(H26(172) 종류별 규칙) — 지금은 메일 없음, LMS To do 에만 생김
-- **운영 반영 순서(대표 승인 뒤)**: ① 운영 백업 ② migration 20261115040000(학생 이메일 숨김) + 20261115050000 ③ `git log origin/lms-test..origin/lms-prod` 확인 뒤 lms-prod 반영 ④ 운영자 화면 '강사 서명 문서' → 새 문서(전문·서명 문구) → **대표가 [회사 서명하고 올리기]** → Benny·Maria·Olivia 요청(강사 계정·tutors.email 있는지 먼저 확인) ⑤ 운영 send_emails 켜져 있으므로 코드·서명본 메일이 실제 강사에게 감
+- **대표 대기**: 강사 메일 문구 3개(요청·코드·서명본) 검토 → '보내' 뒤 운영 운영자 화면에서 대표가 [회사 서명하고 올리기] → Benny·Maria·Olivia [요청 보내기]
+- 남은 순서: ④ 운영자 화면 '강사 서명 문서' → 1판 초안 → **대표가 [회사 서명하고 올리기]** → Benny·Maria·Olivia 요청(세 강사 모두 계정·이메일 있음 확인) ⑤ 운영 send_emails 켜져 있으므로 요청·코드·서명본 메일이 실제 강사에게 감
 
 ## ▶ 다음 세션 작업 (대표 11/15 확정, 시작 전): 수강생이 직접 한 취소 → '수강생 안내 카드' 만들지 않기
 - 대표 11/15 '어': 수강생이 LMS에서 직접 한 취소는 '수강생 안내 카드'(카톡 복사 → 복사함 → 보냄)를 아예 만들지 않게 개발 (정책 원본 H26(102)). 운영진·강사가 대신 한 취소 등 다른 경로의 카드는 그대로.
