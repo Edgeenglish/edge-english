@@ -6,8 +6,9 @@
 //  - 운영자 보기: 열람·PDF 받기만, 입력칸·버튼은 못 누름 (대표 11/15: 서명은 강사 본인만)
 import { useEffect, useState } from 'react';
 import { Rich } from '@/app/lms/Rich';
-import { enBoth, enDay } from '@/lms/admin/time-text';
+import { enBoth } from '@/lms/admin/time-text';
 import { useT } from '@/lms/tutor/lang';
+export { dueLine } from '@/lms/tutor/esign';
 import { cleanCode, docParagraphs, downloadPdf, SIGN_ERROR, type SignActions, type SignDoc, type SignList } from '@/lms/tutor/esign';
 
 const card = 'rounded-[14px] border border-[#e6e3ef] bg-white p-4';
@@ -181,9 +182,4 @@ export function DocumentsCard({ list, actions, onOpen }: { list: SignList; actio
       {err && <p role="alert" className="mt-2 text-[14px] text-[#b3261e]">{err}</p>}
     </section>
   );
-}
-
-/** To do 줄 아래 기한: 'Please sign by Mon, 23 Nov' (강사 현지 날짜). 지나면 빨간 글자 */
-export function dueLine(dueAt: Date, tz: string, now: Date): { text: string; late: boolean } {
-  return { text: `Please sign by ${enDay(dueAt, tz)}`, late: now.getTime() > dueAt.getTime() };
 }

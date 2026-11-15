@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanCode, docParagraphs, parseSignDoc, parseSignList } from './esign';
-import { dueLine } from '../../app/lms/tutor/SignDoc';
+import { cleanCode, docParagraphs, dueLine, parseSignDoc, parseSignList } from './esign';
 
 describe('전자서명 (H26(188))', () => {
   it('전문 문단: 첫 문단 제목, 1. … 조 제목', () => {

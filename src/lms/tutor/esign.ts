@@ -2,6 +2,7 @@
 //  - To do 'Sign: …' → 전문 → 거주 국가·이름 → 이메일 6자리 코드 → [I agree and sign]
 //  - 서명은 강사 본인만 (운영자 보기는 열람·PDF 받기만)
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { enDay } from '../admin/time-text';
 
 export type SignOpen = { requestId: string; title: string; revision: number; dueAt: Date };
 export type SignDone = { signatureId: string; requestId: string; title: string; revision: number; signedAt: Date; tz: string };
@@ -121,4 +122,9 @@ export function downloadPdf(filename: string, base64: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** To do 줄 아래 기한: 'Please sign by Mon, 23 Nov' (강사 현지 날짜). 지나면 빨간 글자 */
+export function dueLine(dueAt: Date, tz: string, now: Date): { text: string; late: boolean } {
+  return { text: `Please sign by ${enDay(dueAt, tz)}`, late: now.getTime() > dueAt.getTime() };
 }
