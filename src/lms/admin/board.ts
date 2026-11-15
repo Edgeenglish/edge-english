@@ -383,6 +383,7 @@ function briefOf(t: TaskSource, now: Date): string {
       return t.studentName;
     case 'lesson_change':
       if (t.pendingNotices > 0) return `안내 안 보냄 ${t.pendingNotices}건`;
+      if ((t.emailFailed ?? 0) > 0) return `${noticeWho(t.emailFailedTo)} ${t.emailFailed}건`;
       return t.makeupWaitingSince ? `보강 신청 후 ${waitText(t.makeupWaitingSince, now)}` : `보강 강사 답 대기 ${t.openMakeups}건`;
     case 'tutor_leave':
       return t.firstOpenAt ? `첫 수업 ${kstDay(t.firstOpenAt)}` : `${t.tutorName} 휴무`;

@@ -15,9 +15,11 @@ import {
 import { KOREA_TIME } from '@/lms/tutor/screen';
 import { useSavedValue } from './useSaved';
 import { Lines, TravelSheet, type Sheet } from './TravelSheet';
-import { homeTabLabel, homeText, tabLabel, tabPeriodLine, zoneBadge, type TravelLocation } from '@/lms/tutor/travel';
+import { applyLine, homeTabLabel, homeText, LOCKED_TEXT, tabLabel, tabPeriodLine, zoneBadge, type TravelLocation } from '@/lms/tutor/travel';
+import { enRange, isKst } from '@/lms/admin/time-text';
+import { formatInZone } from '@/lms/rules/dates';
 
-import { ALL_HOURS, cityTime, sourceCell } from '@/lms/tutor/hours-view';
+import { ALL_HOURS, cityTime, localToInstant, sourceCell } from '@/lms/tutor/hours-view';
 
 export type HoursActions = {
   load: () => Promise<HoursData>;
@@ -50,7 +52,7 @@ const cantChange: CSSProperties = { background: CANT_OPEN_BACKGROUND };
 type Dialog =
   | { kind: 'info'; title: string; body: string[] }
   | { kind: 'save' }
-  | { kind: 'saved'; weekly: boolean; from: string | null };
+  | { kind: 'saved'; weekly: boolean; text: string | null };
 /** 지금 탭의 격자 자료: Regular = 강사 시간대·다음 주 월요일부터, 이동 기간 = 그 지역 시간대·그 기간 (H26(173)) */
 type Grid = { tz: string; from: string; weeklyOpen: string[]; weeklyClasses: HoursData['weeklyClasses']; loc: TravelLocation | null };
 const gridOf = (d: HoursData, tab: string): Grid => {
@@ -145,6 +147,9 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
     </ul>
   );
   const weeklyChanged = w.added.length + w.removed.length > 0;
+  // Temporary location: 적용할 날이 없으면(다음 월요일 > 종료일) 칸·Save 잠금 (대표 11/15)
+  const locked = !!g.loc && !g.loc.applyFrom;
+  const applyText = g.loc ? applyLine(g.loc) : applyFromText(d.from);
   const source = (date: string, t: string) => sourceCell(date, t, viewZone, g.tz);
   const showPolicy = () => setDialog({ kind: 'info', title: "Can't open", body: [cantOpenHelp(d.times, g.tz)] });
   const unavailable = <button type="button" aria-label="Can't open" aria-haspopup="dialog" onClick={showPolicy} className={cellBase} style={cantChange} />;
@@ -175,7 +180,9 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
     setBusy(true);
     setSaveErr('');
     try {
-      const saved = { weekly: weeklyChanged, from: g.loc ? null : d.from };
+      const willApply = g.loc ? applyLine(g.loc) : applyFromText(d.from);
+      const later = !(g.loc && g.loc.first);
+      const saved = { weekly: weeklyChanged, text: willApply ? `${willApply}${later ? ' Until then your current hours stay the same.' : ''}` : null };
       if (g.loc) await actions.saveLocationHours(g.loc.id, [...weekly]);
       else await actions.save(weeklyChanged ? [...weekly] : null, [], []);
       await load();
@@ -188,6 +195,15 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
     }
   }
 
+  // 수업 칸 창: 한국 시간 같이 (요일이 다르면 요일도) (대표 11/15)
+  function kstPart(dow: number, time: string, min: number): string {
+    if (isKst(g.tz)) return '';
+    const start = localToInstant(plusDays(g.from, (dow + 6) % 7), time, g.tz);
+    const end = new Date(+start + min * 60000);
+    const kd = new Date(`${formatInZone(start, 'Asia/Seoul').date}T00:00:00Z`).getUTCDay();
+    return ` / ${kd === dow ? '' : `${FULL[kd]} `}${enRange(start, end, 'Asia/Seoul')} KST`;
+  }
+
   function weekCell(dow: number, t: string, when: string) {
     const cl = weeklyClassAt(g.weeklyClasses, dow, t);
     if (cl) {
@@ -195,7 +211,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
         <button type="button" className={`${cellBase} truncate px-0.5 text-white ${cl.first ? (cl.c.min > 30 ? 'rounded-b-none' : '') : cont}`} aria-label={`${when} class with ${cl.c.student}`}
           style={fillStyle(classFill(toMin(cl.c.time), cl.c.min, toMin(t)), TIME_COLORS.class, TIME_COLORS.closed)}
           onClick={() => setDialog({ kind: 'info', title: `Weekly class · ${cl.c.student}`, body: [
-            `Every ${FULL[dow]} ${span(cl.c.time, cl.c.min)} ${localLabel} (${cl.c.min} min). You can’t close this time while the class is here.`,
+            `Every ${FULL[dow]} ${span(cl.c.time, cl.c.min)} ${localLabel}${kstPart(dow, cl.c.time, cl.c.min)} (${cl.c.min} min). You can’t close this time while the class is here.`,
             'To stop teaching this slot, please tell the Edge English team. We’ll move the class with the student first.'] })}>
           {cl.first ? lessonLabel(cl.c.student, cl.c.min) : ''}
         </button>
@@ -205,10 +221,10 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
     const isOpen = weekly.has(k);
     const changed = isOpen !== g.weeklyOpen.includes(k);
     return (
-      <button type="button" aria-label={`${when} ${isOpen ? 'open' : 'closed'}`} aria-pressed={isOpen}
+      <button type="button" aria-label={`${when} ${isOpen ? 'open' : 'closed'}`} aria-pressed={isOpen} disabled={locked}
         onClick={() => toggle(weekly, k, setWeekly)}
         style={{ background: isOpen ? TIME_COLORS.open : TIME_COLORS.closed }}
-        className={`${cellBase} ${changed ? 'ring-2 ring-inset ring-[#5b3fe0]' : ''}`} />
+        className={`${cellBase} ${changed ? 'ring-2 ring-inset ring-[#5b3fe0]' : ''} ${locked ? 'cursor-not-allowed opacity-50' : ''}`} />
     );
   }
 
@@ -222,7 +238,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
       {lines.length > 0
         ? lineList('text-[13.5px] text-[#1d1b2b]')
         : <p className="text-[13px] text-[#6b6880]">No changes</p>}
-      <button type="button" disabled={lines.length === 0} onClick={() => { setSaveErr(''); setDialog({ kind: 'save' }); }} className={btnMain}>
+      <button type="button" disabled={lines.length === 0 || locked} onClick={() => { setSaveErr(''); setDialog({ kind: 'save' }); }} className={btnMain}>
         Save{lines.length > 0 ? ` (${lines.length})` : ''}
       </button>
     </div>
@@ -286,6 +302,9 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
                     <button type="button" onClick={() => setSheet({ kind: 'end', loc: g.loc! })} className={`${btnSub} min-h-[40px] text-[14px]`}>Set end date</button>
                   </div>
                 )}
+              {applyText
+                ? <p className="text-[13.5px] font-semibold text-[#1d1b2b]">{applyText}</p>
+                : <p role="alert" className="text-[13.5px] font-semibold text-[#b3261e]">{LOCKED_TEXT}</p>}
             </div>
           ) : <p className="mb-3 text-[13.5px] font-semibold text-[#1d1b2b]">{applyFromText(d.from)}</p>}
           <TimeStatusLegend onHelp={showPolicy} />
@@ -326,7 +345,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
       </div>
       <div className={`flex items-center gap-2 border-t border-[#e6e3ef] bg-white px-1 pb-1 pt-2.5 lg:hidden ${inline ? 'sticky bottom-[64px] z-10 -mx-1 shadow-[0_64px_0_0_#fff]' : ''}`}>
         <span className="flex-1 text-[13px] text-[#6b6880]">{lines.length > 0 ? `${lines.length} change${lines.length > 1 ? 's' : ''} not saved` : 'No changes'}</span>
-        <button type="button" disabled={lines.length === 0} onClick={() => { setSaveErr(''); setDialog({ kind: 'save' }); }} className={btnMain}>Save</button>
+        <button type="button" disabled={lines.length === 0 || locked} onClick={() => { setSaveErr(''); setDialog({ kind: 'save' }); }} className={btnMain}>Save</button>
       </div>
 
       {dialog && (
@@ -344,7 +363,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
                 <strong className="text-[16px] text-[#1d1b2b]">Save these changes?</strong>
                 <p className="text-[12px] text-[#6b6880]">Times shown in {viewLabel}</p>
                 {lineList('text-[14px] text-[#1d1b2b]')}
-                {weeklyChanged && <p className="text-[13px] font-semibold text-[#3a22b0]">{g.loc ? tabLabel(g.loc) : applyFromText(d.from)}</p>}
+                {weeklyChanged && applyText && <p className="text-[13px] font-semibold text-[#3a22b0]">{applyText}</p>}
                 <p className="text-[13px] text-[#6b6880]">Students can no longer pick closed times for make-ups. Your classes don’t change.</p>
                 {saveErr && <p role="alert" className="text-[14px] text-[#b3261e]">{saveErr}</p>}
                 <button type="button" disabled={busy} onClick={save} className={btnMain}>{busy ? 'Saving…' : 'Save'}</button>
@@ -354,7 +373,7 @@ export default function TutorHours({ actions, onClose, onSchedule, onTimeOff, in
             {dialog.kind === 'saved' && (
               <>
                 <strong className="text-[16px] text-[#1f7a4d]">Saved ✓</strong>
-                {dialog.weekly && dialog.from && <p className="text-[14px] text-[#1d1b2b]">{applyFromText(dialog.from)} Until then your current hours stay the same.</p>}
+                {dialog.weekly && dialog.text && <p className="text-[14px] text-[#1d1b2b]">{dialog.text}</p>}
                 <button type="button" onClick={() => setDialog(null)} className={btnSub}>Close</button>
               </>
             )}
