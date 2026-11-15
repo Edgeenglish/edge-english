@@ -71,7 +71,7 @@ export default function TutorDemo({ nowIso }: { nowIso: string }) {
           l.to = to;
           return { ...l };
         }
-        const l = { id: `loc${Date.now()}`, city: city ?? '', country: country ?? '', timezone: timezone ?? 'UTC', from: from ?? '', to, monday: mondayOf(from ?? ''), weeklyOpen: [], weeklyClasses: [] };
+        const l = { id: `loc${Date.now()}`, city: city ?? '', country: country ?? '', timezone: timezone ?? 'UTC', from: from ?? '', to, monday: mondayOf(from ?? ''), weeklyOpen: [], weeklyClasses: [], applyFrom: from ?? '', first: true, today: '' };
         h.locations = [...h.locations, l].sort((a, b) => (a.from < b.from ? -1 : 1));
         return { ...l };
       },
