@@ -262,8 +262,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
   const weekKinds = view === 'week' && data ? wcols.map((c) => kindsOf(c, data)) : null;
   // 주 보기 머리글: 그 주 열들의 지역 (두 지역이면 'Toronto Time / Buenos Aires Time')
   const weekZones = [...new Set((view === 'week' ? (wcols.length ? wcols : grid) : [selected]).map((c) => cityTime(korea ? zoneOfDate(dd(c)) : vz(c))))].join(' / ');
-  const firstRow = weekKinds ? Math.min(...weekKinds.map((ks) => ks.findIndex((k) => k !== 'outside' && k !== 'past')).filter((x) => x >= 0), 48) : 48;
-  // 처음 보이는 줄 = 가장 이른 열린 칸, 없으면 오전 6시 (6시 전 수업은 위로 올리면 보임, 대표 11/15 ①)
+  const firstRow = weekKinds ? Math.min(...weekKinds.map((ks) => ks.indexOf('free')).filter((x) => x >= 0), 48) : 48;
+  // 처음 보이는 줄 = 가장 이른 열린 칸(Regular Working Hours 와 같음), 없으면 오전 6시 (6시 전 수업은 위로 올리면 보임, 대표 11/15 ①)
   useEffect(() => {
     if (view !== 'week' || !scroller.current) return;
     const row = scroller.current.querySelector<HTMLElement>(`[data-row="${firstRow < 48 ? firstRow : 12}"]`);
