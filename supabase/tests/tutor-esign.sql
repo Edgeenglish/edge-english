@@ -35,9 +35,23 @@ select pg_temp.ok((select status = 'published' and published_by = 'eeeeeeee-0000
   from terms_documents where id = (select val::uuid from v where k = 'doc')), '게시 = 회사 서명(대표 계정·시각)');
 select pg_temp.fails($$select admin_sign_doc_save((select val::uuid from v where k = 'doc'), null, 'x', 'y')$$, '게시한 판은 함수로 못 고침');
 select pg_temp.ok(admin_sign_request((select val::uuid from v where k = 'doc'), array['aaaaaaaa-0000-4000-8000-0000000000e1'::uuid, 'aaaaaaaa-0000-4000-8000-0000000000e2'::uuid]) = 2, '강사 2명에게 요청');
-select pg_temp.ok(admin_sign_request((select val::uuid from v where k = 'doc'), array['aaaaaaaa-0000-4000-8000-0000000000e1'::uuid]) = 0, '같은 강사 다시 요청해도 그대로');
+select pg_temp.ok(admin_sign_request((select val::uuid from v where k = 'doc'), array['aaaaaaaa-0000-4000-8000-0000000000e1'::uuid]) = 0, '같은 강사 다시 요청해도 그대로(메일도 다시 안 감)');
 select pg_temp.ok((select bool_and(abs(extract(epoch from due_at - created_at) - 7 * 86400) < 1) from tutor_sign_requests), '기한 = 요청 + 7일');
 insert into v select 'req1', id::text from tutor_sign_requests where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000e1';
+reset role;
+select pg_temp.ok((select count(*) = 2 and bool_and(payload ->> 'subject' like '%[Edge English] Document ready for your signature')
+  and bool_and(payload ->> 'text' like 'Hi %,' || E'\n\n' || 'Please log in to the LMS and sign the Student Data Protection Addendum within 7 days.' || E'\n' || 'You can find it under To do on your Home page.' || E'\n\n' || 'Thank you!' || E'\n' || 'Edge English Team%')
+  from notifications where template = 'tutor_sign_request'), '요청 알림 메일: 새 요청 2명에게 1통씩·확정 문구');
+insert into tutors (id, name, country, timezone, email) values ('aaaaaaaa-0000-4000-8000-0000000000e3', 'Olivia', 'Japan', 'Asia/Tokyo', 'olivia@example.invalid');
+set local role authenticated;
+select pg_temp.ok(admin_sign_request((select val::uuid from v where k = 'doc'), array['aaaaaaaa-0000-4000-8000-0000000000e3'::uuid], false) = 1, '메일 없이 요청만');
+reset role;
+select pg_temp.ok((select count(*) = 2 from notifications where template = 'tutor_sign_request'), '메일 없이 요청하면 메일 안 생김');
+set local role authenticated;
+select pg_temp.ok(admin_sign_request_mail((select id from tutor_sign_requests where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000e3')), '나중에 요청 메일 보내기');
+select pg_temp.ok(not admin_sign_request_mail((select id from tutor_sign_requests where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000e3')), '요청 메일은 한 번만');
+select pg_temp.ok((select (r ->> 'request_mail_status') = 'queued' from jsonb_array_elements(admin_sign_docs() -> 0 -> 'requests') r where r ->> 'tutor' = 'Olivia'), '운영자 현황: 요청 메일 상태');
+
 insert into v select 'req2', id::text from tutor_sign_requests where tutor_id = 'aaaaaaaa-0000-4000-8000-0000000000e2';
 -- 운영자 보기: 열람은 되고 서명·코드는 안 됨
 select pg_temp.ok(jsonb_array_length(tutor_sign_list('aaaaaaaa-0000-4000-8000-0000000000e1') -> 'open') = 1, '운영자 보기: 서명할 문서 보임');

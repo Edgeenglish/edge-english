@@ -18,7 +18,7 @@ const btn = 'inline-flex min-h-[40px] items-center rounded-[10px] bg-[#7d5ffb] p
 const btnLine = 'inline-flex min-h-[40px] items-center rounded-[10px] border border-[#7d5ffb] px-3 text-[13.5px] font-semibold text-[#5b3fe0] disabled:opacity-40';
 const field = 'w-full rounded-[10px] border border-[#d9d5e6] px-3 py-2 text-[16px] lg:text-[14px]';
 
-type Req = { requestId: string; tutorId: string; tutor: string; requestedAt: Date; dueAt: Date; signatureId: string | null; signedAt: Date | null; country: string | null; mailStatus: string | null; mailError: string | null };
+type Req = { requestId: string; tutorId: string; tutor: string; requestedAt: Date; dueAt: Date; signatureId: string | null; signedAt: Date | null; country: string | null; hasEmail: boolean; requestMail: string | null; mailStatus: string | null; mailError: string | null };
 type Doc = { id: string; title: string; revision: number; status: 'draft' | 'published' | 'retired'; body: string; statement: string; publishedAt: Date | null; requests: Req[] };
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
@@ -36,6 +36,7 @@ function parseDocs(rows: Record<string, unknown>[]): Doc[] {
     requests: ((d.requests ?? []) as Record<string, unknown>[]).map((r) => ({
       requestId: String(r.request_id), tutorId: String(r.tutor_id), tutor: String(r.tutor), requestedAt: new Date(String(r.requested_at)), dueAt: new Date(String(r.due_at)),
       signatureId: (r.signature_id as string | null) ?? null, signedAt: r.signed_at ? new Date(String(r.signed_at)) : null, country: (r.country as string | null) ?? null,
+      hasEmail: r.has_email !== false, requestMail: (r.request_mail_status as string | null) ?? null,
       mailStatus: (r.mail_status as string | null) ?? null, mailError: (r.mail_error as string | null) ?? null,
     })),
   }));
@@ -123,6 +124,13 @@ function LiveDoc({ sb, doc, tutors, onChanged }: { sb: SupabaseClient; doc: Doc;
     if (r.error) return setErr(r.error.message);
     setPick([]); setAdding(false); await onChanged();
   }
+  async function mail(requestId: string) {
+    setBusy(true); setErr('');
+    const r = await sb.rpc('admin_sign_request_mail', { p_request: requestId });
+    setBusy(false);
+    if (r.error) return setErr(r.error.message);
+    await onChanged();
+  }
   async function pdf(id: string) {
     const tutor = doc.requests.find((r) => r.signatureId === id)?.tutorId;
     const r = await sb.rpc('tutor_signed_pdf', { p_signature: id, p_tutor: tutor });
@@ -148,6 +156,11 @@ function LiveDoc({ sb, doc, tutors, onChanged }: { sb: SupabaseClient; doc: Doc;
                 {r.signedAt
                   ? <span className="font-semibold text-[#1f7a4d]">서명함 ✓</span>
                   : <span className={Date.now() > r.dueAt.getTime() ? 'font-semibold text-[#b3261e]' : 'text-[#6b6880]'}>서명 대기 · 기한 {kst(r.dueAt)}</span>}
+                {!r.signedAt && (
+                  <span className="block text-[12.5px] text-[#55526a]">
+                    {r.requestMail ? `요청 메일 ${MAIL[r.requestMail] ?? r.requestMail}` : r.hasEmail ? '요청 메일 안 보냄' : <span className="text-[#b3261e]">강사 이메일 없음</span>}
+                  </span>
+                )}
                 {r.signedAt && (
                   <span className="block text-[12.5px] text-[#55526a]">
                     {r.country} · {kst(r.signedAt)} · 서명본 메일 {MAIL[r.mailStatus ?? ''] ?? '없음'}{r.mailError ? ` (${r.mailError})` : ''}
@@ -155,6 +168,9 @@ function LiveDoc({ sb, doc, tutors, onChanged }: { sb: SupabaseClient; doc: Doc;
                 )}
               </span>
               {r.signatureId && <button type="button" onClick={() => void pdf(r.signatureId!)} className={btnLine}>PDF</button>}
+              {!r.signatureId && !r.requestMail && r.hasEmail && doc.status === 'published' && (
+                <button type="button" disabled={busy} onClick={() => void mail(r.requestId)} className={btnLine}>요청 메일 보내기</button>
+              )}
             </li>
           ))}
         </ul>
