@@ -22,9 +22,10 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 
 /** tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
 export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null, kstFrom: string, kstTo: string): Promise<TutorScreen> {
-  const [screen, sug, late] = await Promise.all([
+  const [screen, sug, travel, late] = await Promise.all([
     sb.rpc('tutor_screen', { p_tutor: tutorId, p_from: kstFrom, p_to: kstTo }),
     sb.rpc('tutor_makeup_suggestions', { p_tutor: tutorId }),
+    sb.rpc('tutor_travel_periods', { p_tutor: tutorId }),
     sb.rpc('tutor_late_notices', { p_tutor: tutorId }),
   ]);
   const s = parseScreen(check(screen));
@@ -34,12 +35,6 @@ export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null
       .map((x) => [x.lesson_id, { minutes: x.minutes, reason: x.reason, at: new Date(x.at) }]));
     s.lessons = s.lessons.map((l) => (sent.has(l.id) ? { ...l, lateNotice: sent.get(l.id)! } : l));
   }
-  const [screen, sug, travel] = await Promise.all([
-    sb.rpc('tutor_screen', { p_tutor: tutorId, p_from: kstFrom, p_to: kstTo }),
-    sb.rpc('tutor_makeup_suggestions', { p_tutor: tutorId }),
-    sb.rpc('tutor_travel_periods', { p_tutor: tutorId }),
-  ]);
-  const s = parseScreen(check(screen));
   // 이동 기간 (H26(176)): 수업 시각을 그 수업 날짜의 지역 시간으로. 함수 없는 옛 DB 면 평소 시간대 그대로
   if (!travel.error) s.locations = ((travel.data as unknown[]) ?? []).map(parsePeriod);
   // 강사 시간 제안 (H26(134), 20261111160000). 함수 없는 옛 DB 면 제안 표시만 없음
