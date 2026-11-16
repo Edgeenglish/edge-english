@@ -31,7 +31,7 @@ import {
   type SocialProvider,
 } from '@/lms/auth/login-flow';
 
-type Step = 'login' | 'signup' | 'signup_code' | 'pw_email' | 'pw_new' | 'totp' | 'enroll' | 'member' | 'social_choice' | 'moving';
+type Step = 'login' | 'code_login' | 'signup' | 'signup_code' | 'pw_email' | 'pw_new' | 'totp' | 'enroll' | 'member' | 'social_choice' | 'moving';
 
 const LANG_KEY = 'lms-lang';
 const LINK_KEY = 'lms-link-provider'; // '이미 회원이에요' 뒤 기존 계정 로그인이 끝나면 연결할 카카오·네이버
@@ -171,7 +171,7 @@ export default function LoginFlow() {
     return () => clearTimeout(id);
   }, [wait]);
   useEffect(() => {
-    if (step === 'signup_code' || step === 'totp' || step === 'enroll') codeRef.current?.focus();
+    if (step === 'code_login' || step === 'signup_code' || step === 'totp' || step === 'enroll') codeRef.current?.focus();
   }, [step]);
 
   function switchLang(l: Lang) {
@@ -269,6 +269,37 @@ export default function LoginFlow() {
       if (e.status === 429) return setError(t.tooMany);
       if (e.status && e.status >= 400 && e.status < 500) return setBadLogin(true);
       return setError(t.network);
+    }
+    await routeAfterLogin();
+    setBusy(false);
+  }
+
+  // 메일 코드 로그인 (H26(205) 보충: 기존 회원이 비밀번호 없이 계속 쓰던 방식, 누구나 사용) — 있는 계정에만 코드가 감
+  async function sendLoginCode(resend = false) {
+    if (!sb) return setError(t.network);
+    setBadLogin(false);
+    if (!looksLikeEmail(email)) return setError(t.badEmail);
+    setBusy(true);
+    setError(null);
+    const { error: e } = await sb.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: false } });
+    setBusy(false);
+    // 가입 안 된 이메일(422)도 같은 화면으로 — 가입 여부를 알려 주지 않음
+    if (e && e.status === 429) return setError(t.tooMany);
+    if (e && !(e.status && e.status >= 400 && e.status < 500)) return setError(t.network);
+    setCode('');
+    setWait(RESEND_WAIT_SECONDS);
+    setStep('code_login');
+    setNotice(resend ? t.resent : null);
+  }
+
+  async function verifyLoginCode() {
+    if (!sb || code.length !== 6) return;
+    setBusy(true);
+    setError(null);
+    const { error: e } = await sb.auth.verifyOtp({ email: email.trim(), token: code, type: 'email' });
+    if (e) {
+      setBusy(false);
+      return setError(failMessage(e));
     }
     await routeAfterLogin();
     setBusy(false);
@@ -640,6 +671,9 @@ export default function LoginFlow() {
             <button type="submit" disabled={busy} className={`${primary} bg-[#5b3df0]`}>
               {t.login}
             </button>
+            <button type="button" disabled={busy} className="flex min-h-[52px] w-full items-center justify-center rounded-[14px] border-[1.5px] border-[#5b3df0] text-[16px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => sendLoginCode()}>
+              {t.codeLogin}
+            </button>
             <div className="flex flex-wrap justify-center gap-x-4">
               <button type="button" className={`${linkBtn} ${badLogin ? 'font-bold text-[#1d1b2b]' : ''}`} onClick={() => go('pw_email')}>
                 {t.pwLink}
@@ -651,6 +685,32 @@ export default function LoginFlow() {
               )}
             </div>
           </form>
+        )}
+
+        {step === 'code_login' && (
+          <div className="grid gap-3">
+            <div>
+              <h1 className={h1}>{t.codeLabel}</h1>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-[#55526a]">
+                <b className="break-all text-[#1d1b2b]">{t.codeSent(maskEmail(email))}</b>
+                <br />
+                {t.codeLead}
+              </p>
+            </div>
+            {codeBoxes(verifyLoginCode, t.codeLabel)}
+            <button type="button" disabled={busy || code.length !== 6} onClick={verifyLoginCode} className={`${primary} bg-[#5b3df0]`}>
+              {t.login}
+            </button>
+            <div className="flex justify-between">
+              <button type="button" className={ghost} onClick={() => go('login')}>
+                {t.fixEmail}
+              </button>
+              <button type="button" className={`${ghost} disabled:opacity-50`} disabled={wait > 0 || busy} onClick={() => sendLoginCode(true)}>
+                {wait > 0 ? t.resendIn(wait) : t.resend}
+              </button>
+            </div>
+            <p className="text-[13px] leading-relaxed text-[#55526a]">{t.spam}</p>
+          </div>
         )}
 
         {step === 'signup' && (
@@ -875,7 +935,7 @@ export default function LoginFlow() {
 
         {step === 'moving' && <p className="text-center text-[15px] text-[#55526a]">{t.moving}</p>}
 
-        {notice && !error && (step === 'pw_new' || step === 'signup_code') && (
+        {notice && !error && (step === 'pw_new' || step === 'signup_code' || step === 'code_login') && (
           <p role="status" className="mt-3 text-[13px] text-[#13623a]">
             {notice}
           </p>
