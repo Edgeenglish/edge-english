@@ -22,11 +22,14 @@
 - ⚠ 학생 이메일로 공유하면 편집 권한 강사가 Docs [공유] 창에서 학생 이메일을 볼 수 있음(이메일 숨김 정책과 충돌). 선택지: A 이메일 공유 + 2판 제1조 예시에 Google Docs 공유 창 추가 / B 학생 '링크 보기'·강사만 편집(링크 유출 위험) — C(노트를 LMS 안에서 보여 주기)는 대표 11/16 '안 해'로 제외. A·B 중 학생이 노트를 직접 쓰는지 조사 결과 보고 결정
 - 2판 요청 메일: H26(192) 부속합의서 문구 재사용 가능 — 2판임을 알리는 표현 필요 여부 대표 확인. 기한 날짜는 대표에게 물음(숫자)
 
-## ▶ 다음 세션 작업 (H26(197) 참고, 시작 전): 강사 [학생에게 연락하기] — 학생 불참 때 LMS 로 학생에게 공식 메일
-- 결정 요점은 H26(197). 학생 이메일은 강사에게 계속 숨김(부속합의서 1판 그대로)
-- 재사용 검토: 강사 '늦어요' 알림(migration 20261114200000 `tutor_late_notice`·`RunningLate.tsx`) — 강사 버튼 → 학생 한국어 메일(거주지 시간) + 운영진 메일 1통 + 기록, 운영자 보기 대신 보내기
-- 시안(PC·휴대폰) 먼저. 대표에게 물을 것: 버튼을 누를 수 있는 시간 창(수업 시작 몇 분 뒤부터 언제까지) · 강사 한마디 글자 수 · 학생 메일 한국어 고정 문구(대화창에만, '넣어' 전 DB·코드에 넣지 않음) · 운영진 알림 메일 제목
-- 처리방침에 '수업 운영 연락' 목적이 학생 메일을 덮는지 문구 대조(미확인)
+## ✅ 11/16 강사 [학생에게 연락하기] — **시험 DB·lms-test 반영, 운영 미반영** (H26(197)(203), 브랜치 claude/great-davinci-lu5rvr)
+- 시안 3판(대표 승인): https://claude.ai/artifact/4pWG9tnsXvZGgTG3FTGbWv
+- migration **20261116140000_lms_tutor_contact_student** (시험 DB 적용, 커넥터 이름 lms_tutor_contact_student · 주석만 뺀 같은 내용): 표 `tutor_contact_notices`(수업·단계(1·2)당 1줄, 삭제 금지, note 150자, by_admin) · `tutor_contact_student(lesson, stage, note, p_tutor)` · `tutor_contact_notices(p_tutor)`. 학생 메일 template `tutor_contact_student`, dedupe `tutor_contact:수업:단계`. 운영진 메일 없음(숨은참조). 표 67→68 (02-check)
+- 코드: `src/lms/tutor/contact.ts`(시간 창·요약 문구) · `src/app/lms/tutor/ContactStudent.tsx` · TutorHome(오늘 수업 줄·Class Record 기록할 수업 카드·줄 펼침) · TutorSchedule 수업 창 · TutorLive · live.ts(`sendTutorContact`). 덤: Schedule 수업 창의 '늦어요' 보낸 시각도 이동 기간 시간대로(같은 버그)
+- 시험: `supabase/tests/tutor-contact-student.sql` 33줄 통과(run.sh 연결) · vitest 503 · tsc·eslint. ⚠ run.sh 전체는 기존 renewal-mail.sql 날짜 고정 시험에서 멈춤(이 기능과 무관) → 따로 돌려 확인
+- 실제 화면 QA(시험 사이트, Alex = support+alex@ 메일 코드): PC Home 1차 → 한마디 '45 / 150' → Email sent ✓ + 보낸 시각(Auckland 이동 기간 시간대) + [Contact student again] / 휴대폰 2차 → 2nd email sent ✓, 가로 넘침 0 / Class Record 카드·Schedule 수업 창에 1·2차 기록 같음 / 콘솔 오류 0 / support@ 에 1·2차 메일 도착·문구 확인(Meet 버튼, 메시지 칸은 쓴 때만). 운영자 보기(TOTP) 화면 클릭은 안 함 — 운영자 대신·'by Edge English'는 DB 시험으로 확인
+- 시험 데이터(그대로 둠): Alex·이도윤 STU-9001 11/16 19:20 KST 수업(f63c8832…) 1·2차 보냄, 기록 전
+- 운영 반영 = 대표 승인 뒤: 운영 DB 백업 → migration 1개 → lms-prod 에 이 기능 커밋만. 되돌리기: 코드 = 이전 lms-prod, DB = 함수 2개 drop(표는 기록 있으면 보존)
 
 ## 🖊 11/15 강사 LMS 전자서명 — **운영 반영·발송 끝: 대표 회사 서명 11/16 01:14 KST · Benny·Maria·Olivia 요청+메일 11/16 06:01 KST (H26(194)), 기한 11/19 강사 현지 날짜** (정책 원본 H26(188)(189)(190) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
 - ✅ 운영 반영(대표 11/15): 운영 DB 백업 **snapshots 60**(표 64 전체 + 바뀌는 함수 3개 이전 정의 `_functions_before`: lms_mail_dispatch·lms_student_profile_json·tutor_my_students) → migration 커넥터 이름 lms_tutor_hide_student_email(040000) · lms_tutor_esign(050000) · lms_tutor_sign_request_mail(070000) → 표 67, 학생 13·수업 183 그대로, RLS 꺼진 표 0 · 코드 lms-prod 743536d(+ca384bd·c9bb5d7 묶음 SQL) = 전자서명·이메일 숨김 파일만 골라 담음(처리방침 legal.ts·060000 수업 안내 카드 등 다른 미배포 변경 안 넣음). edgeenglish.kr JS 에 반영 확인
