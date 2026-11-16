@@ -23,6 +23,7 @@
 - 시험: DB `supabase/tests/tutor-esign.sql` 48줄 통과 · `npm run test:db` 전부 · vitest 491 · tsc 0
 - 실제 화면 QA(시험 사이트, Alex = support+alex@ 메일 코드 로그인): To do 'Please sign by Mon, 23 Nov' → 창(전문·Party A 줄·두 칸 비면 버튼 못 누름) → Email me a code → support@ 에 '[시험 · Alex] Edge English – Your signing code' → 틀린 코드 1회(DB wrong_tries 1) → 서명 → '✓ Signed'·서명 시각 Sydney/KST → 서명본 메일 PDF 첨부 도착 · PDF 2쪽 pypdf strict 통과 · To do 에서 빠짐 · My info › Documents 보기·PDF · 휴대폰 390 가로 넘침 없음
 - 시험 데이터(그대로 둠): 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판(최종 전문, 서명란 빈칸 줄은 전자서명 칸으로 대체) — 회사 서명은 Claude 가 시험 DB 에서 대표 운영자 계정 id 로 게시(시험만) · 요청 Alex(서명함)·Emma·James(서명 대기)
+- ⏸ 11/16 대표 지시로 1판 내림(H26(198)): 운영 terms_documents 1판 status=retired(직접 update, 되돌리기 불가 — 다시 받으려면 새 판 게시 후 요청) → Maria To do 에서 사라짐·서명 불가. Benny·Olivia 는 내리기 전에 서명함(기록·서명본 메일 그대로). 상의 중: 수업 노트 회사 소유 전환·부속합의서 2판
 - 다음 확인: 11/19 기한까지 세 강사 서명 현황(운영자 화면 '강사 서명 문서') · 서명하면 서명본 메일(PDF) 자동 · Leslie 는 다음 대체 수업 맡길 때 요청
 - 남은 순서: ④ 운영자 화면 '강사 서명 문서' → 1판 초안 → **대표가 [회사 서명하고 올리기]** → Benny·Maria·Olivia 요청(세 강사 모두 계정·이메일 있음 확인) ⑤ 운영 send_emails 켜져 있으므로 요청·코드·서명본 메일이 실제 강사에게 감
 
