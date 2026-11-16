@@ -543,7 +543,7 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
                   <button type="button" onClick={() => closeDialog(() => onRecord(l))} className={btnMain}>Class Record ›</button>
                   {l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation' &&
                     <button type="button" onClick={() => closeDialog(() => onRecord(l))} className={btnSub}>Cancel class</button>}
-                  <RunningLate lesson={l} now={new Date(Math.max(now.getTime(), Date.now()))} tz={tz} send={sendLate} full
+                  <RunningLate lesson={l} now={new Date(Math.max(now.getTime(), Date.now()))} tz={zoneAt(locs, l.startsAt, tz)} send={sendLate} full
                     onSent={async () => { await load(); await onSaved?.(); }} />
                   <ContactStudent lesson={l} now={new Date(Math.max(now.getTime(), Date.now()))} tz={zoneAt(locs, l.startsAt, tz)} tutorName={tutorName} send={sendContact} full
                     onSent={async () => { await load(); await onSaved?.(); }} />
