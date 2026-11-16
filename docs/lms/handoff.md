@@ -14,6 +14,11 @@
 - 시험 DB 실제 수신(11/16): STU-0002·STU-0018 24시간 전 메일 support@ 도착. 시험 DB 예약 실행이 계속 돌아 12시간 전 메일(오늘 밤)·STU-9004·STU-0013 메일도 support@ 로 옴 = 시험 데이터 그대로 둠
 - 운영 반영 = migration 1개 적용(함수 3개 새로 + cron 명령 교체, 데이터 안 바뀜 → 되돌리기: cron 명령을 'select lms_renewal_mail_run(); select lms_mail_run();' 으로). 코드(lms-prod) 변경 없음
 
+## ▶ 다음 세션 작업 (H26(206) 참고): 홈페이지와 LMS를 한 사이트처럼 — 공통 위쪽 틀 시안부터
+- 지금: 홈페이지(src/app/layout.tsx · Header.tsx · Footer.tsx)와 LMS(src/app/lms/layout.tsx, 운영/시험 DB 띠 + 화면마다 자체 머리글: AdminHeader·TutorHome·StudentHome)가 틀이 다름. /privacy·/terms 는 홈페이지 틀, /lms/login 은 LMS 틀
+- 할 일: PC·휴대폰 시안(로그인 전 로그인·가입 = 홈페이지 메뉴+바닥글 / 로그인 후 학생·강사(영어)·운영자 = 같은 위쪽 틀 + 역할별 메뉴, 휴대폰 메뉴 두 줄 금지) → 대표 선택 → 개발 → 시험 사이트 → 운영
+- 주의: 운영/시험 DB 띠(db-env.ts)를 일반 회원에게도 보일지 함께 정하기(지금 운영 로그인 화면 맨 위에 '운영 DB · 실제 데이터'가 모두에게 보임). 기존 LMS 기능·데이터 안 바꿈
+
 ## ⏸ 11/16 회원가입·로그인 운영 공개 준비 점검 (브랜치 claude/nice-keller-dmfuv3, 실행 없음 — 대표 답 대기)
 - 네이버 로그인 검수 11/16 승인(대표). 임시 설정 정리는 다른 세션 담당 — 건드리지 않음
 - 처리방침 국외 이전 확인: Resend = 저장 미국(공식 GDPR·보안 문서) · 실제 발송 서버 일본 도쿄(support@ 수신 메일 헤더 ap-northeast-1.amazonses.com) / Google = 미국 등 Google·하위 처리자 시설 국가(Cloud DPA) / Vercel = 미국(edgeenglish.kr 응답 x-vercel-id iad1). 강사 거주국 서명 확인 = Benny Australia·Olivia Japan, Maria 미확인. 수정 문구는 대화창에만 — 대표 '반영해' 대기
