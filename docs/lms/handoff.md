@@ -2,12 +2,13 @@
 
 # 다음 세션 시작 메모
 
-## 🔔 11/16 장기 수강생 새 4주 시작 안내 메일 (학생) — **시험 DB 반영·support@ 수신 확인, 운영 미반영(대표 승인 대기)** (H26(202), 브랜치 claude/determined-edison-hvhe2o)
+## ✅ 11/16 장기 수강생 새 4주 시작 안내 메일 (학생) — **운영 반영 끝 (대표 '응')** (H26(202), 브랜치 claude/determined-edison-hvhe2o)
 - migration **20261116130000_lms_period_start_mail** (시험 DB 적용): `lms_period_start_due`(idx ≥ 2 · 수강권 confirmed/active · 체험용 아님 · 시작일 당일 9:00 KST 이후 · 같은 기간 미발송 · 24시간 안 첫 수업 안내 없음) · `lms_period_start_mail`(template `period_start`, dedupe `period_start:기간id`) · `lms_period_start_run` · 예약 실행 `lms-renewal-mail` 에 붙임(재등록 누락 run 이 있으면 유지). 앱 사용자 실행 불가 확인
 - 시험(11/16): 김도윤 STU-0109(서울, 주1)·최지아 STU-0110(Detroit, 주2) 2통 support@ 수신, 이서윤 STU-0111(4주) 제외, 다시 실행 0통, 9시 전·다음 날 0건. 시험 학생 3명 그대로 둠(12/14 에 세 번째 4주 메일이 시험 DB 에서 support@ 로 또 옴)
-- 운영 반영 = **H26(201) migration 먼저, 그다음 이 migration** (201 을 나중에 적용하면 cron 명령에서 이 실행이 빠짐). 데이터 안 바뀜. 되돌리기: cron 명령에서 `select lms_period_start_run(); ` 빼기
+- ✅ 운영 반영(11/16): 백업 `lms_backup.snapshots` **66**(cron 이전 명령 `_cron_before` + 개수) → 201 migration → 202 migration. 함수 6개 md5 = 시험 DB, anon·authenticated 실행 불가, cron 명령 4개 실행. 운영 첫 대상 STU-0011 세 번째 4주(오늘 시작). 되돌리기 = cron 명령을 snapshots 66 `_cron_before` 로
+- (기록) 적용 순서 = **H26(201) migration 먼저, 그다음 이 migration** (201 을 나중에 적용하면 cron 명령에서 이 실행이 빠짐). 데이터 안 바뀜. 되돌리기: cron 명령에서 `select lms_period_start_run(); ` 빼기
 
-## 🔔 11/16 재등록 누락 확인 메일 (운영진만) — **시험 DB 반영·support@ 수신 확인, 운영 미반영(대표 승인 대기)** (H26(201), 브랜치 claude/optimistic-knuth-w2mh1v)
+## ✅ 11/16 재등록 누락 확인 메일 (운영진만) — **운영 반영 끝 (대표 '응', 새 4주 안내 세션에서 함께 적용, 백업 snapshots 66)** (H26(201), 브랜치 claude/optimistic-knuth-w2mh1v)
 - migration **20261116120000_lms_renewal_missing_admin_mail** (시험 DB 적용): `lms_renewal_missing_due`(마지막 수강권 completed 아님·체험용 아님 → 종료일 뒤 첫 정규 수업(regular_schedules, 14일 안) 24시간 안·그 시각 예정 수업 없음 → 단계 h24/h12) · `lms_renewal_missing_mail`(support@ 1통, dedupe `renewal_missing:수강권:h24|h12`) · `lms_renewal_missing_run` · 예약 실행 `lms-renewal-mail` 명령에 붙임. 앱 사용자(anon·authenticated) 실행 불가 확인
 - 시험: `supabase/tests/renewal-missing.sql` 19항목 통과(run.sh 연결). ⚠ run.sh 는 그 앞 renewal-mail.sql '종료일 7일 전 전: week 안 보냄'(날짜 고정 시험, 기존 문제)에서 멈춤 → 이번 시험은 따로 돌려 확인
 - 시험 DB 실제 수신(11/16): STU-0002·STU-0018 24시간 전 메일 support@ 도착. 시험 DB 예약 실행이 계속 돌아 12시간 전 메일(오늘 밤)·STU-9004·STU-0013 메일도 support@ 로 옴 = 시험 데이터 그대로 둠
