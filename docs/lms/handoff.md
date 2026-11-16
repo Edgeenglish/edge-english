@@ -14,6 +14,14 @@
 - 시험 DB 실제 수신(11/16): STU-0002·STU-0018 24시간 전 메일 support@ 도착. 시험 DB 예약 실행이 계속 돌아 12시간 전 메일(오늘 밤)·STU-9004·STU-0013 메일도 support@ 로 옴 = 시험 데이터 그대로 둠
 - 운영 반영 = migration 1개 적용(함수 3개 새로 + cron 명령 교체, 데이터 안 바뀜 → 되돌리기: cron 명령을 'select lms_renewal_mail_run(); select lms_mail_run();' 으로). 코드(lms-prod) 변경 없음
 
+## ⏸ 11/16 회원가입·로그인 운영 공개 준비 점검 (브랜치 claude/nice-keller-dmfuv3, 실행 없음 — 대표 답 대기)
+- 네이버 로그인 검수 11/16 승인(대표). 임시 설정 정리는 다른 세션 담당 — 건드리지 않음
+- 처리방침 국외 이전 확인: Resend = 저장 미국(공식 GDPR·보안 문서) · 실제 발송 서버 일본 도쿄(support@ 수신 메일 헤더 ap-northeast-1.amazonses.com) / Google = 미국 등 Google·하위 처리자 시설 국가(Cloud DPA) / Vercel = 미국(edgeenglish.kr 응답 x-vercel-id iad1). 강사 거주국 서명 확인 = Benny Australia·Olivia Japan, Maria 미확인. 수정 문구는 대화창에만 — 대표 '반영해' 대기
+- 운영 DB 에 없는 migration: 20261112000000 · 20261112000100(회원가입) · 20261111220000 admin_renewal_mail_sent(회원가입과 무관, 운영 미적용 상태로 남아 있음 — 코드가 없으면 건너뜀). 24시간 접근(20261114100000)은 이미 운영 적용
+- 운영 Supabase 인증 설정(11/16 공개 settings 읽기): 가입 막힘(disable_signup true)·이메일만 켜짐·카카오/네이버 없음. Management API 토큰은 여전히 'Invalid access token' → 설정 변경은 대표 대시보드
+- lms-prod 에만 있는 커밋 7개 = [학생에게 연락하기] — 내용은 lms-test 에 모두 있음(src 차이 없음), 합칠 것 없음
+- 결정 대기: H26(198) 로 1판 내림 → 11/19 기한 의미 없음, 공개 조건(H26(178-2) '강사 서명·국외 이전 정보 확인 뒤')을 2판 서명까지 기다릴지 / Maria 거주국만 확인되면 분리 공개할지
+
 ## ▶ 다음 세션 작업 (H26(198) 참고, 시작 전): 수업 노트 회사 소유 전환 + 부속합의서 2판 + 세 강사 재서명
 - 현재: 부속합의서 1판 운영에서 내림(retired). Benny·Olivia 1판 서명 기록·서명본 그대로(해시·PDF 확인), Maria 미서명. 2판은 운영자 화면 '강사 서명 문서' [새 판 만들기] → 별도 문서
 - 11/16 조사(읽기만): 운영 students.class_note_url 12개(STU-0001~0012) 모두 강사 개인 Google 계정 소유(Olivia 7·Benny 3·Maria 2), 6개 '링크 있는 누구나'(STU-0005·0007·0008·0009·0010·0011, 0011 은 댓글까지). STU-0010 노트는 예전 강사(Benny) 소유인데 지금 담당은 Maria → 제8조와 어긋남. 노트 내용 = 수업 대화 메모(직업·가족·생활 등 사생활 많음), 그림·표·탭(Maria 1개 19탭) 있음, 수정 제안 없음. support@ 는 12개 모두 읽기 가능(복사 가능). 댓글 수·학생 개별 공유 목록은 지금 도구로 못 봄(미확인)
