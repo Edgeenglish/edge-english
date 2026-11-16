@@ -5,7 +5,7 @@
 // 운영 공개 전 채울 것: LEGAL_EFFECTIVE_DATE(운영 공개일)
 // 화면: /terms · /privacy · 회원가입·카카오/네이버 '처음이에요' [보기]
 
-export const LEGAL_EFFECTIVE_DATE: string | null = null; // 예: '2026년 12월 1일' (운영 공개일)
+export const LEGAL_EFFECTIVE_DATE: string | null = '2026년 11월 17일'; // 운영 공개일 (대표 11/16: 자정 넘기면 11/17)
 
 export const effectiveDateText = () => LEGAL_EFFECTIVE_DATE ?? '운영 공개일';
 
