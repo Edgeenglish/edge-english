@@ -55,6 +55,8 @@ export type TutorLesson = {
   compensationOf?: Date | null;
   /** 강사 '늦어요' 알림을 보낸 수업 (20261114200000). 없으면 안 보냄 */
   lateNotice?: { minutes: number; reason: string | null; at: Date } | null;
+  /** 강사 [학생에게 연락하기] 보낸 기록 (20261116140000, 1·2차). 없으면 빈 목록 */
+  contacts?: { stage: 1 | 2; at: Date; byAdmin: boolean }[];
 };
 
 /** why: 왜 못 고르는지 (4530) — closed 강사가 열지 않은 시간 · busy 다른 수업 · leave 휴무 · hours 06:00~22:30 밖 · b2b 연속 수업 규칙 */

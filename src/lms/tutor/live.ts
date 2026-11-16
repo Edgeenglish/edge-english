@@ -8,6 +8,7 @@ import { parseCanceled, parseScreen, withSuggestions, type Late, type TutorCance
 import { parseTutorProfile, type TutorStudentProfile } from './profile';
 import { parseFollowup, parseFollowupTodos, type Followup, type FollowupTodo } from './followup';
 import { parseRequests, parseUpdates, type NewStudentRequest, type TutorUpdate } from './updates';
+import type { ContactSent } from './contact';
 import type { TutorStudentRow } from '@/app/lms/tutor/TutorHome';
 
 const NOT_APPLIED = 'The tutor page is not ready on this database yet (migration 2000).';
@@ -22,11 +23,12 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 
 /** tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
 export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null, kstFrom: string, kstTo: string): Promise<TutorScreen> {
-  const [screen, sug, travel, late] = await Promise.all([
+  const [screen, sug, travel, late, contact] = await Promise.all([
     sb.rpc('tutor_screen', { p_tutor: tutorId, p_from: kstFrom, p_to: kstTo }),
     sb.rpc('tutor_makeup_suggestions', { p_tutor: tutorId }),
     sb.rpc('tutor_travel_periods', { p_tutor: tutorId }),
     sb.rpc('tutor_late_notices', { p_tutor: tutorId }),
+    sb.rpc('tutor_contact_notices', { p_tutor: tutorId }),
   ]);
   const s = parseScreen(check(screen));
   // 강사 '늦어요' 알림 (20261114200000). 함수 없는 옛 DB 면 표시만 없음
@@ -34,6 +36,11 @@ export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null
     const sent = new Map(((late.data as { lesson_id: string; minutes: number; reason: string | null; at: string }[]) ?? [])
       .map((x) => [x.lesson_id, { minutes: x.minutes, reason: x.reason, at: new Date(x.at) }]));
     s.lessons = s.lessons.map((l) => (sent.has(l.id) ? { ...l, lateNotice: sent.get(l.id)! } : l));
+  }
+  // 강사 [학생에게 연락하기] (20261116140000). 함수 없는 옛 DB 면 표시만 없음
+  if (!contact.error) {
+    const by = contactsByLesson(contact.data);
+    s.lessons = s.lessons.map((l) => (by.has(l.id) ? { ...l, contacts: by.get(l.id)! } : l));
   }
   // 이동 기간 (H26(176)): 수업 시각을 그 수업 날짜의 지역 시간으로. 함수 없는 옛 DB 면 평소 시간대 그대로
   if (!travel.error) s.locations = ((travel.data as unknown[]) ?? []).map(parsePeriod);
@@ -56,6 +63,22 @@ export async function sendTutorLate(sb: SupabaseClient, tutorId: string | null, 
   const x = (rows ?? []).find((r) => r.lesson_id === lessonId);
   if (!x) throw new Error('Could not confirm. Please reload the page.');
   return { minutes: x.minutes, reason: x.reason, at: new Date(x.at) };
+}
+type ContactRow = { lesson_id: string; stage: 1 | 2; at: string; by_admin: boolean };
+function contactsByLesson(data: unknown): Map<string, ContactSent[]> {
+  const m = new Map<string, ContactSent[]>();
+  for (const x of (data as ContactRow[]) ?? []) {
+    m.set(x.lesson_id, [...(m.get(x.lesson_id) ?? []), { stage: x.stage, at: new Date(x.at), byAdmin: !!x.by_admin }]);
+  }
+  return m;
+}
+/** 강사 [학생에게 연락하기] (20261116140000): 학생 메일 1통, 단계마다 한 번.
+ *  돌려주는 값 = DB 에 저장된 이 수업의 기록 (다른 창에서 먼저 보냈으면 그 값) */
+export async function sendTutorContact(sb: SupabaseClient, tutorId: string | null, lessonId: string, stage: 1 | 2, note: string): Promise<ContactSent[]> {
+  check(await sb.rpc('tutor_contact_student', { p_lesson: lessonId, p_stage: stage, p_note: note.trim() || null, p_tutor: tutorId }));
+  const rows = contactsByLesson(check(await sb.rpc('tutor_contact_notices', { p_tutor: tutorId }))).get(lessonId) ?? [];
+  if (!rows.some((r) => r.stage === stage)) throw new Error('Could not confirm. Please reload the page.');
+  return rows;
 }
 export async function answerMakeup(sb: SupabaseClient, requestId: string, yes: string[], note: string): Promise<void> {
   check(await sb.rpc('tutor_makeup_answer', { p_request: requestId, p_yes: yes, p_note: note }));
