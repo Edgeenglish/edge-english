@@ -581,6 +581,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                 {toRecord.map((l) => (
                   <div key={l.id} className={`${card} border-[#f0a33a]`}>
                     <LessonHead lesson={l} tz={zAt(l.startsAt)} now={now} />
+                    <div className="mt-2 empty:hidden"><ContactStudent lesson={l} now={now} tz={zAt(l.startsAt)} tutorName={screen.tutor.name} send={actions.contactStudent} onSent={() => reload()} admin={!!adminBar} /></div>
                     <RecordForm key={`${l.id}-${l.state}`} lesson={l} tz={zAt(l.startsAt)} now={now} due={screen.toRecord.includes(l.id)} actions={actions} startEditing={screen.toRecord.includes(l.id)} admin={!!adminBar}
                       onSaved={async (saved) => {
                         setRecordedHere((x) => [...x.filter((y) => y.id !== saved.id), saved]);
