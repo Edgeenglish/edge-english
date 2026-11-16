@@ -2,6 +2,12 @@
 
 # 다음 세션 시작 메모
 
+## 🔔 11/16 재등록 누락 확인 메일 (운영진만) — **시험 DB 반영·support@ 수신 확인, 운영 미반영(대표 승인 대기)** (H26(201), 브랜치 claude/optimistic-knuth-w2mh1v)
+- migration **20261116120000_lms_renewal_missing_admin_mail** (시험 DB 적용): `lms_renewal_missing_due`(마지막 수강권 completed 아님·체험용 아님 → 종료일 뒤 첫 정규 수업(regular_schedules, 14일 안) 24시간 안·그 시각 예정 수업 없음 → 단계 h24/h12) · `lms_renewal_missing_mail`(support@ 1통, dedupe `renewal_missing:수강권:h24|h12`) · `lms_renewal_missing_run` · 예약 실행 `lms-renewal-mail` 명령에 붙임. 앱 사용자(anon·authenticated) 실행 불가 확인
+- 시험: `supabase/tests/renewal-missing.sql` 19항목 통과(run.sh 연결). ⚠ run.sh 는 그 앞 renewal-mail.sql '종료일 7일 전 전: week 안 보냄'(날짜 고정 시험, 기존 문제)에서 멈춤 → 이번 시험은 따로 돌려 확인
+- 시험 DB 실제 수신(11/16): STU-0002·STU-0018 24시간 전 메일 support@ 도착. 시험 DB 예약 실행이 계속 돌아 12시간 전 메일(오늘 밤)·STU-9004·STU-0013 메일도 support@ 로 옴 = 시험 데이터 그대로 둠
+- 운영 반영 = migration 1개 적용(함수 3개 새로 + cron 명령 교체, 데이터 안 바뀜 → 되돌리기: cron 명령을 'select lms_renewal_mail_run(); select lms_mail_run();' 으로). 코드(lms-prod) 변경 없음
+
 ## ▶ 다음 세션 작업 (H26(198) 참고, 시작 전): 수업 노트 회사 소유 전환 + 부속합의서 2판 + 세 강사 재서명
 - 현재: 부속합의서 1판 운영에서 내림(retired). Benny·Olivia 1판 서명 기록·서명본 그대로(해시·PDF 확인), Maria 미서명. 2판은 운영자 화면 '강사 서명 문서' [새 판 만들기] → 별도 문서
 - 11/16 조사(읽기만): 운영 students.class_note_url 12개(STU-0001~0012) 모두 강사 개인 Google 계정 소유(Olivia 7·Benny 3·Maria 2), 6개 '링크 있는 누구나'(STU-0005·0007·0008·0009·0010·0011, 0011 은 댓글까지). STU-0010 노트는 예전 강사(Benny) 소유인데 지금 담당은 Maria → 제8조와 어긋남. 노트 내용 = 수업 대화 메모(직업·가족·생활 등 사생활 많음), 그림·표·탭(Maria 1개 19탭) 있음, 수정 제안 없음. support@ 는 12개 모두 읽기 가능(복사 가능). 댓글 수·학생 개별 공유 목록은 지금 도구로 못 봄(미확인)

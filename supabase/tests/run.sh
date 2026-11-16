@@ -28,6 +28,11 @@ RM_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/renewal-mail.sql" 2>&1 || true)"
 echo "$RM_OUT" | sed -n -e "s/.*NOTICE:  //p" -e "/ERROR/p" | grep -v '^통과' && { echo "❌ 재등록 메일 시험 실패"; exit 1; }
 [ "$(echo "$RM_OUT" | grep -c '통과: ')" -ge 20 ] || { echo "❌ 재등록 메일 시험 통과 줄 부족"; exit 1; }
 echo "✅ 재등록 안내 메일 시험 통과"
+# 재등록 누락 확인 메일 (운영진만, 대표 11/16): 가짜 데이터로 24·12시간 전·첫 정규 수업만·제외·문구 확인, 끝에 되돌림
+RX_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/renewal-missing.sql" 2>&1 || true)"
+echo "$RX_OUT" | grep -E 'ERROR|실패' && { echo "❌ 재등록 누락 확인 메일 시험 실패"; exit 1; }
+[ "$(echo "$RX_OUT" | grep -c '통과: ')" -ge 19 ] || { echo "❌ 재등록 누락 확인 메일 시험 통과 줄 부족"; echo "$RX_OUT" | tail -5; exit 1; }
+echo "✅ 재등록 누락 확인 메일 시험 통과"
 
 # 학생 지각 알림 (2026-11-13 대표 확정): 가짜 데이터로 시간 창·이유·중복·강사 메일 문구 확인, 끝에 되돌림
 LN_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/student-late-notice.sql" 2>&1 || true)"
