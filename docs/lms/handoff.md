@@ -22,14 +22,18 @@
 - ⚠ 학생 이메일로 공유하면 편집 권한 강사가 Docs [공유] 창에서 학생 이메일을 볼 수 있음(이메일 숨김 정책과 충돌). 선택지: A 이메일 공유 + 2판 제1조 예시에 Google Docs 공유 창 추가 / B 학생 '링크 보기'·강사만 편집(링크 유출 위험) — C(노트를 LMS 안에서 보여 주기)는 대표 11/16 '안 해'로 제외. A·B 중 학생이 노트를 직접 쓰는지 조사 결과 보고 결정
 - 2판 요청 메일: H26(192) 부속합의서 문구 재사용 가능 — 2판임을 알리는 표현 필요 여부 대표 확인. 기한 날짜는 대표에게 물음(숫자)
 
-## ✅ 11/16 강사 [학생에게 연락하기] — **시험 DB·lms-test 반영, 운영 미반영** (H26(197)(203), 브랜치 claude/great-davinci-lu5rvr)
+## ✅ 11/16 강사 [학생에게 연락하기] — **운영 반영 끝 (대표 '넣어'·운영 동의)** (H26(197)(203), 브랜치 claude/great-davinci-lu5rvr)
+- ✅ 운영 반영(11/16): 백업 `lms_backup.snapshots` **68**(표별 줄 수, 새 표·함수만이라 기존 정의 보관 없음) → migration 커넥터 이름 lms_tutor_contact_student(메일 문구 최종본 포함) → 표 67→68, 학생 13·수업 192·메일 78 그대로, RLS 꺼진 표 0, 함수 2개 md5 = 시험 DB, anon 실행 불가 · 코드 lms-prod **224511e8** = origin/lms-prod(b9f5cdca) 위에 이 기능 커밋 5개 + 묶음 SQL. edgeenglish.kr JS 에 'Contact student again' 확인(11/16 11:44 UTC). 운영 send_emails 켜짐 → 실제 학생에게 감 + support@ 숨은참조
+- 운영 전 lms-prod 에만 있던 b9f5cdca(학생 홈 '수업 노트 열기')를 lms-test 에 합침(내용 이미 같아 변경 없음)
+- 메일 문구 최종본(대표 11/16 '넣어'): 인사 '○○님, 안녕하세요! 엣지영어입니다. ☺️' + 안내 3줄 · [수업 들어가기] · '💬 ○○ 강사님의 메시지'(쓴 때만) · '수업 안내' 목록(수업 시간 거주지/한국 · 길이 · 2차만 수업 종료) · 연장 안 됨 문장 · 감사합니다/엣지영어 드림. 이름 = 성 포함. 시험 메일 STU-9003(브리즈번) 1·2차 support@ 대조 통과
+- 기존 기능 영향: 기존 함수·표 변경 없음(새 표 1·새 함수 2). DB 시험 전체 통과(재등록 메일 날짜 고정 시험만 기존 문제로 실패) · vitest 503
 - 시안 3판(대표 승인): https://claude.ai/artifact/4pWG9tnsXvZGgTG3FTGbWv
 - migration **20261116140000_lms_tutor_contact_student** (시험 DB 적용, 커넥터 이름 lms_tutor_contact_student · 주석만 뺀 같은 내용): 표 `tutor_contact_notices`(수업·단계(1·2)당 1줄, 삭제 금지, note 150자, by_admin) · `tutor_contact_student(lesson, stage, note, p_tutor)` · `tutor_contact_notices(p_tutor)`. 학생 메일 template `tutor_contact_student`, dedupe `tutor_contact:수업:단계`. 운영진 메일 없음(숨은참조). 표 67→68 (02-check)
 - 코드: `src/lms/tutor/contact.ts`(시간 창·요약 문구) · `src/app/lms/tutor/ContactStudent.tsx` · TutorHome(오늘 수업 줄·Class Record 기록할 수업 카드·줄 펼침) · TutorSchedule 수업 창 · TutorLive · live.ts(`sendTutorContact`). 덤: Schedule 수업 창의 '늦어요' 보낸 시각도 이동 기간 시간대로(같은 버그)
 - 시험: `supabase/tests/tutor-contact-student.sql` 33줄 통과(run.sh 연결) · vitest 503 · tsc·eslint. ⚠ run.sh 전체는 기존 renewal-mail.sql 날짜 고정 시험에서 멈춤(이 기능과 무관) → 따로 돌려 확인
 - 실제 화면 QA(시험 사이트, Alex = support+alex@ 메일 코드): PC Home 1차 → 한마디 '45 / 150' → Email sent ✓ + 보낸 시각(Auckland 이동 기간 시간대) + [Contact student again] / 휴대폰 2차 → 2nd email sent ✓, 가로 넘침 0 / Class Record 카드·Schedule 수업 창에 1·2차 기록 같음 / 콘솔 오류 0 / support@ 에 1·2차 메일 도착·문구 확인(Meet 버튼, 메시지 칸은 쓴 때만). 운영자 보기(TOTP) 화면 클릭은 안 함 — 운영자 대신·'by Edge English'는 DB 시험으로 확인
-- 시험 데이터(그대로 둠): Alex·이도윤 STU-9001 11/16 19:20 KST 수업(f63c8832…) 1·2차 보냄, 기록 전
-- 운영 반영 = 대표 승인 뒤: 운영 DB 백업 → migration 1개 → lms-prod 에 이 기능 커밋만. 되돌리기: 코드 = 이전 lms-prod, DB = 함수 2개 drop(표는 기록 있으면 보존)
+- 시험 데이터(그대로 둠): Alex·이도윤 STU-9001 11/16 19:20 KST 수업(f63c8832…)·한예린 STU-9003 11/16 20:10 KST 수업(09fb2a20…) 각각 1·2차 보냄, 기록 전
+- 되돌리기: 코드 = lms-prod 를 b9f5cdca 로, DB = 함수 2개 drop(표는 기록 있으면 보존)
 
 ## 🖊 11/15 강사 LMS 전자서명 — **운영 반영·발송 끝: 대표 회사 서명 11/16 01:14 KST · Benny·Maria·Olivia 요청+메일 11/16 06:01 KST (H26(194)), 기한 11/19 강사 현지 날짜** (정책 원본 H26(188)(189)(190) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
 - ✅ 운영 반영(대표 11/15): 운영 DB 백업 **snapshots 60**(표 64 전체 + 바뀌는 함수 3개 이전 정의 `_functions_before`: lms_mail_dispatch·lms_student_profile_json·tutor_my_students) → migration 커넥터 이름 lms_tutor_hide_student_email(040000) · lms_tutor_esign(050000) · lms_tutor_sign_request_mail(070000) → 표 67, 학생 13·수업 183 그대로, RLS 꺼진 표 0 · 코드 lms-prod 743536d(+ca384bd·c9bb5d7 묶음 SQL) = 전자서명·이메일 숨김 파일만 골라 담음(처리방침 legal.ts·060000 수업 안내 카드 등 다른 미배포 변경 안 넣음). edgeenglish.kr JS 에 반영 확인
