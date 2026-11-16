@@ -604,7 +604,7 @@
   - **✅ 11/9 새 주소 열림 (대표 '올려', 정책 원본 H26(112))**: 대표 Vercel Production 환경변수 4개(Type Config) → lms-prod·main = **0cfe809** (8182af9 + 주소 이전 2커밋만, lms-test 의 다른 미승인 커밋 제외). www.edgeenglish.kr/lms → edgeenglish.kr/lms 모음(코드, Vercel Domains 는 두 주소 모두 Production·Redirect 없음). 확인: edgeenglish.kr/lms·?next=makeup 307 → 로그인 화면(운영 DB 띠), www 넘김, 홈페이지 /·/price 200, PC·휴대폰 화면. 작업 환경 네트워크에 edgeenglish.kr·www 허용 추가(확인용). **미확인: 새 주소 실제 로그인(대표 TOTP)**
   - **홈페이지 회원가입·로그인 개편 = 정책 원본 H26(146)** (11/11 결정: 결제는 홈페이지 카드결제 → 결제 업체 비교안부터, 아이디=이메일 추천·시안 때 확인). 다음: 새 세션에서 ① 결제 업체 비교안 ② 회원가입·로그인 PC·휴대폰 시안(카카오 로그인 시안과 합칠지). 새 주소 공개 조건 H26(128)
   - **⚠️ H26(128) (대표 11/10): 11/14까지 홈페이지 로그인 시스템을 못 넣으면 새 주소는 학생·강사 모두에게 공개 보류, Vercel 계속 사용 → 아래 11/15 할 일 ①②와 새 주소 안내 발송을 하지 않음(새 주소는 열어 둠, main·lms-prod 같은 코드 규칙 유지)**
-  - **11/15 할 일**: ① 대표 Vercel lms-prod Preview 환경변수 `LMS_MOVED_TO` = `https://edgeenglish.kr` + lms-prod 재배포 ② 운영 DB 백업 → migration 20261109020000 (lms_url, 실행 전 대표 확인) ③ 안내 문구(대표 미정) ④ 06:00 로그인 점검 보고에 이동 시각 표시
+  - **11/15 할 일**: ① 대표 Vercel lms-prod Preview 환경변수 `LMS_MOVED_TO` = `https://edgeenglish.kr` + lms-prod 재배포 ② **✅ 11/16 완료** — 운영 DB 백업 snapshots 67 → migration 20261109020000 (lms_url 이 `https://edgeenglish.kr/lms` 돌려줌, anon·authenticated 실행 불가, 학생·수업 건수 백업과 같음) ③ 안내 문구(대표 미정) ④ 06:00 로그인 점검 보고에 이동 시각 표시
   - **11/15 전까지 운영 배포 규칙**: lms-prod 에 올릴 때 main 도 같은 커밋으로(빨리감기). 지금 lms-prod = main = 0cfe809
   - 이전 남은 순서: (✅ lms-test) → lms-prod → main 빨리감기(main 은 lms-prod 보다 뒤에만 있음, 충돌 없음) → 대표 Production 환경변수·배포 승인 → edgeenglish.kr/lms 실제 로그인·딥링크·휴대폰 검증
 
