@@ -2,6 +2,12 @@
 
 # 다음 세션 시작 메모
 
+## ▶ 다음 세션 작업 (H26(197) 참고, 시작 전): 강사 [학생에게 연락하기] — 학생 불참 때 LMS 로 학생에게 공식 메일
+- 결정 요점은 H26(197). 학생 이메일은 강사에게 계속 숨김(부속합의서 1판 그대로)
+- 재사용 검토: 강사 '늦어요' 알림(migration 20261114200000 `tutor_late_notice`·`RunningLate.tsx`) — 강사 버튼 → 학생 한국어 메일(거주지 시간) + 운영진 메일 1통 + 기록, 운영자 보기 대신 보내기
+- 시안(PC·휴대폰) 먼저. 대표에게 물을 것: 버튼을 누를 수 있는 시간 창(수업 시작 몇 분 뒤부터 언제까지) · 강사 한마디 글자 수 · 학생 메일 한국어 고정 문구(대화창에만, '넣어' 전 DB·코드에 넣지 않음) · 운영진 알림 메일 제목
+- 처리방침에 '수업 운영 연락' 목적이 학생 메일을 덮는지 문구 대조(미확인)
+
 ## 🖊 11/15 강사 LMS 전자서명 — **운영 반영·발송 끝: 대표 회사 서명 11/16 01:14 KST · Benny·Maria·Olivia 요청+메일 11/16 06:01 KST (H26(194)), 기한 11/19 강사 현지 날짜** (정책 원본 H26(188)(189)(190) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
 - ✅ 운영 반영(대표 11/15): 운영 DB 백업 **snapshots 60**(표 64 전체 + 바뀌는 함수 3개 이전 정의 `_functions_before`: lms_mail_dispatch·lms_student_profile_json·tutor_my_students) → migration 커넥터 이름 lms_tutor_hide_student_email(040000) · lms_tutor_esign(050000) · lms_tutor_sign_request_mail(070000) → 표 67, 학생 13·수업 183 그대로, RLS 꺼진 표 0 · 코드 lms-prod 743536d(+ca384bd·c9bb5d7 묶음 SQL) = 전자서명·이메일 숨김 파일만 골라 담음(처리방침 legal.ts·060000 수업 안내 카드 등 다른 미배포 변경 안 넣음). edgeenglish.kr JS 에 반영 확인
 - 운영 데이터: 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판 **초안**만 넣음(전문 해시 313082ba… = 시험과 같음). 회사 서명(게시)·Benny·Maria·Olivia 요청·강사 메일 **안 함** — 대표가 메일 문구 3개 검토 후 '보내' 할 때. 운영 send_emails 켜져 있으므로 [요청 보내기] 누르면 실제 메일이 감(메일 없이 요청만 = rpc admin_sign_request(…, false))
