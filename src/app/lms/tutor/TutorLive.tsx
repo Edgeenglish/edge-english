@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { saveLocation, saveLocationHours, scheduleMulti, answerCover, answerMakeup, confirmMakeup, loadSuggestOptions, suggestMakeup, createTutorLogin, loadCanceledClasses, loadNewRequests, loadTutorUpdates, answerNewRequest, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, sendTutorLate, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
+import { saveLocation, saveLocationHours, scheduleMulti, answerCover, answerMakeup, confirmMakeup, loadSuggestOptions, suggestMakeup, createTutorLogin, loadCanceledClasses, loadNewRequests, loadTutorUpdates, answerNewRequest, loadFollowupTodos, loadHours, loadMyStudents, loadSchedule, loadStudentProfile, loadTutorAccounts, loadTutorScreen, recordClass, sendTutorLate, sendTutorContact, saveFollowup, saveHours, saveSchedule, updateStudentProfile, type TutorAccount } from '@/lms/tutor/live';
 import { LANGS, type Lang } from '@/lms/tutor/lang';
 import { useSavedValue } from './useSaved';
 import { weekOf, type StudentCancelDecision, type TutorScreen } from '@/lms/tutor/screen';
@@ -71,6 +71,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
         },
         record: (id, r, t, rm, late) => recordClass(sb, id, r, t, rm, late),
         lateNotice: (lessonId, minutes, reason) => sendTutorLate(sb, adminTutor, lessonId, minutes, reason),
+        contactStudent: (lessonId, stage, note) => sendTutorContact(sb, adminTutor, lessonId, stage, note),
         answer: (id, yes, note) => answerMakeup(sb, id, yes, note),
         confirm: (id, slot) => confirmMakeup(sb, id, slot),
         suggestOptions: (id) => loadSuggestOptions(sb, id),

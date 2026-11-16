@@ -28,6 +28,11 @@ RM_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/renewal-mail.sql" 2>&1 || true)"
 echo "$RM_OUT" | sed -n -e "s/.*NOTICE:  //p" -e "/ERROR/p" | grep -v '^통과' && { echo "❌ 재등록 메일 시험 실패"; exit 1; }
 [ "$(echo "$RM_OUT" | grep -c '통과: ')" -ge 20 ] || { echo "❌ 재등록 메일 시험 통과 줄 부족"; exit 1; }
 echo "✅ 재등록 안내 메일 시험 통과"
+# 재등록 누락 확인 메일 (운영진만, 대표 11/16): 가짜 데이터로 24·12시간 전·첫 정규 수업만·제외·문구 확인, 끝에 되돌림
+RX_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/renewal-missing.sql" 2>&1 || true)"
+echo "$RX_OUT" | grep -E 'ERROR|실패' && { echo "❌ 재등록 누락 확인 메일 시험 실패"; exit 1; }
+[ "$(echo "$RX_OUT" | grep -c '통과: ')" -ge 19 ] || { echo "❌ 재등록 누락 확인 메일 시험 통과 줄 부족"; echo "$RX_OUT" | tail -5; exit 1; }
+echo "✅ 재등록 누락 확인 메일 시험 통과"
 
 # 학생 지각 알림 (2026-11-13 대표 확정): 가짜 데이터로 시간 창·이유·중복·강사 메일 문구 확인, 끝에 되돌림
 LN_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/student-late-notice.sql" 2>&1 || true)"
@@ -52,6 +57,18 @@ TLN_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/tutor-late-notice.sql" 2>&1 || tr
 echo "$TLN_OUT" | grep -E 'ERROR|실패' && { echo "❌ 강사 늦어요 알림 시험 실패"; exit 1; }
 [ "$(echo "$TLN_OUT" | grep -c '통과: ')" -ge 27 ] || { echo "❌ 강사 늦어요 알림 시험 통과 줄 부족"; echo "$TLN_OUT" | tail -5; exit 1; }
 echo "✅ 강사 늦어요 알림 시험 통과"
+
+# 강사 [학생에게 연락하기] (H26(197), 대표 11/16): 가짜 데이터로 1·2차 시간 창·한 번만·한마디 150자·학생 메일 문구·운영자 대신·권한 확인, 끝에 되돌림
+CS_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/tutor-contact-student.sql" 2>&1 || true)"
+echo "$CS_OUT" | grep -E 'ERROR|실패' && { echo "❌ 학생에게 연락하기 시험 실패"; exit 1; }
+[ "$(echo "$CS_OUT" | grep -c '통과: ')" -ge 33 ] || { echo "❌ 학생에게 연락하기 시험 통과 줄 부족"; echo "$CS_OUT" | tail -5; exit 1; }
+echo "✅ 학생에게 연락하기 시험 통과"
+
+# 강사 LMS 전자서명 (H26(188), 대표 11/15): 가짜 데이터로 초안·게시(회사 서명)·요청·코드(10분·5회)·서명·PDF·메일 첨부·권한 확인, 끝에 되돌림
+ES_OUT="$("${PSQL[@]}" -o /dev/null -f "$HERE/tutor-esign.sql" 2>&1 || true)"
+echo "$ES_OUT" | grep -E 'ERROR|실패' && { echo "❌ 강사 전자서명 시험 실패"; exit 1; }
+[ "$(echo "$ES_OUT" | grep -c '통과: ')" -ge 59 ] || { echo "❌ 강사 전자서명 시험 통과 줄 부족"; echo "$ES_OUT" | tail -5; exit 1; }
+echo "✅ 강사 전자서명 시험 통과"
 
 # 로그인 사용자 권한 점검: 시험용 Supabase 상태(가상 데이터 적용 후)와 같게 만든 뒤 실물용 파일을 그대로 실행
 "${PSQL[@]}" -o /dev/null -f "$ROOT/supabase/test-setup/seed_fake.sql"

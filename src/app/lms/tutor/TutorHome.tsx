@@ -27,6 +27,7 @@ import { useDetailBack } from './useDetailBack';
 import { zoneAt } from '@/lms/tutor/travel';
 import { TimeOffCard, TimeOffForm } from './TimeOff';
 import RunningLate, { type LateSend } from './RunningLate';
+import ContactStudent, { type ContactSend } from './ContactStudent';
 import type { TimeOffActions, TimeOffList } from '@/lms/tutor/time-off';
 import type { SignActions, SignList } from '@/lms/tutor/esign';
 import { DocumentsCard, SignSheetBody, dueLine } from './SignDoc';
@@ -47,6 +48,8 @@ export type TutorActions = {
   cancel?: CancelAction;
   /** 강사 '늦어요' 알림 (20261114200000). 없으면 버튼이 안 보임 */
   lateNotice?: LateSend;
+  /** 강사 [학생에게 연락하기] (20261116140000). 없으면 버튼이 안 보임 */
+  contactStudent?: ContactSend;
   studentCancel?: StudentCancelAction;
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
   record: (lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late) => Promise<void>;
@@ -411,7 +414,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <div key={d.date}>
               <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}{d.date === today ? ' · Today' : ''}</h3>
               {d.lessons.map((l) => (
-                <ListRow key={l.id} focus={focus === l.id} lesson={l} due={screen.toRecord.includes(l.id)} tz={zAt(l.startsAt)} headTz={headTz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
+                <ListRow key={l.id} focus={focus === l.id} lesson={l} due={screen.toRecord.includes(l.id)} tz={zAt(l.startsAt)} headTz={headTz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} tutorName={screen.tutor.name} actions={actions} admin={!!adminBar}
                   onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
               ))}
             </div>
@@ -551,7 +554,8 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{t('Today’s classes', '오늘 수업')} <span className="text-[#6b6880]">{todayLessons.length || ''}</span></h2>
               {todayLessons.length === 0 && <p className="text-[14.5px] text-[#6b6880]">{t('No classes today.', '오늘은 수업이 없어요.')}</p>}
               <div className="divide-y divide-[#f0eef5]">
-                {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={zAt(l.startsAt)} now={now} onRecord={() => setTab('record')} sendLate={actions.lateNotice} onLateSent={() => reload()} />)}
+                {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={zAt(l.startsAt)} now={now} onRecord={() => setTab('record')} sendLate={actions.lateNotice} onLateSent={() => reload()}
+                  sendContact={actions.contactStudent} tutorName={screen.tutor.name} admin={!!adminBar} />)}
               </div>
               {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">{t('Next class', '다음 수업')}: <Rich text={whenFull(nextLesson.startsAt, zAt(nextLesson.startsAt))} /> · {nextLesson.student}</p>}
               <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">{t('All classes', '전체 수업')} ›</button>
@@ -627,7 +631,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 
         {tab === 'schedule' && (
           <TutorSchedule actions={actions.schedule} tz={tz} now={now} openProfile={openProfile} onRecord={openInRecord}
-            loadLessons={loadLessons} onSaved={() => reload()} sendLate={actions.lateNotice} onHours={() => goTab('hours')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} />
+            loadLessons={loadLessons} onSaved={() => reload()} sendLate={actions.lateNotice} sendContact={actions.contactStudent} tutorName={screen.tutor.name} onHours={() => goTab('hours')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} />
         )}
 
         {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} inline onDirty={(d) => { hoursDirty.current = d; }} onSaved={() => reload()} />}
@@ -724,7 +728,9 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 }
 
 /** Home 의 오늘 수업 한 줄 */
-function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent }: { lesson: TutorLesson; tz: string; now: Date; onRecord: () => void; sendLate?: LateSend; onLateSent?: () => void | Promise<void> }) {
+function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent, sendContact, tutorName, admin = false }: {
+  lesson: TutorLesson; tz: string; now: Date; onRecord: () => void; sendLate?: LateSend; onLateSent?: () => void | Promise<void>; sendContact?: ContactSend; tutorName?: string; admin?: boolean;
+}) {
   const phase = phaseOf(l, now);
   const tag = kindTag(l);
   const st = statusText(l, now);
@@ -743,6 +749,8 @@ function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent }: { less
     </div>
     {/* 강사 '늦어요' 알림: 시작 2시간 전~시작 전, 보냈으면 회색 Sent ✓ */}
     <div className="mt-1.5 empty:hidden"><RunningLate lesson={l} now={now} tz={tz} send={sendLate} onSent={onLateSent} /></div>
+    {/* 강사 [학생에게 연락하기]: 시작 5분 뒤~끝, 보냈으면 회색 Email sent ✓ */}
+    <div className="mt-1.5 empty:hidden"><ContactStudent lesson={l} now={now} tz={tz} tutorName={tutorName} send={sendContact} onSent={onLateSent} admin={admin} /></div>
     </div>
   );
 }
@@ -899,7 +907,8 @@ const cols = (kst: boolean, paid: boolean) => kst
 
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
-function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paidCol, meetUrl, actions, onSaved, admin, focus = false }: {
+function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paidCol, meetUrl, tutorName, actions, onSaved, admin, focus = false }: {
+  tutorName?: string;
   focus?: boolean;
   due?: boolean;
   lesson: TutorLesson; tz: string; /** 표 머리글 시간대 — 다르면 줄에 시간대 이름 (이동 기간, H26(176)) */ headTz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
@@ -1001,6 +1010,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
           {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
           {recordable ? (
             <div className="lg:max-w-[560px]">
+              <div className="pt-2 empty:hidden"><ContactStudent lesson={l} now={now} tz={tz} tutorName={tutorName} send={actions.contactStudent} onSent={onSaved} admin={admin} /></div>
               <DirtyCtx.Provider value={mark}>
                 <RecordForm key={`${l.id}-${l.state}`} lesson={l} tz={tz} now={now} due={due} actions={actions} startEditing extra={links} admin={admin}
                   onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />
@@ -1013,6 +1023,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
                 onDirty={(value) => mark(`cancel-${l.id}`, value)}
                 onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />}
               <RunningLate lesson={l} now={now} tz={tz} send={actions.lateNotice} onSent={onSaved} />
+              <ContactStudent lesson={l} now={now} tz={tz} tutorName={tutorName} send={actions.contactStudent} onSent={onSaved} admin={admin} />
               <div className="flex flex-wrap items-center gap-1.5">
                 {links}
                 {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}

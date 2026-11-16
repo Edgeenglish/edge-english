@@ -11,6 +11,7 @@ import { CANT_OPEN_BACKGROUND, TIME_COLORS, cantOpenHelp } from '@/lms/tutor/tim
 import TimeStatusLegend from './TimeStatusLegend';
 import { TimeOffLine } from './TimeOff';
 import RunningLate, { type LateSend } from './RunningLate';
+import ContactStudent, { type ContactSend } from './ContactStudent';
 import { TUTOR_MENU } from '@/lms/tutor/navigation';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ALL_HOURS, cityTime, localToInstant } from '@/lms/tutor/hours-view';
@@ -57,10 +58,13 @@ type Dialog =
   | { kind: 'lesson'; lesson: TutorLesson }
   | { kind: 'info'; title: string; body: string };
 
-export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile, onSaved, onHours, onTimeOff, sendLate }: {
+export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord, openProfile, onSaved, onHours, onTimeOff, sendLate, sendContact, tutorName }: {
   actions: ScheduleActions;
   /** 강사 '늦어요' 알림 (20261114200000): 수업 창 Cancel class 아래 */
   sendLate?: LateSend;
+  /** 강사 [학생에게 연락하기] (20261116140000) */
+  sendContact?: ContactSend;
+  tutorName?: string;
   onHours?: () => void;
   /** 맨 위 한 줄 [Request time off ›] (H26(137)) */
   onTimeOff?: () => void;
@@ -540,6 +544,8 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
                   {l.state === 'scheduled' && l.startsAt > now && !l.leaveOpen && !l.locked && l.kind !== 'compensation' &&
                     <button type="button" onClick={() => closeDialog(() => onRecord(l))} className={btnSub}>Cancel class</button>}
                   <RunningLate lesson={l} now={new Date(Math.max(now.getTime(), Date.now()))} tz={tz} send={sendLate} full
+                    onSent={async () => { await load(); await onSaved?.(); }} />
+                  <ContactStudent lesson={l} now={new Date(Math.max(now.getTime(), Date.now()))} tz={tz} tutorName={tutorName} send={sendContact} full
                     onSent={async () => { await load(); await onSaved?.(); }} />
                   <button type="button" onClick={() => closeDialog()} className={btnSub}>Close</button>
                 </>
