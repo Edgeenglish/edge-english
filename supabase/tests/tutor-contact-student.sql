@@ -71,8 +71,8 @@ select pg_temp.ok((select count(*) from notifications where dedupe_key = 'tutor_
 select pg_temp.ok((select count(*) from notifications where dedupe_key like 'tutor_contact%' and recipient_kind = 'admin') = 0, '운영진 메일은 따로 없음 (숨은참조로 받음)');
 select pg_temp.ok((select payload ->> 'subject' from notifications where dedupe_key = 'tutor_contact:dddddddd-0000-4000-8000-0000000000d1:1') like '%[엣지영어] Liam 강사님이 수업방에서 기다리고 있어요', '1차 제목');
 select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'tutor_contact:dddddddd-0000-4000-8000-0000000000d1:1')
-  like E'김하준님, 안녕하세요! 엣지영어입니다. ☺️\n오늘 수업 시간이 시작되었는데 아직 입장하지 않으셔서 연락드려요.\nLiam 강사님이 수업방에서 기다리고 계세요. 지금이라도 참여하실 수 있으니 아래 버튼을 눌러 입장해 주세요!\n\n수업 들어가기: https://meet.google.com/liam-room\n\n💬 Liam 강사님의 메시지\nHi Hajun! I''m in our Meet room.\n\n수업 안내\n• 수업 시간: %[한국 시간]\n• 수업 길이: 50분\n\n늦게 입장하시더라도 기존 수업 종료 시간은 연장되지 않는 점 참고 부탁드려요.\n오늘 수업 참여가 어려우시다면 엣지영어 카카오톡 채널로 알려 주세요.\n\n감사합니다.\n엣지영어 드림%', '1차 본문 (확정 문구 순서)');
-select pg_temp.ok((select payload ->> 'html' from notifications where dedupe_key = 'tutor_contact:dddddddd-0000-4000-8000-0000000000d1:1') like '%href="https://meet.google.com/liam-room"%💬 Liam 강사님의 메시지%', '메일 버튼 = 강사 Meet, 한마디 칸');
+  like E'김하준님, 안녕하세요! 엣지영어입니다. ☺️\n오늘 수업 시간이 시작되었는데 아직 입장하지 않으셔서 연락드려요.\nLiam 강사님이 수업방에서 기다리고 계세요. 지금이라도 참여하실 수 있으니 아래 버튼을 눌러 입장해 주세요!\n\n수업 안내\n• 수업 시간: %[한국 시간]\n\n수업 들어가기: https://meet.google.com/liam-room\n\n💬 Liam 강사님의 메시지\nHi Hajun! I''m in our Meet room.\n\n늦게 입장하시더라도 기존 수업 종료 시간은 연장되지 않는 점 참고 부탁드려요.\n오늘 수업 참여가 어려우시다면 엣지영어 카카오톡 채널로 알려 주세요.\n\n감사합니다.\n엣지영어 드림%', '1차 본문 (확정 문구 순서)');
+select pg_temp.ok((select payload ->> 'html' from notifications where dedupe_key = 'tutor_contact:dddddddd-0000-4000-8000-0000000000d1:1') like '%수업 안내%href="https://meet.google.com/liam-room"%💬 Liam 강사님의 메시지%늦게 입장%', '메일 버튼 = 강사 Meet, 한마디 칸');
 
 -- 2차 (해외 학생: 거주지 시간 · 한마디 없음)
 select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-0000000000d1","aal":"aal1"}', true);
@@ -82,7 +82,7 @@ reset role;
 select pg_temp.ok((select note from tutor_contact_notices where lesson_id = 'dddddddd-0000-4000-8000-0000000000d3' and stage = 2) is null, '빈 한마디는 저장 안 함');
 select pg_temp.ok((select payload ->> 'subject' from notifications where dedupe_key = 'tutor_contact:dddddddd-0000-4000-8000-0000000000d3:2') like '%[엣지영어] 아직 수업에 참여하실 수 있어요', '2차 제목');
 select pg_temp.ok((select payload ->> 'text' from notifications where dedupe_key = 'tutor_contact:dddddddd-0000-4000-8000-0000000000d3:2')
-  like E'박서연님, 안녕하세요! 엣지영어입니다. ☺️\n아직 수업에 입장하지 않으셔서 한 번 더 연락드려요.\nEmma 강사님은 수업이 끝날 때까지 기다리고 계십니다. 남은 시간이라도 수업에 참여하실 수 있으니 아래 버튼을 눌러 주세요!\n\n수업 들어가기: https://meet.google.com/abc-defg-hij\n\n수업 안내\n• 수업 시간: %[시드니 시간] / %[한국 시간]\n• 수업 길이: 50분\n• 수업 종료: 오%[시드니 시간] / %[한국 시간]\n\n늦게 입장하시더라도 수업 종료 시간은 동일하며, 별도로 연장되지 않습니다.\n\n감사합니다.\n엣지영어 드림%', '2차 본문 (메시지 칸 없음·거주지 시간)');
+  like E'박서연님, 안녕하세요! 엣지영어입니다. ☺️\n아직 수업에 입장하지 않으셔서 한 번 더 연락드려요.\nEmma 강사님은 수업이 끝날 때까지 기다리고 계십니다.\n남은 시간이라도 수업에 참여하실 수 있으니 아래 버튼을 눌러 주세요!\n\n수업 안내\n• 수업 시작: %[시드니 시간] / %[한국 시간]\n• 수업 종료: 오%[시드니 시간] / %[한국 시간]\n\n수업 들어가기: https://meet.google.com/abc-defg-hij\n\n늦게 입장하시더라도 수업 종료 시간은 동일하며, 별도로 연장되지 않습니다.\n\n감사합니다.\n엣지영어 드림%', '2차 본문 (메시지 칸 없음·거주지 시간)');
 select pg_temp.ok((select payload ->> 'html' from notifications where dedupe_key = 'tutor_contact:dddddddd-0000-4000-8000-0000000000d3:2') not like '%강사님의 메시지%', '한마디 없으면 메시지 칸 없음');
 
 -- 운영자 대신 (James 수업, Meet 주소 없음 → LMS)
