@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { supabaseBrowser } from '@/lms/auth/client';
+import { useState } from 'react';
+import BubbleRightTail from './common/bubble/BubbleRightTail';
 import BubbleTopTail from './common/bubble/BubbleTopTail';
 
 export default function Header() {
@@ -11,14 +11,6 @@ export default function Header() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const closeDrawer = () => setIsDrawerOpen(false);
-  // H26(146)(150) 로그인돼 있으면 '내 수업' (로그인 화면이 권한별 홈으로 넘김)
-  const [loggedIn, setLoggedIn] = useState(false);
-  useEffect(() => {
-    const sb = supabaseBrowser();
-    if (!sb) return;
-    void sb.auth.getSession().then(({ data }) => setLoggedIn(!!data.session)).catch(() => setLoggedIn(false));
-  }, []);
-  const accountLabel = loggedIn ? '내 수업' : '로그인';
 
   return (
     <header className="flex-center sticky top-0 z-20 min-h-[70px] bg-white px-4 py-4">
@@ -85,10 +77,17 @@ export default function Header() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-4 max-md:hidden">
-            <Link href="/lms/login" className="text-nowrap text-sm font-semibold text-[#333]">
-              {accountLabel}
-            </Link>
+          <div className="relative flex gap-2 max-md:hidden">
+            <div className="max-lg:hidden">
+              <BubbleRightTail
+                text="회원가입 없이 간편 신청하기"
+                bg="#1A1A1A"
+                left={-205}
+                top={4}
+                textClassName="text-white text-sm"
+              />
+            </div>
+
             <Link
               href="https://forms.gle/arWZ6uzK3BFgaxM39"
               target="_blank"
@@ -98,9 +97,6 @@ export default function Header() {
             </Link>
           </div>
         </div>
-        <Link href="/lms/login" className="text-nowrap text-sm font-semibold text-[#333] md:hidden">
-          {accountLabel}
-        </Link>
         {/* 모바일 햄버거 메뉴 */}
         <div className="drawer drawer-end min-h-8 w-auto min-w-8 md:hidden">
           <input
