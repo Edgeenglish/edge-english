@@ -1,6 +1,7 @@
 ## ⏸ 11/17 머리글 [내 수업] 바로 학생 홈 — lms-test 반영, 운영 미반영 (브랜치 claude/quirky-bell-j29fzz, 대표 답 대기: 강사·운영자도 바꿀지)
 - 수정: `src/lms/auth/home.ts`(새, 역할→홈 주소 한 곳 — 지금 학생만) · `components/Header.tsx`([내 수업] href) · `app/lms/page.tsx`+`LmsIndexGo.tsx`(/lms 메일 링크도 같게, ?next= 등 있으면 예전처럼 로그인 화면) · `student/StudentLive.tsx`(역할 확인과 학생 자료를 함께 불러옴) · `student/StudentHome.tsx`(교재 둘러보기 next/link)
 - 시험(시험 사이트, STU-0018 메일 코드 로그인 — 비밀번호 안 건드림, 끝나고 세션 로그아웃): PC·iPhone 13 [내 수업] 경로 / → /lms/student(로그인 화면 0번), /lms → /lms/student, 로그아웃 상태 [로그인]·/lms → /lms/login, 풀린 세션 → /lms/login 모두 통과
+- 11/17 보충('불러오는 중'도 찰나에 보임): `lms/student/prefetch.ts`(새) — 머리글이 로그인 확인과 함께 학생 화면 자료를 미리 불러 둠(학생 아니면 버림), StudentLive 는 그것을 바로 보여 주고 새로 불러 바꿈(`StudentHome` refreshed). 시험: PC·휴대폰 홈 열자마자/1초 뒤/교재에서 [내 수업] 6번 모두 '불러오는 중' 0번, 0.2~0.6초. 메일 링크처럼 처음 여는 주소는 미리 불러 둘 수 없어 그대로
 - 강사·운영자로 넓히려면 `homeForRole` 에 tutor→/lms/tutor, admin(aal2)→/lms/admin 추가
 
 ## 11/17 학생 정상 취소 대체수업의 보강 강사 선택 — 시험 후 운영 반영 완료
