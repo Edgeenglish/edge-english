@@ -26,10 +26,16 @@ export default function StudentLive({ studentParam, makeup, tab }: { studentPara
     (async () => {
       const { data: session } = await sb.auth.getSession();
       if (!session.session) return toLogin();
+      // 학생 화면 자료를 역할 확인과 함께 불러옴 (기다리는 시간 한 번 줄임). 학생이 아니면 이 결과는 버림
+      const own = loadStudentView(sb, null).then((view) => ({ view }), (e: unknown) => ({ e }));
       const { data: role } = await sb.rpc('my_role');
       try {
         const nowIso = new Date().toISOString();
-        if (role === 'student') return setState({ kind: 'ready', nowIso, view: await loadStudentView(sb, null), admin: null });
+        if (role === 'student') {
+          const r = await own;
+          if ('e' in r) throw r.e;
+          return setState({ kind: 'ready', nowIso, view: r.view, admin: null });
+        }
         const [{ data: aal }, { data: admin }] = await Promise.all([sb.auth.mfa.getAuthenticatorAssuranceLevel(), sb.rpc('is_admin')]);
         if (role !== 'admin' || aal?.currentLevel !== 'aal2' || admin !== true) return toLogin();
         const students = await loadStudentAccounts(sb);
