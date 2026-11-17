@@ -14,6 +14,11 @@
 # 다음 세션 시작 메모
 
 
+## ✅ 11/17 로그인 화면 비밀번호 안내 — 운영 반영 (lms-prod d952538, 대표 '응')
+- 원인: 기존 학생·강사는 비밀번호를 만든 적 없음(운영자가 이메일로만 계정 생성) → 비밀번호 칸에서 실패(로그인 점검: 학생 1·강사 1)
+- 화면: [로그인] 아래 '비밀번호를 만든 적이 없다면 먼저 만들어 주세요👇' + [비밀번호 만들기·찾기](이메일 넣었으면 바로 인증번호+새 비밀번호 화면) · 틀리면 '만든 적이 없거나 잊었다면👇' · 이 기기에서 비밀번호 로그인/만들기 1번이면 안내 줄 숨김(localStorage lms-pw-used) · '메일 코드로 로그인' 작은 링크 유지
+- 확인: 운영 /lms/login 새 문구·Google 버튼 0·내부 표시 없음·넘침 0, check-public-pages·internal-marks 통과. 되돌리기 = lms-prod 를 d952538 이전(origin/lms-prod 의 8개 커밋 앞)으로 되돌리는 커밋
+
 ## ⏸ 11/17 Google 로그인 (브랜치 claude/charming-newton-hgvywn → lms-test 612aa04, 운영 미반영 — 대표 '보류')
 - a54f329·5c59707(다른 곳에서 올림) + 612aa04: 약관 2곳·처리방침 1곳 Google 문구(프로필 사진 주소 포함, 대표 '응') · '이미 회원이에요'로 빈 Google 계정 지우고 기존 계정에 연결(canDiscardSocialAccount = 이메일 없는 간편 로그인 계정) · googleAllowed 에 운영(mfamixejxydodclhglbc + edgeenglish.kr·www) 추가(운영 Supabase Google 켜야 버튼 보임)
 - 시험 통과(11/17): 다른 메일 Google → 윤지호 STU-0018 연결 · Google 새 가입 → [이미 회원이에요] → 빈 계정 삭제 → STU-0018 연결(DB: email+google, 간편 로그인만 있는 새 계정 0) · DB 삭제 함수 모의(Google만 = 삭제, 이메일·회원 연결 = 안 지움, 되돌림) · 운영 lms_discard_new_social_account md5 = 시험과 같음 · vitest 515
