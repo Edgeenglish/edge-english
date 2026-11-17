@@ -668,7 +668,6 @@ export default function LoginFlow() {
   const errText = 'mt-1 block text-[13px] font-semibold text-[#b3261e]';
   const h1 = 'text-[22px] font-bold text-[#1d1b2b]';
   const linkBtn = 'min-h-[44px] px-1 text-[14px] text-[#55526a]';
-  const smallLink = 'min-h-[40px] px-0.5 text-[13px] leading-snug text-[#55526a]';
   const has = (p: SignupProblem) => problems.includes(p);
 
   const passwordInput = (id: string, label: string, autoComplete: string, onEnter: () => void, bad: boolean, placeholder?: string) => (
@@ -764,12 +763,6 @@ export default function LoginFlow() {
               <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => (looksLikeEmail(email) ? sendPwCode() : go('pw_email'))}>
                 {t.pwLink}
               </button>
-            </div>
-            <div className="flex flex-col items-center">
-              <button type="button" disabled={busy} className={`${smallLink} disabled:opacity-40`} onClick={() => sendLoginCode()}>
-                {t.codeLogin}
-              </button>
-              {recent === 'code' && <span className="relative z-[1] -mt-1">{bubble('up')}</span>}
             </div>
             {socialCircles()}
             {!linkFor && (
