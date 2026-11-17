@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
 import { loadStudentAccounts, loadStudentView, searchStudents, studentActions, type StudentAccount, type StudentView } from '@/lms/student/live';
+import { forgetOwnView, ownViewCache, rememberOwnView } from '@/lms/student/prefetch';
 import StudentHome from './StudentHome';
 
 type State =
@@ -17,7 +18,12 @@ type State =
 const toLogin = () => window.location.replace(`/lms/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
 
 export default function StudentLive({ studentParam, makeup, tab }: { studentParam?: string; makeup?: string; tab?: string }) {
-  const [state, setState] = useState<State>({ kind: 'loading' });
+  // 머리글이 미리 불러 둔 본인 자료가 있으면 첫 화면부터 바로 보여 줌 (운영자 보기 ?student= 는 제외). 아래에서 로그인 확인 후 새로 불러 바꿈
+  const [state, setState] = useState<State>(() => {
+    const c = studentParam ? null : ownViewCache();
+    return c?.view ? { kind: 'ready', nowIso: new Date().toISOString(), view: c.view, admin: null } : { kind: 'loading' };
+  });
+  const [fresh, setFresh] = useState<StudentView | undefined>();
   const sb = supabaseBrowser();
   const adminStudent = state.kind === 'ready' && state.admin ? state.admin.studentId : null;
 
@@ -25,17 +31,25 @@ export default function StudentLive({ studentParam, makeup, tab }: { studentPara
     if (!sb) return setState({ kind: 'error', message: 'Supabase 설정이 없어요.' });
     (async () => {
       const { data: session } = await sb.auth.getSession();
-      if (!session.session) return toLogin();
-      // 학생 화면 자료를 역할 확인과 함께 불러옴 (기다리는 시간 한 번 줄임). 학생이 아니면 이 결과는 버림
-      const own = loadStudentView(sb, null).then((view) => ({ view }), (e: unknown) => ({ e }));
+      if (!session.session) { forgetOwnView(); return toLogin(); }
+      const uid = session.session.user.id;
+      const c = studentParam ? null : ownViewCache();
+      const mine = c?.userId === uid ? c : null;
+      if (c && !mine) forgetOwnView();
+      // 학생 화면 자료를 역할 확인과 함께 불러옴 (기다리는 시간 한 번 줄임). 머리글이 불러오는 중이면 그것을 기다림. 학생이 아니면 이 결과는 버림
+      const own = (mine?.pending ?? loadStudentView(sb, null)).then((view) => ({ view }), (e: unknown) => ({ e }));
       const { data: role } = await sb.rpc('my_role');
       try {
         const nowIso = new Date().toISOString();
         if (role === 'student') {
           const r = await own;
           if ('e' in r) throw r.e;
+          rememberOwnView(uid, r.view);
+          // 미리 보여 준 자료가 있으면 화면은 그대로 두고 내용만 새것으로
+          if (mine?.view) return setFresh(r.view);
           return setState({ kind: 'ready', nowIso, view: r.view, admin: null });
         }
+        if (mine?.view) forgetOwnView();
         const [{ data: aal }, { data: admin }] = await Promise.all([sb.auth.mfa.getAuthenticatorAssuranceLevel(), sb.rpc('is_admin')]);
         if (role !== 'admin' || aal?.currentLevel !== 'aal2' || admin !== true) return toLogin();
         const students = await loadStudentAccounts(sb);
@@ -52,6 +66,7 @@ export default function StudentLive({ studentParam, makeup, tab }: { studentPara
 
   async function logout() {
     await sb?.auth.signOut();
+    forgetOwnView();
     window.location.replace('/lms/login');
   }
 
@@ -77,6 +92,7 @@ export default function StudentLive({ studentParam, makeup, tab }: { studentPara
       key={state.view.studentId}
       nowIso={state.nowIso}
       initial={state.view}
+      refreshed={fresh}
       actions={actions}
       preview={false}
       adminBar={adminBar}
