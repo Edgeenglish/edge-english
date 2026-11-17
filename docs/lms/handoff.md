@@ -3,6 +3,7 @@
 - 시험(시험 사이트, STU-0018 메일 코드 로그인 — 비밀번호 안 건드림, 끝나고 세션 로그아웃): PC·iPhone 13 [내 수업] 경로 / → /lms/student(로그인 화면 0번), /lms → /lms/student, 로그아웃 상태 [로그인]·/lms → /lms/login, 풀린 세션 → /lms/login 모두 통과
 - 11/17 보충('불러오는 중'도 찰나에 보임): `lms/student/prefetch.ts`(새) — 머리글이 로그인 확인과 함께 학생 화면 자료를 미리 불러 둠(학생 아니면 버림), StudentLive 는 그것을 바로 보여 주고 새로 불러 바꿈(`StudentHome` refreshed). 시험: PC·휴대폰 홈 열자마자/1초 뒤/교재에서 [내 수업] 6번 모두 '불러오는 중' 0번, 0.2~0.6초. 메일 링크처럼 처음 여는 주소는 미리 불러 둘 수 없어 그대로
 - 11/17 보충 2: 자료를 받는 중에 누르면 머리글이 지금 화면을 두고 다 받은 뒤 넘김(`Header.tsx` openAccount). 시험: 학생 자료 응답을 2초 늦춘 느린 망 흉내로 PC·휴대폰 6번 모두 '불러오는 중' 0번
+- 11/17 보충 3 (한 번에 정리): `live.ts` loadStudentBundle(홈 자료+시간대·누적 학습·공지·결제·알림·정규 시간·처리 내역 순서를 한 번에) → `prefetch.ts`·`StudentLive`·`StudentHome`(preloaded 로 처음부터 그림)·`ProcessingHistory`(prefs) · `LoginFlow`(학생은 자료 받은 뒤 router.push, 버튼 누른 채 유지) · `LmsIndexGo`+`SiteChrome`(/lms 도 머리글 틀 안, 빈 틀 보이며 받은 뒤 넘김) · `StudentHomeSkeleton`('불러오는 중' 글 대신 메뉴 그대로 빈 틀). 시험(자료 응답 1.5초 늦춘 느린 망, PC·iPhone 13): 머리글 [내 수업]·/lms·새로고침·로그인 뒤 4길 모두 학생 홈이 시간대 '변경'·누적 학습 시간과 한 프레임에 나옴, 머리글 계속 보임, '불러오는 중' 0번. 로그인 버튼 누른 길은 비밀번호가 없어 화면 시험 못 함(코드만)
 - 강사·운영자로 넓히려면 `homeForRole` 에 tutor→/lms/tutor, admin(aal2)→/lms/admin 추가
 
 ## 11/17 학생 정상 취소 대체수업의 보강 강사 선택 — 시험 후 운영 반영 완료
