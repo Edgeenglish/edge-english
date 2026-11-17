@@ -106,7 +106,7 @@ export const STRINGS = {
     hide: '숨기기',
     login: '로그인',
     badLogin: '이메일 또는 비밀번호가 맞지 않아요',
-    noPwHint: '이미 회원이신가요? 비밀번호가 없거나 기억나지 않으면👇',
+    noPwHint: '이미 회원이신가요? 비밀번호를 만든 적 없거나 기억나지 않으면👇',
     pwLink: '비밀번호 만들기·찾기',
     codeLogin: '메일 코드로 로그인',
     signupLink: '회원가입',
