@@ -27052,16 +27052,16 @@ begin
   )
   select
     string_agg(lms_mail_en_at(coalesce((a.cover_answer->>'starts_at')::timestamptz,a.starts_at),
-      lms_tutor_tz_at(tu.id,coalesce((a.cover_answer->>'starts_at')::timestamptz,a.starts_at))), E'\\n' order by a.starts_at)
+      lms_tutor_tz_at(tu.id,coalesce((a.cover_answer->>'starts_at')::timestamptz,a.starts_at))), E'\n' order by a.starts_at)
       filter (where (a.cover_answer->>'yes')::boolean=false or (a.cover_answer is null and n.recipient_id=any(a.sub_declined))),
-    string_agg(lms_mail_en_at(a.starts_at,lms_tutor_tz_at(tu.id,a.starts_at)), E'\\n' order by a.starts_at)
+    string_agg(lms_mail_en_at(a.starts_at,lms_tutor_tz_at(tu.id,a.starts_at)), E'\n' order by a.starts_at)
       filter (where a.sub_tutor_id=n.recipient_id and a.sub_stage='tutor_ok'
         and ((a.cover_answer->>'yes')::boolean=true or a.cover_answer is null))
   into v_unavailable,v_pending from replies a;
   v_paras:=array['CONFIRMED cover classes - ' || lms_student_en(st) || ' (' || v_min || ' min)',
-    'Confirmed:' || E'\\n' || v_list];
-  if v_unavailable is not null then v_paras:=v_paras || ('You marked unavailable:' || E'\\n' || v_unavailable); end if;
-  if v_pending is not null then v_paras:=v_paras || ('Available - awaiting final confirmation:' || E'\\n' || v_pending); end if;
+    'Confirmed:' || E'\n' || v_list];
+  if v_unavailable is not null then v_paras:=v_paras || ('You marked unavailable:' || E'\n' || v_unavailable); end if;
+  if v_pending is not null then v_paras:=v_paras || ('Available - awaiting final confirmation:' || E'\n' || v_pending); end if;
   v_paras:=array_append(v_paras, 'Only the confirmed classes above are booked in your LMS schedule. Thank you!');
   v_name := lms_student_en(st);
   v_mail := lms_tutor_mail(n.recipient_id, st.id, 'lesson_notice_sub_confirmed', 'tutor_mail:cover:' || v_ids[1],
