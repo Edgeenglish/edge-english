@@ -20,6 +20,7 @@
 - 운영 DB 띠: 11/17 긴급 수정 운영 반영(71dfc69 학생·로그인에서 숨김, 운영자 화면·운영자 보기에만 ProdBand/ProdChip). 자동 점검 = src/lms/auth/internal-marks.test.ts + scripts/check-public-pages.sh (CLAUDE.md)
 - 시험(11/17): vitest 51파일 507개 통과, next build 통과, 로컬 320·360·390·1280px 가로 넘침 0·말풍선 4종(한국어·영어), 시험 사이트 학생 윤지호 STU-0018(메일 코드, support@ 수신) PC·iPhone 13: 홈페이지 → [로그인] → 학생 화면([내 수업]) → 수업료 → [내 수업] 다시 학생 화면, 화면에 내부용 글 없음, 최근 로그인 code 저장
 - 운영 배포 때: `git log origin/lms-test..origin/lms-prod` 먼저(운영에만 있는 커밋 많음 — lms-test 통째 배포 금지, 이 묶음만 골라 담기: db4613e 의 코드 파일) → push → `bash scripts/check-public-pages.sh` → 대표 본인 학생 계정으로 확인
+- 11/17 추가(시험 사이트만): 시험 띠 한 줄로, 머리글 오른쪽 위 [로그아웃](학생 왼쪽 메뉴·내 정보 탭 로그아웃 없앰), 카카오톡·맨 위로 버튼 학생·로그인 화면에도(휴대폰은 아래 메뉴 위로). 운영자 보기(학생) PC·휴대폰 확인: 머리글 아래 시험 띠 → 운영자 보기 막대, 겹침·넘침 없음. 운영 띠 색 빠짐(ProdBand 가 Tailwind content 밖 src/lms 에 있었음) → src/components 로 옮겨 운영 반영(11/17)
 - **대표 확인용 시험 계정 (11/17 대표 '지우지 말고 계속 둬')**: 시험 사이트 학생 윤지호 STU-0018 `support+stu0018@edgeenglish.kr`, 강사 Alex `support+alex@edgeenglish.kr` — 둘 다 11/17 비밀번호 만들어 대표에게 줌(값은 기록 안 함). 지우거나 비밀번호 바꾸지 말 것. 메일 코드는 support@ 로 옴
 - 시안: https://claude.ai/artifact/WhqQQQtR5VXM54wkmgtSVg (6판 — 말풍선은 꽉 찬 모양으로 남아 있음, 실제 화면이 기준)
 
