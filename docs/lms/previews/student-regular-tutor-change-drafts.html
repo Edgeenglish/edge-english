@@ -1,0 +1,291 @@
+<title>정규 시간·강사 변경 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--accent:#5b3df0;--q:#efeafe;--sel:#efebff;
+--ok:#e6f6ec;--ok-fg:#1f7a4d;--warn:#fff4d6;--warn-fg:#5c3b00;--bad-fg:#b3261e;--soft:#f3f1f8;--chip:#ecebf1;--chip-fg:#55526a;--frame:#d9d5e6;--dis:#c9c6d6;
+--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;--frame:#3b3948;--dis:#4a4858;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;--frame:#3b3948;--dis:#4a4858;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;padding:24px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px))}
+main{max-width:1180px;margin:0 auto;display:grid;gap:34px}
+main>*{min-width:0}
+h1{font-size:22px;margin:0}h2{font-size:19px;margin:0 0 10px}h3{font-size:14px;margin:0 0 8px;color:var(--muted);font-weight:600}
+p{margin:0}ol,ul{margin:4px 0 0;padding-left:20px}li{margin-bottom:5px}
+.q{background:var(--q);border-radius:14px;padding:14px 16px;display:grid;gap:14px}
+.q>div{display:grid;gap:3px}
+.q b.n{color:var(--accent)}
+.rec{display:inline-block;background:var(--accent);color:#fff;font-size:11.5px;font-weight:700;border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.row{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.phone{width:360px;max-width:100%;border:8px solid var(--frame);border-radius:30px;background:var(--bg);padding:14px 12px 18px;display:grid;gap:10px;align-content:start}
+.pc{flex:1 1 640px;min-width:0;border:1px solid var(--frame);border-radius:12px;background:var(--bg);overflow:hidden}
+.pcbar{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;font-size:13px;color:var(--muted);display:flex;gap:16px}
+.pcbody{padding:18px;display:grid;gap:12px;max-width:760px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px}
+.p{padding:12px 16px}
+.badge{display:inline-block;background:var(--soft);color:var(--chip-fg);border-radius:999px;font-size:12px;font-weight:600;padding:2px 10px}
+.qk{display:grid;gap:8px;grid-template-columns:1fr}
+@media(min-width:640px){.pc .qk{grid-template-columns:1fr 1fr}}
+.qtop{display:flex;justify-content:space-between;align-items:center;min-height:48px;padding:0 16px;border-bottom:1px solid #eeecf4;font-weight:700}
+.go{color:var(--accent);font-size:12.5px;font-weight:600}
+.mini{font-size:12.5px;color:var(--muted);padding:8px 16px 12px}
+.new{outline:3px dashed var(--accent);outline-offset:3px}
+.rowbtn{display:flex;justify-content:space-between;align-items:center;min-height:52px;padding:0 16px;font-weight:600;font-size:14px}
+.rowbtn span:last-child{color:var(--muted)}
+.dis{color:var(--muted)}
+.sheet{background:var(--card);border-radius:18px 18px 0 0;border:1px solid var(--line);padding:16px;display:grid;gap:12px}
+.sheet h4{margin:0;font-size:17px}
+.lbl{font-size:13px;font-weight:700;color:var(--chip-fg)}
+.big{font-size:15px;font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:7px 11px;font-size:13.5px;font-weight:600}
+.chip.on{background:var(--sel);border-color:var(--accent);color:var(--accent)}
+.chip.off{color:var(--dis);text-decoration:line-through}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.days span{text-align:center;border:1px solid var(--line);border-radius:8px;padding:6px 0;font-size:13px;font-weight:700}
+.days span.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.days span.none{color:var(--dis)}
+.times{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.times span{text-align:center;border:1px solid var(--line);border-radius:10px;padding:8px 0;font-size:13.5px;font-weight:600}
+.times span.on{background:var(--sel);border-color:var(--accent);color:var(--accent)}
+.pick{background:var(--sel);border-radius:10px;padding:8px 12px;font-size:13.5px;display:flex;justify-content:space-between;gap:8px}
+.pick b{color:var(--accent)}
+.ta{border:1px solid var(--line);border-radius:10px;min-height:56px;padding:8px 10px;color:var(--muted);font-size:13.5px}
+.btn{background:var(--accent);color:#fff;border-radius:12px;text-align:center;font-weight:700;padding:12px;font-size:15px}
+.btn.gray{background:var(--chip);color:var(--chip-fg)}
+.btn.line{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.ok{background:var(--ok);color:var(--ok-fg);border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px}
+.bad{color:var(--bad-fg);font-weight:700;font-size:13.5px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
+.names{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.names div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.names b{display:block;font-size:15px}
+.names small{color:var(--muted);font-size:12.5px}
+.adm{display:grid;gap:10px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px}
+.kv b{color:var(--muted);font-weight:600}
+</style>
+<main>
+<header style="display:grid;gap:6px">
+  <h1>학생 홈 새 버튼 2개 — 최종 시안</h1>
+  <p class="note">정규 시간 변경 · 강사 변경 상담. 시험 사이트·시험 DB에서만 개발. 예시: 학생 박서연(Sydney 거주, 지금 화·목 오후 9:00 Sydney = 오후 7:00 한국 시간), 담당 강사 Emma, 오늘 = 11/17(화). 점선 테두리 = 새로 넣는 곳.</p>
+</header>
+
+<section>
+  <h2>확정된 기준 (대표 11/17)</h2>
+  <div class="q">
+    <div><b><span class="n">1.</span> 4주에 1회</b><span>수강기간(28일)마다 1회, 확정된 변경만 셈 (반려·취소된 신청은 안 셈). 일반 변경권과 별도.</span></div>
+    <div><b><span class="n">2.</span> 4일 전 마감</b><span>후보마다 따로 계산. 그 주에 바뀌는 첫 수업(옮겨지는 기존 수업과 새 수업 중 빠른 쪽) 4일 전 날 밤 11:59 한국 시간까지.</span></div>
+    <div><b><span class="n">3.</span> 다음 주</b><span>월~일, 한국 시간 기준. 적용은 '○○(월) 주부터'.</span></div>
+    <div><b><span class="n">4.</span> 가능한 시간</b><span>적용 주부터 지금 수강기간 끝까지 매주 비어 있는 시간만 보임 (보강 달력과 같은 계산·30분 간격, 강사 개인 일정 안 보임).</span></div>
+    <div><b><span class="n">5.</span> 주 2회 학생</b><span>두 요일을 한 번에 바꿔도 1회 사용.</span></div>
+    <div><b><span class="n">6.</span> 승인이 늦으면</b><span>기한 안에 신청했으면 원래 적용 주 그대로 인정. 단 승인할 때 충돌이 있거나 그 주 첫 수업이 이미 지났으면 확정을 막고 '다음 가능한 주'를 자동으로 다시 계산해 보여 줌.</span></div>
+    <div><b><span class="n">7.</span> 신청 취소</b><span>확정 전까지 학생이 [신청 취소] 가능.</span></div>
+    <div><b><span class="n">8.</span> 버튼 이름</b><span>정규 시간 변경 · 강사 변경 상담</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>학생 홈 — 버튼 자리</h2>
+  <div class="row">
+    <div class="pc">
+      <div class="pcbar"><b style="color:var(--fg)">엣지영어</b><span>내 수업</span><span>수강신청</span><span style="margin-left:auto">로그아웃</span></div>
+      <div class="pcbody">
+        <span class="badge">모든 날짜·시간은 Sydney 기준</span>
+        <div class="card p"><b>다음 수업</b> · 11/19(목) 오후 9:00 · 40분 · Emma 강사님</div>
+        <div class="card p" style="font-size:12.5px"><b style="font-size:14px">내 수강 정보</b><br><span class="dis">담당 강사</span> <b>Emma</b> · <span class="dis">수업 시간</span> <b>화·목 오후 9:00</b> · <span class="dis">남은 수업</span> <b>5회</b></div>
+        <div class="qk">
+          <div class="card"><div class="qtop">수업 변경·취소<span class="go">신청하기 ›</span></div><div class="mini">남은 변경권 <b>2개</b> / 총 2개</div></div>
+          <div class="card"><div class="qtop">수업 날짜 고르기<span class="go">신청하기 ›</span></div><div class="mini">날짜를 골라야 할 수업 <b>0회</b></div></div>
+        </div>
+        <div class="qk new">
+          <div class="card rowbtn"><span>정규 시간 변경</span><span>›</span></div>
+          <div class="card rowbtn"><span>강사 변경 상담</span><span>›</span></div>
+        </div>
+        <div class="card p dis">공지</div>
+      </div>
+    </div>
+    <div class="phone">
+      <span class="badge" style="justify-self:start">모든 날짜·시간은 Sydney 기준</span>
+      <div class="card p"><b>다음 수업</b><br>11/19(목) 오후 9:00 · 40분</div>
+      <div class="card"><div class="qtop">수업 변경·취소<span class="go">신청하기 ›</span></div></div>
+      <div class="card"><div class="qtop">수업 날짜 고르기<span class="go">신청하기 ›</span></div></div>
+      <div class="qk new">
+        <div class="card rowbtn"><span>정규 시간 변경</span><span>›</span></div>
+        <div class="card rowbtn"><span>강사 변경 상담</span><span>›</span></div>
+      </div>
+      <h3 style="margin:8px 0 0">신청해 두고 확인 기다리는 때 (누르면 신청 내용·[신청 취소])</h3>
+      <div class="card rowbtn"><span>정규 시간 변경</span><span style="font-size:12.5px;font-weight:600;color:var(--accent)">변경 신청 확인 중 ›</span></div>
+      <h3 style="margin:8px 0 0">이번 수강기간에 이미 바꾼 때 (못 누름)</h3>
+      <div class="card rowbtn" style="background:var(--soft)"><span class="dis">정규 시간 변경</span><span class="dis" style="font-size:12.5px;font-weight:600">12/15(화)부터 신청 가능</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>① 정규 시간 변경 — 신청 화면</h2>
+  <div class="row">
+    <div class="phone">
+      <h3 style="margin:0">주 2회 학생 · 화요일만 바꿀 때</h3>
+      <div class="sheet">
+        <h4>정규 시간 변경</h4>
+        <span class="badge" style="justify-self:start">Sydney 시간 기준</span>
+        <div class="pick" style="background:var(--soft)"><span>가장 빠른 적용일</span><b>11/23(월) 주부터</b></div>
+        <div><p class="lbl">지금 정규 수업 · 바꿀 수업 고르기</p>
+          <div class="chips"><span class="chip on">화 오후 9:00</span><span class="chip">목 오후 9:00</span></div></div>
+        <div><p class="lbl">화 오후 9:00 → 새 시간</p>
+          <div class="chips"><span class="chip on">1순위</span><span class="chip">2순위 (선택)</span></div>
+          <div class="days" style="margin-top:6px"><span>월</span><span>화</span><span class="on">수</span><span class="none">목</span><span>금</span><span class="none">토</span><span class="none">일</span></div>
+          <div class="times" style="margin-top:6px"><span>오후 7:00</span><span>오후 7:30</span><span class="on">오후 8:00</span><span>오후 9:30</span><span>오후 10:00</span><span>오후 10:30</span></div></div>
+        <div class="pick"><span>1순위 · 수 오후 8:00</span><b>11/23(월) 주부터 ✕</b></div>
+        <div class="pick"><span>2순위 · 화 오후 8:00</span><b>11/23(월) 주부터 ✕</b></div>
+        <div><p class="lbl">변경 사유 (선택)</p><div class="ta">예: 퇴근 시간이 바뀌었어요</div></div>
+        <div class="btn">신청하기</div>
+      </div>
+      <h3 style="margin:8px 0 0">신청 뒤 (같은 화면에 머묾)</h3>
+      <div class="ok">신청했어요 ✓ · 확정 전까지 기존 시간 그대로</div>
+      <div class="btn gray">신청함 ✓</div>
+    </div>
+    <div class="phone">
+      <h3 style="margin:0">주 2회 학생 · 두 요일 다 바꿀 때</h3>
+      <div class="sheet">
+        <h4>정규 시간 변경</h4>
+        <span class="badge" style="justify-self:start">Sydney 시간 기준</span>
+        <div class="pick" style="background:var(--soft)"><span>가장 빠른 적용일</span><b>11/23(월) 주부터</b></div>
+        <div><p class="lbl">지금 정규 수업 · 바꿀 수업 고르기</p>
+          <div class="chips"><span class="chip on">화 오후 9:00</span><span class="chip on">목 오후 9:00</span></div></div>
+        <div class="card p" style="display:grid;gap:6px"><p class="lbl">화 오후 9:00 → 새 시간</p>
+          <div class="pick"><span>1순위 · 수 오후 8:00</span><b>11/23(월) 주부터 ✕</b></div>
+          <div class="pick" style="background:var(--soft)"><span class="dis">2순위 (선택)</span><b>+</b></div></div>
+        <div class="card p" style="display:grid;gap:6px"><p class="lbl">목 오후 9:00 → 새 시간</p>
+          <div class="pick"><span>1순위 · 목 오후 7:00</span><b>11/23(월) 주부터 ✕</b></div>
+          <div class="pick"><span>2순위 · 토 오전 10:00</span><b>11/23(월) 주부터 ✕</b></div></div>
+        <p class="note">요일 칸을 누르면 왼쪽 화면처럼 요일·시간 고르기가 펼쳐짐</p>
+        <div><p class="lbl">변경 사유 (선택)</p><div class="ta"></div></div>
+        <div class="btn">신청하기</div>
+      </div>
+    </div>
+    <div class="pc">
+      <div class="pcbar"><b style="color:var(--fg)">정규 시간 변경</b><span class="badge">Sydney 시간 기준</span></div>
+      <div class="pcbody" style="grid-template-columns:1fr 1fr;max-width:none">
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="pick" style="background:var(--soft)"><span>가장 빠른 적용일</span><b>11/23(월) 주부터</b></div>
+          <div><p class="lbl">지금 정규 수업 · 바꿀 수업 고르기</p><div class="chips"><span class="chip on">화 오후 9:00</span><span class="chip">목 오후 9:00</span></div></div>
+          <div><p class="lbl">화 오후 9:00 → 새 시간</p>
+            <div class="chips"><span class="chip on">1순위</span><span class="chip">2순위 (선택)</span></div>
+            <div class="days" style="margin-top:6px"><span>월</span><span>화</span><span class="on">수</span><span class="none">목</span><span>금</span><span class="none">토</span><span class="none">일</span></div>
+            <div class="times" style="margin-top:6px;grid-template-columns:repeat(4,1fr)"><span>오후 7:00</span><span>오후 7:30</span><span class="on">오후 8:00</span><span>오후 9:30</span><span>오후 10:00</span><span>오후 10:30</span></div></div>
+        </div>
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="pick"><span>1순위 · 수 오후 8:00</span><b>11/23(월) 주부터 ✕</b></div>
+          <div class="pick"><span>2순위 · 화 오후 8:00</span><b>11/23(월) 주부터 ✕</b></div>
+          <div><p class="lbl">변경 사유 (선택)</p><div class="ta">예: 퇴근 시간이 바뀌었어요</div></div>
+          <div class="btn">신청하기</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="note" style="margin-top:12px">
+    <li>주 1회 학생은 '바꿀 수업 고르기' 줄 없이 바로 새 시간 고르기.</li>
+    <li>적용일 계산 예: 11/17(화) 신청 → 11/23(월) 주부터. 11/21(토)에 화 수업을 수로 바꾸면 기존 11/24(화) 마감 11/20이 지나 <b>11/30(월) 주부터</b>.</li>
+    <li>기존 정규 수업은 개수 그대로 새 요일로 하나씩 옮겨짐 (기존 [정규 일정 수정]과 같은 방식) → 수업 중복·누락 없음.</li>
+    <li>바꾸는 수업의 요일도 다른 시간이면 고를 수 있음(예: 화 오후 9:00 → 화 오후 8:00). 지금과 같은 요일·시간만 못 고름.</li>
+    <li>회색(못 누름): 되는 시간이 하나도 없는 요일 · 바꾸지 않고 남는 다른 정규 요일(예: 화만 바꿀 때 목 — 한 요일에 정규 2개는 확정이 안 됨) · 같은 신청에서 다른 수업에 이미 고른 요일.</li>
+    <li>적용 주는 후보마다 따로 계산해 그 줄에 붙임. 예: 11/20(금)에 화 수업을 바꾸면 월로 옮길 때 11/23(월) 마감 11/19가 지나 <b>11/30(월) 주부터</b>, 수로 옮길 때는 그 주 첫 바뀌는 수업이 기존 11/24(화)라 마감 11/20 안 → <b>11/23(월) 주부터</b>. 맨 위 '가장 빠른 적용일'은 고르기 전 가장 빠른 값.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>① 운영진 — 확정 화면</h2>
+  <p class="note" style="margin-bottom:10px">운영자 홈 할 일에 카드 1줄 → 누르면 신청 내용. [확정]을 누르는 순간 기존 [정규 일정 수정] 충돌 검사(강사 가능 시간·06:00~22:30·다른 수업·휴식·휴무·재등록 대기 자리)를 다시 돌림. 운영자 화면 시각 = 한국 시간.</p>
+  <div class="row">
+    <div class="pc">
+      <div class="pcbar"><b style="color:var(--fg)">운영자 홈 · 할 일</b></div>
+      <div class="pcbody adm">
+        <div class="card rowbtn new"><span>정규 시간 변경 신청 · 박서연</span><span>›</span></div>
+        <div class="card p adm">
+          <div class="kv"><b>지금</b><span>화·목 오후 7:00 한국 시간 · Emma</span>
+            <b>변경 사유</b><span>퇴근 시간이 바뀌었어요</span></div>
+          <p class="lbl">화 오후 7:00 한국 시간 →</p>
+          <div class="pick"><span>1순위 · 수 오후 6:00 한국 시간</span><b>11/23(월) 주부터</b></div>
+          <div class="pick"><span>2순위 · 화 오후 6:00 한국 시간</span><b>11/23(월) 주부터</b></div>
+          <div class="chips"><span class="btn" style="padding:9px 14px">1순위로 확정</span><span class="btn line" style="padding:9px 14px">2순위로 확정</span><span class="btn gray" style="padding:9px 14px">반려</span></div>
+          <h3 style="margin:10px 0 0">확정이 막힌 때 (같은 자리에 표시)</h3>
+          <p class="bad">확정할 수 없어요: 11/25(수) 오후 6:00 한국 시간 — Emma 다른 수업과 겹침</p>
+          <h3 style="margin:10px 0 0">승인이 늦어 그 주 첫 수업이 지난 때</h3>
+          <p class="bad">11/23(월) 주 첫 수업이 이미 지났어요</p>
+          <div class="chips"><span class="btn" style="padding:9px 14px">1순위로 11/30(월) 주부터 확정</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="card rowbtn new"><span>정규 시간 변경 신청 · 박서연</span><span>›</span></div>
+      <div class="card p adm">
+        <div class="kv"><b>지금</b><span>화·목 오후 7:00 한국 시간</span><b>변경 사유</b><span>퇴근 시간이 바뀌었어요</span></div>
+        <p class="lbl">화 오후 7:00 한국 시간 →</p>
+        <div class="pick"><span>1순위 · 수 오후 6:00 한국 시간</span><b>11/23(월) 주부터</b></div>
+        <div class="btn">1순위로 확정</div>
+        <p class="bad">확정할 수 없어요: 11/25(수) 오후 6:00 한국 시간 — Emma 다른 수업과 겹침</p>
+        <div class="pick"><span>2순위 · 화 오후 6:00 한국 시간</span><b>11/23(월) 주부터</b></div>
+        <div class="btn line">2순위로 확정</div>
+        <div class="btn gray">반려</div>
+      </div>
+      <p class="note">두 요일을 다 바꾼 신청은 요일마다 1·2순위 중 하나씩 골라 [확정]. 확정하면 기존 정규 변경과 같게 처리(강사 Updates·자동 메일 H26(122)). 학생 처리 내역: '확정' / '반려'.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>② 강사 변경 상담</h2>
+  <div class="row">
+    <div class="phone">
+      <div class="sheet">
+        <h4>강사 변경 상담</h4>
+        <div><p class="lbl">상담 내용 (선택 · 여러 개 가능)</p>
+          <div class="chips" style="flex-direction:column;align-items:stretch">
+            <span class="chip on">다른 수업 스타일을 경험해 보고 싶어요</span>
+            <span class="chip">수업 시간이 잘 맞지 않아요</span>
+            <span class="chip">다른 강사님과 수업하고 싶어요</span>
+            <span class="chip">먼저 상담받고 싶어요</span>
+          </div></div>
+        <div><p class="lbl">추가로 전하고 싶은 말 (선택)</p><div class="ta"></div></div>
+        <p style="font-size:13px;color:var(--chip-fg)">신청 내용은 담당 강사님께 전달되지 않아요.</p>
+        <div class="btn">상담 요청하기</div>
+      </div>
+      <h3 style="margin:8px 0 0">요청 뒤</h3>
+      <div class="ok">요청했어요 ✓</div>
+      <div class="btn gray">요청함 ✓</div>
+    </div>
+    <div class="pc">
+      <div class="pcbar"><b style="color:var(--fg)">강사 변경 상담</b></div>
+      <div class="pcbody">
+        <p class="lbl">상담 내용 (선택 · 여러 개 가능)</p>
+        <div class="chips"><span class="chip on">다른 수업 스타일을 경험해 보고 싶어요</span><span class="chip">수업 시간이 잘 맞지 않아요</span><span class="chip">다른 강사님과 수업하고 싶어요</span><span class="chip">먼저 상담받고 싶어요</span></div>
+        <p class="lbl">추가로 전하고 싶은 말 (선택)</p>
+        <div class="ta"></div>
+        <p style="font-size:13px;color:var(--chip-fg)">신청 내용은 담당 강사님께 전달되지 않아요.</p>
+        <div class="btn" style="justify-self:start;padding:11px 28px">상담 요청하기</div>
+        <hr style="border:0;border-top:1px solid var(--line);width:100%">
+        <h3>운영자 홈 · 할 일 (담당 강사 화면·메일 어디에도 안 나감)</h3>
+        <div class="card p adm new">
+          <b>강사 변경 상담 · 박서연</b>
+          <div class="kv"><b>담당 강사</b><span>Emma</span><b>상담 내용</b><span>다른 수업 스타일을 경험해 보고 싶어요</span><b>요청</b><span>11/17(화) 오후 8:12 한국 시간</span></div>
+          <div class="btn" style="justify-self:start;padding:9px 20px">상담 완료</div>
+        </div>
+        <p class="note">실제 강사 변경은 지금처럼 운영진이 상담 뒤 기존 화면에서 함(POL-CHG-12).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>공통</h2>
+  <ul>
+    <li>운영자 보기(<code>/lms?student=STU-…</code>)에서 같은 두 버튼·화면이 열리고 대신 신청 가능(기록에 '운영자 대신').</li>
+    <li>상담 버튼은 따로 안 만듦.</li>
+    <li>학생 처리 내역에 두 신청 모두 한 줄씩 남음(처리해도 사라지지 않음).</li>
+  </ul>
+</section>
+</main>
