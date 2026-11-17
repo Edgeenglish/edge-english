@@ -36,7 +36,7 @@ export default function Header() {
 
   return (
     <header className="flex-center sticky top-0 z-20 min-h-[70px] bg-white px-4 py-4">
-      <div className="flex w-full items-center gap-12">
+      <div className="flex w-full items-center gap-12 max-md:gap-4">
         <Link href="/">
           <img
             src="/images/logo.svg"
@@ -113,10 +113,12 @@ export default function Header() {
             </Link>
           </div>
         </div>
-        <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333] md:hidden`}>
-          {accountLabel}
-        </Link>
-        {logoutBtn('md:hidden')}
+        <div className="flex items-center gap-3 md:hidden">
+          <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
+            {accountLabel}
+          </Link>
+          {logoutBtn('')}
+        </div>
         {/* 모바일 햄버거 메뉴 */}
         <div className="drawer drawer-end min-h-8 w-auto min-w-8 md:hidden">
           <input
