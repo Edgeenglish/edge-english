@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
 import { loadStudentAccounts, loadStudentView, searchStudents, studentActions, type StudentAccount, type StudentView } from '@/lms/student/live';
 import StudentHome from './StudentHome';
-import { ProdChip } from '@/lms/auth/ProdBand';
+import { ProdChip } from '@/components/ProdBand';
 
 type State =
   | { kind: 'loading' }

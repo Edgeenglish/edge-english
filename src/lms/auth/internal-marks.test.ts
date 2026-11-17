@@ -25,7 +25,7 @@ describe('운영 DB 띠는 운영진에게만', () => {
 
   it('운영 띠 문구·ProdBand·ProdChip 은 정해진 운영자 자리에서만 쓴다', () => {
     const allowed: Record<string, RegExp> = {
-      'lms/auth/ProdBand.tsx': /./,
+      'components/ProdBand.tsx': /./,
       'lms/auth/db-env.ts': /./,
       'app/lms/admin/ui.tsx': /ProdBand/,
       'app/lms/student/StudentLive.tsx': /ProdChip/,

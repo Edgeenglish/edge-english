@@ -13,7 +13,7 @@ import { loadScreenPrefs, saveScreenPref } from '@/lms/screen-prefs';
 import TutorHome, { type TutorActions } from './TutorHome';
 import { timeOffActions } from '@/lms/tutor/time-off';
 import { signActions } from '@/lms/tutor/esign';
-import { ProdChip } from '@/lms/auth/ProdBand';
+import { ProdChip } from '@/components/ProdBand';
 
 type State =
   | { kind: 'loading' }
