@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import PendingSavesBanner from './PendingSavesBanner';
+import { ProdBand } from '@/components/ProdBand';
 
 const PATHS = {
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
@@ -91,6 +92,7 @@ export function BottomNav({ active, demo }: { active: AdminTab; demo: boolean })
 export function AdminHeader({ active, demo, right, rightInline }: { active: AdminTab; demo: boolean; right?: React.ReactNode; rightInline?: boolean }) {
   return (
     <>
+    <ProdBand />
     <header className="sticky top-0 z-10 flex flex-wrap items-center gap-2 lg:gap-3 border-b-[3px] border-[#ffd401] bg-white px-4 py-3 lg:flex-nowrap lg:px-7">
       {/* 로고 = 대시보드 새로고침. Link 는 같은 주소면 다시 불러오지 않아서 일반 a 로 페이지 전체를 다시 연다 */}
       <a href={withDemo('/lms/admin', demo)} title="대시보드 새로고침" className="flex shrink-0 items-center gap-1.5">

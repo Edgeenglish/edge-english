@@ -25,7 +25,12 @@ export default function FloatingMenu() {
           수강 신청하기
         </a>
       )}
-      <div className="fixed bottom-[4.5rem] right-4.5 z-[19] flex flex-col gap-2 xs:bottom-10 xs:right-10">
+      <div
+        className={`fixed z-[19] flex flex-col gap-2 ${
+          // 학생 화면 휴대폰: 아래 고정 메뉴 위로 올림 (11/17 대표)
+          pathName?.startsWith('/lms/student') ? 'bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 lg:bottom-10 lg:right-10' : 'bottom-[4.5rem] right-4.5 xs:bottom-10 xs:right-10'
+        }`}
+      >
         {/* 카카오 버튼 */}
         <Link
           href="https://pf.kakao.com/_blxgib/friend"

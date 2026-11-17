@@ -19,10 +19,24 @@ export default function Header() {
     void sb.auth.getSession().then(({ data }) => setLoggedIn(!!data.session)).catch(() => setLoggedIn(false));
   }, []);
   const accountLabel = loggedIn ? '내 수업' : '로그인';
+  // 로그인·내 수업 화면에 있으면 다른 메뉴처럼 굵게 (11/17 학생 화면 홈페이지 틀 통합)
+  const accountOn = pathName.startsWith('/lms') ? 'font-bold' : 'font-semibold';
+  // 로그인돼 있으면 오른쪽 위에 로그아웃 (11/17 대표) — 로그아웃 뒤 홈페이지 첫 화면
+  const logout = async () => {
+    await supabaseBrowser()?.auth.signOut();
+    setLoggedIn(false);
+    window.location.assign('/');
+  };
+  const logoutBtn = (cls: string) =>
+    loggedIn ? (
+      <button type="button" onClick={logout} className={`text-nowrap text-sm font-semibold text-[#555] ${cls}`}>
+        로그아웃
+      </button>
+    ) : null;
 
   return (
     <header className="flex-center sticky top-0 z-20 min-h-[70px] bg-white px-4 py-4">
-      <div className="flex w-full items-center gap-12">
+      <div className="flex w-full items-center gap-12 max-md:gap-4">
         <Link href="/">
           <img
             src="/images/logo.svg"
@@ -85,8 +99,9 @@ export default function Header() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-4 max-md:hidden">
-            <Link href="/lms/login" className="text-nowrap text-sm font-semibold text-[#333]">
+          {/* 순서: [내 수업] [수강신청] [로그아웃] — 로그아웃은 맨 오른쪽 (11/17 대표) */}
+          <div className="flex items-center gap-5 max-md:hidden">
+            <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
               {accountLabel}
             </Link>
             <Link
@@ -96,11 +111,15 @@ export default function Header() {
             >
               수강신청
             </Link>
+            {logoutBtn('')}
           </div>
         </div>
-        <Link href="/lms/login" className="text-nowrap text-sm font-semibold text-[#333] md:hidden">
-          {accountLabel}
-        </Link>
+        <div className="flex items-center gap-4 md:hidden">
+          <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
+            {accountLabel}
+          </Link>
+          {logoutBtn('')}
+        </div>
         {/* 모바일 햄버거 메뉴 */}
         <div className="drawer drawer-end min-h-8 w-auto min-w-8 md:hidden">
           <input

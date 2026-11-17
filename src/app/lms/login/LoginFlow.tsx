@@ -6,12 +6,13 @@
 // 비밀번호 만들기·찾기: 이메일 → 메일 코드 + 새 비밀번호 (기존 학생·강사는 재가입 없이 지금 계정에 비밀번호만)
 // 카카오·네이버 첫 로그인이 회원과 연결 안 되면 '처음이에요 / 이미 회원이에요' — 이미 회원이면 기존 계정 로그인 뒤에만 연결
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { Provider } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lms/auth/client';
+import { canDiscardSocialAccount, googleAllowed, googleCallbackVerified } from '@/lms/auth/google';
 import { PRIVACY_POLICY, TERMS } from '@/lms/auth/legal';
 import { LegalSections } from '@/components/legal/LegalDoc';
+import { GoogleIcon } from './GoogleIcon';
 import {
   afterEmailCode,
   enabledSocial,
@@ -31,12 +32,31 @@ import {
   type SocialProvider,
 } from '@/lms/auth/login-flow';
 
-type Step = 'login' | 'code_login' | 'signup' | 'signup_code' | 'pw_email' | 'pw_new' | 'totp' | 'enroll' | 'member' | 'social_choice' | 'moving';
+type Step = 'login' | 'code_login' | 'signup' | 'signup_code' | 'pw_email' | 'pw_new' | 'totp' | 'enroll' | 'member' | 'social_choice' | 'google_choice' | 'moving';
 
 const LANG_KEY = 'lms-lang';
 const LINK_KEY = 'lms-link-provider'; // '이미 회원이에요' 뒤 기존 계정 로그인이 끝나면 연결할 카카오·네이버
 const LAST_KEY = 'lms-last-provider'; // 방금 누른 간편 로그인 (돌아왔을 때 어느 쪽인지)
+const GOOGLE_LINK_USER_KEY = 'lms-google-link-user';
 const APPLY_URL = 'https://forms.gle/arWZ6uzK3BFgaxM39';
+// 이 기기에서 마지막으로 로그인에 성공한 방법 — '최근 로그인' 말풍선 (11/17 대표: 비밀번호·메일 코드·카카오·네이버 구분)
+const RECENT_KEY = 'lms-recent-login';
+type Recent = 'password' | 'code' | SocialProvider;
+function readRecent(): Recent | null {
+  try {
+    const v = localStorage.getItem(RECENT_KEY);
+    return v === 'password' || v === 'code' || v === 'kakao' || v === 'naver' || v === 'google' ? v : null;
+  } catch {
+    return null;
+  }
+}
+function saveRecent(v: Recent) {
+  try {
+    localStorage.setItem(RECENT_KEY, v);
+  } catch {
+    /* 저장 안 되면 말풍선만 안 보임 */
+  }
+}
 
 function readLang(): Lang {
   try {
@@ -48,7 +68,7 @@ function readLang(): Lang {
 function readPendingLink(): SocialProvider | null {
   try {
     const v = sessionStorage.getItem(LINK_KEY);
-    return v === 'kakao' || v === 'naver' ? v : null;
+    return v === 'kakao' || v === 'naver' || v === 'google' ? v : null;
   } catch {
     return null;
   }
@@ -56,7 +76,7 @@ function readPendingLink(): SocialProvider | null {
 function readLast(): SocialProvider | null {
   try {
     const v = sessionStorage.getItem(LAST_KEY);
-    return v === 'kakao' || v === 'naver' ? v : null;
+    return v === 'kakao' || v === 'naver' || v === 'google' ? v : null;
   } catch {
     return null;
   }
@@ -99,6 +119,7 @@ export default function LoginFlow() {
   // 카카오·네이버로만 만든 빈 계정(수강 기록 없음) — '처음이에요'를 잘못 누른 기존 학생이 스스로 바로잡는 버튼용
   const [socialOnly, setSocialOnly] = useState(false);
   const [memberName, setMemberName] = useState(''); // 가입 때 받은 이름(이메일 가입 입력값·카카오·네이버 이름) — 빈 회원 화면 제목
+  const [recent, setRecent] = useState<Recent | null>(null);
   const t = STRINGS[lang];
   const sb = supabaseBrowser();
   const codeRef = useRef<HTMLInputElement>(null);
@@ -109,6 +130,7 @@ export default function LoginFlow() {
     setLang(readLang());
     setNext(new URLSearchParams(window.location.search).get('next'));
     setLinkFor(readPendingLink());
+    setRecent(readRecent());
   }, []);
 
   // 켜진 간편 로그인만 버튼으로 (꺼진 것을 누르면 오류가 나므로 아예 안 보임)
@@ -122,7 +144,7 @@ export default function LoginFlow() {
     const naver = fetch(`${url}/auth/v1/authorize?provider=${encodeURIComponent(PROVIDER_ID.naver)}`, { redirect: 'manual' })
       .then((r) => r.type === 'opaqueredirect' || r.status === 302)
       .catch(() => false);
-    void Promise.all([settings, naver]).then(([s, n]) => setSocial(enabledSocial(s?.external, n)));
+    void Promise.all([settings, naver]).then(([s, n]) => setSocial(enabledSocial(s?.external, n, googleAllowed(url, window.location.hostname))));
   }, []);
 
   // 카카오·네이버에서 돌아왔으면(?code=) 세션으로 바꾸고, 아니면 같은 주소의 유효한 세션을 이어 씀
@@ -147,15 +169,35 @@ export default function LoginFlow() {
           setLinkFor(null);
           setError(t.socialFail);
         }
+        try { sessionStorage.removeItem(GOOGLE_LINK_USER_KEY); sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
+        return;
       }
       if (oauthCode) {
         const { error: e } = await sb.auth.exchangeCodeForSession(oauthCode);
         params.delete('code');
         window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`);
+        if (!e) {
+          const last = readLast();
+          if (last === 'google') {
+            const expected = sessionStorage.getItem(GOOGLE_LINK_USER_KEY);
+            const { data: verified, error: verifyError } = await sb.auth.getUser();
+            sessionStorage.removeItem(GOOGLE_LINK_USER_KEY);
+            if (verifyError || !googleCallbackVerified(verified.user, expected)) {
+              setPendingLink(null);
+              setLinkFor(null);
+              if (expected && verified.user?.id !== expected) await sb.auth.signOut({ scope: 'local' });
+              if (active) setError(t.linkFail);
+              return;
+            }
+          }
+          if (last) { saveRecent(last); setRecent(last); }
+          try { sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
+        }
         if (e) {
           if (active) setError(readPendingLink() ? t.linkFail : t.socialFail);
           setPendingLink(null);
           setLinkFor(null);
+          try { sessionStorage.removeItem(GOOGLE_LINK_USER_KEY); sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
           return;
         }
       }
@@ -201,7 +243,7 @@ export default function LoginFlow() {
 
   async function routeAfterLogin() {
     if (!sb) return;
-    const [{ data: role }, { data: aal }, { data: factors }, { data: userData }] = await Promise.all([
+    const [{ data: role, error: roleError }, { data: aal, error: aalError }, { data: factors }, { data: userData }] = await Promise.all([
       sb.rpc('my_role'),
       sb.auth.mfa.getAuthenticatorAssuranceLevel(),
       sb.auth.mfa.listFactors(),
@@ -213,15 +255,40 @@ export default function LoginFlow() {
     setSocialOnly(providers.length > 0 && !providers.includes('email'));
     const metaName = user?.user_metadata?.name;
     setMemberName(typeof metaName === 'string' ? metaName.trim() : '');
-    if (needsSocialChoice({ role: myRole, providers, choseNew: user?.user_metadata?.edge_new_member === true })) {
+    if (!user) return setError(t.network);
+    const pendingGoogle = readPendingLink() === 'google';
+    if (pendingGoogle && (roleError || aalError)) return setError(t.network);
+    if (!pendingGoogle && needsSocialChoice({ role: myRole, providers, choseNew: user?.user_metadata?.edge_new_member === true })) {
       return setStep('social_choice');
     }
     const verified = factors?.totp ?? [];
     const after = afterEmailCode({ role: myRole, aal: aal?.currentLevel === 'aal2' ? 'aal2' : 'aal1', verifiedTotp: verified.length });
+    // POL-AC-02~05: 기존 계정을 인증한 뒤 같은 auth UUID에만 추가. 수강 전 회원도 가능, 운영자는 MFA 이후.
+    if (pendingGoogle && (after.kind === 'go' || after.kind === 'not_linked')) {
+      if (!googleAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL, window.location.hostname)) return setError(t.linkFail);
+      try {
+        sessionStorage.setItem(GOOGLE_LINK_USER_KEY, user.id);
+        sessionStorage.setItem(LAST_KEY, 'google');
+      } catch {
+        return setError(t.linkFail); // 계정 ID를 보관 못 하면 연결을 시작하지 않음
+      }
+      setPendingLink(null);
+      setStep('moving');
+      const { error: e } = await sb.auth.linkIdentity({ provider: 'google', options: {
+        redirectTo: `${window.location.origin}/lms/login${next ? `?next=${encodeURIComponent(next)}` : ''}`,
+        queryParams: { prompt: 'select_account' },
+      } });
+      if (!e) return;
+      sessionStorage.removeItem(GOOGLE_LINK_USER_KEY);
+      sessionStorage.removeItem(LAST_KEY);
+      setLinkFor(null);
+      setStep('login');
+      return setError(e.code === 'identity_already_exists' ? t.googleConflict : t.linkFail);
+    }
     if (after.kind === 'go') {
       // '이미 회원이에요'로 기존 계정 로그인을 마쳤으면 카카오·네이버를 이 계정에 연결 (갔다가 이 화면으로 돌아옴)
       const pending = readPendingLink();
-      if (pending) {
+      if (pending && pending !== 'google') {
         setPendingLink(null);
         setStep('moving');
         // 미인증 이메일로 시도했을 때 Supabase 가 만든 빈 계정(본인 이메일, 그 공급자만)이 있으면 지워야 연결됨
@@ -270,6 +337,7 @@ export default function LoginFlow() {
       if (e.status && e.status >= 400 && e.status < 500) return setBadLogin(true);
       return setError(t.network);
     }
+    saveRecent('password');
     await routeAfterLogin();
     setBusy(false);
   }
@@ -301,12 +369,17 @@ export default function LoginFlow() {
       setBusy(false);
       return setError(failMessage(e));
     }
+    saveRecent('code');
     await routeAfterLogin();
     setBusy(false);
   }
 
-  async function socialLogin(p: SocialProvider) {
+  async function socialLogin(p: SocialProvider, googleConfirmed = false) {
     if (!sb) return setError(t.network);
+    if (p === 'google') {
+      if (!googleAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL, window.location.hostname)) return;
+      if (!googleConfirmed && recent !== 'google') return go('google_choice');
+    }
     setBusy(true);
     try {
       sessionStorage.setItem(LAST_KEY, p);
@@ -495,10 +568,10 @@ export default function LoginFlow() {
             disabled={busy}
             onClick={() => socialLogin(p)}
             className={`flex min-h-[52px] w-full items-center justify-center rounded-[14px] text-[16px] font-bold disabled:opacity-40 ${
-              p === 'kakao' ? 'bg-[#FEE500] text-[#191600]' : 'bg-[#03C75A] text-white'
+              p === 'kakao' ? 'bg-[#FEE500] text-[#191600]' : p === 'naver' ? 'bg-[#03C75A] text-white' : 'gap-3 border border-[#d9d5e8] bg-white text-[#1d1b2b]'
             }`}
           >
-            {t.social[p]}
+            {p === 'google' && <GoogleIcon />}{t.social[p]}
           </button>
         ))}
         <p className="flex items-center gap-2 text-[12px] text-[#8a87a0] before:h-px before:flex-1 before:bg-[#e6e3ef] after:h-px after:flex-1 after:bg-[#e6e3ef]">{t.or}</p>
@@ -506,12 +579,57 @@ export default function LoginFlow() {
     );
   }
 
+  // '최근 로그인' 속 빈 둥근 말풍선 (11/17 대표 A안: 흰 바탕·얇은 보라 테두리·보라 글씨·작은 꼬리·그림자 없음)
+  const bubble = (tail: 'down' | 'up') => (
+    <span className="relative inline-block whitespace-nowrap rounded-[8px] border border-[#7d5fff] bg-white px-2 py-[1px] text-[11px] font-semibold leading-[17px] text-[#5b3df0]">
+      {t.recent}
+      <span
+        aria-hidden
+        className={`absolute left-1/2 h-[7px] w-[7px] -translate-x-1/2 rotate-45 border-[#7d5fff] bg-white ${tail === 'down' ? '-bottom-[4.5px] border-b border-r' : '-top-[4.5px] border-l border-t'}`}
+      />
+    </span>
+  );
+
+  // 로그인 화면 간편 로그인: 동그란 아이콘 (회원가입 화면은 큰 버튼 그대로)
+  function socialCircles() {
+    if (social.length === 0 || (linkFor && linkFor !== 'google')) return null;
+    const choices = linkFor === 'google' ? social.filter((p) => p !== 'google') : social;
+    const socialRecent = recent !== null && choices.includes(recent as SocialProvider);
+    return (
+      <div className="grid gap-2 pt-2">
+        <p className="flex items-center gap-2 text-[12px] text-[#8a87a0] before:h-px before:flex-1 before:bg-[#e6e3ef] after:h-px after:flex-1 after:bg-[#e6e3ef]">{t.quickLogin}</p>
+        <div className={`flex justify-center gap-5 ${socialRecent ? 'pt-7' : 'pt-1'}`}>
+          {choices.map((p) => (
+            <div key={p} className="relative">
+              {recent === p && <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2">{bubble('down')}</span>}
+              <button
+                type="button"
+                disabled={busy}
+                aria-label={t.social[p]}
+                title={t.social[p]}
+                onClick={() => socialLogin(p)}
+                className={`flex h-[52px] w-[52px] items-center justify-center rounded-full disabled:opacity-40 ${p === 'kakao' ? 'bg-[#FEE500]' : p === 'naver' ? 'bg-[#03C75A]' : 'border border-[#d9d5e8] bg-white'}`}
+              >
+                {p === 'kakao' ? (
+                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden><path fill="#191600" d="M12 3.5c-5 0-9 3.1-9 7 0 2.5 1.7 4.7 4.2 5.9l-.9 3.3c-.1.3.2.5.5.3l3.9-2.6c.4 0 .9.1 1.3.1 5 0 9-3.1 9-7s-4-7-9-7z" /></svg>
+                ) : p === 'naver' ? (
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="#fff" d="M15.6 12.8 8.1 2H2v20h6.4V11.2L15.9 22H22V2h-6.4z" /></svg>
+                ) : <GoogleIcon />}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // ── 카카오·네이버 첫 로그인
   async function chooseNew() {
     if (!sb) return;
     setBusy(true);
-    await sb.auth.updateUser({ data: { edge_new_member: true, terms_agreed_at: new Date().toISOString() } });
+    const { error: e } = await sb.auth.updateUser({ data: { edge_new_member: true, terms_agreed_at: new Date().toISOString() } });
     setBusy(false);
+    if (e) return setError(t.network);
     await routeAfterLogin();
   }
 
@@ -519,6 +637,10 @@ export default function LoginFlow() {
     if (!sb) return;
     setBusy(true);
     const { data: user } = await sb.auth.getUser();
+    if (!canDiscardSocialAccount((user.user?.identities ?? []).map((i) => i.provider))) {
+      setBusy(false);
+      return setError(t.googleConflict);
+    }
     const p = (user.user?.identities ?? []).map((i) => i.provider).find((x) => x !== 'email') ?? '';
     const provider: SocialProvider = p.includes('naver') ? 'naver' : 'kakao';
     // 방금 카카오·네이버로 생긴 빈 계정을 지워야 기존 계정에 연결할 수 있음 (회원 연결이 있는 계정은 DB가 지우지 않음)
@@ -539,6 +661,8 @@ export default function LoginFlow() {
     setPendingLink(null);
     setLinkFor(null);
     setJoined(false);
+    setRecent(readRecent());
+    try { sessionStorage.removeItem(GOOGLE_LINK_USER_KEY); sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
     go('login');
   }
 
@@ -578,6 +702,7 @@ export default function LoginFlow() {
   const errText = 'mt-1 block text-[13px] font-semibold text-[#b3261e]';
   const h1 = 'text-[22px] font-bold text-[#1d1b2b]';
   const linkBtn = 'min-h-[44px] px-1 text-[14px] text-[#55526a]';
+  const smallLink = 'min-h-[40px] px-0.5 text-[13px] leading-snug text-[#55526a]';
   const has = (p: SignupProblem) => problems.includes(p);
 
   const passwordInput = (id: string, label: string, autoComplete: string, onEnter: () => void, bad: boolean, placeholder?: string) => (
@@ -615,7 +740,7 @@ export default function LoginFlow() {
   );
 
   return (
-    <div className="flex min-h-dvh flex-col items-center px-[18px] pb-10 pt-6">
+    <div className="flex flex-col items-center px-4 pb-14 pt-6 sm:px-[18px]">
       <div className="flex w-full max-w-[400px] justify-end">
         <div role="group" aria-label="Language" className="flex rounded-full border border-[#d9d5e8] bg-white p-0.5 text-[13px]">
           {(['ko', 'en'] as const).map((l) => (
@@ -632,12 +757,7 @@ export default function LoginFlow() {
         </div>
       </div>
 
-      <div className="mt-6 text-center">
-        <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="mx-auto h-[36px] w-auto" />
-        <p className="mt-1 text-[14px] text-[#55526a]">{t.portal}</p>
-      </div>
-
-      <main className="mt-7 w-full max-w-[400px] rounded-[22px] border border-[#e6e3ef] bg-white px-5 py-6">
+      <main className="mt-4 w-full max-w-[400px] rounded-[22px] border border-[#e6e3ef] bg-white px-4 py-6 sm:px-5">
         {!sb && <p className="text-[14px] text-[#b3261e]">{t.network}</p>}
 
         {step === 'login' && (
@@ -651,7 +771,6 @@ export default function LoginFlow() {
             <h1 className={h1}>{t.loginTitle}</h1>
             {isMakeupLink(next) && <p className="rounded-[12px] bg-[#efeaff] px-3.5 py-2.5 text-[13.5px] font-semibold text-[#3a22b0]">{t.makeupNext}</p>}
             {linkFor && <p className="rounded-[12px] bg-[#efeaff] px-3.5 py-2.5 text-[13.5px] font-semibold text-[#3a22b0]">{t.linkNotice(t.socialName[linkFor])}</p>}
-            {socialButtons()}
             <label className="block" htmlFor="login-email">
               <span className={fieldLabel}>{t.emailLabel}</span>
               <input
@@ -671,19 +790,30 @@ export default function LoginFlow() {
             <button type="submit" disabled={busy} className={`${primary} bg-[#5b3df0]`}>
               {t.login}
             </button>
-            <button type="button" disabled={busy} className="flex min-h-[52px] w-full items-center justify-center rounded-[14px] border-[1.5px] border-[#5b3df0] text-[16px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => sendLoginCode()}>
-              {t.codeLogin}
-            </button>
-            <div className="flex flex-wrap justify-center gap-x-4">
-              <button type="button" className={`${linkBtn} ${badLogin ? 'font-bold text-[#1d1b2b]' : ''}`} onClick={() => go('pw_email')}>
+            {recent === 'password' && <div className="-mt-1 flex justify-center">{bubble('up')}</div>}
+            {/* 두 링크는 한 줄 두 칸 — 좁은 휴대폰·영어에서도 구분선이 따로 떨어지지 않게 칸 안에서만 줄바꿈 */}
+            <div className="grid grid-cols-[minmax(0,auto)_1px_minmax(0,auto)] items-start justify-center gap-x-2.5 text-center">
+              <button type="button" className={`${smallLink} ${badLogin ? 'font-bold text-[#1d1b2b]' : ''}`} onClick={() => go('pw_email')}>
                 {t.pwLink}
               </button>
-              {!linkFor && (
-                <button type="button" className={`${linkBtn} font-bold text-[#1d1b2b]`} onClick={() => { setPassword(''); go('signup'); }}>
+              <span aria-hidden className="mt-[15px] h-[11px] w-px bg-[#d9d5e8]" />
+              <span className="flex flex-col items-center">
+                <button type="button" disabled={busy} className={`${smallLink} disabled:opacity-40`} onClick={() => sendLoginCode()}>
+                  {t.codeLogin}
+                </button>
+                {recent === 'code' && <span className="relative z-[1] -mt-1">{bubble('up')}</span>}
+              </span>
+            </div>
+            {socialCircles()}
+            {linkFor === 'google' && <button type="button" className={ghost} onClick={() => { setPendingLink(null); setLinkFor(null); go('login'); }}>{t.cancelLink}</button>}
+            {!linkFor && (
+              <div className="flex items-center justify-center gap-1.5 text-[14px] text-[#55526a]">
+                <span>{t.noAccount}</span>
+                <button type="button" className={`${linkBtn} font-bold text-[#5b3df0]`} onClick={() => { setPassword(''); go('signup'); }}>
                   {t.signupLink}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </form>
         )}
 
@@ -902,6 +1032,17 @@ export default function LoginFlow() {
           </div>
         )}
 
+        {step === 'google_choice' && (
+          <div className="grid gap-3">
+            <h1 className={h1}>{t.googleTitle}</h1>
+            <p className="text-[14px] leading-relaxed text-[#55526a]">{t.googleLead}</p>
+            <button type="button" disabled={busy} className={`${primary} bg-[#5b3df0]`} onClick={() => { setPendingLink('google'); setLinkFor('google'); go('login'); }}>{t.googleLink}</button>
+            <button type="button" disabled={busy} className="min-h-[52px] rounded-[14px] border border-[#d9d5e8] px-3 text-[15px] font-semibold text-[#1d1b2b]" onClick={() => socialLogin('google', true)}>{t.googleReturning}</button>
+            <button type="button" disabled={busy} className={ghost} onClick={() => socialLogin('google', true)}>{t.googleNew}</button>
+            <button type="button" disabled={busy} className={ghost} onClick={() => go('login')}>{t.backLogin}</button>
+          </div>
+        )}
+
         {step === 'social_choice' && (
           <div className="grid gap-3">
             <h1 className={h1}>{t.socialTitle}</h1>
@@ -912,6 +1053,7 @@ export default function LoginFlow() {
             <button type="button" disabled={busy} onClick={chooseExisting} className="flex min-h-[52px] w-full items-center justify-center rounded-[14px] border-[1.5px] border-[#5b3df0] text-[16px] font-bold text-[#5b3df0] disabled:opacity-40">
               {t.socialExisting}
             </button>
+            <button type="button" className={ghost} onClick={logout}>{t.logout}</button>
           </div>
         )}
 
@@ -947,9 +1089,6 @@ export default function LoginFlow() {
         )}
       </main>
 
-      <Link href="/" className="mt-5 text-[13px] text-[#4b2fd6]">
-        {t.backHome}
-      </Link>
     </div>
   );
 

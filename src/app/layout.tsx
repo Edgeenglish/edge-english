@@ -47,14 +47,16 @@ export default function RootLayout({
   return (
     <html lang="ko" data-theme="light">
       <body>
-        <SiteChrome>
+        <SiteChrome lms>
           <Header />
         </SiteChrome>
 
         <main>{children}</main>
 
-        <SiteChrome>
+        <SiteChrome lms>
           <FloatingMenu />
+        </SiteChrome>
+        <SiteChrome lms footer>
           <Footer />
         </SiteChrome>
       </body>

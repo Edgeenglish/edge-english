@@ -14,10 +14,15 @@
 - 시험 DB 실제 수신(11/16): STU-0002·STU-0018 24시간 전 메일 support@ 도착. 시험 DB 예약 실행이 계속 돌아 12시간 전 메일(오늘 밤)·STU-9004·STU-0013 메일도 support@ 로 옴 = 시험 데이터 그대로 둠
 - 운영 반영 = migration 1개 적용(함수 3개 새로 + cron 명령 교체, 데이터 안 바뀜 → 되돌리기: cron 명령을 'select lms_renewal_mail_run(); select lms_mail_run();' 으로). 코드(lms-prod) 변경 없음
 
-## ▶ 다음 세션 작업 (H26(206) 참고): 홈페이지와 LMS를 한 사이트처럼 — 공통 위쪽 틀 시안부터
-- 지금: 홈페이지(src/app/layout.tsx · Header.tsx · Footer.tsx)와 LMS(src/app/lms/layout.tsx, 운영/시험 DB 띠 + 화면마다 자체 머리글: AdminHeader·TutorHome·StudentHome)가 틀이 다름. /privacy·/terms 는 홈페이지 틀, /lms/login 은 LMS 틀
-- 할 일(H26(206) 보충 혼합형 확정): PC·휴대폰 시안 — 로그인·가입 = 홈페이지 메뉴+바닥글 / 학생 = 홈페이지 위 메뉴·바닥글 그대로 + 가운데 LMS(학생 화면 자체 머리글 없애고 학생 메뉴는 내용 위 탭, [로그인]→[내 수업]) / 강사 = 같은 위쪽 틀 + 영어 강사 메뉴 / 운영자 = 같은 위쪽 틀 + 운영 메뉴 → 대표 선택 → 개발 → 시험 사이트 → 운영
-- 주의: 운영/시험 DB 띠(db-env.ts)를 일반 회원에게도 보일지 함께 정하기(지금 운영 로그인 화면 맨 위에 '운영 DB · 실제 데이터'가 모두에게 보임). 기존 LMS 기능·데이터 안 바꿈
+## ✅ 11/17 학생·로그인 화면 홈페이지 틀 통합 — 시험 사이트 반영·동선 확인 끝, **운영 배포 대표 결정 대기** (H26(207), 브랜치 claude/awesome-brown-xp0c9u)
+- 커밋 db4613e (lms-test). 수정: src/app/layout.tsx · components/SiteChrome.tsx(inSiteFrame: /lms/login·/lms/student 만 홈페이지 Header·Footer, 떠 있는 버튼은 LMS 에서 숨김) · components/Header.tsx(LMS 에서 [로그인/내 수업] 굵게) · app/lms/LmsShell.tsx(틀 안 화면은 화면 높이 안 채움) · app/lms/layout.tsx · lms/login/LoginFlow.tsx(로그인 상자 새 배치, '최근 로그인' localStorage `lms-recent-login` = password·code·kakao·naver, 로고·'홈페이지로' 링크 없앰) · lms/auth/login-flow.ts(문구 3개) · student/StudentHome.tsx(자체 로고 없앰, 바닥글 여백은 SiteChrome)
+- 강사·운영자 화면 파일 안 건드림. 회원가입 단계의 카카오·네이버 큰 버튼은 그대로
+- 운영 DB 띠: 11/17 긴급 수정 운영 반영(71dfc69 학생·로그인에서 숨김, 운영자 화면·운영자 보기에만 ProdBand/ProdChip). 자동 점검 = src/lms/auth/internal-marks.test.ts + scripts/check-public-pages.sh (CLAUDE.md)
+- 시험(11/17): vitest 51파일 507개 통과, next build 통과, 로컬 320·360·390·1280px 가로 넘침 0·말풍선 4종(한국어·영어), 시험 사이트 학생 윤지호 STU-0018(메일 코드, support@ 수신) PC·iPhone 13: 홈페이지 → [로그인] → 학생 화면([내 수업]) → 수업료 → [내 수업] 다시 학생 화면, 화면에 내부용 글 없음, 최근 로그인 code 저장
+- 운영 배포 때: `git log origin/lms-test..origin/lms-prod` 먼저(운영에만 있는 커밋 많음 — lms-test 통째 배포 금지, 이 묶음만 골라 담기: db4613e 의 코드 파일) → push → `bash scripts/check-public-pages.sh` → 대표 본인 학생 계정으로 확인
+- 11/17 추가(시험 사이트만): 시험 띠 한 줄로, 머리글 오른쪽 위 [로그아웃](학생 왼쪽 메뉴·내 정보 탭 로그아웃 없앰), 카카오톡·맨 위로 버튼 학생·로그인 화면에도(휴대폰은 아래 메뉴 위로). 운영자 보기(학생) PC·휴대폰 확인: 머리글 아래 시험 띠 → 운영자 보기 막대, 겹침·넘침 없음. 운영 띠 색 빠짐(ProdBand 가 Tailwind content 밖 src/lms 에 있었음) → src/components 로 옮겨 운영 반영(11/17)
+- **대표 확인용 시험 계정 (11/17 대표 '지우지 말고 계속 둬')**: 시험 사이트 학생 윤지호 STU-0018 `support+stu0018@edgeenglish.kr`, 강사 Alex `support+alex@edgeenglish.kr` — 둘 다 11/17 비밀번호 만들어 대표에게 줌(값은 기록 안 함). 지우거나 비밀번호 바꾸지 말 것. 메일 코드는 support@ 로 옴
+- 시안: https://claude.ai/artifact/WhqQQQtR5VXM54wkmgtSVg (6판 — 말풍선은 꽉 찬 모양으로 남아 있음, 실제 화면이 기준)
 
 ## ⏸ 11/16 회원가입·로그인 운영 공개 준비 점검 (브랜치 claude/nice-keller-dmfuv3, 실행 없음 — 대표 답 대기)
 - 네이버 로그인 검수 11/16 승인(대표). 임시 설정 정리는 다른 세션 담당 — 건드리지 않음
@@ -27,7 +32,8 @@
 - lms-prod 에만 있는 커밋 7개 = [학생에게 연락하기] — 내용은 lms-test 에 모두 있음(src 차이 없음), 합칠 것 없음
 - ⏪ 11/16 23:30~11/17 00:00 KST 운영 반영 후 되돌림 (H26(205) 보충): 백업 snapshots **70** → migration 2개 운영 적용(유지) → lms-prod 65a1d1e 배포(시행일 11/17) → Work 가입 허용 켬 → Claude 운영 QA 통과(support+prodsignup1116@ 가짜 이름 정하윤 가입·메일 코드·비밀번호 로그인·권한 0건/운영자 함수 거절, 계정 남겨 둠) → **기존 회원이 메일 코드 로그인을 잃는 문제로 대표 '되돌림'**: Work 가입 허용 끔(Claude 확인 signup_disabled) → lms-prod 되돌림 커밋 8c31f73·e81fea5(코드 = 3908254 와 같음, /privacy 404) → 예전 메일 코드 로그인 운영 확인(코드 메일·입력 통과). 유지: DB 함수 2개·Supabase 카카오/네이버 등 설정 2~9·시험 계정
 - ✅ 11/17 00:10 KST **운영 공개**: lms-prod 9b153f1 배포(시행일 11/17) → Work 가입 허용 켬 → Claude 운영 QA(메일 코드·가입 윤서진 support+prodsignup1117@·비밀번호·권한 차단, 학생 13·수업 192·회원 연결 18 그대로) → 대표 PC: 카카오(시에나 개인)는 같은 이메일이라 STU-0013 에 자동 연결 → 대표 '해'로 운영자 계정에 옮김(백업 snapshots **71** = identity 1줄, 되돌리기 = user_id 를 STU-0013 로) → 지금 운영자 = 이메일+카카오+네이버, STU-0013 = 이메일만. 네이버는 '이미 회원이에요'+비밀번호로 운영자 계정에 연결 통과. 실제 수강생 STU-0005 가 카카오 로그인 → 본인 계정 자동 연결(정상). 빈 계정 1개(개인 네이버로 실수 로그인, 연결 없음) 남김
-- ⚠ 확인 중: 다른 네이버 계정으로 로그인 시 네이버 화면 '엣지영어 서비스 설정에 오류가 있어 네이버 아이디로 로그인할 수 없습니다' → 운영용 네이버 앱이 '개발 중'(멤버만 로그인)일 가능성(추정) → Work 에 앱 상태·멤버 수·Callback·서비스 URL 확인 요청(대표 전달)
+- ✅ 11/17 옛 운영 주소 넘김(대표 '응'): 원인 = 옛 Vercel 주소(edge-english-git-lms-prod-…)에서 네이버 로그인 → 네이버 서비스 URL(edgeenglish.kr)과 달라 '서비스 설정 오류'. src/proxy.ts OLD_PROD_HOST 면 환경변수 없이 /lms 를 같은 경로·쿼리로 edgeenglish.kr 307 → lms-prod f700908. 확인: 옛 주소 /lms/student?makeup=abc·/lms/login?next= → edgeenglish.kr 그대로, 새 주소·시험 사이트·옛 주소 홈페이지 200. 학생·강사는 기기마다 1번 재로그인(메일 코드). 되돌리기 = OLD_PROD_HOST 줄 빼고 배포
+- (해결됨) 다른 네이버 계정으로 로그인 시 네이버 화면 '엣지영어 서비스 설정에 오류가 있어 네이버 아이디로 로그인할 수 없습니다' → 운영용 네이버 앱이 '개발 중'(멤버만 로그인)일 가능성(추정) → Work 에 앱 상태·멤버 수·Callback·서비스 URL 확인 요청(대표 전달)
 - ✅ 11/17 00:00 KST 메일 코드 로그인 추가(lms-test 473ff1c): 로그인 화면 [로그인] 아래 테두리 버튼 '메일 코드로 로그인' → 같은 화면 이메일로 코드(shouldCreateUser false) → 코드 화면(코드 입력·[로그인]·이메일 고치기·다시 받기). 시험 사이트 확인: Alex(강사) 코드 → 강사 Home · support@(운영자) 코드 → 인증 앱 화면 · 휴대폰 넘침 0 · vitest 503. 운영 배포 묶음 v2 = 로컬 worktree 9b153f1(origin/lms-prod e81fea5 위, 시행일 11/17, next build 통과, push 안 함)
 - ▶ 다음(대표 '응', H26(150) ⑤ 변경): 새 로그인 화면에 **'메일 코드로 로그인'** 다시 추가(누구나, shouldCreateUser false, 운영자는 코드 뒤 인증 앱) + 카카오·네이버 '이미 회원이에요' 연결도 메일 코드로 가능하게 → 시험 사이트에서 신규 가입·비밀번호·메일 코드·카카오·네이버·기존 계정 연결·운영자 TOTP 시험 → 대표 '응' → 운영 배포(배포 묶음 방법 위와 같음, 65a1d1e 재사용 가능) → Work 가입 허용 → 운영 QA → 대표 휴대폰(카카오·네이버 '이미 회원이에요' 로 support@ 연결, 새 운영자 계정 안 생기는지 DB 확인) → 공개
 - ✅ 11/16 Work 운영 Supabase 미리 설정(대표 전달 보고): 비밀번호 8·가입 메일 템플릿·수동 연결·카카오·네이버(custom:naver)·Site URL/Redirect(https://edgeenglish.kr/**) 반영, **가입 허용은 꺼둠(공개 직전 Work 에 한 줄 요청)**. Claude 확인: 운영 settings kakao true·signup 막힘, authorize kakao·custom:naver 302(운영 앱 client_id). 운영 화면은 아직 옛 코드라 버튼 안 보임
