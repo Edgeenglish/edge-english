@@ -7,9 +7,9 @@
 
 
 
-## ⏳ 11/17 학생 홈 [정규 시간 변경]·[강사 변경 요청] — 시안, 대표 답 대기 (H26(208), 브랜치 claude/pensive-davinci-7uksza)
+## ⏳ 11/17 학생 홈 [정규 시간 변경]·[강사 변경 상담] — 최종 시안·기준 확정(H26(208) 보충), 개발 시작 지시 대기 (H26(208), 브랜치 claude/pensive-davinci-7uksza)
 - 시안 `docs/lms/previews/student-regular-tutor-change-drafts.html` · https://claude.ai/artifact/X5VctaggcpPUgj58qZsb6N
-- 대표 답 대기 Q1~Q8(4주 1회 세는 법·4일 마감 시각·한 주 기준·가능 시간 확인 주 수·주 2회 처리·승인 지연·신청 취소·② 버튼 이름). 답 받으면 시험 DB·lms-test 개발 (가능 시간 = student_makeup_options 계산 재사용, 확정 = admin_regular_change 미리 보기 검사 재사용)
+- 기준 8개 확정 = H26(208) 보충. 개발: 가능 시간 = student_makeup_options 계산 재사용(수강기간 끝까지 매주), 확정 = admin_regular_change 미리 보기 검사 재사용, 적용 = 월요일 주 단위
 
 ## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)** 참고)
 - migration **20261113120000_lms_student_late_notice** (시험 DB 적용): 표 student_late_notices(수업당 1줄) · tutor_updates 종류 'student_late' · 함수 student_late_notice(보내기, 시작 2시간 전~끝나기 전만) · student_late_notices(읽기). 운영 표 수 60 → 61 (prod-setup 02-check 고침)
