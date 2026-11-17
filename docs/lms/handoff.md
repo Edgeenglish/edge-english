@@ -1,3 +1,8 @@
+## ⏸ 11/17 머리글 [내 수업] 바로 학생 홈 — lms-test 반영, 운영 미반영 (브랜치 claude/quirky-bell-j29fzz, 대표 답 대기: 강사·운영자도 바꿀지)
+- 수정: `src/lms/auth/home.ts`(새, 역할→홈 주소 한 곳 — 지금 학생만) · `components/Header.tsx`([내 수업] href) · `app/lms/page.tsx`+`LmsIndexGo.tsx`(/lms 메일 링크도 같게, ?next= 등 있으면 예전처럼 로그인 화면) · `student/StudentLive.tsx`(역할 확인과 학생 자료를 함께 불러옴) · `student/StudentHome.tsx`(교재 둘러보기 next/link)
+- 시험(시험 사이트, STU-0018 메일 코드 로그인 — 비밀번호 안 건드림, 끝나고 세션 로그아웃): PC·iPhone 13 [내 수업] 경로 / → /lms/student(로그인 화면 0번), /lms → /lms/student, 로그아웃 상태 [로그인]·/lms → /lms/login, 풀린 세션 → /lms/login 모두 통과
+- 강사·운영자로 넓히려면 `homeForRole` 에 tutor→/lms/tutor, admin(aal2)→/lms/admin 추가
+
 ## 11/17 학생 정상 취소 대체수업의 보강 강사 선택 — 시험 후 운영 반영 완료
 - 대표 승인: 학생이 미리 취소한 대체수업(공휴일 정상 취소 포함)도 원래 강사/대체강사 중 선택. 학생 직전 취소·결석의 보강 불가 및 무료 노쇼 보상수업의 강사 고정·무급 정책 유지.
 - migration 20261117123711_lms_student_canceled_cover_tutor_choice. 시험 DB 68항목 통과 후 운영 적용. 운영 함수 백업 snapshots 73, 복구는 저장된 lms_makeup_tutors 정의 재실행. 학생·수업 데이터 변경 없음. 화면 코드 변경 없음.
