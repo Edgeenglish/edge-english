@@ -1,0 +1,269 @@
+<title>학생 자기소개 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap">
+<style>
+/* 레이아웃: 시안 A~E를 위에서 아래로, 각 시안은 PC 틀 + 휴대폰 틀 나란히(좁으면 세로) */
+:root{
+  --bg:#f4f3f8; --card:#ffffff; --fg:#1f1d2b; --sub:#69667c; --line:#e7e5ef;
+  --accent:#5b3df0; --accent-soft:#efecfd; --todo:#f0a33a; --todo-soft:#fff8ea;
+  --ok:#176c45; --ok-soft:#e5f5ed; --warn:#c0392b; --frame:#2b2838;
+  --font:'Noto Sans KR',system-ui,-apple-system,'Apple SD Gothic Neo',sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#17161d; --card:#23212c; --fg:#ecebf3; --sub:#a4a1b8; --line:#363346;
+  --accent:#8d78ff; --accent-soft:#2f2a4d; --todo:#f0a33a; --todo-soft:#3a2f1a;
+  --ok:#5fd19a; --ok-soft:#1d3a2c; --warn:#ff8a7a; --frame:#5a566b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#17161d; --card:#23212c; --fg:#ecebf3; --sub:#a4a1b8; --line:#363346;
+  --accent:#8d78ff; --accent-soft:#2f2a4d; --todo:#f0a33a; --todo-soft:#3a2f1a;
+  --ok:#5fd19a; --ok-soft:#1d3a2c; --warn:#ff8a7a; --frame:#5a566b; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:28px}
+h1{font-size:24px;margin:0;text-wrap:balance}
+h2.sec{font-size:19px;margin:0 0 4px}
+.lead{color:var(--sub);margin:4px 0 0}
+.decide{background:var(--card);border:2px solid var(--accent);border-radius:14px;padding:16px;display:grid;gap:10px}
+.decide h2{margin:0;font-size:17px}
+.q{display:grid;gap:4px;padding-top:10px;border-top:1px solid var(--line)}
+.q b{font-size:15px}
+.q .opt{color:var(--sub)}
+.q .rec{color:var(--accent);font-weight:700}
+.row{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.lab{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--sub);margin-bottom:6px}
+.pc{flex:1 1 640px;min-width:0}
+.pcframe{border:6px solid var(--frame);border-radius:12px;background:var(--bg);overflow-x:auto}
+.pcin{min-width:640px;padding:16px;display:grid;gap:12px}
+.phone{flex:0 0 360px;max-width:100%}
+.phframe{border:8px solid var(--frame);border-radius:30px;background:var(--bg);padding:14px 12px;display:grid;gap:10px;max-width:360px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px}
+.pad{padding:14px 16px}
+.todo{border:2px solid var(--todo);border-radius:18px;background:var(--card);overflow:hidden}
+.todo .hd{background:var(--todo-soft);padding:8px 14px;font-weight:800}
+.todo .it{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;min-height:52px;font-weight:700}
+.todo .it .go{color:var(--accent);font-weight:800}
+.badge{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700}
+.b-ok{background:var(--ok-soft);color:var(--ok)}
+.b-wait{background:var(--todo-soft);color:#9a5b00}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .b-wait{color:var(--todo)}}
+:root[data-theme="dark"] .b-wait{color:var(--todo)}
+.b-no{background:var(--accent-soft);color:var(--accent)}
+.muted{color:var(--sub)}
+.small{font-size:12.5px}
+.f{display:grid;gap:5px}
+.f label{font-weight:700;font-size:14px}
+.f .ex{font-size:12.5px;color:var(--sub)}
+.inp{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px 12px;color:var(--fg);min-height:42px}
+.inp.tall{min-height:64px}
+.inp.ph{color:var(--sub)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:700;background:var(--card)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn{display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:12px;background:var(--accent);color:#fff;font-weight:800}
+.btn.ghost{background:var(--card);color:var(--accent);border:1px solid var(--line);min-height:40px;padding:0 14px;display:inline-flex}
+.modal{background:var(--card);border-radius:18px;border:1px solid var(--line);padding:18px;display:grid;gap:14px;max-width:560px;margin:0 auto;width:100%}
+.mtop{display:flex;justify-content:space-between;align-items:center}
+.mtop b{font-size:18px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;padding:9px 0;border-top:1px solid var(--line)}
+.kv:first-of-type{border-top:0}
+.kv .k{color:var(--sub)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+.note{font-size:13px;color:var(--sub);background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
+.ko{font-size:12.5px;color:var(--sub)}
+.dim{opacity:.55}
+.tag{font-size:11px;font-weight:800;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;margin-left:6px}
+@media (max-width:700px){.cols,.two{grid-template-columns:1fr}.kv{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>학생 자기소개 시안</h1>
+  <p class="lead">학생이 첫 수업 전에 LMS에서 직접 쓰는 자기소개 7항목. 시험 학생 박서연(신규, 첫 수업 전) 기준. A 할 일 → B 쓰기 → C 내 정보 → D 운영자 → E 강사 순서.</p>
+</header>
+
+<section class="decide" aria-label="정할 것">
+  <h2>정할 것 — 번호로 답해 주세요 (예: 1 가 2 가 3 가 4 가)</h2>
+  <div class="q"><b>1. 꼭 써야 하는 칸</b>
+    <span class="opt">가) 7개 모두 필수 · 나) 1~5번만 필수, 6·7은 선택</span>
+    <span class="rec">추천 가) 6·7번은 누르기만 하면 돼서 학생 부담이 거의 없고, 강사에게 꼭 필요한 정보입니다.</span></div>
+  <div class="q"><b>2. 쓰기 창 맨 위 안내 한 줄 (B 시안의 보라 줄)</b>
+    <span class="opt">"한국어로 써 주시면 영어로 옮겨 강사님께 전해 드려요." 가) 넣음 · 나) 뺌</span>
+    <span class="rec">추천 가) 없으면 영어로 써야 하는지 망설이다 미루는 학생이 생길 수 있습니다. 지금 카톡 안내에도 있는 문장입니다.</span></div>
+  <div class="q"><b>3. 제출 뒤 학생이 고칠 수 있게 할지</b>
+    <span class="opt">가) 언제든 고칠 수 있음. 고치면 운영자 처리할 일에 '자기소개 번역'이 다시 뜸 · 나) 제출하면 고칠 수 없음(운영진에게 카톡)</span>
+    <span class="rec">추천 가) 운영진에게 카톡하는 일이 줄어듭니다.</span></div>
+  <div class="q"><b>4. 첫 수업 전까지 안 쓴 학생 표시</b>
+    <span class="opt">가) 운영자 학생 상세에 '자기소개 아직'만 표시 · 나) 대시보드 처리할 일에도 띄움</span>
+    <span class="rec">추천 나) 지금처럼 카톡으로 다시 요청해야 하니, 대시보드에서 바로 보이는 쪽이 놓치지 않습니다. 띄우는 시점(첫 수업 몇 시간 전 등)은 대표님이 정해 주세요.</span></div>
+  <p class="small muted">번역은 합의대로 운영진이 합니다(D 시안). 자동 번역은 새 서비스·비용이 드는 일이라 이번에 넣지 않습니다.</p>
+</section>
+
+<!-- A -->
+<section>
+  <h2 class="sec">A. 학생 홈 — 할 일</h2>
+  <p class="lead small">제출하기 전까지 할 일에 보입니다. 누르면 B 쓰기 창이 열립니다.</p>
+  <div class="row" style="margin-top:10px">
+    <div class="pc"><div class="lab">PC</div><div class="pcframe"><div class="pcin">
+      <div class="todo"><div class="hd">할 일</div>
+        <div class="it"><span>첫 수업 전 자기소개 쓰기</span><span class="go">쓰기 ›</span></div></div>
+      <div class="card pad"><b>다음 수업</b><div class="muted small">(기존 홈 화면 그대로)</div></div>
+    </div></div></div>
+    <div class="phone"><div class="lab">휴대폰</div><div class="phframe">
+      <div class="todo"><div class="hd">할 일</div>
+        <div class="it"><span>첫 수업 전 자기소개 쓰기</span><span class="go">쓰기 ›</span></div></div>
+      <div class="card pad"><b>다음 수업</b><div class="muted small">(기존 홈 화면 그대로)</div></div>
+    </div></div>
+  </div>
+</section>
+
+<!-- B -->
+<section>
+  <h2 class="sec">B. 자기소개 쓰기 창</h2>
+  <p class="lead small">PC는 가운데 창, 휴대폰은 전체 화면. 예시는 칸 안의 흐린 글자로만 보여 줍니다.</p>
+  <div class="row" style="margin-top:10px">
+    <div class="pc"><div class="lab">PC</div><div class="pcframe"><div class="pcin">
+      <div class="modal">
+        <div class="mtop"><b>자기소개</b><span class="muted">✕</span></div>
+        <div class="note" style="border-style:solid;border-color:var(--accent);color:var(--accent);font-weight:700">한국어로 써 주시면 영어로 옮겨 강사님께 전해 드려요.</div>
+        <div class="two">
+          <div class="f"><label for="pc1">1. 직업</label><div id="pc1" class="inp">마케팅 회사 다녀요</div></div>
+          <div class="f"><label for="pc2">2. 취미</label><div id="pc2" class="inp">러닝, 넷플릭스 보기</div></div>
+        </div>
+        <div class="f"><label for="pc3">3. 관심사</label><div id="pc3" class="inp ph">예: 요즘 좋아하는 것, 빠져 있는 것</div></div>
+        <div class="f"><label for="pc4">4. 영어에서 개선하고 싶은 부분</label><div id="pc4" class="inp tall ph">예: 어휘, 리딩, 리스닝, 스피킹, 라이팅, 발음</div></div>
+        <div class="f"><label for="pc5">5. 수업에서 바라는 점·분위기</label><div id="pc5" class="inp tall ph">예: 천천히 진행해 주셨으면 좋겠어요, 발음을 자세히 교정받고 싶어요</div></div>
+        <div class="f"><label>6. 수업 중 교정은 어떻게 받는 게 편하세요?</label>
+          <div class="chips"><span class="chip on">바로바로 교정</span><span class="chip">큰 실수 위주만</span></div>
+          <div class="inp ph">더 하고 싶은 말 (선택)</div></div>
+        <div class="f"><label>7. 선호하는 수업 스타일</label>
+          <div class="chips"><span class="chip">교재</span><span class="chip on">프리토킹</span><span class="chip">아직 잘 모르겠음</span></div>
+          <div class="inp ph">더 하고 싶은 말 (선택)</div></div>
+        <div class="btn">제출</div>
+      </div>
+    </div></div></div>
+    <div class="phone"><div class="lab">휴대폰</div><div class="phframe">
+      <div class="mtop"><b>자기소개</b><span class="muted">✕</span></div>
+      <div class="note" style="border-style:solid;border-color:var(--accent);color:var(--accent);font-weight:700">한국어로 써 주시면 영어로 옮겨 강사님께 전해 드려요.</div>
+      <div class="f"><label for="m1">1. 직업</label><div id="m1" class="inp">마케팅 회사 다녀요</div></div>
+      <div class="f"><label for="m2">2. 취미</label><div id="m2" class="inp">러닝, 넷플릭스 보기</div></div>
+      <div class="f"><label for="m3">3. 관심사</label><div id="m3" class="inp ph">예: 요즘 좋아하는 것, 빠져 있는 것</div></div>
+      <div class="f"><label for="m4">4. 영어에서 개선하고 싶은 부분</label><div id="m4" class="inp tall ph">예: 어휘, 리딩, 리스닝, 스피킹, 라이팅, 발음</div></div>
+      <div class="f"><label for="m5">5. 수업에서 바라는 점·분위기</label><div id="m5" class="inp tall ph">예: 천천히 진행해 주셨으면 좋겠어요</div></div>
+      <div class="f"><label>6. 수업 중 교정은 어떻게 받는 게 편하세요?</label>
+        <div class="chips"><span class="chip on">바로바로 교정</span><span class="chip">큰 실수 위주만</span></div></div>
+      <div class="f"><label>7. 선호하는 수업 스타일</label>
+        <div class="chips"><span class="chip">교재</span><span class="chip on">프리토킹</span><span class="chip">아직 잘 모르겠음</span></div></div>
+      <div class="btn">제출</div>
+      <p class="small" style="color:var(--warn);margin:0">3번 칸을 써 주세요</p>
+    </div></div>
+  </div>
+  <p class="small muted" style="margin-top:8px">빈 필수 칸이 있으면 [제출]을 누른 뒤 그 칸 바로 아래에 빨간 글자로 보여 줍니다(휴대폰 맨 아래 빨간 줄은 예시 위치 설명용, 실제로는 3번 칸 밑).</p>
+</section>
+
+<!-- C -->
+<section>
+  <h2 class="sec">C. 내 정보 — 내 자기소개</h2>
+  <p class="lead small">제출 뒤 할 일에서 사라지고, 내 정보의 '나의 학습 정보(강사님 작성)' 아래에 보입니다. [수정]은 3번 답에 따라 있거나 없음.</p>
+  <div class="row" style="margin-top:10px">
+    <div class="pc"><div class="lab">PC</div><div class="pcframe"><div class="pcin">
+      <div class="cols">
+        <div style="display:grid;gap:12px">
+          <div class="card pad dim"><b>박서연님</b><div class="small muted">프로필 (기존 그대로)</div></div>
+          <div class="card pad dim"><b>나의 학습 정보 · 강사님 작성</b><div class="small muted">(기존 그대로)</div></div>
+          <div class="card pad">
+            <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:15px">내 자기소개</b><span class="btn ghost">수정</span></div>
+            <div class="kv"><span class="k">직업</span><span>마케팅 회사 다녀요</span></div>
+            <div class="kv"><span class="k">취미</span><span>러닝, 넷플릭스 보기</span></div>
+            <div class="kv"><span class="k">관심사</span><span>여행, 요리</span></div>
+            <div class="kv"><span class="k">개선하고 싶은 부분</span><span>스피킹, 발음</span></div>
+            <div class="kv"><span class="k">바라는 점·분위기</span><span>편하게 대화하는 분위기</span></div>
+            <div class="kv"><span class="k">교정 방식</span><span>바로바로 교정</span></div>
+            <div class="kv"><span class="k">수업 스타일</span><span>프리토킹</span></div>
+          </div>
+        </div>
+        <div class="card pad dim"><b>이메일 알림 설정 · 내 수강권</b><div class="small muted">(기존 그대로)</div></div>
+      </div>
+    </div></div></div>
+    <div class="phone"><div class="lab">휴대폰</div><div class="phframe">
+      <div class="card pad dim"><b>나의 학습 정보 · 강사님 작성</b></div>
+      <div class="card pad">
+        <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:15px">내 자기소개</b><span class="btn ghost">수정</span></div>
+        <div class="kv"><span class="k">직업</span><span>마케팅 회사 다녀요</span></div>
+        <div class="kv"><span class="k">취미</span><span>러닝, 넷플릭스 보기</span></div>
+        <div class="kv"><span class="k">관심사</span><span>여행, 요리</span></div>
+        <div class="kv"><span class="k">개선하고 싶은 부분</span><span>스피킹, 발음</span></div>
+        <div class="kv"><span class="k">바라는 점·분위기</span><span>편하게 대화하는 분위기</span></div>
+        <div class="kv"><span class="k">교정 방식</span><span>바로바로 교정</span></div>
+        <div class="kv"><span class="k">수업 스타일</span><span>프리토킹</span></div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<!-- D -->
+<section>
+  <h2 class="sec">D. 운영자 — 처리할 일 + 학생 상세에서 번역</h2>
+  <p class="lead small">학생이 제출하면 대시보드 처리할 일에 '자기소개 번역'이 뜹니다. 누르면 학생 상세 자기소개 창이 열리고, 칸마다 학생 원문(한국어) 아래 영어 칸이 있습니다. 6·7번은 고른 값이 그대로 들어가 번역할 필요 없음.</p>
+  <div class="row" style="margin-top:10px">
+    <div class="pc"><div class="lab">PC</div><div class="pcframe"><div class="pcin">
+      <div class="todo"><div class="hd">처리할 일</div>
+        <div class="it"><span>자기소개 번역 · 박서연</span><span class="go">열기 ›</span></div></div>
+      <div class="modal" style="max-width:none">
+        <div class="mtop"><b>자기소개·선호 <span class="badge b-wait">번역 전</span></b><span class="muted">✕</span></div>
+        <div class="two">
+          <div class="f"><label>1 직업</label><div class="ko">학생: 마케팅 회사 다녀요</div><div class="inp">Works at a marketing company</div></div>
+          <div class="f"><label>2 취미</label><div class="ko">학생: 러닝, 넷플릭스 보기</div><div class="inp">Running, watching Netflix</div></div>
+        </div>
+        <div class="f"><label>3 관심사</label><div class="ko">학생: 여행, 요리</div><div class="inp ph">영어로</div></div>
+        <div class="f"><label>4 영어에서 개선하고 싶은 부분</label><div class="ko">학생: 스피킹, 발음</div><div class="inp ph">영어로</div></div>
+        <div class="f"><label>5 바라는 점·분위기</label><div class="ko">학생: 편하게 대화하는 분위기</div><div class="inp ph">영어로</div></div>
+        <div class="kv"><span class="k">6 선호 교정 방식</span><span>바로바로 교정 <span class="tag">학생 선택</span></span></div>
+        <div class="kv"><span class="k">7 선호 수업 스타일</span><span>프리토킹 <span class="tag">학생 선택</span></span></div>
+        <div class="btn">저장</div>
+      </div>
+    </div></div></div>
+    <div class="phone"><div class="lab">휴대폰</div><div class="phframe">
+      <div class="todo"><div class="hd">처리할 일</div>
+        <div class="it"><span>자기소개 번역 · 박서연</span><span class="go">열기 ›</span></div></div>
+      <div class="mtop"><b>자기소개·선호 <span class="badge b-wait">번역 전</span></b><span class="muted">✕</span></div>
+      <div class="f"><label>1 직업</label><div class="ko">학생: 마케팅 회사 다녀요</div><div class="inp">Works at a marketing company</div></div>
+      <div class="f"><label>3 관심사</label><div class="ko">학생: 여행, 요리</div><div class="inp ph">영어로</div></div>
+      <div class="muted small">… 2·4·5번 같은 모양</div>
+      <div class="kv"><span class="k">6 선호 교정 방식</span><span>바로바로 교정</span></div>
+      <div class="btn">저장</div>
+    </div></div>
+  </div>
+  <p class="small muted" style="margin-top:8px">5개 영어 칸을 다 채워 저장하면 '번역 전' 배지가 '번역 완료'로 바뀌고 처리할 일에서 빠집니다. 학생이 안 쓴 상태면 배지는 '자기소개 아직'(4번 답에 따라 대시보드에도).</p>
+</section>
+
+<!-- E -->
+<section>
+  <h2 class="sec">E. 강사 — Student profile (기존 화면)</h2>
+  <p class="lead small">강사는 영어만 봅니다. 번역 전 칸은 'Being translated'. 6·7번은 학생이 고른 즉시 영어로 보입니다.</p>
+  <div class="row" style="margin-top:10px">
+    <div class="pc"><div class="lab">PC</div><div class="pcframe"><div class="pcin">
+      <div class="card pad">
+        <b style="font-size:15px">About &amp; preferences</b>
+        <div class="kv"><span class="k">Job</span><span>Works at a marketing company</span></div>
+        <div class="kv"><span class="k">Hobbies</span><span>Running, watching Netflix</span></div>
+        <div class="kv"><span class="k">Interests</span><span class="muted">Being translated</span></div>
+        <div class="kv"><span class="k">What they want to improve</span><span class="muted">Being translated</span></div>
+        <div class="kv"><span class="k">Hopes for class</span><span class="muted">Being translated</span></div>
+        <div class="kv"><span class="k">Corrections</span><span>Correct me right away</span></div>
+        <div class="kv"><span class="k">Preferred class style</span><span>Free talking</span></div>
+      </div>
+    </div></div></div>
+    <div class="phone"><div class="lab">휴대폰</div><div class="phframe">
+      <div class="card pad">
+        <b style="font-size:15px">About &amp; preferences</b>
+        <div class="kv"><span class="k">Job</span><span>Works at a marketing company</span></div>
+        <div class="kv"><span class="k">Interests</span><span class="muted">Being translated</span></div>
+        <div class="kv"><span class="k">Corrections</span><span>Correct me right away</span></div>
+        <div class="kv"><span class="k">Preferred class style</span><span>Free talking</span></div>
+      </div>
+    </div></div>
+  </div>
+  <p class="small muted" style="margin-top:8px">6·7번 영어 표기(Correct me right away 등)는 지금 강사 화면에 쓰는 문구를 그대로 씁니다.</p>
+</section>
+</div>
