@@ -10,8 +10,9 @@ export default function LmsLayout({ children }: { children: React.ReactNode }) {
   const env = dbEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
   return (
     <div className="min-h-dvh bg-[#f6f5fa]">
-      {env && (
-        <div className={`px-4 py-2 text-center text-white ${env === 'prod' ? 'bg-red-600' : 'bg-gray-500'}`}>
+      {/* 운영 DB 띠는 학생·강사·처음 온 사람에게 보이면 안 됨 (2026-11-17 대표 긴급). 시험 사이트 회색 띠만 표시 */}
+      {env === 'test' && (
+        <div className="bg-gray-500 px-4 py-2 text-center text-white">
           <p className="text-sm font-bold text-white">{DB_ENV_LABEL[env].title}</p>
           <p className="text-xs text-white/90">{DB_ENV_LABEL[env].note}</p>
         </div>
