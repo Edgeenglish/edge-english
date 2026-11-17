@@ -379,7 +379,8 @@ export default function LoginFlow() {
     if (!sb) return setError(t.network);
     if (p === 'google') {
       if (!googleAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL, window.location.hostname)) return;
-      if (!googleConfirmed && recent !== 'google') return go('google_choice');
+      // 최근 로그인 표시는 브라우저 기록일 뿐, 이번 Google 계정의 연결 여부를 보장하지 않는다.
+      if (!googleConfirmed) return go('google_choice');
     }
     setBusy(true);
     try {
@@ -638,9 +639,10 @@ export default function LoginFlow() {
     if (!sb) return;
     setBusy(true);
     const { data: user } = await sb.auth.getUser();
-    if (!canDiscardSocialAccount((user.user?.identities ?? []).map((i) => i.provider))) {
+    const providers = (user.user?.identities ?? []).map((i) => i.provider);
+    if (!canDiscardSocialAccount(providers)) {
       setBusy(false);
-      return setError(t.googleConflict);
+      return setError(providers.includes('google') ? t.googleExistingHelp : t.linkFail);
     }
     const p = (user.user?.identities ?? []).map((i) => i.provider).find((x) => x !== 'email') ?? '';
     const provider: SocialProvider = p.includes('naver') ? 'naver' : 'kakao';
