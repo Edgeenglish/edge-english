@@ -19,6 +19,11 @@
 - 화면: [로그인] 아래 '비밀번호를 만든 적이 없다면 먼저 만들어 주세요👇' + [비밀번호 만들기·찾기](이메일 넣었으면 바로 인증번호+새 비밀번호 화면) · 틀리면 '만든 적이 없거나 잊었다면👇' · 이 기기에서 비밀번호 로그인/만들기 1번이면 안내 줄 숨김(localStorage lms-pw-used) · '메일 코드로 로그인' 작은 링크 유지
 - 확인: 운영 /lms/login 새 문구·Google 버튼 0·내부 표시 없음·넘침 0, check-public-pages·internal-marks 통과. 되돌리기 = lms-prod 를 d952538 이전(origin/lms-prod 의 8개 커밋 앞)으로 되돌리는 커밋
 
+## ⏸ 11/24 Google 로그인 공개 대기 (H26(211)) — 이 세션에 11/24 10:00 KST 알림 예약(trig_01PNvXRbDG6L11R8wzkdWX31)
+- 운영(lms-prod befe905): Google 코드 들어감(운영 Supabase Google OFF → 버튼 안 보임) · /terms·/privacy 맨 위 변경 공지(LEGAL_NOTICE) · 약관 본문은 Google 전 문구 그대로
+- 11/24 할 일: 시험 DB 에서 대표 시험 2(Chrome·Safari Google 새 가입) 통과 확인 → Work 운영 Google 켜기 → lms-prod legal.ts 본문 = lms-test 문구 + LEGAL_NOTICE null → 배포 → 운영 확인 → 대표 휴대폰 1번
+- lms-test: Google 선택 화면 없앰, 앱 안 브라우저 안내 줄(inAppBrowser), 둘 다 운영에도 들어감
+
 ## ⏸ 11/17 Google 로그인 (브랜치 claude/charming-newton-hgvywn → lms-test 612aa04, 운영 미반영 — 대표 '보류')
 - a54f329·5c59707(다른 곳에서 올림) + 612aa04: 약관 2곳·처리방침 1곳 Google 문구(프로필 사진 주소 포함, 대표 '응') · '이미 회원이에요'로 빈 Google 계정 지우고 기존 계정에 연결(canDiscardSocialAccount = 이메일 없는 간편 로그인 계정) · googleAllowed 에 운영(mfamixejxydodclhglbc + edgeenglish.kr·www) 추가(운영 Supabase Google 켜야 버튼 보임)
 - 시험 통과(11/17): 다른 메일 Google → 윤지호 STU-0018 연결 · Google 새 가입 → [이미 회원이에요] → 빈 계정 삭제 → STU-0018 연결(DB: email+google, 간편 로그인만 있는 새 계정 0) · DB 삭제 함수 모의(Google만 = 삭제, 이메일·회원 연결 = 안 지움, 되돌림) · 운영 lms_discard_new_social_account md5 = 시험과 같음 · vitest 515
