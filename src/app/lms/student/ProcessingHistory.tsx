@@ -4,18 +4,21 @@ import { useEffect, useState } from 'react';
 import { prefOf, type PrefKey, type ScreenPrefs } from '@/lms/screen-prefs';
 import { historyLines, historySlots, historyTime, requestStatus, visibleEvents, type ProcessingEvent } from '@/lms/student/processing-history';
 
-export default function ProcessingHistory({ events, error, timezone, loadPrefs, savePref }: {
+export default function ProcessingHistory({ events, error, timezone, prefs, loadPrefs, savePref }: {
   events: ProcessingEvent[]; error?: boolean; timezone: string;
   /** 학생이 저장한 정렬 읽기 · 저장(학생 본인만, 운영자 보기는 null → 이 화면에서만 바뀜) — 대표 11/13 A안 */
+  /** 미리 읽어 둔 설정이 있으면 처음부터 그 순서로 (다시 읽지 않음) */
+  prefs?: ScreenPrefs;
   loadPrefs?: () => Promise<ScreenPrefs>; savePref?: ((key: PrefKey, value: string) => Promise<void>) | null;
 }) {
   const [limit, setLimit] = useState(30);
-  const [oldestFirst, setOldestFirstState] = useState(false);
+  const [oldestFirst, setOldestFirstState] = useState(() => !!prefs && prefOf(prefs, 'history_order', ['asc', 'desc'] as const, 'desc') === 'asc');
   useEffect(() => {
+    if (prefs) return;
     let live = true;
     loadPrefs?.().then((p) => { if (live) setOldestFirstState(prefOf(p, 'history_order', ['asc', 'desc'] as const, 'desc') === 'asc'); }).catch(() => { /* 기본: 최신순 */ });
     return () => { live = false; };
-  }, [loadPrefs]);
+  }, [loadPrefs, prefs]);
   const setOldestFirst = (asc: boolean) => {
     setOldestFirstState(asc);
     void savePref?.('history_order', asc ? 'asc' : 'desc').catch(() => { /* 저장 실패해도 화면은 그대로 */ });
