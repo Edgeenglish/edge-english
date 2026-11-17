@@ -47,7 +47,24 @@ function readRecent(): Recent | null {
     return null;
   }
 }
+// 이 기기에서 비밀번호로 한 번이라도 로그인(또는 비밀번호를 만듦)했으면 처음 화면 '비밀번호를 만든 적이 없다면' 줄을 숨김 (11/17 대표)
+const PW_USED_KEY = 'lms-pw-used';
+function readPwUsed(): boolean {
+  try {
+    return localStorage.getItem(PW_USED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function savePwUsed() {
+  try {
+    localStorage.setItem(PW_USED_KEY, '1');
+  } catch {
+    /* 저장 안 되면 줄이 계속 보임 */
+  }
+}
 function saveRecent(v: Recent) {
+  if (v === 'password') savePwUsed();
   try {
     localStorage.setItem(RECENT_KEY, v);
   } catch {
@@ -117,6 +134,7 @@ export default function LoginFlow() {
   const [socialOnly, setSocialOnly] = useState(false);
   const [memberName, setMemberName] = useState(''); // 가입 때 받은 이름(이메일 가입 입력값·카카오·네이버 이름) — 빈 회원 화면 제목
   const [recent, setRecent] = useState<Recent | null>(null);
+  const [pwUsed, setPwUsed] = useState(false);
   const t = STRINGS[lang];
   const sb = supabaseBrowser();
   const codeRef = useRef<HTMLInputElement>(null);
@@ -128,6 +146,7 @@ export default function LoginFlow() {
     setNext(new URLSearchParams(window.location.search).get('next'));
     setLinkFor(readPendingLink());
     setRecent(readRecent());
+    setPwUsed(readPwUsed());
   }, []);
 
   // 켜진 간편 로그인만 버튼으로 (꺼진 것을 누르면 오류가 나므로 아예 안 보임)
@@ -461,7 +480,10 @@ export default function LoginFlow() {
   async function storePassword(pw: string): Promise<boolean> {
     if (!sb) return false;
     const { error: e } = await sb.auth.updateUser({ password: pw });
-    if (!e || e.code === 'same_password') return true;
+    if (!e || e.code === 'same_password') {
+      savePwUsed();
+      return true;
+    }
     if (e.code === 'weak_password') {
       setStep('pw_new');
       setProblems(['password']);
@@ -738,7 +760,7 @@ export default function LoginFlow() {
             {/* 11/17 대표: 기존 회원은 비밀번호를 만든 적이 없음 → 처음 화면부터 비밀번호 만들기로 이끔.
                 이메일을 넣었으면 바로 인증번호+새 비밀번호 화면, 안 넣었으면 이메일 화면 */}
             <div className="grid gap-2 pt-1">
-              <span className="text-center text-[13px] text-[#55526a]">{badLogin ? t.noPwHintBad : t.noPwHint}</span>
+              {(badLogin || !pwUsed) && <span className="text-center text-[13px] text-[#55526a]">{badLogin ? t.noPwHintBad : t.noPwHint}</span>}
               <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => (looksLikeEmail(email) ? sendPwCode() : go('pw_email'))}>
                 {t.pwLink}
               </button>
