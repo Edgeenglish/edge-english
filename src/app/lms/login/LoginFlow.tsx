@@ -186,7 +186,7 @@ export default function LoginFlow() {
         } else {
           setPendingLink(null);
           setLinkFor(null);
-          setError(t.socialFail);
+          setError(last === 'google' && oauthErrorCode === 'identity_already_exists' ? t.googleConflict : t.socialFail);
         }
         try { sessionStorage.removeItem(GOOGLE_LINK_USER_KEY); sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
         return;
@@ -204,6 +204,7 @@ export default function LoginFlow() {
             if (verifyError || !googleCallbackVerified(verified.user, expected)) {
               setPendingLink(null);
               setLinkFor(null);
+              sessionStorage.removeItem(LAST_KEY);
               if (expected && verified.user?.id !== expected) await sb.auth.signOut({ scope: 'local' });
               if (active) setError(t.linkFail);
               return;
