@@ -1,11 +1,12 @@
-## ⏸ 11/17 머리글 [내 수업] 바로 학생 홈 — lms-test 반영, 운영 미반영 (브랜치 claude/quirky-bell-j29fzz, 대표 답 대기: 강사·운영자도 바꿀지)
+## ✅ 11/17 머리글 [내 수업]·학생 화면 진입 정리 — **운영 반영 끝** (H26(212), lms-prod cfb254d, DB 변경 없음, 브랜치 claude/quirky-bell-j29fzz)
+- 운영 반영 방법: lms-prod 위에 이 작업 커밋만 cherry-pick. 운영엔 '정규 시간 변경'(H26(208)) 이 아직 없어 `loadStudentBundle` 에서 changeRequests 를 뺀 판으로 맞춤 — 정규 시간 변경을 운영에 올릴 때 lms-test 판(changeReqs 포함) 그대로 가면 됨. 운영 공개 화면 점검(check-public-pages) 통과
 - 수정: `src/lms/auth/home.ts`(새, 역할→홈 주소 한 곳 — 지금 학생만) · `components/Header.tsx`([내 수업] href) · `app/lms/page.tsx`+`LmsIndexGo.tsx`(/lms 메일 링크도 같게, ?next= 등 있으면 예전처럼 로그인 화면) · `student/StudentLive.tsx`(역할 확인과 학생 자료를 함께 불러옴) · `student/StudentHome.tsx`(교재 둘러보기 next/link)
 - 시험(시험 사이트, STU-0018 메일 코드 로그인 — 비밀번호 안 건드림, 끝나고 세션 로그아웃): PC·iPhone 13 [내 수업] 경로 / → /lms/student(로그인 화면 0번), /lms → /lms/student, 로그아웃 상태 [로그인]·/lms → /lms/login, 풀린 세션 → /lms/login 모두 통과
 - 11/17 보충('불러오는 중'도 찰나에 보임): `lms/student/prefetch.ts`(새) — 머리글이 로그인 확인과 함께 학생 화면 자료를 미리 불러 둠(학생 아니면 버림), StudentLive 는 그것을 바로 보여 주고 새로 불러 바꿈(`StudentHome` refreshed). 시험: PC·휴대폰 홈 열자마자/1초 뒤/교재에서 [내 수업] 6번 모두 '불러오는 중' 0번, 0.2~0.6초. 메일 링크처럼 처음 여는 주소는 미리 불러 둘 수 없어 그대로
 - 11/17 보충 2: 자료를 받는 중에 누르면 머리글이 지금 화면을 두고 다 받은 뒤 넘김(`Header.tsx` openAccount). 시험: 학생 자료 응답을 2초 늦춘 느린 망 흉내로 PC·휴대폰 6번 모두 '불러오는 중' 0번
 - 11/17 보충 3 (한 번에 정리): `live.ts` loadStudentBundle(홈 자료+시간대·누적 학습·공지·결제·알림·정규 시간·처리 내역 순서를 한 번에) → `prefetch.ts`·`StudentLive`·`StudentHome`(preloaded 로 처음부터 그림)·`ProcessingHistory`(prefs) · `LoginFlow`(학생은 자료 받은 뒤 router.push, 버튼 누른 채 유지) · `LmsIndexGo`+`SiteChrome`(/lms 도 머리글 틀 안, 빈 틀 보이며 받은 뒤 넘김) · `StudentHomeSkeleton`('불러오는 중' 글 대신 메뉴 그대로 빈 틀). 시험(자료 응답 1.5초 늦춘 느린 망, PC·iPhone 13): 머리글 [내 수업]·/lms·새로고침·로그인 뒤 4길 모두 학생 홈이 시간대 '변경'·누적 학습 시간과 한 프레임에 나옴, 머리글 계속 보임, '불러오는 중' 0번. 로그인 버튼 누른 길은 비밀번호가 없어 화면 시험 못 함(코드만)
 - 11/17 보충 4: 머리글이 로그인·로그아웃 알림(onAuthStateChange)으로 바로 [로그인]↔[내 수업] (전엔 로그인 뒤 새로고침 전까지 '로그인'), 역할 확인 전 눌러도 기다렸다 바로, 홈 자료 못 읽으면 한 번 더, 시간대 '변경' 항상. 시험: [로그인] 버튼 길은 비밀번호 로그인 응답을 실제 학생 세션으로 바꿔 끼워(비밀번호 안 바뀜) PC·휴대폰 느린 망 — 로그인 칸 → (머리글 '내 수업'으로 바뀜) → 학생 홈 한 번에, 공지사항 → [내 수업] 로그인 화면 0번
-- 강사·운영자로 넓히려면 `homeForRole` 에 tutor→/lms/tutor, admin(aal2)→/lms/admin 추가
+- 11/17 대표 '1번': 강사 → /lms/tutor, 운영자(aal2) → /lms/admin, 아니면 로그인 화면 (`homeForRole`)
 
 ## 11/17 학생 정상 취소 대체수업의 보강 강사 선택 — 시험 후 운영 반영 완료
 - 대표 승인: 학생이 미리 취소한 대체수업(공휴일 정상 취소 포함)도 원래 강사/대체강사 중 선택. 학생 직전 취소·결석의 보강 불가 및 무료 노쇼 보상수업의 강사 고정·무급 정책 유지.
