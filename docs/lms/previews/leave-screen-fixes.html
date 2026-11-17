@@ -1,132 +1,266 @@
 <title>강사 휴무 화면 수정 시안</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* 레이아웃: 위 = 바뀌는 점 3개, 아래 = PC(왼쪽 목록·오른쪽 상세) 와 휴대폰 화면을 나란히 */
-:root{--bg:#f4f3f8;--card:#fff;--fg:#1d1b2b;--sub:#6b6880;--line:#e6e3ef;--accent:#7d5ffb;--accent-weak:#efebff;--accent-fg:#5b3fe0;--ok:#1e7a46;--warn:#5c3b00;--bad:#b3261e;--new:#fff6d6;--soft:#f6f5fb}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#1f1d29;--fg:#ecebf3;--sub:#a7a4b8;--line:#34313f;--accent:#9a83ff;--accent-weak:#2c2647;--accent-fg:#c2b5ff;--ok:#6fd49c;--warn:#e7c27a;--bad:#ff8f86;--new:#3a3218;--soft:#262433;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#15141c;--card:#1f1d29;--fg:#ecebf3;--sub:#a7a4b8;--line:#34313f;--accent:#9a83ff;--accent-weak:#2c2647;--accent-fg:#c2b5ff;--ok:#6fd49c;--warn:#e7c27a;--bad:#ff8f86;--new:#3a3218;--soft:#262433;color-scheme:dark}
-body{background:var(--bg);color:var(--fg);font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
-.wrap{max-width:1180px;margin:0 auto;display:grid;gap:20px}
-h1{font-size:22px;margin:0}h2{font-size:17px;margin:0}
-.changes{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-.chg{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:6px;font-size:14px;line-height:1.5}
-.chg b.n{color:var(--accent-fg)}
-.before{color:var(--sub);text-decoration:line-through}
-.stage{display:grid;gap:20px;grid-template-columns:minmax(0,1fr) 380px;align-items:start}
-@media (max-width:980px){.stage{grid-template-columns:minmax(0,1fr)}}
-.label{font-size:13px;font-weight:700;color:var(--sub);letter-spacing:.02em}
+/* 레이아웃: 요청 정리 → PC 전체 화면 → 휴대폰 흐름 4장 → 메일 글 → 지난 휴무 펼친 모양. 노란 바탕 = 이번에 바뀜 */
+:root{--bg:#f4f3f8;--card:#fff;--fg:#1d1b2b;--sub:#6b6880;--line:#e6e3ef;--accent:#7d5ffb;--accent-weak:#efebff;--accent-fg:#5b3fe0;--ok:#1e7a46;--warn:#7a4a00;--bad:#b3261e;--new:#fff1b8;--soft:#f6f5fb;--todo:#f0a33a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#1f1d29;--fg:#ecebf3;--sub:#a7a4b8;--line:#34313f;--accent:#9a83ff;--accent-weak:#2c2647;--accent-fg:#c2b5ff;--ok:#6fd49c;--warn:#e7c27a;--bad:#ff8f86;--new:#4a3d10;--soft:#262433;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#1f1d29;--fg:#ecebf3;--sub:#a7a4b8;--line:#34313f;--accent:#9a83ff;--accent-weak:#2c2647;--accent-fg:#c2b5ff;--ok:#6fd49c;--warn:#e7c27a;--bad:#ff8f86;--new:#4a3d10;--soft:#262433;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 56px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:22px}
+h1{font-size:22px;margin:0}h2{font-size:18px;margin:0}h3{font-size:14px;margin:0}
+.sub{color:var(--sub);font-size:13px;margin:0}
+.hl{background:var(--new);border-radius:5px;padding:0 4px}
+.reqs{display:grid;gap:6px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin:0;padding:0;list-style:none}
+.reqs li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13.5px;display:grid;gap:2px}
+.tag{font-size:12px;font-weight:800;border-radius:6px;padding:1px 7px;display:inline-block;margin-right:6px;background:var(--accent-weak);color:var(--accent-fg)}
+.tag.have{background:var(--soft);color:var(--sub)}
 .screen{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px;min-width:0}
-.phone{max-width:380px;border-radius:28px;border-width:6px}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;font-size:14px;color:var(--fg)}
-.chip.on{border-color:var(--accent);background:var(--accent-weak);color:var(--accent-fg);font-weight:700}
-.chip.past{border-style:dashed;color:var(--sub)}
 .tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .tab{border:1px solid var(--accent);border-radius:10px;min-height:42px;display:grid;place-items:center;font-weight:700;font-size:15px;color:var(--accent-fg)}
 .tab.on{background:var(--accent);color:#fff}
-.sum{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:14px}
-.two{display:grid;grid-template-columns:260px minmax(0,1fr);gap:12px;align-items:start}
-.phone .two{grid-template-columns:minmax(0,1fr)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;font-size:14px}
+.chip.on{border-color:var(--accent);background:var(--accent-weak);color:var(--accent-fg);font-weight:700}
+.chip.fold{border-style:dashed;color:var(--sub)}
+.chip.need{border-color:var(--todo);border-width:2px}
+.sum{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:14px;margin:0}
+.two{display:grid;grid-template-columns:270px minmax(0,1fr);gap:14px;align-items:start}
 .list{display:grid;gap:6px}
-.list h3{font-size:13px;color:var(--sub);margin:4px 0 0}
-.item{border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:grid;gap:2px}
+.grp{font-size:13px;font-weight:800;color:var(--fg);border-bottom:2px solid var(--line);padding:8px 0 3px;margin-top:6px}
+.grp.first{margin-top:0}
+.sec{font-size:12.5px;font-weight:700;color:var(--sub);margin:2px 0 0}
+.item{border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:grid;gap:1px}
 .item.on{border-color:var(--accent);background:var(--accent-weak)}
 .item b{font-size:15px}.item span{font-size:13px;color:var(--sub)}
 .card{border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:10px;min-width:0}
-.card>b{font-size:15px}
-.opt{border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
-.opt>b{font-size:15px}
-.opt .r{flex:1;display:flex;flex-direction:column;align-items:flex-end;text-align:right;font-size:13px;gap:1px}
-.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
-.hl{background:var(--new);border-radius:6px;padding:0 4px}
-.mail{font-size:12.5px}
-.btn{display:inline-grid;place-items:center;min-height:40px;padding:0 14px;border-radius:10px;font-weight:700;font-size:14px;border:1px solid var(--accent);color:var(--accent-fg);background:var(--card)}
+.card>.t{font-size:15px;font-weight:800}
+.card .code{font-size:13px;font-weight:400;color:var(--sub)}
+.les{border:2px solid var(--todo);border-radius:12px;padding:8px 12px;display:grid;gap:5px}
+.les.done{border:1px solid var(--line)}
+.les .top{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-weight:800;font-size:14.5px}
+.badge{font-size:12.5px;font-weight:800;border-radius:6px;padding:1px 8px;background:#ffe9c2;color:#6b4300}
+.badge.dn{background:#dff3e6;color:#1e5c38}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .badge{background:#4a3715;color:#ffd699}:root:not([data-theme="light"]) .badge.dn{background:#183a27;color:#9be4b8}}
+:root[data-theme="dark"] .badge{background:#4a3715;color:#ffd699}:root[data-theme="dark"] .badge.dn{background:#183a27;color:#9be4b8}
+.les p{margin:0;font-size:13px;color:var(--sub)}
+.btn{display:inline-grid;place-items:center;min-height:38px;padding:0 12px;border-radius:10px;font-weight:700;font-size:13.5px;border:1px solid var(--accent);color:var(--accent-fg);background:var(--card)}
 .btn.main{background:var(--accent);color:#fff}
+.btn.off{border-color:var(--line);color:var(--sub);background:var(--soft)}
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-pre{white-space:pre-wrap;background:var(--soft);border-radius:10px;padding:8px 10px;font:13px/1.5 inherit;margin:0}
-.note{font-size:12.5px;color:var(--sub)}
-.legend{font-size:13px;color:var(--sub)}
+.back{justify-self:start}
+table.mx{border-collapse:collapse;width:100%;font-size:13px}
+.mx th,.mx td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.mx th{background:var(--soft);font-weight:700}
+.mx td.pick{font-weight:800;font-size:14.5px;white-space:nowrap}
+.ok{color:var(--ok);font-weight:700}.warn{color:var(--warn);font-weight:700}.bad{color:var(--bad);font-weight:700}
+.tcard{border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:grid;gap:3px}
+.tcard b{font-size:15px}.tcard .l{font-size:13px;display:flex;flex-wrap:wrap;gap:2px 10px}
+.mail{font-size:12.5px}
+pre{white-space:pre-wrap;background:var(--soft);border-radius:10px;padding:8px 10px;font:13px/1.55 inherit;margin:0}
+.phones{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(290px,340px));justify-content:start}
+.phone{border:6px solid var(--line);border-radius:28px;background:var(--card);padding:14px 12px;display:grid;gap:10px;align-content:start;min-width:0}
+.phone .cap{font-size:12.5px;font-weight:800;color:var(--sub)}
+.dash{border:1px dashed var(--line);border-radius:12px;padding:8px 10px;display:grid;gap:6px}
+.arrow{color:var(--sub);font-size:13px}
 </style>
 
 <div class="wrap">
-  <h1>강사 휴무 화면 수정 시안</h1>
-  <p class="legend">노란 바탕 = 이번에 바뀌는 글자. 예시 데이터는 운영 STU-0007 휴무 건(Benny 휴무)을 본뜸 · 수강생 이름은 가짜.</p>
+  <header>
+    <h1>강사 휴무 화면 수정 시안</h1>
+    <p class="sub">노란 바탕 = 이번에 바뀌는 곳 · 예시는 운영 STU-0007 휴무 건(Benny 휴무)을 본뜸, 수강생 이름은 가짜 · 운영자 화면이라 시각은 모두 한국 시간</p>
+  </header>
 
-  <div class="changes">
-    <div class="chg"><b class="n">① '불가' 옆에 사유</b>
-      <span class="before">12/28·12/30 불가</span>
-      <span>12/28·12/30 불가 · 휴무</span>
-      <span class="note">사유: 휴무 · 다른 수업 · 근무 시간 밖(현지 06:00~22:30) · Schedule에서 막은 시간 · 불가 답함. 날짜마다 사유가 다르면 사유별로 줄을 나눔.</span>
-    </div>
-    <div class="chg"><b class="n">② '문의 보내기 전' 없앰</b>
-      <span class="before">Maria 강사님에게 문의 보내기 전</span>
-      <span>Maria 강사님 답 기다리는 중</span>
-      <span class="note">강사를 고르면 자동 메일(15분마다)로 감. 메일이 갈 때까지는 '자동 메일 보내는 중'. [보냄] 버튼과 WhatsApp 글은 메일을 못 보냈을 때(주소 없음·실패)만 보임.</span>
-    </div>
-    <div class="chg"><b class="n">③ 지난 휴무 접기</b>
-      <span class="before">Benny · 10/20~10/25 · Olivia · 11/2~11/3 · …</span>
-      <span>끝나지 않은 휴무만 보이고, 끝난 휴무는 [지난 휴무 2 ▸] 안에 접힘</span>
-      <span class="note">'끝난 휴무' = 휴무 마지막 날(한국 날짜)이 오늘보다 전. 눌러서 펼치면 예전처럼 열어 볼 수 있음.</span>
-    </div>
-  </div>
+  <section class="grid" style="display:grid;gap:8px">
+    <h2>요청 정리</h2>
+    <ul class="reqs">
+      <li><span><span class="tag">시안 반영</span>1 목록 구분</span>왼쪽 목록을 '수강생'과 '강사에게 묻기' 두 묶음으로 크게 나눔</li>
+      <li><span><span class="tag have">이미 있음</span>2 수업별 한 줄</span>수강생 화면은 이미 수업마다 '날짜 · 상태 · 다음 할 일 · 버튼' 한 줄. 이번엔 대체 강사 목록의 날짜 반복을 표로 한 번만 보이게 바꿈</li>
+      <li><span><span class="tag">시안 반영</span>3 가능·불가 구분</span>'정규 근무시간 밖 · 문의 가능'과 '불가 · 사유'를 글자로 구분</li>
+      <li><span><span class="tag">시안 반영</span>4 버튼·상태 문구</span>'강사 가능으로 기록' · '수강생 답 기다리는 중'</li>
+      <li><span><span class="tag">시안 반영</span>5 휴대폰 흐름</span>목록 → 수강생 상세 → [‹ 목록]으로 돌아가기, 4장으로 보여 줌</li>
+      <li><span><span class="tag">시안 반영</span>6 불가 사유</span>휴무 · 다른 수업 · 근무 시간 밖(현지 06:00~22:30) · Schedule에서 막은 시간 · 불가 답함</li>
+      <li><span><span class="tag">시안 반영</span>7 메일 상태·WhatsApp</span>'문의 보내기 전' 없앰 → '메일 발송 대기'. 복사·보냄은 메일 실패·주소 없음일 때만</li>
+      <li><span><span class="tag">시안 반영</span>8 지난 휴무</span>끝났고 처리할 것 없음 = 접힘 · 끝났는데 처리할 것 남음 = 펼쳐 두고 '처리 필요'</li>
+      <li><span><span class="tag">시안 반영</span>9 정규 시간 밖 문의</span>체크 안 한 날짜는 거절이 아니라 '아직 모름'(지금도 그렇게 동작). 메일에 시간 밖 수업 표시 + 한 문장</li>
+    </ul>
+  </section>
 
-  <div class="stage">
-    <!-- PC -->
+  <!-- ===== PC ===== -->
+  <section style="display:grid;gap:8px">
+    <h2>PC 화면</h2>
     <div class="screen">
-      <span class="label">PC</span>
-      <h2>강사 휴무</h2>
-      <div class="tabs"><span class="tab on">등록된 휴무 1</span><span class="tab">+ 새 휴무 입력</span></div>
+      <h2 style="font-size:20px">강사 휴무</h2>
+      <div class="tabs"><span class="tab on">등록된 휴무 2</span><span class="tab">+ 새 휴무 입력</span></div>
       <div class="chips">
-        <span class="chip on">Benny · 12/22 ~ 1/4</span>
-        <span class="chip past hl">지난 휴무 2 ▸</span>
+        <span class="chip on">Benny · 12/22(화) ~ 1/4(월)</span>
+        <span class="chip need hl">James · 11/9(월) ~ 11/10(화) · 처리 필요</span>
+        <span class="chip fold hl">지난 휴무 2 ▸</span>
       </div>
-      <p class="sum" style="margin:0">수강생 1명 · 수업 4회 · 처리할 것 1명 · 답 기다리는 것 1명</p>
+      <p class="sum">수강생 2명 · 수업 5회 · 처리할 것 1명 · 답 기다리는 것 1명</p>
       <div class="two">
         <div class="list">
-          <h3>처리할 것 1명</h3>
-          <div class="item on"><b>김하준</b><span>12/23 대체 강사 고르기</span></div>
-          <h3>강사에게 묻기 1명</h3>
+          <div class="grp first hl">수강생 2명</div>
+          <div class="sec">처리할 것 1명</div>
+          <div class="item on"><b>김하준</b><span>12/23(수) 대체 강사 고르기</span></div>
+          <div class="sec">답 기다리는 것 1명</div>
+          <div class="item"><b>박서연</b><span>12/28(월) 수강생 답 기다리는 중</span></div>
+          <div class="grp hl">강사에게 묻기 1명</div>
           <div class="item"><b>Maria</b><span>수강생 1명 1회 · <span class="hl">답 기다리는 중</span></span></div>
         </div>
         <div class="card">
-          <b>수업별 대체 강사 찾기</b>
-          <span class="note">남은 수업 12/23 · 12/28 · 12/30 (1/4 은 Maria 강사님 답 기다리는 중)</span>
-          <div class="opt"><b>Maria</b><span class="r"><span class="ok">12/23 평소 가능시간과 일치</span><span class="bad">12/28·12/30 불가 <span class="hl">· 휴무</span></span></span></div>
-          <div class="opt"><b>Leslie</b><span class="r"><span class="warn">모두 평소 시간표 밖 · 문의 필요</span></span></div>
-          <div class="opt"><b>Olivia</b><span class="r"><span class="ok">12/23 평소 가능시간과 일치</span><span class="bad">12/28·12/30 불가 <span class="hl">· 불가 답함</span></span></span></div>
-          <div class="opt"><b>James</b><span class="r"><span class="bad">12/23 불가 <span class="hl">· 다른 수업</span></span><span class="bad">12/28 불가 <span class="hl">· 근무 시간 밖</span></span></span></div>
-          <span class="note">James 줄은 사유가 둘 이상일 때 모양을 보이려는 예시</span>
-        </div>
-      </div>
-    </div>
+          <div class="t">김하준 <span class="code">STU-0101</span></div>
+          <div class="les">
+            <div class="top">1번째 · 12/23(수) 오전 11:00 한국 시간 <span class="badge">대체 강사 고르기</span></div>
+            <p>할 일: <b>아래에서 대체 강사 고르기</b></p>
+            <div class="row"><span class="btn off">대체 강사 없음 → 보강</span></div>
+          </div>
+          <div class="les">
+            <div class="top">2번째 · 12/28(월) 오전 11:00 한국 시간 <span class="badge">대체 강사 고르기</span></div>
+            <div class="row"><span class="btn off">대체 강사 없음 → 보강</span></div>
+          </div>
+          <div class="les">
+            <div class="top">3번째 · 12/30(수) 오전 11:00 한국 시간 <span class="badge">대체 강사 고르기</span></div>
+            <div class="row"><span class="btn off">대체 강사 없음 → 보강</span></div>
+          </div>
+          <div class="les">
+            <div class="top">4번째 · 1/4(월) 오전 11:00 한국 시간 <span class="badge hl">Maria 강사님 답 기다리는 중</span></div>
+            <p>기다리는 중: <b>Maria 강사님</b></p>
+            <div class="row"><span class="btn off">Maria 강사님에게 묻기 ›</span></div>
+          </div>
 
-    <!-- 휴대폰 -->
-    <div class="screen phone">
-      <span class="label">휴대폰 · Maria 를 누른 화면</span>
-      <h2>강사 휴무</h2>
-      <div class="tabs"><span class="tab on">등록된 휴무 1</span><span class="tab">+ 새 휴무 입력</span></div>
-      <div class="chips">
-        <span class="chip on">Benny · 12/22 ~ 1/4</span>
-        <span class="chip past hl">지난 휴무 2 ▸</span>
-      </div>
-      <div class="list">
-        <h3>강사에게 묻기 1명</h3>
-        <div class="item on"><b>Maria</b><span>수강생 1명 1회 · <span class="hl">답 기다리는 중</span></span></div>
-      </div>
-      <div class="card">
-        <b>Maria 강사님에게 묻기 <span class="note">수강생 1명 1회</span></b>
-        <span class="mail ok">✓ 11/17 오전 12:45 한국 시간 자동 메일 보냄</span>
-        <span class="note"><span class="hl">[복사]·[보냄] 칸 없음</span> (메일을 못 보냈을 때만 아래처럼 나옴)</span>
-        <div class="card" style="border-style:dashed">
-          <span class="mail bad">메일 주소가 없어 자동 메일을 못 보냈어요</span>
-          <div class="row"><b style="flex:1;font-size:14px">Maria</b><span class="btn">복사</span><span class="btn main">보냄</span></div>
-          <pre>Substitute request - not confirmed yet
-One of our Edge English tutors is on leave. …</pre>
+          <div class="card" style="gap:8px">
+            <div class="t">대체 강사 고르기 · 체크한 3회</div>
+            <p class="sub">수업 시각은 모두 오전 11:00 한국 시간 · 강사 이름을 누르면 불가가 아닌 날짜가 그 강사로 정해짐</p>
+            <div style="overflow-x:auto">
+            <table class="mx">
+              <tr><th>강사</th><th>12/23(수)</th><th>12/28(월)</th><th>12/30(수)</th></tr>
+              <tr><td class="pick">Maria</td><td class="ok">가능</td><td class="bad hl">불가 · 휴무</td><td class="bad hl">불가 · 휴무</td></tr>
+              <tr><td class="pick">Leslie</td><td class="warn hl">정규 근무시간 밖 · 문의 가능</td><td class="warn hl">정규 근무시간 밖 · 문의 가능</td><td class="warn hl">정규 근무시간 밖 · 문의 가능</td></tr>
+              <tr><td class="pick">Olivia</td><td class="ok">가능</td><td class="bad hl">불가 · 불가 답함</td><td class="bad hl">불가 · 불가 답함</td></tr>
+              <tr><td class="pick">James</td><td class="bad hl">불가 · 다른 수업</td><td class="warn hl">정규 근무시간 밖 · 문의 가능</td><td class="ok">가능</td></tr>
+            </table>
+            </div>
+            <p class="sub">'가능' = 강사 정규 근무시간 안 · '문의 가능' = 정규 근무시간 밖이라도 부탁해 볼 수 있음 · '불가'는 고를 수 없음 (James 줄은 사유가 여러 종류일 때의 예시)</p>
+          </div>
         </div>
-        <span class="note">답 기다리는 수업 1회 · Maria 강사님이 가능하다고 답한 것 체크</span>
-        <div class="opt"><b style="font-size:14px">☐ 1/4(일) 오전 11:00 한국 시간 · 김하준</b></div>
-        <span class="btn main">강사 가능 여부 확인 완료</span>
       </div>
     </div>
-  </div>
+  </section>
+
+  <!-- ===== 휴대폰 흐름 ===== -->
+  <section style="display:grid;gap:8px">
+    <h2>휴대폰 흐름</h2>
+    <p class="sub">① 목록 → ② 수강생 상세(‹ 목록으로 돌아감) → ③ 대체 강사 고르기 → ④ 강사에게 묻기. 수강생을 바꿔 가며 처리할 때는 ②에서 [‹ 목록]만 누르면 됨</p>
+    <div class="phones">
+      <div class="phone">
+        <span class="cap">① 목록</span>
+        <h2>강사 휴무</h2>
+        <div class="tabs"><span class="tab on">등록된 휴무 2</span><span class="tab">+ 새 휴무 입력</span></div>
+        <div class="chips">
+          <span class="chip on">Benny · 12/22 ~ 1/4</span>
+          <span class="chip need hl">James · 11/9 ~ 11/10 · 처리 필요</span>
+          <span class="chip fold hl">지난 휴무 2 ▸</span>
+        </div>
+        <p class="sum">수강생 2명 · 수업 5회 · 처리할 것 1명 · 답 기다리는 것 1명</p>
+        <div class="list">
+          <div class="grp first hl">수강생 2명</div>
+          <div class="sec">처리할 것 1명</div>
+          <div class="item"><b>김하준</b><span>12/23(수) 대체 강사 고르기</span></div>
+          <div class="sec">답 기다리는 것 1명</div>
+          <div class="item"><b>박서연</b><span>12/28(월) 수강생 답 기다리는 중</span></div>
+          <div class="grp hl">강사에게 묻기 1명</div>
+          <div class="item"><b>Maria</b><span>수강생 1명 1회 · <span class="hl">답 기다리는 중</span></span></div>
+        </div>
+      </div>
+
+      <div class="phone">
+        <span class="cap">② 수강생 상세 (김하준을 누름)</span>
+        <span class="btn back hl">‹ 목록</span>
+        <div class="t" style="font-weight:800;font-size:16px">김하준 <span class="code" style="font-weight:400;font-size:13px;color:var(--sub)">STU-0101</span></div>
+        <div class="les">
+          <div class="top">1번째 · 12/23(수) 오전 11:00 한국 시간</div>
+          <span class="badge" style="justify-self:start">대체 강사 고르기</span>
+          <p>할 일: <b>대체 강사 고르기</b></p>
+          <div class="row"><span class="btn off">대체 강사 없음 → 보강</span></div>
+        </div>
+        <div class="les">
+          <div class="top">2번째 · 12/28(월) 오전 11:00 한국 시간</div>
+          <span class="badge" style="justify-self:start">대체 강사 고르기</span>
+        </div>
+        <div class="les">
+          <div class="top">3번째 · 12/30(수) 오전 11:00 한국 시간</div>
+          <span class="badge" style="justify-self:start">대체 강사 고르기</span>
+        </div>
+        <div class="les">
+          <div class="top">4번째 · 1/4(월) 오전 11:00 한국 시간</div>
+          <span class="badge hl" style="justify-self:start">Maria 강사님 답 기다리는 중</span>
+          <div class="row"><span class="btn off">Maria 강사님에게 묻기 ›</span></div>
+        </div>
+        <span class="arrow">↓ 아래에 ③ 대체 강사 고르기</span>
+      </div>
+
+      <div class="phone">
+        <span class="cap">③ 대체 강사 고르기 (같은 화면 아래)</span>
+        <div class="t" style="font-weight:800;font-size:15px">대체 강사 고르기 · 체크한 3회</div>
+        <div class="tcard"><b>Maria</b>
+          <div class="l"><span class="ok">12/23 가능</span><span class="bad hl">12/28·12/30 불가 · 휴무</span></div></div>
+        <div class="tcard"><b>Leslie</b>
+          <div class="l"><span class="warn hl">12/23·12/28·12/30 정규 근무시간 밖 · 문의 가능</span></div></div>
+        <div class="tcard"><b>Olivia</b>
+          <div class="l"><span class="ok">12/23 가능</span><span class="bad hl">12/28·12/30 불가 · 불가 답함</span></div></div>
+        <div class="tcard"><b>James</b>
+          <div class="l"><span class="bad hl">12/23 불가 · 다른 수업</span><span class="warn hl">12/28 정규 근무시간 밖 · 문의 가능</span><span class="ok">12/30 가능</span></div></div>
+        <p class="sub">강사 이름을 누르면 불가가 아닌 날짜가 그 강사로 정해지고, 그 강사 '묻기' 묶음으로 넘어감</p>
+      </div>
+
+      <div class="phone">
+        <span class="cap">④ 강사에게 묻기 (Maria를 누름)</span>
+        <span class="btn back">‹ 목록</span>
+        <div class="t" style="font-weight:800;font-size:15px">Maria 강사님에게 묻기 <span class="sub">수강생 1명 1회</span></div>
+        <div class="dash"><span class="sub">메일 상태 3가지 (실제 화면엔 하나만)</span>
+          <span class="mail hl">메일 발송 대기</span>
+          <span class="mail ok">✓ 11/17(화) 오전 12:45 한국 시간 메일 보냄</span>
+          <span class="mail bad">메일 주소가 없어 못 보냈어요</span>
+        </div>
+        <div class="dash hl" style="background:none"><span class="sub">복사·보냄은 메일을 못 보냈을 때만 이렇게 나옴</span>
+          <div class="row"><b style="flex:1;font-size:14px">Maria</b><span class="btn">복사</span><span class="btn main">보냄</span></div>
+          <pre>Substitute request - not confirmed yet …</pre>
+        </div>
+        <p class="sub">가능하다고 답한 날짜 체크 · 체크 안 한 날짜는 아직 모름</p>
+        <label class="row" style="border:1px solid var(--line);border-radius:10px;min-height:44px;padding:0 10px;font-size:14px"><input type="checkbox" style="width:20px;height:20px" disabled> 1번 · 1/4(월) 오전 11:00 한국 시간 · 김하준</label>
+        <span class="btn main hl">강사 가능으로 기록</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 메일 글 ===== -->
+  <section style="display:grid;gap:8px">
+    <h2>대체 수업 요청 메일 글 (영어)</h2>
+    <p class="sub">시간 밖 수업이 있을 때만 표시와 마지막 문장이 들어감 · 예시 강사 시간대 Manila · 아직 시스템에 넣지 않은 초안</p>
+    <div class="screen">
+<pre>Substitute request - not confirmed yet
+One of our Edge English tutors is on leave. Are you available to teach these classes?
+1) Wed, 23 Dec 10:00 AM <b>Manila Time</b> / 11:00 AM <b>KST</b> · Student · 30 min
+2) Mon, 28 Dec 10:00 AM <b>Manila Time</b> / 11:00 AM <b>KST</b> · Student · 30 min <span class="hl">(outside your regular working hours)</span>
+<span class="hl">We know the marked classes are outside your regular working hours, but would you be available to cover any of them? No worries if not!</span>
+If you can't do all of them, please reply with the numbers you can do. Thank you!</pre>
+    </div>
+  </section>
+
+  <!-- ===== 지난 휴무 ===== -->
+  <section style="display:grid;gap:8px">
+    <h2>지난 휴무 접기</h2>
+    <p class="sub">'끝남' = 휴무 마지막 날(한국 날짜)이 오늘보다 앞. 접힌 줄을 누르면 펼쳐져서 예전처럼 열어 볼 수 있음</p>
+    <div class="screen">
+      <div class="chips">
+        <span class="chip on">Benny · 12/22(화) ~ 1/4(월)</span>
+        <span class="chip need">James · 11/9(월) ~ 11/10(화) · 처리 필요</span>
+        <span class="chip fold">지난 휴무 2 ▾</span>
+      </div>
+      <div class="chips" style="padding-left:12px">
+        <span class="chip">Emma · 10/20(화) ~ 10/25(일)</span>
+        <span class="chip">Noah · 11/2(월) ~ 11/3(화)</span>
+      </div>
+    </div>
+  </section>
 </div>
