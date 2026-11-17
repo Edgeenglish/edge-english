@@ -3,15 +3,15 @@
 // 이 브라우저 탭 안에서만 (새로고침·로그아웃하면 사라짐). 실제 권한은 DB 함수가 다시 확인한다.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { loadStudentView, type StudentView } from './live';
+import { loadStudentBundle, type StudentBundle } from './live';
 
-type Entry = { userId: string; view?: StudentView; pending?: Promise<StudentView> };
+type Entry = { userId: string; view?: StudentBundle; pending?: Promise<StudentBundle> };
 let entry: Entry | null = null;
 
 /** 학생 로그인을 확인한 뒤 부름. 이미 불러 두었거나 불러오는 중이면 다시 안 부름 */
 export function prefetchOwnView(sb: SupabaseClient, userId: string): void {
   if (entry?.userId === userId && (entry.view || entry.pending)) return;
-  const pending = loadStudentView(sb, null);
+  const pending = loadStudentBundle(sb, null);
   entry = { userId, pending };
   pending.then(
     (view) => { if (entry?.pending === pending) entry = { userId, view }; },
@@ -22,7 +22,7 @@ export function prefetchOwnView(sb: SupabaseClient, userId: string): void {
 /** 미리 불러 둔 자료 (사용자 확인 전 첫 화면용) */
 export const ownViewCache = (): Entry | null => entry;
 
-export function rememberOwnView(userId: string, view: StudentView): void {
+export function rememberOwnView(userId: string, view: StudentBundle): void {
   entry = { userId, view };
 }
 

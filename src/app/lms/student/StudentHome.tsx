@@ -11,6 +11,7 @@ import { createContext, useContext, useEffect, useId, useMemo, useRef, useState 
 import books from '@/data/books.json';
 import Link from 'next/link';
 import ProcessingHistory from './ProcessingHistory';
+import type { StudentExtras } from '@/lms/student/live';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
 import { koZoneCity, ZONE_ROWS, zoneName } from '@/lms/admin/places';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
@@ -273,6 +274,8 @@ export default function StudentHome(props: {
   initial: StudentView;
   /** 미리 불러 둔 자료로 먼저 보여 준 뒤 새로 불러온 자료 (StudentLive) */
   refreshed?: StudentView;
+  /** 홈 칸 자료를 미리 읽어 둔 것 — 처음부터 한 번에 그림 (StudentLive) */
+  preloaded?: StudentExtras;
   actions: StudentActions;
   /** 미리보기에만: 교재·결제 내역·동의 할 일 (실제 데이터 연결 전 항목) */
   extras?: PreviewExtras;
@@ -322,7 +325,13 @@ export default function StudentHome(props: {
   }, [overlayOpen]);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [reminders, setReminders] = useState<Reminders | null>(null);
+  const [reminders, setReminders] = useState<Reminders | null>(props.preloaded?.reminders ?? null);
+  // 화면 보기 설정(처리 내역 순서 등): 미리 읽은 값을 쓰고, 바꾸면 여기에도 기억 (탭을 다시 열어도 순서가 튀지 않게)
+  const [prefs, setPrefs] = useState(props.preloaded?.prefs);
+  const savePref = actions.savePref && ((key: Parameters<NonNullable<StudentActions['savePref']>>[0], value: string) => {
+    setPrefs((p) => (p ? { ...p, [key]: value } : p));
+    return actions.savePref!(key, value);
+  });
   /** 저장은 됐는데 화면을 다시 읽지 못함 (R-02) → 위에 안내 + [다시 읽기] */
   const [stale, setStale] = useState<string | null>(null);
   /** 여러 수업 취소가 중간에 멈춤 → 남은 수업만 다시 고른 상태로 창 유지 (R-02) */
@@ -385,15 +394,16 @@ export default function StudentHome(props: {
   }, [actions]);
 
   // 시간대 자동 확인 (H26(119)): 기기 시간대가 프로필과 다르고, 그 기기 시간대에 [그대로]를 누른 적이 없으면 맨 위에서 물음. 운영자 보기에서는 안 물음
-  const [tzState, setTzState] = useState<TimezoneState | null>(null);
-  const [deviceTz, setDeviceTz] = useState<string | null>(null);
-  useEffect(() => {
-    actions.timezone().then(setTzState, () => setTzState(null));
+  const [tzState, setTzState] = useState<TimezoneState | null>(props.preloaded?.tz ?? null);
+  const [deviceTz] = useState<string | null>(() => {
     try {
       const d = Intl.DateTimeFormat().resolvedOptions().timeZone;
       // 'UTC'·'Etc/…' 는 기기 설정이 없는 경우라 묻지 않음
-      if (d && d.includes('/') && !d.startsWith('Etc/')) setDeviceTz(d);
-    } catch { /* 시간대를 못 읽는 브라우저 */ }
+      return d && d.includes('/') && !d.startsWith('Etc/') ? d : null;
+    } catch { return null; /* 시간대를 못 읽는 브라우저 */ }
+  });
+  useEffect(() => {
+    actions.timezone().then(setTzState, () => setTzState(null));
   }, [actions]);
   const askTz = !isAdminView && tzState && deviceTz && deviceTz !== studentTz && deviceTz !== tzState.kept ? deviceTz : null;
 
@@ -462,7 +472,7 @@ export default function StudentHome(props: {
   }
 
   // 수업 시간 (H26(95) ②): 매주 정규 요일·시각 — 수강생 거주지 시간으로 (운영자 보기에서 KST 전환 시 한국 시간)
-  const [slots, setSlots] = useState<RegularSlot[]>([]);
+  const [slots, setSlots] = useState<RegularSlot[]>(props.preloaded?.slots ?? []);
   useEffect(() => {
     let alive = true;
     actions.regularSlots().then((x) => { if (alive) setSlots(x); }, () => {});
@@ -471,7 +481,7 @@ export default function StudentHome(props: {
   const slotText = regularSlotText(slots, now);
 
   // 나의 학습 정보(강사 작성)·누적 학습 시간 (11/11 대표 시안, migration 20261111010000)
-  const [info, setInfo] = useState<MyInfo | null>(null);
+  const [info, setInfo] = useState<MyInfo | null>(props.preloaded?.info ?? null);
   useEffect(() => {
     let alive = true;
     actions.myInfo().then((x) => { if (alive) setInfo(x); }, () => {});
@@ -479,7 +489,7 @@ export default function StudentHome(props: {
   }, [actions, s]);
 
   // 공지 (최신 2건 + 전체보기, 학생이 열면 확인함 — 11/11 대표) · 수강권 / 결제 내역
-  const [notices, setNotices] = useState<StudentNotice[]>([]);
+  const [notices, setNotices] = useState<StudentNotice[]>(props.preloaded?.notices ?? []);
   // 강사 '늦어요' 알림 (QA 11/14): 다음 수업 2시간 전~끝날 때까지 열어 둔 홈도 새로고침 없이 노란 띠가 나오게 30초마다(+ 화면으로 돌아올 때) 다시 읽음
   const [liveTutorLate, setLiveTutorLate] = useState<{ lessonId: string; minutes: number; reason: string | null }[] | null>(null);
   const watchStart = next?.startsAt.getTime() ?? null;
@@ -497,7 +507,7 @@ export default function StudentHome(props: {
     document.addEventListener('visibilitychange', onShow);
     return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', onShow); };
   }, [actions, watchStart, watchEnd]);
-  const [history, setHistory] = useState<PaymentSummary[] | null>(null);
+  const [history, setHistory] = useState<PaymentSummary[] | null>(props.preloaded?.history ?? null);
   useEffect(() => {
     let alive = true;
     actions.notices().then((x) => { if (alive) setNotices(x); }, () => {});
@@ -512,7 +522,7 @@ export default function StudentHome(props: {
   }
 
   // [맞는 시간이 없어요] 보일 보강권 (H26(92) ⑤): 수업 번호 → 누른 시각. 화면을 다시 읽을 때마다 같이
-  const [noTime, setNoTime] = useState<Map<string, string | null>>(new Map());
+  const [noTime, setNoTime] = useState<Map<string, string | null>>(() => props.preloaded?.noTime ?? new Map());
   useEffect(() => {
     let alive = true;
     actions.noTimeRights().then((m) => { if (alive) setNoTime(m); }, () => {});
@@ -920,7 +930,7 @@ export default function StudentHome(props: {
         {tab === 'requests' && (
           <TabPage title="처리 내역">
             <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
-              loadPrefs={actions.prefs} savePref={actions.savePref} />
+              prefs={prefs} loadPrefs={actions.prefs} savePref={savePref} />
           </TabPage>
         )}
 
@@ -2362,5 +2372,42 @@ function HelpTip({ text }: { text: string }) {
         </span>
       )}
     </span>
+  );
+}
+
+/** 학생 화면을 처음 열 때(메일 링크·새로고침) 자료를 받는 동안: 메뉴는 그대로, 칸 자리만 빈 틀로 (11/17 대표: 화면이 단계별로 조립돼 보이지 않게) */
+export function StudentHomeSkeleton() {
+  const bar = 'animate-pulse rounded-full bg-[#ebe8f3]';
+  const box = `${card} animate-pulse`;
+  return (
+    <div aria-busy="true" className="mx-auto max-w-[1200px] text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-8">
+      <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
+        {TABS.map((t) => (
+          <span key={t.key} className={`flex min-h-[46px] items-center gap-2.5 rounded-[12px] px-3 text-left text-[15px] ${t.key === 'home' ? 'bg-[#efeaff] font-bold text-[#3a22b0]' : ''}`}>
+            <Icon d={t.icon} />
+            {t.label}
+          </span>
+        ))}
+      </nav>
+      <div className="min-w-0 flex-1 pb-6 pt-3 lg:pb-0 lg:pt-0">
+        <div className="grid gap-2 px-4 pb-3 lg:px-0 lg:pb-4 lg:pt-1">
+          <span className={`${bar} h-[32px] w-[280px] max-w-full`} />
+          <span className={`${bar} h-[30px] w-[220px] max-w-full`} />
+        </div>
+        <div className="grid gap-3 px-4 lg:px-0">
+          <div className="h-[150px] animate-pulse rounded-[22px] bg-[#e4e0f0]" />
+          <div className={`${box} h-[130px]`} />
+          <div className={`${box} h-[170px]`} />
+        </div>
+      </div>
+      <nav aria-label="아래 메뉴" className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
+        {TABS.map((t) => (
+          <span key={t.key} className={`flex min-h-[48px] flex-col items-center justify-center gap-0.5 text-[11px] ${t.key === 'home' ? 'font-bold text-[#5b3df0]' : 'text-[#55526a]'}`}>
+            <Icon d={t.icon} />
+            {t.label}
+          </span>
+        ))}
+      </nav>
+    </div>
   );
 }

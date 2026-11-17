@@ -6,7 +6,9 @@
 // 비밀번호 만들기·찾기: 이메일 → 메일 코드 + 새 비밀번호 (기존 학생·강사는 재가입 없이 지금 계정에 비밀번호만)
 // 카카오·네이버 첫 로그인이 회원과 연결 안 되면 '처음이에요 / 이미 회원이에요' — 이미 회원이면 기존 계정 로그인 뒤에만 연결
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { ownViewCache, prefetchOwnView } from '@/lms/student/prefetch';
 import type { Provider } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lms/auth/client';
 import { canDiscardSocialAccount, googleAllowed, googleCallbackVerified, inAppBrowser } from '@/lms/auth/google';
@@ -121,7 +123,16 @@ export default function LoginFlow() {
   const [badLogin, setBadLogin] = useState(false);
   const [joined, setJoined] = useState(false);
   const [code, setCode] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusyState] = useState(false);
+  // 학생 홈으로 넘어가는 중이면 [로그인] 버튼을 누른 모양 그대로 둠 (다시 눌리거나 화면이 바뀌지 않게, 11/17 대표)
+  const leaving = useRef(false);
+  const busyNow = useRef(false);
+  const setBusy = (v: boolean) => {
+    if (!v && leaving.current) return;
+    busyNow.current = v;
+    setBusyState(v);
+  };
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [wait, setWait] = useState(0);
@@ -326,8 +337,18 @@ export default function LoginFlow() {
         setStep('login');
         return setError(t.linkFail);
       }
+      const dest = nextAfterLogin(new URLSearchParams(window.location.search).get('next'), after.to, myRole);
+      if (myRole === 'student' && dest.startsWith('/lms/student')) {
+        // 학생: 학생 홈 자료를 다 받은 뒤 한 번에 넘김 ('이동하는 중'·'불러오는 중' 화면을 거치지 않음, 11/17 대표)
+        leaving.current = true;
+        if (!busyNow.current) setStep('moving'); // 로그인 버튼을 누른 게 아니면(이미 로그인된 채 열림 등) 빈 로그인 칸 대신
+        prefetchOwnView(sb, user.id);
+        await ownViewCache()?.pending?.catch(() => undefined);
+        router.push(dest);
+        return;
+      }
       setStep('moving');
-      window.location.assign(nextAfterLogin(new URLSearchParams(window.location.search).get('next'), after.to, myRole));
+      window.location.assign(dest);
     } else if (after.kind === 'totp_verify') {
       setFactorId(verified[0].id);
       setCode('');
