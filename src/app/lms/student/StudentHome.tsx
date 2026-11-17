@@ -465,6 +465,7 @@ export default function StudentHome(props: {
   }
 
   function say(msg: string) {
+    if (!msg) return; // 화면 안에 결과가 이미 보이는 동작(정규 시간 변경·강사 변경 상담)은 알림 안 띄움
     setToast(`${msg}${preview ? ' (미리보기: 실제로 저장되지 않아요)' : ''}`);
   }
 
@@ -978,8 +979,9 @@ export default function StudentHome(props: {
         {tab === 'requests' && (
           <TabPage title="처리 내역">
             <ChangeRequestRows data={changeReqs} tz={VIEW_TZ} onOpenRegular={() => setOverlay({ kind: 'regular' })} />
-            <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
-              prefs={prefs} loadPrefs={actions.prefs} savePref={savePref} />
+            {/* 정규 시간 변경·강사 변경 상담 줄이 있으면 '아직 처리 내역이 없어요' 를 띄우지 않음 */}
+            {((s.processingHistory ?? []).length > 0 || s.processingHistoryError || (changeReqs.regular.length + changeReqs.tutor.length) === 0) && <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
+              prefs={prefs} loadPrefs={actions.prefs} savePref={savePref} />}
           </TabPage>
         )}
 
@@ -1144,12 +1146,12 @@ export default function StudentHome(props: {
           {overlay.kind === 'regular' && (
             <RegularChangeSheet tz={VIEW_TZ} load={actions.regularOptions} busy={busy}
               pending={changeReqs.regular.find((r) => r.status === 'pending') ?? null}
-              onSubmit={async (items, reason) => { const v = await run(() => actions.regularRequest(items, reason), '신청했어요.'); await reloadChangeReqs(); return !!v; }}
-              onWithdraw={async (id) => { const v = await run(() => actions.regularWithdraw(id), '신청을 취소했어요.'); await reloadChangeReqs(); return !!v; }} />
+              onSubmit={async (items, reason) => { const v = await run(() => actions.regularRequest(items, reason), ''); await reloadChangeReqs(); return !!v; }}
+              onWithdraw={async (id) => { const v = await run(() => actions.regularWithdraw(id), ''); await reloadChangeReqs(); return !!v; }} />
           )}
           {overlay.kind === 'tutor_change' && (
             <TutorChangeSheet busy={busy} open={changeReqs.tutor.find((t) => t.status === 'open') ?? null}
-              onSubmit={async (reasons, note) => { const v = await run(() => actions.tutorChangeRequest(reasons, note), '요청했어요.'); await reloadChangeReqs(); return !!v; }} />
+              onSubmit={async (reasons, note) => { const v = await run(() => actions.tutorChangeRequest(reasons, note), ''); await reloadChangeReqs(); return !!v; }} />
           )}
           {overlay.kind === 'rights' && <div className="grid gap-3">
             <h2 className="text-[18px] font-bold">보강권 확인</h2>
