@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Provider } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { canDiscardSocialAccount, googleAllowed, googleCallbackVerified } from '@/lms/auth/google';
+import { canDiscardSocialAccount, googleAllowed, googleCallbackVerified, inAppBrowser } from '@/lms/auth/google';
 import { PRIVACY_POLICY, TERMS } from '@/lms/auth/legal';
 import { LegalSections } from '@/components/legal/LegalDoc';
 import { GoogleIcon } from './GoogleIcon';
@@ -163,7 +163,7 @@ export default function LoginFlow() {
     const naver = fetch(`${url}/auth/v1/authorize?provider=${encodeURIComponent(PROVIDER_ID.naver)}`, { redirect: 'manual' })
       .then((r) => r.type === 'opaqueredirect' || r.status === 302)
       .catch(() => false);
-    void Promise.all([settings, naver]).then(([s, n]) => setSocial(enabledSocial(s?.external, n, googleAllowed(url, window.location.hostname))));
+    void Promise.all([settings, naver]).then(([s, n]) => setSocial(enabledSocial(s?.external, n, googleAllowed(url, window.location.hostname) && !inAppBrowser(navigator.userAgent))));
   }, []);
 
   // 카카오·네이버에서 돌아왔으면(?code=) 세션으로 바꾸고, 아니면 같은 주소의 유효한 세션을 이어 씀

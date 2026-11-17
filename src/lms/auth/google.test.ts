@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UserIdentity } from '@supabase/supabase-js';
-import { canDiscardSocialAccount, googleAllowed, googleCallbackVerified } from './google';
+import { canDiscardSocialAccount, googleAllowed, googleCallbackVerified, inAppBrowser } from './google';
 import { afterEmailCode, enabledSocial, needsSocialChoice, STRINGS } from './login-flow';
 
 const testUrl = 'https://kyeimjozkcqbgkepwrnv.supabase.co';
@@ -59,5 +59,15 @@ describe('Google 연결 후 영구 계정 보존', () => {
   it('로그인·회원가입에 한국어와 영어 Google 문구 제공', () => {
     expect(STRINGS.ko.social.google).toContain('Google');
     expect(STRINGS.en.social.google).toContain('Google');
+  });
+});
+
+describe('앱 안 브라우저', () => {
+  it('카카오톡·인스타그램·네이버 앱 안에서는 Google 숨김, 일반 브라우저는 보임', () => {
+    expect(inAppBrowser('Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 KAKAOTALK 10.8.0')).toBe(true);
+    expect(inAppBrowser('Mozilla/5.0 (Linux; Android 14) Instagram 300.0')).toBe(true);
+    expect(inAppBrowser('Mozilla/5.0 (Linux; Android 14) NAVER(inapp; search; 2000; 12.0.0)')).toBe(true);
+    expect(inAppBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1')).toBe(false);
+    expect(inAppBrowser('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36')).toBe(false);
   });
 });
