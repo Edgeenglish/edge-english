@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
 import { LOGIN_PATH, myLmsHome } from '@/lms/auth/home';
+import { forgetOwnView, prefetchOwnView } from '@/lms/student/prefetch';
 import BubbleTopTail from './common/bubble/BubbleTopTail';
 
 export default function Header() {
@@ -21,7 +22,12 @@ export default function Header() {
     if (!sb) return;
     void sb.auth.getSession().then(({ data }) => {
       setLoggedIn(!!data.session);
-      if (data.session) void myLmsHome(sb).then((to) => setAccountHref(to ?? LOGIN_PATH)).catch(() => {});
+      const uid = data.session?.user.id;
+      if (uid) void myLmsHome(sb).then((to) => {
+        setAccountHref(to ?? LOGIN_PATH);
+        // 학생이면 학생 화면 자료를 미리 불러 둠 → [내 수업] 누르면 '불러오는 중' 없이 바로 보임
+        if (to === '/lms/student') prefetchOwnView(sb, uid);
+      }).catch(() => {});
     }).catch(() => setLoggedIn(false));
   }, []);
   const accountLabel = loggedIn ? '내 수업' : '로그인';
@@ -30,6 +36,7 @@ export default function Header() {
   // 로그인돼 있으면 오른쪽 위에 로그아웃 (11/17 대표) — 로그아웃 뒤 홈페이지 첫 화면
   const logout = async () => {
     await supabaseBrowser()?.auth.signOut();
+    forgetOwnView();
     setLoggedIn(false);
     setAccountHref(LOGIN_PATH);
     window.location.assign('/');

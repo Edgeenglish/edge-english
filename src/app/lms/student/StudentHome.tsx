@@ -271,6 +271,8 @@ function untilText(now: Date, at: Date): string {
 export default function StudentHome(props: {
   nowIso: string;
   initial: StudentView;
+  /** 미리 불러 둔 자료로 먼저 보여 준 뒤 새로 불러온 자료 (StudentLive) */
+  refreshed?: StudentView;
   actions: StudentActions;
   /** 미리보기에만: 교재·결제 내역·동의 할 일 (실제 데이터 연결 전 항목) */
   extras?: PreviewExtras;
@@ -285,6 +287,7 @@ export default function StudentHome(props: {
   const { actions, extras, preview } = props;
   const now = useMemo(() => new Date(props.nowIso), [props.nowIso]);
   const [s, setView] = useState<StudentView>(props.initial);
+  useEffect(() => { if (props.refreshed) setView(props.refreshed); }, [props.refreshed]);
   const studentTz = s.timezone || props.initial.timezone || 'Asia/Seoul';
   // 운영자 보기에서만 한국 시간으로 바꿔 볼 수 있음 (H26(93)). 수강생 본인 화면은 항상 수강생 시간
   const isAdminView = !!props.adminBar;
