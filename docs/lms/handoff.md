@@ -9,6 +9,13 @@
 
 # 다음 세션 시작 메모
 
+
+## ⏸ 11/17 Google 로그인 (브랜치 claude/charming-newton-hgvywn → lms-test 612aa04, 운영 미반영 — 대표 '보류')
+- a54f329·5c59707(다른 곳에서 올림) + 612aa04: 약관 2곳·처리방침 1곳 Google 문구(프로필 사진 주소 포함, 대표 '응') · '이미 회원이에요'로 빈 Google 계정 지우고 기존 계정에 연결(canDiscardSocialAccount = 이메일 없는 간편 로그인 계정) · googleAllowed 에 운영(mfamixejxydodclhglbc + edgeenglish.kr·www) 추가(운영 Supabase Google 켜야 버튼 보임)
+- 시험 통과(11/17): 다른 메일 Google → 윤지호 STU-0018 연결 · Google 새 가입 → [이미 회원이에요] → 빈 계정 삭제 → STU-0018 연결(DB: email+google, 간편 로그인만 있는 새 계정 0) · DB 삭제 함수 모의(Google만 = 삭제, 이메일·회원 연결 = 안 지움, 되돌림) · 운영 lms_discard_new_social_account md5 = 시험과 같음 · vitest 515
+- 운영 남은 것: ① 운영 Supabase Google 꺼짐 + Google OAuth 클라이언트 284694131806-rl051e…에 운영 콜백(https://mfamixejxydodclhglbc.supabase.co/auth/v1/callback) 미등록(redirect_uri_mismatch) → Work 문구 대화에 있음(동의 화면 사용자 유형·게시 상태 확인 포함) ② 약관 제10조 7일 전 공지 → Google 공개 날짜 대표 답 대기(가장 빠름 11/24) → /terms·/privacy 맨 위 공지 한 줄(문구 대표 '반영해' 뒤) ③ 배포 묶음 = origin/lms-prod 위에 Google 파일 6개(GoogleIcon·LoginFlow·google.ts·google.test.ts·login-flow.ts·legal.ts 문구만, 시행일 줄은 운영 값 유지) → internal-marks 시험·check-public-pages
+- Google 동의 화면에 'kyeimjozkcqbgkepwrnv.supabase.co(시험)/mfamixejxydodclhglbc.supabase.co(운영)로 이동'이 보임(맞춤 도메인 없음) — 공개 조건 아님
+
 ## 🛠 11/17 강사 휴무 화면 수정 — **시험 사이트·시험 DB 반영 끝, 운영 반영은 대표 승인 대기** (브랜치 claude/modest-shannon-osnope, 시안 https://claude.ai/artifact/SeuXW4ufCvRvGG6Rxops49)
 - 코드: `TutorLeave.tsx`(대체 강사 고르기 = 선택 → [○○에게 문의하기 N회], 불가 사유 표·카드, 지난 휴무 접기, 수강생/강사 목록 구분, ‹ 목록), `tutor-leave.ts`(`subCell`·`askMailFailed`·묶음 `mailWait`, 상태 글 '문의 보내기 전' 없앰 → 메일 못 보냄/답변 기다리는 중, '강사님 수락'), `tutor-leave-live.ts`(불가 사유 읽기), `lesson-change.ts`(메일 상태 '메일 발송 대기'). 복사·보냄은 자동 메일 실패·주소 없음일 때만.
 - migration **20261117010000_lms_leave_sub_busy_reasons_offhours_mail** (시험 DB 적용): `admin_leave_sub_busy_reasons`(불가 사유) 추가 + `lms_cover_mail_run` 본문 일부 교체(정규 근무시간 밖 수업 줄 `(outside your regular working hours)` + 있을 때만 한 문장, 재촉 메일은 그대로). **운영 적용 때: 직전 백업(함수 정의) → 이 migration** (적용 전 DB 에서도 화면은 사유만 빠지고 동작).
