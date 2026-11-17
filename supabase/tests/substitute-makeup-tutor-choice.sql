@@ -20,9 +20,9 @@ begin
   insert into tutor_availability(tutor_id,weekday,start_local,end_local,timezone,effective_from)
     select t,w,case when t=orig then time '09:00' else time '14:00' end,case when t=orig then time '10:00' else time '15:00' end,'Asia/Seoul',current_date-30
     from unnest(array[orig,sub,other_t]) t cross join generate_series(0,6) w;
-  foreach state_name in array array['Tutor canceled in advance','Tutor canceled late','Tutor no-show'] loop
+  foreach state_name in array array['Student canceled in advance','Student canceled in advance (public holiday)','Tutor canceled in advance','Tutor canceled late','Tutor no-show'] loop
     insert into lessons(enrollment_id,student_id,tutor_id,original_tutor_id,kind,seq,starts_at,ends_at,state,class_status,canceled_at)
-      values(enr,st,sub,orig,'regular',count_checks+1,now()-interval '2 days',now()-interval '2 days'+interval '40 minutes',case when state_name='Tutor no-show' then 'done' else 'canceled' end,state_name::class_status,now()) returning id into src;
+      values(enr,st,sub,orig,case when state_name like 'Student%' then 'migrated_makeup' else 'regular' end,case when state_name like 'Student%' then null else count_checks+1 end,now()-interval '2 days',now()-interval '2 days'+interval '40 minutes',case when state_name='Tutor no-show' then 'done' else 'canceled' end,state_name::class_status,now()) returning id into src;
     if jsonb_array_length(lms_makeup_tutors(src,null,null))<>2 then raise exception 'Both tutors missing: %',state_name; end if;
     count_checks:=count_checks+1;
     perform set_config('request.jwt.claims',jsonb_build_object('sub',u,'aal','aal1')::text,true);
