@@ -19,6 +19,11 @@
 - 화면: [로그인] 아래 '비밀번호를 만든 적이 없다면 먼저 만들어 주세요👇' + [비밀번호 만들기·찾기](이메일 넣었으면 바로 인증번호+새 비밀번호 화면) · 틀리면 '만든 적이 없거나 잊었다면👇' · 이 기기에서 비밀번호 로그인/만들기 1번이면 안내 줄 숨김(localStorage lms-pw-used) · '메일 코드로 로그인' 작은 링크 유지
 - 확인: 운영 /lms/login 새 문구·Google 버튼 0·내부 표시 없음·넘침 0, check-public-pages·internal-marks 통과. 되돌리기 = lms-prod 를 d952538 이전(origin/lms-prod 의 8개 커밋 앞)으로 되돌리는 커밋
 
+## ⏸ 11/24 Google 로그인 공개 대기 (H26(211)) — 이 세션에 11/24 10:00 KST 알림 예약(trig_01PNvXRbDG6L11R8wzkdWX31)
+- 운영(lms-prod befe905): Google 코드 들어감(운영 Supabase Google OFF → 버튼 안 보임) · /terms·/privacy 맨 위 변경 공지(LEGAL_NOTICE) · 약관 본문은 Google 전 문구 그대로
+- 11/24 할 일: 시험 DB 에서 대표 시험 2(Chrome·Safari Google 새 가입) 통과 확인 → Work 운영 Google 켜기 → lms-prod legal.ts 본문 = lms-test 문구 + LEGAL_NOTICE null → 배포 → 운영 확인 → 대표 휴대폰 1번
+- lms-test: Google 선택 화면 없앰, 앱 안 브라우저 안내 줄(inAppBrowser), 둘 다 운영에도 들어감
+
 ## ⏸ 11/17 Google 로그인 (브랜치 claude/charming-newton-hgvywn → lms-test 612aa04, 운영 미반영 — 대표 '보류')
 - a54f329·5c59707(다른 곳에서 올림) + 612aa04: 약관 2곳·처리방침 1곳 Google 문구(프로필 사진 주소 포함, 대표 '응') · '이미 회원이에요'로 빈 Google 계정 지우고 기존 계정에 연결(canDiscardSocialAccount = 이메일 없는 간편 로그인 계정) · googleAllowed 에 운영(mfamixejxydodclhglbc + edgeenglish.kr·www) 추가(운영 Supabase Google 켜야 버튼 보임)
 - 시험 통과(11/17): 다른 메일 Google → 윤지호 STU-0018 연결 · Google 새 가입 → [이미 회원이에요] → 빈 계정 삭제 → STU-0018 연결(DB: email+google, 간편 로그인만 있는 새 계정 0) · DB 삭제 함수 모의(Google만 = 삭제, 이메일·회원 연결 = 안 지움, 되돌림) · 운영 lms_discard_new_social_account md5 = 시험과 같음 · vitest 515
@@ -88,7 +93,10 @@
 
 ## ✅ 11/16 밤 완료 (H26(198)): 수업 노트 회사 소유 전환 + 부속합의서 2판 + 세 강사 재서명 — 11/17 오전이 아니라 11/16 밤에 진행(대표 PC 1시간 가능)
 - 결과: 운영 DB 노트 링크 13개(STU-0001~0013, 0013 은 대표 본인 계정) 교체(lms_student_apply, 이력 13건, 옛 링크는 이력 student_profile_edits 에 남음) · 복사본 13개 support@ 소유, 링크 있는 누구나 보기 + 담당 강사 편집(Olivia 0001·0002·0004·0005·0012 / Benny 0007·0009·0010 / Maria 0010·0011·0013, 예정 수업 없는 0003·0006·0008 은 편집 안 줌) · 2판 게시(대표 13:41 UTC) · 서명 요청 3건(기한 11/20 강사 현지 23:59, 메일 14:02 UTC Gmail 확인) · 안내 메일 14:02 UTC(support@ 받는사람, 강사 3명 숨은참조)
-- ✅ 11/17: 2판 서명 3명 끝(운영 DB: Maria 04:38·Benny 04:55·Olivia 11:44 UTC). Benny STU-0010 복사본 편집 권한에 Drive 자동 만료 2026-11-19 08:40 UTC(11/18 수업 끝 +24시간) 걸어 둠 — 따로 할 일 없음. 원본 삭제 요청 메일 = 문구 대표 확인 대기(보내지 않음). ⚠ 원본이 전환 뒤에도 수정됨: STU-0001(Olivia, 11/17 11:47 UTC)·STU-0013(Maria, 11/17 04:26 UTC) — 새 노트로 옮긴 뒤 삭제해야 함
+- ✅ 11/17 강사 Students 목록 'Class notes ↗' 버튼 운영 반영(대표 '응', lms-prod e73575d = lms-prod 위에 이 커밋만 cherry-pick, 운영 JS·데모 PC/휴대폰 확인). TutorHome.tsx 만, DB 변경 없음
+- ✅ 11/17 원래 노트에만 있던 기록을 회사 새 노트에 옮김(대표 '응')·대조 일치: STU-0001 11/17 단락 · STU-0013 '17/11-Pumpkins' 탭(새 탭) · STU-0002 레슬리 11/4 대체수업(11/11 앞에 'Wednesday, November 4, 2026 (cover class)'). 보존 범위 = 수강 중 학생만(끝난 학생·탠저린 노트는 삭제 허용, 대표·탠저린 확인)
+- ✅ 11/17 원래 노트 삭제 요청 메일 2개 발송(대표 '넣어'·'진행해', 직전 원래 노트 추가 수정 없음 확인, 반송 없음): 세 강사 숨은참조 / Leslie 따로(삭제만). 정책 원본 H26(210). 남은 것 없음(삭제 여부·권한 만료 확인 안 함, 대표 11/17)
+- ✅ 11/17: 2판 서명 3명 끝(운영 DB: Maria 04:38·Benny 04:55·Olivia 11:44 UTC). Benny STU-0010 복사본 편집 권한에 Drive 자동 만료 2026-11-19 08:40 UTC(11/18 수업 끝 +24시간) 설정 완료 — Google 자동 만료라 따로 확인 안 함(대표 11/17). 원본 삭제 요청 메일 = 문구 대표 확인 대기(보내지 않음). ⚠ 원본이 전환 뒤에도 수정됨: STU-0001(Olivia, 11/17 11:47 UTC)·STU-0013(Maria, 11/17 04:26 UTC) — 새 노트로 옮긴 뒤 삭제해야 함
 - **(이전) 남은 일: Benny 의 STU-0010 편집 권한은 11/18 수업 + 24시간 뒤(11/19 이후)에 제거** (Drive 복사본 1PojEPTE…) · 원본 삭제 요청은 2판 서명 뒤 · 서명 현황 11/20 확인 · STU-0003·0006·0008 은 수업이 다시 잡히면 담당 강사에게 편집 권한 · 시험 사이트 로그인 없이 열림은 이 환경에서 docs.google.com 접속이 막혀 직접 못 열어 봄(권한 조회로만 확인)
 - (아래는 계획 기록)
 ### 계획 (11/17 오전 한국 전환, H26(198)): 수업 노트 회사 소유 전환 + 부속합의서 2판 + 세 강사 재서명

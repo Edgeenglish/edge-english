@@ -607,9 +607,9 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             {students && students.length > 0 && (
               <ul className="overflow-hidden rounded-[12px] border border-[#e6e3ef] bg-white">
                 {[...students].sort((a, b) => a.name.localeCompare(b.name)).map((st) => (
-                  <li key={st.id} className="border-b border-[#e6e3ef] last:border-b-0">
+                  <li key={st.id} className="flex items-center gap-2 border-b border-[#e6e3ef] last:border-b-0 hover:bg-[#f7f6fb]">
                     <button type="button" disabled={!openProfile} onClick={() => openProfile?.(st.id)}
-                      className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2 text-left hover:bg-[#f7f6fb]">
+                      className="flex min-h-[56px] min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left">
                       <span className="min-w-0 flex-1">
                         <span className="block text-[15.5px] font-semibold text-[#1d1b2b]">{st.name}</span>
                         <span className="block text-[13px] text-[#6b6880]">
@@ -621,8 +621,13 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                           </span>
                         )}
                       </span>
-                      <span className="text-[13px] font-semibold text-[#5b3fe0]">{t('Profile', '프로필')} ›</span>
                     </button>
+                    {st.noteUrl && (
+                      <a href={st.noteUrl} target="_blank" rel="noreferrer"
+                        className="inline-flex min-h-[36px] shrink-0 items-center whitespace-nowrap rounded-[9px] bg-[#f3f1fa] px-3 text-[13px] font-bold text-[#5b3fe0]">{t('Class notes', '수업 노트')} ↗</a>
+                    )}
+                    <button type="button" disabled={!openProfile} onClick={() => openProfile?.(st.id)}
+                      className="min-h-[56px] shrink-0 whitespace-nowrap py-2 pl-1 pr-4 text-[13px] font-semibold text-[#5b3fe0]">{t('Profile', '프로필')} ›</button>
                   </li>
                 ))}
               </ul>
