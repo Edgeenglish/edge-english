@@ -179,7 +179,7 @@ export const STRINGS = {
     socialNew: '처음이에요',
     socialExisting: '이미 회원이에요',
     alreadyStudent: '이미 수강 중이에요',
-    linkNotice: (p: string) => `기존 계정으로 로그인하면 ${p}가 연결돼요.`,
+    linkNotice: (p: string) => `기존 계정으로 로그인하면 ${p}${p === 'Google' ? '이' : '가'} 연결돼요.`,
     linkFail: '연결하지 못했어요. 이메일로 로그인해 주세요.',
     socialFail: '로그인하지 못했어요. 이메일로 로그인해 주세요.',
     logout: '로그아웃',
