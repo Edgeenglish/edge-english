@@ -817,7 +817,7 @@ export default function LoginFlow() {
             {/* 11/17 대표: 기존 회원은 비밀번호를 만든 적이 없음 → 처음 화면부터 비밀번호 만들기로 이끔.
                 이메일을 넣었으면 바로 인증번호+새 비밀번호 화면, 안 넣었으면 이메일 화면 */}
             <div className="grid gap-2 pt-1">
-              {(badLogin || !pwUsed) && <span className="text-center text-[13px] text-[#55526a]">{badLogin ? t.noPwHintBad : t.noPwHint}</span>}
+              {(badLogin || !pwUsed) && <span className="text-center text-[13px] text-[#55526a]">{t.noPwHint}</span>}
               <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => (looksLikeEmail(email) ? sendPwCode() : go('pw_email'))}>
                 {t.pwLink}
               </button>
