@@ -221,9 +221,9 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       return { state: 'ok' as const, today, finalEnd: add(today, 30), duration: 50, tutor: '가상강사 Alex', slots, free,
         periods: [{ start: add(today, -10), end: add(today, 17), used: false }, { start: add(today, 18), end: add(today, 45), used: false }] };
     },
-    regularRequest: async (items, reason) => {
+    regularRequest: async (items, reason, start) => {
       const o = await actions.regularOptions();
-      const wk = (old: KstSlot, c: KstSlot) => (o.state === 'ok' ? weekFor({ today: o.today, finalEnd: o.finalEnd, periods: o.periods }, [{ old, new: c }]) ?? '' : '') as KstDate;
+      const wk = (old: KstSlot, c: KstSlot) => (start ? start : o.state === 'ok' ? weekFor({ today: o.today, finalEnd: o.finalEnd, periods: o.periods }, [{ old, new: c }]) ?? '' : '') as KstDate;
       changeReqs.regular = [{ id: `rc${Date.now()}`, status: 'pending', createdAt: new Date(), oldSlots: items.map((i) => i.old), reason: reason || null, chosen: null, effectiveFrom: null,
         items: items.map((i) => ({ old: i.old, c1: { ...i.c1, week: wk(i.old, i.c1), first: '' as KstDate }, c2: i.c2 ? { ...i.c2, week: wk(i.old, i.c2), first: '' as KstDate } : null })) }, ...changeReqs.regular];
     },

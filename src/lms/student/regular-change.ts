@@ -34,13 +34,28 @@ export function periodOf(periods: RcPeriod[], day: string): RcPeriod | null {
   return periods.find((p) => p.start <= day && day <= p.end) ?? [...periods].filter((p) => p.start <= day).at(-1) ?? null;
 }
 
+/** 그 주부터 종료일까지 그 요일 수업 횟수 */
+const countFrom = (week: string, weekday: number, end: string) => {
+  const d = dayOf(week, weekday);
+  return d > end ? 0 : Math.floor((Date.parse(end) - Date.parse(d)) / (7 * 864e5)) + 1;
+};
+/** 옮긴 수업이 수강 종료일 뒤로 밀리지 않는지 (새 요일 횟수 >= 옛 요일 횟수 — 확정 때 [정규 일정 수정]이 '종료일 뒤'로 막는 경우를 미리 뺌) */
+export const fitsEnd = (week: string, pairs: RcPair[], end: string) => pairs.every((p) => countFrom(week, p.new.weekday, end) >= countFrom(week, p.old.weekday, end));
+
 /** 가장 빠른 적용 주(월요일). 없으면 null */
 export function weekFor(c: RcContext, pairs: RcPair[]): KstDate | null {
   for (let w = addDays(mondayOf(c.today), 7); w <= c.finalEnd; w = addDays(w, 7)) {
     const f = firstDate(w, pairs);
-    if (f <= c.finalEnd && c.today <= addDays(f, -4) && !periodOf(c.periods, f)?.used) return w;
+    if (f <= c.finalEnd && c.today <= addDays(f, -4) && !periodOf(c.periods, f)?.used && fitsEnd(w, pairs, c.finalEnd)) return w;
   }
   return null;
+}
+
+/** 그 주(월요일)에 적용할 수 있는지 — DB lms_rc_week_ok 와 같음 (학생이 '변경 시작 주'를 고른 때) */
+export function weekOk(c: RcContext, pairs: RcPair[], week: string): boolean {
+  if (week < addDays(mondayOf(c.today), 7) || week > c.finalEnd || mondayOf(week) !== week) return false;
+  const f = firstDate(week, pairs);
+  return f <= c.finalEnd && c.today <= addDays(f, -4) && !periodOf(c.periods, f)?.used && fitsEnd(week, pairs, c.finalEnd);
 }
 
 /** 그 주의 그 정규 시각 (실제 순간 — 학생 시간대로 바꿔 보여 줄 때) */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstDate, mondayOf, weekFor, type RcContext } from './regular-change';
+import { firstDate, mondayOf, weekFor, weekOk, type RcContext } from './regular-change';
 
 // 대표 11/17 확정 예시 (H26(208) 보충 2). 화(2) 수업을 바꿈
 const ctx = (today: string, used = false): RcContext => ({
@@ -36,5 +36,16 @@ describe('정규 시간 변경 적용 주', () => {
   });
   it('수강 종료일 안에 맞는 주가 없으면 null', () => {
     expect(weekFor({ ...ctx('2026-11-17'), finalEnd: '2026-11-22' as never }, [{ old: tue, new: { weekday: 3, time: '20:00' } }])).toBeNull();
+  });
+  it('변경 시작 주를 고르면 그 주에 적용 가능한지', () => {
+    const c = ctx('2026-11-20');
+    expect(weekOk(c, [{ old: tue, new: { weekday: 1, time: '19:30' } }], '2026-11-23')).toBe(false);
+    expect(weekOk(c, [{ old: tue, new: { weekday: 1, time: '19:30' } }], '2026-12-14')).toBe(true);
+    expect(weekOk(c, [{ old: tue, new: { weekday: 1, time: '19:30' } }], '2026-12-15')).toBe(false);
+  });
+  it('옮기면 마지막 수업이 종료일 뒤로 밀리는 후보는 안 됨 (종료 12/9 수, 월→목)', () => {
+    const c = { ...ctx('2026-11-17'), finalEnd: '2026-12-09' as never };
+    expect(weekFor(c, [{ old: { weekday: 1, time: '19:00' }, new: { weekday: 4, time: '20:00' } }])).toBeNull();
+    expect(weekFor(c, [{ old: { weekday: 4, time: '19:00' }, new: { weekday: 2, time: '20:00' } }])).toBe('2026-11-23');
   });
 });

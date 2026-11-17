@@ -398,14 +398,14 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
       check(await sb.rpc('student_late_notice', { p_student: adminStudentId, p_lesson: lessonId, p_minutes: minutes, p_reason: reason }));
     },
     /** 정규 시간 변경 신청 화면 (H26(208)): 가능한 시간은 한국 요일·시각. state 가 ok 가 아니면 신청 못 함 */
-    regularOptions: async (): Promise<RcOptions> => {
-      const d = check(await sb.rpc('student_regular_change_options', { p_student: adminStudentId })) as Record<string, unknown>;
+    regularOptions: async (from: KstDate | null = null): Promise<RcOptions> => {
+      const d = check(await sb.rpc('student_regular_change_options', { p_student: adminStudentId, p_from: from })) as Record<string, unknown>;
       if (d.state !== 'ok') return { state: d.state as Exclude<RcOptions['state'], 'ok'> };
       return { state: 'ok', today: d.today as KstDate, finalEnd: d.final_end as KstDate, duration: d.duration as number, tutor: d.tutor as string,
         slots: d.slots as KstSlot[], free: d.free as KstSlot[], periods: d.periods as RcPeriod[] };
     },
-    regularRequest: async (items: { old: KstSlot; c1: KstSlot; c2: KstSlot | null }[], reason: string): Promise<void> => {
-      check(await sb.rpc('student_regular_change_request', { p_student: adminStudentId, p_items: items, p_reason: reason || null }));
+    regularRequest: async (items: { old: KstSlot; c1: KstSlot; c2: KstSlot | null }[], reason: string, start: KstDate | null = null): Promise<void> => {
+      check(await sb.rpc('student_regular_change_request', { p_student: adminStudentId, p_items: items, p_reason: reason || null, p_start: start }));
     },
     regularWithdraw: async (id: string): Promise<void> => {
       check(await sb.rpc('student_regular_change_withdraw', { p_student: adminStudentId, p_id: id }));

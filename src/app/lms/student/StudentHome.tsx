@@ -1146,7 +1146,7 @@ export default function StudentHome(props: {
           {overlay.kind === 'regular' && (
             <RegularChangeSheet tz={VIEW_TZ} load={actions.regularOptions} busy={busy}
               pending={changeReqs.regular.find((r) => r.status === 'pending') ?? null}
-              onSubmit={async (items, reason) => { const v = await run(() => actions.regularRequest(items, reason), ''); await reloadChangeReqs(); return !!v; }}
+              onSubmit={async (items, reason, start) => { const v = await run(() => actions.regularRequest(items, reason, start), ''); await reloadChangeReqs(); return !!v; }}
               onWithdraw={async (id) => { const v = await run(() => actions.regularWithdraw(id), ''); await reloadChangeReqs(); return !!v; }} />
           )}
           {overlay.kind === 'tutor_change' && (
