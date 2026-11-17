@@ -793,7 +793,7 @@ export default function LoginFlow() {
                 <div className="mt-2 grid gap-2">
                   <span className="text-[13px] text-[#55526a]">{t.noPwHint}</span>
                   <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => sendPwCode()}>
-                    {t.pwMake}
+                    {t.pwLink}
                   </button>
                 </div>
               )}
