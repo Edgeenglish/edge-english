@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Provider } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { canDiscardSocialAccount, googleAllowed, googleCallbackVerified } from '@/lms/auth/google';
+import { canDiscardSocialAccount, googleAllowed, googleCallbackVerified, inAppBrowser } from '@/lms/auth/google';
 import { PRIVACY_POLICY, TERMS } from '@/lms/auth/legal';
 import { LegalSections } from '@/components/legal/LegalDoc';
 import { GoogleIcon } from './GoogleIcon';
@@ -163,7 +163,7 @@ export default function LoginFlow() {
     const naver = fetch(`${url}/auth/v1/authorize?provider=${encodeURIComponent(PROVIDER_ID.naver)}`, { redirect: 'manual' })
       .then((r) => r.type === 'opaqueredirect' || r.status === 302)
       .catch(() => false);
-    void Promise.all([settings, naver]).then(([s, n]) => setSocial(enabledSocial(s?.external, n, googleAllowed(url, window.location.hostname))));
+    void Promise.all([settings, naver]).then(([s, n]) => setSocial(enabledSocial(s?.external, n, googleAllowed(url, window.location.hostname) && !inAppBrowser(navigator.userAgent))));
   }, []);
 
   // 카카오·네이버에서 돌아왔으면(?code=) 세션으로 바꾸고, 아니면 같은 주소의 유효한 세션을 이어 씀
@@ -726,7 +726,6 @@ export default function LoginFlow() {
   const errText = 'mt-1 block text-[13px] font-semibold text-[#b3261e]';
   const h1 = 'text-[22px] font-bold text-[#1d1b2b]';
   const linkBtn = 'min-h-[44px] px-1 text-[14px] text-[#55526a]';
-  const smallLink = 'min-h-[40px] px-0.5 text-[13px] leading-snug text-[#55526a]';
   const has = (p: SignupProblem) => problems.includes(p);
 
   const passwordInput = (id: string, label: string, autoComplete: string, onEnter: () => void, bad: boolean, placeholder?: string) => (
@@ -822,12 +821,6 @@ export default function LoginFlow() {
               <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => (looksLikeEmail(email) ? sendPwCode() : go('pw_email'))}>
                 {t.pwLink}
               </button>
-            </div>
-            <div className="flex flex-col items-center">
-              <button type="button" disabled={busy} className={`${smallLink} disabled:opacity-40`} onClick={() => sendLoginCode()}>
-                {t.codeLogin}
-              </button>
-              {recent === 'code' && <span className="relative z-[1] -mt-1">{bubble('up')}</span>}
             </div>
             {socialCircles()}
             {linkFor === 'google' && <button type="button" className={ghost} onClick={() => { setPendingLink(null); setLinkFor(null); go('login'); }}>{t.cancelLink}</button>}
