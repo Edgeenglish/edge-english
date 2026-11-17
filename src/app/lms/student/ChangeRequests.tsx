@@ -6,7 +6,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { formatInZone } from '@/lms/rules/dates';
-import { addDays, mondayOf, sameSlot, slotAt, TUTOR_CHANGE_REASONS, weekFor, type KstSlot } from '@/lms/student/regular-change';
+import { addDays, mondayOf, sameSlot, slotAt, TUTOR_CHANGE_REASONS, weekFor, weekOk, type KstSlot } from '@/lms/student/regular-change';
+import type { KstDate } from '@/lms/rules/dates';
 import type { RcOptions, RegularRequest, TutorChangeRequest } from '@/lms/student/live';
 
 const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
@@ -35,10 +36,10 @@ type Pick = { c1: KstSlot | null; c2: KstSlot | null };
 
 export function RegularChangeSheet(props: {
   tz: string;
-  load: () => Promise<RcOptions>;
+  load: (from?: KstDate | null) => Promise<RcOptions>;
   pending: RegularRequest | null;
   busy: boolean;
-  onSubmit: (items: { old: KstSlot; c1: KstSlot; c2: KstSlot | null }[], reason: string) => Promise<boolean>;
+  onSubmit: (items: { old: KstSlot; c1: KstSlot; c2: KstSlot | null }[], reason: string, start: KstDate | null) => Promise<boolean>;
   onWithdraw: (id: string) => Promise<boolean>;
 }) {
   const { tz, busy } = props;
@@ -53,11 +54,15 @@ export function RegularChangeSheet(props: {
   const [withdrawn, setWithdrawn] = useState(false);
   // 연 순간의 신청 상태로 고정 (신청 직후 '신청했어요 ✓' 화면에 머묾)
   const [pending] = useState(props.pending);
+  // 변경 시작 주 (H26(208) 보충 4): null = 후보마다 가장 빠른 주. 처음 읽은 값(base)으로 고를 수 있는 주 목록을 만듦
+  const [start, setStart] = useState<KstDate | null>(null);
+  const [base, setBase] = useState<RcOptions | null>(null);
 
   useEffect(() => {
     if (pending) return;
     props.load().then((x) => {
       setO(x);
+      setBase(x);
       if (x.state === 'ok' && x.slots.length === 1) { setOlds([x.slots[0].weekday]); setTarget({ old: x.slots[0].weekday, rank: 'c1' }); }
     }).catch(() => setErr(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,7 +72,16 @@ export function RegularChangeSheet(props: {
   const refWeek = ok ? addDays(mondayOf(ok.today), 7) : '';
   const slotOf = (wd: number) => ok!.slots.find((s) => s.weekday === wd)!;
   const ctx = ok ? { today: ok.today, finalEnd: ok.finalEnd, periods: ok.periods } : null;
-  const weekOf = (old: KstSlot, c: KstSlot) => (ctx ? weekFor(ctx, [{ old, new: c }]) : null);
+  const weekOf = (old: KstSlot, c: KstSlot) => (!ctx ? null : start ? (weekOk(ctx, [{ old, new: c }], start) ? start : null) : weekFor(ctx, [{ old, new: c }]));
+  const changeStart = (w: KstDate | null) => {
+    setStart(w);
+    setPicks({});
+    setTarget(olds.length ? { old: olds[0], rank: 'c1' } : null);
+    // 고른 주부터 매주 비어 있는 시간으로 다시 읽음 (가장 빠른 주면 처음 값)
+    if (!w) { setO(base); return; }
+    setO(null);
+    props.load(w).then(setO).catch(() => setErr(true));
+  };
 
   /** 이 수업(old)의 새 시간으로 고를 수 있는 것: 남는 다른 정규 요일·다른 수업에서 고른 요일 빼고, 적용 주가 있는 것 */
   const allowed = useMemo(() => {
@@ -127,8 +141,12 @@ export function RegularChangeSheet(props: {
     return <div className="grid gap-3"><h2 className="text-[18px] font-bold">정규 시간 변경</h2><p className="text-[14px] font-bold text-[#55526a]">{why}</p></div>;
   }
 
-  // 가장 빠른 적용일: 아무것도 고르기 전, 바꿀 수 있는 모든 수업·시간 중 가장 빠른 주
-  const earliest = ok.slots.flatMap((s) => ok.free.filter((f) => !sameSlot(f, s)).map((f) => weekOf(s, f))).filter(Boolean).sort()[0] ?? null;
+  // 가장 빠른 적용일: 아무것도 고르기 전, 바꿀 수 있는 모든 수업·시간 중 가장 빠른 주 (처음 읽은 값 기준)
+  const b = base?.state === 'ok' ? base : ok;
+  const bctx = { today: b.today, finalEnd: b.finalEnd, periods: b.periods };
+  const earliest = b.slots.flatMap((s) => b.free.filter((f) => !sameSlot(f, s)).map((f) => weekFor(bctx, [{ old: s, new: f }]))).filter(Boolean).sort()[0] ?? null;
+  const weeks: KstDate[] = [];
+  for (let w = earliest; w && w <= b.finalEnd; w = addDays(w, 7)) weeks.push(w);
   const canSend = olds.length > 0 && olds.every((w) => picks[w]?.c1);
   const pickRow = (w: number, rank: 'c1' | 'c2') => {
     const c = picks[w]?.[rank];
@@ -170,6 +188,16 @@ export function RegularChangeSheet(props: {
       <p className="flex justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2.5 text-[14px]">
         <span>가장 빠른 적용일</span><b className="text-[#5b3df0]">{earliest ? weekText(earliest) : '-'}</b>
       </p>
+      {weeks.length > 1 && (
+        <label className="grid gap-1.5">
+          <span className={lbl.replace('mb-1.5 ', '')}>변경 시작 주</span>
+          <select value={start ?? ''} disabled={sent} onChange={(e) => changeStart((e.target.value || null) as KstDate | null)}
+            className="min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] font-semibold">
+            <option value="">가장 빠른 주</option>
+            {weeks.slice(1).map((w) => <option key={w} value={w}>{weekText(w)}</option>)}
+          </select>
+        </label>
+      )}
       {!earliest && <p className="text-[14px] font-bold text-[#b3261e]">이번 수강기간에는 더 바꿀 수 없어요</p>}
       {earliest && (
         <>
@@ -233,7 +261,7 @@ export function RegularChangeSheet(props: {
           <button type="button" disabled={busy || sent || !canSend} className={sent ? DONE : PRI}
             onClick={async () => {
               const items = olds.map((w) => ({ old: slotOf(w), c1: picks[w]!.c1!, c2: picks[w]?.c2 ?? null }));
-              if (await props.onSubmit(items, reason.trim())) { setSent(true); setTarget(null); }
+              if (await props.onSubmit(items, reason.trim(), start)) { setSent(true); setTarget(null); }
             }}>
             {sent ? '신청함 ✓' : '신청하기'}
           </button>
