@@ -110,7 +110,7 @@ export function emailStatusText(e: ChNoticeEmail, sentLabel: (d: Date) => string
   if (e.status === 'sent') return `자동 메일 발송 완료${e.sentAt ? ` ${sentLabel(e.sentAt)} 한국 시간` : ''} · ${to}`;
   if (e.status === 'failed') return `자동 메일 실패 · ${e.error ?? '발송 서비스 오류'} · ${to}`;
   if (e.status === 'no_address') return `자동 메일 못 보냄 · ${e.error ?? '이메일이 없어요'}`;
-  return e.error ? `자동 메일 대기 · ${e.error}` : `자동 메일 보내는 중 · ${to}`;
+  return e.error ? `자동 메일 대기 · ${e.error}` : `메일 발송 대기 · ${to}`;
 }
 
 export type ChStudent = { id: string; code: string; nameKo: string; nameEn: string; timezone: string };

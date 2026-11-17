@@ -123,7 +123,7 @@ describe('수업 변경 화면 계산 (1순위)', () => {
     expect(emailStatusText({ status: 'sent', to: 'support@edgeenglish.kr', intended: 'a@b.kr', sentAt: now, error: null, attempts: 1 }, lbl)).toBe('자동 메일 발송 완료 11/7 21:03 한국 시간 · support@edgeenglish.kr (시험 · 원래 a@b.kr)');
     expect(emailStatusText({ status: 'failed', to: 'a@b.kr', intended: 'a@b.kr', sentAt: null, error: '422 bad address', attempts: 1 }, lbl)).toBe('자동 메일 실패 · 422 bad address · a@b.kr');
     expect(emailStatusText({ status: 'no_address', to: null, intended: null, sentAt: null, error: '강사 이메일이 없어요', attempts: 0 }, lbl)).toBe('자동 메일 못 보냄 · 강사 이메일이 없어요');
-    expect(emailStatusText({ status: 'queued', to: 'a@b.kr', intended: 'a@b.kr', sentAt: null, error: null, attempts: 1 }, lbl)).toBe('자동 메일 보내는 중 · a@b.kr');
+    expect(emailStatusText({ status: 'queued', to: 'a@b.kr', intended: 'a@b.kr', sentAt: null, error: null, attempts: 1 }, lbl)).toBe('메일 발송 대기 · a@b.kr');
   });
 
   it('대시보드: 수업이 이미 지났어도 안내 카드에 그 수업 날짜가 보임', () => {
