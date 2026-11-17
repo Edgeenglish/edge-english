@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
 import { LOGIN_PATH, myLmsHome } from '@/lms/auth/home';
-import { forgetOwnView, prefetchOwnView } from '@/lms/student/prefetch';
+import { forgetOwnView, ownViewCache, prefetchOwnView } from '@/lms/student/prefetch';
 import BubbleTopTail from './common/bubble/BubbleTopTail';
 
 export default function Header() {
@@ -17,6 +17,15 @@ export default function Header() {
   const [loggedIn, setLoggedIn] = useState(false);
   // 학생은 [내 수업]이 학생 홈으로 바로 (로그인 화면·'이동하는 중'을 거치지 않음, 11/17 대표). 그 밖은 로그인 화면이 넘김
   const [accountHref, setAccountHref] = useState(LOGIN_PATH);
+  const router = useRouter();
+  // 학생 자료를 아직 받는 중에 누르면 지금 화면을 그대로 두고, 다 받은 뒤 학생 홈으로 넘김 ('불러오는 중' 화면으로 끊기지 않게, 11/17 대표)
+  const openAccount = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    const pending = accountHref === '/lms/student' ? ownViewCache()?.pending : undefined;
+    if (!pending || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    const go = () => router.push('/lms/student');
+    pending.then(go, go);
+  };
   useEffect(() => {
     const sb = supabaseBrowser();
     if (!sb) return;
@@ -117,7 +126,7 @@ export default function Header() {
 
           {/* 순서: [내 수업] [수강신청] [로그아웃] — 로그아웃은 맨 오른쪽 (11/17 대표). 1024px 아래는 ☰ 메뉴(로그아웃 생긴 뒤 768~1023 에서 머리글이 화면 밖으로 넘침) */}
           <div className="flex shrink-0 items-center gap-5 max-xl:gap-4 max-lg:hidden">
-            <Link href={accountHref} className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
+            <Link href={accountHref} onClick={openAccount} className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
               {accountLabel}
             </Link>
             <Link
@@ -131,7 +140,7 @@ export default function Header() {
           </div>
         </div>
         <div className="flex items-center gap-4 lg:hidden">
-          <Link href={accountHref} className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
+          <Link href={accountHref} onClick={openAccount} className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
             {accountLabel}
           </Link>
           {logoutBtn('')}
