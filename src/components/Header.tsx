@@ -36,7 +36,7 @@ export default function Header() {
 
   return (
     <header className="flex-center sticky top-0 z-20 min-h-[70px] bg-white px-4 py-4">
-      <div className="flex w-full items-center gap-12 max-md:gap-4">
+      <div className="flex w-full items-center gap-12 max-xl:gap-8 max-lg:gap-4">
         <Link href="/">
           <img
             src="/images/logo.svg"
@@ -48,7 +48,7 @@ export default function Header() {
         </Link>
 
         <div className="flex w-full items-center justify-between">
-          <div className="flex gap-11 max-xl:gap-7 max-lg:gap-6 max-md:hidden">
+          <div className="flex gap-11 max-xl:gap-6 max-lg:hidden">
             <Link
               href="/events"
               className={`text-nowrap ${pathName.startsWith('/events') ? 'font-bold' : 'font-medium text-edge-light'}`}
@@ -99,8 +99,8 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* 순서: [내 수업] [수강신청] [로그아웃] — 로그아웃은 맨 오른쪽 (11/17 대표) */}
-          <div className="flex items-center gap-5 max-md:hidden">
+          {/* 순서: [내 수업] [수강신청] [로그아웃] — 로그아웃은 맨 오른쪽 (11/17 대표). 1024px 아래는 ☰ 메뉴(로그아웃 생긴 뒤 768~1023 에서 머리글이 화면 밖으로 넘침) */}
+          <div className="flex shrink-0 items-center gap-5 max-xl:gap-4 max-lg:hidden">
             <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
               {accountLabel}
             </Link>
@@ -114,14 +114,14 @@ export default function Header() {
             {logoutBtn('')}
           </div>
         </div>
-        <div className="flex items-center gap-4 md:hidden">
+        <div className="flex items-center gap-4 lg:hidden">
           <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
             {accountLabel}
           </Link>
           {logoutBtn('')}
         </div>
         {/* 모바일 햄버거 메뉴 */}
-        <div className="drawer drawer-end min-h-8 w-auto min-w-8 md:hidden">
+        <div className="drawer drawer-end min-h-8 w-auto min-w-8 lg:hidden">
           <input
             id="hamburger-menu"
             type="checkbox"
