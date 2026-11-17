@@ -67,18 +67,19 @@ export function signupProblems(v: SignupInput): SignupProblem[] {
   return out;
 }
 
-export type SocialProvider = 'kakao' | 'naver';
+export type SocialProvider = 'kakao' | 'naver' | 'google';
 /** Supabase 공급자 이름. 네이버는 기본 지원이 없어 직접 연결(custom OAuth) 이름 */
-export const PROVIDER_ID: Record<SocialProvider, string> = { kakao: 'kakao', naver: 'custom:naver' };
+export const PROVIDER_ID: Record<SocialProvider, string> = { kakao: 'kakao', naver: 'custom:naver', google: 'google' };
 /**
  * 켜진 간편 로그인만 버튼으로 (꺼진 버튼은 보이지 않게).
  * 카카오 = /auth/v1/settings 의 external.kakao. 네이버(직접 연결)는 settings 에 안 나와서
  * /auth/v1/authorize?provider=custom:naver 가 넘겨 주면(302) 켜진 것으로 본다 (없으면 400 'not found').
  */
-export function enabledSocial(external: Record<string, boolean> | null | undefined, naverOn = false): SocialProvider[] {
+export function enabledSocial(external: Record<string, boolean> | null | undefined, naverOn = false, googleAllowed = false): SocialProvider[] {
   const out: SocialProvider[] = [];
   if (external?.kakao) out.push('kakao');
   if (naverOn) out.push('naver');
+  if (googleAllowed && external?.google) out.push('google');
   return out;
 }
 
@@ -108,8 +109,8 @@ export const STRINGS = {
     pwLink: '비밀번호 만들기·찾기',
     codeLogin: '메일 코드로 로그인',
     signupLink: '회원가입',
-    social: { kakao: '카카오로 로그인', naver: '네이버로 로그인' },
-    socialName: { kakao: '카카오', naver: '네이버' },
+    social: { kakao: '카카오로 로그인', naver: '네이버로 로그인', google: 'Google로 로그인' },
+    socialName: { kakao: '카카오', naver: '네이버', google: 'Google' },
     or: '또는',
     quickLogin: '간편 로그인',
     recent: '최근 로그인',
@@ -167,6 +168,13 @@ export const STRINGS = {
     memberTitle: '아직 수강 중인 수업이 없어요',
     memberTitleNamed: (n: string) => `${n}님, 아직 수강 중인 수업이 없어요`,
     apply: '수강신청',
+    googleTitle: 'Google로 로그인',
+    googleLink: '기존 계정에 Google 연결',
+    googleNew: 'Google로 새로 가입',
+    googleReturning: '이미 연결한 Google로 로그인',
+    googleLead: '기존 회원은 먼저 기존 계정에 연결해 주세요. 수업·결제 내역이 그대로 유지돼요.',
+    googleConflict: '이 Google 계정은 다른 회원 계정에 연결되어 있어요. 기존 로그인 방법으로 이용하고 운영진에게 문의해 주세요.',
+    cancelLink: '연결 취소',
     socialTitle: '엣지영어가 처음이세요?',
     socialNew: '처음이에요',
     socialExisting: '이미 회원이에요',
@@ -191,8 +199,8 @@ export const STRINGS = {
     pwLink: 'Set or reset password',
     codeLogin: 'Log in with email code',
     signupLink: 'Sign up',
-    social: { kakao: 'Continue with Kakao', naver: 'Continue with Naver' },
-    socialName: { kakao: 'Kakao', naver: 'Naver' },
+    social: { kakao: 'Continue with Kakao', naver: 'Continue with Naver', google: 'Continue with Google' },
+    socialName: { kakao: 'Kakao', naver: 'Naver', google: 'Google' },
     or: 'or',
     quickLogin: 'Or log in with',
     recent: 'Last used',
@@ -250,6 +258,13 @@ export const STRINGS = {
     memberTitle: 'No classes yet',
     memberTitleNamed: (n: string) => `${n}, no classes yet`,
     apply: 'Apply for classes',
+    googleTitle: 'Continue with Google',
+    googleLink: 'Connect Google to my account',
+    googleNew: 'Sign up with Google',
+    googleReturning: 'Log in with my connected Google account',
+    googleLead: 'Already a member? Connect your existing account first to keep your classes and payments together.',
+    googleConflict: 'This Google account is connected to another member account. Use your existing login method and contact our team.',
+    cancelLink: 'Cancel connection',
     socialTitle: 'New to Edge English?',
     socialNew: "Yes, I'm new",
     socialExisting: 'I already have an account',
