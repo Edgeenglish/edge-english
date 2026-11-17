@@ -25,3 +25,8 @@ export function googleCallbackVerified(user: Pick<User, 'id' | 'identities'> | n
 export function canDiscardSocialAccount(providers: string[]): boolean {
   return providers.length > 0 && !providers.includes('email');
 }
+
+// Google 은 앱 안 브라우저(카카오톡·인스타그램·페이스북·라인·네이버 앱)에서 로그인을 막음(disallowed_useragent) → 그 안에서는 Google 버튼을 숨김 (11/17)
+export function inAppBrowser(ua: string): boolean {
+  return /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER\(inapp/i.test(ua);
+}
