@@ -197,7 +197,7 @@ export const STRINGS = {
     hide: 'Hide',
     login: 'Log in',
     badLogin: 'Email or password is incorrect',
-    noPwHint: 'Already a member? No password yet, or forgot it? 👇',
+    noPwHint: 'Already a member? Haven’t set a password yet, or forgot it? 👇',
     pwLink: 'Set or reset password',
     codeLogin: 'Log in with email code',
     signupLink: 'Sign up',
