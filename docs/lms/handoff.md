@@ -2,6 +2,12 @@
 
 # 다음 세션 시작 메모
 
+## 🛠 11/17 강사 휴무 화면 수정 — **시험 사이트·시험 DB 반영 끝, 운영 반영은 대표 승인 대기** (브랜치 claude/modest-shannon-osnope, 시안 https://claude.ai/artifact/SeuXW4ufCvRvGG6Rxops49)
+- 코드: `TutorLeave.tsx`(대체 강사 고르기 = 선택 → [○○에게 문의하기 N회], 불가 사유 표·카드, 지난 휴무 접기, 수강생/강사 목록 구분, ‹ 목록), `tutor-leave.ts`(`subCell`·`askMailFailed`·묶음 `mailWait`, 상태 글 '문의 보내기 전' 없앰 → 메일 못 보냄/답변 기다리는 중, '강사님 수락'), `tutor-leave-live.ts`(불가 사유 읽기), `lesson-change.ts`(메일 상태 '메일 발송 대기'). 복사·보냄은 자동 메일 실패·주소 없음일 때만.
+- migration **20261117010000_lms_leave_sub_busy_reasons_offhours_mail** (시험 DB 적용): `admin_leave_sub_busy_reasons`(불가 사유) 추가 + `lms_cover_mail_run` 본문 일부 교체(정규 근무시간 밖 수업 줄 `(outside your regular working hours)` + 있을 때만 한 문장, 재촉 메일은 그대로). **운영 적용 때: 직전 백업(함수 정의) → 이 migration** (적용 전 DB 에서도 화면은 사유만 빠지고 동작).
+- 시험(11/17): 같은 수업·같은 강사 다시 문의 = 변경 0·안내 중복 없음, 다른 강사에게 새로 문의 가능, 메일 글 시간 밖 수업만 표시(Noah)·안 밖은 표시 없음(Mia) — 모두 되돌림(다시 고르기). 시험 데이터: Alex 12/22~1/15(수업 4회 미정 — 대체 강사 고르기), Alex 12/13~12/16(Mia 메일 발송 대기·Sophie 메일 못 보냄 — 복사·보냄 카드). 되돌리기: 해당 수업 [다시 고르기].
+- 남은 것: 대표 화면 확인 → 운영 반영 승인. 운영 반영 때 강사에게 알릴 새 기능 없음(운영자 화면만).
+
 ## ✅ 11/16 장기 수강생 새 4주 시작 안내 메일 (학생) — **운영 반영 끝 (대표 '응')** (H26(202), 브랜치 claude/determined-edison-hvhe2o)
 - migration **20261116130000_lms_period_start_mail** (시험 DB 적용): `lms_period_start_due`(idx ≥ 2 · 수강권 confirmed/active · 체험용 아님 · 시작일 당일 9:00 KST 이후 · 같은 기간 미발송 · 24시간 안 첫 수업 안내 없음) · `lms_period_start_mail`(template `period_start`, dedupe `period_start:기간id`) · `lms_period_start_run` · 예약 실행 `lms-renewal-mail` 에 붙임(재등록 누락 run 이 있으면 유지). 앱 사용자 실행 불가 확인
 - 시험(11/16): 김도윤 STU-0109(서울, 주1)·최지아 STU-0110(Detroit, 주2) 2통 support@ 수신, 이서윤 STU-0111(4주) 제외, 다시 실행 0통, 9시 전·다음 날 0건. 시험 학생 3명 그대로 둠(12/14 에 세 번째 4주 메일이 시험 DB 에서 support@ 로 또 옴)
