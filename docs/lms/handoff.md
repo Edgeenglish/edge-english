@@ -14,10 +14,13 @@
 - 시험 DB 실제 수신(11/16): STU-0002·STU-0018 24시간 전 메일 support@ 도착. 시험 DB 예약 실행이 계속 돌아 12시간 전 메일(오늘 밤)·STU-9004·STU-0013 메일도 support@ 로 옴 = 시험 데이터 그대로 둠
 - 운영 반영 = migration 1개 적용(함수 3개 새로 + cron 명령 교체, 데이터 안 바뀜 → 되돌리기: cron 명령을 'select lms_renewal_mail_run(); select lms_mail_run();' 으로). 코드(lms-prod) 변경 없음
 
-## ▶ 다음 세션 작업 (H26(206) 참고): 홈페이지와 LMS를 한 사이트처럼 — 공통 위쪽 틀 시안부터
-- 지금: 홈페이지(src/app/layout.tsx · Header.tsx · Footer.tsx)와 LMS(src/app/lms/layout.tsx, 운영/시험 DB 띠 + 화면마다 자체 머리글: AdminHeader·TutorHome·StudentHome)가 틀이 다름. /privacy·/terms 는 홈페이지 틀, /lms/login 은 LMS 틀
-- 할 일(H26(206) 보충 혼합형 확정): PC·휴대폰 시안 — 로그인·가입 = 홈페이지 메뉴+바닥글 / 학생 = 홈페이지 위 메뉴·바닥글 그대로 + 가운데 LMS(학생 화면 자체 머리글 없애고 학생 메뉴는 내용 위 탭, [로그인]→[내 수업]) / 강사 = 같은 위쪽 틀 + 영어 강사 메뉴 / 운영자 = 같은 위쪽 틀 + 운영 메뉴 → 대표 선택 → 개발 → 시험 사이트 → 운영
-- 주의: 운영/시험 DB 띠(db-env.ts)를 일반 회원에게도 보일지 함께 정하기(지금 운영 로그인 화면 맨 위에 '운영 DB · 실제 데이터'가 모두에게 보임). 기존 LMS 기능·데이터 안 바꿈
+## ✅ 11/17 학생·로그인 화면 홈페이지 틀 통합 — 시험 사이트 반영·동선 확인 끝, **운영 배포 대표 결정 대기** (H26(207), 브랜치 claude/awesome-brown-xp0c9u)
+- 커밋 db4613e (lms-test). 수정: src/app/layout.tsx · components/SiteChrome.tsx(inSiteFrame: /lms/login·/lms/student 만 홈페이지 Header·Footer, 떠 있는 버튼은 LMS 에서 숨김) · components/Header.tsx(LMS 에서 [로그인/내 수업] 굵게) · app/lms/LmsShell.tsx(틀 안 화면은 화면 높이 안 채움) · app/lms/layout.tsx · lms/login/LoginFlow.tsx(로그인 상자 새 배치, '최근 로그인' localStorage `lms-recent-login` = password·code·kakao·naver, 로고·'홈페이지로' 링크 없앰) · lms/auth/login-flow.ts(문구 3개) · student/StudentHome.tsx(자체 로고 없앰, 바닥글 여백은 SiteChrome)
+- 강사·운영자 화면 파일 안 건드림. 회원가입 단계의 카카오·네이버 큰 버튼은 그대로
+- 운영 DB 띠: 11/17 긴급 수정 운영 반영(71dfc69 학생·로그인에서 숨김, 운영자 화면·운영자 보기에만 ProdBand/ProdChip). 자동 점검 = src/lms/auth/internal-marks.test.ts + scripts/check-public-pages.sh (CLAUDE.md)
+- 시험(11/17): vitest 51파일 507개 통과, next build 통과, 로컬 320·360·390·1280px 가로 넘침 0·말풍선 4종(한국어·영어), 시험 사이트 학생 윤지호 STU-0018(메일 코드, support@ 수신) PC·iPhone 13: 홈페이지 → [로그인] → 학생 화면([내 수업]) → 수업료 → [내 수업] 다시 학생 화면, 화면에 내부용 글 없음, 최근 로그인 code 저장
+- 운영 배포 때: `git log origin/lms-test..origin/lms-prod` 먼저(운영에만 있는 커밋 많음 — lms-test 통째 배포 금지, 이 묶음만 골라 담기: db4613e 의 코드 파일) → push → `bash scripts/check-public-pages.sh` → 대표 본인 학생 계정으로 확인
+- 시안: https://claude.ai/artifact/WhqQQQtR5VXM54wkmgtSVg (6판 — 말풍선은 꽉 찬 모양으로 남아 있음, 실제 화면이 기준)
 
 ## ⏸ 11/16 회원가입·로그인 운영 공개 준비 점검 (브랜치 claude/nice-keller-dmfuv3, 실행 없음 — 대표 답 대기)
 - 네이버 로그인 검수 11/16 승인(대표). 임시 설정 정리는 다른 세션 담당 — 건드리지 않음
