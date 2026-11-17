@@ -9,6 +9,7 @@ import { asClassType, typeKo, typeKoLong } from '@/lms/class-type';
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
+import Link from 'next/link';
 import ProcessingHistory from './ProcessingHistory';
 import { ChangeRequestRows, RegularChangeSheet, TutorChangeSheet } from './ChangeRequests';
 import type { ChangeRequests } from '@/lms/student/live';
@@ -972,9 +973,9 @@ export default function StudentHome(props: {
                 </div>
               </section>
             )}
-            <a href="/books" className={`${card} flex min-h-[52px] items-center justify-between px-4 text-[15px] font-semibold`}>
+            <Link href="/books" className={`${card} flex min-h-[52px] items-center justify-between px-4 text-[15px] font-semibold`}>
               전체 교재 둘러보기 (홈페이지 교재 소개) <span className="text-[#8b88a0]">›</span>
-            </a>
+            </Link>
           </TabPage>
         )}
 
