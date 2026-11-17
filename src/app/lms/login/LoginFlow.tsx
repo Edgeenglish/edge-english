@@ -32,7 +32,7 @@ import {
   type SocialProvider,
 } from '@/lms/auth/login-flow';
 
-type Step = 'login' | 'code_login' | 'signup' | 'signup_code' | 'pw_email' | 'pw_new' | 'totp' | 'enroll' | 'member' | 'social_choice' | 'google_choice' | 'moving';
+type Step = 'login' | 'code_login' | 'signup' | 'signup_code' | 'pw_email' | 'pw_new' | 'totp' | 'enroll' | 'member' | 'social_choice' | 'moving';
 
 const LANG_KEY = 'lms-lang';
 const LINK_KEY = 'lms-link-provider'; // '이미 회원이에요' 뒤 기존 계정 로그인이 끝나면 연결할 카카오·네이버
@@ -138,6 +138,7 @@ export default function LoginFlow() {
   const [memberName, setMemberName] = useState(''); // 가입 때 받은 이름(이메일 가입 입력값·카카오·네이버 이름) — 빈 회원 화면 제목
   const [recent, setRecent] = useState<Recent | null>(null);
   const [pwUsed, setPwUsed] = useState(false);
+  const [googleInApp, setGoogleInApp] = useState(false);
   const t = STRINGS[lang];
   const sb = supabaseBrowser();
   const codeRef = useRef<HTMLInputElement>(null);
@@ -163,7 +164,13 @@ export default function LoginFlow() {
     const naver = fetch(`${url}/auth/v1/authorize?provider=${encodeURIComponent(PROVIDER_ID.naver)}`, { redirect: 'manual' })
       .then((r) => r.type === 'opaqueredirect' || r.status === 302)
       .catch(() => false);
-    void Promise.all([settings, naver]).then(([s, n]) => setSocial(enabledSocial(s?.external, n, googleAllowed(url, window.location.hostname) && !inAppBrowser(navigator.userAgent))));
+    void Promise.all([settings, naver]).then(([s, n]) => {
+      const google = googleAllowed(url, window.location.hostname);
+      const inApp = inAppBrowser(navigator.userAgent);
+      setSocial(enabledSocial(s?.external, n, google && !inApp));
+      // Google 은 앱 안 브라우저에서 로그인을 막음 → 버튼 대신 바깥 브라우저 안내 한 줄 (11/17 대표)
+      setGoogleInApp(google && inApp && !!s?.external?.google);
+    });
   }, []);
 
   // 카카오·네이버에서 돌아왔으면(?code=) 세션으로 바꾸고, 아니면 같은 주소의 유효한 세션을 이어 씀
@@ -394,12 +401,10 @@ export default function LoginFlow() {
     setBusy(false);
   }
 
-  async function socialLogin(p: SocialProvider, googleConfirmed = false) {
+  async function socialLogin(p: SocialProvider) {
     if (!sb) return setError(t.network);
     if (p === 'google') {
       if (!googleAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL, window.location.hostname)) return;
-      // 최근 로그인 표시는 브라우저 기록일 뿐, 이번 Google 계정의 연결 여부를 보장하지 않는다.
-      if (!googleConfirmed) return go('google_choice');
     }
     setBusy(true);
     try {
@@ -643,6 +648,7 @@ export default function LoginFlow() {
             </div>
           ))}
         </div>
+        {googleInApp && !linkFor && <p className="text-center text-[13px] text-[#55526a]">{t.googleInApp}</p>}
       </div>
     );
   }
@@ -1047,17 +1053,6 @@ export default function LoginFlow() {
             <button type="button" className={`${ghost} w-full`} onClick={logout}>
               {t.logout}
             </button>
-          </div>
-        )}
-
-        {step === 'google_choice' && (
-          <div className="grid gap-3">
-            <h1 className={h1}>{t.googleTitle}</h1>
-            <p className="text-[14px] leading-relaxed text-[#55526a]">{t.googleLead}</p>
-            <button type="button" disabled={busy} className={`${primary} bg-[#5b3df0]`} onClick={() => { setPendingLink('google'); setLinkFor('google'); go('login'); }}>{t.googleLink}</button>
-            <button type="button" disabled={busy} className="min-h-[52px] rounded-[14px] border border-[#d9d5e8] px-3 text-[15px] font-semibold text-[#1d1b2b]" onClick={() => socialLogin('google', true)}>{t.googleReturning}</button>
-            <button type="button" disabled={busy} className={ghost} onClick={() => socialLogin('google', true)}>{t.googleNew}</button>
-            <button type="button" disabled={busy} className={ghost} onClick={() => go('login')}>{t.backLogin}</button>
           </div>
         )}
 
