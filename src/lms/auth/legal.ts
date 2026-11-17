@@ -7,6 +7,13 @@
 
 export const LEGAL_EFFECTIVE_DATE: string | null = '2026년 11월 17일'; // 운영 공개일
 
+// 약관·처리방침 변경 공지 (제10조: 적용일 7일 전부터) — /terms·/privacy 맨 위. 적용일에 본문 바꾸면서 null 로 (11/17 대표 '오케이')
+export const LEGAL_NOTICE: string[] | null = [
+  '[변경 안내] 2026년 11월 24일부터 Google 계정으로도 회원가입·로그인할 수 있습니다. 이에 따라 이용약관 제2조·제3조와 개인정보 처리방침 1번(처리하는 개인정보)에 Google을 추가합니다.',
+  '· 이용약관: 카카오·네이버 → 카카오·네이버·Google',
+  '· 개인정보 처리방침: Google 회원 식별번호, Google 프로필 사진 주소 추가',
+];
+
 export const effectiveDateText = () => LEGAL_EFFECTIVE_DATE ?? '운영 공개일';
 
 export type LegalSection = { title: string; body: string[] };
