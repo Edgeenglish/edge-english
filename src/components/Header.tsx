@@ -21,6 +21,18 @@ export default function Header() {
   const accountLabel = loggedIn ? '내 수업' : '로그인';
   // 로그인·내 수업 화면에 있으면 다른 메뉴처럼 굵게 (11/17 학생 화면 홈페이지 틀 통합)
   const accountOn = pathName.startsWith('/lms') ? 'font-bold' : 'font-semibold';
+  // 로그인돼 있으면 오른쪽 위에 로그아웃 (11/17 대표) — 로그아웃 뒤 홈페이지 첫 화면
+  const logout = async () => {
+    await supabaseBrowser()?.auth.signOut();
+    setLoggedIn(false);
+    window.location.assign('/');
+  };
+  const logoutBtn = (cls: string) =>
+    loggedIn ? (
+      <button type="button" onClick={logout} className={`text-nowrap text-sm font-medium text-edge-gray ${cls}`}>
+        로그아웃
+      </button>
+    ) : null;
 
   return (
     <header className="flex-center sticky top-0 z-20 min-h-[70px] bg-white px-4 py-4">
@@ -91,6 +103,7 @@ export default function Header() {
             <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
               {accountLabel}
             </Link>
+            {logoutBtn('')}
             <Link
               href="https://forms.gle/arWZ6uzK3BFgaxM39"
               target="_blank"
@@ -103,6 +116,7 @@ export default function Header() {
         <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333] md:hidden`}>
           {accountLabel}
         </Link>
+        {logoutBtn('md:hidden')}
         {/* 모바일 햄버거 메뉴 */}
         <div className="drawer drawer-end min-h-8 w-auto min-w-8 md:hidden">
           <input
