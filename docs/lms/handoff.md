@@ -20,11 +20,13 @@
 - 운영 남은 것: ① 운영 Supabase Google 꺼짐 + Google OAuth 클라이언트 284694131806-rl051e…에 운영 콜백(https://mfamixejxydodclhglbc.supabase.co/auth/v1/callback) 미등록(redirect_uri_mismatch) → Work 문구 대화에 있음(동의 화면 사용자 유형·게시 상태 확인 포함) ② 약관 제10조 7일 전 공지 → Google 공개 날짜 대표 답 대기(가장 빠름 11/24) → /terms·/privacy 맨 위 공지 한 줄(문구 대표 '반영해' 뒤) ③ 배포 묶음 = origin/lms-prod 위에 Google 파일 6개(GoogleIcon·LoginFlow·google.ts·google.test.ts·login-flow.ts·legal.ts 문구만, 시행일 줄은 운영 값 유지) → internal-marks 시험·check-public-pages
 - Google 동의 화면에 'kyeimjozkcqbgkepwrnv.supabase.co(시험)/mfamixejxydodclhglbc.supabase.co(운영)로 이동'이 보임(맞춤 도메인 없음) — 공개 조건 아님
 
-## 🛠 11/17 강사 휴무 화면 수정 — **시험 사이트·시험 DB 반영 끝, 운영 반영은 대표 승인 대기** (브랜치 claude/modest-shannon-osnope, 시안 https://claude.ai/artifact/SeuXW4ufCvRvGG6Rxops49)
-- 코드: `TutorLeave.tsx`(대체 강사 고르기 = 선택 → [○○에게 문의하기 N회], 불가 사유 표·카드, 지난 휴무 접기, 수강생/강사 목록 구분, ‹ 목록), `tutor-leave.ts`(`subCell`·`askMailFailed`·묶음 `mailWait`, 상태 글 '문의 보내기 전' 없앰 → 메일 못 보냄/답변 기다리는 중, '강사님 수락'), `tutor-leave-live.ts`(불가 사유 읽기), `lesson-change.ts`(메일 상태 '메일 발송 대기'). 복사·보냄은 자동 메일 실패·주소 없음일 때만.
-- migration **20261117010000_lms_leave_sub_busy_reasons_offhours_mail** (시험 DB 적용): `admin_leave_sub_busy_reasons`(불가 사유) 추가 + `lms_cover_mail_run` 본문 일부 교체(정규 근무시간 밖 수업 줄 `(outside your regular working hours)` + 있을 때만 한 문장, 재촉 메일은 그대로). **운영 적용 때: 직전 백업(함수 정의) → 이 migration** (적용 전 DB 에서도 화면은 사유만 빠지고 동작).
-- 시험(11/17): 같은 수업·같은 강사 다시 문의 = 변경 0·안내 중복 없음, 다른 강사에게 새로 문의 가능, 메일 글 시간 밖 수업만 표시(Noah)·안 밖은 표시 없음(Mia) — 모두 되돌림(다시 고르기). 시험 데이터: Alex 12/22~1/15(수업 4회 미정 — 대체 강사 고르기), Alex 12/13~12/16(Mia 메일 발송 대기·Sophie 메일 못 보냄 — 복사·보냄 카드). 되돌리기: 해당 수업 [다시 고르기].
-- 남은 것: 대표 화면 확인 → 운영 반영 승인. 운영 반영 때 강사에게 알릴 새 기능 없음(운영자 화면만).
+## ✅ 11/17 강사 휴무 화면 수정 + 대체 수업 강사 메일 5가지 — **운영 반영 끝 (대표 '응')** (브랜치 claude/modest-shannon-osnope, 시안 https://claude.ai/artifact/SeuXW4ufCvRvGG6Rxops49)
+- 화면: 대체 강사 고르기 = 선택 → [○○에게 문의하기 N회], 불가 사유, 지난 휴무 접기(처리 필요는 펼침), 수강생/강사에게 묻기 구분, ‹ 목록, '메일 발송 대기'(복사·보냄은 메일 실패·주소 없음일 때만), '강사님 수락'. 강사 Updates 'Cover class canceled'(`updates.ts`).
+- 메일 5가지(문구 대화 확정, 시험 DB 실제 발송·support@ 수신 확인): ① 요청(단수·복수, 정규 근무시간 밖 표시) ② 답변 접수(강사 화면 답·운영자 대신 기록 모두) ③-가 확정 ③-나 요청 종료(확정 전 학생이 기존 강사 선택·운영자 철회) ③-다 확정 후 취소. ③-나·다는 15분마다 묶어서(`lms_cover_closures` 표 + `lms_cover_close_mail_run`, 기존 To do 메일 예약 실행에 붙임). 일부 확정·일부 종료는 두 통.
+- migration **20261117010000**(불가 사유 함수 + 요청 메일 시간 밖 표시) → **20261117020000**(메일 5종·표·트리거). **적용 순서 중요**(앞 것이 있어야 시간 밖 표시가 요청 메일에 나옴).
+- ✅ 운영 반영(11/17): 백업 `lms_backup.snapshots` **74**(바뀌는 함수 6개 이전 정의 `_functions_before` + 표별 줄 수; 되돌리기 = 그 정의 실행 + 새 트리거·함수 drop) → migration 2개 → 함수 10개 md5 = 시험 DB, anon 실행 불가, 표 RLS 켜짐, 줄 수 그대로(leave_items 23·notices 147·notifications 93), 읽기 전용 dry-run 두 함수 모두 보낼 메일 0건 → 코드 lms-prod **d11222d**(lms-prod 위에 이 기능 파일 8개만; lms-prod 에 있던 로그인 변경 29커밋은 건드리지 않음). 운영에서는 실제 강사에게 시험 메일을 보내지 않음(쓰기 시험 안 함).
+- 참고: 운영 Olivia 에게는 ② 형식 메일이 11/17 13:24 UTC 에 수동으로 이미 감 — 이번 변경은 적용 뒤 새 답변에만 ② 발송(소급 없음).
+- 남은 것(선택): 확정 후 취소·요청 종료 메일을 운영에서 처음 보면 메일함 확인. 강사 [처리내역] 화면은 새 세션에서 시안부터(대표 11/17 동의).
 
 ## ✅ 11/16 장기 수강생 새 4주 시작 안내 메일 (학생) — **운영 반영 끝 (대표 '응')** (H26(202), 브랜치 claude/determined-edison-hvhe2o)
 - migration **20261116130000_lms_period_start_mail** (시험 DB 적용): `lms_period_start_due`(idx ≥ 2 · 수강권 confirmed/active · 체험용 아님 · 시작일 당일 9:00 KST 이후 · 같은 기간 미발송 · 24시간 안 첫 수업 안내 없음) · `lms_period_start_mail`(template `period_start`, dedupe `period_start:기간id`) · `lms_period_start_run` · 예약 실행 `lms-renewal-mail` 에 붙임(재등록 누락 run 이 있으면 유지). 앱 사용자 실행 불가 확인
