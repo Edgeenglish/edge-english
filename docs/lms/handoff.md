@@ -1,6 +1,24 @@
+## 11/17 학생 정상 취소 대체수업의 보강 강사 선택 — 시험 후 운영 반영 완료
+- 대표 승인: 학생이 미리 취소한 대체수업(공휴일 정상 취소 포함)도 원래 강사/대체강사 중 선택. 학생 직전 취소·결석의 보강 불가 및 무료 노쇼 보상수업의 강사 고정·무급 정책 유지.
+- migration 20261117123711_lms_student_canceled_cover_tutor_choice. 시험 DB 68항목 통과 후 운영 적용. 운영 함수 백업 snapshots 73, 복구는 저장된 lms_makeup_tutors 정의 재실행. 학생·수업 데이터 변경 없음. 화면 코드 변경 없음.
+
+## 11/17 대체강사 취소 보강 선택·확정 메일 날짜 구분 (대표 반영 승인)
+- 대체강사 사전/직전 취소·노쇼로 못 받은 수업: 원래 강사/대체강사 선택. 추가 무료 노쇼 보상수업: 노쇼 강사로 고정. 보강 목록 제목 바로 아래 강사 표시, 강사 변경 시 선택 날짜 초기화, 신청 버튼에 수신 강사 표시.
+- 대체 요청·최종 확정 메일: 강사 수신 + 운영진 숨은참조 유지. 확정 메일은 Confirmed / You marked unavailable / Available - awaiting final confirmation 구분. 수락만 한 날짜를 확정으로 표시하지 않음. 답변 당시 날짜를 최신 문의 안내에 보존.
+- 운영 DB: migrations 20261117100859 / 20261117101311 적용, 함수 백업 snapshots 72. 되돌리기: snapshots 72 `_functions_before` 복구 + 화면 커밋 되돌림. 신규 nullable cover_answer와 미사용 보조 함수는 남겨도 기존 동작에 영향 없음.
+- 검증: 시험 DB 보강 46항목, 혼합 답변·메일 수신자·BCC·중복방지 시험 통과(전부 rollback). 프런트 관련 60시험·운영 소스 build 통과. 고정 시험 사이트 PC 1280/모바일 390 화면·선택 초기화·보상 강사 고정 확인. 운영 배포는 이 변경을 포함한 lms-prod 커밋의 Vercel 기록 참조.
+- 정책: H26(130)/(172) 보충. 운영 학생 데이터 변경·시험 메일 발송 없음.
+
 > **2026-11-03 ChatGPT 작업 인수인계**: [최신 변경·시험 DB 적용·Google 승인 대기·검증 기록](handoff-2026-11-03-chatgpt.md). My hours 현지 06:00~22:30, 구글폼 연도→월→날짜→학생 선택, 시험 고정 주소·세션 재사용 및 실제 Google 응답 연결·클릭 검증 완료. 운영 미반영.
 
 # 다음 세션 시작 메모
+
+
+## ⏸ 11/17 Google 로그인 (브랜치 claude/charming-newton-hgvywn → lms-test 612aa04, 운영 미반영 — 대표 '보류')
+- a54f329·5c59707(다른 곳에서 올림) + 612aa04: 약관 2곳·처리방침 1곳 Google 문구(프로필 사진 주소 포함, 대표 '응') · '이미 회원이에요'로 빈 Google 계정 지우고 기존 계정에 연결(canDiscardSocialAccount = 이메일 없는 간편 로그인 계정) · googleAllowed 에 운영(mfamixejxydodclhglbc + edgeenglish.kr·www) 추가(운영 Supabase Google 켜야 버튼 보임)
+- 시험 통과(11/17): 다른 메일 Google → 윤지호 STU-0018 연결 · Google 새 가입 → [이미 회원이에요] → 빈 계정 삭제 → STU-0018 연결(DB: email+google, 간편 로그인만 있는 새 계정 0) · DB 삭제 함수 모의(Google만 = 삭제, 이메일·회원 연결 = 안 지움, 되돌림) · 운영 lms_discard_new_social_account md5 = 시험과 같음 · vitest 515
+- 운영 남은 것: ① 운영 Supabase Google 꺼짐 + Google OAuth 클라이언트 284694131806-rl051e…에 운영 콜백(https://mfamixejxydodclhglbc.supabase.co/auth/v1/callback) 미등록(redirect_uri_mismatch) → Work 문구 대화에 있음(동의 화면 사용자 유형·게시 상태 확인 포함) ② 약관 제10조 7일 전 공지 → Google 공개 날짜 대표 답 대기(가장 빠름 11/24) → /terms·/privacy 맨 위 공지 한 줄(문구 대표 '반영해' 뒤) ③ 배포 묶음 = origin/lms-prod 위에 Google 파일 6개(GoogleIcon·LoginFlow·google.ts·google.test.ts·login-flow.ts·legal.ts 문구만, 시행일 줄은 운영 값 유지) → internal-marks 시험·check-public-pages
+- Google 동의 화면에 'kyeimjozkcqbgkepwrnv.supabase.co(시험)/mfamixejxydodclhglbc.supabase.co(운영)로 이동'이 보임(맞춤 도메인 없음) — 공개 조건 아님
 
 ## 🛠 11/17 강사 휴무 화면 수정 — **시험 사이트·시험 DB 반영 끝, 운영 반영은 대표 승인 대기** (브랜치 claude/modest-shannon-osnope, 시안 https://claude.ai/artifact/SeuXW4ufCvRvGG6Rxops49)
 - 코드: `TutorLeave.tsx`(대체 강사 고르기 = 선택 → [○○에게 문의하기 N회], 불가 사유 표·카드, 지난 휴무 접기, 수강생/강사 목록 구분, ‹ 목록), `tutor-leave.ts`(`subCell`·`askMailFailed`·묶음 `mailWait`, 상태 글 '문의 보내기 전' 없앰 → 메일 못 보냄/답변 기다리는 중, '강사님 수락'), `tutor-leave-live.ts`(불가 사유 읽기), `lesson-change.ts`(메일 상태 '메일 발송 대기'). 복사·보냄은 자동 메일 실패·주소 없음일 때만.
@@ -27,6 +45,7 @@
 - 시험(11/17): vitest 51파일 507개 통과, next build 통과, 로컬 320·360·390·1280px 가로 넘침 0·말풍선 4종(한국어·영어), 시험 사이트 학생 윤지호 STU-0018(메일 코드, support@ 수신) PC·iPhone 13: 홈페이지 → [로그인] → 학생 화면([내 수업]) → 수업료 → [내 수업] 다시 학생 화면, 화면에 내부용 글 없음, 최근 로그인 code 저장
 - (운영 배포 끝 — 골라 담은 커밋: db4613e·8a9fad2·9b55982·91b9b9e·4f5a072·e5a99b4 + 시험 경로 맞춤. lms-test 의 a54f329 Google 로그인(다른 곳에서 올림)은 운영에 안 넣음) 다음 배포 때도: `git log origin/lms-test..origin/lms-prod` 먼저(운영에만 있는 커밋 많음 — lms-test 통째 배포 금지, 이 묶음만 골라 담기: db4613e 의 코드 파일) → push → `bash scripts/check-public-pages.sh` → 대표 본인 학생 계정으로 확인
 - 11/17 추가(시험 사이트만): 시험 띠 한 줄로, 머리글 오른쪽 위 [로그아웃](학생 왼쪽 메뉴·내 정보 탭 로그아웃 없앰), 카카오톡·맨 위로 버튼 학생·로그인 화면에도(휴대폰은 아래 메뉴 위로). 운영자 보기(학생) PC·휴대폰 확인: 머리글 아래 시험 띠 → 운영자 보기 막대, 겹침·넘침 없음. 운영 띠 색 빠짐(ProdBand 가 Tailwind content 밖 src/lms 에 있었음) → src/components 로 옮겨 운영 반영(11/17)
+- 11/17 운영 추가 반영: 머리글 1024px 아래 ☰ 메뉴·1280px 아래 간격 줄임(로그인 상태 768~1023px 머리글 넘침 고침, 대표 '그렇게 해' 로 유지) · 운영자 보기 막대의 빨간 '운영 DB' 표시 뺌(대표 요청 — 운영자 홈 맨 위 빨간 띠만 남음, ProdChip 없앰)
 - **대표 확인용 시험 계정 (11/17 대표 '지우지 말고 계속 둬')**: 시험 사이트 학생 윤지호 STU-0018 `support+stu0018@edgeenglish.kr`, 강사 Alex `support+alex@edgeenglish.kr` — 둘 다 11/17 비밀번호 만들어 대표에게 줌(값은 기록 안 함). 지우거나 비밀번호 바꾸지 말 것. 메일 코드는 support@ 로 옴
 - 시안: https://claude.ai/artifact/WhqQQQtR5VXM54wkmgtSVg (6판 — 말풍선은 꽉 찬 모양으로 남아 있음, 실제 화면이 기준)
 

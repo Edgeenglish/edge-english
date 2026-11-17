@@ -49,9 +49,10 @@ import {
   type StudentRequest,
 } from '@/lms/student/home';
 import { tutorLateBand } from '@/lms/tutor/late';
+import { makeupTutorText, type RightRef } from '@/lms/student/live';
 
 type Tab = 'home' | 'schedule' | 'requests' | 'materials' | 'me';
-type Right = Pick<MakeupRight, 'lessonId' | 'itemId' | 'compId'>;
+type Right = RightRef;
 type Overlay =
   | null
   | { kind: 'request'; id: string }
@@ -1083,6 +1084,7 @@ export default function StudentHome(props: {
             {openRights.map((m) => <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })}
               className={`${card} min-h-[64px] p-4 text-left`}>
               <span className="block text-[14px] font-bold">{rightTitle(m)}</span>
+              <span className="mt-1 block text-[13px] text-[#6b6880]">보강 강사: <strong>{makeupTutorText(m)}</strong></span>
               {rightDate(m, needsTime(m, openRights)) && <span className="mt-1 block text-[13px] text-[#6b6880]">{rightDate(m, needsTime(m, openRights))}</span>}
               <span className="mt-1 block text-[13px] text-[#6b6880]">{rightReason(m)}</span>
               <span className="mt-2 block text-[14px] font-semibold text-[#5b3df0]">날짜 고르기 ›</span>
@@ -1201,6 +1203,7 @@ function RightCard({ right, withTime, endDate, onPick }: { right: MakeupRight; w
         <p className="text-[16px] font-bold">{rightTitle(right)}</p>
         {comp && <Icon d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" className="mt-0.5 h-5 w-5 shrink-0 text-[#5b3df0]" />}
       </div>
+      <p className="text-[13.5px] text-[#55526a]">보강 강사: <strong>{makeupTutorText(right)}</strong></p>
       {rightDate(right, withTime) && <p className="text-[13.5px] text-[#55526a]">{rightDate(right, withTime)}</p>}
       <p className="text-[13.5px] text-[#55526a]">{rightReason(right)}</p>
       {until && <p className="text-[13.5px] text-[#55526a]">{until}</p>}
@@ -1363,7 +1366,7 @@ function Profile({ name, onBack }: { name: string; onBack: () => void }) {
 
 // 보강 날짜 고르기 (2026-10-28 대표: 목록 대신 달력 — PC·휴대폰 같은 모양, 스크롤 줄이기)
 // 달력에서 날짜 → 그날 가능한 시각 → 고른 날짜 최대 2개 → 신청. 날짜는 DB '보강 가능한 날짜'(강사 일정·휴무·종료일)만
-function MakeupPicker(props: {
+type MakeupPickerProps = {
   right: MakeupRight | null;
   /** 방금 수업을 취소하고 넘어왔으면 맨 위에 결과 표시 */
   canceled: boolean;
@@ -1378,7 +1381,34 @@ function MakeupPicker(props: {
   /** 종료 5일 이내 강사 취소 보강만 (아니면 null → 링크 없음). requestedAt = 이미 누름 */
   noTime?: { requestedAt: string | null } | null;
   onNoTime?: (lessonId: string) => void;
-}) {
+};
+
+function MakeupPicker(props: MakeupPickerProps) {
+  const [chosen, setChosen] = useState<string | null>(null);
+  const choices = props.right?.tutorChoices;
+  const selected = choices?.length === 1 ? choices[0] : choices?.find((t) => t.id === chosen);
+  const needsTutor = (choices?.length ?? 0) > 1 && !selected;
+  const right = useMemo(() => props.right && selected
+    ? { ...props.right, tutor: selected.name, tutorId: selected.id }
+    : props.right, [props.right, selected]);
+  const tutorPicker = (choices?.length ?? 0) > 1 ? (
+    <fieldset className="grid gap-2">
+      <legend className="mb-2 text-[14px] font-semibold">보강 강사</legend>
+      <div className="grid grid-cols-2 gap-2">
+        {choices!.map((t) => (
+          <label key={t.id} className={`flex min-h-[48px] cursor-pointer items-center gap-2 rounded-[12px] border px-3 py-2 text-[14px] ${selected?.id === t.id ? 'border-[#5b3df0] bg-[#efeaff]' : 'border-[#d9d5e8]'}`}>
+            <input type="radio" name="makeup-tutor" value={t.id} checked={selected?.id === t.id} disabled={props.busy} onChange={() => setChosen(t.id)} className="accent-[#5b3df0]" />
+            <span><strong>{t.name}</strong><span className="block text-[12px] text-[#55526a]">{t.role === 'original' ? '원래 강사' : '대체강사'}</span></span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  ) : null;
+  // 강사를 바꾸면 달력·선택 날짜를 함께 초기화하고 이전 요청 응답을 버림.
+  return <MakeupDatePicker key={`${right?.lessonId}:${right?.itemId}:${right?.compId}:${selected?.id ?? ''}`} {...props} right={right} needsTutor={needsTutor} tutorPicker={tutorPicker} />;
+}
+
+function MakeupDatePicker(props: MakeupPickerProps & { needsTutor: boolean; tutorPicker: React.ReactNode }) {
   const [opts, setOpts] = useState<MakeupOption[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
@@ -1397,15 +1427,18 @@ function MakeupPicker(props: {
   }, [props.tz]);
 
   useEffect(() => {
-    if (!right) return;
+    if (!right || props.needsTutor) return;
+    let current = true;
     load(right)
       .then((o) => {
+        if (!current) return;
         const available = right.timeKnown === false ? o : o.filter((slot) => slot.startsAt.getTime() !== right.originalAt.getTime());
         setOpts(available);
         if (available[0]) setMonth(kst(available[0].startsAt).date.slice(0, 7));
       })
-      .catch((e) => setErr(e instanceof Error ? e.message : '불러오지 못했어요.'));
-  }, [right, load]);
+      .catch((e) => { if (current) setErr(e instanceof Error ? e.message : '불러오지 못했어요.'); });
+    return () => { current = false; };
+  }, [right, load, props.needsTutor]);
 
   if (!right) return <p className="text-[14px]">이미 신청했거나 신청할 수 없는 수업이에요.</p>;
   const byDay = new Map<string, Date[]>();
@@ -1476,10 +1509,11 @@ function MakeupPicker(props: {
         )}
         {rightUntil(right, props.endDate) && <p className="text-[13.5px] text-[#55526a]">{rightUntil(right, props.endDate)}</p>}
       </div>
+      {props.tutorPicker}
       <p className="text-[14px] leading-relaxed text-[#55526a]">이 수업을 대신할 날짜를 최대 {MAKEUP_SLOTS_MAX}개 골라 주세요. 강사님이 확인하면 확정돼요.</p>
-      <p className="text-[14px] font-semibold">{right.tutor ? `${right.tutor} 강사님의 가능한 시간입니다.` : '담당 강사님의 가능한 시간입니다.'}</p>
+      <p className="text-[14px] font-semibold">{props.needsTutor ? '보강 강사를 선택해 주세요.' : right.tutor ? `${right.tutor} 강사님의 가능한 시간입니다.` : '담당 강사님의 가능한 시간입니다.'}</p>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
-      {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
+      {!opts && !err && !props.needsTutor && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
       {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
       {opts && opts.length > 0 && (
         <div className="grid gap-3.5 lg:grid-cols-2 lg:items-start">
@@ -1528,7 +1562,7 @@ function MakeupPicker(props: {
                 onClick={() => props.onSubmit(right, picked)}
                 className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-40"
               >
-                {right.compId ? '보상수업 신청하기' : '보강 신청하기'}
+                {right.tutor ? `${right.tutor} 강사님께 ` : ''}{right.compId ? '보상수업 신청하기' : '보강 신청하기'}
               </button>
               <LaterButton onLater={props.onLater} />
             </section>

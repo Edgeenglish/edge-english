@@ -50,7 +50,24 @@ function readRecent(): Recent | null {
     return null;
   }
 }
+// 이 기기에서 비밀번호로 한 번이라도 로그인(또는 비밀번호를 만듦)했으면 처음 화면 '비밀번호를 만든 적이 없다면' 줄을 숨김 (11/17 대표)
+const PW_USED_KEY = 'lms-pw-used';
+function readPwUsed(): boolean {
+  try {
+    return localStorage.getItem(PW_USED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function savePwUsed() {
+  try {
+    localStorage.setItem(PW_USED_KEY, '1');
+  } catch {
+    /* 저장 안 되면 줄이 계속 보임 */
+  }
+}
 function saveRecent(v: Recent) {
+  if (v === 'password') savePwUsed();
   try {
     localStorage.setItem(RECENT_KEY, v);
   } catch {
@@ -120,6 +137,7 @@ export default function LoginFlow() {
   const [socialOnly, setSocialOnly] = useState(false);
   const [memberName, setMemberName] = useState(''); // 가입 때 받은 이름(이메일 가입 입력값·카카오·네이버 이름) — 빈 회원 화면 제목
   const [recent, setRecent] = useState<Recent | null>(null);
+  const [pwUsed, setPwUsed] = useState(false);
   const t = STRINGS[lang];
   const sb = supabaseBrowser();
   const codeRef = useRef<HTMLInputElement>(null);
@@ -131,6 +149,7 @@ export default function LoginFlow() {
     setNext(new URLSearchParams(window.location.search).get('next'));
     setLinkFor(readPendingLink());
     setRecent(readRecent());
+    setPwUsed(readPwUsed());
   }, []);
 
   // 켜진 간편 로그인만 버튼으로 (꺼진 것을 누르면 오류가 나므로 아예 안 보임)
@@ -379,7 +398,8 @@ export default function LoginFlow() {
     if (!sb) return setError(t.network);
     if (p === 'google') {
       if (!googleAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL, window.location.hostname)) return;
-      if (!googleConfirmed && recent !== 'google') return go('google_choice');
+      // 최근 로그인 표시는 브라우저 기록일 뿐, 이번 Google 계정의 연결 여부를 보장하지 않는다.
+      if (!googleConfirmed) return go('google_choice');
     }
     setBusy(true);
     try {
@@ -510,7 +530,10 @@ export default function LoginFlow() {
   async function storePassword(pw: string): Promise<boolean> {
     if (!sb) return false;
     const { error: e } = await sb.auth.updateUser({ password: pw });
-    if (!e || e.code === 'same_password') return true;
+    if (!e || e.code === 'same_password') {
+      savePwUsed();
+      return true;
+    }
     if (e.code === 'weak_password') {
       setStep('pw_new');
       setProblems(['password']);
@@ -642,9 +665,9 @@ export default function LoginFlow() {
       setBusy(false);
       return setError(t.googleConflict);
     }
-    const p = (user.user?.identities ?? []).map((i) => i.provider).find((x) => x !== 'email') ?? '';
-    const provider: SocialProvider = p.includes('naver') ? 'naver' : 'kakao';
-    // 방금 카카오·네이버로 생긴 빈 계정을 지워야 기존 계정에 연결할 수 있음 (회원 연결이 있는 계정은 DB가 지우지 않음)
+    const ps = (user.user?.identities ?? []).map((i) => i.provider);
+    const provider: SocialProvider = ps.includes('google') ? 'google' : ps.some((x) => x.includes('naver')) ? 'naver' : 'kakao';
+    // 방금 카카오·네이버·Google 로 생긴 빈 계정을 지워야 기존 계정에 연결할 수 있음 (회원 연결이 있는 계정은 DB가 지우지 않음)
     const { data: done, error: e } = await sb.rpc('lms_discard_new_social_account');
     await sb.auth.signOut();
     setBusy(false);
@@ -792,18 +815,19 @@ export default function LoginFlow() {
               {t.login}
             </button>
             {recent === 'password' && <div className="-mt-1 flex justify-center">{bubble('up')}</div>}
-            {/* 두 링크는 한 줄 두 칸 — 좁은 휴대폰·영어에서도 구분선이 따로 떨어지지 않게 칸 안에서만 줄바꿈 */}
-            <div className="grid grid-cols-[minmax(0,auto)_1px_minmax(0,auto)] items-start justify-center gap-x-2.5 text-center">
-              <button type="button" className={`${smallLink} ${badLogin ? 'font-bold text-[#1d1b2b]' : ''}`} onClick={() => go('pw_email')}>
+            {/* 11/17 대표: 기존 회원은 비밀번호를 만든 적이 없음 → 처음 화면부터 비밀번호 만들기로 이끔.
+                이메일을 넣었으면 바로 인증번호+새 비밀번호 화면, 안 넣었으면 이메일 화면 */}
+            <div className="grid gap-2 pt-1">
+              {(badLogin || !pwUsed) && <span className="text-center text-[13px] text-[#55526a]">{badLogin ? t.noPwHintBad : t.noPwHint}</span>}
+              <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => (looksLikeEmail(email) ? sendPwCode() : go('pw_email'))}>
                 {t.pwLink}
               </button>
-              <span aria-hidden className="mt-[15px] h-[11px] w-px bg-[#d9d5e8]" />
-              <span className="flex flex-col items-center">
-                <button type="button" disabled={busy} className={`${smallLink} disabled:opacity-40`} onClick={() => sendLoginCode()}>
-                  {t.codeLogin}
-                </button>
-                {recent === 'code' && <span className="relative z-[1] -mt-1">{bubble('up')}</span>}
-              </span>
+            </div>
+            <div className="flex flex-col items-center">
+              <button type="button" disabled={busy} className={`${smallLink} disabled:opacity-40`} onClick={() => sendLoginCode()}>
+                {t.codeLogin}
+              </button>
+              {recent === 'code' && <span className="relative z-[1] -mt-1">{bubble('up')}</span>}
             </div>
             {socialCircles()}
             {linkFor === 'google' && <button type="button" className={ghost} onClick={() => { setPendingLink(null); setLinkFor(null); go('login'); }}>{t.cancelLink}</button>}

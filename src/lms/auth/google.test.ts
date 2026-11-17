@@ -13,6 +13,9 @@ describe('Google 공개 제한', () => {
     expect(googleAllowed(testUrl, 'localhost')).toBe(true);
     expect(googleAllowed('https://mfamixejxydodclhglbc.supabase.co', testHost)).toBe(false);
     expect(googleAllowed(testUrl, 'edgeenglish.kr')).toBe(false);
+    expect(googleAllowed('https://mfamixejxydodclhglbc.supabase.co', 'edgeenglish.kr')).toBe(true);
+    expect(googleAllowed('https://mfamixejxydodclhglbc.supabase.co', 'www.edgeenglish.kr')).toBe(true);
+    expect(googleAllowed('https://mfamixejxydodclhglbc.supabase.co', 'localhost')).toBe(false);
     expect(googleAllowed(testUrl, `${testHost}.example.com`)).toBe(false);
     expect(googleAllowed(undefined, testHost)).toBe(false);
   });
@@ -35,10 +38,11 @@ describe('Google 연결 후 영구 계정 보존', () => {
     expect(googleCallbackVerified(existing, null)).toBe(true);
     expect(googleCallbackVerified({ ...existing, identities: [] }, null)).toBe(false);
   });
-  it('Google이 하나라도 연결된 계정은 빈 소셜 계정 삭제 경로 금지', () => {
-    for (const providers of [['google'], ['google', 'kakao'], ['custom:naver', 'google'], ['email', 'google'], []]) {
+  it('이메일이 붙은 계정은 빈 소셜 계정 삭제 경로 금지, 간편 로그인만 있는 새 계정은 가능', () => {
+    for (const providers of [['email', 'google'], ['email', 'kakao'], []]) {
       expect(canDiscardSocialAccount(providers)).toBe(false);
     }
+    expect(canDiscardSocialAccount(['google'])).toBe(true);
     expect(canDiscardSocialAccount(['kakao'])).toBe(true);
     expect(canDiscardSocialAccount(['custom:naver'])).toBe(true);
   });
