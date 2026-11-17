@@ -13,6 +13,7 @@ import { loadScreenPrefs, saveScreenPref } from '@/lms/screen-prefs';
 import TutorHome, { type TutorActions } from './TutorHome';
 import { timeOffActions } from '@/lms/tutor/time-off';
 import { signActions } from '@/lms/tutor/esign';
+import { ProdChip } from '@/lms/auth/ProdBand';
 
 type State =
   | { kind: 'loading' }
@@ -121,6 +122,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
   const adminBar = state.admin && (
     <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[12px] bg-[#1d1b2b] px-3 py-2">
       <span className="text-[13px] font-semibold text-white">운영자 보기</span>
+      <ProdChip />
       <select aria-label="강사" value={state.admin.tutorId} onChange={(e) => window.location.assign(`/lms/tutor?tutor=${e.target.value}`)}
         className="min-h-[38px] flex-1 rounded-[8px] bg-white px-2 text-[15px] text-[#1d1b2b]">
         {state.admin.tutors.map((t) => (
