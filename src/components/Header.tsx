@@ -29,7 +29,7 @@ export default function Header() {
   };
   const logoutBtn = (cls: string) =>
     loggedIn ? (
-      <button type="button" onClick={logout} className={`text-nowrap text-sm font-medium text-edge-gray ${cls}`}>
+      <button type="button" onClick={logout} className={`text-nowrap text-sm font-semibold text-[#555] ${cls}`}>
         로그아웃
       </button>
     ) : null;
@@ -99,11 +99,11 @@ export default function Header() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-4 max-md:hidden">
+          {/* 순서: [내 수업] [수강신청] [로그아웃] — 로그아웃은 맨 오른쪽 (11/17 대표) */}
+          <div className="flex items-center gap-5 max-md:hidden">
             <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
               {accountLabel}
             </Link>
-            {logoutBtn('')}
             <Link
               href="https://forms.gle/arWZ6uzK3BFgaxM39"
               target="_blank"
@@ -111,9 +111,10 @@ export default function Header() {
             >
               수강신청
             </Link>
+            {logoutBtn('')}
           </div>
         </div>
-        <div className="flex items-center gap-3 md:hidden">
+        <div className="flex items-center gap-4 md:hidden">
           <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
             {accountLabel}
           </Link>
