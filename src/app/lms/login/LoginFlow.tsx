@@ -730,12 +730,12 @@ export default function LoginFlow() {
             <div>
               {passwordInput('login-password', t.passwordLabel, 'current-password', passwordLogin, badLogin)}
               {badLogin && <span className={errText}>{t.badLogin}</span>}
-              {/* 11/17 대표 A안: 기존 회원은 비밀번호를 만든 적이 없음 — 틀린 자리 바로 아래에서 메일 코드로 */}
+              {/* 11/17 대표: 기존 회원은 비밀번호를 만든 적이 없음 — 틀린 자리 바로 아래에서 바로 비밀번호 만들기(이메일 이어 감, 인증번호+새 비밀번호 한 화면) */}
               {badLogin && (
                 <div className="mt-2 grid gap-2">
                   <span className="text-[13px] text-[#55526a]">{t.noPwHint}</span>
-                  <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => sendLoginCode()}>
-                    {t.codeLogin}
+                  <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => sendPwCode()}>
+                    {t.pwMake}
                   </button>
                 </div>
               )}
