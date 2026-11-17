@@ -31,9 +31,15 @@ export type MakeupRight = {
   tutorCanceled?: boolean;
   /** 지난 수강 기간에서 이월된 권리 (원래 수업이 지금 수강권이 아닌 앞 수강권 것) — 카드 '이월된 수업' (11/12 대표) */
   carryIn?: boolean;
+  tutorChoices?: MakeupTutor[];
+  tutorId?: string | null;
 };
+export type MakeupTutor = { id: string; name: string; role: 'original' | 'substitute' | 'assigned' };
+export const makeupTutorText = (right: MakeupRight): string => right.tutorChoices?.length
+  ? `${right.tutorChoices.map((t) => t.name).join(' / ')}${right.tutorChoices.length > 1 ? ' 중 선택' : ''}`
+  : right.tutor || '담당 강사';
 /** 보강 권리를 가리키는 값 (원래 수업 · 시트 보강 · 보상수업 중 하나) */
-export type RightRef = { lessonId: string | null; itemId: string | null; compId?: string | null };
+export type RightRef = { lessonId: string | null; itemId: string | null; compId?: string | null; tutorId?: string | null };
 /** 강사 휴무 안내 한 줄. stage tutor_ok = 수강생 답 기다림, confirmed = 대체 수업 확정, choice wait = 기존 강사님과 보강 */
 export type LeaveRow = {
   id: string;
@@ -101,7 +107,7 @@ type Raw = {
     next_regular_from: KstDate | null;
   };
   lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null; type?: string; lesson_final_end_date?: KstDate | null }[];
-  makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean; carry_in?: boolean }[];
+  makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; tutor_choices?: MakeupTutor[]; original_at: string; time_known?: boolean; tutor_leave: boolean; carry_in?: boolean }[];
   leave_pending?: { id: string; starts_at: string; ends_at: string }[];
   makeup_requests: {
     confirmed_lesson_id?: string | null;
@@ -199,6 +205,7 @@ export function parseStudentView(r: Raw): StudentView {
       timeKnown: m.time_known !== false,
       tutorLeave: m.tutor_leave,
       tutor: m.tutor ?? r.lessons.find((l) => l.id === m.lesson_id)?.tutor ?? null,
+      tutorChoices: m.tutor_choices,
       tutorNoShow: !!m.comp_id || r.lessons.find((l) => l.id === m.lesson_id)?.class_status === 'Tutor no-show',
       tutorFault: TUTOR_FAULT.includes(r.lessons.find((l) => l.id === m.lesson_id)?.class_status ?? ''),
       tutorCanceled: ['Tutor canceled in advance', 'Tutor canceled late'].includes(r.lessons.find((l) => l.id === m.lesson_id)?.class_status ?? ''),
@@ -292,7 +299,9 @@ export type RegularSlot = { weekday: number; timeKst: string; minutes: number; t
 /** 보상수업이면 p_comp 를 붙임 (4100). 원래 수업 보강은 예전과 같은 인자 → 4100 전 DB에서도 그대로 */
 const compArg = (right: RightRef) => (right.compId ? { p_comp: right.compId } : {});
 export async function loadMakeupOptions(sb: SupabaseClient, studentId: string | null, right: RightRef): Promise<MakeupOption[]> {
-  const rows = check(await sb.rpc('student_makeup_options', { p_student: studentId, p_lesson: right.lessonId, p_item: right.itemId, ...compArg(right) })) as { section: string; starts_at: string }[];
+  const rows = check(right.tutorId
+    ? await sb.rpc('student_makeup_options_for_tutor', { p_student: studentId, p_lesson: right.lessonId, p_item: right.itemId, p_comp: right.compId ?? null, p_tutor: right.tutorId })
+    : await sb.rpc('student_makeup_options', { p_student: studentId, p_lesson: right.lessonId, p_item: right.itemId, ...compArg(right) })) as { section: string; starts_at: string }[];
   return rows.map((x) => ({ startsAt: new Date(x.starts_at), afterEnd: x.section === 'after_end' }));
 }
 
@@ -393,6 +402,10 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     },
     requestMakeup: async (right: RightRef, slots: Date[]): Promise<void> => {
       const p_slots = slots.map((s) => ({ starts_at: s.toISOString() }));
+      if (right.tutorId) {
+        check(await sb.rpc('student_makeup_request_for_tutor', { p_student: adminStudentId, p_lesson: right.lessonId, p_item: right.itemId, p_comp: right.compId ?? null, p_tutor: right.tutorId, p_slots }));
+        return;
+      }
       check(
         admin
           ? await sb.rpc('admin_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, p_requested_at: null, ...compArg(right) })

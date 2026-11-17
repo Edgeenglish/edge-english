@@ -61,7 +61,20 @@ export type LvNotice = {
 const sentTime = (n: LvNotice): Date | null => (n.status === 'sent' ? n.sentAt : n.status === 'not_needed' ? n.wasSentAt ?? null : null);
 
 /** free = 보통 수업 시간 안에서 맡을 수 있는 횟수, busyDates = 못 하는 날짜(휴무·다른 수업·불가 답), offHours = 보통 시간 밖(골라도 됨, 2700) */
-export type LvSubOption = { tutorId: string; name: string; timezone: string; free: number; busyDates: string[]; offHours: string[] };
+export type LvSubOption = { tutorId: string; name: string; timezone: string; free: number; busyDates: string[]; offHours: string[]; /** 불가 날짜('M/D') → 사유 (휴무·다른 수업·현지 06:00~22:30 밖·Schedule에서 막은 시간·불가 답함). 적용 전 DB면 빈 객체 */ busyReasons: Record<string, string> };
+
+/** 대체 강사 고르기 칸 하나: 정규 근무시간 안 / 정규 근무시간 밖 · 문의 가능 / 불가 · 사유 (md = 'M/D') */
+export function subCell(o: LvSubOption, md: string): { kind: 'ok' | 'off' | 'busy'; text: string; reason: string | null } {
+  if (o.busyDates.includes(md)) {
+    const reason = o.busyReasons[md] ?? null;
+    return { kind: 'busy', text: reason ? `불가 · ${reason}` : '불가', reason };
+  }
+  if (o.offHours.includes(md)) return { kind: 'off', text: '정규 근무시간 밖 · 문의 가능', reason: null };
+  return { kind: 'ok', text: '정규 근무시간 안', reason: null };
+}
+
+/** 대체강사 문의 메일을 못 보낸 상태 (실패·주소 없음) = 운영진이 WhatsApp 글을 복사해 직접 보냄. 그 밖(발송 전·대기·보냄)은 자동 메일이 처리 */
+export const askMailFailed = (e: ChNoticeEmail | null | undefined): boolean => e?.status === 'failed' || e?.status === 'no_address';
 /** 기존 강사 보강 후보: in_period 지금 수강기간 안 / after_end 종료일 뒤 평소 요일·시간 (확정하면 그날까지 자동 연장) */
 export type LvMakeupOption = { section: 'in_period' | 'after_end'; startsAt: Date };
 
@@ -99,7 +112,8 @@ export function groupChoice(items: LvItem[]): LvChoice | 'mixed' {
 
 /** 안 보낸 안내 '수업id|종류' (상태 글에서 '보내기 전'과 '답 기다리는 중'·'완료'를 가름, R2·R4) */
 export function pendingNoticeKeys(notices: LvNotice[]): Set<string> {
-  return new Set(notices.filter((n) => n.status === 'pending').map((n) => `${n.itemId}|${n.event}`));
+  // 대체강사 문의(sub_ask)는 자동 메일이 보냄: 메일을 못 보낸 것만 '안 보낸 안내'로 침 (대표 11/17: '문의 보내기 전' 없앰)
+  return new Set(notices.filter((n) => n.status === 'pending' && (n.event !== 'sub_ask' || askMailFailed(n.email))).map((n) => `${n.itemId}|${n.event}`));
 }
 
 /**
@@ -122,14 +136,14 @@ export function itemStatus(i: LvItem, pending?: ReadonlySet<string>): { text: st
   const who = i.subTutorName ?? '대체강사';
   if (i.subStage === 'asked') {
     return unsent('sub_ask')
-      ? { text: `${who} 강사님에게 문의 보내기 전`, tone: 'todo', next: `${who} 강사님에게 문의 보내기` }
+      ? { text: `${who} 강사님 메일 못 보냄`, tone: 'todo', next: `${who} 강사님에게 직접 문의 보내기` }
       : { text: `${who} 강사님 답변 기다리는 중`, tone: 'wait', wait: `${who} 강사님 답` };
   }
   if (i.subStage === 'tutor_ok') {
-    if (!pending) return { text: `${who} 강사님 가능 · 수강생 답 필요`, tone: 'todo' };
+    if (!pending) return { text: `${who} 강사님 수락 · 수강생 답 필요`, tone: 'todo' };
     return proposalUnsent
-      ? { text: `${who} 강사님 가능 · 수강생 안내 전`, tone: 'todo', next: '수강생에게 휴무 안내 보내기' }
-      : { text: `${who} 강사님 가능 · 수강생 답변 기다리는 중`, tone: 'wait', wait: '수강생 답', next: '수강생 답이 오면 아래에서 기록' };
+      ? { text: `${who} 강사님 수락 · 수강생 안내 전`, tone: 'todo', next: '수강생에게 휴무 안내 보내기' }
+      : { text: `${who} 강사님 수락 · 수강생 답변 기다리는 중`, tone: 'wait', wait: '수강생 답', next: '수강생 답이 오면 아래에서 기록' };
   }
   // 배정 확정과 확정 안내 보냄은 다른 상태: 안내까지 보내야 완료 (R4)
   if (unsent('sub_confirmed')) return { text: `대체강사 ${who} 확정 · 확정 안내 보내기 전`, tone: 'todo', next: '확정 안내 보내기' };
@@ -166,6 +180,8 @@ export type LvMessage = {
   noticeItems?: string[];
   /** 보낸 시각: 한 번에 보낸 글은 같은 시각 → 보낸 글은 그 묶음 그대로 (대표 10/30: 보낸 원문·번호 고정) */
   sentAt?: Date | null;
+  /** 대체강사 문의(sub_ask) 자동 메일 상태: 못 보낸 것이 있으면 그것, 없으면 첫 것 */
+  mail?: ChNoticeEmail | null;
 };
 
 /** 아직 안 보낸 안내는 메시지로 묶고, 보낸 것은 최근 것만 따로 보여 줌 */
@@ -204,8 +220,15 @@ export function leaveMessages(items: LvItem[], notices: LvNotice[]): LvMessage[]
       sentAt: g.notices[0].sentAt,
       status: g.status,
       text: leaveText(g.event, list, recipient),
+      mail: g.event === 'sub_ask' ? worstMail(g.notices.map((n) => n.email ?? null)) : undefined,
     };
   });
+}
+
+/** 자동 메일 상태 여럿 중 운영진이 먼저 알아야 하는 것(못 보냄) → 대기 → 첫 것 */
+function worstMail(list: (ChNoticeEmail | null)[]): ChNoticeEmail | null {
+  const ms = list.filter((m): m is ChNoticeEmail => !!m);
+  return ms.find(askMailFailed) ?? ms.find((m) => m.status === 'queued') ?? ms[0] ?? null;
 }
 
 export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'student' | 'tutor' = event === 'sub_ask' || event === 'sub_confirmed' ? 'tutor' : 'student'): string {
@@ -436,7 +459,7 @@ export function renewalTutorText(g: LvRenewalGroup): string {
 
 /** pending = 아직 안 보낸 문의(안 보낸 수업만) · sent = 보낸 문의 원문(보낸 묶음마다, 번호 고정) · numbers = 답 기다리는 수업이 보낸 글의 몇 번인지 */
 export type LvAskMsg = { noticeIds: string[]; itemIds: string[]; text: string; sentAt: Date | null };
-export type LvTutorBundle = { subTutorId: string; subTutorName: string; items: LvItem[]; pending: LvAskMsg | null; sent: LvAskMsg[]; numbers: Record<string, string>; status: 'pending' | 'sent'; mail: ChNoticeEmail | null };
+export type LvTutorBundle = { subTutorId: string; subTutorName: string; items: LvItem[]; pending: LvAskMsg | null; sent: LvAskMsg[]; numbers: Record<string, string>; status: 'pending' | 'sent'; mail: ChNoticeEmail | null; /** 문의가 저장됐고 자동 메일이 아직 안 나감(발송 전·대기) */ mailWait: boolean };
 
 export function tutorBundles(items: LvItem[], notices: LvNotice[], now: Date): LvTutorBundle[] {
   const byId = new Map(items.map((i) => [i.id, i]));
@@ -464,9 +487,11 @@ export function tutorBundles(items: LvItem[], notices: LvNotice[], now: Date): L
     return {
       subTutorId: id, subTutorName: its[0].subTutorName ?? '', items: its, sent, numbers,
       // 자동 메일 상태: 지금 묻는 중인 수업의 문의 중 안 보낸·실패를 먼저(운영진이 알아야 함), 없으면 가장 최근
-      mail: (() => { const ms = mineAsk.filter((n) => n.email && asked.has(n.itemId)).map((n) => n.email!); return ms.find((m) => m.status === 'no_address' || m.status === 'failed') ?? ms.find((m) => m.status === 'queued') ?? ms[0] ?? null; })(),
+      mail: worstMail(mineAsk.filter((n) => asked.has(n.itemId)).map((n) => n.email ?? null)),
       pending: pendIts.length ? { noticeIds: pend.map((n) => n.id), itemIds: pendIts.map((i) => i.id), text: subAskBundleText(pendIts), sentAt: null } : null,
-      status: pendIts.length ? 'pending' : 'sent',
+      // 'pending' = 자동 메일을 못 보내 운영진이 직접 보내야 함. 메일 발송 전·대기(mailWait)는 자동으로 나감
+      status: pendIts.length && askMailFailed(worstMail(pend.map((n) => n.email ?? null))) ? 'pending' : 'sent',
+      mailWait: pendIts.length > 0 && !askMailFailed(worstMail(pend.map((n) => n.email ?? null))),
     };
   });
 }
@@ -484,7 +509,7 @@ export function subAskBundleText(items: LvItem[]): string {
 
 /** 수강생 목록 묶음: 운영진이 할 것 / 답 기다림 / 끝남 (R15·R29) */
 export function studentPhase(w: LvStudentWork): 'todo' | 'wait' | 'done' {
-  if (w.pick.length || w.tutor.some((t) => t.ask) || w.proposal?.status === 'pending' || w.confirm.confirmedMsgs.length || w.confirm.makeup.length
+  if (w.pick.length || w.tutor.some((t) => t.ask && askMailFailed(t.ask.mail)) || w.proposal?.status === 'pending' || w.confirm.confirmedMsgs.length || w.confirm.makeup.length
     || w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll)) return 'todo';
   if (w.tutor.length || w.answer.length || w.confirm.makeupRequested.length) return 'wait';
   return 'done';

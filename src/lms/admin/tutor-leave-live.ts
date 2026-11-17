@@ -117,11 +117,20 @@ export async function studentOk(sb: SupabaseClient, itemIds: string[]): Promise<
   check(await sb.rpc('admin_leave_student_ok', { p_items: itemIds }));
 }
 export async function subOptions(sb: SupabaseClient, itemIds: string[]): Promise<LvSubOption[]> {
-  const [opt, off] = await Promise.all([sb.rpc('admin_leave_sub_options', { p_items: itemIds }), sb.rpc('admin_leave_sub_off_hours', { p_items: itemIds })]);
+  const [opt, off, why] = await Promise.all([
+    sb.rpc('admin_leave_sub_options', { p_items: itemIds }),
+    sb.rpc('admin_leave_sub_off_hours', { p_items: itemIds }),
+    sb.rpc('admin_leave_sub_busy_reasons', { p_items: itemIds }),
+  ]);
   const rows = check(opt) as { tutor_id: string; name: string; timezone: string; free: number; busy_dates: string[] }[];
   // 보통 시간 밖 날짜 (2700). 적용 전 DB면 빈 목록
   const hours = new Map(((off.error ? [] : off.data) as { tutor_id: string; off_hours: string[] }[]).map((r) => [r.tutor_id, r.off_hours]));
-  return rows.map((r) => ({ tutorId: r.tutor_id, name: r.name, timezone: r.timezone, free: r.free, busyDates: r.busy_dates, offHours: hours.get(r.tutor_id) ?? [] }));
+  // 불가 사유 (11/17). 적용 전 DB면 사유 없이 '불가'만
+  const reasons = new Map<string, Record<string, string>>();
+  for (const r of ((why.error ? [] : why.data) ?? []) as { tutor_id: string; md: string; reason: string }[]) {
+    reasons.set(r.tutor_id, { ...(reasons.get(r.tutor_id) ?? {}), [r.md]: r.reason });
+  }
+  return rows.map((r) => ({ tutorId: r.tutor_id, name: r.name, timezone: r.timezone, free: r.free, busyDates: r.busy_dates, offHours: hours.get(r.tutor_id) ?? [], busyReasons: reasons.get(r.tutor_id) ?? {} }));
 }
 
 export async function makeupOptions(sb: SupabaseClient, itemIds: string[]): Promise<LvMakeupOption[]> {

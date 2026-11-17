@@ -25,20 +25,20 @@ describe('강사 휴무 화면 계산 (2순위 ①)', () => {
   it('상태 글: 미정 → 강사 답 대기 → 수강생 OK 대기 → 확정 / 기다림 보강 미정·보강 날짜', () => {
     expect(itemStatus(I('a', 's1', '2026-11-02')).text).toBe('대체 강사 고르기 필요');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' })).text).toBe('Benny 강사님 답변 기다리는 중');
-    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' })).text).toBe('Benny 강사님 가능 · 수강생 답 필요');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' })).text).toBe('Benny 강사님 수락 · 수강생 답 필요');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' })).tone).toBe('done');
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait' }))).toMatchObject({ text: '기존 강사 보강 · 날짜 미정', wait: '수강생 보강 신청' });
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupRequested: true }))).toMatchObject({ text: '기존 강사 보강 · 날짜 미정', wait: '강사님 보강 확인' });
     expect(itemStatus(I('a', 's1', '2026-11-02', { choice: 'wait', makeupAt: kstToInstant('2026-11-20', '20:00') })).text).toBe('기존 강사 보강 · 11/20 오후 8:00');
   });
 
-  it('상태 글: 문의 보내기 전 ≠ 답변 대기 (R2), 확정 안내 보내기 전 ≠ 완료 (R4), 밖에서 취소된 수업 (R5)', () => {
+  it('상태 글: 문의 메일 못 보냄 ≠ 답변 대기 (R2), 확정 안내 보내기 전 ≠ 완료 (R4), 밖에서 취소된 수업 (R5)', () => {
     const pending = new Set(['a|sub_ask', 'b|sub_confirmed']);
-    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' }), pending).text).toBe('Benny 강사님에게 문의 보내기 전');
+    expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'asked' }), pending).text).toBe('Benny 강사님 메일 못 보냄');
     expect(itemStatus(I('b', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending)).toEqual({ text: '대체강사 Benny 확정 · 확정 안내 보내기 전', tone: 'todo', next: '확정 안내 보내기' });
     expect(itemStatus(I('c', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending).text).toBe('대체강사 Benny 확정 · 안내 보냄');
     // 수강생 답 대기는 운영자 할 일이 아님 (대표 11/2): 안내를 보냈으면 '수강생 답변 기다리는 중', 안 보냈으면 '수강생 안내 전'
-    expect(itemStatus(I('d', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), pending)).toMatchObject({ text: 'Benny 강사님 가능 · 수강생 답변 기다리는 중', tone: 'wait', wait: '수강생 답' });
+    expect(itemStatus(I('d', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), pending)).toMatchObject({ text: 'Benny 강사님 수락 · 수강생 답변 기다리는 중', tone: 'wait', wait: '수강생 답' });
     expect(itemStatus(I('d', 's1', '2026-11-02', { ...sub, subStage: 'tutor_ok' }), new Set(['d|sub_student']))).toMatchObject({ tone: 'todo', next: '수강생에게 휴무 안내 보내기' });
     expect(itemStatus(I('c', 's1', '2026-11-02', { ...sub, subStage: 'confirmed' }), pending).tone).toBe('done');
     expect(itemStatus(I('a', 's1', '2026-11-02', { ...sub, subStage: 'confirmed', lessonGone: true }), pending)).toEqual({ text: '수업 취소·변경됨', tone: 'done' });
@@ -216,12 +216,17 @@ describe('강사별 묶음 문의 · 수강생 목록 묶음 (2026-10-30 시안 
     lessonId: id, migratedItemId: null, ...o,
   });
   const now = new Date('2026-11-01T00:00:00Z');
-  it('같은 대체강사의 여러 수강생 수업을 한 묶음으로, 안 보낸 문의가 있으면 pending · 취소된 수업은 뺌', () => {
+  it('같은 대체강사의 여러 수강생 수업을 한 묶음으로, 메일을 못 보낸 문의만 pending(직접 보내기) · 발송 전은 자동 메일 대기 · 취소된 수업은 뺌', () => {
     const items = [base('a', 's1', '2026-11-09T11:00:00Z', sub), base('b', 's2', '2026-11-09T00:00:00Z', sub), base('c', 's2', '2026-11-10T00:00:00Z', { ...sub, lessonGone: true })];
     const notices: LvNotice[] = [{ id: 'n1', itemId: 'a', event: 'sub_ask', recipientKind: 'tutor', recipientId: 'm', status: 'pending', sentAt: null }];
-    const [b] = tutorBundles(items, notices, now);
+    const [w0] = tutorBundles(items, notices, now);
+    expect(w0.status).toBe('sent');   // 자동 메일이 아직 안 나간 것 = 운영진이 할 일 아님 (대표 11/17: '문의 보내기 전' 없앰)
+    expect(w0.mailWait).toBe(true);
+    const failed: LvNotice[] = [{ ...notices[0], email: { status: 'no_address', to: null, intended: null, sentAt: null, error: '강사 이메일이 없어요', attempts: 1 } }];
+    const [b] = tutorBundles(items, failed, now);
     expect(b.items.map((i) => i.id)).toEqual(['b', 'a']);
     expect(b.status).toBe('pending');
+    expect(b.mailWait).toBe(false);
     expect(b.pending!.noticeIds).toEqual(['n1']);
     expect(b.pending!.text).toContain('1) ');
     expect(b.pending!.text).toContain('En s1 · 40 min');

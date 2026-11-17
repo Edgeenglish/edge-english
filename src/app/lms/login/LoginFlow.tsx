@@ -167,7 +167,7 @@ export default function LoginFlow() {
         } else {
           setPendingLink(null);
           setLinkFor(null);
-          setError(t.socialFail);
+          setError(last === 'google' && oauthErrorCode === 'identity_already_exists' ? t.googleConflict : t.socialFail);
         }
         try { sessionStorage.removeItem(GOOGLE_LINK_USER_KEY); sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
         return;
@@ -185,6 +185,7 @@ export default function LoginFlow() {
             if (verifyError || !googleCallbackVerified(verified.user, expected)) {
               setPendingLink(null);
               setLinkFor(null);
+              sessionStorage.removeItem(LAST_KEY);
               if (expected && verified.user?.id !== expected) await sb.auth.signOut({ scope: 'local' });
               if (active) setError(t.linkFail);
               return;
@@ -378,7 +379,8 @@ export default function LoginFlow() {
     if (!sb) return setError(t.network);
     if (p === 'google') {
       if (!googleAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL, window.location.hostname)) return;
-      if (!googleConfirmed && recent !== 'google') return go('google_choice');
+      // 최근 로그인 표시는 브라우저 기록일 뿐, 이번 Google 계정의 연결 여부를 보장하지 않는다.
+      if (!googleConfirmed) return go('google_choice');
     }
     setBusy(true);
     try {
@@ -641,9 +643,9 @@ export default function LoginFlow() {
       setBusy(false);
       return setError(t.googleConflict);
     }
-    const p = (user.user?.identities ?? []).map((i) => i.provider).find((x) => x !== 'email') ?? '';
-    const provider: SocialProvider = p.includes('naver') ? 'naver' : 'kakao';
-    // 방금 카카오·네이버로 생긴 빈 계정을 지워야 기존 계정에 연결할 수 있음 (회원 연결이 있는 계정은 DB가 지우지 않음)
+    const ps = (user.user?.identities ?? []).map((i) => i.provider);
+    const provider: SocialProvider = ps.includes('google') ? 'google' : ps.some((x) => x.includes('naver')) ? 'naver' : 'kakao';
+    // 방금 카카오·네이버·Google 로 생긴 빈 계정을 지워야 기존 계정에 연결할 수 있음 (회원 연결이 있는 계정은 DB가 지우지 않음)
     const { data: done, error: e } = await sb.rpc('lms_discard_new_social_account');
     await sb.auth.signOut();
     setBusy(false);
