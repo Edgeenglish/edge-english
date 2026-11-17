@@ -1,0 +1,280 @@
+<title>여러 날 등록 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 레이아웃: 위에서 장면(1~5)을 고르면 같은 화면이 PC(왼쪽 큰 틀)와 휴대폰(오른쪽 좁은 틀)에 나란히 나온다 */
+:root{
+  --bg:#f3f1f8; --card:#ffffff; --fg:#1d1b2b; --sub:#55526a; --mute:#6b6880; --line:#eeecf4; --edge:#e0ddec;
+  --accent:#5b3df0; --accent-soft:#eee9ff; --on-accent:#ffffff; --ok:#1f7a4d; --ok-soft:#e5f5ec; --warn:#b3261e; --warn-soft:#fdeceb; --dark:#1b1740; --dim:rgba(20,16,50,.45);
+  --font:'Noto Sans KR',system-ui,-apple-system,'Apple SD Gothic Neo',sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141222; --card:#1e1b30; --fg:#efedf8; --sub:#c3bfd8; --mute:#a29eb8; --line:#2e2a45; --edge:#38334f;
+  --accent:#9d87ff; --accent-soft:#2a2450; --on-accent:#141222; --ok:#6fd3a0; --ok-soft:#173226; --warn:#ff9a92; --warn-soft:#3a1f22; --dark:#0d0b1c; --dim:rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141222; --card:#1e1b30; --fg:#efedf8; --sub:#c3bfd8; --mute:#a29eb8; --line:#2e2a45; --edge:#38334f;
+  --accent:#9d87ff; --accent-soft:#2a2450; --on-accent:#141222; --ok:#6fd3a0; --ok-soft:#173226; --warn:#ff9a92; --warn-soft:#3a1f22; --dark:#0d0b1c; --dim:rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);margin:0;
+  padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:18px}
+h1{font-size:20px;margin:0}
+.lead{margin:4px 0 0;color:var(--sub);font-size:13.5px;line-height:1.6}
+.scn{display:flex;flex-wrap:wrap;gap:8px}
+.scn button{font:inherit;font-size:13px;font-weight:700;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--edge);background:var(--card);color:var(--sub);cursor:pointer;text-align:left}
+.scn button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.cap{margin:0;font-size:13.5px;color:var(--sub);line-height:1.6}
+.cap b{color:var(--fg)}
+.frames{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,.85fr);gap:20px;align-items:start}
+@media(max-width:900px){.frames{grid-template-columns:minmax(0,1fr)}}
+.lbl{font-weight:700;font-size:14px;margin:0 0 8px}
+.pc,.phone{position:relative;background:var(--card);border:1px solid var(--edge);overflow:hidden}
+.pc{border-radius:16px;min-height:640px}
+.phone{width:min(390px,100%);margin:0 auto;border:8px solid var(--dark);border-radius:30px;min-height:720px}
+.page{padding:16px;display:grid;gap:12px;align-content:start}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.top h2{margin:0;font-size:19px}
+.btn{font:inherit;font-size:13.5px;font-weight:700;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--edge);background:var(--card);color:var(--fg);cursor:pointer}
+.btn.main{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.loc{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg);border-radius:12px;padding:10px 12px;font-size:13.5px}
+.loc b{font-size:14px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:inherit;font-size:13px;font-weight:700;min-height:40px;padding:0 12px;border-radius:999px;border:1px solid var(--edge);background:transparent;color:var(--sub);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.rows{display:grid;gap:6px}
+.r{display:grid;grid-template-columns:44px minmax(0,1fr);gap:8px;align-items:start;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--card)}
+.r b{font-size:13px}
+.r small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+.r.off{color:var(--mute)}
+.badge{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:5px 10px}
+.warn{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:700}
+.okline{background:var(--ok-soft);color:var(--ok);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:700}
+.dim{position:absolute;inset:0;background:var(--dim);display:flex;z-index:2}
+.pc .dim{align-items:center;justify-content:center;padding:16px}
+.phone .dim{align-items:flex-end}
+.sheet{background:var(--card);color:var(--fg);width:100%;max-height:100%;overflow:auto;display:grid;gap:12px;padding:16px}
+.pc .sheet{max-width:540px;border-radius:16px;border:1px solid var(--edge)}
+.phone .sheet{border-radius:18px 18px 0 0}
+.sheet h3{margin:0;font-size:16px}
+.stepbar{display:flex;gap:6px;font-size:12px;font-weight:700;color:var(--mute)}
+.stepbar span{padding:4px 10px;border-radius:999px;border:1px solid var(--edge)}
+.stepbar span.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+label.f{display:grid;gap:4px;font-size:12px;color:var(--mute);font-weight:700}
+input,select{font:inherit;font-size:14px;min-height:44px;padding:0 10px;border:1px solid var(--edge);border-radius:10px;background:var(--card);color:var(--fg);min-width:0}
+.foot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.list{display:grid;gap:6px;max-height:230px;overflow:auto}
+.item{display:flex;justify-content:space-between;gap:8px;border-radius:10px;padding:8px 10px;font-size:13px}
+.item.ok{background:var(--ok-soft)}
+.item.skip{background:var(--warn-soft)}
+.item small{color:var(--sub);text-align:right}
+.grp{border:1px solid var(--edge);border-radius:12px;padding:10px 12px;display:grid;gap:4px;font-size:13px}
+.grp b{font-size:13.5px}
+.tl{display:grid;gap:6px}
+.seg{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px;align-items:stretch;font-size:12.5px}
+.seg>span{display:flex;align-items:center;color:var(--mute);font-weight:700}
+.bar{border-radius:10px;padding:9px 10px;line-height:1.5;border:1px solid var(--edge);background:var(--bg)}
+.bar.stay{background:var(--accent-soft);border-color:var(--accent)}
+.bar.leave{background:var(--warn-soft);border-color:var(--warn)}
+.bar.back{background:var(--ok-soft);border-color:var(--ok)}
+.bar small{display:block;color:var(--sub)}
+.case{border:1px solid var(--edge);border-radius:12px;padding:10px;display:grid;gap:8px}
+.case>b{font-size:13.5px}
+.note{background:var(--card);border:1px solid var(--edge);border-radius:14px;padding:14px 16px;font-size:13px;line-height:1.7;color:var(--sub)}
+.note b{color:var(--fg)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>강사 해외 이동 설정 · 여러 날 등록 시안</h1>
+    <p class="lead">위에서 장면을 고르면 PC와 휴대폰 화면이 같이 바뀝니다. 강사 화면은 영어라 화면 글도 영어입니다. 베니 기준 예시이며 날짜·시간은 모두 예시입니다. 지금은 시안뿐이고 개발·DB 변경은 하지 않았습니다.</p>
+  </header>
+  <div class="scn" id="scn"></div>
+  <div class="scn" id="ctl"></div>
+  <p class="cap" id="cap"></p>
+  <div class="frames">
+    <section><p class="lbl">PC 화면</p><div class="pc" id="pc"></div></section>
+    <section><p class="lbl">휴대폰 화면</p><div class="phone" id="ph"></div></section>
+  </div>
+  <div class="note">
+    <b>정리한 내용</b><br>
+    · <b>시간은 항상 그 지역 현지 시간으로만 입력</b>합니다(지금 있는 나라든 이동 나라든 수업 시작 06:00~22:30). 한국 시간(KST)은 참고용 보기 전환뿐이고 직접 입력은 없습니다.<br>
+    · 이동 기간을 미리 등록하면, 지금 호주에 있어도 아르헨티나 현지 시간으로 미리 시간표를 설정합니다.<br>
+    · 이동 기간은 도시는 <b>검색창에 영어로 치면</b> 결과가 뜨고(국가 이름도 가능), 고르면 시간대가 자동으로 붙습니다. 도시·시작일·종료일(선택)만 입력합니다. 그 기간의 시간대는 날짜로 자동 정해지고, 강사가 시간대를 고르는 칸은 없습니다.<br>
+    · 이동 기간마다 정기 시간표가 따로 있습니다. 이동 중에는 '평소' 시간표가 적용되지 않고, 그 기간 탭에 입력한 시간만 열립니다.<br>
+    · <b>종료일을 넣으면</b> 다음 날부터 '평소' 시간표가 자동으로 다시 적용됩니다. <b>종료일이 없으면</b> 자동 복귀하지 않고 이동 지역이 계속 유지됩니다.<br>
+    · 현지 시간 / 한국 시간(KST) 전환은 그대로이며, 한국 시간으로 골라도 저장되는 실제 시각은 같습니다.<br>
+    · 여러 날 등록은 지금처럼 오늘부터 12주 안(2/6)까지입니다. 그 뒤(3/23까지)는 이동 기간 탭의 정기 시간표로 등록합니다.<br>
+    · 이미 잡힌 수업과 학생 일정은 바뀌지 않습니다. 운영진은 같은 화면에서 대신 입력하며 이력에 '운영자 대신'이 남습니다.<br>
+    · 시간대 이름은 서머타임을 반영해 자동 계산합니다(호주는 서머타임 있음, 아르헨티나·한국은 없음).
+  </div>
+</div>
+
+<script>
+const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const hh=h=>{h=((h%24)+24)%24;const hr=Math.floor(h),m=h-hr?'30':'00';const ap=hr<12?'AM':'PM';const x=hr%12===0?12:hr%12;return `${x}:${m} ${ap}`};
+/* 아르헨티나(UTC-3) 시각 → 한국(UTC+9, 12시간 차이): 요일이 하루 넘어갈 수 있음 */
+const D=()=>9-S.city.off; /* 한국(UTC+9)과의 시차: 아르헨티나 12, 뉴욕 14, 시카고 15, LA 17 */
+function kst(day,s,e){const idx=DAYS.indexOf(day),off=Math.floor((s+D())/24);return {kday:DAYS[(idx+off)%7],ks:hh(s+D()),ke:hh(e+D()),shift:off}}
+const zn=()=>`${S.city.z} Time`;
+const CITIES=[{n:'Buenos Aires',c:'Argentina',z:'Buenos Aires',off:-3},{n:'Córdoba',c:'Argentina',z:'Buenos Aires',off:-3},{n:'Mendoza',c:'Argentina',z:'Buenos Aires',off:-3},{n:'New York',c:'USA',z:'New York',off:-5},{n:'Chicago',c:'USA',z:'Chicago',off:-6},{n:'Los Angeles',c:'USA',z:'Los Angeles',off:-8},{n:'Springfield, Illinois',c:'USA',z:'Chicago',off:-6},{n:'Springfield, Missouri',c:'USA',z:'Chicago',off:-6}];
+const utc=c=>`UTC${c.off<0?'−':'+'}${Math.abs(c.off)}`;
+const norm=x=>x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function found(){const q=norm(S.q.trim());return CITIES.filter(c=>!q||norm(c.n).includes(q)||norm(c.c).includes(q)).slice(0,6)}
+function resHtml(){const r=found();return r.length?r.map((c,i)=>`<button type="button" class="btn" style="text-align:left;min-height:44px;font-weight:500" data-pick="${CITIES.indexOf(c)}"><b>${c.n}</b>, ${c.c}</button>`).join(''):'<div class="warn" style="font-weight:500">No match. Try the English city name.</div>'}
+const S={q:'Buenos',city:CITIES[0],scn:1,end:'2027-03-23',zone:'local',cells:{},split:false,step:1,applied:false,editDay:'Mon',es:16,ee:22};
+const EXAMPLE={Mon:[[16,22],[9,12]],Tue:[[16,22],[9,12]],Wed:[[16,22],[9,12]],Thu:[[16,22],[9,12]],Fri:[[16,22],[9,12]]};
+
+function zoneSeg(){return `<div class="tabs"><button type="button" class="chip" data-zone="local" aria-pressed="${S.zone==='local'}">${zn()}</button><button type="button" class="chip" data-zone="kst" aria-pressed="${S.zone==='kst'}">KST</button></div>`}
+const opts=(a,b,sel)=>{let o='';for(let h=a;h<=b;h+=.5)o+=`<option value="${h}" ${h===sel?'selected':''}>${hh(h)}</option>`;return o};
+const START=()=>opts(6,22.5,S.es),END=()=>opts(6.5,23,S.ee);
+function convText(day,s,e){const k=kst(day,s,e);return `${k.kday} ${k.ks} – ${k.ke} KST`}
+
+/* 장면 1: Regular Working Hours + 이동 기간 추가 창 */
+function s1page(){
+  return `<div class="top"><h2>Regular Working Hours</h2><button type="button" class="btn main" data-sheet="1">Add Temporary Location</button></div>
+  <div class="loc"><span>Current location <b>Australia · Sydney</b></span><span class="badge">AEDT</span></div>
+  <div class="tabs"><button type="button" class="chip" aria-pressed="true">Regular</button></div>
+  <div class="rows">
+    ${['Mon','Tue','Wed'].map(d=>`<div class="r"><b>${d}</b><span>9:00 AM – 6:00 PM Sydney Time<small>7:00 AM – 4:00 PM KST</small></span></div>`).join('')}
+    <div class="r off"><b>Thu</b><span>Not available</span></div>
+    <div class="r off"><b>Fri</b><span>Not available</span></div>
+  </div>`;
+}
+function s1sheet(){
+  const has=!!S.end;
+  return `<h3>Add Temporary Location</h3>
+  <div class="row"><label class="f" style="flex:1 1 220px">City<input type="search" data-q value="${S.q}" placeholder="Search city or country" autocomplete="off"></label></div>
+  <div class="list res" style="max-height:150px">${resHtml()}</div>
+  ${S.city?`<div class="loc"><span><b>${S.city.n}</b> · ${S.city.c}</span><span class="badge">${S.city.z} Time · ${utc(S.city)}</span></div>`:''}
+  <div class="row"><label class="f" style="flex:1 1 140px">From<input type="date" id="from" value="2027-01-05"></label><label class="f" style="flex:1 1 140px">To (optional)<input type="date" id="to" value="${S.end}"></label></div>
+  <div class="tabs"><button type="button" class="chip" data-end="1" aria-pressed="${has}">With end date</button><button type="button" class="chip" data-end="0" aria-pressed="${!has}">No end date</button></div>
+  ${has?`<div class="okline">Regular hours apply again from Wed, 24 Mar</div>`:`<div class="warn">No end date. Regular hours will not return automatically.</div>`}
+  <div class="foot"><button type="button" class="btn" data-sheet="0">Cancel</button><button type="button" class="btn main" data-go="2">Save</button></div>`;
+}
+
+/* 장면 2: 저장 직후 → 이동 기간 탭에서 기존 30분 칸 격자로 입력 (칸은 그 지역 현지 시간, KST는 참고 열) */
+const CELLS=[];for(let h=6;h<=22.5;h+=.5)CELLS.push(h);
+const kstLab=h=>{const x=h+D();return hh(x)+(x>=24?' +1':'')};
+function s2page(){
+  const tab=S.end?`${S.city.n} · 5 Jan – 23 Mar`:`${S.city.n} · from 5 Jan`;
+  const n=Object.keys(S.cells).length;
+  const head=`<div style="display:grid;grid-template-columns:54px repeat(7,minmax(0,1fr));gap:2px;font-size:11px;position:sticky;top:0;background:var(--card);z-index:1;padding-bottom:2px"><span></span>${DAYS.map(d=>`<b style="text-align:center">${d}</b>`).join('')}</div>`;
+  const rows=CELLS.map(h=>{
+    const cells=DAYS.map(d=>{const on=S.cells[d+':'+h];return `<button type="button" data-cell="${d}:${h}" aria-pressed="${!!on}" aria-label="${d} ${hh(h)} ${on?'open':'closed'}" style="min-height:24px;border:0;border-radius:4px;cursor:pointer;background:${on?'var(--accent)':'var(--line)'}"></button>`}).join('');
+    const lab=Number.isInteger(h)?`<span style="font-size:10.5px;color:var(--sub);line-height:1.2">${hh(h)}${S.zone==='kst'?'':''}<br><span style="color:var(--mute)">${kstLab(h)}</span></span>`:`<span></span>`;
+    return `<div style="display:grid;grid-template-columns:54px repeat(7,minmax(0,1fr));gap:2px;align-items:center">${lab}${cells}</div>`;
+  }).join('');
+  return `<div class="top"><h2>Regular Working Hours</h2><button type="button" class="btn" data-sheet="1">Add Temporary Location</button></div>
+  <div class="okline">Saved · ${tab}</div>
+  <div class="tabs"><button type="button" class="chip" aria-pressed="false">Regular</button><button type="button" class="chip" aria-pressed="true">${tab}</button></div>
+  <div class="loc"><span><b>${zn()}</b> · 06:00 AM – 10:30 PM</span><span class="badge">${utc(S.city)}</span></div>
+  ${n?'':`<div class="warn">No hours set for this period</div>`}
+  <div style="max-height:360px;overflow:auto;display:grid;gap:2px;border:1px solid var(--line);border-radius:10px;padding:6px">${head}${rows}</div>
+  <div class="foot"><button type="button" class="btn main" ${n?'':'disabled'}>Save</button></div>`;
+}
+function s2sheet(){return s1sheet()}
+
+/* 장면 3: 여러 날 등록 — Days → Time → Review 3단계를 각각 따로 */
+function s3page(){return `<div class="top"><h2>Calendar & One-Time Changes</h2><button type="button" class="btn main" data-sheet="3">Set Multiple Days</button></div>
+  <div class="loc"><span>Current location <b>Australia · Sydney</b></span><span class="badge">AEDT</span></div>
+  <p style="margin:0;font-size:12px;color:var(--mute)">Month view (example)</p>`;}
+function bar(n){return `<div class="stepbar">${['Days','Time','Review'].map((t,i)=>`<span class="${n===i+1?'on':''}">${i+1} ${t}</span>`).join('')}</div>`}
+function s3sheet(){
+  const st=S.step,ar=S.zone==='local';
+  if(st===1)return `${bar(1)}<h3>Which days?</h3>
+    <div class="loc"><span><b>${S.city.c} · ${S.city.n}</b></span><span class="badge">${utc(S.city)}</span></div>
+    <div class="row"><label class="f" style="flex:1 1 130px">From<input type="date" value="2027-01-20"></label><label class="f" style="flex:1 1 130px">To<input type="date" value="2027-01-22"></label></div>
+    <div class="sum" style="background:var(--bg);border-radius:12px;padding:10px 12px;font-size:13px">3 days selected</div>
+    <div class="foot"><button type="button" class="btn" data-sheet="0">Cancel</button><button type="button" class="btn main" data-step="2">Next</button></div>`;
+  if(st===2)return `${bar(2)}<h3>What time?</h3>
+    <div class="loc"><span><b>${S.city.c} · ${S.city.n}</b><br>Wed, 20 Jan – Fri, 22 Jan</span><span class="badge">${utc(S.city)}</span></div>
+    <div class="row"><label class="f">Start<select data-es>${START()}</select></label><label class="f">End<select data-ee>${END()}</select></label></div>
+    <div class="sum" style="background:var(--bg);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.7">${hh(S.es)} – ${hh(S.ee)} ${zn()}<br>= ${convText('Wed',S.es,S.ee)}</div>
+    <div class="foot"><button type="button" class="btn" data-step="1">Back</button><button type="button" class="btn main" data-step="3">Next</button></div>`;
+  if(S.applied)return `${bar(3)}<h3>Saved</h3><p class="done" style="font-size:13px;color:var(--ok);font-weight:700;margin:0">✓ 2 days opened · ${hh(S.es)} – ${hh(S.ee)} ${zn()}</p><div class="foot"><button type="button" class="btn main" data-sheet="0">Done</button></div>`;
+  const k=kst('Wed',S.es,S.ee);
+  const DL=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];const nd=(i,sh)=>`${DL[(2+i+sh)%7]}, ${20+i+sh} Jan`;
+  const dnames=[[nd(0,0),nd(0,k.shift)],[nd(1,0),nd(1,k.shift)],[nd(2,0),'']];
+  return `${bar(3)}<h3>Review</h3>
+    <div class="sum" style="background:var(--bg);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.7"><b>Make available</b> · ${hh(S.es)} – ${hh(S.ee)} ${zn()}<br><span style="color:var(--ok);font-weight:700">2 days will be saved</span> · <span style="color:var(--warn);font-weight:700">1 skipped</span></div>
+    <div class="list">
+      <div class="item ok"><span>${dnames[0][0]} ${hh(S.es)} ${zn()}</span><small>${dnames[0][1]} ${k.ks} KST ✓</small></div>
+      <div class="item ok"><span>${dnames[1][0]} ${hh(S.es)} ${zn()}</span><small>${dnames[1][1]} ${k.ks} KST ✓</small></div>
+      <div class="item skip"><span>${dnames[2][0]}</span><small>Class at 9:00 PM ${zn()}</small></div>
+    </div>
+    <div class="foot"><button type="button" class="btn" data-step="2">Back</button><button type="button" class="btn main" data-apply>Apply to 2 days</button></div>`;
+}
+
+/* 장면 4: 시간대가 둘로 걸칠 때 */
+function s4sheet(){
+  if(!S.split) return `${bar(1)}<h3>Which days?</h3>
+    <div class="warn">The selected days are in two locations</div>
+    <div class="grp"><b>Australia · Sydney</b><span>Mon, 4 Jan</span></div>
+    <div class="grp"><b>${S.city.c} · ${S.city.n}</b><span>Tue, 5 Jan – Thu, 7 Jan</span></div>
+    <div class="foot"><button type="button" class="btn" data-sheet="0">Back</button><button type="button" class="btn main" data-split="1">Split by location</button></div>`;
+  return `${bar(2)}<h3>What time?</h3>
+    <div class="grp"><b>1 of 2 · ${S.city.c} · ${S.city.n}</b><span>Tue, 5 Jan – Thu, 7 Jan</span>
+      <div class="row"><label class="f">Start<select><option>4:00 PM</option></select></label><label class="f">End<select><option>10:00 PM</option></select></label></div></div>
+    <div class="grp"><b>2 of 2 · Australia · Sydney</b><span>Mon, 4 Jan</span><span style="color:var(--warn);font-weight:700">In your leave. Nothing to save.</span></div>
+    <div class="foot"><button type="button" class="btn" data-split="0">Back</button><button type="button" class="btn main" data-sheet="0">Next</button></div>`;
+}
+
+/* 장면 5: 종료 후 복귀(종료일 있음 / 없음) */
+function s5page(){
+  return `<div class="top"><h2>Regular Working Hours</h2></div>
+  <div class="case"><b>With end date (23 Mar)</b><div class="tl">
+    <div class="seg"><span>to 22 Dec</span><div class="bar">Regular · Sydney<small>Mon–Wed 9:00 AM – 6:00 PM</small></div></div>
+    <div class="seg"><span>23 Dec – 4 Jan</span><div class="bar leave">Leave</div></div>
+    <div class="seg"><span>5 Jan – 23 Mar</span><div class="bar stay">${S.city.n}<small>Mon–Fri 4:00 PM – 10:00 PM</small></div></div>
+    <div class="seg"><span>from 24 Mar</span><div class="bar back">Regular · Sydney, back automatically<small>Mon–Wed 9:00 AM – 6:00 PM</small></div></div>
+  </div></div>
+  <div class="case"><b>No end date</b><div class="tl">
+    <div class="seg"><span>to 22 Dec</span><div class="bar">Regular · Sydney</div></div>
+    <div class="seg"><span>23 Dec – 4 Jan</span><div class="bar leave">Leave</div></div>
+    <div class="seg"><span>from 5 Jan</span><div class="bar stay">${S.city.n}, no end date<small>Regular hours do not return</small></div></div>
+  </div><div class="foot"><button type="button" class="btn main" data-sheet="5">Set end date</button></div></div>`;
+}
+function s5sheet(){return `<h3>Set end date</h3>
+  <div class="row"><label class="f" style="flex:1 1 140px">To<input type="date" value="2027-03-23"></label></div>
+  <div class="okline">Regular hours apply again from Wed, 24 Mar</div>
+  <div class="foot"><button type="button" class="btn" data-sheet="0">Cancel</button><button type="button" class="btn main" data-sheet="0">Save</button></div>`;}
+
+const SC=[
+ {n:'1 이동 기간 추가',cap:'<b>Regular Working Hours</b> 맨 위에 현재 근무 지역이 보이고, [Add Temporary Location]으로 창을 엽니다. 도시·시작일·종료일(선택)만 입력합니다. 종료일 유무에 따라 아래 안내가 바뀝니다. [Save]를 누르면 2번 화면으로 넘어갑니다.',page:s1page,sheet:s1sheet,open:1},
+ {n:'2 이동 기간 시간 입력',cap:'저장 직후입니다. 이동 기간 탭이 생기고 <b>입력된 시간이 없어서 경고</b>가 보입니다. 지금 Regular Working Hours와 같은 <b>30분 칸 격자</b>이고, 칸을 누르면 열립니다(그 지역 현지 시간, 시작 06:00~22:30). 왼쪽 열에 현지 시각과 한국 시각(참고)이 나옵니다. 시안 조작은 위 두 번째 줄 버튼입니다.',page:s2page,sheet:s2sheet,open:0},
+ {n:'3 Set Multiple Days (3단계)',cap:'<b>1 Days → 2 Time → 3 Review</b> 세 단계가 각각 따로입니다. 2단계에는 시간만, 3단계에서 날짜별 결과(막힌 날 제외)와 [Apply]가 나옵니다. 시간은 그 지역 현지 시간으로만 고르고(시작 06:00~22:30), 한국 시간은 아래 줄에 참고로만 나옵니다. [Next]를 눌러 보세요.',page:s3page,sheet:s3sheet,open:3},
+ {n:'4 시간대가 둘로 걸칠 때',cap:'1/4~1/7처럼 호주와 아르헨티나에 걸치면 한 번에 등록할 수 없고 <b>[Split by location]</b>으로 지역마다 시간을 정합니다.',page:s3page,sheet:s4sheet,open:4},
+ {n:'5 종료 후 복귀 · 종료일 없음',cap:'<b>종료일 있음:</b> 24일부터 평소 시간표가 자동으로 다시 적용됩니다. <b>종료일 없음:</b> 자동 복귀하지 않고 이동 지역이 유지되며, [Set end date]로 나중에 종료일을 넣습니다.',page:s5page,sheet:s5sheet,open:0}
+];
+let sheetOpen=SC[0].open;
+function draw(){
+  const sc=SC[S.scn-1];
+  document.getElementById('scn').innerHTML=SC.map((s,i)=>`<button type="button" data-scn="${i+1}" aria-pressed="${S.scn===i+1}">${s.n}</button>`).join('');
+  document.getElementById('ctl').innerHTML=S.scn===2?`<button type="button" data-ex="0">시안 조작 · 입력 비우기</button><button type="button" data-ex="1">시안 조작 · 예시 시간 채우기</button>`:'';
+  document.getElementById('cap').innerHTML=sc.cap;
+  for(const id of ['pc','ph']){
+    const el=document.getElementById(id);
+    el.innerHTML=`<div class="page">${sc.page()}</div>${sheetOpen&&sc.sheet?`<div class="dim"><div class="sheet" role="dialog" aria-label="dialog">${sc.sheet()}</div></div>`:''}`;
+  }
+  const q=(s,fn)=>document.querySelectorAll(s).forEach(fn);
+  q('[data-scn]',b=>b.onclick=()=>{S.scn=+b.dataset.scn;S.split=false;S.step=1;S.applied=false;S.sheet=0;sheetOpen=SC[S.scn-1].open;draw()});
+  q('[data-zone]',b=>b.onclick=()=>{S.zone=b.dataset.zone;draw()});
+  q('[data-end]',b=>b.onclick=()=>{S.end=b.dataset.end==='1'?'2027-03-23':'';draw()});
+  q('[data-ex]',b=>b.onclick=()=>{S.cells={};if(b.dataset.ex==='1')['Mon','Tue','Wed','Thu','Fri'].forEach(d=>{for(let h=16;h<22;h+=.5)S.cells[d+':'+h]=1;for(let h=9;h<12;h+=.5)S.cells[d+':'+h]=1});draw()});
+  q('[data-cell]',b=>b.onclick=()=>{const k=b.dataset.cell;if(S.cells[k])delete S.cells[k];else S.cells[k]=1;draw()});
+  q('[data-split]',b=>b.onclick=()=>{S.split=b.dataset.split==='1';draw()});
+  q('[data-step]',b=>b.onclick=()=>{S.step=+b.dataset.step;draw()});
+  q('[data-apply]',b=>b.onclick=()=>{S.applied=true;draw()});
+  q('[data-sheet]',b=>b.onclick=()=>{sheetOpen=+b.dataset.sheet;S.sheet=sheetOpen;if(sheetOpen===3){S.step=1;S.applied=false}draw()});
+  q('[data-q]',i=>i.oninput=()=>{S.q=i.value;document.querySelectorAll('.res').forEach(r=>{r.innerHTML=resHtml();r.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{S.city=CITIES[+b.dataset.pick];S.q=S.city.n;draw()})});document.querySelectorAll('[data-q]').forEach(o=>{if(o!==i)o.value=S.q})});
+  q('[data-pick]',b=>b.onclick=()=>{S.city=CITIES[+b.dataset.pick];S.q=S.city.n;draw()});
+  q('[data-go]',b=>b.onclick=()=>{S.scn=+b.dataset.go;S.cells={};sheetOpen=0;S.sheet=0;draw()});
+  q('[data-add]',b=>b.onclick=()=>{S.editDay=b.dataset.add;S.es=16;S.ee=22;S.sheet=6;sheetOpen=6;draw()});
+  q('[data-es]',s=>s.onchange=()=>{S.es=+s.value;if(S.ee<=S.es)S.ee=Math.min(24,S.es+1);draw()});
+  q('[data-ee]',s=>s.onchange=()=>{S.ee=+s.value;draw()});
+  q('[data-savehrs]',b=>b.onclick=()=>{(S.hrs[S.editDay]=S.hrs[S.editDay]||[]).push([S.es,S.ee]);sheetOpen=0;S.sheet=0;draw()});
+}
+draw();
+</script>

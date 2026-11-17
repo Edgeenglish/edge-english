@@ -40,9 +40,6 @@ function Section({ title, action, children }: { title: string; action?: ReactNod
     </section>
   );
 }
-async function copy(text: string): Promise<boolean> {
-  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
-}
 
 export default function StudentProfile({ studentId, actions, onClose, now, backLabel, followupPending = null, onFollowup, zoneOf }: {
   studentId: string; actions: ProfileActions; onClose: () => void; now: Date;
@@ -56,7 +53,6 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
   const [p, setP] = useState<TutorStudentProfile | null>(null);
   const [err, setErr] = useState('');
   const [editing, setEditing] = useState(false);
-  const [copied, setCopied] = useState<boolean | null>(null);
   useEffect(() => {
     let alive = true;
     setP(null);
@@ -112,14 +108,6 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
             <Row k="Preferred Name" v={s.displayName ?? NP} />
             <Row k="Lives in" v={[s.city, s.country].filter(Boolean).join(', ') ? <>{[s.city, s.country].filter(Boolean).join(', ')} <span className="text-[#6b6880]">· {stTz}</span></> : <>{NP} <span className="text-[#6b6880]">· {stTz}</span></>} />
             <Row k="Gender / age" v={s.genderAge ?? NP} />
-            {regular && (
-              <Row k="Email" v={s.email ? (
-                <span className="inline-flex flex-wrap items-center gap-1.5">
-                  <span className="select-all">{s.email}</span>
-                  <button type="button" className={btnSmall} onClick={async () => { setCopied(await copy(s.email!)); setTimeout(() => setCopied(null), 1500); }}>{copied === true ? 'Copied ✓' : copied === false ? 'Copy failed' : 'Copy'}</button>
-                </span>
-              ) : NP} />
-            )}
             <Row k="English level" v={
               <>
                 {s.level ?? <i className="text-[#b9b6c8]">Not assessed yet</i>}

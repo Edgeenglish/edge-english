@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { cityTime } from '@/lms/tutor/hours-view';
-import { NO_END_TEXT, returnText, searchCity, zoneBadge, type CityHit, type TravelLocation } from '@/lms/tutor/travel';
+import { periodLines, searchCity, zoneBadge, type CityHit, type TravelLocation } from '@/lms/tutor/travel';
 import { formatInZone } from '@/lms/rules/dates';
 
 export type Sheet = { kind: 'add' } | { kind: 'end'; loc: TravelLocation };
@@ -16,8 +16,8 @@ const btnSub = 'min-h-[44px] flex-1 rounded-[10px] border border-[#e6e3ef] bg-wh
 const field = 'min-h-[44px] w-full rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[15px] text-[#1d1b2b]';
 const label = 'grid gap-1 text-[13px] font-semibold text-[#55526a]';
 
-export function TravelSheet({ sheet, inline, actions, onClose, onSaved }: {
-  sheet: Sheet; inline?: boolean; actions: Actions; onClose: () => void; onSaved: (l: TravelLocation) => void | Promise<void>;
+export function TravelSheet({ sheet, home, inline, actions, onClose, onSaved }: {
+  sheet: Sheet; /** 강사 평소 시간대 (복귀 안내) */ home: string; inline?: boolean; actions: Actions; onClose: () => void; onSaved: (l: TravelLocation) => void | Promise<void>;
 }) {
   const [q, setQ] = useState('');
   const [city, setCity] = useState<CityHit | null>(null);
@@ -105,8 +105,9 @@ export function TravelSheet({ sheet, inline, actions, onClose, onSaved }: {
             </div>
             {from && today && from < today && <p role="alert" className="text-[13.5px] text-[#b3261e]">The start date has passed.</p>}
             {hasEnd && !endOk && <p role="alert" className="text-[13.5px] text-[#b3261e]">The end date must be on or after the start date.</p>}
-            {hasEnd ? (to && endOk && <p className="text-[13.5px] font-semibold text-[#1f7a4d]">{returnText(to)}</p>)
-              : <p className="text-[13.5px] font-semibold text-[#b3261e]">{NO_END_TEXT}</p>}
+            {city && from && from >= today && (hasEnd
+              ? (to && endOk && <Lines lines={periodLines(from, to, city.timezone, home)} />)
+              : <Lines lines={periodLines(from, null, city.timezone, home)} />)}
           </>
         )}
 
@@ -117,7 +118,7 @@ export function TravelSheet({ sheet, inline, actions, onClose, onSaved }: {
             </label>
             {to && !endOk && <p role="alert" className="text-[13.5px] text-[#b3261e]">The end date must be on or after the start date.</p>}
             {to && endOk && to < today && <p role="alert" className="text-[13.5px] text-[#b3261e]">The end date has passed.</p>}
-            {to && endOk && to >= today && <p className="text-[13.5px] font-semibold text-[#1f7a4d]">{returnText(to)}</p>}
+            {to && endOk && to >= today && <Lines lines={periodLines(sheet.loc.from, to, sheet.loc.timezone, home)} />}
           </>
         )}
 
@@ -129,4 +130,9 @@ export function TravelSheet({ sheet, inline, actions, onClose, onSaved }: {
       </div>
     </div>
   );
+}
+
+/** 이동 기간 안내 줄 (TutorHours 탭 아래와 같은 모양) */
+export function Lines({ lines }: { lines: string[] }) {
+  return <div className="grid gap-0.5 text-[13.5px] font-semibold text-[#1d1b2b]">{lines.map((l) => <p key={l}>{l}</p>)}</div>;
 }

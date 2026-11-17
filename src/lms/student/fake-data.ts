@@ -140,7 +140,11 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       ...s.lessons.map((l) => ({ ...l, meetUrl: null, leavePostponed: false, substitute: false })),
       ...[7, 9, 11].map((d, i) => ({ id: `lv${i}`, kind: 'regular' as const, startsAt: at(d, '20:00'), minutes: 50, tutorName: '가상강사 Alex', state: 'scheduled' as const, meetUrl: null, leavePostponed: false, substitute: false })),
     ],
-    makeupRights: [{ lessonId: 'l5', itemId: null, originalAt: s.lessons[4].startsAt, tutorLeave: false, requested: false }],
+    makeupRights: [
+      { lessonId: 'l5', itemId: null, originalAt: s.lessons[4].startsAt, tutorLeave: false, requested: false, tutor: 'Alex', tutorChoices: [{ id: 'alex', name: 'Alex', role: 'assigned' }] },
+      { lessonId: 'cover-canceled', itemId: null, originalAt: at(-3, '20:00'), tutorLeave: false, requested: false, tutorCanceled: true, tutor: 'Emma', tutorChoices: [{ id: 'alex', name: 'Alex', role: 'original' }, { id: 'emma', name: 'Emma', role: 'substitute' }] },
+      { lessonId: null, itemId: null, compId: 'cover-comp', originalAt: at(-3, '20:00'), tutorLeave: false, requested: false, tutor: 'Emma', tutorChoices: [{ id: 'emma', name: 'Emma', role: 'assigned' }] },
+    ],
     requests: [],
     leave: [
       { id: 'x1', startsAt: at(7, '20:00'), choice: 'substitute', stage: 'tutor_ok', subTutor: 'Maria', subMeetUrl: null, lessonId: 'lv0', itemId: null, offFrom, offTo },
@@ -189,7 +193,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       const back = view.makeupRights.find((m) => m.lessonId === right.lessonId)?.tutorLeave ? 14 : 1;
       return Array.from({ length: 18 }, (_, i) => back + i)
         .filter((d) => d % 2 === 0)
-        .flatMap((d) => [{ startsAt: at(d, '10:00'), afterEnd: false }, ...(d % 4 === 0 ? [{ startsAt: at(d, '20:00'), afterEnd: false }] : [])]);
+        .flatMap((d) => [{ startsAt: at(d, right.tutorId === 'emma' ? '14:00' : '10:00'), afterEnd: false }, ...(d % 4 === 0 ? [{ startsAt: at(d, '20:00'), afterEnd: false }] : [])]);
     },
     // 미리보기: 휴무·노쇼·보상이 아닌 첫 보강권을 '종료 5일 이내 강사 취소'로 흉내 (실제는 DB 가 강사 취소 기록으로 판정)
     notices: async () => notices.map((n) => ({ ...n })),

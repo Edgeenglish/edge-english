@@ -1,16 +1,79 @@
 'use client';
 
-// 로그인 A안: 가운데 카드 하나에서 단계가 바뀜 — 이메일 → 메일 코드 → (운영자) 인증 앱 코드 / 첫 등록
-// 등록 안 된 이메일도 화면은 같게 진행 (등록 여부를 알려 주지 않음, 계정·메일은 생기지 않음)
+// 로그인 A안 카드 하나에서 단계가 바뀜 (H26(146)(150) 홈페이지 회원가입·로그인)
+// 로그인: 이메일 + 비밀번호 (+ 켜져 있으면 카카오·네이버) → (운영자) 인증 앱 코드 / 첫 등록
+// 회원가입: 이름·이메일·비밀번호·필수 동의 → 메일 6자리 코드 → 가입 끝(로그인된 채)
+// 비밀번호 만들기·찾기: 이메일 → 메일 코드 + 새 비밀번호 (기존 학생·강사는 재가입 없이 지금 계정에 비밀번호만)
+// 카카오·네이버 첫 로그인이 회원과 연결 안 되면 '처음이에요 / 이미 회원이에요' — 이미 회원이면 기존 계정 로그인 뒤에만 연결
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import type { Provider } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { afterEmailCode, isMakeupLink, looksLikeEmail, nextAfterLogin, maskEmail, RESEND_WAIT_SECONDS, STRINGS, type Lang, type Role } from '@/lms/auth/login-flow';
+import { canDiscardSocialAccount, googleAllowed, googleCallbackVerified } from '@/lms/auth/google';
+import { PRIVACY_POLICY, TERMS } from '@/lms/auth/legal';
+import { LegalSections } from '@/components/legal/LegalDoc';
+import { GoogleIcon } from './GoogleIcon';
+import {
+  afterEmailCode,
+  enabledSocial,
+  isMakeupLink,
+  looksLikeEmail,
+  maskEmail,
+  needsSocialChoice,
+  nextAfterLogin,
+  PASSWORD_MIN,
+  PROVIDER_ID,
+  RESEND_WAIT_SECONDS,
+  signupProblems,
+  STRINGS,
+  type Lang,
+  type Role,
+  type SignupProblem,
+  type SocialProvider,
+} from '@/lms/auth/login-flow';
 
-type Step = 'email' | 'code' | 'totp' | 'enroll' | 'not_linked' | 'moving';
+type Step = 'login' | 'code_login' | 'signup' | 'signup_code' | 'pw_email' | 'pw_new' | 'totp' | 'enroll' | 'member' | 'social_choice' | 'google_choice' | 'moving';
 
 const LANG_KEY = 'lms-lang';
+const LINK_KEY = 'lms-link-provider'; // '이미 회원이에요' 뒤 기존 계정 로그인이 끝나면 연결할 카카오·네이버
+const LAST_KEY = 'lms-last-provider'; // 방금 누른 간편 로그인 (돌아왔을 때 어느 쪽인지)
+const GOOGLE_LINK_USER_KEY = 'lms-google-link-user';
+const APPLY_URL = 'https://forms.gle/arWZ6uzK3BFgaxM39';
+// 이 기기에서 마지막으로 로그인에 성공한 방법 — '최근 로그인' 말풍선 (11/17 대표: 비밀번호·메일 코드·카카오·네이버 구분)
+const RECENT_KEY = 'lms-recent-login';
+type Recent = 'password' | 'code' | SocialProvider;
+function readRecent(): Recent | null {
+  try {
+    const v = localStorage.getItem(RECENT_KEY);
+    return v === 'password' || v === 'code' || v === 'kakao' || v === 'naver' || v === 'google' ? v : null;
+  } catch {
+    return null;
+  }
+}
+// 이 기기에서 비밀번호로 한 번이라도 로그인(또는 비밀번호를 만듦)했으면 처음 화면 '비밀번호를 만든 적이 없다면' 줄을 숨김 (11/17 대표)
+const PW_USED_KEY = 'lms-pw-used';
+function readPwUsed(): boolean {
+  try {
+    return localStorage.getItem(PW_USED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function savePwUsed() {
+  try {
+    localStorage.setItem(PW_USED_KEY, '1');
+  } catch {
+    /* 저장 안 되면 줄이 계속 보임 */
+  }
+}
+function saveRecent(v: Recent) {
+  if (v === 'password') savePwUsed();
+  try {
+    localStorage.setItem(RECENT_KEY, v);
+  } catch {
+    /* 저장 안 되면 말풍선만 안 보임 */
+  }
+}
 
 function readLang(): Lang {
   try {
@@ -19,11 +82,44 @@ function readLang(): Lang {
     return 'ko';
   }
 }
+function readPendingLink(): SocialProvider | null {
+  try {
+    const v = sessionStorage.getItem(LINK_KEY);
+    return v === 'kakao' || v === 'naver' || v === 'google' ? v : null;
+  } catch {
+    return null;
+  }
+}
+function readLast(): SocialProvider | null {
+  try {
+    const v = sessionStorage.getItem(LAST_KEY);
+    return v === 'kakao' || v === 'naver' || v === 'google' ? v : null;
+  } catch {
+    return null;
+  }
+}
+function setPendingLink(v: SocialProvider | null) {
+  try {
+    if (v) sessionStorage.setItem(LINK_KEY, v);
+    else sessionStorage.removeItem(LINK_KEY);
+  } catch {
+    /* 저장 안 되면 연결은 로그인 뒤 다시 '이미 회원이에요'로 */
+  }
+}
 
 export default function LoginFlow() {
   const [lang, setLang] = useState<Lang>('ko');
-  const [step, setStep] = useState<Step>('email');
+  const [step, setStep] = useState<Step>('login');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [terms, setTerms] = useState(false);
+  const [legalOpen, setLegalOpen] = useState<'terms' | 'privacy' | null>(null);
+  const [problems, setProblems] = useState<SignupProblem[]>([]);
+  const [emailTaken, setEmailTaken] = useState(false);
+  const [badLogin, setBadLogin] = useState(false);
+  const [joined, setJoined] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +128,16 @@ export default function LoginFlow() {
   const [showLost, setShowLost] = useState(false);
   const [enroll, setEnroll] = useState<{ factorId: string; qr: string; secret: string } | null>(null);
   const [factorId, setFactorId] = useState<string | null>(null);
+  const [social, setSocial] = useState<SocialProvider[]>([]);
+  const [linkFor, setLinkFor] = useState<SocialProvider | null>(null);
+  // 비밀번호 만들기·찾기: 메일 코드는 한 번만 쓸 수 있음 → 확인되면 다시 보내지 않음. 운영자(인증 앱 켬)는 인증 앱 코드 뒤에 저장
+  const [otpDone, setOtpDone] = useState(false);
+  const [pendingPw, setPendingPw] = useState<string | null>(null);
+  // 카카오·네이버로만 만든 빈 계정(수강 기록 없음) — '처음이에요'를 잘못 누른 기존 학생이 스스로 바로잡는 버튼용
+  const [socialOnly, setSocialOnly] = useState(false);
+  const [memberName, setMemberName] = useState(''); // 가입 때 받은 이름(이메일 가입 입력값·카카오·네이버 이름) — 빈 회원 화면 제목
+  const [recent, setRecent] = useState<Recent | null>(null);
+  const [pwUsed, setPwUsed] = useState(false);
   const t = STRINGS[lang];
   const sb = supabaseBrowser();
   const codeRef = useRef<HTMLInputElement>(null);
@@ -41,14 +147,83 @@ export default function LoginFlow() {
   useEffect(() => {
     setLang(readLang());
     setNext(new URLSearchParams(window.location.search).get('next'));
+    setLinkFor(readPendingLink());
+    setRecent(readRecent());
+    setPwUsed(readPwUsed());
   }, []);
-  // 같은 고정 주소의 유효한 세션은 이메일 코드를 다시 보내지 않고 이어 쓴다.
+
+  // 켜진 간편 로그인만 버튼으로 (꺼진 것을 누르면 오류가 나므로 아예 안 보임)
+  useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) return;
+    const settings = fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    const naver = fetch(`${url}/auth/v1/authorize?provider=${encodeURIComponent(PROVIDER_ID.naver)}`, { redirect: 'manual' })
+      .then((r) => r.type === 'opaqueredirect' || r.status === 302)
+      .catch(() => false);
+    void Promise.all([settings, naver]).then(([s, n]) => setSocial(enabledSocial(s?.external, n, googleAllowed(url, window.location.hostname))));
+  }, []);
+
+  // 카카오·네이버에서 돌아왔으면(?code=) 세션으로 바꾸고, 아니면 같은 주소의 유효한 세션을 이어 씀
   useEffect(() => {
     if (!sb) return;
     let active = true;
-    void sb.auth.getSession().then(({ data }) => {
-      if (active && data.session) return routeAfterLogin();
-    }).catch(() => { /* 세션이 유효하지 않으면 원래 로그인 화면을 사용 */ });
+    const params = new URLSearchParams(window.location.search);
+    const oauthCode = params.get('code');
+    const oauthError = params.get('error_description') || params.get('error');
+    const oauthErrorCode = params.get('error_code');
+    (async () => {
+      if (oauthError) {
+        for (const k of ['error', 'error_code', 'error_description']) params.delete(k);
+        window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`);
+        const last = readLast();
+        // 카카오·네이버 이메일이 기존 계정과 같지만 인증되지 않음 → 자동 연결하지 않고, 기존 계정으로 로그인한 뒤 연결 (H26(150))
+        if (oauthErrorCode === 'provider_email_needs_verification' && last) {
+          setPendingLink(last);
+          setLinkFor(last);
+        } else {
+          setPendingLink(null);
+          setLinkFor(null);
+          setError(last === 'google' && oauthErrorCode === 'identity_already_exists' ? t.googleConflict : t.socialFail);
+        }
+        try { sessionStorage.removeItem(GOOGLE_LINK_USER_KEY); sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
+        return;
+      }
+      if (oauthCode) {
+        const { error: e } = await sb.auth.exchangeCodeForSession(oauthCode);
+        params.delete('code');
+        window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`);
+        if (!e) {
+          const last = readLast();
+          if (last === 'google') {
+            const expected = sessionStorage.getItem(GOOGLE_LINK_USER_KEY);
+            const { data: verified, error: verifyError } = await sb.auth.getUser();
+            sessionStorage.removeItem(GOOGLE_LINK_USER_KEY);
+            if (verifyError || !googleCallbackVerified(verified.user, expected)) {
+              setPendingLink(null);
+              setLinkFor(null);
+              sessionStorage.removeItem(LAST_KEY);
+              if (expected && verified.user?.id !== expected) await sb.auth.signOut({ scope: 'local' });
+              if (active) setError(t.linkFail);
+              return;
+            }
+          }
+          if (last) { saveRecent(last); setRecent(last); }
+          try { sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
+        }
+        if (e) {
+          if (active) setError(readPendingLink() ? t.linkFail : t.socialFail);
+          setPendingLink(null);
+          setLinkFor(null);
+          try { sessionStorage.removeItem(GOOGLE_LINK_USER_KEY); sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
+          return;
+        }
+      }
+      const { data } = await sb.auth.getSession();
+      if (active && data.session) await routeAfterLogin();
+    })().catch(() => { /* 세션이 유효하지 않으면 로그인 화면을 그대로 */ });
     return () => { active = false; };
   }, [sb]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -58,16 +233,25 @@ export default function LoginFlow() {
     return () => clearTimeout(id);
   }, [wait]);
   useEffect(() => {
-    if (step !== 'email') codeRef.current?.focus();
+    if (step === 'code_login' || step === 'signup_code' || step === 'totp' || step === 'enroll') codeRef.current?.focus();
   }, [step]);
 
-  function switchLang(next: Lang) {
-    setLang(next);
+  function switchLang(l: Lang) {
+    setLang(l);
     try {
-      localStorage.setItem(LANG_KEY, next);
+      localStorage.setItem(LANG_KEY, l);
     } catch {
       /* 저장 안 돼도 화면은 바뀜 */
     }
+  }
+
+  function go(s: Step) {
+    setError(null);
+    setNotice(null);
+    setBadLogin(false);
+    setProblems([]);
+    setCode('');
+    setStep(s);
   }
 
   function failMessage(e: unknown): string {
@@ -77,54 +261,126 @@ export default function LoginFlow() {
     return t.network;
   }
 
-  async function sendCode(resend = false) {
-    if (!sb) return setError(t.network);
-    if (!looksLikeEmail(email)) return setError(t.badEmail);
-    setBusy(true);
-    setError(null);
-    const { error: e } = await sb.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: false } });
-    setBusy(false);
-    // 등록 안 된 이메일(422)도 같은 화면으로 — 등록 여부를 알려 주지 않음
-    if (e && e.status === 429) return setError(t.tooMany);
-    if (e && !(e.status && e.status >= 400 && e.status < 500)) return setError(t.network);
-    setCode('');
-    setWait(RESEND_WAIT_SECONDS);
-    setStep('code');
-    setNotice(resend ? t.resent : null);
-  }
-
   async function routeAfterLogin() {
     if (!sb) return;
-    const [{ data: role }, { data: aal }, { data: factors }] = await Promise.all([
+    const [{ data: role, error: roleError }, { data: aal, error: aalError }, { data: factors }, { data: userData }] = await Promise.all([
       sb.rpc('my_role'),
       sb.auth.mfa.getAuthenticatorAssuranceLevel(),
       sb.auth.mfa.listFactors(),
+      sb.auth.getUser(),
     ]);
+    const myRole = (role as Role | null) ?? null;
+    const user = userData?.user;
+    const providers = (user?.identities ?? []).map((i) => i.provider);
+    setSocialOnly(providers.length > 0 && !providers.includes('email'));
+    const metaName = user?.user_metadata?.name;
+    setMemberName(typeof metaName === 'string' ? metaName.trim() : '');
+    if (!user) return setError(t.network);
+    const pendingGoogle = readPendingLink() === 'google';
+    if (pendingGoogle && (roleError || aalError)) return setError(t.network);
+    if (!pendingGoogle && needsSocialChoice({ role: myRole, providers, choseNew: user?.user_metadata?.edge_new_member === true })) {
+      return setStep('social_choice');
+    }
     const verified = factors?.totp ?? [];
-    const next = afterEmailCode({
-      role: (role as Role | null) ?? null,
-      aal: aal?.currentLevel === 'aal2' ? 'aal2' : 'aal1',
-      verifiedTotp: verified.length,
-    });
-    if (next.kind === 'go') {
+    const after = afterEmailCode({ role: myRole, aal: aal?.currentLevel === 'aal2' ? 'aal2' : 'aal1', verifiedTotp: verified.length });
+    // POL-AC-02~05: 기존 계정을 인증한 뒤 같은 auth UUID에만 추가. 수강 전 회원도 가능, 운영자는 MFA 이후.
+    if (pendingGoogle && (after.kind === 'go' || after.kind === 'not_linked')) {
+      if (!googleAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL, window.location.hostname)) return setError(t.linkFail);
+      try {
+        sessionStorage.setItem(GOOGLE_LINK_USER_KEY, user.id);
+        sessionStorage.setItem(LAST_KEY, 'google');
+      } catch {
+        return setError(t.linkFail); // 계정 ID를 보관 못 하면 연결을 시작하지 않음
+      }
+      setPendingLink(null);
       setStep('moving');
-      window.location.assign(nextAfterLogin(new URLSearchParams(window.location.search).get('next'), next.to, (role as Role | null) ?? null));
-    } else if (next.kind === 'totp_verify') {
+      const { error: e } = await sb.auth.linkIdentity({ provider: 'google', options: {
+        redirectTo: `${window.location.origin}/lms/login${next ? `?next=${encodeURIComponent(next)}` : ''}`,
+        queryParams: { prompt: 'select_account' },
+      } });
+      if (!e) return;
+      sessionStorage.removeItem(GOOGLE_LINK_USER_KEY);
+      sessionStorage.removeItem(LAST_KEY);
+      setLinkFor(null);
+      setStep('login');
+      return setError(e.code === 'identity_already_exists' ? t.googleConflict : t.linkFail);
+    }
+    if (after.kind === 'go') {
+      // '이미 회원이에요'로 기존 계정 로그인을 마쳤으면 카카오·네이버를 이 계정에 연결 (갔다가 이 화면으로 돌아옴)
+      const pending = readPendingLink();
+      if (pending && pending !== 'google') {
+        setPendingLink(null);
+        setStep('moving');
+        // 미인증 이메일로 시도했을 때 Supabase 가 만든 빈 계정(본인 이메일, 그 공급자만)이 있으면 지워야 연결됨
+        await sb.rpc('lms_discard_unverified_social_orphan', { p_provider: PROVIDER_ID[pending] });
+        const { error: e } = await sb.auth.linkIdentity({
+          provider: PROVIDER_ID[pending] as Provider,
+          options: {
+            redirectTo: `${window.location.origin}/lms/login`,
+            // Supabase 기본 카카오 범위(profile_image 포함)를 필요한 두 항목으로 대체한다.
+            queryParams: pending === 'kakao' ? { scope: 'profile_nickname,account_email' } : undefined,
+          },
+        });
+        if (!e) return;
+        setLinkFor(null);
+        setStep('login');
+        return setError(t.linkFail);
+      }
+      setStep('moving');
+      window.location.assign(nextAfterLogin(new URLSearchParams(window.location.search).get('next'), after.to, myRole));
+    } else if (after.kind === 'totp_verify') {
       setFactorId(verified[0].id);
       setCode('');
       setStep('totp');
-    } else if (next.kind === 'totp_enroll') {
+    } else if (after.kind === 'totp_enroll') {
       const { data, error: e } = await sb.auth.mfa.enroll({ factorType: 'totp', issuer: '엣지영어 LMS', friendlyName: `EdgeEnglish ${new Date().toISOString().slice(0, 10)}` });
       if (e || !data) return setError(failMessage(e));
       setEnroll({ factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
       setCode('');
       setStep('enroll');
     } else {
-      setStep('not_linked');
+      setStep('member');
     }
   }
 
-  async function verifyEmailCode() {
+  // ── 로그인
+  async function passwordLogin() {
+    if (!sb) return setError(t.network);
+    setError(null);
+    setBadLogin(false);
+    if (!looksLikeEmail(email) || !password) return setBadLogin(true);
+    setBusy(true);
+    const { error: e } = await sb.auth.signInWithPassword({ email: email.trim(), password });
+    if (e) {
+      setBusy(false);
+      if (e.status === 429) return setError(t.tooMany);
+      if (e.status && e.status >= 400 && e.status < 500) return setBadLogin(true);
+      return setError(t.network);
+    }
+    saveRecent('password');
+    await routeAfterLogin();
+    setBusy(false);
+  }
+
+  // 메일 코드 로그인 (H26(205) 보충: 기존 회원이 비밀번호 없이 계속 쓰던 방식, 누구나 사용) — 있는 계정에만 코드가 감
+  async function sendLoginCode(resend = false) {
+    if (!sb) return setError(t.network);
+    setBadLogin(false);
+    if (!looksLikeEmail(email)) return setError(t.badEmail);
+    setBusy(true);
+    setError(null);
+    const { error: e } = await sb.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: false } });
+    setBusy(false);
+    // 가입 안 된 이메일(422)도 같은 화면으로 — 가입 여부를 알려 주지 않음
+    if (e && e.status === 429) return setError(t.tooMany);
+    if (e && !(e.status && e.status >= 400 && e.status < 500)) return setError(t.network);
+    setCode('');
+    setWait(RESEND_WAIT_SECONDS);
+    setStep('code_login');
+    setNotice(resend ? t.resent : null);
+  }
+
+  async function verifyLoginCode() {
     if (!sb || code.length !== 6) return;
     setBusy(true);
     setError(null);
@@ -133,29 +389,305 @@ export default function LoginFlow() {
       setBusy(false);
       return setError(failMessage(e));
     }
+    saveRecent('code');
     await routeAfterLogin();
     setBusy(false);
   }
 
-  async function verifyTotp() {
-    const id = step === 'enroll' ? enroll?.factorId : factorId;
-    if (!sb || !id || code.length !== 6) return;
+  async function socialLogin(p: SocialProvider, googleConfirmed = false) {
+    if (!sb) return setError(t.network);
+    if (p === 'google') {
+      if (!googleAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL, window.location.hostname)) return;
+      // 최근 로그인 표시는 브라우저 기록일 뿐, 이번 Google 계정의 연결 여부를 보장하지 않는다.
+      if (!googleConfirmed) return go('google_choice');
+    }
+    setBusy(true);
+    try {
+      sessionStorage.setItem(LAST_KEY, p);
+    } catch {
+      /* 저장 안 되면 미인증 이메일 때 연결 안내만 빠짐 */
+    }
+    const { error: e } = await sb.auth.signInWithOAuth({
+      provider: PROVIDER_ID[p] as Provider,
+      options: {
+        redirectTo: `${window.location.origin}/lms/login${next ? `?next=${encodeURIComponent(next)}` : ''}`,
+        // scopes 옵션은 기본 범위에 추가되므로, scope 쿼리로 사진 요청을 제외한다.
+        queryParams: p === 'kakao' ? { scope: 'profile_nickname,account_email' } : undefined,
+      },
+    });
+    if (e) {
+      setBusy(false);
+      setError(t.socialFail);
+    }
+  }
+
+  // ── 회원가입
+  async function signup() {
+    if (!sb) return setError(t.network);
+    setError(null);
+    setEmailTaken(false);
+    const p = signupProblems({ name, email, password, terms });
+    setProblems(p);
+    if (p.length) return;
+    setBusy(true);
+    const agreedAt = new Date().toISOString();
+    const { data, error: e } = await sb.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { name: name.trim(), terms_agreed_at: agreedAt } },
+    });
+    setBusy(false);
+    if (e) {
+      if (e.status === 429) return setError(t.tooMany);
+      if (e.code === 'user_already_exists' || e.code === 'email_exists') return setEmailTaken(true);
+      if (e.code === 'weak_password') return setProblems(['password']);
+      return setError(t.network);
+    }
+    // 이미 가입된 이메일이면 Supabase 는 오류 대신 로그인 방법이 없는 빈 사용자를 돌려줌 (메일도 안 보냄)
+    if (data.user && (data.user.identities?.length ?? 0) === 0) return setEmailTaken(true);
+    if (data.session) {
+      setJoined(true);
+      return routeAfterLogin();
+    }
+    setCode('');
+    setWait(RESEND_WAIT_SECONDS);
+    setStep('signup_code');
+  }
+
+  async function verifySignup() {
+    if (!sb || code.length !== 6) return;
     setBusy(true);
     setError(null);
-    const { error: e } = await sb.auth.mfa.challengeAndVerify({ factorId: id, code });
+    const { error: e } = await sb.auth.verifyOtp({ email: email.trim(), token: code, type: 'signup' });
     if (e) {
       setBusy(false);
       return setError(failMessage(e));
     }
+    setJoined(true);
     await routeAfterLogin();
     setBusy(false);
   }
 
+  async function resendSignup() {
+    if (!sb) return;
+    setBusy(true);
+    const { error: e } = await sb.auth.resend({ type: 'signup', email: email.trim() });
+    setBusy(false);
+    if (e && e.status === 429) return setError(t.tooMany);
+    setWait(RESEND_WAIT_SECONDS);
+    setNotice(t.resent);
+  }
+
+  // ── 비밀번호 만들기·찾기 (메일 코드로 로그인 → 새 비밀번호 저장)
+  async function sendPwCode(resend = false) {
+    if (!sb) return setError(t.network);
+    if (!looksLikeEmail(email)) return setError(t.badEmail);
+    setBusy(true);
+    setError(null);
+    const { error: e } = await sb.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: false } });
+    setBusy(false);
+    // 가입 안 된 이메일(422)도 같은 화면으로 — 가입 여부를 알려 주지 않음
+    if (e && e.status === 429) return setError(t.tooMany);
+    if (e && !(e.status && e.status >= 400 && e.status < 500)) return setError(t.network);
+    setCode('');
+    setPassword('');
+    setOtpDone(false);
+    setWait(RESEND_WAIT_SECONDS);
+    setStep('pw_new');
+    setNotice(resend ? t.resent : null);
+  }
+
+  async function saveNewPassword() {
+    if (!sb || (!otpDone && code.length !== 6)) return;
+    setProblems([]);
+    if (password.length < PASSWORD_MIN) return setProblems(['password']);
+    setBusy(true);
+    setError(null);
+    if (!otpDone) {
+      const { error: e } = await sb.auth.verifyOtp({ email: email.trim(), token: code, type: 'email' });
+      if (e) {
+        setBusy(false);
+        return setError(failMessage(e));
+      }
+      setOtpDone(true);
+    }
+    // 인증 앱이 켜진 계정(운영자)은 Supabase 가 인증 앱 코드 뒤에만 비밀번호 변경을 허락함 → 인증 앱 코드 단계 뒤에 저장
+    const [{ data: aal }, { data: factors }] = await Promise.all([sb.auth.mfa.getAuthenticatorAssuranceLevel(), sb.auth.mfa.listFactors()]);
+    const verified = factors?.totp ?? [];
+    if (verified.length > 0 && aal?.currentLevel !== 'aal2') {
+      setPendingPw(password);
+      setFactorId(verified[0].id);
+      setCode('');
+      setBusy(false);
+      return setStep('totp');
+    }
+    const ok = await storePassword(password);
+    if (ok) await routeAfterLogin();
+    setBusy(false);
+  }
+
+  /** 새 비밀번호 저장. 실패하면 칸 아래·맨 아래에 이유 */
+  async function storePassword(pw: string): Promise<boolean> {
+    if (!sb) return false;
+    const { error: e } = await sb.auth.updateUser({ password: pw });
+    if (!e || e.code === 'same_password') {
+      savePwUsed();
+      return true;
+    }
+    if (e.code === 'weak_password') {
+      setStep('pw_new');
+      setProblems(['password']);
+      return false;
+    }
+    setError(e.status === 429 ? t.tooMany : t.network);
+    return false;
+  }
+
+  // 이용약관 동의(필수) + 개인정보 처리방침 보기 — 이메일 가입·카카오·네이버 '처음이에요' 같은 줄 (대표 11/14)
+  function legalRows() {
+    const view = (key: 'terms' | 'privacy') => (
+      <button
+        type="button"
+        aria-expanded={legalOpen === key}
+        className="min-h-[40px] shrink-0 px-1 text-[13px] text-[#55526a] underline"
+        onClick={() => setLegalOpen(legalOpen === key ? null : key)}
+      >
+        {t.viewLegal}
+      </button>
+    );
+    const box = (key: 'terms' | 'privacy') =>
+      legalOpen === key && (
+        <div className="max-h-[240px] overflow-y-auto rounded-[10px] border border-[#e4e1ee] bg-[#faf9fd] p-3">
+          <LegalSections sections={key === 'terms' ? TERMS : PRIVACY_POLICY} compact />
+        </div>
+      );
+    return (
+      <>
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="agree-terms" className="flex min-h-[40px] items-center gap-2.5 text-[14px] text-[#1d1b2b]">
+            <input id="agree-terms" type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} className="h-[20px] w-[20px] accent-[#5b3df0]" />
+            {t.agreeTerms}
+          </label>
+          {view('terms')}
+        </div>
+        {box('terms')}
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-h-[40px] pl-[30px] text-[14px] leading-[40px] text-[#1d1b2b]">{t.privacyPolicy}</span>
+          {view('privacy')}
+        </div>
+        {box('privacy')}
+      </>
+    );
+  }
+
+  // 카카오·네이버 버튼 — 로그인·회원가입 화면 같은 모양 (대표 11/15: 회원가입 화면에도)
+  function socialButtons() {
+    if (social.length === 0 || linkFor) return null;
+    return (
+      <>
+        {social.map((p) => (
+          <button
+            key={p}
+            type="button"
+            disabled={busy}
+            onClick={() => socialLogin(p)}
+            className={`flex min-h-[52px] w-full items-center justify-center rounded-[14px] text-[16px] font-bold disabled:opacity-40 ${
+              p === 'kakao' ? 'bg-[#FEE500] text-[#191600]' : p === 'naver' ? 'bg-[#03C75A] text-white' : 'gap-3 border border-[#d9d5e8] bg-white text-[#1d1b2b]'
+            }`}
+          >
+            {p === 'google' && <GoogleIcon />}{t.social[p]}
+          </button>
+        ))}
+        <p className="flex items-center gap-2 text-[12px] text-[#8a87a0] before:h-px before:flex-1 before:bg-[#e6e3ef] after:h-px after:flex-1 after:bg-[#e6e3ef]">{t.or}</p>
+      </>
+    );
+  }
+
+  // '최근 로그인' 속 빈 둥근 말풍선 (11/17 대표 A안: 흰 바탕·얇은 보라 테두리·보라 글씨·작은 꼬리·그림자 없음)
+  const bubble = (tail: 'down' | 'up') => (
+    <span className="relative inline-block whitespace-nowrap rounded-[8px] border border-[#7d5fff] bg-white px-2 py-[1px] text-[11px] font-semibold leading-[17px] text-[#5b3df0]">
+      {t.recent}
+      <span
+        aria-hidden
+        className={`absolute left-1/2 h-[7px] w-[7px] -translate-x-1/2 rotate-45 border-[#7d5fff] bg-white ${tail === 'down' ? '-bottom-[4.5px] border-b border-r' : '-top-[4.5px] border-l border-t'}`}
+      />
+    </span>
+  );
+
+  // 로그인 화면 간편 로그인: 동그란 아이콘 (회원가입 화면은 큰 버튼 그대로)
+  function socialCircles() {
+    if (social.length === 0 || (linkFor && linkFor !== 'google')) return null;
+    const choices = linkFor === 'google' ? social.filter((p) => p !== 'google') : social;
+    const socialRecent = recent !== null && choices.includes(recent as SocialProvider);
+    return (
+      <div className="grid gap-2 pt-2">
+        <p className="flex items-center gap-2 text-[12px] text-[#8a87a0] before:h-px before:flex-1 before:bg-[#e6e3ef] after:h-px after:flex-1 after:bg-[#e6e3ef]">{t.quickLogin}</p>
+        <div className={`flex justify-center gap-5 ${socialRecent ? 'pt-7' : 'pt-1'}`}>
+          {choices.map((p) => (
+            <div key={p} className="relative">
+              {recent === p && <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2">{bubble('down')}</span>}
+              <button
+                type="button"
+                disabled={busy}
+                aria-label={t.social[p]}
+                title={t.social[p]}
+                onClick={() => socialLogin(p)}
+                className={`flex h-[52px] w-[52px] items-center justify-center rounded-full disabled:opacity-40 ${p === 'kakao' ? 'bg-[#FEE500]' : p === 'naver' ? 'bg-[#03C75A]' : 'border border-[#d9d5e8] bg-white'}`}
+              >
+                {p === 'kakao' ? (
+                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden><path fill="#191600" d="M12 3.5c-5 0-9 3.1-9 7 0 2.5 1.7 4.7 4.2 5.9l-.9 3.3c-.1.3.2.5.5.3l3.9-2.6c.4 0 .9.1 1.3.1 5 0 9-3.1 9-7s-4-7-9-7z" /></svg>
+                ) : p === 'naver' ? (
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="#fff" d="M15.6 12.8 8.1 2H2v20h6.4V11.2L15.9 22H22V2h-6.4z" /></svg>
+                ) : <GoogleIcon />}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── 카카오·네이버 첫 로그인
+  async function chooseNew() {
+    if (!sb) return;
+    setBusy(true);
+    const { error: e } = await sb.auth.updateUser({ data: { edge_new_member: true, terms_agreed_at: new Date().toISOString() } });
+    setBusy(false);
+    if (e) return setError(t.network);
+    await routeAfterLogin();
+  }
+
+  async function chooseExisting() {
+    if (!sb) return;
+    setBusy(true);
+    const { data: user } = await sb.auth.getUser();
+    if (!canDiscardSocialAccount((user.user?.identities ?? []).map((i) => i.provider))) {
+      setBusy(false);
+      return setError(t.googleConflict);
+    }
+    const ps = (user.user?.identities ?? []).map((i) => i.provider);
+    const provider: SocialProvider = ps.includes('google') ? 'google' : ps.some((x) => x.includes('naver')) ? 'naver' : 'kakao';
+    // 방금 카카오·네이버·Google 로 생긴 빈 계정을 지워야 기존 계정에 연결할 수 있음 (회원 연결이 있는 계정은 DB가 지우지 않음)
+    const { data: done, error: e } = await sb.rpc('lms_discard_new_social_account');
+    await sb.auth.signOut();
+    setBusy(false);
+    if (e || done !== true) {
+      go('login');
+      return setError(t.linkFail);
+    }
+    setPendingLink(provider);
+    setLinkFor(provider);
+    go('login');
+  }
+
   async function logout() {
     await sb?.auth.signOut();
-    setStep('email');
-    setCode('');
-    setError(null);
+    setPendingLink(null);
+    setLinkFor(null);
+    setJoined(false);
+    setRecent(readRecent());
+    try { sessionStorage.removeItem(GOOGLE_LINK_USER_KEY); sessionStorage.removeItem(LAST_KEY); } catch { /* optional storage */ }
+    go('login');
   }
 
   const codeBoxes = (onDone: () => void, label: string) => (
@@ -188,9 +720,51 @@ export default function LoginFlow() {
 
   const primary = 'flex min-h-[52px] w-full items-center justify-center rounded-[14px] text-[16px] font-bold text-white disabled:opacity-40';
   const ghost = 'min-h-[44px] text-[14px] text-[#55526a]';
+  const inputCls = (bad: boolean) =>
+    `min-h-[52px] w-full rounded-[14px] border-[1.5px] px-4 text-[16px] text-[#1d1b2b] outline-none focus:border-[#5b3df0] ${bad ? 'border-[#b3261e]' : 'border-[#d9d5e8]'}`;
+  const fieldLabel = 'mb-1 block text-[13px] font-semibold text-[#1d1b2b]';
+  const errText = 'mt-1 block text-[13px] font-semibold text-[#b3261e]';
+  const h1 = 'text-[22px] font-bold text-[#1d1b2b]';
+  const linkBtn = 'min-h-[44px] px-1 text-[14px] text-[#55526a]';
+  const smallLink = 'min-h-[40px] px-0.5 text-[13px] leading-snug text-[#55526a]';
+  const has = (p: SignupProblem) => problems.includes(p);
+
+  const passwordInput = (id: string, label: string, autoComplete: string, onEnter: () => void, bad: boolean, placeholder?: string) => (
+    <label className="block" htmlFor={id}>
+      <span className={fieldLabel}>{label}</span>
+      <span className="relative block">
+        <input
+          id={id}
+          type={showPw ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          placeholder={placeholder}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && onEnter()}
+          className={`${inputCls(bad)} pr-[72px]`}
+        />
+        <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2 top-1/2 min-h-[40px] -translate-y-1/2 px-2 text-[13px] text-[#55526a]">
+          {showPw ? t.hide : t.show}
+        </button>
+      </span>
+    </label>
+  );
+
+  const steps = (labels: string[], current: number) => (
+    <p className="mb-1 text-[12.5px] font-semibold text-[#8a87a0]">
+      {labels.map((l, i) => (
+        <span key={l}>
+          {i > 0 && ' › '}
+          <span className={i === current ? 'text-[#5b3df0]' : ''}>
+            {i + 1} {l}
+          </span>
+        </span>
+      ))}
+    </p>
+  );
 
   return (
-    <div className="flex min-h-dvh flex-col items-center px-[18px] pb-10 pt-6">
+    <div className="flex flex-col items-center px-4 pb-14 pt-6 sm:px-[18px]">
       <div className="flex w-full max-w-[400px] justify-end">
         <div role="group" aria-label="Language" className="flex rounded-full border border-[#d9d5e8] bg-white p-0.5 text-[13px]">
           {(['ko', 'en'] as const).map((l) => (
@@ -207,64 +781,86 @@ export default function LoginFlow() {
         </div>
       </div>
 
-      <div className="mt-6 text-center">
-        <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="mx-auto h-[36px] w-auto" />
-        <p className="mt-1 text-[14px] text-[#55526a]">{t.portal}</p>
-      </div>
-
-      <main className="mt-7 w-full max-w-[400px] rounded-[22px] border border-[#e6e3ef] bg-white px-5 py-6">
+      <main className="mt-4 w-full max-w-[400px] rounded-[22px] border border-[#e6e3ef] bg-white px-4 py-6 sm:px-5">
         {!sb && <p className="text-[14px] text-[#b3261e]">{t.network}</p>}
 
-        {step === 'email' && (
+        {step === 'login' && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              sendCode();
+              passwordLogin();
             }}
+            className="grid gap-3"
           >
-            <h1 className="text-[22px] font-bold text-[#1d1b2b]">{t.loginTitle}</h1>
-            <p className="mb-[18px] mt-1.5 text-[13px] leading-relaxed text-[#55526a]">{t.loginLead}</p>
-            {isMakeupLink(next) && <p className="mb-3 rounded-[12px] bg-[#efeaff] px-3.5 py-2.5 text-[13.5px] font-semibold text-[#3a22b0]">{t.makeupNext}</p>}
-            <label className="block">
-              <span className="sr-only">{t.emailLabel}</span>
+            <h1 className={h1}>{t.loginTitle}</h1>
+            {isMakeupLink(next) && <p className="rounded-[12px] bg-[#efeaff] px-3.5 py-2.5 text-[13.5px] font-semibold text-[#3a22b0]">{t.makeupNext}</p>}
+            {linkFor && <p className="rounded-[12px] bg-[#efeaff] px-3.5 py-2.5 text-[13.5px] font-semibold text-[#3a22b0]">{t.linkNotice(t.socialName[linkFor])}</p>}
+            <label className="block" htmlFor="login-email">
+              <span className={fieldLabel}>{t.emailLabel}</span>
               <input
+                id="login-email"
                 type="email"
                 inputMode="email"
-                autoComplete="email"
-                placeholder={t.emailLabel}
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="min-h-[52px] w-full rounded-[14px] border-[1.5px] border-[#d9d5e8] px-4 text-[16px] text-[#1d1b2b] outline-none focus:border-[#5b3df0]"
+                className={inputCls(false)}
               />
             </label>
-            <button type="submit" disabled={busy} className={`${primary} mt-3 bg-[#5b3df0]`}>
-              {t.sendCode}
+            <div>
+              {passwordInput('login-password', t.passwordLabel, 'current-password', passwordLogin, badLogin)}
+              {badLogin && <span className={errText}>{t.badLogin}</span>}
+            </div>
+            <button type="submit" disabled={busy} className={`${primary} bg-[#5b3df0]`}>
+              {t.login}
             </button>
-            <p className="mt-[18px] text-[13px] leading-relaxed text-[#55526a]">
-              {t.noPassword}
-              <br />
-              {t.contact}
-            </p>
+            {recent === 'password' && <div className="-mt-1 flex justify-center">{bubble('up')}</div>}
+            {/* 11/17 대표: 기존 회원은 비밀번호를 만든 적이 없음 → 처음 화면부터 비밀번호 만들기로 이끔.
+                이메일을 넣었으면 바로 인증번호+새 비밀번호 화면, 안 넣었으면 이메일 화면 */}
+            <div className="grid gap-2 pt-1">
+              {(badLogin || !pwUsed) && <span className="text-center text-[13px] text-[#55526a]">{badLogin ? t.noPwHintBad : t.noPwHint}</span>}
+              <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => (looksLikeEmail(email) ? sendPwCode() : go('pw_email'))}>
+                {t.pwLink}
+              </button>
+            </div>
+            <div className="flex flex-col items-center">
+              <button type="button" disabled={busy} className={`${smallLink} disabled:opacity-40`} onClick={() => sendLoginCode()}>
+                {t.codeLogin}
+              </button>
+              {recent === 'code' && <span className="relative z-[1] -mt-1">{bubble('up')}</span>}
+            </div>
+            {socialCircles()}
+            {linkFor === 'google' && <button type="button" className={ghost} onClick={() => { setPendingLink(null); setLinkFor(null); go('login'); }}>{t.cancelLink}</button>}
+            {!linkFor && (
+              <div className="flex items-center justify-center gap-1.5 text-[14px] text-[#55526a]">
+                <span>{t.noAccount}</span>
+                <button type="button" className={`${linkBtn} font-bold text-[#5b3df0]`} onClick={() => { setPassword(''); go('signup'); }}>
+                  {t.signupLink}
+                </button>
+              </div>
+            )}
           </form>
         )}
 
-        {step === 'code' && (
-          <div>
-            <h1 className="text-[22px] font-bold text-[#1d1b2b]">{t.codeTitle}</h1>
-            <p className="mb-[18px] mt-1.5 text-[13px] leading-relaxed text-[#55526a]">
-              <b className="break-all text-[#1d1b2b]">{t.codeSent(maskEmail(email))}</b>
-              <br />
-              {t.codeLead}
-            </p>
-            {codeBoxes(verifyEmailCode, t.codeLabel)}
-            <button type="button" disabled={busy || code.length !== 6} onClick={verifyEmailCode} className={`${primary} mt-4 bg-[#5b3df0]`}>
+        {step === 'code_login' && (
+          <div className="grid gap-3">
+            <div>
+              <h1 className={h1}>{t.codeLabel}</h1>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-[#55526a]">
+                <b className="break-all text-[#1d1b2b]">{t.codeSent(maskEmail(email))}</b>
+                <br />
+                {t.codeLead}
+              </p>
+            </div>
+            {codeBoxes(verifyLoginCode, t.codeLabel)}
+            <button type="button" disabled={busy || code.length !== 6} onClick={verifyLoginCode} className={`${primary} bg-[#5b3df0]`}>
               {t.login}
             </button>
-            <div className="mt-2 flex justify-between">
-              <button type="button" className={ghost} onClick={() => setStep('email')}>
-                {t.changeEmail}
+            <div className="flex justify-between">
+              <button type="button" className={ghost} onClick={() => go('login')}>
+                {t.fixEmail}
               </button>
-              <button type="button" className={`${ghost} disabled:opacity-50`} disabled={wait > 0 || busy} onClick={() => sendCode(true)}>
+              <button type="button" className={`${ghost} disabled:opacity-50`} disabled={wait > 0 || busy} onClick={() => sendLoginCode(true)}>
                 {wait > 0 ? t.resendIn(wait) : t.resend}
               </button>
             </div>
@@ -272,10 +868,167 @@ export default function LoginFlow() {
           </div>
         )}
 
+        {step === 'signup' && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              signup();
+            }}
+            className="grid gap-3"
+          >
+            <div>
+              {steps([t.stepInfo, t.stepMail], 0)}
+              <h1 className={h1}>{t.signupTitle}</h1>
+            </div>
+            {socialButtons()}
+            <label className="block" htmlFor="signup-name">
+              <span className={fieldLabel}>{t.nameLabel}</span>
+              <input id="signup-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls(has('name'))} />
+              {has('name') && <span className={errText}>{t.nameRequired}</span>}
+            </label>
+            <label className="block" htmlFor="signup-email">
+              <span className={fieldLabel}>{t.emailIdLabel}</span>
+              <input
+                id="signup-email"
+                type="email"
+                inputMode="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEmailTaken(false);
+                }}
+                className={inputCls(has('email') || emailTaken)}
+              />
+              {has('email') && <span className={errText}>{t.badEmail}</span>}
+            </label>
+            {emailTaken && (
+              <div className="-mt-2">
+                <span className={errText}>{t.emailTaken}</span>
+                <button type="button" className="min-h-[40px] text-[14px] font-semibold text-[#5b3df0]" onClick={() => go('pw_email')}>
+                  {t.makePwWithThis}
+                </button>
+              </div>
+            )}
+            <div>
+              {passwordInput('signup-password', t.passwordLabel, 'new-password', signup, has('password'), t.pwHint(PASSWORD_MIN))}
+              {has('password') && <span className={errText}>{t.pwTooShort(PASSWORD_MIN)}</span>}
+            </div>
+            <div className="grid gap-1">
+              {legalRows()}
+              {has('agree') && <span className={errText}>{t.agreeRequired}</span>}
+            </div>
+            <button type="submit" disabled={busy} className={`${primary} bg-[#5b3df0]`}>
+              {t.next}
+            </button>
+            <div className="flex justify-center gap-3 text-[14px] text-[#55526a]">
+              <span className="min-h-[44px] leading-[44px]">{t.haveAccount}</span>
+              <button type="button" className={`${linkBtn} font-bold text-[#1d1b2b]`} onClick={() => go('login')}>
+                {t.login}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 'signup_code' && (
+          <div className="grid gap-3">
+            <div>
+              {steps([t.stepInfo, t.stepMail], 1)}
+              <h1 className={h1}>{t.signupCodeTitle}</h1>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-[#55526a]">
+                <b className="break-all text-[#1d1b2b]">{t.codeSent(maskEmail(email))}</b>
+                <br />
+                {t.codeLead}
+              </p>
+            </div>
+            {codeBoxes(verifySignup, t.codeLabel)}
+            <button type="button" disabled={busy || code.length !== 6} onClick={verifySignup} className={`${primary} bg-[#5b3df0]`}>
+              {t.join}
+            </button>
+            <div className="flex justify-between">
+              <button type="button" className={ghost} onClick={() => go('signup')}>
+                {t.fixEmail}
+              </button>
+              <button type="button" className={`${ghost} disabled:opacity-50`} disabled={wait > 0 || busy} onClick={resendSignup}>
+                {wait > 0 ? t.resendIn(wait) : t.resend}
+              </button>
+            </div>
+            <p className="text-[13px] leading-relaxed text-[#55526a]">{t.spam}</p>
+          </div>
+        )}
+
+        {step === 'pw_email' && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              sendPwCode();
+            }}
+            className="grid gap-3"
+          >
+            <div>
+              {steps([t.stepEmail, t.stepNewPw], 0)}
+              <h1 className={h1}>{t.pwTitle}</h1>
+            </div>
+            <label className="block" htmlFor="pw-email">
+              <span className={fieldLabel}>{t.emailLabel}</span>
+              <input id="pw-email" type="email" inputMode="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls(false)} />
+            </label>
+            <button type="submit" disabled={busy} className={`${primary} bg-[#5b3df0]`}>
+              {t.getCode}
+            </button>
+            <button type="button" className={`${ghost} w-full`} onClick={() => go('login')}>
+              {t.backLogin}
+            </button>
+          </form>
+        )}
+
+        {step === 'pw_new' && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveNewPassword();
+            }}
+            className="grid gap-3"
+          >
+            <div>
+              {steps([t.stepEmail, t.stepNewPw], 1)}
+              <h1 className={h1}>{t.newPwTitle}</h1>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-[#55526a]">
+                <b className="break-all text-[#1d1b2b]">{t.codeSent(maskEmail(email))}</b>
+                <br />
+                {t.codeLead}
+              </p>
+            </div>
+            {!otpDone && (
+              <div>
+                <span className={fieldLabel}>{t.codeLabel}</span>
+                {codeBoxes(() => undefined, t.codeLabel)}
+              </div>
+            )}
+            <input type="email" autoComplete="username" value={email} readOnly hidden />
+            <div>
+              {passwordInput('new-password', t.newPwLabel, 'new-password', saveNewPassword, has('password'), t.pwHint(PASSWORD_MIN))}
+              {has('password') && <span className={errText}>{t.pwTooShort(PASSWORD_MIN)}</span>}
+            </div>
+            <button type="submit" disabled={busy || (!otpDone && code.length !== 6)} className={`${primary} bg-[#5b3df0]`}>
+              {t.savePw}
+            </button>
+            <div className="flex justify-between">
+              <button type="button" className={ghost} onClick={() => go('pw_email')}>
+                {t.fixEmail}
+              </button>
+              <button type="button" className={`${ghost} disabled:opacity-50`} disabled={wait > 0 || busy} onClick={() => sendPwCode(true)}>
+                {wait > 0 ? t.resendIn(wait) : t.resend}
+              </button>
+            </div>
+            <p className="text-[13px] leading-relaxed text-[#55526a]">{t.spam}</p>
+          </form>
+        )}
+
         {(step === 'totp' || step === 'enroll') && (
           <div>
             <span className="mb-2.5 inline-block rounded-full bg-[#fff1d6] px-2.5 py-1 text-[12px] font-bold text-[#8a5300]">{t.adminOnly}</span>
-            <h1 className="text-[22px] font-bold text-[#1d1b2b]">{step === 'enroll' ? t.enrollTitle : t.totpTitle}</h1>
+            <h1 className={h1}>{step === 'enroll' ? t.enrollTitle : t.totpTitle}</h1>
             <p className="mb-[18px] mt-1.5 text-[13px] leading-relaxed text-[#55526a]">{step === 'enroll' ? t.enrollLead : t.totpLead}</p>
             {step === 'enroll' && enroll && (
               <div className="mb-4 text-center">
@@ -304,11 +1057,44 @@ export default function LoginFlow() {
           </div>
         )}
 
-        {step === 'not_linked' && (
-          <div>
-            <h1 className="text-[20px] font-bold text-[#1d1b2b]">{t.notLinkedTitle}</h1>
-            <p className="mt-2 text-[14px] leading-relaxed text-[#55526a]">{t.notLinkedLead}</p>
-            <button type="button" className={`${primary} mt-5 bg-[#1b1442]`} onClick={logout}>
+        {step === 'google_choice' && (
+          <div className="grid gap-3">
+            <h1 className={h1}>{t.googleTitle}</h1>
+            <p className="text-[14px] leading-relaxed text-[#55526a]">{t.googleLead}</p>
+            <button type="button" disabled={busy} className={`${primary} bg-[#5b3df0]`} onClick={() => { setPendingLink('google'); setLinkFor('google'); go('login'); }}>{t.googleLink}</button>
+            <button type="button" disabled={busy} className="min-h-[52px] rounded-[14px] border border-[#d9d5e8] px-3 text-[15px] font-semibold text-[#1d1b2b]" onClick={() => socialLogin('google', true)}>{t.googleReturning}</button>
+            <button type="button" disabled={busy} className={ghost} onClick={() => socialLogin('google', true)}>{t.googleNew}</button>
+            <button type="button" disabled={busy} className={ghost} onClick={() => go('login')}>{t.backLogin}</button>
+          </div>
+        )}
+
+        {step === 'social_choice' && (
+          <div className="grid gap-3">
+            <h1 className={h1}>{t.socialTitle}</h1>
+            <div className="grid gap-1">{legalRows()}</div>
+            <button type="button" disabled={busy || !terms} onClick={chooseNew} className={`${primary} bg-[#5b3df0]`}>
+              {t.socialNew}
+            </button>
+            <button type="button" disabled={busy} onClick={chooseExisting} className="flex min-h-[52px] w-full items-center justify-center rounded-[14px] border-[1.5px] border-[#5b3df0] text-[16px] font-bold text-[#5b3df0] disabled:opacity-40">
+              {t.socialExisting}
+            </button>
+            <button type="button" className={ghost} onClick={logout}>{t.logout}</button>
+          </div>
+        )}
+
+        {step === 'member' && (
+          <div className="grid gap-4">
+            {joined && <p className="rounded-[12px] bg-[#e6f6ec] px-3.5 py-2.5 text-[14px] font-semibold text-[#1f7a4d]">{t.joined}</p>}
+            <h1 className="text-center text-[18px] font-bold text-[#1d1b2b]">{memberName ? t.memberTitleNamed(memberName) : t.memberTitle}</h1>
+            <a href={APPLY_URL} target="_blank" rel="noreferrer" className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] bg-[#FFD401] text-[15px] font-bold text-[#333]">
+              {t.apply}
+            </a>
+            {socialOnly && (
+              <button type="button" disabled={busy} onClick={chooseExisting} className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40">
+                {t.alreadyStudent}
+              </button>
+            )}
+            <button type="button" className={`${ghost} w-full`} onClick={logout}>
               {t.logout}
             </button>
           </div>
@@ -316,7 +1102,7 @@ export default function LoginFlow() {
 
         {step === 'moving' && <p className="text-center text-[15px] text-[#55526a]">{t.moving}</p>}
 
-        {notice && !error && step === 'code' && (
+        {notice && !error && (step === 'pw_new' || step === 'signup_code' || step === 'code_login') && (
           <p role="status" className="mt-3 text-[13px] text-[#13623a]">
             {notice}
           </p>
@@ -328,9 +1114,25 @@ export default function LoginFlow() {
         )}
       </main>
 
-      <Link href="/" className="mt-5 text-[13px] text-[#4b2fd6]">
-        {t.backHome}
-      </Link>
     </div>
   );
+
+  async function verifyTotp() {
+    const id = step === 'enroll' ? enroll?.factorId : factorId;
+    if (!sb || !id || code.length !== 6) return;
+    setBusy(true);
+    setError(null);
+    const { error: e } = await sb.auth.mfa.challengeAndVerify({ factorId: id, code });
+    if (e) {
+      setBusy(false);
+      return setError(failMessage(e));
+    }
+    if (pendingPw) {
+      const pw = pendingPw;
+      setPendingPw(null);
+      if (!(await storePassword(pw))) return setBusy(false);
+    }
+    await routeAfterLogin();
+    setBusy(false);
+  }
 }

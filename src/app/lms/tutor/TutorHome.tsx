@@ -27,7 +27,10 @@ import { useDetailBack } from './useDetailBack';
 import { zoneAt } from '@/lms/tutor/travel';
 import { TimeOffCard, TimeOffForm } from './TimeOff';
 import RunningLate, { type LateSend } from './RunningLate';
+import ContactStudent, { type ContactSend } from './ContactStudent';
 import type { TimeOffActions, TimeOffList } from '@/lms/tutor/time-off';
+import type { SignActions, SignList } from '@/lms/tutor/esign';
+import { DocumentsCard, SignSheetBody, dueLine } from './SignDoc';
 import {
   canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   canStudentCancel, COVERED_NOTE, COVERING_NOTE, type StudentCancelDecision,
@@ -45,6 +48,8 @@ export type TutorActions = {
   cancel?: CancelAction;
   /** 강사 '늦어요' 알림 (20261114200000). 없으면 버튼이 안 보임 */
   lateNotice?: LateSend;
+  /** 강사 [학생에게 연락하기] (20261116140000). 없으면 버튼이 안 보임 */
+  contactStudent?: ContactSend;
   studentCancel?: StudentCancelAction;
   load: (kstFrom: string, kstTo: string) => Promise<TutorScreen>;
   record: (lessonId: string, result: TutorResult, topics: string, remarks: string, late: Late) => Promise<void>;
@@ -77,6 +82,8 @@ export type TutorActions = {
   answerRequest?: (planId: string, yes: boolean) => Promise<void>;
   /** Home 'Time off' 휴무 신청 (H26(137)). 없거나 옛 DB 면 그 란이 안 보임 */
   timeOff?: TimeOffActions;
+  /** 전자서명 (H26(188)). 옛 DB 면 list 가 null → To do·Documents 숨김 */
+  sign?: SignActions;
 };
 
 function CancelClass({ lessonId, cancel, onSaved, onDirty }: {
@@ -137,7 +144,7 @@ const input = 'w-full rounded-[10px] border border-[#d9d5e6] bg-white px-3 py-2.
 const label = 'mb-1 block text-[13px] font-semibold text-[#55526a]';
 const inputAuto = input.replace('w-full ', '');
 
-type Tab = 'home' | 'schedule' | 'record' | 'students' | 'hours';
+type Tab = 'home' | 'schedule' | 'record' | 'students' | 'hours' | 'info';
 // 메뉴 이름은 대표가 정한 영문 그대로 (2026-11-04, H26(50): My hours → Availability. 저장 키 'hours' 는 그대로)
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -145,9 +152,11 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'students', label: 'Students', icon: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' },
   { key: 'hours', label: TUTOR_MENU.hours, icon: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
   { key: 'schedule', label: TUTOR_MENU.schedule, icon: 'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' },
+  // My info (전자서명 Documents, H26(188)): PC 왼쪽 메뉴에만. 휴대폰은 맨 위 머리글의 'My info'
+  { key: 'info', label: 'My info', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21v-1a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7v1' },
 ];
 // 운영자 보기 한국어 라벨 (강사 본인은 늘 영어)
-const TAB_KO: Record<Tab, string> = { home: '홈', schedule: '일정', record: 'Class Record', students: '수강생', hours: '가능 시간' };
+const TAB_KO: Record<Tab, string> = { home: '홈', schedule: '일정', record: 'Class Record', students: '수강생', hours: '가능 시간', info: '내 정보' };
 function Icon({ d }: { d: string }) {
   return (
     <svg aria-hidden viewBox="0 0 24 24" className="h-[20px] w-[20px] shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -267,7 +276,8 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (수강생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
-  const [panel, setPanel] = useState<'request' | 'cover' | 'makeup' | 'followup' | 'timeoff' | null>(null);
+  const [panel, setPanel] = useState<'request' | 'cover' | 'makeup' | 'followup' | 'timeoff' | 'sign' | null>(null);
+  const [signReq, setSignReq] = useState<string | null>(null);
   // 수강생 프로필 창 (4300): 열어도 보던 메뉴·주·고른 수강생은 그대로, 닫으면 돌아옴
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const openProfile = actions.profile ? setProfileOf : null;
@@ -312,10 +322,19 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     try { setTimeOff(await actions.timeOff.list()); } catch { /* 일시 오류: 이 칸만 비움 */ }
   }, [actions]);
   useEffect(() => { void refreshTimeOff(); }, [refreshTimeOff, screen]);
+  // 전자서명 (H26(188)): 서명할 문서 + 서명한 문서. null = 옛 DB(숨김)
+  const [signList, setSignList] = useState<SignList | null>(null);
+  const refreshSign = useCallback(async () => {
+    if (!actions.sign) return;
+    try { setSignList(await actions.sign.list()); } catch { /* 일시 오류: 이 칸만 비움 */ }
+  }, [actions]);
+  useEffect(() => { void refreshSign(); }, [refreshSign, screen]);
+  const openSign = (requestId: string) => { setSignReq(requestId); setPanel('sign'); };
   const followupOfStudent = (id?: string) => (id ? followups.find((f) => f.studentId === id) : undefined);
   // 학생에게 시간을 제안하고 기다리는 보강(H26(134))은 강사 할 일이 아님 — 카드는 그대로 열어 볼 수 있음
   const makeupTodo = screen.makeups.filter((m) => !m.stage).length;
-  const todoCount = [openRequests, screen.toRecord.length, screen.covers.length, makeupTodo, followups.length].filter((n) => n > 0).length;
+  const signOpen = signList?.open ?? [];
+  const todoCount = [openRequests, screen.toRecord.length, screen.covers.length, makeupTodo, followups.length].filter((n) => n > 0).length + signOpen.length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
     ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), zAt, { from: '1900-01-01', to: '2999-12-31' })
@@ -395,7 +414,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <div key={d.date}>
               <h3 className="border-b border-[#e6e3ef] bg-[#f7f6fb] px-3 py-1.5 text-[13px] font-bold text-[#1d1b2b]">{dayLabel(d.date)}{d.date === today ? ' · Today' : ''}</h3>
               {d.lessons.map((l) => (
-                <ListRow key={l.id} focus={focus === l.id} lesson={l} due={screen.toRecord.includes(l.id)} tz={zAt(l.startsAt)} headTz={headTz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} actions={actions} admin={!!adminBar}
+                <ListRow key={l.id} focus={focus === l.id} lesson={l} due={screen.toRecord.includes(l.id)} tz={zAt(l.startsAt)} headTz={headTz} now={now} kst={kst} paidCol={paidCol} meetUrl={screen.tutor.meetUrl} tutorName={screen.tutor.name} actions={actions} admin={!!adminBar}
                   onSaved={async () => { await reload(); if (student) await refreshAll(); }} />
               ))}
             </div>
@@ -455,7 +474,11 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
         {adminBar && <div className="pt-3 lg:pt-0">{adminBar}</div>}
         <header className="flex items-center justify-between pb-3 pt-[14px] lg:hidden">
           {brand}
-          {onLogout && <button type="button" onClick={onLogout} className="min-h-[36px] text-[13px] text-[#55526a] underline">Sign out</button>}
+          <span className="flex items-center gap-3">
+            <button type="button" onClick={() => goTab('info')} aria-current={tab === 'info' ? 'page' : undefined}
+              className={`min-h-[36px] text-[13.5px] font-semibold ${tab === 'info' ? 'text-[#5b3df0]' : 'text-[#1d1b2b]'}`}>{t('My info', '내 정보')}</button>
+            {onLogout && <button type="button" onClick={onLogout} className="min-h-[36px] text-[13px] text-[#55526a] underline">Sign out</button>}
+          </span>
         </header>
         {profileOf && actions.profile && <StudentProfile studentId={profileOf} actions={actions.profile} now={now} zoneOf={(t, home) => zoneAt(screen.locations, t, home)} onClose={() => setProfileOf(null)}
           backLabel={tab === 'students' ? t('Back to students', '수강생 목록으로') : tab === 'record' ? t('Back to Class Record', 'Class Record 로') : tab === 'schedule' ? t('Back to schedule', '일정으로') : t('Back', '뒤로')}
@@ -484,6 +507,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               </h2>
               <div className="divide-y divide-[#f3e6c4]">
                 {todoCount === 0 && <p className="px-4 py-3.5 text-[15px] text-[#1f7a4d]">✓ {t('Nothing to do right now', '지금 할 일이 없어요')}</p>}
+                {signOpen.map((o) => { const d = dueLine(o.dueAt, curTz, now); return <TodoBar key={o.requestId} text={`${t('Sign', '서명')}: ${o.title}`} sub={d.text} subLate={d.late} onClick={() => openSign(o.requestId)} />; })}
                 {openRequests > 0 && <TodoBar n={openRequests} text={t('New student request', '신규 수강생 문의')} onClick={() => setPanel('request')} />}
                 {screen.toRecord.length > 0 && <TodoBar n={screen.toRecord.length} text={t('Classes to record', '기록할 수업')} onClick={() => setTab('record')} />}
                   {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text={t('Cover requests', '대체 수업 요청')} onClick={() => setPanel('cover')} />}
@@ -530,7 +554,8 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{t('Today’s classes', '오늘 수업')} <span className="text-[#6b6880]">{todayLessons.length || ''}</span></h2>
               {todayLessons.length === 0 && <p className="text-[14.5px] text-[#6b6880]">{t('No classes today.', '오늘은 수업이 없어요.')}</p>}
               <div className="divide-y divide-[#f0eef5]">
-                {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={zAt(l.startsAt)} now={now} onRecord={() => setTab('record')} sendLate={actions.lateNotice} onLateSent={() => reload()} />)}
+                {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={zAt(l.startsAt)} now={now} onRecord={() => setTab('record')} sendLate={actions.lateNotice} onLateSent={() => reload()}
+                  sendContact={actions.contactStudent} tutorName={screen.tutor.name} admin={!!adminBar} />)}
               </div>
               {nextLesson && <p className="mt-2 text-[13.5px] text-[#6b6880]">{t('Next class', '다음 수업')}: <Rich text={whenFull(nextLesson.startsAt, zAt(nextLesson.startsAt))} /> · {nextLesson.student}</p>}
               <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">{t('All classes', '전체 수업')} ›</button>
@@ -556,6 +581,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                 {toRecord.map((l) => (
                   <div key={l.id} className={`${card} border-[#f0a33a]`}>
                     <LessonHead lesson={l} tz={zAt(l.startsAt)} now={now} />
+                    <div className="mt-2 empty:hidden"><ContactStudent lesson={l} now={now} tz={zAt(l.startsAt)} tutorName={screen.tutor.name} send={actions.contactStudent} onSent={() => reload()} admin={!!adminBar} /></div>
                     <RecordForm key={`${l.id}-${l.state}`} lesson={l} tz={zAt(l.startsAt)} now={now} due={screen.toRecord.includes(l.id)} actions={actions} startEditing={screen.toRecord.includes(l.id)} admin={!!adminBar}
                       onSaved={async (saved) => {
                         setRecordedHere((x) => [...x.filter((y) => y.id !== saved.id), saved]);
@@ -606,10 +632,23 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 
         {tab === 'schedule' && (
           <TutorSchedule actions={actions.schedule} tz={tz} now={now} openProfile={openProfile} onRecord={openInRecord}
-            loadLessons={loadLessons} onSaved={() => reload()} sendLate={actions.lateNotice} onHours={() => goTab('hours')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} />
+            loadLessons={loadLessons} onSaved={() => reload()} sendLate={actions.lateNotice} sendContact={actions.contactStudent} tutorName={screen.tutor.name} onHours={() => goTab('hours')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} />
         )}
 
         {tab === 'hours' && <TutorHours actions={actions.hours} onClose={() => setTab('home')} onSchedule={() => goTab('schedule')} onTimeOff={timeOff && actions.timeOff ? goTimeOff : undefined} inline onDirty={(d) => { hoursDirty.current = d; }} onSaved={() => reload()} />}
+
+        {tab === 'info' && (
+          <section aria-label="My info" className="grid gap-4 lg:max-w-[720px]">
+            <h1 className="text-[20px] font-bold text-[#1d1b2b]">{t('My info', '내 정보')}</h1>
+            {signList && actions.sign ? <DocumentsCard list={signList} actions={actions.sign} onOpen={openSign} /> : <p className="text-[14.5px] text-[#6b6880]">{t('No documents', '문서가 없어요')}</p>}
+          </section>
+        )}
+
+        {panel === 'sign' && signReq && actions.sign && (
+          <Sheet onClose={() => { setPanel(null); void refreshSign(); }}>
+            <SignSheetBody actions={actions.sign} requestId={signReq} tz={curTz} onSigned={() => void refreshSign()} />
+          </Sheet>
+        )}
 
         {panel === 'timeoff' && timeOff && actions.timeOff && (
           <Sheet onClose={() => setPanel(null)}>
@@ -682,7 +721,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 
       {/* 휴대폰: 아래 고정 메뉴 */}
       <nav aria-label="Menu" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
-        {TABS.map((t) => tabBtn(t, true))}
+        {TABS.filter((x) => x.key !== 'info').map((t) => tabBtn(t, true))}
       </nav>
     </div>
     </ProfileCtx.Provider>
@@ -690,7 +729,9 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 }
 
 /** Home 의 오늘 수업 한 줄 */
-function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent }: { lesson: TutorLesson; tz: string; now: Date; onRecord: () => void; sendLate?: LateSend; onLateSent?: () => void | Promise<void> }) {
+function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent, sendContact, tutorName, admin = false }: {
+  lesson: TutorLesson; tz: string; now: Date; onRecord: () => void; sendLate?: LateSend; onLateSent?: () => void | Promise<void>; sendContact?: ContactSend; tutorName?: string; admin?: boolean;
+}) {
   const phase = phaseOf(l, now);
   const tag = kindTag(l);
   const st = statusText(l, now);
@@ -709,6 +750,8 @@ function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent }: { less
     </div>
     {/* 강사 '늦어요' 알림: 시작 2시간 전~시작 전, 보냈으면 회색 Sent ✓ */}
     <div className="mt-1.5 empty:hidden"><RunningLate lesson={l} now={now} tz={tz} send={sendLate} onSent={onLateSent} /></div>
+    {/* 강사 [학생에게 연락하기]: 시작 5분 뒤~끝, 보냈으면 회색 Email sent ✓ */}
+    <div className="mt-1.5 empty:hidden"><ContactStudent lesson={l} now={now} tz={tz} tutorName={tutorName} send={sendContact} onSent={onLateSent} admin={admin} /></div>
     </div>
   );
 }
@@ -798,13 +841,16 @@ function RequestCard({ r, tz, zAt, answer, onDone }: { r: NewStudentRequest; tz:
   );
 }
 
-function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () => void }) {
+function TodoBar({ n, text, sub, subLate, onClick }: { n?: number; text: string; sub?: string; subLate?: boolean; onClick: () => void }) {
   const t = useT();
   return (
     <button type="button" onClick={onClick}
       className="flex min-h-[54px] w-full items-center gap-3 px-4 py-3 text-left">
-      <span className="flex-1 text-[15px] font-semibold leading-snug text-[#1d1b2b]">{text}</span>
-      <span className="text-[13px] text-[#8a5300]">{n}</span>
+      <span className="flex-1 text-[15px] font-semibold leading-snug text-[#1d1b2b]">
+        {text}
+        {sub && <span className={`block text-[13px] font-normal ${subLate ? 'text-[#b3261e]' : 'text-[#6b6880]'}`}>{sub}</span>}
+      </span>
+      {n !== undefined && <span className="text-[13px] text-[#8a5300]">{n}</span>}
       <span className="whitespace-nowrap rounded-[10px] bg-[#5b3fe0] px-3 py-1.5 text-[13px] font-bold text-white">{t('Open', '열기')} ›</span>
     </button>
   );
@@ -862,7 +908,8 @@ const cols = (kst: boolean, paid: boolean) => kst
 
 
 /** 일정 한 줄 (Class Record 시트처럼). 누르면 그 아래에 기록칸·링크가 펼쳐짐. 휴대폰은 칸을 줄여 한 줄 */
-function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paidCol, meetUrl, actions, onSaved, admin, focus = false }: {
+function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paidCol, meetUrl, tutorName, actions, onSaved, admin, focus = false }: {
+  tutorName?: string;
   focus?: boolean;
   due?: boolean;
   lesson: TutorLesson; tz: string; /** 표 머리글 시간대 — 다르면 줄에 시간대 이름 (이동 기간, H26(176)) */ headTz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
@@ -964,6 +1011,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
           {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
           {recordable ? (
             <div className="lg:max-w-[560px]">
+              <div className="pt-2 empty:hidden"><ContactStudent lesson={l} now={now} tz={tz} tutorName={tutorName} send={actions.contactStudent} onSent={onSaved} admin={admin} /></div>
               <DirtyCtx.Provider value={mark}>
                 <RecordForm key={`${l.id}-${l.state}`} lesson={l} tz={tz} now={now} due={due} actions={actions} startEditing extra={links} admin={admin}
                   onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />
@@ -976,6 +1024,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
                 onDirty={(value) => mark(`cancel-${l.id}`, value)}
                 onSaved={async () => { dirty.current.clear(); closeDetail(); await onSaved(); }} />}
               <RunningLate lesson={l} now={now} tz={tz} send={actions.lateNotice} onSent={onSaved} />
+              <ContactStudent lesson={l} now={now} tz={tz} tutorName={tutorName} send={actions.contactStudent} onSent={onSaved} admin={admin} />
               <div className="flex flex-wrap items-center gap-1.5">
                 {links}
                 {l.locked && <span className="text-[13px] text-[#6b6880]">In payroll</span>}

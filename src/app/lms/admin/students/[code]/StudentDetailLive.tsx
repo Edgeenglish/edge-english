@@ -7,6 +7,7 @@ import {
 } from '@/lms/admin/students-live';
 import type { StudentDetailData } from '@/lms/admin/students';
 import { supabaseBrowser } from '@/lms/auth/client';
+import { createStudentLogin } from '@/lms/student/live';
 import { addLessonByAdmin, editLessonByAdmin, loadActiveTutors, loadMakeupLogs, loadStudentLessons } from '@/lms/admin/lesson-change-live';
 import StudentDetail, { type DetailActions, type RenewalExtra } from './StudentDetail';
 import type { RenewalContext, Rewards } from '@/lms/admin/renewal';
@@ -67,6 +68,7 @@ export default function StudentDetailLive({ code }: { code: string }) {
       add: async (source, tutorId, at, note) => { await addLessonByAdmin(sb, source, tutorId, at, note); await load(id); },
       edit: async (lessonId, tutorId, at, note) => { await editLessonByAdmin(sb, lessonId, tutorId, at, note); await load(id); },
     },
+    createLogin: async (email) => { await createStudentLogin(sb, id, email); await load(id); },
   } : null, [sb, id, load]);
 
   const code_ = (state.kind === 'ready' ? state.data.student.code : null) ?? code;
