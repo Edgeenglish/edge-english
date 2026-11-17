@@ -53,7 +53,7 @@ export default function RootLayout({
 
         <main>{children}</main>
 
-        <SiteChrome>
+        <SiteChrome lms>
           <FloatingMenu />
         </SiteChrome>
         <SiteChrome lms footer>
