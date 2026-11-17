@@ -764,11 +764,7 @@ export default function StudentHome(props: {
           </button>
         ))}
         <span className="px-3 pt-5 text-[13px] text-[#55526a]">{s.name} 님</span>
-        {props.onLogout && (
-          <button type="button" onClick={props.onLogout} className="mx-3 mt-1 min-h-[36px] text-left text-[13px] text-[#55526a] underline">
-            로그아웃
-          </button>
-        )}
+        {/* 로그아웃은 홈페이지 머리글 오른쪽 위 하나만 (11/17 대표) */}
       </nav>
 
       <div className="min-w-0 flex-1 pb-6 pt-3 lg:pb-0 lg:pt-0">
@@ -1052,11 +1048,6 @@ export default function StudentHome(props: {
                 </section>
               </div>
             </div>
-            {props.onLogout && (
-              <button type="button" onClick={props.onLogout} className="min-h-[44px] text-left text-[14px] text-[#55526a] underline">
-                로그아웃
-              </button>
-            )}
           </div>
         )}
       </div>
