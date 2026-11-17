@@ -12,12 +12,8 @@ export default function LmsLayout({ children }: { children: React.ReactNode }) {
   return (
     <LmsShell>
       {/* 운영 DB 띠는 학생·강사·처음 온 사람에게 보이면 안 됨 (2026-11-17 대표 긴급). 시험 사이트 회색 띠만 표시 */}
-      {env === 'test' && (
-        <div className="bg-gray-500 px-4 py-2 text-center text-white">
-          <p className="text-sm font-bold text-white">{DB_ENV_LABEL[env].title}</p>
-          <p className="text-xs text-white/90">{DB_ENV_LABEL[env].note}</p>
-        </div>
-      )}
+      {/* 시험 사이트 표시는 한 줄로 얇게 (11/17 대표 '접어줘') */}
+      {env === 'test' && <p className="bg-gray-500 py-[3px] text-center text-[11px] font-semibold leading-tight text-white">{DB_ENV_LABEL[env].title}</p>}
       {children}
     </LmsShell>
   );
