@@ -26,20 +26,34 @@ export default function Header() {
     const go = () => router.push('/lms/student');
     pending.then(go, go);
   };
+  // 로그인·로그아웃이 바뀌면 바로 [로그인]↔[내 수업] (11/17 대표: 로그인 뒤에도 새로고침 전까지 '로그인'으로 남음)
   useEffect(() => {
     const sb = supabaseBrowser();
     if (!sb) return;
-    void sb.auth.getSession().then(({ data }) => {
-      setLoggedIn(!!data.session);
-      const uid = data.session?.user.id;
-      if (!uid) return;
+    let lastUid: string | null | undefined;
+    const apply = (uid: string | null) => {
+      if (uid === lastUid) return;
+      lastUid = uid;
+      setLoggedIn(!!uid);
+      if (!uid) {
+        setAccountHref(LOGIN_PATH);
+        forgetOwnView();
+        return;
+      }
       // 학생 화면 자료를 역할 확인과 함께 미리 불러 둠 → [내 수업] 누르면 '불러오는 중' 없이 바로 보임. 학생이 아니면 버림
       prefetchOwnView(sb, uid);
       void myLmsHome(sb).then((to) => {
+        if (lastUid !== uid) return;
         setAccountHref(to ?? LOGIN_PATH);
         if (to !== '/lms/student') forgetOwnView();
       }).catch(() => {});
-    }).catch(() => setLoggedIn(false));
+    };
+    // 알림 안에서 바로 DB 를 부르면 막힐 수 있어(Supabase 안내) 한 박자 뒤에 처리
+    const { data } = sb.auth.onAuthStateChange((_e, session) => {
+      const uid = session?.user.id ?? null;
+      setTimeout(() => apply(uid), 0);
+    });
+    return () => data.subscription.unsubscribe();
   }, []);
   const accountLabel = loggedIn ? '내 수업' : '로그인';
   // 로그인·내 수업 화면에 있으면 다른 메뉴처럼 굵게 (11/17 학생 화면 홈페이지 틀 통합)
