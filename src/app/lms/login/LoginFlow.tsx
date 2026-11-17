@@ -788,34 +788,25 @@ export default function LoginFlow() {
             <div>
               {passwordInput('login-password', t.passwordLabel, 'current-password', passwordLogin, badLogin)}
               {badLogin && <span className={errText}>{t.badLogin}</span>}
-              {/* 11/17 대표: 기존 회원은 비밀번호를 만든 적이 없음 — 틀린 자리 바로 아래에서 바로 비밀번호 만들기(이메일 이어 감, 인증번호+새 비밀번호 한 화면) */}
-              {badLogin && (
-                <div className="mt-2 grid gap-2">
-                  <span className="text-[13px] text-[#55526a]">{t.noPwHint}</span>
-                  <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => sendPwCode()}>
-                    {t.pwLink}
-                  </button>
-                </div>
-              )}
             </div>
             <button type="submit" disabled={busy} className={`${primary} bg-[#5b3df0]`}>
               {t.login}
             </button>
             {recent === 'password' && <div className="-mt-1 flex justify-center">{bubble('up')}</div>}
-            {/* 두 링크는 한 줄 두 칸 — 좁은 휴대폰·영어에서도 구분선이 따로 떨어지지 않게 칸 안에서만 줄바꿈
-                비밀번호가 틀렸을 때는 [비밀번호 만들기] 하나만 보이게 이 줄을 숨김 (11/17 대표 '헷갈리게 하면 안 돼') */}
-            {!badLogin && <div className="grid grid-cols-[minmax(0,auto)_1px_minmax(0,auto)] items-start justify-center gap-x-2.5 text-center">
-              <button type="button" className={`${smallLink} ${badLogin ? 'font-bold text-[#1d1b2b]' : ''}`} onClick={() => go('pw_email')}>
+            {/* 11/17 대표: 기존 회원은 비밀번호를 만든 적이 없음 → 처음 화면부터 비밀번호 만들기로 이끔.
+                이메일을 넣었으면 바로 인증번호+새 비밀번호 화면, 안 넣었으면 이메일 화면 */}
+            <div className="grid gap-2 pt-1">
+              <span className="text-center text-[13px] text-[#55526a]">{badLogin ? t.noPwHintBad : t.noPwHint}</span>
+              <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => (looksLikeEmail(email) ? sendPwCode() : go('pw_email'))}>
                 {t.pwLink}
               </button>
-              <span aria-hidden className="mt-[15px] h-[11px] w-px bg-[#d9d5e8]" />
-              <span className="flex flex-col items-center">
-                <button type="button" disabled={busy} className={`${smallLink} disabled:opacity-40`} onClick={() => sendLoginCode()}>
-                  {t.codeLogin}
-                </button>
-                {recent === 'code' && <span className="relative z-[1] -mt-1">{bubble('up')}</span>}
-              </span>
-            </div>}
+            </div>
+            <div className="flex flex-col items-center">
+              <button type="button" disabled={busy} className={`${smallLink} disabled:opacity-40`} onClick={() => sendLoginCode()}>
+                {t.codeLogin}
+              </button>
+              {recent === 'code' && <span className="relative z-[1] -mt-1">{bubble('up')}</span>}
+            </div>
             {socialCircles()}
             {linkFor === 'google' && <button type="button" className={ghost} onClick={() => { setPendingLink(null); setLinkFor(null); go('login'); }}>{t.cancelLink}</button>}
             {!linkFor && (
