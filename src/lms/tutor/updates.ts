@@ -3,7 +3,7 @@
 import { enBoth, enDay, enEvery, enEveryLines, enZoned } from '../admin/time-text';
 
 export type TutorUpdateKind =
-  | 'new_student' | 'renewal' | 'schedule_change' | 'class_moved' | 'cover'
+  | 'new_student' | 'renewal' | 'schedule_change' | 'class_moved' | 'cover' | 'cover_canceled'
   | 'makeup_new' | 'makeup_moved' | 'makeup_removed' | 'makeup_canceled' | 'cancel_undone' | 'canceled' | 'student_late';
 
 export type TutorUpdate = { id: string; kind: TutorUpdateKind; student: string; studentId?: string; at: Date; info: Record<string, unknown> };
@@ -29,6 +29,7 @@ export const UPDATE_TITLE: Record<TutorUpdateKind, [string, string]> = {
   schedule_change: ['Schedule change', '정규 시간 변경'],
   class_moved: ['Class date changed', '수업 날짜 변경'],
   cover: ['Cover classes', '대체 수업'],
+  cover_canceled: ['Cover class canceled', '대체 수업 취소'],
   makeup_new: ['New make-up', '새 보강'],
   makeup_moved: ['Make-up time changed', '보강 시간 변경'],
   makeup_removed: ['Make-up canceled', '보강 취소'],
@@ -66,6 +67,7 @@ export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)
       return [enBoth(d(i.to) ?? u.at, z(d(i.to) ?? u.at)), ...(was ? [`Was: ${enZoned(was, z(was))}`] : [])];
     }
     case 'cover':
+    case 'cover_canceled':
       return ds(i.times).map((t) => enBoth(t, z(t)));
     case 'makeup_new': {
       const o = d(i.origin);
