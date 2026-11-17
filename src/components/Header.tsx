@@ -23,10 +23,12 @@ export default function Header() {
     void sb.auth.getSession().then(({ data }) => {
       setLoggedIn(!!data.session);
       const uid = data.session?.user.id;
-      if (uid) void myLmsHome(sb).then((to) => {
+      if (!uid) return;
+      // 학생 화면 자료를 역할 확인과 함께 미리 불러 둠 → [내 수업] 누르면 '불러오는 중' 없이 바로 보임. 학생이 아니면 버림
+      prefetchOwnView(sb, uid);
+      void myLmsHome(sb).then((to) => {
         setAccountHref(to ?? LOGIN_PATH);
-        // 학생이면 학생 화면 자료를 미리 불러 둠 → [내 수업] 누르면 '불러오는 중' 없이 바로 보임
-        if (to === '/lms/student') prefetchOwnView(sb, uid);
+        if (to !== '/lms/student') forgetOwnView();
       }).catch(() => {});
     }).catch(() => setLoggedIn(false));
   }, []);
