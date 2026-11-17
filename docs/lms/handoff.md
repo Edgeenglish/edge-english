@@ -14,12 +14,12 @@
 - 시험 DB 실제 수신(11/16): STU-0002·STU-0018 24시간 전 메일 support@ 도착. 시험 DB 예약 실행이 계속 돌아 12시간 전 메일(오늘 밤)·STU-9004·STU-0013 메일도 support@ 로 옴 = 시험 데이터 그대로 둠
 - 운영 반영 = migration 1개 적용(함수 3개 새로 + cron 명령 교체, 데이터 안 바뀜 → 되돌리기: cron 명령을 'select lms_renewal_mail_run(); select lms_mail_run();' 으로). 코드(lms-prod) 변경 없음
 
-## ✅ 11/17 학생·로그인 화면 홈페이지 틀 통합 — 시험 사이트 반영·동선 확인 끝, **운영 배포 대표 결정 대기** (H26(207), 브랜치 claude/awesome-brown-xp0c9u)
+## ✅ 11/17 학생·로그인 화면 홈페이지 틀 통합 — **운영 반영 끝** (lms-prod ef3e9ad, 대표 '응', 로그인 전 화면 자동 점검 통과) (H26(207), 브랜치 claude/awesome-brown-xp0c9u)
 - 커밋 db4613e (lms-test). 수정: src/app/layout.tsx · components/SiteChrome.tsx(inSiteFrame: /lms/login·/lms/student 만 홈페이지 Header·Footer, 떠 있는 버튼은 LMS 에서 숨김) · components/Header.tsx(LMS 에서 [로그인/내 수업] 굵게) · app/lms/LmsShell.tsx(틀 안 화면은 화면 높이 안 채움) · app/lms/layout.tsx · lms/login/LoginFlow.tsx(로그인 상자 새 배치, '최근 로그인' localStorage `lms-recent-login` = password·code·kakao·naver, 로고·'홈페이지로' 링크 없앰) · lms/auth/login-flow.ts(문구 3개) · student/StudentHome.tsx(자체 로고 없앰, 바닥글 여백은 SiteChrome)
 - 강사·운영자 화면 파일 안 건드림. 회원가입 단계의 카카오·네이버 큰 버튼은 그대로
 - 운영 DB 띠: 11/17 긴급 수정 운영 반영(71dfc69 학생·로그인에서 숨김, 운영자 화면·운영자 보기에만 ProdBand/ProdChip). 자동 점검 = src/lms/auth/internal-marks.test.ts + scripts/check-public-pages.sh (CLAUDE.md)
 - 시험(11/17): vitest 51파일 507개 통과, next build 통과, 로컬 320·360·390·1280px 가로 넘침 0·말풍선 4종(한국어·영어), 시험 사이트 학생 윤지호 STU-0018(메일 코드, support@ 수신) PC·iPhone 13: 홈페이지 → [로그인] → 학생 화면([내 수업]) → 수업료 → [내 수업] 다시 학생 화면, 화면에 내부용 글 없음, 최근 로그인 code 저장
-- 운영 배포 때: `git log origin/lms-test..origin/lms-prod` 먼저(운영에만 있는 커밋 많음 — lms-test 통째 배포 금지, 이 묶음만 골라 담기: db4613e 의 코드 파일) → push → `bash scripts/check-public-pages.sh` → 대표 본인 학생 계정으로 확인
+- (운영 배포 끝 — 골라 담은 커밋: db4613e·8a9fad2·9b55982·91b9b9e·4f5a072·e5a99b4 + 시험 경로 맞춤. lms-test 의 a54f329 Google 로그인(다른 곳에서 올림)은 운영에 안 넣음) 다음 배포 때도: `git log origin/lms-test..origin/lms-prod` 먼저(운영에만 있는 커밋 많음 — lms-test 통째 배포 금지, 이 묶음만 골라 담기: db4613e 의 코드 파일) → push → `bash scripts/check-public-pages.sh` → 대표 본인 학생 계정으로 확인
 - 11/17 추가(시험 사이트만): 시험 띠 한 줄로, 머리글 오른쪽 위 [로그아웃](학생 왼쪽 메뉴·내 정보 탭 로그아웃 없앰), 카카오톡·맨 위로 버튼 학생·로그인 화면에도(휴대폰은 아래 메뉴 위로). 운영자 보기(학생) PC·휴대폰 확인: 머리글 아래 시험 띠 → 운영자 보기 막대, 겹침·넘침 없음. 운영 띠 색 빠짐(ProdBand 가 Tailwind content 밖 src/lms 에 있었음) → src/components 로 옮겨 운영 반영(11/17)
 - **대표 확인용 시험 계정 (11/17 대표 '지우지 말고 계속 둬')**: 시험 사이트 학생 윤지호 STU-0018 `support+stu0018@edgeenglish.kr`, 강사 Alex `support+alex@edgeenglish.kr` — 둘 다 11/17 비밀번호 만들어 대표에게 줌(값은 기록 안 함). 지우거나 비밀번호 바꾸지 말 것. 메일 코드는 support@ 로 옴
 - 시안: https://claude.ai/artifact/WhqQQQtR5VXM54wkmgtSVg (6판 — 말풍선은 꽉 찬 모양으로 남아 있음, 실제 화면이 기준)
