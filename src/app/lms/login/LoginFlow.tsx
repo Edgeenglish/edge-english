@@ -802,8 +802,9 @@ export default function LoginFlow() {
               {t.login}
             </button>
             {recent === 'password' && <div className="-mt-1 flex justify-center">{bubble('up')}</div>}
-            {/* 두 링크는 한 줄 두 칸 — 좁은 휴대폰·영어에서도 구분선이 따로 떨어지지 않게 칸 안에서만 줄바꿈 */}
-            <div className="grid grid-cols-[minmax(0,auto)_1px_minmax(0,auto)] items-start justify-center gap-x-2.5 text-center">
+            {/* 두 링크는 한 줄 두 칸 — 좁은 휴대폰·영어에서도 구분선이 따로 떨어지지 않게 칸 안에서만 줄바꿈
+                비밀번호가 틀렸을 때는 [비밀번호 만들기] 하나만 보이게 이 줄을 숨김 (11/17 대표 '헷갈리게 하면 안 돼') */}
+            {!badLogin && <div className="grid grid-cols-[minmax(0,auto)_1px_minmax(0,auto)] items-start justify-center gap-x-2.5 text-center">
               <button type="button" className={`${smallLink} ${badLogin ? 'font-bold text-[#1d1b2b]' : ''}`} onClick={() => go('pw_email')}>
                 {t.pwLink}
               </button>
@@ -814,7 +815,7 @@ export default function LoginFlow() {
                 </button>
                 {recent === 'code' && <span className="relative z-[1] -mt-1">{bubble('up')}</span>}
               </span>
-            </div>
+            </div>}
             {socialCircles()}
             {linkFor === 'google' && <button type="button" className={ghost} onClick={() => { setPendingLink(null); setLinkFor(null); go('login'); }}>{t.cancelLink}</button>}
             {!linkFor && (
