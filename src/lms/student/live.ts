@@ -460,9 +460,10 @@ export type StudentBundle = { view: StudentView; extras: StudentExtras };
 /** 학생 홈을 한 번에 그릴 자료 전부 (11/17 대표: 띠·칸이 늦게 생기며 화면이 바뀌지 않게) */
 export async function loadStudentBundle(sb: SupabaseClient, studentId: string | null): Promise<StudentBundle> {
   const a = studentActions(sb, studentId);
-  const opt = <T,>(p: Promise<T>): Promise<T | undefined> => p.then((v) => v, () => undefined);
+  // 못 읽으면 한 번 더 (화면이 그려진 뒤 칸이 끼어들지 않게). 그래도 못 읽으면 비워 두고 화면이 따로 다시 읽음
+  const opt = <T,>(f: () => Promise<T>): Promise<T | undefined> => f().catch(() => f()).then((v) => v, () => undefined);
   const [view, reminders, tz, slots, info, notices, history, noTime, prefs] = await Promise.all([
-    loadStudentView(sb, studentId), opt(a.reminders()), opt(a.timezone()), opt(a.regularSlots()), opt(a.myInfo()),
-    opt(a.notices()), opt(a.history()), opt(a.noTimeRights()), opt(a.prefs())]);
+    loadStudentView(sb, studentId), opt(a.reminders), opt(() => a.timezone()), opt(a.regularSlots), opt(a.myInfo),
+    opt(a.notices), opt(a.history), opt(a.noTimeRights), opt(a.prefs)]);
   return { view, extras: { reminders, tz, slots, info, notices, history, noTime, prefs } };
 }

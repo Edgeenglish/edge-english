@@ -803,7 +803,8 @@ export default function StudentHome(props: {
             </section>
           )}
           {/* 시간대 띠는 모든 학생·운영자 보기에서 같은 자리·같은 모양 (11/11 대표: 학생마다 화면이 달라 보이지 않게) */}
-          <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
+          {/* '변경'은 시간대 기억값을 못 읽어도 항상 (배지 모양이 나중에 바뀌지 않게) — 바꾸기는 그대로 저장 함수가 처리 */}
+          <ZoneBar change={{ value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) }} />
           {tab === 'home' && info && <LearnedBand minutes={info.learnedMin} />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
