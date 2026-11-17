@@ -6,6 +6,7 @@
 //  운영진 할 일 = 운영진이 직접 풀 일만. 마지막 필수 처리가 끝나면 다시 읽을 때 저절로 빠짐 ([카드 닫기] 없음). 성공 안내 없음, 실패만 짧게
 // 미리보기(?demo=1)에서는 버튼을 눌러도 화면 안에서만 바뀌고 저장·발송하지 않는다.
 
+import RegularChangeDecide, { type DecideResult } from './RegularChangeDecide';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, searchBoard, type BoardFilter, type BoardItem, type Category, type TaskSource } from '@/lms/admin/board';
@@ -41,11 +42,11 @@ const PRI = `${btn} border-[#7d5ffb] bg-[#7d5ffb] text-white disabled:border-[#e
 const SEC = `${btn} border-[#e6e3ef] bg-white text-[#1d1b2b] disabled:text-[#b9b6c8]`;
 const DONE = `${btn} border-[#c9c6d6] bg-[#d9d6e3] font-bold text-[#4a4760]`;
 /** 실제 데이터에서 서버 저장이 있는 버튼 (나머지는 그 업무 화면으로 이동) */
-const LIVE_KEYS = new Set(['import_checked', 'notify_tutor', 'no_extension', 'reject_time_off']);
+const LIVE_KEYS = new Set(['import_checked', 'notify_tutor', 'no_extension', 'reject_time_off', 'tutor_change_done']);
 
 export default function AdminDashboard({
   nowIso, today, preview, tasks: liveTasks, stats, onLogout, planActions, importActions, renewalSent, renewalNotify, enrollmentClose, onReload,
-  history, notices, noExtension, timeOffReject,
+  history, notices, noExtension, timeOffReject, changeRequests,
 }: {
   nowIso: string;
   today: LessonItem[];
@@ -70,6 +71,8 @@ export default function AdminDashboard({
   noExtension?: (task: TaskSource) => Promise<void>;
   /** 강사 휴무 신청 [반려] (사유 필수, 강사 Home 에 보임) */
   timeOffReject?: (id: string, reason: string) => Promise<void>;
+  /** 학생 정규 시간 변경 신청 확정·반려 · 강사 변경 상담 완료 (H26(208)) */
+  changeRequests?: { decide: (id: string, action: 'confirm' | 'reject', choice: number[] | null, week: string | null) => Promise<DecideResult>; done: (id: string) => Promise<void> };
 }) {
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
@@ -155,6 +158,7 @@ export default function AdminDashboard({
     if (key === 'notify_tutor' && item.kind === 'renewal_tutor_notice' && renewalNotify) return run(() => renewalNotify(item.id));
     if (key === 'no_extension' && task && noExtension) return run(() => noExtension(task));
     if (key === 'reject_time_off') { setRejecting(item.id); setRejectNote(''); return; }
+    if (key === 'tutor_change_done' && changeRequests) return run(() => changeRequests.done(item.id));
   }
 
   async function markRenewalSent(item: BoardItem) {
@@ -274,6 +278,24 @@ export default function AdminDashboard({
               </li>
             ))}
           </ul>
+        )}
+        {item.regularChange && (
+          <RegularChangeDecide view={item.regularChange} busy={busy} decide={async (action, choice, week) => {
+            if (preview || !changeRequests) { drop(item); return null; }
+            if (busy) return null;
+            setBusy(true);
+            setErr(null);
+            try {
+              const r = await changeRequests.decide(item.id, action, choice, week);
+              if (r.ok) await onReload?.();
+              return r.ok ? null : r;
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : '저장하지 못했어요.');
+              return null;
+            } finally {
+              setBusy(false);
+            }
+          }} />
         )}
         {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
         {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}

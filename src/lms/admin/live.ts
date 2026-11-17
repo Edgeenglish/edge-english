@@ -7,7 +7,7 @@ import { addDays, endOfKstDay, formatInZone, instantToKstDate, type KstDate } fr
 import { courseName } from '../rules/period';
 import { grantsMakeup, type ClassStatus } from '../rules/status';
 import { RENEWAL_PROMPT } from '../student/home';
-import type { TaskSource } from './board';
+import type { RcSlot, RegularChangeRequestTask, TaskSource } from './board';
 import { filterActionableTasks, filterClosedTasks } from './task-closure';
 import type { PlanView } from './confirm';
 import { loadPlans } from './confirm-live';
@@ -322,6 +322,26 @@ export function toTimeOffRequests(rows: TimeOffRequestRow[]): TaskSource[] {
   }));
 }
 
+/** 정규 시간 변경 신청·강사 변경 상담 (H26(208)) */
+export function toChangeRequests(d: { regular: { id: string; student_code: string; student_name: string; tutor: string; old_slots: RcSlot[]; items: RegularChangeRequestTask['items']; reason: string | null; created_at: string }[];
+  tutor: { id: string; student_code: string; student_name: string; tutor: string | null; reasons: string[]; note: string | null; created_at: string }[] }): TaskSource[] {
+  return [
+    ...d.regular.map((r): TaskSource => ({ kind: 'regular_change_request', id: r.id, studentName: r.student_name, studentCode: r.student_code, tutorName: r.tutor,
+      oldSlots: r.old_slots, items: r.items, reason: r.reason, createdAt: new Date(r.created_at) })),
+    ...d.tutor.map((r): TaskSource => ({ kind: 'tutor_change_request', id: r.id, studentName: r.student_name, studentCode: r.student_code, tutorName: r.tutor,
+      reasons: r.reasons, note: r.note, createdAt: new Date(r.created_at) })),
+  ];
+}
+export async function decideRegularChange(sb: SupabaseClient, id: string, action: 'confirm' | 'reject', choice: number[] | null, week: string | null) {
+  const r = await sb.rpc('admin_regular_change_request_decide', { p_id: id, p_action: action, p_choice: choice, p_week: week });
+  if (r.error) throw new Error(r.error.message);
+  return r.data as { ok: boolean; why?: 'passed' | 'problems'; week?: string; shifted_to?: string | null; problems?: { date: string; time: string; why: string; other?: string | null }[] };
+}
+export async function tutorChangeDone(sb: SupabaseClient, id: string): Promise<void> {
+  const r = await sb.rpc('admin_tutor_change_done', { p_id: id });
+  if (r.error) throw new Error(r.error.message);
+}
+
 export type LeaveOpenRow = {
   student_id: string; starts_at: string; choice: 'undecided' | 'substitute' | 'wait'; sub_stage: 'asked' | 'tutor_ok' | 'confirmed' | null;
   /** 휴무 처리 밖에서 취소된 수업 (3200, R5) → 할 일에서 뺌 */
@@ -582,6 +602,8 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
   const sent = new Map(renewalSent.error ? [] : (renewalSent.data ?? []).map((r) => [r.enrollment_id as string, r.sent_at as string]));
   // 강사 휴무 신청 (20261113150000 전 DB 는 함수가 없어 건너뜀)
   const timeOffReqs = await sb.rpc('admin_time_off_requests');
+  // 정규 시간 변경 신청·강사 변경 상담 (20261117140000 전 DB 는 건너뜀)
+  const changeReqs = await sb.rpc('admin_change_requests');
   const endingRows = (ending.data ?? []) as unknown as EndingRow[];
   const trial = (r: { student?: { is_trial_account?: boolean | null } | { is_trial_account?: boolean | null }[] | null }) => {
     const st = Array.isArray(r.student) ? r.student[0] : r.student;
@@ -606,6 +628,7 @@ export async function loadAdminBoard(sb: SupabaseClient, now: Date) {
       // Class Record 미기록은 강사 Home 'Classes to record' 에만 (대표 11/9: 운영진 할 일에서 뺌)
       ...(extReviews.error ? [] : toExtensionReviews((extReviews.data ?? []) as ExtensionReviewRow[])),
       ...(timeOffReqs.error ? [] : toTimeOffRequests((timeOffReqs.data ?? []) as TimeOffRequestRow[])),
+      ...(changeReqs.error || !changeReqs.data ? [] : toChangeRequests(changeReqs.data as Parameters<typeof toChangeRequests>[0])),
     ]), decided),
     today: toLessonItems(todayRows, new Set(ns.map((n) => n.lesson?.id).filter((x): x is string => !!x)), { ...todayExtras, now }),
     stats: {

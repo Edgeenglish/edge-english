@@ -1,3 +1,4 @@
+import type { KstSlot, RcPeriod } from './regular-change';
 // 수강생 화면 실제 데이터 (migration 2800). 읽기·쓰기 모두 DB 함수 — 본인 확인·검사·이력은 DB
 import { asClassType } from '../class-type';
 import { loadScreenPrefs, saveScreenPref, type PrefKey, type ScreenPrefs } from '../screen-prefs';
@@ -312,6 +313,18 @@ export type Reminders = { regular: boolean; makeup: boolean; hasEmail: boolean }
 export type TimezoneState = { timezone: string; kept: string | null };
 
 /** 수강생 화면 동작. admin = 운영자 보기(대신 입력)면 운영진 함수 */
+/** 정규 시간 변경·강사 변경 상담 (H26(208)) */
+export type RcOptions =
+  | { state: 'ok'; today: KstDate; finalEnd: KstDate; duration: number; tutor: string; slots: KstSlot[]; free: KstSlot[]; periods: RcPeriod[] }
+  | { state: 'none' | 'pending' | 'scheduled' | 'ending' };
+export type RcCandidate = KstSlot & { week: KstDate; first: KstDate };
+export type RegularRequest = {
+  id: string; status: 'pending' | 'confirmed' | 'rejected' | 'withdrawn'; createdAt: Date; oldSlots: KstSlot[];
+  items: { old: KstSlot; c1: RcCandidate; c2: RcCandidate | null }[]; reason: string | null; chosen: KstSlot[] | null; effectiveFrom: KstDate | null;
+};
+export type TutorChangeRequest = { id: string; status: 'open' | 'done'; createdAt: Date; reasons: string[]; note: string | null };
+export type ChangeRequests = { regular: RegularRequest[]; tutor: TutorChangeRequest[] };
+
 export function studentActions(sb: SupabaseClient, adminStudentId: string | null) {
   const admin = adminStudentId !== null;
   return {
@@ -383,6 +396,33 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     /** 지각 알림 (대표 11/13): 담당 강사 Updates + 이메일. 한 수업에 한 번만 */
     lateNotice: async (lessonId: string, minutes: number, reason: LateReason | null): Promise<void> => {
       check(await sb.rpc('student_late_notice', { p_student: adminStudentId, p_lesson: lessonId, p_minutes: minutes, p_reason: reason }));
+    },
+    /** 정규 시간 변경 신청 화면 (H26(208)): 가능한 시간은 한국 요일·시각. state 가 ok 가 아니면 신청 못 함 */
+    regularOptions: async (): Promise<RcOptions> => {
+      const d = check(await sb.rpc('student_regular_change_options', { p_student: adminStudentId })) as Record<string, unknown>;
+      if (d.state !== 'ok') return { state: d.state as Exclude<RcOptions['state'], 'ok'> };
+      return { state: 'ok', today: d.today as KstDate, finalEnd: d.final_end as KstDate, duration: d.duration as number, tutor: d.tutor as string,
+        slots: d.slots as KstSlot[], free: d.free as KstSlot[], periods: d.periods as RcPeriod[] };
+    },
+    regularRequest: async (items: { old: KstSlot; c1: KstSlot; c2: KstSlot | null }[], reason: string): Promise<void> => {
+      check(await sb.rpc('student_regular_change_request', { p_student: adminStudentId, p_items: items, p_reason: reason || null }));
+    },
+    regularWithdraw: async (id: string): Promise<void> => {
+      check(await sb.rpc('student_regular_change_withdraw', { p_student: adminStudentId, p_id: id }));
+    },
+    tutorChangeRequest: async (reasons: string[], note: string): Promise<void> => {
+      check(await sb.rpc('student_tutor_change_request', { p_student: adminStudentId, p_reasons: reasons, p_note: note || null }));
+    },
+    /** 내 정규 시간 변경 신청·강사 변경 상담 (함수 없는 옛 DB 면 빈 목록) */
+    changeRequests: async (): Promise<ChangeRequests> => {
+      const r = await sb.rpc('student_change_requests', { p_student: adminStudentId });
+      if (r.error || !r.data) return { regular: [], tutor: [] };
+      const d = r.data as { regular: { id: string; status: RegularRequest['status']; created_at: string; old_slots: KstSlot[]; items: RegularRequest['items']; reason: string | null; chosen: KstSlot[] | null; effective_from: KstDate | null }[];
+        tutor: { id: string; status: 'open' | 'done'; created_at: string; reasons: string[]; note: string | null }[] };
+      return {
+        regular: d.regular.map((x) => ({ id: x.id, status: x.status, createdAt: new Date(x.created_at), oldSlots: x.old_slots, items: x.items, reason: x.reason, chosen: x.chosen, effectiveFrom: x.effective_from })),
+        tutor: d.tutor.map((x) => ({ id: x.id, status: x.status, createdAt: new Date(x.created_at), reasons: x.reasons, note: x.note })),
+      };
     },
     /** 강사 '늦어요' 알림 다시 읽기 (QA 11/14: 열어 둔 홈에도 반영). 옛 DB 면 빈 배열 */
     tutorLateNotices: async (): Promise<{ lessonId: string; minutes: number; reason: string | null }[]> => {

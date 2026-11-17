@@ -209,6 +209,12 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       set({ ...view, lateNotices: [...(view.lateNotices ?? []), { lessonId, minutes, reason }] });
     },
     tutorLateNotices: async () => view.tutorLateNotices ?? [],
+    // 정규 시간 변경·강사 변경 상담 (H26(208)): 미리보기에서는 버튼만 (실제 계산은 DB)
+    regularOptions: async () => ({ state: 'none' as const }),
+    regularRequest: async () => {},
+    regularWithdraw: async () => {},
+    tutorChangeRequest: async () => {},
+    changeRequests: async () => ({ regular: [], tutor: [] }),
     noTimeRequest: async () => {
       noTimeAt = new Date().toISOString();
       set({ ...view });   // 화면이 다시 읽도록 새 값

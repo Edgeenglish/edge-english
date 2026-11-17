@@ -226,7 +226,32 @@ export type TimeOffRequestTask = {
   createdAt: Date;
 };
 
-export type TaskSource = MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask | ClassRecordMissingTask | ExtensionReviewTask | TimeOffRequestTask;
+/** 학생 정규 시간 변경 신청 (H26(208)) — 운영진이 1·2순위 중 골라 확정 (확정 순간 충돌 검사 다시) */
+export type RcSlot = { weekday: number; time: string };
+export type RegularChangeRequestTask = {
+  kind: 'regular_change_request';
+  id: string;
+  studentName: string;
+  studentCode: string;
+  tutorName: string;
+  oldSlots: RcSlot[];
+  items: { old: RcSlot; c1: RcSlot & { week: string }; c2: (RcSlot & { week: string }) | null }[];
+  reason: string | null;
+  createdAt: Date;
+};
+/** 학생 강사 변경 상담 (H26(208)) — 운영진만 봄, [상담 완료] */
+export type TutorChangeRequestTask = {
+  kind: 'tutor_change_request';
+  id: string;
+  studentName: string;
+  studentCode: string;
+  tutorName: string | null;
+  reasons: string[];
+  note: string | null;
+  createdAt: Date;
+};
+
+export type TaskSource = RegularChangeRequestTask | TutorChangeRequestTask | MatchingTask | RenewalTask | LongLeaveTask | NoShowTask | EndingSoonTask | MakeupUnrequestedTask | AutoFailureTask | ImportCheckTask | LessonChangeTask | TutorLeaveTask | ClassRecordMissingTask | ExtensionReviewTask | TimeOffRequestTask;
 
 /** 요약 카드 5개 = 처리할 일을 나누는 칸. 한 업무는 정확히 한 칸에만 들어감 (중복 없음) */
 export type Category = 'matching' | 'tutor_ack' | 'time_off' | 'ending' | 'issue';
@@ -282,6 +307,8 @@ export type BoardItem = {
   actions: { key: string; label: string; primary?: boolean; danger?: boolean; href?: string; done?: boolean; disabled?: boolean }[];
   /** 신규 매칭의 일정안 — 화면이 PlanCard(확정·안내 복사)로 그림 */
   plan?: PlanView;
+  /** 정규 시간 변경 신청: 화면이 순위 고르기·확정으로 그림 */
+  regularChange?: { slotText: string[]; items: { old: string; c: ({ text: string; week: string } | null)[] }[] };
   /** 첫 수업 24시간 안인데 안내 미완료 → 목록 맨 위 (D-51-3) */
   top?: boolean;
   /** 기존 수강생 입력: 원래 날짜 확인 필요 보강 — 화면이 날짜 입력칸으로 그림 */
@@ -298,6 +325,12 @@ const KST = 'Asia/Seoul';
 const SEVERITY_RANK: Record<Severity, number> = { urgent: 0, overdue: 1, due_soon: 2, open: 3 };
 const REASON_KO = { health: '건강', family_emergency: '가족 긴급 사정', business_trip: '출장', other_special: '기타 특별 사유' } as const;
 const WD: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토' };
+
+/** 정규 시각(한국 요일·시각) → '수 오후 6:00 한국 시간' */
+function rcText(s: RcSlot): string {
+  const h = Number(s.time.slice(0, 2));
+  return `${'일월화수목금토'[s.weekday]} ${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${s.time.slice(3, 5)} 한국 시간`;
+}
 
 function kstLabel(d: Date): string {
   const f = formatInZone(d, KST);
@@ -393,6 +426,9 @@ function briefOf(t: TaskSource, now: Date): string {
       return `종료 ${Number(t.endDate.slice(5, 7))}/${Number(t.endDate.slice(8, 10))}`;
     case 'time_off_request':
       return `수업 ${t.classes}회`;
+    case 'regular_change_request':
+    case 'tutor_change_request':
+      return `신청 후 ${waitText(t.createdAt, now)}`;
     case 'auto_failure':
       return `발생 후 ${waitText(t.occurredAt, now)}`;
   }
@@ -645,6 +681,38 @@ function toItem(t: TaskSource, now: Date): ItemBase {
           { key: 'open_leave', label: '휴무 화면 열기', primary: true, href: `/lms/admin/leave?new=1&req=${encodeURIComponent(t.id)}` },
           { key: 'reject_time_off', label: '반려' },
         ],
+      };
+    }
+    case 'regular_change_request': {
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: 'open',
+        tag: '정규 시간 변경 신청',
+        title: `${t.studentName} · ${t.tutorName}`,
+        detail: [`지금 ${t.oldSlots.map(rcText).join(' · ')}`, t.reason ? `변경 사유: ${t.reason}` : null, `신청 ${kstLabel(t.createdAt)} 한국 시간`].filter(Boolean).join(' · '),
+        due: null,
+        steps: [],
+        actions: [],
+        regularChange: {
+          slotText: t.oldSlots.map(rcText),
+          items: t.items.map((it) => ({ old: rcText(it.old), c: [it.c1, it.c2].map((c) => (c ? { text: rcText(c), week: c.week } : null)) })),
+        },
+      };
+    }
+    case 'tutor_change_request': {
+      const label: Record<string, string> = { style: '다른 수업 스타일을 경험해 보고 싶어요', time: '수업 시간이 잘 맞지 않아요', other_tutor: '다른 강사님과 수업하고 싶어요', consult: '먼저 상담받고 싶어요' };
+      return {
+        id: t.id,
+        kind: t.kind,
+        severity: 'open',
+        tag: '강사 변경 상담',
+        title: `${t.studentName}${t.tutorName ? ` · 담당 ${t.tutorName}` : ''}`,
+        detail: [t.reasons.length ? `상담 내용: ${t.reasons.map((r) => label[r] ?? r).join(' / ')}` : '상담 내용: 고르지 않음', t.note ? `전하고 싶은 말: ${t.note}` : null,
+          `요청 ${kstLabel(t.createdAt)} 한국 시간`].filter(Boolean).join(' · '),
+        due: null,
+        steps: [],
+        actions: [{ key: 'tutor_change_done', label: '상담 완료', primary: true }],
       };
     }
     case 'auto_failure': {
