@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
 import { createStudentLogin, loadStudentAccounts, loadStudentView, searchStudents, studentActions, type StudentAccount, type StudentView } from '@/lms/student/live';
 import StudentHome from './StudentHome';
+import { ProdChip } from '@/lms/auth/ProdBand';
 
 type State =
   | { kind: 'loading' }
@@ -63,6 +64,7 @@ export default function StudentLive({ studentParam, makeup, tab }: { studentPara
   const adminBar = state.admin && (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[12px] bg-[#1d1b2b] px-3 py-2">
       <span className="text-[13px] font-semibold text-white">운영자 보기</span>
+      <ProdChip />
       <StudentPicker students={state.admin.students} current={state.admin.studentId} />
       <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">← 운영자 화면</a>
       {sb && current && !current.hasLogin && <StudentLoginForm onCreate={(email) => createStudentLogin(sb, current.id, email)} />}
