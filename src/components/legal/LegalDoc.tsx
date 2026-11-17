@@ -1,5 +1,5 @@
 import type { LegalSection } from '@/lms/auth/legal';
-import { effectiveDateText } from '@/lms/auth/legal';
+import { LEGAL_NOTICE, effectiveDateText } from '@/lms/auth/legal';
 
 export function LegalSections({ sections, compact = false }: { sections: LegalSection[]; compact?: boolean }) {
   return (
@@ -21,6 +21,11 @@ export function LegalSections({ sections, compact = false }: { sections: LegalSe
 export default function LegalDoc({ title, intro, sections }: { title: string; intro?: string; sections: LegalSection[] }) {
   return (
     <div className="mx-auto max-w-[800px] px-4 py-15 max-md:py-10">
+      {LEGAL_NOTICE && (
+        <div className="mb-6 rounded-[12px] bg-[#efeaff] px-4 py-3 text-[14px] leading-relaxed text-[#3a22b0]">
+          {LEGAL_NOTICE.map((line) => <p key={line}>{line}</p>)}
+        </div>
+      )}
       <h1 className="text-[28px] font-bold text-[#1d1b2b] max-md:text-[22px]">{title}</h1>
       {intro && <p className="mt-4 text-[15px] leading-relaxed text-[#55526a]">{intro}</p>}
       <div className="mt-8">
