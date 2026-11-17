@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
 import { LOGIN_PATH, myLmsHome } from '@/lms/auth/home';
 import { forgetOwnView, ownViewCache, prefetchOwnView } from '@/lms/student/prefetch';
@@ -19,12 +19,19 @@ export default function Header() {
   const [accountHref, setAccountHref] = useState(LOGIN_PATH);
   const router = useRouter();
   // 학생 자료를 아직 받는 중에 누르면 지금 화면을 그대로 두고, 다 받은 뒤 학생 홈으로 넘김 ('불러오는 중' 화면으로 끊기지 않게, 11/17 대표)
+  // 역할을 아직 확인하는 중에 눌러도(홈페이지를 막 연 직후) 로그인 화면으로 가지 않고 확인을 기다림
+  const homeP = useRef<Promise<string | null> | null>(null);
   const openAccount = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const waitHome = loggedIn && accountHref === LOGIN_PATH ? homeP.current : null;
     const pending = accountHref === '/lms/student' ? ownViewCache()?.pending : undefined;
-    if (!pending || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    if (!waitHome && !pending) return;
     e.preventDefault();
-    const go = () => router.push('/lms/student');
-    pending.then(go, go);
+    void (async () => {
+      const to = waitHome ? await waitHome.catch(() => null) : '/lms/student';
+      if (to === '/lms/student') await ownViewCache()?.pending?.catch(() => undefined);
+      router.push(to ?? LOGIN_PATH);
+    })();
   };
   // 로그인·로그아웃이 바뀌면 바로 [로그인]↔[내 수업] (11/17 대표: 로그인 뒤에도 새로고침 전까지 '로그인'으로 남음)
   useEffect(() => {
@@ -36,13 +43,16 @@ export default function Header() {
       lastUid = uid;
       setLoggedIn(!!uid);
       if (!uid) {
+        homeP.current = null;
         setAccountHref(LOGIN_PATH);
         forgetOwnView();
         return;
       }
       // 학생 화면 자료를 역할 확인과 함께 미리 불러 둠 → [내 수업] 누르면 '불러오는 중' 없이 바로 보임. 학생이 아니면 버림
       prefetchOwnView(sb, uid);
-      void myLmsHome(sb).then((to) => {
+      const p = myLmsHome(sb);
+      homeP.current = p;
+      void p.then((to) => {
         if (lastUid !== uid) return;
         setAccountHref(to ?? LOGIN_PATH);
         if (to !== '/lms/student') forgetOwnView();
