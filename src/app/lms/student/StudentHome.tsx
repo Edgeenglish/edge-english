@@ -10,6 +10,8 @@ import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/ad
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
 import ProcessingHistory from './ProcessingHistory';
+import { ChangeRequestRows, RegularChangeSheet, TutorChangeSheet } from './ChangeRequests';
+import type { ChangeRequests } from '@/lms/student/live';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
 import { koZoneCity, ZONE_ROWS, zoneName } from '@/lms/admin/places';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
@@ -66,7 +68,9 @@ type Overlay =
   | { kind: 'profile'; name: string }
   | { kind: 'makeup'; right: Right | null; canceled?: boolean }
   | { kind: 'credits' }
-  | { kind: 'rights' };
+  | { kind: 'rights' }
+  | { kind: 'regular' }
+  | { kind: 'tutor_change' };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -318,6 +322,11 @@ export default function StudentHome(props: {
   }, [overlayOpen]);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 정규 시간 변경 신청·강사 변경 상담 (H26(208))
+  const [changeReqs, setChangeReqs] = useState<ChangeRequests>({ regular: [], tutor: [] });
+  const reloadChangeReqs = () => actions.changeRequests().then(setChangeReqs).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void reloadChangeReqs(); }, []);
   const [reminders, setReminders] = useState<Reminders | null>(null);
   /** 저장은 됐는데 화면을 다시 읽지 못함 (R-02) → 위에 안내 + [다시 읽기] */
   const [stale, setStale] = useState<string | null>(null);
@@ -825,6 +834,22 @@ export default function StudentHome(props: {
             {nextCard}
             {summary}
             {quick}
+            {slots.length > 0 && !notStarted && (
+              <section aria-label="정규 시간·강사 변경" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button type="button" onClick={() => setOverlay({ kind: 'regular' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
+                  <span className="font-semibold">정규 시간 변경</span>
+                  {changeReqs.regular.some((r) => r.status === 'pending')
+                    ? <span className="text-[12.5px] font-semibold text-[#5b3df0]">변경 신청 확인 중 ›</span>
+                    : <span className="text-[#8b88a0]">›</span>}
+                </button>
+                <button type="button" onClick={() => setOverlay({ kind: 'tutor_change' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
+                  <span className="font-semibold">강사 변경 상담</span>
+                  {changeReqs.tutor.some((t) => t.status === 'open')
+                    ? <span className="text-[12.5px] font-semibold text-[#55526a]">요청함 ›</span>
+                    : <span className="text-[#8b88a0]">›</span>}
+                </button>
+              </section>
+            )}
             {leaveVisible && leaveAsk.length === 0 && (
               <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
                 <span className="font-semibold">담당 강사님 휴무 안내</span>
@@ -915,6 +940,7 @@ export default function StudentHome(props: {
 
         {tab === 'requests' && (
           <TabPage title="처리 내역">
+            <ChangeRequestRows data={changeReqs} tz={VIEW_TZ} onOpenRegular={() => setOverlay({ kind: 'regular' })} />
             <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
               loadPrefs={actions.prefs} savePref={actions.savePref} />
           </TabPage>
@@ -1078,6 +1104,16 @@ export default function StudentHome(props: {
           {overlay.kind === 'notice' && notices.find((n) => n.id === overlay.id) && <NoticeDetail n={notices.find((n) => n.id === overlay.id)!} />}
           {overlay.kind === 'points' && <Points history={points} />}
           {overlay.kind === 'credits' && <Credits s={s} />}
+          {overlay.kind === 'regular' && (
+            <RegularChangeSheet tz={VIEW_TZ} load={actions.regularOptions} busy={busy}
+              pending={changeReqs.regular.find((r) => r.status === 'pending') ?? null}
+              onSubmit={async (items, reason) => { const v = await run(() => actions.regularRequest(items, reason), '신청했어요.'); await reloadChangeReqs(); return !!v; }}
+              onWithdraw={async (id) => { const v = await run(() => actions.regularWithdraw(id), '신청을 취소했어요.'); await reloadChangeReqs(); return !!v; }} />
+          )}
+          {overlay.kind === 'tutor_change' && (
+            <TutorChangeSheet busy={busy} open={changeReqs.tutor.find((t) => t.status === 'open') ?? null}
+              onSubmit={async (reasons, note) => { const v = await run(() => actions.tutorChangeRequest(reasons, note), '요청했어요.'); await reloadChangeReqs(); return !!v; }} />
+          )}
           {overlay.kind === 'rights' && <div className="grid gap-3">
             <h2 className="text-[18px] font-bold">보강권 확인</h2>
             {openRights.length === 0 && <p className="text-[14px] text-[#6b6880]">신청 가능한 보강이 없어요.</p>}
