@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import PendingSavesBanner from './PendingSavesBanner';
-import { ProdBand } from '@/lms/auth/ProdBand';
+import { ProdBand } from '@/components/ProdBand';
 
 const PATHS = {
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
