@@ -642,9 +642,9 @@ export default function LoginFlow() {
       setBusy(false);
       return setError(t.googleConflict);
     }
-    const p = (user.user?.identities ?? []).map((i) => i.provider).find((x) => x !== 'email') ?? '';
-    const provider: SocialProvider = p.includes('naver') ? 'naver' : 'kakao';
-    // 방금 카카오·네이버로 생긴 빈 계정을 지워야 기존 계정에 연결할 수 있음 (회원 연결이 있는 계정은 DB가 지우지 않음)
+    const ps = (user.user?.identities ?? []).map((i) => i.provider);
+    const provider: SocialProvider = ps.includes('google') ? 'google' : ps.some((x) => x.includes('naver')) ? 'naver' : 'kakao';
+    // 방금 카카오·네이버·Google 로 생긴 빈 계정을 지워야 기존 계정에 연결할 수 있음 (회원 연결이 있는 계정은 DB가 지우지 않음)
     const { data: done, error: e } = await sb.rpc('lms_discard_new_social_account');
     await sb.auth.signOut();
     setBusy(false);
