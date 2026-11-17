@@ -746,18 +746,11 @@ export default function StudentHome(props: {
   const myTutors = [...new Set(slots.map((x) => x.tutor))].join(' · ') || upcoming[0]?.tutorName || '';
   const enrollText = s.enrollmentStatus === 'active' || s.enrollmentStatus === 'confirmed' ? '수강 중' : s.enrollmentStatus === 'completed' ? '수강 종료' : s.enrollmentStatus === 'pending_payment' ? '결제 확인 중' : null;
 
-  const logo = (
-    <span className="inline-flex items-center gap-1.5">
-      <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
-      <span className="rounded-[6px] bg-[#27230e] px-[6px] py-[2px] text-[11px] font-extrabold text-[#ffd401]">수강생용</span>
-    </span>
-  );
-  const brand = props.adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : <button type="button" aria-label="새로고침" onClick={() => window.location.reload()} className="inline-flex">{logo}</button>;
+  // 로고·수강생용 표시는 없앰 — 위에 홈페이지 머리글(로고·[내 수업])이 있음 (H26(206) 보충, 11/17)
   return (
     <KstCtx.Provider value={{ admin: isAdminView, studentTz, on: adminKst, set: setAdminKst }}>
-    <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
+    <div className="mx-auto max-w-[1200px] text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-8">
       <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
-        <div className="px-3 pb-4 pt-1">{brand}</div>
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -778,12 +771,8 @@ export default function StudentHome(props: {
         )}
       </nav>
 
-      <div className="min-w-0 flex-1 pb-24 lg:pb-0">
+      <div className="min-w-0 flex-1 pb-6 pt-3 lg:pb-0 lg:pt-0">
         {props.adminBar && <div className="grid px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}</div>}
-        <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
-          {brand}
-          <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
-        </header>
         <div className="grid gap-2 px-4 pb-3 lg:px-0 lg:pb-4 lg:pt-1">
           {askTz && (
             <section aria-label="시간대 확인" className="grid gap-2.5 rounded-[14px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-3">

@@ -19,6 +19,8 @@ export default function Header() {
     void sb.auth.getSession().then(({ data }) => setLoggedIn(!!data.session)).catch(() => setLoggedIn(false));
   }, []);
   const accountLabel = loggedIn ? '내 수업' : '로그인';
+  // 로그인·내 수업 화면에 있으면 다른 메뉴처럼 굵게 (11/17 학생 화면 홈페이지 틀 통합)
+  const accountOn = pathName.startsWith('/lms') ? 'font-bold' : 'font-semibold';
 
   return (
     <header className="flex-center sticky top-0 z-20 min-h-[70px] bg-white px-4 py-4">
@@ -86,7 +88,7 @@ export default function Header() {
           </div>
 
           <div className="flex items-center gap-4 max-md:hidden">
-            <Link href="/lms/login" className="text-nowrap text-sm font-semibold text-[#333]">
+            <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
               {accountLabel}
             </Link>
             <Link
@@ -98,7 +100,7 @@ export default function Header() {
             </Link>
           </div>
         </div>
-        <Link href="/lms/login" className="text-nowrap text-sm font-semibold text-[#333] md:hidden">
+        <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333] md:hidden`}>
           {accountLabel}
         </Link>
         {/* 모바일 햄버거 메뉴 */}
