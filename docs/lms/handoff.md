@@ -39,9 +39,14 @@
 - ✅ 운영 반영(11/16): 백업 `lms_backup.snapshots` **66**(cron 이전 명령 `_cron_before` + 개수) → 201 migration → 202 migration. 함수 6개 md5 = 시험 DB, anon·authenticated 실행 불가, cron 명령 4개 실행. 운영 첫 대상 STU-0011 세 번째 4주(오늘 시작). 되돌리기 = cron 명령을 snapshots 66 `_cron_before` 로
 - (기록) 적용 순서 = **H26(201) migration 먼저, 그다음 이 migration** (201 을 나중에 적용하면 cron 명령에서 이 실행이 빠짐). 데이터 안 바뀜. 되돌리기: cron 명령에서 `select lms_period_start_run(); ` 빼기
 
-## ⏳ 11/17 학생 홈 [정규 시간 변경]·[강사 변경 상담] — 최종 시안·기준 확정(H26(208) 보충), 개발 시작 지시 대기 (H26(208), 브랜치 claude/pensive-davinci-7uksza)
+## ✅ 11/17 학생 홈 [정규 시간 변경]·[강사 변경 상담] — 시험 DB·lms-test 반영, 운영 미반영 (H26(208)·보충·보충 2·보충 3, 브랜치 claude/pensive-davinci-7uksza)
 - 시안 `docs/lms/previews/student-regular-tutor-change-drafts.html` · https://claude.ai/artifact/X5VctaggcpPUgj58qZsb6N
-- 기준 8개 확정 = H26(208) 보충. 개발: 가능 시간 = student_makeup_options 계산 재사용(수강기간 끝까지 매주), 확정 = admin_regular_change 미리 보기 검사 재사용, 적용 = 월요일 주 단위
+- migration **20261117140000_lms_student_regular_tutor_change_requests** (시험 DB 적용): 표 regular_change_requests(학생당 대기 1건)·tutor_change_requests(열린 것 1건), 둘 다 지우기 금지 · lms_rc_monday/day/first/free/week/context · student_regular_change_options·request·withdraw · student_tutor_change_request · student_change_requests · admin_change_requests · admin_regular_change_request_decide(확정 = admin_regular_change 미리 보기 → 저장, 막히면 problems·shifted_to) · admin_tutor_change_done
+- 화면: 학생 `src/app/lms/student/ChangeRequests.tsx`(신청 창·상담 창·처리 내역 줄) + StudentHome 버튼 2개 / 계산 `src/lms/student/regular-change.ts`(+test, DB lms_rc_week 와 같은 규칙) / 운영자 홈 할 일 `board.ts` kind regular_change_request·tutor_change_request, `RegularChangeDecide.tsx`, `live.ts decideRegularChange·tutorChangeDone`
+- 시험(시험 DB, 되돌림 트랜잭션): STU-0041 목→금 신청·2순위 확정 = 수업 5회 그대로 목 2회만 옮김 / 두 요일 함께 = 5회 그대로 / 남는 요일 고르기 거절 / 대기 중 두 번째 신청 거절 / 확정 뒤 같은 수강기간 재신청 거절 / 적용 주 11/20 월=11/30·수=11/23·11/21 수=11/30 (TS 시험 8개 통과)
+- 대표 확인용 시험 데이터: STU-0041 대기 신청 1건(목 → 1순위 금 오후 8:00 / 2순위 목 오후 8:00 한국 시간) + 강사 변경 상담 1건. 되돌리기 = 운영자 홈에서 [반려]·[상담 완료]
+- 관찰: Blair 처럼 수강기간 중 강사 해외 이동·휴무가 있으면 그 시간대는 '매주 비어 있음'에서 빠져 고를 시간이 거의 없을 수 있음 (확정 때 admin_regular_change 도 같은 이유로 막으므로 규칙과 일치)
+- 남은 것: 대표 시험 → '응' → 운영 DB 백업·migration·lms-prod
 
 ## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)** 참고)
 
