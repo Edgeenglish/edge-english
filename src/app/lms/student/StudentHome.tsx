@@ -740,8 +740,8 @@ export default function StudentHome(props: {
           </p>
           <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
             {/* 대표 11/18 시안 확정 (https://claude.ai/artifact/5eFCzRLSaMq6tKBzSTGWNE) */}
-            <b className="font-bold text-[#3d3a52]">6시간 이상 남았을 때 취소 시</b><span>변경권 1개 사용, 보강 가능</span>
-            <b className="font-bold text-[#3d3a52]">6시간 미만 남았을 때 취소 시</b><span>변경권 사용 안 됨, 보강 불가<span className="whitespace-nowrap">(수업 1회 차감)</span></span>
+            <b className="font-bold text-[#3d3a52]">6시간 이상 남았을 때</b><span>변경권 1개 사용, 보강 가능</span>
+            <b className="font-bold text-[#3d3a52]">6시간 미만 남았을 때</b><span>변경권 사용 안 됨, 보강 불가<span className="whitespace-nowrap">(수업 1회 차감)</span></span>
           </p>
         </div>
       </div>
