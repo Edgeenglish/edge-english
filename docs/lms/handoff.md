@@ -10,6 +10,7 @@
 - 처리 내역 줄(대표 11/18 시안 https://claude.ai/artifact/VrFHjbDsD2icJEF9HAWFK6): 제목 → 수업 시각 → 취소·신청·확정·제안·요청·만료·처리 일시 → (취소만) 6시간 이상/미만 · 수강생/강사 취소 · 강사 휴무·사정 → 상태 → (수강생 취소·되돌림만) 변경권 '1개 사용 · 2개 → 1개'·'사용 안 됨 · 수업 1회 차감'·'남은 0개 · 수업 1회 차감'·'1개 반환'. migration **20261118110000** student_processing_history 에 cancel_at·timing (`processing-history.ts` historyRow)
 - 운영 반영: 운영 DB 백업 **snapshots 79**(student_processing_history 이전 정의) → migration 20261118100000·20261118110000 → 학생 13·수업 200·변경권 기록 22 그대로, 비로그인 실행 없음, STU-0013 계정으로 두 함수 정상. 코드 lms-prod **0b680bf2**(이 기능 커밋만 골라 담음), edgeenglish.kr JS 반영·공개 화면 점검 통과. 되돌리기: DB = snapshots 79 정의 실행 + drop function student_credit_history(uuid) / 코드 = lms-prod 를 de925749 로
 - 운영 화면 실제 클릭은 미확인(STU-0013 메일 코드가 support@ 가 아니라 Claude 가 못 읽음)
+- 11/18 추가 운영 반영: 카드 규칙 '6시간 이상/미만 남았을 때'(lms-prod 851cb3f0) · 변경권 내역 창 2차(처리 내역과 같은 항목명·순서, 흰 박스 없이 구분선, 14px, 목록만 스크롤, '처리 내역 전체 보기 ›') · 과거 취소는 그때 결과 그대로('수업 1회 차감' 유지) · 변경권 안 쓴 취소의 되돌림 줄('수업 취소 되돌림 · 수업 일정 복구 완료', 변경권 줄 없음) — migration **20261118140000**(운영 백업 snapshots 80 = student_credit_history 이전 정의), lms-prod **20da527b**. 시안 https://claude.ai/artifact/Wn6qmbEPo4awsp9y6kKFdy
 
 ## ✅ 11/17 머리글 [내 수업]·학생 화면 진입 정리 — **운영 반영 끝** (H26(212), lms-prod cfb254d, DB 변경 없음, 브랜치 claude/quirky-bell-j29fzz)
 - 운영 반영 방법: lms-prod 위에 이 작업 커밋만 cherry-pick. 운영엔 '정규 시간 변경'(H26(208)) 이 아직 없어 `loadStudentBundle` 에서 changeRequests 를 뺀 판으로 맞춤 — 정규 시간 변경을 운영에 올릴 때 lms-test 판(changeReqs 포함) 그대로 가면 됨. 운영 공개 화면 점검(check-public-pages) 통과
