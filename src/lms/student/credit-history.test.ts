@@ -18,7 +18,7 @@ describe('변경권 내역 (대표 11/18)', () => {
     expect(timingText(item({ kind: 'return', timing: null }))).toBeNull();
   });
   it('결과·처리 후', () => {
-    expect(resultText(item({ kind: 'late', delta: 0 }))).toBe('변경권 사용 안 함 · 수업 1회 차감');
+    expect(resultText(item({ kind: 'late', delta: 0 }))).toBe('변경권 사용 안 됨 · 수업 1회 차감');
     expect(subText(item({ kind: 'late', timing: 'late', delta: 0, after: 1 }))).toBe('6시간 미만 남기고 취소 · 수업 1회 차감 · 처리 후 1개');
     expect(subText(item({ kind: 'return', timing: null, delta: 1, after: 2 }))).toBe('처리 후 2개');
     expect(subText(item({ kind: 'no_credit', delta: 0, reverted: true }))).toBe('6시간 이상 남기고 취소 · 남은 변경권 없음 · 나중에 취소 되돌림 · 처리 후 0개');

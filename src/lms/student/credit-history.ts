@@ -31,12 +31,12 @@ export function timingText(i: CreditItem): string | null {
   return i.timing === 'late' ? '6시간 미만 남기고 취소' : '6시간 이상 남기고 취소';
 }
 
-/** 변경권 결과 한 줄: '변경권 1개 사용' · '변경권 사용 안 함 · 수업 1회 차감' · '1개 반환' 등 */
+/** 변경권 결과 한 줄: '변경권 1개 사용' · '변경권 사용 안 됨 · 수업 1회 차감' · '1개 반환' 등 */
 export function resultText(i: CreditItem): string {
   switch (i.kind) {
     case 'use': return '변경권 1개 사용';
-    case 'late': return i.reverted ? '변경권 사용 안 함' : '변경권 사용 안 함 · 수업 1회 차감';
-    case 'holiday': return '변경권 사용 안 함 (공휴일)';
+    case 'late': return i.reverted ? '변경권 사용 안 됨' : '변경권 사용 안 됨 · 수업 1회 차감';
+    case 'holiday': return '변경권 사용 안 됨 (공휴일)';
     case 'no_credit': return i.reverted ? '남은 변경권 없음' : '남은 변경권 없음 · 수업 1회 차감';
     case 'return': return '변경권 1개 반환';
     case 'admin_add': return '운영진 추가 1개';
@@ -49,7 +49,7 @@ export function resultText(i: CreditItem): string {
 export function shortResult(i: CreditItem): string {
   switch (i.kind) {
     case 'use': return '1개 사용';
-    case 'late': case 'holiday': case 'no_credit': return '사용 안 함';
+    case 'late': case 'holiday': case 'no_credit': return '사용 안 됨';
     case 'return': return '1개 반환';
     case 'admin_add': return '1개 추가';
     case 'admin_remove': case 'migrated': return '1개 차감';

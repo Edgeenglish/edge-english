@@ -1,6 +1,7 @@
 ## 🧪 11/18 학생 변경권 내역 — **시험 사이트(lms-test)·시험 DB 반영, 운영 미반영** (브랜치 claude/friendly-rubin-d7ftqh, 시안 https://claude.ai/artifact/SCERAK1za5rBF4bkYCWZ3m `docs/lms/previews/student-credit-history-drafts.html`)
+- 홈 카드 규칙: 요청 없이 바꿨다가 되돌린 뒤 대표 시안 확정 문구로 반영(https://claude.ai/artifact/5eFCzRLSaMq6tKBzSTGWNE) · '사용 안 됨'으로 통일 · 내 정보 › 변경권도 새 창(B) · 운영진 조정 사유 숨김(B) (대표 11/18, 비교 https://claude.ai/artifact/SgXa4eavSC14XvfGGjzuKw)
 - 정책 원본: 문서 끝 'H26 (11/18 학생 변경권 내역 — 번호는 대표가 정리)' 줄 (끝 번호 확인 못 함)
-- 대표 확정(ChatGPT 검토 반영): B안(홈 카드 [내역 ›] → 변경권 내역 창) · 변경권 안 쓴 취소도 표시 · 문구 '6시간 이상/미만 남기고 취소' · '처리 후 변경권 n개' · 처리 시각 최신순 · 창 '변경권 적용 기간 / 남은 n개 / 기본 제공 n개' · 카드 규칙 위아래 배치('수업 시작 기준')
+- 대표 확정(ChatGPT 검토 반영): B안(홈 카드 [내역 ›] → 변경권 내역 창) · 변경권 안 쓴 취소도 표시 · 문구 '6시간 이상/미만 남기고 취소' · '처리 후 변경권 n개' · 처리 시각 최신순 · 창 '변경권 적용 기간 / 남은 n개 / 기본 제공 n개'
 - migration **20261118100000_lms_student_credit_history** (읽기 전용 함수 `student_credit_history`, 시험 DB 적용): 기간별 지급·남은 수·줄(use·late·holiday·no_credit·return·admin_add/remove·migrated), 줄의 after = 취소 판정 기록(change_requests.decision.credits_after) 또는 지급량+그 시각까지 credit_ledger 합. 운영진 조정 사유(note)는 학생에게 안 줌
 - 코드: `src/lms/student/credit-history.ts`(+test) · `processing-history.ts` historyLines(credit) · `ProcessingHistory.tsx`(수강생 취소 줄 = 수업 시각·남은 시간·결과·처리 후, 상태 줄 없음 / 되돌림 = 1개 반환) · `StudentHome.tsx` 홈 카드·Credits 창(옛 DB 면 CreditsOld) · `live.ts` 로드 · authz-probe 목록
 - 시험: vitest src/lms/student 62 · tsc 0 · 시험 DB 점검 `supabase/tests/student-credit-history.sql` 학생 44명 통과(left=credit_balance·최신순·칸 목록·기록 수·권한 5종)
