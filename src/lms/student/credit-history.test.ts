@@ -21,8 +21,8 @@ describe('변경권 내역 (대표 11/18)', () => {
     expect(resultText(item({ kind: 'late', delta: 0 }))).toBe('변경권 사용 안 됨 · 수업 1회 차감');
     expect(subText(item({ kind: 'late', timing: 'late', delta: 0, after: 1 }))).toBe('6시간 미만 남았을 때 · 수업 1회 차감 · 처리 후 1개');
     expect(subText(item({ kind: 'return', timing: null, delta: 1, after: 2 }))).toBe('처리 후 2개');
-    expect(subText(item({ kind: 'no_credit', delta: 0, reverted: true }))).toBe('6시간 이상 남았을 때 · 나중에 취소 되돌림 · 처리 후 0개');
-    expect(resultText(item({ kind: 'no_credit', delta: 0, reverted: true }))).toBe('남은 0개');
+    expect(subText(item({ kind: 'no_credit', delta: 0, reverted: true }))).toBe('6시간 이상 남았을 때 · 수업 1회 차감 · 처리 후 0개');
+    expect(resultText(item({ kind: 'no_credit', delta: 0, reverted: true }))).toBe('남은 0개 · 수업 1회 차감');
   });
   it('처리 내역 줄에 맞는 기록: 같은 수업·가까운 처리 시각, 강사 취소는 없음', () => {
     const periods = parseCreditHistory([{ start: '2026-11-12', end: '2026-12-09', granted: 2, left: 0, current: true,
@@ -54,6 +54,8 @@ describe('변경권 내역 창 줄 (대표 11/18 2차)', () => {
     expect(creditEntry({ ...base, kind: 'use', after: 1 })).toMatchObject({ lessonLabel: '취소한 수업', timeLabel: '취소 일시', timing: '6시간 이상 남았을 때', result: '1개 사용 · ', bold: '2개 → 1개' });
     expect(creditEntry({ ...base, kind: 'late', delta: 0, timing: 'late', after: 1 })).toMatchObject({ timing: '6시간 미만 남았을 때', bold: '사용 안 됨 · 수업 1회 차감' });
     expect(creditEntry({ ...base, kind: 'return', delta: 1, timing: null, after: 2 })).toMatchObject({ lessonLabel: '원래 수업', timeLabel: '처리 일시', timing: null, bold: '1개 → 2개' });
+    expect(creditEntry({ ...base, kind: 'no_credit', delta: 0, reverted: true, after: 0 })).toMatchObject({ bold: '남은 0개 · 수업 1회 차감' });
+    expect(creditEntry({ ...base, kind: 'restored', delta: 0, timing: null, after: 0 })).toMatchObject({ lessonLabel: '원래 수업', timeLabel: '처리 일시', note: '수업 취소 되돌림 · 수업 일정 복구 완료', result: null });
     expect(creditEntry({ ...base, kind: 'admin_add', delta: 1, timing: null, lesson_at: null, after: 1 })).toMatchObject({ lessonLabel: null, result: '운영진 지급 1개 · ', bold: '0개 → 1개' });
   });
 });
