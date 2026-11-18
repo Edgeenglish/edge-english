@@ -280,7 +280,7 @@
 - 11/18 한 것: 학생 홈 `?late=수업id` → 지금 알릴 수 있으면 '늦게 참여해요' 창 바로 열고 화면 가운데로, 아니면 맨 위 한 줄(LATE_LINK_NOTE: 링크 없음·취소·끝남·이미 알림·2시간 전 아님). page.tsx·StudentLive·StudentDemo·StudentHome. 중복 발송은 DB student_late_notice 가 막음(그대로)
 - ✅ 11/18 '시스템에 넣어'(H26(215) 보충): migration **20261118120000_lms_mail_late_notice_button** 시험 DB 적용(lms_lesson_reminder_mail 2h 만·tutor_contact_student 1·2차), lms-test 반영. QA 통과: 메일 3종 support@ 도착(24h 는 버튼 없음), STU-0018 휴대폰·PC 창 바로 열림 → 보냄 → 다시 열면 '이미…'(student_late_notices 1줄), 끝남·취소·이름·잘못된 링크, 로그아웃이면 /lms/login?next=…late= 유지. 고친 것: 창이 화면 그린 뒤에도 열리게(autoOpen effect)
 - 대표 확인용 데이터: STU-0018 11/18 20:00~20:40 한국 수업(seq 107) + 2시간 전 메일. QA 수업 seq 101·106 은 하루 전으로 옮김, 102~105 그대로(지난 수업·11/19 수업)
-- 남은 것: 대표 확인 → 운영(백업 → migration → lms-prod 골라 담기, `git log origin/lms-test..origin/lms-prod` 먼저). 대표 답 대기: 2시간 안에 수업이 2개 있을 때 뒤 수업 링크 문구
+- 남은 것: 대표 확인 → 운영(백업 → migration → lms-prod 골라 담기, `git log origin/lms-test..origin/lms-prod` 먼저). (Work QA 11/18 중간 오류 고침: 앞 수업 진행 중에 뒤 수업 링크 → 뒤 수업 창을 따로 엶(overlay 'late'), 저장도 뒤 수업. 재시험 통과: seq 108 진행 중 + 109 21:00 → 109 에만 1줄, 다시 열면 '이미…', 108 링크는 홈 카드에서 바로)
 - 대표 11/18: 학생 메일에 버튼 `강사님께 늦는다고 알리기` → 누르면 학생 홈에서 그 수업의 기존 '늦게 참여해요' 창(지각 시간·이유 고르기)이 바로 열림. 로그인 안 됐으면 로그인 뒤 그 창(기존 `?next=` 흐름). 학생이 직접 보내기는 그대로. 학생 홈 버튼 이름 `늦게 참여해요`는 유지. 이미지 안내는 안 넣음
 - 넣는 메일: **2시간 전 수업 리마인더**(정규·보강·이월·보상 모두, `lms_student_lesson_reminder_mail`, [수업 입장하기] 아래) + **강사 Contact student 학생 메일 1·2차**(migration 20261116140000, [수업 들어가기] 아래). 24시간 전 리마인더는 제외(지각 알림은 시작 2시간 전부터라 못 보냄)
 - 확인됨: 학생 지각 알림은 수업 끝날 때까지 보낼 수 있음(student_late_notice) → Contact student(시작 뒤) 메일도 됨. 2시간 전 리마인더는 2시간 전~1시간 전 사이 발송 → 창 열림
