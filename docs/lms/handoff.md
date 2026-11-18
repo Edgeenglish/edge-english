@@ -263,6 +263,13 @@
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
+## ⏭ 메일 [강사님께 늦는다고 알리기] 버튼 — **대표 방향 확정(11/18), 개발은 새 세션** (정책 원본 H26 기록 전)
+- 대표 11/18: 학생 메일에 버튼 `강사님께 늦는다고 알리기` → 누르면 학생 홈에서 그 수업의 기존 '늦게 참여해요' 창(지각 시간·이유 고르기)이 바로 열림. 로그인 안 됐으면 로그인 뒤 그 창(기존 `?next=` 흐름). 학생이 직접 보내기는 그대로. 학생 홈 버튼 이름 `늦게 참여해요`는 유지. 이미지 안내는 안 넣음
+- 넣는 메일: **2시간 전 수업 리마인더**(정규·보강·이월·보상 모두, `lms_student_lesson_reminder_mail`, [수업 입장하기] 아래) + **강사 Contact student 학생 메일 1·2차**(migration 20261116140000, [수업 들어가기] 아래). 24시간 전 리마인더는 제외(지각 알림은 시작 2시간 전부터라 못 보냄)
+- 확인됨: 학생 지각 알림은 수업 끝날 때까지 보낼 수 있음(student_late_notice) → Contact student(시작 뒤) 메일도 됨. 2시간 전 리마인더는 2시간 전~1시간 전 사이 발송 → 창 열림
+- 참고 구현: 보강 메일 `/student?makeup=` 열기(StudentHome `searchParams.delete('makeup')`), 로그인 `?next=`(StudentLive toLogin, LoginFlow)
+- 개발 전 대표 확인: 메일에 버튼 위·아래 문장을 넣을지(기본 = 버튼만), 수업이 이미 끝났거나 이미 알린 뒤 링크를 누르면 무엇을 보일지. 문구는 '시스템에 넣어' 뒤에만 코드·DB 에 넣음
+
 ## ✅ 11/14 강사 '늦어요' 알림 — **운영 반영 완료** (대표 11/14 승인, 운영 DB 백업 snapshots 57, migration 20261114200000, lms-prod 032224c = 이 기능 커밋 3개만 lms-prod 0a7159e 위에 골라 얹음, 시안 https://claude.ai/artifact/7YmptmNwBiGWEjWjNGReDM)
 - 되돌리기: 코드 = lms-prod 를 0a7159e 로. DB = 함수 tutor_late_notice·tutor_late_notices·student_tutor_late_notices·lms_kst_short 만 drop, **tutor_late_notices 표는 기록이 있으면 보존**(대표 11/14)
 - 확정 문구 원본 = `src/lms/tutor/late.ts` + migration. 'LMS 알림' 대신 학생 홈 '다음 수업' 카드 노란 띠, 운영진은 별도 메일, 한 수업 1번, Schedule+Home 두 곳
