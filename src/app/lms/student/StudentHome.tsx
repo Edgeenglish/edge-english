@@ -11,6 +11,7 @@ import { createContext, useContext, useEffect, useId, useMemo, useRef, useState 
 import books from '@/data/books.json';
 import Link from 'next/link';
 import ProcessingHistory from './ProcessingHistory';
+import { shortResult, subText, type CreditItem, type CreditPeriodHistory } from '@/lms/student/credit-history';
 import { ChangeRequestRows, RegularChangeSheet, TutorChangeSheet } from './ChangeRequests';
 import type { ChangeRequests, StudentExtras } from '@/lms/student/live';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
@@ -726,13 +727,20 @@ export default function StudentHome(props: {
         </button>
         <div className="flex flex-1 flex-col gap-1.5 px-4 pb-3.5 pt-2.5">
           <p className="relative flex flex-wrap items-center gap-x-1 text-[12.5px] text-[#55526a]">
-            <span>남은 변경권 <b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.creditsLeft}개</b> / 총 {s.creditsPerPeriod}개</span>
+            {/* 누르면 변경권 내역 (대표 11/18) */}
+            <button type="button" onClick={() => setOverlay({ kind: 'credits' })}
+              className="-mx-1.5 inline-flex min-h-[36px] items-center gap-1 rounded-[8px] px-1.5 text-left hover:bg-[#f7f5fd] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0]">
+              <span>남은 변경권 <b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.creditsLeft}개</b> / 총 {s.creditsPerPeriod}개</span>
+              <span className="text-[12px] font-semibold text-[#5b3df0]">내역 ›</span>
+            </button>
             <HelpTip text="변경권은 28일마다 새로 제공돼요." />
           </p>
-          <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
-            <b className="font-bold text-[#3d3a52]">6시간 전</b><span>변경권 1개 사용 · 보강 가능</span>
-            <b className="font-bold text-[#3d3a52]">6시간 이내</b><span>변경권 유지 · 보강 불가 (수업 1회 차감)</span>
-          </p>
+          {/* 위아래 배치 (대표 11/18): 기준 → 결과 */}
+          <div className="grid gap-1 text-[11.5px] leading-[1.45] text-[#55526a]">
+            <p className="text-[11px] text-[#8b88a0]">수업 시작 기준</p>
+            <p><b className="font-bold text-[#3d3a52]">6시간 이상 남기고 취소</b><br />변경권 1개 사용 · 보강 가능</p>
+            <p><b className="font-bold text-[#3d3a52]">6시간 미만 남기고 취소</b><br />변경권 사용 안 함 · 수업 1회 차감 · 보강 불가</p>
+          </div>
         </div>
       </div>
       <div className={`${card} flex flex-col`}>
@@ -979,7 +987,7 @@ export default function StudentHome(props: {
           <TabPage title="처리 내역">
             <ChangeRequestRows data={changeReqs} tz={VIEW_TZ} onOpenRegular={() => setOverlay({ kind: 'regular' })} />
             {/* 정규 시간 변경·강사 변경 상담 줄이 있으면 '아직 처리 내역이 없어요' 를 띄우지 않음 */}
-            {((s.processingHistory ?? []).length > 0 || s.processingHistoryError || (changeReqs.regular.length + changeReqs.tutor.length) === 0) && <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
+            {((s.processingHistory ?? []).length > 0 || s.processingHistoryError || (changeReqs.regular.length + changeReqs.tutor.length) === 0) && <ProcessingHistory events={s.processingHistory ?? []} credits={s.creditHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
               prefs={prefs} loadPrefs={actions.prefs} savePref={savePref} />}
           </TabPage>
         )}
@@ -1141,7 +1149,7 @@ export default function StudentHome(props: {
           {overlay.kind === 'notices' && <NoticeList notices={notices} onOpen={openNotice} />}
           {overlay.kind === 'notice' && notices.find((n) => n.id === overlay.id) && <NoticeDetail n={notices.find((n) => n.id === overlay.id)!} />}
           {overlay.kind === 'points' && <Points history={points} />}
-          {overlay.kind === 'credits' && <Credits s={s} />}
+          {overlay.kind === 'credits' && <Credits s={s} onAll={() => { setOverlay(null); setTab('requests'); }} />}
           {overlay.kind === 'regular' && (
             <RegularChangeSheet tz={VIEW_TZ} load={actions.regularOptions} busy={busy}
               pending={changeReqs.regular.find((r) => r.status === 'pending') ?? null}
@@ -1806,9 +1814,54 @@ function LateNotice({ sent, onSend, autoOpen }: { sent: boolean; onSend: (minute
   );
 }
 
-// 변경권: 지금 기간과 언제 썼는지 (대표 10/29)
-// 변경권: 지금 기간과 언제 썼는지 (대표 10/29)
-function Credits({ s }: { s: StudentView }) {
+// 변경권 내역 (대표 11/18): 지금 기간 요약 + 처리 시각 최신순 줄(처리 후 남은 수), 다른 기간은 눌러서 펼침.
+// 함수 없는 옛 DB(creditHistory 없음)면 예전 목록.
+function Credits({ s, onAll }: { s: StudentView; onAll: () => void }) {
+  const [more, setMore] = useState(false);
+  if (!s.creditHistory) return <CreditsOld s={s} />;
+  const periods = s.creditHistory;
+  const current = periods.find((p) => p.current) ?? null;
+  const others = periods.filter((p) => p !== current);
+  // 기간 날짜는 날짜만 (시각 없음 — 다른 화면 '이번 기간'과 같은 날짜)
+  const day = (d: string) => `${fmtDate(d as KstDate)}(${'일월화수목금토'[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
+  const title = (i: CreditItem) => {
+    const lesson = i.lesson_at ? `${whenText(new Date(i.lesson_at))} 수업 ` : '';
+    if (i.kind === 'return') return `${lesson}취소 되돌림`;
+    if (i.kind === 'admin_add' || i.kind === 'admin_remove') return '운영진 조정';
+    if (i.kind === 'migrated') return 'LMS 시작 전 사용';
+    return `${lesson}취소`;
+  };
+  const block = (p: CreditPeriodHistory) => (
+    <section key={p.start} className={`${card} px-4 py-3`}>
+      <div className="flex items-baseline justify-between gap-2 border-b border-[#eeecf4] pb-2">
+        <p className="text-[12.5px] text-[#55526a]">변경권 적용 기간<br /><span className="font-semibold text-[#1d1b2b]">{day(p.start)}~{day(p.end)}</span></p>
+        <p className="text-right text-[12.5px] text-[#55526a]">남은 <b className="text-[20px] font-extrabold text-[#1d1b2b]">{p.left}개</b><br />기본 제공 {p.granted}개</p>
+      </div>
+      {p.items.length === 0 && <p className="py-3 text-[13.5px] text-[#6b6880]">이 기간에 변경권 기록이 없어요.</p>}
+      {p.items.map((i) => (
+        <div key={i.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 border-b border-[#eeecf4] py-2.5 last:border-0">
+          <span className="text-[14px] font-semibold text-[#1d1b2b]">{title(i)}</span>
+          <b className={`whitespace-nowrap text-right text-[13.5px] ${i.delta === 0 ? 'font-semibold text-[#8b88a0]' : 'text-[#1d1b2b]'}`}>{shortResult(i)}</b>
+          <span className="col-span-2 text-[12px] leading-[17px] text-[#55526a]">{subText(i)}</span>
+          <span className="col-span-2 text-[11.5px] text-[#8b88a0]">{i.kind === 'return' || i.kind.startsWith('admin') || i.kind === 'migrated' ? '처리' : '취소'}: {whenText(new Date(i.kind === 'use' || i.kind === 'late' || i.kind === 'holiday' || i.kind === 'no_credit' ? i.cancel_at : i.at))}</span>
+        </div>
+      ))}
+    </section>
+  );
+  return (
+    <div className="grid gap-3">
+      <h2 className="text-[18px] font-bold">변경권 내역</h2>
+      {current ? block(current) : <p className={`${card} p-4 text-[14px] text-[#6b6880]`}>지금 변경권 적용 기간이 없어요.</p>}
+      {others.length > 0 && (more ? others.map(block) : (
+        <button type="button" onClick={() => setMore(true)} className="min-h-[44px] text-left text-[13.5px] font-semibold text-[#5b3df0]">다른 기간 보기 ›</button>
+      ))}
+      <button type="button" onClick={onAll} className="min-h-[44px] text-left text-[13.5px] font-semibold text-[#5b3df0]">처리 내역 전체 ›</button>
+    </div>
+  );
+}
+
+// 예전 변경권 목록 (student_credit_history 없는 DB)
+function CreditsOld({ s }: { s: StudentView }) {
   const text = (c: StudentView['creditUses'][number]) =>
     c.reason === 'student_change'
       ? `${c.lessonAt ? `${whenText(c.lessonAt)} 수업 취소` : '수업 취소'}`

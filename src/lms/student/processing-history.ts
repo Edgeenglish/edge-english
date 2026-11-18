@@ -1,4 +1,5 @@
 import { ampmKo, formatInZone } from '../rules/dates';
+import { resultText, timingText, type CreditItem } from './credit-history';
 
 export const HISTORY_LABELS = {
   lesson_canceled: ['수업 취소', '취소 처리 완료'],
@@ -90,7 +91,16 @@ export function historyOriginalDay(e: ProcessingEvent, timezone: string): string
  * 처리 내역 줄 (대표 11/13 확정): 제목 / '원래 수업 : 11/9(월)'(취소는 '취소한 수업 : 11/9(월) · 수강생 취소') / '상태 : …'
  * 보강 신청 줄 상태는 requestStatus() 결과 (없으면 상태 줄 없이 두 줄만)
  */
-export function historyLines(e: ProcessingEvent, timezone: string, reqStatus: string | null = null): { title: string; detail: string | null; status: string | null } {
+export function historyLines(e: ProcessingEvent, timezone: string, reqStatus: string | null = null, credit: CreditItem | null = null): { title: string; detail: string | null; status: string | null; extra?: string[] } {
+  // 변경권 기록이 있는 수강생 취소·되돌림 (대표 11/18): 수업 시작 시각 · 남은 시간 · 변경권 결과 · 처리 후 변경권. '수강생 취소'·'상태' 줄은 뺌
+  if (credit && e.lesson_at && e.kind === 'lesson_canceled') {
+    const extra = [timingText(credit), resultText(credit), `처리 후 변경권 ${credit.after}개`].filter((x): x is string => !!x);
+    return { title: historyLabel(e).title, detail: `취소한 수업 : ${historyTime(e.lesson_at, timezone)}`, status: null, extra };
+  }
+  if (credit && e.lesson_at && e.kind === 'lesson_restored') {
+    return { title: historyLabel(e).title, detail: `원래 수업 : ${historyTime(e.lesson_at, timezone)}`, status: historyLabel(e).result,
+      extra: [resultText(credit), `처리 후 변경권 ${credit.after}개`] };
+  }
   const day = historyOriginalDay(e, timezone);
   const original = day ?? '날짜 미기록';
   const label = historyLabel(e);
