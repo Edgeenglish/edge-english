@@ -1,3 +1,8 @@
+## ✅ 11/18 로그인 화면 비밀번호 안내 강화 — 운영 반영 (lms-prod 841bdd36, 대표 '운영 반영해')
+- 한국어 첫 안내 '한 번도 비밀번호를 만든 적 없거나/기억나지 않으면👇'(영어 첫 안내도 👇), 👇 3번만 까딱 · 비밀번호 틀리면 빨간 '비밀번호를 만든 적 없으면 아래 [비밀번호 만들기·찾기] 버튼을 눌러 주세요'+보라 채운 버튼 흔들림(틀릴 때마다) · 동작 줄이기 설정이면 안 움직임
+- 수정: login-flow.ts(badLogin·noPwHint·noPwArrow) · LoginFlow.tsx(badTick·failLogin) · globals.css(lms-shake·lms-bob). 나중에 안내 지우기 = noPwHint·noPwArrow 두 줄만 삭제(한·영 동시)
+- 운영에는 이 커밋 2개만 골라 담음(lms-test 의 다른 미반영 로그인 변경은 그대로 둠). 되돌리기 = lms-prod 를 20da527b 로. 점검: vitest 536·tsc·internal-marks·check-public-pages 통과
+
 ## ✅ 11/18 학생 변경권 내역 + 처리 내역 줄 정리 — **운영 반영 끝 (대표 '시험반영 후 운영반영해')** (브랜치 claude/friendly-rubin-d7ftqh, 시안 https://claude.ai/artifact/SCERAK1za5rBF4bkYCWZ3m `docs/lms/previews/student-credit-history-drafts.html`)
 - 홈 카드 규칙: 요청 없이 바꿨다가 되돌린 뒤 대표 시안 확정 문구로 반영(https://claude.ai/artifact/5eFCzRLSaMq6tKBzSTGWNE) · '사용 안 됨'으로 통일 · 내 정보 › 변경권도 새 창(B) · 운영진 조정 사유 숨김(B) (대표 11/18, 비교 https://claude.ai/artifact/SgXa4eavSC14XvfGGjzuKw)
 - 정책 원본: 문서 끝 'H26 (11/18 학생 변경권 내역 — 번호는 대표가 정리)' 줄 (끝 번호 확인 못 함)
