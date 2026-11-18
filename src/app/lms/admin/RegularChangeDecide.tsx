@@ -1,6 +1,6 @@
 'use client';
 /*
- * 운영자 홈 할 일 '정규 시간 변경 신청' (H26(208)): 1·2순위 중 골라 [확정] / [반려].
+ * 운영자 홈 할 일 '정규 시간 변경 신청' (H26(208), 보충 7: 1·2순위 = 일정 전체): 1·2순위 중 골라 [확정] / [반려].
  * [확정] 순간 DB 가 [정규 일정 수정]과 같은 충돌 검사를 다시 돌림 — 막히면 저장 안 하고 사유·다음 가능한 주를 그 자리에 보여 줌.
  * 시각은 모두 한국 시간.
  */
@@ -28,7 +28,7 @@ const SEC = `${btn} border-[#5b3df0] bg-white text-[#5b3df0]`;
 const GRAY = `${btn} border-[#e6e3ef] bg-[#ecebf1] text-[#55526a]`;
 
 export default function RegularChangeDecide({ view, busy, decide }: {
-  view: { items: { old: string; c: ({ text: string; week: string } | null)[] }[] };
+  view: { items: { c: ({ text: string; week: string } | null)[] }[] };
   busy: boolean;
   /** 저장·다시 읽기는 부모가. 확정이 막혔을 때만 결과를 돌려받아 그 자리에 보여 줌 */
   decide: (action: 'confirm' | 'reject', choice: number[] | null, week: string | null) => Promise<DecideResult | null>;
@@ -57,7 +57,6 @@ export default function RegularChangeDecide({ view, busy, decide }: {
     <div className="grid gap-2">
       {view.items.map((it, i) => (
         <div key={i} className="grid gap-1">
-          <p className="text-[13px] font-bold text-[#55526a]">{it.old} →</p>
           {it.c.map((c, k) => c && (
             single ? (
               <p key={k} className="flex justify-between gap-2 rounded-[10px] bg-[#efebff] px-3 py-2 text-[14px]">

@@ -63,6 +63,25 @@ export const slotAt = (week: string, s: KstSlot): Date => new Date(`${dayOf(week
 
 export const sameSlot = (a: KstSlot, b: KstSlot) => a.weekday === b.weekday && a.time === b.time;
 
+/** 일정 전체(정규 시간 같은 시간 규칙, H26(208) 보충 7): 옛 일정과 새 일정 비교 — DB lms_rc_first2·fits2·week_ok2·week2 와 같음 */
+const inSet = (set: KstSlot[], x: KstSlot) => set.some((y) => sameSlot(x, y));
+export function firstDate2(week: string, olds: KstSlot[], news: KstSlot[]): KstDate | null {
+  const diff = [...olds.filter((o) => !inSet(news, o)), ...news.filter((n) => !inSet(olds, n))];
+  return diff.length ? diff.map((x) => dayOf(week, x.weekday)).sort()[0] : null;
+}
+const countAll = (week: string, set: KstSlot[], end: string) => set.reduce((n, x) => n + countFrom(week, x.weekday, end), 0);
+export function weekOk2(c: RcContext, olds: KstSlot[], news: KstSlot[], week: string): boolean {
+  if (week < addDays(mondayOf(c.today), 7) || week > c.finalEnd || mondayOf(week) !== week) return false;
+  const f = firstDate2(week, olds, news);
+  return !!f && f <= c.finalEnd && c.today <= addDays(f, -4) && countAll(week, news, c.finalEnd) >= countAll(week, olds, c.finalEnd) && !periodOf(c.periods, f)?.used;
+}
+export function weekFor2(c: RcContext, olds: KstSlot[], news: KstSlot[]): KstDate | null {
+  for (let w = addDays(mondayOf(c.today), 7); w <= c.finalEnd; w = addDays(w, 7)) if (weekOk2(c, olds, news, w)) return w;
+  return null;
+}
+/** 요일들 + 시간 하나 → 정규 일정 (요일 순) */
+export const slotsOf = (days: number[], time: string): KstSlot[] => [...new Set(days)].sort((a, b) => a - b).map((weekday) => ({ weekday, time }));
+
 /** 강사 변경 상담 내용 (DB 코드 → 화면 글, 대표 11/17 확정 순서) */
 export const TUTOR_CHANGE_REASONS: { code: 'style' | 'time' | 'other_tutor' | 'consult'; label: string }[] = [
   { code: 'style', label: '다른 수업 스타일을 경험해 보고 싶어요' },

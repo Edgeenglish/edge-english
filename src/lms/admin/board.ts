@@ -228,6 +228,7 @@ export type TimeOffRequestTask = {
 
 /** 학생 정규 시간 변경 신청 (H26(208)) — 운영진이 1·2순위 중 골라 확정 (확정 순간 충돌 검사 다시) */
 export type RcSlot = { weekday: number; time: string };
+export type RcCand = { days: number[]; time: string; week: string };
 export type RegularChangeRequestTask = {
   kind: 'regular_change_request';
   id: string;
@@ -235,7 +236,7 @@ export type RegularChangeRequestTask = {
   studentCode: string;
   tutorName: string;
   oldSlots: RcSlot[];
-  items: { old: RcSlot; c1: RcSlot & { week: string }; c2: (RcSlot & { week: string }) | null }[];
+  items: { c1: RcCand; c2: RcCand | null }[];
   reason: string | null;
   createdAt: Date;
 };
@@ -308,7 +309,7 @@ export type BoardItem = {
   /** 신규 매칭의 일정안 — 화면이 PlanCard(확정·안내 복사)로 그림 */
   plan?: PlanView;
   /** 정규 시간 변경 신청: 화면이 순위 고르기·확정으로 그림 */
-  regularChange?: { slotText: string[]; items: { old: string; c: ({ text: string; week: string } | null)[] }[] };
+  regularChange?: { slotText: string[]; items: { c: ({ text: string; week: string } | null)[] }[] };
   /** 첫 수업 24시간 안인데 안내 미완료 → 목록 맨 위 (D-51-3) */
   top?: boolean;
   /** 기존 수강생 입력: 원래 날짜 확인 필요 보강 — 화면이 날짜 입력칸으로 그림 */
@@ -330,6 +331,17 @@ const WD: Record<string, string> = { Sun: '일', Mon: '월', Tue: '화', Wed: '�
 function rcText(s: RcSlot): string {
   const h = Number(s.time.slice(0, 2));
   return `${'일월화수목금토'[s.weekday]} ${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${s.time.slice(3, 5)} 한국 시간`;
+}
+
+/** 일정 전체 '월·수 오후 12:30 한국 시간' */
+function rcSetText(c: RcCand): string {
+  const h = Number(c.time.slice(0, 2));
+  return `${[...c.days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => '일월화수목금토'[d]).join('·')} ${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${c.time.slice(3, 5)} 한국 시간`;
+}
+/** 지금 정규 일정: 시간이 모두 같으면 '화·금 오후 1:00 한국 시간', 다르면 요일마다 */
+function rcNowText(slots: RcSlot[]): string {
+  const times = [...new Set(slots.map((s) => s.time))];
+  return times.length === 1 ? rcSetText({ days: slots.map((s) => s.weekday), time: times[0], week: '' }) : slots.map(rcText).join(' · ');
 }
 
 function kstLabel(d: Date): string {
@@ -690,13 +702,13 @@ function toItem(t: TaskSource, now: Date): ItemBase {
         severity: 'open',
         tag: '정규 시간 변경 신청',
         title: `${t.studentName} · ${t.tutorName}`,
-        detail: [`지금 ${t.oldSlots.map(rcText).join(' · ')}`, t.reason ? `변경 사유: ${t.reason}` : null, `신청 ${kstLabel(t.createdAt)} 한국 시간`].filter(Boolean).join(' · '),
+        detail: [`지금 ${rcNowText(t.oldSlots)}`, t.reason ? `변경 사유: ${t.reason}` : null, `신청 ${kstLabel(t.createdAt)} 한국 시간`].filter(Boolean).join(' · '),
         due: null,
         steps: [],
         actions: [],
         regularChange: {
           slotText: t.oldSlots.map(rcText),
-          items: t.items.map((it) => ({ old: rcText(it.old), c: [it.c1, it.c2].map((c) => (c ? { text: rcText(c), week: c.week } : null)) })),
+          items: t.items.map((it) => ({ c: [it.c1, it.c2].map((c) => (c ? { text: rcSetText(c), week: c.week } : null)) })),
         },
       };
     }

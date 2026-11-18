@@ -321,10 +321,12 @@ export type TimezoneState = { timezone: string; kept: string | null };
 export type RcOptions =
   | { state: 'ok'; today: KstDate; finalEnd: KstDate; duration: number; tutor: string; slots: KstSlot[]; free: KstSlot[]; periods: RcPeriod[] }
   | { state: 'none' | 'pending' | 'scheduled' | 'ending' };
-export type RcCandidate = KstSlot & { week: KstDate; first: KstDate };
+/** 학생이 고른 일정: 한국 요일들 + 한국 시각 하나 */
+export type RcPick = { days: number[]; time: string };
+export type RcCandidate = { days: number[]; time: string; week: KstDate; first: KstDate };
 export type RegularRequest = {
   id: string; status: 'pending' | 'confirmed' | 'rejected' | 'withdrawn'; createdAt: Date; oldSlots: KstSlot[];
-  items: { old: KstSlot; c1: RcCandidate; c2: RcCandidate | null }[]; reason: string | null; chosen: KstSlot[] | null; effectiveFrom: KstDate | null;
+  items: { c1: RcCandidate; c2: RcCandidate | null }[]; reason: string | null; chosen: KstSlot[] | null; effectiveFrom: KstDate | null;
 };
 export type TutorChangeRequest = { id: string; status: 'open' | 'done'; createdAt: Date; reasons: string[]; note: string | null };
 export type ChangeRequests = { regular: RegularRequest[]; tutor: TutorChangeRequest[] };
@@ -408,7 +410,7 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
       return { state: 'ok', today: d.today as KstDate, finalEnd: d.final_end as KstDate, duration: d.duration as number, tutor: d.tutor as string,
         slots: d.slots as KstSlot[], free: d.free as KstSlot[], periods: d.periods as RcPeriod[] };
     },
-    regularRequest: async (items: { old: KstSlot; c1: KstSlot; c2: KstSlot | null }[], reason: string, start: KstDate | null = null): Promise<void> => {
+    regularRequest: async (items: { c1: RcPick; c2: RcPick | null }[], reason: string, start: KstDate | null = null): Promise<void> => {
       check(await sb.rpc('student_regular_change_request', { p_student: adminStudentId, p_items: items, p_reason: reason || null, p_start: start }));
     },
     regularWithdraw: async (id: string): Promise<void> => {
