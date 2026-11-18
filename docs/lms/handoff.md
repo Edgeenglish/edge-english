@@ -263,6 +263,17 @@
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
 
+## ⏭ 메일 [강사님께 늦는다고 알리기] 버튼 — **개발 중(11/18, 브랜치 claude/vibrant-ptolemy-par1q9)**, 정책 원본 H26(214)(215) 기록함
+- 11/18 한 것: 학생 홈 `?late=수업id` → 지금 알릴 수 있으면 '늦게 참여해요' 창 바로 열고 화면 가운데로, 아니면 맨 위 한 줄(LATE_LINK_NOTE: 링크 없음·취소·끝남·이미 알림·2시간 전 아님). page.tsx·StudentLive·StudentDemo·StudentHome. 중복 발송은 DB student_late_notice 가 막음(그대로)
+- 남은 것: 대표 메일 문구 확인 → '시스템에 넣어' 뒤 migration(lms_lesson_reminder_mail·tutor_contact_student 에 두 번째 버튼, 링크 lms_url()||'/student?late='||l.id) → 시험 DB·lms-test → QA(끝난 뒤·이미 알린 뒤·로그인 안 된 상태) → 대표 확인 → 운영. (참고: vitest 묶음 SQL 2개 실패는 이 브랜치 시작 전부터 — migration 넣을 때 `node scripts/lms-test-bundle.mjs` 로 같이 해결)
+- 대표 11/18: 학생 메일에 버튼 `강사님께 늦는다고 알리기` → 누르면 학생 홈에서 그 수업의 기존 '늦게 참여해요' 창(지각 시간·이유 고르기)이 바로 열림. 로그인 안 됐으면 로그인 뒤 그 창(기존 `?next=` 흐름). 학생이 직접 보내기는 그대로. 학생 홈 버튼 이름 `늦게 참여해요`는 유지. 이미지 안내는 안 넣음
+- 넣는 메일: **2시간 전 수업 리마인더**(정규·보강·이월·보상 모두, `lms_student_lesson_reminder_mail`, [수업 입장하기] 아래) + **강사 Contact student 학생 메일 1·2차**(migration 20261116140000, [수업 들어가기] 아래). 24시간 전 리마인더는 제외(지각 알림은 시작 2시간 전부터라 못 보냄)
+- 확인됨: 학생 지각 알림은 수업 끝날 때까지 보낼 수 있음(student_late_notice) → Contact student(시작 뒤) 메일도 됨. 2시간 전 리마인더는 2시간 전~1시간 전 사이 발송 → 창 열림
+- 참고 구현: 보강 메일 `/student?makeup=` 열기(StudentHome `searchParams.delete('makeup')`), 로그인 `?next=`(StudentLive toLogin, LoginFlow)
+- 개발 전 대표 확인: 메일에 버튼 위·아래 문장을 넣을지(기본 = 버튼만), 수업이 이미 끝났거나 이미 알린 뒤 링크를 누르면 무엇을 보일지. 문구는 '시스템에 넣어' 뒤에만 코드·DB 에 넣음
+- QA 에 꼭 포함(대표 11/18): 메일을 늦게 열어 수업이 이미 끝났거나 이미 지각 알림을 보낸 뒤 버튼을 누르면 중복 발송 없이 알맞게 안내되는지
+- 같이 할 일(대표 11/18 '응'): 정책 원본 H26 에 11/14 강사 '늦어요' 알림 확정 문구 기록(이유 버튼 5개·? 팝업·학생 메일·운영진 메일·학생 홈 노란 띠·한 수업 1번·Schedule+Home) + 11/14 운영 반영(snapshots 57, lms-prod 032224c) + 11/18 메일 버튼 방향
+
 ## ✅ 11/14 강사 '늦어요' 알림 — **운영 반영 완료** (대표 11/14 승인, 운영 DB 백업 snapshots 57, migration 20261114200000, lms-prod 032224c = 이 기능 커밋 3개만 lms-prod 0a7159e 위에 골라 얹음, 시안 https://claude.ai/artifact/7YmptmNwBiGWEjWjNGReDM)
 - 되돌리기: 코드 = lms-prod 를 0a7159e 로. DB = 함수 tutor_late_notice·tutor_late_notices·student_tutor_late_notices·lms_kst_short 만 drop, **tutor_late_notices 표는 기록이 있으면 보존**(대표 11/14)
 - 확정 문구 원본 = `src/lms/tutor/late.ts` + migration. 'LMS 알림' 대신 학생 홈 '다음 수업' 카드 노란 띠, 운영진은 별도 메일, 한 수업 1번, Schedule+Home 두 곳
