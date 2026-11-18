@@ -11,7 +11,7 @@ import { createContext, useContext, useEffect, useId, useMemo, useRef, useState 
 import books from '@/data/books.json';
 import Link from 'next/link';
 import ProcessingHistory from './ProcessingHistory';
-import { shortResult, subText, type CreditItem, type CreditPeriodHistory } from '@/lms/student/credit-history';
+import { creditEntry, type CreditItem, type CreditPeriodHistory } from '@/lms/student/credit-history';
 import { ChangeRequestRows, RegularChangeSheet, TutorChangeSheet } from './ChangeRequests';
 import type { ChangeRequests, StudentExtras } from '@/lms/student/live';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
@@ -1843,40 +1843,45 @@ function Credits({ s, onAll }: { s: StudentView; onAll: () => void }) {
   const periods = s.creditHistory;
   const current = periods.find((p) => p.current) ?? null;
   const others = periods.filter((p) => p !== current);
-  // 기간 날짜는 날짜만 (시각 없음 — 다른 화면 '이번 기간'과 같은 날짜)
-  const day = (d: string) => `${fmtDate(d as KstDate)}(${'일월화수목금토'[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
-  const title = (i: CreditItem) => {
-    const lesson = i.lesson_at ? `${whenText(new Date(i.lesson_at))} 수업 ` : '';
-    if (i.kind === 'return') return `${lesson}취소 되돌림`;
-    if (i.kind === 'admin_add' || i.kind === 'admin_remove') return '운영진 조정';
-    if (i.kind === 'migrated') return 'LMS 시작 전 사용';
-    return `${lesson}취소`;
+  // 기간 날짜는 날짜만 (다른 화면 '이번 기간'과 같은 날짜)
+  const day = (d: string) => fmtDate(d as KstDate);
+  // 대표 11/18 2차: 처리 내역과 같은 항목명·순서, 흰 박스 없이 얇은 구분선, 본문 14px, 왼쪽 정렬
+  const row = (i: CreditItem) => {
+    const e = creditEntry(i);
+    return (
+      <li key={i.id} className="grid gap-0.5 border-b border-[#e6e3ef] py-3 text-[14px] leading-[1.5] text-[#55526a] last:border-0">
+        {e.lessonLabel && <span>{e.lessonLabel}: <b className="font-bold text-[#1d1b2b]">{e.lessonAt ? whenText(new Date(e.lessonAt)) : '날짜 미기록'}</b></span>}
+        <span>{e.timeLabel}: {whenText(new Date(e.timeAt))}</span>
+        {e.timing && <span>{e.timing}</span>}
+        <span>변경권: {e.result}{e.bold && <b className="font-bold text-[#1d1b2b]">{e.bold}</b>}</span>
+      </li>
+    );
   };
-  const block = (p: CreditPeriodHistory) => (
-    <section key={p.start} className={`${card} px-4 py-3`}>
-      <div className="flex items-baseline justify-between gap-2 border-b border-[#eeecf4] pb-2">
-        <p className="text-[12.5px] text-[#55526a]">변경권 적용 기간<br /><span className="font-semibold text-[#1d1b2b]">{day(p.start)}~{day(p.end)}</span></p>
-        <p className="text-right text-[12.5px] text-[#55526a]">남은 <b className="text-[20px] font-extrabold text-[#1d1b2b]">{p.left}개</b><br />기본 제공 {p.granted}개</p>
-      </div>
-      {p.items.length === 0 && <p className="py-3 text-[13.5px] text-[#6b6880]">이 기간에 변경권 기록이 없어요.</p>}
-      {p.items.map((i) => (
-        <div key={i.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 border-b border-[#eeecf4] py-2.5 last:border-0">
-          <span className="text-[14px] font-semibold text-[#1d1b2b]">{title(i)}</span>
-          <b className={`whitespace-nowrap text-right text-[13.5px] ${i.delta === 0 ? 'font-semibold text-[#8b88a0]' : 'text-[#1d1b2b]'}`}>{shortResult(i)}</b>
-          <span className="col-span-2 text-[12px] leading-[17px] text-[#55526a]">{subText(i)}</span>
-          <span className="col-span-2 text-[11.5px] text-[#8b88a0]">{i.kind === 'return' || i.kind.startsWith('admin') || i.kind === 'migrated' ? '처리' : '취소'}: {whenText(new Date(i.kind === 'use' || i.kind === 'late' || i.kind === 'holiday' || i.kind === 'no_credit' ? i.cancel_at : i.at))}</span>
-        </div>
-      ))}
-    </section>
-  );
+  const list = (p: CreditPeriodHistory) => p.items.length === 0
+    ? <p className="py-3 text-[14px] text-[#6b6880]">이 기간에 변경권 기록이 없어요.</p>
+    : <ul className="border-t border-[#e6e3ef]">{p.items.map(row)}</ul>;
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-3 text-left">
       <h2 className="text-[18px] font-bold">변경권 내역</h2>
-      {current ? block(current) : <p className={`${card} p-4 text-[14px] text-[#6b6880]`}>지금 변경권 적용 기간이 없어요.</p>}
-      {others.length > 0 && (more ? others.map(block) : (
-        <button type="button" onClick={() => setMore(true)} className="min-h-[44px] text-left text-[13.5px] font-semibold text-[#5b3df0]">다른 기간 보기 ›</button>
-      ))}
-      <button type="button" onClick={onAll} className="min-h-[44px] text-left text-[13.5px] font-semibold text-[#5b3df0]">처리 내역 전체 ›</button>
+      {current ? (
+        <div className="grid gap-0.5 text-[14px] text-[#55526a]">
+          <p>남은 변경권 <b className="text-[20px] font-extrabold text-[#1d1b2b]">{current.left}개</b> / 총 {current.granted}개</p>
+          <p>변경권 적용 기간: {day(current.start)}~{day(current.end)}</p>
+        </div>
+      ) : <p className="text-[14px] text-[#6b6880]">지금 변경권 적용 기간이 없어요.</p>}
+      {/* 내역이 많으면 목록만 스크롤, 적으면 내용 높이 그대로 */}
+      <div className="grid max-h-[55dvh] gap-4 overflow-y-auto">
+        {current && list(current)}
+        {others.length > 0 && (more ? others.map((p) => (
+          <section key={p.start} className="grid gap-1">
+            <p className="text-[13px] font-semibold text-[#55526a]">변경권 적용 기간: {day(p.start)}~{day(p.end)} · 남은 {p.left}개 / 총 {p.granted}개</p>
+            {list(p)}
+          </section>
+        )) : (
+          <button type="button" onClick={() => setMore(true)} className="min-h-[44px] text-left text-[14px] font-semibold text-[#5b3df0]">다른 기간 보기 ›</button>
+        ))}
+      </div>
+      <button type="button" onClick={onAll} className="min-h-[44px] text-left text-[14px] font-semibold text-[#5b3df0]">처리 내역 전체 보기 ›</button>
     </div>
   );
 }

@@ -46,3 +46,14 @@ describe('변경권 내역 (대표 11/18)', () => {
     expect([c.lessonLabel, c.timeLabel, c.status, c.sub]).toEqual(['원래 수업', '확정 일시', '11/20(금) 오후 7:00 보강 확정', null]);
   });
 });
+
+describe('변경권 내역 창 줄 (대표 11/18 2차)', () => {
+  it('취소: 수업·취소 일시·6시간·변경권 화살표, 반환·지급', async () => {
+    const { creditEntry } = await import('./credit-history');
+    const base = { id: 'x', at: '2026-11-11T07:22:00Z', delta: -1, lesson_at: '2026-11-13T04:00:00Z', cancel_at: '2026-11-11T07:22:00Z', timing: 'advance' as const, holiday: false };
+    expect(creditEntry({ ...base, kind: 'use', after: 1 })).toMatchObject({ lessonLabel: '취소한 수업', timeLabel: '취소 일시', timing: '6시간 이상 남았을 때', result: '1개 사용 · ', bold: '2개 → 1개' });
+    expect(creditEntry({ ...base, kind: 'late', delta: 0, timing: 'late', after: 1 })).toMatchObject({ timing: '6시간 미만 남았을 때', bold: '사용 안 됨 · 수업 1회 차감' });
+    expect(creditEntry({ ...base, kind: 'return', delta: 1, timing: null, after: 2 })).toMatchObject({ lessonLabel: '원래 수업', timeLabel: '처리 일시', timing: null, bold: '1개 → 2개' });
+    expect(creditEntry({ ...base, kind: 'admin_add', delta: 1, timing: null, lesson_at: null, after: 1 })).toMatchObject({ lessonLabel: null, result: '운영진 지급 1개 · ', bold: '0개 → 1개' });
+  });
+});
