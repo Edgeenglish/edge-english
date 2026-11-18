@@ -1,0 +1,105 @@
+<title>처리 내역 줄 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 학생 '처리 내역' 줄 고정 순서: 제목 → 수업 → 일시 → 구분 → (상태·변경권 묶음). PC(왼쪽 메뉴+목록) · 휴대폰 */
+:root { --bg:#f6f5fa; --panel:#fff; --fg:#1d1b2b; --sub:#55526a; --mute:#8b88a0; --border:#e6e3ef; --line:#eeecf4; --accent:#5b3df0; --soft:#f1edff;
+  --font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#15141c; --panel:#1f1d29; --fg:#f0eef7; --sub:#c3c0d3; --mute:#8f8ca3; --border:#34314a; --line:#2d2a3a; --accent:#a594ff; --soft:#2b2547; color-scheme:dark } }
+:root[data-theme="dark"] { --bg:#15141c; --panel:#1f1d29; --fg:#f0eef7; --sub:#c3c0d3; --mute:#8f8ca3; --border:#34314a; --line:#2d2a3a; --accent:#a594ff; --soft:#2b2547; color-scheme:dark }
+body { background:var(--bg); color:var(--fg); font-family:var(--font); line-height:1.5; padding-block:24px 48px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width:1180px; margin:0 auto; display:grid; gap:18px; }
+h1 { font-size:20px; margin:0; } p { margin:0; }
+.lead { font-size:13.5px; color:var(--sub); }
+.pair { display:grid; grid-template-columns:minmax(0,1fr) 390px; gap:18px; align-items:start; }
+@media (max-width:980px) { .pair { grid-template-columns:minmax(0,1fr); } }
+.frame { border:1px solid var(--border); border-radius:14px; background:var(--bg); overflow:hidden; min-width:0; }
+.cap { font-size:12px; font-weight:700; color:var(--mute); padding:7px 12px; background:var(--panel); border-bottom:1px solid var(--border); }
+.scroll { overflow-x:auto; }
+.pc { width:760px; display:grid; grid-template-columns:170px 1fr; gap:16px; padding:16px; }
+.menu { display:grid; gap:4px; align-content:start; font-size:13.5px; color:var(--sub); }
+.menu span { padding:8px 10px; border-radius:10px; } .menu .on { background:var(--soft); color:var(--accent); font-weight:700; }
+.main { display:grid; gap:8px; min-width:0; }
+.ph { padding:12px; display:grid; gap:8px; max-width:390px; }
+.zone { justify-self:start; font-size:11.5px; font-weight:600; color:var(--accent); background:var(--soft); border-radius:999px; padding:3px 10px; }
+.sort { justify-self:end; display:flex; gap:6px; } .sort span { font-size:12px; font-weight:600; border-radius:999px; padding:3px 11px; border:1px solid var(--border); color:var(--sub); } .sort .on { background:var(--accent); border-color:var(--accent); color:#fff; }
+.list { background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+.it { padding:11px 14px; border-bottom:1px solid var(--line); display:grid; gap:1px; }
+.it:last-child { border-bottom:0; }
+.t { font-size:14.5px; font-weight:700; margin-bottom:2px; }
+.k { font-size:12.5px; color:var(--sub); } .k b { color:var(--fg); font-weight:700; }
+.s { font-size:11.5px; color:var(--mute); }
+.res { margin-top:5px; padding-top:5px; border-top:1px dashed var(--line); display:grid; gap:1px; font-size:12.5px; color:var(--sub); }
+.res b { color:var(--fg); }
+.groups { display:grid; gap:8px; } .grp { font-size:12.5px; font-weight:800; color:var(--accent); margin:8px 0 0; }
+.note { font-size:12.5px; color:var(--sub); background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
+</style>
+<div class="wrap">
+  <h1>학생 '처리 내역' 줄 · 나올 수 있는 모든 경우</h1>
+  <p class="lead">고정 순서: 제목 → 수업(진하게) → 일시 → 구분(작게) → 상태·변경권(진하게, 아래 묶음). 오른쪽 위에 따로 있던 시각은 '○○ 일시' 줄로 옮깁니다. 숫자·날짜는 예시입니다.</p>
+  <div class="pair">
+    <div class="frame"><div class="cap">PC · 처리 내역</div><div class="scroll"><div class="pc">
+      <div class="menu"><span>홈</span><span>일정</span><span class="on">처리 내역</span><span>학습자료</span><span>내 정보</span></div>
+      <div class="main">
+        <span class="zone">모든 날짜·시간은 한국 시간 기준</span>
+        <div class="sort"><span class="on">최신순</span><span>오래된순</span></div>
+        <div class="list" id="rows-pc"></div>
+      </div>
+    </div></div></div>
+    <div class="frame"><div class="cap">휴대폰 · 처리 내역</div><div class="ph">
+      <span class="zone">모든 날짜·시간은 한국 시간 기준</span>
+      <div class="sort"><span class="on">최신순</span><span>오래된순</span></div>
+      <div class="list" id="rows-m"></div>
+    </div></div>
+  </div>
+  <p class="note">화면에 안 나오는 기록(지금처럼 숨김): 강사 확인 대기·강사 답변. 강사 늦은 취소 때 학생 적립금 2,000원은 처리 내역이 아니라 적립금 내역에 나옵니다. 변경권 줄은 수강생 취소·취소 되돌림에만 붙습니다(강사 취소·보강 줄에는 없음). 6시간 이상 남았는데 변경권이 0개였던 취소 = 정책 POL-CHG-04(보강 없음, 수업 1회 소진) 그대로 표시만 합니다. 줄을 누르면 신청한 보강 시간이 펼쳐지는 기능은 지금처럼 둡니다.</p>
+</div>
+<script>
+// [그룹, 제목, 수업 줄 이름, 수업, 일시 이름, 일시, 구분(작게), 상태, 변경권]
+const G = [
+ ['수업 취소 · 수강생', [
+  ['수업 취소','취소한 수업','11/19(목) 오후 7:00','취소 일시','11/18(수) 오후 4:10','6시간 이상 남았을 때 · 수강생 취소','취소 처리 완료','1개 사용 · 2개 → 1개'],
+  ['수업 취소','취소한 수업','11/17(화) 오후 7:00','취소 일시','11/16(월) 오전 9:00','6시간 이상 남았을 때 · 수강생 취소','취소 처리 완료','남은 0개 · 수업 1회 차감'],
+  ['수업 취소','취소한 수업','11/12(목) 오후 7:00','취소 일시','11/12(목) 오후 3:00','6시간 미만 남았을 때 · 수강생 취소','취소 처리 완료','사용 안 됨 · 수업 1회 차감'],
+  ['수업 취소','취소한 수업','11/6(금) 오후 7:00','취소 일시','11/5(목) 오전 10:12','6시간 이상 남았을 때 · 수강생 취소 · 공휴일','취소 처리 완료','사용 안 됨 (공휴일)'],
+ ]],
+ ['수업 취소 · 강사 쪽 (변경권 줄 없음)', [
+  ['수업 취소','취소한 수업','11/5(목) 오후 7:00','취소 일시','11/4(수) 오후 2:00','6시간 이상 남았을 때 · 강사 취소','취소 처리 완료',''],
+  ['수업 취소','취소한 수업','11/5(목) 오후 7:00','취소 일시','11/5(목) 오후 4:11','6시간 미만 남았을 때 · 강사 취소','취소 처리 완료',''],
+  ['수업 취소','취소한 수업','11/24(화) 오후 7:00','취소 일시','11/10(화) 오전 11:00','강사 휴무로 취소','취소 처리 완료',''],
+  ['수업 취소','취소한 수업','11/9(월) 오후 7:00','취소 일시','11/9(월) 오후 8:30','강사 사정으로 취소','취소 처리 완료',''],
+ ]],
+ ['수업 취소 되돌림 (운영진)', [
+  ['수업 취소 되돌림','원래 수업','11/3(화) 오후 7:00','처리 일시','11/2(월) 오전 11:00','','수업 일정 복구 완료','1개 반환 · 1개 → 2개'],
+  ['수업 취소 되돌림','원래 수업','11/6(금) 오후 12:20','처리 일시','11/5(목) 오후 4:14','','수업 일정 복구 완료',''],
+ ]],
+ ['보강 신청 → 강사 처리', [
+  ['보강 신청','원래 수업','11/2(월) 오후 7:00','신청 일시','10/28(수) 오후 8:15','','강사 확인 중',''],
+  ['보강 신청','원래 수업','11/2(월) 오후 7:00','신청 일시','10/28(수) 오후 8:15','','보강 일정 조율 중',''],
+  ['강사 제안','원래 수업','11/2(월) 오후 7:00','제안 일시','10/29(목) 오전 9:00','','새 보강 시간 제안',''],
+  ['다른 일정 요청','원래 수업','11/2(월) 오후 7:00','요청 일시','10/29(목) 오후 1:00','','일정 조율 요청 접수',''],
+  ['보강 확정','원래 수업','11/2(월) 오후 7:00','확정 일시','10/29(목) 오전 9:26','','11/13(금) 오후 7:00 보강 확정',''],
+  ['보강 신청 취소','원래 수업','11/2(월) 오후 7:00','취소 일시','10/28(수) 오후 9:00','','신청 취소 처리 완료',''],
+  ['보강 신청 만료','원래 수업','11/2(월) 오후 7:00','만료 일시','11/1(일) 오후 11:59','','신청 만료 처리됨',''],
+  ['보강 확정 되돌림','원래 수업','11/2(월) 오후 7:00','처리 일시','10/30(금) 오전 10:00','','확정 취소 처리 완료',''],
+ ]],
+ ['보상수업 (강사 노쇼로 생긴 무료 수업) — 보강 줄과 같은 모양, 제목만 보상수업', [
+  ['보상수업 신청','강사 사정으로 취소된 수업','11/9(월) 오후 7:00','신청 일시','11/10(화) 오전 10:00','','강사 확인 중',''],
+  ['보상수업 확정','강사 사정으로 취소된 수업','11/9(월) 오후 7:00','확정 일시','11/10(화) 오후 2:00','','11/20(금) 오후 7:00 보상수업 확정',''],
+ ]],
+ ['이월된 수업 (지난 수강 기간에서 넘어온 보강)', [
+  ['보강 신청','원래 수업','10/27(화) 오후 7:00','신청 일시','11/12(목) 오전 9:00','지난 수강 기간에서 이월','강사 확인 중',''],
+  ['보강 확정','원래 수업','10/27(화) 오후 7:00','확정 일시','11/12(목) 오후 5:00','지난 수강 기간에서 이월','11/19(목) 오후 7:00 보강 확정',''],
+ ]],
+ ['시트에서 옮긴 수업 (원래 시각 기록 없음)', [
+  ['보강 신청','원래 수업','10/20(화) (한국 날짜)','신청 일시','11/3(화) 오후 8:00','','강사 확인 중',''],
+ ]],
+];
+const card = r => `<div class="it"><span class="t">${r[0]}</span>
+  <span class="k">${r[1]}: <b>${r[2]}</b></span>
+  <span class="s">${r[3]}: ${r[4]}</span>${r[5] ? `<span class="s">${r[5]}</span>` : ''}
+  <div class="res"><span>상태: <b>${r[6]}</b></span>${r[7] ? `<span>변경권: <b>${r[7]}</b></span>` : ''}</div></div>`;
+const html = G.map(([g, rows]) => `<p class="grp">${g}</p><div class="list">${rows.map(card).join('')}</div>`).join('');
+document.getElementById('rows-pc').outerHTML = `<div class="groups">${html}</div>`;
+document.getElementById('rows-m').outerHTML = `<div class="groups">${html}</div>`;
+</script>

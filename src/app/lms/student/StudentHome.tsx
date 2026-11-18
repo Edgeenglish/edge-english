@@ -72,7 +72,8 @@ type Overlay =
   | { kind: 'credits' }
   | { kind: 'rights' }
   | { kind: 'regular' }
-  | { kind: 'tutor_change' };
+  | { kind: 'tutor_change' }
+  | { kind: 'late'; lessonId: string };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -404,8 +405,10 @@ export default function StudentHome(props: {
     else if (l.state === 'canceled') setLinkNote(LATE_LINK_NOTE.canceled);
     else if (ended || l.state !== 'scheduled') setLinkNote(LATE_LINK_NOTE.ended);
     else if ((s.lateNotices ?? []).some((n) => n.lessonId === id)) setLinkNote(LATE_LINK_NOTE.sent);
-    else if (next?.id === id && !l.leaveOpen && lateNoticeOpen(l, now)) setLateAuto(id);
-    else setLinkNote(LATE_LINK_NOTE.notYet);
+    else if (l.leaveOpen || !lateNoticeOpen(l, now)) setLinkNote(LATE_LINK_NOTE.notYet);
+    else if (next?.id === id) setLateAuto(id);
+    // 앞 수업이 진행 중이라 '다음 수업'이 다른 수업이어도, 링크의 수업 창을 따로 엶 (Work QA 11/18)
+    else setOverlay({ kind: 'late', lessonId: id });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const points = pointsHistory(s.points);
   // 가상 화면은 extras(지난 Unit 포함), 실제 화면은 강사가 정한 교재 이름만 (QA C-04)
@@ -735,12 +738,11 @@ export default function StudentHome(props: {
             </button>
             <HelpTip text="변경권은 28일마다 새로 제공돼요." />
           </p>
-          {/* 위아래 배치 (대표 11/18): 기준 → 결과 */}
-          <div className="grid gap-1 text-[11.5px] leading-[1.45] text-[#55526a]">
-            <p className="text-[11px] text-[#8b88a0]">수업 시작 기준</p>
-            <p><b className="font-bold text-[#3d3a52]">6시간 이상 남기고 취소</b><br />변경권 1개 사용 · 보강 가능</p>
-            <p><b className="font-bold text-[#3d3a52]">6시간 미만 남기고 취소</b><br />변경권 사용 안 함 · 수업 1회 차감 · 보강 불가</p>
-          </div>
+          <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
+            {/* 대표 11/18 시안 확정 (https://claude.ai/artifact/5eFCzRLSaMq6tKBzSTGWNE) */}
+            <b className="font-bold text-[#3d3a52]">6시간 이상 남았을 때 취소 시</b><span>변경권 1개 사용, 보강 가능</span>
+            <b className="font-bold text-[#3d3a52]">6시간 미만 남았을 때 취소 시</b><span>변경권 사용 안 됨, 보강 불가<span className="whitespace-nowrap">(수업 1회 차감)</span></span>
+          </p>
         </div>
       </div>
       <div className={`${card} flex flex-col`}>
@@ -1142,6 +1144,25 @@ export default function StudentHome(props: {
 
       {overlay && (
         <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
+          {overlay.kind === 'late' && (() => {
+            const l = s.lessons.find((x) => x.id === overlay.lessonId);
+            if (!l) return null;
+            return (
+              <NextLesson
+                lesson={l}
+                now={now}
+                meetUrl={l.leaveOpen ? null : meetRoomUrl(l.meetUrl)}
+                noteUrl={info?.noteUrl ?? null}
+                substitute={l.substitute}
+                leaveOpen={!!l.leaveOpen}
+                lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === l.id)}
+                tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === l.id) ?? null}
+                onLate={async (minutes, reason) => { await run(() => actions.lateNotice(l.id, minutes, reason), '강사님께 알렸어요.'); }}
+                lateAutoOpen
+                noLabel
+              />
+            );
+          })()}
           {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} busy={busy} calendar={calendarOf(s.requests.find((r) => r.id === overlay.id)!)}
             onWithdraw={async (id) => { await run(() => actions.withdrawMakeup(id), '신청을 취소했어요.'); }}
             onPick={pickSuggestion} onDecline={async (id) => { await run(() => actions.declineSuggestion(id), '운영진에게 다른 일정을 요청했어요.'); }} />}
@@ -1695,7 +1716,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate, lateAutoOpen }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; lateAutoOpen?: boolean }) {
+function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate, lateAutoOpen, noLabel }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; lateAutoOpen?: boolean; /** 메일 링크로 따로 연 뒤 수업 창: '다음 수업' 이름표 없음 (대표 11/18) */ noLabel?: boolean }) {
   // 지각 알림 버튼은 수업 시작 2시간 전부터 끝나기 전까지 (페이지를 열어 둔 채로도 때가 되면 나타나게)
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -1711,7 +1732,7 @@ function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, late
   return (
     <section aria-label="다음 수업" className="grid gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
       <div className="flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
+        {noLabel ? <span /> : <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>}
         <span className="rounded-full bg-[#ffd66b] px-2.5 py-1 text-[12px] font-semibold text-[#1b1442]">{badge}</span>
       </div>
       {/* 대체강사 수업은 수업 링크가 다름 — 늘 쓰던 링크로 들어가는 일이 잦음 (대표 10/29) */}
