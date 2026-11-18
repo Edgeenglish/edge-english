@@ -744,8 +744,8 @@ function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent, sendCont
     <div className={`flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3 ${phase === 'canceled' || phase === 'covered' ? 'text-[#8a879c]' : ''} ${phase === 'covered' ? 'opacity-60' : ''}`}>
       {/* 시각마다 그 옆에 어느 시간대인지 바로 적음 (현지 + 한국) */}
       <span className="w-full min-w-0 sm:flex-1">
-        <span className="block text-[14.5px] tabular-nums"><Rich text={rangeFullNoDay(l, tz)} /></span>
-        <StudentName id={l.studentId} name={l.student} className={`mt-0.5 block truncate text-[15px] font-semibold ${phase === 'canceled' ? 'line-through' : ''}`} />
+        <span className={`block text-[14.5px] tabular-nums ${phase === 'canceled' ? 'line-through decoration-2' : ''}`}><Rich text={rangeFullNoDay(l, tz)} /></span>
+        <StudentName id={l.studentId} name={phase === 'canceled' ? <span className="line-through decoration-2">{l.student}</span> : l.student} className="mt-0.5 block truncate text-[15px] font-semibold" />
         <span className="block text-[12.5px] text-[#6b6880]">{minutesOf(l)} min · {tag}<CoverNote lesson={l} where="type" />{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}</span>
       </span>
       {phase === 'to_record'
@@ -947,7 +947,8 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
   // 페이 대상 Y/N (상태 규칙 tutorPaid + 보상수업은 무급, R-19: 공통 규칙 tutorPaidFor). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
   const paidRule = tutorPaidFor(l.kind, l.classStatus);
   const paid = paidRule === null || l.coveredByOther ? '' : paidRule ? (l.locked ? 'Y ✓' : 'Y') : 'N';
-  const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
+  const strike = phase === 'canceled' ? 'line-through decoration-2' : '';
+  const name = <span className={strike}>{l.student}</span>;
   const statusControl = canOpen ? (
     <button type="button" aria-expanded={open} aria-label={`${stText} · ${l.student}`}
       onClick={(e) => { e.stopPropagation(); toggle(); }}
@@ -982,7 +983,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
         {/* 휴대폰: 출결 상태는 이름 아래 줄 (QA-02: 긴 상태가 이름 폭을 빼앗지 않게) */}
         <div className="grid grid-cols-[76px_minmax(0,1fr)] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
-            {time}{tz !== headTz && <span className="block text-[11.5px] font-semibold text-[#2b1c7a]">{tzTimeLabel(tz)}</span>}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]"><Rich text={k} /></span>}
+            <span className={strike}>{time}</span>{tz !== headTz && <span className="block text-[11.5px] font-semibold text-[#2b1c7a]">{tzTimeLabel(tz)}</span>}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]"><span className={strike}><Rich text={k} /></span></span>}
           </span>
           <span className="min-w-0">
             <StudentName id={l.studentId} name={name} className="block max-w-full truncate text-[14.5px] font-semibold" />
@@ -995,8 +996,8 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
 
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-          <span className="flex-col !items-start justify-center font-semibold">{time}{tz !== headTz && <span className="text-[11.5px] font-semibold leading-tight text-[#2b1c7a]">{tzTimeLabel(tz)}</span>}</span>
-          {kst && <span className="text-[#6b6880]">{k ? stripBold(k).replace(/ KST$/, '') : ''}</span>}
+          <span className="flex-col !items-start justify-center font-semibold"><span className={strike}>{time}</span>{tz !== headTz && <span className="text-[11.5px] font-semibold leading-tight text-[#2b1c7a]">{tzTimeLabel(tz)}</span>}</span>
+          {kst && <span className={`text-[#6b6880] ${strike}`}>{k ? stripBold(k).replace(/ KST$/, '') : ''}</span>}
           <span className="flex-col !items-start justify-center font-semibold"><StudentName id={l.studentId} name={name} className="max-w-full truncate" /></span>
           <span>{count}</span>
           <span>{minutesOf(l)}</span>
