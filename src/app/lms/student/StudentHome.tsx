@@ -284,6 +284,8 @@ export default function StudentHome(props: {
   onLogout?: () => void;
   /** 톡 바로가기 ?makeup=수업(시트 보강·보상권)id → 그 '보강 날짜 고르기'를 바로 엶 (11/8 대표 시안) */
   openMakeup?: string;
+  /** 메일 바로가기 ?late=수업id → 그 수업 '늦게 참여해요' 창을 바로 엶 (대표 11/18) */
+  openLate?: string;
   /** 메일 바로가기 ?tab=me → '내 정보' 탭으로 바로 엶 (첫 학습 정보 등록 메일) */
   openTab?: string;
 }) {
@@ -376,6 +378,25 @@ export default function StudentHome(props: {
         ? `이 수업은 보강 신청 기한(${endText(endDate)})이 지났어요. 카카오톡으로 문의해 주세요.`
         : '이 수업은 지금 보강을 신청할 수 없어요. 카카오톡으로 문의해 주세요.');
     else setLinkNote('열 수 없는 링크예요. 카카오톡으로 문의해 주세요.');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // 메일 [강사님께 늦는다고 알리기] (대표 11/18): 지금 알릴 수 있으면 창을 바로 열고, 아니면 맨 위 한 줄로 이유. 보내기 막기는 DB(student_late_notice)가 그대로 함
+  const [lateAuto, setLateAuto] = useState<string | null>(null);
+  useEffect(() => {
+    const id = props.openLate;
+    if (!id) return;
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('late');
+      window.history.replaceState(window.history.state, '', u.pathname + u.search);
+    } catch { /* 주소를 못 바꿔도 화면은 그대로 */ }
+    const l = s.lessons.find((x) => x.id === id);
+    const ended = l && now.getTime() >= l.startsAt.getTime() + l.minutes * 60_000;
+    if (!l) setLinkNote(LATE_LINK_NOTE.unknown);
+    else if (l.state === 'canceled') setLinkNote(LATE_LINK_NOTE.canceled);
+    else if (ended || l.state !== 'scheduled') setLinkNote(LATE_LINK_NOTE.ended);
+    else if ((s.lateNotices ?? []).some((n) => n.lessonId === id)) setLinkNote(LATE_LINK_NOTE.sent);
+    else if (next?.id === id && !l.leaveOpen && lateNoticeOpen(l, now)) setLateAuto(id);
+    else setLinkNote(LATE_LINK_NOTE.notYet);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const points = pointsHistory(s.points);
   // 가상 화면은 extras(지난 Unit 포함), 실제 화면은 강사가 정한 교재 이름만 (QA C-04)
@@ -618,6 +639,7 @@ export default function StudentHome(props: {
       lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === next.id)}
       tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === next.id) ?? null}
       onLate={async (minutes, reason) => { await run(() => actions.lateNotice(next.id, minutes, reason), '강사님께 알렸어요.'); }}
+      lateAutoOpen={lateAuto === next.id}
     />
   );
 
@@ -1628,7 +1650,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
+function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate, lateAutoOpen }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; lateAutoOpen?: boolean }) {
   // 지각 알림 버튼은 수업 시작 2시간 전부터 끝나기 전까지 (페이지를 열어 둔 채로도 때가 되면 나타나게)
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -1681,14 +1703,26 @@ function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, late
           수업 노트 열기 ↗
         </a>
       )}
-      {lateOpen && <LateNotice sent={lateSent} onSend={onLate} />}
+      {lateOpen && <LateNotice sent={lateSent} onSend={onLate} autoOpen={lateAutoOpen} />}
     </section>
   );
 }
 
+// 메일 [강사님께 늦는다고 알리기] 링크를 지금 쓸 수 없을 때 맨 위 한 줄 (대표 11/18)
+const LATE_LINK_NOTE = {
+  unknown: '열 수 없는 링크예요. 카카오톡으로 문의해 주세요.',
+  canceled: '이 수업은 취소됐어요.',
+  ended: '이 수업은 이미 끝났어요.',
+  sent: '이 수업은 이미 강사님께 알렸어요.',
+  notYet: '수업 시작 2시간 전부터 알릴 수 있어요.',
+} as const;
+
 // 지각 알림 (대표 11/13): 지각 시간 + 이유(선택) → [강사님께 알리기]. 보낸 뒤에는 회색 '알렸어요 ✓'
-function LateNotice({ sent, onSend }: { sent: boolean; onSend: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
+function LateNotice({ sent, onSend, autoOpen }: { sent: boolean; onSend: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; autoOpen?: boolean }) {
+  const [open, setOpen] = useState(!!autoOpen);
+  const box = useRef<HTMLDivElement>(null);
+  // 메일 링크로 열렸으면 휴대폰에서도 창이 바로 보이게
+  useEffect(() => { if (autoOpen) box.current?.scrollIntoView({ block: 'center' }); }, [autoOpen]);
   const [minutes, setMinutes] = useState<LateMinutes | null>(null);
   const [reason, setReason] = useState<LateReason | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1696,7 +1730,7 @@ function LateNotice({ sent, onSend }: { sent: boolean; onSend: (minutes: LateMin
   if (!open) return <button type="button" onClick={() => setOpen(true)} className="min-h-[46px] rounded-[14px] border border-white/35 text-[15px] font-semibold text-white">늦게 참여해요</button>;
   const chip = (on: boolean) => `min-h-[44px] rounded-[12px] px-3.5 text-[14.5px] font-semibold ${on ? 'bg-[#ffd66b] text-[#1b1442]' : 'border border-white/35 text-white'}`;
   return (
-    <div className="grid gap-3.5 rounded-[16px] bg-white/10 p-4">
+    <div ref={box} className="grid gap-3.5 rounded-[16px] bg-white/10 p-4">
       <div className="flex items-center justify-between">
         <p className="text-[16px] font-bold text-white">늦게 참여하시나요?</p>
         <button type="button" onClick={() => setOpen(false)} className="min-h-[36px] px-1 text-[14px] font-semibold text-[#c9c0ff]">닫기</button>
