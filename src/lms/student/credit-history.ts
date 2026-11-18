@@ -87,3 +87,35 @@ export function creditFor(e: ProcessingEvent, periods: CreditPeriodHistory[]): C
   }
   return best;
 }
+
+/**
+ * '변경권 내역' 창 한 줄 (대표 11/18 2차): 처리 내역과 같은 항목명·순서.
+ * 수업 줄 → ○○ 일시 → (취소만) 6시간 이상/미만 남았을 때 → 변경권: 결과(진하게 부분 = bold).
+ */
+export type CreditEntry = {
+  lessonLabel: string | null; lessonAt: string | null; timeLabel: string; timeAt: string;
+  timing: string | null; result: string; bold: string | null;
+};
+export function creditEntry(i: CreditItem): CreditEntry {
+  const before = i.after - i.delta;
+  const arrow = `${before}개 → ${i.after}개`;
+  const charged = i.reverted ? '' : ' · 수업 1회 차감';
+  const cancel = isCancelItem(i);
+  const base = {
+    lessonLabel: cancel ? '취소한 수업' : i.kind === 'return' ? '원래 수업' : null,
+    lessonAt: cancel || i.kind === 'return' ? i.lesson_at : null,
+    timeLabel: cancel ? '취소 일시' : '처리 일시',
+    timeAt: cancel ? i.cancel_at : i.at,
+    timing: cancel && i.timing ? (i.timing === 'late' ? '6시간 미만 남았을 때' : '6시간 이상 남았을 때') : null,
+  };
+  switch (i.kind) {
+    case 'use': return { ...base, result: '1개 사용 · ', bold: arrow };
+    case 'late': return { ...base, result: '', bold: `사용 안 됨${charged}` };
+    case 'holiday': return { ...base, result: '', bold: '사용 안 됨 (공휴일)' };
+    case 'no_credit': return { ...base, result: '', bold: `남은 0개${charged}` };
+    case 'return': return { ...base, result: '1개 반환 · ', bold: arrow };
+    case 'admin_add': return { ...base, result: '운영진 지급 1개 · ', bold: arrow };
+    case 'admin_remove': return { ...base, result: '운영진 회수 1개 · ', bold: arrow };
+    case 'migrated': return { ...base, result: 'LMS 시작 전 사용 1개 · ', bold: arrow };
+  }
+}
