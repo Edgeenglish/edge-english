@@ -1,3 +1,13 @@
+## 🧪 11/18 학생 변경권 내역 — **시험 사이트(lms-test)·시험 DB 반영, 운영 미반영** (브랜치 claude/friendly-rubin-d7ftqh, 시안 https://claude.ai/artifact/SCERAK1za5rBF4bkYCWZ3m `docs/lms/previews/student-credit-history-drafts.html`)
+- 정책 원본: 문서 끝 'H26 (11/18 학생 변경권 내역 — 번호는 대표가 정리)' 줄 (끝 번호 확인 못 함)
+- 대표 확정(ChatGPT 검토 반영): B안(홈 카드 [내역 ›] → 변경권 내역 창) · 변경권 안 쓴 취소도 표시 · 문구 '6시간 이상/미만 남기고 취소' · '처리 후 변경권 n개' · 처리 시각 최신순 · 창 '변경권 적용 기간 / 남은 n개 / 기본 제공 n개' · 카드 규칙 위아래 배치('수업 시작 기준')
+- migration **20261118100000_lms_student_credit_history** (읽기 전용 함수 `student_credit_history`, 시험 DB 적용): 기간별 지급·남은 수·줄(use·late·holiday·no_credit·return·admin_add/remove·migrated), 줄의 after = 취소 판정 기록(change_requests.decision.credits_after) 또는 지급량+그 시각까지 credit_ledger 합. 운영진 조정 사유(note)는 학생에게 안 줌
+- 코드: `src/lms/student/credit-history.ts`(+test) · `processing-history.ts` historyLines(credit) · `ProcessingHistory.tsx`(수강생 취소 줄 = 수업 시각·남은 시간·결과·처리 후, 상태 줄 없음 / 되돌림 = 1개 반환) · `StudentHome.tsx` 홈 카드·Credits 창(옛 DB 면 CreditsOld) · `live.ts` 로드 · authz-probe 목록
+- 시험: vitest src/lms/student 62 · tsc 0 · 시험 DB 점검 `supabase/tests/student-credit-history.sql` 학생 44명 통과(left=credit_balance·최신순·칸 목록·기록 수·권한 5종)
+- 고침: 되돌린 취소는 '수업 1회 차감' 대신 '나중에 취소 되돌림'(함수 칸 reverted), 남은 변경권 없을 때 이유 표시
+- 시험 데이터: STU-0018 지금 기간(10/20~11/16) = 사용 2(처리 후 1·0) + '남은 변경권 없음 · 수업 1회 차감' 2. '6시간 미만' 사례는 STU-0018 에 열린 보강권·수업이 없어 안 만듦(다른 세션 지각 시험 수업 11/18·11/19 은 건드리지 않음)
+- 운영 반영 순서(대표 승인 뒤): ① `git log origin/lms-test..origin/lms-prod` ② 운영 DB migration 20261118100000(함수 추가만, 백업 불필요 — 데이터·기존 함수 안 바뀜) ③ lms-prod 에 이 기능 커밋만 ④ 운영 화면(STU-0013) 확인
+
 ## ✅ 11/17 머리글 [내 수업]·학생 화면 진입 정리 — **운영 반영 끝** (H26(212), lms-prod cfb254d, DB 변경 없음, 브랜치 claude/quirky-bell-j29fzz)
 - 운영 반영 방법: lms-prod 위에 이 작업 커밋만 cherry-pick. 운영엔 '정규 시간 변경'(H26(208)) 이 아직 없어 `loadStudentBundle` 에서 changeRequests 를 뺀 판으로 맞춤 — 정규 시간 변경을 운영에 올릴 때 lms-test 판(changeReqs 포함) 그대로 가면 됨. 운영 공개 화면 점검(check-public-pages) 통과
 - 수정: `src/lms/auth/home.ts`(새, 역할→홈 주소 한 곳 — 지금 학생만) · `components/Header.tsx`([내 수업] href) · `app/lms/page.tsx`+`LmsIndexGo.tsx`(/lms 메일 링크도 같게, ?next= 등 있으면 예전처럼 로그인 화면) · `student/StudentLive.tsx`(역할 확인과 학생 자료를 함께 불러옴) · `student/StudentHome.tsx`(교재 둘러보기 next/link)
@@ -265,7 +275,9 @@
 
 ## ⏭ 메일 [강사님께 늦는다고 알리기] 버튼 — **개발 중(11/18, 브랜치 claude/vibrant-ptolemy-par1q9)**, 정책 원본 H26(214)(215) 기록함
 - 11/18 한 것: 학생 홈 `?late=수업id` → 지금 알릴 수 있으면 '늦게 참여해요' 창 바로 열고 화면 가운데로, 아니면 맨 위 한 줄(LATE_LINK_NOTE: 링크 없음·취소·끝남·이미 알림·2시간 전 아님). page.tsx·StudentLive·StudentDemo·StudentHome. 중복 발송은 DB student_late_notice 가 막음(그대로)
-- 남은 것: 대표 메일 문구 확인 → '시스템에 넣어' 뒤 migration(lms_lesson_reminder_mail·tutor_contact_student 에 두 번째 버튼, 링크 lms_url()||'/student?late='||l.id) → 시험 DB·lms-test → QA(끝난 뒤·이미 알린 뒤·로그인 안 된 상태) → 대표 확인 → 운영. (참고: vitest 묶음 SQL 2개 실패는 이 브랜치 시작 전부터 — migration 넣을 때 `node scripts/lms-test-bundle.mjs` 로 같이 해결)
+- ✅ 11/18 '시스템에 넣어'(H26(215) 보충): migration **20261118120000_lms_mail_late_notice_button** 시험 DB 적용(lms_lesson_reminder_mail 2h 만·tutor_contact_student 1·2차), lms-test 반영. QA 통과: 메일 3종 support@ 도착(24h 는 버튼 없음), STU-0018 휴대폰·PC 창 바로 열림 → 보냄 → 다시 열면 '이미…'(student_late_notices 1줄), 끝남·취소·이름·잘못된 링크, 로그아웃이면 /lms/login?next=…late= 유지. 고친 것: 창이 화면 그린 뒤에도 열리게(autoOpen effect)
+- 대표 확인용 데이터: STU-0018 11/18 20:00~20:40 한국 수업(seq 107) + 2시간 전 메일. QA 수업 seq 101·106 은 하루 전으로 옮김, 102~105 그대로(지난 수업·11/19 수업)
+- 남은 것: 대표 확인 → 운영(백업 → migration → lms-prod 골라 담기, `git log origin/lms-test..origin/lms-prod` 먼저). 대표 답 대기: 2시간 안에 수업이 2개 있을 때 뒤 수업 링크 문구
 - 대표 11/18: 학생 메일에 버튼 `강사님께 늦는다고 알리기` → 누르면 학생 홈에서 그 수업의 기존 '늦게 참여해요' 창(지각 시간·이유 고르기)이 바로 열림. 로그인 안 됐으면 로그인 뒤 그 창(기존 `?next=` 흐름). 학생이 직접 보내기는 그대로. 학생 홈 버튼 이름 `늦게 참여해요`는 유지. 이미지 안내는 안 넣음
 - 넣는 메일: **2시간 전 수업 리마인더**(정규·보강·이월·보상 모두, `lms_student_lesson_reminder_mail`, [수업 입장하기] 아래) + **강사 Contact student 학생 메일 1·2차**(migration 20261116140000, [수업 들어가기] 아래). 24시간 전 리마인더는 제외(지각 알림은 시작 2시간 전부터라 못 보냄)
 - 확인됨: 학생 지각 알림은 수업 끝날 때까지 보낼 수 있음(student_late_notice) → Contact student(시작 뒤) 메일도 됨. 2시간 전 리마인더는 2시간 전~1시간 전 사이 발송 → 창 열림

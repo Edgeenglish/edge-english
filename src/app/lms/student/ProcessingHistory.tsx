@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { prefOf, type PrefKey, type ScreenPrefs } from '@/lms/screen-prefs';
+import { creditFor, type CreditPeriodHistory } from '@/lms/student/credit-history';
 import { historyLines, historySlots, historyTime, requestStatus, visibleEvents, type ProcessingEvent } from '@/lms/student/processing-history';
 
-export default function ProcessingHistory({ events, error, timezone, prefs, loadPrefs, savePref }: {
+export default function ProcessingHistory({ events, error, timezone, prefs, loadPrefs, savePref, credits = [] }: {
   events: ProcessingEvent[]; error?: boolean; timezone: string;
+  /** 변경권 내역 (student_credit_history) — 수업 취소·되돌림 줄에 변경권 결과를 붙임. 없으면 예전 그대로 */
+  credits?: CreditPeriodHistory[];
   /** 학생이 저장한 정렬 읽기 · 저장(학생 본인만, 운영자 보기는 null → 이 화면에서만 바뀜) — 대표 11/13 A안 */
   /** 미리 읽어 둔 설정이 있으면 처음부터 그 순서로 (다시 읽지 않음) */
   prefs?: ScreenPrefs;
@@ -39,7 +42,7 @@ export default function ProcessingHistory({ events, error, timezone, prefs, load
     <div className="flex justify-end gap-1.5 pb-2">{sortBtn(false, '최신순')}{sortBtn(true, '오래된순')}</div>
     <section aria-label="처리 기록" className="overflow-hidden rounded-[16px] border border-[#e6e3ef] bg-white">
       {shown.map((e) => {
-        const lines = historyLines(e, timezone, requestStatus(e, events));
+        const lines = historyLines(e, timezone, requestStatus(e, events), creditFor(e, credits));
         const sl = historySlots(e, events);
         const head = (
           <>
@@ -47,7 +50,13 @@ export default function ProcessingHistory({ events, error, timezone, prefs, load
             <time dateTime={e.at} className="whitespace-nowrap text-right text-[11px] leading-5 text-[#6b6880]">{when(e.at)}</time>
           </>
         );
-        const text = <span>{lines.detail}{lines.detail && lines.status && <br />}{lines.status && <>상태 : {lines.status}</>}</span>;
+        const text = (
+          <span>
+            {lines.detail}
+            {lines.extra?.map((x, i) => <span key={i}><br />{x.startsWith('처리 후') ? <>처리 후 변경권 <b className="font-bold text-[#1d1b2b]">{x.replace('처리 후 변경권 ', '')}</b></> : x}</span>)}
+            {lines.detail && lines.status && <br />}{lines.status && <>상태 : {lines.status}</>}
+          </span>
+        );
         if (sl.requested.length === 0 && sl.suggested.length === 0 && !sl.confirmedExtra) {
           return (
             <div key={e.id} className="grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 border-b border-[#eeecf4] px-3 py-2.5 last:border-0 sm:px-4">
