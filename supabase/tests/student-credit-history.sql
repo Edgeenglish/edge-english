@@ -24,7 +24,7 @@ begin
       raise exception '최신순 아님';
     end if;
     if exists (select 1 from jsonb_array_elements(h) p, jsonb_array_elements(p->'items') i, jsonb_object_keys(i) k
-               where k not in ('id','at','kind','delta','lesson_at','cancel_at','timing','holiday','after')) then
+               where k not in ('id','at','kind','delta','lesson_at','cancel_at','timing','holiday','reverted','after')) then
       raise exception '검토 안 한 칸';
     end if;
     if (select count(*) from jsonb_array_elements(h) p, jsonb_array_elements(p->'items') i where (i->>'delta')::int <> 0)

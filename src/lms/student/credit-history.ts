@@ -8,6 +8,8 @@ export type CreditItemKind = 'use' | 'late' | 'holiday' | 'no_credit' | 'return'
 export type CreditItem = {
   id: string; at: string; kind: CreditItemKind; delta: number;
   lesson_at: string | null; cancel_at: string; timing: 'advance' | 'late' | null; holiday: boolean; after: number;
+  /** 이 취소를 나중에 되돌림 (운영진). 되돌린 취소는 '수업 1회 차감'을 쓰지 않음 */
+  reverted?: boolean;
 };
 export type CreditPeriodHistory = { start: string; end: string; granted: number; left: number; current: boolean; items: CreditItem[] };
 
@@ -33,9 +35,9 @@ export function timingText(i: CreditItem): string | null {
 export function resultText(i: CreditItem): string {
   switch (i.kind) {
     case 'use': return '변경권 1개 사용';
-    case 'late': return '변경권 사용 안 함 · 수업 1회 차감';
+    case 'late': return i.reverted ? '변경권 사용 안 함' : '변경권 사용 안 함 · 수업 1회 차감';
     case 'holiday': return '변경권 사용 안 함 (공휴일)';
-    case 'no_credit': return '남은 변경권 없음 · 수업 1회 차감';
+    case 'no_credit': return i.reverted ? '남은 변경권 없음' : '남은 변경권 없음 · 수업 1회 차감';
     case 'return': return '변경권 1개 반환';
     case 'admin_add': return '운영진 추가 1개';
     case 'admin_remove': return '운영진 조정 1개 차감';
@@ -59,8 +61,10 @@ export function subText(i: CreditItem): string {
   const parts: string[] = [];
   const t = timingText(i);
   if (t) parts.push(t);
-  if (i.kind === 'late' || i.kind === 'no_credit') parts.push('수업 1회 차감');
+  if (i.kind === 'no_credit') parts.push('남은 변경권 없음');
+  if ((i.kind === 'late' || i.kind === 'no_credit') && !i.reverted) parts.push('수업 1회 차감');
   if (i.kind === 'holiday') parts.push('공휴일');
+  if (i.reverted) parts.push('나중에 취소 되돌림');
   parts.push(`처리 후 ${i.after}개`);
   return parts.join(' · ');
 }

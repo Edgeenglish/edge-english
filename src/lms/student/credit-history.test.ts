@@ -21,6 +21,8 @@ describe('변경권 내역 (대표 11/18)', () => {
     expect(resultText(item({ kind: 'late', delta: 0 }))).toBe('변경권 사용 안 함 · 수업 1회 차감');
     expect(subText(item({ kind: 'late', timing: 'late', delta: 0, after: 1 }))).toBe('6시간 미만 남기고 취소 · 수업 1회 차감 · 처리 후 1개');
     expect(subText(item({ kind: 'return', timing: null, delta: 1, after: 2 }))).toBe('처리 후 2개');
+    expect(subText(item({ kind: 'no_credit', delta: 0, reverted: true }))).toBe('6시간 이상 남기고 취소 · 남은 변경권 없음 · 나중에 취소 되돌림 · 처리 후 0개');
+    expect(resultText(item({ kind: 'no_credit', delta: 0, reverted: true }))).toBe('남은 변경권 없음');
   });
   it('처리 내역 줄에 맞는 기록: 같은 수업·가까운 처리 시각, 강사 취소는 없음', () => {
     const periods = parseCreditHistory([{ start: '2026-11-12', end: '2026-12-09', granted: 2, left: 0, current: true,

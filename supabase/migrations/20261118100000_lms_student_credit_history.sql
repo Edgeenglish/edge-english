@@ -24,7 +24,7 @@ begin
       select p.* from public.enrollment_periods p
       join public.enrollments en on en.id = p.enrollment_id and en.student_id = v_student
     ), cancels as (   -- 수강생 쪽 취소 (학생 직접·운영진 대신·강사가 학생 대신 기록 모두)
-      select c.id, c.created_at, c.requested_at, c.decision, l.id lesson_id, l.starts_at,
+      select c.id, c.created_at, c.requested_at, c.decision, c.status = 'reverted' reverted, l.id lesson_id, l.starts_at,
              public.lms_lesson_period(l.enrollment_id, l.kst_date) period_id
       from public.change_requests c
       join public.lessons l on l.id = c.lesson_id and l.student_id = v_student
@@ -39,7 +39,7 @@ begin
              g.delta::int delta, l.starts_at lesson_at,
              coalesce(cu.requested_at, g.created_at) cancel_at,
              cu.decision->>'timing' timing, coalesce((cu.decision->>'holiday')::boolean, false) holiday,
-             (cu.decision->>'credits_after')::int cr_after
+             (cu.decision->>'credits_after')::int cr_after, coalesce(cu.reverted, false) reverted
       from public.credit_ledger g
       join periods p on p.id = g.period_id
       left join public.lessons l on l.id = g.lesson_id
@@ -49,7 +49,7 @@ begin
              case when coalesce((c.decision->>'holiday')::boolean, false) then 'holiday'
                   when c.decision->>'timing' = 'late' then 'late' else 'no_credit' end,
              0, c.starts_at, c.requested_at, c.decision->>'timing', coalesce((c.decision->>'holiday')::boolean, false),
-             (c.decision->>'credits_after')::int
+             (c.decision->>'credits_after')::int, c.reverted
       from cancels c join periods p on p.id = c.period_id
       where not coalesce((c.decision->>'uses_credit')::boolean, false)
     )
@@ -59,7 +59,7 @@ begin
       'items', coalesce((
         select jsonb_agg(jsonb_build_object(
           'id', i.item_id, 'at', i.at, 'kind', i.kind, 'delta', i.delta,
-          'lesson_at', i.lesson_at, 'cancel_at', i.cancel_at, 'timing', i.timing, 'holiday', i.holiday,
+          'lesson_at', i.lesson_at, 'cancel_at', i.cancel_at, 'timing', i.timing, 'holiday', i.holiday, 'reverted', i.reverted,
           'after', coalesce(i.cr_after, p.credits_granted + coalesce((select sum(g2.delta) from public.credit_ledger g2
                      where g2.period_id = p.id and g2.created_at <= i.at), 0)::int)
         ) order by i.at desc, i.item_id desc)
