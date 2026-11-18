@@ -28695,6 +28695,83 @@ end $$;
 revoke all on function tutor_contact_student(uuid, integer, text, uuid) from public, anon;
 grant execute on function tutor_contact_student(uuid, integer, text, uuid) to authenticated;
 
+-- &gt;&gt;&gt; 20261118140000_lms_student_credit_history_restored.sql
+-- 학생 변경권 내역: 변경권을 쓰지 않은 취소를 운영진이 되돌린 기록도 줄로 (kind 'restored', 변경권 줄 없음) — 대표 11/18.
+-- 읽기 전용 함수 교체만 (20261118100000 판에 restored 갈래만 더함). 데이터 변경 없음. 다시 실행해도 같은 결과.
+create or replace function public.student_credit_history(p_student uuid default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_current uuid;
+begin
+  if auth.uid() is null then
+    raise exception '학생 계정으로 로그인해 주세요.' using errcode = '42501';
+  end if;
+  v_student := public.lms_screen_student(p_student);
+  -- 홈 '남은 변경권'과 같은 기간 (student_screen 과 같은 기준)
+  select x.id into v_current from public.enrollment_periods x
+  where x.enrollment_id = public.lms_student_enrollment(v_student) and x.start_date &lt;= v_today
+  order by x.idx desc limit 1;
+
+  return (
+    with periods as (
+      select p.* from public.enrollment_periods p
+      join public.enrollments en on en.id = p.enrollment_id and en.student_id = v_student
+    ), cancels as (   -- 수강생 쪽 취소 (학생 직접·운영진 대신·강사가 학생 대신 기록 모두)
+      select c.id, c.created_at, c.requested_at, c.reverted_at, c.decision, c.status = 'reverted' reverted, l.id lesson_id, l.starts_at,
+             public.lms_lesson_period(l.enrollment_id, l.kst_date) period_id
+      from public.change_requests c
+      join public.lessons l on l.id = c.lesson_id and l.student_id = v_student
+      where c.student_id = v_student and c.type in ('student_cancel', 'admin_cancel')
+        and c.decision-&gt;&gt;'who' = 'student' and c.status in ('applied', 'reverted')
+    ), items as (
+      select g.period_id, g.created_at at, g.id::text item_id,
+             case when g.reason = 'student_change' then 'use'
+                  when g.reason = 'admin_restore' then 'return'
+                  when g.lesson_id is null and g.note like '기존 학생 이관%' then 'migrated'
+                  when g.delta &gt; 0 then 'admin_add' else 'admin_remove' end kind,
+             g.delta::int delta, l.starts_at lesson_at,
+             coalesce(cu.requested_at, g.created_at) cancel_at,
+             cu.decision-&gt;&gt;'timing' timing, coalesce((cu.decision-&gt;&gt;'holiday')::boolean, false) holiday,
+             (cu.decision-&gt;&gt;'credits_after')::int cr_after, coalesce(cu.reverted, false) reverted
+      from public.credit_ledger g
+      join periods p on p.id = g.period_id
+      left join public.lessons l on l.id = g.lesson_id
+      left join cancels cu on cu.id = g.change_request_id and g.reason = 'student_change'
+      union all
+      select c.period_id, c.created_at, c.id::text,
+             case when coalesce((c.decision-&gt;&gt;'holiday')::boolean, false) then 'holiday'
+                  when c.decision-&gt;&gt;'timing' = 'late' then 'late' else 'no_credit' end,
+             0, c.starts_at, c.requested_at, c.decision-&gt;&gt;'timing', coalesce((c.decision-&gt;&gt;'holiday')::boolean, false),
+             (c.decision-&gt;&gt;'credits_after')::int, c.reverted
+      from cancels c join periods p on p.id = c.period_id
+      where not coalesce((c.decision-&gt;&gt;'uses_credit')::boolean, false)
+      union all
+      -- 변경권을 쓰지 않은 취소를 운영진이 되돌린 기록 (대표 11/18: 복구된 사실도 같은 창에, 변경권 줄 없음)
+      select c.period_id, c.reverted_at, c.id::text || ':restored', 'restored', 0, c.starts_at, c.reverted_at, null, false, null, false
+      from cancels c join periods p on p.id = c.period_id
+      where c.reverted and c.reverted_at is not null and not coalesce((c.decision-&gt;&gt;'uses_credit')::boolean, false)
+    )
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'start', p.start_date, 'end', p.end_date, 'granted', p.credits_granted,
+      'left', public.credit_balance(p.id), 'current', p.id = v_current,
+      'items', coalesce((
+        select jsonb_agg(jsonb_build_object(
+          'id', i.item_id, 'at', i.at, 'kind', i.kind, 'delta', i.delta,
+          'lesson_at', i.lesson_at, 'cancel_at', i.cancel_at, 'timing', i.timing, 'holiday', i.holiday, 'reverted', i.reverted,
+          'after', coalesce(i.cr_after, p.credits_granted + coalesce((select sum(g2.delta) from public.credit_ledger g2
+                     where g2.period_id = p.id and g2.created_at &lt;= i.at), 0)::int)
+        ) order by i.at desc, i.item_id desc)
+        from items i where i.period_id = p.id), '[]'::jsonb)
+    ) order by p.start_date desc), '[]'::jsonb)
+    from periods p
+    where p.start_date &lt;= v_today or exists (select 1 from items i where i.period_id = p.id)
+  );
+end $$;
+revoke all on function public.student_credit_history(uuid) from public, anon, authenticated;
+grant execute on function public.student_credit_history(uuid) to authenticated;
+
 -- &gt;&gt;&gt; 20261118150000_lms_regular_change_same_time.sql
 -- =====================================================================
 -- 정규 시간 변경: 모든 정규 수업 같은 시작 시간 (정책 원본 H26(208) 보충 7·8, 대표 11/18 확정)
@@ -28891,6 +28968,52 @@ begin
          period_id = lms_lesson_period(r.enrollment_id, v_first), regular_change_id = (v_res -&gt;&gt; 'change_id')::uuid
    where id = p_id;
   return jsonb_build_object('ok', true, 'status', 'confirmed', 'week', v_week, 'moved', v_res -&gt; 'moved');
+end $$;
+
+-- &gt;&gt;&gt; 20261118150000_lms_student_late_mail_class_time.sql
+-- 학생 지각 알림 강사 메일에 수업 시간 줄 (대표 11/18 '시스템에 넣어', H26(216))
+-- 'Class: Thu, 19 Nov 1:30 AM *Manila Time* / 2:30 AM *KST*' — 강사 거주지 시간 먼저, 한국 시간 뒤 (lms_mail_en_at). 나머지는 그대로
+-- 되돌리기: 20261113120000 의 student_late_notice 정의 다시 실행
+create or replace function student_late_notice(p_student uuid, p_lesson uuid, p_minutes integer, p_reason text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_student uuid := lms_screen_student(p_student);
+  l lessons;
+  st students;
+  v_tz text;
+  v_reason text;
+  v_x text;
+  v_paras text[];
+begin
+  select * into l from lessons where id = p_lesson;
+  if not found or l.student_id &lt;&gt; v_student then raise exception '본인 수업만 알릴 수 있습니다.' using errcode = '42501'; end if;
+  if p_minutes not in (5, 10, 15, 20) then raise exception '지각 시간을 골라 주세요.'; end if;
+  if p_reason is not null and p_reason not in ('work_late', 'traffic', 'transit', 'unexpected') then raise exception '이유를 다시 골라 주세요.'; end if;
+  if exists (select 1 from student_late_notices where lesson_id = p_lesson) then return jsonb_build_object('repeated', true); end if;
+  if l.state &lt;&gt; 'scheduled' or l.voided_at is not null or l.tutor_id is null
+     or now() &lt; l.starts_at - interval '2 hours' or now() &gt;= l.ends_at then
+    raise exception '지금은 지각을 알릴 수 없는 수업이에요.' using hint = 'not_eligible';
+  end if;
+  perform set_config('app.actor_id', coalesce(auth.uid()::text, ''), true);
+  perform set_config('app.actor_via', 'student_late_notice', true);
+  insert into student_late_notices (lesson_id, student_id, tutor_id, minutes, reason, created_by)
+  values (p_lesson, v_student, l.tutor_id, p_minutes, p_reason, auth.uid());
+  select * into st from students where id = v_student;
+  select coalesce(nullif(t.timezone, ''), 'Asia/Seoul') into v_tz from tutors t where t.id = l.tutor_id;
+  v_reason := case p_reason when 'work_late' then 'Work is running late.' when 'traffic' then 'I''m stuck in traffic.'
+                            when 'transit' then 'Public transportation is delayed.' when 'unexpected' then 'Something unexpected came up.' end;
+  v_x := case when p_minutes = 20 then '20 or more' else p_minutes::text end;
+  v_paras := array[
+    'Student Running Late – ' || lms_student_en(st),
+    lms_student_en(st) || ' has reported that they may be approximately *' || v_x || '* minutes late.'
+      || E'\nClass: ' || lms_mail_en_at(l.starts_at, coalesce(v_tz, 'Asia/Seoul'))
+      || case when v_reason is null then '' else E'\nReason: ' || v_reason end,
+    '*Please join the class on time and stay until the scheduled end time*, as the student may arrive earlier than expected.'];
+  perform lms_tutor_update_add(l.tutor_id, v_student, 'student_late',
+    jsonb_build_object('to', l.starts_at, 'minutes', p_minutes, 'reason', p_reason),
+    l.ends_at, 'student_late:' || p_lesson,
+    'Student Running Late – ' || lms_student_en(st), v_paras);
+  return jsonb_build_object('repeated', false);
 end $$;
 
 -- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)
