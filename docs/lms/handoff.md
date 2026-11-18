@@ -72,7 +72,10 @@
 - 대표 확인용 시험 데이터: STU-0041 대기 신청 1건(목 → 1순위 금 오후 8:00 / 2순위 목 오후 8:00 한국 시간) + 강사 변경 상담 1건. 되돌리기 = 운영자 홈에서 [반려]·[상담 완료]
 - 관찰: Blair 처럼 수강기간 중 강사 해외 이동·휴무가 있으면 그 시간대는 '매주 비어 있음'에서 빠져 고를 시간이 거의 없을 수 있음 (확정 때 admin_regular_change 도 같은 이유로 막으므로 규칙과 일치)
 - 11/17 보충 4: migration **20261117160000_lms_regular_change_start_week** (시험 DB 적용: lms_rc_fits_end·week_ok·week, options(p_from)·request(p_start) 인자 바뀜 / decide 는 Work 가 시험 DB 에 고친 것과 같은 내용) — 변경 시작 주·두 요일 확정 오류(Work QA)·종료일 뒤 밀림 후보 빼기. 시험 데이터 STU-0041 정리함(신청 취소·상담 완료로 남음)
-- 남은 것: 학생·운영자 화면 클릭 QA(Work 브라우저 시간 초과로 미완료) → 대표 '응' → 운영 DB 백업·migration 2개(140000→160000)·lms-prod
+- 11/18 Work 클릭 QA 3흐름 통과(PC·휴대폰). 보충 5(H26(208)): 160000 파일에 lms_rc_context(끝난 수강권 → 다음 확정 수강권)·lms_rc_free 빠르게(5.8→1초) 추가, 시험 DB 적용
+- 시험 계정 데이터(대표 11/18): STU-0018 윤O호 → Alex 12주 재등록(11/24~2/15, 화·목 19:00 KST), Alex 예전 시험 휴무 3건 [휴무 취소](12/7 건은 보강 확정 있어 남김), Alex Buenos Aires 임시 근무 시간 현지 06:00~09:30 추가
+- 운영 배포 준비: 골라 담은 판 = 로컬 브랜치 deploy-rc(origin/lms-prod + 이 기능 커밋만, 94a9633, 시험 526 통과). lms-test 를 통째로 올리지 말 것(Google 로그인 11/24 대기 섞여 있음)
+- 남은 것: 대표 '응' → 운영 DB 백업·migration 2개(140000→160000)·deploy-rc 를 lms-prod 로 push
 
 ## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)** 참고)
 

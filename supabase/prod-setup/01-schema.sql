@@ -27835,6 +27835,60 @@ create or replace function lms_rc_fits_end(p_week date, p_items jsonb, p_end dat
   from jsonb_array_elements(p_items) x
 $$;
 
+-- ④ 수강기간이 끝났고 다음 수강권(재등록)이 이미 확정돼 있으면 다음 수강권 기준으로 (재등록 때 강사·시간이 바뀌면 '변경 예정'으로 막히던 것, Claude QA 11/18)
+create or replace function lms_rc_context(p_student uuid, out e enrollments, out tutor tutors, out slots jsonb, out future_pending boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_n int;
+  v_t uuid;
+begin
+  select * into e from enrollments x where x.id = lms_student_enrollment(p_student);
+  if e.id is not null and e.final_end_date < v_today then
+    select * into e from enrollments x where x.student_id = p_student and x.status in ('confirmed', 'active') and x.start_date > e.final_end_date
+    order by x.start_date limit 1;
+  end if;
+  if e.id is null or e.status not in ('confirmed', 'active') then e := null; return; end if;
+  select jsonb_agg(jsonb_build_object('weekday', rs.weekday, 'time', to_char(rs.start_time_kst, 'HH24:MI')) order by rs.weekday, rs.start_time_kst),
+         count(distinct rs.tutor_id), (array_agg(distinct rs.tutor_id))[1]
+    into slots, v_n, v_t
+  from regular_schedules rs
+  where rs.student_id = p_student and rs.effective_from <= greatest(v_today, e.start_date)
+    and (rs.effective_to is null or rs.effective_to >= greatest(v_today, e.start_date));
+  if slots is null or v_n <> 1 then slots := null; return; end if;
+  select * into tutor from tutors where id = v_t;
+  future_pending := exists (select 1 from regular_schedules rs where rs.student_id = p_student
+                             and rs.effective_from > greatest(v_today, e.start_date) and rs.effective_from > date '1950-01-01');
+end $$;
+revoke all on function lms_rc_context(uuid) from public, anon, authenticated;
+
+-- ⑤ 속도 (Claude QA 11/18: 12주 수강권에서 신청 화면 5.8초): 매주 검사를 앞 주부터 하다 하나라도 막히면 바로 멈춤, 싼 검사부터
+create or replace function lms_rc_free(p_tutor uuid, p_student uuid, p_from date, p_until date, p_dow int, p_time time, p_min int)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare
+  d date;
+  t0 timestamptz;
+  t1 timestamptz;
+  n int := 0;
+begin
+  d := lms_rc_day(lms_rc_monday(p_from), p_dow);
+  if d < p_from then d := d + 7; end if;
+  while d <= p_until loop
+    t0 := (d + p_time) at time zone 'Asia/Seoul';
+    t1 := t0 + make_interval(mins => p_min);
+    if not lms_tutor_start_ok(p_tutor, t0) or not lms_tutor_available(p_tutor, t0) then return false; end if;
+    if exists (select 1 from tutor_time_off o where o.tutor_id = p_tutor and o.starts_at < t1 and t0 < o.ends_at) then return false; end if;
+    if exists (select 1 from lessons y where y.tutor_id = p_tutor and y.state <> 'canceled' and y.voided_at is null
+                 and not (y.student_id = p_student and y.kind = 'regular' and y.state = 'scheduled')
+                 and y.starts_at < t1 + interval '10 minutes' and t0 - interval '10 minutes' < y.ends_at) then return false; end if;
+    if exists (select 1 from lms_slot_hold_hits(p_tutor, t0, t1) h where h.student_id <> p_student) then return false; end if;
+    n := n + 1;
+    d := d + 7;
+  end loop;
+  return n > 0;
+end $$;
+revoke all on function lms_rc_free(uuid, uuid, date, date, int, time, int) from public, anon, authenticated;
+
 -- 그 주(월요일)에 적용할 수 있는지 (lms_rc_week 와 같은 조건)
 create or replace function lms_rc_week_ok(p_enrollment uuid, p_items jsonb, p_today date, p_week date)
 returns boolean language plpgsql stable security definer set search_path = public as $$
