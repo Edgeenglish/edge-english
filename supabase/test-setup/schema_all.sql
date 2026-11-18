@@ -27251,6 +27251,187 @@ begin
 end
 $patch$;
 
+-- >>> 20261118100000_lms_student_credit_history.sql
+-- 학생 '변경권 내역' (대표 11/18 시안 확정): 기간마다 지급량·지금 남은 수·내역(사용·사용 안 한 취소·반환·운영진 조정·이관).
+-- 줄마다 '처리 후' 남은 수: 취소 줄은 취소 때 판정 기록(change_requests.decision.credits_after), 그 밖은 그 기간 지급량 + 그 시각까지 credit_ledger 합
+-- (지금 남은 수를 과거 줄에 붙이지 않음).
+-- 읽기 전용 함수 추가만. 표·데이터·트리거·메일 변경 없음. 다시 실행해도 같은 결과.
+-- 운영진 조정 사유(note)는 내부용이라 학생에게 주지 않음.
+create or replace function public.student_credit_history(p_student uuid default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_student uuid;
+  v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_current uuid;
+begin
+  if auth.uid() is null then
+    raise exception '학생 계정으로 로그인해 주세요.' using errcode = '42501';
+  end if;
+  v_student := public.lms_screen_student(p_student);
+  -- 홈 '남은 변경권'과 같은 기간 (student_screen 과 같은 기준)
+  select x.id into v_current from public.enrollment_periods x
+  where x.enrollment_id = public.lms_student_enrollment(v_student) and x.start_date <= v_today
+  order by x.idx desc limit 1;
+
+  return (
+    with periods as (
+      select p.* from public.enrollment_periods p
+      join public.enrollments en on en.id = p.enrollment_id and en.student_id = v_student
+    ), cancels as (   -- 수강생 쪽 취소 (학생 직접·운영진 대신·강사가 학생 대신 기록 모두)
+      select c.id, c.created_at, c.requested_at, c.decision, c.status = 'reverted' reverted, l.id lesson_id, l.starts_at,
+             public.lms_lesson_period(l.enrollment_id, l.kst_date) period_id
+      from public.change_requests c
+      join public.lessons l on l.id = c.lesson_id and l.student_id = v_student
+      where c.student_id = v_student and c.type in ('student_cancel', 'admin_cancel')
+        and c.decision->>'who' = 'student' and c.status in ('applied', 'reverted')
+    ), items as (
+      select g.period_id, g.created_at at, g.id::text item_id,
+             case when g.reason = 'student_change' then 'use'
+                  when g.reason = 'admin_restore' then 'return'
+                  when g.lesson_id is null and g.note like '기존 학생 이관%' then 'migrated'
+                  when g.delta > 0 then 'admin_add' else 'admin_remove' end kind,
+             g.delta::int delta, l.starts_at lesson_at,
+             coalesce(cu.requested_at, g.created_at) cancel_at,
+             cu.decision->>'timing' timing, coalesce((cu.decision->>'holiday')::boolean, false) holiday,
+             (cu.decision->>'credits_after')::int cr_after, coalesce(cu.reverted, false) reverted
+      from public.credit_ledger g
+      join periods p on p.id = g.period_id
+      left join public.lessons l on l.id = g.lesson_id
+      left join cancels cu on cu.id = g.change_request_id and g.reason = 'student_change'
+      union all
+      select c.period_id, c.created_at, c.id::text,
+             case when coalesce((c.decision->>'holiday')::boolean, false) then 'holiday'
+                  when c.decision->>'timing' = 'late' then 'late' else 'no_credit' end,
+             0, c.starts_at, c.requested_at, c.decision->>'timing', coalesce((c.decision->>'holiday')::boolean, false),
+             (c.decision->>'credits_after')::int, c.reverted
+      from cancels c join periods p on p.id = c.period_id
+      where not coalesce((c.decision->>'uses_credit')::boolean, false)
+    )
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'start', p.start_date, 'end', p.end_date, 'granted', p.credits_granted,
+      'left', public.credit_balance(p.id), 'current', p.id = v_current,
+      'items', coalesce((
+        select jsonb_agg(jsonb_build_object(
+          'id', i.item_id, 'at', i.at, 'kind', i.kind, 'delta', i.delta,
+          'lesson_at', i.lesson_at, 'cancel_at', i.cancel_at, 'timing', i.timing, 'holiday', i.holiday, 'reverted', i.reverted,
+          'after', coalesce(i.cr_after, p.credits_granted + coalesce((select sum(g2.delta) from public.credit_ledger g2
+                     where g2.period_id = p.id and g2.created_at <= i.at), 0)::int)
+        ) order by i.at desc, i.item_id desc)
+        from items i where i.period_id = p.id), '[]'::jsonb)
+    ) order by p.start_date desc), '[]'::jsonb)
+    from periods p
+    where p.start_date <= v_today or exists (select 1 from items i where i.period_id = p.id)
+  );
+end $$;
+revoke all on function public.student_credit_history(uuid) from public, anon, authenticated;
+grant execute on function public.student_credit_history(uuid) to authenticated;
+
+-- >>> 20261118110000_lms_student_processing_history_cancel_timing.sql
+-- 학생 처리 내역: 수업 취소 줄에 취소 일시(cancel_at = 취소 판정에 쓴 요청 시각)·6시간 이상/미만(timing) 두 칸 추가 (대표 11/18).
+-- 읽기 전용 함수 교체만. 표·데이터·트리거 변경 없음. 다시 실행해도 같은 결과. 화면은 이 칸이 없는 옛 응답에서도 그대로 동작.
+create or replace function public.student_processing_history(p_student uuid default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_student uuid;
+begin
+  if auth.uid() is null then
+    raise exception '학생 계정으로 로그인해 주세요.' using errcode = '42501';
+  end if;
+  v_student := public.lms_screen_student(p_student);
+  return (
+    with owned as (
+      select a.* from public.lessons l
+      join public.audit_log a on a.table_name = 'lessons' and a.row_id = l.id::text
+      where l.student_id = v_student and a.new_row->>'student_id' = v_student::text
+      union all
+      select a.* from public.makeup_requests r
+      join public.audit_log a on a.table_name = 'makeup_requests' and a.row_id = r.id::text
+      where r.student_id = v_student and a.new_row->>'student_id' = v_student::text
+    ), events as (
+      select a.*, e.kind, e.step from owned a
+      cross join lateral (values
+        ('lesson_canceled', 1, a.table_name = 'lessons'
+          and (a.new_row->>'state' = 'canceled' or a.new_row->>'class_status' = 'Tutor no-show')
+          and not (coalesce(a.old_row->>'state' = 'canceled', false) or coalesce(a.old_row->>'class_status' = 'Tutor no-show', false))),
+        ('lesson_restored', 1, a.table_name = 'lessons' and a.new_row->>'state' = 'scheduled'
+          and (a.old_row->>'state' = 'canceled' or a.old_row->>'class_status' = 'Tutor no-show')),
+        ('makeup_requested', 1, a.table_name = 'makeup_requests' and a.action = 'INSERT'),
+        ('tutor_waiting', 2, a.table_name = 'makeup_requests' and a.new_row->>'status' = 'requested'
+          and a.new_row->>'status' is distinct from a.old_row->>'status'),
+        ('tutor_answered', 3, a.table_name = 'makeup_requests' and a.new_row->>'tutor_answered_at' is not null
+          and a.new_row->>'tutor_answered_at' is distinct from a.old_row->>'tutor_answered_at'
+          and a.new_row->>'status' <> 'countered'),
+        ('tutor_suggested', 3, a.table_name = 'makeup_requests' and a.new_row->>'suggested_at' is not null
+          and a.new_row->>'suggested_at' is distinct from a.old_row->>'suggested_at'),
+        ('suggestion_declined', 4, a.table_name = 'makeup_requests' and a.new_row->>'student_declined_at' is not null
+          and a.new_row->>'student_declined_at' is distinct from a.old_row->>'student_declined_at'),
+        ('makeup_confirmed', 5, a.table_name = 'makeup_requests' and a.new_row->>'status' = 'confirmed'
+          and a.new_row->>'status' is distinct from a.old_row->>'status'),
+        ('makeup_withdrawn', 5, a.table_name = 'makeup_requests' and a.new_row->>'status' = 'withdrawn'
+          and a.new_row->>'status' is distinct from a.old_row->>'status'),
+        ('makeup_expired', 5, a.table_name = 'makeup_requests' and a.new_row->>'status' = 'expired'
+          and a.new_row->>'status' is distinct from a.old_row->>'status'),
+        ('makeup_voided', 5, a.table_name = 'makeup_requests' and a.new_row->>'status' = 'voided'
+          and a.new_row->>'status' is distinct from a.old_row->>'status')
+      ) e(kind, step, include) where e.include
+    )
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'id', e.id::text || ':' || e.kind, 'at', e.at, 'kind', e.kind,
+      'request_id', case when e.table_name = 'makeup_requests' then e.row_id end,
+      'lesson_at', case when e.table_name = 'lessons' then e.new_row->>'starts_at' else src.starts_at::text end,
+      'original_date', mi.original_date,
+      'tutor', t.name,
+      'compensation', e.new_row->>'compensation_id' is not null,
+      'tutor_fault', e.new_row->>'class_status' in ('Tutor no-show', 'Tutor canceled in advance', 'Tutor canceled late', 'Tutor on leave'),
+      'cancel_reason', case when e.kind = 'lesson_canceled' then
+        case when e.new_row->>'class_status' in ('Tutor long-term leave', 'Tutor on leave') then 'tutor_leave'
+             when e.new_row->>'class_status' in ('Tutor canceled in advance', 'Tutor canceled late') then 'tutor_canceled'
+             when e.new_row->>'class_status' = 'Tutor no-show' then 'tutor_fault'
+             else 'student' end end,
+      -- 취소 일시·6시간 이상/미만 (대표 11/18): 취소 판정 기록(change_requests) 의 요청 시각, 없으면 처리 시각
+      'cancel_at', case when e.kind = 'lesson_canceled' then coalesce(cr.requested_at, e.at) end,
+      'timing', case when e.kind = 'lesson_canceled' then
+        case when e.new_row->>'class_status' in ('Student canceled late', 'Tutor canceled late') then 'late'
+             when e.new_row->>'class_status' in ('Student canceled in advance', 'Student canceled in advance (public holiday)',
+                                                 'No change credits left', 'Tutor canceled in advance') then 'advance' end end,
+      'booked_at', case when e.kind = 'makeup_confirmed' then booked.new_row->>'starts_at' end,
+      'slots', coalesce(slots.items, '[]'::jsonb)
+    ) order by e.at desc, e.id desc, e.step desc), '[]'::jsonb)
+    from events e
+    left join public.lessons src on src.id::text = e.new_row->>'source_lesson_id' and src.student_id = v_student
+    left join public.migrated_items mi on mi.id::text = e.new_row->>'migrated_item_id'
+      and exists (select 1 from public.enrollments en where en.id = mi.enrollment_id and en.student_id = v_student)
+    left join public.tutors t on t.id::text = e.new_row->>'tutor_id'
+    left join lateral (
+      select c.requested_at from public.change_requests c
+      where e.kind = 'lesson_canceled' and c.lesson_id::text = e.row_id and c.student_id = v_student
+        and c.created_at between e.at - interval '2 minutes' and e.at + interval '2 minutes'
+      order by abs(extract(epoch from c.created_at - e.at)) limit 1
+    ) cr on true
+    left join lateral (
+      select a.new_row from public.audit_log a
+      where a.table_name = 'lessons' and a.row_id = e.new_row->>'confirmed_lesson_id'
+        and a.new_row->>'student_id' = v_student::text and a.at <= e.at
+      order by a.at desc, a.id desc limit 1
+    ) booked on true
+    left join lateral (
+      select jsonb_agg(jsonb_build_object('at', x.new_row->>'starts_at', 'answer', x.new_row->>'tutor_answer')
+        order by x.new_row->>'starts_at') items
+      from (
+        select distinct on (a.row_id) a.new_row, a.action
+        from public.audit_log a
+        where a.table_name = 'makeup_candidates' and coalesce(a.new_row, a.old_row)->>'request_id' = e.row_id and a.at <= e.at
+        order by a.row_id, a.at desc, a.id desc
+      ) x
+      where x.action <> 'DELETE'
+        and (case when e.kind = 'tutor_suggested' then x.new_row->>'proposed_by' = 'tutor'
+          else x.new_row->>'proposed_by' <> 'tutor' end)
+        and e.kind in ('makeup_requested', 'tutor_answered', 'tutor_suggested')
+    ) slots on e.table_name = 'makeup_requests'
+  );
+end $$;
+revoke all on function public.student_processing_history(uuid) from public, anon, authenticated;
+grant execute on function public.student_processing_history(uuid) to authenticated;
+
 -- >>> 20261118120000_lms_mail_late_notice_button.sql
 -- 학생 메일 [강사님께 늦는다고 알리기] 버튼 (대표 11/18 '시스템에 넣어', 정책 원본 H26(215))
 -- 수업 2시간 전 리마인더(정규·보강·이월·보상)·강사 Contact student 1·2차 메일의 기존 버튼 아래에 두 번째 버튼.
