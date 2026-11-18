@@ -269,6 +269,8 @@
 - 확인됨: 학생 지각 알림은 수업 끝날 때까지 보낼 수 있음(student_late_notice) → Contact student(시작 뒤) 메일도 됨. 2시간 전 리마인더는 2시간 전~1시간 전 사이 발송 → 창 열림
 - 참고 구현: 보강 메일 `/student?makeup=` 열기(StudentHome `searchParams.delete('makeup')`), 로그인 `?next=`(StudentLive toLogin, LoginFlow)
 - 개발 전 대표 확인: 메일에 버튼 위·아래 문장을 넣을지(기본 = 버튼만), 수업이 이미 끝났거나 이미 알린 뒤 링크를 누르면 무엇을 보일지. 문구는 '시스템에 넣어' 뒤에만 코드·DB 에 넣음
+- QA 에 꼭 포함(대표 11/18): 메일을 늦게 열어 수업이 이미 끝났거나 이미 지각 알림을 보낸 뒤 버튼을 누르면 중복 발송 없이 알맞게 안내되는지
+- 같이 할 일(대표 11/18 '응'): 정책 원본 H26 에 11/14 강사 '늦어요' 알림 확정 문구 기록(이유 버튼 5개·? 팝업·학생 메일·운영진 메일·학생 홈 노란 띠·한 수업 1번·Schedule+Home) + 11/14 운영 반영(snapshots 57, lms-prod 032224c) + 11/18 메일 버튼 방향
 
 ## ✅ 11/14 강사 '늦어요' 알림 — **운영 반영 완료** (대표 11/14 승인, 운영 DB 백업 snapshots 57, migration 20261114200000, lms-prod 032224c = 이 기능 커밋 3개만 lms-prod 0a7159e 위에 골라 얹음, 시안 https://claude.ai/artifact/7YmptmNwBiGWEjWjNGReDM)
 - 되돌리기: 코드 = lms-prod 를 0a7159e 로. DB = 함수 tutor_late_notice·tutor_late_notices·student_tutor_late_notices·lms_kst_short 만 drop, **tutor_late_notices 표는 기록이 있으면 보존**(대표 11/14)
