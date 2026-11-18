@@ -1159,6 +1159,7 @@ export default function StudentHome(props: {
                 tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === l.id) ?? null}
                 onLate={async (minutes, reason) => { await run(() => actions.lateNotice(l.id, minutes, reason), '강사님께 알렸어요.'); }}
                 lateAutoOpen
+                noLabel
               />
             );
           })()}
@@ -1715,7 +1716,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate, lateAutoOpen }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; lateAutoOpen?: boolean }) {
+function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate, lateAutoOpen, noLabel }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; lateAutoOpen?: boolean; /** 메일 링크로 따로 연 뒤 수업 창: '다음 수업' 이름표 없음 (대표 11/18) */ noLabel?: boolean }) {
   // 지각 알림 버튼은 수업 시작 2시간 전부터 끝나기 전까지 (페이지를 열어 둔 채로도 때가 되면 나타나게)
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -1731,7 +1732,7 @@ function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, late
   return (
     <section aria-label="다음 수업" className="grid gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
       <div className="flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
+        {noLabel ? <span /> : <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>}
         <span className="rounded-full bg-[#ffd66b] px-2.5 py-1 text-[12px] font-semibold text-[#1b1442]">{badge}</span>
       </div>
       {/* 대체강사 수업은 수업 링크가 다름 — 늘 쓰던 링크로 들어가는 일이 잦음 (대표 10/29) */}
