@@ -94,6 +94,9 @@ export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)
 
 /** 첫 수업 날짜 변경이면 'First class date changed' */
 export function updateTitle(u: TutorUpdate, ko: boolean): string {
+  if (u.kind === 'canceled') return u.info.late === true
+    ? (ko ? '수강생 늦은 취소' : 'Student canceled late')
+    : (ko ? '수강생 사전 취소' : 'Student canceled in advance');
   if (u.kind === 'class_moved' && u.info.is_first) return ko ? '첫 수업 날짜 변경' : 'First class date changed';
   return UPDATE_TITLE[u.kind]?.[ko ? 1 : 0] ?? u.kind;
 }
