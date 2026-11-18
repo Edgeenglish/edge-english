@@ -1,14 +1,14 @@
 'use client';
 /*
- * 학생 홈 [정규 시간 변경] · [강사 변경 상담] (정책 원본 H26(208)·보충·보충 2, 대표 11/17 최종 시안
+ * 학생 홈 [정규 시간 변경] · [강사 변경 상담] (정책 원본 H26(208)·보충·보충 2·보충 7(모든 정규 수업 같은 시간), 대표 11/17·11/18 시안
  * docs/lms/previews/student-regular-tutor-change-drafts.html). 신청만 — 확정은 운영진(운영자 홈 할 일).
  * 시각은 모두 학생 거주지 시간(팝업 맨 위 배지). 가능한 시간·적용 주 판정은 DB, 여기서는 미리 보여 주기만.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { formatInZone } from '@/lms/rules/dates';
-import { addDays, mondayOf, sameSlot, slotAt, TUTOR_CHANGE_REASONS, weekFor, weekOk, type KstSlot } from '@/lms/student/regular-change';
+import { addDays, mondayOf, sameSlot, slotAt, slotsOf, TUTOR_CHANGE_REASONS, weekFor, weekFor2, weekOk2, type KstSlot } from '@/lms/student/regular-change';
 import type { KstDate } from '@/lms/rules/dates';
-import type { RcOptions, RegularRequest, TutorChangeRequest } from '@/lms/student/live';
+import type { RcOptions, RcPick, RegularRequest, TutorChangeRequest } from '@/lms/student/live';
 
 const card = 'rounded-[16px] border border-[#e6e3ef] bg-white';
 const WD = '일월화수목금토';
@@ -32,98 +32,97 @@ const btn = 'min-h-[48px] w-full rounded-[12px] text-[15px] font-bold';
 const PRI = `${btn} bg-[#5b3df0] text-white disabled:opacity-40`;
 const DONE = `${btn} bg-[#ecebf1] text-[#55526a]`;
 
-type Pick = { c1: KstSlot | null; c2: KstSlot | null };
+/** 정규 일정 → 학생 시간 글 '화·금 오후 1:00' (시간이 서로 다르면 요일마다) */
+function setText(week: string, slots: KstSlot[], tz: string) {
+  const ls = slots.map((x) => local(week, x, tz)).sort((p, q) => DAY_ORDER.indexOf(p.dow) - DAY_ORDER.indexOf(q.dow));
+  const times = [...new Set(ls.map((l) => l.time))];
+  return times.length === 1 ? `${ls.map((l) => WD[l.dow]).join('·')} ${ampm(times[0])}` : ls.map((l) => l.text).join(' · ');
+}
+const md = (w: string) => `${Number(w.slice(5, 7))}/${Number(w.slice(8, 10))}`;
+type Sel = { days: number[]; time: string; kst: KstSlot[] };
+type Rank = 'c1' | 'c2';
 
 export function RegularChangeSheet(props: {
   tz: string;
   load: (from?: KstDate | null) => Promise<RcOptions>;
   pending: RegularRequest | null;
   busy: boolean;
-  onSubmit: (items: { old: KstSlot; c1: KstSlot; c2: KstSlot | null }[], reason: string, start: KstDate | null) => Promise<boolean>;
+  onSubmit: (items: { c1: RcPick; c2: RcPick | null }[], reason: string, start: KstDate | null) => Promise<boolean>;
   onWithdraw: (id: string) => Promise<boolean>;
 }) {
   const { tz, busy } = props;
   const [o, setO] = useState<RcOptions | null>(null);
+  const [base, setBase] = useState<RcOptions | null>(null);
   const [err, setErr] = useState(false);
-  const [olds, setOlds] = useState<number[]>([]);
-  const [picks, setPicks] = useState<Record<number, Pick>>({});
-  const [target, setTarget] = useState<{ old: number; rank: 'c1' | 'c2' } | null>(null);
-  const [day, setDay] = useState<number | null>(null);
+  const [start, setStart] = useState<KstDate | null>(null);
+  const [picks, setPicks] = useState<Record<Rank, Sel | null>>({ c1: null, c2: null });
+  const [editing, setEditing] = useState<Rank | null>('c1');
+  const [draft, setDraft] = useState<number[]>([]);
+  const [msg, setMsg] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [sent, setSent] = useState(false);
   const [withdrawn, setWithdrawn] = useState(false);
   // 연 순간의 신청 상태로 고정 (신청 직후 '신청했어요 ✓' 화면에 머묾)
   const [pending] = useState(props.pending);
-  // 변경 시작 주 (H26(208) 보충 4): null = 후보마다 가장 빠른 주. 처음 읽은 값(base)으로 고를 수 있는 주 목록을 만듦
-  const [start, setStart] = useState<KstDate | null>(null);
-  const [base, setBase] = useState<RcOptions | null>(null);
 
   useEffect(() => {
     if (pending) return;
-    props.load().then((x) => {
-      setO(x);
-      setBase(x);
-      if (x.state === 'ok' && x.slots.length === 1) { setOlds([x.slots[0].weekday]); setTarget({ old: x.slots[0].weekday, rank: 'c1' }); }
-    }).catch(() => setErr(true));
+    props.load().then((x) => { setO(x); setBase(x); }).catch(() => setErr(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const ok = o?.state === 'ok' ? o : null;
-  const refWeek = ok ? addDays(mondayOf(ok.today), 7) : '';
-  const slotOf = (wd: number) => ok!.slots.find((s) => s.weekday === wd)!;
+  const n = ok?.slots.length ?? 0;
+  const refWeek = ok ? (start ?? addDays(mondayOf(ok.today), 7)) : '';
   const ctx = ok ? { today: ok.today, finalEnd: ok.finalEnd, periods: ok.periods } : null;
-  const weekOf = (old: KstSlot, c: KstSlot) => (!ctx ? null : start ? (weekOk(ctx, [{ old, new: c }], start) ? start : null) : weekFor(ctx, [{ old, new: c }]));
+  const weekOf = (news: KstSlot[]) => (!ctx || !ok ? null : start ? (weekOk2(ctx, ok.slots, news, start) ? start : null) : weekFor2(ctx, ok.slots, news));
+
+  // 학생 시간 (요일·시각) → 한국 정규 시각. 지금 정규 수업 + 비어 있는 시간
+  const byLocal = useMemo(() => {
+    const m = new Map<string, KstSlot>();
+    if (!ok) return m;
+    for (const x of [...ok.slots, ...ok.free]) { const l = local(refWeek, x, tz); m.set(`${l.dow}|${l.time}`, x); }
+    return m;
+  }, [ok, refWeek, tz]);
+  const daysWith = useMemo(() => new Set([...byLocal.keys()].map((k) => Number(k.split('|')[0]))), [byLocal]);
+  const times = useMemo(() => {
+    if (draft.length !== n) return [];
+    const all = [...new Set([...byLocal.keys()].map((k) => k.split('|')[1]))].sort();
+    return all.filter((t) => draft.every((d) => byLocal.has(`${d}|${t}`)))
+      .map((t) => ({ t, kst: draft.map((d) => byLocal.get(`${d}|${t}`)!) }))
+      .filter((x) => sameSet(x.kst, ok!.slots) || weekOf(x.kst));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, n, byLocal, start]);
+
   const changeStart = (w: KstDate | null) => {
     setStart(w);
-    setPicks({});
-    setTarget(olds.length ? { old: olds[0], rank: 'c1' } : null);
-    // 고른 주부터 매주 비어 있는 시간으로 다시 읽음 (가장 빠른 주면 처음 값)
+    setPicks({ c1: null, c2: null });
+    setEditing('c1');
+    setDraft([]);
+    setMsg(null);
     if (!w) { setO(base); return; }
     setO(null);
     props.load(w).then(setO).catch(() => setErr(true));
   };
 
-  /** 이 수업(old)의 새 시간으로 고를 수 있는 것: 남는 다른 정규 요일·다른 수업에서 고른 요일 빼고, 적용 주가 있는 것 */
-  const allowed = useMemo(() => {
-    if (!ok || !target) return [];
-    const kept = ok.slots.filter((s) => !olds.includes(s.weekday)).map((s) => s.weekday);
-    const taken = olds.filter((w) => w !== target.old).flatMap((w) => [picks[w]?.c1, picks[w]?.c2]).filter(Boolean).map((s) => s!.weekday);
-    const other = picks[target.old]?.[target.rank === 'c1' ? 'c2' : 'c1'];
-    const old = slotOf(target.old);
-    return ok.free.filter((f) => !kept.includes(f.weekday) && !taken.includes(f.weekday) && !sameSlot(f, old) && !(other && sameSlot(f, other)) && weekOf(old, f));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ok, target, olds, picks]);
-  const byDay = useMemo(() => {
-    const m = new Map<number, { s: KstSlot; time: string; text: string }[]>();
-    for (const s of allowed) {
-      const l = local(refWeek, s, tz);
-      m.set(l.dow, [...(m.get(l.dow) ?? []), { s, time: l.time, text: l.text }]);
-    }
-    for (const v of m.values()) v.sort((a, b) => a.time.localeCompare(b.time));
-    return m;
-  }, [allowed, refWeek, tz]);
-  useEffect(() => {
-    if (day !== null && byDay.has(day)) return;
-    setDay(DAY_ORDER.find((d) => byDay.has(d)) ?? null);
-  }, [byDay, day]);
-
   // 신청해 둔 것이 있으면: 신청 내용 + [신청 취소]
   if (pending) {
     const r = pending;
-    const w = addDays(mondayOf(new Date().toISOString().slice(0, 10)), 7);
+    const it = r.items[0];
+    const cands = it ? ([['1순위', it.c1], ['2순위', it.c2]] as const).filter(([, c]) => c) : [];
+    const weeks = [...new Set(cands.map(([, c]) => c!.week))];
+    const w0 = weeks[0] ?? addDays(mondayOf(new Date().toISOString().slice(0, 10)), 7);
     return (
       <div className="grid gap-3">
         <h2 className="text-[18px] font-bold">정규 시간 변경</h2>
         <p className="text-[14px] font-bold text-[#5b3df0]">{withdrawn ? '신청 취소함' : '변경 신청 확인 중'}</p>
-        {r.items.map((it) => (
-          <div key={it.old.weekday} className={`${card} grid gap-1.5 p-3`}>
-            <p className={lbl}>{local(w, it.old, tz).text} → 새 시간</p>
-            {([['1순위', it.c1], ['2순위', it.c2]] as const).map(([k, c]) => c && (
-              <p key={k} className="flex justify-between gap-2 rounded-[10px] bg-[#efebff] px-3 py-2 text-[14px]">
-                <span>{k} · {local(c.week, c, tz).text}</span><b className="shrink-0 text-[#5b3df0]">{weekText(c.week)}</b>
-              </p>
-            ))}
-          </div>
+        <p className="flex justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2.5 text-[14px]"><span>현재 정규 수업</span><b>{setText(w0, r.oldSlots, tz)}</b></p>
+        {weeks.length === 1 && <p className="flex justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2.5 text-[14px]"><span>변경 시작 주</span><b className="text-[#5b3df0]">{weekText(weeks[0])}</b></p>}
+        {cands.map(([k, c]) => (
+          <p key={k} className="flex justify-between gap-2 rounded-[10px] bg-[#efebff] px-3 py-2.5 text-[14px]">
+            <span>{k} · {setText(c!.week, slotsOf(c!.days, c!.time), tz)}</span>
+            {weeks.length > 1 && <b className="shrink-0 text-[#5b3df0]">{weekText(c!.week)}</b>}
+          </p>
         ))}
         {r.reason && <p className="text-[13.5px] text-[#55526a]">변경 사유: {r.reason}</p>}
         <button type="button" disabled={busy || withdrawn} className={withdrawn ? DONE : `${btn} border border-[#5b3df0] text-[#5b3df0] disabled:opacity-40`}
@@ -141,127 +140,109 @@ export function RegularChangeSheet(props: {
     return <div className="grid gap-3"><h2 className="text-[18px] font-bold">정규 시간 변경</h2><p className="text-[14px] font-bold text-[#55526a]">{why}</p></div>;
   }
 
-  // 가장 빠른 적용일: 아무것도 고르기 전, 바꿀 수 있는 모든 수업·시간 중 가장 빠른 주 (처음 읽은 값 기준)
+  // 가장 빠른 주: 처음 읽은 값에서 한 수업만 바꾸는 경우 중 가장 빠른 주
   const b = base?.state === 'ok' ? base : ok;
   const bctx = { today: b.today, finalEnd: b.finalEnd, periods: b.periods };
-  const earliest = b.slots.flatMap((s) => b.free.filter((f) => !sameSlot(f, s)).map((f) => weekFor(bctx, [{ old: s, new: f }]))).filter(Boolean).sort()[0] ?? null;
+  const earliest = b.slots.flatMap((x) => b.free.map((f) => weekFor(bctx, [{ old: x, new: f }]))).filter(Boolean).sort()[0] ?? null;
   const weeks: KstDate[] = [];
   for (let w = earliest; w && w <= b.finalEnd; w = addDays(w, 7)) weeks.push(w);
-  const canSend = olds.length > 0 && olds.every((w) => picks[w]?.c1);
-  const pickRow = (w: number, rank: 'c1' | 'c2') => {
-    const c = picks[w]?.[rank];
-    const on = target?.old === w && target.rank === rank;
-    const name = rank === 'c1' ? '1순위' : '2순위 (선택)';
-    if (!c) return (
-      <button type="button" disabled={sent} onClick={() => setTarget({ old: w, rank })}
-        className={`flex min-h-[44px] w-full items-center justify-between rounded-[10px] px-3 text-left text-[14px] ${on ? 'border border-[#5b3df0] bg-white text-[#5b3df0]' : 'bg-[#f3f1f8] text-[#8b88a0]'}`}>
-        <span>{name}</span><b>{on ? '아래에서 고르기' : '+'}</b>
-      </button>
+
+  const choose = (x: { t: string; kst: KstSlot[] }) => {
+    if (!editing) return;
+    if (sameSet(x.kst, ok.slots)) return setMsg('지금 일정과 같아요');
+    const other = picks[editing === 'c1' ? 'c2' : 'c1'];
+    if (other && sameSet(other.kst, x.kst)) return setMsg('1순위와 같아요');
+    setPicks((p) => ({ ...p, [editing]: { days: [...draft], time: x.t, kst: x.kst } }));
+    setEditing(null);
+    setDraft([]);
+    setMsg(null);
+  };
+  const toggleDay = (d: number) => {
+    setMsg(null);
+    setDraft((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : cur.length < n ? [...cur, d] : cur));
+  };
+  const edit = (k: Rank) => { setEditing(k); setDraft(picks[k]?.days ?? []); setMsg(null); };
+  const picker = (
+    <div className="grid gap-2">
+      <div className="grid grid-cols-7 gap-1">
+        {DAY_ORDER.map((d) => {
+          const on = draft.includes(d);
+          const can = daysWith.has(d) && (on || draft.length < n);
+          return (
+            <button key={d} type="button" disabled={!can} onClick={() => toggleDay(d)} aria-pressed={on}
+              className={`min-h-[44px] rounded-[8px] border text-[14px] font-bold ${!daysWith.has(d) ? 'border-[#eeecf4] text-[#c9c6d6]' : on ? 'border-[#5b3df0] bg-[#5b3df0] text-white' : 'border-[#e6e3ef] bg-white disabled:text-[#c9c6d6]'}`}>
+              {WD[d]}
+            </button>
+          );
+        })}
+      </div>
+      {draft.length === n && (times.length === 0
+        ? <p className="text-[13.5px] font-bold text-[#b3261e]">가능한 시간이 없어요</p>
+        : <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-4">
+            {times.map((x) => {
+              const on = !!editing && picks[editing]?.time === x.t && sameSet(picks[editing]!.kst, x.kst);
+              return <button key={x.t} type="button" onClick={() => choose(x)} className={chip(on)}>{ampm(x.t)}</button>;
+            })}
+          </div>)}
+      {msg && <p className="text-[13.5px] font-bold text-[#b3261e]">{msg}</p>}
+    </div>
+  );
+  const row = (k: Rank) => {
+    const p = picks[k];
+    const name = k === 'c1' ? '1순위' : '2순위';
+    if (editing === k) return (
+      <div key={k} className={`${card} grid gap-2 p-3`}>
+        <p className={lbl.replace('mb-1.5 ', '')}>{name} · 요일 {n}개</p>
+        {picker}
+      </div>
     );
-    const wk = weekOf(slotOf(w), c);
+    if (!p) return null;
+    const wk = start ? null : weekOf(p.kst);
     return (
-      <div className={`flex min-h-[44px] items-center justify-between gap-2 rounded-[10px] px-3 text-[14px] ${on ? 'border border-[#5b3df0]' : ''} bg-[#efebff]`}>
-        <button type="button" disabled={sent} className="min-w-0 flex-1 text-left" onClick={() => setTarget({ old: w, rank })}>
-          {rank === 'c1' ? '1순위' : '2순위'} · {local(refWeek, c, tz).text}
+      <div key={k} className="flex min-h-[48px] items-center justify-between gap-2 rounded-[10px] bg-[#efebff] px-3 text-[14px]">
+        <button type="button" disabled={sent} className="min-w-0 flex-1 py-2 text-left" onClick={() => edit(k)}>
+          {name} · {setText(refWeek, p.kst, tz)}
         </button>
-        <b className="shrink-0 text-[13px] text-[#5b3df0]">{wk ? weekText(wk) : ''}</b>
-        {!sent && <button type="button" aria-label="빼기" className="-mr-2 h-10 w-9 shrink-0 text-[#5b3df0]"
-          onClick={() => { setPicks((p) => ({ ...p, [w]: { ...(p[w] ?? { c1: null, c2: null }), [rank]: null } })); setTarget({ old: w, rank }); }}>✕</button>}
+        {wk && <b className="shrink-0 text-[13px] text-[#5b3df0]">{weekText(wk)}</b>}
+        {k === 'c2' && !sent && <button type="button" aria-label="빼기" className="-mr-2 h-11 w-10 shrink-0 text-[#5b3df0]"
+          onClick={() => setPicks((q) => ({ ...q, c2: null }))}>✕</button>}
       </div>
     );
   };
-  const choose = (s: KstSlot) => {
-    if (!target) return;
-    setPicks((p) => {
-      const cur = { ...(p[target.old] ?? { c1: null, c2: null }), [target.rank]: s };
-      return { ...p, [target.old]: cur };
-    });
-    // 1순위를 고르면 2순위 칸으로 (2순위는 안 골라도 됨)
-    if (target.rank === 'c1' && !picks[target.old]?.c2) setTarget({ old: target.old, rank: 'c2' });
-    else setTarget(null);
-  };
-  const chosenNow = target ? picks[target.old]?.[target.rank] : null;
 
   return (
     <div className="grid gap-3.5">
       <h2 className="text-[18px] font-bold">정규 시간 변경</h2>
-      <p className="flex justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2.5 text-[14px]">
-        <span>가장 빠른 적용일</span><b className="text-[#5b3df0]">{earliest ? weekText(earliest) : '-'}</b>
-      </p>
-      {weeks.length > 1 && (
-        <label className="grid gap-1.5">
-          <span className={lbl.replace('mb-1.5 ', '')}>변경 시작 주</span>
-          <select value={start ?? ''} disabled={sent} onChange={(e) => changeStart((e.target.value || null) as KstDate | null)}
-            className="min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] font-semibold">
-            <option value="">가장 빠른 주</option>
-            {weeks.slice(1).map((w) => <option key={w} value={w}>{weekText(w)}</option>)}
-          </select>
-        </label>
-      )}
+      <p className="flex justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2.5 text-[14px]"><span>현재 정규 수업</span><b>{setText(refWeek, ok.slots, tz)}</b></p>
       {!earliest && <p className="text-[14px] font-bold text-[#b3261e]">이번 수강기간에는 더 바꿀 수 없어요</p>}
       {earliest && (
         <>
-          {ok.slots.length > 1 && (
-            <div>
-              <p className={lbl}>지금 정규 수업 · 바꿀 수업 고르기</p>
-              <div className="flex flex-wrap gap-1.5">
-                {ok.slots.map((s) => {
-                  const on = olds.includes(s.weekday);
-                  return (
-                    <button key={s.weekday} type="button" disabled={sent} className={chip(on)} aria-pressed={on}
-                      onClick={() => {
-                        const next = on ? olds.filter((x) => x !== s.weekday) : [...olds, s.weekday];
-                        setOlds(next);
-                        if (on) { setPicks((p) => { const q = { ...p }; delete q[s.weekday]; return q; }); setTarget(next.length ? { old: next[0], rank: 'c1' } : null); }
-                        else setTarget({ old: s.weekday, rank: 'c1' });
-                      }}>
-                      {local(refWeek, s, tz).text}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+          <label className="grid gap-1.5">
+            <span className={lbl.replace('mb-1.5 ', '')}>변경 시작 주</span>
+            <select value={start ?? ''} disabled={sent} onChange={(e) => changeStart((e.target.value || null) as KstDate | null)}
+              className="min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-3 text-[14px] font-semibold">
+              <option value="">가장 빠른 주 ({md(earliest)}(월)부터)</option>
+              {weeks.slice(1).map((w) => <option key={w} value={w}>{weekText(w)}</option>)}
+            </select>
+          </label>
+          {row('c1')}
+          {row('c2')}
+          {picks.c1 && !picks.c2 && editing !== 'c2' && !sent && (
+            <button type="button" onClick={() => edit('c2')}
+              className="flex min-h-[48px] items-center justify-between rounded-[10px] bg-[#f3f1f8] px-3 text-left text-[14px] text-[#55526a]">
+              <span>＋ 2순위 일정 (선택)</span>
+            </button>
           )}
-          {olds.map((w) => (
-            <div key={w} className={`${card} grid gap-1.5 p-3`}>
-              <p className={lbl}>{local(refWeek, slotOf(w), tz).text} → 새 시간</p>
-              {pickRow(w, 'c1')}
-              {pickRow(w, 'c2')}
-              {target?.old === w && !sent && (
-                <div className="mt-1 grid gap-2">
-                  <div className="grid grid-cols-7 gap-1">
-                    {DAY_ORDER.map((d) => {
-                      const has = byDay.has(d);
-                      return (
-                        <button key={d} type="button" disabled={!has} onClick={() => setDay(d)} aria-pressed={day === d}
-                          className={`min-h-[40px] rounded-[8px] border text-[14px] font-bold ${!has ? 'border-[#eeecf4] text-[#c9c6d6]' : day === d ? 'border-[#5b3df0] bg-[#5b3df0] text-white' : 'border-[#e6e3ef] bg-white'}`}>
-                          {WD[d]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {day !== null && (
-                    <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-4">
-                      {(byDay.get(day) ?? []).map((x) => {
-                        const on = !!chosenNow && sameSlot(chosenNow, x.s);
-                        return <button key={`${x.s.weekday}${x.s.time}`} type="button" onClick={() => choose(x.s)} className={chip(on)}>{ampm(x.time)}</button>;
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
           <div>
             <p className={lbl}>변경 사유 (선택)</p>
             <textarea value={reason} disabled={sent} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={300}
               className="w-full rounded-[10px] border border-[#e6e3ef] bg-white px-3 py-2 text-[14px]" />
           </div>
           {sent && <p className="rounded-[10px] bg-[#e6f6ec] px-3 py-2.5 text-[14px] font-bold text-[#1f7a4d]">신청했어요 ✓ · 확정 전까지 기존 시간 그대로</p>}
-          <button type="button" disabled={busy || sent || !canSend} className={sent ? DONE : PRI}
+          <button type="button" disabled={busy || sent || !picks.c1 || editing !== null} className={sent ? DONE : PRI}
             onClick={async () => {
-              const items = olds.map((w) => ({ old: slotOf(w), c1: picks[w]!.c1!, c2: picks[w]?.c2 ?? null }));
-              if (await props.onSubmit(items, reason.trim(), start)) { setSent(true); setTarget(null); }
+              const pick = (x: Sel | null): RcPick | null => (x ? { days: x.kst.map((k) => k.weekday), time: x.kst[0].time } : null);
+              if (await props.onSubmit([{ c1: pick(picks.c1)!, c2: pick(picks.c2) }], reason.trim(), start)) { setSent(true); setEditing(null); }
             }}>
             {sent ? '신청함 ✓' : '신청하기'}
           </button>
@@ -271,6 +252,8 @@ export function RegularChangeSheet(props: {
   );
 }
 
+const sameSet = (a: KstSlot[], b: KstSlot[]) => a.length === b.length && a.every((x) => b.some((y) => sameSlot(x, y)));
+
 /** 강사 변경 상담 안내 (대표 11/18 최종 문구): 늘 보이는 한 줄 + ⓘ 누르면 아래에 펼침 */
 function TutorChangeInfo() {
   const [open, setOpen] = useState(false);
@@ -279,7 +262,7 @@ function TutorChangeInfo() {
       <p className="flex items-center gap-1.5 text-[14px] text-[#3d3a52]">
         강사 변경은 언제든 편하게 요청해 주세요.
         <button type="button" aria-label="강사 변경 안내" aria-expanded={open} onClick={() => setOpen((v) => !v)}
-          className="grid h-7 w-7 place-items-center rounded-full text-[17px] leading-none text-[#8b88a0] hover:text-[#55526a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0]">ⓘ</button>
+          className="-my-2 grid h-11 w-11 place-items-center rounded-full text-[17px] leading-none text-[#8b88a0] hover:text-[#55526a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0]">ⓘ</button>
       </p>
       {open && (
         <div className="grid gap-2 rounded-[12px] bg-[#f3f1f8] px-3.5 py-3 text-[13.5px] leading-relaxed text-[#3d3a52]">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstDate, mondayOf, weekFor, weekOk, type RcContext } from './regular-change';
+import { firstDate, firstDate2, mondayOf, slotsOf, weekFor, weekFor2, weekOk, type RcContext } from './regular-change';
 
 // 대표 11/17 확정 예시 (H26(208) 보충 2). 화(2) 수업을 바꿈
 const ctx = (today: string, used = false): RcContext => ({
@@ -47,5 +47,13 @@ describe('정규 시간 변경 적용 주', () => {
     const c = { ...ctx('2026-11-17'), finalEnd: '2026-12-09' as never };
     expect(weekFor(c, [{ old: { weekday: 1, time: '19:00' }, new: { weekday: 4, time: '20:00' } }])).toBeNull();
     expect(weekFor(c, [{ old: { weekday: 4, time: '19:00' }, new: { weekday: 2, time: '20:00' } }])).toBe('2026-11-23');
+  });
+  it('일정 전체(같은 시간 규칙): 화·금 오후 1:00 → 수·금 1:00 은 화요일만 바뀜, 같은 일정은 null', () => {
+    const old = slotsOf([2, 5], '13:00');
+    expect(firstDate2('2026-11-23', old, slotsOf([3, 5], '13:00'))).toBe('2026-11-24');
+    expect(firstDate2('2026-11-23', old, slotsOf([5, 2], '13:00'))).toBeNull();
+    expect(firstDate2('2026-11-23', old, slotsOf([2, 5], '12:30'))).toBe('2026-11-24');
+    expect(weekFor2(ctx('2026-11-20'), old, slotsOf([1, 3], '12:30'))).toBe('2026-11-30');
+    expect(weekFor2(ctx('2026-11-20'), old, slotsOf([3, 5], '13:00'))).toBe('2026-11-23');
   });
 });
