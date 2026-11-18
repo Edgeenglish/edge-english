@@ -735,12 +735,10 @@ export default function StudentHome(props: {
             </button>
             <HelpTip text="변경권은 28일마다 새로 제공돼요." />
           </p>
-          {/* 위아래 배치 (대표 11/18): 기준 → 결과 */}
-          <div className="grid gap-1 text-[11.5px] leading-[1.45] text-[#55526a]">
-            <p className="text-[11px] text-[#8b88a0]">수업 시작 기준</p>
-            <p><b className="font-bold text-[#3d3a52]">6시간 이상 남기고 취소</b><br />변경권 1개 사용 · 보강 가능</p>
-            <p><b className="font-bold text-[#3d3a52]">6시간 미만 남기고 취소</b><br />변경권 사용 안 함 · 수업 1회 차감 · 보강 불가</p>
-          </div>
+          <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
+            <b className="font-bold text-[#3d3a52]">6시간 전</b><span>변경권 1개 사용 · 보강 가능</span>
+            <b className="font-bold text-[#3d3a52]">6시간 이내</b><span>변경권 유지 · 보강 불가 (수업 1회 차감)</span>
+          </p>
         </div>
       </div>
       <div className={`${card} flex flex-col`}>
