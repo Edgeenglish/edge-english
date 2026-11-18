@@ -44,7 +44,7 @@ const rows = [
 const html = `<div class="top"><p class="zone"><span>모든 날짜·시간은 한국 시간 기준</span></p><span class="x">✕</span></div>
 <h2>변경권 내역</h2>
 <div class="sum"><p>남은 변경권 <b>0개</b> / 총 3개</p><p>변경권 적용 기간: 11/6~12/3</p></div>
-<ul>${rows.map(r => `<li><span>취소한 수업: <b>${r[0]}</b></span><span>취소 일시: ${r[1]}</span><span>${r[2]}</span><span>변경권: 1개 사용 · <b>${r[3]}</b></span></li>`).join('')}</ul>
+<ul>${rows.map(r => `<li><span>취소한 수업: <b>${r[0]}</b></span><span>취소 일시: ${r[1]}</span><span>${r[2]}</span><span><b>변경권:</b> 1개 사용 · <b>${r[3]}</b></span></li>`).join('')}</ul>
 <span class="link">처리 내역 전체 보기 ›</span>`;
 document.getElementById('pc').innerHTML = html;
 document.getElementById('m').innerHTML = html;
