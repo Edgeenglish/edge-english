@@ -1,0 +1,51 @@
+<title>변경권 내역 창 2차</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 변경권 내역 창 2차 시안: 가상 데이터(총 3개 → 3번 사용 → 0개). PC 가운데 창 · 휴대폰 아래 창 */
+:root { --bg:#eceaf3; --sheet:#f6f5fa; --fg:#1d1b2b; --sub:#55526a; --mute:#8b88a0; --line:#e6e3ef; --accent:#5b3df0; --zone:#efebfe;
+  --font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#15141c; --sheet:#1f1d29; --fg:#f0eef7; --sub:#c3c0d3; --mute:#8f8ca3; --line:#34314a; --accent:#a594ff; --zone:#2b2547; color-scheme:dark } }
+:root[data-theme="dark"] { --bg:#15141c; --sheet:#1f1d29; --fg:#f0eef7; --sub:#c3c0d3; --mute:#8f8ca3; --line:#34314a; --accent:#a594ff; --zone:#2b2547; color-scheme:dark }
+body { background:var(--bg); color:var(--fg); font-family:var(--font); padding-block:24px 40px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width:1000px; margin:0 auto; display:grid; gap:16px; }
+h1 { font-size:19px; margin:0; } p { margin:0; }
+.pair { display:grid; grid-template-columns:minmax(0,1fr) 390px; gap:18px; align-items:start; }
+@media (max-width:900px) { .pair { grid-template-columns:minmax(0,1fr); } }
+.cap { font-size:12px; font-weight:700; color:var(--mute); margin-bottom:6px; }
+.stage { background:rgba(20,16,40,.38); border-radius:14px; padding:28px 16px; display:flex; justify-content:center; }
+.m .stage { padding:120px 0 0; align-items:flex-end; }
+.sheet { width:100%; max-width:520px; background:var(--sheet); border-radius:22px; padding:20px; display:grid; gap:12px; text-align:left; }
+.m .sheet { border-radius:22px 22px 0 0; }
+.top { display:flex; align-items:center; gap:8px; }
+.zone { flex:1; font-size:12px; font-weight:600; color:var(--accent); } .zone span { background:var(--zone); border-radius:999px; padding:4px 10px; display:inline-block; }
+.x { font-size:20px; color:var(--sub); }
+h2 { font-size:18px; margin:0; }
+.sum { font-size:14px; color:var(--sub); display:grid; gap:2px; } .sum b { font-size:20px; color:var(--fg); }
+ul { list-style:none; margin:0; padding:0; border-top:1px solid var(--line); }
+li { border-bottom:1px solid var(--line); padding:12px 0; font-size:14px; line-height:1.5; color:var(--sub); display:grid; gap:2px; }
+li:last-child { border-bottom:0; }
+li b { color:var(--fg); }
+.link { font-size:14px; font-weight:600; color:var(--accent); }
+</style>
+<div class="wrap">
+  <h1>변경권 내역 창 · 2차 시안 (가상 데이터: 총 3개를 3번 사용)</h1>
+  <div class="pair">
+    <div><p class="cap">PC · 가운데 창</p><div class="stage"><div class="sheet" id="pc"></div></div></div>
+    <div class="m"><p class="cap">휴대폰 · 아래 창</p><div class="stage"><div class="sheet" id="m"></div></div></div>
+  </div>
+</div>
+<script>
+const rows = [
+  ['11/27(금) 오후 1:00', '11/25(수) 오전 9:10', '6시간 이상 남았을 때', '1개 → 0개'],
+  ['11/20(금) 오후 1:00', '11/19(목) 오후 8:30', '6시간 이상 남았을 때', '2개 → 1개'],
+  ['11/13(금) 오후 1:00', '11/11(수) 오후 4:22', '6시간 이상 남았을 때', '3개 → 2개'],
+];
+const html = `<div class="top"><p class="zone"><span>모든 날짜·시간은 한국 시간 기준</span></p><span class="x">✕</span></div>
+<h2>변경권 내역</h2>
+<div class="sum"><p>남은 변경권 <b>0개</b> / 총 3개</p><p>변경권 적용 기간: 11/6~12/3</p></div>
+<ul>${rows.map(r => `<li><span>취소한 수업: <b>${r[0]}</b></span><span>취소 일시: ${r[1]}</span><span>${r[2]}</span><span>변경권: 1개 사용 · <b>${r[3]}</b></span></li>`).join('')}</ul>
+<span class="link">처리 내역 전체 보기 ›</span>`;
+document.getElementById('pc').innerHTML = html;
+document.getElementById('m').innerHTML = html;
+</script>

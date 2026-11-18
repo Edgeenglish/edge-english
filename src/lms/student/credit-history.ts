@@ -4,7 +4,7 @@
  */
 import type { ProcessingEvent } from './processing-history';
 
-export type CreditItemKind = 'use' | 'late' | 'holiday' | 'no_credit' | 'return' | 'admin_add' | 'admin_remove' | 'migrated';
+export type CreditItemKind = 'use' | 'late' | 'holiday' | 'no_credit' | 'return' | 'restored' | 'admin_add' | 'admin_remove' | 'migrated';
 export type CreditItem = {
   id: string; at: string; kind: CreditItemKind; delta: number;
   lesson_at: string | null; cancel_at: string; timing: 'advance' | 'late' | null; holiday: boolean; after: number;
@@ -13,7 +13,7 @@ export type CreditItem = {
 };
 export type CreditPeriodHistory = { start: string; end: string; granted: number; left: number; current: boolean; items: CreditItem[] };
 
-const KINDS: CreditItemKind[] = ['use', 'late', 'holiday', 'no_credit', 'return', 'admin_add', 'admin_remove', 'migrated'];
+const KINDS: CreditItemKind[] = ['use', 'late', 'holiday', 'no_credit', 'return', 'restored', 'admin_add', 'admin_remove', 'migrated'];
 export function parseCreditHistory(rows: unknown): CreditPeriodHistory[] {
   if (!Array.isArray(rows)) return [];
   return rows.map((p: CreditPeriodHistory) => ({
@@ -35,10 +35,11 @@ export function timingText(i: CreditItem): string | null {
 export function resultText(i: CreditItem): string {
   switch (i.kind) {
     case 'use': return '변경권 1개 사용';
-    case 'late': return i.reverted ? '변경권 사용 안 됨' : '변경권 사용 안 됨 · 수업 1회 차감';
+    case 'late': return '변경권 사용 안 됨 · 수업 1회 차감';
     case 'holiday': return '변경권 사용 안 됨 (공휴일)';
-    case 'no_credit': return i.reverted ? '남은 0개' : '남은 0개 · 수업 1회 차감';
+    case 'no_credit': return '남은 0개 · 수업 1회 차감';
     case 'return': return '변경권 1개 반환';
+    case 'restored': return '수업 취소 되돌림';
     case 'admin_add': return '운영진 추가 1개';
     case 'admin_remove': return '운영진 조정 1개 차감';
     case 'migrated': return 'LMS 시작 전 사용 1개';
@@ -51,6 +52,7 @@ export function shortResult(i: CreditItem): string {
     case 'use': return '1개 사용';
     case 'late': case 'holiday': case 'no_credit': return '사용 안 됨';
     case 'return': return '1개 반환';
+    case 'restored': return '되돌림';
     case 'admin_add': return '1개 추가';
     case 'admin_remove': case 'migrated': return '1개 차감';
   }
@@ -61,9 +63,8 @@ export function subText(i: CreditItem): string {
   const parts: string[] = [];
   const t = timingText(i);
   if (t) parts.push(t);
-  if ((i.kind === 'late' || i.kind === 'no_credit') && !i.reverted) parts.push('수업 1회 차감');
+  if (i.kind === 'late' || i.kind === 'no_credit') parts.push('수업 1회 차감');
   if (i.kind === 'holiday') parts.push('공휴일');
-  if (i.reverted) parts.push('나중에 취소 되돌림');
   parts.push(`처리 후 ${i.after}개`);
   return parts.join(' · ');
 }
@@ -94,19 +95,22 @@ export function creditFor(e: ProcessingEvent, periods: CreditPeriodHistory[]): C
  */
 export type CreditEntry = {
   lessonLabel: string | null; lessonAt: string | null; timeLabel: string; timeAt: string;
-  timing: string | null; result: string; bold: string | null;
+  timing: string | null; note: string | null; result: string | null; bold: string | null;
 };
 export function creditEntry(i: CreditItem): CreditEntry {
   const before = i.after - i.delta;
   const arrow = `${before}개 → ${i.after}개`;
-  const charged = i.reverted ? '' : ' · 수업 1회 차감';
+  // 그때 결과 그대로 — 나중에 되돌려도 과거 취소 기록은 바꾸지 않음 (대표 11/18)
+  const charged = ' · 수업 1회 차감';
   const cancel = isCancelItem(i);
+  const restore = i.kind === 'return' || i.kind === 'restored';
   const base = {
-    lessonLabel: cancel ? '취소한 수업' : i.kind === 'return' ? '원래 수업' : null,
-    lessonAt: cancel || i.kind === 'return' ? i.lesson_at : null,
+    lessonLabel: cancel ? '취소한 수업' : restore ? '원래 수업' : null,
+    lessonAt: cancel || restore ? i.lesson_at : null,
     timeLabel: cancel ? '취소 일시' : '처리 일시',
     timeAt: cancel ? i.cancel_at : i.at,
     timing: cancel && i.timing ? (i.timing === 'late' ? '6시간 미만 남았을 때' : '6시간 이상 남았을 때') : null,
+    note: restore ? '수업 취소 되돌림 · 수업 일정 복구 완료' : null,
   };
   switch (i.kind) {
     case 'use': return { ...base, result: '1개 사용 · ', bold: arrow };
@@ -114,6 +118,7 @@ export function creditEntry(i: CreditItem): CreditEntry {
     case 'holiday': return { ...base, result: '', bold: '사용 안 됨 (공휴일)' };
     case 'no_credit': return { ...base, result: '', bold: `남은 0개${charged}` };
     case 'return': return { ...base, result: '1개 반환 · ', bold: arrow };
+    case 'restored': return { ...base, result: null, bold: null };
     case 'admin_add': return { ...base, result: '운영진 지급 1개 · ', bold: arrow };
     case 'admin_remove': return { ...base, result: '운영진 회수 1개 · ', bold: arrow };
     case 'migrated': return { ...base, result: 'LMS 시작 전 사용 1개 · ', bold: arrow };
