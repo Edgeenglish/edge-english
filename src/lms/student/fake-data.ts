@@ -4,7 +4,7 @@
 import { addDays, instantToKstDate, kstToInstant, type KstDate, type KstTime } from '../rules/dates';
 import type { PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
 import type { ChangeRequests, StudentActions, StudentView } from './live';
-import { weekFor, type KstSlot } from './regular-change';
+import { slotsOf, weekFor2 } from './regular-change';
 
 const H = 60 * 60 * 1000;
 
@@ -223,9 +223,14 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     },
     regularRequest: async (items, reason, start) => {
       const o = await actions.regularOptions();
-      const wk = (old: KstSlot, c: KstSlot) => (start ? start : o.state === 'ok' ? weekFor({ today: o.today, finalEnd: o.finalEnd, periods: o.periods }, [{ old, new: c }]) ?? '' : '') as KstDate;
-      changeReqs.regular = [{ id: `rc${Date.now()}`, status: 'pending', createdAt: new Date(), oldSlots: items.map((i) => i.old), reason: reason || null, chosen: null, effectiveFrom: null,
-        items: items.map((i) => ({ old: i.old, c1: { ...i.c1, week: wk(i.old, i.c1), first: '' as KstDate }, c2: i.c2 ? { ...i.c2, week: wk(i.old, i.c2), first: '' as KstDate } : null })) }, ...changeReqs.regular];
+      if (o.state !== 'ok') return;
+      const cand = (c: { days: number[]; time: string } | null) => {
+        if (!c) return null;
+        const week = (start ?? weekFor2({ today: o.today, finalEnd: o.finalEnd, periods: o.periods }, o.slots, slotsOf(c.days, c.time)) ?? '') as KstDate;
+        return { days: c.days, time: c.time, week, first: '' as KstDate };
+      };
+      changeReqs.regular = [{ id: `rc${Date.now()}`, status: 'pending', createdAt: new Date(), oldSlots: o.slots, reason: reason || null, chosen: null, effectiveFrom: null,
+        items: items.map((i) => ({ c1: cand(i.c1)!, c2: cand(i.c2) })) }, ...changeReqs.regular];
     },
     regularWithdraw: async (id) => { changeReqs.regular = changeReqs.regular.map((r) => (r.id === id ? { ...r, status: 'withdrawn' } : r)); },
     tutorChangeRequest: async (reasons, note) => { changeReqs.tutor = [{ id: `tc${Date.now()}`, status: 'open', createdAt: new Date(), reasons, note: note || null }, ...changeReqs.tutor]; },
