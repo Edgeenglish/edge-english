@@ -121,6 +121,7 @@ export default function LoginFlow() {
   const [problems, setProblems] = useState<SignupProblem[]>([]);
   const [emailTaken, setEmailTaken] = useState(false);
   const [badLogin, setBadLogin] = useState(false);
+  const [badTick, setBadTick] = useState(0); // 틀릴 때마다 버튼이 다시 흔들리게
   const [joined, setJoined] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusyState] = useState(false);
@@ -365,17 +366,22 @@ export default function LoginFlow() {
   }
 
   // ── 로그인
+  function failLogin() {
+    setBadLogin(true);
+    setBadTick((n) => n + 1);
+  }
+
   async function passwordLogin() {
     if (!sb) return setError(t.network);
     setError(null);
     setBadLogin(false);
-    if (!looksLikeEmail(email) || !password) return setBadLogin(true);
+    if (!looksLikeEmail(email) || !password) return failLogin();
     setBusy(true);
     const { error: e } = await sb.auth.signInWithPassword({ email: email.trim(), password });
     if (e) {
       setBusy(false);
       if (e.status === 429) return setError(t.tooMany);
-      if (e.status && e.status >= 400 && e.status < 500) return setBadLogin(true);
+      if (e.status && e.status >= 400 && e.status < 500) return failLogin();
       return setError(t.network);
     }
     saveRecent('password');
@@ -838,8 +844,13 @@ export default function LoginFlow() {
             {/* 11/17 대표: 기존 회원은 비밀번호를 만든 적이 없음 → 처음 화면부터 비밀번호 만들기로 이끔.
                 이메일을 넣었으면 바로 인증번호+새 비밀번호 화면, 안 넣었으면 이메일 화면 */}
             <div className="grid gap-2 pt-1">
-              {(badLogin || !pwUsed) && <span className="text-center text-[13px] text-[#55526a]">{t.noPwHint}</span>}
-              <button type="button" disabled={busy} className="min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40" onClick={() => (looksLikeEmail(email) ? sendPwCode() : go('pw_email'))}>
+              {!badLogin && !pwUsed && (
+                <span className="whitespace-pre-line text-center text-[13px] text-[#55526a]">
+                  {t.noPwHint}
+                  {t.noPwArrow && <span className="lms-bob">{t.noPwArrow}</span>}
+                </span>
+              )}
+              <button key={badLogin ? badTick : 0} type="button" disabled={busy} className={`min-h-[48px] rounded-[14px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold disabled:opacity-40 ${badLogin ? 'lms-shake bg-[#5b3df0] text-white' : 'text-[#5b3df0]'}`} onClick={() => (looksLikeEmail(email) ? sendPwCode() : go('pw_email'))}>
                 {t.pwLink}
               </button>
             </div>
