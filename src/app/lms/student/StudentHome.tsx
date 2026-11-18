@@ -72,7 +72,8 @@ type Overlay =
   | { kind: 'credits' }
   | { kind: 'rights' }
   | { kind: 'regular' }
-  | { kind: 'tutor_change' };
+  | { kind: 'tutor_change' }
+  | { kind: 'late'; lessonId: string };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -404,8 +405,10 @@ export default function StudentHome(props: {
     else if (l.state === 'canceled') setLinkNote(LATE_LINK_NOTE.canceled);
     else if (ended || l.state !== 'scheduled') setLinkNote(LATE_LINK_NOTE.ended);
     else if ((s.lateNotices ?? []).some((n) => n.lessonId === id)) setLinkNote(LATE_LINK_NOTE.sent);
-    else if (next?.id === id && !l.leaveOpen && lateNoticeOpen(l, now)) setLateAuto(id);
-    else setLinkNote(LATE_LINK_NOTE.notYet);
+    else if (l.leaveOpen || !lateNoticeOpen(l, now)) setLinkNote(LATE_LINK_NOTE.notYet);
+    else if (next?.id === id) setLateAuto(id);
+    // 앞 수업이 진행 중이라 '다음 수업'이 다른 수업이어도, 링크의 수업 창을 따로 엶 (Work QA 11/18)
+    else setOverlay({ kind: 'late', lessonId: id });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const points = pointsHistory(s.points);
   // 가상 화면은 extras(지난 Unit 포함), 실제 화면은 강사가 정한 교재 이름만 (QA C-04)
@@ -1140,6 +1143,24 @@ export default function StudentHome(props: {
 
       {overlay && (
         <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
+          {overlay.kind === 'late' && (() => {
+            const l = s.lessons.find((x) => x.id === overlay.lessonId);
+            if (!l) return null;
+            return (
+              <NextLesson
+                lesson={l}
+                now={now}
+                meetUrl={l.leaveOpen ? null : meetRoomUrl(l.meetUrl)}
+                noteUrl={info?.noteUrl ?? null}
+                substitute={l.substitute}
+                leaveOpen={!!l.leaveOpen}
+                lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === l.id)}
+                tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === l.id) ?? null}
+                onLate={async (minutes, reason) => { await run(() => actions.lateNotice(l.id, minutes, reason), '강사님께 알렸어요.'); }}
+                lateAutoOpen
+              />
+            );
+          })()}
           {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} busy={busy} calendar={calendarOf(s.requests.find((r) => r.id === overlay.id)!)}
             onWithdraw={async (id) => { await run(() => actions.withdrawMakeup(id), '신청을 취소했어요.'); }}
             onPick={pickSuggestion} onDecline={async (id) => { await run(() => actions.declineSuggestion(id), '운영진에게 다른 일정을 요청했어요.'); }} />}
