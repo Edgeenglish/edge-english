@@ -31,7 +31,7 @@ begin
       raise exception 'Duplicate processing event';
     end if;
     if exists (select 1 from jsonb_array_elements(events) e cross join lateral jsonb_object_keys(e) k
-      where k not in ('id','at','kind','request_id','lesson_at','original_date','tutor','compensation','tutor_fault','booked_at','slots')) then
+      where k not in ('id','at','kind','request_id','lesson_at','original_date','tutor','compensation','tutor_fault','cancel_reason','cancel_at','timing','booked_at','slots')) then
       raise exception 'Unreviewed field exposed';
     end if;
     checked := checked + 1; total := total + jsonb_array_length(events);
