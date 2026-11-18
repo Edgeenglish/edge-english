@@ -154,7 +154,7 @@ function cancelSub(e: ProcessingEvent, credit: CreditItem | null): string | null
   return parts.length ? parts.join(' · ') : null;
 }
 export function creditText(c: CreditItem): string | null {
-  const charged = c.reverted ? '' : ' · 수업 1회 차감';
+  const charged = ' · 수업 1회 차감'; // 그때 결과 그대로 (대표 11/18)
   switch (c.kind) {
     case 'use': return `1개 사용 · ${c.after + 1}개 → ${c.after}개`;
     case 'late': return `사용 안 됨${charged}`;

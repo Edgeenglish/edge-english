@@ -1854,7 +1854,8 @@ function Credits({ s, onAll }: { s: StudentView; onAll: () => void }) {
         {e.lessonLabel && <span>{e.lessonLabel}: <b className="font-bold text-[#1d1b2b]">{e.lessonAt ? whenText(new Date(e.lessonAt)) : '날짜 미기록'}</b></span>}
         <span>{e.timeLabel}: {whenText(new Date(e.timeAt))}</span>
         {e.timing && <span>{e.timing}</span>}
-        <span>변경권: {e.result}{e.bold && <b className="font-bold text-[#1d1b2b]">{e.bold}</b>}</span>
+        {e.note && <span>{e.note}</span>}
+        {e.result !== null && <span>변경권: {e.result}{e.bold && <b className="font-bold text-[#1d1b2b]">{e.bold}</b>}</span>}
       </li>
     );
   };
