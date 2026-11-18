@@ -215,3 +215,9 @@ export function runFrom(kinds: CellKind[], start: number, want: CellKind): { end
 export const slotTime = (i: number) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
 export const slotText = (i: number) => (i === 48 ? '12:00 AM' : ampmEn(slotTime(i)));
 export const slotOf = (time: string) => toMin(time) / 30;
+
+/** Canceled history is visible at its start slot without occupying availability. */
+export function canceledStartingIn(lessons: TutorLesson[], slotStart: Date): TutorLesson[] {
+  return lessons.filter((l) => l.state === 'canceled' && +l.startsAt >= +slotStart && +l.startsAt < +slotStart + 30 * 60000)
+    .sort((a, b) => +a.startsAt - +b.startsAt || a.id.localeCompare(b.id));
+}

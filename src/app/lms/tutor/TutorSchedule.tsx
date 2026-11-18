@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { ALL_HOURS, cityTime, localToInstant } from '@/lms/tutor/hours-view';
 import { classFill, plusDays, toMin } from '@/lms/tutor/hours';
 import {
-  addMonth, blockAt, cellKind, dayItems, dayTag, dayText, inZone, lessonTag, localInstant, mondayOf, monthGrid, monthTitle, NOTE_HELP, NOTE_MAX, otherZone,
+  addMonth, blockAt, canceledStartingIn, cellKind, dayItems, dayTag, dayText, inZone, lessonTag, localInstant, mondayOf, monthGrid, monthTitle, NOTE_HELP, NOTE_MAX, otherZone,
   runFrom, slotText, slotTime, spanText, weekTitle, whenSpan, type CellKind, type DayItem, type ScheduleAction, type ScheduleBlock, type ScheduleData, isExtraCell,
 } from '@/lms/tutor/schedule';
 import { KOREA_TIME, minutesOf, statusText, type TutorLesson } from '@/lms/tutor/screen';
@@ -455,7 +455,17 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
           {ALL_HOURS.map((t, i) => (
             <div key={t} className="contents">
               <div data-row={i} className="pr-1 text-right text-[11px] leading-[32px] text-[#1d1b2b] lg:text-[12px] lg:leading-[30px]">{t.endsWith('00') ? ampmEn(t).replace(':00', '') : ''}</div>
-              {wcols.map((c, n) => <div key={c}>{weekCell(c, i, weekKinds[n])}</div>)}
+              {wcols.map((c, n) => <div key={c}>
+                {weekCell(c, i, weekKinds[n])}
+                {canceledStartingIn(lessons, at(c, i)).map((l) => (
+                  <button key={l.id} type="button" onClick={() => setDialog({ kind: 'lesson', lesson: l })}
+                    aria-label={`Canceled: ${l.student}, ${spanText(l.startsAt, l.endsAt, vz(c))}`}
+                    title={`Canceled: ${l.student}, ${spanText(l.startsAt, l.endsAt, vz(c))}`}
+                    className="mt-0.5 block w-full truncate rounded-[4px] border border-[#e6e3ef] bg-[#f3f1f8] px-1 py-1 text-left text-[10px] leading-tight text-[#6b6880] lg:text-[11px]">
+                    <span className="line-through decoration-2">{l.student} · {ampmEn(inZone(l.startsAt, vz(c)).time)}</span>
+                  </button>
+                ))}
+              </div>)}
             </div>
           ))}
         </div>
@@ -532,11 +542,12 @@ export default function TutorSchedule({ actions, loadLessons, tz, now, onRecord,
             {dialog.kind === 'lesson' && (() => {
               const l = dialog.lesson;
               const tag = lessonTag(l);
+              const strike = l.state === 'canceled' ? 'line-through decoration-2' : '';
               return (
                 <>
-                  {l.studentId && openProfile ? <button type="button" onClick={() => closeDialog(() => openProfile(l.studentId!))} className="w-fit rounded-[9px] bg-[#f3f1fa] px-3 py-2 text-[17px] font-semibold text-[#1d1b2b]">{l.student}</button> : <strong className="text-[17px] text-[#1d1b2b]">{l.student}</strong>}
-                  <p className="text-[15px] text-[#1d1b2b]"><b>{dayText(inZone(l.startsAt, zoneAt(locs, l.startsAt, tz)).date)} {spanText(l.startsAt, l.endsAt, zoneAt(locs, l.startsAt, tz))}</b></p>
-                  {zoneAt(locs, l.startsAt, tz) !== 'Asia/Seoul' && <p className="-mt-2 text-[13px] text-[#6b6880]">{whenSpan(l.startsAt, l.endsAt, 'Asia/Seoul')}</p>}
+                  {l.studentId && openProfile ? <button type="button" onClick={() => closeDialog(() => openProfile(l.studentId!))} className="w-fit rounded-[9px] bg-[#f3f1fa] px-3 py-2 text-[17px] font-semibold text-[#1d1b2b]"><span className={strike}>{l.student}</span></button> : <strong className={`text-[17px] text-[#1d1b2b] ${strike}`}>{l.student}</strong>}
+                  <p className={`text-[15px] text-[#1d1b2b] ${strike}`}><b>{dayText(inZone(l.startsAt, zoneAt(locs, l.startsAt, tz)).date)} {spanText(l.startsAt, l.endsAt, zoneAt(locs, l.startsAt, tz))}</b></p>
+                  {zoneAt(locs, l.startsAt, tz) !== 'Asia/Seoul' && <p className={`-mt-2 text-[13px] text-[#6b6880] ${strike}`}>{whenSpan(l.startsAt, l.endsAt, 'Asia/Seoul')}</p>}
                   <p className="text-[14px] text-[#55526a]">
                     {minutesOf(l)} min{tag ? ` · ${tag}` : ''}{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''} · {statusText(l, now)}
                   </p>
@@ -677,8 +688,8 @@ function DayRow({ item, zone, onOpen }: { item: DayItem; zone: string; onOpen: (
         <button type="button" onClick={onOpen} className="flex min-h-[48px] w-full items-center gap-2 rounded-[10px] border border-[#e6e3ef] px-3 py-1.5 text-left hover:bg-[#f7f6fb]">
           <i className={`block h-[8px] w-[8px] shrink-0 rounded-full ${off ? 'bg-[#c4c1d1]' : 'bg-[#5b3fe0]'}`} />
           <span className="min-w-0 flex-1">
-            <span className={`block truncate text-[14.5px] font-semibold ${off ? 'text-[#8a879c] line-through' : 'text-[#1d1b2b]'}`}>{l.student}</span>
-            <span className="block text-[12.5px] text-[#6b6880]">{spanText(l.startsAt, l.endsAt, zone)}</span>
+            <span className={`block truncate text-[14.5px] font-semibold ${off ? 'text-[#8a879c] line-through decoration-2' : 'text-[#1d1b2b]'}`}>{l.student}</span>
+            <span className={`block text-[12.5px] text-[#6b6880] ${off ? 'line-through decoration-2' : ''}`}>{spanText(l.startsAt, l.endsAt, zone)}</span>
           </span>
           {tag && <span className="shrink-0 rounded-[6px] bg-[#efebff] px-1.5 text-[12px] font-semibold text-[#5b3fe0]">{tag}</span>}
         </button>
