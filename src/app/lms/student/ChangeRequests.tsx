@@ -271,6 +271,26 @@ export function RegularChangeSheet(props: {
   );
 }
 
+/** 강사 변경 상담 안내 (대표 11/18 최종 문구): 늘 보이는 한 줄 + ⓘ 누르면 아래에 펼침 */
+function TutorChangeInfo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="grid gap-2">
+      <p className="flex items-center gap-1.5 text-[14px] text-[#3d3a52]">
+        강사 변경은 언제든 편하게 요청해 주세요.
+        <button type="button" aria-label="강사 변경 안내" aria-expanded={open} onClick={() => setOpen((v) => !v)}
+          className="grid h-7 w-7 place-items-center rounded-full text-[17px] leading-none text-[#8b88a0] hover:text-[#55526a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0]">ⓘ</button>
+      </p>
+      {open && (
+        <div className="grid gap-2 rounded-[12px] bg-[#f3f1f8] px-3.5 py-3 text-[13.5px] leading-relaxed text-[#3d3a52]">
+          <p>엣지영어 강사님들은 공동운영자 2명이 직접 <b>서류 심사, 면접, 강의 교육 2회, 실제 수업 평가 2회</b>까지 총 <b>6단계</b>를 거쳐 뽑아요. 수업 실력은 기본이고, 학생을 대하는 마음과 수업 태도를 가장 중요하게 보기 때문에 어느 강사님과 수업하셔도 좋답니다.👍</p>
+          <p>다만 학생마다 잘 맞는 수업 스타일이 다르다는 걸 저희도 강사님들도 너무 잘 이해하고 있어요. 수강생이 요청하면 언제든 강사 변경이 가능하다는 것도 모두 알고 계시니, 부담 없이 말씀해 주세요.☺️</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TutorChangeSheet(props: {
   open: TutorChangeRequest | null;
   busy: boolean;
@@ -282,6 +302,7 @@ export function TutorChangeSheet(props: {
   return (
     <div className="grid gap-3.5">
       <h2 className="text-[18px] font-bold">강사 변경 상담</h2>
+      <TutorChangeInfo />
       <div>
         <p className={lbl}>상담 내용 (선택 · 여러 개 가능)</p>
         <div className="grid gap-1.5">
