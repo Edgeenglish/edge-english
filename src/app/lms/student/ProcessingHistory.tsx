@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { prefOf, type PrefKey, type ScreenPrefs } from '@/lms/screen-prefs';
 import { creditFor, type CreditPeriodHistory } from '@/lms/student/credit-history';
-import { historyLines, historySlots, historyTime, requestStatus, visibleEvents, type ProcessingEvent } from '@/lms/student/processing-history';
+import { historyRow, historySlots, historyTime, requestStatus, visibleEvents, type ProcessingEvent } from '@/lms/student/processing-history';
 
 export default function ProcessingHistory({ events, error, timezone, prefs, loadPrefs, savePref, credits = [] }: {
   events: ProcessingEvent[]; error?: boolean; timezone: string;
@@ -42,26 +42,28 @@ export default function ProcessingHistory({ events, error, timezone, prefs, load
     <div className="flex justify-end gap-1.5 pb-2">{sortBtn(false, '최신순')}{sortBtn(true, '오래된순')}</div>
     <section aria-label="처리 기록" className="overflow-hidden rounded-[16px] border border-[#e6e3ef] bg-white">
       {shown.map((e) => {
-        const lines = historyLines(e, timezone, requestStatus(e, events), creditFor(e, credits));
+        const r = historyRow(e, timezone, requestStatus(e, events), creditFor(e, credits));
         const sl = historySlots(e, events);
-        const head = (
-          <>
-            <span className="text-[14px] font-bold leading-5 text-[#1d1b2b]">{lines.title}</span>
-            <time dateTime={e.at} className="whitespace-nowrap text-right text-[11px] leading-5 text-[#6b6880]">{when(e.at)}</time>
-          </>
-        );
+        // 대표 11/18 확정 순서: 제목 → 수업(진하게) → ○○ 일시 → 구분 → 상태·변경권(진하게)
+        const head = <span className="text-[14px] font-bold leading-5 text-[#1d1b2b]">{r.title}</span>;
         const text = (
-          <span>
-            {lines.detail}
-            {lines.extra?.map((x, i) => <span key={i}><br />{x.startsWith('처리 후') ? <>처리 후 변경권 <b className="font-bold text-[#1d1b2b]">{x.replace('처리 후 변경권 ', '')}</b></> : x}</span>)}
-            {lines.detail && lines.status && <br />}{lines.status && <>상태 : {lines.status}</>}
+          <span className="grid gap-0.5">
+            {r.lessonLabel && <span className="text-[12.5px] text-[#55526a]">{r.lessonLabel}: <b className="font-bold text-[#1d1b2b]">{r.lesson}</b></span>}
+            <span className="text-[11.5px] text-[#8b88a0]">{r.timeLabel}: {r.time}</span>
+            {r.sub && <span className="text-[11.5px] text-[#8b88a0]">{r.sub}</span>}
+            {(r.status || r.credit) && (
+              <span className="mt-1 grid gap-0.5 border-t border-dashed border-[#eeecf4] pt-1 text-[12.5px] text-[#55526a]">
+                {r.status && <span>상태: <b className="font-bold text-[#1d1b2b]">{r.status}</b></span>}
+                {r.credit && <span>변경권: <b className="font-bold text-[#1d1b2b]">{r.credit}</b></span>}
+              </span>
+            )}
           </span>
         );
         if (sl.requested.length === 0 && sl.suggested.length === 0 && !sl.confirmedExtra) {
           return (
-            <div key={e.id} className="grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 border-b border-[#eeecf4] px-3 py-2.5 last:border-0 sm:px-4">
+            <div key={e.id} className="grid gap-0.5 border-b border-[#eeecf4] px-3 py-2.5 last:border-0 sm:px-4">
               {head}
-              <span className="col-span-2 text-[12px] leading-[18px] text-[#55526a]">{text}</span>
+              {text}
             </div>
           );
         }
@@ -77,9 +79,9 @@ export default function ProcessingHistory({ events, error, timezone, prefs, load
         );
         return (
           <details key={e.id} className="group border-b border-[#eeecf4] last:border-0">
-            <summary className="grid min-h-[64px] cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 px-3 py-2.5 sm:px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0] [&::-webkit-details-marker]:hidden">
+            <summary className="grid cursor-pointer list-none gap-0.5 px-3 py-2.5 sm:px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0] [&::-webkit-details-marker]:hidden">
               {head}
-              <span className="col-span-2 flex items-start justify-between gap-2 text-[12px] leading-[18px] text-[#55526a]">
+              <span className="flex items-start justify-between gap-2">
                 {text}
                 <span aria-hidden="true" className="shrink-0 text-[#8b88a0] group-open:rotate-90">›</span>
               </span>
