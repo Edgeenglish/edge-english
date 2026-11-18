@@ -1,4 +1,4 @@
-## 🧪 11/18 학생 변경권 내역 — **시험 사이트(lms-test)·시험 DB 반영, 운영 미반영** (브랜치 claude/friendly-rubin-d7ftqh, 시안 https://claude.ai/artifact/SCERAK1za5rBF4bkYCWZ3m `docs/lms/previews/student-credit-history-drafts.html`)
+## ✅ 11/18 학생 변경권 내역 + 처리 내역 줄 정리 — **운영 반영 끝 (대표 '시험반영 후 운영반영해')** (브랜치 claude/friendly-rubin-d7ftqh, 시안 https://claude.ai/artifact/SCERAK1za5rBF4bkYCWZ3m `docs/lms/previews/student-credit-history-drafts.html`)
 - 홈 카드 규칙: 요청 없이 바꿨다가 되돌린 뒤 대표 시안 확정 문구로 반영(https://claude.ai/artifact/5eFCzRLSaMq6tKBzSTGWNE) · '사용 안 됨'으로 통일 · 내 정보 › 변경권도 새 창(B) · 운영진 조정 사유 숨김(B) (대표 11/18, 비교 https://claude.ai/artifact/SgXa4eavSC14XvfGGjzuKw)
 - 정책 원본: 문서 끝 'H26 (11/18 학생 변경권 내역 — 번호는 대표가 정리)' 줄 (끝 번호 확인 못 함)
 - 대표 확정(ChatGPT 검토 반영): B안(홈 카드 [내역 ›] → 변경권 내역 창) · 변경권 안 쓴 취소도 표시 · 문구 '6시간 이상/미만 남기고 취소' · '처리 후 변경권 n개' · 처리 시각 최신순 · 창 '변경권 적용 기간 / 남은 n개 / 기본 제공 n개'
@@ -7,7 +7,9 @@
 - 시험: vitest src/lms/student 62 · tsc 0 · 시험 DB 점검 `supabase/tests/student-credit-history.sql` 학생 44명 통과(left=credit_balance·최신순·칸 목록·기록 수·권한 5종)
 - 고침: 되돌린 취소는 '수업 1회 차감' 대신 '나중에 취소 되돌림'(함수 칸 reverted), 남은 변경권 없을 때 이유 표시
 - 시험 데이터: STU-0018 지금 기간(10/20~11/16) = 사용 2(처리 후 1·0) + '남은 변경권 없음 · 수업 1회 차감' 2. '6시간 미만' 사례는 STU-0018 에 열린 보강권·수업이 없어 안 만듦(다른 세션 지각 시험 수업 11/18·11/19 은 건드리지 않음)
-- 운영 반영 순서(대표 승인 뒤): ① `git log origin/lms-test..origin/lms-prod` ② 운영 DB migration 20261118100000(함수 추가만, 백업 불필요 — 데이터·기존 함수 안 바뀜) ③ lms-prod 에 이 기능 커밋만 ④ 운영 화면(STU-0013) 확인
+- 처리 내역 줄(대표 11/18 시안 https://claude.ai/artifact/VrFHjbDsD2icJEF9HAWFK6): 제목 → 수업 시각 → 취소·신청·확정·제안·요청·만료·처리 일시 → (취소만) 6시간 이상/미만 · 수강생/강사 취소 · 강사 휴무·사정 → 상태 → (수강생 취소·되돌림만) 변경권 '1개 사용 · 2개 → 1개'·'사용 안 됨 · 수업 1회 차감'·'남은 0개 · 수업 1회 차감'·'1개 반환'. migration **20261118110000** student_processing_history 에 cancel_at·timing (`processing-history.ts` historyRow)
+- 운영 반영: 운영 DB 백업 **snapshots 79**(student_processing_history 이전 정의) → migration 20261118100000·20261118110000 → 학생 13·수업 200·변경권 기록 22 그대로, 비로그인 실행 없음, STU-0013 계정으로 두 함수 정상. 코드 lms-prod **0b680bf2**(이 기능 커밋만 골라 담음), edgeenglish.kr JS 반영·공개 화면 점검 통과. 되돌리기: DB = snapshots 79 정의 실행 + drop function student_credit_history(uuid) / 코드 = lms-prod 를 de925749 로
+- 운영 화면 실제 클릭은 미확인(STU-0013 메일 코드가 support@ 가 아니라 Claude 가 못 읽음)
 
 ## ✅ 11/17 머리글 [내 수업]·학생 화면 진입 정리 — **운영 반영 끝** (H26(212), lms-prod cfb254d, DB 변경 없음, 브랜치 claude/quirky-bell-j29fzz)
 - 운영 반영 방법: lms-prod 위에 이 작업 커밋만 cherry-pick. 운영엔 '정규 시간 변경'(H26(208)) 이 아직 없어 `loadStudentBundle` 에서 changeRequests 를 뺀 판으로 맞춤 — 정규 시간 변경을 운영에 올릴 때 lms-test 판(changeReqs 포함) 그대로 가면 됨. 운영 공개 화면 점검(check-public-pages) 통과
