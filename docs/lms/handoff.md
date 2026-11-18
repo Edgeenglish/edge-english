@@ -79,7 +79,7 @@
 - 시험 계정 데이터(대표 11/18): STU-0018 윤O호 → Alex 12주 재등록(11/24~2/15, 화·목 19:00 KST), Alex 예전 시험 휴무 3건 [휴무 취소](12/7 건은 보강 확정 있어 남김), Alex Buenos Aires 임시 근무 시간 현지 06:00~09:30 추가
 - 운영 배포 준비: 골라 담은 판 = 로컬 브랜치 deploy-rc(origin/lms-prod + 이 기능 커밋만, 94a9633, 시험 526 통과). lms-test 를 통째로 올리지 말 것(Google 로그인 11/24 대기 섞여 있음)
 - ✅ 11/18 운영 반영: 백업 snapshots 77 → migration 140000·160000 → lms-prod 9fd5210(586fcf8 위에 이 기능만). 운영 JS 반영·check-public-pages 통과·실제 학생 4명 options 정상(읽기만). 되돌리기 = 백업 77 + lms-prod 586fcf8
-- 11/18 보충 7·8(같은 시간 규칙): migration **20261118150000_lms_regular_change_same_time** 시험 DB 적용(lms_rc_first2·fits2·week_ok2·week2·slots_of, request·decide 교체 — items = [{c1:{days,time,week,first},c2}], 재등록 직후 확정은 새 수강기간 시작부터) · 화면 ChangeRequests.tsx 다시 씀 · lms-test ebbdacf. **운영 미반영** — 운영 반영 때 migration 150000 + 화면
+- 11/18 보충 7·8(같은 시간 규칙): migration **20261118160000_lms_regular_change_same_time** 시험 DB 적용(lms_rc_first2·fits2·week_ok2·week2·slots_of, request·decide 교체 — items = [{c1:{days,time,week,first},c2}], 재등록 직후 확정은 새 수강기간 시작부터) · 화면 ChangeRequests.tsx 다시 씀 · lms-test ebbdacf. **운영 미반영** — 운영 반영 때 migration 20261118160000 + 화면
 
 ## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)** 참고)
 

@@ -28587,7 +28587,7 @@ end $$;
 revoke all on function tutor_contact_student(uuid, integer, text, uuid) from public, anon;
 grant execute on function tutor_contact_student(uuid, integer, text, uuid) to authenticated;
 
--- >>> 20261118150000_lms_regular_change_same_time.sql
+-- >>> 20261118160000_lms_regular_change_same_time.sql
 -- =====================================================================
 -- 정규 시간 변경: 모든 정규 수업 같은 시작 시간 (정책 원본 H26(208) 보충 7·8, 대표 11/18 확정)
 --  · 학생 신청 = 일정 전체(요일 N개 + 시간 하나)를 1·2순위로. 요일만 바꾸거나, 시간을 바꾸면 모든 수업 함께
