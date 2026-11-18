@@ -1759,7 +1759,8 @@ function LateNotice({ sent, onSend, autoOpen }: { sent: boolean; onSend: (minute
   const [open, setOpen] = useState(!!autoOpen);
   const box = useRef<HTMLDivElement>(null);
   // 메일 링크로 열렸으면 휴대폰에서도 창이 바로 보이게
-  useEffect(() => { if (autoOpen) box.current?.scrollIntoView({ block: 'center' }); }, [autoOpen]);
+  useEffect(() => { if (autoOpen) setOpen(true); }, [autoOpen]);
+  useEffect(() => { if (open && autoOpen) box.current?.scrollIntoView({ block: 'center' }); }, [open, autoOpen]);
   const [minutes, setMinutes] = useState<LateMinutes | null>(null);
   const [reason, setReason] = useState<LateReason | null>(null);
   const [busy, setBusy] = useState(false);
