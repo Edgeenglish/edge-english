@@ -328,7 +328,7 @@ describe('상태값 14개 (Master Sheet 상태매핑표 2026-10-16 기준)', () 
       ['Tutor no-show', 'N', 'N', 'N'],
       ['Tutor long-term leave', 'N', 'N', 'N'],
       ['Student long-term leave', 'N', 'N', 'N'],
-      ['No change credits left', 'Y', 'Y', 'N'],
+      ['No change credits left', 'N', 'Y', 'N'], // 2026-11-18: advance cancellation pay is independent of credits
       ['Tutor Late - Student Present', 'Y', 'Y', 'N'],
       ['Covered by another tutor', 'Y', 'Y', 'N'],
     ];

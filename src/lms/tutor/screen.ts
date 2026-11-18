@@ -226,9 +226,9 @@ export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   'Student no-show': 'Student no-show',
   // 취소 상태는 강사 시트 Status 이름 그대로 (H26(138))
   'Student canceled in advance': 'Student canceled in advance',
-  'Student canceled in advance (public holiday)': 'Student canceled in advance (public holiday)',
+  'Student canceled in advance (public holiday)': 'Student canceled in advance',
   'Student canceled late': 'Student canceled late',
-  'No change credits left': 'No change credits left',
+  'No change credits left': 'Student canceled in advance',
   'Tutor canceled in advance': 'Tutor canceled in advance',
   'Tutor canceled late': 'Tutor canceled late',
   'Tutor no-show': 'Tutor no-show',

@@ -34,7 +34,7 @@ import { DocumentsCard, SignSheetBody, dueLine } from './SignDoc';
 import {
   canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   canStudentCancel, COVERED_NOTE, COVERING_NOTE, type StudentCancelDecision,
-  statusText, rangeFull, rangeFullNoDay, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
+  TUTOR_STATUS_TEXT, statusText, rangeFull, rangeFullNoDay, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
 
 type CancelDecision = { status: string };
 type CancelAction = (lessonId: string, requestId: string, reason: string, dryRun: boolean) => Promise<CancelDecision>;
@@ -530,7 +530,6 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <span className="rounded-[6px] bg-[#efecfd] px-1.5 py-0.5 text-[12.5px] font-bold text-[#3b2a9a]">{updateTitle(u, lang === 'ko')}</span>
                           <StudentName id={u.studentId} name={u.student} className="inline text-[15px] font-semibold" />
-                          {u.kind === 'canceled' && u.info.late === true && <span className="text-[12.5px] font-semibold text-[#b3261e]">{t('late', '늦은 취소')}</span>}
                         </p>
                         {updateLines(u, zAt).map((line, i) => (
                           <span key={i} className={`block text-[14px] ${i === 0 ? 'text-[#1d1b2b]' : 'text-[#55526a]'}`}><Rich text={line} /></span>
@@ -551,7 +550,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <HomeNotices who="tutor" title={t('Notice', '공지')} />
 
             <section aria-label="Today" className={card}>
-              <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{t('Today’s classes', '오늘 수업')} <span className="text-[#6b6880]">{todayLessons.length || ''}</span></h2>
+              <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{t('Today’s classes', '오늘 수업')} <span className="text-[#6b6880]">{todayLessons.filter((l) => l.state !== 'canceled' && !l.coveredByOther).length}</span></h2>
               {todayLessons.length === 0 && <p className="text-[14.5px] text-[#6b6880]">{t('No classes today.', '오늘은 수업이 없어요.')}</p>}
               <div className="divide-y divide-[#f0eef5]">
                 {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={zAt(l.startsAt)} now={now} onRecord={() => setTab('record')} sendLate={actions.lateNotice} onLateSent={() => reload()}
@@ -1070,7 +1069,7 @@ function StudentCanceledFields({ lesson: l, tz, cancel, request, onDecision }: {
     if (toldMs === null) return;
     const t = setTimeout(() => {
       cancel(l.id, request, new Date(toldMs), true)
-        .then((d) => { if (!live) return; setShown({ status: d.status, late: d.timing === 'late' }); onDecision({ told: new Date(toldMs), status: d.status }); })
+        .then((d) => { if (!live) return; setShown({ status: TUTOR_STATUS_TEXT[d.status], late: d.timing === 'late' }); onDecision({ told: new Date(toldMs), status: d.status }); })
         .catch((e) => { if (live) setErr(e instanceof Error ? e.message : 'Could not check. Please try again.'); });
     }, 300);
     return () => { live = false; clearTimeout(t); };
