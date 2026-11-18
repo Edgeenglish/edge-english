@@ -744,8 +744,8 @@ function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent, sendCont
     <div className={`flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3 ${phase === 'canceled' || phase === 'covered' ? 'text-[#8a879c]' : ''} ${phase === 'covered' ? 'opacity-60' : ''}`}>
       {/* 시각마다 그 옆에 어느 시간대인지 바로 적음 (현지 + 한국) */}
       <span className="w-full min-w-0 sm:flex-1">
-        <span className="block text-[14.5px] tabular-nums"><Rich text={rangeFullNoDay(l, tz)} /></span>
-        <StudentName id={l.studentId} name={l.student} className={`mt-0.5 block truncate text-[15px] font-semibold ${phase === 'canceled' ? 'line-through' : ''}`} />
+        <span className={`block text-[14.5px] tabular-nums ${phase === 'canceled' ? 'line-through decoration-2' : ''}`}><Rich text={rangeFullNoDay(l, tz)} /></span>
+        <StudentName id={l.studentId} name={phase === 'canceled' ? <span className="line-through decoration-2">{l.student}</span> : l.student} className="mt-0.5 block truncate text-[15px] font-semibold" />
         <span className="block text-[12.5px] text-[#6b6880]">{minutesOf(l)} min · {tag}<CoverNote lesson={l} where="type" />{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}</span>
       </span>
       {phase === 'to_record'
