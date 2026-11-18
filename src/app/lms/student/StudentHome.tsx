@@ -9,9 +9,10 @@ import { asClassType, typeKo, typeKoLong } from '@/lms/class-type';
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
+import Link from 'next/link';
 import ProcessingHistory from './ProcessingHistory';
 import { ChangeRequestRows, RegularChangeSheet, TutorChangeSheet } from './ChangeRequests';
-import type { ChangeRequests } from '@/lms/student/live';
+import type { ChangeRequests, StudentExtras } from '@/lms/student/live';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
 import { koZoneCity, ZONE_ROWS, zoneName } from '@/lms/admin/places';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
@@ -274,6 +275,10 @@ function untilText(now: Date, at: Date): string {
 export default function StudentHome(props: {
   nowIso: string;
   initial: StudentView;
+  /** 미리 불러 둔 자료로 먼저 보여 준 뒤 새로 불러온 자료 (StudentLive) */
+  refreshed?: StudentView;
+  /** 홈 칸 자료를 미리 읽어 둔 것 — 처음부터 한 번에 그림 (StudentLive) */
+  preloaded?: StudentExtras;
   actions: StudentActions;
   /** 미리보기에만: 교재·결제 내역·동의 할 일 (실제 데이터 연결 전 항목) */
   extras?: PreviewExtras;
@@ -282,12 +287,15 @@ export default function StudentHome(props: {
   onLogout?: () => void;
   /** 톡 바로가기 ?makeup=수업(시트 보강·보상권)id → 그 '보강 날짜 고르기'를 바로 엶 (11/8 대표 시안) */
   openMakeup?: string;
+  /** 메일 바로가기 ?late=수업id → 그 수업 '늦게 참여해요' 창을 바로 엶 (대표 11/18) */
+  openLate?: string;
   /** 메일 바로가기 ?tab=me → '내 정보' 탭으로 바로 엶 (첫 학습 정보 등록 메일) */
   openTab?: string;
 }) {
   const { actions, extras, preview } = props;
   const now = useMemo(() => new Date(props.nowIso), [props.nowIso]);
   const [s, setView] = useState<StudentView>(props.initial);
+  useEffect(() => { if (props.refreshed) setView(props.refreshed); }, [props.refreshed]);
   const studentTz = s.timezone || props.initial.timezone || 'Asia/Seoul';
   // 운영자 보기에서만 한국 시간으로 바꿔 볼 수 있음 (H26(93)). 수강생 본인 화면은 항상 수강생 시간
   const isAdminView = !!props.adminBar;
@@ -323,11 +331,17 @@ export default function StudentHome(props: {
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // 정규 시간 변경 신청·강사 변경 상담 (H26(208))
-  const [changeReqs, setChangeReqs] = useState<ChangeRequests>({ regular: [], tutor: [] });
+  const [changeReqs, setChangeReqs] = useState<ChangeRequests>(props.preloaded?.changeReqs ?? { regular: [], tutor: [] });
   const reloadChangeReqs = () => actions.changeRequests().then(setChangeReqs).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void reloadChangeReqs(); }, []);
-  const [reminders, setReminders] = useState<Reminders | null>(null);
+  const [reminders, setReminders] = useState<Reminders | null>(props.preloaded?.reminders ?? null);
+  // 화면 보기 설정(처리 내역 순서 등): 미리 읽은 값을 쓰고, 바꾸면 여기에도 기억 (탭을 다시 열어도 순서가 튀지 않게)
+  const [prefs, setPrefs] = useState(props.preloaded?.prefs);
+  const savePref = actions.savePref && ((key: Parameters<NonNullable<StudentActions['savePref']>>[0], value: string) => {
+    setPrefs((p) => (p ? { ...p, [key]: value } : p));
+    return actions.savePref!(key, value);
+  });
   /** 저장은 됐는데 화면을 다시 읽지 못함 (R-02) → 위에 안내 + [다시 읽기] */
   const [stale, setStale] = useState<string | null>(null);
   /** 여러 수업 취소가 중간에 멈춤 → 남은 수업만 다시 고른 상태로 창 유지 (R-02) */
@@ -373,6 +387,25 @@ export default function StudentHome(props: {
         : '이 수업은 지금 보강을 신청할 수 없어요. 카카오톡으로 문의해 주세요.');
     else setLinkNote('열 수 없는 링크예요. 카카오톡으로 문의해 주세요.');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // 메일 [강사님께 늦는다고 알리기] (대표 11/18): 지금 알릴 수 있으면 창을 바로 열고, 아니면 맨 위 한 줄로 이유. 보내기 막기는 DB(student_late_notice)가 그대로 함
+  const [lateAuto, setLateAuto] = useState<string | null>(null);
+  useEffect(() => {
+    const id = props.openLate;
+    if (!id) return;
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('late');
+      window.history.replaceState(window.history.state, '', u.pathname + u.search);
+    } catch { /* 주소를 못 바꿔도 화면은 그대로 */ }
+    const l = s.lessons.find((x) => x.id === id);
+    const ended = l && now.getTime() >= l.startsAt.getTime() + l.minutes * 60_000;
+    if (!l) setLinkNote(LATE_LINK_NOTE.unknown);
+    else if (l.state === 'canceled') setLinkNote(LATE_LINK_NOTE.canceled);
+    else if (ended || l.state !== 'scheduled') setLinkNote(LATE_LINK_NOTE.ended);
+    else if ((s.lateNotices ?? []).some((n) => n.lessonId === id)) setLinkNote(LATE_LINK_NOTE.sent);
+    else if (next?.id === id && !l.leaveOpen && lateNoticeOpen(l, now)) setLateAuto(id);
+    else setLinkNote(LATE_LINK_NOTE.notYet);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const points = pointsHistory(s.points);
   // 가상 화면은 extras(지난 Unit 포함), 실제 화면은 강사가 정한 교재 이름만 (QA C-04)
   const textbook: { title: string; lastUnit?: number | null } | null = extras?.textbook ?? (s.textbook ? { title: s.textbook, lastUnit: null } : null);
@@ -390,15 +423,16 @@ export default function StudentHome(props: {
   }, [actions]);
 
   // 시간대 자동 확인 (H26(119)): 기기 시간대가 프로필과 다르고, 그 기기 시간대에 [그대로]를 누른 적이 없으면 맨 위에서 물음. 운영자 보기에서는 안 물음
-  const [tzState, setTzState] = useState<TimezoneState | null>(null);
-  const [deviceTz, setDeviceTz] = useState<string | null>(null);
-  useEffect(() => {
-    actions.timezone().then(setTzState, () => setTzState(null));
+  const [tzState, setTzState] = useState<TimezoneState | null>(props.preloaded?.tz ?? null);
+  const [deviceTz] = useState<string | null>(() => {
     try {
       const d = Intl.DateTimeFormat().resolvedOptions().timeZone;
       // 'UTC'·'Etc/…' 는 기기 설정이 없는 경우라 묻지 않음
-      if (d && d.includes('/') && !d.startsWith('Etc/')) setDeviceTz(d);
-    } catch { /* 시간대를 못 읽는 브라우저 */ }
+      return d && d.includes('/') && !d.startsWith('Etc/') ? d : null;
+    } catch { return null; /* 시간대를 못 읽는 브라우저 */ }
+  });
+  useEffect(() => {
+    actions.timezone().then(setTzState, () => setTzState(null));
   }, [actions]);
   const askTz = !isAdminView && tzState && deviceTz && deviceTz !== studentTz && deviceTz !== tzState.kept ? deviceTz : null;
 
@@ -468,7 +502,7 @@ export default function StudentHome(props: {
   }
 
   // 수업 시간 (H26(95) ②): 매주 정규 요일·시각 — 수강생 거주지 시간으로 (운영자 보기에서 KST 전환 시 한국 시간)
-  const [slots, setSlots] = useState<RegularSlot[]>([]);
+  const [slots, setSlots] = useState<RegularSlot[]>(props.preloaded?.slots ?? []);
   useEffect(() => {
     let alive = true;
     actions.regularSlots().then((x) => { if (alive) setSlots(x); }, () => {});
@@ -477,7 +511,7 @@ export default function StudentHome(props: {
   const slotText = regularSlotText(slots, now);
 
   // 나의 학습 정보(강사 작성)·누적 학습 시간 (11/11 대표 시안, migration 20261111010000)
-  const [info, setInfo] = useState<MyInfo | null>(null);
+  const [info, setInfo] = useState<MyInfo | null>(props.preloaded?.info ?? null);
   useEffect(() => {
     let alive = true;
     actions.myInfo().then((x) => { if (alive) setInfo(x); }, () => {});
@@ -485,7 +519,7 @@ export default function StudentHome(props: {
   }, [actions, s]);
 
   // 공지 (최신 2건 + 전체보기, 학생이 열면 확인함 — 11/11 대표) · 수강권 / 결제 내역
-  const [notices, setNotices] = useState<StudentNotice[]>([]);
+  const [notices, setNotices] = useState<StudentNotice[]>(props.preloaded?.notices ?? []);
   // 강사 '늦어요' 알림 (QA 11/14): 다음 수업 2시간 전~끝날 때까지 열어 둔 홈도 새로고침 없이 노란 띠가 나오게 30초마다(+ 화면으로 돌아올 때) 다시 읽음
   const [liveTutorLate, setLiveTutorLate] = useState<{ lessonId: string; minutes: number; reason: string | null }[] | null>(null);
   const watchStart = next?.startsAt.getTime() ?? null;
@@ -503,7 +537,7 @@ export default function StudentHome(props: {
     document.addEventListener('visibilitychange', onShow);
     return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', onShow); };
   }, [actions, watchStart, watchEnd]);
-  const [history, setHistory] = useState<PaymentSummary[] | null>(null);
+  const [history, setHistory] = useState<PaymentSummary[] | null>(props.preloaded?.history ?? null);
   useEffect(() => {
     let alive = true;
     actions.notices().then((x) => { if (alive) setNotices(x); }, () => {});
@@ -518,7 +552,7 @@ export default function StudentHome(props: {
   }
 
   // [맞는 시간이 없어요] 보일 보강권 (H26(92) ⑤): 수업 번호 → 누른 시각. 화면을 다시 읽을 때마다 같이
-  const [noTime, setNoTime] = useState<Map<string, string | null>>(new Map());
+  const [noTime, setNoTime] = useState<Map<string, string | null>>(() => props.preloaded?.noTime ?? new Map());
   useEffect(() => {
     let alive = true;
     actions.noTimeRights().then((m) => { if (alive) setNoTime(m); }, () => {});
@@ -614,6 +648,7 @@ export default function StudentHome(props: {
       lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === next.id)}
       tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === next.id) ?? null}
       onLate={async (minutes, reason) => { await run(() => actions.lateNotice(next.id, minutes, reason), '강사님께 알렸어요.'); }}
+      lateAutoOpen={lateAuto === next.id}
     />
   );
 
@@ -799,7 +834,8 @@ export default function StudentHome(props: {
             </section>
           )}
           {/* 시간대 띠는 모든 학생·운영자 보기에서 같은 자리·같은 모양 (11/11 대표: 학생마다 화면이 달라 보이지 않게) */}
-          <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
+          {/* '변경'은 시간대 기억값을 못 읽어도 항상 (배지 모양이 나중에 바뀌지 않게) — 바꾸기는 그대로 저장 함수가 처리 */}
+          <ZoneBar change={{ value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) }} />
           {tab === 'home' && info && <LearnedBand minutes={info.learnedMin} />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
@@ -944,7 +980,7 @@ export default function StudentHome(props: {
             <ChangeRequestRows data={changeReqs} tz={VIEW_TZ} onOpenRegular={() => setOverlay({ kind: 'regular' })} />
             {/* 정규 시간 변경·강사 변경 상담 줄이 있으면 '아직 처리 내역이 없어요' 를 띄우지 않음 */}
             {((s.processingHistory ?? []).length > 0 || s.processingHistoryError || (changeReqs.regular.length + changeReqs.tutor.length) === 0) && <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
-              loadPrefs={actions.prefs} savePref={actions.savePref} />}
+              prefs={prefs} loadPrefs={actions.prefs} savePref={savePref} />}
           </TabPage>
         )}
 
@@ -972,9 +1008,9 @@ export default function StudentHome(props: {
                 </div>
               </section>
             )}
-            <a href="/books" className={`${card} flex min-h-[52px] items-center justify-between px-4 text-[15px] font-semibold`}>
+            <Link href="/books" className={`${card} flex min-h-[52px] items-center justify-between px-4 text-[15px] font-semibold`}>
               전체 교재 둘러보기 (홈페이지 교재 소개) <span className="text-[#8b88a0]">›</span>
-            </a>
+            </Link>
           </TabPage>
         )}
 
@@ -1651,7 +1687,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
+function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate, lateAutoOpen }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; lateAutoOpen?: boolean }) {
   // 지각 알림 버튼은 수업 시작 2시간 전부터 끝나기 전까지 (페이지를 열어 둔 채로도 때가 되면 나타나게)
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -1704,14 +1740,26 @@ function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, late
           수업 노트 열기 ↗
         </a>
       )}
-      {lateOpen && <LateNotice sent={lateSent} onSend={onLate} />}
+      {lateOpen && <LateNotice sent={lateSent} onSend={onLate} autoOpen={lateAutoOpen} />}
     </section>
   );
 }
 
+// 메일 [강사님께 늦는다고 알리기] 링크를 지금 쓸 수 없을 때 맨 위 한 줄 (대표 11/18)
+const LATE_LINK_NOTE = {
+  unknown: '열 수 없는 링크예요. 카카오톡으로 문의해 주세요.',
+  canceled: '이 수업은 취소됐어요.',
+  ended: '이 수업은 이미 끝났어요.',
+  sent: '이미 강사님께 늦는다고 알렸어요.',
+  notYet: '수업 시작 2시간 전부터 알릴 수 있어요.',
+} as const;
+
 // 지각 알림 (대표 11/13): 지각 시간 + 이유(선택) → [강사님께 알리기]. 보낸 뒤에는 회색 '알렸어요 ✓'
-function LateNotice({ sent, onSend }: { sent: boolean; onSend: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
+function LateNotice({ sent, onSend, autoOpen }: { sent: boolean; onSend: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; autoOpen?: boolean }) {
+  const [open, setOpen] = useState(!!autoOpen);
+  const box = useRef<HTMLDivElement>(null);
+  // 메일 링크로 열렸으면 휴대폰에서도 창이 바로 보이게
+  useEffect(() => { if (autoOpen) box.current?.scrollIntoView({ block: 'center' }); }, [autoOpen]);
   const [minutes, setMinutes] = useState<LateMinutes | null>(null);
   const [reason, setReason] = useState<LateReason | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1719,7 +1767,7 @@ function LateNotice({ sent, onSend }: { sent: boolean; onSend: (minutes: LateMin
   if (!open) return <button type="button" onClick={() => setOpen(true)} className="min-h-[46px] rounded-[14px] border border-white/35 text-[15px] font-semibold text-white">늦게 참여해요</button>;
   const chip = (on: boolean) => `min-h-[44px] rounded-[12px] px-3.5 text-[14.5px] font-semibold ${on ? 'bg-[#ffd66b] text-[#1b1442]' : 'border border-white/35 text-white'}`;
   return (
-    <div className="grid gap-3.5 rounded-[16px] bg-white/10 p-4">
+    <div ref={box} className="grid gap-3.5 rounded-[16px] bg-white/10 p-4">
       <div className="flex items-center justify-between">
         <p className="text-[16px] font-bold text-white">늦게 참여하시나요?</p>
         <button type="button" onClick={() => setOpen(false)} className="min-h-[36px] px-1 text-[14px] font-semibold text-[#c9c0ff]">닫기</button>
@@ -2396,5 +2444,42 @@ function HelpTip({ text }: { text: string }) {
         </span>
       )}
     </span>
+  );
+}
+
+/** 학생 화면을 처음 열 때(메일 링크·새로고침) 자료를 받는 동안: 메뉴는 그대로, 칸 자리만 빈 틀로 (11/17 대표: 화면이 단계별로 조립돼 보이지 않게) */
+export function StudentHomeSkeleton() {
+  const bar = 'animate-pulse rounded-full bg-[#ebe8f3]';
+  const box = `${card} animate-pulse`;
+  return (
+    <div aria-busy="true" className="mx-auto max-w-[1200px] text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-8">
+      <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
+        {TABS.map((t) => (
+          <span key={t.key} className={`flex min-h-[46px] items-center gap-2.5 rounded-[12px] px-3 text-left text-[15px] ${t.key === 'home' ? 'bg-[#efeaff] font-bold text-[#3a22b0]' : ''}`}>
+            <Icon d={t.icon} />
+            {t.label}
+          </span>
+        ))}
+      </nav>
+      <div className="min-w-0 flex-1 pb-6 pt-3 lg:pb-0 lg:pt-0">
+        <div className="grid gap-2 px-4 pb-3 lg:px-0 lg:pb-4 lg:pt-1">
+          <span className={`${bar} h-[32px] w-[280px] max-w-full`} />
+          <span className={`${bar} h-[30px] w-[220px] max-w-full`} />
+        </div>
+        <div className="grid gap-3 px-4 lg:px-0">
+          <div className="h-[150px] animate-pulse rounded-[22px] bg-[#e4e0f0]" />
+          <div className={`${box} h-[130px]`} />
+          <div className={`${box} h-[170px]`} />
+        </div>
+      </div>
+      <nav aria-label="아래 메뉴" className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
+        {TABS.map((t) => (
+          <span key={t.key} className={`flex min-h-[48px] flex-col items-center justify-center gap-0.5 text-[11px] ${t.key === 'home' ? 'font-bold text-[#5b3df0]' : 'text-[#55526a]'}`}>
+            <Icon d={t.icon} />
+            {t.label}
+          </span>
+        ))}
+      </nav>
+    </div>
   );
 }

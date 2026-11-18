@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { STATUS_RULES, tutorPaidFor } from './status';
+import { evaluateStudentChange } from './change';
 
 describe('강사 급여 대상 (R-19)', () => {
+  it('변경권 잔고·추가 지급과 무관하게 6시간 경계로 급여가 결정됨', () => {
+    const startsAt = new Date('2026-11-18T11:00:00+09:00');
+    for (const creditsLeft of [-1, 0, 1, 8]) for (const kind of ['regular', 'makeup'] as const) {
+      for (const [beforeMs, paid] of [[6 * 3600000, false], [6 * 3600000 - 1, true], [18 * 3600000, false]] as const) {
+        const d = evaluateStudentChange({ lesson: { kind, kstDate: '2026-11-18', startsAt }, now: new Date(+startsAt - beforeMs), finalEndDate: '2026-11-30', creditsLeft, isKoreanPublicHoliday: false }, { compensationRecancel: 'no_rebook' });
+        expect(d.ok).toBe(true);
+        if (!d.ok) continue;
+        expect(tutorPaidFor(kind, d.status)).toBe(paid);
+        if (creditsLeft <= 0) expect(d).toMatchObject({ consumesLesson: true, makeupAllowed: false, usesCredit: false });
+      }
+    }
+  });
   it('정규·보강은 상태 규칙 그대로 (Normal 유급, 수강생 정상 취소 무급)', () => {
     expect(tutorPaidFor('regular', 'Normal')).toBe(true);
     expect(tutorPaidFor('makeup', 'Make-up completed')).toBe(true);

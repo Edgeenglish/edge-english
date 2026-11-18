@@ -49,7 +49,8 @@ export const STATUS_RULES: Record<ClassStatus, StatusRule> = {
   'Tutor long-term leave': { studentLabel: '강사 장기 휴식 👉 수강기간 연장', consumesLesson: false, usesCredit: false, tutorPaid: false, incentive: 'none' },
   // 학생용 문구의 '최대 2주·24주만'은 FAQ·수강계약서와 달라 확인 필요 (docs/lms/04-policy-review.md)
   'Student long-term leave': { studentLabel: '학생 장기 연기 👉 수강기간 최대 2주 연장(6개월(24주) 수강 학생만)', consumesLesson: false, usesCredit: false, tutorPaid: false, incentive: 'none' },
-  'No change credits left': { studentLabel: '변경권 소진 👉 보강 불가', consumesLesson: true, usesCredit: false, tutorPaid: true, incentive: 'none' },
+  // POL-CHG-01·04: 6시간 이상 전 취소. 학생 차감과 강사 급여는 별개 (대표 2026-11-18).
+  'No change credits left': { studentLabel: '변경권 소진 👉 보강 불가', consumesLesson: true, usesCredit: false, tutorPaid: false, incentive: 'none' },
   'Tutor Late - Student Present': { studentLabel: '강사 지각(정상 진행)', consumesLesson: true, usesCredit: false, tutorPaid: true, incentive: 'late' },
   'Covered by another tutor': { studentLabel: '대타 강사 진행', consumesLesson: true, usesCredit: false, tutorPaid: true, incentive: 'none' },
 };

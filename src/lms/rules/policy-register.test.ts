@@ -123,16 +123,18 @@ describe('코드 ↔ 기준표', () => {
 
 describe('상태매핑표 14개: TypeScript ↔ DB 기준값', () => {
   const sql = readdirSync(join(ROOT, 'supabase/migrations'))
-    .map((f) => readFileSync(join(ROOT, 'supabase/migrations', f), 'utf8'))
+    .sort().map((f) => readFileSync(join(ROOT, 'supabase/migrations', f), 'utf8'))
     .join('\n');
   const rows = [...sql.matchAll(/\('([^']+)', '([^']+)', (true|false), (true|false), (true|false), '([a-z_]+)', '[a-z]+'\)/g)];
+  // 이미 적용된 초기 migration은 고치지 않고 후속 급여 규칙 변경까지 비교한다.
+  const paidOverrides = new Map([...sql.matchAll(/update (?:public\.)?class_status_rules set tutor_paid = (true|false) where status = '([^']+)'/g)].map((m) => [m[2], m[1]]));
 
   it('DB에도 14개', () => expect(rows.map((r) => r[1]).sort()).toEqual([...CLASS_STATUSES].sort()));
 
   it('수강생 문구·수강권·변경권·급여·인센티브가 같음', () => {
     for (const [, status, label, consumes, credit, paid, incentive] of rows) {
       const r = STATUS_RULES[status as keyof typeof STATUS_RULES];
-      expect({ status, label, consumes, credit, paid, incentive }).toEqual({
+      expect({ status, label, consumes, credit, paid: paidOverrides.get(status) ?? paid, incentive }).toEqual({
         status,
         label: r.studentLabel,
         consumes: String(r.consumesLesson),

@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
+import { LOGIN_PATH, myLmsHome } from '@/lms/auth/home';
+import { forgetOwnView, ownViewCache, prefetchOwnView } from '@/lms/student/prefetch';
 import BubbleTopTail from './common/bubble/BubbleTopTail';
 
 export default function Header() {
@@ -13,10 +15,55 @@ export default function Header() {
   const closeDrawer = () => setIsDrawerOpen(false);
   // H26(146)(150) 로그인돼 있으면 '내 수업' (로그인 화면이 권한별 홈으로 넘김)
   const [loggedIn, setLoggedIn] = useState(false);
+  // 학생은 [내 수업]이 학생 홈으로 바로 (로그인 화면·'이동하는 중'을 거치지 않음, 11/17 대표). 그 밖은 로그인 화면이 넘김
+  const [accountHref, setAccountHref] = useState(LOGIN_PATH);
+  const router = useRouter();
+  // 학생 자료를 아직 받는 중에 누르면 지금 화면을 그대로 두고, 다 받은 뒤 학생 홈으로 넘김 ('불러오는 중' 화면으로 끊기지 않게, 11/17 대표)
+  // 역할을 아직 확인하는 중에 눌러도(홈페이지를 막 연 직후) 로그인 화면으로 가지 않고 확인을 기다림
+  const homeP = useRef<Promise<string | null> | null>(null);
+  const openAccount = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const waitHome = loggedIn && accountHref === LOGIN_PATH ? homeP.current : null;
+    const pending = accountHref === '/lms/student' ? ownViewCache()?.pending : undefined;
+    if (!waitHome && !pending) return;
+    e.preventDefault();
+    void (async () => {
+      const to = waitHome ? await waitHome.catch(() => null) : '/lms/student';
+      if (to === '/lms/student') await ownViewCache()?.pending?.catch(() => undefined);
+      router.push(to ?? LOGIN_PATH);
+    })();
+  };
+  // 로그인·로그아웃이 바뀌면 바로 [로그인]↔[내 수업] (11/17 대표: 로그인 뒤에도 새로고침 전까지 '로그인'으로 남음)
   useEffect(() => {
     const sb = supabaseBrowser();
     if (!sb) return;
-    void sb.auth.getSession().then(({ data }) => setLoggedIn(!!data.session)).catch(() => setLoggedIn(false));
+    let lastUid: string | null | undefined;
+    const apply = (uid: string | null) => {
+      if (uid === lastUid) return;
+      lastUid = uid;
+      setLoggedIn(!!uid);
+      if (!uid) {
+        homeP.current = null;
+        setAccountHref(LOGIN_PATH);
+        forgetOwnView();
+        return;
+      }
+      // 학생 화면 자료를 역할 확인과 함께 미리 불러 둠 → [내 수업] 누르면 '불러오는 중' 없이 바로 보임. 학생이 아니면 버림
+      prefetchOwnView(sb, uid);
+      const p = myLmsHome(sb);
+      homeP.current = p;
+      void p.then((to) => {
+        if (lastUid !== uid) return;
+        setAccountHref(to ?? LOGIN_PATH);
+        if (to !== '/lms/student') forgetOwnView();
+      }).catch(() => {});
+    };
+    // 알림 안에서 바로 DB 를 부르면 막힐 수 있어(Supabase 안내) 한 박자 뒤에 처리
+    const { data } = sb.auth.onAuthStateChange((_e, session) => {
+      const uid = session?.user.id ?? null;
+      setTimeout(() => apply(uid), 0);
+    });
+    return () => data.subscription.unsubscribe();
   }, []);
   const accountLabel = loggedIn ? '내 수업' : '로그인';
   // 로그인·내 수업 화면에 있으면 다른 메뉴처럼 굵게 (11/17 학생 화면 홈페이지 틀 통합)
@@ -24,7 +71,9 @@ export default function Header() {
   // 로그인돼 있으면 오른쪽 위에 로그아웃 (11/17 대표) — 로그아웃 뒤 홈페이지 첫 화면
   const logout = async () => {
     await supabaseBrowser()?.auth.signOut();
+    forgetOwnView();
     setLoggedIn(false);
+    setAccountHref(LOGIN_PATH);
     window.location.assign('/');
   };
   const logoutBtn = (cls: string) =>
@@ -101,7 +150,7 @@ export default function Header() {
 
           {/* 순서: [내 수업] [수강신청] [로그아웃] — 로그아웃은 맨 오른쪽 (11/17 대표). 1024px 아래는 ☰ 메뉴(로그아웃 생긴 뒤 768~1023 에서 머리글이 화면 밖으로 넘침) */}
           <div className="flex shrink-0 items-center gap-5 max-xl:gap-4 max-lg:hidden">
-            <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
+            <Link href={accountHref} onClick={openAccount} className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
               {accountLabel}
             </Link>
             <Link
@@ -115,7 +164,7 @@ export default function Header() {
           </div>
         </div>
         <div className="flex items-center gap-4 lg:hidden">
-          <Link href="/lms/login" className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
+          <Link href={accountHref} onClick={openAccount} className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
             {accountLabel}
           </Link>
           {logoutBtn('')}

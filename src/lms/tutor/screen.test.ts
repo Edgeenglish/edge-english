@@ -53,6 +53,16 @@ describe('강사 화면 (migration 2000)', () => {
   it('14개 상태 모두 강사 문구가 있음', () => {
     for (const s of CLASS_STATUSES) expect(TUTOR_STATUS_TEXT[s]).toBeTruthy();
   });
+  it('강사는 변경권 소진 여부 대신 취소 시점만 본다', () => {
+    const now = new Date('2026-11-02T08:00:00Z');
+    for (const classStatus of ['Student canceled in advance', 'Student canceled in advance (public holiday)', 'No change credits left'] as const) {
+      const l = { ...base, state: 'canceled' as const, classStatus };
+      expect(statusText(l, now)).toBe('Student canceled in advance');
+      expect(canRecord(l, now, true)).toBe(false);
+    }
+    expect(statusText({ ...base, state: 'canceled', classStatus: 'Student canceled late' }, now)).toBe('Student canceled late');
+    expect(Object.values(TUTOR_STATUS_TEXT).join(' ')).not.toMatch(/credit/i);
+  });
   it('결과 이름은 DB와 같은 규칙: 보강은 Make-up completed, 대체 진행은 Normal (H26(138))', () => {
     expect(savedStatus(base, 'held')).toBe('Normal');
     expect(savedStatus({ ...base, kind: 'migrated_makeup' }, 'held')).toBe('Make-up completed');

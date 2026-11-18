@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockAt, dayTag, monthGrid, runFrom, sourceKey, type DayItem } from './schedule';
+import { blockAt, canceledStartingIn, dayTag, monthGrid, runFrom, sourceKey, type DayItem } from './schedule';
 import { NO_LATE, type TutorLesson } from './screen';
 
 const lesson = (extra: Partial<TutorLesson>): TutorLesson => ({
@@ -86,5 +86,18 @@ describe('Calendar boundary and timezone regression', () => {
     const block = { id: 'boundary', kind: 'block' as const, start: '2026-11-11T22:00', end: '2026-11-11T22:30', note: null };
     expect(blockAt([block], new Date('2026-11-12T03:00:00Z'), 'America/Toronto')).toEqual(block);
     expect(blockAt([block], new Date('2026-11-12T03:30:00Z'), 'America/Toronto')).toBeNull();
+  });
+});
+
+describe('canceled weekly history', () => {
+  it('retains all cancellations beside a replacement without occupying the slot', () => {
+    const canceled = lesson({ id: 'c1', state: 'canceled' });
+    const another = lesson({ id: 'c2', state: 'canceled', startsAt: new Date(+at + 20 * 60000) });
+    const replacement = lesson({ id: 'new' });
+    const next = lesson({ id: 'next', state: 'canceled', startsAt: new Date(+at + 30 * 60000) });
+    const rows = [replacement, next, another, canceled];
+    expect(canceledStartingIn(rows, at).map(l => l.id)).toEqual(['c1', 'c2']);
+    expect(canceledStartingIn(rows, new Date(+at + 30 * 60000)).map(l => l.id)).toEqual(['next']);
+    expect(rows.filter(l => l.state !== 'canceled')).toEqual([replacement]);
   });
 });

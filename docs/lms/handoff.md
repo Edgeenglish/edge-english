@@ -1,3 +1,13 @@
+## ✅ 11/17 머리글 [내 수업]·학생 화면 진입 정리 — **운영 반영 끝** (H26(212), lms-prod cfb254d, DB 변경 없음, 브랜치 claude/quirky-bell-j29fzz)
+- 운영 반영 방법: lms-prod 위에 이 작업 커밋만 cherry-pick. 운영엔 '정규 시간 변경'(H26(208)) 이 아직 없어 `loadStudentBundle` 에서 changeRequests 를 뺀 판으로 맞춤 — 정규 시간 변경을 운영에 올릴 때 lms-test 판(changeReqs 포함) 그대로 가면 됨. 운영 공개 화면 점검(check-public-pages) 통과
+- 수정: `src/lms/auth/home.ts`(새, 역할→홈 주소 한 곳 — 지금 학생만) · `components/Header.tsx`([내 수업] href) · `app/lms/page.tsx`+`LmsIndexGo.tsx`(/lms 메일 링크도 같게, ?next= 등 있으면 예전처럼 로그인 화면) · `student/StudentLive.tsx`(역할 확인과 학생 자료를 함께 불러옴) · `student/StudentHome.tsx`(교재 둘러보기 next/link)
+- 시험(시험 사이트, STU-0018 메일 코드 로그인 — 비밀번호 안 건드림, 끝나고 세션 로그아웃): PC·iPhone 13 [내 수업] 경로 / → /lms/student(로그인 화면 0번), /lms → /lms/student, 로그아웃 상태 [로그인]·/lms → /lms/login, 풀린 세션 → /lms/login 모두 통과
+- 11/17 보충('불러오는 중'도 찰나에 보임): `lms/student/prefetch.ts`(새) — 머리글이 로그인 확인과 함께 학생 화면 자료를 미리 불러 둠(학생 아니면 버림), StudentLive 는 그것을 바로 보여 주고 새로 불러 바꿈(`StudentHome` refreshed). 시험: PC·휴대폰 홈 열자마자/1초 뒤/교재에서 [내 수업] 6번 모두 '불러오는 중' 0번, 0.2~0.6초. 메일 링크처럼 처음 여는 주소는 미리 불러 둘 수 없어 그대로
+- 11/17 보충 2: 자료를 받는 중에 누르면 머리글이 지금 화면을 두고 다 받은 뒤 넘김(`Header.tsx` openAccount). 시험: 학생 자료 응답을 2초 늦춘 느린 망 흉내로 PC·휴대폰 6번 모두 '불러오는 중' 0번
+- 11/17 보충 3 (한 번에 정리): `live.ts` loadStudentBundle(홈 자료+시간대·누적 학습·공지·결제·알림·정규 시간·처리 내역 순서를 한 번에) → `prefetch.ts`·`StudentLive`·`StudentHome`(preloaded 로 처음부터 그림)·`ProcessingHistory`(prefs) · `LoginFlow`(학생은 자료 받은 뒤 router.push, 버튼 누른 채 유지) · `LmsIndexGo`+`SiteChrome`(/lms 도 머리글 틀 안, 빈 틀 보이며 받은 뒤 넘김) · `StudentHomeSkeleton`('불러오는 중' 글 대신 메뉴 그대로 빈 틀). 시험(자료 응답 1.5초 늦춘 느린 망, PC·iPhone 13): 머리글 [내 수업]·/lms·새로고침·로그인 뒤 4길 모두 학생 홈이 시간대 '변경'·누적 학습 시간과 한 프레임에 나옴, 머리글 계속 보임, '불러오는 중' 0번. 로그인 버튼 누른 길은 비밀번호가 없어 화면 시험 못 함(코드만)
+- 11/17 보충 4: 머리글이 로그인·로그아웃 알림(onAuthStateChange)으로 바로 [로그인]↔[내 수업] (전엔 로그인 뒤 새로고침 전까지 '로그인'), 역할 확인 전 눌러도 기다렸다 바로, 홈 자료 못 읽으면 한 번 더, 시간대 '변경' 항상. 시험: [로그인] 버튼 길은 비밀번호 로그인 응답을 실제 학생 세션으로 바꿔 끼워(비밀번호 안 바뀜) PC·휴대폰 느린 망 — 로그인 칸 → (머리글 '내 수업'으로 바뀜) → 학생 홈 한 번에, 공지사항 → [내 수업] 로그인 화면 0번
+- 11/17 대표 '1번': 강사 → /lms/tutor, 운영자(aal2) → /lms/admin, 아니면 로그인 화면 (`homeForRole`)
+
 ## 11/17 학생 정상 취소 대체수업의 보강 강사 선택 — 시험 후 운영 반영 완료
 - 대표 승인: 학생이 미리 취소한 대체수업(공휴일 정상 취소 포함)도 원래 강사/대체강사 중 선택. 학생 직전 취소·결석의 보강 불가 및 무료 노쇼 보상수업의 강사 고정·무급 정책 유지.
 - migration 20261117123711_lms_student_canceled_cover_tutor_choice. 시험 DB 68항목 통과 후 운영 적용. 운영 함수 백업 snapshots 73, 복구는 저장된 lms_makeup_tutors 정의 재실행. 학생·수업 데이터 변경 없음. 화면 코드 변경 없음.
@@ -252,6 +262,17 @@
 - 운영 반영 때 추가: 카카오 앱 Redirect URI 에 운영 Supabase callback · 운영 Supabase 카카오·custom:naver(Userinfo = https://edgeenglish.kr/api/auth/naver-userinfo) · 대표 운영 계정 연결은 반드시 [이미 회원이에요]
 - 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
 - H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
+
+## ⏭ 메일 [강사님께 늦는다고 알리기] 버튼 — **개발 중(11/18, 브랜치 claude/vibrant-ptolemy-par1q9)**, 정책 원본 H26(214)(215) 기록함
+- 11/18 한 것: 학생 홈 `?late=수업id` → 지금 알릴 수 있으면 '늦게 참여해요' 창 바로 열고 화면 가운데로, 아니면 맨 위 한 줄(LATE_LINK_NOTE: 링크 없음·취소·끝남·이미 알림·2시간 전 아님). page.tsx·StudentLive·StudentDemo·StudentHome. 중복 발송은 DB student_late_notice 가 막음(그대로)
+- 남은 것: 대표 메일 문구 확인 → '시스템에 넣어' 뒤 migration(lms_lesson_reminder_mail·tutor_contact_student 에 두 번째 버튼, 링크 lms_url()||'/student?late='||l.id) → 시험 DB·lms-test → QA(끝난 뒤·이미 알린 뒤·로그인 안 된 상태) → 대표 확인 → 운영. (참고: vitest 묶음 SQL 2개 실패는 이 브랜치 시작 전부터 — migration 넣을 때 `node scripts/lms-test-bundle.mjs` 로 같이 해결)
+- 대표 11/18: 학생 메일에 버튼 `강사님께 늦는다고 알리기` → 누르면 학생 홈에서 그 수업의 기존 '늦게 참여해요' 창(지각 시간·이유 고르기)이 바로 열림. 로그인 안 됐으면 로그인 뒤 그 창(기존 `?next=` 흐름). 학생이 직접 보내기는 그대로. 학생 홈 버튼 이름 `늦게 참여해요`는 유지. 이미지 안내는 안 넣음
+- 넣는 메일: **2시간 전 수업 리마인더**(정규·보강·이월·보상 모두, `lms_student_lesson_reminder_mail`, [수업 입장하기] 아래) + **강사 Contact student 학생 메일 1·2차**(migration 20261116140000, [수업 들어가기] 아래). 24시간 전 리마인더는 제외(지각 알림은 시작 2시간 전부터라 못 보냄)
+- 확인됨: 학생 지각 알림은 수업 끝날 때까지 보낼 수 있음(student_late_notice) → Contact student(시작 뒤) 메일도 됨. 2시간 전 리마인더는 2시간 전~1시간 전 사이 발송 → 창 열림
+- 참고 구현: 보강 메일 `/student?makeup=` 열기(StudentHome `searchParams.delete('makeup')`), 로그인 `?next=`(StudentLive toLogin, LoginFlow)
+- 개발 전 대표 확인: 메일에 버튼 위·아래 문장을 넣을지(기본 = 버튼만), 수업이 이미 끝났거나 이미 알린 뒤 링크를 누르면 무엇을 보일지. 문구는 '시스템에 넣어' 뒤에만 코드·DB 에 넣음
+- QA 에 꼭 포함(대표 11/18): 메일을 늦게 열어 수업이 이미 끝났거나 이미 지각 알림을 보낸 뒤 버튼을 누르면 중복 발송 없이 알맞게 안내되는지
+- 같이 할 일(대표 11/18 '응'): 정책 원본 H26 에 11/14 강사 '늦어요' 알림 확정 문구 기록(이유 버튼 5개·? 팝업·학생 메일·운영진 메일·학생 홈 노란 띠·한 수업 1번·Schedule+Home) + 11/14 운영 반영(snapshots 57, lms-prod 032224c) + 11/18 메일 버튼 방향
 
 ## ✅ 11/14 강사 '늦어요' 알림 — **운영 반영 완료** (대표 11/14 승인, 운영 DB 백업 snapshots 57, migration 20261114200000, lms-prod 032224c = 이 기능 커밋 3개만 lms-prod 0a7159e 위에 골라 얹음, 시안 https://claude.ai/artifact/7YmptmNwBiGWEjWjNGReDM)
 - 되돌리기: 코드 = lms-prod 를 0a7159e 로. DB = 함수 tutor_late_notice·tutor_late_notices·student_tutor_late_notices·lms_kst_short 만 drop, **tutor_late_notices 표는 기록이 있으면 보존**(대표 11/14)

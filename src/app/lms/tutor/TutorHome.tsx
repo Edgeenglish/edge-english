@@ -34,7 +34,7 @@ import { DocumentsCard, SignSheetBody, dueLine } from './SignDoc';
 import {
   canRecord, KOREA_TIME, tzTimeLabel, daysOf, dayLabel, kindTag, kstText, makeupOrigin, localDate, minutesOf, phaseOf, recordReady, RESULT_TEXT, resultOf, savedStatus, lateText, lateToSave, LATE_PRESETS, type Late,
   canStudentCancel, COVERED_NOTE, COVERING_NOTE, type StudentCancelDecision,
-  statusText, rangeFull, rangeFullNoDay, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
+  TUTOR_STATUS_TEXT, statusText, rangeFull, rangeFullNoDay, weekOf, whenFull, whenText, type TutorCanceled, type TutorCover, type TutorLesson, type TutorMakeup, type TutorResult, type TutorScreen, busyText } from '@/lms/tutor/screen';
 
 type CancelDecision = { status: string };
 type CancelAction = (lessonId: string, requestId: string, reason: string, dryRun: boolean) => Promise<CancelDecision>;
@@ -530,7 +530,6 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <span className="rounded-[6px] bg-[#efecfd] px-1.5 py-0.5 text-[12.5px] font-bold text-[#3b2a9a]">{updateTitle(u, lang === 'ko')}</span>
                           <StudentName id={u.studentId} name={u.student} className="inline text-[15px] font-semibold" />
-                          {u.kind === 'canceled' && u.info.late === true && <span className="text-[12.5px] font-semibold text-[#b3261e]">{t('late', '늦은 취소')}</span>}
                         </p>
                         {updateLines(u, zAt).map((line, i) => (
                           <span key={i} className={`block text-[14px] ${i === 0 ? 'text-[#1d1b2b]' : 'text-[#55526a]'}`}><Rich text={line} /></span>
@@ -551,7 +550,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <HomeNotices who="tutor" title={t('Notice', '공지')} />
 
             <section aria-label="Today" className={card}>
-              <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{t('Today’s classes', '오늘 수업')} <span className="text-[#6b6880]">{todayLessons.length || ''}</span></h2>
+              <h2 className="mb-2 text-[16px] font-bold text-[#1d1b2b]">{t('Today’s classes', '오늘 수업')} <span className="text-[#6b6880]">{todayLessons.filter((l) => l.state !== 'canceled' && !l.coveredByOther).length}</span></h2>
               {todayLessons.length === 0 && <p className="text-[14.5px] text-[#6b6880]">{t('No classes today.', '오늘은 수업이 없어요.')}</p>}
               <div className="divide-y divide-[#f0eef5]">
                 {todayLessons.map((l) => <TodayRow key={l.id} lesson={l} tz={zAt(l.startsAt)} now={now} onRecord={() => setTab('record')} sendLate={actions.lateNotice} onLateSent={() => reload()}
@@ -742,11 +741,11 @@ function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent, sendCont
   const st = statusText(l, now);
   return (
     <div className="py-2">
-    <div className={`flex items-center gap-3 ${phase === 'canceled' || phase === 'covered' ? 'text-[#8a879c]' : ''} ${phase === 'covered' ? 'opacity-60' : ''}`}>
+    <div className={`flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3 ${phase === 'canceled' || phase === 'covered' ? 'text-[#8a879c]' : ''} ${phase === 'covered' ? 'opacity-60' : ''}`}>
       {/* 시각마다 그 옆에 어느 시간대인지 바로 적음 (현지 + 한국) */}
-      <span className="min-w-0 flex-1">
-        <span className="block text-[14.5px] tabular-nums"><Rich text={rangeFullNoDay(l, tz)} /></span>
-        <StudentName id={l.studentId} name={l.student} className={`mt-0.5 block truncate text-[15px] font-semibold ${phase === 'canceled' ? 'line-through' : ''}`} />
+      <span className="w-full min-w-0 sm:flex-1">
+        <span className={`block text-[14.5px] tabular-nums ${phase === 'canceled' ? 'line-through decoration-2' : ''}`}><Rich text={rangeFullNoDay(l, tz)} /></span>
+        <StudentName id={l.studentId} name={phase === 'canceled' ? <span className="line-through decoration-2">{l.student}</span> : l.student} className="mt-0.5 block truncate text-[15px] font-semibold" />
         <span className="block text-[12.5px] text-[#6b6880]">{minutesOf(l)} min · {tag}<CoverNote lesson={l} where="type" />{l.count ? ` · Class ${l.count.n}/${l.count.total}` : ''}</span>
       </span>
       {phase === 'to_record'
@@ -948,7 +947,8 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
   // 페이 대상 Y/N (상태 규칙 tutorPaid + 보상수업은 무급, R-19: 공통 규칙 tutorPaidFor). 기록 전은 빈칸, 정산 끝난 수업은 'Y ✓'
   const paidRule = tutorPaidFor(l.kind, l.classStatus);
   const paid = paidRule === null || l.coveredByOther ? '' : paidRule ? (l.locked ? 'Y ✓' : 'Y') : 'N';
-  const name = <span className={phase === 'canceled' ? 'line-through' : ''}>{l.student}</span>;
+  const strike = phase === 'canceled' ? 'line-through decoration-2' : '';
+  const name = <span className={strike}>{l.student}</span>;
   const statusControl = canOpen ? (
     <button type="button" aria-expanded={open} aria-label={`${stText} · ${l.student}`}
       onClick={(e) => { e.stopPropagation(); toggle(); }}
@@ -983,7 +983,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
         {/* 휴대폰: 출결 상태는 이름 아래 줄 (QA-02: 긴 상태가 이름 폭을 빼앗지 않게) */}
         <div className="grid grid-cols-[76px_minmax(0,1fr)] items-start gap-2 lg:hidden">
           <span className="text-[14px] font-bold tabular-nums">
-            {time}{tz !== headTz && <span className="block text-[11.5px] font-semibold text-[#2b1c7a]">{tzTimeLabel(tz)}</span>}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]"><Rich text={k} /></span>}
+            <span className={strike}>{time}</span>{tz !== headTz && <span className="block text-[11.5px] font-semibold text-[#2b1c7a]">{tzTimeLabel(tz)}</span>}{k && <span className="block text-[11.5px] font-medium text-[#6b6880]"><span className={strike}><Rich text={k} /></span></span>}
           </span>
           <span className="min-w-0">
             <StudentName id={l.studentId} name={name} className="block max-w-full truncate text-[14.5px] font-semibold" />
@@ -996,8 +996,8 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
 
         </div>
         <div className={`-my-2 hidden text-[14px] tabular-nums lg:grid ${cols(kst, paidCol)} [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:border-l [&>*]:border-[#e6e3ef] [&>*]:px-2 [&>*:first-child]:border-l-0 [&>*]:py-2`}>
-          <span className="flex-col !items-start justify-center font-semibold">{time}{tz !== headTz && <span className="text-[11.5px] font-semibold leading-tight text-[#2b1c7a]">{tzTimeLabel(tz)}</span>}</span>
-          {kst && <span className="text-[#6b6880]">{k ? stripBold(k).replace(/ KST$/, '') : ''}</span>}
+          <span className="flex-col !items-start justify-center font-semibold"><span className={strike}>{time}</span>{tz !== headTz && <span className="text-[11.5px] font-semibold leading-tight text-[#2b1c7a]">{tzTimeLabel(tz)}</span>}</span>
+          {kst && <span className={`text-[#6b6880] ${strike}`}>{k ? stripBold(k).replace(/ KST$/, '') : ''}</span>}
           <span className="flex-col !items-start justify-center font-semibold"><StudentName id={l.studentId} name={name} className="max-w-full truncate" /></span>
           <span>{count}</span>
           <span>{minutesOf(l)}</span>
@@ -1070,7 +1070,7 @@ function StudentCanceledFields({ lesson: l, tz, cancel, request, onDecision }: {
     if (toldMs === null) return;
     const t = setTimeout(() => {
       cancel(l.id, request, new Date(toldMs), true)
-        .then((d) => { if (!live) return; setShown({ status: d.status, late: d.timing === 'late' }); onDecision({ told: new Date(toldMs), status: d.status }); })
+        .then((d) => { if (!live) return; setShown({ status: TUTOR_STATUS_TEXT[d.status], late: d.timing === 'late' }); onDecision({ told: new Date(toldMs), status: d.status }); })
         .catch((e) => { if (live) setErr(e instanceof Error ? e.message : 'Could not check. Please try again.'); });
     }, 300);
     return () => { live = false; clearTimeout(t); };

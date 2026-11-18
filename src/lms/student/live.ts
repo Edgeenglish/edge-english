@@ -1,7 +1,7 @@
 import type { KstSlot, RcPeriod } from './regular-change';
 // 수강생 화면 실제 데이터 (migration 2800). 읽기·쓰기 모두 DB 함수 — 본인 확인·검사·이력은 DB
 import { asClassType } from '../class-type';
-import { loadScreenPrefs, saveScreenPref, type PrefKey } from '../screen-prefs';
+import { loadScreenPrefs, saveScreenPref, type PrefKey, type ScreenPrefs } from '../screen-prefs';
 // 수강생 본인은 student_ 함수, 운영자(TOTP 완료)가 ?student= 로 열면 운영진 화면과 같은 admin_ 함수(이력에 운영자로 남음)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -488,4 +488,22 @@ export function searchStudents(list: StudentAccount[], q: string): StudentAccoun
 export async function createStudentLogin(sb: SupabaseClient, studentId: string, email: string): Promise<{ created: boolean }> {
   const rows = check(await sb.rpc('admin_student_login', { p_student: studentId, p_email: email })) as { created: boolean }[];
   return { created: rows[0]?.created ?? false };
+}
+
+/** 홈 위·아래 칸 자료 (시간대 '변경'·누적 학습 시간·공지 등). 못 읽은 것은 비워 두고 화면이 따로 다시 읽음 */
+export type StudentExtras = {
+  reminders?: Reminders | null; tz?: TimezoneState | null; slots?: RegularSlot[]; info?: MyInfo | null;
+  notices?: StudentNotice[]; history?: PaymentSummary[]; noTime?: Map<string, string | null>; changeReqs?: ChangeRequests; prefs?: ScreenPrefs;
+};
+export type StudentBundle = { view: StudentView; extras: StudentExtras };
+
+/** 학생 홈을 한 번에 그릴 자료 전부 (11/17 대표: 띠·칸이 늦게 생기며 화면이 바뀌지 않게) */
+export async function loadStudentBundle(sb: SupabaseClient, studentId: string | null): Promise<StudentBundle> {
+  const a = studentActions(sb, studentId);
+  // 못 읽으면 한 번 더 (화면이 그려진 뒤 칸이 끼어들지 않게). 그래도 못 읽으면 비워 두고 화면이 따로 다시 읽음
+  const opt = <T,>(f: () => Promise<T>): Promise<T | undefined> => f().catch(() => f()).then((v) => v, () => undefined);
+  const [view, reminders, tz, slots, info, notices, history, noTime, changeReqs, prefs] = await Promise.all([
+    loadStudentView(sb, studentId), opt(a.reminders), opt(() => a.timezone()), opt(a.regularSlots), opt(a.myInfo),
+    opt(a.notices), opt(a.history), opt(a.noTimeRights), opt(a.changeRequests), opt(a.prefs)]);
+  return { view, extras: { reminders, tz, slots, info, notices, history, noTime, changeReqs, prefs } };
 }
