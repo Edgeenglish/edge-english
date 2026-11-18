@@ -1,3 +1,11 @@
+## 🧪 11/18 학생 변경권 내역 — **시험 사이트(lms-test)·시험 DB 반영, 운영 미반영** (브랜치 claude/friendly-rubin-d7ftqh, 시안 https://claude.ai/artifact/SCERAK1za5rBF4bkYCWZ3m `docs/lms/previews/student-credit-history-drafts.html`)
+- 대표 확정(ChatGPT 검토 반영): B안(홈 카드 [내역 ›] → 변경권 내역 창) · 변경권 안 쓴 취소도 표시 · 문구 '6시간 이상/미만 남기고 취소' · '처리 후 변경권 n개' · 처리 시각 최신순 · 창 '변경권 적용 기간 / 남은 n개 / 기본 제공 n개' · 카드 규칙 위아래 배치('수업 시작 기준')
+- migration **20261118100000_lms_student_credit_history** (읽기 전용 함수 `student_credit_history`, 시험 DB 적용): 기간별 지급·남은 수·줄(use·late·holiday·no_credit·return·admin_add/remove·migrated), 줄의 after = 취소 판정 기록(change_requests.decision.credits_after) 또는 지급량+그 시각까지 credit_ledger 합. 운영진 조정 사유(note)는 학생에게 안 줌
+- 코드: `src/lms/student/credit-history.ts`(+test) · `processing-history.ts` historyLines(credit) · `ProcessingHistory.tsx`(수강생 취소 줄 = 수업 시각·남은 시간·결과·처리 후, 상태 줄 없음 / 되돌림 = 1개 반환) · `StudentHome.tsx` 홈 카드·Credits 창(옛 DB 면 CreditsOld) · `live.ts` 로드 · authz-probe 목록
+- 시험: vitest src/lms/student 62 · tsc 0 · 시험 DB 점검 `supabase/tests/student-credit-history.sql` 학생 44명 통과(left=credit_balance·최신순·칸 목록·기록 수·권한 5종)
+- 시험 데이터: STU-0018 지금 기간(10/20~11/16) = 사용 2(처리 후 1·0) + '남은 변경권 없음 · 수업 1회 차감' 2. '6시간 미만' 사례는 STU-0018 에 열린 보강권·수업이 없어 안 만듦(다른 세션 지각 시험 수업 11/18·11/19 은 건드리지 않음)
+- 운영 반영 순서(대표 승인 뒤): ① `git log origin/lms-test..origin/lms-prod` ② 운영 DB migration 20261118100000(함수 추가만, 백업 불필요 — 데이터·기존 함수 안 바뀜) ③ lms-prod 에 이 기능 커밋만 ④ 운영 화면(STU-0013) 확인
+
 ## ✅ 11/17 머리글 [내 수업]·학생 화면 진입 정리 — **운영 반영 끝** (H26(212), lms-prod cfb254d, DB 변경 없음, 브랜치 claude/quirky-bell-j29fzz)
 - 운영 반영 방법: lms-prod 위에 이 작업 커밋만 cherry-pick. 운영엔 '정규 시간 변경'(H26(208)) 이 아직 없어 `loadStudentBundle` 에서 changeRequests 를 뺀 판으로 맞춤 — 정규 시간 변경을 운영에 올릴 때 lms-test 판(changeReqs 포함) 그대로 가면 됨. 운영 공개 화면 점검(check-public-pages) 통과
 - 수정: `src/lms/auth/home.ts`(새, 역할→홈 주소 한 곳 — 지금 학생만) · `components/Header.tsx`([내 수업] href) · `app/lms/page.tsx`+`LmsIndexGo.tsx`(/lms 메일 링크도 같게, ?next= 등 있으면 예전처럼 로그인 화면) · `student/StudentLive.tsx`(역할 확인과 학생 자료를 함께 불러옴) · `student/StudentHome.tsx`(교재 둘러보기 next/link)
