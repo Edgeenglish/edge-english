@@ -376,10 +376,11 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     history: async (): Promise<PaymentSummary[]> => {
       const r = await sb.rpc('student_enrollment_history', { p_student: adminStudentId });
       if (r.error) return [];
-      return ((r.data ?? []) as { id: string; current: boolean; status: string; duration_min: number; weekly_count: number; weeks: number | null; legacy_label: string | null; start_date: KstDate; final_end_date: KstDate; method: string | null; confirmed_on: KstDate | null }[]).map((e) => ({
+      return ((r.data ?? []) as { id: string; current: boolean; status: string; duration_min: number; weekly_count: number; weeks: number | null; legacy_label: string | null; start_date: KstDate; final_end_date: KstDate; method: string | null; confirmed_on: KstDate | null; schedule_pending?: boolean }[]).map((e) => ({
         id: e.id, product: productLabel(e), periodStart: e.start_date, periodEnd: e.final_end_date,
         method: e.method === 'bank_transfer' ? 'bank_transfer' : e.method === 'card_link' ? 'card_imweb' : null,
         confirmedOn: e.confirmed_on, current: e.current, paid: paidStatus({ status: e.status, confirmed_on: e.confirmed_on }),
+        schedulePending: e.schedule_pending === true,
       }));
     },
     /** 함수 없는 옛 DB 면 null (화면에서 해당 칸 숨김) */

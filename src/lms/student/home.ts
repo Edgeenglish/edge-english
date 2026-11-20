@@ -176,6 +176,8 @@ export type PaymentSummary = {
   current: boolean;
   /** 결제 완료 (결제 확인 기록, 또는 시트에서 옮긴 수강 중·끝난 수강권) */
   paid?: boolean;
+  /** Paid renewal with a changed course still awaiting its regular schedule. */
+  schedulePending?: boolean;
 };
 
 /** 수강권 구분 (대표 11/13): 지금 수강권이 아니고 시작일이 오늘(한국 날짜) 뒤면 '다음 수강권'(미리 재등록), 그 밖은 '지난 수강권' */
