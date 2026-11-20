@@ -775,7 +775,7 @@ export default function StudentHome(props: {
   const schedulePending = history?.some((p) => p.schedulePending) ?? false;
   const todoItems = (
     <>
-      {schedulePending && <TodoBar n={1} text="수업 요일·시간을 카카오톡으로 알려주세요" onClick={() => window.open('https://pf.kakao.com/_blxgib/friend', '_blank', 'noopener,noreferrer')} />}
+      {schedulePending && <TodoBar n={0} text="수업 요일·시간을 카카오톡으로 알려주세요" onClick={() => window.open('https://pf.kakao.com/_blxgib/friend', '_blank', 'noopener,noreferrer')} />}
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
       {openRights.length > 0 && <TodoBar n={openRights.length} text={openRights.some((m) => m.carryIn) ? '수업 날짜 고르기' : '보강 날짜 고르기'} onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {choosing.length > 0 && <TodoBar n={choosing.length} text="보강 시간 고르기" onClick={() => (choosing.length === 1 ? setOverlay({ kind: 'request', id: choosing[0].id }) : setTab('requests'))} />}
