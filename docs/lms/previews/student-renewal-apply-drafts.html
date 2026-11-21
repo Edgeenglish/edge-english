@@ -33,11 +33,14 @@ h1{font-size:22px;margin:0}
 .row span:first-child{color:var(--sub)}
 .row b{font-weight:700;text-align:right}
 .plans{display:grid;gap:8px}
-.pc .plans{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pc .plans{grid-template-columns:minmax(0,.8fr) repeat(2,minmax(0,1.1fr))}
 .plan{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:3px;font-size:14px;cursor:pointer;background:var(--panel)}
 .plan .p1{font-weight:800;font-size:15px}
 .plan .p2{font-weight:700}
-.plan .p3{color:var(--sub);font-size:12.5px}
+.plan .p3{color:var(--brand);font-size:13px;font-weight:700}
+.plan small{font-weight:600;color:var(--sub);font-size:12.5px}
+.plan.best{border-color:var(--brand);background:var(--soft)}
+.plan.best .p1{color:var(--brand)}
 .plan.on{border-color:var(--brand);background:var(--soft);box-shadow:0 0 0 1px var(--brand) inset}
 .keep{font-size:14px;margin:0;font-weight:600}
 .dl{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.65;margin:0}
@@ -96,11 +99,11 @@ h1{font-size:22px;margin:0}
           <div style="display:grid;gap:12px">
             <p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p>
             <div class="plans">
-              <div class="plan"><span class="p1">1개월 (4주)</span><span class="p2">290,000원</span><span class="p3">&nbsp;</span></div>
-              <div class="plan on"><span class="p1">3개월 (12주)</span><span class="p2">826,500원</span><span class="p3">5% 할인 · 43,500원 절약</span></div>
-              <div class="plan"><span class="p1">6개월 (24주)</span><span class="p2">1,603,000원</span><span class="p3">137,000원 절약 + Ebook 패키지 무료</span></div>
+              <div class="plan"><span class="p1">📍 1개월 (4주)</span><span class="p2">290,000원</span></div>
+              <div class="plan best"><span class="p1">💜 3개월 (12주) | 5% 할인</span><span class="p2">826,500원 <small>(월 275,500원)</small></span><span class="p3">→ 43,500원 절약!</span></div>
+              <div class="plan best"><span class="p1">🔥 6개월 (24주) | 최대 혜택</span><span class="p2">1,603,000원 <small>(월 약 267,167원)</small></span><span class="p3">→ 137,000원 절약 + Ebook 패키지 무료!</span></div>
             </div>
-            <p class="dl">기존 강사님·수업 시간을 유지하시려면<br>수강 종료일까지 입금을 완료해 주세요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p>
+            <p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p>
             <button class="btn">재등록 신청하기</button>
             <p class="small">수업 횟수나 일정 변경을 원하시면 입금 전에 <a href="#">문의</a>해 주세요.</p>
           </div>
@@ -119,17 +122,17 @@ h1{font-size:22px;margin:0}
         </div>
         <p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p>
         <div class="plans">
-          <div class="plan"><span class="p1">1개월 (4주)</span><span class="p2">290,000원</span></div>
-          <div class="plan on"><span class="p1">3개월 (12주)</span><span class="p2">826,500원</span><span class="p3">5% 할인 · 43,500원 절약</span></div>
-          <div class="plan"><span class="p1">6개월 (24주)</span><span class="p2">1,603,000원</span><span class="p3">137,000원 절약 + Ebook 패키지 무료</span></div>
-        </div>
-        <p class="dl">기존 강사님·수업 시간을 유지하시려면<br>수강 종료일까지 입금을 완료해 주세요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p>
+              <div class="plan"><span class="p1">📍 1개월 (4주)</span><span class="p2">290,000원</span></div>
+              <div class="plan best"><span class="p1">💜 3개월 (12주) | 5% 할인</span><span class="p2">826,500원 <small>(월 275,500원)</small></span><span class="p3">→ 43,500원 절약!</span></div>
+              <div class="plan best"><span class="p1">🔥 6개월 (24주) | 최대 혜택</span><span class="p2">1,603,000원 <small>(월 약 267,167원)</small></span><span class="p3">→ 137,000원 절약 + Ebook 패키지 무료!</span></div>
+            </div>
+        <p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p>
         <button class="btn">재등록 신청하기</button>
         <p class="small">수업 횟수나 일정 변경을 원하시면 입금 전에 <a href="#">문의</a>해 주세요.</p>
       </div>
     </div>
   </div>
-  <p class="note">기간을 안 고르면 버튼이 회색으로 못 눌림. 해외 학생은 정규 수업·종료일이 거주지 시간(예: 맨 위 '모든 날짜·시간은 Sydney 기준', 종료일 '12월 16일(수) 오전 1:59까지'). '문의'는 지금 쓰는 카카오톡 채널 링크.</p>
+  <p class="note">처음엔 아무 기간도 안 골라져 있고, 고르면 그 칸이 진한 보라 테두리 + ✓. 기간을 안 고르면 버튼이 회색으로 못 눌림. 3·6개월 칸은 늘 보라 테두리·연보라 바탕으로 1개월보다 돋보이게. 해외 학생은 정규 수업·종료일이 거주지 시간(예: 맨 위 '모든 날짜·시간은 Sydney 기준', 종료일 '12월 16일(수) 오전 1:59까지'). '문의'는 지금 쓰는 카카오톡 채널 링크.</p>
 </section>
 
 <!-- ② 신청 뒤 -->
@@ -153,7 +156,7 @@ h1{font-size:22px;margin:0}
               <div class="pay"><span class="k">계좌이체</span><span>카카오뱅크 3333-27-7626253 <button class="copy">복사</button></span><span>이진솔(탠저린 영어)</span></div>
               <div class="pay"><span class="k">카드결제</span><a class="link" href="#">카드로 결제하기 ›</a></div>
             </div>
-            <p class="dl">기존 강사님·수업 시간을 유지하시려면<br>수강 종료일까지 입금을 완료해 주세요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p>
+            <p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p>
             <p class="small">수업 횟수나 일정 변경을 원하시면 입금 전에 <a href="#">문의</a>해 주세요.</p>
           </div>
         </div>
@@ -168,7 +171,7 @@ h1{font-size:22px;margin:0}
           <div class="pay"><span class="k">계좌이체</span><span>카카오뱅크 3333-27-7626253 <button class="copy">복사</button></span><span>이진솔(탠저린 영어)</span></div>
           <div class="pay"><span class="k">카드결제</span><a class="link" href="#">카드로 결제하기 ›</a></div>
         </div>
-        <p class="dl">기존 강사님·수업 시간을 유지하시려면<br>수강 종료일까지 입금을 완료해 주세요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p>
+        <p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p>
         <div class="box"><h3>신청 내역</h3>
           <div class="row"><span>수강 기간</span><b>3개월 (12주)</b></div>
           <div class="row"><span>수업</span><b>40분 · 주 2회 · Alex</b></div>
