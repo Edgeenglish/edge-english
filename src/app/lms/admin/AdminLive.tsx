@@ -14,6 +14,7 @@ import { supabaseBrowser } from '@/lms/auth/client';
 import AdminDashboard from './AdminDashboard';
 import { saveTaskClosure } from '@/lms/admin/task-closure';
 import { loadTaskHistory, reopenTask } from '@/lms/admin/task-history';
+import { loadRenewalRequests } from '@/lms/admin/renewal-requests';
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tasks: TaskSource[]; today: LessonItem[]; stats: DashboardStats | null };
 
@@ -97,6 +98,7 @@ export default function AdminLive() {
       notices={notices}
       history={sb ? { load: () => loadTaskHistory(sb), reopen: (r) => reopenTask(sb, r) } : undefined}
       onReload={reload}
+      renewalRequests={sb ? () => loadRenewalRequests(sb) : undefined}
     />
   );
 }

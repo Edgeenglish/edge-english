@@ -18,6 +18,7 @@ import PrestartMove from './PrestartMove';
 import LessonManage, { type LessonManageActions } from './LessonManage';
 import { Rich } from '@/app/lms/Rich';
 import { CarrySheet, RenewSheet, RewardRows, RewardSheet, type RenewalActions } from './Renewal';
+import { periodText, requestAmount, type AdminRenewalRequest } from '@/lms/admin/renewal-requests';
 import type { RenewalContext, Rewards } from '@/lms/admin/renewal';
 
 export type DetailActions = {
@@ -49,7 +50,7 @@ const NA = <i className="text-[#b9b6c8]">미응답</i>;
 const or = (v: string | null | undefined, fallback: ReactNode = <i className="text-[#b9b6c8]">없음</i>) => (v ? v : fallback);
 
 /** 재등록·보강 이월·적립금 (20261109130000). DB 에 아직 없으면 null → 그 칸·버튼을 안 보임 */
-export type RenewalExtra = { ctx: RenewalContext | null; rewards: Rewards | null; actions: RenewalActions };
+export type RenewalExtra = { ctx: RenewalContext | null; rewards: Rewards | null; actions: RenewalActions; /** 학생 재등록 신청 (입금 확인 전, 20261121100000) */ request?: AdminRenewalRequest | null };
 
 export default function StudentDetail({ data, nowIso, actions, extra }: { data: StudentDetailData; nowIso: string; actions: DetailActions; extra?: RenewalExtra }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -163,6 +164,8 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
           ) : undefined}>
             {!e ? <p className="py-2 text-[13px] text-[#6b6880]">수강권이 없어요.</p> : (
               <>
+                {extra?.request && <RequestRow r={extra.request} canConfirm={canRenew} onConfirm={() => setSheet('renew')}
+                  onClose={async () => { await extra.actions.closeRequest(extra.request!.id); await actions.reload(); }} />}
                 <Row k="등록 상품" v={productText(e)} strong />
                 <Row k="등록 수업" v={`${e.lessonsPurchased}회${e.lessonsCarriedIn ? ` + 이월 ${e.lessonsCarriedIn}회` : ''}`} />
                 {pending
@@ -324,7 +327,7 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
       {sheet === 'profile' && <ProfileSheet student={s} update={actions.update} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
       {sheet === 'answers' && <AnswersSheet student={s} update={actions.update} onClose={() => setSheet(null)} onSaved={async () => { await actions.reload(); setSheet(null); }} />}
       {sheet === 'renew' && extra && ctx?.prev && (
-        <RenewSheet who={who} ctx={ctx} today={today} actions={extra.actions} onClose={() => setSheet(null)} onSaved={actions.reload} onCarry={() => setSheet('carry')} />
+        <RenewSheet who={who} ctx={ctx} today={today} actions={extra.actions} request={extra.request ?? null} onClose={() => setSheet(null)} onSaved={actions.reload} onCarry={() => setSheet('carry')} />
       )}
       {sheet === 'carry' && extra && ctx?.prev && ctx.next && (
         <CarrySheet who={who} ctx={ctx} today={today} actions={extra.actions} onClose={() => setSheet(null)} onSaved={actions.reload} />
@@ -590,4 +593,42 @@ function ProfileSheet(p: { student: StudentProfile; update: DetailActions['updat
 function AnswersSheet(p: { student: StudentProfile; update: DetailActions['update']; onClose: () => void; onSaved: () => Promise<void> }) {
   return <FieldsSheet title="자기소개 · 수업 선호 (수강생 답 입력)" fields={ANSWER_FIELDS} {...p}
     foot={<p className="mt-3 text-[12px] text-[#6b6880]">첫 수업 전 카톡으로 받은 답을 그대로 적어요. 받지 않은 항목은 비워 두면 ‘미응답’으로 저장돼요 (추측해서 적지 않기). 기존 시트 자기소개는 원문 그대로 따로 보관돼요.</p>} />;
+}
+
+// 학생 재등록 신청 줄 (대표 11/21): 결제 상태는 '입금 확인 전', [입금 확인됨] = 지금 재등록 창을 신청대로 채워 엶, [신청 닫기] = 재등록 안 함(기록 남음, 적립금 예약 되돌림)
+function RequestRow({ r, canConfirm, onConfirm, onClose }: { r: AdminRenewalRequest; canConfirm: boolean; onConfirm: () => void; onClose: () => Promise<void> }) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [errText, setErrText] = useState('');
+  const method = r.method ?? 'bank_transfer';
+  const when = r.submittedAt ?? r.updatedAt;
+  return (
+    <div className="mb-2 grid gap-1.5 rounded-[12px] border border-[#f0d27a] bg-[#fff8e6] px-3 py-2.5 text-[13.5px]">
+      <p>
+        <span className="mr-1.5 rounded-full bg-[#fff1d6] px-2 py-0.5 text-[12px] font-bold text-[#8a5300]">입금 확인 전</span>
+        <b>{r.status === 'submitted' ? '재등록 신청 완료' : '입금 안내까지 보고 신청 전'}</b>
+      </p>
+      <p className="text-[#55526a]">
+        {periodText(r.weeks)}
+        {r.status === 'submitted' ? ` · ${method === 'card_link' ? '카드결제' : '계좌이체'} ${won(requestAmount(r, method))}` : ` · ${won(r.price)}`}
+        {r.points > 0 ? ` · 적립금 ${won(r.points)}` : ''}
+        {r.payerName ? ` · ${method === 'card_link' ? '결제자명' : '입금자명'} ${r.payerName}` : ''}
+        {` · ${kstWithZones(when, [])} ${r.status === 'submitted' ? '신청' : '확인'}`}
+      </p>
+      {errText && <p className="font-semibold text-[#b3261e]">{errText}</p>}
+      {asking ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="flex-1 font-semibold">재등록 안 하는 걸로 닫을까요?</span>
+          <button type="button" className={btnSmall} onClick={() => setAsking(false)}>아니요</button>
+          <button type="button" disabled={busy} className={`${btnSmall} !border-[#5b3fe0] !bg-[#5b3fe0] !text-white`}
+            onClick={async () => { setBusy(true); setErrText(''); try { await onClose(); } catch (x) { setErrText(x instanceof Error ? x.message : '닫지 못했어요.'); } finally { setBusy(false); setAsking(false); } }}>닫기</button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          <button type="button" disabled={!canConfirm} className={`${btnSmall} !border-[#5b3fe0] !bg-[#5b3fe0] !text-white disabled:opacity-40`} onClick={onConfirm}>입금 확인됨</button>
+          <button type="button" className={btnSmall} onClick={() => setAsking(true)}>신청 닫기</button>
+        </div>
+      )}
+    </div>
+  );
 }
