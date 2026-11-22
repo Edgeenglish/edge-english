@@ -85,7 +85,8 @@ export default function RenewalApply(props: {
   const points = parsePoints(pointsText);
   const max = maxPoints(info.pointsBalance, plan?.price ?? null);
   const pointsErr = points === null ? '숫자만 넣어 주세요' : points > max ? `최대 ${won(max)}까지 쓸 수 있어요` : null;
-  const endText = info.lastLessonAt ? props.dateText(info.lastLessonAt) : info.finalEndDate ? props.kstDayText(info.finalEndDate) : '';
+  // 마지막 수업일. 날짜 안 잡은 보강이 남아 있으면 수강권 기간 끝(한국 23:59 를 보이는 시간대로)
+  const endText = info.lastLessonAt ? props.dateText(info.lastLessonAt) : info.finalEndDate ? props.dateText(new Date(`${info.finalEndDate}T23:59:00+09:00`)) : '';
   const course = `${info.durationMin}분 · 주 ${info.weeklyCount}회`;
 
   async function refresh() {

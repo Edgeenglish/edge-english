@@ -29027,10 +29027,14 @@ begin
 end $$;
 revoke all on function lms_renewal_target(uuid) from public, anon, authenticated;
 
--- 마지막 수업 시작 시각 (취소·무효 아닌 정규·보강·보상 모두). 없으면 null
+-- 마지막 수업 시작 시각 (취소·무효 아닌 정규·보강·보상 모두). 날짜 안 잡은 보강·보상이 남아 있으면(마지막 날을 아직 모름) null
+-- → 화면·메일은 수강권 기간 끝(final_end_date)을 대신 씀
 create or replace function lms_last_lesson_at(p_enrollment uuid) returns timestamptz
 language sql stable security definer set search_path = public as $$
-  select max(l.starts_at) from lessons l where l.enrollment_id = p_enrollment and l.voided_at is null and l.state <> 'canceled'
+  select case when lms_renewal_remaining(p_enrollment) > (select count(*) from lessons l where l.enrollment_id = p_enrollment
+                and l.voided_at is null and l.state = 'scheduled' and l.ends_at > now())
+              then null
+              else (select max(l.starts_at) from lessons l where l.enrollment_id = p_enrollment and l.voided_at is null and l.state <> 'canceled') end
 $$;
 revoke all on function lms_last_lesson_at(uuid) from public, anon, authenticated;
 
