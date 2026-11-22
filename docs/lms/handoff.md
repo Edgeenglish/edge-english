@@ -1,3 +1,10 @@
+## ⏳ 11/22 학생 재등록 신청 — **시험 반영, 운영 미반영 (대표 화면 확인 대기)** (H26(217), 브랜치 claude/wizardly-feynman-k6w7tb, 시안 https://claude.ai/artifact/SnN71zMF8AzWNrJEYgdV7F `docs/lms/previews/student-renewal-apply-drafts.html`)
+- migration **20261121100000_lms_student_renewal_request** (시험 DB 적용): 표 `renewal_requests`(draft→submitted→paid/closed, 수강권당 열린 신청 1건) · `student_renewal_info/save/submit`(학생·운영자 보기) · `admin_renewal_requests/close/confirm`(confirm = admin_renew 또는 no_schedule 이면 admin_register_renewal → 적립금 확정/되돌림) · `lms_renewal_target`·`lms_last_lesson_at`·`lms_renewal_price` · `reward_redemption_check` 확정 조건에 '다음 수강권 결제' 허용 · `lms_renewal_mail_due`(submitted·paid 제외)·`lms_renewal_mail`(이모지 뺌·신청 링크·종료일 = 마지막 수업일) 교체
+- 화면: 학생 `src/app/lms/student/RenewalApply.tsx`(창) · `renew/page.tsx`(/lms/student/renew = 메일 링크) · `StudentHome.tsx`(홈 카드 문구·버튼, overlay 'renew') · `src/lms/student/renewal-apply.ts` / 운영자 `StudentDetail.tsx` RequestRow([입금 확인됨]·[신청 닫기]) · `Renewal.tsx` RenewSheet request(미리 채움·'일정 미정') · `AdminDashboard.tsx` '재등록 신청 · 입금 확인 전' 칸 · `src/lms/admin/renewal-requests.ts`
+- 시험(시험 DB, 롤백): 저장 2번 = 1건 · 적립금 최대 초과 막힘 · 입금자명 빈칸 막힘 · 제출 2번 = 1번 · 제출 뒤 기간 변경 막힘 · 예약 1건(잔액 0) · 메일 대상에서 빠짐 · 운영자 [입금 확인됨] → 새 수강권·결제 822,500원·적립금 확정·학생 '재등록 완료' · 다시 눌러도 1번 · 닫기 = 예약 되돌림 · 카드 확인 = 예약 되돌림 · 일정 미정 = 수업 0·재등록 업무 열림 · 다른 학생 정보 못 봄 · 학생은 운영자 목록 못 봄. 화면: 학생 창 PC·iPhone 13 3단계(가짜 데이터, 가로 밀림 0). 메일: STU-0018 '2회 남음' 새 문구 support@ 도착
+- 시험 데이터: STU-0015(한OO, 40분 주2회, 남은 1회, 수강권 끝 11/30)에 적립금 4,000원. STU-0018 은 11/24 시작 다음 수강권이 있어 '재등록 완료' 화면
+- 남은 것: 운영자 화면(대시보드 칸·[입금 확인됨] 창) 실제 클릭 확인 = 운영자 TOTP 필요 · 운영 반영(대표 승인 뒤: 운영 DB 백업 → migration → lms-prod)
+
 ## ✅ 11/18 로그인 화면 비밀번호 안내 강화 — 운영 반영 (lms-prod 841bdd36, 대표 '운영 반영해')
 - 한국어 첫 안내 '한 번도 비밀번호를 만든 적 없거나/기억나지 않으면👇'(영어 첫 안내도 👇), 👇 3번만 까딱 · 비밀번호 틀리면 빨간 '비밀번호를 만든 적 없으면 아래 [비밀번호 만들기·찾기] 버튼을 눌러 주세요'+보라 채운 버튼 흔들림(틀릴 때마다) · 동작 줄이기 설정이면 안 움직임
 - 수정: login-flow.ts(badLogin·noPwHint·noPwArrow) · LoginFlow.tsx(badTick·failLogin) · globals.css(lms-shake·lms-bob). 나중에 안내 지우기 = noPwHint·noPwArrow 두 줄만 삭제(한·영 동시)
