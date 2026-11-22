@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
 import type { CreditPeriod, LateReason, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
 import { processingEvents, type ProcessingEvent } from './processing-history';
+import { renewalActions } from './renewal-apply';
 
 const NOT_APPLIED = '수강생 화면이 이 DB에 아직 없어요 (migration 2800).';
 
@@ -338,6 +339,8 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     prefs: () => loadScreenPrefs(sb, { student: adminStudentId }),
     savePref: admin ? null : (key: PrefKey, value: string) => saveScreenPref(sb, key, value),
     reload: () => loadStudentView(sb, adminStudentId),
+    /** 재등록 신청 (migration 20261121100000) */
+    renewal: renewalActions(sb, adminStudentId),
     /** 알림 설정 읽기(인자 없음)·바꾸기 — 수강생·운영자 같은 함수 */
     reminders: async (change?: { regular?: boolean; makeup?: boolean }): Promise<Reminders> => {
       const r = check(await sb.rpc('student_reminders', { p_student: adminStudentId, p_regular: change?.regular ?? null, p_makeup: change?.makeup ?? null })) as {

@@ -54,6 +54,8 @@ import {
 } from '@/lms/student/home';
 import { tutorLateBand } from '@/lms/tutor/late';
 import { makeupTutorText, type RightRef } from '@/lms/student/live';
+import { renewalStage, type RenewalInfo } from '@/lms/student/renewal-apply';
+import RenewalApply from './RenewalApply';
 
 type Tab = 'home' | 'schedule' | 'requests' | 'materials' | 'me';
 type Right = RightRef;
@@ -73,7 +75,8 @@ type Overlay =
   | { kind: 'rights' }
   | { kind: 'regular' }
   | { kind: 'tutor_change' }
-  | { kind: 'late'; lessonId: string };
+  | { kind: 'late'; lessonId: string }
+  | { kind: 'renew' };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -187,11 +190,6 @@ const endDay = (d: KstDate) => {
   const k = kst(new Date(`${d}T23:59:00+09:00`));
   return `${k.md}(${k.wd})`;
 };
-/** 재등록 마감 날짜만 '11월 17일' (11/11 대표 콤팩트 시안: 학생 화면엔 마감 시각을 쓰지 않음, 실제 마감 기준은 그대로) */
-const endDateKo = (d: KstDate) => {
-  const [m, day] = kst(new Date(`${d}T23:59:00+09:00`)).md.split('/');
-  return `${Number(m)}월 ${Number(day)}일`;
-};
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
 function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
@@ -291,6 +289,8 @@ export default function StudentHome(props: {
   openMakeup?: string;
   /** 메일 바로가기 ?late=수업id → 그 수업 '늦게 참여해요' 창을 바로 엶 (대표 11/18) */
   openLate?: string;
+  /** 재등록 메일 링크 /lms/student/renew → 재등록 신청 창을 바로 엶 (대표 11/21) */
+  openRenew?: boolean;
   /** 메일 바로가기 ?tab=me → '내 정보' 탭으로 바로 엶 (첫 학습 정보 등록 메일) */
   openTab?: string;
 }) {
@@ -514,6 +514,26 @@ export default function StudentHome(props: {
   }, [actions, s]);
   const slotText = regularSlotText(slots, now);
 
+  // 재등록 신청 (대표 11/21, migration 20261121100000): 신청 상태로 홈 카드를 바꾸고, 메일 링크면 창을 바로 엶
+  const [rInfo, setRInfo] = useState<RenewalInfo | null>(null);
+  useEffect(() => {
+    if (preview) return;
+    let alive = true;
+    actions.renewal.info().then((x) => { if (alive) setRInfo(x); }, () => {});
+    return () => { alive = false; };
+  }, [actions, s, preview]);
+  useEffect(() => {
+    if (preview || !rInfo) return;
+    const st = renewalStage(rInfo);
+    setRenewal(props.initial.renewalPaid || st === 'renewed' ? 'payment_confirmed' : st === 'submitted' ? 'requested' : 'not_requested');
+  }, [rInfo, preview, props.initial.renewalPaid]);
+  const renewOpened = useRef(false);
+  useEffect(() => {
+    if (!props.openRenew || renewOpened.current || !rInfo) return;
+    renewOpened.current = true;
+    setOverlay({ kind: 'renew' });
+  }, [props.openRenew, rInfo]);
+
   // 나의 학습 정보(강사 작성)·누적 학습 시간 (11/11 대표 시안, migration 20261111010000)
   const [info, setInfo] = useState<MyInfo | null>(props.preloaded?.info ?? null);
   useEffect(() => {
@@ -660,30 +680,29 @@ export default function StudentHome(props: {
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
       <div className="lg:flex-1">
         <h2 className="text-[15px] font-bold text-[#5c3b00]">수업이 {prompt.left}회 남았어요</h2>
-        {prompt.mode === 'request' ? (
-          <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            {endDateKo(endDate)}까지 재등록 결제하면 남은 수업을 다음 등록으로 이월할 수 있어요.
-          </p>
-        ) : (
-          <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {endDateKo(endDate)}예요.
-          </p>
-        )}
+        {/* 대표 11/21: 이월 안내는 남은 수업이 있을 때만, 입금 확인 전에는 확정된 것처럼 쓰지 않음 */}
+        <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
+          {prompt.mode === 'request'
+            ? prompt.left > 0
+              ? '지금 재등록하시면 남은 수업은 다음 수강 기간으로 이월되고, 기존 강사님과 수업 일정도 그대로 유지할 수 있어요.'
+              : '지금 재등록하시면 기존 강사님과 수업 일정도 그대로 유지할 수 있어요.'
+            : '재등록 신청 완료 · 입금 확인 중이에요.'}
+        </p>
       </div>
-      {/* 재등록 신청 저장은 아직 DB에 없음 → 미리보기에서만 버튼 */}
-      {preview && prompt.mode === 'request' && (
+      {(preview || (rInfo && rInfo.state !== 'none')) && (
         <button
           type="button"
           onClick={() => {
-            setRenewal('requested');
-            say('재등록을 신청했어요.');
+            if (!preview) return setOverlay({ kind: 'renew' });
+            if (prompt.mode === 'request') { setRenewal('requested'); say('재등록을 신청했어요.'); }
           }}
-          className="min-h-[46px] rounded-[12px] bg-[#1b1442] px-5 text-[15px] font-bold text-white"
+          className={prompt.mode === 'request'
+            ? 'min-h-[46px] rounded-[12px] bg-[#1b1442] px-5 text-[15px] font-bold text-white'
+            : 'min-h-[46px] rounded-[12px] border-[1.5px] border-[#5b3df0] bg-white px-5 text-[14px] font-bold text-[#5b3df0]'}
         >
-          재등록 신청
+          {prompt.mode === 'request' ? '재등록 신청하기' : '신청 내역 보기'}
         </button>
       )}
-      {prompt.mode === 'awaiting_payment' && <span className="justify-self-start rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#8a5300]">결제 확인 대기</span>}
     </section>
   );
 
@@ -1145,7 +1164,7 @@ export default function StudentHome(props: {
       </nav>
 
       {overlay && (
-        <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
+        <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup' || overlay.kind === 'renew'}>
           {overlay.kind === 'late' && (() => {
             const l = s.lessons.find((x) => x.id === overlay.lessonId);
             if (!l) return null;
@@ -1178,6 +1197,13 @@ export default function StudentHome(props: {
               pending={changeReqs.regular.find((r) => r.status === 'pending') ?? null}
               onSubmit={async (items, reason, start) => { const v = await run(() => actions.regularRequest(items, reason, start), ''); await reloadChangeReqs(); return !!v; }}
               onWithdraw={async (id) => { const v = await run(() => actions.regularWithdraw(id), ''); await reloadChangeReqs(); return !!v; }} />
+          )}
+          {overlay.kind === 'renew' && rInfo && (
+            <RenewalApply info={rInfo} actions={actions.renewal} onChanged={setRInfo}
+              slotsText={slotText ? slotText.map((x) => x.short).join(', ') : null}
+              tutors={[...new Set(slots.map((x) => x.tutor))].join(' · ')}
+              dateText={(d) => { const k = kst(d); const [m, day] = k.md.split('/'); return `${m}월 ${day}일(${k.wd})`; }}
+              kstDayText={(d) => `${fmtDate(d as KstDate)}(${wdOf(d)})`} />
           )}
           {overlay.kind === 'tutor_change' && (
             <TutorChangeSheet busy={busy} open={changeReqs.tutor.find((t) => t.status === 'open') ?? null}

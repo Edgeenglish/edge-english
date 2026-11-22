@@ -17,7 +17,7 @@ type State =
 /** 로그인 화면으로 — 지금 주소(바로가기 링크 포함)를 넘겨 로그인 뒤 같은 화면으로 돌아옴 */
 const toLogin = () => window.location.replace(`/lms/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
 
-export default function StudentLive({ studentParam, makeup, tab, late }: { studentParam?: string; makeup?: string; tab?: string; late?: string }) {
+export default function StudentLive({ studentParam, makeup, tab, late, renew }: { studentParam?: string; makeup?: string; tab?: string; late?: string; renew?: boolean }) {
   // 머리글이 미리 불러 둔 본인 자료가 있으면 첫 화면부터 바로 보여 줌 (운영자 보기 ?student= 는 제외). 아래에서 로그인 확인 후 새로 불러 바꿈
   const [state, setState] = useState<State>(() => {
     const c = studentParam ? null : ownViewCache();
@@ -103,6 +103,7 @@ export default function StudentLive({ studentParam, makeup, tab, late }: { stude
       openMakeup={makeup}
       openTab={tab}
       openLate={late}
+      openRenew={renew}
     />
   );
 }

@@ -8,6 +8,8 @@
 
 import RegularChangeDecide, { type DecideResult } from './RegularChangeDecide';
 import { useEffect, useMemo, useState } from 'react';
+import { periodText, requestAmount, type AdminRenewalRequest } from '@/lms/admin/renewal-requests';
+import { kstWithZones } from '@/lms/admin/students';
 import Link from 'next/link';
 import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, searchBoard, type BoardFilter, type BoardItem, type Category, type TaskSource } from '@/lms/admin/board';
 import { fakeTasks } from '@/lms/admin/fake-data';
@@ -46,7 +48,7 @@ const LIVE_KEYS = new Set(['import_checked', 'notify_tutor', 'no_extension', 're
 
 export default function AdminDashboard({
   nowIso, today, preview, tasks: liveTasks, stats, onLogout, planActions, importActions, renewalSent, renewalNotify, enrollmentClose, onReload,
-  history, notices, noExtension, timeOffReject, changeRequests,
+  history, notices, noExtension, timeOffReject, changeRequests, renewalRequests,
 }: {
   nowIso: string;
   today: LessonItem[];
@@ -72,6 +74,8 @@ export default function AdminDashboard({
   /** 강사 휴무 신청 [반려] (사유 필수, 강사 Home 에 보임) */
   timeOffReject?: (id: string, reason: string) => Promise<void>;
   /** 학생 정규 시간 변경 신청 확정·반려 · 강사 변경 상담 완료 (H26(208)) */
+  /** 학생 재등록 신청 · 입금 확인 전 (20261121100000) */
+  renewalRequests?: () => Promise<AdminRenewalRequest[]>;
   changeRequests?: { decide: (id: string, action: 'confirm' | 'reject', choice: number[] | null, week: string | null) => Promise<DecideResult>; done: (id: string) => Promise<void> };
 }) {
   const [rejecting, setRejecting] = useState<string | null>(null);
@@ -84,6 +88,13 @@ export default function AdminDashboard({
   }, [liveTasks]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [renewReqs, setRenewReqs] = useState<AdminRenewalRequest[]>([]);
+  useEffect(() => {
+    if (!renewalRequests) return;
+    let live = true;
+    renewalRequests().then((x) => { if (live) setRenewReqs(x); }, () => {});
+    return () => { live = false; };
+  }, [renewalRequests, liveTasks]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [roster, setRoster] = useState<'reg' | 'end' | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -459,7 +470,33 @@ export default function AdminDashboard({
         {tiles}
         {rosterBox}
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_370px] lg:items-start lg:gap-4">
-          <div className="grid min-w-0 gap-3">{tasksBox}</div>
+          <div className="grid min-w-0 gap-3">
+            {renewReqs.length > 0 && (
+              <section aria-label="재등록 신청 · 입금 확인 전" className={box}>
+                <h2 className="mb-2 text-[15px] font-bold text-[#1d1b2b]">재등록 신청 · 입금 확인 전 <span className="text-[13px] font-semibold text-[#6b6880]">{renewReqs.length}건</span></h2>
+                <ul className="grid gap-1.5">
+                  {renewReqs.map((r) => {
+                    const m = r.method ?? 'bank_transfer';
+                    return (
+                      <li key={r.id}>
+                        <Link href={q(`/lms/admin/students/${r.studentCode}`)} className="block rounded-[10px] border border-[#eeecf4] px-3 py-2 text-[13.5px] hover:bg-[#f7f5fd]">
+                          <b>{r.studentName}</b> <span className="text-[#6b6880]">{r.studentCode}</span>
+                          <span className="block text-[#55526a]">
+                            {r.status === 'submitted' ? '신청 완료' : '입금 안내까지 보고 신청 전'} · {periodText(r.weeks)}
+                            {r.status === 'submitted' ? ` · ${m === 'card_link' ? '카드결제' : '계좌이체'} ${requestAmount(r, m).toLocaleString('ko-KR')}원` : ''}
+                            {r.points > 0 ? ` · 적립금 ${r.points.toLocaleString('ko-KR')}원` : ''}
+                            {r.payerName ? ` · ${m === 'card_link' ? '결제자명' : '입금자명'} ${r.payerName}` : ''}
+                            {` · ${kstWithZones(r.submittedAt ?? r.updatedAt, [])}`}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+            {tasksBox}
+          </div>
           <div className="grid min-w-0 gap-3">
             {todayBox}
             {quick}
