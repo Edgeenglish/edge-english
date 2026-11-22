@@ -193,7 +193,10 @@ export default function RenewalApply(props: {
       <div className="grid gap-3.5">
         {title}
         <Steps n={3} />
-        <p className="text-[15px] font-extrabold text-[#1f7a4d]">✓ 재등록 신청 완료 · 입금 확인 중</p>
+        <div className="grid gap-0.5">
+          <p className="text-[15px] font-extrabold text-[#1f7a4d]">✓ 재등록 신청 완료 · 입금 확인 중</p>
+          <p className="text-[13.5px] text-[#55526a]">입금이 확인되면 재등록이 완료돼요.</p>
+        </div>
         <Box title="신청 내역">
           <Row k="수강 기간" v={info.plans.find((p) => p.weeks === req.weeks)?.title ?? `${req.weeks}주`} />
           <Row k="수업" v={`${course}${props.tutors ? ` · ${props.tutors}` : ''}`} />

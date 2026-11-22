@@ -649,7 +649,7 @@ function RequestRow({ r, canConfirm, onConfirm, onClose }: { r: AdminRenewalRequ
   return (
     <div className="mb-2 grid gap-1.5 rounded-[12px] border border-[#f0d27a] bg-[#fff8e6] px-3 py-2.5 text-[13.5px]">
       <p>
-        <span className="mr-1.5 rounded-full bg-[#fff1d6] px-2 py-0.5 text-[12px] font-bold text-[#8a5300]">입금 확인 전</span>
+        <span className={`mr-1.5 rounded-full px-2 py-0.5 text-[12px] font-bold ${r.status === 'submitted' ? 'bg-[#fff1d6] text-[#8a5300]' : 'bg-[#f0eef6] text-[#55526a]'}`}>{r.status === 'submitted' ? '입금 확인 전' : '신청 전'}</span>
         <b>{r.status === 'submitted' ? '재등록 신청 완료' : '입금 안내까지 보고 신청 전'}</b>
       </p>
       <p className="text-[#55526a]">
