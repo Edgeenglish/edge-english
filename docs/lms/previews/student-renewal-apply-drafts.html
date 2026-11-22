@@ -90,59 +90,69 @@ h1{font-size:22px;margin:0}
 .benefit{border:2px solid var(--brand);border-radius:14px;padding:12px 14px;display:grid;gap:5px;font-size:13.5px}
 .benefit li{list-style:none}
 .benefit ul{margin:0;padding:0;display:grid;gap:4px}
+.stepper{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#a9a6bb;white-space:nowrap}
+.stepper .ln{flex:1;height:2px;background:#e6e3ef;min-width:12px}
+.stepper .ln.done{background:var(--brand)}
+.stepper .cur{color:var(--brand)}
+.stepper .past{color:var(--brand);opacity:.6}
+.appeal{display:grid;gap:4px}
 </style>
 
 <div class="wrap"><header><h1>학생 재등록 신청 시안</h1><p class="lead">시험 학생 예: 김하준 · Alex 담당 · 40분 주 2회 · 화·목 오후 7:00 (한국 학생) · 마지막 수업일 12월 15일(화) · 적립금 4,000원. 금액은 지금 재등록 메일과 같은 가격표·할인 계산.</p></header>
 <p class="flow"><b>흐름</b> · 메일 링크·학생 홈 카드 → <b>1단계 · 수강 기간 고르기</b>(기간·적립금) [다음] → <b>2단계 · 입금하기</b>(금액·계좌·카드 링크 → 결제 → 결제 방법·입금자명 적기) [재등록 신청하기] → 여기서 처음으로 '재등록 신청 완료 · 입금 확인 중' → 운영진 입금 확인([재등록 넣기]) → 일정 확정·강사 통보(지금 흐름 그대로).</p>
-<section class="case"><h2><span class="tag">1</span> 1단계 · 수강 기간 고르기</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><p class="stephead">1단계 · 수강 기간 고르기</p>
+<section class="case"><h2><span class="tag">1</span> 수강 기간 고르기</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="cur">수강 기간 고르기</span><span class="ln"></span><span class="">입금하기</span><span class="ln"></span><span class="">신청 완료</span></div>
 <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:20px;align-items:start"><div style="display:grid;gap:8px"><div class="box"><h3>현재 수업</h3>
   <div class="row"><span>수업</span><b>40분 · 주 2회</b></div>
   <div class="row"><span>담당 강사</span><b>Alex</b></div>
   <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
   <div class="row"><span>수강 종료일</span><b>12월 15일(화)</b></div>
-</div><p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p></div><div style="display:grid;gap:12px">
+</div><p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p></div><div style="display:grid;gap:12px"><div class="appeal"><p class="ttl">영어는 꾸준함이 답! 길게 할수록 더 저렴해요</p><p class="small">* 1개월 = 4주(28일) 기준</p></div>
 <div class="plans">
   <div class="plan"><span class="p1">1개월 (4주)</span><span class="p2">290,000원</span></div>
   <div class="plan best on"><span class="p1">3개월 (12주) | 5% 할인 ✓</span><span class="p2">826,500원 <small>(월 275,500원)</small></span><span class="p3">→ 43,500원 절약!</span></div>
   <div class="plan best"><span class="p1">6개월 (24주) | 최대 혜택</span><span class="p2">1,603,000원 <small>(월 약 267,167원)</small></span><span class="p3">→ 137,000원 절약 + Ebook 패키지 무료!</span></div>
-</div><div class="box"><h3>적립금</h3>
+</div><div class="appeal"><p class="ttl">영어, 결국 오래 하는 사람이 이겨요</p><p class="small">매달 결제할 때마다 고민되셨죠? 한 번 등록해두면 수업 시간이 생활 루틴으로 자리 잡아요. 고민 없이 수업만 듣다 보면, 영어는 어느새 쌓여 있을 거예요.</p></div>
+<div class="benefit"><span class="tag2" style="justify-self:start">6개월 등록 시 추가 혜택</span><b>엣지영어 대표가 직접 만든 Ebook 패키지 무료!</b>
+<ul><li>✓ 해외여행 실전 회화 ebook + 저자 직강 영상 <span class="small">(판매가 26,900원 상당)</span></li><li>✓ 헷갈리는 문법 핵심 정리본 <span class="small">(PDF)</span></li><li>✓ 스피킹에 무조건 도움 되는 영어 꿀팁 30개 <span class="small">(PDF)</span></li><li>✓ <b>최대 2주 휴강</b> 가능</li></ul></div><div class="box"><h3>적립금</h3>
   <div class="row"><span>보유 적립금</span><b>4,000원</b></div>
   <label class="pts"><span>사용할 적립금</span><span class="inp">4,000</span><span>원</span></label>
   <p class="small">최대 4,000원 · 적립금은 계좌이체에만 적용돼요. 카드결제로 쓰시려면 <a href="#">문의</a>해 주세요.</p>
   <div class="row tot"><span>계좌이체</span><b>822,500원</b></div>
   <div class="row"><span>카드결제</span><b>826,500원</b></div>
-</div><p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p><button class="btn">다음</button></div></div></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><p class="stephead">1단계 · 수강 기간 고르기</p><div style="display:grid;gap:8px"><div class="box"><h3>현재 수업</h3>
+</div><p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p><button class="btn">다음</button></div></div></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="cur">수강 기간 고르기</span><span class="ln"></span><span class="">입금하기</span><span class="ln"></span><span class="">신청 완료</span></div><div style="display:grid;gap:8px"><div class="box"><h3>현재 수업</h3>
   <div class="row"><span>수업</span><b>40분 · 주 2회</b></div>
   <div class="row"><span>담당 강사</span><b>Alex</b></div>
   <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
   <div class="row"><span>수강 종료일</span><b>12월 15일(화)</b></div>
-</div><p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p></div>
+</div><p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p></div><div class="appeal"><p class="ttl">영어는 꾸준함이 답! 길게 할수록 더 저렴해요</p><p class="small">* 1개월 = 4주(28일) 기준</p></div>
 <div class="plans">
   <div class="plan"><span class="p1">1개월 (4주)</span><span class="p2">290,000원</span></div>
   <div class="plan best on"><span class="p1">3개월 (12주) | 5% 할인 ✓</span><span class="p2">826,500원 <small>(월 275,500원)</small></span><span class="p3">→ 43,500원 절약!</span></div>
   <div class="plan best"><span class="p1">6개월 (24주) | 최대 혜택</span><span class="p2">1,603,000원 <small>(월 약 267,167원)</small></span><span class="p3">→ 137,000원 절약 + Ebook 패키지 무료!</span></div>
-</div><div class="box"><h3>적립금</h3>
+</div><div class="appeal"><p class="ttl">영어, 결국 오래 하는 사람이 이겨요</p><p class="small">매달 결제할 때마다 고민되셨죠? 한 번 등록해두면 수업 시간이 생활 루틴으로 자리 잡아요. 고민 없이 수업만 듣다 보면, 영어는 어느새 쌓여 있을 거예요.</p></div>
+<div class="benefit"><span class="tag2" style="justify-self:start">6개월 등록 시 추가 혜택</span><b>엣지영어 대표가 직접 만든 Ebook 패키지 무료!</b>
+<ul><li>✓ 해외여행 실전 회화 ebook + 저자 직강 영상 <span class="small">(판매가 26,900원 상당)</span></li><li>✓ 헷갈리는 문법 핵심 정리본 <span class="small">(PDF)</span></li><li>✓ 스피킹에 무조건 도움 되는 영어 꿀팁 30개 <span class="small">(PDF)</span></li><li>✓ <b>최대 2주 휴강</b> 가능</li></ul></div><div class="box"><h3>적립금</h3>
   <div class="row"><span>보유 적립금</span><b>4,000원</b></div>
   <label class="pts"><span>사용할 적립금</span><span class="inp">4,000</span><span>원</span></label>
   <p class="small">최대 4,000원 · 적립금은 계좌이체에만 적용돼요. 카드결제로 쓰시려면 <a href="#">문의</a>해 주세요.</p>
   <div class="row tot"><span>계좌이체</span><b>822,500원</b></div>
   <div class="row"><span>카드결제</span><b>826,500원</b></div>
 </div><p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p><button class="btn">다음</button></div></div></div><p class="note">'수강 종료일' = 보강·보상수업까지 포함한 마지막 수업일. 적립금 칸은 적립금이 있을 때만. 기간을 안 고르면 [다음] 회색. [다음]을 누르면 고른 내용만 저장(신청 완료 아님, 적립금 예약도 아직 안 함).</p></section>
-<section class="case"><h2><span class="tag">2</span> 2단계 · 입금하기</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><p class="stephead">2단계 · 입금하기</p><a class="back" href="#">‹ 기간·적립금 바꾸기</a>
+<section class="case"><h2><span class="tag">2</span> 입금하기</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="past">수강 기간 고르기</span><span class="ln done"></span><span class="cur">입금하기</span><span class="ln"></span><span class="">신청 완료</span></div><a class="back" href="#">‹ 기간·적립금 바꾸기</a>
 <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start"><div style="display:grid;gap:12px"><div class="box"><h3>결제 금액 · 3개월 (12주)</h3>
   <div class="pay"><span class="k">계좌이체</span><span class="amount">822,500원</span><span class="small">826,500원 − 적립금 4,000원</span><span>카카오뱅크 3333-27-7626253 <button class="copy">복사</button></span><span>이진솔(탠저린 영어)</span></div>
   <div class="pay" style="border-top:1px solid var(--line);padding-top:10px"><span class="k">카드결제</span><span class="amount">826,500원</span><span class="small">적립금은 계좌이체에만 적용돼요. 카드결제로 쓰시려면 <a href="#">문의</a>해 주세요.</span><a class="link" href="#">카드로 결제하기 ›</a></div>
 </div><p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p></div><div style="display:grid;gap:12px"><div class="box"><h3>결제한 뒤 적어 주세요</h3>
   <div class="field"><span>결제 방법</span><div class="seg"><span class="on">계좌이체</span><span>카드결제</span></div></div>
   <label class="field"><span>입금자명</span><span class="inp">김하준</span></label>
-</div><button class="btn">재등록 신청하기</button></div></div></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><p class="stephead">2단계 · 입금하기</p><a class="back" href="#">‹ 기간·적립금 바꾸기</a><div class="box"><h3>결제 금액 · 3개월 (12주)</h3>
+</div><button class="btn">재등록 신청하기</button></div></div></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="past">수강 기간 고르기</span><span class="ln done"></span><span class="cur">입금하기</span><span class="ln"></span><span class="">신청 완료</span></div><a class="back" href="#">‹ 기간·적립금 바꾸기</a><div class="box"><h3>결제 금액 · 3개월 (12주)</h3>
   <div class="pay"><span class="k">계좌이체</span><span class="amount">822,500원</span><span class="small">826,500원 − 적립금 4,000원</span><span>카카오뱅크 3333-27-7626253 <button class="copy">복사</button></span><span>이진솔(탠저린 영어)</span></div>
   <div class="pay" style="border-top:1px solid var(--line);padding-top:10px"><span class="k">카드결제</span><span class="amount">826,500원</span><span class="small">적립금은 계좌이체에만 적용돼요. 카드결제로 쓰시려면 <a href="#">문의</a>해 주세요.</span><a class="link" href="#">카드로 결제하기 ›</a></div>
 </div><p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p><div class="box"><h3>결제한 뒤 적어 주세요</h3>
   <div class="field"><span>결제 방법</span><div class="seg"><span class="on">계좌이체</span><span>카드결제</span></div></div>
   <label class="field"><span>입금자명</span><span class="inp">김하준</span></label>
 </div><button class="btn">재등록 신청하기</button></div></div></div><p class="note">입금자명을 안 적으면 [재등록 신청하기] 회색. 카드결제를 고르면 칸 이름이 '결제자명', 금액은 정가. 나갔다 다시 와도 이 단계에서 이어짐. [재등록 신청하기]를 눌러야 신청 완료 + 적립금 예약(계좌이체일 때만). 두 번 눌러도 1건.</p></section>
-<section class="case"><h2><span class="tag">3</span> 신청 완료 뒤 (다시 열어도 이 화면)</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><p class="done">✓ 재등록 신청 완료 · 입금 확인 중</p><div class="box"><h3>신청 내역</h3>
+<section class="case"><h2><span class="tag">3</span> 신청 완료 뒤 (다시 열어도 이 화면)</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="past">수강 기간 고르기</span><span class="ln done"></span><span class="past">입금하기</span><span class="ln done"></span><span class="cur">신청 완료</span></div><p class="done">✓ 재등록 신청 완료 · 입금 확인 중</p><div class="box"><h3>신청 내역</h3>
   <div class="row"><span>수강 기간</span><b>3개월 (12주)</b></div>
   <div class="row"><span>수업</span><b>40분 · 주 2회 · Alex</b></div>
   <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
@@ -150,7 +160,7 @@ h1{font-size:22px;margin:0}
   <div class="row"><span>사용 적립금</span><b>4,000원</b></div>
   <div class="row"><span>입금자명</span><b>김하준</b></div>
   <div class="row"><span>신청일</span><b>11월 21일(토)</b></div>
-</div><p class="small">수업 횟수나 일정 변경을 원하시면 엣지영어 카카오톡으로 <a href="#">문의</a>해 주세요.</p></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><p class="done">✓ 재등록 신청 완료 · 입금 확인 중</p><div class="box"><h3>신청 내역</h3>
+</div><p class="small">수업 횟수나 일정 변경을 원하시면 엣지영어 카카오톡으로 <a href="#">문의</a>해 주세요.</p></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="past">수강 기간 고르기</span><span class="ln done"></span><span class="past">입금하기</span><span class="ln done"></span><span class="cur">신청 완료</span></div><p class="done">✓ 재등록 신청 완료 · 입금 확인 중</p><div class="box"><h3>신청 내역</h3>
   <div class="row"><span>수강 기간</span><b>3개월 (12주)</b></div>
   <div class="row"><span>수업</span><b>40분 · 주 2회 · Alex</b></div>
   <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
@@ -184,29 +194,5 @@ h1{font-size:22px;margin:0}
 <div class="ab"><div class="t">저장 뒤 '수강' 칸</div><div><span class="chip ok">입금 확인</span> 다음 수강권 · 12주 · 적립금 4,000원 사용 확정</div><div><span class="chip">일정 확정 전</span> 정규 일정 미정 · [정규 일정 넣기]</div></div></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr admin"><div class="ab"><div class="t">수강</div><div>지금 수강권 · 40분 주 2회 · 마지막 수업 12/15(화)</div>
 <div><span class="chip">입금 확인 전</span> 재등록 신청 완료</div><div class="s">3개월(12주) · 계좌이체 822,500원 · 적립금 4,000원 · 입금자명 김하준 · 11/21(토) 오후 2:10 한국 시간</div>
 <button class="btn">입금 확인됨</button><button class="btn ghost">신청 닫기</button></div></div></div></div><p class="note">대시보드 목록: 신청 완료(입금 확인 전) + 2단계까지 보고 신청 안 한 학생(입금하고 제출을 잊었을 수 있어서). 입금 확인을 카드결제로 넣으면 적립금 예약 되돌림, 계좌이체면 확정. [신청 닫기] = 재등록 안 함(기록 남음, 예약 되돌림). 결제 상태·일정 상태는 따로.</p></section>
-<section class="case"><h2><span class="tag">⑦</span> 홈페이지 수업료 페이지 문구 반영안 (1단계 화면)</h2>
-<div class="pair"><div class="dev pc"><div class="bar">PC (위아래 순서만 보기 — 실제 PC는 지금처럼 왼쪽 '현재 수업' · 오른쪽 이 칸)</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p>
-<p class="keep"><span class="mark">③</span>영어, 결국 오래 하는 사람이 이겨요</p>
-<p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p>
-<div><p class="ttl"><span class="mark">①</span>영어는 꾸준함이 답! 길게 할수록 더 저렴해요</p><p class="small">* 1개월 = 4주(28일) 기준</p></div>
-<div class="plans" style="grid-template-columns:none">
-  <div class="plan"><span class="p1">1개월 (4주)</span><span class="p2">290,000원</span></div>
-  <div class="plan best on"><span class="p1">3개월 (12주) | 5% 할인 ✓</span><span class="p2">826,500원 <small>(월 275,500원)</small></span><span class="p3">→ 43,500원 절약!</span></div>
-  <div class="plan best"><span class="p1">6개월 (24주) | 최대 혜택</span><span class="p2">1,603,000원 <small>(월 약 267,167원)</small></span><span class="p3">→ 137,000원 절약 + Ebook 패키지 무료!</span></div>
-</div>
-<div class="benefit"><span><span class="mark">②</span><span class="tag2">6개월 등록 시 추가 혜택</span></span><b>엣지영어 대표가 직접 만든 Ebook 패키지 무료!</b>
-<ul><li>✓ 해외여행 실전 회화 ebook + 저자 직강 영상 <span class="small">(판매가 26,900원 상당)</span></li><li>✓ 헷갈리는 문법 핵심 정리본 <span class="small">(PDF)</span></li><li>✓ 스피킹에 무조건 도움 되는 영어 꿀팁 30개 <span class="small">(PDF)</span></li><li>✓ <b>최대 2주 휴강</b> 가능</li></ul></div>
-<p class="small">… 아래 적립금·안내·[다음]은 지금과 같음</p></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p>
-<p class="keep"><span class="mark">③</span>영어, 결국 오래 하는 사람이 이겨요</p>
-<p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p>
-<div><p class="ttl"><span class="mark">①</span>영어는 꾸준함이 답! 길게 할수록 더 저렴해요</p><p class="small">* 1개월 = 4주(28일) 기준</p></div>
-<div class="plans" style="grid-template-columns:none">
-  <div class="plan"><span class="p1">1개월 (4주)</span><span class="p2">290,000원</span></div>
-  <div class="plan best on"><span class="p1">3개월 (12주) | 5% 할인 ✓</span><span class="p2">826,500원 <small>(월 275,500원)</small></span><span class="p3">→ 43,500원 절약!</span></div>
-  <div class="plan best"><span class="p1">6개월 (24주) | 최대 혜택</span><span class="p2">1,603,000원 <small>(월 약 267,167원)</small></span><span class="p3">→ 137,000원 절약 + Ebook 패키지 무료!</span></div>
-</div>
-<div class="benefit"><span><span class="mark">②</span><span class="tag2">6개월 등록 시 추가 혜택</span></span><b>엣지영어 대표가 직접 만든 Ebook 패키지 무료!</b>
-<ul><li>✓ 해외여행 실전 회화 ebook + 저자 직강 영상 <span class="small">(판매가 26,900원 상당)</span></li><li>✓ 헷갈리는 문법 핵심 정리본 <span class="small">(PDF)</span></li><li>✓ 스피킹에 무조건 도움 되는 영어 꿀팁 30개 <span class="small">(PDF)</span></li><li>✓ <b>최대 2주 휴강</b> 가능</li></ul></div>
-<p class="small">… 아래 적립금·안내·[다음]은 지금과 같음</p></div></div></div>
-<p class="note">빨간 번호 = 넣을지 고를 부분. ① 기간 칸 위 제목 + '1개월 = 4주(28일) 기준' ② 기간 칸 아래 6개월 혜택 상자(홈페이지와 같은 글) ③ 맨 위 '영어, 결국 오래 하는 사람이 이겨요'. 홈페이지의 '등록하시는 모든 분께 Ebook 증정'은 재등록 학생은 이미 받았을 수 있어 뺐음.</p></section>
+
 </div>
