@@ -1,11 +1,12 @@
-## ⏳ 11/22 학생 재등록 신청 — **시험 반영, 운영 미반영 (대표 화면 확인 대기)** (H26(217), 브랜치 claude/wizardly-feynman-k6w7tb, 시안 https://claude.ai/artifact/SnN71zMF8AzWNrJEYgdV7F `docs/lms/previews/student-renewal-apply-drafts.html`)
+## ✅ 11/22 학생 재등록 신청 — **운영 반영 끝 (대표 '응')** (H26(217), 브랜치 claude/wizardly-feynman-k6w7tb, 시안 https://claude.ai/artifact/SnN71zMF8AzWNrJEYgdV7F `docs/lms/previews/student-renewal-apply-drafts.html`)
 - migration **20261121100000_lms_student_renewal_request** (시험 DB 적용): 표 `renewal_requests`(draft→submitted→paid/closed, 수강권당 열린 신청 1건) · `student_renewal_info/save/submit`(학생·운영자 보기) · `admin_renewal_requests/close/confirm`(confirm = admin_renew 또는 no_schedule 이면 admin_register_renewal → 적립금 확정/되돌림) · `lms_renewal_target`·`lms_last_lesson_at`·`lms_renewal_price` · `reward_redemption_check` 확정 조건에 '다음 수강권 결제' 허용 · `lms_renewal_mail_due`(submitted·paid 제외)·`lms_renewal_mail`(이모지 뺌·신청 링크·종료일 = 마지막 수업일) 교체
 - 화면: 학생 `src/app/lms/student/RenewalApply.tsx`(창) · `renew/page.tsx`(/lms/student/renew = 메일 링크) · `StudentHome.tsx`(홈 카드 문구·버튼, overlay 'renew') · `src/lms/student/renewal-apply.ts` / 운영자 `StudentDetail.tsx` RequestRow([입금 확인됨]·[신청 닫기]) · `Renewal.tsx` RenewSheet request(미리 채움·'일정 미정') · `AdminDashboard.tsx` '재등록 신청 · 입금 확인 전' 칸 · `src/lms/admin/renewal-requests.ts`
 - 시험(시험 DB, 롤백): 저장 2번 = 1건 · 적립금 최대 초과 막힘 · 입금자명 빈칸 막힘 · 제출 2번 = 1번 · 제출 뒤 기간 변경 막힘 · 예약 1건(잔액 0) · 메일 대상에서 빠짐 · 운영자 [입금 확인됨] → 새 수강권·결제 822,500원·적립금 확정·학생 '재등록 완료' · 다시 눌러도 1번 · 닫기 = 예약 되돌림 · 카드 확인 = 예약 되돌림 · 일정 미정 = 수업 0·재등록 업무 열림 · 다른 학생 정보 못 봄 · 학생은 운영자 목록 못 봄. 화면: 학생 창 PC·iPhone 13 3단계(가짜 데이터, 가로 밀림 0). 메일: STU-0018 '2회 남음' 새 문구 support@ 도착
 - 시험 데이터: STU-0015(한OO, 40분 주2회, 남은 1회, 수강권 끝 11/30)에 적립금 4,000원. STU-0018 은 11/24 시작 다음 수강권이 있어 '재등록 완료' 화면
 - 11/22 운영자 화면 실제 클릭(시험 사이트, support@ 메일 코드 + 대표 인증 앱): STU-0023 학생 신청(운영자 보기) → 대시보드 '재등록 신청 · 입금 확인 전 1건' → 학생 상세 [입금 확인됨] → 창에 3개월·계좌이체 1,011,750원·입금자명 미리 채움, 정규 시간 겹침 경고(12/15) → '일정 미정' 저장 → 2차 수강권·결제 기록·재등록 업무 열림·수업 0 → 학생 '재등록 완료' 확인
 - 기간 칸 모양(대표 11/22): 고르지 않은 칸은 모두 같은 흰 칸, 고른 칸만 보라 테두리 + 연보라 바탕
-- 남은 것: 운영 반영(대표 승인 뒤: 운영 DB 백업 → migration 20261121100000 → lms-prod)
+- 운영 반영(11/22): 운영 DB 백업 **snapshots 84**(전체 표 + 바꾼 함수 3개 reward_redemption_check·lms_renewal_mail·lms_renewal_mail_due 이전 정의 `_functions_before`) → migration 20261121100000 → 확인: 학생 13·수업 202·수강권 18 그대로, 신청 0, 새 함수 anon 실행 불가, 지금 보낼 재등록 메일 0 · lms-prod **d35fe3f6**(origin/lms-prod 위에 이 기능 파일만, 운영에 없는 로그인 계정 만들기 줄은 뺌) · edgeenglish.kr JS 반영·/lms/student/renew 200·check-public-pages·vitest 537 통과
+- 되돌리기: DB = snapshots 84 `_functions_before` 정의 실행(새 표·새 함수는 남겨도 영향 없음) / 코드 = lms-prod 를 f2027275 로
 
 ## ✅ 11/18 로그인 화면 비밀번호 안내 강화 — 운영 반영 (lms-prod 841bdd36, 대표 '운영 반영해')
 - 한국어 첫 안내 '한 번도 비밀번호를 만든 적 없거나/기억나지 않으면👇'(영어 첫 안내도 👇), 👇 3번만 까딱 · 비밀번호 틀리면 빨간 '비밀번호를 만든 적 없으면 아래 [비밀번호 만들기·찾기] 버튼을 눌러 주세요'+보라 채운 버튼 흔들림(틀릴 때마다) · 동작 줄이기 설정이면 안 움직임
