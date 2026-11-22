@@ -29197,5 +29197,63 @@ begin
   execute replace(d, a, a || ', ''period_end'', coalesce(e.final_end_date, e.base_end_date)');
 end $$;
 
+-- >>> 20261122160000_lms_tutor_update_first_canceled.sql
+-- =====================================================================
+-- 강사 Home 'New student' 줄: 첫 수업을 학생이 취소했으면 실제 첫 수업을 보여 줌 (2026-11-22 대표 '어')
+--   First class: Wed, 25 Nov · 20 min · 8 classes
+--   Mon, 23 Nov class canceled by student
+--  tutor_updates_feed 의 신규 배정 줄에 first_actual·first_canceled 를 더하고, 실제 첫 수업이 끝날 때까지 보이게 함
+--  등록 회차·수강 시작일은 바꾸지 않음. 메일 없음
+-- =====================================================================
+do $$
+declare
+  d text := pg_get_functiondef('tutor_updates_feed(uuid)'::regprocedure);
+  a text := E'''at'', coalesce(u.info ->> ''first'', u.info ->> ''from'', u.info ->> ''to''), ''info'', u.info) as r\n    from tutor_updates u join students s on s.id = u.student_id\n    where u.tutor_id = me and u.visible_until > now()';
+  b text := E'''at'', coalesce(u.info ->> ''first'', u.info ->> ''from'', u.info ->> ''to''), ''info'', u.info || coalesce(fx.extra, ''{}''::jsonb)) as r\n'
+    || E'    from tutor_updates u join students s on s.id = u.student_id\n'
+    || E'    left join lateral (\n'
+    || E'      select case when f0.state = ''canceled'' and f1.starts_at is not null then jsonb_build_object(''first_actual'', f1.starts_at, ''first_canceled'', f0.starts_at) end as extra, f1.ends_at as actual_end\n'
+    || E'      from (select 1) z\n'
+    || E'      left join lateral (select l.state, l.starts_at from lessons l where u.kind = ''new_student'' and l.student_id = u.student_id and l.tutor_id = me and l.kind = ''regular''\n'
+    || E'                         and l.voided_at is null and l.starts_at = (u.info ->> ''first'')::timestamptz limit 1) f0 on true\n'
+    || E'      left join lateral (select l.starts_at, l.ends_at from lessons l where u.kind = ''new_student'' and l.student_id = u.student_id and l.tutor_id = me and l.kind = ''regular''\n'
+    || E'                         and l.voided_at is null and l.state = ''scheduled'' and l.starts_at > (u.info ->> ''first'')::timestamptz order by l.starts_at limit 1) f1 on true\n'
+    || E'    ) fx on true\n'
+    || E'    where u.tutor_id = me and (u.visible_until > now() or (fx.extra is not null and fx.actual_end > now()))';
+begin
+  if (length(d) - length(replace(d, a, ''))) / length(a) <> 1 then raise exception '자리 못 찾음'; end if;
+  execute replace(d, a, b);
+end $$;
+
+-- >>> 20261122170000_lms_student_label_everywhere.sql
+-- =====================================================================
+-- 강사 화면 학생 이름: 별명이 있으면 어디서나 '영문 이름 (별명)' (2026-11-22 대표)
+--  별명만 보이던 곳 4개를 lms_tutor_student_label 로: tutor_updates_feed(수강생 취소 줄) · tutor_canceled_classes · tutor_hours · lms_weekly_classes
+--  화면 데이터 함수만 — 메일 없음
+-- =====================================================================
+do $$
+declare
+  f text;
+  d text;
+  a text := 'coalesce(s.display_name, s.name_en)';
+begin
+  foreach f in array array['tutor_updates_feed(uuid)', 'tutor_canceled_classes', 'tutor_hours', 'lms_weekly_classes(uuid,text,date)'] loop
+    d := pg_get_functiondef(case when f like '%(%' then f::regprocedure else f::regproc::oid end);
+    if position(a in d) = 0 then raise exception '자리 못 찾음: %', f; end if;
+    execute replace(d, a, 'lms_tutor_student_label(s.name_en, s.display_name)');
+  end loop;
+end $$;
+
+-- >>> 20261122180000_lms_student_en_nickname.sql
+-- =====================================================================
+-- 강사 자동 메일 학생 이름도 '영문 이름 (별명)' (2026-11-22 대표 '오케이')
+--  lms_student_en 은 강사에게 가는 영어 메일(재등록·첫 수업·지각·수업 알림·새 학생 요청·일정 변경·대체 확정)에서만 씀
+--  별명이 없거나 영문 이름과 같으면 지금과 같음. 메일이 더 가지는 않음
+-- =====================================================================
+create or replace function lms_student_en(st students)
+returns text language sql immutable as $$
+  select lms_tutor_student_label(coalesce(nullif(st.name_en, ''), st.name_ko), st.display_name)
+$$;
+
 insert into lms_backup.project (name) values ('edgeenglish-lms-test');   -- 이 DB의 프로젝트 이름 (복구 안전장치)
 commit;

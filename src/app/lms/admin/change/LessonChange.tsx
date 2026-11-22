@@ -5,6 +5,7 @@
 //       · 4 안내(수강생·강사 각각 [복사] → 보낸 뒤 [보냄], 누른 버튼은 회색으로 남음) · 5 보강(신청 → 강사 확인 → [확정]) · 6 변경 기록([되돌리기])
 // 판정(6시간·변경권·공휴일·보강 기한)과 중복 방지는 DB 함수 하나 — 화면 미리 보기와 저장 결과가 같음
 
+import { enLabel } from '@/lms/student-name';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import DateInput from '../DateInput';
 import { useSavingGuard } from '../useSavingGuard';
@@ -236,7 +237,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
           {student ? (
             <div className="flex items-center gap-2">
               <b className="flex-1 text-[16px] text-[#1d1b2b]">
-                {student.nameKo} <span className="text-[13px] font-normal text-[#6b6880]">{student.code} · {student.nameEn}</span>
+                {student.nameKo} <span className="text-[13px] font-normal text-[#6b6880]">{student.code} · {enLabel(student.nameEn, student.displayName)}</span>
               </b>
               <button type="button" className={btnSub} onClick={() => setStudent(null)}>
                 다른 수강생
@@ -249,7 +250,7 @@ export default function LessonChange({ students, actions, nowIso, initialCode }:
                 {found.map((s) => (
                   <li key={s.id}>
                     <button type="button" onClick={() => { setStudent(s); setQ(''); }} className="min-h-[44px] w-full rounded-[10px] px-3 py-2 text-left text-[15px] text-[#1d1b2b] hover:bg-[#efebff]">
-                      {s.nameKo} <span className="text-[13px] text-[#6b6880]">{s.code} · {s.nameEn}</span>
+                      {s.nameKo} <span className="text-[13px] text-[#6b6880]">{s.code} · {enLabel(s.nameEn, s.displayName)}</span>
                     </button>
                   </li>
                 ))}

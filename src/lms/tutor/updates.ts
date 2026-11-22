@@ -57,7 +57,11 @@ export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)
     (typeof zone === 'string' ? [enEvery(ts, zone)] : enEveryLines(ts, zone, end));
   switch (u.kind) {
     case 'new_student':
-      return [...every(ds(i.every), { last: d(i.last), classes: Number(i.classes) || null }), `First class: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} · ${i.minutes} min · ${i.classes} classes`];
+    {
+      // 첫 수업을 학생이 취소했으면 실제 첫 수업 (20261122160000, 대표 11/22 — 취소는 따로 '수강생 취소' 알림)
+      const first = d(i.first_actual) ?? d(i.first) ?? u.at;
+      return [...every(ds(i.every), { last: d(i.last), classes: Number(i.classes) || null }), `First class: ${enDay(first, z(first))} · ${i.minutes} min · ${i.classes} classes`];
+    }
     case 'renewal': {
       // 기간 끝 = 수강권 종료일(period_end, 20261122150000). 옛 기록은 마지막 수업일
       const end = i.period_end ? new Date(`${i.period_end}T12:00:00+09:00`) : d(i.last);

@@ -113,7 +113,7 @@ export function emailStatusText(e: ChNoticeEmail, sentLabel: (d: Date) => string
   return e.error ? `자동 메일 대기 · ${e.error}` : `메일 발송 대기 · ${to}`;
 }
 
-export type ChStudent = { id: string; code: string; nameKo: string; nameEn: string; timezone: string };
+export type ChStudent = { id: string; code: string; nameKo: string; nameEn: string; displayName?: string | null; timezone: string };
 export type ChEnrollment = { id: string; finalEndDate: KstDate; durationMin: number };
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];

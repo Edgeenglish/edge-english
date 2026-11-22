@@ -1,6 +1,7 @@
 'use client';
 
 // 운영진 수강생 목록: 수강 중 · 수강 예정 · 종료 구분 + 이름 검색 → 수강생 상세 (H26(44) ②, 4300). 수강 상태는 등록 기간으로 계산(따로 입력 안 함)
+import { enLabel } from '@/lms/student-name';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { diffDays, instantToKstDate } from '@/lms/rules/dates';
@@ -66,7 +67,7 @@ export default function StudentList({ rows, nowIso, initialQuery, initialTab }: 
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <b className="text-[15px] text-[#1d1b2b]">{s.nameKo}</b>
-                    <span className="text-[12.5px] text-[#6b6880]">({s.nameEn})</span>
+                    <span className="text-[12.5px] text-[#6b6880]">{enLabel(s.nameEn, s.displayName)}</span>
                     <span className="text-[12px] text-[#6b6880]">{s.code}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-bold ${STATUS_STYLE[s.status]}`}>{STATUS_TEXT[s.status]}</span>
                     {s.noticePending && <span className="rounded-full bg-[#fff1d6] px-2 py-0.5 text-[11.5px] font-bold text-[#8a5300]">일정 변경 안내 안 보냄</span>}

@@ -2,6 +2,7 @@
 
 // 운영진 수강생 상세 (H26(44) ①~⑤, migration 4300): 정규 일정 · 수강 · 프로필 · 자기소개/선호 7항목 · 운영진만(결제·메모) · 수업 · 변경 기록·안내
 // 시간은 모두 '한국 시간 · 수강생 도시 시간 · 강사 도시 시간' 이름과 같이, 실제 수업 날짜로 계산 (H26(43))
+import { enLabel } from '@/lms/student-name';
 import { typeKo } from '@/lms/class-type';
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -103,7 +104,7 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2c2263] text-[18px] font-bold text-white">{(s.nameKo ?? s.nameEn).slice(-1)}</span>
           <div className="min-w-0 flex-1">
             <p className="text-[20px] font-bold text-white">
-              {s.nameKo} <span className="text-[14px] font-normal text-[#c9c0ff]">({s.nameEn}{s.displayName && s.displayName.toLowerCase() !== s.nameEn.toLowerCase() ? ` · "${s.displayName}"` : ''}) · {s.code}</span>
+              {s.nameKo} <span className="text-[14px] font-normal text-[#c9c0ff]">· {enLabel(s.nameEn, s.displayName)} · {s.code}</span>
               <span className={`ml-2 rounded-full px-2 py-0.5 align-middle text-[11.5px] font-bold ${STATUS_STYLE[status]}`}>{STATUS_TEXT[status]}</span>
             </p>
             <p className="text-[13px] text-[#d8d3f5]">
