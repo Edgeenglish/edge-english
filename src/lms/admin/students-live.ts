@@ -22,7 +22,7 @@ export async function loadStudents(sb: SupabaseClient): Promise<StudentRow[]> {
 export async function loadStudentDetail(sb: SupabaseClient, studentId: string): Promise<StudentDetailData> {
   const [detail, pending] = await Promise.all([sb.rpc('admin_student_detail', { p_student: studentId }), sb.rpc('student_pending_times', { p_student: studentId })]);
   const d = parseDetail(check(detail));
-  // 시간 협의 필요 회차 (20261122120000). 함수 없는 옛 DB 면 표시만 없음
+  // 시간 협의 필요 회차 (20261122130000). 함수 없는 옛 DB 면 표시만 없음
   d.pendingTimes = pending.error ? [] : ((pending.data ?? []) as { seq: number; starts_at: string }[]).map((x) => ({ seq: x.seq, startsAt: new Date(x.starts_at) }));
   // 강사 현지 시각 = 그 시각의 지역 (해외 이동 기간, H26(176)): 수업마다 시간대를 다시 정함
   const names = new Map<string, { id: string; home: string }>();

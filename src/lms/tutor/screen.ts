@@ -90,7 +90,7 @@ export type TutorScreen = {
   toRecord: string[];
   makeups: TutorMakeup[];
   covers: TutorCover[];
-  /** 시간 협의 필요 회차 (기존 일정 기준, 수업 아님 — migration 20261122120000) */
+  /** 시간 협의 필요 회차 (기존 일정 기준, 수업 아님 — migration 20261122130000) */
   pendingTimes?: { student: string; studentId: string; seq: number; startsAt: Date; minutes: number }[];
 };
 

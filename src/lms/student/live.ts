@@ -94,7 +94,7 @@ export type StudentView = {
   leave: LeaveRow[];
   /** 휴무 처리 중인데 수업 줄이 아직 없는 수업 → 일정에 '일정 조율 중' (3700) */
   leavePending?: { id: string; startsAt: Date; endsAt: Date }[];
-  /** 시간 협의 필요 회차 (기존 일정 기준, 수업 아님 — migration 20261122120000). 함수 없는 옛 DB 면 [] */
+  /** 시간 협의 필요 회차 (기존 일정 기준, 수업 아님 — migration 20261122130000). 함수 없는 옛 DB 면 [] */
   pendingTimes?: { seq: number; startsAt: Date; minutes: number }[];
   holidays: KstDate[];
   points: PointsEvent[];

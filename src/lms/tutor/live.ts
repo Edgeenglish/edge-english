@@ -43,7 +43,7 @@ export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null
     const by = contactsByLesson(contact.data);
     s.lessons = s.lessons.map((l) => (by.has(l.id) ? { ...l, contacts: by.get(l.id)! } : l));
   }
-  // 시간 협의 필요 회차 (20261122120000). 함수 없는 옛 DB 면 표시만 없음
+  // 시간 협의 필요 회차 (20261122130000). 함수 없는 옛 DB 면 표시만 없음
   s.pendingTimes = pending.error ? [] : ((pending.data ?? []) as { student: string; student_id: string; seq: number; starts_at: string; minutes: number }[])
     .map((x) => ({ student: x.student, studentId: x.student_id, seq: x.seq, startsAt: new Date(x.starts_at), minutes: x.minutes }));
   // 이동 기간 (H26(176)): 수업 시각을 그 수업 날짜의 지역 시간으로. 함수 없는 옛 DB 면 평소 시간대 그대로
