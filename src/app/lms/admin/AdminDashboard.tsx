@@ -472,8 +472,12 @@ export default function AdminDashboard({
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_370px] lg:items-start lg:gap-4">
           <div className="grid min-w-0 gap-3">
             {renewReqs.length > 0 && (
-              <section aria-label="재등록 신청 · 입금 확인 전" className={box}>
-                <h2 className="mb-2 text-[15px] font-bold text-[#1d1b2b]">재등록 신청 · 입금 확인 전 <span className="text-[13px] font-semibold text-[#6b6880]">{renewReqs.length}건</span></h2>
+              <section aria-label="재등록 신청" className={box}>
+                <h2 className="mb-2 flex flex-wrap items-center gap-1.5 text-[15px] font-bold text-[#1d1b2b]">
+                  재등록 신청
+                  {renewReqs.some((r) => r.status === 'submitted') && <span className="rounded-full bg-[#fff1d6] px-2 py-0.5 text-[12px] font-bold text-[#8a5300]">입금 확인 전 {renewReqs.filter((r) => r.status === 'submitted').length}</span>}
+                  {renewReqs.some((r) => r.status === 'draft') && <span className="rounded-full bg-[#f0eef6] px-2 py-0.5 text-[12px] font-bold text-[#55526a]">신청 전 {renewReqs.filter((r) => r.status === 'draft').length}</span>}
+                </h2>
                 <ul className="grid gap-1.5">
                   {renewReqs.map((r) => {
                     const m = r.method ?? 'bank_transfer';
