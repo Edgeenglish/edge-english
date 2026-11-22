@@ -296,7 +296,7 @@ export default function RenewalApply(props: {
       <Steps n={2} />
       <button type="button" onClick={() => { setErr(null); setStep(1); }} className="justify-self-start text-[13px] font-bold text-[#5b3df0]">‹ 기간·적립금 바꾸기</button>
       <div className="grid gap-3.5 lg:grid-cols-2 lg:items-start lg:gap-5">
-        <div className="grid gap-3">{current}{payBox}<Notice /></div>
+        <div className="grid gap-3">{payBox}<Notice /></div>
         <div className="grid gap-3">
           {form}
           <button type="button" className={btn} disabled={!payer.trim() || busy} onClick={submit}>재등록 신청하기</button>
