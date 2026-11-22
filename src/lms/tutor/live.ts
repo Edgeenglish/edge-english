@@ -23,12 +23,13 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 
 /** tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
 export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null, kstFrom: string, kstTo: string): Promise<TutorScreen> {
-  const [screen, sug, travel, late, contact] = await Promise.all([
+  const [screen, sug, travel, late, contact, pending] = await Promise.all([
     sb.rpc('tutor_screen', { p_tutor: tutorId, p_from: kstFrom, p_to: kstTo }),
     sb.rpc('tutor_makeup_suggestions', { p_tutor: tutorId }),
     sb.rpc('tutor_travel_periods', { p_tutor: tutorId }),
     sb.rpc('tutor_late_notices', { p_tutor: tutorId }),
     sb.rpc('tutor_contact_notices', { p_tutor: tutorId }),
+    sb.rpc('tutor_pending_times', { p_tutor: tutorId }),
   ]);
   const s = parseScreen(check(screen));
   // 강사 '늦어요' 알림 (20261114200000). 함수 없는 옛 DB 면 표시만 없음
@@ -42,6 +43,9 @@ export async function loadTutorScreen(sb: SupabaseClient, tutorId: string | null
     const by = contactsByLesson(contact.data);
     s.lessons = s.lessons.map((l) => (by.has(l.id) ? { ...l, contacts: by.get(l.id)! } : l));
   }
+  // 시간 협의 필요 회차 (20261122130000). 함수 없는 옛 DB 면 표시만 없음
+  s.pendingTimes = pending.error ? [] : ((pending.data ?? []) as { student: string; student_id: string; seq: number; starts_at: string; minutes: number }[])
+    .map((x) => ({ student: x.student, studentId: x.student_id, seq: x.seq, startsAt: new Date(x.starts_at), minutes: x.minutes }));
   // 이동 기간 (H26(176)): 수업 시각을 그 수업 날짜의 지역 시간으로. 함수 없는 옛 DB 면 평소 시간대 그대로
   if (!travel.error) s.locations = ((travel.data as unknown[]) ?? []).map(parsePeriod);
   // 강사 시간 제안 (H26(134), 20261111160000). 함수 없는 옛 DB 면 제안 표시만 없음

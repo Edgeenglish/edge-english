@@ -1,3 +1,17 @@
+## ✅ 11/22 일정 일부만 먼저 확정 — **운영 반영 끝 (대표 '보내')** (브랜치 claude/zen-sagan-cx7lwj)
+- 운영(11/22): 백업 snapshots **86** → migration 20261122100000·110000·130000 (함수 md5 = 시험 DB) → 오O수 STU-0010 24회 확정(수업 13 = 정상 9 + 휴무 4, 협의 11, 회차 1~24, 남은 24) · Benny 메일 발송(본문 support@ 보낸편지함 대조 일치) · 재등록 카드 자동 닫힘 · lms-prod **b8092e73**(lms-prod 위에 이 기능 파일만) · check-public-pages 통과. 되돌리기: DB = snapshots 86 `_functions_before` 정의 실행 / 코드 = lms-prod 를 d35fe3f6 로
+- 정규 시간 닫기 버그 수정(대표 '1번 응'): migration **20261122140000** `lms_close_dropped_slots` — 확정 때 새 일정에 없는 요일의 열린 정규 시간을 새 수강권 시작 전날로 닫음(3→2·2→1 시험 통과, 다른 학생 그대로). 운영: 백업 snapshots **87** → 적용 → STU-0010 수·금 17:00 두 줄 11/22로 닫음(정규 = 월·목 19:00)
+- 대표 결정(11/22): 강사 Schedule 탭에 협의 11회 안 넣음 · To do 아님(Home 카드 유지, 강사 시간 입력 기능 생기면 To do 검토)
+- 원칙 (대표 11/22): 오O수 한 건용 예외가 아니라 모든 경우(신규·재등록 × 휴무만/근무 시간 변경만/둘 다 × 강사 먼저 설정/수업 확정 뒤 설정 + 수정·철회)에 같게 도는 시스템. 9·4·11·날짜·이름은 코드에 고정하지 않음
+- migration: `20261122100000_lms_partial_plan_confirm`(schedule_plans.partial, plan_pending_lessons, lms_partial_kind/split, lms_new_plan_partial, lms_confirm_plan_partial, lms_confirm_plan 분기, admin_partial_preview, admin_confirm_partial_schedule) · `20261122110000_lms_partial_plan_mail`(강사 메일 틀, 대표 11/22 '넣어') · `20261122130000_lms_pending_times_screens`(student_/tutor_pending_times, lms_renewal_remaining 에 협의 필요 회차 포함)
+- 화면: 학생 일정 목록 '⚠️ 강사님 근무 시간 변경으로 시간 협의 중 (기존 일정 기준)' + 남은 수업 수 포함 · 강사 Home 'New times needed' 카드 · 운영자 학생 상세 '시간 협의 필요 n회' · 운영자 일정 확정(assign) '가능한 회차만 확정'
+- **완료(시험 DB)**: 판정 9/4/11(2/8 포함) · 24회 보존(수업 13 + 협의 11, 회차 1~24) · 휴무 회차 = 수업 + leave_items + leave_options(메일 없음) · 학생·강사 수업 알림 제외(leave_items 기준) · 다른 수업 겹침 막힘 · 두 번 확정해도 중복 없음 · 일반 등록(lms_new_plan_lessons) 그대로, 메일 예전 문구 · 휴무 철회 → leave_items 철회·안내 not_needed · 휴무 다시 넣기 → 4회 다시 붙음 · 메일 본문 확인
+- **미검증**: 화면 실제 확인(PC·휴대폰, 로그인 필요) · 휴무 처리 뒤 확정된 대체수업·보강 보존(기존 함수, 이번에 안 바꿈) · 신규 등록 화면에서 '가능한 회차만 확정'
+- **남은 작업**: 운영 반영(백업 → migration 3개 → 오O수 확정) · 협의 필요 회차를 실제 수업으로 바꾸는 기능(학생 시간 선택·강사 확정, 운영진 예외 입력) · 확정 뒤 강사가 근무 시간을 바꾼 경우 기존 처리 경로 확인 후 보완 · 회차별 날짜 일정안(lesson_dates)도 지원
+- 11/22 추가 확인: 운영자 assign 화면 [회차별로 나눠 보기]→[가능한 13회 확정] 클릭 통과(시험 학생 남궁O린 STU-0133, 13+4휴무+11) · 신규 등록도 같은 함수로 통과(서O호 STU-0132) · 화면 휴대폰·PC 확인
+- ⚠️ 따로 할 일(이번 범위 밖, 기존 기능): 휴무 취소(admin_leave_withdraw)는 대체수업·기다림을 원래대로 되돌리지만(대표 11/22 유지 결정) 학생·대체강사에게 바뀐 사실을 알리는 메일이 없음(대기 안내만 not_needed) → 알림 추가 필요
+- 시험 데이터(시험 DB): 강사 Noah(휴무 12/22~1/4 · 1/5~3/22 Buenos Aires 월 8:30·목 9:00~) · 학생 한O우 STU-0129(24회, 일부 확정) · 윤O아(8회 일반 등록)
+
 ## ✅ 11/22 학생 재등록 신청 — **운영 반영 끝 (대표 '응')** (H26(217), 브랜치 claude/wizardly-feynman-k6w7tb, 시안 https://claude.ai/artifact/SnN71zMF8AzWNrJEYgdV7F `docs/lms/previews/student-renewal-apply-drafts.html`)
 - migration **20261121100000_lms_student_renewal_request** (시험 DB 적용): 표 `renewal_requests`(draft→submitted→paid/closed, 수강권당 열린 신청 1건) · `student_renewal_info/save/submit`(학생·운영자 보기) · `admin_renewal_requests/close/confirm`(confirm = admin_renew 또는 no_schedule 이면 admin_register_renewal → 적립금 확정/되돌림) · `lms_renewal_target`·`lms_last_lesson_at`·`lms_renewal_price` · `reward_redemption_check` 확정 조건에 '다음 수강권 결제' 허용 · `lms_renewal_mail_due`(submitted·paid 제외)·`lms_renewal_mail`(이모지 뺌·신청 링크·종료일 = 마지막 수업일) 교체
 - 화면: 학생 `src/app/lms/student/RenewalApply.tsx`(창) · `renew/page.tsx`(/lms/student/renew = 메일 링크) · `StudentHome.tsx`(홈 카드 문구·버튼, overlay 'renew') · `src/lms/student/renewal-apply.ts` / 운영자 `StudentDetail.tsx` RequestRow([입금 확인됨]·[신청 닫기]) · `Renewal.tsx` RenewSheet request(미리 채움·'일정 미정') · `AdminDashboard.tsx` '재등록 신청 · 입금 확인 전' 칸 · `src/lms/admin/renewal-requests.ts`
@@ -8,6 +22,15 @@
 - 운영 반영(11/22): 운영 DB 백업 **snapshots 84**(전체 표 + 바꾼 함수 3개 reward_redemption_check·lms_renewal_mail·lms_renewal_mail_due 이전 정의 `_functions_before`) → migration 20261121100000 → 확인: 학생 13·수업 202·수강권 18 그대로, 신청 0, 새 함수 anon 실행 불가, 지금 보낼 재등록 메일 0 · lms-prod **d35fe3f6**(origin/lms-prod 위에 이 기능 파일만, 운영에 없는 로그인 계정 만들기 줄은 뺌) · edgeenglish.kr JS 반영·/lms/student/renew 200·check-public-pages·vitest 537 통과
 - 11/22 운영 반영 뒤 시험 사이트만(lms-test 1ac713e7, 운영 미반영): 문의 줄은 신청 완료 화면에만('수업 횟수나 일정 변경을 원하시면 엣지영어 카카오톡으로 문의해 주세요.') · 단계 흐름 선(수강 기간 고르기 — 입금하기 — 신청 완료) · 1단계에 홈페이지 수업료 문구(LongTermPrice.tsx 와 같은 글)·6개월 혜택 상자 · 현재 수업 칸 아래 '기존 수업 일정으로 이어서 등록됩니다.' · 1단계 안내 상자 뺌 · '‹ 이전 단계'. 대표 확인 대기
 - 되돌리기: DB = snapshots 84 `_functions_before` 정의 실행(새 표·새 함수는 남겨도 영향 없음) / 코드 = lms-prod 를 f2027275 로
+
+
+## 🔧 11/22 이월된 보강 날짜 0개 버그 — 운영 적용 끝 (브랜치 claude/peaceful-hypatia-o42kvh)
+- 증상: 이O옥(STU-0003) 화면 '이월된 수업'(11/9·11/16 취소분) 기한 12/20 표시인데 날짜 찾기는 지난 수강권 종료일 11/17까지 → 날짜 0개(Olivia·Benny 모두)
+- migration **20261122120000_lms_makeup_carry_in_until**: `lms_makeup_until(수강권)` = 이어지는 재등록을 종료일까지 결제(POL-RN-01)했으면 재등록 종료일. 보강 날짜 찾기 2·신청·확정·시간 확인·운영자 보강 옮기기 함수 6개의 종료일 검사만 교체
+- 시험 DB: 12/7 뒤 날짜 0→333, 12/20 신청·강사 확정 됨, 새 종료일 뒤는 막힘, 늦게 결제한 학생은 안 늘어남 (모두 되돌림)
+- 운영 DB(대표 '응'): 백업 **lms_backup.snapshots id 85**(함수 6개 이전 정의 `_functions_before`) → 적용 → 이O옥 11/9분 Olivia 433칸·Benny 484칸, 11/16분 Olivia 433칸, 모두 12/20까지. anon 실행 불가. 되돌리기 = snapshots 85 정의 실행 + `drop function lms_makeup_until(uuid)`
+- 11/23 Benny 수업 취소분은 기존 규칙대로 Benny 만(대표 11/22: 이전 강사로 풀지 않음, 새 규칙 없음)
+- lms-prod 에 migration 파일 기록은 다음 운영 배포 때 함께 (화면 코드 변경 없음)
 
 ## ✅ 11/18 로그인 화면 비밀번호 안내 강화 — 운영 반영 (lms-prod 841bdd36, 대표 '운영 반영해')
 - 한국어 첫 안내 '한 번도 비밀번호를 만든 적 없거나/기억나지 않으면👇'(영어 첫 안내도 👇), 👇 3번만 까딱 · 비밀번호 틀리면 빨간 '비밀번호를 만든 적 없으면 아래 [비밀번호 만들기·찾기] 버튼을 눌러 주세요'+보라 채운 버튼 흔들림(틀릴 때마다) · 동작 줄이기 설정이면 안 움직임

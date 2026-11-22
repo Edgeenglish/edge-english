@@ -58,8 +58,11 @@ export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)
   switch (u.kind) {
     case 'new_student':
       return [...every(ds(i.every), { last: d(i.last), classes: Number(i.classes) || null }), `First class: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} · ${i.minutes} min · ${i.classes} classes`];
-    case 'renewal':
-      return [...every(ds(i.every), { last: d(i.last) }), `Next period: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} – ${enDay(d(i.last) ?? u.at, z(d(i.last) ?? u.at))} · ${i.same ? 'same schedule' : 'new schedule'}`];
+    case 'renewal': {
+      // 기간 끝 = 수강권 종료일(period_end, 20261122150000). 옛 기록은 마지막 수업일
+      const end = i.period_end ? new Date(`${i.period_end}T12:00:00+09:00`) : d(i.last);
+      return [...every(ds(i.every), { last: d(i.last) }), `Next period: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} – ${enDay(end ?? u.at, z(end ?? u.at))} · ${i.same ? 'same schedule' : 'new schedule'}`];
+    }
     case 'schedule_change':
       return [...every(ds(i.every), { last: d(i.last) }), `From ${enDay(d(i.from) ?? u.at, z(d(i.from) ?? u.at))}`];
     case 'class_moved': {

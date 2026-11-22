@@ -167,6 +167,8 @@ export type EnrollmentShort = {
   lessonsPurchased: number; lessonsCarriedIn: number; amountDue: number; payments: { on: KstDate | null; method: string; amount: number; confirmed: boolean }[];
 };
 export type StudentDetailData = {
+  /** 시간 협의 필요 회차 (기존 일정 기준, 수업 아님 — migration 20261122130000) */
+  pendingTimes?: { seq: number; startsAt: Date }[];
   student: StudentProfile; enrollment: EnrollmentInfo | null; slots: SlotFull[]; nextSlots: (Slot & { from: KstDate })[]; upcoming: Upcoming[]; recentTopics: RecentTopic[]; holidays: KstDate[];
   enrollments: EnrollmentShort[]; changes: RegularChangeRec[]; edits: ProfileEdit[]; recent: RecentLesson[]; loginEmail: string | null;
   /** 강사 이름 → 그 시각의 강사 시간대 (해외 이동 기간이 있는 강사만, H26(176)) */
