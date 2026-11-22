@@ -2,6 +2,7 @@
 
 // 강사용 Student profile (영어, H26(44) ③·④·⑥): Profile / About & preferences / Class / Enrollment 네 칸.
 // 정규 담당 강사 = 레벨·자기소개·선호 수정, 대체강사 = 열람만(이메일 없음). 권한은 DB 함수가 확인. 닫으면 보던 주로 그대로
+import { enLabel } from '@/lms/student-name';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { enZone } from '@/lms/admin/students';
 import { bold, enBoth } from '@/lms/admin/time-text';
@@ -89,7 +90,7 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
     return (
       <>
         <header className="mb-3">
-          <h2 className="pr-10 text-[20px] font-bold text-[#1d1b2b]">{s.nameEn}{s.displayName && s.displayName.toLowerCase() !== s.nameEn.toLowerCase() ? <span className="text-[#5b3fe0]"> “{s.displayName}”</span> : null}</h2>
+          <h2 className="pr-10 text-[20px] font-bold text-[#1d1b2b]">{enLabel(s.nameEn, s.displayName)}</h2>
           <p className="text-[13.5px] text-[#6b6880]">
             {regular ? t('Your regular student', '담당 수강생') : t('Cover class — view only', '대체 수업 — 열람만')}{p.slots.length ? ` · ${kst.text.split(' ').slice(0, 1)[0]}` : ''}{e ? ` · ${e.durationMin} min` : ''}
             {!regular && ` · ${t('Email and payment details are not shared with cover tutors.', '이메일·결제 정보는 대체강사에게 보이지 않아요.')}`}

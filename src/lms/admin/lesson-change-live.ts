@@ -20,9 +20,9 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 }
 
 export async function loadChangeStudents(sb: SupabaseClient): Promise<ChStudent[]> {
-  const rows = check(await sb.from('students').select('id, code, name_ko, name_en, timezone').order('name_ko')) as
-    { id: string; code: string; name_ko: string; name_en: string; timezone: string }[];
-  return rows.map((s) => ({ id: s.id, code: s.code, nameKo: s.name_ko, nameEn: s.name_en, timezone: s.timezone }));
+  const rows = check(await sb.from('students').select('id, code, name_ko, name_en, display_name, timezone').order('name_ko')) as
+    { id: string; code: string; name_ko: string; name_en: string; display_name: string | null; timezone: string }[];
+  return rows.map((s) => ({ id: s.id, code: s.code, nameKo: s.name_ko, nameEn: s.name_en, displayName: s.display_name, timezone: s.timezone }));
 }
 
 export type StudentLessonData = {
