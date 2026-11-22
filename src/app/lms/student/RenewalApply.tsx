@@ -198,7 +198,7 @@ export default function RenewalApply(props: {
                 const on = weeks === p.weeks;
                 return (
                   <button key={p.weeks} type="button" role="radio" aria-checked={on} onClick={() => setWeeks(p.weeks)}
-                    className={`grid gap-0.5 rounded-[12px] border-[1.5px] px-3.5 py-3 text-left text-[14px] ${on ? 'border-[#5b3df0] bg-[#efebff] text-[#1d1b2b]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
+                    className={`grid gap-0.5 rounded-[12px] border-[1.5px] px-3.5 py-3 text-left text-[14px] ${on ? 'border-[#5b3df0] bg-[#f7f5fd] text-[#1d1b2b] shadow-[inset_0_0_0_1px_#5b3df0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
                     <span className={`text-[15px] font-extrabold ${p.best ? 'text-[#5b3df0]' : ''}`}>{p.title}{p.sub ? ` | ${p.sub}` : ''}{on ? ' ✓' : ''}</span>
                     <span className="font-bold">
                       {won(p.price)}{p.perMonth && <small className={`ml-1 text-[12.5px] font-semibold text-[#55526a]`}>(월 {p.weeks === 24 ? '약 ' : ''}{won(p.perMonth)})</small>}
