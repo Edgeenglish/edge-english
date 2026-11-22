@@ -94,6 +94,8 @@ export type StudentView = {
   leave: LeaveRow[];
   /** 휴무 처리 중인데 수업 줄이 아직 없는 수업 → 일정에 '일정 조율 중' (3700) */
   leavePending?: { id: string; startsAt: Date; endsAt: Date }[];
+  /** 시간 협의 필요 회차 (기존 일정 기준, 수업 아님 — migration 20261122130000). 함수 없는 옛 DB 면 [] */
+  pendingTimes?: { seq: number; startsAt: Date; minutes: number }[];
   holidays: KstDate[];
   points: PointsEvent[];
   /** 지금 변경권 기간과 쓴·돌려받은 기록 */
@@ -276,15 +278,17 @@ export function withSuggestions(v: StudentView, rows: SuggestionRow[]): StudentV
 
 /** studentId: 운영자가 고른 수강생 (수강생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
-  const [screen, book, sug, history, late, tutorLate, credits] = await Promise.all([
+  const [screen, book, sug, history, late, tutorLate, credits, pending] = await Promise.all([
     sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId), sb.rpc('student_makeup_suggestions', { p_student: studentId }),
     sb.rpc('student_processing_history', { p_student: studentId }), sb.rpc('student_late_notices', { p_student: studentId }),
-    sb.rpc('student_tutor_late_notices', { p_student: studentId }), sb.rpc('student_credit_history', { p_student: studentId })]);
+    sb.rpc('student_tutor_late_notices', { p_student: studentId }), sb.rpc('student_credit_history', { p_student: studentId }),
+    sb.rpc('student_pending_times', { p_student: studentId })]);
   const v = parseStudentView(check(screen));
   // 강사가 제안한 시간 (H26(134), 20261111160000). 함수 없는 옛 DB 면 예전 그대로
   return { ...(sug.error ? v : withSuggestions(v, (sug.data as SuggestionRow[]) ?? [])), textbook: book,
     processingHistory: history.error ? [] : processingEvents((history.data as ProcessingEvent[]) ?? []),
     processingHistoryError: !!history.error,
+    pendingTimes: pending.error ? [] : ((pending.data ?? []) as { seq: number; starts_at: string; minutes: number }[]).map((x) => ({ seq: x.seq, startsAt: new Date(x.starts_at), minutes: x.minutes })),
     creditHistory: credits.error ? undefined : parseCreditHistory(credits.data),
     lateNotices: late.error ? [] : ((late.data ?? []) as { lesson_id: string; minutes: number; reason: LateReason | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })),
     tutorLateNotices: tutorLate.error ? [] : ((tutorLate.data ?? []) as { lesson_id: string; minutes: number; reason: string | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })) };

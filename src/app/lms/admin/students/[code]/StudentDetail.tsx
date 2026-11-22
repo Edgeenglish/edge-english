@@ -286,6 +286,15 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
               </div>
             ))}
             {data.upcoming.length > 8 && <p className="pt-1 text-[12.5px] text-[#6b6880]">… {data.upcoming.length - 8}회 더 · 수업 변경은 <Link href={`/lms/admin/change?student=${s.code}`} className="font-semibold text-[#5b3fe0] underline">수업 변경·보강</Link>에서</p>}
+            {/* 시간 협의 필요 회차 (20261122100000): 수업 아님 — 기존 일정 기준 */}
+            {(data.pendingTimes?.length ?? 0) > 0 && (
+              <div className="mt-2 rounded-[10px] bg-[#fdecea] px-3 py-2 text-[13px]">
+                <p className="font-bold text-[#b3261e]">⚠️ 시간 협의 필요 {data.pendingTimes!.length}회 <span className="font-normal">(기존 일정 기준)</span></p>
+                {data.pendingTimes!.map((p) => (
+                  <p key={p.seq} className="text-[#1d1b2b]">정규 {p.seq}회 · {kstWithZones(p.startsAt, [{ label: '수강생', tz: s.timezone }])}</p>
+                ))}
+              </div>
+            )}
           </Box>
 
           <Box title="지난 수업">
