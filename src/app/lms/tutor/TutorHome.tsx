@@ -568,7 +568,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                   const rows = screen.pendingTimes!.filter((p) => p.studentId === id);
                   return (
                     <div key={id} className="border-t border-[#f0eef5] py-2 first:border-t-0">
-                      <p className="text-[14.5px] font-semibold text-[#1d1b2b]">{rows[0].student} · {rows.length} {t('classes', '회')} <span className="font-normal text-[#6b6880]">({t('original schedule', '기존 일정 기준')})</span></p>
+                      <p className="text-[14.5px] font-semibold text-[#1d1b2b]">{rows[0].student} · {rows.length}{t(' classes', '회')} <span className="font-normal text-[#6b6880]">({t('original schedule', '기존 일정 기준')})</span></p>
                       <ul className="mt-1 grid gap-0.5 text-[13.5px] text-[#55526a]">
                         {rows.map((p) => <li key={p.seq}><Rich text={whenFull(p.startsAt, zAt(p.startsAt))} /></li>)}
                       </ul>
