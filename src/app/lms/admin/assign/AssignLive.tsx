@@ -3,7 +3,7 @@
 // 실제 데이터(시험용 Supabase)로 강사·시간 고르기. 권한은 DB가 확인 (is_admin = aal2)
 
 import { useEffect, useMemo, useState } from 'react';
-import { loadAssignInfo, loadMatchingCurrent, loadPlans, markMatchingNotified, planActions, proposeSchedule, type MatchingCurrent } from '@/lms/admin/confirm-live';
+import { loadAssignInfo, loadMatchingCurrent, loadPlans, markMatchingNotified, partialConfirm, partialPreview, planActions, proposeSchedule, type MatchingCurrent } from '@/lms/admin/confirm-live';
 import type { PlanView } from '@/lms/admin/confirm';
 import type { RegTutor } from '@/lms/admin/registration';
 import { loadRegTutors } from '@/lms/admin/registration-live';
@@ -57,5 +57,6 @@ export default function AssignLive({ enrollmentId }: { enrollmentId: string }) {
   if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;
   if (state.kind === 'error') return <p className="px-6 py-16 text-center text-[15px] text-[#b3261e]">{state.message}</p>;
   return <AssignSchedule nowIso={state.nowIso} demo={false} info={state.info} tutors={state.tutors} propose={(planId, p) => proposeSchedule(sb!, enrollmentId, planId, p)} planActions={actions}
-    initialView={state.plan} current={state.current} confirmCurrent={() => markMatchingNotified(sb!, enrollmentId)} />;
+    initialView={state.plan} current={state.current} confirmCurrent={() => markMatchingNotified(sb!, enrollmentId)}
+    partial={{ preview: (p) => partialPreview(sb!, enrollmentId, p), confirm: (planId, p) => partialConfirm(sb!, enrollmentId, planId, p) }} />;
 }

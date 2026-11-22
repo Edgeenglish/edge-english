@@ -354,14 +354,17 @@ export default function StudentHome(props: {
   const openRights = s.makeupRights.filter((m) => !m.requested);
   // 휴무 처리 중인 시트 휴가 수업(수업 줄 없음)도 남은 수업 — 보강 신청 목록에서만 빠짐 (3700, 대시보드와 같은 수)
   const makeupsOwed = s.makeupRights.length + (s.leavePending?.length ?? 0);
+  // 시간 협의 필요 회차도 남은 정규 수업 (수업 줄은 아직 없음, 기존 일정 기준)
+  const pendingCount = s.pendingTimes?.length ?? 0;
   const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
   // 남은 수업 = 지금 수강권만 (다음 수강권 수업은 '다음 수강권' 줄로, 대표 11/13)
-  const left = lessonsLeft(currentPassLessons(lessons, s.finalEndDate), now, makeupsOwed);
+  const left0 = lessonsLeft(currentPassLessons(lessons, s.finalEndDate), now, makeupsOwed);
+  const left = { ...left0, total: left0.total + pendingCount, regular: left0.regular + pendingCount };
   // 결제 확인 전·강사 배정 전(수업이 아직 없음)에는 '수업이 0회 남았어요' 재등록 안내를 띄우지 않음 (QA-05)
   const notStarted = !s.paid || (s.enrollmentStatus != null && s.enrollmentStatus !== 'active' && lessons.length === 0);
-  const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed, studentTz);
+  const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed + pendingCount, studentTz);
   const endDate = s.finalEndDate;
   // 바로가기 링크: 고를 수 있으면 날짜 고르기를 바로 열고, 아니면 수강생 홈 맨 위 한 줄로 이유 (신청 중·확정·기한 지남·열 수 없음)
   const [linkNote, setLinkNote] = useState<string | null>(null);
@@ -962,9 +965,17 @@ export default function StudentHome(props: {
                 </details>
               );
             })()}
-            {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p }))]
+            {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null, q: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p, q: null })),
+              ...(s.pendingTimes ?? []).map((q) => ({ at: q.startsAt, l: null, p: null, q }))]
               .sort((a, b) => a.at.getTime() - b.at.getTime())
-              .map(({ l, p }) => p ? (
+              .map(({ l, p, q }) => q ? (
+              // 시간 협의 필요 회차 (20261122100000): 수업 아님 — 입장·변경 버튼 없음, 날짜는 기존 일정 기준
+              <div key={`pending-${q.seq}`} className={`${card} p-4`}>
+                <p className="text-[15px] font-semibold">{whenText(q.startsAt)} <span className="text-[12.5px] font-normal text-[#6b6880]">(기존 일정 기준)</span></p>
+                <p className="text-[12.5px] text-[#6b6880]">{q.minutes}분</p>
+                <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 근무 시간 변경으로 시간 협의 중</p>
+              </div>
+            ) : p ? (
               // 휴무 처리 중인데 수업 줄이 아직 없는 수업 (3700, 대표 11/2: 휴무 안내에는 보이는데 일정에 없음)
               <div key={p.id} className={`${card} p-4`}>
                 <p className="text-[15px] font-semibold">{whenText(p.startsAt)}</p>

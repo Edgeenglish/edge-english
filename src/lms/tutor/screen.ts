@@ -90,6 +90,8 @@ export type TutorScreen = {
   toRecord: string[];
   makeups: TutorMakeup[];
   covers: TutorCover[];
+  /** 시간 협의 필요 회차 (기존 일정 기준, 수업 아님 — migration 20261122120000) */
+  pendingTimes?: { student: string; studentId: string; seq: number; startsAt: Date; minutes: number }[];
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB 함수가 돌려주는 JSON 을 화면 모양으로 바꾸는 곳 */

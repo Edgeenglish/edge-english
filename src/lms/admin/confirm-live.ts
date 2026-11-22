@@ -147,6 +147,21 @@ export async function proposeSchedule(
   return { planId: r.plan_id, state: r.state, tutorNoticeId: r.tutor_notice_id ?? null, studentNoticeId: r.student_notice_id ?? null };
 }
 
+/** 일정 일부만 먼저 확정 (migration 20261122100000): 회차별 판정 — ok 확정 · leave 강사 휴무(기존 휴무 절차) · travel 시간 협의 필요 · block 다른 겹침(확정 불가) */
+export type PartialRow = { seq: number; date: string; time: string; kind: 'ok' | 'leave' | 'travel' | 'block' };
+export async function partialPreview(sb: SupabaseClient, enrollmentId: string, p: { tutor_id: string; slots: RegularSlot[]; start_date: string }): Promise<PartialRow[]> {
+  const r = await call<{ seq: number; date: string; time: string; kind: PartialRow['kind'] }[]>(sb, 'admin_partial_preview', {
+    p_enrollment: enrollmentId, p_tutor: p.tutor_id, p_slots: p.slots.map((s) => ({ weekday: s.weekday, time: s.time })), p_start: p.start_date,
+  });
+  return (r ?? []).map((x) => ({ seq: x.seq, date: x.date, time: x.time, kind: x.kind }));
+}
+export async function partialConfirm(sb: SupabaseClient, enrollmentId: string, planId: string, p: { tutor_id: string; slots: RegularSlot[]; start_date: string }) {
+  const r = await call<{ plan_id: string; state: 'proposed' | 'confirmed'; tutor_notice_id?: string | null; student_notice_id?: string | null }>(sb, 'admin_confirm_partial_schedule', {
+    p_plan_id: planId, p_enrollment: enrollmentId, p: { ...p, slots: p.slots.map((s) => ({ weekday: s.weekday, time: s.time })) },
+  });
+  return { planId: r.plan_id, state: r.state, tutorNoticeId: r.tutor_notice_id ?? null, studentNoticeId: r.student_notice_id ?? null };
+}
+
 /** 기존 배정이 있는 신규 매칭 (R-10, 4520): 일정안 없이 강사·정규 수업이 이미 있는 등록의 지금 배정 */
 export type MatchingCurrent = {
   task: { id: string; status: 'open' | 'done' | 'canceled'; tutorAssignedAt: Date | null; studentNotifiedAt: Date | null } | null;
