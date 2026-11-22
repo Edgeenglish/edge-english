@@ -29297,6 +29297,21 @@ begin
   return jsonb_build_object('plan_id', pl.id, 'version', pl.version, 'state', 'confirmed', 'lessons', n) || lms_plan_notice_ids(pl.id);
 end $$;
 
+-- &gt;&gt;&gt; 20261122150000_lms_tutor_update_period_end.sql
+-- =====================================================================
+-- 강사 Home 알림 'Renewed' 줄 기간 끝 = 수강권 종료일 (2026-11-22 대표 '고쳐')
+--  지금: Next period 끝을 '만든 마지막 수업일'로 보여 줌 → 일부만 확정한 등록(오O수 STU-0010)은 1/4로 보임 (실제 2/14)
+--  고침: 확정 알림 info 에 period_end(= 최종 종료일) 를 넣고, 화면은 있으면 그걸 씀 (src/lms/tutor/updates.ts). 메일 문구는 그대로
+-- =====================================================================
+do $$
+declare
+  d text := pg_get_functiondef('lms_plan_confirmed_notice()'::regprocedure);
+  a text := '''minutes'', e.duration_min, ''classes'', e.lessons_purchased';
+begin
+  if (length(d) - length(replace(d, a, ''))) / length(a) &lt;&gt; 2 then raise exception '자리 못 찾음'; end if;
+  execute replace(d, a, a || ', ''period_end'', coalesce(e.final_end_date, e.base_end_date)');
+end $$;
+
 -- 이 DB의 프로젝트 이름 (복구 안전장치: 백업·복구가 이 이름을 확인)
 insert into lms_backup.project (name) values ('edgeenglish-lms');
 commit;</textarea>
