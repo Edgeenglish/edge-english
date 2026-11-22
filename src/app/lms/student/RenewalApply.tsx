@@ -43,13 +43,47 @@ function Row({ k, v }: { k: string; v: string }) {
     </div>
   );
 }
-function Steps({ n }: { n: 1 | 2 }) {
+// 단계 흐름 (대표 11/22): 수강 기간 고르기 —— 입금하기 —— 신청 완료. 지금 단계 보라, 지난 단계 연보라, 남은 단계 회색
+const STEP_NAMES = ['수강 기간 고르기', '입금하기', '신청 완료'] as const;
+function Steps({ n }: { n: 1 | 2 | 3 }) {
   return (
-    <div className="flex items-center gap-2 text-[13px] font-bold text-[#8b88a0]">
-      <span className={n === 1 ? 'text-[#5b3df0]' : ''}>1 기간 선택</span>
-      <span aria-hidden>›</span>
-      <span className={n === 2 ? 'text-[#5b3df0]' : ''}>2 입금 · 신청</span>
+    <ol aria-label="신청 단계" className="flex items-center gap-2 whitespace-nowrap text-[12.5px] font-bold text-[#a9a6bb]">
+      {STEP_NAMES.map((name, i) => (
+        <li key={name} className="contents">
+          <span aria-current={i + 1 === n ? 'step' : undefined} className={i + 1 === n ? 'text-[#5b3df0]' : i + 1 < n ? 'text-[#5b3df0]/60' : ''}>{name}</span>
+          {i < 2 && <span aria-hidden className={`h-[2px] min-w-[12px] flex-1 ${i + 1 < n ? 'bg-[#5b3df0]' : 'bg-[#e6e3ef]'}`} />}
+        </li>
+      ))}
+    </ol>
+  );
+}
+// 홈페이지 수업료 페이지와 같은 글 (src/components/LongTermPrice.tsx, 대표 11/22: 재등록 화면에도 반영)
+function AppealTop() {
+  return (
+    <div className="grid gap-0.5">
+      <p className="text-[16px] font-extrabold text-[#1d1b2b]">영어는 꾸준함이 답! 길게 할수록 더 저렴해요</p>
+      <p className="text-[12.5px] text-[#55526a]">* 1개월 = 4주(28일) 기준</p>
     </div>
+  );
+}
+function AppealBottom() {
+  return (
+    <>
+      <div className="grid gap-1">
+        <p className="text-[16px] font-extrabold text-[#1d1b2b]">영어, 결국 오래 하는 사람이 이겨요</p>
+        <p className="text-[12.5px] leading-relaxed text-[#55526a]">매달 결제할 때마다 고민되셨죠? 한 번 등록해두면 수업 시간이 생활 루틴으로 자리 잡아요. 고민 없이 수업만 듣다 보면, 영어는 어느새 쌓여 있을 거예요.</p>
+      </div>
+      <div className="grid gap-1.5 rounded-[14px] border-2 border-[#5b3df0] bg-white px-4 py-3 text-[13.5px]">
+        <span className="justify-self-start rounded-full bg-[#5b3df0] px-2.5 py-0.5 text-[11.5px] font-bold text-white">6개월 등록 시 추가 혜택</span>
+        <b>엣지영어 대표가 직접 만든 Ebook 패키지 무료!</b>
+        <ul className="grid gap-1">
+          <li><span className="font-bold text-[#5b3df0]">✓</span> 해외여행 실전 회화 ebook + 저자 직강 영상 <span className="text-[12px] text-[#55526a]">(판매가 26,900원 상당)</span></li>
+          <li><span className="font-bold text-[#5b3df0]">✓</span> 헷갈리는 문법 핵심 정리본 <span className="text-[12px] text-[#55526a]">(PDF)</span></li>
+          <li><span className="font-bold text-[#5b3df0]">✓</span> 스피킹에 무조건 도움 되는 영어 꿀팁 30개 <span className="text-[12px] text-[#55526a]">(PDF)</span></li>
+          <li><span className="font-bold text-[#5b3df0]">✓</span> <b>최대 2주 휴강</b> 가능</li>
+        </ul>
+      </div>
+    </>
   );
 }
 const btn = 'min-h-[48px] w-full rounded-[12px] bg-[#5b3df0] text-[16px] font-extrabold text-white disabled:bg-[#cfcbe0] disabled:text-[#6b6880]';
@@ -158,6 +192,7 @@ export default function RenewalApply(props: {
     return (
       <div className="grid gap-3.5">
         {title}
+        <Steps n={3} />
         <p className="text-[15px] font-extrabold text-[#1f7a4d]">✓ 재등록 신청 완료 · 입금 확인 중</p>
         <Box title="신청 내역">
           <Row k="수강 기간" v={info.plans.find((p) => p.weeks === req.weeks)?.title ?? `${req.weeks}주`} />
@@ -189,9 +224,12 @@ export default function RenewalApply(props: {
         {title}
         <Steps n={1} />
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] lg:items-start lg:gap-5">
-          {current}
-          <div className="grid gap-3">
+          <div className="grid gap-2">
+            {current}
             <p className="text-[14px] font-semibold text-[#1d1b2b]">{KEEP}</p>
+          </div>
+          <div className="grid gap-3">
+            <AppealTop />
             <div className="grid gap-2" role="radiogroup" aria-label="수강 기간">
               {info.plans.map((p) => {
                 const on = weeks === p.weeks;
@@ -207,6 +245,7 @@ export default function RenewalApply(props: {
                 );
               })}
             </div>
+            <AppealBottom />
             {usePoints && (
               <Box title="적립금">
                 <Row k="보유 적립금" v={won(info.pointsBalance)} />
@@ -229,7 +268,6 @@ export default function RenewalApply(props: {
                 )}
               </Box>
             )}
-            <Notice />
             <Err text={err && err.field !== 'points' ? err.text : null} />
             <button type="button" className={btn} disabled={!weeks || points === null || !!pointsErr || busy} onClick={next}>다음</button>
           </div>
@@ -294,7 +332,7 @@ export default function RenewalApply(props: {
     <div className="grid gap-3.5">
       {title}
       <Steps n={2} />
-      <button type="button" onClick={() => { setErr(null); setStep(1); }} className="justify-self-start text-[13px] font-bold text-[#5b3df0]">‹ 기간·적립금 바꾸기</button>
+      <button type="button" onClick={() => { setErr(null); setStep(1); }} className="justify-self-start text-[13px] font-bold text-[#5b3df0]">‹ 이전 단계</button>
       <div className="grid gap-3.5 lg:grid-cols-2 lg:items-start lg:gap-5">
         <div className="grid gap-3">{payBox}<Notice /></div>
         <div className="grid gap-3">
