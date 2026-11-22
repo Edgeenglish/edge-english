@@ -10,10 +10,9 @@ import {
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 const KEEP = '기존 수업 일정으로 이어서 등록됩니다.';
-const ASK = '수업 횟수나 일정 변경을 원하시면 입금 전에 ';
 const CARD_NOTE = '적립금은 계좌이체에만 적용돼요. 카드결제로 쓰시려면 ';
 
-function Ask({ text = ASK }: { text?: string }) {
+function Ask({ text }: { text: string }) {
   return (
     <p className="text-[12.5px] leading-relaxed text-[#55526a]">
       {text}<a href={KAKAO_CHANNEL} target="_blank" rel="noopener noreferrer" className="font-bold text-[#5b3df0]">문의</a>해 주세요.
@@ -169,7 +168,7 @@ export default function RenewalApply(props: {
           <Row k={bank ? '입금자명' : '결제자명'} v={req.payerName ?? ''} />
           {req.submittedAt && <Row k="신청일" v={props.dateText(req.submittedAt)} />}
         </Box>
-        <Ask text="바꿀 내용이 있으면 " />
+        <Ask text="수업 횟수나 일정 변경을 원하시면 엣지영어 카카오톡으로 " />
       </div>
     );
   }
@@ -233,7 +232,6 @@ export default function RenewalApply(props: {
             <Notice />
             <Err text={err && err.field !== 'points' ? err.text : null} />
             <button type="button" className={btn} disabled={!weeks || points === null || !!pointsErr || busy} onClick={next}>다음</button>
-            <Ask />
           </div>
         </div>
       </div>
@@ -302,7 +300,6 @@ export default function RenewalApply(props: {
         <div className="grid gap-3">
           {form}
           <button type="button" className={btn} disabled={!payer.trim() || busy} onClick={submit}>재등록 신청하기</button>
-          <Ask />
         </div>
       </div>
     </div>
