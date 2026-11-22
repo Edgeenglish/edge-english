@@ -199,11 +199,11 @@ export default function RenewalApply(props: {
                 return (
                   <button key={p.weeks} type="button" role="radio" aria-checked={on} onClick={() => setWeeks(p.weeks)}
                     className={`grid gap-0.5 rounded-[12px] border-[1.5px] px-3.5 py-3 text-left text-[14px] ${on ? 'border-[#5b3df0] bg-[#efebff] text-[#1d1b2b]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
-                    <span className="text-[15px] font-extrabold">{p.title}{p.sub ? ` | ${p.sub}` : ''}{on ? ' ✓' : ''}</span>
+                    <span className={`text-[15px] font-extrabold ${p.best ? 'text-[#5b3df0]' : ''}`}>{p.title}{p.sub ? ` | ${p.sub}` : ''}{on ? ' ✓' : ''}</span>
                     <span className="font-bold">
                       {won(p.price)}{p.perMonth && <small className={`ml-1 text-[12.5px] font-semibold text-[#55526a]`}>(월 {p.weeks === 24 ? '약 ' : ''}{won(p.perMonth)})</small>}
                     </span>
-                    {p.save && <span className="text-[13px] font-bold">{p.save}</span>}
+                    {p.save && <span className="text-[13px] font-bold text-[#5b3df0]">{p.save}</span>}
                   </button>
                 );
               })}
