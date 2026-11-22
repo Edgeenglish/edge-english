@@ -50,7 +50,7 @@ function Steps({ n }: { n: 1 | 2 | 3 }) {
     <ol aria-label="신청 단계" className="flex items-center gap-2 whitespace-nowrap text-[12.5px] font-bold text-[#a9a6bb]">
       {STEP_NAMES.map((name, i) => (
         <li key={name} className="contents">
-          <span aria-current={i + 1 === n ? 'step' : undefined} className={i + 1 === n ? 'text-[#5b3df0]' : i + 1 < n ? 'text-[#5b3df0]/60' : ''}>{name}</span>
+          <span aria-current={i + 1 === n ? 'step' : undefined} className={i + 1 === n ? 'text-[#5b3df0]' : i + 1 < n ? 'text-[#5b3df0]/60' : 'text-[#a9a6bb]'}>{name}</span>
           {i < 2 && <span aria-hidden className={`h-[2px] min-w-[12px] flex-1 ${i + 1 < n ? 'bg-[#5b3df0]' : 'bg-[#e6e3ef]'}`} />}
         </li>
       ))}
