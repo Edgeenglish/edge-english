@@ -560,24 +560,6 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
               <button type="button" onClick={() => setTab('schedule')} className="mt-2 min-h-[36px] text-[13.5px] font-semibold text-[#5b3fe0] underline">{t('All classes', '전체 수업')} ›</button>
             </section>
 
-            {/* 시간 협의 필요 회차 (20261122100000): 수업 아님 — 기존 일정 기준 날짜만 */}
-            {(screen.pendingTimes?.length ?? 0) > 0 && (
-              <section aria-label="New times needed" className={card}>
-                <h2 className="mb-2 text-[16px] font-bold text-[#b3261e]">⚠️ {t('New times needed', '새 시간 필요')}</h2>
-                {[...new Set(screen.pendingTimes!.map((p) => p.studentId))].map((id) => {
-                  const rows = screen.pendingTimes!.filter((p) => p.studentId === id);
-                  return (
-                    <div key={id} className="border-t border-[#f0eef5] py-2 first:border-t-0">
-                      <p className="text-[14.5px] font-semibold text-[#1d1b2b]">{rows[0].student} · {rows.length}{t(' classes', '회')} <span className="font-normal text-[#6b6880]">({t('original schedule', '기존 일정 기준')})</span></p>
-                      <ul className="mt-1 grid gap-0.5 text-[13.5px] text-[#55526a]">
-                        {rows.map((p) => <li key={p.seq}><Rich text={whenFull(p.startsAt, zAt(p.startsAt))} /></li>)}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </section>
-            )}
-
             {timeOff && actions.timeOff && (
               <TimeOffCard data={timeOff} onRequest={() => setPanel('timeoff')}
                 onWithdraw={async (id) => { await actions.timeOff!.withdraw(id); await refreshTimeOff(); }} />
