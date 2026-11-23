@@ -214,7 +214,12 @@ export function RegularChangeSheet(props: {
     <div className="grid gap-3.5">
       <h2 className="text-[18px] font-bold">정규 시간 변경</h2>
       <p className="flex justify-between gap-2 rounded-[10px] bg-[#f3f1f8] px-3 py-2.5 text-[14px]"><span>현재 정규 수업</span><b>{setText(refWeek, ok.slots, tz)}</b></p>
-      {!earliest && <p className="text-[14px] font-bold text-[#b3261e]">이번 수강기간에는 더 바꿀 수 없어요</p>}
+      {!earliest && (
+        <p className="text-[14px] font-bold text-[#b3261e]">
+          {/* 막힌 이유를 나눔 (대표 11/23): 이번 수강기간에 이미 바꿈 / 고를 수 있는 시간 없음 */}
+          {b.free.length > 0 && b.periods.some((p) => p.used && p.end >= b.today) ? '이번 수강기간에는 더 바꿀 수 없어요' : '지금 고를 수 있는 시간이 없어요'}
+        </p>
+      )}
       {earliest && (
         <>
           <label className="grid gap-1.5">
