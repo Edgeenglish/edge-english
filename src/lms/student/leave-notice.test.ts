@@ -23,8 +23,12 @@ describe('휴무 안내 문구 (대표 11/23)', () => {
     expect(isYearEndLeave(d('2026-10-28T15:00:00Z'), d('2026-10-31T15:00:00Z'), 'Asia/Seoul')).toBe(false);
     expect(isYearEndLeave(d('2026-10-28T15:00:00Z'), d('2026-10-31T15:00:01Z'), 'Asia/Seoul')).toBe(true);
   });
-  it('두 문구는 휴무 때문에 기존 수업이 어렵다는 설명을 모두 포함', () => {
-    for (const t of [LEAVE_SORRY_GENERAL, LEAVE_SORRY_YEAR_END]) expect(t).toContain('담당 강사님의 휴무로 해당 기간에는 기존 일정대로 수업을 진행하기 어렵습니다');
+  it('두 문구는 강사 휴무 때문에 기존 일정대로 수업이 어렵다는 설명과 사과를 모두 포함', () => {
+    for (const t of [LEAVE_SORRY_GENERAL, LEAVE_SORRY_YEAR_END]) {
+      expect(t).toContain('담당 강사님');
+      expect(t).toContain('기존 일정대로 수업을 진행하기 어렵습니다');
+      expect(t).toContain('불편을 드려 죄송합니다');
+    }
   });
   it('추천 상자: 강사 이름은 중복 없이 하나로', () => {
     const r = leaveRecommendLines(['Olivia', 'Olivia']);
