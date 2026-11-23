@@ -1,0 +1,566 @@
+<title>새 수업 시간 고르기 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 엣지영어 LMS 실제 화면 색·모양을 그대로 따름 (보라 주 버튼, 주황 To do 게시판, 연보라 Updates). 시안 조작 띠만 회색 */
+:root{
+  --ink:#1d1b2b; --sub:#55526a; --muted:#6b6880; --line:#e6e3ef; --soft:#f6f4fb;
+  --main:#5b3fe0; --main-soft:#efeaff; --main-ink:#3a22b0;
+  --todo:#f0a33a; --todo-bg:#fff4d6; --todo-ink:#5c3b00; --todo-line:#f3e6c4; --todo-num:#8a5300;
+  --upd:#c9c2f2; --upd-bg:#efecfd; --upd-ink:#3b2a9a;
+  --ok:#1f7a4d; --bad:#b3261e; --bad-bg:#fdecea;
+  --page:#f4f3f8; --card:#ffffff; --chrome:#2a2838; --chrome-ink:#f1f0f6;
+  --f:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{background:var(--page);color:var(--ink);font-family:var(--f);font-size:15px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 40px}
+button{font:inherit;cursor:pointer}
+button:disabled{cursor:default}
+:focus-visible{outline:3px solid #a99cf5;outline-offset:2px}
+b{font-weight:700}
+
+/* 시안 조작 띠 */
+.ctl{background:var(--chrome);color:var(--chrome-ink);border-radius:14px;padding:12px 14px;display:grid;gap:10px;max-width:1240px;margin:0 auto 14px}
+.ctl h1{font-size:15px;margin:0;font-weight:700}
+.ctl .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ctl .lab{font-size:12px;color:#b9b6c9;min-width:64px}
+.seg{display:inline-flex;background:#3a3850;border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;color:#d9d7e6;padding:7px 12px;border-radius:8px;font-size:13.5px;font-weight:600}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink)}
+.pill{border:1px solid #57546d;background:transparent;color:#e7e5f1;border-radius:999px;padding:6px 11px;font-size:12.5px;font-weight:600}
+.pill[aria-pressed=true]{background:#e7e2ff;color:#2a1d86;border-color:#e7e2ff}
+.pill:disabled{opacity:.35}
+.ctl details{font-size:12.5px;color:#d2d0df}
+.ctl summary{cursor:pointer;font-weight:600}
+.ctl ol{margin:6px 0 0;padding-left:20px;display:grid;gap:3px;line-height:1.5}
+.toast{background:#e8f6ee;color:#14532d;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600}
+
+/* 화면 틀 */
+.stage{max-width:1240px;margin:0 auto;overflow-x:auto}
+.frame{position:relative;background:#fff;border:1px solid #dcd9e6;border-radius:18px;overflow:hidden;margin:0 auto}
+.frame.pc{width:1180px;min-height:760px}
+.frame.mo{width:390px;height:800px;border-radius:34px;border:8px solid #1e1c2a}
+.frame.mo .scroll{height:100%;overflow-y:auto;padding-bottom:84px}
+.app{display:flex;gap:24px;padding:24px}
+.side{width:220px;flex-shrink:0;display:flex;flex-direction:column;gap:4px}
+.brand{font-weight:800;font-size:19px;color:var(--main);letter-spacing:-.2px;padding:4px 12px 16px}
+.mo .brand{padding:0;font-size:18px}
+.tab{display:flex;align-items:center;gap:10px;min-height:46px;border:0;background:transparent;border-radius:12px;padding:0 12px;text-align:left;font-size:15px;color:var(--ink)}
+.tab[aria-current=page]{background:var(--main-soft);font-weight:700;color:var(--main-ink)}
+.tab svg{width:20px;height:20px;flex-shrink:0}
+.who{padding:20px 12px 0;font-size:13px;color:var(--sub)}
+.main{flex:1;min-width:0}
+.mo .main{padding:0 16px}
+.mhead{display:flex;justify-content:space-between;align-items:center;padding:16px 16px 12px}
+.mhead span{font-size:13px;color:var(--sub)}
+.btab{position:absolute;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:#fff;padding:6px 4px 14px}
+.btab button{border:0;background:transparent;display:grid;justify-items:center;gap:2px;font-size:11.5px;color:var(--sub);min-height:50px}
+.btab button[aria-current=page]{color:var(--main-ink);font-weight:700}
+.btab svg{width:22px;height:22px}
+.stack{display:grid;gap:16px;max-width:720px}
+.mo .stack{gap:14px}
+h2.hi{font-size:22px;margin:0;font-weight:700}
+.date{font-size:14px;color:var(--muted);margin:2px 0 0}
+.btn{min-height:44px;border-radius:10px;padding:0 16px;font-size:15px;font-weight:600;border:0;background:var(--main);color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.sub{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn.done{background:#ecebf1;color:#7d7a90}
+.btn:disabled{opacity:.4}
+.btn.sm{min-height:36px;font-size:13.5px;padding:0 12px}
+.zone{display:inline-flex;align-items:center;gap:6px;width:fit-content;border-radius:999px;padding:6px 12px;font-size:13.5px;font-weight:700;background:var(--main-soft);color:var(--main-ink)}
+.zone svg{width:16px;height:16px}
+
+/* To do 게시판 — 실제 LMS 와 같은 모양 */
+.board{border:2px solid var(--todo);border-radius:18px;overflow:hidden;background:#fff}
+.board>h3{margin:0;display:flex;align-items:center;gap:8px;background:var(--todo-bg);color:var(--todo-ink);padding:10px 16px;font-size:16px;font-weight:700}
+.cnt{border-radius:999px;background:var(--todo);color:#fff;padding:2px 8px;font-size:13px}
+.board .list>*+*{border-top:1px solid var(--todo-line)}
+.none{padding:14px 16px;color:var(--ok);margin:0}
+.upd{border-color:var(--upd)}
+.upd>h3{background:var(--upd-bg);color:var(--upd-ink)}
+.upd .cnt{background:var(--main)}
+.todo-bar{display:flex;align-items:center;gap:12px;min-height:54px;padding:12px 16px;width:100%;border:0;background:#fff;text-align:left}
+.todo-bar .t{flex:1;font-weight:600}
+.todo-bar .n{font-size:13px;color:var(--todo-num)}
+.open{white-space:nowrap;border-radius:10px;background:var(--main);color:#fff;padding:6px 12px;font-size:13px;font-weight:700}
+
+.ti{padding:14px 16px;display:grid;gap:8px}
+.ti-top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.ti-title{font-weight:700;font-size:15.5px;flex:1 1 190px;min-width:0}
+.chip{border-radius:6px;padding:3px 7px;font-size:12.5px;font-weight:700;background:var(--upd-bg);color:var(--upd-ink);white-space:nowrap}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.ti p{margin:0;font-size:14px;line-height:1.5}
+.ti .nm{font-size:15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13.5px;margin:0}
+.kv dt{color:var(--sub)}
+.kv dd{margin:0}
+.prog{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--sub)}
+.bar{flex:0 0 120px;height:6px;border-radius:9px;background:#eceaf3;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--main)}
+.ti .acts{display:flex;flex-wrap:wrap;gap:8px}
+.note-en{font-size:13px;color:var(--sub);line-height:1.55;background:var(--soft);border-radius:10px;padding:10px 12px;margin:0}
+
+.card{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:#fff}
+.card h4{margin:0 0 4px;font-size:13px;color:var(--sub);font-weight:600}
+.card p{margin:0}
+
+/* 일정 */
+.sched{display:grid}
+.sched .r{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #eeecf4;padding:10px 4px;font-size:14px}
+.sched .r small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.sched .tag{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.sched .tag.on{color:var(--ok);font-weight:700}
+.sched .tag.bad{color:var(--bad);font-weight:700}
+.ph{color:var(--muted);font-size:14px;padding:20px 0}
+h2.pt{font-size:20px;margin:0 0 6px}
+
+/* 창 (PC = 가운데, 휴대폰 = 아래에서 올라옴) */
+.ov{position:absolute;inset:0;background:rgba(20,18,30,.42);display:flex;align-items:center;justify-content:center;z-index:5}
+.mo .ov{align-items:flex-end}
+.sheet{background:#fff;width:600px;max-height:92%;border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
+.mo .sheet{width:100%;border-radius:18px 18px 0 0;max-height:94%}
+.sh-h{display:flex;align-items:center;gap:8px;padding:14px 16px 6px}
+.sh-h strong{flex:1;font-size:17px}
+.x{border:0;background:transparent;width:36px;height:36px;font-size:18px;color:var(--sub)}
+.sh-sub{padding:0 16px 8px;font-size:13.5px;color:var(--sub)}
+.steps{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:0 16px 8px;font-size:12.5px;color:var(--muted)}
+.steps button{border:0;background:transparent;padding:4px 2px;font-size:12.5px;color:var(--muted)}
+.steps button[aria-current=step]{color:var(--main-ink);font-weight:800}
+.steps button.can{color:var(--ink);text-decoration:underline}
+.sh-body{padding:4px 16px 16px;overflow-y:auto;display:grid;gap:12px;align-content:start}
+.st-title{font-size:18px;font-weight:800;margin:0}
+.sh-f{display:flex;gap:8px;padding:12px 16px 16px;border-top:1px solid var(--line)}
+.sh-f .btn{flex:1}
+.days{display:grid;gap:8px}
+.day{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:start}
+.mo .day{grid-template-columns:44px 1fr}
+.day>span{font-size:13.5px;font-weight:700;padding-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.slot{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 11px;font-size:14px;font-weight:600;color:var(--ink);text-align:left;line-height:1.25;min-height:44px}
+.slot small{display:block;font-weight:500;font-size:11.5px;color:var(--muted)}
+.slot[aria-pressed=true]{background:var(--main);border-color:var(--main);color:#fff}
+.slot[aria-pressed=true] small{color:#e3ddff}
+.slot:disabled{opacity:.35}
+.pick-n{font-size:13.5px;color:var(--sub)}
+.rows{display:grid;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.rw{padding:10px 12px;display:grid;gap:6px;font-size:14px}
+.rw+.rw{border-top:1px solid #eeecf4}
+.rw .ln{display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+.rw .old{color:var(--muted);font-size:12.5px;text-decoration:line-through}
+.rw .nw{font-weight:700}
+.rw .no{color:var(--muted);font-weight:600}
+.rw .lock{color:var(--muted);font-size:12.5px;font-weight:700;white-space:nowrap}
+.rw .err{color:var(--bad);font-size:13px;font-weight:600}
+.rw.locked{background:#fafafc}
+.link{border:0;background:transparent;color:var(--main);font-weight:700;font-size:13.5px;padding:4px 0;white-space:nowrap;text-decoration:underline}
+.alts{display:flex;flex-wrap:wrap;gap:6px;padding-top:2px}
+.sum{display:grid;gap:4px;font-size:14px}
+.big-ok{font-size:18px;font-weight:800;color:var(--ok);margin:4px 0 0}
+.spin{width:22px;height:22px;border:3px solid #ddd6ff;border-top-color:var(--main);border-radius:50%;animation:sp 0.9s linear infinite;display:inline-block;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.red{color:var(--bad);font-weight:700}
+.prog .parts{display:flex;flex-wrap:wrap;gap:2px 10px}
+.sumline{margin:0;font-size:15px;font-weight:700}
+.grp{font-size:13.5px;font-weight:700;color:var(--sub);margin:4px 0 6px;cursor:pointer}
+.okt{color:var(--ok);font-size:13px;font-weight:700}
+.sumbox{background:var(--soft);border-radius:12px;padding:10px 12px;display:grid;gap:2px;font-size:14px}
+.sumbox p{margin:0}
+.checks{display:grid;gap:4px;font-size:13.5px;color:var(--sub);margin:0;padding-left:18px}
+</style>
+
+<div class="ctl" id="ctl"></div>
+<div class="stage"><div id="frame"></div></div>
+
+<script>
+/* ===== 시간 계산 (한국 UTC+9, Buenos Aires UTC-3 고정 — 아르헨티나는 서머타임 없음) ===== */
+const H=3600e3,K=9,BA=-3,MEL=11;
+const sh=(t,o)=>new Date(t.getTime()+o*H);
+const WE=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],WK=['일','월','화','수','목','금','토'],MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const kst=(y,m,d,h)=>new Date(Date.UTC(y,m-1,d,h-9));
+const dkey=(t,o)=>sh(t,o).toISOString().slice(0,10);
+const dowK=t=>sh(t,K).getUTCDay(), hK=t=>sh(t,K).getUTCHours();
+const enDay=(t,o)=>{const d=sh(t,o);return `${WE[d.getUTCDay()]}, ${d.getUTCDate()} ${MO[d.getUTCMonth()]}`};
+const enClock=(t,o)=>{const d=sh(t,o);let h=d.getUTCHours();const ap=h<12?'AM':'PM';h=h%12||12;return `${h}:${String(d.getUTCMinutes()).padStart(2,'0')} ${ap}`};
+const tTime=t=>{const same=dkey(t,BA)===dkey(t,K);return `${enDay(t,BA)} ${enClock(t,BA)} <b>Buenos Aires Time</b> / ${same?'':enDay(t,K)+' '}${enClock(t,K)} <b>KST</b>`};
+const koDay=t=>{const d=sh(t,K);return `${d.getUTCMonth()+1}/${d.getUTCDate()}(${WK[d.getUTCDay()]})`};
+const koClock=t=>{const d=sh(t,K);let h=d.getUTCHours();const ap=h<12?'오전':'오후';h=h%12||12;return `${ap} ${h}:${String(d.getUTCMinutes()).padStart(2,'0')}`};
+const koTime=t=>`${koDay(t)} ${koClock(t)}`;
+const dOnly=s=>new Date(s+'T12:00:00Z');
+const enDate=s=>enDay(dOnly(s),0), koDate=s=>{const d=dOnly(s);return `${d.getUTCMonth()+1}/${d.getUTCDate()}(${WK[d.getUTCDay()]})`};
+
+/* ===== 가상 데이터 (예시 값) ===== */
+const NOW=kst(2026,11,22,21);
+const TUTOR='Benny', CITY='Buenos Aires';
+const LOC_FROM='2026-12-01', LOC_TO='2027-01-08';           // 임시 근무 지역 기간 (강사 현지 날짜)
+// 강사가 Buenos Aires 에서 등록한 가능 시간 (한국 시간으로 적음): 월~금 오후 8·9시 = 현지 오전 8·9시 / 화~토 오전 6·7시 = 현지 전날 오후 6·7시
+const WEEKLY=[];[1,2,3,4,5].forEach(d=>[20,21].forEach(h=>WEEKLY.push({d,h})));[2,3,4,5,6].forEach(d=>[6,7].forEach(h=>WEEKLY.push({d,h})));
+const WEEKLY_BOOKED=new Set(['4-21','3-6']);                  // 다른 학생 정규 수업 (매주)
+const TIMEOFF=['2026-12-24','2026-12-25'];                    // 강사 휴무 (현지 날짜)
+const BOOKED_ONCE=[kst(2026,12,17,20),kst(2026,12,29,7)].map(t=>t.getTime()); // 다른 학생 보강
+const STU={
+  s1:{name:'김하준',orig:[{d:1,h:19},{d:4,h:19}],start:[2026,12,3],count:11,end:'2027-01-10'},
+  s2:{name:'박서연',orig:[{d:2,h:8},{d:5,h:8}],start:[2026,12,4],count:6,end:'2026-12-27'},
+  s3:{name:'이도윤',orig:[{d:3,h:19}],start:[2026,12,2],count:4,end:'2026-12-27'},
+};
+const sk=s=>`${s.d}-${s.h}`;
+const OPEN_WEEKLY=WEEKLY.filter(s=>!WEEKLY_BOOKED.has(sk(s)));
+const REASON={outside:['Outside the temporary location dates','근무 지역 변경 기간 밖이에요'],hours:['Not in the tutor’s hours','선생님 가능 시간이 아니에요'],off:['Tutor time off','선생님 휴무일이에요'],busy:['Another class at this time','다른 수업과 겹쳐요'],dup:['Already chosen for another class','다른 회차에 이미 골랐어요'],race:['Booked by another class just before confirming','확정 직전에 다른 수업이 이 시간을 잡았어요'],end:['After the course end date','수강 종료일 뒤예요'],noslot:['No open time in this week','이 주에 가능한 시간이 없어요']};
+
+function genRows(sid){
+  const s=STU[sid],out=[];const [y,m,d]=s.start;
+  for(let i=0;out.length<s.count&&i<90;i++){for(const o of s.orig){const t=kst(y,m,d+i,o.h);if(dowK(t)===o.d&&out.length<s.count)out.push(t)}}
+  return out.map((t,i)=>({id:sid+'-'+i,orig:t,state:'open',newT:null,reason:null}));
+}
+const mkItem=sid=>({sid,rows:genRows(sid),proposal:null,readjust:false,processing:false,freeze:false});
+
+/* ===== 상태 ===== */
+let S={view:'tutor',device:innerWidth<900?'mo':'pc',tab:{tutor:'home',student:'home'},stu:'s1',items:[],ov:null,race:false,toast:'',scene:'start'};
+const item=sid=>S.items.find(i=>i.sid===sid);
+
+function takenByOthers(t,sid){
+  const ms=t.getTime();
+  return S.items.some(it=>it.sid!==sid&&(it.rows.some(r=>(r.state==='confirmed'||r.state==='admin')&&r.newT&&r.newT.getTime()===ms)||(it.proposal&&Object.values(it.proposal).some(x=>x instanceof Date&&x.getTime()===ms))));
+}
+function problem(t,sid,used){
+  const k=`${dowK(t)}-${hK(t)}`,ba=dkey(t,BA);
+  if(ba<LOC_FROM||ba>LOC_TO)return 'outside';
+  if(!WEEKLY.some(s=>sk(s)===k)||WEEKLY_BOOKED.has(k))return 'hours';
+  if(dkey(t,K)>STU[sid].end)return 'end';
+  if(TIMEOFF.includes(ba))return 'off';
+  if(BOOKED_ONCE.includes(t.getTime())||takenByOthers(t,sid))return 'busy';
+  if(used&&used.has(t.getTime()))return 'dup';
+  return null;
+}
+function weekStart(t){const d=sh(t,K);const back=(d.getUTCDay()+6)%7;return kst(d.getUTCFullYear(),d.getUTCMonth()+1,d.getUTCDate()-back,0)}
+function occurrences(slots){const out=[];for(let i=-1;i<45;i++)for(const s of slots){const t=kst(2026,12,1+i,s.h);if(dowK(t)===s.d){const b=dkey(t,BA);if(b>=LOC_FROM&&b<=LOC_TO)out.push(t)}}return out.sort((a,b)=>a-b)}
+function lockedTimes(it){return it.rows.filter(r=>r.state!=='open'&&r.newT).map(r=>r.newT.getTime())}
+function autoAssign(it,slots){
+  const occ=occurrences(slots),used=new Set(lockedTimes(it)),res={};
+  for(const r of it.rows.filter(r=>r.state==='open')){const ws=weekStart(r.orig).getTime();const c=occ.find(t=>t.getTime()>=ws&&t.getTime()<ws+7*24*H&&!used.has(t.getTime()));res[r.id]=c||null;if(c)used.add(c.getTime())}
+  return res;
+}
+function usedExcept(it,assign,rid){const u=new Set(lockedTimes(it));for(const [k,v] of Object.entries(assign))if(k!==rid&&v instanceof Date)u.add(v.getTime());return u}
+function alternatives(it,assign,r){
+  const used=usedExcept(it,assign,r.id),ws=weekStart(r.orig),out=[];
+  for(let i=0;i<7;i++)for(const s of OPEN_WEEKLY){const t=new Date(ws.getTime()+i*24*H+s.h*H);if(dowK(t)!==s.d)continue;if(!problem(t,it.sid,used)&&t>NOW)out.push(t)}
+  return out.sort((a,b)=>a-b).slice(0,8);
+}
+function status(it){
+  const n=it.rows.length,c=it.rows.filter(r=>r.state==='confirmed').length,a=it.rows.filter(r=>r.state==='admin').length;
+  let k='open';
+  if(it.processing)k='processing';else if(c===n)k='done';else if(a)k='admin';else if(it.proposal)k='proposed';else if(it.readjust)k='readjust';else if(c)k='partial';
+  const open=it.rows.filter(r=>r.state==='open').length,p=it.proposal?Object.keys(it.proposal).length:0;
+  return {k,n,c,a,open,p,none:open-p};
+}
+const LABEL={
+  en:{open:'Not chosen yet',proposed:'Waiting for the student',processing:'Confirming…',readjust:'Student asked to adjust',partial:'Partly confirmed',admin:'Time conflict · Edge English is checking'},
+  ko:{open:'시간 선택 전',proposed:'선생님 신청 · 확인 필요',processing:'자동 확정 처리 중',readjust:'다시 조정 필요',partial:'일부 확정',admin:'시간 겹침 · 운영진 확인 중'}
+};
+
+/* 확정 직전 다시 검사 → 문제 없으면 자동 확정, 겹치면 그 회차만 운영진 확인 */
+function recheck(it,map){
+  let first=true;const used=new Set(lockedTimes(it));
+  const res={ok:0,admin:[]};
+  for(const r of it.rows.filter(r=>r.state==='open'&&map[r.id])){
+    const t=map[r.id];
+    if(t==='admin'){r.state='admin';r.reason='noslot';r.newT=null;res.admin.push(r);continue}let p=problem(t,it.sid,used);
+    if(!p&&S.race&&first)p='race';
+    first=false;
+    r.newT=t;used.add(t.getTime());
+    if(p){r.state='admin';r.reason=p;res.admin.push(r)}else{r.state='confirmed';res.ok++}
+  }
+  it.proposal=null;it.readjust=false;
+  return res;
+}
+function runConfirm(it,map,after){
+  it.processing=true;render();
+  setTimeout(()=>{it.processing=false;const res=recheck(it,map);after(res);afterChange();render()},1800);
+}
+function afterChange(){
+  const doneNow=S.items.filter(it=>status(it).k==='done'&&!it.gone);
+  doneNow.forEach(it=>{it.gone=true;S.toast=`${STU[it.sid].name} ${it.rows.length}회가 모두 확정되어 강사·학생 To do 에서 사라졌어요.`});
+}
+
+/* ===== 장면 (가상 데이터) ===== */
+function fillConfirmed(it,slots,n){
+  const map=autoAssign(it,slots);let k=0;
+  for(const r of it.rows){if(k>=n)break;const t=map[r.id];if(t&&!problem(t,it.sid,usedExcept(it,{},r.id))){r.state='confirmed';r.newT=t;k++}}
+}
+function cleanMap(it,slots){const map=autoAssign(it,slots);for(const r of it.rows.filter(r=>r.state==='open')){const t=map[r.id];if(!t||problem(t,it.sid,usedExcept(it,map,r.id))){const alt=alternatives(it,map,r);map[r.id]=alt[0]||null}}return map}
+const SL=(...a)=>a.map(x=>{const [d,h]=x.split('-').map(Number);return{d,h}});
+function scene(name){
+  S.scene=name;S.ov=null;S.toast='';S.race=false;S.stu='s1';
+  S.items=[mkItem('s1')];
+  const it=S.items[0];
+  if(name==='proposed'){it.proposal=cleanMap(it,SL('1-20','4-20'))}
+  if(name==='partial'){fillConfirmed(it,SL('1-20','4-20'),7)}
+  if(name==='admin'){fillConfirmed(it,SL('1-20','4-20'),5);const r=it.rows.find(r=>r.state==='open');r.state='admin';r.newT=kst(2026,12,21,21);r.reason='race'}
+  if(name==='processing'){it.processing=true;it.freeze=true}
+  if(name==='multi'){
+    S.items.push(mkItem('s2'),mkItem('s3'));
+    item('s2').proposal=cleanMap(item('s2'),SL('2-6','5-6'));
+    const c=item('s3');fillConfirmed(c,SL('3-20'),2);const r=c.rows.find(r=>r.state==='open');r.state='admin';r.newT=kst(2026,12,16,21);r.reason='race';
+  }
+  render();
+}
+
+/* ===== 화면 조각 ===== */
+const ICON={home:'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',sched:'M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z',rec:'M9 12l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z',stu:'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',hrs:'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',me:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',req:'M4 6h16M4 12h16M4 18h10'};
+const ic=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+const TT=[['home','Home',ICON.home],['record','Class Record',ICON.rec],['students','Students',ICON.stu],['hours','Availability',ICON.hrs],['schedule','Schedule',ICON.sched]];
+const ST=[['home','홈',ICON.home],['schedule','일정',ICON.sched],['requests','신청 내역',ICON.req],['me','내 정보',ICON.me]];
+
+function progress(s,en){
+  if(!s.c&&!s.a)return '';
+  const L=en?[['Confirmed',s.c],['Edge English checking',s.a],['Waiting for the student',s.p],['Not chosen',s.none]]:[['확정',s.c],['운영진 확인 필요',s.a],['학생 확인 대기',s.p],['미선택',s.none]];
+  return `<div class="prog"><span class="bar"><i style="width:${s.c/s.n*100}%"></i></span><span class="parts">${L.filter(([,v])=>v).map(([l,v])=>`<span${l.includes('운영진')||l.includes('Edge')?' class="red"':''}>${l} <b>${v}</b></span>`).join('')}</span></div>`;
+}
+function tutorItem(it){
+  const s=status(it),st=STU[it.sid],r0=it.rows[0].orig,r1=it.rows[it.rows.length-1].orig;
+  const left=s.n-s.c;
+  const prog=progress(s,true);
+  let btn;
+  if(s.k==='proposed')btn=`<button class="btn sm done" disabled>Waiting for the student</button>`;
+  else if(s.k==='processing')btn=`<button class="btn sm done" disabled><span class="spin" style="width:14px;height:14px;border-width:2px"></span> Confirming…</button>`;
+  else if(s.open===0)btn='';
+  else btn=`<button class="btn sm" onclick="openPick('tutor','${it.sid}')">Choose new class times</button>`;
+  return `<div class="ti">
+    <div class="ti-top"><span class="ti-title">New class times needed</span><span class="chip ${s.k==='admin'?'bad':''}">${LABEL.en[s.k]}</span></div>
+    <p class="nm"><b>${st.name}</b> · ${left===s.n?`${s.n} classes`:`${left} of ${s.n} classes left`}</p>
+    <dl class="kv"><dt>Reason</dt><dd>Temporary work location change (${CITY})</dd>
+    <dt>Location change</dt><dd>${enDate(LOC_FROM)} – ${enDate(LOC_TO)}</dd>
+    <dt>Classes to move</dt><dd>${enDay(r0,BA)} – ${enDay(r1,BA)}</dd></dl>
+    ${prog}${btn?`<div class="acts">${btn}</div>`:''}
+  </div>`;
+}
+function tutorHome(){
+  const live=S.items.filter(it=>status(it).k!=='done');
+  const n=live.length+1;
+  return `<div class="stack">
+    <header><h2 class="hi">Hi, ${TUTOR}</h2><p class="date">${enDay(NOW,MEL)} ${enClock(NOW,MEL)} <b>Melbourne Time</b> / ${enClock(NOW,K)} <b>KST</b></p>
+    <button class="btn" style="margin-top:12px" disabled>Classroom (Google Meet)</button></header>
+    <section class="board" aria-label="To do"><h3>To do <span class="cnt">${n}</span></h3>
+      <div class="list">${live.map(tutorItem).join('')}
+      <div class="todo-bar"><span class="t">Classes to record</span><span class="n">2</span><span class="open" style="opacity:.45">Open ›</span></div></div>
+    </section>
+    <section class="board upd" aria-label="Updates"><h3>Updates <span class="cnt">0</span></h3><p class="none">✓ No updates</p></section>
+  </div>`;
+}
+function studentItem(it){
+  const s=status(it),r0=it.rows[0].orig,r1=it.rows[it.rows.length-1].orig,left=s.n-s.c;
+  if(s.k==='proposed'){
+    const n=Object.keys(it.proposal).length;
+    return `<div class="ti"><div class="ti-top"><span class="ti-title">선생님이 신청한 수업 시간을 확인해 주세요</span><span class="chip">${LABEL.ko.proposed}</span></div>
+      <p>${TUTOR} 선생님 · ${n}회</p>
+      <div class="acts"><button class="btn sm" onclick="openReview('${it.sid}')">확인하기</button></div></div>`;
+  }
+  const prog=progress(s,false);
+  let btn='';
+  if(s.k==='processing')btn=`<button class="btn sm done" disabled><span class="spin" style="width:14px;height:14px;border-width:2px"></span> 자동 확정 처리 중</button>`;
+  else if(s.open>0)btn=`<button class="btn sm" onclick="openPick('student','${it.sid}')">새 수업 시간 선택하기</button>`;
+  return `<div class="ti"><div class="ti-top"><span class="ti-title">수업 시간 변경이 필요해요</span><span class="chip ${s.k==='admin'?'bad':''}">${LABEL.ko[s.k]}</span></div>
+    <p>${TUTOR} 선생님의 임시 근무 지역 변경으로 ${left}회 수업의 새 시간을 선택해 주세요.</p>
+    <dl class="kv"><dt>근무 지역 변경 기간</dt><dd>${koDate(LOC_FROM)} ~ ${koDate(LOC_TO)}</dd>
+    <dt>변경이 필요한 수업</dt><dd>${left===s.n?`${s.n}회`:`남은 ${left}회 (전체 ${s.n}회)`} · ${koDay(r0)} ~ ${koDay(r1)}</dd></dl>
+    ${prog}${btn?`<div class="acts">${btn}</div>`:''}</div>`;
+}
+const zoneBadge=`<p class="zone" role="note">${ic(ICON.hrs)}모든 날짜·시간은 한국 시간 기준</p>`;
+function nextClass(sid){
+  const st=STU[sid],[y,m,d]=st.start,pre=[];
+  for(let i=-21;i<0;i++)for(const o of st.orig){const t=kst(y,m,d+i,o.h);if(dowK(t)===o.d&&t>NOW)pre.push({t,tag:''})}
+  const it=item(sid);
+  const rows=it?it.rows.map(r=>r.state==='confirmed'?{t:r.newT,tag:'새 시간'}:{t:r.orig,tag:r.state==='admin'?'운영진 확인 중':'새 시간 선택 전'}):[];
+  const n=[...pre,...rows].filter(x=>x.t>NOW).sort((a,b)=>a.t-b.t)[0];
+  return n?`<b>${koTime(n.t)}</b> · ${TUTOR} 선생님${n.tag?` <span class="chip">${n.tag}</span>`:''}`:'예정된 수업이 없어요';
+}
+function studentHome(){
+  const it=item(S.stu);const live=it&&status(it).k!=='done';
+  const next=it?it.rows.find(r=>r.state==='confirmed')?.newT:null;
+  return `<div class="stack">
+    ${zoneBadge}
+    ${live?`<section class="board" aria-label="할 일"><h3>할 일</h3><div class="list">${studentItem(it)}</div></section>`:''}
+    <div class="card"><h4>다음 수업</h4><p>${nextClass(S.stu)}</p></div>
+    <div class="card"><h4>수업 변경·취소</h4><p style="font-size:14px;color:var(--sub)">변경권·보강 신청 (기존 화면 그대로)</p></div>
+  </div>`;
+}
+function scheduleView(who){
+  const its=who==='tutor'?S.items:S.items.filter(i=>i.sid===S.stu);
+  const rows=its.flatMap(it=>it.rows.map(r=>({it,r}))).sort((a,b)=>(a.r.newT||a.r.orig)-(b.r.newT||b.r.orig));
+  const en=who==='tutor';
+  const line=({it,r})=>{
+    const t=r.state==='confirmed'?r.newT:r.orig;
+    const when=en?tTime(t):koTime(t);
+    const prev=r.state==='confirmed'?`<small>${en?'Was ':'원래 '}${en?tTime(r.orig):koTime(r.orig)}</small>`:'';
+    const tag=r.state==='confirmed'?`<span class="tag on">${en?'New time':'새 시간'}</span>`:r.state==='admin'?`<span class="tag bad">${en?'Edge English is checking':'운영진 확인 중'}</span>`:`<span class="tag">${en?'New time needed':'새 시간 선택 전'}</span>`;
+    return `<div class="r"><div style="min-width:0">${en?`<b>${STU[it.sid].name}</b> · `:''}${when}${prev}</div>${tag}</div>`;
+  };
+  return `<div class="stack">${en?'':zoneBadge}<h2 class="pt">${en?'Schedule':'일정'}</h2><div class="sched">${rows.map(line).join('')}</div></div>`;
+}
+const placeholder=en=>`<p class="ph">${en?'Not part of this mock-up.':'이 시안에서는 홈·일정만 볼 수 있어요.'}</p>`;
+
+/* ===== 시간 고르기 창 ===== */
+function openPick(who,sid){const it=item(sid);S.ov={type:'pick',who,sid,step:1,weekly:[],assign:{},edit:null,result:null};render()}
+function openReview(sid){S.ov={type:'review',sid,result:null};render()}
+function closeOv(){if(S.ov&&S.ov.busy)return;S.ov=null;render()}
+function toggleSlot(k){const o=S.ov,need=STU[o.sid].orig.length;const i=o.weekly.indexOf(k);if(i>=0)o.weekly.splice(i,1);else if(o.weekly.length<need)o.weekly.push(k);render()}
+function goStep(n){const o=S.ov,it=item(o.sid);
+  if(n===2&&o.step===1){const a=autoAssign(it,SL(...o.weekly));for(const k in a)if(o.assign[k]==='later')a[k]='later';o.assign=a;o.edit=null;o.flag=it.rows.filter(r=>r.state==='open'&&rowProblem(it,o,r)).map(r=>r.id)}
+  o.step=n;render()}
+function setRow(rid,ms){const o=S.ov;o.assign[rid]=(ms==='later'||ms==='admin')?ms:new Date(ms);o.edit=null;render()}
+function editRow(rid){S.ov.edit=S.ov.edit===rid?null:rid;render()}
+function rowProblem(it,o,r){const v=o.assign[r.id];if(!(v instanceof Date))return (v==='later'||v==='admin')?null:'none';return problem(v,it.sid,usedExcept(it,o.assign,r.id))}
+function submitPick(){
+  const o=S.ov,it=item(o.sid);const map={};for(const r of it.rows.filter(r=>r.state==='open')){const v=o.assign[r.id];if(v instanceof Date||v==='admin')map[r.id]=v}
+  if(o.who==='tutor'){it.proposal=map;it.readjust=false;o.result={kind:'sent',n:Object.keys(map).length};render();return}
+  o.busy=true;o.step=4;
+  runConfirm(it,map,res=>{o.busy=false;o.result={kind:'done',...res,left:status(it).open}});
+}
+function agree(){const o=S.ov,it=item(o.sid);const map={...it.proposal};o.busy=true;o.step=4;runConfirm(it,map,res=>{o.busy=false;o.result={kind:'done',...res,left:status(it).open}})}
+function readjust(){const it=item(S.ov.sid);it.proposal=null;it.readjust=true;S.ov.result={kind:'readjust'};render()}
+
+function stepBar(o,en){
+  const names=en?['Weekly times','Check each date','Submit']:['매주 수업 시간','날짜별 확인','신청'];
+  return `<div class="steps">${names.map((n,i)=>{const s=i+1;const cur=o.step===s;const can=s<o.step&&o.step<4;return `${i?'<span>›</span>':''}<button ${cur?'aria-current="step"':''} class="${can?'can':''}" ${can?`onclick="goStep(${s})"`:'disabled'}>${s} ${n}</button>`}).join('')}</div>`;
+}
+function slotChip(s,o,en){
+  const k=sk(s),on=o.weekly.includes(k),need=STU[o.sid].orig.length;
+  const t=kst(2026,12,7+((s.d+6)%7),s.h); // 대표 주(12/7~)로 현지 요일 계산
+  const label=en?`${enClock(t,BA)}<small>${dkey(t,BA)===dkey(t,K)?'':WE[dowK(t)]+' '}${enClock(t,K)} KST</small>`:koClock(t);
+  return `<button class="slot" aria-pressed="${on}" ${!on&&o.weekly.length>=need?'disabled':''} onclick="toggleSlot('${k}')">${label}</button>`;
+}
+function weeklyGrid(o,en){
+  const groups={};
+  for(const s of OPEN_WEEKLY){const t=kst(2026,12,7+((s.d+6)%7),s.h);const d=en?sh(t,BA).getUTCDay():s.d;(groups[d]=groups[d]||[]).push({s,t})}
+  const order=[1,2,3,4,5,6,0].filter(d=>groups[d]);
+  return `<div class="days">${order.map(d=>`<div class="day"><span>${en?WE[d]:WK[d]}</span><div class="chips">${groups[d].sort((a,b)=>a.t-b.t).map(x=>slotChip(x.s,o,en)).join('')}</div></div>`).join('')}</div>`;
+}
+function pickSheet(){
+  const o=S.ov,it=item(o.sid),en=o.who==='tutor',st=STU[o.sid],need=st.orig.length;
+  const open=it.rows.filter(r=>r.state==='open');
+  const title=en?'Choose new class times':'새 수업 시간 선택하기';
+  const sub=en?`${st.name} · ${open.length} classes · ${CITY}`:`${TUTOR} 선생님 · ${open.length}회`;
+  let body='',foot='';
+  if(o.result){
+    const r=o.result;
+    if(r.kind==='sent')body=`<p class="big-ok">✓ Sent to ${st.name}</p><p style="margin:0">${r.n} classes. They are confirmed after ${st.name} agrees.</p>`;
+    else body=resultBody(r,en);
+    foot=`<button class="btn" onclick="closeOv()">${en?'Close':'닫기'}</button>`;
+  } else if(o.step===4){
+    body=processingBody(en);
+  } else if(o.step===1){
+    body=`${en?`<p class="note-en">The student can select and request new class times directly through their LMS.<br>If the student asks for your help during class, you can discuss the options together and submit the agreed schedule.<br>Any schedule you submit must be confirmed by the student before it can be finalized.</p>`:''}
+      <p class="st-title">${en?'Step 1 · Weekly times':'1단계 · 매주 수업 시간'}</p>
+      ${en?'':zoneBadge}
+      <p class="pick-n">${en?`Choose ${need} · ${o.weekly.length}/${need}`:`${need}개 고르기 · ${o.weekly.length}/${need}`}</p>
+      ${weeklyGrid(o,en)}`;
+    foot=`<button class="btn" ${o.weekly.length===need?'':'disabled'} onclick="goStep(2)">${en?'Next ›':'다음 ›'}</button>`;
+  } else if(o.step===2){
+    const bad=open.filter(r=>rowProblem(it,o,r)).length;
+    const flag=o.flag||[],top=open.filter(r=>flag.includes(r.id)),ok=open.filter(r=>!flag.includes(r.id)),locked=it.rows.filter(r=>r.state!=='open');
+    body=`<p class="st-title">${en?'Step 2 · Check each date':'2단계 · 날짜별 확인'}</p>${en?'':zoneBadge}
+      <p class="sumline">${en?`${ok.length} of ${open.length} set automatically ✓`:`${open.length}회 중 ${ok.length}회 자동 배정 ✓`}${bad?` · <span class="red">${en?`${bad} to adjust`:`${bad}회 조정 필요`}</span>`:''}</p>
+      ${top.length?`<p class="grp">${en?'Dates to adjust':'조정이 필요한 날짜'}</p><div class="rows">${top.map(r=>rowView(it,o,r,en)).join('')}</div>`:''}
+      ${ok.length?`<details ${o.showOk?'open':''} ontoggle="S.ov.showOk=this.open"><summary class="grp">${en?`Set automatically (${ok.length})`:`자동 배정된 회차 ${ok.length}회`}</summary><div class="rows">${ok.map(r=>rowView(it,o,r,en)).join('')}</div></details>`:''}
+      ${locked.length?`<details><summary class="grp">${en?`Already confirmed or being checked (${locked.length})`:`이미 확정·확인 중 ${locked.length}회`}</summary><div class="rows">${locked.map(r=>rowView(it,o,r,en)).join('')}</div></details>`:''}`;
+    foot=`<button class="btn sub" onclick="goStep(1)">‹ ${en?'Back':'이전'}</button><button class="btn" ${bad||!open.some(r=>o.assign[r.id] instanceof Date||o.assign[r.id]==='admin')?'disabled':''} onclick="goStep(3)">${en?'Next ›':'다음 ›'}</button>`;
+  } else {
+    const chosen=open.filter(r=>o.assign[r.id] instanceof Date),adm=open.filter(r=>o.assign[r.id]==='admin').length,later=open.length-chosen.length-adm;
+    body=`<p class="st-title">${en?'Step 3 · Submit':'3단계 · 신청'}</p>${en?'':zoneBadge}
+      <div class="rows">${chosen.map(r=>`<div class="rw"><span class="old">${en?tTime(r.orig):koTime(r.orig)}</span><span class="nw">${en?tTime(o.assign[r.id]):koTime(o.assign[r.id])}</span></div>`).join('')}</div>
+      ${adm?`<p style="margin:0;font-size:14px">${en?`${adm} classes: Edge English will arrange`:`${adm}회는 운영진이 시간을 정해요`}</p>`:''}${later?`<p style="margin:0;font-size:14px">${en?`${later} classes: choose later`:`${later}회는 나중에 고르기`}</p>`:''}`;
+    foot=`<button class="btn sub" onclick="goStep(2)">‹ ${en?'Back':'이전'}</button><button class="btn" onclick="submitPick()">${en?'Submit agreed class times':`${chosen.length+adm}회 신청하기`}</button>`;
+  }
+  return sheet(title,sub,(o.result||o.step===4)?'':stepBar(o,en),body,foot,en);
+}
+function rowView(it,o,r,en){
+  const f=t=>en?tTime(t):koTime(t);
+  if(r.state==='confirmed')return `<div class="rw locked"><div class="ln"><div><div class="old">${f(r.orig)}</div><div class="nw">${f(r.newT)}</div></div><span class="lock">✓ ${en?'Confirmed':'확정됨'}</span></div></div>`;
+  if(r.state==='admin')return `<div class="rw locked"><div class="ln"><div><div class="old">${f(r.orig)}</div><div class="nw">${r.newT?f(r.newT):(en?'Time to be set by Edge English':'운영진이 시간을 정해요')}</div></div><span class="lock">${en?'Edge English is checking':'운영진 확인 중'}</span></div></div>`;
+  const v=o.assign[r.id],p=rowProblem(it,o,r);
+  const al=alternatives(it,o.assign,r);
+  const main=v instanceof Date?`<div class="nw">${f(v)}</div>`:`<div class="no">${v==='later'?(en?'Choose later':'나중에 고르기'):v==='admin'?(en?'Edge English will arrange':'운영진에게 맡김'):(en?'Your weekly times don’t fit this week':'고른 요일·시간이 이 주에 없어요')}</div>`;
+  const err=p&&p!=='none'?`<div class="err">${REASON[p][en?0:1]} · ${en?'choose another time':'다른 시간을 골라 주세요'}</div>`:p==='none'?`<div class="err">${al.length?(en?'Choose a time':'시간을 골라 주세요'):(en?'Ask Edge English or choose later':'운영진에게 맡기거나 나중에 골라 주세요')}</div>`:(flagFixed(o,r)?`<div class="okt">✓ ${en?'Adjusted':'조정함'}</div>`:'');
+  const alts=o.edit===r.id?`<div class="alts">${al.map(t=>`<button class="slot" onclick="setRow('${r.id}',${t.getTime()})">${en?`${enDay(t,BA)} ${enClock(t,BA)}<small>${enClock(t,K)} KST</small>`:`${koDay(t)}<small style="font-size:13px;color:inherit;font-weight:600">${koClock(t)}</small>`}</button>`).join('')}${al.length?'':`<button class="slot" onclick="setRow('${r.id}','admin')">${en?'Ask Edge English':'운영진에게 맡기기'}</button>`}<button class="slot" onclick="setRow('${r.id}','later')">${en?'Choose later':'나중에 고르기'}</button></div>`:'';
+  return `<div class="rw"><div class="ln"><div style="min-width:0"><div class="old">${f(r.orig)}</div>${main}</div><button class="link" onclick="editRow('${r.id}')">${o.edit===r.id?(en?'Close':'닫기'):(en?'Change':'바꾸기')}</button></div>${err}${alts}</div>`;
+}
+function flagFixed(o,r){return (o.flag||[]).includes(r.id)}
+function processingBody(en){
+  return `<p style="margin:8px 0 0;font-weight:700"><span class="spin"></span> ${en?'Checking again before confirming…':'확정 전에 다시 확인하고 있어요'}</p>`;
+}
+function resultBody(r,en){
+  const parts=[];
+  if(r.ok)parts.push(`<p class="big-ok">✓ ${r.ok}회 확정됐어요</p>`);
+  if(r.admin.length)parts.push(`<p style="margin:0;color:var(--bad);font-weight:700">${r.admin.length}회는 운영진이 확인하고 있어요</p><div class="rows">${r.admin.map(x=>`<div class="rw"><span class="old">${koTime(x.orig)}</span><span class="nw">${x.newT?koTime(x.newT):'시간 미정'}</span><span class="err">${REASON[x.reason][1]}</span></div>`).join('')}</div>`);
+  if(r.left)parts.push(`<p style="margin:0">남은 ${r.left}회는 할 일에서 다시 고를 수 있어요.</p>`);
+  return parts.join('');
+}
+function reviewSheet(){
+  const o=S.ov,it=item(o.sid);let body,foot;
+  if(o.result){
+    body=o.result.kind==='readjust'?`<p class="big-ok" style="color:var(--ink)">다시 조정으로 바꿨어요</p><p style="margin:0">선생님께도 알려 드렸어요.</p>`:resultBody(o.result,false);
+    foot=o.result.kind==='readjust'?`<button class="btn sub" onclick="closeOv()">닫기</button><button class="btn" onclick="openPick('student','${o.sid}')">직접 시간 고르기</button>`:`<button class="btn" onclick="closeOv()">닫기</button>`;
+  } else if(o.step===4){body=processingBody(false);foot=''}
+  else{
+    const rows=it.rows.filter(r=>it.proposal[r.id]);
+    const adm=rows.filter(r=>it.proposal[r.id]==='admin').length;
+    body=`${zoneBadge}<div class="sumbox"><p><b>변경되는 수업 ${rows.length}회</b></p><p>기존 수업 ${koDay(rows[0].orig)} ~ ${koDay(rows[rows.length-1].orig)}</p><p>근무 지역 변경 기간 ${koDate(LOC_FROM)} ~ ${koDate(LOC_TO)}</p>${adm?`<p class="red">${adm}회는 운영진이 시간을 정해요</p>`:''}</div>
+      <div class="rows">${rows.map(r=>`<div class="rw"><span class="old">${koTime(r.orig)}</span><span class="nw">${it.proposal[r.id] instanceof Date?koTime(it.proposal[r.id]):'운영진이 시간을 정해요'}</span></div>`).join('')}</div>`;
+    foot=`<button class="btn sub" onclick="readjust()">다시 조정하기</button><button class="btn" onclick="agree()">이 일정에 동의하기</button>`;
+  }
+  return sheet('선생님이 신청한 수업 시간',`${TUTOR} 선생님`,'',body,foot,false);
+}
+function sheet(title,sub,steps,body,foot,en){
+  return `<div class="ov" onclick="if(event.target===this)closeOv()"><div class="sheet" role="dialog" aria-modal="true" aria-label="${title}">
+    <div class="sh-h"><strong>${title}</strong><button class="x" aria-label="${en?'Close':'닫기'}" onclick="closeOv()">✕</button></div>
+    <div class="sh-sub">${sub}</div>${steps}
+    <div class="sh-body">${body}</div>${foot?`<div class="sh-f">${foot}</div>`:''}</div></div>`;
+}
+
+/* ===== 그리기 ===== */
+function setV(k,v){S[k]=v;if(k==='view')S.ov=null;render()}
+function setTab(v){S.tab[S.view]=v;render()}
+function adminResolve(){
+  for(const it of S.items)for(const r of it.rows.filter(r=>r.state==='admin')){
+    const alt=alternatives(it,{},r)[0];if(!alt)continue;r.state='confirmed';r.newT=alt;r.reason=null;
+  }
+  afterChange();render();
+}
+function ctl(){
+  const has=S.items.some(it=>it.rows.some(r=>r.state==='admin'));
+  const sc=[['start','1 시간 선택 전'],['proposed','2 강사 신청 → 학생 확인 대기'],['processing','3 자동 확정 처리 중'],['partial','4 일부 회차만 확정'],['admin','5 시간 겹침 → 운영진 확인'],['multi','6 여러 학생 동시 발생']];
+  const multi=S.items.length>1;
+  return `<h1>새 수업 시간 고르기 · 클릭 시안 (가상 데이터, 실제 LMS·DB 와 연결 안 됨)</h1>
+  <div class="row"><span class="lab">화면</span><span class="seg"><button aria-pressed="${S.view==='tutor'}" onclick="setV('view','tutor')">강사 Home</button><button aria-pressed="${S.view==='student'}" onclick="setV('view','student')">학생 Home</button></span>
+  <span class="seg"><button aria-pressed="${S.device==='pc'}" onclick="setV('device','pc')">PC</button><button aria-pressed="${S.device==='mo'}" onclick="setV('device','mo')">휴대폰</button></span>
+  ${S.view==='student'&&multi?`<span class="seg">${S.items.map(it=>`<button aria-pressed="${S.stu===it.sid}" onclick="setV('stu','${it.sid}')">${STU[it.sid].name}</button>`).join('')}</span>`:''}</div>
+  <div class="row"><span class="lab">상황</span>${sc.map(([k,l])=>`<button class="pill" aria-pressed="${S.scene===k}" onclick="scene('${k}')">${l}</button>`).join('')}</div>
+  <div class="row"><span class="lab">가상 조작</span><button class="pill" aria-pressed="${S.race}" onclick="setV('race',${!S.race})">확정 직전 시간 겹침 만들기 ${S.race?'켬':'끔'}</button><button class="pill" ${has?'':'disabled'} onclick="adminResolve()">운영진 처리 완료 (가상 · 그 주에 빈 시간 있는 회차만)</button></div>
+  ${S.toast?`<div class="toast">✓ ${S.toast}</div>`:''}
+  <details><summary>체험 순서</summary><ol>
+  <li>강사 신청: 상황 1 → 강사 Home [Choose new class times] → 시간 2개 → Next → Submit → 학생 Home [확인하기] → [이 일정에 동의하기] → 자동 확정, 양쪽 To do 에서 사라짐</li>
+  <li>학생 직접: 상황 1 → 학생 Home [새 수업 시간 선택하기] → 월·목 오후 8:00 → 겹치는 날짜(12/17·12/24) [바꾸기] → 신청 → 자동 확정</li>
+  <li>거절: 상황 2 → 학생 Home [확인하기] → [다시 조정하기] → 양쪽 '다시 조정 필요'</li>
+  <li>일부만: 2단계에서 몇 회를 '나중에 고르기' 로 두고 신청 → '일부 확정', 확정 회차는 잠김</li>
+  <li>겹침: '확정 직전 시간 겹침 만들기 켬' 뒤 신청·동의 → 그 회차만 운영진 확인, [운영진 처리 완료] 로 마무리</li></ol></details>`;
+}
+function render(){
+  document.getElementById('ctl').innerHTML=ctl();
+  const en=S.view==='tutor',pc=S.device==='pc',tab=S.tab[S.view];
+  const tabs=en?TT:ST;
+  const main=tab==='home'?(en?tutorHome():studentHome()):tab==='schedule'?scheduleView(S.view):placeholder(en);
+  const ov=S.ov?(S.ov.type==='pick'?pickSheet():reviewSheet()):'';
+  const name=en?TUTOR:`${STU[S.stu].name} 님`;
+  let html;
+  if(pc){
+    html=`<div class="frame pc"><div class="app"><nav class="side" aria-label="Menu"><div class="brand">Edge English</div>
+      ${tabs.map(([k,l,d])=>`<button class="tab" ${tab===k?'aria-current="page"':''} onclick="setTab('${k}')">${ic(d)}${l}</button>`).join('')}
+      <div class="who"><b style="color:var(--ink)">${name}</b></div></nav><main class="main">${main}</main></div>${ov}</div>`;
+  } else {
+    const mt=en?TT.filter(t=>['home','record','hours','schedule'].includes(t[0])):ST;
+    html=`<div class="frame mo"><div class="scroll"><header class="mhead"><span class="brand">Edge English</span><span>${en?'Sign out':name}</span></header><main class="main">${main}</main></div>
+      <nav class="btab">${mt.map(([k,l,d])=>`<button ${tab===k?'aria-current="page"':''} onclick="setTab('${k}')">${ic(d)}${l}</button>`).join('')}</nav>${ov}</div>`;
+  }
+  const f=document.getElementById('frame');const sc=f.querySelector('.sh-body')?.scrollTop||0;
+  f.innerHTML=html;const nb=f.querySelector('.sh-body');if(nb)nb.scrollTop=sc;
+}
+scene('start');
+</script>
