@@ -727,7 +727,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
             <h2 className="mb-3 pr-10 text-[17px] font-bold text-[#1d1b2b]">{t('New class times needed', '새 수업 시간 필요')}</h2>
             <div className="grid gap-2">
               {ttlItems.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ {t('All done', '모두 완료')}</p>}
-              {ttlItems.map((it) => <TtlCard key={`${it.studentId}-${it.city}`} it={it} onPick={() => setTtlOpen(it)} />)}
+              {ttlItems.map((it) => <TtlCard key={`${it.studentId}-${it.city}`} it={it} onPick={() => { setPanel(null); setTtlOpen(it); }} />)}
             </div>
           </Sheet>
         )}
