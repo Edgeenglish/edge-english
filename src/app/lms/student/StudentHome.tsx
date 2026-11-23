@@ -9,8 +9,13 @@ import { asClassType, typeKo, typeKoLong } from '@/lms/class-type';
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import books from '@/data/books.json';
+import Link from 'next/link';
 import ProcessingHistory from './ProcessingHistory';
+import { creditEntry, type CreditItem, type CreditPeriodHistory } from '@/lms/student/credit-history';
+import { ChangeRequestRows, RegularChangeSheet, TutorChangeSheet } from './ChangeRequests';
+import type { ChangeRequests, StudentExtras } from '@/lms/student/live';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
+import { leaveButtonOk, leaveButtonWait, leaveRecommendLines, leaveSorryText } from '@/lms/student/leave-notice';
 import { koZoneCity, ZONE_ROWS, zoneName } from '@/lms/admin/places';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
 import { CONFIRMED } from '@/lms/rules/policy';
@@ -49,9 +54,12 @@ import {
   type StudentRequest,
 } from '@/lms/student/home';
 import { tutorLateBand } from '@/lms/tutor/late';
+import { makeupTutorText, type RightRef } from '@/lms/student/live';
+import { renewalStage, type RenewalInfo } from '@/lms/student/renewal-apply';
+import RenewalApply from './RenewalApply';
 
 type Tab = 'home' | 'schedule' | 'requests' | 'materials' | 'me';
-type Right = Pick<MakeupRight, 'lessonId' | 'itemId' | 'compId'>;
+type Right = RightRef;
 type Overlay =
   | null
   | { kind: 'request'; id: string }
@@ -65,7 +73,11 @@ type Overlay =
   | { kind: 'profile'; name: string }
   | { kind: 'makeup'; right: Right | null; canceled?: boolean }
   | { kind: 'credits' }
-  | { kind: 'rights' };
+  | { kind: 'rights' }
+  | { kind: 'regular' }
+  | { kind: 'tutor_change' }
+  | { kind: 'late'; lessonId: string }
+  | { kind: 'renew' };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -179,11 +191,6 @@ const endDay = (d: KstDate) => {
   const k = kst(new Date(`${d}T23:59:00+09:00`));
   return `${k.md}(${k.wd})`;
 };
-/** 재등록 마감 날짜만 '11월 17일' (11/11 대표 콤팩트 시안: 학생 화면엔 마감 시각을 쓰지 않음, 실제 마감 기준은 그대로) */
-const endDateKo = (d: KstDate) => {
-  const [m, day] = kst(new Date(`${d}T23:59:00+09:00`)).md.split('/');
-  return `${Number(m)}월 ${Number(day)}일`;
-};
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
 function Icon({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
@@ -269,6 +276,10 @@ function untilText(now: Date, at: Date): string {
 export default function StudentHome(props: {
   nowIso: string;
   initial: StudentView;
+  /** 미리 불러 둔 자료로 먼저 보여 준 뒤 새로 불러온 자료 (StudentLive) */
+  refreshed?: StudentView;
+  /** 홈 칸 자료를 미리 읽어 둔 것 — 처음부터 한 번에 그림 (StudentLive) */
+  preloaded?: StudentExtras;
   actions: StudentActions;
   /** 미리보기에만: 교재·결제 내역·동의 할 일 (실제 데이터 연결 전 항목) */
   extras?: PreviewExtras;
@@ -277,12 +288,17 @@ export default function StudentHome(props: {
   onLogout?: () => void;
   /** 톡 바로가기 ?makeup=수업(시트 보강·보상권)id → 그 '보강 날짜 고르기'를 바로 엶 (11/8 대표 시안) */
   openMakeup?: string;
+  /** 메일 바로가기 ?late=수업id → 그 수업 '늦게 참여해요' 창을 바로 엶 (대표 11/18) */
+  openLate?: string;
+  /** 재등록 메일 링크 /lms/student/renew → 재등록 신청 창을 바로 엶 (대표 11/21) */
+  openRenew?: boolean;
   /** 메일 바로가기 ?tab=me → '내 정보' 탭으로 바로 엶 (첫 학습 정보 등록 메일) */
   openTab?: string;
 }) {
   const { actions, extras, preview } = props;
   const now = useMemo(() => new Date(props.nowIso), [props.nowIso]);
   const [s, setView] = useState<StudentView>(props.initial);
+  useEffect(() => { if (props.refreshed) setView(props.refreshed); }, [props.refreshed]);
   const studentTz = s.timezone || props.initial.timezone || 'Asia/Seoul';
   // 운영자 보기에서만 한국 시간으로 바꿔 볼 수 있음 (H26(93)). 수강생 본인 화면은 항상 수강생 시간
   const isAdminView = !!props.adminBar;
@@ -317,7 +333,18 @@ export default function StudentHome(props: {
   }, [overlayOpen]);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [reminders, setReminders] = useState<Reminders | null>(null);
+  // 정규 시간 변경 신청·강사 변경 상담 (H26(208))
+  const [changeReqs, setChangeReqs] = useState<ChangeRequests>(props.preloaded?.changeReqs ?? { regular: [], tutor: [] });
+  const reloadChangeReqs = () => actions.changeRequests().then(setChangeReqs).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void reloadChangeReqs(); }, []);
+  const [reminders, setReminders] = useState<Reminders | null>(props.preloaded?.reminders ?? null);
+  // 화면 보기 설정(처리 내역 순서 등): 미리 읽은 값을 쓰고, 바꾸면 여기에도 기억 (탭을 다시 열어도 순서가 튀지 않게)
+  const [prefs, setPrefs] = useState(props.preloaded?.prefs);
+  const savePref = actions.savePref && ((key: Parameters<NonNullable<StudentActions['savePref']>>[0], value: string) => {
+    setPrefs((p) => (p ? { ...p, [key]: value } : p));
+    return actions.savePref!(key, value);
+  });
   /** 저장은 됐는데 화면을 다시 읽지 못함 (R-02) → 위에 안내 + [다시 읽기] */
   const [stale, setStale] = useState<string | null>(null);
   /** 여러 수업 취소가 중간에 멈춤 → 남은 수업만 다시 고른 상태로 창 유지 (R-02) */
@@ -328,14 +355,17 @@ export default function StudentHome(props: {
   const openRights = s.makeupRights.filter((m) => !m.requested);
   // 휴무 처리 중인 시트 휴가 수업(수업 줄 없음)도 남은 수업 — 보강 신청 목록에서만 빠짐 (3700, 대시보드와 같은 수)
   const makeupsOwed = s.makeupRights.length + (s.leavePending?.length ?? 0);
+  // 시간 협의 필요 회차도 남은 정규 수업 (수업 줄은 아직 없음, 기존 일정 기준)
+  const pendingCount = s.pendingTimes?.length ?? 0;
   const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
   // 남은 수업 = 지금 수강권만 (다음 수강권 수업은 '다음 수강권' 줄로, 대표 11/13)
-  const left = lessonsLeft(currentPassLessons(lessons, s.finalEndDate), now, makeupsOwed);
+  const left0 = lessonsLeft(currentPassLessons(lessons, s.finalEndDate), now, makeupsOwed);
+  const left = { ...left0, total: left0.total + pendingCount, regular: left0.regular + pendingCount };
   // 결제 확인 전·강사 배정 전(수업이 아직 없음)에는 '수업이 0회 남았어요' 재등록 안내를 띄우지 않음 (QA-05)
   const notStarted = !s.paid || (s.enrollmentStatus != null && s.enrollmentStatus !== 'active' && lessons.length === 0);
-  const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed, studentTz);
+  const prompt = notStarted ? null : renewalPrompt(lessons, renewal, now, makeupsOwed + pendingCount, studentTz);
   const endDate = s.finalEndDate;
   // 바로가기 링크: 고를 수 있으면 날짜 고르기를 바로 열고, 아니면 수강생 홈 맨 위 한 줄로 이유 (신청 중·확정·기한 지남·열 수 없음)
   const [linkNote, setLinkNote] = useState<string | null>(null);
@@ -363,6 +393,27 @@ export default function StudentHome(props: {
         : '이 수업은 지금 보강을 신청할 수 없어요. 카카오톡으로 문의해 주세요.');
     else setLinkNote('열 수 없는 링크예요. 카카오톡으로 문의해 주세요.');
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // 메일 [강사님께 늦는다고 알리기] (대표 11/18): 지금 알릴 수 있으면 창을 바로 열고, 아니면 맨 위 한 줄로 이유. 보내기 막기는 DB(student_late_notice)가 그대로 함
+  const [lateAuto, setLateAuto] = useState<string | null>(null);
+  useEffect(() => {
+    const id = props.openLate;
+    if (!id) return;
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('late');
+      window.history.replaceState(window.history.state, '', u.pathname + u.search);
+    } catch { /* 주소를 못 바꿔도 화면은 그대로 */ }
+    const l = s.lessons.find((x) => x.id === id);
+    const ended = l && now.getTime() >= l.startsAt.getTime() + l.minutes * 60_000;
+    if (!l) setLinkNote(LATE_LINK_NOTE.unknown);
+    else if (l.state === 'canceled') setLinkNote(LATE_LINK_NOTE.canceled);
+    else if (ended || l.state !== 'scheduled') setLinkNote(LATE_LINK_NOTE.ended);
+    else if ((s.lateNotices ?? []).some((n) => n.lessonId === id)) setLinkNote(LATE_LINK_NOTE.sent);
+    else if (l.leaveOpen || !lateNoticeOpen(l, now)) setLinkNote(LATE_LINK_NOTE.notYet);
+    else if (next?.id === id) setLateAuto(id);
+    // 앞 수업이 진행 중이라 '다음 수업'이 다른 수업이어도, 링크의 수업 창을 따로 엶 (Work QA 11/18)
+    else setOverlay({ kind: 'late', lessonId: id });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const points = pointsHistory(s.points);
   // 가상 화면은 extras(지난 Unit 포함), 실제 화면은 강사가 정한 교재 이름만 (QA C-04)
   const textbook: { title: string; lastUnit?: number | null } | null = extras?.textbook ?? (s.textbook ? { title: s.textbook, lastUnit: null } : null);
@@ -380,15 +431,16 @@ export default function StudentHome(props: {
   }, [actions]);
 
   // 시간대 자동 확인 (H26(119)): 기기 시간대가 프로필과 다르고, 그 기기 시간대에 [그대로]를 누른 적이 없으면 맨 위에서 물음. 운영자 보기에서는 안 물음
-  const [tzState, setTzState] = useState<TimezoneState | null>(null);
-  const [deviceTz, setDeviceTz] = useState<string | null>(null);
-  useEffect(() => {
-    actions.timezone().then(setTzState, () => setTzState(null));
+  const [tzState, setTzState] = useState<TimezoneState | null>(props.preloaded?.tz ?? null);
+  const [deviceTz] = useState<string | null>(() => {
     try {
       const d = Intl.DateTimeFormat().resolvedOptions().timeZone;
       // 'UTC'·'Etc/…' 는 기기 설정이 없는 경우라 묻지 않음
-      if (d && d.includes('/') && !d.startsWith('Etc/')) setDeviceTz(d);
-    } catch { /* 시간대를 못 읽는 브라우저 */ }
+      return d && d.includes('/') && !d.startsWith('Etc/') ? d : null;
+    } catch { return null; /* 시간대를 못 읽는 브라우저 */ }
+  });
+  useEffect(() => {
+    actions.timezone().then(setTzState, () => setTzState(null));
   }, [actions]);
   const askTz = !isAdminView && tzState && deviceTz && deviceTz !== studentTz && deviceTz !== tzState.kept ? deviceTz : null;
 
@@ -420,6 +472,7 @@ export default function StudentHome(props: {
   }
 
   function say(msg: string) {
+    if (!msg) return; // 화면 안에 결과가 이미 보이는 동작(정규 시간 변경·강사 변경 상담)은 알림 안 띄움
     setToast(`${msg}${preview ? ' (미리보기: 실제로 저장되지 않아요)' : ''}`);
   }
 
@@ -457,7 +510,7 @@ export default function StudentHome(props: {
   }
 
   // 수업 시간 (H26(95) ②): 매주 정규 요일·시각 — 수강생 거주지 시간으로 (운영자 보기에서 KST 전환 시 한국 시간)
-  const [slots, setSlots] = useState<RegularSlot[]>([]);
+  const [slots, setSlots] = useState<RegularSlot[]>(props.preloaded?.slots ?? []);
   useEffect(() => {
     let alive = true;
     actions.regularSlots().then((x) => { if (alive) setSlots(x); }, () => {});
@@ -465,8 +518,28 @@ export default function StudentHome(props: {
   }, [actions, s]);
   const slotText = regularSlotText(slots, now);
 
+  // 재등록 신청 (대표 11/21, migration 20261121100000): 신청 상태로 홈 카드를 바꾸고, 메일 링크면 창을 바로 엶
+  const [rInfo, setRInfo] = useState<RenewalInfo | null>(null);
+  useEffect(() => {
+    if (preview) return;
+    let alive = true;
+    actions.renewal.info().then((x) => { if (alive) setRInfo(x); }, () => {});
+    return () => { alive = false; };
+  }, [actions, s, preview]);
+  useEffect(() => {
+    if (preview || !rInfo) return;
+    const st = renewalStage(rInfo);
+    setRenewal(props.initial.renewalPaid || st === 'renewed' ? 'payment_confirmed' : st === 'submitted' ? 'requested' : 'not_requested');
+  }, [rInfo, preview, props.initial.renewalPaid]);
+  const renewOpened = useRef(false);
+  useEffect(() => {
+    if (!props.openRenew || renewOpened.current || !rInfo) return;
+    renewOpened.current = true;
+    setOverlay({ kind: 'renew' });
+  }, [props.openRenew, rInfo]);
+
   // 나의 학습 정보(강사 작성)·누적 학습 시간 (11/11 대표 시안, migration 20261111010000)
-  const [info, setInfo] = useState<MyInfo | null>(null);
+  const [info, setInfo] = useState<MyInfo | null>(props.preloaded?.info ?? null);
   useEffect(() => {
     let alive = true;
     actions.myInfo().then((x) => { if (alive) setInfo(x); }, () => {});
@@ -474,7 +547,7 @@ export default function StudentHome(props: {
   }, [actions, s]);
 
   // 공지 (최신 2건 + 전체보기, 학생이 열면 확인함 — 11/11 대표) · 수강권 / 결제 내역
-  const [notices, setNotices] = useState<StudentNotice[]>([]);
+  const [notices, setNotices] = useState<StudentNotice[]>(props.preloaded?.notices ?? []);
   // 강사 '늦어요' 알림 (QA 11/14): 다음 수업 2시간 전~끝날 때까지 열어 둔 홈도 새로고침 없이 노란 띠가 나오게 30초마다(+ 화면으로 돌아올 때) 다시 읽음
   const [liveTutorLate, setLiveTutorLate] = useState<{ lessonId: string; minutes: number; reason: string | null }[] | null>(null);
   const watchStart = next?.startsAt.getTime() ?? null;
@@ -492,7 +565,7 @@ export default function StudentHome(props: {
     document.addEventListener('visibilitychange', onShow);
     return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', onShow); };
   }, [actions, watchStart, watchEnd]);
-  const [history, setHistory] = useState<PaymentSummary[] | null>(null);
+  const [history, setHistory] = useState<PaymentSummary[] | null>(props.preloaded?.history ?? null);
   useEffect(() => {
     let alive = true;
     actions.notices().then((x) => { if (alive) setNotices(x); }, () => {});
@@ -507,7 +580,7 @@ export default function StudentHome(props: {
   }
 
   // [맞는 시간이 없어요] 보일 보강권 (H26(92) ⑤): 수업 번호 → 누른 시각. 화면을 다시 읽을 때마다 같이
-  const [noTime, setNoTime] = useState<Map<string, string | null>>(new Map());
+  const [noTime, setNoTime] = useState<Map<string, string | null>>(() => props.preloaded?.noTime ?? new Map());
   useEffect(() => {
     let alive = true;
     actions.noTimeRights().then((m) => { if (alive) setNoTime(m); }, () => {});
@@ -597,11 +670,13 @@ export default function StudentHome(props: {
       lesson={next}
       now={now}
       meetUrl={nextFull?.leaveOpen ? null : meetRoomUrl(nextFull?.meetUrl)}
+      noteUrl={info?.noteUrl ?? null}
       substitute={nextFull?.substitute ?? false}
       leaveOpen={!!nextFull?.leaveOpen}
       lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === next.id)}
       tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === next.id) ?? null}
       onLate={async (minutes, reason) => { await run(() => actions.lateNotice(next.id, minutes, reason), '강사님께 알렸어요.'); }}
+      lateAutoOpen={lateAuto === next.id}
     />
   );
 
@@ -609,30 +684,29 @@ export default function StudentHome(props: {
     <section aria-label="재등록 안내" className="grid gap-2.5 rounded-[18px] border border-[#f0d27a] bg-[#fff4d6] p-4 lg:flex lg:items-center lg:gap-4">
       <div className="lg:flex-1">
         <h2 className="text-[15px] font-bold text-[#5c3b00]">수업이 {prompt.left}회 남았어요</h2>
-        {prompt.mode === 'request' ? (
-          <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            {endDateKo(endDate)}까지 재등록 결제하면 남은 수업을 다음 등록으로 이월할 수 있어요.
-          </p>
-        ) : (
-          <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
-            <b>재등록 신청 완료 · 결제 확인 중</b>이에요. 결제는 운영자가 직접 확인하고, 확인되면 이 안내가 사라져요. 마감은 {endDateKo(endDate)}예요.
-          </p>
-        )}
+        {/* 대표 11/21: 이월 안내는 남은 수업이 있을 때만, 입금 확인 전에는 확정된 것처럼 쓰지 않음 */}
+        <p className="mt-1 text-[13px] leading-relaxed text-[#5c3b00]">
+          {prompt.mode === 'request'
+            ? prompt.left > 0
+              ? '지금 재등록하시면 남은 수업은 다음 수강 기간으로 이월되고, 기존 강사님과 수업 일정도 그대로 유지할 수 있어요.'
+              : '지금 재등록하시면 기존 강사님과 수업 일정도 그대로 유지할 수 있어요.'
+            : '재등록 신청 완료 · 입금 확인 중이에요.'}
+        </p>
       </div>
-      {/* 재등록 신청 저장은 아직 DB에 없음 → 미리보기에서만 버튼 */}
-      {preview && prompt.mode === 'request' && (
+      {(preview || (rInfo && rInfo.state !== 'none')) && (
         <button
           type="button"
           onClick={() => {
-            setRenewal('requested');
-            say('재등록을 신청했어요.');
+            if (!preview) return setOverlay({ kind: 'renew' });
+            if (prompt.mode === 'request') { setRenewal('requested'); say('재등록을 신청했어요.'); }
           }}
-          className="min-h-[46px] rounded-[12px] bg-[#1b1442] px-5 text-[15px] font-bold text-white"
+          className={prompt.mode === 'request'
+            ? 'min-h-[46px] rounded-[12px] bg-[#1b1442] px-5 text-[15px] font-bold text-white'
+            : 'min-h-[46px] rounded-[12px] border-[1.5px] border-[#5b3df0] bg-white px-5 text-[14px] font-bold text-[#5b3df0]'}
         >
-          재등록 신청
+          {prompt.mode === 'request' ? '재등록 신청하기' : '신청 내역 보기'}
         </button>
       )}
-      {prompt.mode === 'awaiting_payment' && <span className="justify-self-start rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-[#8a5300]">결제 확인 대기</span>}
     </section>
   );
 
@@ -679,12 +753,18 @@ export default function StudentHome(props: {
         </button>
         <div className="flex flex-1 flex-col gap-1.5 px-4 pb-3.5 pt-2.5">
           <p className="relative flex flex-wrap items-center gap-x-1 text-[12.5px] text-[#55526a]">
-            <span>남은 변경권 <b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.creditsLeft}개</b> / 총 {s.creditsPerPeriod}개</span>
+            {/* 누르면 변경권 내역 (대표 11/18) */}
+            <button type="button" onClick={() => setOverlay({ kind: 'credits' })}
+              className="-mx-1.5 inline-flex min-h-[36px] items-center gap-1 rounded-[8px] px-1.5 text-left hover:bg-[#f7f5fd] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5b3df0]">
+              <span>남은 변경권 <b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.creditsLeft}개</b> / 총 {s.creditsPerPeriod}개</span>
+              <span className="text-[12px] font-semibold text-[#5b3df0]">내역 ›</span>
+            </button>
             <HelpTip text="변경권은 28일마다 새로 제공돼요." />
           </p>
           <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
-            <b className="font-bold text-[#3d3a52]">6시간 전</b><span>변경권 1개 사용 · 보강 가능</span>
-            <b className="font-bold text-[#3d3a52]">6시간 이내</b><span>변경권 유지 · 보강 불가 (수업 1회 차감)</span>
+            {/* 대표 11/18 시안 확정 (https://claude.ai/artifact/5eFCzRLSaMq6tKBzSTGWNE) */}
+            <b className="font-bold text-[#3d3a52]">6시간 이상 남았을 때</b><span>변경권 1개 사용, 보강 가능</span>
+            <b className="font-bold text-[#3d3a52]">6시간 미만 남았을 때</b><span>변경권 사용 안 됨, 보강 불가<span className="whitespace-nowrap">(수업 1회 차감)</span></span>
           </p>
         </div>
       </div>
@@ -714,15 +794,17 @@ export default function StudentHome(props: {
     return { title: '엣지영어 보강 수업', start: l.startsAt, end: new Date(l.startsAt.getTime() + l.minutes * 60000), details: meetOf(l.id) };
   };
   // 할 일: 수강생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
+  const schedulePending = history?.some((p) => p.schedulePending) ?? false;
   const todoItems = (
     <>
+      {schedulePending && <TodoBar n={0} text="수업 요일·시간을 카카오톡으로 알려주세요" onClick={() => window.open('https://pf.kakao.com/_blxgib/friend', '_blank', 'noopener,noreferrer')} />}
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
       {openRights.length > 0 && <TodoBar n={openRights.length} text={openRights.some((m) => m.carryIn) ? '수업 날짜 고르기' : '보강 날짜 고르기'} onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {choosing.length > 0 && <TodoBar n={choosing.length} text="보강 시간 고르기" onClick={() => (choosing.length === 1 ? setOverlay({ kind: 'request', id: choosing[0].id }) : setTab('requests'))} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
     </>
   );
-  const todoCount = (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (choosing.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
+  const todoCount = (schedulePending ? 1 : 0) + (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (choosing.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
   // 할 일: 처리할 일이 있을 때만 (11/11 대표 최신 지시), 제목 옆 전체 숫자 없음
   const todoBars = todoCount > 0 && (
     <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
@@ -745,18 +827,11 @@ export default function StudentHome(props: {
   const myTutors = [...new Set(slots.map((x) => x.tutor))].join(' · ') || upcoming[0]?.tutorName || '';
   const enrollText = s.enrollmentStatus === 'active' || s.enrollmentStatus === 'confirmed' ? '수강 중' : s.enrollmentStatus === 'completed' ? '수강 종료' : s.enrollmentStatus === 'pending_payment' ? '결제 확인 중' : null;
 
-  const logo = (
-    <span className="inline-flex items-center gap-1.5">
-      <img src="/images/brand/edge-english-logo.svg" alt="엣지영어" className="h-[22px] w-auto" />
-      <span className="rounded-[6px] bg-[#27230e] px-[6px] py-[2px] text-[11px] font-extrabold text-[#ffd401]">수강생용</span>
-    </span>
-  );
-  const brand = props.adminBar ? <a href="/lms/admin" aria-label="운영자 화면으로" className="inline-flex">{logo}</a> : <button type="button" aria-label="새로고침" onClick={() => window.location.reload()} className="inline-flex">{logo}</button>;
+  // 로고·수강생용 표시는 없앰 — 위에 홈페이지 머리글(로고·[내 수업])이 있음 (H26(206) 보충, 11/17)
   return (
     <KstCtx.Provider value={{ admin: isAdminView, studentTz, on: adminKst, set: setAdminKst }}>
-    <div className="mx-auto min-h-dvh max-w-[1280px] font-sans text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-6">
+    <div className="mx-auto max-w-[1200px] text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-8">
       <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
-        <div className="px-3 pb-4 pt-1">{brand}</div>
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -770,19 +845,11 @@ export default function StudentHome(props: {
           </button>
         ))}
         <span className="px-3 pt-5 text-[13px] text-[#55526a]">{s.name} 님</span>
-        {props.onLogout && (
-          <button type="button" onClick={props.onLogout} className="mx-3 mt-1 min-h-[36px] text-left text-[13px] text-[#55526a] underline">
-            로그아웃
-          </button>
-        )}
+        {/* 로그아웃은 홈페이지 머리글 오른쪽 위 하나만 (11/17 대표) */}
       </nav>
 
-      <div className="min-w-0 flex-1 pb-24 lg:pb-0">
+      <div className="min-w-0 flex-1 pb-6 pt-3 lg:pb-0 lg:pt-0">
         {props.adminBar && <div className="grid px-4 pt-3 lg:px-0 lg:pt-0">{props.adminBar}</div>}
-        <header className="flex items-center justify-between px-5 pb-3 pt-[18px] lg:hidden">
-          {brand}
-          <span className="text-[13px] text-[#55526a]">{s.name} 님</span>
-        </header>
         <div className="grid gap-2 px-4 pb-3 lg:px-0 lg:pb-4 lg:pt-1">
           {askTz && (
             <section aria-label="시간대 확인" className="grid gap-2.5 rounded-[14px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-3">
@@ -802,7 +869,8 @@ export default function StudentHome(props: {
             </section>
           )}
           {/* 시간대 띠는 모든 학생·운영자 보기에서 같은 자리·같은 모양 (11/11 대표: 학생마다 화면이 달라 보이지 않게) */}
-          <ZoneBar change={tzState ? { value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) } : undefined} />
+          {/* '변경'은 시간대 기억값을 못 읽어도 항상 (배지 모양이 나중에 바뀌지 않게) — 바꾸기는 그대로 저장 함수가 처리 */}
+          <ZoneBar change={{ value: studentTz, options: tzOptions(studentTz, deviceTz), disabled: busy, onChange: (z) => saveTimezone({ set: z }) }} />
           {tab === 'home' && info && <LearnedBand minutes={info.learnedMin} />}
           {linkNote && (
             <p role="status" className="flex items-start justify-between gap-2 rounded-[12px] border border-[#d9d0ff] bg-[#f3f0ff] px-3.5 py-2.5 text-[14px] font-semibold leading-relaxed text-[#3a22b0]">
@@ -838,6 +906,22 @@ export default function StudentHome(props: {
             {nextCard}
             {summary}
             {quick}
+            {slots.length > 0 && !notStarted && (
+              <section aria-label="정규 시간·강사 변경" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button type="button" onClick={() => setOverlay({ kind: 'regular' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
+                  <span className="font-semibold">정규 시간 변경</span>
+                  {changeReqs.regular.some((r) => r.status === 'pending')
+                    ? <span className="text-[12.5px] font-semibold text-[#5b3df0]">변경 신청 확인 중 ›</span>
+                    : <span className="text-[#8b88a0]">›</span>}
+                </button>
+                <button type="button" onClick={() => setOverlay({ kind: 'tutor_change' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
+                  <span className="font-semibold">강사 변경 상담</span>
+                  {changeReqs.tutor.some((t) => t.status === 'open')
+                    ? <span className="text-[12.5px] font-semibold text-[#55526a]">요청함 ›</span>
+                    : <span className="text-[#8b88a0]">›</span>}
+                </button>
+              </section>
+            )}
             {leaveVisible && leaveAsk.length === 0 && (
               <button type="button" onClick={() => setOverlay({ kind: 'leave' })} className={`${card} flex min-h-[52px] items-center justify-between px-4 text-left text-[14px]`}>
                 <span className="font-semibold">담당 강사님 휴무 안내</span>
@@ -882,9 +966,17 @@ export default function StudentHome(props: {
                 </details>
               );
             })()}
-            {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p }))]
+            {[...upcoming.map((l) => ({ at: l.startsAt, l, p: null, q: null })), ...(s.leavePending ?? []).map((p) => ({ at: p.startsAt, l: null, p, q: null })),
+              ...(s.pendingTimes ?? []).map((q) => ({ at: q.startsAt, l: null, p: null, q }))]
               .sort((a, b) => a.at.getTime() - b.at.getTime())
-              .map(({ l, p }) => p ? (
+              .map(({ l, p, q }) => q ? (
+              // 시간 협의 필요 회차 (20261122100000): 수업 아님 — 입장·변경 버튼 없음, 날짜는 기존 일정 기준
+              <div key={`pending-${q.seq}`} className={`${card} p-4`}>
+                <p className="text-[15px] font-semibold">{whenText(q.startsAt)} <span className="text-[12.5px] font-normal text-[#6b6880]">(기존 일정 기준)</span></p>
+                <p className="text-[12.5px] text-[#6b6880]">{q.minutes}분</p>
+                <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 근무 시간 변경으로 시간 협의 중</p>
+              </div>
+            ) : p ? (
               // 휴무 처리 중인데 수업 줄이 아직 없는 수업 (3700, 대표 11/2: 휴무 안내에는 보이는데 일정에 없음)
               <div key={p.id} className={`${card} p-4`}>
                 <p className="text-[15px] font-semibold">{whenText(p.startsAt)}</p>
@@ -928,8 +1020,10 @@ export default function StudentHome(props: {
 
         {tab === 'requests' && (
           <TabPage title="처리 내역">
-            <ProcessingHistory events={s.processingHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
-              loadPrefs={actions.prefs} savePref={actions.savePref} />
+            <ChangeRequestRows data={changeReqs} tz={VIEW_TZ} onOpenRegular={() => setOverlay({ kind: 'regular' })} />
+            {/* 정규 시간 변경·강사 변경 상담 줄이 있으면 '아직 처리 내역이 없어요' 를 띄우지 않음 */}
+            {((s.processingHistory ?? []).length > 0 || s.processingHistoryError || (changeReqs.regular.length + changeReqs.tutor.length) === 0) && <ProcessingHistory events={s.processingHistory ?? []} credits={s.creditHistory ?? []} error={s.processingHistoryError} timezone={VIEW_TZ}
+              prefs={prefs} loadPrefs={actions.prefs} savePref={savePref} />}
           </TabPage>
         )}
 
@@ -957,9 +1051,9 @@ export default function StudentHome(props: {
                 </div>
               </section>
             )}
-            <a href="/books" className={`${card} flex min-h-[52px] items-center justify-between px-4 text-[15px] font-semibold`}>
+            <Link href="/books" className={`${card} flex min-h-[52px] items-center justify-between px-4 text-[15px] font-semibold`}>
               전체 교재 둘러보기 (홈페이지 교재 소개) <span className="text-[#8b88a0]">›</span>
-            </a>
+            </Link>
           </TabPage>
         )}
 
@@ -1062,11 +1156,6 @@ export default function StudentHome(props: {
                 </section>
               </div>
             </div>
-            {props.onLogout && (
-              <button type="button" onClick={props.onLogout} className="min-h-[44px] text-left text-[14px] text-[#55526a] underline">
-                로그아웃
-              </button>
-            )}
           </div>
         )}
       </div>
@@ -1087,7 +1176,26 @@ export default function StudentHome(props: {
       </nav>
 
       {overlay && (
-        <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup'}>
+        <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup' || overlay.kind === 'renew'}>
+          {overlay.kind === 'late' && (() => {
+            const l = s.lessons.find((x) => x.id === overlay.lessonId);
+            if (!l) return null;
+            return (
+              <NextLesson
+                lesson={l}
+                now={now}
+                meetUrl={l.leaveOpen ? null : meetRoomUrl(l.meetUrl)}
+                noteUrl={info?.noteUrl ?? null}
+                substitute={l.substitute}
+                leaveOpen={!!l.leaveOpen}
+                lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === l.id)}
+                tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === l.id) ?? null}
+                onLate={async (minutes, reason) => { await run(() => actions.lateNotice(l.id, minutes, reason), '강사님께 알렸어요.'); }}
+                lateAutoOpen
+                noLabel
+              />
+            );
+          })()}
           {overlay.kind === 'request' && s.requests.find((r) => r.id === overlay.id) && <RequestDetail r={s.requests.find((r) => r.id === overlay.id)!} busy={busy} calendar={calendarOf(s.requests.find((r) => r.id === overlay.id)!)}
             onWithdraw={async (id) => { await run(() => actions.withdrawMakeup(id), '신청을 취소했어요.'); }}
             onPick={pickSuggestion} onDecline={async (id) => { await run(() => actions.declineSuggestion(id), '운영진에게 다른 일정을 요청했어요.'); }} />}
@@ -1095,13 +1203,31 @@ export default function StudentHome(props: {
           {overlay.kind === 'notices' && <NoticeList notices={notices} onOpen={openNotice} />}
           {overlay.kind === 'notice' && notices.find((n) => n.id === overlay.id) && <NoticeDetail n={notices.find((n) => n.id === overlay.id)!} />}
           {overlay.kind === 'points' && <Points history={points} />}
-          {overlay.kind === 'credits' && <Credits s={s} />}
+          {overlay.kind === 'credits' && <Credits s={s} onAll={() => { setOverlay(null); setTab('requests'); }} />}
+          {overlay.kind === 'regular' && (
+            <RegularChangeSheet tz={VIEW_TZ} load={actions.regularOptions} busy={busy}
+              pending={changeReqs.regular.find((r) => r.status === 'pending') ?? null}
+              onSubmit={async (items, reason, start) => { const v = await run(() => actions.regularRequest(items, reason, start), ''); await reloadChangeReqs(); return !!v; }}
+              onWithdraw={async (id) => { const v = await run(() => actions.regularWithdraw(id), ''); await reloadChangeReqs(); return !!v; }} />
+          )}
+          {overlay.kind === 'renew' && rInfo && (
+            <RenewalApply info={rInfo} actions={actions.renewal} onChanged={setRInfo}
+              slotsText={slotText ? slotText.map((x) => x.short).join(', ') : null}
+              tutors={[...new Set(slots.map((x) => x.tutor))].join(' · ')}
+              dateText={(d) => { const k = kst(d); const [m, day] = k.md.split('/'); return `${m}월 ${day}일(${k.wd})`; }}
+              kstDayText={(d) => `${fmtDate(d as KstDate)}(${wdOf(d)})`} />
+          )}
+          {overlay.kind === 'tutor_change' && (
+            <TutorChangeSheet busy={busy} open={changeReqs.tutor.find((t) => t.status === 'open') ?? null}
+              onSubmit={async (reasons, note) => { const v = await run(() => actions.tutorChangeRequest(reasons, note), ''); await reloadChangeReqs(); return !!v; }} />
+          )}
           {overlay.kind === 'rights' && <div className="grid gap-3">
             <h2 className="text-[18px] font-bold">보강권 확인</h2>
             {openRights.length === 0 && <p className="text-[14px] text-[#6b6880]">신청 가능한 보강이 없어요.</p>}
             {openRights.map((m) => <button key={`${m.lessonId}${m.itemId}${m.compId}`} type="button" onClick={() => setOverlay({ kind: 'makeup', right: m })}
               className={`${card} min-h-[64px] p-4 text-left`}>
               <span className="block text-[14px] font-bold">{rightTitle(m)}</span>
+              <span className="mt-1 block text-[13px] text-[#6b6880]">보강 강사: <strong>{makeupTutorText(m)}</strong></span>
               {rightDate(m, needsTime(m, openRights)) && <span className="mt-1 block text-[13px] text-[#6b6880]">{rightDate(m, needsTime(m, openRights))}</span>}
               <span className="mt-1 block text-[13px] text-[#6b6880]">{rightReason(m)}</span>
               <span className="mt-2 block text-[14px] font-semibold text-[#5b3df0]">날짜 고르기 ›</span>
@@ -1220,6 +1346,7 @@ function RightCard({ right, withTime, endDate, onPick }: { right: MakeupRight; w
         <p className="text-[16px] font-bold">{rightTitle(right)}</p>
         {comp && <Icon d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" className="mt-0.5 h-5 w-5 shrink-0 text-[#5b3df0]" />}
       </div>
+      <p className="text-[13.5px] text-[#55526a]">보강 강사: <strong>{makeupTutorText(right)}</strong></p>
       {rightDate(right, withTime) && <p className="text-[13.5px] text-[#55526a]">{rightDate(right, withTime)}</p>}
       <p className="text-[13.5px] text-[#55526a]">{rightReason(right)}</p>
       {until && <p className="text-[13.5px] text-[#55526a]">{until}</p>}
@@ -1263,10 +1390,14 @@ function LeaveSheet(props: {
         <h2 className="text-[18px] font-bold">담당 강사님 휴무 안내</h2>
         {offText && <p className="mt-0.5 text-[13px] text-[#55526a]">휴무 {offText}</p>}
       </div>
-      {/* 확정·답변 필요·기존 강사 보강을 따로 (대표 11/2: 확정 2회·미정 1회인데 '3회 대체수업'으로 보임) */}
-      <p className="rounded-[14px] bg-[#efeaff] px-4 py-3 text-[15px] font-semibold leading-relaxed text-[#2b1c7a]">
-        {[fixed.length && `대체강사 확정 ${fixed.length}회`, ask.length && `답변 필요 ${ask.length}회`, waits.length && `기존 강사님과 보강 ${waits.length}회`].filter(Boolean).join(' · ')}
-      </p>
+      {/* 사과 문구 (대표 11/23): 휴무가 11~1월과 겹치면 연말연초 문구, 아니면 일반 — 날짜로 자동 */}
+      {off && <p className="text-[13.5px] leading-relaxed text-[#55526a]">{leaveSorryText(off.offFrom, off.offTo, VIEW_TZ)}</p>}
+      {/* 확정·기존 강사 보강을 따로 (대표 11/2: 확정 2회·미정 1회인데 '3회 대체수업'으로 보임). 답변 필요 줄은 뺌 (대표 11/23) */}
+      {(fixed.length > 0 || waits.length > 0) && (
+        <p className="rounded-[14px] bg-[#efeaff] px-4 py-3 text-[15px] font-semibold leading-relaxed text-[#2b1c7a]">
+          {[fixed.length && `대체강사 확정 ${fixed.length}회`, waits.length && `기존 강사님과 보강 ${waits.length}회`].filter(Boolean).join(' · ')}
+        </p>
+      )}
       {fixed.length > 0 && (() => {
         // R-23: 회의실 링크가 있는 수업만 '아래 링크', 없으면 카톡으로 보냄
         const withLink = fixed.filter((x) => meetRoomUrl(x.subMeetUrl)).length;
@@ -1277,7 +1408,17 @@ function LeaveSheet(props: {
       })()}
       {[{ title: '대체강사 수업 · 확정', list: fixed }, { title: '대체강사 수업 · 답변 필요', list: ask }].filter((x) => x.list.length > 0).map(({ title, list }) => (
         <section key={title} className={`${card} grid gap-1 p-4`}>
-          <h3 className="text-[15px] font-bold">{title}</h3>
+          {list === ask ? (() => {
+            // 답변이 필요한 카드: 제목 없이 추천 상자부터 (대표 11/23)
+            const rec = leaveRecommendLines(ask.map((x) => x.subTutor ?? ''));
+            return (
+              <div className="mb-1 grid gap-1.5 rounded-[12px] bg-[#f4f1ff] px-3 py-3 text-[14px] leading-relaxed">
+                <p className="text-[15px] font-bold">{rec.title}</p>
+                {rec.lines.map((t) => <p key={t}>{t}</p>)}
+                <p className="text-[12.5px] text-[#55526a]">{rec.small}</p>
+              </div>
+            );
+          })() : <h3 className="text-[15px] font-bold">{title}</h3>}
           {list.map((x) => (
             <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
               <span>
@@ -1305,10 +1446,10 @@ function LeaveSheet(props: {
           {list === ask && (
             <div className="mt-2 grid gap-2">
               <button type="button" disabled={props.busy} onClick={() => props.onAnswer('ok')} className="min-h-[52px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-50">
-                {ask.length > 1 ? `좋아요, ${ask.length}회 모두 이대로 할게요` : '좋아요, 이대로 할게요'}
+                {leaveButtonOk(ask.length)}
               </button>
               <button type="button" disabled={props.busy} onClick={() => props.onAnswer('makeup')} className="min-h-[50px] rounded-[14px] border border-[#5b3df0] text-[15px] font-bold text-[#4b2fd6] disabled:opacity-50">
-                {ask.length > 1 ? `${ask.length}회 모두 기존 강사님과 보강할게요` : '기존 강사님과 보강할게요'}
+                {leaveButtonWait(ask.length)}
               </button>
             </div>
           )}
@@ -1382,7 +1523,7 @@ function Profile({ name, onBack }: { name: string; onBack: () => void }) {
 
 // 보강 날짜 고르기 (2026-10-28 대표: 목록 대신 달력 — PC·휴대폰 같은 모양, 스크롤 줄이기)
 // 달력에서 날짜 → 그날 가능한 시각 → 고른 날짜 최대 2개 → 신청. 날짜는 DB '보강 가능한 날짜'(강사 일정·휴무·종료일)만
-function MakeupPicker(props: {
+type MakeupPickerProps = {
   right: MakeupRight | null;
   /** 방금 수업을 취소하고 넘어왔으면 맨 위에 결과 표시 */
   canceled: boolean;
@@ -1397,7 +1538,34 @@ function MakeupPicker(props: {
   /** 종료 5일 이내 강사 취소 보강만 (아니면 null → 링크 없음). requestedAt = 이미 누름 */
   noTime?: { requestedAt: string | null } | null;
   onNoTime?: (lessonId: string) => void;
-}) {
+};
+
+function MakeupPicker(props: MakeupPickerProps) {
+  const [chosen, setChosen] = useState<string | null>(null);
+  const choices = props.right?.tutorChoices;
+  const selected = choices?.length === 1 ? choices[0] : choices?.find((t) => t.id === chosen);
+  const needsTutor = (choices?.length ?? 0) > 1 && !selected;
+  const right = useMemo(() => props.right && selected
+    ? { ...props.right, tutor: selected.name, tutorId: selected.id }
+    : props.right, [props.right, selected]);
+  const tutorPicker = (choices?.length ?? 0) > 1 ? (
+    <fieldset className="grid gap-2">
+      <legend className="mb-2 text-[14px] font-semibold">보강 강사</legend>
+      <div className="grid grid-cols-2 gap-2">
+        {choices!.map((t) => (
+          <label key={t.id} className={`flex min-h-[48px] cursor-pointer items-center gap-2 rounded-[12px] border px-3 py-2 text-[14px] ${selected?.id === t.id ? 'border-[#5b3df0] bg-[#efeaff]' : 'border-[#d9d5e8]'}`}>
+            <input type="radio" name="makeup-tutor" value={t.id} checked={selected?.id === t.id} disabled={props.busy} onChange={() => setChosen(t.id)} className="accent-[#5b3df0]" />
+            <span><strong>{t.name}</strong><span className="block text-[12px] text-[#55526a]">{t.role === 'original' ? '원래 강사' : '대체강사'}</span></span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  ) : null;
+  // 강사를 바꾸면 달력·선택 날짜를 함께 초기화하고 이전 요청 응답을 버림.
+  return <MakeupDatePicker key={`${right?.lessonId}:${right?.itemId}:${right?.compId}:${selected?.id ?? ''}`} {...props} right={right} needsTutor={needsTutor} tutorPicker={tutorPicker} />;
+}
+
+function MakeupDatePicker(props: MakeupPickerProps & { needsTutor: boolean; tutorPicker: React.ReactNode }) {
   const [opts, setOpts] = useState<MakeupOption[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
@@ -1416,15 +1584,18 @@ function MakeupPicker(props: {
   }, [props.tz]);
 
   useEffect(() => {
-    if (!right) return;
+    if (!right || props.needsTutor) return;
+    let current = true;
     load(right)
       .then((o) => {
+        if (!current) return;
         const available = right.timeKnown === false ? o : o.filter((slot) => slot.startsAt.getTime() !== right.originalAt.getTime());
         setOpts(available);
         if (available[0]) setMonth(kst(available[0].startsAt).date.slice(0, 7));
       })
-      .catch((e) => setErr(e instanceof Error ? e.message : '불러오지 못했어요.'));
-  }, [right, load]);
+      .catch((e) => { if (current) setErr(e instanceof Error ? e.message : '불러오지 못했어요.'); });
+    return () => { current = false; };
+  }, [right, load, props.needsTutor]);
 
   if (!right) return <p className="text-[14px]">이미 신청했거나 신청할 수 없는 수업이에요.</p>;
   const byDay = new Map<string, Date[]>();
@@ -1495,10 +1666,11 @@ function MakeupPicker(props: {
         )}
         {rightUntil(right, props.endDate) && <p className="text-[13.5px] text-[#55526a]">{rightUntil(right, props.endDate)}</p>}
       </div>
+      {props.tutorPicker}
       <p className="text-[14px] leading-relaxed text-[#55526a]">이 수업을 대신할 날짜를 최대 {MAKEUP_SLOTS_MAX}개 골라 주세요. 강사님이 확인하면 확정돼요.</p>
-      <p className="text-[14px] font-semibold">{right.tutor ? `${right.tutor} 강사님의 가능한 시간입니다.` : '담당 강사님의 가능한 시간입니다.'}</p>
+      <p className="text-[14px] font-semibold">{props.needsTutor ? '보강 강사를 선택해 주세요.' : right.tutor ? `${right.tutor} 강사님의 가능한 시간입니다.` : '담당 강사님의 가능한 시간입니다.'}</p>
       {err && <p className="text-[14px] text-[#b3261e]">{err}</p>}
-      {!opts && !err && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
+      {!opts && !err && !props.needsTutor && <p className="text-[14px] text-[#55526a]">불러오는 중…</p>}
       {opts && opts.length === 0 && <p className="text-[14px]">가능한 날짜가 없어요. 카카오톡으로 문의해 주세요.</p>}
       {opts && opts.length > 0 && (
         <div className="grid gap-3.5 lg:grid-cols-2 lg:items-start">
@@ -1547,7 +1719,7 @@ function MakeupPicker(props: {
                 onClick={() => props.onSubmit(right, picked)}
                 className="min-h-[50px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-40"
               >
-                {right.compId ? '보상수업 신청하기' : '보강 신청하기'}
+                {right.tutor ? `${right.tutor} 강사님께 ` : ''}{right.compId ? '보상수업 신청하기' : '보강 신청하기'}
               </button>
               <LaterButton onLater={props.onLater} />
             </section>
@@ -1598,7 +1770,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen, lateSent, tutorLate, onLate }: { lesson: StudentLesson; now: Date; meetUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
+function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate, lateAutoOpen, noLabel }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; lateAutoOpen?: boolean; /** 메일 링크로 따로 연 뒤 수업 창: '다음 수업' 이름표 없음 (대표 11/18) */ noLabel?: boolean }) {
   // 지각 알림 버튼은 수업 시작 2시간 전부터 끝나기 전까지 (페이지를 열어 둔 채로도 때가 되면 나타나게)
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -1614,7 +1786,7 @@ function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen, lateSent, tut
   return (
     <section aria-label="다음 수업" className="grid gap-3.5 rounded-[20px] bg-[#1b1442] p-5 text-white lg:rounded-[22px] lg:p-6">
       <div className="flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>
+        {noLabel ? <span /> : <span className="text-[13px] font-semibold text-[#c9c0ff]">다음 수업</span>}
         <span className="rounded-full bg-[#ffd66b] px-2.5 py-1 text-[12px] font-semibold text-[#1b1442]">{badge}</span>
       </div>
       {/* 대체강사 수업은 수업 링크가 다름 — 늘 쓰던 링크로 들어가는 일이 잦음 (대표 10/29) */}
@@ -1645,14 +1817,33 @@ function NextLesson({ lesson, now, meetUrl, substitute, leaveOpen, lateSent, tut
           수업 입장
         </a>
       )}
-      {lateOpen && <LateNotice sent={lateSent} onSend={onLate} />}
+      {/* 수업 노트 열기 (대표 11/16): 노트 링크가 있는 학생만. 내 정보의 같은 이름 버튼은 그대로 */}
+      {noteUrl && (
+        <a href={noteUrl} target="_blank" rel="noreferrer" className="flex min-h-[46px] items-center justify-center rounded-[14px] bg-[#2c2263] text-[15px] font-bold text-white">
+          수업 노트 열기 ↗
+        </a>
+      )}
+      {lateOpen && <LateNotice sent={lateSent} onSend={onLate} autoOpen={lateAutoOpen} />}
     </section>
   );
 }
 
+// 메일 [강사님께 늦는다고 알리기] 링크를 지금 쓸 수 없을 때 맨 위 한 줄 (대표 11/18)
+const LATE_LINK_NOTE = {
+  unknown: '열 수 없는 링크예요. 카카오톡으로 문의해 주세요.',
+  canceled: '이 수업은 취소됐어요.',
+  ended: '이 수업은 이미 끝났어요.',
+  sent: '이미 강사님께 늦는다고 알렸어요.',
+  notYet: '수업 시작 2시간 전부터 알릴 수 있어요.',
+} as const;
+
 // 지각 알림 (대표 11/13): 지각 시간 + 이유(선택) → [강사님께 알리기]. 보낸 뒤에는 회색 '알렸어요 ✓'
-function LateNotice({ sent, onSend }: { sent: boolean; onSend: (minutes: LateMinutes, reason: LateReason | null) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
+function LateNotice({ sent, onSend, autoOpen }: { sent: boolean; onSend: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; autoOpen?: boolean }) {
+  const [open, setOpen] = useState(!!autoOpen);
+  const box = useRef<HTMLDivElement>(null);
+  // 메일 링크로 열렸으면 휴대폰에서도 창이 바로 보이게
+  useEffect(() => { if (autoOpen) setOpen(true); }, [autoOpen]);
+  useEffect(() => { if (open && autoOpen) box.current?.scrollIntoView({ block: 'center' }); }, [open, autoOpen]);
   const [minutes, setMinutes] = useState<LateMinutes | null>(null);
   const [reason, setReason] = useState<LateReason | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1660,7 +1851,7 @@ function LateNotice({ sent, onSend }: { sent: boolean; onSend: (minutes: LateMin
   if (!open) return <button type="button" onClick={() => setOpen(true)} className="min-h-[46px] rounded-[14px] border border-white/35 text-[15px] font-semibold text-white">늦게 참여해요</button>;
   const chip = (on: boolean) => `min-h-[44px] rounded-[12px] px-3.5 text-[14.5px] font-semibold ${on ? 'bg-[#ffd66b] text-[#1b1442]' : 'border border-white/35 text-white'}`;
   return (
-    <div className="grid gap-3.5 rounded-[16px] bg-white/10 p-4">
+    <div ref={box} className="grid gap-3.5 rounded-[16px] bg-white/10 p-4">
       <div className="flex items-center justify-between">
         <p className="text-[16px] font-bold text-white">늦게 참여하시나요?</p>
         <button type="button" onClick={() => setOpen(false)} className="min-h-[36px] px-1 text-[14px] font-semibold text-[#c9c0ff]">닫기</button>
@@ -1698,9 +1889,60 @@ function LateNotice({ sent, onSend }: { sent: boolean; onSend: (minutes: LateMin
   );
 }
 
-// 변경권: 지금 기간과 언제 썼는지 (대표 10/29)
-// 변경권: 지금 기간과 언제 썼는지 (대표 10/29)
-function Credits({ s }: { s: StudentView }) {
+// 변경권 내역 (대표 11/18): 지금 기간 요약 + 처리 시각 최신순 줄(처리 후 남은 수), 다른 기간은 눌러서 펼침.
+// 함수 없는 옛 DB(creditHistory 없음)면 예전 목록.
+function Credits({ s, onAll }: { s: StudentView; onAll: () => void }) {
+  const [more, setMore] = useState(false);
+  if (!s.creditHistory) return <CreditsOld s={s} />;
+  const periods = s.creditHistory;
+  const current = periods.find((p) => p.current) ?? null;
+  const others = periods.filter((p) => p !== current);
+  // 기간 날짜는 날짜만 (다른 화면 '이번 기간'과 같은 날짜)
+  const day = (d: string) => fmtDate(d as KstDate);
+  // 대표 11/18 2차: 처리 내역과 같은 항목명·순서, 흰 박스 없이 얇은 구분선, 본문 14px, 왼쪽 정렬
+  const row = (i: CreditItem) => {
+    const e = creditEntry(i);
+    return (
+      <li key={i.id} className="grid gap-0.5 border-b border-[#e6e3ef] py-3 text-[14px] leading-[1.5] text-[#55526a] last:border-0">
+        {e.lessonLabel && <span>{e.lessonLabel}: <b className="font-bold text-[#1d1b2b]">{e.lessonAt ? whenText(new Date(e.lessonAt)) : '날짜 미기록'}</b></span>}
+        <span>{e.timeLabel}: {whenText(new Date(e.timeAt))}</span>
+        {e.timing && <span>{e.timing}</span>}
+        {e.note && <span>{e.note}</span>}
+        {e.result !== null && <span>변경권: {e.result}{e.bold && <b className="font-bold text-[#1d1b2b]">{e.bold}</b>}</span>}
+      </li>
+    );
+  };
+  const list = (p: CreditPeriodHistory) => p.items.length === 0
+    ? <p className="py-3 text-[14px] text-[#6b6880]">이 기간에 변경권 기록이 없어요.</p>
+    : <ul className="border-t border-[#e6e3ef]">{p.items.map(row)}</ul>;
+  return (
+    <div className="grid gap-3 text-left">
+      <h2 className="text-[18px] font-bold">변경권 내역</h2>
+      {current ? (
+        <div className="grid gap-0.5 text-[14px] text-[#55526a]">
+          <p>남은 변경권 <b className="text-[20px] font-extrabold text-[#1d1b2b]">{current.left}개</b> / 총 {current.granted}개</p>
+          <p>변경권 적용 기간: {day(current.start)}~{day(current.end)}</p>
+        </div>
+      ) : <p className="text-[14px] text-[#6b6880]">지금 변경권 적용 기간이 없어요.</p>}
+      {/* 내역이 많으면 목록만 스크롤, 적으면 내용 높이 그대로 */}
+      <div className="grid max-h-[55dvh] gap-4 overflow-y-auto">
+        {current && list(current)}
+        {others.length > 0 && (more ? others.map((p) => (
+          <section key={p.start} className="grid gap-1">
+            <p className="text-[13px] font-semibold text-[#55526a]">변경권 적용 기간: {day(p.start)}~{day(p.end)} · 남은 {p.left}개 / 총 {p.granted}개</p>
+            {list(p)}
+          </section>
+        )) : (
+          <button type="button" onClick={() => setMore(true)} className="min-h-[44px] text-left text-[14px] font-semibold text-[#5b3df0]">다른 기간 보기 ›</button>
+        ))}
+      </div>
+      <button type="button" onClick={onAll} className="min-h-[44px] text-left text-[14px] font-semibold text-[#5b3df0]">처리 내역 전체 보기 ›</button>
+    </div>
+  );
+}
+
+// 예전 변경권 목록 (student_credit_history 없는 DB)
+function CreditsOld({ s }: { s: StudentView }) {
   const text = (c: StudentView['creditUses'][number]) =>
     c.reason === 'student_change'
       ? `${c.lessonAt ? `${whenText(c.lessonAt)} 수업 취소` : '수업 취소'}`
@@ -2337,5 +2579,42 @@ function HelpTip({ text }: { text: string }) {
         </span>
       )}
     </span>
+  );
+}
+
+/** 학생 화면을 처음 열 때(메일 링크·새로고침) 자료를 받는 동안: 메뉴는 그대로, 칸 자리만 빈 틀로 (11/17 대표: 화면이 단계별로 조립돼 보이지 않게) */
+export function StudentHomeSkeleton() {
+  const bar = 'animate-pulse rounded-full bg-[#ebe8f3]';
+  const box = `${card} animate-pulse`;
+  return (
+    <div aria-busy="true" className="mx-auto max-w-[1200px] text-[#1d1b2b] lg:flex lg:gap-6 lg:px-6 lg:py-8">
+      <nav aria-label="메뉴" className="hidden w-[220px] shrink-0 flex-col gap-1 lg:flex">
+        {TABS.map((t) => (
+          <span key={t.key} className={`flex min-h-[46px] items-center gap-2.5 rounded-[12px] px-3 text-left text-[15px] ${t.key === 'home' ? 'bg-[#efeaff] font-bold text-[#3a22b0]' : ''}`}>
+            <Icon d={t.icon} />
+            {t.label}
+          </span>
+        ))}
+      </nav>
+      <div className="min-w-0 flex-1 pb-6 pt-3 lg:pb-0 lg:pt-0">
+        <div className="grid gap-2 px-4 pb-3 lg:px-0 lg:pb-4 lg:pt-1">
+          <span className={`${bar} h-[32px] w-[280px] max-w-full`} />
+          <span className={`${bar} h-[30px] w-[220px] max-w-full`} />
+        </div>
+        <div className="grid gap-3 px-4 lg:px-0">
+          <div className="h-[150px] animate-pulse rounded-[22px] bg-[#e4e0f0]" />
+          <div className={`${box} h-[130px]`} />
+          <div className={`${box} h-[170px]`} />
+        </div>
+      </div>
+      <nav aria-label="아래 메뉴" className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t border-[#e6e3ef] bg-white pb-3 pt-1.5 lg:hidden">
+        {TABS.map((t) => (
+          <span key={t.key} className={`flex min-h-[48px] flex-col items-center justify-center gap-0.5 text-[11px] ${t.key === 'home' ? 'font-bold text-[#5b3df0]' : 'text-[#55526a]'}`}>
+            <Icon d={t.icon} />
+            {t.label}
+          </span>
+        ))}
+      </nav>
+    </div>
   );
 }

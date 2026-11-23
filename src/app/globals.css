@@ -197,3 +197,51 @@
   font-weight: 900;
   font-style: normal;
 }
+
+/* 로그인 화면 비밀번호 안내 (대표 11/18): 틀리면 버튼이 한 번 흔들리고, 👇는 3번만 까딱 */
+@keyframes lms-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-8px);
+  }
+  30% {
+    transform: translateX(8px);
+  }
+  45% {
+    transform: translateX(-6px);
+  }
+  60% {
+    transform: translateX(6px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+  90% {
+    transform: translateX(3px);
+  }
+}
+@keyframes lms-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+.lms-shake {
+  animation: lms-shake 0.6s ease-in-out;
+}
+.lms-bob {
+  display: inline-block;
+  animation: lms-bob 1.4s ease-in-out 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lms-shake,
+  .lms-bob {
+    animation: none;
+  }
+}

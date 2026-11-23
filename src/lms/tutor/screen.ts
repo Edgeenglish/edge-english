@@ -55,6 +55,8 @@ export type TutorLesson = {
   compensationOf?: Date | null;
   /** 강사 '늦어요' 알림을 보낸 수업 (20261114200000). 없으면 안 보냄 */
   lateNotice?: { minutes: number; reason: string | null; at: Date } | null;
+  /** 강사 [학생에게 연락하기] 보낸 기록 (20261116140000, 1·2차). 없으면 빈 목록 */
+  contacts?: { stage: 1 | 2; at: Date; byAdmin: boolean }[];
 };
 
 /** why: 왜 못 고르는지 (4530) — closed 강사가 열지 않은 시간 · busy 다른 수업 · leave 휴무 · hours 06:00~22:30 밖 · b2b 연속 수업 규칙 */
@@ -88,6 +90,8 @@ export type TutorScreen = {
   toRecord: string[];
   makeups: TutorMakeup[];
   covers: TutorCover[];
+  /** 시간 협의 필요 회차 (기존 일정 기준, 수업 아님 — migration 20261122130000) */
+  pendingTimes?: { student: string; studentId: string; seq: number; startsAt: Date; minutes: number }[];
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB 함수가 돌려주는 JSON 을 화면 모양으로 바꾸는 곳 */
@@ -224,9 +228,9 @@ export const TUTOR_STATUS_TEXT: Record<ClassStatus, string> = {
   'Student no-show': 'Student no-show',
   // 취소 상태는 강사 시트 Status 이름 그대로 (H26(138))
   'Student canceled in advance': 'Student canceled in advance',
-  'Student canceled in advance (public holiday)': 'Student canceled in advance (public holiday)',
+  'Student canceled in advance (public holiday)': 'Student canceled in advance',
   'Student canceled late': 'Student canceled late',
-  'No change credits left': 'No change credits left',
+  'No change credits left': 'Student canceled in advance',
   'Tutor canceled in advance': 'Tutor canceled in advance',
   'Tutor canceled late': 'Tutor canceled late',
   'Tutor no-show': 'Tutor no-show',

@@ -3,7 +3,8 @@
 
 import { addDays, instantToKstDate, kstToInstant, type KstDate, type KstTime } from '../rules/dates';
 import type { PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
-import type { StudentActions, StudentView } from './live';
+import type { ChangeRequests, StudentActions, StudentView } from './live';
+import { slotsOf, weekFor2 } from './regular-change';
 
 const H = 60 * 60 * 1000;
 
@@ -140,7 +141,11 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       ...s.lessons.map((l) => ({ ...l, meetUrl: null, leavePostponed: false, substitute: false })),
       ...[7, 9, 11].map((d, i) => ({ id: `lv${i}`, kind: 'regular' as const, startsAt: at(d, '20:00'), minutes: 50, tutorName: '가상강사 Alex', state: 'scheduled' as const, meetUrl: null, leavePostponed: false, substitute: false })),
     ],
-    makeupRights: [{ lessonId: 'l5', itemId: null, originalAt: s.lessons[4].startsAt, tutorLeave: false, requested: false }],
+    makeupRights: [
+      { lessonId: 'l5', itemId: null, originalAt: s.lessons[4].startsAt, tutorLeave: false, requested: false, tutor: 'Alex', tutorChoices: [{ id: 'alex', name: 'Alex', role: 'assigned' }] },
+      { lessonId: 'cover-canceled', itemId: null, originalAt: at(-3, '20:00'), tutorLeave: false, requested: false, tutorCanceled: true, tutor: 'Emma', tutorChoices: [{ id: 'alex', name: 'Alex', role: 'original' }, { id: 'emma', name: 'Emma', role: 'substitute' }] },
+      { lessonId: null, itemId: null, compId: 'cover-comp', originalAt: at(-3, '20:00'), tutorLeave: false, requested: false, tutor: 'Emma', tutorChoices: [{ id: 'emma', name: 'Emma', role: 'assigned' }] },
+    ],
     requests: [],
     leave: [
       { id: 'x1', startsAt: at(7, '20:00'), choice: 'substitute', stage: 'tutor_ok', subTutor: 'Maria', subMeetUrl: null, lessonId: 'lv0', itemId: null, offFrom, offTo },
@@ -175,8 +180,10 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     { id: 'n1', title: '크리스마스 시즌 수업 안내', body: '연말 수업 일정과 휴무 안내를 확인해 주세요.', startsOn: '2026-11-10' as KstDate, read: false },
     { id: 'n2', title: '11월 휴무 일정 안내', body: '11월 휴무 일정을 확인해 주세요.', startsOn: '2026-11-03' as KstDate, read: true },
   ];
+  const changeReqs: ChangeRequests = { regular: [], tutor: [] };
   const actions: StudentActions = {
     reload: async () => ({ ...view, timezone: tz.timezone }),
+    renewal: { info: async () => null, save: async () => { throw new Error('미리보기'); }, submit: async () => { throw new Error('미리보기'); } },
     prefs: async () => ({}),
     savePref: null,
     reminders: async (change) => (reminders = { ...reminders, ...change }),
@@ -189,7 +196,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       const back = view.makeupRights.find((m) => m.lessonId === right.lessonId)?.tutorLeave ? 14 : 1;
       return Array.from({ length: 18 }, (_, i) => back + i)
         .filter((d) => d % 2 === 0)
-        .flatMap((d) => [{ startsAt: at(d, '10:00'), afterEnd: false }, ...(d % 4 === 0 ? [{ startsAt: at(d, '20:00'), afterEnd: false }] : [])]);
+        .flatMap((d) => [{ startsAt: at(d, right.tutorId === 'emma' ? '14:00' : '10:00'), afterEnd: false }, ...(d % 4 === 0 ? [{ startsAt: at(d, '20:00'), afterEnd: false }] : [])]);
     },
     // 미리보기: 휴무·노쇼·보상이 아닌 첫 보강권을 '종료 5일 이내 강사 취소'로 흉내 (실제는 DB 가 강사 취소 기록으로 판정)
     notices: async () => notices.map((n) => ({ ...n })),
@@ -205,6 +212,30 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       set({ ...view, lateNotices: [...(view.lateNotices ?? []), { lessonId, minutes, reason }] });
     },
     tutorLateNotices: async () => view.tutorLateNotices ?? [],
+    // 정규 시간 변경·강사 변경 상담 (H26(208)): 미리보기 — 가상 강사가 매일 한국 시간 오후 6:00~10:00 가능하다고 흉내 (실제 계산·판정은 DB)
+    regularOptions: async () => {
+      const today = new Date(Date.now() + 9 * H).toISOString().slice(0, 10) as KstDate;
+      const add = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 24 * H).toISOString().slice(0, 10) as KstDate;
+      const slots = [{ weekday: 1, time: '20:00' }, { weekday: 4, time: '20:00' }];
+      const free = [0, 1, 2, 3, 4, 5, 6].flatMap((w) => ['18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00']
+        .filter((t) => !slots.some((x) => x.weekday === w && x.time === t)).map((t) => ({ weekday: w, time: t })));
+      return { state: 'ok' as const, today, finalEnd: add(today, 30), duration: 50, tutor: '가상강사 Alex', slots, free,
+        periods: [{ start: add(today, -10), end: add(today, 17), used: false }, { start: add(today, 18), end: add(today, 45), used: false }] };
+    },
+    regularRequest: async (items, reason, start) => {
+      const o = await actions.regularOptions();
+      if (o.state !== 'ok') return;
+      const cand = (c: { days: number[]; time: string } | null) => {
+        if (!c) return null;
+        const week = (start ?? weekFor2({ today: o.today, finalEnd: o.finalEnd, periods: o.periods }, o.slots, slotsOf(c.days, c.time)) ?? '') as KstDate;
+        return { days: c.days, time: c.time, week, first: '' as KstDate };
+      };
+      changeReqs.regular = [{ id: `rc${Date.now()}`, status: 'pending', createdAt: new Date(), oldSlots: o.slots, reason: reason || null, chosen: null, effectiveFrom: null,
+        items: items.map((i) => ({ c1: cand(i.c1)!, c2: cand(i.c2) })) }, ...changeReqs.regular];
+    },
+    regularWithdraw: async (id) => { changeReqs.regular = changeReqs.regular.map((r) => (r.id === id ? { ...r, status: 'withdrawn' } : r)); },
+    tutorChangeRequest: async (reasons, note) => { changeReqs.tutor = [{ id: `tc${Date.now()}`, status: 'open', createdAt: new Date(), reasons, note: note || null }, ...changeReqs.tutor]; },
+    changeRequests: async () => ({ regular: [...changeReqs.regular], tutor: [...changeReqs.tutor] }),
     noTimeRequest: async () => {
       noTimeAt = new Date().toISOString();
       set({ ...view });   // 화면이 다시 읽도록 새 값

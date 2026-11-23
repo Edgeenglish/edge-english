@@ -4,6 +4,7 @@
 // 2026-10-22 대표: "너무 복잡하지 않게" → 한 화면: 수강생 요약 → 강사 → 주간 칸 → 첫 수업일 → [아직 → 제안 문구 복사] / [가능하대요 → 확정]
 // 등록 화면의 강사 고르기·캘린더를 그대로 씀. 저장은 DB 함수 admin_propose_schedule (같은 요청 번호면 1번만)
 
+import type { PartialRow } from '@/lms/admin/confirm-live';
 import { tutorZoneFn } from '@/lms/admin/tutor-zone';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
@@ -68,11 +69,16 @@ type Props = {
   current?: MatchingCurrent | null;
   /** '수업 컨펌 완료' 기록 — 지금 배정을 강사·수강생에게 확인했음 → 신규 매칭 업무 완료 */
   confirmCurrent?: () => Promise<{ repeated: boolean }>;
+  /** 일정 일부만 먼저 확정 (20261122100000): 예약 불가가 강사 휴무·해외 체류 시간뿐이면 가능한 회차만 확정 */
+  partial?: {
+    preview: (p: { tutor_id: string; slots: RegularSlot[]; start_date: KstDate }) => Promise<PartialRow[]>;
+    confirm: (planId: string, p: { tutor_id: string; slots: RegularSlot[]; start_date: KstDate }) => Promise<ProposeResult>;
+  };
 };
 
 const bySlot = (a: RegularSlot, b: RegularSlot) => ((a.weekday + 6) % 7) - ((b.weekday + 6) % 7);
 
-export default function AssignSchedule({ nowIso, demo, info, tutors, propose, planActions, initialView = null, current = null, confirmCurrent }: Props) {
+export default function AssignSchedule({ nowIso, demo, info, tutors, propose, planActions, initialView = null, current = null, confirmCurrent, partial }: Props) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const today = instantToKstDate(now);
   const [tutorId, setTutorId] = useState<string | null>(null);
@@ -182,6 +188,43 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
         }
       : null;
   const ready = !!draft && plan!.issues.length === 0 && (lessonPlan?.problems.length ?? 0) === 0;
+  // 가능한 회차만 확정: 회차별로 바꾼 날짜가 없고 예약 불가가 있을 때만 (판정은 DB)
+  const partialBasis = JSON.stringify([tutor?.id, slots, draft?.startDate]);
+  const [partialRows, setPartialRows] = useState<{ basis: string; rows: PartialRow[] } | null>(null);
+  const partialOk = !!partial && !!draft && !draft.lessonList && plan!.issues.length > 0 && (lessonPlan?.problems.length ?? 0) === 0;
+  const rows = partialRows?.basis === partialBasis ? partialRows.rows : null;
+  async function loadPartial() {
+    if (!partialOk || !tutor || !draft) return;
+    setErr('');
+    setSaving(true);
+    try {
+      setPartialRows({ basis: partialBasis, rows: await partial!.preview({ tutor_id: tutor.id, slots, start_date: draft.startDate }) });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '판정을 읽지 못했어요.');
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function confirmPartial() {
+    if (!rows || !tutor || !draft || saving || rows.some((r) => r.kind === 'block')) return;
+    setErr('');
+    setSaving(true);
+    try {
+      const r = await partial!.confirm(requestId, { tutor_id: tutor.id, slots, start_date: draft.startDate });
+      setView({
+        ...draft,
+        planId: r.planId,
+        state: 'confirmed',
+        confirmedAt: new Date(),
+        tutorNotice: r.tutorNoticeId ? { id: r.tutorNoticeId, status: 'pending', sentAt: null } : null,
+        studentNotice: r.studentNoticeId ? { id: r.studentNoticeId, status: 'pending', sentAt: null } : null,
+      });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '확정하지 못했어요.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function save(accepted: boolean) {
     if (!draft || !ready || saving) return;
@@ -454,6 +497,40 @@ export default function AssignSchedule({ nowIso, demo, info, tutors, propose, pl
                     가능하대요 → 확정
                   </button>
                 </div>
+              </Card>
+            )}
+            {partialOk && (
+              <Card title="가능한 회차만 확정">
+                {!rows && (
+                  <button type="button" disabled={saving} onClick={loadPartial}
+                    className="min-h-[48px] w-full rounded-[12px] border-[1.5px] border-[#7d5ffb] bg-white text-[15px] font-bold text-[#4b33c4] disabled:opacity-50">
+                    회차별로 나눠 보기
+                  </button>
+                )}
+                {rows && (() => {
+                  const by = (k: PartialRow['kind']) => rows.filter((r) => r.kind === k);
+                  const group = (k: PartialRow['kind'], label: string) => by(k).length > 0 && (
+                    <div className="mt-2 text-[13px]">
+                      <p className="font-bold text-[#1d1b2b]">{label} {by(k).length}회</p>
+                      <p className="text-[#55526a]">{by(k).map((r) => `${r.seq}회 ${dayLabel(r.date as KstDate)}`).join(' · ')}</p>
+                    </div>
+                  );
+                  return (
+                    <>
+                      <p className="text-[13px] text-[#6b6880]">{ampmKo(slots[0]?.time ?? '')} <b>한국 시간</b> 기준 · 총 {rows.length}회</p>
+                      {group('ok', '확정')}
+                      {group('leave', '강사 휴무 처리')}
+                      {group('travel', '시간 협의 필요 (기존 일정 기준)')}
+                      {by('block').length > 0 && (
+                        <p className="mt-2 rounded-[10px] bg-[#fdecec] px-3 py-2 text-[13px] font-bold text-[#b3261e]">다른 수업과 겹쳐 확정할 수 없어요: {by('block').map((r) => `${r.seq}회 ${dayLabel(r.date as KstDate)}`).join(' · ')}</p>
+                      )}
+                      <button type="button" disabled={saving || by('block').length > 0} onClick={confirmPartial}
+                        className="mt-3 min-h-[52px] w-full rounded-[12px] bg-[#7d5ffb] text-[16px] font-bold text-white disabled:bg-[#cfc4ff]">
+                        {saving ? '저장 중…' : `가능한 ${by('ok').length + by('leave').length}회 확정`}
+                      </button>
+                    </>
+                  );
+                })()}
               </Card>
             )}
           </>

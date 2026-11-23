@@ -1,0 +1,186 @@
+<title>정규 시간 같은 시간 규칙 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#f6f5fa;--card:#fff;--fg:#1d1b2b;--muted:#6b6880;--line:#e6e3ef;--accent:#5b3df0;--q:#efeafe;--sel:#efebff;
+--ok:#e6f6ec;--ok-fg:#1f7a4d;--warn:#fff4d6;--warn-fg:#5c3b00;--bad-fg:#b3261e;--soft:#f3f1f8;--chip:#ecebf1;--chip-fg:#55526a;--frame:#d9d5e6;--dis:#c9c6d6;
+--font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;--frame:#3b3948;--dis:#4a4858;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15141c;--card:#201f2a;--fg:#ecebf3;--muted:#a7a3bb;--line:#33313f;--accent:#9c87ff;--q:#2a2540;--sel:#2e2850;
+--ok:#173325;--ok-fg:#7fd6a5;--warn:#3a2f12;--warn-fg:#ffd77a;--bad-fg:#ff9b92;--soft:#2a2935;--chip:#2a2935;--chip-fg:#b9b5cc;--frame:#3b3948;--dis:#4a4858;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;padding:24px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px))}
+main{max-width:1180px;margin:0 auto;display:grid;gap:34px}
+main>*{min-width:0}
+h1{font-size:22px;margin:0}h2{font-size:19px;margin:0 0 10px}h3{font-size:14px;margin:0 0 8px;color:var(--muted);font-weight:600}
+p{margin:0}ol,ul{margin:4px 0 0;padding-left:20px}li{margin-bottom:5px}
+.q{background:var(--q);border-radius:14px;padding:14px 16px;display:grid;gap:14px}
+.q>div{display:grid;gap:3px}
+.q b.n{color:var(--accent)}
+.rec{display:inline-block;background:var(--accent);color:#fff;font-size:11.5px;font-weight:700;border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.row{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.phone{width:360px;max-width:100%;border:8px solid var(--frame);border-radius:30px;background:var(--bg);padding:14px 12px 18px;display:grid;gap:10px;align-content:start}
+.pc{flex:1 1 640px;min-width:0;border:1px solid var(--frame);border-radius:12px;background:var(--bg);overflow:hidden}
+.pcbar{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;font-size:13px;color:var(--muted);display:flex;gap:16px}
+.pcbody{padding:18px;display:grid;gap:12px;max-width:760px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px}
+.p{padding:12px 16px}
+.badge{display:inline-block;background:var(--soft);color:var(--chip-fg);border-radius:999px;font-size:12px;font-weight:600;padding:2px 10px}
+.qk{display:grid;gap:8px;grid-template-columns:1fr}
+@media(min-width:640px){.pc .qk{grid-template-columns:1fr 1fr}}
+.qtop{display:flex;justify-content:space-between;align-items:center;min-height:48px;padding:0 16px;border-bottom:1px solid #eeecf4;font-weight:700}
+.go{color:var(--accent);font-size:12.5px;font-weight:600}
+.mini{font-size:12.5px;color:var(--muted);padding:8px 16px 12px}
+.new{outline:3px dashed var(--accent);outline-offset:3px}
+.rowbtn{display:flex;justify-content:space-between;align-items:center;min-height:52px;padding:0 16px;font-weight:600;font-size:14px}
+.rowbtn span:last-child{color:var(--muted)}
+.dis{color:var(--muted)}
+.sheet{background:var(--card);border-radius:18px 18px 0 0;border:1px solid var(--line);padding:16px;display:grid;gap:12px}
+.sheet h4{margin:0;font-size:17px}
+.lbl{font-size:13px;font-weight:700;color:var(--chip-fg)}
+.big{font-size:15px;font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:7px 11px;font-size:13.5px;font-weight:600}
+.chip.on{background:var(--sel);border-color:var(--accent);color:var(--accent)}
+.chip.off{color:var(--dis);text-decoration:line-through}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.days span{text-align:center;border:1px solid var(--line);border-radius:8px;padding:6px 0;font-size:13px;font-weight:700}
+.days span.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.days span.none{color:var(--dis)}
+.times{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.times span{text-align:center;border:1px solid var(--line);border-radius:10px;padding:8px 0;font-size:13.5px;font-weight:600}
+.times span.on{background:var(--sel);border-color:var(--accent);color:var(--accent)}
+.pick{background:var(--sel);border-radius:10px;padding:8px 12px;font-size:13.5px;display:flex;justify-content:space-between;gap:8px}
+.pick b{color:var(--accent)}
+.ta{border:1px solid var(--line);border-radius:10px;min-height:56px;padding:8px 10px;color:var(--muted);font-size:13.5px}
+.btn{background:var(--accent);color:#fff;border-radius:12px;text-align:center;font-weight:700;padding:12px;font-size:15px}
+.btn.gray{background:var(--chip);color:var(--chip-fg)}
+.btn.line{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.ok{background:var(--ok);color:var(--ok-fg);border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px}
+.bad{color:var(--bad-fg);font-weight:700;font-size:13.5px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
+.names{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.names div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.names b{display:block;font-size:15px}
+.names small{color:var(--muted);font-size:12.5px}
+.adm{display:grid;gap:10px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px}
+.kv b{color:var(--muted);font-weight:600}
+</style>
+<main>
+<header style="display:grid;gap:6px">
+  <h1>정규 시간 변경 (같은 시간 규칙) · 강사 변경 상담 안내 — 시안</h1>
+  <p class="note">예시: 학생 박서연(서울), 지금 화·금 오후 1:00, 주 2회. 오늘 11/18(수). 점선 = 바뀌는 곳.</p>
+</header>
+
+<section>
+  <h2>확정한 규칙 (대표 11/18)</h2>
+  <div class="q">
+    <div><b>학생 신청 화면</b><span>모든 정규 수업은 같은 시작 시간. 요일만 바꾸거나, 시간을 바꾸면 모든 수업을 함께 바꿈. 1·2순위는 '요일들 + 시간 하나'로 된 일정 전체.</span></div>
+    <div><b>주 3회 학생</b><span>운영진 판단으로 1회만 다른 시간 가능 — 학생 화면에는 없음, 운영진이 [정규 일정 수정]으로 처리. 주 4회 이상은 상품이 없어 규칙 없음.</span></div>
+    <div><b>지금 시간이 다른 학생</b><span>지금 일정 그대로. 새로 신청할 때부터 같은 시간으로만.</span></div>
+    <div><b>운영진 [정규 일정 수정]</b><span>제한 없음 (예외 처리용).</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>① 정규 시간 변경 — 신청 화면</h2>
+  <div class="row">
+    <div class="phone">
+      <div class="sheet">
+        <h4>정규 시간 변경</h4>
+        <span class="badge" style="justify-self:start">서울 시간 기준</span>
+        <div class="pick" style="background:var(--soft)"><span>가장 빠른 적용일</span><b>11/23(월) 주부터</b></div>
+        <div><p class="lbl">변경 시작 주</p><div class="ta" style="min-height:0;color:var(--fg)">가장 빠른 주 ▾</div></div>
+        <p class="lbl" style="margin:0">지금 정규 수업 · 화·금 오후 1:00</p>
+        <div class="card p new" style="display:grid;gap:8px">
+          <p class="lbl" style="margin:0">1순위 · 요일 2개</p>
+          <div class="days"><span class="on">월</span><span>화</span><span class="on">수</span><span>목</span><span>금</span><span class="none">토</span><span class="none">일</span></div>
+          <p class="lbl" style="margin:0">시간 (고른 요일 모두 되는 시간만)</p>
+          <div class="times"><span>오전 10:00</span><span class="on">오후 12:30</span><span>오후 1:00</span><span>오후 7:00</span><span>오후 7:30</span></div>
+          <div class="pick"><span>1순위 · 월·수 오후 12:30</span><b>11/23(월) 주부터</b></div>
+        </div>
+        <div class="pick" style="background:var(--soft)"><span class="dis">2순위 (선택)</span><b>+</b></div>
+        <div><p class="lbl">변경 사유 (선택)</p><div class="ta"></div></div>
+        <div class="btn">신청하기</div>
+      </div>
+      <p class="note">요일만 바꿀 때: 수·금을 고르면 시간에 지금 '오후 1:00'도 그대로 고를 수 있음. 요일·시간이 지금과 똑같으면 못 고름.</p>
+    </div>
+    <div class="pc">
+      <div class="pcbar"><b style="color:var(--fg)">정규 시간 변경</b><span class="badge">서울 시간 기준</span></div>
+      <div class="pcbody" style="grid-template-columns:1fr 1fr;max-width:none">
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="pick" style="background:var(--soft)"><span>가장 빠른 적용일</span><b>11/23(월) 주부터</b></div>
+          <div><p class="lbl">변경 시작 주</p><div class="ta" style="min-height:0;color:var(--fg)">가장 빠른 주 ▾</div></div>
+          <p class="lbl" style="margin:0">지금 정규 수업 · 화·금 오후 1:00</p>
+          <div class="card p new" style="display:grid;gap:8px">
+            <p class="lbl" style="margin:0">1순위 · 요일 2개</p>
+            <div class="days"><span class="on">월</span><span>화</span><span class="on">수</span><span>목</span><span>금</span><span class="none">토</span><span class="none">일</span></div>
+            <p class="lbl" style="margin:0">시간 (고른 요일 모두 되는 시간만)</p>
+            <div class="times" style="grid-template-columns:repeat(5,1fr)"><span>오전 10:00</span><span class="on">오후 12:30</span><span>오후 1:00</span><span>오후 7:00</span><span>오후 7:30</span></div>
+          </div>
+        </div>
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="pick"><span>1순위 · 월·수 오후 12:30</span><b>11/23(월) 주부터</b></div>
+          <div class="pick"><span>2순위 · 화·목 오전 10:00</span><b>11/23(월) 주부터</b></div>
+          <div><p class="lbl">변경 사유 (선택)</p><div class="ta"></div></div>
+          <div class="btn">신청하기</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="note" style="margin-top:12px">
+    <li>지금과 바뀌는 점: '바꿀 수업 고르기'와 수업마다 1·2순위 고르기가 없어지고, 일정 전체(요일 N개 + 시간 하나)를 1·2순위로 고름. N = 주 수업 횟수.</li>
+    <li>신청 뒤 화면·[신청 취소]·처리 내역은 지금 그대로.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>① 운영진 — 확정 화면</h2>
+  <div class="row">
+    <div class="phone">
+      <div class="card rowbtn"><span>정규 시간 변경 신청 · 박서연</span><span>›</span></div>
+      <div class="card p adm">
+        <div class="kv"><b>지금</b><span>화·금 오후 1:00 한국 시간</span><b>변경 사유</b><span>-</span></div>
+        <div class="pick new"><span>1순위 · 월·수 오후 12:30 한국 시간</span><b>11/23(월) 주부터</b></div>
+        <div class="btn">1순위로 확정</div>
+        <div class="pick new"><span>2순위 · 화·목 오전 10:00 한국 시간</span><b>11/23(월) 주부터</b></div>
+        <div class="btn line">2순위로 확정</div>
+        <div class="btn gray">반려</div>
+      </div>
+      <p class="note">충돌 검사·다음 가능한 주로 확정·반려는 지금 그대로.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>② 강사 변경 상담 — 안내 (시험 사이트에 이미 넣음)</h2>
+  <div class="row">
+    <div class="phone">
+      <div class="sheet">
+        <h4>강사 변경 상담</h4>
+        <p style="font-size:14px">강사 변경은 언제든 편하게 요청해 주세요. <span style="color:var(--muted)">ⓘ</span></p>
+        <div class="card p" style="background:var(--soft);font-size:13.5px;display:grid;gap:8px">
+          <p>엣지영어 강사님들은 공동운영자 2명이 직접 <b>서류 심사, 면접, 강의 교육 2회, 실제 수업 평가 2회</b>까지 총 <b>6단계</b>를 거쳐 뽑아요. 수업 실력은 기본이고, 학생을 대하는 마음과 수업 태도를 가장 중요하게 보기 때문에 어느 강사님과 수업하셔도 좋답니다.👍</p>
+          <p>다만 학생마다 잘 맞는 수업 스타일이 다르다는 걸 저희도 강사님들도 너무 잘 이해하고 있어요. 수강생이 요청하면 언제든 강사 변경이 가능하다는 것도 모두 알고 계시니, 부담 없이 말씀해 주세요.☺️</p>
+        </div>
+        <p class="note">ⓘ 누르면 위 회색 칸이 펼쳐짐, 다시 누르면 접힘</p>
+        <p class="lbl">상담 내용 (선택 · 여러 개 가능)</p>
+        <div class="chips" style="flex-direction:column;align-items:stretch"><span class="chip">다른 수업 스타일을 경험해 보고 싶어요</span><span class="chip">수업 시간이 잘 맞지 않아요</span><span class="chip">다른 강사님과 수업하고 싶어요</span><span class="chip">먼저 상담받고 싶어요</span></div>
+      </div>
+    </div>
+    <div class="pc">
+      <div class="pcbar"><b style="color:var(--fg)">강사 변경 상담</b></div>
+      <div class="pcbody">
+        <p style="font-size:14px">강사 변경은 언제든 편하게 요청해 주세요. <span style="color:var(--muted)">ⓘ</span></p>
+        <div class="card p" style="background:var(--soft);font-size:13.5px;display:grid;gap:8px">
+          <p>엣지영어 강사님들은 공동운영자 2명이 직접 <b>서류 심사, 면접, 강의 교육 2회, 실제 수업 평가 2회</b>까지 총 <b>6단계</b>를 거쳐 뽑아요. 수업 실력은 기본이고, 학생을 대하는 마음과 수업 태도를 가장 중요하게 보기 때문에 어느 강사님과 수업하셔도 좋답니다.👍</p>
+          <p>다만 학생마다 잘 맞는 수업 스타일이 다르다는 걸 저희도 강사님들도 너무 잘 이해하고 있어요. 수강생이 요청하면 언제든 강사 변경이 가능하다는 것도 모두 알고 계시니, 부담 없이 말씀해 주세요.☺️</p>
+        </div>
+        <p class="lbl">상담 내용 (선택 · 여러 개 가능)</p>
+        <div class="chips"><span class="chip">다른 수업 스타일을 경험해 보고 싶어요</span><span class="chip">수업 시간이 잘 맞지 않아요</span><span class="chip">다른 강사님과 수업하고 싶어요</span><span class="chip">먼저 상담받고 싶어요</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>

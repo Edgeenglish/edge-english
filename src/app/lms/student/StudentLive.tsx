@@ -5,19 +5,25 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lms/auth/client';
-import { createStudentLogin, loadStudentAccounts, loadStudentView, searchStudents, studentActions, type StudentAccount, type StudentView } from '@/lms/student/live';
-import StudentHome from './StudentHome';
+import { loadStudentAccounts, loadStudentBundle, searchStudents, studentActions, type StudentAccount, type StudentExtras, type StudentView } from '@/lms/student/live';
+import { forgetOwnView, ownViewCache, rememberOwnView } from '@/lms/student/prefetch';
+import StudentHome, { StudentHomeSkeleton } from './StudentHome';
 
 type State =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; nowIso: string; view: StudentView; admin: { students: StudentAccount[]; studentId: string } | null };
+  | { kind: 'ready'; nowIso: string; view: StudentView; extras: StudentExtras; admin: { students: StudentAccount[]; studentId: string } | null };
 
 /** 로그인 화면으로 — 지금 주소(바로가기 링크 포함)를 넘겨 로그인 뒤 같은 화면으로 돌아옴 */
 const toLogin = () => window.location.replace(`/lms/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
 
-export default function StudentLive({ studentParam, makeup, tab }: { studentParam?: string; makeup?: string; tab?: string }) {
-  const [state, setState] = useState<State>({ kind: 'loading' });
+export default function StudentLive({ studentParam, makeup, tab, late, renew }: { studentParam?: string; makeup?: string; tab?: string; late?: string; renew?: boolean }) {
+  // 머리글이 미리 불러 둔 본인 자료가 있으면 첫 화면부터 바로 보여 줌 (운영자 보기 ?student= 는 제외). 아래에서 로그인 확인 후 새로 불러 바꿈
+  const [state, setState] = useState<State>(() => {
+    const c = studentParam ? null : ownViewCache();
+    return c?.view ? { kind: 'ready', nowIso: new Date().toISOString(), view: c.view.view, extras: c.view.extras, admin: null } : { kind: 'loading' };
+  });
+  const [fresh, setFresh] = useState<StudentView | undefined>();
   const sb = supabaseBrowser();
   const adminStudent = state.kind === 'ready' && state.admin ? state.admin.studentId : null;
 
@@ -25,17 +31,32 @@ export default function StudentLive({ studentParam, makeup, tab }: { studentPara
     if (!sb) return setState({ kind: 'error', message: 'Supabase 설정이 없어요.' });
     (async () => {
       const { data: session } = await sb.auth.getSession();
-      if (!session.session) return toLogin();
+      if (!session.session) { forgetOwnView(); return toLogin(); }
+      const uid = session.session.user.id;
+      const c = studentParam ? null : ownViewCache();
+      const mine = c?.userId === uid ? c : null;
+      if (c && !mine) forgetOwnView();
+      // 학생 화면 자료를 역할 확인과 함께 불러옴 (기다리는 시간 한 번 줄임). 머리글이 불러오는 중이면 그것을 기다림. 학생이 아니면 이 결과는 버림
+      const own = (mine?.pending ?? loadStudentBundle(sb, null)).then((view) => ({ view }), (e: unknown) => ({ e }));
       const { data: role } = await sb.rpc('my_role');
       try {
         const nowIso = new Date().toISOString();
-        if (role === 'student') return setState({ kind: 'ready', nowIso, view: await loadStudentView(sb, null), admin: null });
+        if (role === 'student') {
+          const r = await own;
+          if ('e' in r) throw r.e;
+          rememberOwnView(uid, r.view);
+          // 미리 보여 준 자료가 있으면 화면은 그대로 두고 내용만 새것으로
+          if (mine?.view) return setFresh(r.view.view);
+          return setState({ kind: 'ready', nowIso, view: r.view.view, extras: r.view.extras, admin: null });
+        }
+        if (mine?.view) forgetOwnView();
         const [{ data: aal }, { data: admin }] = await Promise.all([sb.auth.mfa.getAuthenticatorAssuranceLevel(), sb.rpc('is_admin')]);
         if (role !== 'admin' || aal?.currentLevel !== 'aal2' || admin !== true) return toLogin();
         const students = await loadStudentAccounts(sb);
         const pick = students.find((x) => x.id === studentParam || x.code === studentParam) ?? students[0];
         if (!pick) return setState({ kind: 'error', message: '등록된 수강생이 없어요.' });
-        setState({ kind: 'ready', nowIso, view: await loadStudentView(sb, pick.id), admin: { students, studentId: pick.id } });
+        const b = await loadStudentBundle(sb, pick.id);
+        setState({ kind: 'ready', nowIso, view: b.view, extras: b.extras, admin: { students, studentId: pick.id } });
       } catch (e) {
         setState({ kind: 'error', message: e instanceof Error ? e.message : '불러오지 못했어요.' });
       }
@@ -46,10 +67,12 @@ export default function StudentLive({ studentParam, makeup, tab }: { studentPara
 
   async function logout() {
     await sb?.auth.signOut();
+    forgetOwnView();
     window.location.replace('/lms/login');
   }
 
-  if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;
+  // 처음 열 때는 '불러오는 중' 글 대신 메뉴·칸 자리를 그대로 둔 빈 틀 (운영자 보기도 같음)
+  if (state.kind === 'loading') return <StudentHomeSkeleton />;
   if (state.kind === 'error' || !actions)
     return (
       <div className="px-6 py-16 text-center">
@@ -59,13 +82,11 @@ export default function StudentLive({ studentParam, makeup, tab }: { studentPara
         </button>
       </div>
     );
-  const current = state.admin?.students.find((x) => x.id === state.admin?.studentId);
   const adminBar = state.admin && (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[12px] bg-[#1d1b2b] px-3 py-2">
       <span className="text-[13px] font-semibold text-white">운영자 보기</span>
       <StudentPicker students={state.admin.students} current={state.admin.studentId} />
       <a href="/lms/admin" className="min-h-[38px] rounded-[8px] bg-white/15 px-3 py-2 text-[13px] font-semibold text-white">← 운영자 화면</a>
-      {sb && current && !current.hasLogin && <StudentLoginForm onCreate={(email) => createStudentLogin(sb, current.id, email)} />}
     </div>
   );
   return (
@@ -73,44 +94,17 @@ export default function StudentLive({ studentParam, makeup, tab }: { studentPara
       key={state.view.studentId}
       nowIso={state.nowIso}
       initial={state.view}
+      refreshed={fresh}
+      preloaded={state.extras}
       actions={actions}
       preview={false}
       adminBar={adminBar}
       onLogout={state.admin ? undefined : logout}
       openMakeup={makeup}
       openTab={tab}
+      openLate={late}
+      openRenew={renew}
     />
-  );
-}
-
-// 대표: 이 수강생의 로그인 계정 만들기 (이메일만 넣으면 계정 + 수강생 연결, 비밀번호 없음 — 수강생은 이메일 코드로 로그인)
-function StudentLoginForm({ onCreate }: { onCreate: (email: string) => Promise<{ created: boolean }> }) {
-  const [email, setEmail] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  async function submit() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      await onCreate(email);
-      setMsg({ ok: true, text: '수강생 로그인 계정을 만들었어요.' });
-      setTimeout(() => window.location.reload(), 1500);
-    } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : '만들지 못했어요.' });
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="flex w-full flex-wrap items-center gap-2">
-      <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="수강생 로그인 이메일"
-        aria-label="수강생 로그인 이메일" className="min-h-[38px] min-w-0 flex-1 rounded-[8px] bg-white px-2 text-[15px] text-[#1d1b2b]" />
-      <button type="button" disabled={busy || !email.trim()} onClick={submit}
-        className="min-h-[38px] rounded-[8px] bg-[#6d4aff] px-3 text-[13px] font-semibold text-white disabled:opacity-50">
-        {busy ? '만드는 중…' : '로그인 만들기'}
-      </button>
-      {msg && <p role={msg.ok ? 'status' : 'alert'} className={`w-full text-[13px] ${msg.ok ? 'text-[#b9f5cf]' : 'text-[#ffb4ab]'}`}>{msg.text}</p>}
-    </div>
   );
 }
 

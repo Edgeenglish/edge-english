@@ -3,7 +3,7 @@
 import { enBoth, enDay, enEvery, enEveryLines, enZoned } from '../admin/time-text';
 
 export type TutorUpdateKind =
-  | 'new_student' | 'renewal' | 'schedule_change' | 'class_moved' | 'cover'
+  | 'new_student' | 'renewal' | 'schedule_change' | 'class_moved' | 'cover' | 'cover_canceled'
   | 'makeup_new' | 'makeup_moved' | 'makeup_removed' | 'makeup_canceled' | 'cancel_undone' | 'canceled' | 'student_late';
 
 export type TutorUpdate = { id: string; kind: TutorUpdateKind; student: string; studentId?: string; at: Date; info: Record<string, unknown> };
@@ -29,6 +29,7 @@ export const UPDATE_TITLE: Record<TutorUpdateKind, [string, string]> = {
   schedule_change: ['Schedule change', '정규 시간 변경'],
   class_moved: ['Class date changed', '수업 날짜 변경'],
   cover: ['Cover classes', '대체 수업'],
+  cover_canceled: ['Cover class canceled', '대체 수업 취소'],
   makeup_new: ['New make-up', '새 보강'],
   makeup_moved: ['Make-up time changed', '보강 시간 변경'],
   makeup_removed: ['Make-up canceled', '보강 취소'],
@@ -56,9 +57,16 @@ export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)
     (typeof zone === 'string' ? [enEvery(ts, zone)] : enEveryLines(ts, zone, end));
   switch (u.kind) {
     case 'new_student':
-      return [...every(ds(i.every), { last: d(i.last), classes: Number(i.classes) || null }), `First class: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} · ${i.minutes} min · ${i.classes} classes`];
-    case 'renewal':
-      return [...every(ds(i.every), { last: d(i.last) }), `Next period: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} – ${enDay(d(i.last) ?? u.at, z(d(i.last) ?? u.at))} · ${i.same ? 'same schedule' : 'new schedule'}`];
+    {
+      // 첫 수업을 학생이 취소했으면 실제 첫 수업 (20261122160000, 대표 11/22 — 취소는 따로 '수강생 취소' 알림)
+      const first = d(i.first_actual) ?? d(i.first) ?? u.at;
+      return [...every(ds(i.every), { last: d(i.last), classes: Number(i.classes) || null }), `First class: ${enDay(first, z(first))} · ${i.minutes} min · ${i.classes} classes`];
+    }
+    case 'renewal': {
+      // 기간 끝 = 수강권 종료일(period_end, 20261122150000). 옛 기록은 마지막 수업일
+      const end = i.period_end ? new Date(`${i.period_end}T12:00:00+09:00`) : d(i.last);
+      return [...every(ds(i.every), { last: d(i.last) }), `Next period: ${enDay(d(i.first) ?? u.at, z(d(i.first) ?? u.at))} – ${enDay(end ?? u.at, z(end ?? u.at))} · ${i.same ? 'same schedule' : 'new schedule'}`];
+    }
     case 'schedule_change':
       return [...every(ds(i.every), { last: d(i.last) }), `From ${enDay(d(i.from) ?? u.at, z(d(i.from) ?? u.at))}`];
     case 'class_moved': {
@@ -66,6 +74,7 @@ export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)
       return [enBoth(d(i.to) ?? u.at, z(d(i.to) ?? u.at)), ...(was ? [`Was: ${enZoned(was, z(was))}`] : [])];
     }
     case 'cover':
+    case 'cover_canceled':
       return ds(i.times).map((t) => enBoth(t, z(t)));
     case 'makeup_new': {
       const o = d(i.origin);
@@ -92,6 +101,9 @@ export function updateLines(u: TutorUpdate, zone: string | ((t: Date) => string)
 
 /** 첫 수업 날짜 변경이면 'First class date changed' */
 export function updateTitle(u: TutorUpdate, ko: boolean): string {
+  if (u.kind === 'canceled') return u.info.late === true
+    ? (ko ? '수강생 늦은 취소' : 'Student canceled late')
+    : (ko ? '수강생 사전 취소' : 'Student canceled in advance');
   if (u.kind === 'class_moved' && u.info.is_first) return ko ? '첫 수업 날짜 변경' : 'First class date changed';
   return UPDATE_TITLE[u.kind]?.[ko ? 1 : 0] ?? u.kind;
 }

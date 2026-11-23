@@ -1,0 +1,55 @@
+<title>변경·취소 카드 규칙 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 홈 '수업 변경·취소' 카드 규칙 두 줄만 바꾼 시안: 지금 / 새 문구, PC 카드 폭·휴대폰 카드 폭 */
+:root { --bg:#f4f3f8; --panel:#fff; --fg:#1d1b2b; --sub:#55526a; --label:#3d3a52; --border:#e6e3ef; --line:#eeecf4; --accent:#5b3df0; --mute:#8b88a0;
+  --font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#15141c; --panel:#1f1d29; --fg:#f0eef7; --sub:#c3c0d3; --label:#e2dff0; --border:#34314a; --line:#2d2a3a; --accent:#a594ff; --mute:#8f8ca3; color-scheme:dark } }
+:root[data-theme="dark"] { --bg:#15141c; --panel:#1f1d29; --fg:#f0eef7; --sub:#c3c0d3; --label:#e2dff0; --border:#34314a; --line:#2d2a3a; --accent:#a594ff; --mute:#8f8ca3; color-scheme:dark }
+body { background:var(--bg); color:var(--fg); font-family:var(--font); padding-block:24px 40px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width:900px; margin:0 auto; display:grid; gap:22px; }
+h1 { font-size:20px; margin:0; } h2 { font-size:15px; margin:0 0 8px; } p { margin:0; }
+.row { display:grid; grid-template-columns:minmax(0,376px) minmax(0,358px); gap:18px; align-items:start; }
+@media (max-width:800px) { .row { grid-template-columns:minmax(0,1fr); } }
+.cap { font-size:12px; font-weight:700; color:var(--mute); margin-bottom:6px; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:16px; }
+.top { display:flex; justify-content:space-between; align-items:center; min-height:48px; padding:0 16px; border-bottom:1px solid var(--line); }
+.top b { font-size:15px; } .top span { font-size:12.5px; font-weight:600; color:var(--accent); }
+.body { padding:10px 16px 14px; display:grid; gap:6px; }
+.left { font-size:12.5px; color:var(--sub); }
+.left b { font-size:19px; font-weight:800; color:var(--fg); }
+.left i { font-style:normal; font-size:12px; font-weight:600; color:var(--accent); margin-left:4px; }
+.rule { display:grid; grid-template-columns:auto minmax(0,1fr); gap:2px 8px; font-size:11.5px; line-height:1.45; color:var(--sub); }
+.rule b { font-weight:700; color:var(--label); }
+.old { opacity:.75; }
+</style>
+<div class="wrap">
+  <h1>홈 '수업 변경·취소' 카드 · 규칙 두 줄만</h1>
+  <section>
+    <h2>지금 (운영과 같음)</h2>
+    <div class="row old">
+      <div><p class="cap">PC</p><div class="card"><div class="top"><b>수업 변경·취소</b><span>신청하기 ›</span></div><div class="body">
+        <p class="left">남은 변경권 <b>0개</b> / 총 2개<i>내역 ›</i></p>
+        <p class="rule"><b>6시간 전</b><span>변경권 1개 사용 · 보강 가능</span><b>6시간 이내</b><span>변경권 유지 · 보강 불가 (수업 1회 차감)</span></p>
+      </div></div></div>
+      <div><p class="cap">휴대폰</p><div class="card"><div class="top"><b>수업 변경·취소</b><span>신청하기 ›</span></div><div class="body">
+        <p class="left">남은 변경권 <b>0개</b> / 총 2개<i>내역 ›</i></p>
+        <p class="rule"><b>6시간 전</b><span>변경권 1개 사용 · 보강 가능</span><b>6시간 이내</b><span>변경권 유지 · 보강 불가 (수업 1회 차감)</span></p>
+      </div></div></div>
+    </div>
+  </section>
+  <section>
+    <h2>새 문구</h2>
+    <div class="row">
+      <div><p class="cap">PC</p><div class="card"><div class="top"><b>수업 변경·취소</b><span>신청하기 ›</span></div><div class="body">
+        <p class="left">남은 변경권 <b>0개</b> / 총 2개<i>내역 ›</i></p>
+        <p class="rule"><b>6시간 이상 남았을 때 취소 시</b><span>변경권 1개 사용, 보강 가능</span><b>6시간 미만 남았을 때 취소 시</b><span>변경권 사용 안 됨, 보강 불가(수업 1회 차감)</span></p>
+      </div></div></div>
+      <div><p class="cap">휴대폰</p><div class="card"><div class="top"><b>수업 변경·취소</b><span>신청하기 ›</span></div><div class="body">
+        <p class="left">남은 변경권 <b>0개</b> / 총 2개<i>내역 ›</i></p>
+        <p class="rule"><b>6시간 이상 남았을 때 취소 시</b><span>변경권 1개 사용, 보강 가능</span><b>6시간 미만 남았을 때 취소 시</b><span>변경권 사용 안 됨, 보강 불가(수업 1회 차감)</span></p>
+      </div></div></div>
+    </div>
+  </section>
+</div>

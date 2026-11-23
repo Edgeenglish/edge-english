@@ -7,13 +7,14 @@ import { useEffect, useMemo, useState } from 'react';
 import type { TaskSource } from '@/lms/admin/board';
 import type { LessonItem } from '@/lms/admin/dashboard';
 import { planActions } from '@/lms/admin/confirm-live';
-import { loadAdminBoard, rejectTimeOff, type DashboardStats } from '@/lms/admin/live';
+import { decideRegularChange, loadAdminBoard, rejectTimeOff, tutorChangeDone, type DashboardStats } from '@/lms/admin/live';
 import { endNotice, loadNotices, saveNotice } from '@/lms/admin/dashboard-live';
 import { closeEnrollment, markImportChecked, markRenewalSent, setImportEndReason, setImportOrigin, notifyRenewalTutor } from '@/lms/admin/import-live';
 import { supabaseBrowser } from '@/lms/auth/client';
 import AdminDashboard from './AdminDashboard';
 import { saveTaskClosure } from '@/lms/admin/task-closure';
 import { loadTaskHistory, reopenTask } from '@/lms/admin/task-history';
+import { loadRenewalRequests } from '@/lms/admin/renewal-requests';
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; tasks: TaskSource[]; today: LessonItem[]; stats: DashboardStats | null };
 
@@ -93,9 +94,11 @@ export default function AdminLive() {
       enrollmentClose={sb ? (id) => closeEnrollment(sb, id) : undefined}
       noExtension={sb ? (task) => saveTaskClosure(sb, task, true) : undefined}
       timeOffReject={sb ? (id, reason) => rejectTimeOff(sb, id, reason) : undefined}
+      changeRequests={sb ? { decide: (id, action, choice, week) => decideRegularChange(sb, id, action, choice, week), done: (id) => tutorChangeDone(sb, id) } : undefined}
       notices={notices}
       history={sb ? { load: () => loadTaskHistory(sb), reopen: (r) => reopenTask(sb, r) } : undefined}
       onReload={reload}
+      renewalRequests={sb ? () => loadRenewalRequests(sb) : undefined}
     />
   );
 }

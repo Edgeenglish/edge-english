@@ -20,9 +20,9 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
 }
 
 export async function loadChangeStudents(sb: SupabaseClient): Promise<ChStudent[]> {
-  const rows = check(await sb.from('students').select('id, code, name_ko, name_en, timezone').order('name_ko')) as
-    { id: string; code: string; name_ko: string; name_en: string; timezone: string }[];
-  return rows.map((s) => ({ id: s.id, code: s.code, nameKo: s.name_ko, nameEn: s.name_en, timezone: s.timezone }));
+  const rows = check(await sb.from('students').select('id, code, name_ko, name_en, display_name, timezone').order('name_ko')) as
+    { id: string; code: string; name_ko: string; name_en: string; display_name: string | null; timezone: string }[];
+  return rows.map((s) => ({ id: s.id, code: s.code, nameKo: s.name_ko, nameEn: s.name_en, displayName: s.display_name, timezone: s.timezone }));
 }
 
 export type StudentLessonData = {
@@ -247,7 +247,7 @@ export async function markLessonNoticesSent(sb: SupabaseClient, noticeIds: strin
 /** 대시보드: 안 보낸 수업 변경·보강 안내, 강사 답을 기다리는 보강 신청 */
 export async function loadChangeTasks(sb: SupabaseClient): Promise<{ pendingNotices: number; openMakeups: number } | null> {
   const [n, m] = await Promise.all([
-    sb.from('lesson_notices').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    sb.from('lesson_notices').select('id', { count: 'exact', head: true }).eq('status', 'pending').is('email_status', null),
     sb.from('makeup_requests').select('id', { count: 'exact', head: true }).in('status', ['requested', 'countered']),
   ]);
   if (n.error) return null;   // 1700 적용 전 DB

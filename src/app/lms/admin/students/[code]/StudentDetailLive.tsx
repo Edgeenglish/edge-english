@@ -7,14 +7,16 @@ import {
 } from '@/lms/admin/students-live';
 import type { StudentDetailData } from '@/lms/admin/students';
 import { supabaseBrowser } from '@/lms/auth/client';
+import { createStudentLogin } from '@/lms/student/live';
 import { addLessonByAdmin, editLessonByAdmin, loadActiveTutors, loadMakeupLogs, loadStudentLessons } from '@/lms/admin/lesson-change-live';
 import StudentDetail, { type DetailActions, type RenewalExtra } from './StudentDetail';
 import type { RenewalContext, Rewards } from '@/lms/admin/renewal';
 import {
   carryCheck, confirmPlan, loadRenewalContext, loadRewards, newId, renewalConflicts, saveCarry, saveRenewal, saveReward,
 } from '@/lms/admin/renewal-live';
+import { closeRenewalRequest, confirmRenewalRequest, loadRenewalRequests, type AdminRenewalRequest } from '@/lms/admin/renewal-requests';
 
-type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; id: string; data: StudentDetailData; ctx: RenewalContext | null; rewards: Rewards | null };
+type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; nowIso: string; id: string; data: StudentDetailData; ctx: RenewalContext | null; rewards: Rewards | null; request: AdminRenewalRequest | null };
 
 export default function StudentDetailLive({ code }: { code: string }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -23,12 +25,14 @@ export default function StudentDetailLive({ code }: { code: string }) {
   const load = useCallback(async (id: string) => {
     if (!sb) return;
     // 재등록·적립금 읽기는 따로: 이 DB 에 아직 없으면(운영 미반영) 그 칸만 안 보이고 나머지는 그대로
-    const [data, ctx, rewards] = await Promise.all([
+    const [data, ctx, rewards, requests] = await Promise.all([
       loadStudentDetail(sb, id),
       loadRenewalContext(sb, id).catch(() => null),
       loadRewards(sb, id).catch(() => null),
+      loadRenewalRequests(sb).catch(() => [] as AdminRenewalRequest[]),
     ]);
-    setState({ kind: 'ready', nowIso: new Date().toISOString(), id, data, ctx, rewards });
+    const request = requests.find((r) => r.studentId === id) ?? null;
+    setState({ kind: 'ready', nowIso: new Date().toISOString(), id, data, ctx, rewards, request });
   }, [sb]);
 
   useEffect(() => {
@@ -67,6 +71,7 @@ export default function StudentDetailLive({ code }: { code: string }) {
       add: async (source, tutorId, at, note) => { await addLessonByAdmin(sb, source, tutorId, at, note); await load(id); },
       edit: async (lessonId, tutorId, at, note) => { await editLessonByAdmin(sb, lessonId, tutorId, at, note); await load(id); },
     },
+    createLogin: async (email) => { await createStudentLogin(sb, id, email); await load(id); },
   } : null, [sb, id, load]);
 
   const code_ = (state.kind === 'ready' ? state.data.student.code : null) ?? code;
@@ -77,11 +82,13 @@ export default function StudentDetailLive({ code }: { code: string }) {
     carryCheck: (items) => carryCheck(sb, id, items),
     carry: (requestId, items) => saveCarry(sb, requestId, code_, items),
     reward: (requestId, amount, reason) => saveReward(sb, requestId, id, amount, reason),
+    confirmRequest: (requestId, ids, x, noSchedule) => confirmRenewalRequest(sb, requestId, ids, x, noSchedule),
+    closeRequest: (requestId) => closeRenewalRequest(sb, requestId),
     newId,
   } : null, [sb, id, code_]);
 
   if (state.kind === 'loading') return <p className="px-6 py-16 text-center text-[15px] text-[#6b6880]">불러오는 중…</p>;
   if (state.kind === 'error' || !actions) return <p className="px-6 py-16 text-center text-[15px] text-[#b3261e]">{state.kind === 'error' ? state.message : ''}</p>;
   return <StudentDetail data={state.data} nowIso={state.nowIso} actions={actions}
-    extra={renewalActions ? { ctx: state.ctx, rewards: state.rewards, actions: renewalActions } : undefined} />;
+    extra={renewalActions ? { ctx: state.ctx, rewards: state.rewards, request: state.request, actions: renewalActions } : undefined} />;
 }

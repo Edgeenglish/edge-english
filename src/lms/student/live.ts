@@ -1,12 +1,15 @@
+import { parseCreditHistory, type CreditPeriodHistory } from './credit-history';
+import type { KstSlot, RcPeriod } from './regular-change';
 // 수강생 화면 실제 데이터 (migration 2800). 읽기·쓰기 모두 DB 함수 — 본인 확인·검사·이력은 DB
 import { asClassType } from '../class-type';
-import { loadScreenPrefs, saveScreenPref, type PrefKey } from '../screen-prefs';
+import { loadScreenPrefs, saveScreenPref, type PrefKey, type ScreenPrefs } from '../screen-prefs';
 // 수강생 본인은 student_ 함수, 운영자(TOTP 완료)가 ?student= 로 열면 운영진 화면과 같은 admin_ 함수(이력에 운영자로 남음)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KstDate } from '../rules/dates';
 import type { CreditPeriod, LateReason, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
 import { processingEvents, type ProcessingEvent } from './processing-history';
+import { renewalActions } from './renewal-apply';
 
 const NOT_APPLIED = '수강생 화면이 이 DB에 아직 없어요 (migration 2800).';
 
@@ -31,9 +34,15 @@ export type MakeupRight = {
   tutorCanceled?: boolean;
   /** 지난 수강 기간에서 이월된 권리 (원래 수업이 지금 수강권이 아닌 앞 수강권 것) — 카드 '이월된 수업' (11/12 대표) */
   carryIn?: boolean;
+  tutorChoices?: MakeupTutor[];
+  tutorId?: string | null;
 };
+export type MakeupTutor = { id: string; name: string; role: 'original' | 'substitute' | 'assigned' };
+export const makeupTutorText = (right: MakeupRight): string => right.tutorChoices?.length
+  ? `${right.tutorChoices.map((t) => t.name).join(' / ')}${right.tutorChoices.length > 1 ? ' 중 선택' : ''}`
+  : right.tutor || '담당 강사';
 /** 보강 권리를 가리키는 값 (원래 수업 · 시트 보강 · 보상수업 중 하나) */
-export type RightRef = { lessonId: string | null; itemId: string | null; compId?: string | null };
+export type RightRef = { lessonId: string | null; itemId: string | null; compId?: string | null; tutorId?: string | null };
 /** 강사 휴무 안내 한 줄. stage tutor_ok = 수강생 답 기다림, confirmed = 대체 수업 확정, choice wait = 기존 강사님과 보강 */
 export type LeaveRow = {
   id: string;
@@ -80,9 +89,13 @@ export type StudentView = {
   tutorLateNotices?: { lessonId: string; minutes: number; reason: string | null }[];
   processingHistory?: ProcessingEvent[];
   processingHistoryError?: boolean;
+  /** 변경권 내역 (student_credit_history, 20261118100000). 함수 없는 옛 DB 면 undefined → 예전 변경권 화면 */
+  creditHistory?: CreditPeriodHistory[];
   leave: LeaveRow[];
   /** 휴무 처리 중인데 수업 줄이 아직 없는 수업 → 일정에 '일정 조율 중' (3700) */
   leavePending?: { id: string; startsAt: Date; endsAt: Date }[];
+  /** 시간 협의 필요 회차 (기존 일정 기준, 수업 아님 — migration 20261122130000). 함수 없는 옛 DB 면 [] */
+  pendingTimes?: { seq: number; startsAt: Date; minutes: number }[];
   holidays: KstDate[];
   points: PointsEvent[];
   /** 지금 변경권 기간과 쓴·돌려받은 기록 */
@@ -101,7 +114,7 @@ type Raw = {
     next_regular_from: KstDate | null;
   };
   lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null; type?: string; lesson_final_end_date?: KstDate | null }[];
-  makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; original_at: string; time_known?: boolean; tutor_leave: boolean; carry_in?: boolean }[];
+  makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; tutor_choices?: MakeupTutor[]; original_at: string; time_known?: boolean; tutor_leave: boolean; carry_in?: boolean }[];
   leave_pending?: { id: string; starts_at: string; ends_at: string }[];
   makeup_requests: {
     confirmed_lesson_id?: string | null;
@@ -199,6 +212,7 @@ export function parseStudentView(r: Raw): StudentView {
       timeKnown: m.time_known !== false,
       tutorLeave: m.tutor_leave,
       tutor: m.tutor ?? r.lessons.find((l) => l.id === m.lesson_id)?.tutor ?? null,
+      tutorChoices: m.tutor_choices,
       tutorNoShow: !!m.comp_id || r.lessons.find((l) => l.id === m.lesson_id)?.class_status === 'Tutor no-show',
       tutorFault: TUTOR_FAULT.includes(r.lessons.find((l) => l.id === m.lesson_id)?.class_status ?? ''),
       tutorCanceled: ['Tutor canceled in advance', 'Tutor canceled late'].includes(r.lessons.find((l) => l.id === m.lesson_id)?.class_status ?? ''),
@@ -264,15 +278,18 @@ export function withSuggestions(v: StudentView, rows: SuggestionRow[]): StudentV
 
 /** studentId: 운영자가 고른 수강생 (수강생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
-  const [screen, book, sug, history, late, tutorLate] = await Promise.all([
+  const [screen, book, sug, history, late, tutorLate, credits, pending] = await Promise.all([
     sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId), sb.rpc('student_makeup_suggestions', { p_student: studentId }),
     sb.rpc('student_processing_history', { p_student: studentId }), sb.rpc('student_late_notices', { p_student: studentId }),
-    sb.rpc('student_tutor_late_notices', { p_student: studentId })]);
+    sb.rpc('student_tutor_late_notices', { p_student: studentId }), sb.rpc('student_credit_history', { p_student: studentId }),
+    sb.rpc('student_pending_times', { p_student: studentId })]);
   const v = parseStudentView(check(screen));
   // 강사가 제안한 시간 (H26(134), 20261111160000). 함수 없는 옛 DB 면 예전 그대로
   return { ...(sug.error ? v : withSuggestions(v, (sug.data as SuggestionRow[]) ?? [])), textbook: book,
     processingHistory: history.error ? [] : processingEvents((history.data as ProcessingEvent[]) ?? []),
     processingHistoryError: !!history.error,
+    pendingTimes: pending.error ? [] : ((pending.data ?? []) as { seq: number; starts_at: string; minutes: number }[]).map((x) => ({ seq: x.seq, startsAt: new Date(x.starts_at), minutes: x.minutes })),
+    creditHistory: credits.error ? undefined : parseCreditHistory(credits.data),
     lateNotices: late.error ? [] : ((late.data ?? []) as { lesson_id: string; minutes: number; reason: LateReason | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })),
     tutorLateNotices: tutorLate.error ? [] : ((tutorLate.data ?? []) as { lesson_id: string; minutes: number; reason: string | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })) };
 }
@@ -292,7 +309,9 @@ export type RegularSlot = { weekday: number; timeKst: string; minutes: number; t
 /** 보상수업이면 p_comp 를 붙임 (4100). 원래 수업 보강은 예전과 같은 인자 → 4100 전 DB에서도 그대로 */
 const compArg = (right: RightRef) => (right.compId ? { p_comp: right.compId } : {});
 export async function loadMakeupOptions(sb: SupabaseClient, studentId: string | null, right: RightRef): Promise<MakeupOption[]> {
-  const rows = check(await sb.rpc('student_makeup_options', { p_student: studentId, p_lesson: right.lessonId, p_item: right.itemId, ...compArg(right) })) as { section: string; starts_at: string }[];
+  const rows = check(right.tutorId
+    ? await sb.rpc('student_makeup_options_for_tutor', { p_student: studentId, p_lesson: right.lessonId, p_item: right.itemId, p_comp: right.compId ?? null, p_tutor: right.tutorId })
+    : await sb.rpc('student_makeup_options', { p_student: studentId, p_lesson: right.lessonId, p_item: right.itemId, ...compArg(right) })) as { section: string; starts_at: string }[];
   return rows.map((x) => ({ startsAt: new Date(x.starts_at), afterEnd: x.section === 'after_end' }));
 }
 
@@ -303,6 +322,20 @@ export type Reminders = { regular: boolean; makeup: boolean; hasEmail: boolean }
 export type TimezoneState = { timezone: string; kept: string | null };
 
 /** 수강생 화면 동작. admin = 운영자 보기(대신 입력)면 운영진 함수 */
+/** 정규 시간 변경·강사 변경 상담 (H26(208)) */
+export type RcOptions =
+  | { state: 'ok'; today: KstDate; finalEnd: KstDate; duration: number; tutor: string; slots: KstSlot[]; free: KstSlot[]; periods: RcPeriod[] }
+  | { state: 'none' | 'pending' | 'scheduled' | 'ending' };
+/** 학생이 고른 일정: 한국 요일들 + 한국 시각 하나 */
+export type RcPick = { days: number[]; time: string };
+export type RcCandidate = { days: number[]; time: string; week: KstDate; first: KstDate };
+export type RegularRequest = {
+  id: string; status: 'pending' | 'confirmed' | 'rejected' | 'withdrawn'; createdAt: Date; oldSlots: KstSlot[];
+  items: { c1: RcCandidate; c2: RcCandidate | null }[]; reason: string | null; chosen: KstSlot[] | null; effectiveFrom: KstDate | null;
+};
+export type TutorChangeRequest = { id: string; status: 'open' | 'done'; createdAt: Date; reasons: string[]; note: string | null };
+export type ChangeRequests = { regular: RegularRequest[]; tutor: TutorChangeRequest[] };
+
 export function studentActions(sb: SupabaseClient, adminStudentId: string | null) {
   const admin = adminStudentId !== null;
   return {
@@ -310,6 +343,8 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     prefs: () => loadScreenPrefs(sb, { student: adminStudentId }),
     savePref: admin ? null : (key: PrefKey, value: string) => saveScreenPref(sb, key, value),
     reload: () => loadStudentView(sb, adminStudentId),
+    /** 재등록 신청 (migration 20261121100000) */
+    renewal: renewalActions(sb, adminStudentId),
     /** 알림 설정 읽기(인자 없음)·바꾸기 — 수강생·운영자 같은 함수 */
     reminders: async (change?: { regular?: boolean; makeup?: boolean }): Promise<Reminders> => {
       const r = check(await sb.rpc('student_reminders', { p_student: adminStudentId, p_regular: change?.regular ?? null, p_makeup: change?.makeup ?? null })) as {
@@ -348,10 +383,11 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     history: async (): Promise<PaymentSummary[]> => {
       const r = await sb.rpc('student_enrollment_history', { p_student: adminStudentId });
       if (r.error) return [];
-      return ((r.data ?? []) as { id: string; current: boolean; status: string; duration_min: number; weekly_count: number; weeks: number | null; legacy_label: string | null; start_date: KstDate; final_end_date: KstDate; method: string | null; confirmed_on: KstDate | null }[]).map((e) => ({
+      return ((r.data ?? []) as { id: string; current: boolean; status: string; duration_min: number; weekly_count: number; weeks: number | null; legacy_label: string | null; start_date: KstDate; final_end_date: KstDate; method: string | null; confirmed_on: KstDate | null; schedule_pending?: boolean }[]).map((e) => ({
         id: e.id, product: productLabel(e), periodStart: e.start_date, periodEnd: e.final_end_date,
         method: e.method === 'bank_transfer' ? 'bank_transfer' : e.method === 'card_link' ? 'card_imweb' : null,
         confirmedOn: e.confirmed_on, current: e.current, paid: paidStatus({ status: e.status, confirmed_on: e.confirmed_on }),
+        schedulePending: e.schedule_pending === true,
       }));
     },
     /** 함수 없는 옛 DB 면 null (화면에서 해당 칸 숨김) */
@@ -375,6 +411,33 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     lateNotice: async (lessonId: string, minutes: number, reason: LateReason | null): Promise<void> => {
       check(await sb.rpc('student_late_notice', { p_student: adminStudentId, p_lesson: lessonId, p_minutes: minutes, p_reason: reason }));
     },
+    /** 정규 시간 변경 신청 화면 (H26(208)): 가능한 시간은 한국 요일·시각. state 가 ok 가 아니면 신청 못 함 */
+    regularOptions: async (from: KstDate | null = null): Promise<RcOptions> => {
+      const d = check(await sb.rpc('student_regular_change_options', { p_student: adminStudentId, p_from: from })) as Record<string, unknown>;
+      if (d.state !== 'ok') return { state: d.state as Exclude<RcOptions['state'], 'ok'> };
+      return { state: 'ok', today: d.today as KstDate, finalEnd: d.final_end as KstDate, duration: d.duration as number, tutor: d.tutor as string,
+        slots: d.slots as KstSlot[], free: d.free as KstSlot[], periods: d.periods as RcPeriod[] };
+    },
+    regularRequest: async (items: { c1: RcPick; c2: RcPick | null }[], reason: string, start: KstDate | null = null): Promise<void> => {
+      check(await sb.rpc('student_regular_change_request', { p_student: adminStudentId, p_items: items, p_reason: reason || null, p_start: start }));
+    },
+    regularWithdraw: async (id: string): Promise<void> => {
+      check(await sb.rpc('student_regular_change_withdraw', { p_student: adminStudentId, p_id: id }));
+    },
+    tutorChangeRequest: async (reasons: string[], note: string): Promise<void> => {
+      check(await sb.rpc('student_tutor_change_request', { p_student: adminStudentId, p_reasons: reasons, p_note: note || null }));
+    },
+    /** 내 정규 시간 변경 신청·강사 변경 상담 (함수 없는 옛 DB 면 빈 목록) */
+    changeRequests: async (): Promise<ChangeRequests> => {
+      const r = await sb.rpc('student_change_requests', { p_student: adminStudentId });
+      if (r.error || !r.data) return { regular: [], tutor: [] };
+      const d = r.data as { regular: { id: string; status: RegularRequest['status']; created_at: string; old_slots: KstSlot[]; items: RegularRequest['items']; reason: string | null; chosen: KstSlot[] | null; effective_from: KstDate | null }[];
+        tutor: { id: string; status: 'open' | 'done'; created_at: string; reasons: string[]; note: string | null }[] };
+      return {
+        regular: d.regular.map((x) => ({ id: x.id, status: x.status, createdAt: new Date(x.created_at), oldSlots: x.old_slots, items: x.items, reason: x.reason, chosen: x.chosen, effectiveFrom: x.effective_from })),
+        tutor: d.tutor.map((x) => ({ id: x.id, status: x.status, createdAt: new Date(x.created_at), reasons: x.reasons, note: x.note })),
+      };
+    },
     /** 강사 '늦어요' 알림 다시 읽기 (QA 11/14: 열어 둔 홈에도 반영). 옛 DB 면 빈 배열 */
     tutorLateNotices: async (): Promise<{ lessonId: string; minutes: number; reason: string | null }[]> => {
       const r = await sb.rpc('student_tutor_late_notices', { p_student: adminStudentId });
@@ -393,6 +456,10 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     },
     requestMakeup: async (right: RightRef, slots: Date[]): Promise<void> => {
       const p_slots = slots.map((s) => ({ starts_at: s.toISOString() }));
+      if (right.tutorId) {
+        check(await sb.rpc('student_makeup_request_for_tutor', { p_student: adminStudentId, p_lesson: right.lessonId, p_item: right.itemId, p_comp: right.compId ?? null, p_tutor: right.tutorId, p_slots }));
+        return;
+      }
       check(
         admin
           ? await sb.rpc('admin_makeup_request', { p_lesson: right.lessonId, p_item: right.itemId, p_slots, p_requested_at: null, ...compArg(right) })
@@ -435,4 +502,22 @@ export function searchStudents(list: StudentAccount[], q: string): StudentAccoun
 export async function createStudentLogin(sb: SupabaseClient, studentId: string, email: string): Promise<{ created: boolean }> {
   const rows = check(await sb.rpc('admin_student_login', { p_student: studentId, p_email: email })) as { created: boolean }[];
   return { created: rows[0]?.created ?? false };
+}
+
+/** 홈 위·아래 칸 자료 (시간대 '변경'·누적 학습 시간·공지 등). 못 읽은 것은 비워 두고 화면이 따로 다시 읽음 */
+export type StudentExtras = {
+  reminders?: Reminders | null; tz?: TimezoneState | null; slots?: RegularSlot[]; info?: MyInfo | null;
+  notices?: StudentNotice[]; history?: PaymentSummary[]; noTime?: Map<string, string | null>; changeReqs?: ChangeRequests; prefs?: ScreenPrefs;
+};
+export type StudentBundle = { view: StudentView; extras: StudentExtras };
+
+/** 학생 홈을 한 번에 그릴 자료 전부 (11/17 대표: 띠·칸이 늦게 생기며 화면이 바뀌지 않게) */
+export async function loadStudentBundle(sb: SupabaseClient, studentId: string | null): Promise<StudentBundle> {
+  const a = studentActions(sb, studentId);
+  // 못 읽으면 한 번 더 (화면이 그려진 뒤 칸이 끼어들지 않게). 그래도 못 읽으면 비워 두고 화면이 따로 다시 읽음
+  const opt = <T,>(f: () => Promise<T>): Promise<T | undefined> => f().catch(() => f()).then((v) => v, () => undefined);
+  const [view, reminders, tz, slots, info, notices, history, noTime, changeReqs, prefs] = await Promise.all([
+    loadStudentView(sb, studentId), opt(a.reminders), opt(() => a.timezone()), opt(a.regularSlots), opt(a.myInfo),
+    opt(a.notices), opt(a.history), opt(a.noTimeRights), opt(a.changeRequests), opt(a.prefs)]);
+  return { view, extras: { reminders, tz, slots, info, notices, history, noTime, changeReqs, prefs } };
 }

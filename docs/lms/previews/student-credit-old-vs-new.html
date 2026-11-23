@@ -1,0 +1,147 @@
+<title>내 정보 변경권 화면 비교</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 질문 3·4 비교: 각 질문마다 [지금 운영] vs [시험 사이트 새 창], PC(가운데 창) · 휴대폰(아래 창) */
+:root { --bg:#f4f3f8; --panel:#fff; --fg:#1d1b2b; --sub:#55526a; --mute:#8b88a0; --border:#e6e3ef; --line:#eeecf4; --accent:#5b3df0;
+  --dark:#1b1442; --darksub:#d8d3f5; --hl:#fff1c2; --warn:#b3261e; --sheet:#f6f5fa;
+  --font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#15141c; --panel:#1f1d29; --fg:#f0eef7; --sub:#c3c0d3; --mute:#8f8ca3; --border:#34314a; --line:#2d2a3a; --accent:#a594ff; --hl:#4a3c12; --warn:#ff8a80; --sheet:#1a1823; color-scheme:dark } }
+:root[data-theme="dark"] { --bg:#15141c; --panel:#1f1d29; --fg:#f0eef7; --sub:#c3c0d3; --mute:#8f8ca3; --border:#34314a; --line:#2d2a3a; --accent:#a594ff; --hl:#4a3c12; --warn:#ff8a80; --sheet:#1a1823; color-scheme:dark }
+body { background:var(--bg); color:var(--fg); font-family:var(--font); line-height:1.5; padding-block:24px 48px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width:1100px; margin:0 auto; display:grid; gap:30px; }
+h1 { font-size:21px; margin:0; } h2 { font-size:17px; margin:0; } h3 { font-size:14px; margin:0 0 6px; } p { margin:0; }
+.q { display:grid; gap:12px; }
+.lead { font-size:14px; color:var(--sub); }
+.pair { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; }
+@media (max-width:820px) { .pair { grid-template-columns:minmax(0,1fr); } }
+.col { display:grid; gap:10px; min-width:0; }
+.tag { font-size:12px; font-weight:800; color:var(--mute); }
+.frames { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; }
+.frame { border:1px solid var(--border); border-radius:14px; overflow:hidden; background:var(--bg); }
+.frame .cap { font-size:11.5px; font-weight:700; color:var(--mute); padding:6px 10px; border-bottom:1px solid var(--border); background:var(--panel); }
+.stage { padding:14px; display:flex; justify-content:center; }
+.sheet { width:100%; max-width:360px; background:var(--sheet); border-radius:18px; padding:14px; display:grid; gap:10px; }
+.pc .sheet { max-width:440px; }
+.zone { justify-self:start; font-size:11.5px; font-weight:600; color:var(--accent); background:var(--panel); border:1px solid var(--border); border-radius:999px; padding:2px 9px; }
+.sheet h4 { font-size:17px; margin:0; }
+.darkbox { background:var(--dark); color:#fff; border-radius:16px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; }
+.darkbox small { color:#c9c0ff; font-size:12px; display:block; }
+.darkbox b { font-size:24px; } .darkbox b span { font-size:13px; color:var(--darksub); font-weight:500; }
+.darkbox .per { font-size:12px; color:var(--darksub); text-align:right; }
+.list { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:0 12px; }
+.r { display:flex; justify-content:space-between; gap:8px; padding:9px 0; border-bottom:1px solid var(--line); font-size:13px; }
+.r:last-child { border-bottom:0; }
+.r b { white-space:nowrap; }
+.nr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1px 8px; padding:9px 0; border-bottom:1px solid var(--line); }
+.nr:last-child { border-bottom:0; }
+.nr .t { font-size:13px; font-weight:600; } .nr .v { font-size:12.5px; font-weight:700; white-space:nowrap; }
+.nr .s { grid-column:1/-1; font-size:11.5px; color:var(--sub); } .nr .w { grid-column:1/-1; font-size:11px; color:var(--mute); }
+.sum { display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding:9px 0; font-size:12px; color:var(--sub); }
+.sum b { font-size:18px; color:var(--fg); }
+.hl { background:var(--hl); border-radius:4px; padding:0 3px; }
+.link { font-size:12.5px; font-weight:600; color:var(--accent); }
+.note { font-size:13px; color:var(--sub); background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
+.note b { color:var(--fg); }
+.rec { color:#1f7a4d; font-weight:800; }
+</style>
+
+<div class="wrap">
+  <h1>질문 3·4 비교 시안 · 내 정보 › 변경권</h1>
+  <p class="lead">학생 화면 '내 정보' 탭 → '변경권 0개 ›' 줄을 누르면 열리는 창입니다. 노란 칸이 질문과 관련된 부분입니다. 예시 학생: 변경권 총 2개, 지금 기간 10/20~11/16.</p>
+
+  <!-- 질문 3 -->
+  <section class="q">
+    <h2>질문 3 · 이 창을 예전 목록으로 둘지, 새 '변경권 내역' 창으로 바꿀지</h2>
+    <p class="lead">지금 운영에서는 '내 정보 › 변경권'을 누르면 간단한 예전 목록이 나옵니다. 시험 사이트에서는 이번에 만든 '변경권 내역' 창(홈 카드 [내역 ›]과 같은 창)이 나오게 바꿔 두었습니다. 대표님이 정하지 않은 변경이라 여쭙니다.</p>
+    <div class="pair">
+      <div class="col"><span class="tag">A · 예전 목록 (지금 운영)</span>
+        <div class="frames">
+          <div class="frame pc"><div class="cap">PC · 가운데 창</div><div class="stage"><div class="sheet">
+            <span class="zone">모든 날짜·시간은 한국 시간 기준</span><h4>변경권</h4>
+            <div class="darkbox"><div><small>남은 변경권</small><b>0개 <span>/ 2개</span></b></div><div class="per">이번 기간<br>10/20 ~ 11/16</div></div>
+            <div class="list">
+              <div class="r"><span>11/12(목) 오후 1:00 수업 취소</span><b>−1</b></div>
+              <div class="r"><span>11/10(화) 오후 1:00 수업 취소</span><b>−1</b></div>
+            </div>
+            <p class="hl" style="font-size:12px">변경권을 쓴 줄만 · 남은 수가 그때 몇 개였는지·6시간 이상/미만은 안 보임</p>
+          </div></div></div>
+          <div class="frame"><div class="cap">휴대폰 · 아래에서 올라오는 창</div><div class="stage"><div class="sheet">
+            <span class="zone">모든 날짜·시간은 한국 시간 기준</span><h4>변경권</h4>
+            <div class="darkbox"><div><small>남은 변경권</small><b>0개 <span>/ 2개</span></b></div><div class="per">이번 기간<br>10/20 ~ 11/16</div></div>
+            <div class="list">
+              <div class="r"><span>11/12(목) 오후 1:00 수업 취소</span><b>−1</b></div>
+              <div class="r"><span>11/10(화) 오후 1:00 수업 취소</span><b>−1</b></div>
+            </div>
+          </div></div></div>
+        </div>
+      </div>
+      <div class="col"><span class="tag">B · 새 '변경권 내역' 창 (지금 시험 사이트) <span class="rec">권장</span></span>
+        <div class="frames">
+          <div class="frame pc"><div class="cap">PC · 가운데 창</div><div class="stage"><div class="sheet">
+            <span class="zone">모든 날짜·시간은 한국 시간 기준</span><h4>변경권 내역</h4>
+            <div class="list">
+              <div class="sum"><span>변경권 적용 기간<br><b style="font-size:13px">10/20(화)~11/16(월)</b></span><span style="text-align:right">남은 <b>0개</b><br>기본 제공 2개</span></div>
+              <div class="nr"><span class="t">11/6(금) 오후 12:20 수업 취소</span><span class="v" style="color:var(--mute)">사용 안 됨</span><span class="s">6시간 이상 남기고 취소 · 남은 변경권 없음 · 나중에 취소 되돌림 · 처리 후 0개</span><span class="w">취소: 11/5(목) 오후 4:10</span></div>
+              <div class="nr"><span class="t">11/12(목) 오후 1:00 수업 취소</span><span class="v">1개 사용</span><span class="s">6시간 이상 남기고 취소 · 처리 후 0개</span><span class="w">취소: 11/2(월) 오전 12:27</span></div>
+              <div class="nr"><span class="t">11/10(화) 오후 1:00 수업 취소</span><span class="v">1개 사용</span><span class="s">6시간 이상 남기고 취소 · 처리 후 1개</span><span class="w">취소: 10/29(목) 오후 4:07</span></div>
+            </div>
+            <span class="link">처리 내역 전체 ›</span>
+          </div></div></div>
+          <div class="frame"><div class="cap">휴대폰 · 아래에서 올라오는 창</div><div class="stage"><div class="sheet">
+            <span class="zone">모든 날짜·시간은 한국 시간 기준</span><h4>변경권 내역</h4>
+            <div class="list">
+              <div class="sum"><span>변경권 적용 기간<br><b style="font-size:13px">10/20(화)~11/16(월)</b></span><span style="text-align:right">남은 <b>0개</b><br>기본 제공 2개</span></div>
+              <div class="nr"><span class="t">11/12(목) 오후 1:00 수업 취소</span><span class="v">1개 사용</span><span class="s">6시간 이상 남기고 취소 · 처리 후 0개</span><span class="w">취소: 11/2(월) 오전 12:27</span></div>
+              <div class="nr"><span class="t">11/10(화) 오후 1:00 수업 취소</span><span class="v">1개 사용</span><span class="s">6시간 이상 남기고 취소 · 처리 후 1개</span><span class="w">취소: 10/29(목) 오후 4:07</span></div>
+            </div>
+          </div></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>권장 B 이유:</b> 같은 '변경권'을 보는 창이 두 가지(홈 [내역 ›]은 새 창, 내 정보는 예전 목록)면 학생이 어느 쪽이 맞는지 헷갈립니다. B면 어디서 눌러도 같은 창 하나입니다. A로 두면 내 정보 쪽만 예전 목록으로 남습니다.</p>
+  </section>
+
+  <!-- 질문 4 -->
+  <section class="q">
+    <h2>질문 4 · 운영진이 변경권을 직접 더하거나 뺄 때 적은 '사유'를 학생에게 보일지</h2>
+    <p class="lead">운영자 화면에서 학생 변경권을 +1/−1 할 때 사유를 꼭 적게 되어 있습니다. 예전 목록(지금 운영)은 그 사유를 학생에게 그대로 보여 줍니다. 새 창은 '운영진 조정 · 1개 추가'만 보이고 사유는 숨깁니다. 아래 사유는 운영 DB에 실제로 적혀 있는 글 그대로입니다(이름 없음).</p>
+    <div class="pair">
+      <div class="col"><span class="tag">A · 사유 보임 (지금 운영 예전 목록)</span>
+        <div class="frames">
+          <div class="frame pc"><div class="cap">PC</div><div class="stage"><div class="sheet">
+            <span class="zone">모든 날짜·시간은 한국 시간 기준</span><h4>변경권</h4>
+            <div class="list">
+              <div class="r"><span class="hl">운영진 조정 · 11/5 두 번 취소 중 1회만 차감 (학생 시트 메모 기준, 11/8 3자 대조)</span><b>+1</b></div>
+              <div class="r"><span class="hl">운영진 조정 · 대표 11/15 예외 1회: 마지막 수업(11/17) 변경 허용…</span><b>+1</b></div>
+            </div>
+          </div></div></div>
+          <div class="frame"><div class="cap">휴대폰</div><div class="stage"><div class="sheet">
+            <span class="zone">모든 날짜·시간은 한국 시간 기준</span><h4>변경권</h4>
+            <div class="list">
+              <div class="r"><span class="hl">운영진 조정 · 11/5 두 번 취소 중 1회만 차감 (학생 시트 메모 기준, 11/8 3자 대조)</span><b>+1</b></div>
+            </div>
+          </div></div></div>
+        </div>
+      </div>
+      <div class="col"><span class="tag">B · 사유 숨김 (새 창) <span class="rec">권장</span></span>
+        <div class="frames">
+          <div class="frame pc"><div class="cap">PC</div><div class="stage"><div class="sheet">
+            <span class="zone">모든 날짜·시간은 한국 시간 기준</span><h4>변경권 내역</h4>
+            <div class="list">
+              <div class="nr"><span class="t">운영진 조정</span><span class="v">1개 추가</span><span class="s">처리 후 1개</span><span class="w">처리: 11/8(일) 오후 3:00</span></div>
+              <div class="nr"><span class="t">운영진 조정</span><span class="v">1개 추가</span><span class="s">처리 후 1개</span><span class="w">처리: 11/15(일) 오전 10:00</span></div>
+            </div>
+          </div></div></div>
+          <div class="frame"><div class="cap">휴대폰</div><div class="stage"><div class="sheet">
+            <span class="zone">모든 날짜·시간은 한국 시간 기준</span><h4>변경권 내역</h4>
+            <div class="list">
+              <div class="nr"><span class="t">운영진 조정</span><span class="v">1개 추가</span><span class="s">처리 후 1개</span><span class="w">처리: 11/8(일) 오후 3:00</span></div>
+            </div>
+          </div></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>권장 B 이유:</b> 사유 칸은 운영진끼리 보는 메모로 써 왔습니다('3자 대조', '대표 11/15 예외' 같은 내부 말). 이 글이 지금 운영 학생 화면에 그대로 보이고 있습니다. 학생에게 이유를 알려야 하면 카톡·메일로 따로 안내하는 편이 안전합니다.</p>
+  </section>
+</div>

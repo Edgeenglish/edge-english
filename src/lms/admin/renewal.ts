@@ -97,7 +97,6 @@ export type RenewDraft = {
 /** 저장 막는 까닭 (화면 버튼 글). 없으면 '' — 순서는 화면 위에서 아래 */
 export function renewBlock(d: RenewDraft, prevEnd: KstDate, conflictCount: number, today: KstDate): string {
   const dup = d.slots.some((s, i) => d.slots.findIndex((x) => x.weekday === s.weekday) !== i);
-  const amt = parseWon(d.amount);
   if (d.slots.length !== d.weekly) return `요일 ${d.weekly}개를 맞춰 주세요`;
   if (dup) return '같은 요일이 두 번 있어요';
   if (d.slots.some((s) => !/^\d\d:\d\d$/.test(s.time))) return '시간을 골라 주세요';
@@ -105,6 +104,12 @@ export function renewBlock(d: RenewDraft, prevEnd: KstDate, conflictCount: numbe
   const start = d.start;
   if (!start || start <= prevEnd) return '시작일을 골라 주세요';
   if (!d.slots.some((s) => s.weekday === weekdayOf(start))) return '시작일을 정규 요일로 맞춰 주세요';
+  return payBlock(d, today);
+}
+
+/** 결제 칸만 (받은 금액·결제일). 재등록 신청의 '일정 미정' 저장도 이것만 봄 */
+export function payBlock(d: Pick<RenewDraft, 'amount' | 'paidOn' | 'method'>, today: KstDate): string {
+  const amt = parseWon(d.amount);
   if (amt === null) return WON_ERROR;
   if (amt <= 0) return '받은 금액을 넣어 주세요';
   if (!d.paidOn) return `${d.method === 'card_link' ? '결제일' : '입금 날짜'}를 넣어 주세요`;

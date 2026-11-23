@@ -1,18 +1,380 @@
+## ✅ 11/23 학생 '담당 강사님 휴무 안내' 문구 개편 — **시험 사이트만 (운영 반영 대기)** (브랜치 claude/sleepy-hypatia-yvxi5w)
+- 대표 11/23 확정(시안 5차, 정책 원본 H26 기록은 아직 안 함): 맨 위 사과 문구 = 휴무 기간이 11월~1월과 겹치면 연말연초 문구('연말연초를 맞아 담당 강사님이 잠시 쉬어가실 예정이에요. 이 기간에는 기존 일정대로 수업을 진행하기 어렵습니다. 불편을 드려 죄송합니다. 🙇', 대표 11/23 최종), 아니면 일반 문구 — 학생 시간대 날짜로 자동(운영진 설정 없음) · 답변 필요 카드 제목('대체강사 수업 · 답변 필요')·'답변 필요 n회' 줄 뺌 · 그 카드 맨 위 ⭐추천 상자(원래 시간에 대체강사님과 수업해 보세요 / 평소 일정 유지 / 인기 강사님 중 한 분인 ○○ 선생님 / 강사 변경 사례 + 작은 회색 괄호) · 버튼 '대체강사님과 n회 수업할게요' / '기존 강사님과 n회 보강할게요'. 이미 확정된 카드에는 추천 상자 없음
+- 코드: `src/lms/student/leave-notice.ts`(문구·날짜 판정) + `leave-notice.test.ts`(7개) · `src/app/lms/student/StudentHome.tsx` LeaveSheet. 카톡 안내 글(`proposalText`)은 안 바꿈
+- 검증: vitest 새 7개 통과·tsc 0건. **실제 화면(PC·휴대폰)은 아직 못 봄** · `test-bundle.test.ts` 2개 실패는 이번 변경과 무관(lms-test 머리글에서도 실패: 묶음 SQL 최신 아님 → `node scripts/lms-test-bundle.mjs`)
+- 남은 일: 시험 사이트 화면 확인 → 대표 '운영 반영' → lms-prod (운영 DB 변경 없음, 코드만) · 정책 원본 H26 기록
+
+## ✅ 11/22 일정 일부만 먼저 확정 — **운영 반영 끝 (대표 '보내')** (브랜치 claude/zen-sagan-cx7lwj)
+- 운영(11/22): 백업 snapshots **86** → migration 20261122100000·110000·130000 (함수 md5 = 시험 DB) → 오O수 STU-0010 24회 확정(수업 13 = 정상 9 + 휴무 4, 협의 11, 회차 1~24, 남은 24) · Benny 메일 발송(본문 support@ 보낸편지함 대조 일치) · 재등록 카드 자동 닫힘 · lms-prod **b8092e73**(lms-prod 위에 이 기능 파일만) · check-public-pages 통과. 되돌리기: DB = snapshots 86 `_functions_before` 정의 실행 / 코드 = lms-prod 를 d35fe3f6 로
+- 정규 시간 닫기 버그 수정(대표 '1번 응'): migration **20261122140000** `lms_close_dropped_slots` — 확정 때 새 일정에 없는 요일의 열린 정규 시간을 새 수강권 시작 전날로 닫음(3→2·2→1 시험 통과, 다른 학생 그대로). 운영: 백업 snapshots **87** → 적용 → STU-0010 수·금 17:00 두 줄 11/22로 닫음(정규 = 월·목 19:00)
+- 11/22 추가 운영 반영(메일 0통 확인): 'Renewed' 줄 기간 끝=수강권 종료일(snapshots 88, 20261122150000) · 강사 New student 줄은 취소되지 않은 실제 첫 수업, 실제 첫 수업 끝까지 보임(20261122160000) · 학생 이름 '영문 이름 (별명)' 통일 — 강사 화면 4곳(20261122170000)·강사 메일 lms_student_en(20261122180000)·운영진 학생 상세/목록/수업 변경·강사 프로필(src/lms/student-name.ts), 한국 이름 그대로(snapshots 89) · 강사 Home '새 시간 필요' 카드는 뺌(대표 허락 없이 넣었던 칸) · lms-prod 668a2e02
+- 대표 결정(11/22): 강사 Schedule 탭에 협의 11회 안 넣음 · To do 아님(Home 카드 유지, 강사 시간 입력 기능 생기면 To do 검토)
+- 원칙 (대표 11/22): 오O수 한 건용 예외가 아니라 모든 경우(신규·재등록 × 휴무만/근무 시간 변경만/둘 다 × 강사 먼저 설정/수업 확정 뒤 설정 + 수정·철회)에 같게 도는 시스템. 9·4·11·날짜·이름은 코드에 고정하지 않음
+- migration: `20261122100000_lms_partial_plan_confirm`(schedule_plans.partial, plan_pending_lessons, lms_partial_kind/split, lms_new_plan_partial, lms_confirm_plan_partial, lms_confirm_plan 분기, admin_partial_preview, admin_confirm_partial_schedule) · `20261122110000_lms_partial_plan_mail`(강사 메일 틀, 대표 11/22 '넣어') · `20261122130000_lms_pending_times_screens`(student_/tutor_pending_times, lms_renewal_remaining 에 협의 필요 회차 포함)
+- 화면: 학생 일정 목록 '⚠️ 강사님 근무 시간 변경으로 시간 협의 중 (기존 일정 기준)' + 남은 수업 수 포함 · 강사 Home 'New times needed' 카드 · 운영자 학생 상세 '시간 협의 필요 n회' · 운영자 일정 확정(assign) '가능한 회차만 확정'
+- **완료(시험 DB)**: 판정 9/4/11(2/8 포함) · 24회 보존(수업 13 + 협의 11, 회차 1~24) · 휴무 회차 = 수업 + leave_items + leave_options(메일 없음) · 학생·강사 수업 알림 제외(leave_items 기준) · 다른 수업 겹침 막힘 · 두 번 확정해도 중복 없음 · 일반 등록(lms_new_plan_lessons) 그대로, 메일 예전 문구 · 휴무 철회 → leave_items 철회·안내 not_needed · 휴무 다시 넣기 → 4회 다시 붙음 · 메일 본문 확인
+- **미검증**: 화면 실제 확인(PC·휴대폰, 로그인 필요) · 휴무 처리 뒤 확정된 대체수업·보강 보존(기존 함수, 이번에 안 바꿈) · 신규 등록 화면에서 '가능한 회차만 확정'
+- **남은 작업**: 운영 반영(백업 → migration 3개 → 오O수 확정) · 협의 필요 회차를 실제 수업으로 바꾸는 기능(학생 시간 선택·강사 확정, 운영진 예외 입력) · 확정 뒤 강사가 근무 시간을 바꾼 경우 기존 처리 경로 확인 후 보완 · 회차별 날짜 일정안(lesson_dates)도 지원
+- 11/22 추가 확인: 운영자 assign 화면 [회차별로 나눠 보기]→[가능한 13회 확정] 클릭 통과(시험 학생 남궁O린 STU-0133, 13+4휴무+11) · 신규 등록도 같은 함수로 통과(서O호 STU-0132) · 화면 휴대폰·PC 확인
+- ⚠️ 따로 할 일(이번 범위 밖, 기존 기능): 휴무 취소(admin_leave_withdraw)는 대체수업·기다림을 원래대로 되돌리지만(대표 11/22 유지 결정) 학생·대체강사에게 바뀐 사실을 알리는 메일이 없음(대기 안내만 not_needed) → 알림 추가 필요
+- 시험 데이터(시험 DB): 강사 Noah(휴무 12/22~1/4 · 1/5~3/22 Buenos Aires 월 8:30·목 9:00~) · 학생 한O우 STU-0129(24회, 일부 확정) · 윤O아(8회 일반 등록)
+
+## ✅ 11/22 학생 재등록 신청 — **운영 반영 끝 (대표 '응')** (H26(217), 브랜치 claude/wizardly-feynman-k6w7tb, 시안 https://claude.ai/artifact/SnN71zMF8AzWNrJEYgdV7F `docs/lms/previews/student-renewal-apply-drafts.html`)
+- migration **20261121100000_lms_student_renewal_request** (시험 DB 적용): 표 `renewal_requests`(draft→submitted→paid/closed, 수강권당 열린 신청 1건) · `student_renewal_info/save/submit`(학생·운영자 보기) · `admin_renewal_requests/close/confirm`(confirm = admin_renew 또는 no_schedule 이면 admin_register_renewal → 적립금 확정/되돌림) · `lms_renewal_target`·`lms_last_lesson_at`·`lms_renewal_price` · `reward_redemption_check` 확정 조건에 '다음 수강권 결제' 허용 · `lms_renewal_mail_due`(submitted·paid 제외)·`lms_renewal_mail`(이모지 뺌·신청 링크·종료일 = 마지막 수업일) 교체
+- 화면: 학생 `src/app/lms/student/RenewalApply.tsx`(창) · `renew/page.tsx`(/lms/student/renew = 메일 링크) · `StudentHome.tsx`(홈 카드 문구·버튼, overlay 'renew') · `src/lms/student/renewal-apply.ts` / 운영자 `StudentDetail.tsx` RequestRow([입금 확인됨]·[신청 닫기]) · `Renewal.tsx` RenewSheet request(미리 채움·'일정 미정') · `AdminDashboard.tsx` '재등록 신청 · 입금 확인 전' 칸 · `src/lms/admin/renewal-requests.ts`
+- 시험(시험 DB, 롤백): 저장 2번 = 1건 · 적립금 최대 초과 막힘 · 입금자명 빈칸 막힘 · 제출 2번 = 1번 · 제출 뒤 기간 변경 막힘 · 예약 1건(잔액 0) · 메일 대상에서 빠짐 · 운영자 [입금 확인됨] → 새 수강권·결제 822,500원·적립금 확정·학생 '재등록 완료' · 다시 눌러도 1번 · 닫기 = 예약 되돌림 · 카드 확인 = 예약 되돌림 · 일정 미정 = 수업 0·재등록 업무 열림 · 다른 학생 정보 못 봄 · 학생은 운영자 목록 못 봄. 화면: 학생 창 PC·iPhone 13 3단계(가짜 데이터, 가로 밀림 0). 메일: STU-0018 '2회 남음' 새 문구 support@ 도착
+- 시험 데이터: STU-0015(한OO, 40분 주2회, 남은 1회, 수강권 끝 11/30)에 적립금 4,000원. STU-0018 은 11/24 시작 다음 수강권이 있어 '재등록 완료' 화면
+- 11/22 운영자 화면 실제 클릭(시험 사이트, support@ 메일 코드 + 대표 인증 앱): STU-0023 학생 신청(운영자 보기) → 대시보드 '재등록 신청 · 입금 확인 전 1건' → 학생 상세 [입금 확인됨] → 창에 3개월·계좌이체 1,011,750원·입금자명 미리 채움, 정규 시간 겹침 경고(12/15) → '일정 미정' 저장 → 2차 수강권·결제 기록·재등록 업무 열림·수업 0 → 학생 '재등록 완료' 확인
+- 기간 칸 모양(대표 11/22): 고르지 않은 칸은 모두 같은 흰 칸, 고른 칸만 보라 테두리 + 연보라 바탕
+- 운영 반영(11/22): 운영 DB 백업 **snapshots 84**(전체 표 + 바꾼 함수 3개 reward_redemption_check·lms_renewal_mail·lms_renewal_mail_due 이전 정의 `_functions_before`) → migration 20261121100000 → 확인: 학생 13·수업 202·수강권 18 그대로, 신청 0, 새 함수 anon 실행 불가, 지금 보낼 재등록 메일 0 · lms-prod **d35fe3f6**(origin/lms-prod 위에 이 기능 파일만, 운영에 없는 로그인 계정 만들기 줄은 뺌) · edgeenglish.kr JS 반영·/lms/student/renew 200·check-public-pages·vitest 537 통과
+- 11/22 운영 반영 뒤 시험 사이트만(lms-test 1ac713e7, 운영 미반영): 문의 줄은 신청 완료 화면에만('수업 횟수나 일정 변경을 원하시면 엣지영어 카카오톡으로 문의해 주세요.') · 단계 흐름 선(수강 기간 고르기 — 입금하기 — 신청 완료) · 1단계에 홈페이지 수업료 문구(LongTermPrice.tsx 와 같은 글)·6개월 혜택 상자 · 현재 수업 칸 아래 '기존 수업 일정으로 이어서 등록됩니다.' · 1단계 안내 상자 뺌 · '‹ 이전 단계' · 완료 화면 '입금이 확인되면 재등록이 완료돼요.' · 운영진 건수 '입금 확인 전 n · 신청 전 n'(대시보드 칸 이름 '재등록 신청', 학생 상세 표시도 신청 전이면 '신청 전'). 시험 데이터: STU-0014 신청 완료·STU-0024 신청 전(1단계 저장만). 대표 확인 대기
+- 되돌리기: DB = snapshots 84 `_functions_before` 정의 실행(새 표·새 함수는 남겨도 영향 없음) / 코드 = lms-prod 를 f2027275 로
+
+
+## 🔧 11/22 이월된 보강 날짜 0개 버그 — 운영 적용 끝 (브랜치 claude/peaceful-hypatia-o42kvh)
+- 증상: 이O옥(STU-0003) 화면 '이월된 수업'(11/9·11/16 취소분) 기한 12/20 표시인데 날짜 찾기는 지난 수강권 종료일 11/17까지 → 날짜 0개(Olivia·Benny 모두)
+- migration **20261122120000_lms_makeup_carry_in_until**: `lms_makeup_until(수강권)` = 이어지는 재등록을 종료일까지 결제(POL-RN-01)했으면 재등록 종료일. 보강 날짜 찾기 2·신청·확정·시간 확인·운영자 보강 옮기기 함수 6개의 종료일 검사만 교체
+- 시험 DB: 12/7 뒤 날짜 0→333, 12/20 신청·강사 확정 됨, 새 종료일 뒤는 막힘, 늦게 결제한 학생은 안 늘어남 (모두 되돌림)
+- 운영 DB(대표 '응'): 백업 **lms_backup.snapshots id 85**(함수 6개 이전 정의 `_functions_before`) → 적용 → 이O옥 11/9분 Olivia 433칸·Benny 484칸, 11/16분 Olivia 433칸, 모두 12/20까지. anon 실행 불가. 되돌리기 = snapshots 85 정의 실행 + `drop function lms_makeup_until(uuid)`
+- 11/23 Benny 수업 취소분은 기존 규칙대로 Benny 만(대표 11/22: 이전 강사로 풀지 않음, 새 규칙 없음)
+- lms-prod 에 migration 파일 기록은 다음 운영 배포 때 함께 (화면 코드 변경 없음)
+
+## ✅ 11/18 로그인 화면 비밀번호 안내 강화 — 운영 반영 (lms-prod 841bdd36, 대표 '운영 반영해')
+- 한국어 첫 안내 '한 번도 비밀번호를 만든 적 없거나/기억나지 않으면👇'(영어 첫 안내도 👇), 👇 3번만 까딱 · 비밀번호 틀리면 빨간 '비밀번호를 만든 적 없으면 아래 [비밀번호 만들기·찾기] 버튼을 눌러 주세요'+보라 채운 버튼 흔들림(틀릴 때마다) · 동작 줄이기 설정이면 안 움직임
+- 수정: login-flow.ts(badLogin·noPwHint·noPwArrow) · LoginFlow.tsx(badTick·failLogin) · globals.css(lms-shake·lms-bob). 나중에 안내 지우기 = noPwHint·noPwArrow 두 줄만 삭제(한·영 동시)
+- 운영에는 이 커밋 2개만 골라 담음(lms-test 의 다른 미반영 로그인 변경은 그대로 둠). 되돌리기 = lms-prod 를 20da527b 로. 점검: vitest 536·tsc·internal-marks·check-public-pages 통과
+
+## ✅ 11/18 학생 변경권 내역 + 처리 내역 줄 정리 — **운영 반영 끝 (대표 '시험반영 후 운영반영해')** (브랜치 claude/friendly-rubin-d7ftqh, 시안 https://claude.ai/artifact/SCERAK1za5rBF4bkYCWZ3m `docs/lms/previews/student-credit-history-drafts.html`)
+- 홈 카드 규칙: 요청 없이 바꿨다가 되돌린 뒤 대표 시안 확정 문구로 반영(https://claude.ai/artifact/5eFCzRLSaMq6tKBzSTGWNE) · '사용 안 됨'으로 통일 · 내 정보 › 변경권도 새 창(B) · 운영진 조정 사유 숨김(B) (대표 11/18, 비교 https://claude.ai/artifact/SgXa4eavSC14XvfGGjzuKw)
+- 정책 원본: 문서 끝 'H26 (11/18 학생 변경권 내역 — 번호는 대표가 정리)' 줄 (끝 번호 확인 못 함)
+- 대표 확정(ChatGPT 검토 반영): B안(홈 카드 [내역 ›] → 변경권 내역 창) · 변경권 안 쓴 취소도 표시 · 문구 '6시간 이상/미만 남기고 취소' · '처리 후 변경권 n개' · 처리 시각 최신순 · 창 '변경권 적용 기간 / 남은 n개 / 기본 제공 n개'
+- migration **20261118100000_lms_student_credit_history** (읽기 전용 함수 `student_credit_history`, 시험 DB 적용): 기간별 지급·남은 수·줄(use·late·holiday·no_credit·return·admin_add/remove·migrated), 줄의 after = 취소 판정 기록(change_requests.decision.credits_after) 또는 지급량+그 시각까지 credit_ledger 합. 운영진 조정 사유(note)는 학생에게 안 줌
+- 코드: `src/lms/student/credit-history.ts`(+test) · `processing-history.ts` historyLines(credit) · `ProcessingHistory.tsx`(수강생 취소 줄 = 수업 시각·남은 시간·결과·처리 후, 상태 줄 없음 / 되돌림 = 1개 반환) · `StudentHome.tsx` 홈 카드·Credits 창(옛 DB 면 CreditsOld) · `live.ts` 로드 · authz-probe 목록
+- 시험: vitest src/lms/student 62 · tsc 0 · 시험 DB 점검 `supabase/tests/student-credit-history.sql` 학생 44명 통과(left=credit_balance·최신순·칸 목록·기록 수·권한 5종)
+- 고침: 되돌린 취소는 '수업 1회 차감' 대신 '나중에 취소 되돌림'(함수 칸 reverted), 남은 변경권 없을 때 이유 표시
+- 시험 데이터: STU-0018 지금 기간(10/20~11/16) = 사용 2(처리 후 1·0) + '남은 변경권 없음 · 수업 1회 차감' 2. '6시간 미만' 사례는 STU-0018 에 열린 보강권·수업이 없어 안 만듦(다른 세션 지각 시험 수업 11/18·11/19 은 건드리지 않음)
+- 처리 내역 줄(대표 11/18 시안 https://claude.ai/artifact/VrFHjbDsD2icJEF9HAWFK6): 제목 → 수업 시각 → 취소·신청·확정·제안·요청·만료·처리 일시 → (취소만) 6시간 이상/미만 · 수강생/강사 취소 · 강사 휴무·사정 → 상태 → (수강생 취소·되돌림만) 변경권 '1개 사용 · 2개 → 1개'·'사용 안 됨 · 수업 1회 차감'·'남은 0개 · 수업 1회 차감'·'1개 반환'. migration **20261118110000** student_processing_history 에 cancel_at·timing (`processing-history.ts` historyRow)
+- 운영 반영: 운영 DB 백업 **snapshots 79**(student_processing_history 이전 정의) → migration 20261118100000·20261118110000 → 학생 13·수업 200·변경권 기록 22 그대로, 비로그인 실행 없음, STU-0013 계정으로 두 함수 정상. 코드 lms-prod **0b680bf2**(이 기능 커밋만 골라 담음), edgeenglish.kr JS 반영·공개 화면 점검 통과. 되돌리기: DB = snapshots 79 정의 실행 + drop function student_credit_history(uuid) / 코드 = lms-prod 를 de925749 로
+- 운영 화면 실제 클릭은 미확인(STU-0013 메일 코드가 support@ 가 아니라 Claude 가 못 읽음)
+- 11/18 추가 운영 반영: 카드 규칙 '6시간 이상/미만 남았을 때'(lms-prod 851cb3f0) · 변경권 내역 창 2차(처리 내역과 같은 항목명·순서, 흰 박스 없이 구분선, 14px, 목록만 스크롤, '처리 내역 전체 보기 ›') · 과거 취소는 그때 결과 그대로('수업 1회 차감' 유지) · 변경권 안 쓴 취소의 되돌림 줄('수업 취소 되돌림 · 수업 일정 복구 완료', 변경권 줄 없음) — migration **20261118140000**(운영 백업 snapshots 80 = student_credit_history 이전 정의), lms-prod **20da527b**. 시안 https://claude.ai/artifact/Wn6qmbEPo4awsp9y6kKFdy
+
+## ✅ 11/17 머리글 [내 수업]·학생 화면 진입 정리 — **운영 반영 끝** (H26(212), lms-prod cfb254d, DB 변경 없음, 브랜치 claude/quirky-bell-j29fzz)
+- 운영 반영 방법: lms-prod 위에 이 작업 커밋만 cherry-pick. 운영엔 '정규 시간 변경'(H26(208)) 이 아직 없어 `loadStudentBundle` 에서 changeRequests 를 뺀 판으로 맞춤 — 정규 시간 변경을 운영에 올릴 때 lms-test 판(changeReqs 포함) 그대로 가면 됨. 운영 공개 화면 점검(check-public-pages) 통과
+- 수정: `src/lms/auth/home.ts`(새, 역할→홈 주소 한 곳 — 지금 학생만) · `components/Header.tsx`([내 수업] href) · `app/lms/page.tsx`+`LmsIndexGo.tsx`(/lms 메일 링크도 같게, ?next= 등 있으면 예전처럼 로그인 화면) · `student/StudentLive.tsx`(역할 확인과 학생 자료를 함께 불러옴) · `student/StudentHome.tsx`(교재 둘러보기 next/link)
+- 시험(시험 사이트, STU-0018 메일 코드 로그인 — 비밀번호 안 건드림, 끝나고 세션 로그아웃): PC·iPhone 13 [내 수업] 경로 / → /lms/student(로그인 화면 0번), /lms → /lms/student, 로그아웃 상태 [로그인]·/lms → /lms/login, 풀린 세션 → /lms/login 모두 통과
+- 11/17 보충('불러오는 중'도 찰나에 보임): `lms/student/prefetch.ts`(새) — 머리글이 로그인 확인과 함께 학생 화면 자료를 미리 불러 둠(학생 아니면 버림), StudentLive 는 그것을 바로 보여 주고 새로 불러 바꿈(`StudentHome` refreshed). 시험: PC·휴대폰 홈 열자마자/1초 뒤/교재에서 [내 수업] 6번 모두 '불러오는 중' 0번, 0.2~0.6초. 메일 링크처럼 처음 여는 주소는 미리 불러 둘 수 없어 그대로
+- 11/17 보충 2: 자료를 받는 중에 누르면 머리글이 지금 화면을 두고 다 받은 뒤 넘김(`Header.tsx` openAccount). 시험: 학생 자료 응답을 2초 늦춘 느린 망 흉내로 PC·휴대폰 6번 모두 '불러오는 중' 0번
+- 11/17 보충 3 (한 번에 정리): `live.ts` loadStudentBundle(홈 자료+시간대·누적 학습·공지·결제·알림·정규 시간·처리 내역 순서를 한 번에) → `prefetch.ts`·`StudentLive`·`StudentHome`(preloaded 로 처음부터 그림)·`ProcessingHistory`(prefs) · `LoginFlow`(학생은 자료 받은 뒤 router.push, 버튼 누른 채 유지) · `LmsIndexGo`+`SiteChrome`(/lms 도 머리글 틀 안, 빈 틀 보이며 받은 뒤 넘김) · `StudentHomeSkeleton`('불러오는 중' 글 대신 메뉴 그대로 빈 틀). 시험(자료 응답 1.5초 늦춘 느린 망, PC·iPhone 13): 머리글 [내 수업]·/lms·새로고침·로그인 뒤 4길 모두 학생 홈이 시간대 '변경'·누적 학습 시간과 한 프레임에 나옴, 머리글 계속 보임, '불러오는 중' 0번. 로그인 버튼 누른 길은 비밀번호가 없어 화면 시험 못 함(코드만)
+- 11/17 보충 4: 머리글이 로그인·로그아웃 알림(onAuthStateChange)으로 바로 [로그인]↔[내 수업] (전엔 로그인 뒤 새로고침 전까지 '로그인'), 역할 확인 전 눌러도 기다렸다 바로, 홈 자료 못 읽으면 한 번 더, 시간대 '변경' 항상. 시험: [로그인] 버튼 길은 비밀번호 로그인 응답을 실제 학생 세션으로 바꿔 끼워(비밀번호 안 바뀜) PC·휴대폰 느린 망 — 로그인 칸 → (머리글 '내 수업'으로 바뀜) → 학생 홈 한 번에, 공지사항 → [내 수업] 로그인 화면 0번
+- 11/17 대표 '1번': 강사 → /lms/tutor, 운영자(aal2) → /lms/admin, 아니면 로그인 화면 (`homeForRole`)
+
+## 11/17 학생 정상 취소 대체수업의 보강 강사 선택 — 시험 후 운영 반영 완료
+- 대표 승인: 학생이 미리 취소한 대체수업(공휴일 정상 취소 포함)도 원래 강사/대체강사 중 선택. 학생 직전 취소·결석의 보강 불가 및 무료 노쇼 보상수업의 강사 고정·무급 정책 유지.
+- migration 20261117123711_lms_student_canceled_cover_tutor_choice. 시험 DB 68항목 통과 후 운영 적용. 운영 함수 백업 snapshots 73, 복구는 저장된 lms_makeup_tutors 정의 재실행. 학생·수업 데이터 변경 없음. 화면 코드 변경 없음.
+
+## 11/17 대체강사 취소 보강 선택·확정 메일 날짜 구분 (대표 반영 승인)
+- 대체강사 사전/직전 취소·노쇼로 못 받은 수업: 원래 강사/대체강사 선택. 추가 무료 노쇼 보상수업: 노쇼 강사로 고정. 보강 목록 제목 바로 아래 강사 표시, 강사 변경 시 선택 날짜 초기화, 신청 버튼에 수신 강사 표시.
+- 대체 요청·최종 확정 메일: 강사 수신 + 운영진 숨은참조 유지. 확정 메일은 Confirmed / You marked unavailable / Available - awaiting final confirmation 구분. 수락만 한 날짜를 확정으로 표시하지 않음. 답변 당시 날짜를 최신 문의 안내에 보존.
+- 운영 DB: migrations 20261117100859 / 20261117101311 적용, 함수 백업 snapshots 72. 되돌리기: snapshots 72 `_functions_before` 복구 + 화면 커밋 되돌림. 신규 nullable cover_answer와 미사용 보조 함수는 남겨도 기존 동작에 영향 없음.
+- 검증: 시험 DB 보강 46항목, 혼합 답변·메일 수신자·BCC·중복방지 시험 통과(전부 rollback). 프런트 관련 60시험·운영 소스 build 통과. 고정 시험 사이트 PC 1280/모바일 390 화면·선택 초기화·보상 강사 고정 확인. 운영 배포는 이 변경을 포함한 lms-prod 커밋의 Vercel 기록 참조.
+- 정책: H26(130)/(172) 보충. 운영 학생 데이터 변경·시험 메일 발송 없음.
+
 > **2026-11-03 ChatGPT 작업 인수인계**: [최신 변경·시험 DB 적용·Google 승인 대기·검증 기록](handoff-2026-11-03-chatgpt.md). My hours 현지 06:00~22:30, 구글폼 연도→월→날짜→학생 선택, 시험 고정 주소·세션 재사용 및 실제 Google 응답 연결·클릭 검증 완료. 운영 미반영.
 
 # 다음 세션 시작 메모
 
-새 세션 첫 메시지 예: **"docs/lms/handoff.md 읽고 이어서 해줘. 오늘 할 일: (아래 목록에서 하나)"**
 
+## ✅ 11/17 로그인 화면 비밀번호 안내 — 운영 반영 (lms-prod d952538, 대표 '응')
+- 원인: 기존 학생·강사는 비밀번호를 만든 적 없음(운영자가 이메일로만 계정 생성) → 비밀번호 칸에서 실패(로그인 점검: 학생 1·강사 1)
+- 화면: [로그인] 아래 '비밀번호를 만든 적이 없다면 먼저 만들어 주세요👇' + [비밀번호 만들기·찾기](이메일 넣었으면 바로 인증번호+새 비밀번호 화면) · 틀리면 '만든 적이 없거나 잊었다면👇' · 이 기기에서 비밀번호 로그인/만들기 1번이면 안내 줄 숨김(localStorage lms-pw-used) · '메일 코드로 로그인' 작은 링크 유지
+- 확인: 운영 /lms/login 새 문구·Google 버튼 0·내부 표시 없음·넘침 0, check-public-pages·internal-marks 통과. 되돌리기 = lms-prod 를 d952538 이전(origin/lms-prod 의 8개 커밋 앞)으로 되돌리는 커밋
 
+## ⏸ 11/24 Google 로그인 공개 대기 (H26(211)) — 이 세션에 11/24 10:00 KST 알림 예약(trig_01PNvXRbDG6L11R8wzkdWX31)
+- 운영(lms-prod befe905): Google 코드 들어감(운영 Supabase Google OFF → 버튼 안 보임) · /terms·/privacy 맨 위 변경 공지(LEGAL_NOTICE) · 약관 본문은 Google 전 문구 그대로
+- 11/24 할 일: 시험 DB 에서 대표 시험 2(Chrome·Safari Google 새 가입) 통과 확인 → Work 운영 Google 켜기 → lms-prod legal.ts 본문 = lms-test 문구 + LEGAL_NOTICE null → 배포 → 운영 확인 → 대표 휴대폰 1번
+- lms-test: Google 선택 화면 없앰, 앱 안 브라우저 안내 줄(inAppBrowser), 둘 다 운영에도 들어감
 
+## ⏸ 11/17 Google 로그인 (브랜치 claude/charming-newton-hgvywn → lms-test 612aa04, 운영 미반영 — 대표 '보류')
+- a54f329·5c59707(다른 곳에서 올림) + 612aa04: 약관 2곳·처리방침 1곳 Google 문구(프로필 사진 주소 포함, 대표 '응') · '이미 회원이에요'로 빈 Google 계정 지우고 기존 계정에 연결(canDiscardSocialAccount = 이메일 없는 간편 로그인 계정) · googleAllowed 에 운영(mfamixejxydodclhglbc + edgeenglish.kr·www) 추가(운영 Supabase Google 켜야 버튼 보임)
+- 시험 통과(11/17): 다른 메일 Google → 윤지호 STU-0018 연결 · Google 새 가입 → [이미 회원이에요] → 빈 계정 삭제 → STU-0018 연결(DB: email+google, 간편 로그인만 있는 새 계정 0) · DB 삭제 함수 모의(Google만 = 삭제, 이메일·회원 연결 = 안 지움, 되돌림) · 운영 lms_discard_new_social_account md5 = 시험과 같음 · vitest 515
+- 운영 남은 것: ① 운영 Supabase Google 꺼짐 + Google OAuth 클라이언트 284694131806-rl051e…에 운영 콜백(https://mfamixejxydodclhglbc.supabase.co/auth/v1/callback) 미등록(redirect_uri_mismatch) → Work 문구 대화에 있음(동의 화면 사용자 유형·게시 상태 확인 포함) ② 약관 제10조 7일 전 공지 → Google 공개 날짜 대표 답 대기(가장 빠름 11/24) → /terms·/privacy 맨 위 공지 한 줄(문구 대표 '반영해' 뒤) ③ 배포 묶음 = origin/lms-prod 위에 Google 파일 6개(GoogleIcon·LoginFlow·google.ts·google.test.ts·login-flow.ts·legal.ts 문구만, 시행일 줄은 운영 값 유지) → internal-marks 시험·check-public-pages
+- Google 동의 화면에 'kyeimjozkcqbgkepwrnv.supabase.co(시험)/mfamixejxydodclhglbc.supabase.co(운영)로 이동'이 보임(맞춤 도메인 없음) — 공개 조건 아님
+
+## ✅ 11/17 강사 휴무 화면 수정 + 대체 수업 강사 메일 5가지 — **운영 반영 끝 (대표 '응')** (브랜치 claude/modest-shannon-osnope, 시안 https://claude.ai/artifact/SeuXW4ufCvRvGG6Rxops49)
+- 화면: 대체 강사 고르기 = 선택 → [○○에게 문의하기 N회], 불가 사유, 지난 휴무 접기(처리 필요는 펼침), 수강생/강사에게 묻기 구분, ‹ 목록, '메일 발송 대기'(복사·보냄은 메일 실패·주소 없음일 때만), '강사님 수락'. 강사 Updates 'Cover class canceled'(`updates.ts`).
+- 메일 5가지(문구 대화 확정, 시험 DB 실제 발송·support@ 수신 확인): ① 요청(단수·복수, 정규 근무시간 밖 표시) ② 답변 접수(강사 화면 답·운영자 대신 기록 모두) ③-가 확정 ③-나 요청 종료(확정 전 학생이 기존 강사 선택·운영자 철회) ③-다 확정 후 취소. ③-나·다는 15분마다 묶어서(`lms_cover_closures` 표 + `lms_cover_close_mail_run`, 기존 To do 메일 예약 실행에 붙임). 일부 확정·일부 종료는 두 통.
+- migration **20261117010000**(불가 사유 함수 + 요청 메일 시간 밖 표시) → **20261117020000**(메일 5종·표·트리거). **적용 순서 중요**(앞 것이 있어야 시간 밖 표시가 요청 메일에 나옴).
+- ✅ 운영 반영(11/17): 백업 `lms_backup.snapshots` **74**(바뀌는 함수 6개 이전 정의 `_functions_before` + 표별 줄 수; 되돌리기 = 그 정의 실행 + 새 트리거·함수 drop) → migration 2개 → 함수 10개 md5 = 시험 DB, anon 실행 불가, 표 RLS 켜짐, 줄 수 그대로(leave_items 23·notices 147·notifications 93), 읽기 전용 dry-run 두 함수 모두 보낼 메일 0건 → 코드 lms-prod **d11222d**(lms-prod 위에 이 기능 파일 8개만; lms-prod 에 있던 로그인 변경 29커밋은 건드리지 않음). 운영에서는 실제 강사에게 시험 메일을 보내지 않음(쓰기 시험 안 함).
+- 참고: 운영 Olivia 에게는 ② 형식 메일이 11/17 13:24 UTC 에 수동으로 이미 감 — 이번 변경은 적용 뒤 새 답변에만 ② 발송(소급 없음).
+- 남은 것(선택): 확정 후 취소·요청 종료 메일을 운영에서 처음 보면 메일함 확인. 강사 [처리내역] 화면은 새 세션에서 시안부터(대표 11/17 동의).
+
+## ✅ 11/16 장기 수강생 새 4주 시작 안내 메일 (학생) — **운영 반영 끝 (대표 '응')** (H26(202), 브랜치 claude/determined-edison-hvhe2o)
+- migration **20261116130000_lms_period_start_mail** (시험 DB 적용): `lms_period_start_due`(idx ≥ 2 · 수강권 confirmed/active · 체험용 아님 · 시작일 당일 9:00 KST 이후 · 같은 기간 미발송 · 24시간 안 첫 수업 안내 없음) · `lms_period_start_mail`(template `period_start`, dedupe `period_start:기간id`) · `lms_period_start_run` · 예약 실행 `lms-renewal-mail` 에 붙임(재등록 누락 run 이 있으면 유지). 앱 사용자 실행 불가 확인
+- 시험(11/16): 김도윤 STU-0109(서울, 주1)·최지아 STU-0110(Detroit, 주2) 2통 support@ 수신, 이서윤 STU-0111(4주) 제외, 다시 실행 0통, 9시 전·다음 날 0건. 시험 학생 3명 그대로 둠(12/14 에 세 번째 4주 메일이 시험 DB 에서 support@ 로 또 옴)
+- ✅ 운영 반영(11/16): 백업 `lms_backup.snapshots` **66**(cron 이전 명령 `_cron_before` + 개수) → 201 migration → 202 migration. 함수 6개 md5 = 시험 DB, anon·authenticated 실행 불가, cron 명령 4개 실행. 운영 첫 대상 STU-0011 세 번째 4주(오늘 시작). 되돌리기 = cron 명령을 snapshots 66 `_cron_before` 로
+- (기록) 적용 순서 = **H26(201) migration 먼저, 그다음 이 migration** (201 을 나중에 적용하면 cron 명령에서 이 실행이 빠짐). 데이터 안 바뀜. 되돌리기: cron 명령에서 `select lms_period_start_run(); ` 빼기
+
+## ✅ 11/17~18 학생 홈 [정규 시간 변경]·[강사 변경 상담] — 운영 반영 끝 (11/18, H26(208) 보충 6) (H26(208)·보충·보충 2·보충 3, 브랜치 claude/pensive-davinci-7uksza)
+- 시안 `docs/lms/previews/student-regular-tutor-change-drafts.html` · https://claude.ai/artifact/X5VctaggcpPUgj58qZsb6N
+- migration **20261117140000_lms_student_regular_tutor_change_requests** (시험 DB 적용): 표 regular_change_requests(학생당 대기 1건)·tutor_change_requests(열린 것 1건), 둘 다 지우기 금지 · lms_rc_monday/day/first/free/week/context · student_regular_change_options·request·withdraw · student_tutor_change_request · student_change_requests · admin_change_requests · admin_regular_change_request_decide(확정 = admin_regular_change 미리 보기 → 저장, 막히면 problems·shifted_to) · admin_tutor_change_done
+- 화면: 학생 `src/app/lms/student/ChangeRequests.tsx`(신청 창·상담 창·처리 내역 줄) + StudentHome 버튼 2개 / 계산 `src/lms/student/regular-change.ts`(+test, DB lms_rc_week 와 같은 규칙) / 운영자 홈 할 일 `board.ts` kind regular_change_request·tutor_change_request, `RegularChangeDecide.tsx`, `live.ts decideRegularChange·tutorChangeDone`
+- 시험(시험 DB, 되돌림 트랜잭션): STU-0041 목→금 신청·2순위 확정 = 수업 5회 그대로 목 2회만 옮김 / 두 요일 함께 = 5회 그대로 / 남는 요일 고르기 거절 / 대기 중 두 번째 신청 거절 / 확정 뒤 같은 수강기간 재신청 거절 / 적용 주 11/20 월=11/30·수=11/23·11/21 수=11/30 (TS 시험 8개 통과)
+- 대표 확인용 시험 데이터: STU-0041 대기 신청 1건(목 → 1순위 금 오후 8:00 / 2순위 목 오후 8:00 한국 시간) + 강사 변경 상담 1건. 되돌리기 = 운영자 홈에서 [반려]·[상담 완료]
+- 관찰: Blair 처럼 수강기간 중 강사 해외 이동·휴무가 있으면 그 시간대는 '매주 비어 있음'에서 빠져 고를 시간이 거의 없을 수 있음 (확정 때 admin_regular_change 도 같은 이유로 막으므로 규칙과 일치)
+- 11/17 보충 4: migration **20261117160000_lms_regular_change_start_week** (시험 DB 적용: lms_rc_fits_end·week_ok·week, options(p_from)·request(p_start) 인자 바뀜 / decide 는 Work 가 시험 DB 에 고친 것과 같은 내용) — 변경 시작 주·두 요일 확정 오류(Work QA)·종료일 뒤 밀림 후보 빼기. 시험 데이터 STU-0041 정리함(신청 취소·상담 완료로 남음)
+- 11/18 Work 클릭 QA 3흐름 통과(PC·휴대폰). 보충 5(H26(208)): 160000 파일에 lms_rc_context(끝난 수강권 → 다음 확정 수강권)·lms_rc_free 빠르게(5.8→1초) 추가, 시험 DB 적용
+- 시험 계정 데이터(대표 11/18): STU-0018 윤O호 → Alex 12주 재등록(11/24~2/15, 화·목 19:00 KST), Alex 예전 시험 휴무 3건 [휴무 취소](12/7 건은 보강 확정 있어 남김), Alex Buenos Aires 임시 근무 시간 현지 06:00~09:30 추가
+- 운영 배포 준비: 골라 담은 판 = 로컬 브랜치 deploy-rc(origin/lms-prod + 이 기능 커밋만, 94a9633, 시험 526 통과). lms-test 를 통째로 올리지 말 것(Google 로그인 11/24 대기 섞여 있음)
+- ✅ 11/18 운영 반영: 백업 snapshots 77 → migration 140000·160000 → lms-prod 9fd5210(586fcf8 위에 이 기능만). 운영 JS 반영·check-public-pages 통과·실제 학생 4명 options 정상(읽기만). 되돌리기 = 백업 77 + lms-prod 586fcf8
+- 11/18 보충 7·8(같은 시간 규칙): migration **20261118160000_lms_regular_change_same_time** 시험 DB 적용(lms_rc_first2·fits2·week_ok2·week2·slots_of, request·decide 교체 — items = [{c1:{days,time,week,first},c2}], 재등록 직후 확정은 새 수강기간 시작부터) · 화면 ChangeRequests.tsx 다시 씀 · lms-test ebbdacf. ✅ 11/18 운영 반영: 백업 snapshots 82 → migration 20261118160000 → lms-prod ca4d7c0 (보충 9)
+- 11/23 보충 10: migration **20261123100000_lms_regular_change_free_only_moved_weeks** 시험 DB 적용(lms_rc_free = 옮겨질 수업 있는 주만 검사) + 막힌 이유 문구 둘. 시험: STU-0018 Alex 휴무 1주 넣으면 11→0, 그 주 수업 휴무 처리 중이면 11 그대로(되돌림 트랜잭션). 운영 STU-0007 같은 계산(읽기만) 시간 약 40개. **운영 미반영(대표 '응' 대기)**
+- 11/23 보충 11: migration **20261123110000_lms_regular_change_into_leave** 시험 DB 적용(admin_regular_change 본문 3곳 교체: 휴무(kind leave)는 문제 아님 + 옮긴 수업을 그 휴무 leave_items·학생 알림에 넣음 / lms_rc_free 휴무 날짜는 검사 안 함). 시험: STU-0018 Alex 12/16 휴무 → 화·목→수·목 저장, 12/15 수업이 12/16 휴무 항목(undecided)+알림 1건(되돌림 트랜잭션). **운영 미반영**. 운영 STU-0007 처리 순서 = Benny 12/11 block 풀기(tutor_schedule_save 'unblock') → 수·금 19:00 11/30부터 저장(12/21→12/23 휴무 처리) → Benny 가 12/11 Cancel class
+- 11/23 보충 10·11 **운영 반영 완료**: 백업 snapshots 90 → 20261123100000·110000 적용, lms-prod e2fccd2 (H26(208) 보충 12)
+- 11/23 보충 13: migration **20261123120000_lms_regular_change_into_block** — 강사가 막아 둔 시간(kind block, 1회 휴무)도 정규 변경을 막지 않음. 옮긴 수업이 막아 둔 시간에 들어가면 저장 뒤 lms_change_core(tutor, admin_on_behalf)로 '강사 정상 취소'(보강권, 학생·강사 알림). lms_rc_free 도 block 날짜 검사 안 함. 시험 DB 적용·시험(STU-0018 Alex 12/11 block → 수·금 저장, 12/11 Tutor canceled in advance, 알림 2건, 되돌림). **운영 적용 완료**(백업 snapshots 93). 운영 STU-0007 11/30부터 수·금 19:00 저장: 12/11 강사 정상 취소, 12/21→12/23 휴무 처리. Benny block 그대로. 화면 코드 변경 없음
+- 11/23 보충 14: migration **20261123130000_lms_regular_change_moves_leave_lessons** — 학생 답 전(undecided·대체강사 진행 전) 휴무 수업도 정규 변경으로 옮김(새 시각이 휴무 안이면 leave_items 시각·time_off 맞춤, 밖이면 lesson_gone_at), 휴무 안 새 시각은 근무시간·겹침 검사 안 함, 같은 일정이라도 어긋난 수업 있으면 저장 가능(A-03 effective_to null 처리). 시험 DB 시험(STU-0018 Alex 휴무 안/밖 두 경우, 같은 일정 거부) 후 **운영 적용**(백업 snapshots 94). 운영 STU-0007 12/22부터 같은 일정 저장: 12/28→12/25(금)·12/30→12/30·1/4→1/1(금) 오후 7시, 셋 다 휴무 항목 undecided 유지, 회차 14·16·17·18 중복 없음, 정규 일정 줄 그대로
+- Benny 노트 13개 회사 드라이브 복사 완료(이름_Benny). Benny 공유(읽기)는 Benny 안내 문구 확정('넣어') 뒤에 같이
 
 ## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)** 참고)
+
+## ✅ 11/16 재등록 누락 확인 메일 (운영진만) — **운영 반영 끝 (대표 '응', 새 4주 안내 세션에서 함께 적용, 백업 snapshots 66)** (H26(201), 브랜치 claude/optimistic-knuth-w2mh1v)
+- migration **20261116120000_lms_renewal_missing_admin_mail** (시험 DB 적용): `lms_renewal_missing_due`(마지막 수강권 completed 아님·체험용 아님 → 종료일 뒤 첫 정규 수업(regular_schedules, 14일 안) 24시간 안·그 시각 예정 수업 없음 → 단계 h24/h12) · `lms_renewal_missing_mail`(support@ 1통, dedupe `renewal_missing:수강권:h24|h12`) · `lms_renewal_missing_run` · 예약 실행 `lms-renewal-mail` 명령에 붙임. 앱 사용자(anon·authenticated) 실행 불가 확인
+- 시험: `supabase/tests/renewal-missing.sql` 19항목 통과(run.sh 연결). ⚠ run.sh 는 그 앞 renewal-mail.sql '종료일 7일 전 전: week 안 보냄'(날짜 고정 시험, 기존 문제)에서 멈춤 → 이번 시험은 따로 돌려 확인
+- 시험 DB 실제 수신(11/16): STU-0002·STU-0018 24시간 전 메일 support@ 도착. 시험 DB 예약 실행이 계속 돌아 12시간 전 메일(오늘 밤)·STU-9004·STU-0013 메일도 support@ 로 옴 = 시험 데이터 그대로 둠
+- 운영 반영 = migration 1개 적용(함수 3개 새로 + cron 명령 교체, 데이터 안 바뀜 → 되돌리기: cron 명령을 'select lms_renewal_mail_run(); select lms_mail_run();' 으로). 코드(lms-prod) 변경 없음
+
+## ✅ 11/17 학생·로그인 화면 홈페이지 틀 통합 — **운영 반영 끝** (lms-prod ef3e9ad, 대표 '응', 로그인 전 화면 자동 점검 통과) (H26(207), 브랜치 claude/awesome-brown-xp0c9u)
+- 커밋 db4613e (lms-test). 수정: src/app/layout.tsx · components/SiteChrome.tsx(inSiteFrame: /lms/login·/lms/student 만 홈페이지 Header·Footer, 떠 있는 버튼은 LMS 에서 숨김) · components/Header.tsx(LMS 에서 [로그인/내 수업] 굵게) · app/lms/LmsShell.tsx(틀 안 화면은 화면 높이 안 채움) · app/lms/layout.tsx · lms/login/LoginFlow.tsx(로그인 상자 새 배치, '최근 로그인' localStorage `lms-recent-login` = password·code·kakao·naver, 로고·'홈페이지로' 링크 없앰) · lms/auth/login-flow.ts(문구 3개) · student/StudentHome.tsx(자체 로고 없앰, 바닥글 여백은 SiteChrome)
+- 강사·운영자 화면 파일 안 건드림. 회원가입 단계의 카카오·네이버 큰 버튼은 그대로
+- 운영 DB 띠: 11/17 긴급 수정 운영 반영(71dfc69 학생·로그인에서 숨김, 운영자 화면·운영자 보기에만 ProdBand/ProdChip). 자동 점검 = src/lms/auth/internal-marks.test.ts + scripts/check-public-pages.sh (CLAUDE.md)
+- 시험(11/17): vitest 51파일 507개 통과, next build 통과, 로컬 320·360·390·1280px 가로 넘침 0·말풍선 4종(한국어·영어), 시험 사이트 학생 윤지호 STU-0018(메일 코드, support@ 수신) PC·iPhone 13: 홈페이지 → [로그인] → 학생 화면([내 수업]) → 수업료 → [내 수업] 다시 학생 화면, 화면에 내부용 글 없음, 최근 로그인 code 저장
+- (운영 배포 끝 — 골라 담은 커밋: db4613e·8a9fad2·9b55982·91b9b9e·4f5a072·e5a99b4 + 시험 경로 맞춤. lms-test 의 a54f329 Google 로그인(다른 곳에서 올림)은 운영에 안 넣음) 다음 배포 때도: `git log origin/lms-test..origin/lms-prod` 먼저(운영에만 있는 커밋 많음 — lms-test 통째 배포 금지, 이 묶음만 골라 담기: db4613e 의 코드 파일) → push → `bash scripts/check-public-pages.sh` → 대표 본인 학생 계정으로 확인
+- 11/17 추가(시험 사이트만): 시험 띠 한 줄로, 머리글 오른쪽 위 [로그아웃](학생 왼쪽 메뉴·내 정보 탭 로그아웃 없앰), 카카오톡·맨 위로 버튼 학생·로그인 화면에도(휴대폰은 아래 메뉴 위로). 운영자 보기(학생) PC·휴대폰 확인: 머리글 아래 시험 띠 → 운영자 보기 막대, 겹침·넘침 없음. 운영 띠 색 빠짐(ProdBand 가 Tailwind content 밖 src/lms 에 있었음) → src/components 로 옮겨 운영 반영(11/17)
+- 11/17 운영 추가 반영: 머리글 1024px 아래 ☰ 메뉴·1280px 아래 간격 줄임(로그인 상태 768~1023px 머리글 넘침 고침, 대표 '그렇게 해' 로 유지) · 운영자 보기 막대의 빨간 '운영 DB' 표시 뺌(대표 요청 — 운영자 홈 맨 위 빨간 띠만 남음, ProdChip 없앰)
+- **대표 확인용 시험 계정 (11/17 대표 '지우지 말고 계속 둬')**: 시험 사이트 학생 윤지호 STU-0018 `support+stu0018@edgeenglish.kr`, 강사 Alex `support+alex@edgeenglish.kr` — 둘 다 11/17 비밀번호 만들어 대표에게 줌(값은 기록 안 함). 지우거나 비밀번호 바꾸지 말 것. 메일 코드는 support@ 로 옴
+- 시안: https://claude.ai/artifact/WhqQQQtR5VXM54wkmgtSVg (6판 — 말풍선은 꽉 찬 모양으로 남아 있음, 실제 화면이 기준)
+
+## ⏸ 11/16 회원가입·로그인 운영 공개 준비 점검 (브랜치 claude/nice-keller-dmfuv3, 실행 없음 — 대표 답 대기)
+- 네이버 로그인 검수 11/16 승인(대표). 임시 설정 정리는 다른 세션 담당 — 건드리지 않음
+- 처리방침 국외 이전 확인: Resend = 저장 미국(공식 GDPR·보안 문서) · 실제 발송 서버 일본 도쿄(support@ 수신 메일 헤더 ap-northeast-1.amazonses.com) / Google = 미국 등 Google·하위 처리자 시설 국가(Cloud DPA) / Vercel = 미국(edgeenglish.kr 응답 x-vercel-id iad1). 강사 거주국 서명 확인 = Benny Australia·Olivia Japan, Maria 미확인. 수정 문구는 대화창에만 — 대표 '반영해' 대기
+- 운영 DB 에 없는 migration: 20261112000000 · 20261112000100(회원가입) · 20261111220000 admin_renewal_mail_sent(회원가입과 무관, 운영 미적용 상태로 남아 있음 — 코드가 없으면 건너뜀). 24시간 접근(20261114100000)은 이미 운영 적용
+- 운영 Supabase 인증 설정(11/16 공개 settings 읽기): 가입 막힘(disable_signup true)·이메일만 켜짐·카카오/네이버 없음. Management API 토큰은 여전히 'Invalid access token' → 설정 변경은 대표 대시보드
+- lms-prod 에만 있는 커밋 7개 = [학생에게 연락하기] — 내용은 lms-test 에 모두 있음(src 차이 없음), 합칠 것 없음
+- ⏪ 11/16 23:30~11/17 00:00 KST 운영 반영 후 되돌림 (H26(205) 보충): 백업 snapshots **70** → migration 2개 운영 적용(유지) → lms-prod 65a1d1e 배포(시행일 11/17) → Work 가입 허용 켬 → Claude 운영 QA 통과(support+prodsignup1116@ 가짜 이름 정하윤 가입·메일 코드·비밀번호 로그인·권한 0건/운영자 함수 거절, 계정 남겨 둠) → **기존 회원이 메일 코드 로그인을 잃는 문제로 대표 '되돌림'**: Work 가입 허용 끔(Claude 확인 signup_disabled) → lms-prod 되돌림 커밋 8c31f73·e81fea5(코드 = 3908254 와 같음, /privacy 404) → 예전 메일 코드 로그인 운영 확인(코드 메일·입력 통과). 유지: DB 함수 2개·Supabase 카카오/네이버 등 설정 2~9·시험 계정
+- ✅ 11/17 00:10 KST **운영 공개**: lms-prod 9b153f1 배포(시행일 11/17) → Work 가입 허용 켬 → Claude 운영 QA(메일 코드·가입 윤서진 support+prodsignup1117@·비밀번호·권한 차단, 학생 13·수업 192·회원 연결 18 그대로) → 대표 PC: 카카오(시에나 개인)는 같은 이메일이라 STU-0013 에 자동 연결 → 대표 '해'로 운영자 계정에 옮김(백업 snapshots **71** = identity 1줄, 되돌리기 = user_id 를 STU-0013 로) → 지금 운영자 = 이메일+카카오+네이버, STU-0013 = 이메일만. 네이버는 '이미 회원이에요'+비밀번호로 운영자 계정에 연결 통과. 실제 수강생 STU-0005 가 카카오 로그인 → 본인 계정 자동 연결(정상). 빈 계정 1개(개인 네이버로 실수 로그인, 연결 없음) 남김
+- ✅ 11/17 옛 운영 주소 넘김(대표 '응'): 원인 = 옛 Vercel 주소(edge-english-git-lms-prod-…)에서 네이버 로그인 → 네이버 서비스 URL(edgeenglish.kr)과 달라 '서비스 설정 오류'. src/proxy.ts OLD_PROD_HOST 면 환경변수 없이 /lms 를 같은 경로·쿼리로 edgeenglish.kr 307 → lms-prod f700908. 확인: 옛 주소 /lms/student?makeup=abc·/lms/login?next= → edgeenglish.kr 그대로, 새 주소·시험 사이트·옛 주소 홈페이지 200. 학생·강사는 기기마다 1번 재로그인(메일 코드). 되돌리기 = OLD_PROD_HOST 줄 빼고 배포
+- (해결됨) 다른 네이버 계정으로 로그인 시 네이버 화면 '엣지영어 서비스 설정에 오류가 있어 네이버 아이디로 로그인할 수 없습니다' → 운영용 네이버 앱이 '개발 중'(멤버만 로그인)일 가능성(추정) → Work 에 앱 상태·멤버 수·Callback·서비스 URL 확인 요청(대표 전달)
+- ✅ 11/17 00:00 KST 메일 코드 로그인 추가(lms-test 473ff1c): 로그인 화면 [로그인] 아래 테두리 버튼 '메일 코드로 로그인' → 같은 화면 이메일로 코드(shouldCreateUser false) → 코드 화면(코드 입력·[로그인]·이메일 고치기·다시 받기). 시험 사이트 확인: Alex(강사) 코드 → 강사 Home · support@(운영자) 코드 → 인증 앱 화면 · 휴대폰 넘침 0 · vitest 503. 운영 배포 묶음 v2 = 로컬 worktree 9b153f1(origin/lms-prod e81fea5 위, 시행일 11/17, next build 통과, push 안 함)
+- ▶ 다음(대표 '응', H26(150) ⑤ 변경): 새 로그인 화면에 **'메일 코드로 로그인'** 다시 추가(누구나, shouldCreateUser false, 운영자는 코드 뒤 인증 앱) + 카카오·네이버 '이미 회원이에요' 연결도 메일 코드로 가능하게 → 시험 사이트에서 신규 가입·비밀번호·메일 코드·카카오·네이버·기존 계정 연결·운영자 TOTP 시험 → 대표 '응' → 운영 배포(배포 묶음 방법 위와 같음, 65a1d1e 재사용 가능) → Work 가입 허용 → 운영 QA → 대표 휴대폰(카카오·네이버 '이미 회원이에요' 로 support@ 연결, 새 운영자 계정 안 생기는지 DB 확인) → 공개
+- ✅ 11/16 Work 운영 Supabase 미리 설정(대표 전달 보고): 비밀번호 8·가입 메일 템플릿·수동 연결·카카오·네이버(custom:naver)·Site URL/Redirect(https://edgeenglish.kr/**) 반영, **가입 허용은 꺼둠(공개 직전 Work 에 한 줄 요청)**. Claude 확인: 운영 settings kakao true·signup 막힘, authorize kakao·custom:naver 302(운영 앱 client_id). 운영 화면은 아직 옛 코드라 버튼 안 보임
+- ✅ 11/16 배포 묶음 확인: origin/lms-prod 위에 위 13개 파일 + migration 2개를 lms-test 에서 가져와 얹기 → lms-test-bundle·lms-prod-page 스크립트 → tsc 0·vitest 503·next build 통과(로컬 worktree, push 안 함 — 공개 당일 같은 방법으로 다시 만들어 시행일 넣고 push)
+- 공개 당일 순서(11/17 목표): lms-prod 에만 있는 커밋 확인 → 2판 세션 운영 DB 작업 중인지 확인 → 백업 → migration 2개(대표 '응') → 배포 묶음 + LEGAL_EFFECTIVE_DATE → lms-prod push → 운영 확인(가입은 Work 가입 허용 뒤) → 대표 휴대폰 카톡 로그인 → 공개
+- ✅ 11/16 대표 '반영해': 처리방침 '5·6' 국외 이전 A안 시험 사이트 반영(legal.ts) — 강사 실명·국가(Benny·Olivia = 서명 기록, Maria = 본인이 보낸 서명 계약서 메일 이름 + 대표 확인 베트남), Resend(Plus Five Five, Inc.·발송 기록 30일·privacy@resend.com)·Google(수업 노트 Google Docs 추가, 데이터 보호팀 양식)·Vercel(접속 기록 최대 1일·privacy@vercel.com). Google 데이터 지역 설정 확인은 공개 조건 아님(대표). 강사 바뀌면 학생 정보 넘기기 전에 강사 줄 먼저 고침. 남은 것: 시행일(공개일) · 같은 날 운영 반영·QA
+- 11/16 대표(ChatGPT 의견 전달): 한 계획으로 관리하되 **2판 재서명은 공개 차단 조건 아님**(법·심사 근거 없음). 공개를 막는 조건 = 처리방침 법정 항목(강사 이전 국가 Maria 미확인 · 강사 줄 이전받는 자 표기 'support@ 경유' 충족 여부 · 연락처: Resend privacy@resend.com, Vercel privacy@vercel.com, Google = DPA 데이터 보호팀 문의 양식) + 운영 /privacy·/terms 지금 404(배포 전) + 같은 날 운영 반영·QA. 운영 변경 금지(대표). (이전 메모) ① 처리방침 제28조의8 요건(이전받는 자 연락처 = 각 회사 연락처 — Resend privacy@resend.com·법인명 Plus Five Five, Inc. 확인, Google·Vercel 미확인 / 강사 줄 'support@ 경유' 충족 여부 ChatGPT 조문 대조) ② 수업 노트 회사 소유 전환 + 부속합의서 2판 + Benny·Maria·Olivia 재서명(Maria 거주국 확보, 기한 대표) ③ 시행일 ④ 같은 날 운영 반영(백업 → migration 2개 → 대표 Supabase 설정·카카오·네이버 키 → lms-prod → Claude 확인 → 대표 휴대폰 카톡 로그인)
+- (지난 메모) 결정 대기였던 것: H26(198) 로 1판 내림 → 11/19 기한 의미 없음, 공개 조건(H26(178-2) '강사 서명·국외 이전 정보 확인 뒤')을 2판 서명까지 기다릴지 / Maria 거주국만 확인되면 분리 공개할지
+
+## ✅ 11/16 밤 완료 (H26(198)): 수업 노트 회사 소유 전환 + 부속합의서 2판 + 세 강사 재서명 — 11/17 오전이 아니라 11/16 밤에 진행(대표 PC 1시간 가능)
+- 결과: 운영 DB 노트 링크 13개(STU-0001~0013, 0013 은 대표 본인 계정) 교체(lms_student_apply, 이력 13건, 옛 링크는 이력 student_profile_edits 에 남음) · 복사본 13개 support@ 소유, 링크 있는 누구나 보기 + 담당 강사 편집(Olivia 0001·0002·0004·0005·0012 / Benny 0007·0009·0010 / Maria 0010·0011·0013, 예정 수업 없는 0003·0006·0008 은 편집 안 줌) · 2판 게시(대표 13:41 UTC) · 서명 요청 3건(기한 11/20 강사 현지 23:59, 메일 14:02 UTC Gmail 확인) · 안내 메일 14:02 UTC(support@ 받는사람, 강사 3명 숨은참조)
+- ✅ 11/17 강사 Students 목록 'Class notes ↗' 버튼 운영 반영(대표 '응', lms-prod e73575d = lms-prod 위에 이 커밋만 cherry-pick, 운영 JS·데모 PC/휴대폰 확인). TutorHome.tsx 만, DB 변경 없음
+- ✅ 11/17 원래 노트에만 있던 기록을 회사 새 노트에 옮김(대표 '응')·대조 일치: STU-0001 11/17 단락 · STU-0013 '17/11-Pumpkins' 탭(새 탭) · STU-0002 레슬리 11/4 대체수업(11/11 앞에 'Wednesday, November 4, 2026 (cover class)'). 보존 범위 = 수강 중 학생만(끝난 학생·탠저린 노트는 삭제 허용, 대표·탠저린 확인)
+- ✅ 11/17 원래 노트 삭제 요청 메일 2개 발송(대표 '넣어'·'진행해', 직전 원래 노트 추가 수정 없음 확인, 반송 없음): 세 강사 숨은참조 / Leslie 따로(삭제만). 정책 원본 H26(210). 남은 것 없음(삭제 여부·권한 만료 확인 안 함, 대표 11/17)
+- ✅ 11/17: 2판 서명 3명 끝(운영 DB: Maria 04:38·Benny 04:55·Olivia 11:44 UTC). Benny STU-0010 복사본 편집 권한에 Drive 자동 만료 2026-11-19 08:40 UTC(11/18 수업 끝 +24시간) 설정 완료 — Google 자동 만료라 따로 확인 안 함(대표 11/17). 원본 삭제 요청 메일 = 문구 대표 확인 대기(보내지 않음). ⚠ 원본이 전환 뒤에도 수정됨: STU-0001(Olivia, 11/17 11:47 UTC)·STU-0013(Maria, 11/17 04:26 UTC) — 새 노트로 옮긴 뒤 삭제해야 함
+- **(이전) 남은 일: Benny 의 STU-0010 편집 권한은 11/18 수업 + 24시간 뒤(11/19 이후)에 제거** (Drive 복사본 1PojEPTE…) · 원본 삭제 요청은 2판 서명 뒤 · 서명 현황 11/20 확인 · STU-0003·0006·0008 은 수업이 다시 잡히면 담당 강사에게 편집 권한 · 시험 사이트 로그인 없이 열림은 이 환경에서 docs.google.com 접속이 막혀 직접 못 열어 봄(권한 조회로만 확인)
+- (아래는 계획 기록)
+### 계획 (11/17 오전 한국 전환, H26(198)): 수업 노트 회사 소유 전환 + 부속합의서 2판 + 세 강사 재서명
+- 대표 11/16 확정: 노트 = 회사 계정 소유·담당 강사 편집·학생 링크 열람(B), 2판 문구(제3조만 1판과 다름), 서명 기한 **11/20(강사 현지 날짜)**, 전환 **11/17 오전(한국)**, 안내 메일 최종안(숨은참조·Olivia·Benny·Maria만, Leslie 제외)은 링크 교체 뒤 발송
+- ✅ 11/16 완료: 노트 12개 support@ 복사(공유 안 함·비공개, 원본과 본문 해시·표·그림 수 일치, 복사 시각 11/16 09:53 UTC) · 운영 DB 2판 **초안**(terms_documents revision 2, id c1d82058…) 넣음(게시·요청 0, 1판 retired·서명 2건 그대로)
+- 복사본 파일 ID(운영 DB students.class_note_url 의 STU 순서, 원본→복사본은 handoff 외 scratchpad 아님 — Drive 에서 support@ 소유 같은 이름 문서): STU-0001 1670RmgW… · 0002 1mTUAm6k… · 0003 1OxEcIb2… · 0004 1q6f3GFG… · 0005 1iYueqBB… · 0006 1PZFgDJG… · 0007 1a_5Bx8s… · 0008 1ZRiKOnc… · 0009 1CKyfNcx… · 0010 1PojEPTE… · 0011 1xxC-ced… · 0012 1UXwzn9i…
+- 11/17 오전 순서: ① 원본이 복사 뒤 바뀐 노트 다시 복사·대조(최신화) ② 대표 [회사 서명하고 올리기](운영자 화면 '강사 서명 문서', 2판) ③ 복사본 공유(담당 강사 편집·학생 링크 열람, STU-0010 은 지금 담당 Maria 편집) ④ 로그인 없이 열리는지 확인 ⑤ 운영 DB 링크 교체(직전 대표 '응') ⑥ 안내 메일 ⑦ 서명 요청(기한 칸에 2026-11-20)
+- 원본 삭제 요청은 2판 서명 뒤. 안 한 것: 공유·LMS 링크 교체·원본 삭제·안내 메일·서명 요청
+- 11/16 강사 안내 메일(이메일 비공개·WhatsApp 안내·합의서 곧)은 Benny·Olivia·Maria 에게 따로 발송 완료
+
+## (이전 메모) 수업 노트 회사 소유 전환 + 부속합의서 2판 + 세 강사 재서명 (시작 전 기록)
+- 현재: 부속합의서 1판 운영에서 내림(retired). Benny·Olivia 1판 서명 기록·서명본 그대로(해시·PDF 확인), Maria 미서명. 2판은 운영자 화면 '강사 서명 문서' [새 판 만들기] → 별도 문서
+- 11/16 조사(읽기만): 운영 students.class_note_url 12개(STU-0001~0012) 모두 강사 개인 Google 계정 소유(Olivia 7·Benny 3·Maria 2), 6개 '링크 있는 누구나'(STU-0005·0007·0008·0009·0010·0011, 0011 은 댓글까지). STU-0010 노트는 예전 강사(Benny) 소유인데 지금 담당은 Maria → 제8조와 어긋남. 노트 내용 = 수업 대화 메모(직업·가족·생활 등 사생활 많음), 그림·표·탭(Maria 1개 19탭) 있음, 수정 제안 없음. support@ 는 12개 모두 읽기 가능(복사 가능). 댓글 수·학생 개별 공유 목록은 지금 도구로 못 봄(미확인)
+- 방향(ChatGPT·Claude 일치, 대표 최종 승인 전): 회사 계정(support@)에서 새로 복사 → 담당 강사 편집 → 학생별 제한 공유(공개 링크 끔) → 검증 뒤 LMS 링크 교체 → 강사에게 원본 삭제 요청. 2판 = 제3조 도구에 'Google Docs class notes provided by Party A' 추가
+- 먼저 할 것: ① 학생이 노트를 직접 쓰는지·Google 로그인으로 여는지 조사(Drive 수정 기록 + 대표가 강사 3명에게 한 줄 질문 — 영어 문구 대표 확인 후) ② 댓글·수정 기록 보존 필요 여부 ③ 2판 문구 대화창에만(대표 '넣어' 전 게시 금지) ④ 운영 LMS 링크 교체·문서 생성은 대표 승인 뒤. 전환 날 강사에게 'LMS 링크로만 열기' 안내 필요(원본 계속 쓰는 문제)
+- ⚠ 학생 이메일로 공유하면 편집 권한 강사가 Docs [공유] 창에서 학생 이메일을 볼 수 있음(이메일 숨김 정책과 충돌). 선택지: A 이메일 공유 + 2판 제1조 예시에 Google Docs 공유 창 추가 / B 학생 '링크 보기'·강사만 편집(링크 유출 위험) — C(노트를 LMS 안에서 보여 주기)는 대표 11/16 '안 해'로 제외. A·B 중 학생이 노트를 직접 쓰는지 조사 결과 보고 결정
+- 2판 요청 메일: H26(192) 부속합의서 문구 재사용 가능 — 2판임을 알리는 표현 필요 여부 대표 확인. 기한 날짜는 대표에게 물음(숫자)
+
+## ✅ 11/16 강사 [학생에게 연락하기] — **운영 반영 끝 (대표 '넣어'·운영 동의)** (H26(197)(203), 브랜치 claude/great-davinci-lu5rvr)
+- ✅ 운영 반영(11/16): 백업 `lms_backup.snapshots` **68**(표별 줄 수, 새 표·함수만이라 기존 정의 보관 없음) → migration 커넥터 이름 lms_tutor_contact_student(메일 문구 최종본 포함) → 표 67→68, 학생 13·수업 192·메일 78 그대로, RLS 꺼진 표 0, 함수 2개 md5 = 시험 DB, anon 실행 불가 · 코드 lms-prod **224511e8** = origin/lms-prod(b9f5cdca) 위에 이 기능 커밋 5개 + 묶음 SQL. edgeenglish.kr JS 에 'Contact student again' 확인(11/16 11:44 UTC). 운영 send_emails 켜짐 → 실제 학생에게 감 + support@ 숨은참조
+- ✅ 11/16 메일 순서·문구 변경(대표 '바꿔'·'응'): 수업 안내를 [수업 들어가기] 위로, '수업 길이' 뺌, 2차 '수업 시작'·'수업 종료', 2차 안내 4줄. 운영 백업 **snapshots 69**(이전 정의 `_functions_before`) → 운영 함수 md5 = 시험 DB(ccce50ef…), 운영 연락 기록 0건. 시험 메일 STU-0041(시드니) 1·2차 support@ 확인. lms-prod 에는 SQL 파일만 반영(화면 코드 변경 없음)
+- ✅ 강사 안내 메일 발송(11/16, 대표 지시): support@ 에서 Benny·Leslie·Maria·Olivia 숨은참조, 제목 'New in LMS: Contact Student'. CLAUDE.md '강사용 새 기능은 강사에게도 짧게 안내' 규칙 추가
+- 운영 전 lms-prod 에만 있던 b9f5cdca(학생 홈 '수업 노트 열기')를 lms-test 에 합침(내용 이미 같아 변경 없음)
+- 메일 문구 최종본(대표 11/16 '넣어'): 인사 '○○님, 안녕하세요! 엣지영어입니다. ☺️' + 안내 3줄 · [수업 들어가기] · '💬 ○○ 강사님의 메시지'(쓴 때만) · '수업 안내' 목록(수업 시간 거주지/한국 · 길이 · 2차만 수업 종료) · 연장 안 됨 문장 · 감사합니다/엣지영어 드림. 이름 = 성 포함. 시험 메일 STU-9003(브리즈번) 1·2차 support@ 대조 통과
+- 기존 기능 영향: 기존 함수·표 변경 없음(새 표 1·새 함수 2). DB 시험 전체 통과(재등록 메일 날짜 고정 시험만 기존 문제로 실패) · vitest 503
+- 시안 3판(대표 승인): https://claude.ai/artifact/4pWG9tnsXvZGgTG3FTGbWv
+- migration **20261116140000_lms_tutor_contact_student** (시험 DB 적용, 커넥터 이름 lms_tutor_contact_student · 주석만 뺀 같은 내용): 표 `tutor_contact_notices`(수업·단계(1·2)당 1줄, 삭제 금지, note 150자, by_admin) · `tutor_contact_student(lesson, stage, note, p_tutor)` · `tutor_contact_notices(p_tutor)`. 학생 메일 template `tutor_contact_student`, dedupe `tutor_contact:수업:단계`. 운영진 메일 없음(숨은참조). 표 67→68 (02-check)
+- 코드: `src/lms/tutor/contact.ts`(시간 창·요약 문구) · `src/app/lms/tutor/ContactStudent.tsx` · TutorHome(오늘 수업 줄·Class Record 기록할 수업 카드·줄 펼침) · TutorSchedule 수업 창 · TutorLive · live.ts(`sendTutorContact`). 덤: Schedule 수업 창의 '늦어요' 보낸 시각도 이동 기간 시간대로(같은 버그)
+- 시험: `supabase/tests/tutor-contact-student.sql` 33줄 통과(run.sh 연결) · vitest 503 · tsc·eslint. ⚠ run.sh 전체는 기존 renewal-mail.sql 날짜 고정 시험에서 멈춤(이 기능과 무관) → 따로 돌려 확인
+- 실제 화면 QA(시험 사이트, Alex = support+alex@ 메일 코드): PC Home 1차 → 한마디 '45 / 150' → Email sent ✓ + 보낸 시각(Auckland 이동 기간 시간대) + [Contact student again] / 휴대폰 2차 → 2nd email sent ✓, 가로 넘침 0 / Class Record 카드·Schedule 수업 창에 1·2차 기록 같음 / 콘솔 오류 0 / support@ 에 1·2차 메일 도착·문구 확인(Meet 버튼, 메시지 칸은 쓴 때만). 운영자 보기(TOTP) 화면 클릭은 안 함 — 운영자 대신·'by Edge English'는 DB 시험으로 확인
+- 시험 데이터(그대로 둠): Alex·이도윤 STU-9001 11/16 19:20 KST 수업(f63c8832…)·한예린 STU-9003 11/16 20:10 KST 수업(09fb2a20…) 각각 1·2차 보냄, 기록 전
+- 되돌리기: 코드 = lms-prod 를 b9f5cdca 로, DB = 함수 2개 drop(표는 기록 있으면 보존)
+
+## 🖊 11/15 강사 LMS 전자서명 — **운영 반영·발송 끝: 대표 회사 서명 11/16 01:14 KST · Benny·Maria·Olivia 요청+메일 11/16 06:01 KST (H26(194)), 기한 11/19 강사 현지 날짜** (정책 원본 H26(188)(189)(190) 참고, 브랜치 claude/pensive-ritchie-fz9hjn)
+- ✅ 운영 반영(대표 11/15): 운영 DB 백업 **snapshots 60**(표 64 전체 + 바뀌는 함수 3개 이전 정의 `_functions_before`: lms_mail_dispatch·lms_student_profile_json·tutor_my_students) → migration 커넥터 이름 lms_tutor_hide_student_email(040000) · lms_tutor_esign(050000) · lms_tutor_sign_request_mail(070000) → 표 67, 학생 13·수업 183 그대로, RLS 꺼진 표 0 · 코드 lms-prod 743536d(+ca384bd·c9bb5d7 묶음 SQL) = 전자서명·이메일 숨김 파일만 골라 담음(처리방침 legal.ts·060000 수업 안내 카드 등 다른 미배포 변경 안 넣음). edgeenglish.kr JS 에 반영 확인
+- 운영 데이터: 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판 **초안**만 넣음(전문 해시 313082ba… = 시험과 같음). 회사 서명(게시)·Benny·Maria·Olivia 요청·강사 메일 **안 함** — 대표가 메일 문구 3개 검토 후 '보내' 할 때. 운영 send_emails 켜져 있으므로 [요청 보내기] 누르면 실제 메일이 감(메일 없이 요청만 = rpc admin_sign_request(…, false))
+- 되돌리기: 코드 = lms-prod 를 30204e5 로 · DB = snapshots 60 `_functions_before` 3개 정의 실행 + 새 함수·표 3개 drop(서명 0건일 때만)
+- 11/15 대표 확정(H26(193)): 이번 부속합의서 기한 = **11/19(목) 강사별 현지 날짜**(그 날 23:59, 메일·To do 날짜만 'Thu, 19 Nov') → 운영자 화면 요청에 '기한 (강사 현지 날짜)' 칸(기본 요청일+7일) · migration 20261115100000 시험·운영 DB 적용(운영 백업 snapshots 63), lms-prod 6b376b3. 시험 DB Blair(Toronto) 요청 메일 'To do by Thu, 19 Nov' 확인. **[요청 보내기] 때 기한 칸에 2026-11-19 넣기**. ✅ schema_test 'My hours' 실패 원인 = 시험이 한국 기준 다음 월요일과 비교(함수는 강사 현지 기준) → 한국 월요일 0~2시에만 실패, 시험을 현지 기준으로 고침(e250a50 직전 커밋). ⚠ 이어서 renewal-mail.sql '종료일 7일 전 전: week 안 보냄' 실패(11/16 KST 01:06) — 날짜가 2026-11-16~23 로 고정된 재등록 메일 시험, 전자서명과 무관·원인 미확인 → 재등록 메일 담당 세션에서 확인
+- 11/15 대표 확정(H26(192)): 부속합의서 서명 요청 메일 = 제목 'Edge English – Student Data Protection Addendum (please sign)' + 확정 본문(기한 = 강사 현지 날짜), 다른 문서 요청은 일반 문구 → migration 20261115090000 시험·운영 DB 적용(운영 백업 snapshots 62). 시험 메일 support@ 도착 확인(Emma). 운영 요청 0·메일 0·문서 초안 그대로
+- 11/15 대표 메일 3개 최종 승인(H26(191)): 서명본 메일 맺음말만 'Edge English Team' 으로 통일 → migration 20261115080000 시험·운영 DB 적용(운영 백업 snapshots 61 = tutor_sign 이전 정의). 회사 서명·요청·발송은 여전히 대표 '보내' 대기
+- 11/15 추가: 서명 요청 알림 메일 1회(재촉 없음, migration 070000) · 운영자 화면 요청 메일 상태·[요청 메일 보내기]
+- ✅ 시험 사이트 운영자 화면 QA(대표 시험용 인증 앱 코드): 빠른 메뉴 '강사 서명 문서' → 1판·회사 서명 시각·Alex 서명함/PDF·Emma·James 서명 대기·요청 메일 안 보냄·[요청 메일 보내기] · 강사 추가 목록 · 새 판 → 초안 → [회사 서명하고 올리기] 확인 단계(올리지 않음, 시험 DB 에 2판 초안 남음) · 휴대폰 가로 넘침 없음 · 운영자 보기 James: 입력칸·코드·서명 버튼 못 누름 + '강사 본인만 서명할 수 있어요' · Alex My info PDF
+- 시안: `docs/lms/previews/tutor-esign-drafts.html` (https://claude.ai/artifact/9VKQxqr6Kqg8EpMmzyY7B9)
+- migration **20261115050000_lms_tutor_esign** (시험 DB 적용, 커넥터 이름 lms_tutor_esign · 주석만 뺀 같은 내용): 표 3개 `tutor_sign_requests`(기한 = 요청+7일) · `tutor_sign_codes`(코드 해시, 10분·5회, 직접 읽기 없음) · `tutor_signatures`(쌓기만, PDF bytea·해시) / 문서 원본은 기존 `terms_versions`+`terms_documents` 재사용(서명 문구 = required_items[0], 게시 = 회사 서명) / 함수 `tutor_sign_list·tutor_sign_doc·tutor_sign_send_code·tutor_sign·tutor_signed_pdf·admin_sign_docs·admin_sign_doc_save·admin_sign_doc_publish·admin_sign_request` + PDF(`lms_pdf_*`, 글자만 Helvetica) / `lms_mail_dispatch` 에 첨부(payload.attachments)만 더함. 표 64→67 (02-check)
+- 코드: `src/lms/tutor/esign.ts` · `src/app/lms/tutor/SignDoc.tsx` · TutorHome(To do 'Sign: …'+기한 줄, 'My info' 탭 = PC 왼쪽 메뉴·휴대폰 맨 위 머리글) · TutorLive · 운영자 `/lms/admin/sign`(SignAdmin.tsx, 빠른 메뉴 '강사 서명 문서')
+- 시험: DB `supabase/tests/tutor-esign.sql` 48줄 통과 · `npm run test:db` 전부 · vitest 491 · tsc 0
+- 실제 화면 QA(시험 사이트, Alex = support+alex@ 메일 코드 로그인): To do 'Please sign by Mon, 23 Nov' → 창(전문·Party A 줄·두 칸 비면 버튼 못 누름) → Email me a code → support@ 에 '[시험 · Alex] Edge English – Your signing code' → 틀린 코드 1회(DB wrong_tries 1) → 서명 → '✓ Signed'·서명 시각 Sydney/KST → 서명본 메일 PDF 첨부 도착 · PDF 2쪽 pypdf strict 통과 · To do 에서 빠짐 · My info › Documents 보기·PDF · 휴대폰 390 가로 넘침 없음
+- 시험 데이터(그대로 둠): 문서 TS_STUDENT_DATA_PROTECTION_ADDENDUM 1판(최종 전문, 서명란 빈칸 줄은 전자서명 칸으로 대체) — 회사 서명은 Claude 가 시험 DB 에서 대표 운영자 계정 id 로 게시(시험만) · 요청 Alex(서명함)·Emma·James(서명 대기)
+- ⏸ 11/16 대표 지시로 1판 내림(H26(198)): 운영 terms_documents 1판 status=retired(직접 update, 되돌리기 불가 — 다시 받으려면 새 판 게시 후 요청) → Maria To do 에서 사라짐·서명 불가. Benny·Olivia 는 내리기 전에 서명함(기록·서명본 메일 그대로). 상의 중: 수업 노트 회사 소유 전환·부속합의서 2판
+- 다음 확인: 11/19 기한까지 세 강사 서명 현황(운영자 화면 '강사 서명 문서') · 서명하면 서명본 메일(PDF) 자동 · Leslie 는 다음 대체 수업 맡길 때 요청
+- 남은 순서: ④ 운영자 화면 '강사 서명 문서' → 1판 초안 → **대표가 [회사 서명하고 올리기]** → Benny·Maria·Olivia 요청(세 강사 모두 계정·이메일 있음 확인) ⑤ 운영 send_emails 켜져 있으므로 요청·코드·서명본 메일이 실제 강사에게 감
+
+## ✅ 11/15 수강생 직접 취소 등 자동 메일이 가는 안내 → 할 일 카드 없음 — **운영 반영 완료** (lms-prod a521c6b, 운영 DB migration 20261115060000, 백업 snapshots 64 = 두 함수 이전 정의, 되돌리기 = 그 정의 실행 + lms-prod 를 앞 커밋으로) (H26(102) 보충·보충 2)
+- 운영 확인: 안내 기록 140건·상태별 수·수업 184·변경 13 그대로, 운영 화면 PC·휴대폰(대시보드 정상, STU-0008 안내 줄 [복사]+'✓ 자동 메일 발송 완료 … 한국 시간', 가로 넘침 없음). 운영에 메일 실패 건이 없어 [보냄] 닫기는 시험 사이트에서만 실물 확인
+- 대표 11/15 '어': 수강생이 LMS에서 직접 한 취소는 '수강생 안내 카드'(카톡 복사 → 복사함 → 보냄)를 아예 만들지 않게 개발 (정책 원본 H26(102)). 운영진·강사가 대신 한 취소 등 다른 경로의 카드는 그대로.
+- 먼저: 안내 카드(`lesson_notices`)가 만들어지는 곳을 모두 찾고(DB 함수·화면), 영향 범위와 PC·휴대폰 시안 보고 → 승인 뒤 시험 DB·lms-test 구현 → 운영은 별도 승인. 기존 안내 카드 데이터는 지우지 않음.
+- **강사 WhatsApp 복사 카드 (대표 11/15)**: 강사에게 WhatsApp으로 보내는 기능은 그대로 둠(대표가 필요할 때만 씀). 하지만 **'보냄'을 눌러 없애는 일은 하지 않게** — 강사 안내는 메일이 자동으로 나가므로 카드가 '할 일/대기'로 남지 않고(대시보드 대기 숫자에 안 잡힘), 복사 버튼만 필요할 때 쓸 수 있게. 위 수강생 카드 작업과 같은 세션에서 같이 시안·영향 범위 확인(기존 not_needed 처리 방식 H26(82) 참고).
+- 숨은참조: 운영 발송 함수에 이미 있음(`lms_mail_dispatch`, 끄는 스위치 `email_bcc_ops_stop` 꺼짐) — 대표 11/15 확인, 추가 작업 없음.
+- 11/15 영향 범위 조사 끝·시안 https://claude.ai/artifact/62xt4QgVEeaZh4A6qEGsqC (`docs/lms/previews/student-cancel-no-card-drafts.html`), 대표 승인 대기. 요점: 카드 줄은 `lms_change_core` 한 곳(via='student_app' 일 때 수강생 'change' 줄)에서 생김. 이 줄이 수강생 취소 메일의 원본(`lesson_notices_email`→`lms_notice_mail`)이라 **줄은 계속 만들고 넣을 때 status='not_needed'**(강사 줄 `lesson_notices_tutor_no_copy` 와 같은 방식, before insert 트리거 하나 추가). 메일 실패는 지금처럼 '자동 메일 못 보냄' 카드(live.ts emailFails 가 status≠sent 를 봄). 화면(강사 WhatsApp 결정과 통일): 자동 메일이 걸린 not_needed 줄(수강생·강사)은 '자동 메일 안내' + [복사] + 글 상자, [보냄] 없음 — 지금은 not_needed 줄에 [복사]가 숨겨져 있어 강사 줄도 복사 못 함(`LessonChange.tsx` NoticeRow). 강사 줄은 11/11부터 이미 전부 not_needed(시험 DB 확인)라 대시보드 대기 숫자엔 원래 안 잡힘. 휴무 화면(`tutor-leave`) 강사 줄 표시도 구현 때 확인. 되돌리기(admin_revert_change)는 원래 줄을 복사해 'revert' 카드를 만드므로 그대로 뜸
+- ✅ 11/15 대표 '다 반영해'(1~4 + UI 개선) → **시험 사이트 반영(코드만, DB 변경 없음)**: 규칙 = 자동 메일이 걸린 안내(email_status 있음)는 할 일 아님 / 메일 실패·주소 없음·대기 중 오류 = '자동 메일 못 보냄' 카드 + [메일 다시 보내기]·[보냄] / 메일 없는 안내(휴무·되돌리기·보강 무효 등) = 지금처럼 [복사]+[보냄]. 수강생 직접 취소·운영진 대신 취소·강사 기록 취소·보강 확정·보강 시간 변경 모두 같은 규칙(운영진 대신 취소도 메일이 실제로 나갈 때만 카드 없음). 파일: `src/lms/admin/live.ts`(대기 안내 = email_status null 만, 메일 실패에 queued+오류 추가) · `lesson-change-live.ts` loadChangeTasks · `lesson-change.ts` '자동 메일 발송 완료' · `LessonChange.tsx` NoticeRow([복사] 항상, [보냄]은 메일 없거나 실패 때만, 강사 줄도 [복사]). tsc 0 · vitest src/lms/admin 190. 시험 DB: STU-0005 11/18 수업 수강생 직접 취소 1건 만듦(change_request faa056a4…) → 수강생 줄 메일 sent→status sent, 강사 줄 not_needed·sent, support@ 로만 감. 남은 것: 강사 줄(not_needed) 메일 실패 때 [보냄]으로 닫을 수 없음(admin_mark_lesson_notice_sent 가 not_needed 거절, 예전부터) · 운영 반영은 대표 승인 뒤(코드만)
+- ✅ 11/15 추가(대표, H26(102) 보충 2): 메일 실패한 강사 줄(not_needed)도 [보냄]으로 닫기 — migration **20261115060000_lms_notice_mail_failed_mark_sent**(lms_notice_mail_failed + admin_mark_lesson_notice(s)_sent, 강사 휴무 줄 제외, email_status 는 그대로) **시험 DB 적용, 운영 미적용**. 화면: 메일 시각에 '한국 시간', 메일 실패만 남은 할 일 카드 요약 '수강생 1건'(전엔 '보강 강사 답 대기 0건'). test:db 통과(schema_test 12·12-1) · vitest 190 · **실제 시험 화면 QA(운영자 로그인, PC 1280·휴대폰 390)**: STU-0005 수강생 줄 [복사]만+'✓ 자동 메일 발송 완료 … 한국 시간' / 강사 Blair 줄(메일 실패로 만든 시험 데이터) [보냄] → '보냄 ✓'·실패 기록 유지·DB sent_by 운영자 / 대시보드에 조O우 카드 없음, 가로 넘침 없음
+- **운영 반영 순서(대표 승인 뒤)**: ① `git log origin/lms-test..origin/lms-prod` 확인 ② 운영 DB 백업(두 함수 이전 정의) → migration 20261115060000 ③ lms-prod 에 이 기능 커밋만(live.ts·lesson-change-live.ts·lesson-change.ts(+test)·board.ts·LessonChange.tsx) 골라 담기 ④ 운영 화면 확인
+- 같은 날 대표 결정: 3자 대조 보고 예약 작업 끔(trig_01DYXbuSfHjUehZrZJZwaq5H), 로그인 점검 보고는 계속. 강사 메일 숨은참조·강사 WhatsApp 복사 카드 유지 여부는 대표 답 대기.
+
+## ✅ 11/14 학생 수업 리마인더 신규 학생 기본값 + 첫 수업 안내 메일 한 줄 — **시험·운영 DB 반영 완료** (대표 승인, 정책 원본 H26(175) — 같은 날 강사 해외 이동 기록과 번호가 겹쳐 175 로 정정)
+- migration `20261114130000_student_reminder_default_regular_off`(students.remind_regular 기본값 false, 기존 학생 변경 없음) · `20261114140000_first_class_mail_reminder_setting_line`(lms_first_class_mail_student: 일정 변경 재안내 메일 제외, 첫 안내에만 '수업 알림 메일은 … 내 정보 › 이메일 알림 설정에서 켜고 끌 수 있어요.' 한 줄).
+- 운영 DB 백업 `lms_backup.snapshots` **54**(표 62 전체) · **55**(lms_first_class_mail_student 이전 정의, 되돌리기 = 그 정의로 create or replace). 기본값 되돌리기 = `alter table students alter column remind_regular set default true`.
+- 확인: 운영 기본값 remind_regular=false·remind_makeup=true, 학생 13명 중 정규 켬 1명(STU-0012, 운영자 대신 켬 기록 있음 — 대표 확인 대기). 시험 DB 문구 확인은 롤백 안에서 본문 출력으로 함(메일 안 나감).
+
+## ✅ 11/13 강사 휴무 신청 (H26(137)) — **운영 반영 완료** (lms-prod 6c052b9, 운영 DB 백업 snapshots 50)
+- 운영 반영(대표 11/13 승인): 운영 DB(mfamixejxydodclhglbc) 백업 **snapshots id 50**(표 61 전체 + 바뀌는 함수 admin_leave_create·lms_leave_candidates 원래 정의 `_functions_before` + 새 객체 목록) → migration 20261113150000(커넥터 이름 lms_tutor_time_off_requests) → 표 62, 휴무 2·휴무 줄 18·수업 183·보강 신청 16·수강등록 15·기간 연장 4 그대로, 신청 0건(운영에서 시험 신청 안 만듦). 적용 전 운영 admin_leave_create·lms_leave_candidates 본문 = 저장소 0200·0100 판과 같음(주석만 다름)
+- 코드: origin/lms-prod(69db1c0)에서 브랜치 → a0b7848·56d7651 의 이 기능 파일만 적용(다른 세션 미반영 작업 안 섞음, live.ts 의 재등록 메일 '보냄' 코드는 운영판 그대로) → tsc 0 · vitest 458 · test:db 전부 통과 → lms-prod 6c052b9. main 은 손대지 않음(지각 알림 배포 때부터 main 0932ca9 그대로)
+- 운영 화면 확인(읽기만, PC·휴대폰): 운영자 대시보드 칸 '강사 휴무 신청 0'·불러오기 오류 없음 · 강사 화면 운영자 보기 Home 'Time off' 란 · 가능 시간·일정 페이지 한 줄 · 휴무 화면 기존 휴무(Olivia) 목록 정상 · 가로 넘침 없음
+- **되돌리기**: 코드 = lms-prod 를 69db1c0 로 되돌려 push. DB = `drop function tutor_time_off_preview, tutor_time_off_list, tutor_time_off_request, tutor_time_off_withdraw, admin_time_off_requests, admin_time_off_reject, admin_leave_create(uuid,date,date,text,boolean,uuid), lms_time_off_min_days, lms_time_off_notice_days` 후 snapshots 50 `_functions_before` 의 admin_leave_create(5인자)·lms_leave_candidates 정의를 그대로 실행 → lms_leave_candidates_at·표 tutor_time_off_requests 삭제(신청 0건일 때만). 데이터 변경 없는 migration 이라 데이터 복구는 필요 없음
+- 미검증: 실제 강사 휴대폰 기기 · 운영에서 실제 신청 흐름(시험 신청을 만들지 않기로 함 — 첫 실제 신청 때 대시보드 확인)
+- 정책 원본: 문서 끝 'H26(137) 보충' 줄에 운영 반영·1~2일 기준(POL-TU-05) 그대로임을 적음
+
+### (이전 기록) 시험 DB 적용·실제 화면 QA (브랜치 claude/pensive-goodall-m2ndw0, 시안 https://claude.ai/artifact/VijcTWhC9DY52i9FqjHT3A)
+- 대표 확정 11/13 ('권장한걸로 다' + 질문 창): 계획된 휴무 14일 전(늦으면 빨간 경고, 신청은 받음) · 급한 일 기한 없음(요청 시 증빙) · **Home 신청은 3일 이상만**(1~2일은 Calendar Cancel class — 운영진 휴무 화면도 3일 미만 안 받음) · 확인 창 본인 기록 = 올해(현지 1/1~) · 란 이름 'Time off' · 반려 사유 필수(강사에게 보임) · 승인 전 철회 · 휴무 화면 저장 = 자동 승인 · 끝난 휴무는 다음 날 Home 에서 빠짐 · 현지 날짜는 실제 시각(현지 첫날 0:00~마지막 날 24:00)으로 휴무를 잡음. **정책 원본 H26 기록 못 함(Google Docs 커넥터 연결 실패) → 다음에 H26 에 위 내용 적기**
+- migration **20261113150000_lms_tutor_time_off_requests**: 표 `tutor_time_off_requests`(RLS, 직접 읽기 없음) · `tutor_time_off_preview/list/request/withdraw`(운영자 보기 p_tutor) · `admin_time_off_requests/reject` · `lms_leave_candidates_at`(실제 시각) + `lms_leave_candidates` 는 이걸 부르는 판 · `admin_leave_create` 6인자판(p_request: 날짜 그대로면 신청 실제 시각, 저장하면 승인, notice_given_on 기록) + 5인자판은 감싸기. 표 61→62 (02-check)
+- 코드: `src/app/lms/tutor/TimeOff.tsx`(Home 란·신청 창·확인 창·근무시간/달력 한 줄) · `src/lms/tutor/time-off.ts` · TutorHome/Hours/Schedule/Live · 대시보드 칸 '강사 휴무 신청'(`board.ts` time_off_request, [휴무 화면 열기]=/lms/admin/leave?new=1&req=…, [반려] 사유 입력) · 휴무 화면 `?req=` 칸 채움 + 안내 띠. 옛 DB(함수 없음)면 Home 란·대시보드 칸이 안 보임 → migration 전에 배포돼도 안전
+- 시험: `npm test` 465 · `npm run test:db` 전부 통과(새 `supabase/tests/tutor-time-off-request.sql` 25줄: 3일·기한·경계 수업(Manila 23:30=한국 다음 날)·승인·반려·철회·권한) · tsc 0. authz-probe 에 새 함수 + 다른 세션의 `lms_screen_prefs/pref_set` 검토 목록 추가(빠져 있어 실패하던 것)
+- ✅ 시험 DB(kyeimjozkcqbgkepwrnv) migration 적용(커넥터 이름 lms_tutor_time_off_requests): 표 63→64, 기존 휴무 7·휴무 줄 47 그대로, RLS·권한(강사 직접 읽기 없음·비로그인 실행 없음) 확인. 기존 lms_leave_candidates 본문 = 저장소와 같았음(md5)
+- ✅ 시험 데이터(그대로 둠, 대표가 열면 바로 보임): James(Manila) 대기 2건(11/17~19 긴급 · 11/22~24 계획·기한 지남) → 운영자 대시보드 '강사 휴무 신청' 칸 / James Home(운영자 보기 ?tutor=James): 반려 12/1~3·승인 12/14~16 / Alex(Sydney): 승인 12/14~16(휴무 화면 저장으로 승인, 휴무 줄 3 = Sydney 12/14 0:00~12/17 0:00 수업 3개 정확) · 반려 12/20~22(사유 보임). 철회 시험 1건(12/8~10 James, Alex 11/20~22)
+- ✅ 실제 화면 QA (시험 사이트, PC 1280·휴대폰 390, 가로 넘침 없음): 강사(Alex 계정) Home 란·신청 창(2일 → Calendar 안내, 늦은 계획 휴무 빨간 경고·제출 가능, Urgent 증빙 줄, 걸리는 수업 시각 Sydney/KST) · 확인 창 · 보내기 → 대기·[Withdraw] → 철회 · 근무시간/달력 한 줄 → 신청 창 열림 / 운영자(대표 인증 앱 코드): 칸 '강사 휴무 신청 4' · 상세(계획/급한 일·수업 수·사유·신청 시각 한국 시간·현지/한국 날짜) · 반려 사유 없으면 못 누름 → 반려 → 강사 화면 사유 · [휴무 화면 열기] 강사·한국 날짜(12/13~12/16)·사유 채움 + 안내 띠 → 저장 → 승인
+- QA 뒤 고침: 확인 창 '올해 기록'을 '3 · …' 한 줄 → 기간마다 한 줄(현지 날짜)
+- 정책 원본: H26(137) '보충' 줄을 문서 맨 끝에 적음(11/13) — 새 번호 아님, 필요하면 H26 자리로 옮기기
+- 미검증: 실제 강사 휴대폰 기기 · 1~2일 Cancel class 화면 자체(코드 안 바꿈) · 운영 DB
+
+## ✅ 11/13 수업 줄 상태·용어 통일 — 운영 반영 완료 (lms-prod f724592 + 494abc9 취소·노쇼 줄에도 강사 변경, 코드만) (H26(168)·(170)·(171) 참고) (브랜치 claude/eloquent-davinci-jvrtqu, 시안 https://claude.ai/artifact/816YCWMz2KT5yR9G8pVn7S)
+- 코드만(DB 변경 없음): `src/lms/admin/dashboard.ts` `lessonState`(예정·진행 중·기록 전은 state=scheduled 일 때만 시각으로 / 완료·취소·수강생 노쇼·강사 노쇼(done+Tutor no-show)는 시각으로 안 덮음)·`lessonNote`(취소 사유 STATUS_PLAIN · 연결된 보강 · 'Emma → James' · '시간 변경 · 8:30 → 9:30')
+- `live.ts` `loadLessonExtras`: 보강 = makeup_requests confirmed(source→confirmed_lesson) 최신, 그 보강도 취소면 다음 연결을 따라감(최대 4번) / 시간 변경 = admin_makeup_logs reschedule 첫 old_starts_at 이 있을 때만. 읽기 실패면 표시만 생략
+- 화면: `LessonRows.tsx`(홈 오늘 수업·강사 상세)·`lessons/LessonList.tsx`(PC 표·휴대폰) 취소선은 시각·학생 이름만, 상태는 오른쪽 그대로. 학생 일정 '진행'→'완료', 수강생 노쇼 '결석'. 용어: '수강생 변경'·'수강생 정상 변경'·'수강생측 취소'·'추가 '·'보상 ' 없앰(STATUS_SHORT 삭제 → STATUS_PLAIN 하나)
+- 검증: tsc 0 · npm test 465 · 로컬 ?demo=1 PC·휴대폰 · ChatGPT QA(시험·운영 DB 읽기 대조, 시험 화면 PC·휴대폰 61줄) 통과. QA 지적 3건 고침: 강사 노쇼 줄 연결 보강 날짜 / 되돌린 수업(voided_at) 목록에서 뺌(student_screen·tutor_screen 과 같게) / 수업 목록 휴대폰 줄 = LessonRows. 이번 주 시험 DB 에 사례 없어 실물 미확인: 취소된 보강 연쇄 추적·같은 날 시간 변경·늦은/공휴일 취소
+- 운영 배포: lms-prod f724592 = 이 기능 커밋(d02e0ed·0cfbcfa)만 골라 담음(handoff 제외). 배포 전 확인: 숨기는 기준 = voided_at(되돌림 함수 5개만 씀, 제약 voided_by 필수), 시험 DB 이번 주 되돌린 10건만 빠지고 정상 취소 14건 모두 사유와 함께 남음. 실제 로그인 화면 PC 1440·휴대폰 390: 시험 51줄·운영 30줄 DB 와 일치, 취소선 시험 14·운영 8, STU-0003 강사 노쇼 줄 '보강 11/9(월) 오후 2:00', 이름·상태 겹침 0, 가로 넘침 없음. 운영 DB 직접 확인: 이번 주 되돌린 수업 0·연결 보강 3·대체 4(1건 완료 'Olivia → Benny', 3건 취소라 사유만)·보강 시간 고침 기록 0(시간 변경 표시는 운영에서 아직 실물 없음)
+
+## ✅ 11/13 학생 화면 '다음 수강권' 표시 — 운영 반영 완료 (lms-prod·main 5e7bfa7, 코드만) (H26(161) 참고, 브랜치 claude/nifty-fermat-bkdcsc)
+- 코드만(DB 변경 없음): `src/lms/student/home.ts` `passKind`·`nextPass`(지금 수강권 아님 + 시작일 > 오늘 한국 날짜 = 다음) · `StudentHome.tsx` 홈 '내 수강 정보' 종료일 옆·내 정보 '내 수강권' 종료일 아래 '다음 수강권 M/D~M/D', 결제 내역 카드 '다음 수강권', 이름 '수강권 / 결제 내역' · 시안 `docs/lms/previews/next-pass-drafts.html`
+- 검증: tsc 0 · vitest src/lms 449 · 로컬 ?demo=1 PC 1280·iPhone 13 — 다음 수강권 없음(화면 그대로)/있음(3곳 표시) 둘 다, 가로 넘침 없음. 시험 DB: STU-0003·0027·0042·0044 다음 수강권 있음, STU-0022(시작 전 첫 수강권)는 '현재'로 남음 확인
+- 운영 배포: 11/13 대표 승인 → lms-prod·main 5e7bfa7 (이 커밋만 골라 담음, Vercel 성공). 첫 실제 대상 STU-0011(12/14 시작)
+- 11/13 추가 고침(대표 '고쳐', H26(161)): 학생 '남은 수업'·'남은 정규 수업' = 지금 수강권 수업만(`currentPassLessons`, 수업의 finalEndDate ≤ 지금 수강권 종료일). 운영 확인 중 STU-0011 이 16회(4+12)로 보임. 시험 사이트 반영 · vitest 458 · ?demo=1 PC·휴대폰(다음 수강권 수업 2개 넣어도 8회·4회 그대로) · **운영 반영 lms-prod·main 0932ca9** · 운영 화면 확인(운영자 보기 STU-0011 PC·휴대폰): 남은 수업 4회·남은 정규 수업 4회·다음 수강권 12/14~3/7
+- 참고: 11/11 ①②③·11/12 ④(이월된 수업, 운영 DB lms_student_makeup_carry_in 적용)는 운영 반영 끝 — 아래 '⏭ 새 세션 개발 대기 (대표 11/11)' 항목은 ⑤까지 모두 개발 끝
+
+## ✅ 11/13 학생 일정·처리 내역·보기 설정 계정 저장·용어 '보상수업' — 운영 반영 완료 (정책 원본 H26(159) 참고)
+- 운영 DB(mfamixejxydodclhglbc): 백업 `lms_backup.snapshots` **id 48**(표 60·학생 13·수업 171, 처리 내역 함수 이전 정의 `_functions_before`) → migration 적용(커넥터 이름 `student_processing_history_cancel_reason` = 저장소 20261113070000, `lms_screen_prefs` = 20261113080000) → 확인: 함수에 cancel_reason · students/tutors.screen_prefs 칸 · 함수 2개 · STU-0013 계정으로 처리 내역 5건 모두 cancel_reason 키(되돌림 처리)
+- 코드: lms-prod·main = 3a459ef (lms-test 커밋 12건만 골라 담음: 0647a4a 1e769fa b0f8b20 a7d31b3 6b4c9f4 ed6cce6 56d8053 63f716e 401b773 8a25bbc 3650d45 eea655d). 그 상태로 tsc 0 · vitest src/lms 442 통과. 다른 세션의 시험 전용 작업은 섞지 않음
+- 시험 DB: STU-0003 강민준에 경우 6개 추가(학생 늦은 취소 10/23 · 학생 노쇼 10/27 · 강사 사전 취소 10/30 · 강사 휴무 11/4 · 공휴일 취소 11/6 · 12/2 취소→되돌림), 처리 기록 시각은 11/13 16:10(audit 수정 불가)
+- 남은 확인: 운영 화면 실제 클릭(대표) · 강사가 '맞는 시간 없음'을 글로만 남긴 경우 학생 다음 행동 QA · 학생 메일·카톡의 '무료 보상수업이 확정됐어요'는 예외로 유지
+
+## 🔐 11/11~12 홈페이지 회원가입·로그인 — 정책 원본 H26(146)(150) 참고 · **시험 사이트(lms-test) 반영, 운영 미반영** (브랜치 claude/clever-curie-hzaqbi)
+- 시안 v2: `docs/lms/previews/home-signup-login-drafts.html` (https://claude.ai/artifact/RPg5vNWjBvo2vC1JD53Qsn)
+- 코드: `src/app/lms/login/LoginFlow.tsx`(login·signup·signup_code·pw_email·pw_new·social_choice·member + totp/enroll) · `src/lms/auth/login-flow.ts`(PASSWORD_MIN 8·signupProblems·enabledSocial·needsSocialChoice·PROVIDER_ID, 한·영 문구) · `src/lms/auth/client.ts` pkce · `src/lms/auth/naver.ts` + `src/app/api/auth/naver-userinfo/route.ts` · `src/components/Header.tsx` [로그인]/[내 수업], 말풍선 삭제
+- migration (시험 DB 적용, 운영 미적용): **20261112000000_lms_discard_new_social_account**('이미 회원이에요' 때 방금 생긴 카카오·네이버 전용 빈 계정을 본인만 지움) · **20261112000100_lms_discard_unverified_social_orphan**(미인증 같은 이메일로 Supabase 가 만든 빈 계정 — 본인 이메일·그 공급자만·미확인·회원 연결 없음 — 을 연결 직전에 지움). authz-probe 검토 목록 추가
+- 동작 요점: 카카오 버튼 = /auth/v1/settings external.kakao · 네이버 버튼 = /auth/v1/authorize?provider=custom:naver 가 302 일 때(settings 에 안 나옴) · 카카오 이메일 없음 → Supabase 가 거절('로그인하지 못했어요') · 카카오 미인증 같은 이메일 → 자동 연결 안 함, '기존 계정으로 로그인하면 카카오가 연결돼요' → 로그인 뒤 연결 · **네이버는 이메일을 로그인 이메일로 넘기지 않음**(Supabase 가 네이버 응답 안쪽 response 를 못 읽고 attribute_mapping 도 안 됨 → 우리 /api/auth/naver-userinfo 가 펴서 sub·name 만, email_optional) → 네이버 첫 로그인은 항상 '처음이에요 / 이미 회원이에요'(네이버 이메일 인증 여부를 알 수 없어 자동 연결 안 함 = H26(150) 미인증 규칙). 네이버 이메일은 저장 안 됨(custom claim 미저장)
+- **로컬 전체 QA 33/33 통과 (11/12)**: 이 작업 환경에 Supabase 로그인 서버(gotrue v2.197)·DB(supabase/postgres + schema_all + seed_fake)·REST·메일함(mailpit)·가짜 카카오/네이버를 띄워 실제 화면으로 — 신규 가입(오류 칸 아래·메일 6자리·이름·동의 시각·회원 연결 없음) · 가입자/비회원 표 10개 0건·학생/운영자 함수 거절 · 이미 있는 이메일 가입(계정·메일 안 생김 → 비밀번호 만들기) · 비밀번호 없는 기존 학생 비밀번호 만들기(Auth ID 그대로)·재설정(짧은 비밀번호·틀린 코드·옛 비밀번호 거절) · 카카오 같은 인증 이메일 자동 연결 · 다른 이메일 → 이미 회원이에요 → 로그인 뒤 연결 · 이메일 없음 거절 · 미인증 같은 이메일(강사) → 로그인 뒤 연결 · 네이버 같은 이메일/다른 이메일 · 다음부터 버튼만으로 같은 계정 · **전후 대조: 기존 회원 Auth ID·학생/강사 연결·수강권·결제·수업 md5 같음**. 스크립트·화면: scratchpad local/qa.js (세션 끝나면 사라짐)
+- 시험 DB(실제 Supabase): 두 함수 경계 경우 통과(rollback) · STU-0018 실제 메일 코드로 비밀번호 만들기·비밀번호 로그인(11/11) · 연결 없는 로그인 사용자 표 0건
+- ✅ 11/12 **실제 시험 Supabase 회원가입 통과**(대표가 공개 가입·가입 코드 메일 켬): 시험 사이트 휴대폰 화면 가입 → '엣지영어 가입 코드' 메일(support+signupcheck@) → 확인 → 비밀번호 로그인 PC·휴대폰 '아직 수강 중인 수업이 없어요', 헤더 '내 수업', /lms/student 는 로그인 화면으로 · DB 이름 최O우(가짜 이름)·동의 시각·회원 연결 0 · 이 계정 토큰으로 표 11개 0건·운영자 함수 거절 · 서버 비밀번호 7자 거절(weak_password) · 이미 있는 이메일 가입 = identities 0(화면 '이미 가입된 이메일이에요'). 같은 이메일 연속 가입은 Supabase 60초 제한('요청이 많아요'). **시험 데이터 남김**: support+signupcheck@ 가입 회원 1명(회원 연결 없음)
+- **미검증 (앱 등록 전이라 못 함)**: 실제 카카오·네이버 서버와의 로그인(가짜 서버로만 확인) · 카카오 is_email_verified 실제 값 · 네이버 실제 응답 · 휴대폰 카톡 안 브라우저에서 간편 로그인
+- **대표 할 일(대표 계정만)**: ① 시험용 Supabase: 새 가입 허용 · 비밀번호 최소 8 · 'Confirm signup' 메일 코드 문구 · Manual linking 켬 ② 카카오 개발자 앱(비즈 앱·이메일 필수 동의) → 시험 Supabase Kakao 켬 ③ 네이버 개발자센터 앱 → 시험 Supabase 'custom:naver'(OAuth2, authorize https://nid.naver.com/oauth2.0/authorize · token https://nid.naver.com/oauth2.0/token · userinfo **https://edge-english-git-lms-test-support-2126.vercel.app/api/auth/naver-userinfo** · Allow users without email 켬)
+- 남은 개발: 약관·개인정보 동의 원문(대표 원문) · 운영 반영 순서(대표 승인 뒤): 운영 DB migration 2개 → 운영 Supabase 설정 → lms-prod·main 같은 커밋(헤더는 main 홈페이지)
+- ✅ 11/12 고침: **운영자(인증 앱 켬) 비밀번호 만들기·찾기** — Supabase 가 인증 앱 코드 전에는 비밀번호 변경을 막음(insufficient_aal, 대표 support@ 시험에서 '연결이 불안정해요' → 다시 누르면 이미 쓴 메일 코드라 '코드가 맞지 않거나'). 이제 메일 코드 확인 뒤 인증 앱 코드 단계 → 저장, 메일 코드는 한 번 확인되면 다시 묻지 않음. 로컬: 운영자 6/6(인증 앱 단계·틀린 코드·저장 뒤 운영자 화면·옛 비밀번호 거절·새 비밀번호+인증 앱 PC·학생은 단계 없음) + 전체 회귀 33/33
+- ✅ 11/13 대표 '넣어': 카카오·네이버로만 만든 빈 회원 화면('아직 수강 중인 수업이 없어요')에 **[이미 수강 중이에요]** — '처음이에요'를 잘못 누른 기존 학생이 스스로 빈 계정을 지우고 기존 계정 로그인 → 연결(이메일 가입 회원에게는 안 보임). 로컬 6/6 통과(기록 전후 같음)
+- 11/13 Work(ChatGPT)가 시험 Supabase 카카오·네이버 켬(authorize 302 확인), 대표가 시험 사이트 support@ 에 카톡·네이버 연결. **시험 DB 대조 미완료**(Supabase 커넥터 접속 실패) — 기준값 11/13 12:51Z: 사용자 12·연결 12·app_users md5 3d645a88…·수강권 9c67f463…·결제 d9c3706b…
+- ✅ 11/13 약관·개인정보 (대표 '권장안대로', 시행일 = 운영 공개일): 원문 `src/lms/auth/legal.ts` · 페이지 /terms · /privacy · 홈페이지 바닥글 링크 · 가입 동의 칸 [보기](같은 화면 안에서 펼침). 결정: 환불은 약관에 '수강 안내·FAQ 따름' · 탈퇴는 메일 요청 · 약관 변경 공지 7일/불리 30일 · 탈퇴 시 바로 삭제(법정 기록만 보관). 시험 사이트 반영, 운영 미반영. **H26 미기록(Google Docs 커넥터 접속 실패) — 다음 세션에서 적기**
+  - 11/14 진행: 시험 DB 대조 통과(support@ 에 카카오·네이버 2개만 늘고 다른 계정 0·회원 연결/수강권/결제 변경 기록 없음) · 운영 Supabase 서울(ap-northeast-2) · 법령 확인(ChatGPT: 시행령 제6조 5년/5년/3년, 신고 면제와 무관, 제10조 전화번호 필수) · 대표 결정: 강사=국외 위탁 방향+**강사 개인정보 부속합의서 서명 뒤 운영 공개**, 개인정보 동의 체크칸 빼고 처리방침 링크, 메일 탈퇴 유지, 바닥글 전화번호 표시(주석의 번호) · 부속합의서 초안 대화창에만(대표 '넣어' 대기)
+  - '반영해' 대기 목록: 바닥글 전화번호 · 개인정보 체크칸 제거 · 카카오·네이버 '처음이에요'에 약관 동의+처리방침 링크(지금 없음) · 탈퇴 문구('계정·연락처 바로 삭제, 결제·계약 기록+이름 5년 보관') · 위탁/국외 이전 표(Supabase 서울·Resend 도쿄 서버·Google 미국·Vercel 미확인·강사 거주국: **미확정** — 대표 11/14 '추정 국가 기재 금지'. 운영자 기록(Class Record Teacher Info·운영 DB country)은 일본·호주·베트남·홍콩이나 강사 본인 확인 아님, 서명된 계약서에도 주소 없음 → 부속합의서 'Country of residence' 칸으로 확인된 국가만 기재. 초안의 '미국·캐나다·호주'는 지움) · 쿠키 조항(분석 도구 없음) · PG 이름(Work)
+  - 11/14 강사 개인정보 부속합의서(영어, 기존 프리랜서 계약 유지·별도 추가, 서명란 Country of residence + 양측 서명·날짜): ChatGPT 법령 검토 완료 — 전반 적절, 제4조 Security·제7조 Checks·제8조 End of assignment 3곳만 ChatGPT 문구로 교체, 나머지 유지. 국외 처리위탁 분류는 합리적 근거 있으나 유권해석 미확인. 최종 문구는 이 세션 대화에 있음(대표 '넣어'·발송 전). PG: support@ 메일에 2026-01 NICEPAY(나이스정보통신)·아임웹 심사 메일 — 사용 중인지 미확인(아임웹 관리자 확인 대기). 시험 DB 차이 2건 원인 확인(끊긴 연결 = 10/24 가짜 강사, md5 = 계산식 다름·변경 기록 없음). 정책 원본 H26(167) Work 기록
+  - 공개 전 추가 확인(ChatGPT): 처리방침 국외 이전에 수탁자(강사) 정보·연락처 표기 방식 · 이전 시기·방법·보유 기간 · 거부 방법과 효과 · 강사 LMS 접근권한 회수·삭제 절차(강사 배정 해제·비활성 때 LMS 접근이 실제로 끊기는지 확인 필요)
+  - ✅ 11/14 대표 '넣어·반영해' → 시험 사이트 반영: 바닥글 전화 010-5012-1553 · 개인정보 동의 체크칸 없앰(이용약관 동의 + '개인정보 처리방침 [보기]') · 카카오·네이버 '처음이에요'에도 같은 줄, 약관 체크 전 [처음이에요] 못 누름, terms_agreed_at 저장 · 처리방침 11개 항목(법적 근거·보관 조문·분리 보관·위탁 Supabase 서울/아임웹/나이스정보통신(NICEPAY, Work 확인)/Resend/Google/Vercel/강사 · 국외 이전은 확인된 항목만, 국가는 '확인 후 기재' · 쿠키 · 변경) · 약관 제2조 '개인정보 동의' 문구 뺌. vitest 465 · tsc · 휴대폰 화면 확인
+  - ⚠ 시험 DB 강사 접근 QA(되돌림 트랜잭션, Emma): 비활성(active=false)해도 학생 3명 그대로 보임(my_tutor_id·lms_tutor_student_access 가 active 를 안 봄) · 정규 일정 끝내고 앞 수업을 다른 강사로 옮겨도 3명 그대로(지난 60일 수업 기준 접근 — 20261104000000) → 처리방침·부속합의서 '배정 끝나면 열람 중단'과 다름. 대표 결정 대기
+  - ✅ 11/14 강사 학생 정보 접근 (대표 결정: 비활성 즉시 차단 · 배정 끝난 학생은 마지막 수업 종료 24시간 뒤 차단 · 수업 없어도 계약 중이면 풀에 두고 비활성 안 함 · 서명은 PDF 메일 첨부→PDF/사진 회신, 기한 발송 후 7일): migration **20261114100000_lms_tutor_access_24h** (시험 DB 적용, 운영 미적용) — my_tutor_id() 가 비활성 강사면 null, lms_tutor_student_access 60일→24시간 + 비활성 null. 시험 DB 되돌림 QA(Emma): 담당 3명 → 비활성 0(프로필 'Please sign in…') → 배정 끝남 0(프로필 'not assigned'), 지난 수업 기록은 tutor_record_class 가 수업 주인만 보므로 계속 가능(비활성 제외). 현재 담당 학생 수 변화 없음, 지난 학생만 있던 Sophie·Noah 1→0. test:db 통과(schema_test 강사 A 시험을 정규 일정 기준으로 + 새 시험 2개). 처리방침 6번 보유 기간 문구 맞춤. 운영 반영 때 같이 적용
+  - 🧰 **운영 반영 준비 (11/14 확인, 실행은 대표 승인 뒤)** — 구글 시트 Class Record 권한은 대표가 11/15 직접 운영진 전용으로 바꿈(이번 개발 제외)
+    - 운영 DB: 백업(snapshots) → migration 3개 **20261112000000 · 20261112000100 · 20261114100000**. 운영에 셋 다 없음 확인(11/14), 운영 lms_tutor_student_access 는 아직 60일판(시험 DB 바꾸기 전과 같은 모양). 24시간 접근 제한은 회원가입 공개와 따로 먼저 내보낼 수 있음
+    - 코드: lms-prod 에 커밋을 그대로 cherry-pick 하면 handoff·schema_all·01-schema·authz-probe·시안 html 이 충돌 → **이 파일들만 HEAD 에서 가져와 얹기**: src/app/api/auth/naver-userinfo/route.ts · src/app/lms/login/LoginFlow.tsx · src/app/privacy/page.tsx · src/app/terms/page.tsx · src/components/Footer.tsx · src/components/Header.tsx · src/components/legal/LegalDoc.tsx · src/lms/auth/{client,legal,login-flow,login-flow.test,naver,naver.test}.ts · migration 3개 → authz-probe.sql 목록에 'lms_discard_unverified_social_orphan' 추가(운영 쪽엔 new_social_account 만 있음) → `node scripts/lms-test-bundle.mjs` · `node scripts/lms-prod-page.mjs`. 11/14 lms-prod 위에서 이 방법으로 tsc 통과·vitest 465 통과 확인(시험 묶음)
+    - 대표 Supabase 운영 설정(대표 계정): 새 가입 허용 · 비밀번호 최소 8 · 'Confirm signup' 메일 코드 문구 · Manual linking · 카카오(앱 Redirect URI 에 운영 callback) · custom:naver(Userinfo https://edgeenglish.kr/api/auth/naver-userinfo, Allow users without email). 대표 운영 계정 연결은 [이미 회원이에요]
+    - 공개 직전: LEGAL_EFFECTIVE_DATE · 강사 서명 거주국 · Resend/Google/Vercel 이전 국가 · (강사 연락처 = support@ 경유로 11/14 대표 A, 시험 사이트 반영, 법 요건 충족 여부 미확인) · 휴대폰 카톡 안 간편 로그인 시험 · 네이버 검수
+  - ✅ **11/14 운영 DB 반영: 강사 24시간 접근 제한** (대표 승인) — 백업 **lms_backup.snapshots id 51**(표 62 전체 + my_tutor_id·lms_tutor_student_access 원래 정의) → migration 20261114100000 적용. 확인(읽기 전용): 강사별 담당 학생 수 전후 같음(Benny 4·Leslie 0·Maria 3·Olivia 7, 실제 강사 계정으로 tutor_my_students 도 같음) · 학생 13·수업 183·수업 기록 41 그대로 · anon 실행 불가. 되돌리기: snapshots 51 의 _functions_before 두 함수 본문 다시 실행. **lms-prod 에 migration 파일 기록 push 는 권한 확인에서 막힘**(화면 코드 변경 없음이라 사이트 영향 없음, 다음 운영 배포 때 함께 넣기)
+  - ✅ 11/14 대표 C: 강사 Home 수업 줄 — 접근 끝난 학생은 수준·노트 링크 안 보냄(이름·기록 칸 그대로). migration **20261114110000_lms_tutor_screen_hide_past_student_info**(지금 tutor_screen 본문에서 두 곳만 바꿈, 본문 다르면 멈춤) 시험 DB 적용 → **11/14 운영 DB 적용**(대표 '적용', 백업 snapshots 52 = 전체 표 + tutor_screen 원래 정의; 실제 강사 계정 읽기 확인: 이름 줄 수 전후 같음, 노트 링크 숨김 Benny 3·Leslie 3·Maria 3·Olivia 0, Benny 수준 1→0, 학생 13·수업 183·기록 41 그대로; 되돌리기 = snapshots 52 의 tutor_screen 본문 실행; lms-prod 파일 기록은 다음 운영 배포 때). 되돌림 QA(Emma): 배정 끝난 뒤 노트 링크 1→0·이름 8줄 그대로·지난 수업 기록 저장 Normal. test:db 통과·vitest 465. D(Student Info 탭)는 보류, 구글 시트 권한(A·B)은 대표가 11/15 직접 처리(대표 확정). 11/14 대표: ① 링크 공개 4개 '제한됨' ② 예전 강사 편집 권한 빼기 진행, ③ 지금 강사 4명 본인 권한은 보류. chloelee·siennabwg·jinsolly94 로 시작하는 계정은 모두 대표 개인 계정. Work 처리(11/14, H26(178)): 링크 공개 4개 제한됨·예전 강사 계정 삭제·siennabwg 삭제 확인함. **jinsolly94 는 대표 결정 A로 유지**(엣지영어 폴더 전체 상속, 2단계 인증 확인 권고). chloelee 는 '끝난 강사' 폴더 주인이라 Kai·Peter·Fatima 를 '강사 관리' > '끝난 강사 class record'(support@ 소유)로 옮김 → 11/14 Claude 확인: 세 시트 모두 support@(소유자)·jinsolly94(편집자)만, chloelee 빠짐. 남은 것: 11/15 지금 강사 4명 시트 운영진 전용 전환(대표). 커넥터에 공유 해제 기능이 없어 Work 에 맡김(끝나면 Claude 가 get_file_permissions 로 확인). 링크 공개 시트 4개(Benny·Grace 옛·Rai·David)·예전 강사(Kai·Peter·Fatima·Alina·Grace) 편집 권한이 정리 대상
+  - 강사 부속합의서 메일(11/14 대표): 제3조에서 Class Record 뺌(도구 = LMS·Google Meet) · 기한 문장 부탁 어조 · **11/15 Class Record 운영진 전용 전환 확인 뒤 발송**(날짜 미정, 내일 예정) · 강사 서명 먼저 받고 회사 서명은 그 뒤. 처리방침 국외 이전 '시기·방법'에서도 수업 기록 시트 뺌. 최종 문구는 이 세션 대화에 있음
+  - 11/14 Work 확인(설정 변경 없음): 카카오·네이버 모두 '엣지영어 시험용' 앱 1개씩만 있음. 네이버 = 개발 중·검수 신청 전('애플리케이션 로고를 먼저 등록' 안내). 카카오 Redirect URI = 시험 Supabase callback 1개뿐(운영 callback 없음). → 대표 결정 H26(181): A안 = 운영용 앱 '엣지영어' 카카오·네이버 따로 등록(시험용 유지), 제출 단계(비즈 앱 전환·네이버 검수)는 대표 '제출해' 뒤, 운영 Supabase·사이트는 공개 승인 전 변경 금지. Work 진행 대기
+  - 11/14 밤 네이버 검수 캡처 정리(대표): 시험 사이트에서 이O솔 네이버로 신규 가입 흐름 캡처(로그인 버튼 → 네이버 로그인 → 동의 화면 → 처음이에요) — 시험 DB 확인: 네이버 전용 새 계정 1개(회원 연결 0), 다른 계정에 붙지 않음. 동의 화면 로고 'NO IMAGE' → 로고 140×140 PNG 대표에게 전달(시험용 앱 로고 등록은 대표). 결론: 캡처 속 앱 이름이 '엣지영어 시험용'이라 **검수 캡처는 운영 반영 뒤 운영용 '엣지영어' 앱으로 다시 찍음**. 운영 DB 소셜 연결 0(이메일 19), 시험 support@ = 이메일+카카오+네이버(chloelee23 네이버, 대표 개인). edgeclass@naver = 탠저린영어 아임웹용 별개 앱
+  - ✅ 11/14 대표 결정: **운영용 네이버 앱·검수 캡처 모두 이O솔 네이버**(사업자등록증 대표자 = 이O솔). H26(196) 기록함(11/16). 다음: Work 에 이O솔 네이버 개발자센터로 운영용 '엣지영어' 앱 등록 지시문 · 운영 반영 뒤 검수 기간 중 네이버 버튼 처리 방법 대표에게 묻기 · 대표 운영 계정 네이버 연결은 [이미 회원이에요]
+  - ✅ 11/15 대표: 운영 support@ 계정 소셜 연결 = **카카오는 시에나(이O민) 카카오, 네이버는 edgeclass@naver(이O솔 명의 — 아임웹 가입 메일로 확인)**. 운영용 네이버 앱 개발자 계정도 edgeclass. 검수 캡처는 edgeclass로 신규 가입(처음이에요) → 캡처 끝나면 빈 회원 화면 [이미 수강 중이에요] → support@ 로그인 → edgeclass 네이버가 support@에 연결(빈 계정 안 남음). chloelee23 네이버는 시험용 앱·시험 support@에만
+  - ✅ 11/15 **네이버 검수 요청 완료(검수 상태 '검수요청', 요청일 2026.11.15)** — 운영용 앱 '엣지영어'(edgeclass 개발자 계정, Client ID Uq7mcjebdArpDtbEHCy6, 개발 중). 제공 정보 = 회원이름(필수)만(이메일은 저장·사용 안 해서 뺌). 캡처는 시험 사이트에서(네이버 가이드 3.2: 개발 환경 캡처 허용). 이름 활용처 = 빈 회원 화면 제목 'OOO님, 아직 수강 중인 수업이 없어요'(커밋 1f82d43, lms-test, 운영 미반영 — 운영 반영 때 같이). 검수 결과는 edgeclass 계정 메일로 옴
+    - ✅ 11/16 **네이버 검수 승인** + 임시 상태 ①②③ 정리 끝(H26(196) 보충): 시험 Supabase custom:naver = 시험용 앱(Client ID 5YSq… authorize 302 로 Claude 확인), 운영용 앱 서비스 URL = edgeenglish.kr·시험 Callback 삭제(재검수 없음). 남은 것: 운영 공개 때 운영 Supabase 에 카카오·네이버 키
+    - 지금 임시 상태(결과 나온 뒤 정리): ① 시험 Supabase custom:naver = 운영용 앱 키(원래 시험용 앱 Client ID 5YSqQAzLupVPqn0D8pVX, Secret 은 Work 보관) → 검수 결과 뒤 시험용 앱으로 되돌리기 ② 운영용 앱 서비스 URL(PC·모바일) = 시험 사이트 주소 → **운영 공개 직전 https://edgeenglish.kr 로**(바꾸면 재검수인지 미확인) ③ 운영용 앱 Callback 에 시험 Supabase callback 포함 → 정리 때 빼기 ④ 시험 Supabase custom:naver 에 Work 가 JWKS URI 넣음(로그인 영향 없음)
+    - ✅ 11/15 회원가입 화면에도 카카오·네이버 버튼(로그인 화면과 같은 버튼·이름 '○○로 로그인' 유지, 대표 확정) — 커밋 008fd6e, lms-test, 운영 미반영(운영 공개 때 같이)
+    - 계정 정리(대표 11/15): 운영용 앱 주인 = 탠저린(네이버 edgeclass·카카오 탠저린 카카오, 만들 예정) + 시에나 팀원 · 운영 support@ 로그인 연결 = 카카오 시에나·네이버 edgeclass · 운영자 화면은 인증 앱 코드 필요(탠저린 휴대폰 인증 앱 확인 필요) · 1인 1계정 원칙상 탠저린 전용 운영자 계정은 나중에 권장
+    - ✅ 11/16 **운영용 카카오 앱 '엣지영어' 등록**(앱 ID 1651871, 주인 = 탠저린 카카오, 시에나 멤버 초대 — 수락 확인 필요) · 비즈 앱 전환(사업자 정보, 대표 직접) · 동의항목: 닉네임 필수('회원 이름 표시') · 카카오계정(이메일) 필수('회원 식별 및 수업·계정 안내', 값 없으면 입력 요청 체크) · REST API 키 '엣지영어 운영' 카카오 로그인 리다이렉트 URI = 운영 Supabase callback · 사이트 도메인(JS 키)은 안 넣음(우리는 REST 만). 운영 공개 때: REST API 키 + Client Secret(플랫폼 키 > REST API 키에서 확인)을 운영 Supabase Kakao 에 넣기(대표 계정)
+    - 시험 DB: edgeclass 네이버 빈 회원 2개(11/14 시험용 앱, 11/15 운영용 앱 — 네이버 식별자는 앱마다 다름 확인)
+  - **운영 공개 전 채울 것**: `LEGAL_EFFECTIVE_DATE`(운영 공개일) · 결제대행사(PG) 이름(지금 '아임웹 및 결제대행사') · Supabase 운영 서버 국가(국외 이전 표에 아직 없음, 시험은 Seoul) · 전자상거래법 시행령 제6조 보존 기간 5년/3년 조문 확인(이 환경에서 law.go.kr 막힘)과 신고 면제 사업자 적용 여부 · 개인정보위 '처리방침 작성지침' 대조
+- 운영 반영 때 추가: 카카오 앱 Redirect URI 에 운영 Supabase callback · 운영 Supabase 카카오·custom:naver(Userinfo = https://edgeenglish.kr/api/auth/naver-userinfo) · 대표 운영 계정 연결은 반드시 [이미 회원이에요]
+- 기록 끊김·다른 계정 연결 위험: **발견 안 됨**(위 대조). 네이버를 이메일로 자동 연결하면 남의 계정에 붙을 수 있어 막아 둠
+- H26(128)·11/15 할 일: H26(150) 으로 공개·주소 이전 보류. 11/9 카카오 시안 '첫 연결은 내 정보에서만'은 H26(150) 으로 바뀜
+
+## ⏭ 메일 [강사님께 늦는다고 알리기] 버튼 — **개발 중(11/18, 브랜치 claude/vibrant-ptolemy-par1q9)**, 정책 원본 H26(214)(215) 기록함
+- 11/18 한 것: 학생 홈 `?late=수업id` → 지금 알릴 수 있으면 '늦게 참여해요' 창 바로 열고 화면 가운데로, 아니면 맨 위 한 줄(LATE_LINK_NOTE: 링크 없음·취소·끝남·이미 알림·2시간 전 아님). page.tsx·StudentLive·StudentDemo·StudentHome. 중복 발송은 DB student_late_notice 가 막음(그대로)
+- ✅ 11/18 '시스템에 넣어'(H26(215) 보충): migration **20261118120000_lms_mail_late_notice_button** 시험 DB 적용(lms_lesson_reminder_mail 2h 만·tutor_contact_student 1·2차), lms-test 반영. QA 통과: 메일 3종 support@ 도착(24h 는 버튼 없음), STU-0018 휴대폰·PC 창 바로 열림 → 보냄 → 다시 열면 '이미…'(student_late_notices 1줄), 끝남·취소·이름·잘못된 링크, 로그아웃이면 /lms/login?next=…late= 유지. 고친 것: 창이 화면 그린 뒤에도 열리게(autoOpen effect)
+- 11/18 추가(대표 '시스템에 넣어', H26(216)): 학생 지각 알림 강사 메일에 `Class:` 줄(강사 시간 / KST, lms_mail_en_at) — migration **20261118150000_lms_student_late_mail_class_time** 시험 DB 적용, Alex(Sydney) 메일 support@ 도착 확인. ✅ 운영 반영(대표 '응'): 백업 snapshots **81**(이전 정의) → migration 운영 적용, 함수 md5 = 시험(1c8ba81b…), anon 실행 불가. lms-prod 4db1e104 = migration 파일·묶음 SQL 기록만(화면 코드 변경 없음). 되돌리기 = snapshots 81 정의 실행
+- 대표 시험 사이트 확인용(11/18 밤): STU-0018 정규 리마인더 켬(remind_regular true, 원래 false) + 11/19 수업 7개(seq 110~116: 09:00·11:00·13:00·15:00·17:00·19:30·21:00 한국, Mia 40분) → 예약 작업이 2시간 전 메일을 support@ 로 자동 발송. 끝나면 remind_regular false 로 되돌리기
+- 대표 확인용 데이터: STU-0018 11/18 20:00~20:40 한국 수업(seq 107) + 2시간 전 메일. QA 수업 seq 101·106 은 하루 전으로 옮김, 102~105 그대로(지난 수업·11/19 수업)
+- 🚀 운영(대표 11/18 '1 응'): 뒤 수업 창 이름표 뺌(noLabel) → 운영 DB 백업 snapshots **78**(두 함수 이전 정의 `_functions_before`, 운영 이전 md5 = 시험 이전과 같음) → migration 20261118120000 운영 적용(두 함수 md5 = 시험, anon 실행 불가) → lms-prod **586fcf87**(lms-prod 835603ba 위에 이 기능 파일만, 로컬 next build 통과). ⚠️ 586fcf87 에는 cherry-pick 실패로 수정 3개(autoOpen·뒤 수업 창·이름표)와 '이미…늦는다고' 문구가 빠졌었음(Vercel·Domains 는 정상이었음, Work 확인) → lms-prod **de925749** 로 보완, 로컬 next build·internal-marks 통과, 23:27(한국) 운영 JS 에 새 문구·late 확인, check-public-pages 통과. ✅ 운영 반영 완료. 되돌리기: DB = snapshots 78 정의 실행, 코드 = lms-prod 835603ba. (Work QA 11/18 중간 오류 고침: 앞 수업 진행 중에 뒤 수업 링크 → 뒤 수업 창을 따로 엶(overlay 'late'), 저장도 뒤 수업. 재시험 통과: seq 108 진행 중 + 109 21:00 → 109 에만 1줄, 다시 열면 '이미…', 108 링크는 홈 카드에서 바로)
+- 대표 11/18: 학생 메일에 버튼 `강사님께 늦는다고 알리기` → 누르면 학생 홈에서 그 수업의 기존 '늦게 참여해요' 창(지각 시간·이유 고르기)이 바로 열림. 로그인 안 됐으면 로그인 뒤 그 창(기존 `?next=` 흐름). 학생이 직접 보내기는 그대로. 학생 홈 버튼 이름 `늦게 참여해요`는 유지. 이미지 안내는 안 넣음
+- 넣는 메일: **2시간 전 수업 리마인더**(정규·보강·이월·보상 모두, `lms_student_lesson_reminder_mail`, [수업 입장하기] 아래) + **강사 Contact student 학생 메일 1·2차**(migration 20261116140000, [수업 들어가기] 아래). 24시간 전 리마인더는 제외(지각 알림은 시작 2시간 전부터라 못 보냄)
+- 확인됨: 학생 지각 알림은 수업 끝날 때까지 보낼 수 있음(student_late_notice) → Contact student(시작 뒤) 메일도 됨. 2시간 전 리마인더는 2시간 전~1시간 전 사이 발송 → 창 열림
+- 참고 구현: 보강 메일 `/student?makeup=` 열기(StudentHome `searchParams.delete('makeup')`), 로그인 `?next=`(StudentLive toLogin, LoginFlow)
+- 개발 전 대표 확인: 메일에 버튼 위·아래 문장을 넣을지(기본 = 버튼만), 수업이 이미 끝났거나 이미 알린 뒤 링크를 누르면 무엇을 보일지. 문구는 '시스템에 넣어' 뒤에만 코드·DB 에 넣음
+- QA 에 꼭 포함(대표 11/18): 메일을 늦게 열어 수업이 이미 끝났거나 이미 지각 알림을 보낸 뒤 버튼을 누르면 중복 발송 없이 알맞게 안내되는지
+- 같이 할 일(대표 11/18 '응'): 정책 원본 H26 에 11/14 강사 '늦어요' 알림 확정 문구 기록(이유 버튼 5개·? 팝업·학생 메일·운영진 메일·학생 홈 노란 띠·한 수업 1번·Schedule+Home) + 11/14 운영 반영(snapshots 57, lms-prod 032224c) + 11/18 메일 버튼 방향
+
+## ✅ 11/14 강사 '늦어요' 알림 — **운영 반영 완료** (대표 11/14 승인, 운영 DB 백업 snapshots 57, migration 20261114200000, lms-prod 032224c = 이 기능 커밋 3개만 lms-prod 0a7159e 위에 골라 얹음, 시안 https://claude.ai/artifact/7YmptmNwBiGWEjWjNGReDM)
+- 되돌리기: 코드 = lms-prod 를 0a7159e 로. DB = 함수 tutor_late_notice·tutor_late_notices·student_tutor_late_notices·lms_kst_short 만 drop, **tutor_late_notices 표는 기록이 있으면 보존**(대표 11/14)
+- 확정 문구 원본 = `src/lms/tutor/late.ts` + migration. 'LMS 알림' 대신 학생 홈 '다음 수업' 카드 노란 띠, 운영진은 별도 메일, 한 수업 1번, Schedule+Home 두 곳
+- migration **20261114200000_lms_tutor_late_notice** (시험 DB 적용): 표 tutor_late_notices(수업당 1줄, RLS·삭제 금지) · tutor_late_notice(강사 본인/운영자 p_tutor, 시작 2시간 전~시작 전, 학생 메일 + 운영진 메일) · tutor_late_notices · student_tutor_late_notices · lms_kst_short. 표 63→64 (02-check)
+- 화면: `RunningLate.tsx` → TutorSchedule 수업 창(Cancel class 아래) · TutorHome 오늘 수업 줄 아래 · Class Record 줄 펼침(Cancel class 다음). Home 오늘 수업에는 원래 Cancel class 가 없어 Running late 만 줄 아래(시안과 다른 점). 학생 StudentHome NextLesson 노란 띠
+- 시험: vitest 477 · test:db 전부(새 tutor-late-notice.sql 28줄) · authz-probe 통과 · 시험 DB 실제 함수(James 흉내): 메일 2통·두 번째 repeated
+- 시험 데이터: James(Manila) ↔ 최O STU-9002 40분 수업 20개, 11/15 01:30 ~ 11/16 15:30 한국 시간 2시간마다. 첫 수업(01:30)은 Claude 가 보내 봄
+- 독립 QA(11/14) 중간 2건 고침: ① 열어 둔 화면에서 시간이 흘러도 버튼이 나타나고·사라지게(RunningLate 30초 시계) ② 다른 창에서 먼저 보냈으면 Sent 에 DB 에 저장된 값 표시(sendTutorLate 가 저장 기록을 다시 읽어 돌려줌). ③(11/14 2차 QA) 열어 둔 학생 홈도 새로고침 없이 노란 띠(다음 수업 2시간 전~끝까지 30초마다 + 화면 돌아올 때 student_tutor_late_notices 다시 읽음). 실제 화면 QA 통과: 두 창 Sent·PC/휴대폰 Sent·메일·새로고침 뒤 띠. 해외 시간대 메일은 Claude 가 시험 DB 롤백으로 확인. 남은 QA: ③ 실제 화면 재확인·실제 시간 경과
+- 남은 일: 대표 화면 확인 → 운영 반영(운영 DB 백업 → migration → lms-prod, 먼저 `git log origin/lms-test..origin/lms-prod`) · 정책 원본 H26 에 11/14 문구 확정 기록
+
+## (참고) 강사 지각 알림 11/13 결정
+- **결정(대표 11/13, 추천안 전부)**: ① POL-TU-01 '늦은 만큼 연장' 그대로 ② **미리 알려도 실제 시작에 늦으면 무조건 지각** — 월 정시 수업률 90% 계산에 반영, 연장 의무 유지, 연장 수업을 해도 지각 기록 유지, 사전 알림은 면제 사유 아님 ③ 지각 시간 선택지 5·10·15·20분 이상 ④ 학생 + 운영진(support@) 모두 메일
+- **추가 원칙(대표 11/13)**: 학생은 수업을 떠날 권리가 있고 강사가 늦을 때 기다릴 의무가 없음. 강사 지각 수업의 결과는 2가지 — ⓐ 학생이 아직 있으면 **강사 지각**(늦은 만큼 연장 + 정시 90% 반영) ⓑ 학생이 이미 떠났으면 **강사 노쇼**(기존 POL-TU-03: 보강 1 + 무료 보상 1). 사전 지각 알림은 어느 쪽도 면제 아님. **학생 알림에 '기다려 주세요' 같은 표현 금지**
+- **범위 확정(대표 11/13)**: 이번에는 **강사 '늦어요' 알림만 개발**. 강사 노쇼 신고는 기존처럼 학생이 공식톡으로 연락 → 운영진이 확인·처리(학생 [강사가 안 들어왔어요] 신고 버튼은 지금 코드에 없음 → 실제 필요성 본 뒤 별도 검토, D-9 5분 신고 정책은 아직 구현 안 됨). 노쇼 판정 때 운영진이 볼 것: 강사 사전 알림 여부·알린 시각·예상 분, 학생의 실제 이탈, 수업 진행 여부(사전 알림 기록은 강사 Updates·운영자 보기에 남음)
+- **설계 확정(대표 11/13, ChatGPT 추천 4가지 동의)**: ⓐ '늦어요' 버튼은 **수업 시작 직전까지**(시작 후 자동 비활성, 시작 후엔 운영진에게 직접 연락) ⓑ 버튼은 **수업 시작 2시간 전부터** 보임 ⓒ 지각 사유는 **미리 정해진 이유 버튼 4개 정도, 선택 사항**(강사가 고르면 학생에겐 미리 쓴 한국어로) ⓓ **'수업에 참석할 수 없어요' 버튼은 새로 만들지 않음** — 기존 강사 일정 수업 창의 'Cancel class'(시작 전 수업만, 누른 시각으로 강사 취소 자동 판정) 재사용, '늦어요'는 그 옆에 추가 ⓔ **? 안내 팝업**은 기존 'Cover class 안내' 팝업과 같은 방식(클릭·탭): 'Please report any expected delays at least 10 minutes before class starts. It's important to let your student know as early as possible so they aren't left waiting. This button will remain available until class starts.' (영어 확정 문구는 개발 때 대표 확인 후)
+- **개발 시작 전에 대표와 먼저 정할 것(Claude 가 정하지 않음)**: 이유 버튼 4개의 영어 이름과 학생용 한국어 문구, 학생 메일·LMS 알림·운영진 메일 문구(거주지 시간만, 기다리라는 표현 금지, 20분 이상 때 문구), PC·휴대폰 시안(강사 일정 수업 창에서 Cancel class 옆 배치). 문구는 대화창에서 확정 뒤 '시스템에 넣어' 이후에만 코드·DB 에 넣음
+- 구조는 학생 지각 알림(migration 20261113120000)과 같게: 강사 Home 버튼 → 담당 학생 메일 + 학생 LMS 알림, 운영자 보기에서도 대신 입력. 시험 사이트에 만들 때 대표가 열자마자 보이게 시험 데이터를 미리 만들고 볼 페이지를 같이 안내(CLAUDE.md 11/13)
+- ChatGPT 안 중 쓰지 않는 것: 학생 메일 영어 문구(학생 메일은 한국어)
+
+## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test·운영 DB·운영 화면 모두 반영 완료** (운영 주소 복구 23:27~23:28 한국, 정책 원본 H26(162)~(165))
+- **운영 최종 확인 (11/13 밤)**: edgeenglish.kr·www.edgeenglish.kr 모두 dpl_FDCP3w…(lms-prod 69db1c0) 를 주고, 운영 JS 에 '늦게 참여해요'·'강사님께 알렸어요' 있음. 홈 · /lms/tutor · /lms/admin 응답 200. 원인: 두 운영 주소가 Production 연결로 바뀌어 lms-prod 푸시를 못 따라감 → ChatGPT(work)가 대표 승인으로 'Preview · lms-prod 브랜치'로 복구(Vercel Domains, DNS·환경변수·재배포 없음). 언제 왜 바뀌었는지는 미확인 — 다시 안 따라오면 Vercel Settings → Domains 에서 두 주소 연결 대상부터 확인 (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)(163)** 참고)
+- **운영 반영 (대표 11/13 '운영에도 배포해')**: 운영 DB 백업 snapshots **49**(tutor_updates 표 + kind 제약 정의) → migration 20261113120000 적용(표 60→61, RLS·anon 실행 막힘·트리거 2개 확인, 학생 알림 0건) → 코드 lms-prod **69db1c0**(lms-test 의 지각 알림 3커밋만 골라 얹음). 되돌리기: 코드 lms-prod 0932ca9 · DB 표·함수 2개 제거 + kind 제약을 snapshots 49 정의로. **11/13 22:25(한국) 확인: lms-prod 69db1c0 push 35분 뒤에도 운영 사이트(edgeenglish.kr)가 예전 배포(dpl_7qCc61…)를 그대로 줌 — 운영 JS 에 '늦게 참여해요' 없음. 69db1c0 로컬 `next build` 는 성공하고 버튼 문구도 들어감 → 코드 문제 아님, Vercel 쪽(배포 안 됨·실패·대기)을 대표가 Vercel Deployments 에서 확인해야 함. 운영 DB 변경은 옛 화면이 쓰지 않아 영향 없음**
+- **시험 DB 시험용 수업 복구 완료·확인(11/13 밤, ChatGPT 읽기 조회)**: STU-9001 수업 0ee7b8bc… 11/14 10:00~10:50(한국) · e263168d… 11/14 11:00~11:50(한국). 알림 기록(student_late_notices 1줄)은 지울 수 없어 남아 있음(이미 알린 수업 하나에 붙어 있어 이후 시험은 다른 수업으로)
 - migration **20261113120000_lms_student_late_notice** (시험 DB 적용): 표 student_late_notices(수업당 1줄) · tutor_updates 종류 'student_late' · 함수 student_late_notice(보내기, 시작 2시간 전~끝나기 전만) · student_late_notices(읽기). 운영 표 수 60 → 61 (prod-setup 02-check 고침)
 - 화면: 학생 홈 '다음 수업' 카드 [늦게 참여해요] (StudentHome.tsx NextLesson·LateNotice), 강사 Home Updates 'Running late' 줄 (tutor/updates.ts), 운영자 보기는 같은 함수로 대신 입력
 - 검증: vitest 456 · tsc · test:db 새 시험(supabase/tests/student-late-notice.sql 22개) 통과 · 시험 DB 실제 함수 실행(수업 시간을 되돌림 트랜잭션 안에서 앞당겨 실행 → 알림·메일 문구·중복 확인 → 롤백, 데이터 안 남음). **미확인: support@ 실제 도착**(실제 저장 없이 롤백했음 — 강사 메일 경로는 기존 tutor_updates 메일과 같음)
 - 이 작업 전부터 실패하던 것(내 변경과 무관): test:db schema_test.sql:2495 겹침 오류(날짜에 따라 달라지는 시험) · authz-probe '검토 안 된 SECURITY DEFINER 함수 lms_screen_pref_set·lms_screen_prefs'(11/13 보기 설정 migration 이 목록에 안 넣음) · eslint TimeStatusLegend.tsx 1건
-- 남은 것: 운영 배포 때 migration 1개 적용(운영 DB 구조 변경 → 직전 백업 필요) + 정책 문구 '학생 안내'는 화면에 그대로 반영됨
 
 ## ✅ 11/11 학생 재등록 안내 자동 메일 3통 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/nice-einstein-x201yx, H26(117) ① · 대표 11/11 결정 1~5 + 마지막 수업 종료 기준)
 - migration **20261111190000_lms_renewal_mail** (시험 DB 적용): `lms_renewal_plans`(가격표, renewal-price.ts 와 같은 값 — 가격 바뀌면 두 곳) · `lms_renewal_remaining`(대시보드 remainingOf 와 같은 남은 수업) · `lms_renewal_mail`(문구·대기열, dedupe `renewal_mail:수강권:단계`) · `lms_renewal_mail_due` · `lms_renewal_mail_run` · pg_cron `lms-renewal-mail` 10분(`lms_renewal_mail_run(); lms_mail_run();`). 시작 스위치 = feature_flags `renewal_mail_since` 줄이 있을 때만 (시험 DB 에만 넣음, 운영은 줄 없음 = 안 보냄)
@@ -24,11 +386,12 @@
 - 가격표 일치 자동 시험: `src/lms/admin/renewal-price.test.ts`(TS MONTHLY 와 migration 의 jsonb 가격표·할인식 비교, 한쪽만 바꾸면 실패 확인함)
 - 안 한 것: 문자 [보냄]과 별개로 대시보드 카드에 '자동 메일 보냄' 표시 · 수업 알림 24시간·2시간 전(다른 세션 ecc4538)
 
-## ✅ 11/11 강사 Class Record ①②③ — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/wonderful-cerf-zsfv6f, 정책 원본 H26(136)(138)(139) 참고)
+## ✅ 11/11 강사 Class Record ①②③ — **운영 DB·운영 코드 반영 확인(11/12 운영 migration 목록에 20261111122214 있음)** (브랜치 claude/wonderful-cerf-zsfv6f, 정책 원본 H26(136)(138)(139) 참고)
 - migration **20261111140000_lms_class_type_student_cancel_cover** (시험 DB 적용): `class_type(lessons)`(PostgREST 계산 칸, 판정 `lms_class_type(l, p_cover)`: regular·makeup·compensation·cover·carry_in·carry_out) · `tutor_screen` type + 원래 강사 회색 줄(`covered_by_other`, 기록 내용·class_status 안 보냄, to_record 그대로) · `tutor_record_class` 대체 Held = Normal · 새 `tutor_student_cancel(request, lesson, told_at, dry_run)` → `lms_change_core(학생 사유, via tutor_app / 운영자 admin_on_behalf)` · student_screen·lms_student_profile_json·admin_student_detail 에 `type` (DO 블록으로 칸만 끼움)
 - 화면: `src/lms/class-type.ts`(이름 하나) · 강사 `screen.ts`·`TutorHome.tsx`(Student canceled 칸 `StudentCanceledFields`, CoverNote, 회색 줄 opacity) · Schedule 달력은 회색 줄 빼고 지금 그대로 · 운영진 대시보드·수강생 상세·수업 변경 목록(select 에 class_type) · 학생 홈 종류 이름 · 학생 취소 팝업 공휴일 줄
 - 검증: tsc · vitest 430 · test:db 통과(새 시험 4개 + 기존 2곳 고침: 원래 강사 회색 줄, 대체 Held = Normal) · ?demo=1 PC·휴대폰 화면 · 시험 DB Blair 계정으로 실제 저장(사전 취소·변경권 2→1·같은 요청 다시 보내도 1번·학생/강사 안내 2건)
-- ⚠ **운영 배포 순서**: 운영 DB migration 먼저(운영자 화면이 lessons 의 class_type 칸을 읽음 — 없으면 대시보드·수업 변경 목록 오류) → lms-prod. 운영 미반영 앞 작업(강사 통보 LMS 이전 등)과 같이 나갈 수 있으니 배포 전 `git log origin/lms-prod..origin/lms-test` 확인
+- (11/12 확인: 아래 배포 순서는 이미 끝남. 강사 화면 Cover class 안내 ? 클릭 팝업만 시험 사이트(lms-test)에 있고 운영 미반영)
+- ⚠ **운영 배포 순서(끝남)**: 운영 DB migration 먼저(운영자 화면이 lessons 의 class_type 칸을 읽음 — 없으면 대시보드·수업 변경 목록 오류) → lms-prod. 운영 미반영 앞 작업(강사 통보 LMS 이전 등)과 같이 나갈 수 있으니 배포 전 `git log origin/lms-prod..origin/lms-test` 확인
 - ✅ 11/11 대표 PC 시험 사이트 B1~B4 통과(H26(139)). 공휴일 줄은 시험 DB 공휴일 0건이라 시험 안 함
 - ✅ 11/11 공휴일 시험(시험 DB, H26(140)): STU-0003 11/30 수업에 임시 공휴일 → 학생 화면 팝업 '변경권 | 차감 안 됨 (공휴일 취소)', 실제 취소 'Student canceled in advance (public holiday)'·변경권 0 그대로·보강 가능. 원복 끝(holidays 0건·수업 scheduled·변경 기록·안내·메일 줄·audit 줄·임시 비밀번호·로그인 세션). 학생 취소 메일 1통은 원복 전에 support@로 나감
 - ✅ 11/11 고침(대표 지시, 시험 DB·lms-test): 다음 수강권 수업 학생 취소 — migration 20261111170000 student_screen 수업마다 lesson_final_end_date + credit_periods 열린 수강권 전부, 화면 cancelPreview·보강 기한이 그 수업 수강권 기준. 확인: STU-0003 12/14 팝업 '변경권 1개 사용 (1개 → 0개)·보강 ~1/10(일)', 저장 뒤 다음 수강권 기간 변경권 1→0·지금 수강권 0 그대로·보강 기한 2027-01-10. 시험 뒤 원복. 02-check 표 59개(다른 세션 student_notice_reads 표 반영)
@@ -39,22 +402,32 @@
 - 운영에 안 나간 DB migration (11/11 기준): 20261111010000_student_my_info · 20261111073809_student_makeup_mail_and_original_slot · 20261111120000_tutor_updates_mail · 20261111120100_notice_mail_wording · 20261111140000(이 작업) · 20261111150000_student_notice_reads_history · 20261111150100_student_reminder_settings. lms-prod 에만 있는 커밋 5개는 내용이 lms-test 에 모두 있음(확인함)
 - 안 넣은 것: Student canceled 의 Remarks 칸(저장할 곳이 없어 뺌, 시안 휴대폰도 없음)
 
-## ⏭ 다음 (새 세션): 통합 운영 배포 — 대표 11/11 '가) 묶어서 한 번에' 결정
+## ✅ 11/11 통합 운영 배포 완료 — 정책 원본 H26(147) (브랜치 claude/hopeful-heisenberg-f94wcr = lms-test = lms-prod·main 8af05d9)
+- 운영 전용 커밋 5개 병합(eb21855, lms-test 쪽 유지) · 자동 시험 시각 의존 실패 1건 고침(71d6b8b: schema_test 대체수업 24시간 차단 시험이 수요일 낮 UTC 에 같은 학생 화요일 수업과 겹침 → 9일 더 과거로) · vitest 433·test:db 전부·tsc·next build 통과
+- 운영 DB: 백업 **snapshots 40**(표 57개 행 수 일치 + `_functions_before` 함수 253개·`_triggers`·`_cron`) → migration 11개(20261111010000·073809·120000·120100·140000·150000·150100·160000·170000·170500·180000) + `supabase/data/legacy_learned_minutes_20261111.sql`(14명 225회 8,000분). 적용 전 tutor_screen·tutor_record_class·lms_makeup_book 이 운영에만 있는 변경 없는지 확인. 적용 뒤 새 함수 63개 md5 = 시험 DB(4개는 주석만 다름) · 앱 사용자 내부 함수 실행 불가 · 예약 실행 5개(lms-first-class-mail·lms-lesson-reminders 추가) 정상 · first_class_mail_since = 12:19 UTC(이 뒤 만든 수강권만 첫 수업 안내)
+- 120000 은 하위 에이전트로 적용하다 Supabase 확인 질문이 화면에 안 떠 시간 초과(적용 안 됨 확인) → 본 세션에서 다시 적용. 운영 DB migration 은 본 세션에서만
+- 코드: lms-prod·main 172cc4f → 8af05d9, edgeenglish.kr·git-lms-prod 주소 새 코드 확인
+- 배포 뒤: 운영자 권한으로 학생 14명·강사 5명 화면 함수 오류 없음(롤백 트랜잭션), 강사 실제 Class Record 저장 1건 정상, 잘못 나간 메일 0
+- **학생 수업 리마인더 켬(11/11 21:31 KST)**: 켜기 전 운영 미리보기(롤백) 정상·첫 수업 안내와 겹침 방지·켤 때 밀린 메일 0 확인. 멈춤 = 운영 DB `feature_flags` 'lesson_reminder_since' 줄 삭제
+- Olivia 10/20~ 시각·길이: 아래 학생 리마인더 항목대로 다른 세션이 시트 보완·재합산 끝 → 이번 데이터에 포함
+- 되돌리기: DB = snapshots 40 `_functions_before` · 코드 = lms-prod 172cc4f
+- 남은 미확인: 운영 실제 로그인 화면 클릭(학생·강사·운영자) — 대표가 평소 쓰면서 이상하면 알려 주기
+
+## (지난 계획) 통합 운영 배포 — 대표 11/11 '가) 묶어서 한 번에' 결정
 - 순서: ① 운영 전용 커밋 5개(172cc4f·06aa38c·3e5f508·7371e24·b4c9837)를 lms-test 에 병합 ② lms-test 에만 있는 커밋(11/11 기준 102개)·migration 12개를 기능별로 정리 — 특히 실제 학생·강사에게 가는 자동 메일(강사 통보 메일·첫 수업 안내·학생 취소/보강 메일·수업 알림 메일·재등록 안내 등)을 하나씩 확인 ③ 승인 안 된 자동 메일은 끄거나 빼서 위험 제거 ④ 병합으로 영향받은 부분만 통합 QA(이미 끝난 QA 반복 안 함) ⑤ 운영 DB 백업·복구 가능 확인 → migration → lms-prod·main → 배포 후 핵심 기능 재검증. 위험을 못 없애거나 필수 검증이 실패하면 배포하지 말고 그 문제만 보고
 - 11/11 확인: '학생 대시보드·내 정보 메뉴 수정' 세션 끝(712ec37), '학생 재등록 안내 자동 메일' 세션은 시험 반영 끝·운영 배포만 대기(5f1f3e8) → 둘 다 이 통합 배포에 포함
 - 대표 11/11 추천(통합 배포 때 같이 처리): ① **Olivia 10/20~10/30 일부 수업 시간·길이 없음 → 누적 학습 시간에 안 들어감**: 강사 시트(Class Record) 원본 확인해 따로 보완(배포를 막지 않음, 시트 고치면 Remarks 에 '[Edge 날짜] …') ② **학생 수업 리마인더(migration 20261111170500)**: 운영은 feature_flags 'lesson_reminder_since' 행을 넣는 순간 실제 학생에게 감 → 배포는 하되 스위치는 끈 채로, 첫 수업 안내 메일·다른 자동 메일과 중복·충돌을 확인한 뒤 켜기
 - 시작 전 확인: 새로 lms-test 를 고치는 세션이 없는지(list_sessions)
 
-## ✅ 11/11 강사 보강 시간 제안 → 학생이 골라 바로 확정 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/dreamy-curie-yyxifa, H26(134)·(141))
+## ✅ 11/11 강사 보강 시간 제안 → 학생이 골라 바로 확정 — **시험 DB·lms-test·운영 모두 반영 완료 (11/11 통합 운영 배포, 운영 DB 함수 5개·새 칸 2개 읽기 확인)** (브랜치 claude/dreamy-curie-yyxifa, H26(134)·(141))
 - migration **20261111160000_lms_tutor_makeup_suggest** (시험 DB 적용, 함수 11개 md5 = 저장소): makeup_requests.student_declined_at·suggested_at · `makeup_stage(r)`(학생·강사·운영진 같은 상태: tutor/student/admin) · `lms_makeup_slot_ok`(확정과 같은 검사) · `tutor_makeup_suggest_options`(= lms_makeup_options, 학생 고른 시간 제외) · `tutor_makeup_suggest`(1~2개, 같은 시간 다시 = repeated, status countered) · `lms_makeup_suggested_mail`(학생 메일 '[엣지영어] 강사님이 보강 시간을 제안했어요', 바로가기 ?makeup=신청id, dedupe makeup_suggested:id, 운영진은 dispatch 숨은참조) · `student_makeup_pick`(잠금+재검사 → lms_makeup_book, 막히면 '이 시간은 이제 선택할 수 없어요') · `student_makeup_decline_suggestion` · `lms_makeup_book` 2곳(제안 시간은 학생이 원한 시간으로 검사, 학생 직접 확정은 학생 카톡 복사 카드 not_needed — 메일은 그대로) · `lms_makeup_expire_run` countered 제외 · 읽기 `student_makeup_suggestions`·`tutor_makeup_suggestions`(tutor_screen·student_screen 은 안 건드림)
 - 화면: 강사 `TutorHome.tsx MakeupCard`+`SuggestTimes`(카드 안에서 날짜→시간→고른 시간 1/2·2/2·✕ → Suggest to student, PC 좌우·휴대폰 세로, 보낸 뒤 'Suggested · Waiting for the student' 배지+점선 제안 시간, 시간 없으면 Tell Edge English) · 할 일 수는 강사 답 필요만 · 학생 `StudentHome.tsx` 할 일 '보강 시간 고르기' → `RequestDetail` 라디오·[이 시간으로 확정 · 날짜]·[제안한 시간이 모두 안 돼요](한 번 더 확인)·확정 화면+캘린더 · 운영진 `LessonChange.tsx` '강사 제안 · 학생 선택 대기'/'보강 조율 필요 · 사유'+제안 시간 [확정] · 대시보드 기존 보강 카드에 '강사 제안 시간 수강생 불가·지남 n건'(`live.ts`·`board.ts`). 강사 카드 'Original class' 별표(*) 그대로 보이던 것 Rich 로 고침
 - 검증: test:db 621 통과(새 H26(134) 17개) — '운영 DB 확인 실패(LMS 표 58개)' 1건은 다른 세션 merge(학생 홈·알림) 뒤 생긴 것, 이 작업과 무관 · vitest 430 · tsc · eslint(기존 경고 1)
 - **시험 사이트 실제 클릭(11/11, 가상 학생 STU-9001·가상 강사 Blair(토론토), 학생은 운영자 보기)**: 강사 PC 1개 제안·3번째 막힘·✕ 뒤 다시 고르기 / 강사 휴대폰 2개 제안 / 운영자 대신 제안(이력 admin_makeup_suggest_as_tutor) / 학생 PC 메일 바로가기 → 첫 시간 확정(두 번 눌러도 보강 1개·메일 1쌍) / 학생 휴대폰 둘째 시간 확정(첫 시간 '이 시간은 이제 선택할 수 없어요') / 학생 휴대폰 '모두 안 돼요' → 다른 일정 조율 중 / 같은 시간을 다른 신청이 먼저 확정 → 막힘·운영진 조율 / 제안 시간 지남(시각을 과거로 바꿔 흉내) → 조율 / 강사 확인 화면 동기화 / 운영진 수업 변경·대시보드 표시 / 기존 강사 확정 회귀 / 휴무·막은 시간 넣으면 제안 시간 무효(롤백 시험) / support@ 수신 5통 확인. 시드니(+11 서머타임)·토론토(-5)·KST 날짜 차이 표시 맞음
 - **11/11 추가 검증 통과**: ① 학생 본인 로그인(가상 학생 STU-9001 에 시험용 로그인 e2e-student-9001@example.com 연결, 비밀번호는 끝나고 무작위) PC·휴대폰: 할 일 '보강 시간 고르기 · 수업 1건' → 제안 시간 2개(시드니) → 선택 전 버튼 잠김 → [이 시간으로 확정 · 11/21(토) 오전 11:00] → ✓ 확정+캘린더 2개 → 새로고침 뒤 할 일 사라짐·다음 수업에 보강 · DB 기록 student_makeup_pick, 확정 메일 학생·강사 ② 해외 학생 제안 메일(시드니): 원래 수업 '11월 12일(목) 오후 12시 30분 [시드니 시간] / 오전 10시 30분 [한국 시간]', 제안 '11월 21일(토) 오전 11시 [시드니 시간] / 오전 9시 [한국 시간]' 맞음, support@ 로만 감. 서머타임 경계(lms_mail_ko_at): 시드니 4/3 +2시간·4/5 +1시간, 토론토 3/12·3/14 날짜 넘어감 맞음
 - 남은 미확인: 실제 Gmail 앱 캘린더 버튼
-- **운영 배포 보류 (11/11)**: lms-test 에 운영에 없는 커밋 102개(강사 통보 메일·첫 수업 안내·학생 홈·알림 메일 등, 대부분 '운영 배포 별도 승인' 대기)가 쌓여 있음. 이 기능 화면 코드가 그 위에서 만들어져 따로 떼어 배포할 수 없고, lms-test 통째 배포는 운영(send_emails 켜짐)에서 승인 안 된 자동 메일이 실제 학생·강사에게 나갈 수 있음. 운영에만 있는 커밋 5개(172cc4f·06aa38c·3e5f508 등)도 lms-test 에 아직 안 합쳐짐
+- 운영 배포 완료(11/11 통합 운영 배포). 남은 것: 삼성폰 Gmail 캘린더 버튼 실제 기기 확인(대표) · 운영에서 실제 학생이 쓰는 첫 사례 확인
 - **시험 데이터 남김**: STU-9001 11/17·19·24·26·12/1·12/3 수업 강사 사정 취소 + 보강 신청 6건(확정 3, 조율 필요 3). 정리 끝(11/11): STU-9001 시간대 서울로 되돌림 · e2e-admin·e2e Blair 임시 비밀번호 무작위 값으로 바꾸고 로그인 유지 기록 지움
-- 운영 배포 전: 운영 DB 백업 → migration 20261111160000 → lms-prod (대표 승인 뒤)
 
 ## ✅ 11/11 강사 통보 LMS 이전 + 첫 수업 안내 메일 + 보강 메일 정리 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/brave-pascal-guazck, 정책 원본 H26(134)(135) 참고)
 - 범위: H26(116)(122)(125)(127) 강사 Updates·To do·강사 메일 6종 · H26(129) 첫 수업 안내 · H26(124)② 강사 [None of these times work] → support@ 메일 · H26(133) 재촉 생략 · H26(131)(132) 학생 메일 문구(대표 11/11 '넣어': 해요체·'보강 희망 시간'·'(아직 강사 확인 중)') · 보강 확정·시간 변경 메일 캘린더 버튼 2개(대표 11/11)
@@ -66,11 +439,55 @@
 - 일반 24시간·2시간 전 수업 알림(H26(117)②)은 아직 없음 → 생기면 첫 수업과 겹칠 때 첫 수업 안내만 보내는 처리를 그때 넣기
 - 검증: test:db 전부 통과(기존 시험 고침: 강사 안내 'not_needed', 7f6d690 이후 깨져 있던 4곳) · vitest 429 · tsc · eslint(기존 1건) · next build · 로컬 DB 시나리오(신규 문의→답→확정→첫 수업 24h 안내→발송 뒤 변경 안내→같은 값 재저장 안 보냄, 재등록 같은 일정·공백 없음=첫 수업 안내 없음, 정규 변경 메일) · 시험 DB 되돌리기 시나리오(신규 문의 메일·확정 메일·강사 안내 sent) · ?demo=1 PC·iPhone 13 화면
 - 미확인: 실제 support@ 수신(시험 DB 커밋 발송 안 함), 대체 수업 확정 묶음 메일·보강 none-work 메일 실제 흐름(로컬 DB 시험 장면 없음), Gmail 앱에서 '애플·삼성 캘린더' 버튼 → 11/11 대표 아이폰에서 추가 확인(아이폰 확인 창 뜬 뒤 추가 = 정상), 삼성폰은 미확인
-- **⏳ 대표 결정 대기 (11/11)**: 학생 메일 속 LMS 버튼 — A(권장) 보기용 버튼만 빼기(보강 신청 접수 'LMS에서 확인하기'·보강 확정/시간 변경 'LMS에서 일정 보기'·늦은 취소 'LMS 일정 보기'·강사 사정 취소 보강 불가 때 'LMS에서 일정 보기'), 행동 버튼(보강 날짜 고르기·다시 고르기)·캘린더 2개·첫 수업 '수업 입장하기' 유지 / B 학생 메일 LMS 버튼 전부 빼기 / C 그대로. 계기: 메일 링크가 로그인 안 된 브라우저에서 열리면 로그인 화면. 정해지면 문구라 '넣어' 뒤 lms_notice_mail 고침 → 시험 DB·support@ 확인 → 운영 (통합 운영 배포 끝난 뒤)
+- ✅ 학생 메일 속 LMS 버튼 = **C 그대로** (대표 11/11, H26(152)). 다른 세션에서 같은 질문이 나와도 다시 묻지 않음
+- **✅ 대표 확정 H26(153), 11/12 — 첫 수업에 정규/보강 구분 금지**: 해당 학생/수강권에서 실제 가장 먼저 진행할 확정 수업이 첫 수업이다. 11/12 정규 취소 → 11/13 보강 확정 → 다음 정규 11/16이면 첫 수업은 11/13. '정규 수업만 첫 수업'이라는 과거 권장안은 폐기·질문 금지. **남은 개발 문제는 메일 중복**: 보강 확정 메일 외에 첫 수업 변경 메일이 15분 뒤 별도로 가는 현상. 첫 수업의 정의를 바꾸지 말고 중복 발송을 최소화하는 구현안을 검토한다. 수업·메일 이력 삭제 금지. 운영 변경 전 시험 DB 검증.
+  - 개발(이 세션, migration `20261111200000_lms_first_class_makeup_no_dup`): `lms_first_class_check` — 새 첫 수업이 보강·보상수업이고 그 사람에게 보강 확정·시간 변경 안내(lesson_notices makeup_confirmed/makeup_rescheduled)가 이미 있으면 '첫 수업 일정이 변경됐어요' 메일 생략, 생략 기록은 notifications status 'canceled'·stage 'skipped'(다시 안 보냄). 수업 INSERT 때도 바로 다시 확인(트리거 after insert or update). 정규 수업 시간 변경 메일은 그대로. 쓰지 않는 운영자 표 `schedule_plan_board.first_lesson_at`의 정규만 조건도 뺌. 로컬 test:db 통과·로컬 시나리오(정규 변경 메일 2통 유지, 첫 수업 취소→보강 확정 = 변경 메일 0·생략 2) 통과. 시험 DB 적용 완료(11/12) + STU-0041 되돌리기 시험 통과(첫 수업 = 보강 11/14, 변경 메일 0·생략 2) → H26(155). ✅ **운영 DB 적용 11/12 01:33 KST**(대표 '응', 직전 백업 snapshots 46 = 이전 함수·트리거·표 정의, 운영·시험 함수 해시 같음, 15분 자동 확인 운영 실행 후 되돌림 = 오류 없음·새 메일 0). 화면 코드 변경 없음 → lms-prod 배포 불필요. 되돌리기: snapshots 46 의 정의 다시 실행. 참고(기존 동작, 안 고침): 첫 수업이 예전에 안내한 일정으로 되돌아가면(예: 보강 취소로 다시 11/16) 같은 내용이라 변경 메일이 다시 안 감 — 학생은 취소 메일을 받음
+- 11/11 추가 시험 통과(시험 DB, support@ 대조): 대체 수업 확정 묶음 메일(James, 휴무 강사 이름 없음, Updates 'Cover classes') · 강사 [None of these times work] 운영진 메일(가능 시간 글 포함)
 - **11/11 시험 DB 실제 메일 시험 통과(A~F, STU-0041·Sienna QA, support@ 11통 대조, 아이폰 캘린더 추가 대표 확인)**. 남은 미확인: 삼성폰 캘린더 버튼 · 대체 수업 확정 묶음 메일 · 강사 [None of these times work] 운영진 메일 실제 발송(Claude가 시험 DB로 할 수 있음) · 운영 배포 완료(통합 운영 배포 세션 진행 중: 운영 백업 끝·migration 적용 중)
-- **⏭ 다음 (새 세션)**: 강사가 [None of these times work] 때 글 대신 Availability 에서 시간 골라 학생에게 제안 → 학생이 하나 고르면 바로 확정 + 확정 메일 학생·강사·운영진 (대표 11/11 결정, D-43 예외 — H26(134)). 시안부터
+- ✅ 강사 시간 역제안(H26(134))은 위 항목대로 개발·시험·운영 배포 완료 — 추가 개발 없음
   - 11/11 시안 `docs/lms/previews/tutor-suggest-times-drafts.html` → **대표 결정 4개 확정(최대 2개 · '모두 안 돼요' 버튼 · 제안 메일 보냄+운영진 숨은참조 · 미응답은 대시보드만) → 아래 '11/11 강사 보강 시간 제안' 으로 개발 끝**
 - **운영 배포 전**: `git log origin/lms-test..origin/lms-prod` 에 운영에만 있는 커밋 있음(172cc4f·06aa38c 강사 Hours 등) → lms-test 에 먼저 합치기. 운영 DB 백업 → migration 2개 → first_class_mail_since 시각 확인
+
+## ✅ 11/11 운영진 대시보드 '안내 보내기' 카드 정리 — **시험 DB·lms-test·운영 DB 반영 완료** (브랜치 claude/intelligent-bell-o33pr9, 대표 '메일 정상 발송이면 카드 자동 제거' 선택 + 바로 반영 지시)
+- migration **20261111210000_lms_notice_mail_sent_closes_card** (시험 DB 적용): lesson_notices 의 email_status 가 'sent' 로 바뀌면 같은 줄 pending → sent(sent_at = 메일 보낸 시각, sent_by 없음) 트리거 `lesson_notices_mail_sent_done` + 지금 떠 있던 'pending 인데 메일 sent' 18건 정리. 코드 변경 없음(카드는 pending 만 셈)
+- 시험(시험 DB, 되돌림 포함): 메일 성공 → sent / 실패(failed) → pending 유지 / 정리 대상 0건. 남은 pending = 주소 없음 no_address 6건 + 메일 기능 전 옛 줄(email_status 없음) — 카드 유지가 맞음
+- ✅ **운영 DB 반영(대표 11/11)**: 백업 **snapshots id 41**(lesson_notices 125줄 전체, 이 표만 바뀌므로 부분 백업) → migration 적용. 전: 안내 125·pending 24(그중 메일 sent 10) → 후: pending 14·pending인데 메일 sent 0·트리거 1·앱 사용자 실행 불가·백업 대비 바뀐 줄 10(전부 pending→sent). 남은 pending 14는 모두 email_status 없음(메일 자동 발송 켜지기 전 옛 안내 등) = 카드 유지가 맞음. 코드(lms-prod) 변경 없음. 되돌리기: 바뀐 10줄을 snapshots 41 값(pending·sent_at null)으로 + `drop trigger lesson_notices_mail_sent_done`
+- 정책 원본 H26 기록은 H26(148) 기록함(대표 결정: 메일 정상 발송 = 안내 완료, 카톡 별도 확인 없음)
+- ✅ 운영 안내 카드 최종 정리(대표 11/11): 남은 지난 수업 안내 6건(STU-0003 2·STU-0008 4, 전부 지난 수업)을 대표 지시로 '보냄' 처리(백업 snapshots 43). 이로써 운영 lesson_notices pending 0건. 대표가 화면에서 직접 누른 건(STU-0013·0007·0010·0003 일부)은 대표가 카톡 확인 뒤 처리
+- ✅ **재등록 안내 카드도 같은 규칙(대표 11/11)** — migration **20261111220000_lms_admin_renewal_mail_sent**(함수 `admin_renewal_mail_sent()`: 운영자만, 재등록 자동 메일 notifications sent 인 수강권 목록. renewal_notices 에는 안 넣음 = 뒤 단계 자동 메일 안 멈춤) + `src/lms/admin/live.ts`(대시보드가 이 목록을 '보냄'으로 취급, 함수 없는 DB 는 건너뜀). **시험 DB·lms-test 반영, 운영 DB 미적용·운영 코드 미배포**(코드는 통합 운영 배포 때 같이 — lms-test 전체에 운영 미반영 변경 다수). 운영에는 재등록 자동 메일이 11/11 20:40 KST 에 STU-0003·STU-0008 에게 실제 발송됨(renewal_mail_since 줄은 대표 지시로 다른 세션이 넣음, 이 항목 위의 '켜기 대기' 문구는 낡음)
+- 시험 사이트 대시보드 화면 확인은 운영자 로그인(TOTP) 필요 — 대표 PC 확인 대기
+- ✅ **재등록 자동 메일 3통 각 1번 + 모양 통일 — 시험 DB·lms-test 반영, 운영 DB 미적용** (대표 11/11 확인·'반영해', H26(148)): migration **20261111230000_lms_renewal_mail_three_stages**(시험 DB 적용). 단계 week(종료일 7일 전 한국 날짜부터·남은 수업 1+)·two(남은 1~2회 한 번)·ended(0회), 'one' 삭제, 같은 날 겹쳐도 각각, ended 뒤 week·two 안 보냄. 문자 [보냄]은 그 시각에 이미 해당된 단계만 막음(뒤 단계는 나감). 메일: 1·3·6개월 굵게+💜, 맨 아래 ※ 안내 한 줄(원문 '강사님와' → '강사님과' 오타 고침), week 첫 줄 '안녕하세요 ○○님, 벌써 수강기간이 거의 끝나가서 연락드려요☺️ (종료일: **실제 마지막 수업일**)' · 제목 '[엣지영어] 수강기간이 1주일 남았어요'. ※는 세 메일 모두에 들어감(대표 지시 '메일 맨 아래', 한 메일에만 넣을지 확인 필요). test:db 전부 통과(renewal-mail.sql 새 단계·문자 규칙·모양 시험, schema_test 메일 200 → 안내 줄 보냄으로 기대값 고침, authz-probe 에 admin_renewal_mail_sent 추가). 시험 DB 실제 발송: STU-0018 week 메일 support@ 수신·본문 확인
+- ✅ **운영 DB 반영 완료(대표 11/11 '운영에 반영해, ※는 세 메일 다 넣어')**: 백업 **snapshots 44**(바꾼 함수 2개 lms_renewal_mail·lms_renewal_mail_due 이전 정의) → migration 20261111230000 적용. 확인: 지금 보낼 대상 0건·재등록 메일 2통 그대로·앱 사용자(anon·authenticated) 실행 불가·예약 실행 lms-renewal-mail 활성·학생 13·수강권 14·수업 171 그대로. STU-0010 은 11/13부터 week 메일(실제 학생에게 나감). 되돌리기: snapshots 44 의 _functions_before 로 두 함수를 되돌림. 재등록 카드 '보냄' 처리 코드(live.ts)+migration 20261111220000(admin_renewal_mail_sent)은 **운영 미반영 — 다음 통합 운영 배포 때**
+- ✅ **운영 DB 가상 데이터 삭제(대표 11/11 '아예 삭제, 되돌릴 방법 없어도 됨')**: 가상 학생 STU-0014(체험용)·가상 강사 Sera Kara(체험용) 와 딸린 줄 완전 삭제 — 수강권 1·수업 20·결제 1·고정 일정 5·로그인 연결 1·일정 안내 2 등 38줄. 백업 **snapshots id 42**(삭제된 줄 전체). 방식: 연결 표를 따라 안쪽부터 삭제(삭제 방지 장치는 그 실행 안에서만 꺼짐), 끝에 고아 행 0 확인(드라이런 먼저). 결과: 학생 14→13·강사 5→4·수강권 15→14·수업 191→171·결제 4→3, 체험용 학생·강사 0. 로그인 계정(auth.users)은 안 지움(연결 줄만 삭제)
+- 안내 카드 남은 14건 원인: 메일 발송 기록 없음 — 학생 취소 안내 메일(change) 자동 발송이 11/11 저녁(운영 migration 073809 반영 시각 ≈21:19 KST, 추정) 전에 생긴 안내. 처리는 대표 선택 대기: (a) 화면에서 [보냄] (b) Claude 일괄 보냄 처리(실제 안내 여부는 대표 확인)
+- ⚠ 의도: 학생 취소·보강 확정 등 메일 나간 안내는 카톡 [보냄] 단계 없이 카드가 사라짐
+
+## (이전) 운영진 대시보드 '안내 보내기' 카드 정리 요청 원문 (대표 11/11)
+- 요청: 안내 메일(취소·보강·재등록 등)이 학생·강사에게 정상 발송된 기록(notifications/lesson_notices 메일 sent)이 있으면 대시보드 카드('보강 확정 안내 보내기'·'수업 취소 안내 보내기'·'안내 안 보냄 n건' 등)에 안 뜨게 + 지금 떠 있는 것도 정리. 대표 캡처: 홍O길 '보강 확정 안내 보내기 1건', 이O민 '수업 취소 안내 보내기 3건', 김O민 '수업 취소 안내 보내기 4건' (운영)
+- 관련 코드: src/lms/admin/board.ts·live.ts·AdminDashboard.tsx, lesson_notices(email_status·email_notification_id), 카드 닫기 admin_task_closures. 주의: '지금 떠 있는 것 정리'가 운영 DB 변경(lesson_notices sent 처리 등)이면 운영 DB 실행 조건(대표 '응')·백업 규칙 지킴. 시험 먼저 → 대표 승인 → 운영
+
+## 11/11 학생 홈 마무리 — 로그인 계정 만들기 위치 이동 · 빠른 신청 카드 최종 (lms-test af6918c·abb7ae3, 운영 미배포)
+- 로그인 계정 만들기: 학생 화면 운영자 띠에서 빼고 운영자 수강생 상세 '운영진만' 칸 '로그인 이메일' 줄로 옮김 (`StudentDetail.tsx` LoginRow, `StudentDetailLive.tsx` createLogin — DB 함수 admin_student_login 그대로, 대표(owner) 계정만 가능). 계정 있으면 '이메일 · 연결됨'만
+- 카드: 위 줄 '제목 · 신청하기 ›'(누르는 곳, hover·포커스 테두리), 아래 정보. 휴대폰(640px 미만)은 한 줄에 한 카드, PC 두 칸. 보강 카드 '강사 확정 대기 중 N회' = 보강 신청 중 tutor_reviewing 개수
+- 시험 DB: STU-0001 에 시험 로그인 qa-login-stu0001@example.com 연결(SQL 로 owner 권한 흉내, 메일 발송 없음). 다른 이메일로 다시 연결 → DB 가 막음 확인
+- **운영 배포 11/11 f4efd3a** (lms-prod·main): (H26(157) 참고) lms-prod 위에 StudentHome.tsx·fake-data.ts 만 (DB 변경 없음). 로그인 계정 만들기 이동(StudentLive·StudentDetail)은 대표 계정 화면 QA 뒤 따로 배포 — 운영은 아직 운영자 띠에 예전 입력칸
+- lms-test cadc6fe·63f27af (운영 미배포): 내 정보 알림 설정 '수업 알림은 수업 24시간 전과 2시간 전에…' 문구, 누적 학습 시간 띠 문장 400 통일, 변경권 28일 안내 → ? 툴팁(HelpTip: 마우스 올리기·클릭·터치·포커스, Esc·바깥 누르면 닫힘)
+- lms-test 54bfd5b (운영 미배포): 학생 홈 '내 수강 정보' 요약 칸 (다음 수업 아래·빠른 신청 위). 담당 강사 = student_regular_slots 강사만, 수업 시간 = 정규 일정을 학생 시간대로, 남은 수업 = lessonsLeft.total(재등록 기준과 같음), 종료일 = final_end_date 23:59 KST 의 학생 현지 날짜. 자세히 보기 › → 내 정보 #my-pass. QA: STU-0012(담당 Emma·다음 수업 James)·0002(멜버른·연장)·0041(시드니)·0004(연장 5회·12주)·0018 본인, PC·390·360 통과
+- **운영 배포 11/11 42d84e7** (lms-prod·main): (H26(158) 참고) cadc6fe·63f27af·54bfd5b 의 StudentHome.tsx 만 (처리 내역 01982ef·로그인 계정 이동 제외, DB 변경 없음). 되돌리기: lms-prod 에서 42d84e7 revert 후 push
+- **운영 배포 11/12 d66683b** (lms-prod·main): 학생 '처리 내역' (H26(156) 참고) — 대표 운영 화면 확인 이상 없음(11/12) (01982ef·3a78fb6, ChatGPT Work 개발·Claude 독립 QA). 운영 DB: 백업 snapshots id 47(전체 표) 뒤 migration 20261111162429 student_processing_history 추가(읽기 전용 새 함수). 권한: 학생 본인만·다른 학생/로그인 없음 거절 확인. 되돌리기: drop function public.student_processing_history(uuid) + lms-prod 에서 d66683b revert. 로그인 계정 이동은 여전히 제외
+- **미완료 (11/12 검토, 대표 지시 11/11)**: 학생 홈 재등록 안내·할 일이 둘 다 노란색이라 단조롭고 강조가 겹침 → 역할에 맞게 색을 나눈 시안(PC·휴대폰)을 먼저 대표에게 제안. 기존 LMS 디자인에 어울리는 차분한 색, 새 카드·기능 추가 금지. **대표가 시안 확인 전에는 코드·운영 수정 금지**
+- 대표 확인(11/11): 휴대폰 카드 세로 한 장씩 유지 · 운영자 띠 검색칸 유지. **남은 것: 대표 계정으로 시험 사이트 수강생 상세 [로그인 만들기] 화면 QA (STU-0002, example.com 이메일) — 끝나면 Claude 가 시험 DB 로 연결·기존 기록 확인**
+
+## ⚠ 11/11 운영 학생 홈 '학생마다 다르게 보임' 원인·수정 — **lms-test 51b9589, 운영 미배포(대표 승인 대기)**
+- 원인: 운영자 보기 '시간 기준 [수강생 시간 | 한국 시간]' 줄이 해외 거주 학생에게만 나옴(KstToggle 이 한국 학생이면 아무것도 안 그림). 운영 해외 학생 = 이O옥 STU-0003(싱가포르)·송O나 STU-0004(디트로이트)·오O수 STU-0010(시드니) 3명 = 대표가 다르다고 한 3명과 같음. 학생 화면 카드 구성·순서는 같음(운영 화면 파일에 새 화면 글자만 있고 예전 화면 글자 없음 확인)
+- 수정(최종 e4e9ba5, 대표 지시로 51b9589·1721526·e688390 방식 되돌림): 검은 '시간 기준' 줄 없앰. 해외 학생 운영자 보기의 한국 시간 보기는 보라색 시간대 띠 안 끝 글자 버튼 '· 한국 시간으로 보기'(누르면 띠 '한국 시간(KST) 기준으로 보는 중 · ○○ 시간으로 보기', 학생 저장 시간대는 안 바뀜). 운영자 '수강생 로그인 이메일' 입력은 원래대로. 시험 7명(해외·한국, 로그인 있음·없음) PC·iPhone 13: 띠 1개, 공통 순서 같음, 조건부만 다름(재등록 STU-0002, 할 일 STU-0010), 가로 밀림 0
+- 11/11 추가(6018f2a): 운영자 한국 시간 보기여도 띠 색을 노란색으로 바꾸지 않음(원인: 운영자 브라우저에 한국 시간 보기 켬이 기억돼 해외 학생만 노란 띠). 띠는 늘 보라색 하나, 글자만 '한국 시간 기준'. 시험 38명 PC·휴대폰 QA 통과(띠 1개·보라색·순서 같음·가로 밀림 0, 해외 5명 켬/끔·새로고침 유지·저장 시간대 그대로, STU-0028 시간대 바꿈→되돌림)
+- **11/11 운영 배포 완료(대표 승인)**: lms-prod·main 8af05d9 → **c171d0f** (StudentHome.tsx 한 파일만 = lms-test 51b9589~6018f2a 시간대 띠 통일, DB 변경 없음). edgeenglish.kr/lms·lms-prod 주소 새 화면 파일 확인(노란 띠 글자 없음). 되돌리기: lms-prod·main 을 8af05d9 로. 운영 학생별 화면 확인은 운영자 로그인 필요(대표 PC 인증 대기)
+- 11/11 정규 수업 알림 신규 기본 OFF: migration **20261111190000_lms_remind_regular_default_off**(students.remind_regular default false, 데이터 안 바꿈) — **시험 DB·운영 DB 적용**(11/11 대표 승인, 운영 백업 snapshots 45 → 적용, 적용 뒤 기본값 정규 false·보강 true, 학생 13명 정규 ON 0·보강 ON 13 그대로. 되돌리기: alter column remind_regular set default true). 보강 기본 ON 그대로. 학생 등록 코드에 remind_regular 를 넣는 곳 없음(기본값만 씀). 데모 데이터 정규 OFF
+- 11/11 두 카드 대표 최종 시안(8f5da16, lms-test 만): 수업 변경·취소 = 6시간 규칙 2줄(6시간 이내: 변경권 유지 · 보강 불가 (수업 1회 차감)) + 남은 변경권/이번 기간 총 N개 중/N개 + '변경·취소하기 ›', 보강 일정 잡기 = N회 + '잡을 수 있는 보강' + '신청 가능 ›'(있을 때만). QA STU-0012·0010·0003 PC·iPhone 13: 높이 같음, 행동 글자 아래끝 같음, 변경권 = DB, 클릭 이동 정상
+- 11/11 콤팩트 시안(580aa4b~, **lms-test 만, 운영 미배포 — 시간대 띠 수정과 함께 배포 예정**): 누적 학습 시간 베이지 얇은 띠(#F5F1E9, 늘 '○시간 ○분'), 재등록 안내 마감 날짜만('11월 18일까지 … 이월할 수 있어요.', 마감 기준은 그대로), 수업 변경·취소 카드 6시간 규칙 + '남은 변경권 n개', 보강 카드 '보강 일정 잡기 n회'(0이면 '신청 가능' 없음, 기존 클릭 동작), 두 카드 아이콘 없앰·제목 진하게(대표), 공지 N 빨간 글자만·날짜 2026.11.11. QA 5명(재등록·할 일·휴무·해외·수업 없음) PC·iPhone 13: 변경권 = DB, 보강 n = 신청 내역 '날짜 선택 필요' 수, 카드 클릭·공지 열기 확인, 가로 밀림 0
+- 11/11 대표 시안 반영(de11aec·d8fec73, **lms-test 만, 운영 미배포**): 운영자·해외 학생일 때만 '한국 시간으로 보기 ›'를 PC는 시간대 띠 같은 줄 오른쪽 끝(작은 회색 글자+얇은 구분선, 띠 너비 = 홈 카드 너비), 휴대폰은 같은 띠 둘째 줄. 켜면 '○○ 시간으로 보기 ›'. QA: 해외 2명·한국 2명 운영자 보기 + 학생 본인 1명, PC·iPhone 13, 켬/끔·새로고침 유지·저장 시간대 그대로·가로 밀림 0
+- 운영 리마인더: 통합 운영 배포 세션이 11/11 21:31 KST 운영에 'lesson_reminder_since' 줄을 넣음(enabled=false 로 적혔지만 줄이 있으면 발송) — 계속 둘지 대표 답 대기
 
 ## ✅ 11/11 학생 수업 리마인더 메일 + 누적 학습 시간 시트 시절 포함 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/jolly-turing-bfiwh0, 대표 결정 11/11 · 확인 간격 10분 H26(117)) — 정책 원본 **H26(145)** 기록 · **시험 DB 리마인더 시작 스위치 11/11 끔**(feature_flags 'lesson_reminder_since' 행 지움 → 메일 안 감, 기능·예약 실행·학생 설정은 그대로. 다시 켜려면 그 행만 넣기)
 - migration **20261111170500_lms_student_lesson_reminder_mail**: 2900 직접 발송 함수는 없애고 지금 자동 메일 대기열 재사용 — `lms_lesson_reminders_due`(24h·2h, 알림 시점부터 1시간 안만, 취소·무효·휴무 처리 확정 전 제외, 시간 바뀌면 바뀐 시각 기준(dedupe_key 에 시작 시각), 알림 시점 뒤에 정한 수업 건너뜀(lessons.time_set_at 트리거), 정규=remind_regular/그 밖=remind_makeup, 첫 수업 안내 메일 받은 첫 수업은 24h 생략) → `lms_lesson_reminder_mail`(notifications 'lesson_reminder_24h/2h' → lms_mail_dispatch, 받는 주소 lms_notice_recipient_email, send_emails 꺼짐=support@+[시험 · 번호], 시각 lms_mail_ko_at '오후 8시 [한국 시간]' 모양, 대체강사면 대체강사·링크) → pg_cron 'lms-lesson-reminders' */10 + lms_mail_run. 시작 스위치 feature_flags 'lesson_reminder_since'(**시험 DB 에만 있음** → 운영은 행이 없으면 안 나감). 실패는 기존처럼 failed·운영진 [다시 보내기], 자동 재시도 없음. 강사 알림 변경 없음
@@ -84,6 +501,7 @@
 - 홈 순서(모든 학생 같은 컴포넌트): 시간대 띠('모든 날짜·시간은 ○○ 시간 기준 · 변경 ›') → 나의 누적 학습 시간(진행된 수업만, 0분도 표시) → 재등록 안내(대상만) → 할 일(있을 때만, 제목 옆 숫자 없음, 줄마다 '수업 n건') → 다음 수업(없으면 '예정된 수업이 없어요', 교재 링크 없음, '40분 · ○○ 강사님 · 정규 수업', [수업 입장]) → 수업 변경·취소/보강 신청(보강 0건이면 신청 내역으로) → 공지사항(최신 2건, 새 공지 빨간 N·미확인/확인함, 3건 이상 [전체보기], 없으면 빈 상태). 수강·결제·적립금 칸은 홈에서 빼고 내 정보에만
 - 운영자 보기: 시간 기준 전환은 운영자 검은 칸 안, 시간대 띠는 모든 학생 같은 자리
 - 내 정보: 프로필(담당 강사·수강 상태·시간대 [변경 ›]·수업 링크) · 나의 학습 정보(강사 작성 4칸, 없으면 '아직 작성 전이에요') · 이메일 알림 설정(정규/보강 각각) · 내 수강권(현재 코스·수업 시간·남은 정규 수업·변경권·종료일·[현재·지난 수강권 / 결제 내역 ›] 실제 기록) · 적립금·보강권
+- ⏭ **학생 대시보드 다음 수정 때 넣기 (대표 11/11, 누락 지적)**: '내 정보' → 이메일 알림 설정 칸에 발송 시점 한 줄 — 정규·보강 모두 수업 24시간 전·2시간 전 (실제 발송 규칙 = migration 20261111170500, 대표 11/11 확정). 문구는 시안에서 대표 확인
 - migration **20261111010000_lms_student_my_info**(학습 정보·누적 시간) · **20261111150000_lms_student_notice_reads_history**(공지 확인 표 announcement_reads + student_notices/student_notice_read(운영자 보기는 기록 안 함)/student_enrollment_history) — **시험 DB 적용 · 운영 미적용**
 - migration **20261111150100_lms_student_reminder_settings**: 2900 중 알림 켬/끔 저장만(students.remind_regular/makeup + student_reminders, 메일 주소 확인 = lms_notice_recipient_email). **시험 DB 적용, 발송 함수·예약 실행 없음 → 수업 알림 메일은 아직 안 나감**(H26(86) ⑥ 대표 결정 대기). 시험·운영 모두 그동안 2900 미적용이라 '이메일 알림 설정' 칸이 화면에 안 보였음
 - QA(11/11, 시험 사이트 실제 배포): 운영자 보기 34명 PC·iPhone 13 — 홈 칸 순서 모두 같음(차이는 데이터 조건뿐: 재등록 안내 5명·할 일 4명), 내 정보 4칸 34명 같음, 가로 밀림 0. 학생 본인 STU-0018(임시 비밀번호 → 끝나고 무작위) PC·휴대폰: 공지 미확인 → 열기 → 확인함(새로고침 유지, DB announcement_reads 1건, 운영자 보기는 기록 안 됨)·전체보기 3건·수업 변경·취소 열기/닫기·보강 신청·정규/보강 알림 각각 OFF → DB·새로고침 유지 → ON 복구·시간대 시드니 → 홈 띠·새로고침 유지 → 서울 복구·결제 내역·적립금·보강권 확인 모두 통과. **시험 데이터 남김**: 학생 공지 2건('크리스마스 시즌 수업 안내'·'12월 정기 점검 안내')
@@ -110,6 +528,32 @@
 ## ✅ 11/10 운영자 '저장 기록' 띠: 저장 완료 줄 자동 지움 — 정책 원본 H26(121) · **lms-test 반영, 운영 미반영(다음 운영 배포 때 같이, DB 변경 없음)** (브랜치 claude/busy-bohr-q9w22a)
 - `src/lms/admin/pending-saves.ts` `keepRows`: 저장할 때·읽을 때 status 'ok' 줄을 버림(이미 쌓인 옛 '저장 완료' 줄도 다음 읽기에서 사라짐). '저장 중'·'저장되지 않았어요'·'확인 필요' 줄만 남음. `PendingSavesBanner.tsx` 'ok' 표시 분기 제거
 - 시험: pending-saves.test 6 통과(keepRows 1개 추가), tsc·eslint 통과. 화면 클릭 확인은 안 함
+
+## ✅ 11/14 강사 해외 이동 기간 기능 — **시험 사이트·시험 DB 개발·검증 끝, 운영 미반영** · 정책 원본 H26(173)(174) (브랜치 claude/modest-fermi-ord1q5 → lms-test 3354e38)
+- 이름: H26(174) 참고 (평소 지역 줄 = Home location, 나머지 시안 그대로) · 시각 기준: H26(176)
+- migration **20261114120000_lms_tutor_travel_locations** (시험 DB 적용, 함수 16개 본문 = 저장소 파일 md5 같음 확인): `tutor_locations` 표(표 63개) · `tutor_availability.location_id`(null = Regular) · `lms_tutor_tz_on(날짜)`/`lms_tutor_location_at`/`lms_tutor_tz_at(시각)` · `lms_tutor_start_ok`(그 시각 지역 06:00~22:30) · `lms_tutor_weekly_ok`(이동 중엔 그 기간 줄만) · `lms_weekly_open`·`tutor_hours_save`(Regular 줄만) · `tutor_hours` + locations · 새 `tutor_location_save`(추가/종료일) · `tutor_location_hours_save` · `tutor_schedule`(칸 48개, 시작 못 하는 칸 'n', locations) · `tutor_schedule_save`(칸 검사 = start_ok) · 새 `tutor_schedule_multi`(Set Multiple Days 미리보기/적용, 두 지역이면 오류) · `lms_mail_ko_zone` 에 아르헨티나 2개
+- 화면: `TutorHours.tsx`(Home location 줄·탭·Add Temporary Location·Set end date·이력 '이동 기간'), 새 `TravelSheet.tsx`·`SetMultipleDays.tsx`·`src/lms/tutor/travel.ts`, `TutorSchedule.tsx`(보는 현지 시간 = 보고 있는 날짜의 지역, Set Multiple Days 버튼, Home location 줄), `places.ts` 아르헨티나, `registration-live.ts` 신규 매칭은 Regular 줄만
+- 시험: test:db 새 '강사 해외 이동 기간 시험' 36줄(`supabase/tests/tutor-travel-location.sql`) · vitest 471 · tsc · 시험 DB 실제 23줄(가짜 강사 Ben, 되돌림) · 데모 PC·iPhone 13 · **시험 사이트 실제 강사 Blair 계정**(임시 비밀번호 → 끝나고 무작위·세션 지움) PC: 이동 기간 추가(Buenos Aires 12/24~1/23) → 경고 → 월 16:00 저장 → Set Multiple Days 12/22~26 Split(Toronto 2일·BA 3일) → 적용, 휴대폰: 같은 범위 '이미 열림' 5일. DB 대조 맞음, 가로 밀림 0. **시험 데이터 남김**(Blair 위 내용)
+- 경계 규칙: 이동 첫날·마지막 날은 그 지역 현지 날짜. 서쪽으로 가면 하루 중 일부 시각이 어느 날짜에도 안 들어가고, 동쪽이면 겹침(칸 판정은 시각 기준이라 저장 오류는 없음)
+- ✅ 11/14 후속 H26(176): 강사 Home·강사 메일 수업 시각 = 그 수업 날짜에 설정된 지역. migration **20261114170000_lms_tutor_travel_lesson_zone**(시험 DB 적용, 처음 130000 으로 만들었다가 다른 세션 migration 번호와 두 번 겹쳐 170000 으로 바꿈): `tutor_travel_periods` + 강사 메일 함수 9개 본문의 `lms_mail_en_*(시각, tu.timezone)` → `lms_tutor_tz_at(tu.id, 시각)`(DO 블록이 서버 본문을 고쳐 다시 만듦, 함수 10개 md5 = 로컬). 화면: `TutorHome.tsx`(수업마다 zAt, 표 머리글과 다르면 줄에 시간대 이름)·`StudentProfile.tsx` 다음 수업·`screen.ts daysOf`. 시험 DB 실제 강사 메일 미리보기(되돌림): 이동 기간 넣으면 제목·Class 줄이 Buenos Aires Time, 기간 밖 시각(취소한 시각)은 그대로
+- ✅ 운영자 대리 등록 실제 화면(시험 사이트, e2e-admin TOTP → ?tutor=Blair, PC·iPhone 13): New York 2/2~2/8 추가 → 화 10:00 저장 → Set Multiple Days 2/3~5 적용, 이력 '운영자'. Blair 12/21 주 Class Record 에서 12/24부터 Buenos Aires 시각·줄에 시간대 이름(PC 칸 밀림 → 고침). 임시 비밀번호 끝나고 무작위·세션 지움. **시험 데이터 남김**: Blair New York 2/2~2/8
+- ✅ 11/14 독립 QA(ChatGPT Work) 5건 고침 H26(177): migration **20261114180000_lms_tutor_travel_qa_fixes**(시험 DB 적용, 함수 3개 md5 = 저장소) — Calendar 칸 키 = 그 날짜 지역 현지(`keyOf`, 경계 시각 '!')·경계 'n'·여러 날 등록 이유 zone·대기 요청 r/a. 화면: `TutorSchedule.tsx`(날짜·열마다 지역, 두 지역 주는 열 머리에 도시)·`TutorHome.tsx` CoverCard/MakeupCard/SuggestTimes 후보마다 zAt. 시험: test:db 해외 이동 46줄·vitest 474. 시험 사이트(운영진 시험 계정 ?tutor=Blair) 12/24 고르면 Buenos Aires Time·12/22 Toronto Time, 12/21 주 열 머리 Toronto/Buenos Aires, 칸 판정 DB 와 같음(PC·휴대폰)
+- ✅ 11/14 재검증 2건 H26(178): migration **20261114190000_lms_tutor_travel_requalify**(시험 DB 적용, md5 = 저장소) — `tutor_schedule` 'slots'(UTC 키 끝 Z, 시작 가능 시각 전부·'o' 포함)·`tutor_schedule_save` Z 키(평소 시간대 키도 받음)·여러 날 등록 대기 요청 제외 되돌림(기존 QA-01: 닫힌 시간 보강 후보는 그날만 열고 '가능' 답). 화면 `keyOf`=UTC 키, `cellKind(key,d,lesson,viewDate)`, fake 도 UTC 키. 시험: test:db 해외 이동 49줄(36일 격자 일치)·vitest 474. 시험 사이트 KST 보기 Blair 1/24 12:00 KST(= Toronto 1/23 22:00 복귀 경계) closed·13:00 can't open
+- ✅ 11/14 3차 QA: '열기 허용'은 QA 가 판정 철회. 남은 높음 1건 고침(H26(178) 끝 줄) — `TutorSchedule.tsx` 열 = 날짜 또는 '날짜@시간대'(`colsOf`·`vz`·`dd`), 출발·복귀 날 남은 다른 지역 시각이 있으면 열 추가, 칸·수업은 그 시각 실제 지역 열에만(`kindsOf` 소유 검사·`dayAll`), 월 보기 그날 목록·버튼 지역별. DB 변경 없음. 시험 사이트(운영진 시험 계정 ?tutor=Alex) 11/30 주 열 머리 'Fri 4 Sydney | Fri 4 Buenos Aires', Sydney 12/4 9:00·1:30 PM closed, 2:00 PM can't open, PC·휴대폰 가로 밀림 0. **시험 데이터 남김**: Alex 이동 기간 Buenos Aires 12/4~12/20 (되돌리기: tutor_locations 그 줄 삭제 — 시험 DB)
+- ✅ 11/14 4차 QA 통과(수정 범위). 실제 강사 계정(Blair, 임시 비밀번호 → 끝나고 무작위·세션 지움) 로그아웃·재로그인 뒤 이동 기간 탭 매주 시간·Calendar 하루 열기 유지 확인(DB 대조). 이동 없는 강사 lms_tutor_tz_at = 강사 시간대(시험 DB 전원·400일, 어긋남 0). **시험 데이터 남김**: Blair BA 탭 수 17:00 열림, 12/26 09:00 BA 그날만 열림. 남은 미확인: 신규 예약·보강·대체 전체 브라우저 흐름(DB 흐름은 QA 통과)
+- 운영 배포: 대표 승인 → 운영 DB 백업 → migration 120000·170000·180000·190000 → lms-prod
+- ✅ 11/14 브라우저 전체 흐름 시험 1차(신규 예약·보강·대체, 시험 사이트 운영자 시험 계정): 보강·대체 통과, 신규 예약에서 운영자 화면·강사 WhatsApp 문구가 강사 평소 시간대로 나오고 배정 달력이 이동 기간을 무시하는 문제 발견 → 대표 '1 응 2 응 3 가' (H26 기록). 강사 Home Updates 시각도 고침
+- ✅ 11/14 수정(lms-test 040140b): `src/lms/rules/booking.ts` AvailabilityWindow travel·periodId(그 시각 지역 시간표만, DB lms_tutor_weekly_ok 와 같은 규칙) · `registration-live.ts` 이동 기간 시간표 줄+기간 · 새 `src/lms/admin/tutor-zone.ts`(tutor_travel_periods 로 강사별 기간, tutorZoneFn) · `confirm.ts`(PlanView.tutorZoneAt, 지역 바뀌는 날 'From …' 줄) · `lesson-change.ts`(tutorZoneAt, tutorLocalAt) · `students.ts`·`students-live.ts`(정규 변경 문구·수업별 시간대) · `tutor-leave-live.ts`(대체강사 시각 수업마다) · PlanCard·parts·ScheduleStep·NewStudent·AssignSchedule·LessonChange·StudentDetail·RegularChange·PrestartMove·LessonManage · migration **20261114210000_lms_tutor_travel_booking_check**(lms_plan_conflicts 에 이동 기간 시간표 검사 'tutor_travel_hours' — 제안·등록·확정·회차 목록 모두, 시험 DB 적용) · test:db 이동 기간 51줄 · vitest 485
+- ✅ 11/14 재검증(시험 사이트 화면, Mia BA 12/24~1/10 월 07:00·07:30·08:00·09:00): 경계 — 달력 12/21 월 오후 6:00 가능(시드니 오후 8:00)·12/28 오후 6:00 못 누름·오후 7:00 가능(BA 오전 7:00)·1/11 다시 시드니, DB lms_plan_conflicts 오후 6:00 = 충돌 2(12/28·1/4) / 오후 7:00 = 0. 신규 예약(STU-0037 월 19:00, 제안→Mia To do→I can take it→확정) 강사 To do·WhatsApp·학생·DB = 12/28 BA 07:00 / KST 19:00, 1/11부터 시드니 21:00. 보강(STU-0005 12/28 13:00 취소 → 12/29 04:00 KST 신청 → Blair 확정) 강사·운영자 문구 = Mon 28 Dec 4:00 PM BA / Tue 29 Dec 4:00 AM KST. 대체(Blair 휴무 12/27~29, STU-0008 12/28 20:00 → Mia 묻기 문구 'Mon, 28 Dec 8:00 AM BA / 8:00 PM KST' → Mia 가능 → 학생 좋아요 → 확정) DB BA 08:00. 실제 학생·강사 메일 0
+- ✅ 11/15 독립 QA(e2d2aa5) 높음 2·중간 2 고침(lms-test 95ce412, H26(184)): ① 강사 To do·Updates·메일 매주 시간 줄을 지역 구간마다 나눔(`time-text.ts enEveryLines`, DB `lms_tutor_every` + 강사 메일 함수 5개 — migration **20261115020000_lms_tutor_travel_every_lines**) ② 회차별 일정안도 복귀 'From …' 줄(`confirm.ts zoneSegs`) ③ 운영자 강사 줄·WhatsApp 은 구간마다 그 지역 요일만·그 지역 도시 이름 ④ 보강 강사 변경 뒤 이전 강사 취소 안내 = 바꾸기 전 시각의 지역(migration **20261115010000_lms_tutor_travel_makeup_log_zone**). 둘 다 시험 DB 적용. test:db 이동 기간 53줄, vitest 488. 시험 사이트 Mia Updates 'Every Mon 7:00 AM Buenos Aires Time … / From Mon, 11 Jan: Every Mon 9:00 PM Sydney Time' 확인
+- ✅ 11/15 재QA(9f814e1) 4건 통과 + 새 중간 1건 고침: 매주 시간 지역 나눔이 다른 학생 수업·26주 추정을 써서 수강 종료 뒤 'From …' 이 붙던 것 → 그 수강권 실제 범위로만(끝을 모르면 나누지 않음). migration **20261115030000_lms_tutor_every_course_range**(lms_tutor_every 끝/횟수 필수, lms_course_last_regular, 정규 시간 변경·첫 수업 안내 메일 끝 = 수강권 마지막 정규 수업, 정규 변경 Updates info 'last'), `time-text.ts enEveryLines`·`updates.ts`. 시험 DB 적용, test:db 54줄
+- ✅ **11/15 운영 반영 끝 (대표 '응')**: 시험 데이터 원복(시험 DB, 시험 운영자 계정 임시 비밀번호 무효·세션 삭제) → 운영 DB 백업 `lms_backup.snapshots` **id 58**(학생 13·수업 183) → 운영 migration 8개(120000·170000·180000·190000·210000·20261115010000·020000·030000, 함수 내용 시험 DB 와 같음 — 차이는 주석만) → 표 64 → `lms-prod` **9955ff2** (이동 기간 기능만 cherry-pick, lms-test 의 다른 미승인 기능 제외: Preferred name·학생 로그인 계정 만들기 등). 운영 화면 확인(운영자 보기 Olivia): Home·Regular Working Hours 'Home location Japan · Tokyo'·Add Temporary Location 도시 검색·Calendar Set Multiple Days 보임, 저장 안 함(운영 tutor_locations 0). 운영 브랜치 DB 시험 1건(리마인더 24시간) 실패는 전부터 있던 것(lms-prod 원본도 같음)
+- ✅ **11/15 Temporary location 매주 시간표 적용 시점 + UI — 시험 사이트·시험 DB 반영, 운영 미반영** (H26(194)): migration **20261115040000_lms_tutor_location_hours_dated**(시험 DB 적용) — `lms_location_apply_from`(처음=시작일/오늘, 고치기=다음 월요일·시작일 중 늦은 날, 종료일 넘으면 null), `tutor_location_hours_save` 옛 벌 effective_to·새 벌 effective_from, `lms_tutor_weekly_ok` 현지 날짜 벌 판정, json `apply_from·first·today`. 화면 `TutorHours.tsx`(적용 줄·잠금·저장 창·수업 창 KST)·`travel.ts applyLine/LOCKED_TEXT`·`booking.ts windowOn` 현지 날짜 벌·`hours.ts` 'Mon, 23 Nov'. 시험: test:db 해외 이동 61줄(재등록 메일 시험은 다른 세션 문제로 건너뛰고 나머지 전부 통과)·vitest 498·tsc. 시험 사이트 Alex PC·iPhone 13 확인. **시험 데이터**: Alex 에 Auckland 11/16~11/20(잠금 상태 보기용, tutor_locations id fff6112c-…·availability 5줄) + BA 일 10:00 열림 1칸 추가 — '끝' 때 Alex 데이터와 함께 지움
+- ✅ **11/15 위 기능 운영 반영 끝 (독립 QA 통과 lms-test 708b9c0 → 대표 '응')**: 운영 백업 `lms_backup.snapshots` **65**(함수 3개 이전 정의 `_functions_before` + tutor_locations 0줄·tutor_availability 53줄) → migration 20261115040000 운영 적용(함수 4개 md5 = 시험 DB, anon 실행 불가) → lms-prod **e52a176**(lms-prod 위에 이 기능 파일만 + TravelSheet.tsx, 다른 세션 미배포 migration 10개 안 넣음) → edgeenglish.kr JS 반영 확인. 되돌리기 = snapshots 65 `_functions_before` 3개 실행 + `drop function lms_location_apply_from(tutor_locations)` (배포 뒤 시간표를 고친 강사가 있으면 effective_to 있는 옛 줄 정리 필요 — 대표 확인 뒤)
+- ✅ 11/15 강사 Calendar 표 통일 (H26(195), **운영 반영 끝 lms-prod 3d697ac — TutorSchedule·TutorHours 두 파일만, DB 변경 없음. 운영자 보기 Benny PC·iPhone 13: 두 화면 첫 열린 줄(10:00)이 머리글 바로 아래, 빈 주 6시, 칸 30/32px, 가로 밀림 없음**): `TutorSchedule.tsx` 칸 32/30px·글자 12.5px·간격 3px·시간 열 46/56px(= TutorHours), 처음 줄 = 가장 이른 'free' 칸 없으면 오전 6시(데이터 받은 뒤 다시 맞춤). 두 화면 처음 스크롤을 offsetTop 대신 칸 실제 위치로 계산(TutorHours 도 — 전엔 머리글 밖으로 지나침). 시험 사이트 Alex PC·iPhone 13: 빈 주 6시 줄이 머리글 바로 아래, 이번 주 첫 열린 줄 바로 아래, 위로 올리면 0시부터 보임, 가로 밀림 없음, 월 보기 날짜 35개 누를 수 있음
+- (아래 '시험 데이터 남김'은 11/15 원복 끝)
+- ⚠️ **시험 데이터 남김(독립 QA 뒤 PC 에서 지우기 — 모바일에선 Supabase 삭제 승인 창이 안 뜸)**: 기준 시각 T1 = 2026-11-14 17:25 UTC 뒤 만든 것 — Mia 이동 기간 BA 12/24~1/10 + 시간표, Mia meet_url(원래 'https://meet.google.com/'), STU-0037 신규 예약(일정안·수업 4·regular_schedules·schedule_notices·tutor_updates, 등록 기간 원래 11/23~12/20, admin_tasks 4a4b09d3 tutor 비움), STU-0005 12/28 13:00 취소+보강(makeup 118c4e08), Blair 휴무 12/27~29(leave_items·lesson_notices), STU-0008 대체 확정(수업 tutor 원래 Blair). 되돌리기: audit_log 의 old_row 로 update, 새 줄 delete (session_replication_role=replica — 삭제 금지 트리거 때문)
+- 남은 것: 운영자 보기(`?tutor=`) 실제 운영자 계정 클릭은 안 함(같은 화면·같은 함수, 이력 '운영자'는 로컬 DB 시험으로 확인) · 이동 기간 삭제 기능 없음(시안에 없음) · 운영 반영(대표 승인 → 운영 DB 백업 → migration → lms-prod)
 
 ## ✅ 11/9 학생 시간대 자동 확인 — 정책 원본 H26(119) · **시험 DB·lms-test 개발·검증 끝, 운영 미반영** (브랜치 claude/vibrant-pascal-sr9m94 → lms-test)
 - migration `20261109150000_lms_student_timezone` (시험 DB 적용): `students.tz_kept_device`([그대로] 누른 기기 시간대) 추가, `student_profile_edits.edited_role` 에 'student' 추가, 새 함수 `student_timezone(p_student, p_set, p_keep)` (학생 본인·운영자 같은 함수, 바꾸면 이력에 학생 본인/운영진으로 남김)
@@ -149,7 +593,7 @@
 - 강사 WhatsApp 수강생 취소 문구(대화체) 운영 반영 lms-prod 4cd31e9
 - ⚠ 운영에 GitHub 웹으로 직접 올리면 lms-test 와 어긋남 → 다음부터는 lms-test 에도 같이 올리거나 Claude 에게 합치기 요청
 
-## ⏳ 강사 통보를 강사 LMS로 옮기기 (H26(116)) — **대시보드 개편 세션이 끝난 뒤 시작** (대표 11/9 순서: ① 실제 계정 클릭 QA 아무 때나 ② 대시보드 개편 ③ 이 작업)
+## ✅ 강사 통보를 강사 LMS로 옮기기 (H26(116)) — **끝남: 위 '11/11 강사 통보 LMS 이전' 항목 참고** (아래는 11/9 조사 기록)
 - 같은 운영진 안내 카드 파일(`LessonChange.tsx`·`PlanCard.tsx`·`board.ts`·`AdminDashboard.tsx`)을 대시보드 개편도 고치므로 개편이 lms-test 에 올라간 뒤 그 위에서 시작. 시작 전 ChatGPT `TutorHome.tsx`·`live.ts` 작업(11/9 20:57 KST 마지막 커밋)이 끝났는지 확인
 - **운영 DB 읽기 확인 (11/9, 강사에게 간 통보 기록)**: 수업 취소 change 7(학생 취소 6·강사 사정 1, 보냄 4·대기 3) → Updates 이미 있음 · 운영진 확정 보강 makeup_confirmed 12(보냄 8·대기 4) · makeup_ask 11 모두 not_needed(이미 없앰) · 대체 수업 요청 sub_ask 12 → To-do 이미 있음, 복사 카드만 없앰 · 대체 수업 확정 sub_confirmed 9(대기 1) · 신규 수강생 admin_tasks new_student_matching 3·schedule_plans 4(강사 제안 = `confirm.ts proposalMessage`, 확정 = `tutorConfirmMessage`) · 재등록 renewal_tutor_notice 열림 1 · 보강 시간 변경·강사 바뀜·보강 취소·취소 되돌림 0건(문구는 `lesson-change.ts tutorNotice` makeup_rescheduled·makeup_tutor_removed·makeup_voided·revert)
 - **✅ 대표 확정 11/10 H26(122)(125) — 둘 다 Updates 에 넣음 (보이는 기한 = 바뀐 뒤 첫 수업 시각 / 새 첫 수업 시각, H26(116) 원칙 그대로)** — 대상 통보: ① 정규 수업 시간 변경(`regular_changes` 운영 1건, `students.ts regularNoticeEn` WhatsApp 문구) ② 첫 수업 전 수업 날짜 변경(`PrestartMove.tsx` 저장 뒤 WhatsApp 문구, 기록 없음). 넣으면 Updates, 보이는 기한 = 새 첫 수업 시각 / 바뀐 수업 시각 (권장안 — 대표 확인 필요)
@@ -250,7 +694,9 @@
 - 4단계 **마지막: 처음 쓰는 운영진 기준 업무 흐름 독립 재검증** (2026-11-06 대표) — 설명 없이 휴대폰·PC 로 처음부터 끝까지: 신규 등록(결제 대기 → 결제 확인) → 강사 매칭·제안·확정 → 양쪽 안내 → 시작 전 날짜 변경 → 수업 취소·보강 → 강사 휴무·대체. 단계마다 막히는 곳·다음 행동이 안 보이는 곳·누르는 횟수를 적고 개선안은 시안으로 먼저. 그 뒤 Work 에서 학생·강사·운영진 정상 흐름 독립 재검증 → 운영 배포(대표 승인)
 - ✅ 대표 결정 (11/6 밤, H26(75) 기록 필요): ① To-do 는 **앞으로 새로 시작하는 학생만** — migration 4601(`20261107020000`): feature_flags 줄 `first_lesson_followup_since`(스위치 아님, enabled=false)의 updated_at 한국 날짜 = 기능 시작일. 그 날짜 이후 시작한 수강권 + 그 전에 진행한 수업이 없는 학생만 (시험 DB 시작일 11/6 → 기존 Blair 학생 To-do 는 사라짐, 이미 저장한 STU-0002·0006 값은 그대로). 운영 DB 에 적용하는 날이 운영 시작일 ② Other textbook 직접 입력 유지 ③ Wants to Improve 는 강사가 직접 적어야 완료(지금 그대로) ④ 한국어는 위 '후순위 미완료'
 
-## ✅ 2026-11-09 재등록·보강 이월·적립금 넣기/빼기 운영자 화면 — 시험 환경 개발 완료, 대표 화면 시험 대기 (브랜치 `claude/admiring-pasteur-wbwsie` = lms-test 반영)
+## ✅ 2026-11-09 재등록·보강 이월·적립금 넣기/빼기 운영자 화면 — 운영 반영 완료 H26(120), 후속 수정 3건 운영 배포 대기 H26(154) (브랜치 `claude/admiring-pasteur-wbwsie`)
+- **11/12 운영 배포**: lms-prod f4efd3a → **695f14b** (= 운영 + 4e6372e·f0ff27e 만, 운영에만 있던 2커밋은 lms-test 에 먼저 합침). 운영 브랜치 주소에 새 코드 확인. edgeenglish.kr 은 main 을 따라감 → **main 도 695f14b 로 올림(대표 승인)**, edgeenglish.kr 에서 새 화면 파일 제공 확인. 운영 화면 실제 클릭(대표 로그인 후 Work, 저장 없이) 적립금 넣기·빼기·재등록·신규 등록 금액 칸 모두 통과 — **이 작업 끝** (H26(154)). 되돌리기: lms-prod 를 f4efd3a 로. 시험 DB STU-0044 '서지안'·STU-0042 '임채원'으로 이름만 바꿈(운영 메모에 시험용 표시)
+- (예전) 운영 배포 대기 (대표 승인 필요, 화면 코드만·DB 변경 없음): 금액 칸 소수점·마이너스 오류(4e6372e — 운영에는 아직 1.5 → 15원 저장 가능) · 학생 상세 [정규 일정 확정](c26e8d9) · 재등록 완료 화면 대시보드 버튼 뺌. 시험 사이트 운영자 클릭 검증 통과 11/11~12. 운영 배포 전 `git log origin/lms-test..origin/lms-prod` 확인
 - migration **20261109130000_lms_renewal_screen** (시험 DB 적용, 운영 미반영): payments.paid_at null 허용(결제 시각 모르면 비움)·received_on=결제일·confirmed_at=기록 시각, 마감 판정 결제일 기준(`lms_comp_chain`·`admin_carry_over_makeups`), 신규 등록·재등록 결제는 `payment.paid_on`(예전 paid_at 도 받음), `admin_renew`(재등록+정규 일정 확정 한 번에), 읽기 `admin_renewal_context`·`admin_renewal_conflicts`(자기 재등록 대기 자리 제외)·`admin_carry_check`·`admin_student_rewards`. 기존 결제 기록 그대로
 - 지난 수강권에 날짜 안 잡은 휴무 보강이 있으면(기존 규칙 2750) 재등록 저장 때 일정안만 저장 → [보강 이월] 저장 뒤 자동 확정(`admin_confirm_schedule`). 학생 상세 '정규 일정 · 확정 전' 줄로 보임
 - 화면: `src/app/lms/admin/students/[code]/Renewal.tsx`(세 창)·`StudentDetail.tsx`(수강·적립금 칸)·`AdminDashboard.tsx`(종료 임박 카드 [재등록 넣기] → `?renew=1`)·`NewStudent.tsx`(결제 날짜만), 계산 `src/lms/admin/renewal.ts`, DB 호출 `renewal-live.ts`
@@ -357,7 +803,7 @@
   - **✅ 11/9 새 주소 열림 (대표 '올려', 정책 원본 H26(112))**: 대표 Vercel Production 환경변수 4개(Type Config) → lms-prod·main = **0cfe809** (8182af9 + 주소 이전 2커밋만, lms-test 의 다른 미승인 커밋 제외). www.edgeenglish.kr/lms → edgeenglish.kr/lms 모음(코드, Vercel Domains 는 두 주소 모두 Production·Redirect 없음). 확인: edgeenglish.kr/lms·?next=makeup 307 → 로그인 화면(운영 DB 띠), www 넘김, 홈페이지 /·/price 200, PC·휴대폰 화면. 작업 환경 네트워크에 edgeenglish.kr·www 허용 추가(확인용). **미확인: 새 주소 실제 로그인(대표 TOTP)**
   - **홈페이지 회원가입·로그인 개편 = 정책 원본 H26(146)** (11/11 결정: 결제는 홈페이지 카드결제 → 결제 업체 비교안부터, 아이디=이메일 추천·시안 때 확인). 다음: 새 세션에서 ① 결제 업체 비교안 ② 회원가입·로그인 PC·휴대폰 시안(카카오 로그인 시안과 합칠지). 새 주소 공개 조건 H26(128)
   - **⚠️ H26(128) (대표 11/10): 11/14까지 홈페이지 로그인 시스템을 못 넣으면 새 주소는 학생·강사 모두에게 공개 보류, Vercel 계속 사용 → 아래 11/15 할 일 ①②와 새 주소 안내 발송을 하지 않음(새 주소는 열어 둠, main·lms-prod 같은 코드 규칙 유지)**
-  - **11/15 할 일**: ① 대표 Vercel lms-prod Preview 환경변수 `LMS_MOVED_TO` = `https://edgeenglish.kr` + lms-prod 재배포 ② 운영 DB 백업 → migration 20261109020000 (lms_url, 실행 전 대표 확인) ③ 안내 문구(대표 미정) ④ 06:00 로그인 점검 보고에 이동 시각 표시
+  - **11/15 할 일**: ① 대표 Vercel lms-prod Preview 환경변수 `LMS_MOVED_TO` = `https://edgeenglish.kr` + lms-prod 재배포 ② **✅ 11/16 완료** — 운영 DB 백업 snapshots 67 → migration 20261109020000 (lms_url 이 `https://edgeenglish.kr/lms` 돌려줌, anon·authenticated 실행 불가, 학생·수업 건수 백업과 같음) ③ 안내 문구(대표 미정) ④ 06:00 로그인 점검 보고에 이동 시각 표시
   - **11/15 전까지 운영 배포 규칙**: lms-prod 에 올릴 때 main 도 같은 커밋으로(빨리감기). 지금 lms-prod = main = 0cfe809
   - 이전 남은 순서: (✅ lms-test) → lms-prod → main 빨리감기(main 은 lms-prod 보다 뒤에만 있음, 충돌 없음) → 대표 Production 환경변수·배포 승인 → edgeenglish.kr/lms 실제 로그인·딥링크·휴대폰 검증
 
@@ -391,10 +837,10 @@
 - 예전 예약 작업 '매일 학생 시트 점검 보고'(trig_01FARP3K5pwPP8MS9Gir5c73, 13:00 KST)는 **11/14까지 유지**(대표 11/7 최종). 새 작업 '시트 ↔ LMS 대조'(trig_01DYXbuSfHjUehZrZJZwaq5H, 12:47 KST)와 함께 돎 → **11/14 보고 뒤 예전 작업 끄기**(대표에게 알리고)
 - ⏭ **🚫 누락 금지 — 2단계 자동 메일 작업 때 학생 '내 정보'에 반드시 함께 (대표확정 11/8, H26(95) ②, '꼭 기억해라')**: '내 정보' 메뉴 유지 + 수업 알림 메일 켬/끔 · 담당 강사(사진·소개) + 수업 링크 · 적립금 내역 (강사 프로필 데이터는 LMS 에 없음 → 홈페이지 강사 소개 글 쓸지 정하기). 수업 시간은 홈에 11/8 먼저 넣음. 이전 메모: 수업 알림 메일 켬/끔(운영엔 2900 미적용이라 지금 안 보임) · 담당 강사 + 강사 프로필 보기 · 수업 시간(매주 요일·시각, 학생 거주지 시간). 지금 운영 학생 화면엔 정규 요일·시간 표시가 아예 없음. 시안(PC·휴대폰)부터
 - ✅ 11/8 시험 환경: **학생 화면 시간대 표기 통일** (대표 사양·시안 승인 11/8, 코드만·DB 변경 없음, `StudentHome.tsx`): 표기 '11/2(월) 오후 8:00'·'기한: 11/21(토) 오전 1:59까지'(국내도 시각까지), 줄마다 붙던 '(Sydney 시간)' 대신 페이지 맨 위 배지 '모든 날짜·시간은 Sydney 기준' + 팝업(Sheet) 맨 위 'Sydney 시간 기준', 운영자 보기 KST 선택 시 고정 주황 띠 '한국 시간 (KST)으로 보는 중'·배지 주황. 시트 이관 시각 모르는 수업만 '11/3(화) 한국 날짜' 유지(대표 승인). 결제일·수강 기간 범위·적립금 날짜는 날짜만 그대로. 확인: tsc·eslint·vitest(기존 정책 기준표 1건 실패 그대로), 로컬 ?demo=1 PC·휴대폰(학생·운영자 학생 시간·운영자 KST·국내). **미검증: 실제 운영자 TOTP 로그인 화면, lms-test 실제 학생 로그인 화면.** 학생 화면만 해당 — 카톡 문구·자동 메일 시각 표기(46e075a)는 그대로. CLAUDE.md 시간 표기 규칙('시각마다 시간대 이름')은 대표 '반영해' 전까지 그대로. 운영 반영 = 대표 승인 대기
+- ✅ 11/11 화면 문구 '이관' 제거 (대표 지시, 시험만): 운영진 수업 관리 '시트 이관분' → '○/○(요일) 수업분 · 보강 수업'·'보강 수업', 보강 없애기 오류 문구(migration 20261111200000, 시험 DB 적용·저장소 파일과 함수 본문 md5 일치), 정규 일정 안내. 남은 '이관'은 기존 학생 입력(import) 관련 운영진 문구·저장된 데이터(수강권 이름·연장 메모)뿐 → **대표 결정 11/11: 그대로 유지**(시트 데이터 출처 추적용 운영 정보). 학생·강사 화면엔 '이관' 노출 금지(현재 없음 확인). 운영 배포는 시험 사이트 실제 화면 클릭 QA·다른 세션 변경과 충돌 확인 뒤
 - ✅ 11/8 ChatGPT Work QA 최종: 종료일 단축 차단 해제(실제 취소 함수 lms_change_core 롤백 시험, 12/7 유지)·시간대 전환·버튼 중복·5/6일 경계·재등록 안내 숨김·운영진 카드 모두 통과. UI 개선 2건: KST 신청 기한 23:59(다른 세션 f3c76bb 로 이미 해결) · 운영진 연장 창 기록 접기(ace4f24, 화면 확인 필요). **운영 배포 대표 승인 대기** — 운영 DB 미적용: 20261108020000·030000·040000(이 세션) + 20261108120000(다른 세션). lms-prod 는 cherry-pick 줄이라 이 기능만 따로 얹기 어려움(StudentHome 겹침) → lms-test 전체를 내보낼지 결정 필요. ⚠ 운영 DB 에 저장소에 없는 migration 3개(lms_register_renewal·lms_carry_over_makeups·lms_confirm_plan_renewal, 11/8 다른 세션) — 함수 겹침 없음 확인, 저장소에 파일 남겨야 함
 - ✅ 11/8 시험 환경: 학생 홈 '수강·결제·적립금' 칸 '수업 시간'(매주 요일·시각·강사, 학생 거주지 시간) — migration **20261108040000_lms_student_regular_slots** (시험 DB 적용, 운영 미적용), lms-test a2a0b9e. 확인: ?demo=1 PC·휴대폰·토론토, 시험 DB STU-0003 함수 결과(월 18:30 Alex). 운영 반영은 귀책 연장과 함께 대표 승인 대기
 - ✅ 11/8 운영: STU-0012 일정 학생 시트 기준 정정(H26(95), 백업 snapshots 17) — 정규 월·목 22:30 KST, 2회차 11/15(일) 21:30, Olivia 월·목 가능 시간 22:30 시작까지(11/9~)
-- ⏭ **다음 세션 순서 (대표 11/7)**: ① H26(90)·(91) 자동 연장 개발(시안부터, 노력 '높음' 권유) → ✅ ② 2단계 자동 메일 시험 검증 완료(11/8, 아래 📧) → 운영 배포는 대표 승인 대기
 - ✅ **H26(92)·(93) 강사 귀책 자동 연장 — 시험 환경 개발·검증 완료, 운영 반영은 대표 승인 대기** (브랜치 `claude/busy-brahmagupta-9j5fbi` = lms-test d138198)
   - migration **20261108020000_lms_fault_extension** (시험 DB 적용, 운영 DB 미적용): 시행일 = 적용한 날(feature_flags `tutor_fault_extension_since` updated_at). 종료일 하나·줄이지 않음(대표 11/7 최종: 보강을 일찍 끝내도 단축 없음) · 시행 뒤 강사 휴무(3일+)·노쇼 횟수만큼 정규 요일 자동 연장(auto_source 'fault', reason 'tutor_fault') · 다음 수강권 시작일 전날까지 · 기존 수동 연장·시행 전 휴무 보강(`lms_leave_sync_extension`)은 그대로 · 시행 뒤 휴무 보강도 종료일까지만(`lms_makeup_source.tutor_leave` = 시행 전 휴무만) · `extension_reviews` 표 + `student_no_time_rights/request`·`admin_extension_reviews`
   - 화면: 학생 신청 기한 모두 종료일(시트 이관 휴무 보강만 기한 없음) · 날짜 고르기 맨 아래 [맞는 시간이 없어요]→'요청함 ✓' · 학생 화면 거주지 시간만(KST 짝·체크박스 없앰), 운영자 보기만 '학생 시간 | 한국 시간(KST)' 전환(localStorage `lms_admin_student_view_kst`) · 재등록 안내: 남은 0회면 마지막 수업이 있는 날(학생 거주지 날짜)까지 · 운영진 대시보드 '예외 연장 검토' 카드([종료일 연장]=학생 상세, 카드 닫기) · 학생 상세 '연장' 줄 '(강사 휴무 n · 노쇼 n, 자동)' · 휴무 화면 3일 미만 저장 막기
@@ -417,12 +863,16 @@
   - 11/10 대표 답 반영: Olivia 219행 황O영 10/29 Regular→Makeup, Leslie 63행 이O민 11/10 Cover class·강사 사전 취소 추가, 학생 시트 A1 학생 번호(황O영 STU-0002·서O정 STU-0005·이O나 STU-0011, 운영 DB와 일치 확인). 강사 시트 고친 줄 Remarks 기록
   - 11/10 추가(대표 지시·질문 창 승인): 이O나 학생 시트 11/9 진행 여부 '정상 진행'+비고, **운영 DB** 서O정 STU-0005 11/9 08:00 KST 수업(lesson 02f53398…) original_tutor_id 빈칸 → Olivia (직접 SQL update 1줄, 빈칸만 채움, actor_via admin_sql_set_original_tutor — 화면 함수 없음, 덮어쓰기 금지 원칙의 대표 승인 예외). 가르친 강사 Benny 그대로
 - **대조 기록** 11/11: 불일치 8건 · 기록 누락 4건 · 세 곳 일치 6/12명. 11/10 대비 6건+누락 1건 해결. 남은 결정: 이O연 STU-0008 11/10 실제(정상 진행 vs 학생 취소+15:00 보강). 새로: 이O옥 11/11 학생 늦은 취소(LMS 학생 노쇼), 김O민 11/13 보강 취소·11/11 LMS 빈칸, 홍O길 11/12 보강 취소 Benny 시트 없음, 변경권 차이(김O민·홍O길·이O연)
+- **대조 기록** 11/12: 불일치 7건 · 기록 누락 7건(모두 학생 시트 빈칸) · 세 곳 일치 5/12명. 11/11 대비 김O민 11/11·11/13 해결. 11/11 뒤 학생 시트 수정 없음. 남은 결정: 이O옥 STU-0003 11/11 LMS 학생 노쇼 → 학생 늦은 취소로 바꿀지. 남은 불일치: 이O연 11/10 Benny·학생 시트(LMS 기준), 홍O길 11/12 보강 취소 Benny 시트 없음, 변경권 학생 시트 미반영(김O민·이O연·홍O길)
+  - 11/12 대표 답: 이O옥 11/11 12:00 KST = **학생 노쇼**(LMS 가 맞음, LMS 안 바꿈). Olivia 232행·학생 시트 19행을 '학생 노쇼'로 정정 + 비고 기록
+  - 11/12 변경권 판단: 김O민·이O연은 LMS 0회가 맞음(학생 시트 미반영). 홍O길 STU-0009: 10/27 대표 결정 재확인 — 학생이 '다음 주 목요일(10/22)'을 빼려 했고 운영진이 '다다음 주(10/29)'로 잘못 알아들어 강사에게 전함. 10/22 는 학생이 미리 뺀 수업이라 **변경권 차감 맞음**, 운영진이 잘못 취소한 10/29 만 차감 안 함(10/29 는 Benny 휴무와 겹침). 11/12 에 Claude 가 잘못 +1 했다가 같은 날 −1 로 되돌림(admin_credit_adjust 2건, 사유 기록) → 남은 변경권 **0회**(10/22·11/12 보강 취소). 학생 시트 1회는 고쳐야 함
   - 11/11 대표 지시 반영(운영 DB, admin_change_lesson 학생 대신 취소): 김O민 STU-0007 11/11 11:00 KST 학생 사전 취소(연락 시각 11/11 05:00 KST = 6시간 전, 변경권 2→1), 11/13 10:00 KST 보강 학생 사전 취소(연락 시각 지금, 변경권 1→0). 이O연 STU-0008 11/10 = LMS 가 맞음(09:00 학생 취소 + 15:00 KST 보강, 대표 확인) — Benny·학생 시트 정정은 대표 답 대기. 강사 Class Record 에 'Student canceled in advance' 선택지 추가는 새 세션 개발(대표 지시)
+  - ⏭ **새 세션 개발 대기 (대표 11/11)**: ① 강사 Class Record 'Student canceled in advance' 선택지(카톡 취소, 기존 학생 취소 함수 재사용) ② 수업 종류를 강사 시트 Class Type 과 같게 강사·운영진·학생 화면에 표시 — Regular·Makeup·Compensation·Cover class(지금 LMS 강사 화면 'Substitute' → 이름 통일)·Carryover from previous period·Carryover to next period·free trial. ③ 대체 수업 양쪽 표시(대표 11/11): 맡은 강사 화면 = Class Type 'Cover class' + 꼬리표 "You're covering for another tutor"(원래 강사 실명 안 씀), 원래 강사 화면 = 그 수업이 사라지지 않고 회색 줄 + 상태 'Covered by another tutor' + "Another tutor is covering this class", '기록할 수업'에는 안 들어감(지금 원래 강사 화면에 안 보일 수 있음 — 확인). ④ 학생 화면에서 지난 수강 이월 수업은 '보강'이 아니라 **'지난 수강에서 이월된 수업'**(사유 '이월 · 날짜 선택 필요', 버튼 '이월 수업 날짜 선택', 기한 = 지금 수강 종료일)으로 표시, 보강과 같이 있으면 할 일 줄은 '수업 날짜 고르기'로 묶음 — 기능은 보강과 같고 글자만(대표 11/12). 시안(PC·휴대폰)부터
   - ⏭ **새 세션 개발 대기 (대표 11/11)**: ① 강사 Class Record 'Student canceled in advance' 선택지(카톡 취소, 기존 학생 취소 함수 재사용) ② 수업 종류를 강사 시트 Class Type 과 같게 강사·운영진·학생 화면에 표시 — Regular·Makeup·Compensation·Cover class(지금 LMS 강사 화면 'Substitute' → 이름 통일)·Carryover from previous period·Carryover to next period·free trial. ③ 대체 수업 양쪽 표시(대표 11/11): 맡은 강사 화면 = Class Type 'Cover class' + 꼬리표 "You're covering for another tutor"(원래 강사 실명 안 씀), 원래 강사 화면 = 그 수업이 사라지지 않고 회색 줄 + 상태 'Covered by another tutor' + "Another tutor is covering this class", '기록할 수업'에는 안 들어감(확인: 지금 원래 강사 화면에 안 보임 — tutor_screen 이 tutor_id 만 읽음). 시안(PC·휴대폰)부터
      - 11/11 시안 https://claude.ai/artifact/YVLwWKyTMm3MQe32TmuDtW (브랜치 claude/adoring-hamilton-xgum09). 대표 결정 대기 2건: 결정1 학생이 알린 시각 강사 입력 여부, 결정2 운영진·학생 화면 수업 종류 이름(영어/한국어). 확인: 이관 추가 수업(migrated_extra, 송O나 11/11·11/13) = Olivia 시트 Regular. 시안에 포함: 대체강사 Held 저장 → 'Normal'(기존 기록 그대로)
      - ✅ **11/11 결정 끝 (H26(136)(138))** → ✅ 11/11 시험 환경 개발 끝 (맨 위 항목, H26(139)). 남은 대표 결정: 운영 DB 공휴일 목록 넣기(0건)
      - 11/11 대표 추가: 결정3 = A 운영진만 (H26(136) — 대표가 다시 물으면 그 이유를 꼭 다시 말할 것). 학생 취소 팝업 — 한국 공휴일 수업이면 '변경권 | 차감 안 됨 (공휴일 취소)' 한 줄(지금 공휴일이면 변경권 줄이 아예 안 보임), 공휴일 미리 표시 기능은 안 만듦. ⚠ 운영 DB holidays 표 0건 → 공휴일 취소 판정이 지금 한 번도 안 됨, 공휴일 목록 넣기 대표 승인 대기. 강사 장기휴무 직접 신청(Schedule) = 지금 없음(휴무는 운영진 휴무 화면만, 강사는 수업 없는 칸만 막기) → 별도 세션·시안
-   - ⏭ **새 세션 개발 대기: 강사 휴무 '신청' 란 (H26(137))** — 강사 신청(날짜·사유) → 운영진 대시보드 → 누르면 휴무 화면 그 날짜로. Regular working hours·One time changes 페이지에 한 줄(3일 이상은 Home 신청 란으로, 바로 가기 버튼). **신청 기한 숫자는 시안에서 대표에게 꼭 물을 것**(기존 POL-TU-05: 14일·4일·급한 일 최대한 빨리+증빙을 기본안으로 보여 주고 확인). Home 신청 란 이름도 시안에서 정함. PC·휴대폰 시안부터
+   - 🧪 (11/13 개발됨 — 맨 위 '강사 휴무 신청' 항목) **강사 휴무 '신청' 란 (H26(137))** — 강사 신청(날짜·사유) → 운영진 대시보드 → 누르면 휴무 화면 그 날짜로. Regular working hours·One time changes 페이지에 한 줄(3일 이상은 Home 신청 란으로, 바로 가기 버튼). **신청 기한 숫자는 시안에서 대표에게 꼭 물을 것**(기존 POL-TU-05: 14일·4일·급한 일 최대한 빨리+증빙을 기본안으로 보여 주고 확인). Home 신청 란 이름도 시안에서 정함. PC·휴대폰 시안부터
 
 ## ✅ 2026-11-07 운영 DB: 체험용 강사 계정 + 가상 학생 (대표 지시·'응 운영DB에 바로해')
 - 강사 **Sera Kara**(대표 지인, 독일 슈투트가르트, Europe/Berlin, 활성) 추가 + 로그인 계정(이메일은 운영 DB tutors.email) `admin_tutor_login`. 시험 DB에도 같은 이메일을 James 에 연결해 둠
@@ -1232,3 +1682,85 @@
 - 남은 수업 2회·1회 안내는 위 전체 미완료 수업을 합산해서 판정한다. 최종 완료 안내는 마지막 수업이 실제 종료되고, 미완료 수업 및 날짜 미정 보강·보상수업이 하나도 남지 않은 경우에만 해당한다.
 - 과거 문서의 '남은 정규 수업 2회 이하' 및 '보강 제외' 표기는 **폐기된 이전 결정**이다. 최신 정책은 이 항목을 우선한다.
 - 이 변경은 재등록 안내의 판단 기준을 명확히 하는 문서 변경이며, 실제 DB/메일 발송 로직 배포를 의미하지 않는다.
+
+## '이관' 문구 제거 — ✅ 운영 반영 (11/11 대표 승인, lms-prod 85da8ea = 3c8ac2b 만 cherry-pick, 운영 DB migration lms_wording_no_migrated 적용 — 함수 오류 문구만, 권한 그대로. 되돌리기: lms-prod 를 c171d0f 로 + 예전 문구 함수 다시 넣기)
+- 강사 귀책 자동 연장(migration 020000·030000·040000·코드 d138198)은 '통합 운영 배포' 세션이 운영에 이미 반영함
+- (반영 전) LessonManage '시트 이관분' → '보강 수업' 문구 + migration 20261111200000(admin_void_makeup 오류 문구). 운영자 화면에만 보임
+- 시험 사이트 STU-0003 [+ 수업 추가] 목록: 첫 줄은 11/23(월) 수업분 · 수강생 미리 취소(보강 수업을 학생이 취소해 생긴 보강권), 12/7(월) 수업분 · 보강 수업은 목록 아래쪽 → 대표 시험 사이트 확인 통과(11/11)
+
+- 11/12 학생 화면 문구·이월 표시 개발(lms-test): 카드 '보강 수업'/'이월된 수업'·'원래 수업 날짜'·'사유'·버튼 '날짜 고르기'·홈 카드 '수업 날짜 고르기'·강사 Cover class ? 클릭 팝업. migration 20261112100000(student_screen carry_in) 시험 DB 적용, 운영 적용(11/12 lms_student_makeup_carry_in) · 코드 운영 반영. 결정 내용은 정책 원본 H26 참고.
+
+## ✅ 11/14 강사 To do 새 항목 메일 — 운영 반영 완료 (정책 원본 H26(172) 참고)
+- 운영 DB(mfamixejxydodclhglbc): 백업 `lms_backup.snapshots` **id 53**(표 62·학생 13) → migration `lms_tutor_todo_mails`(= 저장소 20261114000000: leave_items 칸 2개·schedule_plans 칸 1개·함수 3개·트리거 `leave_items_ask_mail_reset`·예약 `lms-tutor-todo-mail` 15분) → 코드 lms-prod·main **4f45b0b**(휴무 화면 '강사님에게 묻기' 위 자동 메일 상태 한 줄). 시작 기준 flag `tutor_todo_mail_since`(11/14 13:12 한국) 뒤에 새로 고른 대체강사부터 첫 메일+재촉 자동
+- 이번 한 번: 쌓여 있던 Olivia 대체 수업 요청 4건(12/23·12/28·12/30·1/4)에 시스템으로 첫 메일 1통 직접 실행(11/14 13:13 한국, 발송 sent, 문의 안내 줄 email_status sent·WhatsApp 카드 자동 보냄, 재촉은 생략 표시 `ask_nudged_at`)
+- 시험(시험 DB): 실제 함수로 첫 메일·재촉 26시간·답한 뒤 재촉 없음·이메일 없음 기록·다시 고르면 기록 초기화 통과. 신규 수강생 문의 재촉은 실제 신규 등록이 없어 글만 확인
+- 남음: 기록할 수업 하루 한 번 묶음 메일(기준 숫자 대표 결정 대기) · 재촉 뒤 무응답 운영진 알림(대표 결정 대기) · 운영에만 있는 커밋 4개(학생 지각 알림·강사 휴무 신청·수업 줄 용어 통일 등)가 lms-test 에 없음 — 다음 lms-test 배포 전에 합칠 것
+
+## 📎 강사 학생 정보 보호 부속합의서·발송 메일 최종 문구 (11/14 확정, 미발송 — H26(178)(181) 참고)
+- 발송 조건: 11/15 Class Record 운영진 전용 전환을 Claude 가 시트 권한으로 확인한 뒤, 대표 "보내" → support@ 임시 보관함에 강사 3명(Benny·Maria·Olivia, Leslie 는 아래 11/15 줄 참고) 초안, 대표가 [보내기]. 기한 = 보낸 날 + 7일. 강사 서명 먼저 → 대표 서명 → 양쪽 서명본 강사에게 1부
+- ✅ 11/15 23:10 KST 뒤 Claude 확인: Class Record 4개(Benny·Leslie·Maria·Olivia) 강사 권한 0 — support@(소유자)·jinsolly94(편집자)만, 링크 공개 꺼짐
+- **H26(188) 참고 (11/15 대표 확정)**: LMS 전자서명 개발 확정(법령 검토 끝) · 1조·처리방침 항목 = 실제 강사 화면(이메일은 빼고 Meet 문장, 도시 추가) · 회사 서명은 판 올릴 때 한 번 · PDF 메일 발송 대신 LMS 서명. 다음 = 새 세션에서 시안(PC·휴대폰)
+- 11/15 대표: **강사 서명을 LMS 전자서명(To do)으로 받는 쪽 검토** — 범용(부속합의서·신규 강사·프리랜서 계약서 재사용)으로 만들 것, **ChatGPT 법령 검토(클릭 동의가 개인정보 처리위탁 문서·계약 서명으로 유효한지) 결과 확인 전 개발 시작 금지**(대표). 기존 consent_requests·consent_events(학생 동의, document_sha256)·tutor_contracts 표 재사용 검토
+- 11/15 대표: 1조에 이메일·성별나이대·국가시간대·학습 선호·수업 노트 추가(실제 강사 화면과 맞춤), 강사 화면에서 학생 이메일 숨김(migration 20261115040000, 시험 DB 적용·운영 미적용), 처리방침 목록도 같게(시험 사이트). 11/15 23:30 일괄 발송은 대표 보류
+- 11/15 진행(이 세션): 운영 DB 확인 — 11/7 뒤 끝난 수업 Benny 10·Maria 3·Olivia 8 모두 강사가 LMS 에 기록(빈 기록 0, 수업 내용 빈 칸 Olivia 1). LMS 기록 시작 전(10/27~11/4 이전) 기록은 시트에만 있음 → 필요하면 운영진에게 요청. 대표 결정: **Class Record 4개 11/15 오후 11:00 한국 시간에 강사 권한 빼기**(공유 해제 = 대표 또는 Work, 커넥터 불가) · 미리 WhatsApp 알림은 Benny·Maria·Olivia 만(현지 시간 / KST 문구, 대표가 보냄) · **Leslie 는 알림 없음**(예정 수업 0, LMS 계정 연결돼 있으나 로그인 안내 안 함 — 다음 대체 수업 맡길 때 안내) · **부속합의서는 Benny·Maria·Olivia 3명만 이번에 발송, Leslie 는 다음 대체 수업 맡길 때 LMS 로그인 안내와 함께 보내 서명 받기**(대표 11/15, 계약은 유지). 11/15 23:10 KST 에 Claude 가 시트 권한 확인 예약
+- 메일 제목: `Edge English – Student Data Protection Addendum (please sign)`
+- 메일 본문:
+```
+Hi [Name],
+
+We've added a short Student Data Protection Addendum to your Freelance Instructor Contract. Your current contract stays the same — this only covers how student information is handled.
+
+Please read the attached PDF, fill in your country of residence, sign, and send it back to us (a signed PDF or a clear photo is fine).
+
+We'd really appreciate it if you could send it back by [date].
+
+Thank you!
+Edge English
+```
+- 첨부 PDF 전문:
+```
+Addendum: Student Data Protection
+
+This Addendum is part of the Freelance Instructor Contract between Tangerine English (Edge English, "Party A") and the Instructor ("Party B"). All other terms of the Freelance Instructor Contract remain unchanged.
+
+1. Purpose and scope
+Party A entrusts Party B with student information (name, English level, self-introduction, gender and age range, city, country and time zone, learning preferences such as textbook and correction style, class notes, class schedule and class records) only to teach the classes Party A assigns. If Party B sees any other student information during class (for example, an email address shown in Google Meet), the same rules in this Addendum apply.
+
+2. Use
+Party B uses student information only for those classes, and for no other purpose.
+
+3. Access and storage
+Party B uses student information only through the tools Party A provides (LMS and Google Meet). Party B does not copy, download, screenshot or keep it anywhere else, and only accesses information about students assigned to them.
+
+4. Security
+Party B keeps their login details private, does not share their account, protects the devices used for classes, and takes reasonable security measures to prevent unauthorized access, loss, or disclosure of student information.
+
+5. No sharing
+Party B does not share student information with anyone, and does not hand this work to another person.
+
+6. Incidents
+If student information is lost, leaked or accessed by someone else, Party B tells Party A right away and follows Party A's instructions.
+
+7. Checks
+Party B cooperates with Party A's reasonable security checks and instructions concerning student information, including measures to protect student rights and address privacy complaints or disputes.
+
+8. End of assignment
+Party B can access a student's information only while the student is assigned to them and for 24 hours after their last class with that student. After that, Party B stops accessing that student's information and permanently deletes any copies still in their possession or control, unless retention is required by applicable law. When this contract ends, access to all student information stops immediately.
+
+9. Responsibility
+Party B is responsible for any damage caused by breaking this Addendum. This Addendum is governed by Article 9 of the contract.
+
+Country of residence: ____________
+Name: ____________
+Signature: ____________
+Date: ____________
+
+Party A: Tangerine English (Edge English)
+Representative Signature: ____________
+Date: ____________
+```
+
+## 📎 카카오·네이버 운영용 앱 (H26(181)) — Work 에 보낸 프롬프트 요점 (11/14)
+- 1단계(진행): 카카오 새 앱 '엣지영어'(회사명 탠저린 영어·교육·로고) · Web 도메인 https://edgeenglish.kr , https://www.edgeenglish.kr · 카카오 로그인 켬 · Redirect URI = https://mfamixejxydodclhglbc.supabase.co/auth/v1/callback 1개 · 동의항목 닉네임(필수)·이메일(필수)만(코드 3cba682 와 같음) · Client Secret 발급·사용. 네이버 새 앱 '엣지영어'(네이버 로그인, 제공 정보 = 시험용 앱과 같게, PC·모바일 웹, 서비스 URL https://edgeenglish.kr, Callback = 위 운영 callback, 로고)
+- 2단계(제출 버튼 누르지 말고 보고): 카카오 비즈 앱 전환(탠저린 영어·897-75-00421), 네이버 검수 요청. 키 값은 보고에 쓰지 않음
+- Claude 할 일: Work 1단계 보고를 위 값·코드와 대조 → 대표에게 '제출해' 여부. 네이버 검수가 실제 서비스 화면 로그인 버튼을 요구하면 공개 순서와 맞춰 제출 시점 다시 정함. 운영 Supabase 키 넣기·켜기는 공개 당일

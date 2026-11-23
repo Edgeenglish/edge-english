@@ -228,14 +228,6 @@ describe('다음 수강권 (대표 11/13)', () => {
   });
 });
 
-describe('남은 수업 = 지금 수강권만 (대표 11/13)', () => {
-  it('다음 수강권 수업은 빼고, 수강권 종료일 모르는 수업은 둠', () => {
-    const ls = [{ id: 'a', finalEndDate: '2026-12-13' }, { id: 'b', finalEndDate: '2027-03-07' }, { id: 'c', finalEndDate: undefined }] as never[];
-    expect(currentPassLessons(ls, '2026-12-13' as never).map((l: { id: string }) => l.id)).toEqual(['a', 'c']);
-    expect(currentPassLessons(ls, '').length).toBe(3);
-  });
-});
-
 describe('지각 알림 (대표 11/13): 수업 시작 2시간 전부터 끝나기 전까지', () => {
   const lesson = { startsAt: new Date('2026-11-16T12:00:00Z'), minutes: 40, state: 'scheduled' as const };
   it('2시간보다 일찍은 아님, 2시간 전부터 열림', () => {
@@ -255,5 +247,13 @@ describe('지각 알림 (대표 11/13): 수업 시작 2시간 전부터 끝나�
     expect(lateMinutesLabel(20)).toBe('20분 이상');
     expect(lateMinutesLabel(10)).toBe('10분');
     expect(LATE_NOTICE.reasons.map((r) => r.label)).toEqual(['회사 업무가 늦게 끝나요', '길이 막혀요', '대중교통이 지연됐어요', '갑자기 일이 생겼어요']);
+  });
+});
+
+describe('남은 수업 = 지금 수강권만 (대표 11/13)', () => {
+  it('다음 수강권 수업은 빼고, 수강권 종료일 모르는 수업은 둠', () => {
+    const ls = [{ id: 'a', finalEndDate: '2026-12-13' }, { id: 'b', finalEndDate: '2027-03-07' }, { id: 'c', finalEndDate: undefined }] as never[];
+    expect(currentPassLessons(ls, '2026-12-13' as never).map((l: { id: string }) => l.id)).toEqual(['a', 'c']);
+    expect(currentPassLessons(ls, '').length).toBe(3);
   });
 });

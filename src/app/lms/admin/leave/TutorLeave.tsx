@@ -13,7 +13,7 @@ import DateInput from '../DateInput';
 import { diffDays, instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { dateLabel, emailStatusText, enAt, kstLabel, MAKEUP_SLOTS_MAX, tutorLocalLabel } from '@/lms/admin/lesson-change';
 import {
-  groupByStudent, groupRenewals, itemStatus, leaveMessages, pendingNoticeKeys, studentPhase, tutorBundles, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork,
+  groupByStudent, groupRenewals, itemStatus, leaveMessages, pendingNoticeKeys, studentPhase, subCell, tutorBundles, askMailFailed, LV_EVENT_TEXT, LV_STEP_TEXT, makeupDatesText, renewalLeaveText, renewalTutorText, studentWork,
   type LvAskMsg, type LvItem, type LvProposal, type LvTutorBundle, type LvRenewal, type LvRenewalGroup, type LvMakeupOption, type LvMessage, type LvNotice, type LvStep, type LvStudentGroup, type LvStudentWork, type LvSubOption, type LvTimeOff,
 } from '@/lms/admin/tutor-leave';
 import type { LeaveWithdrawPreview, LeaveCreateResult, LvTutor } from '@/lms/admin/tutor-leave-live';
@@ -81,6 +81,13 @@ function useRun(done: () => Promise<void>) {
 }
 
 /** 강사 휴무 신청에서 채울 값 (대시보드 [휴무 화면 열기]) */
+/** 휴무 하나의 남은 일: 수업별 상태 중 운영진 할 일이 있으면 todo, 답 기다림만 있으면 wait, 없으면 done */
+function leaveWork(items: LvItem[], notices: LvNotice[]): 'todo' | 'wait' | 'done' {
+  const pend = pendingNoticeKeys(notices);
+  const tones = items.filter((i) => !i.lessonGone).map((i) => itemStatus(i, pend).tone);
+  return tones.includes('todo') ? 'todo' : tones.includes('wait') ? 'wait' : 'done';
+}
+
 export type LeavePrefill = { requestId: string; tutorId: string; from: KstDate; to: KstDate; reason: string; note: string };
 
 export default function TutorLeave({ tutors, actions, nowIso, initialOff, startNew, prefill }: { tutors: LvTutor[]; actions: LeaveActions; nowIso: string; initialOff?: string; startNew?: boolean; prefill?: LeavePrefill | null }) {
@@ -99,10 +106,26 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
     }
   };
   const [err, setErr] = useState('');
+  /** 끝난 휴무의 남은 일: 'todo' 처리 필요 · 'wait' 답 기다리는 중 · 'done' 없음. 모르면(못 읽음) 접지 않음 */
+  const [pastWork, setPastWork] = useState<Record<string, 'todo' | 'wait' | 'done'>>({});
+  const [showPast, setShowPast] = useState(false);
 
   const reloadLeaves = useCallback(async () => {
     try {
-      setLeaves(await actions.leaves(now));
+      const ls = await actions.leaves(now);
+      setLeaves(ls);
+      // 끝난 휴무(마지막 날이 오늘보다 앞)만 남은 일을 읽음. 처리할 것이 남은 것은 접지 않음 (대표 11/17)
+      const today = instantToKstDate(now);
+      const past = ls.filter((l) => l.to < today);
+      const got = await Promise.all(past.map(async (l) => {
+        try {
+          const d = await actions.items(l.id);
+          return [l.id, leaveWork(d.items, d.notices)] as const;
+        } catch {
+          return [l.id, 'todo'] as const;
+        }
+      }));
+      setPastWork(Object.fromEntries(got));
     } catch (e) {
       setErr(e instanceof Error ? e.message : '불러오지 못했어요.');
     }
@@ -164,14 +187,36 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
             saved={async (id) => { await reloadLeaves(); setOffId(id); setTab('list'); }} />
         )}
         {tab === 'list' && leaves.length === 0 && <p className="text-[14px] text-[#6b6880]">등록된 휴무가 없어요.</p>}
-        {tab === 'list' && <div className="flex flex-wrap items-center gap-1.5">
-          {leaves.map((l) => (
-            <button key={l.id} type="button" aria-pressed={l.id === offId} onClick={() => setOffId(l.id === offId ? null : l.id)}
-              className={`min-h-[40px] rounded-full border px-3.5 text-[14px] ${l.id === offId ? 'border-[#7d5ffb] bg-[#efebff] font-bold text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
-              {l.tutorName} · {dateLabel(l.from)} ~ {dateLabel(l.to)}
-            </button>
-          ))}
-        </div>}
+        {tab === 'list' && (() => {
+          const today = instantToKstDate(now);
+          // 보던 휴무의 남은 일은 화면에서 바로 계산 (처리하면 바로 접힐 수 있게)
+          const workOf = (l: LvTimeOff) => (l.id === offId && data ? leaveWork(data.items, data.notices) : pastWork[l.id] ?? 'todo');
+          const folded = leaves.filter((l) => l.to < today && l.id !== offId && workOf(l) === 'done');
+          const shown = leaves.filter((l) => !folded.includes(l));
+          const chip = (l: LvTimeOff) => {
+            const w = l.to < today ? workOf(l) : 'done';
+            return (
+              <button key={l.id} type="button" aria-pressed={l.id === offId} onClick={() => setOffId(l.id === offId ? null : l.id)}
+                className={`min-h-[40px] rounded-full border px-3.5 text-[14px] ${l.id === offId ? 'border-[#7d5ffb] bg-[#efebff] font-bold text-[#5b3fe0]' : w === 'todo' ? 'border-2 border-[#f0a33a] bg-white text-[#1d1b2b]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
+                {l.tutorName} · {dateLabel(l.from)} ~ {dateLabel(l.to)}{w === 'todo' ? ' · 처리 필요' : w === 'wait' ? ' · 답 기다리는 중' : ''}
+              </button>
+            );
+          };
+          return (
+            <div className="grid gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {shown.map(chip)}
+                {folded.length > 0 && (
+                  <button type="button" aria-expanded={showPast} onClick={() => setShowPast(!showPast)}
+                    className="min-h-[40px] rounded-full border border-dashed border-[#c9c6d6] bg-white px-3.5 text-[14px] text-[#6b6880]">
+                    지난 휴무 {folded.length} {showPast ? '▾' : '▸'}
+                  </button>
+                )}
+              </div>
+              {showPast && folded.length > 0 && <div className="flex flex-wrap items-center gap-1.5 pl-3">{folded.map(chip)}</div>}
+            </div>
+          );
+        })()}
         <Err>{err}</Err>
 
         {tab === 'list' && offId && data && (
@@ -190,18 +235,10 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
             {(groups.length > 0 || renewals.length > 0) && (
               <div className="grid gap-3 lg:grid-cols-[280px_1fr] lg:items-start">
                 {/* 왼쪽(휴대폰은 위) 목록: 처리할 것 / 강사에게 묻기 / 답 기다리는 것 / 끝남 / 재등록 대기 (R15·R17) */}
-                <ul className="grid gap-1.5">
+                <ul id="leave-list" className="grid scroll-mt-3 gap-1.5">
+                  {groups.length > 0 && <li className="mt-1 border-b-2 border-[#e6e3ef] pb-1 text-[13.5px] font-extrabold text-[#1d1b2b]">수강생 {groups.length}명</li>}
                   {([['todo', '처리할 것'], ['wait', '답 기다리는 것'], ['done', '끝남']] as const).map(([ph, label]) => (
                     <Fragment key={ph}>
-                      {ph === 'wait' && bundles.length > 0 && (
-                        <li className="grid gap-1.5">
-                          <h3 className="mt-1 text-[13px] font-bold text-[#55526a]">강사에게 묻기 {bundles.length}명</h3>
-                          {bundles.map((b) => (
-                            <ListButton key={b.subTutorId} on={selKey === `t:${b.subTutorId}`} onClick={() => pick(`t:${b.subTutorId}`)}
-                              name={b.subTutorName} sub={`수강생 ${new Set(b.items.map((i) => i.studentId)).size}명 ${b.items.length}회 · ${b.status === 'pending' ? '문의 보내기 전' : '답변 기다리는 중'}`} />
-                          ))}
-                        </li>
-                      )}
                       {phases[ph].length > 0 && (
                         <li className="grid gap-1.5">
                           <h3 className="mt-1 text-[13px] font-bold text-[#55526a]">{label} {phases[ph].length}명</h3>
@@ -213,6 +250,15 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
                       )}
                     </Fragment>
                   ))}
+                  {bundles.length > 0 && (
+                    <li className="grid gap-1.5">
+                      <h3 className="mt-3 border-b-2 border-[#e6e3ef] pb-1 text-[13.5px] font-extrabold text-[#1d1b2b]">강사에게 묻기 {bundles.length}명</h3>
+                      {bundles.map((b) => (
+                        <ListButton key={b.subTutorId} on={selKey === `t:${b.subTutorId}`} onClick={() => pick(`t:${b.subTutorId}`)}
+                          name={b.subTutorName} sub={`수강생 ${new Set(b.items.map((i) => i.studentId)).size}명 ${b.items.length}회 · ${b.status === 'pending' ? '메일 못 보냄' : b.mailWait ? '메일 발송 대기' : '답변 기다리는 중'}`} />
+                      ))}
+                    </li>
+                  )}
                   {renewals.length > 0 && <li className="mt-2 text-[13px] font-bold text-[#6b6880]">재등록 대기</li>}
                   {renewals.map((r) => (
                     <li key={r.studentId}>
@@ -221,6 +267,8 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
                   ))}
                 </ul>
                 <div id="leave-detail" className="grid min-w-0 scroll-mt-3 gap-3">
+                  <button type="button" className={`${btnSub} justify-self-start lg:hidden`}
+                    onClick={() => document.getElementById('leave-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>‹ 목록</button>
                   {groups.map((g) => (
                     <div key={g.studentId} className={g.studentId === selKey ? '' : 'hidden'}>
                       <StudentPanel g={g} w={works.get(g.studentId)!} msgs={messages.filter((m) => m.studentId === g.studentId)} leaveTutor={off?.tutorName ?? '기존'}
@@ -335,7 +383,7 @@ function nextText(g: LvStudentGroup, w: LvStudentWork): string {
   if (w.proposal?.status === 'pending') return LV_STEP_TEXT.propose;
   if (w.confirm.confirmedMsgs.length) return LV_STEP_TEXT.confirm;
   if (w.confirm.makeup.length) return `${md(w.confirm.makeup[0])} 보강 날짜 잡기`;
-  if (w.tutor.length) return w.tutor.map((t) => (t.ask ? `${t.subTutorName} 강사님에게 문의 보내기 전` : `${t.subTutorName} 강사님 답`)).join(' · ');
+  if (w.tutor.length) return w.tutor.map((t) => (t.ask && askMailFailed(t.ask.mail) ? `${t.subTutorName} 강사님 메일 못 보냄` : `${t.subTutorName} 강사님 답 기다리는 중`)).join(' · ');
   if (w.answer.length) return `수강생 답 · 첫 수업 ${md(w.answer[0])}`;
   if (w.confirm.makeupRequested.some((i) => i.makeupDeclinedAll)) return '보강 · 강사님 모든 날짜 불가 · 다른 날짜 받기';
   if (w.confirm.makeupRequested.length) return '보강 · 강사님 확인 기다림';
@@ -616,12 +664,13 @@ function TutorBundlePanel({ b, actions, done }: { b: LvTutorBundle; actions: Lea
   return (
     <Card title={<>{b.subTutorName} 강사님에게 묻기 <span className="text-[13px] font-normal text-[#6b6880]">수강생 {students}명 {b.items.length}회</span></>}>
       <div className="grid gap-3">
-        {b.mail && (
+        {b.mail ? (
           <p role="status" className={`text-[12.5px] ${b.mail.status === 'sent' ? 'text-[#1f7a4d]' : b.mail.status === 'queued' ? 'text-[#6b6880]' : 'text-[#b3261e]'}`}>
             {b.mail.status === 'sent' ? '✓ ' : ''}{emailStatusText(b.mail, (d) => when(d))}
           </p>
-        )}
-        {b.pending && (
+        ) : b.mailWait ? <p role="status" className="text-[12.5px] text-[#6b6880]">메일 발송 대기</p> : null}
+        {/* 복사·보냄은 자동 메일을 못 보냈을 때(실패·주소 없음)만 (대표 11/17) */}
+        {b.pending && b.status === 'pending' && (
           <MessageRow m={asMsg(b.pending, 'pending')} copied={copied} onCopied={() => setCopied(true)}
             onSend={async () => { await actions.markSent(b.pending!.noticeIds); await done(); }} />
         )}
@@ -755,31 +804,79 @@ function PickTutors({ items, actions, done }: { items: LvItem[]; actions: LeaveA
   );
 }
 
-// 대체강사 목록 하나 (R12·R13): 날짜마다 '평소 가능시간과 일치' / '평소 시간표 밖 · 문의 필요'(골라도 됨, 2700) / '불가'(다른 수업·휴무·불가 답).
-// 고르면 불가가 아닌 날짜만 그 강사로, 불가 날짜는 그대로 남음
+// 대체강사 고르기 (R12·R13, 대표 11/17 시안): 날짜마다 '정규 근무시간 안' / '정규 근무시간 밖 · 문의 가능'(골라도 됨, 2700) / '불가 · 사유'.
+// 강사를 고르면 선택만 되고(저장·메일 없음), [○○에게 문의하기 N회]를 눌러야 요청됨. 불가 날짜는 빠지고 빠진 날짜·사유가 버튼 위에 보임
 function SubOptions({ options, items, busy, pick }: { options: LvSubOption[]; items: LvItem[]; busy: boolean; pick: (tutorId: string, itemIds: string[]) => void }) {
-  const md = (i: LvItem) => instantToKstDate(i.startsAt).slice(5).split('-').map(Number).join('/');
-  const all = items.length;
+  const [sel, setSel] = useState<string | null>(null);
+  const mdOf = (i: LvItem) => instantToKstDate(i.startsAt).slice(5).split('-').map(Number).join('/');
+  const label = (i: LvItem) => dateLabel(instantToKstDate(i.startsAt));
+  const tone = (k: 'ok' | 'off' | 'busy') => (k === 'ok' ? 'text-[#1e7a46]' : k === 'off' ? 'text-[#7a4a00]' : 'text-[#b3261e]');
+  const canOf = (o: LvSubOption) => items.filter((i) => subCell(o, mdOf(i)).kind !== 'busy');
+  const chosen = options.find((o) => o.tutorId === sel) ?? null;
+  const can = chosen ? canOf(chosen) : [];
+  const out = chosen ? items.filter((i) => subCell(chosen, mdOf(i)).kind === 'busy') : [];
+  // 휴대폰 카드: 같은 칸 글이 이어진 날짜는 한 줄로 ('12/28·12/30 불가 · 휴무')
+  const lines = (o: LvSubOption) => {
+    const m = new Map<string, { kind: 'ok' | 'off' | 'busy'; text: string; dates: string[] }>();
+    for (const i of items) {
+      const c = subCell(o, mdOf(i));
+      const e = m.get(c.text) ?? { kind: c.kind, text: c.text, dates: [] };
+      e.dates.push(mdOf(i));
+      m.set(c.text, e);
+    }
+    return [...m.values()];
+  };
   return (
-    <ul className="grid gap-1.5">
-      {options.length === 0 && <li className="text-[13.5px] text-[#6b6880]">고를 수 있는 강사가 없어요.</li>}
-      {options.map((o) => {
-        const can = items.filter((i) => !o.busyDates.includes(md(i)));
-        return (
+    <div className="grid gap-2">
+      {options.length === 0 && <p className="text-[13.5px] text-[#6b6880]">고를 수 있는 강사가 없어요.</p>}
+      {/* PC: 날짜는 위에 한 번만 */}
+      {options.length > 0 && (
+        <div className="hidden overflow-x-auto lg:block">
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th className="border border-[#e6e3ef] bg-[#f6f5fb] px-2 py-1.5 text-left">강사</th>
+                {items.map((i) => <th key={i.id} className="border border-[#e6e3ef] bg-[#f6f5fb] px-2 py-1.5 text-left">{kstLabel(i.startsAt)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {options.map((o) => (
+                <tr key={o.tutorId} className={sel === o.tutorId ? 'bg-[#efebff]' : ''}>
+                  <td className="border border-[#e6e3ef] px-1.5 py-1">
+                    <button type="button" aria-pressed={sel === o.tutorId} disabled={busy || canOf(o).length === 0} onClick={() => setSel(o.tutorId)}
+                      className={`min-h-[40px] w-full rounded-[8px] border px-2.5 text-left text-[14.5px] font-bold disabled:text-[#b9b6c8] ${sel === o.tutorId ? 'border-[#7d5ffb] bg-white text-[#5b3fe0]' : 'border-[#e6e3ef] bg-white'}`}>
+                      {o.name}
+                    </button>
+                  </td>
+                  {items.map((i) => { const c = subCell(o, mdOf(i)); return <td key={i.id} className={`border border-[#e6e3ef] px-2 py-1.5 font-semibold ${tone(c.kind)}`}>{c.text}</td>; })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {/* 휴대폰: 강사마다 카드 */}
+      <ul className="grid gap-1.5 lg:hidden">
+        {options.map((o) => (
           <li key={o.tutorId}>
-            <button type="button" disabled={busy || can.length === 0} onClick={() => pick(o.tutorId, can.map((i) => i.id))}
-              className="flex min-h-[48px] w-full flex-wrap items-center gap-x-2 rounded-[12px] border border-[#e6e3ef] bg-white px-3 py-2 text-left disabled:bg-[#faf9fd] disabled:text-[#b9b6c8]">
+            <button type="button" aria-pressed={sel === o.tutorId} disabled={busy || canOf(o).length === 0} onClick={() => setSel(o.tutorId)}
+              className={`grid min-h-[48px] w-full gap-0.5 rounded-[12px] border px-3 py-2 text-left disabled:bg-[#faf9fd] disabled:text-[#b9b6c8] ${sel === o.tutorId ? 'border-[#7d5ffb] bg-[#efebff]' : 'border-[#e6e3ef] bg-white'}`}>
               <b className="text-[15px]">{o.name}</b>
-              <span className="flex flex-1 flex-col items-end text-right text-[13px]">
-                {o.free > 0 && <span className="text-[#1e7a46]">{o.free === all ? '모두' : `${o.free}회`} 평소 가능시간과 일치</span>}
-                {o.offHours.length > 0 && <span className="text-[#5c3b00]">{o.offHours.join('·')} 평소 시간표 밖 · 문의 필요</span>}
-                {o.busyDates.length > 0 && <span className="text-[#b3261e]">{o.busyDates.join('·')} 불가</span>}
-              </span>
+              {lines(o).map((l) => <span key={l.text} className={`text-[13px] font-semibold ${tone(l.kind)}`}>{l.dates.join('·')} {l.text}</span>)}
             </button>
           </li>
-        );
-      })}
-    </ul>
+        ))}
+      </ul>
+      {chosen && (
+        <div className="grid gap-1.5 rounded-[12px] bg-[#f6f5fb] px-3 py-2.5 text-[13.5px] text-[#1d1b2b]">
+          <p>문의: <b>{can.map(label).join(' · ')}</b></p>
+          {out.length > 0 && <p className="text-[#b3261e]">제외: {out.map((i) => `${label(i)} ${subCell(chosen, mdOf(i)).reason ?? '불가'}`).join(' · ')}</p>}
+          <button type="button" disabled={busy || can.length === 0} className={btnMain} onClick={() => pick(chosen.tutorId, can.map((i) => i.id))}>
+            {chosen.name}에게 문의하기 {can.length}회
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -811,7 +908,7 @@ function TutorCheck({ t, actions, done, numbers }: { t: LvStudentWork['tutor'][n
         ))}
       </ul>
       <button type="button" disabled={r.busy || yes.length === 0} className={btnMain} onClick={() => r.run(() => actions.subOk(yes))}>
-        강사 가능 여부 확인 완료
+        강사 가능으로 기록
       </button>
       {no.length > 0 && (
         <>

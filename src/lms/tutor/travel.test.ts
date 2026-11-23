@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupDays, homeText, returnText, searchCity, tabLabel, zoneAt, zoneBadge, zoneOn, type TravelPeriod } from './travel';
+import { applyLine, groupDays, homeText, periodLines, searchCity, tabPeriodLine, tabLabel, zoneAt, zoneBadge, zoneOn, type TravelPeriod } from './travel';
 import { cellKind, keyOf, type ScheduleData } from './schedule';
 import { daysOf, rangeFull, type TutorLesson } from './screen';
 
@@ -9,7 +9,10 @@ describe('강사 해외 이동 기간 (H26(173))', () => {
   it('탭 이름·복귀 문구 (대표 확정)', () => {
     expect(tabLabel(ba)).toBe('Buenos Aires · 5 Jan – 23 Mar');
     expect(tabLabel({ ...ba, to: null })).toBe('Buenos Aires · from 5 Jan');
-    expect(returnText('2027-03-23')).toBe('Regular hours apply again from Wed, 24 Mar');
+    expect(periodLines('2026-12-01', '2026-12-20', 'America/Argentina/Buenos_Aires', 'Australia/Sydney')).toEqual([
+      '1 Dec – 20 Dec: Your schedule will use Buenos Aires Time.', 'From 21 Dec: Your schedule will return to Sydney Time.']);
+    expect(periodLines('2026-12-01', null, 'America/Argentina/Buenos_Aires', 'Australia/Sydney')).toEqual([
+      'From 1 Dec: Your schedule will use Buenos Aires Time until you set an end date.']);
     expect(homeText('Australia', 'Australia/Sydney')).toBe('Australia · Sydney');
   });
   it('시간대 약자는 그날 서머타임 반영, 약자 없으면 UTC', () => {
@@ -66,5 +69,18 @@ describe('강사 해외 이동 기간 (H26(173))', () => {
     expect(rangeFull(l, z(l.startsAt))).toContain('Wed, 6 Jan 4:00–4:40 PM *Buenos Aires Time*');
     expect(daysOf([l], z, { from: '2027-01-04', to: '2027-01-10' }).map((d) => d.date)).toEqual(['2027-01-06']);
     expect(daysOf([l], 'Australia/Sydney', { from: '2027-01-04', to: '2027-01-10' }).map((d) => d.date)).toEqual(['2027-01-07']);
+  });
+});
+
+describe('이동 기간 탭 아래 안내 (시안 3)', () => {
+  it('날짜 줄 없이 복귀·종료일 안내만', () => {
+    expect(tabPeriodLine('2026-12-20', 'America/Argentina/Buenos_Aires', 'Australia/Sydney')).toBe('From 21 Dec: Your schedule will return to Sydney Time.');
+    expect(tabPeriodLine(null, 'America/Argentina/Buenos_Aires', 'Australia/Sydney')).toBe('Your schedule will use Buenos Aires Time until you set an end date.');
+  });
+  it('Temporary location 적용 줄 (대표 11/15)', () => {
+    expect(applyLine({ applyFrom: '2026-12-01', first: true, today: '2026-11-18' })).toBe('Changes apply from Tue, 1 Dec.');
+    expect(applyLine({ applyFrom: '2026-12-03', first: true, today: '2026-12-03' })).toBe('Changes apply right away.');
+    expect(applyLine({ applyFrom: '2026-12-07', first: false, today: '2026-12-03' })).toBe('Changes apply from Mon, 7 Dec.');
+    expect(applyLine({ applyFrom: null, first: false, today: '2026-12-15' })).toBeNull();
   });
 });

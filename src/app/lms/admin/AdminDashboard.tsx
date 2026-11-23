@@ -6,7 +6,10 @@
 //  운영진 할 일 = 운영진이 직접 풀 일만. 마지막 필수 처리가 끝나면 다시 읽을 때 저절로 빠짐 ([카드 닫기] 없음). 성공 안내 없음, 실패만 짧게
 // 미리보기(?demo=1)에서는 버튼을 눌러도 화면 안에서만 바뀌고 저장·발송하지 않는다.
 
+import RegularChangeDecide, { type DecideResult } from './RegularChangeDecide';
 import { useEffect, useMemo, useState } from 'react';
+import { periodText, requestAmount, type AdminRenewalRequest } from '@/lms/admin/renewal-requests';
+import { kstWithZones } from '@/lms/admin/students';
 import Link from 'next/link';
 import { buildBoard, CATEGORY_LABEL, categoryCounts, filterBoard, isUrgent, searchBoard, type BoardFilter, type BoardItem, type Category, type TaskSource } from '@/lms/admin/board';
 import { fakeTasks } from '@/lms/admin/fake-data';
@@ -41,11 +44,11 @@ const PRI = `${btn} border-[#7d5ffb] bg-[#7d5ffb] text-white disabled:border-[#e
 const SEC = `${btn} border-[#e6e3ef] bg-white text-[#1d1b2b] disabled:text-[#b9b6c8]`;
 const DONE = `${btn} border-[#c9c6d6] bg-[#d9d6e3] font-bold text-[#4a4760]`;
 /** 실제 데이터에서 서버 저장이 있는 버튼 (나머지는 그 업무 화면으로 이동) */
-const LIVE_KEYS = new Set(['import_checked', 'notify_tutor', 'no_extension', 'reject_time_off']);
+const LIVE_KEYS = new Set(['import_checked', 'notify_tutor', 'no_extension', 'reject_time_off', 'tutor_change_done']);
 
 export default function AdminDashboard({
   nowIso, today, preview, tasks: liveTasks, stats, onLogout, planActions, importActions, renewalSent, renewalNotify, enrollmentClose, onReload,
-  history, notices, noExtension, timeOffReject,
+  history, notices, noExtension, timeOffReject, changeRequests, renewalRequests,
 }: {
   nowIso: string;
   today: LessonItem[];
@@ -70,6 +73,10 @@ export default function AdminDashboard({
   noExtension?: (task: TaskSource) => Promise<void>;
   /** 강사 휴무 신청 [반려] (사유 필수, 강사 Home 에 보임) */
   timeOffReject?: (id: string, reason: string) => Promise<void>;
+  /** 학생 정규 시간 변경 신청 확정·반려 · 강사 변경 상담 완료 (H26(208)) */
+  /** 학생 재등록 신청 · 입금 확인 전 (20261121100000) */
+  renewalRequests?: () => Promise<AdminRenewalRequest[]>;
+  changeRequests?: { decide: (id: string, action: 'confirm' | 'reject', choice: number[] | null, week: string | null) => Promise<DecideResult>; done: (id: string) => Promise<void> };
 }) {
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
@@ -81,6 +88,13 @@ export default function AdminDashboard({
   }, [liveTasks]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [renewReqs, setRenewReqs] = useState<AdminRenewalRequest[]>([]);
+  useEffect(() => {
+    if (!renewalRequests) return;
+    let live = true;
+    renewalRequests().then((x) => { if (live) setRenewReqs(x); }, () => {});
+    return () => { live = false; };
+  }, [renewalRequests, liveTasks]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [roster, setRoster] = useState<'reg' | 'end' | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -155,6 +169,7 @@ export default function AdminDashboard({
     if (key === 'notify_tutor' && item.kind === 'renewal_tutor_notice' && renewalNotify) return run(() => renewalNotify(item.id));
     if (key === 'no_extension' && task && noExtension) return run(() => noExtension(task));
     if (key === 'reject_time_off') { setRejecting(item.id); setRejectNote(''); return; }
+    if (key === 'tutor_change_done' && changeRequests) return run(() => changeRequests.done(item.id));
   }
 
   async function markRenewalSent(item: BoardItem) {
@@ -275,6 +290,24 @@ export default function AdminDashboard({
             ))}
           </ul>
         )}
+        {item.regularChange && (
+          <RegularChangeDecide view={item.regularChange} busy={busy} decide={async (action, choice, week) => {
+            if (preview || !changeRequests) { drop(item); return null; }
+            if (busy) return null;
+            setBusy(true);
+            setErr(null);
+            try {
+              const r = await changeRequests.decide(item.id, action, choice, week);
+              if (r.ok) await onReload?.();
+              return r.ok ? null : r;
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : '저장하지 못했어요.');
+              return null;
+            } finally {
+              setBusy(false);
+            }
+          }} />
+        )}
         {item.plan && <PlanCard view={item.plan} handlers={planHandlers(item, item.plan)} />}
         {item.unknownOrigins && item.unknownOrigins.length > 0 && <OriginFix items={item.unknownOrigins} onSave={(id, date) => fixOrigin(item, id, date)} />}
         {item.renewal && <RenewalNotice text={item.renewal.text} sentAt={item.renewal.sentAt} onSent={() => markRenewalSent(item)} />}
@@ -394,7 +427,7 @@ export default function AdminDashboard({
 
   const QUICK: [string, string][] = [
     ['수강생 관리', '/lms/admin/students'], ['강사 관리', '/lms/admin/tutors'], ['신규 수강생 등록', '/lms/admin/students/new'],
-    ['수업 변경·취소', '/lms/admin/change'], ['강사 휴무', '/lms/admin/leave'],
+    ['수업 변경·취소', '/lms/admin/change'], ['강사 휴무', '/lms/admin/leave'], ['강사 서명 문서', '/lms/admin/sign'],
   ];
   const quick = (
     <section aria-label="빠른 메뉴" className={box}>
@@ -437,7 +470,37 @@ export default function AdminDashboard({
         {tiles}
         {rosterBox}
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_370px] lg:items-start lg:gap-4">
-          <div className="grid min-w-0 gap-3">{tasksBox}</div>
+          <div className="grid min-w-0 gap-3">
+            {renewReqs.length > 0 && (
+              <section aria-label="재등록 신청" className={box}>
+                <h2 className="mb-2 flex flex-wrap items-center gap-1.5 text-[15px] font-bold text-[#1d1b2b]">
+                  재등록 신청
+                  {renewReqs.some((r) => r.status === 'submitted') && <span className="rounded-full bg-[#fff1d6] px-2 py-0.5 text-[12px] font-bold text-[#8a5300]">입금 확인 전 {renewReqs.filter((r) => r.status === 'submitted').length}</span>}
+                  {renewReqs.some((r) => r.status === 'draft') && <span className="rounded-full bg-[#f0eef6] px-2 py-0.5 text-[12px] font-bold text-[#55526a]">신청 전 {renewReqs.filter((r) => r.status === 'draft').length}</span>}
+                </h2>
+                <ul className="grid gap-1.5">
+                  {renewReqs.map((r) => {
+                    const m = r.method ?? 'bank_transfer';
+                    return (
+                      <li key={r.id}>
+                        <Link href={q(`/lms/admin/students/${r.studentCode}`)} className="block rounded-[10px] border border-[#eeecf4] px-3 py-2 text-[13.5px] hover:bg-[#f7f5fd]">
+                          <b>{r.studentName}</b> <span className="text-[#6b6880]">{r.studentCode}</span>
+                          <span className="block text-[#55526a]">
+                            {r.status === 'submitted' ? '신청 완료' : '입금 안내까지 보고 신청 전'} · {periodText(r.weeks)}
+                            {r.status === 'submitted' ? ` · ${m === 'card_link' ? '카드결제' : '계좌이체'} ${requestAmount(r, m).toLocaleString('ko-KR')}원` : ''}
+                            {r.points > 0 ? ` · 적립금 ${r.points.toLocaleString('ko-KR')}원` : ''}
+                            {r.payerName ? ` · ${m === 'card_link' ? '결제자명' : '입금자명'} ${r.payerName}` : ''}
+                            {` · ${kstWithZones(r.submittedAt ?? r.updatedAt, [])}`}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+            {tasksBox}
+          </div>
           <div className="grid min-w-0 gap-3">
             {todayBox}
             {quick}

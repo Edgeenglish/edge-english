@@ -86,7 +86,7 @@ export function fakeStudentProfile(studentId: string, now: Date): TutorStudentPr
   const common = {
     id: studentId, code: null, nameKo: null, nameEn: regular ? 'Hajun Kim' : 'Seoyeon Park', displayName: regular ? null : 'Sarah', label: regular ? 'Hajun Kim' : 'Seoyeon Park (Sarah)',
     country: regular ? 'Korea' : 'Canada', city: regular ? 'Seoul' : 'Toronto', timezone: regular ? 'Asia/Seoul' : 'America/Toronto', genderAge: 'F / 30s',
-    email: regular ? 'hajun@example.com' : null, phone: null, adminMemo: null, level: 'Intermediate', levelNote: 'B1 (sheet)', levelAt: new Date(+now - 86400000 * 3), levelBy: 'Emma',
+    email: null, phone: null, adminMemo: null, level: 'Intermediate', levelNote: 'B1 (sheet)', levelAt: new Date(+now - 86400000 * 3), levelBy: 'Emma',
     classType: 'Free conversation', textbook: null, classNoteUrl: null, correctionPref: 'active immediate corrections',
     selfIntroEn: '✅ Job: Software engineer\n✅ Hobbies: Hiking, cooking', job: 'Software engineer', hobbies: 'Hiking, cooking', interests: null, improve: 'Speaking in meetings',
     hopes: 'Relaxed, lots of talking', correctionStyle: 'major_only' as const, correctionNote: null, classStyle: 'free_talking' as const, classStyleNote: null, answersAt: now, lmsSince: null,

@@ -84,8 +84,8 @@ export default function LeaveDemo({ nowIso }: { nowIso: string }) {
       unsend: async (ids) => { db.notices = db.notices.map((n) => (ids.includes(n.id) ? { ...n, status: 'pending', sentAt: null } : n)); },
       markSent: async (ids) => { const at = new Date(); db.notices = db.notices.map((n) => (ids.includes(n.id) ? { ...n, status: 'sent', sentAt: at } : n)); },
       subOptions: async (ids) => [
-        { tutorId: 't-james', name: 'James', timezone: 'Asia/Manila', free: ids.length, busyDates: [], offHours: [] },
-        { tutorId: 't-noah', name: 'Noah', timezone: 'Asia/Manila', free: Math.max(0, ids.length - 1), busyDates: ids.length > 1 ? ['날짜 1개'] : [], offHours: [] },
+        { tutorId: 't-james', name: 'James', timezone: 'Asia/Manila', free: ids.length, busyDates: [], offHours: [], busyReasons: {} },
+        { tutorId: 't-noah', name: 'Noah', timezone: 'Asia/Manila', free: Math.max(0, ids.length - 1), busyDates: ids.length > 1 ? ['날짜 1개'] : [], offHours: [], busyReasons: {} },
       ],
       makeupOptions: async () => {
         const base = new Date(nowIso);

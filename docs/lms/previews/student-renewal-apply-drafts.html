@@ -1,0 +1,198 @@
+<title>재등록 신청 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 시안 페이지: 위에 설명 한 줄, 아래 화면별로 PC(왼쪽)·휴대폰(오른쪽) 나란히 */
+:root{
+  --bg:#f4f3f8; --panel:#ffffff; --ink:#1d1b2a; --sub:#55526a; --line:#e6e3ef;
+  --brand:#5b3df0; --navy:#1b1442; --warnbg:#fff4d6; --warnline:#f0d27a; --warnink:#5c3b00;
+  --soft:#f7f5fd; --red:#b3261e; --ok:#1f7a4d;
+  --font: "Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15131d;--panel:#1f1c2b;--ink:#ecebf3;--sub:#aaa6bd;--line:#353148;--soft:#26223a;--warnbg:#3a2f12;--warnline:#6b5420;--warnink:#f6dd9b;--navy:#3b2f8f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15131d;--panel:#1f1c2b;--ink:#ecebf3;--sub:#aaa6bd;--line:#353148;--soft:#26223a;--warnbg:#3a2f12;--warnline:#6b5420;--warnink:#f6dd9b;--navy:#3b2f8f;color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:40px}
+h1{font-size:22px;margin:0}
+.lead{color:var(--sub);font-size:14px;margin:6px 0 0;line-height:1.6}
+.case{display:grid;gap:12px}
+.case>h2{font-size:18px;margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tag{font-size:12px;font-weight:700;background:var(--navy);color:#fff;border-radius:999px;padding:3px 10px}
+.note{font-size:13px;color:var(--sub);margin:0;line-height:1.6}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:20px;align-items:start}
+@media (max-width:900px){.pair{grid-template-columns:minmax(0,1fr)}}
+.dev{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;min-width:0}
+.dev>.bar{font-size:11.5px;color:var(--sub);padding:6px 12px;border-bottom:1px solid var(--line);background:var(--soft)}
+.phone{max-width:380px;width:100%}
+.scr{padding:20px;display:grid;gap:14px}
+.pc .scr{padding:28px 32px}
+.zone{font-size:12px;color:var(--brand);background:var(--soft);border-radius:999px;padding:4px 10px;justify-self:start;font-weight:600}
+.title{font-size:20px;font-weight:800;margin:0}
+.box{border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px}
+.box h3{font-size:14px;margin:0;color:var(--sub);font-weight:700}
+.row{display:flex;justify-content:space-between;gap:12px;font-size:14.5px}
+.row span:first-child{color:var(--sub)}
+.row b{font-weight:700;text-align:right}
+.plans{display:grid;gap:8px}
+.pc .plans{grid-template-columns:minmax(0,.8fr) repeat(2,minmax(0,1.1fr))}
+.plan{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:3px;font-size:14px;cursor:pointer;background:var(--panel)}
+.plan .p1{font-weight:800;font-size:15px}
+.plan .p2{font-weight:700}
+.plan .p3{color:var(--brand);font-size:13px;font-weight:700}
+.plan small{font-weight:600;color:var(--sub);font-size:12.5px}
+.plan.best .p1{color:var(--brand)}
+
+.plan.on{border-color:var(--brand);background:var(--soft);box-shadow:0 0 0 1px var(--brand) inset}
+.keep{font-size:14px;margin:0;font-weight:600}
+.dl{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warnink);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.65;margin:0}
+.btn{min-height:48px;border-radius:12px;border:0;background:var(--brand);color:#fff;font-size:16px;font-weight:800;font-family:inherit;width:100%}
+.btn.ghost{background:var(--panel);color:var(--brand);border:1.5px solid var(--brand);font-size:14px;min-height:42px}
+.btn.gray{background:#cfcbe0;color:#4b4760}
+.small{font-size:12px;color:var(--sub);margin:0;line-height:1.6}
+.small a,.link{color:var(--brand);font-weight:700;text-decoration:none}
+.done{color:var(--ok);font-weight:800;font-size:15px;margin:0}
+.pay{display:grid;gap:4px;font-size:14.5px}
+.pay .k{font-size:12.5px;color:var(--sub);font-weight:700}
+.copy{font-size:12.5px;font-weight:700;color:var(--brand);background:var(--soft);border:0;border-radius:8px;padding:4px 10px;margin-left:6px;font-family:inherit}
+.amount{font-size:22px;font-weight:800}
+.card{border-radius:18px;border:1px solid var(--warnline);background:var(--warnbg);padding:14px 16px;display:grid;gap:8px;color:var(--warnink)}
+.card h4{margin:0;font-size:15px}
+.card p{margin:0;font-size:13px;line-height:1.6}
+.card .btn{background:var(--navy);min-height:44px;font-size:15px}
+.pill{justify-self:start;background:var(--panel);color:#8a5300;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700}
+.admin{font-size:14px}
+.ab{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:6px}
+.ab .t{font-weight:800}
+.ab .s{color:var(--sub);font-size:13px}
+.chip{font-size:12px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--warnbg);color:var(--warnink);border:1px solid var(--warnline)}
+.chip.ok{background:#e4f4ea;color:var(--ok);border-color:#b9dfc8}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btns .btn{width:auto;padding:0 16px;min-height:40px;font-size:14px}
+.radio{display:flex;gap:8px;flex-wrap:wrap}
+.radio span{border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13.5px;font-weight:600}
+.radio span.on{border-color:var(--brand);color:var(--brand);background:var(--soft)}
+.pts{display:flex;align-items:center;gap:8px;font-size:14.5px}
+.pts span:first-child{color:var(--sub);flex:1}
+.inp{border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;min-width:96px;text-align:right;font-weight:700;background:var(--panel)}
+.tot{border-top:1px solid var(--line);padding-top:8px;font-size:15.5px}
+.flow{font-size:13px;color:var(--sub);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;line-height:1.8;margin:0}
+.steps{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:700;color:var(--sub);flex-wrap:wrap}
+.steps .now{color:var(--brand)}
+.stephead{font-size:17px;font-weight:800;margin:0;color:var(--brand)}
+.field{display:grid;gap:6px;font-size:14px}
+.field .inp{text-align:left;min-width:0}
+.seg{display:flex;gap:8px}
+.seg span{flex:1;text-align:center;border:1.5px solid var(--line);border-radius:10px;padding:9px 0;font-weight:700;font-size:14px}
+.seg span.on{border-color:var(--brand);color:var(--brand);background:var(--soft)}
+.back{font-size:13px;font-weight:700;color:var(--brand)}
+.ttl{font-size:16px;font-weight:800;margin:0}
+.tag2{display:inline-block;border-radius:999px;background:var(--brand);color:#fff;font-size:11.5px;font-weight:700;padding:2px 9px}
+.mark{display:inline-block;border-radius:6px;background:#ffe4e4;color:#b3261e;font-size:11px;font-weight:800;padding:1px 6px;margin-right:4px;vertical-align:1px}
+.benefit{border:2px solid var(--brand);border-radius:14px;padding:12px 14px;display:grid;gap:5px;font-size:13.5px}
+.benefit li{list-style:none}
+.benefit ul{margin:0;padding:0;display:grid;gap:4px}
+.stepper{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#a9a6bb;white-space:nowrap}
+.stepper .ln{flex:1;height:2px;background:#e6e3ef;min-width:12px}
+.stepper .ln.done{background:var(--brand)}
+.stepper .cur{color:var(--brand)}
+.stepper .past{color:var(--brand);opacity:.6}
+.appeal{display:grid;gap:4px}
+</style>
+
+<div class="wrap"><header><h1>학생 재등록 신청 시안</h1><p class="lead">시험 학생 예: 김하준 · Alex 담당 · 40분 주 2회 · 화·목 오후 7:00 (한국 학생) · 마지막 수업일 12월 15일(화) · 적립금 4,000원. 금액은 지금 재등록 메일과 같은 가격표·할인 계산.</p></header>
+<p class="flow"><b>흐름</b> · 메일 링크·학생 홈 카드 → <b>1단계 · 수강 기간 고르기</b>(기간·적립금) [다음] → <b>2단계 · 입금하기</b>(금액·계좌·카드 링크 → 결제 → 결제 방법·입금자명 적기) [재등록 신청하기] → 여기서 처음으로 '재등록 신청 완료 · 입금 확인 중' → 운영진 입금 확인([재등록 넣기]) → 일정 확정·강사 통보(지금 흐름 그대로).</p>
+<section class="case"><h2><span class="tag">1</span> 수강 기간 고르기</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="cur">수강 기간 고르기</span><span class="ln"></span><span class="">입금하기</span><span class="ln"></span><span class="">신청 완료</span></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:20px;align-items:start"><div style="display:grid;gap:8px"><div class="box"><h3>현재 수업</h3>
+  <div class="row"><span>수업</span><b>40분 · 주 2회</b></div>
+  <div class="row"><span>담당 강사</span><b>Alex</b></div>
+  <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
+  <div class="row"><span>수강 종료일</span><b>12월 15일(화)</b></div>
+</div><p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p></div><div style="display:grid;gap:12px"><div class="appeal"><p class="ttl">영어는 꾸준함이 답! 길게 할수록 더 저렴해요</p><p class="small">* 1개월 = 4주(28일) 기준</p></div>
+<div class="plans">
+  <div class="plan"><span class="p1">1개월 (4주)</span><span class="p2">290,000원</span></div>
+  <div class="plan best on"><span class="p1">3개월 (12주) | 5% 할인 ✓</span><span class="p2">826,500원 <small>(월 275,500원)</small></span><span class="p3">→ 43,500원 절약!</span></div>
+  <div class="plan best"><span class="p1">6개월 (24주) | 최대 혜택</span><span class="p2">1,603,000원 <small>(월 약 267,167원)</small></span><span class="p3">→ 137,000원 절약 + Ebook 패키지 무료!</span></div>
+</div><div class="appeal"><p class="ttl">영어, 결국 오래 하는 사람이 이겨요</p><p class="small">매달 결제할 때마다 고민되셨죠? 한 번 등록해두면 수업 시간이 생활 루틴으로 자리 잡아요. 고민 없이 수업만 듣다 보면, 영어는 어느새 쌓여 있을 거예요.</p></div>
+<div class="benefit"><span class="tag2" style="justify-self:start">6개월 등록 시 추가 혜택</span><b>엣지영어 대표가 직접 만든 Ebook 패키지 무료!</b>
+<ul><li>✓ 해외여행 실전 회화 ebook + 저자 직강 영상 <span class="small">(판매가 26,900원 상당)</span></li><li>✓ 헷갈리는 문법 핵심 정리본 <span class="small">(PDF)</span></li><li>✓ 스피킹에 무조건 도움 되는 영어 꿀팁 30개 <span class="small">(PDF)</span></li><li>✓ <b>최대 2주 휴강</b> 가능</li></ul></div><div class="box"><h3>적립금</h3>
+  <div class="row"><span>보유 적립금</span><b>4,000원</b></div>
+  <label class="pts"><span>사용할 적립금</span><span class="inp">4,000</span><span>원</span></label>
+  <p class="small">최대 4,000원 · 적립금은 계좌이체에만 적용돼요. 카드결제로 쓰시려면 <a href="#">문의</a>해 주세요.</p>
+  <div class="row tot"><span>계좌이체</span><b>822,500원</b></div>
+  <div class="row"><span>카드결제</span><b>826,500원</b></div>
+</div><button class="btn">다음</button></div></div></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="cur">수강 기간 고르기</span><span class="ln"></span><span class="">입금하기</span><span class="ln"></span><span class="">신청 완료</span></div><div style="display:grid;gap:8px"><div class="box"><h3>현재 수업</h3>
+  <div class="row"><span>수업</span><b>40분 · 주 2회</b></div>
+  <div class="row"><span>담당 강사</span><b>Alex</b></div>
+  <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
+  <div class="row"><span>수강 종료일</span><b>12월 15일(화)</b></div>
+</div><p class="keep">기존 수업 일정으로 이어서 등록됩니다.</p></div><div class="appeal"><p class="ttl">영어는 꾸준함이 답! 길게 할수록 더 저렴해요</p><p class="small">* 1개월 = 4주(28일) 기준</p></div>
+<div class="plans">
+  <div class="plan"><span class="p1">1개월 (4주)</span><span class="p2">290,000원</span></div>
+  <div class="plan best on"><span class="p1">3개월 (12주) | 5% 할인 ✓</span><span class="p2">826,500원 <small>(월 275,500원)</small></span><span class="p3">→ 43,500원 절약!</span></div>
+  <div class="plan best"><span class="p1">6개월 (24주) | 최대 혜택</span><span class="p2">1,603,000원 <small>(월 약 267,167원)</small></span><span class="p3">→ 137,000원 절약 + Ebook 패키지 무료!</span></div>
+</div><div class="appeal"><p class="ttl">영어, 결국 오래 하는 사람이 이겨요</p><p class="small">매달 결제할 때마다 고민되셨죠? 한 번 등록해두면 수업 시간이 생활 루틴으로 자리 잡아요. 고민 없이 수업만 듣다 보면, 영어는 어느새 쌓여 있을 거예요.</p></div>
+<div class="benefit"><span class="tag2" style="justify-self:start">6개월 등록 시 추가 혜택</span><b>엣지영어 대표가 직접 만든 Ebook 패키지 무료!</b>
+<ul><li>✓ 해외여행 실전 회화 ebook + 저자 직강 영상 <span class="small">(판매가 26,900원 상당)</span></li><li>✓ 헷갈리는 문법 핵심 정리본 <span class="small">(PDF)</span></li><li>✓ 스피킹에 무조건 도움 되는 영어 꿀팁 30개 <span class="small">(PDF)</span></li><li>✓ <b>최대 2주 휴강</b> 가능</li></ul></div><div class="box"><h3>적립금</h3>
+  <div class="row"><span>보유 적립금</span><b>4,000원</b></div>
+  <label class="pts"><span>사용할 적립금</span><span class="inp">4,000</span><span>원</span></label>
+  <p class="small">최대 4,000원 · 적립금은 계좌이체에만 적용돼요. 카드결제로 쓰시려면 <a href="#">문의</a>해 주세요.</p>
+  <div class="row tot"><span>계좌이체</span><b>822,500원</b></div>
+  <div class="row"><span>카드결제</span><b>826,500원</b></div>
+</div><button class="btn">다음</button></div></div></div><p class="note">'수강 종료일' = 보강·보상수업까지 포함한 마지막 수업일. 적립금 칸은 적립금이 있을 때만. 기간을 안 고르면 [다음] 회색. [다음]을 누르면 고른 내용만 저장(신청 완료 아님, 적립금 예약도 아직 안 함).</p></section>
+<section class="case"><h2><span class="tag">2</span> 입금하기</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="past">수강 기간 고르기</span><span class="ln done"></span><span class="cur">입금하기</span><span class="ln"></span><span class="">신청 완료</span></div><a class="back" href="#">‹ 이전 단계</a>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start"><div style="display:grid;gap:12px"><div class="box"><h3>결제 금액 · 3개월 (12주)</h3>
+  <div class="pay"><span class="k">계좌이체</span><span class="amount">822,500원</span><span class="small">826,500원 − 적립금 4,000원</span><span>카카오뱅크 3333-27-7626253 <button class="copy">복사</button></span><span>이진솔(탠저린 영어)</span></div>
+  <div class="pay" style="border-top:1px solid var(--line);padding-top:10px"><span class="k">카드결제</span><span class="amount">826,500원</span><span class="small">적립금은 계좌이체에만 적용돼요. 카드결제로 쓰시려면 <a href="#">문의</a>해 주세요.</span><a class="link" href="#">카드로 결제하기 ›</a></div>
+</div><p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p></div><div style="display:grid;gap:12px"><div class="box"><h3>결제한 뒤 적어 주세요</h3>
+  <div class="field"><span>결제 방법</span><div class="seg"><span class="on">계좌이체</span><span>카드결제</span></div></div>
+  <label class="field"><span>입금자명</span><span class="inp">김하준</span></label>
+</div><button class="btn">재등록 신청하기</button></div></div></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="past">수강 기간 고르기</span><span class="ln done"></span><span class="cur">입금하기</span><span class="ln"></span><span class="">신청 완료</span></div><a class="back" href="#">‹ 이전 단계</a><div class="box"><h3>결제 금액 · 3개월 (12주)</h3>
+  <div class="pay"><span class="k">계좌이체</span><span class="amount">822,500원</span><span class="small">826,500원 − 적립금 4,000원</span><span>카카오뱅크 3333-27-7626253 <button class="copy">복사</button></span><span>이진솔(탠저린 영어)</span></div>
+  <div class="pay" style="border-top:1px solid var(--line);padding-top:10px"><span class="k">카드결제</span><span class="amount">826,500원</span><span class="small">적립금은 계좌이체에만 적용돼요. 카드결제로 쓰시려면 <a href="#">문의</a>해 주세요.</span><a class="link" href="#">카드로 결제하기 ›</a></div>
+</div><p class="dl">지금 재등록하시면<br>잔여 수업이 있다면 다음 수강 기간으로 이월되고, 기존 수업 요일·시간도 그대로 유지돼요.<br><br>수업은 결제 완료 순서로 확정되며,<br>입금이 늦어지면 강사님의 가능 시간이 달라질 수 있습니다.</p><div class="box"><h3>결제한 뒤 적어 주세요</h3>
+  <div class="field"><span>결제 방법</span><div class="seg"><span class="on">계좌이체</span><span>카드결제</span></div></div>
+  <label class="field"><span>입금자명</span><span class="inp">김하준</span></label>
+</div><button class="btn">재등록 신청하기</button></div></div></div><p class="note">입금자명을 안 적으면 [재등록 신청하기] 회색. 카드결제를 고르면 칸 이름이 '결제자명', 금액은 정가. 나갔다 다시 와도 이 단계에서 이어짐. [재등록 신청하기]를 눌러야 신청 완료 + 적립금 예약(계좌이체일 때만). 두 번 눌러도 1건.</p></section>
+<section class="case"><h2><span class="tag">3</span> 신청 완료 뒤 (다시 열어도 이 화면)</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="past">수강 기간 고르기</span><span class="ln done"></span><span class="past">입금하기</span><span class="ln done"></span><span class="cur">신청 완료</span></div><p class="done">✓ 재등록 신청 완료 · 입금 확인 중</p><p class="small" style="font-size:13.5px">입금이 확인되면 재등록이 완료돼요.</p><div class="box"><h3>신청 내역</h3>
+  <div class="row"><span>수강 기간</span><b>3개월 (12주)</b></div>
+  <div class="row"><span>수업</span><b>40분 · 주 2회 · Alex</b></div>
+  <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
+  <div class="row"><span>결제</span><b>계좌이체 822,500원</b></div>
+  <div class="row"><span>사용 적립금</span><b>4,000원</b></div>
+  <div class="row"><span>입금자명</span><b>김하준</b></div>
+  <div class="row"><span>신청일</span><b>11월 21일(토)</b></div>
+</div><p class="small">수업 횟수나 일정 변경을 원하시면 엣지영어 카카오톡으로 <a href="#">문의</a>해 주세요.</p></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><span class="zone">모든 날짜·시간은 한국 기준</span><p class="title">재등록 신청</p><div class="stepper"><span class="past">수강 기간 고르기</span><span class="ln done"></span><span class="past">입금하기</span><span class="ln done"></span><span class="cur">신청 완료</span></div><p class="done">✓ 재등록 신청 완료 · 입금 확인 중</p><p class="small" style="font-size:13.5px">입금이 확인되면 재등록이 완료돼요.</p><div class="box"><h3>신청 내역</h3>
+  <div class="row"><span>수강 기간</span><b>3개월 (12주)</b></div>
+  <div class="row"><span>수업</span><b>40분 · 주 2회 · Alex</b></div>
+  <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
+  <div class="row"><span>결제</span><b>계좌이체 822,500원</b></div>
+  <div class="row"><span>사용 적립금</span><b>4,000원</b></div>
+  <div class="row"><span>입금자명</span><b>김하준</b></div>
+  <div class="row"><span>신청일</span><b>11월 21일(토)</b></div>
+</div><p class="small">수업 횟수나 일정 변경을 원하시면 엣지영어 카카오톡으로 <a href="#">문의</a>해 주세요.</p></div></div></div><p class="note">입금 확인 전에는 맨 아래에 [기간·적립금 바꾸기]를 두지 않고 문의로(이미 입금했을 수 있어서 금액이 바뀌면 안 맞음). 입금이 확인되면 '재등록 완료'로 바뀜.</p></section>
+<section class="case"><h2><span class="tag">4</span> 학생 홈 재등록 안내 카드</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr" style="gap:12px"><div class="card" style="grid-template-columns:minmax(0,1fr) auto;align-items:center"><div><h4>수업이 2회 남았어요</h4><p>12월 15일까지 재등록 결제하면 남은 수업을 다음 등록으로 이월할 수 있어요.</p></div><button class="btn" style="width:auto;padding:0 20px">재등록 신청하기</button></div><div class="card" style="grid-template-columns:minmax(0,1fr) auto;align-items:center"><div><h4>수업이 2회 남았어요</h4><p>재등록 신청 완료 · 입금 확인 중이에요.</p></div><button class="btn ghost" style="width:auto;padding:0 20px">신청 내역 보기</button></div></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr" style="gap:12px"><div class="card"><div><h4>수업이 2회 남았어요</h4><p>12월 15일까지 재등록 결제하면 남은 수업을 다음 등록으로 이월할 수 있어요.</p></div><button class="btn">재등록 신청하기</button></div><div class="card"><div><h4>수업이 2회 남았어요</h4><p>재등록 신청 완료 · 입금 확인 중이에요.</p></div><button class="btn ghost">신청 내역 보기</button></div></div></div></div><p class="note">1·2단계 중이면 위 카드 그대로(누르면 하던 단계로). 신청 완료 뒤 아래 카드. 입금 확인 뒤 카드 사라짐.</p></section>
+<section class="case"><h2><span class="tag">5</span> 수강 종료일이 지난 뒤 메일 링크로 들어온 경우</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr"><p class="title">재등록 신청</p><div class="box"><h3>현재 수업</h3>
+  <div class="row"><span>수업</span><b>40분 · 주 2회</b></div>
+  <div class="row"><span>담당 강사</span><b>Alex</b></div>
+  <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
+  <div class="row"><span>수강 종료일</span><b>12월 15일(화)</b></div>
+</div><p class="dl">수강 종료일이 지나 기존 강사님·수업 시간이 바뀔 수 있어요.<br>재등록은 카카오톡으로 문의해 주세요.</p><button class="btn">카카오톡으로 문의하기</button></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr"><p class="title">재등록 신청</p><div class="box"><h3>현재 수업</h3>
+  <div class="row"><span>수업</span><b>40분 · 주 2회</b></div>
+  <div class="row"><span>담당 강사</span><b>Alex</b></div>
+  <div class="row"><span>정규 수업</span><b>화·목 오후 7:00</b></div>
+  <div class="row"><span>수강 종료일</span><b>12월 15일(화)</b></div>
+</div><p class="dl">수강 종료일이 지나 기존 강사님·수업 시간이 바뀔 수 있어요.<br>재등록은 카카오톡으로 문의해 주세요.</p><button class="btn">카카오톡으로 문의하기</button></div></div></div><p class="note">종료일 전에 신청을 완료한 학생은 계속 3번 화면.</p></section>
+<section class="case"><h2><span class="tag">6</span> 운영진 화면</h2><div class="pair"><div class="dev pc"><div class="bar">PC · edgeenglish.kr/lms/student/renew</div><div class="scr admin">
+<div class="ab"><div class="t">재등록 신청 <span class="chip">입금 확인 전 1</span> <span class="chip" style="background:#f0eef6;color:#55526a;border-color:#e6e3ef">신청 전 1</span></div>
+<div class="s">김하준 · 3개월(12주) · 계좌이체 822,500원(적립금 4,000원) · 입금자명 김하준 · 11/21(토) 신청</div>
+<div class="s">박서연 · 1개월(4주) · 입금 안내까지 보고 신청 전 · 11/20(금)</div></div>
+<div class="ab"><div class="t">수강 · 김하준</div><div>지금 수강권 · 40분 주 2회 · 마지막 수업 12/15(화)</div>
+<div><span class="chip">입금 확인 전</span> 재등록 신청 완료 · 3개월(12주) · 계좌이체 822,500원 · 적립금 4,000원 · 입금자명 김하준 · 11/21(토) 오후 2:10 한국 시간</div>
+<div class="btns"><button class="btn">입금 확인됨</button><button class="btn ghost">신청 닫기</button></div></div>
+<div class="ab"><div class="t">[입금 확인됨] 누르면 뜨는 창 (지금 재등록 창 — 기간·결제 방법·금액·입금자명·입금 날짜(제출일)를 신청대로 미리 채움, 일정은 기존 그대로) → [저장]을 눌러야 새 수강권 생성</div>
+<div class="s">상품 40분 · 주 2회 · 12주 [바꾸기] · 받은 금액 822,500 · 입금 날짜 · 입금자명 김하준</div>
+<div class="s">정규 일정</div><div class="radio"><span class="on">화·목 오후 7:00 한국 시간 (기존 그대로)</span><span>요일·시간 바꾸기</span><span>일정 미정 (학생과 협의 중)</span></div></div>
+<div class="ab"><div class="t">저장 뒤 '수강' 칸</div><div><span class="chip ok">입금 확인</span> 다음 수강권 · 12주 · 적립금 4,000원 사용 확정</div><div><span class="chip">일정 확정 전</span> 정규 일정 미정 · [정규 일정 넣기]</div></div></div></div><div class="dev phone"><div class="bar">휴대폰</div><div class="scr admin"><div class="ab"><div class="t">수강</div><div>지금 수강권 · 40분 주 2회 · 마지막 수업 12/15(화)</div>
+<div><span class="chip">입금 확인 전</span> 재등록 신청 완료</div><div class="s">3개월(12주) · 계좌이체 822,500원 · 적립금 4,000원 · 입금자명 김하준 · 11/21(토) 오후 2:10 한국 시간</div>
+<button class="btn">입금 확인됨</button><button class="btn ghost">신청 닫기</button></div></div></div></div><p class="note">대시보드 목록: 신청 완료(입금 확인 전) + 2단계까지 보고 신청 안 한 학생(입금하고 제출을 잊었을 수 있어서). 입금 확인을 카드결제로 넣으면 적립금 예약 되돌림, 계좌이체면 확정. [신청 닫기] = 재등록 안 함(기록 남음, 예약 되돌림). 결제 상태·일정 상태는 따로.</p></section>
+
+</div>

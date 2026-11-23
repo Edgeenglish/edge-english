@@ -8,10 +8,11 @@ import { addDays, ampmKo, formatInZone, instantToKstDate, kstToInstant, weekdayO
 import { courseName } from '@/lms/rules/period';
 import { koZone, md, mdw, productText, slotsInZone, slotsText, WD_KO, type Slot } from '@/lms/admin/students';
 import {
-  creditsPerPeriod, endOfCourse, firstLessonAfter, paidInTime, parseWon, renewBlock, rewardReason, WON_ERROR,
+  creditsPerPeriod, endOfCourse, firstLessonAfter, paidInTime, parseWon, renewBlock, payBlock, rewardReason, WON_ERROR,
   type CarryItem, type RenewalContext, type RenewDraft, type Rewards,
 } from '@/lms/admin/renewal';
 import type { RenewInput, RenewResult } from '@/lms/admin/renewal-live';
+import { periodText, requestAmount, requestPaidOn, type AdminRenewalRequest } from '@/lms/admin/renewal-requests';
 import { payLabels } from '@/lms/admin/registration';
 import DateInput from '../../DateInput';
 import TimeInput from '../../TimeInput';
@@ -24,6 +25,9 @@ export type RenewalActions = {
   carryCheck: (items: { originalDate: KstDate; startsAt: string | null }[]) => Promise<Record<string, string>>;
   carry: (requestId: string, items: { originalDate: KstDate; startsAt: string | null }[]) => Promise<number>;
   reward: (requestId: string, amount: number, reason: string) => Promise<{ after: number }>;
+  /** 학생 재등록 신청 [입금 확인됨] 저장 / [신청 닫기] (migration 20261121100000) */
+  confirmRequest: (requestId: string, ids: { request: string; plan: string }, x: RenewInput, noSchedule: boolean) => Promise<RenewResult>;
+  closeRequest: (requestId: string) => Promise<void>;
   newId: () => string;
 };
 export type Who = { id: string; code: string; name: string; timezone: string };
@@ -87,17 +91,24 @@ function Actions({ kept, onClose, children }: { kept: { dirty: boolean; setAskin
 // ---------- ② 재등록 넣기 ----------
 const REASON: Record<string, string> = { lesson: '다른 학생 수업과 겹쳐요', break: '다른 학생 수업과 10분 안이에요', time_off: '휴무와 겹쳐요', hold: '다른 학생 재등록 대기 시간이에요' };
 
-export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry }: {
+export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry, request }: {
   who: Who; ctx: RenewalContext; today: KstDate; actions: RenewalActions;
+  /** 학생 재등록 신청에서 [입금 확인됨]으로 열면: 기간·결제 방법·금액·입금자명·입금 날짜를 신청대로 채움 */
+  request?: AdminRenewalRequest | null;
   onClose: () => void; onSaved: () => Promise<void>; onCarry: () => void;
 }) {
   const p = ctx.prev!;
-  const initial = useMemo<RenewDraft>(() => ({
-    weeks: p.weeks ?? 4, weekly: p.weeklyCount, dur: p.durationMin, prodOpen: false,
-    slots: ctx.slots.length ? ctx.slots : [], start: '', manual: false,
-    method: p.lastMethod === 'card_link' ? 'card_link' : 'bank_transfer', amount: '', paidOn: '', payer: '',
-  }), [p, ctx.slots]);
-  const kept = useKept(who.id, '재등록 넣기', initial);
+  const initial = useMemo<RenewDraft>(() => {
+    const method = request?.method ?? (p.lastMethod === 'card_link' ? 'card_link' : 'bank_transfer');
+    return {
+      weeks: request?.weeks ?? p.weeks ?? 4, weekly: p.weeklyCount, dur: p.durationMin, prodOpen: false,
+      slots: ctx.slots.length ? ctx.slots : [], start: '', manual: false,
+      method, amount: request ? String(requestAmount(request, method)) : '', paidOn: request ? requestPaidOn(request, today) : '', payer: request?.payerName ?? '',
+    };
+  }, [p, ctx.slots, request, today]);
+  const kept = useKept(who.id, request ? `재등록 신청 ${request.id}` : '재등록 넣기', initial);
+  // 재등록 신청: 정규 일정 '일정 미정 (학생과 협의 중)' 이면 수강권·결제만 저장 (학생 할 일·대시보드 '일정 확정 전'으로 남음)
+  const [noSched, setNoSched] = useState(false);
   const d = kept.v;
   const set = (x: Partial<RenewDraft>) => kept.set({ ...d, ...x });
   const start: KstDate | '' = d.manual ? d.start : firstLessonAfter(p.finalEndDate, d.slots);
@@ -110,7 +121,7 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
 
   // 정규 시간 겹침 미리 검사 (일정 확정과 같은 검사, 새 수강권 기간 전체)
   const slotsKey = JSON.stringify(d.slots);
-  const ready = !!start && start > p.finalEndDate && d.slots.length > 0 && d.slots.every((s) => /^\d\d:\d\d$/.test(s.time));
+  const ready = !noSched && !!start && start > p.finalEndDate && d.slots.length > 0 && d.slots.every((s) => /^\d\d:\d\d$/.test(s.time));
   useEffect(() => {
     if (!ready || !start) { setConf({}); return; }
     let live = true;
@@ -127,7 +138,9 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, start, slotsKey, d.weeks, d.dur]);
 
-  const block = renewBlock({ ...d, start }, p.finalEndDate, Object.keys(conf).length, today);
+  const block = noSched
+    ? (!start || start <= p.finalEndDate ? '시작일을 골라 주세요' : payBlock(d, today))
+    : renewBlock({ ...d, start }, p.finalEndDate, Object.keys(conf).length, today);
   const dupDay = d.slots.some((s, i) => d.slots.findIndex((x) => x.weekday === s.weekday) !== i);
   const badStart = !!start && start <= p.finalEndDate;
   const offDay = !!start && !badStart && !d.slots.some((s) => s.weekday === weekdayOf(start));
@@ -140,10 +153,11 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
     setBusy(true);
     setSaveErr('');
     try {
-      const r = await actions.renew(ids, {
+      const input = {
         studentCode: who.code, weeks: d.weeks, weekly: d.weekly, dur: d.dur, start, slots: [...d.slots].sort((a, b) => a.weekday - b.weekday),
         method: d.method, amount: parseWon(d.amount) ?? 0, paidOn: d.paidOn as KstDate, payer: d.payer,
-      });
+      };
+      const r = request ? await actions.confirmRequest(request.id, ids, input, noSched) : await actions.renew(ids, input);
       kept.clear();
       setDone(r);
       await onSaved();
@@ -167,7 +181,7 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
           )}
           <div className={`${card} flex flex-wrap items-center justify-between gap-2`}>
             <span className="text-[14px]">
-              {done.planState === 'confirmed' ? `정규 일정 확정 · ${slotsText(d.slots)} 한국 시간` : '정규 일정 확정 전 · 휴무로 미뤄진 수업 날짜를 먼저 잡아 주세요'}
+              {done.planState === 'none' ? '정규 일정 미정' : done.planState === 'confirmed' ? `정규 일정 확정 · ${slotsText(d.slots)} 한국 시간` : '정규 일정 확정 전 · 휴무로 미뤄진 수업 날짜를 먼저 잡아 주세요'}
             </span>
           </div>
           <button type="button" className={btnSub} onClick={onClose}>학생 상세로</button>
@@ -194,7 +208,13 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
   const left = (
     <div className="grid min-w-0 gap-3">
       {productBox}
-      <div>
+      {request && (
+        <div className="flex flex-wrap gap-1.5">
+          <button type="button" aria-pressed={!noSched} className={chip(!noSched)} onClick={() => setNoSched(false)}>정규 일정 넣기</button>
+          <button type="button" aria-pressed={noSched} className={chip(noSched)} onClick={() => setNoSched(true)}>일정 미정 (학생과 협의 중)</button>
+        </div>
+      )}
+      <div hidden={noSched}>
         <span className={label}>정규 수업 (한국 시간 KST){tutor ? ` · ${tutor.name}` : ''}</span>
         <div className="grid gap-2">
           {d.slots.map((s, i) => (
@@ -230,7 +250,7 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
         </label>
         <DateInput id="rn-start" value={start} min={addDays(p.finalEndDate, 1)} onChange={(v) => set({ start: v, manual: true })} className={input} />
         {badStart ? <span className={err}>{mdw(p.finalEndDate)} 뒤 날짜를 골라 주세요</span>
-          : offDay && start ? <span className={err}>{WD_KO[weekdayOf(start)]}요일이에요 · 정규 요일은 {[...d.slots].sort((a, b) => ORDER.indexOf(a.weekday) - ORDER.indexOf(b.weekday)).map((s) => WD_KO[s.weekday]).join('·')}</span> : null}
+          : offDay && start && !noSched ? <span className={err}>{WD_KO[weekdayOf(start)]}요일이에요 · 정규 요일은 {[...d.slots].sort((a, b) => ORDER.indexOf(a.weekday) - ORDER.indexOf(b.weekday)).map((s) => WD_KO[s.weekday]).join('·')}</span> : null}
       </div>
       <div className="rounded-[12px] bg-[#efebff] px-3 py-1">
         <Row k="종료" v={start ? `${mdw(endOfCourse(start, d.weeks))} 오후 11:59 한국 시간` : '—'} strong />
@@ -244,8 +264,8 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
       <div>
         <span className={label}>결제 방법</span>
         <div className="flex flex-wrap gap-1.5">
-          <button type="button" aria-pressed={d.method === 'bank_transfer'} className={chip(d.method === 'bank_transfer')} onClick={() => set({ method: 'bank_transfer' })}>계좌이체</button>
-          <button type="button" aria-pressed={d.method === 'card_link'} className={chip(d.method === 'card_link')} onClick={() => set({ method: 'card_link' })}>아임웹 카드</button>
+          <button type="button" aria-pressed={d.method === 'bank_transfer'} className={chip(d.method === 'bank_transfer')} onClick={() => set({ method: 'bank_transfer', ...(request ? { amount: String(requestAmount(request, 'bank_transfer')) } : {}) })}>계좌이체</button>
+          <button type="button" aria-pressed={d.method === 'card_link'} className={chip(d.method === 'card_link')} onClick={() => set({ method: 'card_link', ...(request ? { amount: String(requestAmount(request, 'card_link')) } : {}) })}>아임웹 카드</button>
         </div>
       </div>
       <div>
@@ -269,6 +289,14 @@ export function RenewSheet({ who, ctx, today, actions, onClose, onSaved, onCarry
   return (
     <Sheet title={`재등록 넣기 · ${who.name}`} onClose={onClose} wide>
       <RestoreBar show={kept.restored} onReset={kept.reset} />
+      {request && (
+        <p className={`${card} mb-2 text-[13.5px]`}>
+          재등록 신청 · <b>{periodText(request.weeks)}</b>
+          {request.method ? ` · ${request.method === 'card_link' ? '카드결제' : '계좌이체'} ${won(requestAmount(request, request.method))}` : ' · 결제 방법 미입력'}
+          {request.points > 0 ? ` · 적립금 ${won(request.points)}` : ''}
+          {request.payerName ? ` · ${request.method === 'card_link' ? '결제자명' : '입금자명'} ${request.payerName}` : ''}
+        </p>
+      )}
       <p className={`${card} mb-3 flex flex-wrap gap-x-3 gap-y-1 text-[13.5px]`}>
         <span>지난 수강권 <b>{p.seq}차 {productText({ weeks: p.weeks, legacyLabel: p.legacyLabel, weeklyCount: p.weeklyCount, durationMin: p.durationMin })}</b></span>
         <span>~ {mdw(p.finalEndDate)} 오후 11:59 한국 시간</span>
