@@ -61,6 +61,15 @@ export default function StudentDetailLive({ code }: { code: string }) {
     sent: (changeId, who, undo) => markRegularChangeSent(sb, changeId, who, undo),
     extend: (enrollmentId, newEnd, kind, note) => extendEnrollment(sb, enrollmentId, newEnd, kind, note),
     prestart: (lessonId, startsAt) => prestartMove(sb, lessonId, startsAt),
+    ttl: {
+      list: async () => {
+        const r = await sb.rpc('admin_ttl_rows');
+        if (r.error) return [];
+        return ((r.data ?? []) as { id: string; student_id: string; tutor: string; city: string; orig: string; new: string | null; conflict: string | null }[])
+          .map((x) => ({ id: x.id, studentId: x.student_id, tutor: x.tutor, city: x.city, orig: new Date(x.orig), newAt: x.new ? new Date(x.new) : null, conflict: x.conflict }));
+      },
+      resolve: async (moveId, startsAt) => { const r = await sb.rpc('admin_ttl_resolve', { p_move: moveId, p_starts_at: startsAt }); if (r.error) throw new Error(r.error.message); },
+    },
     prestartMoved: () => loadPrestartMoved(sb, id),
     lessonManage: {
       load: async () => {

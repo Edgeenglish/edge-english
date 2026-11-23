@@ -183,6 +183,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
   const changeReqs: ChangeRequests = { regular: [], tutor: [] };
   const actions: StudentActions = {
     reload: async () => ({ ...view, timezone: tz.timezone }),
+    ttl: { items: async () => [], options: async () => ({ rows: [], weekly: [], need: 0, rcPending: false, proposed: false }), submit: async () => { throw new Error('미리보기'); } },
     renewal: { info: async () => null, save: async () => { throw new Error('미리보기'); }, submit: async () => { throw new Error('미리보기'); } },
     prefs: async () => ({}),
     savePref: null,

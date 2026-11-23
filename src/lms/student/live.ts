@@ -6,6 +6,7 @@ import { loadScreenPrefs, saveScreenPref, type PrefKey, type ScreenPrefs } from 
 // 수강생 본인은 student_ 함수, 운영자(TOTP 완료)가 ?student= 로 열면 운영진 화면과 같은 admin_ 함수(이력에 운영자로 남음)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { studentTtl } from '../ttl';
 import type { KstDate } from '../rules/dates';
 import type { CreditPeriod, LateReason, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
 import { processingEvents, type ProcessingEvent } from './processing-history';
@@ -339,6 +340,8 @@ export type ChangeRequests = { regular: RegularRequest[]; tutor: TutorChangeRequ
 export function studentActions(sb: SupabaseClient, adminStudentId: string | null) {
   const admin = adminStudentId !== null;
   return {
+    /** 새 수업 시간 고르기 (H26(218), 강사 임시 근무 지역 변경) */
+    ttl: studentTtl(sb, adminStudentId),
     /** 화면 보기 설정: 학생이 저장한 값 읽기 · 저장은 학생 본인일 때만 (운영자 보기는 저장 안 함, 대표 11/13 A안) */
     prefs: () => loadScreenPrefs(sb, { student: adminStudentId }),
     savePref: admin ? null : (key: PrefKey, value: string) => saveScreenPref(sb, key, value),

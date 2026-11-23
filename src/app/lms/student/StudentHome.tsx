@@ -7,7 +7,9 @@
 
 import { asClassType, typeKo, typeKoLong } from '@/lms/class-type';
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
-import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { TtlPickSheet, TtlReviewSheet, type TtlView } from '@/app/lms/TtlSheet';
+import { ttlStatus, type TtlItem } from '@/lms/ttl';
 import books from '@/data/books.json';
 import Link from 'next/link';
 import ProcessingHistory from './ProcessingHistory';
@@ -77,7 +79,8 @@ type Overlay =
   | { kind: 'regular' }
   | { kind: 'tutor_change' }
   | { kind: 'late'; lessonId: string }
-  | { kind: 'renew' };
+  | { kind: 'renew' }
+  | { kind: 'ttl'; tutorId: string; review: boolean };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -316,6 +319,10 @@ export default function StudentHome(props: {
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>(props.openTab === 'me' ? 'me' : 'home');
   const [overlay, setOverlay] = useState<Overlay>(null);
+  // 새 수업 시간 고르기 (H26(218)): 강사 임시 근무 지역 변경으로 옮길 수업. 모두 확정되면 DB 가 목록에서 뺌
+  const [ttlItems, setTtlItems] = useState<TtlItem[]>([]);
+  const refreshTtl = useCallback(() => { actions.ttl.items().then(setTtlItems, () => {}); }, [actions]);
+  useEffect(() => { refreshTtl(); }, [refreshTtl, s]);
   // 창이 열리면 history 에 한 칸 → 휴대폰 뒤로가기(제스처 포함)는 창만 닫고 수강생 화면에 머묾 (Work QA 11/7: 수업 변경 창에서 뒤로가기 → 화면 이탈)
   const overlayOpen = overlay !== null;
   const mounted = useRef(true);
@@ -795,6 +802,8 @@ export default function StudentHome(props: {
   };
   // 할 일: 수강생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
   const schedulePending = history?.some((p) => p.schedulePending) ?? false;
+  // 학생이 할 수 있는 것만: 강사가 보낸 시간 확인 · 아직 안 고른 회차 (운영진 확인 중만 남으면 빠짐, 정규 시간 변경 신청 중이면 빠짐)
+  const ttlTodo = ttlItems.filter((it) => { const st = ttlStatus(it); return st.kind === 'proposed' || (st.open > 0 && !it.rcPending); });
   const todoItems = (
     <>
       {schedulePending && <TodoBar n={0} text="수업 요일·시간을 카카오톡으로 알려주세요" onClick={() => window.open('https://pf.kakao.com/_blxgib/friend', '_blank', 'noopener,noreferrer')} />}
@@ -802,9 +811,15 @@ export default function StudentHome(props: {
       {openRights.length > 0 && <TodoBar n={openRights.length} text={openRights.some((m) => m.carryIn) ? '수업 날짜 고르기' : '보강 날짜 고르기'} onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {choosing.length > 0 && <TodoBar n={choosing.length} text="보강 시간 고르기" onClick={() => (choosing.length === 1 ? setOverlay({ kind: 'request', id: choosing[0].id }) : setTab('requests'))} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
+      {ttlTodo.map((it) => {
+        const st = ttlStatus(it);
+        return st.kind === 'proposed'
+          ? <TodoBar key={it.tutorId + it.city} n={st.proposed} text="선생님이 신청한 수업 시간을 확인해 주세요" onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: true })} />
+          : <TodoBar key={it.tutorId + it.city} n={st.open} text="수업 시간 변경이 필요해요" onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: false })} />;
+      })}
     </>
   );
-  const todoCount = (schedulePending ? 1 : 0) + (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (choosing.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
+  const todoCount = (schedulePending ? 1 : 0) + (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (choosing.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0) + ttlTodo.length;
   // 할 일: 처리할 일이 있을 때만 (11/11 대표 최신 지시), 제목 옆 전체 숫자 없음
   const todoBars = todoCount > 0 && (
     <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
@@ -1175,7 +1190,22 @@ export default function StudentHome(props: {
         ))}
       </nav>
 
-      {overlay && (
+      {overlay?.kind === 'ttl' && (() => {
+        const it = ttlItems.find((x) => x.tutorId === overlay.tutorId);
+        if (!it) return null;
+        const v: TtlView = {
+          en: false, who: `${it.tutor} 선생님`, badge: `모든 날짜·시간은 ${zoneCity()} 기준`,
+          when: whenText,
+          date: (t) => { const k = kst(t); return `${k.md}(${k.wd})`; },
+          day: (t) => { const k = kst(t); return { key: '일월화수목금토'.indexOf(k.wd), name: k.wd }; },
+          slot: (t) => ({ main: kst(t).time }),
+        };
+        const done = () => { refreshTtl(); void actions.reload().then(setView, () => {}); };
+        return overlay.review
+          ? <TtlReviewSheet item={it} actions={actions.ttl} v={v} onClose={() => setOverlay(null)} onDone={done} onPick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: false })} />
+          : <TtlPickSheet item={it} actions={actions.ttl} v={v} onClose={() => setOverlay(null)} onDone={done} />;
+      })()}
+      {overlay && overlay.kind !== 'ttl' && (
         <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup' || overlay.kind === 'renew'}>
           {overlay.kind === 'late' && (() => {
             const l = s.lessons.find((x) => x.id === overlay.lessonId);
