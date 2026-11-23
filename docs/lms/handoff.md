@@ -123,6 +123,9 @@
 - 11/18 보충 7·8(같은 시간 규칙): migration **20261118160000_lms_regular_change_same_time** 시험 DB 적용(lms_rc_first2·fits2·week_ok2·week2·slots_of, request·decide 교체 — items = [{c1:{days,time,week,first},c2}], 재등록 직후 확정은 새 수강기간 시작부터) · 화면 ChangeRequests.tsx 다시 씀 · lms-test ebbdacf. ✅ 11/18 운영 반영: 백업 snapshots 82 → migration 20261118160000 → lms-prod ca4d7c0 (보충 9)
 - 11/23 보충 10: migration **20261123100000_lms_regular_change_free_only_moved_weeks** 시험 DB 적용(lms_rc_free = 옮겨질 수업 있는 주만 검사) + 막힌 이유 문구 둘. 시험: STU-0018 Alex 휴무 1주 넣으면 11→0, 그 주 수업 휴무 처리 중이면 11 그대로(되돌림 트랜잭션). 운영 STU-0007 같은 계산(읽기만) 시간 약 40개. **운영 미반영(대표 '응' 대기)**
 - 11/23 보충 11: migration **20261123110000_lms_regular_change_into_leave** 시험 DB 적용(admin_regular_change 본문 3곳 교체: 휴무(kind leave)는 문제 아님 + 옮긴 수업을 그 휴무 leave_items·학생 알림에 넣음 / lms_rc_free 휴무 날짜는 검사 안 함). 시험: STU-0018 Alex 12/16 휴무 → 화·목→수·목 저장, 12/15 수업이 12/16 휴무 항목(undecided)+알림 1건(되돌림 트랜잭션). **운영 미반영**. 운영 STU-0007 처리 순서 = Benny 12/11 block 풀기(tutor_schedule_save 'unblock') → 수·금 19:00 11/30부터 저장(12/21→12/23 휴무 처리) → Benny 가 12/11 Cancel class
+- 11/23 보충 10·11 **운영 반영 완료**: 백업 snapshots 90 → 20261123100000·110000 적용, lms-prod e2fccd2 (H26(208) 보충 12)
+- 11/23 보충 13: migration **20261123120000_lms_regular_change_into_block** — 강사가 막아 둔 시간(kind block, 1회 휴무)도 정규 변경을 막지 않음. 옮긴 수업이 막아 둔 시간에 들어가면 저장 뒤 lms_change_core(tutor, admin_on_behalf)로 '강사 정상 취소'(보강권, 학생·강사 알림). lms_rc_free 도 block 날짜 검사 안 함. 시험 DB 적용·시험(STU-0018 Alex 12/11 block → 수·금 저장, 12/11 Tutor canceled in advance, 알림 2건, 되돌림). **운영 적용 완료**(백업 snapshots 93). 운영 STU-0007 11/30부터 수·금 19:00 저장: 12/11 강사 정상 취소, 12/21→12/23 휴무 처리. Benny block 그대로. 화면 코드 변경 없음
+- Benny 노트 13개 회사 드라이브 복사 완료(이름_Benny). Benny 공유(읽기)는 Benny 안내 문구 확정('넣어') 뒤에 같이
 
 ## ✅ 11/13 학생 지각 알림 — **시험 DB·lms-test 반영, 운영 미반영** (브랜치 claude/admiring-ritchie-u27l8j, 정책 원본 **H26(162)** 참고)
 
