@@ -35,6 +35,9 @@ describe('휴무 안내 문구 (대표 11/23)', () => {
     expect(r.lines[1]).toBe('인기 강사님 중 한 분인 Olivia 선생님이 기존 수업 시간에 가능하세요.');
     expect(r.title.startsWith('⭐ 추천')).toBe(true);
   });
+  it('추천 상자: 강사가 여러 명이면 이름을 나열', () => {
+    expect(leaveRecommendLines(['Maria', 'Benny']).lines[1]).toBe('인기 강사님 중 Maria, Benny 선생님이 기존 수업 시간에 가능하세요.');
+  });
   it('버튼 글', () => {
     expect(leaveButtonOk(2)).toBe('대체강사님과 2회 수업할게요');
     expect(leaveButtonWait(1)).toBe('기존 강사님과 1회 보강할게요');
