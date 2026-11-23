@@ -19,7 +19,7 @@ export type TtlView = {
   slot: (t: Date) => { main: string; sub?: string };
   /** 날짜만 ('12/7(월)' · 'Mon, 7 Dec') */
   date: (t: Date) => string;
-  /** 학생 화면 페이지 맨 위 배지와 같은 글 ('모든 날짜·시간은 Sydney 기준'). 강사는 없음 */
+  /** 창 맨 위 기준 시간 배지 (학생 = 페이지 맨 위 배지와 같은 글 '모든 날짜·시간은 Sydney 기준', 강사 = 'All times: Buenos Aires Time / KST') */
   badge?: string;
   /** 창 제목 아래 한 줄 (강사 = 학생 이름, 학생 = 선생님) */
   who: string;

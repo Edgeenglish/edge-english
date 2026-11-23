@@ -22,7 +22,7 @@ import { updateLines, updateTitle, type NewStudentRequest, type TutorUpdate } fr
 import { LangCtx, useLang, useT, type Lang } from '@/lms/tutor/lang';
 import { Rich } from '@/app/lms/Rich';
 import HomeNotices from '@/app/lms/HomeNotices';
-import { enBoth, enClock, enDay, enEveryLines, stripBold } from '@/lms/admin/time-text';
+import { enBoth, enClock, enDay, enEveryLines, enZoneName, stripBold } from '@/lms/admin/time-text';
 import { TtlPickSheet, type TtlView } from '@/app/lms/TtlSheet';
 import { ttlStatus, type TtlActions, type TtlItem } from '@/lms/ttl';
 import { useDetailBack } from './useDetailBack';
@@ -879,7 +879,7 @@ const enDateOnly = (d: string) => enDay(new Date(`${d}T12:00:00Z`), 'UTC');
 function tutorTtlView(it: TtlItem): TtlView {
   const tz = it.timezone;
   return {
-    en: true, who: it.student,
+    en: true, who: it.student, badge: `All times: ${enZoneName(tz)} / KST`,
     when: (t) => enBoth(t, tz),
     date: (t) => enDay(t, tz),
     day: (t) => { const d = new Date(`${formatInZone(t, tz).date}T00:00:00Z`).getUTCDay(); return { key: d, name: EN_WDAY[d] }; },
