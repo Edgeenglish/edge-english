@@ -16,6 +16,7 @@ import { creditEntry, type CreditItem, type CreditPeriodHistory } from '@/lms/st
 import { ChangeRequestRows, RegularChangeSheet, TutorChangeSheet } from './ChangeRequests';
 import type { ChangeRequests } from '@/lms/student/live';
 import { homepageProfile } from '@/lms/admin/homepage-tutor';
+import { leaveButtonOk, leaveButtonWait, leaveRecommendLines, leaveSorryText } from '@/lms/student/leave-notice';
 import { koZoneCity, ZONE_ROWS, zoneName } from '@/lms/admin/places';
 import { MAKEUP_SLOTS_MAX } from '@/lms/admin/lesson-change';
 import { CONFIRMED } from '@/lms/rules/policy';
@@ -1390,10 +1391,14 @@ function LeaveSheet(props: {
         <h2 className="text-[18px] font-bold">담당 강사님 휴무 안내</h2>
         {offText && <p className="mt-0.5 text-[13px] text-[#55526a]">휴무 {offText}</p>}
       </div>
-      {/* 확정·답변 필요·기존 강사 보강을 따로 (대표 11/2: 확정 2회·미정 1회인데 '3회 대체수업'으로 보임) */}
-      <p className="rounded-[14px] bg-[#efeaff] px-4 py-3 text-[15px] font-semibold leading-relaxed text-[#2b1c7a]">
-        {[fixed.length && `대체강사 확정 ${fixed.length}회`, ask.length && `답변 필요 ${ask.length}회`, waits.length && `기존 강사님과 보강 ${waits.length}회`].filter(Boolean).join(' · ')}
-      </p>
+      {/* 사과 문구 (대표 11/23): 휴무가 11~1월과 겹치면 연말연초 문구, 아니면 일반 — 날짜로 자동 */}
+      {off && <p className="text-[13.5px] leading-relaxed text-[#55526a]">{leaveSorryText(off.offFrom, off.offTo, VIEW_TZ)}</p>}
+      {/* 확정·기존 강사 보강을 따로 (대표 11/2: 확정 2회·미정 1회인데 '3회 대체수업'으로 보임). 답변 필요 줄은 뺌 (대표 11/23) */}
+      {(fixed.length > 0 || waits.length > 0) && (
+        <p className="rounded-[14px] bg-[#efeaff] px-4 py-3 text-[15px] font-semibold leading-relaxed text-[#2b1c7a]">
+          {[fixed.length && `대체강사 확정 ${fixed.length}회`, waits.length && `기존 강사님과 보강 ${waits.length}회`].filter(Boolean).join(' · ')}
+        </p>
+      )}
       {fixed.length > 0 && (() => {
         // R-23: 회의실 링크가 있는 수업만 '아래 링크', 없으면 카톡으로 보냄
         const withLink = fixed.filter((x) => meetRoomUrl(x.subMeetUrl)).length;
@@ -1404,7 +1409,17 @@ function LeaveSheet(props: {
       })()}
       {[{ title: '대체강사 수업 · 확정', list: fixed }, { title: '대체강사 수업 · 답변 필요', list: ask }].filter((x) => x.list.length > 0).map(({ title, list }) => (
         <section key={title} className={`${card} grid gap-1 p-4`}>
-          <h3 className="text-[15px] font-bold">{title}</h3>
+          {list === ask ? (() => {
+            // 답변이 필요한 카드: 제목 없이 추천 상자부터 (대표 11/23)
+            const rec = leaveRecommendLines(ask.map((x) => x.subTutor ?? ''));
+            return (
+              <div className="mb-1 grid gap-1.5 rounded-[12px] bg-[#f4f1ff] px-3 py-3 text-[14px] leading-relaxed">
+                <p className="text-[15px] font-bold">{rec.title}</p>
+                {rec.lines.map((t) => <p key={t}>{t}</p>)}
+                <p className="text-[12.5px] text-[#55526a]">{rec.small}</p>
+              </div>
+            );
+          })() : <h3 className="text-[15px] font-bold">{title}</h3>}
           {list.map((x) => (
             <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
               <span>
@@ -1432,10 +1447,10 @@ function LeaveSheet(props: {
           {list === ask && (
             <div className="mt-2 grid gap-2">
               <button type="button" disabled={props.busy} onClick={() => props.onAnswer('ok')} className="min-h-[52px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-50">
-                {ask.length > 1 ? `좋아요, ${ask.length}회 모두 이대로 할게요` : '좋아요, 이대로 할게요'}
+                {leaveButtonOk(ask.length)}
               </button>
               <button type="button" disabled={props.busy} onClick={() => props.onAnswer('makeup')} className="min-h-[50px] rounded-[14px] border border-[#5b3df0] text-[15px] font-bold text-[#4b2fd6] disabled:opacity-50">
-                {ask.length > 1 ? `${ask.length}회 모두 기존 강사님과 보강할게요` : '기존 강사님과 보강할게요'}
+                {leaveButtonWait(ask.length)}
               </button>
             </div>
           )}
