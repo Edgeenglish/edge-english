@@ -3,7 +3,7 @@
 - 가입 때 `signUp` data 에 `lang`(화면 언어) 저장 → 시험용 Supabase Confirm sign up 템플릿(제목·본문)을 `{{ if eq (print .Data.lang) "en" }}` 영어 / 그 밖 = 기존 한국어(그대로)로 바꿈. 영어 문구 대표 11/24 확인
 - 시험(11/24): 영어 화면 가입 support+signupen@ → 'Edge English sign-up code' 영어 메일 도착 · 한국어 화면 가입 support+signupko@ → 기존 한국어 메일 도착. tsc 0
 - 운영 확인: 운영 JS 에 lang 저장 반영, 공개 화면 6곳 내부용 글 없음. 되돌리기 = lms-prod 를 3b3b570 로 + 템플릿 제목·본문을 한국어 원문으로
-- 남은 일: 코드 로그인(Magic Link) 메일 영어판 — 대표 '어'(11/24), 영어 문구 대표 확인 대기 · 기존 운영 강사 계정에 lang=en 넣을지 대표 확인 대기
+- 코드 로그인(Magic Link) 메일 영어판도 반영(대표 11/24 '넣어'): 시험·운영 템플릿 제목·본문 `.Data.lang` 분기, 운영 강사 계정 4개·시험 강사 5개 user_metadata lang=en 추가(메일 발송 없음). 시험: support+tutorvideo@ 코드 요청 → 'Edge English login code' 도착. 되돌리기 = 템플릿 한국어 원문 + `raw_user_meta_data - 'lang'`
 
 ## ⏭ 강사 임시 근무 지역 변경 → 새 수업 시간 고르기 — **시험 DB·lms-test 반영, 운영 미반영** (H26(218), 브랜치 claude/serene-mccarthy-r1wvk6 → 이어서 claude/compassionate-gauss-iafm0s)
 - 시안 `docs/lms/previews/tutor-temp-location-new-times.html` · 결정 = 정책 원본 H26(218) (①~⑩)
