@@ -466,7 +466,7 @@ export default function LoginFlow() {
     const { data, error: e } = await sb.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { name: name.trim(), terms_agreed_at: agreedAt } },
+      options: { data: { name: name.trim(), terms_agreed_at: agreedAt, lang } }, // 가입 메일 언어 (메일 템플릿이 .Data.lang 으로 영어/한국어 선택)
     });
     setBusy(false);
     if (e) {
