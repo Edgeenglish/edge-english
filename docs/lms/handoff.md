@@ -1,3 +1,9 @@
+## ✅ 11/24 첫 수업 확인 창 'Create a new Google Doc' 버튼 삭제 · 영어 화면 가입 메일 영어 — **시험 사이트만, 운영 미반영** (브랜치 claude/tutor-followup-signup-mail-en)
+- 대표 11/24: 새 구글 문서 만들기 버튼은 없는 정책 → `FirstLessonFollowup.tsx` 버튼 줄 삭제
+- 가입 때 `signUp` data 에 `lang`(화면 언어) 저장 → 시험용 Supabase Confirm sign up 템플릿(제목·본문)을 `{{ if eq (print .Data.lang) "en" }}` 영어 / 그 밖 = 기존 한국어(그대로)로 바꿈. 영어 문구 대표 11/24 확인
+- 시험(11/24): 영어 화면 가입 support+signupen@ → 'Edge English sign-up code' 영어 메일 도착 · 한국어 화면 가입 support+signupko@ → 기존 한국어 메일 도착. tsc 0
+- 운영 반영 때: 코드(lms-prod) + **운영 Supabase Confirm sign up 템플릿도 같은 내용으로** 바꿔야 함. 코드 로그인(Magic Link) 메일은 아직 한국어만(대표 답 대기)
+
 ## ⏭ 강사 임시 근무 지역 변경 → 새 수업 시간 고르기 — **시험 DB·lms-test 반영, 운영 미반영** (H26(218), 브랜치 claude/serene-mccarthy-r1wvk6 → 이어서 claude/compassionate-gauss-iafm0s)
 - 시안 `docs/lms/previews/tutor-temp-location-new-times.html` · 결정 = 정책 원본 H26(218) (①~⑩)
 - 재사용 안전성 확인(11/23): lms_tutor_location_at·lms_tutor_tz_at·lms_tutor_weekly_ok·lms_tutor_available·lms_makeup_conflict(p_ignore)·lms_slot_hold_hits·lms_rc_monday = 읽기 전용, 그대로 씀. lms_plan_conflicts 는 요일 반복용이라 옮기는 수업 자신을 못 빼서 안 씀. admin_prestart_move(운영자만·첫 수업 전만·회차 번호 전체 다시 매김 → 협의 필요 회차 번호와 충돌)·admin_regular_change(⑥) 안 씀
