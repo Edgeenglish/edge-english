@@ -6,9 +6,10 @@
 - 메일: 새 메일 없음(공지는 메일 안 감). 취소·보강 메일은 기존 그대로
 - 남은 일: 운영 반영(대표 승인 + 공지 게시 시작일 결정) → 운영 DB 백업(바뀌는 함수 8개 이전 정의) → migration → lms-prod
 
-## ✅ 11/25 홈 '강사 채용 과정 5단계' 새 섹션 — **시험 사이트만 (운영 반영 대기)** (브랜치 claude/sleepy-hypatia-yvxi5w)
+## ✅ 11/25 홈 '강사 채용 과정 5단계' 새 섹션 — **운영 반영 끝 (대표 '운영 반영해', lms-prod 2fe71cbb = 파일 4개: 홈·레벨테스트 카드·운영자 머리글 [홈페이지] 버튼·TutorHiring)** (브랜치 claude/sleepy-hypatia-yvxi5w)
 - 대표 11/25 확정(시안 2개의 좋은 점 합침): 리스트 5줄 + 아이콘 + 5단계 강조, 제목 '운영진 둘이 직접 면접 보고 골라요'. 멘트는 대표가 쓴 그대로(2·3·4단계 교체). 자리 = 홈 '화상영어 수강생들의 흔한 고민' 말풍선 섹션 바로 아래(위치는 대표 답 없이 Claude 판단 — 바꾸라면 이동)
 - 코드: `src/components/main/TutorHiring.tsx`(새) · `src/app/page.tsx`(import + `<TutorHiring />` 한 줄). tsc 0건·eslint 통과·로컬 홈 PC·휴대폰 화면 확인. 홈 탭 '5단계 검증 완료'(DetailPointTab)는 안 바꿈
+- 운영 확인: edgeenglish.kr 홈·/level-test 에 새 문구, check-public-pages 6곳 통과. 5단계 끝 마침표 모두 뺌(대표 답). 되돌리기 = lms-prod 를 34707e80 으로
 - 확인 필요(Claude 가 확인 못 함): '서면 인터뷰·2:1 면접·2개월 집중 모니터링·탈락' 문구가 실제 운영과 같은지는 대표 책임
 
 ## ⏭ 강사 임시 근무 지역 변경 → 새 수업 시간 고르기 — **시안 확정, 시험 개발 대기 (새 세션)** (브랜치 claude/sleepy-knuth-86ksdz)
