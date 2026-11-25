@@ -837,15 +837,15 @@ export default function StudentHome(props: {
     <>
       {schedulePending && <TodoBar n={0} text="수업 요일·시간을 카카오톡으로 알려주세요" onClick={() => window.open('https://pf.kakao.com/_blxgib/friend', '_blank', 'noopener,noreferrer')} />}
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
-      {ttlCoverAsk.length > 0 && <TodoBar n={ttlCoverAsk.length} text="대체강사 수업을 확정해 주세요" sub={`${ttlCoverTutor} 강사님의 임시 근무 지역 변경으로 인한 수업 조정`} onClick={() => setOverlay({ kind: 'ttl_cover' })} />}
+      {ttlCoverAsk.length > 0 && <TodoBar n={ttlCoverAsk.length} text="대체강사 수업을 확정해 주세요" sub={`${ttlCoverTutor} 강사님의 임시 근무 지역 변경`} onClick={() => setOverlay({ kind: 'ttl_cover' })} />}
       {openRights.length > 0 && <TodoBar n={openRights.length} text={openRights.some((m) => m.carryIn) ? '수업 날짜 고르기' : '보강 날짜 고르기'} onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {choosing.length > 0 && <TodoBar n={choosing.length} text="보강 시간 고르기" onClick={() => (choosing.length === 1 ? setOverlay({ kind: 'request', id: choosing[0].id }) : setTab('requests'))} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
       {ttlTodo.map((it) => {
         const st = ttlStatus(it);
         return st.kind === 'proposed'
-          ? <TodoBar key={it.tutorId + it.city} n={st.proposed} text="선생님이 신청한 수업 시간을 확인해 주세요" sub={`${it.tutor} 강사님의 임시 근무 지역 변경으로 인한 수업 조정`} onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: true })} />
-          : <TodoBar key={it.tutorId + it.city} n={st.open} text="수업 시간 변경이 필요해요" sub={`${it.tutor} 강사님의 임시 근무 지역 변경으로 인한 수업 조정`} onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: false })} />;
+          ? <TodoBar key={it.tutorId + it.city} n={st.proposed} text="선생님이 신청한 수업 시간을 확인해 주세요" sub={`${it.tutor} 강사님의 임시 근무 지역 변경`} onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: true })} />
+          : <TodoBar key={it.tutorId + it.city} n={st.open} text="수업 시간 변경이 필요해요" sub={`${it.tutor} 강사님의 임시 근무 지역 변경`} onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: false })} />;
       })}
     </>
   );
