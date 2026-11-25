@@ -420,7 +420,7 @@ export default function LevelTest() {
             e.preventDefault();
             void copyText(resultText(L.name, score, wrong)).then((ok) => {
               setCopied(ok);
-              setTimeout(() => { window.location.href = KAKAO; }, ok ? 1200 : 0);
+              setTimeout(() => { window.location.href = KAKAO; }, ok ? 2000 : 0);
             });
           }}>카톡으로 상담받기</a>
         {copied && <p className="copied" role="status">결과를 복사했어요. 카톡 입력칸에 붙여 넣어 주세요.</p>}
