@@ -676,11 +676,13 @@ export default async function Home() {
                 </div>
                 <div className="mb-2 text-sm text-[#6B6880]">Nov 25 · Free Talking</div>
                 <div className="mt-2 text-sm font-bold text-[#5b3df0]">New expressions</div>
-                <div className="border-l-2 border-[#E2E0EE] pl-3">I&apos;m gonna crash early tonight.</div>
-                <div className="border-l-2 border-[#E2E0EE] pl-3">It&apos;s way comfier than my old one.</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3">I&apos;m down!<span className="ml-2 text-[0.85em] font-normal text-[#6B6880]">나도 콜!</span></div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3">It&apos;s on me.<span className="ml-2 text-[0.85em] font-normal text-[#6B6880]">이건 내가 쏠게.</span></div>
                 <div className="mt-2 text-sm font-bold text-[#5b3df0]">Let&apos;s fix this</div>
-                <div className="border-l-2 border-[#E2E0EE] pl-3 text-[#D2414B] line-through">I go to Busan yesterday.</div>
-                <div className="border-l-2 border-[#E2E0EE] pl-3 font-bold text-[#1F8A5B]">I went to Busan yesterday.</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 text-[#D2414B] line-through">I&apos;m so boring.</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 font-bold text-[#1F8A5B]">I&apos;m so bored.<span className="ml-2 text-[0.85em] font-normal text-[#6B6880]">나 너무 심심해</span></div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 text-[#D2414B] line-through">I went to there.</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 font-bold text-[#1F8A5B]">I went there.<span className="ml-2 text-[0.85em] font-normal text-[#6B6880]">거기 갔어</span></div>
               </div>
             </div>
           </div>
