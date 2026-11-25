@@ -14,15 +14,12 @@ export default function MainReviews({ reviews }: { reviews: ReviewType[] }) {
 
   return (
     <div className="bg-[#F3F6F8] px-4.5 py-[120px] text-center max-md:px-0 max-md:py-15">
-      <p className="text-xl font-semibold text-edge-purple max-md:text-base">
-        솔직 찐후기
-      </p>
-      <h3 className="mt-4 text-4xl font-bold text-[#140F33] max-md:px-4.5 max-md:text-[28px]">
-        왜 모두 엣지영어에{' '}
+      <h3 className="text-4xl font-bold text-[#140F33] max-md:px-4.5 max-md:text-[28px]">
+        엣지영어 수강생들에게 받은{' '}
         <span className="md:hidden">
           <br />
         </span>
-        만족할까요?
+        실제 내돈내산 후기
       </h3>
       <p className="mt-4 text-lg text-edge-gray max-md:px-4.5 max-md:text-[15px]">
         카카오톡으로 받은 수강생 후기를{' '}

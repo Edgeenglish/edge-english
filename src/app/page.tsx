@@ -1,3 +1,4 @@
+import HomeHero from '@/components/main/HomeHero';
 import MainReviews from '@/components/main/MainReviews';
 import PointsTab from '@/components/main/DetailPointTab';
 import MobileShortsSwiper from '@/components/main/MobileShortsSwiper';
@@ -14,79 +15,8 @@ export default async function Home() {
 
   return (
     <div>
-      {/* 섹션 1 */}
-      <div className="mx-auto mb-[120px] mt-15 w-fit self-center px-4.5 max-md:mb-20 max-md:mt-10">
-        <img
-          src="/images/main/memoji.png"
-          alt="memoji"
-          width={304}
-          height={168}
-          className="mx-auto justify-self-center max-lg:mb-4 max-lg:w-[240px]"
-        />
-        <p
-          className="mx-auto w-fit text-[32px] font-extrabold max-md:text-2xl"
-          style={{
-            background: 'linear-gradient(90deg, #FCB045, #FD1D1D, #833AB4)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          시에나
-          <span className="font-normal"> X </span>
-          탠저린
-        </p>
-
-        {/* 타이틀 */}
-        <>
-          <h1 className="mt-[26px] text-center text-4xl font-bold leading-[120%] max-lg:text-4xl max-md:mt-5 max-md:text-[28px]">
-            엣지영어는{' '}
-            <span className="hidden max-md:inline">
-              <br />
-            </span>
-            영어 교육 전문가들이 만든
-          </h1>
-
-          <div className="mx-auto mt-2 flex w-fit justify-center gap-4 max-md:mt-0 max-md:block">
-            <div className="flex gap-4 max-md:items-end max-md:gap-1">
-              <h1 className="content-center text-4xl font-bold max-lg:text-4xl max-md:text-[28px]">
-                1:1 미국 · 캐나다 · 호주{' '}
-              </h1>
-              <div className="aspect-[109/57] w-[109px] max-lg:w-[70px]">
-                <img
-                  src="/images/main/flag.png"
-                  alt="usa and canaga flags"
-                  width={109}
-                  height={57}
-                />
-              </div>
-            </div>
-
-            <h1 className="content-center text-4xl font-bold leading-[120%] max-lg:text-4xl max-md:text-[28px]">
-              화상영어 브랜드입니다.
-            </h1>
-          </div>
-
-          <h2 className="mt-8 text-center text-xl max-md:mt-6 max-md:text-base">
-            13년 차 영어 튜터 시에나 & 누적 조회수 300만+
-            <span className="md:hidden">
-              <br />
-            </span>
-            영어 콘텐츠 제작자 탠저린이 직접 운영해요.
-          </h2>
-        </>
-
-        {/* 무료 레벨테스트 입구 (대표 11/25, H26(219)) */}
-        <div className="mx-auto mt-10 flex max-w-[760px] items-center gap-6 rounded-[20px] bg-[#eeeaff] px-8 py-6 text-left max-md:mt-8 max-md:flex-col max-md:items-stretch max-md:gap-4 max-md:px-5 max-md:py-5">
-          <p className="flex-1 text-2xl font-black leading-[1.35] text-[#140F33] max-md:text-xl">
-            <span className="text-[#5b3df0]">무료 레벨테스트</span>하면
-            <br />
-            부족한 부분만 콕 짚어 드려요
-          </p>
-          <Link href="/level-test" className="shrink-0 rounded-xl bg-[#5b3df0] px-7 py-4 text-center text-lg font-bold text-white">
-            지금 시작하기
-          </Link>
-        </div>
-      </div>
+      {/* 섹션 1 첫 화면 (대표 11/25 시안) */}
+      <HomeHero />
 
       {/* 수강생 후기 (최신 6개) */}
       <MainReviews reviews={reviews} />
