@@ -1,6 +1,6 @@
 /**
  * 대체 강사 수업 노트 자동 만들기 (support@edgeenglish.kr 계정, migration 20261125090000)
- * - 1분마다 LMS(시험·운영)에서 만들 노트 목록을 가져와 Google Docs '학생_대체강사' 를 만든다
+ * - 10분마다 LMS(시험·운영)에서 만들 노트 목록을 가져와 Google Docs '학생_대체강사' 를 만든다
  * - 대체 강사: 새 노트 편집 / 원래 노트 보기(이미 권한이 있으면 그대로) · 새 노트는 링크 있는 누구나 보기
  * - 공유 알림 메일은 보내지 않는다 (sendNotificationEmail=false)
  * - 처음 한 번: 함수 'setup' 실행 → 권한 허용. 그 뒤로는 자동
@@ -15,7 +15,7 @@ const LMS = [
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'run') ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('run').timeBased().everyMinutes(1).create();
+  ScriptApp.newTrigger('run').timeBased().everyMinutes(10).create();
   run();
 }
 

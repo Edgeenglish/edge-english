@@ -1130,7 +1130,7 @@ export default function StudentHome(props: {
                         )}
                         {info.subNotes.map((n) => (
                           <a key={n.url} href={n.url} target="_blank" rel="noreferrer" className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
-                            대체 수업 노트 열기 · {n.tutor} ↗
+                            {n.kind === 'sub' ? '대체 수업 노트 열기' : '이전 수업 노트 열기'}{n.tutor ? ` · ${n.tutor}` : ''} ↗
                           </a>
                         ))}
                       </InfoBlock>

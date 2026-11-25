@@ -3,10 +3,10 @@
 --  - 대체 수업 = 수업 강사(lessons.tutor_id)가 그 날짜의 담당 강사(정규 시간표 regular_schedules 강사,
 --    없으면 lessons.original_tutor_id)와 다른 예정 수업
 --  - 그런 수업이 잡히면(넣기·강사 바뀜) substitute_notes 에 '학생_대체강사' 노트 작업 1줄 (같은 학생·강사면 다시 씀)
---  - support@ 계정 Apps Script(apps-script/substitute-notes)가 1분마다 작업을 가져가 Google Docs 를 만들고
+--  - support@ 계정 Apps Script(apps-script/substitute-notes)가 10분마다 작업을 가져가 Google Docs 를 만들고
 --    대체 강사 편집 · 링크 있는 누구나 보기 · 원래 노트에 대체 강사 보기(이미 권한 있으면 그대로) — 공유 알림 메일 없음
 --  - 강사 화면: 그 학생의 담당 강사가 아니면 원래 노트 대신 본인 대체 노트 링크(만들어지기 전엔 없음)
---  - 학생 화면: 원래 노트 + 대체 노트 모두 (student_my_info.sub_notes)
+--  - 학생 화면: 지금 노트 + 대체 노트 + 담당 강사 바뀌며 교체된 예전 노트 모두 (student_my_info.sub_notes)
 --  - 메일: 이 migration 은 학생·강사 메일을 보내지 않음
 --  - 다시 실행해도 같은 결과 (지우는 문장 없음)
 -- =====================================================================
@@ -88,13 +88,25 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function lms_tutor_note_url(uuid, uuid, date) from public, anon, authenticated;
 
--- 학생에게 보일 대체 노트 목록
+-- 학생에게 보일 다른 노트 목록 (대표 11/25 '학생은 대체강사 포함 자기 모든 노트를 볼 수 있어야')
+--  kind sub  = 대체 강사 노트
+--  kind prev = 담당 강사가 바뀌며 교체된 예전 노트 (회사 소유로 옮긴 11/16 밤 이후 교체분만 — 그 전 링크는 강사 개인 문서)
 create or replace function lms_student_sub_notes(p_student uuid)
 returns jsonb
 language sql stable security definer set search_path = public as $$
-  select coalesce(jsonb_agg(jsonb_build_object('tutor', t.name, 'url', n.doc_url) order by n.created_at), '[]'::jsonb)
-  from substitute_notes n join tutors t on t.id = n.tutor_id
-  where n.student_id = p_student and n.status = 'done' and n.doc_url is not null
+  select coalesce(jsonb_agg(jsonb_build_object('kind', x.kind, 'tutor', x.tutor, 'url', x.url) order by x.at), '[]'::jsonb)
+  from (
+    select distinct on (y.url) y.* from (
+      select n.created_at as at, 'sub'::text as kind, t.name as tutor, n.doc_url as url
+      from substitute_notes n join tutors t on t.id = n.tutor_id
+      where n.student_id = p_student and n.status = 'done' and n.doc_url is not null
+      union all
+      select e.created_at, 'prev', (select t.name from tutors t where t.id = lms_student_main_tutor(p_student, ((e.created_at at time zone 'Asia/Seoul')::date - 1))), e.old_value
+      from student_profile_edits e join students s on s.id = e.student_id
+      where e.student_id = p_student and e.field = 'class_note_url' and e.created_at >= '2026-11-16 15:00+00'
+        and lms_is_google_doc_url(e.old_value) and e.old_value is distinct from s.class_note_url
+    ) y order by y.url, y.at
+  ) x
 $$;
 revoke all on function lms_student_sub_notes(uuid) from public, anon, authenticated;
 
