@@ -25,7 +25,7 @@ export default function MainReviews({ reviews }: { reviews: ReviewType[] }) {
         만족할까요?
       </h3>
       <p className="mt-4 text-lg text-edge-gray max-md:px-4.5 max-md:text-[15px]">
-        엣지영어 수강생들에게 받은 실제 찐후기
+        엣지영어 수강생들에게 받은 실제 후기
         <br />
         (오타까지 그대로 옮겨왔어요!)
       </p>
