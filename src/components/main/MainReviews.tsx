@@ -19,7 +19,7 @@ export default function MainReviews({ reviews }: { reviews: ReviewType[] }) {
         <span className="md:hidden">
           <br />
         </span>
-        실제 후기
+        실제 내돈내산 후기
       </h3>
       <p className="mt-4 text-lg text-edge-gray max-md:px-4.5 max-md:text-[15px]">
         (오타까지 그대로 옮겨왔어요!)
