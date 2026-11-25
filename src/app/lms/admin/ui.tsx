@@ -104,6 +104,8 @@ export function AdminHeader({ active, demo, right, rightInline }: { active: Admi
         <div className="flex items-center gap-1 lg:gap-1.5">
           <Link href="/lms/tutor" className="flex min-h-[36px] items-center rounded-[10px] border border-[#7d5ffb] px-2 text-[12px] font-semibold text-[#5b3fe0] lg:px-3 lg:text-[13px]">튜터 화면 보러가기</Link>
           <Link href="/lms/student" className="flex min-h-[36px] items-center rounded-[10px] border border-[#7d5ffb] px-2 text-[12px] font-semibold text-[#5b3fe0] lg:px-3 lg:text-[13px]">수강생 화면 보러가기</Link>
+          {/* 홈페이지로 돌아가기 (대표 11/25) */}
+          <Link href="/" className="flex min-h-[36px] items-center rounded-[10px] border border-[#7d5ffb] px-2 text-[12px] font-semibold text-[#5b3fe0] lg:px-3 lg:text-[13px]">홈페이지</Link>
           <span className="mx-1 hidden h-6 w-px bg-[#e6e3ef] lg:block" />
         </div>
       )}
