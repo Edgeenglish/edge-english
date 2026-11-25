@@ -548,6 +548,13 @@ export default function StudentHome(props: {
   // 나의 학습 정보(강사 작성)·누적 학습 시간 (11/11 대표 시안, migration 20261111010000)
   const [info, setInfo] = useState<MyInfo | null>(props.preloaded?.info ?? null);
   const [otherNotesOpen, setOtherNotesOpen] = useState(false);
+  // 내 레벨테스트 결과 (홈페이지 /level-test 에서 가입·로그인 뒤 저장한 것, H26(219)) — 있을 때만 카드
+  const [levelTest, setLevelTest] = useState<{ score: number; level: string; takenAt: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    actions.levelTest().then((x) => { if (alive) setLevelTest(x); }, () => {});
+    return () => { alive = false; };
+  }, [actions]);
   useEffect(() => {
     let alive = true;
     actions.myInfo().then((x) => { if (alive) setInfo(x); }, () => {});
@@ -1150,6 +1157,17 @@ export default function StudentHome(props: {
                         )}
                       </InfoBlock>
                     )}
+                  </section>
+                )}
+                {levelTest && (
+                  <section className={`${card} grid p-4`}>
+                    <h2 className="mb-1 text-[15px] font-bold">내 레벨테스트 결과</h2>
+                    <InfoBlock label="레벨">
+                      <span className="text-[17px] font-extrabold">{levelTest.level}</span> <span className="text-[13px] text-[#69667c]">{levelTest.score} / 20 · {new Date(levelTest.takenAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: studentTz })}</span>
+                      <a href={isAdminView ? `/level-test?student=${encodeURIComponent(s.studentId)}` : '/level-test'} className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                        결과·틀린 문제 복습 보기
+                      </a>
+                    </InfoBlock>
                   </section>
                 )}
               </div>
