@@ -60,18 +60,6 @@ export default function HomeHero() {
         </div>
 
         <figure className="relative m-0">
-          <svg
-            aria-hidden="true"
-            width="1"
-            height="1"
-            className="absolute left-0 top-0 z-[2] origin-top-left overflow-visible max-md:left-1 max-md:top-1 max-md:scale-[.6]"
-          >
-            <g fill="none" stroke="#4b1fd9" strokeWidth="4" strokeLinecap="round">
-              <path d="M-6 7 L0 23" />
-              <path d="M-22 21 L-8 30" />
-              <path d="M-24 39 L-11 40" />
-            </g>
-          </svg>
           <img
             src="/images/main/founders.webp"
             alt="엣지영어를 만든 사람들"
