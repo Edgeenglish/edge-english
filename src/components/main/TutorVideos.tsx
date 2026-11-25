@@ -49,7 +49,7 @@ export default function TutorVideos({ videos }: { videos: TeacherVideo[] }) {
           그래서 <b className="text-[#140F33]">저희 스스로도 영어를 배우고 싶다는 생각이 드는 선생님들만</b> 정말 고심해서 선발했어요. :)
         </p>
 
-        <ul className="mt-9 grid grid-cols-3 gap-[18px] max-md:-mx-4.5 max-md:mt-6 max-md:flex max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:px-4.5 max-md:pb-3 max-md:[scroll-padding-left:18px]">
+        <ul className="mt-9 grid grid-cols-3 md:mx-auto md:max-w-[780px] gap-[18px] max-md:-mx-4.5 max-md:mt-6 max-md:flex max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:px-4.5 max-md:pb-3 max-md:[scroll-padding-left:18px]">
           {videos.map((v) => (
             <li key={v.id} className="max-md:w-[58%] max-md:shrink-0 max-md:snap-start">
               <button
@@ -59,7 +59,7 @@ export default function TutorVideos({ videos }: { videos: TeacherVideo[] }) {
                   setOpenId(v.id);
                 }}
                 aria-label={`${v.title} 재생`}
-                className="group relative block aspect-[3/4] w-full overflow-hidden rounded-[20px] bg-[#3b1fd0] text-left shadow-[0_8px_22px_rgba(59,31,208,0.16)] max-md:aspect-[9/14] max-md:rounded-[18px]"
+                className="group relative block aspect-[3/4] w-full overflow-hidden rounded-[20px] bg-[#3b1fd0] text-left shadow-[0_6px_18px_rgba(59,31,208,0.10)] max-md:aspect-[9/14] max-md:rounded-[18px]"
               >
                 {/* 유튜브 쇼츠 썸네일은 가로 그림 가운데에 세로 화면이 있어서, 양옆 검은 띠를 잘라 내려고 키움 */}
                 <img
@@ -74,7 +74,7 @@ export default function TutorVideos({ videos }: { videos: TeacherVideo[] }) {
                     <path d="m10 7.8 6 4.2-6 4.2z" fill="#3b1fd0" />
                   </svg>
                 </span>
-                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent to-[#140F33]/80 px-4 pb-4 pt-9 text-base font-bold !leading-snug text-white max-md:px-3 max-md:pb-3 max-md:pt-7 max-md:text-sm">
+                <span className="line-clamp-2 absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent to-[#140F33]/80 px-4 pb-4 pt-9 text-base font-bold !leading-snug text-white max-md:px-3 max-md:pb-3 max-md:pt-7 max-md:text-sm">
                   {v.title}
                 </span>
               </button>
@@ -91,13 +91,13 @@ export default function TutorVideos({ videos }: { videos: TeacherVideo[] }) {
           className="fixed inset-0 z-[60] grid place-items-center bg-[#0e0a24]/75 p-4"
           onClick={close}
         >
-          <div className="relative w-full max-w-[340px] rounded-[20px] bg-[#140F33] p-3.5 pt-10 text-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-[340px] rounded-[20px] bg-[#140F33] p-3.5 pt-[54px] text-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <button
               ref={closeBtn}
               type="button"
               onClick={close}
               aria-label="닫기"
-              className="absolute right-3 top-2.5 grid size-9 place-items-center rounded-full bg-white/15 text-base"
+              className="absolute right-2 top-1.5 grid size-11 place-items-center rounded-full bg-white/15 text-base"
             >
               ✕
             </button>
