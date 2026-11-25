@@ -172,8 +172,7 @@ begin
       'id', n.id,
       'title', coalesce(nullif(trim(s.display_name), ''), s.name_en, s.code) || '_' || t.name,
       'doc_id', n.doc_id,
-      'tutor_email', lower(trim(t.email)),
-      'original_doc_id', substring(s.class_note_url from '/document/d/([A-Za-z0-9_-]+)'))
+      'tutor_email', lower(trim(t.email)))
       order by n.created_at)
     from substitute_notes n join students s on s.id = n.student_id join tutors t on t.id = n.tutor_id
     where n.status = 'pending' and n.attempts < 5), '[]'::jsonb);
