@@ -3,10 +3,10 @@
 - ✅ 11/25 결정 H26(220) 보충: 보강은 이어진 마지막 수강권 종료일까지, 모자라면 +7일 · 이름 '겨울 특별 변경권' · 학생 홈 공지 + '수업 변경·취소' 카드 '❄️ 겨울 특별 변경권 2회가 추가됐어요!'·남은 횟수 · **학생 메일 보류**(공지·지급으로 메일 가는 경로 있으면 끄고 대기, 문구 대표 확인 뒤)
 - 확인할 것(ChatGPT 검수): 공휴일 무료가 겨울 2회에서 안 빠짐 · 휴무 연장과 중복 연장 없음 · 겨울 보강 취소·변경 때 종료일이 줄지 않음
 
-## ✅ 11/25 강사 교육 영상 'How to Write Class Notes' 다시 만들기 — **끝** (대표 11/25)
-- 새 영상: Drive 폴더 1sX3klkkqTPq-jMakmDS2--wzUFbqIyS9 'How_to_Write_Class_Notes.mp4'(1DE6hvLnkaS3s0j8XCWCNox6dPrI0vn3W, 1분 55초, 1920x1080). 옛 파일은 '[옛 버전] How_to_Write_Class_Notes.mp4'(1RT3jx…). 데모 노트(1ZOcnbpc…) 링크 새 id 로 바꿈
-- 바꾼 것: 한 페이지에 이어 쓰기(자동 스크롤, 93.5초에 완성 노트 한 장으로 줄여 보여 줌) · 날짜 Wed, 11/25/2026 · Why it matters 'essential part' · 5번 설명 rephrase → type. 효과음 = 옛 영상 클릭음 그대로
-- 편집 소스: `docs/lms/training-video/class-notes/`(video.html·tl.js 타임라인·render.js). 다시 만들기 = `node render.js`(프레임 캡처 → silent.mp4, 약 4분) → 효과음은 tl.js 시각에 클릭음 합치기
+## ✅ 11/25 강사 교육 영상 'How to Write Class Notes' 다시 만들기 — **끝** (대표 11/25 미리 보기 확인 뒤 올림)
+- 새 영상: Drive 폴더 1sX3klkkqTPq-jMakmDS2--wzUFbqIyS9 'How_to_Write_Class_Notes.mp4'(1SLO8zjP9Z2fOOuANzF3o_yTCpzcX8v5M, 1분 55초, 1920x1080, 2.7MB). 옛 파일 '[옛 버전] How_to_Write_Class_Notes.mp4'(1RT3jx…) 남김, 중간판(1DE6hv…)은 휴지통. 데모 노트(1ZOcnbpc…) 링크 = 새 id
+- 내용(대표 11/25): 한 페이지 이어 쓰기(마지막에 완성 노트 한 장) · 날짜 Wed, 11/25/2026 · Why it matters 2줄(after every class / essential part) · 0번 설명 = 'Open the Doc in LMS > Students > Class notes. Don't make your own.' + 화면 공유 줄 + 날짜 줄 · 5번 rephrase → type · Two important rules 2줄(Never use AI… / Only use the Doc in LMS > Students > Class notes. Don't make your own notes.) · 오른쪽 밑줄 다 그은 뒤 왼쪽 타이핑 시작 · 타이핑 소리 · 배경음악(직접 합성, music.py)
+- 편집 소스: `docs/lms/training-video/class-notes/`(video.html·tl.js 타임라인·render.js·audio.py·music.py). 다시 만들기 = `node render.js`(약 4분, silent.mp4) → `python3 audio.py blip.wav`(blip = 옛 영상 4.0초 0.1초 클릭음) → `python3 music.py` → amix → **crf 28·오디오 64k 로 3.1MB 미만**(커넥터 올리기 한도)
 
 ## ⏭ 11/25 홈페이지 무료 레벨테스트 `/level-test` — **✅ 운영 반영 끝 (대표 11/25 '운영 반영해', lms-prod 83f1dfa3 = lms-prod 위에 이 기능 파일만, 운영 DB 백업 snapshots 95(표별 줄 수, 새 표·함수만) → migration 20261125100000, 메일 없음)** (H26(219), 개발 브랜치 claude/intelligent-feynman-go5w78) (시에나 11/25, 브랜치 claude/optimistic-fermat-w0uzc8, 시안 https://claude.ai/artifact/GFk9awD8Y65kc4PQMfqTmH)
 - 개발(11/25): `src/app/level-test/`(page·LevelTest.tsx·level-test.css — 사이트 daisyUI 와 겹치지 않게 클래스 lt-*) · `src/lib/level-test/`(data.ts 문제·레벨 = 시안 그대로, logic.ts + test 5개, saved.ts 브라우저 보관·계정 붙이기) · 음성 = 시안에 든 Kokoro mp3 를 그대로 꺼내 `public/level-test/q01~q20.mp3`(다시 만들 필요 없음) · 강사 사진 = public/images/tutor/data/*_main
