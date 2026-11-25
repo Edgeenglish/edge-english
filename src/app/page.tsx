@@ -1,6 +1,7 @@
 import MainReviews from '@/components/main/MainReviews';
 import PointsTab from '@/components/main/DetailPointTab';
 import MobileShortsSwiper from '@/components/main/MobileShortsSwiper';
+import TutorHiring from '@/components/main/TutorHiring';
 import Link from 'next/link';
 import Bubble from '@/components/common/bubble/Bubble';
 import { getReviews } from '@/lib/reviews';
@@ -502,35 +503,8 @@ export default async function Home() {
         </div>
       </div>
 
-      {/* 강사 선발 5단계 (대표 11/25 — 레벨테스트 홍보 카드와 같은 내용) */}
-      <div className="bg-[#F3F6F8] px-4.5 py-24 max-md:py-16">
-        <div className="mx-auto max-w-[640px]">
-          <h3 className="text-center text-4xl font-bold text-[#140F33] break-keep [text-wrap:balance] max-md:text-[28px]">운영진 둘이 직접 면접 보고 골라요</h3>
-          <p className="mt-4 text-center text-xl text-[#55526a] break-keep [text-wrap:balance] max-md:text-base">모든 강사를 운영진 두 명이 직접 만나고, 고민 끝에 뽑아요.</p>
-          <ol className="mt-10 grid gap-2.5">
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">1</span>
-              <span><b className="mr-2">서면 인터뷰</b></span>
-            </li>
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">2</span>
-              <span><b className="mr-2">서류 심사</b>자격증·학위·경력 확인</span>
-            </li>
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">3</span>
-              <span><b className="mr-2">2:1 심층 면접</b>운영진 둘이 직접</span>
-            </li>
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">4</span>
-              <span><b className="mr-2">데모 레슨</b>티칭 실력·책임감·인성 확인</span>
-            </li>
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">5</span>
-              <span><b className="mr-2">채용 후 교육</b>운영진이 직접 교육 · 2개월 집중 모니터링, 이 기간에도 탈락할 수 있어요</span>
-            </li>
-          </ol>
-        </div>
-      </div>
+      {/* 강사 채용 과정 5단계 (대표 11/25) — 위 '철저한 5단계 검증' 말풍선의 근거 */}
+      <TutorHiring />
 
       {/* 섹션 5 pc 매번 작심삼일로 끝났다면? */}
       <div

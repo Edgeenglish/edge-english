@@ -5,6 +5,19 @@
 - 시험 DB(되돌림 시험): 공휴일 12/3 → 공휴일 무료(겨울 2회 그대로) · 12/1·12/24 겨울 → 남은 0 · 12/29 일반 변경권 · 겨울 보강 기한 2/22(종료 2/15+7) · 2/20 보강 → 종료일 2/20 · 그 보강 취소해도 2/20 유지 · 되돌리면 1회 반환 · 노쇼 3회 겹침 → 2/23 하나만(중복 없음). 시험 DB 공휴일 6개(운영과 같게)·공지 1건 넣음
 - 메일: 새 메일 없음(공지는 메일 안 감). 취소·보강 메일은 기존 그대로
 - 남은 일: 운영 반영(대표 승인 + 공지 게시 시작일 결정) → 운영 DB 백업(바뀌는 함수 8개 이전 정의) → migration → lms-prod
+
+## ✅ 11/25 홈 '강사 채용 과정 5단계' 새 섹션 — **시험 사이트만 (운영 반영 대기)** (브랜치 claude/sleepy-hypatia-yvxi5w)
+- 대표 11/25 확정(시안 2개의 좋은 점 합침): 리스트 5줄 + 아이콘 + 5단계 강조, 제목 '운영진 둘이 직접 면접 보고 골라요'. 멘트는 대표가 쓴 그대로(2·3·4단계 교체). 자리 = 홈 '화상영어 수강생들의 흔한 고민' 말풍선 섹션 바로 아래(위치는 대표 답 없이 Claude 판단 — 바꾸라면 이동)
+- 코드: `src/components/main/TutorHiring.tsx`(새) · `src/app/page.tsx`(import + `<TutorHiring />` 한 줄). tsc 0건·eslint 통과·로컬 홈 PC·휴대폰 화면 확인. 홈 탭 '5단계 검증 완료'(DetailPointTab)는 안 바꿈
+- 확인 필요(Claude 가 확인 못 함): '서면 인터뷰·2:1 면접·2개월 집중 모니터링·탈락' 문구가 실제 운영과 같은지는 대표 책임
+
+## ⏭ 강사 임시 근무 지역 변경 → 새 수업 시간 고르기 — **시안 확정, 시험 개발 대기 (새 세션)** (브랜치 claude/sleepy-knuth-86ksdz)
+- 시안(확정 11/23): `docs/lms/previews/tutor-temp-location-new-times.html` · https://claude.ai/artifact/GD22H6mgUnd1Ke5JbwicZN (가상 데이터, 강사·학생 Home To do, PC·휴대폰)
+- 대표 결정(11/23, 정책 원본 **H26(218)** 참고): ① D-43 예외 = **강사 임시 근무 지역 변경으로 생긴 재배정에만**: 학생이 강사 등록 가능 시간 중 직접 고르면 확정 직전 충돌 검사 통과 시 자동 확정(강사 승인 없음) ② 강사 경로 = 수업 중 학생과 합의한 시간을 강사가 **본인 등록 가능 시간 안에서만** 골라 [Submit agreed class times] → 학생 [이 일정에 동의하기](영어 대화 착오 확인용) → 충돌 검사 → 자동 확정. 강사 신청만으로는 확정 안 됨. 등록 안 한 시간으로 합의했으면 강사가 먼저 Availability 에서 열어야 함 ③ 충돌 회차만 운영진 처리, 정상 회차는 확정 ④ 수강 종료일 자동 연장 안 함 — 종료일 안에 못 넣는 회차는 운영진 ⑤ 확정 메일은 한 번 처리 결과를 1통으로 ⑥ 정규 시간 변경(admin_regular_change) 재사용 안 함 — 정규 시간은 DB 그대로, 임시 기간 회차만 개별 재배정(재등록 때 임시 시간 복사·주 중간 경계·'정규 변경' 메일 오해 피함) ⑦ 변경권 차감 없음, 기존 회차·시작/종료일·결제 보존 ⑧ 회차별 처리 상태(강사 신청·확정·운영진 확인·나중에) 저장, To do 는 상태 없는 미처리 회차만 새로 찾음(확정 회차 재등장 금지) ⑨ 자동 배정은 같은 주(월~일, 한국 날짜) 안에서만, 다음 주로 넘기지 않음 ⑩ 강사 To do 에 안내문 추가 안 함
+- 재사용 후보(개발 첫 단계에서 안전성 확인): 임시 근무 지역 `tutor_locations`·`lms_tutor_weekly_ok`·`lms_tutor_tz_at`(20261114120000~) · 충돌 검사 `lms_plan_conflicts`('tutor_travel_hours' 포함) · 수업 이동 핵심 함수(변경권 미차감 경로 새로) · 메일 `lms_notice_mail`
+- 개발 때 대표에게 물을 것: 확정 뒤 강사가 임시 지역 가능 시간을 바꿔 확정 회차가 시간 밖이 되면 To do 재등장 vs 운영진 알림 · 메일 문구(영·한)는 '시스템에 넣어' 전까지 대화창에만 · 강사·학생 To do 메일 간격(H26(172))
+- 검증 항목: 자동 확정·변경권 미차감·기존 수업 보존·메일 중복 없음·같은 회차 중복 신청/확정 방지·학생 정규 시간 변경 대기 신청과 동시 진행 막기
+
 ## ✅ 11/25 강사 교육 영상 'How to Write Class Notes' 다시 만들기 — **끝** (대표 11/25 미리 보기 확인 뒤 올림)
 - 새 영상: Drive 폴더 1sX3klkkqTPq-jMakmDS2--wzUFbqIyS9 'How_to_Write_Class_Notes.mp4'(1IETRBFX51vWI_WcH63QekKy9N7znF1oe, 2분 1초, 1920x1080, veryslow crf25·소리 64k, 3.09MB — 한도에 거의 닿음, 더 길어지면 crf26). 옛 파일·중간판 모두 휴지통(대표 11/25 '기존거 삭제') — 폴더엔 새 영상 1개만. ChatGPT 가 만든 'How_to_Write_Class_Notes_review.mp4'(1SJL…, 소리 없음·옛 화면)는 커넥터로 못 지움 → 대표가 삭제. 데모 노트(1ZOcnbpc…) 링크 = 새 id
 - 내용(대표 11/25): 한 페이지 이어 쓰기(마지막에 완성 노트 한 장) · 날짜 Wed, 11/25/2026 · Why it matters 2줄(after every class / 'Our class notes are one of our biggest selling points. Students really love them.') · 0번 설명 = 'Open the Doc in LMS > Students > Class notes. Don't make your own.' + 화면 공유 줄 + 날짜 줄 · 5번 rephrase → type · Two important rules 2줄(Never use AI… / Only use the Doc in LMS > Students > Class notes. Don't make your own notes.) · 밑줄 1.8초씩 차례로 긋고 다 그은 뒤 왼쪽 타이핑 시작(장면 시각은 tl.js 가 자동 계산) · 부드러운 타이핑 소리 · 끝에 Thanks for watching · 배경음악(직접 합성, music.py)
