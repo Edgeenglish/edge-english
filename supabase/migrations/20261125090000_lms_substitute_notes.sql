@@ -11,9 +11,6 @@
 --  - 다시 실행해도 같은 결과 (지우는 문장 없음)
 -- =====================================================================
 
-alter table tutors add column if not exists google_docs_email text;
-comment on column tutors.google_docs_email is '수업 노트(Google Docs) 공유용 Google 계정 이메일. 비어 있으면 tutors.email';
-
 create table if not exists substitute_notes (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references students(id),
@@ -161,7 +158,7 @@ begin
       'id', n.id,
       'title', coalesce(nullif(trim(s.display_name), ''), s.name_en, s.code) || '_' || t.name,
       'doc_id', n.doc_id,
-      'tutor_email', lower(trim(coalesce(nullif(trim(t.google_docs_email), ''), t.email))),
+      'tutor_email', lower(trim(t.email)),
       'original_doc_id', substring(s.class_note_url from '/document/d/([A-Za-z0-9_-]+)'))
       order by n.created_at)
     from substitute_notes n join students s on s.id = n.student_id join tutors t on t.id = n.tutor_id
