@@ -844,8 +844,8 @@ export default function StudentHome(props: {
       {ttlTodo.map((it) => {
         const st = ttlStatus(it);
         return st.kind === 'proposed'
-          ? <TodoBar key={it.tutorId + it.city} n={st.proposed} text="선생님이 신청한 수업 시간을 확인해 주세요" onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: true })} />
-          : <TodoBar key={it.tutorId + it.city} n={st.open} text="수업 시간 변경이 필요해요" onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: false })} />;
+          ? <TodoBar key={it.tutorId + it.city} n={st.proposed} text="선생님이 신청한 수업 시간을 확인해 주세요" sub={`${it.tutor} 강사님의 임시 근무 지역 변경으로 인한 수업 조정`} onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: true })} />
+          : <TodoBar key={it.tutorId + it.city} n={st.open} text="수업 시간 변경이 필요해요" sub={`${it.tutor} 강사님의 임시 근무 지역 변경으로 인한 수업 조정`} onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: false })} />;
       })}
     </>
   );
