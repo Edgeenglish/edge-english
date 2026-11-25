@@ -91,9 +91,9 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
   const chosen = rows.filter((r) => picks[r.key] instanceof Date || picks[r.key] === 'admin' || picks[r.key] === 'sub');
   const later = rows.filter((r) => picks[r.key] === 'later').length;
 
-  /** 학생 '맞는 시간이 없어요' → 다른 수업 방법 고르기 (대표 11/25) */
+  /** 학생 '맞는 시간이 없어요' → 다른 수업 방법 고르기 → 모든 회차에 넣고 2단계에서 회차별로 확인·수정 (대표 11/25) */
   const [noFit, setNoFit] = useState(false);
-  const allTo = (x: 'sub' | 'admin') => { setPicks(Object.fromEntries(rows.map((r) => [r.key, x]))); setEdit(null); setNoFit(false); setStep(3); };
+  const allTo = (x: 'sub' | 'admin') => { setPicks(Object.fromEntries(rows.map((r) => [r.key, x]))); setEdit(null); setNoFit(false); setStep(2); };
   const goStep2 = () => { setPicks(autoAssign(rows, weekly, picks)); setEdit(null); setStep(2); };
   async function submit() {
     setBusy(true); setErr('');
