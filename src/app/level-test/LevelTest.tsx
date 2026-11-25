@@ -132,6 +132,7 @@ function Review({ k, pick }: { k: number; pick: number }) {
       <div className="ans en">
         <span className="lt-x">✗ {fill(q.q, q.o[pick])}</span>
         <span className="lt-o">✓ {right}</span>
+        <span className="muted ko">{q.ko}</span>
       </div>
       <div className="exp">{q.e.map((t) => <p key={t}>{t}</p>)}</div>
       <details>
