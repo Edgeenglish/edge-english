@@ -1,3 +1,8 @@
+## ⏭ 12~1월 겨울 특별 혜택 — LMS 개발 대기 (H26(220), 12/1 전 목표)
+- 정책은 H26(220)에만. 개발 메모: 학생당 시즌 무료 변경 2회(28일 변경권과 별도 카운트, 공휴일 무료 → 겨울 무료 → 일반 순) · 연장 = 기존 자동 연장(`lms_fault_extension`·`enrollment_extensions`)에 사유 '겨울 특별 혜택' 추가, 원래 종료일+7일 상한, 줄이지 않음 · 운영진 손 연장 `admin_extend_enrollment`는 예외용
+- ❓ 대표 결정 대기: (가) 바로 재등록한 학생(다음 수강권 시작일 때문에 연장 0일)의 남은 겨울 보강 = 다음 수강권 이월(POL-RN-01) 안 (나) 학생 화면 이름 '겨울 특별 변경권'(추천)/'겨울방학 특별 변경권'
+- 확인할 것(ChatGPT 검수): 공휴일 무료가 겨울 2회에서 안 빠짐 · 휴무 연장과 중복 연장 없음 · 겨울 보강 취소·변경 때 종료일이 줄지 않음
+
 ## ⏭ 11/25 홈페이지 무료 레벨테스트 `/level-test` — **✅ 운영 반영 끝 (대표 11/25 '운영 반영해', lms-prod 83f1dfa3 = lms-prod 위에 이 기능 파일만, 운영 DB 백업 snapshots 95(표별 줄 수, 새 표·함수만) → migration 20261125100000, 메일 없음)** (H26(219), 개발 브랜치 claude/intelligent-feynman-go5w78) (시에나 11/25, 브랜치 claude/optimistic-fermat-w0uzc8, 시안 https://claude.ai/artifact/GFk9awD8Y65kc4PQMfqTmH)
 - 개발(11/25): `src/app/level-test/`(page·LevelTest.tsx·level-test.css — 사이트 daisyUI 와 겹치지 않게 클래스 lt-*) · `src/lib/level-test/`(data.ts 문제·레벨 = 시안 그대로, logic.ts + test 5개, saved.ts 브라우저 보관·계정 붙이기) · 음성 = 시안에 든 Kokoro mp3 를 그대로 꺼내 `public/level-test/q01~q20.mp3`(다시 만들 필요 없음) · 강사 사진 = public/images/tutor/data/*_main
 - 저장: migration **20261125100000_level_test_results**(시험 DB 적용, 운영 미적용) — 표 level_test_results(auth 계정 기준, 문제 20개 답·점수·레벨·taken_at, 같은 결과 1건) · level_test_save(로그인 본인) · level_test_mine(p_student = 운영자 보기). 가입 전 결과는 localStorage `edge_level_test_last` → 로그인 때(LoginFlow routeAfterLogin) 계정에 붙임, 학생·강사 아닌 회원은 /level-test 로 이동. 학생 홈 '내 레벨테스트 결과' 카드(있을 때만, 운영자 보기 = /level-test?student=) · 수강생 아닌 회원은 로그인 뒤 회원 화면에 [내 레벨테스트 결과 보기](결과 있을 때만). 로그인 화면 `?signup=1` = 회원가입 단계로 바로
