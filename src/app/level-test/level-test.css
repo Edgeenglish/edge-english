@@ -113,3 +113,4 @@
 .lt .weak{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .lt .weak button{width:100%;display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:10px;padding:9px 12px;text-align:left;font-size:15px;font-weight:500}
 .lt .weak button span:last-child{flex:none;white-space:nowrap}
+.lt .ko{font-family:inherit;font-size:14px}
