@@ -17,6 +17,6 @@ secs:[
  L(87.5,['q','How long have you been living in Seoul?'])]}
 ]};
 // 오른쪽 밑줄이 다 그어진 뒤에 왼쪽 타이핑 시작 (대표 11/25)
-(()=>{const T=module.exports;T.secs.forEach((s,i)=>{const n=(s.desc.match(/\*/g)||[]).length/2;const ready=s.start+0.8+(n-1)*0.5+0.6+0.4;
+(()=>{const T=module.exports;T.secs.forEach((s,i)=>{const n=(s.desc.match(/\*/g)||[]).length/2;const ready=s.start+0.8+(n-1)*1.5+1.0+0.4;
  if(i===0){T.date_at=Math.max(T.date_at,ready);return}
  const sh=Math.max(0,ready-s.lines[0].at);s.lines.forEach(l=>l.at=+(l.at+sh).toFixed(2));});})();

@@ -45,7 +45,7 @@ const page=document.getElementById('page');
 page.innerHTML='<div class="date" id="date"></div>'+T.secs.map((s,i)=>`<div class="sec" id="sec${i}">`+s.lines.map((l,j)=>`<div class="ln" id="l${i}_${j}"></div>`).join('')+'</div>').join('');
 function lineHTML(segs,n){let out='',left=n;for(const [cls,txt] of segs){if(left<=0)break;const p=txt.slice(0,left);left-=p.length;out+=cls?`<span class="${cls}">${p.replace(/</g,'&lt;')}</span>`:p.replace(/</g,'&lt;')}return out}
 const len=segs=>segs.reduce((a,s)=>a+s[1].length,0);
-function ul(el,t0,t){el.querySelectorAll('.u').forEach((u,k)=>{u.style.backgroundSize=(ease((t-t0-k*0.5)/0.6)*100)+'% 3px'})}
+function ul(el,t0,t){el.querySelectorAll('.u').forEach((u,k)=>{u.style.backgroundSize=(ease((t-t0-k*1.5)/1.0)*100)+'% 3px'})}
 let scroll=0,lastSec=-1;
 window.render=function(t){
  const show=id=>document.querySelectorAll('.scene').forEach(s=>s.style.display=s.id===id?'block':'none');
