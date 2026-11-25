@@ -143,7 +143,8 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
         </div>
         {prob === 'clash' && <p className="text-[13px] font-semibold text-[#b3261e]">{T('Overlaps another class · choose another time', '다른 회차와 겹쳐요 · 다른 시간을 골라 주세요')}</p>}
         {prob === 'none' && <p className="text-[13px] font-semibold text-[#b3261e]">{r.cands.length ? T('Choose a time', '시간을 골라 주세요') : T('Ask Edge English or choose later', '운영진에게 맡기거나 나중에 골라 주세요')}</p>}
-        {!prob && flagged.has(r.key) && <p className="text-[13px] font-semibold text-[#1f7a4d]">✓ {T('Adjusted', '조정함')}</p>}
+        {p === 'sub' ? <p className="text-[13px] font-semibold text-[#55526a]">대체강사 신청 예정</p>
+          : !prob && flagged.has(r.key) && <p className="text-[13px] font-semibold text-[#1f7a4d]">✓ {T('Adjusted', '조정함')}</p>}
         {edit === r.key && (
           <div className="mt-1 flex flex-wrap gap-1.5">
             {alts.map((t) => (
@@ -193,12 +194,13 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
     const order = [...groups.keys()].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
     return (
       <Frame title={title} sub={sub} steps={steps} onClose={onClose}
-        foot={<button type="button" className={btnMain} disabled={weekly.length === 0} onClick={goStep2}>{T('Next ›', '다음 ›')}</button>}>
+        foot={<>{!v.en && <button type="button" className={btnSub} onClick={() => setNoFit(true)}>맞는 시간이 없어요</button>}
+          <button type="button" className={btnMain} disabled={weekly.length === 0} onClick={goStep2}>{T('Next ›', '다음 ›')}</button></>}>
         {/* 학생: 왜 바꾸는지·정규 시간은 그대로인지 (대표 11/25) */}
         {!v.en && <div className="mb-3 grid gap-1 text-[14px] leading-relaxed text-[#1d1b2b]">
-          <p>{item.tutor} 강사님의 임시 근무 지역 변경으로 기존 시간에 수업이 어려워졌어요.</p>
-          <p>아래에서 수업 가능한 요일과 시간을 골라 주세요. 가능한 시간이 없다면 [맞는 시간이 없어요]를 눌러 주세요.</p>
-          <p>임시 근무 기간이 끝나면 기존 정규 수업 시간으로 돌아가요.</p>
+          <p>{item.tutor} 강사님의 임시 근무 지역 변경으로 수업 시간 조정이 필요해요. 불편을 드려 죄송해요.</p>
+          <p>아래에서 가능한 시간을 골라 주세요. 맞는 시간이 없다면 [맞는 시간이 없어요]를 눌러 주세요.</p>
+          <p>임시 근무가 끝나면 기존 수업 시간으로 돌아가요.</p>
         </div>}
         {v.en && <p className="mb-3 text-[13.5px] text-[#55526a]">The student can select and request new class times directly through their LMS.<br />If the student asks for your help during class, you can discuss the options together and submit the agreed schedule.<br />Any schedule you submit must be confirmed by the student before it can be finalized.</p>}
         <Badge text={v.badge} />
@@ -222,7 +224,6 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
             </div>
           ))}
         </div>
-        {!v.en && <button type="button" onClick={() => setNoFit(true)} className="mt-3 min-h-[46px] w-full rounded-[10px] bg-[#efeaff] px-4 text-[15px] font-semibold text-[#3a22b0]">맞는 시간이 없어요 ›</button>}
       </Frame>
     );
   }
