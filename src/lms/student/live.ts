@@ -397,6 +397,12 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
       const d = r.data as { level: string | null; goal: string | null; style: string | null; note_url: string | null; learned_min: number };
       return { level: d.level, goal: d.goal, style: d.style, noteUrl: d.note_url, learnedMin: d.learned_min ?? 0 };
     },
+    // 내 레벨테스트 결과 (홈페이지 /level-test, H26(219)) — 가장 최근 1건만 학생 홈 카드에
+    levelTest: async (): Promise<{ score: number; level: string; takenAt: string } | null> => {
+      const r = await sb.rpc('level_test_mine', { p_student: adminStudentId });
+      const x = Array.isArray(r.data) ? (r.data[0] as { score: number; level: string; taken_at: string } | undefined) : undefined;
+      return x ? { score: x.score, level: x.level, takenAt: x.taken_at } : null;
+    },
     regularSlots: async (): Promise<RegularSlot[]> => {
       const r = await sb.rpc('student_regular_slots', { p_student: adminStudentId });
       if (r.error) return [];

@@ -6,6 +6,7 @@
 // 비밀번호 만들기·찾기: 이메일 → 메일 코드 + 새 비밀번호 (기존 학생·강사는 재가입 없이 지금 계정에 비밀번호만)
 // 카카오·네이버 첫 로그인이 회원과 연결 안 되면 '처음이에요 / 이미 회원이에요' — 이미 회원이면 기존 계정 로그인 뒤에만 연결
 
+import { claimTaken } from '@/lib/level-test/saved';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ownViewCache, prefetchOwnView } from '@/lms/student/prefetch';
@@ -159,6 +160,7 @@ export default function LoginFlow() {
   useEffect(() => {
     setLang(readLang());
     setNext(new URLSearchParams(window.location.search).get('next'));
+    if (new URLSearchParams(window.location.search).get('signup') === '1') setStep('signup'); // 홈페이지 레벨테스트 [이메일로 가입]
     setLinkFor(readPendingLink());
     setRecent(readRecent());
     setPwUsed(readPwUsed());
@@ -288,6 +290,8 @@ export default function LoginFlow() {
     const metaName = user?.user_metadata?.name;
     setMemberName(typeof metaName === 'string' ? metaName.trim() : '');
     if (!user) return setError(t.network);
+    // 홈페이지 레벨테스트 결과가 이 브라우저에 있으면 이 계정에 붙임 (H26(219) ⑨). 학생·강사가 아닌 회원은 결과 화면으로
+    const levelTestSaved = await claimTaken(sb).catch(() => false);
     const pendingGoogle = readPendingLink() === 'google';
     if (pendingGoogle && (roleError || aalError)) return setError(t.network);
     if (!pendingGoogle && needsSocialChoice({ role: myRole, providers, choseNew: user?.user_metadata?.edge_new_member === true })) {
@@ -360,6 +364,9 @@ export default function LoginFlow() {
       setEnroll({ factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
       setCode('');
       setStep('enroll');
+    } else if (levelTestSaved) {
+      setStep('moving');
+      window.location.assign('/level-test');
     } else {
       setStep('member');
     }
