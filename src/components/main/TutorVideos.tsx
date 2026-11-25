@@ -46,7 +46,7 @@ export default function TutorVideos({ videos }: { videos: TeacherVideo[] }) {
           저희도 영어를 가르치지만, 여전히 영어를 배우는 사람이기도 해요.
         </p>
         <p className="mt-1.5 text-[17px] !leading-relaxed text-[#3d3a52] max-md:text-[14.5px]">
-          그래서 <b className="text-[#140F33]">저희 스스로도 영어를 배우고 싶다는 생각이 드는 선생님들만</b> 정말 고심해서 선발했어요. :)
+          그래서 <b className="text-[#140F33]">저희 스스로도 수업을 듣고 싶은 선생님들만</b> 정말 고심해서 선발했어요. :)
         </p>
 
         <ul className="mt-9 grid grid-cols-3 md:mx-auto md:max-w-[780px] gap-[18px] max-md:-mx-4.5 max-md:mt-6 max-md:flex max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:px-4.5 max-md:pb-3 max-md:[scroll-padding-left:18px]">
