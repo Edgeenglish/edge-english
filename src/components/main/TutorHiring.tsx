@@ -71,7 +71,7 @@ export default function TutorHiring() {
           면접 보고 골라요
         </h3>
         <p className="mt-3 text-center text-lg text-[#5D5A73] max-md:text-[15px]">
-          모든 강사를 운영진 두 명이 직접 만나고, 고민 끝에 뽑아요.
+          모든 강사를 운영진 두 명이 직접 심사하고, 고민 끝에 뽑아요.
         </p>
 
         <ol className="mt-10 flex flex-col gap-2.5 max-md:mt-7">

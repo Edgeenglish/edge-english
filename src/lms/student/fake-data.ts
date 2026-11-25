@@ -153,6 +153,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
       { id: 'x3', startsAt: at(11, '20:00'), choice: 'wait', stage: null, subTutor: null, subMeetUrl: null, lessonId: 'lv2', itemId: null, offFrom, offTo },
     ],
     holidays: [],
+    season: { key: 'winter_2026', name: '겨울 특별 변경권', startsOn: '2026-12-01', endsOn: '2027-01-31', granted: 2, used: 0, left: 2 },
     creditPeriod: { start: s.periodStart, end: addDays(s.periodStart, 27) },
     creditPeriods: [{ start: s.periodStart, end: addDays(s.periodStart, 27), granted: s.creditsPerPeriod, left: s.creditsLeft }],
     creditUses: [{ at: s.lessons[4].startsAt, reason: 'student_change', delta: -1, lessonAt: s.lessons[4].startsAt }],

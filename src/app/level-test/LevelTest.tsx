@@ -83,7 +83,7 @@ function Promo({ i }: { i: number }) {
       <div className="pbody">
         <span className="ptag">강사 선발</span>
         <h3>운영진 둘이 직접 면접 보고 골라요</h3>
-        <p>모든 강사를 운영진 두 명이 직접 만나고, 고민 끝에 뽑아요.</p>
+        <p>모든 강사를 운영진 두 명이 직접 심사하고, 고민 끝에 뽑아요.</p>
       </div>
       <ol className="lt-steps">
         <li><i>1</i><span><b>서면 인터뷰</b> 기본 역량과 소통 능력 확인</span></li>
