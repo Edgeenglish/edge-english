@@ -765,6 +765,19 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 }
 
 /** Home 의 오늘 수업 한 줄 */
+/** 노트 버튼 (대체 강사 노트, migration 20261125090000): Class notes = 이 강사가 쓰는 노트, Main tutor notes = 대체 수업 중 담당 강사 노트(보기만) */
+function NoteButtons({ noteUrl, mainNoteUrl, className = '' }: { noteUrl?: string | null; mainNoteUrl?: string | null; className?: string }) {
+  const t = useT();
+  if (!noteUrl && !mainNoteUrl) return null;
+  const cls = 'inline-flex min-h-[40px] items-center rounded-[10px] bg-[#f3f1fa] px-3 text-[14px] font-bold text-[#5b3fe0]';
+  return (
+    <div className={`flex flex-wrap gap-2 ${className}`}>
+      {noteUrl && <a href={noteUrl} target="_blank" rel="noreferrer" className={cls}>{t('Class notes', '수업 노트')} ↗</a>}
+      {mainNoteUrl && <a href={mainNoteUrl} target="_blank" rel="noreferrer" className={cls}>{t('Main tutor notes', '담당 강사 노트')} ↗</a>}
+    </div>
+  );
+}
+
 function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent, sendContact, tutorName, admin = false }: {
   lesson: TutorLesson; tz: string; now: Date; onRecord: () => void; sendLate?: LateSend; onLateSent?: () => void | Promise<void>; sendContact?: ContactSend; tutorName?: string; admin?: boolean;
 }) {
@@ -784,6 +797,7 @@ function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent, sendCont
         ? <button type="button" onClick={onRecord} className="min-h-[36px] rounded-[10px] bg-[#5b3fe0] px-3 text-[13px] font-bold text-white">Record</button>
         : <span className={`text-[13px] font-semibold ${phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]'}`}>{phase === 'recorded' ? `✓ ${st}${lateText(l.late)}` : st}<CoverNote lesson={l} where="status" /></span>}
     </div>
+    {phase !== 'canceled' && phase !== 'covered' && <NoteButtons noteUrl={l.noteUrl} mainNoteUrl={l.mainNoteUrl} className="mt-1.5" />}
     {/* 강사 '늦어요' 알림: 시작 2시간 전~시작 전, 보냈으면 회색 Sent ✓ */}
     <div className="mt-1.5 empty:hidden"><RunningLate lesson={l} now={now} tz={tz} send={sendLate} onSent={onLateSent} /></div>
     {/* 강사 [학생에게 연락하기]: 시작 5분 뒤~끝, 보냈으면 회색 Email sent ✓ */}
@@ -1001,7 +1015,6 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
   due?: boolean;
   lesson: TutorLesson; tz: string; /** 표 머리글 시간대 — 다르면 줄에 시간대 이름 (이동 기간, H26(176)) */ headTz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
 }) {
-  const t = useT();
   const now = useLiveNow(loadedNow);
   const [open, setOpen] = useState(false);
   const [dirty, mark] = useDirtyList();
@@ -1098,12 +1111,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
         <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
           {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
-          {(l.noteUrl || l.mainNoteUrl) && (
-            <div className="flex flex-wrap gap-2 pt-2">
-              {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[40px] items-center rounded-[10px] bg-[#f3f1fa] px-3 text-[14px] font-bold text-[#5b3fe0]">{t('Class notes', '수업 노트')} ↗</a>}
-              {l.mainNoteUrl && <a href={l.mainNoteUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[40px] items-center rounded-[10px] bg-[#f3f1fa] px-3 text-[14px] font-bold text-[#5b3fe0]">{t('Main tutor notes', '담당 강사 노트')} ↗</a>}
-            </div>
-          )}
+          <NoteButtons noteUrl={l.noteUrl} mainNoteUrl={l.mainNoteUrl} className="pt-2" />
           {recordable ? (
             <div className="lg:max-w-[560px]">
               <div className="pt-2 empty:hidden"><ContactStudent lesson={l} now={now} tz={tz} tutorName={tutorName} send={actions.contactStudent} onSent={onSaved} admin={admin} /></div>
