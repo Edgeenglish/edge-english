@@ -168,6 +168,11 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
     return (
       <Frame title={title} sub={sub} steps={steps} onClose={onClose}
         foot={<button type="button" className={btnMain} disabled={weekly.length === 0} onClick={goStep2}>{T('Next ›', '다음 ›')}</button>}>
+        {/* 학생: 왜 바꾸는지·정규 시간은 그대로인지 (대표 11/25) */}
+        {!v.en && <div className="mb-3 grid gap-1 text-[14px] leading-relaxed text-[#1d1b2b]">
+          <p>{item.tutor} 강사님의 임시 근무 지역 변경으로 기존 시간에 수업이 어려워졌어요.</p>
+          <p>해당 기간에만 수업할 새로운 시간을 골라 주세요. 임시 근무 기간이 끝나면 기존 정규 수업 시간으로 돌아가요.</p>
+        </div>}
         {v.en && <p className="mb-3 text-[13.5px] text-[#55526a]">The student can select and request new class times directly through their LMS.<br />If the student asks for your help during class, you can discuss the options together and submit the agreed schedule.<br />Any schedule you submit must be confirmed by the student before it can be finalized.</p>}
         <Badge text={v.badge} />
         <p className="mb-2 text-[14px] font-bold">{T(`Choose ${need} · ${weekly.length}/${need}`, `${need}개 고르기 · ${weekly.length}/${need}`)}</p>
