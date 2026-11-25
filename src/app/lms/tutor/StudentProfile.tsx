@@ -95,6 +95,12 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
             {regular ? t('Your regular student', '담당 수강생') : t('Cover class — view only', '대체 수업 — 열람만')}{p.slots.length ? ` · ${kst.text.split(' ').slice(0, 1)[0]}` : ''}{e ? ` · ${e.durationMin} min` : ''}
             {!regular && ` · ${t('Email and payment details are not shared with cover tutors.', '이메일·결제 정보는 대체강사에게 보이지 않아요.')}`}
           </p>
+          {(s.classNoteUrl || s.mainNoteUrl) && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {s.classNoteUrl && <a href={s.classNoteUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[40px] items-center rounded-[10px] bg-[#f3f1fa] px-3 text-[14px] font-bold text-[#5b3fe0]">{t('Class notes', '수업 노트')} ↗</a>}
+              {s.mainNoteUrl && <a href={s.mainNoteUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[40px] items-center rounded-[10px] bg-[#f3f1fa] px-3 text-[14px] font-bold text-[#5b3fe0]">{t('Main tutor notes', '담당 강사 노트')} ↗</a>}
+            </div>
+          )}
           {/* 첫 수업 후 To-do (4600): 첫 Held 수업이 있는 담당 수강생만. 남은 게 있으면 노란 버튼, 다 했으면 작은 링크 */}
           {regular && onFollowup && p.followup && (() => { const left = followupPending ?? p.followup.pending; return (
             <button type="button" onClick={onFollowup}
@@ -156,7 +162,6 @@ export default function StudentProfile({ studentId, actions, onClose, now, backL
                 {notes.map((n) => <p key={n} className="pt-1 text-[12.5px] text-[#a35b00]">{n}</p>)}
               </>
             ) : <Row k="Class days / time" v={next ? <><Rich text={enBoth(next.startsAt, zoneOf ? zoneOf(next.startsAt, tz) : tz)} /> (cover class)</> : NP} />}
-            <Row k="Google Docs" v={s.classNoteUrl ? <a href={s.classNoteUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#5b3fe0] underline">Open class notes ↗</a> : NP} />
           </Section>
 
           <Section title="ENROLLMENT">

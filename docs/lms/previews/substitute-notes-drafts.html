@@ -49,6 +49,12 @@ h2 { font-size: 18px; margin: 0 0 4px; }
 .explain { background: var(--note); color: var(--note-ink); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; }
 .explain p { margin: 0; }
 .explain ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.where { font-size: 16px; margin: 22px 0 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.legend { margin: 6px 0 4px; color: var(--muted); font-size: 13px; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 800; }
+.pill.done { background: #e3f6ea; color: #13723f; }
+.pill.ask { background: #fff1cc; color: #7a5200; }
+.ghostchip { background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
 </style>
 
 <div class="wrap">
@@ -59,7 +65,7 @@ h2 { font-size: 18px; margin: 0 0 4px; }
 
   <!-- 학생 화면 -->
   <section>
-    <h2>학생 화면 · 내 수업 › 나의 학습 정보</h2>
+    <h2>학생 화면 · 내 수업 › 나의 학습 정보 <span class="pill done">반영됨</span></h2>
     <div class="row">
       <div>
         <div class="label">PC</div>
@@ -121,17 +127,19 @@ h2 { font-size: 18px; margin: 0 0 4px; }
 
   <!-- 강사 화면 -->
   <section>
-    <h2>강사 화면 · Students (Maria가 김하준 대체 수업을 맡았을 때)</h2>
+    <h2>강사 화면 — 노트 버튼이 생기는 곳 3군데</h2>
+    <p class="lead">예: Maria가 김하준(담당 Benny)의 대체 수업을 맡았을 때 Maria 화면. 강사 화면은 영어입니다.</p>
+    <div class="legend"><span class="pill done">반영됨</span> 시험 사이트에 이미 들어감 · <span class="pill ask">제안</span> 대표님 '응' 하면 넣음</div>
+
+    <h3 class="where">① Students 메뉴 — 학생 줄 오른쪽 <span class="pill done">반영됨</span></h3>
     <div class="row">
       <div>
         <div class="label">PC</div>
         <div class="frame">
           <div class="topbar">Edge English · Tutor <span>Home · Schedule · <u>Students</u></span></div>
-          <h3 style="margin:0 0 8px;font-size:18px">Students</h3>
           <div class="list">
             <div class="li"><div class="who"><b>Hailey Lee</b><span>Intermediate · Free talking · Seoul</span></div><span class="chip">Class notes ↗</span><span class="prof">Profile ›</span></div>
             <div class="li mark"><div class="who"><b>Hajun Kim</b><span>Intermediate · Free talking · Sydney</span></div><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span><span class="prof">Profile ›</span></div>
-            <div class="li"><div class="who"><b>Sienna Lee</b><span>Pre-Intermediate · Textbook · Seoul</span></div><span class="chip">Class notes ↗</span><span class="prof">Profile ›</span></div>
           </div>
         </div>
       </div>
@@ -142,19 +150,71 @@ h2 { font-size: 18px; margin: 0 0 4px; }
           <div class="list">
             <div class="li"><div class="who"><b>Hailey Lee</b><span>Intermediate · Seoul</span></div><span class="chip">Class notes ↗</span></div>
             <div class="li mark" style="flex-wrap:wrap"><div class="who"><b>Hajun Kim</b><span>Intermediate · Sydney</span></div><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
-            <div class="li"><div class="who"><b>Sienna Lee</b><span>Pre-Intermediate · Seoul</span></div><span class="chip">Class notes ↗</span></div>
           </div>
         </div>
       </div>
     </div>
+
+    <h3 class="where">② 학생 프로필 — 이름 바로 아래 (맨 위로 올림) <span class="pill done">반영됨</span></h3>
+    <div class="row">
+      <div>
+        <div class="label">PC</div>
+        <div class="frame">
+          <div class="card">
+            <h3 style="font-size:20px">Hajun Kim</h3>
+            <span style="color:var(--muted);font-size:13px">Cover class — view only · Thu · 40 min</span>
+            <div class="mark" style="display:flex;flex-wrap:wrap;gap:8px;border-radius:10px;width:fit-content"><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
+            <div class="ghost">PROFILE · ABOUT & PREFERENCES · CLASS … (그대로. 맨 아래 'Google Docs' 줄은 위로 옮겨서 없어짐)</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="label">휴대폰</div>
+        <div class="frame phone">
+          <div class="card">
+            <h3 style="font-size:19px">Hajun Kim</h3>
+            <span style="color:var(--muted);font-size:13px">Cover class — view only · Thu · 40 min</span>
+            <div class="mark" style="display:flex;flex-wrap:wrap;gap:8px;border-radius:10px"><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
+            <div class="ghost">아래 내용 그대로</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="where">③ Home·Schedule — 수업 줄을 눌러 펼친 곳 <span class="pill ask">제안</span></h3>
+    <div class="row">
+      <div>
+        <div class="label">PC</div>
+        <div class="frame">
+          <div class="list">
+            <div class="li" style="background:var(--accent-soft)"><div class="who"><b>Thu 27 Nov 7:00 PM <i style="font-style:normal;color:var(--muted)">Sydney Time</i> · Hajun Kim</b><span>40 min · Cover class · Scheduled</span></div><span class="prof">▴</span></div>
+            <div class="li" style="display:grid;gap:8px;justify-items:start">
+              <div class="mark" style="display:flex;flex-wrap:wrap;gap:8px;border-radius:10px"><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px"><span class="chip ghostchip">Running late</span><span class="chip ghostchip">Contact student</span><span class="chip ghostchip">Cancel class</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="label">휴대폰</div>
+        <div class="frame phone">
+          <div class="list">
+            <div class="li" style="background:var(--accent-soft)"><div class="who"><b>7:00 PM · Hajun Kim</b><span>Sydney Time · Cover class</span></div><span class="prof">▴</span></div>
+            <div class="li" style="display:grid;gap:8px;justify-items:start">
+              <div class="mark" style="display:flex;flex-wrap:wrap;gap:8px;border-radius:10px"><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px"><span class="chip ghostchip">Running late</span><span class="chip ghostchip">Contact student</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="explain" style="margin-top:14px">
-      <p><b>누르면 열리는 문서</b></p>
+      <p><b>버튼을 누르면</b></p>
       <ol>
-        <li>Maria 화면의 Hajun Kim 'Class notes' → <b>김하준_Maria</b> (Maria 편집 가능). 지금처럼 김하준_Benny가 열리지 않습니다.</li>
-        <li>Benny 화면의 Hajun Kim 'Class notes' → 지금처럼 <b>김하준_Benny</b> (Benny만 편집).</li>
-        <li>대체 학생은 지금 규칙 그대로, 수업이 잡힌 때부터 수업 끝나고 24시간까지만 Maria 목록에 보입니다.</li>
-        <li>Maria 화면의 Hajun Kim 'Main tutor notes' → <b>김하준_Benny</b> (보기만, 수업이 어디까지 진행됐는지 확인용). Maria의 마지막 대체 수업이 끝나면 이 버튼은 사라집니다.</li>
-        <li>노트는 대체 수업이 잡히고 10분 안에 생깁니다. 생기기 전 몇 분은 Maria 화면에 'Class notes' 버튼이 없습니다.</li>
+        <li>Class notes → 그 강사가 쓰는 노트. Maria는 <b>김하준_Maria</b>(편집), Benny는 <b>김하준_Benny</b>.</li>
+        <li>Main tutor notes → <b>김하준_Benny</b>(보기만). 대체 강사에게만, 그 학생과의 마지막 대체 수업이 끝나면 사라짐.</li>
+        <li>담당 강사(Benny) 화면에는 Class notes 하나만 나옵니다.</li>
       </ol>
     </div>
   </section>
