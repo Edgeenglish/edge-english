@@ -187,7 +187,6 @@ export default function LevelTest() {
   const [rp, setRp] = useState(0);
   const [seen, setSeen] = useState<Set<number>>(new Set());
   const [account, setAccount] = useState<Account>('checking');
-  const [copied, setCopied] = useState(false);
   const [, setSaved] = useState(false);
   const [adminView, setAdminView] = useState(false);
   const rvRef = useRef<HTMLDivElement>(null);
@@ -415,8 +414,12 @@ export default function LevelTest() {
           <br />1:1 상담으로 나에게 딱 맞는 걸 찾아 드릴게요.
         </p>
         <a className="lt-btn kakao" href={KAKAO} target="_blank" rel="noopener noreferrer"
-          onClick={() => { copyText(resultText(L.name, score, wrong)).then(setCopied, () => {}); }}>카톡으로 상담받기</a>
-        {copied && <p className="copied" role="status">결과를 복사했어요. 카톡 입력칸에 붙여 넣어 주세요.</p>}
+          onClick={(e) => {
+            // 휴대폰: 카톡이 먼저 열리면 이 화면이 포커스를 잃어 복사가 실패함 → 복사를 마친 뒤 카톡 열기
+            e.preventDefault();
+            void copyText(resultText(L.name, score, wrong)).finally(() => { window.location.href = KAKAO; });
+          }}>카톡으로 상담받기</a>
+        <p className="copied">누르면 결과가 복사되고 카톡으로 연결돼요.<br />카톡 입력칸에 붙여 넣어 주세요.</p>
       </div>
     );
   }
