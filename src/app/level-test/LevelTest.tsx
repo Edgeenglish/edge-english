@@ -9,7 +9,7 @@ import { PROMO_CHEER, audioUrl, cheer, fill, levelOf, reviewSteps, scoreOf, vali
 import { claimTaken, readTaken, writeTaken } from '@/lib/level-test/saved';
 import './level-test.css';
 
-const KAKAO = 'https://pf.kakao.com/_blxgib/friend';
+const KAKAO = 'https://pf.kakao.com/_blxgib/chat'; // 1:1 채팅방 (채널 추가 안 했으면 카톡이 채널 추가도 보여 줌)
 const CAMP = 'https://tangerineenglish.imweb.me/?idx=13';
 const TUTORS: [string, string][] = [
   ['Grace', '/images/tutor/data/grace_main.jpg'],
@@ -152,6 +152,34 @@ function Review({ k, pick }: { k: number; pick: number }) {
   );
 }
 
+// 카톡 상담 버튼: 결과 글을 복사해 두고 채팅방을 연다 (자동 전송은 카카오가 막음 — 학생이 붙여넣기·전송, 대표 11/25)
+function resultText(level: string, score: number, wrong: number[]) {
+  const weak = wrong.length ? wrong.map((k) => QUESTIONS[k].tag).join(', ') : '없음 (다 맞혔어요)';
+  return `[엣지영어 레벨테스트 결과]\n${level} · ${score}/${QUESTIONS.length}\n부족한 부분: ${weak}`;
+}
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // 앱 안 브라우저 등 clipboard 를 막는 곳: 예전 방식으로 한 번 더
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export default function LevelTest() {
   const [phase, setPhase] = useState<Phase>('start');
   const [i, setI] = useState(0);
@@ -159,6 +187,7 @@ export default function LevelTest() {
   const [rp, setRp] = useState(0);
   const [seen, setSeen] = useState<Set<number>>(new Set());
   const [account, setAccount] = useState<Account>('checking');
+  const [copied, setCopied] = useState(false);
   const [, setSaved] = useState(false);
   const [adminView, setAdminView] = useState(false);
   const rvRef = useRef<HTMLDivElement>(null);
@@ -385,7 +414,9 @@ export default function LevelTest() {
           {L.camp ? '영붙캠이 좋을지, 화상영어가 좋을지, 어떤 교재로 시작할지' : '프리토킹이 좋을지, 교재 수업이 좋을지, 어떤 교재가 맞을지'}
           <br />1:1 상담으로 나에게 딱 맞는 걸 찾아 드릴게요.
         </p>
-        <a className="lt-btn kakao" href={KAKAO} target="_blank" rel="noopener noreferrer">카톡으로 상담받기</a>
+        <a className="lt-btn kakao" href={KAKAO} target="_blank" rel="noopener noreferrer"
+          onClick={() => { copyText(resultText(L.name, score, wrong)).then(setCopied, () => {}); }}>카톡으로 상담받기</a>
+        {copied && <p className="copied" role="status">결과를 복사했어요. 카톡 입력칸에 붙여 넣어 주세요.</p>}
       </div>
     );
   }
