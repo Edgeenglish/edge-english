@@ -238,7 +238,8 @@ export type CancelPreview = ChangeDecision | { ok: false; reason: 'policy_pendin
  * 보상 수업은 재취소 규칙이 미결정이라 운영자가 값을 정하기 전에는 판정하지 않음
  */
 export function cancelPreview(
-  input: { lesson: StudentLesson; now: Date; finalEndDate: KstDate; creditsLeft: number; holidays: ReadonlySet<KstDate> },
+  input: { lesson: StudentLesson; now: Date; finalEndDate: KstDate; creditsLeft: number; holidays: ReadonlySet<KstDate>;
+    season?: { startsOn: KstDate; endsOn: KstDate; left: number } | null },
   policy: PendingPolicy | null,
 ): CancelPreview {
   const { lesson } = input;
@@ -250,6 +251,7 @@ export function cancelPreview(
       finalEndDate: lesson.finalEndDate ?? input.finalEndDate,
       creditsLeft: input.creditsLeft,
       isKoreanPublicHoliday: input.holidays.has(instantToKstDate(lesson.startsAt)),
+      season: input.season ?? null,
     },
     policy ?? POLICY_NOT_DECIDED,
   );
@@ -280,6 +282,8 @@ export type CancelPlan = {
   items: CancelPlanItem[];
   /** 변경권을 쓰는 수업 수 */
   uses: number;
+  /** 시즌 무료 변경(겨울 특별 변경권)을 쓰는 수업 수 */
+  seasonUses: number;
   /** 보강 없이 수업 횟수가 차감되는 수 */
   consumes: number;
   /** 새로 생기는 보강 권리 수 */
@@ -296,8 +300,10 @@ export type CancelPlan = {
  */
 export function planCancelMany(
   lessons: readonly StudentLesson[],
-  input: { now: Date; finalEndDate: KstDate; creditsLeft: number; creditPeriods?: readonly CreditPeriod[]; holidays: ReadonlySet<KstDate> },
+  input: { now: Date; finalEndDate: KstDate; creditsLeft: number; creditPeriods?: readonly CreditPeriod[]; holidays: ReadonlySet<KstDate>;
+    season?: { startsOn: KstDate; endsOn: KstDate; left: number } | null },
 ): CancelPlan {
+  let seasonLeft = input.season?.left ?? 0;   // 시즌 무료 변경도 시간순으로 차례로 (DB 와 같은 순서)
   const sorted = [...lessons].sort((a, b) => +a.startsAt - +b.startsAt);
   const usePeriods = !!input.creditPeriods && input.creditPeriods.length > 0;
   const left = new Map<string, number>();   // 기간 시작일 → 남은 변경권 (차감하며 갱신)
@@ -316,14 +322,17 @@ export function planCancelMany(
     const date = instantToKstDate(lesson.startsAt);
     const period = usePeriods ? creditPeriodFor(input.creditPeriods!, date) : null;
     const credits = take(period);
-    const decision = cancelPreview({ lesson, now: input.now, finalEndDate: input.finalEndDate, creditsLeft: credits, holidays: input.holidays }, null);
+    const decision = cancelPreview({ lesson, now: input.now, finalEndDate: input.finalEndDate, creditsLeft: credits, holidays: input.holidays,
+      season: input.season ? { ...input.season, left: seasonLeft } : null }, null);
     if (decision.ok && decision.usesCredit) left.set(key(period), credits - 1);
+    if (decision.ok && decision.usesSeason) seasonLeft -= 1;
     return { lesson, decision, period };
   });
   const ok = items.map((x) => x.decision).filter((d): d is ChangeDecision & { ok: true } => d.ok);
   return {
     items,
     uses: ok.filter((d) => d.usesCredit).length,
+    seasonUses: ok.filter((d) => d.usesSeason).length,
     consumes: ok.filter((d) => d.consumesLesson).length,
     makeups: ok.filter((d) => d.makeupAllowed).length,
     bad: items.length - ok.length,
@@ -332,7 +341,7 @@ export function planCancelMany(
 }
 
 /** 취소 저장 결과 한 건 (DB student_change_lesson / admin_change_lesson 반환) */
-export type CancelResult = { uses_credit: boolean; makeup_allowed: boolean; credits_after?: number };
+export type CancelResult = { uses_credit: boolean; makeup_allowed: boolean; credits_after?: number; season?: string | null };
 
 /**
  * 여러 수업 취소 완료 문구 (R-01): 미리 보기 예상이 아니라 저장된 결과로. 남은 변경권은 저장 뒤 다시 읽은 기간 잔여로
@@ -343,5 +352,6 @@ export function cancelManySummary(done: readonly CancelResult[], remaining: { st
   const makeups = done.filter((r) => r.makeup_allowed).length;
   const md = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
   const left = remaining.length === 0 ? '' : remaining.length === 1 ? ` · 남은 변경권 ${remaining[0].left}개` : ` · 남은 변경권 ${remaining.map((r) => `${r.start ? `${md(r.start)}~ ` : ''}${r.left}개`).join(', ')}`;
-  return `수업 ${done.length}회를 취소했어요 · 변경권 ${credits}개 사용${left}${makeups ? ` · 보강 ${makeups}회는 ‘보강 신청’에서 날짜를 골라 주세요` : ''}`;
+  const season = done.filter((r) => !!r.season).length;
+  return `수업 ${done.length}회를 취소했어요${season ? ` · 겨울 특별 변경권 ${season}회 사용` : ''} · 변경권 ${credits}개 사용${left}${makeups ? ` · 보강 ${makeups}회는 ‘보강 신청’에서 날짜를 골라 주세요` : ''}`;
 }

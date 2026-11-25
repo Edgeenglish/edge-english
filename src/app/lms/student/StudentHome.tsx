@@ -24,7 +24,7 @@ import { CONFIRMED } from '@/lms/rules/policy';
 import { diffDays, formatInZone, hoursBetween, instantToKstDate, type KstDate } from '@/lms/rules/dates';
 import { MEET_MISSING_KO, meetRoomUrl } from '@/lms/rules/meet';
 import type { PreviewExtras } from '@/lms/student/fake-data';
-import type { LeaveRow, MakeupOption, MakeupRight, MyInfo, RegularSlot, StudentNotice, Reminders, StudentActions, StudentView, TimezoneState } from '@/lms/student/live';
+import type { LeaveRow, MakeupOption, MakeupRight, MyInfo, RegularSlot, StudentNotice, Reminders, StudentActions, StudentView, TimezoneState, SeasonCredits } from '@/lms/student/live';
 import {
   cancelManySummary,
   cancelPreview,
@@ -776,6 +776,13 @@ export default function StudentHome(props: {
             </button>
             <HelpTip text="변경권은 28일마다 새로 제공돼요." />
           </p>
+          {/* 겨울 특별 혜택 (H26(220) 보충 ⑧): 추가 안내 + 남은 횟수 */}
+          {s.season && (
+            <p className="flex flex-wrap items-baseline gap-x-1.5 text-[12.5px] text-[#55526a]">
+              <b className="font-bold text-[#1d1b2b]">❄️ {s.season.name} {s.season.granted}회가 추가됐어요!</b>
+              <span>남은 <b className="font-extrabold text-[#1d1b2b]">{s.season.left}회</b></span>
+            </p>
+          )}
           <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
             {/* 대표 11/18 시안 확정 (https://claude.ai/artifact/5eFCzRLSaMq6tKBzSTGWNE) */}
             <b className="font-bold text-[#3d3a52]">6시간 이상 남았을 때</b><span>변경권 1개 사용, 보강 가능</span>
@@ -1337,6 +1344,7 @@ export default function StudentHome(props: {
               finalEndDate={s.finalEndDate}
               makeupUntil={s.finalEndDate}
               holidays={holidays}
+              season={s.season ?? null}
               regularLeft={regularLessonsLeft(lessons, now)}
               totalLeft={left.total}
               busy={busy}
@@ -2456,8 +2464,9 @@ function Row({ k, v }: { k: string; v: string }) {
 }
 
 /** 수업 하나를 취소하면 어떻게 되는지 한 줄 (목록 줄 아래 · 여러 수업 요약 공통) */
-const outcomeText = (d: { ok: boolean; consumesLesson?: boolean; timing?: string; usesCredit?: boolean }) =>
+const outcomeText = (d: { ok: boolean; consumesLesson?: boolean; timing?: string; usesCredit?: boolean; usesSeason?: boolean }) =>
   !d.ok ? '취소 불가' : d.consumesLesson ? (d.timing === 'late' ? '6시간 이내 · 1회 차감 · 보강 없음' : '변경권 없음 · 1회 차감 · 보강 없음')
+    : d.usesSeason ? '겨울 특별 변경권 1회 · 보강 가능'
     : d.usesCredit ? '변경권 1개 · 보강 가능' : '변경권 그대로 · 보강 가능';
 
 function CancelSheet(props: {
@@ -2476,6 +2485,8 @@ function CancelSheet(props: {
   /** 보강 기한 = 수강 종료일 */
   makeupUntil: KstDate;
   holidays: ReadonlySet<KstDate>;
+  /** 겨울 특별 변경권 (H26(220)) — 없으면 null */
+  season: SeasonCredits | null;
   regularLeft: number;
   totalLeft: number;
   busy: boolean;
@@ -2497,8 +2508,8 @@ function CancelSheet(props: {
   if (!lesson) {
     // 여러 수업 고르기: 시간순으로, 각 수업이 속한 기간의 변경권을 차례로 차감해 미리 계산 (DB 도 같은 순서·같은 기간 규칙, R-12)
     const picked = props.lessons.filter((l) => many.has(l.id));
-    const plan = planCancelMany(picked, { now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, creditPeriods: periods, holidays: props.holidays });
-    const { uses, consumes, makeups } = plan;
+    const plan = planCancelMany(picked, { now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, creditPeriods: periods, holidays: props.holidays, season: props.season });
+    const { uses, seasonUses, consumes, makeups } = plan;
     const bad = plan.items.filter((x) => !x.decision.ok);
     const toggleMany = (id: string) => setMany((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
     return (
@@ -2506,7 +2517,7 @@ function CancelSheet(props: {
         <h2 className="text-[18px] font-bold">{multi ? '취소할 수업을 모두 골라 주세요' : '취소할 수업을 골라 주세요'}</h2>
         {props.lessons.map((l) => {
           const on = many.has(l.id);
-          const alone = planCancelMany([l], { now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, creditPeriods: periods, holidays: props.holidays }).items[0]?.decision;
+          const alone = planCancelMany([l], { now: props.now, finalEndDate: props.finalEndDate, creditsLeft: props.creditsLeft, creditPeriods: periods, holidays: props.holidays, season: props.season }).items[0]?.decision;
           const showCheck = multi && !!props.onConfirmMany && l.kind !== 'compensation';
           return (
             <div key={l.id} className={`${card} flex min-h-[56px] items-center gap-2 pl-3 pr-4 ${on ? 'border-[#5b3df0] bg-[#f6f3ff]' : ''}`}>
@@ -2533,7 +2544,7 @@ function CancelSheet(props: {
         {props.notice && <p className="rounded-[12px] border border-[#f3c2bb] bg-[#fff1ef] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#7a1d12]">{props.notice}</p>}
         {picked.length > 0 && props.onConfirmMany && (
           <section className={`${card} sticky bottom-0 z-10 grid gap-2 p-3.5 shadow-[0_-6px_16px_rgba(27,20,66,0.12)]`}>
-            <p className="text-[15px] font-bold">선택한 수업 {picked.length}회 · 변경권 {uses}개 사용</p>
+            <p className="text-[15px] font-bold">선택한 수업 {picked.length}회{seasonUses ? ` · 겨울 특별 변경권 ${seasonUses}회` : ''} · 변경권 {uses}개 사용</p>
             {/* 기간별 잔여 (R-12): 수업이 속한 기간마다 차감 전 → 후 */}
             <p className="text-[12.5px] text-[#55526a]">
               {plan.periods.map((p) => `${p.start && p.end ? `${fmtDate(p.start)}~${fmtDate(p.end)} 기간 ` : ''}변경권 ${p.before}개 → ${p.after}개`).join(' · ')}
@@ -2566,7 +2577,7 @@ function CancelSheet(props: {
   }
 
   const creditsNow = creditsOf(lesson);   // 그 수업 날짜가 속한 기간의 변경권 (R-12)
-  const d = cancelPreview({ lesson, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: creditsNow, holidays: props.holidays }, null);
+  const d = cancelPreview({ lesson, now: props.now, finalEndDate: props.finalEndDate, creditsLeft: creditsNow, holidays: props.holidays, season: props.season }, null);
   const title = `${whenText(lesson.startsAt)} 수업을 취소할까요?`;
 
   if (!d.ok) {
@@ -2586,6 +2597,7 @@ function CancelSheet(props: {
   const rows: [string, string][] = [
     ...(d.consumesLesson ? [['수업 횟수', '1회 차감'] as [string, string]] : []),
     ...(d.usesCredit ? [['변경권', `1개 사용 (${creditsNow}개 → ${creditsNow - 1}개)`] as [string, string]] : []),
+    ...(d.usesSeason && props.season ? [['겨울 특별 변경권', `1회 사용 (${props.season.left}회 → ${props.season.left - 1}회)`] as [string, string]] : []),
     // 한국 공휴일 수업 (H26(138)): 변경권 줄이 아예 안 보이던 것 → 차감 안 된다는 한 줄
     ...(d.status === 'Student canceled in advance (public holiday)' ? [['변경권', '차감 안 됨 (공휴일 취소)'] as [string, string]] : []),
     ['보강', d.makeupAllowed ? `~${endDay(lesson.finalEndDate ?? props.makeupUntil)}까지 가능` : '불가'],

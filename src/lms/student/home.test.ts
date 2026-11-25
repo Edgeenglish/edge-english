@@ -257,3 +257,28 @@ describe('남은 수업 = 지금 수강권만 (대표 11/13)', () => {
     expect(currentPassLessons(ls, '').length).toBe(3);
   });
 });
+
+describe('겨울 특별 변경권 (H26(220)): 공휴일 무료 → 겨울 무료 → 일반 변경권', async () => {
+  const { planCancelMany } = await import('./home');
+  const now = kstToInstant('2026-11-25', '12:00');
+  const periods = [{ start: '2026-11-24' as const, end: '2027-02-15' as const, granted: 2, left: 2 }];
+  const season = { startsOn: '2026-12-01' as const, endsOn: '2027-01-31' as const, left: 2 };
+  const base = { now, finalEndDate: '2027-02-15' as const, creditsLeft: 2, creditPeriods: periods, holidays: new Set(['2026-12-25' as const]), season };
+
+  it('시즌 수업 3개 + 공휴일 1개: 공휴일은 겨울 횟수에서 안 빠지고, 겨울 2회 뒤에 일반 변경권', () => {
+    const plan = planCancelMany([lesson('h', 'regular', '2026-12-25'), lesson('a', 'regular', '2026-12-01'), lesson('b', 'regular', '2026-12-03'), lesson('c', 'regular', '2026-12-08')], base);
+    const by = Object.fromEntries(plan.items.map((x) => [x.lesson.id, x.decision]));
+    expect(by.a).toMatchObject({ usesSeason: true, usesCredit: false, makeupAllowed: true });
+    expect(by.b).toMatchObject({ usesSeason: true, usesCredit: false });
+    expect(by.c).toMatchObject({ usesCredit: true });
+    expect(by.h).toMatchObject({ status: 'Student canceled in advance (public holiday)', usesCredit: false });
+    expect((by.h as { usesSeason?: boolean }).usesSeason).toBeFalsy();
+    expect(plan.seasonUses).toBe(2);
+    expect(plan.uses).toBe(1);
+  });
+  it('시즌 밖(11/26·2/2) 수업은 일반 변경권', () => {
+    const plan = planCancelMany([lesson('x', 'regular', '2026-11-26'), lesson('y', 'regular', '2027-02-02')], base);
+    expect(plan.seasonUses).toBe(0);
+    expect(plan.uses).toBe(2);
+  });
+});

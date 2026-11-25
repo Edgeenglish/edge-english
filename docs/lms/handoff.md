@@ -1,8 +1,10 @@
-## ⏭ 12~1월 겨울 특별 혜택 — LMS 개발 대기 (H26(220), 12/1 전 목표)
-- 정책은 H26(220)에만. 개발 메모: 학생당 시즌 무료 변경 2회(28일 변경권과 별도 카운트, 공휴일 무료 → 겨울 무료 → 일반 순) · 연장 = 기존 자동 연장(`lms_fault_extension`·`enrollment_extensions`)에 사유 '겨울 특별 혜택' 추가, 원래 종료일+7일 상한, 줄이지 않음 · 운영진 손 연장 `admin_extend_enrollment`는 예외용
-- ✅ 11/25 결정 H26(220) 보충: 보강은 이어진 마지막 수강권 종료일까지, 모자라면 +7일 · 이름 '겨울 특별 변경권' · 학생 홈 공지 + '수업 변경·취소' 카드 '❄️ 겨울 특별 변경권 2회가 추가됐어요!'·남은 횟수 · **학생 메일 보류**(공지·지급으로 메일 가는 경로 있으면 끄고 대기, 문구 대표 확인 뒤)
-- 확인할 것(ChatGPT 검수): 공휴일 무료가 겨울 2회에서 안 빠짐 · 휴무 연장과 중복 연장 없음 · 겨울 보강 취소·변경 때 종료일이 줄지 않음
-
+## ⏭ 12~1월 겨울 특별 혜택 — 시험 사이트·시험 DB 반영 끝, 운영 반영 대기 (H26(220)·(220) 보충·(221))
+- 정책은 H26(220)에만. 브랜치 claude/beautiful-wozniak-knztzy → lms-test
+- migration **20261125120000_lms_winter_benefit** (시험 DB 적용, 운영 DB 미적용): 표 `season_benefits`('winter_2026' 12/1~1/31·2회·7일) · `season_extension_marks`(연장 높이, 줄이지 않기) · `lms_change_core` 패치(공휴일 → 겨울 무료 → 일반 변경권, 상태 'Student canceled in advance' + decision.season, 변경권 장부 안 씀, 학생별 advisory lock) · 사용 수 = applied 학생 취소 중 decision.season (운영진 되돌리면 자동 반환) · 보강 기한 `lms_makeup_until(e, 원래수업)` = 겨울이면 greatest(이어진 마지막 종료일, 원래 종료일(기본+운영진 연장)+7, 다음 수강권 시작 전날까지) — 보강 날짜 찾기·신청·확정·시간 확인·운영자 옮기기 6곳 · 연장 `lms_season_sync_student`(트리거 lessons_zzz_, auto_source 'season'·사유 'season_benefit') · 강사 귀책 연장은 겨울 연장·겨울 보강 빼고 계산(겹치면 늦은 날 하나) · `student_season_credits` · 변경권 내역 'winter' 줄
+- 화면: 학생 홈 '수업 변경·취소' 카드 '❄️ 겨울 특별 변경권 2회가 추가됐어요! 남은 n회'(시즌과 수강기간이 겹치는 학생만, 시즌 끝나면 사라짐) · 취소 목록·확인창 '겨울 특별 변경권 1회 · 보강 가능' · 변경권 내역 '사용 안 됨 (겨울 특별 변경권 사용)'
+- 시험 DB(되돌림 시험): 공휴일 12/3 → 공휴일 무료(겨울 2회 그대로) · 12/1·12/24 겨울 → 남은 0 · 12/29 일반 변경권 · 겨울 보강 기한 2/22(종료 2/15+7) · 2/20 보강 → 종료일 2/20 · 그 보강 취소해도 2/20 유지 · 되돌리면 1회 반환 · 노쇼 3회 겹침 → 2/23 하나만(중복 없음). 시험 DB 공휴일 6개(운영과 같게)·공지 1건 넣음
+- 메일: 새 메일 없음(공지는 메일 안 감). 취소·보강 메일은 기존 그대로
+- 남은 일: 운영 반영(대표 승인 + 공지 게시 시작일 결정) → 운영 DB 백업(바뀌는 함수 8개 이전 정의) → migration → lms-prod
 ## ✅ 11/25 강사 교육 영상 'How to Write Class Notes' 다시 만들기 — **끝** (대표 11/25 미리 보기 확인 뒤 올림)
 - 새 영상: Drive 폴더 1sX3klkkqTPq-jMakmDS2--wzUFbqIyS9 'How_to_Write_Class_Notes.mp4'(1IETRBFX51vWI_WcH63QekKy9N7znF1oe, 2분 1초, 1920x1080, veryslow crf25·소리 64k, 3.09MB — 한도에 거의 닿음, 더 길어지면 crf26). 옛 파일·중간판 모두 휴지통(대표 11/25 '기존거 삭제') — 폴더엔 새 영상 1개만. ChatGPT 가 만든 'How_to_Write_Class_Notes_review.mp4'(1SJL…, 소리 없음·옛 화면)는 커넥터로 못 지움 → 대표가 삭제. 데모 노트(1ZOcnbpc…) 링크 = 새 id
 - 내용(대표 11/25): 한 페이지 이어 쓰기(마지막에 완성 노트 한 장) · 날짜 Wed, 11/25/2026 · Why it matters 2줄(after every class / 'Our class notes are one of our biggest selling points. Students really love them.') · 0번 설명 = 'Open the Doc in LMS > Students > Class notes. Don't make your own.' + 화면 공유 줄 + 날짜 줄 · 5번 rephrase → type · Two important rules 2줄(Never use AI… / Only use the Doc in LMS > Students > Class notes. Don't make your own notes.) · 밑줄 1.8초씩 차례로 긋고 다 그은 뒤 왼쪽 타이핑 시작(장면 시각은 tl.js 가 자동 계산) · 부드러운 타이핑 소리 · 끝에 Thanks for watching · 배경음악(직접 합성, music.py)
