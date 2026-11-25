@@ -370,6 +370,8 @@ export default function StudentHome(props: {
   const leaveRows = s.leave.filter((x) => !x.ttl);
   const leaveAsk = leaveRows.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
   const ttlCoverAsk = s.leave.filter((x) => x.ttl && x.choice === 'substitute' && x.stage === 'tutor_ok');
+  // 원래 강사 이름 (확정 전이라 수업 줄의 강사 = 원래 강사)
+  const ttlCoverTutor = s.lessons.find((l) => l.id === ttlCoverAsk[0]?.lessonId)?.tutorName ?? '';
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
   // 남은 수업 = 지금 수강권만 (다음 수강권 수업은 '다음 수강권' 줄로, 대표 11/13)
@@ -835,7 +837,7 @@ export default function StudentHome(props: {
     <>
       {schedulePending && <TodoBar n={0} text="수업 요일·시간을 카카오톡으로 알려주세요" onClick={() => window.open('https://pf.kakao.com/_blxgib/friend', '_blank', 'noopener,noreferrer')} />}
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
-      {ttlCoverAsk.length > 0 && <TodoBar n={ttlCoverAsk.length} text="대체강사 수업을 확인해 주세요" onClick={() => setOverlay({ kind: 'ttl_cover' })} />}
+      {ttlCoverAsk.length > 0 && <TodoBar n={ttlCoverAsk.length} text="대체강사 수업을 확정해 주세요" sub={`${ttlCoverTutor} 강사님의 임시 근무 지역 변경으로 인한 수업 조정`} onClick={() => setOverlay({ kind: 'ttl_cover' })} />}
       {openRights.length > 0 && <TodoBar n={openRights.length} text={openRights.some((m) => m.carryIn) ? '수업 날짜 고르기' : '보강 날짜 고르기'} onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {choosing.length > 0 && <TodoBar n={choosing.length} text="보강 시간 고르기" onClick={() => (choosing.length === 1 ? setOverlay({ kind: 'request', id: choosing[0].id }) : setTab('requests'))} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
@@ -1380,7 +1382,7 @@ export default function StudentHome(props: {
             />
           )}
           {overlay.kind === 'ttl_cover' && (
-            <TtlCoverSheet rows={ttlCoverAsk} busy={busy} onProfile={(name) => setOverlay({ kind: 'profile', name, back: 'ttl_cover' })} onAnswer={answerTtlCover} />
+            <TtlCoverSheet rows={ttlCoverAsk} tutor={ttlCoverTutor} busy={busy} onProfile={(name) => setOverlay({ kind: 'profile', name, back: 'ttl_cover' })} onAnswer={answerTtlCover} />
           )}
           {overlay.kind === 'profile' && <Profile name={overlay.name} onBack={() => setOverlay({ kind: overlay.back ?? 'leave' })} />}
           {overlay.kind === 'makeup' &&
@@ -1455,22 +1457,25 @@ function RightCard({ right, withTime, endDate, onPick }: { right: MakeupRight; w
   );
 }
 
-function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () => void }) {
+function TodoBar({ n, text, sub, onClick }: { n: number; text: string; /** 이유 한 줄 (작게) */ sub?: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="flex min-h-[54px] w-full items-center gap-3 px-4 py-3 text-left">
-      <span className="flex-1 text-[15px] font-semibold leading-snug">{text}</span>
+      <span className="flex-1 text-[15px] font-semibold leading-snug">{text}{sub && <span className="block text-[13px] font-normal text-[#55526a]">{sub}</span>}</span>
       {n > 0 && <span className="whitespace-nowrap text-[13px] text-[#8a5300]">수업 {n}건</span>}
       <span className="whitespace-nowrap rounded-[10px] bg-[#5b3df0] px-3 py-1.5 text-[13px] font-bold text-white">확인 ›</span>
     </button>
   );
 }
 
-// 강사 휴무 안내 (A안 한 번에 답, 2026-10-28 대표). 수강생은 강사를 고르지 않음 — 운영진이 정한 대체강사만 보여 줌
-/** 강사 임시 근무 지역 변경 대체 수업 확인 (H26(218) 보충3, 대표 11/25): 학생이 이미 대체강사를 골랐으므로 [좋아요]만 + 운영진 문의 */
-function TtlCoverSheet({ rows, busy, onProfile, onAnswer }: { rows: LeaveRow[]; busy: boolean; onProfile: (name: string) => void; onAnswer: () => void }) {
+/** 강사 임시 근무 지역 변경 대체 수업 확인 (H26(218) 보충3·보충4, 대표 11/25): 학생이 이미 대체강사를 골랐으므로 [좋아요]만 + 운영진 문의, 위에 진행 경위 */
+function TtlCoverSheet({ rows, tutor, busy, onProfile, onAnswer }: { rows: LeaveRow[]; tutor: string; busy: boolean; onProfile: (name: string) => void; onAnswer: () => void }) {
   return (
     <div className="grid gap-3.5">
-      <h2 className="text-[18px] font-bold">대체강사 수업 확인</h2>
+      <div>
+        <h2 className="text-[18px] font-bold">대체강사 수업 확인</h2>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-[#1d1b2b]">{tutor} 강사님의 임시 근무 지역 변경으로 기존 시간에 수업이 어려워졌어요.</p>
+        <p className="mt-1 text-[14px] leading-relaxed text-[#1d1b2b]">이전에 요청하신 대체강사 수업에 가능한 강사님을 배정했어요. 아래 일정을 확인하고 수업을 확정해 주세요.</p>
+      </div>
       <section className={`${card} grid gap-1 p-4`}>
         {rows.map((x) => (
           <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
@@ -1494,6 +1499,7 @@ function TtlCoverSheet({ rows, busy, onProfile, onAnswer }: { rows: LeaveRow[]; 
   );
 }
 
+// 강사 휴무 안내 (A안 한 번에 답, 2026-10-28 대표). 수강생은 강사를 고르지 않음 — 운영진이 정한 대체강사만 보여 줌
 function LeaveSheet(props: {
   rows: LeaveRow[];
   rights: MakeupRight[];
