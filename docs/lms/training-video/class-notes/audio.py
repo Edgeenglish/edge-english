@@ -14,7 +14,7 @@ def key():
     hp=np.diff(noise,prepend=0)  # 높은 소리 쪽
     body=np.sin(2*np.pi*rng.uniform(1600,2400)*np.arange(n)/SR)*np.exp(-np.linspace(0,25,n))
     return (0.6*hp*e+0.5*body)*0.18
-ev=[4,16,24,43,57,72,85,97]+[b['at'] for b in T['why']+T['rules']]
+ev=[T['why_start'],T['doc_start']]+[x['start'] for x in T['secs'][1:]]+[T['rules_start']]+[b['at'] for b in T['why']+T['rules']]
 for t in ev: put(t,blip)
 lines=[(T['date_at'],T['date'])]+[(l['at'],''.join(s[1] for s in l['segs'])) for s in T['secs'] for l in s['lines']]
 for at,txt in lines:

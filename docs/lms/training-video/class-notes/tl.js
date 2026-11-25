@@ -1,10 +1,10 @@
 // timeline
 const L=(at,...segs)=>({at,segs});
-module.exports={cps:28,why_start:4,doc_start:16,rules_start:97,zoom_at:93.5,date:'Wed, 11/25/2026',date_at:17.2,
-why:[{at:4.8,text:'Students review this Google Doc *after every class*.'},{at:6.8,text:"It's an *essential part* of our classes."},{at:8.8,text:'Share your screen and keep the Doc on screen *for the whole class*.'},{at:10.8,text:'We make the Doc for you. Find the link *in the LMS*.'}],
-rules:[{at:97.8,text:'*Never use AI* for class notes. Write only what the student *actually said* and your own corrections.'},{at:99.8,text:'*One or two* good examples per class are enough.'},{at:101.8,text:"Only use the Google Doc we give you. *Don't copy notes* to your personal account."}],
+module.exports={cps:28,why_start:4,doc_start:12,rules_start:97,zoom_at:93.5,date:'Wed, 11/25/2026',date_at:18.5,
+why:[{at:4.8,text:'Students review this Google Doc *after every class*.'},{at:6.8,text:"It's an *essential part* of our classes."}],
+rules:[{at:97.8,text:'*Never use AI* for class notes. Write only what the student *actually said* and your own corrections.'},{at:99.8,text:"Only use the Doc in *LMS > Students > Class notes*. *Don't make your own* notes."}],
 secs:[
-{n:'0',start:16,title:'Write the date first',desc:'At the start of every class, type the date at the top. Use the *same Doc* for the same student every class.',lines:[]},
+{n:'0',start:12,title:'Write the date first',desc:"Open the Doc in *LMS > Students > Class notes*. *Don't make your own.*<br><br>Share your screen and keep the Doc on screen *for the whole class*.<br><br>At the start of every class, type the date at the top. Use the *same Doc* for the same student every class.",lines:[]},
 {n:'1',start:24,title:'Key mistakes + your correction',desc:"Write the student's sentence, add an *arrow* (--> or >), then your correction. Make the key words *bold or red*, and feel free to use colors. *Only the key* mistakes. Have the student *repeat it*.",lines:[
  L(25.5,['','I go to Starbucks yesterday with my friend.']),L(28,['','--> I '],['r','went'],['',' to Starbucks yesterday with my friend.']),L(31.5,['',"I'm boring today. --> I'm "],['r','bored'],['',' today.']),L(34.5,['','She have two child. --> She '],['r','has'],['',' two '],['r','children'],['','.'])]},
 {n:'2',start:43,title:'Vocabulary',desc:'Add a *short definition*, a *simple example*, or both.',lines:[
