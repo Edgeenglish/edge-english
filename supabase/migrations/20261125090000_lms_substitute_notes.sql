@@ -4,8 +4,8 @@
 --    없으면 lessons.original_tutor_id)와 다른 예정 수업
 --  - 그런 수업이 잡히면(넣기·강사 바뀜) substitute_notes 에 '학생_대체강사' 노트 작업 1줄 (같은 학생·강사면 다시 씀)
 --  - support@ 계정 Apps Script(apps-script/substitute-notes)가 10분마다 작업을 가져가 Google Docs 를 만들고
---    대체 강사 편집 · 링크 있는 누구나 보기 · 원래 노트에 대체 강사 보기(이미 권한 있으면 그대로) — 공유 알림 메일 없음
---  - 강사 화면: 그 학생의 담당 강사가 아니면 원래 노트 대신 본인 대체 노트 링크(만들어지기 전엔 없음)
+--    대체 강사 편집 · 링크 있는 누구나 보기 — 공유 알림 메일 없음 (원래 노트는 이미 링크 보기라 권한을 따로 주지 않음)
+--  - 강사 화면: 그 학생의 담당 강사가 아니면 원래 노트 대신 본인 대체 노트 링크(만들어지기 전엔 없음) + 마지막 대체 수업 끝까지 '담당 강사 노트'(보기)
 --  - 학생 화면: 지금 노트 + 대체 노트 + 담당 강사 바뀌며 교체된 예전 노트 모두 (student_my_info.sub_notes)
 --  - 메일: 이 migration 은 학생·강사 메일을 보내지 않음
 --  - 다시 실행해도 같은 결과 (지우는 문장 없음)
@@ -84,6 +84,20 @@ language sql stable security definer set search_path = public as $$
   end
 $$;
 revoke all on function lms_tutor_note_url(uuid, uuid, date) from public, anon, authenticated;
+
+-- 대체 강사 Students 목록: 대체 수업을 맡은 학생의 담당 강사 노트(보기만, 수업 진행 확인용). 그 강사의 마지막 대체 수업이 끝나면 안 보임 (대표 11/25)
+create or replace function tutor_main_notes(p_tutor uuid default null)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  with me as (select lms_screen_tutor(p_tutor) as id)
+  select coalesce(jsonb_object_agg(s.id, s.class_note_url), '{}'::jsonb)
+  from students s, me
+  where lms_is_google_doc_url(s.class_note_url)
+    and exists (select 1 from lessons l where l.student_id = s.id and l.tutor_id = me.id and l.state <> 'canceled'
+                and l.voided_at is null and l.ends_at > now() and lms_lesson_is_substitute(l.id))
+$$;
+revoke all on function tutor_main_notes(uuid) from public, anon;
+grant execute on function tutor_main_notes(uuid) to authenticated;
 
 -- 학생에게 보일 다른 노트 목록 (대표 11/25 '학생은 대체강사 포함 자기 모든 노트를 볼 수 있어야')
 --  kind sub  = 대체 강사 노트

@@ -1,7 +1,7 @@
 /**
  * 대체 강사 수업 노트 자동 만들기 (support@edgeenglish.kr 계정, migration 20261125090000)
  * - 10분마다 LMS(시험·운영)에서 만들 노트 목록을 가져와 Google Docs '학생_대체강사' 를 만든다
- * - 대체 강사: 새 노트 편집 / 원래 노트 보기(이미 권한이 있으면 그대로) · 새 노트는 링크 있는 누구나 보기
+ * - 대체 강사: 새 노트 편집 · 새 노트는 링크 있는 누구나 보기 (원래 노트는 이미 링크 보기)
  * - 공유 알림 메일은 보내지 않는다 (sendNotificationEmail=false)
  * - 처음 한 번: 함수 'setup' 실행 → 권한 허용. 그 뒤로는 자동
  * 토큰은 저장소에 적지 않는다 (__TEST_TOKEN__·__PROD_TOKEN__ 자리에 넣어 Drive 의 프로젝트에만 둠)
@@ -46,9 +46,6 @@ function pull_(c) {
       DriveApp.getFileById(docId).setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       if (j.tutor_email) {
         try { share_(docId, j.tutor_email, 'writer', true); } catch (e) { errors.push('new note: ' + e); }
-        if (j.original_doc_id) {
-          try { share_(j.original_doc_id, j.tutor_email, 'reader', false); } catch (e) { errors.push('original note: ' + e); }
-        }
       } else {
         errors.push('no tutor email');
       }

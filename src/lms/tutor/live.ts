@@ -175,7 +175,10 @@ export async function updateStudentProfile(sb: SupabaseClient, studentId: string
 /** Students 메뉴 (4402 tutor_students_list): 정규 담당 수강생 + 확정된 대체수업 수강생(수업 끝 24시간까지). 누가 보이는지는 DB 가 정함. tutorId: 운영자가 고른 강사 (강사 본인은 비움) */
 export async function loadMyStudents(sb: SupabaseClient, tutorId: string | null): Promise<TutorStudentRow[]> {
   const rows = check(await sb.rpc('tutor_students_list', { p_tutor: tutorId })) as { student_id: string; display_name: string; level: string | null; class_type: string | null; timezone: string | null; class_note_url: string | null }[];
-  return rows.map((r) => ({ id: r.student_id, name: r.display_name, level: r.level, classType: r.class_type, timezone: r.timezone, noteUrl: r.class_note_url }));
+  // 대체 수업을 맡은 학생: 담당 강사 노트(보기만) — 마지막 대체 수업이 끝나면 DB 가 빼서 줌 (migration 20261125090000). 함수 없는 옛 DB 면 없음
+  const main = await sb.rpc('tutor_main_notes', { p_tutor: tutorId });
+  const mainNotes = (main.error ? {} : (main.data ?? {})) as Record<string, string>;
+  return rows.map((r) => ({ id: r.student_id, name: r.display_name, level: r.level, classType: r.class_type, timezone: r.timezone, noteUrl: r.class_note_url, mainNoteUrl: mainNotes[r.student_id] ?? null }));
 }
 
 /** 취소된 수업 To-do (migration 20261108140000): 수강생이 취소한 앞으로의 수업. 옛 DB 면 빈 목록 */

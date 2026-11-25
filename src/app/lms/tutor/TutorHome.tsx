@@ -170,7 +170,7 @@ function Icon({ d }: { d: string }) {
 }
 
 /** Students 메뉴 한 줄 (tutor_my_students, 4300) */
-export type TutorStudentRow = { id: string; name: string; level: string | null; classType: string | null; timezone: string | null; noteUrl: string | null };
+export type TutorStudentRow = { id: string; name: string; level: string | null; classType: string | null; timezone: string | null; noteUrl: string | null; /** 대체 수업 중인 학생의 담당 강사 노트 (보기만) */ mainNoteUrl?: string | null };
 
 export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout, lang = 'en' }: {
   initial: TutorScreen;
@@ -639,6 +639,10 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                     {st.noteUrl && (
                       <a href={st.noteUrl} target="_blank" rel="noreferrer"
                         className="inline-flex min-h-[36px] shrink-0 items-center whitespace-nowrap rounded-[9px] bg-[#f3f1fa] px-3 text-[13px] font-bold text-[#5b3fe0]">{t('Class notes', '수업 노트')} ↗</a>
+                    )}
+                    {st.mainNoteUrl && (
+                      <a href={st.mainNoteUrl} target="_blank" rel="noreferrer"
+                        className="inline-flex min-h-[36px] shrink-0 items-center whitespace-nowrap rounded-[9px] bg-[#f3f1fa] px-3 text-[13px] font-bold text-[#5b3fe0]">{t('Main tutor notes', '담당 강사 노트')} ↗</a>
                     )}
                     <button type="button" disabled={!openProfile} onClick={() => openProfile?.(st.id)}
                       className="min-h-[56px] shrink-0 whitespace-nowrap py-2 pl-1 pr-4 text-[13px] font-semibold text-[#5b3fe0]">{t('Profile', '프로필')} ›</button>
