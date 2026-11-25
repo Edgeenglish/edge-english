@@ -657,21 +657,31 @@ export default async function Home() {
                 포인트3
               </span>
               <h4 className="pt-4 text-3xl font-bold leading-[120%] text-[#140F33] max-lg:text-4xl max-md:text-2xl">
-                전원 미국·캐나다·호주 원어민 강사진
+                매 수업, 강사가 노트를 적어 드려요
               </h4>
               <p className="mt-8 text-lg leading-[140%] text-edge-gray max-lg:text-xl max-md:mt-6 max-md:text-base">
-                영어에는 다양한 억양이 있지만, 한국 학습자에게 가장 익숙한 북미·호주 발음을
-                사용하는 튜터만으로 구성되어 있어요.
+                새로 배운 표현과 고친 문장이 내 수업 노트에 계속 쌓여요.
+                수업이 끝나도 언제든 다시 보며 복습할 수 있어요.
               </p>
             </div>
 
+            {/* 수업 노트 예시 (대표 11/25: 포인트3 원어민 → 수업 노트, 레벨테스트 홍보 카드와 같은 그림) */}
             <div className="flex-center flex-1 max-md:mt-10">
-              <img
-                src={'/images/main/point03.png'}
-                alt="point 03"
-                width={580}
-                height={400}
-              />
+              <div aria-hidden="true" className="w-full max-w-[460px] rounded-2xl border border-[#E2E0EE] bg-white p-6 text-[17px] leading-[1.6] shadow-[0_10px_30px_-14px_rgba(20,15,51,0.35)] max-md:p-4 max-md:text-[15px]">
+                <div className="mb-3 flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#E2E0EE]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#E2E0EE]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#E2E0EE]" />
+                  <span className="ml-2 text-sm font-bold text-[#140F33]">Class Notes</span>
+                </div>
+                <div className="mb-2 text-sm text-[#6B6880]">Nov 25 · Free Talking</div>
+                <div className="mt-2 text-sm font-bold text-[#5b3df0]">New expressions</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3">I&apos;m gonna crash early tonight.</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3">It&apos;s way comfier than my old one.</div>
+                <div className="mt-2 text-sm font-bold text-[#5b3df0]">Let&apos;s fix this</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 text-[#D2414B] line-through">I go to Busan yesterday.</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 font-bold text-[#1F8A5B]">I went to Busan yesterday.</div>
+              </div>
             </div>
           </div>
         </div>
