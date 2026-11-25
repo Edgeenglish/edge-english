@@ -353,5 +353,5 @@ export function cancelManySummary(done: readonly CancelResult[], remaining: { st
   const md = (d: KstDate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
   const left = remaining.length === 0 ? '' : remaining.length === 1 ? ` · 남은 변경권 ${remaining[0].left}개` : ` · 남은 변경권 ${remaining.map((r) => `${r.start ? `${md(r.start)}~ ` : ''}${r.left}개`).join(', ')}`;
   const season = done.filter((r) => !!r.season).length;
-  return `수업 ${done.length}회를 취소했어요${season ? ` · 겨울 특별 변경권 ${season}회 사용` : ''} · 변경권 ${credits}개 사용${left}${makeups ? ` · 보강 ${makeups}회는 ‘보강 신청’에서 날짜를 골라 주세요` : ''}`;
+  return `수업 ${done.length}회를 취소했어요${season ? ` · 겨울 특별 변경권 ${season}개 사용` : ''} · 변경권 ${credits}개 사용${left}${makeups ? ` · 보강 ${makeups}회는 ‘보강 신청’에서 날짜를 골라 주세요` : ''}`;
 }

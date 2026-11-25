@@ -108,7 +108,7 @@ export function evaluateStudentChange(input: StudentChangeInput, policy: Pending
       consumesLesson: false,
       makeupAllowed: true,
       makeupDeadline: deadline,
-      studentMessage: `겨울 특별 변경권 ${season.left}회 중 1회를 사용해요. 보강을 신청할 수 있어요.`,
+      studentMessage: `겨울 특별 변경권 ${season.left}개 중 1개를 사용해요. 보강을 신청할 수 있어요.`,
     };
   }
 

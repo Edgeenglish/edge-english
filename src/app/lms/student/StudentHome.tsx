@@ -777,10 +777,11 @@ export default function StudentHome(props: {
             <HelpTip text="변경권은 28일마다 새로 제공돼요." />
           </p>
           {/* 겨울 특별 혜택 (H26(220) 보충 ⑧): 추가 안내 + 남은 횟수 */}
+          {/* 대표 11/25: 기존 변경권 줄과 같은 모양 + 아래 작은 글씨로 사용 기간 */}
           {s.season && (
-            <p className="flex flex-wrap items-baseline gap-x-1.5 text-[12.5px] text-[#55526a]">
-              <b className="font-bold text-[#1d1b2b]">❄️ {s.season.name} {s.season.granted}회가 추가됐어요!</b>
-              <span>남은 <b className="font-extrabold text-[#1d1b2b]">{s.season.left}회</b></span>
+            <p className="-mt-1 grid text-[12.5px] text-[#55526a]">
+              <span className="inline-flex min-h-[32px] items-center">❄️ {s.season.name}&nbsp;<b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.season.left}개</b>&nbsp;/ 총 {s.season.granted}개</span>
+              <span className="text-[11.5px] text-[#6b6880]">{monthDay(s.season.startsOn)}~{monthDay(s.season.endsOn)} 수업</span>
             </p>
           )}
           <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
@@ -2463,10 +2464,13 @@ function Row({ k, v }: { k: string; v: string }) {
   );
 }
 
+/** 날짜 '2026-12-01' → '12/1' */
+const monthDay = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+
 /** 수업 하나를 취소하면 어떻게 되는지 한 줄 (목록 줄 아래 · 여러 수업 요약 공통) */
 const outcomeText = (d: { ok: boolean; consumesLesson?: boolean; timing?: string; usesCredit?: boolean; usesSeason?: boolean }) =>
   !d.ok ? '취소 불가' : d.consumesLesson ? (d.timing === 'late' ? '6시간 이내 · 1회 차감 · 보강 없음' : '변경권 없음 · 1회 차감 · 보강 없음')
-    : d.usesSeason ? '겨울 특별 변경권 1회 · 보강 가능'
+    : d.usesSeason ? '겨울 특별 변경권 1개 · 보강 가능'
     : d.usesCredit ? '변경권 1개 · 보강 가능' : '변경권 그대로 · 보강 가능';
 
 function CancelSheet(props: {
@@ -2544,7 +2548,7 @@ function CancelSheet(props: {
         {props.notice && <p className="rounded-[12px] border border-[#f3c2bb] bg-[#fff1ef] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#7a1d12]">{props.notice}</p>}
         {picked.length > 0 && props.onConfirmMany && (
           <section className={`${card} sticky bottom-0 z-10 grid gap-2 p-3.5 shadow-[0_-6px_16px_rgba(27,20,66,0.12)]`}>
-            <p className="text-[15px] font-bold">선택한 수업 {picked.length}회{seasonUses ? ` · 겨울 특별 변경권 ${seasonUses}회` : ''} · 변경권 {uses}개 사용</p>
+            <p className="text-[15px] font-bold">선택한 수업 {picked.length}회{seasonUses ? ` · 겨울 특별 변경권 ${seasonUses}개` : ''} · 변경권 {uses}개 사용</p>
             {/* 기간별 잔여 (R-12): 수업이 속한 기간마다 차감 전 → 후 */}
             <p className="text-[12.5px] text-[#55526a]">
               {plan.periods.map((p) => `${p.start && p.end ? `${fmtDate(p.start)}~${fmtDate(p.end)} 기간 ` : ''}변경권 ${p.before}개 → ${p.after}개`).join(' · ')}
@@ -2597,7 +2601,7 @@ function CancelSheet(props: {
   const rows: [string, string][] = [
     ...(d.consumesLesson ? [['수업 횟수', '1회 차감'] as [string, string]] : []),
     ...(d.usesCredit ? [['변경권', `1개 사용 (${creditsNow}개 → ${creditsNow - 1}개)`] as [string, string]] : []),
-    ...(d.usesSeason && props.season ? [['겨울 특별 변경권', `1회 사용 (${props.season.left}회 → ${props.season.left - 1}회)`] as [string, string]] : []),
+    ...(d.usesSeason && props.season ? [['겨울 특별 변경권', `1개 사용 (${props.season.left}개 → ${props.season.left - 1}개)`] as [string, string]] : []),
     // 한국 공휴일 수업 (H26(138)): 변경권 줄이 아예 안 보이던 것 → 차감 안 된다는 한 줄
     ...(d.status === 'Student canceled in advance (public holiday)' ? [['변경권', '차감 안 됨 (공휴일 취소)'] as [string, string]] : []),
     ['보강', d.makeupAllowed ? `~${endDay(lesson.finalEndDate ?? props.makeupUntil)}까지 가능` : '불가'],
