@@ -147,6 +147,18 @@ language sql stable as $$
     else lms_mail_ko_at(p_old, p_tz) || ' → ' || lms_mail_ko_at(p_new, p_tz) end
 $$;
 
+-- 강사 메일 한 줄: 기존 → 새 시각 (같은 날이면 새 시각은 날짜 없이 '→ 8:00 AM *Buenos Aires Time* / 8:00 PM *KST*')
+create or replace function lms_ttl_en_move(p_old timestamptz, p_new timestamptz, p_tz text) returns text
+language sql stable as $$
+  select lms_mail_en_at(p_old, p_tz) || E'\n→ '
+         || case when coalesce(nullif(p_tz, ''), 'Asia/Seoul') <> 'Asia/Seoul'
+                      and (p_old at time zone p_tz)::date = (p_new at time zone p_tz)::date then
+                   lms_mail_en_clock(p_new, p_tz) || ' *' || lms_mail_en_zone(p_tz) || '* / '
+                   || case when (p_new at time zone p_tz)::date = (p_new at time zone 'Asia/Seoul')::date then lms_mail_en_clock(p_new, 'Asia/Seoul')
+                           else lms_mail_en_when(p_new, 'Asia/Seoul') end || ' *KST*'
+                 else lms_mail_en_at(p_new, p_tz) end
+$$;
+
 -- 학생 메일 보내기 (다른 학생 메일과 같은 틀: 시험 DB 는 support@ 로, 제목 앞 [시험 · 학생번호])
 create or replace function lms_ttl_student_mail(p_student uuid, p_template text, p_key text, p_subject text, p_lines text[], p_btn text)
 returns uuid
@@ -319,8 +331,7 @@ begin
   v_name := lms_student_en(st);
   select count(*),
          string_agg(lms_ttl_ko_move(m.orig_starts_at, m.new_starts_at, st.timezone), E'\n' order by m.orig_starts_at),
-         string_agg(lms_mail_en_at(m.orig_starts_at, lms_tutor_tz_at(m.tutor_id, m.orig_starts_at)) || E'\n→ '
-                    || lms_mail_en_at(m.new_starts_at, lms_tutor_tz_at(m.tutor_id, m.new_starts_at)), E'\n' order by m.orig_starts_at)
+         string_agg(lms_ttl_en_move(m.orig_starts_at, m.new_starts_at, lms_tutor_tz_at(m.tutor_id, m.new_starts_at)), E'\n' order by m.orig_starts_at)
     into n, v_ko, v_en
   from temp_location_moves m where m.batch_id = p_batch and m.state = 'confirmed';
   if coalesce(n, 0) = 0 then return; end if;
@@ -492,12 +503,12 @@ begin
 end $$;
 
 revoke all on function lms_ttl_needs_move(uuid), lms_ttl_rows(uuid, uuid), lms_ttl_save(jsonb, text, timestamptz, text, uuid, text, uuid),
-  lms_ttl_ko_at(timestamptz, text), lms_ttl_ko_move(timestamptz, timestamptz, text),
+  lms_ttl_ko_at(timestamptz, text), lms_ttl_ko_move(timestamptz, timestamptz, text), lms_ttl_en_move(timestamptz, timestamptz, text),
   lms_ttl_student_mail(uuid, text, text, text, text[], text), lms_ttl_pick_mail(uuid, uuid, uuid, uuid), lms_ttl_mail_run(),
   lms_ttl_proposed_mail(uuid, uuid, uuid), lms_ttl_confirmed_mail(uuid), lms_ttl_submit(uuid, uuid, jsonb, text) from public, anon, authenticated;
 grant execute on function student_ttl_answer(uuid, uuid, boolean), admin_ttl_resolve(uuid, timestamptz) to authenticated;
 
--- 15분마다 확인 (pg_cron 이 있는 Supabase 에서만)
+-- 15분마다 확인 (pg_cron 이 있는 Supabase 에서만) — 시험 DB 11/25 적용
 do $$
 begin
   if to_regnamespace('cron') is not null then
