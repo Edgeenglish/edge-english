@@ -257,3 +257,36 @@ describe('지각 알림 (대표 11/13): 수업 시작 2시간 전부터 끝나�
     expect(LATE_NOTICE.reasons.map((r) => r.label)).toEqual(['회사 업무가 늦게 끝나요', '길이 막혀요', '대중교통이 지연됐어요', '갑자기 일이 생겼어요']);
   });
 });
+
+describe('남은 수업 = 지금 수강권만 (대표 11/13)', () => {
+  it('다음 수강권 수업은 빼고, 수강권 종료일 모르는 수업은 둠', () => {
+    const ls = [{ id: 'a', finalEndDate: '2026-12-13' }, { id: 'b', finalEndDate: '2027-03-07' }, { id: 'c', finalEndDate: undefined }] as never[];
+    expect(currentPassLessons(ls, '2026-12-13' as never).map((l: { id: string }) => l.id)).toEqual(['a', 'c']);
+    expect(currentPassLessons(ls, '').length).toBe(3);
+  });
+});
+
+describe('겨울 특별 변경권 (H26(220)): 공휴일 무료 → 겨울 무료 → 일반 변경권', async () => {
+  const { planCancelMany } = await import('./home');
+  const now = kstToInstant('2026-11-25', '12:00');
+  const periods = [{ start: '2026-11-24' as const, end: '2027-02-15' as const, granted: 2, left: 2 }];
+  const season = { startsOn: '2026-12-01' as const, endsOn: '2027-01-31' as const, left: 2 };
+  const base = { now, finalEndDate: '2027-02-15' as const, creditsLeft: 2, creditPeriods: periods, holidays: new Set(['2026-12-25' as const]), season };
+
+  it('시즌 수업 3개 + 공휴일 1개: 공휴일은 겨울 횟수에서 안 빠지고, 겨울 2회 뒤에 일반 변경권', () => {
+    const plan = planCancelMany([lesson('h', 'regular', '2026-12-25'), lesson('a', 'regular', '2026-12-01'), lesson('b', 'regular', '2026-12-03'), lesson('c', 'regular', '2026-12-08')], base);
+    const by = Object.fromEntries(plan.items.map((x) => [x.lesson.id, x.decision]));
+    expect(by.a).toMatchObject({ usesSeason: true, usesCredit: false, makeupAllowed: true });
+    expect(by.b).toMatchObject({ usesSeason: true, usesCredit: false });
+    expect(by.c).toMatchObject({ usesCredit: true });
+    expect(by.h).toMatchObject({ status: 'Student canceled in advance (public holiday)', usesCredit: false });
+    expect((by.h as { usesSeason?: boolean }).usesSeason).toBeFalsy();
+    expect(plan.seasonUses).toBe(2);
+    expect(plan.uses).toBe(1);
+  });
+  it('시즌 밖(11/26·2/2) 수업은 일반 변경권', () => {
+    const plan = planCancelMany([lesson('x', 'regular', '2026-11-26'), lesson('y', 'regular', '2027-02-02')], base);
+    expect(plan.seasonUses).toBe(0);
+    expect(plan.uses).toBe(2);
+  });
+});

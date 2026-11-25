@@ -91,6 +91,8 @@ export type StudentView = {
   processingHistoryError?: boolean;
   /** 변경권 내역 (student_credit_history, 20261118100000). 함수 없는 옛 DB 면 undefined → 예전 변경권 화면 */
   creditHistory?: CreditPeriodHistory[];
+  /** 시즌 무료 변경 (겨울 특별 변경권, H26(220), migration 20261125120000). 시즌·함수가 없으면 null */
+  season?: SeasonCredits | null;
   leave: LeaveRow[];
   /** 휴무 처리 중인데 수업 줄이 아직 없는 수업 → 일정에 '일정 조율 중' (3700) */
   leavePending?: { id: string; startsAt: Date; endsAt: Date }[];
@@ -276,13 +278,21 @@ export function withSuggestions(v: StudentView, rows: SuggestionRow[]): StudentV
   };
 }
 
+/** 시즌 무료 변경 남은 횟수 (student_season_credits) */
+export type SeasonCredits = { key: string; name: string; startsOn: KstDate; endsOn: KstDate; granted: number; used: number; left: number };
+function parseSeason(x: unknown): SeasonCredits | null {
+  if (!x || typeof x !== 'object') return null;
+  const r = x as { key: string; name: string; starts_on: KstDate; ends_on: KstDate; granted: number; used: number; left: number };
+  return { key: r.key, name: r.name, startsOn: r.starts_on, endsOn: r.ends_on, granted: r.granted, used: r.used, left: r.left };
+}
+
 /** studentId: 운영자가 고른 수강생 (수강생 본인은 비움) */
 export async function loadStudentView(sb: SupabaseClient, studentId: string | null): Promise<StudentView> {
-  const [screen, book, sug, history, late, tutorLate, credits, pending] = await Promise.all([
+  const [screen, book, sug, history, late, tutorLate, credits, pending, season] = await Promise.all([
     sb.rpc('student_screen', { p_student: studentId }), loadTextbook(sb, studentId), sb.rpc('student_makeup_suggestions', { p_student: studentId }),
     sb.rpc('student_processing_history', { p_student: studentId }), sb.rpc('student_late_notices', { p_student: studentId }),
     sb.rpc('student_tutor_late_notices', { p_student: studentId }), sb.rpc('student_credit_history', { p_student: studentId }),
-    sb.rpc('student_pending_times', { p_student: studentId })]);
+    sb.rpc('student_pending_times', { p_student: studentId }), sb.rpc('student_season_credits', { p_student: studentId })]);
   const v = parseStudentView(check(screen));
   // 강사가 제안한 시간 (H26(134), 20261111160000). 함수 없는 옛 DB 면 예전 그대로
   return { ...(sug.error ? v : withSuggestions(v, (sug.data as SuggestionRow[]) ?? [])), textbook: book,
@@ -290,6 +300,7 @@ export async function loadStudentView(sb: SupabaseClient, studentId: string | nu
     processingHistoryError: !!history.error,
     pendingTimes: pending.error ? [] : ((pending.data ?? []) as { seq: number; starts_at: string; minutes: number }[]).map((x) => ({ seq: x.seq, startsAt: new Date(x.starts_at), minutes: x.minutes })),
     creditHistory: credits.error ? undefined : parseCreditHistory(credits.data),
+    season: season.error ? null : parseSeason(season.data),
     lateNotices: late.error ? [] : ((late.data ?? []) as { lesson_id: string; minutes: number; reason: LateReason | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })),
     tutorLateNotices: tutorLate.error ? [] : ((tutorLate.data ?? []) as { lesson_id: string; minutes: number; reason: string | null }[]).map((x) => ({ lessonId: x.lesson_id, minutes: x.minutes, reason: x.reason })) };
 }
@@ -454,7 +465,7 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
       check(await sb.rpc('student_no_time_request', { p_student: adminStudentId, p_lesson: lessonId }));
     },
     /** 수업 취소 (판정 시각 = 지금 = 서버 시각. A-01: 브라우저 시각을 보내면 시계가 빠른 기기에서 '요청 받은 시각이 지금보다 늦습니다' 로 거절됨). 결과는 DB 판정 */
-    cancel: async (lessonId: string): Promise<{ status: string; uses_credit: boolean; makeup_allowed: boolean }> => {
+    cancel: async (lessonId: string): Promise<{ status: string; uses_credit: boolean; makeup_allowed: boolean; season?: string | null }> => {
       const id = crypto.randomUUID();
       return admin
         ? check(await sb.rpc('admin_change_lesson', { p_request_id: id, p_lesson: lessonId, p_who: 'student', p_requested_at: null, p_dry_run: false }))

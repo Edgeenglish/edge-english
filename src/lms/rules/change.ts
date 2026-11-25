@@ -20,6 +20,8 @@ export type StudentChangeInput = {
   finalEndDate: KstDate; // 수강 최종 종료일 (연장 포함)
   creditsLeft: number; // 수업 날짜가 속한 기간의 남은 변경권
   isKoreanPublicHoliday: boolean; // 수업 날짜(KST)가 운영자가 등록한 공휴일인지
+  /** 시즌 무료 변경 (겨울 특별 변경권, H26(220)): 수업 날짜가 시즌 안이면 남은 횟수. 공휴일 무료 → 시즌 무료 → 일반 변경권 */
+  season?: { startsOn: KstDate; endsOn: KstDate; left: number } | null;
 };
 
 export type ChangeDecision =
@@ -30,6 +32,8 @@ export type ChangeDecision =
       /** null = 상태매핑표에 맞는 값이 없음 (운영자 결정 필요 항목) */
       status: ClassStatus | null;
       usesCredit: boolean;
+      /** 시즌 무료 변경(겨울 특별 변경권) 1회 사용 */
+      usesSeason?: boolean;
       consumesLesson: boolean;
       makeupAllowed: boolean;
       makeupDeadline: Date | null; // 보강 수업 시작 시각의 한계 (KST 종료일 23:59)
@@ -90,6 +94,21 @@ export function evaluateStudentChange(input: StudentChangeInput, policy: Pending
       makeupAllowed: true,
       makeupDeadline: deadline,
       studentMessage: '공휴일 수업이라 변경권이 차감되지 않아요. 수강기간 안에 보강을 신청할 수 있어요.',
+    };
+  }
+
+  const season = input.season;
+  if (season && season.left > 0 && season.startsOn <= lesson.kstDate && lesson.kstDate <= season.endsOn) {
+    return {
+      ok: true,
+      timing: 'advance',
+      status: 'Student canceled in advance',
+      usesCredit: false,
+      usesSeason: true,
+      consumesLesson: false,
+      makeupAllowed: true,
+      makeupDeadline: deadline,
+      studentMessage: `겨울 특별 변경권 ${season.left}개 중 1개를 사용해요. 보강을 신청할 수 있어요.`,
     };
   }
 
