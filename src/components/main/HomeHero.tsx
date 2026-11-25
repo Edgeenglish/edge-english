@@ -88,21 +88,7 @@ export default function HomeHero() {
         </figure>
       </div>
 
-      <div className="mt-7 flex items-center justify-between gap-4 rounded-[22px] bg-[#efebff] px-[30px] py-[22px] max-md:mt-5 max-md:flex-col max-md:items-stretch max-md:rounded-[18px] max-md:p-[18px]">
-        <p className="m-0 text-2xl font-extrabold leading-[1.4] max-md:text-xl">
-          <b className="text-[#5b3df0]">무료 레벨테스트</b>하면
-          <br />
-          부족한 부분만 콕 짚어 드려요
-        </p>
-        <Link
-          href="/level-test"
-          className="shrink-0 whitespace-nowrap rounded-[14px] bg-[#5b3df0] px-8 py-4 text-center text-lg font-bold text-white max-md:px-4 max-md:py-3.5 max-md:text-base"
-        >
-          지금 시작하기
-        </Link>
-      </div>
-
-      <ul className="m-0 mt-[22px] grid list-none grid-cols-3 p-0 max-md:mx-2.5 max-md:mt-[18px]">
+      <ul className="m-0 mt-7 grid list-none grid-cols-3 p-0 max-md:mx-2.5 max-md:mt-5">
         {STATS.map((s, i) => (
           <li
             key={s.big}
@@ -116,6 +102,20 @@ export default function HomeHero() {
           </li>
         ))}
       </ul>
+
+      <div className="mt-[26px] flex items-center justify-between gap-4 rounded-[22px] bg-[#efebff] px-[30px] py-[22px] max-md:mt-5 max-md:flex-col max-md:items-stretch max-md:rounded-[18px] max-md:p-[18px]">
+        <p className="m-0 text-2xl font-extrabold leading-[1.4] max-md:text-xl">
+          <b className="text-[#5b3df0]">무료 레벨테스트</b>하면
+          <br />
+          부족한 부분만 콕 짚어 드려요
+        </p>
+        <Link
+          href="/level-test"
+          className="shrink-0 whitespace-nowrap rounded-[14px] bg-[#5b3df0] px-8 py-4 text-center text-lg font-bold text-white max-md:px-4 max-md:py-3.5 max-md:text-base"
+        >
+          지금 시작하기
+        </Link>
+      </div>
     </section>
   );
 }
