@@ -73,6 +73,18 @@ export default async function Home() {
             영어 콘텐츠 제작자 탠저린이 직접 운영해요.
           </h2>
         </>
+
+        {/* 무료 레벨테스트 입구 (대표 11/25, H26(219)) */}
+        <div className="mx-auto mt-10 flex max-w-[760px] items-center gap-6 rounded-[20px] bg-[#eeeaff] px-8 py-6 text-left max-md:mt-8 max-md:flex-col max-md:items-stretch max-md:gap-4 max-md:px-5 max-md:py-5">
+          <p className="flex-1 text-2xl font-black leading-[1.35] text-[#140F33] max-md:text-xl">
+            <span className="text-[#5b3df0]">무료 레벨테스트</span>하면
+            <br />
+            부족한 부분만 콕 짚어 드려요
+          </p>
+          <Link href="/level-test" className="shrink-0 rounded-xl bg-[#5b3df0] px-7 py-4 text-center text-lg font-bold text-white">
+            지금 시작하기
+          </Link>
+        </div>
       </div>
 
       {/* 수강생 후기 (최신 6개) */}
@@ -487,6 +499,36 @@ export default async function Home() {
               />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* 강사 선발 5단계 (대표 11/25 — 레벨테스트 홍보 카드와 같은 내용) */}
+      <div className="bg-[#F3F6F8] px-4.5 py-24 max-md:py-16">
+        <div className="mx-auto max-w-[640px]">
+          <h3 className="text-center text-4xl font-bold text-[#140F33] break-keep [text-wrap:balance] max-md:text-[28px]">운영진 둘이 직접 면접 보고 골라요</h3>
+          <p className="mt-4 text-center text-xl text-[#55526a] break-keep [text-wrap:balance] max-md:text-base">모든 강사를 운영진 두 명이 직접 만나고, 고민 끝에 뽑아요.</p>
+          <ol className="mt-10 grid gap-2.5">
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">1</span>
+              <span><b className="mr-2">서면 인터뷰</b></span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">2</span>
+              <span><b className="mr-2">서류 심사</b>자격증·학위·경력 확인</span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">3</span>
+              <span><b className="mr-2">2:1 심층 면접</b>운영진 둘이 직접</span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">4</span>
+              <span><b className="mr-2">데모 레슨</b>티칭 실력·책임감·인성 확인</span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">5</span>
+              <span><b className="mr-2">채용 후 교육</b>운영진이 직접 교육 · 2개월 집중 모니터링, 이 기간에도 탈락할 수 있어요</span>
+            </li>
+          </ol>
         </div>
       </div>
 
