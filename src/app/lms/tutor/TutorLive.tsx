@@ -13,6 +13,7 @@ import { loadScreenPrefs, saveScreenPref } from '@/lms/screen-prefs';
 import TutorHome, { type TutorActions } from './TutorHome';
 import { timeOffActions } from '@/lms/tutor/time-off';
 import { signActions } from '@/lms/tutor/esign';
+import { tutorTtl } from '@/lms/ttl';
 
 type State =
   | { kind: 'loading' }
@@ -101,6 +102,7 @@ export default function TutorLive({ tutorParam }: { tutorParam?: string }) {
         followupSave: (studentId, fields) => saveFollowup(sb, studentId, fields, adminTutor),
         timeOff: timeOffActions(sb, adminTutor),
         sign: signActions(sb, adminTutor),
+        ttl: tutorTtl(sb, adminTutor),
       },
     [sb, adminTutor],
   );

@@ -30,6 +30,8 @@ export type TutorLesson = {
   studentId?: string;
   level: string | null;
   noteUrl: string | null;
+  /** 대체 수업 중 담당 강사 노트 (보기만, 마지막 대체 수업 끝나면 없음 — migration 20261125090000) */
+  mainNoteUrl?: string | null;
   covering: boolean;
   /** 수업 종류 (H26(138), DB class_type). 없으면 kind·covering 으로 */
   type?: ClassType;
@@ -103,7 +105,7 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
     locations: (j.locations ?? []).map(parsePeriod),
     lessons: (j.lessons ?? []).map((l: any) => ({
       id: l.id, startsAt: new Date(l.starts_at), endsAt: new Date(l.ends_at), kind: l.kind, state: l.state, classStatus: l.class_status ?? null,
-      student: l.student, studentId: l.student_id ?? undefined, level: l.level ?? null, noteUrl: l.note_url ?? null, covering: !!l.covering, makeupOf: at(l.makeup_of),
+      student: l.student, studentId: l.student_id ?? undefined, level: l.level ?? null, noteUrl: l.note_url ?? null, mainNoteUrl: l.main_note_url ?? null, covering: !!l.covering, makeupOf: at(l.makeup_of),
       type: asClassType(l.type, l.kind, !!l.covering), coveredByOther: !!l.covered_by_other,
       count: l.count ? { n: Number(l.count.n), total: Number(l.count.total) } : null,
       topics: l.topics ?? null, remarks: l.remarks ?? null, studentLate: !!l.student_late,

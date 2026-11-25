@@ -183,6 +183,7 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
   const changeReqs: ChangeRequests = { regular: [], tutor: [] };
   const actions: StudentActions = {
     reload: async () => ({ ...view, timezone: tz.timezone }),
+    ttl: { items: async () => [], options: async () => ({ rows: [], weekly: [], need: 0, rcPending: false, proposed: false }), submit: async () => { throw new Error('미리보기'); } },
     renewal: { info: async () => null, save: async () => { throw new Error('미리보기'); }, submit: async () => { throw new Error('미리보기'); } },
     prefs: async () => ({}),
     savePref: null,
@@ -202,7 +203,8 @@ export function fakeStore(now: Date): { view: StudentView; extras: PreviewExtras
     notices: async () => notices.map((n) => ({ ...n })),
     noticeRead: async (id: string) => { const n = notices.find((x) => x.id === id); if (n) n.read = true; },
     history: async () => s.payments.map((p) => ({ ...p, paid: !!p.confirmedOn })),
-    myInfo: async () => ({ level: 'Intermediate', goal: 'Speak more confidently at work and improve fluency.', style: '교재 중심 · Speak Now 2', noteUrl: 'https://docs.google.com/document/d/example-preview-doc', learnedMin: 2540 }),
+    myInfo: async () => ({ level: 'Intermediate', goal: 'Speak more confidently at work and improve fluency.', style: '교재 중심 · Speak Now 2', noteUrl: 'https://docs.google.com/document/d/example-preview-doc', learnedMin: 2540, subNotes: [] }),
+    levelTest: async () => null,
     regularSlots: async () => [{ weekday: 1, timeKst: '20:00', minutes: 50, tutor: '가상강사 Alex' }, { weekday: 4, timeKst: '20:00', minutes: 50, tutor: '가상강사 Alex' }],
     noTimeRights: async () => {
       const m = view.makeupRights.find((x) => x.lessonId && !x.compId && !x.tutorLeave && !x.tutorNoShow);

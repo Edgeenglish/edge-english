@@ -135,6 +135,8 @@ export type StudentProfile = {
   country: string | null; city: string | null; timezone: string; genderAge: string | null; email: string | null; phone: string | null; adminMemo: string | null;
   level: string | null; levelNote: string | null; levelAt: Date | null; levelBy: string | null;
   classType: string | null; textbook: string | null; classNoteUrl: string | null; correctionPref: string | null; selfIntroEn: string | null;
+  /** 강사 프로필: 대체 수업 중이면 담당 강사 노트(보기만, migration 20261125090000) */
+  mainNoteUrl?: string | null;
   job: string | null; hobbies: string | null; interests: string | null; improve: string | null; hopes: string | null;
   correctionStyle: 'immediate' | 'major_only' | null; correctionNote: string | null; classStyle: 'textbook' | 'free_talking' | 'not_sure' | null; classStyleNote: string | null;
   /** 강사가 첫 수업 후 확인한 실제 수업 방식 (4600) — 수강생 희망(classStyle)과 다른 칸 */
@@ -181,7 +183,7 @@ export function parseProfile(s: any): StudentProfile {
     id: s.id, code: s.code ?? null, nameKo: s.name_ko ?? null, nameEn: s.name_en ?? '', displayName: s.display_name ?? null, label: s.label ?? s.name_en ?? '',
     country: s.country ?? null, city: s.city ?? null, timezone: s.timezone ?? 'Asia/Seoul', genderAge: s.gender_age ?? null, email: s.email ?? null, phone: s.phone ?? null,
     adminMemo: s.admin_memo ?? null, level: s.level ?? null, levelNote: s.level_note ?? null, levelAt: at(s.level_at), levelBy: s.level_by ?? null,
-    classType: s.class_type ?? null, textbook: s.textbook ?? null, classNoteUrl: s.class_note_url ?? null, correctionPref: s.correction_pref ?? null, selfIntroEn: s.self_intro_en ?? null,
+    classType: s.class_type ?? null, textbook: s.textbook ?? null, classNoteUrl: s.class_note_url ?? null, mainNoteUrl: s.main_note_url ?? null, correctionPref: s.correction_pref ?? null, selfIntroEn: s.self_intro_en ?? null,
     job: s.job ?? null, hobbies: s.hobbies ?? null, interests: s.interests ?? null, improve: s.improve ?? null, hopes: s.hopes ?? null,
     correctionStyle: s.correction_style ?? null, correctionNote: s.correction_note ?? null, classStyle: s.class_style ?? null, classStyleNote: s.class_style_note ?? null,
     tutorClassStyle: s.tutor_class_style ?? null, tutorClassStyleMix: Array.isArray(s.tutor_class_style_mix) ? (s.tutor_class_style_mix as string[]) : [], tutorMaterialsNote: s.tutor_materials_note ?? null,

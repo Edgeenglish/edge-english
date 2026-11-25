@@ -7,7 +7,9 @@
 
 import { asClassType, typeKo, typeKoLong } from '@/lms/class-type';
 import { googleCalendarUrl, icsUrl, type CalendarEvent } from '@/lms/calendar/add';
-import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { TtlPickSheet, TtlReviewSheet, type TtlView } from '@/app/lms/TtlSheet';
+import { ttlStatus, type TtlItem } from '@/lms/ttl';
 import books from '@/data/books.json';
 import Link from 'next/link';
 import ProcessingHistory from './ProcessingHistory';
@@ -77,7 +79,8 @@ type Overlay =
   | { kind: 'regular' }
   | { kind: 'tutor_change' }
   | { kind: 'late'; lessonId: string }
-  | { kind: 'renew' };
+  | { kind: 'renew' }
+  | { kind: 'ttl'; tutorId: string; review: boolean };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'home', label: '홈', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
@@ -316,6 +319,10 @@ export default function StudentHome(props: {
   const [consents, setConsents] = useState(extras?.pendingConsents ?? []);
   const [tab, setTab] = useState<Tab>(props.openTab === 'me' ? 'me' : 'home');
   const [overlay, setOverlay] = useState<Overlay>(null);
+  // 새 수업 시간 고르기 (H26(218)): 강사 임시 근무 지역 변경으로 옮길 수업. 모두 확정되면 DB 가 목록에서 뺌
+  const [ttlItems, setTtlItems] = useState<TtlItem[]>([]);
+  const refreshTtl = useCallback(() => { actions.ttl.items().then(setTtlItems, () => {}); }, [actions]);
+  useEffect(() => { refreshTtl(); }, [refreshTtl, s]);
   // 창이 열리면 history 에 한 칸 → 휴대폰 뒤로가기(제스처 포함)는 창만 닫고 수강생 화면에 머묾 (Work QA 11/7: 수업 변경 창에서 뒤로가기 → 화면 이탈)
   const overlayOpen = overlay !== null;
   const mounted = useRef(true);
@@ -540,6 +547,14 @@ export default function StudentHome(props: {
 
   // 나의 학습 정보(강사 작성)·누적 학습 시간 (11/11 대표 시안, migration 20261111010000)
   const [info, setInfo] = useState<MyInfo | null>(props.preloaded?.info ?? null);
+  const [otherNotesOpen, setOtherNotesOpen] = useState(false);
+  // 내 레벨테스트 결과 (홈페이지 /level-test 에서 가입·로그인 뒤 저장한 것, H26(219)) — 있을 때만 카드
+  const [levelTest, setLevelTest] = useState<{ score: number; level: string; takenAt: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    actions.levelTest().then((x) => { if (alive) setLevelTest(x); }, () => {});
+    return () => { alive = false; };
+  }, [actions]);
   useEffect(() => {
     let alive = true;
     actions.myInfo().then((x) => { if (alive) setInfo(x); }, () => {});
@@ -795,6 +810,8 @@ export default function StudentHome(props: {
   };
   // 할 일: 수강생이 직접 해야 하는 것만 (휴무 안내 답 · 날짜 안 잡은 보강 POL-OP-22 · 수업 안내 동의)
   const schedulePending = history?.some((p) => p.schedulePending) ?? false;
+  // 학생이 할 수 있는 것만: 강사가 보낸 시간 확인 · 아직 안 고른 회차 (운영진 확인 중만 남으면 빠짐, 정규 시간 변경 신청 중이면 빠짐)
+  const ttlTodo = ttlItems.filter((it) => { const st = ttlStatus(it); return st.kind === 'proposed' || (st.open > 0 && !it.rcPending); });
   const todoItems = (
     <>
       {schedulePending && <TodoBar n={0} text="수업 요일·시간을 카카오톡으로 알려주세요" onClick={() => window.open('https://pf.kakao.com/_blxgib/friend', '_blank', 'noopener,noreferrer')} />}
@@ -802,9 +819,15 @@ export default function StudentHome(props: {
       {openRights.length > 0 && <TodoBar n={openRights.length} text={openRights.some((m) => m.carryIn) ? '수업 날짜 고르기' : '보강 날짜 고르기'} onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {choosing.length > 0 && <TodoBar n={choosing.length} text="보강 시간 고르기" onClick={() => (choosing.length === 1 ? setOverlay({ kind: 'request', id: choosing[0].id }) : setTab('requests'))} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
+      {ttlTodo.map((it) => {
+        const st = ttlStatus(it);
+        return st.kind === 'proposed'
+          ? <TodoBar key={it.tutorId + it.city} n={st.proposed} text="선생님이 신청한 수업 시간을 확인해 주세요" onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: true })} />
+          : <TodoBar key={it.tutorId + it.city} n={st.open} text="수업 시간 변경이 필요해요" onClick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: false })} />;
+      })}
     </>
   );
-  const todoCount = (schedulePending ? 1 : 0) + (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (choosing.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0);
+  const todoCount = (schedulePending ? 1 : 0) + (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (choosing.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0) + ttlTodo.length;
   // 할 일: 처리할 일이 있을 때만 (11/11 대표 최신 지시), 제목 옆 전체 숫자 없음
   const todoBars = todoCount > 0 && (
     <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
@@ -1102,15 +1125,49 @@ export default function StudentHome(props: {
                     <InfoBlock label="영어 레벨">{info.level ? <span className="text-[17px] font-extrabold">{info.level}</span> : <NotYet />}</InfoBlock>
                     <InfoBlock label="학습 목표">{info.goal ?? <NotYet />}</InfoBlock>
                     <InfoBlock label="수업 방식 · 교재">{info.style ?? <NotYet />}</InfoBlock>
-                    {!info.noteUrl && <InfoBlock label="수업 노트"><NotYet /></InfoBlock>}
-                    {info.noteUrl && (
+                    {!info.noteUrl && !info.subNotes.length && <InfoBlock label="수업 노트"><NotYet /></InfoBlock>}
+                    {(info.noteUrl || info.subNotes.length > 0) && (
                       <InfoBlock label="수업 노트">
-                        매 수업 내용이 이 노트에 계속 쌓여요.
-                        <a href={info.noteUrl} target="_blank" rel="noreferrer" className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
-                          수업 노트 열기 ↗
-                        </a>
+                        {info.noteUrl && (
+                          <>
+                            매 수업 내용이 이 노트에 계속 쌓여요.
+                            <a href={info.noteUrl} target="_blank" rel="noreferrer" className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                              수업 노트 열기 ↗
+                            </a>
+                          </>
+                        )}
+                        {info.subNotes.length > 0 && (
+                          <>
+                            <button type="button" onClick={() => setOtherNotesOpen((x) => !x)} aria-expanded={otherNotesOpen}
+                              className="mt-2.5 flex min-h-[46px] w-full items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                              이전·대체 수업 노트 열기 {otherNotesOpen ? '▴' : '▾'}
+                            </button>
+                            {otherNotesOpen && (
+                              <ul className="mt-2 overflow-hidden rounded-[10px] border border-[#e6e3ef]">
+                                {info.subNotes.map((n) => (
+                                  <li key={n.url} className="border-b border-[#e6e3ef] last:border-b-0">
+                                    <a href={n.url} target="_blank" rel="noreferrer" className="flex min-h-[44px] items-center justify-between px-3 text-[14px] font-bold text-[#5b3df0]">
+                                      <span>{n.tutor ? `${n.tutor}_${s.name}` : s.name}</span><span aria-hidden>↗</span>
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </>
+                        )}
                       </InfoBlock>
                     )}
+                  </section>
+                )}
+                {levelTest && (
+                  <section className={`${card} grid p-4`}>
+                    <h2 className="mb-1 text-[15px] font-bold">내 레벨테스트 결과</h2>
+                    <InfoBlock label="레벨">
+                      <span className="text-[17px] font-extrabold">{levelTest.level}</span> <span className="text-[13px] text-[#69667c]">{levelTest.score} / 20 · {new Date(levelTest.takenAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: studentTz })}</span>
+                      <a href={isAdminView ? `/level-test?student=${encodeURIComponent(s.studentId)}` : '/level-test'} className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                        결과·틀린 문제 복습 보기
+                      </a>
+                    </InfoBlock>
                   </section>
                 )}
               </div>
@@ -1175,7 +1232,22 @@ export default function StudentHome(props: {
         ))}
       </nav>
 
-      {overlay && (
+      {overlay?.kind === 'ttl' && (() => {
+        const it = ttlItems.find((x) => x.tutorId === overlay.tutorId);
+        if (!it) return null;
+        const v: TtlView = {
+          en: false, who: `${it.tutor} 선생님`, badge: `모든 날짜·시간은 ${zoneCity()} 기준`,
+          when: whenText,
+          date: (t) => { const k = kst(t); return `${k.md}(${k.wd})`; },
+          day: (t) => { const k = kst(t); return { key: '일월화수목금토'.indexOf(k.wd), name: k.wd }; },
+          slot: (t) => ({ main: kst(t).time }),
+        };
+        const done = () => { refreshTtl(); void actions.reload().then(setView, () => {}); };
+        return overlay.review
+          ? <TtlReviewSheet item={it} actions={actions.ttl} v={v} onClose={() => setOverlay(null)} onDone={done} onPick={() => setOverlay({ kind: 'ttl', tutorId: it.tutorId, review: false })} />
+          : <TtlPickSheet item={it} actions={actions.ttl} v={v} onClose={() => setOverlay(null)} onDone={done} />;
+      })()}
+      {overlay && overlay.kind !== 'ttl' && (
         <Sheet onClose={() => setOverlay(null)} wide={overlay.kind === 'makeup' || overlay.kind === 'renew'}>
           {overlay.kind === 'late' && (() => {
             const l = s.lessons.find((x) => x.id === overlay.lessonId);

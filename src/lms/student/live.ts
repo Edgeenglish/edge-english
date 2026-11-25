@@ -6,6 +6,7 @@ import { loadScreenPrefs, saveScreenPref, type PrefKey, type ScreenPrefs } from 
 // 수강생 본인은 student_ 함수, 운영자(TOTP 완료)가 ?student= 로 열면 운영진 화면과 같은 admin_ 함수(이력에 운영자로 남음)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { studentTtl } from '../ttl';
 import type { KstDate } from '../rules/dates';
 import type { CreditPeriod, LateReason, PaymentSummary, PointsEvent, StudentLesson, StudentRequest } from './home';
 import { processingEvents, type ProcessingEvent } from './processing-history';
@@ -304,7 +305,7 @@ export type MakeupOption = { startsAt: Date; afterEnd: boolean };
 /** '내 정보' 학습 정보(강사 작성)·홈 누적 학습 시간 (migration 20261111010000). 값이 없으면 null */
 /** 학생 홈 공지 (migration 20261111150000): 게시 중인 공지 + 이 학생이 열어 봤는지 */
 export type StudentNotice = { id: string; title: string; body: string; startsOn: KstDate; read: boolean };
-export type MyInfo = { level: string | null; goal: string | null; style: string | null; noteUrl: string | null; learnedMin: number };
+export type MyInfo = { level: string | null; goal: string | null; style: string | null; noteUrl: string | null; learnedMin: number; /** 대체 수업 노트(sub)·담당 강사 바뀌며 교체된 예전 노트(prev) (migration 20261125090000) */ subNotes: { kind: 'sub' | 'prev'; tutor: string | null; url: string }[] };
 export type RegularSlot = { weekday: number; timeKst: string; minutes: number; tutor: string };
 /** 보상수업이면 p_comp 를 붙임 (4100). 원래 수업 보강은 예전과 같은 인자 → 4100 전 DB에서도 그대로 */
 const compArg = (right: RightRef) => (right.compId ? { p_comp: right.compId } : {});
@@ -339,6 +340,8 @@ export type ChangeRequests = { regular: RegularRequest[]; tutor: TutorChangeRequ
 export function studentActions(sb: SupabaseClient, adminStudentId: string | null) {
   const admin = adminStudentId !== null;
   return {
+    /** 새 수업 시간 고르기 (H26(218), 강사 임시 근무 지역 변경) */
+    ttl: studentTtl(sb, adminStudentId),
     /** 화면 보기 설정: 학생이 저장한 값 읽기 · 저장은 학생 본인일 때만 (운영자 보기는 저장 안 함, 대표 11/13 A안) */
     prefs: () => loadScreenPrefs(sb, { student: adminStudentId }),
     savePref: admin ? null : (key: PrefKey, value: string) => saveScreenPref(sb, key, value),
@@ -394,8 +397,14 @@ export function studentActions(sb: SupabaseClient, adminStudentId: string | null
     myInfo: async (): Promise<MyInfo | null> => {
       const r = await sb.rpc('student_my_info', { p_student: adminStudentId });
       if (r.error || !r.data) return null;
-      const d = r.data as { level: string | null; goal: string | null; style: string | null; note_url: string | null; learned_min: number };
-      return { level: d.level, goal: d.goal, style: d.style, noteUrl: d.note_url, learnedMin: d.learned_min ?? 0 };
+      const d = r.data as { level: string | null; goal: string | null; style: string | null; note_url: string | null; learned_min: number; sub_notes?: { kind: 'sub' | 'prev'; tutor: string | null; url: string }[] };
+      return { level: d.level, goal: d.goal, style: d.style, noteUrl: d.note_url, learnedMin: d.learned_min ?? 0, subNotes: d.sub_notes ?? [] };
+    },
+    // 내 레벨테스트 결과 (홈페이지 /level-test, H26(219)) — 가장 최근 1건만 학생 홈 카드에
+    levelTest: async (): Promise<{ score: number; level: string; takenAt: string } | null> => {
+      const r = await sb.rpc('level_test_mine', { p_student: adminStudentId });
+      const x = Array.isArray(r.data) ? (r.data[0] as { score: number; level: string; taken_at: string } | undefined) : undefined;
+      return x ? { score: x.score, level: x.level, takenAt: x.taken_at } : null;
     },
     regularSlots: async (): Promise<RegularSlot[]> => {
       const r = await sb.rpc('student_regular_slots', { p_student: adminStudentId });

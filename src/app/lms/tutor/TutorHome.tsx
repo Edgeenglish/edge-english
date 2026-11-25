@@ -22,7 +22,9 @@ import { updateLines, updateTitle, type NewStudentRequest, type TutorUpdate } fr
 import { LangCtx, useLang, useT, type Lang } from '@/lms/tutor/lang';
 import { Rich } from '@/app/lms/Rich';
 import HomeNotices from '@/app/lms/HomeNotices';
-import { enBoth, enEveryLines, stripBold } from '@/lms/admin/time-text';
+import { enBoth, enClock, enDay, enEveryLines, enZoneName, stripBold } from '@/lms/admin/time-text';
+import { TtlPickSheet, type TtlView } from '@/app/lms/TtlSheet';
+import { ttlStatus, type TtlActions, type TtlItem } from '@/lms/ttl';
 import { useDetailBack } from './useDetailBack';
 import { zoneAt } from '@/lms/tutor/travel';
 import { TimeOffCard, TimeOffForm } from './TimeOff';
@@ -84,6 +86,8 @@ export type TutorActions = {
   timeOff?: TimeOffActions;
   /** 전자서명 (H26(188)). 옛 DB 면 list 가 null → To do·Documents 숨김 */
   sign?: SignActions;
+  /** 임시 근무 지역 변경 → 새 수업 시간 고르기 (H26(218)). 없거나 옛 DB 면 To do 칸이 안 보임 */
+  ttl?: TtlActions;
 };
 
 function CancelClass({ lessonId, cancel, onSaved, onDirty }: {
@@ -166,7 +170,7 @@ function Icon({ d }: { d: string }) {
 }
 
 /** Students 메뉴 한 줄 (tutor_my_students, 4300) */
-export type TutorStudentRow = { id: string; name: string; level: string | null; classType: string | null; timezone: string | null; noteUrl: string | null };
+export type TutorStudentRow = { id: string; name: string; level: string | null; classType: string | null; timezone: string | null; noteUrl: string | null; /** 대체 수업 중인 학생의 담당 강사 노트 (보기만) */ mainNoteUrl?: string | null };
 
 export default function TutorHome({ initial, nowIso, actions, adminBar, onLogout, lang = 'en' }: {
   initial: TutorScreen;
@@ -276,7 +280,15 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
     ...recordedHere.filter((l) => !screen.toRecord.includes(l.id)).map((l) => byId.get(l.id) ?? l),
   ].sort((a, b) => +a.startsAt - +b.startsAt);
   // 할 일 게시판 (수강생 화면과 같은 모양, 대표 10/29): 아직 안 한 것만 세고, 누르면 그 칸으로
-  const [panel, setPanel] = useState<'request' | 'cover' | 'makeup' | 'followup' | 'timeoff' | 'sign' | null>(null);
+  const [panel, setPanel] = useState<'request' | 'cover' | 'makeup' | 'followup' | 'timeoff' | 'sign' | 'ttl' | null>(null);
+  // 새 수업 시간 고르기 (H26(218)): 학생마다 1건. 모두 확정되면 DB 가 목록에서 뺌
+  const [ttlItems, setTtlItems] = useState<TtlItem[]>([]);
+  const [ttlOpen, setTtlOpen] = useState<TtlItem | null>(null);
+  const refreshTtl = useCallback(async () => {
+    if (!actions.ttl) return;
+    try { setTtlItems(await actions.ttl.items()); } catch { /* 옛 DB 또는 일시 오류: To-do 칸만 비움 */ }
+  }, [actions]);
+  useEffect(() => { void refreshTtl(); }, [refreshTtl, screen]);
   const [signReq, setSignReq] = useState<string | null>(null);
   // 수강생 프로필 창 (4300): 열어도 보던 메뉴·주·고른 수강생은 그대로, 닫으면 돌아옴
   const [profileOf, setProfileOf] = useState<string | null>(null);
@@ -334,7 +346,9 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
   // 학생에게 시간을 제안하고 기다리는 보강(H26(134))은 강사 할 일이 아님 — 카드는 그대로 열어 볼 수 있음
   const makeupTodo = screen.makeups.filter((m) => !m.stage).length;
   const signOpen = signList?.open ?? [];
-  const todoCount = [openRequests, screen.toRecord.length, screen.covers.length, makeupTodo, followups.length].filter((n) => n > 0).length + signOpen.length;
+  // 강사가 고를 수 있는 것만 셈 (학생 답 대기·운영진 확인 중은 빼고)
+  const ttlTodo = ttlItems.filter((it) => { const st = ttlStatus(it); return st.open > 0 && st.kind !== 'proposed'; }).length;
+  const todoCount = [openRequests, screen.toRecord.length, screen.covers.length, makeupTodo, followups.length, ttlTodo].filter((n) => n > 0).length + signOpen.length;
   const makeups = [...screen.makeups, ...answeredHere.filter((m) => !screen.makeups.some((x) => x.id === m.id))];
   const days = student
     ? daysOf((allLessons ?? screen.lessons).filter((l) => l.student === student), zAt, { from: '1900-01-01', to: '2999-12-31' })
@@ -513,6 +527,7 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                   {screen.covers.length > 0 && <TodoBar n={screen.covers.length} text={t('Cover requests', '대체 수업 요청')} onClick={() => setPanel('cover')} />}
                   {screen.makeups.length > 0 && <TodoBar n={makeupTodo > 0 ? makeupTodo : screen.makeups.length} text={makeupTodo > 0 ? t('Make-up requests', '보강 요청') : (screen.makeups.some((m) => m.stage === 'student') ? t('Make-up requests · Waiting for the student', '보강 요청 · 학생 답 대기') : t('Make-up requests · Edge English will arrange', '보강 요청 · 운영진 조율'))} onClick={() => setPanel('makeup')} />}
                 {followups.length > 0 && <TodoBar n={followups.length} text={t('First lesson follow-up', '첫 수업 후 확인')} onClick={() => setPanel('followup')} />}
+                {ttlItems.length > 0 && <TodoBar n={ttlTodo > 0 ? ttlTodo : ttlItems.length} text={ttlTodo > 0 ? t('New class times needed', '새 수업 시간 필요') : t('New class times needed · Waiting for the student', '새 수업 시간 필요 · 학생 확인 대기')} onClick={() => setPanel('ttl')} />}
               </div>
             </section>
 
@@ -625,6 +640,10 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
                       <a href={st.noteUrl} target="_blank" rel="noreferrer"
                         className="inline-flex min-h-[36px] shrink-0 items-center whitespace-nowrap rounded-[9px] bg-[#f3f1fa] px-3 text-[13px] font-bold text-[#5b3fe0]">{t('Class notes', '수업 노트')} ↗</a>
                     )}
+                    {st.mainNoteUrl && (
+                      <a href={st.mainNoteUrl} target="_blank" rel="noreferrer"
+                        className="inline-flex min-h-[36px] shrink-0 items-center whitespace-nowrap rounded-[9px] bg-[#f3f1fa] px-3 text-[13px] font-bold text-[#5b3fe0]">{t('Main tutor notes', '담당 강사 노트')} ↗</a>
+                    )}
                     <button type="button" disabled={!openProfile} onClick={() => openProfile?.(st.id)}
                       className="min-h-[56px] shrink-0 whitespace-nowrap py-2 pl-1 pr-4 text-[13px] font-semibold text-[#5b3fe0]">{t('Profile', '프로필')} ›</button>
                   </li>
@@ -707,6 +726,19 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
           </Sheet>
         )}
 
+        {panel === 'ttl' && (
+          <Sheet onClose={() => setPanel(null)}>
+            <h2 className="mb-3 pr-10 text-[17px] font-bold text-[#1d1b2b]">{t('New class times needed', '새 수업 시간 필요')}</h2>
+            <div className="grid gap-2">
+              {ttlItems.length === 0 && <p className="text-[15px] text-[#1f7a4d]">✓ {t('All done', '모두 완료')}</p>}
+              {ttlItems.map((it) => <TtlCard key={`${it.studentId}-${it.city}`} it={it} onPick={() => { setPanel(null); setTtlOpen(it); }} />)}
+            </div>
+          </Sheet>
+        )}
+        {ttlOpen && actions.ttl && (
+          <TtlPickSheet item={ttlOpen} actions={actions.ttl} v={tutorTtlView(ttlOpen)} onClose={() => setTtlOpen(null)} onDone={() => void refreshTtl()} />
+        )}
+
         {panel === 'makeup' && (
           <Sheet onClose={() => setPanel(null)}>
             <h2 className="mb-2 pr-10 text-[17px] font-bold text-[#1d1b2b]">Make-up requests</h2>
@@ -733,6 +765,19 @@ function TutorHomeInner({ initial, nowIso, actions, adminBar, onLogout }: {
 }
 
 /** Home 의 오늘 수업 한 줄 */
+/** 노트 버튼 (대체 강사 노트, migration 20261125090000): Class notes = 이 강사가 쓰는 노트, Main tutor notes = 대체 수업 중 담당 강사 노트(보기만) */
+function NoteButtons({ noteUrl, mainNoteUrl, className = '' }: { noteUrl?: string | null; mainNoteUrl?: string | null; className?: string }) {
+  const t = useT();
+  if (!noteUrl && !mainNoteUrl) return null;
+  const cls = 'inline-flex min-h-[40px] items-center rounded-[10px] bg-[#f3f1fa] px-3 text-[14px] font-bold text-[#5b3fe0]';
+  return (
+    <div className={`flex flex-wrap gap-2 ${className}`}>
+      {noteUrl && <a href={noteUrl} target="_blank" rel="noreferrer" className={cls}>{t('Class notes', '수업 노트')} ↗</a>}
+      {mainNoteUrl && <a href={mainNoteUrl} target="_blank" rel="noreferrer" className={cls}>{t('Main tutor notes', '담당 강사 노트')} ↗</a>}
+    </div>
+  );
+}
+
 function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent, sendContact, tutorName, admin = false }: {
   lesson: TutorLesson; tz: string; now: Date; onRecord: () => void; sendLate?: LateSend; onLateSent?: () => void | Promise<void>; sendContact?: ContactSend; tutorName?: string; admin?: boolean;
 }) {
@@ -752,6 +797,7 @@ function TodayRow({ lesson: l, tz, now, onRecord, sendLate, onLateSent, sendCont
         ? <button type="button" onClick={onRecord} className="min-h-[36px] rounded-[10px] bg-[#5b3fe0] px-3 text-[13px] font-bold text-white">Record</button>
         : <span className={`text-[13px] font-semibold ${phase === 'recorded' ? 'text-[#1f7a4d]' : 'text-[#6b6880]'}`}>{phase === 'recorded' ? `✓ ${st}${lateText(l.late)}` : st}<CoverNote lesson={l} where="status" /></span>}
     </div>
+    {phase !== 'canceled' && phase !== 'covered' && <NoteButtons noteUrl={l.noteUrl} mainNoteUrl={l.mainNoteUrl} className="mt-1.5" />}
     {/* 강사 '늦어요' 알림: 시작 2시간 전~시작 전, 보냈으면 회색 Sent ✓ */}
     <div className="mt-1.5 empty:hidden"><RunningLate lesson={l} now={now} tz={tz} send={sendLate} onSent={onLateSent} /></div>
     {/* 강사 [학생에게 연락하기]: 시작 5분 뒤~끝, 보냈으면 회색 Email sent ✓ */}
@@ -841,6 +887,57 @@ function RequestCard({ r, tz, zAt, answer, onDone }: { r: NewStudentRequest; tz:
         {btn(false, 'I can’t')}
       </div>
       {err && <p role="alert" className="mt-2 text-[14px] text-[#b3261e]">{err}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- 새 수업 시간 고르기 (H26(218))
+const EN_WDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const enDateOnly = (d: string) => enDay(new Date(`${d}T12:00:00Z`), 'UTC');
+function tutorTtlView(it: TtlItem): TtlView {
+  const tz = it.timezone;
+  return {
+    en: true, who: it.student, badge: `All times: ${enZoneName(tz)} / KST`,
+    when: (t) => enBoth(t, tz),
+    date: (t) => enDay(t, tz),
+    day: (t) => { const d = new Date(`${formatInZone(t, tz).date}T00:00:00Z`).getUTCDay(); return { key: d, name: EN_WDAY[d] }; },
+    slot: (t) => {
+      const same = formatInZone(t, tz).date === formatInZone(t, 'Asia/Seoul').date;
+      return { main: enClock(t, tz), sub: `${same ? '' : `${EN_WDAY[new Date(`${formatInZone(t, 'Asia/Seoul').date}T00:00:00Z`).getUTCDay()]} `}${enClock(t, 'Asia/Seoul')} KST` };
+    },
+  };
+}
+const TTL_LABEL: Record<string, [string, string]> = {
+  open: ['Not chosen yet', '시간 선택 전'], proposed: ['Waiting for the student', '학생 확인 대기'], returned: ['Student asked to adjust', '다시 조정 필요'],
+  partial: ['Partly confirmed', '일부 확정'], admin: ['Time conflict · Edge English is checking', '시간 겹침 · 운영진 확인 중'], done: ['Confirmed', '확정'],
+};
+function TtlCard({ it, onPick }: { it: TtlItem; onPick: () => void }) {
+  const t = useT();
+  const st = ttlStatus(it);
+  const left = st.n - st.confirmed;
+  const r0 = it.rows[0].orig; const r1 = it.rows[it.rows.length - 1].orig;
+  return (
+    <div className={`${card} grid gap-2`}>
+      <div className="flex items-start justify-between gap-2">
+        <b className="text-[15.5px] text-[#1d1b2b]">{it.student} · {left === st.n ? t(`${st.n} classes`, `${st.n}회`) : t(`${left} of ${st.n} classes left`, `${st.n}회 중 ${left}회 남음`)}</b>
+        <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-bold ${st.kind === 'admin' ? 'bg-[#fdecea] text-[#b3261e]' : 'bg-[#efeaff] text-[#3a22b0]'}`}>{t(...TTL_LABEL[st.kind])}</span>
+      </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[13.5px]">
+        <dt className="text-[#6b6880]">{t('Reason', '사유')}</dt><dd>{t(`Temporary work location change (${it.city})`, `임시 근무 지역 변경 (${it.city})`)}</dd>
+        <dt className="text-[#6b6880]">{t('Location change', '근무 지역 변경')}</dt><dd>{enDateOnly(it.from)}{it.to ? ` – ${enDateOnly(it.to)}` : ''}</dd>
+        <dt className="text-[#6b6880]">{t('Classes to move', '옮길 수업')}</dt><dd>{enDay(r0, it.timezone)} – {enDay(r1, it.timezone)}</dd>
+      </dl>
+      {(st.confirmed > 0 || st.admin > 0) && (
+        <p className="flex flex-wrap gap-x-3 text-[13px]">
+          {st.confirmed > 0 && <span>{t('Confirmed', '확정')} <b>{st.confirmed}</b></span>}
+          {st.admin > 0 && <span className="text-[#b3261e]">{t('Edge English checking', '운영진 확인 필요')} <b>{st.admin}</b></span>}
+          {st.proposed > 0 && <span>{t('Waiting for the student', '학생 확인 대기')} <b>{st.proposed}</b></span>}
+          {st.open > 0 && <span>{t('Not chosen', '미선택')} <b>{st.open}</b></span>}
+        </p>
+      )}
+      {st.kind === 'proposed'
+        ? <button type="button" disabled className="min-h-[42px] rounded-[10px] bg-[#e6e3ef] px-4 text-[14px] font-bold text-[#6b6880]">{t('Waiting for the student', '학생 확인 대기')}</button>
+        : st.open > 0 && !it.rcPending && <button type="button" onClick={onPick} className="min-h-[42px] rounded-[10px] bg-[#5b3fe0] px-4 text-[14px] font-bold text-white">{t('Choose new class times', '새 수업 시간 고르기')}</button>}
     </div>
   );
 }
@@ -1014,6 +1111,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
         <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
           {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
+          <NoteButtons noteUrl={l.noteUrl} mainNoteUrl={l.mainNoteUrl} className="pt-2" />
           {recordable ? (
             <div className="lg:max-w-[560px]">
               <div className="pt-2 empty:hidden"><ContactStudent lesson={l} now={now} tz={tz} tutorName={tutorName} send={actions.contactStudent} onSent={onSaved} admin={admin} /></div>

@@ -16,6 +16,7 @@ import { styleText } from '@/lms/tutor/followup';
 import { Box, btnMain, btnSmall, btnSub, CopyButton, input, label, Row, Sheet, WHO_ROLE } from './parts';
 import RegularChange from './RegularChange';
 import PrestartMove from './PrestartMove';
+import TtlAdmin, { type TtlAdminActions } from './TtlAdmin';
 import LessonManage, { type LessonManageActions } from './LessonManage';
 import { Rich } from '@/app/lms/Rich';
 import { CarrySheet, RenewSheet, RewardRows, RewardSheet, type RenewalActions } from './Renewal';
@@ -36,6 +37,8 @@ export type DetailActions = {
   lessonManage: LessonManageActions;
   /** 수강생 로그인 계정 만들기 (admin_student_login — 이미 연결돼 있으면 DB 가 막음) */
   createLogin: (email: string) => Promise<void>;
+  /** 임시 근무 지역 변경 · 운영진 확인 회차 (H26(218)) */
+  ttl?: TtlAdminActions;
 };
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
@@ -298,6 +301,7 @@ export default function StudentDetail({ data, nowIso, actions, extra }: { data: 
                 ))}
               </div>
             )}
+            {actions.ttl && <TtlAdmin studentId={s.id} actions={actions.ttl} />}
           </Box>
 
           <Box title="지난 수업">
