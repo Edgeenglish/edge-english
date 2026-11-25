@@ -3,6 +3,7 @@
 - Apps Script `apps-script/substitute-notes/Code.gs`(저장소엔 토큰 자리만, 실제 토큰은 vault·Drive 프로젝트): support@ 가 1분마다 시험·운영 둘 다 가져가 문서 만들기·대체 강사 편집·링크 보기·원래 노트 보기(이미 권한 있으면 그대로), 공유 알림 메일 없음. 시험 노트 폴더 'LMS 시험 사이트 대체 강사 노트'(1cddboJq…), 운영은 내 드라이브 맨 위(기존 노트와 같은 곳)
 - 학생 화면 '나의 학습 정보 > 수업 노트'에 '대체 수업 노트 열기 · 강사 ↗' (StudentHome.tsx·student/live.ts·fake-data.ts)
 - 시험 데이터: STU-0018 12/1·12/8 수업 Sienna QA 대체(노트 커넥터로 만듦), STU-0030 11/27 Alex 대체(커넥터로 만듦), STU-0031 11/27 Sienna QA 대체(**Apps Script 끝-끝 시험용으로 pending 남김**). 되돌리기: 그 수업 tutor_id 를 original_tutor_id 로, original_tutor_id null
+- 11/25 운영 Drive: 오O수_Benny(1PojEPTE…)에서 Maria 11/20 'Naps notes' 단락을 새 문서 오O수_Maria(1EWhRPf8…, support@ 소유, 아직 공유 없음)로 옮기고 Benny 노트에서 삭제(대표 지시). 운영 반영 때 substitute_notes(STU-0010, Maria)에 이 문서를 done 으로 넣고 공유는 Apps Script 로(알림 없음). Apps Script 코드 사본: support@ Drive '대체 강사 노트 자동 만들기 - Apps Script 코드 (붙여넣기용)'(1ws1vIY_…)
 - 남은 일: 대표 Apps Script 1회 연결 → STU-0031 작업 done·siennabwg 편집 공유 확인 · 운영 반영(대표 승인, 운영 vault notes_script_token 넣기, Olivia google_docs_email 채우기 여부) · 오O수 11/20 Maria 노트는 지난 수업이라 자동으로 안 생김
 
 ## ✅ 11/24 첫 수업 확인 창 'Create a new Google Doc' 버튼 삭제 · 영어 화면 가입 메일 영어 — **운영 반영 끝 (대표 11/24 '어', lms-prod 5d132fd = lms-prod 위에 이 파일 2개만, 운영 Supabase Confirm sign up 템플릿도 같게 바꿈, 메일 발송 없음)** (브랜치 claude/tutor-followup-signup-mail-en)
