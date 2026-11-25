@@ -295,6 +295,20 @@ export default function LevelTest() {
           </div>
         </div>
         <div className="ladder" aria-label="레벨 단계">{LEVELS.map((l) => <div key={l.name} className={l === L ? 'on' : ''}>{l.name}</div>)}</div>
+        {wrong.length > 0 && (
+          <div className="rec">
+            <h3>내가 부족한 부분 <span className="muted num" style={{ fontWeight: 500 }}>{wrong.length}개</span></h3>
+            <ul className="weak">
+              {wrong.map((k) => (
+                <li key={k}>
+                  <button type="button" onClick={() => { setRp(steps.findIndex((x) => x.t === 'q' && x.k === k)); rvRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+                    <span>{QUESTIONS[k].tag}</span><span className="muted small num">{k + 1}번 ›</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="rec">
           <h3>화상영어 1:1 추천</h3>
           <p style={{ margin: 0 }}>{L.talk}</p>
