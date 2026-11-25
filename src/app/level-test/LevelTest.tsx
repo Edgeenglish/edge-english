@@ -64,11 +64,13 @@ function Promo({ i }: { i: number }) {
           <div className="note-top"><span className="dot" /><span className="dot" /><span className="dot" /><span className="note-t">Class Notes</span></div>
           <div className="note-d">Nov 25 · Free Talking</div>
           <div className="note-s">New expressions</div>
-          <div className="note-l">I&apos;m gonna crash early tonight.</div>
-          <div className="note-l">It&apos;s way comfier than my old one.</div>
+          <div className="note-l">I&apos;m down! <span className="muted ko">나도 콜!</span></div>
+          <div className="note-l">It&apos;s on me. <span className="muted ko">이건 내가 쏠게.</span></div>
           <div className="note-s">Let&apos;s fix this</div>
-          <div className="note-l"><s>I go to Busan yesterday.</s></div>
-          <div className="note-l good">I went to Busan yesterday.</div>
+          <div className="note-l"><s>I&apos;m so boring.</s></div>
+          <div className="note-l good">I&apos;m so bored. <span className="muted ko">나 너무 심심해</span></div>
+          <div className="note-l"><s>I went to there.</s></div>
+          <div className="note-l good">I went there. <span className="muted ko">거기 갔어</span></div>
         </div>
         <div className="pbody">
           <span className="ptag">수업 노트</span>
@@ -95,7 +97,7 @@ function Promo({ i }: { i: number }) {
   );
 }
 
-function Drill({ s, o, a }: { s: string; o: string[]; a: number }) {
+function Drill({ s, o, a, k }: { s: string; o: string[]; a: number; k: string }) {
   const [picked, setPicked] = useState<number | null>(null);
   return (
     <div className="drill">
@@ -111,6 +113,7 @@ function Drill({ s, o, a }: { s: string; o: string[]; a: number }) {
       </div>
       <span className="fb" aria-live="polite">
         {picked !== null && (picked === a ? <span className="lt-o">맞았어요</span> : <span className="lt-x">정답은 {o[a]}</span>)}
+        {picked !== null && <span className="muted ko" style={{ display: 'block' }}>{k}</span>}
       </span>
     </div>
   );
