@@ -1117,13 +1117,22 @@ export default function StudentHome(props: {
                     <InfoBlock label="영어 레벨">{info.level ? <span className="text-[17px] font-extrabold">{info.level}</span> : <NotYet />}</InfoBlock>
                     <InfoBlock label="학습 목표">{info.goal ?? <NotYet />}</InfoBlock>
                     <InfoBlock label="수업 방식 · 교재">{info.style ?? <NotYet />}</InfoBlock>
-                    {!info.noteUrl && <InfoBlock label="수업 노트"><NotYet /></InfoBlock>}
-                    {info.noteUrl && (
+                    {!info.noteUrl && !info.subNotes.length && <InfoBlock label="수업 노트"><NotYet /></InfoBlock>}
+                    {(info.noteUrl || info.subNotes.length > 0) && (
                       <InfoBlock label="수업 노트">
-                        매 수업 내용이 이 노트에 계속 쌓여요.
-                        <a href={info.noteUrl} target="_blank" rel="noreferrer" className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
-                          수업 노트 열기 ↗
-                        </a>
+                        {info.noteUrl && (
+                          <>
+                            매 수업 내용이 이 노트에 계속 쌓여요.
+                            <a href={info.noteUrl} target="_blank" rel="noreferrer" className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                              수업 노트 열기 ↗
+                            </a>
+                          </>
+                        )}
+                        {info.subNotes.map((n) => (
+                          <a key={n.url} href={n.url} target="_blank" rel="noreferrer" className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                            대체 수업 노트 열기 · {n.tutor} ↗
+                          </a>
+                        ))}
                       </InfoBlock>
                     )}
                   </section>

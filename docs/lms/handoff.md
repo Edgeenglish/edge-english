@@ -1,3 +1,10 @@
+## ⏭ 11/25 대체 강사 수업 노트 자동 만들기 — **시험 DB·lms-test 반영, 운영 미반영 · Apps Script 1회 연결 대표 대기** (시에나 11/24 결정, 브랜치 claude/substitute-tutor-notes-auto-r8uass)
+- migration `20261125090000_lms_substitute_notes.sql`: tutors.google_docs_email(공유용 Google 계정, 비면 email) · substitute_notes(학생+대체강사 1줄, 다시 씀) · lessons 지연 트리거(예정 수업 강사 ≠ 그 날짜 담당 강사(regular_schedules, 없으면 original_tutor_id) → 작업 넣기) · tutor_screen·tutor_students_list 노트 = lms_tutor_note_url(담당이면 학생 노트, 아니면 본인 대체 노트) · student_my_info.sub_notes · anon RPC lms_note_jobs/lms_note_job_result(금고 notes_script_token)
+- Apps Script `apps-script/substitute-notes/Code.gs`(저장소엔 토큰 자리만, 실제 토큰은 vault·Drive 프로젝트): support@ 가 1분마다 시험·운영 둘 다 가져가 문서 만들기·대체 강사 편집·링크 보기·원래 노트 보기(이미 권한 있으면 그대로), 공유 알림 메일 없음. 시험 노트 폴더 'LMS 시험 사이트 대체 강사 노트'(1cddboJq…), 운영은 내 드라이브 맨 위(기존 노트와 같은 곳)
+- 학생 화면 '나의 학습 정보 > 수업 노트'에 '대체 수업 노트 열기 · 강사 ↗' (StudentHome.tsx·student/live.ts·fake-data.ts)
+- 시험 데이터: STU-0018 12/1·12/8 수업 Sienna QA 대체(노트 커넥터로 만듦), STU-0030 11/27 Alex 대체(커넥터로 만듦), STU-0031 11/27 Sienna QA 대체(**Apps Script 끝-끝 시험용으로 pending 남김**). 되돌리기: 그 수업 tutor_id 를 original_tutor_id 로, original_tutor_id null
+- 남은 일: 대표 Apps Script 1회 연결 → STU-0031 작업 done·siennabwg 편집 공유 확인 · 운영 반영(대표 승인, 운영 vault notes_script_token 넣기, Olivia google_docs_email 채우기 여부) · 오O수 11/20 Maria 노트는 지난 수업이라 자동으로 안 생김
+
 ## ✅ 11/24 첫 수업 확인 창 'Create a new Google Doc' 버튼 삭제 · 영어 화면 가입 메일 영어 — **운영 반영 끝 (대표 11/24 '어', lms-prod 5d132fd = lms-prod 위에 이 파일 2개만, 운영 Supabase Confirm sign up 템플릿도 같게 바꿈, 메일 발송 없음)** (브랜치 claude/tutor-followup-signup-mail-en)
 - 대표 11/24: 새 구글 문서 만들기 버튼은 없는 정책 → `FirstLessonFollowup.tsx` 버튼 줄 삭제
 - 가입 때 `signUp` data 에 `lang`(화면 언어) 저장 → 시험용 Supabase Confirm sign up 템플릿(제목·본문)을 `{{ if eq (print .Data.lang) "en" }}` 영어 / 그 밖 = 기존 한국어(그대로)로 바꿈. 영어 문구 대표 11/24 확인
