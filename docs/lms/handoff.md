@@ -1,3 +1,9 @@
+## ⏳ 11/25 홈 '강사 영상 6개' 섹션 — **코드 완료·시험 사이트 올림, 대표 설정 대기 (환경변수 없으면 섹션 숨김)** (브랜치 claude/sleepy-hypatia-yvxi5w)
+- 대표 확정(11/25, 정책 원본 H26 기록은 아직 안 함): 유튜브 '홈 전용 재생목록'에서 대표가 영상·순서를 직접 관리 → **재생 가능한 영상 중 재생목록 순서대로 위 6개**(최신순 자동 아님), 공식 YouTube Data API(키는 서버 환경변수만), 1시간마다 갱신, 실패하면 마지막 정상 페이지 유지(후기 연동과 같은 방식), 카드는 썸네일+영상 제목(선생님 이름 안 씀), 눌러야 그 영상만 불러와 홈페이지 팝업(youtube-nocookie)에서 재생, 인스타 링크 없음(바닥글 아이콘만), 위치 = 채용 과정 5단계 바로 위. Kai·Grace 영상은 안 씀(현재 강사 Benny·Maria·Olivia 영상 위주)
+- 코드: `src/lib/teacher-videos.ts`(API 2번 호출: playlistItems + videos.status, 비공개·삭제·외부 재생 제한·처리 중 제외 `pickPlayableVideos`) · `src/components/main/TutorVideos.tsx`(PC 3×2·휴대폰 옆 스크롤·팝업) · `src/app/page.tsx` · 시험 `src/lib/teacher-videos.test.ts`(6개) · 로컬 가짜 서버(`YOUTUBE_API_BASE`)로 6개 표시·팝업 열기·Esc 닫기·스크롤 유지 확인
+- **대표 설정 대기**: ① 유튜브 재생목록 만들기(공개/일부 공개) ② 구글 클라우드 API 키(YouTube Data API v3만 허용) ③ Vercel 환경변수 `YOUTUBE_API_KEY`·`YOUTUBE_PLAYLIST_ID` — **Preview 에만 먼저**, 시험 사이트에서 확인한 뒤 Production 추가. 실제 유튜브 연동·모바일 재생은 아직 못 해 봄(이 환경은 유튜브 접속 막힘)
+- 알아 둘 것: 쇼츠 썸네일은 가로 그림 가운데에 세로 화면이 있어 CSS 로 키워 양옆 검은 띠를 잘라 냄(실제 썸네일로 확인 필요)
+
 ## ⏭ 12~1월 겨울 특별 혜택 — 시험 사이트·시험 DB 반영 끝, 운영 반영 대기 (H26(220)·(220) 보충·(221))
 - 정책은 H26(220)에만. 브랜치 claude/beautiful-wozniak-knztzy → lms-test
 - migration **20261125120000_lms_winter_benefit** (시험 DB 적용, 운영 DB 미적용): 표 `season_benefits`('winter_2026' 12/1~1/31·2회·7일) · `season_extension_marks`(연장 높이, 줄이지 않기) · `lms_change_core` 패치(공휴일 → 겨울 무료 → 일반 변경권, 상태 'Student canceled in advance' + decision.season, 변경권 장부 안 씀, 학생별 advisory lock) · 사용 수 = applied 학생 취소 중 decision.season (운영진 되돌리면 자동 반환) · 보강 기한 `lms_makeup_until(e, 원래수업)` = 겨울이면 greatest(이어진 마지막 종료일, 원래 종료일(기본+운영진 연장)+7, 다음 수강권 시작 전날까지) — 보강 날짜 찾기·신청·확정·시간 확인·운영자 옮기기 6곳 · 연장 `lms_season_sync_student`(트리거 lessons_zzz_, auto_source 'season'·사유 'season_benefit') · 강사 귀책 연장은 겨울 연장·겨울 보강 빼고 계산(겹치면 늦은 날 하나) · `student_season_credits` · 변경권 내역 'winter' 줄
