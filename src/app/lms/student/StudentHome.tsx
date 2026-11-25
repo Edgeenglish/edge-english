@@ -547,6 +547,14 @@ export default function StudentHome(props: {
 
   // 나의 학습 정보(강사 작성)·누적 학습 시간 (11/11 대표 시안, migration 20261111010000)
   const [info, setInfo] = useState<MyInfo | null>(props.preloaded?.info ?? null);
+  const [otherNotesOpen, setOtherNotesOpen] = useState(false);
+  // 내 레벨테스트 결과 (홈페이지 /level-test 에서 가입·로그인 뒤 저장한 것, H26(219)) — 있을 때만 카드
+  const [levelTest, setLevelTest] = useState<{ score: number; level: string; takenAt: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    actions.levelTest().then((x) => { if (alive) setLevelTest(x); }, () => {});
+    return () => { alive = false; };
+  }, [actions]);
   useEffect(() => {
     let alive = true;
     actions.myInfo().then((x) => { if (alive) setInfo(x); }, () => {});
@@ -1117,15 +1125,49 @@ export default function StudentHome(props: {
                     <InfoBlock label="영어 레벨">{info.level ? <span className="text-[17px] font-extrabold">{info.level}</span> : <NotYet />}</InfoBlock>
                     <InfoBlock label="학습 목표">{info.goal ?? <NotYet />}</InfoBlock>
                     <InfoBlock label="수업 방식 · 교재">{info.style ?? <NotYet />}</InfoBlock>
-                    {!info.noteUrl && <InfoBlock label="수업 노트"><NotYet /></InfoBlock>}
-                    {info.noteUrl && (
+                    {!info.noteUrl && !info.subNotes.length && <InfoBlock label="수업 노트"><NotYet /></InfoBlock>}
+                    {(info.noteUrl || info.subNotes.length > 0) && (
                       <InfoBlock label="수업 노트">
-                        매 수업 내용이 이 노트에 계속 쌓여요.
-                        <a href={info.noteUrl} target="_blank" rel="noreferrer" className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
-                          수업 노트 열기 ↗
-                        </a>
+                        {info.noteUrl && (
+                          <>
+                            매 수업 내용이 이 노트에 계속 쌓여요.
+                            <a href={info.noteUrl} target="_blank" rel="noreferrer" className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                              수업 노트 열기 ↗
+                            </a>
+                          </>
+                        )}
+                        {info.subNotes.length > 0 && (
+                          <>
+                            <button type="button" onClick={() => setOtherNotesOpen((x) => !x)} aria-expanded={otherNotesOpen}
+                              className="mt-2.5 flex min-h-[46px] w-full items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                              이전·대체 수업 노트 열기 {otherNotesOpen ? '▴' : '▾'}
+                            </button>
+                            {otherNotesOpen && (
+                              <ul className="mt-2 overflow-hidden rounded-[10px] border border-[#e6e3ef]">
+                                {info.subNotes.map((n) => (
+                                  <li key={n.url} className="border-b border-[#e6e3ef] last:border-b-0">
+                                    <a href={n.url} target="_blank" rel="noreferrer" className="flex min-h-[44px] items-center justify-between px-3 text-[14px] font-bold text-[#5b3df0]">
+                                      <span>{n.tutor ? `${n.tutor}_${s.name}` : s.name}</span><span aria-hidden>↗</span>
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </>
+                        )}
                       </InfoBlock>
                     )}
+                  </section>
+                )}
+                {levelTest && (
+                  <section className={`${card} grid p-4`}>
+                    <h2 className="mb-1 text-[15px] font-bold">내 레벨테스트 결과</h2>
+                    <InfoBlock label="레벨">
+                      <span className="text-[17px] font-extrabold">{levelTest.level}</span> <span className="text-[13px] text-[#69667c]">{levelTest.score} / 20 · {new Date(levelTest.takenAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: studentTz })}</span>
+                      <a href={isAdminView ? `/level-test?student=${encodeURIComponent(s.studentId)}` : '/level-test'} className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#5b3df0] text-[14px] font-extrabold text-white">
+                        결과·틀린 문제 복습 보기
+                      </a>
+                    </InfoBlock>
                   </section>
                 )}
               </div>

@@ -73,6 +73,18 @@ export default async function Home() {
             영어 콘텐츠 제작자 탠저린이 직접 운영해요.
           </h2>
         </>
+
+        {/* 무료 레벨테스트 입구 (대표 11/25, H26(219)) */}
+        <div className="mx-auto mt-10 flex max-w-[760px] items-center gap-6 rounded-[20px] bg-[#eeeaff] px-8 py-6 text-left max-md:mt-8 max-md:flex-col max-md:items-stretch max-md:gap-4 max-md:px-5 max-md:py-5">
+          <p className="flex-1 text-2xl font-black leading-[1.35] text-[#140F33] max-md:text-xl">
+            <span className="text-[#5b3df0]">무료 레벨테스트</span>하면
+            <br />
+            부족한 부분만 콕 짚어 드려요
+          </p>
+          <Link href="/level-test" className="shrink-0 rounded-xl bg-[#5b3df0] px-7 py-4 text-center text-lg font-bold text-white">
+            지금 시작하기
+          </Link>
+        </div>
       </div>
 
       {/* 수강생 후기 (최신 6개) */}
@@ -490,6 +502,36 @@ export default async function Home() {
         </div>
       </div>
 
+      {/* 강사 선발 5단계 (대표 11/25 — 레벨테스트 홍보 카드와 같은 내용) */}
+      <div className="bg-[#F3F6F8] px-4.5 py-24 max-md:py-16">
+        <div className="mx-auto max-w-[640px]">
+          <h3 className="text-center text-4xl font-bold text-[#140F33] break-keep [text-wrap:balance] max-md:text-[28px]">운영진 둘이 직접 면접 보고 골라요</h3>
+          <p className="mt-4 text-center text-xl text-[#55526a] break-keep [text-wrap:balance] max-md:text-base">모든 강사를 운영진 두 명이 직접 만나고, 고민 끝에 뽑아요.</p>
+          <ol className="mt-10 grid gap-2.5">
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">1</span>
+              <span><b className="mr-2">서면 인터뷰</b></span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">2</span>
+              <span><b className="mr-2">서류 심사</b>자격증·학위·경력 확인</span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">3</span>
+              <span><b className="mr-2">2:1 심층 면접</b>운영진 둘이 직접</span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">4</span>
+              <span><b className="mr-2">데모 레슨</b>티칭 실력·책임감·인성 확인</span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">5</span>
+              <span><b className="mr-2">채용 후 교육</b>운영진이 직접 교육 · 2개월 집중 모니터링, 이 기간에도 탈락할 수 있어요</span>
+            </li>
+          </ol>
+        </div>
+      </div>
+
       {/* 섹션 5 pc 매번 작심삼일로 끝났다면? */}
       <div
         className="relative w-full bg-cover bg-center bg-no-repeat px-4.5 py-32 max-md:hidden"
@@ -615,21 +657,33 @@ export default async function Home() {
                 포인트3
               </span>
               <h4 className="pt-4 text-3xl font-bold leading-[120%] text-[#140F33] max-lg:text-4xl max-md:text-2xl">
-                전원 미국·캐나다·호주 원어민 강사진
+                매 수업, 강사가 노트를 적어 드려요
               </h4>
               <p className="mt-8 text-lg leading-[140%] text-edge-gray max-lg:text-xl max-md:mt-6 max-md:text-base">
-                영어에는 다양한 억양이 있지만, 한국 학습자에게 가장 익숙한 북미·호주 발음을
-                사용하는 튜터만으로 구성되어 있어요.
+                새로 배운 표현과 고친 문장이 내 수업 노트에 계속 쌓여요.
+                수업이 끝나도 언제든 다시 보며 복습할 수 있어요.
               </p>
             </div>
 
+            {/* 수업 노트 예시 (대표 11/25: 포인트3 원어민 → 수업 노트, 레벨테스트 홍보 카드와 같은 그림) */}
             <div className="flex-center flex-1 max-md:mt-10">
-              <img
-                src={'/images/main/point03.png'}
-                alt="point 03"
-                width={580}
-                height={400}
-              />
+              <div aria-hidden="true" className="w-full max-w-[460px] rounded-2xl border border-[#E2E0EE] bg-white p-6 text-[17px] leading-[1.6] shadow-[0_10px_30px_-14px_rgba(20,15,51,0.35)] max-md:p-4 max-md:text-[15px]">
+                <div className="mb-3 flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#E2E0EE]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#E2E0EE]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#E2E0EE]" />
+                  <span className="ml-2 text-sm font-bold text-[#140F33]">Class Notes</span>
+                </div>
+                <div className="mb-2 text-sm text-[#6B6880]">Nov 25 · Free Talking</div>
+                <div className="mt-2 text-sm font-bold text-[#5b3df0]">New expressions</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3">I&apos;m down!<span className="ml-2 text-[0.85em] font-normal text-[#6B6880]">나도 콜!</span></div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3">It&apos;s on me.<span className="ml-2 text-[0.85em] font-normal text-[#6B6880]">이건 내가 쏠게.</span></div>
+                <div className="mt-2 text-sm font-bold text-[#5b3df0]">Let&apos;s fix this</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 text-[#D2414B] line-through">I&apos;m so boring.</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 font-bold text-[#1F8A5B]">I&apos;m so bored.<span className="ml-2 text-[0.85em] font-normal text-[#6B6880]">나 너무 심심해</span></div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 text-[#D2414B] line-through">I went to there.</div>
+                <div className="border-l-2 border-[#E2E0EE] pl-3 font-bold text-[#1F8A5B]">I went there.<span className="ml-2 text-[0.85em] font-normal text-[#6B6880]">거기 갔어</span></div>
+              </div>
             </div>
           </div>
         </div>

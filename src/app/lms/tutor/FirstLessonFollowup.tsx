@@ -227,7 +227,6 @@ export default function FirstLessonFollowup({ studentId, actions, save, now, onC
           <Row label="Class Notes (Google Docs)" htmlFor="fl-doc">
             <input id="fl-doc" type="url" inputMode="url" className={field} value={doc} onChange={(x) => setDoc(x.target.value)} placeholder="https://docs.google.com/document/…" />
             {docErr && (tried || doc.trim().length > 12) && <p className={errText}>{docErr}</p>}
-            <a href="https://docs.new" target="_blank" rel="noreferrer" className={`${btnLine} inline-flex items-center justify-center justify-self-start text-[14.5px]`}>Create a new Google Doc ↗</a>
           </Row>
         </div>
 

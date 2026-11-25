@@ -1,0 +1,221 @@
+<title>대체 강사 노트 화면 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap">
+<style>
+/* 레이아웃: 위 = 학생 화면(PC·휴대폰), 아래 = 강사 화면(PC·휴대폰). 각 화면 아래에 '누르면 열리는 문서' 설명 */
+:root {
+  --bg: #f4f3f8; --panel: #ffffff; --ink: #1d1b2b; --muted: #6b6880; --line: #e6e3ef;
+  --accent: #5b3df0; --accent-soft: #f3f1fa; --note: #fff7e0; --note-ink: #6b4a00;
+  --font: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15141c; --panel: #1f1d2a; --ink: #ecebf3; --muted: #a29fb6; --line: #34314a;
+  --accent: #8f7bff; --accent-soft: #2a2640; --note: #3a3020; --note-ink: #f1d79a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15141c; --panel: #1f1d2a; --ink: #ecebf3; --muted: #a29fb6; --line: #34314a;
+  --accent: #8f7bff; --accent-soft: #2a2640; --note: #3a3020; --note-ink: #f1d79a; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 36px; }
+h1 { font-size: 22px; margin: 0; text-wrap: balance; }
+h2 { font-size: 18px; margin: 0 0 4px; }
+.lead { color: var(--muted); margin: 4px 0 0; }
+.row { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .row { grid-template-columns: minmax(0, 1fr); } }
+.label { font-size: 12px; font-weight: 700; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
+.frame { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0; }
+.phone { max-width: 380px; border-radius: 26px; padding: 18px 12px; border-width: 6px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; font-weight: 800; color: var(--accent); margin-bottom: 10px; font-size: 15px; }
+.topbar span { color: var(--muted); font-weight: 600; font-size: 12px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.phone .cols { grid-template-columns: minmax(0, 1fr); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.card h3 { margin: 0; font-size: 15px; }
+.card h3 small { font-weight: 400; color: var(--muted); font-size: 12px; }
+.info { display: grid; gap: 2px; }
+.info b { font-size: 12px; color: var(--muted); font-weight: 600; }
+.btn { display: flex; align-items: center; justify-content: center; min-height: 46px; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 800; font-size: 14px; text-decoration: none; }
+.ghost { background: var(--panel); border: 1px dashed var(--line); color: var(--muted); font-size: 13px; padding: 10px; border-radius: 12px; }
+.mark { outline: 3px solid #f0b400; outline-offset: 2px; }
+.list { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.li { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); min-width: 0; }
+.li:last-child { border-bottom: 0; }
+.li .who { flex: 1; min-width: 0; }
+.li .who b { display: block; font-size: 15px; }
+.li .who span { font-size: 12.5px; color: var(--muted); }
+.chip { display: inline-flex; align-items: center; min-height: 34px; padding: 0 10px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 13px; white-space: nowrap; }
+.prof { color: var(--accent); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.tag { display: inline-block; margin-top: 2px; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 700; }
+.explain { background: var(--note); color: var(--note-ink); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; }
+.explain p { margin: 0; }
+.explain ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.where { font-size: 16px; margin: 22px 0 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.legend { margin: 6px 0 4px; color: var(--muted); font-size: 13px; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 800; }
+.pill.done { background: #e3f6ea; color: #13723f; }
+.pill.ask { background: #fff1cc; color: #7a5200; }
+.ghostchip { background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>대체 강사 노트 — 학생·강사 화면 시안</h1>
+    <p class="lead">예시 학생 김하준: 담당 강사 Benny · 예전 담당 Olivia(담당이 바뀌기 전) · 대체 강사 Maria. 노란 테두리가 이번에 달라지는 곳입니다. 이름은 가짜 예시입니다.</p>
+  </header>
+
+  <!-- 학생 화면 -->
+  <section>
+    <h2>학생 화면 · 내 수업 › 나의 학습 정보 <span class="pill done">반영됨</span></h2>
+    <div class="row">
+      <div>
+        <div class="label">PC</div>
+        <div class="frame">
+          <div class="topbar">엣지영어 <span>모든 날짜·시간은 Sydney 기준</span></div>
+          <div class="cols">
+            <div class="card">
+              <h3>나의 학습 정보 <small>· 강사님 작성</small></h3>
+              <div class="info"><b>영어 레벨</b><span style="font-size:17px;font-weight:800">Intermediate</span></div>
+              <div class="info"><b>학습 목표</b><span>회사에서 의견을 자신 있게 말하기</span></div>
+              <div class="info"><b>수업 방식 · 교재</b><span>회화</span></div>
+              <div class="info"><b>수업 노트</b>
+                <span>매 수업 내용이 이 노트에 계속 쌓여요.</span>
+                <a class="btn" href="#s">수업 노트 열기 ↗</a>
+                <div class="mark" style="display:grid;gap:8px;border-radius:10px">
+                  <span class="btn">이전·대체 수업 노트 열기 ▴</span>
+                  <div class="list">
+                    <div class="li"><b style="color:var(--accent)">Olivia_김하준</b><span style="margin-left:auto;color:var(--accent)">↗</span></div>
+                    <div class="li"><b style="color:var(--accent)">Maria_김하준</b><span style="margin-left:auto;color:var(--accent)">↗</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="ghost">오른쪽 칸: 이메일 알림 설정 등 (바뀌지 않음)</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="label">휴대폰</div>
+        <div class="frame phone">
+          <div class="topbar">엣지영어 <span>Sydney 기준</span></div>
+          <div class="card">
+            <h3>나의 학습 정보 <small>· 강사님 작성</small></h3>
+            <div class="info"><b>영어 레벨</b><span style="font-size:17px;font-weight:800">Intermediate</span></div>
+            <div class="info"><b>수업 노트</b>
+              <span>매 수업 내용이 이 노트에 계속 쌓여요.</span>
+              <a class="btn" href="#s">수업 노트 열기 ↗</a>
+              <div class="mark" style="display:grid;gap:8px;border-radius:10px">
+                <span class="btn">이전·대체 수업 노트 열기 ▴</span>
+                <div class="list">
+                  <div class="li"><b style="color:var(--accent)">Olivia_김하준</b><span style="margin-left:auto;color:var(--accent)">↗</span></div>
+                  <div class="li"><b style="color:var(--accent)">Maria_김하준</b><span style="margin-left:auto;color:var(--accent)">↗</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="explain" style="margin-top:14px">
+      <p><b>누르면 열리는 문서</b> (모두 로그인 없이 보기만 가능)</p>
+      <ol>
+        <li>수업 노트 열기 → <b>김하준_Benny</b> (지금 담당 강사 노트). 한 번 누르면 바로 열립니다.</li>
+        <li>이전·대체 수업 노트 열기 → 누르면 아래에 목록이 펼쳐집니다. 시간 순서(먼저 생긴 노트가 위)로 '강사_학생' 이름이 나오고, 누르면 그 노트가 열립니다.</li>
+        <li>목록에 들어가는 것: 담당이 바뀌기 전 강사 노트(예: Olivia) + 대체 수업 강사 노트(예: Maria). 둘 다 없는 학생은 이 버튼이 없습니다.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 강사 화면 -->
+  <section>
+    <h2>강사 화면 — 노트 버튼이 생기는 곳 3군데</h2>
+    <p class="lead">예: Maria가 김하준(담당 Benny)의 대체 수업을 맡았을 때 Maria 화면. 강사 화면은 영어입니다.</p>
+    <div class="legend"><span class="pill done">반영됨</span> 시험 사이트에 이미 들어감 · <span class="pill ask">제안</span> 대표님 '응' 하면 넣음</div>
+
+    <h3 class="where">① Students 메뉴 — 학생 줄 오른쪽 <span class="pill done">반영됨</span></h3>
+    <div class="row">
+      <div>
+        <div class="label">PC</div>
+        <div class="frame">
+          <div class="topbar">Edge English · Tutor <span>Home · Schedule · <u>Students</u></span></div>
+          <div class="list">
+            <div class="li"><div class="who"><b>Hailey Lee</b><span>Intermediate · Free talking · Seoul</span></div><span class="chip">Class notes ↗</span><span class="prof">Profile ›</span></div>
+            <div class="li mark"><div class="who"><b>Hajun Kim</b><span>Intermediate · Free talking · Sydney</span></div><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span><span class="prof">Profile ›</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="label">휴대폰</div>
+        <div class="frame phone">
+          <div class="topbar">Edge English <span>Students</span></div>
+          <div class="list">
+            <div class="li"><div class="who"><b>Hailey Lee</b><span>Intermediate · Seoul</span></div><span class="chip">Class notes ↗</span></div>
+            <div class="li mark" style="flex-wrap:wrap"><div class="who"><b>Hajun Kim</b><span>Intermediate · Sydney</span></div><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="where">② 학생 프로필 — 이름 바로 아래 (맨 위로 올림) <span class="pill done">반영됨</span></h3>
+    <div class="row">
+      <div>
+        <div class="label">PC</div>
+        <div class="frame">
+          <div class="card">
+            <h3 style="font-size:20px">Hajun Kim</h3>
+            <span style="color:var(--muted);font-size:13px">Cover class — view only · Thu · 40 min</span>
+            <div class="mark" style="display:flex;flex-wrap:wrap;gap:8px;border-radius:10px;width:fit-content"><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
+            <div class="ghost">PROFILE · ABOUT & PREFERENCES · CLASS … (그대로. 맨 아래 'Google Docs' 줄은 위로 옮겨서 없어짐)</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="label">휴대폰</div>
+        <div class="frame phone">
+          <div class="card">
+            <h3 style="font-size:19px">Hajun Kim</h3>
+            <span style="color:var(--muted);font-size:13px">Cover class — view only · Thu · 40 min</span>
+            <div class="mark" style="display:flex;flex-wrap:wrap;gap:8px;border-radius:10px"><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
+            <div class="ghost">아래 내용 그대로</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="where">③ Class Record — 수업 줄을 눌러 펼친 곳 · ④ Home '오늘 수업' 줄에도 같은 버튼 <span class="pill done">반영됨</span></h3>
+    <div class="row">
+      <div>
+        <div class="label">PC</div>
+        <div class="frame">
+          <div class="list">
+            <div class="li" style="background:var(--accent-soft)"><div class="who"><b>Thu 27 Nov 7:00 PM <i style="font-style:normal;color:var(--muted)">Sydney Time</i> · Hajun Kim</b><span>40 min · Cover class · Scheduled</span></div><span class="prof">▴</span></div>
+            <div class="li" style="display:grid;gap:8px;justify-items:start">
+              <div class="mark" style="display:flex;flex-wrap:wrap;gap:8px;border-radius:10px"><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px"><span class="chip ghostchip">Running late</span><span class="chip ghostchip">Contact student</span><span class="chip ghostchip">Cancel class</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="label">휴대폰</div>
+        <div class="frame phone">
+          <div class="list">
+            <div class="li" style="background:var(--accent-soft)"><div class="who"><b>7:00 PM · Hajun Kim</b><span>Sydney Time · Cover class</span></div><span class="prof">▴</span></div>
+            <div class="li" style="display:grid;gap:8px;justify-items:start">
+              <div class="mark" style="display:flex;flex-wrap:wrap;gap:8px;border-radius:10px"><span class="chip">Class notes ↗</span><span class="chip">Main tutor notes ↗</span></div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px"><span class="chip ghostchip">Running late</span><span class="chip ghostchip">Contact student</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="explain" style="margin-top:14px">
+      <p><b>버튼을 누르면</b></p>
+      <ol>
+        <li>Class notes → 그 강사가 쓰는 노트. Maria는 <b>김하준_Maria</b>(편집), Benny는 <b>김하준_Benny</b>.</li>
+        <li>Main tutor notes → <b>김하준_Benny</b>(보기만). 대체 강사에게만, 그 학생과의 마지막 대체 수업이 끝나면 사라짐.</li>
+        <li>담당 강사(Benny) 화면에는 Class notes 하나만 나옵니다.</li>
+      </ol>
+    </div>
+  </section>
+</div>

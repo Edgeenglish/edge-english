@@ -97,7 +97,15 @@ export default function Header() {
         </Link>
 
         <div className="flex w-full items-center justify-between">
-          <div className="flex gap-11 max-xl:gap-6 max-lg:hidden">
+          <div className="flex items-center gap-11 max-xl:gap-6 max-lg:hidden">
+            {/* 무료 레벨테스트 입구 (대표 11/25, H26(219)) */}
+            <Link
+              href="/level-test"
+              className={`text-nowrap rounded-full border-2 border-[#5b3df0] px-3.5 py-0.5 font-bold text-[#5b3df0] ${pathName.startsWith('/level-test') ? 'bg-[#eeeaff]' : ''}`}
+            >
+              무료 레벨테스트
+            </Link>
+
             <Link
               href="/events"
               className={`text-nowrap ${pathName.startsWith('/events') ? 'font-bold' : 'font-medium text-edge-light'}`}
@@ -163,7 +171,10 @@ export default function Header() {
             {logoutBtn('')}
           </div>
         </div>
-        <div className="flex items-center gap-4 lg:hidden">
+        <div className="flex items-center gap-3 lg:hidden">
+          <Link href="/level-test" className="text-nowrap rounded-full border-2 border-[#5b3df0] px-2.5 py-0.5 text-[13px] font-bold text-[#5b3df0]">
+            무료 레벨테스트
+          </Link>
           <Link href={accountHref} onClick={openAccount} className={`text-nowrap text-sm ${accountOn} text-[#333]`}>
             {accountLabel}
           </Link>
@@ -210,6 +221,16 @@ export default function Header() {
                     height={32}
                   />
                 </div>
+              </li>
+
+              <li>
+                <Link
+                  href="/level-test"
+                  className={`active:bg-white! text-nowrap py-4 text-[22px] font-bold ${pathName.startsWith('/level-test') ? 'text-edge-yellow' : ''}`}
+                  onClick={() => closeDrawer()}
+                >
+                  무료 레벨테스트
+                </Link>
               </li>
 
               <li>
