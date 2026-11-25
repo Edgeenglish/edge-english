@@ -1,7 +1,7 @@
 // timeline
 const L=(at,...segs)=>({at,segs});
 module.exports={cps:28,why_start:4,doc_start:12,rules_start:97,zoom_at:93.5,date:'Wed, 11/25/2026',date_at:18.5,
-why:[{at:4.8,text:'Students review this Google Doc *after every class*.'},{at:6.8,text:"It's an *essential part* of our classes."}],
+why:[{at:4.8,text:'Students review this Google Doc *after every class*.'},{at:6.8,text:"Our class notes are one of our *biggest selling points*. Students *really love* them."}],
 rules:[{at:97.8,text:'*Never use AI* for class notes. Write only what the student *actually said* and your own corrections.'},{at:99.8,text:"Only use the Doc in *LMS > Students > Class notes*. *Don't make your own* notes."}],
 secs:[
 {n:'0',start:12,title:'Write the date first',desc:"Open the Doc in *LMS > Students > Class notes*. *Don't make your own.*<br><br>Share your screen and keep the Doc on screen *for the whole class*.<br><br>At the start of every class, type the date at the top. Use the *same Doc* for the same student every class.",lines:[]},
