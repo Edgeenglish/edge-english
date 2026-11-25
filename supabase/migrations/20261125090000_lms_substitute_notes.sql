@@ -140,7 +140,7 @@ begin
   -- 강사 화면 수업 줄
   d := pg_get_functiondef('tutor_screen(uuid, date, date)'::regprocedure);
   if position('lms_tutor_note_url' in d) = 0 then
-    d2 := replace(d, 'then s.class_note_url end', 'then lms_tutor_note_url(v_tutor, s.id, l.kst_date) end');
+    d2 := replace(d, 'then s.class_note_url end', 'then lms_tutor_note_url(v_tutor, s.id, l.kst_date) end, ''main_note_url'', case when lms_tutor_student_access(v_tutor, s.id) is not null then lms_tutor_main_note_url(v_tutor, s.id) end');
     if d2 = d then raise exception 'tutor_screen: note_url 자리를 못 찾음'; end if;
     execute d2;
   end if;

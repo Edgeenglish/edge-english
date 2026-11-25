@@ -1001,6 +1001,7 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
   due?: boolean;
   lesson: TutorLesson; tz: string; /** 표 머리글 시간대 — 다르면 줄에 시간대 이름 (이동 기간, H26(176)) */ headTz: string; now: Date; kst: boolean; paidCol: boolean; meetUrl: string | null; actions: TutorActions; onSaved: () => Promise<void>; admin: boolean;
 }) {
+  const t = useT();
   const now = useLiveNow(loadedNow);
   const [open, setOpen] = useState(false);
   const [dirty, mark] = useDirtyList();
@@ -1097,6 +1098,12 @@ function ListRow({ lesson: l, due = false, tz, headTz, now: loadedNow, kst, paid
         <div className="border-t border-[#e6e3ef] bg-[#f7f6fb] px-3 pb-3 lg:pl-[92px]">
           {l.makeupOf && <p className="pt-2 text-[13px] text-[#6b6880]">Make-up for {whenFull(l.makeupOf, tz)}</p>}
           {l.compensationOf && <p className="pt-2 text-[13px] text-[#6b6880]">Compensation for {whenFull(l.compensationOf, tz)} (tutor no-show)</p>}
+          {(l.noteUrl || l.mainNoteUrl) && (
+            <div className="flex flex-wrap gap-2 pt-2">
+              {l.noteUrl && <a href={l.noteUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[40px] items-center rounded-[10px] bg-[#f3f1fa] px-3 text-[14px] font-bold text-[#5b3fe0]">{t('Class notes', '수업 노트')} ↗</a>}
+              {l.mainNoteUrl && <a href={l.mainNoteUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[40px] items-center rounded-[10px] bg-[#f3f1fa] px-3 text-[14px] font-bold text-[#5b3fe0]">{t('Main tutor notes', '담당 강사 노트')} ↗</a>}
+            </div>
+          )}
           {recordable ? (
             <div className="lg:max-w-[560px]">
               <div className="pt-2 empty:hidden"><ContactStudent lesson={l} now={now} tz={tz} tutorName={tutorName} send={actions.contactStudent} onSent={onSaved} admin={admin} /></div>
