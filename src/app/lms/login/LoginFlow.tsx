@@ -150,6 +150,7 @@ export default function LoginFlow() {
   const [socialOnly, setSocialOnly] = useState(false);
   const [memberName, setMemberName] = useState(''); // 가입 때 받은 이름(이메일 가입 입력값·카카오·네이버 이름) — 빈 회원 화면 제목
   const [recent, setRecent] = useState<Recent | null>(null);
+  const [hasLevelTest, setHasLevelTest] = useState(false);
   const [pwUsed, setPwUsed] = useState(false);
   const [googleInApp, setGoogleInApp] = useState(false);
   const t = STRINGS[lang];
@@ -375,6 +376,9 @@ export default function LoginFlow() {
       setStep('moving');
       window.location.assign('/level-test');
     } else {
+      // 레벨테스트로 가입한 회원(아직 수강생 아님): 저장한 결과가 있으면 결과 보기 버튼 (H26(219) ⑨)
+      const lt = await sb.rpc('level_test_mine').then((r) => Array.isArray(r.data) && r.data.length > 0, () => false);
+      setHasLevelTest(lt);
       setStep('member');
     }
   }
@@ -1116,6 +1120,11 @@ export default function LoginFlow() {
             <a href={APPLY_URL} target="_blank" rel="noreferrer" className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] bg-[#FFD401] text-[15px] font-bold text-[#333]">
               {t.apply}
             </a>
+            {hasLevelTest && (
+              <a href="/level-test" className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] bg-[#5b3df0] text-[15px] font-bold text-white">
+                {t.myLevelTest}
+              </a>
+            )}
             {socialOnly && (
               <button type="button" disabled={busy} onClick={chooseExisting} className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40">
                 {t.alreadyStudent}
