@@ -235,8 +235,9 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
         foot={<><button type="button" className={btnSub} onClick={() => setStep(1)}>‹ {T('Back', '이전')}</button>
           <button type="button" className={btnMain} disabled={bad > 0 || chosen.length === 0} onClick={() => setStep(3)}>{T('Next ›', '다음 ›')}</button></>}>
         <Badge text={v.badge} />
-        <p className="mb-2 text-[14px] font-semibold">{T(`${ok.length} of ${rows.length} set automatically ✓`, `${rows.length}회 중 ${ok.length}회 자동 배정 ✓`)}{bad > 0 && <span className="text-[#b3261e]"> · {T(`${bad} to adjust`, `${bad}회 조정 필요`)}</span>}</p>
-        {top.length > 0 && <><p className="mt-2 text-[13.5px] font-bold text-[#55526a]">{T('Dates to adjust', '조정이 필요한 날짜')}</p><div className="rounded-[12px] bg-white px-3">{top.map(rowView)}</div></>}
+        {/* 학생: 회차마다 방법을 골랐으면 '선택 완료' (아직 신청 전, 대표 11/25) */}
+        <p className="mb-2 text-[14px] font-semibold">{T(`${ok.length} of ${rows.length} set automatically ✓`, `${rows.length}회 중 ${rows.length - bad}회 선택 완료`)}{bad > 0 && <span className="text-[#b3261e]"> · {T(`${bad} to adjust`, `${bad}회 조정 필요`)}</span>}</p>
+        {top.length > 0 && <><p className="mt-2 text-[13.5px] font-bold text-[#55526a]">{T('Dates to adjust', bad > 0 ? '조정이 필요한 날짜' : '선택한 수업 일정')}</p><div className="rounded-[12px] bg-white px-3">{top.map(rowView)}</div></>}
         {ok.length > 0 && (
           <details className="mt-3"><summary className="min-h-[40px] cursor-pointer py-2 text-[13.5px] font-bold text-[#55526a]">{T(`Set automatically (${ok.length})`, `자동 배정된 회차 ${ok.length}회`)}</summary>
             <div className="rounded-[12px] bg-white px-3">{ok.map(rowView)}</div></details>
