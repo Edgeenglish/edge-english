@@ -91,6 +91,9 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
   const chosen = rows.filter((r) => picks[r.key] instanceof Date || picks[r.key] === 'admin' || picks[r.key] === 'sub');
   const later = rows.filter((r) => picks[r.key] === 'later').length;
 
+  /** 학생 '맞는 시간이 없어요' → 다른 수업 방법 고르기 (대표 11/25) */
+  const [noFit, setNoFit] = useState(false);
+  const allTo = (x: 'sub' | 'admin') => { setPicks(Object.fromEntries(rows.map((r) => [r.key, x]))); setEdit(null); setNoFit(false); setStep(3); };
   const goStep2 = () => { setPicks(autoAssign(rows, weekly, picks)); setEdit(null); setStep(2); };
   async function submit() {
     setBusy(true); setErr('');
@@ -147,8 +150,8 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
               <button key={t.toISOString()} type="button" className={chip} aria-pressed={p instanceof Date && p.getTime() === t.getTime()}
                 onClick={() => { setPicks({ ...picks, [r.key]: t }); setEdit(null); }}><Rich text={v.when(t)} /></button>
             ))}
-            {/* 같은 주에 새 시간이 없는 회차만 학생이 대체강사와 수업 (H26(218) 보충3) — 강사 화면엔 없음 */}
-            {!v.en && r.cands.length === 0 && <button type="button" className={chip} aria-pressed={p === 'sub'} onClick={() => { setPicks({ ...picks, [r.key]: 'sub' }); setEdit(null); }}>대체강사와 수업할게요</button>}
+            {/* 학생은 어느 회차든 대체강사와 수업 가능 (H26(218) 보충5, 대표 11/25 — 맞는 시간이 없을 때 포함) · 강사 화면엔 없음 */}
+            {!v.en && <button type="button" className={chip} aria-pressed={p === 'sub'} onClick={() => { setPicks({ ...picks, [r.key]: 'sub' }); setEdit(null); }}>대체강사와 수업할게요</button>}
             {alts.length === 0 && <button type="button" className={chip} aria-pressed={p === 'admin'} onClick={() => { setPicks({ ...picks, [r.key]: 'admin' }); setEdit(null); }}>{T('Ask Edge English', '운영진에게 맡기기')}</button>}
             <button type="button" className={chip} aria-pressed={p === 'later'} onClick={() => { setPicks({ ...picks, [r.key]: 'later' }); setEdit(null); }}>{T('Choose later', '나중에 고르기')}</button>
           </div>
@@ -157,6 +160,29 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
     );
   };
 
+  if (step === 1 && noFit) {
+    const opt3 = 'grid w-full gap-0.5 rounded-[12px] border border-[#dcd8ea] bg-white px-4 py-3 text-left';
+    return (
+      <Frame title={title} sub={sub} steps={steps} onClose={onClose}
+        foot={<button type="button" className={btnSub} onClick={() => setNoFit(false)}>‹ 이전</button>}>
+        <h3 className="text-[16px] font-bold text-[#1d1b2b]">다른 수업 방법 선택하기</h3>
+        <p className="mb-3 text-[14px] text-[#55526a]">가능한 시간 중 맞는 시간이 없으신가요?</p>
+        <div className="grid gap-2">
+          <button type="button" className={opt3} onClick={() => allTo('sub')}>
+            <b className="text-[15px] text-[#1d1b2b]">대체강사와 수업할게요</b>
+            <span className="text-[13.5px] text-[#55526a]">기존 수업 시간에 가능한 다른 강사님을 찾아드려요.</span>
+          </button>
+          <button type="button" className={opt3} onClick={() => allTo('admin')}>
+            <b className="text-[15px] text-[#1d1b2b]">운영진에게 맡기기</b>
+            <span className="text-[13.5px] text-[#55526a]">운영진이 수업 일정 조정을 도와드려요.</span>
+          </button>
+          <button type="button" className={opt3} onClick={onClose}>
+            <b className="text-[15px] text-[#1d1b2b]">나중에 고르기</b>
+          </button>
+        </div>
+      </Frame>
+    );
+  }
   if (step === 1) {
     const groups = new Map<number, { name: string; list: typeof opt.weekly }>();
     for (const w of opt.weekly) {
@@ -171,7 +197,8 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
         {/* 학생: 왜 바꾸는지·정규 시간은 그대로인지 (대표 11/25) */}
         {!v.en && <div className="mb-3 grid gap-1 text-[14px] leading-relaxed text-[#1d1b2b]">
           <p>{item.tutor} 강사님의 임시 근무 지역 변경으로 기존 시간에 수업이 어려워졌어요.</p>
-          <p>해당 기간에만 수업할 새로운 시간을 골라 주세요. 임시 근무 기간이 끝나면 기존 정규 수업 시간으로 돌아가요.</p>
+          <p>아래에서 수업 가능한 요일과 시간을 골라 주세요. 가능한 시간이 없다면 [맞는 시간이 없어요]를 눌러 주세요.</p>
+          <p>임시 근무 기간이 끝나면 기존 정규 수업 시간으로 돌아가요.</p>
         </div>}
         {v.en && <p className="mb-3 text-[13.5px] text-[#55526a]">The student can select and request new class times directly through their LMS.<br />If the student asks for your help during class, you can discuss the options together and submit the agreed schedule.<br />Any schedule you submit must be confirmed by the student before it can be finalized.</p>}
         <Badge text={v.badge} />
@@ -195,6 +222,7 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
             </div>
           ))}
         </div>
+        {!v.en && <button type="button" onClick={() => setNoFit(true)} className="mt-3 min-h-[46px] w-full rounded-[10px] bg-[#efeaff] px-4 text-[15px] font-semibold text-[#3a22b0]">맞는 시간이 없어요 ›</button>}
       </Frame>
     );
   }
