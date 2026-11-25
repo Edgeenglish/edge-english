@@ -9,9 +9,8 @@ import { PROMO_CHEER, audioUrl, cheer, fill, levelOf, reviewSteps, scoreOf, vali
 import { claimTaken, readTaken, writeTaken } from '@/lib/level-test/saved';
 import './level-test.css';
 
-const KAKAO = 'https://pf.kakao.com/_blxgib';
+const KAKAO = 'https://pf.kakao.com/_blxgib/chat'; // 1:1 채팅방 (채널 추가 안 했으면 카톡이 채널 추가도 보여 줌)
 const CAMP = 'https://tangerineenglish.imweb.me/?idx=13';
-const LOGIN = '/lms/login';
 const TUTORS: [string, string][] = [
   ['Grace', '/images/tutor/data/grace_main.jpg'],
   ['Kai', '/images/tutor/data/kai_main.jpeg'],
@@ -153,6 +152,34 @@ function Review({ k, pick }: { k: number; pick: number }) {
   );
 }
 
+// 카톡 상담 버튼: 결과 글을 복사해 두고 채팅방을 연다 (자동 전송은 카카오가 막음 — 학생이 붙여넣기·전송, 대표 11/25)
+function resultText(level: string, score: number, wrong: number[]) {
+  const weak = wrong.length ? wrong.map((k) => QUESTIONS[k].tag).join(', ') : '없음 (다 맞혔어요)';
+  return `[엣지영어 레벨테스트 결과]\n${level} · ${score}/${QUESTIONS.length}\n부족한 부분: ${weak}`;
+}
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // 앱 안 브라우저 등 clipboard 를 막는 곳: 예전 방식으로 한 번 더
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export default function LevelTest() {
   const [phase, setPhase] = useState<Phase>('start');
   const [i, setI] = useState(0);
@@ -160,7 +187,7 @@ export default function LevelTest() {
   const [rp, setRp] = useState(0);
   const [seen, setSeen] = useState<Set<number>>(new Set());
   const [account, setAccount] = useState<Account>('checking');
-  const [saved, setSaved] = useState(false);
+  const [, setSaved] = useState(false);
   const [adminView, setAdminView] = useState(false);
   const rvRef = useRef<HTMLDivElement>(null);
 
@@ -288,8 +315,8 @@ export default function LevelTest() {
   const left = [0, 1, 2].filter((n) => !seen.has(n));
 
   return (
-    <div className="lt"><div className="frame lt-stack">
-      <div className="lt-card lt-stack">
+    <div className="lt"><div className="frame lt-stack res">
+      <div className="lt-card lt-stack main">
         <h1 className="rtitle">테스트 결과</h1>
         <div className="lt-level">
           <div className="lt-score"><div><b>{score}</b><small>/ {QUESTIONS.length}</small></div></div>
@@ -313,12 +340,15 @@ export default function LevelTest() {
             </ul>
           </div>
         )}
-        <div className="rec">
-          <h3>화상영어 1:1 추천</h3>
-          <p style={{ margin: 0 }}>{L.talk}</p>
-          <div className="books">{L.books.map((b) => <span key={b}>{b}</span>)}</div>
-          <a className="lt-link" href="/books">교재 자세히 보기 ›</a>
-        </div>
+      </div>
+
+      {kakaoCard()}
+
+      <div className="lt-card lt-stack soft">
+        <h2>화상영어 1:1 추천</h2>
+        <p style={{ margin: 0 }}>{L.talk}</p>
+        <div className="books">{L.books.map((b) => <span key={b}>{b}</span>)}</div>
+        <a className="lt-link" href="/books">교재 자세히 보기 ›</a>
         {L.camp && (
           <div className="camp">
             <h3 style={{ margin: '0 0 4px', fontSize: 16 }}>영붙캠(영어가 입에 붙는 캠프) 초급반도 잘 맞아요</h3>
@@ -361,41 +391,36 @@ export default function LevelTest() {
 
       {doneReview && (
         <>
-          {!adminView && (
-            <div className="lt-card lt-stack">
-              <h2>결과를 저장해 두세요</h2>
-              {saved ? (
-                <p className="saved">✓ 내 계정에 저장했어요. 이 페이지에서 언제든 다시 볼 수 있어요.</p>
-              ) : account === 'in' ? (
-                <p className="muted" style={{ margin: 0 }}>저장하는 중…</p>
-              ) : (
-                <>
-                  <p style={{ margin: 0 }}>회원가입하면 내 결과와 틀린 문제 복습을 사이트에서 언제든 다시 볼 수 있어요.</p>
-                  <a className="lt-btn kakao" href={LOGIN}>카카오로 3초 가입</a>
-                  <a className="lt-btn naver" href={LOGIN}>네이버로 가입</a>
-                  <a className="lt-btn ghost" href={`${LOGIN}?signup=1`}>이메일로 가입</a>
-                </>
-              )}
-            </div>
-          )}
-
           {left.length > 0 && (
             <div className="promo">
               <h2 className="promo-h">엣지영어는 이렇게 가르쳐요</h2>
               {left.map((n) => <Promo key={n} i={n} />)}
             </div>
           )}
-
-          <div className="lt-card lt-stack">
-            <h2>내 결과로 1:1 상담받기</h2>
-            <p className="small" style={{ margin: 0 }}>결과 화면을 캡처해서 카톡으로 보내 주시면, 내 레벨에 맞는 수업과 교재를 바로 알려 드려요. 정확한 레벨도 상담에서 봐 드려요.</p>
-            <a className="lt-btn kakao" href={KAKAO} target="_blank" rel="noopener noreferrer">결과 보내고 상담받기</a>
-            <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>카카오톡 채널: <span className="en">pf.kakao.com/_blxgib</span></p>
-          </div>
-
+          {wrong.length > 0 && kakaoCard()}
           {!adminView && <button type="button" className="lt-btn ghost" onClick={restart}>테스트 다시 하기</button>}
         </>
       )}
     </div></div>
   );
+
+  // 카톡 채널 추가 + 1:1 상담 (대표 11/25: 회원가입보다 채널 추가가 메인). 회원가입 유도는 뺌(대표 11/25)
+  function kakaoCard() {
+    return (
+      <div className="lt-card lt-stack talk">
+        <h2>{L.name}, {wrong.length ? `부족한 부분 ${wrong.length}개` : '다 맞혔어요!'}</h2>
+        <p style={{ margin: 0 }}>
+          {L.camp ? '영붙캠이 좋을지, 화상영어가 좋을지, 어떤 교재로 시작할지' : '프리토킹이 좋을지, 교재 수업이 좋을지, 어떤 교재가 맞을지'}
+          <br />1:1 상담으로 나에게 딱 맞는 걸 찾아 드릴게요.
+        </p>
+        <a className="lt-btn kakao" href={KAKAO} target="_blank" rel="noopener noreferrer"
+          onClick={(e) => {
+            // 휴대폰: 카톡이 먼저 열리면 이 화면이 포커스를 잃어 복사가 실패함 → 복사를 마친 뒤 카톡 열기
+            e.preventDefault();
+            void copyText(resultText(L.name, score, wrong)).finally(() => { window.location.href = KAKAO; });
+          }}>카톡으로 상담받기</a>
+        <p className="copied">누르면 결과가 복사되고 카톡으로 연결돼요.<br />카톡 입력칸에 붙여 넣어 주세요.</p>
+      </div>
+    );
+  }
 }
