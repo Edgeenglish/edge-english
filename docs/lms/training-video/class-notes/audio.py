@@ -1,7 +1,7 @@
 # 효과음: 장면·글머리 클릭음(blip.wav) + 글자마다 타이핑 소리
 import json,subprocess,sys,wave,numpy as np
 T=json.loads(subprocess.check_output(['node','-e','console.log(JSON.stringify(require("./tl.js")))']))
-SR=44100;DUR=115;out=np.zeros(SR*DUR)
+SR=44100;DUR=T['total'];out=np.zeros(SR*DUR)
 def load(p):
     w=wave.open(p);a=np.frombuffer(w.readframes(w.getnframes()),dtype=np.int16).reshape(-1,w.getnchannels()).mean(1)/32768;return a
 blip=load(sys.argv[1]) if len(sys.argv)>1 else None
@@ -17,7 +17,7 @@ def key():
     tick=np.convolve(rng.standard_normal(n),np.ones(24)/24,'same')*np.exp(-x*400)  # 잡음은 부드럽게 걸러 아주 조금
     att=np.minimum(1,x/0.002)
     return (0.8*body+0.25*tick)*att*0.10
-ev=[T['why_start'],T['doc_start']]+[x['start'] for x in T['secs'][1:]]+[T['rules_start']]+[b['at'] for b in T['why']+T['rules']]
+ev=[T['why_start'],T['doc_start']]+[x['start'] for x in T['secs'][1:]]+[T['rules_start'],T['thanks_start']]+[b['at'] for b in T['why']+T['rules']]
 for t in ev: put(t,blip)
 lines=[(T['date_at'],T['date'])]+[(l['at'],''.join(s[1] for s in l['segs'])) for s in T['secs'] for l in s['lines']]
 for at,txt in lines:

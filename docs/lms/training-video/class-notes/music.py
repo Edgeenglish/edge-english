@@ -1,6 +1,8 @@
 # 배경음악: 직접 합성한 잔잔한 피아노풍 반주 (저작권 걱정 없음). 결과 music.wav
 import numpy as np,wave
-SR=44100;DUR=115;BPM=88;beat=60/BPM
+import json,subprocess
+T=json.loads(subprocess.check_output(['node','-e','console.log(JSON.stringify(require("./tl.js")))']))
+SR=44100;DUR=T['total'];BPM=88;beat=60/BPM
 out=np.zeros(int(SR*DUR))
 def note(f,t,d,g):
     n=int(SR*d);x=np.arange(n)/SR

@@ -1,5 +1,5 @@
 const {chromium}=require('playwright');const fs=require('fs');const {spawn}=require('child_process');
-const TL=require('./tl.js');const FPS=30,DUR=115;const only=process.argv[2];
+const TL=require('./tl.js');const FPS=30,DUR=TL.total;const only=process.argv[2];
 (async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1.5});
 await p.addInitScript(`window.TL=${JSON.stringify(TL)}`);await p.goto('file://'+__dirname+'/video.html');await p.evaluate(()=>document.fonts.ready);
 if(only){for(const t of only.split(',')){await p.evaluate(x=>{for(let s=Math.max(0,x-6);s<=x;s+=1/30)render(s)},+t);await p.screenshot({path:`chk_${t}.png`})}await b.close();return}
