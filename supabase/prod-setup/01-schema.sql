@@ -31172,16 +31172,27 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function lms_tutor_note_url(uuid, uuid, date) from public, anon, authenticated;
 
--- 대체 강사 Students 목록: 대체 수업을 맡은 학생의 담당 강사 노트(보기만, 수업 진행 확인용). 그 강사의 마지막 대체 수업이 끝나면 안 보임 (대표 11/25)
+-- 대체 강사에게 보일 담당 강사 노트(보기만, 수업 진행 확인용). 그 강사의 마지막 대체 수업이 끝나면 null (대표 11/25)
+create or replace function lms_tutor_main_note_url(p_tutor uuid, p_student uuid)
+returns text
+language sql stable security definer set search_path = public as $$
+  select s.class_note_url from students s
+  where s.id = p_student and lms_is_google_doc_url(s.class_note_url)
+    and exists (select 1 from lessons l where l.student_id = s.id and l.tutor_id = p_tutor and l.state <> 'canceled'
+                and l.voided_at is null and l.ends_at > now() and lms_lesson_is_substitute(l.id))
+$$;
+revoke all on function lms_tutor_main_note_url(uuid, uuid) from public, anon, authenticated;
+
+-- Students 목록용: {학생 id: 담당 강사 노트}
 create or replace function tutor_main_notes(p_tutor uuid default null)
 returns jsonb
 language sql stable security definer set search_path = public as $$
   with me as (select lms_screen_tutor(p_tutor) as id)
-  select coalesce(jsonb_object_agg(s.id, s.class_note_url), '{}'::jsonb)
-  from students s, me
-  where lms_is_google_doc_url(s.class_note_url)
-    and exists (select 1 from lessons l where l.student_id = s.id and l.tutor_id = me.id and l.state <> 'canceled'
-                and l.voided_at is null and l.ends_at > now() and lms_lesson_is_substitute(l.id))
+  select coalesce(jsonb_object_agg(x.sid, x.url), '{}'::jsonb)
+  from (select s.id as sid, lms_tutor_main_note_url(me.id, s.id) as url
+        from students s, me
+        where exists (select 1 from lessons l where l.student_id = s.id and l.tutor_id = me.id and l.ends_at > now())) x
+  where x.url is not null
 $$;
 revoke all on function tutor_main_notes(uuid) from public, anon;
 grant execute on function tutor_main_notes(uuid) to authenticated;
@@ -31228,6 +31239,14 @@ begin
     if d2 = d then raise exception 'tutor_students_list: class_note_url 자리를 못 찾음'; end if;
     execute d2;
   end if;
+  -- 강사 학생 프로필 (맨 위 버튼): 수업 노트 = 강사별 노트, 대체 수업 중이면 담당 강사 노트도
+  d := pg_get_functiondef('tutor_student_profile(uuid, uuid)'::regprocedure);
+  if position('main_note_url' in d) = 0 then
+    d2 := replace(d, '|| lms_followup_fields(p_student));',
+                  '|| lms_followup_fields(p_student) || jsonb_build_object(''class_note_url'', lms_tutor_note_url(me, p_student, (now() at time zone ''Asia/Seoul'')::date), ''main_note_url'', lms_tutor_main_note_url(me, p_student)));');
+    if d2 = d then raise exception 'tutor_student_profile: student 자리를 못 찾음'; end if;
+    execute d2;
+  end if;
   -- 학생 '나의 학습 정보'
   d := pg_get_functiondef('student_my_info(uuid)'::regprocedure);
   if position('sub_notes' in d) = 0 then
@@ -31259,8 +31278,7 @@ begin
       'id', n.id,
       'title', coalesce(nullif(trim(s.display_name), ''), s.name_en, s.code) || '_' || t.name,
       'doc_id', n.doc_id,
-      'tutor_email', lower(trim(t.email)),
-      'original_doc_id', substring(s.class_note_url from '/document/d/([A-Za-z0-9_-]+)'))
+      'tutor_email', lower(trim(t.email)))
       order by n.created_at)
     from substitute_notes n join students s on s.id = n.student_id join tutors t on t.id = n.tutor_id
     where n.status = 'pending' and n.attempts < 5), '[]'::jsonb);
