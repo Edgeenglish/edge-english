@@ -1,3 +1,8 @@
+## ⏳ 11/25 홈 첫 화면 교체(운영진 사진) — **시험 사이트에만 올림, 대표 확인 대기** (브랜치 claude/sleepy-hypatia-yvxi5w)
+- 대표 확정 시안: 배지(미국·캐나다·호주 원어민 강사진) + 제목 '영어를 가르치는 사람들이 직접 만든 화상영어.' + 사진(///표시, 캡션 '엣지영어를 만든 사람들 시에나 & 탠저린') + 레벨테스트 카드 + 실제 숫자 3개(13년+·800만+·5단계 검증). 노란 고정 버튼은 그대로
+- 코드: `src/components/main/HomeHero.tsx`(새) · `src/app/page.tsx`(섹션 1 교체) · 사진 `public/images/main/founders.webp`(대표가 보낸 원본을 4:3으로 잘라 1400px). 운영 반영은 대표 '운영 반영해' 뒤에만(lms-prod 위에 이 3개 파일만)
+- H26 기록은 아직 안 함(첫 화면 결정·강사 영상 결정)
+
 ## ⏳ 11/25 홈 '강사 영상 6개' 섹션 — **코드 완료·시험 사이트 올림, 대표 설정 대기 (환경변수 없으면 섹션 숨김)** (브랜치 claude/sleepy-hypatia-yvxi5w)
 - 대표 확정(11/25, 정책 원본 H26 기록은 아직 안 함): 유튜브 '홈 전용 재생목록'에서 대표가 영상·순서를 직접 관리 → **재생 가능한 영상 중 재생목록 순서대로 위 6개**(최신순 자동 아님), 공식 YouTube Data API(키는 서버 환경변수만), 1시간마다 갱신, 실패하면 마지막 정상 페이지 유지(후기 연동과 같은 방식), 카드는 썸네일+영상 제목(선생님 이름 안 씀), 눌러야 그 영상만 불러와 홈페이지 팝업(youtube-nocookie)에서 재생, 인스타 링크 없음(바닥글 아이콘만), 위치 = 채용 과정 5단계 바로 위. Kai·Grace 영상은 안 씀(현재 강사 Benny·Maria·Olivia 영상 위주)
 - 코드: `src/lib/teacher-videos.ts`(API 2번 호출: playlistItems + videos.status, 비공개·삭제·외부 재생 제한·처리 중 제외 `pickPlayableVideos`) · `src/components/main/TutorVideos.tsx`(PC 3×2·휴대폰 옆 스크롤·팝업) · `src/app/page.tsx` · 시험 `src/lib/teacher-videos.test.ts`(6개) · 로컬 가짜 서버(`YOUTUBE_API_BASE`)로 6개 표시·팝업 열기·Esc 닫기·스크롤 유지 확인
