@@ -9,7 +9,7 @@ import { PROMO_CHEER, audioUrl, cheer, fill, levelOf, reviewSteps, scoreOf, vali
 import { claimTaken, readTaken, writeTaken } from '@/lib/level-test/saved';
 import './level-test.css';
 
-const KAKAO = 'https://pf.kakao.com/_blxgib';
+const KAKAO = 'https://pf.kakao.com/_blxgib/friend';
 const CAMP = 'https://tangerineenglish.imweb.me/?idx=13';
 const LOGIN = '/lms/login';
 const TUTORS: [string, string][] = [
@@ -288,8 +288,8 @@ export default function LevelTest() {
   const left = [0, 1, 2].filter((n) => !seen.has(n));
 
   return (
-    <div className="lt"><div className="frame lt-stack">
-      <div className="lt-card lt-stack">
+    <div className="lt"><div className="frame lt-stack res">
+      <div className="lt-card lt-stack main">
         <h1 className="rtitle">테스트 결과</h1>
         <div className="lt-level">
           <div className="lt-score"><div><b>{score}</b><small>/ {QUESTIONS.length}</small></div></div>
@@ -313,12 +313,15 @@ export default function LevelTest() {
             </ul>
           </div>
         )}
-        <div className="rec">
-          <h3>화상영어 1:1 추천</h3>
-          <p style={{ margin: 0 }}>{L.talk}</p>
-          <div className="books">{L.books.map((b) => <span key={b}>{b}</span>)}</div>
-          <a className="lt-link" href="/books">교재 자세히 보기 ›</a>
-        </div>
+      </div>
+
+      {kakaoCard(true)}
+
+      <div className="lt-card lt-stack soft">
+        <h2>화상영어 1:1 추천</h2>
+        <p style={{ margin: 0 }}>{L.talk}</p>
+        <div className="books">{L.books.map((b) => <span key={b}>{b}</span>)}</div>
+        <a className="lt-link" href="/books">교재 자세히 보기 ›</a>
         {L.camp && (
           <div className="camp">
             <h3 style={{ margin: '0 0 4px', fontSize: 16 }}>영붙캠(영어가 입에 붙는 캠프) 초급반도 잘 맞아요</h3>
@@ -361,41 +364,32 @@ export default function LevelTest() {
 
       {doneReview && (
         <>
-          {!adminView && (
-            <div className="lt-card lt-stack">
-              <h2>결과를 저장해 두세요</h2>
-              {saved ? (
-                <p className="saved">✓ 내 계정에 저장했어요. 이 페이지에서 언제든 다시 볼 수 있어요.</p>
-              ) : account === 'in' ? (
-                <p className="muted" style={{ margin: 0 }}>저장하는 중…</p>
-              ) : (
-                <>
-                  <p style={{ margin: 0 }}>회원가입하면 내 결과와 틀린 문제 복습을 사이트에서 언제든 다시 볼 수 있어요.</p>
-                  <a className="lt-btn kakao" href={LOGIN}>카카오로 3초 가입</a>
-                  <a className="lt-btn naver" href={LOGIN}>네이버로 가입</a>
-                  <a className="lt-btn ghost" href={`${LOGIN}?signup=1`}>이메일로 가입</a>
-                </>
-              )}
-            </div>
-          )}
-
           {left.length > 0 && (
             <div className="promo">
               <h2 className="promo-h">엣지영어는 이렇게 가르쳐요</h2>
               {left.map((n) => <Promo key={n} i={n} />)}
             </div>
           )}
-
-          <div className="lt-card lt-stack">
-            <h2>내 결과로 1:1 상담받기</h2>
-            <p className="small" style={{ margin: 0 }}>결과 화면을 캡처해서 카톡으로 보내 주시면, 내 레벨에 맞는 수업과 교재를 바로 알려 드려요. 정확한 레벨도 상담에서 봐 드려요.</p>
-            <a className="lt-btn kakao" href={KAKAO} target="_blank" rel="noopener noreferrer">결과 보내고 상담받기</a>
-            <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>카카오톡 채널: <span className="en">pf.kakao.com/_blxgib</span></p>
-          </div>
-
+          {wrong.length > 0 && kakaoCard(false)}
           {!adminView && <button type="button" className="lt-btn ghost" onClick={restart}>테스트 다시 하기</button>}
         </>
       )}
     </div></div>
   );
+
+  // 카톡 채널 추가 + 1:1 상담 (대표 11/25: 회원가입보다 채널 추가가 메인). 회원가입은 맨 위 카드에만 작은 글 한 줄
+  function kakaoCard(withSignup: boolean) {
+    return (
+      <div className="lt-card lt-stack talk">
+        <h2>내 결과로 1:1 상담받기</h2>
+        <p className="small" style={{ margin: 0 }}>결과 화면을 캡처해서 카톡으로 보내 주시면, 내 레벨에 맞는 수업과 교재를 바로 알려 드려요. 정확한 레벨도 상담에서 봐 드려요.</p>
+        <a className="lt-btn kakao" href={KAKAO} target="_blank" rel="noopener noreferrer">카톡 채널 추가하고 상담받기</a>
+        {withSignup && !adminView && (saved ? (
+          <p className="small" style={{ margin: 0, textAlign: 'center' }}>✓ 내 계정에 결과를 저장했어요</p>
+        ) : account === 'out' ? (
+          <a className="signup" href={`${LOGIN}?signup=1`}>결과를 사이트에 저장하려면 회원가입 ›</a>
+        ) : null)}
+      </div>
+    );
+  }
 }

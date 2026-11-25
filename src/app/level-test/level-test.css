@@ -115,3 +115,11 @@
 .lt .weak button span:last-child{flex:none;white-space:nowrap}
 .lt .ko{font-family:inherit;font-size:14px}
 .lt .note-l .ko{font-weight:400;font-size:12px;margin-left:4px}
+.lt .frame.res{gap:24px}
+.lt .lt-card.main{border:2px solid var(--accent)}
+.lt .lt-card.soft{background:var(--accent-soft);border-color:transparent}
+.lt .lt-card.soft .books span{background:var(--card)}
+.lt .lt-card.soft .camp{background:var(--card)}
+.lt .lt-card.talk{background:#FFF8CC;border-color:#F5DC4A}
+.lt .lt-card h2{font-size:21px}
+.lt a.signup{display:block;text-align:center;color:var(--muted);font-size:14px;text-decoration:underline}
