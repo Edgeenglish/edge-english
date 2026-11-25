@@ -6,6 +6,7 @@
 // 비밀번호 만들기·찾기: 이메일 → 메일 코드 + 새 비밀번호 (기존 학생·강사는 재가입 없이 지금 계정에 비밀번호만)
 // 카카오·네이버 첫 로그인이 회원과 연결 안 되면 '처음이에요 / 이미 회원이에요' — 이미 회원이면 기존 계정 로그인 뒤에만 연결
 
+import { claimTaken } from '@/lib/level-test/saved';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ownViewCache, prefetchOwnView } from '@/lms/student/prefetch';
@@ -149,6 +150,7 @@ export default function LoginFlow() {
   const [socialOnly, setSocialOnly] = useState(false);
   const [memberName, setMemberName] = useState(''); // 가입 때 받은 이름(이메일 가입 입력값·카카오·네이버 이름) — 빈 회원 화면 제목
   const [recent, setRecent] = useState<Recent | null>(null);
+  const [hasLevelTest, setHasLevelTest] = useState(false);
   const [pwUsed, setPwUsed] = useState(false);
   const [googleInApp, setGoogleInApp] = useState(false);
   const t = STRINGS[lang];
@@ -160,6 +162,7 @@ export default function LoginFlow() {
   useEffect(() => {
     setLang(readLang());
     setNext(new URLSearchParams(window.location.search).get('next'));
+    if (new URLSearchParams(window.location.search).get('signup') === '1') setStep('signup'); // 홈페이지 레벨테스트 [이메일로 가입]
     setLinkFor(readPendingLink());
     setRecent(readRecent());
     setPwUsed(readPwUsed());
@@ -295,6 +298,8 @@ export default function LoginFlow() {
     const metaName = user?.user_metadata?.name;
     setMemberName(typeof metaName === 'string' ? metaName.trim() : '');
     if (!user) return setError(t.network);
+    // 홈페이지 레벨테스트 결과가 이 브라우저에 있으면 이 계정에 붙임 (H26(219) ⑨). 학생·강사가 아닌 회원은 결과 화면으로
+    const levelTestSaved = await claimTaken(sb).catch(() => false);
     const pendingGoogle = readPendingLink() === 'google';
     if (pendingGoogle && (roleError || aalError)) return setError(t.network);
     if (!pendingGoogle && needsSocialChoice({ role: myRole, providers, choseNew: user?.user_metadata?.edge_new_member === true })) {
@@ -367,7 +372,13 @@ export default function LoginFlow() {
       setEnroll({ factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
       setCode('');
       setStep('enroll');
+    } else if (levelTestSaved) {
+      setStep('moving');
+      window.location.assign('/level-test');
     } else {
+      // 레벨테스트로 가입한 회원(아직 수강생 아님): 저장한 결과가 있으면 결과 보기 버튼 (H26(219) ⑨)
+      const lt = await sb.rpc('level_test_mine').then((r) => Array.isArray(r.data) && r.data.length > 0, () => false);
+      setHasLevelTest(lt);
       setStep('member');
     }
   }
@@ -1109,6 +1120,11 @@ export default function LoginFlow() {
             <a href={APPLY_URL} target="_blank" rel="noreferrer" className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] bg-[#FFD401] text-[15px] font-bold text-[#333]">
               {t.apply}
             </a>
+            {hasLevelTest && (
+              <a href="/level-test" className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] bg-[#5b3df0] text-[15px] font-bold text-white">
+                {t.myLevelTest}
+              </a>
+            )}
             {socialOnly && (
               <button type="button" disabled={busy} onClick={chooseExisting} className="mx-auto flex min-h-[48px] w-full max-w-[240px] items-center justify-center rounded-[12px] border-[1.5px] border-[#5b3df0] text-[15px] font-bold text-[#5b3df0] disabled:opacity-40">
                 {t.alreadyStudent}
