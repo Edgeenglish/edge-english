@@ -183,7 +183,8 @@ export function dayItems(date: string, zone: string, lessons: TutorLesson[], d: 
 export function dayTag(items: DayItem[]): string | null {
   const ls = items.flatMap((i) => (i.kind === 'lesson' ? [i.lesson] : []));
   if (ls.some((l) => l.state === 'canceled')) return 'Cancel';
-  if (items.some((i) => i.kind === 'block' && i.block.kind === 'leave') || ls.some((l) => l.leaveOpen)) return 'Leave';
+  if (items.some((i) => i.kind === 'block' && i.block.kind === 'leave') || ls.some((l) => l.leaveOpen && !l.ttlCover)) return 'Leave';
+  if (ls.some((l) => l.leaveOpen && l.ttlCover)) return 'Cover needed';
   if (ls.some((l) => l.covering)) return 'Cover';
   if (ls.some((l) => l.kind === 'makeup' || l.kind === 'migrated_makeup')) return 'Makeup';
   if (ls.some((l) => l.kind === 'compensation')) return 'Extra class';   // 보상수업 (전체 이름 Compensation 은 날짜 누르면)
@@ -195,7 +196,8 @@ export function dayTag(items: DayItem[]): string | null {
 /** 수업 한 줄 꼬리 글자 (Month PC·그날 목록) */
 export function lessonTag(l: TutorLesson): string | null {
   if (l.state === 'canceled') return 'Canceled';
-  if (l.leaveOpen) return 'Leave';
+  if (l.leaveOpen) return l.ttlCover ? 'Cover needed' : 'Leave';
+  if (l.coveredByOther && l.ttlCover) return 'Cover confirmed';
   const k = kindTag(l);
   if (k !== 'Regular') return k;
   return l.count && l.count.n === l.count.total ? 'Last class' : null;

@@ -38,7 +38,14 @@ export type LeaveActions = {
   renewals: (timeOffId: string) => Promise<LvRenewal[]>;
   /** 휴무 철회 (4510): dryRun 미리 보기 → 사유 → 철회 */
   withdraw?: (timeOffId: string, note: string | null, dryRun: boolean) => Promise<LeaveWithdrawPreview>;
+  /** 임시 근무 지역 대체 수업 → 운영진 확인으로 돌리기 (H26(218) 보충3) */
+  ttlBack?: (itemIds: string[]) => Promise<void>;
 };
+
+/** 임시 근무 지역 대체 수업은 '보강' 대신 '운영진 확인' (수강기간 연장 없음, H26(218)) */
+const allTtl = (its: LvItem[]) => its.length > 0 && its.every((i) => i.ttl);
+/** 2단계 이름: 임시 근무 지역 대체 수업은 휴무 안내가 아님 */
+const proposeText = (g: LvStudentGroup) => (allTtl(g.items) ? '수강생한테 대체강사 안내하기' : LV_STEP_TEXT.propose);
 
 const btnMain = 'min-h-[44px] rounded-[10px] bg-[#7d5ffb] px-4 text-[14.5px] font-bold text-white disabled:bg-[#cfc4ff]';
 const btnSub = 'min-h-[44px] rounded-[10px] border border-[#e6e3ef] bg-white px-3.5 text-[14px] text-[#1d1b2b] disabled:text-[#b9b6c8]';
@@ -198,7 +205,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
             return (
               <button key={l.id} type="button" aria-pressed={l.id === offId} onClick={() => setOffId(l.id === offId ? null : l.id)}
                 className={`min-h-[40px] rounded-full border px-3.5 text-[14px] ${l.id === offId ? 'border-[#7d5ffb] bg-[#efebff] font-bold text-[#5b3fe0]' : w === 'todo' ? 'border-2 border-[#f0a33a] bg-white text-[#1d1b2b]' : 'border-[#e6e3ef] bg-white text-[#1d1b2b]'}`}>
-                {l.tutorName} · {dateLabel(l.from)} ~ {dateLabel(l.to)}{w === 'todo' ? ' · 처리 필요' : w === 'wait' ? ' · 답 기다리는 중' : ''}
+                {l.tutorName} · {l.kind === 'temp_location' ? `임시 근무 지역 · ${dateLabel(l.from)}` : `${dateLabel(l.from)} ~ ${dateLabel(l.to)}`}{w === 'todo' ? ' · 처리 필요' : w === 'wait' ? ' · 답 기다리는 중' : ''}
               </button>
             );
           };
@@ -221,7 +228,7 @@ export default function TutorLeave({ tutors, actions, nowIso, initialOff, startN
 
         {tab === 'list' && offId && data && (
           <>
-            {off && actions.withdraw && (
+            {off && actions.withdraw && off.kind !== 'temp_location' && (
               <WithdrawLeave off={off} withdraw={(note, dry) => actions.withdraw!(off.id, note, dry)}
                 done={async () => { await reloadLeaves(); setOffId(null); setData(null); }} />
             )}
@@ -380,7 +387,7 @@ function ListButton({ on, onClick, name, sub, done }: { on: boolean; onClick: ()
 function nextText(g: LvStudentGroup, w: LvStudentWork): string {
   const md = (i: LvItem) => dateLabel(instantToKstDate(i.startsAt));
   if (w.pick.length) return `${md(w.pick[0])} 대체 강사 고르기`;
-  if (w.proposal?.status === 'pending') return LV_STEP_TEXT.propose;
+  if (w.proposal?.status === 'pending') return proposeText(g);
   if (w.confirm.confirmedMsgs.length) return LV_STEP_TEXT.confirm;
   if (w.confirm.makeup.length) return `${md(w.confirm.makeup[0])} 보강 날짜 잡기`;
   if (w.tutor.length) return w.tutor.map((t) => (t.ask && askMailFailed(t.ask.mail) ? `${t.subTutorName} 강사님 메일 못 보냄` : `${t.subTutorName} 강사님 답 기다리는 중`)).join(' · ');
@@ -541,7 +548,9 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
   const openItems = g.items.filter((i) => !finished(i));
   const closedItems = g.items.filter(finished);
   const ok = (its: LvItem[]) => r.run(() => actions.studentOk(its.map((i) => i.id)));
-  const wait = (its: LvItem[]) => r.run(() => actions.choose(its.map((i) => i.id), 'wait', null), () => setDropped([...dropped, ...its.filter((i) => i.choice === 'substitute')]));
+  const wait = (its: LvItem[]) => allTtl(its) && actions.ttlBack
+    ? r.run(() => actions.ttlBack!(its.map((i) => i.id)))
+    : r.run(() => actions.choose(its.map((i) => i.id), 'wait', null), () => setDropped([...dropped, ...its.filter((i) => i.choice === 'substitute')]));
   const redo = async (i: LvItem) => {
     if (window.confirm(`${kstLabel(i.startsAt)} 수업을 처음부터 다시 고를까요?`)) await r.run(() => actions.back([i.id], 'undecided'));
   };
@@ -549,11 +558,11 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
 
   // 줄마다 지금 누를 것 하나(수강생 답은 두 가지 답 중 하나)
   const rowAction = (i: LvItem): React.ReactNode => {
-    if (pickSet.has(i.id)) return <button type="button" disabled={r.busy} className={`${btnSub} ${sm}`} onClick={() => wait([i])}>대체 강사 없음 → 보강</button>;
+    if (pickSet.has(i.id)) return <button type="button" disabled={r.busy} className={`${btnSub} ${sm}`} onClick={() => wait([i])}>{i.ttl ? '대체 강사 없음 → 운영진 확인' : '대체 강사 없음 → 보강'}</button>;
     if (answerSet.has(i.id)) return (
       <>
         <button type="button" disabled={r.busy} className={`${btnMain} ${sm}`} onClick={() => ok([i])}>대체수업 수락</button>
-        <button type="button" disabled={r.busy} className={`${btnSub} ${sm}`} onClick={() => wait([i])}>기존 강사 보강 요청</button>
+        <button type="button" disabled={r.busy} className={`${btnSub} ${sm}`} onClick={() => wait([i])}>{i.ttl ? '운영진 확인으로 돌리기' : '기존 강사 보강 요청'}</button>
       </>
     );
     if (i.choice === 'substitute' && i.subStage === 'asked' && i.subTutorId) {
@@ -610,7 +619,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
           </Block>
         )}
         {p && (
-          <Block title={LV_STEP_TEXT.propose}>
+          <Block title={proposeText(g)}>
             <ProposalRow key={p.noticeIds.join()} p={p} to={g.studentName} onSend={async () => { await actions.markSent(p.noticeIds); await done(); }} />
           </Block>
         )}
@@ -618,7 +627,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
           <Block title={`${LV_STEP_TEXT.answer} · ${w.answer.map((i) => kstLabel(i.startsAt)).join(', ')}`}>
             <div className="grid grid-cols-2 gap-1.5">
               <button type="button" disabled={r.busy} className={btnMain} onClick={() => ok(w.answer)}>{w.answer.length}회 모두 대체수업 수락</button>
-              <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait(w.answer)}>{w.answer.length}회 모두 기존 강사 보강 요청</button>
+              <button type="button" disabled={r.busy} className={btnSub} onClick={() => wait(w.answer)}>{w.answer.length}회 모두 {allTtl(w.answer) ? '운영진 확인으로 돌리기' : '기존 강사 보강 요청'}</button>
             </div>
           </Block>
         )}
@@ -647,7 +656,7 @@ function StudentPanel({ g, w, msgs, leaveTutor, now, actions, done, openTutor }:
             </Link>
           </Block>
         )}
-        {w.sentProposals.map((sp) => <Fold key={sp.noticeIds.join()} title={`✓ 휴무 안내 보냄 · ${sp.itemIds.length}회`}><ProposalRow p={sp} to={g.studentName} onSend={async () => {}} /></Fold>)}
+        {w.sentProposals.map((sp) => <Fold key={sp.noticeIds.join()} title={`✓ ${allTtl(g.items) ? '대체강사 안내' : '휴무 안내'} 보냄 · ${sp.itemIds.length}회`}><ProposalRow p={sp} to={g.studentName} onSend={async () => {}} /></Fold>)}
         <Err>{r.err}</Err>
       </div>
     </Card>
@@ -921,8 +930,8 @@ function TutorCheck({ t, actions, done, numbers }: { t: LvStudentWork['tutor'][n
             }}>
               다른 대체강사 선택
             </button>
-            <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => actions.choose(no, 'wait', null))}>
-              대체 강사 없음 → 보강
+            <button type="button" disabled={r.busy} className={btnSub} onClick={() => r.run(() => (allTtl(t.items.filter((i) => no.includes(i.id))) && actions.ttlBack ? actions.ttlBack(no) : actions.choose(no, 'wait', null)))}>
+              {allTtl(t.items.filter((i) => no.includes(i.id))) ? '대체 강사 없음 → 운영진 확인' : '대체 강사 없음 → 보강'}
             </button>
           </div>
           {options && <SubOptions options={options} items={t.items.filter((i) => no.includes(i.id))} busy={r.busy} pick={(id, sel) => r.run(() => actions.choose(sel, 'substitute', id))} />}

@@ -2,6 +2,8 @@ import MainReviews from '@/components/main/MainReviews';
 import PointsTab from '@/components/main/DetailPointTab';
 import MobileShortsSwiper from '@/components/main/MobileShortsSwiper';
 import TutorHiring from '@/components/main/TutorHiring';
+import TutorVideos from '@/components/main/TutorVideos';
+import { getTeacherVideos } from '@/lib/teacher-videos';
 import Link from 'next/link';
 import Bubble from '@/components/common/bubble/Bubble';
 import { getReviews } from '@/lib/reviews';
@@ -11,6 +13,7 @@ export const revalidate = 300;
 
 export default async function Home() {
   const reviews = (await getReviews()).slice(0, 6);
+  const teacherVideos = await getTeacherVideos();
 
   return (
     <div>
@@ -504,6 +507,8 @@ export default async function Home() {
       </div>
 
       {/* 강사 채용 과정 5단계 (대표 11/25) — 위 '철저한 5단계 검증' 말풍선의 근거 */}
+      {/* 강사 영상 6개 (대표 11/25) — 유튜브 재생목록 순서 그대로, 채용 과정 바로 위. 환경변수가 없으면 숨김 */}
+      <TutorVideos videos={teacherVideos} />
       <TutorHiring />
 
       {/* 섹션 5 pc 매번 작심삼일로 끝났다면? */}
