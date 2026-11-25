@@ -1,6 +1,7 @@
 import MainReviews from '@/components/main/MainReviews';
 import PointsTab from '@/components/main/DetailPointTab';
 import MobileShortsSwiper from '@/components/main/MobileShortsSwiper';
+import TutorHiring from '@/components/main/TutorHiring';
 import Link from 'next/link';
 import Bubble from '@/components/common/bubble/Bubble';
 import { getReviews } from '@/lib/reviews';
@@ -489,6 +490,9 @@ export default async function Home() {
           </div>
         </div>
       </div>
+
+      {/* 강사 채용 과정 5단계 (대표 11/25) — 위 '철저한 5단계 검증' 말풍선의 근거 */}
+      <TutorHiring />
 
       {/* 섹션 5 pc 매번 작심삼일로 끝났다면? */}
       <div
