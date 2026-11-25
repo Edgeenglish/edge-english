@@ -110,3 +110,8 @@
 .lt .saved{background:var(--ok-soft);color:var(--ok);border-radius:10px;padding:10px 12px;font-weight:700;font-size:15px;margin:0}
 @media (prefers-reduced-motion:reduce){.lt .bar i{transition:none}.lt .cheer{animation:none}}
 @media (max-width:420px){.lt h1{font-size:24px}.lt .lt-q{font-size:19px}.lt .lt-card{padding:18px}.lt .lt-score{width:76px;height:76px}}
+.lt .weak{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.lt .weak button{width:100%;display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:10px;padding:9px 12px;text-align:left;font-size:15px;font-weight:500}
+.lt .weak button span:last-child{flex:none;white-space:nowrap}
+.lt .ko{font-family:inherit;font-size:14px}
+.lt .note-l .ko{font-weight:400;font-size:12px;margin-left:4px}

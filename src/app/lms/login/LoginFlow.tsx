@@ -298,13 +298,13 @@ export default function LoginFlow() {
     const metaName = user?.user_metadata?.name;
     setMemberName(typeof metaName === 'string' ? metaName.trim() : '');
     if (!user) return setError(t.network);
-    // 홈페이지 레벨테스트 결과가 이 브라우저에 있으면 이 계정에 붙임 (H26(219) ⑨). 학생·강사가 아닌 회원은 결과 화면으로
-    const levelTestSaved = await claimTaken(sb).catch(() => false);
     const pendingGoogle = readPendingLink() === 'google';
     if (pendingGoogle && (roleError || aalError)) return setError(t.network);
     if (!pendingGoogle && needsSocialChoice({ role: myRole, providers, choseNew: user?.user_metadata?.edge_new_member === true })) {
       return setStep('social_choice');
     }
+    // 홈페이지 레벨테스트 결과가 이 브라우저에 있으면 이 계정에 붙임 (H26(219) ⑨). 새 간편 로그인 계정인지 고른 뒤에(버려질 계정에 붙지 않게)
+    const levelTestSaved = await claimTaken(sb).catch(() => false);
     const verified = factors?.totp ?? [];
     const after = afterEmailCode({ role: myRole, aal: aal?.currentLevel === 'aal2' ? 'aal2' : 'aal1', verifiedTotp: verified.length });
     // POL-AC-02~05: 기존 계정을 인증한 뒤 같은 auth UUID에만 추가. 수강 전 회원도 가능, 운영자는 MFA 이후.
