@@ -415,7 +415,14 @@ export default function LevelTest() {
           <br />1:1 상담으로 나에게 딱 맞는 걸 찾아 드릴게요.
         </p>
         <a className="lt-btn kakao" href={KAKAO} target="_blank" rel="noopener noreferrer"
-          onClick={() => { copyText(resultText(L.name, score, wrong)).then(setCopied, () => {}); }}>카톡으로 상담받기</a>
+          onClick={(e) => {
+            // 휴대폰: 카톡이 먼저 열리면 이 화면이 포커스를 잃어 복사가 실패함 → 먼저 복사하고 안내를 보인 뒤 카톡 열기
+            e.preventDefault();
+            void copyText(resultText(L.name, score, wrong)).then((ok) => {
+              setCopied(ok);
+              setTimeout(() => { window.location.href = KAKAO; }, ok ? 1200 : 0);
+            });
+          }}>카톡으로 상담받기</a>
         {copied && <p className="copied" role="status">결과를 복사했어요. 카톡 입력칸에 붙여 넣어 주세요.</p>}
       </div>
     );
