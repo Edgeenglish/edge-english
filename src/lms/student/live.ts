@@ -57,6 +57,8 @@ export type LeaveRow = {
   itemId: string | null;
   offFrom: Date;
   offTo: Date;
+  /** 강사 임시 근무 지역 변경으로 생긴 대체 수업 (H26(218) 보충3) — 휴무 안내와 따로, [좋아요]만 */
+  ttl?: boolean;
 };
 
 export type StudentView = {
@@ -81,7 +83,7 @@ export type StudentView = {
   /** 강사가 정한 교재 이름 (QA C-04). 없거나 수업 방식에 교재가 없으면 null */
   textbook?: string | null;
   /** leavePostponed = 강사 장기휴무로 못 들은 수업의 보강 (DB 구분용, 수강생 화면 표시는 '보강'으로 같음) */
-  lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean; /** 수강생 노쇼 — 학생 화면 '결석' */ studentNoShow?: boolean })[];
+  lessons: (StudentLesson & { meetUrl: string | null; leavePostponed: boolean; substitute: boolean; /** 휴무 처리 확정 전 (3300): 일정 조율 중 */ leaveOpen?: boolean; /** 임시 근무 지역 대체 수업 (H26(218) 보충3): '🕒 대체강사 배정 중' */ ttlCover?: boolean; /** 강사 노쇼 (4000) */ tutorNoShow?: boolean; /** 수강생 노쇼 — 학생 화면 '결석' */ studentNoShow?: boolean })[];
   makeupRights: MakeupRight[];
   requests: StudentRequest[];
   /** 지각을 알린 수업 (migration 20261113120000). 옛 DB 면 빈 배열 */
@@ -114,7 +116,7 @@ type Raw = {
     lessons_total: number; credits_left: number; credits_granted: number; confirmed_on: KstDate | null; renewal_paid: boolean;
     next_regular_from: KstDate | null;
   };
-  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; class_status?: string | null; type?: string; lesson_final_end_date?: KstDate | null }[];
+  lessons: { id: string; kind: string; starts_at: string; ends_at: string; state: string; tutor: string; meet_url: string | null; leave_postponed: boolean; substitute: boolean; leave_open?: boolean; ttl_cover?: boolean; class_status?: string | null; type?: string; lesson_final_end_date?: KstDate | null }[];
   makeup_rights: { lesson_id: string | null; item_id: string | null; comp_id?: string | null; use_until?: KstDate | null; tutor?: string | null; tutor_choices?: MakeupTutor[]; original_at: string; time_known?: boolean; tutor_leave: boolean; carry_in?: boolean }[];
   leave_pending?: { id: string; starts_at: string; ends_at: string }[];
   makeup_requests: {
@@ -128,7 +130,7 @@ type Raw = {
     confirmed_state?: string | null;
     original_at?: string | null; original_time_known?: boolean; original_tutor?: string | null; tutor?: string | null; confirmed_at?: string | null;
   }[];
-  leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; sub_meet_url: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string }[];
+  leave: { id: string; starts_at: string; choice: 'substitute' | 'wait'; stage: 'tutor_ok' | 'confirmed' | null; sub_tutor: string | null; sub_meet_url: string | null; lesson_id: string | null; item_id: string | null; off_from: string; off_to: string; off_kind?: string }[];
   holidays: KstDate[];
   credit_period: { start: KstDate; end: KstDate } | null;
   credit_periods?: { idx: number; start: KstDate; end: KstDate; granted: number; left: number }[];
@@ -201,6 +203,7 @@ export function parseStudentView(r: Raw): StudentView {
       leavePostponed: l.leave_postponed,
       substitute: l.substitute,
       leaveOpen: !!l.leave_open,
+      ttlCover: !!l.ttl_cover,
       tutorNoShow: l.class_status === 'Tutor no-show',
       studentNoShow: l.class_status === 'Student no-show',
     })),
@@ -252,7 +255,7 @@ export function parseStudentView(r: Raw): StudentView {
     }),
     leave: r.leave.map((x) => ({
       id: x.id, startsAt: new Date(x.starts_at), choice: x.choice, stage: x.stage, subTutor: x.sub_tutor, subMeetUrl: x.sub_meet_url,
-      lessonId: x.lesson_id, itemId: x.item_id, offFrom: new Date(x.off_from), offTo: new Date(x.off_to),
+      lessonId: x.lesson_id, itemId: x.item_id, offFrom: new Date(x.off_from), offTo: new Date(x.off_to), ttl: x.off_kind === 'temp_location',
     })),
     leavePending: (r.leave_pending ?? []).map((x) => ({ id: x.id, startsAt: new Date(x.starts_at), endsAt: new Date(x.ends_at) })),
     holidays: r.holidays,

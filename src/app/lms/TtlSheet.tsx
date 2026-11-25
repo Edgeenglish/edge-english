@@ -61,6 +61,7 @@ function ResultBody({ r, v, sentTo }: { r: TtlResult; v: TtlView; sentTo?: strin
     <div className="grid gap-2">
       {r.ok > 0 && <p className="text-[17px] font-bold text-[#1f7a4d]">✓ {T(`${r.ok} classes confirmed`, `${r.ok}회 확정됐어요`)}</p>}
       {r.admin > 0 && <p className="font-bold text-[#b3261e]">{T(`${r.admin} classes: Edge English is checking`, `${r.admin}회는 운영진이 확인하고 있어요`)}</p>}
+      {r.sub > 0 && <p className="text-[17px] font-bold text-[#1f7a4d]">✓ {r.sub}회 대체강사와 수업 신청했어요</p>}
       {r.left > 0 && <p>{T(`${r.left} classes left`, `남은 ${r.left}회`)}</p>}
     </div>
   );
@@ -87,7 +88,7 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
   const need = Math.max(1, opt?.need ?? 1);
   const flagged = useMemo(() => new Set(rows.filter((r) => pickProblem(r, rows, autoAssign(rows, weekly, picks))).map((r) => r.key)), [rows, weekly]); // eslint-disable-line react-hooks/exhaustive-deps
   const bad = rows.filter((r) => pickProblem(r, rows, picks)).length;
-  const chosen = rows.filter((r) => picks[r.key] instanceof Date || picks[r.key] === 'admin');
+  const chosen = rows.filter((r) => picks[r.key] instanceof Date || picks[r.key] === 'admin' || picks[r.key] === 'sub');
   const later = rows.filter((r) => picks[r.key] === 'later').length;
 
   const goStep2 = () => { setPicks(autoAssign(rows, weekly, picks)); setEdit(null); setStep(2); };
@@ -132,7 +133,7 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
           <div className="min-w-0">
             <p className="text-[12.5px] text-[#6b6880] line-through"><Rich text={v.when(r.orig)} /></p>
             {p instanceof Date ? <p className="text-[14.5px] font-bold text-[#1d1b2b]"><Rich text={v.when(p)} /></p>
-              : <p className="text-[14px] font-semibold text-[#6b6880]">{p === 'later' ? T('Choose later', '나중에 고르기') : p === 'admin' ? T('Edge English will arrange', '운영진에게 맡김') : T('Your weekly times don’t fit this week', '고른 요일·시간이 이 주에 없어요')}</p>}
+              : <p className="text-[14px] font-semibold text-[#6b6880]">{p === 'later' ? T('Choose later', '나중에 고르기') : p === 'admin' ? T('Edge English will arrange', '운영진에게 맡김') : p === 'sub' ? '대체강사와 수업' : T('Your weekly times don’t fit this week', '고른 요일·시간이 이 주에 없어요')}</p>}
           </div>
           <button type="button" onClick={() => setEdit(edit === r.key ? null : r.key)} className="whitespace-nowrap text-[14px] font-bold text-[#5b3fe0] underline">
             {edit === r.key ? T('Close', '닫기') : T('Change', '바꾸기')}</button>
@@ -146,6 +147,8 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
               <button key={t.toISOString()} type="button" className={chip} aria-pressed={p instanceof Date && p.getTime() === t.getTime()}
                 onClick={() => { setPicks({ ...picks, [r.key]: t }); setEdit(null); }}><Rich text={v.when(t)} /></button>
             ))}
+            {/* 같은 주에 새 시간이 없는 회차만 학생이 대체강사와 수업 (H26(218) 보충3) — 강사 화면엔 없음 */}
+            {!v.en && r.cands.length === 0 && <button type="button" className={chip} aria-pressed={p === 'sub'} onClick={() => { setPicks({ ...picks, [r.key]: 'sub' }); setEdit(null); }}>대체강사와 수업할게요</button>}
             {alts.length === 0 && <button type="button" className={chip} aria-pressed={p === 'admin'} onClick={() => { setPicks({ ...picks, [r.key]: 'admin' }); setEdit(null); }}>{T('Ask Edge English', '운영진에게 맡기기')}</button>}
             <button type="button" className={chip} aria-pressed={p === 'later'} onClick={() => { setPicks({ ...picks, [r.key]: 'later' }); setEdit(null); }}>{T('Choose later', '나중에 고르기')}</button>
           </div>
@@ -209,6 +212,7 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
   }
   const dates = rows.filter((r) => picks[r.key] instanceof Date);
   const adm = rows.filter((r) => picks[r.key] === 'admin').length;
+  const subs = rows.filter((r) => picks[r.key] === 'sub').length;
   return (
     <Frame title={title} sub={sub} steps={steps} onClose={onClose} busy={busy}
       foot={<><button type="button" className={btnSub} disabled={busy} onClick={() => setStep(2)}>‹ {T('Back', '이전')}</button>
@@ -223,6 +227,7 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
         ))}
       </div>
       {adm > 0 && <p className="mt-2 text-[14px]">{T(`${adm} classes: Edge English will arrange`, `${adm}회는 운영진이 시간을 정해요`)}</p>}
+      {subs > 0 && <p className="mt-1 text-[14px]">{subs}회는 대체강사와 수업</p>}
       {later > 0 && <p className="mt-1 text-[14px]">{T(`${later} classes: choose later`, `${later}회는 나중에 고르기`)}</p>}
       {err && <p className="mt-2 text-[13.5px] text-[#b3261e]">{err}</p>}
     </Frame>

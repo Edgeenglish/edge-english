@@ -319,6 +319,16 @@ begin
   end if;
 
   -- 임시 근무 지역 회차는 '기존 강사와 보강'(= 휴무 보강 + 수강기간 자동 연장)으로 못 바꿈 → 운영진 확인으로 돌리기
+  d := pg_get_functiondef('admin_leave_choose'::regproc);
+  if position('temp_location' in d) = 0 then
+    n := replace(d, $x$raise exception '휴무인 강사는 대체강사가 될 수 없습니다.'; end if;$x$,
+                 $x$raise exception '휴무인 강사는 대체강사가 될 수 없습니다.'; end if;
+    if p_choice = 'wait' and exists (select 1 from tutor_time_off t where t.id = it.time_off_id and t.kind = 'temp_location') then
+      raise exception '임시 근무 지역 수업은 보강으로 바꿀 수 없어요. [운영진 확인으로 돌리기]를 눌러 주세요.';
+    end if;$x$);
+    if n = d then raise exception 'admin_leave_choose: 끼울 곳을 못 찾음'; end if;
+    execute n;
+  end if;
   d := pg_get_functiondef('lms_leave_choose_core'::regproc);
   if position('temp_location' in d) = 0 then
     n := replace(d, $x$raise exception '휴무인 강사는 대체강사가 될 수 없습니다.'; end if;$x$,

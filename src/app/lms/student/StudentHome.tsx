@@ -57,7 +57,7 @@ import {
 } from '@/lms/student/home';
 import { tutorLateBand } from '@/lms/tutor/late';
 import { makeupTutorText, type RightRef } from '@/lms/student/live';
-import { renewalStage, type RenewalInfo } from '@/lms/student/renewal-apply';
+import { KAKAO_CHANNEL, renewalStage, type RenewalInfo } from '@/lms/student/renewal-apply';
 import RenewalApply from './RenewalApply';
 
 type Tab = 'home' | 'schedule' | 'requests' | 'materials' | 'me';
@@ -72,7 +72,9 @@ type Overlay =
   | { kind: 'consent' }
   | { kind: 'cancel'; lessonId: string | null }
   | { kind: 'leave' }
-  | { kind: 'profile'; name: string }
+  /** 강사 임시 근무 지역 변경 대체 수업 확인 (H26(218) 보충3) */
+  | { kind: 'ttl_cover' }
+  | { kind: 'profile'; name: string; back?: 'leave' | 'ttl_cover' }
   | { kind: 'makeup'; right: Right | null; canceled?: boolean }
   | { kind: 'credits' }
   | { kind: 'rights' }
@@ -364,7 +366,10 @@ export default function StudentHome(props: {
   const makeupsOwed = s.makeupRights.length + (s.leavePending?.length ?? 0);
   // 시간 협의 필요 회차도 남은 정규 수업 (수업 줄은 아직 없음, 기존 일정 기준)
   const pendingCount = s.pendingTimes?.length ?? 0;
-  const leaveAsk = s.leave.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
+  // 임시 근무 지역 대체 수업은 휴무 안내와 따로 (H26(218) 보충3: 휴무·사과 문구 없이 [좋아요]만)
+  const leaveRows = s.leave.filter((x) => !x.ttl);
+  const leaveAsk = leaveRows.filter((x) => x.choice === 'substitute' && x.stage === 'tutor_ok');
+  const ttlCoverAsk = s.leave.filter((x) => x.ttl && x.choice === 'substitute' && x.stage === 'tutor_ok');
   const todos = studentTodos({ pendingConsents: consents });
   const next = nextLesson(lessons, now);
   // 남은 수업 = 지금 수강권만 (다음 수강권 수업은 '다음 수강권' 줄로, 대표 11/13)
@@ -665,6 +670,11 @@ export default function StudentHome(props: {
     }
   }
 
+  async function answerTtlCover() {
+    const v = await run(() => actions.answerLeave(ttlCoverAsk.map((x) => x.id), 'ok'), '확정했어요.');
+    if (v) setOverlay(null);
+  }
+
   async function answerLeave(answer: 'ok' | 'makeup') {
     const ids = leaveAsk.map((x) => x.id);
     const v = await run(() => actions.answerLeave(ids, answer), answer === 'ok' ? '확정했어요.' : '기존 강사님과 수업하기로 정했어요.');
@@ -688,6 +698,7 @@ export default function StudentHome(props: {
       noteUrl={info?.noteUrl ?? null}
       substitute={nextFull?.substitute ?? false}
       leaveOpen={!!nextFull?.leaveOpen}
+      ttlCover={!!nextFull?.ttlCover}
       lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === next.id)}
       tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === next.id) ?? null}
       onLate={async (minutes, reason) => { await run(() => actions.lateNotice(next.id, minutes, reason), '강사님께 알렸어요.'); }}
@@ -816,6 +827,7 @@ export default function StudentHome(props: {
     <>
       {schedulePending && <TodoBar n={0} text="수업 요일·시간을 카카오톡으로 알려주세요" onClick={() => window.open('https://pf.kakao.com/_blxgib/friend', '_blank', 'noopener,noreferrer')} />}
       {leaveAsk.length > 0 && <TodoBar n={leaveAsk.length} text="담당 강사님 휴무 안내" onClick={() => setOverlay({ kind: 'leave' })} />}
+      {ttlCoverAsk.length > 0 && <TodoBar n={ttlCoverAsk.length} text="대체강사 수업을 확인해 주세요" onClick={() => setOverlay({ kind: 'ttl_cover' })} />}
       {openRights.length > 0 && <TodoBar n={openRights.length} text={openRights.some((m) => m.carryIn) ? '수업 날짜 고르기' : '보강 날짜 고르기'} onClick={() => setOverlay({ kind: 'makeup', right: openRights.length === 1 ? openRights[0] : null })} />}
       {choosing.length > 0 && <TodoBar n={choosing.length} text="보강 시간 고르기" onClick={() => (choosing.length === 1 ? setOverlay({ kind: 'request', id: choosing[0].id }) : setTab('requests'))} />}
       {todos.length > 0 && <TodoBar n={todos.length} text={todos.length === 1 ? todos[0].label : `${todos.length}가지 확인이 필요해요`} onClick={() => setOverlay({ kind: 'consent' })} />}
@@ -827,7 +839,7 @@ export default function StudentHome(props: {
       })}
     </>
   );
-  const todoCount = (schedulePending ? 1 : 0) + (leaveAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (choosing.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0) + ttlTodo.length;
+  const todoCount = (schedulePending ? 1 : 0) + (leaveAsk.length > 0 ? 1 : 0) + (ttlCoverAsk.length > 0 ? 1 : 0) + (openRights.length > 0 ? 1 : 0) + (choosing.length > 0 ? 1 : 0) + (todos.length > 0 ? 1 : 0) + ttlTodo.length;
   // 할 일: 처리할 일이 있을 때만 (11/11 대표 최신 지시), 제목 옆 전체 숫자 없음
   const todoBars = todoCount > 0 && (
     <section aria-label="할 일" className="overflow-hidden rounded-[18px] border-2 border-[#f0a33a] bg-white">
@@ -840,7 +852,7 @@ export default function StudentHome(props: {
 
   const upcoming = lessons.filter((l) => l.state === 'scheduled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   const canceledAhead = lessons.filter((l) => l.state === 'canceled' && l.startsAt.getTime() > now.getTime()).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-  const leaveVisible = s.leave.length > 0;
+  const leaveVisible = leaveRows.length > 0;
   // 휴무 처리 확정 전 수업(일정 조율 중)은 입장 링크 없음 — 휴무 강사 링크로 들어가지 않게
   // 수업 링크는 회의실 주소(meet.google.com/xxx-xxxx-xxx)일 때만 (R-05) — 홈페이지 주소는 링크로 내보내지 않음
   const meetOf = (id: string) => { const x = s.lessons.find((l) => l.id === id); return x && !x.leaveOpen ? meetRoomUrl(x.meetUrl) : null; };
@@ -1014,8 +1026,9 @@ export default function StudentHome(props: {
                     {l.minutes}분{s.lessons.find((x) => x.id === l.id)?.leaveOpen ? '' : ` · ${l.tutorName}`} · {s.lessons.find((x) => x.id === l.id)?.substitute
                       ? <span className="font-bold text-[#b3261e]">대체강사 수업</span> : typeKo(l.type, l.kind)}
                   </p>
-                  {s.lessons.find((x) => x.id === l.id)?.leaveOpen && (
-                    <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
+                  {s.lessons.find((x) => x.id === l.id)?.leaveOpen && (s.lessons.find((x) => x.id === l.id)?.ttlCover
+                    ? <p className="mt-1 text-[13px] font-bold text-[#1d1b2b]">🕒 대체강사 배정 중</p>
+                    : <p className="mt-1 text-[13px] font-bold text-[#b3261e]">⚠️ 강사님 휴무로 일정 조율 중</p>
                   )}
                   {/* 정규 시간이 아닌, 따로 잡은 수업(보강·무료 보상수업·이월)은 모두 캘린더 추가 (대표 11/13) */}
                   {(() => {
@@ -1260,6 +1273,7 @@ export default function StudentHome(props: {
                 noteUrl={info?.noteUrl ?? null}
                 substitute={l.substitute}
                 leaveOpen={!!l.leaveOpen}
+                ttlCover={!!l.ttlCover}
                 lateSent={(s.lateNotices ?? []).some((n) => n.lessonId === l.id)}
                 tutorLate={(liveTutorLate ?? s.tutorLateNotices ?? []).find((n) => n.lessonId === l.id) ?? null}
                 onLate={async (minutes, reason) => { await run(() => actions.lateNotice(l.id, minutes, reason), '강사님께 알렸어요.'); }}
@@ -1347,16 +1361,19 @@ export default function StudentHome(props: {
           )}
           {overlay.kind === 'leave' && (
             <LeaveSheet
-              rows={s.leave}
+              rows={leaveRows}
               rights={s.makeupRights}
               requests={s.requests}
               busy={busy}
-              onProfile={(name) => setOverlay({ kind: 'profile', name })}
+              onProfile={(name) => setOverlay({ kind: 'profile', name, back: 'leave' })}
               onAnswer={answerLeave}
               onMakeup={(right) => setOverlay({ kind: 'makeup', right })}
             />
           )}
-          {overlay.kind === 'profile' && <Profile name={overlay.name} onBack={() => setOverlay({ kind: 'leave' })} />}
+          {overlay.kind === 'ttl_cover' && (
+            <TtlCoverSheet rows={ttlCoverAsk} busy={busy} onProfile={(name) => setOverlay({ kind: 'profile', name, back: 'ttl_cover' })} onAnswer={answerTtlCover} />
+          )}
+          {overlay.kind === 'profile' && <Profile name={overlay.name} onBack={() => setOverlay({ kind: overlay.back ?? 'leave' })} />}
           {overlay.kind === 'makeup' &&
             (overlay.right ? (
               <MakeupPicker
@@ -1440,6 +1457,34 @@ function TodoBar({ n, text, onClick }: { n: number; text: string; onClick: () =>
 }
 
 // 강사 휴무 안내 (A안 한 번에 답, 2026-10-28 대표). 수강생은 강사를 고르지 않음 — 운영진이 정한 대체강사만 보여 줌
+/** 강사 임시 근무 지역 변경 대체 수업 확인 (H26(218) 보충3, 대표 11/25): 학생이 이미 대체강사를 골랐으므로 [좋아요]만 + 운영진 문의 */
+function TtlCoverSheet({ rows, busy, onProfile, onAnswer }: { rows: LeaveRow[]; busy: boolean; onProfile: (name: string) => void; onAnswer: () => void }) {
+  return (
+    <div className="grid gap-3.5">
+      <h2 className="text-[18px] font-bold">대체강사 수업 확인</h2>
+      <section className={`${card} grid gap-1 p-4`}>
+        {rows.map((x) => (
+          <div key={x.id} className="flex items-center justify-between gap-2 border-b border-[#eeecf4] py-2.5 last:border-0">
+            <span>
+              <span className="block text-[15px] font-semibold">{whenText(x.startsAt)}</span>
+              <span className="block text-[13px] text-[#55526a]">{x.subTutor} 강사님</span>
+            </span>
+            <button type="button" onClick={() => onProfile(x.subTutor ?? '')} className="min-h-[40px] rounded-[10px] border border-[#d9d5e8] px-3 text-[13px] font-semibold">
+              프로필 보기
+            </button>
+          </div>
+        ))}
+        <div className="mt-2 grid gap-2">
+          <button type="button" disabled={busy || rows.length === 0} onClick={onAnswer} className="min-h-[52px] rounded-[14px] bg-[#5b3df0] text-[16px] font-bold text-white disabled:opacity-50">
+            {leaveButtonOk(rows.length)}
+          </button>
+          <a href={KAKAO_CHANNEL} target="_blank" rel="noopener noreferrer" className="py-1 text-center text-[13.5px] font-semibold text-[#4b2fd6] underline">운영진에게 문의하기</a>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function LeaveSheet(props: {
   rows: LeaveRow[];
   rights: MakeupRight[];
@@ -1842,7 +1887,7 @@ export function AddToCalendar({ ev, google, file }: { ev: CalendarEvent; google:
   );
 }
 
-function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, lateSent, tutorLate, onLate, lateAutoOpen, noLabel }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; lateAutoOpen?: boolean; /** 메일 링크로 따로 연 뒤 수업 창: '다음 수업' 이름표 없음 (대표 11/18) */ noLabel?: boolean }) {
+function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, ttlCover, lateSent, tutorLate, onLate, lateAutoOpen, noLabel }: { lesson: StudentLesson; now: Date; meetUrl: string | null; noteUrl: string | null; substitute: boolean; leaveOpen?: boolean; /** 임시 근무 지역 대체 수업 배정 중 (H26(218) 보충3) */ ttlCover?: boolean; lateSent: boolean; tutorLate?: { minutes: number; reason: string | null } | null; onLate: (minutes: LateMinutes, reason: LateReason | null) => Promise<void>; lateAutoOpen?: boolean; /** 메일 링크로 따로 연 뒤 수업 창: '다음 수업' 이름표 없음 (대표 11/18) */ noLabel?: boolean }) {
   // 지각 알림 버튼은 수업 시작 2시간 전부터 끝나기 전까지 (페이지를 열어 둔 채로도 때가 되면 나타나게)
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -1864,7 +1909,7 @@ function NextLesson({ lesson, now, meetUrl, noteUrl, substitute, leaveOpen, late
       {/* 대체강사 수업은 수업 링크가 다름 — 늘 쓰던 링크로 들어가는 일이 잦음 (대표 10/29) */}
       {/* 휴무 처리 확정 전: 휴무 강사와 정상 수업처럼 보이지 않게 (대표 10/30) */}
       {leaveOpen && (
-        <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">⚠️ 강사님 휴무로 일정 조율 중</p>
+        <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">{ttlCover ? '🕒 대체강사 배정 중' : '⚠️ 강사님 휴무로 일정 조율 중'}</p>
       )}
       {substitute && (
         <p className="rounded-[12px] bg-[#ffd66b] px-3.5 py-2.5 text-[15px] font-bold leading-snug text-[#1b1442]">
