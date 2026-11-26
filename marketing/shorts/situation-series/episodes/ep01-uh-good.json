@@ -1,0 +1,30 @@
+{
+  "id": "ep01-uh-good",
+  "source": "source/ep01-two-women-cafe.mp4",
+  "scene_end": 10.0,
+  "outro_duration": 5.0,
+  "title": [
+    [["영어 못 알아들었는데", "white"]],
+    [["일단 대답하는", "yellow"], [" 한국인 특", "white"]]
+  ],
+  "subs": [
+    {"start": 0.73, "end": 2.25, "en": [[["I love traveling!", "white"]]], "ko": ["나 여행 진짜 좋아해!"]},
+    {"start": 2.55, "end": 3.55, "en": [[["Oh, nice!", "white"]]], "ko": ["오, 좋다!"]},
+    {"start": 3.78, "end": 6.6, "en": [[["What's the most memorable", "white"]], [["place you've ever been to?", "white"]]], "ko": ["지금까지 가 본 곳 중에", "어디가 가장 기억에 남아?"]},
+    {"start": 7.05, "end": 7.9, "en": [[["Uh...", "white"]]], "ko": ["어..."]},
+    {"start": 7.9, "end": 10.0, "en": [[["Uh... ", "white"], ["Good!", "yellow"]]], "ko": ["어... 굳!"]}
+  ],
+  "badges": [
+    {"text": "(뇌 정지)", "start": 6.05, "end": 7.9, "center": [400, 430]}
+  ],
+  "zoom": {"start": 6.0, "end": 7.0, "scale": 1.12, "focus": [225, 525]},
+  "outro": {
+    "label": "못 알아들었을 땐 이렇게!",
+    "en": ["Sorry, could you", "say that again?"],
+    "ko": "미안한데, 다시 한번 말해 줄래요?",
+    "subscribe": "매일 영어 회화 연습하고 싶다면 구독!",
+    "cta_question": "내 영어 실력이 궁금하다면?",
+    "cta_button": "무료 레벨테스트 · 프로필 링크",
+    "brand": "EDGE ENGLISH"
+  }
+}
