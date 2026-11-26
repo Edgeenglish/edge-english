@@ -1,23 +1,27 @@
 'use client';
 
-// 처리방침 9번 '거부 방법' — 누르면 이 브라우저에서 GA4·Clarity 를 안 불러옴 (다시 누르면 켬, 대표 11/26)
+// 처리방침 9번 '거부·철회 방법' — 방문 통계 동의 상태를 보이고 바꿈 (대표 11/26). 바꾸면 새로고침해 바로 적용
 import { useEffect, useState } from 'react';
-import { setTrackingOff, trackingOff } from '@/lib/tracking';
+import { readConsent, setConsent, type Consent } from '@/lib/tracking';
 
 export default function TrackingOptOut() {
-  const [off, setOff] = useState<boolean | null>(null);
-  useEffect(() => setOff(trackingOff()), []);
-  if (off === null) return null;
+  const [c, setC] = useState<Consent | undefined>(undefined);
+  useEffect(() => setC(readConsent()), []);
+  if (c === undefined) return null;
+  const yes = c === 'yes';
   return (
-    <button
-      type="button"
-      onClick={() => {
-        setTrackingOff(!off);
-        setOff(!off);
-      }}
-      className={`mx-auto mt-6 block min-h-[44px] w-full max-w-[800px] rounded-[10px] px-4 text-[15px] font-bold ${off ? 'bg-[#e7e5ee] text-[#69667c]' : 'bg-[#5b3df0] text-white'}`}
-    >
-      {off ? '방문 통계 꺼짐 ✓' : '방문 통계 끄기'}
-    </button>
+    <div className="mt-6 flex items-center justify-between gap-3 rounded-[12px] border border-[#e2e0ee] px-4 py-3 text-[15px]">
+      <span className="text-[#3d3a52]">방문 통계: {yes ? '동의함' : '동의 안 함'}</span>
+      <button
+        type="button"
+        onClick={() => {
+          setConsent(yes ? 'no' : 'yes');
+          window.location.reload();
+        }}
+        className="min-h-[44px] shrink-0 rounded-[10px] border border-[#5b3df0] px-4 text-[14px] font-bold text-[#5b3df0]"
+      >
+        {yes ? '방문 통계 동의 철회' : '방문 통계 동의하기'}
+      </button>
+    </div>
   );
 }
