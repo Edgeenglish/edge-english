@@ -311,6 +311,63 @@ def render_outro_steps(ep, bg_frame, lay):
     return paths
 
 
+def render_outro_clean(ep, bg_frame, lay):
+    """깔끔한 학습 화면: 한 화면에 하나씩 크게 (intro → expr → end). EP02부터 기본."""
+    o = ep["outro"]
+    bg = Image.open(bg_frame).convert("RGB").resize((W, H)).filter(ImageFilter.GaussianBlur(28))
+    tint = Image.new("RGB", (W, H), (243, 240, 255))
+    base_bg = Image.blend(bg, tint, 0.88).convert("RGBA")
+    inner = W - 2 * 90
+    CY = 840  # 화면 가운데 (쇼츠·릴스 위아래 UI 피함)
+    paths = []
+    for j, st in enumerate(o["steps"]):
+        img = base_bg.copy()
+        d = ImageDraw.Draw(img)
+        items = []  # (text, font, color, height)
+        k = st["type"]
+        if k == "intro":
+            f = fit_size([[[t, "navy"]] for t in st["lines"]], "Black", 92, inner)
+            for i, t in enumerate(st["lines"]):
+                items.append((t, f, "purple" if i == len(st["lines"]) - 1 else "navy", int(f.size * 1.3)))
+        elif k == "expr":
+            fk = fit_size([[[st["ko"], "gray"]]], "Bold", 60, inner)
+            items.append((st["ko"], fk, "gray", int(fk.size * 1.9)))
+            fe = fit_size([[[t, "navy"]] for t in st["en"]], "Black", 104, inner)
+            for t in st["en"]:
+                items.append((t, fe, "navy", int(fe.size * 1.2)))
+            fp = fit_size([[[st["pron"], "purple"]]], "SemiBold", 54, inner)
+            items.append(("", fp, "purple", 30))
+            items.append((st["pron"], fp, "purple", fp.size))
+        elif k == "end":
+            f = fit_size([[[t, "navy"]] for t in st["lines"]], "Black", 80, inner)
+            for i, t in enumerate(st["lines"]):
+                items.append((t, f, "purple" if i == len(st["lines"]) - 1 else "navy", int(f.size * 1.35)))
+        btn_h = 140 if st.get("button") else 0
+        total = sum(h for *_, h in items) + (90 + btn_h if btn_h else 0)
+        y = CY - total / 2
+        if k == "expr":  # 흰 카드
+            pad = 80
+            card = [60, y - pad, W - 60, y + total + pad - 10]
+            sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            ImageDraw.Draw(sh).rounded_rectangle([card[0], card[1] + 14, card[2], card[3] + 14], radius=48, fill=(125, 95, 255, 70))
+            img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(18)))
+            d.rounded_rectangle(card, radius=48, fill=C["white"], outline=C["lavender"], width=4)
+        for t, f, col, h in items:
+            if t:
+                d.text((W / 2, y), t, font=f, fill=C[col], anchor="mt")
+            y += h
+        if btn_h:
+            y += 90
+            fb = font("ExtraBold", 62)
+            bw = fb.getlength(st["button"]) + 110
+            d.rounded_rectangle([(W - bw) / 2, y, (W + bw) / 2, y + btn_h], radius=btn_h / 2, fill=C["navy"])
+            d.text((W / 2, y + btn_h / 2), st["button"], font=fb, fill=C["white"], anchor="mm")
+        pth = f"{lay}/outro{j}.png"
+        img.convert("RGB").save(pth)
+        paths.append(pth)
+    return paths
+
+
 def main():
     global FONT_DIR
     ap = argparse.ArgumentParser()
@@ -341,7 +398,8 @@ def main():
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(end - 0.1), "-i", a.src, "-frames:v", "1", f"{lay}/last.png"], check=True)
     step_imgs, step_win = [], []
     if ep["outro"].get("steps"):
-        step_imgs = render_outro_steps(ep, f"{lay}/last.png", lay)
+        render = render_outro_clean if ep["outro"].get("style") == "clean" else render_outro_steps
+        step_imgs = render(ep, f"{lay}/last.png", lay)
         shutil.copy(step_imgs[0], f"{lay}/outro.png")
         starts = [end] + [end + v["at"] + timing[st["line"]]["start"] - 0.08 for st in ep["outro"]["steps"][1:]]
         step_win = [(starts[j], starts[j + 1] if j + 1 < len(starts) else total + 1) for j in range(len(starts))]
@@ -367,7 +425,12 @@ def main():
         inputs += ["-i", os.path.join(ep_dir, v["file"])]
 
     fc = []
-    base = f"[0:v]scale={W}:{H}:flags=lanczos,setsar=1,trim=0:{end},setpts=PTS-STARTPTS"
+    base = f"[0:v]scale={W}:{H}:flags=lanczos,setsar=1"
+    # 구간별 화질 보정 (필요한 장면만, 전체 적용 안 함)
+    for g in ep.get("grade", []):
+        for flt in g["filters"]:
+            base += f",{flt}:enable='between(t,{g['start']},{g['end']})'"
+    base += f",trim=0:{end},setpts=PTS-STARTPTS"
     if z:
         s0, s1, zs = z["start"], z["end"], z["scale"]
         fx, fy = z["focus"]

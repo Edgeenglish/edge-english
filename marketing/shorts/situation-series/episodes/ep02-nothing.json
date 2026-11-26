@@ -113,14 +113,6 @@
     }
   ],
   "outro": {
-    "label": "이럴 때 쓸 수 있는 말 3개!",
-    "subscribe": [
-      "매일 실전 영어 한마디!",
-      "구독하고 함께 연습해요."
-    ],
-    "cta_question": "내 영어 회화 실력은 어느 정도일까?",
-    "cta_button": "무료 레벨테스트 · 프로필 링크",
-    "brand": "EDGE ENGLISH",
     "voice": {
       "file": "audio/ep02-outro.wav",
       "timing": "audio/ep02-outro.timing.json",
@@ -130,63 +122,96 @@
     "hold": 1.2,
     "steps": [
       {
-        "type": "question",
+        "type": "intro",
         "line": 0,
-        "en": [
-          "What did you get up to",
-          "over the weekend?"
-        ],
-        "ko": "주말에 뭐 했어?"
+        "lines": [
+          "이럴 때 쓸 수 있는 말",
+          "빠르게 3개!"
+        ]
       },
       {
         "type": "expr",
         "line": 1,
-        "num": "1 / 3",
         "ko": "그냥 집에서 쉬었어!",
         "en": [
-          "I just chilled at home."
+          "I just chilled",
+          "at home."
         ],
         "pron": "아이 저스 칠드 앳 홈."
       },
       {
         "type": "expr",
         "line": 3,
-        "num": "2 / 3",
         "ko": "그냥 넷플릭스나 봤어!",
         "en": [
-          "I just watched Netflix."
+          "I just watched",
+          "Netflix."
         ],
         "pron": "아이 저스 와치트 넷플릭스."
       },
       {
         "type": "expr",
         "line": 5,
-        "num": "3 / 3",
         "ko": "친구 만났어!",
         "en": [
-          "I hung out with a friend."
+          "I hung out",
+          "with a friend."
         ],
         "pron": "아이 헝아웃 위더 프렌드."
       },
       {
-        "type": "recap",
+        "type": "end",
         "line": 7,
-        "label": "영어는 직접 말해 봐야 늘어요!",
-        "rows": [
-          {
-            "en": "I just chilled at home.",
-            "ko": "그냥 집에서 쉬었어!"
-          },
-          {
-            "en": "I just watched Netflix.",
-            "ko": "그냥 넷플릭스나 봤어!"
-          },
-          {
-            "en": "I hung out with a friend.",
-            "ko": "친구 만났어!"
-          }
-        ]
+        "lines": [
+          "영어는 직접 말해 봐야 늘어요!",
+          "엣지영어 놀러 오세요~"
+        ],
+        "button": "무료 레벨테스트 · 프로필 링크"
       }
-    ]
-  }
+    ],
+    "style": "clean"
+  },
+  "grade": [
+    {
+      "scene": "바다",
+      "start": 2.0,
+      "end": 2.999,
+      "filters": [
+        "unsharp=5:5:0.45:5:5:0"
+      ]
+    },
+    {
+      "scene": "식사",
+      "start": 3.0,
+      "end": 3.916,
+      "filters": [
+        "cas=0.35"
+      ]
+    },
+    {
+      "scene": "싸움",
+      "start": 4.958,
+      "end": 5.957,
+      "filters": [
+        "unsharp=5:5:0.45:5:5:0"
+      ]
+    },
+    {
+      "scene": "오열",
+      "start": 5.958,
+      "end": 6.957,
+      "filters": [
+        "eq=brightness=0.035:gamma=1.08",
+        "cas=0.3"
+      ]
+    },
+    {
+      "scene": "파티",
+      "start": 6.958,
+      "end": 7.916,
+      "filters": [
+        "cas=0.45"
+      ]
+    }
+  ]
 }

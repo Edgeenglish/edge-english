@@ -26,6 +26,14 @@ python3 build.py episodes/ep02-xxx.json --src source/ep02.mp4 --out output
 - 편집 설정 `outro.steps`: question(질문) → expr(1/3·2/3·3/3: 한국어 뜻·영어 가장 크게·한글 발음) → recap(정리). 각 단계는 대본 줄 번호(`line`)에 맞춰 자동으로 바뀜. `outro_duration: "auto"` = 음성 끝 + 1.2초
 - 처음 실행 때 모델을 huggingface.co 에서 받음(환경 허용 주소에 huggingface.co·us.aws.cdn.hf.co·cas-server.xethub.hf.co 등 추가해 둠)
 
+## 깔끔한 학습 화면 (EP02 확정 디자인, `outro.style: "clean"`)
+- 한 화면에 하나씩: intro(큰 글씨 2줄) → expr(흰 카드: 한국어 뜻 · 영어 가장 크게 · 한글 발음) → end(마무리 2줄 + '무료 레벨테스트 · 프로필 링크' 버튼만)
+- 번호(1/3)·구독 문구·정리 화면 없음
+
+## 구간별 화질 보정 (`grade`)
+- 필요한 장면 구간에만 필터 적용(전체 적용 금지). 약한 샤프닝(unsharp 0.45 / cas 0.3~0.45), 어두운 장면만 밝기 소폭(eq)
+- 보정 전후 같은 프레임을 비교해 깨짐·피부 뭉개짐·얼굴 변형이 없을 때만 넣는다
+
 ## 편 목록
 | 편 | 파일 | 길이 |
 |---|---|---|
