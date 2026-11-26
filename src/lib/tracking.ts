@@ -3,8 +3,8 @@
 // - 운영 주소(edgeenglish.kr)에서만. 시험 사이트는 ?debugtrack=1 일 때만 GA4 디버그 보기로(운영 통계에 안 섞임)
 // - 운영진 기기: ?notrack=1 한 번 열면 그 브라우저는 안 잡힘, ?notrack=0 으로 다시 켬
 // - ID 가 비어 있으면 아무것도 불러오지 않음
-export const GA_ID = '';
-export const CLARITY_ID = '';
+export const GA_ID = 'G-09WZ0EWZ51';
+export const CLARITY_ID = 'zjpnloox4e';
 
 const PROD_HOSTS = ['edgeenglish.kr', 'www.edgeenglish.kr'];
 const NOTRACK_KEY = 'edge_notrack';
