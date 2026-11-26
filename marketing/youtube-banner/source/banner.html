@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:P;font-weight:500;src:url(fonts/Pretendard-Medium.woff2)}
+@font-face{font-family:P;font-weight:600;src:url(fonts/Pretendard-SemiBold.woff2)}
+@font-face{font-family:P;font-weight:700;src:url(fonts/Pretendard-Bold.woff2)}
+@font-face{font-family:P;font-weight:800;src:url(fonts/Pretendard-ExtraBold.woff2)}
+@font-face{font-family:H;src:url(fonts/nanum-pen-script-korean-400-normal.woff2)}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:2560px;height:1440px;overflow:hidden;background:#F8F3EC;font-family:P;color:#2A2200}
+.abs{position:absolute}
+#blur{left:1250px;top:0;width:1310px;height:1440px;background:url(../assets/photo-sailing.jpg) 30% 42%/1500px auto;filter:blur(28px) saturate(1.1);transform:scale(1.08)}
+#photo{left:1300px;top:0;width:1260px;height:1440px;background:url(photo_ext.jpg) 0 0/1260px 1440px;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 170px)}
+#circle{left:180px;top:770px;width:520px;height:520px;border-radius:50%;background:#FFE680;opacity:.75}
+#circle2{left:-120px;top:420px;width:300px;height:300px;border-radius:50%;background:#FFD401;opacity:.25}
+#text{left:560px;top:532px;width:780px}
+#logo{height:34px;display:block;margin-bottom:16px}
+h1{font-weight:800;font-size:60px;line-height:74px;letter-spacing:-1.5px}
+.hl{position:relative;z-index:0}
+.hl:after{content:"";position:absolute;left:-10px;right:-8px;bottom:6px;height:28px;background:#FFD93A;border-radius:6px;z-index:-1;transform:skew(-8deg)}
+.sub{margin-top:18px;font-size:28px;line-height:40px;font-weight:500;color:#4a4232;letter-spacing:-.5px}
+.sub b{font-weight:700;color:#2A2200}
+.sub .brand{font-weight:800;font-style:italic;position:relative;z-index:0}
+.sub .brand:after{content:"";position:absolute;left:-6px;right:-4px;bottom:2px;height:16px;background:#FFD93A;border-radius:4px;z-index:-1}
+.icons{margin-top:18px;display:flex;align-items:center;background:#fff;border-radius:40px;padding:10px 26px;box-shadow:0 3px 12px rgba(80,60,0,.08);width:max-content}
+.ic{display:flex;align-items:center;gap:12px;font-size:19px;line-height:23px;font-weight:600;color:#3a3324;padding:0 20px;border-left:1.5px solid #ece4d6}
+.ic:first-child{padding-left:0;border:0}.ic:last-child{padding-right:0}
+.ic b{font-weight:800;color:#2A2200}
+.ic svg{width:40px;height:40px;flex:none}
+#hand{left:1500px;top:522px;width:560px;text-align:center;font-family:H;font-size:50px;line-height:44px;color:#2b2618}
+#btn{left:1640px;top:858px;height:62px;padding:0 30px 0 26px;border-radius:31px;background:linear-gradient(180deg,#FFE04A,#FFC800);display:flex;align-items:center;gap:12px;font-size:28px;font-weight:800;color:#2A2200;box-shadow:0 6px 18px rgba(0,0,0,.25);letter-spacing:-.5px}
+</style></head><body>
+<div id="photo" class="abs"></div>
+<div id="circle2" class="abs"></div>
+<div id="circle" class="abs"></div>
+<div id="text" class="abs">
+ <img id="logo" src="../assets/edge-logo.svg">
+ <h1>영어강사도 수업 받고 싶은<br><span class="hl">원어민 선생님만 뽑았어요!</span></h1>
+ <p class="sub">아는 영어를 ‘실제로 말하게 만들어 주는’<br><b>성인 전문 1:1 원어민 화상영어, <span class="brand">엣지영어</span></b> <svg width="30" height="26" viewBox="0 0 24 21" style="vertical-align:-3px"><path d="M12 21 1.8 11A6 6 0 0 1 12 3.3 6 6 0 0 1 22.2 11Z" fill="#FFC800"/></svg></p>
+ <div class="icons">
+  <div class="ic"><svg viewBox="0 0 40 40" fill="none" stroke="#2A2200" stroke-width="2.4" stroke-linejoin="round"><path d="M3 15 20 8l17 7-17 7z"/><path d="M10 18.5v8c3 3 17 3 20 0v-8"/><path d="M34 16v9" /><circle cx="34" cy="27" r="2.2" fill="#FFC800" stroke="none"/></svg><div><b>13년+</b><br>영어교육 경력</div></div>
+  <div class="ic"><svg viewBox="0 0 40 40" fill="none" stroke="#2A2200" stroke-width="2.4" stroke-linejoin="round"><rect x="4" y="8" width="32" height="24" rx="4"/><path d="M17 14.5v11l9-5.5z" fill="#FFC800"/></svg><div><b>누적 800만+</b><br>영어 콘텐츠</div></div>
+  <div class="ic"><svg viewBox="0 0 40 40" fill="none" stroke="#2A2200" stroke-width="2.4" stroke-linejoin="round"><rect x="8" y="9" width="24" height="17" rx="2"/><path d="M3 30h34l-2 3H5z"/><path d="M16 30h8" stroke="#FFC800"/></svg><div>수업 후에도<br><b>이어지는 복습</b></div></div>
+  <div class="ic"><svg viewBox="0 0 40 40" fill="none" stroke="#2A2200" stroke-width="2.4" stroke-linejoin="round"><rect x="5" y="23" width="7" height="11" rx="1.5"/><rect x="16.5" y="15" width="7" height="19" rx="1.5"/><rect x="28" y="6" width="7" height="28" rx="1.5" fill="#FFC800"/></svg><div><b>무료</b><br>영어 레벨테스트</div></div>
+ </div>
+</div>
+<div id="hand" class="abs">영어 가르치다<br>
+ <svg width="40" height="34" viewBox="0 0 40 34" style="vertical-align:-14px;margin-right:4px" fill="none" stroke="#2b2618" stroke-width="2.6" stroke-linecap="round"><path d="M36 6C22 6 12 14 8 28"/><path d="M4 21l4 8 7-5"/></svg>화상영어까지 만들었어요!<svg width="40" height="34" viewBox="0 0 40 34" style="vertical-align:-14px;margin-left:4px;transform:scaleX(-1)" fill="none" stroke="#2b2618" stroke-width="2.6" stroke-linecap="round"><path d="M36 6C22 6 12 14 8 28"/><path d="M4 21l4 8 7-5"/></svg></div>
+<div id="btn" class="abs"><svg width="32" height="32" viewBox="0 0 40 40" fill="none" stroke="#2A2200" stroke-width="3" stroke-linejoin="round"><rect x="5" y="23" width="7" height="11" rx="1.5"/><rect x="16.5" y="15" width="7" height="19" rx="1.5"/><rect x="28" y="6" width="7" height="28" rx="1.5"/></svg>무료 영어 레벨테스트 <span style="font-size:30px;margin-left:2px">›</span></div>
+</body></html>
