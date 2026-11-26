@@ -1,17 +1,69 @@
 'use client';
 
-// 홈페이지 방문 통계 (Vercel Web Analytics, 쿠키 없음 · 대표 11/26)
-// 주소 뒤 ?… 값(학생 id 등)은 보내지 않고, 운영자 화면(/lms/admin)은 세지 않는다
-import { Analytics } from '@vercel/analytics/next';
+// 홈페이지 방문 통계 불러오기 (규칙은 src/lib/tracking.ts)
+import { usePathname } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { CLARITY_ID, GA_ID, isPublicPath, track, trackingMode } from '@/lib/tracking';
+
+function loadScript(src: string) {
+  const s = document.createElement('script');
+  s.async = true;
+  s.src = src;
+  document.head.appendChild(s);
+}
 
 export default function SiteAnalytics() {
-  return (
-    <Analytics
-      beforeSend={(e) => {
-        const u = new URL(e.url);
-        if (u.pathname.startsWith('/lms/admin')) return null;
-        return { ...e, url: u.origin + u.pathname };
-      }}
-    />
-  );
+  const path = usePathname();
+  const mode = useRef<'off' | 'on' | 'debug' | null>(null);
+  const loaded = useRef({ ga: false, clarity: false });
+
+  useEffect(() => {
+    if (mode.current === null) mode.current = trackingMode();
+    const m = mode.current;
+    if (m === 'off' || !isPublicPath(path)) {
+      // 홈페이지에서 LMS 로 넘어가면 Clarity 기록을 멈춤
+      if (loaded.current.clarity && !isPublicPath(path)) window.clarity?.('stop');
+      return;
+    }
+    if (GA_ID && !loaded.current.ga) {
+      loaded.current.ga = true;
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function gtag() {
+        // eslint-disable-next-line prefer-rest-params
+        window.dataLayer!.push(arguments);
+      };
+      window.gtag('js', new Date());
+      window.gtag('config', GA_ID, { send_page_view: false, ...(m === 'debug' ? { debug_mode: true } : {}) });
+      loadScript(`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`);
+    }
+    if (CLARITY_ID && m === 'on') {
+      if (!loaded.current.clarity) {
+        loaded.current.clarity = true;
+        const c = function clarity() {
+          // eslint-disable-next-line prefer-rest-params
+          ((c as unknown as { q: unknown[] }).q = (c as unknown as { q?: unknown[] }).q || []).push(arguments);
+        };
+        window.clarity = c;
+        loadScript(`https://www.clarity.ms/tag/${CLARITY_ID}`);
+      } else {
+        window.clarity?.('start');
+      }
+    }
+    // 페이지 보기 (주소 뒤 ?값은 보내지 않음)
+    window.gtag?.('event', 'page_view', { page_location: window.location.origin + path, page_path: path, page_title: document.title });
+  }, [path]);
+
+  // 수강신청(구글 설문지)·카톡 채널 링크 누름은 화면마다 코드를 고치지 않고 여기서 한 번에 셈
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement | null)?.closest?.('a');
+      const href = a?.getAttribute('href') ?? '';
+      if (href.includes('forms.gle') || href.includes('docs.google.com/forms')) track('apply_click', { page_path: window.location.pathname });
+      else if (href.includes('pf.kakao.com')) track('kakao_click', { page_path: window.location.pathname });
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, []);
+
+  return null;
 }

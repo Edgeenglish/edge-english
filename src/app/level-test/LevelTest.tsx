@@ -7,6 +7,7 @@ import { supabaseBrowser } from '@/lms/auth/client';
 import { LEVELS, QUESTIONS } from '@/lib/level-test/data';
 import { PROMO_CHEER, audioUrl, cheer, fill, levelOf, reviewSteps, scoreOf, validPicks, wrongOf } from '@/lib/level-test/logic';
 import { claimTaken, readTaken, writeTaken } from '@/lib/level-test/saved';
+import { track } from '@/lib/tracking';
 import './level-test.css';
 
 const KAKAO = 'https://pf.kakao.com/_blxgib/chat'; // 1:1 채팅방 (채널 추가 안 했으면 카톡이 채널 추가도 보여 줌)
@@ -253,7 +254,7 @@ export default function LevelTest() {
               <li><i>✓</i><span><b>결과 저장</b> 가입하면 언제든 다시 보며 복습</span></li>
             </ul>
           </div>
-          <button type="button" className="lt-btn" onClick={() => { setI(0); setPhase('q'); toTop(); }}>테스트 시작</button>
+          <button type="button" className="lt-btn" onClick={() => { setI(0); setPhase('q'); toTop(); track('level_test_start'); }}>테스트 시작</button>
         </div>
       </div></div>
     );
@@ -280,9 +281,10 @@ export default function LevelTest() {
           <button type="button" className="lt-btn ghost" disabled={i === 0} onClick={() => setI(i - 1)}>이전</button>
           <button type="button" className="lt-btn" disabled={pick === null} onClick={() => {
             if (pick === null) return;
-            if (!last) return setI(i + 1);
+            if (!last) { track('level_test_question', { question: i + 1 }); return setI(i + 1); }
             const t = { picks: picks as number[], takenAt: new Date().toISOString() };
             writeTaken(t);
+            { const sc = scoreOf(t.picks); track('level_test_complete', { level: levelOf(sc).name, score: sc }); }
             setPhase('result');
             setRp(0);
             setSeen(new Set());
