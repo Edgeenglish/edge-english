@@ -48,6 +48,8 @@ export default function SiteAnalytics() {
       }
     }
     // 페이지 보기 (주소 뒤 ?값은 보내지 않음)
+    // 자동 수집 이벤트(스크롤·바깥 링크 등)도 주소 뒤 ?값 없이 보내도록 매 페이지 주소를 먼저 고정
+    window.gtag?.('set', { page_location: window.location.origin + path, page_referrer: document.referrer ? new URL(document.referrer).origin : '' });
     window.gtag?.('event', 'page_view', { page_location: window.location.origin + path, page_path: path, page_title: document.title });
   }, [path]);
 
