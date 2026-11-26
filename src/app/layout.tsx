@@ -4,6 +4,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import FloatingMenu from '@/components/FloatingMenu';
 import SiteChrome from '@/components/SiteChrome';
+import SiteAnalytics from '@/components/SiteAnalytics';
 
 export const metadata: Metadata = {
   title: { default: '엣지영어', template: '%s | 엣지영어' },
@@ -59,6 +60,7 @@ export default function RootLayout({
         <SiteChrome lms footer>
           <Footer />
         </SiteChrome>
+        <SiteAnalytics />
       </body>
     </html>
   );
