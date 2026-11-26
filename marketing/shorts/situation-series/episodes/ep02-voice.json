@@ -1,0 +1,11 @@
+{"lines": [
+ {"lang": "ko", "text": "이럴 때 쓸 수 있는 말, 빠르게 세 개 알려드릴게요!"},
+ {"lang": "ko", "text": "그냥 집에서 쉬었어!"},
+ {"lang": "en", "text": "I just chilled at home.", "pair": true},
+ {"lang": "ko", "text": "그냥 넷플릭스나 봤어!"},
+ {"lang": "en", "text": "I just watched Netflix.", "pair": true},
+ {"lang": "ko", "text": "친구 만났어!"},
+ {"lang": "en", "text": "I hung out with a friend.", "pair": true},
+ {"lang": "ko", "text": "영어는 직접 말해 봐야 늘어요!"},
+ {"lang": "ko", "text": "엣지영어 놀러 오세요!", "pair": true, "speed": 1.2}
+]}

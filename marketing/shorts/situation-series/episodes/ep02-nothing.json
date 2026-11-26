@@ -1,0 +1,192 @@
+{
+  "id": "ep02-nothing",
+  "source": "source/ep02-weekend-flashback.mp4",
+  "scene_end": 10.0,
+  "outro_duration": "auto",
+  "title": [
+    [
+      [
+        "한국인에게 영어로",
+        "white"
+      ]
+    ],
+    [
+      [
+        "주말에 뭐 했냐고",
+        "yellow"
+      ],
+      [
+        " 물어보면",
+        "white"
+      ]
+    ]
+  ],
+  "subs": [
+    {
+      "start": 0.15,
+      "end": 1.95,
+      "en": [
+        [
+          [
+            "What did you get up to",
+            "white"
+          ]
+        ],
+        [
+          [
+            "over the weekend?",
+            "white"
+          ]
+        ]
+      ],
+      "ko": [
+        "주말에 뭐 함? ☺️"
+      ]
+    },
+    {
+      "start": 8.0,
+      "end": 8.95,
+      "en": [
+        [
+          [
+            "Uh~",
+            "white"
+          ]
+        ]
+      ],
+      "ko": [
+        "어~"
+      ],
+      "ko_size": 62
+    },
+    {
+      "start": 8.95,
+      "end": 10.0,
+      "en": [
+        [
+          [
+            "Uh~ ",
+            "white"
+          ],
+          [
+            "Nothing!",
+            "yellow"
+          ]
+        ]
+      ],
+      "ko": [
+        "어~ 나띵!"
+      ],
+      "ko_size": 62
+    }
+  ],
+  "badges": [
+    {
+      "text": "(바다… sea…)",
+      "center": [
+        540,
+        1250
+      ],
+      "size": 58,
+      "start": 2.0,
+      "end": 3.0
+    },
+    {
+      "text": "(싸우다… fight…?)",
+      "center": [
+        540,
+        1250
+      ],
+      "size": 58,
+      "start": 4.958,
+      "end": 5.958
+    },
+    {
+      "text": "(에라 모르겠다)",
+      "center": [
+        540,
+        1250
+      ],
+      "size": 58,
+      "start": 6.958,
+      "end": 7.917
+    }
+  ],
+  "outro": {
+    "label": "이럴 때 쓸 수 있는 말 3개!",
+    "subscribe": [
+      "매일 실전 영어 한마디!",
+      "구독하고 함께 연습해요."
+    ],
+    "cta_question": "내 영어 회화 실력은 어느 정도일까?",
+    "cta_button": "무료 레벨테스트 · 프로필 링크",
+    "brand": "EDGE ENGLISH",
+    "voice": {
+      "file": "audio/ep02-outro.wav",
+      "timing": "audio/ep02-outro.timing.json",
+      "at": 0.3,
+      "volume": 1.0
+    },
+    "hold": 1.2,
+    "steps": [
+      {
+        "type": "question",
+        "line": 0,
+        "en": [
+          "What did you get up to",
+          "over the weekend?"
+        ],
+        "ko": "주말에 뭐 했어?"
+      },
+      {
+        "type": "expr",
+        "line": 1,
+        "num": "1 / 3",
+        "ko": "그냥 집에서 쉬었어!",
+        "en": [
+          "I just chilled at home."
+        ],
+        "pron": "아이 저스 칠드 앳 홈."
+      },
+      {
+        "type": "expr",
+        "line": 3,
+        "num": "2 / 3",
+        "ko": "그냥 넷플릭스나 봤어!",
+        "en": [
+          "I just watched Netflix."
+        ],
+        "pron": "아이 저스 와치트 넷플릭스."
+      },
+      {
+        "type": "expr",
+        "line": 5,
+        "num": "3 / 3",
+        "ko": "친구 만났어!",
+        "en": [
+          "I hung out with a friend."
+        ],
+        "pron": "아이 헝아웃 위더 프렌드."
+      },
+      {
+        "type": "recap",
+        "line": 7,
+        "label": "영어는 직접 말해 봐야 늘어요!",
+        "rows": [
+          {
+            "en": "I just chilled at home.",
+            "ko": "그냥 집에서 쉬었어!"
+          },
+          {
+            "en": "I just watched Netflix.",
+            "ko": "그냥 넷플릭스나 봤어!"
+          },
+          {
+            "en": "I hung out with a friend.",
+            "ko": "친구 만났어!"
+          }
+        ]
+      }
+    ]
+  }
+}
