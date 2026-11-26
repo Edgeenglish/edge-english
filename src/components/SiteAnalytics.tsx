@@ -3,7 +3,7 @@
 // 홈페이지 방문 통계 불러오기 (규칙은 src/lib/tracking.ts)
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
-import { CLARITY_ID, GA_ID, isPublicPath, track, trackingMode } from '@/lib/tracking';
+import { CLARITY_ID, GA_ID, isTrackablePage, track, trackingMode } from '@/lib/tracking';
 
 function loadScript(src: string) {
   const s = document.createElement('script');
@@ -18,9 +18,9 @@ export default function SiteAnalytics() {
 
   useEffect(() => {
     const m = trackingMode();
-    if (m === 'off' || !isPublicPath(path)) {
-      // 홈페이지에서 LMS 로 넘어가면 Clarity 기록을 멈춤
-      if (loaded.current.clarity && !isPublicPath(path)) window.clarity?.('stop');
+    if (m === 'off' || !isTrackablePage()) {
+      // 홈페이지에서 LMS·운영자 보기로 넘어가면 Clarity 기록을 멈춤
+      if (loaded.current.clarity) window.clarity?.('stop');
       return;
     }
     if (GA_ID && !loaded.current.ga) {
