@@ -5,7 +5,7 @@ export function LegalSections({ sections, compact = false }: { sections: LegalSe
   return (
     <div className={compact ? 'grid gap-3' : 'grid gap-6'}>
       {sections.map((s) => (
-        <section key={s.title}>
+        <section key={s.title} id={s.id} className={s.id ? 'scroll-mt-24' : undefined}>
           <h2 className={compact ? 'text-[13px] font-bold text-[#1d1b2b]' : 'text-[17px] font-bold text-[#1d1b2b]'}>{s.title}</h2>
           {s.body.map((line) => (
             <p key={line} className={compact ? 'mt-1 text-[13px] leading-relaxed text-[#55526a]' : 'mt-2 text-[15px] leading-relaxed text-[#55526a]'}>
