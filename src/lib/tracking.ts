@@ -26,6 +26,21 @@ function recall(key: string): string | null {
   }
 }
 
+function isEuropeTz(): boolean {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    return tz.startsWith('Europe/') || tz === 'Atlantic/Reykjavik' || tz === 'Atlantic/Canary' || tz === 'Atlantic/Madeira' || tz === 'Atlantic/Azores';
+  } catch {
+    return false;
+  }
+}
+
+/** 방문 통계 끄기 버튼 (/privacy) */
+export const trackingOff = () => recall(NOTRACK_KEY) === '1';
+export function setTrackingOff(off: boolean) {
+  remember(NOTRACK_KEY, off ? '1' : null);
+}
+
 /** 주소 뒤 ?notrack=1/0, ?debugtrack=1/0 을 기억하고 지금 보낼지 정함 */
 export function trackingMode(): Mode {
   if (typeof window === 'undefined') return 'off';
@@ -35,6 +50,8 @@ export function trackingMode(): Mode {
   if (q.get('debugtrack') === '1') remember(DEBUG_KEY, '1');
   if (q.get('debugtrack') === '0') remember(DEBUG_KEY, null);
   if (recall(NOTRACK_KEY) === '1') return 'off';
+  // 유럽(EEA·영국·스위스) 방문자는 동의 창 없이 쓸 수 없어 아예 안 불러옴 — 기기 시간대로 판단 (대표 11/26)
+  if (isEuropeTz()) return 'off';
   if (PROD_HOSTS.includes(window.location.hostname)) return 'on';
   return recall(DEBUG_KEY) === '1' ? 'debug' : 'off';
 }
