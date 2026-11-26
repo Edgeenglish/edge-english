@@ -1,8 +1,8 @@
-## ✅ 11/26 홈페이지 방문 통계 GA4 + Microsoft Clarity — **동의 배너로 운영 반영 끝 (lms-prod 02989c00, 공지 '개인정보 처리방침 변경 안내' 함께, DB·메일 없음)** (대표 11/26 'ChatGPT 의견: 운영 배포 아직 승인 안 함', 브랜치 claude/intelligent-feynman-go5w78)
-- 계정(ChatGPT 가 만듦, support@): GA4 측정 ID G-09WZ0EWZ51(대한민국·KRW·데이터 공유 끔·이벤트 보관 14개월) · Clarity zjpnloox4e(Masking Strict)
-- 코드: `src/lib/tracking.ts`(운영 주소만, /lms 제외, 유럽 시간대 제외, ?notrack=1/0, 시험 사이트는 ?debugtrack=1 일 때 GA4 디버그만) · `src/components/SiteAnalytics.tsx`(페이지 보기·수강신청(forms.gle)·카톡 링크 누름) · 레벨테스트 이벤트 level_test_start/question/complete · `src/components/legal/TrackingOptOut.tsx` /privacy [방문 통계 끄기] · 처리방침 9번 교체(legal.ts)
-- 확인(11/26): 운영 첫 화면에서 GA4·Clarity 스크립트 요청됨, /lms 에서는 요청 없음, /privacy 버튼·문구 보임, check-public-pages 통과. 실제 GA4 수신은 이 환경에서 구글 서버가 막혀 미확인 → GA4 '실시간'에서 확인
-- 11/26 대표 '응'(동의 배너안) → lms-test 반영: 유럽 시간대 제외 뺌 · 하단 동의 배너(동의 전 안 불러옴, 거부·동의 같은 모양, 국외 이전 안내 + 자세히=/privacy#stats) · 처리방침 6번에 Google 애널리틱스·Microsoft Clarity(근거 이용자 동의) · 9번 '사용자·이벤트 단위 데이터 14개월' · /privacy 아래 [방문 통계 동의 철회/동의하기](누르면 ga-disable·clarity stop 후 새로고침). 시험(운영 주소 흉내): 거부=요청 0·배너 다시 안 뜸, 동의=GA·Clarity 요청, 철회 뒤 요청 0, LMS 배너 없음. 운영 확인(11/26): 배너 보임·동의 전 요청 0·동의 뒤 GA·Clarity 요청·공지·처리방침 6번·철회 버튼 보임·check-public-pages 통과. 실제 수신은 GA4 실시간·Clarity 대시보드에서 대표 확인
+## ✅ 11/26 홈페이지 방문 통계 GA4 + Microsoft Clarity — **운영 반영 끝: 업계처럼 배너 없이 처리방침 안내 + /privacy [방문 통계 끄기/켜기]** (대표 11/26, lms-prod 718a8a4a, DB·메일 없음, 브랜치 claude/intelligent-feynman-go5w78)
+- 계정(support@): GA4 G-09WZ0EWZ51(대한민국·KRW·데이터 공유 끔·이벤트 보관 14개월) · Clarity zjpnloox4e(Masking Strict)
+- 코드: `src/lib/tracking.ts`(운영 주소만·/lms 제외·?notrack=1/0·[방문 통계 끄기]=localStorage edge_stats_consent 'no'·시험 사이트는 ?debugtrack=1 일 때 GA4 디버그만) · `src/components/SiteAnalytics.tsx`(페이지 보기, 수강신청(forms.gle)·카톡 링크 누름) · 레벨테스트 이벤트 level_test_start/question/complete · `src/components/legal/TrackingOptOut.tsx` · 처리방침 6번(Google 애널리틱스·Microsoft Clarity 국외 이전, 거부 = 9번 버튼)·9번(legal.ts) · 공지 '개인정보 처리방침 변경 안내'(운영 notices.json index 3)
+- 경과(11/26): 처음 동의 없이 켬 → ChatGPT 의견으로 되돌림 → 동의 배너로 운영 → 업계 조사(화상영어 11곳 배너 없음) 뒤 배너 없앰. 정책 근거는 추정(법률 검토 아님)
+- 확인: 운영에서 배너 없음·GA4·Clarity 요청됨·/privacy 버튼·공지 새 문구·check-public-pages 통과. 실제 수신은 GA4 실시간·Clarity Recordings 에서 대표 확인
 
 ## ✅ 11/25 홈 첫 화면 교체(운영진 사진)·후기 문구·'직접 심사하고' — **운영 반영 끝(lms-prod e78a56f2)** (브랜치 claude/sleepy-hypatia-yvxi5w)
 - 대표 확정 시안: 배지(미국·캐나다·호주 원어민 강사진) + 제목 '영어를 가르치는 사람들이 직접 만든 화상영어.' + 사진(///표시, 캡션 '엣지영어를 만든 사람들 시에나 & 탠저린') + 실제 숫자 3개 + 레벨테스트 카드(숫자 아래, 대표 11/25)(13년+·800만+·5단계 검증). 노란 고정 버튼은 그대로
