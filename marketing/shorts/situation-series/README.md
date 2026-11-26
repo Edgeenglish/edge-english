@@ -16,7 +16,9 @@ python3 build.py episodes/ep02-xxx.json --src source/ep02.mp4 --out output
 - 보라 `#7D5FFF` · 연보라 `#AA96FF` · 남색 `#140F33` · 강조 노랑 `#FFD401`
 - 제목: Pretendard Black 80, 흰 글씨 + 검은 외곽선, 강조 부분 노랑, 위에서 128px
 - 영어 자막: ExtraBold 66(최대 폭 800), 한국어: Bold 50, 위에서 1120px (쇼츠·릴스 아래 글·오른쪽 버튼 피함)
-- 마지막 학습 화면 5초: 연보라 바탕 + 흰 카드(학습 표현이 가장 크게) → 구독 → 레벨테스트 버튼 → EDGE ENGLISH
+- 마지막 학습 화면 5초: 연보라 바탕 + 흰 카드(학습 표현 Black 92, 가장 크게) → 구독(Bold 57) → 레벨테스트 질문(SemiBold 55)·버튼(ExtraBold 57) → EDGE ENGLISH
+- 학습 표현 원어민 음성: 학습 화면 시작 0.6초 뒤 1번. `tts.py` (Kokoro TTS, 무료·오프라인, 미국 여성 af_heart, 속도 0.95)로 만들어 `audio/` 에 두고 JSON `outro.voice` 에 적는다
+- 작은 반응 자막: JSON `badges` (예: '(뇌 정지)' 흰 44, 상대 반응 '???' 흰 76 머리 옆)
 
 ## 편 목록
 | 편 | 파일 | 길이 |

@@ -103,10 +103,9 @@ def render_sub(sub, path):
 def render_badge(b, path):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    f = font("ExtraBold", 44)
+    f = font("ExtraBold", b.get("size", 44))
     cx, cy = b["center"]
-    tw = f.getlength(b["text"])
-    seg_line(d, [[b["text"], "white"]], f, cx, cy - f.size / 2 - 6, 6)
+    seg_line(d, [[b["text"], b.get("color", "white")]], f, cx, cy - f.size / 2 - 6, 6)
     img.save(path)
 
 
@@ -141,17 +140,17 @@ def render_outro(ep, bg_frame, path):
     d.text((W / 2, y + 62), o["ko"], font=fk, fill=C["gray"], anchor="mt")
 
     # 3) 구독 문구
-    fs = font("Bold", 44)
-    d.text((W / 2, 1040), o["subscribe"], font=fs, fill=C["navy"], anchor="mt")
+    fs = font("Bold", 57)
+    d.text((W / 2, 1035), o["subscribe"], font=fs, fill=C["navy"], anchor="mt")
 
     # 4) 레벨테스트 안내
-    fq = font("SemiBold", 42)
+    fq = font("SemiBold", 55)
     d.text((W / 2, 1150), o["cta_question"], font=fq, fill=C["gray"], anchor="mt")
-    fb = font("ExtraBold", 44)
+    fb = font("ExtraBold", 57)
     bw = fb.getlength(o["cta_button"]) + 90
-    by = 1215
-    d.rounded_rectangle([(W - bw) / 2, by, (W + bw) / 2, by + 96], radius=48, fill=C["navy"])
-    d.text((W / 2, by + 48), o["cta_button"], font=fb, fill=C["white"], anchor="mm")
+    by = 1235
+    d.rounded_rectangle([(W - bw) / 2, by, (W + bw) / 2, by + 124], radius=62, fill=C["navy"])
+    d.text((W / 2, by + 62), o["cta_button"], font=fb, fill=C["white"], anchor="mm")
 
     # 5) 브랜드
     fbr = font("Black", 40)
@@ -160,7 +159,7 @@ def render_outro(ep, bg_frame, path):
     total = sum(fbr.getlength(ch) for ch in brand) + sp * (len(brand) - 1)
     x = W / 2 - total / 2
     for ch in brand:
-        d.text((x, 1395), ch, font=fbr, fill=C["purple"])
+        d.text((x, 1420), ch, font=fbr, fill=C["purple"])
         x += fbr.getlength(ch) + sp
     img.convert("RGB").save(path)
 
@@ -202,6 +201,9 @@ def main():
         overlays.append((f"badge{i}", b["start"], b["end"]))
     inputs += ["-loop", "1", "-t", str(total), "-i", f"{lay}/outro.png"]
     outro_idx = len(overlays) + 1
+    v = ep["outro"].get("voice")
+    if v:
+        inputs += ["-i", os.path.join(os.path.dirname(os.path.abspath(a.episode)), "..", v["file"])]
 
     fc = []
     base = f"[0:v]scale={W}:{H}:flags=lanczos,setsar=1,trim=0:{end},setpts=PTS-STARTPTS"
@@ -222,7 +224,14 @@ def main():
         cur = nxt
     fc.append(f"[{outro_idx}:v]format=rgba,fade=in:st={end}:d=0.3:alpha=1[o]")
     fc.append(f"[{cur}][o]overlay=0:0:enable='gte(t,{end})',format=yuv420p[vout]")
-    fc.append(f"[0:a]atrim=0:{end},afade=out:st={end - 0.4}:d=0.4,apad=whole_dur={total}[aout]")
+    fc.append(f"[0:a]atrim=0:{end},afade=out:st={end - 0.4}:d=0.4,apad=whole_dur={total}[a0]")
+    v = ep["outro"].get("voice")
+    if v:
+        ms = int((end + v["at"]) * 1000)
+        fc.append(f"[{outro_idx + 1}:a]aresample=48000,aformat=channel_layouts=stereo,volume={v.get('volume', 1.0)},adelay={ms}|{ms}[vo]")
+        fc.append(f"[a0][vo]amix=inputs=2:duration=first:normalize=0[aout]")
+    else:
+        fc.append("[a0]anull[aout]")
 
     mp4 = os.path.join(out, f"{ep['id']}.mp4")
     cmd = ["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(fc),
