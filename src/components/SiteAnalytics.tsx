@@ -77,7 +77,7 @@ export default function SiteAnalytics() {
     <div role="region" aria-label="방문 통계 동의" className="fixed inset-x-0 bottom-0 z-[30] border-t border-[#e2e0ee] bg-white px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
       <div className="mx-auto flex max-w-[960px] items-center gap-3 max-md:flex-col max-md:items-stretch max-md:gap-2">
         <p className="flex-1 text-[13px] leading-snug text-[#3d3a52]">
-          본 웹사이트는 서비스 개선 및 이용 통계 분석을 위해 쿠키를 사용합니다.{' '}
+          본 웹사이트는 서비스 개선 및 이용 통계 분석을 위해 Google 애널리틱스와 Microsoft Clarity를 사용하며, 방문 데이터는 해외 서버에 저장됩니다.{' '}
           <Link href="/privacy#stats" className="font-semibold text-[#5b3df0] underline">자세히</Link>
         </p>
         <div className="flex shrink-0 gap-2">
