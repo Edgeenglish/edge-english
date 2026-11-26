@@ -3,7 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { formatInZone } from './rules/dates';
 
-export type TtlState = 'proposed' | 'returned' | 'later' | 'confirmed' | 'admin' | 'admin_done';
+export type TtlState = 'proposed' | 'returned' | 'later' | 'confirmed' | 'admin' | 'admin_done' | 'substitute';
 export type TtlRow = { key: string; orig: Date; minutes: number; state: TtlState | null; newAt: Date | null; conflict: string | null };
 export type TtlItem = {
   tutorId: string; tutor: string; studentId: string; student: string;
@@ -12,9 +12,9 @@ export type TtlItem = {
 export type TtlOptionRow = { key: string; orig: Date; minutes: number; state: TtlState | null; cands: Date[] };
 export type TtlWeekly = { dow: number; time: string; sample: Date };
 export type TtlOptions = { rows: TtlOptionRow[]; weekly: TtlWeekly[]; need: number; rcPending: boolean; proposed: boolean };
-/** 한 회차 선택: 시각 · 'admin'(운영진에게 맡김) · 'later'(나중에 고르기) · null(아직 없음) */
-export type TtlPick = Date | 'admin' | 'later' | null;
-export type TtlResult = { ok: number; admin: number; sent: number; left: number };
+/** 한 회차 선택: 시각 · 'admin'(운영진에게 맡김) · 'later'(나중에 고르기) · 'sub'(대체강사와 수업, 학생만·같은 주 시간 없는 회차만 — H26(218) 보충3) · null(아직 없음) */
+export type TtlPick = Date | 'admin' | 'later' | 'sub' | null;
+export type TtlResult = { ok: number; admin: number; sent: number; left: number; sub: number };
 
 type RawRow = { key: string; orig: string; minutes: number; state: TtlState | null; new?: string | null; conflict?: string | null; cands?: string[] };
 type RawItem = { tutor_id: string; tutor: string; student_id: string; student: string; city: string; timezone: string; from: string; to: string | null; rc_pending: boolean; rows: RawRow[] };
@@ -38,8 +38,8 @@ function check<T>(r: { data: T | null; error: { code?: string; message: string }
   return r.data as T;
 }
 const items = (picks: Record<string, TtlPick>) => Object.entries(picks).filter(([, v]) => v !== null)
-  .map(([key, v]) => (v === 'admin' ? { key, admin: true } : v === 'later' ? { key, later: true } : { key, at: (v as Date).toISOString() }));
-const result = (d: unknown): TtlResult => { const x = (d ?? {}) as Partial<TtlResult>; return { ok: x.ok ?? 0, admin: x.admin ?? 0, sent: x.sent ?? 0, left: x.left ?? 0 }; };
+  .map(([key, v]) => (v === 'admin' ? { key, admin: true } : v === 'later' ? { key, later: true } : v === 'sub' ? { key, sub: true } : { key, at: (v as Date).toISOString() }));
+const result = (d: unknown): TtlResult => { const x = (d ?? {}) as Partial<TtlResult>; return { ok: x.ok ?? 0, admin: x.admin ?? 0, sent: x.sent ?? 0, left: x.left ?? 0, sub: x.sub ?? 0 }; };
 
 export type TtlActions = {
   items: () => Promise<TtlItem[]>;
@@ -65,12 +65,14 @@ export const studentTtl = (sb: SupabaseClient, studentId: string | null): TtlAct
 // ---------------------------------------------------------------- 상태·자동 배정
 export type TtlStatus = { kind: 'open' | 'proposed' | 'returned' | 'partial' | 'admin' | 'done'; n: number; confirmed: number; admin: number; proposed: number; open: number };
 export function ttlStatus(it: TtlItem): TtlStatus {
-  const n = it.rows.length;
-  const c = (s: TtlState) => it.rows.filter((r) => r.state === s).length;
+  // 대체강사 절차로 넘긴 회차는 새 시간 고르기와 상관없음 (운영진 휴무 화면에서 처리)
+  const rows = it.rows.filter((r) => r.state !== 'substitute');
+  const n = rows.length;
+  const c = (s: TtlState) => rows.filter((r) => r.state === s).length;
   const confirmed = c('confirmed') + c('admin_done');
   const admin = c('admin');
   const proposed = c('proposed');
-  const open = it.rows.filter((r) => r.state === null || r.state === 'later' || r.state === 'returned').length;
+  const open = rows.filter((r) => r.state === null || r.state === 'later' || r.state === 'returned').length;
   const kind = confirmed === n ? 'done' : proposed ? 'proposed' : admin ? 'admin' : c('returned') ? 'returned' : confirmed ? 'partial' : 'open';
   return { kind, n, confirmed, admin, proposed, open };
 }
@@ -85,7 +87,7 @@ function clash(t: Date, min: number, rows: TtlOptionRow[], picks: Record<string,
 export function autoAssign(rows: TtlOptionRow[], weekly: string[], keep: Record<string, TtlPick> = {}): Record<string, TtlPick> {
   const out: Record<string, TtlPick> = {};
   for (const r of rows) {
-    if (keep[r.key] === 'later' || keep[r.key] === 'admin') { out[r.key] = keep[r.key]; continue; }
+    if (keep[r.key] === 'later' || keep[r.key] === 'admin' || keep[r.key] === 'sub') { out[r.key] = keep[r.key]; continue; }
     out[r.key] = r.cands.find((t) => weekly.includes(weekKey(t)) && !clash(t, r.minutes, rows, out, r.key)) ?? null;
   }
   return out;
@@ -96,7 +98,7 @@ export const alternatives = (r: TtlOptionRow, rows: TtlOptionRow[], picks: Recor
 /** 그 회차 선택에 문제가 있는지: none = 아직 시간 없음 · clash = 다른 회차와 겹침 · null = 됨 */
 export function pickProblem(r: TtlOptionRow, rows: TtlOptionRow[], picks: Record<string, TtlPick>): 'none' | 'clash' | null {
   const v = picks[r.key];
-  if (v === 'later' || v === 'admin') return null;
+  if (v === 'later' || v === 'admin' || v === 'sub') return null;
   if (!(v instanceof Date)) return 'none';
   return clash(v, r.minutes, rows, picks, r.key) ? 'clash' : null;
 }
@@ -113,4 +115,5 @@ export const CONFLICT: Record<string, [string, string]> = {
   student: ['The student has another class', '다른 수업과 겹쳐요'],
   asked: ['Edge English will arrange', '운영진이 시간을 정해요'],
   gone: ['Class changed', '수업이 바뀌었어요'],
+  no_sub: ['No cover tutor found', '대체강사를 못 구했어요'],
 };

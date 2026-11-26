@@ -25,12 +25,15 @@ export async function loadTutors(sb: SupabaseClient): Promise<LvTutor[]> {
 
 /** 끝난 지 7일 안 된 휴무 (최근 것부터) */
 export async function loadLeaves(sb: SupabaseClient, now: Date): Promise<LvTimeOff[]> {
-  const rows = check(await sb.from('tutor_time_off').select('id, tutor_id, starts_at, ends_at, reason, tutor:tutors(name)')
-    .eq('kind', 'leave').gte('ends_at', new Date(now.getTime() - 7 * 86400000).toISOString()).order('starts_at', { ascending: false })) as unknown as
-    { id: string; tutor_id: string; starts_at: string; ends_at: string; reason: string | null; tutor: { name: string } | null }[];
+  const rows = check(await sb.from('tutor_time_off').select('id, tutor_id, starts_at, ends_at, reason, kind, tutor:tutors(name)')
+    .in('kind', ['leave', 'temp_location']).is('withdrawn_at', null).gte('ends_at', new Date(now.getTime() - 7 * 86400000).toISOString()).order('starts_at', { ascending: false })) as unknown as
+    { id: string; tutor_id: string; starts_at: string; ends_at: string; reason: string | null; kind: 'leave' | 'temp_location'; tutor: { name: string } | null }[];
   return rows.map((r) => ({
     id: r.id, tutorId: r.tutor_id, tutorName: r.tutor?.name ?? '', reason: r.reason,
-    from: instantToKstDate(new Date(r.starts_at)), to: addDays(instantToKstDate(new Date(r.ends_at)), -1),
+    from: instantToKstDate(new Date(r.starts_at)),
+    // 임시 근무 지역 기록은 수업 하나 (끝 시각이 같은 날) → 그 날짜 하루
+    to: r.kind === 'temp_location' ? instantToKstDate(new Date(r.starts_at)) : addDays(instantToKstDate(new Date(r.ends_at)), -1),
+    kind: r.kind,
   }));
 }
 
@@ -40,11 +43,12 @@ type ItemRow = {
   student: { name_ko: string; name_en: string; code: string; timezone: string } | null;
   enrollment: { duration_min: number } | null;
   sub: { name: string; timezone: string; meet_url: string | null } | null;
+  off: { kind: string } | null;
 };
 
 export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Promise<{ items: LvItem[]; notices: LvNotice[] }> {
   const rows = check(await sb.from('leave_items')
-    .select('id, time_off_id, student_id, lesson_id, migrated_item_id, starts_at, choice, sub_tutor_id, sub_stage, lesson_gone_at, student:students(name_ko, name_en, code, timezone), enrollment:enrollments(duration_min), sub:tutors!leave_items_sub_tutor_id_fkey(name, timezone, meet_url)')
+    .select('id, time_off_id, student_id, lesson_id, migrated_item_id, starts_at, choice, sub_tutor_id, sub_stage, lesson_gone_at, student:students(name_ko, name_en, code, timezone), enrollment:enrollments(duration_min), sub:tutors!leave_items_sub_tutor_id_fkey(name, timezone, meet_url), off:tutor_time_off(kind)')
     .eq('time_off_id', timeOffId).order('starts_at')) as unknown as ItemRow[];
   const lessonIds = rows.flatMap((r) => (r.lesson_id ? [r.lesson_id] : []));
   const migIds = rows.flatMap((r) => (r.migrated_item_id ? [r.migrated_item_id] : []));
@@ -70,7 +74,7 @@ export async function loadLeaveItems(sb: SupabaseClient, timeOffId: string): Pro
     makeupAt: r.choice !== 'wait' ? null : r.lesson_id ? makeupOf.get(r.lesson_id) ?? null : migLesson.get(r.migrated_item_id ?? '') ?? null,
     makeupRequested: requested.has(r.lesson_id ?? r.migrated_item_id),
     makeupDeclinedAll: declinedAll.has(r.lesson_id ?? r.migrated_item_id),
-    lessonId: r.lesson_id, migratedItemId: r.migrated_item_id, lessonGone: !!r.lesson_gone_at,
+    lessonId: r.lesson_id, migratedItemId: r.migrated_item_id, lessonGone: !!r.lesson_gone_at, ttl: r.off?.kind === 'temp_location',
   }));
   // 대체강사 현지 시각 = 그 수업 시각의 지역 (해외 이동 기간, H26(176)): 수업마다 시간대를 다시 정함
   const travel = await loadTutorTravel(sb, items.map((i) => i.subTutorId ?? ''));
@@ -98,6 +102,10 @@ export async function withdrawLeave(sb: SupabaseClient, timeOffId: string, note:
   const r = await sb.rpc('admin_leave_withdraw', { p_time_off: timeOffId, p_note: note, p_dry_run: dryRun });
   if (r.error?.code === 'PGRST202' || r.error?.code === '42883') throw new Error('휴무 철회 기능이 아직 이 DB에 적용되지 않았어요 (migration 4510).');
   return check(r);
+}
+/** 임시 근무 지역 대체 수업 → 운영진 확인으로 돌리기 (대체강사 없음·학생 문의, H26(218) 보충3) */
+export async function ttlSubBack(sb: SupabaseClient, itemId: string): Promise<void> {
+  check(await sb.rpc('admin_ttl_sub_back', { p_item: itemId }));
 }
 export async function chooseLeave(sb: SupabaseClient, itemIds: string[], choice: 'substitute' | 'wait', subTutorId: string | null): Promise<void> {
   check(await sb.rpc('admin_leave_choose', { p_items: itemIds, p_choice: choice, p_sub_tutor: subTutorId }));

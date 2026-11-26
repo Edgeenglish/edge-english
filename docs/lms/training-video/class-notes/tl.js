@@ -1,7 +1,7 @@
 // timeline
 const L=(at,...segs)=>({at,segs});
 module.exports={cps:28,why_start:4,doc_start:12,rules_start:97,zoom_at:93.5,date:'Wed, 11/25/2026',date_at:18.5,
-why:[{at:4.8,text:'Students review this Google Doc *after every class*.'},{at:6.8,text:"It's an *essential part* of our classes."}],
+why:[{at:4.8,text:'Students review this Google Doc *after every class*.'},{at:6.8,text:"Our class notes are one of our *biggest selling points*. Students *really love* them."}],
 rules:[{at:97.8,text:'*Never use AI* for class notes. Write only what the student *actually said* and your own corrections.'},{at:99.8,text:"Only use the Doc in *LMS > Students > Class notes*. *Don't make your own* notes."}],
 secs:[
 {n:'0',start:12,title:'Write the date first',desc:"Open the Doc in *LMS > Students > Class notes*. *Don't make your own.*<br><br>Share your screen and keep the Doc on screen *for the whole class*.<br><br>At the start of every class, type the date at the top. Use the *same Doc* for the same student every class.",lines:[]},
@@ -16,7 +16,15 @@ secs:[
 {n:'5',start:85,title:"Type it when they don't understand",desc:"If the student doesn't understand, *rephrase it in simpler words* first. If that still doesn't help, *type it on the screen*.",lines:[
  L(87.5,['q','How long have you been living in Seoul?'])]}
 ]};
-// 오른쪽 밑줄이 다 그어진 뒤에 왼쪽 타이핑 시작 (대표 11/25)
-(()=>{const T=module.exports;T.secs.forEach((s,i)=>{const n=(s.desc.match(/\*/g)||[]).length/2;const ready=s.start+0.8+(n-1)*0.5+0.6+0.4;
- if(i===0){T.date_at=Math.max(T.date_at,ready);return}
- const sh=Math.max(0,ready-s.lines[0].at);s.lines.forEach(l=>l.at=+(l.at+sh).toFixed(2));});})();
+// 시각 자동 계산 (대표 11/25: 밑줄 더 천천히, 끝 빈 시간 줄이고 Thanks for watching)
+(()=>{const T=module.exports;T.udur=1.8;T.ugap=T.udur+0.4;const HOLD=2.5,LGAP=0.6;
+ const nU=x=>(x.match(/\*/g)||[]).length/2;const uEnd=(t0,n)=>t0+0.8+(n-1)*T.ugap+T.udur;
+ const plain=l=>l.segs.reduce((a,x)=>a+x[1].length,0);
+ let t=T.why_start+0.8;T.why.forEach(b=>{b.at=+t.toFixed(2);t=uEnd(b.at-0.3,nU(b.text))+0.5});
+ T.doc_start=+(t+HOLD-0.5).toFixed(2);t=T.doc_start;
+ T.secs.forEach((s,i)=>{s.start=+t.toFixed(2);let c=uEnd(s.start,nU(s.desc))+0.4;
+  if(i===0){T.date_at=+c.toFixed(2);c+=T.date.length/T.cps+LGAP}
+  s.lines.forEach(l=>{l.at=+c.toFixed(2);c+=plain(l)/T.cps+LGAP});
+  t=c+HOLD;if(i===T.secs.length-1){T.zoom_at=+(c+1).toFixed(2);t=T.zoom_at+4}});
+ T.rules_start=+t.toFixed(2);t+=0.8;T.rules.forEach(b=>{b.at=+t.toFixed(2);t=uEnd(b.at-0.3,nU(b.text))+0.5});
+ T.thanks_start=+(t+2.5).toFixed(2);T.total=Math.ceil(T.thanks_start+3);})();

@@ -51,6 +51,8 @@ export type TutorLesson = {
   beforeLms?: boolean;
   /** 이 강사 휴무로 처리 중인 수업 (미정 · 대체강사 확정 전, 수강생 화면 '일정 조율 중'과 같은 판정, migration 3500) */
   leaveOpen?: boolean;
+  /** 강사 임시 근무 지역 변경으로 대체강사에게 넘긴 수업 (H26(218) 보충3): 'Cover needed' / 'Cover confirmed' (휴무 아님) */
+  ttlCover?: boolean;
   /** 강사 노쇼 보상 수업 상태 (4000): available·used·expired·voided */
   compensation?: string | null;
   /** 보상 수업이면 강사 노쇼였던 원래 수업 시각 (4100) */
@@ -112,6 +114,7 @@ export function parseScreen(j: any, loadedAt: Date = new Date()): TutorScreen {
       late: { student: !!l.student_late, studentMin: l.student_late_min ?? null, tutor: !!l.tutor_late, tutorMin: l.tutor_late_min ?? null }, recordedAt: at(l.recorded_at), locked: !!l.locked,
       beforeLms: l.state === 'scheduled' && new Date(l.starts_at) <= loadedAt && !toRecord.has(l.id),
       leaveOpen: !!l.leave_open,
+      ttlCover: !!l.ttl_cover,
       compensation: l.compensation ?? null,
       compensationOf: at(l.compensation_of),
     })),
@@ -261,14 +264,17 @@ export function statusText(l: TutorLesson, now: Date): string {
   if (p === 'upcoming') return 'Upcoming';
   if (p === 'to_record') return 'Not recorded';
   if (p === 'before_lms') return 'Before LMS';
-  if (p === 'on_leave') return TUTOR_STATUS_TEXT['Tutor long-term leave'];
-  if (p === 'covered') return COVERED_TEXT;
+  if (p === 'on_leave') return l.ttlCover ? COVER_NEEDED_TEXT : TUTOR_STATUS_TEXT['Tutor long-term leave'];
+  if (p === 'covered') return l.ttlCover ? COVER_CONFIRMED_TEXT : COVERED_TEXT;
   if (l.classStatus === 'Tutor no-show' && l.compensation && l.compensation !== 'voided') return 'Tutor no-show · +1 Compensation';
   return l.classStatus ? TUTOR_STATUS_TEXT[l.classStatus] : '';
 }
 
 /** 원래 강사 화면의 대체된 수업 (H26(138)) */
 export const COVERED_TEXT = 'Covered by another tutor';
+/** 임시 근무 지역 변경 대체 수업 (대표 11/25): 찾는 중 · 확정 */
+export const COVER_NEEDED_TEXT = 'Cover needed';
+export const COVER_CONFIRMED_TEXT = 'Cover confirmed';
 export const COVERED_NOTE = 'Another tutor is covering this class';
 export const COVERING_NOTE = "You're covering for another tutor";
 

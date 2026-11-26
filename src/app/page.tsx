@@ -1,6 +1,10 @@
+import HomeHero from '@/components/main/HomeHero';
 import MainReviews from '@/components/main/MainReviews';
 import PointsTab from '@/components/main/DetailPointTab';
 import MobileShortsSwiper from '@/components/main/MobileShortsSwiper';
+import TutorHiring from '@/components/main/TutorHiring';
+import TutorVideos from '@/components/main/TutorVideos';
+import { getTeacherVideos } from '@/lib/teacher-videos';
 import Link from 'next/link';
 import Bubble from '@/components/common/bubble/Bubble';
 import { getReviews } from '@/lib/reviews';
@@ -10,82 +14,12 @@ export const revalidate = 300;
 
 export default async function Home() {
   const reviews = (await getReviews()).slice(0, 6);
+  const teacherVideos = await getTeacherVideos();
 
   return (
     <div>
-      {/* 섹션 1 */}
-      <div className="mx-auto mb-[120px] mt-15 w-fit self-center px-4.5 max-md:mb-20 max-md:mt-10">
-        <img
-          src="/images/main/memoji.png"
-          alt="memoji"
-          width={304}
-          height={168}
-          className="mx-auto justify-self-center max-lg:mb-4 max-lg:w-[240px]"
-        />
-        <p
-          className="mx-auto w-fit text-[32px] font-extrabold max-md:text-2xl"
-          style={{
-            background: 'linear-gradient(90deg, #FCB045, #FD1D1D, #833AB4)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          시에나
-          <span className="font-normal"> X </span>
-          탠저린
-        </p>
-
-        {/* 타이틀 */}
-        <>
-          <h1 className="mt-[26px] text-center text-4xl font-bold leading-[120%] max-lg:text-4xl max-md:mt-5 max-md:text-[28px]">
-            엣지영어는{' '}
-            <span className="hidden max-md:inline">
-              <br />
-            </span>
-            영어 교육 전문가들이 만든
-          </h1>
-
-          <div className="mx-auto mt-2 flex w-fit justify-center gap-4 max-md:mt-0 max-md:block">
-            <div className="flex gap-4 max-md:items-end max-md:gap-1">
-              <h1 className="content-center text-4xl font-bold max-lg:text-4xl max-md:text-[28px]">
-                1:1 미국 · 캐나다 · 호주{' '}
-              </h1>
-              <div className="aspect-[109/57] w-[109px] max-lg:w-[70px]">
-                <img
-                  src="/images/main/flag.png"
-                  alt="usa and canaga flags"
-                  width={109}
-                  height={57}
-                />
-              </div>
-            </div>
-
-            <h1 className="content-center text-4xl font-bold leading-[120%] max-lg:text-4xl max-md:text-[28px]">
-              화상영어 브랜드입니다.
-            </h1>
-          </div>
-
-          <h2 className="mt-8 text-center text-xl max-md:mt-6 max-md:text-base">
-            13년 차 영어 튜터 시에나 & 누적 조회수 300만+
-            <span className="md:hidden">
-              <br />
-            </span>
-            영어 콘텐츠 제작자 탠저린이 직접 운영해요.
-          </h2>
-        </>
-
-        {/* 무료 레벨테스트 입구 (대표 11/25, H26(219)) */}
-        <div className="mx-auto mt-10 flex max-w-[760px] items-center gap-6 rounded-[20px] bg-[#eeeaff] px-8 py-6 text-left max-md:mt-8 max-md:flex-col max-md:items-stretch max-md:gap-4 max-md:px-5 max-md:py-5">
-          <p className="flex-1 text-2xl font-black leading-[1.35] text-[#140F33] max-md:text-xl">
-            <span className="text-[#5b3df0]">무료 레벨테스트</span>하면
-            <br />
-            부족한 부분만 콕 짚어 드려요
-          </p>
-          <Link href="/level-test" className="shrink-0 rounded-xl bg-[#5b3df0] px-7 py-4 text-center text-lg font-bold text-white">
-            지금 시작하기
-          </Link>
-        </div>
-      </div>
+      {/* 섹션 1 첫 화면 (대표 11/25 시안) */}
+      <HomeHero />
 
       {/* 수강생 후기 (최신 6개) */}
       <MainReviews reviews={reviews} />
@@ -502,35 +436,10 @@ export default async function Home() {
         </div>
       </div>
 
-      {/* 강사 선발 5단계 (대표 11/25 — 레벨테스트 홍보 카드와 같은 내용) */}
-      <div className="bg-[#F3F6F8] px-4.5 py-24 max-md:py-16">
-        <div className="mx-auto max-w-[640px]">
-          <h3 className="text-center text-4xl font-bold text-[#140F33] break-keep [text-wrap:balance] max-md:text-[28px]">운영진 둘이 직접 면접 보고 골라요</h3>
-          <p className="mt-4 text-center text-xl text-[#55526a] break-keep [text-wrap:balance] max-md:text-base">모든 강사를 운영진 두 명이 직접 만나고, 고민 끝에 뽑아요.</p>
-          <ol className="mt-10 grid gap-2.5">
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">1</span>
-              <span><b className="mr-2">서면 인터뷰</b></span>
-            </li>
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">2</span>
-              <span><b className="mr-2">서류 심사</b>자격증·학위·경력 확인</span>
-            </li>
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">3</span>
-              <span><b className="mr-2">2:1 심층 면접</b>운영진 둘이 직접</span>
-            </li>
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">4</span>
-              <span><b className="mr-2">데모 레슨</b>티칭 실력·책임감·인성 확인</span>
-            </li>
-            <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-base max-md:text-[15px]">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#5b3df0] text-sm font-bold text-white">5</span>
-              <span><b className="mr-2">채용 후 교육</b>운영진이 직접 교육 · 2개월 집중 모니터링, 이 기간에도 탈락할 수 있어요</span>
-            </li>
-          </ol>
-        </div>
-      </div>
+      {/* 강사 채용 과정 5단계 (대표 11/25) — 위 '철저한 5단계 검증' 말풍선의 근거 */}
+      {/* 강사 영상 6개 (대표 11/25) — 유튜브 재생목록 순서 그대로, 채용 과정 바로 위. 환경변수가 없으면 숨김 */}
+      <TutorVideos videos={teacherVideos} />
+      <TutorHiring />
 
       {/* 섹션 5 pc 매번 작심삼일로 끝났다면? */}
       <div

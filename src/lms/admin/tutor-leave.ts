@@ -15,7 +15,9 @@ import { meetRoomUrl } from '../rules/meet';
 export type LvChoice = 'undecided' | 'substitute' | 'wait';
 export type LvStage = 'asked' | 'tutor_ok' | 'confirmed';
 
-export type LvTimeOff = { id: string; tutorId: string; tutorName: string; from: KstDate; to: KstDate; reason: string | null };
+export type LvTimeOff = { id: string; tutorId: string; tutorName: string; from: KstDate; to: KstDate; reason: string | null;
+  /** temp_location = 강사 임시 근무 지역 변경으로 학생이 대체강사를 고른 수업 하나 (H26(218) 보충3, 실제 휴무 아님) */
+  kind?: 'leave' | 'temp_location' };
 
 export type LvItem = {
   id: string;
@@ -47,6 +49,8 @@ export type LvItem = {
   migratedItemId: string | null;
   /** 휴무 처리 밖에서(수강생 취소·변경) 수업이 취소됨 (3200, R5) → 처리할 것 없음 */
   lessonGone?: boolean;
+  /** 강사 임시 근무 지역 변경 대체 수업 (H26(218) 보충3): 휴무 안내 없음 · 보강 대신 운영진 확인 · 글 문구 다름 */
+  ttl?: boolean;
 };
 
 export type LvNoticeEvent = 'leave_options' | 'sub_ask' | 'sub_student' | 'sub_confirmed';
@@ -231,6 +235,9 @@ function worstMail(list: (ChNoticeEmail | null)[]): ChNoticeEmail | null {
   return ms.find(askMailFailed) ?? ms.find((m) => m.status === 'queued') ?? ms[0] ?? null;
 }
 
+/** 대체강사 요청 이유 줄: 실제 휴무가 하나라도 있으면 휴무, 임시 근무 지역만이면 'unavailable' (대표 11/25) */
+const coverReason = (items: LvItem[]) => `One of our Edge English tutors is ${items.every((x) => x.ttl) ? 'unavailable at this time' : 'on leave'}. Are you available to teach these classes?`;
+
 export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'student' | 'tutor' = event === 'sub_ask' || event === 'sub_confirmed' ? 'tutor' : 'student'): string {
   const i = items[0];
   const tz = i.subTutorTz ?? 'Asia/Seoul';
@@ -244,6 +251,11 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
       [`② ${o.wait.title}`, ...o.wait.lines].join('\n'),
     ].join('\n\n');
   }
+  if (event === 'sub_student' && items.every((x) => x.ttl)) {
+    // 임시 근무 지역 변경: 학생이 고른 대체강사 수업 — 아직 확정 전 (대표 11/25 문구)
+    return [`[엣지영어] ${i.studentName}님, 요청하신 아래 수업은 ${i.subTutorName} 강사님과 기존 수업 시간에 진행 가능해요!`, dates,
+      "강사님 프로필도 함께 보내 드려요. LMS 홈의 '할 일'에서 확인 및 확정해 주세요. 😊"].join('\n\n');
+  }
   if (event === 'sub_student') {
     // 대체강사 가능 확인 뒤 수강생에게 강사·날짜 제안 (프로필은 이어서 따로 보냄) → 수강생 OK → 확정 (2026-10-27 대표 최종)
     return [`[엣지영어] ${i.studentName}님, 담당 강사님 휴가 기간 수업을 대체강사 ${i.subTutorName} 강사님과 평소 시간에 진행하려고 해요. 아래 날짜 괜찮으신지 알려 주세요. 강사님 프로필도 함께 보내 드려요.`, dates].join('\n\n');
@@ -251,7 +263,7 @@ export function leaveText(event: LvNoticeEvent, items: LvItem[], recipient: 'stu
   if (event === 'sub_ask') {
     return [
       `Substitute request - ${i.studentNameEn} (${i.durationMin} min), not confirmed yet`,
-      'One of our Edge English tutors is on leave. Are you available to teach these classes?',
+      coverReason(items),
       ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, x.subTutorTz ?? tz)}`),
       "If you can't do all of them, please reply with the numbers you can do. Thank you!",
     ].join('\n');
@@ -501,7 +513,7 @@ export function subAskBundleText(items: LvItem[]): string {
   const tz = items[0].subTutorTz ?? 'Asia/Seoul';
   return [
     'Substitute request - not confirmed yet',
-    'One of our Edge English tutors is on leave. Are you available to teach these classes?',
+    coverReason(items),
     ...items.map((x, n) => `${n + 1}) ${enAt(x.startsAt, x.subTutorTz ?? tz)} · ${x.studentNameEn} · ${x.durationMin} min`),
     "If you can't do all of them, please reply with the numbers you can do. Thank you!",
   ].join('\n');

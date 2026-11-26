@@ -4,7 +4,7 @@
  */
 import type { ProcessingEvent } from './processing-history';
 
-export type CreditItemKind = 'use' | 'late' | 'holiday' | 'no_credit' | 'return' | 'restored' | 'admin_add' | 'admin_remove' | 'migrated';
+export type CreditItemKind = 'use' | 'late' | 'holiday' | 'winter' | 'no_credit' | 'return' | 'restored' | 'admin_add' | 'admin_remove' | 'migrated';
 export type CreditItem = {
   id: string; at: string; kind: CreditItemKind; delta: number;
   lesson_at: string | null; cancel_at: string; timing: 'advance' | 'late' | null; holiday: boolean; after: number;
@@ -13,7 +13,7 @@ export type CreditItem = {
 };
 export type CreditPeriodHistory = { start: string; end: string; granted: number; left: number; current: boolean; items: CreditItem[] };
 
-const KINDS: CreditItemKind[] = ['use', 'late', 'holiday', 'no_credit', 'return', 'restored', 'admin_add', 'admin_remove', 'migrated'];
+const KINDS: CreditItemKind[] = ['use', 'late', 'holiday', 'winter', 'no_credit', 'return', 'restored', 'admin_add', 'admin_remove', 'migrated'];
 export function parseCreditHistory(rows: unknown): CreditPeriodHistory[] {
   if (!Array.isArray(rows)) return [];
   return rows.map((p: CreditPeriodHistory) => ({
@@ -22,7 +22,7 @@ export function parseCreditHistory(rows: unknown): CreditPeriodHistory[] {
   }));
 }
 
-const CANCEL_KINDS: CreditItemKind[] = ['use', 'late', 'holiday', 'no_credit'];
+const CANCEL_KINDS: CreditItemKind[] = ['use', 'late', 'holiday', 'winter', 'no_credit'];
 export const isCancelItem = (i: CreditItem) => CANCEL_KINDS.includes(i.kind);
 
 /** 수업 시작까지 남은 시간 (대표 11/18: '6시간 이상 / 미만 남기고 취소', 정확히 6시간 전은 '이상') */
@@ -37,6 +37,7 @@ export function resultText(i: CreditItem): string {
     case 'use': return '변경권 1개 사용';
     case 'late': return '변경권 사용 안 됨 · 수업 1회 차감';
     case 'holiday': return '변경권 사용 안 됨 (공휴일)';
+    case 'winter': return '변경권 사용 안 됨 (겨울 특별 변경권 사용)';
     case 'no_credit': return '남은 0개 · 수업 1회 차감';
     case 'return': return '변경권 1개 반환';
     case 'restored': return '수업 취소 되돌림';
@@ -50,7 +51,7 @@ export function resultText(i: CreditItem): string {
 export function shortResult(i: CreditItem): string {
   switch (i.kind) {
     case 'use': return '1개 사용';
-    case 'late': case 'holiday': case 'no_credit': return '사용 안 됨';
+    case 'late': case 'holiday': case 'winter': case 'no_credit': return '사용 안 됨';
     case 'return': return '1개 반환';
     case 'restored': return '되돌림';
     case 'admin_add': return '1개 추가';
@@ -65,6 +66,7 @@ export function subText(i: CreditItem): string {
   if (t) parts.push(t);
   if (i.kind === 'late' || i.kind === 'no_credit') parts.push('수업 1회 차감');
   if (i.kind === 'holiday') parts.push('공휴일');
+  if (i.kind === 'winter') parts.push('겨울 특별 변경권 사용');
   parts.push(`처리 후 ${i.after}개`);
   return parts.join(' · ');
 }
@@ -116,6 +118,7 @@ export function creditEntry(i: CreditItem): CreditEntry {
     case 'use': return { ...base, result: '1개 사용 · ', bold: arrow };
     case 'late': return { ...base, result: '', bold: `사용 안 됨${charged}` };
     case 'holiday': return { ...base, result: '', bold: '사용 안 됨 (공휴일)' };
+    case 'winter': return { ...base, result: '', bold: '사용 안 됨 (겨울 특별 변경권 사용)' };
     case 'no_credit': return { ...base, result: '', bold: `남은 0개${charged}` };
     case 'return': return { ...base, result: '1개 반환 · ', bold: arrow };
     case 'restored': return { ...base, result: null, bold: null };

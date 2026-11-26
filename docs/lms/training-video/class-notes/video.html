@@ -33,6 +33,7 @@ li:before{content:"";position:absolute;left:4px;top:15px;width:12px;height:12px;
 <div class="scene" id="doc"><div class="bar"><b>Edge English</b><span>Tutor Training &nbsp;·&nbsp; How to Write Class Notes</span></div>
  <div class="left"><div class="tab">Sienna_Peter &nbsp;–&nbsp; Google Docs</div><div class="viewport"><div class="page" id="page"></div></div></div>
  <div class="right"><span class="badge" id="badge"></span><div class="rt" id="rt"></div><div class="rd" id="rd"></div></div></div>
+<div class="scene navy" id="s_thanks" style="display:none;text-align:center;padding-top:250px"><div class="big" style="margin:0">Thanks for watching!</div><div class="brand" style="margin-top:24px;font-size:26px">Edge English</div></div>
 <div class="scene navy" id="s_rules"><div class="brand">Edge English</div><div class="big">Two important rules</div><ul id="rules"></ul></div>
 <script>
 const T=window.TL;
@@ -45,12 +46,13 @@ const page=document.getElementById('page');
 page.innerHTML='<div class="date" id="date"></div>'+T.secs.map((s,i)=>`<div class="sec" id="sec${i}">`+s.lines.map((l,j)=>`<div class="ln" id="l${i}_${j}"></div>`).join('')+'</div>').join('');
 function lineHTML(segs,n){let out='',left=n;for(const [cls,txt] of segs){if(left<=0)break;const p=txt.slice(0,left);left-=p.length;out+=cls?`<span class="${cls}">${p.replace(/</g,'&lt;')}</span>`:p.replace(/</g,'&lt;')}return out}
 const len=segs=>segs.reduce((a,s)=>a+s[1].length,0);
-function ul(el,t0,t){el.querySelectorAll('.u').forEach((u,k)=>{u.style.backgroundSize=(ease((t-t0-k*0.5)/0.6)*100)+'% 3px'})}
+function ul(el,t0,t){el.querySelectorAll('.u').forEach((u,k)=>{u.style.backgroundSize=(ease((t-t0-k*T.ugap)/T.udur)*100)+'% 3px'})}
 let scroll=0,lastSec=-1;
 window.render=function(t){
  const show=id=>document.querySelectorAll('.scene').forEach(s=>s.style.display=s.id===id?'block':'none');
  if(t<T.why_start){show('s_title');return}
  if(t<T.doc_start){show('s_why');const lis=document.querySelectorAll('#why li');T.why.forEach((b,k)=>{const o=ease((t-b.at)/0.4);lis[k].style.opacity=o;lis[k].style.transform=`translateY(${(1-o)*10}px)`;ul(lis[k],b.at+0.5,t)});return}
+ if(t>=T.thanks_start){show('s_thanks');const o=ease((t-T.thanks_start)/0.6);document.getElementById('s_thanks').style.opacity=o;return}
  if(t>=T.rules_start){show('s_rules');const lis=document.querySelectorAll('#rules li');T.rules.forEach((b,k)=>{const o=ease((t-b.at)/0.4);lis[k].style.opacity=o;lis[k].style.transform=`translateY(${(1-o)*10}px)`;ul(lis[k],b.at+0.5,t)});return}
  show('doc');
  let cur=0;T.secs.forEach((s,i)=>{if(t>=s.start)cur=i});

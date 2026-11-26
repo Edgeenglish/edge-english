@@ -61,6 +61,7 @@ function ResultBody({ r, v, sentTo }: { r: TtlResult; v: TtlView; sentTo?: strin
     <div className="grid gap-2">
       {r.ok > 0 && <p className="text-[17px] font-bold text-[#1f7a4d]">✓ {T(`${r.ok} classes confirmed`, `${r.ok}회 확정됐어요`)}</p>}
       {r.admin > 0 && <p className="font-bold text-[#b3261e]">{T(`${r.admin} classes: Edge English is checking`, `${r.admin}회는 운영진이 확인하고 있어요`)}</p>}
+      {r.sub > 0 && <p className="text-[17px] font-bold text-[#1f7a4d]">✓ {r.sub}회 대체강사와 수업 신청했어요</p>}
       {r.left > 0 && <p>{T(`${r.left} classes left`, `남은 ${r.left}회`)}</p>}
     </div>
   );
@@ -87,9 +88,12 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
   const need = Math.max(1, opt?.need ?? 1);
   const flagged = useMemo(() => new Set(rows.filter((r) => pickProblem(r, rows, autoAssign(rows, weekly, picks))).map((r) => r.key)), [rows, weekly]); // eslint-disable-line react-hooks/exhaustive-deps
   const bad = rows.filter((r) => pickProblem(r, rows, picks)).length;
-  const chosen = rows.filter((r) => picks[r.key] instanceof Date || picks[r.key] === 'admin');
+  const chosen = rows.filter((r) => picks[r.key] instanceof Date || picks[r.key] === 'admin' || picks[r.key] === 'sub');
   const later = rows.filter((r) => picks[r.key] === 'later').length;
 
+  /** 학생 '맞는 시간이 없어요' → 다른 수업 방법 고르기 → 모든 회차에 넣고 2단계에서 회차별로 확인·수정 (대표 11/25) */
+  const [noFit, setNoFit] = useState(false);
+  const allTo = (x: 'sub' | 'admin') => { setPicks(Object.fromEntries(rows.map((r) => [r.key, x]))); setEdit(null); setNoFit(false); setStep(2); };
   const goStep2 = () => { setPicks(autoAssign(rows, weekly, picks)); setEdit(null); setStep(2); };
   async function submit() {
     setBusy(true); setErr('');
@@ -132,20 +136,23 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
           <div className="min-w-0">
             <p className="text-[12.5px] text-[#6b6880] line-through"><Rich text={v.when(r.orig)} /></p>
             {p instanceof Date ? <p className="text-[14.5px] font-bold text-[#1d1b2b]"><Rich text={v.when(p)} /></p>
-              : <p className="text-[14px] font-semibold text-[#6b6880]">{p === 'later' ? T('Choose later', '나중에 고르기') : p === 'admin' ? T('Edge English will arrange', '운영진에게 맡김') : T('Your weekly times don’t fit this week', '고른 요일·시간이 이 주에 없어요')}</p>}
+              : <p className="text-[14px] font-semibold text-[#6b6880]">{p === 'later' ? T('Choose later', '나중에 고르기') : p === 'admin' ? T('Edge English will arrange', '운영진에게 맡김') : p === 'sub' ? '대체강사와 수업' : T('Your weekly times don’t fit this week', '고른 요일·시간이 이 주에 없어요')}</p>}
           </div>
           <button type="button" onClick={() => setEdit(edit === r.key ? null : r.key)} className="whitespace-nowrap text-[14px] font-bold text-[#5b3fe0] underline">
             {edit === r.key ? T('Close', '닫기') : T('Change', '바꾸기')}</button>
         </div>
         {prob === 'clash' && <p className="text-[13px] font-semibold text-[#b3261e]">{T('Overlaps another class · choose another time', '다른 회차와 겹쳐요 · 다른 시간을 골라 주세요')}</p>}
         {prob === 'none' && <p className="text-[13px] font-semibold text-[#b3261e]">{r.cands.length ? T('Choose a time', '시간을 골라 주세요') : T('Ask Edge English or choose later', '운영진에게 맡기거나 나중에 골라 주세요')}</p>}
-        {!prob && flagged.has(r.key) && <p className="text-[13px] font-semibold text-[#1f7a4d]">✓ {T('Adjusted', '조정함')}</p>}
+        {p === 'sub' ? <p className="text-[13px] font-semibold text-[#55526a]">대체강사 신청 예정</p>
+          : !prob && flagged.has(r.key) && <p className="text-[13px] font-semibold text-[#1f7a4d]">✓ {T('Adjusted', '조정함')}</p>}
         {edit === r.key && (
           <div className="mt-1 flex flex-wrap gap-1.5">
             {alts.map((t) => (
               <button key={t.toISOString()} type="button" className={chip} aria-pressed={p instanceof Date && p.getTime() === t.getTime()}
                 onClick={() => { setPicks({ ...picks, [r.key]: t }); setEdit(null); }}><Rich text={v.when(t)} /></button>
             ))}
+            {/* 학생은 어느 회차든 대체강사와 수업 가능 (H26(218) 보충5, 대표 11/25 — 맞는 시간이 없을 때 포함) · 강사 화면엔 없음 */}
+            {!v.en && <button type="button" className={chip} aria-pressed={p === 'sub'} onClick={() => { setPicks({ ...picks, [r.key]: 'sub' }); setEdit(null); }}>대체강사와 수업할게요</button>}
             {alts.length === 0 && <button type="button" className={chip} aria-pressed={p === 'admin'} onClick={() => { setPicks({ ...picks, [r.key]: 'admin' }); setEdit(null); }}>{T('Ask Edge English', '운영진에게 맡기기')}</button>}
             <button type="button" className={chip} aria-pressed={p === 'later'} onClick={() => { setPicks({ ...picks, [r.key]: 'later' }); setEdit(null); }}>{T('Choose later', '나중에 고르기')}</button>
           </div>
@@ -154,6 +161,29 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
     );
   };
 
+  if (step === 1 && noFit) {
+    const opt3 = 'grid w-full gap-0.5 rounded-[12px] border border-[#dcd8ea] bg-white px-4 py-3 text-left';
+    return (
+      <Frame title={title} sub={sub} steps={steps} onClose={onClose}
+        foot={<button type="button" className={btnSub} onClick={() => setNoFit(false)}>‹ 이전</button>}>
+        <h3 className="text-[16px] font-bold text-[#1d1b2b]">다른 수업 방법 선택하기</h3>
+        <p className="mb-3 text-[14px] text-[#55526a]">가능한 시간 중 맞는 시간이 없으신가요?</p>
+        <div className="grid gap-2">
+          <button type="button" className={opt3} onClick={() => allTo('sub')}>
+            <b className="text-[15px] text-[#1d1b2b]">대체강사와 수업할게요</b>
+            <span className="text-[13.5px] text-[#55526a]">기존 수업 시간에 가능한 다른 강사님을 찾아드려요.</span>
+          </button>
+          <button type="button" className={opt3} onClick={() => allTo('admin')}>
+            <b className="text-[15px] text-[#1d1b2b]">운영진에게 맡기기</b>
+            <span className="text-[13.5px] text-[#55526a]">운영진이 수업 일정 조정을 도와드려요.</span>
+          </button>
+          <button type="button" className={opt3} onClick={onClose}>
+            <b className="text-[15px] text-[#1d1b2b]">나중에 고르기</b>
+          </button>
+        </div>
+      </Frame>
+    );
+  }
   if (step === 1) {
     const groups = new Map<number, { name: string; list: typeof opt.weekly }>();
     for (const w of opt.weekly) {
@@ -164,7 +194,14 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
     const order = [...groups.keys()].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
     return (
       <Frame title={title} sub={sub} steps={steps} onClose={onClose}
-        foot={<button type="button" className={btnMain} disabled={weekly.length === 0} onClick={goStep2}>{T('Next ›', '다음 ›')}</button>}>
+        foot={<>{!v.en && <button type="button" className={btnSub} onClick={() => setNoFit(true)}>맞는 시간이 없어요</button>}
+          <button type="button" className={btnMain} disabled={weekly.length === 0} onClick={goStep2}>{T('Next ›', '다음 ›')}</button></>}>
+        {/* 학생: 왜 바꾸는지·정규 시간은 그대로인지 (대표 11/25) */}
+        {!v.en && <div className="mb-3 grid gap-1 text-[14px] leading-relaxed text-[#1d1b2b]">
+          <p>{item.tutor} 강사님의 임시 근무 지역 변경으로 수업 시간 조정이 필요해요. 불편을 드려 죄송해요.</p>
+          <p>아래에서 가능한 시간을 골라 주세요. 맞는 시간이 없다면 [맞는 시간이 없어요]를 눌러 주세요.</p>
+          <p>임시 근무가 끝나면 기존 수업 시간으로 돌아가요.</p>
+        </div>}
         {v.en && <p className="mb-3 text-[13.5px] text-[#55526a]">The student can select and request new class times directly through their LMS.<br />If the student asks for your help during class, you can discuss the options together and submit the agreed schedule.<br />Any schedule you submit must be confirmed by the student before it can be finalized.</p>}
         <Badge text={v.badge} />
         <p className="mb-2 text-[14px] font-bold">{T(`Choose ${need} · ${weekly.length}/${need}`, `${need}개 고르기 · ${weekly.length}/${need}`)}</p>
@@ -198,8 +235,9 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
         foot={<><button type="button" className={btnSub} onClick={() => setStep(1)}>‹ {T('Back', '이전')}</button>
           <button type="button" className={btnMain} disabled={bad > 0 || chosen.length === 0} onClick={() => setStep(3)}>{T('Next ›', '다음 ›')}</button></>}>
         <Badge text={v.badge} />
-        <p className="mb-2 text-[14px] font-semibold">{T(`${ok.length} of ${rows.length} set automatically ✓`, `${rows.length}회 중 ${ok.length}회 자동 배정 ✓`)}{bad > 0 && <span className="text-[#b3261e]"> · {T(`${bad} to adjust`, `${bad}회 조정 필요`)}</span>}</p>
-        {top.length > 0 && <><p className="mt-2 text-[13.5px] font-bold text-[#55526a]">{T('Dates to adjust', '조정이 필요한 날짜')}</p><div className="rounded-[12px] bg-white px-3">{top.map(rowView)}</div></>}
+        {/* 학생: 회차마다 방법을 골랐으면 '선택 완료' (아직 신청 전, 대표 11/25) */}
+        <p className="mb-2 text-[14px] font-semibold">{T(`${ok.length} of ${rows.length} set automatically ✓`, `${rows.length}회 중 ${rows.length - bad}회 선택 완료`)}{bad > 0 && <span className="text-[#b3261e]"> · {T(`${bad} to adjust`, `${bad}회 조정 필요`)}</span>}</p>
+        {top.length > 0 && <><p className="mt-2 text-[13.5px] font-bold text-[#55526a]">{T('Dates to adjust', bad > 0 ? '조정이 필요한 날짜' : '선택한 수업 일정')}</p><div className="rounded-[12px] bg-white px-3">{top.map(rowView)}</div></>}
         {ok.length > 0 && (
           <details className="mt-3"><summary className="min-h-[40px] cursor-pointer py-2 text-[13.5px] font-bold text-[#55526a]">{T(`Set automatically (${ok.length})`, `자동 배정된 회차 ${ok.length}회`)}</summary>
             <div className="rounded-[12px] bg-white px-3">{ok.map(rowView)}</div></details>
@@ -209,6 +247,7 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
   }
   const dates = rows.filter((r) => picks[r.key] instanceof Date);
   const adm = rows.filter((r) => picks[r.key] === 'admin').length;
+  const subs = rows.filter((r) => picks[r.key] === 'sub').length;
   return (
     <Frame title={title} sub={sub} steps={steps} onClose={onClose} busy={busy}
       foot={<><button type="button" className={btnSub} disabled={busy} onClick={() => setStep(2)}>‹ {T('Back', '이전')}</button>
@@ -223,6 +262,7 @@ export function TtlPickSheet({ item, actions, v, onClose, onDone }: { item: TtlI
         ))}
       </div>
       {adm > 0 && <p className="mt-2 text-[14px]">{T(`${adm} classes: Edge English will arrange`, `${adm}회는 운영진이 시간을 정해요`)}</p>}
+      {subs > 0 && <p className="mt-1 text-[14px]">{subs}회는 대체강사와 수업</p>}
       {later > 0 && <p className="mt-1 text-[14px]">{T(`${later} classes: choose later`, `${later}회는 나중에 고르기`)}</p>}
       {err && <p className="mt-2 text-[13.5px] text-[#b3261e]">{err}</p>}
     </Frame>
