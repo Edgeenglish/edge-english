@@ -46,6 +46,7 @@ export function setConsent(v: 'yes' | 'no') {
 /** 운영진 기기·배너를 띄울지 (운영 주소에서 아직 안 골랐을 때만) */
 export function needsConsentBanner(): boolean {
   if (typeof window === 'undefined') return false;
+  trackingMode(); // 주소 뒤 ?notrack=1 을 먼저 기억 (안 그러면 처음 연 화면에 배너가 뜸)
   if (recall(NOTRACK_KEY) === '1') return false;
   const host = window.location.hostname;
   const debug = recall(DEBUG_KEY) === '1';
