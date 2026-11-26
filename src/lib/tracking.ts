@@ -57,6 +57,12 @@ export function trackingMode(): Mode {
 }
 
 export const isPublicPath = (path: string) => !path.startsWith('/lms');
+/** 지금 화면을 셀지: LMS 와 운영자 보기 주소(?student=·?tutor=, 예: /level-test?student=…)는 브라우저 설정과 관계없이 안 셈 */
+export function isTrackablePage(): boolean {
+  if (typeof window === 'undefined' || !isPublicPath(window.location.pathname)) return false;
+  const q = new URLSearchParams(window.location.search);
+  return !q.has('student') && !q.has('tutor');
+}
 
 type Gtag = (...args: unknown[]) => void;
 declare global {
@@ -69,6 +75,6 @@ declare global {
 
 /** GA4 이벤트 (불러오지 않았으면 아무 일도 안 함) */
 export function track(name: string, params: Record<string, string | number> = {}) {
-  if (typeof window === 'undefined' || !window.gtag || !isPublicPath(window.location.pathname)) return;
+  if (typeof window === 'undefined' || !window.gtag || !isTrackablePage()) return;
   window.gtag('event', name, params);
 }

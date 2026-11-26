@@ -3,7 +3,7 @@
 // 홈페이지 방문 통계 불러오기 (규칙은 src/lib/tracking.ts)
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
-import { CLARITY_ID, GA_ID, isPublicPath, track, trackingMode } from '@/lib/tracking';
+import { CLARITY_ID, GA_ID, isTrackablePage, track, trackingMode } from '@/lib/tracking';
 
 function loadScript(src: string) {
   const s = document.createElement('script');
@@ -18,9 +18,9 @@ export default function SiteAnalytics() {
 
   useEffect(() => {
     const m = trackingMode();
-    if (m === 'off' || !isPublicPath(path)) {
-      // 홈페이지에서 LMS 로 넘어가면 Clarity 기록을 멈춤
-      if (loaded.current.clarity && !isPublicPath(path)) window.clarity?.('stop');
+    if (m === 'off' || !isTrackablePage()) {
+      // 홈페이지에서 LMS·운영자 보기로 넘어가면 Clarity 기록을 멈춤
+      if (loaded.current.clarity) window.clarity?.('stop');
       return;
     }
     if (GA_ID && !loaded.current.ga) {
@@ -48,6 +48,8 @@ export default function SiteAnalytics() {
       }
     }
     // 페이지 보기 (주소 뒤 ?값은 보내지 않음)
+    // 자동 수집 이벤트(스크롤·바깥 링크 등)도 주소 뒤 ?값 없이 보내도록 매 페이지 주소를 먼저 고정
+    window.gtag?.('set', { page_location: window.location.origin + path, page_referrer: document.referrer ? new URL(document.referrer).origin : '' });
     window.gtag?.('event', 'page_view', { page_location: window.location.origin + path, page_path: path, page_title: document.title });
   }, [path]);
 
