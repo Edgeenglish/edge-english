@@ -136,7 +136,7 @@ def render_sub(sub, path):
     d = ImageDraw.Draw(img)
     fe = fit_size(sub["en"], "ExtraBold", 66, SUB_W)
     fk = fit_size([[[k, "white"]] for k in sub["ko"]], "Bold", sub.get("ko_size", 50), SUB_W)
-    y = SUB_TOP
+    y = sub.get("top", SUB_TOP)
     for segs in sub["en"]:
         seg_line(d, segs, fe, W / 2, y, 7)
         y += int(fe.size * 1.2)
@@ -388,6 +388,8 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
     흐린 상황극 배경(블러 40, 밝기 0.65) + 위 노란 둥근 제목 + 점 3개 + 한국어 → 영어(노랑 강조) + 한글 발음.
     돌려주는 값: [(그림, 시작, 끝, 페이드)]"""
     o = ep["outro"]
+    K = o.get("text_scale", 1.0)  # 학습 화면 글씨 배율 (EP03부터 1.15)
+    Z = lambda v: int(round(v * K))
     YEL = (254, 209, 0, 255)
     bg = Image.open(bg_frame).convert("RGB").resize((W, H)).filter(ImageFilter.GaussianBlur(40))
     bg = Image.eval(bg, lambda px: int(px * 0.65)).convert("RGBA")
@@ -397,19 +399,21 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
     def base(dots=None):
         img = bg.copy()
         d = ImageDraw.Draw(img)
-        f = font("Black", 53)
+        f = font("Black", Z(53))
         tw = f.getlength(o["label"])
-        d.rounded_rectangle([W / 2 - tw / 2 - 40, 250, W / 2 + tw / 2 + 40, 341], radius=46, fill=YEL)
-        d.text((W / 2, 296), o["label"], font=f, fill=(17, 17, 17, 255), anchor="mm")
+        ph = Z(91)
+        d.rounded_rectangle([W / 2 - tw / 2 - Z(40), 250, W / 2 + tw / 2 + Z(40), 250 + ph], radius=ph // 2, fill=YEL)
+        d.text((W / 2, 250 + ph / 2), o["label"], font=f, fill=(17, 17, 17, 255), anchor="mm")
         if dots is not None:
-            for k, x in enumerate([496, 540, 584]):
-                r = 11 if k == dots else 8
-                d.ellipse([x - r, 430 - r, x + r, 430 + r], fill=YEL if k == dots else (205, 205, 210, 255))
+            dy = 430 + (ph - 91)
+            for k, x in enumerate([540 - Z(44), 540, 540 + Z(44)]):
+                r = Z(11) if k == dots else Z(8)
+                d.ellipse([x - r, dy - r, x + r, dy + r], fill=YEL if k == dots else (205, 205, 210, 255))
         return img, d
 
     def ko_lines(d, lines, cy, size=57):
-        f = font("Black", size)
-        pitch = 85
+        f = font("Black", Z(size))
+        pitch = Z(85)
         y0 = cy - pitch * (len(lines) - 1) / 2
         for i, t in enumerate(lines):
             d.text((W / 2, y0 + pitch * i), t, font=f, fill=C["white"], anchor="mm", stroke_width=6, stroke_fill=C["black"])
@@ -428,14 +432,14 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
         nxt = starts[j + 1] if j + 1 < len(steps) else 9999
         if st["type"] == "intro":
             img, d = base()
-            ko_lines(d, st["lines"], 820)
+            ko_lines(d, st["lines"], 820 + Z(0))
             out.append((save(img, f"learn{j}"), starts[j], nxt, 0.3))
         elif st["type"] == "expr":
             img, d = base(st["n"] - 1)
-            ko_lines(d, [st["ko"]], 757)
+            ko_lines(d, [st["ko"]], 757 + (Z(91) - 91) * 2)
             out.append((save(img, f"learn{j}a"), starts[j], nxt, 0.2 if st["n"] == 1 else 0))
             # 영어 (강조 단어 노랑) + 한글 발음
-            fe = fit_size([[[st["en"], "white"]]], "Black", 87, W - 100)
+            fe = fit_size([[[st["en"], "white"]]], "Black", Z(87), W - 70)
             segs = []
             rest = st["en"]
             hl = st.get("highlight", "")
@@ -445,19 +449,21 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
             else:
                 segs = [[rest, "white"]]
             C["yellow_hl"] = YEL
-            seg_line(d, [x for x in segs if x[0]], fe, W / 2, 919 - fe.size * 0.62, 9)
-            fp = font("SemiBold", 46)
-            d.text((W / 2, 1058), st["pron"], font=fp, fill=(228, 228, 228, 255), anchor="mm", stroke_width=4, stroke_fill=C["black"])
+            seg_line(d, [x for x in segs if x[0]], fe, W / 2, 919 + (Z(91) - 91) * 3 - fe.size * 0.62, Z(9))
+            fp = font("SemiBold", Z(46))
+            d.text((W / 2, 1058 + (Z(91) - 91) * 4), st["pron"], font=fp, fill=(228, 228, 228, 255), anchor="mm", stroke_width=4, stroke_fill=C["black"])
             en_start = T0 + seg[st["en_line"]]["start"] - 0.08
             out.append((save(img, f"learn{j}b"), en_start, nxt, 0.2))
         elif st["type"] == "end":
             img, d = base()
-            ko_lines(d, st["lines"], 780, 61)
-            f = font("Black", 59)
+            e = Z(91) - 91
+            ko_lines(d, st["lines"], 780 + e, 61)
+            f = font("Black", Z(59))
             tw = f.getlength(st["button"])
-            d.rounded_rectangle([W / 2 - tw / 2 - 52, 940, W / 2 + tw / 2 + 52, 1041], radius=50, fill=YEL)
-            d.text((W / 2, 991), st["button"], font=f, fill=(17, 17, 17, 255), anchor="mm")
-            ko_lines(d, [st.get("brand", "엣지영어")], 1188, 62)
+            bh = Z(101)
+            d.rounded_rectangle([W / 2 - tw / 2 - Z(52), 940 + e * 3, W / 2 + tw / 2 + Z(52), 940 + e * 3 + bh], radius=bh // 2, fill=YEL)
+            d.text((W / 2, 940 + e * 3 + bh / 2), st["button"], font=f, fill=(17, 17, 17, 255), anchor="mm")
+            ko_lines(d, [st.get("brand", "엣지영어")], 1188 + e * 5, 62)
             out.append((save(img, f"learn{j}"), starts[j], nxt, 0))
     return out
 
@@ -489,6 +495,11 @@ def main():
         render_sub(s, f"{lay}/sub{i}.png")
     for i, b in enumerate(ep.get("badges", [])):
         render_badge(b, f"{lay}/badge{i}.png")
+        if b.get("track"):  # 움직이는 자막: 글자 부분만 잘라 두고 위치를 프레임마다 옮김
+            im = Image.open(f"{lay}/badge{i}.png")
+            bb = im.getbbox()
+            im.crop(bb).save(f"{lay}/badge{i}.png")
+            b["_size"] = (bb[2] - bb[0], bb[3] - bb[1])
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(end - 0.1), "-i", a.src, "-frames:v", "1", f"{lay}/last.png"], check=True)
     step_imgs, step_win, step_fade = [], [], []
     if ep["outro"].get("style") == "learn":
@@ -515,7 +526,22 @@ def main():
         overlays.append((f"sub{i}", s["start"], s["end"]))
     for i, b in enumerate(ep.get("badges", [])):
         inputs += ["-loop", "1", "-t", str(total), "-i", f"{lay}/badge{i}.png"]
-        overlays.append((f"badge{i}", b["start"], b["end"]))
+        if b.get("track"):
+            bw, bh = b["_size"]
+            ax = {"center": 0.5, "left": 0.0}[b.get("anchor", "center")]
+            keys = b["track"]
+            def lerp(idx):
+                ex = str(keys[-1][idx])
+                for k in range(len(keys) - 2, -1, -1):
+                    t0, t1 = keys[k][0], keys[k + 1][0]
+                    v0, v1 = keys[k][idx], keys[k + 1][idx]
+                    ex = f"if(lt(t,{t1}),{v0}+({v1}-{v0})*(t-{t0})/{max(t1 - t0, 1e-3)},{ex})"
+                return ex
+            xe = f"({lerp(1)})-{bw * ax:.1f}"
+            ye = f"({lerp(2)})-{bh / 2:.1f}"
+            overlays.append((f"badge{i}", b["start"], b["end"], xe, ye))
+        else:
+            overlays.append((f"badge{i}", b["start"], b["end"]))
     inputs += ["-loop", "1", "-t", str(total), "-i", f"{lay}/outro.png"]
     outro_idx = len(overlays) + 1
     for pth in step_imgs[1:]:
@@ -544,9 +570,13 @@ def main():
     base += f",tpad=stop_mode=clone:stop_duration={ep['outro_duration']},fps=30[v0]"
     fc.append(base)
     cur = "v0"
-    for k, (name, st, en) in enumerate(overlays, start=1):
+    for k, ov in enumerate(overlays, start=1):
+        name, st, en = ov[:3]
         nxt = f"v{k}"
-        fc.append(f"[{cur}][{k}:v]overlay=0:0:enable='between(t,{st},{en - 0.001})'[{nxt}]")
+        if len(ov) == 5:
+            fc.append(f"[{cur}][{k}:v]overlay=x='{ov[3]}':y='{ov[4]}':eval=frame:enable='between(t,{st},{en - 0.001})'[{nxt}]")
+        else:
+            fc.append(f"[{cur}][{k}:v]overlay=0:0:enable='between(t,{st},{en - 0.001})'[{nxt}]")
         cur = nxt
     fc.append(f"[{outro_idx}:v]format=rgba,fade=in:st={end}:d=0.3:alpha=1[o]")
     fc.append(f"[{cur}][o]overlay=0:0:enable='gte(t,{end})'[s0]")
