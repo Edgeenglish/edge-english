@@ -112,6 +112,17 @@ def fit_size(lines, weight, size, max_w):
 def render_title(ep, path):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
+    band = ep.get("title_band")
+    if band:  # 위쪽 검은 띠 + 큰 제목 (채널 목록·쇼츠 화면에서 잘 보임. EP03부터 기본)
+        d.rectangle([0, 0, W, band], fill=(0, 0, 0, 255))
+        f = fit_size(ep["title"], "Black", 104, W - 80)
+        lh = int(f.size * 1.25)
+        y = 110 + (band - 110 - lh * len(ep["title"])) / 2 + 6
+        for segs in ep["title"]:
+            seg_line(d, segs, f, W / 2, y, 0)
+            y += lh
+        img.save(path)
+        return
     f = fit_size(ep["title"], "Black", 80, SAFE_W + 60)
     y = TITLE_TOP
     for segs in ep["title"]:
@@ -430,6 +441,8 @@ def main():
     for g in ep.get("grade", []):
         for flt in g["filters"]:
             base += f",{flt}:enable='between(t,{g['start']},{g['end']})'"
+    if ep.get("title_band"):  # 영상을 띠 아래로 내림 (아래쪽 일부가 잘림)
+        base += f",pad={W}:{H + ep['title_band']}:0:{ep['title_band']}:black,crop={W}:{H}:0:0"
     base += f",trim=0:{end},setpts=PTS-STARTPTS"
     if z:
         s0, s1, zs = z["start"], z["end"], z["scale"]

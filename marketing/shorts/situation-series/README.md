@@ -12,6 +12,11 @@ python3 build.py episodes/ep02-xxx.json --src source/ep02.mp4 --out output
 - 필요: ffmpeg, Pillow. Pretendard 글꼴은 처음 실행 때 `fonts/` 로 자동 내려받음(OFL 무료 글꼴).
 - 자막 시각은 `pip install pocketsphinx` 로 음성 단어 시각을 뽑아 맞췄다(ep01 기준).
 
+## 🚩 제목 위치 규칙 (대표 11/27 지시 — 다음 편부터 기본)
+- 제목을 화면 맨 위에 얇게 두지 않는다(채널 Shorts 목록·미리보기에서 잘려 안 보임).
+- 다른 잘 되는 쇼츠처럼 **위쪽 검은 띠(높이 420px) + 큰 제목(Black 104, 흰색·노랑 강조)**, 영상은 띠 아래로 내린다.
+- 편집 설정 JSON 에 `"title_band": 420` 을 넣으면 적용된다(EP01·EP02 는 이전 방식 그대로).
+
 ## 디자인 기준 (홈페이지 색)
 - 보라 `#7D5FFF` · 연보라 `#AA96FF` · 남색 `#140F33` · 강조 노랑 `#FFD401`
 - 제목: Pretendard Black 80, 흰 글씨 + 검은 외곽선, 강조 부분 노랑, 위에서 128px
