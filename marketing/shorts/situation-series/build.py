@@ -7,7 +7,7 @@
 에피소드 JSON 만 바꾸면 같은 제목·자막·마지막 학습 화면 디자인으로 새 편이 나온다.
 필요: ffmpeg, Pillow, Pretendard 글꼴(fonts/ 에 없으면 npm 으로 자동 내려받음).
 """
-import argparse, json, os, subprocess, sys, tarfile, glob, shutil
+import math, argparse, json, os, subprocess, sys, tarfile, glob, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -411,11 +411,18 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
                 d.ellipse([x - r, dy - r, x + r, dy + r], fill=YEL if k == dots else (205, 205, 210, 255))
         return img, d
 
-    def ko_lines(d, lines, cy, size=57):
-        f = font("Black", Z(size))
-        pitch = Z(85)
+    def ko_lines(d, lines, cy, size=57, underline=None, px=None):
+        f = fit_size([[[t, "white"]] for t in lines], "Black", px or Z(size), W - 80)
+        pitch = int(f.size * 1.49)
         y0 = cy - pitch * (len(lines) - 1) / 2
         for i, t in enumerate(lines):
+            if underline and t.startswith(underline):  # 노란 형광펜 밑줄 (곧은 띠, 글자 아래쪽 절반에 깔림)
+                x0 = W / 2 - f.getlength(t) / 2 - 6
+                x1 = x0 + f.getlength(underline) + 12
+                yc = y0 + pitch * i
+                lay_ = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+                ImageDraw.Draw(lay_).rounded_rectangle([x0, yc + f.size * 0.12, x1, yc + f.size * 0.52], radius=6, fill=(254, 209, 0, 210))
+                d._image.alpha_composite(lay_)
             d.text((W / 2, y0 + pitch * i), t, font=f, fill=C["white"], anchor="mm", stroke_width=6, stroke_fill=C["black"])
 
     out = []
@@ -425,6 +432,7 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
         return p
 
     steps = o["steps"]
+    EN_PX = min(fit_size([[[st["en"], "white"]]], "Black", Z(87), W - 70).size for st in steps if st["type"] == "expr")
     starts = []
     for st in steps:
         starts.append(end if st["type"] == "intro" else T0 + seg[st["line"]]["start"] - 0.08)
@@ -436,34 +444,61 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
             out.append((save(img, f"learn{j}"), starts[j], nxt, 0.3))
         elif st["type"] == "expr":
             img, d = base(st["n"] - 1)
-            ko_lines(d, [st["ko"]], 757 + (Z(91) - 91) * 2)
-            out.append((save(img, f"learn{j}a"), starts[j], nxt, 0.2 if st["n"] == 1 else 0))
-            # 영어 (강조 단어 노랑) + 한글 발음
-            fe = fit_size([[[st["en"], "white"]]], "Black", Z(87), W - 70)
-            segs = []
-            rest = st["en"]
-            hl = st.get("highlight", "")
-            if hl and hl in rest:
-                i0 = rest.index(hl)
-                segs = [[rest[:i0], "white"], [hl, "yellow_hl"], [rest[i0 + len(hl):], "white"]]
-            else:
-                segs = [[rest, "white"]]
+            e = Z(91) - 91
+            # 영어: 한 줄에 Z(87) 로 안 들어가면 두 줄로 나눠 크게 (강조 단어 노랑)
             C["yellow_hl"] = YEL
-            seg_line(d, [x for x in segs if x[0]], fe, W / 2, 919 + (Z(91) - 91) * 3 - fe.size * 0.62, Z(9))
-            fp = font("SemiBold", Z(46))
-            d.text((W / 2, 1058 + (Z(91) - 91) * 4), st["pron"], font=fp, fill=(228, 228, 228, 255), anchor="mm", stroke_width=4, stroke_fill=C["black"])
+            full = st["en"]
+            hl = st.get("highlight", "")
+            words = full.split(" ")
+            hs = full.index(hl) if hl and hl in full else -1
+            def wcol(k):
+                pos = len(" ".join(words[:k])) + (1 if k else 0)
+                return "yellow_hl" if hs >= 0 and hs <= pos < hs + len(hl) else "white"
+            def line_segs(ws):
+                out_, k0 = [], ws[0]
+                for k in range(ws[0], ws[1]):
+                    t = words[k] + (" " if k < ws[1] - 1 else "")
+                    col = wcol(k)
+                    if out_ and out_[-1][1] == col:
+                        out_[-1][0] += t
+                    else:
+                        out_.append([t, col])
+                return out_
+            f1 = font("Black", Z(87))
+            if f1.getlength(full) <= W - 70 or not o.get("en_wrap", False):  # 기본: 한 줄 (가독성 우선, 억지로 키우지 않음)
+                lines_ = [line_segs((0, len(words)))]
+                fe = fit_size(lines_, "Black", Z(87), W - 40)  # 한 줄로 들어가는 가장 큰 크기
+            else:
+                best = min(range(1, len(words)), key=lambda k: abs(len(" ".join(words[:k])) - len(" ".join(words[k:]))))
+                lines_ = [line_segs((0, best)), line_segs((best, len(words)))]
+                fe = fit_size(lines_, "Black", Z(87), W - 70)
+            pitch = int(fe.size * 1.15)
+            extra = pitch * (len(lines_) - 1)
+            ko_lines(d, [st["ko"]], 757 + e * 2 - extra / 2, px=min(Z(57), int(fe.size * 0.9)))  # 한국어가 영어보다 커지지 않게
+            out.append((save(img, f"learn{j}a"), starts[j], nxt, 0.2 if st["n"] == 1 else 0))
+            ycen = 919 + e * 3 - extra / 2
+            for li, segs in enumerate(lines_):
+                seg_line(d, segs, fe, W / 2, ycen + pitch * li - fe.size * 0.62, Z(9))
+            fp = font("SemiBold", min(Z(46), int(fe.size * 0.8)))
+            d.text((W / 2, 1058 + e * 4 + extra / 2), st["pron"], font=fp, fill=(228, 228, 228, 255), anchor="mm", stroke_width=4, stroke_fill=C["black"])
             en_start = T0 + seg[st["en_line"]]["start"] - 0.08
             out.append((save(img, f"learn{j}b"), en_start, nxt, 0.2))
         elif st["type"] == "end":
             img, d = base()
             e = Z(91) - 91
-            ko_lines(d, st["lines"], 780 + e, 61)
-            f = font("Black", Z(59))
-            tw = f.getlength(st["button"])
-            bh = Z(101)
-            d.rounded_rectangle([W / 2 - tw / 2 - Z(52), 940 + e * 3, W / 2 + tw / 2 + Z(52), 940 + e * 3 + bh], radius=bh // 2, fill=YEL)
-            d.text((W / 2, 940 + e * 3 + bh / 2), st["button"], font=f, fill=(17, 17, 17, 255), anchor="mm")
-            ko_lines(d, [st.get("brand", "엣지영어")], 1188 + e * 5, 62)
+            if st.get("button"):
+                ko_lines(d, st["lines"], 780 + e, 61, st.get("underline"))
+                f = font("Black", Z(59))
+                tw = f.getlength(st["button"])
+                bh = Z(101)
+                d.rounded_rectangle([W / 2 - tw / 2 - Z(52), 940 + e * 3, W / 2 + tw / 2 + Z(52), 940 + e * 3 + bh], radius=bh // 2, fill=YEL)
+                d.text((W / 2, 940 + e * 3 + bh / 2), st["button"], font=f, fill=(17, 17, 17, 255), anchor="mm")
+                ko_lines(d, [st.get("brand", "엣지영어")], 1188 + e * 5, 62)
+            else:  # 노란 버튼 없이 글 줄만 (행간 같게) + 엣지영어
+                n = len(st["lines"])
+                cy = 860 + e * 2
+                ko_lines(d, st["lines"], cy, 61, st.get("underline"))
+                ko_lines(d, [st.get("brand", "엣지영어")], cy + Z(61) * 1.49 * (n - 1) / 2 + Z(61) * 2.4, 62)
             out.append((save(img, f"learn{j}"), starts[j], nxt, 0))
     return out
 
@@ -481,6 +516,34 @@ def main():
     lay = os.path.join(out, "layers", ep["id"])
     os.makedirs(lay, exist_ok=True)
 
+    rt = ep.get("retime")
+    if rt:  # 장면 한 구간 느리게 + 확대 (원본 시각 기준으로 적은 값들을 뒤로 밀어 줌)
+        d_ = (rt["end"] - rt["start"]) * (rt["factor"] - 1)
+        sh = lambda t: t if t <= rt["start"] else (rt["start"] + (t - rt["start"]) * rt["factor"] if t <= rt["end"] else t + d_)
+        ep["scene_end"] = round(sh(ep["scene_end"]), 3)
+        for b in ep.get("badges", []):
+            b["start"], b["end"] = sh(b["start"]), sh(b["end"])
+            if b.get("track"):
+                b["track"] = [[round(sh(k[0]), 3), k[1], k[2]] for k in b["track"]]
+        for x in ep.get("subs", []):
+            x["start"], x["end"] = sh(x["start"]), sh(x["end"])
+        z0, s0, s1, F = rt.get("zoom", 1.0), rt["start"], rt["end"], rt["factor"]
+        fx, fy = rt.get("focus", [W / 2, H / 2])
+        dur = (s1 - s0) * F
+        p = f"min(t/{rt.get('zoom_in', 0.5)},1)"
+        zz = f"(1+({z0}-1)*(0.5-0.5*cos(PI*{p})))"
+        edit = f"{lay}/src_edit.mp4"
+        fcr = (f"[0:v]trim=0:{s0},setpts=PTS-STARTPTS[a];"
+               f"[0:v]trim={s0}:{s1},setpts=(PTS-STARTPTS)*{F},fps=30,"
+               f"scale=w='trunc({W}*{zz}/2)*2':h='trunc({H}*{zz}/2)*2':eval=frame:flags=lanczos,"
+               f"crop={W}:{H}:x='min(max({fx}*(iw/{W})-{fx},0),iw-{W})':y='min(max({fy}*(ih/{H})-{fy},0),ih-{H})'[b];"
+               f"[0:v]trim=start={s1},setpts=PTS-STARTPTS[c];"
+               f"[a]fps=30,setsar=1[a2];[b]setsar=1[b2];[c]fps=30,setsar=1[c2];[a2][b2][c2]concat=n=3:v=1:a=0[v];"
+               f"[0:a]atrim=0:{s0},asetpts=PTS-STARTPTS[x];[0:a]atrim={s0}:{s1},asetpts=PTS-STARTPTS,atempo={1 / F:.4f}[y];"
+               f"[0:a]atrim=start={s1},asetpts=PTS-STARTPTS[z];[x][y][z]concat=n=3:v=0:a=1[aud]")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", a.src, "-filter_complex", fcr, "-map", "[v]", "-map", "[aud]",
+                        "-c:v", "libx264", "-crf", "14", "-preset", "medium", "-c:a", "pcm_s16le", edit.replace(".mp4", ".mov")], check=True)
+        a.src = edit.replace(".mp4", ".mov")
     end = ep["scene_end"]
     ep_dir = os.path.join(os.path.dirname(os.path.abspath(a.episode)), "..")
     v = ep["outro"].get("voice")
