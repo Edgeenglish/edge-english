@@ -26,7 +26,8 @@ python3 build.py episodes/ep02-xxx.json --src source/ep02.mp4 --out output
 - 코믹 자막 크기 68(EP02의 58보다 약 17% 큼)
 - `badges[].track`: [[초, x, y], ...] 를 넣으면 자막이 그 위치를 따라 움직임(머리 위·손가락 옆). 위치는 OpenCV 로 얼굴(Haar)·손가락(CSRT 추적)을 프레임마다 찾아 만든다
 - 대사 자막은 `subs[].top` 으로 높이 지정(제목 띠가 있으면 1440 정도)
-- 학습 화면 글씨 배율 `outro.text_scale` (EP03 = 1.15)
+- 학습 화면 글씨 배율 `outro.text_scale` (EP03 = 1.35)
+- 영어 문장 줄바꿈: 한 줄·두 줄로 고정하지 않고 길이와 의미 단위로 정한다(`en_lines`). a·the 같은 관사는 뒤 명사와 같은 줄에 둔다 (예: "This isn't" / "the room I booked.")
 
 ## 🚩 제목 위치 규칙 (대표 11/27 지시 — 다음 편부터 기본)
 - 제목을 화면 맨 위에 얇게 두지 않는다(채널 Shorts 목록·미리보기에서 잘려 안 보임).

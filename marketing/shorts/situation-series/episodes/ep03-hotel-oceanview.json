@@ -392,7 +392,11 @@
         "ko": "제가 예약한 방이 아니에요.",
         "en": "This isn't the room I booked.",
         "highlight": "the room I booked",
-        "pron": "디스 이즌 더 룸 아이 북트."
+        "pron": "디스 이즌 더 룸 아이 북트.",
+        "en_lines": [
+          "This isn't",
+          "the room I booked."
+        ]
       },
       {
         "type": "expr",
@@ -402,7 +406,11 @@
         "ko": "예약 내용 좀 확인해 주시겠어요?",
         "en": "Could you check my reservation?",
         "highlight": "check my reservation",
-        "pron": "쿠쥬 첵 마이 레저베이션?"
+        "pron": "쿠쥬 첵 마이 레저베이션?",
+        "en_lines": [
+          "Could you check",
+          "my reservation?"
+        ]
       },
       {
         "type": "expr",
@@ -412,7 +420,11 @@
         "ko": "다른 방으로 바꿔 주실 수 있나요?",
         "en": "Can I get a different room?",
         "highlight": "a different room",
-        "pron": "캐나이 게러 디프런트 룸?"
+        "pron": "캐나이 게러 디프런트 룸?",
+        "en_lines": [
+          "Can I get",
+          "a different room?"
+        ]
       },
       {
         "type": "end",

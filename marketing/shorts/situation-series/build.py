@@ -416,12 +416,14 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
         pitch = int(f.size * 1.49)
         y0 = cy - pitch * (len(lines) - 1) / 2
         for i, t in enumerate(lines):
-            if underline and t.startswith(underline):  # 노란 형광펜 밑줄 (곧은 띠, 글자 아래쪽 절반에 깔림)
-                x0 = W / 2 - f.getlength(t) / 2 - 6
-                x1 = x0 + f.getlength(underline) + 12
-                yc = y0 + pitch * i
+            if underline and t.startswith(underline):  # 노란 형광펜 물결 밑줄 (이어진 물결, 글자 바로 아래)
+                x0 = W / 2 - f.getlength(t) / 2
+                x1 = x0 + f.getlength(underline)
+                yb = y0 + pitch * i + f.size * 0.66
+                amp, wl = f.size * 0.07, f.size * 0.42
+                pts = [(x0 + k, yb + amp * math.sin(k / wl * 2 * math.pi)) for k in range(0, int(x1 - x0) + 1, 2)]
                 lay_ = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-                ImageDraw.Draw(lay_).rounded_rectangle([x0, yc + f.size * 0.12, x1, yc + f.size * 0.52], radius=6, fill=(254, 209, 0, 210))
+                ImageDraw.Draw(lay_).line(pts, fill=(254, 209, 0, 255), width=max(8, int(f.size * 0.13)), joint="curve")
                 d._image.alpha_composite(lay_)
             d.text((W / 2, y0 + pitch * i), t, font=f, fill=C["white"], anchor="mm", stroke_width=6, stroke_fill=C["black"])
 
@@ -465,7 +467,14 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
                         out_.append([t, col])
                 return out_
             f1 = font("Black", Z(87))
-            if f1.getlength(full) <= W - 70 or not o.get("en_wrap", False):  # 기본: 한 줄 (가독성 우선, 억지로 키우지 않음)
+            if st.get("en_lines"):  # 의미 단위로 나눈 줄 (예: "This isn't" / "the room I booked.") — 길면 이 방식 권장
+                lines_, k = [], 0
+                for ln in st["en_lines"]:
+                    n = len(ln.split(" "))
+                    lines_.append(line_segs((k, k + n)))
+                    k += n
+                fe = fit_size(lines_, "Black", Z(87), W - 70)
+            elif f1.getlength(full) <= W - 70 or not o.get("en_wrap", False):  # 기본: 한 줄 (가독성 우선, 억지로 키우지 않음)
                 lines_ = [line_segs((0, len(words)))]
                 fe = fit_size(lines_, "Black", Z(87), W - 40)  # 한 줄로 들어가는 가장 큰 크기
             else:
@@ -539,7 +548,8 @@ def main():
                f"crop={W}:{H}:x='min(max({fx}*(iw/{W})-{fx},0),iw-{W})':y='min(max({fy}*(ih/{H})-{fy},0),ih-{H})'[b];"
                f"[0:v]trim=start={s1},setpts=PTS-STARTPTS[c];"
                f"[a]fps=30,setsar=1[a2];[b]setsar=1[b2];[c]fps=30,setsar=1[c2];[a2][b2][c2]concat=n=3:v=1:a=0[v];"
-               f"[0:a]atrim=0:{s0},asetpts=PTS-STARTPTS[x];[0:a]atrim={s0}:{s1},asetpts=PTS-STARTPTS,atempo={1 / F:.4f}[y];"
+               f"[0:a]atrim=0:{s0},asetpts=PTS-STARTPTS[x];[0:a]atrim={s0}:{s1},asetpts=PTS-STARTPTS[y1];"
+               f"[0:a]atrim={s1 - d_ - 0.08}:{s1},asetpts=PTS-STARTPTS[y2];[y1][y2]acrossfade=d=0.08[y];"  # 소리는 늘이지 않고 같은 배경음을 이어 붙임
                f"[0:a]atrim=start={s1},asetpts=PTS-STARTPTS[z];[x][y][z]concat=n=3:v=0:a=1[aud]")
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", a.src, "-filter_complex", fcr, "-map", "[v]", "-map", "[aud]",
                         "-c:v", "libx264", "-crf", "14", "-preset", "medium", "-c:a", "pcm_s16le", edit.replace(".mp4", ".mov")], check=True)
