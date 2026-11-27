@@ -12,6 +12,12 @@ python3 build.py episodes/ep02-xxx.json --src source/ep02.mp4 --out output
 - 필요: ffmpeg, Pillow. Pretendard 글꼴은 처음 실행 때 `fonts/` 로 자동 내려받음(OFL 무료 글꼴).
 - 자막 시각은 `pip install pocketsphinx` 로 음성 단어 시각을 뽑아 맞췄다(ep01 기준).
 
+## ✅ 기본 템플릿 (EP03부터, 대표 11/27 지시) — `outro.style: "learn"`
+- 대표가 올린 EP02 최종본(`reference/ep02-final-uploaded.mp4`) 학습 화면을 픽셀 단위로 재서 그대로 만든 것
+- 흐린 상황극 배경(블러 40·밝기 0.65) / 위 노란 둥근 제목(#FED100, 250~341px) / 점 3개(y430) / 한국어 흰 글씨(y757) → 영어(87, 강조 단어 노랑, 0.2초 페이드) → 한글 발음(y1058) / 마지막: 흰 글씨 2줄 + 노란 버튼 + 엣지영어
+- 편마다 바꾸는 것: 원본 영상, 제목(`title`), 코믹 자막(`badges`), 학습 제목(`outro.label`), 도입 문구, 표현 3개(뜻·영어·강조·발음), 음성 파일과 문장별 시각(`audio/*.timing.json`), 마지막 CTA(`end`의 lines·button — 편마다 다르게 시험)
+- 음성: 대표가 준 학습 음성 파일을 그대로 씀(속도 바꾸지 않음)
+
 ## 🚩 제목 위치 규칙 (대표 11/27 지시 — 다음 편부터 기본)
 - 제목을 화면 맨 위에 얇게 두지 않는다(채널 Shorts 목록·미리보기에서 잘려 안 보임).
 - 다른 잘 되는 쇼츠처럼 **위쪽 검은 띠(높이 420px) + 큰 제목(Black 104, 흰색·노랑 강조)**, 영상은 띠 아래로 내린다.
@@ -43,4 +49,5 @@ python3 build.py episodes/ep02-xxx.json --src source/ep02.mp4 --out output
 | 편 | 파일 | 길이 |
 |---|---|---|
 | ep01 영어 못 알아들었는데 일단 대답하는 한국인 특 | output/ep01-uh-good.mp4 | 15초 |
-| ep02 한국인에게 영어로 주말에 뭐 했냐고 물어보면 | output/ep02-nothing.mp4 | 24.7초 |
+| ep02 한국인에게 영어로 주말에 뭐 했냐고 물어보면 | output/ep02-nothing.mp4 (실제 올린 것: reference/ep02-final-uploaded.mp4) | 24.7초 |
+| ep03 오션뷰 예약했는데 이게 맞아..? | output/ep03-hotel-oceanview.mp4 | 27.2초 |

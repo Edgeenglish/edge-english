@@ -152,7 +152,11 @@ def render_badge(b, path):
     d = ImageDraw.Draw(img)
     f = font("ExtraBold", b.get("size", 44))
     cx, cy = b["center"]
-    seg_line(d, [[b["text"], b.get("color", "white")]], f, cx, cy - f.size / 2 - 6, 6)
+    lines = b["text"].split("\n")
+    pitch = int(f.size * 1.25)
+    y0 = cy - pitch * (len(lines) - 1) / 2
+    for i, t in enumerate(lines):
+        seg_line(d, [[t, b.get("color", "white")]], f, cx, y0 + pitch * i - f.size / 2 - 6, 6)
     img.save(path)
 
 
@@ -379,6 +383,85 @@ def render_outro_clean(ep, bg_frame, lay):
     return paths
 
 
+def render_learn(ep, bg_frame, lay, end, v, timing):
+    """EP02 최종본(대표 업로드) 학습 화면 디자인 — EP03부터 기본 템플릿.
+    흐린 상황극 배경(블러 40, 밝기 0.65) + 위 노란 둥근 제목 + 점 3개 + 한국어 → 영어(노랑 강조) + 한글 발음.
+    돌려주는 값: [(그림, 시작, 끝, 페이드)]"""
+    o = ep["outro"]
+    YEL = (254, 209, 0, 255)
+    bg = Image.open(bg_frame).convert("RGB").resize((W, H)).filter(ImageFilter.GaussianBlur(40))
+    bg = Image.eval(bg, lambda px: int(px * 0.65)).convert("RGBA")
+    T0 = end + v["at"]
+    seg = {t["i"]: t for t in timing}
+
+    def base(dots=None):
+        img = bg.copy()
+        d = ImageDraw.Draw(img)
+        f = font("Black", 53)
+        tw = f.getlength(o["label"])
+        d.rounded_rectangle([W / 2 - tw / 2 - 40, 250, W / 2 + tw / 2 + 40, 341], radius=46, fill=YEL)
+        d.text((W / 2, 296), o["label"], font=f, fill=(17, 17, 17, 255), anchor="mm")
+        if dots is not None:
+            for k, x in enumerate([496, 540, 584]):
+                r = 11 if k == dots else 8
+                d.ellipse([x - r, 430 - r, x + r, 430 + r], fill=YEL if k == dots else (205, 205, 210, 255))
+        return img, d
+
+    def ko_lines(d, lines, cy, size=57):
+        f = font("Black", size)
+        pitch = 85
+        y0 = cy - pitch * (len(lines) - 1) / 2
+        for i, t in enumerate(lines):
+            d.text((W / 2, y0 + pitch * i), t, font=f, fill=C["white"], anchor="mm", stroke_width=6, stroke_fill=C["black"])
+
+    out = []
+    def save(img, name):
+        p = f"{lay}/{name}.png"
+        img.convert("RGB").save(p)
+        return p
+
+    steps = o["steps"]
+    starts = []
+    for st in steps:
+        starts.append(end if st["type"] == "intro" else T0 + seg[st["line"]]["start"] - 0.08)
+    for j, st in enumerate(steps):
+        nxt = starts[j + 1] if j + 1 < len(steps) else 9999
+        if st["type"] == "intro":
+            img, d = base()
+            ko_lines(d, st["lines"], 820)
+            out.append((save(img, f"learn{j}"), starts[j], nxt, 0.3))
+        elif st["type"] == "expr":
+            img, d = base(st["n"] - 1)
+            ko_lines(d, [st["ko"]], 757)
+            out.append((save(img, f"learn{j}a"), starts[j], nxt, 0.2 if st["n"] == 1 else 0))
+            # 영어 (강조 단어 노랑) + 한글 발음
+            fe = fit_size([[[st["en"], "white"]]], "Black", 87, W - 100)
+            segs = []
+            rest = st["en"]
+            hl = st.get("highlight", "")
+            if hl and hl in rest:
+                i0 = rest.index(hl)
+                segs = [[rest[:i0], "white"], [hl, "yellow_hl"], [rest[i0 + len(hl):], "white"]]
+            else:
+                segs = [[rest, "white"]]
+            C["yellow_hl"] = YEL
+            seg_line(d, [x for x in segs if x[0]], fe, W / 2, 919 - fe.size * 0.62, 9)
+            fp = font("SemiBold", 46)
+            d.text((W / 2, 1058), st["pron"], font=fp, fill=(228, 228, 228, 255), anchor="mm", stroke_width=4, stroke_fill=C["black"])
+            en_start = T0 + seg[st["en_line"]]["start"] - 0.08
+            out.append((save(img, f"learn{j}b"), en_start, nxt, 0.2))
+        elif st["type"] == "end":
+            img, d = base()
+            ko_lines(d, st["lines"], 780, 61)
+            f = font("Black", 59)
+            tw = f.getlength(st["button"])
+            d.rounded_rectangle([W / 2 - tw / 2 - 52, 940, W / 2 + tw / 2 + 52, 1041], radius=50, fill=YEL)
+            d.text((W / 2, 991), st["button"], font=f, fill=(17, 17, 17, 255), anchor="mm")
+            ko_lines(d, [st.get("brand", "엣지영어")], 1188, 62)
+            out.append((save(img, f"learn{j}"), starts[j], nxt, 0))
+    return out
+
+
 def main():
     global FONT_DIR
     ap = argparse.ArgumentParser()
@@ -407,8 +490,14 @@ def main():
     for i, b in enumerate(ep.get("badges", [])):
         render_badge(b, f"{lay}/badge{i}.png")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(end - 0.1), "-i", a.src, "-frames:v", "1", f"{lay}/last.png"], check=True)
-    step_imgs, step_win = [], []
-    if ep["outro"].get("steps"):
+    step_imgs, step_win, step_fade = [], [], []
+    if ep["outro"].get("style") == "learn":
+        L = render_learn(ep, f"{lay}/last.png", lay, end, v, timing)
+        step_imgs = [x[0] for x in L]
+        step_win = [(x[1], x[2]) for x in L]
+        step_fade = [x[3] for x in L]
+        shutil.copy(step_imgs[0], f"{lay}/outro.png")
+    elif ep["outro"].get("steps"):
         render = render_outro_clean if ep["outro"].get("style") == "clean" else render_outro_steps
         step_imgs = render(ep, f"{lay}/last.png", lay)
         shutil.copy(step_imgs[0], f"{lay}/outro.png")
@@ -464,10 +553,15 @@ def main():
     cur = "s0"
     for j in range(1, len(step_imgs)):
         st0, en0 = step_win[j]
-        fc.append(f"[{cur}][{outro_idx + j}:v]overlay=0:0:enable='between(t,{st0:.3f},{en0:.3f})'[s{j}]")
+        fd = step_fade[j] if step_fade else 0
+        src_in = f"[{outro_idx + j}:v]"
+        if fd:
+            fc.append(f"{src_in}format=rgba,fade=in:st={st0:.3f}:d={fd}:alpha=1[f{j}]")
+            src_in = f"[f{j}]"
+        fc.append(f"[{cur}]{src_in}overlay=0:0:enable='between(t,{st0:.3f},{en0:.3f})'[s{j}]")
         cur = f"s{j}"
     fc.append(f"[{cur}]format=yuv420p[vout]")
-    fc.append(f"[0:a]atrim=0:{end},afade=out:st={end - 0.4}:d=0.4,apad=whole_dur={total}[a0]")
+    fc.append(f"[0:a]atrim=0:{end},afade=out:st={end - ep.get('scene_audio_fade', 0.4)}:d={ep.get('scene_audio_fade', 0.4)},apad=whole_dur={total}[a0]")
     if v:
         ms = int((end + v["at"]) * 1000)
         fc.append(f"[{voice_idx}:a]aresample=48000,aformat=channel_layouts=stereo,volume={v.get('volume', 1.0)},adelay={ms}|{ms}[vo]")

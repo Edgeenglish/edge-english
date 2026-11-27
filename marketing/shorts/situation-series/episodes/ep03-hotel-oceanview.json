@@ -1,0 +1,116 @@
+{
+  "id": "ep03-hotel-oceanview",
+  "source": "source/ep03-hotel-oceanview.mp4",
+  "scene_end": 10.0,
+  "outro_duration": "auto",
+  "scene_audio_fade": 0.1,
+  "title_band": 420,
+  "title": [
+    [
+      [
+        "오션뷰 예약했는데",
+        "white"
+      ]
+    ],
+    [
+      [
+        "이게 맞아..?",
+        "yellow"
+      ]
+    ]
+  ],
+  "subs": [],
+  "badges": [
+    {
+      "text": "(??? 오션뷰라며)",
+      "start": 0.4,
+      "end": 2.0,
+      "center": [
+        540,
+        640
+      ],
+      "size": 58
+    },
+    {
+      "text": "(K장녀 잘못 건드렸어)",
+      "start": 2.0,
+      "end": 4.917,
+      "center": [
+        540,
+        700
+      ],
+      "size": 58
+    },
+    {
+      "text": "(오션뷰인 건 맞는데\n오션이 요만하잖아요)",
+      "start": 6.5,
+      "end": 8.4,
+      "center": [
+        540,
+        640
+      ],
+      "size": 58
+    }
+  ],
+  "outro": {
+    "style": "learn",
+    "label": "호텔에서 항의할 때!",
+    "hold": 0.8,
+    "voice": {
+      "file": "audio/ep03-hotel-voice-1.35x.mp3",
+      "timing": "audio/ep03-hotel-voice.timing.json",
+      "at": 0.05,
+      "volume": 1.0
+    },
+    "steps": [
+      {
+        "type": "intro",
+        "line": 0,
+        "lines": [
+          "외국 호텔에서 항의할 때 쓰는 영어,",
+          "빠르게 알려드릴게요!"
+        ]
+      },
+      {
+        "type": "expr",
+        "n": 1,
+        "line": 1,
+        "en_line": 2,
+        "ko": "제가 예약한 방이 아니에요.",
+        "en": "This isn't the room I booked.",
+        "highlight": "the room I booked",
+        "pron": "디스 이즌 더 룸 아이 북트."
+      },
+      {
+        "type": "expr",
+        "n": 2,
+        "line": 3,
+        "en_line": 4,
+        "ko": "예약 내용 좀 확인해 주시겠어요?",
+        "en": "Could you check my reservation?",
+        "highlight": "check my reservation",
+        "pron": "쿠쥬 첵 마이 레저베이션?"
+      },
+      {
+        "type": "expr",
+        "n": 3,
+        "line": 5,
+        "en_line": 6,
+        "ko": "다른 방으로 바꿔 주실 수 있나요?",
+        "en": "Can I get a different room?",
+        "highlight": "a different room",
+        "pron": "캐나이 게러 디프런트 룸?"
+      },
+      {
+        "type": "end",
+        "line": 7,
+        "lines": [
+          "구독하시고 짧지만",
+          "기억에 확 남는 영어 꿀팁"
+        ],
+        "button": "받아보세요!",
+        "brand": "엣지영어"
+      }
+    ]
+  }
+}
