@@ -772,9 +772,13 @@ export default function StudentHome(props: {
           {/* 겨울 특별 혜택 (H26(220) 보충 ⑧): 추가 안내 + 남은 횟수 */}
           {/* 대표 11/25: 기존 변경권 줄과 같은 모양 + 아래 작은 글씨로 사용 기간 */}
           {s.season && (
-            <p className="-mt-1 grid text-[12.5px] text-[#55526a]">
-              <span className="inline-flex min-h-[32px] items-center">❄️ {s.season.name}&nbsp;<b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.season.left}개</b>&nbsp;/ 총 {s.season.granted}개</span>
-              <span className="text-[11.5px] text-[#6b6880]">{monthDay(s.season.startsOn)}~{monthDay(s.season.endsOn)} 수업</span>
+            <p className="relative -mt-1 grid text-[12.5px] text-[#55526a]">
+              <span className="inline-flex min-h-[32px] flex-wrap items-center gap-x-1">
+                <span>❄️ {s.season.name}&nbsp;<b className="text-[19px] font-extrabold text-[#1d1b2b]">{s.season.left}개</b>&nbsp;/ 총 {s.season.granted}개</span>
+                {/* 대표 11/28: 12월이 돼야 쓸 수 있다고 오해 → 지금 바로 사용 가능 + (?) 설명 */}
+                <HelpTip text={`${monthDay(s.season.startsOn)}~${monthDay(s.season.endsOn)}에 있는 수업을 바꿀 때 쓰여요. 지금 미리 바꿔도 돼요. 일반 변경권보다 먼저 쓰여요.`} />
+              </span>
+              <span className="text-[11.5px] text-[#6b6880]">{monthDay(s.season.startsOn)}~{monthDay(s.season.endsOn)} 수업용 · 지금 바로 사용 가능</span>
             </p>
           )}
           <p className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px] leading-[1.45] text-[#55526a]">
