@@ -408,8 +408,9 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
     T0 = end + v["at"]
     seg = {t["i"]: t for t in timing}
 
+    DY = o.get("content_dy", 0)  # 학습 화면 내용 전체를 아래로 (위에 홍보 문구가 있을 때)
     def base(dots=None):
-        img = bg.copy()
+        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
         f = font("Black", Z(53))
         tw = f.getlength(o["label"])
@@ -442,7 +443,11 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
     out = []
     def save(img, name):
         p = f"{lay}/{name}.png"
-        img.convert("RGB").save(p)
+        fr = bg.copy()
+        sh_ = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        sh_.paste(img, (0, DY))
+        fr.alpha_composite(sh_)
+        fr.convert("RGB").save(p)
         return p
 
     steps = o["steps"]
@@ -529,7 +534,7 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
                     for t in st["promo_lines"]:
                         d.text((W / 2, py), t, font=fpm, fill=(255, 255, 255, 255), anchor="mt", stroke_width=2, stroke_fill=(0, 0, 0, 255))
                         py += int(fpm.size * 1.3)
-                else:
+                elif st.get("brand", "엣지영어"):
                     ko_lines(d, [st.get("brand", "엣지영어")], yb, 62)
             out.append((save(img, f"learn{j}"), starts[j], nxt, 0))
     return out
@@ -701,7 +706,7 @@ def main():
     if promo_idx is not None:  # 홍보 문구: 상황극 중간에 0.4초 동안 서서히 나타나 상황극 끝까지
         ps = pr["start"]
         fc.append(f"[{promo_idx}:v]format=rgba,fade=in:st={ps}:d=0.4:alpha=1[pm]")
-        fc.append(f"[{cur}][pm]overlay=0:0:enable='between(t,{ps},{end - 0.001})'[pmo]")
+        fc.append(f"[{cur}][pm]overlay=0:0:enable='between(t,{ps},{pr.get("end", total) - 0.001})'[pmo]")
         cur = "pmo"
     fc.append(f"[{cur}]format=yuv420p[vout]")
     duck = ""

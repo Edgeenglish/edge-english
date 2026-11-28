@@ -13,18 +13,19 @@
     "size": 36,
     "top": 165,
     "title_top": 303,
-    "start": 2.5
+    "start": 10.0,
+    "end": 99
   },
   "title": [
     [
       [
-        "원어민이 'Shut up!' 하면",
+        "외국인 친구에게",
         "white"
       ]
     ],
     [
       [
-        "진짜 닥치라는 걸까?",
+        "좋은 소식을 전했더니…",
         "yellow"
       ]
     ]
@@ -60,7 +61,7 @@
   ],
   "outro": {
     "style": "learn",
-    "label": "Really 대신 이렇게!",
+    "label": "Really 말고 이렇게!",
     "hold": 0.4,
     "text_scale": 1.35,
     "voice": {
@@ -87,7 +88,7 @@
         "en": "Shut up!",
         "highlight": "Shut up!",
         "pron": "셔럽!",
-        "note": "친한 사이에서 놀라움·기쁨을 표현할 때만!"
+        "note": "친한 사이에서 놀라움이나 기쁨을 표현할 때 사용해요!"
       },
       {
         "type": "expr",
@@ -118,12 +119,9 @@
           "받아보세요!"
         ],
         "underline": "구독하시고",
-        "promo_lines": [
-          "영어만 하면 작아지는 어른들을 위한 곳",
-          "무료 레벨테스트 | edgeenglish.kr"
-        ],
-        "promo_size": 44
+        "brand": ""
       }
-    ]
+    ],
+    "content_dy": 60
   }
 }
