@@ -141,11 +141,11 @@
   "outro": {
     "style": "learn",
     "label": "Really 말고 이렇게!",
-    "hold": 0.6,
+    "hold": 0.4,
     "text_scale": 1.35,
     "voice": {
-      "file": "audio/ep04-learn-voice-full-1.35x.wav",
-      "timing": "audio/ep04-learn-voice-full-1.35x.timing.json",
+      "file": "audio/ep04-learn-voice-final.wav",
+      "timing": "audio/ep04-learn-voice-final.timing.json",
       "at": 0.05,
       "volume": 1.0
     },
