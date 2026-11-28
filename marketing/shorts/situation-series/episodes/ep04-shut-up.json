@@ -1,0 +1,129 @@
+{
+  "id": "ep04-shut-up",
+  "source": "source/ep04-shut-up.mp4",
+  "scene_end": 10.0,
+  "outro_duration": "auto",
+  "scene_audio_fade": 0.1,
+  "title_band": 560,
+  "top_promo": {
+    "lines": [
+      "영어만 하면 작아지는 어른들을 위한 곳",
+      "무료 레벨테스트 | edgeenglish.kr"
+    ],
+    "size": 36,
+    "top": 165,
+    "title_top": 303,
+    "start": 2.5
+  },
+  "title": [
+    [
+      [
+        "원어민이 'Shut up!' 하면",
+        "white"
+      ]
+    ],
+    [
+      [
+        "진짜 닥치라는 걸까?",
+        "yellow"
+      ]
+    ]
+  ],
+  "subs": [],
+  "badges": [
+    {
+      "text": "(그냥 일단 웃자~)",
+      "start": 8.85,
+      "end": 10.0,
+      "center": [
+        540,
+        650
+      ],
+      "size": 68
+    }
+  ],
+  "inserts": [
+    {
+      "file": "audio/ep04-inner-voice.mp3",
+      "at": 4.55,
+      "volume": 1.0,
+      "filter": "aecho=0.8:0.7:40|70:0.12|0.06"
+    }
+  ],
+  "duck": [
+    {
+      "start": 4.6,
+      "end": 8.5,
+      "gain": 0.6,
+      "ramp": 0.25
+    }
+  ],
+  "outro": {
+    "style": "learn",
+    "label": "Really 말고 이렇게!",
+    "hold": 0.8,
+    "text_scale": 1.35,
+    "voice": {
+      "file": "audio/ep04-learn-voice.wav",
+      "timing": "audio/ep04-learn-voice.timing.json",
+      "at": 0.05,
+      "volume": 1.0
+    },
+    "steps": [
+      {
+        "type": "intro",
+        "line": 0,
+        "lines": [
+          "진짜? Really 말고,",
+          "찐 원어민들이 쓰는 표현 알려드릴게요!"
+        ]
+      },
+      {
+        "type": "expr",
+        "n": 1,
+        "line": 1,
+        "en_line": 2,
+        "ko": "헐, 진짜?!",
+        "en": "Shut up!",
+        "highlight": "Shut up!",
+        "pron": "셔럽!",
+        "note": "친한 사이에서 놀라움·기쁨을 표현할 때만!"
+      },
+      {
+        "type": "expr",
+        "n": 2,
+        "line": 3,
+        "en_line": 4,
+        "ko": "대박! 말도 안 돼!",
+        "en": "No way!",
+        "highlight": "No way!",
+        "pron": "노 웨이!"
+      },
+      {
+        "type": "expr",
+        "n": 3,
+        "line": 5,
+        "en_line": 6,
+        "ko": "진짜로?!",
+        "en": "For real?",
+        "highlight": "For real?",
+        "pron": "퍼 리얼?"
+      },
+      {
+        "type": "end",
+        "line": 7,
+        "lines": [
+          "구독하시고 짧지만",
+          "기억에 확 남는 영어 꿀팁",
+          "받아보세요!"
+        ],
+        "underline": "구독하시고",
+        "promo_lines": [
+          "영어만 하면 작아지는 어른들을 위한 곳",
+          "무료 레벨테스트 | edgeenglish.kr"
+        ],
+        "promo_size": 44
+      }
+    ]
+  }
+}

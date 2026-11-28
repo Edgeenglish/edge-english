@@ -122,10 +122,14 @@ def render_title(ep, path):
         if pr:  # 맨 위 채널 소개 문구 (인스타 기본 글씨처럼: 흰 글씨 + 얇은 검정 외곽선, 제목보다 작게)
             fpm = font("Medium", pr.get("size", 40))
             py = pr.get("top", 160)
+            pimg = Image.new("RGBA", (W, H), (0, 0, 0, 0)) if pr.get("start") is not None else img
+            pd = ImageDraw.Draw(pimg)
             for t in pr["lines"]:
-                d.text((W / 2, py), t, font=fpm, fill=(255, 255, 255, 255), anchor="mt", stroke_width=2, stroke_fill=(0, 0, 0, 255))
+                pd.text((W / 2, py), t, font=fpm, fill=(255, 255, 255, 255), anchor="mt", stroke_width=2, stroke_fill=(0, 0, 0, 255))
                 py += int(fpm.size * 1.3)
-            y = py + pr.get("gap", 40)
+            if pimg is not img:  # 중간에 나타나는 홍보 문구는 따로 저장
+                pimg.save(path.replace("title.png", "promo.png"))
+            y = pr.get("title_top", py + pr.get("gap", 40))
         for segs in ep["title"]:
             seg_line(d, segs, f, W / 2, y, 0)
             y += lh
@@ -498,6 +502,9 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
                 seg_line(d, segs, fe, W / 2, ycen + pitch * li - fe.size * 0.62, Z(9))
             fp = font("SemiBold", min(Z(46), int(fe.size * 0.8)))
             d.text((W / 2, 1058 + e * 4 + extra / 2), st["pron"], font=fp, fill=(228, 228, 228, 255), anchor="mm", stroke_width=4, stroke_fill=C["black"])
+            if st.get("note"):  # 짧은 주의 문구 (발음 아래, 작게)
+                fn = fit_size([[[st["note"], "white"]]], "SemiBold", Z(34), W - 80)
+                d.text((W / 2, 1058 + e * 4 + extra / 2 + Z(78)), st["note"], font=fn, fill=(228, 228, 228, 255), anchor="mm", stroke_width=3, stroke_fill=C["black"])
             en_start = T0 + seg[st["en_line"]]["start"] - 0.08
             out.append((save(img, f"learn{j}b"), en_start, nxt, 0.2))
         elif st["type"] == "end":
@@ -638,6 +645,18 @@ def main():
     voice_idx = outro_idx + 1 + max(0, len(step_imgs) - 1)
     if v:
         inputs += ["-i", os.path.join(ep_dir, v["file"])]
+    nin = voice_idx + (1 if v else 0)
+    pr = ep.get("top_promo") or {}
+    promo_idx = None
+    if pr.get("start") is not None:
+        inputs += ["-loop", "1", "-t", str(total), "-i", f"{lay}/promo.png"]
+        promo_idx = nin
+        nin += 1
+    ins_idx = []
+    for x in ep.get("inserts", []):  # 속마음 음성 등 상황극 중간에 넣는 소리
+        inputs += ["-i", os.path.join(ep_dir, x["file"])]
+        ins_idx.append(nin)
+        nin += 1
 
     fc = []
     base = f"[0:v]scale={W}:{H}:flags=lanczos,setsar=1"
@@ -679,12 +698,32 @@ def main():
             src_in = f"[f{j}]"
         fc.append(f"[{cur}]{src_in}overlay=0:0:enable='between(t,{st0:.3f},{en0:.3f})'[s{j}]")
         cur = f"s{j}"
+    if promo_idx is not None:  # 홍보 문구: 상황극 중간에 0.4초 동안 서서히 나타나 상황극 끝까지
+        ps = pr["start"]
+        fc.append(f"[{promo_idx}:v]format=rgba,fade=in:st={ps}:d=0.4:alpha=1[pm]")
+        fc.append(f"[{cur}][pm]overlay=0:0:enable='between(t,{ps},{end - 0.001})'[pmo]")
+        cur = "pmo"
     fc.append(f"[{cur}]format=yuv420p[vout]")
-    fc.append(f"[0:a]atrim=0:{end},afade=out:st={end - ep.get('scene_audio_fade', 0.4)}:d={ep.get('scene_audio_fade', 0.4)},apad=whole_dur={total}[a0]")
+    duck = ""
+    for dk in ep.get("duck", []):  # 현장음 살짝 낮추기 (부드럽게)
+        r = dk.get("ramp", 0.25)
+        g = dk["gain"]
+        a0, a1 = dk["start"], dk["end"]
+        duck += (f",volume='if(lt(t,{a0 - r}),1,if(lt(t,{a0}),1-(1-{g})*(t-{a0 - r})/{r},if(lt(t,{a1}),{g},"
+                 f"if(lt(t,{a1 + r}),{g}+(1-{g})*(t-{a1})/{r},1))))':eval=frame")
+    fc.append(f"[0:a]atrim=0:{end}{duck},afade=out:st={end - ep.get('scene_audio_fade', 0.4)}:d={ep.get('scene_audio_fade', 0.4)},apad=whole_dur={total}[a0]")
+    mix = ["[a0]"]
+    for k, x in enumerate(ep.get("inserts", [])):
+        ms = int(x["at"] * 1000)
+        fx = ("," + x["filter"]) if x.get("filter") else ""
+        fc.append(f"[{ins_idx[k]}:a]aresample=48000,aformat=channel_layouts=stereo,volume={x.get('volume', 1.0)}{fx},adelay={ms}|{ms}[in{k}]")
+        mix.append(f"[in{k}]")
     if v:
         ms = int((end + v["at"]) * 1000)
         fc.append(f"[{voice_idx}:a]aresample=48000,aformat=channel_layouts=stereo,volume={v.get('volume', 1.0)},adelay={ms}|{ms}[vo]")
-        fc.append(f"[a0][vo]amix=inputs=2:duration=first:normalize=0[aout]")
+        mix.append("[vo]")
+    if len(mix) > 1:
+        fc.append(f"{''.join(mix)}amix=inputs={len(mix)}:duration=first:normalize=0[aout]")
     else:
         fc.append("[a0]anull[aout]")
 
