@@ -144,8 +144,8 @@
     "hold": 0.6,
     "text_scale": 1.35,
     "voice": {
-      "file": "audio/ep04-learn-voice-full.wav",
-      "timing": "audio/ep04-learn-voice-full.timing.json",
+      "file": "audio/ep04-learn-voice-full-1.35x.wav",
+      "timing": "audio/ep04-learn-voice-full-1.35x.timing.json",
       "at": 0.05,
       "volume": 1.0
     },
@@ -203,8 +203,8 @@
     ],
     "content_dy": 60,
     "underline_anim": {
-      "start": 14.95,
-      "dur": 0.81
+      "start": 11.074,
+      "dur": 0.6
     }
   }
 }
