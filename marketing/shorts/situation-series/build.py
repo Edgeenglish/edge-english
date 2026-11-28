@@ -33,7 +33,7 @@ SUB_W = 800  # 오른쪽 좋아요·댓글 버튼 피하기
 
 def ensure_fonts():
     d = os.path.join(HERE, "fonts")
-    need = ["Pretendard-Black.otf", "Pretendard-ExtraBold.otf", "Pretendard-Bold.otf", "Pretendard-SemiBold.otf"]
+    need = ["Pretendard-Black.otf", "Pretendard-ExtraBold.otf", "Pretendard-Bold.otf", "Pretendard-SemiBold.otf", "Pretendard-Medium.otf"]
     if all(os.path.exists(os.path.join(d, n)) for n in need):
         return d
     os.makedirs(d, exist_ok=True)
@@ -118,6 +118,14 @@ def render_title(ep, path):
         f = fit_size(ep["title"], "Black", 104, W - 80)
         lh = int(f.size * 1.25)
         y = 110 + (band - 110 - lh * len(ep["title"])) / 2 + 6
+        pr = ep.get("top_promo")
+        if pr:  # 맨 위 채널 소개 문구 (인스타 기본 글씨처럼: 흰 글씨 + 얇은 검정 외곽선, 제목보다 작게)
+            fpm = font("Medium", pr.get("size", 40))
+            py = pr.get("top", 160)
+            for t in pr["lines"]:
+                d.text((W / 2, py), t, font=fpm, fill=(255, 255, 255, 255), anchor="mt", stroke_width=2, stroke_fill=(0, 0, 0, 255))
+                py += int(fpm.size * 1.3)
+            y = py + pr.get("gap", 40)
         for segs in ep["title"]:
             seg_line(d, segs, f, W / 2, y, 0)
             y += lh
@@ -549,7 +557,7 @@ def main():
                f"[0:v]trim=start={s1},setpts=PTS-STARTPTS[c];"
                f"[a]fps=30,setsar=1[a2];[b]setsar=1[b2];[c]fps=30,setsar=1[c2];[a2][b2][c2]concat=n=3:v=1:a=0[v];"
                f"[0:a]atrim=0:{s0},asetpts=PTS-STARTPTS[x];[0:a]atrim={s0}:{s1},asetpts=PTS-STARTPTS[y1];"
-               f"[0:a]atrim={s1 - d_ - 0.08}:{s1},asetpts=PTS-STARTPTS[y2];[y1][y2]acrossfade=d=0.08[y];"  # 소리는 늘이지 않고 같은 배경음을 이어 붙임
+               f"[0:a]atrim={s1 - d_ - 0.08}:{s1},asetpts=PTS-STARTPTS[y2];[y1][y2]acrossfade=d=0.08,volume={rt.get('audio_gain', 1.0)}[y];"  # 소리는 늘이지 않고 같은 배경음을 이어 붙임
                f"[0:a]atrim=start={s1},asetpts=PTS-STARTPTS[z];[x][y][z]concat=n=3:v=0:a=1[aud]")
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", a.src, "-filter_complex", fcr, "-map", "[v]", "-map", "[aud]",
                         "-c:v", "libx264", "-crf", "14", "-preset", "medium", "-c:a", "pcm_s16le", edit.replace(".mp4", ".mov")], check=True)
