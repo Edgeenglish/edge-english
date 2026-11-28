@@ -435,7 +435,11 @@
           "받아보세요!"
         ],
         "underline": "구독하시고",
-        "brand": "엣지영어"
+        "promo_lines": [
+          "영어만 하면 작아지는 어른들을 위한 곳",
+          "무료 레벨테스트 | edgeenglish.kr"
+        ],
+        "promo_size": 44
       }
     ],
     "text_scale": 1.35

@@ -515,7 +515,15 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
                 n = len(st["lines"])
                 cy = 860 + e * 2
                 ko_lines(d, st["lines"], cy, 61, st.get("underline"))
-                ko_lines(d, [st.get("brand", "엣지영어")], cy + Z(61) * 1.49 * (n - 1) / 2 + Z(61) * 2.4, 62)
+                yb = cy + Z(61) * 1.49 * (n - 1) / 2 + Z(61) * 2.4
+                if st.get("promo_lines"):  # '엣지영어' 대신 채널 소개 문구 (맨 위 문구와 같은 모양)
+                    fpm = font("Medium", st.get("promo_size", 44))
+                    py = yb - fpm.size * 0.65
+                    for t in st["promo_lines"]:
+                        d.text((W / 2, py), t, font=fpm, fill=(255, 255, 255, 255), anchor="mt", stroke_width=2, stroke_fill=(0, 0, 0, 255))
+                        py += int(fpm.size * 1.3)
+                else:
+                    ko_lines(d, [st.get("brand", "엣지영어")], yb, 62)
             out.append((save(img, f"learn{j}"), starts[j], nxt, 0))
     return out
 
