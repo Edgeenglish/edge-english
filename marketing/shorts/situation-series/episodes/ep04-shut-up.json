@@ -30,8 +30,87 @@
       ]
     ]
   ],
-  "subs": [],
+  "subs": [
+    {
+      "start": 0.4,
+      "end": 1.4,
+      "top": 1580,
+      "en": [
+        [
+          [
+            "Guess what?",
+            "white"
+          ]
+        ]
+      ],
+      "ko": [
+        "있짜나"
+      ]
+    },
+    {
+      "start": 1.4,
+      "end": 2.75,
+      "top": 1580,
+      "en": [
+        [
+          [
+            "I got promoted!",
+            "white"
+          ]
+        ]
+      ],
+      "ko": [
+        "나 승진했어!><"
+      ]
+    },
+    {
+      "start": 2.75,
+      "end": 4.62,
+      "top": 1580,
+      "en": [
+        [
+          [
+            "Shut up! Really?!",
+            "white"
+          ]
+        ]
+      ],
+      "ko": [
+        "쎠럽! 진짜?!"
+      ]
+    }
+  ],
   "badges": [
+    {
+      "text": "(쎠럽…?)",
+      "start": 4.62,
+      "end": 5.55,
+      "center": [
+        540,
+        650
+      ],
+      "size": 68
+    },
+    {
+      "text": "(닥치라고…?)",
+      "start": 5.55,
+      "end": 6.95,
+      "center": [
+        540,
+        650
+      ],
+      "size": 68
+    },
+    {
+      "text": "(여기까지만 말하라는 건가…?)",
+      "start": 6.95,
+      "end": 8.6,
+      "center": [
+        540,
+        650
+      ],
+      "size": 68
+    },
     {
       "text": "(그냥 일단 웃자~)",
       "start": 8.85,
@@ -45,7 +124,7 @@
   ],
   "inserts": [
     {
-      "file": "audio/ep04-inner-voice.mp3",
+      "file": "audio/ep04-inner-voice-v2.wav",
       "at": 4.55,
       "volume": 1.0,
       "filter": "aecho=0.8:0.7:40|70:0.12|0.06"
@@ -62,11 +141,11 @@
   "outro": {
     "style": "learn",
     "label": "Really 말고 이렇게!",
-    "hold": 0.4,
+    "hold": 0.6,
     "text_scale": 1.35,
     "voice": {
-      "file": "audio/ep04-learn-voice-v2-gapfix.wav",
-      "timing": "audio/ep04-learn-voice-v2-gapfix.timing.json",
+      "file": "audio/ep04-learn-voice-full.wav",
+      "timing": "audio/ep04-learn-voice-full.timing.json",
       "at": 0.05,
       "volume": 1.0
     },
@@ -114,14 +193,18 @@
         "type": "end",
         "line": 7,
         "lines": [
-          "구독하시고 짧지만",
-          "기억에 확 남는 영어 꿀팁",
-          "받아보세요!"
+          "구독하시고",
+          "짧지만 기억에 확 남는",
+          "영어 꿀팁 받아보세요!"
         ],
         "underline": "구독하시고",
         "brand": ""
       }
     ],
-    "content_dy": 60
+    "content_dy": 60,
+    "underline_anim": {
+      "start": 14.95,
+      "dur": 0.81
+    }
   }
 }

@@ -437,7 +437,12 @@ def render_learn(ep, bg_frame, lay, end, v, timing):
                 pts = [(x0 + k, yb + amp * math.sin(k / wl * 2 * math.pi)) for k in range(0, int(x1 - x0) + 1, 2)]
                 lay_ = Image.new("RGBA", (W, H), (0, 0, 0, 0))
                 ImageDraw.Draw(lay_).line(pts, fill=(254, 209, 0, 255), width=max(8, int(f.size * 0.13)), joint="curve")
-                d._image.alpha_composite(lay_)
+                if o.get("underline_anim"):  # 음성에 맞춰 왼쪽→오른쪽으로 그어지게: 따로 저장
+                    bb = lay_.getbbox()
+                    lay_.crop(bb).save(f"{lay}/underline.png")
+                    ep["_ul"] = (f"{lay}/underline.png", bb[0], bb[1] + DY)
+                else:
+                    d._image.alpha_composite(lay_)
             d.text((W / 2, y0 + pitch * i), t, font=f, fill=C["white"], anchor="mm", stroke_width=6, stroke_fill=C["black"])
 
     out = []
@@ -703,6 +708,16 @@ def main():
             src_in = f"[f{j}]"
         fc.append(f"[{cur}]{src_in}overlay=0:0:enable='between(t,{st0:.3f},{en0:.3f})'[s{j}]")
         cur = f"s{j}"
+    if ep.get("_ul"):  # 밑줄 그어지는 효과
+        ulp, ulx, uly = ep["_ul"]
+        ua = ep["outro"]["underline_anim"]
+        u0 = end + v["at"] + ua["start"]
+        ud = ua["dur"]
+        inputs += ["-loop", "1", "-t", str(total), "-i", ulp]
+        fc.append(f"[{nin}:v]format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lt(X,W*(T-{u0})/{ud}),alpha(X,Y),0)'[ul]")
+        fc.append(f"[{cur}][ul]overlay={ulx}:{uly}:enable='gte(t,{u0})'[ulo]")
+        cur = "ulo"
+        nin += 1
     if promo_idx is not None:  # 홍보 문구: 상황극 중간에 0.4초 동안 서서히 나타나 상황극 끝까지
         ps = pr["start"]
         fc.append(f"[{promo_idx}:v]format=rgba,fade=in:st={ps}:d=0.4:alpha=1[pm]")
