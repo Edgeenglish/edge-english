@@ -60,11 +60,11 @@
   ],
   "outro": {
     "style": "learn",
-    "label": "Really 말고 이렇게!",
-    "hold": 0.8,
+    "label": "Really 대신 이렇게!",
+    "hold": 0.4,
     "text_scale": 1.35,
     "voice": {
-      "file": "audio/ep04-learn-voice.wav",
+      "file": "audio/ep04-learn-voice.mp3",
       "timing": "audio/ep04-learn-voice.timing.json",
       "at": 0.05,
       "volume": 1.0
@@ -74,7 +74,7 @@
         "type": "intro",
         "line": 0,
         "lines": [
-          "진짜? Really 말고,",
+          "진짜? Really 대신,",
           "찐 원어민들이 쓰는 표현 알려드릴게요!"
         ]
       },
@@ -83,7 +83,7 @@
         "n": 1,
         "line": 1,
         "en_line": 2,
-        "ko": "헐, 진짜?!",
+        "ko": "미쳤다, 진짜?!",
         "en": "Shut up!",
         "highlight": "Shut up!",
         "pron": "셔럽!",
