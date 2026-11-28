@@ -65,8 +65,8 @@
     "hold": 0.4,
     "text_scale": 1.35,
     "voice": {
-      "file": "audio/ep04-learn-voice.mp3",
-      "timing": "audio/ep04-learn-voice.timing.json",
+      "file": "audio/ep04-learn-voice-v2-gapfix.wav",
+      "timing": "audio/ep04-learn-voice-v2-gapfix.timing.json",
       "at": 0.05,
       "volume": 1.0
     },
