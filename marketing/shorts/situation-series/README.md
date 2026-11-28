@@ -29,6 +29,10 @@ python3 build.py episodes/ep02-xxx.json --src source/ep02.mp4 --out output
 - 학습 화면 글씨 배율 `outro.text_scale` (EP03 = 1.35)
 - 영어 문장 줄바꿈: 한 줄·두 줄로 고정하지 않고 길이와 의미 단위로 정한다(`en_lines`). a·the 같은 관사는 뒤 명사와 같은 줄에 둔다 (예: "This isn't" / "the room I booked.")
 
+## 🔊 매 편 끝 시그니처 (대표 11/28 확정)
+- 마지막 CTA 멘트 바로 뒤(약 0.04초)에 '엣지영어 최고~' 음성만 넣는다. 자막은 넣지 않는다
+- 편집 설정에 `"outro": {"signature": {"speed": 1.35}}` 를 넣으면 `audio/signature-edge-best.mp3` 가 자동으로 붙는다 (학습 음성과 같은 배속)
+
 ## 🚩 제목 위치 규칙 (대표 11/27 지시 — 다음 편부터 기본)
 - 제목을 화면 맨 위에 얇게 두지 않는다(채널 Shorts 목록·미리보기에서 잘려 안 보임).
 - 다른 잘 되는 쇼츠처럼 **위쪽 검은 띠(높이 420px) + 큰 제목(Black 104, 흰색·노랑 강조)**, 영상은 띠 아래로 내린다.

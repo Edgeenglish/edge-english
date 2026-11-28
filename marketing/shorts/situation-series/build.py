@@ -591,6 +591,18 @@ def main():
     ep_dir = os.path.join(os.path.dirname(os.path.abspath(a.episode)), "..")
     v = ep["outro"].get("voice")
     timing = json.load(open(os.path.join(ep_dir, v["timing"]), encoding="utf-8")) if v and v.get("timing") else None
+    sig = ep["outro"].get("signature")
+    if sig and v and timing:  # 매 편 끝 시그니처 '엣지영어 최고~' (마지막 멘트 바로 뒤, 같은 배속)
+        cut = timing[-1]["end"] + 0.04
+        spd = sig.get("speed", 1.35)
+        outv = f"{lay}/voice_with_signature.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", os.path.join(ep_dir, v["file"]), "-i", os.path.join(ep_dir, sig.get("file", "audio/signature-edge-best.mp3")),
+                        "-filter_complex", f"[0:a]aresample=44100,aformat=channel_layouts=mono,atrim=0:{cut}[a];"
+                        f"[1:a]aresample=44100,aformat=channel_layouts=mono,atrim=start={sig.get('trim_start', 0.10)},asetpts=PTS-STARTPTS,atempo={spd}[b];[a][b]concat=n=2:v=0:a=1",
+                        outv], check=True)
+        timing = timing + [{"i": len(timing), "text": "엣지영어 최고~", "start": round(cut, 3), "end": round(cut + sig.get("len", 1.494) / spd, 3)}]
+        v = dict(v, file=os.path.relpath(outv, ep_dir))
+        ep["outro"]["voice"] = v
     if ep["outro_duration"] == "auto":  # 음성 끝 + 여운
         ep["outro_duration"] = round(v["at"] + timing[-1]["end"] + ep["outro"].get("hold", 1.2), 2)
     total = end + ep["outro_duration"]
