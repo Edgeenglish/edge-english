@@ -5,14 +5,10 @@
 // 운영 공개 전 채울 것: LEGAL_EFFECTIVE_DATE(운영 공개일)
 // 화면: /terms · /privacy · 회원가입·카카오/네이버 '처음이에요' [보기]
 
-export const LEGAL_EFFECTIVE_DATE: string | null = '2026년 11월 17일'; // 운영 공개일
+export const LEGAL_EFFECTIVE_DATE: string | null = '2026년 11월 24일'; // 11/24 Google 로그인 문구 적용(11/17 공지)
 
 // 약관·처리방침 변경 공지 (제10조: 적용일 7일 전부터) — /terms·/privacy 맨 위. 적용일에 본문 바꾸면서 null 로 (11/17 대표 '오케이')
-export const LEGAL_NOTICE: string[] | null = [
-  '[변경 안내] 2026년 11월 24일부터 Google 계정으로도 회원가입·로그인할 수 있습니다. 이에 따라 이용약관 제2조·제3조와 개인정보 처리방침 1번(처리하는 개인정보)에 Google을 추가합니다.',
-  '· 이용약관: 카카오·네이버 → 카카오·네이버·Google',
-  '· 개인정보 처리방침: Google 회원 식별번호, Google 프로필 사진 주소 추가',
-];
+export const LEGAL_NOTICE: string[] | null = null; // 11/24 Google 문구 반영으로 공지 내림
 
 export const effectiveDateText = () => LEGAL_EFFECTIVE_DATE ?? '운영 공개일';
 
@@ -28,7 +24,7 @@ export const TERMS: LegalSection[] = [
   {
     title: '제2조 (회원 가입)',
     body: [
-      '1. 회원 가입은 이메일 또는 카카오·네이버 계정으로 할 수 있으며, 이 약관에 동의해야 합니다.',
+      '1. 회원 가입은 이메일 또는 카카오·네이버·Google 계정으로 할 수 있으며, 이 약관에 동의해야 합니다.',
       '2. 1인 1계정을 원칙으로 합니다.',
       '3. 다른 사람의 정보로 가입한 경우 회사는 이용을 제한하거나 계정을 해지할 수 있습니다.',
     ],
@@ -36,7 +32,7 @@ export const TERMS: LegalSection[] = [
   {
     title: '제3조 (계정 관리)',
     body: [
-      '1. 비밀번호와 연결된 카카오·네이버 계정의 관리 책임은 회원에게 있습니다.',
+      '1. 비밀번호와 연결된 카카오·네이버·Google 계정의 관리 책임은 회원에게 있습니다.',
       '2. 계정이 도용된 것을 알게 되면 바로 회사에 알려야 합니다.',
     ],
   },
@@ -86,7 +82,7 @@ export const PRIVACY_POLICY: LegalSection[] = [
   {
     title: '1. 처리하는 개인정보와 목적',
     body: [
-      '회원 가입·로그인: 이름, 이메일, 비밀번호(암호화), 카카오·네이버 회원 식별번호',
+      '회원 가입·로그인: 이름, 이메일, 비밀번호(암호화), 카카오·네이버·Google 회원 식별번호, Google 프로필 사진 주소',
       '수강 관리·수업 진행: 영어 이름, 연락처, 거주 국가·도시·시간대, 영어 수준, 자기소개, 수업 일정, 수업 기록',
       '결제·환불: 결제 내역 (카드번호 등 결제 정보는 결제대행사가 처리하며 회사는 저장하지 않습니다)',
       '문의 응대: 문의 내용과 연락처',
